@@ -36,8 +36,8 @@ All of the following must pass, not just `cargo test`:
 - `cargo clippy --workspace --all-targets`
 - `cargo fmt --all -- --check`
 - `cargo test --workspace` — `tests/js_core_integration.rs` reads
-  `packages/gpjs-ui/dist/index.js` off disk, so run
-  `pnpm --filter gpjs-ui build` first, or this one test fails with a
+  `packages/core/dist/index.js` off disk, so run
+  `pnpm --filter incajs build` first, or this one test fails with a
   message saying so
 
 `--workspace` rather than a list of `-p` flags, so a new crate is covered by
@@ -80,14 +80,14 @@ full gpui build under its own `Swatinem/rust-cache` key.
 Mirrors the Rust split above, using Vitest:
 
 - **Unit tests**: `*.test.mts` co-located next to the module it tests
-  (e.g. `packages/gpjs-ui/src/tree.test.mts` next to `src/tree.mts`),
+  (e.g. `packages/core/src/tree.test.mts` next to `src/tree.mts`),
   mocking `globalThis.__gpjsui_native__`/`__gpjsui_callbacks__` rather
   than driving a real QuickJS engine. A barrel (`src/index.mts`)
   re-exports only; its modules carry the tests.
 - **Integration tests**: a `tests/` directory at the package root, for
   whatever a package's own unit tests can't reach mocked — e.g.
-  `packages/vue/tests/renderer.test.mts`, driving `createGpjsuiApp`
-  end-to-end against a real (unmocked) `packages/gpjs-ui`.
+  `packages/core/tests/renderer.test.mts`, driving `createGpjsuiApp`
+  end-to-end against `incajs/vue` and a real (unmocked) `incajs` core.
 
 ### Required checks
 
@@ -129,7 +129,9 @@ Watch for these when scaffolding a new package too:
   `customConditions`, so a package testing against another workspace
   package needs the same condition set explicitly, on both
   `resolve.conditions` and `ssr.resolve.conditions` (vitest resolves
-  through Vite's SSR path) — see `packages/vue/vitest.config.mts`.
+  through Vite's SSR path) via its own `vitest.config.mts` merged on top
+  of `vite.config.mts` — not currently needed by any package, since
+  `incajs` and `@incajs/cli` each build entirely from their own source.
 - A package's `tsconfig.json` `include` has to list every directory whose
   files are checked, plus a `*.mts` glob for its own root-level config
   files — a file outside `include` still gets linted, but under default
@@ -138,9 +140,10 @@ Watch for these when scaffolding a new package too:
 - Vitest replaces rather than merges an array option (`exclude`, etc.) with
   its default, so extending one means spreading `configDefaults` from
   `vitest/config` instead of retyping it — see the root `vitest.config.ts`.
-- A test fixture spawned directly as a process (`packages/host-client`'s
-  `tests/fixtures/*.mts`) needs its executable bit set. One added without
-  it fails the test with `EACCES`, not a parse or module-resolution error.
+- A test fixture spawned directly as a process (`packages/cli`'s
+  `tests/dev-client/fixtures/*.mts`) needs its executable bit set. One
+  added without it fails the test with `EACCES`, not a parse or
+  module-resolution error.
 
 ## Running tests
 

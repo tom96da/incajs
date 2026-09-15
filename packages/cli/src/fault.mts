@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { HostError } from "@gpjs-ui/host-client";
+import { HostError } from "./dev-client/index.mts";
 
 export interface Fault {
   message: string;

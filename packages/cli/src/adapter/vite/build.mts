@@ -6,25 +6,14 @@ import path from "node:path";
 import { build as buildOnce } from "vite";
 
 import { BUNDLE_FILE_NAME, resolveViteConfig } from "./config.mts";
+import type { BuildOptions, BuildResult } from "../types.mts";
 
-/** Options for {@link build}. */
-export interface BuildOptions {
-  /** The app's own entry point — may import `.vue` files. */
-  entry: string;
-  /** Where the self-contained bundle is written — see `BuildResult.bundlePath` for the exact file. */
-  outDir: string;
-}
-
-/** The result of a one-shot {@link build}. */
-export interface BuildResult {
-  /** Where the bundle was written — read this rather than assuming a name. */
-  bundlePath: string;
-}
+export type { BuildOptions, BuildResult } from "../types.mts";
 
 /**
  * Builds `entry` into a minified, production bundle under `outDir` once, and
  * rejects on failure rather than reporting it through a callback. Never
- * starts or talks to `gpjs-ui-host` — that's `@gpjs-ui/cli`'s job.
+ * starts or talks to `gpjs-ui-host` — that's `@incajs/cli`'s job.
  */
 export async function build({ entry, outDir }: BuildOptions): Promise<BuildResult> {
   await buildOnce(resolveViteConfig({ entry, outDir, mode: "production", watch: false }));

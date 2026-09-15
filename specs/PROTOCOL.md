@@ -3,13 +3,13 @@ Copyright (c) 2026 tom96da
 SPDX-License-Identifier: MIT OR Apache-2.0
 -->
 
-# Dev protocol (host ↔ host-client)
+# Dev protocol (host ↔ dev-client)
 
 The message surface between `gpjs-ui-host` and the Node process that spawns
-it during development. `@gpjs-ui/host-client` owns that end — it resolves and
-launches the host binary and speaks everything below; `@gpjs-ui/cli` drives
-it. The counterpart to [FFI.md](./FFI.md), which covers the other boundary
-— JS calling into Rust inside the host's own process.
+it during development. `@incajs/cli`'s `dev-client` owns that end — it
+resolves and launches the host binary and speaks everything below, driven by
+the CLI's own commands. The counterpart to [FFI.md](./FFI.md), which covers
+the other boundary — JS calling into Rust inside the host's own process.
 
 See [AGENTS.md](../AGENTS.md#status) for how much of this is built. Update
 this file whenever a message lands or changes, same as [FFI.md](./FFI.md).
@@ -129,9 +129,9 @@ starts in the host and is answered by the client, and an HMR update travels
 the other way — both as `vite` notifications, because Vite pairs a call with
 its answer by an id it keeps inside `params`. Nesting therefore keeps their
 shape intact and asks nothing of this layer's own `id`.
-`@gpjs-ui/host-client` depends on no bundler and reaches a payload's owner
-only through the handle `@gpjs-ui/cli` passes it, so another integration is a
-new `method` name, not a change here.
+`dev-client` depends on no bundler and reaches a payload's owner only
+through the handle the CLI's own commands pass it, so another integration is
+a new `method` name, not a change here.
 
 **New app-visible events.** These don't travel this protocol at all. The
 host dispatches any `(node id, event name)` pair to whatever JS registered

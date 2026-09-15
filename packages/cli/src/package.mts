@@ -5,12 +5,11 @@ import { existsSync } from "node:fs";
 import { chmod, cp, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { resolveHostBin } from "@gpjs-ui/host-client";
-
 import { build } from "./build.mts";
+import { resolveHostBin } from "./dev-client/index.mts";
 import { readAppMetadata, slugify } from "./metadata.mts";
 import { encodePlist } from "./plist.mts";
-import type { Bundler } from "./bundler.mts";
+import type { Bundler } from "./adapter/types.mts";
 import type { AppMetadata } from "./metadata.mts";
 import type { PlistValue } from "./plist.mts";
 
@@ -27,7 +26,7 @@ export interface PackageAppOptions {
    * in a synthesized one.
    */
   entry?: string;
-  /** Overrides the bundler — `@gpjs-ui/vite` is the only one wired in by default. */
+  /** Overrides the bundler — see {@link build}'s default. */
   bundler?: Bundler;
   /**
    * Overrides which `gpjs-ui-host` binary gets embedded in the packaged

@@ -3,27 +3,32 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("gpjs-ui", () => ({
+import { createNodeOps } from "./nodeOps.mts";
+import type { IncajsCore } from "./core.mts";
+import type { GpjsuiElement, GpjsuiText } from "./nodeOps.mts";
+
+let nextId = 1;
+
+const core: IncajsCore = {
+  rootNodeId: vi.fn<() => number>(),
   createNode: vi.fn<(tag: string) => number>(),
   appendChild: vi.fn<(parentId: number, childId: number) => void>(),
   insertBefore: vi.fn<(parentId: number, childId: number, anchorId: number | null) => void>(),
   removeChild: vi.fn<(parentId: number, childId: number) => void>(),
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   setStyle: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
+  setEventListener:
+    vi.fn<(nodeId: number, event: string, listener: (...args: unknown[]) => void) => void>(),
+  removeEventListener: vi.fn<(nodeId: number, event: string) => void>(),
   destroyNode: vi.fn<(nodeId: number) => void>(),
-}));
+};
 
-import * as gpjsUi from "gpjs-ui";
-
-import { nodeOps } from "./nodeOps.mts";
-import type { GpjsuiElement, GpjsuiText } from "./nodeOps.mts";
-
-let nextId = 1;
+const nodeOps = createNodeOps(core);
 
 beforeEach(() => {
   vi.clearAllMocks();
   nextId = 1;
-  vi.mocked(gpjsUi.createNode).mockImplementation(() => nextId++);
+  vi.mocked(core.createNode).mockImplementation(() => nextId++);
 });
 
 function element(): GpjsuiElement {
@@ -33,7 +38,7 @@ function element(): GpjsuiElement {
 describe("createElement", () => {
   it("allocates a native node for the tag and returns a parentless, childless element", () => {
     const el = nodeOps.createElement("div");
-    expect(gpjsUi.createNode).toHaveBeenCalledWith("div");
+    expect(core.createNode).toHaveBeenCalledWith("div");
     expect(el).toEqual({ id: 1, kind: "element", parent: null, children: [] });
   });
 });
@@ -41,8 +46,8 @@ describe("createElement", () => {
 describe("createText", () => {
   it("creates a text node and forwards the initial value", () => {
     const node = nodeOps.createText("hello");
-    expect(gpjsUi.createNode).toHaveBeenCalledWith("text");
-    expect(gpjsUi.setAttribute).toHaveBeenCalledWith(1, "value", "hello");
+    expect(core.createNode).toHaveBeenCalledWith("text");
+    expect(core.setAttribute).toHaveBeenCalledWith(1, "value", "hello");
     expect(node).toEqual({ id: 1, kind: "text", parent: null, text: "hello" });
   });
 });
@@ -50,8 +55,8 @@ describe("createText", () => {
 describe("createComment", () => {
   it("creates a hidden container in place of a comment", () => {
     const node = nodeOps.createComment("v-if");
-    expect(gpjsUi.createNode).toHaveBeenCalledWith("div");
-    expect(gpjsUi.setStyle).toHaveBeenCalledWith(1, "display", "none");
+    expect(core.createNode).toHaveBeenCalledWith("div");
+    expect(core.setStyle).toHaveBeenCalledWith(1, "display", "none");
     expect(node).toEqual({ id: 1, kind: "comment", parent: null, children: [] });
   });
 });
@@ -60,7 +65,7 @@ describe("setText", () => {
   it("forwards the new value and updates the node", () => {
     const node = nodeOps.createText("old") as GpjsuiText;
     nodeOps.setText(node, "new");
-    expect(gpjsUi.setAttribute).toHaveBeenCalledWith(1, "value", "new");
+    expect(core.setAttribute).toHaveBeenCalledWith(1, "value", "new");
     expect(node.text).toBe("new");
   });
 });
@@ -74,7 +79,7 @@ describe("setElementText", () => {
 
     nodeOps.setElementText(el, "hello");
 
-    expect(gpjsUi.destroyNode).toHaveBeenCalledWith(oldChild.id);
+    expect(core.destroyNode).toHaveBeenCalledWith(oldChild.id);
     expect(oldChild.parent).toBeNull();
     expect(el.children).toHaveLength(1);
     expect(el.children[0]).toMatchObject({ kind: "text", text: "hello" });
@@ -99,7 +104,7 @@ describe("insert", () => {
 
     nodeOps.insert(child, parent);
 
-    expect(gpjsUi.insertBefore).toHaveBeenCalledWith(parent.id, child.id, null);
+    expect(core.insertBefore).toHaveBeenCalledWith(parent.id, child.id, null);
     expect(parent.children).toEqual([child]);
     expect(child.parent).toBe(parent);
   });
@@ -110,12 +115,12 @@ describe("insert", () => {
     const anchor = element();
     nodeOps.insert(first, parent);
     nodeOps.insert(anchor, parent);
-    vi.mocked(gpjsUi.insertBefore).mockClear();
+    vi.mocked(core.insertBefore).mockClear();
 
     const inserted = element();
     nodeOps.insert(inserted, parent, anchor);
 
-    expect(gpjsUi.insertBefore).toHaveBeenCalledWith(parent.id, inserted.id, anchor.id);
+    expect(core.insertBefore).toHaveBeenCalledWith(parent.id, inserted.id, anchor.id);
     expect(parent.children).toEqual([first, inserted, anchor]);
   });
 
@@ -126,7 +131,7 @@ describe("insert", () => {
 
     nodeOps.insert(child, parent, strayAnchor);
 
-    expect(gpjsUi.insertBefore).toHaveBeenCalledWith(parent.id, child.id, null);
+    expect(core.insertBefore).toHaveBeenCalledWith(parent.id, child.id, null);
     expect(parent.children).toEqual([child]);
   });
 
@@ -138,8 +143,8 @@ describe("insert", () => {
 
     nodeOps.insert(child, newParent);
 
-    expect(gpjsUi.removeChild).toHaveBeenCalledWith(oldParent.id, child.id);
-    expect(gpjsUi.destroyNode).not.toHaveBeenCalled();
+    expect(core.removeChild).toHaveBeenCalledWith(oldParent.id, child.id);
+    expect(core.destroyNode).not.toHaveBeenCalled();
     expect(oldParent.children).toHaveLength(0);
     expect(newParent.children).toEqual([child]);
     expect(child.parent).toBe(newParent);
@@ -151,13 +156,13 @@ describe("remove", () => {
     const parent = element();
     const child = element();
     nodeOps.insert(child, parent);
-    vi.mocked(gpjsUi.removeChild).mockClear();
+    vi.mocked(core.removeChild).mockClear();
 
     nodeOps.remove(child);
 
-    expect(gpjsUi.destroyNode).toHaveBeenCalledWith(child.id);
+    expect(core.destroyNode).toHaveBeenCalledWith(child.id);
     expect(
-      gpjsUi.removeChild,
+      core.removeChild,
       "destroyNode detaches natively, so a second call would be redundant",
     ).not.toHaveBeenCalled();
     expect(parent.children).toHaveLength(0);
@@ -169,8 +174,8 @@ describe("remove", () => {
 
     nodeOps.remove(child);
 
-    expect(gpjsUi.destroyNode).toHaveBeenCalledWith(child.id);
-    expect(gpjsUi.removeChild).not.toHaveBeenCalled();
+    expect(core.destroyNode).toHaveBeenCalledWith(child.id);
+    expect(core.removeChild).not.toHaveBeenCalled();
   });
 });
 

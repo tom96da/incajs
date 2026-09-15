@@ -6,7 +6,7 @@
   "license": "(MIT OR Apache-2.0)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tom96da/gpjs-ui.git",
+    "url": "git+https://github.com/tom96da/incajs.git",
     "directory": "examples/hello_world"
   },
   "type": "module",
@@ -19,11 +19,11 @@
     "typecheck": "oxlint -A all --type-aware --type-check"
   },
   "dependencies": {
-    "@gpjs-ui/vue": "workspace:*",
-    "@vue/runtime-core": "^3.5.42"
+    "@vue/runtime-core": "^3.5.42",
+    "incajs": "workspace:*"
   },
   "devDependencies": {
-    "@gpjs-ui/cli": "workspace:*",
+    "@incajs/cli": "workspace:*",
     "oxfmt": "^0.66.0",
     "oxlint": "^1.81.0"
   }

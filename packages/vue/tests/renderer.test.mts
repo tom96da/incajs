@@ -4,8 +4,9 @@
 import { h, nextTick, reactive } from "@vue/runtime-core";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { createNode, rootNodeId } from "gpjs-ui";
-import type { NodeId } from "gpjs-ui";
+import * as core from "incajs";
+import { createNode, rootNodeId } from "incajs";
+import type { NodeId } from "incajs";
 
 import { createGpjsuiApp } from "../src/index.mts";
 import type { GpjsuiElement } from "../src/index.mts";
@@ -20,7 +21,7 @@ interface FakeNode {
 }
 
 // A minimal, in-memory stand-in for the native host's retained tree — real
-// enough to drive `gpjs-ui`'s actual wrapper functions and `@gpjs-ui/vue`'s
+// enough to drive `incajs`'s actual wrapper functions and `incajs/vue`'s
 // actual `nodeOps`/`patchProp` end to end, without a real Rust process.
 //
 // It matches the real host where the difference is observable: one parent per
@@ -130,7 +131,7 @@ function dispatch(node: FakeNode, event: string): void {
   }
 }
 
-describe("@gpjs-ui/vue renderer, driven end to end through a real gpjs-ui core", () => {
+describe("incajs/vue renderer, driven end to end through real core internals", () => {
   let nodes: Map<NodeId, FakeNode>;
   let root: GpjsuiElement;
 
@@ -157,7 +158,7 @@ describe("@gpjs-ui/vue renderer, driven end to end through a real gpjs-ui core",
       },
     };
 
-    createGpjsuiApp(App).mount(root);
+    createGpjsuiApp(core, App).mount(root);
     await nextTick();
 
     const rootNode = nodes.get(root.id)!;
@@ -188,7 +189,7 @@ describe("@gpjs-ui/vue renderer, driven end to end through a real gpjs-ui core",
       },
     };
 
-    createGpjsuiApp(App).mount(root);
+    createGpjsuiApp(core, App).mount(root);
     await nextTick();
 
     const containerId = nodes.get(root.id)!.children[0]!;
@@ -211,7 +212,7 @@ describe("@gpjs-ui/vue renderer, driven end to end through a real gpjs-ui core",
       },
     };
 
-    createGpjsuiApp(App).mount(root);
+    createGpjsuiApp(core, App).mount(root);
     await nextTick();
 
     const containerId = nodes.get(root.id)!.children[0]!;
@@ -240,7 +241,7 @@ describe("@gpjs-ui/vue renderer, driven end to end through a real gpjs-ui core",
       },
     };
 
-    createGpjsuiApp(App).mount(root);
+    createGpjsuiApp(core, App).mount(root);
     await nextTick();
 
     const div = nodes.get(nodes.get(root.id)!.children[0]!)!;
@@ -263,7 +264,7 @@ describe("@gpjs-ui/vue renderer, driven end to end through a real gpjs-ui core",
       },
     };
 
-    createGpjsuiApp(App).mount(root);
+    createGpjsuiApp(core, App).mount(root);
     await nextTick();
 
     const div = nodes.get(nodes.get(root.id)!.children[0]!)!;
@@ -282,7 +283,7 @@ describe("@gpjs-ui/vue renderer, driven end to end through a real gpjs-ui core",
       },
     };
 
-    createGpjsuiApp(App).mount();
+    createGpjsuiApp(core, App).mount();
     await nextTick();
 
     const hostRoot = nodes.get(rootNodeId())!;

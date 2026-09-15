@@ -142,14 +142,14 @@ importers:
 
   examples/click_counter:
     dependencies:
-      '@gpjs-ui/vue':
-        specifier: workspace:*
-        version: link:../../packages/vue
       '@vue/runtime-core':
         specifier: ^3.5.42
         version: 3.5.42
+      incajs:
+        specifier: workspace:*
+        version: link:../../packages/core
     devDependencies:
-      '@gpjs-ui/cli':
+      '@incajs/cli':
         specifier: workspace:*
         version: link:../../packages/cli
       oxfmt:
@@ -161,14 +161,14 @@ importers:
 
   examples/hello_world:
     dependencies:
-      '@gpjs-ui/vue':
-        specifier: workspace:*
-        version: link:../../packages/vue
       '@vue/runtime-core':
         specifier: ^3.5.42
         version: 3.5.42
+      incajs:
+        specifier: workspace:*
+        version: link:../../packages/core
     devDependencies:
-      '@gpjs-ui/cli':
+      '@incajs/cli':
         specifier: workspace:*
         version: link:../../packages/cli
       oxfmt:
@@ -187,59 +187,6 @@ importers:
   npm/linux-x64: {}
 
   packages/cli:
-    dependencies:
-      '@gpjs-ui/host-client':
-        specifier: workspace:*
-        version: link:../host-client
-      '@gpjs-ui/vite':
-        specifier: workspace:*
-        version: link:../vite
-    devDependencies:
-      '@types/node':
-        specifier: ^26.4.1
-        version: 26.4.1
-      oxfmt:
-        specifier: ^0.66.0
-        version: 0.66.0
-      oxlint:
-        specifier: ^1.81.0
-        version: 1.81.0(oxlint-tsgolint@7.0.2001)
-
-  packages/gpjs-ui:
-    devDependencies:
-      oxfmt:
-        specifier: ^0.66.0
-        version: 0.66.0
-      oxlint:
-        specifier: ^1.81.0
-        version: 1.81.0(oxlint-tsgolint@7.0.2001)
-
-  packages/host-client:
-    devDependencies:
-      '@types/node':
-        specifier: ^26.4.1
-        version: 26.4.1
-      oxfmt:
-        specifier: ^0.66.0
-        version: 0.66.0
-      oxlint:
-        specifier: ^1.81.0
-        version: 1.81.0(oxlint-tsgolint@7.0.2001)
-    optionalDependencies:
-      '@gpjs-ui/host-darwin-arm64':
-        specifier: workspace:*
-        version: link:../../npm/darwin-arm64
-      '@gpjs-ui/host-darwin-x64':
-        specifier: workspace:*
-        version: link:../../npm/darwin-x64
-      '@gpjs-ui/host-linux-arm64':
-        specifier: workspace:*
-        version: link:../../npm/linux-arm64
-      '@gpjs-ui/host-linux-x64':
-        specifier: workspace:*
-        version: link:../../npm/linux-x64
-
-  packages/vite:
     dependencies:
       '@vitejs/plugin-vue':
         specifier: ^6.0.8
@@ -266,16 +213,44 @@ importers:
       vue:
         specifier: ^3.5.42
         version: 3.5.42(typescript@6.0.3)
-
-  packages/vue:
-    dependencies:
-      gpjs-ui:
+    optionalDependencies:
+      '@incajs/host-darwin-arm64':
         specifier: workspace:*
-        version: link:../gpjs-ui
+        version: link:../../npm/darwin-arm64
+      '@incajs/host-darwin-x64':
+        specifier: workspace:*
+        version: link:../../npm/darwin-x64
+      '@incajs/host-linux-arm64':
+        specifier: workspace:*
+        version: link:../../npm/linux-arm64
+      '@incajs/host-linux-x64':
+        specifier: workspace:*
+        version: link:../../npm/linux-x64
+
+  packages/core:
+    dependencies:
+      '@incajs/vue':
+        specifier: workspace:*
+        version: link:../vue
     devDependencies:
       '@vue/runtime-core':
         specifier: ^3.5.42
         version: 3.5.42
+      oxfmt:
+        specifier: ^0.66.0
+        version: 0.66.0
+      oxlint:
+        specifier: ^1.81.0
+        version: 1.81.0(oxlint-tsgolint@7.0.2001)
+
+  packages/vue:
+    devDependencies:
+      '@vue/runtime-core':
+        specifier: ^3.5.42
+        version: 3.5.42
+      incajs:
+        specifier: workspace:*
+        version: link:../core
       oxfmt:
         specifier: ^0.66.0
         version: 0.66.0

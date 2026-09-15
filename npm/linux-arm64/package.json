@@ -1,19 +1,20 @@
 {
-  "name": "@gpjs-ui/host-linux-arm64",
+  "name": "@incajs/host-linux-arm64",
   "version": "0.0.0-0",
   "private": true,
   "description": "Prebuilt gpjs-ui-host binary for Linux on arm64.",
   "keywords": [
     "desktop-app",
-    "gpjs-ui",
     "gpui",
     "gui",
+    "incajs",
+    "incarnative.js",
     "quickjs"
   ],
   "license": "(MIT OR Apache-2.0)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tom96da/gpjs-ui.git",
+    "url": "git+https://github.com/tom96da/incajs.git",
     "directory": "npm/linux-arm64"
   },
   "files": [

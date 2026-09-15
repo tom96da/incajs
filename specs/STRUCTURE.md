@@ -46,11 +46,8 @@ gpjs-ui/
 ├── tsconfig.base.json         # shared TS compiler options, extended by each package's tsconfig.json
 ├── oxlint.config.ts / oxfmt.config.ts  # shared lint/format config for all TS packages
 ├── packages/
-│   ├── gpjs-ui/             # `gpjs-ui` — framework-agnostic host bridge wrapper (Phase 2 Unit i–ii, done)
-│   ├── vue/                 # `@gpjs-ui/vue` — Vue 3 custom renderer (Phase 2 Unit iii, done)
-│   ├── host-client/         # `@gpjs-ui/host-client` — launches the host binary and speaks its dev protocol (Phase 3.1 Unit iv, done)
-│   ├── vite/                 # `@gpjs-ui/vite` — the Vite adapter, the only package importing vite (Phase 3.1 Unit v, done)
-│   └── cli/                  # `@gpjs-ui/cli` — the `gpjsui` dev/build/package CLI (Phase 3.1 Unit vi, done)
+│   ├── core/                # `incajs` — framework-agnostic host bridge wrapper (Phase 2 Unit i–ii, done), plus `incajs/vue`, its Vue 3 custom renderer subpath (Phase 2 Unit iii, done)
+│   └── cli/                  # `@incajs/cli` — the `gpjsui` dev/build/package CLI (Phase 3.1 Unit vi, done); internally absorbs the dev-protocol client (Phase 3.1 Unit iv, done) and the Vite bundler adapter (Phase 3.1 Unit v, done), neither ever imported on its own
 ├── npm/                      # per-platform npm packages carrying a prebuilt gpjs-ui-host each (Phase 3.3 Unit i)
 │   ├── darwin-arm64/
 │   ├── darwin-x64/
@@ -86,9 +83,10 @@ gpjs-ui/
 ├── crates/
 │   └── gpjs-ui-macros/      # host bridge binding helper macros
 └── packages/
-    ├── vite-runtime/        # `@gpjs-ui/vite-runtime` — Vite Runtime API integration, runs inside QuickJS (Phase 3.4)
-    └── react/               # `@gpjs-ui/react` — React custom renderer, future (Phase 10)
+    └── vite-runtime/        # `@gpjs-ui/vite-runtime` — Vite Runtime API integration, runs inside QuickJS (Phase 3.4)
 ```
+
+React lands as `incajs/react` — a new subpath inside `packages/core`, alongside `incajs/vue`, not a new top-level package (Phase 10).
 
 Move an entry up into the tree above once it actually lands, per
 [ROADMAP.md](./ROADMAP.md).
@@ -102,7 +100,7 @@ These are **git submodules pinned to a specific tagged release commit**, not mov
 | `third_party/zed` | [zed-industries/zed](https://github.com/zed-industries/zed) | `v1.17.2` | Source of the `gpui` crate this project builds its rendering on. |
 | `third_party/rquickjs` | [DelSkayn/rquickjs](https://github.com/DelSkayn/rquickjs) | `v0.12.2` | Rust bindings to QuickJS this project uses as its JS runtime. |
 | `third_party/rquickjs/sys/quickjs` | [quickjs-ng/quickjs](https://github.com/quickjs-ng/quickjs) | commit pinned by rquickjs `v0.12.2` | rquickjs's own nested submodule — the actual QuickJS engine (the actively-maintained `quickjs-ng` fork, not Bellard's original `bellard/quickjs`). Not the same tree as `bellard/quickjs`; add that separately if it's ever needed for comparison. |
-| `third_party/vue` | [vuejs/core](https://github.com/vuejs/core) | `v3.5.42` | Reference source for `@vue/runtime-core`'s `createRenderer`/`RendererOptions` API and `runtime-dom`'s reference `nodeOps`/`patchProp` implementation — used while building `@gpjs-ui/vue`'s custom renderer (Phase 2). Matches the version `packages/vue/package.json` already depends on. |
+| `third_party/vue` | [vuejs/core](https://github.com/vuejs/core) | `v3.5.42` | Reference source for `@vue/runtime-core`'s `createRenderer`/`RendererOptions` API and `runtime-dom`'s reference `nodeOps`/`patchProp` implementation — used while building `incajs/vue`'s custom renderer (Phase 2). Matches the version `packages/core/package.json` already depends on. |
 | `third_party/vite` | [vitejs/vite](https://github.com/vitejs/vite) | `v8.2.2` | Reference source for Vite's Runtime API (`vite/module-runner`: `ModuleRunner`, `ModuleRunnerTransport`, `ModuleEvaluator`), whose published docs are thin — used while building Phase 3's HMR bridge. Matches the version the root `package.json` already depends on. |
 
 All are registered **shallow** (`submodule.<name>.shallow = true` in the relevant `.gitmodules`) since full history is large and irrelevant here.

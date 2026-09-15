@@ -5,9 +5,9 @@ import { readFile, writeFile } from "node:fs/promises";
 
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import { watch } from "../src/index.mts";
+import { watch } from "../../../src/adapter/vite/index.mts";
 import { scratchApp } from "./scratchApp.mts";
-import type { Watcher } from "../src/index.mts";
+import type { Watcher } from "../../../src/adapter/types.mts";
 
 const { setUp, tearDown, makeApp } = scratchApp("watch");
 

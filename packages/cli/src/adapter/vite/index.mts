@@ -2,6 +2,4 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 export { build } from "./build.mts";
-export type { BuildOptions, BuildResult } from "./build.mts";
 export { watch } from "./watch.mts";
-export type { Watcher, WatchOptions } from "./watch.mts";

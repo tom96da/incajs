@@ -21,7 +21,7 @@ function platformPackageName(): string | undefined {
   const os =
     process.platform === "darwin" || process.platform === "linux" ? process.platform : undefined;
   const arch = process.arch === "arm64" || process.arch === "x64" ? process.arch : undefined;
-  return os && arch ? `@gpjs-ui/host-${os}-${arch}` : undefined;
+  return os && arch ? `@incajs/host-${os}-${arch}` : undefined;
 }
 
 /** Resolves the prebuilt binary a per-platform package carries, if one is installed. */
@@ -38,7 +38,7 @@ function resolveFromPlatformPackage(): string | undefined {
 
 /**
  * Where `gpjs-ui-host` itself lives. `GPJS_UI_HOST_BIN` wins outright,
- * then the per-platform npm package for this OS/arch (`@gpjs-ui/host-<os>-<arch>`,
+ * then the per-platform npm package for this OS/arch (`@incajs/host-<os>-<arch>`,
  * an `optionalDependency` of this package), then this workspace's own Cargo
  * build output — the only place a binary exists before a package installs
  * one.
@@ -52,5 +52,5 @@ export function resolveHostBin(options: ResolveHostBinOptions = {}): string {
 
   const suffix = process.platform === "win32" ? ".exe" : "";
   const profile = options.profile ?? "debug";
-  return path.resolve(import.meta.dirname, `../../../target/${profile}/gpjs-ui-host${suffix}`);
+  return path.resolve(import.meta.dirname, `../../../../target/${profile}/gpjs-ui-host${suffix}`);
 }

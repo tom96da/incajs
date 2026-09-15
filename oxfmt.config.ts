@@ -12,22 +12,22 @@ export default defineConfig({
     customGroups: [
       {
         groupName: "first-party",
-        elementNamePattern: ["gpjs-ui*"],
+        elementNamePattern: ["incajs*"],
         modifiers: ["value"],
       },
       {
         groupName: "type-first-party",
-        elementNamePattern: ["gpjs-ui*"],
+        elementNamePattern: ["incajs*"],
         modifiers: ["type"],
       },
       {
         groupName: "scoped-first-party",
-        elementNamePattern: ["@gpjs-ui/*"],
+        elementNamePattern: ["@incajs/*"],
         modifiers: ["value"],
       },
       {
         groupName: "type-scoped-first-party",
-        elementNamePattern: ["@gpjs-ui/*"],
+        elementNamePattern: ["@incajs/*"],
         modifiers: ["type"],
       },
     ],

@@ -1,8 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Exercises `Engine::eval_module` against `packages/gpjs-ui`'s actual
-//! compiled output (a real Rollup/Vite bundle), not hand-written JS strings
+//! Exercises `Engine::eval_module` against `packages/core`'s actual
+//! compiled output (a real Rolldown/Vite bundle), not hand-written JS strings
 //! like `bindings.rs`'s own tests use. A real bundler renames a module's
 //! internal top-level bindings (e.g. `createNode` becomes some single-letter
 //! name), so its exported functions are only reachable through the module's
@@ -23,13 +23,13 @@ use gpjs_ui::{AttributeValue, Engine, Host};
 
 const BUNDLE_PATH: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../packages/gpjs-ui/dist/index.js"
+    "/../../packages/core/dist/index.js"
 );
 
 #[test]
 fn compiled_gpjs_ui_bundle_drives_the_real_virtual_tree() {
     let source = fs::read_to_string(BUNDLE_PATH).unwrap_or_else(|_| {
-        panic!("{BUNDLE_PATH} is missing — run `pnpm --filter gpjs-ui build` first")
+        panic!("{BUNDLE_PATH} is missing — run `pnpm --filter incajs build` first")
     });
 
     let host = Rc::new(RefCell::new(Host::default()));

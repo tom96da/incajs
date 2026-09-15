@@ -10,7 +10,7 @@ cargo build -p gpjs-ui-host
 pnpm --filter hello_world dev
 ```
 
-`gpjsui dev` (from [`@gpjs-ui/cli`](../../packages/cli/README.md)) builds
+`gpjsui dev` (from [`@incajs/cli`](../../packages/cli/README.md)) builds
 `src/App.vue` and every rebuild after, starts
 [`gpjs-ui-host`](../../crates/gpjs-ui-host/README.md) once the first build
 lands, and reloads it on every following one.

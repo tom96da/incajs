@@ -48,28 +48,29 @@ are built in, not a set of independent tracks.
 4. **GPUI rendering pipeline**: recursively convert the `VirtualNode` tree into
    GPUI `AnyElement` instances during GPUI's `render()` frame cycle.
 
-## Phase 2: JS core bridge (`gpjs-ui`) & Vue 3 custom renderer (`@gpjs-ui/vue`)
+## Phase 2: JS core bridge (`incajs`) & Vue 3 custom renderer (`incajs/vue`)
 
-1. **`gpjs-ui`** (`packages/gpjs-ui`): a framework-agnostic, typed JS wrapper
+1. **`incajs`** (`packages/core`): a framework-agnostic, typed JS wrapper
    around `globalThis.__gpjsui_native__` (see
    [FFI.md](./FFI.md#binding-functions)) — see
-   [ARCHITECTURE.md](./ARCHITECTURE.md#tech-stack) for why this is a
-   separate, shared package rather than logic duplicated into each framework
-   adapter.
-2. **`@gpjs-ui/vue`** (`packages/vue`): a custom Vue 3 runtime adapter
-   using `@vue/runtime-core`'s `createRenderer`, built on `gpjs-ui` rather
-   than calling `__gpjsui_native__` directly.
+   [ARCHITECTURE.md](./ARCHITECTURE.md#tech-stack) for why this is shared
+   rather than logic duplicated into each framework adapter.
+2. **`incajs/vue`** (`packages/core/src/vue`): a custom Vue 3 runtime
+   adapter using `@vue/runtime-core`'s `createRenderer`, built on `incajs`
+   rather than calling `__gpjsui_native__` directly — a subpath of the same
+   package as the core, never imported on its own.
 3. Map Vue node lifecycle methods (`createElement`, `insert`, `remove`,
-   `patchProp`) to `gpjs-ui`'s calls.
+   `patchProp`) to `incajs`'s calls.
 4. A unified mount API, e.g. `createGpjsuiApp(App).mount('#root')`.
 
 ## Phase 3: Developer tooling & HMR integration
 
 The `gpjsui` CLI's process orchestration is owned by the **JS/TS side**:
-`@gpjs-ui/cli` (`packages/cli`) is the parent process, driving a bundler
-adapter that holds Vite in-process, while `@gpjs-ui/host-client`
-(`packages/host-client`) spawns the Rust host (`crates/gpjs-ui-host`) as a
-child and bridges dev-server messages over its stdio. The alternatives
+`@incajs/cli` (`packages/cli`) is the parent process, internally driving a
+bundler adapter that holds Vite in-process, while its own `dev-client`
+spawns the Rust host (`crates/gpjs-ui-host`) as a child and bridges
+dev-server messages over its stdio — neither is a separate package, since
+neither is ever imported on its own. The alternatives
 considered — a Rust-primary `crates/gpjs-ui-cli` owning everything, and
 Rust-primary logic behind a thin npm `bin` wrapper — were rejected because:
 
@@ -93,16 +94,18 @@ lands after 3.3, when there is something to release.
 
 ### Phase 3.1: `gpjsui dev` (full reload)
 
-1. **`@gpjs-ui/cli`** (`packages/cli`): owns the `gpjsui` commands, resolves
-   an app's entry point, and wires the two packages below together. It holds
-   the `Bundler` contract and injects an implementation, so swapping
-   bundlers is a dependency change here and nothing else.
-2. **`@gpjs-ui/vite`** (`packages/vite`): runs Vite in
+1. **`@incajs/cli`** (`packages/cli`): owns the `gpjsui` commands, resolves
+   an app's entry point, and wires the two modules below together
+   internally. It holds the `Bundler` contract and injects an
+   implementation, so swapping bundlers is a dependency change here and
+   nothing else.
+2. **`adapter/vite`** (`packages/cli/src/adapter/vite`): runs Vite in
    library/watch mode (not its browser dev server), using
    `@vitejs/plugin-vue` to compile `.vue` SFCs, and announces each rebuild.
-   The only package that imports `vite`, and it depends on no first-party
-   package — a `@gpjs-ui/rspack` would be a sibling, not a rewrite.
-3. **`@gpjs-ui/host-client`** (`packages/host-client`): the Node end of
+   The only part of the CLI that imports `vite`, and it depends on no
+   first-party package — a future `adapter/rspack` would be a sibling
+   module, not a sibling package, since neither is ever imported on its own.
+3. **`dev-client`** (`packages/cli/src/dev-client`): the Node end of
    [PROTOCOL.md](./PROTOCOL.md) — resolves and launches the host
    binary, supervises the child, and carries messages both ways. It depends
    on no bundler and never parses a routed payload, so Vite's HMR traffic
@@ -141,8 +144,7 @@ prebuilt hosts. **Design constraint**: keep the host binary swappable, so
 Phase 13 can substitute an app-compiled one.
 
 This is the **first release milestone**: once packaging works, the framework
-is published as `v0.0.1`, to npm only (`gpjs-ui`, `@gpjs-ui/vue`,
-`@gpjs-ui/cli`, `@gpjs-ui/host-client`, `@gpjs-ui/vite`, and the
+is published as `v0.0.1`, to npm only (`incajs`, `@incajs/cli`, and the
 per-platform host packages). The Rust crates stay
 `publish = false` — nothing outside this repo depends on them until Phase 13.
 
@@ -186,7 +188,7 @@ is a name the host agrees to send, not a new binding.
    `hover:`/`focus:` Tailwind variants build on this.
 6. **Event payloads**: a listener's callback takes only a node id today,
    which can't express a key, a pointer position, or a text edit. The
-   callback signature and its `packages/gpjs-ui` wrapper are settled here,
+   callback signature and its `packages/core` wrapper are settled here,
    once, for every event that follows.
 
 ## Phase 5: Accessibility (future)
@@ -220,7 +222,7 @@ network, no filesystem, no `console`. Phase 3.1 adds `console`; everything
 else is still absent, and without it an app cannot poll, debounce, animate,
 fetch, or read a file.
 
-Each item is a host binding plus its typed wrapper in `packages/gpjs-ui`,
+Each item is a host binding plus its typed wrapper in `packages/core`,
 and each hands a new capability to app code — the FFI safety checklist in
 [PLAN.md](./PLAN.md) applies to all of them. They belong in
 `crates/gpjs-ui-jsenv`, which depends on `rquickjs` alone so an
@@ -298,7 +300,7 @@ to run where the app runs.
    engine, with the dev build's `__VUE_PROD_DEVTOOLS__` on, forwarding over
    the channel [PROTOCOL.md](./PROTOCOL.md) already carries — nested in
    `params`, the way Vite's frames are.
-3. **The UI in a browser, first.** `@gpjs-ui/cli` serves
+3. **The UI in a browser, first.** `@incajs/cli` serves
    `@vue/devtools-client` and bridges it to that channel. This is how Nuxt
    DevTools works, and it asks nothing of the style vocabulary.
 4. **The UI in the window, eventually.** `@vue/devtools-overlay` mounted
@@ -330,10 +332,10 @@ does *around* its content lives here.
 ## Phase 10: React custom renderer (future)
 
 Not started, and not begun until Vue 3 support (Phases 1–3) is stable. Adds
-`@gpjs-ui/react` as an additional package alongside `@gpjs-ui/vue`, using
-`react-reconciler` against the same `gpjs-ui` core package (not
-`__gpjsui_native__` directly — see Phase 2), plus `@vitejs/plugin-react` for
-JSX/TSX compilation and HMR.
+`incajs/react` as an additional subpath alongside `incajs/vue`, in the same
+`incajs` package rather than a separate one, using `react-reconciler`
+against the same core (not `__gpjsui_native__` directly — see Phase 2), plus
+`@vitejs/plugin-react` for JSX/TSX compilation and HMR.
 
 ## Phase 11: Cross-platform support (future)
 

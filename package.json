@@ -1,5 +1,5 @@
 {
-  "name": "@gpjs-ui/monorepo",
+  "name": "@incajs/monorepo",
   "private": true,
   "description": "A lightweight Webview-free desktop application framework powered by GPUI and QuickJS.",
   "keywords": [
@@ -8,6 +8,8 @@
     "electron-alternative",
     "gpui",
     "gui",
+    "incajs",
+    "incarnative.js",
     "quickjs",
     "rust",
     "tauri-alternative",
@@ -18,7 +20,7 @@
   "license": "(MIT OR Apache-2.0)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tom96da/gpjs-ui.git"
+    "url": "git+https://github.com/tom96da/incajs.git"
   },
   "type": "module",
   "scripts": {

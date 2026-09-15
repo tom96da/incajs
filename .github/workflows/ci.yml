@@ -56,7 +56,7 @@ jobs:
               - 'Cargo.lock'
               - 'rust-toolchain.toml'
               # cargo test evaluates this package's build output
-              - 'packages/gpjs-ui/**'
+              - 'packages/core/**'
               - '.github/workflows/ci.yml'
             js:
               - 'packages/**'
@@ -249,8 +249,8 @@ jobs:
         run: pnpm ci
 
       # tests/js_core_integration.rs reads this package's dist/ off disk.
-      - name: Build the gpjs-ui package
-        run: pnpm --filter gpjs-ui build
+      - name: Build the incajs package
+        run: pnpm --filter incajs build
 
       - name: Check formatting
         run: cargo fmt --all -- --check

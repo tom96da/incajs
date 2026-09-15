@@ -9,6 +9,6 @@ export default defineConfig({
   test: {
     projects: ["packages/*"],
     exclude,
-    coverage: { provider: "v8", exclude },
+    coverage: { provider: "v8", exclude: [...exclude, "**/tests/**"] },
   },
 });

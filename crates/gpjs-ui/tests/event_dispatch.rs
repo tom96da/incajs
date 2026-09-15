@@ -171,7 +171,7 @@ fn a_listener_registered_after_the_first_render_still_fires(cx: &mut TestAppCont
 }
 
 /// The host holds a list of callbacks per `(node, event)`, the way the DOM
-/// does, and dispatches to all of it. `packages/gpjs-ui` registers one — a
+/// does, and dispatches to all of it. `packages/core` registers one — a
 /// framework adapter composes its own handlers first — so nothing above this
 /// layer exercises the list.
 #[gpui::test]

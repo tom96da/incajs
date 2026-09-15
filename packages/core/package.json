@@ -1,24 +1,27 @@
 {
-  "name": "gpjs-ui",
-  "version": "0.0.0-0",
-  "private": true,
-  "description": "Framework-agnostic JS core for gpjs-ui — a typed wrapper around the native host bridge, shared by every framework adapter.",
+  "name": "incajs",
+  "version": "0.0.1",
+  "description": "Incarnative.js — a GPU-native, Webview-free desktop application framework powered by GPUI and QuickJS. Framework-agnostic core, with first-class Vue 3 support via the incajs/vue subpath.",
   "keywords": [
     "cross-platform",
+    "custom-renderer",
     "desktop-app",
     "electron-alternative",
     "framework-agnostic",
     "gpui",
     "gui",
     "quickjs",
+    "rust",
     "tauri-alternative",
+    "vue",
+    "vue3",
     "webview-free"
   ],
   "license": "(MIT OR Apache-2.0)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tom96da/gpjs-ui.git",
-    "directory": "packages/gpjs-ui"
+    "url": "git+https://github.com/tom96da/incajs.git",
+    "directory": "packages/core"
   },
   "files": [
     "dist"
@@ -32,6 +35,11 @@
       "source": "./src/index.mts",
       "types": "./dist/index.d.mts",
       "import": "./dist/index.js"
+    },
+    "./vue": {
+      "source": "./src/vue.mts",
+      "types": "./dist/vue.d.mts",
+      "import": "./dist/vue.js"
     }
   },
   "publishConfig": {
@@ -39,6 +47,10 @@
       ".": {
         "types": "./dist/index.d.mts",
         "import": "./dist/index.js"
+      },
+      "./vue": {
+        "types": "./dist/vue.d.mts",
+        "import": "./dist/vue.js"
       }
     }
   },
@@ -49,7 +61,11 @@
     "format": "oxfmt --check .",
     "typecheck": "oxlint -A all --type-aware --type-check"
   },
+  "dependencies": {
+    "@incajs/vue": "workspace:*"
+  },
   "devDependencies": {
+    "@vue/runtime-core": "^3.5.42",
     "oxfmt": "^0.66.0",
     "oxlint": "^1.81.0"
   }

@@ -1,21 +1,25 @@
 {
-  "name": "@gpjs-ui/cli",
+  "name": "@incajs/cli",
   "version": "0.0.0-0",
   "private": true,
-  "description": "The gpjsui CLI: watches an app's entry point through a Bundler adapter, starts gpjs-ui-host once the first bundle lands, and reloads it on every rebuild.",
+  "description": "The gpjsui CLI: watches an app's entry point through a bundler adapter, starts gpjs-ui-host once the first bundle lands, and reloads it on every rebuild.",
   "keywords": [
+    "bundler",
     "cli",
     "desktop-app",
     "dev-server",
-    "gpjs-ui",
     "gpui",
     "gui",
-    "quickjs"
+    "incajs",
+    "incarnative.js",
+    "json-rpc",
+    "quickjs",
+    "vite"
   ],
   "license": "(MIT OR Apache-2.0)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tom96da/gpjs-ui.git",
+    "url": "git+https://github.com/tom96da/incajs.git",
     "directory": "packages/cli"
   },
   "bin": {
@@ -52,12 +56,29 @@
     "typecheck": "oxlint -A all --type-aware --type-check"
   },
   "dependencies": {
-    "@gpjs-ui/host-client": "workspace:*",
-    "@gpjs-ui/vite": "workspace:*"
+    "@vitejs/plugin-vue": "^6.0.8",
+    "vite": "^8.2.2"
   },
   "devDependencies": {
     "@types/node": "^26.4.1",
+    "@vue/runtime-core": "^3.5.42",
     "oxfmt": "^0.66.0",
-    "oxlint": "^1.81.0"
+    "oxlint": "^1.81.0",
+    "rolldown": "~1.2.4",
+    "vue": "^3.5.42"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.42"
+  },
+  "peerDependenciesMeta": {
+    "vue": {
+      "optional": true
+    }
+  },
+  "optionalDependencies": {
+    "@incajs/host-darwin-arm64": "workspace:*",
+    "@incajs/host-darwin-x64": "workspace:*",
+    "@incajs/host-linux-arm64": "workspace:*",
+    "@incajs/host-linux-x64": "workspace:*"
   }
 }

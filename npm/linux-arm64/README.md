@@ -1,7 +1,7 @@
 # @gpjs-ui/host-linux-arm64
 
 Prebuilt `gpjs-ui-host` binary for Linux on arm64. Not meant to be depended
-on directly — `@gpjs-ui/host-client` installs whichever of these matches
+on directly — `@incajs/cli`'s dev-client installs whichever of these matches
 the current OS/arch as an `optionalDependency` and resolves the binary
 inside it.
 

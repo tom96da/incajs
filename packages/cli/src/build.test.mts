@@ -6,7 +6,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { build } from "./build.mts";
-import type { Bundler, BuildOptions, BuildResult, Watcher } from "./bundler.mts";
+import type { Bundler, BuildOptions, BuildResult, Watcher } from "./adapter/types.mts";
 
 function makeFakeBundler(result: () => Promise<BuildResult>): Bundler {
   return {

@@ -33,7 +33,7 @@ async function synthesizeEntry(appPath: string, cwd: string): Promise<string> {
   const importSpecifier = JSON.stringify(appPath.split(path.sep).join("/"));
   await writeFile(
     entryPath,
-    `import { createGpjsuiApp } from "@gpjs-ui/vue";\n` +
+    `import { createGpjsuiApp } from "incajs/vue";\n` +
       `import App from ${importSpecifier};\n` +
       `createGpjsuiApp(App).mount();\n`,
   );

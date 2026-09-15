@@ -3,14 +3,12 @@
 
 import type { RendererOptions } from "@vue/runtime-core";
 
-import { removeEventListener, setAttribute, setEventListener, setStyle } from "gpjs-ui";
-import type { EventListener } from "gpjs-ui";
-
+import type { EventListener, IncajsCore } from "./core.mts";
 import type { GpjsuiElement } from "./nodeOps.mts";
 
 const isOn = (key: string): boolean => /^on[A-Z]/.test(key);
 
-function patchStyle(el: GpjsuiElement, nextValue: unknown): void {
+function patchStyle(core: IncajsCore, el: GpjsuiElement, nextValue: unknown): void {
   if (typeof nextValue !== "object" || nextValue === null) return;
 
   for (const [key, value] of Object.entries(nextValue)) {
@@ -18,7 +16,7 @@ function patchStyle(el: GpjsuiElement, nextValue: unknown): void {
     // `setAttribute` does — so a value shape it can't take (e.g. an array,
     // for DOM's multi-value CSS properties) is skipped rather than thrown.
     if (typeof value === "string" || typeof value === "number") {
-      setStyle(el.id, key, value);
+      core.setStyle(el.id, key, value);
     }
   }
 }
@@ -37,13 +35,13 @@ function asListener(value: unknown): EventListener | null {
   };
 }
 
-function patchEvent(el: GpjsuiElement, rawKey: string, nextValue: unknown): void {
+function patchEvent(core: IncajsCore, el: GpjsuiElement, rawKey: string, nextValue: unknown): void {
   const event = rawKey.slice(2).toLowerCase();
   const listener = asListener(nextValue);
   if (listener) {
-    setEventListener(el.id, event, listener);
+    core.setEventListener(el.id, event, listener);
   } else {
-    removeEventListener(el.id, event);
+    core.removeEventListener(el.id, event);
   }
 }
 
@@ -52,33 +50,33 @@ function patchEvent(el: GpjsuiElement, rawKey: string, nextValue: unknown): void
  * attribute/event prop to a host element:
  *
  * - `style` (an object, per `:style="{...}"`) fans out to one
- *   {@link setStyle} call per entry; an entry whose value isn't a
+ *   `core.setStyle` call per entry; an entry whose value isn't a
  *   string/number is skipped.
  * - An `onXxx` key registers `nextValue` as the listener for `xxx`, taking a
  *   function or an array of them, and unbinds `xxx` for anything else — only
  *   `"click"` is wired to real input by the native host today, other event
  *   names are accepted but never fire.
- * - Everything else falls through to {@link setAttribute}, again skipping
+ * - Everything else falls through to `core.setAttribute`, again skipping
  *   a non-string/number/boolean value rather than passing it through.
  *
  * There is no native "unset" call, so a prop that's removed entirely (a
  * `null`/`undefined` `nextValue`) is left as-is rather than cleared.
+ * @param core - the incajs bindings to drive the native tree through
  */
-export const patchProp: RendererOptions<unknown, GpjsuiElement>["patchProp"] = (
-  el: GpjsuiElement,
-  key: string,
-  _prevValue: unknown,
-  nextValue: unknown,
-): void => {
-  if (key === "style") {
-    patchStyle(el, nextValue);
-  } else if (isOn(key)) {
-    patchEvent(el, key, nextValue);
-  } else if (
-    typeof nextValue === "string" ||
-    typeof nextValue === "number" ||
-    typeof nextValue === "boolean"
-  ) {
-    setAttribute(el.id, key, nextValue);
-  }
-};
+export function createPatchProp(
+  core: IncajsCore,
+): RendererOptions<unknown, GpjsuiElement>["patchProp"] {
+  return (el: GpjsuiElement, key: string, _prevValue: unknown, nextValue: unknown): void => {
+    if (key === "style") {
+      patchStyle(core, el, nextValue);
+    } else if (isOn(key)) {
+      patchEvent(core, el, key, nextValue);
+    } else if (
+      typeof nextValue === "string" ||
+      typeof nextValue === "number" ||
+      typeof nextValue === "boolean"
+    ) {
+      core.setAttribute(el.id, key, nextValue);
+    }
+  };
+}

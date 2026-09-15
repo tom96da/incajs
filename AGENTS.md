@@ -21,7 +21,7 @@ See [README.md](./README.md) for the full pitch. `gpjs-ui` is currently a develo
 ## Status
 
 Phase 1 (`crates/gpjs-ui`'s FFI bridge core) and Phase 2 (the pnpm
-workspace, `packages/gpjs-ui`, `packages/vue`'s Vue 3 custom renderer, and
+workspace, `packages/core`, its `incajs/vue` Vue 3 custom renderer, and
 two working `.vue` examples) are complete and visually confirmed —
 [FFI.md](./specs/FFI.md) has the current binding vocabulary.
 

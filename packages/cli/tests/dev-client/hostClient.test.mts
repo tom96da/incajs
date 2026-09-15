@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { HostClient, HostError } from "../src/index.mts";
+import { HostClient, HostError } from "../../src/dev-client/index.mts";
 
 const mockHost = path.join(import.meta.dirname, "fixtures/mock-host.mts");
 const wedgedMockHost = path.join(import.meta.dirname, "fixtures/mock-host-wedged.mts");

@@ -7,7 +7,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 Target architecture for gpjs-ui. This describes the design agents should
 build toward. See [AGENTS.md](../AGENTS.md#status) for which layers already
-match this design (the Rust host and the `gpjs-ui` core JS package) and which
+match this design (the Rust host and the `incajs` core JS package) and which
 are still forward-looking (the Vue custom renderer, the Vite/HMR bridge, and
 everything after). Update it as each piece actually lands; don't let it drift
 from reality.
@@ -21,12 +21,12 @@ The JS↔Rust binding surface is specced in [FFI.md](./FFI.md).
 | --- | --- | --- |
 | **Native core** | Rust + [`gpui`](https://www.gpui.rs/) (wgpu) | Window management, event loop, retained virtual tree, direct GPU rendering. |
 | **JS engine** | QuickJS via [`rquickjs`](https://github.com/DelSkayn/rquickjs) | Embedded, lightweight JS runtime executing UI logic and reactivity. |
-| **Core JS package** | `gpjs-ui` (framework-agnostic) | Thin, typed JS wrapper around the host bridge (`__gpjsui_native__`), shared by every framework adapter instead of duplicated in each. |
-| **Frontend framework** | `@gpjs-ui/vue` (first-class, current) / `@gpjs-ui/react` (future, see [Roadmap](./ROADMAP.md#phase-10-react-custom-renderer-future)) | Custom renderer mapping virtual component trees to `gpjs-ui` calls. |
+| **Core JS package** | `incajs` (framework-agnostic) | Thin, typed JS wrapper around the host bridge (`__gpjsui_native__`), shared by every framework adapter instead of duplicated in each. |
+| **Frontend framework** | `incajs/vue` (first-class, current) / `incajs/react` (future, see [Roadmap](./ROADMAP.md#phase-10-react-custom-renderer-future)) | Custom renderer mapping virtual component trees to `incajs` calls — a subpath of the same package as the core, not a separate one, since neither adapter is ever imported without it. |
 | **Bundler & dev tooling** | Vite, used in library/build mode (no browser dev server) | Compiles `.vue`/`.tsx` via the official `@vitejs/plugin-vue` (and later `@vitejs/plugin-react`); HMR is delivered through Vite's Runtime API instead of Vite's browser client — see [HMR delivery](#hmr-delivery). |
-| **Dev CLI** | `@gpjs-ui/cli` (Node) | Parent process during development: owns the commands and wires a bundler adapter to the host client — see [Roadmap](./ROADMAP.md#phase-3-developer-tooling--hmr-integration) for why orchestration lives on the JS side. |
-| **Bundler adapter** | `@gpjs-ui/vite` (Node) | Runs Vite in library/watch mode and announces each rebuild. The only package that imports `vite`; the CLI injects it, so another bundler is a sibling package. |
-| **Host client** | `@gpjs-ui/host-client` (Node) | Launches and supervises the Rust host as a child and carries messages over its stdio — see [PROTOCOL.md](./PROTOCOL.md). Depends on no bundler, so bundler traffic rides the channel as a registered message name. |
+| **Dev CLI** | `@incajs/cli` (Node) | Parent process during development: owns the commands, and internally wires its own bundler adapter to its own dev-protocol client — see [Roadmap](./ROADMAP.md#phase-3-developer-tooling--hmr-integration) for why orchestration lives on the JS side. |
+| **Bundler adapter** | `@incajs/cli`'s `adapter/vite` (Node) | Runs Vite in library/watch mode and announces each rebuild. The only part of the CLI that imports `vite`; a future bundler is a sibling adapter module inside the same package, not a sibling package — neither is ever imported on its own. |
+| **Host client** | `@incajs/cli`'s `dev-client` (Node) | Launches and supervises the Rust host as a child and carries messages over its stdio — see [PROTOCOL.md](./PROTOCOL.md). Depends on no bundler, so bundler traffic rides the channel as a registered message name. |
 | **Host bridge** | In-process Rust functions bound into the QuickJS context via `rquickjs` | Transfers mutation operations (`createNode`, `setAttribute`, `appendChild`, ...) from JS to the Rust host. Not a real C ABI or IPC boundary — everything runs in one process. |
 
 Why Vite instead of a bare bundler (e.g. raw Rolldown): Vite owns the official,
@@ -42,22 +42,22 @@ Rust-bundler speed benefit isn't lost by choosing Vite.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│        [ @gpjs-ui/cli — Node process (dev only, parent) ]        │
-│  [ .vue / .tsx ] ──▶ [ @gpjs-ui/vite ──▶ Vite (watch) ]          │
+│        [ @incajs/cli — Node process (dev only, parent) ]         │
+│  [ .vue / .tsx ] ──▶ [ adapter/vite ──▶ Vite (watch) ]           │
 │                             │                                    │
-│                    [ @gpjs-ui/host-client ]                      │
+│                       [ dev-client ]                             │
 │                             │ fetchModule / HMR payloads         │
 │                             │ (newline-delimited JSON over the   │
 │                             │  child's stdio)                    │
 └─────────────────────────────┼────────────────────────────────────┘
-                              ▼  (host-client spawns the host as a child)
+                              ▼  (dev-client spawns the host as a child)
 ┌──────────────────────────────────────────────────────────────────┐
 │             [ gpjs-ui Native Runtime — host process ]            │
 │  ┌────────────────────────────────────────────────────────────┐  │
 │  │ JS Runtime (QuickJS via `rquickjs`)                        │  │
 │  │   - Vue 3 application (React: future, see Roadmap)         │  │
 │  │   - Custom renderer (`createRenderer` / `react-reconciler`)│  │
-│  │   - `gpjs-ui` core (typed `__gpjsui_native__` wrapper)     │  │
+│  │   - `incajs` core (typed `__gpjsui_native__` wrapper)      │  │
 │  │   - Vite `ModuleRunner` + custom Transport/Evaluator       │  │
 │  │     (dev only; transformed modules run here, not in Node)  │  │
 │  └──────────────────────────┬─────────────────────────────────┘  │
@@ -85,7 +85,7 @@ environment." gpjs-ui uses it instead of Vite's browser client:
   hop. With the runner in QuickJS, only `fetchModule` results and HMR payloads
   cross the boundary, as JSON.
 - A custom **`ModuleRunnerTransport`** carries those messages between the
-  Node process and the host, over the channel `@gpjs-ui/host-client` owns. A
+  Node process and the host, over the channel `@incajs/cli`'s `dev-client` owns. A
   transport is just `invoke`, or `connect`+`send` — no WebSocket is required
   (Vite's own `createServerModuleRunnerTransport` is EventEmitter-only), so
   this rides the host child process's stdio.
@@ -104,7 +104,7 @@ the transport and the evaluator.
 See [FFI.md](./FFI.md) for the exact function surface and the retained virtual
 tree's node structure.
 
-## Dev protocol (host ↔ host-client)
+## Dev protocol (host ↔ dev-client)
 
 See [PROTOCOL.md](./PROTOCOL.md) for the message surface the host and the Node
 process that spawns it exchange over the child's stdio.

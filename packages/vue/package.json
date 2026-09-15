@@ -1,20 +1,21 @@
 {
-  "name": "@gpjs-ui/vue",
-  "version": "0.0.0-0",
-  "private": true,
-  "description": "Vue 3 custom renderer for gpjs-ui, mapping createRenderer's lifecycle methods to gpjs-ui core calls.",
+  "name": "@incajs/vue",
+  "version": "0.0.1",
+  "description": "Vue 3 custom renderer for incajs, mapping createRenderer's lifecycle methods to incajs core calls.",
   "keywords": [
     "custom-renderer",
     "desktop-app",
-    "gpjs-ui",
+    "gpui",
     "gui",
+    "incajs",
+    "incarnative.js",
     "vue",
     "vue3"
   ],
   "license": "(MIT OR Apache-2.0)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tom96da/gpjs-ui.git",
+    "url": "git+https://github.com/tom96da/incajs.git",
     "directory": "packages/vue"
   },
   "files": [
@@ -46,11 +47,9 @@
     "format": "oxfmt --check .",
     "typecheck": "oxlint -A all --type-aware --type-check"
   },
-  "dependencies": {
-    "gpjs-ui": "workspace:*"
-  },
   "devDependencies": {
     "@vue/runtime-core": "^3.5.42",
+    "incajs": "workspace:*",
     "oxfmt": "^0.66.0",
     "oxlint": "^1.81.0"
   },

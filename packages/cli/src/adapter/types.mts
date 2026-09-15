@@ -38,10 +38,9 @@ export interface BuildResult {
 }
 
 /**
- * The contract a bundler adapter satisfies. `@gpjs-ui/vite`'s `watch`/`build`
- * already match this shape structurally, so swapping bundlers means
- * injecting a different `Bundler` here — never editing this package's own
- * types, and never requiring the adapter itself to import from here.
+ * The contract a bundler adapter satisfies. Supporting another bundler
+ * means adding a sibling adapter module and injecting its `Bundler` here —
+ * never editing this package's own types.
  */
 export interface Bundler {
   watch(options: BundlerOptions): Promise<Watcher>;

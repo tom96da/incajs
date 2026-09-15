@@ -20,7 +20,7 @@ export default defineConfig({
       // This package only ever runs in Node — nothing here targets a
       // browser bundle, so every `node:` builtin stays an import rather
       // than something Vite tries to polyfill.
-      external: [/^node:/, "@gpjs-ui/host-client", "@gpjs-ui/vite"],
+      external: [/^node:/, "vite", "@vitejs/plugin-vue"],
     },
   },
   plugins: [dts({ include: ["src"], exclude: ["src/**/*.test.mts"] })],

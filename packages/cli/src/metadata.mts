@@ -31,7 +31,7 @@ export interface AppMetadata {
   icon?: string;
 }
 
-/** Strips a package name's scope, e.g. `@gpjs-ui/vue` → `vue`. */
+/** Strips a package name's scope, e.g. `incajs/vue` → `vue`. */
 function unscopedName(name: string): string {
   const slash = name.indexOf("/");
   return name.startsWith("@") && slash !== -1 ? name.slice(slash + 1) : name;

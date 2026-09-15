@@ -146,7 +146,7 @@ the JS half.
 
 ### App lifecycle surface (decided, not yet dispatched)
 
-Settled ahead of `@gpjs-ui/cli`'s `gpjsui dev` needing it, per
+Settled ahead of `@incajs/cli`'s `gpjsui dev` needing it, per
 [PROTOCOL.md](./PROTOCOL.md)'s own note that an app lifecycle hook is "a name
 the host agrees to dispatch, not a new binding." Recorded here so a future
 unit implements this rather than deciding it again:
@@ -166,7 +166,7 @@ unit implements this rather than deciding it again:
   existing `drain_jobs_and_refresh` call site, and nothing pumps it again
   afterward — QuickJS has no timers or I/O to resume it, so awaiting a
   timer or `fetch` would hang forever, not fail loudly.
-- **Wrapping**: `packages/gpjs-ui` should expose named helpers (e.g.
+- **Wrapping**: `packages/core` should expose named helpers (e.g.
   `onBeforeReload`/`onBeforeUnmount`) over the raw `addEventListener`
   call, so the event-name strings never become app-facing API.
 

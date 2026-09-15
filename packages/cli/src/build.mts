@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { defaultBundler } from "./defaultBundler.mts";
 import { resolveEntry } from "./entry.mts";
-import type { Bundler } from "./bundler.mts";
+import type { Bundler } from "./adapter/types.mts";
 
 export interface BuildAppOptions {
   /** The app's root directory. Defaults to `process.cwd()`. */
@@ -15,7 +15,7 @@ export interface BuildAppOptions {
    * committed `src/main.mts`, or `src/App.vue` wrapped in a synthesized one.
    */
   entry?: string;
-  /** Overrides the bundler — `@gpjs-ui/vite` is the only one wired in by default. */
+  /** Overrides the bundler — see {@link defaultBundler} for what's wired in by default. */
   bundler?: Bundler;
 }
 

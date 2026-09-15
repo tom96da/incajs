@@ -5,7 +5,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { build } from "../src/index.mts";
+import { build } from "../../../src/adapter/vite/index.mts";
 import { scratchApp } from "./scratchApp.mts";
 
 const { setUp, tearDown, makeApp } = scratchApp("build");

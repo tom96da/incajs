@@ -32,7 +32,7 @@ describe("resolveEntry", () => {
 
     expect(entry).toBe(path.join(app, "node_modules/.gpjsui/entry.mts"));
     const content = await readFile(entry, "utf8");
-    expect(content).toContain('import { createGpjsuiApp } from "@gpjs-ui/vue";');
+    expect(content).toContain('import { createGpjsuiApp } from "incajs/vue";');
     expect(content).toContain(
       `import App from ${JSON.stringify(appVuePath.split(path.sep).join("/"))};`,
     );

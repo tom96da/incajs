@@ -4,13 +4,10 @@
 import { createRenderer } from "@vue/runtime-core";
 import type { App, Component, ComponentPublicInstance } from "@vue/runtime-core";
 
-import { rootNodeId } from "gpjs-ui";
-
-import { nodeOps } from "./nodeOps.mts";
-import { patchProp } from "./patchProp.mts";
+import { createNodeOps } from "./nodeOps.mts";
+import { createPatchProp } from "./patchProp.mts";
+import type { IncajsCore } from "./core.mts";
 import type { GpjsuiElement, GpjsuiNode } from "./nodeOps.mts";
-
-const renderer = createRenderer<GpjsuiNode, GpjsuiElement>({ ...nodeOps, patchProp });
 
 /**
  * `@vue/runtime-core`'s `App`, with `mount` additionally callable with no
@@ -22,27 +19,32 @@ export type GpjsuiApp = App<GpjsuiElement> & {
   mount: (rootContainer?: GpjsuiElement) => ComponentPublicInstance;
 };
 
-function hostRootElement(): GpjsuiElement {
-  return { id: rootNodeId(), kind: "element", parent: null, children: [] };
-}
-
 /**
  * Creates a Vue app whose root mounts against a {@link GpjsuiElement} host
  * handle instead of a DOM element. `app.mount()` with no argument targets
  * the host's root container; `app.unmount`, `app.use`, etc. all behave
  * exactly as `@vue/runtime-core` itself documents them.
+ * @param core - the incajs bindings to drive the native tree through
  * @param rootComponent - the component to mount as the app's root
  * @param rootProps - props to pass to that root component
  * @returns the created app
  */
 export function createGpjsuiApp(
+  core: IncajsCore,
   rootComponent: Component,
   rootProps?: Record<string, unknown> | null,
 ): GpjsuiApp {
+  const renderer = createRenderer<GpjsuiNode, GpjsuiElement>({
+    ...createNodeOps(core),
+    patchProp: createPatchProp(core),
+  });
   const app = renderer.createApp(rootComponent, rootProps);
   // Captured before the override, or the replacement would call itself.
   const mountAt = app.mount.bind(app);
   return Object.assign(app, {
-    mount: (rootContainer?: GpjsuiElement) => mountAt(rootContainer ?? hostRootElement()),
+    mount: (rootContainer?: GpjsuiElement) =>
+      mountAt(
+        rootContainer ?? { id: core.rootNodeId(), kind: "element", parent: null, children: [] },
+      ),
   });
 }
