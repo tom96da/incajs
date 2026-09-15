@@ -4,12 +4,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createNodeOps } from "./nodeOps.mts";
-import type { IncajsCore } from "./core.mts";
-import type { GpjsuiElement, GpjsuiText } from "./nodeOps.mts";
+import type { IncaCore } from "./core.mts";
+import type { IncaElement, IncaText } from "./nodeOps.mts";
 
 let nextId = 1;
 
-const core: IncajsCore = {
+const core: IncaCore = {
   rootNodeId: vi.fn<() => number>(),
   createNode: vi.fn<(tag: string) => number>(),
   appendChild: vi.fn<(parentId: number, childId: number) => void>(),
@@ -31,7 +31,7 @@ beforeEach(() => {
   vi.mocked(core.createNode).mockImplementation(() => nextId++);
 });
 
-function element(): GpjsuiElement {
+function element(): IncaElement {
   return { id: nextId++, kind: "element", parent: null, children: [] };
 }
 
@@ -63,7 +63,7 @@ describe("createComment", () => {
 
 describe("setText", () => {
   it("forwards the new value and updates the node", () => {
-    const node = nodeOps.createText("old") as GpjsuiText;
+    const node = nodeOps.createText("old") as IncaText;
     nodeOps.setText(node, "new");
     expect(core.setAttribute).toHaveBeenCalledWith(1, "value", "new");
     expect(node.text).toBe("new");

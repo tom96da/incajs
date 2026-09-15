@@ -23,12 +23,12 @@ const native = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  globalThis.__gpjsui_native__ = native;
-  delete (globalThis as { __gpjsui_callbacks__?: unknown }).__gpjsui_callbacks__;
+  globalThis.__inca_native__ = native;
+  delete (globalThis as { __inca_callbacks__?: unknown }).__inca_callbacks__;
 });
 
 describe("setEventListener's callback registry", () => {
-  it("stores the listener at __gpjsui_callbacks__[id] and forwards that id natively", () => {
+  it("stores the listener at __inca_callbacks__[id] and forwards that id natively", () => {
     const listener = vi.fn<() => void>();
 
     setEventListener(1, "click", listener);
@@ -37,14 +37,14 @@ describe("setEventListener's callback registry", () => {
     const [nodeId, event, callbackId] = native.addEventListener.mock.calls[0]!;
     expect(nodeId).toBe(1);
     expect(event).toBe("click");
-    expect(globalThis.__gpjsui_callbacks__[callbackId]).toBe(listener);
+    expect(globalThis.__inca_callbacks__[callbackId]).toBe(listener);
   });
 
   it("allocates a distinct id per registration", () => {
     setEventListener(1, "click", vi.fn());
     setEventListener(2, "click", vi.fn());
 
-    const ids = Object.keys(globalThis.__gpjsui_callbacks__);
+    const ids = Object.keys(globalThis.__inca_callbacks__);
     expect(ids).toHaveLength(2);
   });
 
@@ -56,8 +56,8 @@ describe("setEventListener's callback registry", () => {
     const secondId = native.addEventListener.mock.calls[1]![2];
 
     expect(secondId).not.toBe(firstId);
-    expect(globalThis.__gpjsui_callbacks__[firstId]).toBeUndefined();
-    expect(Object.keys(globalThis.__gpjsui_callbacks__)).toHaveLength(1);
+    expect(globalThis.__inca_callbacks__[firstId]).toBeUndefined();
+    expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(1);
   });
 });
 
@@ -69,7 +69,7 @@ describe("removeEventListener", () => {
     removeEventListener(1, "click");
 
     expect(native.removeEventListener).toHaveBeenCalledWith(1, "click", callbackId);
-    expect(globalThis.__gpjsui_callbacks__[callbackId]).toBeUndefined();
+    expect(globalThis.__inca_callbacks__[callbackId]).toBeUndefined();
   });
 
   it("is a no-op when nothing is registered", () => {
@@ -83,7 +83,7 @@ describe("removeEventListener", () => {
     removeEventListener(1, "click");
     setEventListener(1, "click", vi.fn());
 
-    expect(Object.keys(globalThis.__gpjsui_callbacks__)).toHaveLength(1);
+    expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(1);
   });
 });
 
@@ -100,7 +100,7 @@ describe("destroyNode", () => {
 
     destroyNode(1);
 
-    expect(globalThis.__gpjsui_callbacks__).toEqual({});
+    expect(globalThis.__inca_callbacks__).toEqual({});
   });
 
   it("leaves another node's registration alone", () => {
@@ -111,8 +111,8 @@ describe("destroyNode", () => {
 
     destroyNode(1);
 
-    expect(globalThis.__gpjsui_callbacks__[survivor]).toBeDefined();
-    expect(Object.keys(globalThis.__gpjsui_callbacks__)).toHaveLength(1);
+    expect(globalThis.__inca_callbacks__[survivor]).toBeDefined();
+    expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(1);
   });
 
   it("re-registering a destroyed node's (nodeId, event) does not resurrect the old id", () => {
@@ -124,6 +124,6 @@ describe("destroyNode", () => {
     setEventListener(1, "click", vi.fn());
 
     expect(native.removeEventListener).not.toHaveBeenCalled();
-    expect(Object.keys(globalThis.__gpjsui_callbacks__)).toHaveLength(1);
+    expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(1);
   });
 });

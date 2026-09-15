@@ -17,7 +17,7 @@ afterEach(async () => {
 });
 
 async function makeApp(): Promise<string> {
-  cwd = await mkdtemp(path.join(tmpdir(), "gpjsui-entry-"));
+  cwd = await mkdtemp(path.join(tmpdir(), "inca-entry-"));
   await mkdir(path.join(cwd, "src"), { recursive: true });
   return cwd;
 }
@@ -30,13 +30,13 @@ describe("resolveEntry", () => {
 
     const entry = await resolveEntry(app);
 
-    expect(entry).toBe(path.join(app, "node_modules/.gpjsui/entry.mts"));
+    expect(entry).toBe(path.join(app, "node_modules/.inca/entry.mts"));
     const content = await readFile(entry, "utf8");
-    expect(content).toContain('import { createGpjsuiApp } from "incajs/vue";');
+    expect(content).toContain('import { createIncaApp } from "incajs/vue";');
     expect(content).toContain(
       `import App from ${JSON.stringify(appVuePath.split(path.sep).join("/"))};`,
     );
-    expect(content).toContain("createGpjsuiApp(App).mount();");
+    expect(content).toContain("createIncaApp(App).mount();");
   });
 
   it("prefers a committed src/main.mts over src/App.vue when both exist", async () => {

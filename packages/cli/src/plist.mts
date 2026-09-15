@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-/** A macOS `Info.plist`'s value types — the only ones `gpjsui package` writes. */
+/** A macOS `Info.plist`'s value types — the only ones `inca package` writes. */
 export type PlistValue = string | boolean;
 
 function escapeXml(value: string): string {

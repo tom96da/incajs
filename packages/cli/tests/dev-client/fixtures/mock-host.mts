@@ -2,7 +2,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-// A stand-in for `gpjs-ui-host --dev`, driven by dev-client's own tests
+// A stand-in for `inca-host --dev`, driven by dev-client's own tests
 // instead of a real compiled binary: it speaks the same newline-delimited
 // JSON-RPC channel the real host does, just without a real engine or
 // window behind it.

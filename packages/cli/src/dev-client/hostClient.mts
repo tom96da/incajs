@@ -20,7 +20,7 @@ interface PendingCall {
 export interface HostClientOptions {
   /** The bundle passed to the host as `--dev <bundlePath>`. */
   bundlePath: string;
-  /** Overrides which `gpjs-ui-host` binary gets spawned, in place of automatic resolution. */
+  /** Overrides which `inca-host` binary gets spawned, in place of automatic resolution. */
   hostBin?: string;
   /**
    * Every diagnostic line the transport itself produces: the host's real
@@ -48,7 +48,7 @@ const defaultOnStderr = (line: string): void => {
 };
 
 /**
- * Spawns `gpjs-ui-host --dev <bundlePath>` and speaks newline-delimited
+ * Spawns `inca-host --dev <bundlePath>` and speaks newline-delimited
  * JSON-RPC 2.0 on its stdin/stdout. One instance owns exactly one child
  * process for its whole lifetime — a reload is a `reload` call on the same
  * child, never a respawn.
@@ -85,7 +85,7 @@ export class HostClient {
 
     child.on("exit", (code, signal) => {
       const reason = new Error(
-        `gpjs-ui-host exited (code=${String(code)}, signal=${String(signal)}) before answering`,
+        `inca-host exited (code=${String(code)}, signal=${String(signal)}) before answering`,
       );
       for (const { reject } of this.#pending.values()) reject(reason);
       this.#pending.clear();
@@ -131,7 +131,7 @@ export class HostClient {
         const { protocol } = params as ReadyParams;
         if (protocol !== HOST_PROTOCOL_VERSION) {
           onStderr(
-            `gpjs-ui-host speaks protocol ${String(protocol)}, this package was built for ` +
+            `inca-host speaks protocol ${String(protocol)}, this package was built for ` +
               `${String(HOST_PROTOCOL_VERSION)} — stopping it rather than carrying on`,
           );
           if (this.#child) void this.#kill(this.#child);

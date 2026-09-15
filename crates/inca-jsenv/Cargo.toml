@@ -1,0 +1,26 @@
+#:schema https://json.schemastore.org/cargo.json
+
+# Copyright (c) 2026 tom96da
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "inca-jsenv"
+description = "The QuickJS runtime bootstrap and host environment inca installs into it — the language plus what a script expects the host to provide."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme = "README.md"
+keywords.workspace = true
+publish = false
+
+[lib]
+name = "inca_jsenv"
+
+[dependencies]
+rquickjs.workspace = true
+
+[lints]
+workspace = true

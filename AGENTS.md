@@ -9,31 +9,32 @@ Instructions for AI coding agents working in this repository.
 
 ## Project
 
-**gpjs-ui** is an ultra-lightweight, Webview-free desktop application framework:
+**Incarnative.js** (`inca`) is an ultra-lightweight, Webview-free desktop application framework:
 
 - **Engine / Core**: Rust, built on [`gpui`](https://www.gpui.rs/) for direct GPU rendering (no Chromium/DOM).
 - **JS Runtime**: QuickJS via [`rquickjs`](https://github.com/DelSkayn/rquickjs), for a micro-sized, sub-second-startup runtime.
 - **Frontend**: Vue 3 (first-class support, built first) via a custom renderer. React and other frameworks are a future, additive goal — not yet implemented, and not started until Vue 3 support is stable.
 - **Bundler / dev tooling**: Vite, used in library/build mode (not as a browser dev server) — see [ARCHITECTURE.md](./specs/ARCHITECTURE.md).
 
-See [README.md](./README.md) for the full pitch. `gpjs-ui` is currently a development code name.
+See [README.md](./README.md) for the full pitch.
 
 ## Status
 
-Phase 1 (`crates/gpjs-ui`'s FFI bridge core) and Phase 2 (the pnpm
-workspace, `packages/core`, its `incajs/vue` Vue 3 custom renderer, and
-two working `.vue` examples) are complete and visually confirmed —
-[FFI.md](./specs/FFI.md) has the current binding vocabulary.
+Phase 1 (the Rust host's FFI bridge core, now split across
+`crates/inca-gpui`/`crates/inca-bridge`/`crates/inca-jsenv`) and Phase 2
+(the pnpm workspace, `packages/core`, its `incajs/vue` Vue 3 custom
+renderer, and two working `.vue` examples) are complete and visually
+confirmed — [FFI.md](./specs/FFI.md) has the current binding vocabulary.
 
-Phase 3 (the `gpjsui` CLI, on the JS/TS side) is split into 3.1 through
-3.4, with a `v0.0.1` release after 3.3. 3.1 (`gpjsui dev`, full reload)
-and 3.2 (`gpjsui build`) are both done and confirmed on macOS and Linux.
+Phase 3 (the `inca` CLI, on the JS/TS side) is split into 3.1 through
+3.4, with a `v0.0.1` release after 3.3. 3.1 (`inca dev`, full reload)
+and 3.2 (`inca build`) are both done and confirmed on macOS and Linux.
 One item from 3.1 remains, not blocking 3.2 or 3.3: a dev-only error
 panel drawn in the window, deliberately deferred — it needs
 `position`/`z_index`/`overflow`, which don't exist before Phase 4.
 
 3.3 (application packaging) has landed through Unit ii: per-platform
-`gpjs-ui-host` npm packages and `gpjsui package`, confirmed with a real
+`@incajs/host-*` npm packages and `inca package`, confirmed with a real
 launch on Linux (macOS checked structurally only — no display to launch
 one on here). What's left before `v0.0.1`: Unit iii, the CD workflow and
 the npm publish itself.
@@ -48,7 +49,7 @@ Keep this section's status prose accurate as real logic lands — don't let it g
 - [ARCHITECTURE.md](./specs/ARCHITECTURE.md) — tech stack, system diagram, and how HMR is delivered into the embedded QuickJS runtime.
 - [ROADMAP.md](./specs/ROADMAP.md) — the phased build-out plan (Vue 3 first, React later as an additive package).
 - [FFI.md](./specs/FFI.md) — the JS↔Rust host bridge function surface.
-- [PROTOCOL.md](./specs/PROTOCOL.md) — the dev protocol between `gpjs-ui-host` and the Node process that spawns it.
+- [PROTOCOL.md](./specs/PROTOCOL.md) — the dev protocol between `inca-host` and the Node process that spawns it.
 
 ### Guiding principles
 

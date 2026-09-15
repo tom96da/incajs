@@ -2,7 +2,7 @@
   "name": "@incajs/host-darwin-arm64",
   "version": "0.0.0-0",
   "private": true,
-  "description": "Prebuilt gpjs-ui-host binary for macOS on Apple Silicon (arm64).",
+  "description": "Prebuilt inca-host binary for macOS on Apple Silicon (arm64).",
   "keywords": [
     "desktop-app",
     "gpui",

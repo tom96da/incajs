@@ -30,7 +30,7 @@ export interface DevOptions {
 }
 
 /**
- * Builds the app, starts `gpjs-ui-host` once the first bundle lands, and
+ * Builds the app, starts `inca-host` once the first bundle lands, and
  * reloads it on every rebuild — until `options.signal` aborts.
  */
 export async function dev(options: DevOptions): Promise<void> {
@@ -63,7 +63,7 @@ export async function dev(options: DevOptions): Promise<void> {
         onStderr: (line) => stderr.write(line),
         onReady: () => {
           ready = true;
-          stdout.write("[gpjsui] ready\n");
+          stdout.write("[inca] ready\n");
           if (pendingReload) {
             pendingReload = false;
             void reloadHost();
@@ -74,7 +74,7 @@ export async function dev(options: DevOptions): Promise<void> {
       try {
         await next.start();
       } catch (error) {
-        printFault(stderr, "failed to start gpjs-ui-host", toFault(error));
+        printFault(stderr, "failed to start inca-host", toFault(error));
         return;
       }
       client = next;

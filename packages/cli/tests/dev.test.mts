@@ -76,12 +76,12 @@ describe("dev", () => {
     });
 
     bundler.emitBuild("bundle.js");
-    await vi.waitFor(() => expect(stdout.text()).toContain("[gpjsui] ready"));
+    await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
 
     controller.abort();
     await running;
 
-    expect(stdout.text()).toContain("[gpjsui] ready");
+    expect(stdout.text()).toContain("[inca] ready");
   });
 
   it("reloads the host on a later build without restarting it", async () => {
@@ -100,7 +100,7 @@ describe("dev", () => {
     });
 
     bundler.emitBuild("bundle.js");
-    await vi.waitFor(() => expect(stdout.text()).toContain("[gpjsui] ready"));
+    await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
     bundler.emitBuild("bundle.js");
 
     controller.abort();
@@ -119,19 +119,19 @@ describe("dev", () => {
       bundler,
       // Deliberately unspawnable: a build failure must never reach the
       // point of starting a host at all.
-      hostBin: "/nonexistent/gpjs-ui-host",
+      hostBin: "/nonexistent/inca-host",
       stdout: makeSink().stream,
       stderr: stderr.stream,
       signal: controller.signal,
     });
 
     bundler.emitError({ message: "syntax error", stack: "at somewhere" });
-    await vi.waitFor(() => expect(stderr.text()).toContain("[gpjsui] build failed"));
+    await vi.waitFor(() => expect(stderr.text()).toContain("[inca] build failed"));
 
     controller.abort();
     await running;
 
-    expect(stderr.text()).toContain("[gpjsui] build failed: syntax error");
+    expect(stderr.text()).toContain("[inca] build failed: syntax error");
     expect(stderr.text()).toContain("at somewhere");
   });
 
@@ -151,14 +151,14 @@ describe("dev", () => {
     });
 
     bundler.emitBuild("bundle.js");
-    await vi.waitFor(() => expect(stdout.text()).toContain("[gpjsui] ready"));
+    await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
     bundler.emitBuild("bundle.js");
-    await vi.waitFor(() => expect(stderr.text()).toContain("[gpjsui] reload failed"));
+    await vi.waitFor(() => expect(stderr.text()).toContain("[inca] reload failed"));
 
     controller.abort();
     await running;
 
-    expect(stderr.text()).toContain("[gpjsui] reload failed: boom");
+    expect(stderr.text()).toContain("[inca] reload failed: boom");
     expect(stderr.text()).toContain("Error: boom");
   });
 
@@ -178,12 +178,12 @@ describe("dev", () => {
     });
 
     bundler.emitBuild("bundle.js");
-    await vi.waitFor(() => expect(stderr.text()).toContain("[gpjsui] app error"));
+    await vi.waitFor(() => expect(stderr.text()).toContain("[inca] app error"));
 
     controller.abort();
     await running;
 
-    expect(stderr.text()).toContain("[gpjsui] app error: boom");
+    expect(stderr.text()).toContain("[inca] app error: boom");
     expect(stderr.text()).toContain("Error: boom");
   });
 
@@ -202,7 +202,7 @@ describe("dev", () => {
     });
 
     bundler.emitBuild("bundle.js");
-    await vi.waitFor(() => expect(stdout.text()).toContain("[gpjsui] ready"));
+    await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
 
     controller.abort();
     await running;
@@ -228,7 +228,7 @@ describe("dev", () => {
     bundler.emitBuild("bundle.js");
     bundler.emitBuild("bundle.js");
 
-    await vi.waitFor(() => expect(stdout.text()).toContain("[gpjsui] ready"));
+    await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
     await vi.waitFor(() => expect(stderr.text()).toContain("reload #1"));
 
     controller.abort();

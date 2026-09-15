@@ -13,7 +13,7 @@ export type { BuildOptions, BuildResult } from "../types.mts";
 /**
  * Builds `entry` into a minified, production bundle under `outDir` once, and
  * rejects on failure rather than reporting it through a callback. Never
- * starts or talks to `gpjs-ui-host` — that's `@incajs/cli`'s job.
+ * starts or talks to `inca-host` — that's `dev.mts`'s job.
  */
 export async function build({ entry, outDir }: BuildOptions): Promise<BuildResult> {
   await buildOnce(resolveViteConfig({ entry, outDir, mode: "production", watch: false }));

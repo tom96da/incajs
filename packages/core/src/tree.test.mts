@@ -31,10 +31,10 @@ const native = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  globalThis.__gpjsui_native__ = native;
+  globalThis.__inca_native__ = native;
 });
 
-describe("wrapper functions forward to __gpjsui_native__", () => {
+describe("wrapper functions forward to __inca_native__", () => {
   it("rootNodeId", () => {
     expect(rootNodeId()).toBe(42);
     expect(native.rootNodeId).toHaveBeenCalledWith();

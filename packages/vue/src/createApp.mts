@@ -6,8 +6,8 @@ import type { App, Component, ComponentPublicInstance } from "@vue/runtime-core"
 
 import { createNodeOps } from "./nodeOps.mts";
 import { createPatchProp } from "./patchProp.mts";
-import type { IncajsCore } from "./core.mts";
-import type { GpjsuiElement, GpjsuiNode } from "./nodeOps.mts";
+import type { IncaCore } from "./core.mts";
+import type { IncaElement, IncaNode } from "./nodeOps.mts";
 
 /**
  * `@vue/runtime-core`'s `App`, with `mount` additionally callable with no
@@ -15,12 +15,12 @@ import type { GpjsuiElement, GpjsuiNode } from "./nodeOps.mts";
  * than an `Omit`: `App`'s `this`-returning methods (`use`, `mixin`,
  * `component`, `directive`) have to keep this wider `mount` when chained.
  */
-export type GpjsuiApp = App<GpjsuiElement> & {
-  mount: (rootContainer?: GpjsuiElement) => ComponentPublicInstance;
+export type IncaApp = App<IncaElement> & {
+  mount: (rootContainer?: IncaElement) => ComponentPublicInstance;
 };
 
 /**
- * Creates a Vue app whose root mounts against a {@link GpjsuiElement} host
+ * Creates a Vue app whose root mounts against a {@link IncaElement} host
  * handle instead of a DOM element. `app.mount()` with no argument targets
  * the host's root container; `app.unmount`, `app.use`, etc. all behave
  * exactly as `@vue/runtime-core` itself documents them.
@@ -29,12 +29,12 @@ export type GpjsuiApp = App<GpjsuiElement> & {
  * @param rootProps - props to pass to that root component
  * @returns the created app
  */
-export function createGpjsuiApp(
-  core: IncajsCore,
+export function createIncaApp(
+  core: IncaCore,
   rootComponent: Component,
   rootProps?: Record<string, unknown> | null,
-): GpjsuiApp {
-  const renderer = createRenderer<GpjsuiNode, GpjsuiElement>({
+): IncaApp {
+  const renderer = createRenderer<IncaNode, IncaElement>({
     ...createNodeOps(core),
     patchProp: createPatchProp(core),
   });
@@ -42,7 +42,7 @@ export function createGpjsuiApp(
   // Captured before the override, or the replacement would call itself.
   const mountAt = app.mount.bind(app);
   return Object.assign(app, {
-    mount: (rootContainer?: GpjsuiElement) =>
+    mount: (rootContainer?: IncaElement) =>
       mountAt(
         rootContainer ?? { id: core.rootNodeId(), kind: "element", parent: null, children: [] },
       ),

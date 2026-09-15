@@ -4,7 +4,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 -->
 
 <!--
-  Vue port of crates/gpjs-ui/examples/click_counter.rs: a clickable,
+  Vue port of crates/inca-bridge/examples/click_counter.rs: a clickable,
   bordered box whose label counts up — the JS-side reactivity/event-dispatch
   counterpart to hello_world's purely static tree.
 -->

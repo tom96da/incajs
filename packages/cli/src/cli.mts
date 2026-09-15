@@ -6,7 +6,7 @@ import { dev } from "./dev.mts";
 import { printFault, toFault } from "./fault.mts";
 import { packageApp } from "./package.mts";
 
-const USAGE = "Usage: gpjsui <dev|build|package>";
+const USAGE = "Usage: inca <dev|build|package>";
 
 /** Parses argv and runs the named subcommand: `dev`, `build`, or `package`. */
 export async function run(argv: readonly string[] = process.argv): Promise<void> {
@@ -15,7 +15,7 @@ export async function run(argv: readonly string[] = process.argv): Promise<void>
   if (command === "build") {
     try {
       const bundlePath = await build();
-      process.stdout.write(`[gpjsui] built ${bundlePath}\n`);
+      process.stdout.write(`[inca] built ${bundlePath}\n`);
     } catch (error) {
       printFault(process.stderr, "build failed", toFault(error));
       process.exitCode = 1;
@@ -26,7 +26,7 @@ export async function run(argv: readonly string[] = process.argv): Promise<void>
   if (command === "package") {
     try {
       const { appPath } = await packageApp();
-      process.stdout.write(`[gpjsui] packaged ${appPath}\n`);
+      process.stdout.write(`[inca] packaged ${appPath}\n`);
     } catch (error) {
       printFault(process.stderr, "package failed", toFault(error));
       process.exitCode = 1;
@@ -42,7 +42,7 @@ export async function run(argv: readonly string[] = process.argv): Promise<void>
 
   const controller = new AbortController();
   const onSignal = (): void => {
-    process.stderr.write("[gpjsui] shutting down\n");
+    process.stderr.write("[inca] shutting down\n");
     controller.abort();
   };
   // A wrapper script runner (e.g. `pnpm run`) commonly delivers SIGTERM to

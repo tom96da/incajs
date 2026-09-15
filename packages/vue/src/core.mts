@@ -26,7 +26,7 @@ export type EventListener = (...args: unknown[]) => void;
  * checked and trip lint rules against passing them around unbound, neither
  * of which this interface needs to tolerate.
  */
-export interface IncajsCore {
+export interface IncaCore {
   rootNodeId: () => NodeId;
   createNode: (tag: TagName) => NodeId;
   appendChild: (parentId: NodeId, childId: NodeId) => void;

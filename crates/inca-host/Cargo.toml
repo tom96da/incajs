@@ -1,0 +1,44 @@
+#:schema https://json.schemastore.org/cargo.json
+
+# Copyright (c) 2026 tom96da
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "inca-host"
+description = "Runtime binary for inca apps — reads a prebuilt, self-contained JS bundle and mounts it through the real inca/GPUI stack."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme = "README.md"
+keywords.workspace = true
+publish = false
+
+[dependencies]
+async-channel.workspace = true
+env_logger.workspace = true
+gpui.workspace = true
+inca-bridge = { path = "../inca-bridge" }
+inca-gpui = { path = "../inca-gpui" }
+inca-jsenv = { path = "../inca-jsenv" }
+log.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+# test-support gates gpui's TestAppContext, which is how the startup drain
+# is checked without a real display.
+gpui = { workspace = true, features = ["test-support"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# font-kit is required on macOS (gpui_macos) for any text to render at all —
+# without it, gpui_macos silently draws every other primitive but skips text.
+gpui_platform = { workspace = true, features = ["font-kit"] }
+
+[target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
+gpui_platform = { workspace = true, features = ["wayland", "x11"] }
+
+[lints]
+workspace = true

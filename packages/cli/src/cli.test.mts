@@ -51,10 +51,10 @@ afterEach(() => {
 
 describe("run", () => {
   it("prints usage and sets a non-zero exit code for anything but dev/build/package", async () => {
-    await run(["node", "gpjsui"]);
+    await run(["node", "inca"]);
 
     expect(process.exitCode).toBe(1);
-    expect(written(stderr)).toContain("Usage: gpjsui <dev|build|package>");
+    expect(written(stderr)).toContain("Usage: inca <dev|build|package>");
     expect(mockedDev).not.toHaveBeenCalled();
     expect(mockedBuild).not.toHaveBeenCalled();
     expect(mockedPackageApp).not.toHaveBeenCalled();
@@ -63,46 +63,46 @@ describe("run", () => {
   it("runs build and leaves the exit code untouched on success", async () => {
     mockedBuild.mockResolvedValue("/app/dist/bundle.js");
 
-    await run(["node", "gpjsui", "build"]);
+    await run(["node", "inca", "build"]);
 
     expect(mockedBuild).toHaveBeenCalled();
     expect(mockedDev).not.toHaveBeenCalled();
     expect(process.exitCode).toBeUndefined();
-    expect(written(stdout)).toContain("[gpjsui] built /app/dist/bundle.js");
+    expect(written(stdout)).toContain("[inca] built /app/dist/bundle.js");
   });
 
   it("sets a non-zero exit code and prints a readable error when build fails", async () => {
     mockedBuild.mockRejectedValue(new Error("syntax error"));
 
-    await run(["node", "gpjsui", "build"]);
+    await run(["node", "inca", "build"]);
 
     expect(process.exitCode).toBe(1);
-    expect(written(stderr)).toContain("[gpjsui] build failed: syntax error");
+    expect(written(stderr)).toContain("[inca] build failed: syntax error");
   });
 
   it("runs package and leaves the exit code untouched on success", async () => {
     mockedPackageApp.mockResolvedValue({ appPath: "/app/dist/click_counter.app" });
 
-    await run(["node", "gpjsui", "package"]);
+    await run(["node", "inca", "package"]);
 
     expect(mockedPackageApp).toHaveBeenCalled();
     expect(process.exitCode).toBeUndefined();
-    expect(written(stdout)).toContain("[gpjsui] packaged /app/dist/click_counter.app");
+    expect(written(stdout)).toContain("[inca] packaged /app/dist/click_counter.app");
   });
 
   it("sets a non-zero exit code and prints a readable error when package fails", async () => {
     mockedPackageApp.mockRejectedValue(new Error("no host binary"));
 
-    await run(["node", "gpjsui", "package"]);
+    await run(["node", "inca", "package"]);
 
     expect(process.exitCode).toBe(1);
-    expect(written(stderr)).toContain("[gpjsui] package failed: no host binary");
+    expect(written(stderr)).toContain("[inca] package failed: no host binary");
   });
 
   it.each(["SIGINT", "SIGTERM"] as const)(
     "aborts dev()'s signal on %s — a script runner may deliver either on Ctrl-C",
     (signal) => {
-      void run(["node", "gpjsui", "dev"]);
+      void run(["node", "inca", "dev"]);
 
       const options = mockedDev.mock.calls[0]?.[0];
       expect(options?.signal.aborted).toBe(false);
@@ -110,7 +110,7 @@ describe("run", () => {
       process.emit(signal);
 
       expect(options?.signal.aborted).toBe(true);
-      expect(written(stderr)).toContain("[gpjsui] shutting down");
+      expect(written(stderr)).toContain("[inca] shutting down");
     },
   );
 });

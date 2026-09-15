@@ -5,19 +5,19 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-/** An app's own `package.json`, the parts `gpjsui package` cares about. */
+/** An app's own `package.json`, the parts `inca package` cares about. */
 interface AppPackageJson {
   name?: string;
   version?: string;
   description?: string;
-  gpjsui?: {
+  inca?: {
     productName?: string;
     identifier?: string;
     icon?: string;
   };
 }
 
-/** An app's identity and version, for `gpjsui package` to stamp onto the application it emits. */
+/** An app's identity and version, for `inca package` to stamp onto the application it emits. */
 export interface AppMetadata {
   /** Shown to the user — the app's display name. */
   productName: string;
@@ -31,7 +31,7 @@ export interface AppMetadata {
   icon?: string;
 }
 
-/** Strips a package name's scope, e.g. `incajs/vue` → `vue`. */
+/** Strips a package name's scope, e.g. `@incajs/vue` → `vue`. Unscoped names (e.g. `incajs`) pass through unchanged. */
 function unscopedName(name: string): string {
   const slash = name.indexOf("/");
   return name.startsWith("@") && slash !== -1 ? name.slice(slash + 1) : name;
@@ -50,14 +50,14 @@ export function slugify(name: string): string {
 }
 
 /**
- * Reads an app's package metadata for `gpjsui package`: `productName`,
+ * Reads an app's package metadata for `inca package`: `productName`,
  * `identifier`, `version`, and an optional `icon`. Everything is derived
  * from the app's own `package.json` — its `name`/`version` fields, and an
- * optional `"gpjsui"` key overriding any of them:
- * `{ "gpjsui": { "productName", "identifier", "icon" } }`.
+ * optional `"inca"` key overriding any of them:
+ * `{ "inca": { "productName", "identifier", "icon" } }`.
  *
  * @throws if `package.json` is missing, has neither a `name` nor a
- * `"gpjsui".productName`, or `"gpjsui".icon` doesn't resolve to a real file.
+ * `"inca".productName`, or `"inca".icon` doesn't resolve to a real file.
  */
 export async function readAppMetadata(cwd: string): Promise<AppMetadata> {
   const pkgPath = path.join(cwd, "package.json");
@@ -69,22 +69,22 @@ export async function readAppMetadata(cwd: string): Promise<AppMetadata> {
   }
 
   const pkg = JSON.parse(raw) as AppPackageJson;
-  const config = pkg.gpjsui ?? {};
+  const config = pkg.inca ?? {};
 
   const productName = config.productName ?? (pkg.name ? unscopedName(pkg.name) : undefined);
   if (!productName) {
-    throw new Error(`${pkgPath} needs a "name", or "gpjsui": { "productName" }`);
+    throw new Error(`${pkgPath} needs a "name", or "inca": { "productName" }`);
   }
 
   const version = pkg.version ?? "0.0.0";
 
-  const identifier = config.identifier ?? `org.gpjsui.${slugify(productName)}`;
+  const identifier = config.identifier ?? `org.inca.${slugify(productName)}`;
 
   let icon: string | undefined;
   if (config.icon) {
     icon = path.resolve(cwd, config.icon);
     if (!existsSync(icon)) {
-      throw new Error(`"gpjsui.icon" points to ${icon}, which doesn't exist`);
+      throw new Error(`"inca.icon" points to ${icon}, which doesn't exist`);
     }
   }
 

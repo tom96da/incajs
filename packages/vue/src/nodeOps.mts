@@ -3,62 +3,62 @@
 
 import type { RendererOptions } from "@vue/runtime-core";
 
-import type { IncajsCore, NodeId, TagName } from "./core.mts";
+import type { IncaCore, NodeId, TagName } from "./core.mts";
 
 /**
  * A container host node: either a real element or the hidden stand-in
  * {@link nodeOps.createComment} uses. Also `@vue/runtime-core`'s
  * `HostElement` — the only host node type that can act as a parent.
  *
- * `gpjs-ui`'s native tree has no parent pointers and no way to list a
+ * `inca`'s native tree has no parent pointers and no way to list a
  * node's children, so `parent`/`children` are maintained here as a
  * JS-side shadow of the tree, kept in sync by {@link nodeOps.insert}/
  * {@link nodeOps.remove}.
  */
-export interface GpjsuiElement {
+export interface IncaElement {
   /** The underlying native node's id — the only part of this object the native tree itself knows about. */
   readonly id: NodeId;
   /** `"comment"` for the hidden stand-in {@link nodeOps.createComment} produces; `"element"` for every other container. Purely informational — both render identically once created. */
   readonly kind: "element" | "comment";
   /** The current parent, or `null` if this node isn't attached to the tree. */
-  parent: GpjsuiElement | null;
+  parent: IncaElement | null;
   /** This node's children, in render order. */
-  children: GpjsuiNode[];
+  children: IncaNode[];
 }
 
 /** A text leaf host node — `@vue/runtime-core`'s `HostNode` for text. */
-export interface GpjsuiText {
+export interface IncaText {
   /** The underlying native node's id. */
   readonly id: NodeId;
-  /** Discriminates this node within the {@link GpjsuiNode} union. */
+  /** Discriminates this node within the {@link IncaNode} union. */
   readonly kind: "text";
   /** The current parent, or `null` if this node isn't attached to the tree. */
-  parent: GpjsuiElement | null;
+  parent: IncaElement | null;
   /** The text content, mirroring what's been pushed to the native node via {@link setAttribute}. */
   text: string;
 }
 
 /** Any host node {@link nodeOps} can produce: an element, comment, or text leaf. */
-export type GpjsuiNode = GpjsuiElement | GpjsuiText;
+export type IncaNode = IncaElement | IncaText;
 
 /**
- * `@vue/runtime-core`'s {@link RendererOptions}`<GpjsuiNode, GpjsuiElement>`,
+ * `@vue/runtime-core`'s {@link RendererOptions}`<IncaNode, IncaElement>`,
  * minus `patchProp` (see `./patchProp.mts`) — the host-node lifecycle half
  * of `incajs/vue`'s custom renderer, built entirely on the injected
- * {@link IncajsCore}, never on the native bridge directly.
+ * {@link IncaCore}, never on the native bridge directly.
  * @param core - the incajs bindings to drive the native tree through
  */
 export function createNodeOps(
-  core: IncajsCore,
-): Omit<RendererOptions<GpjsuiNode, GpjsuiElement>, "patchProp"> {
-  function createTextNode(text: string): GpjsuiText {
+  core: IncaCore,
+): Omit<RendererOptions<IncaNode, IncaElement>, "patchProp"> {
+  function createTextNode(text: string): IncaText {
     const id = core.createNode("text");
     core.setAttribute(id, "value", text);
     return { id, kind: "text", parent: null, text };
   }
 
   // Drops `child` from its parent in this module's shadow of the native tree.
-  function unlink(child: GpjsuiNode): void {
+  function unlink(child: IncaNode): void {
     const parent = child.parent;
     if (!parent) return;
 
@@ -69,7 +69,7 @@ export function createNodeOps(
 
   // Detaches `child` in the native tree as well. `destroyNode` detaches on
   // its own, so the removal path uses `unlink` instead.
-  function detach(child: GpjsuiNode): void {
+  function detach(child: IncaNode): void {
     if (child.parent) core.removeChild(child.parent.id, child.id);
     unlink(child);
   }
@@ -82,7 +82,7 @@ export function createNodeOps(
      * @param tag - the node's element kind
      * @returns the new, parentless, childless element
      */
-    createElement(tag: TagName): GpjsuiElement {
+    createElement(tag: TagName): IncaElement {
       return { id: core.createNode(tag), kind: "element", parent: null, children: [] };
     },
 
@@ -93,7 +93,7 @@ export function createNodeOps(
      */
     createText: createTextNode,
 
-    // gpjs-ui has no comment concept — a hidden, childless container stands
+    // inca has no comment concept — a hidden, childless container stands
     // in for one. The comment's own text carries no rendered meaning here and
     // is discarded, same as the hidden node itself.
     /**
@@ -102,7 +102,7 @@ export function createNodeOps(
      * @param _text - the comment's text; accepted for interface compatibility, but discarded since nothing renders it
      * @returns the new hidden element
      */
-    createComment(_text: string): GpjsuiElement {
+    createComment(_text: string): IncaElement {
       const id = core.createNode("div");
       core.setStyle(id, "display", "none");
       return { id, kind: "comment", parent: null, children: [] };
@@ -113,7 +113,7 @@ export function createNodeOps(
      * @param node - the text leaf to update
      * @param text - the new text content
      */
-    setText(node: GpjsuiText, text: string): void {
+    setText(node: IncaText, text: string): void {
       core.setAttribute(node.id, "value", text);
       node.text = text;
     },
@@ -125,7 +125,7 @@ export function createNodeOps(
      * @param el - the container whose children are replaced
      * @param text - the new text content
      */
-    setElementText(el: GpjsuiElement, text: string): void {
+    setElementText(el: IncaElement, text: string): void {
       for (const child of el.children.splice(0)) {
         core.destroyNode(child.id);
         child.parent = null;
@@ -147,7 +147,7 @@ export function createNodeOps(
      * @param parent - the new container
      * @param anchor - the sibling to insert before, or omitted/`null` to append at the end
      */
-    insert(child: GpjsuiNode, parent: GpjsuiElement, anchor?: GpjsuiNode | null): void {
+    insert(child: IncaNode, parent: IncaElement, anchor?: IncaNode | null): void {
       detach(child);
 
       const anchorIndex = anchor ? parent.children.indexOf(anchor) : -1;
@@ -168,7 +168,7 @@ export function createNodeOps(
      * descendants are freed here or nowhere.
      * @param child - the node being removed
      */
-    remove(child: GpjsuiNode): void {
+    remove(child: IncaNode): void {
       unlink(child);
       core.destroyNode(child.id);
     },
@@ -178,7 +178,7 @@ export function createNodeOps(
      * @param node - the node to query
      * @returns the current parent, or `null` if it isn't attached
      */
-    parentNode(node: GpjsuiNode): GpjsuiElement | null {
+    parentNode(node: IncaNode): IncaElement | null {
       return node.parent;
     },
 
@@ -187,7 +187,7 @@ export function createNodeOps(
      * @param node - the node to query
      * @returns the sibling immediately after `node` in its parent's children, or `null` if there is none (or `node` isn't attached)
      */
-    nextSibling(node: GpjsuiNode): GpjsuiNode | null {
+    nextSibling(node: IncaNode): IncaNode | null {
       const parent = node.parent;
       if (!parent) return null;
 

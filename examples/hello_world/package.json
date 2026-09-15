@@ -2,7 +2,7 @@
   "name": "hello_world",
   "version": "0.0.0-0",
   "private": true,
-  "description": "A gpjs-ui Vue port of crates/gpjs-ui/examples/hello_world.rs — a static bordered box, a text label, and a row of six colored squares.",
+  "description": "An inca Vue port of crates/inca-gpui/examples/hello_world.rs — a static bordered box, a text label, and a row of six colored squares.",
   "license": "(MIT OR Apache-2.0)",
   "repository": {
     "type": "git",
@@ -11,9 +11,9 @@
   },
   "type": "module",
   "scripts": {
-    "dev": "gpjsui dev",
-    "build": "gpjsui build",
-    "package": "gpjsui package",
+    "dev": "inca dev",
+    "build": "inca build",
+    "package": "inca package",
     "lint": "oxlint --type-aware",
     "format": "oxfmt --check .",
     "typecheck": "oxlint -A all --type-aware --type-check"

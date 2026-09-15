@@ -2139,38 +2139,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gpjs-ui"
-version = "0.0.0-0"
-dependencies = [
- "env_logger",
- "gpui",
- "gpui_platform",
- "rquickjs",
-]
-
-[[package]]
-name = "gpjs-ui-host"
-version = "0.0.0-0"
-dependencies = [
- "async-channel",
- "env_logger",
- "gpjs-ui",
- "gpjs-ui-jsenv",
- "gpui",
- "gpui_platform",
- "log",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "gpjs-ui-jsenv"
-version = "0.0.0-0"
-dependencies = [
- "rquickjs",
-]
-
-[[package]]
 name = "gpu-allocator"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2887,6 +2855,50 @@ name = "imgref"
 version = "1.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e44b0a4eaa4c82f441d50a963f2d5f05a787240aeee097597033e72accfd22f"
+
+[[package]]
+name = "inca-bridge"
+version = "0.0.0-0"
+dependencies = [
+ "env_logger",
+ "gpui",
+ "gpui_platform",
+ "inca-gpui",
+ "inca-jsenv",
+ "rquickjs",
+]
+
+[[package]]
+name = "inca-gpui"
+version = "0.0.0-0"
+dependencies = [
+ "env_logger",
+ "gpui",
+ "gpui_platform",
+]
+
+[[package]]
+name = "inca-host"
+version = "0.0.0-0"
+dependencies = [
+ "async-channel",
+ "env_logger",
+ "gpui",
+ "gpui_platform",
+ "inca-bridge",
+ "inca-gpui",
+ "inca-jsenv",
+ "log",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "inca-jsenv"
+version = "0.0.0-0"
+dependencies = [
+ "rquickjs",
+]
 
 [[package]]
 name = "indexmap"

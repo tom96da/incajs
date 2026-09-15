@@ -1,8 +1,13 @@
-# @gpjs-ui/host-darwin-x64
+<!--
+Copyright (c) 2026 tom96da
+SPDX-License-Identifier: MIT OR Apache-2.0
+-->
 
-Prebuilt `gpjs-ui-host` binary for macOS on Intel (x64). Not meant to be
+# @incajs/host-darwin-x64
+
+Prebuilt `inca-host` binary for macOS on Intel (x64). Not meant to be
 depended on directly — `@incajs/cli`'s dev-client installs whichever of
 these matches the current OS/arch as an `optionalDependency` and resolves
 the binary inside it.
 
-This package carries no JS: `bin/gpjs-ui-host` is the whole of it.
+This package carries no JS: `bin/inca-host` is the whole of it.

@@ -9,13 +9,13 @@ import type { Component } from "@vue/runtime-core";
 
 import * as core from "incajs";
 
-import { createGpjsuiApp as createVueApp } from "@incajs/vue";
+import { createIncaApp as createVueApp } from "@incajs/vue";
 
-export function createGpjsuiApp(
+export function createIncaApp(
   rootComponent: Component,
   rootProps?: Record<string, unknown> | null,
 ) {
   return createVueApp(core, rootComponent, rootProps);
 }
 
-export type { GpjsuiApp, GpjsuiElement, GpjsuiNode, IncajsCore } from "@incajs/vue";
+export type { IncaApp, IncaElement, IncaNode, IncaCore } from "@incajs/vue";

@@ -6,7 +6,7 @@
 // For format details, see https://aka.ms/devcontainer.json. For config options, see the
 // README at: https://github.com/devcontainers/templates/tree/main/src/rust
 {
-  "name": "GPJSUI",
+  "name": "Incarnative.js",
   // Extends the base rust devcontainer image with gpui's native build deps
   // (see .devcontainer/Dockerfile). More info: https://containers.dev/guide/dockerfile
   "build": {

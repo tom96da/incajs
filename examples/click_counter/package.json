@@ -2,7 +2,7 @@
   "name": "click_counter",
   "version": "0.0.0-0",
   "private": true,
-  "description": "A gpjs-ui Vue port of crates/gpjs-ui/examples/click_counter.rs — a bordered box that counts up when clicked.",
+  "description": "An inca Vue port of crates/inca-bridge/examples/click_counter.rs — a bordered box that counts up when clicked.",
   "license": "(MIT OR Apache-2.0)",
   "repository": {
     "type": "git",
@@ -11,9 +11,9 @@
   },
   "type": "module",
   "scripts": {
-    "dev": "gpjsui dev",
-    "build": "gpjsui build",
-    "package": "gpjsui package",
+    "dev": "inca dev",
+    "build": "inca build",
+    "package": "inca package",
     "lint": "oxlint --type-aware",
     "format": "oxfmt --check .",
     "typecheck": "oxlint -A all --type-aware --type-check"

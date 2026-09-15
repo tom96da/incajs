@@ -3,12 +3,12 @@
 
 import type { RendererOptions } from "@vue/runtime-core";
 
-import type { EventListener, IncajsCore } from "./core.mts";
-import type { GpjsuiElement } from "./nodeOps.mts";
+import type { EventListener, IncaCore } from "./core.mts";
+import type { IncaElement } from "./nodeOps.mts";
 
 const isOn = (key: string): boolean => /^on[A-Z]/.test(key);
 
-function patchStyle(core: IncajsCore, el: GpjsuiElement, nextValue: unknown): void {
+function patchStyle(core: IncaCore, el: IncaElement, nextValue: unknown): void {
   if (typeof nextValue !== "object" || nextValue === null) return;
 
   for (const [key, value] of Object.entries(nextValue)) {
@@ -35,7 +35,7 @@ function asListener(value: unknown): EventListener | null {
   };
 }
 
-function patchEvent(core: IncajsCore, el: GpjsuiElement, rawKey: string, nextValue: unknown): void {
+function patchEvent(core: IncaCore, el: IncaElement, rawKey: string, nextValue: unknown): void {
   const event = rawKey.slice(2).toLowerCase();
   const listener = asListener(nextValue);
   if (listener) {
@@ -64,9 +64,9 @@ function patchEvent(core: IncajsCore, el: GpjsuiElement, rawKey: string, nextVal
  * @param core - the incajs bindings to drive the native tree through
  */
 export function createPatchProp(
-  core: IncajsCore,
-): RendererOptions<unknown, GpjsuiElement>["patchProp"] {
-  return (el: GpjsuiElement, key: string, _prevValue: unknown, nextValue: unknown): void => {
+  core: IncaCore,
+): RendererOptions<unknown, IncaElement>["patchProp"] {
+  return (el: IncaElement, key: string, _prevValue: unknown, nextValue: unknown): void => {
     if (key === "style") {
       patchStyle(core, el, nextValue);
     } else if (isOn(key)) {

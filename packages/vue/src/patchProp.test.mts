@@ -4,10 +4,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createPatchProp } from "./patchProp.mts";
-import type { IncajsCore } from "./core.mts";
-import type { GpjsuiElement } from "./nodeOps.mts";
+import type { IncaCore } from "./core.mts";
+import type { IncaElement } from "./nodeOps.mts";
 
-const core: IncajsCore = {
+const core: IncaCore = {
   rootNodeId: vi.fn<() => number>(),
   createNode: vi.fn<(tag: string) => number>(),
   appendChild: vi.fn<(parentId: number, childId: number) => void>(),
@@ -23,7 +23,7 @@ const core: IncajsCore = {
 
 const patchProp = createPatchProp(core);
 
-const el: GpjsuiElement = { id: 1, kind: "element", parent: null, children: [] };
+const el: IncaElement = { id: 1, kind: "element", parent: null, children: [] };
 
 beforeEach(() => {
   vi.clearAllMocks();

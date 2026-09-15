@@ -13,7 +13,7 @@ import type { Bundler } from "./adapter/types.mts";
 import type { AppMetadata } from "./metadata.mts";
 import type { PlistValue } from "./plist.mts";
 
-/** A platform `gpjsui package` can emit a distributable application for. */
+/** A platform `inca package` can emit a distributable application for. */
 export type PackageTarget = "macos" | "linux";
 
 /** Options for {@link packageApp}. */
@@ -21,7 +21,7 @@ export interface PackageAppOptions {
   /** The app's root directory. Defaults to `process.cwd()`. */
   cwd?: string;
   /**
-   * The app's entry point. Defaults to resolving it the same way `gpjsui
+   * The app's entry point. Defaults to resolving it the same way `inca
    * dev`/`build` do: a committed `src/main.mts`, or `src/App.vue` wrapped
    * in a synthesized one.
    */
@@ -29,9 +29,9 @@ export interface PackageAppOptions {
   /** Overrides the bundler — see {@link build}'s default. */
   bundler?: Bundler;
   /**
-   * Overrides which `gpjs-ui-host` binary gets embedded in the packaged
-   * app, in place of automatically resolving the current platform's
-   * prebuilt release build.
+   * Overrides which `inca-host` binary gets embedded in the packaged
+   * app, in place of automatic resolution (`INCA_HOST_BIN`, then the
+   * per-platform `@incajs/host-*` package — see {@link resolveHostBin}).
    */
   hostBin?: string;
   /**
@@ -57,7 +57,7 @@ export interface PackageResult {
 function targetForPlatform(): PackageTarget {
   if (process.platform === "darwin") return "macos";
   if (process.platform === "linux") return "linux";
-  throw new Error(`gpjsui package doesn't support ${process.platform} yet`);
+  throw new Error(`inca package doesn't support ${process.platform} yet`);
 }
 
 /** Inputs shared by every platform's app layout. */
@@ -138,14 +138,14 @@ async function packageLinux({
 }
 
 /**
- * Builds the app and pairs it with the prebuilt `gpjs-ui-host` into a
+ * Builds the app and pairs it with the prebuilt `inca-host` into a
  * distributable, platform-native application — a `.app` on macOS, a plain
  * directory on Linux — written alongside the build output, under the
  * app's own `dist/`. The app launches with no arguments and no terminal,
- * since `gpjs-ui-host` finds its own bundle beside its executable.
+ * since `inca-host` finds its own bundle beside its executable.
  *
  * @throws if the app's metadata can't be read, the build fails, or no
- * `gpjs-ui-host` binary can be resolved for the target platform.
+ * `inca-host` binary can be resolved for the target platform.
  */
 export async function packageApp(options: PackageAppOptions = {}): Promise<PackageResult> {
   const cwd = options.cwd ?? process.cwd();
@@ -155,7 +155,7 @@ export async function packageApp(options: PackageAppOptions = {}): Promise<Packa
   const metadata = await readAppMetadata(cwd);
   if (metadata.identifierIsDefault) {
     stdout.write(
-      `[gpjsui] no "gpjsui.identifier" set in package.json — using generated identifier ` +
+      `[inca] no "inca.identifier" set in package.json — using generated identifier ` +
         `${metadata.identifier}\n`,
     );
   }
@@ -163,12 +163,9 @@ export async function packageApp(options: PackageAppOptions = {}): Promise<Packa
   const bundlePath = await build({ cwd, entry: options.entry, bundler: options.bundler });
   const distDir = path.dirname(bundlePath);
 
-  const hostBin = options.hostBin ?? resolveHostBin({ profile: "release" });
+  const hostBin = options.hostBin ?? resolveHostBin();
   if (!existsSync(hostBin)) {
-    throw new Error(
-      `no host binary at ${hostBin} — build one first, e.g. ` +
-        '"cargo build -p gpjs-ui-host --release"',
-    );
+    throw new Error(`no host binary at ${hostBin} — check that it was built and is executable`);
   }
 
   const layoutArgs: LayoutArgs = { distDir, metadata, bundlePath, hostBin };

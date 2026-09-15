@@ -13,8 +13,8 @@ export type { Watcher } from "../types.mts";
 
 /**
  * Builds `entry` into a bundle under `outDir` and rebuilds it on every
- * change. Never starts, reloads, or talks to `gpjs-ui-host` — that's
- * `@incajs/cli`'s job.
+ * change. Never starts, reloads, or talks to `inca-host` — that's
+ * `dev.mts`'s job.
  */
 export async function watch({
   onBuild,

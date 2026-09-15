@@ -15,6 +15,6 @@ export function toFault(error: unknown): Fault {
 }
 
 export function printFault(stream: NodeJS.WritableStream, label: string, fault: Fault): void {
-  stream.write(`[gpjsui] ${label}: ${fault.message}\n`);
+  stream.write(`[inca] ${label}: ${fault.message}\n`);
   if (fault.stack) stream.write(`${fault.stack}\n`);
 }

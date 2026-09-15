@@ -10,6 +10,8 @@
     "framework-agnostic",
     "gpui",
     "gui",
+    "incajs",
+    "incarnative.js",
     "quickjs",
     "rust",
     "tauri-alternative",

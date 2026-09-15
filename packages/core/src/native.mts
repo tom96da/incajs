@@ -4,7 +4,7 @@
 import type { AttributeValue, CallbackId, EventListener, NodeId } from "./types.mts";
 
 /** The host-injected object every wrapper in this package forwards to. Not part of the public surface — reach it through the wrappers instead. */
-interface GpjsuiNative {
+interface IncaNative {
   rootNodeId(): NodeId;
   createNode(tag: string): NodeId;
   appendChild(parentId: NodeId, childId: NodeId): void;
@@ -19,11 +19,11 @@ interface GpjsuiNative {
 
 declare global {
   // eslint-disable-next-line no-var
-  var __gpjsui_native__: GpjsuiNative;
+  var __inca_native__: IncaNative;
   // eslint-disable-next-line no-var
-  var __gpjsui_callbacks__: Record<CallbackId, EventListener>;
+  var __inca_callbacks__: Record<CallbackId, EventListener>;
 }
 
-export function native(): GpjsuiNative {
-  return globalThis.__gpjsui_native__;
+export function native(): IncaNative {
+  return globalThis.__inca_native__;
 }

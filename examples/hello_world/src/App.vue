@@ -4,12 +4,12 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 -->
 
 <!--
-  Vue port of crates/gpjs-ui/examples/hello_world.rs's build_tree(): a
+  Vue port of crates/inca-gpui/examples/hello_world.rs's build_tree(): a
   static, non-interactive tree — no reactivity needed, matching the Rust
   original's own choice of plain `render_tree` with no event dispatch.
 
   The label below is a mustache interpolation, not plain template text:
-  gpjs-ui's "text" nodes render their value verbatim (no trimming), and
+  inca's "text" nodes render their value verbatim (no trimming), and
   Vue's whitespace condensing only fully removes whitespace-only text
   between two elements — the interpolation's own trailing edge still picks
   up one condensed space before the following <div>. That's expected,
@@ -39,7 +39,7 @@ const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0x000000, 0xffffff];
       text_size: 20,
     }"
   >
-    {{ "Hello, gpjs-ui!" }}
+    {{ "Hello, Incarnative.js!" }}
     <div :style="{ display: 'flex', flex_direction: 'row', gap: 8 }">
       <div
         v-for="color in colors"

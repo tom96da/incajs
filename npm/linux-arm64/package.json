@@ -2,7 +2,7 @@
   "name": "@incajs/host-linux-arm64",
   "version": "0.0.0-0",
   "private": true,
-  "description": "Prebuilt gpjs-ui-host binary for Linux on arm64.",
+  "description": "Prebuilt inca-host binary for Linux on arm64.",
   "keywords": [
     "desktop-app",
     "gpui",

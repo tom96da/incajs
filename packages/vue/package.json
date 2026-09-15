@@ -1,7 +1,7 @@
 {
   "name": "@incajs/vue",
   "version": "0.0.1",
-  "description": "Vue 3 custom renderer for incajs, mapping createRenderer's lifecycle methods to incajs core calls.",
+  "description": "Vue 3 custom renderer mapping createRenderer's lifecycle methods onto an injected incajs-shaped native host bridge.",
   "keywords": [
     "custom-renderer",
     "desktop-app",
@@ -55,5 +55,10 @@
   },
   "peerDependencies": {
     "@vue/runtime-core": "^3.5.42"
+  },
+  "peerDependenciesMeta": {
+    "@vue/runtime-core": {
+      "optional": true
+    }
   }
 }

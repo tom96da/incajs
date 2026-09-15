@@ -33,14 +33,14 @@ function fakeBundler(): Bundler {
 
 /** A stand-in host binary — real content and the executable bit, nothing that runs. */
 async function makeHostBin(dir: string): Promise<string> {
-  const hostBin = path.join(dir, "gpjs-ui-host");
+  const hostBin = path.join(dir, "inca-host");
   await writeFile(hostBin, "#!/bin/sh\necho stand-in\n");
   await chmod(hostBin, 0o755);
   return hostBin;
 }
 
 async function makeApp(pkg: object): Promise<string> {
-  cwd = await mkdtemp(path.join(tmpdir(), "gpjsui-package-"));
+  cwd = await mkdtemp(path.join(tmpdir(), "inca-package-"));
   await writeFile(path.join(cwd, "package.json"), JSON.stringify(pkg));
   return cwd;
 }
@@ -84,7 +84,7 @@ describe("packageApp", () => {
     const plist = await readFile(path.join(appPath, "Contents/Info.plist"), "utf8");
     expect(plist).toContain("<key>CFBundleExecutable</key>\n\t<string>click_counter</string>");
     expect(plist).toContain(
-      "<key>CFBundleIdentifier</key>\n\t<string>org.gpjsui.click-counter</string>",
+      "<key>CFBundleIdentifier</key>\n\t<string>org.inca.click-counter</string>",
     );
     expect(plist).toContain("<key>CFBundleVersion</key>\n\t<string>1.2.3</string>");
     expect(plist).toContain("<key>NSHighResolutionCapable</key>\n\t<true/>");
@@ -122,14 +122,14 @@ describe("packageApp", () => {
       stdout: sink.stream,
     });
 
-    expect(sink.text()).toContain("org.gpjsui.click-counter");
+    expect(sink.text()).toContain("org.inca.click-counter");
   });
 
   it("stays quiet about the identifier when the app set one", async () => {
     const app = await makeApp({
       name: "click_counter",
       version: "1.0.0",
-      gpjsui: { identifier: "com.example.click-counter" },
+      inca: { identifier: "com.example.click-counter" },
     });
     const hostBin = await makeHostBin(app);
     const sink = makeSink();

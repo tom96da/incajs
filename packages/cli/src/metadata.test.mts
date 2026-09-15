@@ -17,7 +17,7 @@ afterEach(async () => {
 });
 
 async function makeApp(pkg: object): Promise<string> {
-  cwd = await mkdtemp(path.join(tmpdir(), "gpjsui-metadata-"));
+  cwd = await mkdtemp(path.join(tmpdir(), "inca-metadata-"));
   await writeFile(path.join(cwd, "package.json"), JSON.stringify(pkg));
   return cwd;
 }
@@ -28,7 +28,7 @@ describe("readAppMetadata", () => {
 
     await expect(readAppMetadata(app)).resolves.toEqual({
       productName: "click_counter",
-      identifier: "org.gpjsui.click-counter",
+      identifier: "org.inca.click-counter",
       identifierIsDefault: true,
       version: "0.0.0-0",
       icon: undefined,
@@ -40,15 +40,15 @@ describe("readAppMetadata", () => {
 
     await expect(readAppMetadata(app)).resolves.toMatchObject({
       productName: "notes-app",
-      identifier: "org.gpjsui.notes-app",
+      identifier: "org.inca.notes-app",
     });
   });
 
-  it('lets a "gpjsui" key override productName and identifier', async () => {
+  it('lets a "inca" key override productName and identifier', async () => {
     const app = await makeApp({
       name: "click_counter",
       version: "0.0.0-0",
-      gpjsui: { productName: "Click Counter", identifier: "com.example.click-counter" },
+      inca: { productName: "Click Counter", identifier: "com.example.click-counter" },
     });
 
     await expect(readAppMetadata(app)).resolves.toMatchObject({
@@ -58,18 +58,18 @@ describe("readAppMetadata", () => {
     });
   });
 
-  it("resolves gpjsui.icon relative to cwd and rejects a missing one", async () => {
+  it("resolves inca.icon relative to cwd and rejects a missing one", async () => {
     const app = await makeApp({
       name: "click_counter",
       version: "0.0.0-0",
-      gpjsui: { icon: "assets/icon.icns" },
+      inca: { icon: "assets/icon.icns" },
     });
 
     await expect(readAppMetadata(app)).rejects.toThrow(/icon\.icns/);
   });
 
   it("throws when package.json is missing", async () => {
-    cwd = await mkdtemp(path.join(tmpdir(), "gpjsui-metadata-"));
+    cwd = await mkdtemp(path.join(tmpdir(), "inca-metadata-"));
 
     await expect(readAppMetadata(cwd)).rejects.toThrow(/package\.json/);
   });

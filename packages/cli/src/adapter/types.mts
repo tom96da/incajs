@@ -44,6 +44,6 @@ export interface BuildResult {
  */
 export interface Bundler {
   watch(options: BundlerOptions): Promise<Watcher>;
-  /** One-shot production build, used by `gpjsui build` — rejects on failure. */
+  /** One-shot production build, used by `inca build` — rejects on failure. */
   build(options: BuildOptions): Promise<BuildResult>;
 }

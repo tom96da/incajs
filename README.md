@@ -1,10 +1,6 @@
-# GPJSUI - A mighty desktop engine
+# Incarnative.js
 
-**gpjs-ui** (/dʒɪp.ɛs.juː.aɪ/ • *jip-es-ui*) is an ultra-lightweight, Webview-free desktop application framework powered by **GPUI**, **QuickJS**, and custom renderers.
-
-> [!NOTE]
->  `gpjs-ui` is currently a development code name.
-
+**Incarnative.js** (`inca`) is an ultra-lightweight, Webview-free desktop application framework powered by **GPUI**, **QuickJS**, and custom renderers.
 
 ## :sparkles: Features
 

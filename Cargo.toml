@@ -6,7 +6,7 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
-default-members = ["crates/gpjs-ui"]
+default-members = ["crates/inca-gpui"]
 
 [workspace.package]
 version = "0.0.0-0"
@@ -14,7 +14,7 @@ edition = "2024"
 rust-version = "1.98"
 license = "MIT OR Apache-2.0"
 authors = ["tom96da"]
-repository = "https://github.com/tom96da/gpjs-ui"
+repository = "https://github.com/tom96da/incajs"
 readme = "README.md"
 keywords = ["gpui", "quickjs", "desktop-app", "gui", "webview-free"]
 

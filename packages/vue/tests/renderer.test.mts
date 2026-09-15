@@ -8,8 +8,8 @@ import * as core from "incajs";
 import { createNode, rootNodeId } from "incajs";
 import type { NodeId } from "incajs";
 
-import { createGpjsuiApp } from "../src/index.mts";
-import type { GpjsuiElement } from "../src/index.mts";
+import { createIncaApp } from "../src/index.mts";
+import type { IncaElement } from "../src/index.mts";
 
 interface FakeNode {
   tag: string;
@@ -58,13 +58,13 @@ function installFakeNative(): Map<NodeId, FakeNode> {
   // The host allocates its root along with the tree, before any JS runs.
   const rootId = allocate("div");
 
-  globalThis.__gpjsui_native__ = {
+  globalThis.__inca_native__ = {
     rootNodeId(): NodeId {
       return rootId;
     },
     createNode: allocate,
     appendChild(parentId: NodeId, childId: NodeId): void {
-      globalThis.__gpjsui_native__.insertBefore(parentId, childId, null);
+      globalThis.__inca_native__.insertBefore(parentId, childId, null);
     },
     insertBefore(parentId: NodeId, childId: NodeId, anchorId: NodeId | null): void {
       const parent = requireNode(parentId);
@@ -125,7 +125,7 @@ function dispatch(node: FakeNode, event: string): void {
   const callbackIds = node.listeners[event] ?? [];
   if (callbackIds.length === 0) throw new Error(`no ${event} listener registered`);
   for (const callbackId of callbackIds) {
-    const callback = globalThis.__gpjsui_callbacks__[callbackId];
+    const callback = globalThis.__inca_callbacks__[callbackId];
     if (callback === undefined) throw new Error(`no callback registered as ${callbackId}`);
     callback();
   }
@@ -133,11 +133,11 @@ function dispatch(node: FakeNode, event: string): void {
 
 describe("incajs/vue renderer, driven end to end through real core internals", () => {
   let nodes: Map<NodeId, FakeNode>;
-  let root: GpjsuiElement;
+  let root: IncaElement;
 
   beforeEach(() => {
     nodes = installFakeNative();
-    delete (globalThis as { __gpjsui_callbacks__?: unknown }).__gpjsui_callbacks__;
+    delete (globalThis as { __inca_callbacks__?: unknown }).__inca_callbacks__;
     root = { id: createNode("root"), kind: "element", parent: null, children: [] };
   });
 
@@ -158,7 +158,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       },
     };
 
-    createGpjsuiApp(core, App).mount(root);
+    createIncaApp(core, App).mount(root);
     await nextTick();
 
     const rootNode = nodes.get(root.id)!;
@@ -189,7 +189,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       },
     };
 
-    createGpjsuiApp(core, App).mount(root);
+    createIncaApp(core, App).mount(root);
     await nextTick();
 
     const containerId = nodes.get(root.id)!.children[0]!;
@@ -212,13 +212,13 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       },
     };
 
-    createGpjsuiApp(core, App).mount(root);
+    createIncaApp(core, App).mount(root);
     await nextTick();
 
     const containerId = nodes.get(root.id)!.children[0]!;
     const branchId = nodes.get(containerId)!.children[0]!;
     const leafId = nodes.get(branchId)!.children[0]!;
-    expect(Object.keys(globalThis.__gpjsui_callbacks__)).toHaveLength(1);
+    expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(1);
 
     state.shown = false;
     await nextTick();
@@ -228,7 +228,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       nodes.has(leafId),
       "Vue removes only the subtree's root, so the descendant is freed here or nowhere",
     ).toBe(false);
-    expect(globalThis.__gpjsui_callbacks__).toEqual({});
+    expect(globalThis.__inca_callbacks__).toEqual({});
   });
 
   it("keeps one native registration when a handler is replaced on every render", async () => {
@@ -241,7 +241,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       },
     };
 
-    createGpjsuiApp(core, App).mount(root);
+    createIncaApp(core, App).mount(root);
     await nextTick();
 
     const div = nodes.get(nodes.get(root.id)!.children[0]!)!;
@@ -252,7 +252,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
 
     expect(state.count).toBe(2);
     expect(div.listeners["click"]).toHaveLength(1);
-    expect(Object.keys(globalThis.__gpjsui_callbacks__)).toHaveLength(1);
+    expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(1);
   });
 
   it("unbinds a handler that goes away", async () => {
@@ -264,7 +264,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       },
     };
 
-    createGpjsuiApp(core, App).mount(root);
+    createIncaApp(core, App).mount(root);
     await nextTick();
 
     const div = nodes.get(nodes.get(root.id)!.children[0]!)!;
@@ -272,7 +272,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
     await nextTick();
 
     expect(div.listeners["click"]).toHaveLength(0);
-    expect(globalThis.__gpjsui_callbacks__).toEqual({});
+    expect(globalThis.__inca_callbacks__).toEqual({});
     expect(clicks).toBe(0);
   });
 
@@ -283,7 +283,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       },
     };
 
-    createGpjsuiApp(core, App).mount();
+    createIncaApp(core, App).mount();
     await nextTick();
 
     const hostRoot = nodes.get(rootNodeId())!;

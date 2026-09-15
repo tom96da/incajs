@@ -1,0 +1,41 @@
+#:schema https://json.schemastore.org/cargo.json
+
+# Copyright (c) 2026 tom96da
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "inca-bridge"
+description = "Binds a QuickJS realm to inca's retained virtual tree — the native bridge (__inca_native__) JS-side renderers drive, and the event dispatch back into JS."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme = "README.md"
+keywords.workspace = true
+publish = false
+
+[dependencies]
+gpui.workspace = true
+inca-gpui = { path = "../inca-gpui" }
+inca-jsenv = { path = "../inca-jsenv" }
+rquickjs.workspace = true
+
+[dev-dependencies]
+env_logger.workspace = true
+# test-support gates gpui's TestPlatform/TestAppContext/#[gpui::test] — see
+# third_party/zed/crates/gpui/src/gpui.rs's `cfg(any(test, feature =
+# "test-support"))` gate.
+gpui = { workspace = true, features = ["test-support"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# font-kit is required on macOS (gpui_macos) for any text to render at all —
+# without it, gpui_macos silently draws every other primitive but skips text.
+gpui_platform = { workspace = true, features = ["font-kit"] }
+
+[target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
+gpui_platform = { workspace = true, features = ["wayland", "x11"] }
+
+[lints]
+workspace = true

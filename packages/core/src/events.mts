@@ -6,7 +6,7 @@ import type { CallbackId, EventListener, NodeId } from "./types.mts";
 
 /**
  * The JS half of every registration: the `callbackId` the host holds, the
- * listener at `globalThis.__gpjsui_callbacks__[callbackId]`, and which
+ * listener at `globalThis.__inca_callbacks__[callbackId]`, and which
  * `(nodeId, event)` that id belongs to.
  *
  * A registration is reached from either end — by `(nodeId, event)` when
@@ -50,8 +50,7 @@ function createRegistrations(): Registrations {
   const keyOf = (nodeId: NodeId, event: string): string => `${nodeId}:${event}`;
 
   // Lazily, because the host defines nothing until the first registration.
-  const listeners = (): Record<CallbackId, EventListener> =>
-    (globalThis.__gpjsui_callbacks__ ??= {});
+  const listeners = (): Record<CallbackId, EventListener> => (globalThis.__inca_callbacks__ ??= {});
 
   return {
     add(nodeId, event, listener) {
