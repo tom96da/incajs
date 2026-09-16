@@ -31,7 +31,7 @@ export interface AppMetadata {
   icon?: string;
 }
 
-/** Strips a package name's scope, e.g. `@incajs/vue` → `vue`. Unscoped names (e.g. `incajs`) pass through unchanged. */
+/** Strips a package name's scope, e.g. `@incajs/cli` → `cli`. Unscoped names (e.g. `incajs`) pass through unchanged. */
 function unscopedName(name: string): string {
   const slash = name.indexOf("/");
   return name.startsWith("@") && slash !== -1 ? name.slice(slash + 1) : name;

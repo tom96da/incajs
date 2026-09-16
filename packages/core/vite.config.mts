@@ -11,13 +11,13 @@ export default defineConfig({
     lib: {
       entry: {
         index: path.resolve(import.meta.dirname, "src/index.mts"),
-        vue: path.resolve(import.meta.dirname, "src/vue.mts"),
+        vue: path.resolve(import.meta.dirname, "src/vue/index.mts"),
       },
       formats: ["es"],
     },
     rollupOptions: {
-      external: ["incajs", "@incajs/vue"],
+      external: ["@vue/runtime-core"],
     },
   },
-  plugins: [dts({ include: ["src/index.mts", "src/vue.mts"] })],
+  plugins: [dts({ include: ["src"], exclude: ["src/**/*.test.mts"] })],
 });

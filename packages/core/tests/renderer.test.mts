@@ -4,12 +4,10 @@
 import { h, nextTick, reactive } from "@vue/runtime-core";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import * as core from "incajs";
-import { createNode, rootNodeId } from "incajs";
-import type { NodeId } from "incajs";
-
-import { createIncaApp } from "../src/index.mts";
-import type { IncaElement } from "../src/index.mts";
+import { createNode, rootNodeId } from "../src/index.mts";
+import { createIncaApp } from "../src/vue/index.mts";
+import type { NodeId } from "../src/index.mts";
+import type { IncaElement } from "../src/vue/index.mts";
 
 interface FakeNode {
   tag: string;
@@ -158,7 +156,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       },
     };
 
-    createIncaApp(core, App).mount(root);
+    createIncaApp(App).mount(root);
     await nextTick();
 
     const rootNode = nodes.get(root.id)!;
@@ -189,7 +187,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       },
     };
 
-    createIncaApp(core, App).mount(root);
+    createIncaApp(App).mount(root);
     await nextTick();
 
     const containerId = nodes.get(root.id)!.children[0]!;
@@ -212,7 +210,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       },
     };
 
-    createIncaApp(core, App).mount(root);
+    createIncaApp(App).mount(root);
     await nextTick();
 
     const containerId = nodes.get(root.id)!.children[0]!;
@@ -241,7 +239,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       },
     };
 
-    createIncaApp(core, App).mount(root);
+    createIncaApp(App).mount(root);
     await nextTick();
 
     const div = nodes.get(nodes.get(root.id)!.children[0]!)!;
@@ -264,7 +262,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       },
     };
 
-    createIncaApp(core, App).mount(root);
+    createIncaApp(App).mount(root);
     await nextTick();
 
     const div = nodes.get(nodes.get(root.id)!.children[0]!)!;
@@ -283,7 +281,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       },
     };
 
-    createIncaApp(core, App).mount();
+    createIncaApp(App).mount();
     await nextTick();
 
     const hostRoot = nodes.get(rootNodeId())!;

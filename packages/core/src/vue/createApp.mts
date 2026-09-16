@@ -4,9 +4,9 @@
 import { createRenderer } from "@vue/runtime-core";
 import type { App, Component, ComponentPublicInstance } from "@vue/runtime-core";
 
+import * as core from "../index.mts";
 import { createNodeOps } from "./nodeOps.mts";
 import { createPatchProp } from "./patchProp.mts";
-import type { IncaCore } from "./core.mts";
 import type { IncaElement, IncaNode } from "./nodeOps.mts";
 
 /**
@@ -24,13 +24,11 @@ export type IncaApp = App<IncaElement> & {
  * handle instead of a DOM element. `app.mount()` with no argument targets
  * the host's root container; `app.unmount`, `app.use`, etc. all behave
  * exactly as `@vue/runtime-core` itself documents them.
- * @param core - the incajs bindings to drive the native tree through
  * @param rootComponent - the component to mount as the app's root
  * @param rootProps - props to pass to that root component
  * @returns the created app
  */
 export function createIncaApp(
-  core: IncaCore,
   rootComponent: Component,
   rootProps?: Record<string, unknown> | null,
 ): IncaApp {

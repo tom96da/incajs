@@ -39,8 +39,8 @@
       "import": "./dist/index.js"
     },
     "./vue": {
-      "source": "./src/vue.mts",
-      "types": "./dist/vue.d.mts",
+      "source": "./src/vue/index.mts",
+      "types": "./dist/vue/index.d.mts",
       "import": "./dist/vue.js"
     }
   },
@@ -51,7 +51,7 @@
         "import": "./dist/index.js"
       },
       "./vue": {
-        "types": "./dist/vue.d.mts",
+        "types": "./dist/vue/index.d.mts",
         "import": "./dist/vue.js"
       }
     }
@@ -63,12 +63,17 @@
     "format": "oxfmt --check .",
     "typecheck": "oxlint -A all --type-aware --type-check"
   },
-  "dependencies": {
-    "@incajs/vue": "workspace:*"
-  },
   "devDependencies": {
     "@vue/runtime-core": "^3.5.42",
     "oxfmt": "^0.66.0",
     "oxlint": "^1.81.0"
+  },
+  "peerDependencies": {
+    "@vue/runtime-core": "^3.5.42"
+  },
+  "peerDependenciesMeta": {
+    "@vue/runtime-core": {
+      "optional": true
+    }
   }
 }

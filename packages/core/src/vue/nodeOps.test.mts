@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createNodeOps } from "./nodeOps.mts";
-import type { IncaCore } from "./core.mts";
+import type { IncaCore } from "../rendererCore.mts";
 import type { IncaElement, IncaText } from "./nodeOps.mts";
 
 let nextId = 1;

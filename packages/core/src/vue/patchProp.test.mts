@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createPatchProp } from "./patchProp.mts";
-import type { IncaCore } from "./core.mts";
+import type { IncaCore } from "../rendererCore.mts";
 import type { IncaElement } from "./nodeOps.mts";
 
 const core: IncaCore = {

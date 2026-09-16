@@ -4,5 +4,5 @@
 export { createIncaApp } from "./createApp.mts";
 
 export type { IncaApp } from "./createApp.mts";
-export type { IncaCore } from "./core.mts";
+export type { IncaCore } from "../rendererCore.mts";
 export type { IncaElement, IncaNode } from "./nodeOps.mts";

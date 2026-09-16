@@ -3,7 +3,8 @@
 
 import type { RendererOptions } from "@vue/runtime-core";
 
-import type { EventListener, IncaCore } from "./core.mts";
+import type { IncaCore } from "../rendererCore.mts";
+import type { EventListener } from "../types.mts";
 import type { IncaElement } from "./nodeOps.mts";
 
 const isOn = (key: string): boolean => /^on[A-Z]/.test(key);
