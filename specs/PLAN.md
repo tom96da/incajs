@@ -717,6 +717,49 @@ mostly about what `dev` and `build` must *share* rather than new machinery.
 - [x] Update `specs/TESTING.md`'s required checks if the build command moves
 - [x] Update `AGENTS.md`'s Status section
 
+### Unit iii — module resolution, multi-file builds, and the `incajs/vue` merge
+
+Found while moving `incajs/vue` from a thin re-export of a separate
+`@incajs/vue` package into `packages/core/src/vue` — the design
+[ROADMAP.md](./ROADMAP.md#phase-2-js-core-bridge-incajs--vue-3-custom-renderer-incajsvue)
+always specified, but never actually landed that way. The merge produces a
+shared chunk between `incajs`'s and `incajs/vue`'s built entries, which
+`inca-jsenv`'s engine couldn't load: it had no `ModuleLoader`, so every
+evaluated source had to be a single, self-contained module. That same
+constraint is what Unit i above flagged and deferred — a dynamic `import()`
+or a `.vue` file's own `<style>` block silently broke `inca build`, since
+neither the CLI nor the host could handle more than one output file.
+
+- [x] `crates/inca-jsenv`: `Engine::builder()` resolves `import`s against
+      real files on disk (`DiskResolver`/`DiskLoader`), so an evaluated
+      module's own imports — including a shared chunk — resolve instead of
+      requiring self-contained source
+- [x] `crates/inca-host`: reads an entry path rather than a single bundle
+      string, and lets the loader above resolve whatever it imports
+- [x] `@incajs/cli`: `Bundler.build`/`.watch` report every file a build
+      wrote (`BuildOutput`), not one assumed bundle path; `inca package`
+      copies the reported files rather than a single `bundle.js`; `inca dev`
+      prunes stale files between rebuilds, since `outDir` is no longer
+      emptied on every one
+- [x] `packages/vue` deleted; its source moved into `packages/core/src/vue`,
+      the `IncaCore` contract moved to `packages/core/src/rendererCore.mts`
+      (derived from `index.mts`'s real exports via `Pick<typeof import(...),
+      ...>` rather than hand-duplicated), and `createIncaApp` is a
+      single-argument call again — the two-package split, and its
+      dependency-injected `core` argument, existed only to avoid a circular
+      dependency a single package no longer has
+- [x] `specs/*.md` renamed off the old `gpjs-ui`/`gpjsui` codename, and its
+      paths fixed where the later `inca-gpui`/`inca-bridge`/`inca-jsenv`
+      split had left them stale (outside this file's own completed history)
+- [x] Manual: `inca dev`/`build`/`package` still launch and render
+      correctly on macOS after the loader and multi-file build changes
+      above
+
+Deliberately deferred, tracked as follow-up rather than done here:
+precompiling the bundle to QuickJS bytecode (a `loader::Bundle` alongside
+the disk resolver above), and a real CSS path for `.vue`'s `<style>`
+blocks (Vite already emits the file; nothing in the host reads it yet).
+
 ## Phase 3.3: Application packaging and the `v0.0.1` release
 
 See [ROADMAP.md#phase-33](./ROADMAP.md#phase-33-application-packaging).
