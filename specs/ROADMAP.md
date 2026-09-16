@@ -37,13 +37,13 @@ to develop against, more platform, and a second frontend framework.
 Each phase below names the gate it waits on; the numbering is the order they
 are built in, not a set of independent tracks.
 
-## Phase 1: Rust host & FFI bridge core (`gpjs-ui`)
+## Phase 1: Rust host & FFI bridge core (`inca-gpui`)
 
 1. **QuickJS context setup**: use `rquickjs` to spin up a managed QuickJS
    runtime inside the GPUI event loop.
 2. **Retained virtual tree**: an in-memory `VirtualNode` structure — see
    [FFI.md](./FFI.md#retained-virtual-tree).
-3. **Binding functions** exposed to JS as `globalThis.__gpjsui_native__` — see
+3. **Binding functions** exposed to JS as `globalThis.__inca_native__` — see
    [FFI.md](./FFI.md#binding-functions).
 4. **GPUI rendering pipeline**: recursively convert the `VirtualNode` tree into
    GPUI `AnyElement` instances during GPUI's `render()` frame cycle.
@@ -51,27 +51,27 @@ are built in, not a set of independent tracks.
 ## Phase 2: JS core bridge (`incajs`) & Vue 3 custom renderer (`incajs/vue`)
 
 1. **`incajs`** (`packages/core`): a framework-agnostic, typed JS wrapper
-   around `globalThis.__gpjsui_native__` (see
+   around `globalThis.__inca_native__` (see
    [FFI.md](./FFI.md#binding-functions)) — see
    [ARCHITECTURE.md](./ARCHITECTURE.md#tech-stack) for why this is shared
    rather than logic duplicated into each framework adapter.
 2. **`incajs/vue`** (`packages/core/src/vue`): a custom Vue 3 runtime
    adapter using `@vue/runtime-core`'s `createRenderer`, built on `incajs`
-   rather than calling `__gpjsui_native__` directly — a subpath of the same
+   rather than calling `__inca_native__` directly — a subpath of the same
    package as the core, never imported on its own.
 3. Map Vue node lifecycle methods (`createElement`, `insert`, `remove`,
    `patchProp`) to `incajs`'s calls.
-4. A unified mount API, e.g. `createGpjsuiApp(App).mount('#root')`.
+4. A unified mount API, e.g. `createIncaApp(App).mount('#root')`.
 
 ## Phase 3: Developer tooling & HMR integration
 
-The `gpjsui` CLI's process orchestration is owned by the **JS/TS side**:
+The `inca` CLI's process orchestration is owned by the **JS/TS side**:
 `@incajs/cli` (`packages/cli`) is the parent process, internally driving a
 bundler adapter that holds Vite in-process, while its own `dev-client`
-spawns the Rust host (`crates/gpjs-ui-host`) as a child and bridges
+spawns the Rust host (`crates/inca-host`) as a child and bridges
 dev-server messages over its stdio — neither is a separate package, since
 neither is ever imported on its own. The alternatives
-considered — a Rust-primary `crates/gpjs-ui-cli` owning everything, and
+considered — a Rust-primary `crates/inca-cli` owning everything, and
 Rust-primary logic behind a thin npm `bin` wrapper — were rejected because:
 
 - Node already owns every orchestration primitive this needs (Vite's own
@@ -80,7 +80,7 @@ Rust-primary logic behind a thin npm `bin` wrapper — were rejected because:
 - The host binary ships through npm either way, since app authors aren't
   expected to have a Rust toolchain (Phase 13 is the one exception). A Rust
   CLI would add a second binary to distribute for no gain.
-- It keeps `crates/gpjs-ui` and the host free of process/IPC concerns.
+- It keeps `crates/inca-gpui` and the host free of process/IPC concerns.
 
 Phase 3 lands in four numbered stages, with real HMR deliberately **last**:
 a full-reload dev loop already needs the whole spawn/teardown/remount
@@ -92,9 +92,9 @@ A GitHub Actions **CI** workflow running
 multi-package phase isn't built without one. Its **CD** counterpart
 lands after 3.3, when there is something to release.
 
-### Phase 3.1: `gpjsui dev` (full reload)
+### Phase 3.1: `inca dev` (full reload)
 
-1. **`@incajs/cli`** (`packages/cli`): owns the `gpjsui` commands, resolves
+1. **`@incajs/cli`** (`packages/cli`): owns the `inca` commands, resolves
    an app's entry point, and wires the two modules below together
    internally. It holds the `Bundler` contract and injects an
    implementation, so swapping bundlers is a dependency change here and
@@ -110,26 +110,26 @@ lands after 3.3, when there is something to release.
    binary, supervises the child, and carries messages both ways. It depends
    on no bundler and never parses a routed payload, so Vite's HMR traffic
    (Phase 3.4) rides the same channel as a registered `type` name.
-4. **`crates/gpjs-ui-host`**: the runtime binary — opens the GPUI window
+4. **`crates/inca-host`**: the runtime binary — opens the GPUI window
    and evaluates a bundle in QuickJS, and in dev mode reads newline-delimited
    JSON messages on stdin, re-evaluating the bundle in a fresh engine against
    a reset tree on each reload. Its stdout is the protocol channel; logs go
    to stderr.
 5. **Native root handle**: a binding replacing Phase 2's
-   `__GPJSUI_ROOT_ID__` source substitution, so an app's entry point is
-   plain code (`createGpjsuiApp(App).mount()`) with no host-injected token
+   `__INCA_ROOT_ID__` source substitution, so an app's entry point is
+   plain code (`createIncaApp(App).mount()`) with no host-injected token
    in it.
 6. **Core corrections**: node lifetime (nothing frees a detached node),
    error visibility (a listener's exception reaches nobody, and QuickJS has
    no `console`), and the per-frame cost of wiring every node for input.
-   All three are `crates/gpjs-ui` gaps that a dev loop running a real app
+   All three are `crates/inca-gpui` gaps that a dev loop running a real app
    continuously makes unavoidable, so they land here rather than after the
    release.
 
 Component state is *not* preserved across a reload — that's exactly what
 Phase 3.4 adds.
 
-### Phase 3.2: `gpjsui build`
+### Phase 3.2: `inca build`
 
 The one-shot production counterpart of 3.1's pipeline, emitting a
 self-contained bundle. Subsumes the per-example `scripts/build.mjs` files
@@ -148,9 +148,9 @@ is published as `v0.0.1`, to npm only (`incajs`, `@incajs/cli`, and the
 per-platform host packages). The Rust crates stay
 `publish = false` — nothing outside this repo depends on them until Phase 13.
 
-### Phase 3.4: HMR (`@gpjs-ui/vite-runtime`)
+### Phase 3.4: HMR (`@incajs/vite-runtime`)
 
-**HMR bridge** (`@gpjs-ui/vite-runtime`, at `packages/vite-runtime`): a
+**HMR bridge** (`@incajs/vite-runtime`, at `packages/vite-runtime`): a
 custom `ModuleRunnerTransport` and module evaluator against Vite's Runtime
 API (`vite/module-runner`), so updated modules are evaluated inside QuickJS
 and trigger a GPUI redraw while component state survives. The runner itself
@@ -197,7 +197,7 @@ Not started, and not begun until Phase 4's focus and text models are stable
 — a screen reader reads a focus path, so there is nothing to expose before
 one exists.
 
-Electron inherits this entire layer from Chromium. gpjs-ui renders to the
+Electron inherits this entire layer from Chromium. Incarnative.js renders to the
 GPU directly and inherits nothing, so all of it is ours to build. It is
 scheduled immediately after input rather than at the end because retrofitting
 an accessibility tree onto a node vocabulary that grew without one means
@@ -225,7 +225,7 @@ fetch, or read a file.
 Each item is a host binding plus its typed wrapper in `packages/core`,
 and each hands a new capability to app code — the FFI safety checklist in
 [PLAN.md](./PLAN.md) applies to all of them. They belong in
-`crates/gpjs-ui-jsenv`, which depends on `rquickjs` alone so an
+`crates/inca-jsenv`, which depends on `rquickjs` alone so an
 implementation can be swapped for a third-party one.
 
 Check for one before writing any of these. `rquickjs-extra-*` (the rquickjs
@@ -260,12 +260,12 @@ Vite pipeline to plug into. Full CSS/Tailwind parity is not the goal here
 cover the large majority of real-world usage and map cleanly onto GPUI's
 native styling model:
 
-1. **Native style vocabulary expansion** (`crates/gpjs-ui`): close the gaps
+1. **Native style vocabulary expansion** (`crates/inca-gpui`): close the gaps
    flagged as "deliberately incomplete" since Phase 1 (see
    [FFI.md](./FFI.md)) — margin/padding, percentage lengths, min/max size,
    flex-grow/shrink/basis, per-side border width/radius, basic box-shadow,
    font-weight/family, line-height/letter-spacing.
-2. **Tailwind class resolver**: gpjs-ui has no real CSS engine, so Tailwind
+2. **Tailwind class resolver**: Incarnative.js has no real CSS engine, so Tailwind
    utility classes can't generate actual CSS — a Vite plugin (building on
    Phase 3's pipeline) scans `class="..."` usage and maps each recognized
    utility directly to a `setStyle` call, rather than through a stylesheet.
@@ -313,7 +313,7 @@ Not started, and not begun until Phase 3.3's packaging is stable — these are
 the APIs a packaged application calls, and several have no meaning until
 there is one.
 
-A gpjs-ui app is one window with no way to address it. Everything an app
+An Incarnative.js app is one window with no way to address it. Everything an app
 does *around* its content lives here.
 
 1. **Windows**: title, size and position, minimize/maximize/fullscreen,
@@ -334,7 +334,7 @@ does *around* its content lives here.
 Not started, and not begun until Vue 3 support (Phases 1–3) is stable. Adds
 `incajs/react` as an additional subpath alongside `incajs/vue`, in the same
 `incajs` package rather than a separate one, using `react-reconciler`
-against the same core (not `__gpjsui_native__` directly — see Phase 2), plus
+against the same core (not `__inca_native__` directly — see Phase 2), plus
 `@vitejs/plugin-react` for JSX/TSX compilation and HMR.
 
 ## Phase 11: Cross-platform support (future)
@@ -377,9 +377,9 @@ and still ships as a single application:
    prebuilt binary — the swappability Phase 3.3 is required to preserve.
    Apps without one keep needing no Rust toolchain.
 2. **Extension binding surface**: a stable way for app-owned Rust code to
-   register its own functions alongside `__gpjsui_native__` (see
+   register its own functions alongside `__inca_native__` (see
    [FFI.md](./FFI.md#binding-functions)), rather than patching the host's
-   own bindings. This is the likely driver for `crates/gpjs-ui-macros`
+   own bindings. This is the likely driver for `crates/inca-macros`
    (see [STRUCTURE.md](./STRUCTURE.md)).
 3. **MSRV verification**: `rust-version` is held equal to the pinned
    toolchain while these crates have no consumers outside this repo. Once

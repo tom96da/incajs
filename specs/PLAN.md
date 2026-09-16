@@ -22,7 +22,7 @@ a partly-ticked unit only by agreement; a wholly unticked one needs none.
 
 ## Phase 1: Rust host & FFI bridge core (`gpjs-ui`)
 
-See [ROADMAP.md#phase-1](./ROADMAP.md#phase-1-rust-host--ffi-bridge-core-gpjs-ui)
+See [ROADMAP.md#phase-1](./ROADMAP.md#phase-1-rust-host--ffi-bridge-core-inca-gpui)
 and [FFI.md](./FFI.md) for the design this implements.
 
 ### Prerequisites
@@ -140,7 +140,7 @@ and [FFI.md](./FFI.md) for the design this implements.
 
 ## Phase 2: JS core bridge (`gpjs-ui`) & Vue 3 custom renderer (`@gpjs-ui/vue`)
 
-See [ROADMAP.md#phase-2](./ROADMAP.md#phase-2-js-core-bridge-gpjs-ui--vue-3-custom-renderer-gpjs-uivue)
+See [ROADMAP.md#phase-2](./ROADMAP.md#phase-2-js-core-bridge-incajs--vue-3-custom-renderer-incajsvue)
 and [FFI.md](./FFI.md) for the design this implements.
 
 Scope grew beyond ROADMAP.md's four bullet points once planning dug into
@@ -389,7 +389,7 @@ becomes obsolete when Phase 3 swaps in Vite's dev pipeline, the
 
 ## Phase 3.1: `gpjsui dev` (full reload)
 
-See [ROADMAP.md#phase-31](./ROADMAP.md#phase-31-gpjsui-dev-full-reload) for
+See [ROADMAP.md#phase-31](./ROADMAP.md#phase-31-inca-dev-full-reload) for
 the design this implements, and its Phase 3 preamble for why orchestration
 lives on the JS side. Phases 3.2–3.4 get their own sections when they start.
 
@@ -591,8 +591,8 @@ integration registered against this channel rather than a change here.
 ### Unit v — `@gpjs-ui/vite`
 
 The Vite half of the build, and the only Node package that imports `vite` —
-Phase 3.4's `@gpjs-ui/vite-runtime` is the other side of the same tool,
-running inside QuickJS. A `@gpjs-ui/rspack` would be a sibling of this one,
+Phase 3.4's `@incajs/vite-runtime` is the other side of the same tool,
+running inside QuickJS. A `@incajs/rspack` would be a sibling of this one,
 not a rewrite.
 
 - [x] `packages/vite` (npm name `@gpjs-ui/vite`), following
@@ -686,7 +686,7 @@ dependency change here rather than an edit anywhere else.
 
 ## Phase 3.2: `gpjsui build`
 
-See [ROADMAP.md#phase-32](./ROADMAP.md#phase-32-gpjsui-build). This is 3.1's
+See [ROADMAP.md#phase-32](./ROADMAP.md#phase-32-inca-build). This is 3.1's
 pipeline with the watcher removed and production settings on, so the work is
 mostly about what `dev` and `build` must *share* rather than new machinery.
 
@@ -759,8 +759,8 @@ The first release milestone: after this, the framework is publishable.
 
 - [ ] `.github/workflows/cd.yml`: on a version tag, build the host for each
       supported platform, then publish to npm
-- [ ] Publish set is npm only — `gpjs-ui`, `@gpjs-ui/vue`, `@gpjs-ui/cli`,
-      `@gpjs-ui/host-client`, `@gpjs-ui/vite`, and the per-platform
+- [ ] Publish set is npm only — `incajs`, `incajs/vue`, `@incajs/cli`,
+      `@incajs/host-client`, `@incajs/vite`, and the per-platform
       host packages. The Rust crates stay `publish = false`
 - [ ] Version the workspace at `0.0.1` (packages currently sit at a
       placeholder version)
@@ -770,9 +770,9 @@ The first release milestone: after this, the framework is publishable.
 - [ ] Update `README.md` with real install/usage instructions
 - [ ] Update `AGENTS.md`'s Status section
 
-## Phase 3.4: HMR (`@gpjs-ui/vite-runtime`)
+## Phase 3.4: HMR (`@incajs/vite-runtime`)
 
-See [ROADMAP.md#phase-34](./ROADMAP.md#phase-34-hmr-gpjs-uivite-runtime)
+See [ROADMAP.md#phase-34](./ROADMAP.md#phase-34-hmr-incajsvite-runtime)
 and [ARCHITECTURE.md](./ARCHITECTURE.md#hmr-delivery) for the design.
 The hard part of Phase 3: it replaces 3.1's whole-bundle re-evaluation with
 module-granular updates that preserve component state.
@@ -793,9 +793,9 @@ reason this unit comes first.
       something has to drive the queue between messages
 - [ ] Re-apply the FFI safety checklist below to every new binding
 
-### Unit i — `@gpjs-ui/vite-runtime`
+### Unit i — `@incajs/vite-runtime`
 
-- [ ] `packages/vite-runtime` (npm name `@gpjs-ui/vite-runtime`), declaring
+- [ ] `packages/vite-runtime` (npm name `@incajs/vite-runtime`), declaring
       `vite` as a peer dependency — under pnpm a package only resolves what
       it declares, and this one imports `vite/module-runner` directly
 - [ ] A `ModuleRunnerTransport` bridging to the host's stdio channel:
@@ -811,7 +811,7 @@ reason this unit comes first.
 
 ### Unit ii — CLI and host wiring
 
-- [ ] `@gpjs-ui/vite` holds a real Vite dev environment in `dev`,
+- [ ] `@incajs/vite` holds a real Vite dev environment in `dev`,
       answering `fetchModule` and pushing HMR payloads over the channel the
       CLI hands it, in place of 3.1's rebuild-and-reload message
 - [ ] The host keeps one long-lived engine across updates — the point of
@@ -848,7 +848,7 @@ reason this unit comes first.
 Re-apply these on every relevant future PR — they are not phase-scoped and
 never get "checked off" permanently.
 
-### FFI safety review (any PR touching `crates/gpjs-ui/src/js/*`)
+### FFI safety review (any PR touching `crates/inca-bridge/src/*`)
 
 - [ ] No `rquickjs::Value`/`Ctx<'js>`/`Persistent<T>` is stored in
       `VirtualTree`, the event-listener registry, or any other long-lived

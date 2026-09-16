@@ -11,7 +11,7 @@ Complements [GIT.md](./GIT.md)'s repo-wide rules the same way
 [FFI.md](./FFI.md) complements [ARCHITECTURE.md](./ARCHITECTURE.md).
 Update this file as real conventions land, same as the other docs here.
 
-## Rust (`crates/gpjs-ui`)
+## Rust (`crates/inca-gpui`)
 
 ### Test placement
 
@@ -19,7 +19,7 @@ Update this file as real conventions land, same as the other docs here.
   (e.g. `src/tree.rs`, `src/js/bindings.rs`, `src/js/engine.rs`).
 - **Integration tests**: `tests/*.rs`, one file per cross-module concern
   (`tests/layout_parity.rs`, `tests/event_dispatch.rs`) — Cargo compiles
-  each as its own crate against `gpjs-ui`'s public API only, the same
+  each as its own crate against `inca-gpui`'s public API only, the same
   boundary a real external caller would see.
 - **Manual/GUI checks**: tracked in
   [MANUAL_GUI_CHECK.md](./MANUAL_GUI_CHECK.md) instead of automated — see
@@ -32,7 +32,7 @@ All of the following must pass, not just `cargo test`:
 
 - `cargo check --workspace --all-targets` — the `--all-targets` also
   compile-checks `examples/`, which has no automated test of its own (see
-  `crates/gpjs-ui/examples/hello_world.rs`'s doc comment)
+  `crates/inca-gpui/examples/hello_world.rs`'s doc comment)
 - `cargo clippy --workspace --all-targets`
 - `cargo fmt --all -- --check`
 - `cargo test --workspace` — `tests/js_core_integration.rs` reads
@@ -41,8 +41,8 @@ All of the following must pass, not just `cargo test`:
   message saying so
 
 `--workspace` rather than a list of `-p` flags, so a new crate is covered by
-the checks the moment it exists. `crates/gpjs-ui-host` opens a window, which
-stays a manual check like `crates/gpjs-ui`'s own examples — see
+the checks the moment it exists. `crates/inca-host` opens a window, which
+stays a manual check like `crates/inca-gpui`'s own examples — see
 [MANUAL_GUI_CHECK.md](./MANUAL_GUI_CHECK.md).
 
 ### Toolchain pinning and MSRV
@@ -81,12 +81,12 @@ Mirrors the Rust split above, using Vitest:
 
 - **Unit tests**: `*.test.mts` co-located next to the module it tests
   (e.g. `packages/core/src/tree.test.mts` next to `src/tree.mts`),
-  mocking `globalThis.__gpjsui_native__`/`__gpjsui_callbacks__` rather
+  mocking `globalThis.__inca_native__`/`__inca_callbacks__` rather
   than driving a real QuickJS engine. A barrel (`src/index.mts`)
   re-exports only; its modules carry the tests.
 - **Integration tests**: a `tests/` directory at the package root, for
   whatever a package's own unit tests can't reach mocked — e.g.
-  `packages/core/tests/renderer.test.mts`, driving `createGpjsuiApp`
+  `packages/core/tests/renderer.test.mts`, driving `createIncaApp`
   end-to-end against `incajs/vue` and a real (unmocked) `incajs` core.
 
 ### Required checks
@@ -153,7 +153,7 @@ Watch for these when scaffolding a new package too:
 - Single package, for iterating on one — may be incomplete on its own:
   `pnpm --filter <pkg> test` / `typecheck` / `build`
 - Coverage: `pnpm test:coverage`, same run with `--coverage` added
-- Rust: `cargo test -p gpjs-ui` (see [AGENTS.md](../AGENTS.md#status)) —
+- Rust: `cargo test -p inca-gpui` (see [AGENTS.md](../AGENTS.md#status)) —
   plus `cargo clippy`/`cargo fmt --check` from the Required checks list
   above, which aren't bundled into `cargo test` itself the way the root
   `pretest` bundles them on the TypeScript side.

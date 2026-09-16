@@ -5,7 +5,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 # Host bridge (FFI) reference
 
-The function surface exposed to JS as `globalThis.__gpjsui_native__`, bound
+The function surface exposed to JS as `globalThis.__inca_native__`, bound
 into the QuickJS context by the Rust host via `rquickjs`. See
 [AGENTS.md](../AGENTS.md#status) for how much of this is built. The
 tag/style vocabulary below is deliberately incomplete by design and grows as
@@ -42,7 +42,7 @@ event listener registered on them.
 
 ### Tag vocabulary (v1)
 
-Implemented by `crates/gpjs-ui/src/render/element.rs` (Unit v). Only two
+Implemented by `crates/inca-gpui/src/element.rs` (Unit v). Only two
 kinds exist so far — there's no per-tag dispatch table yet, since there's
 exactly one container builder to pick from until a real second element kind
 is designed:
@@ -54,7 +54,7 @@ is designed:
 
 ### Style prop vocabulary (v1)
 
-Also implemented by `render/element.rs`. This is a deliberately small,
+Also implemented by `element.rs`. This is a deliberately small,
 initial set — exactly what's needed to express `examples/gpui/hello_world.rs`'s
 flex-box shapes and solid fills, not a full CSS surface. Unrecognized keys
 and malformed enum-string values are silently ignored (forward-compatible,
@@ -108,11 +108,11 @@ on every pointer move.
 
 ### Event dispatch (v1: `"click"` only)
 
-Implemented by `crates/gpjs-ui/src/render/bridge.rs` (Unit vi):
-`render_tree_with_events`/`build_element_with_events`
-(`crates/gpjs-ui/src/render/element.rs`) wire every container's click to an
-`EventDispatcher`, which looks up and calls the JS callbacks registered
-for `(nodeId, "click")` via `addEventListener`, then requests a redraw.
+Implemented by `render_tree_with_events`/`build_element_with_events`
+(`crates/inca-gpui/src/element.rs`, Unit vi), which wire every container's
+click to an `EventDispatcher` (`crates/inca-bridge/src/dispatch.rs`), which
+looks up and calls the JS callbacks registered for `(nodeId, "click")` via
+`addEventListener`, then requests a redraw.
 Other event names aren't wired to any real GPUI input yet — extend as
 needed, same "deliberately incomplete" framing as the style vocabulary.
 Neither `addEventListener` nor `EventDispatcher` requires a name to come
@@ -120,22 +120,23 @@ from real input, or the node to be an element, so a host-lifecycle event on
 the `rootNodeId` node reaches JS through this same path.
 
 `addEventListener` itself is unchanged and needs no thread-safe/cross-thread
-callback machinery: gpjs-ui's embedded QuickJS and the GPUI event loop
+callback machinery: Incarnative.js's embedded QuickJS and the GPUI event loop
 already share one process and are driven synchronously (see
-`crates/gpjs-ui/src/js/engine.rs`'s `Context::with`), unlike an architecture
+`crates/inca-jsenv/src/engine.rs`'s `Context::with`), unlike an architecture
 where JS runs in a separate runtime that loads a native addon (JS and the
 native UI layer on different threads/processes) — confirmed, not just
-assumed, by `crates/gpjs-ui/tests/event_dispatch.rs`.
+assumed, by `crates/inca-bridge/tests/event_dispatch.rs`.
 
-`EventListeners` only ever stores the plain `u32` `callbackId` it's given —
-never an `rquickjs::Value`/`Function`/`Persistent<T>`, per the FFI safety
+`EventListeners` (`crates/inca-bridge/src/bindings.rs`) only ever stores the
+plain `u32` `callbackId` it's given — never an
+`rquickjs::Value`/`Function`/`Persistent<T>`, per the FFI safety
 checklist below. The real JS function has to live somewhere, so the
 convention is: **the caller stores it itself**, at
-`globalThis.__gpjsui_callbacks__[callbackId]`, before calling
+`globalThis.__inca_callbacks__[callbackId]`, before calling
 `addEventListener` with that id. `EventDispatcher::dispatch` looks the real
 function up fresh inside one `Engine::with` call and drops it before that
 call returns — it never crosses into a long-lived Rust struct. A missing
-`__gpjsui_callbacks__` entry, or one that isn't a function, is a stale id and
+`__inca_callbacks__` entry, or one that isn't a function, is a stale id and
 is skipped. A callback that *throws* is reported through the host's error
 reporter and the remaining callbacks still run: one bad listener must take
 down neither the host nor its siblings.
@@ -146,7 +147,7 @@ the JS half.
 
 ### App lifecycle surface (decided, not yet dispatched)
 
-Settled ahead of `@incajs/cli`'s `gpjsui dev` needing it, per
+Settled ahead of `@incajs/cli`'s `inca dev` needing it, per
 [PROTOCOL.md](./PROTOCOL.md)'s own note that an app lifecycle hook is "a name
 the host agrees to dispatch, not a new binding." Recorded here so a future
 unit implements this rather than deciding it again:
@@ -158,7 +159,7 @@ unit implements this rather than deciding it again:
   `"beforeUnmount"`) dispatched on `rootNodeId()` through the existing
   `addEventListener`/`EventDispatcher` path above.
 - **Cancellation**: observe-only. By the time a reload's hook would fire,
-  the new bundle has already loaded successfully — `gpjs-ui-host`'s
+  the new bundle has already loaded successfully — `inca-host`'s
   `reload()` only swaps sessions after that succeeds — so there is
   nothing left to veto. Shutdown can't be blocked indefinitely either.
 - **What a handler may await**: only already-settled microtasks. The job
@@ -170,5 +171,5 @@ unit implements this rather than deciding it again:
   `onBeforeReload`/`onBeforeUnmount`) over the raw `addEventListener`
   call, so the event-name strings never become app-facing API.
 
-Nothing dispatches either event yet — wiring `crates/gpjs-ui-host` to
+Nothing dispatches either event yet — wiring `crates/inca-host` to
 actually fire them is separate, future work.

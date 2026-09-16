@@ -5,7 +5,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 # Architecture
 
-Target architecture for gpjs-ui. This describes the design agents should
+Target architecture for Incarnative.js. This describes the design agents should
 build toward. See [AGENTS.md](../AGENTS.md#status) for which layers already
 match this design (the Rust host and the `incajs` core JS package) and which
 are still forward-looking (the Vue custom renderer, the Vite/HMR bridge, and
@@ -21,7 +21,7 @@ The JS↔Rust binding surface is specced in [FFI.md](./FFI.md).
 | --- | --- | --- |
 | **Native core** | Rust + [`gpui`](https://www.gpui.rs/) (wgpu) | Window management, event loop, retained virtual tree, direct GPU rendering. |
 | **JS engine** | QuickJS via [`rquickjs`](https://github.com/DelSkayn/rquickjs) | Embedded, lightweight JS runtime executing UI logic and reactivity. |
-| **Core JS package** | `incajs` (framework-agnostic) | Thin, typed JS wrapper around the host bridge (`__gpjsui_native__`), shared by every framework adapter instead of duplicated in each. |
+| **Core JS package** | `incajs` (framework-agnostic) | Thin, typed JS wrapper around the host bridge (`__inca_native__`), shared by every framework adapter instead of duplicated in each. |
 | **Frontend framework** | `incajs/vue` (first-class, current) / `incajs/react` (future, see [Roadmap](./ROADMAP.md#phase-10-react-custom-renderer-future)) | Custom renderer mapping virtual component trees to `incajs` calls — a subpath of the same package as the core, not a separate one, since neither adapter is ever imported without it. |
 | **Bundler & dev tooling** | Vite, used in library/build mode (no browser dev server) | Compiles `.vue`/`.tsx` via the official `@vitejs/plugin-vue` (and later `@vitejs/plugin-react`); HMR is delivered through Vite's Runtime API instead of Vite's browser client — see [HMR delivery](#hmr-delivery). |
 | **Dev CLI** | `@incajs/cli` (Node) | Parent process during development: owns the commands, and internally wires its own bundler adapter to its own dev-protocol client — see [Roadmap](./ROADMAP.md#phase-3-developer-tooling--hmr-integration) for why orchestration lives on the JS side. |
@@ -33,7 +33,7 @@ Why Vite instead of a bare bundler (e.g. raw Rolldown): Vite owns the official,
 maintained Vue SFC (and future React JSX) compiler integration
 (`@vitejs/plugin-vue`). Reimplementing SFC compilation (template compile, CSS
 extraction, source maps) on top of a bare bundler would be significant extra
-work for no runtime benefit, since gpjs-ui never uses Vite's browser dev
+work for no runtime benefit, since Incarnative.js never uses Vite's browser dev
 server anyway — only its library/build API and its Runtime API (see below).
 Modern Vite is also moving its own internals onto Rolldown, so the
 Rust-bundler speed benefit isn't lost by choosing Vite.
@@ -52,12 +52,12 @@ Rust-bundler speed benefit isn't lost by choosing Vite.
 └─────────────────────────────┼────────────────────────────────────┘
                               ▼  (dev-client spawns the host as a child)
 ┌──────────────────────────────────────────────────────────────────┐
-│             [ gpjs-ui Native Runtime — host process ]            │
+│        [ Incarnative.js Native Runtime — host process ]          │
 │  ┌────────────────────────────────────────────────────────────┐  │
 │  │ JS Runtime (QuickJS via `rquickjs`)                        │  │
 │  │   - Vue 3 application (React: future, see Roadmap)         │  │
 │  │   - Custom renderer (`createRenderer` / `react-reconciler`)│  │
-│  │   - `incajs` core (typed `__gpjsui_native__` wrapper)      │  │
+│  │   - `incajs` core (typed `__inca_native__` wrapper)        │  │
 │  │   - Vite `ModuleRunner` + custom Transport/Evaluator       │  │
 │  │     (dev only; transformed modules run here, not in Node)  │  │
 │  └──────────────────────────┬─────────────────────────────────┘  │
@@ -76,7 +76,7 @@ Rust-bundler speed benefit isn't lost by choosing Vite.
 Vite ships a **Runtime API** (`vite/module-runner`, the same mechanism
 `vite-node`/Vitest/Nuxt dev SSR use to run Vite-transformed modules outside a
 browser) built specifically for "run Vite modules with HMR in a non-browser
-environment." gpjs-ui uses it instead of Vite's browser client:
+environment." Incarnative.js uses it instead of Vite's browser client:
 
 - The `ModuleRunner` itself runs **inside QuickJS**, not on the Node side.
   Vite hands the evaluator `__vite_ssr_exports__`/`__vite_ssr_import__` as

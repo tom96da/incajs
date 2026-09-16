@@ -11,11 +11,11 @@ and renders, which an agent working inside the devcontainer can't do on its
 own (no display attached — see [why](#why-an-agent-cant-just-do-this)
 below). This doc covers how to do that check
 yourself, for the existing examples
-(`crates/gpjs-ui/examples/gpui/hello_world.rs`,
-`crates/gpjs-ui/examples/hello_world.rs`,
-`crates/gpjs-ui/examples/click_counter.rs`, and the two Vue ports,
+(`crates/inca-gpui/examples/gpui/hello_world.rs`,
+`crates/inca-gpui/examples/hello_world.rs`,
+`crates/inca-gpui/examples/click_counter.rs`, and the two Vue ports,
 `examples/hello_world` and `examples/click_counter`, run through
-`gpjs-ui-host`) and any future one.
+`inca-host`) and any future one.
 
 There are two ways to see the window, depending on which platform's
 rendering backend you want to exercise. Option A is simpler and is enough
@@ -32,7 +32,7 @@ command directly on macOS, outside the container, gets you the native
 backend with no extra setup:
 
 ```sh
-cargo run -p gpjs-ui --example gpui_hello_world
+cargo run -p inca-gpui --example gpui_hello_world
 ```
 
 A window with a gray background, the text "Hello, World!", and a row of six
@@ -40,11 +40,11 @@ colored boxes should appear.
 
 ### The Vue ports (`examples/hello_world`, `examples/click_counter`)
 
-These aren't Cargo examples — build `gpjs-ui-host` once, then let `gpjsui
+These aren't Cargo examples — build `inca-host` once, then let `inca
 dev` build the `.vue` app and start it:
 
 ```sh
-cargo build -p gpjs-ui-host
+cargo build -p inca-host
 pnpm --filter hello_world dev
 ```
 
@@ -54,13 +54,13 @@ Same look as `hello_world`/`gpui_hello_world` above. Swap in
 `EventDispatcher` correctly drains `@vue/runtime-core`'s
 microtask-scheduled reactivity update (see [PLAN.md](./PLAN.md)'s Unit iv notes).
 
-### A packaged app (`gpjsui package`)
+### A packaged app (`inca package`)
 
 Confirms the same thing about a distributable `.app`, launched the way a
-real user would rather than through `cargo run`/`gpjsui dev`:
+real user would rather than through `cargo run`/`inca dev`:
 
 ```sh
-cargo build -p gpjs-ui-host --release
+cargo build -p inca-host --release
 pnpm --filter click_counter package
 open examples/click_counter/dist/click_counter.app
 ```
@@ -75,7 +75,7 @@ carry it further).
 ### No text, but the background/boxes render fine
 
 `gpui_platform`'s `font-kit` feature isn't enabled for this platform (see
-`crates/gpjs-ui/Cargo.toml`) — without it, `gpui_macos` silently skips all
+`crates/inca-gpui/Cargo.toml`) — without it, `gpui_macos` silently skips all
 text rendering while drawing everything else normally, with no error.
 
 ### Metal toolchain errors
@@ -170,9 +170,9 @@ background — for a reason not yet found.
    `xhost +` (revert with `xhost -` once done) is the fallback.
 5. Inside the devcontainer, for examples:
    ```sh
-   DISPLAY=host.docker.internal:0 cargo run -p gpjs-ui --example hello_world
+   DISPLAY=host.docker.internal:0 cargo run -p inca-gpui --example hello_world
    ```
-   or, for one of the Vue ports (build `gpjs-ui-host` first, same as
+   or, for one of the Vue ports (build `inca-host` first, same as
    Option A):
    ```sh
    DISPLAY=host.docker.internal:0 pnpm --filter hello_world dev

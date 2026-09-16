@@ -5,7 +5,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 # Dev protocol (host ↔ dev-client)
 
-The message surface between `gpjs-ui-host` and the Node process that spawns
+The message surface between `inca-host` and the Node process that spawns
 it during development. `@incajs/cli`'s `dev-client` owns that end — it
 resolves and launches the host binary and speaks everything below, driven by
 the CLI's own commands. The counterpart to [FFI.md](./FFI.md), which covers
@@ -19,7 +19,7 @@ this file whenever a message lands or changes, same as [FFI.md](./FFI.md).
 Dev mode is opt-in:
 
 ```sh
-gpjs-ui-host --dev <path-to-bundle.js>
+inca-host --dev <path-to-bundle.js>
 ```
 
 Without `--dev` the host reads no stdin and writes no protocol messages —
@@ -135,7 +135,7 @@ a new `method` name, not a change here.
 
 **New app-visible events.** These don't travel this protocol at all. The
 host dispatches any `(node id, event name)` pair to whatever JS registered
-for it through `__gpjsui_native__.addEventListener`, and `rootNodeId()` gives
+for it through `__inca_native__.addEventListener`, and `rootNodeId()` gives
 an app a target not tied to any element, so an app lifecycle hook — cleanup
 before `shutdown`, a warning before a reload discards state — would be a name
 the host agrees to dispatch, not a new binding and not a new message. **No
