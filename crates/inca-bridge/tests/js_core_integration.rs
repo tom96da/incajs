@@ -14,6 +14,7 @@
 
 use std::cell::RefCell;
 use std::fs;
+use std::path::Path;
 use std::rc::Rc;
 
 use inca_bridge::Host;
@@ -32,14 +33,15 @@ fn compiled_inca_bundle_drives_the_real_virtual_tree() {
     let source = fs::read_to_string(BUNDLE_PATH).unwrap_or_else(|_| {
         panic!("{BUNDLE_PATH} is missing — run `pnpm --filter incajs build` first")
     });
+    let dist_dir = Path::new(BUNDLE_PATH).parent().unwrap();
 
     let host = Rc::new(RefCell::new(Host::default()));
-    let engine = Engine::new().unwrap();
+    let engine = Engine::builder().module_root(dist_dir).build().unwrap();
     engine.with(|ctx| install(&ctx, &host)).unwrap();
 
     let node_id: u32 = engine
         .with(|ctx| -> rquickjs::Result<u32> {
-            let (module, promise) = Module::declare(ctx, "inca-core.mjs", source)?.eval()?;
+            let (module, promise) = Module::declare(ctx, BUNDLE_PATH, source)?.eval()?;
             promise.finish::<()>()?;
 
             let create_node: Function = module.get("createNode")?;

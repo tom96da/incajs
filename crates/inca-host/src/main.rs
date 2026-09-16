@@ -1,8 +1,9 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Runtime binary behind an inca app: loads one prebuilt, self-contained
-//! JS bundle and opens a GPUI window on whatever tree it mounts.
+//! Runtime binary behind an inca app: loads an entry module — resolving its
+//! own `import`s against sibling files on disk — and opens a GPUI window on
+//! whatever tree it mounts.
 //!
 //! One binary serves any app, so it cannot know whether a bundle registers
 //! input handlers; it always renders through `EventDispatcher`, which wires
@@ -90,10 +91,12 @@ struct Session {
 }
 
 impl Session {
-    /// Starts an engine, gives it everything a bundle expects to find, and
-    /// evaluates the bundle into a fresh tree.
+    /// Starts an engine rooted at `entry_path`'s directory, gives it
+    /// everything an entry expects to find, and evaluates `source` — the
+    /// entry's own already-read content — into a fresh tree. An `import` in
+    /// `source` resolves against a sibling file next to `entry_path`.
     ///
-    /// `console` goes in before the bundle runs, so a bundle that logs while
+    /// `console` goes in before the entry runs, so an entry that logs while
     /// evaluating is heard rather than met with a `ReferenceError`.
     ///
     /// Dropping a previous `Session` takes its whole `QuickJS` runtime with
@@ -102,18 +105,20 @@ impl Session {
     /// # Errors
     ///
     /// Returns the thrown value if the engine fails to start, the bindings
-    /// or `console` fail to install, or `bundle` throws while evaluating.
-    fn load(bundle: &str, reporter: ErrorReporter) -> Result<Self, EngineError> {
+    /// or `console` fail to install, or `source` throws while evaluating —
+    /// including an unresolved `import` for a sibling file that isn't there.
+    fn load(entry_path: &str, source: &str, reporter: ErrorReporter) -> Result<Self, EngineError> {
         let host = Rc::new(RefCell::new(Host::default()));
         let root = host.borrow().root;
 
-        let engine = Engine::new()?;
+        let module_root = Path::new(entry_path).parent().unwrap_or(Path::new("."));
+        let engine = Engine::builder().module_root(module_root).build()?;
         engine.with(|ctx| {
             console::install(&ctx, &console::to_stderr())
                 .and_then(|()| install(&ctx, &host))
                 .map_err(|err| EngineError::capture(&ctx, &err))
         })?;
-        engine.eval_module("bundle.mjs", bundle)?;
+        engine.eval_module(entry_path, source)?;
 
         let engine = Rc::new(engine);
         let dispatcher =
@@ -247,24 +252,26 @@ fn respond(id: Option<&Value>, outcome: Result<(), Failure>, writer: &SharedWrit
     );
 }
 
-/// Re-reads the bundle and evaluates it into a fresh [`Session`], swapping
-/// the window over only once that succeeds — a bundle that fails to load
+/// Re-reads the entry and evaluates it into a fresh [`Session`], swapping
+/// the window over only once that succeeds — an entry that fails to load
 /// leaves the last working one on screen.
 fn reload(
     window: &WindowHandle<HostedApp>,
     cx: &mut gpui::AsyncApp,
-    bundle_path: &str,
+    entry_path: &str,
     id: Option<&Value>,
     writer: &SharedWriter,
 ) {
-    let outcome = fs::read_to_string(bundle_path)
+    let outcome = fs::read_to_string(entry_path)
         .map_err(|err| {
             Failure::Message(
                 ErrorCode::BundleFailed,
-                format!("failed to read {bundle_path}: {err}"),
+                format!("failed to read {entry_path}: {err}"),
             )
         })
-        .and_then(|bundle| Session::load(&bundle, reporter_for(writer)).map_err(Failure::Thrown))
+        .and_then(|source| {
+            Session::load(entry_path, &source, reporter_for(writer)).map_err(Failure::Thrown)
+        })
         .and_then(|session| {
             window
                 .update(cx, |app, window, _| {
@@ -282,7 +289,7 @@ fn reload(
 fn serve_dev_protocol(
     cx: &mut App,
     window: WindowHandle<HostedApp>,
-    bundle_path: String,
+    entry_path: String,
     writer: SharedWriter,
 ) {
     let lines = stdin_lines();
@@ -298,7 +305,7 @@ fn serve_dev_protocol(
             };
 
             match method {
-                Method::Reload => reload(&window, cx, &bundle_path, id.as_ref(), &writer),
+                Method::Reload => reload(&window, cx, &entry_path, id.as_ref(), &writer),
                 Method::Shutdown => {
                     respond(id.as_ref(), Ok(()), &writer);
                     break;
@@ -322,13 +329,14 @@ fn serve_dev_protocol(
 ///
 /// # Errors
 ///
-/// Returns the window that failed to open, or the value the bundle threw.
+/// Returns the window that failed to open, or the value the entry threw.
 fn start(
     cx: &mut App,
-    bundle: &str,
+    entry_path: &str,
+    source: &str,
     reporter: ErrorReporter,
 ) -> Result<WindowHandle<HostedApp>, Failure> {
-    let session = Session::load(bundle, reporter).map_err(Failure::Thrown)?;
+    let session = Session::load(entry_path, source, reporter).map_err(Failure::Thrown)?;
     let (width, height) = content_window_size(&session.host.borrow(), session.root);
 
     let bounds = Bounds::centered(None, size(px(width), px(height)), cx);
@@ -377,15 +385,15 @@ fn report_startup_failure(failure: &Failure, writer: Option<&SharedWriter>) {
     }
 }
 
-fn run_bundle(bundle_path: &str, dev: bool) -> ExitCode {
-    let bundle = match fs::read_to_string(bundle_path) {
-        Ok(bundle) => bundle,
+fn run_bundle(entry_path: &str, dev: bool) -> ExitCode {
+    let source = match fs::read_to_string(entry_path) {
+        Ok(source) => source,
         Err(err) => {
-            eprintln!("failed to read {bundle_path}: {err}");
+            eprintln!("failed to read {entry_path}: {err}");
             return ExitCode::FAILURE;
         }
     };
-    let bundle_path = bundle_path.to_owned();
+    let entry_path = entry_path.to_owned();
     let writer: Option<SharedWriter> = dev.then(|| Rc::new(StdoutWriter::spawn()) as SharedWriter);
 
     // `run` blocks until the app quits, so the outcome comes back out
@@ -394,11 +402,11 @@ fn run_bundle(bundle_path: &str, dev: bool) -> ExitCode {
     let reported = Rc::clone(&failed);
     application().run(move |cx: &mut App| {
         let error_reporter = writer.as_ref().map_or_else(stderr_reporter, reporter_for);
-        match start(cx, &bundle, error_reporter) {
+        match start(cx, &entry_path, &source, error_reporter) {
             Ok(window) => {
                 if let Some(writer) = &writer {
                     send(&**writer, &Outgoing::ready());
-                    serve_dev_protocol(cx, window, bundle_path.clone(), Rc::clone(writer));
+                    serve_dev_protocol(cx, window, entry_path.clone(), Rc::clone(writer));
                 }
             }
             Err(failure) => {
@@ -439,7 +447,7 @@ fn main() -> ExitCode {
     env_logger::init();
 
     let args: Vec<String> = env::args().skip(1).collect();
-    let (dev, bundle_path) = match args.as_slice() {
+    let (dev, entry_path) = match args.as_slice() {
         [] => {
             let Some(path) = bundle_beside_exe() else {
                 eprintln!(
@@ -458,7 +466,7 @@ fn main() -> ExitCode {
         }
     };
 
-    run_bundle(&bundle_path, dev)
+    run_bundle(&entry_path, dev)
 }
 
 #[cfg(test)]
@@ -467,8 +475,13 @@ mod tests {
     use super::*;
     use gpui::TestAppContext;
 
-    fn load(bundle: &str) -> Result<Session, EngineError> {
-        Session::load(bundle, stderr_reporter())
+    /// The entry path these tests evaluate `source` under. Never read from
+    /// disk in a test that imports nothing else, since [`Session::load`]
+    /// only reads a sibling file when a `source` actually imports one.
+    const TEST_ENTRY_PATH: &str = "/test/entry.js";
+
+    fn load(source: &str) -> Result<Session, EngineError> {
+        Session::load(TEST_ENTRY_PATH, source, stderr_reporter())
     }
 
     /// Captures every line written to it instead of touching real stdout, so
@@ -518,7 +531,7 @@ mod tests {
 
     #[gpui::test]
     fn bringing_the_window_up_runs_what_mounting_only_queued(cx: &mut TestAppContext) {
-        cx.update(|cx| start(cx, DEFERS_ITS_MOUNT, stderr_reporter()).unwrap());
+        cx.update(|cx| start(cx, TEST_ENTRY_PATH, DEFERS_ITS_MOUNT, stderr_reporter()).unwrap());
         cx.run_until_parked();
 
         let ran: bool = cx.update(|cx| {
@@ -587,7 +600,8 @@ mod tests {
         let writer: SharedWriter = Rc::clone(&capturing) as SharedWriter;
         let reporter = reporter_for(&writer);
 
-        let window = cx.update(|cx| start(cx, THROWING_LISTENER_BUNDLE, reporter).unwrap());
+        let window =
+            cx.update(|cx| start(cx, TEST_ENTRY_PATH, THROWING_LISTENER_BUNDLE, reporter).unwrap());
         cx.run_until_parked();
 
         cx.update(|cx| {

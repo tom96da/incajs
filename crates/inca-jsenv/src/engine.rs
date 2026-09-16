@@ -8,8 +8,11 @@
 //! any other `Engine`, since they don't share a runtime or a heap.
 
 use std::fmt;
+use std::path::PathBuf;
 
 use rquickjs::{Coerced, Context, Ctx, FromJs, Module, Runtime, Value};
+
+use crate::loader::{DiskLoader, DiskResolver};
 
 pub type EngineResult<T> = Result<T, EngineError>;
 
@@ -122,7 +125,17 @@ impl Engine {
     /// Returns an error if the underlying `QuickJS` runtime or context fails
     /// to initialize.
     pub fn new() -> EngineResult<Self> {
-        let runtime = Runtime::new().map_err(|err| EngineError::plain(&err))?;
+        Self::builder().build()
+    }
+
+    /// Starts building an [`Engine`] with one or more module roots — see
+    /// [`EngineBuilder`].
+    #[must_use]
+    pub fn builder() -> EngineBuilder {
+        EngineBuilder::default()
+    }
+
+    fn from_runtime(runtime: Runtime) -> EngineResult<Self> {
         let context = Context::full(&runtime).map_err(|err| EngineError::plain(&err))?;
         Ok(Self {
             _runtime: runtime,
@@ -161,14 +174,17 @@ impl Engine {
     /// Declares and evaluates `source` as an ES module named `name`, driving
     /// its top-level evaluation to completion before returning.
     ///
-    /// This engine has no `ModuleLoader` installed, so `source` must be
-    /// fully self-contained — no unresolved `import`s for anything to
-    /// resolve them against. A module's own completion value is always
-    /// `undefined` per spec, so unlike [`eval`](Self::eval) there's nothing
-    /// meaningful to convert to a caller-chosen type; state comes back the
-    /// same way `examples/click_counter.rs` already does it for plain
-    /// scripts — the module's top-level code writes to `globalThis`, and a
-    /// separate `eval` call reads it back afterward.
+    /// An unresolved `import` in `source` resolves against this engine's
+    /// module roots (see [`EngineBuilder::module_root`]) — against nothing,
+    /// if there are none, so `source` then has to be fully self-contained.
+    /// `name` also doubles as the base a relative `import` in `source`
+    /// resolves against, so pass the source's real path on disk if it has
+    /// one. A module's own completion value is always `undefined` per spec,
+    /// so unlike [`eval`](Self::eval) there's nothing meaningful to convert
+    /// to a caller-chosen type; state comes back the same way
+    /// `examples/click_counter.rs` already does it for plain scripts — the
+    /// module's top-level code writes to `globalThis`, and a separate `eval`
+    /// call reads it back afterward.
     ///
     /// # Errors
     ///
@@ -186,10 +202,70 @@ impl Engine {
     }
 }
 
+/// Builds an [`Engine`], configuring where its `import`s resolve against.
+///
+/// [`Engine::new`] is [`Engine::builder().build()`](Self::build) with no
+/// module root — every `import` in evaluated source is then unresolved.
+#[derive(Default)]
+pub struct EngineBuilder {
+    module_roots: Vec<PathBuf>,
+}
+
+impl EngineBuilder {
+    /// Adds a directory a bare `import` specifier is searched in, and that a
+    /// `./`- or `../`-relative specifier resolves against (via the
+    /// importing module's own path, not this root directly). Call it more
+    /// than once to add more than one root; each is tried in the order
+    /// added.
+    #[must_use]
+    pub fn module_root(mut self, root: impl Into<PathBuf>) -> Self {
+        self.module_roots.push(root.into());
+        self
+    }
+
+    /// Builds the configured [`Engine`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the underlying `QuickJS` runtime or context fails
+    /// to initialize.
+    pub fn build(self) -> EngineResult<Engine> {
+        let runtime = Runtime::new().map_err(|err| EngineError::plain(&err))?;
+        if !self.module_roots.is_empty() {
+            runtime.set_loader(DiskResolver::new(self.module_roots), DiskLoader);
+        }
+        Engine::from_runtime(runtime)
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
+    use std::{env, fs};
+
     use super::*;
+
+    /// A directory under the OS temp root, unique per test invocation, torn
+    /// down on drop.
+    struct ScratchDir(PathBuf);
+
+    impl ScratchDir {
+        fn new(name: &str) -> Self {
+            let path = env::temp_dir().join(format!(
+                "inca-jsenv-test-{name}-{}-{:?}",
+                std::process::id(),
+                std::thread::current().id()
+            ));
+            fs::create_dir_all(&path).unwrap();
+            Self(path)
+        }
+    }
+
+    impl Drop for ScratchDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
 
     #[test]
     fn eval_smoke_test() {
@@ -291,5 +367,102 @@ mod tests {
 
         assert_eq!(first.message(), "Error: first");
         assert_eq!(second.message(), "Error: second");
+    }
+
+    #[test]
+    fn a_module_root_resolves_a_relative_import() {
+        let dir = ScratchDir::new("relative-import");
+        fs::write(dir.0.join("dep.js"), "export const value = 41;").unwrap();
+        let entry = dir.0.join("entry.js");
+        fs::write(
+            &entry,
+            "import { value } from './dep.js'; globalThis.seen = value + 1;",
+        )
+        .unwrap();
+
+        let engine = Engine::builder().module_root(&dir.0).build().unwrap();
+        engine
+            .eval_module(
+                &entry.to_string_lossy(),
+                &fs::read_to_string(&entry).unwrap(),
+            )
+            .unwrap();
+
+        let seen: i32 = engine.eval("globalThis.seen").unwrap();
+        assert_eq!(seen, 42);
+    }
+
+    #[test]
+    fn a_shared_dependency_is_evaluated_once_across_two_entries() {
+        let dir = ScratchDir::new("shared-dependency");
+        fs::write(
+            dir.0.join("counter.js"),
+            "let calls = 0; export function next() { calls += 1; return calls; }",
+        )
+        .unwrap();
+        let first = dir.0.join("first.js");
+        fs::write(
+            &first,
+            "import { next } from './counter.js'; globalThis.firstSeen = next();",
+        )
+        .unwrap();
+        let second = dir.0.join("second.js");
+        fs::write(
+            &second,
+            "import { next } from './counter.js'; globalThis.secondSeen = next();",
+        )
+        .unwrap();
+
+        let engine = Engine::builder().module_root(&dir.0).build().unwrap();
+        engine
+            .eval_module(
+                &first.to_string_lossy(),
+                &fs::read_to_string(&first).unwrap(),
+            )
+            .unwrap();
+        engine
+            .eval_module(
+                &second.to_string_lossy(),
+                &fs::read_to_string(&second).unwrap(),
+            )
+            .unwrap();
+
+        // Both entries import the same `counter.js` — one shared module
+        // instance means its call counter keeps incrementing rather than
+        // restarting, so the second entry sees `2`, not `1`.
+        let first_seen: i32 = engine.eval("globalThis.firstSeen").unwrap();
+        let second_seen: i32 = engine.eval("globalThis.secondSeen").unwrap();
+        assert_eq!((first_seen, second_seen), (1, 2));
+    }
+
+    #[test]
+    fn a_dynamic_import_settles_once_pending_jobs_are_drained() {
+        let dir = ScratchDir::new("dynamic-import");
+        fs::write(dir.0.join("dep.js"), "export const value = 41;").unwrap();
+        let entry = dir.0.join("entry.js");
+        fs::write(
+            &entry,
+            "import('./dep.js').then((m) => { globalThis.seen = m.value + 1; });",
+        )
+        .unwrap();
+
+        let engine = Engine::builder().module_root(&dir.0).build().unwrap();
+        engine
+            .eval_module(
+                &entry.to_string_lossy(),
+                &fs::read_to_string(&entry).unwrap(),
+            )
+            .unwrap();
+        engine.with(|ctx| while ctx.execute_pending_job() {});
+
+        let seen: i32 = engine.eval("globalThis.seen").unwrap();
+        assert_eq!(seen, 42);
+    }
+
+    #[test]
+    fn no_module_root_leaves_an_import_unresolved() {
+        let engine = Engine::new().unwrap();
+        let result = engine.eval_module("entry.js", "import './dep.js';");
+        assert!(result.is_err());
     }
 }

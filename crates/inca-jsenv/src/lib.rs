@@ -14,5 +14,6 @@ pub mod console;
 pub mod engine;
 
 mod inspect;
+mod loader;
 
 pub use engine::{Engine, EngineError, EngineResult};

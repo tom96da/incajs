@@ -22,7 +22,7 @@ keywords = ["gpui", "quickjs", "desktop-app", "gui", "webview-free"]
 env_logger = "0.11"
 gpui = { git = "https://github.com/zed-industries/zed", tag = "v1.17.2" }
 gpui_platform = { git = "https://github.com/zed-industries/zed", tag = "v1.17.2" }
-rquickjs = { version = "0.12.2", default-features = false, features = ["std"] }
+rquickjs = { version = "0.12.2", default-features = false, features = ["std", "loader"] }
 log = "0.4"
 async-channel = "2.5"
 serde = { version = "1", features = ["derive"] }
