@@ -9,7 +9,7 @@ import { Writable } from "node:stream";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { packageApp } from "./package.mts";
-import type { Bundler, BuildResult, Watcher } from "./adapter/types.mts";
+import type { Bundler, BuildOutput, Watcher } from "./adapter/types.mts";
 
 let cwd: string | undefined;
 
@@ -18,15 +18,23 @@ afterEach(async () => {
   cwd = undefined;
 });
 
-/** A bundler stand-in that writes real content to `outDir`, since packaging copies it onward. */
+/**
+ * A bundler stand-in that writes real content to `outDir`, since packaging
+ * copies it onward — an entry plus a chunk, so the copy has to preserve
+ * both, not just the entry.
+ */
 function fakeBundler(): Bundler {
   return {
     watch: (): Promise<Watcher> => Promise.reject(new Error("not used by packageApp()")),
-    build: async ({ outDir }): Promise<BuildResult> => {
-      await mkdir(outDir, { recursive: true });
-      const bundlePath = path.join(outDir, "bundle.js");
-      await writeFile(bundlePath, "console.log('packaged');\n");
-      return { bundlePath };
+    build: async ({ outDir }): Promise<BuildOutput> => {
+      await mkdir(path.join(outDir, "chunks"), { recursive: true });
+      await writeFile(path.join(outDir, "bundle.js"), "console.log('packaged');\n");
+      await writeFile(path.join(outDir, "chunks", "shared.js"), "export const shared = true;\n");
+      return {
+        outDir,
+        entryFile: path.join(outDir, "bundle.js"),
+        files: ["bundle.js", "chunks/shared.js"],
+      };
     },
   };
 }
@@ -79,6 +87,9 @@ describe("packageApp", () => {
     expect(await readFile(path.join(appPath, "Contents/Resources/bundle.js"), "utf8")).toContain(
       "packaged",
     );
+    expect(
+      await readFile(path.join(appPath, "Contents/Resources/chunks/shared.js"), "utf8"),
+    ).toContain("shared");
     expect(await readFile(path.join(appPath, "Contents/PkgInfo"), "utf8")).toBe("APPL????");
 
     const plist = await readFile(path.join(appPath, "Contents/Info.plist"), "utf8");
@@ -106,6 +117,7 @@ describe("packageApp", () => {
     expect(appPath).toBe(path.join(app, "dist/click-counter"));
     expect(await readFile(path.join(appPath, "click-counter"), "utf8")).toContain("stand-in");
     expect(await readFile(path.join(appPath, "bundle.js"), "utf8")).toContain("packaged");
+    expect(await readFile(path.join(appPath, "chunks/shared.js"), "utf8")).toContain("shared");
   });
 
   it("reports a generated identifier when the app didn't set one", async () => {

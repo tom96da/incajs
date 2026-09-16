@@ -7,16 +7,24 @@ import { Writable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 
 import { dev } from "../src/dev.mts";
-import type { Bundler, BundlerOptions, Watcher } from "../src/adapter/types.mts";
+import type { Bundler, BundlerOptions, BuildOutput, Watcher } from "../src/adapter/types.mts";
 
 const mockHost = path.join(import.meta.dirname, "fixtures/mock-host.mts");
 const reloadFailsMockHost = path.join(import.meta.dirname, "fixtures/mock-host-reload-fails.mts");
 const appErrorMockHost = path.join(import.meta.dirname, "fixtures/mock-host-app-error.mts");
 const slowReadyMockHost = path.join(import.meta.dirname, "fixtures/mock-host-slow-ready.mts");
 
+// A nonexistent directory: pruneStaleFiles() treats a missing outDir as
+// nothing to prune, so these tests need no real files on disk.
+const FAKE_OUTPUT: BuildOutput = {
+  outDir: "/unused",
+  entryFile: "/unused/bundle.js",
+  files: ["bundle.js"],
+};
+
 interface FakeBundler extends Bundler {
   /** Simulates a successful (re)build. */
-  emitBuild(bundlePath: string): void;
+  emitBuild(output?: BuildOutput): void;
   /** Simulates a build failure. */
   emitError(error: { message: string; stack: string | null }): void;
   closed: boolean;
@@ -30,7 +38,6 @@ function makeFakeBundler(): FakeBundler {
     watch(options): Promise<Watcher> {
       handlers = options;
       return Promise.resolve({
-        bundlePath: "unused",
         close: () => {
           fake.closed = true;
           return Promise.resolve();
@@ -39,8 +46,8 @@ function makeFakeBundler(): FakeBundler {
     },
     // Never exercised here — dev() only ever calls watch().
     build: () => Promise.reject(new Error("not used by dev()")),
-    emitBuild(bundlePath) {
-      handlers?.onBuild(bundlePath);
+    emitBuild(output = FAKE_OUTPUT) {
+      handlers?.onBuild(output);
     },
     emitError(error) {
       handlers?.onError(error);
@@ -75,7 +82,7 @@ describe("dev", () => {
       signal: controller.signal,
     });
 
-    bundler.emitBuild("bundle.js");
+    bundler.emitBuild();
     await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
 
     controller.abort();
@@ -99,9 +106,9 @@ describe("dev", () => {
       signal: controller.signal,
     });
 
-    bundler.emitBuild("bundle.js");
+    bundler.emitBuild();
     await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
-    bundler.emitBuild("bundle.js");
+    bundler.emitBuild();
 
     controller.abort();
     await running;
@@ -150,9 +157,9 @@ describe("dev", () => {
       signal: controller.signal,
     });
 
-    bundler.emitBuild("bundle.js");
+    bundler.emitBuild();
     await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
-    bundler.emitBuild("bundle.js");
+    bundler.emitBuild();
     await vi.waitFor(() => expect(stderr.text()).toContain("[inca] reload failed"));
 
     controller.abort();
@@ -177,7 +184,7 @@ describe("dev", () => {
       signal: controller.signal,
     });
 
-    bundler.emitBuild("bundle.js");
+    bundler.emitBuild();
     await vi.waitFor(() => expect(stderr.text()).toContain("[inca] app error"));
 
     controller.abort();
@@ -201,7 +208,7 @@ describe("dev", () => {
       signal: controller.signal,
     });
 
-    bundler.emitBuild("bundle.js");
+    bundler.emitBuild();
     await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
 
     controller.abort();
@@ -225,8 +232,8 @@ describe("dev", () => {
       signal: controller.signal,
     });
 
-    bundler.emitBuild("bundle.js");
-    bundler.emitBuild("bundle.js");
+    bundler.emitBuild();
+    bundler.emitBuild();
 
     await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
     await vi.waitFor(() => expect(stderr.text()).toContain("reload #1"));

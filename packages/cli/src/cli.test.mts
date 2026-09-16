@@ -8,7 +8,7 @@ vi.mock("./dev.mts", () => ({
   dev: vi.fn<(options: DevOptions) => Promise<void>>(() => new Promise(() => {})),
 }));
 vi.mock("./build.mts", () => ({
-  build: vi.fn<(options?: BuildAppOptions) => Promise<string>>(),
+  build: vi.fn<(options?: BuildAppOptions) => Promise<BuildOutput>>(),
 }));
 vi.mock("./package.mts", () => ({
   packageApp: vi.fn<(options?: PackageAppOptions) => Promise<PackageResult>>(),
@@ -18,6 +18,7 @@ import { build } from "./build.mts";
 import { run } from "./cli.mts";
 import { dev } from "./dev.mts";
 import { packageApp } from "./package.mts";
+import type { BuildOutput } from "./adapter/types.mts";
 import type { BuildAppOptions } from "./build.mts";
 import type { DevOptions } from "./dev.mts";
 import type { PackageAppOptions, PackageResult } from "./package.mts";
@@ -61,7 +62,11 @@ describe("run", () => {
   });
 
   it("runs build and leaves the exit code untouched on success", async () => {
-    mockedBuild.mockResolvedValue("/app/dist/bundle.js");
+    mockedBuild.mockResolvedValue({
+      outDir: "/app/dist",
+      entryFile: "/app/dist/bundle.js",
+      files: ["bundle.js"],
+    });
 
     await run(["node", "inca", "build"]);
 

@@ -24,7 +24,7 @@ describe("HostClient", () => {
     let ready = false;
     const client = new HostClient({
       hostBin: mockHost,
-      bundlePath: "bundle.js",
+      entryFile: "bundle.js",
       onReady: () => {
         ready = true;
       },
@@ -42,7 +42,7 @@ describe("HostClient", () => {
     const lines: string[] = [];
     const client = new HostClient({
       hostBin: mockHost,
-      bundlePath: "bundle.js",
+      entryFile: "bundle.js",
       onStderr: (line) => lines.push(line),
     });
 
@@ -57,7 +57,7 @@ describe("HostClient", () => {
   it("rejects a call the host answers with a JSON-RPC error", async () => {
     const client = new HostClient({
       hostBin: mockHost,
-      bundlePath: "bundle.js",
+      entryFile: "bundle.js",
       onStderr: () => {},
     });
     await client.start();
@@ -68,7 +68,7 @@ describe("HostClient", () => {
   });
 
   it("kills the child once the shutdown deadline passes without it exiting", async () => {
-    const client = new HostClient({ hostBin: wedgedMockHost, bundlePath: "bundle.js" });
+    const client = new HostClient({ hostBin: wedgedMockHost, entryFile: "bundle.js" });
     await client.start();
 
     // A wedged app ignores `shutdown` and never exits on its own —
@@ -80,7 +80,7 @@ describe("HostClient", () => {
     const errors: { message: string; stack: string | null }[] = [];
     const client = new HostClient({
       hostBin: appErrorMockHost,
-      bundlePath: "bundle.js",
+      entryFile: "bundle.js",
       onAppError: (error) => errors.push(error),
       onStderr: () => {},
     });
@@ -95,7 +95,7 @@ describe("HostClient", () => {
     const calls: { method: string; params: unknown }[] = [];
     const client = new HostClient({
       hostBin: unknownMethodMockHost,
-      bundlePath: "bundle.js",
+      entryFile: "bundle.js",
       integrations: {
         someIntegration: (params) => calls.push({ method: "someIntegration", params }),
       },
@@ -112,7 +112,7 @@ describe("HostClient", () => {
     const lines: string[] = [];
     const client = new HostClient({
       hostBin: unknownMethodMockHost,
-      bundlePath: "bundle.js",
+      entryFile: "bundle.js",
       onStderr: (line) => lines.push(line),
     });
 
@@ -125,7 +125,7 @@ describe("HostClient", () => {
   it("stops the host when ready reports a protocol this package wasn't built for, leaving no child behind", async () => {
     const client = new HostClient({
       hostBin: protocolMismatchMockHost,
-      bundlePath: "bundle.js",
+      entryFile: "bundle.js",
       onStderr: () => {},
     });
 

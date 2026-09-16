@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { defaultBundler } from "./defaultBundler.mts";
 import { resolveEntry } from "./entry.mts";
-import type { Bundler } from "./adapter/types.mts";
+import type { Bundler, BuildOutput } from "./adapter/types.mts";
 
 export interface BuildAppOptions {
   /** The app's root directory. Defaults to `process.cwd()`. */
@@ -20,17 +20,16 @@ export interface BuildAppOptions {
 }
 
 /**
- * Builds the app once through the same bundler `dev` uses, and returns the
- * bundle's path. Rejects on failure — deciding what that means for the
- * process is `cli.mts`'s job.
+ * Builds the app once through the same bundler `dev` uses, and returns what
+ * it wrote. Rejects on failure — deciding what that means for the process
+ * is `cli.mts`'s job.
  */
-export async function build(options: BuildAppOptions = {}): Promise<string> {
+export async function build(options: BuildAppOptions = {}): Promise<BuildOutput> {
   const cwd = options.cwd ?? process.cwd();
   const outDir = path.join(cwd, "dist");
   const bundler: Bundler = options.bundler ?? defaultBundler;
 
   const entry = options.entry ?? (await resolveEntry(cwd));
 
-  const { bundlePath } = await bundler.build({ entry, outDir });
-  return bundlePath;
+  return bundler.build({ entry, outDir });
 }

@@ -9,7 +9,7 @@ import { build } from "./build.mts";
 import { resolveHostBin } from "./dev-client/index.mts";
 import { readAppMetadata, slugify } from "./metadata.mts";
 import { encodePlist } from "./plist.mts";
-import type { Bundler } from "./adapter/types.mts";
+import type { Bundler, BuildOutput } from "./adapter/types.mts";
 import type { AppMetadata } from "./metadata.mts";
 import type { PlistValue } from "./plist.mts";
 
@@ -62,20 +62,30 @@ function targetForPlatform(): PackageTarget {
 
 /** Inputs shared by every platform's app layout. */
 interface LayoutArgs {
-  distDir: string;
   metadata: AppMetadata;
-  bundlePath: string;
+  output: BuildOutput;
   hostBin: string;
 }
 
+/**
+ * Copies exactly the files `output` reports — never `output.outDir`
+ * wholesale, which could otherwise recurse into a previously packaged app
+ * sitting alongside it — into `destDir`, preserving each file's own
+ * subpath (e.g. a chunk under `chunks/`).
+ */
+async function copyBuildOutput(output: BuildOutput, destDir: string): Promise<void> {
+  await Promise.all(
+    output.files.map(async (relPath) => {
+      const dest = path.join(destDir, relPath);
+      await mkdir(path.dirname(dest), { recursive: true });
+      await cp(path.join(output.outDir, relPath), dest);
+    }),
+  );
+}
+
 /** Writes a macOS `.app` bundle: `Contents/{MacOS,Resources}`, `Info.plist`, `PkgInfo`. */
-async function packageMacos({
-  distDir,
-  metadata,
-  bundlePath,
-  hostBin,
-}: LayoutArgs): Promise<string> {
-  const appPath = path.join(distDir, `${metadata.productName}.app`);
+async function packageMacos({ metadata, output, hostBin }: LayoutArgs): Promise<string> {
+  const appPath = path.join(output.outDir, `${metadata.productName}.app`);
   await rm(appPath, { recursive: true, force: true });
 
   const contentsDir = path.join(appPath, "Contents");
@@ -88,7 +98,7 @@ async function packageMacos({
   await cp(hostBin, executablePath);
   await chmod(executablePath, 0o755);
 
-  await cp(bundlePath, path.join(resourcesDir, "bundle.js"));
+  await copyBuildOutput(output, resourcesDir);
 
   const plist: Record<string, PlistValue> = {
     CFBundleName: metadata.productName,
@@ -117,14 +127,9 @@ async function packageMacos({
 }
 
 /** Writes a plain directory holding the host executable and `bundle.js` beside it. */
-async function packageLinux({
-  distDir,
-  metadata,
-  bundlePath,
-  hostBin,
-}: LayoutArgs): Promise<string> {
+async function packageLinux({ metadata, output, hostBin }: LayoutArgs): Promise<string> {
   const dirName = slugify(metadata.productName);
-  const appDir = path.join(distDir, dirName);
+  const appDir = path.join(output.outDir, dirName);
   await rm(appDir, { recursive: true, force: true });
   await mkdir(appDir, { recursive: true });
 
@@ -132,7 +137,7 @@ async function packageLinux({
   await cp(hostBin, executablePath);
   await chmod(executablePath, 0o755);
 
-  await cp(bundlePath, path.join(appDir, "bundle.js"));
+  await copyBuildOutput(output, appDir);
 
   return appDir;
 }
@@ -160,15 +165,14 @@ export async function packageApp(options: PackageAppOptions = {}): Promise<Packa
     );
   }
 
-  const bundlePath = await build({ cwd, entry: options.entry, bundler: options.bundler });
-  const distDir = path.dirname(bundlePath);
+  const output = await build({ cwd, entry: options.entry, bundler: options.bundler });
 
   const hostBin = options.hostBin ?? resolveHostBin();
   if (!existsSync(hostBin)) {
     throw new Error(`no host binary at ${hostBin} — check that it was built and is executable`);
   }
 
-  const layoutArgs: LayoutArgs = { distDir, metadata, bundlePath, hostBin };
+  const layoutArgs: LayoutArgs = { metadata, output, hostBin };
   const appPath =
     target === "macos" ? await packageMacos(layoutArgs) : await packageLinux(layoutArgs);
 

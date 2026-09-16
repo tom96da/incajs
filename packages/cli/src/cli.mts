@@ -14,8 +14,8 @@ export async function run(argv: readonly string[] = process.argv): Promise<void>
 
   if (command === "build") {
     try {
-      const bundlePath = await build();
-      process.stdout.write(`[inca] built ${bundlePath}\n`);
+      const output = await build();
+      process.stdout.write(`[inca] built ${output.entryFile}\n`);
     } catch (error) {
       printFault(process.stderr, "build failed", toFault(error));
       process.exitCode = 1;

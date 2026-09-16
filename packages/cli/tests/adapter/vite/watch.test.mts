@@ -7,7 +7,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import { watch } from "../../../src/adapter/vite/index.mts";
 import { scratchApp } from "./scratchApp.mts";
-import type { Watcher } from "../../../src/adapter/types.mts";
+import type { BuildOutput, Watcher } from "../../../src/adapter/types.mts";
 
 const { setUp, tearDown, makeApp } = scratchApp("watch");
 
@@ -21,13 +21,12 @@ afterEach(async () => {
 });
 
 describe("watch", () => {
-  it("compiles a .vue file into a self-contained bundle", async () => {
+  it("compiles a .vue file, reporting the entry it wrote", async () => {
     const { entry, outDir } = await makeApp(
       `<script setup>\nconst msg = "hello";\n</script>\n<template><div>{{ msg }}</div></template>\n`,
     );
 
-    let watcher!: Watcher;
-    const bundlePath = await new Promise<string>((resolve, reject) => {
+    const output = await new Promise<BuildOutput>((resolve, reject) => {
       watch({
         entry,
         outDir,
@@ -35,15 +34,12 @@ describe("watch", () => {
         onBuild: resolve,
         onError: (error) => reject(new Error(error.message)),
       })
-        .then((w) => {
-          watcher = w;
-          watchers.push(w);
-        })
+        .then((w) => watchers.push(w))
         .catch(reject);
     });
 
-    expect(watcher.bundlePath).toBe(bundlePath);
-    const bundle = await readFile(watcher.bundlePath, "utf8");
+    expect(output.outDir).toBe(outDir);
+    const bundle = await readFile(output.entryFile, "utf8");
     expect(bundle).toContain("@vue/runtime-core");
     expect(bundle).not.toMatch(/from\s+["']vue["']/);
   }, 20000);
@@ -54,8 +50,8 @@ describe("watch", () => {
     );
 
     let builds = 0;
-    let resolveBuild!: (bundlePath: string) => void;
-    let nextBuild = new Promise<string>((resolve) => {
+    let resolveBuild!: (output: BuildOutput) => void;
+    let nextBuild = new Promise<BuildOutput>((resolve) => {
       resolveBuild = resolve;
     });
 
@@ -63,9 +59,9 @@ describe("watch", () => {
       entry,
       outDir,
       mode: "development",
-      onBuild: (bundlePath) => {
+      onBuild: (output) => {
         builds += 1;
-        resolveBuild(bundlePath);
+        resolveBuild(output);
       },
       onError: (error) => {
         throw new Error(error.message);
@@ -82,10 +78,10 @@ describe("watch", () => {
       vuePath,
       `<script setup>\nconst msg = "second";\n</script>\n<template><div>{{ msg }}</div></template>\n`,
     );
-    const bundlePath = await nextBuild;
+    const output = await nextBuild;
 
     expect(builds).toBe(2);
-    const bundle = await readFile(bundlePath, "utf8");
+    const bundle = await readFile(output.entryFile, "utf8");
     expect(bundle).toContain("second");
   }, 20000);
 

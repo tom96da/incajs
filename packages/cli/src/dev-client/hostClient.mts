@@ -18,8 +18,8 @@ interface PendingCall {
 }
 
 export interface HostClientOptions {
-  /** The bundle passed to the host as `--dev <bundlePath>`. */
-  bundlePath: string;
+  /** The entry module passed to the host as `--dev <entryFile>`. */
+  entryFile: string;
   /** Overrides which `inca-host` binary gets spawned, in place of automatic resolution. */
   hostBin?: string;
   /**
@@ -48,7 +48,7 @@ const defaultOnStderr = (line: string): void => {
 };
 
 /**
- * Spawns `inca-host --dev <bundlePath>` and speaks newline-delimited
+ * Spawns `inca-host --dev <entryFile>` and speaks newline-delimited
  * JSON-RPC 2.0 on its stdin/stdout. One instance owns exactly one child
  * process for its whole lifetime — a reload is a `reload` call on the same
  * child, never a respawn.
@@ -70,7 +70,7 @@ export class HostClient {
    */
   async start(): Promise<void> {
     const hostBin = this.#options.hostBin ?? resolveHostBin();
-    const child = spawn(hostBin, ["--dev", this.#options.bundlePath], {
+    const child = spawn(hostBin, ["--dev", this.#options.entryFile], {
       stdio: ["pipe", "pipe", "pipe"],
     });
     this.#child = child;

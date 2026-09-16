@@ -3,7 +3,7 @@
 
 export type {
   BuildOptions,
-  BuildResult,
+  BuildOutput,
   Bundler,
   BundlerOptions,
   Watcher,
