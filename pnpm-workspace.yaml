@@ -5,6 +5,7 @@ packages:
   - "packages/*"
   - "examples/*"
   - "npm/*"
+  - "!npm/darwin-x64"
 minimumReleaseAgeExclude:
   - "@vitest/mocker@5.0.0"
   - "@vitest/spy@5.0.0"
