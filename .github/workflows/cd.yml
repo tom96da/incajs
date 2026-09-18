@@ -1,0 +1,294 @@
+# Copyright (c) 2026 tom96da
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+name: CD
+
+permissions: {}
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Commit/ref to rehearse a dry run against"
+        required: false
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  DRY_RUN: ${{ github.event_name == 'workflow_dispatch' }}
+
+jobs:
+  gate:
+    name: Gate
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      version: ${{ steps.check.outputs.version }}
+      sha: ${{ steps.sha.outputs.sha }}
+    steps:
+      - name: Resolve the commit to release
+        id: sha
+        run: |
+          sha="${{ github.event_name == 'workflow_dispatch' && (inputs.ref || github.sha) || github.event.workflow_run.head_sha }}"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ steps.sha.outputs.sha }}
+          persist-credentials: false
+
+      - name: Check whether this version is already tagged
+        id: check
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./packages/core/package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if git ls-remote --tags origin "refs/tags/v$version" | grep -q .; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  verify:
+    name: Verify
+    needs: gate
+    if: needs.gate.outputs.should_release == 'true'
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+          persist-credentials: ${{ github.event_name != 'workflow_dispatch' }}
+
+      - name: Check every publish-set manifest matches the release version
+        run: |
+          set -euo pipefail
+          version="${{ needs.gate.outputs.version }}"
+          status=0
+          for manifest in \
+            packages/core/package.json \
+            packages/cli/package.json \
+            npm/darwin-arm64/package.json \
+            npm/darwin-x64/package.json \
+            npm/linux-arm64/package.json \
+            npm/linux-x64/package.json
+          do
+            found=$(node -p "require('./$manifest').version")
+            private=$(node -p "String(require('./$manifest').private ?? false)")
+            if [ "$found" != "$version" ]; then
+              echo "::error file=$manifest::version is $found, expected $version"
+              status=1
+            fi
+            if [ "$private" != "false" ]; then
+              echo "::error file=$manifest::still marked private"
+              status=1
+            fi
+          done
+          exit $status
+
+      - name: Tag the release
+        if: github.event_name != 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          version="${{ needs.gate.outputs.version }}"
+          git tag -a "v$version" -m "v$version"
+          git push origin "v$version"
+
+  build-host:
+    name: "Build host: ${{ matrix.pkg }}"
+    needs: [gate, verify]
+    timeout-minutes: 60
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - pkg: linux-x64
+            runner: ubuntu-latest
+          - pkg: linux-arm64
+            runner: ubuntu-24.04-arm
+          - pkg: darwin-arm64
+            runner: macos-latest
+          - pkg: darwin-x64
+            runner: macos-15-large
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+          persist-credentials: false
+
+      - name: Install gpui's native build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake \
+            clang \
+            lld \
+            llvm \
+            pkg-config \
+            libfontconfig-dev \
+            libwayland-dev \
+            libx11-xcb-dev \
+            libxkbcommon-x11-dev \
+            libssl-dev
+
+      - name: Check the Metal toolchain is available
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          if ! xcrun -sdk macosx metal --version > /dev/null 2>&1; then
+            echo "Installing the Metal toolchain component..."
+            xcodebuild -downloadComponent MetalToolchain
+          fi
+          xcrun -sdk macosx metal --version
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          key: cd-${{ matrix.pkg }}
+
+      - name: Build inca-host
+        run: cargo build --release --locked -p inca-host
+
+      - name: Pack the binary
+        run: tar -C target/release -czf inca-host-${{ matrix.pkg }}.tar.gz inca-host
+
+      - name: Upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: inca-host-${{ matrix.pkg }}
+          path: inca-host-${{ matrix.pkg }}.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish
+    needs: [gate, verify, build-host]
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6
+
+      - name: Set node version to 26
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 26
+          cache: pnpm
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install deps
+        run: pnpm ci
+
+      - name: Build
+        run: pnpm -r build
+
+      - name: Download host binaries
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          path: artifacts
+
+      - name: Place host binaries
+        run: |
+          set -euo pipefail
+          for pkg in linux-x64 linux-arm64 darwin-x64 darwin-arm64; do
+            mkdir -p "npm/$pkg/bin"
+            tar -xzf "artifacts/inca-host-$pkg/inca-host-$pkg.tar.gz" -C "npm/$pkg/bin"
+            chmod 0755 "npm/$pkg/bin/inca-host"
+          done
+
+      - name: Verify the packed host tarballs
+        run: |
+          set -euo pipefail
+          for pkg in linux-x64 linux-arm64 darwin-x64 darwin-arm64; do
+            tarball=$(pnpm --dir "npm/$pkg" pack --pack-destination "$RUNNER_TEMP" | tail -1)
+            tar -tvzf "$tarball" | tee /dev/stderr | \
+              grep -Eq '^-rwxr-xr-x.* package/bin/inca-host$' \
+              || { echo "::error::$pkg: bin/inca-host is not 0755 in the tarball"; exit 1; }
+          done
+
+      - name: Publish the host packages
+        run: pnpm publish -r --filter "@incajs/host-*" --no-git-checks ${{ env.DRY_RUN == 'true' && '--dry-run' || '' }}
+
+      - name: Publish incajs
+        run: pnpm publish -r --filter incajs --no-git-checks ${{ env.DRY_RUN == 'true' && '--dry-run' || '' }}
+
+      - name: Publish @incajs/cli
+        run: pnpm publish -r --filter "@incajs/cli" --no-git-checks ${{ env.DRY_RUN == 'true' && '--dry-run' || '' }}
+
+  release:
+    name: GitHub release
+    needs: [gate, publish]
+    if: github.event_name != 'workflow_dispatch'
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download host binaries
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          path: artifacts
+
+      - name: Write release notes from commit log
+        run: |
+          set -euo pipefail
+          version="${{ needs.gate.outputs.version }}"
+          prev=$(git tag --sort=-v:refname | grep -v "^v$version$" | head -1 || true)
+          {
+            if [ -n "$prev" ]; then
+              echo "Changes since $prev:"
+              echo
+              git log "$prev..HEAD" --no-merges --pretty='format:- %s (%h)'
+            else
+              echo "Initial release."
+            fi
+          } > "$RUNNER_TEMP/notes.md"
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: v${{ needs.gate.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md" artifacts/*/inca-host-*.tar.gz
