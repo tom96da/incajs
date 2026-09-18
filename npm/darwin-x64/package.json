@@ -1,6 +1,7 @@
 {
   "name": "@incajs/host-darwin-x64",
-  "version": "0.0.1",
+  "version": "0.0.0-0",
+  "private": true,
   "description": "Prebuilt inca-host binary for macOS on Intel (x64).",
   "keywords": [
     "desktop-app",
@@ -24,11 +25,5 @@
   ],
   "cpu": [
     "x64"
-  ],
-  "publishConfig": {
-    "access": "public",
-    "executableFiles": [
-      "bin/inca-host"
-    ]
-  }
+  ]
 }

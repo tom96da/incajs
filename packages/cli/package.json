@@ -77,7 +77,6 @@
   },
   "optionalDependencies": {
     "@incajs/host-darwin-arm64": "workspace:*",
-    "@incajs/host-darwin-x64": "workspace:*",
     "@incajs/host-linux-arm64": "workspace:*",
     "@incajs/host-linux-x64": "workspace:*"
   },
