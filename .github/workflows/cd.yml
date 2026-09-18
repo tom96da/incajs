@@ -268,20 +268,31 @@ jobs:
         with:
           path: artifacts
 
-      - name: Write release notes from commit log
+      - name: Write release notes
         run: |
           set -euo pipefail
           version="${{ needs.gate.outputs.version }}"
-          prev=$(git tag --sort=-v:refname | grep -v "^v$version$" | head -1 || true)
-          {
-            if [ -n "$prev" ]; then
-              echo "Changes since $prev:"
-              echo
-              git log "$prev..HEAD" --no-merges --pretty='format:- %s (%h)'
-            else
-              echo "Initial release."
-            fi
-          } > "$RUNNER_TEMP/notes.md"
+          date=$(sed -n "s/^## \[$version\][[:space:]]*-[[:space:]]*\(.*\)\$/\1/p" CHANGELOG.md)
+          awk -v ver="$version" '
+            $0 ~ "^## \\[" ver "\\]" { found=1; next }
+            found && (/^## \[/ || /^\[.*\]: /) { exit }
+            found { print }
+          ' CHANGELOG.md > "$RUNNER_TEMP/body.md"
+          if [ -n "$date" ] && [ -s "$RUNNER_TEMP/body.md" ]; then
+            { echo "Released on $date"; cat "$RUNNER_TEMP/body.md"; } > "$RUNNER_TEMP/notes.md"
+          fi
+          if [ ! -s "$RUNNER_TEMP/notes.md" ]; then
+            prev=$(git tag --sort=-v:refname | grep -v "^v$version$" | head -1 || true)
+            {
+              if [ -n "$prev" ]; then
+                echo "Changes since $prev:"
+                echo
+                git log "$prev..HEAD" --no-merges --pretty='format:- %s (%h)'
+              else
+                echo "Initial release."
+              fi
+            } > "$RUNNER_TEMP/notes.md"
+          fi
 
       - name: Create the release
         env:
