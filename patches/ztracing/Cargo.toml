@@ -1,0 +1,15 @@
+#:schema https://json.schemastore.org/cargo.json
+
+# Copyright (c) 2026 tom96da
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "ztracing"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+description = "No-op stand-in for zed-industries/zed's ztracing, avoiding its GPL-3.0-or-later zlog dependency."
+
+[dependencies]
+ztracing_macro = { path = "../ztracing_macro" }
