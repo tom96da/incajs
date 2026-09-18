@@ -16,15 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Features
 
-- GPU-native rendering via [GPUI](https://www.gpui.rs/), no Chromium or
-  webview
-- embedded QuickJS runtime ([`rquickjs`](https://github.com/DelSkayn/rquickjs))
-  for sub-second startup
+- GPU-native rendering via [GPUI](https://www.gpui.rs/), no Chromium or webview
+- embedded QuickJS runtime ([`rquickjs`](https://github.com/DelSkayn/rquickjs)) for sub-second startup
 - first-class Vue 3 support via the `incajs/vue` custom renderer
-- `inca` CLI: `dev` (live reload), `build`, and `package` (a distributable
-  `.app` on macOS, a plain directory on Linux)
-- prebuilt `inca-host` binaries for linux-x64, linux-arm64, and
-  darwin-arm64, resolved automatically per platform
+- `inca` CLI: `dev` (live reload), `build`, and `package` (a distributable `.app` on macOS, a plain directory on Linux)
+- prebuilt `inca-host` binaries for linux-x64, linux-arm64, and darwin-arm64, resolved automatically per platform
 - click event dispatch from the native tree back into JS
 
 [Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.1...HEAD

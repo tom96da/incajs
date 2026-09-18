@@ -800,18 +800,17 @@ The first release milestone: after this, the framework is publishable.
 
 ### Unit iii — CD workflow and the release
 
-- [ ] `.github/workflows/cd.yml`: on a version tag, build the host for each
-      supported platform, then publish to npm
-- [ ] Publish set is npm only — `incajs`, `incajs/vue`, `@incajs/cli`,
-      `@incajs/host-client`, `@incajs/vite`, and the per-platform
-      host packages. The Rust crates stay `publish = false`
-- [ ] Version the workspace at `0.0.1` (packages currently sit at a
-      placeholder version)
-- [ ] Each published package needs its own self-contained README, license
-      fields, and `files`/`exports` correctness — verify by packing, not by
-      reading the manifest
+- [x] `.github/workflows/cd.yml`: `workflow_run`-gated on `ci.yml`,
+      builds the host per platform, then publishes to npm
+- [x] Publish set is npm only — `incajs`, `@incajs/cli`, and the
+      per-platform host packages (`darwin-x64` excluded, no free Intel
+      macOS runner). Rust crates stay `publish = false`
+- [x] Workspace versioned at `0.0.1`
+- [x] Each published package has its own README, generated `LICENSE`,
+      and `files`/`exports` correctness — verified by packing
 - [ ] Update `README.md` with real install/usage instructions
-- [ ] Update `AGENTS.md`'s Status section
+- [x] Update `AGENTS.md`'s Status section
+- [x] `v0.0.1` published to npm and GitHub Releases
 
 ## Phase 3.4: HMR (`@incajs/vite-runtime`)
 

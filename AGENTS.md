@@ -41,11 +41,11 @@ macOS afterward. One item from 3.1 remains, not blocking 3.2 or 3.3: a
 dev-only error panel drawn in the window, deliberately deferred — it
 needs `position`/`z_index`/`overflow`, which don't exist before Phase 4.
 
-3.3 (application packaging) has landed through Unit ii: per-platform
-`@incajs/host-*` npm packages and `inca package`, confirmed with a real
-launch on Linux, and manually on macOS outside any terminal (see
-[PLAN.md](./specs/PLAN.md) Phase 3.3 Unit ii). What's left before
-`v0.0.1`: Unit iii, the CD workflow and the npm publish itself.
+3.3 is done. Unit ii: per-platform `@incajs/host-*` npm packages and
+`inca package`, confirmed with a real launch on Linux and macOS. Unit
+iii: `v0.0.1` published to npm via `.github/workflows/cd.yml`.
+`darwin-x64` is excluded for now — no free Intel macOS CI runner exists;
+`npm/darwin-x64/` stays as an unpublished placeholder.
 
 See [PLAN.md](./specs/PLAN.md) for unit-by-unit detail on every phase
 above.
