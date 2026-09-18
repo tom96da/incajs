@@ -1,7 +1,6 @@
 {
   "name": "@incajs/host-linux-x64",
-  "version": "0.0.0-0",
-  "private": true,
+  "version": "0.0.1",
   "description": "Prebuilt inca-host binary for Linux on x64.",
   "keywords": [
     "desktop-app",
@@ -25,5 +24,11 @@
   ],
   "cpu": [
     "x64"
-  ]
+  ],
+  "publishConfig": {
+    "access": "public",
+    "executableFiles": [
+      "bin/inca-host"
+    ]
+  }
 }

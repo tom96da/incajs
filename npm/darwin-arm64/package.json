@@ -1,7 +1,6 @@
 {
   "name": "@incajs/host-darwin-arm64",
-  "version": "0.0.0-0",
-  "private": true,
+  "version": "0.0.1",
   "description": "Prebuilt inca-host binary for macOS on Apple Silicon (arm64).",
   "keywords": [
     "desktop-app",
@@ -25,5 +24,11 @@
   ],
   "cpu": [
     "arm64"
-  ]
+  ],
+  "publishConfig": {
+    "access": "public",
+    "executableFiles": [
+      "bin/inca-host"
+    ]
+  }
 }

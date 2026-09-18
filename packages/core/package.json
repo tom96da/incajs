@@ -54,7 +54,8 @@
         "types": "./dist/vue/index.d.mts",
         "import": "./dist/vue.js"
       }
-    }
+    },
+    "access": "public"
   },
   "scripts": {
     "build": "vite build",
@@ -75,5 +76,8 @@
     "@vue/runtime-core": {
       "optional": true
     }
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

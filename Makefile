@@ -1,6 +1,9 @@
 GITIGNORE_PARTS := $(sort $(wildcard .gitignore.d/*.gitignore))
 
-.PHONY: check-gitignore FORCE
+LICENSE_PACKAGES := packages/core packages/cli npm/darwin-arm64 npm/darwin-x64 npm/linux-arm64 npm/linux-x64
+LICENSE_TARGETS := $(addsuffix /LICENSE,$(LICENSE_PACKAGES))
+
+.PHONY: check-gitignore check-license FORCE
 
 FORCE:
 
@@ -19,3 +22,21 @@ check-gitignore: .gitignore
 		exit 1; \
 	fi
 	@printf '%s\n' 'The generated .gitignore is up to date.'
+
+# Each published package's LICENSE is generated from LICENSE.tpl
+# (npm only auto-includes a LICENSE* found in the package's own directory).
+$(LICENSE_TARGETS): %/LICENSE: LICENSE.tpl
+	@cp $< $@
+
+check-license: $(LICENSE_TARGETS)
+	@for f in $(LICENSE_TARGETS); do \
+		git ls-files --error-unmatch "$$f" > /dev/null || { \
+			printf '%s\033[1;31m%s\033[0m\n' 'Missing generated file: ' "$$f (run: make $(LICENSE_TARGETS))"; \
+			exit 1; \
+		}; \
+		if ! git diff --quiet -- "$$f"; then \
+			printf '%s\033[1;31m%s\033[0m\n' 'The generated LICENSE files have changed. Run: ' 'git add $(LICENSE_TARGETS)'; \
+			exit 1; \
+		fi; \
+	done
+	@printf '%s\n' 'The generated LICENSE files are up to date.'
