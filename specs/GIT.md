@@ -10,24 +10,13 @@ repository. Anyone working here — AI agents included — follows these.
 
 ## Branching model
 
-This repo's target branching model is the standard [Git-Flow](https://nvie.com/posts/a-successful-git-branching-model/), described below.
+Just `main`, with short-lived `feature/<name>` branches merged
+directly into it via review. Releasing is not a branch type — it's
+whatever merged commit bumps `packages/core/package.json`'s version;
+CD detects that on the push to `main` and tags/publishes from there.
 
-**During initial development, before there are real releases to manage, this repo uses [GitHub Flow](https://docs.github.com/en/get-started/using-github/github-flow) instead**: just `main`, with short-lived branches merged directly into it via review. There's no `develop`/`release`/`hotfix` branch yet. Switch to the full Git-Flow model once the project starts cutting actual releases.
-
-### Git-Flow (target, once releases start)
-
-Long-lived branches:
-
-- `main` — always production-ready. Every commit on `main` is a release and gets tagged `vX.Y.Z`.
-- `develop` — integration branch for completed work heading into the next release.
-
-Supporting branches, all short-lived and deleted after merging:
-
-- `feature/<name>` — branched from `develop`, merged back into `develop`. Never merged directly into `main`.
-- `release/<version>` — branched from `develop` when preparing a release (version bump, docs, final fixes only — no new features). Merged into both `main` (tagged `vX.Y.Z`) and back into `develop`.
-- `hotfix/<name>` — branched from `main` for an urgent production fix. Merged into both `main` (tagged) and `develop`.
-
-Never commit directly to `main` or `develop` — land work through a supporting branch, merged in via review.
+Never commit directly to `main` — land work through a supporting
+branch, merged in via review.
 
 ## Never commit without review
 
