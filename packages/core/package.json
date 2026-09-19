@@ -19,6 +19,7 @@
     "vue3",
     "webview-free"
   ],
+  "homepage": "https://tom96da.github.io/incajs/",
   "license": "(MIT OR Apache-2.0)",
   "repository": {
     "type": "git",

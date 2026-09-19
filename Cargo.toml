@@ -15,6 +15,7 @@ rust-version = "1.98"
 license = "MIT OR Apache-2.0"
 authors = ["tom96da"]
 repository = "https://github.com/tom96da/incajs"
+homepage = "https://tom96da.github.io/incajs/"
 readme = "README.md"
 keywords = ["gpui", "quickjs", "desktop-app", "gui", "webview-free"]
 
