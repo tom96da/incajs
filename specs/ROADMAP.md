@@ -132,8 +132,10 @@ Phase 3.4 adds.
 ### Phase 3.2: `inca build`
 
 The one-shot production counterpart of 3.1's pipeline, emitting a
-self-contained bundle. Subsumes the per-example `scripts/build.mjs` files
-Phase 2 Unit iv hand-rolled.
+production build — potentially multiple files, since a real module loader
+now resolves `import`s against disk instead of requiring one self-contained
+bundle. Subsumes the per-example `scripts/build.mjs` files Phase 2 Unit iv
+hand-rolled.
 
 ### Phase 3.3: Application packaging
 

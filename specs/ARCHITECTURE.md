@@ -93,7 +93,7 @@ environment." Incarnative.js uses it instead of Vite's browser client:
   QuickJS. Vite's SSR transform emits an async *function body* taking the six
   `__vite_ssr_*` parameters, not an ES module, so no module loader is needed in
   QuickJS — but it does need an `AsyncFunction`-style entry point rather than
-  the `Module::declare` path a self-contained bundle uses.
+  the `Module::declare` path `inca build`'s output uses.
 
 This gets real HMR (module graph invalidation, accept/dispose boundaries)
 without reimplementing Vite's HMR protocol from scratch — the only new code is
