@@ -1,0 +1,22 @@
+{
+  "name": "@incajs/docs",
+  "version": "0.0.0-0",
+  "private": true,
+  "description": "The Incarnative.js documentation site.",
+  "license": "(MIT OR Apache-2.0)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tom96da/incajs.git",
+    "directory": "docs"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview"
+  },
+  "devDependencies": {
+    "vitepress": "^2.0.0-alpha.20",
+    "vitepress-plugin-group-icons": "^1.7.6"
+  }
+}

@@ -22,9 +22,9 @@
 
 ## :rocket: Getting started
 
-```sh
-npm i incajs
-npm i -D @incajs/cli
+```sh [npm]
+$ npm install incajs
+$ npm install -D @incajs/cli
 ```
 
 Drop a `src/App.vue`. No entry point or bootstrapping code needed:
@@ -47,22 +47,42 @@ const clicks = ref(0);
 Run `inca dev` for a live-reloading window. Run `inca build` for a
 one-off bundle, or `inca package` for a distributable app.
 
+## Host binary
+
 `inca-host`'s prebuilt binary is pulled in automatically as a
-platform-specific optional dependency (`linux-x64`, `linux-arm64`,
-`darwin-arm64`). Neither Cargo nor Rust are needed to run an app.
+platform-specific optional dependency. Neither Cargo nor Rust are
+needed to run an app.
 
-### Linux runtime requirements
+| Platform      | Status           |
+| ------------- | ---------------- |
+| Linux x64     | Limited support* |
+| Linux arm64   | Limited support* |
+| macOS arm64   | Supported        |
+| macOS x64     | Not planned      |
+| Windows x64   | Planned          |
+| Windows arm64 | Planned          |
 
-The host binary needs `libxcb1`, `libfontconfig1`, `libfreetype6`,
-`libxkbcommon0`, and `libxkbcommon-x11-0` (these are the Debian/Ubuntu
-package names; other distributions use the same libraries under
-different package names). Present by default on most desktops, but a
-minimal or headless install may need them added explicitly.
+\* Packaged apps still need [these libraries](#linux-runtime-requirements)
+on the machine that runs them — `inca package` doesn't bundle them yet.
 
-A Vulkan loader and GPU driver are also required (`libvulkan1` plus a
-driver package such as `mesa-vulkan-drivers`). These are dlopen'd at
-startup rather than linked, so `ldd` won't show them, but rendering
-can't start without them.
+## Linux runtime requirements
+
+On Debian/Ubuntu, the host binary needs:
+
+- `libxcb1`
+- `libfontconfig1`
+- `libfreetype6`
+- `libxkbcommon0`
+- `libxkbcommon-x11-0`
+- `libvulkan1`
+- a Vulkan driver package, such as `mesa-vulkan-drivers`
+
+Other distributions use the same libraries under different package
+names. They're present by default on most desktops, but a minimal or
+headless install may need them added explicitly.
+
+The Vulkan loader and driver are dlopen'd at startup rather than
+linked, so `ldd` won't show them. Rendering can't start without them.
 
 ## :scroll: License
 

@@ -1,0 +1,20 @@
+/* Copyright (c) 2026 tom96da
+   SPDX-License-Identifier: MIT OR Apache-2.0 */
+
+.hero-muted {
+  -webkit-text-fill-color: lightgray !important;
+
+  .dark & {
+    -webkit-text-fill-color: dimgray !important;
+  }
+}
+
+.VPFeature .icon span.vue {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  background-image: url("./assets/vue.svg");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}

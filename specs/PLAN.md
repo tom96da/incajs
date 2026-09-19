@@ -860,6 +860,9 @@ reason this unit comes first.
       HMR is that it *isn't* 3.1's teardown
 - [ ] The window and root node survive an update; a redraw is requested
       after each applied update
+- [ ] Introduce `inca.config.ts`, replacing `package.json`'s `"inca"`
+      key as the app metadata source for `inca package` (see the
+      `docs/` "Building for Production" guide's provisional-config note)
 
 ### Unit iii — Vue HMR
 
