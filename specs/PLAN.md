@@ -860,9 +860,15 @@ reason this unit comes first.
       HMR is that it *isn't* 3.1's teardown
 - [ ] The window and root node survive an update; a redraw is requested
       after each applied update
-- [ ] Introduce `inca.config.ts`, replacing `package.json`'s `"inca"`
-      key as the app metadata source for `inca package` (see the
-      `docs/` "Building for Production" guide's provisional-config note)
+- [x] Introduce `inca.config.ts`, loaded via `c12` with a `defineConfig`
+      helper from `@incajs/cli/config`. Landed ahead of the rest of this
+      unit, since it's independent of the HMR work above. `package.json`'s
+      `"inca"` key stays as a deprecated fallback — `inca package` warns
+      when it supplies anything, and `inca.config.ts` wins when both are
+      present — rather than being removed outright
+- [ ] `inca dev` reloads `inca.config.ts` on change via c12's
+      `watchConfig`, rather than requiring a restart to pick up an
+      edited `outDir`/`entry`/metadata field
 
 ### Unit iii — Vue HMR
 

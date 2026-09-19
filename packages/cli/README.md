@@ -31,20 +31,21 @@ bootstrapping; it wins outright when both exist.
   macOS, a plain directory on Linux (other platforms aren't supported
   yet).
 
-App metadata for `inca package` comes from the app's own
-`package.json`, with an optional `"inca"` key overriding what's derived
-from it:
+When running `inca`, it will automatically try to resolve a config file
+named `inca.config.ts` inside your app's root (other JS/JSON extensions
+are also supported), for app metadata and build settings:
 
-```jsonc
-{
-  "name": "click_counter",
-  "version": "1.0.0",
-  "inca": {
-    "productName": "Click Counter",             // defaults to "name", scope stripped
-    "identifier": "com.example.click-counter",  // defaults to a generated org.inca.<slug>
-    "icon": "assets/icon.icns"                  // resolved relative to the app's own directory
-  }
-}
+```ts [inca.config.ts]
+import { defineConfig } from "@incajs/cli/config";
+
+export default defineConfig({
+  // the app's display name
+  productName: "Click Counter",
+  // macOS's CFBundleIdentifier or equivalent
+  identifier: "com.example.click-counter",
+  // the packaged app's icon file
+  icon: "assets/icon.icns",
+});
 ```
 
 An `identifier` should be world-unique, so `inca package` prints a note

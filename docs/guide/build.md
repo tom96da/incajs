@@ -14,34 +14,55 @@ output lands in `dist`. `inca package` does the same, then wraps the
 result into a distributable application: a `.app` on macOS, a plain
 directory on Linux.
 
-## App Metadata
+## Configuration <Badge type="warning" text="unreleased" />
 
 > [!NOTE]
-> Configuring app metadata through `package.json`'s `"inca"` key is
-> provisional. It's expected to move to a dedicated `inca.config.ts`
-> in the future.
+> Configuring app metadata through `package.json`'s `"inca"` key still
+> works, but is deprecated — `inca package` prints a warning, and
+> `inca.config.ts` wins when both are present.
 
-App metadata for `inca package` comes from the app's own
-`package.json`, with an optional `"inca"` key overriding what's derived
-from it:
+When running `inca`, it will automatically try to resolve a config file
+named `inca.config.ts` inside your app's root (other JS/JSON extensions
+are also supported), for app metadata and where a build reads and
+writes:
 
-```json [package.json]
-{
-  "name": "click_counter",
-  "version": "1.0.0",
-  ...
-  "inca": {
-    "productName": "Click Counter",
-    "identifier": "com.example.click-counter",
-    "icon": "assets/icon.icns"
-  }
-  ...
-}
+```ts [inca.config.ts]
+import { defineConfig } from "@incajs/cli/config";
+
+export default defineConfig({
+  productName: "Click Counter",
+  identifier: "com.example.click-counter",
+  icon: "assets/icon.icns",
+});
 ```
 
-- `productName` defaults to `"name"`, with any npm scope (`@org/`)
-  stripped.
-- `identifier` defaults to a generated `org.inca.<slug>`. It should be
-  world-unique, so `inca package` prints a note when it falls back to
-  the generated one rather than using it silently.
-- `icon` is resolved relative to the app's own directory.
+### `productName`
+
+The app's display name. Defaults to `package.json`'s own `"name"`, with
+any npm scope (`@org/`) stripped.
+
+### `identifier`
+
+A reverse-DNS-style unique id — e.g. macOS's `CFBundleIdentifier`.
+Defaults to a generated `org.inca.<slug>`. It should be world-unique, so
+`inca package` prints a note when it falls back to the generated one
+rather than using it silently.
+
+### `icon`
+
+The packaged app's icon file, resolved relative to `inca.config.ts`'s
+own directory.
+
+### `version`
+
+The packaged app's version. Defaults to `package.json`'s own
+`"version"`.
+
+### `entry`
+
+The app's entry point, overriding the automatic entry resolution
+(`src/main.mts`, or `src/App.vue`).
+
+### `outDir`
+
+Where a build's output is written. Defaults to `dist`.
