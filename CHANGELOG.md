@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `inca.config.ts` (or `.js`/`.json`) for app metadata and build settings, with a `defineConfig` helper from `@incajs/cli/config`. `package.json`'s `"inca"` key still works as a deprecated fallback.
+
 ## [0.0.1] - 2026-09-18
 
 ### Features
