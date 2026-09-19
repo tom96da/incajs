@@ -8,3 +8,4 @@ export type {
   BundlerOptions,
   Watcher,
 } from "./adapter/types.mts";
+export type { ResolvedAppConfig } from "./config/loader.mts";

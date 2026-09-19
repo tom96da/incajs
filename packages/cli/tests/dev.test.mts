@@ -28,15 +28,28 @@ interface FakeBundler extends Bundler {
   /** Simulates a build failure. */
   emitError(error: { message: string; stack: string | null }): void;
   closed: boolean;
+  /**
+   * Resolves once `watch()` is called — `dev()` now resolves its config
+   * (an async step) before reaching `watch()`, so a test firing an event
+   * right after calling `dev()` has to wait for this first, or the event
+   * lands before any handler is registered to see it.
+   */
+  watching: Promise<void>;
 }
 
 function makeFakeBundler(): FakeBundler {
   let handlers: Pick<BundlerOptions, "onBuild" | "onError"> | undefined;
+  let markWatching: () => void;
+  const watching = new Promise<void>((resolve) => {
+    markWatching = resolve;
+  });
 
   const fake: FakeBundler = {
     closed: false,
+    watching,
     watch(options): Promise<Watcher> {
       handlers = options;
+      markWatching();
       return Promise.resolve({
         close: () => {
           fake.closed = true;
@@ -82,6 +95,7 @@ describe("dev", () => {
       signal: controller.signal,
     });
 
+    await bundler.watching;
     bundler.emitBuild();
     await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
 
@@ -106,6 +120,7 @@ describe("dev", () => {
       signal: controller.signal,
     });
 
+    await bundler.watching;
     bundler.emitBuild();
     await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
     bundler.emitBuild();
@@ -132,6 +147,7 @@ describe("dev", () => {
       signal: controller.signal,
     });
 
+    await bundler.watching;
     bundler.emitError({ message: "syntax error", stack: "at somewhere" });
     await vi.waitFor(() => expect(stderr.text()).toContain("[inca] build failed"));
 
@@ -157,6 +173,7 @@ describe("dev", () => {
       signal: controller.signal,
     });
 
+    await bundler.watching;
     bundler.emitBuild();
     await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
     bundler.emitBuild();
@@ -184,6 +201,7 @@ describe("dev", () => {
       signal: controller.signal,
     });
 
+    await bundler.watching;
     bundler.emitBuild();
     await vi.waitFor(() => expect(stderr.text()).toContain("[inca] app error"));
 
@@ -208,6 +226,7 @@ describe("dev", () => {
       signal: controller.signal,
     });
 
+    await bundler.watching;
     bundler.emitBuild();
     await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
 
@@ -232,6 +251,7 @@ describe("dev", () => {
       signal: controller.signal,
     });
 
+    await bundler.watching;
     bundler.emitBuild();
     bundler.emitBuild();
 

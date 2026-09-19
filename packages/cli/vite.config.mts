@@ -12,14 +12,13 @@ export default defineConfig({
       entry: {
         index: path.resolve(import.meta.dirname, "src/index.mts"),
         cli: path.resolve(import.meta.dirname, "src/cli.mts"),
+        config: path.resolve(import.meta.dirname, "src/config/index.mts"),
       },
       formats: ["es"],
       fileName: (_format, entryName) => `${entryName}.js`,
     },
     rolldownOptions: {
-      // This package only ever runs in Node — nothing here targets a
-      // browser bundle, so every `node:` builtin stays an import rather
-      // than something Vite tries to polyfill.
+      // This package only ever runs in Node.
       external: [/^node:/, "vite", "@vitejs/plugin-vue"],
     },
   },

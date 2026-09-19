@@ -49,7 +49,9 @@ async function makeHostBin(dir: string): Promise<string> {
 
 async function makeApp(pkg: object): Promise<string> {
   cwd = await mkdtemp(path.join(tmpdir(), "inca-package-"));
-  await writeFile(path.join(cwd, "package.json"), JSON.stringify(pkg));
+  // Node needs "type": "module" to load an inca.config.ts without a
+  // reparse-as-ESM warning — every real app already has this.
+  await writeFile(path.join(cwd, "package.json"), JSON.stringify({ type: "module", ...pkg }));
   return cwd;
 }
 
@@ -138,6 +140,27 @@ describe("packageApp", () => {
   });
 
   it("stays quiet about the identifier when the app set one", async () => {
+    const app = await makeApp({ name: "click_counter", version: "1.0.0" });
+    await writeFile(
+      path.join(app, "inca.config.ts"),
+      `export default { identifier: "com.example.click-counter" };\n`,
+    );
+    const hostBin = await makeHostBin(app);
+    const sink = makeSink();
+
+    await packageApp({
+      cwd: app,
+      entry: "unused",
+      bundler: fakeBundler(),
+      hostBin,
+      target: "linux",
+      stdout: sink.stream,
+    });
+
+    expect(sink.text()).toBe("");
+  });
+
+  it('warns when package.json\'s deprecated "inca" key supplied anything', async () => {
     const app = await makeApp({
       name: "click_counter",
       version: "1.0.0",
@@ -155,7 +178,28 @@ describe("packageApp", () => {
       stdout: sink.stream,
     });
 
-    expect(sink.text()).toBe("");
+    expect(sink.text()).toContain('the "inca" key in package.json is deprecated');
+  });
+
+  it("lets inca.config.ts supply productName", async () => {
+    const app = await makeApp({ name: "click_counter", version: "1.0.0" });
+    await writeFile(
+      path.join(app, "inca.config.ts"),
+      `export default { productName: "Click Counter" };\n`,
+    );
+    const hostBin = await makeHostBin(app);
+
+    const { appPath } = await packageApp({
+      cwd: app,
+      entry: "unused",
+      bundler: fakeBundler(),
+      hostBin,
+      target: "linux",
+      stdout: makeSink().stream,
+    });
+
+    expect(appPath).toBe(path.join(app, "dist/click-counter"));
+    expect(await readFile(path.join(appPath, "click-counter"), "utf8")).toContain("stand-in");
   });
 
   it("rejects a missing host binary with a clear message", async () => {

@@ -38,6 +38,11 @@
       "source": "./src/index.mts",
       "types": "./dist/index.d.mts",
       "import": "./dist/index.js"
+    },
+    "./config": {
+      "source": "./src/config/index.mts",
+      "types": "./dist/config/index.d.mts",
+      "import": "./dist/config.js"
     }
   },
   "publishConfig": {
@@ -45,6 +50,10 @@
       ".": {
         "types": "./dist/index.d.mts",
         "import": "./dist/index.js"
+      },
+      "./config": {
+        "types": "./dist/config/index.d.mts",
+        "import": "./dist/config.js"
       }
     },
     "access": "public"
@@ -63,6 +72,7 @@
   "devDependencies": {
     "@types/node": "^26.4.1",
     "@vue/runtime-core": "^3.5.42",
+    "c12": "4.0.0-rc.1",
     "oxfmt": "^0.66.0",
     "oxlint": "^1.81.0",
     "rolldown": "~1.2.4",
@@ -82,6 +92,6 @@
     "@incajs/host-linux-x64": "workspace:*"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.18"
   }
 }

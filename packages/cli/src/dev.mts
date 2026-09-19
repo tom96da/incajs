@@ -4,6 +4,7 @@
 import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
 
+import { resolveBuildConfig } from "./config/loader.mts";
 import { defaultBundler } from "./defaultBundler.mts";
 import { HostClient } from "./dev-client/index.mts";
 import { resolveEntry } from "./entry.mts";
@@ -59,12 +60,13 @@ async function pruneStaleFiles(outDir: string, keep: readonly string[]): Promise
  */
 export async function dev(options: DevOptions): Promise<void> {
   const cwd = options.cwd ?? process.cwd();
-  const outDir = path.join(cwd, "dist");
+  const config = await resolveBuildConfig(cwd);
+  const outDir = config.outDir;
   const bundler: Bundler = options.bundler ?? defaultBundler;
   const stdout = options.stdout ?? process.stdout;
   const stderr = options.stderr ?? process.stderr;
 
-  const entry = options.entry ?? (await resolveEntry(cwd));
+  const entry = options.entry ?? config.entry ?? (await resolveEntry(cwd));
 
   let client: HostClient | undefined;
   let ready = false;

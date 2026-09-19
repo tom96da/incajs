@@ -6,11 +6,12 @@ import { chmod, cp, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { build } from "./build.mts";
+import { slugify } from "./config/defaults.mts";
+import { resolveAppConfig } from "./config/loader.mts";
 import { resolveHostBin } from "./dev-client/index.mts";
-import { readAppMetadata, slugify } from "./metadata.mts";
 import { encodePlist } from "./plist.mts";
 import type { Bundler, BuildOutput } from "./adapter/types.mts";
-import type { AppMetadata } from "./metadata.mts";
+import type { ResolvedAppConfig } from "./config/loader.mts";
 import type { PlistValue } from "./plist.mts";
 
 /** A platform `inca package` can emit a distributable application for. */
@@ -62,7 +63,7 @@ function targetForPlatform(): PackageTarget {
 
 /** Inputs shared by every platform's app layout. */
 interface LayoutArgs {
-  metadata: AppMetadata;
+  metadata: ResolvedAppConfig;
   output: BuildOutput;
   hostBin: string;
 }
@@ -157,15 +158,25 @@ export async function packageApp(options: PackageAppOptions = {}): Promise<Packa
   const stdout = options.stdout ?? process.stdout;
   const target = options.target ?? targetForPlatform();
 
-  const metadata = await readAppMetadata(cwd);
+  const metadata = await resolveAppConfig(cwd);
+  if (metadata.usedPackageJsonKey) {
+    stdout.write(
+      `[inca] the "inca" key in package.json is deprecated — move these settings to inca.config.ts\n`,
+    );
+  }
   if (metadata.identifierIsDefault) {
     stdout.write(
-      `[inca] no "inca.identifier" set in package.json — using generated identifier ` +
+      `[inca] no "identifier" set in inca.config.ts — using generated identifier ` +
         `${metadata.identifier}\n`,
     );
   }
 
-  const output = await build({ cwd, entry: options.entry, bundler: options.bundler });
+  const output = await build({
+    cwd,
+    entry: options.entry,
+    config: metadata,
+    bundler: options.bundler,
+  });
 
   const hostBin = options.hostBin ?? resolveHostBin();
   if (!existsSync(hostBin)) {

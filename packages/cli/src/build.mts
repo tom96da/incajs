@@ -1,11 +1,11 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import path from "node:path";
-
+import { resolveBuildConfig } from "./config/loader.mts";
 import { defaultBundler } from "./defaultBundler.mts";
 import { resolveEntry } from "./entry.mts";
 import type { Bundler, BuildOutput } from "./adapter/types.mts";
+import type { ResolvedBuildConfig } from "./config/loader.mts";
 
 export interface BuildAppOptions {
   /** The app's root directory. Defaults to `process.cwd()`. */
@@ -17,6 +17,8 @@ export interface BuildAppOptions {
   entry?: string;
   /** Overrides the bundler — see {@link defaultBundler} for what's wired in by default. */
   bundler?: Bundler;
+  /** An already-resolved config — lets `packageApp` avoid loading it twice. */
+  config?: ResolvedBuildConfig;
 }
 
 /**
@@ -26,10 +28,11 @@ export interface BuildAppOptions {
  */
 export async function build(options: BuildAppOptions = {}): Promise<BuildOutput> {
   const cwd = options.cwd ?? process.cwd();
-  const outDir = path.join(cwd, "dist");
+  const config = options.config ?? (await resolveBuildConfig(cwd));
+  const outDir = config.outDir;
   const bundler: Bundler = options.bundler ?? defaultBundler;
 
-  const entry = options.entry ?? (await resolveEntry(cwd));
+  const entry = options.entry ?? config.entry ?? (await resolveEntry(cwd));
 
   return bundler.build({ entry, outDir });
 }
