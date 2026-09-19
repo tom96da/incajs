@@ -26,5 +26,8 @@
     "@incajs/cli": "workspace:*",
     "oxfmt": "^0.66.0",
     "oxlint": "^1.81.0"
+  },
+  "engines": {
+    "node": ">=22.18"
   }
 }

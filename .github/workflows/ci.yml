@@ -132,14 +132,14 @@ jobs:
         run: pnpm run typecheck
 
   # One job per version instead of a strategy.matrix, so a skip keeps its name.
-  test-node-20:
-    name: "Test: Node.js 20, ubuntu-latest"
+  test-node-22:
+    name: "Test: Node.js 22, ubuntu-latest"
     needs: [changed, build]
     if: needs.changed.outputs.js == 'true'
     timeout-minutes: 15
     runs-on: ubuntu-latest
     env:
-      NODE_VERSION: "20"
+      NODE_VERSION: "22"
     steps: &test_node_steps
       - name: Checkout
         uses: actions/checkout@v7
@@ -158,28 +158,8 @@ jobs:
       - name: Install deps
         run: pnpm ci
 
-      # Node 20 can't run .mts natively; route it through tsx.
-      - name: Install tsx
-        id: install_tsx
-        if: env.NODE_VERSION == '20'
-        run: |
-          npm install -g tsx@4.23.13
-          echo "node_options=--import=$(npm root -g)/tsx/dist/esm/index.mjs" >> "$GITHUB_OUTPUT"
-
       - name: Test
-        env:
-          NODE_OPTIONS: ${{ steps.install_tsx.outputs.node_options }}
         run: pnpm exec vitest run
-
-  test-node-22:
-    name: "Test: Node.js 22, ubuntu-latest"
-    needs: [changed, build]
-    if: needs.changed.outputs.js == 'true'
-    timeout-minutes: 15
-    runs-on: ubuntu-latest
-    env:
-      NODE_VERSION: "22"
-    steps: *test_node_steps
 
   test-node-24:
     name: "Test: Node.js 24, ubuntu-latest"
@@ -276,18 +256,7 @@ jobs:
   passed:
     name: CI Passed
     if: always()
-    needs:
-      [
-        changed,
-        build,
-        lint,
-        test-node-20,
-        test-node-22,
-        test-node-24,
-        test-node-26,
-        rust-ubuntu,
-        rust-macos,
-      ]
+    needs: [changed, build, lint, test-node-22, test-node-24, test-node-26, rust-ubuntu, rust-macos]
     runs-on: ubuntu-latest
     steps:
       - name: Check job results
