@@ -28,9 +28,10 @@ jobs:
   gate:
     name: Gate
     if: >
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'main')
+      github.repository == 'tom96da/incajs' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_branch == 'main'))
     timeout-minutes: 5
     runs-on: ubuntu-latest
     permissions:
