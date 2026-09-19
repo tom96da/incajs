@@ -6,18 +6,24 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 # incajs
 
 **Incarnative.js** — a GPU-native, Webview-free desktop application
-framework powered by [GPUI](https://www.gpui.rs/) and QuickJS.
+framework. No Chromium, no DOM: UI renders directly on the GPU via
+[GPUI](https://www.gpui.rs/), driven by an embedded QuickJS runtime
+([`rquickjs`](https://github.com/DelSkayn/rquickjs)) with sub-second
+startup.
 
-`incajs` provides the framework-agnostic JS API that talks directly to the
-native host bridge (`globalThis.__inca_native__`), plus first-class Vue 3
-support via the `incajs/vue` subpath — a custom renderer mapping Vue's
-`createRenderer` lifecycle methods onto this package's own typed wrapper
-functions. `incajs/vue`'s `@vue/runtime-core` peer dependency is optional:
-only import `incajs/vue` if you're building with Vue.
+## Features
 
-The typed wrapper functions over the native bridge, the
-`__inca_callbacks__` event-listener registry, and the Vue 3 renderer
-(node lifecycle, text/comment nodes, style/attribute/event prop patching)
-are implemented and tested.
+- Framework-agnostic core, with first-class Vue 3 support via the
+  `incajs/vue` subpath (`@vue/runtime-core` is an optional peer
+  dependency — only needed if you import `incajs/vue`)
+- Direct GPU rendering — no Chromium, no DOM
+- Embedded QuickJS runtime for sub-second startup and a minimal memory
+  footprint
+
+## How it works
+
+`incajs` is a thin, typed wrapper around the native host bridge.
+`incajs/vue` is a custom renderer mapping Vue's `createRenderer`
+lifecycle onto those calls.
 
 Part of [tom96da/incajs](https://github.com/tom96da/incajs).

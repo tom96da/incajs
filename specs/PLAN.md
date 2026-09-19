@@ -808,7 +808,7 @@ The first release milestone: after this, the framework is publishable.
 - [x] Workspace versioned at `0.0.1`
 - [x] Each published package has its own README, generated `LICENSE`,
       and `files`/`exports` correctness — verified by packing
-- [ ] Update `README.md` with real install/usage instructions
+- [x] Update `README.md` with real install/usage instructions
 - [x] Update `AGENTS.md`'s Status section
 - [x] `v0.0.1` published to npm and GitHub Releases
 

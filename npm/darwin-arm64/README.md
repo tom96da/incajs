@@ -11,3 +11,6 @@ whichever of these matches the current OS/arch as an `optionalDependency`
 and resolves the binary inside it.
 
 This package carries no JS: `bin/inca-host` is the whole of it.
+
+Part of [tom96da/incajs](https://github.com/tom96da/incajs), the
+Incarnative.js framework.
