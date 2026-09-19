@@ -20,35 +20,26 @@ See [README.md](./README.md) for the full pitch.
 
 ## Status
 
-Phase 1 (the Rust host's FFI bridge core, now split across
-`crates/inca-gpui`/`crates/inca-bridge`/`crates/inca-jsenv`) and Phase 2
-(the pnpm workspace, `packages/core`, its `incajs/vue` Vue 3 custom
-renderer, and two working `.vue` examples) are complete and visually
-confirmed — [FFI.md](./specs/FFI.md) has the current binding vocabulary.
+Phase 1 (Rust host FFI bridge: `crates/inca-gpui`/`inca-bridge`/
+`inca-jsenv`) and Phase 2 (pnpm workspace, `packages/core`,
+`incajs/vue`, two `.vue` examples) are done — [FFI.md](./specs/FFI.md)
+has the current binding vocabulary.
 
-Phase 3 (the `inca` CLI, on the JS/TS side) is split into 3.1 through
-3.4, with a `v0.0.1` release after 3.3. 3.1 (`inca dev`, full reload)
-and 3.2 (`inca build`) are both done. 3.2 gained a Unit iii after the
-fact: `inca-jsenv`'s engine had no module loader, so a build could only
-ever emit one self-contained file, which silently broke a dynamic
-`import()` or a `.vue` file's own `<style>` block. Fixed by giving the
-engine a disk-backed loader and having the CLI report/copy every file a
-build writes rather than one assumed `bundle.js`; the same fix let
-`incajs/vue` move from a thin re-export of a separate `@incajs/vue`
-package into an implementation inside `packages/core/src/vue`, the
-shape Phase 2 always specified. Re-confirmed with a live launch on
-macOS afterward. One item from 3.1 remains, not blocking 3.2 or 3.3: a
-dev-only error panel drawn in the window, deliberately deferred — it
-needs `position`/`z_index`/`overflow`, which don't exist before Phase 4.
+Phase 3 (the `inca` CLI) is split into 3.1–3.4, with `v0.0.1` released
+after 3.3. 3.1 (`inca dev`), 3.2 (`inca build`, including a
+file-backed module loader so a build can emit more than one file), and
+3.3 (`inca package`, per-platform `@incajs/host-*` npm packages,
+`v0.0.1` published via `.github/workflows/cd.yml`) are done.
+`darwin-x64` stays an unpublished placeholder — no free Intel macOS CI
+runner. 3.4 (HMR) is next.
 
-3.3 is done. Unit ii: per-platform `@incajs/host-*` npm packages and
-`inca package`, confirmed with a real launch on Linux and macOS. Unit
-iii: `v0.0.1` published to npm via `.github/workflows/cd.yml`.
-`darwin-x64` is excluded for now — no free Intel macOS CI runner exists;
-`npm/darwin-x64/` stays as an unpublished placeholder.
+The project also has a public docs site (`docs/`, VitePress), deployed
+by `.github/workflows/docs.yml` to
+[tom96da.github.io/incajs](https://tom96da.github.io/incajs/).
 
-See [PLAN.md](./specs/PLAN.md) for unit-by-unit detail on every phase
-above.
+See [PLAN.md](./specs/PLAN.md) for unit-by-unit detail and deferred
+items (e.g. 3.1's dev-only error panel, waiting on Phase 4's
+`position`/`z-index`/`overflow`).
 
 Keep this section's status prose accurate as real logic lands — don't let it go stale.
 

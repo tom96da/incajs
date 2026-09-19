@@ -33,14 +33,17 @@ incajs/
 ├── .github/
 │   ├── dependabot.yml       # auto-updates the devcontainer image/features only, for now
 │   └── workflows/
-│       └── ci.yml           # runs TESTING.md's required checks on push/PR
+│       ├── ci.yml           # runs TESTING.md's required checks on push/PR
+│       ├── cd.yml           # tags/publishes to npm and GitHub Releases once CI passes on main
+│       └── docs.yml         # builds docs/ and deploys it to GitHub Pages
 ├── Cargo.toml               # Rust workspace manifest
 ├── Cargo.lock               # locked Rust dependency graph, including git-pinned gpui
 ├── crates/
 │   ├── inca-gpui/           # Rust host: retained tree, QuickJS bridge, GPUI render (Phase 1, done)
+│   ├── inca-bridge/         # binds a QuickJS realm to the retained tree — the __inca_native__ bridge and event dispatch (Phase 1, done)
 │   ├── inca-jsenv/          # the host objects installed into the QuickJS realm — console today, more in Phase 6
 │   └── inca-host/           # the runtime binary: loads a bundle and opens the window (Phase 2 Unit iv, done; grows a dev mode in Phase 3.1)
-├── pnpm-workspace.yaml       # pnpm workspace member globs (packages/*, examples/*, npm/*)
+├── pnpm-workspace.yaml       # pnpm workspace member globs (packages/*, examples/*, npm/*, docs)
 ├── package.json              # root workspace manifest — lint/format/typecheck/test/build scripts
 ├── pnpm-lock.yaml
 ├── tsconfig.base.json         # shared TS compiler options, extended by each package's tsconfig.json
@@ -56,6 +59,7 @@ incajs/
 ├── examples/
 │   ├── hello_world/         # Vue port of crates/inca-gpui/examples/hello_world.rs (Phase 2 Unit iv, done)
 │   └── click_counter/       # Vue port of crates/inca-gpui/examples/click_counter.rs (Phase 2 Unit iv, done)
+├── docs/                     # the public VitePress site, deployed by .github/workflows/docs.yml
 └── third_party/             # pinned upstream sources, as git submodules — see below
     ├── zed/                 # zed-industries/zed @ v1.17.2
     ├── rquickjs/            # DelSkayn/rquickjs @ v0.12.2
