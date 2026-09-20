@@ -84,6 +84,10 @@ Other distributions use the same libraries under different package
 names. They're present by default on most desktops, but a minimal or
 headless install may need them added explicitly.
 
+Some of these are already unnecessary. The binary bundles FreeType, and
+`libfontconfig1` is linked on arm64 only. The list will be narrowed once
+it is measured on a minimal install.
+
 The Vulkan loader and driver are dlopen'd at startup rather than
 linked, so `ldd` won't show them. Rendering can't start without them.
 

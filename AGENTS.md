@@ -40,7 +40,7 @@ raises is an `IncaError` with an `ERR_INCA_*` code — document a new one in
 `docs/reference/errors.md` in the same change — and a feature the engine
 can't run is rejected at build time from one list in `unsupported.mts`.
 
-The current release is `v0.0.2`, on Node.js 22.18 or newer, zed v1.20.2
+The current release is `v0.0.3`, on Node.js 22.18 or newer, zed v1.20.2
 for `gpui` and rquickjs 0.14.0. The public docs site (`docs/`, VitePress)
 — `guide/` for prose, `reference/` for lookup — is deployed by
 `.github/workflows/docs.yml` to

@@ -7,7 +7,7 @@ Copyright (c) 2026 tom96da
 SPDX-License-Identifier: MIT OR Apache-2.0
 -->
 
-# Error Codes <Badge type="warning" text="unreleased" />
+# Error Codes
 
 Every failure the CLI raises itself carries an `ERR_INCA_*` code, printed
 with the message:

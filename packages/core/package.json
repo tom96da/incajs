@@ -1,6 +1,6 @@
 {
   "name": "incajs",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Incarnative.js — a GPU-native, Webview-free desktop application framework powered by GPUI and QuickJS. Framework-agnostic core, with first-class Vue 3 support via the incajs/vue subpath.",
   "keywords": [
     "cross-platform",

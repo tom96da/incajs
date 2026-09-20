@@ -1,6 +1,6 @@
 {
   "name": "@incajs/cli",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "The inca CLI: watches an app's entry point through a bundler adapter, starts inca-host once the first bundle lands, and reloads it on every rebuild.",
   "keywords": [
     "bundler",

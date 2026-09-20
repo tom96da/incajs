@@ -1,6 +1,6 @@
 {
   "name": "@incajs/host-linux-x64",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Prebuilt inca-host binary for Linux on x64.",
   "keywords": [
     "desktop-app",
