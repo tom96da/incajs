@@ -3,9 +3,12 @@ GITIGNORE_PARTS := $(sort $(wildcard .gitignore.d/*.gitignore))
 LICENSE_PACKAGES := packages/core packages/cli npm/darwin-arm64 npm/darwin-x64 npm/linux-arm64 npm/linux-x64
 LICENSE_TARGETS := $(addsuffix /LICENSE,$(LICENSE_PACKAGES))
 
-.PHONY: check-gitignore check-license FORCE
+.PHONY: check-gitignore check-license clean-dist FORCE
 
 FORCE:
+
+clean-dist:
+	@find packages examples docs -type d -name dist -not -path '*/node_modules/*' -printf 'remove %p\n' -exec rm -rf {} +
 
 .gitignore: FORCE $(GITIGNORE_PARTS)
 	@printf '%s\n\n' '# This file is generated from .gitignore.d/*.gitignore.' > $@
