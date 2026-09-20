@@ -6,6 +6,7 @@ import path from "node:path";
 import { build } from "vite";
 import type { RolldownWatcher } from "rolldown";
 
+import { bundlerFault } from "../../log.mts";
 import { resolveViteConfig } from "./config.mts";
 import type { BundlerOptions, Watcher } from "../types.mts";
 
@@ -55,9 +56,13 @@ export async function watch({
   });
 
   watcher.on("event", (event) => {
-    if (event.code === "ERROR") {
-      onError({ message: event.error.message, stack: event.error.stack ?? null });
-    }
+    if (event.code !== "ERROR") return;
+    // Nothing to reload for, so the next successful build times from the
+    // edit that fixed this one.
+    changed = undefined;
+    // Rolldown aggregates: errors[0] is the one a plugin actually raised.
+    const { errors } = event.error as { errors?: { message?: string }[] };
+    onError(bundlerFault(errors?.[0]?.message ?? event.error.message));
   });
 
   return { close: () => watcher.close() };

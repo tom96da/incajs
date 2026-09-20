@@ -18,7 +18,7 @@ export interface BundlerOptions {
   /** Called after each successful (re)build, with what it wrote. */
   onBuild: (output: BuildOutput) => void;
   /** Called instead of `onBuild` when a (re)build fails. */
-  onError: (error: { message: string; stack: string | null }) => void;
+  onError: (error: { message: string; stack: string | null; code?: string | null }) => void;
   /** Where the bundler's own output goes. Defaults to `process.stdout`. */
   stdout?: NodeJS.WritableStream;
   /** Where the bundler's warnings and errors go. Defaults to `process.stderr`. */

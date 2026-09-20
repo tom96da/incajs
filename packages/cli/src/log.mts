@@ -73,6 +73,18 @@ function framesOf(error: Error): string | null {
   return stack;
 }
 
+/**
+ * Reduces an error a bundler re-wrapped: its text is kept whole — the
+ * excerpt a compiler points at is the useful part — while the error class
+ * and any `ERR_INCA_*` marker are lifted off the first line, the latter
+ * into the fault's code.
+ */
+export function bundlerFault(message: string): Fault {
+  const marked = /^(?:\w*Error: )?(ERR_INCA_[A-Z0-9_]+): /.exec(message);
+  if (marked) return { message: message.slice(marked[0].length), stack: null, code: marked[1] };
+  return { message: message.replace(/^\w*Error: /, ""), stack: null, code: null };
+}
+
 /** Reduces a thrown value to a {@link Fault}. A `HostError` carries the host process's stack. */
 export function toFault(error: unknown): Fault {
   if (error instanceof HostError) {
