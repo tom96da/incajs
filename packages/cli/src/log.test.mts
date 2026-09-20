@@ -40,12 +40,21 @@ describe("log", () => {
 });
 
 describe("printFault", () => {
-  it("prints the message, then the stack", () => {
+  it("names the code when the failure carries one", () => {
+    const out = sink();
+
+    printFault(out.stream, "dev failed", toFault(Object.assign(new Error("busy"), { code: "ERR_INCA_DEV_RUNNING" })));
+
+    expect(out.text()).toContain("[inca] dev failed (ERR_INCA_DEV_RUNNING): busy\n");
+  });
+
+  it("prints the message, then the frames it doesn't already repeat", () => {
     const out = sink();
 
     printFault(out.stream, "build failed", toFault(new Error("syntax error")));
 
     expect(out.text()).toContain("[inca] build failed: syntax error\n");
-    expect(out.text()).toContain("Error: syntax error\n");
+    expect(out.text()).toContain("    at ");
+    expect(out.text()).not.toContain("Error: syntax error\n    at");
   });
 });

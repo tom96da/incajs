@@ -351,7 +351,12 @@ describe("dev", () => {
         stderr: makeSink().stream,
         signal: new AbortController().signal,
       }),
-    ).rejects.toThrow(/already running for this app \(pid \d+\)/);
+    ).rejects.toThrow(
+      expect.objectContaining({
+        code: "ERR_INCA_DEV_RUNNING",
+        message: expect.stringMatching(/already running for this app \(pid \d+\)/),
+      }),
+    );
 
     controller.abort();
     await running;

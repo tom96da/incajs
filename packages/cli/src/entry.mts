@@ -4,6 +4,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { IncaError } from "./error.mts";
 
 /**
  * Resolves an app's entry point. `src/main.mts`, committed by the app,
@@ -19,7 +20,10 @@ export async function resolveEntry(cwd: string): Promise<string> {
   const appPath = path.join(cwd, "src/App.vue");
   if (existsSync(appPath)) return synthesizeEntry(appPath, cwd);
 
-  throw new Error(`no app entry found — expected ${mainPath} or ${appPath}`);
+  throw new IncaError(
+    "ERR_INCA_ENTRY_NOT_FOUND",
+    `no app entry found — expected ${mainPath} or ${appPath}`,
+  );
 }
 
 async function synthesizeEntry(appPath: string, cwd: string): Promise<string> {

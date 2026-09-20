@@ -14,6 +14,7 @@ import { encodePlist } from "./plist.mts";
 import type { Bundler, BuildOutput } from "./adapter/types.mts";
 import type { ResolvedAppConfig } from "./config/loader.mts";
 import type { PlistValue } from "./plist.mts";
+import { IncaError } from "./error.mts";
 
 /** A platform `inca package` can emit a distributable application for. */
 export type PackageTarget = "macos" | "linux";
@@ -61,7 +62,10 @@ export interface PackageResult {
 function targetForPlatform(): PackageTarget {
   if (process.platform === "darwin") return "macos";
   if (process.platform === "linux") return "linux";
-  throw new Error(`inca package doesn't support ${process.platform} yet`);
+  throw new IncaError(
+    "ERR_INCA_PLATFORM_UNSUPPORTED",
+    `inca package doesn't support ${process.platform} yet`,
+  );
 }
 
 /** Inputs shared by every platform's app layout. */
@@ -186,7 +190,10 @@ export async function packageApp(options: PackageAppOptions = {}): Promise<Packa
 
   const hostBin = options.hostBin ?? resolveHostBin();
   if (!existsSync(hostBin)) {
-    throw new Error(`no host binary at ${hostBin} — check that it was built and is executable`);
+    throw new IncaError(
+      "ERR_INCA_HOST_BIN_NOT_FOUND",
+      `no host binary at ${hostBin} — check that it was built and is executable`,
+    );
   }
 
   const layoutArgs: LayoutArgs = { metadata, output, hostBin };

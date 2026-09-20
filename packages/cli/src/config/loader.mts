@@ -9,6 +9,7 @@ import { loadConfig } from "c12";
 
 import { defaultConfig, defaultIdentifier, defaultProductName } from "./defaults.mts";
 import type { IncaConfig } from "./types.mts";
+import { IncaError } from "../error.mts";
 
 /** The parts of an app's `package.json` this loader reads directly, rather than through c12. */
 interface AppPackageJson {
@@ -76,7 +77,7 @@ export async function resolveAppConfig(cwd: string): Promise<ResolvedAppConfig> 
   try {
     raw = await readFile(pkgPath, "utf8");
   } catch {
-    throw new Error(`no package.json found at ${pkgPath}`);
+    throw new IncaError("ERR_INCA_PACKAGE_JSON_NOT_FOUND", `no package.json found at ${pkgPath}`);
   }
   const pkg = JSON.parse(raw) as AppPackageJson;
 
@@ -95,7 +96,10 @@ export async function resolveAppConfig(cwd: string): Promise<ResolvedAppConfig> 
 
   const productName = config.productName ?? defaultProductName(pkg.name);
   if (!productName) {
-    throw new Error(`${pkgPath} needs a "name", or "productName" in inca.config.ts`);
+    throw new IncaError(
+      "ERR_INCA_PRODUCT_NAME_MISSING",
+      `${pkgPath} needs a "name", or "productName" in inca.config.ts`,
+    );
   }
 
   const version = config.version ?? pkg.version ?? defaultConfig.version;
@@ -105,7 +109,7 @@ export async function resolveAppConfig(cwd: string): Promise<ResolvedAppConfig> 
   if (config.icon) {
     icon = path.resolve(cwd, config.icon);
     if (!existsSync(icon)) {
-      throw new Error(`"icon" points to ${icon}, which doesn't exist`);
+      throw new IncaError("ERR_INCA_ICON_NOT_FOUND", `"icon" points to ${icon}, which doesn't exist`);
     }
   }
 

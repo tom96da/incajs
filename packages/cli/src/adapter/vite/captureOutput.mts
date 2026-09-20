@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import type { Plugin } from "vite";
+import { IncaError } from "../../error.mts";
 
 /** What one (re)build actually wrote, relative to its own `outDir`. */
 export interface CapturedOutput {
@@ -24,7 +25,7 @@ export function captureOutput(sink: (output: CapturedOutput) => void): Plugin {
       const files = Object.keys(bundle);
       const entry = Object.values(bundle).find((file) => file.type === "chunk" && file.isEntry);
       if (!entry) {
-        throw new Error("inca: build produced no entry chunk");
+        throw new IncaError("ERR_INCA_BUILD_NO_ENTRY_CHUNK", "build produced no entry chunk");
       }
       sink({ entryFile: entry.fileName, files });
     },

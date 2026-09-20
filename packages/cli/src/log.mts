@@ -41,22 +41,64 @@ export function log(
 export interface Fault {
   message: string;
   stack: string | null;
+  /** An `ERR_INCA_*` identifier, when the failure has one to look up. */
+  code?: string | null;
+}
+
+/** The `code` an `Error` carries, in the shape Node's own errors use. */
+function codeOf(error: Error): string | null {
+  const code: unknown = (error as { code?: unknown }).code;
+  return typeof code === "string" ? code : null;
+}
+
+/**
+ * The code read back out of a message. A bundler re-wraps a plugin's error
+ * and keeps only its text, so the code is repeated there for this to find.
+ */
+function codeIn(message: string): string | null {
+  return /\bERR_INCA_[A-Z0-9_]+/.exec(message)?.[0] ?? null;
+}
+
+/**
+ * Drops the header `Error.stack` repeats — Node writes `Name: message`, a
+ * bundler's aggregated error the bare message. A stack in any other shape
+ * is kept whole.
+ */
+function framesOf(error: Error): string | null {
+  const stack = error.stack;
+  if (!stack) return null;
+  for (const header of [`${error.name}: ${error.message}`, error.message]) {
+    if (stack.startsWith(header)) return stack.slice(header.length).replace(/^\r?\n/, "") || null;
+  }
+  return stack;
 }
 
 /** Reduces a thrown value to a {@link Fault}. A `HostError` carries the host process's stack. */
 export function toFault(error: unknown): Fault {
-  if (error instanceof HostError) return { message: error.message, stack: error.hostStack };
-  if (error instanceof Error) return { message: error.message, stack: error.stack ?? null };
-  return { message: String(error), stack: null };
+  if (error instanceof HostError) {
+    return { message: error.message, stack: error.hostStack, code: codeOf(error) };
+  }
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      stack: framesOf(error),
+      code: codeOf(error) ?? codeIn(error.message),
+    };
+  }
+  return { message: String(error), stack: null, code: null };
 }
 
-/** Writes `[inca] <label>: <message>` to `stream`, followed by the stack when there is one. */
+/**
+ * Writes `[inca] <label> (<code>): <message>` to `stream` — the code only
+ * when the failure carries one — followed by the stack when there is one.
+ */
 export function printFault(
   stream: NodeJS.WritableStream,
   label: string,
   fault: Fault,
   options: LogOptions = {},
 ): void {
-  stream.write(`${tag(stream, options, "red")} ${label}: ${fault.message}\n`);
+  const code = fault.code ? ` (${styleText("bold", fault.code, { stream })})` : "";
+  stream.write(`${tag(stream, options, "red")} ${label}${code}: ${fault.message}\n`);
   if (fault.stack) stream.write(`${fault.stack}\n`);
 }

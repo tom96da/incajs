@@ -3,6 +3,7 @@
 
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { IncaError } from "./error.mts";
 
 /** Where a running `inca dev` records its pid, for the next one to find. */
 function lockPath(cwd: string): string {
@@ -32,7 +33,10 @@ export async function acquireDevLock(cwd: string): Promise<() => Promise<void>> 
   const file = lockPath(cwd);
   const held = Number.parseInt(await readFile(file, "utf8").catch(() => ""), 10);
   if (Number.isInteger(held) && isRunning(held)) {
-    throw new Error(`inca dev is already running for this app (pid ${String(held)})`);
+    throw new IncaError(
+      "ERR_INCA_DEV_RUNNING",
+      `inca dev is already running for this app (pid ${String(held)})`,
+    );
   }
 
   await mkdir(path.dirname(file), { recursive: true });

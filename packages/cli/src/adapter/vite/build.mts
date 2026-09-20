@@ -7,6 +7,7 @@ import { build as buildOnce } from "vite";
 
 import { resolveViteConfig } from "./config.mts";
 import type { BuildOptions, BuildOutput } from "../types.mts";
+import { IncaError } from "../../error.mts";
 
 export type { BuildOptions, BuildOutput } from "../types.mts";
 
@@ -41,6 +42,6 @@ export async function build({
       },
     }),
   );
-  if (!output) throw new Error("inca: build produced no output");
+  if (!output) throw new IncaError("ERR_INCA_BUILD_NO_OUTPUT", "build produced no output");
   return output;
 }

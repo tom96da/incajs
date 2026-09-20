@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { createRequire } from "node:module";
+import { IncaError } from "../error.mts";
 
 /** Overrides host binary resolution — for a stand-in in tests, or a platform with no published binary yet. */
 const HOST_BIN_ENV_VAR = "INCA_HOST_BIN";
@@ -45,7 +46,8 @@ export function resolveHostBin(): string {
   const platformNote = packageName
     ? `no ${packageName} package is installed for it`
     : `this platform (${process.platform}/${process.arch}) has no published package`;
-  throw new Error(
+  throw new IncaError(
+    "ERR_INCA_HOST_BIN_UNRESOLVED",
     `no inca-host binary found — ${platformNote}, and ${HOST_BIN_ENV_VAR} isn't set to one`,
   );
 }
