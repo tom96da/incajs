@@ -57,6 +57,8 @@ export interface BuildOutput {
   entryFile: string;
   /** Every file this build emitted, relative to `outDir` — may include chunks and assets besides the entry itself. */
   files: readonly string[];
+  /** The change that triggered this rebuild. Absent from a one-shot build and a watch's first build. */
+  changed?: { file: string; at: number };
 }
 
 /**

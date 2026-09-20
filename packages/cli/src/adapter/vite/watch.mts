@@ -25,6 +25,7 @@ export async function watch({
   ...buildOptions
 }: BundlerOptions): Promise<Watcher> {
   const { outDir } = buildOptions;
+  let changed: { file: string; at: number } | undefined;
   const result = await build(
     resolveViteConfig({
       ...buildOptions,
@@ -37,7 +38,9 @@ export async function watch({
           outDir,
           entryFile: path.join(outDir, captured.entryFile),
           files: captured.files,
+          changed,
         });
+        changed = undefined;
       },
     }),
   );
@@ -46,6 +49,10 @@ export async function watch({
   // call signature covers both — watch: {} in the resolved config means
   // it's always this.
   const watcher = result as RolldownWatcher;
+
+  watcher.on("change", (id) => {
+    changed ??= { file: id, at: Date.now() };
+  });
 
   watcher.on("event", (event) => {
     if (event.code === "ERROR") {

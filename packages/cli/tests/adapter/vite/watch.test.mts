@@ -83,6 +83,7 @@ describe("watch", () => {
     const output = await nextBuild;
 
     expect(builds).toBe(2);
+    expect(output.changed?.file).toBe(vuePath);
     const bundle = await readFile(output.entryFile, "utf8");
     expect(bundle).toContain("second");
   }, 20000);

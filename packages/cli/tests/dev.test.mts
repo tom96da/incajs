@@ -137,6 +137,35 @@ describe("dev", () => {
     expect(stderr.text()).not.toContain("reload failed");
   });
 
+  it("names the file that triggered a reload and how long it took", async () => {
+    const bundler = makeFakeBundler();
+    const stdout = makeSink();
+    const controller = new AbortController();
+
+    const running = dev({
+      entry: "unused",
+      bundler,
+      hostBin: mockHost,
+      stdout: stdout.stream,
+      stderr: makeSink().stream,
+      signal: controller.signal,
+    });
+
+    await bundler.watching;
+    bundler.emitBuild();
+    await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
+    expect(stdout.text()).not.toContain("reload");
+
+    const vuePath = path.join(process.cwd(), "src/App.vue");
+    bundler.emitBuild({ ...FAKE_OUTPUT, changed: { file: vuePath, at: Date.now() } });
+    await vi.waitFor(() => expect(stdout.text()).toContain("reload src/App.vue"));
+
+    controller.abort();
+    await running;
+
+    expect(stdout.text()).toMatch(/\[inca\] reload src\/App\.vue \(\d+ms\)/);
+  });
+
   it("prints a build failure without ever starting the host", async () => {
     const bundler = makeFakeBundler();
     const stderr = makeSink();

@@ -8,6 +8,13 @@ import { HostError } from "./dev-client/index.mts";
 /** The prefix on every line the CLI prints. */
 const TAG = "[inca]";
 
+/** The clock Vite stamps its dev-server lines with: the viewer's own locale. */
+const TIME = new Intl.DateTimeFormat(undefined, {
+  hour: "numeric",
+  minute: "numeric",
+  second: "numeric",
+});
+
 /** Shared by {@link log} and {@link printFault}. */
 export interface LogOptions {
   /** Prefixes the line with `HH:MM:SS`, the way Vite's dev server stamps its own. */
@@ -18,8 +25,7 @@ export interface LogOptions {
 function tag(stream: NodeJS.WritableStream, options: LogOptions, color: "cyan" | "red"): string {
   const label = styleText(["bold", color], TAG, { stream });
   if (!options.timestamp) return label;
-  const time = new Date().toLocaleTimeString("en-US", { hour12: false });
-  return `${styleText("dim", time, { stream })} ${label}`;
+  return `${styleText("dim", TIME.format(new Date()), { stream })} ${label}`;
 }
 
 /** Writes one `[inca] <message>` line to `stream`. */

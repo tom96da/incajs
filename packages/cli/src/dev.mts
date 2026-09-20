@@ -3,6 +3,7 @@
 
 import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
+import { styleText } from "node:util";
 
 import { resolveBuildConfig } from "./config/loader.mts";
 import { defaultBundler } from "./defaultBundler.mts";
@@ -86,11 +87,13 @@ export async function dev(options: DevOptions): Promise<void> {
     stop = resolve;
   });
 
-  async function reloadHost(): Promise<void> {
+  async function reloadHost(): Promise<boolean> {
     try {
       await client?.call("reload");
+      return true;
     } catch (error) {
       printFault(stderr, "reload failed", toFault(error), STAMPED);
+      return false;
     }
   }
 
@@ -135,7 +138,12 @@ export async function dev(options: DevOptions): Promise<void> {
       return;
     }
 
-    await reloadHost();
+    if (!(await reloadHost())) return;
+    if (output.changed) {
+      const file = styleText("dim", path.relative(cwd, output.changed.file), { stream: stdout });
+      const took = Date.now() - output.changed.at;
+      log(stdout, `${styleText("green", "reload")} ${file} (${took}ms)`, STAMPED);
+    }
   }
 
   const watcher = await bundler.watch({
