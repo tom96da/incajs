@@ -11,7 +11,7 @@ on:
     types: [completed]
   workflow_dispatch:
     inputs:
-      ref:
+      commit:
         description: "Commit/ref to rehearse a dry run against"
         required: false
         type: string
@@ -44,7 +44,7 @@ jobs:
       - name: Resolve the commit to release
         id: sha
         run: |
-          sha="${{ github.event_name == 'workflow_dispatch' && (inputs.ref || github.sha) || github.event.workflow_run.head_sha }}"
+          sha="${{ github.event_name == 'workflow_dispatch' && (inputs.commit || github.sha) || github.event.workflow_run.head_sha }}"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
       - name: Checkout
