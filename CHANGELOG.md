@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `inca dev` exits when a dev window is already open for the same app ([e416bdb](https://github.com/tom96da/incajs/commit/e416bdb))
+
+### Fixed
+
+- closing the last window quits the app and exits `inca dev` ([ad1d800](https://github.com/tom96da/incajs/commit/ad1d800), [4763659](https://github.com/tom96da/incajs/commit/4763659))
+
 ## [0.0.2] - 2026-09-20
 
 ### Added

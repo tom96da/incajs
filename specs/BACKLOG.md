@@ -49,6 +49,14 @@ enough overhead for a single maintainer plus AI pairing.
   `<style>` blocks in `.vue` SFCs currently have no effect through the
   custom renderer.
 
+- **No app menu, so Cmd-Q does nothing on macOS**: GPUI builds the menu
+  bar only when `Platform::set_menus` is called
+  (`third_party/zed/crates/gpui_macos/src/platform.rs`), which
+  `crates/inca-host/src/main.rs` never does. Closing the window and
+  quitting from the Dock both work; the Quit item and its key equivalent
+  are what's missing. Whether the menu is the host's to define or the
+  app's to configure is undecided.
+
 - **`dependabot.yml` is missing the `npm`/`cargo`/`github-actions`
   ecosystems**: it currently only auto-updates the devcontainer image/
   features.
