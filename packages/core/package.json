@@ -71,7 +71,7 @@
     "oxlint": "^1.83.0"
   },
   "peerDependencies": {
-    "@vue/runtime-core": "^3.5.42"
+    "@vue/runtime-core": "^3.5.43"
   },
   "peerDependenciesMeta": {
     "@vue/runtime-core": {
