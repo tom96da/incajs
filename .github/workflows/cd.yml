@@ -120,6 +120,9 @@ jobs:
     needs: [gate, verify]
     timeout-minutes: 60
     runs-on: ${{ matrix.runner }}
+    # The image's glibc is the floor for the binary published from it, so it is
+    # pinned rather than following the runner. ci.yml compiles in the same one.
+    container: ${{ matrix.container }}
     permissions:
       contents: read
     strategy:
@@ -128,22 +131,28 @@ jobs:
         include:
           - pkg: linux-x64
             runner: ubuntu-latest
+            container: ubuntu:22.04
           - pkg: linux-arm64
             runner: ubuntu-24.04-arm
+            container: ubuntu:22.04
           - pkg: darwin-arm64
             runner: macos-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          ref: ${{ needs.gate.outputs.sha }}
-          persist-credentials: false
-
+      # Ahead of the checkout: a bare image lacks git, curl and a compiler.
+      # The gpui half is .devcontainer/Dockerfile's list, minus the
+      # display-only packages.
       - name: Install gpui's native build dependencies
         if: runner.os == 'Linux'
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates \
+            curl \
+            git \
+            xz-utils \
+            build-essential \
             cmake \
             clang \
             lld \
@@ -154,6 +163,20 @@ jobs:
             libx11-xcb-dev \
             libxkbcommon-x11-dev \
             libssl-dev
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+          persist-credentials: false
+
+      # The runner's own toolchain lives outside the container.
+      - name: Install Rust
+        if: runner.os == 'Linux'
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --no-modify-path --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
       - name: Check the Metal toolchain is available
         if: runner.os == 'macOS'
@@ -171,6 +194,21 @@ jobs:
 
       - name: Build inca-host
         run: cargo build --release --locked -p inca-host
+
+      # A newer image would raise the floor silently; every published binary
+      # has to keep loading on the glibc README documents.
+      - name: Check the glibc floor
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          floor=GLIBC_2.35
+          needed=$(objdump -T target/release/inca-host \
+            | grep -oE 'GLIBC_[0-9.]+' | sort -Vu | tail -1)
+          echo "requires $needed, floor $floor"
+          if [ "$(printf '%s\n%s\n' "$floor" "$needed" | sort -V | tail -1)" != "$floor" ]; then
+            echo "::error::$needed exceeds $floor"
+            exit 1
+          fi
 
       - name: Pack the binary
         run: tar -C target/release -czf inca-host-${{ matrix.pkg }}.tar.gz inca-host
