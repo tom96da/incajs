@@ -3,7 +3,7 @@
 
 import path from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { HostClient, HostError } from "../../src/dev-client/index.mts";
 
@@ -18,8 +18,28 @@ const unknownMethodMockHost = path.join(
   import.meta.dirname,
   "fixtures/mock-host-unknown-method.mts",
 );
+// The one host that quits on its own already lives beside dev.test.mts.
+const exitingMockHost = path.join(import.meta.dirname, "../fixtures/mock-host-exits.mts");
 
 describe("HostClient", () => {
+  it("rejects a call written after the host has exited, rather than crashing", async () => {
+    let exited = false;
+    const client = new HostClient({
+      hostBin: exitingMockHost,
+      entryFile: "bundle.js",
+      onStderr: () => {},
+      onExit: () => {
+        exited = true;
+      },
+    });
+
+    await client.start();
+    await vi.waitFor(() => expect(exited).toBe(true));
+
+    // EPIPE when the write races the exit, a destroyed stream once it lands after.
+    await expect(client.call("reload")).rejects.toThrow(/EPIPE|destroyed/);
+  });
+
   it("spawns the host, calls it, and correlates the response by id", async () => {
     let ready = false;
     const client = new HostClient({

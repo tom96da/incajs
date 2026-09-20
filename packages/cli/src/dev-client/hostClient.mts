@@ -85,6 +85,13 @@ export class HostClient {
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (chunk: string) => onStderr(chunk));
 
+    // The host can die between a write and its delivery. Without a listener
+    // the resulting EPIPE is an unhandled 'error' event, which ends this
+    // process; the child's own exit is what teardown waits on instead.
+    child.stdin.on("error", (error: NodeJS.ErrnoException) => {
+      if (error.code !== "EPIPE") onStderr(`inca-host stdin: ${error.message}\n`);
+    });
+
     readline.createInterface({ input: child.stdout }).on("line", (line) => {
       this.#handleLine(line, onStderr);
     });
@@ -175,7 +182,11 @@ export class HostClient {
     const line = JSON.stringify({ jsonrpc: JSONRPC, id, method, params });
     return new Promise((resolve, reject) => {
       this.#pending.set(id, { resolve, reject });
-      child.stdin.write(`${line}\n`);
+      child.stdin.write(`${line}\n`, (error) => {
+        if (!error) return;
+        this.#pending.delete(id);
+        reject(error);
+      });
     });
   }
 
