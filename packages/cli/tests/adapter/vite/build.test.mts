@@ -72,6 +72,17 @@ describe("build", () => {
     await expect(readFile(stalePath, "utf8")).rejects.toThrow(/ENOENT/);
   }, 20000);
 
+  it("rejects a <style> block, naming the file that used it", async () => {
+    const { entry, outDir, streams } = await makeApp(
+      `<script setup>\nconst msg = "hello";\n</script>\n<template><div>{{ msg }}</div></template>\n` +
+        `<style scoped>\ndiv { color: red; }\n</style>\n`,
+    );
+
+    await expect(build({ entry, outDir, ...streams })).rejects.toThrow(
+      /App\.vue uses a <style> block/,
+    );
+  }, 20000);
+
   it("rejects with a readable error on a syntax error", async () => {
     const { entry, outDir, streams } = await makeApp(
       `<script setup>\nconst broken = ;\n</script>\n<template><div/></template>\n`,

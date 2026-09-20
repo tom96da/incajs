@@ -8,6 +8,7 @@ import type { InlineConfig } from "vite";
 
 import { captureOutput } from "./captureOutput.mts";
 import { streamLogger } from "./logger.mts";
+import { rejectUnsupported } from "./unsupported.mts";
 import type { CapturedOutput } from "./captureOutput.mts";
 
 export const BUNDLE_FILE_NAME = "bundle.js";
@@ -69,6 +70,7 @@ export function resolveViteConfig({
           compilerOptions: { runtimeModuleName: "@vue/runtime-core" },
         },
       }),
+      rejectUnsupported(),
       captureOutput(onOutput),
     ],
     build: {
