@@ -41,9 +41,11 @@ raises is an `IncaError` with an `ERR_INCA_*` code — document a new one in
 can't run is rejected at build time from one list in `unsupported.mts`.
 
 The current release is `v0.0.3`, on Node.js 22.18 or newer, zed v1.20.2
-for `gpui` and rquickjs 0.14.0. The public docs site (`docs/`, VitePress)
-— `guide/` for prose, `reference/` for lookup — is deployed by
-`.github/workflows/docs.yml` to
+for `gpui` and rquickjs 0.14.0. Its Linux binaries are built in an
+`ubuntu:22.04` container by both workflows, fixing their glibc floor at
+2.35 — change that image in one file and the other has to follow. The
+public docs site (`docs/`, VitePress) — `guide/` for prose, `reference/`
+for lookup — is deployed by `.github/workflows/docs.yml` to
 [tom96da.github.io/incajs](https://tom96da.github.io/incajs/).
 
 See [PLAN.md](./specs/PLAN.md) for unit-by-unit detail and deferred items
