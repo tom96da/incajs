@@ -21,32 +21,35 @@ See [README.md](./README.md) for the full pitch.
 ## Status
 
 Phase 1 (Rust host FFI bridge: `crates/inca-gpui`/`inca-bridge`/
-`inca-jsenv`) and Phase 2 (pnpm workspace, `packages/core`,
-`incajs/vue`, two `.vue` examples) are done — [FFI.md](./specs/FFI.md)
-has the current binding vocabulary.
+`inca-jsenv`) and Phase 2 (pnpm workspace, `packages/core`, `incajs/vue`,
+two `.vue` examples) are done — [FFI.md](./specs/FFI.md) has the current
+binding vocabulary.
 
 Phase 3 (the `inca` CLI) is split into 3.1–3.4, with `v0.0.1` released
-after 3.3. 3.1 (`inca dev`), 3.2 (`inca build`, including a
-file-backed module loader so a build can emit more than one file), and
-3.3 (`inca package`, per-platform `@incajs/host-*` npm packages,
-published via `.github/workflows/cd.yml`) are done. `darwin-x64` stays
-an unpublished placeholder — no free Intel macOS CI runner.
+after 3.3. 3.1 (`inca dev`), 3.2 (`inca build`, with a file-backed module
+loader so a build can emit more than one file) and 3.3 (`inca package`,
+per-platform `@incajs/host-*` packages published via `cd.yml`) are done.
+`darwin-x64` stays an unpublished placeholder — no free Intel macOS runner.
 
-3.4 (HMR) is in progress. Only its config item is done: `inca.config.ts`
-carries app metadata and build settings, with a `defineConfig` helper
-from `@incajs/cli/config`. `package.json`'s `"inca"` key is deprecated.
+3.4 (HMR) is in progress: only `inca.config.ts` is done — app metadata
+and build settings, `defineConfig` from `@incajs/cli/config`, deprecating
+`package.json`'s `"inca"` key. `inca dev` still reloads the whole bundle.
 
-The current release is `v0.0.2`. It requires Node.js 22.18 or newer, and
-builds on zed v1.20.2 for `gpui` and rquickjs 0.14.0.
+The CLI prints the bundler's own output beside its own. Every failure it
+raises is an `IncaError` with an `ERR_INCA_*` code — document a new one in
+`docs/reference/errors.md` in the same change — and a feature the engine
+can't run is rejected at build time from one list in `unsupported.mts`.
 
-The project also has a public docs site (`docs/`, VitePress), deployed
-by `.github/workflows/docs.yml` to
+The current release is `v0.0.2`, on Node.js 22.18 or newer, zed v1.20.2
+for `gpui` and rquickjs 0.14.0. The public docs site (`docs/`, VitePress)
+— `guide/` for prose, `reference/` for lookup — is deployed by
+`.github/workflows/docs.yml` to
 [tom96da.github.io/incajs](https://tom96da.github.io/incajs/).
 
-See [PLAN.md](./specs/PLAN.md) for unit-by-unit detail and deferred
-items (e.g. 3.1's dev-only error panel, waiting on Phase 4's
-`position`/`z-index`/`overflow`), and
-[BACKLOG.md](./specs/BACKLOG.md) for gaps outside the phased plan.
+See [PLAN.md](./specs/PLAN.md) for unit-by-unit detail and deferred items
+(e.g. 3.1's dev-only error panel, waiting on Phase 4's `position`/
+`z-index`/`overflow`), and [BACKLOG.md](./specs/BACKLOG.md) for gaps
+outside the phased plan.
 
 Keep this section's status prose accurate as real logic lands — don't let it go stale.
 

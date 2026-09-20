@@ -29,7 +29,7 @@ cargo run -p inca-host -- examples/click_counter/dist/bundle.js
 ```
 
 `pnpm --filter click_counter package` (see
-[`inca package`](../../packages/cli/README.md#inca-package)) pairs that
+[`inca package`](../../packages/cli/README.md#commands)) pairs that
 same build with a prebuilt `inca-host` into a distributable application
 at `examples/click_counter/dist/click_counter.app` (macOS) or
 `examples/click_counter/dist/click_counter/` (Linux) — double-click it, or

@@ -104,6 +104,11 @@ individually useful for checking just one thing directly:
 CI runs `lint`, `format`, and `typecheck` as their own separate steps,
 not merely as a side effect of `test`.
 
+Run `format` from the root, not from a package: `oxfmt.config.ts` — which
+holds the import-sorting rules — lives there and only the root script
+(`oxfmt --check --disable-nested-config .`) applies it. A package's own
+`format` can pass on imports the root one rejects.
+
 #### Agent-friendly lint output
 
 `oxlint` takes `-f`/`--format=agent` (e.g. `oxlint --type-aware
