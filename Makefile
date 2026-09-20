@@ -26,9 +26,9 @@ check-gitignore: .gitignore
 	fi
 	@printf '%s\n' 'The generated .gitignore is up to date.'
 
-# Each published package's LICENSE is generated from LICENSE.tpl
-# (npm only auto-includes a LICENSE* found in the package's own directory).
-$(LICENSE_TARGETS): %/LICENSE: LICENSE.tpl
+# npm only includes a LICENSE* from the package's own directory; the template
+# stays out of the repo root, where GitHub would read it as ours.
+$(LICENSE_TARGETS): %/LICENSE: .github/license.tpl
 	@cp $< $@
 
 check-license: $(LICENSE_TARGETS)
