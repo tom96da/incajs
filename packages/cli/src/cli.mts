@@ -51,5 +51,10 @@ export async function run(argv: readonly string[] = process.argv): Promise<void>
   process.on("SIGINT", onSignal);
   process.on("SIGTERM", onSignal);
 
-  await dev({ signal: controller.signal });
+  try {
+    await dev({ signal: controller.signal });
+  } catch (error) {
+    printFault(process.stderr, "dev failed", toFault(error));
+    process.exitCode = 1;
+  }
 }

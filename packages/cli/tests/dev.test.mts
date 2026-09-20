@@ -4,9 +4,10 @@
 import path from "node:path";
 import { Writable } from "node:stream";
 
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { dev } from "../src/dev.mts";
+import { scratchConfigApp } from "./scratchConfigApp.mts";
 import type { Bundler, BundlerOptions, BuildOutput, Watcher } from "../src/adapter/types.mts";
 
 const mockHost = path.join(import.meta.dirname, "fixtures/mock-host.mts");
@@ -82,6 +83,10 @@ function makeSink(): { stream: NodeJS.WritableStream; text: () => string } {
 }
 
 describe("dev", () => {
+  const scratch = scratchConfigApp("dev");
+  beforeAll(scratch.setUp);
+  afterAll(scratch.tearDown);
+
   it("starts the host and prints ready once the first build lands", async () => {
     const bundler = makeFakeBundler();
     const stdout = makeSink();
@@ -285,5 +290,41 @@ describe("dev", () => {
 
     expect(stdout.text()).toContain("[inca] host exited");
     expect(bundler.closed).toBe(true);
+  });
+
+  it("refuses to start while another dev is running for the same app", async () => {
+    const cwd = await scratch.makeApp({ name: "locked" });
+    const bundler = makeFakeBundler();
+    const stdout = makeSink();
+    const controller = new AbortController();
+
+    const running = dev({
+      cwd,
+      entry: "unused",
+      bundler,
+      hostBin: mockHost,
+      stdout: stdout.stream,
+      stderr: makeSink().stream,
+      signal: controller.signal,
+    });
+
+    await bundler.watching;
+    bundler.emitBuild();
+    await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
+
+    await expect(
+      dev({
+        cwd,
+        entry: "unused",
+        bundler: makeFakeBundler(),
+        hostBin: mockHost,
+        stdout: makeSink().stream,
+        stderr: makeSink().stream,
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toThrow(/already running for this app \(pid \d+\)/);
+
+    controller.abort();
+    await running;
   });
 });

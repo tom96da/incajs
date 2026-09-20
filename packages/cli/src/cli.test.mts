@@ -118,4 +118,15 @@ describe("run", () => {
       expect(written(stderr)).toContain("[inca] shutting down");
     },
   );
+
+  it("sets a non-zero exit code and prints a readable error when dev fails", async () => {
+    mockedDev.mockRejectedValueOnce(new Error("inca dev is already running for this app (pid 42)"));
+
+    await run(["node", "inca", "dev"]);
+
+    expect(process.exitCode).toBe(1);
+    expect(written(stderr)).toContain(
+      "[inca] dev failed: inca dev is already running for this app (pid 42)",
+    );
+  });
 });

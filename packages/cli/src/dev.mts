@@ -7,6 +7,7 @@ import path from "node:path";
 import { resolveBuildConfig } from "./config/loader.mts";
 import { defaultBundler } from "./defaultBundler.mts";
 import { HostClient } from "./dev-client/index.mts";
+import { acquireDevLock } from "./dev-lock.mts";
 import { resolveEntry } from "./entry.mts";
 import { printFault, toFault } from "./fault.mts";
 import type { Bundler, BuildOutput } from "./adapter/types.mts";
@@ -58,10 +59,13 @@ async function pruneStaleFiles(outDir: string, keep: readonly string[]): Promise
  * Builds the app, starts `inca-host` once the first build lands, and
  * reloads it on every rebuild — until `options.signal` aborts or the host
  * exits on its own.
+ *
+ * @throws if another `inca dev` is already running for this app.
  */
 export async function dev(options: DevOptions): Promise<void> {
   const cwd = options.cwd ?? process.cwd();
   const config = await resolveBuildConfig(cwd);
+  const releaseLock = await acquireDevLock(cwd);
   const outDir = config.outDir;
   const bundler: Bundler = options.bundler ?? defaultBundler;
   const stdout = options.stdout ?? process.stdout;
@@ -153,4 +157,5 @@ export async function dev(options: DevOptions): Promise<void> {
   await queue;
   await client?.stop();
   await watcher.close();
+  await releaseLock();
 }
