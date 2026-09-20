@@ -33,6 +33,17 @@ enough overhead for a single maintainer plus AI pairing.
   building it statically; `RUST_FONTCONFIG_DLOPEN=1` only defers the
   failure to runtime. Whether this is worth doing at all is the question.
 
+- **The documented Linux dependencies are wider than the binary's**: in
+  v0.0.3's published binaries FreeType is linked statically (its symbols
+  are defined in the executable, no `NEEDED` entry), and fontconfig is
+  replaced by the `fontconfig_parser` crate — neither architecture
+  references a single `Fc*` symbol, though arm64 still carries a
+  `libfontconfig.so.1` `NEEDED`. `README.md` and `docs/guide/index.md`
+  list both as required. Measure what a minimal Ubuntu 22.04 actually
+  needs to launch, then narrow both files. The set moved on its own when
+  the build image changed, so a CI check on the binary's `NEEDED` list
+  would keep the docs honest.
+
 - **`strip = true` for the release profile**: shrink release binaries by
   stripping symbols.
 
