@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `inca dev` names the file that triggered a reload, and how long it took ([c808782](https://github.com/tom96da/incajs/commit/c808782))
 - `inca dev` exits when a dev window is already open for the same app ([e416bdb](https://github.com/tom96da/incajs/commit/e416bdb))
 
+### Changed
+
+- the Linux host binaries are built against glibc 2.35, down from 2.39 — Ubuntu 22.04 and Debian 12 can run them now ([a7a468a](https://github.com/tom96da/incajs/commit/a7a468a), [6512bbb](https://github.com/tom96da/incajs/commit/6512bbb))
+
 ### Fixed
 
 - `inca dev` no longer crashes with `EPIPE` when the host exits first, mid-shutdown ([fb93059](https://github.com/tom96da/incajs/commit/fb93059))

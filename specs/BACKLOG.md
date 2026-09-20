@@ -33,12 +33,6 @@ enough overhead for a single maintainer plus AI pairing.
   building it statically; `RUST_FONTCONFIG_DLOPEN=1` only defers the
   failure to runtime. Whether this is worth doing at all is the question.
 
-- **The published Linux binary needs glibc 2.39**: `pidfd_spawnp` and
-  `pidfd_getpid` are weak, but the `GLIBC_2.39` verneed entry carries
-  `Flags: none`, so the loader refuses anything older — Ubuntu 22.04 and
-  Debian 12 can't start `@incajs/host-linux-*`. CD builds on
-  `ubuntu-latest`; zed builds on an older image and claims 2.31/2.35.
-
 - **`strip = true` for the release profile**: shrink release binaries by
   stripping symbols.
 

@@ -67,7 +67,10 @@ on the machine that runs them — `inca package` doesn't bundle them yet.
 
 ## Linux runtime requirements
 
-On Debian/Ubuntu, the host binary needs:
+The host binary is built against glibc 2.35, so it needs Ubuntu 22.04,
+Debian 12, or anything newer.
+
+On Debian/Ubuntu, it also needs:
 
 - `libxcb1`
 - `libfontconfig1`
