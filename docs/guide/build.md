@@ -14,7 +14,7 @@ output lands in `dist`. `inca package` does the same, then wraps the
 result into a distributable application: a `.app` on macOS, a plain
 directory on Linux.
 
-## Configuration <Badge type="warning" text="unreleased" />
+## Configuration
 
 > [!NOTE]
 > Configuring app metadata through `package.json`'s `"inca"` key still

@@ -29,9 +29,15 @@ Phase 3 (the `inca` CLI) is split into 3.1–3.4, with `v0.0.1` released
 after 3.3. 3.1 (`inca dev`), 3.2 (`inca build`, including a
 file-backed module loader so a build can emit more than one file), and
 3.3 (`inca package`, per-platform `@incajs/host-*` npm packages,
-`v0.0.1` published via `.github/workflows/cd.yml`) are done.
-`darwin-x64` stays an unpublished placeholder — no free Intel macOS CI
-runner. 3.4 (HMR) is next.
+published via `.github/workflows/cd.yml`) are done. `darwin-x64` stays
+an unpublished placeholder — no free Intel macOS CI runner.
+
+3.4 (HMR) is in progress. Only its config item is done: `inca.config.ts`
+carries app metadata and build settings, with a `defineConfig` helper
+from `@incajs/cli/config`. `package.json`'s `"inca"` key is deprecated.
+
+The current release is `v0.0.2`. It requires Node.js 22.18 or newer, and
+builds on zed v1.20.2 for `gpui` and rquickjs 0.14.0.
 
 The project also has a public docs site (`docs/`, VitePress), deployed
 by `.github/workflows/docs.yml` to
@@ -39,7 +45,8 @@ by `.github/workflows/docs.yml` to
 
 See [PLAN.md](./specs/PLAN.md) for unit-by-unit detail and deferred
 items (e.g. 3.1's dev-only error panel, waiting on Phase 4's
-`position`/`z-index`/`overflow`).
+`position`/`z-index`/`overflow`), and
+[BACKLOG.md](./specs/BACKLOG.md) for gaps outside the phased plan.
 
 Keep this section's status prose accurate as real logic lands — don't let it go stale.
 

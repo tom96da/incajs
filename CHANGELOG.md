@@ -12,9 +12,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.2] - 2026-09-20
+
 ### Added
 
-- `inca.config.ts` (or `.js`/`.json`) for app metadata and build settings, with a `defineConfig` helper from `@incajs/cli/config`. `package.json`'s `"inca"` key still works as a deprecated fallback.
+- `inca.config.ts` for app metadata and build settings, with a `defineConfig` helper from `@incajs/cli/config` ([9e74511](https://github.com/tom96da/incajs/commit/9e74511))
+
+### Changed
+
+- Node.js 22.18 or newer is now required ([9e74511](https://github.com/tom96da/incajs/commit/9e74511))
+- updated GPUI and QuickJS to their latest releases ([efb37af](https://github.com/tom96da/incajs/commit/efb37af))
+
+### Deprecated
+
+- `package.json`'s `"inca"` key, superseded by `inca.config.ts` ([9e74511](https://github.com/tom96da/incajs/commit/9e74511))
 
 ## [0.0.1] - 2026-09-18
 
@@ -27,5 +38,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - prebuilt `inca-host` binaries for linux-x64, linux-arm64, and darwin-arm64, resolved automatically per platform
 - click event dispatch from the native tree back into JS
 
-[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.1...HEAD
+[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.2...HEAD
+[0.0.2]: https://github.com/tom96da/incajs/releases/tag/v0.0.2
 [0.0.1]: https://github.com/tom96da/incajs/releases/tag/v0.0.1
