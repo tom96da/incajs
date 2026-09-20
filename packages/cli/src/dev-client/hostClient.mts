@@ -36,6 +36,11 @@ export interface HostClientOptions {
   /** An app's own event listener threw; the host caught it and kept rendering. */
   onAppError?: (error: AppErrorParams) => void;
   /**
+   * The host exited on its own — its window was closed, or it crashed.
+   * Not called for the exit `stop()` asks for.
+   */
+  onExit?: (code: number | null, signal: NodeJS.Signals | null) => void;
+  /**
    * Handlers for notification `method`s this package doesn't implement
    * itself (e.g. a future Vite integration), keyed by method name —
    * `params` forwarded untouched.
@@ -58,6 +63,7 @@ export class HostClient {
   #child: ChildProcessWithoutNullStreams | undefined;
   #nextId = 1;
   #pending = new Map<number, PendingCall>();
+  #stopping = false;
 
   constructor(options: HostClientOptions) {
     this.#options = options;
@@ -89,6 +95,7 @@ export class HostClient {
       );
       for (const { reject } of this.#pending.values()) reject(reason);
       this.#pending.clear();
+      if (!this.#stopping) this.#options.onExit?.(code, signal);
     });
 
     await once(child, "spawn");
@@ -153,6 +160,7 @@ export class HostClient {
 
   /** Kills the child and waits for it to actually exit. */
   async #kill(child: ChildProcessWithoutNullStreams): Promise<void> {
+    this.#stopping = true;
     const exited = once(child, "exit");
     child.kill();
     await exited;
@@ -180,6 +188,7 @@ export class HostClient {
     const child = this.#child;
     if (!child || child.exitCode !== null || child.signalCode !== null) return;
 
+    this.#stopping = true;
     const exited = once(child, "exit");
     this.call("shutdown").catch(() => {
       // The pipe can close before a response arrives; the exit below is

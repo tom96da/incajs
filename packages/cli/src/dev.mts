@@ -56,7 +56,8 @@ async function pruneStaleFiles(outDir: string, keep: readonly string[]): Promise
 
 /**
  * Builds the app, starts `inca-host` once the first build lands, and
- * reloads it on every rebuild — until `options.signal` aborts.
+ * reloads it on every rebuild — until `options.signal` aborts or the host
+ * exits on its own.
  */
 export async function dev(options: DevOptions): Promise<void> {
   const cwd = options.cwd ?? process.cwd();
@@ -72,6 +73,11 @@ export async function dev(options: DevOptions): Promise<void> {
   let ready = false;
   let pendingReload = false;
   let queue = Promise.resolve();
+
+  let stop = (): void => {};
+  const stopped = new Promise<void>((resolve) => {
+    stop = resolve;
+  });
 
   async function reloadHost(): Promise<void> {
     try {
@@ -98,6 +104,11 @@ export async function dev(options: DevOptions): Promise<void> {
           }
         },
         onAppError: (error) => printFault(stderr, "app error", error),
+        onExit: () => {
+          // The window is gone, so there is nothing left to rebuild for.
+          stdout.write("[inca] host exited — stopping\n");
+          stop();
+        },
       });
       try {
         await next.start();
@@ -135,13 +146,9 @@ export async function dev(options: DevOptions): Promise<void> {
     },
   });
 
-  await new Promise<void>((resolve) => {
-    if (options.signal.aborted) {
-      resolve();
-      return;
-    }
-    options.signal.addEventListener("abort", () => resolve(), { once: true });
-  });
+  if (options.signal.aborted) stop();
+  else options.signal.addEventListener("abort", () => stop(), { once: true });
+  await stopped;
 
   await queue;
   await client?.stop();

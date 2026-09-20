@@ -13,6 +13,7 @@ const mockHost = path.join(import.meta.dirname, "fixtures/mock-host.mts");
 const reloadFailsMockHost = path.join(import.meta.dirname, "fixtures/mock-host-reload-fails.mts");
 const appErrorMockHost = path.join(import.meta.dirname, "fixtures/mock-host-app-error.mts");
 const slowReadyMockHost = path.join(import.meta.dirname, "fixtures/mock-host-slow-ready.mts");
+const exitingMockHost = path.join(import.meta.dirname, "fixtures/mock-host-exits.mts");
 
 // A nonexistent directory: pruneStaleFiles() treats a missing outDir as
 // nothing to prune, so these tests need no real files on disk.
@@ -263,5 +264,26 @@ describe("dev", () => {
 
     expect(stderr.text()).not.toContain("reload failed");
     expect(stderr.text()).not.toContain("reload #2");
+  });
+
+  it("stops on its own once the host exits, without waiting for an abort", async () => {
+    const bundler = makeFakeBundler();
+    const stdout = makeSink();
+
+    const running = dev({
+      entry: "unused",
+      bundler,
+      hostBin: exitingMockHost,
+      stdout: stdout.stream,
+      stderr: makeSink().stream,
+      signal: new AbortController().signal,
+    });
+
+    await bundler.watching;
+    bundler.emitBuild();
+    await running;
+
+    expect(stdout.text()).toContain("[inca] host exited");
+    expect(bundler.closed).toBe(true);
   });
 });
