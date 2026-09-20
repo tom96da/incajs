@@ -20,6 +20,7 @@ export default defineConfig({
     rolldownOptions: {
       // This package only ever runs in Node.
       external: [/^node:/, "vite", "@vitejs/plugin-vue"],
+      output: { chunkFileNames: "chunks/[name]-[hash].js" },
     },
   },
   plugins: [dts({ include: ["src"], exclude: ["src/**/*.test.mts"] })],

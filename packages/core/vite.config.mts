@@ -15,8 +15,9 @@ export default defineConfig({
       },
       formats: ["es"],
     },
-    rollupOptions: {
+    rolldownOptions: {
       external: ["@vue/runtime-core"],
+      output: { chunkFileNames: "chunks/[name]-[hash].js" },
     },
   },
   plugins: [dts({ include: ["src"], exclude: ["src/**/*.test.mts"] })],
