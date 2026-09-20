@@ -34,8 +34,10 @@ enough overhead for a single maintainer plus AI pairing.
   ahead of time instead of parsing source at startup.
 
 - **`.vue` `<style>` blocks don't reach the screen**: scoped/global
-  `<style>` blocks in `.vue` SFCs currently have no effect through the
-  custom renderer.
+  `<style>` blocks in `.vue` SFCs have no effect through the custom
+  renderer. A build now fails on one rather than shipping it
+  (`ERR_INCA_UNSUPPORTED_STYLE`, raised by `adapter/vite/unsupported.mts`);
+  rendering them is Phase 7's work.
 
 - **No app menu, so Cmd-Q does nothing on macOS**: GPUI builds the menu
   bar only when `Platform::set_menus` is called

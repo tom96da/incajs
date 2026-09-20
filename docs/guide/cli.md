@@ -9,6 +9,9 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 # Command Line Interface
 
+Every command reports a failure as `[inca] <command> failed (<code>): …` —
+see [Error Codes](../reference/errors) for what each one means.
+
 ## `inca dev`
 
 Watches your app and opens a live-reloading window, reloading on every

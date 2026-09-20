@@ -14,12 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `inca dev`, `build` and `package` now show the bundler's own build output, including its size report and timings ([bafa985](https://github.com/tom96da/incajs/commit/bafa985))
-- `inca dev` names the file that triggered a reload and how long the reload took ([c808782](https://github.com/tom96da/incajs/commit/c808782))
+- every failure carries an `ERR_INCA_*` code, listed in the new [error reference](https://tom96da.github.io/incajs/reference/errors) ([7a2e6e4](https://github.com/tom96da/incajs/commit/7a2e6e4))
+- a failed build is reported once, with the excerpt the bundler pointed at ([e5a177d](https://github.com/tom96da/incajs/commit/e5a177d))
+- a `<style>` block or stylesheet import fails the build, instead of being ignored at runtime ([ecabe7b](https://github.com/tom96da/incajs/commit/ecabe7b))
+- `inca dev`, `build` and `package` show the bundler's own build output ([bafa985](https://github.com/tom96da/incajs/commit/bafa985))
+- `inca dev` names the file that triggered a reload, and how long it took ([c808782](https://github.com/tom96da/incajs/commit/c808782))
 - `inca dev` exits when a dev window is already open for the same app ([e416bdb](https://github.com/tom96da/incajs/commit/e416bdb))
 
 ### Fixed
 
+- `inca dev` no longer crashes with `EPIPE` when the host exits first, mid-shutdown ([fb93059](https://github.com/tom96da/incajs/commit/fb93059))
 - closing the last window quits the app and exits `inca dev` ([ad1d800](https://github.com/tom96da/incajs/commit/ad1d800), [4763659](https://github.com/tom96da/incajs/commit/4763659))
 
 ## [0.0.2] - 2026-09-20

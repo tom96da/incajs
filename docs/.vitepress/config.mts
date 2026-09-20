@@ -18,6 +18,7 @@ export default defineConfig({
   themeConfig: {
     nav: [
       { text: "Guide", link: "/guide/", activeMatch: "^/guide/" },
+      { text: "Reference", link: "/reference/errors", activeMatch: "^/reference/" },
       {
         text: `v${incaVersion}`,
         items: [
@@ -40,6 +41,12 @@ export default defineConfig({
             { text: "CLI", link: "/guide/cli" },
             { text: "Building for Production", link: "/guide/build" },
           ],
+        },
+      ],
+      "/reference/": [
+        {
+          text: "Reference",
+          items: [{ text: "Error Codes", link: "/reference/errors" }],
         },
       ],
     },
