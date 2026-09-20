@@ -183,23 +183,30 @@ jobs:
 
   # gpui_platform's features differ per platform, so both need checking.
   rust-ubuntu:
-    name: "Rust: ubuntu-latest"
+    name: "Rust: ubuntu:22.04"
     needs: changed
     if: needs.changed.outputs.rust == 'true'
     timeout-minutes: 30
     runs-on: ubuntu-latest
+    # Same image as cd.yml's build-host: its glibc is the floor for every
+    # binary published from there.
+    container: ubuntu:22.04
     steps: &rust_steps
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-
-      # .devcontainer/Dockerfile's list, minus the display-only packages.
+      # Ahead of the checkout: a bare image lacks git, curl and a compiler.
+      # The gpui half is .devcontainer/Dockerfile's list, minus the
+      # display-only packages.
       - name: Install gpui's native build dependencies
         if: runner.os == 'Linux'
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates \
+            curl \
+            git \
+            xz-utils \
+            build-essential \
             cmake \
             clang \
             lld \
@@ -210,6 +217,19 @@ jobs:
             libx11-xcb-dev \
             libxkbcommon-x11-dev \
             libssl-dev
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # The runner's own toolchain lives outside the container.
+      - name: Install Rust
+        if: runner.os == 'Linux'
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --no-modify-path --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
       - name: Install clippy and rustfmt
         run: rustup component add clippy rustfmt
