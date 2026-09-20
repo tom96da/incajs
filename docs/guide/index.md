@@ -11,7 +11,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 ## Installation
 
-[Node.js](https://nodejs.org/) v22 or higher.
+[Node.js](https://nodejs.org/) v22.18 or higher.
 
 ::: code-group
 
