@@ -23,9 +23,21 @@ enough overhead for a single maintainer plus AI pairing.
   that typing is the prerequisite; only after that does adding `vue-tsc`
   (plus the full `vue` package, `@vue/tsconfig`) actually buy anything.
 
-- **Linux `.so` bundling in `inca package`**: decide how `inca package`
-  ships native `.so` dependencies on Linux, or sidesteps needing to via
-  `RUST_FONTCONFIG_DLOPEN=1`/`FREETYPE2_NO_PKG_CONFIG=1`.
+- **Linux runtime dependencies in `inca package`**: measured on an
+  `aarch64` release build — 8 direct `NEEDED` libraries, desktop-typical
+  except `libxkbcommon-x11`. Vulkan and Wayland are `dlopen`ed, and a
+  Vulkan ICD is GPU-specific, so neither can be bundled meaningfully. The
+  binary carries no `RPATH`/`RUNPATH`, so bundling anything means adding
+  an `$ORIGIN` rpath (as `third_party/zed/script/bundle-linux` does) or a
+  launcher first. `FREETYPE2_NO_PKG_CONFIG=1` drops `libfreetype` by
+  building it statically; `RUST_FONTCONFIG_DLOPEN=1` only defers the
+  failure to runtime. Whether this is worth doing at all is the question.
+
+- **The published Linux binary needs glibc 2.39**: `pidfd_spawnp` and
+  `pidfd_getpid` are weak, but the `GLIBC_2.39` verneed entry carries
+  `Flags: none`, so the loader refuses anything older — Ubuntu 22.04 and
+  Debian 12 can't start `@incajs/host-linux-*`. CD builds on
+  `ubuntu-latest`; zed builds on an older image and claims 2.31/2.35.
 
 - **`strip = true` for the release profile**: shrink release binaries by
   stripping symbols.
