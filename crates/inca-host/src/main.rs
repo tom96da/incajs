@@ -401,6 +401,15 @@ fn run_bundle(entry_path: &str, dev: bool) -> ExitCode {
     let failed = Rc::new(Cell::new(false));
     let reported = Rc::clone(&failed);
     application().run(move |cx: &mut App| {
+        // macOS keeps an app alive with no windows left; this framework's
+        // apps are single-window, so closing the window is quitting.
+        cx.on_window_closed(|cx, _window_id| {
+            if cx.windows().is_empty() {
+                cx.quit();
+            }
+        })
+        .detach();
+
         let error_reporter = writer.as_ref().map_or_else(stderr_reporter, reporter_for);
         match start(cx, &entry_path, &source, error_reporter) {
             Ok(window) => {
