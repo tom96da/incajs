@@ -66,9 +66,9 @@
     "typecheck": "oxlint -A all --type-aware --type-check"
   },
   "devDependencies": {
-    "@vue/runtime-core": "^3.5.42",
-    "oxfmt": "^0.66.0",
-    "oxlint": "^1.81.0"
+    "@vue/runtime-core": "^3.5.43",
+    "oxfmt": "^0.68.0",
+    "oxlint": "^1.83.0"
   },
   "peerDependencies": {
     "@vue/runtime-core": "^3.5.42"

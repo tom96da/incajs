@@ -66,17 +66,17 @@
     "typecheck": "oxlint -A all --type-aware --type-check"
   },
   "dependencies": {
-    "@vitejs/plugin-vue": "^6.0.8",
-    "vite": "^8.2.2"
+    "@vitejs/plugin-vue": "^6.0.9",
+    "vite": "^8.3.0"
   },
   "devDependencies": {
-    "@types/node": "^26.4.1",
-    "@vue/runtime-core": "^3.5.42",
+    "@types/node": "^26.6.2",
+    "@vue/runtime-core": "^3.5.43",
     "c12": "4.0.0-rc.1",
-    "oxfmt": "^0.66.0",
-    "oxlint": "^1.81.0",
-    "rolldown": "~1.2.4",
-    "vue": "^3.5.42"
+    "oxfmt": "^0.68.0",
+    "oxlint": "^1.83.0",
+    "rolldown": "~1.2.9",
+    "vue": "^3.5.43"
   },
   "peerDependencies": {
     "vue": "^3.5.42"

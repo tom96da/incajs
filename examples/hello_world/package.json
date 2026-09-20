@@ -19,13 +19,13 @@
     "typecheck": "oxlint -A all --type-aware --type-check"
   },
   "dependencies": {
-    "@vue/runtime-core": "^3.5.42",
+    "@vue/runtime-core": "^3.5.43",
     "incajs": "workspace:*"
   },
   "devDependencies": {
     "@incajs/cli": "workspace:*",
-    "oxfmt": "^0.66.0",
-    "oxlint": "^1.81.0"
+    "oxfmt": "^0.68.0",
+    "oxlint": "^1.83.0"
   },
   "engines": {
     "node": ">=22.18"
