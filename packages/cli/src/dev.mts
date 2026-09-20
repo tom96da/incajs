@@ -9,7 +9,7 @@ import { defaultBundler } from "./defaultBundler.mts";
 import { HostClient } from "./dev-client/index.mts";
 import { acquireDevLock } from "./dev-lock.mts";
 import { resolveEntry } from "./entry.mts";
-import { printFault, toFault } from "./fault.mts";
+import { log, printFault, toFault } from "./log.mts";
 import type { Bundler, BuildOutput } from "./adapter/types.mts";
 
 export interface DevOptions {
@@ -31,6 +31,9 @@ export interface DevOptions {
   /** Aborting tears the host and the bundler watcher down and resolves `dev()`. */
   signal: AbortSignal;
 }
+
+/** `inca dev` stamps its lines the way Vite's dev server does. */
+const STAMPED = { timestamp: true } as const;
 
 /**
  * Deletes every file directly under `outDir` that `keep` doesn't name —
@@ -87,7 +90,7 @@ export async function dev(options: DevOptions): Promise<void> {
     try {
       await client?.call("reload");
     } catch (error) {
-      printFault(stderr, "reload failed", toFault(error));
+      printFault(stderr, "reload failed", toFault(error), STAMPED);
     }
   }
 
@@ -101,23 +104,23 @@ export async function dev(options: DevOptions): Promise<void> {
         onStderr: (line) => stderr.write(line),
         onReady: () => {
           ready = true;
-          stdout.write("[inca] ready\n");
+          log(stdout, "ready", STAMPED);
           if (pendingReload) {
             pendingReload = false;
             void reloadHost();
           }
         },
-        onAppError: (error) => printFault(stderr, "app error", error),
+        onAppError: (error) => printFault(stderr, "app error", error, STAMPED),
         onExit: () => {
           // The window is gone, so there is nothing left to rebuild for.
-          stdout.write("[inca] host exited — stopping\n");
+          log(stdout, "host exited — stopping", STAMPED);
           stop();
         },
       });
       try {
         await next.start();
       } catch (error) {
-        printFault(stderr, "failed to start inca-host", toFault(error));
+        printFault(stderr, "failed to start inca-host", toFault(error), STAMPED);
         return;
       }
       client = next;
@@ -139,6 +142,8 @@ export async function dev(options: DevOptions): Promise<void> {
     entry,
     outDir,
     mode: "development",
+    stdout,
+    stderr,
     onBuild: (output) => {
       // Chained rather than fired independently: two rebuilds landing
       // before the host finishes starting would otherwise both see no
@@ -146,7 +151,7 @@ export async function dev(options: DevOptions): Promise<void> {
       queue = queue.then(() => onBuild(output));
     },
     onError: (error) => {
-      printFault(stderr, "build failed", error);
+      printFault(stderr, "build failed", error, STAMPED);
     },
   });
 

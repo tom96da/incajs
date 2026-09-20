@@ -19,6 +19,10 @@ export interface BuildAppOptions {
   bundler?: Bundler;
   /** An already-resolved config — lets `packageApp` avoid loading it twice. */
   config?: ResolvedBuildConfig;
+  /** Where the bundler's own output goes. Defaults to `process.stdout`. */
+  stdout?: NodeJS.WritableStream;
+  /** Where the bundler's warnings and errors go. Defaults to `process.stderr`. */
+  stderr?: NodeJS.WritableStream;
 }
 
 /**
@@ -34,5 +38,5 @@ export async function build(options: BuildAppOptions = {}): Promise<BuildOutput>
 
   const entry = options.entry ?? config.entry ?? (await resolveEntry(cwd));
 
-  return bundler.build({ entry, outDir });
+  return bundler.build({ entry, outDir, stdout: options.stdout, stderr: options.stderr });
 }

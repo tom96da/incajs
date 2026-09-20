@@ -19,6 +19,9 @@ export type { Watcher } from "../types.mts";
 export async function watch({
   onBuild,
   onError,
+  stdout = process.stdout,
+  stderr = process.stderr,
+  quiet = false,
   ...buildOptions
 }: BundlerOptions): Promise<Watcher> {
   const { outDir } = buildOptions;
@@ -26,6 +29,9 @@ export async function watch({
     resolveViteConfig({
       ...buildOptions,
       watch: true,
+      stdout,
+      stderr,
+      quiet,
       onOutput: (captured) => {
         onBuild({
           outDir,

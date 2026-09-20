@@ -7,6 +7,7 @@ import vue from "@vitejs/plugin-vue";
 import type { InlineConfig } from "vite";
 
 import { captureOutput } from "./captureOutput.mts";
+import { streamLogger } from "./logger.mts";
 import type { CapturedOutput } from "./captureOutput.mts";
 
 export const BUNDLE_FILE_NAME = "bundle.js";
@@ -22,6 +23,12 @@ export interface ResolveConfigOptions {
   watch: boolean;
   /** Called with what each successful (re)build wrote. */
   onOutput: (output: CapturedOutput) => void;
+  /** Where Vite's own build output goes. */
+  stdout: NodeJS.WritableStream;
+  /** Where Vite's warnings and errors go. */
+  stderr: NodeJS.WritableStream;
+  /** Silences the bundler's progress output — see the `quiet` option in `../types.mts`. */
+  quiet: boolean;
 }
 
 /**
@@ -40,13 +47,19 @@ export function resolveViteConfig({
   mode,
   watch,
   onOutput,
+  stdout,
+  stderr,
+  quiet,
 }: ResolveConfigOptions): InlineConfig {
   return {
     configFile: false,
     root: path.dirname(entry),
     mode,
     clearScreen: false,
-    logLevel: "silent",
+    // The only knob rolldown's native reporter reads. Silencing it also
+    // drops the size report.
+    logLevel: quiet ? "silent" : "info",
+    customLogger: streamLogger(stdout, stderr),
     define: {
       "process.env.NODE_ENV": JSON.stringify(mode),
     },

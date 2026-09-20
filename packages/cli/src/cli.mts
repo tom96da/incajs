@@ -1,12 +1,19 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import path from "node:path";
+
 import { build } from "./build.mts";
 import { dev } from "./dev.mts";
-import { printFault, toFault } from "./fault.mts";
+import { log, printFault, toFault } from "./log.mts";
 import { packageApp } from "./package.mts";
 
 const USAGE = "Usage: inca <dev|build|package>";
+
+/** Formats a path relative to the working directory, the way the bundler reports its own. */
+function relative(target: string): string {
+  return path.relative(process.cwd(), target);
+}
 
 /** Parses argv and runs the named subcommand: `dev`, `build`, or `package`. */
 export async function run(argv: readonly string[] = process.argv): Promise<void> {
@@ -15,7 +22,7 @@ export async function run(argv: readonly string[] = process.argv): Promise<void>
   if (command === "build") {
     try {
       const output = await build();
-      process.stdout.write(`[inca] built ${output.entryFile}\n`);
+      log(process.stdout, `built ${relative(output.entryFile)}`);
     } catch (error) {
       printFault(process.stderr, "build failed", toFault(error));
       process.exitCode = 1;
@@ -26,7 +33,7 @@ export async function run(argv: readonly string[] = process.argv): Promise<void>
   if (command === "package") {
     try {
       const { appPath } = await packageApp();
-      process.stdout.write(`[inca] packaged ${appPath}\n`);
+      log(process.stdout, `packaged ${relative(appPath)}`);
     } catch (error) {
       printFault(process.stderr, "package failed", toFault(error));
       process.exitCode = 1;
@@ -42,7 +49,8 @@ export async function run(argv: readonly string[] = process.argv): Promise<void>
 
   const controller = new AbortController();
   const onSignal = (): void => {
-    process.stderr.write("[inca] shutting down\n");
+    if (controller.signal.aborted) return;
+    log(process.stderr, "shutting down", { timestamp: true });
     controller.abort();
   };
   // A wrapper script runner (e.g. `pnpm run`) commonly delivers SIGTERM to
@@ -54,7 +62,7 @@ export async function run(argv: readonly string[] = process.argv): Promise<void>
   try {
     await dev({ signal: controller.signal });
   } catch (error) {
-    printFault(process.stderr, "dev failed", toFault(error));
+    printFault(process.stderr, "dev failed", toFault(error), { timestamp: true });
     process.exitCode = 1;
   }
 }

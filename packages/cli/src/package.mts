@@ -9,6 +9,7 @@ import { build } from "./build.mts";
 import { slugify } from "./config/defaults.mts";
 import { resolveAppConfig } from "./config/loader.mts";
 import { resolveHostBin } from "./dev-client/index.mts";
+import { log } from "./log.mts";
 import { encodePlist } from "./plist.mts";
 import type { Bundler, BuildOutput } from "./adapter/types.mts";
 import type { ResolvedAppConfig } from "./config/loader.mts";
@@ -40,8 +41,10 @@ export interface PackageAppOptions {
    * process is running on.
    */
   target?: PackageTarget;
-  /** Where progress notes go. Defaults to `process.stdout`. */
+  /** Where progress notes and the bundler's own output go. Defaults to `process.stdout`. */
   stdout?: NodeJS.WritableStream;
+  /** Where the bundler's warnings and errors go. Defaults to `process.stderr`. */
+  stderr?: NodeJS.WritableStream;
 }
 
 /** The result of a successful {@link packageApp} call. */
@@ -160,14 +163,15 @@ export async function packageApp(options: PackageAppOptions = {}): Promise<Packa
 
   const metadata = await resolveAppConfig(cwd);
   if (metadata.usedPackageJsonKey) {
-    stdout.write(
-      `[inca] the "inca" key in package.json is deprecated — move these settings to inca.config.ts\n`,
+    log(
+      stdout,
+      `the "inca" key in package.json is deprecated — move these settings to inca.config.ts`,
     );
   }
   if (metadata.identifierIsDefault) {
-    stdout.write(
-      `[inca] no "identifier" set in inca.config.ts — using generated identifier ` +
-        `${metadata.identifier}\n`,
+    log(
+      stdout,
+      `no "identifier" set in inca.config.ts — using generated identifier ${metadata.identifier}`,
     );
   }
 
@@ -176,6 +180,8 @@ export async function packageApp(options: PackageAppOptions = {}): Promise<Packa
     entry: options.entry,
     config: metadata,
     bundler: options.bundler,
+    stdout,
+    stderr: options.stderr,
   });
 
   const hostBin = options.hostBin ?? resolveHostBin();

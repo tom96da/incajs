@@ -15,7 +15,13 @@ export type { BuildOptions, BuildOutput } from "../types.mts";
  * rejects on failure rather than reporting it through a callback. Never
  * starts or talks to `inca-host` — that's `dev.mts`'s job.
  */
-export async function build({ entry, outDir }: BuildOptions): Promise<BuildOutput> {
+export async function build({
+  entry,
+  outDir,
+  stdout = process.stdout,
+  stderr = process.stderr,
+  quiet = false,
+}: BuildOptions): Promise<BuildOutput> {
   let output: BuildOutput | undefined;
   await buildOnce(
     resolveViteConfig({
@@ -23,6 +29,9 @@ export async function build({ entry, outDir }: BuildOptions): Promise<BuildOutpu
       outDir,
       mode: "production",
       watch: false,
+      stdout,
+      stderr,
+      quiet,
       onOutput: (captured) => {
         output = {
           outDir,

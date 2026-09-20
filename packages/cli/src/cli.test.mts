@@ -1,6 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import path from "node:path";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MockInstance } from "vitest";
 
@@ -73,7 +75,9 @@ describe("run", () => {
     expect(mockedBuild).toHaveBeenCalled();
     expect(mockedDev).not.toHaveBeenCalled();
     expect(process.exitCode).toBeUndefined();
-    expect(written(stdout)).toContain("[inca] built /app/dist/bundle.js");
+    expect(written(stdout)).toContain(
+      `[inca] built ${path.relative(process.cwd(), "/app/dist/bundle.js")}`,
+    );
   });
 
   it("sets a non-zero exit code and prints a readable error when build fails", async () => {
@@ -92,7 +96,9 @@ describe("run", () => {
 
     expect(mockedPackageApp).toHaveBeenCalled();
     expect(process.exitCode).toBeUndefined();
-    expect(written(stdout)).toContain("[inca] packaged /app/dist/click_counter.app");
+    expect(written(stdout)).toContain(
+      `[inca] packaged ${path.relative(process.cwd(), "/app/dist/click_counter.app")}`,
+    );
   });
 
   it("sets a non-zero exit code and prints a readable error when package fails", async () => {
@@ -118,6 +124,15 @@ describe("run", () => {
       expect(written(stderr)).toContain("[inca] shutting down");
     },
   );
+
+  it("shuts down once when both signals arrive", () => {
+    void run(["node", "inca", "dev"]);
+
+    process.emit("SIGINT");
+    process.emit("SIGTERM");
+
+    expect(written(stderr).match(/\[inca\] shutting down/g)).toHaveLength(1);
+  });
 
   it("sets a non-zero exit code and prints a readable error when dev fails", async () => {
     mockedDev.mockRejectedValueOnce(new Error("inca dev is already running for this app (pid 42)"));

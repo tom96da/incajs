@@ -15,12 +15,22 @@ beforeAll(setUp);
 afterAll(tearDown);
 
 describe("build", () => {
-  it("compiles a .vue file into a minified entry, reporting it and every file it wrote", async () => {
-    const { entry, outDir } = await makeApp(
+  it("writes Vite's own build log to the stream it was given", async () => {
+    const { entry, outDir, streams, logs } = await makeApp(
       `<script setup>\nconst msg = "hello";\n</script>\n<template><div>{{ msg }}</div></template>\n`,
     );
 
-    const output = await build({ entry, outDir });
+    await build({ entry, outDir, ...streams });
+
+    expect(logs()).toContain("built in");
+  }, 20000);
+
+  it("compiles a .vue file into a minified entry, reporting it and every file it wrote", async () => {
+    const { entry, outDir, streams } = await makeApp(
+      `<script setup>\nconst msg = "hello";\n</script>\n<template><div>{{ msg }}</div></template>\n`,
+    );
+
+    const output = await build({ entry, outDir, ...streams });
 
     expect(output.outDir).toBe(outDir);
     expect(output.entryFile).toBe(path.join(outDir, "bundle.js"));
@@ -34,7 +44,7 @@ describe("build", () => {
   }, 20000);
 
   it("reports a dynamic import as its own chunk alongside the entry", async () => {
-    const { entry, outDir } = await makeApp(
+    const { entry, outDir, streams } = await makeApp(
       `<script setup>\nconst msg = "hello";\n</script>\n<template><div>{{ msg }}</div></template>\n`,
     );
     const dynamicEntry = path.join(path.dirname(entry), "dynamic-entry.mts");
@@ -43,30 +53,30 @@ describe("build", () => {
       `import("./App.vue").then((m) => { globalThis.loaded = m.default; });\n`,
     );
 
-    const output = await build({ entry: dynamicEntry, outDir });
+    const output = await build({ entry: dynamicEntry, outDir, ...streams });
 
     expect(output.files.length).toBeGreaterThan(1);
     expect(output.files.some((file) => file.startsWith("chunks/"))).toBe(true);
   }, 20000);
 
   it("clears a stale file already in outDir", async () => {
-    const { entry, outDir } = await makeApp(
+    const { entry, outDir, streams } = await makeApp(
       `<script setup>\nconst msg = "hello";\n</script>\n<template><div>{{ msg }}</div></template>\n`,
     );
     await mkdir(outDir, { recursive: true });
     const stalePath = `${outDir}/stale.js`;
     await writeFile(stalePath, "// leftover from a previous build\n");
 
-    await build({ entry, outDir });
+    await build({ entry, outDir, ...streams });
 
     await expect(readFile(stalePath, "utf8")).rejects.toThrow(/ENOENT/);
   }, 20000);
 
   it("rejects with a readable error on a syntax error", async () => {
-    const { entry, outDir } = await makeApp(
+    const { entry, outDir, streams } = await makeApp(
       `<script setup>\nconst broken = ;\n</script>\n<template><div/></template>\n`,
     );
 
-    await expect(build({ entry, outDir })).rejects.toThrow(/./);
+    await expect(build({ entry, outDir, ...streams })).rejects.toThrow(/./);
   }, 20000);
 });

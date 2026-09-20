@@ -3,11 +3,29 @@
 
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { Writable } from "node:stream";
 
 export interface ScratchApp {
   entry: string;
   outDir: string;
   vuePath: string;
+  /** Spread into a build call to keep the bundler's output off the test console. */
+  streams: { stdout: Writable; stderr: Writable; quiet: true };
+  /** Everything Vite wrote to {@link ScratchApp.streams}. */
+  logs: () => string;
+}
+
+function sink(): { stream: Writable; text: () => string } {
+  const chunks: string[] = [];
+  return {
+    stream: new Writable({
+      write(chunk, _encoding, callback) {
+        chunks.push(String(chunk));
+        callback();
+      },
+    }),
+    text: () => chunks.join(""),
+  };
 }
 
 /**
@@ -33,7 +51,15 @@ export function scratchApp(name: string): {
       const entry = path.join(appDir, "entry.mts");
       await writeFile(vuePath, vueSource);
       await writeFile(entry, `import App from "./App.vue";\nexport default App;\n`);
-      return { entry, outDir: path.join(appDir, "dist"), vuePath };
+      const out = sink();
+      const err = sink();
+      return {
+        entry,
+        outDir: path.join(appDir, "dist"),
+        vuePath,
+        streams: { stdout: out.stream, stderr: err.stream, quiet: true },
+        logs: () => out.text() + err.text(),
+      };
     },
   };
 }

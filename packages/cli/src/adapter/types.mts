@@ -19,6 +19,16 @@ export interface BundlerOptions {
   onBuild: (output: BuildOutput) => void;
   /** Called instead of `onBuild` when a (re)build fails. */
   onError: (error: { message: string; stack: string | null }) => void;
+  /** Where the bundler's own output goes. Defaults to `process.stdout`. */
+  stdout?: NodeJS.WritableStream;
+  /** Where the bundler's warnings and errors go. Defaults to `process.stderr`. */
+  stderr?: NodeJS.WritableStream;
+  /**
+   * Drops the bundler's progress output and size report, leaving the
+   * per-build summary. Set it when the build has to stay silent: part of
+   * that output goes to the process's own stdout, not to `stdout` above.
+   */
+  quiet?: boolean;
 }
 
 /** Options for {@link Bundler.build}. */
@@ -27,6 +37,16 @@ export interface BuildOptions {
   entry: string;
   /** Where the build's output is written. */
   outDir: string;
+  /** Where the bundler's own output goes. Defaults to `process.stdout`. */
+  stdout?: NodeJS.WritableStream;
+  /** Where the bundler's warnings and errors go. Defaults to `process.stderr`. */
+  stderr?: NodeJS.WritableStream;
+  /**
+   * Drops the bundler's progress output and size report, leaving the
+   * per-build summary. Set it when the build has to stay silent: part of
+   * that output goes to the process's own stdout, not to `stdout` above.
+   */
+  quiet?: boolean;
 }
 
 /** What a build wrote — the result of {@link Bundler.build}, and every {@link BundlerOptions.onBuild} call. */

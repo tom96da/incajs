@@ -22,7 +22,7 @@ afterEach(async () => {
 
 describe("watch", () => {
   it("compiles a .vue file, reporting the entry it wrote", async () => {
-    const { entry, outDir } = await makeApp(
+    const { entry, outDir, streams } = await makeApp(
       `<script setup>\nconst msg = "hello";\n</script>\n<template><div>{{ msg }}</div></template>\n`,
     );
 
@@ -31,6 +31,7 @@ describe("watch", () => {
         entry,
         outDir,
         mode: "development",
+        ...streams,
         onBuild: resolve,
         onError: (error) => reject(new Error(error.message)),
       })
@@ -45,7 +46,7 @@ describe("watch", () => {
   }, 20000);
 
   it("rebuilds when the .vue file changes", async () => {
-    const { entry, outDir, vuePath } = await makeApp(
+    const { entry, outDir, vuePath, streams } = await makeApp(
       `<script setup>\nconst msg = "first";\n</script>\n<template><div>{{ msg }}</div></template>\n`,
     );
 
@@ -59,6 +60,7 @@ describe("watch", () => {
       entry,
       outDir,
       mode: "development",
+      ...streams,
       onBuild: (output) => {
         builds += 1;
         resolveBuild(output);
@@ -86,7 +88,7 @@ describe("watch", () => {
   }, 20000);
 
   it("reports a syntax error without throwing", async () => {
-    const { entry, outDir } = await makeApp(
+    const { entry, outDir, streams } = await makeApp(
       `<script setup>\nconst broken = ;\n</script>\n<template><div/></template>\n`,
     );
 
@@ -96,6 +98,7 @@ describe("watch", () => {
           entry,
           outDir,
           mode: "development",
+          ...streams,
           onBuild: () => reject(new Error("expected a build error, got a successful build")),
           onError: resolve,
         })
