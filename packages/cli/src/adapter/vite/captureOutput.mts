@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import type { Plugin } from "vite";
+
 import { IncaError } from "../../error.mts";
 
 /** What one (re)build actually wrote, relative to its own `outDir`. */

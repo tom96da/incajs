@@ -45,9 +45,7 @@ export const UNSUPPORTED: readonly UnsupportedFeature[] = [
  * Fails the build on the first module that uses an unsupported feature,
  * naming the file that used it.
  */
-export function rejectUnsupported(
-  features: readonly UnsupportedFeature[] = UNSUPPORTED,
-): Plugin {
+export function rejectUnsupported(features: readonly UnsupportedFeature[] = UNSUPPORTED): Plugin {
   return {
     name: "inca:reject-unsupported",
     enforce: "pre",

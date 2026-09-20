@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { createRequire } from "node:module";
+
 import { IncaError } from "../error.mts";
 
 /** Overrides host binary resolution — for a stand-in in tests, or a platform with no published binary yet. */

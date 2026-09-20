@@ -9,12 +9,12 @@ import { build } from "./build.mts";
 import { slugify } from "./config/defaults.mts";
 import { resolveAppConfig } from "./config/loader.mts";
 import { resolveHostBin } from "./dev-client/index.mts";
+import { IncaError } from "./error.mts";
 import { log } from "./log.mts";
 import { encodePlist } from "./plist.mts";
 import type { Bundler, BuildOutput } from "./adapter/types.mts";
 import type { ResolvedAppConfig } from "./config/loader.mts";
 import type { PlistValue } from "./plist.mts";
-import { IncaError } from "./error.mts";
 
 /** A platform `inca package` can emit a distributable application for. */
 export type PackageTarget = "macos" | "linux";

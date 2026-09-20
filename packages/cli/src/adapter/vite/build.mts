@@ -5,9 +5,9 @@ import path from "node:path";
 
 import { build as buildOnce } from "vite";
 
+import { IncaError } from "../../error.mts";
 import { resolveViteConfig } from "./config.mts";
 import type { BuildOptions, BuildOutput } from "../types.mts";
-import { IncaError } from "../../error.mts";
 
 export type { BuildOptions, BuildOutput } from "../types.mts";
 

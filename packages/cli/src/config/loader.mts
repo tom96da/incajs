@@ -7,9 +7,9 @@ import path from "node:path";
 
 import { loadConfig } from "c12";
 
+import { IncaError } from "../error.mts";
 import { defaultConfig, defaultIdentifier, defaultProductName } from "./defaults.mts";
 import type { IncaConfig } from "./types.mts";
-import { IncaError } from "../error.mts";
 
 /** The parts of an app's `package.json` this loader reads directly, rather than through c12. */
 interface AppPackageJson {
@@ -109,7 +109,10 @@ export async function resolveAppConfig(cwd: string): Promise<ResolvedAppConfig> 
   if (config.icon) {
     icon = path.resolve(cwd, config.icon);
     if (!existsSync(icon)) {
-      throw new IncaError("ERR_INCA_ICON_NOT_FOUND", `"icon" points to ${icon}, which doesn't exist`);
+      throw new IncaError(
+        "ERR_INCA_ICON_NOT_FOUND",
+        `"icon" points to ${icon}, which doesn't exist`,
+      );
     }
   }
 

@@ -43,7 +43,11 @@ describe("printFault", () => {
   it("names the code when the failure carries one", () => {
     const out = sink();
 
-    printFault(out.stream, "dev failed", toFault(Object.assign(new Error("busy"), { code: "ERR_INCA_DEV_RUNNING" })));
+    printFault(
+      out.stream,
+      "dev failed",
+      toFault(Object.assign(new Error("busy"), { code: "ERR_INCA_DEV_RUNNING" })),
+    );
 
     expect(out.text()).toContain("[inca] dev failed (ERR_INCA_DEV_RUNNING): busy\n");
   });
