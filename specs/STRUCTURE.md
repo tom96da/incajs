@@ -23,6 +23,7 @@ incajs/
 │   ├── FFI.md               # JS↔Rust host bridge function surface
 │   ├── PROTOCOL.md          # dev protocol between the host binary and the Node process spawning it
 │   ├── PLAN.md              # checkbox-tracked, per-phase task breakdown of ROADMAP.md
+│   ├── BACKLOG.md           # unscheduled desktop-app gaps and QoL fixes, outside ROADMAP.md's phased plan
 │   ├── GIT.md               # commit message format and the commit-review policy
 │   ├── TESTING.md           # test placement and required checks, Rust + TypeScript
 │   └── MANUAL_GUI_CHECK.md  # how to visually verify a GPUI window/example yourself
