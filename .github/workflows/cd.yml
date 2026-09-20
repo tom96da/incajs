@@ -123,6 +123,10 @@ jobs:
     # The image's glibc is the floor for the binary published from it, so it is
     # pinned rather than following the runner. ci.yml compiles in the same one.
     container: ${{ matrix.container }}
+    # A container's default shell is sh, and these steps are written in bash.
+    defaults:
+      run:
+        shell: bash
     permissions:
       contents: read
     strategy:

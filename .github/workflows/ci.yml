@@ -191,6 +191,10 @@ jobs:
     # Same image as cd.yml's build-host: its glibc is the floor for every
     # binary published from there.
     container: ubuntu:22.04
+    # A container's default shell is sh, and these steps are written in bash.
+    defaults:
+      run:
+        shell: bash
     steps: &rust_steps
       # Ahead of the checkout: a bare image lacks git, curl and a compiler.
       # The gpui half is .devcontainer/Dockerfile's list, minus the
