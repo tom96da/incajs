@@ -23,18 +23,6 @@ enough overhead for a single maintainer plus AI pairing.
   that typing is the prerequisite; only after that does adding `vue-tsc`
   (plus the full `vue` package, `@vue/tsconfig`) actually buy anything.
 
-- **Rich console output for `inca dev`/`build`**
-  ([tom96da/incajs#1](https://github.com/tom96da/incajs/issues/1)): replace
-  the current plain `[inca] ...` lines with `consola`-based output — a
-  build summary (file, size, duration) and a dev-server log naming which
-  file triggered a rebuild. Report the changed file and rebuild duration
-  through `@incajs/cli`'s `watch()` (`onBuild`/`onError`, via the
-  underlying watcher's already-available `"change"` event). Decided
-  against `@clack/prompts` here — that fits interactive scaffolding
-  prompts, not a running log stream; save it for a future bootstrap CLI.
-  Per-module HMR output ("hot update: App.vue") is out of scope, blocked on
-  Phase 3.4.
-
 - **Linux `.so` bundling in `inca package`**: decide how `inca package`
   ships native `.so` dependencies on Linux, or sidesteps needing to via
   `RUST_FONTCONFIG_DLOPEN=1`/`FREETYPE2_NO_PKG_CONFIG=1`.

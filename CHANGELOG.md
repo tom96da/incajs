@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `inca dev`, `build` and `package` now show the bundler's own build output, including its size report and timings ([bafa985](https://github.com/tom96da/incajs/commit/bafa985))
+- `inca dev` names the file that triggered a reload and how long the reload took ([c808782](https://github.com/tom96da/incajs/commit/c808782))
 - `inca dev` exits when a dev window is already open for the same app ([e416bdb](https://github.com/tom96da/incajs/commit/e416bdb))
 
 ### Fixed
