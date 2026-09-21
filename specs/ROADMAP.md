@@ -322,7 +322,10 @@ does *around* its content lives here.
    close behaviour, and more than one window per app — which the host's
    one-session-per-process shape does not currently express.
 2. **Native menus**: an application menu bar and context menus, with their
-   keyboard shortcuts.
+   keyboard shortcuts. The host already owns a `Quit` item and its
+   shortcut, which an app cannot remove — see
+   [FFI.md](./FFI.md#application-menu-host-owned-one-item). What an app
+   adds beside it, and where those items come from, is this item's work.
 3. **Dialogs**: file open/save and message boxes, drawn by the platform
    rather than in-tree.
 4. **System integration**: clipboard, notifications, a tray icon, and

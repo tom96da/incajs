@@ -14,6 +14,9 @@ whatever tree it mounted. The app's `console` output goes to stderr.
 cargo run -p inca-host -- path/to/bundle.js
 ```
 
+The window carries an application menu with a `Quit` item, bound to `cmd-q`
+on macOS and `ctrl-q` elsewhere. Only macOS draws a menu bar for it.
+
 Run with no arguments, it looks for `bundle.js` beside its own executable,
 then beside it in `../Resources/` (a macOS `.app`'s layout) — the search a
 packaged app's launcher relies on, since a double-clicked `.app` gets no

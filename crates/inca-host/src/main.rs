@@ -17,6 +17,7 @@
 //! Nothing here panics on a failure a user can cause.
 
 mod config;
+mod menu;
 mod protocol;
 
 use std::cell::{Cell, RefCell};
@@ -42,6 +43,9 @@ use inca_gpui::{AttributeValue, NodeId, VirtualNode, render_tree_with_events};
 use inca_jsenv::{Engine, EngineError, console};
 
 use crate::protocol::{ErrorCode, Incoming, Method, Outgoing};
+
+/// What an app is called when nothing named it.
+const DEFAULT_APP_NAME: &str = "Inca";
 
 /// Window size to fall back to when neither the app's config nor its root
 /// element gives one.
@@ -360,6 +364,7 @@ fn start(
         // Before any window opens, per `App::set_app_identity`.
         cx.set_app_identity(identifier, name);
     }
+    menu::install(cx, app_config.name.as_deref().unwrap_or(DEFAULT_APP_NAME));
 
     let content = content_window_size(&session.host.borrow(), session.root);
     let (width, height) = window_size(app_config.window.as_ref(), content);

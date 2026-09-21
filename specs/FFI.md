@@ -173,3 +173,27 @@ unit implements this rather than deciding it again:
 
 Nothing dispatches either event yet — wiring `crates/inca-host` to
 actually fire them is separate, future work.
+
+### Application menu (host-owned, one item)
+
+`crates/inca-host` sets the menu bar (`src/menu.rs`): one top-level menu
+titled after the app, holding `Quit`, bound to `secondary-q` — `cmd-q` on
+macOS and `ctrl-q` elsewhere. macOS reads a menu item's key equivalent from
+the keymap, so the shortcut shown beside the item comes from that binding,
+and it titles the application menu from the `.app` bundle's
+`CFBundleName`. macOS is the only platform that draws a menu bar today;
+Linux and Windows keep what `set_menus` was given.
+
+`Quit` is the host's. An app can neither remove nor rebind it, so every app
+has a way to quit.
+
+An item an app defines reaches JS through the same path a lifecycle hook
+does, with no new binding: its activation is dispatched on `rootNodeId()`
+as `menu:<id>`, `<id>` being whatever the app called the item, so an item
+`save` arrives as `("menu:save")`. A GPUI action is a type, so an app's own
+id travels in one action struct with a `SharedString` field (`Action`
+derive, `#[action(no_json)]`), constructed per item.
+
+**Nothing supplies app-defined items yet.** Where they come from —
+`inca.config.ts`, a JS binding, or an SFC — is undecided, and settling it
+changes only what produces the `Vec<Menu>` that `menu::install` takes.
