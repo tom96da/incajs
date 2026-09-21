@@ -1,10 +1,11 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { Writable } from "node:stream";
 
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { dev } from "../src/dev.mts";
 import { scratchConfigApp } from "./scratchConfigApp.mts";
@@ -360,5 +361,108 @@ describe("dev", () => {
 
     controller.abort();
     await running;
+  });
+});
+
+describe("dev on macOS", () => {
+  const scratch = scratchConfigApp("dev-macos");
+  beforeAll(scratch.setUp);
+  afterAll(scratch.tearDown);
+
+  /** Reports this process as macOS for one test, so the bundling path runs off one. */
+  function pretendMacos(): void {
+    const real = process.platform;
+    Object.defineProperty(process, "platform", { value: "darwin", configurable: true });
+    onTestFinished(() => {
+      Object.defineProperty(process, "platform", { value: real, configurable: true });
+    });
+  }
+
+  it("assembles a bundle named after the app before starting the host", async () => {
+    pretendMacos();
+    const cwd = await scratch.makeApp({ name: "bundled", version: "4.5.6" });
+    const bundler = makeFakeBundler();
+    const controller = new AbortController();
+
+    const running = dev({
+      cwd,
+      entry: "unused",
+      bundler,
+      hostBin: mockHost,
+      stdout: makeSink().stream,
+      stderr: makeSink().stream,
+      signal: controller.signal,
+    });
+
+    // The bundle is assembled before the watcher starts, so nothing has to
+    // build or run for it to be on disk.
+    await bundler.watching;
+
+    const appPath = path.join(cwd, "node_modules/.inca/bundled.app");
+    expect((await stat(path.join(appPath, "Contents/MacOS/bundled"))).ino).toBe(
+      (await stat(mockHost)).ino,
+    );
+    const plist = await readFile(path.join(appPath, "Contents/Info.plist"), "utf8");
+    expect(plist).toContain("<string>bundled</string>");
+    expect(plist).toContain("<string>4.5.6</string>");
+
+    controller.abort();
+    await running;
+  });
+
+  it("keeps running when no host binary resolves", async () => {
+    pretendMacos();
+    const cwd = await scratch.makeApp({ name: "hostless" });
+    const bundler = makeFakeBundler();
+    const stdout = makeSink();
+    const stderr = makeSink();
+    const controller = new AbortController();
+
+    const running = dev({
+      cwd,
+      entry: "unused",
+      bundler,
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      signal: controller.signal,
+    });
+
+    await bundler.watching;
+    bundler.emitBuild();
+    await vi.waitFor(() => expect(stderr.text()).toContain("failed to start inca-host"));
+
+    controller.abort();
+    await running;
+
+    expect(stdout.text()).toContain("running unbundled");
+  });
+
+  it("runs unbundled and says so when the app names itself nowhere", async () => {
+    pretendMacos();
+    const cwd = await scratch.makeApp({});
+    const bundler = makeFakeBundler();
+    const stdout = makeSink();
+    const controller = new AbortController();
+
+    const running = dev({
+      cwd,
+      entry: "unused",
+      bundler,
+      hostBin: mockHost,
+      stdout: stdout.stream,
+      stderr: makeSink().stream,
+      signal: controller.signal,
+    });
+
+    await bundler.watching;
+    bundler.emitBuild();
+    await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
+
+    controller.abort();
+    await running;
+
+    expect(stdout.text()).toContain("running unbundled");
+    const scratchFiles = await readdir(path.join(cwd, "node_modules/.inca"));
+    expect(scratchFiles.filter((name) => name.endsWith(".app"))).toEqual([]);
   });
 });

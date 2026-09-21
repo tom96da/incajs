@@ -41,6 +41,9 @@ export default defineConfig({
 The app's display name. Defaults to `package.json`'s own `"name"`, with
 any npm scope (`@org/`) stripped.
 
+On macOS this is the name the Dock, the menu bar and the Finder show, for
+`inca dev` as much as for a packaged app.
+
 ### `identifier`
 
 A reverse-DNS-style unique id — e.g. macOS's `CFBundleIdentifier`.
@@ -50,8 +53,9 @@ rather than using it silently.
 
 ### `icon`
 
-The packaged app's icon file, resolved relative to `inca.config.ts`'s
-own directory.
+The app's icon file, resolved relative to `inca.config.ts`'s own
+directory. On macOS it is what the Dock shows, for `inca dev` as much as
+for a packaged app.
 
 ### `version`
 

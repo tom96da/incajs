@@ -43,13 +43,17 @@ export default defineConfig({
   productName: "Click Counter",
   // macOS's CFBundleIdentifier or equivalent
   identifier: "com.example.click-counter",
-  // the packaged app's icon file
+  // the app's icon file
   icon: "assets/icon.icns",
 });
 ```
 
 An `identifier` should be world-unique, so `inca package` prints a note
 when it falls back to the generated one rather than using it silently.
+
+On macOS, `inca dev` launches the app under its `productName`, `icon` and
+`identifier`, so the Dock and the menu bar show the same app they will
+once it is packaged.
 
 ## Requirements
 

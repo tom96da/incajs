@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { existsSync } from "node:fs";
-import { chmod, cp, mkdir, rm, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 
 import { build } from "./build.mts";
@@ -11,10 +11,9 @@ import { resolveAppConfig } from "./config/loader.mts";
 import { resolveHostBin } from "./dev-client/index.mts";
 import { IncaError } from "./error.mts";
 import { log } from "./log.mts";
-import { encodePlist } from "./plist.mts";
+import { writeMacosApp } from "./macos-app.mts";
 import type { Bundler, BuildOutput } from "./adapter/types.mts";
 import type { ResolvedAppConfig } from "./config/loader.mts";
-import type { PlistValue } from "./plist.mts";
 
 /** A platform `inca package` can emit a distributable application for. */
 export type PackageTarget = "macos" | "linux";
@@ -91,45 +90,15 @@ async function copyBuildOutput(output: BuildOutput, destDir: string): Promise<vo
   );
 }
 
-/** Writes a macOS `.app` bundle: `Contents/{MacOS,Resources}`, `Info.plist`, `PkgInfo`. */
+/** Writes a macOS `.app` bundle with the build output under `Contents/Resources`. */
 async function packageMacos({ metadata, output, hostBin }: LayoutArgs): Promise<string> {
-  const appPath = path.join(output.outDir, `${metadata.productName}.app`);
-  await rm(appPath, { recursive: true, force: true });
-
-  const contentsDir = path.join(appPath, "Contents");
-  const macosDir = path.join(contentsDir, "MacOS");
-  const resourcesDir = path.join(contentsDir, "Resources");
-  await mkdir(macosDir, { recursive: true });
-  await mkdir(resourcesDir, { recursive: true });
-
-  const executablePath = path.join(macosDir, metadata.productName);
-  await cp(hostBin, executablePath);
-  await chmod(executablePath, 0o755);
+  const { appPath, resourcesDir } = await writeMacosApp({
+    appPath: path.join(output.outDir, `${metadata.productName}.app`),
+    metadata,
+    hostBin,
+  });
 
   await copyBuildOutput(output, resourcesDir);
-
-  const plist: Record<string, PlistValue> = {
-    CFBundleName: metadata.productName,
-    CFBundleDisplayName: metadata.productName,
-    CFBundleExecutable: metadata.productName,
-    CFBundleIdentifier: metadata.identifier,
-    CFBundleVersion: metadata.version,
-    CFBundleShortVersionString: metadata.version,
-    CFBundlePackageType: "APPL",
-    CFBundleInfoDictionaryVersion: "6.0",
-    NSHighResolutionCapable: true,
-  };
-
-  if (metadata.icon) {
-    const iconFile = path.basename(metadata.icon);
-    await cp(metadata.icon, path.join(resourcesDir, iconFile));
-    plist.CFBundleIconFile = iconFile;
-  }
-
-  await writeFile(path.join(contentsDir, "Info.plist"), encodePlist(plist));
-  // The classic four-byte type/creator marker every .app has carried since
-  // Classic Mac OS — still expected to be there, even though nothing reads it.
-  await writeFile(path.join(contentsDir, "PkgInfo"), "APPL????");
 
   return appPath;
 }

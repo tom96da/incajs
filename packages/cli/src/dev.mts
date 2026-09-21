@@ -5,12 +5,13 @@ import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { styleText } from "node:util";
 
-import { resolveBuildConfig } from "./config/loader.mts";
+import { resolveAppConfig, resolveBuildConfig } from "./config/loader.mts";
 import { defaultBundler } from "./defaultBundler.mts";
-import { HostClient } from "./dev-client/index.mts";
+import { HostClient, resolveHostBin } from "./dev-client/index.mts";
 import { acquireDevLock } from "./dev-lock.mts";
 import { resolveEntry } from "./entry.mts";
 import { log, printFault, toFault } from "./log.mts";
+import { writeMacosApp } from "./macos-app.mts";
 import type { Bundler, BuildOutput } from "./adapter/types.mts";
 
 export interface DevOptions {
@@ -23,7 +24,10 @@ export interface DevOptions {
   entry?: string;
   /** Overrides the bundler — see {@link defaultBundler} for what's wired in by default. */
   bundler?: Bundler;
-  /** Overrides host binary resolution — passed straight through to `HostClient`. */
+  /**
+   * Overrides host binary resolution. On macOS this is the binary the
+   * app bundle wraps; elsewhere it is launched directly.
+   */
   hostBin?: string;
   /** Defaults to `process.stdout`. */
   stdout?: NodeJS.WritableStream;
@@ -35,6 +39,37 @@ export interface DevOptions {
 
 /** `inca dev` stamps its lines the way Vite's dev server does. */
 const STAMPED = { timestamp: true } as const;
+
+/**
+ * The executable to launch on macOS so the running app carries the name,
+ * icon and identifier its config declares: one inside a `.app` bundle
+ * under `node_modules/.inca`, holding the host binary and an `Info.plist`.
+ *
+ * `undefined` on every other platform, and whenever the bundle can't be
+ * assembled — an app with no name of its own, or no host binary to wrap.
+ * Both are reported on `stdout`, and the host is launched unbundled.
+ */
+async function resolveDevExecutable(
+  cwd: string,
+  hostBin: string | undefined,
+  stdout: NodeJS.WritableStream,
+): Promise<string | undefined> {
+  if (process.platform !== "darwin") return undefined;
+
+  try {
+    const metadata = await resolveAppConfig(cwd);
+    const app = await writeMacosApp({
+      appPath: path.join(cwd, "node_modules/.inca", `${metadata.productName}.app`),
+      metadata,
+      hostBin: hostBin ?? resolveHostBin(),
+      link: true,
+    });
+    return app.executablePath;
+  } catch (error) {
+    log(stdout, `running unbundled — ${toFault(error).message}`, STAMPED);
+    return undefined;
+  }
+}
 
 /**
  * Deletes every file directly under `outDir` that `keep` doesn't name —
@@ -76,6 +111,7 @@ export async function dev(options: DevOptions): Promise<void> {
   const stderr = options.stderr ?? process.stderr;
 
   const entry = options.entry ?? config.entry ?? (await resolveEntry(cwd));
+  const hostBin = (await resolveDevExecutable(cwd, options.hostBin, stdout)) ?? options.hostBin;
 
   let client: HostClient | undefined;
   let ready = false;
@@ -103,7 +139,7 @@ export async function dev(options: DevOptions): Promise<void> {
     if (!client) {
       const next = new HostClient({
         entryFile: output.entryFile,
-        hostBin: options.hostBin,
+        hostBin,
         onStderr: (line) => stderr.write(line),
         onReady: () => {
           ready = true;
