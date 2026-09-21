@@ -7,7 +7,7 @@ import path from "node:path";
 
 import { build } from "./build.mts";
 import { slugify } from "./config/defaults.mts";
-import { resolveAppConfig } from "./config/loader.mts";
+import { resolveAppConfig, runtimeConfigOf } from "./config/loader.mts";
 import { resolveHostBin } from "./dev-client/index.mts";
 import { IncaError } from "./error.mts";
 import { log } from "./log.mts";
@@ -152,6 +152,7 @@ export async function packageApp(options: PackageAppOptions = {}): Promise<Packa
     cwd,
     entry: options.entry,
     config: metadata,
+    runtimeConfig: runtimeConfigOf(metadata),
     bundler: options.bundler,
     stdout,
     stderr: options.stderr,

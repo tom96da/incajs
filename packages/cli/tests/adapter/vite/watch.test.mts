@@ -1,7 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
 
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
@@ -86,6 +87,46 @@ describe("watch", () => {
     expect(output.changed?.file).toBe(vuePath);
     const bundle = await readFile(output.entryFile, "utf8");
     expect(bundle).toContain("second");
+  }, 20000);
+
+  it("rewrites the app's config on every rebuild", async () => {
+    const { entry, outDir, vuePath, streams } = await makeApp(
+      `<script setup>\nconst msg = "first";\n</script>\n<template><div>{{ msg }}</div></template>\n`,
+    );
+
+    let resolveBuild!: (output: BuildOutput) => void;
+    let nextBuild = new Promise<BuildOutput>((resolve) => {
+      resolveBuild = resolve;
+    });
+
+    const watcher = await watch({
+      entry,
+      outDir,
+      mode: "development",
+      runtimeConfig: { name: "Demo" },
+      ...streams,
+      onBuild: (output) => resolveBuild(output),
+      onError: (error) => {
+        throw new Error(error.message);
+      },
+    });
+    watchers.push(watcher);
+
+    expect((await nextBuild).files).toContain("inca.json");
+    nextBuild = new Promise((resolve) => {
+      resolveBuild = resolve;
+    });
+
+    await rm(path.join(outDir, "inca.json"));
+    await writeFile(
+      vuePath,
+      `<script setup>\nconst msg = "second";\n</script>\n<template><div>{{ msg }}</div></template>\n`,
+    );
+
+    expect((await nextBuild).files).toContain("inca.json");
+    expect(JSON.parse(await readFile(path.join(outDir, "inca.json"), "utf8"))).toEqual({
+      name: "Demo",
+    });
   }, 20000);
 
   it("reports a syntax error without throwing", async () => {

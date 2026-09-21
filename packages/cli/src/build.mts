@@ -1,11 +1,11 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { resolveBuildConfig } from "./config/loader.mts";
+import { resolveBuildConfig, resolveRuntimeConfig } from "./config/loader.mts";
 import { defaultBundler } from "./defaultBundler.mts";
 import { resolveEntry } from "./entry.mts";
 import type { Bundler, BuildOutput } from "./adapter/types.mts";
-import type { ResolvedBuildConfig } from "./config/loader.mts";
+import type { ResolvedBuildConfig, RuntimeConfig } from "./config/loader.mts";
 
 export interface BuildAppOptions {
   /** The app's root directory. Defaults to `process.cwd()`. */
@@ -19,6 +19,8 @@ export interface BuildAppOptions {
   bundler?: Bundler;
   /** An already-resolved config — lets `packageApp` avoid loading it twice. */
   config?: ResolvedBuildConfig;
+  /** What the build carries for `inca-host` to read. Resolved from the app's config when absent. */
+  runtimeConfig?: RuntimeConfig;
   /** Where the bundler's own output goes. Defaults to `process.stdout`. */
   stdout?: NodeJS.WritableStream;
   /** Where the bundler's warnings and errors go. Defaults to `process.stderr`. */
@@ -37,6 +39,13 @@ export async function build(options: BuildAppOptions = {}): Promise<BuildOutput>
   const bundler: Bundler = options.bundler ?? defaultBundler;
 
   const entry = options.entry ?? config.entry ?? (await resolveEntry(cwd));
+  const runtimeConfig = options.runtimeConfig ?? (await resolveRuntimeConfig(cwd));
 
-  return bundler.build({ entry, outDir, stdout: options.stdout, stderr: options.stderr });
+  return bundler.build({
+    entry,
+    outDir,
+    runtimeConfig,
+    stdout: options.stdout,
+    stderr: options.stderr,
+  });
 }

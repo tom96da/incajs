@@ -35,4 +35,27 @@ export interface IncaConfig {
    * @default "dist"
    */
   outDir?: string;
+  /** The window the app opens in. */
+  window?: WindowConfig;
+}
+
+/** What an app declares about its window — see {@link IncaConfig.window}. */
+export interface WindowConfig {
+  /**
+   * Initial width, in pixels. Falls back to the width the app's root
+   * element declares, then to this default.
+   * @default 800
+   */
+  width?: number;
+  /**
+   * Initial height, in pixels. Falls back to the height the app's root
+   * element declares, then to this default.
+   * @default 600
+   */
+  height?: number;
+  /**
+   * The window's title.
+   * @default the app's productName
+   */
+  title?: string;
 }

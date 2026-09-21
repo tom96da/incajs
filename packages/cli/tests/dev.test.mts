@@ -437,7 +437,7 @@ describe("dev on macOS", () => {
     expect(stdout.text()).toContain("running unbundled");
   });
 
-  it("runs unbundled and says so when the app names itself nowhere", async () => {
+  it("runs unnamed and says so when the app names itself nowhere", async () => {
     pretendMacos();
     const cwd = await scratch.makeApp({});
     const bundler = makeFakeBundler();
@@ -461,7 +461,7 @@ describe("dev on macOS", () => {
     controller.abort();
     await running;
 
-    expect(stdout.text()).toContain("running unbundled");
+    expect(stdout.text()).toContain("running unnamed");
     const scratchFiles = await readdir(path.join(cwd, "node_modules/.inca"));
     expect(scratchFiles.filter((name) => name.endsWith(".app"))).toEqual([]);
   });

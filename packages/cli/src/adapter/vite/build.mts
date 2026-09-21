@@ -19,6 +19,7 @@ export type { BuildOptions, BuildOutput } from "../types.mts";
 export async function build({
   entry,
   outDir,
+  runtimeConfig,
   stdout = process.stdout,
   stderr = process.stderr,
   quiet = false,
@@ -28,6 +29,7 @@ export async function build({
     resolveViteConfig({
       entry,
       outDir,
+      runtimeConfig,
       mode: "production",
       watch: false,
       stdout,

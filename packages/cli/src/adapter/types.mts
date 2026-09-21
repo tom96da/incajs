@@ -13,6 +13,11 @@ export interface BundlerOptions {
   entry: string;
   /** Where the build's output is written. */
   outDir: string;
+  /**
+   * Values the built app carries for `inca-host` to read — its name, id
+   * and window. Any JSON-serializable object.
+   */
+  runtimeConfig?: unknown;
   /** `"development"` keeps a framework's own warnings; `"production"` strips them. */
   mode: "development" | "production";
   /** Called after each successful (re)build, with what it wrote. */
@@ -37,6 +42,11 @@ export interface BuildOptions {
   entry: string;
   /** Where the build's output is written. */
   outDir: string;
+  /**
+   * Values the built app carries for `inca-host` to read — its name, id
+   * and window. Any JSON-serializable object.
+   */
+  runtimeConfig?: unknown;
   /** Where the bundler's own output goes. Defaults to `process.stdout`. */
   stdout?: NodeJS.WritableStream;
   /** Where the bundler's warnings and errors go. Defaults to `process.stderr`. */

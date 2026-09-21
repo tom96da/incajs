@@ -9,13 +9,27 @@ import { loadConfig } from "c12";
 
 import { IncaError } from "../error.mts";
 import { defaultConfig, defaultIdentifier, defaultProductName } from "./defaults.mts";
-import type { IncaConfig } from "./types.mts";
+import type { IncaConfig, WindowConfig } from "./types.mts";
 
-/** The parts of an app's `package.json` this loader reads directly, rather than through c12. */
+/** The parts of an app's `package.json` this loader reads itself. */
 interface AppPackageJson {
   name?: string;
   version?: string;
 }
+
+/**
+ * What a config load looks at: an `inca.config.*` beside the app, and
+ * `package.json`'s deprecated `"inca"` key. Nothing else — no rc file, no
+ * global config, no remote template.
+ */
+const CONFIG_LOOKUP = {
+  name: "inca",
+  packageJson: "inca",
+  rcFile: false,
+  globalRc: false,
+  giget: false,
+  extend: false,
+} as const;
 
 /** `entry`/`outDir` only — what `build()`/`dev()` need, with no `package.json` requirement. */
 export interface ResolvedBuildConfig {
@@ -34,8 +48,30 @@ export interface ResolvedAppConfig extends ResolvedBuildConfig {
   version: string;
   /** Absolute path, if the app declared one. */
   icon?: string;
+  /** What the app declared about its window, if anything. */
+  window?: WindowConfig;
   /** package.json's `"inca"` key is deprecated; callers warn when this is true. */
   usedPackageJsonKey: boolean;
+}
+
+/**
+ * What a built app carries for its host to read: the name the platform
+ * shows it under, the id it is known by, and its window. Each field is
+ * absent unless the app's config sets it.
+ */
+export interface RuntimeConfig {
+  name?: string;
+  identifier?: string;
+  window?: WindowConfig;
+}
+
+/** Loads `inca.config.ts`, and reports whether `package.json`'s `"inca"` key supplied anything. */
+async function loadIncaConfig(
+  cwd: string,
+): Promise<{ config: IncaConfig; usedPackageJsonKey: boolean }> {
+  const { config, layers } = await loadConfig<IncaConfig>({ cwd, ...CONFIG_LOOKUP });
+  const pkgJsonLayer = layers?.find((layer) => layer.configFile === "package.json");
+  return { config, usedPackageJsonKey: Object.keys(pkgJsonLayer?.config ?? {}).length > 0 };
 }
 
 /**
@@ -46,15 +82,7 @@ export interface ResolvedAppConfig extends ResolvedBuildConfig {
  * @returns `entry`/`outDir`, resolved to absolute paths
  */
 export async function resolveBuildConfig(cwd: string): Promise<ResolvedBuildConfig> {
-  const { config } = await loadConfig<IncaConfig>({
-    cwd,
-    name: "inca",
-    packageJson: "inca",
-    rcFile: false,
-    globalRc: false,
-    giget: false,
-    extend: false,
-  });
+  const { config } = await loadIncaConfig(cwd);
 
   return {
     entry: config.entry ? path.resolve(cwd, config.entry) : undefined,
@@ -81,18 +109,7 @@ export async function resolveAppConfig(cwd: string): Promise<ResolvedAppConfig> 
   }
   const pkg = JSON.parse(raw) as AppPackageJson;
 
-  const { config, layers } = await loadConfig<IncaConfig>({
-    cwd,
-    name: "inca",
-    packageJson: "inca",
-    rcFile: false,
-    globalRc: false,
-    giget: false,
-    extend: false,
-  });
-
-  const pkgJsonLayer = layers?.find((layer) => layer.configFile === "package.json");
-  const usedPackageJsonKey = Object.keys(pkgJsonLayer?.config ?? {}).length > 0;
+  const { config, usedPackageJsonKey } = await loadIncaConfig(cwd);
 
   const productName = config.productName ?? defaultProductName(pkg.name);
   if (!productName) {
@@ -125,8 +142,49 @@ export async function resolveAppConfig(cwd: string): Promise<ResolvedAppConfig> 
     identifierIsDefault: config.identifier === undefined,
     version,
     icon,
+    window: config.window,
     entry,
     outDir,
     usedPackageJsonKey,
   };
+}
+
+/**
+ * Narrows a full config down to what a build carries for the host.
+ *
+ * @param config - a config {@link resolveAppConfig} returned
+ * @returns its name, id and window
+ */
+export function runtimeConfigOf(config: ResolvedAppConfig): RuntimeConfig {
+  return {
+    name: config.productName,
+    identifier: config.identifier,
+    window: config.window,
+  };
+}
+
+/**
+ * Loads {@link RuntimeConfig} for an app that may name itself nowhere.
+ * An app with no `package.json`, or none that gives it a name, still gets
+ * whatever window settings it declared.
+ *
+ * @param cwd - the app's root directory
+ * @returns the config, or `undefined` when the app declares none of it
+ */
+export async function resolveRuntimeConfig(cwd: string): Promise<RuntimeConfig | undefined> {
+  const { config } = await loadIncaConfig(cwd);
+
+  let pkg: AppPackageJson = {};
+  try {
+    pkg = JSON.parse(await readFile(path.join(cwd, "package.json"), "utf8")) as AppPackageJson;
+  } catch {
+    // An app without a readable package.json names itself only through
+    // inca.config.ts, if at all.
+  }
+
+  const name = config.productName ?? defaultProductName(pkg.name);
+  const identifier = config.identifier ?? (name ? defaultIdentifier(name) : undefined);
+  const runtime: RuntimeConfig = { name, identifier, window: config.window };
+
+  return Object.values(runtime).some((value) => value !== undefined) ? runtime : undefined;
 }

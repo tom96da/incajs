@@ -7,6 +7,7 @@ import vue from "@vitejs/plugin-vue";
 import type { InlineConfig } from "vite";
 
 import { captureOutput } from "./captureOutput.mts";
+import { emitConfig } from "./emitConfig.mts";
 import { streamLogger } from "./logger.mts";
 import { rejectUnsupported } from "./unsupported.mts";
 import type { CapturedOutput } from "./captureOutput.mts";
@@ -30,6 +31,8 @@ export interface ResolveConfigOptions {
   stderr: NodeJS.WritableStream;
   /** Silences the bundler's progress output — see the `quiet` option in `../types.mts`. */
   quiet: boolean;
+  /** Written beside the entry — see the `runtimeConfig` option in `../types.mts`. */
+  runtimeConfig?: unknown;
 }
 
 /**
@@ -51,6 +54,7 @@ export function resolveViteConfig({
   stdout,
   stderr,
   quiet,
+  runtimeConfig,
 }: ResolveConfigOptions): InlineConfig {
   return {
     configFile: false,
@@ -71,6 +75,7 @@ export function resolveViteConfig({
         },
       }),
       rejectUnsupported(),
+      emitConfig(runtimeConfig),
       captureOutput(onOutput),
     ],
     build: {

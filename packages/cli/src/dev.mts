@@ -5,7 +5,12 @@ import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { styleText } from "node:util";
 
-import { resolveAppConfig, resolveBuildConfig } from "./config/loader.mts";
+import {
+  resolveAppConfig,
+  resolveBuildConfig,
+  resolveRuntimeConfig,
+  runtimeConfigOf,
+} from "./config/loader.mts";
 import { defaultBundler } from "./defaultBundler.mts";
 import { HostClient, resolveHostBin } from "./dev-client/index.mts";
 import { acquireDevLock } from "./dev-lock.mts";
@@ -13,6 +18,7 @@ import { resolveEntry } from "./entry.mts";
 import { log, printFault, toFault } from "./log.mts";
 import { writeMacosApp } from "./macos-app.mts";
 import type { Bundler, BuildOutput } from "./adapter/types.mts";
+import type { ResolvedAppConfig } from "./config/loader.mts";
 
 export interface DevOptions {
   /** The app's root directory. Defaults to `process.cwd()`. */
@@ -41,23 +47,40 @@ export interface DevOptions {
 const STAMPED = { timestamp: true } as const;
 
 /**
- * The executable to launch on macOS so the running app carries the name,
- * icon and identifier its config declares: one inside a `.app` bundle
- * under `node_modules/.inca`, holding the host binary and an `Info.plist`.
+ * The app's full config, or `undefined` when it names itself nowhere,
+ * which is reported on `stdout`.
+ */
+async function resolveMetadata(
+  cwd: string,
+  stdout: NodeJS.WritableStream,
+): Promise<ResolvedAppConfig | undefined> {
+  try {
+    return await resolveAppConfig(cwd);
+  } catch (error) {
+    log(stdout, `running unnamed — ${toFault(error).message}`, STAMPED);
+    return undefined;
+  }
+}
+
+/**
+ * The executable to launch on macOS so the running app carries the name and
+ * icon `metadata` declares: one inside a `.app` bundle under
+ * `node_modules/.inca`, holding the host binary and an `Info.plist`. macOS
+ * names the Dock tile and the Finder entry after the bundle a process
+ * launched from.
  *
  * `undefined` on every other platform, and whenever the bundle can't be
- * assembled — an app with no name of its own, or no host binary to wrap.
- * Both are reported on `stdout`, and the host is launched unbundled.
+ * assembled — reported on `stdout`, and the host is launched unbundled.
  */
-async function resolveDevExecutable(
+async function bundleExecutable(
   cwd: string,
+  metadata: ResolvedAppConfig | undefined,
   hostBin: string | undefined,
   stdout: NodeJS.WritableStream,
 ): Promise<string | undefined> {
-  if (process.platform !== "darwin") return undefined;
+  if (process.platform !== "darwin" || !metadata) return undefined;
 
   try {
-    const metadata = await resolveAppConfig(cwd);
     const app = await writeMacosApp({
       appPath: path.join(cwd, "node_modules/.inca", `${metadata.productName}.app`),
       metadata,
@@ -111,7 +134,10 @@ export async function dev(options: DevOptions): Promise<void> {
   const stderr = options.stderr ?? process.stderr;
 
   const entry = options.entry ?? config.entry ?? (await resolveEntry(cwd));
-  const hostBin = (await resolveDevExecutable(cwd, options.hostBin, stdout)) ?? options.hostBin;
+  const metadata = await resolveMetadata(cwd, stdout);
+  const runtimeConfig = metadata ? runtimeConfigOf(metadata) : await resolveRuntimeConfig(cwd);
+  const hostBin =
+    (await bundleExecutable(cwd, metadata, options.hostBin, stdout)) ?? options.hostBin;
 
   let client: HostClient | undefined;
   let ready = false;
@@ -185,6 +211,7 @@ export async function dev(options: DevOptions): Promise<void> {
   const watcher = await bundler.watch({
     entry,
     outDir,
+    runtimeConfig,
     mode: "development",
     stdout,
     stderr,

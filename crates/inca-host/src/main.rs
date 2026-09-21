@@ -16,6 +16,7 @@
 //!
 //! Nothing here panics on a failure a user can cause.
 
+mod config;
 mod protocol;
 
 use std::cell::{Cell, RefCell};
@@ -28,8 +29,8 @@ use std::rc::Rc;
 use std::thread;
 
 use gpui::{
-    App, Bounds, Context, Window, WindowBounds, WindowHandle, WindowOptions, div, prelude::*, px,
-    size,
+    App, Bounds, Context, SharedString, TitlebarOptions, Window, WindowBounds, WindowHandle,
+    WindowOptions, div, prelude::*, px, size,
 };
 use gpui_platform::application;
 
@@ -42,19 +43,20 @@ use inca_jsenv::{Engine, EngineError, console};
 
 use crate::protocol::{ErrorCode, Incoming, Method, Outgoing};
 
-/// Window size to fall back to when the mounted app's root element doesn't
-/// declare an explicit `width`/`height` style (e.g. a fully fluid layout).
+/// Window size to fall back to when neither the app's config nor its root
+/// element gives one.
 const DEFAULT_WINDOW_SIZE: (f32, f32) = (800.0, 600.0);
 
 /// Reads the window size straight from the app the bundle mounted, so the
-/// window fits its content instead of leaving a black margin around a
-/// smaller (or clipping a larger) fixed-size app.
+/// window fits its content.
 ///
 /// `root` is the empty container the [`Host`] allocates for the bundle to
 /// `mount()` against — the mounted app becomes `root`'s first (and only)
 /// child, never `root` itself, so `width`/`height` are read from that
 /// child's style, not `root`'s.
-fn content_window_size(host: &Host, root: NodeId) -> (f32, f32) {
+///
+/// A dimension the app's root doesn't declare comes back as `None`.
+fn content_window_size(host: &Host, root: NodeId) -> (Option<f32>, Option<f32>) {
     let style = host
         .tree
         .get(root)
@@ -74,9 +76,23 @@ fn content_window_size(host: &Host, root: NodeId) -> (f32, f32) {
             })
     };
 
+    (dimension("width"), dimension("height"))
+}
+
+/// The size to open the window at: what the app's config asks for, then
+/// what its root element declares, then [`DEFAULT_WINDOW_SIZE`].
+fn window_size(
+    window: Option<&config::WindowConfig>,
+    content: (Option<f32>, Option<f32>),
+) -> (f32, f32) {
+    let configured = |pick: fn(&config::WindowConfig) -> Option<f32>| window.and_then(pick);
     (
-        dimension("width").unwrap_or(DEFAULT_WINDOW_SIZE.0),
-        dimension("height").unwrap_or(DEFAULT_WINDOW_SIZE.1),
+        configured(|w| w.width)
+            .or(content.0)
+            .unwrap_or(DEFAULT_WINDOW_SIZE.0),
+        configured(|w| w.height)
+            .or(content.1)
+            .unwrap_or(DEFAULT_WINDOW_SIZE.1),
     )
 }
 
@@ -325,7 +341,8 @@ fn serve_dev_protocol(
     .detach();
 }
 
-/// Brings up the engine, the tree and the window.
+/// Brings up the engine, the tree and the window, under the config the
+/// app's build wrote beside its entry.
 ///
 /// # Errors
 ///
@@ -337,13 +354,31 @@ fn start(
     reporter: ErrorReporter,
 ) -> Result<WindowHandle<HostedApp>, Failure> {
     let session = Session::load(entry_path, source, reporter).map_err(Failure::Thrown)?;
-    let (width, height) = content_window_size(&session.host.borrow(), session.root);
+    let app_config = config::read(Path::new(entry_path));
+
+    if let (Some(name), Some(identifier)) = (&app_config.name, &app_config.identifier) {
+        // Before any window opens, per `App::set_app_identity`.
+        cx.set_app_identity(identifier, name);
+    }
+
+    let content = content_window_size(&session.host.borrow(), session.root);
+    let (width, height) = window_size(app_config.window.as_ref(), content);
+    let title = app_config
+        .window
+        .as_ref()
+        .and_then(|window| window.title.clone())
+        .or_else(|| app_config.name.clone());
 
     let bounds = Bounds::centered(None, size(px(width), px(height)), cx);
     let window = cx
         .open_window(
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
+                titlebar: Some(TitlebarOptions {
+                    title: title.map(SharedString::from),
+                    ..Default::default()
+                }),
+                app_id: app_config.identifier.clone(),
                 ..Default::default()
             },
             |_, cx| cx.new(|_| HostedApp { session }),
@@ -649,24 +684,57 @@ mod tests {
         host.tree.set_style(content, "height", 150.0).unwrap();
         host.tree.append_child(root, content).unwrap();
 
-        assert_eq!(content_window_size(&host, root), (300.0, 150.0));
+        assert_eq!(content_window_size(&host, root), (Some(300.0), Some(150.0)));
     }
 
     #[test]
-    fn content_window_size_falls_back_when_unset() {
+    fn content_window_size_is_none_when_unset() {
         let mut host = Host::default();
         let root = host.root;
         let content = host.tree.create_node("div");
         host.tree.append_child(root, content).unwrap();
 
-        assert_eq!(content_window_size(&host, root), DEFAULT_WINDOW_SIZE);
+        assert_eq!(content_window_size(&host, root), (None, None));
     }
 
     #[test]
-    fn content_window_size_falls_back_when_nothing_mounted() {
+    fn content_window_size_is_none_when_nothing_mounted() {
         let host = Host::default();
 
-        assert_eq!(content_window_size(&host, host.root), DEFAULT_WINDOW_SIZE);
+        assert_eq!(content_window_size(&host, host.root), (None, None));
+    }
+
+    #[test]
+    fn window_size_prefers_the_config_over_the_mounted_content() {
+        let configured = config::WindowConfig {
+            width: Some(1024.0),
+            height: Some(768.0),
+            title: None,
+        };
+
+        assert_eq!(
+            window_size(Some(&configured), (Some(300.0), Some(150.0))),
+            (1024.0, 768.0)
+        );
+    }
+
+    #[test]
+    fn window_size_falls_through_each_source_per_dimension() {
+        let width_only = config::WindowConfig {
+            width: Some(1024.0),
+            height: None,
+            title: None,
+        };
+
+        assert_eq!(
+            window_size(Some(&width_only), (Some(300.0), Some(150.0))),
+            (1024.0, 150.0)
+        );
+        assert_eq!(
+            window_size(Some(&width_only), (None, None)),
+            (1024.0, DEFAULT_WINDOW_SIZE.1)
+        );
+        assert_eq!(window_size(None, (None, None)), DEFAULT_WINDOW_SIZE);
     }
 
     /// A directory under the OS temp root, unique per test invocation, torn
