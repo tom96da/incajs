@@ -58,4 +58,19 @@ export interface WindowConfig {
    * @default the app's productName
    */
   title?: string;
+  /**
+   * Whether a user can resize the window.
+   * @default false
+   */
+  resizable?: boolean;
+  /**
+   * Smallest width a user can resize the window to, in pixels. Ignored
+   * unless `resizable` is `true`.
+   */
+  minWidth?: number;
+  /**
+   * Smallest height a user can resize the window to, in pixels. Ignored
+   * unless `resizable` is `true`.
+   */
+  minHeight?: number;
 }

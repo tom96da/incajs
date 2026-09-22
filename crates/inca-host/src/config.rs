@@ -17,7 +17,7 @@ const CONFIG_FILE_NAME: &str = "inca.json";
 #[derive(Debug, Default, PartialEq, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct AppConfig {
-    /// Shown wherever the operating system presents the app to a person.
+    /// Shown wherever the operating system presents the app to a user.
     pub name: Option<String>,
     /// A reverse-DNS id: Wayland's `app_id`, X11's `WM_CLASS`, and on
     /// Windows the `AppUserModelID`.
@@ -36,6 +36,12 @@ pub struct WindowConfig {
     pub height: Option<f32>,
     /// The window's title.
     pub title: Option<String>,
+    /// Whether a user can resize the window.
+    pub resizable: Option<bool>,
+    /// Smallest width a user can resize the window to, in pixels.
+    pub min_width: Option<f32>,
+    /// Smallest height a user can resize the window to, in pixels.
+    pub min_height: Option<f32>,
 }
 
 /// Reads the config beside `entry_path`, the app's entry file.
@@ -110,7 +116,8 @@ mod tests {
             "full",
             Some(
                 r#"{"name":"Demo","identifier":"org.inca.demo",
-                    "window":{"width":1024,"height":768,"title":"Demo Window"}}"#,
+                    "window":{"width":1024,"height":768,"title":"Demo Window",
+                              "resizable":true,"minWidth":320,"minHeight":240}}"#,
             ),
         );
 
@@ -122,6 +129,9 @@ mod tests {
         assert_eq!(window.width, Some(1024.0));
         assert_eq!(window.height, Some(768.0));
         assert_eq!(window.title.as_deref(), Some("Demo Window"));
+        assert_eq!(window.resizable, Some(true));
+        assert_eq!(window.min_width, Some(320.0));
+        assert_eq!(window.min_height, Some(240.0));
     }
 
     #[test]
@@ -136,6 +146,9 @@ mod tests {
         assert_eq!(window.width, Some(320.0));
         assert_eq!(window.height, None);
         assert_eq!(window.title, None);
+        assert_eq!(window.resizable, None);
+        assert_eq!(window.min_width, None);
+        assert_eq!(window.min_height, None);
     }
 
     #[test]

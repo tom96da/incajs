@@ -30,8 +30,8 @@ use std::rc::Rc;
 use std::thread;
 
 use gpui::{
-    App, Bounds, Context, SharedString, TitlebarOptions, Window, WindowBounds, WindowHandle,
-    WindowOptions, div, prelude::*, px, size,
+    App, Bounds, Context, Pixels, SharedString, Size, TitlebarOptions, Window, WindowBounds,
+    WindowHandle, WindowOptions, div, prelude::*, px, size,
 };
 use gpui_platform::application;
 
@@ -81,6 +81,20 @@ fn content_window_size(host: &Host, root: NodeId) -> (Option<f32>, Option<f32>) 
     };
 
     (dimension("width"), dimension("height"))
+}
+
+/// The smallest size a user can resize the window to, where the app's
+/// config gives one. A dimension it leaves out is unconstrained.
+fn window_min_size(window: Option<&config::WindowConfig>) -> Option<Size<Pixels>> {
+    let min_width = window.and_then(|w| w.min_width);
+    let min_height = window.and_then(|w| w.min_height);
+    if min_width.is_none() && min_height.is_none() {
+        return None;
+    }
+    Some(size(
+        px(min_width.unwrap_or(0.0)),
+        px(min_height.unwrap_or(0.0)),
+    ))
 }
 
 /// The size to open the window at: what the app's config asks for, then
@@ -366,11 +380,10 @@ fn start(
     }
     menu::install(cx, app_config.name.as_deref().unwrap_or(DEFAULT_APP_NAME));
 
+    let window_config = app_config.window.as_ref();
     let content = content_window_size(&session.host.borrow(), session.root);
-    let (width, height) = window_size(app_config.window.as_ref(), content);
-    let title = app_config
-        .window
-        .as_ref()
+    let (width, height) = window_size(window_config, content);
+    let title = window_config
         .and_then(|window| window.title.clone())
         .or_else(|| app_config.name.clone());
 
@@ -384,6 +397,8 @@ fn start(
                     ..Default::default()
                 }),
                 app_id: app_config.identifier.clone(),
+                is_resizable: window_config.and_then(|w| w.resizable).unwrap_or(false),
+                window_min_size: window_min_size(window_config),
                 ..Default::default()
             },
             |_, cx| cx.new(|_| HostedApp { session }),
@@ -710,11 +725,33 @@ mod tests {
     }
 
     #[test]
+    fn window_min_size_is_absent_until_the_config_asks_for_one() {
+        assert_eq!(window_min_size(None), None);
+        assert_eq!(
+            window_min_size(Some(&config::WindowConfig::default())),
+            None
+        );
+    }
+
+    #[test]
+    fn window_min_size_leaves_a_dimension_the_config_omits_unconstrained() {
+        let width_only = config::WindowConfig {
+            min_width: Some(320.0),
+            ..config::WindowConfig::default()
+        };
+
+        assert_eq!(
+            window_min_size(Some(&width_only)),
+            Some(size(px(320.0), px(0.0)))
+        );
+    }
+
+    #[test]
     fn window_size_prefers_the_config_over_the_mounted_content() {
         let configured = config::WindowConfig {
             width: Some(1024.0),
             height: Some(768.0),
-            title: None,
+            ..config::WindowConfig::default()
         };
 
         assert_eq!(
@@ -727,8 +764,7 @@ mod tests {
     fn window_size_falls_through_each_source_per_dimension() {
         let width_only = config::WindowConfig {
             width: Some(1024.0),
-            height: None,
-            title: None,
+            ..config::WindowConfig::default()
         };
 
         assert_eq!(
