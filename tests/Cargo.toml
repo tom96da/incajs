@@ -1,0 +1,27 @@
+#:schema https://json.schemastore.org/cargo.json
+
+# Copyright (c) 2026 tom96da
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "inca-tests"
+description = "Tests that span Rust and TypeScript."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish = false
+
+[dev-dependencies]
+inca-bridge = { path = "../crates/inca-bridge" }
+inca-gpui = { path = "../crates/inca-gpui" }
+inca-host = { path = "../crates/inca-host" }
+inca-jsenv = { path = "../crates/inca-jsenv" }
+rquickjs.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

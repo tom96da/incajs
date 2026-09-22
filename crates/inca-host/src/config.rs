@@ -7,14 +7,14 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// The file an app's build writes its config to, beside the entry.
 const CONFIG_FILE_NAME: &str = "inca.json";
 
 /// What an app declares about itself. Each field is absent unless the app's
 /// config sets it.
-#[derive(Debug, Default, PartialEq, Deserialize)]
+#[derive(Debug, Default, PartialEq, Deserialize, Serialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct AppConfig {
     /// Shown wherever the operating system presents the app to a user.
@@ -27,7 +27,7 @@ pub struct AppConfig {
 }
 
 /// What an app declares about its window.
-#[derive(Debug, Default, PartialEq, Deserialize)]
+#[derive(Debug, Default, PartialEq, Deserialize, Serialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct WindowConfig {
     /// Initial width, in pixels.

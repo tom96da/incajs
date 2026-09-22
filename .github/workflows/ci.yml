@@ -52,11 +52,10 @@ jobs:
           filters: |
             rust:
               - 'crates/**'
+              - 'tests/**'
               - 'Cargo.toml'
               - 'Cargo.lock'
               - 'rust-toolchain.toml'
-              # cargo test evaluates this package's build output
-              - 'packages/core/**'
               - '.github/workflows/ci.yml'
             js:
               - 'packages/**'
@@ -239,6 +238,84 @@ jobs:
         run: rustup component add clippy rustfmt
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: workspace
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Check
+        run: cargo check --workspace --all-targets --exclude inca-tests
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --exclude inca-tests -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace --exclude inca-tests
+
+  rust-macos:
+    name: "Rust: macos-latest"
+    needs: changed
+    if: needs.changed.outputs.rust == 'true'
+    timeout-minutes: 30
+    runs-on: macos-latest
+    steps: *rust_steps
+
+  # The tests that need a crate and a package at once, kept out of both so
+  # neither depends on the other. Linux only: nothing here is
+  # platform-specific.
+  rust-node:
+    name: "Rust & Node: ubuntu:22.04"
+    needs: changed
+    if: needs.changed.outputs.rust == 'true' || needs.changed.outputs.js == 'true'
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    container: ubuntu:22.04
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # Ahead of the checkout: a bare image lacks git, curl and a compiler.
+      - name: Install gpui's native build dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates \
+            curl \
+            git \
+            xz-utils \
+            build-essential \
+            cmake \
+            clang \
+            lld \
+            llvm \
+            pkg-config \
+            libfontconfig-dev \
+            libwayland-dev \
+            libx11-xcb-dev \
+            libxkbcommon-x11-dev \
+            libssl-dev
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # The runner's own toolchain lives outside the container.
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --no-modify-path --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Install clippy
+        run: rustup component add clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: workspace
 
       - name: Install pnpm
         uses: pnpm/action-setup@v6
@@ -252,35 +329,32 @@ jobs:
       - name: Install deps
         run: pnpm ci
 
-      # tests/js_core_integration.rs reads this package's dist/ off disk.
+      # js_core_integration.rs reads this package's dist/ off disk.
       - name: Build the incajs package
         run: pnpm --filter incajs build
 
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-
-      - name: Check
-        run: cargo check --workspace --all-targets
-
       - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy -p inca-tests --all-targets -- -D warnings
 
       - name: Test
-        run: cargo test --workspace
-
-  rust-macos:
-    name: "Rust: macos-latest"
-    needs: changed
-    if: needs.changed.outputs.rust == 'true'
-    timeout-minutes: 30
-    runs-on: macos-latest
-    steps: *rust_steps
+        run: cargo test -p inca-tests
 
   # One status check whose name survives changes to the jobs above.
   passed:
     name: CI Passed
     if: always()
-    needs: [changed, build, lint, test-node-22, test-node-24, test-node-26, rust-ubuntu, rust-macos]
+    needs:
+      [
+        changed,
+        build,
+        lint,
+        test-node-22,
+        test-node-24,
+        test-node-26,
+        rust-ubuntu,
+        rust-macos,
+        rust-node,
+      ]
     runs-on: ubuntu-latest
     steps:
       - name: Check job results

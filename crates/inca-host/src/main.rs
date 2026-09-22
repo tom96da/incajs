@@ -16,7 +16,6 @@
 //!
 //! Nothing here panics on a failure a user can cause.
 
-mod config;
 mod menu;
 mod protocol;
 
@@ -41,6 +40,8 @@ use inca_bridge::bindings::install;
 use inca_bridge::{ErrorReporter, EventDispatcher, Host, drain_jobs_and_refresh, stderr_reporter};
 use inca_gpui::{AttributeValue, NodeId, VirtualNode, render_tree_with_events};
 use inca_jsenv::{Engine, EngineError, console};
+
+use inca_host::config;
 
 use crate::protocol::{ErrorCode, Incoming, Method, Outgoing};
 

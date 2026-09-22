@@ -2849,6 +2849,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "inca-tests"
+version = "0.0.3"
+dependencies = [
+ "inca-bridge",
+ "inca-gpui",
+ "inca-host",
+ "inca-jsenv",
+ "rquickjs",
+ "serde_json",
+]
+
+[[package]]
 name = "indexmap"
 version = "2.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

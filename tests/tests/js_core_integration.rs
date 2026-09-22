@@ -25,7 +25,7 @@ use rquickjs::{Function, Module};
 
 const BUNDLE_PATH: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../packages/core/dist/index.js"
+    "/../packages/core/dist/index.js"
 );
 
 #[test]
