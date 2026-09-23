@@ -10,6 +10,24 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- `inca dev` runs the app under the `productName`, `icon` and `identifier` from `inca.config.ts` ([b78d43a](https://github.com/tom96da/incajs/commit/b78d43a))
+- `inca.config.ts` takes a `window` block: `width`, `height`, `title`, `resizable`, `minWidth` and `minHeight` ([c35e6ea](https://github.com/tom96da/incajs/commit/c35e6ea), [4b6978e](https://github.com/tom96da/incajs/commit/4b6978e))
+- every app gets an application menu with a `Quit` item, on `⌘Q` on macOS and `Ctrl+Q` on Linux ([7db49c8](https://github.com/tom96da/incajs/commit/7db49c8))
+
+### Changed
+
+- a window is not resizable unless `window.resizable` is `true` ([4b6978e](https://github.com/tom96da/incajs/commit/4b6978e))
+- the window's title bar carries `window.title`, or the app's `productName` ([c35e6ea](https://github.com/tom96da/incajs/commit/c35e6ea))
+- an app's `identifier` becomes its Wayland `app_id` and X11 `WM_CLASS` ([c35e6ea](https://github.com/tom96da/incajs/commit/c35e6ea))
+
+### Fixed
+
+- `inca package` no longer deletes the build output for an app whose name has no ASCII letters or digits ([be3a423](https://github.com/tom96da/incajs/commit/be3a423))
+- `inca dev` no longer reports itself as already running after a failed start ([be3a423](https://github.com/tom96da/incajs/commit/be3a423))
+- a `productName` that can't name a directory fails with `ERR_INCA_PRODUCT_NAME_INVALID` ([fb8fe0f](https://github.com/tom96da/incajs/commit/fb8fe0f))
+
 ## [0.0.3] - 2026-09-20
 
 ### Added
