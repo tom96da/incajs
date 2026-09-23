@@ -27,6 +27,7 @@ incajs/
 │   ├── BACKLOG.md           # unscheduled desktop-app gaps and QoL fixes, outside ROADMAP.md's phased plan
 │   ├── GIT.md               # commit message format and the commit-review policy
 │   ├── TESTING.md           # test placement and required checks, Rust + TypeScript
+│   ├── FAILURES.md          # what gets refused, what falls back, and where each is reported
 │   └── MANUAL_GUI_CHECK.md  # how to visually verify a GPUI window/example yourself
 ├── .devcontainer/
 │   ├── devcontainer.json    # builds from ./Dockerfile, adds the `node` and `claude-code` features
@@ -45,6 +46,7 @@ incajs/
 │   ├── inca-bridge/         # binds a QuickJS realm to the retained tree — the __inca_native__ bridge and event dispatch (Phase 1, done)
 │   ├── inca-jsenv/          # the host objects installed into the QuickJS realm — console today, more in Phase 6
 │   └── inca-host/           # the runtime binary: loads a bundle and opens the window (Phase 2 Unit iv, done; grows a dev mode in Phase 3.1)
+├── tests/                   # `inca-tests` — the tests that span Rust and TypeScript, kept out of both so neither depends on the other (see TESTING.md)
 ├── pnpm-workspace.yaml      # pnpm workspace member globs (packages/*, examples/*, npm/*, docs)
 ├── package.json             # root workspace manifest — lint/format/typecheck/test/build scripts
 ├── pnpm-lock.yaml

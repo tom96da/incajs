@@ -5,11 +5,12 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 # Dev protocol (host ↔ dev-client)
 
-The message surface between `inca-host` and the Node process that spawns
-it during development. `@incajs/cli`'s `dev-client` owns that end — it
-resolves and launches the host binary and speaks everything below, driven by
-the CLI's own commands. The counterpart to [FFI.md](./FFI.md), which covers
-the other boundary — JS calling into Rust inside the host's own process.
+What `inca-host` and the Node process that spawns it exchange during
+development: the messages below, and the config file a build leaves beside
+the entry. `@incajs/cli`'s `dev-client` owns that end — it resolves and
+launches the host binary and speaks everything below, driven by the CLI's
+own commands. The counterpart to [FFI.md](./FFI.md), which covers the other
+boundary — JS calling into Rust inside the host's own process.
 
 See [AGENTS.md](../AGENTS.md#status) for how much of this is built. Update
 this file whenever a message lands or changes, same as [FFI.md](./FFI.md).
@@ -25,6 +26,28 @@ inca-host --dev <path-to-bundle.js>
 Without `--dev` the host reads no stdin and writes no protocol messages —
 the one-shot behaviour its README describes.
 
+### The app's config
+
+Beside the entry, a build writes `inca.json`:
+
+```json
+{
+  "name": "Demo",
+  "identifier": "org.inca.demo",
+  "window": { "width": 1024, "height": 768, "title": "Demo" }
+}
+```
+
+Every member is optional, and a build that has none of them writes no file.
+`name` is what the platform calls the running app, `identifier` its
+reverse-DNS id, and `window` the size and title it opens at.
+
+The host reads it once, at startup, before opening the window, and reaches
+it the same way whether a client spawned it or a person double-clicked a
+packaged app. A file that is missing reads as the defaults in silence; one
+that cannot be read or parsed is named on the host's stderr, and reads as
+the defaults too.
+
 | Stream | Direction | Carries |
 | --- | --- | --- |
 | host stdin | client → host | protocol messages |
@@ -33,8 +56,7 @@ the one-shot behaviour its README describes.
 
 One JSON object per line, UTF-8, `\n`-terminated. **stdout is the protocol
 channel**: a stray `println!` corrupts it, so every diagnostic goes to
-stderr — the host's own logs and, verbatim, whatever the app writes through
-`console`.
+stderr instead.
 
 A client drains stdout for as long as the child lives. The host answers on
 the thread that runs the app, so a client that stops reading eventually
@@ -74,7 +96,7 @@ a line is a message.
 
 | `method` | Response | Meaning |
 | --- | --- | --- |
-| `reload` | `null` on success | Re-read the bundle at the path given on argv and evaluate it afresh. |
+| `reload` | `null` on success | Re-read the bundle at the path given on argv and evaluate it afresh. The config read at startup stands. |
 | `shutdown` | `null` | Exit 0. |
 
 ### From the host
@@ -84,29 +106,23 @@ a line is a message.
 | `ready` | notification | The window is open and the first bundle has been evaluated. `params.protocol` is this host's method-set revision. |
 | `appError` | notification | The running app raised something the host caught and recovered from. `params` carries the thrown value. |
 
-`params.protocol` versions the method set, not JSON-RPC itself. Phase 3.3
-publishes the client and the host binary separately, so the pair can be
-mismatched: a client compares this against the revision it was built for and,
-on any difference, reports it on its own stderr and terminates the child.
-Nothing negotiates — a difference means the installed pair is wrong. A
-client depends on an exact host build rather than a range, so a mismatch is
-a broken installation and this check is what says so out loud.
+`params.protocol` versions the method set, not JSON-RPC itself. The client
+and the host binary are published separately, so the pair can be mismatched.
+A client compares this against the revision it was built for and, on any
+difference, reports it on its own stderr and terminates the child. Nothing
+negotiates: a client depends on an exact host build, so a difference means a
+broken installation.
 
 `appError` is how a fault inside the running app reaches a human. An
-exception thrown by an event listener answers no request — nothing asked for
-it — and must not take the window down, so the host catches it, keeps
-rendering, and reports it here. Without a message of its own such a fault is
-invisible: it belongs to no `id`, and a client can't pick one out of a log
-stream.
+exception thrown by an event listener answers no request and must not take
+the window down, so the host catches it, keeps rendering, and reports it
+here. The app's own `console` output is not this message — that is a log
+stream, and goes to stderr.
 
 `params` is `{"message": string, "stack": string | null}`. `message` is the
 thrown value as text; `stack` is its call stack, and is `null` whenever there
 is none — JS can throw any value, and a thrown string or object carries no
-stack at all. Keeping them apart lets a client fold a long stack away instead
-of splitting one blob back up.
-
-The app's own `console` calls are not this message. Those are a log stream
-and go to stderr. `appError` is a fault.
+stack at all.
 
 `shutdown` needs no reply beyond its response: the child's exit is the real
 acknowledgement. The client kills the child if it hasn't exited by then, so
@@ -168,4 +184,4 @@ not something a further message can reach.
 
 A reload evaluates the new bundle into a fresh `Engine` and `Host`, and swaps
 the window over only once that succeeds. A broken edit therefore leaves the
-last working UI on screen instead of blanking the window.
+last working UI on screen.

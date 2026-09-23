@@ -31,14 +31,21 @@ loader so a build can emit more than one file) and 3.3 (`inca package`,
 per-platform `@incajs/host-*` packages published via `cd.yml`) are done.
 `darwin-x64` stays an unpublished placeholder — no free Intel macOS runner.
 
-3.4 (HMR) is in progress: only `inca.config.ts` is done — app metadata
-and build settings, `defineConfig` from `@incajs/cli/config`, deprecating
-`package.json`'s `"inca"` key. `inca dev` still reloads the whole bundle.
+3.4 (HMR) is in progress: only `inca.config.ts` is done — app metadata,
+build settings and the window, `defineConfig` from `@incajs/cli/config`,
+deprecating `package.json`'s `"inca"` key. `inca dev` still reloads the
+whole bundle.
 
-The CLI prints the bundler's own output beside its own. Every failure it
-raises is an `IncaError` with an `ERR_INCA_*` code — document a new one in
-`docs/reference/errors.md` in the same change — and a feature the engine
-can't run is rejected at build time from one list in `unsupported.mts`.
+An app's settings travel in its own build output: `inca build` writes
+`inca.json` beside the entry, and the host reads its name, identifier and
+window before opening one — see [PROTOCOL.md](./specs/PROTOCOL.md). On
+macOS `inca dev` also assembles a `.app` under `node_modules/.inca`, since
+the Dock and the Finder read a name and an icon from a bundle and nowhere
+else. Every app carries an application menu with a `Quit` item.
+
+The CLI prints the bundler's own output beside its own. See
+[FAILURES.md](./specs/FAILURES.md) for what it refuses, what it falls back
+from, and where each is reported.
 
 The current release is `v0.0.3`, on Node.js 22.18 or newer, zed v1.20.2
 for `gpui` and rquickjs 0.14.0. Its Linux binaries are built in an
@@ -51,7 +58,8 @@ for lookup — is deployed by `.github/workflows/docs.yml` to
 See [PLAN.md](./specs/PLAN.md) for unit-by-unit detail and deferred items
 (e.g. 3.1's dev-only error panel, waiting on Phase 4's `position`/
 `z-index`/`overflow`), and [BACKLOG.md](./specs/BACKLOG.md) for gaps
-outside the phased plan.
+outside the phased plan — several of them are places this framework and
+`gpui` have drifted apart.
 
 Keep this section's status prose accurate as real logic lands — don't let it go stale.
 

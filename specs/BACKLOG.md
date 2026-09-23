@@ -59,3 +59,56 @@ enough overhead for a single maintainer plus AI pairing.
 - **`dependabot.yml` is missing the `npm`/`cargo`/`github-actions`
   ecosystems**: it currently only auto-updates the devcontainer image/
   features.
+
+- **The window is set once and never follows the app**: `start()`
+  (`crates/inca-host/src/main.rs`) reads the size and title out of the
+  config and the mounted root, hands them to `WindowOptions`, and nothing
+  revisits them. An app that changes its root's `width`/`height`, or wants
+  a title that tracks its state, has no way to move the window. GPUI has
+  `Window::resize` and `Window::set_window_title`
+  (`third_party/zed/crates/gpui/src/window.rs:2622, 2732`); reaching them
+  from JS is a binding, and settling which of these an app owns is Phase 9
+  item 1.
+
+- **GPUI window options with no `inca.config.ts` surface**: `window_bounds`,
+  `titlebar.title`, `is_resizable` and `app_id` are wired; the rest of
+  `WindowOptions` is not. Two are already felt. `window_min_size` would
+  stop a resizable window shrinking below a fixed-size root and clipping
+  it — `resizable: false` only covers the growing side.
+  `window_background` picks the colour of whatever the app's root doesn't
+  cover, which is what a fixed-size root in a larger window shows; nothing
+  sets it, so it is GPUI's default. The remainder (`is_minimizable`,
+  `is_movable`, `window_decorations`, `kind`, `display_id`, `focus`,
+  `show`, `tabbing_identifier`, `titlebar.appears_transparent`,
+  `titlebar.traffic_light_position`) is Phase 9 item 1's scope.
+
+- **A packaged app's output reaches nobody**: `inca dev` relays the host's
+  stderr, so an app's `console` output and the host's own reports are
+  visible while developing. A double-clicked `.app` writes to a stderr
+  nothing reads. A log file beside the app would also give the crash
+  reporting in [ROADMAP.md](./ROADMAP.md#known-gaps-not-yet-scheduled)
+  somewhere to write. Where it lives per platform, how it rotates, and
+  whether an app can opt out are all undecided.
+
+- **A `--print-config` diagnostic**: nothing shows which settings an app is
+  actually running under. The host reads `inca.json` beside the entry and
+  applies what it can use; a flag that read it and printed the result would
+  answer "why is my window that size" without a build. Running it from the
+  CLI to validate would make `inca build` need a host binary, which it
+  doesn't today — so this is a diagnostic, not a build step.
+
+- **`inca.json`'s shape is declared twice**: `RuntimeConfig` in
+  `packages/cli/src/config/loader.mts` and `AppConfig` in
+  `crates/inca-host/src/config.rs`. `tests/tests/config_contract.rs` holds
+  them to each other, so a member added to one side alone fails. Generating
+  one from the other (`ts-rs`, `schemars`) would remove the duplication, at
+  the cost of making one language's build depend on the other's — not worth
+  it at eight fields. Revisit if the shape grows, or if the dev protocol's
+  messages want the same treatment.
+
+- **`icon` names two different things**: `inca.config.ts`'s `icon` is an
+  `.icns` path, copied into the macOS `.app` bundle by `inca package`.
+  GPUI's `WindowOptions.icon` is an `Arc<RgbaImage>` the X11 backend sets
+  on the window, and nothing sets it. A Linux app therefore has no window
+  icon at all. Either the config's `icon` feeds both, or the name says
+  which one it is.

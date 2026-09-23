@@ -5,59 +5,49 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 # Manually verifying a GPUI window opens
 
-Some PLAN.md tasks include a manual checklist item like "run the example
-and look at the window" — a human visually confirming a real window opens
-and renders, which an agent working inside the devcontainer can't do on its
-own (no display attached — see [why](#why-an-agent-cant-just-do-this)
-below). This doc covers how to do that check
-yourself, for the existing examples
-(`crates/inca-gpui/examples/gpui/hello_world.rs`,
-`crates/inca-gpui/examples/hello_world.rs`,
-`crates/inca-gpui/examples/click_counter.rs`, and the two Vue ports,
-`examples/hello_world` and `examples/click_counter`, run through
-`inca-host`) and any future one.
+How to run this repo's examples and look at the window. The devcontainer has
+no display, so a person outside it has to do this — see
+[Why an agent can't do this](#why-an-agent-cant-do-this).
 
-There are two ways to see the window, depending on which platform's
-rendering backend you want to exercise. Option A is simpler and is enough
-for most checks; use Option B when you specifically want to exercise the
-Linux backend (e.g. because that's what CI/the devcontainer itself runs on).
+Option A is enough for most checks. Option B exercises the Linux backend,
+which is what CI and the devcontainer run.
 
-## Option A — run natively on macOS (recommended)
+## Option A — natively on macOS (recommended)
 
-The devcontainer just bind-mounts this repo into a container; the files
-also exist on the host at whatever path you opened in VS Code. `gpui`'s
-Cargo dependency graph already branches per OS (macOS uses `gpui_apple` /
-Metal, Linux uses `gpui_linux` / Vulkan), so running the same `cargo`
-command directly on macOS, outside the container, gets you the native
-backend with no extra setup:
+The repo is bind-mounted into the container, so the same commands run on the
+host, against the macOS backend.
 
 ```sh
 cargo run -p inca-gpui --example gpui_hello_world
 ```
 
 A window with a gray background, the text "Hello, World!", and a row of six
-colored boxes should appear.
+colored boxes. The other Cargo examples are `hello_world` and
+`click_counter`.
 
-### The Vue ports (`examples/hello_world`, `examples/click_counter`)
-
-These aren't Cargo examples — build `inca-host` once, then let `inca
-dev` build the `.vue` app and start it:
+### The Vue ports
 
 ```sh
 cargo build -p inca-host
-pnpm --filter hello_world dev
+INCA_HOST_BIN="$(pwd)/target/debug/inca-host" pnpm --filter hello_world dev
 ```
 
-Same look as `hello_world`/`gpui_hello_world` above. Swap in
-`click_counter` for the clickable, counting box (same look as
-`click_counter.rs`) — clicking it should count up, confirming
-`EventDispatcher` correctly drains `@vue/runtime-core`'s
-microtask-scheduled reactivity update (see [PLAN.md](./PLAN.md)'s Unit iv notes).
+Same look as above. `click_counter` instead gives a clickable box that
+counts up.
 
-### A packaged app (`inca package`)
+### The app's name, icon, window and menu (macOS)
 
-Confirms the same thing about a distributable `.app`, launched the way a
-real user would rather than through `cargo run`/`inca dev`:
+Same dev run. `inca dev` assembles `node_modules/.inca/<productName>.app`
+and launches the host from inside it.
+
+1. The Dock tile and the menu bar carry the app's `productName`, and the
+   Dock its `icon` where the config declares one.
+2. The window opens at the `window.width`/`window.height` the config
+   declares, and its title bar carries `window.title`.
+3. The application menu has a `Quit` item with `⌘Q` beside it.
+4. `⌘Q` quits, and `inca dev` stops with it.
+
+### A packaged app
 
 ```sh
 cargo build -p inca-host --release
@@ -65,127 +55,105 @@ pnpm --filter click_counter package
 open examples/click_counter/dist/click_counter.app
 ```
 
-Double-click it from Finder instead if you want to also confirm it starts
-with no terminal attached at all. Same look and click behavior as the dev
-run above — this is the check [PLAN.md](./PLAN.md)'s Phase 3.3 Unit ii still
-needs on macOS specifically (the exe-relative bundle search itself is
-already confirmed on Linux, inside the devcontainer, with no display to
-carry it further).
+Same look and click behavior as the dev run. Double-click it from Finder to
+also confirm it starts with no terminal attached.
 
-### No text, but the background/boxes render fine
+### No text, but the background and boxes render
 
 `gpui_platform`'s `font-kit` feature isn't enabled for this platform (see
-`crates/inca-gpui/Cargo.toml`) — without it, `gpui_macos` silently skips all
-text rendering while drawing everything else normally, with no error.
+`crates/inca-gpui/Cargo.toml`). `gpui_macos` then skips every text draw and
+reports nothing.
 
 ### Metal toolchain errors
-
-If this fails with something like:
 
 ```
 error: cannot execute tool 'metal' due to missing Metal Toolchain; use: xcodebuild -downloadComponent MetalToolchain
 ```
-
-or
 
 ```
 xcrun: error: unable to find utility "metal", not a developer tool or in PATH
 ```
 
 `gpui_apple`'s build script needs the `metal` shader compiler, which ships
-with the full Xcode.app, not the standalone Command Line Tools. Fix:
+with the full Xcode.app rather than the Command Line Tools.
 
-1. Install Xcode from the App Store if you haven't.
+1. Install Xcode from the App Store.
 2. Point the active developer directory at it:
    ```sh
    sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
    sudo xcodebuild -license accept
    ```
-3. Download the Metal toolchain component:
+3. Download the toolchain component (~688 MB):
    ```sh
    xcodebuild -downloadComponent MetalToolchain
    ```
-   This downloads ~688 MB. On macOS 15 (Sequoia) and later, you may see a
-   log line like:
-   ```
-   Metal Toolchain unable to refresh cache with error: … "Operation not permitted"
-   ```
-   The download still completes, but the automatic installation step is
-   blocked by SIP. In that case, install the toolchain manually:
-   ```sh
-   # 1. Find the downloaded DMG (path will contain a hash-like directory name)
-   DMG=$(find /System/Library/AssetsV2/com_apple_MobileAsset_MetalToolchain \
-         -name "*.dmg" 2>/dev/null | head -1)
+4. Confirm: `xcrun -sdk macosx metal --version` prints a version line.
 
-   # 2. Mount it
-   hdiutil attach "$DMG" -nobrowse
+On macOS 15 (Sequoia) and later, step 3 can download but fail to install,
+logging:
 
-   # 3. Copy the toolchain into your user toolchains directory
-   mkdir -p ~/Library/Developer/Toolchains
-   cp -R /Volumes/MetalToolchainCryptex/Metal.xctoolchain \
-         ~/Library/Developer/Toolchains/
+```
+Metal Toolchain unable to refresh cache with error: … "Operation not permitted"
+```
 
-   # 4. Unmount
-   hdiutil detach /Volumes/MetalToolchainCryptex
-   ```
-4. Confirm: `xcrun -sdk macosx metal --version` should print a version line.
+SIP blocks the automatic install. Do it by hand:
 
-If `xcrun`/`xcodebuild` itself errors with a dynamic-library/symbol-loading
-failure (e.g. `Symbol not found: _XPCTypeBool` from
-`libxcodebuildLoader.dylib`), or the component download fails with
+```sh
+# 1. Find the downloaded DMG (its directory name is a hash)
+DMG=$(find /System/Library/AssetsV2/com_apple_MobileAsset_MetalToolchain \
+      -name "*.dmg" 2>/dev/null | head -1)
+
+# 2. Mount it
+hdiutil attach "$DMG" -nobrowse
+
+# 3. Copy the toolchain into your user toolchains directory
+mkdir -p ~/Library/Developer/Toolchains
+cp -R /Volumes/MetalToolchainCryptex/Metal.xctoolchain \
+      ~/Library/Developer/Toolchains/
+
+# 4. Unmount
+hdiutil detach /Volumes/MetalToolchainCryptex
+```
+
+A symbol-loading failure from `xcrun`/`xcodebuild` itself (e.g.
+`Symbol not found: _XPCTypeBool` from `libxcodebuildLoader.dylib`), or
 `Failed fetching catalog for assetType (com.apple.MobileAsset.MetalToolchain)`,
-that's a broken or version-mismatched Xcode install, not something specific
-to this project. Fall back to Option B rather than chasing it — reinstalling
-Xcode from scratch is the usual fix if you want to come back to Option A
-later.
+means a broken Xcode install. Reinstall Xcode, or use Option B.
 
-## Option B — from the devcontainer, forwarded to macOS via XQuartz
+## Option B — devcontainer, forwarded to macOS via XQuartz
 
-Confirms the Linux backend (`gpui_linux`) instead, without leaving the
-container. Confirmed working end-to-end (2026-09-03, the three Cargo
-examples; 2026-09-05, both Vue ports, including a real click updating the
-label). Note this is distinct from an agent's headless `Xvfb` attempt from
-inside the container (no XQuartz), which rendered nothing — not even the
-background — for a reason not yet found.
+Exercises `gpui_linux` without leaving the container.
 
-1. Install XQuartz on the Mac host (not inside the container):
+1. On the Mac host, install XQuartz, then log out and back in — without
+   that it doesn't finish registering itself:
    ```sh
    brew install --cask xquartz
    ```
-   After a fresh install, log out and back in — this is a known Homebrew
-   caveat, without it XQuartz doesn't finish registering itself.
-2. Launch XQuartz. It has no window of its own to open — look for an "X"
-   icon in the menu bar to confirm it's running.
-3. From that menu bar icon, open Settings → Security, and check "Allow
-   connections from network clients." Quit and relaunch XQuartz for this to
-   take effect.
-4. On the Mac host (not inside the container), allow incoming connections.
-   Prefer scoping this to loopback rather than opening it to any host:
+2. Launch XQuartz and look for its "X" icon in the menu bar.
+3. From that icon, open Settings → Security and check "Allow connections
+   from network clients". Quit and relaunch XQuartz.
+4. On the Mac host, allow incoming connections from loopback — Docker
+   Desktop's networking makes the container reach XQuartz as `127.0.0.1`:
    ```sh
    xhost +127.0.0.1
    ```
-   This was confirmed to work through Docker Desktop for Mac's networking
-   (the container's connection to `host.docker.internal` reaches XQuartz as
-   if from `127.0.0.1`). If it doesn't work in your setup, the wider
-   `xhost +` (revert with `xhost -` once done) is the fallback.
-5. Inside the devcontainer, for examples:
+   `xhost +` is the fallback, `xhost -` to revert.
+5. Inside the devcontainer:
    ```sh
    DISPLAY=host.docker.internal:0 cargo run -p inca-gpui --example hello_world
    ```
-   or, for one of the Vue ports (build `inca-host` first, same as
-   Option A):
+   or, for a Vue port (build `inca-host` first, as in Option A):
    ```sh
    DISPLAY=host.docker.internal:0 pnpm --filter hello_world dev
    ```
 
-The same window appears on the Mac desktop, rendered by XQuartz.
+The window appears on the Mac desktop, rendered by XQuartz.
 
-## Why an agent can't just do this
+## Why an agent can't do this
 
-The devcontainer has no display attached (see
-[.devcontainer/devcontainer.json](../.devcontainer/devcontainer.json) — no
-X11/Wayland socket is mounted in). An agent working inside it can run the
-example under a headless `Xvfb` and confirm the process doesn't crash and a
-correctly sized/positioned window gets created (e.g. via `xwininfo`) — but
-not that pixel content actually renders (see the note under Option B).
-Confirming that needs a real compositor and a human looking at it.
+The devcontainer mounts no X11 or Wayland socket (see
+[.devcontainer/devcontainer.json](../.devcontainer/devcontainer.json)). Under
+a headless `Xvfb` an agent can confirm the process survives and a window of
+the right size is created (`xwininfo`), but nothing renders into it — not
+even the background. Pixels need a real compositor and a person looking at
+them.

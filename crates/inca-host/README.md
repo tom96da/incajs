@@ -14,6 +14,10 @@ whatever tree it mounted. The app's `console` output goes to stderr.
 cargo run -p inca-host -- path/to/bundle.js
 ```
 
+Beside that entry it reads `inca.json`, if one is there: the name the
+platform calls the app, its reverse-DNS identifier, and the size and title
+its window opens at. Anything missing falls back to a default.
+
 The window carries an application menu with a `Quit` item, bound to `cmd-q`
 on macOS and `ctrl-q` elsewhere. Only macOS draws a menu bar for it.
 

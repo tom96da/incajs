@@ -25,6 +25,12 @@ Update this file as real conventions land, same as the other docs here.
   [MANUAL_GUI_CHECK.md](./MANUAL_GUI_CHECK.md) instead of automated — see
   that doc for why the devcontainer can't do this alone and how to  actually
   run the check.
+- **Tests that span both languages**: the root `tests/` package
+  (`inca-tests`), never inside a crate or a package, so neither side
+  depends on the other. Cargo picks up `tests/tests/*.rs` on its own; a
+  file that needs the other language runs it (`config_contract.rs` starts
+  Node) or reads what it built (`js_core_integration.rs` reads
+  `packages/core/dist`).
 
 ### Required checks
 
@@ -35,14 +41,17 @@ All of the following must pass, not just `cargo test`:
   `crates/inca-gpui/examples/hello_world.rs`'s doc comment)
 - `cargo clippy --workspace --all-targets`
 - `cargo fmt --all -- --check`
-- `cargo test --workspace` — `tests/js_core_integration.rs` reads
-  `packages/core/dist/index.js` off disk, so run
-  `pnpm --filter incajs build` first, or this one test fails with a
+- `cargo test --workspace --exclude inca-tests` — the crates alone, which
+  need no Node
+- `cargo test -p inca-tests` — the root package, which does: run
+  `pnpm --filter incajs build` first, or `js_core_integration` fails with a
   message saying so
 
 `--workspace` rather than a list of `-p` flags, so a new crate is covered by
-the checks the moment it exists. `crates/inca-host` opens a window, which
-stays a manual check like `crates/inca-gpui`'s own examples — see
+the checks the moment it exists. `inca-tests` is excluded from the test run
+alone: `--all-targets` still compiles it, and only running it needs Node.
+`crates/inca-host` opens a window, which stays a manual check like
+`crates/inca-gpui`'s own examples — see
 [MANUAL_GUI_CHECK.md](./MANUAL_GUI_CHECK.md).
 
 ### Toolchain pinning and MSRV
