@@ -39,6 +39,7 @@ export default defineConfig({
           text: "Guide",
           items: [
             { text: "CLI", link: "/guide/cli" },
+            { text: "Application Window", link: "/guide/window" },
             { text: "Building for Production", link: "/guide/build" },
           ],
         },
@@ -46,7 +47,10 @@ export default defineConfig({
       "/reference/": [
         {
           text: "Reference",
-          items: [{ text: "Error Codes", link: "/reference/errors" }],
+          items: [
+            { text: "Configuration", link: "/reference/configuration" },
+            { text: "Error Codes", link: "/reference/errors" },
+          ],
         },
       ],
     },
