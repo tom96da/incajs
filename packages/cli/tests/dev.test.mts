@@ -322,6 +322,28 @@ describe("dev", () => {
     expect(bundler.closed).toBe(true);
   });
 
+  it("releases its lock when it fails before the watcher starts", async () => {
+    const cwd = await scratch.makeApp({ name: "no-entry" });
+    const failing = {
+      cwd,
+      bundler: makeFakeBundler(),
+      hostBin: mockHost,
+      stdout: makeSink().stream,
+      stderr: makeSink().stream,
+      signal: new AbortController().signal,
+    };
+
+    // No `entry` and no `src/` — resolveEntry throws before the lock's own
+    // release would run.
+    await expect(dev(failing)).rejects.toThrow(
+      expect.objectContaining({ code: "ERR_INCA_ENTRY_NOT_FOUND" }),
+    );
+
+    await expect(dev(failing)).rejects.toThrow(
+      expect.objectContaining({ code: "ERR_INCA_ENTRY_NOT_FOUND" }),
+    );
+  });
+
   it("refuses to start while another dev is running for the same app", async () => {
     const cwd = await scratch.makeApp({ name: "locked" });
     const bundler = makeFakeBundler();

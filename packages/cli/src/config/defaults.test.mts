@@ -24,6 +24,10 @@ describe("slugify", () => {
   it("trims leading and trailing dashes", () => {
     expect(slugify("--Click!!")).toBe("click");
   });
+
+  it.each(["日本語アプリ", "★", "..."])("names a name that slugs to nothing: %j", (name) => {
+    expect(slugify(name)).toBe("app");
+  });
 });
 
 describe("defaultProductName", () => {

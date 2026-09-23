@@ -35,18 +35,23 @@ export function unscopedName(name: string): string {
   return name.startsWith("@") && slash !== -1 ? name.slice(slash + 1) : name;
 }
 
+/** What a name slugs to when it holds nothing `[a-z0-9]` — Japanese, say. */
+const UNSLUGGABLE = "app";
+
 /**
  * Turns a display name into a filesystem/URL-safe slug.
  *
  * @param name - e.g. a `productName`
  * @returns `name` lowercased, with runs of non-`[a-z0-9]` collapsed to a
- * single `-` and trimmed from both ends
+ * single `-` and trimmed from both ends; `"app"` for a name that holds
+ * none of those characters
  */
 export function slugify(name: string): string {
-  return name
+  const slug = name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+  return slug === "" ? UNSLUGGABLE : slug;
 }
 
 /**

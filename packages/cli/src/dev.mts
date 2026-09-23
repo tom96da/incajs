@@ -128,110 +128,113 @@ export async function dev(options: DevOptions): Promise<void> {
   const cwd = options.cwd ?? process.cwd();
   const config = await resolveBuildConfig(cwd);
   const releaseLock = await acquireDevLock(cwd);
-  const outDir = config.outDir;
-  const bundler: Bundler = options.bundler ?? defaultBundler;
-  const stdout = options.stdout ?? process.stdout;
-  const stderr = options.stderr ?? process.stderr;
+  try {
+    const outDir = config.outDir;
+    const bundler: Bundler = options.bundler ?? defaultBundler;
+    const stdout = options.stdout ?? process.stdout;
+    const stderr = options.stderr ?? process.stderr;
 
-  const entry = options.entry ?? config.entry ?? (await resolveEntry(cwd));
-  const metadata = await resolveMetadata(cwd, stdout);
-  const runtimeConfig = metadata ? runtimeConfigOf(metadata) : await resolveRuntimeConfig(cwd);
-  const hostBin =
-    (await bundleExecutable(cwd, metadata, options.hostBin, stdout)) ?? options.hostBin;
+    const entry = options.entry ?? config.entry ?? (await resolveEntry(cwd));
+    const metadata = await resolveMetadata(cwd, stdout);
+    const runtimeConfig = metadata ? runtimeConfigOf(metadata) : await resolveRuntimeConfig(cwd);
+    const hostBin =
+      (await bundleExecutable(cwd, metadata, options.hostBin, stdout)) ?? options.hostBin;
 
-  let client: HostClient | undefined;
-  let ready = false;
-  let pendingReload = false;
-  let queue = Promise.resolve();
+    let client: HostClient | undefined;
+    let ready = false;
+    let pendingReload = false;
+    let queue = Promise.resolve();
 
-  let stop = (): void => {};
-  const stopped = new Promise<void>((resolve) => {
-    stop = resolve;
-  });
+    let stop = (): void => {};
+    const stopped = new Promise<void>((resolve) => {
+      stop = resolve;
+    });
 
-  async function reloadHost(): Promise<boolean> {
-    try {
-      await client?.call("reload");
-      return true;
-    } catch (error) {
-      printFault(stderr, "reload failed", toFault(error), STAMPED);
-      return false;
-    }
-  }
-
-  async function onBuild(output: BuildOutput): Promise<void> {
-    await pruneStaleFiles(output.outDir, output.files);
-
-    if (!client) {
-      const next = new HostClient({
-        entryFile: output.entryFile,
-        hostBin,
-        onStderr: (line) => stderr.write(line),
-        onReady: () => {
-          ready = true;
-          log(stdout, "ready", STAMPED);
-          if (pendingReload) {
-            pendingReload = false;
-            void reloadHost();
-          }
-        },
-        onAppError: (error) => printFault(stderr, "app error", error, STAMPED),
-        onExit: () => {
-          // The window is gone, so there is nothing left to rebuild for.
-          log(stdout, "host exited — stopping", STAMPED);
-          stop();
-        },
-      });
+    async function reloadHost(): Promise<boolean> {
       try {
-        await next.start();
+        await client?.call("reload");
+        return true;
       } catch (error) {
-        printFault(stderr, "failed to start inca-host", toFault(error), STAMPED);
+        printFault(stderr, "reload failed", toFault(error), STAMPED);
+        return false;
+      }
+    }
+
+    async function onBuild(output: BuildOutput): Promise<void> {
+      await pruneStaleFiles(output.outDir, output.files);
+
+      if (!client) {
+        const next = new HostClient({
+          entryFile: output.entryFile,
+          hostBin,
+          onStderr: (line) => stderr.write(line),
+          onReady: () => {
+            ready = true;
+            log(stdout, "ready", STAMPED);
+            if (pendingReload) {
+              pendingReload = false;
+              void reloadHost();
+            }
+          },
+          onAppError: (error) => printFault(stderr, "app error", error, STAMPED),
+          onExit: () => {
+            // The window is gone, so there is nothing left to rebuild for.
+            log(stdout, "host exited — stopping", STAMPED);
+            stop();
+          },
+        });
+        try {
+          await next.start();
+        } catch (error) {
+          printFault(stderr, "failed to start inca-host", toFault(error), STAMPED);
+          return;
+        }
+        client = next;
         return;
       }
-      client = next;
-      return;
+
+      if (!ready) {
+        // The host hasn't finished its first load yet — its entry path is
+        // always the same, so it picks up this build's content on its own
+        // once it gets there; a reload now would only race it.
+        pendingReload = true;
+        return;
+      }
+
+      if (!(await reloadHost())) return;
+      if (output.changed) {
+        const file = styleText("dim", path.relative(cwd, output.changed.file), { stream: stdout });
+        const took = Date.now() - output.changed.at;
+        log(stdout, `${styleText("green", "reload")} ${file} (${took}ms)`, STAMPED);
+      }
     }
 
-    if (!ready) {
-      // The host hasn't finished its first load yet — its entry path is
-      // always the same, so it picks up this build's content on its own
-      // once it gets there; a reload now would only race it.
-      pendingReload = true;
-      return;
-    }
+    const watcher = await bundler.watch({
+      entry,
+      outDir,
+      runtimeConfig,
+      mode: "development",
+      stdout,
+      stderr,
+      onBuild: (output) => {
+        // Chained rather than fired independently: two rebuilds landing
+        // before the host finishes starting would otherwise both see no
+        // client yet and each start their own.
+        queue = queue.then(() => onBuild(output));
+      },
+      onError: (error) => {
+        printFault(stderr, "build failed", error, STAMPED);
+      },
+    });
 
-    if (!(await reloadHost())) return;
-    if (output.changed) {
-      const file = styleText("dim", path.relative(cwd, output.changed.file), { stream: stdout });
-      const took = Date.now() - output.changed.at;
-      log(stdout, `${styleText("green", "reload")} ${file} (${took}ms)`, STAMPED);
-    }
+    if (options.signal.aborted) stop();
+    else options.signal.addEventListener("abort", () => stop(), { once: true });
+    await stopped;
+
+    await queue;
+    await client?.stop();
+    await watcher.close();
+  } finally {
+    await releaseLock();
   }
-
-  const watcher = await bundler.watch({
-    entry,
-    outDir,
-    runtimeConfig,
-    mode: "development",
-    stdout,
-    stderr,
-    onBuild: (output) => {
-      // Chained rather than fired independently: two rebuilds landing
-      // before the host finishes starting would otherwise both see no
-      // client yet and each start their own.
-      queue = queue.then(() => onBuild(output));
-    },
-    onError: (error) => {
-      printFault(stderr, "build failed", error, STAMPED);
-    },
-  });
-
-  if (options.signal.aborted) stop();
-  else options.signal.addEventListener("abort", () => stop(), { once: true });
-  await stopped;
-
-  await queue;
-  await client?.stop();
-  await watcher.close();
-  await releaseLock();
 }
