@@ -15,6 +15,7 @@ import { defaultBundler } from "./defaultBundler.mts";
 import { HostClient, resolveHostBin } from "./dev-client/index.mts";
 import { acquireDevLock } from "./dev-lock.mts";
 import { resolveEntry } from "./entry.mts";
+import { IncaError } from "./error.mts";
 import { log, printFault, toFault } from "./log.mts";
 import { writeMacosApp } from "./macos-app.mts";
 import type { Bundler, BuildOutput } from "./adapter/types.mts";
@@ -46,9 +47,17 @@ export interface DevOptions {
 /** `inca dev` stamps its lines the way Vite's dev server does. */
 const STAMPED = { timestamp: true } as const;
 
+/** The failures that leave the app unnamed instead of stopping `inca dev`. */
+const UNNAMED: readonly string[] = [
+  "ERR_INCA_PACKAGE_JSON_NOT_FOUND",
+  "ERR_INCA_PRODUCT_NAME_MISSING",
+];
+
 /**
  * The app's full config, or `undefined` when it names itself nowhere,
  * which is reported on `stdout`.
+ *
+ * @throws if the config can't be read for any other reason
  */
 async function resolveMetadata(
   cwd: string,
@@ -57,7 +66,8 @@ async function resolveMetadata(
   try {
     return await resolveAppConfig(cwd);
   } catch (error) {
-    log(stdout, `running unnamed — ${toFault(error).message}`, STAMPED);
+    if (!(error instanceof IncaError) || !UNNAMED.includes(error.code)) throw error;
+    log(stdout, `running unnamed — ${error.message}`, STAMPED);
     return undefined;
   }
 }

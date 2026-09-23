@@ -65,6 +65,33 @@ export interface RuntimeConfig {
   window?: WindowConfig;
 }
 
+/** Characters no directory name may hold, on any platform this runs on. */
+const RESERVED_IN_A_NAME = /[/\\:*?"<>|\0]/;
+
+/** Whether `name` is usable as a directory name. */
+function namesADirectory(name: string): boolean {
+  return (
+    name === name.trim() &&
+    name !== "" &&
+    name !== "." &&
+    name !== ".." &&
+    !RESERVED_IN_A_NAME.test(name)
+  );
+}
+
+/**
+ * @param productName - a resolved display name
+ * @throws if it can't name the directory a packaged app becomes
+ */
+function assertUsableProductName(productName: unknown): asserts productName is string {
+  if (typeof productName === "string" && namesADirectory(productName)) return;
+  throw new IncaError(
+    "ERR_INCA_PRODUCT_NAME_INVALID",
+    `${JSON.stringify(productName)} can't name a directory — set a "productName" in ` +
+      `inca.config.ts with no leading or trailing space, and none of \`/\\:*?"<>|\``,
+  );
+}
+
 /** Loads `inca.config.ts`, and reports whether `package.json`'s `"inca"` key supplied anything. */
 async function loadIncaConfig(
   cwd: string,
@@ -118,6 +145,7 @@ export async function resolveAppConfig(cwd: string): Promise<ResolvedAppConfig> 
       `${pkgPath} needs a "name", or "productName" in inca.config.ts`,
     );
   }
+  assertUsableProductName(productName);
 
   const version = config.version ?? pkg.version ?? defaultConfig.version;
   const identifier = config.identifier ?? defaultIdentifier(productName);
@@ -183,6 +211,7 @@ export async function resolveRuntimeConfig(cwd: string): Promise<RuntimeConfig |
   }
 
   const name = config.productName ?? defaultProductName(pkg.name);
+  if (name) assertUsableProductName(name);
   const identifier = config.identifier ?? (name ? defaultIdentifier(name) : undefined);
   const runtime: RuntimeConfig = { name, identifier, window: config.window };
 

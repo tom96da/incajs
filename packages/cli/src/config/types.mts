@@ -63,14 +63,8 @@ export interface WindowConfig {
    * @default false
    */
   resizable?: boolean;
-  /**
-   * Smallest width a user can resize the window to, in pixels. Ignored
-   * unless `resizable` is `true`.
-   */
+  /** Smallest width the window can be, in pixels. It opens at least this wide. */
   minWidth?: number;
-  /**
-   * Smallest height a user can resize the window to, in pixels. Ignored
-   * unless `resizable` is `true`.
-   */
+  /** Smallest height the window can be, in pixels. It opens at least this tall. */
   minHeight?: number;
 }

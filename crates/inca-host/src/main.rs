@@ -84,11 +84,17 @@ fn content_window_size(host: &Host, root: NodeId) -> (Option<f32>, Option<f32>) 
     (dimension("width"), dimension("height"))
 }
 
-/// The smallest size a user can resize the window to, where the app's
-/// config gives one. A dimension it leaves out is unconstrained.
+/// A window dimension that is finite and above zero. Anything else reads
+/// as absent.
+fn usable(dimension: Option<f32>) -> Option<f32> {
+    dimension.filter(|value| value.is_finite() && *value > 0.0)
+}
+
+/// The smallest size the window can be resized to, where the app's config
+/// gives one. A dimension it leaves out is unconstrained.
 fn window_min_size(window: Option<&config::WindowConfig>) -> Option<Size<Pixels>> {
-    let min_width = window.and_then(|w| w.min_width);
-    let min_height = window.and_then(|w| w.min_height);
+    let min_width = usable(window.and_then(|w| w.min_width));
+    let min_height = usable(window.and_then(|w| w.min_height));
     if min_width.is_none() && min_height.is_none() {
         return None;
     }
@@ -98,20 +104,35 @@ fn window_min_size(window: Option<&config::WindowConfig>) -> Option<Size<Pixels>
     ))
 }
 
+/// The window's title: what the app's config asks for, then the app's own
+/// name. A title of nothing but spaces counts as none.
+fn window_title(window: Option<&config::WindowConfig>, name: Option<&str>) -> Option<String> {
+    window
+        .and_then(|window| window.title.clone())
+        .filter(|title| !title.trim().is_empty())
+        .or_else(|| name.map(ToOwned::to_owned))
+}
+
 /// The size to open the window at: what the app's config asks for, then
-/// what its root element declares, then [`DEFAULT_WINDOW_SIZE`].
+/// what its root element declares, then [`DEFAULT_WINDOW_SIZE`]. A window
+/// never opens below the minimum it declared.
 fn window_size(
     window: Option<&config::WindowConfig>,
     content: (Option<f32>, Option<f32>),
 ) -> (f32, f32) {
-    let configured = |pick: fn(&config::WindowConfig) -> Option<f32>| window.and_then(pick);
+    let configured = |pick: fn(&config::WindowConfig) -> Option<f32>| usable(window.and_then(pick));
+    let at_least = |pick: fn(&config::WindowConfig) -> Option<f32>| {
+        usable(window.and_then(pick)).unwrap_or(0.0)
+    };
     (
         configured(|w| w.width)
-            .or(content.0)
-            .unwrap_or(DEFAULT_WINDOW_SIZE.0),
+            .or(usable(content.0))
+            .unwrap_or(DEFAULT_WINDOW_SIZE.0)
+            .max(at_least(|w| w.min_width)),
         configured(|w| w.height)
-            .or(content.1)
-            .unwrap_or(DEFAULT_WINDOW_SIZE.1),
+            .or(usable(content.1))
+            .unwrap_or(DEFAULT_WINDOW_SIZE.1)
+            .max(at_least(|w| w.min_height)),
     )
 }
 
@@ -384,9 +405,7 @@ fn start(
     let window_config = app_config.window.as_ref();
     let content = content_window_size(&session.host.borrow(), session.root);
     let (width, height) = window_size(window_config, content);
-    let title = window_config
-        .and_then(|window| window.title.clone())
-        .or_else(|| app_config.name.clone());
+    let title = window_title(window_config, app_config.name.as_deref());
 
     let bounds = Bounds::centered(None, size(px(width), px(height)), cx);
     let window = cx
@@ -723,6 +742,117 @@ mod tests {
         let host = Host::default();
 
         assert_eq!(content_window_size(&host, host.root), (None, None));
+    }
+
+    #[test]
+    fn a_dimension_no_window_can_open_at_falls_through() {
+        let unusable = config::WindowConfig {
+            width: Some(-100.0),
+            height: Some(0.0),
+            min_width: Some(f32::INFINITY),
+            min_height: Some(f32::NAN),
+            ..config::WindowConfig::default()
+        };
+
+        assert_eq!(
+            window_size(Some(&unusable), (Some(300.0), None)),
+            (300.0, DEFAULT_WINDOW_SIZE.1)
+        );
+        assert_eq!(window_min_size(Some(&unusable)), None);
+    }
+
+    #[test]
+    fn an_unusable_content_dimension_falls_through_too() {
+        assert_eq!(
+            window_size(None, (Some(f32::NAN), None)),
+            DEFAULT_WINDOW_SIZE
+        );
+    }
+
+    #[test]
+    fn window_min_size_carries_both_dimensions_when_both_are_usable() {
+        let both = config::WindowConfig {
+            min_width: Some(320.0),
+            min_height: Some(240.0),
+            ..config::WindowConfig::default()
+        };
+
+        assert_eq!(
+            window_min_size(Some(&both)),
+            Some(size(px(320.0), px(240.0)))
+        );
+    }
+
+    #[test]
+    fn window_min_size_keeps_the_dimension_that_is_usable() {
+        let half_usable = config::WindowConfig {
+            min_width: Some(320.0),
+            min_height: Some(f32::NAN),
+            ..config::WindowConfig::default()
+        };
+
+        assert_eq!(
+            window_min_size(Some(&half_usable)),
+            Some(size(px(320.0), px(0.0)))
+        );
+    }
+
+    #[test]
+    fn a_window_opens_no_smaller_than_the_minimum_it_declared() {
+        let below_its_minimum = config::WindowConfig {
+            width: Some(200.0),
+            min_width: Some(320.0),
+            ..config::WindowConfig::default()
+        };
+
+        assert_eq!(
+            window_size(Some(&below_its_minimum), (None, None)),
+            (320.0, DEFAULT_WINDOW_SIZE.1)
+        );
+    }
+
+    #[test]
+    fn a_minimum_above_the_default_raises_a_window_the_app_did_not_size() {
+        let tall = config::WindowConfig {
+            min_width: Some(2000.0),
+            ..config::WindowConfig::default()
+        };
+
+        assert_eq!(
+            window_size(Some(&tall), (None, None)),
+            (2000.0, DEFAULT_WINDOW_SIZE.1)
+        );
+    }
+
+    #[test]
+    fn a_title_of_nothing_but_spaces_leaves_the_window_named_after_the_app() {
+        for blank in ["", "   "] {
+            let window = config::WindowConfig {
+                title: Some(blank.to_owned()),
+                ..config::WindowConfig::default()
+            };
+
+            assert_eq!(
+                window_title(Some(&window), Some("Demo")),
+                Some("Demo".to_owned()),
+                "{blank:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_title_the_app_set_wins_over_its_name() {
+        let window = config::WindowConfig {
+            title: Some("Window".to_owned()),
+            ..config::WindowConfig::default()
+        };
+
+        assert_eq!(
+            window_title(Some(&window), Some("Demo")),
+            Some("Window".to_owned())
+        );
+        assert_eq!(window_title(None, Some("Demo")), Some("Demo".to_owned()));
+        assert_eq!(window_title(None, None), None);
     }
 
     #[test]

@@ -50,6 +50,23 @@ export default defineConfig({
 });
 ```
 
+## `ERR_INCA_PRODUCT_NAME_INVALID`
+
+The app's name becomes a directory name: `<productName>.app` on macOS, and
+a scratch bundle under `node_modules/.inca` while `inca dev` runs. It can't
+hold `/`, `\`, `:`, `*`, `?`, `"`, `<`, `>`, `|` or a null byte, can't be
+`.` or `..`, and can't open or close with a space.
+
+Set a `productName` that names a single directory:
+
+```ts [inca.config.ts]
+import { defineConfig } from "@incajs/cli/config";
+
+export default defineConfig({
+  productName: "My App",
+});
+```
+
 ## `ERR_INCA_ICON_NOT_FOUND`
 
 `icon` in `inca.config.ts` points at a file that doesn't exist. The path is

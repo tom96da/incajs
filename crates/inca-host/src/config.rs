@@ -38,9 +38,9 @@ pub struct WindowConfig {
     pub title: Option<String>,
     /// Whether a user can resize the window.
     pub resizable: Option<bool>,
-    /// Smallest width a user can resize the window to, in pixels.
+    /// Smallest width the window can be, in pixels. It opens at least this wide.
     pub min_width: Option<f32>,
-    /// Smallest height a user can resize the window to, in pixels.
+    /// Smallest height the window can be, in pixels. It opens at least this tall.
     pub min_height: Option<f32>,
 }
 
