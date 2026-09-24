@@ -100,30 +100,31 @@ impl EventDispatcher {
     }
 
     /// Returns `payload` with its `buttons` bitmask corrected against
-    /// [`Self::held_buttons`] for `"mousedown"`/`"mouseup"`/`"mousemove"`,
-    /// updating that tracked state first for `"mousedown"`/`"mouseup"`.
-    /// A DOM `mouseup` excludes the button just released; every other kind
-    /// includes every button still held.
+    /// [`Self::held_buttons`]. A DOM `mouseup` excludes the button just
+    /// released; every other kind includes every button still held.
     fn with_held_buttons(&self, event: &str, payload: &EventPayload) -> EventPayload {
         let EventPayload::Mouse(mouse) = *payload else {
             return *payload;
         };
-        let bit = 1u8 << mouse.button;
-        let held = match event {
-            "mousedown" => {
-                self.held_buttons.set(self.held_buttons.get() | bit);
-                self.held_buttons.get()
-            }
-            "mouseup" => {
-                self.held_buttons.set(self.held_buttons.get() & !bit);
-                self.held_buttons.get()
-            }
-            _ => self.held_buttons.get(),
-        };
         EventPayload::Mouse(inca_gpui::MousePayload {
-            buttons: held,
+            buttons: self.update_held_buttons(event, mouse.button),
             ..mouse
         })
+    }
+
+    /// Updates [`Self::held_buttons`] for `"mousedown"`/`"mouseup"` and
+    /// returns the current value — `"mousemove"` only reads it.
+    /// `button` is `MousePayload`'s own field, a public part of
+    /// `inca-gpui`'s API, so an out-of-range value (only 0..=4 are ever
+    /// produced by this crate) is handled rather than shifted unchecked.
+    fn update_held_buttons(&self, event: &str, button: u8) -> u8 {
+        let bit = 1u8.checked_shl(u32::from(button)).unwrap_or(0);
+        match event {
+            "mousedown" => self.held_buttons.set(self.held_buttons.get() | bit),
+            "mouseup" => self.held_buttons.set(self.held_buttons.get() & !bit),
+            _ => {}
+        }
+        self.held_buttons.get()
     }
 
     /// Calls every JS callback registered for `(node_id, event)` (via
@@ -330,6 +331,16 @@ mod tests {
 
         assert_eq!(dispatcher.listens(registered), EventMask::CLICK);
         assert_eq!(dispatcher.listens(quiet), EventMask::NONE);
+    }
+
+    /// `EventKind`/`dom_button_bit` only ever produce `0..=4`, but
+    /// `update_held_buttons` takes a plain `u8` — a value outside that
+    /// range must not panic the shift, only fail to set any bit.
+    #[test]
+    fn an_out_of_range_button_does_not_panic() {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        assert_eq!(dispatcher.update_held_buttons("mousedown", 200), 0);
+        assert_eq!(dispatcher.held_buttons.get(), 0);
     }
 
     #[gpui::test]

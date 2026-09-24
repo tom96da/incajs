@@ -393,18 +393,24 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
         ElementTag::Text(content) => content.clone().into_any_element(),
         ElementTag::Container => {
             let id = spec.id;
-            let wired = |mask: EventMask| dispatch.is_some() && spec.listens.contains(mask);
+            // `Some(dispatch.clone())` when `mask` is both listened for and
+            // there's a dispatcher to call — `None` otherwise. Threading the
+            // dispatcher itself through `when_some` (rather than a `bool`
+            // plus a later `dispatch.expect(..)`) makes "wired implies a
+            // dispatcher" a fact the type checker holds, not one this
+            // function has to keep true by hand.
+            let wired = |mask: EventMask| -> Option<E> {
+                dispatch.filter(|_| spec.listens.contains(mask)).cloned()
+            };
 
             let element = div()
                 .debug_selector(move || format!("node-{id}"))
-                .when(wired(EventMask::MOUSE_DOWN), |el| {
-                    let listening = dispatch.expect("wired implies dispatch is Some").clone();
+                .when_some(wired(EventMask::MOUSE_DOWN), |el, listening| {
                     el.on_any_mouse_down(move |event, window, cx| {
                         listening.dispatch(id, "mousedown", &event.into(), window, cx);
                     })
                 })
-                .when(wired(EventMask::MOUSE_UP), |mut el| {
-                    let listening = dispatch.expect("wired implies dispatch is Some").clone();
+                .when_some(wired(EventMask::MOUSE_UP), |mut el, listening| {
                     // No fluent `on_any_mouse_up` exists — DOM's `mouseup`
                     // fires for any button, and only `Interactivity`'s
                     // imperative form takes "any" rather than one button.
@@ -414,16 +420,14 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
                         });
                     el
                 })
-                .when(wired(EventMask::MOUSE_MOVE), |el| {
-                    let listening = dispatch.expect("wired implies dispatch is Some").clone();
+                .when_some(wired(EventMask::MOUSE_MOVE), |el, listening| {
                     el.on_mouse_move(move |event, window, cx| {
                         listening.dispatch(id, "mousemove", &event.into(), window, cx);
                     })
                 });
 
-            if wired(EventMask::CLICK) {
-                let listening = dispatch.expect("wired implies dispatch is Some").clone();
-                finish_container(
+            match wired(EventMask::CLICK) {
+                Some(listening) => finish_container(
                     element
                         .id(ElementId::Integer(u64::from(id)))
                         .on_click(move |_, window, cx| {
@@ -431,9 +435,8 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
                         }),
                     spec,
                     dispatch,
-                )
-            } else {
-                finish_container(element, spec, dispatch)
+                ),
+                None => finish_container(element, spec, dispatch),
             }
         }
     }
