@@ -374,13 +374,55 @@ fn apply_style(style: &mut StyleRefinement, spec: &StyleSpec) {
     }
 }
 
+/// Wires whichever of [`EventMask::MOUSE_DOWN`]/[`MOUSE_UP`]/[`MOUSE_MOVE`]/
+/// [`WHEEL`](EventMask::WHEEL) `wired` reports as present — every kind that
+/// doesn't need a `gpui` `ElementId`, so `Elem` can be `Div` or
+/// `Stateful<Div>` interchangeably; both are [`InteractiveElement`].
+fn wire_stateless<Elem, E>(
+    element: Elem,
+    id: NodeId,
+    wired: &impl Fn(EventMask) -> Option<E>,
+) -> Elem
+where
+    Elem: InteractiveElement + FluentBuilder,
+    E: EventSink + Clone + 'static,
+{
+    element
+        .when_some(wired(EventMask::MOUSE_DOWN), |el, listening| {
+            el.on_any_mouse_down(move |event, window, cx| {
+                listening.dispatch(id, "mousedown", &event.into(), window, cx);
+            })
+        })
+        .when_some(wired(EventMask::MOUSE_UP), |mut el, listening| {
+            // No fluent `on_any_mouse_up` exists — DOM's `mouseup`
+            // fires for any button, and only `Interactivity`'s
+            // imperative form takes "any" rather than one button.
+            el.interactivity()
+                .on_any_mouse_up(move |event, window, cx| {
+                    listening.dispatch(id, "mouseup", &event.into(), window, cx);
+                });
+            el
+        })
+        .when_some(wired(EventMask::MOUSE_MOVE), |el, listening| {
+            el.on_mouse_move(move |event, window, cx| {
+                listening.dispatch(id, "mousemove", &event.into(), window, cx);
+            })
+        })
+        .when_some(wired(EventMask::WHEEL), |el, listening| {
+            el.on_scroll_wheel(move |event, window, cx| {
+                listening.dispatch(id, "wheel", &event.into(), window, cx);
+            })
+        })
+}
+
 /// Recursively converts an [`ElementSpec`] into a real `gpui` [`AnyElement`].
 ///
 /// A container gets a hitbox only when something listens on it — GPUI
 /// inserts one for any element carrying a mouse listener, `click` included.
-/// `click` additionally needs a `gpui` `ElementId`, which only `on_click`
-/// (a `StatefulInteractiveElement` method) requires; the other kinds wire
-/// through plain `InteractiveElement` methods and need no id.
+/// A container also gets a `gpui` `ElementId` (`.id()`) whenever any wired
+/// kind is [`EventKind::needs_element_id`] — `click` is the only one today,
+/// via `on_click` (a `StatefulInteractiveElement` method); the other kinds
+/// wire through plain `InteractiveElement` methods and need no id.
 ///
 /// Every container carries a `.debug_selector("node-{id}")` — a no-op
 /// outside test builds — so a test can look its computed bounds up by
@@ -402,46 +444,23 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
             let wired = |mask: EventMask| -> Option<E> {
                 dispatch.filter(|_| spec.listens.contains(mask)).cloned()
             };
+            let element = div().debug_selector(move || format!("node-{id}"));
 
-            let element = div()
-                .debug_selector(move || format!("node-{id}"))
-                .when_some(wired(EventMask::MOUSE_DOWN), |el, listening| {
-                    el.on_any_mouse_down(move |event, window, cx| {
-                        listening.dispatch(id, "mousedown", &event.into(), window, cx);
-                    })
-                })
-                .when_some(wired(EventMask::MOUSE_UP), |mut el, listening| {
-                    // No fluent `on_any_mouse_up` exists — DOM's `mouseup`
-                    // fires for any button, and only `Interactivity`'s
-                    // imperative form takes "any" rather than one button.
-                    el.interactivity()
-                        .on_any_mouse_up(move |event, window, cx| {
-                            listening.dispatch(id, "mouseup", &event.into(), window, cx);
-                        });
-                    el
-                })
-                .when_some(wired(EventMask::MOUSE_MOVE), |el, listening| {
-                    el.on_mouse_move(move |event, window, cx| {
-                        listening.dispatch(id, "mousemove", &event.into(), window, cx);
-                    })
-                })
-                .when_some(wired(EventMask::WHEEL), |el, listening| {
-                    el.on_scroll_wheel(move |event, window, cx| {
-                        listening.dispatch(id, "wheel", &event.into(), window, cx);
-                    })
-                });
-
-            match wired(EventMask::CLICK) {
-                Some(listening) => finish_container(
-                    element
-                        .id(ElementId::Integer(u64::from(id)))
-                        .on_click(move |_, window, cx| {
+            if dispatch.is_some() && spec.listens.needs_element_id() {
+                let element =
+                    wire_stateless(element.id(ElementId::Integer(u64::from(id))), id, &wired);
+                match wired(EventMask::CLICK) {
+                    Some(listening) => finish_container(
+                        element.on_click(move |_, window, cx| {
                             listening.dispatch(id, "click", &EventPayload::None, window, cx);
                         }),
-                    spec,
-                    dispatch,
-                ),
-                None => finish_container(element, spec, dispatch),
+                        spec,
+                        dispatch,
+                    ),
+                    None => finish_container(element, spec, dispatch),
+                }
+            } else {
+                finish_container(wire_stateless(element, id, &wired), spec, dispatch)
             }
         }
     }

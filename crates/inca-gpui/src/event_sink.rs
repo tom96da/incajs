@@ -53,6 +53,16 @@ impl EventKind {
             Self::Wheel => EventMask::WHEEL,
         }
     }
+
+    /// GPUI's own dispatch requires a `gpui` `ElementId` (`.id()`) to keep
+    /// state for this kind across frames.
+    #[must_use]
+    pub const fn needs_element_id(self) -> bool {
+        match self {
+            Self::Click => true,
+            Self::MouseDown | Self::MouseUp | Self::MouseMove | Self::Wheel => false,
+        }
+    }
 }
 
 /// Which of [`EventKind::ALL`] a node is wired for, as one bit per kind.
@@ -77,6 +87,27 @@ impl EventMask {
     #[must_use]
     pub fn contains(self, other: Self) -> bool {
         self.0 & other.0 == other.0
+    }
+
+    /// Whether `self` and `other` share at least one bit.
+    #[must_use]
+    pub fn intersects(self, other: Self) -> bool {
+        self.0 & other.0 != 0
+    }
+
+    /// Every [`EventKind::needs_element_id`] kind's bit, combined.
+    #[must_use]
+    pub fn needing_element_id() -> Self {
+        EventKind::ALL
+            .iter()
+            .filter(|kind| kind.needs_element_id())
+            .fold(Self::NONE, |mask, kind| mask | kind.mask())
+    }
+
+    /// Whether `self` includes a kind that requires a `gpui` `ElementId`.
+    #[must_use]
+    pub fn needs_element_id(self) -> bool {
+        self.intersects(Self::needing_element_id())
     }
 
     /// The bit `name` occupies, or [`EventMask::NONE`] if `name` names no
@@ -422,5 +453,42 @@ mod tests {
         assert_eq!(wheel.delta_x, 0.0);
         assert_eq!(wheel.delta_y, 0.0);
         assert_eq!(wheel.delta_mode, 0);
+    }
+
+    #[test]
+    fn only_click_needs_an_element_id_today() {
+        assert_eq!(EventMask::needing_element_id(), EventMask::CLICK);
+        assert!(EventMask::CLICK.needs_element_id());
+        assert!(!EventMask::MOUSE_DOWN.needs_element_id());
+        assert!(!EventMask::MOUSE_UP.needs_element_id());
+        assert!(!EventMask::MOUSE_MOVE.needs_element_id());
+        assert!(!EventMask::WHEEL.needs_element_id());
+    }
+
+    /// A mask still needs an id if `.needs_element_id()`-requiring kind is
+    /// only one bit among several — union with an unrelated kind can't
+    /// hide it.
+    #[test]
+    fn needing_an_element_id_survives_a_union_with_other_kinds() {
+        let mixed = EventMask::CLICK | EventMask::MOUSE_MOVE;
+        assert!(mixed.needs_element_id());
+    }
+
+    #[test]
+    fn disjoint_masks_do_not_intersect() {
+        assert!(!EventMask::MOUSE_DOWN.intersects(EventMask::MOUSE_UP));
+    }
+
+    #[test]
+    fn a_mask_intersects_a_union_it_is_part_of() {
+        let union = EventMask::CLICK | EventMask::WHEEL;
+        assert!(union.intersects(EventMask::CLICK));
+        assert!(union.intersects(EventMask::WHEEL));
+    }
+
+    #[test]
+    fn none_intersects_nothing() {
+        assert!(!EventMask::NONE.intersects(EventMask::NONE));
+        assert!(!EventMask::NONE.intersects(EventMask::CLICK));
     }
 }

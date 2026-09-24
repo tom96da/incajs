@@ -479,6 +479,44 @@ fn wheel_and_mousedown_wired_together_fire_independently(cx: &mut TestAppContext
     );
 }
 
+/// `click` (which needs a `gpui` element id) and `mousedown` (which doesn't)
+/// wired on the same node both still fire — the id-requiring branch must
+/// still wire the stateless kinds, not just the id-requiring one.
+#[gpui::test]
+fn click_and_mousedown_wired_together_fire_independently(cx: &mut TestAppContext) {
+    let (host, node) = build_clickable_tree();
+    host.borrow_mut().listeners.register(node, "mousedown", 0);
+    let engine = Rc::new(Engine::new().unwrap());
+    engine
+        .eval::<()>(
+            "globalThis.seen = []; \
+             globalThis.__inca_callbacks__ = { \
+                0: (event) => { globalThis.seen.push(event.type); } \
+             };",
+        )
+        .unwrap();
+    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
+
+    let window = cx.add_window(|_, _| ClickableRoot {
+        host: Rc::clone(&host),
+        node,
+        dispatcher,
+    });
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    let mut cx = VisualTestContext::from_window(window.into(), cx);
+
+    cx.simulate_click(point(px(10.0), px(10.0)), Modifiers::none());
+    cx.run_until_parked();
+
+    assert_eq!(
+        engine
+            .eval::<String>("JSON.stringify(globalThis.seen)")
+            .unwrap(),
+        r#"["mousedown","click"]"#
+    );
+}
+
 /// DOM's `buttons` reports every button held, not just the one an event is
 /// about: pressing a second button while the first is still down must union
 /// its bit in, and releasing one button must clear only that bit.
