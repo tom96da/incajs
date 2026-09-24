@@ -113,11 +113,24 @@ Implemented by `render_tree_with_events`/`build_element_with_events`
 click to an `EventDispatcher` (`crates/inca-bridge/src/dispatch.rs`), which
 looks up and calls the JS callbacks registered for `(nodeId, "click")` via
 `addEventListener`, then requests a redraw.
-Other event names aren't wired to any real GPUI input yet — extend as
-needed, same "deliberately incomplete" framing as the style vocabulary.
-Neither `addEventListener` nor `EventDispatcher` requires a name to come
-from real input, or the node to be an element, so a host-lifecycle event on
-the `rootNodeId` node reaches JS through this same path.
+
+A callback receives one argument: an object shaped
+`{ type: "click", target: nodeId, ...payload }`. `type` is the event's
+name and `target` the node it fired on; further fields depend on the event
+kind — `"click"` carries none of its own in v1.
+
+`crates/inca-gpui`'s `EventKind` enumerates every native event kind a node
+can be wired for, and pairs each with its name and its `EventMask` bit —
+today just `EventKind::Click`. A node's spec carries one mask covering
+everything it listens for. Extending the wired input vocabulary means
+adding a variant to `EventKind` and a payload variant to `EventPayload` —
+same "deliberately incomplete" framing as the style vocabulary.
+
+`EventMask` covers only the fixed vocabulary of native input `inca-gpui`
+wires per-frame. A dynamically-named event — a host-lifecycle event or a
+menu item's activation (`menu:<id>`) — reaches JS through the same
+`addEventListener`/`EventDispatcher::dispatch` path; `EventMask` doesn't
+cover it.
 
 `addEventListener` itself is unchanged and needs no thread-safe/cross-thread
 callback machinery: Incarnative.js's embedded QuickJS and the GPUI event loop

@@ -22,7 +22,7 @@ use gpui::{
     div, px, rgb,
 };
 
-use crate::event_sink::EventSink;
+use crate::event_sink::{EventMask, EventPayload, EventSink};
 use crate::tree::{AttributeValue, NodeId, VirtualTree};
 
 /// What kind of element a [`VirtualNode`](crate::tree::VirtualNode) maps to.
@@ -117,8 +117,8 @@ pub struct ElementSpec {
     pub id: NodeId,
     pub tag: ElementTag,
     pub style: StyleSpec,
-    /// Whether anything is listening for a click on this node.
-    pub listens_click: bool,
+    /// Every kind of event something is listening for on this node.
+    pub listens: EventMask,
     pub children: Vec<ElementSpec>,
 }
 
@@ -240,14 +240,14 @@ fn style_spec_from_props(props: &HashMap<String, AttributeValue>) -> StyleSpec {
 /// listening for input.
 #[must_use]
 pub fn build_spec(tree: &VirtualTree, root: NodeId) -> Option<ElementSpec> {
-    build_spec_with(tree, root, &|_| false)
+    build_spec_with(tree, root, &|_| EventMask::NONE)
 }
 
 /// Builds an [`ElementSpec`] for `root` and its whole subtree, asking
-/// `listens_click` about each node. `None` if `root` doesn't resolve,
-/// matching [`VirtualTree::get`]'s convention. A child id that doesn't
-/// resolve is skipped rather than panicking — this is ultimately fed by
-/// JS-supplied data, so the render path stays defensive.
+/// `listens` about each node. `None` if `root` doesn't resolve, matching
+/// [`VirtualTree::get`]'s convention. A child id that doesn't resolve is
+/// skipped rather than panicking — this is ultimately fed by JS-supplied
+/// data, so the render path stays defensive.
 ///
 /// A predicate rather than the registry itself, so this layer stays free of
 /// it.
@@ -255,7 +255,7 @@ pub fn build_spec(tree: &VirtualTree, root: NodeId) -> Option<ElementSpec> {
 pub fn build_spec_with(
     tree: &VirtualTree,
     root: NodeId,
-    listens_click: &dyn Fn(NodeId) -> bool,
+    listens: &dyn Fn(NodeId) -> EventMask,
 ) -> Option<ElementSpec> {
     let node = tree.get(root)?;
 
@@ -273,14 +273,14 @@ pub fn build_spec_with(
     let children = node
         .children()
         .iter()
-        .filter_map(|&child_id| build_spec_with(tree, child_id, listens_click))
+        .filter_map(|&child_id| build_spec_with(tree, child_id, listens))
         .collect();
 
     Some(ElementSpec {
         id: root,
         tag,
         style,
-        listens_click: listens_click(root),
+        listens: listens(root),
         children,
     })
 }
@@ -393,13 +393,13 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
             let id = spec.id;
             let element = div().debug_selector(move || format!("node-{id}"));
 
-            match dispatch.filter(|_| spec.listens_click) {
+            match dispatch.filter(|_| spec.listens.contains(EventMask::CLICK)) {
                 Some(listening) => {
                     let listening = listening.clone();
                     finish_container(
                         element.id(ElementId::Integer(u64::from(id))).on_click(
                             move |_, window, _| {
-                                listening.dispatch(id, "click", window);
+                                listening.dispatch(id, "click", &EventPayload::None, window);
                             },
                         ),
                         spec,
@@ -437,11 +437,18 @@ where
 struct NeverListens;
 
 impl EventSink for NeverListens {
-    fn listens(&self, _node_id: NodeId, _event: &str) -> bool {
-        false
+    fn listens(&self, _node_id: NodeId) -> EventMask {
+        EventMask::NONE
     }
 
-    fn dispatch(&self, _node_id: NodeId, _event: &str, _window: &mut Window) {}
+    fn dispatch(
+        &self,
+        _node_id: NodeId,
+        _event: &str,
+        _payload: &EventPayload,
+        _window: &mut Window,
+    ) {
+    }
 }
 
 /// Recursively converts an [`ElementSpec`] into a real `gpui` [`AnyElement`],
@@ -479,7 +486,7 @@ pub fn render_tree_with_events<E: EventSink + Clone + 'static>(
     root: NodeId,
     dispatch: &E,
 ) -> Option<AnyElement> {
-    build_spec_with(tree, root, &|id| dispatch.listens(id, "click"))
+    build_spec_with(tree, root, &|id| dispatch.listens(id))
         .map(|spec| build_element_with_events(&spec, dispatch))
 }
 
@@ -587,7 +594,7 @@ mod tests {
             let id = tree.create_node("div");
 
             let spec = build_spec(&tree, id).unwrap();
-            assert!(!spec.listens_click);
+            assert_eq!(spec.listens, EventMask::NONE);
         }
 
         #[test]
@@ -599,11 +606,18 @@ mod tests {
             tree.append_child(parent, listening).unwrap();
             tree.append_child(parent, quiet).unwrap();
 
-            let spec = build_spec_with(&tree, parent, &|id| id == listening).unwrap();
+            let spec = build_spec_with(&tree, parent, &|id| {
+                if id == listening {
+                    EventMask::CLICK
+                } else {
+                    EventMask::NONE
+                }
+            })
+            .unwrap();
 
-            assert!(!spec.listens_click);
-            assert!(spec.children[0].listens_click);
-            assert!(!spec.children[1].listens_click);
+            assert_eq!(spec.listens, EventMask::NONE);
+            assert_eq!(spec.children[0].listens, EventMask::CLICK);
+            assert_eq!(spec.children[1].listens, EventMask::NONE);
         }
 
         #[test]

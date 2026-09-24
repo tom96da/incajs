@@ -27,7 +27,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use gpui::Window;
-use inca_gpui::NodeId;
+use inca_gpui::{EventKind, EventMask, EventPayload, NodeId};
 use inca_jsenv::{Engine, EngineError};
 use rquickjs::{Function, Object};
 
@@ -78,21 +78,26 @@ impl EventDispatcher {
         self
     }
 
-    /// Whether anything is registered for `(node_id, event)`. The render
-    /// path asks before wiring an element for input.
+    /// Every kind registered on `node_id`. The render path asks before
+    /// wiring an element for input.
     #[must_use]
-    pub fn listens(&self, node_id: NodeId, event: &str) -> bool {
-        !self
-            .host
-            .borrow()
-            .listeners
-            .callbacks_for(node_id, event)
-            .is_empty()
+    pub fn listens(&self, node_id: NodeId) -> EventMask {
+        let host = self.host.borrow();
+        EventKind::ALL
+            .iter()
+            .filter(|kind| {
+                !host
+                    .listeners
+                    .callbacks_for(node_id, kind.name())
+                    .is_empty()
+            })
+            .fold(EventMask::NONE, |mask, kind| mask | kind.mask())
     }
 
     /// Calls every JS callback registered for `(node_id, event)` (via
-    /// `__inca_native__.addEventListener`), passing `node_id`, then drains
-    /// the job queue and requests a redraw.
+    /// `__inca_native__.addEventListener`), passing one object shaped
+    /// `{ type: event, target: node_id, ...payload }`, then drains the job
+    /// queue and requests a redraw.
     ///
     /// Never panics. A callback that throws is reported and the rest still
     /// run — one bad listener must not take the host down, nor stop its
@@ -100,9 +105,15 @@ impl EventDispatcher {
     /// is missing or isn't a function, is a stale id and is skipped.
     ///
     /// The drain happens whether or not a listener ran: a job queued earlier
-    /// is still owed a turn, and whether this particular click had a
+    /// is still owed a turn, and whether this particular event had a
     /// listener says nothing about that.
-    pub fn dispatch(&self, node_id: NodeId, event: &str, window: &mut Window) {
+    pub fn dispatch(
+        &self,
+        node_id: NodeId,
+        event: &str,
+        payload: &EventPayload,
+        window: &mut Window,
+    ) {
         let callback_ids = self
             .host
             .borrow()
@@ -118,9 +129,19 @@ impl EventDispatcher {
                 return failures;
             };
             for callback_id in callback_ids {
-                if let Ok(callback) = callbacks.get::<_, Function>(callback_id)
-                    && let Err(err) = callback.call::<_, ()>((node_id,))
-                {
+                let Ok(callback) = callbacks.get::<_, Function>(callback_id) else {
+                    continue;
+                };
+                let call = (|| -> rquickjs::Result<()> {
+                    let event_object = Object::new(ctx.clone())?;
+                    event_object.set("type", event)?;
+                    event_object.set("target", node_id)?;
+                    match payload {
+                        EventPayload::None => {}
+                    }
+                    callback.call::<_, ()>((event_object,))
+                })();
+                if let Err(err) = call {
                     failures.push(EngineError::capture(&ctx, &err));
                 }
             }
@@ -135,12 +156,12 @@ impl EventDispatcher {
 }
 
 impl EventSink for EventDispatcher {
-    fn listens(&self, node_id: NodeId, event: &str) -> bool {
-        self.listens(node_id, event)
+    fn listens(&self, node_id: NodeId) -> EventMask {
+        self.listens(node_id)
     }
 
-    fn dispatch(&self, node_id: NodeId, event: &str, window: &mut Window) {
-        self.dispatch(node_id, event, window);
+    fn dispatch(&self, node_id: NodeId, event: &str, payload: &EventPayload, window: &mut Window) {
+        self.dispatch(node_id, event, payload, window);
     }
 }
 
@@ -180,13 +201,24 @@ mod tests {
         (dispatcher, host, reported)
     }
 
+    #[test]
+    fn listens_reports_click_only_where_something_is_registered() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let registered = host.borrow_mut().tree.create_node("div");
+        let quiet = host.borrow_mut().tree.create_node("div");
+        host.borrow_mut().listeners.register(registered, "click", 0);
+
+        assert_eq!(dispatcher.listens(registered), EventMask::CLICK);
+        assert_eq!(dispatcher.listens(quiet), EventMask::NONE);
+    }
+
     #[gpui::test]
     fn no_listener_registered_reports_nothing(cx: &mut TestAppContext) {
         let (dispatcher, host, reported) = dispatcher_with_engine();
         let node_id = host.borrow_mut().tree.create_node("div");
 
         let cx = cx.add_empty_window();
-        cx.update(|window, _| dispatcher.dispatch(node_id, "click", window));
+        cx.update(|window, _| dispatcher.dispatch(node_id, "click", &EventPayload::None, window));
 
         assert!(reported.borrow().is_empty());
     }
@@ -199,7 +231,7 @@ mod tests {
 
         // No `__inca_callbacks__` global defined at all.
         let cx = cx.add_empty_window();
-        cx.update(|window, _| dispatcher.dispatch(node_id, "click", window));
+        cx.update(|window, _| dispatcher.dispatch(node_id, "click", &EventPayload::None, window));
 
         assert!(
             reported.borrow().is_empty(),
@@ -239,7 +271,7 @@ mod tests {
             .unwrap();
 
         let cx = cx.add_empty_window();
-        cx.update(|window, _| dispatcher.dispatch(node_id, "click", window));
+        cx.update(|window, _| dispatcher.dispatch(node_id, "click", &EventPayload::None, window));
 
         assert!(
             dispatcher.engine.eval::<bool>("globalThis.ran;").unwrap(),
@@ -260,7 +292,7 @@ mod tests {
             .unwrap();
 
         let cx = cx.add_empty_window();
-        cx.update(|window, _| dispatcher.dispatch(node_id, "click", window));
+        cx.update(|window, _| dispatcher.dispatch(node_id, "click", &EventPayload::None, window));
 
         let reported = reported.borrow();
         assert_eq!(reported.len(), 1);
@@ -286,7 +318,7 @@ mod tests {
             .unwrap();
 
         let cx = cx.add_empty_window();
-        cx.update(|window, _| dispatcher.dispatch(node_id, "click", window));
+        cx.update(|window, _| dispatcher.dispatch(node_id, "click", &EventPayload::None, window));
 
         assert_eq!(reported.borrow().len(), 1);
         assert!(dispatcher.engine.eval::<bool>("globalThis.ran;").unwrap());

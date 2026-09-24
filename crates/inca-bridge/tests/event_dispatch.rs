@@ -33,7 +33,10 @@ fn install_click_counter(engine: &Engine) {
     engine
         .eval::<()>(
             "globalThis.__inca_callbacks__ = { \
-                0: () => { globalThis.clicks = (globalThis.clicks || 0) + 1; } \
+                0: (event) => { \
+                    globalThis.clicks = (globalThis.clicks || 0) + 1; \
+                    globalThis.lastEvent = event; \
+                } \
             };",
         )
         .unwrap();
@@ -51,9 +54,10 @@ fn install_deferred_click_counter(engine: &Engine) {
     engine
         .eval::<()>(
             "globalThis.__inca_callbacks__ = { \
-                0: () => { \
+                0: (event) => { \
                     Promise.resolve().then(() => { \
                         globalThis.clicks = (globalThis.clicks || 0) + 1; \
+                        globalThis.lastEvent = event; \
                     }); \
                 } \
             };",
@@ -131,6 +135,12 @@ fn click_dispatches_to_js_exactly_once(cx: &mut TestAppContext) {
         clicks(&engine),
         1.0,
         "exactly one click must dispatch exactly one JS call"
+    );
+    assert_eq!(
+        engine
+            .eval::<String>("JSON.stringify(globalThis.lastEvent)")
+            .unwrap(),
+        format!(r#"{{"type":"click","target":{node}}}"#)
     );
 }
 

@@ -58,8 +58,8 @@ export interface StyleProps {
 
 /**
  * Signature of a callback registered via {@link setEventListener}. The
- * native host currently always calls it with exactly one argument, the
- * {@link NodeId} the event fired on — the type stays variadic so a future
- * event kind can add a richer payload without a breaking signature change.
+ * native host calls it with one argument, an object with `type` (the
+ * event's name) and `target` (the {@link NodeId} it fired on), plus
+ * whatever fields that event kind carries.
  */
 export type EventListener = (...args: unknown[]) => void;

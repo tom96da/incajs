@@ -558,6 +558,7 @@ fn main() -> ExitCode {
 mod tests {
     use super::*;
     use gpui::TestAppContext;
+    use inca_gpui::EventPayload;
 
     /// The entry path these tests evaluate `source` under. Never read from
     /// disk in a test that imports nothing else, since [`Session::load`]
@@ -699,7 +700,9 @@ mod tests {
                         .get(app.session.root)
                         .unwrap()
                         .children()[0];
-                    app.session.dispatcher.dispatch(node, "click", window);
+                    app.session
+                        .dispatcher
+                        .dispatch(node, "click", &EventPayload::None, window);
                 })
                 .unwrap();
         });
