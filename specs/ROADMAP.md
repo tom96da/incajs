@@ -188,10 +188,11 @@ is a name the host agrees to send, not a new binding.
 5. **Interactive visual state**: hover, active, and focus styling mapped
    onto GPUI's own element states rather than re-derived in JS. Phase 12's
    `hover:`/`focus:` Tailwind variants build on this.
-6. **Event payloads**: a listener's callback takes only a node id today,
-   which can't express a key, a pointer position, or a text edit. The
-   callback signature and its `packages/core` wrapper are settled here,
-   once, for every event that follows.
+6. **Event payloads** (done): a listener's callback receives
+   `{ type, target, ...payload }`, and `crates/inca-gpui`'s `EventKind`
+   pairs each wired input with its name and its `EventMask` bit — see
+   [FFI.md](./FFI.md#event-dispatch-v1-click-only). Items 1–2 add a variant
+   and a payload shape there; no new plumbing.
 
 ## Phase 5: Accessibility (future)
 
