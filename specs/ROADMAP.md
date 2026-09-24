@@ -162,19 +162,19 @@ this is preferred over a hand-rolled HMR protocol.
 
 ## Phase 4: Input & text editing (future)
 
-Not started, and not begun until Phase 3's tooling is stable. Phase 1 wired
-exactly one input event — a click on a container, see
-[FFI.md](./FFI.md#event-dispatch-v1-click-only) — which is enough to prove
-the dispatch path and not enough to write an application with. An app is
-driven by input, so this is the first thing the `v0.0.1` release is missing.
+In progress. Phase 1 wired one input event — a click on a container. Item 1
+below is partway done; items 2–5 haven't started. See
+[FFI.md](./FFI.md#event-dispatch) for what's wired today.
 
 Everything here reaches JS through the existing `addEventListener` surface:
 the host already dispatches any `(node id, event name)` pair, so a new event
 is a name the host agrees to send, not a new binding.
 
-1. **Pointer input**: press, release, move, enter, leave, wheel, and the
-   button and modifier state each carries. `"click"` becomes one name among
-   many rather than the only one.
+1. **Pointer input**: press, release, move (done — `"mousedown"`/
+   `"mouseup"`/`"mousemove"`, DOM-`MouseEvent`-shaped payloads, and
+   propagation via `stopPropagation`/`stopImmediatePropagation`/
+   `preventDefault`), then enter, leave, and wheel (not started). `"click"`
+   is now one name among several rather than the only one.
 2. **Keyboard input**: key press/release with modifiers, and a focus model
    deciding which node receives them. GPUI has its own focus handles, so
    this is a mapping rather than new machinery.
@@ -191,8 +191,8 @@ is a name the host agrees to send, not a new binding.
 6. **Event payloads** (done): a listener's callback receives
    `{ type, target, ...payload }`, and `crates/inca-gpui`'s `EventKind`
    pairs each wired input with its name and its `EventMask` bit — see
-   [FFI.md](./FFI.md#event-dispatch-v1-click-only). Items 1–2 add a variant
-   and a payload shape there; no new plumbing.
+   [FFI.md](./FFI.md#event-dispatch). Items 1–2 add a variant and a payload
+   shape there; no new plumbing.
 
 ## Phase 5: Accessibility (future)
 

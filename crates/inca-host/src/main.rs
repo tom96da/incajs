@@ -691,7 +691,7 @@ mod tests {
 
         cx.update(|cx| {
             window
-                .update(cx, |app, window, _| {
+                .update(cx, |app, window, cx| {
                     let node = app
                         .session
                         .host
@@ -702,7 +702,7 @@ mod tests {
                         .children()[0];
                     app.session
                         .dispatcher
-                        .dispatch(node, "click", &EventPayload::None, window);
+                        .dispatch(node, "click", &EventPayload::None, window, cx);
                 })
                 .unwrap();
         });

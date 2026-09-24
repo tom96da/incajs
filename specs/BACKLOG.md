@@ -112,3 +112,27 @@ enough overhead for a single maintainer plus AI pairing.
   on the window, and nothing sets it. A Linux app therefore has no window
   icon at all. Either the config's `icon` feeds both, or the name says
   which one it is.
+
+- **`event.target` is an approximation**: GPUI only gives a container a
+  hitbox when something listens on it, so a click on a listener-less child
+  can't be traced to that child — `EventDispatcher::dispatch`
+  (`crates/inca-bridge/src/dispatch.rs`) sets `target` to the same node as
+  `currentTarget`, the node the call is dispatching for. Making it exact
+  means giving every container a hitbox while any node in the tree has a
+  mouse listener, and reading the innermost one hit_test finds — costing a
+  hitbox and a no-op listener call per node per pointer event. The field
+  name doesn't need to change for this to land later; only its accuracy
+  would improve. Until it does, nothing resembling event delegation
+  (a handler relying on which descendant was actually hit) can be written
+  against this framework.
+
+- **No capture-phase listener registration**: GPUI's own mouse dispatch
+  already runs a capture phase before the bubble phase
+  (`Window::dispatch_mouse_event`), but `addEventListener` has no way to
+  ask for it — every JS listener is bubble-phase only. Adding it means an
+  options parameter on `addEventListener` (`{ capture: true }`, matching
+  the DOM) and splitting `EventListeners`' `(node, event)` key into
+  `(node, event, capture)`, with `EventDispatcher::listens` and `dispatch`
+  each gaining a capture-phase counterpart wired to GPUI's
+  `capture_any_mouse_down`/`capture_any_mouse_up` and friends. Vue's
+  `@click.capture` has nothing to bind to until this lands.

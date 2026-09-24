@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use gpui::Window;
+use gpui::{App, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Window};
 
 use crate::tree::NodeId;
 
@@ -32,6 +32,9 @@ macro_rules! event_kinds {
 
 event_kinds! {
     Click => "click",
+    MouseDown => "mousedown",
+    MouseUp => "mouseup",
+    MouseMove => "mousemove",
 }
 
 impl EventKind {
@@ -40,6 +43,9 @@ impl EventKind {
     pub const fn mask(self) -> EventMask {
         match self {
             Self::Click => EventMask::CLICK,
+            Self::MouseDown => EventMask::MOUSE_DOWN,
+            Self::MouseUp => EventMask::MOUSE_UP,
+            Self::MouseMove => EventMask::MOUSE_MOVE,
         }
     }
 }
@@ -53,6 +59,12 @@ impl EventMask {
     pub const NONE: Self = Self(0);
     /// Wired for [`EventKind::Click`].
     pub const CLICK: Self = Self(1 << 0);
+    /// Wired for [`EventKind::MouseDown`].
+    pub const MOUSE_DOWN: Self = Self(1 << 1);
+    /// Wired for [`EventKind::MouseUp`].
+    pub const MOUSE_UP: Self = Self(1 << 2);
+    /// Wired for [`EventKind::MouseMove`].
+    pub const MOUSE_MOVE: Self = Self(1 << 3);
 
     /// Whether every bit set in `other` is also set in `self`.
     #[must_use]
@@ -80,10 +92,83 @@ impl std::ops::BitOr for EventMask {
 }
 
 /// What a dispatch carries beyond the node it fired on.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum EventPayload {
     /// No data beyond the node and the event's name.
     None,
+    /// A mouse position, button, and modifier state, DOM-`MouseEvent`-shaped.
+    Mouse(MousePayload),
+}
+
+/// [`EventPayload::Mouse`]'s fields, named and shaped after DOM's
+/// `MouseEvent`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MousePayload {
+    pub client_x: f32,
+    pub client_y: f32,
+    /// The button this event is about. 0 for a move, which isn't about any
+    /// one button.
+    pub button: u8,
+    /// Every button held during this event, as a bitmask (DOM's `buttons`).
+    pub buttons: u8,
+    /// How many clicks this is part of (DOM's `detail`). 0 for a move.
+    pub detail: u32,
+    pub modifiers: gpui::Modifiers,
+}
+
+/// DOM's `button`/`buttons` numbering for a [`MouseButton`]. `buttons` is a
+/// bit; `button` is that bit's index.
+const fn dom_button_bit(button: MouseButton) -> u8 {
+    match button {
+        MouseButton::Left => 0,
+        MouseButton::Middle => 1,
+        MouseButton::Right => 2,
+        MouseButton::Navigate(gpui::NavigationDirection::Back) => 3,
+        MouseButton::Navigate(gpui::NavigationDirection::Forward) => 4,
+    }
+}
+
+impl From<&MouseDownEvent> for EventPayload {
+    fn from(event: &MouseDownEvent) -> Self {
+        let bit = dom_button_bit(event.button);
+        Self::Mouse(MousePayload {
+            client_x: f32::from(event.position.x),
+            client_y: f32::from(event.position.y),
+            button: bit,
+            buttons: 1 << bit,
+            detail: u32::try_from(event.click_count).unwrap_or(u32::MAX),
+            modifiers: event.modifiers,
+        })
+    }
+}
+
+impl From<&MouseUpEvent> for EventPayload {
+    fn from(event: &MouseUpEvent) -> Self {
+        let bit = dom_button_bit(event.button);
+        Self::Mouse(MousePayload {
+            client_x: f32::from(event.position.x),
+            client_y: f32::from(event.position.y),
+            button: bit,
+            buttons: 0,
+            detail: u32::try_from(event.click_count).unwrap_or(u32::MAX),
+            modifiers: event.modifiers,
+        })
+    }
+}
+
+impl From<&MouseMoveEvent> for EventPayload {
+    fn from(event: &MouseMoveEvent) -> Self {
+        Self::Mouse(MousePayload {
+            client_x: f32::from(event.position.x),
+            client_y: f32::from(event.position.y),
+            button: 0,
+            buttons: event
+                .pressed_button
+                .map_or(0, |button| 1 << dom_button_bit(button)),
+            detail: 0,
+            modifiers: event.modifiers,
+        })
+    }
 }
 
 /// What [`crate::element`] needs from something that can dispatch a native
@@ -95,8 +180,17 @@ pub trait EventSink {
     /// wiring an element for input.
     fn listens(&self, node_id: NodeId) -> EventMask;
 
-    /// Calls whatever is registered for `(node_id, event)`, passing `payload`.
-    fn dispatch(&self, node_id: NodeId, event: &str, payload: &EventPayload, window: &mut Window);
+    /// Calls whatever is registered for `(node_id, event)`, passing
+    /// `payload`. `cx` lets a callback's `stopPropagation`/`preventDefault`
+    /// reach GPUI's own dispatch.
+    fn dispatch(
+        &self,
+        node_id: NodeId,
+        event: &str,
+        payload: &EventPayload,
+        window: &mut Window,
+        cx: &mut App,
+    );
 }
 
 #[cfg(test)]
@@ -153,5 +247,75 @@ mod tests {
                 "{kind:?} repeats an earlier name"
             );
         }
+    }
+
+    fn mouse_payload(payload: EventPayload) -> MousePayload {
+        match payload {
+            EventPayload::Mouse(mouse) => mouse,
+            EventPayload::None => panic!("expected a mouse payload"),
+        }
+    }
+
+    #[test]
+    fn a_left_mouse_down_reports_button_zero_held() {
+        let event = MouseDownEvent {
+            button: MouseButton::Left,
+            click_count: 1,
+            ..Default::default()
+        };
+        let mouse = mouse_payload(EventPayload::from(&event));
+        assert_eq!(mouse.button, 0);
+        assert_eq!(mouse.buttons, 0b001);
+        assert_eq!(mouse.detail, 1);
+    }
+
+    #[test]
+    fn a_right_mouse_up_holds_no_button() {
+        let event = MouseUpEvent {
+            button: MouseButton::Right,
+            click_count: 2,
+            ..Default::default()
+        };
+        let mouse = mouse_payload(EventPayload::from(&event));
+        assert_eq!(mouse.button, 2);
+        assert_eq!(mouse.buttons, 0);
+        assert_eq!(mouse.detail, 2);
+    }
+
+    #[test]
+    fn a_move_with_no_button_pressed_reports_none_held() {
+        let event = MouseMoveEvent {
+            pressed_button: None,
+            ..Default::default()
+        };
+        let mouse = mouse_payload(EventPayload::from(&event));
+        assert_eq!(mouse.button, 0);
+        assert_eq!(mouse.buttons, 0);
+        assert_eq!(mouse.detail, 0);
+    }
+
+    #[test]
+    fn a_move_while_dragging_reports_the_dragged_buttons_bit() {
+        let event = MouseMoveEvent {
+            pressed_button: Some(MouseButton::Middle),
+            ..Default::default()
+        };
+        let mouse = mouse_payload(EventPayload::from(&event));
+        assert_eq!(mouse.buttons, 0b010);
+    }
+
+    #[test]
+    fn modifiers_carry_through_unchanged() {
+        let modifiers = gpui::Modifiers {
+            control: true,
+            platform: true,
+            ..Default::default()
+        };
+        let event = MouseDownEvent {
+            modifiers,
+            ..Default::default()
+        };
+        let mouse = mouse_payload(EventPayload::from(&event));
+        assert_eq!(mouse.modifiers, modifiers);
     }
 }

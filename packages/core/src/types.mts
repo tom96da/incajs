@@ -59,7 +59,12 @@ export interface StyleProps {
 /**
  * Signature of a callback registered via {@link setEventListener}. The
  * native host calls it with one argument, an object with `type` (the
- * event's name) and `target` (the {@link NodeId} it fired on), plus
- * whatever fields that event kind carries.
+ * event's name), `target`/`currentTarget` (both the {@link NodeId} it fired
+ * on), `stopPropagation`/`stopImmediatePropagation`/`preventDefault`
+ * methods, plus whatever fields that event kind carries.
+ *
+ * `"mousedown"`/`"mouseup"`/`"mousemove"` carry `clientX`, `clientY`,
+ * `button`, `buttons`, `detail`, and `ctrlKey`/`shiftKey`/`altKey`/
+ * `metaKey`, DOM-`MouseEvent`-named. `"click"` carries none of its own.
  */
 export type EventListener = (...args: unknown[]) => void;

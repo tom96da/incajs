@@ -106,25 +106,48 @@ any element carrying a click listener, so wiring a whole tree would cost a
 hitbox and two mouse listeners per node per frame, and hit-test all of them
 on every pointer move.
 
-### Event dispatch (v1: `"click"` only)
+### Event dispatch
 
 Implemented by `render_tree_with_events`/`build_element_with_events`
 (`crates/inca-gpui/src/element.rs`, Unit vi), which wire every container's
-click to an `EventDispatcher` (`crates/inca-bridge/src/dispatch.rs`), which
-looks up and calls the JS callbacks registered for `(nodeId, "click")` via
-`addEventListener`, then requests a redraw.
+`"click"`/`"mousedown"`/`"mouseup"`/`"mousemove"` to an `EventDispatcher`
+(`crates/inca-bridge/src/dispatch.rs`), which looks up and calls the JS
+callbacks registered for `(nodeId, event)` via `addEventListener`, then
+requests a redraw.
 
-A callback receives one argument: an object shaped
-`{ type: "click", target: nodeId, ...payload }`. `type` is the event's
-name and `target` the node it fired on; further fields depend on the event
-kind — `"click"` carries none of its own in v1.
+A callback receives one argument, shared across every callback on one node
+for one event: an object shaped `{ type, target, currentTarget, ...payload
+}` plus `stopPropagation`/`stopImmediatePropagation`/`preventDefault`
+methods. `type` is the event's name. `target`/`currentTarget` are both the
+node this call is dispatching for — every container with a listener gets a
+hitbox, but one without a listener doesn't, so the node a pointer visually
+lands on isn't always known; `currentTarget` is exact, `target` will read
+the same until something can compute it precisely (tracked in
+[BACKLOG.md](./BACKLOG.md)). Further fields depend on the event kind —
+`"click"` carries none of its own; `"mousedown"`/`"mouseup"`/`"mousemove"`
+carry `clientX`, `clientY`, `button`, `buttons`, `detail`, and
+`ctrlKey`/`shiftKey`/`altKey`/`metaKey`, DOM-`MouseEvent`-named (`platform`
+becomes `metaKey`; GPUI's `function` modifier has no DOM counterpart and is
+dropped).
+
+`stopImmediatePropagation()` stops the remaining callbacks *on that node*.
+`stopPropagation()`/`preventDefault()` are read back once every callback on
+the node has run, and forwarded into GPUI's own dispatch — GPUI already
+bubbles from the node a pointer hit outward through its ancestors the same
+way the DOM does, so `stopPropagation()` keeps ancestor listeners for the
+same event from firing. `preventDefault()` reaches only what GPUI itself
+uses it for (`Window::prevent_default`'s doc comment) — narrower than the
+DOM's. `"click"` fires *before* `"mouseup"` on the same node: GPUI
+synthesizes clicks from its own mouse-down/mouse-up bookkeeping, registered
+after this crate's own `mouseup` wiring, and bubble-phase listeners run in
+reverse registration order.
 
 `crates/inca-gpui`'s `EventKind` enumerates every native event kind a node
-can be wired for, and pairs each with its name and its `EventMask` bit —
-today just `EventKind::Click`. A node's spec carries one mask covering
-everything it listens for. Extending the wired input vocabulary means
-adding a variant to `EventKind` and a payload variant to `EventPayload` —
-same "deliberately incomplete" framing as the style vocabulary.
+can be wired for, and pairs each with its name and its `EventMask` bit.
+A node's spec carries one mask covering everything it listens for.
+Extending the wired input vocabulary means adding a variant to `EventKind`
+and a payload variant to `EventPayload` — same "deliberately incomplete"
+framing as the style vocabulary.
 
 `EventMask` covers only the fixed vocabulary of native input `inca-gpui`
 wires per-frame. A dynamically-named event — a host-lifecycle event or a

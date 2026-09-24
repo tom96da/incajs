@@ -18,8 +18,8 @@ use std::collections::HashMap;
 
 use gpui::prelude::*;
 use gpui::{
-    AnyElement, Display, ElementId, Fill, FlexDirection, Hsla, Length, StyleRefinement, Window,
-    div, px, rgb,
+    AnyElement, App, Display, ElementId, Fill, FlexDirection, Hsla, Length, StyleRefinement,
+    Window, div, px, rgb,
 };
 
 use crate::event_sink::{EventMask, EventPayload, EventSink};
@@ -376,9 +376,11 @@ fn apply_style(style: &mut StyleRefinement, spec: &StyleSpec) {
 
 /// Recursively converts an [`ElementSpec`] into a real `gpui` [`AnyElement`].
 ///
-/// A container is wired for input only when something listens on it. Wiring
-/// means a `gpui` `ElementId`, which `on_click` does not exist without, and
-/// a hitbox GPUI then hit-tests on every pointer move.
+/// A container gets a hitbox only when something listens on it — GPUI
+/// inserts one for any element carrying a mouse listener, `click` included.
+/// `click` additionally needs a `gpui` `ElementId`, which only `on_click`
+/// (a `StatefulInteractiveElement` method) requires; the other kinds wire
+/// through plain `InteractiveElement` methods and need no id.
 ///
 /// Every container carries a `.debug_selector("node-{id}")` — a no-op
 /// outside test builds — so a test can look its computed bounds up by
@@ -391,22 +393,47 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
         ElementTag::Text(content) => content.clone().into_any_element(),
         ElementTag::Container => {
             let id = spec.id;
-            let element = div().debug_selector(move || format!("node-{id}"));
+            let wired = |mask: EventMask| dispatch.is_some() && spec.listens.contains(mask);
 
-            match dispatch.filter(|_| spec.listens.contains(EventMask::CLICK)) {
-                Some(listening) => {
-                    let listening = listening.clone();
-                    finish_container(
-                        element.id(ElementId::Integer(u64::from(id))).on_click(
-                            move |_, window, _| {
-                                listening.dispatch(id, "click", &EventPayload::None, window);
-                            },
-                        ),
-                        spec,
-                        dispatch,
-                    )
-                }
-                None => finish_container(element, spec, dispatch),
+            let element = div()
+                .debug_selector(move || format!("node-{id}"))
+                .when(wired(EventMask::MOUSE_DOWN), |el| {
+                    let listening = dispatch.expect("wired implies dispatch is Some").clone();
+                    el.on_any_mouse_down(move |event, window, cx| {
+                        listening.dispatch(id, "mousedown", &event.into(), window, cx);
+                    })
+                })
+                .when(wired(EventMask::MOUSE_UP), |mut el| {
+                    let listening = dispatch.expect("wired implies dispatch is Some").clone();
+                    // No fluent `on_any_mouse_up` exists — DOM's `mouseup`
+                    // fires for any button, and only `Interactivity`'s
+                    // imperative form takes "any" rather than one button.
+                    el.interactivity()
+                        .on_any_mouse_up(move |event, window, cx| {
+                            listening.dispatch(id, "mouseup", &event.into(), window, cx);
+                        });
+                    el
+                })
+                .when(wired(EventMask::MOUSE_MOVE), |el| {
+                    let listening = dispatch.expect("wired implies dispatch is Some").clone();
+                    el.on_mouse_move(move |event, window, cx| {
+                        listening.dispatch(id, "mousemove", &event.into(), window, cx);
+                    })
+                });
+
+            if wired(EventMask::CLICK) {
+                let listening = dispatch.expect("wired implies dispatch is Some").clone();
+                finish_container(
+                    element
+                        .id(ElementId::Integer(u64::from(id)))
+                        .on_click(move |_, window, cx| {
+                            listening.dispatch(id, "click", &EventPayload::None, window, cx);
+                        }),
+                    spec,
+                    dispatch,
+                )
+            } else {
+                finish_container(element, spec, dispatch)
             }
         }
     }
@@ -447,6 +474,7 @@ impl EventSink for NeverListens {
         _event: &str,
         _payload: &EventPayload,
         _window: &mut Window,
+        _cx: &mut App,
     ) {
     }
 }

@@ -23,10 +23,10 @@
 //! real function up fresh inside one `Engine::with` call and drops it
 //! before that call returns — it never crosses into Rust-held state.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use gpui::Window;
+use gpui::{App, Window};
 use inca_gpui::{EventKind, EventMask, EventPayload, NodeId};
 use inca_jsenv::{Engine, EngineError};
 use rquickjs::{Function, Object};
@@ -58,6 +58,10 @@ pub struct EventDispatcher {
     engine: Rc<Engine>,
     host: Rc<RefCell<Host>>,
     reporter: ErrorReporter,
+    /// Every button currently held, as a `mousedown`/`mouseup`/`mousemove`
+    /// payload's `buttons` bitmask — GPUI's own mouse events carry only the
+    /// one button each is about, not which others are held alongside it.
+    held_buttons: Rc<Cell<u8>>,
 }
 
 impl EventDispatcher {
@@ -67,6 +71,7 @@ impl EventDispatcher {
             engine,
             host,
             reporter: stderr_reporter(),
+            held_buttons: Rc::new(Cell::new(0)),
         }
     }
 
@@ -94,10 +99,46 @@ impl EventDispatcher {
             .fold(EventMask::NONE, |mask, kind| mask | kind.mask())
     }
 
+    /// Returns `payload` with its `buttons` bitmask corrected against
+    /// [`Self::held_buttons`] for `"mousedown"`/`"mouseup"`/`"mousemove"`,
+    /// updating that tracked state first for `"mousedown"`/`"mouseup"`.
+    /// A DOM `mouseup` excludes the button just released; every other kind
+    /// includes every button still held.
+    fn with_held_buttons(&self, event: &str, payload: &EventPayload) -> EventPayload {
+        let EventPayload::Mouse(mouse) = *payload else {
+            return *payload;
+        };
+        let bit = 1u8 << mouse.button;
+        let held = match event {
+            "mousedown" => {
+                self.held_buttons.set(self.held_buttons.get() | bit);
+                self.held_buttons.get()
+            }
+            "mouseup" => {
+                self.held_buttons.set(self.held_buttons.get() & !bit);
+                self.held_buttons.get()
+            }
+            _ => self.held_buttons.get(),
+        };
+        EventPayload::Mouse(inca_gpui::MousePayload {
+            buttons: held,
+            ..mouse
+        })
+    }
+
     /// Calls every JS callback registered for `(node_id, event)` (via
-    /// `__inca_native__.addEventListener`), passing one object shaped
-    /// `{ type: event, target: node_id, ...payload }`, then drains the job
-    /// queue and requests a redraw.
+    /// `__inca_native__.addEventListener`), passing one shared object shaped
+    /// `{ type, target, currentTarget, ...payload }` plus DOM's three
+    /// propagation methods, then drains the job queue and requests a redraw.
+    ///
+    /// `target` and `currentTarget` are both `node_id`. `currentTarget` (the
+    /// node this call is dispatching for) is exact; `target` is an
+    /// approximation of the same value (tracked in `specs/BACKLOG.md`).
+    ///
+    /// A callback calling `stopImmediatePropagation()` stops the remaining
+    /// callbacks *on this node*. `stopPropagation()`/`preventDefault()` are
+    /// read back after every callback here has run, and forwarded to `cx`'s
+    /// bubble (`node_id`'s ancestors) and `window`'s default handling.
     ///
     /// Never panics. A callback that throws is reported and the rest still
     /// run — one bad listener must not take the host down, nor stop its
@@ -113,6 +154,7 @@ impl EventDispatcher {
         event: &str,
         payload: &EventPayload,
         window: &mut Window,
+        cx: &mut App,
     ) {
         let callback_ids = self
             .host
@@ -121,6 +163,13 @@ impl EventDispatcher {
             .callbacks_for(node_id, event)
             .to_vec();
 
+        let payload = self.with_held_buttons(event, payload);
+        let payload = &payload;
+
+        let stop_propagation = Rc::new(Cell::new(false));
+        let stop_immediate = Rc::new(Cell::new(false));
+        let prevent_default = Rc::new(Cell::new(false));
+
         // Collected rather than reported in place: a reporter is free to do
         // anything, and re-entering the engine from inside `with` panics.
         let failures = self.engine.with(|ctx| {
@@ -128,20 +177,58 @@ impl EventDispatcher {
             let Ok(callbacks) = ctx.globals().get::<_, Object>("__inca_callbacks__") else {
                 return failures;
             };
+
+            let event_object = (|| -> rquickjs::Result<Object> {
+                let event_object = Object::new(ctx.clone())?;
+                event_object.set("type", event)?;
+                event_object.set("target", node_id)?;
+                event_object.set("currentTarget", node_id)?;
+                set_payload(&event_object, payload)?;
+
+                event_object.set(
+                    "stopImmediatePropagation",
+                    Function::new(ctx.clone(), {
+                        let stop_propagation = Rc::clone(&stop_propagation);
+                        let stop_immediate = Rc::clone(&stop_immediate);
+                        move || {
+                            stop_propagation.set(true);
+                            stop_immediate.set(true);
+                        }
+                    })?,
+                )?;
+                event_object.set(
+                    "stopPropagation",
+                    Function::new(ctx.clone(), {
+                        let stop_propagation = Rc::clone(&stop_propagation);
+                        move || stop_propagation.set(true)
+                    })?,
+                )?;
+                event_object.set(
+                    "preventDefault",
+                    Function::new(ctx.clone(), {
+                        let prevent_default = Rc::clone(&prevent_default);
+                        move || prevent_default.set(true)
+                    })?,
+                )?;
+
+                Ok(event_object)
+            })();
+            let event_object = match event_object {
+                Ok(event_object) => event_object,
+                Err(err) => {
+                    failures.push(EngineError::capture(&ctx, &err));
+                    return failures;
+                }
+            };
+
             for callback_id in callback_ids {
+                if stop_immediate.get() {
+                    break;
+                }
                 let Ok(callback) = callbacks.get::<_, Function>(callback_id) else {
                     continue;
                 };
-                let call = (|| -> rquickjs::Result<()> {
-                    let event_object = Object::new(ctx.clone())?;
-                    event_object.set("type", event)?;
-                    event_object.set("target", node_id)?;
-                    match payload {
-                        EventPayload::None => {}
-                    }
-                    callback.call::<_, ()>((event_object,))
-                })();
-                if let Err(err) = call {
+                if let Err(err) = callback.call::<_, ()>((event_object.clone(),)) {
                     failures.push(EngineError::capture(&ctx, &err));
                 }
             }
@@ -151,8 +238,34 @@ impl EventDispatcher {
             (self.reporter)(failure);
         }
 
+        if stop_propagation.get() {
+            cx.stop_propagation();
+        }
+        if prevent_default.get() {
+            window.prevent_default();
+        }
+
         drain_jobs_and_refresh(&self.engine, window);
     }
+}
+
+/// Writes `payload`'s fields onto `event_object`, DOM-named.
+fn set_payload(event_object: &Object, payload: &EventPayload) -> rquickjs::Result<()> {
+    match payload {
+        EventPayload::None => {}
+        EventPayload::Mouse(mouse) => {
+            event_object.set("clientX", mouse.client_x)?;
+            event_object.set("clientY", mouse.client_y)?;
+            event_object.set("button", mouse.button)?;
+            event_object.set("buttons", mouse.buttons)?;
+            event_object.set("detail", mouse.detail)?;
+            event_object.set("ctrlKey", mouse.modifiers.control)?;
+            event_object.set("shiftKey", mouse.modifiers.shift)?;
+            event_object.set("altKey", mouse.modifiers.alt)?;
+            event_object.set("metaKey", mouse.modifiers.platform)?;
+        }
+    }
+    Ok(())
 }
 
 impl EventSink for EventDispatcher {
@@ -160,8 +273,15 @@ impl EventSink for EventDispatcher {
         self.listens(node_id)
     }
 
-    fn dispatch(&self, node_id: NodeId, event: &str, payload: &EventPayload, window: &mut Window) {
-        self.dispatch(node_id, event, payload, window);
+    fn dispatch(
+        &self,
+        node_id: NodeId,
+        event: &str,
+        payload: &EventPayload,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        self.dispatch(node_id, event, payload, window, cx);
     }
 }
 
@@ -218,7 +338,9 @@ mod tests {
         let node_id = host.borrow_mut().tree.create_node("div");
 
         let cx = cx.add_empty_window();
-        cx.update(|window, _| dispatcher.dispatch(node_id, "click", &EventPayload::None, window));
+        cx.update(|window, cx| {
+            dispatcher.dispatch(node_id, "click", &EventPayload::None, window, cx);
+        });
 
         assert!(reported.borrow().is_empty());
     }
@@ -231,7 +353,9 @@ mod tests {
 
         // No `__inca_callbacks__` global defined at all.
         let cx = cx.add_empty_window();
-        cx.update(|window, _| dispatcher.dispatch(node_id, "click", &EventPayload::None, window));
+        cx.update(|window, cx| {
+            dispatcher.dispatch(node_id, "click", &EventPayload::None, window, cx);
+        });
 
         assert!(
             reported.borrow().is_empty(),
@@ -271,7 +395,9 @@ mod tests {
             .unwrap();
 
         let cx = cx.add_empty_window();
-        cx.update(|window, _| dispatcher.dispatch(node_id, "click", &EventPayload::None, window));
+        cx.update(|window, cx| {
+            dispatcher.dispatch(node_id, "click", &EventPayload::None, window, cx);
+        });
 
         assert!(
             dispatcher.engine.eval::<bool>("globalThis.ran;").unwrap(),
@@ -292,7 +418,9 @@ mod tests {
             .unwrap();
 
         let cx = cx.add_empty_window();
-        cx.update(|window, _| dispatcher.dispatch(node_id, "click", &EventPayload::None, window));
+        cx.update(|window, cx| {
+            dispatcher.dispatch(node_id, "click", &EventPayload::None, window, cx);
+        });
 
         let reported = reported.borrow();
         assert_eq!(reported.len(), 1);
@@ -318,7 +446,9 @@ mod tests {
             .unwrap();
 
         let cx = cx.add_empty_window();
-        cx.update(|window, _| dispatcher.dispatch(node_id, "click", &EventPayload::None, window));
+        cx.update(|window, cx| {
+            dispatcher.dispatch(node_id, "click", &EventPayload::None, window, cx);
+        });
 
         assert_eq!(reported.borrow().len(), 1);
         assert!(dispatcher.engine.eval::<bool>("globalThis.ran;").unwrap());
