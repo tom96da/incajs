@@ -27,7 +27,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use gpui::{App, Window};
-use inca_gpui::{EventKind, EventMask, EventPayload, NodeId};
+use inca_gpui::{EventKind, EventMask, EventPayload, MousePayload, NodeId, WheelPayload};
 use inca_jsenv::{Engine, EngineError};
 use rquickjs::{Function, Object};
 
@@ -103,17 +103,24 @@ impl EventDispatcher {
     /// [`Self::held_buttons`]. A DOM `mouseup` excludes the button just
     /// released; every other kind includes every button still held.
     fn with_held_buttons(&self, event: &str, payload: &EventPayload) -> EventPayload {
-        let EventPayload::Mouse(mouse) = *payload else {
-            return *payload;
-        };
-        EventPayload::Mouse(inca_gpui::MousePayload {
-            buttons: self.update_held_buttons(event, mouse.button),
-            ..mouse
-        })
+        match *payload {
+            EventPayload::Mouse(mouse) => EventPayload::Mouse(MousePayload {
+                buttons: self.update_held_buttons(event, mouse.button),
+                ..mouse
+            }),
+            EventPayload::Wheel(wheel) => EventPayload::Wheel(WheelPayload {
+                mouse: MousePayload {
+                    buttons: self.update_held_buttons(event, wheel.mouse.button),
+                    ..wheel.mouse
+                },
+                ..wheel
+            }),
+            EventPayload::None => *payload,
+        }
     }
 
     /// Updates [`Self::held_buttons`] for `"mousedown"`/`"mouseup"` and
-    /// returns the current value — `"mousemove"` only reads it.
+    /// returns the current value — `"mousemove"`/`"wheel"` only read it.
     /// `button` is `MousePayload`'s own field, a public part of
     /// `inca-gpui`'s API, so an out-of-range value (only 0..=4 are ever
     /// produced by this crate) is handled rather than shifted unchecked.
@@ -254,18 +261,31 @@ impl EventDispatcher {
 fn set_payload(event_object: &Object, payload: &EventPayload) -> rquickjs::Result<()> {
     match payload {
         EventPayload::None => {}
-        EventPayload::Mouse(mouse) => {
-            event_object.set("clientX", mouse.client_x)?;
-            event_object.set("clientY", mouse.client_y)?;
-            event_object.set("button", mouse.button)?;
-            event_object.set("buttons", mouse.buttons)?;
-            event_object.set("detail", mouse.detail)?;
-            event_object.set("ctrlKey", mouse.modifiers.control)?;
-            event_object.set("shiftKey", mouse.modifiers.shift)?;
-            event_object.set("altKey", mouse.modifiers.alt)?;
-            event_object.set("metaKey", mouse.modifiers.platform)?;
+        EventPayload::Mouse(mouse) => set_mouse_fields(event_object, mouse)?,
+        EventPayload::Wheel(wheel) => {
+            set_mouse_fields(event_object, &wheel.mouse)?;
+            event_object.set("deltaX", wheel.delta_x)?;
+            event_object.set("deltaY", wheel.delta_y)?;
+            event_object.set("deltaZ", wheel.delta_z)?;
+            event_object.set("deltaMode", wheel.delta_mode)?;
         }
     }
+    Ok(())
+}
+
+/// Writes [`MousePayload`]'s fields onto `event_object`, DOM-named — shared
+/// by [`EventPayload::Mouse`] and [`EventPayload::Wheel`] (DOM's
+/// `WheelEvent` extends `MouseEvent`).
+fn set_mouse_fields(event_object: &Object, mouse: &MousePayload) -> rquickjs::Result<()> {
+    event_object.set("clientX", mouse.client_x)?;
+    event_object.set("clientY", mouse.client_y)?;
+    event_object.set("button", mouse.button)?;
+    event_object.set("buttons", mouse.buttons)?;
+    event_object.set("detail", mouse.detail)?;
+    event_object.set("ctrlKey", mouse.modifiers.control)?;
+    event_object.set("shiftKey", mouse.modifiers.shift)?;
+    event_object.set("altKey", mouse.modifiers.alt)?;
+    event_object.set("metaKey", mouse.modifiers.platform)?;
     Ok(())
 }
 

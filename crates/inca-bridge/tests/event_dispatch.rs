@@ -12,8 +12,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use gpui::{
-    Context, Modifiers, MouseButton, Render, TestAppContext, VisualTestContext, Window, point,
-    prelude::*, px,
+    Context, Modifiers, MouseButton, Render, ScrollDelta, ScrollWheelEvent, TestAppContext,
+    VisualTestContext, Window, point, prelude::*, px,
 };
 use inca_bridge::{EventDispatcher, Host};
 use inca_gpui::{NodeId, render_tree_with_events};
@@ -326,6 +326,157 @@ fn prevent_default_reaches_the_window(cx: &mut TestAppContext) {
         .update_window(window.into(), |_, window, _| window.default_prevented())
         .unwrap();
     assert!(prevented, "preventDefault() must reach the window");
+}
+
+/// A `wheel`'s payload carries DOM-`WheelEvent`-shaped delta fields plus
+/// every field a `mouse` payload does — `WheelEvent` extends `MouseEvent`.
+#[gpui::test]
+fn wheel_carries_dom_shaped_delta_fields(cx: &mut TestAppContext) {
+    let (host, node) = build_tree_listening_for("wheel");
+    let engine = Rc::new(Engine::new().unwrap());
+    install_click_counter(&engine);
+    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
+
+    let window = cx.add_window(|_, _| ClickableRoot {
+        host: Rc::clone(&host),
+        node,
+        dispatcher,
+    });
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+
+    let mut cx = VisualTestContext::from_window(window.into(), cx);
+    cx.simulate_event(ScrollWheelEvent {
+        position: point(px(10.0), px(10.0)),
+        delta: ScrollDelta::Pixels(point(px(0.0), px(-5.0))),
+        ..Default::default()
+    });
+
+    assert_eq!(clicks(&engine), 1.0);
+    assert_eq!(
+        engine
+            .eval::<String>("JSON.stringify(globalThis.lastEvent)")
+            .unwrap(),
+        format!(
+            r#"{{"type":"wheel","target":{node},"currentTarget":{node},"clientX":10,"clientY":10,"button":0,"buttons":0,"detail":0,"ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false,"deltaX":0,"deltaY":-5,"deltaZ":0,"deltaMode":0}}"#
+        )
+    );
+}
+
+/// A mouse button held while scrolling still shows up in a `wheel`'s
+/// `buttons` — the `held_buttons` tracking `mousedown`/`mouseup` update is
+/// shared with every payload kind, not copied per kind.
+#[gpui::test]
+fn wheel_reports_a_button_held_from_an_earlier_mousedown(cx: &mut TestAppContext) {
+    let (host, node) = build_tree_listening_for("mousedown");
+    host.borrow_mut().listeners.register(node, "wheel", 0);
+    let engine = Rc::new(Engine::new().unwrap());
+    install_click_counter(&engine);
+    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
+
+    let window = cx.add_window(|_, _| ClickableRoot {
+        host: Rc::clone(&host),
+        node,
+        dispatcher,
+    });
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    let mut cx = VisualTestContext::from_window(window.into(), cx);
+
+    cx.simulate_mouse_down(
+        point(px(10.0), px(10.0)),
+        MouseButton::Middle,
+        Modifiers::none(),
+    );
+    cx.run_until_parked();
+    cx.simulate_event(ScrollWheelEvent {
+        position: point(px(10.0), px(10.0)),
+        delta: ScrollDelta::Lines(point(0.0, 1.0)),
+        ..Default::default()
+    });
+
+    let buttons: u8 = engine.eval("globalThis.lastEvent.buttons").unwrap();
+    assert_eq!(buttons, 0b010);
+}
+
+/// A `wheel` on a node nothing listens for must not call into JS — same
+/// guarantee `no_listener_registered_reports_nothing` gives `click`.
+#[gpui::test]
+fn wheel_with_no_listener_reports_nothing(cx: &mut TestAppContext) {
+    let host = Rc::new(RefCell::new(Host::default()));
+    let node = {
+        let mut host = host.borrow_mut();
+        let node = host.tree.create_node("div");
+        host.tree.set_style(node, "width", 100.0).unwrap();
+        host.tree.set_style(node, "height", 100.0).unwrap();
+        node
+    };
+    let engine = Rc::new(Engine::new().unwrap());
+    install_click_counter(&engine);
+    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
+
+    let window = cx.add_window(|_, _| ClickableRoot {
+        host: Rc::clone(&host),
+        node,
+        dispatcher,
+    });
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    let mut cx = VisualTestContext::from_window(window.into(), cx);
+
+    cx.simulate_event(ScrollWheelEvent {
+        position: point(px(10.0), px(10.0)),
+        delta: ScrollDelta::Lines(point(0.0, 1.0)),
+        ..Default::default()
+    });
+
+    assert_eq!(clicks(&engine), 0.0);
+}
+
+/// Two kinds wired on the same node fire independently, at the values each
+/// carries — wiring one kind doesn't steal or block another's dispatch.
+#[gpui::test]
+fn wheel_and_mousedown_wired_together_fire_independently(cx: &mut TestAppContext) {
+    let (host, node) = build_tree_listening_for("wheel");
+    host.borrow_mut().listeners.register(node, "mousedown", 0);
+    let engine = Rc::new(Engine::new().unwrap());
+    engine
+        .eval::<()>(
+            "globalThis.seen = []; \
+             globalThis.__inca_callbacks__ = { \
+                0: (event) => { globalThis.seen.push(event.type); } \
+             };",
+        )
+        .unwrap();
+    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
+
+    let window = cx.add_window(|_, _| ClickableRoot {
+        host: Rc::clone(&host),
+        node,
+        dispatcher,
+    });
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    let mut cx = VisualTestContext::from_window(window.into(), cx);
+
+    cx.simulate_mouse_down(
+        point(px(10.0), px(10.0)),
+        MouseButton::Left,
+        Modifiers::none(),
+    );
+    cx.run_until_parked();
+    cx.simulate_event(ScrollWheelEvent {
+        position: point(px(10.0), px(10.0)),
+        delta: ScrollDelta::Lines(point(0.0, 1.0)),
+        ..Default::default()
+    });
+
+    assert_eq!(
+        engine
+            .eval::<String>("JSON.stringify(globalThis.seen)")
+            .unwrap(),
+        r#"["mousedown","wheel"]"#
+    );
 }
 
 /// DOM's `buttons` reports every button held, not just the one an event is

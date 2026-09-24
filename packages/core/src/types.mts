@@ -65,6 +65,9 @@ export interface StyleProps {
  *
  * `"mousedown"`/`"mouseup"`/`"mousemove"` carry `clientX`, `clientY`,
  * `button`, `buttons`, `detail`, and `ctrlKey`/`shiftKey`/`altKey`/
- * `metaKey`, DOM-`MouseEvent`-named. `"click"` carries none of its own.
+ * `metaKey`, DOM-`MouseEvent`-named. `"wheel"` carries those same fields
+ * plus `deltaX`/`deltaY`/`deltaZ`/`deltaMode`, DOM-`WheelEvent`-named
+ * (`deltaMode` is `0` or `1`; `deltaZ` is always `0`). `"click"` carries
+ * none of its own.
  */
 export type EventListener = (...args: unknown[]) => void;

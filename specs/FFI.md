@@ -110,10 +110,10 @@ on every pointer move.
 
 Implemented by `render_tree_with_events`/`build_element_with_events`
 (`crates/inca-gpui/src/element.rs`, Unit vi), which wire every container's
-`"click"`/`"mousedown"`/`"mouseup"`/`"mousemove"` to an `EventDispatcher`
-(`crates/inca-bridge/src/dispatch.rs`), which looks up and calls the JS
-callbacks registered for `(nodeId, event)` via `addEventListener`, then
-requests a redraw.
+`"click"`/`"mousedown"`/`"mouseup"`/`"mousemove"`/`"wheel"` to an
+`EventDispatcher` (`crates/inca-bridge/src/dispatch.rs`), which looks up
+and calls the JS callbacks registered for `(nodeId, event)` via
+`addEventListener`, then requests a redraw.
 
 A callback receives one argument, shared across every callback on one node
 for one event: an object shaped `{ type, target, currentTarget, ...payload
@@ -128,7 +128,16 @@ the same until something can compute it precisely (tracked in
 carry `clientX`, `clientY`, `button`, `buttons`, `detail`, and
 `ctrlKey`/`shiftKey`/`altKey`/`metaKey`, DOM-`MouseEvent`-named (`platform`
 becomes `metaKey`; GPUI's `function` modifier has no DOM counterpart and is
-dropped).
+dropped). `buttons` tracks every button currently held (`EventDispatcher`
+keeps this state across events — GPUI's own mouse events carry only the
+one button each is about), not just the button `button` names.
+
+`"wheel"` carries the same fields as `"mousedown"`/`"mouseup"`/
+`"mousemove"` plus `deltaX`, `deltaY`, `deltaZ`, `deltaMode` — DOM's
+`WheelEvent` extends `MouseEvent`. `deltaMode` is `0`
+(`DOM_DELTA_PIXEL`) or `1` (`DOM_DELTA_LINE`); GPUI has no equivalent of
+`DOM_DELTA_PAGE` (`2`). `deltaZ` is always `0` — GPUI carries no Z-axis
+scroll.
 
 `stopImmediatePropagation()` stops the remaining callbacks *on that node*.
 `stopPropagation()`/`preventDefault()` are read back once every callback on

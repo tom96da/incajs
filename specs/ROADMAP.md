@@ -170,11 +170,11 @@ Everything here reaches JS through the existing `addEventListener` surface:
 the host already dispatches any `(node id, event name)` pair, so a new event
 is a name the host agrees to send, not a new binding.
 
-1. **Pointer input**: press, release, move (done — `"mousedown"`/
-   `"mouseup"`/`"mousemove"`, DOM-`MouseEvent`-shaped payloads, and
+1. **Pointer input**: press, release, move, wheel (done — `"mousedown"`/
+   `"mouseup"`/`"mousemove"`/`"wheel"`, DOM-shaped payloads, and
    propagation via `stopPropagation`/`stopImmediatePropagation`/
-   `preventDefault`), then enter, leave, and wheel (not started). `"click"`
-   is now one name among several rather than the only one.
+   `preventDefault`), then enter and leave (not started). `"click"` is now
+   one name among several rather than the only one.
 2. **Keyboard input**: key press/release with modifiers, and a focus model
    deciding which node receives them. GPUI has its own focus handles, so
    this is a mapping rather than new machinery.

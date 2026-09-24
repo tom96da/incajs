@@ -424,6 +424,11 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
                     el.on_mouse_move(move |event, window, cx| {
                         listening.dispatch(id, "mousemove", &event.into(), window, cx);
                     })
+                })
+                .when_some(wired(EventMask::WHEEL), |el, listening| {
+                    el.on_scroll_wheel(move |event, window, cx| {
+                        listening.dispatch(id, "wheel", &event.into(), window, cx);
+                    })
                 });
 
             match wired(EventMask::CLICK) {

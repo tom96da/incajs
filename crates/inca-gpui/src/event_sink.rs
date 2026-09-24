@@ -1,7 +1,10 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use gpui::{App, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Window};
+use gpui::{
+    App, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ScrollDelta, ScrollWheelEvent,
+    Window,
+};
 
 use crate::tree::NodeId;
 
@@ -35,6 +38,7 @@ event_kinds! {
     MouseDown => "mousedown",
     MouseUp => "mouseup",
     MouseMove => "mousemove",
+    Wheel => "wheel",
 }
 
 impl EventKind {
@@ -46,6 +50,7 @@ impl EventKind {
             Self::MouseDown => EventMask::MOUSE_DOWN,
             Self::MouseUp => EventMask::MOUSE_UP,
             Self::MouseMove => EventMask::MOUSE_MOVE,
+            Self::Wheel => EventMask::WHEEL,
         }
     }
 }
@@ -65,6 +70,8 @@ impl EventMask {
     pub const MOUSE_UP: Self = Self(1 << 2);
     /// Wired for [`EventKind::MouseMove`].
     pub const MOUSE_MOVE: Self = Self(1 << 3);
+    /// Wired for [`EventKind::Wheel`].
+    pub const WHEEL: Self = Self(1 << 4);
 
     /// Whether every bit set in `other` is also set in `self`.
     #[must_use]
@@ -98,6 +105,9 @@ pub enum EventPayload {
     None,
     /// A mouse position, button, and modifier state, DOM-`MouseEvent`-shaped.
     Mouse(MousePayload),
+    /// A scroll delta plus the same fields as [`EventPayload::Mouse`],
+    /// DOM-`WheelEvent`-shaped (`WheelEvent` extends `MouseEvent`).
+    Wheel(WheelPayload),
 }
 
 /// [`EventPayload::Mouse`]'s fields, named and shaped after DOM's
@@ -114,6 +124,20 @@ pub struct MousePayload {
     /// How many clicks this is part of (DOM's `detail`). 0 for a move.
     pub detail: u32,
     pub modifiers: gpui::Modifiers,
+}
+
+/// [`EventPayload::Wheel`]'s fields beyond [`MousePayload`]'s.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WheelPayload {
+    /// `clientX`/`clientY`/`button`/`buttons`/the modifier keys.
+    pub mouse: MousePayload,
+    pub delta_x: f32,
+    pub delta_y: f32,
+    /// GPUI carries no Z-axis scroll; always 0.
+    pub delta_z: f32,
+    /// DOM's `deltaMode`: 0 (`DOM_DELTA_PIXEL`) or 1 (`DOM_DELTA_LINE`).
+    /// GPUI has no equivalent of `DOM_DELTA_PAGE` (2).
+    pub delta_mode: u8,
 }
 
 /// DOM's `button`/`buttons` numbering for a [`MouseButton`]. `buttons` is a
@@ -171,6 +195,31 @@ impl From<&MouseMoveEvent> for EventPayload {
     }
 }
 
+impl From<&ScrollWheelEvent> for EventPayload {
+    fn from(event: &ScrollWheelEvent) -> Self {
+        let (delta_x, delta_y, delta_mode) = match event.delta {
+            ScrollDelta::Pixels(delta) => (f32::from(delta.x), f32::from(delta.y), 0),
+            ScrollDelta::Lines(delta) => (delta.x, delta.y, 1),
+        };
+        Self::Wheel(WheelPayload {
+            mouse: MousePayload {
+                client_x: f32::from(event.position.x),
+                client_y: f32::from(event.position.y),
+                // Not about any one button; `inca-bridge` fills in the
+                // buttons actually held.
+                button: 0,
+                buttons: 0,
+                detail: 0,
+                modifiers: event.modifiers,
+            },
+            delta_x,
+            delta_y,
+            delta_z: 0.0,
+            delta_mode,
+        })
+    }
+}
+
 /// What [`crate::element`] needs from something that can dispatch a native
 /// event into JS — `inca-bridge`'s `EventDispatcher` implements this, kept
 /// as a trait here rather than a direct dependency so this crate never has
@@ -194,6 +243,7 @@ pub trait EventSink {
 }
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
 
@@ -252,7 +302,14 @@ mod tests {
     fn mouse_payload(payload: EventPayload) -> MousePayload {
         match payload {
             EventPayload::Mouse(mouse) => mouse,
-            EventPayload::None => panic!("expected a mouse payload"),
+            other => panic!("expected a mouse payload, got {other:?}"),
+        }
+    }
+
+    fn wheel_payload(payload: EventPayload) -> WheelPayload {
+        match payload {
+            EventPayload::Wheel(wheel) => wheel,
+            other => panic!("expected a wheel payload, got {other:?}"),
         }
     }
 
@@ -317,5 +374,53 @@ mod tests {
         };
         let mouse = mouse_payload(EventPayload::from(&event));
         assert_eq!(mouse.modifiers, modifiers);
+    }
+
+    #[test]
+    fn a_pixel_delta_reports_dom_delta_pixel() {
+        let event = ScrollWheelEvent {
+            delta: ScrollDelta::Pixels(gpui::point(gpui::px(3.0), gpui::px(-4.0))),
+            ..Default::default()
+        };
+        let wheel = wheel_payload(EventPayload::from(&event));
+        assert_eq!(wheel.delta_x, 3.0);
+        assert_eq!(wheel.delta_y, -4.0);
+        assert_eq!(wheel.delta_z, 0.0);
+        assert_eq!(wheel.delta_mode, 0);
+    }
+
+    #[test]
+    fn a_line_delta_reports_dom_delta_line() {
+        let event = ScrollWheelEvent {
+            delta: ScrollDelta::Lines(gpui::point(0.0, 2.0)),
+            ..Default::default()
+        };
+        let wheel = wheel_payload(EventPayload::from(&event));
+        assert_eq!(wheel.delta_x, 0.0);
+        assert_eq!(wheel.delta_y, 2.0);
+        assert_eq!(wheel.delta_mode, 1);
+    }
+
+    #[test]
+    fn a_negative_line_delta_carries_its_sign() {
+        let event = ScrollWheelEvent {
+            delta: ScrollDelta::Lines(gpui::point(-1.5, 0.0)),
+            ..Default::default()
+        };
+        let wheel = wheel_payload(EventPayload::from(&event));
+        assert_eq!(wheel.delta_x, -1.5);
+        assert_eq!(wheel.delta_mode, 1);
+    }
+
+    #[test]
+    fn a_zero_delta_is_still_reported() {
+        let event = ScrollWheelEvent {
+            delta: ScrollDelta::Pixels(gpui::point(gpui::px(0.0), gpui::px(0.0))),
+            ..Default::default()
+        };
+        let wheel = wheel_payload(EventPayload::from(&event));
+        assert_eq!(wheel.delta_x, 0.0);
+        assert_eq!(wheel.delta_y, 0.0);
+        assert_eq!(wheel.delta_mode, 0);
     }
 }
