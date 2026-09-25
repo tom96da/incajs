@@ -1,7 +1,7 @@
 {
   "name": "@incajs/cli",
-  "version": "0.0.3",
-  "description": "The inca CLI: watches an app's entry point through a bundler adapter, starts inca-host once the first bundle lands, and reloads it on every rebuild.",
+  "version": "0.0.4",
+  "description": "Dev server, bundler, and packager for Incarnative.js apps.",
   "keywords": [
     "bundler",
     "cli",

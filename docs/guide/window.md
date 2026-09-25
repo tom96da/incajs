@@ -7,7 +7,7 @@ Copyright (c) 2026 tom96da
 SPDX-License-Identifier: MIT OR Apache-2.0
 -->
 
-# Application Window <Badge type="warning" text="unreleased" />
+# Application Window
 
 An app opens in one window. Everything around its content — the size it
 starts at, the title it carries, its menu — is set in `inca.config.ts`, or

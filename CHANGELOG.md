@@ -10,23 +10,30 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.0.4] - 2026-09-25
+
 ### Added
 
 - `inca dev` runs the app under the `productName`, `icon` and `identifier` from `inca.config.ts` ([b78d43a](https://github.com/tom96da/incajs/commit/b78d43a))
 - `inca.config.ts` takes a `window` block: `width`, `height`, `title`, `resizable`, `minWidth` and `minHeight` ([c35e6ea](https://github.com/tom96da/incajs/commit/c35e6ea), [4b6978e](https://github.com/tom96da/incajs/commit/4b6978e))
+- the window's title bar carries `window.title`, or the app's `productName` ([c35e6ea](https://github.com/tom96da/incajs/commit/c35e6ea))
+- an app's `identifier` becomes its Wayland `app_id` and X11 `WM_CLASS` ([c35e6ea](https://github.com/tom96da/incajs/commit/c35e6ea))
+- a `productName` that can't name a directory fails with `ERR_INCA_PRODUCT_NAME_INVALID` ([fb8fe0f](https://github.com/tom96da/incajs/commit/fb8fe0f))
 - every app gets an application menu with a `Quit` item, on `⌘Q` on macOS and `Ctrl+Q` on Linux ([7db49c8](https://github.com/tom96da/incajs/commit/7db49c8))
+- DOM-shaped `"mousedown"`/`"mouseup"`/`"mousemove"` payloads became available (position, button, modifiers) ([4247c00](https://github.com/tom96da/incajs/commit/4247c00), [6364e86](https://github.com/tom96da/incajs/commit/6364e86))
+- DOM-shaped `"wheel"`/`"mouseenter"`/`"mouseleave"` payloads became available ([29b111c](https://github.com/tom96da/incajs/commit/29b111c), [6dce804](https://github.com/tom96da/incajs/commit/6dce804))
+- `stopPropagation()`/`stopImmediatePropagation()`/`preventDefault()` became available on every event ([6364e86](https://github.com/tom96da/incajs/commit/6364e86))
+- `focusNode`/`blurNode` and `"focus"`/`"blur"` became available ([c088112](https://github.com/tom96da/incajs/commit/c088112))
+- `"keydown"`/`"keyup"` fire on the focused node and bubble to its ancestors, DOM-`KeyboardEvent`-shaped ([b94c74b](https://github.com/tom96da/incajs/commit/b94c74b))
 
 ### Changed
 
 - a window is not resizable unless `window.resizable` is `true` ([4b6978e](https://github.com/tom96da/incajs/commit/4b6978e))
-- the window's title bar carries `window.title`, or the app's `productName` ([c35e6ea](https://github.com/tom96da/incajs/commit/c35e6ea))
-- an app's `identifier` becomes its Wayland `app_id` and X11 `WM_CLASS` ([c35e6ea](https://github.com/tom96da/incajs/commit/c35e6ea))
 
 ### Fixed
 
 - `inca package` no longer deletes the build output for an app whose name has no ASCII letters or digits ([be3a423](https://github.com/tom96da/incajs/commit/be3a423))
 - `inca dev` no longer reports itself as already running after a failed start ([be3a423](https://github.com/tom96da/incajs/commit/be3a423))
-- a `productName` that can't name a directory fails with `ERR_INCA_PRODUCT_NAME_INVALID` ([fb8fe0f](https://github.com/tom96da/incajs/commit/fb8fe0f))
 
 ## [0.0.3] - 2026-09-20
 
@@ -74,7 +81,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - prebuilt `inca-host` binaries for linux-x64, linux-arm64, and darwin-arm64, resolved automatically per platform
 - click event dispatch from the native tree back into JS
 
-[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.3...HEAD
+[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.4...HEAD
+[0.0.4]: https://github.com/tom96da/incajs/releases/tag/v0.0.4
 [0.0.3]: https://github.com/tom96da/incajs/releases/tag/v0.0.3
 [0.0.2]: https://github.com/tom96da/incajs/releases/tag/v0.0.2
 [0.0.1]: https://github.com/tom96da/incajs/releases/tag/v0.0.1

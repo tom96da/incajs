@@ -2,7 +2,7 @@
   "name": "@incajs/host-darwin-x64",
   "version": "0.0.0-0",
   "private": true,
-  "description": "Prebuilt inca-host binary for macOS on Intel (x64).",
+  "description": "Prebuilt native runtime for Incarnative.js — macOS on Intel (x64).",
   "keywords": [
     "desktop-app",
     "gpui",

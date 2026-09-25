@@ -7,7 +7,7 @@ Copyright (c) 2026 tom96da
 SPDX-License-Identifier: MIT OR Apache-2.0
 -->
 
-# Events <Badge type="warning" text="unreleased" />
+# Events
 
 A `.vue` template binds a listener the usual way — `@click`,
 `@mousedown`, and so on. Every listener receives one shared event

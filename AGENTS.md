@@ -47,7 +47,7 @@ The CLI prints the bundler's own output beside its own. See
 [FAILURES.md](./specs/FAILURES.md) for what it refuses, what it falls back
 from, and where each is reported.
 
-The current release is `v0.0.3`, on Node.js 22.18 or newer, zed v1.20.2
+The current release is `v0.0.4`, on Node.js 22.18 or newer, zed v1.20.2
 for `gpui` and rquickjs 0.14.0. Its Linux binaries are built in an
 `ubuntu:22.04` container by both workflows, fixing their glibc floor at
 2.35 — change that image in one file and the other has to follow. The

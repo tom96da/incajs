@@ -7,7 +7,7 @@ Copyright (c) 2026 tom96da
 SPDX-License-Identifier: MIT OR Apache-2.0
 -->
 
-# Configuration <Badge type="warning" text="unreleased" />
+# Configuration
 
 `inca` reads `inca.config.ts` from your app's root — other JS and JSON
 extensions work too. `defineConfig` is a typing helper; it returns what you
