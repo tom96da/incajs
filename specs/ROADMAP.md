@@ -163,18 +163,18 @@ this is preferred over a hand-rolled HMR protocol.
 ## Phase 4: Input & text editing (future)
 
 In progress. Phase 1 wired one input event — a click on a container. Item 1
-below is partway done; items 2–5 haven't started. See
+below is done; items 2–5 haven't started. See
 [FFI.md](./FFI.md#event-dispatch) for what's wired today.
 
 Everything here reaches JS through the existing `addEventListener` surface:
 the host already dispatches any `(node id, event name)` pair, so a new event
 is a name the host agrees to send, not a new binding.
 
-1. **Pointer input**: press, release, move, wheel (done — `"mousedown"`/
-   `"mouseup"`/`"mousemove"`/`"wheel"`, DOM-shaped payloads, and
-   propagation via `stopPropagation`/`stopImmediatePropagation`/
-   `preventDefault`), then enter and leave (not started). `"click"` is now
-   one name among several rather than the only one.
+1. **Pointer input** (done): press, release, move, wheel, enter, leave —
+   `"mousedown"`/`"mouseup"`/`"mousemove"`/`"wheel"`/`"mouseenter"`/
+   `"mouseleave"`, DOM-shaped payloads, and propagation via
+   `stopPropagation`/`stopImmediatePropagation`/`preventDefault`. `"click"`
+   is now one name among several rather than the only one.
 2. **Keyboard input**: key press/release with modifiers, and a focus model
    deciding which node receives them. GPUI has its own focus handles, so
    this is a mapping rather than new machinery.

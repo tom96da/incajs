@@ -22,7 +22,7 @@ use gpui::{
     Window, div, px, rgb,
 };
 
-use crate::event_sink::{EventMask, EventPayload, EventSink};
+use crate::event_sink::{EventMask, EventPayload, EventSink, MousePayload};
 use crate::tree::{AttributeValue, NodeId, VirtualTree};
 
 /// What kind of element a [`VirtualNode`](crate::tree::VirtualNode) maps to.
@@ -449,6 +449,32 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
             if dispatch.is_some() && spec.listens.needs_element_id() {
                 let element =
                     wire_stateless(element.id(ElementId::Integer(u64::from(id))), id, &wired);
+                // One `on_hover` covers both `mouseenter`/`mouseleave` —
+                // GPUI panics if it's called twice on the same element, so
+                // which name to dispatch is decided from its `bool` at
+                // call time, not by registering per kind.
+                let element = element.when_some(
+                    dispatch
+                        .filter(|_| {
+                            spec.listens
+                                .intersects(EventMask::MOUSE_ENTER | EventMask::MOUSE_LEAVE)
+                        })
+                        .cloned(),
+                    |el, listening| {
+                        el.on_hover(move |is_hovered, window, cx| {
+                            let event = if *is_hovered {
+                                "mouseenter"
+                            } else {
+                                "mouseleave"
+                            };
+                            let payload = EventPayload::Mouse(MousePayload::at(
+                                window.mouse_position(),
+                                window.modifiers(),
+                            ));
+                            listening.dispatch(id, event, &payload, window, cx);
+                        })
+                    },
+                );
                 match wired(EventMask::CLICK) {
                     Some(listening) => finish_container(
                         element.on_click(move |_, window, cx| {

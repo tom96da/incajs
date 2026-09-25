@@ -110,10 +110,11 @@ on every pointer move.
 
 Implemented by `render_tree_with_events`/`build_element_with_events`
 (`crates/inca-gpui/src/element.rs`, Unit vi), which wire every container's
-`"click"`/`"mousedown"`/`"mouseup"`/`"mousemove"`/`"wheel"` to an
-`EventDispatcher` (`crates/inca-bridge/src/dispatch.rs`), which looks up
-and calls the JS callbacks registered for `(nodeId, event)` via
-`addEventListener`, then requests a redraw.
+`"click"`/`"mousedown"`/`"mouseup"`/`"mousemove"`/`"wheel"`/
+`"mouseenter"`/`"mouseleave"` to an `EventDispatcher`
+(`crates/inca-bridge/src/dispatch.rs`), which looks up and calls the JS
+callbacks registered for `(nodeId, event)` via `addEventListener`, then
+requests a redraw.
 
 A callback receives one argument, shared across every callback on one node
 for one event: an object shaped `{ type, target, currentTarget, ...payload
@@ -124,13 +125,14 @@ hitbox, but one without a listener doesn't, so the node a pointer visually
 lands on isn't always known; `currentTarget` is exact, `target` will read
 the same until something can compute it precisely (tracked in
 [BACKLOG.md](./BACKLOG.md)). Further fields depend on the event kind —
-`"click"` carries none of its own; `"mousedown"`/`"mouseup"`/`"mousemove"`
-carry `clientX`, `clientY`, `button`, `buttons`, `detail`, and
-`ctrlKey`/`shiftKey`/`altKey`/`metaKey`, DOM-`MouseEvent`-named (`platform`
-becomes `metaKey`; GPUI's `function` modifier has no DOM counterpart and is
-dropped). `buttons` tracks every button currently held (`EventDispatcher`
-keeps this state across events — GPUI's own mouse events carry only the
-one button each is about), not just the button `button` names.
+`"click"` carries none of its own; `"mousedown"`/`"mouseup"`/`"mousemove"`/
+`"mouseenter"`/`"mouseleave"` carry `clientX`, `clientY`, `button`,
+`buttons`, `detail`, and `ctrlKey`/`shiftKey`/`altKey`/`metaKey`,
+DOM-`MouseEvent`-named (`platform` becomes `metaKey`; GPUI's `function`
+modifier has no DOM counterpart and is dropped). `buttons` tracks every
+button currently held (`EventDispatcher` keeps this state across events —
+GPUI's own mouse events carry only the one button each is about), not just
+the button `button` names.
 
 `"wheel"` carries the same fields as `"mousedown"`/`"mouseup"`/
 `"mousemove"` plus `deltaX`, `deltaY`, `deltaZ`, `deltaMode` — DOM's
@@ -138,6 +140,22 @@ one button each is about), not just the button `button` names.
 (`DOM_DELTA_PIXEL`) or `1` (`DOM_DELTA_LINE`); GPUI has no equivalent of
 `DOM_DELTA_PAGE` (`2`). `deltaZ` is always `0` — GPUI carries no Z-axis
 scroll.
+
+`"mouseenter"`/`"mouseleave"` come from one GPUI hover registration per
+node — GPUI panics if `on_hover` is bound twice on the same element, so
+`inca-gpui` picks the event name from the `bool` that registration hands
+back rather than binding once per name. Their `clientX`/`clientY`/
+`modifiers` come from the window's current pointer position and modifier
+state at the moment hover changes, not from a native move event — GPUI's
+`on_hover` doesn't hand one back. An element already under the pointer
+when it mounts gets a `"mouseenter"` the first time its hover state is
+checked, with no pointer movement involved — unlike the DOM, where
+`mouseenter` only ever follows an actual `mousemove`. GPUI's hover
+tracking also rides the same bubble-phase `mousemove` dispatch as every
+other pointer kind, so `stopPropagation()` from a descendant's hover
+callback can affect whether an ancestor's hover state is re-checked that
+frame — the DOM's `mouseenter`/`mouseleave` don't bubble at all, so this
+has no DOM equivalent.
 
 `stopImmediatePropagation()` stops the remaining callbacks *on that node*.
 `stopPropagation()`/`preventDefault()` are read back once every callback on

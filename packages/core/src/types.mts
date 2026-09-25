@@ -63,11 +63,15 @@ export interface StyleProps {
  * on), `stopPropagation`/`stopImmediatePropagation`/`preventDefault`
  * methods, plus whatever fields that event kind carries.
  *
- * `"mousedown"`/`"mouseup"`/`"mousemove"` carry `clientX`, `clientY`,
- * `button`, `buttons`, `detail`, and `ctrlKey`/`shiftKey`/`altKey`/
- * `metaKey`, DOM-`MouseEvent`-named. `"wheel"` carries those same fields
- * plus `deltaX`/`deltaY`/`deltaZ`/`deltaMode`, DOM-`WheelEvent`-named
- * (`deltaMode` is `0` or `1`; `deltaZ` is always `0`). `"click"` carries
- * none of its own.
+ * `"mousedown"`/`"mouseup"`/`"mousemove"`/`"mouseenter"`/`"mouseleave"`
+ * carry `clientX`, `clientY`, `button`, `buttons`, `detail`, and
+ * `ctrlKey`/`shiftKey`/`altKey`/`metaKey`, DOM-`MouseEvent`-named.
+ * `"wheel"` carries those same fields plus `deltaX`/`deltaY`/`deltaZ`/
+ * `deltaMode`, DOM-`WheelEvent`-named (`deltaMode` is `0` or `1`; `deltaZ`
+ * is always `0`). `"click"` carries none of its own.
+ *
+ * An element already under the pointer when it mounts gets a
+ * `"mouseenter"` the first time its hover state is checked, with no
+ * pointer movement involved.
  */
 export type EventListener = (...args: unknown[]) => void;

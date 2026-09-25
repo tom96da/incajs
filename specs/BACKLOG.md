@@ -136,3 +136,16 @@ enough overhead for a single maintainer plus AI pairing.
   each gaining a capture-phase counterpart wired to GPUI's
   `capture_any_mouse_down`/`capture_any_mouse_up` and friends. Vue's
   `@click.capture` has nothing to bind to until this lands.
+
+- **A GPUI-vs-DOM compat layer for `crates/inca-bridge`**: three separate
+  gaps now live loose in `dispatch.rs` — the two entries above plus
+  `mouseenter` firing on mount for an element already under the pointer
+  (GPUI's hover check compares against freshly-initialized state on first
+  paint, not against a real pointer move; see `specs/FFI.md`'s "Event
+  dispatch" section). `EventDispatcher` is already where this kind of
+  translation belongs — it exists to turn GPUI's raw input into what a DOM
+  author expects — so grouping these under one `compat` submodule there,
+  rather than a separate crate, is the direction: one place to hold this
+  session's `held_buttons` tracking alongside a "no real pointer move seen
+  yet" flag that would suppress the mount-time `mouseenter`, and later the
+  capture-phase and precise-`target` work above.

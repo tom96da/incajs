@@ -517,6 +517,218 @@ fn click_and_mousedown_wired_together_fire_independently(cx: &mut TestAppContext
     );
 }
 
+/// `on_hover` covers both `mouseenter` and `mouseleave` with one GPUI
+/// registration — moving the pointer in, then out, must dispatch each
+/// exactly once, in order.
+#[gpui::test]
+fn hover_dispatches_enter_then_leave(cx: &mut TestAppContext) {
+    let host = Rc::new(RefCell::new(Host::default()));
+    let node = {
+        let mut host = host.borrow_mut();
+        let node = host.tree.create_node("div");
+        host.tree.set_style(node, "width", 100.0).unwrap();
+        host.tree.set_style(node, "height", 100.0).unwrap();
+        node
+    };
+    host.borrow_mut().listeners.register(node, "mouseenter", 0);
+    host.borrow_mut().listeners.register(node, "mouseleave", 0);
+    let engine = Rc::new(Engine::new().unwrap());
+    engine
+        .eval::<()>(
+            "globalThis.seen = []; \
+             globalThis.__inca_callbacks__ = { \
+                0: (event) => { globalThis.seen.push(event.type); } \
+             };",
+        )
+        .unwrap();
+    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
+
+    let window = cx.add_window(|_, _| ClickableRoot {
+        host: Rc::clone(&host),
+        node,
+        dispatcher,
+    });
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    let mut cx = VisualTestContext::from_window(window.into(), cx);
+
+    // The window starts with the mouse at its default position, which lands
+    // inside this 100x100 node, so mounting alone already fired a real
+    // "mouseenter" — assert that before discarding it, so this test proves
+    // the reset below is throwing away a real event, not a no-op.
+    assert_ne!(
+        engine
+            .eval::<String>("JSON.stringify(globalThis.seen)")
+            .unwrap(),
+        "[]",
+        "mounting already hovered must have dispatched mouseenter by itself"
+    );
+    cx.simulate_mouse_move(
+        point(px(200.0), px(200.0)),
+        None::<MouseButton>,
+        Modifiers::none(),
+    );
+    engine.eval::<()>("globalThis.seen = [];").unwrap();
+
+    cx.simulate_mouse_move(
+        point(px(10.0), px(10.0)),
+        None::<MouseButton>,
+        Modifiers::none(),
+    );
+    cx.simulate_mouse_move(
+        point(px(200.0), px(200.0)),
+        None::<MouseButton>,
+        Modifiers::none(),
+    );
+
+    assert_eq!(
+        engine
+            .eval::<String>("JSON.stringify(globalThis.seen)")
+            .unwrap(),
+        r#"["mouseenter","mouseleave"]"#
+    );
+}
+
+/// A `mouseenter` carries the same DOM-`MouseEvent`-shaped fields as
+/// `mousedown`/etc, built from the pointer's current position rather than
+/// a native GPUI event (`on_hover` hands back only a `bool`).
+#[gpui::test]
+fn mouseenter_carries_dom_shaped_fields(cx: &mut TestAppContext) {
+    let host = Rc::new(RefCell::new(Host::default()));
+    let node = {
+        let mut host = host.borrow_mut();
+        let node = host.tree.create_node("div");
+        host.tree.set_style(node, "width", 100.0).unwrap();
+        host.tree.set_style(node, "height", 100.0).unwrap();
+        node
+    };
+    host.borrow_mut().listeners.register(node, "mouseenter", 0);
+    let engine = Rc::new(Engine::new().unwrap());
+    install_click_counter(&engine);
+    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
+
+    let window = cx.add_window(|_, _| ClickableRoot {
+        host: Rc::clone(&host),
+        node,
+        dispatcher,
+    });
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    let mut cx = VisualTestContext::from_window(window.into(), cx);
+
+    // Settle the implicit initial hover (the window's default mouse
+    // position lands inside this 100x100 node) before the transition the
+    // assertions below are about.
+    cx.simulate_mouse_move(
+        point(px(200.0), px(200.0)),
+        None::<MouseButton>,
+        Modifiers::none(),
+    );
+    engine.eval::<()>("globalThis.clicks = 0;").unwrap();
+
+    cx.simulate_mouse_move(
+        point(px(10.0), px(20.0)),
+        None::<MouseButton>,
+        Modifiers::none(),
+    );
+
+    assert_eq!(clicks(&engine), 1.0);
+    assert_eq!(
+        engine
+            .eval::<String>("JSON.stringify(globalThis.lastEvent)")
+            .unwrap(),
+        format!(
+            r#"{{"type":"mouseenter","target":{node},"currentTarget":{node},"clientX":10,"clientY":20,"button":0,"buttons":0,"detail":0,"ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false}}"#
+        )
+    );
+}
+
+/// A node listening only for `mouseleave` doesn't spuriously fire it on
+/// mount just because the pointer already sits over it — `was_hovered`
+/// starts `false`, so the mount-time check can only ever produce an enter
+/// transition, never a leave one, regardless of which names JS registered.
+#[gpui::test]
+fn mounting_already_hovered_does_not_fire_a_spurious_leave(cx: &mut TestAppContext) {
+    let (host, node) = build_tree_listening_for("mouseleave");
+    let engine = Rc::new(Engine::new().unwrap());
+    install_click_counter(&engine);
+    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
+
+    let window = cx.add_window(|_, _| ClickableRoot {
+        host: Rc::clone(&host),
+        node,
+        dispatcher,
+    });
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    let _cx = VisualTestContext::from_window(window.into(), cx);
+
+    assert_eq!(
+        clicks(&engine),
+        0.0,
+        "a mouseleave-only listener must not fire just from mounting already hovered"
+    );
+}
+
+/// Hover (needs a `gpui` element id) and a stateless kind wired on the same
+/// node both still fire — mirrors `click_and_mousedown_wired_together_
+/// fire_independently` for the hover branch chained onto `wire_stateless`.
+#[gpui::test]
+fn hover_and_mousemove_wired_together_fire_independently(cx: &mut TestAppContext) {
+    let host = Rc::new(RefCell::new(Host::default()));
+    let node = {
+        let mut host = host.borrow_mut();
+        let node = host.tree.create_node("div");
+        host.tree.set_style(node, "width", 100.0).unwrap();
+        host.tree.set_style(node, "height", 100.0).unwrap();
+        node
+    };
+    host.borrow_mut().listeners.register(node, "mouseenter", 0);
+    host.borrow_mut().listeners.register(node, "mousemove", 0);
+    let engine = Rc::new(Engine::new().unwrap());
+    engine
+        .eval::<()>(
+            "globalThis.seen = []; \
+             globalThis.__inca_callbacks__ = { \
+                0: (event) => { globalThis.seen.push(event.type); } \
+             };",
+        )
+        .unwrap();
+    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
+
+    let window = cx.add_window(|_, _| ClickableRoot {
+        host: Rc::clone(&host),
+        node,
+        dispatcher,
+    });
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    let mut cx = VisualTestContext::from_window(window.into(), cx);
+
+    // Settle the implicit initial hover before the transition below.
+    cx.simulate_mouse_move(
+        point(px(200.0), px(200.0)),
+        None::<MouseButton>,
+        Modifiers::none(),
+    );
+    engine.eval::<()>("globalThis.seen = [];").unwrap();
+
+    cx.simulate_mouse_move(
+        point(px(10.0), px(10.0)),
+        None::<MouseButton>,
+        Modifiers::none(),
+    );
+
+    // Membership only, not order — which of the two GPUI dispatches first
+    // is its own internal detail, not a contract this crate makes.
+    assert_eq!(
+        engine
+            .eval::<String>("JSON.stringify(globalThis.seen.slice().sort())")
+            .unwrap(),
+        r#"["mouseenter","mousemove"]"#
+    );
+}
+
 /// DOM's `buttons` reports every button held, not just the one an event is
 /// about: pressing a second button while the first is still down must union
 /// its bit in, and releasing one button must clear only that bit.

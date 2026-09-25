@@ -39,6 +39,8 @@ event_kinds! {
     MouseUp => "mouseup",
     MouseMove => "mousemove",
     Wheel => "wheel",
+    MouseEnter => "mouseenter",
+    MouseLeave => "mouseleave",
 }
 
 impl EventKind {
@@ -51,6 +53,8 @@ impl EventKind {
             Self::MouseUp => EventMask::MOUSE_UP,
             Self::MouseMove => EventMask::MOUSE_MOVE,
             Self::Wheel => EventMask::WHEEL,
+            Self::MouseEnter => EventMask::MOUSE_ENTER,
+            Self::MouseLeave => EventMask::MOUSE_LEAVE,
         }
     }
 
@@ -59,7 +63,7 @@ impl EventKind {
     #[must_use]
     pub const fn needs_element_id(self) -> bool {
         match self {
-            Self::Click => true,
+            Self::Click | Self::MouseEnter | Self::MouseLeave => true,
             Self::MouseDown | Self::MouseUp | Self::MouseMove | Self::Wheel => false,
         }
     }
@@ -82,6 +86,10 @@ impl EventMask {
     pub const MOUSE_MOVE: Self = Self(1 << 3);
     /// Wired for [`EventKind::Wheel`].
     pub const WHEEL: Self = Self(1 << 4);
+    /// Wired for [`EventKind::MouseEnter`].
+    pub const MOUSE_ENTER: Self = Self(1 << 5);
+    /// Wired for [`EventKind::MouseLeave`].
+    pub const MOUSE_LEAVE: Self = Self(1 << 6);
 
     /// Whether every bit set in `other` is also set in `self`.
     #[must_use]
@@ -155,6 +163,23 @@ pub struct MousePayload {
     /// How many clicks this is part of (DOM's `detail`). 0 for a move.
     pub detail: u32,
     pub modifiers: gpui::Modifiers,
+}
+
+impl MousePayload {
+    /// For `mouseenter`/`mouseleave` — GPUI's `on_hover` hands back only a
+    /// `bool`, not a `MouseMoveEvent`, so there's no native event to
+    /// convert from.
+    #[must_use]
+    pub fn at(position: gpui::Point<gpui::Pixels>, modifiers: gpui::Modifiers) -> Self {
+        Self {
+            client_x: f32::from(position.x),
+            client_y: f32::from(position.y),
+            button: 0,
+            buttons: 0,
+            detail: 0,
+            modifiers,
+        }
+    }
 }
 
 /// [`EventPayload::Wheel`]'s fields beyond [`MousePayload`]'s.
@@ -456,9 +481,14 @@ mod tests {
     }
 
     #[test]
-    fn only_click_needs_an_element_id_today() {
-        assert_eq!(EventMask::needing_element_id(), EventMask::CLICK);
+    fn click_and_hover_need_an_element_id_today() {
+        assert_eq!(
+            EventMask::needing_element_id(),
+            EventMask::CLICK | EventMask::MOUSE_ENTER | EventMask::MOUSE_LEAVE
+        );
         assert!(EventMask::CLICK.needs_element_id());
+        assert!(EventMask::MOUSE_ENTER.needs_element_id());
+        assert!(EventMask::MOUSE_LEAVE.needs_element_id());
         assert!(!EventMask::MOUSE_DOWN.needs_element_id());
         assert!(!EventMask::MOUSE_UP.needs_element_id());
         assert!(!EventMask::MOUSE_MOVE.needs_element_id());
@@ -490,5 +520,20 @@ mod tests {
     fn none_intersects_nothing() {
         assert!(!EventMask::NONE.intersects(EventMask::NONE));
         assert!(!EventMask::NONE.intersects(EventMask::CLICK));
+    }
+
+    #[test]
+    fn mouse_payload_at_carries_position_and_modifiers() {
+        let modifiers = gpui::Modifiers {
+            shift: true,
+            ..Default::default()
+        };
+        let mouse = MousePayload::at(gpui::point(gpui::px(12.0), gpui::px(34.0)), modifiers);
+        assert_eq!(mouse.client_x, 12.0);
+        assert_eq!(mouse.client_y, 34.0);
+        assert_eq!(mouse.button, 0);
+        assert_eq!(mouse.buttons, 0);
+        assert_eq!(mouse.detail, 0);
+        assert_eq!(mouse.modifiers, modifiers);
     }
 }
