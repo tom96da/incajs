@@ -41,6 +41,8 @@ event_kinds! {
     Wheel => "wheel",
     MouseEnter => "mouseenter",
     MouseLeave => "mouseleave",
+    Focus => "focus",
+    Blur => "blur",
 }
 
 impl EventKind {
@@ -55,6 +57,8 @@ impl EventKind {
             Self::Wheel => EventMask::WHEEL,
             Self::MouseEnter => EventMask::MOUSE_ENTER,
             Self::MouseLeave => EventMask::MOUSE_LEAVE,
+            Self::Focus => EventMask::FOCUS,
+            Self::Blur => EventMask::BLUR,
         }
     }
 
@@ -64,7 +68,12 @@ impl EventKind {
     pub const fn needs_element_id(self) -> bool {
         match self {
             Self::Click | Self::MouseEnter | Self::MouseLeave => true,
-            Self::MouseDown | Self::MouseUp | Self::MouseMove | Self::Wheel => false,
+            Self::MouseDown
+            | Self::MouseUp
+            | Self::MouseMove
+            | Self::Wheel
+            | Self::Focus
+            | Self::Blur => false,
         }
     }
 }
@@ -90,6 +99,10 @@ impl EventMask {
     pub const MOUSE_ENTER: Self = Self(1 << 5);
     /// Wired for [`EventKind::MouseLeave`].
     pub const MOUSE_LEAVE: Self = Self(1 << 6);
+    /// Wired for [`EventKind::Focus`].
+    pub const FOCUS: Self = Self(1 << 7);
+    /// Wired for [`EventKind::Blur`].
+    pub const BLUR: Self = Self(1 << 8);
 
     /// Whether every bit set in `other` is also set in `self`.
     #[must_use]
@@ -296,6 +309,9 @@ pub trait EventSink {
         window: &mut Window,
         cx: &mut App,
     );
+
+    /// The handle to track this node's focus with, if it's focusable.
+    fn focus_handle(&self, node_id: NodeId) -> Option<gpui::FocusHandle>;
 }
 
 #[cfg(test)]
@@ -493,6 +509,8 @@ mod tests {
         assert!(!EventMask::MOUSE_UP.needs_element_id());
         assert!(!EventMask::MOUSE_MOVE.needs_element_id());
         assert!(!EventMask::WHEEL.needs_element_id());
+        assert!(!EventMask::FOCUS.needs_element_id());
+        assert!(!EventMask::BLUR.needs_element_id());
     }
 
     /// A mask still needs an id if `.needs_element_id()`-requiring kind is

@@ -193,8 +193,10 @@ struct HostedApp {
 }
 
 impl Render for HostedApp {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let session = &self.session;
+        let transition = session.host.borrow_mut().focus.apply_pending(window, cx);
+        transition.dispatch(&session.dispatcher, window, cx);
         let host = session.host.borrow();
         render_tree_with_events(&host.tree, session.root, &session.dispatcher)
             .unwrap_or_else(|| div().into_any_element())

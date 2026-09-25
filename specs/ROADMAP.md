@@ -177,7 +177,10 @@ is a name the host agrees to send, not a new binding.
    is now one name among several rather than the only one.
 2. **Keyboard input**: key press/release with modifiers, and a focus model
    deciding which node receives them. GPUI has its own focus handles, so
-   this is a mapping rather than new machinery.
+   this is a mapping rather than new machinery. The focus model — which
+   node is focused, moving it (`focusNode`/`blurNode`, a click on a
+   focusable node), `"focus"`/`"blur"` — is done; `"keydown"`/`"keyup"`
+   themselves haven't started.
 3. **Text editing**: an editable text element, with selection, caret, and
    IME composition. The largest item here, and the one with no partial
    version worth shipping — a text field that drops IME composition is

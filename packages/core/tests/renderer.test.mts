@@ -114,6 +114,8 @@ function installFakeNative(): Map<NodeId, FakeNode> {
       }
       return released;
     },
+    focusNode(): void {},
+    blurNode(): void {},
   };
 
   return nodes;

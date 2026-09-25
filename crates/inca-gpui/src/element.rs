@@ -415,6 +415,20 @@ where
         })
 }
 
+/// Tracks `node_id`'s focus state on `element`, if it has a
+/// [`gpui::FocusHandle`] — orthogonal to [`EventMask::needs_element_id`]:
+/// `.track_focus` is an [`InteractiveElement`] method, so this applies the
+/// same way whether or not the container also got a `gpui` `ElementId`.
+fn wire_focus<Elem, E>(element: Elem, dispatch: Option<&E>, id: NodeId) -> Elem
+where
+    Elem: InteractiveElement + FluentBuilder,
+    E: EventSink,
+{
+    element.when_some(dispatch.and_then(|d| d.focus_handle(id)), |el, handle| {
+        el.track_focus(&handle)
+    })
+}
+
 /// Recursively converts an [`ElementSpec`] into a real `gpui` [`AnyElement`].
 ///
 /// A container gets a hitbox only when something listens on it — GPUI
@@ -449,6 +463,7 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
             if dispatch.is_some() && spec.listens.needs_element_id() {
                 let element =
                     wire_stateless(element.id(ElementId::Integer(u64::from(id))), id, &wired);
+                let element = wire_focus(element, dispatch, id);
                 // One `on_hover` covers both `mouseenter`/`mouseleave` —
                 // GPUI panics if it's called twice on the same element, so
                 // which name to dispatch is decided from its `bool` at
@@ -486,7 +501,8 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
                     None => finish_container(element, spec, dispatch),
                 }
             } else {
-                finish_container(wire_stateless(element, id, &wired), spec, dispatch)
+                let element = wire_stateless(element, id, &wired);
+                finish_container(wire_focus(element, dispatch, id), spec, dispatch)
             }
         }
     }
@@ -529,6 +545,10 @@ impl EventSink for NeverListens {
         _window: &mut Window,
         _cx: &mut App,
     ) {
+    }
+
+    fn focus_handle(&self, _node_id: NodeId) -> Option<gpui::FocusHandle> {
+        None
     }
 }
 

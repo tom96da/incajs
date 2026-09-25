@@ -93,8 +93,10 @@ export function releaseCallbacks(callbackIds: readonly CallbackId[]): void {
  *
  * The host holds a list per `(nodeId, event)` and dispatches to all of it;
  * this wrapper keeps one, the way a framework adapter composes its own
- * handlers into a single callback. Only `"click"` is wired to a real native
- * input event today; other event names are accepted but never fire.
+ * handlers into a single callback. `"click"`/`"mousedown"`/`"mouseup"`/
+ * `"mousemove"`/`"wheel"`/`"mouseenter"`/`"mouseleave"`/`"focus"`/`"blur"`
+ * are wired to real native input today; other event names are accepted but
+ * never fire.
  * @param nodeId - the node to listen on
  * @param event - the event name (e.g. `"click"`)
  * @param listener - called when the event fires
@@ -116,4 +118,24 @@ export function removeEventListener(nodeId: NodeId, event: string): void {
 
   native().removeEventListener(nodeId, event, callbackId);
   registrations.release(callbackId);
+}
+
+/**
+ * Requests that `nodeId` become focused. Takes effect on the next frame,
+ * dispatching `"blur"`/`"focus"` for whatever actually changed — `nodeId`
+ * doesn't need a `"focus"`/`"blur"` listener registered for this to work,
+ * the same way `element.focus()` works on any focusable DOM element
+ * regardless of whether it's being listened to.
+ * @param nodeId - the node to focus
+ */
+export function focus(nodeId: NodeId): void {
+  native().focusNode(nodeId);
+}
+
+/**
+ * Requests that whatever is focused become unfocused. Takes effect on the
+ * next frame; a no-op if nothing is focused when it runs.
+ */
+export function blur(): void {
+  native().blurNode();
 }

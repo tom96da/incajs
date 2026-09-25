@@ -15,6 +15,8 @@ interface IncaNative {
   addEventListener(nodeId: NodeId, event: string, callbackId: CallbackId): void;
   removeEventListener(nodeId: NodeId, event: string, callbackId: CallbackId): boolean;
   destroyNode(nodeId: NodeId): CallbackId[];
+  focusNode(nodeId: NodeId): void;
+  blurNode(): void;
 }
 
 declare global {

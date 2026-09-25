@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-export { removeEventListener, setEventListener } from "./events.mts";
+export { blur, focus, removeEventListener, setEventListener } from "./events.mts";
 export {
   appendChild,
   createNode,

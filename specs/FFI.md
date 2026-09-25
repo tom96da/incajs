@@ -97,7 +97,9 @@ variants beyond the four above.
 | `setStyle` | `(nodeId: number, key: string, value: any) => void` | Set a style prop — the only JS-reachable way to touch `style_props`; `setAttribute` writes to the separate `attributes` map instead. |
 | `addEventListener` | `(nodeId: number, event: string, callbackId: number) => void` | Register a JS callback for a native input event. Distinct ids on one `(nodeId, event)` stack and all of them are dispatched, as in the DOM; re-registering an id already there is a no-op. |
 | `removeEventListener` | `(nodeId: number, event: string, callbackId: number) => boolean` | Drop one registration, reporting whether it was there. Never throws — a node destroyed first is the normal teardown race, not an error. |
-| `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its whole subtree, and return every `callbackId` that was registered anywhere in it, so the caller can drop the JS functions those ids name. Destroying an already-destroyed or unknown id returns `[]`. Destroying the root throws — it belongs to the host. |
+| `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its whole subtree, and return every `callbackId` that was registered anywhere in it, so the caller can drop the JS functions those ids name. Destroying an already-destroyed or unknown id returns `[]`. Destroying the root throws — it belongs to the host. Also drops `nodeId`'s focus state, if it had any. |
+| `focusNode` | `(nodeId: number) => void` | Request that `nodeId` become focused. Takes effect next frame; works on any node, not only one with a `"focus"`/`"blur"` listener registered. |
+| `blurNode` | `() => void` | Request that whatever's focused become unfocused. Takes effect next frame; a no-op if nothing is focused by then. |
 
 On each GPUI `render()` frame cycle, the host recursively converts the
 `VirtualNode` tree into GPUI `AnyElement` instances. A node is wired for
@@ -111,7 +113,7 @@ on every pointer move.
 Implemented by `render_tree_with_events`/`build_element_with_events`
 (`crates/inca-gpui/src/element.rs`, Unit vi), which wire every container's
 `"click"`/`"mousedown"`/`"mouseup"`/`"mousemove"`/`"wheel"`/
-`"mouseenter"`/`"mouseleave"` to an `EventDispatcher`
+`"mouseenter"`/`"mouseleave"`/`"focus"`/`"blur"` to an `EventDispatcher`
 (`crates/inca-bridge/src/dispatch.rs`), which looks up and calls the JS
 callbacks registered for `(nodeId, event)` via `addEventListener`, then
 requests a redraw.
@@ -125,8 +127,9 @@ hitbox, but one without a listener doesn't, so the node a pointer visually
 lands on isn't always known; `currentTarget` is exact, `target` will read
 the same until something can compute it precisely (tracked in
 [BACKLOG.md](./BACKLOG.md)). Further fields depend on the event kind —
-`"click"` carries none of its own; `"mousedown"`/`"mouseup"`/`"mousemove"`/
-`"mouseenter"`/`"mouseleave"` carry `clientX`, `clientY`, `button`,
+`"click"`/`"focus"`/`"blur"` carry none of their own;
+`"mousedown"`/`"mouseup"`/`"mousemove"`/`"mouseenter"`/`"mouseleave"`
+carry `clientX`, `clientY`, `button`,
 `buttons`, `detail`, and `ctrlKey`/`shiftKey`/`altKey`/`metaKey`,
 DOM-`MouseEvent`-named (`platform` becomes `metaKey`; GPUI's `function`
 modifier has no DOM counterpart and is dropped). `buttons` tracks every
@@ -156,6 +159,25 @@ other pointer kind, so `stopPropagation()` from a descendant's hover
 callback can affect whether an ancestor's hover state is re-checked that
 frame — the DOM's `mouseenter`/`mouseleave` don't bubble at all, so this
 has no DOM equivalent.
+
+`"focus"`/`"blur"` come from `crates/inca-bridge/src/focus.rs`'s
+`FocusRegistry`, which persists a `gpui::FocusHandle` per node and
+compares which node is focused against which was focused last frame, once
+per frame (see that file's own doc comment for why not GPUI's
+`Window::on_focus_in`/`on_focus_out`). A node becomes focusable the first
+time `focusNode` names it or its `.track_focus` wiring is asked for. A
+focusable node with no focusable descendants gets DOM's non-bubbling
+`focus`/`blur`; that stops holding once focusable nodes can nest (tracked
+in [BACKLOG.md](./BACKLOG.md)).
+
+A focusable node also focuses itself on `mousedown`, matching the DOM —
+GPUI wires this automatically. `preventDefault()` on that `mousedown`
+suppresses it.
+
+`focusNode`/`blurNode` hold one pending request each, not a queue — a
+second call before the next frame replaces the first. Destroying a
+focused node reports no `"blur"` — its listeners are already gone by the
+time `destroyNode` returns.
 
 `stopImmediatePropagation()` stops the remaining callbacks *on that node*.
 `stopPropagation()`/`preventDefault()` are read back once every callback on

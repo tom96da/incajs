@@ -13,6 +13,8 @@ use rquickjs::{Ctx, Exception, Function, Object, Result as JsResult, Value};
 
 use inca_gpui::{AttributeValue, NodeId, TreeError, VirtualTree};
 
+use crate::focus::FocusRegistry;
+
 /// Every `(node id, event name)` a JS caller has registered through
 /// `addEventListener`, mapped to the plain integer callback handles it gave
 /// us. Only ever stores owned Rust data — never a JS value or function —
@@ -90,6 +92,7 @@ pub struct Host {
     /// Allocated with the tree, so `rootNodeId` always resolves.
     pub root: NodeId,
     pub listeners: EventListeners,
+    pub focus: FocusRegistry,
 }
 
 impl Default for Host {
@@ -100,6 +103,7 @@ impl Default for Host {
             tree,
             root,
             listeners: EventListeners::default(),
+            focus: FocusRegistry::default(),
         }
     }
 }
@@ -303,10 +307,33 @@ pub fn install<'js>(ctx: &Ctx<'js>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
                     let freed = host.tree.destroy_node(node_id);
                     Ok(freed
                         .into_iter()
-                        .flat_map(|id| host.listeners.release(id))
+                        .flat_map(|id| {
+                            host.focus.forget(id);
+                            host.listeners.release(id)
+                        })
                         .collect())
                 },
             )?,
+        )?;
+    }
+
+    {
+        let host = Rc::clone(host);
+        native.set(
+            "focusNode",
+            Function::new(ctx.clone(), move |node_id: NodeId| {
+                host.borrow_mut().focus.request_focus(node_id);
+            })?,
+        )?;
+    }
+
+    {
+        let host = Rc::clone(host);
+        native.set(
+            "blurNode",
+            Function::new(ctx.clone(), move || {
+                host.borrow_mut().focus.request_blur();
+            })?,
         )?;
     }
 

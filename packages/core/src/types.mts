@@ -68,7 +68,7 @@ export interface StyleProps {
  * `ctrlKey`/`shiftKey`/`altKey`/`metaKey`, DOM-`MouseEvent`-named.
  * `"wheel"` carries those same fields plus `deltaX`/`deltaY`/`deltaZ`/
  * `deltaMode`, DOM-`WheelEvent`-named (`deltaMode` is `0` or `1`; `deltaZ`
- * is always `0`). `"click"` carries none of its own.
+ * is always `0`). `"click"`/`"focus"`/`"blur"` carry none of their own.
  *
  * An element already under the pointer when it mounts gets a
  * `"mouseenter"` the first time its hover state is checked, with no

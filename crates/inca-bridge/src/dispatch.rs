@@ -304,6 +304,10 @@ impl EventSink for EventDispatcher {
     ) {
         self.dispatch(node_id, event, payload, window, cx);
     }
+
+    fn focus_handle(&self, node_id: NodeId) -> Option<gpui::FocusHandle> {
+        self.host.borrow().focus.handle(node_id)
+    }
 }
 
 /// Drains `QuickJS`'s pending-job queue, then requests a redraw. Code that

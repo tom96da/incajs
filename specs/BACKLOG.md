@@ -149,3 +149,18 @@ enough overhead for a single maintainer plus AI pairing.
   session's `held_buttons` tracking alongside a "no real pointer move seen
   yet" flag that would suppress the mount-time `mouseenter`, and later the
   capture-phase and precise-`target` work above.
+
+- **`"focus"`/`"blur"` will need to become `"focusin"`/`"focusout"` once
+  focusable nodes can nest**: `crates/inca-bridge/src/focus.rs`'s
+  `FocusRegistry` dispatches DOM's non-bubbling `focus`/`blur` today,
+  correct only because no focusable node has a focusable descendant yet.
+  A focusable container wrapping a focusable child would need the
+  bubbling pair instead — checking whether the node whose focus state
+  changed is the exact one focused, not just an ancestor of it.
+
+- **No Tab-key focus navigation**: `crates/inca-bridge/src/focus.rs` only
+  moves focus on an explicit `focusNode` call or a click landing on a
+  focusable, `.id()`-bearing node. GPUI already has `tab_index`/
+  `tab_stop`/`window.focus_next(cx)` for this — wiring it means deciding
+  what `inca`'s tab-order vocabulary looks like (a style prop? an
+  attribute?) and is a separate unit from the focus model itself.
