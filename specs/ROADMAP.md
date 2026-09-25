@@ -162,8 +162,8 @@ this is preferred over a hand-rolled HMR protocol.
 
 ## Phase 4: Input & text editing (future)
 
-In progress. Phase 1 wired one input event — a click on a container. Item 1
-below is done; items 2–5 haven't started. See
+In progress. Phase 1 wired one input event — a click on a container. Items 1
+and 2 below are done; items 3–5 haven't started. See
 [FFI.md](./FFI.md#event-dispatch) for what's wired today.
 
 Everything here reaches JS through the existing `addEventListener` surface:
@@ -175,12 +175,11 @@ is a name the host agrees to send, not a new binding.
    `"mouseleave"`, DOM-shaped payloads, and propagation via
    `stopPropagation`/`stopImmediatePropagation`/`preventDefault`. `"click"`
    is now one name among several rather than the only one.
-2. **Keyboard input**: key press/release with modifiers, and a focus model
-   deciding which node receives them. GPUI has its own focus handles, so
-   this is a mapping rather than new machinery. The focus model — which
+2. **Keyboard input** (done): key press/release with modifiers, and a
+   focus model deciding which node receives them. The focus model — which
    node is focused, moving it (`focusNode`/`blurNode`, a click on a
-   focusable node), `"focus"`/`"blur"` — is done; `"keydown"`/`"keyup"`
-   themselves haven't started.
+   focusable node), `"focus"`/`"blur"` — plus `"keydown"`/`"keyup"`,
+   DOM-`KeyboardEvent`-named and bubbling from the focused node.
 3. **Text editing**: an editable text element, with selection, caret, and
    IME composition. The largest item here, and the one with no partial
    version worth shipping — a text field that drops IME composition is

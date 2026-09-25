@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use gpui::{
-    App, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ScrollDelta, ScrollWheelEvent,
-    Window,
+    App, KeyDownEvent, KeyUpEvent, Keystroke, MouseButton, MouseDownEvent, MouseMoveEvent,
+    MouseUpEvent, ScrollDelta, ScrollWheelEvent, Window,
 };
 
 use crate::tree::NodeId;
@@ -43,6 +43,8 @@ event_kinds! {
     MouseLeave => "mouseleave",
     Focus => "focus",
     Blur => "blur",
+    KeyDown => "keydown",
+    KeyUp => "keyup",
 }
 
 impl EventKind {
@@ -59,6 +61,8 @@ impl EventKind {
             Self::MouseLeave => EventMask::MOUSE_LEAVE,
             Self::Focus => EventMask::FOCUS,
             Self::Blur => EventMask::BLUR,
+            Self::KeyDown => EventMask::KEY_DOWN,
+            Self::KeyUp => EventMask::KEY_UP,
         }
     }
 
@@ -73,7 +77,9 @@ impl EventKind {
             | Self::MouseMove
             | Self::Wheel
             | Self::Focus
-            | Self::Blur => false,
+            | Self::Blur
+            | Self::KeyDown
+            | Self::KeyUp => false,
         }
     }
 }
@@ -103,6 +109,10 @@ impl EventMask {
     pub const FOCUS: Self = Self(1 << 7);
     /// Wired for [`EventKind::Blur`].
     pub const BLUR: Self = Self(1 << 8);
+    /// Wired for [`EventKind::KeyDown`].
+    pub const KEY_DOWN: Self = Self(1 << 9);
+    /// Wired for [`EventKind::KeyUp`].
+    pub const KEY_UP: Self = Self(1 << 10);
 
     /// Whether every bit set in `other` is also set in `self`.
     #[must_use]
@@ -151,7 +161,7 @@ impl std::ops::BitOr for EventMask {
 }
 
 /// What a dispatch carries beyond the node it fired on.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum EventPayload {
     /// No data beyond the node and the event's name.
     None,
@@ -160,6 +170,8 @@ pub enum EventPayload {
     /// A scroll delta plus the same fields as [`EventPayload::Mouse`],
     /// DOM-`WheelEvent`-shaped (`WheelEvent` extends `MouseEvent`).
     Wheel(WheelPayload),
+    /// A key and modifier state, DOM-`KeyboardEvent`-shaped.
+    Key(KeyPayload),
 }
 
 /// [`EventPayload::Mouse`]'s fields, named and shaped after DOM's
@@ -207,6 +219,17 @@ pub struct WheelPayload {
     /// DOM's `deltaMode`: 0 (`DOM_DELTA_PIXEL`) or 1 (`DOM_DELTA_LINE`).
     /// GPUI has no equivalent of `DOM_DELTA_PAGE` (2).
     pub delta_mode: u8,
+}
+
+/// [`EventPayload::Key`]'s fields, named and shaped after DOM's
+/// `KeyboardEvent`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct KeyPayload {
+    /// DOM's `key`, from [`dom_key`].
+    pub key: String,
+    /// DOM's `repeat`.
+    pub repeat: bool,
+    pub modifiers: gpui::Modifiers,
 }
 
 /// DOM's `button`/`buttons` numbering for a [`MouseButton`]. `buttons` is a
@@ -289,6 +312,68 @@ impl From<&ScrollWheelEvent> for EventPayload {
     }
 }
 
+impl From<&KeyDownEvent> for EventPayload {
+    fn from(event: &KeyDownEvent) -> Self {
+        Self::Key(KeyPayload {
+            key: dom_key(&event.keystroke),
+            repeat: event.is_held,
+            modifiers: event.keystroke.modifiers,
+        })
+    }
+}
+
+impl From<&KeyUpEvent> for EventPayload {
+    fn from(event: &KeyUpEvent) -> Self {
+        Self::Key(KeyPayload {
+            key: dom_key(&event.keystroke),
+            // DOM's `keyup` is never a repeat.
+            repeat: false,
+            modifiers: event.keystroke.modifiers,
+        })
+    }
+}
+
+/// GPUI's `Keystroke::key` to DOM's `KeyboardEvent.key`, covering GPUI's
+/// special key names, grown as real usage needs more of them. Falls
+/// through to `key_char` (the character actually typed, when the platform
+/// reports one) and then to `key` itself for anything not in the table.
+fn dom_key(keystroke: &Keystroke) -> String {
+    let named = match keystroke.key.as_str() {
+        "space" => Some(" "),
+        "tab" => Some("Tab"),
+        "enter" => Some("Enter"),
+        "backspace" => Some("Backspace"),
+        "delete" => Some("Delete"),
+        "left" => Some("ArrowLeft"),
+        "right" => Some("ArrowRight"),
+        "up" => Some("ArrowUp"),
+        "down" => Some("ArrowDown"),
+        "pageup" => Some("PageUp"),
+        "pagedown" => Some("PageDown"),
+        "insert" => Some("Insert"),
+        "home" => Some("Home"),
+        "end" => Some("End"),
+        "back" => Some("BrowserBack"),
+        "forward" => Some("BrowserForward"),
+        "escape" => Some("Escape"),
+        _ => None,
+    };
+    if let Some(named) = named {
+        return named.to_string();
+    }
+    if let Some(function) = keystroke
+        .key
+        .strip_prefix('f')
+        .filter(|n| n.parse::<u8>().is_ok_and(|n| (1..=35).contains(&n)))
+    {
+        return format!("F{function}");
+    }
+    keystroke
+        .key_char
+        .clone()
+        .unwrap_or_else(|| keystroke.key.clone())
+}
+
 /// What [`crate::element`] needs from something that can dispatch a native
 /// event into JS — `inca-bridge`'s `EventDispatcher` implements this, kept
 /// as a trait here rather than a direct dependency so this crate never has
@@ -369,6 +454,48 @@ mod tests {
                 "{kind:?} repeats an earlier name"
             );
         }
+    }
+
+    #[test]
+    fn dom_key_prefers_a_named_key_over_its_key_char() {
+        let enter = Keystroke {
+            key: "enter".to_string(),
+            key_char: Some("\n".to_string()),
+            modifiers: gpui::Modifiers::default(),
+        };
+        assert_eq!(dom_key(&enter), "Enter");
+    }
+
+    #[test]
+    fn dom_key_names_every_function_key() {
+        for n in 1..=35u8 {
+            let keystroke = Keystroke {
+                key: format!("f{n}"),
+                key_char: None,
+                modifiers: gpui::Modifiers::default(),
+            };
+            assert_eq!(dom_key(&keystroke), format!("F{n}"));
+        }
+    }
+
+    #[test]
+    fn dom_key_falls_back_to_key_char_for_an_unnamed_key() {
+        let shifted_s = Keystroke {
+            key: "s".to_string(),
+            key_char: Some("S".to_string()),
+            modifiers: gpui::Modifiers::default(),
+        };
+        assert_eq!(dom_key(&shifted_s), "S");
+    }
+
+    #[test]
+    fn dom_key_falls_back_to_key_when_key_char_is_none() {
+        let cmd_s = Keystroke {
+            key: "s".to_string(),
+            key_char: None,
+            modifiers: gpui::Modifiers::default(),
+        };
+        assert_eq!(dom_key(&cmd_s), "s");
     }
 
     fn mouse_payload(payload: EventPayload) -> MousePayload {
@@ -511,6 +638,8 @@ mod tests {
         assert!(!EventMask::WHEEL.needs_element_id());
         assert!(!EventMask::FOCUS.needs_element_id());
         assert!(!EventMask::BLUR.needs_element_id());
+        assert!(!EventMask::KEY_DOWN.needs_element_id());
+        assert!(!EventMask::KEY_UP.needs_element_id());
     }
 
     /// A mask still needs an id if `.needs_element_id()`-requiring kind is

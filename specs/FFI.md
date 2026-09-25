@@ -113,7 +113,8 @@ on every pointer move.
 Implemented by `render_tree_with_events`/`build_element_with_events`
 (`crates/inca-gpui/src/element.rs`, Unit vi), which wire every container's
 `"click"`/`"mousedown"`/`"mouseup"`/`"mousemove"`/`"wheel"`/
-`"mouseenter"`/`"mouseleave"`/`"focus"`/`"blur"` to an `EventDispatcher`
+`"mouseenter"`/`"mouseleave"`/`"focus"`/`"blur"`/`"keydown"`/`"keyup"` to
+an `EventDispatcher`
 (`crates/inca-bridge/src/dispatch.rs`), which looks up and calls the JS
 callbacks registered for `(nodeId, event)` via `addEventListener`, then
 requests a redraw.
@@ -180,6 +181,18 @@ each in turn, the same as the DOM's synchronous `.focus()` would.
 Destroying a focused node reports no `"blur"` — its listeners are already
 gone by the time `destroyNode` returns (tracked in
 [BACKLOG.md](./BACKLOG.md)).
+
+`"keydown"`/`"keyup"` carry `key`, `repeat`, and
+`ctrlKey`/`shiftKey`/`altKey`/`metaKey`, DOM-`KeyboardEvent`-named. `key`
+comes from GPUI's own `Keystroke::key`/`key_char` through a name table in
+`crates/inca-gpui/src/event_sink.rs`'s `dom_key`, covering GPUI's special
+key names, grown as real usage needs more of them. `repeat` is GPUI's
+`KeyDownEvent::is_held`;
+`"keyup"` is never a repeat, matching the DOM. GPUI routes a key event to
+whichever node is currently focused and bubbles it up through that node's
+ancestors, the same as the DOM; with nothing focused, GPUI routes to the
+window's own root, which carries no `inca` listeners, so neither event
+reaches any node (tracked in [BACKLOG.md](./BACKLOG.md)).
 
 `stopImmediatePropagation()` stops the remaining callbacks *on that node*.
 `stopPropagation()`/`preventDefault()` are read back once every callback on

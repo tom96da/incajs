@@ -10,5 +10,7 @@ pub use element::{
     build_element, build_element_with_events, build_spec, build_spec_with, render_tree,
     render_tree_with_events,
 };
-pub use event_sink::{EventKind, EventMask, EventPayload, EventSink, MousePayload, WheelPayload};
+pub use event_sink::{
+    EventKind, EventMask, EventPayload, EventSink, KeyPayload, MousePayload, WheelPayload,
+};
 pub use tree::{AttributeValue, NodeId, TreeError, VirtualNode, VirtualTree};

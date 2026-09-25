@@ -27,7 +27,9 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use gpui::{App, Window};
-use inca_gpui::{EventKind, EventMask, EventPayload, MousePayload, NodeId, WheelPayload};
+use inca_gpui::{
+    EventKind, EventMask, EventPayload, KeyPayload, MousePayload, NodeId, WheelPayload,
+};
 use inca_jsenv::{Engine, EngineError};
 use rquickjs::{Function, Object};
 
@@ -103,19 +105,19 @@ impl EventDispatcher {
     /// [`Self::held_buttons`]. A DOM `mouseup` excludes the button just
     /// released; every other kind includes every button still held.
     fn with_held_buttons(&self, event: &str, payload: &EventPayload) -> EventPayload {
-        match *payload {
+        match payload {
             EventPayload::Mouse(mouse) => EventPayload::Mouse(MousePayload {
                 buttons: self.update_held_buttons(event, mouse.button),
-                ..mouse
+                ..*mouse
             }),
             EventPayload::Wheel(wheel) => EventPayload::Wheel(WheelPayload {
                 mouse: MousePayload {
                     buttons: self.update_held_buttons(event, wheel.mouse.button),
                     ..wheel.mouse
                 },
-                ..wheel
+                ..*wheel
             }),
-            EventPayload::None => *payload,
+            EventPayload::None | EventPayload::Key(_) => payload.clone(),
         }
     }
 
@@ -140,8 +142,8 @@ impl EventDispatcher {
     /// propagation methods, then drains the job queue and requests a redraw.
     ///
     /// `target` and `currentTarget` are both `node_id`. `currentTarget` (the
-    /// node this call is dispatching for) is exact; `target` is an
-    /// approximation of the same value (tracked in `specs/BACKLOG.md`).
+    /// node this call is dispatching for) is exact; `target` is only an
+    /// approximation of the same value.
     ///
     /// A callback calling `stopImmediatePropagation()` stops the remaining
     /// callbacks *on this node*. `stopPropagation()`/`preventDefault()` are
@@ -269,6 +271,7 @@ fn set_payload(event_object: &Object, payload: &EventPayload) -> rquickjs::Resul
             event_object.set("deltaZ", wheel.delta_z)?;
             event_object.set("deltaMode", wheel.delta_mode)?;
         }
+        EventPayload::Key(key) => set_key_fields(event_object, key)?,
     }
     Ok(())
 }
@@ -282,10 +285,23 @@ fn set_mouse_fields(event_object: &Object, mouse: &MousePayload) -> rquickjs::Re
     event_object.set("button", mouse.button)?;
     event_object.set("buttons", mouse.buttons)?;
     event_object.set("detail", mouse.detail)?;
-    event_object.set("ctrlKey", mouse.modifiers.control)?;
-    event_object.set("shiftKey", mouse.modifiers.shift)?;
-    event_object.set("altKey", mouse.modifiers.alt)?;
-    event_object.set("metaKey", mouse.modifiers.platform)?;
+    set_modifier_fields(event_object, mouse.modifiers)
+}
+
+/// Writes [`KeyPayload`]'s fields onto `event_object`, DOM-named.
+fn set_key_fields(event_object: &Object, key: &KeyPayload) -> rquickjs::Result<()> {
+    event_object.set("key", key.key.clone())?;
+    event_object.set("repeat", key.repeat)?;
+    set_modifier_fields(event_object, key.modifiers)
+}
+
+/// Writes `modifiers`' fields onto `event_object`, DOM-named — shared by
+/// [`set_mouse_fields`] and [`set_key_fields`].
+fn set_modifier_fields(event_object: &Object, modifiers: gpui::Modifiers) -> rquickjs::Result<()> {
+    event_object.set("ctrlKey", modifiers.control)?;
+    event_object.set("shiftKey", modifiers.shift)?;
+    event_object.set("altKey", modifiers.alt)?;
+    event_object.set("metaKey", modifiers.platform)?;
     Ok(())
 }
 

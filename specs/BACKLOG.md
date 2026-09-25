@@ -176,3 +176,11 @@ enough overhead for a single maintainer plus AI pairing.
   `"blur"` before anything is freed (a wider change to the binding/
   dispatch boundary every `crate::bindings` function currently shares).
   Land it alongside whatever else motivates that wider change.
+
+- **`"keydown"`/`"keyup"` reach no node with nothing focused**: the DOM
+  falls back to `document.body` as the target; `inca` has no such
+  fallback, so a key press before anything is focused is silently
+  dropped. `KeyPayload` (`crates/inca-gpui/src/event_sink.rs`) also has no
+  `code`/`location`/`isComposing`, and its `key` can stay lowercase for a
+  shifted letter on a platform whose `Keystroke::key_char` doesn't report
+  the shifted character.

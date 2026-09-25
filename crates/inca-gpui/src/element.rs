@@ -375,8 +375,9 @@ fn apply_style(style: &mut StyleRefinement, spec: &StyleSpec) {
 }
 
 /// Wires whichever of [`EventMask::MOUSE_DOWN`]/[`MOUSE_UP`]/[`MOUSE_MOVE`]/
-/// [`WHEEL`](EventMask::WHEEL) `wired` reports as present — every kind that
-/// doesn't need a `gpui` `ElementId`, so `Elem` can be `Div` or
+/// [`WHEEL`](EventMask::WHEEL)/[`KEY_DOWN`](EventMask::KEY_DOWN)/
+/// [`KEY_UP`](EventMask::KEY_UP) `wired` reports as present — every kind
+/// that doesn't need a `gpui` `ElementId`, so `Elem` can be `Div` or
 /// `Stateful<Div>` interchangeably; both are [`InteractiveElement`].
 fn wire_stateless<Elem, E>(
     element: Elem,
@@ -411,6 +412,16 @@ where
         .when_some(wired(EventMask::WHEEL), |el, listening| {
             el.on_scroll_wheel(move |event, window, cx| {
                 listening.dispatch(id, "wheel", &event.into(), window, cx);
+            })
+        })
+        .when_some(wired(EventMask::KEY_DOWN), |el, listening| {
+            el.on_key_down(move |event, window, cx| {
+                listening.dispatch(id, "keydown", &event.into(), window, cx);
+            })
+        })
+        .when_some(wired(EventMask::KEY_UP), |el, listening| {
+            el.on_key_up(move |event, window, cx| {
+                listening.dispatch(id, "keyup", &event.into(), window, cx);
             })
         })
 }
