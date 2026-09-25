@@ -180,7 +180,42 @@ enough overhead for a single maintainer plus AI pairing.
 - **`"keydown"`/`"keyup"` reach no node with nothing focused**: the DOM
   falls back to `document.body` as the target; `inca` has no such
   fallback, so a key press before anything is focused is silently
-  dropped. `KeyPayload` (`crates/inca-gpui/src/event_sink.rs`) also has no
-  `code`/`location`/`isComposing`, and its `key` can stay lowercase for a
-  shifted letter on a platform whose `Keystroke::key_char` doesn't report
-  the shifted character.
+  dropped. `key` can also stay lowercase for a shifted letter on a
+  platform whose `Keystroke::key_char` doesn't report the shifted
+  character.
+
+- **More `MouseEvent`/`KeyboardEvent` fields could reach JS**:
+  `crates/inca-gpui/src/event_sink.rs`'s `MousePayload`/`KeyPayload`
+  carry a deliberate subset of each DOM type's own fields. What's between
+  each missing one and landing differs:
+  - Computable today, from what already flows through `EventDispatcher`
+    — no `gpui` change needed: `movementX`/`movementY` (a delta from the
+    last `mousemove`, the same way `held_buttons` already tracks state
+    across events); `offsetX`/`offsetY` (a target's own bounds are
+    already computed for hit-testing, just not threaded through to
+    `dispatch`); `pageX`/`pageY` (identical to `clientX`/`clientY` today
+    — nothing scrolls yet).
+  - Blocked on another `inca` gap, not on `gpui`: `relatedTarget` needs
+    the same precise hit-testing the `event.target` approximation entry
+    above is waiting on; `isComposing` needs the text-editing/IME unit,
+    which hasn't started.
+  - Blocked on `gpui` itself: `code` and `location` — `Keystroke`
+    (`third_party/zed/crates/gpui/src/platform/keystroke.rs`) carries
+    only `{ modifiers, key, key_char }`, with no layout-independent
+    scancode and no left/right or numpad distinction to recover either
+    from.
+
+- **A template `ref` resolves to a plain data object, not something with
+  a DOM-like API**: `IncaElement` (`packages/core/src/vue/nodeOps.mts`) is
+  `{ id, kind, parent, children }` — nothing else. A real DOM template
+  `ref` resolves to the actual element, so `el.value.focus()` needs no
+  import beyond `ref` itself; here, moving focus means importing
+  `focus`/`blur` from `incajs` separately and passing `el.value.id`. A
+  node also stays unfocusable — including for GPUI's own click-to-focus —
+  until `focus()` names it once, so this shows up on the very first
+  attempt to move focus, not just as friction later. Giving `IncaElement`
+  its own `.focus()`/`.blur()` methods, backed by the same native
+  `focusNode`/`blurNode` calls, would let a `.vue` app write the same code
+  a real DOM app does, no `incajs` import needed. The same gap likely
+  applies to any other DOM-element method/property a `.vue` app would
+  otherwise reach for on a template `ref`.
