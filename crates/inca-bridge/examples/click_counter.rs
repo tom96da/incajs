@@ -62,8 +62,8 @@ fn build_tree(tree: &mut VirtualTree) -> (NodeId, NodeId) {
 /// Wires the box's click, via JS, to update the label's text. Relies on the
 /// convention that a real callback function must be stored at
 /// `globalThis.__inca_callbacks__[callbackId]` before calling
-/// `addEventListener` with that id (see `render::bridge::EventDispatcher`'s
-/// doc comment for why).
+/// `addEventListener` with that id (see `EventDispatcher`'s doc comment
+/// for why).
 fn install_click_handler(engine: &Engine, outer: NodeId, label: NodeId) {
     engine
         .eval::<()>(&format!(

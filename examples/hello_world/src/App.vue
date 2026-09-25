@@ -4,9 +4,9 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 -->
 
 <!--
-  Vue port of crates/inca-gpui/examples/hello_world.rs's build_tree(): a
-  static, non-interactive tree — no reactivity needed, matching the Rust
-  original's own choice of plain `render_tree` with no event dispatch.
+  Vue port of crates/inca-gpui/examples/hello_world.rs: a static,
+  non-interactive tree — no reactivity needed since nothing changes after
+  mount.
 
   The label below is a mustache interpolation, not plain template text:
   inca's "text" nodes render their value verbatim (no trimming), and

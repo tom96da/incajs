@@ -181,10 +181,9 @@ impl Engine {
     /// resolves against, so pass the source's real path on disk if it has
     /// one. A module's own completion value is always `undefined` per spec,
     /// so unlike [`eval`](Self::eval) there's nothing meaningful to convert
-    /// to a caller-chosen type; state comes back the same way
-    /// `examples/click_counter.rs` already does it for plain scripts — the
-    /// module's top-level code writes to `globalThis`, and a separate `eval`
-    /// call reads it back afterward.
+    /// to a caller-chosen type; state comes back out the same way a plain
+    /// script's does — the module's top-level code writes to `globalThis`,
+    /// and a separate `eval` call reads it back afterward.
     ///
     /// # Errors
     ///
