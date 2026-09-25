@@ -20,7 +20,7 @@
 //! finishes, so one registered in the same frame focus moves to it would
 //! miss that very transition. A plain per-frame diff has no such gap.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use gpui::{App, FocusHandle, Window};
 
@@ -60,13 +60,15 @@ enum PendingFocus {
 }
 
 /// `NodeId` → its persistent `FocusHandle`, the node focused as of the last
-/// frame this was checked, and at most one pending request from a binding
-/// that had no live `Window`/`App`. See the module doc for why.
+/// frame this was checked, and every pending request left by a binding
+/// that had no live `Window`/`App`, oldest first — see the module doc for
+/// why. Two requests queued before the next frame both apply, in order —
+/// the same as the DOM's synchronous `.focus()`.
 #[derive(Debug, Default)]
 pub struct FocusRegistry {
     handles: HashMap<NodeId, FocusHandle>,
     focused: Option<NodeId>,
-    pending: Option<PendingFocus>,
+    pending: VecDeque<PendingFocus>,
 }
 
 impl FocusRegistry {
@@ -77,48 +79,64 @@ impl FocusRegistry {
         self.handles.get(&node_id).cloned()
     }
 
-    /// Records that `node_id` should be focused next frame.
+    /// Queues that `node_id` should be focused next frame.
     pub fn request_focus(&mut self, node_id: NodeId) {
-        self.pending = Some(PendingFocus::Focus(node_id));
+        self.pending.push_back(PendingFocus::Focus(node_id));
     }
 
-    /// Records that whatever's focused should be blurred next frame.
+    /// Queues that whatever's focused at that point should be blurred next
+    /// frame.
     pub fn request_blur(&mut self) {
-        self.pending = Some(PendingFocus::Blur);
+        self.pending.push_back(PendingFocus::Blur);
     }
 
-    /// Applies a pending request, if there is one, and reports whatever
-    /// changed since the last call — called once per frame, before the
-    /// element tree that needs the resulting `track_focus` wiring is
-    /// built.
+    /// Applies every queued request in order and reports each transition
+    /// it produced — called once per frame, before the element tree that
+    /// needs the resulting `track_focus` wiring is built.
     ///
-    /// Returns the transition rather than dispatching it directly: the
+    /// Returns the transitions rather than dispatching them directly: the
     /// caller holds `self` through a borrow of the same `Rc<RefCell<Host>>`
     /// that `EventSink::dispatch` re-borrows internally to look up
     /// callbacks, so dispatching from inside this call would panic with
     /// "already mutably borrowed". The caller dispatches after this
     /// returns, once that borrow is released.
     #[must_use]
-    pub fn apply_pending(&mut self, window: &mut Window, cx: &mut App) -> FocusTransition {
-        match self.pending.take() {
-            Some(PendingFocus::Focus(node_id)) => {
-                let handle = self.get_or_create(node_id, cx);
-                handle.focus(window, cx);
-            }
-            Some(PendingFocus::Blur) => window.blur(cx),
-            None => {}
+    pub fn apply_pending(&mut self, window: &mut Window, cx: &mut App) -> Vec<FocusTransition> {
+        let pending = std::mem::take(&mut self.pending);
+        if pending.is_empty() {
+            // Nothing queued this frame doesn't mean focus didn't move —
+            // GPUI's own click-to-focus moves it without ever going
+            // through `request_focus`.
+            return self.sync(window, cx).into_iter().collect();
         }
+        let mut transitions = Vec::with_capacity(pending.len());
+        for request in pending {
+            match request {
+                PendingFocus::Focus(node_id) => {
+                    let handle = self.get_or_create(node_id, cx);
+                    handle.focus(window, cx);
+                }
+                PendingFocus::Blur => window.blur(cx),
+            }
+            transitions.extend(self.sync(window, cx));
+        }
+        transitions
+    }
 
+    /// Reports a transition if which node is focused changed since the
+    /// last call, including a change from GPUI's own click-to-focus, not
+    /// only one made through [`Self::request_focus`].
+    fn sync(&mut self, window: &mut Window, cx: &mut App) -> Option<FocusTransition> {
         let focused_now = window.focused(cx).and_then(|handle| self.node_for(&handle));
         if focused_now == self.focused {
-            return FocusTransition::default();
+            return None;
         }
         let blurred = self.focused;
         self.focused = focused_now;
-        FocusTransition {
+        Some(FocusTransition {
             blurred,
             focused: focused_now,
-        }
+        })
     }
 
     /// Drops `node_id`'s handle, if it has one. `destroyNode` calls this

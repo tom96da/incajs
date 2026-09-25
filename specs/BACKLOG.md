@@ -164,3 +164,15 @@ enough overhead for a single maintainer plus AI pairing.
   `tab_stop`/`window.focus_next(cx)` for this — wiring it means deciding
   what `inca`'s tab-order vocabulary looks like (a style prop? an
   attribute?) and is a separate unit from the focus model itself.
+
+- **Destroying a focused node must come to fire `"blur"`**: it doesn't
+  today — `destroyNode`'s JS wrapper (`packages/core/src/tree.mts`) drops
+  every freed callback synchronously (`releaseCallbacks`), so even a
+  deferred, next-frame `"blur"` dispatch would find nothing left to call.
+  Closing this needs one of: delaying a focused node's own callback
+  release by one frame (a `destroyNode` contract change — every other
+  node's callbacks still free immediately), or giving native bindings
+  synchronous `Window`/`App` access so `destroyNode` itself can dispatch
+  `"blur"` before anything is freed (a wider change to the binding/
+  dispatch boundary every `crate::bindings` function currently shares).
+  Land it alongside whatever else motivates that wider change.

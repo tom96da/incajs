@@ -174,10 +174,12 @@ A focusable node also focuses itself on `mousedown`, matching the DOM —
 GPUI wires this automatically. `preventDefault()` on that `mousedown`
 suppresses it.
 
-`focusNode`/`blurNode` hold one pending request each, not a queue — a
-second call before the next frame replaces the first. Destroying a
-focused node reports no `"blur"` — its listeners are already gone by the
-time `destroyNode` returns.
+`focusNode`/`blurNode` queue, applied in order on the next frame — two
+calls before then both take effect, dispatching `"blur"`/`"focus"` for
+each in turn, the same as the DOM's synchronous `.focus()` would.
+Destroying a focused node reports no `"blur"` — its listeners are already
+gone by the time `destroyNode` returns (tracked in
+[BACKLOG.md](./BACKLOG.md)).
 
 `stopImmediatePropagation()` stops the remaining callbacks *on that node*.
 `stopPropagation()`/`preventDefault()` are read back once every callback on

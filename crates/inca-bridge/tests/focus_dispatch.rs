@@ -24,8 +24,10 @@ struct FocusableRoot {
 
 impl Render for FocusableRoot {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let transition = self.host.borrow_mut().focus.apply_pending(window, cx);
-        transition.dispatch(&self.dispatcher, window, cx);
+        let transitions = self.host.borrow_mut().focus.apply_pending(window, cx);
+        for transition in &transitions {
+            transition.dispatch(&self.dispatcher, window, cx);
+        }
         let host = self.host.borrow();
         render_tree_with_events(&host.tree, self.node, &self.dispatcher).unwrap()
     }
@@ -260,10 +262,10 @@ fn destroying_a_focused_node_reports_no_blur(cx: &mut TestAppContext) {
     );
 }
 
-/// `focusNode` holds one pending request, not a queue — two calls before
-/// the next frame leave only the later one to apply.
+/// `focusNode` queues its requests — two calls before the next frame both
+/// take effect, in order, the same as the DOM's synchronous `.focus()`.
 #[gpui::test]
-fn a_second_focus_node_call_before_the_next_frame_wins(cx: &mut TestAppContext) {
+fn two_focus_node_calls_before_the_next_frame_both_take_effect(cx: &mut TestAppContext) {
     let (host, parent, a) = build_focusable_pair();
     let b = {
         let host = host.borrow();
@@ -295,7 +297,7 @@ fn a_second_focus_node_call_before_the_next_frame_wins(cx: &mut TestAppContext) 
         engine
             .eval::<String>("JSON.stringify(globalThis.seen)")
             .unwrap(),
-        format!(r#"["focus:{b}"]"#),
-        "only the second request should have taken effect"
+        format!(r#"["focus:{a}","blur:{a}","focus:{b}"]"#),
+        "both requests must take effect, in order, like the DOM's synchronous focus()"
     );
 }
