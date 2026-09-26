@@ -1,16 +1,13 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import path from "node:path";
-
 import { build } from "vite";
 import type { RolldownWatcher } from "rolldown";
 
 import { bundlerFault } from "../../log.mts";
+import { toBuildOutput } from "./captureOutput.mts";
 import { resolveViteConfig } from "./config.mts";
 import type { BundlerOptions, Watcher } from "../types.mts";
-
-export type { Watcher } from "../types.mts";
 
 /**
  * Builds `entry` into a build under `outDir` and rebuilds it on every
@@ -35,12 +32,7 @@ export async function watch({
       stderr,
       quiet,
       onOutput: (captured) => {
-        onBuild({
-          outDir,
-          entryFile: path.join(outDir, captured.entryFile),
-          files: captured.files,
-          changed,
-        });
+        onBuild(toBuildOutput(outDir, captured, changed));
         changed = undefined;
       },
     }),

@@ -1,15 +1,12 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import path from "node:path";
-
 import { build as buildOnce } from "vite";
 
 import { IncaError } from "../../error.mts";
+import { toBuildOutput } from "./captureOutput.mts";
 import { resolveViteConfig } from "./config.mts";
 import type { BuildOptions, BuildOutput } from "../types.mts";
-
-export type { BuildOptions, BuildOutput } from "../types.mts";
 
 /**
  * Builds `entry` into a minified, production build under `outDir` once, and
@@ -36,11 +33,7 @@ export async function build({
       stderr,
       quiet,
       onOutput: (captured) => {
-        output = {
-          outDir,
-          entryFile: path.join(outDir, captured.entryFile),
-          files: captured.files,
-        };
+        output = toBuildOutput(outDir, captured);
       },
     }),
   );

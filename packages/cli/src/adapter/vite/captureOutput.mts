@@ -1,9 +1,12 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import path from "node:path";
+
 import type { Plugin } from "vite";
 
 import { IncaError } from "../../error.mts";
+import type { BuildOutput } from "../types.mts";
 
 /** What one (re)build actually wrote, relative to its own `outDir`. */
 export interface CapturedOutput {
@@ -11,6 +14,20 @@ export interface CapturedOutput {
   entryFile: string;
   /** Every emitted file, as the bundler reported it. */
   files: readonly string[];
+}
+
+/** Resolves `captured`'s paths against `outDir` into a {@link BuildOutput}. */
+export function toBuildOutput(
+  outDir: string,
+  captured: CapturedOutput,
+  changed?: BuildOutput["changed"],
+): BuildOutput {
+  return {
+    outDir,
+    entryFile: path.join(outDir, captured.entryFile),
+    files: captured.files,
+    changed,
+  };
 }
 
 /**

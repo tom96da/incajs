@@ -178,36 +178,41 @@ export async function dev(options: DevOptions): Promise<void> {
       }
     }
 
+    /** Starts the host against `entryFile` and keeps it in `client` once it's up. */
+    async function startHost(entryFile: string): Promise<void> {
+      const next = new HostClient({
+        entryFile,
+        hostBin,
+        onStderr: (line) => stderr.write(line),
+        onReady: () => {
+          ready = true;
+          log(stdout, "ready", STAMPED);
+          if (pendingReload) {
+            pendingReload = false;
+            void reloadHost();
+          }
+        },
+        onAppError: (error) => printFault(stderr, "app error", error, STAMPED),
+        onExit: () => {
+          // The window is gone, so there is nothing left to rebuild for.
+          log(stdout, "host exited — stopping", STAMPED);
+          stop();
+        },
+      });
+      try {
+        await next.start();
+      } catch (error) {
+        printFault(stderr, "failed to start inca-host", toFault(error), STAMPED);
+        return;
+      }
+      client = next;
+    }
+
     async function onBuild(output: BuildOutput): Promise<void> {
       await pruneStaleFiles(output.outDir, output.files);
 
       if (!client) {
-        const next = new HostClient({
-          entryFile: output.entryFile,
-          hostBin,
-          onStderr: (line) => stderr.write(line),
-          onReady: () => {
-            ready = true;
-            log(stdout, "ready", STAMPED);
-            if (pendingReload) {
-              pendingReload = false;
-              void reloadHost();
-            }
-          },
-          onAppError: (error) => printFault(stderr, "app error", error, STAMPED),
-          onExit: () => {
-            // The window is gone, so there is nothing left to rebuild for.
-            log(stdout, "host exited — stopping", STAMPED);
-            stop();
-          },
-        });
-        try {
-          await next.start();
-        } catch (error) {
-          printFault(stderr, "failed to start inca-host", toFault(error), STAMPED);
-          return;
-        }
-        client = next;
+        await startHost(output.entryFile);
         return;
       }
 
