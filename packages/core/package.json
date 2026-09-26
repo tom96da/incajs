@@ -1,6 +1,6 @@
 {
   "name": "incajs",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "A GPU-native, Webview-free desktop app framework built on GPUI and QuickJS.",
   "keywords": [
     "cross-platform",

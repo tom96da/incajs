@@ -42,7 +42,7 @@ from.
 Phase 4 (input & text editing) is running alongside 3.4: pointer input,
 the focus model, and keyboard input are done.
 
-The current release is `v0.0.4`, on Node.js 22.18 or newer, zed v1.20.2
+The current release is `v0.0.5`, on Node.js 22.18 or newer, zed v1.20.2
 for `gpui` and rquickjs 0.14.0. Linux binaries are built in an
 `ubuntu:22.04` container by both workflows, kept in sync, for a glibc
 2.35 floor. The public docs site (`docs/`, VitePress — `guide/` for

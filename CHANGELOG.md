@@ -10,6 +10,23 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.0.5] - 2026-09-26
+
+### Added
+
+- DOM-shaped `pageX`/`pageY`/`movementX`/`movementY` payloads became available on pointer events ([4548c9f](https://github.com/tom96da/incajs/commit/4548c9f))
+- a template `ref`'s element carries `.focus()`/`.blur()` directly ([0258564](https://github.com/tom96da/incajs/commit/0258564))
+
+### Removed
+
+- `incajs`'s tree/event/focus functions are no longer exported from its root; use a template `ref`'s `.focus()`/`.blur()` instead ([fa36a6a](https://github.com/tom96da/incajs/commit/fa36a6a))
+- `@incajs/cli`'s unused bundler-adapter type exports were dropped from its root ([ca5da96](https://github.com/tom96da/incajs/commit/ca5da96))
+
+### Fixed
+
+- `inca dev` no longer hangs on Ctrl-C when a reload is waiting on a wedged host ([a8f2bdf](https://github.com/tom96da/incajs/commit/a8f2bdf))
+- `console.log` prints `Infinity`/`-Infinity` the way JS spells them, not Rust's `inf`/`-inf` ([c589fe2](https://github.com/tom96da/incajs/commit/c589fe2))
+
 ## [0.0.4] - 2026-09-25
 
 ### Added
@@ -81,7 +98,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - prebuilt `inca-host` binaries for linux-x64, linux-arm64, and darwin-arm64, resolved automatically per platform
 - click event dispatch from the native tree back into JS
 
-[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.4...HEAD
+[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.5...HEAD
+[0.0.5]: https://github.com/tom96da/incajs/releases/tag/v0.0.5
 [0.0.4]: https://github.com/tom96da/incajs/releases/tag/v0.0.4
 [0.0.3]: https://github.com/tom96da/incajs/releases/tag/v0.0.3
 [0.0.2]: https://github.com/tom96da/incajs/releases/tag/v0.0.2
