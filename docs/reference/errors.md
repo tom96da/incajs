@@ -90,7 +90,7 @@ A `.vue` file has a `<style>` block, which isn't supported yet — the
 renderer applies no stylesheet, so the block would have no effect at
 runtime, and the build stops rather than shipping it.
 
-Use a `:style` binding instead:
+Use a `:style` binding instead.
 
 Not supported yet:
 

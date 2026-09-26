@@ -94,10 +94,10 @@ incajs/
 
 The Vite Runtime API integration that runs inside QuickJS (Phase 3.4) lands
 inside `@incajs/cli`'s existing `adapter/vite`, beside the Node-side dev
-server it talks to — not as a separate package or an `incajs` subpath. Both
-halves speak Vite's own internal protocol, which isn't guaranteed stable
-across versions, so keeping them in one package keeps them on one `vite`
-install. `incajs` stays free of a `vite` dependency.
+server it talks to. Both halves speak Vite's own internal protocol, which
+isn't guaranteed stable across versions, so keeping them in one package
+keeps them on one `vite` install. `incajs` stays free of a `vite`
+dependency.
 
 React lands as `incajs/react` — a new subpath inside `packages/core`,
 alongside `incajs/vue`, not a new top-level package (Phase 10).

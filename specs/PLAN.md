@@ -846,7 +846,7 @@ currently provides.
       (`JS_AddIntrinsicEval`), so this evaluator runs unchanged inside
       QuickJS; nothing new is needed on the Rust side.
 - [x] A `console` shim — done (`crates/inca-jsenv/src/console.rs`,
-      installed at `crates/inca-host/src/main.rs`). Missing only
+      installed at `crates/inca-host/src/app.rs`). Missing only
       `group*`/`table`/`time*`/`count`/`%s`-style specifiers — a gap-fill
       if Vue's dev build or the module runner turn out to need them, not a
       from-scratch item.
@@ -896,7 +896,7 @@ currently provides.
       update reports nothing anywhere.
 - [ ] Startup order: today the entry bundle is evaluated
       (`Session::load`) before the dev-protocol stdin loop starts
-      (`crates/inca-host/src/main.rs`'s `start`/`serve_dev_protocol`).
+      (`crates/inca-host/src/app.rs`'s `start`, `crates/inca-host/src/dev.rs`'s `serve_dev_protocol`).
       HMR's first `fetchModule` needs a host reply before the entry can
       finish evaluating, so — **in HMR mode only** — the stdin loop has to
       start first, and the window's initial size needs a source other than

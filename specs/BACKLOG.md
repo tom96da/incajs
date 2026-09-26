@@ -70,7 +70,7 @@ enough overhead for a single maintainer plus AI pairing.
   features.
 
 - **The window is set once and never follows the app**: `start()`
-  (`crates/inca-host/src/main.rs`) reads the size and title out of the
+  (`crates/inca-host/src/app.rs`) reads the size and title out of the
   config and the mounted root, hands them to `WindowOptions`, and nothing
   revisits them. An app that changes its root's `width`/`height`, or wants
   a title that tracks its state, has no way to move the window. GPUI has
@@ -211,10 +211,6 @@ enough overhead for a single maintainer plus AI pairing.
   `crates/inca-gpui/src/event_sink.rs`'s `MousePayload`/`KeyPayload`
   carry a deliberate subset of each DOM type's own fields. What's between
   each missing one and landing differs:
-  - Landed: `movementX`/`movementY` (a delta from the last mouse/wheel
-    event, the same way `held_buttons` already tracks state across
-    events) and `pageX`/`pageY` (identical to `clientX`/`clientY` today
-    — nothing scrolls yet).
   - Computable today, but not a small change — no `gpui` change needed,
     but its own state has to be threaded from element-build time into
     dispatch, and `gpui` has no production API to look a node's bounds
@@ -231,10 +227,8 @@ enough overhead for a single maintainer plus AI pairing.
     scancode and no left/right or numpad distinction to recover either
     from.
 
-- **A template `ref` resolves to a plain data object, not something with
-  a DOM-like API**: `IncaElement` (`packages/core/src/vue/nodeOps.mts`)
-  now has `.focus()`/`.blur()`, backed by the same native
-  `focusNode`/`blurNode` calls, so `el.value.focus()` needs no `incajs`
-  import beyond `ref` itself, matching a real DOM template ref. The same
-  gap likely applies to any other DOM-element method/property a `.vue`
-  app would otherwise reach for on a template `ref`.
+- **A template `ref` still resolves to a plain data object for anything
+  beyond `.focus()`/`.blur()`**: `IncaElement`
+  (`packages/core/src/vue/nodeOps.mts`) has those two methods; the same
+  gap likely applies to any other DOM-element method or property a
+  `.vue` app would otherwise reach for on a template `ref`.

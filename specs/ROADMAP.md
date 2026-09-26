@@ -160,9 +160,7 @@ where Vue's own HMR can (template-only edits; a script edit still remounts
 the component). The runner itself runs inside QuickJS, not on the Node
 side — see [ARCHITECTURE.md](./ARCHITECTURE.md#hmr-delivery) for why, and
 for why this is preferred over a hand-rolled HMR protocol. A future
-`adapter/rspack` would hold its own Node/QuickJS halves the same way,
-rather than sharing an `incajs`-side "HMR" grouping with this one — the two
-bundlers' HMR runtimes have no shape in common beyond the name.
+`adapter/rspack` would hold its own Node/QuickJS halves the same way.
 
 Ships **experimental and opt-in**: without the flag, `inca dev` keeps this
 phase's full reload unchanged. See [PLAN.md](./PLAN.md#phase-34-hmr)
