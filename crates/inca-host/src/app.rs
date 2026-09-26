@@ -133,24 +133,47 @@ fn window_size(
 /// One loaded bundle: the engine running its JS, the tree that JS built, and
 /// the dispatcher wiring events back. A reload replaces all of it at once,
 /// so it travels together and a half-swapped state cannot exist.
+///
+/// Dropping one takes its whole `QuickJS` runtime with it, so no node,
+/// listener or callback survives a reload.
 pub(crate) struct Session {
     pub(crate) engine: Rc<Engine>,
     host: Rc<RefCell<Host>>,
-    root: NodeId,
     dispatcher: EventDispatcher,
 }
 
 impl Session {
-    /// Starts an engine rooted at `entry_path`'s directory, gives it
-    /// everything an entry expects to find, and evaluates `source` — the
-    /// entry's own already-read content — into a fresh tree. An `import` in
-    /// `source` resolves against a sibling file next to `entry_path`.
-    ///
-    /// `console` goes in before the entry runs, so an entry that logs while
+    /// The empty container the entry mounts against — [`Host::root`]'s own
+    /// value, fixed once allocated.
+    fn root(&self) -> NodeId {
+        self.host.borrow().root
+    }
+
+    /// Starts an engine rooted at `entry_path`'s directory and gives it
+    /// everything an entry expects to find — `console` and the native
+    /// bindings — before any entry code runs, so one that logs while
     /// evaluating is heard rather than met with a `ReferenceError`.
     ///
-    /// Dropping a previous `Session` takes its whole `QuickJS` runtime with
-    /// it, so no node, listener or callback survives a reload.
+    /// # Errors
+    ///
+    /// Returns the thrown value if the engine fails to start, or `console`
+    /// or the bindings fail to install.
+    fn start_engine(entry_path: &str) -> Result<(Rc<RefCell<Host>>, Engine), EngineError> {
+        let host = Rc::new(RefCell::new(Host::default()));
+
+        let module_root = Path::new(entry_path).parent().unwrap_or(Path::new("."));
+        let engine = Engine::builder().module_root(module_root).build()?;
+        engine.with(|ctx| {
+            console::install(&ctx, &console::to_stderr())
+                .and_then(|()| install(&ctx, &host))
+                .map_err(|err| EngineError::capture(&ctx, &err))
+        })?;
+        Ok((host, engine))
+    }
+
+    /// Evaluates `source` — the entry's own already-read content — into a
+    /// fresh engine, then wires up event dispatch. An `import` in `source`
+    /// resolves against a sibling file next to `entry_path`.
     ///
     /// # Errors
     ///
@@ -162,16 +185,7 @@ impl Session {
         source: &str,
         reporter: ErrorReporter,
     ) -> Result<Self, EngineError> {
-        let host = Rc::new(RefCell::new(Host::default()));
-        let root = host.borrow().root;
-
-        let module_root = Path::new(entry_path).parent().unwrap_or(Path::new("."));
-        let engine = Engine::builder().module_root(module_root).build()?;
-        engine.with(|ctx| {
-            console::install(&ctx, &console::to_stderr())
-                .and_then(|()| install(&ctx, &host))
-                .map_err(|err| EngineError::capture(&ctx, &err))
-        })?;
+        let (host, engine) = Self::start_engine(entry_path)?;
         engine.eval_module(entry_path, source)?;
 
         let engine = Rc::new(engine);
@@ -180,7 +194,6 @@ impl Session {
         Ok(Self {
             engine,
             host,
-            root,
             dispatcher,
         })
     }
@@ -198,7 +211,7 @@ impl Render for HostedApp {
             transition.dispatch(&session.dispatcher, window, cx);
         }
         let host = session.host.borrow();
-        render_tree_with_events(&host.tree, session.root, &session.dispatcher)
+        render_tree_with_events(&host.tree, host.root, &session.dispatcher)
             .unwrap_or_else(|| div().into_any_element())
     }
 }
@@ -225,7 +238,7 @@ fn start(
     menu::install(cx, app_config.name.as_deref().unwrap_or(DEFAULT_APP_NAME));
 
     let window_config = app_config.window.as_ref();
-    let content = content_window_size(&session.host.borrow(), session.root);
+    let content = content_window_size(&session.host.borrow(), session.root());
     let (width, height) = window_size(window_config, content);
     let title = window_title(window_config, app_config.name.as_deref());
 
@@ -429,13 +442,19 @@ mod tests {
     #[test]
     fn a_reload_leaves_no_stale_nodes_listeners_or_callbacks() {
         let first = load(MOUNTING_BUNDLE).unwrap();
-        let first_child = first.host.borrow().tree.get(first.root).unwrap().children()[0];
+        let first_child = first
+            .host
+            .borrow()
+            .tree
+            .get(first.root())
+            .unwrap()
+            .children()[0];
 
         let second = load(MOUNTING_BUNDLE).unwrap();
         drop(first);
 
         let host = second.host.borrow();
-        let children = host.tree.get(second.root).unwrap().children();
+        let children = host.tree.get(second.root()).unwrap().children();
         assert_eq!(children.len(), 1, "the reloaded tree must not accumulate");
         assert_eq!(
             children[0], first_child,
@@ -478,7 +497,7 @@ mod tests {
                         .host
                         .borrow()
                         .tree
-                        .get(app.session.root)
+                        .get(app.session.root())
                         .unwrap()
                         .children()[0];
                     app.session
