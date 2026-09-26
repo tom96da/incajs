@@ -40,32 +40,15 @@ The packaged app has nothing to be called. The name comes from
 own top-level `name` — the npm package name, with any scope stripped, so
 `@acme/todo` packages as `todo`. Neither is set.
 
-Set `productName` when the app's display name isn't its package name:
-
-```ts [inca.config.ts]
-import { defineConfig } from "@incajs/cli/config";
-
-export default defineConfig({
-  productName: "My App",
-});
-```
+Set [`productName`](./configuration#productname) when the app's display
+name isn't its package name.
 
 ## `ERR_INCA_PRODUCT_NAME_INVALID`
 
 The app's name becomes a directory name: `<productName>.app` on macOS, and
-a scratch bundle under `node_modules/.inca` while `inca dev` runs. It can't
-hold `/`, `\`, `:`, `*`, `?`, `"`, `<`, `>`, `|` or a null byte, can't be
-`.` or `..`, and can't open or close with a space.
-
-Set a `productName` that names a single directory:
-
-```ts [inca.config.ts]
-import { defineConfig } from "@incajs/cli/config";
-
-export default defineConfig({
-  productName: "My App",
-});
-```
+a scratch bundle under `node_modules/.inca` while `inca dev` runs. See
+[`productName`](./configuration#productname) for the naming rule this
+enforces.
 
 ## `ERR_INCA_ICON_NOT_FOUND`
 
@@ -87,7 +70,11 @@ No `inca-host` binary could be found at all: the `@incajs/host-*` package
 for this platform isn't installed, and `INCA_HOST_BIN` isn't set.
 
 Install the app's dependencies, or set `INCA_HOST_BIN` to a binary you
-built yourself. `darwin-x64` has no published package.
+built yourself.
+
+> [!NOTE]
+> `darwin-x64` has no published package — see
+> [Host binary](../guide/#host-binary) for platform support.
 
 ## `ERR_INCA_DEV_RUNNING`
 
@@ -99,11 +86,21 @@ Quit the first, or stop the process by that pid if it was left behind.
 
 ## `ERR_INCA_UNSUPPORTED_STYLE`
 
-A `.vue` file has a `<style>` block. The renderer applies no stylesheet, so
-the block would have no effect at runtime and the build stops rather than
-shipping it.
+A `.vue` file has a `<style>` block, which isn't supported yet — the
+renderer applies no stylesheet, so the block would have no effect at
+runtime, and the build stops rather than shipping it.
 
 Use a `:style` binding instead:
+
+Not supported yet:
+
+```vue
+<style>
+.box { color: red; }
+</style>
+```
+
+Use instead:
 
 ```vue
 <template>

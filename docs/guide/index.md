@@ -118,9 +118,8 @@ $ yarn run dev
 
 ## Host binary
 
-`inca-host`'s prebuilt binary is pulled in automatically as a
-platform-specific optional dependency. Neither Cargo nor Rust are
-needed to run an app.
+A prebuilt binary is pulled in automatically as a platform-specific
+optional dependency. Neither Cargo nor Rust are needed to run an app.
 
 | Platform      | Status           |
 | ------------- | ---------------- |

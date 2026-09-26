@@ -47,9 +47,7 @@ All of the following must pass, not just `cargo test`:
   `pnpm --filter incajs build` first, or `js_core_integration` fails with a
   message saying so
 
-`--workspace` rather than a list of `-p` flags, so a new crate is covered by
-the checks the moment it exists. `inca-tests` is excluded from the test run
-alone: `--all-targets` still compiles it, and only running it needs Node.
+`--workspace` covers a new crate automatically, the moment it exists.
 `crates/inca-host` opens a window, which stays a manual check like
 `crates/inca-gpui`'s own examples — see
 [MANUAL_GUI_CHECK.md](./MANUAL_GUI_CHECK.md).

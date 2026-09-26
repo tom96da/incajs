@@ -42,10 +42,9 @@ export default defineConfig({
 
 The name the operating system shows for the running app — the Dock and the
 menu bar on macOS, the taskbar on Linux — under `inca dev` as much as once
-packaged. It also names the packaged app's own directory, so it can't hold
-`/`, `\`, `:`, `*`, `?`, `"`, `<`, `>`, `|` or a null byte, can't be `.` or
-`..`, and can't open or close with a space. See
-[`ERR_INCA_PRODUCT_NAME_INVALID`](./errors#err-inca-product-name-invalid).
+packaged. It also names the packaged app's own directory, so it can't
+hold any of `` / \ : * ? " < > | `` or a null byte, can't be `.` or `..`,
+and can't open or close with a space.
 
 ### `identifier`
 

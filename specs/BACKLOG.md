@@ -145,9 +145,9 @@ enough overhead for a single maintainer plus AI pairing.
   dispatch" section). `EventDispatcher` is already where this kind of
   translation belongs — it exists to turn GPUI's raw input into what a DOM
   author expects — so grouping these under one `compat` submodule there,
-  rather than a separate crate, is the direction: one place to hold this
-  session's `held_buttons` tracking alongside a "no real pointer move seen
-  yet" flag that would suppress the mount-time `mouseenter`, and later the
+  rather than a separate crate, is the direction: one place to hold
+  `held_buttons` tracking alongside a "no real pointer move seen yet"
+  flag that would suppress the mount-time `mouseenter`, and later the
   capture-phase and precise-`target` work above.
 
 - **`"focus"`/`"blur"` will need to become `"focusin"`/`"focusout"` once

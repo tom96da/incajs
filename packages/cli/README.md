@@ -57,11 +57,13 @@ once it is packaged.
 
 ## Requirements
 
-`inca`'s host binary is pulled in automatically as a platform-specific
-optional dependency (Linux and macOS on x64/arm64; Windows isn't
-supported yet) — neither Cargo nor Rust are needed. Set `INCA_HOST_BIN`
-to use a specific binary instead, e.g. on a platform with no published
-one yet, or a custom build.
+A prebuilt binary is pulled in automatically as a platform-specific
+optional dependency — neither Cargo nor Rust are needed. See
+[Host binary](https://tom96da.github.io/incajs/guide/#host-binary) for
+per-platform support.
+
+Set `INCA_HOST_BIN` to use a specific binary instead, e.g. on a
+platform with no published one yet, or a custom build.
 
 ## How it works
 

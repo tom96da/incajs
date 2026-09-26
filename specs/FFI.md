@@ -219,13 +219,11 @@ menu item's activation (`menu:<id>`) — reaches JS through the same
 `addEventListener`/`EventDispatcher::dispatch` path; `EventMask` doesn't
 cover it.
 
-`addEventListener` itself is unchanged and needs no thread-safe/cross-thread
-callback machinery: Incarnative.js's embedded QuickJS and the GPUI event loop
-already share one process and are driven synchronously (see
-`crates/inca-jsenv/src/engine.rs`'s `Context::with`), unlike an architecture
-where JS runs in a separate runtime that loads a native addon (JS and the
-native UI layer on different threads/processes) — confirmed, not just
-assumed, by `crates/inca-bridge/tests/event_dispatch.rs`.
+`addEventListener` itself needs no thread-safe/cross-thread callback
+machinery: Incarnative.js's embedded QuickJS and the GPUI event loop share
+one process and are driven synchronously (see
+`crates/inca-jsenv/src/engine.rs`'s `Context::with`), confirmed by
+`crates/inca-bridge/tests/event_dispatch.rs`.
 
 `EventListeners` (`crates/inca-bridge/src/bindings.rs`) only ever stores the
 plain `u32` `callbackId` it's given — never an
