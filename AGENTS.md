@@ -25,34 +25,27 @@ Phase 1 (Rust host FFI bridge: `crates/inca-gpui`/`inca-bridge`/
 two `.vue` examples) are done — [FFI.md](./specs/FFI.md) has the current
 binding vocabulary.
 
-Phase 3 (the `inca` CLI) is split into 3.1–3.4, with `v0.0.1` released
-after 3.3. 3.1 (`inca dev`), 3.2 (`inca build`, with a file-backed module
-loader so a build can emit more than one file) and 3.3 (`inca package`,
-per-platform `@incajs/host-*` packages published via `cd.yml`) are done.
-`darwin-x64` stays an unpublished placeholder — no free Intel macOS runner.
+Phase 3 (the `inca` CLI, `v0.0.1` released after 3.3) is done through 3.3:
+`inca dev`, `inca build`, and `inca package` (per-platform
+`@incajs/host-*` packages published via `cd.yml`; `darwin-x64` stays an
+unpublished placeholder — no free Intel macOS runner). An app's settings
+travel in its own build output — see [PROTOCOL.md](./specs/PROTOCOL.md)
+— and every app carries an application menu with a `Quit` item. 3.4
+(HMR) is in progress: only `inca.config.ts` is done (app metadata, build
+settings, the window, deprecating `package.json`'s `"inca"` key); `inca
+dev` still reloads the whole bundle. The CLI prints the bundler's own
+output beside its own — see [FAILURES.md](./specs/FAILURES.md) for what
+it refuses and falls back from.
 
-3.4 (HMR) is in progress: only `inca.config.ts` is done — app metadata,
-build settings and the window, `defineConfig` from `@incajs/cli/config`,
-deprecating `package.json`'s `"inca"` key. `inca dev` still reloads the
-whole bundle.
-
-An app's settings travel in its own build output: `inca build` writes
-`inca.json` beside the entry, and the host reads its name, identifier and
-window before opening one — see [PROTOCOL.md](./specs/PROTOCOL.md). On
-macOS `inca dev` also assembles a `.app` under `node_modules/.inca`, since
-the Dock and the Finder read a name and an icon from a bundle and nowhere
-else. Every app carries an application menu with a `Quit` item.
-
-The CLI prints the bundler's own output beside its own. See
-[FAILURES.md](./specs/FAILURES.md) for what it refuses, what it falls back
-from, and where each is reported.
+Phase 4 (input & text editing) is running alongside 3.4: pointer input,
+the focus model, and keyboard input are done.
 
 The current release is `v0.0.4`, on Node.js 22.18 or newer, zed v1.20.2
-for `gpui` and rquickjs 0.14.0. Its Linux binaries are built in an
-`ubuntu:22.04` container by both workflows, fixing their glibc floor at
-2.35 — change that image in one file and the other has to follow. The
-public docs site (`docs/`, VitePress) — `guide/` for prose, `reference/`
-for lookup — is deployed by `.github/workflows/docs.yml` to
+for `gpui` and rquickjs 0.14.0. Linux binaries are built in an
+`ubuntu:22.04` container by both workflows, kept in sync, for a glibc
+2.35 floor. The public docs site (`docs/`, VitePress — `guide/` for
+prose, `reference/` for lookup) is deployed by
+`.github/workflows/docs.yml` to
 [tom96da.github.io/incajs](https://tom96da.github.io/incajs/).
 
 See [PLAN.md](./specs/PLAN.md) for unit-by-unit detail and deferred items
