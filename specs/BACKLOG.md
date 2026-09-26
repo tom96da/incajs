@@ -197,13 +197,16 @@ enough overhead for a single maintainer plus AI pairing.
   `crates/inca-gpui/src/event_sink.rs`'s `MousePayload`/`KeyPayload`
   carry a deliberate subset of each DOM type's own fields. What's between
   each missing one and landing differs:
-  - Computable today, from what already flows through `EventDispatcher`
-    — no `gpui` change needed: `movementX`/`movementY` (a delta from the
-    last `mousemove`, the same way `held_buttons` already tracks state
-    across events); `offsetX`/`offsetY` (a target's own bounds are
-    already computed for hit-testing, just not threaded through to
-    `dispatch`); `pageX`/`pageY` (identical to `clientX`/`clientY` today
+  - Landed: `movementX`/`movementY` (a delta from the last mouse/wheel
+    event, the same way `held_buttons` already tracks state across
+    events) and `pageX`/`pageY` (identical to `clientX`/`clientY` today
     — nothing scrolls yet).
+  - Computable today, but not a small change — no `gpui` change needed,
+    but its own state has to be threaded from element-build time into
+    dispatch, and `gpui` has no production API to look a node's bounds
+    up by id at event time otherwise: `offsetX`/`offsetY` (a target's
+    own bounds are already computed once, for hitbox insertion, just
+    never kept anywhere `dispatch` can reach).
   - Blocked on another `inca` gap, not on `gpui`: `relatedTarget` needs
     the same precise hit-testing the `event.target` approximation entry
     above is waiting on; `isComposing` needs the text-editing/IME unit,

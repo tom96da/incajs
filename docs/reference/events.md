@@ -40,6 +40,11 @@ A subset of the DOM's
 fields:
 
 - `clientX` / `clientY` — pointer position
+- `pageX` / `pageY` — identical to `clientX`/`clientY`; nothing here
+  scrolls the page itself, which is the only thing that would tell them
+  apart
+- `movementX` / `movementY` — delta from whichever mouse/wheel event
+  fired last; `0` for the first one
 - `button` — 0 for a move, which isn't about any one button
 - `buttons` — every button currently held, as a bitmask
 - `detail` — how many clicks this is part of; 0 for a move
@@ -50,7 +55,10 @@ fields:
 Same fields as `mousedown`, above. An element already under the pointer
 when it mounts gets a `mouseenter` the first time its hover state is
 checked, with no pointer movement involved — unlike the DOM, where
-`mouseenter` only ever follows an actual move.
+`mouseenter` only ever follows an actual move. Its `movementX`/`movementY`
+share the same tracker every other mouse event does, so hovering with no
+pointer movement since an earlier click can still report a nonzero delta,
+against that click's position.
 
 ## Wheel
 

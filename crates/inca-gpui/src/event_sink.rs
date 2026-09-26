@@ -180,6 +180,11 @@ pub enum EventPayload {
 pub struct MousePayload {
     pub client_x: f32,
     pub client_y: f32,
+    /// The delta from the last `mousemove`'s position (DOM's `movementX`/
+    /// `movementY`). Always 0 here — `inca-bridge` fills in the real delta,
+    /// which needs state this crate has no reason to hold.
+    pub movement_x: f32,
+    pub movement_y: f32,
     /// The button this event is about. 0 for a move, which isn't about any
     /// one button.
     pub button: u8,
@@ -199,6 +204,8 @@ impl MousePayload {
         Self {
             client_x: f32::from(position.x),
             client_y: f32::from(position.y),
+            movement_x: 0.0,
+            movement_y: 0.0,
             button: 0,
             buttons: 0,
             detail: 0,
@@ -250,6 +257,8 @@ impl From<&MouseDownEvent> for EventPayload {
         Self::Mouse(MousePayload {
             client_x: f32::from(event.position.x),
             client_y: f32::from(event.position.y),
+            movement_x: 0.0,
+            movement_y: 0.0,
             button: bit,
             buttons: 1 << bit,
             detail: u32::try_from(event.click_count).unwrap_or(u32::MAX),
@@ -264,6 +273,8 @@ impl From<&MouseUpEvent> for EventPayload {
         Self::Mouse(MousePayload {
             client_x: f32::from(event.position.x),
             client_y: f32::from(event.position.y),
+            movement_x: 0.0,
+            movement_y: 0.0,
             button: bit,
             buttons: 0,
             detail: u32::try_from(event.click_count).unwrap_or(u32::MAX),
@@ -277,6 +288,8 @@ impl From<&MouseMoveEvent> for EventPayload {
         Self::Mouse(MousePayload {
             client_x: f32::from(event.position.x),
             client_y: f32::from(event.position.y),
+            movement_x: 0.0,
+            movement_y: 0.0,
             button: 0,
             buttons: event
                 .pressed_button
@@ -297,6 +310,8 @@ impl From<&ScrollWheelEvent> for EventPayload {
             mouse: MousePayload {
                 client_x: f32::from(event.position.x),
                 client_y: f32::from(event.position.y),
+                movement_x: 0.0,
+                movement_y: 0.0,
                 // Not about any one button; `inca-bridge` fills in the
                 // buttons actually held.
                 button: 0,

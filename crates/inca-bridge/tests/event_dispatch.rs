@@ -289,7 +289,7 @@ fn mousedown_carries_dom_shaped_fields(cx: &mut TestAppContext) {
             .eval::<String>("JSON.stringify(globalThis.lastEvent)")
             .unwrap(),
         format!(
-            r#"{{"type":"mousedown","target":{node},"currentTarget":{node},"clientX":10,"clientY":20,"button":0,"buttons":1,"detail":1,"ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false}}"#
+            r#"{{"type":"mousedown","target":{node},"currentTarget":{node},"clientX":10,"clientY":20,"pageX":10,"pageY":20,"movementX":0,"movementY":0,"button":0,"buttons":1,"detail":1,"ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false}}"#
         )
     );
 }
@@ -358,7 +358,7 @@ fn wheel_carries_dom_shaped_delta_fields(cx: &mut TestAppContext) {
             .eval::<String>("JSON.stringify(globalThis.lastEvent)")
             .unwrap(),
         format!(
-            r#"{{"type":"wheel","target":{node},"currentTarget":{node},"clientX":10,"clientY":10,"button":0,"buttons":0,"detail":0,"ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false,"deltaX":0,"deltaY":-5,"deltaZ":0,"deltaMode":0}}"#
+            r#"{{"type":"wheel","target":{node},"currentTarget":{node},"clientX":10,"clientY":10,"pageX":10,"pageY":10,"movementX":0,"movementY":0,"button":0,"buttons":0,"detail":0,"ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false,"deltaX":0,"deltaY":-5,"deltaZ":0,"deltaMode":0}}"#
         )
     );
 }
@@ -638,7 +638,7 @@ fn mouseenter_carries_dom_shaped_fields(cx: &mut TestAppContext) {
             .eval::<String>("JSON.stringify(globalThis.lastEvent)")
             .unwrap(),
         format!(
-            r#"{{"type":"mouseenter","target":{node},"currentTarget":{node},"clientX":10,"clientY":20,"button":0,"buttons":0,"detail":0,"ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false}}"#
+            r#"{{"type":"mouseenter","target":{node},"currentTarget":{node},"clientX":10,"clientY":20,"pageX":10,"pageY":20,"movementX":-190,"movementY":-180,"button":0,"buttons":0,"detail":0,"ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false}}"#
         )
     );
 }
@@ -768,6 +768,48 @@ fn buttons_tracks_every_button_currently_held(cx: &mut TestAppContext) {
     cx.simulate_mouse_up(point, MouseButton::Left, Modifiers::none());
     cx.run_until_parked();
     assert_eq!(buttons(), 0b100, "releasing one button clears only its bit");
+}
+
+/// `movementX`/`movementY` are a delta from whatever mouse/wheel event
+/// landed last, not from the target's own position.
+#[gpui::test]
+fn movement_tracks_the_delta_from_the_last_mouse_event(cx: &mut TestAppContext) {
+    let (host, node) = build_tree_listening_for("mousemove");
+    let engine = Rc::new(Engine::new().unwrap());
+    install_click_counter(&engine);
+    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
+
+    let window = cx.add_window(|_, _| ClickableRoot {
+        host: Rc::clone(&host),
+        node,
+        dispatcher,
+    });
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    let mut cx = VisualTestContext::from_window(window.into(), cx);
+
+    let movement = || -> (f32, f32) {
+        (
+            engine.eval("globalThis.lastEvent.movementX").unwrap(),
+            engine.eval("globalThis.lastEvent.movementY").unwrap(),
+        )
+    };
+
+    cx.simulate_mouse_move(
+        point(px(10.0), px(10.0)),
+        None::<MouseButton>,
+        Modifiers::none(),
+    );
+    cx.run_until_parked();
+    assert_eq!(movement(), (0.0, 0.0), "nothing to take a delta from yet");
+
+    cx.simulate_mouse_move(
+        point(px(30.0), px(5.0)),
+        None::<MouseButton>,
+        Modifiers::none(),
+    );
+    cx.run_until_parked();
+    assert_eq!(movement(), (20.0, -5.0));
 }
 
 /// `stopImmediatePropagation()` stops the remaining callbacks on the *same*

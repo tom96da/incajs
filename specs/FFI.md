@@ -130,13 +130,19 @@ the same until something can compute it precisely (tracked in
 [BACKLOG.md](./BACKLOG.md)). Further fields depend on the event kind —
 `"click"`/`"focus"`/`"blur"` carry none of their own;
 `"mousedown"`/`"mouseup"`/`"mousemove"`/`"mouseenter"`/`"mouseleave"`
-carry `clientX`, `clientY`, `button`,
-`buttons`, `detail`, and `ctrlKey`/`shiftKey`/`altKey`/`metaKey`,
+carry `clientX`, `clientY`, `pageX`, `pageY`, `movementX`, `movementY`,
+`button`, `buttons`, `detail`, and `ctrlKey`/`shiftKey`/`altKey`/`metaKey`,
 DOM-`MouseEvent`-named (`platform` becomes `metaKey`; GPUI's `function`
 modifier has no DOM counterpart and is dropped). `buttons` tracks every
 button currently held (`EventDispatcher` keeps this state across events —
 GPUI's own mouse events carry only the one button each is about), not just
-the button `button` names.
+the button `button` names. `pageX`/`pageY` are identical to `clientX`/
+`clientY` — nothing here scrolls the page itself, which is the only thing
+that would tell them apart. `movementX`/`movementY` are a delta from
+whichever mouse/wheel event `EventDispatcher` last saw, `0` for the first
+one — including a `"mouseenter"`/`"mouseleave"` sharing that same tracker,
+so hovering a node with no pointer movement since an earlier click can
+still report a nonzero delta, against that click's position.
 
 `"wheel"` carries the same fields as `"mousedown"`/`"mouseup"`/
 `"mousemove"` plus `deltaX`, `deltaY`, `deltaZ`, `deltaMode` — DOM's

@@ -64,6 +64,9 @@ pub struct EventDispatcher {
     /// payload's `buttons` bitmask — GPUI's own mouse events carry only the
     /// one button each is about, not which others are held alongside it.
     held_buttons: Rc<Cell<u8>>,
+    /// The last mouse/wheel payload's position, to compute `movementX`/
+    /// `movementY` as a delta — `None` until the first one arrives.
+    last_position: Rc<Cell<Option<(f32, f32)>>>,
 }
 
 impl EventDispatcher {
@@ -74,6 +77,7 @@ impl EventDispatcher {
             host,
             reporter: stderr_reporter(),
             held_buttons: Rc::new(Cell::new(0)),
+            last_position: Rc::new(Cell::new(None)),
         }
     }
 
@@ -136,6 +140,44 @@ impl EventDispatcher {
         self.held_buttons.get()
     }
 
+    /// Returns `payload` with `movementX`/`movementY` set against
+    /// [`Self::last_position`] — 0 for whichever mouse/wheel event arrives
+    /// first, since there is nothing yet to take a delta from.
+    fn with_movement(&self, payload: &EventPayload) -> EventPayload {
+        match payload {
+            EventPayload::Mouse(mouse) => {
+                let (movement_x, movement_y) = self.take_movement(mouse.client_x, mouse.client_y);
+                EventPayload::Mouse(MousePayload {
+                    movement_x,
+                    movement_y,
+                    ..*mouse
+                })
+            }
+            EventPayload::Wheel(wheel) => {
+                let (movement_x, movement_y) =
+                    self.take_movement(wheel.mouse.client_x, wheel.mouse.client_y);
+                EventPayload::Wheel(WheelPayload {
+                    mouse: MousePayload {
+                        movement_x,
+                        movement_y,
+                        ..wheel.mouse
+                    },
+                    ..*wheel
+                })
+            }
+            EventPayload::None | EventPayload::Key(_) => payload.clone(),
+        }
+    }
+
+    /// Records `(client_x, client_y)` as [`Self::last_position`] and returns
+    /// the delta from whatever was there before.
+    fn take_movement(&self, client_x: f32, client_y: f32) -> (f32, f32) {
+        let previous = self.last_position.replace(Some((client_x, client_y)));
+        previous.map_or((0.0, 0.0), |(prev_x, prev_y)| {
+            (client_x - prev_x, client_y - prev_y)
+        })
+    }
+
     /// Calls every JS callback registered for `(node_id, event)` (via
     /// `__inca_native__.addEventListener`), passing one shared object shaped
     /// `{ type, target, currentTarget, ...payload }` plus DOM's three
@@ -174,6 +216,7 @@ impl EventDispatcher {
             .to_vec();
 
         let payload = self.with_held_buttons(event, payload);
+        let payload = self.with_movement(&payload);
         let payload = &payload;
 
         let stop_propagation = Rc::new(Cell::new(false));
@@ -304,6 +347,12 @@ fn set_payload(event_object: &Object, payload: &EventPayload) -> rquickjs::Resul
 fn set_mouse_fields(event_object: &Object, mouse: &MousePayload) -> rquickjs::Result<()> {
     event_object.set("clientX", mouse.client_x)?;
     event_object.set("clientY", mouse.client_y)?;
+    // Identical to clientX/clientY today — nothing here scrolls the page
+    // itself, which is the only thing that would tell them apart.
+    event_object.set("pageX", mouse.client_x)?;
+    event_object.set("pageY", mouse.client_y)?;
+    event_object.set("movementX", mouse.movement_x)?;
+    event_object.set("movementY", mouse.movement_y)?;
     event_object.set("button", mouse.button)?;
     event_object.set("buttons", mouse.buttons)?;
     event_object.set("detail", mouse.detail)?;
