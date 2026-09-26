@@ -47,6 +47,14 @@ export interface DevOptions {
 /** `inca dev` stamps its lines the way Vite's dev server does. */
 const STAMPED = { timestamp: true } as const;
 
+/**
+ * How long `reload` waits for the host before giving up. A wedged app would
+ * otherwise hang this call forever, which in turn blocks teardown — an
+ * aborted `dev()` waits for the in-flight rebuild's own reload before it can
+ * stop the host at all.
+ */
+const RELOAD_TIMEOUT_MS = 10_000;
+
 /** The failures that leave the app unnamed instead of stopping `inca dev`. */
 const UNNAMED: readonly string[] = [
   "ERR_INCA_PACKAGE_JSON_NOT_FOUND",
@@ -162,7 +170,7 @@ export async function dev(options: DevOptions): Promise<void> {
 
     async function reloadHost(): Promise<boolean> {
       try {
-        await client?.call("reload");
+        await client?.call("reload", undefined, RELOAD_TIMEOUT_MS);
         return true;
       } catch (error) {
         printFault(stderr, "reload failed", toFault(error), STAMPED);

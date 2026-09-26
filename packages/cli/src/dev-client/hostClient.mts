@@ -173,17 +173,40 @@ export class HostClient {
     await exited;
   }
 
-  /** Sends a request and resolves with its result once the host answers. */
-  async call(method: string, params?: unknown): Promise<unknown> {
+  /**
+   * Sends a request and resolves with its result once the host answers.
+   * With `timeoutMs`, rejects once that much time passes with no answer —
+   * the host answers on the same thread that runs the app's JS, so a
+   * wedged app leaves a call pending forever otherwise (PROTOCOL.md:
+   * "every response a client waits for needs a deadline").
+   */
+  async call(method: string, params?: unknown, timeoutMs?: number): Promise<unknown> {
     const child = this.#child;
     if (!child) throw new Error("HostClient.start() has not been called");
 
     const id = this.#nextId++;
     const line = JSON.stringify({ jsonrpc: JSONRPC, id, method, params });
     return new Promise((resolve, reject) => {
-      this.#pending.set(id, { resolve, reject });
+      const timer =
+        timeoutMs !== undefined
+          ? setTimeout(() => {
+              this.#pending.delete(id);
+              reject(new Error(`${method} timed out after ${String(timeoutMs)}ms`));
+            }, timeoutMs)
+          : undefined;
+      this.#pending.set(id, {
+        resolve: (result) => {
+          clearTimeout(timer);
+          resolve(result);
+        },
+        reject: (error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+      });
       child.stdin.write(`${line}\n`, (error) => {
         if (!error) return;
+        clearTimeout(timer);
         this.#pending.delete(id);
         reject(error);
       });

@@ -96,6 +96,17 @@ describe("HostClient", () => {
     await expect(client.stop(50)).resolves.toBeUndefined();
   }, 5000);
 
+  it("rejects a call once its own deadline passes without an answer", async () => {
+    const client = new HostClient({ hostBin: wedgedMockHost, entryFile: "bundle.js" });
+    await client.start();
+
+    // The wedged host answers nothing but `shutdown` — `reload` is left
+    // pending forever without the deadline this call passes.
+    await expect(client.call("reload", undefined, 50)).rejects.toThrow(/timed out/);
+
+    await client.stop();
+  }, 5000);
+
   it("forwards appError to its own callback rather than a generic notification handler", async () => {
     const errors: { message: string; stack: string | null }[] = [];
     const client = new HostClient({
