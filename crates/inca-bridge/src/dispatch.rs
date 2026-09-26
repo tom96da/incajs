@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Dispatches a native input event into the JS callbacks registered for it
-//! via `__inca_native__.addEventListener` (`crate::bindings`), then
+//! via `__inca_native__.addEventListener` (see [`crate::bindings`]), then
 //! requests a redraw.
 //!
 //! Zero-overhead by construction: [`EventDispatcher::dispatch`] is the only
@@ -12,7 +12,7 @@
 //!
 //! ## Where the real JS function lives
 //!
-//! `EventListeners` (`crate::bindings`) only ever stores a plain `u32`
+//! [`crate::bindings::EventListeners`] only ever stores a plain `u32`
 //! callback id, never an `rquickjs::Value`/`Function`/`Persistent<T>`: a JS
 //! handle kept past the call that produced it outlives the context it
 //! belongs to. The actual function has to live somewhere, so the convention

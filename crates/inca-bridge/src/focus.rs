@@ -5,13 +5,13 @@
 //! don't come from the retained tree, so nothing else keeps them alive —
 //! and turns GPUI's own focus changes into `"focus"`/`"blur"` dispatches.
 //!
-//! `focusNode`/`blurNode` (`crate::bindings`) run outside any GPUI render
+//! `focusNode`/`blurNode` (see [`crate::bindings`]) run outside any GPUI render
 //! or dispatch, with no `Window`/`App` to act on immediately — every
 //! native binding closure only ever closes over `Rc<RefCell<Host>>`, never
 //! a borrow that can't outlive the call that produced it. A request is
 //! recorded here instead and applied the next time something does hold a
-//! live `Window`/`App`: `crates/inca-host/src/main.rs`'s `HostedApp::render`,
-//! once per frame, before building the element tree.
+//! live `Window`/`App` — the host's own per-frame render, before building
+//! the element tree.
 //!
 //! Dispatching is done by comparing which node is focused now against
 //! which was focused last frame, rather than GPUI's own

@@ -1,8 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Parses argv and hands off to `app::run_bundle` — see `app.rs` for what
-//! the binary actually does.
+//! Resolves the entry path and dev flag from argv, then runs the app.
 
 mod app;
 mod dev;

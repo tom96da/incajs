@@ -8,10 +8,10 @@
 //! input handlers; it always renders through `EventDispatcher`, which wires
 //! only the nodes something listens to.
 //!
-//! `--dev` additionally answers messages on stdin and writes them on stdout
-//! — see `dev.rs`/`protocol.rs`. stdout is then the message channel and
-//! nothing else may go there, so every diagnostic, and the app's own
-//! `console`, go to stderr.
+//! `--dev` additionally answers messages on stdin and writes them on
+//! stdout, via [`crate::dev`] speaking [`crate::protocol`]'s wire format.
+//! stdout is then the message channel and nothing else may go there, so
+//! every diagnostic, and the app's own `console`, go to stderr.
 //!
 //! Nothing here panics on a failure a user can cause.
 

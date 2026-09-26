@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! The dev protocol: reads newline-delimited JSON-RPC on stdin, answers on
-//! stdout, and reloads a [`Session`] on `reload` — see `protocol.rs` for the
-//! wire format this speaks.
+//! stdout, and reloads a [`Session`] on `reload` — see [`crate::protocol`]
+//! for the wire format this speaks.
 
 use std::fs;
 use std::io::{self, BufRead, Write};
