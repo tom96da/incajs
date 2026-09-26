@@ -31,7 +31,7 @@ use inca_gpui::{
     EventKind, EventMask, EventPayload, KeyPayload, MousePayload, NodeId, WheelPayload,
 };
 use inca_jsenv::{Engine, EngineError};
-use rquickjs::{Function, Object};
+use rquickjs::{Ctx, Function, Object};
 
 use inca_gpui::EventSink;
 
@@ -188,41 +188,15 @@ impl EventDispatcher {
                 return failures;
             };
 
-            let event_object = (|| -> rquickjs::Result<Object> {
-                let event_object = Object::new(ctx.clone())?;
-                event_object.set("type", event)?;
-                event_object.set("target", node_id)?;
-                event_object.set("currentTarget", node_id)?;
-                set_payload(&event_object, payload)?;
-
-                event_object.set(
-                    "stopImmediatePropagation",
-                    Function::new(ctx.clone(), {
-                        let stop_propagation = Rc::clone(&stop_propagation);
-                        let stop_immediate = Rc::clone(&stop_immediate);
-                        move || {
-                            stop_propagation.set(true);
-                            stop_immediate.set(true);
-                        }
-                    })?,
-                )?;
-                event_object.set(
-                    "stopPropagation",
-                    Function::new(ctx.clone(), {
-                        let stop_propagation = Rc::clone(&stop_propagation);
-                        move || stop_propagation.set(true)
-                    })?,
-                )?;
-                event_object.set(
-                    "preventDefault",
-                    Function::new(ctx.clone(), {
-                        let prevent_default = Rc::clone(&prevent_default);
-                        move || prevent_default.set(true)
-                    })?,
-                )?;
-
-                Ok(event_object)
-            })();
+            let event_object = build_event_object(
+                &ctx,
+                event,
+                node_id,
+                payload,
+                &stop_propagation,
+                &stop_immediate,
+                &prevent_default,
+            );
             let event_object = match event_object {
                 Ok(event_object) => event_object,
                 Err(err) => {
@@ -257,6 +231,54 @@ impl EventDispatcher {
 
         drain_jobs_and_refresh(&self.engine, window);
     }
+}
+
+/// Builds the shared `{ type, target, currentTarget, ...payload }` object a
+/// callback is called with, wired to DOM's three propagation methods —
+/// setting one of `stop_propagation`/`stop_immediate`/`prevent_default` is
+/// how a callback signals it back to the caller.
+fn build_event_object<'js>(
+    ctx: &Ctx<'js>,
+    event: &str,
+    node_id: NodeId,
+    payload: &EventPayload,
+    stop_propagation: &Rc<Cell<bool>>,
+    stop_immediate: &Rc<Cell<bool>>,
+    prevent_default: &Rc<Cell<bool>>,
+) -> rquickjs::Result<Object<'js>> {
+    let event_object = Object::new(ctx.clone())?;
+    event_object.set("type", event)?;
+    event_object.set("target", node_id)?;
+    event_object.set("currentTarget", node_id)?;
+    set_payload(&event_object, payload)?;
+
+    event_object.set(
+        "stopImmediatePropagation",
+        Function::new(ctx.clone(), {
+            let stop_propagation = Rc::clone(stop_propagation);
+            let stop_immediate = Rc::clone(stop_immediate);
+            move || {
+                stop_propagation.set(true);
+                stop_immediate.set(true);
+            }
+        })?,
+    )?;
+    event_object.set(
+        "stopPropagation",
+        Function::new(ctx.clone(), {
+            let stop_propagation = Rc::clone(stop_propagation);
+            move || stop_propagation.set(true)
+        })?,
+    )?;
+    event_object.set(
+        "preventDefault",
+        Function::new(ctx.clone(), {
+            let prevent_default = Rc::clone(prevent_default);
+            move || prevent_default.set(true)
+        })?,
+    )?;
+
+    Ok(event_object)
 }
 
 /// Writes `payload`'s fields onto `event_object`, DOM-named.

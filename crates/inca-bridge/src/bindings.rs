@@ -128,19 +128,18 @@ fn attribute_value_from_js<'js>(ctx: &Ctx<'js>, value: &Value<'js>) -> JsResult<
     ))
 }
 
-/// Installs `globalThis.__inca_native__` into `ctx`, wired to `host`.
-///
-/// # Errors
-///
-/// Returns an error if defining `globalThis.__inca_native__` or any of its
-/// methods on `ctx` fails.
+/// The retained tree itself: allocating, attaching, and describing nodes,
+/// plus `destroyNode` — freeing a subtree is a tree operation first, even
+/// though it also releases the listener/focus state that named its nodes.
 // Long from repeating one registration block per binding, not from
-// complexity — splitting it up would just spread that same list across more
-// functions.
+// complexity — splitting it up further would just spread that same list
+// across more functions.
 #[allow(clippy::too_many_lines)]
-pub fn install<'js>(ctx: &Ctx<'js>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
-    let native = Object::new(ctx.clone())?;
-
+fn install_tree<'js>(
+    ctx: &Ctx<'js>,
+    host: &Rc<RefCell<Host>>,
+    native: &Object<'js>,
+) -> JsResult<()> {
     {
         let host = Rc::clone(host);
         native.set(
@@ -256,6 +255,42 @@ pub fn install<'js>(ctx: &Ctx<'js>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
     {
         let host = Rc::clone(host);
         native.set(
+            "destroyNode",
+            Function::new(
+                ctx.clone(),
+                move |ctx: Ctx<'js>, node_id: NodeId| -> JsResult<Vec<u32>> {
+                    let mut host = host.borrow_mut();
+                    if node_id == host.root {
+                        return Err(Exception::throw_type(
+                            &ctx,
+                            "the root node belongs to the host and cannot be destroyed",
+                        ));
+                    }
+                    let freed = host.tree.destroy_node(node_id);
+                    Ok(freed
+                        .into_iter()
+                        .flat_map(|id| {
+                            host.focus.forget(id);
+                            host.listeners.release(id)
+                        })
+                        .collect())
+                },
+            )?,
+        )?;
+    }
+
+    Ok(())
+}
+
+/// Registering and dropping input-event callbacks.
+fn install_events<'js>(
+    ctx: &Ctx<'js>,
+    host: &Rc<RefCell<Host>>,
+    native: &Object<'js>,
+) -> JsResult<()> {
+    {
+        let host = Rc::clone(host);
+        native.set(
             "addEventListener",
             Function::new(
                 ctx.clone(),
@@ -290,33 +325,15 @@ pub fn install<'js>(ctx: &Ctx<'js>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
         )?;
     }
 
-    {
-        let host = Rc::clone(host);
-        native.set(
-            "destroyNode",
-            Function::new(
-                ctx.clone(),
-                move |ctx: Ctx<'js>, node_id: NodeId| -> JsResult<Vec<u32>> {
-                    let mut host = host.borrow_mut();
-                    if node_id == host.root {
-                        return Err(Exception::throw_type(
-                            &ctx,
-                            "the root node belongs to the host and cannot be destroyed",
-                        ));
-                    }
-                    let freed = host.tree.destroy_node(node_id);
-                    Ok(freed
-                        .into_iter()
-                        .flat_map(|id| {
-                            host.focus.forget(id);
-                            host.listeners.release(id)
-                        })
-                        .collect())
-                },
-            )?,
-        )?;
-    }
+    Ok(())
+}
 
+/// Requesting and releasing focus.
+fn install_focus<'js>(
+    ctx: &Ctx<'js>,
+    host: &Rc<RefCell<Host>>,
+    native: &Object<'js>,
+) -> JsResult<()> {
     {
         let host = Rc::clone(host);
         native.set(
@@ -337,6 +354,20 @@ pub fn install<'js>(ctx: &Ctx<'js>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
         )?;
     }
 
+    Ok(())
+}
+
+/// Installs `globalThis.__inca_native__` into `ctx`, wired to `host`.
+///
+/// # Errors
+///
+/// Returns an error if defining `globalThis.__inca_native__` or any of its
+/// methods on `ctx` fails.
+pub fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
+    let native = Object::new(ctx.clone())?;
+    install_tree(ctx, host, &native)?;
+    install_events(ctx, host, &native)?;
+    install_focus(ctx, host, &native)?;
     ctx.globals().set("__inca_native__", native)?;
     Ok(())
 }
