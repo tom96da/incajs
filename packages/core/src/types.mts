@@ -61,21 +61,8 @@ export interface StyleProps {
  * native host calls it with one argument, an object with `type` (the
  * event's name), `target`/`currentTarget` (both the {@link NodeId} it fired
  * on), `stopPropagation`/`stopImmediatePropagation`/`preventDefault`
- * methods, plus whatever fields that event kind carries.
- *
- * `"mousedown"`/`"mouseup"`/`"mousemove"`/`"mouseenter"`/`"mouseleave"`
- * carry `clientX`, `clientY`, `button`, `buttons`, `detail`, and
- * `ctrlKey`/`shiftKey`/`altKey`/`metaKey`, DOM-`MouseEvent`-named.
- * `"wheel"` carries those same fields plus `deltaX`/`deltaY`/`deltaZ`/
- * `deltaMode`, DOM-`WheelEvent`-named (`deltaMode` is `0` or `1`; `deltaZ`
- * is always `0`). `"keydown"`/`"keyup"` carry `key`, `repeat`, and
- * `ctrlKey`/`shiftKey`/`altKey`/`metaKey`, DOM-`KeyboardEvent`-named, and
- * fire on whichever node is currently focused, bubbling to its ancestors;
- * with nothing focused, neither reaches any node. `"click"`/`"focus"`/
- * `"blur"` carry none of their own.
- *
- * An element already under the pointer when it mounts gets a
- * `"mouseenter"` the first time its hover state is checked, with no
- * pointer movement involved.
+ * methods, plus whatever fields that event kind carries — see
+ * https://tom96da.github.io/incajs/reference/events for the full list of
+ * wired event names and their fields.
  */
 export type EventListener = (...args: unknown[]) => void;

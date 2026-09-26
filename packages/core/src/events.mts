@@ -93,10 +93,9 @@ export function releaseCallbacks(callbackIds: readonly CallbackId[]): void {
  *
  * The host holds a list per `(nodeId, event)` and dispatches to all of it;
  * this wrapper keeps one, the way a framework adapter composes its own
- * handlers into a single callback. `"click"`/`"mousedown"`/`"mouseup"`/
- * `"mousemove"`/`"wheel"`/`"mouseenter"`/`"mouseleave"`/`"focus"`/`"blur"`
- * are wired to real native input today; other event names are accepted but
- * never fire.
+ * handlers into a single callback. See {@link EventListener} for which
+ * event names are wired to real native input today; other names are
+ * accepted but never fire.
  * @param nodeId - the node to listen on
  * @param event - the event name (e.g. `"click"`)
  * @param listener - called when the event fires

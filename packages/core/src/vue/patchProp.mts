@@ -54,11 +54,9 @@ function patchEvent(core: IncaCore, el: IncaElement, rawKey: string, nextValue: 
  *   `core.setStyle` call per entry; an entry whose value isn't a
  *   string/number is skipped.
  * - An `onXxx` key registers `nextValue` as the listener for `xxx`, taking a
- *   function or an array of them, and unbinds `xxx` for anything else — only
- *   `"click"`/`"mousedown"`/`"mouseup"`/`"mousemove"`/`"wheel"`/
- *   `"mouseenter"`/`"mouseleave"`/`"focus"`/`"blur"`/`"keydown"`/`"keyup"`
- *   are wired to real input by the native host today, other event names
- *   are accepted but never fire.
+ *   function or an array of them, and unbinds `xxx` for anything else — see
+ *   {@link EventListener} for which event names are wired to real input by
+ *   the native host today; other names are accepted but never fire.
  * - Everything else falls through to `core.setAttribute`, again skipping
  *   a non-string/number/boolean value rather than passing it through.
  *
