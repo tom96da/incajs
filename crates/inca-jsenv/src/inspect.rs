@@ -51,6 +51,14 @@ fn write_value(out: &mut String, value: &Value<'_>, depth: usize) {
             "false"
         }),
         Type::Int | Type::Float => match value.as_number() {
+            // Rust's own `Display` for `f64` spells these `inf`/`-inf`.
+            Some(number) if number.is_infinite() => {
+                out.push_str(if number.is_sign_positive() {
+                    "Infinity"
+                } else {
+                    "-Infinity"
+                });
+            }
             Some(number) => {
                 let _ = write!(out, "{number}");
             }
@@ -219,6 +227,12 @@ mod tests {
         assert_eq!(rendered("undefined"), "undefined");
         assert_eq!(rendered("10n"), "10n");
         assert_eq!(rendered("Symbol('tag')"), "Symbol(tag)");
+    }
+
+    #[test]
+    fn infinities_read_the_way_js_spells_them() {
+        assert_eq!(rendered("1 / 0"), "Infinity");
+        assert_eq!(rendered("-1 / 0"), "-Infinity");
     }
 
     #[test]
