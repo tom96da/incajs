@@ -109,7 +109,7 @@ lands after 3.3, when there is something to release.
    [PROTOCOL.md](./PROTOCOL.md) — resolves and launches the host
    binary, supervises the child, and carries messages both ways. It depends
    on no bundler and never parses a routed payload, so Vite's HMR traffic
-   (Phase 3.4) rides the same channel as a registered `type` name.
+   (Phase 3.4) rides the same channel as a registered `method` name.
 4. **`crates/inca-host`**: the runtime binary — opens the GPUI window
    and evaluates a bundle in QuickJS, and in dev mode reads newline-delimited
    JSON messages on stdin, re-evaluating the bundle in a fresh engine against
@@ -150,15 +150,23 @@ is published as `v0.0.1`, to npm only (`incajs`, `@incajs/cli`, and the
 per-platform host packages). The Rust crates stay
 `publish = false` — nothing outside this repo depends on them until Phase 13.
 
-### Phase 3.4: HMR (`@incajs/vite-runtime`)
+### Phase 3.4: HMR
 
-**HMR bridge** (`@incajs/vite-runtime`, at `packages/vite-runtime`): a
-custom `ModuleRunnerTransport` and module evaluator against Vite's Runtime
-API (`vite/module-runner`), so updated modules are evaluated inside QuickJS
-and trigger a GPUI redraw while component state survives. The runner itself
-runs inside QuickJS, not on the Node side — see
-[ARCHITECTURE.md](./ARCHITECTURE.md#hmr-delivery) for why, and for why
-this is preferred over a hand-rolled HMR protocol.
+**HMR bridge** (`@incajs/cli`'s `adapter/vite`, beside its Node-side dev
+server): a custom `ModuleRunnerTransport` and module evaluator against
+Vite's Runtime API (`vite/module-runner`), so updated modules are evaluated
+inside QuickJS and trigger a GPUI redraw, with component state surviving
+where Vue's own HMR can (template-only edits; a script edit still remounts
+the component). The runner itself runs inside QuickJS, not on the Node
+side — see [ARCHITECTURE.md](./ARCHITECTURE.md#hmr-delivery) for why, and
+for why this is preferred over a hand-rolled HMR protocol. A future
+`adapter/rspack` would hold its own Node/QuickJS halves the same way,
+rather than sharing an `incajs`-side "HMR" grouping with this one — the two
+bundlers' HMR runtimes have no shape in common beyond the name.
+
+Ships **experimental and opt-in**: without the flag, `inca dev` keeps this
+phase's full reload unchanged. See [PLAN.md](./PLAN.md#phase-34-hmr)
+for the opt-in surface and the prerequisites this needs first.
 
 ## Phase 4: Input & text editing (future)
 

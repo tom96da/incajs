@@ -42,10 +42,10 @@ incajs/
 ├── Cargo.toml               # Rust workspace manifest
 ├── Cargo.lock               # locked Rust dependency graph, including git-pinned gpui
 ├── crates/
-│   ├── inca-gpui/           # Rust host: retained tree, QuickJS bridge, GPUI render (Phase 1, done)
+│   ├── inca-gpui/           # Rust host: retained tree, GPUI render (Phase 1, done)
 │   ├── inca-bridge/         # binds a QuickJS realm to the retained tree — the __inca_native__ bridge and event dispatch (Phase 1, done)
 │   ├── inca-jsenv/          # the host objects installed into the QuickJS realm — console today, more in Phase 6
-│   └── inca-host/           # the runtime binary: loads a bundle and opens the window (Phase 2 Unit iv, done; grows a dev mode in Phase 3.1)
+│   └── inca-host/           # the runtime binary: loads a bundle, opens the window, and (Phase 3.1, done) serves the dev protocol
 ├── tests/                   # `inca-tests` — the tests that span Rust and TypeScript, kept out of both so neither depends on the other (see TESTING.md)
 ├── pnpm-workspace.yaml      # pnpm workspace member globs (packages/*, examples/*, npm/*, docs)
 ├── package.json             # root workspace manifest — lint/format/typecheck/test/build scripts
@@ -90,9 +90,14 @@ existing `crates/`/`packages/` directories shown above:
 incajs/
 ├── crates/
 │   └── inca-macros/         # host bridge binding helper macros
-└── packages/
-    └── vite-runtime/        # `@incajs/vite-runtime` — Vite Runtime API integration, runs inside QuickJS (Phase 3.4)
 ```
+
+The Vite Runtime API integration that runs inside QuickJS (Phase 3.4) lands
+inside `@incajs/cli`'s existing `adapter/vite`, beside the Node-side dev
+server it talks to — not as a separate package or an `incajs` subpath. Both
+halves speak Vite's own internal protocol, which isn't guaranteed stable
+across versions, so keeping them in one package keeps them on one `vite`
+install. `incajs` stays free of a `vite` dependency.
 
 React lands as `incajs/react` — a new subpath inside `packages/core`,
 alongside `incajs/vue`, not a new top-level package (Phase 10).

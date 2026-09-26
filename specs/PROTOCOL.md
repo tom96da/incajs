@@ -155,9 +155,10 @@ for it through `__inca_native__.addEventListener`, and `rootNodeId()` gives
 an app a target not tied to any element, so an app lifecycle hook — cleanup
 before `shutdown`, a warning before a reload discards state — would be a name
 the host agrees to dispatch, not a new binding and not a new message. **No
-lifecycle name is defined and nothing dispatches one**; a click on an element
-is the only event that reaches JS today, and [FFI.md](./FFI.md) is where a
-lifecycle surface gets settled.
+lifecycle name is defined and nothing dispatches one**; only the pointer,
+focus, and keyboard events [FFI.md](./FFI.md#event-dispatch) lists are
+dispatched today, and that same doc is where a lifecycle surface gets
+settled.
 
 ## Failure handling
 

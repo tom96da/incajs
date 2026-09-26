@@ -7,8 +7,8 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 Target architecture for Incarnative.js. This describes the design agents should
 build toward. See [AGENTS.md](../AGENTS.md#status) for which layers already
-match this design (the Rust host and the `incajs` core JS package) and which
-are still forward-looking (the Vue custom renderer, the Vite/HMR bridge, and
+match this design (the Rust host, the `incajs` core JS package, and its Vue
+custom renderer) and which are still forward-looking (the Vite/HMR bridge and
 everything after). Update it as each piece actually lands; don't let it drift
 from reality.
 
@@ -91,9 +91,11 @@ environment." Incarnative.js uses it instead of Vite's browser client:
   this rides the host child process's stdio.
 - A custom **module evaluator** executes the transformed module source inside
   QuickJS. Vite's SSR transform emits an async *function body* taking the six
-  `__vite_ssr_*` parameters, not an ES module, so no module loader is needed in
-  QuickJS — but it does need an `AsyncFunction`-style entry point rather than
-  the `Module::declare` path `inca build`'s output uses.
+  `__vite_ssr_*` parameters, not an ES module, so no module loader is needed:
+  Vite's own stock evaluator builds and calls this function via
+  `new AsyncFunction(...)`, and QuickJS's `AsyncFunction` constructor runs it
+  unchanged — the `Module::declare` path `inca build`'s output uses plays no
+  part here.
 
 This gets real HMR (module graph invalidation, accept/dispose boundaries)
 without reimplementing Vite's HMR protocol from scratch — the only new code is

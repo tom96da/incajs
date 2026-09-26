@@ -32,10 +32,12 @@ unpublished placeholder — no free Intel macOS runner). An app's settings
 travel in its own build output — see [PROTOCOL.md](./specs/PROTOCOL.md)
 — and every app carries an application menu with a `Quit` item. 3.4
 (HMR) is in progress: only `inca.config.ts` is done (app metadata, build
-settings, the window, deprecating `package.json`'s `"inca"` key); `inca
-dev` still reloads the whole bundle. The CLI prints the bundler's own
-output beside its own — see [FAILURES.md](./specs/FAILURES.md) for what
-it refuses and falls back from.
+settings, the window, deprecating `package.json`'s `"inca"` key). HMR
+itself will ship experimental and opt-in (`--experimental-hmr` /
+`INCA_EXPERIMENTAL_HMR`); `inca dev` reloads the whole bundle by default
+either way. The CLI prints the bundler's own output beside its own — see
+[FAILURES.md](./specs/FAILURES.md) for what it refuses and falls back
+from.
 
 Phase 4 (input & text editing) is running alongside 3.4: pointer input,
 the focus model, and keyboard input are done.
