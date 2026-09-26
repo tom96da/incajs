@@ -11,19 +11,12 @@ framework. No Chromium, no DOM: UI renders directly on the GPU via
 ([`rquickjs`](https://github.com/DelSkayn/rquickjs)) with sub-second
 startup.
 
-## Features
-
-- Framework-agnostic core, with first-class Vue 3 support via the
-  `incajs/vue` subpath (`@vue/runtime-core` is an optional peer
-  dependency — only needed if you import `incajs/vue`)
-- Direct GPU rendering — no Chromium, no DOM
-- Embedded QuickJS runtime for sub-second startup and a minimal memory
-  footprint
-
 ## How it works
 
-`incajs` is a thin, typed wrapper around the native host bridge.
-`incajs/vue` is a custom renderer mapping Vue's `createRenderer`
-lifecycle onto those calls.
+- `incajs` is a thin, typed wrapper around the native host bridge
+- Vue 3 support is a custom renderer mapping Vue's `createRenderer`
+  lifecycle onto those calls
+- `@vue/runtime-core` is an optional peer dependency, needed only when
+  you use it
 
 Part of [tom96da/incajs](https://github.com/tom96da/incajs).
