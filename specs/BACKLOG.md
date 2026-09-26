@@ -47,6 +47,15 @@ enough overhead for a single maintainer plus AI pairing.
 - **`strip = true` for the release profile**: shrink release binaries by
   stripping symbols.
 
+- **The dev protocol always ships inside `inca-host`**: `crates/inca-host/src/dev.rs`
+  (stdin/stdout JSON-RPC, the stdout writer thread, `reload`) compiles into
+  every `inca-host` binary, including the ones `inca package` distributes,
+  even though a packaged app never passes `--dev` and never runs any of it.
+  Worth a way to drop it from a release build — a Cargo feature gating
+  `mod dev;` and the CLI's `--dev` flag, built once for `inca dev`'s own use
+  and once (without the feature) for packaging — once it's worth the two
+  build configurations that implies.
+
 - **QuickJS bytecode precompilation**: precompile JS to QuickJS bytecode
   ahead of time instead of parsing source at startup.
 
