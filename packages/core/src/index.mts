@@ -1,17 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-export { blur, focus, removeEventListener, setEventListener } from "./events.mts";
-export {
-  appendChild,
-  createNode,
-  destroyNode,
-  insertBefore,
-  removeChild,
-  rootNodeId,
-  setAttribute,
-  setStyle,
-} from "./tree.mts";
+// Value exports live in `rendererCore.mts`, not here.
 
 export type {
   AttributeValue,

@@ -9,6 +9,9 @@
 //! export table — this test reads them back via `Module::get` inside the
 //! same `Engine::with` call that evaluates the module, then invokes them and
 //! asserts on the resulting `VirtualTree` state.
+//!
+//! Built from `rendererCore.mts` directly — `index.mts` carries no runtime
+//! code.
 
 #![allow(clippy::unwrap_used)]
 
@@ -25,7 +28,7 @@ use rquickjs::{Function, Module};
 
 const BUNDLE_PATH: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../packages/core/dist/index.js"
+    "/../packages/core/dist/rendererCore.js"
 );
 
 #[test]

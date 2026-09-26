@@ -12,6 +12,8 @@ export default defineConfig({
       entry: {
         index: path.resolve(import.meta.dirname, "src/index.mts"),
         vue: path.resolve(import.meta.dirname, "src/vue/index.mts"),
+        // Not in package.json's `exports` — for inca-tests only.
+        rendererCore: path.resolve(import.meta.dirname, "src/rendererCore.mts"),
       },
       formats: ["es"],
     },

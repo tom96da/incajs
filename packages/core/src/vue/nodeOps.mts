@@ -8,18 +8,25 @@ import type { NodeId, TagName } from "../types.mts";
 
 /**
  * A container host node: either a real element or the hidden stand-in
- * {@link nodeOps.createComment} uses. Also `@vue/runtime-core`'s
+ * {@link NodeOps.createComment} uses. Also `@vue/runtime-core`'s
  * `HostElement` — the only host node type that can act as a parent.
  *
  * `inca`'s native tree has no parent pointers and no way to list a
  * node's children, so `parent`/`children` are maintained here as a
- * JS-side shadow of the tree, kept in sync by {@link nodeOps.insert}/
- * {@link nodeOps.remove}.
+ * JS-side shadow of the tree, kept in sync by {@link NodeOps.insert}/
+ * {@link NodeOps.remove}.
  */
 export interface IncaElement {
-  /** The underlying native node's id — the only part of this object the native tree itself knows about. */
+  /**
+   * The underlying native node's id — the only part of this object the native
+   * tree itself knows about.
+   */
   readonly id: NodeId;
-  /** `"comment"` for the hidden stand-in {@link nodeOps.createComment} produces; `"element"` for every other container. Purely informational — both render identically once created. */
+  /**
+   * `"comment"` for the hidden stand-in {@link NodeOps.createComment}
+   * produces; `"element"` for every other container. Purely
+   * informational — both render identically once created.
+   */
   readonly kind: "element" | "comment";
   /** The current parent, or `null` if this node isn't attached to the tree. */
   parent: IncaElement | null;
@@ -43,8 +50,11 @@ export interface IncaText {
   text: string;
 }
 
-/** Any host node {@link nodeOps} can produce: an element, comment, or text leaf. */
+/** Any host node {@link NodeOps} can produce: an element, comment, or text leaf. */
 export type IncaNode = IncaElement | IncaText;
+
+/** {@link createNodeOps}'s return shape. */
+export type NodeOps = Omit<RendererOptions<IncaNode, IncaElement>, "patchProp">;
 
 /**
  * `@vue/runtime-core`'s {@link RendererOptions}`<IncaNode, IncaElement>`,
@@ -53,9 +63,7 @@ export type IncaNode = IncaElement | IncaText;
  * {@link IncaCore}, never on the native bridge directly.
  * @param core - the incajs bindings to drive the native tree through
  */
-export function createNodeOps(
-  core: IncaCore,
-): Omit<RendererOptions<IncaNode, IncaElement>, "patchProp"> {
+export function createNodeOps(core: IncaCore): NodeOps {
   function createTextNode(text: string): IncaText {
     const id = core.createNode("text");
     core.setAttribute(id, "value", text);

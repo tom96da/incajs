@@ -4,7 +4,7 @@
 import { createRenderer } from "@vue/runtime-core";
 import type { App, Component, ComponentPublicInstance } from "@vue/runtime-core";
 
-import * as core from "../index.mts";
+import * as core from "../rendererCore.mts";
 import { createNodeOps } from "./nodeOps.mts";
 import { createPatchProp } from "./patchProp.mts";
 import type { IncaElement, IncaNode } from "./nodeOps.mts";
