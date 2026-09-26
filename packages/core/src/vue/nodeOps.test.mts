@@ -21,6 +21,8 @@ const core: IncaCore = {
     vi.fn<(nodeId: number, event: string, listener: (...args: unknown[]) => void) => void>(),
   removeEventListener: vi.fn<(nodeId: number, event: string) => void>(),
   destroyNode: vi.fn<(nodeId: number) => void>(),
+  focus: vi.fn<(nodeId: number) => void>(),
+  blur: vi.fn<() => void>(),
 };
 
 const nodeOps = createNodeOps(core);
@@ -32,14 +34,28 @@ beforeEach(() => {
 });
 
 function element(): IncaElement {
-  return { id: nextId++, kind: "element", parent: null, children: [] };
+  return {
+    id: nextId++,
+    kind: "element",
+    parent: null,
+    children: [],
+    focus: vi.fn<() => void>(),
+    blur: vi.fn<() => void>(),
+  };
 }
 
 describe("createElement", () => {
   it("allocates a native node for the tag and returns a parentless, childless element", () => {
     const el = nodeOps.createElement("div");
     expect(core.createNode).toHaveBeenCalledWith("div");
-    expect(el).toEqual({ id: 1, kind: "element", parent: null, children: [] });
+    expect(el).toEqual({
+      id: 1,
+      kind: "element",
+      parent: null,
+      children: [],
+      focus: expect.any(Function),
+      blur: expect.any(Function),
+    });
   });
 });
 
@@ -57,7 +73,26 @@ describe("createComment", () => {
     const node = nodeOps.createComment("v-if");
     expect(core.createNode).toHaveBeenCalledWith("div");
     expect(core.setStyle).toHaveBeenCalledWith(1, "display", "none");
-    expect(node).toEqual({ id: 1, kind: "comment", parent: null, children: [] });
+    expect(node).toEqual({
+      id: 1,
+      kind: "comment",
+      parent: null,
+      children: [],
+      focus: expect.any(Function),
+      blur: expect.any(Function),
+    });
+  });
+});
+
+describe("focus / blur", () => {
+  it("forward to core.focus/core.blur bound to the element's own id", () => {
+    const el = nodeOps.createElement("div");
+
+    el.focus();
+    expect(core.focus).toHaveBeenCalledWith(el.id);
+
+    el.blur();
+    expect(core.blur).toHaveBeenCalledWith();
   });
 });
 

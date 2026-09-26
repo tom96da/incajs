@@ -89,24 +89,23 @@ There's no `code`, `location`, or `isComposing` yet.
 
 ## Focus
 
-A node isn't focusable until `focus(nodeId)` has been called on it at
-least once — clicking a node that's never been focused this way doesn't
-move focus there, unlike a DOM element with a `tabindex`.
+A node isn't focusable until `.focus()` has been called on it at least
+once — clicking a node that's never been focused this way doesn't move
+focus there, unlike a DOM element with a `tabindex`.
 
 Once a node has been focused this way, it stays focusable from then on:
 clicking it moves focus there on its own, the same as a focusable DOM
-element does. `blur()` unfocuses whatever is currently focused.
+element does. `.blur()` unfocuses whatever is currently focused.
 
-`focus`/`blur` are exported from `incajs`, and take a node's `id` (a
-template `ref` resolves to a host node carrying one):
+A template `ref`'s own element carries `.focus()`/`.blur()` directly,
+the same as a real DOM element:
 
 ```vue
 <script setup>
 import { onMounted, ref } from "@vue/runtime-core";
-import { focus } from "incajs";
 
 const input = ref(null);
-onMounted(() => focus(input.value.id));
+onMounted(() => input.value.focus());
 </script>
 
 <template>

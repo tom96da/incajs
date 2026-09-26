@@ -174,6 +174,20 @@ enough overhead for a single maintainer plus AI pairing.
   what `inca`'s tab-order vocabulary looks like (a style prop? an
   attribute?) and is a separate unit from the focus model itself.
 
+- **No way to make a node focusable without also focusing it**:
+  `FocusRegistry::get_or_create` (`crates/inca-bridge/src/focus.rs`) is
+  the only place a `FocusHandle` gets allocated, and it only ever runs
+  from `apply_pending`'s `PendingFocus::Focus` branch, which calls
+  `handle.focus(window, cx)` immediately afterward — `focusNode`
+  conflates "become focusable" with "focus now." A future `input`/
+  `button`-like element that should already be click-focusable when it
+  mounts, the way a real `<input>` is with no script ever calling
+  `.focus()`, needs a binding that only allocates the handle and wires
+  `.track_focus` (`crates/inca-gpui/src/element.rs`'s `wire_focus`),
+  without moving focus. Separate from Tab-key navigation above — that's
+  about keyboard order once a node is already focusable, this is about
+  becoming focusable at all.
+
 - **Destroying a focused node must come to fire `"blur"`**: it doesn't
   today — `destroyNode`'s JS wrapper (`packages/core/src/tree.mts`) drops
   every freed callback synchronously (`releaseCallbacks`), so even a
@@ -218,16 +232,9 @@ enough overhead for a single maintainer plus AI pairing.
     from.
 
 - **A template `ref` resolves to a plain data object, not something with
-  a DOM-like API**: `IncaElement` (`packages/core/src/vue/nodeOps.mts`) is
-  `{ id, kind, parent, children }` — nothing else. A real DOM template
-  `ref` resolves to the actual element, so `el.value.focus()` needs no
-  import beyond `ref` itself; here, moving focus means importing
-  `focus`/`blur` from `incajs` separately and passing `el.value.id`. A
-  node also stays unfocusable — including for GPUI's own click-to-focus —
-  until `focus()` names it once, so this shows up on the very first
-  attempt to move focus, not just as friction later. Giving `IncaElement`
-  its own `.focus()`/`.blur()` methods, backed by the same native
-  `focusNode`/`blurNode` calls, would let a `.vue` app write the same code
-  a real DOM app does, no `incajs` import needed. The same gap likely
-  applies to any other DOM-element method/property a `.vue` app would
-  otherwise reach for on a template `ref`.
+  a DOM-like API**: `IncaElement` (`packages/core/src/vue/nodeOps.mts`)
+  now has `.focus()`/`.blur()`, backed by the same native
+  `focusNode`/`blurNode` calls, so `el.value.focus()` needs no `incajs`
+  import beyond `ref` itself, matching a real DOM template ref. The same
+  gap likely applies to any other DOM-element method/property a `.vue`
+  app would otherwise reach for on a template `ref`.

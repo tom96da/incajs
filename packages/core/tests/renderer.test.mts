@@ -4,7 +4,7 @@
 import { h, nextTick, reactive } from "@vue/runtime-core";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { createNode, rootNodeId } from "../src/index.mts";
+import { blur, createNode, focus, rootNodeId } from "../src/index.mts";
 import { createIncaApp } from "../src/vue/index.mts";
 import type { NodeId } from "../src/index.mts";
 import type { IncaElement } from "../src/vue/index.mts";
@@ -138,7 +138,15 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
   beforeEach(() => {
     nodes = installFakeNative();
     delete (globalThis as { __inca_callbacks__?: unknown }).__inca_callbacks__;
-    root = { id: createNode("root"), kind: "element", parent: null, children: [] };
+    const rootId = createNode("root");
+    root = {
+      id: rootId,
+      kind: "element",
+      parent: null,
+      children: [],
+      focus: () => focus(rootId),
+      blur,
+    };
   });
 
   it("mounts styles, attributes, and text, then reacts to a click", async () => {

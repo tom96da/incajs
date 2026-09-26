@@ -19,11 +19,20 @@ const core: IncaCore = {
   removeEventListener: vi.fn<(nodeId: number, event: string) => void>(),
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   setStyle: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
+  focus: vi.fn<(nodeId: number) => void>(),
+  blur: vi.fn<() => void>(),
 };
 
 const patchProp = createPatchProp(core);
 
-const el: IncaElement = { id: 1, kind: "element", parent: null, children: [] };
+const el: IncaElement = {
+  id: 1,
+  kind: "element",
+  parent: null,
+  children: [],
+  focus: vi.fn<() => void>(),
+  blur: vi.fn<() => void>(),
+};
 
 beforeEach(() => {
   vi.clearAllMocks();

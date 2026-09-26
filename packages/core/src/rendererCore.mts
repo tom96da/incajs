@@ -22,4 +22,6 @@ export type IncaCore = Pick<
   | "setStyle"
   | "setEventListener"
   | "removeEventListener"
+  | "focus"
+  | "blur"
 >;

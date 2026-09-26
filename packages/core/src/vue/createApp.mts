@@ -39,10 +39,22 @@ export function createIncaApp(
   const app = renderer.createApp(rootComponent, rootProps);
   // Captured before the override, or the replacement would call itself.
   const mountAt = app.mount.bind(app);
+
+  // The host's root container, with the same `.focus()`/`.blur()`
+  // `createNodeOps`'s own elements get.
+  function rootElement(): IncaElement {
+    const id = core.rootNodeId();
+    return {
+      id,
+      kind: "element",
+      parent: null,
+      children: [],
+      focus: () => core.focus(id),
+      blur: () => core.blur(),
+    };
+  }
+
   return Object.assign(app, {
-    mount: (rootContainer?: IncaElement) =>
-      mountAt(
-        rootContainer ?? { id: core.rootNodeId(), kind: "element", parent: null, children: [] },
-      ),
+    mount: (rootContainer?: IncaElement) => mountAt(rootContainer ?? rootElement()),
   });
 }

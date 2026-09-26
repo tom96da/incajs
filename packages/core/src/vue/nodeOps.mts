@@ -25,6 +25,10 @@ export interface IncaElement {
   parent: IncaElement | null;
   /** This node's children, in render order. */
   children: IncaNode[];
+  /** Focuses this node next frame. */
+  focus(): void;
+  /** Unfocuses whatever's focused, next frame. */
+  blur(): void;
 }
 
 /** A text leaf host node — `@vue/runtime-core`'s `HostNode` for text. */
@@ -75,6 +79,14 @@ export function createNodeOps(
     unlink(child);
   }
 
+  // Shared by createElement/createComment.
+  function focusMethods(id: NodeId): Pick<IncaElement, "focus" | "blur"> {
+    return {
+      focus: () => core.focus(id),
+      blur: () => core.blur(),
+    };
+  }
+
   return {
     /**
      * Allocates a new element node for `tag`. Vue's other `createElement`
@@ -84,7 +96,8 @@ export function createNodeOps(
      * @returns the new, parentless, childless element
      */
     createElement(tag: TagName): IncaElement {
-      return { id: core.createNode(tag), kind: "element", parent: null, children: [] };
+      const id = core.createNode(tag);
+      return { id, kind: "element", parent: null, children: [], ...focusMethods(id) };
     },
 
     /**
@@ -106,7 +119,7 @@ export function createNodeOps(
     createComment(_text: string): IncaElement {
       const id = core.createNode("div");
       core.setStyle(id, "display", "none");
-      return { id, kind: "comment", parent: null, children: [] };
+      return { id, kind: "comment", parent: null, children: [], ...focusMethods(id) };
     },
 
     /**
