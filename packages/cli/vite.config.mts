@@ -13,6 +13,7 @@ export default defineConfig({
         index: path.resolve(import.meta.dirname, "src/index.mts"),
         cli: path.resolve(import.meta.dirname, "src/cli.mts"),
         config: path.resolve(import.meta.dirname, "src/config/index.mts"),
+        "hmr-runtime": path.resolve(import.meta.dirname, "src/adapter/vite/runtime/index.mts"),
       },
       formats: ["es"],
       fileName: (_format, entryName) => `${entryName}.js`,
@@ -23,5 +24,10 @@ export default defineConfig({
       output: { chunkFileNames: "chunks/[name]-[hash].js" },
     },
   },
-  plugins: [dts({ include: ["src"], exclude: ["src/**/*.test.mts"] })],
+  plugins: [
+    dts({
+      include: ["src"],
+      exclude: ["src/**/*.test.mts", "src/adapter/vite/runtime/**"],
+    }),
+  ],
 });
