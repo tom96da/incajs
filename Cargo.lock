@@ -2814,6 +2814,7 @@ dependencies = [
  "inca-gpui",
  "inca-jsenv",
  "rquickjs",
+ "serde_json",
 ]
 
 [[package]]

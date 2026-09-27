@@ -85,8 +85,9 @@ a line is a message.
   answers stay matched to their requests when several are in flight.
 - A **notification** is a call with no `id` at all, and takes no response.
   An explicit `"id": null` is a request, not a notification.
-- An unrecognized `method` is answered `-32601` when it arrives as a request
-  and dropped when it arrives as a notification, so either side can add
+- An unrecognized `method` is answered `-32601` when it arrives as a request.
+  As a notification it is relayed into the running app instead of being
+  dropped — see "New bundler integrations" below — so either side can add
   methods first.
 - `params` this host has no use for are ignored rather than rejected.
 
@@ -139,12 +140,27 @@ upgraded separately.
 
 **New bundler integrations.** Bundler traffic rides this channel in both
 directions as notifications whose `method` names the producer and whose
-`params` carry the payload untouched: Vite's `ModuleRunnerTransport` frames
-arrive as `{"method": "vite", "params": {...}}` in Phase 3.4. A `fetchModule`
-starts in the host and is answered by the client, and an HMR update travels
-the other way — both as `vite` notifications, because Vite pairs a call with
-its answer by an id it keeps inside `params`. Nesting therefore keeps their
-shape intact and asks nothing of this layer's own `id`.
+`params` carry the payload untouched, so this crate never has to know the
+name of a bundler or a frontend framework.
+
+A notification the client sends with an unrecognized `method` is relayed
+into the running app's JS as `globalThis.__inca_dev__.receive?.(method,
+paramsJson)` — `paramsJson` is `params` re-encoded as a JSON string, not a
+live value. A relay that throws, or finds no `__inca_dev__.receive`, is
+handled the same way an event listener's throw is: reported, never fatal.
+
+The running app sends one back the same way, from JS: `__inca_dev__.send(
+method, paramsJson)` parses `paramsJson` as JSON and writes it out as a
+notification named `method`; invalid JSON raises a `TypeError` rather than
+silently doing nothing. `__inca_dev__` exists only in dev — a production
+build has no writer to send through and never installs it.
+
+Vite's `ModuleRunnerTransport` frames are one such integration: they arrive
+as `{"method": "vite", "params": {...}}` in Phase 3.4. A `fetchModule` starts
+in the host and is answered by the client, and an HMR update travels the
+other way — both as `vite` notifications, because Vite pairs a call with its
+answer by an id it keeps inside `params`. Nesting therefore keeps their shape
+intact and asks nothing of this layer's own `id`.
 `dev-client` depends on no bundler and reaches a payload's owner only
 through the handle the CLI's own commands pass it, so another integration is
 a new `method` name, not a change here.
@@ -168,7 +184,7 @@ The host never exits because of a message it couldn't use.
 | --- | --- | --- |
 | A line that isn't valid JSON | `-32700` | `id` is `null` — there was none to read |
 | Valid JSON that is no request object: not an object, no `jsonrpc: "2.0"`, no readable `method`, or an `id` that is not a string, a number, or null | `-32600` | `id` is `null` |
-| A `method` this host doesn't implement | `-32601` | echoes the request's `id`; nothing at all if it was a notification |
+| A `method` this host doesn't implement | `-32601` | echoes the request's `id`; relayed into the app as `__inca_dev__.receive` if it was a notification instead |
 | A bundle that throws while being evaluated | `-32000` | echoes the `id`; the window keeps the tree it already has |
 | A *first* bundle that throws, before any window exists | `-32000` | reported with `id` `null`, then exit 1 |
 | An exception thrown by an app's event listener | — | an `appError` notification; the window keeps rendering |

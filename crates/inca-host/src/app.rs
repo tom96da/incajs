@@ -29,7 +29,9 @@ use gpui::{
 use gpui_platform::application;
 
 use inca_bridge::bindings::install;
-use inca_bridge::{ErrorReporter, EventDispatcher, Host, drain_jobs_and_refresh, stderr_reporter};
+use inca_bridge::{
+    ErrorReporter, EventDispatcher, Host, drain_jobs_and_refresh, install_dev, stderr_reporter,
+};
 use inca_gpui::{AttributeValue, NodeId, VirtualNode, render_tree_with_events};
 use inca_jsenv::{Engine, EngineError, console};
 
@@ -150,15 +152,22 @@ impl Session {
     }
 
     /// Starts an engine rooted at `entry_path`'s directory and gives it
-    /// everything an entry expects to find — `console` and the native
-    /// bindings — before any entry code runs, so one that logs while
-    /// evaluating is heard rather than met with a `ReferenceError`.
+    /// everything an entry expects to find — `console`, the native
+    /// bindings, and, in dev (`writer.is_some()`), `__inca_dev__` — before
+    /// any entry code runs, so one that logs while evaluating is heard
+    /// rather than met with a `ReferenceError`.
+    ///
+    /// `__inca_dev__` doesn't exist at all when `writer` is `None`
+    /// (production) — see [`inca_bridge::install_dev`] for what it does.
     ///
     /// # Errors
     ///
-    /// Returns the thrown value if the engine fails to start, or `console`
-    /// or the bindings fail to install.
-    fn start_engine(entry_path: &str) -> Result<(Rc<RefCell<Host>>, Engine), EngineError> {
+    /// Returns the thrown value if the engine fails to start, or `console`,
+    /// the bindings, or `__inca_dev__` fail to install.
+    fn start_engine(
+        entry_path: &str,
+        writer: Option<&SharedWriter>,
+    ) -> Result<(Rc<RefCell<Host>>, Engine), EngineError> {
         let host = Rc::new(RefCell::new(Host::default()));
 
         let module_root = Path::new(entry_path).parent().unwrap_or(Path::new("."));
@@ -166,6 +175,10 @@ impl Session {
         engine.with(|ctx| {
             console::install(&ctx, &console::to_stderr())
                 .and_then(|()| install(&ctx, &host))
+                .and_then(|()| match writer {
+                    Some(writer) => install_dev(&ctx, crate::dev::dev_send(writer)),
+                    None => Ok(()),
+                })
                 .map_err(|err| EngineError::capture(&ctx, &err))
         })?;
         Ok((host, engine))
@@ -173,7 +186,8 @@ impl Session {
 
     /// Evaluates `source` — the entry's own already-read content — into a
     /// fresh engine, then wires up event dispatch. An `import` in `source`
-    /// resolves against a sibling file next to `entry_path`.
+    /// resolves against a sibling file next to `entry_path`. `writer` is
+    /// `Some` only in dev — see [`Self::start_engine`].
     ///
     /// # Errors
     ///
@@ -184,8 +198,9 @@ impl Session {
         entry_path: &str,
         source: &str,
         reporter: ErrorReporter,
+        writer: Option<&SharedWriter>,
     ) -> Result<Self, EngineError> {
-        let (host, engine) = Self::start_engine(entry_path)?;
+        let (host, engine) = Self::start_engine(entry_path, writer)?;
         engine.eval_module(entry_path, source)?;
 
         let engine = Rc::new(engine);
@@ -217,18 +232,20 @@ impl Render for HostedApp {
 }
 
 /// Brings up the engine, the tree and the window, under the config the
-/// app's build wrote beside its entry.
+/// app's build wrote beside its entry. `writer` is `Some` only in dev,
+/// installing `__inca_dev__` — see [`Session::start_engine`].
 ///
 /// # Errors
 ///
 /// Returns the window that failed to open, or the value the entry threw.
-fn start(
+pub(crate) fn start(
     cx: &mut App,
     entry_path: &str,
     source: &str,
     reporter: ErrorReporter,
+    writer: Option<&SharedWriter>,
 ) -> Result<WindowHandle<HostedApp>, Failure> {
-    let session = Session::load(entry_path, source, reporter).map_err(Failure::Thrown)?;
+    let session = Session::load(entry_path, source, reporter, writer).map_err(Failure::Thrown)?;
     let app_config = config::read(Path::new(entry_path));
 
     if let (Some(name), Some(identifier)) = (&app_config.name, &app_config.identifier) {
@@ -299,7 +316,7 @@ pub(crate) fn run_bundle(entry_path: &str, dev: bool) -> ExitCode {
         .detach();
 
         let error_reporter = writer.as_ref().map_or_else(stderr_reporter, reporter_for);
-        match start(cx, &entry_path, &source, error_reporter) {
+        match start(cx, &entry_path, &source, error_reporter, writer.as_ref()) {
             Ok(window) => {
                 if let Some(writer) = &writer {
                     send(&**writer, &Outgoing::ready());
@@ -360,7 +377,7 @@ mod tests {
     const TEST_ENTRY_PATH: &str = "/test/entry.js";
 
     fn load(source: &str) -> Result<Session, EngineError> {
-        Session::load(TEST_ENTRY_PATH, source, stderr_reporter())
+        Session::load(TEST_ENTRY_PATH, source, stderr_reporter(), None)
     }
 
     /// Captures every line written to it instead of touching real stdout, so
@@ -372,6 +389,32 @@ mod tests {
         fn write_line(&self, line: String) {
             self.0.borrow_mut().push(line);
         }
+    }
+
+    #[test]
+    fn inca_dev_does_not_exist_outside_dev() {
+        let session = load("globalThis.hasDev = typeof __inca_dev__ !== 'undefined';").unwrap();
+
+        assert!(!session.engine.eval::<bool>("globalThis.hasDev;").unwrap());
+    }
+
+    #[test]
+    fn inca_dev_send_writes_a_notification_to_the_writer() {
+        let capturing = Rc::new(CapturingWriter::default());
+        let writer: SharedWriter = Rc::clone(&capturing) as SharedWriter;
+
+        Session::load(
+            TEST_ENTRY_PATH,
+            r"__inca_dev__.send('testEvent', JSON.stringify({ a: 1 }));",
+            stderr_reporter(),
+            Some(&writer),
+        )
+        .unwrap();
+
+        let sent = capturing.0.borrow();
+        assert_eq!(sent.len(), 1);
+        assert!(sent[0].contains(r#""method":"testEvent""#));
+        assert!(sent[0].contains(r#""a":1"#));
     }
 
     #[test]
@@ -410,7 +453,16 @@ mod tests {
 
     #[gpui::test]
     fn bringing_the_window_up_runs_what_mounting_only_queued(cx: &mut TestAppContext) {
-        cx.update(|cx| start(cx, TEST_ENTRY_PATH, DEFERS_ITS_MOUNT, stderr_reporter()).unwrap());
+        cx.update(|cx| {
+            start(
+                cx,
+                TEST_ENTRY_PATH,
+                DEFERS_ITS_MOUNT,
+                stderr_reporter(),
+                None,
+            )
+            .unwrap()
+        });
         cx.run_until_parked();
 
         let ran: bool = cx.update(|cx| {
@@ -485,8 +537,16 @@ mod tests {
         let writer: SharedWriter = Rc::clone(&capturing) as SharedWriter;
         let reporter = reporter_for(&writer);
 
-        let window =
-            cx.update(|cx| start(cx, TEST_ENTRY_PATH, THROWING_LISTENER_BUNDLE, reporter).unwrap());
+        let window = cx.update(|cx| {
+            start(
+                cx,
+                TEST_ENTRY_PATH,
+                THROWING_LISTENER_BUNDLE,
+                reporter,
+                Some(&writer),
+            )
+            .unwrap()
+        });
         cx.run_until_parked();
 
         cx.update(|cx| {

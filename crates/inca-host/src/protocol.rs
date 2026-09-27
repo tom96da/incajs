@@ -15,22 +15,43 @@ const JSONRPC: &str = "2.0";
 /// against the old shape.
 pub const PROTOCOL_VERSION: u32 = 0;
 
-/// A method name this host answers. An unrecognized one still decodes, so a
-/// newer client can call methods this build predates.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+/// A method name this host implements natively.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Method {
     Reload,
     Shutdown,
-    #[serde(other)]
-    Unknown,
+}
+
+impl Method {
+    /// Matches a decoded `method` string against a name this host
+    /// implements, case-sensitive.
+    fn named(name: &str) -> Option<Self> {
+        match name {
+            "reload" => Some(Method::Reload),
+            "shutdown" => Some(Method::Shutdown),
+            _ => None,
+        }
+    }
 }
 
 /// One decoded stdin line. `id` is absent for a notification, which takes no
 /// response; a request's response must echo it back unchanged.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Incoming {
-    Call { id: Option<Value>, method: Method },
+    /// A method this host implements natively.
+    Call {
+        id: Option<Value>,
+        method: Method,
+    },
+    /// A method this host doesn't implement, kept with its own name and
+    /// `params` so the caller can decide what to do with it: a request still
+    /// answers `-32601`, but a notification is relayed on into the running
+    /// app as `__inca_dev__.receive(method, paramsJson)`.
+    Unrecognized {
+        id: Option<Value>,
+        method: String,
+        params: Option<Value>,
+    },
     Empty,
 }
 
@@ -86,12 +107,24 @@ pub enum Outgoing {
     },
     Notification {
         jsonrpc: &'static str,
-        method: &'static str,
+        method: String,
         params: Value,
     },
 }
 
 impl Outgoing {
+    /// A notification carrying an arbitrary `method` name — how a bundler
+    /// integration and the running app trade messages this host never reads
+    /// itself.
+    #[must_use]
+    pub fn notification(method: impl Into<String>, params: Value) -> Self {
+        Outgoing::Notification {
+            jsonrpc: JSONRPC,
+            method: method.into(),
+            params,
+        }
+    }
+
     /// A success response. `id` is the request's, echoed unchanged.
     #[must_use]
     pub fn result(id: Value) -> Self {
@@ -138,25 +171,20 @@ impl Outgoing {
     /// asked for it, so it answers no `id`.
     #[must_use]
     pub fn app_error(thrown: &EngineError) -> Self {
-        Outgoing::Notification {
-            jsonrpc: JSONRPC,
-            method: "appError",
-            params: serde_json::json!({
+        Outgoing::notification(
+            "appError",
+            serde_json::json!({
                 "message": thrown.message(),
                 "stack": thrown.stack(),
             }),
-        }
+        )
     }
 
     /// The notification announcing that the window is up and the first
     /// bundle has been evaluated.
     #[must_use]
     pub fn ready() -> Self {
-        Outgoing::Notification {
-            jsonrpc: JSONRPC,
-            method: "ready",
-            params: serde_json::json!({ "protocol": PROTOCOL_VERSION }),
-        }
+        Outgoing::notification("ready", serde_json::json!({ "protocol": PROTOCOL_VERSION }))
     }
 }
 
@@ -175,10 +203,15 @@ struct RawCall {
     jsonrpc: String,
     #[serde(default, deserialize_with = "present_id")]
     id: Option<Value>,
-    method: Method,
+    method: String,
+    #[serde(default)]
+    params: Option<Value>,
 }
 
-/// Decodes one line of stdin.
+/// Decodes one line of stdin. `method` is read as plain text first and only
+/// then matched against [`Method`]'s known names, since serde's
+/// `#[serde(other)]` catch-all can't carry the unmatched name and `params`
+/// along with it, and a relayed notification needs both.
 ///
 /// # Errors
 ///
@@ -219,9 +252,16 @@ pub fn decode(line: &str) -> Result<Incoming, (ErrorCode, String)> {
         ));
     }
 
-    Ok(Incoming::Call {
-        id: call.id,
-        method: call.method,
+    Ok(match Method::named(&call.method) {
+        Some(method) => Incoming::Call {
+            id: call.id,
+            method,
+        },
+        None => Incoming::Unrecognized {
+            id: call.id,
+            method: call.method,
+            params: call.params,
+        },
     })
 }
 
@@ -291,12 +331,39 @@ mod tests {
 
     #[test]
     fn an_unknown_method_decodes_rather_than_failing() {
-        let decoded = call(r#"{"jsonrpc":"2.0","id":1,"method":"vite"}"#);
+        let decoded = call(r#"{"jsonrpc":"2.0","id":1,"method":"testEvent","params":{"a":1}}"#);
         assert_eq!(
             decoded,
-            Incoming::Call {
+            Incoming::Unrecognized {
                 id: Some(json!(1)),
-                method: Method::Unknown,
+                method: "testEvent".to_owned(),
+                params: Some(json!({"a": 1})),
+            }
+        );
+    }
+
+    #[test]
+    fn an_unknown_notification_keeps_its_params_for_relaying() {
+        let decoded = call(r#"{"jsonrpc":"2.0","method":"testEvent","params":{"a":1}}"#);
+        assert_eq!(
+            decoded,
+            Incoming::Unrecognized {
+                id: None,
+                method: "testEvent".to_owned(),
+                params: Some(json!({"a": 1})),
+            }
+        );
+    }
+
+    #[test]
+    fn an_unknown_method_with_no_params_decodes_with_none() {
+        let decoded = call(r#"{"jsonrpc":"2.0","method":"testEvent"}"#);
+        assert_eq!(
+            decoded,
+            Incoming::Unrecognized {
+                id: None,
+                method: "testEvent".to_owned(),
+                params: None,
             }
         );
     }
@@ -353,6 +420,15 @@ mod tests {
         assert_eq!(
             ready,
             r#"{"jsonrpc":"2.0","method":"ready","params":{"protocol":0}}"#
+        );
+    }
+
+    #[test]
+    fn a_notification_carries_whatever_method_name_it_is_given() {
+        let encoded = encode(&Outgoing::notification("testEvent", json!({"a": 1}))).unwrap();
+        assert_eq!(
+            encoded,
+            r#"{"jsonrpc":"2.0","method":"testEvent","params":{"a":1}}"#
         );
     }
 

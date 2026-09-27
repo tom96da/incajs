@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! The dev protocol: reads newline-delimited JSON-RPC on stdin, answers on
-//! stdout, and reloads a [`Session`] on `reload` — see [`crate::protocol`]
-//! for the wire format this speaks.
+//! stdout, reloads a [`Session`] on `reload`, and relays any other
+//! notification into the running app as `__inca_dev__.receive(method,
+//! paramsJson)` — see [`crate::protocol`] for the wire format this speaks.
 
 use std::fs;
 use std::io::{self, BufRead, Write};
@@ -13,7 +14,7 @@ use std::thread;
 use gpui::{App, WindowHandle};
 use serde_json::Value;
 
-use inca_bridge::{ErrorReporter, drain_jobs_and_refresh};
+use inca_bridge::{ErrorReporter, call_dev_receive, drain_jobs_and_refresh};
 use inca_jsenv::EngineError;
 
 use crate::app::{HostedApp, Session};
@@ -110,6 +111,14 @@ pub(crate) fn reporter_for(writer: &SharedWriter) -> ErrorReporter {
     Rc::new(move |err: &EngineError| send(&*writer, &Outgoing::app_error(err)))
 }
 
+/// Adapts `writer` into the generic callback [`inca_bridge::install_dev`]
+/// takes: a JS `__inca_dev__.send(method, paramsJson)` call becomes a
+/// `method` notification written to `writer`.
+pub(crate) fn dev_send(writer: &SharedWriter) -> inca_bridge::DevSend {
+    let writer = Rc::clone(writer);
+    Rc::new(move |method: &str, params| send(&*writer, &Outgoing::notification(method, params)))
+}
+
 /// Answers the request `id` came from. A notification carries no id and
 /// takes no reply.
 fn respond(id: Option<&Value>, outcome: Result<(), Failure>, writer: &SharedWriter) {
@@ -144,7 +153,8 @@ fn reload(
             )
         })
         .and_then(|source| {
-            Session::load(entry_path, &source, reporter_for(writer)).map_err(Failure::Thrown)
+            Session::load(entry_path, &source, reporter_for(writer), Some(writer))
+                .map_err(Failure::Thrown)
         })
         .and_then(|session| {
             window
@@ -156,6 +166,54 @@ fn reload(
         });
 
     respond(id, outcome, writer);
+}
+
+/// Relays an unrecognized notification (no `id`) into the running app via
+/// [`inca_bridge::call_dev_receive`], then drains the job queue and
+/// refreshes the window exactly as [`reload`] does — a callback may have
+/// queued reactivity work or thrown.
+fn relay_to_js(
+    window: &WindowHandle<HostedApp>,
+    cx: &mut gpui::AsyncApp,
+    method: &str,
+    params: Option<Value>,
+    writer: &SharedWriter,
+) {
+    let params_json =
+        serde_json::to_string(&params.unwrap_or(Value::Null)).unwrap_or_else(|_| "null".to_owned());
+    let reporter = reporter_for(writer);
+
+    let _ = window.update(cx, |app, window, _| {
+        if let Some(err) = call_dev_receive(&app.session.engine, method, &params_json) {
+            reporter(&err);
+        }
+        drain_jobs_and_refresh(&app.session.engine, window);
+    });
+}
+
+/// Handles a decoded [`Incoming::Unrecognized`]: a request still answers
+/// `-32601` exactly as before; a notification (no `id`) is relayed on into
+/// the running app instead of being dropped.
+fn handle_unrecognized(
+    window: &WindowHandle<HostedApp>,
+    cx: &mut gpui::AsyncApp,
+    id: Option<Value>,
+    method: &str,
+    params: Option<Value>,
+    writer: &SharedWriter,
+) {
+    let Some(id) = id else {
+        relay_to_js(window, cx, method, params, writer);
+        return;
+    };
+    respond(
+        Some(&id),
+        Err(Failure::Message(
+            ErrorCode::MethodNotFound,
+            "unknown method".to_owned(),
+        )),
+        writer,
+    );
 }
 
 /// Answers protocol messages until `shutdown`, or until the parent closes
@@ -171,6 +229,10 @@ pub(crate) fn serve_dev_protocol(
         while let Ok(line) = lines.recv().await {
             let (id, method) = match protocol::decode(&line) {
                 Ok(Incoming::Call { id, method }) => (id, method),
+                Ok(Incoming::Unrecognized { id, method, params }) => {
+                    handle_unrecognized(&window, cx, id, &method, params, &writer);
+                    continue;
+                }
                 Ok(Incoming::Empty) => continue,
                 Err((code, message)) => {
                     send(&*writer, &Outgoing::error(Value::Null, code, message));
@@ -184,14 +246,6 @@ pub(crate) fn serve_dev_protocol(
                     respond(id.as_ref(), Ok(()), &writer);
                     break;
                 }
-                Method::Unknown => respond(
-                    id.as_ref(),
-                    Err(Failure::Message(
-                        ErrorCode::MethodNotFound,
-                        "unknown method".to_owned(),
-                    )),
-                    &writer,
-                ),
             }
         }
         cx.update(|cx| cx.quit());
@@ -218,5 +272,102 @@ pub(crate) fn report_startup_failure(failure: &Failure, writer: Option<&SharedWr
             );
         }
         (Failure::Message(_, message), None) => eprintln!("{message}"),
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+    use std::cell::RefCell;
+
+    use gpui::TestAppContext;
+    use inca_bridge::stderr_reporter;
+    use serde_json::json;
+
+    use crate::app::start;
+
+    const TEST_ENTRY_PATH: &str = "/test/entry.js";
+
+    /// Captures every line written to it instead of touching real stdout, so
+    /// a test can read back what was sent.
+    #[derive(Default)]
+    struct CapturingWriter(RefCell<Vec<String>>);
+
+    impl Writer for CapturingWriter {
+        fn write_line(&self, line: String) {
+            self.0.borrow_mut().push(line);
+        }
+    }
+
+    const RECEIVES_DEV_EVENTS: &str = r"
+        globalThis.received = [];
+        __inca_dev__.receive = (method, paramsJson) => {
+            globalThis.received.push([method, paramsJson]);
+        };
+    ";
+
+    #[gpui::test]
+    fn an_unrecognized_notification_relays_into_the_running_app(cx: &mut TestAppContext) {
+        let dev_writer: SharedWriter = Rc::new(CapturingWriter::default());
+        let window = cx.update(|cx| {
+            start(
+                cx,
+                TEST_ENTRY_PATH,
+                RECEIVES_DEV_EVENTS,
+                stderr_reporter(),
+                Some(&dev_writer),
+            )
+            .unwrap()
+        });
+        cx.run_until_parked();
+
+        let mut async_cx = cx.to_async();
+        handle_unrecognized(
+            &window,
+            &mut async_cx,
+            None,
+            "testEvent",
+            Some(json!({"a": 1})),
+            &dev_writer,
+        );
+        cx.run_until_parked();
+
+        let received = cx.update(|cx| {
+            window
+                .update(cx, |app, _, _| {
+                    app.session
+                        .engine
+                        .eval::<String>("JSON.stringify(globalThis.received);")
+                        .unwrap()
+                })
+                .unwrap()
+        });
+        assert_eq!(received, r#"[["testEvent","{\"a\":1}"]]"#);
+    }
+
+    #[gpui::test]
+    fn an_unrecognized_request_still_answers_method_not_found(cx: &mut TestAppContext) {
+        let capturing = Rc::new(CapturingWriter::default());
+        let writer: SharedWriter = Rc::clone(&capturing) as SharedWriter;
+
+        let window =
+            cx.update(|cx| start(cx, TEST_ENTRY_PATH, "", stderr_reporter(), None).unwrap());
+        cx.run_until_parked();
+
+        let mut async_cx = cx.to_async();
+        handle_unrecognized(
+            &window,
+            &mut async_cx,
+            Some(json!(1)),
+            "testEvent",
+            None,
+            &writer,
+        );
+
+        let sent = capturing.0.borrow();
+        assert_eq!(sent.len(), 1);
+        assert!(sent[0].contains(r#""code":-32601"#));
+        assert!(sent[0].contains(r#""id":1"#));
     }
 }
