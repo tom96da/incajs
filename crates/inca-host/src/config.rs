@@ -27,7 +27,7 @@ pub struct AppConfig {
 }
 
 /// What an app declares about its window.
-#[derive(Debug, Default, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Default, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct WindowConfig {
     /// Initial width, in pixels.

@@ -17,7 +17,7 @@ use serde_json::Value;
 use inca_bridge::{ErrorReporter, call_dev_receive, drain_jobs_and_refresh};
 use inca_jsenv::EngineError;
 
-use crate::app::{HostedApp, Session};
+use crate::app::{HostedApp, Session, maybe_auto_resize_to_content};
 use crate::protocol::{self, ErrorCode, Incoming, Method, Outgoing};
 
 /// Why a request could not be answered with a result.
@@ -160,7 +160,11 @@ fn reload(
             window
                 .update(cx, |app, window, _| {
                     app.session = session;
+                    // A reload is a fresh bring-up of the reloaded bundle, so
+                    // it gets its own chance to auto-resize to content.
+                    app.auto_resized.set(false);
                     drain_jobs_and_refresh(&app.session.engine, window);
+                    maybe_auto_resize_to_content(app, window);
                 })
                 .map_err(|err| Failure::Message(ErrorCode::BundleFailed, err.to_string()))
         });
@@ -188,6 +192,7 @@ fn relay_to_js(
             reporter(&err);
         }
         drain_jobs_and_refresh(&app.session.engine, window);
+        maybe_auto_resize_to_content(app, window);
     });
 }
 
@@ -369,5 +374,90 @@ mod tests {
         assert_eq!(sent.len(), 1);
         assert!(sent[0].contains(r#""code":-32601"#));
         assert!(sent[0].contains(r#""id":1"#));
+    }
+
+    /// A real file on disk, torn down with the test — `reload` (unlike
+    /// `start`'s test call sites elsewhere) reads its entry back off disk.
+    struct ScratchEntry(std::path::PathBuf);
+
+    impl ScratchEntry {
+        fn write(name: &str, source: &str) -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "inca-host-dev-test-{name}-{}-{:?}.js",
+                std::process::id(),
+                std::thread::current().id()
+            ));
+            std::fs::write(&path, source).unwrap();
+            Self(path)
+        }
+
+        fn path(&self) -> &str {
+            self.0.to_str().unwrap()
+        }
+    }
+
+    impl Drop for ScratchEntry {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+
+    fn mounts_a_div(width: u32, height: u32) -> String {
+        format!(
+            r"
+                const node = __inca_native__.createNode('div');
+                __inca_native__.appendChild(__inca_native__.rootNodeId(), node);
+                __inca_native__.setStyle(node, 'width', {width});
+                __inca_native__.setStyle(node, 'height', {height});
+            "
+        )
+    }
+
+    #[gpui::test]
+    fn a_reload_resets_the_auto_resize_latch_so_the_new_content_size_applies(
+        cx: &mut TestAppContext,
+    ) {
+        let entry = ScratchEntry::write("resize", &mounts_a_div(300, 150));
+        let writer: SharedWriter = Rc::new(CapturingWriter::default());
+
+        let window = cx.update(|cx| {
+            start(
+                cx,
+                entry.path(),
+                &mounts_a_div(300, 150),
+                stderr_reporter(),
+                Some(&writer),
+            )
+            .unwrap()
+        });
+        cx.run_until_parked();
+
+        let bounds = |cx: &mut TestAppContext| {
+            cx.update(|cx| {
+                window
+                    .update(cx, |_, window, _| {
+                        let b = window.bounds();
+                        (f32::from(b.size.width), f32::from(b.size.height))
+                    })
+                    .unwrap()
+            })
+        };
+        assert_eq!(bounds(cx), (300.0, 150.0));
+
+        // A relay latches auto_resized — same size, so no visible change,
+        // but this is the state a reload has to reset.
+        let mut async_cx = cx.to_async();
+        relay_to_js(&window, &mut async_cx, "testEvent", None, &writer);
+        cx.run_until_parked();
+
+        std::fs::write(&entry.0, mounts_a_div(400, 200)).unwrap();
+        reload(&window, &mut async_cx, entry.path(), None, &writer);
+        cx.run_until_parked();
+
+        assert_eq!(
+            bounds(cx),
+            (400.0, 200.0),
+            "reload must reset the latch, or the new content's size never applies"
+        );
     }
 }

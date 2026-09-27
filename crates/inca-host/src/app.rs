@@ -57,7 +57,7 @@ const DEFAULT_WINDOW_SIZE: (f32, f32) = (800.0, 600.0);
 /// child's style, not `root`'s.
 ///
 /// A dimension the app's root doesn't declare comes back as `None`.
-fn content_window_size(host: &Host, root: NodeId) -> (Option<f32>, Option<f32>) {
+pub(crate) fn content_window_size(host: &Host, root: NodeId) -> (Option<f32>, Option<f32>) {
     let style = host
         .tree
         .get(root)
@@ -82,7 +82,7 @@ fn content_window_size(host: &Host, root: NodeId) -> (Option<f32>, Option<f32>) 
 
 /// A window dimension that is finite and above zero. Anything else reads
 /// as absent.
-fn usable(dimension: Option<f32>) -> Option<f32> {
+pub(crate) fn usable(dimension: Option<f32>) -> Option<f32> {
     dimension.filter(|value| value.is_finite() && *value > 0.0)
 }
 
@@ -112,7 +112,7 @@ fn window_title(window: Option<&config::WindowConfig>, name: Option<&str>) -> Op
 /// The size to open the window at: what the app's config asks for, then
 /// what its root element declares, then [`DEFAULT_WINDOW_SIZE`]. A window
 /// never opens below the minimum it declared.
-fn window_size(
+pub(crate) fn window_size(
     window: Option<&config::WindowConfig>,
     content: (Option<f32>, Option<f32>),
 ) -> (f32, f32) {
@@ -216,6 +216,13 @@ impl Session {
 
 pub(crate) struct HostedApp {
     pub(crate) session: Session,
+    /// The window section of the app's config as of the last `start`/reload,
+    /// kept so a later content-driven resize can reuse [`window_size`]'s own
+    /// fallback chain.
+    pub(crate) window_config: Option<config::WindowConfig>,
+    /// Whether [`maybe_auto_resize_to_content`] has already resized the
+    /// window once — it never fires a second time.
+    pub(crate) auto_resized: Cell<bool>,
 }
 
 impl Render for HostedApp {
@@ -229,6 +236,33 @@ impl Render for HostedApp {
         render_tree_with_events(&host.tree, host.root, &session.dispatcher)
             .unwrap_or_else(|| div().into_any_element())
     }
+}
+
+/// Resizes the window to fit content the first time it becomes usable
+/// after the window already opened. The HMR bootstrap entry evaluates
+/// fire-and-forget, so nothing is mounted yet when the window's initial
+/// size is computed in [`start`] — this catches up once the app finishes
+/// mounting.
+///
+/// A dimension the config fixes explicitly counts as ready right away;
+/// content could never change it either way.
+pub(crate) fn maybe_auto_resize_to_content(app: &HostedApp, window: &mut Window) {
+    if app.auto_resized.get() {
+        return;
+    }
+    let window_config = app.window_config.as_ref();
+    let content = content_window_size(&app.session.host.borrow(), app.session.root());
+    let width_ready =
+        window_config.is_some_and(|w| w.width.is_some()) || usable(content.0).is_some();
+    let height_ready =
+        window_config.is_some_and(|w| w.height.is_some()) || usable(content.1).is_some();
+    if !width_ready || !height_ready {
+        return;
+    }
+
+    let (width, height) = window_size(window_config, content);
+    window.resize(size(px(width), px(height)));
+    app.auto_resized.set(true);
 }
 
 /// Brings up the engine, the tree and the window, under the config the
@@ -273,7 +307,13 @@ pub(crate) fn start(
                 window_min_size: window_min_size(window_config),
                 ..Default::default()
             },
-            |_, cx| cx.new(|_| HostedApp { session }),
+            |_, cx| {
+                cx.new(|_| HostedApp {
+                    session,
+                    window_config: window_config.cloned(),
+                    auto_resized: Cell::new(false),
+                })
+            },
         )
         .map_err(|err| Failure::Message(ErrorCode::BundleFailed, err.to_string()))?;
     cx.activate(true);
@@ -576,6 +616,216 @@ mod tests {
         );
         assert!(sent[0].contains(r#""method":"appError""#));
         assert!(sent[0].contains("boom"));
+    }
+
+    /// Opens a window directly (bypassing [`start`]'s disk-backed config
+    /// read) so a test can hand it a chosen `window_config` and starting
+    /// size without a real `inca.json` on disk.
+    fn open_hosted(
+        cx: &mut TestAppContext,
+        window_config: Option<config::WindowConfig>,
+        initial_size: (f32, f32),
+    ) -> WindowHandle<HostedApp> {
+        let session = load("").unwrap();
+        cx.update(|cx| {
+            cx.open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+                        None,
+                        size(px(initial_size.0), px(initial_size.1)),
+                        cx,
+                    ))),
+                    ..Default::default()
+                },
+                |_, cx| {
+                    cx.new(|_| HostedApp {
+                        session,
+                        window_config,
+                        auto_resized: Cell::new(false),
+                    })
+                },
+            )
+            .unwrap()
+        })
+    }
+
+    /// Mounts a `div` under the session's root with a declared
+    /// `width`/`height`, replacing any prior mount — simulates content
+    /// becoming available after the window already opened.
+    fn mount_content(app: &HostedApp, width: f32, height: f32) {
+        let mut host = app.session.host.borrow_mut();
+        let root = host.root;
+        let existing = host.tree.get(root).unwrap().children().first().copied();
+        let content = if let Some(id) = existing {
+            id
+        } else {
+            let id = host.tree.create_node("div");
+            host.tree.append_child(root, id).unwrap();
+            id
+        };
+        host.tree
+            .set_style(content, "width", f64::from(width))
+            .unwrap();
+        host.tree
+            .set_style(content, "height", f64::from(height))
+            .unwrap();
+    }
+
+    fn bounds_size(cx: &mut TestAppContext, window: WindowHandle<HostedApp>) -> (f32, f32) {
+        cx.update(|cx| {
+            window
+                .update(cx, |_, window, _| {
+                    let bounds = window.bounds();
+                    (f32::from(bounds.size.width), f32::from(bounds.size.height))
+                })
+                .unwrap()
+        })
+    }
+
+    #[gpui::test]
+    fn auto_resize_leaves_the_window_alone_until_content_becomes_usable(cx: &mut TestAppContext) {
+        let window = open_hosted(cx, None, DEFAULT_WINDOW_SIZE);
+        cx.run_until_parked();
+        assert_eq!(bounds_size(cx, window), DEFAULT_WINDOW_SIZE);
+
+        // Nothing mounted yet: the check runs (as it would on every dev
+        // relay) but finds no usable content, so the window stays put.
+        cx.update(|cx| {
+            window
+                .update(cx, |app, window, _| {
+                    maybe_auto_resize_to_content(app, window);
+                })
+                .unwrap();
+        });
+        assert_eq!(bounds_size(cx, window), DEFAULT_WINDOW_SIZE);
+
+        cx.update(|cx| {
+            window
+                .update(cx, |app, window, _| {
+                    mount_content(app, 300.0, 150.0);
+                    maybe_auto_resize_to_content(app, window);
+                })
+                .unwrap();
+        });
+        assert_eq!(bounds_size(cx, window), (300.0, 150.0));
+    }
+
+    #[gpui::test]
+    fn auto_resize_keeps_an_explicit_dimension_but_still_picks_up_the_other_from_content(
+        cx: &mut TestAppContext,
+    ) {
+        let window_config = config::WindowConfig {
+            width: Some(500.0),
+            ..config::WindowConfig::default()
+        };
+        let window = open_hosted(cx, Some(window_config), (500.0, DEFAULT_WINDOW_SIZE.1));
+        cx.run_until_parked();
+
+        cx.update(|cx| {
+            window
+                .update(cx, |app, window, _| {
+                    mount_content(app, 300.0, 150.0);
+                    maybe_auto_resize_to_content(app, window);
+                })
+                .unwrap();
+        });
+
+        assert_eq!(
+            bounds_size(cx, window),
+            (500.0, 150.0),
+            "the configured width must win, but the never-configured height still \
+             comes from content — matching window_size's own per-dimension precedence"
+        );
+    }
+
+    #[gpui::test]
+    fn auto_resize_never_fires_once_both_dimensions_are_configured(cx: &mut TestAppContext) {
+        let window_config = config::WindowConfig {
+            width: Some(500.0),
+            height: Some(400.0),
+            ..config::WindowConfig::default()
+        };
+        let window = open_hosted(cx, Some(window_config), (500.0, 400.0));
+        cx.run_until_parked();
+
+        cx.update(|cx| {
+            window
+                .update(cx, |app, window, _| {
+                    mount_content(app, 300.0, 150.0);
+                    maybe_auto_resize_to_content(app, window);
+                })
+                .unwrap();
+        });
+
+        assert_eq!(
+            bounds_size(cx, window),
+            (500.0, 400.0),
+            "content can't change either dimension once config fixes both"
+        );
+    }
+
+    #[gpui::test]
+    fn auto_resize_only_ever_fires_once(cx: &mut TestAppContext) {
+        let window = open_hosted(cx, None, DEFAULT_WINDOW_SIZE);
+        cx.run_until_parked();
+
+        cx.update(|cx| {
+            window
+                .update(cx, |app, window, _| {
+                    mount_content(app, 300.0, 150.0);
+                    maybe_auto_resize_to_content(app, window);
+                })
+                .unwrap();
+        });
+        assert_eq!(bounds_size(cx, window), (300.0, 150.0));
+
+        // Content changes again later; the latch must stop a second resize.
+        cx.update(|cx| {
+            window
+                .update(cx, |app, window, _| {
+                    mount_content(app, 900.0, 700.0);
+                    maybe_auto_resize_to_content(app, window);
+                })
+                .unwrap();
+        });
+        assert_eq!(bounds_size(cx, window), (300.0, 150.0));
+    }
+
+    #[gpui::test]
+    fn auto_resize_waits_for_both_dimensions_even_if_one_arrives_first(cx: &mut TestAppContext) {
+        let window = open_hosted(cx, None, DEFAULT_WINDOW_SIZE);
+        cx.run_until_parked();
+
+        // Only width lands on this relay — a component that sets its
+        // dimensions across more than one reactive update.
+        cx.update(|cx| {
+            window
+                .update(cx, |app, window, _| {
+                    let mut host = app.session.host.borrow_mut();
+                    let root = host.root;
+                    let content = host.tree.create_node("div");
+                    host.tree.append_child(root, content).unwrap();
+                    host.tree.set_style(content, "width", 300.0).unwrap();
+                    drop(host);
+                    maybe_auto_resize_to_content(app, window);
+                })
+                .unwrap();
+        });
+        assert_eq!(
+            bounds_size(cx, window),
+            DEFAULT_WINDOW_SIZE,
+            "must not latch on a partial size and strand the other dimension"
+        );
+
+        cx.update(|cx| {
+            window
+                .update(cx, |app, window, _| {
+                    mount_content(app, 300.0, 150.0);
+                    maybe_auto_resize_to_content(app, window);
+                })
+                .unwrap();
+        });
+        assert_eq!(bounds_size(cx, window), (300.0, 150.0));
     }
 
     #[test]
