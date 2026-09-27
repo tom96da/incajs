@@ -342,12 +342,17 @@ jobs:
       - name: Build inca-host
         run: cargo build -p inca-host
 
-      # Runs headless: no real display in this container.
+      # Runs headless: no real display or GPU in this container.
       - name: Install Xvfb
         env:
           DEBIAN_FRONTEND: noninteractive
-        # xvfb-run also needs xauth.
-        run: apt-get install -y --no-install-recommends xvfb xauth
+        # xvfb-run also needs xauth; gpui needs a Vulkan driver to render.
+        run: |
+          apt-get install -y --no-install-recommends \
+            xvfb \
+            xauth \
+            libvulkan1 \
+            mesa-vulkan-drivers
 
       - name: Test (real inca-host + real Vite dev server)
         run: xvfb-run -a pnpm -F @incajs/e2e-tests test
