@@ -338,3 +338,29 @@ enough overhead for a single maintainer plus AI pairing.
   it. Getting the real number needs the host to confirm back to Node
   once an update is actually applied, which no dev-protocol message
   does today.
+
+- **A script edit's new value doesn't reach a real click, once it
+  reverts to a value already used earlier in the same session**:
+  reproduced by hand against `examples/click_counter`, repeatedly
+  changing `onClick`'s `clicks.value += 1` to `+= 2`, then `+= 3` — each
+  takes effect correctly on the next click. Changing it back to `+= 1`
+  doesn't: clicks keep incrementing by whatever amount was last
+  genuinely applied. Ruled out at the Node/Vite layer: a diagnostic
+  driving the exact same edit sequence through a synthetic dev-protocol
+  stimulus, bypassing gpui's own click dispatch entirely, applies every
+  value correctly, reverts included. Vite always serves fresh, correct
+  code, confirmed by inspecting the served module's own source each
+  time. The difference from that diagnostic is a real click, dispatched
+  through gpui's own event system, pointing at the same element/paint
+  reuse already suspected in the entry above, this time for an event
+  listener closure rather than a style property, on Vue's own `reload`
+  path rather than `rerender`. Not confirmed at the native layer the way
+  the style-only entry above was.
+
+- **Commenting out a `:style` property doesn't revert it, and this looks
+  true of every property, not just one**: reproduced by hand: removing a
+  property from the `:style` object under `--experimental-hmr` leaves
+  the screen showing its last value forever, while changing the same
+  property's value, not removing it, updates correctly. Not yet
+  confirmed whether this is the same element/paint reuse issue above, or
+  a separate gap in how a removed style key gets diffed and unset.

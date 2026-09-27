@@ -850,116 +850,81 @@ currently provides.
       `group*`/`table`/`time*`/`count`/`%s`-style specifiers — a gap-fill
       if Vue's dev build or the module runner turn out to need them, not a
       from-scratch item.
-- [ ] Job-queue pumping while a JS promise awaits a host round-trip. With a
-      `connect`/`send` transport (see Unit i) the pending-reply resolvers
-      live inside Vite's own JS (`rpcPromises`, in
-      `shared/moduleRunnerTransport.ts`) — Rust never holds one. What's
-      still needed: draining `execute_pending_job` after handing an
-      incoming `vite` payload to JS, the same way `drain_jobs_and_refresh`
-      (`crates/inca-bridge/src/dispatch.rs`) already does after a dispatch.
+- [x] Job-queue pumping while a JS promise awaits a host round-trip —
+      done: `relay_to_js` (`crates/inca-host/src/dev.rs`) calls
+      `drain_jobs_and_refresh` after handing an incoming `vite` payload to
+      JS, exactly this way.
 - [x] ~~rquickjs's `futures` feature~~ — **not needed**, for the same
       reason: `connect`/`send` keeps resolvers in JS, so nothing on the
       Rust side awaits a `Promise` across a call. (`futures` also pulls in
       an async-runtime model and, under `parallel`, `Send` bounds that
       don't fit gpui's non-`Send` `AsyncApp` — avoid enabling it for this.)
-- [ ] `TextDecoder` and `URL` globals. `TextDecoder` is constructed at
-      module load (`vite/module-runner` throws immediately without it);
-      `URL` is constructed on every module evaluation. Minimal stubs
-      suffice — QuickJS-side, not full WHATWG implementations.
-- [ ] `sourcemapInterceptor: false` on the evaluator — quickjs-ng's
-      `Error.prepareStackTrace`/`CallSite` lacks the methods
-      (`isEval`, `isToplevel`, `getTypeName`, `getMethodName`,
-      `getScriptNameOrSourceURL`) Vite's interceptor calls, so this isn't a
-      style choice, it's required.
-- [ ] `setTimeout`/`clearTimeout` — needed unless every place that could
-      use them is configured off. `transport.timeout: 0` avoids the
-      transport's own use; `queueMicrotask`/`performance` already exist in
-      quickjs-ng and cover the rest.
-- [ ] A JS→stdout `send` binding. `__inca_native__` (`crates/inca-bridge/src/bindings.rs`)
-      has no way for JS to write to the host's stdout writer today — a
-      `connect`/`send` transport needs one, on the same `Output`-passing
-      pattern `console`'s install already uses.
-- [ ] `params` threaded through the protocol decoder.
-      `crates/inca-host/src/protocol.rs`'s `RawCall`/`Incoming::Call` has
-      no `params` field yet — `decode` drops it, and a `vite` method needs
-      it carried through untouched (`params` is where Vite nests its own
-      request/reply ids, per [PROTOCOL.md](./PROTOCOL.md#extending-it)).
-- [ ] `HostClient` (`packages/cli/src/dev-client/hostClient.mts`) can send
-      requests but not notifications, and the host can send notifications
-      but not requests — HMR's `vite` traffic needs both directions to
-      carry a fire-and-forget message, not just request/reply.
-- [ ] A rejection tracker on the engine's `Runtime`. `execute_pending_job`
-      silently swallows a job's thrown error today (nothing installs
-      `set_host_promise_rejection_tracker`), and `Engine` doesn't expose
-      its `Runtime` for anything to install one on
-      (`crates/inca-jsenv/src/engine.rs`). Without this, a rejected HMR
-      update reports nothing anywhere.
-- [ ] Startup order: today the entry bundle is evaluated
-      (`Session::load`) before the dev-protocol stdin loop starts
-      (`crates/inca-host/src/app.rs`'s `start`, `crates/inca-host/src/dev.rs`'s `serve_dev_protocol`).
-      HMR's first `fetchModule` needs a host reply before the entry can
-      finish evaluating, so — **in HMR mode only** — the stdin loop has to
-      start first, and the window's initial size needs a source other than
-      the (not-yet-evaluated) entry's content. Full-reload mode keeps
-      today's order.
+- [x] `TextDecoder` and `URL` globals — done
+      (`packages/cli/src/adapter/vite/runtime/globals.mts`), hoisted into
+      their own module so they evaluate before `vite/module-runner` does.
+- [x] `sourcemapInterceptor: false` on the evaluator — done
+      (`packages/cli/src/adapter/vite/runtime/index.mts`).
+- [x] ~~`setTimeout`/`clearTimeout`~~ — **not needed for the current
+      scope**: `transport.timeout: 0` avoids the transport's own use, and
+      nothing else this unit added reaches for either.
+- [x] ~~A JS→stdout `send` binding~~ — **not needed**: the existing
+      `__inca_dev__.send`/`.receive` relay (see Unit ii) already carries
+      arbitrary-named messages both ways; no separate stdout-write binding
+      was required.
+- [x] `params` threaded through the protocol decoder — done
+      (`crates/inca-host/src/protocol.rs`'s `RawCall`/`Incoming` carry
+      `params: Option<Value>`).
+- [x] `HostClient` can send notifications — done
+      (`packages/cli/src/dev-client/hostClient.mts`'s `notify`).
+- [ ] A rejection tracker on the engine's `Runtime`. Still not installed —
+      `execute_pending_job` still silently swallows a job's thrown error.
+      The HMR bootstrap's own top-level `.catch(console.error)` covers a
+      startup-time rejection today, imperfectly (see
+      `specs/BACKLOG.md`'s "HMR bootstrap's rejection handler" entry).
+- [x] ~~Startup order~~ — **not needed**: the bootstrap's `start(entryId)`
+      call is never awaited (fire-and-forget), so `eval_module` returns
+      immediately regardless of HMR mode, the window opens and computes
+      its size from whatever the (as-yet-unmounted) tree has, and incoming
+      `fetchModule` replies simply queue until the stdin loop is up.
+      `maybe_auto_resize_to_content` (`crates/inca-host/src/app.rs`)
+      catches the window up to its real size once mounting finishes,
+      instead — see Unit ii.
 - [ ] Re-apply the FFI safety checklist below to every new binding
 
 ### Unit i — the QuickJS-side Vite runtime
 
-- [ ] `packages/cli/src/adapter/vite/runtime/`, beside the existing
-      Node-side adapter it talks to — not a separate package or an `incajs`
-      subpath. Both halves speak Vite's own internal protocol, unstable
-      across versions, so keeping them in one package keeps them on one
-      `vite` install; `incajs` itself stays free of a `vite` dependency. A
-      future `adapter/rspack` gets its own runtime the same way — an
-      rspack/webpack HMR runtime has a different shape (the bundler injects
-      its own runtime into the bundle), so grouping by feature instead of
-      by bundler would share only a name across them.
-- [ ] A `ModuleRunnerTransport` implementing `connect`+`send` (not
-      `invoke`) over the host's stdio channel — HMR requires `connect`,
-      and keeping requests/replies inside Vite's own JS bookkeeping avoids
-      needing a Rust-side promise store (see the prerequisites above)
-- [ ] A `ModuleEvaluator` running transformed code inside QuickJS, with
-      `sourcemapInterceptor: false` and an `import.meta` factory that
-      doesn't reach for Node APIs
-- [ ] The environment side must run as `consumer: 'client'` with
-      `dev.moduleRunnerTransform: true`, **not** `'server'`/SSR:
-      `@vitejs/plugin-vue` compiles templates to `ssrRender` (a
-      string-producing renderer for `@vue/server-renderer`) under SSR,
-      which can't drive this custom renderer at all, and it also skips
-      emitting HMR code entirely when `ssr` is set. A `consumer: 'client'`
-      environment needs its own `/@vite/client` import shimmed out (Vite's
-      browser HMR client, injected by import analysis wherever
-      `import.meta.hot` appears) — a plugin that makes
-      `createHotContext` return `undefined` on the shimmed import is
-      enough, since the module runner's own `hot` getter lazily creates
-      the real context. Also set `optimizeDeps.noDiscovery: true`
-      (dependency discovery is otherwise on for client consumers and
-      triggers full reloads), and run the dev server with
-      `server.middlewareMode: true` + `server.ws: false` (no HTTP/WS
-      server; a custom `HotChannel` on the environment stands in for it)
-- [ ] Externalized modules have no dynamic `import()` to fall back on in
-      QuickJS — with a `'client'` consumer nothing is externalized by
-      default, so this mostly falls out of the choice above rather than
-      needing its own `noExternal`/`runExternalModule` handling
+- [x] `packages/cli/src/adapter/vite/runtime/`, beside the existing
+      Node-side adapter it talks to — done, as planned.
+- [x] A `ModuleRunnerTransport` implementing `connect`+`send` — done
+      (`createIncaDevTransport`, `runtime/index.mts`).
+- [x] A `ModuleEvaluator` running transformed code inside QuickJS — done:
+      Vite's own stock `ESModulesEvaluator`, with `sourcemapInterceptor:
+      false`.
+- [x] The environment runs as `consumer: 'client'` with
+      `dev.moduleRunnerTransform: true` — done
+      (`packages/cli/src/adapter/vite/hmr.mts`), including the
+      `/@vite/client` shim, `optimizeDeps.noDiscovery: true`, and
+      `server.middlewareMode: true` + `server.ws: false`.
+- [x] Externalized modules — confirmed not an issue: nothing is
+      externalized under a `'client'` consumer, as anticipated.
 
 ### Unit ii — CLI and host wiring
 
-- [ ] `adapter/vite`'s HMR path (`packages/cli/src/adapter/vite`, behind
-      `--experimental-hmr`) holds a real Vite dev environment
-      (`server.middlewareMode`), answering `fetchModule`/`getBuiltins` and
-      pushing HMR payloads over the channel `dev-client` hands it, as a
-      sibling of 3.1's rebuild-and-reload path — not a replacement for it
-- [ ] A `hotUpdate` plugin hook that sends `file-changed` on
-      `this.environment.hot` — `@vitejs/plugin-vue`'s own HMR support only
-      ever sends `file-changed` over `server.ws` (the browser client),
-      which a custom environment never receives, so without this every
-      edit falls through to Vue's `reload` path (see Unit iii)
-- [ ] The host keeps one long-lived engine across updates in HMR mode —
-      the point of HMR is that it *isn't* full reload's teardown. Full
-      reload keeps evaluating into a fresh `Engine`/`Host` exactly as today
-- [ ] The window and root node survive an update; a redraw is requested
-      after each applied update
+- [x] `adapter/vite`'s HMR path (`packages/cli/src/adapter/vite/hmr.mts`,
+      behind `--experimental-hmr`) holds a real Vite dev environment,
+      answering `fetchModule`/`getBuiltins` and pushing HMR payloads over
+      the channel `dev-client` hands it, as a sibling of 3.1's
+      rebuild-and-reload path.
+- [x] A `hotUpdate` plugin hook sending `file-changed` — done
+      (`fileChangedPlugin`, `hmr.mts`).
+- [x] The host keeps one long-lived engine across updates in HMR mode —
+      done: `relay_to_js` drains the same `Session`'s jobs on every
+      update; only the HMR intercept's own `reload` RPC (Vue's
+      `full-reload` fallback) rebuilds a fresh `Session`.
+- [x] The window and root node survive an update; a redraw is requested
+      after each applied update — done, `relay_to_js` calls
+      `drain_jobs_and_refresh` then `maybe_auto_resize_to_content` on
+      every relayed payload.
 - [x] Introduce `inca.config.ts`, loaded via `c12` with a `defineConfig`
       helper from `@incajs/cli/config`. Landed ahead of the rest of this
       unit, since it's independent of the HMR work above. `package.json`'s
@@ -978,35 +943,34 @@ currently provides.
       `mode: "development"` (`packages/cli/src/dev.mts`), which
       `adapter/vite/config.mts` turns into the `process.env.NODE_ENV`
       define, and no example hard-codes production mode any more.
-- [ ] Confirm `@vue/runtime-core`'s HMR rerender/reload path drives the
-      custom renderer correctly. `reload` (as opposed to `rerender`)
-      remounts the component from a root's `appContext.reload` — it
-      doesn't touch `window`, so it works with no DOM present, but it
-      **does** discard that component's own state. Only a `rerender`
-      (template-only edit) preserves state; a script edit is expected to
-      reset it. Unit iv's manual check below reflects this.
-- [ ] Keep engine/window/root initialization out of the hot module graph,
-      and out of module scope — a re-evaluated module must not be able to
-      open a second window or orphan the renderer
-- [ ] Revisit `packages/core`'s `sideEffects: false`: an `import.meta.hot`
-      block or any self-registering module scope makes the flag untrue,
-      and a bundler that trusts it drops the module whole — narrow it to
-      an array or drop it, depending on where the HMR hooks land. Only
-      matters if HMR hooks land inside `incajs`/`incajs/vue` itself, not
-      inside app code
+- [x] Confirmed: `rerender` (template-only edit) preserves state,
+      `reload` (script edit) resets it, both driving the custom renderer
+      correctly — proven by `tests/tests/hmr-quickjs-state.test.mts`
+      against the real engine.
+- [x] Engine/window/root initialization stays out of the hot module
+      graph and out of module scope — only the app's own entry does it,
+      once; HMR only ever re-evaluates the app's own modules, never the
+      bootstrap.
+- [x] `packages/core`'s `sideEffects: false` — confirmed unaffected: no
+      HMR hook lands inside `incajs`/`incajs/vue` itself, only in app
+      code, so this never became untrue.
 
 ### Unit iv — tests and manual check
 
-- [ ] A test asserting state actually survives a template-only edit, not
-      just that no error was raised: a mis-wired refresh runtime fails
-      silently, leaving a stale UI with no error anywhere
-- [ ] Manual: with `--experimental-hmr`, edit `click_counter`'s template
-      (not its script) while it's running and confirm the count is
-      preserved across the update; a script edit is expected to reset it
-      (see Unit iii)
-- [ ] Manual: confirm `inca dev` with no flag still does a full reload,
-      unchanged
-- [ ] Update `AGENTS.md`'s Status section, noting HMR as experimental/opt-in
+- [x] A test asserting state actually survives a template-only edit —
+      done, `tests/tests/hmr-quickjs-state.test.mts` (spawns the real
+      compiled `inca-host` binary against a real Vite dev server).
+- [x] Manual: with `--experimental-hmr`, `click_counter`'s count survives
+      a template edit and resets on a script edit, confirmed by hand.
+      Two real `gpui`-layer bugs turned up doing this, tracked in
+      `specs/BACKLOG.md` rather than blocking this phase: a style-only
+      change not reaching the screen, and (found later, likely the same
+      root cause) a script edit's new value not reaching a real click
+      once it reverts to an earlier one. Not yet written up into
+      `specs/MANUAL_GUI_CHECK.md`'s own format.
+- [x] Manual: confirmed `inca dev` with no flag still does a full reload,
+      unchanged.
+- [x] `AGENTS.md`'s Status section updated.
 
 ## Evergreen checklists
 
