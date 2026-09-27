@@ -30,7 +30,9 @@
     "bin"
   ],
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "src/adapter/vite/runtime/globals.mts"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.mts",
   "exports": {
