@@ -12,5 +12,6 @@ pub use element::{
 };
 pub use event_sink::{
     EventKind, EventMask, EventPayload, EventSink, KeyPayload, MousePayload, WheelPayload,
+    dom_buttons_bit,
 };
 pub use tree::{AttributeValue, NodeId, TreeError, VirtualNode, VirtualTree};

@@ -239,8 +239,8 @@ pub struct KeyPayload {
     pub modifiers: gpui::Modifiers,
 }
 
-/// DOM's `button`/`buttons` numbering for a [`MouseButton`]. `buttons` is a
-/// bit; `button` is that bit's index.
+/// DOM's `button` numbering for a [`MouseButton`]: the index of that
+/// button's bit in `buttons`, not the bit itself.
 const fn dom_button_bit(button: MouseButton) -> u8 {
     match button {
         MouseButton::Left => 0,
@@ -248,6 +248,21 @@ const fn dom_button_bit(button: MouseButton) -> u8 {
         MouseButton::Right => 2,
         MouseButton::Navigate(gpui::NavigationDirection::Back) => 3,
         MouseButton::Navigate(gpui::NavigationDirection::Forward) => 4,
+    }
+}
+
+/// Maps a [`dom_button_bit`] index (equivalently, `MousePayload::button`) to
+/// its DOM `buttons` bitmask value, ordered left/right/middle/back/forward.
+/// An index outside `0..=4` maps to 0.
+#[must_use]
+pub const fn dom_buttons_bit(index: u8) -> u8 {
+    match index {
+        0 => 0b0_0001, // left
+        1 => 0b0_0100, // middle
+        2 => 0b0_0010, // right
+        3 => 0b0_1000, // back
+        4 => 0b1_0000, // forward
+        _ => 0,
     }
 }
 
@@ -260,7 +275,7 @@ impl From<&MouseDownEvent> for EventPayload {
             movement_x: 0.0,
             movement_y: 0.0,
             button: bit,
-            buttons: 1 << bit,
+            buttons: dom_buttons_bit(bit),
             detail: u32::try_from(event.click_count).unwrap_or(u32::MAX),
             modifiers: event.modifiers,
         })
@@ -293,7 +308,7 @@ impl From<&MouseMoveEvent> for EventPayload {
             button: 0,
             buttons: event
                 .pressed_button
-                .map_or(0, |button| 1 << dom_button_bit(button)),
+                .map_or(0, |button| dom_buttons_bit(dom_button_bit(button))),
             detail: 0,
             modifiers: event.modifiers,
         })
@@ -536,7 +551,7 @@ mod tests {
         };
         let mouse = mouse_payload(EventPayload::from(&event));
         assert_eq!(mouse.button, 0);
-        assert_eq!(mouse.buttons, 0b001);
+        assert_eq!(mouse.buttons, 0b0_0001);
         assert_eq!(mouse.detail, 1);
     }
 
@@ -572,7 +587,31 @@ mod tests {
             ..Default::default()
         };
         let mouse = mouse_payload(EventPayload::from(&event));
-        assert_eq!(mouse.buttons, 0b010);
+        assert_eq!(mouse.buttons, 0b0_0100);
+    }
+
+    #[test]
+    fn a_right_mouse_down_reports_the_right_buttons_bit() {
+        let event = MouseDownEvent {
+            button: MouseButton::Right,
+            click_count: 1,
+            ..Default::default()
+        };
+        let mouse = mouse_payload(EventPayload::from(&event));
+        assert_eq!(mouse.button, 2);
+        assert_eq!(mouse.buttons, 0b0_0010);
+    }
+
+    #[test]
+    fn a_middle_mouse_down_reports_the_middle_buttons_bit() {
+        let event = MouseDownEvent {
+            button: MouseButton::Middle,
+            click_count: 1,
+            ..Default::default()
+        };
+        let mouse = mouse_payload(EventPayload::from(&event));
+        assert_eq!(mouse.button, 1);
+        assert_eq!(mouse.buttons, 0b0_0100);
     }
 
     #[test]

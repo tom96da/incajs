@@ -396,7 +396,7 @@ fn wheel_reports_a_button_held_from_an_earlier_mousedown(cx: &mut TestAppContext
     });
 
     let buttons: u8 = engine.eval("globalThis.lastEvent.buttons").unwrap();
-    assert_eq!(buttons, 0b010);
+    assert_eq!(buttons, 0b0_0100);
 }
 
 /// A `wheel` on a node nothing listens for must not call into JS — same
@@ -755,19 +755,27 @@ fn buttons_tracks_every_button_currently_held(cx: &mut TestAppContext) {
 
     cx.simulate_mouse_down(point, MouseButton::Left, Modifiers::none());
     cx.run_until_parked();
-    assert_eq!(buttons(), 0b001, "the just-pressed button alone");
+    assert_eq!(buttons(), 0b0_0001, "the just-pressed button alone");
 
     cx.simulate_mouse_down(point, MouseButton::Right, Modifiers::none());
     cx.run_until_parked();
-    assert_eq!(buttons(), 0b101, "both buttons held at once");
+    assert_eq!(buttons(), 0b0_0011, "both buttons held at once");
 
     cx.simulate_mouse_move(point, MouseButton::Right, Modifiers::none());
     cx.run_until_parked();
-    assert_eq!(buttons(), 0b101, "a move reports every button still held");
+    assert_eq!(
+        buttons(),
+        0b0_0011,
+        "a move reports every button still held"
+    );
 
     cx.simulate_mouse_up(point, MouseButton::Left, Modifiers::none());
     cx.run_until_parked();
-    assert_eq!(buttons(), 0b100, "releasing one button clears only its bit");
+    assert_eq!(
+        buttons(),
+        0b0_0010,
+        "releasing one button clears only its bit"
+    );
 }
 
 /// `movementX`/`movementY` are a delta from whatever mouse/wheel event

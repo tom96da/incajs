@@ -29,6 +29,7 @@ use std::rc::Rc;
 use gpui::{App, Window};
 use inca_gpui::{
     EventKind, EventMask, EventPayload, KeyPayload, MousePayload, NodeId, WheelPayload,
+    dom_buttons_bit,
 };
 use inca_jsenv::{Engine, EngineError};
 use rquickjs::{Ctx, Function, Object};
@@ -129,9 +130,9 @@ impl EventDispatcher {
     /// returns the current value — `"mousemove"`/`"wheel"` only read it.
     /// `button` is `MousePayload`'s own field, a public part of
     /// `inca-gpui`'s API, so an out-of-range value (only 0..=4 are ever
-    /// produced by this crate) is handled rather than shifted unchecked.
+    /// produced by this crate) is handled: [`dom_buttons_bit`] maps it to 0.
     fn update_held_buttons(&self, event: &str, button: u8) -> u8 {
-        let bit = 1u8.checked_shl(u32::from(button)).unwrap_or(0);
+        let bit = dom_buttons_bit(button);
         match event {
             "mousedown" => self.held_buttons.set(self.held_buttons.get() | bit),
             "mouseup" => self.held_buttons.set(self.held_buttons.get() & !bit),
@@ -444,14 +445,26 @@ mod tests {
         assert_eq!(dispatcher.listens(quiet), EventMask::NONE);
     }
 
-    /// `EventKind`/`dom_button_bit` only ever produce `0..=4`, but
+    /// `inca-gpui` only ever produces a `button` index in `0..=4`, but
     /// `update_held_buttons` takes a plain `u8` — a value outside that
-    /// range must not panic the shift, only fail to set any bit.
+    /// range must not panic, only fail to set any bit.
     #[test]
     fn an_out_of_range_button_does_not_panic() {
         let (dispatcher, _host, _reported) = dispatcher_with_engine();
         assert_eq!(dispatcher.update_held_buttons("mousedown", 200), 0);
         assert_eq!(dispatcher.held_buttons.get(), 0);
+    }
+
+    #[test]
+    fn a_right_mousedown_sets_the_right_buttons_bit() {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        assert_eq!(dispatcher.update_held_buttons("mousedown", 2), 0b0_0010);
+    }
+
+    #[test]
+    fn a_middle_mousedown_sets_the_middle_buttons_bit() {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        assert_eq!(dispatcher.update_held_buttons("mousedown", 1), 0b0_0100);
     }
 
     #[gpui::test]
