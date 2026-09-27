@@ -58,9 +58,10 @@ One JSON object per line, UTF-8, `\n`-terminated. **stdout is the protocol
 channel**: a stray `println!` corrupts it, so every diagnostic goes to
 stderr instead.
 
-A client drains stdout for as long as the child lives. The host answers on
-the thread that runs the app, so a client that stops reading eventually
-stops the host.
+A client drains stdout for as long as the child lives. The writer side runs
+on its own thread over an unbounded channel, so a client that stops reading
+doesn't stall the app — it grows the host's memory without limit instead
+(tracked in [BACKLOG.md](./BACKLOG.md)).
 
 The host writes nothing else to stdout, but it cannot vouch for a dependency
 that does. A reader therefore treats a line it can't parse as JSON, or one

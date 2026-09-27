@@ -69,6 +69,23 @@ enough overhead for a single maintainer plus AI pairing.
   ecosystems**: it currently only auto-updates the devcontainer image/
   features.
 
+- **CI's path filter skips JS jobs for a `tests/`-only change**:
+  `.github/workflows/ci.yml`'s `changed` job lists `tests/**` only under
+  its `rust` filter, not `js`, even though `tests/` also holds `.mts`
+  tests. A PR touching only those runs no lint/format/typecheck job.
+
+- **`packages/cli`'s `sideEffects` list omits `dist/hmr-runtime.js`**:
+  only `src/adapter/vite/runtime/globals.mts` is declared, but the built
+  runtime installs globals the same way. A bundler that tree-shakes on
+  `sideEffects` could drop it.
+
+- **`dev.mts` imports `vite`/`rolldown` directly, past the "only
+  `adapter/vite` imports vite" rule**: `faultOf` (`packages/cli/src/dev.mts`)
+  reaches for `buildErrorMessage`/`RollupError` outside the adapter layer
+  `specs/ARCHITECTURE.md` says is the only place that imports `vite`. Move
+  that formatting into `adapter/vite` and hand `dev.mts` an already-built
+  `Fault`.
+
 - **The window is set once and never follows the app**: `start()`
   (`crates/inca-host/src/app.rs`) reads the size and title out of the
   config and the mounted root, hands them to `WindowOptions`, and nothing
@@ -122,6 +139,16 @@ enough overhead for a single maintainer plus AI pairing.
   icon at all. Either the config's `icon` feeds both, or the name says
   which one it is.
 
+- **`insert_before` with the anchor equal to the node being moved reorders
+  it instead of leaving it alone**: `VirtualTree::insert_before`
+  (`crates/inca-gpui/src/tree.rs`) detaches the child before resolving the
+  anchor's position, so when the anchor is the child itself, the position
+  lookup fails (the child isn't in the children list anymore) and the node
+  falls through to being appended at the end. The DOM's own
+  `insertBefore(node, node)` is a no-op; this moves it. `packages/core/src/vue/nodeOps.mts`
+  passes the anchor straight through, so the same input pattern likely
+  reaches this from the JS side too.
+
 - **`event.target` is an approximation**: GPUI only gives a container a
   hitbox when something listens on it, so a click on a listener-less child
   can't be traced to that child — `EventDispatcher::dispatch`
@@ -144,7 +171,10 @@ enough overhead for a single maintainer plus AI pairing.
   `(node, event, capture)`, with `EventDispatcher::listens` and `dispatch`
   each gaining a capture-phase counterpart wired to GPUI's
   `capture_any_mouse_down`/`capture_any_mouse_up` and friends. Vue's
-  `@click.capture` has nothing to bind to until this lands.
+  `@click.capture` has nothing to bind to until this lands. Vue's
+  `.once`/`.passive` modifiers are in the same boat — `patchProp.mts`'s
+  event handling has no notion of either, so both are silently ignored
+  rather than honored.
 
 - **A GPUI-vs-DOM compat layer for `crates/inca-bridge`**: three separate
   gaps now live loose in `dispatch.rs` — the two entries above plus
@@ -339,6 +369,21 @@ enough overhead for a single maintainer plus AI pairing.
   once an update is actually applied, which no dev-protocol message
   does today.
 
+- **A stale `node_modules/.inca/hmr/inca.json` outlives the config that
+  wrote it**: `hmr()` (`packages/cli/src/adapter/vite/hmr.mts`) only writes
+  the file when `serializeConfig(runtimeConfig)` returns something; if a
+  later session's config no longer produces any content, the old file is
+  never removed, so a stale `window`/etc. section keeps being read.
+
+- **A `full-reload` HMR payload skips the ready/pendingReload guard, and
+  reports nothing**: `dev.mts`'s `reload: () => void reloadHost()` (passed
+  to `bundler.hmr`) calls straight through to `reloadHost()` regardless of
+  whether the host has finished its first load — the non-HMR `onBuild`
+  path guards this with `pendingReload`, but a `full-reload` payload has no
+  equivalent. It also logs nothing on success, unlike the "reload ... (Nms)"
+  line `onBuild` prints, so a full reload under `--experimental-hmr` is
+  invisible to the user.
+
 - **A script edit's new value doesn't reach a real click, once it
   reverts to a value already used earlier in the same session**:
   reproduced by hand against `examples/click_counter`, repeatedly
@@ -357,10 +402,62 @@ enough overhead for a single maintainer plus AI pairing.
   path rather than `rerender`. Not confirmed at the native layer the way
   the style-only entry above was.
 
-- **Commenting out a `:style` property doesn't revert it, and this looks
-  true of every property, not just one**: reproduced by hand: removing a
-  property from the `:style` object under `--experimental-hmr` leaves
-  the screen showing its last value forever, while changing the same
-  property's value, not removing it, updates correctly. Not yet
-  confirmed whether this is the same element/paint reuse issue above, or
-  a separate gap in how a removed style key gets diffed and unset.
+- **Commenting out a `:style` property doesn't revert it, and this is true
+  of every property, not just one**: root cause is now known, and it's
+  unrelated to the element/paint reuse issue above. `patchProp.mts`'s
+  `patchStyle` (`packages/core/src/vue/patchProp.mts`) never reads its own
+  `_prevValue` argument, and only ever calls `core.setStyle` for a
+  string/number entry in the next value — a key that disappears (or turns
+  `null`/`undefined`) is simply never touched, and there's no native
+  `removeStyle`/`removeAttribute` to call even if it noticed. Fixing it
+  spans three layers: `crates/inca-gpui` (a `remove_style`/`remove_attribute`
+  on the tree), `crates/inca-bridge` (the matching bindings), and
+  `packages/core` (`native.mts`/`tree.mts`/`rendererCore.mts` plus
+  `patchStyle` actually diffing prev vs next). Deferred past v0.0.6.
+
+- **Dev relay hardening (`__inca_dev__`)**: three related gaps in
+  `crates/inca-bridge/src/dev.rs`. `install_dev`'s `send` accepts any method
+  name, including the host's own reserved ones (`ready`, `appError`), so a
+  running app can spoof a host notification. `call_dev_receive` discards
+  whatever `.ok()?` swallows when reading `__inca_dev__`/`receive` off
+  globals, rather than capturing it as an `EngineError`. `receive` is
+  invoked via a bare `Function::call`, leaving `this` unbound instead of
+  bound to `__inca_dev__` — `specs/PROTOCOL.md`'s own
+  `__inca_dev__.receive?.(...)` implies a method call. Also,
+  `PROTOCOL_VERSION` (`crates/inca-host/src/protocol.rs`) is still `0`
+  despite this new relay surface landing; bump it or write down that it's
+  a backstop that doesn't move on every feature addition.
+
+- **The stdout writer channel is unbounded**: `StdoutWriter::spawn`
+  (`crates/inca-host/src/dev.rs`) backs its writer thread with
+  `async_channel::unbounded`, so a client that stops reading stdout never
+  blocks the host — it grows the host's memory without limit instead.
+  `specs/PROTOCOL.md` used to claim the opposite ("a client that stops
+  reading eventually stops the host"); that wording is now fixed to match.
+  Fixing the behavior itself means a bounded channel with real backpressure.
+
+- **Queued stdout lines can be lost on exit**: `StdoutWriter`'s writer
+  thread (`crates/inca-host/src/dev.rs`) is spawned and never joined —
+  `run_bundle` (`crates/inca-host/src/app.rs`) doesn't wait for it before
+  the process exits. A line still in the channel (a startup-failure
+  report, say) can be dropped if the process exits first. Fix: keep the
+  `JoinHandle`, drop the sender, and join the thread before `run_bundle`
+  returns.
+
+- **Auto-resize gaps beyond the v0.0.6 reload-latch fix**: `start()`
+  (`crates/inca-host/src/app.rs`) never calls
+  `maybe_auto_resize_to_content` after its own initial job drain — only
+  `reload`/an unrecognized-notification relay do, so a first launch whose
+  content mounts asynchronously (the HMR bootstrap, notably) only catches
+  up once some later dev-protocol relay happens to fire. Separately,
+  `maybe_auto_resize_to_content`'s `width_ready`/`height_ready` treat a
+  configured dimension as ready whenever it's `Some`, without running it
+  through `usable()` first, so an unusable configured value (`width: 0`)
+  still latches the resize. And a root that only ever declares one
+  dimension (by design, not a timing accident) never auto-resizes at all,
+  since both dimensions have to become ready together.
+
+- **`-32601` still doesn't return the method name**: `handle_unrecognized`
+  (`crates/inca-host/src/dev.rs`) has the unrecognized `method` in hand but
+  answers a fixed `"unknown method"` string regardless. A client can't tell
+  from its own log which method got rejected.
