@@ -64,6 +64,8 @@ export function resolveViteConfig({
     // The only knob rolldown's native reporter reads. Silencing it also
     // drops the size report.
     logLevel: quiet ? "silent" : "info",
+    // Not `quiet`: this path's info() carries the per-build summary quiet
+    // mode is supposed to keep — see `BuildOptions.quiet`.
     customLogger: streamLogger(stdout, stderr),
     define: {
       "process.env.NODE_ENV": JSON.stringify(mode),

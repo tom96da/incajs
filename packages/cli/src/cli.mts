@@ -59,8 +59,12 @@ export async function run(argv: readonly string[] = process.argv): Promise<void>
   process.on("SIGINT", onSignal);
   process.on("SIGTERM", onSignal);
 
+  const experimentalHmr =
+    argv.includes("--experimental-hmr") || Boolean(process.env.INCA_EXPERIMENTAL_HMR);
+  if (experimentalHmr) log(process.stdout, "experimental HMR active", { timestamp: true });
+
   try {
-    await dev({ signal: controller.signal });
+    await dev({ signal: controller.signal, experimentalHmr });
   } catch (error) {
     printFault(process.stderr, "dev failed", toFault(error), { timestamp: true });
     process.exitCode = 1;

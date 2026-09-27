@@ -9,13 +9,20 @@ import { afterAll, beforeAll, describe, expect, it, onTestFinished, vi } from "v
 
 import { dev } from "../src/dev.mts";
 import { scratchConfigApp } from "./scratchConfigApp.mts";
-import type { Bundler, BundlerOptions, BuildOutput, Watcher } from "../src/adapter/types.mts";
+import type {
+  Bundler,
+  BundlerOptions,
+  BuildOutput,
+  HmrOptions,
+  Watcher,
+} from "../src/adapter/types.mts";
 
 const mockHost = path.join(import.meta.dirname, "fixtures/mock-host.mts");
 const reloadFailsMockHost = path.join(import.meta.dirname, "fixtures/mock-host-reload-fails.mts");
 const appErrorMockHost = path.join(import.meta.dirname, "fixtures/mock-host-app-error.mts");
 const slowReadyMockHost = path.join(import.meta.dirname, "fixtures/mock-host-slow-ready.mts");
 const exitingMockHost = path.join(import.meta.dirname, "fixtures/mock-host-exits.mts");
+const hmrMockHost = path.join(import.meta.dirname, "fixtures/mock-host-hmr.mts");
 
 // A nonexistent directory: pruneStaleFiles() treats a missing outDir as
 // nothing to prune, so these tests need no real files on disk.
@@ -383,6 +390,119 @@ describe("dev", () => {
 
     controller.abort();
     await running;
+  });
+});
+
+interface FakeHmrBundler extends Bundler {
+  /** Simulates the running app pushing a `"vite"` payload out to the dev server. */
+  emitVite(payload: unknown): void;
+  /** Simulates the environment's `HotChannel` seeing a `full-reload` payload. */
+  emitFullReload(): void;
+  /** Every payload `hmr()`'s channel was asked to `dispatch` back into the app. */
+  dispatched: unknown[];
+}
+
+function makeFakeHmrBundler(entryFile: string): FakeHmrBundler {
+  let options: HmrOptions | undefined;
+  const dispatched: unknown[] = [];
+
+  const fake: FakeHmrBundler = {
+    watch: () => Promise.reject(new Error("not used by HMR mode")),
+    build: () => Promise.reject(new Error("not used by HMR mode")),
+    hmr(opts) {
+      options = opts;
+      return Promise.resolve({
+        entryFile,
+        dispatch: (payload) => dispatched.push(payload),
+        close: () => Promise.resolve(),
+      });
+    },
+    emitVite(payload) {
+      options?.notify(payload);
+    },
+    emitFullReload() {
+      options?.reload();
+    },
+    dispatched,
+  };
+  return fake;
+}
+
+describe("dev with --experimental-hmr", () => {
+  const scratch = scratchConfigApp("dev-hmr");
+  beforeAll(scratch.setUp);
+  afterAll(scratch.tearDown);
+
+  it("roundtrips a vite payload the app sends back through the dev channel", async () => {
+    const bundler = makeFakeHmrBundler("/unused/entry.js");
+    const stdout = makeSink();
+    const controller = new AbortController();
+
+    const running = dev({
+      entry: "unused",
+      bundler,
+      hostBin: hmrMockHost,
+      experimentalHmr: true,
+      stdout: stdout.stream,
+      stderr: makeSink().stream,
+      signal: controller.signal,
+    });
+
+    await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
+
+    bundler.emitVite({ type: "custom", event: "greet", data: { hi: 1 } });
+    await vi.waitFor(() =>
+      expect(bundler.dispatched).toEqual([{ type: "custom", event: "greet", data: { hi: 1 } }]),
+    );
+
+    controller.abort();
+    await running;
+  });
+
+  it("turns a full-reload payload into the reload RPC, not a vite notification", async () => {
+    const bundler = makeFakeHmrBundler("/unused/entry.js");
+    const stdout = makeSink();
+    const stderr = makeSink();
+    const controller = new AbortController();
+
+    const running = dev({
+      entry: "unused",
+      bundler,
+      hostBin: slowReadyMockHost,
+      experimentalHmr: true,
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      signal: controller.signal,
+    });
+
+    await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
+
+    bundler.emitFullReload();
+    await vi.waitFor(() => expect(stderr.text()).toContain("reload #1"));
+
+    expect(bundler.dispatched).toEqual([]);
+
+    controller.abort();
+    await running;
+  });
+
+  it("throws a clear error when the bundler has no HMR support", async () => {
+    const bundler: Bundler = {
+      watch: () => Promise.reject(new Error("not used")),
+      build: () => Promise.reject(new Error("not used")),
+    };
+
+    await expect(
+      dev({
+        entry: "unused",
+        bundler,
+        hostBin: mockHost,
+        experimentalHmr: true,
+        stdout: makeSink().stream,
+        stderr: makeSink().stream,
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toThrow(expect.objectContaining({ code: "ERR_INCA_HMR_UNSUPPORTED" }));
   });
 });
 

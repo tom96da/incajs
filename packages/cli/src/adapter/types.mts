@@ -52,6 +52,39 @@ export interface BuildOutput {
   changed?: { file: string; at: number };
 }
 
+/** Options for {@link Bundler.hmr}. */
+export interface HmrOptions {
+  /** The app's own entry point — may import `.vue` files. */
+  entry: string;
+  /** The app's root directory — where its dev-only scratch files are written. */
+  cwd: string;
+  /**
+   * Values the built app carries for `inca-host` to read — its name, id
+   * and window. Any JSON-serializable object.
+   */
+  runtimeConfig?: unknown;
+  /** Overrides where the synthesized entry imports `hmr-runtime.js` from. Test-only. */
+  runtimePath?: string;
+  /** Where the bundler's own output goes. Defaults to `process.stdout`. */
+  stdout?: NodeJS.WritableStream;
+  /** Where the bundler's warnings and errors go. Defaults to `process.stderr`. */
+  stderr?: NodeJS.WritableStream;
+  /** Drops per-update/reload logging; warnings and errors still surface. */
+  quiet?: boolean;
+  /** Delivers a bundler payload to the running app over the dev channel. */
+  notify: (payload: unknown) => void;
+  /** Called in place of forwarding a whole-app reload payload to the app. */
+  reload: () => void;
+}
+
+/** A running HMR session — the value {@link Bundler.hmr} resolves to. */
+export interface HmrChannel extends Watcher {
+  /** The synthesized entry `inca-host` evaluates for this session. */
+  entryFile: string;
+  /** Feeds a payload the running app sent back into the bundler's dev server. */
+  dispatch: (payload: unknown) => void;
+}
+
 /**
  * The contract a bundler adapter satisfies. Supporting another bundler
  * means adding a sibling adapter module and injecting its `Bundler` here —
@@ -61,4 +94,9 @@ export interface Bundler {
   watch(options: BundlerOptions): Promise<Watcher>;
   /** One-shot production build, used by `inca build` — rejects on failure. */
   build(options: BuildOptions): Promise<BuildOutput>;
+  /**
+   * Module-granular dev updates, used by `inca dev --experimental-hmr`.
+   * Optional — a bundler adapter with no HMR support simply omits it.
+   */
+  hmr?(options: HmrOptions): Promise<HmrChannel>;
 }

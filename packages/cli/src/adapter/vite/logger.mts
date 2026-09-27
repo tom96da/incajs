@@ -9,17 +9,22 @@ const AGGREGATE_REPORT = "Build failed with ";
 
 /**
  * A Vite {@link Logger} writing to the given streams: `info` to `stdout`,
- * `warn` and `error` to `stderr`. Messages arrive fully formatted and are
- * written as they are; Vite's own `LogOptions` are ignored.
+ * `warn`/`error` to `stderr`, all unfiltered by Vite's own `LogOptions` — a
+ * custom logger bypasses those. `quiet` drops `info` only; `warn`/`error`
+ * still write, since they report something broken, not just what changed.
  */
-export function streamLogger(stdout: NodeJS.WritableStream, stderr: NodeJS.WritableStream): Logger {
+export function streamLogger(
+  stdout: NodeJS.WritableStream,
+  stderr: NodeJS.WritableStream,
+  quiet = false,
+): Logger {
   const loggedErrors = new WeakSet<Error | RolldownError>();
   const warned = new Set<string>();
 
   const logger: Logger = {
     hasWarned: false,
     info(msg) {
-      stdout.write(`${msg}\n`);
+      if (!quiet) stdout.write(`${msg}\n`);
     },
     warn(msg) {
       logger.hasWarned = true;

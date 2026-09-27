@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { build, watch } from "./adapter/vite/index.mts";
+import { build, hmr, watch } from "./adapter/vite/index.mts";
 import type { Bundler } from "./adapter/types.mts";
 
 /**
@@ -9,4 +9,4 @@ import type { Bundler } from "./adapter/types.mts";
  * default — a single place to swap bundlers, and the reason they can't
  * drift onto different ones.
  */
-export const defaultBundler: Bundler = { watch, build };
+export const defaultBundler: Bundler = { watch, build, hmr };

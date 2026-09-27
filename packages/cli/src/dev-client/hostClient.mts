@@ -214,6 +214,18 @@ export class HostClient {
   }
 
   /**
+   * Sends a fire-and-forget notification — no `id`, so no reply is ever
+   * awaited. Used for traffic a bundler integration owns (e.g. Vite's HMR
+   * payloads), which answers itself over the same named channel rather than
+   * through this client's request/reply bookkeeping.
+   */
+  notify(method: string, params?: unknown): void {
+    const child = this.#child;
+    if (!child) throw new Error("HostClient.start() has not been called");
+    child.stdin.write(`${JSON.stringify({ jsonrpc: JSONRPC, method, params })}\n`);
+  }
+
+  /**
    * Asks the host to `shutdown` and waits for the child to actually exit —
    * that exit is the real acknowledgement, not the response. Kills it once
    * `timeoutMs` passes without that, so a wedged app can't block teardown.

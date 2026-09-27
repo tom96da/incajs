@@ -144,4 +144,34 @@ describe("run", () => {
       "[inca] dev failed: inca dev is already running for this app (pid 42)",
     );
   });
+
+  it("leaves experimentalHmr off and stays silent about it by default", async () => {
+    mockedDev.mockResolvedValueOnce(undefined);
+
+    await run(["node", "inca", "dev"]);
+
+    expect(mockedDev.mock.calls[0]?.[0].experimentalHmr).toBe(false);
+    expect(written(stdout)).not.toContain("HMR");
+  });
+
+  it("turns experimentalHmr on with --experimental-hmr and announces it", async () => {
+    mockedDev.mockResolvedValueOnce(undefined);
+
+    await run(["node", "inca", "dev", "--experimental-hmr"]);
+
+    expect(mockedDev.mock.calls[0]?.[0].experimentalHmr).toBe(true);
+    // The clock follows the runner's locale, so only the shape is asserted.
+    expect(written(stdout)).toMatch(/^\d.* \[inca\] experimental HMR active\n/);
+  });
+
+  it("turns experimentalHmr on with INCA_EXPERIMENTAL_HMR too", async () => {
+    mockedDev.mockResolvedValueOnce(undefined);
+    vi.stubEnv("INCA_EXPERIMENTAL_HMR", "1");
+
+    await run(["node", "inca", "dev"]);
+
+    expect(mockedDev.mock.calls[0]?.[0].experimentalHmr).toBe(true);
+
+    vi.unstubAllEnvs();
+  });
 });

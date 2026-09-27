@@ -119,6 +119,12 @@ The bundler finished without writing anything. This one is a bug in `inca`
 rather than in your app — please
 [open an issue](https://github.com/tom96da/incajs/issues).
 
+## `ERR_INCA_HMR_UNSUPPORTED`
+
+`inca dev --experimental-hmr` (or `INCA_EXPERIMENTAL_HMR`) was set, but the
+configured bundler has no HMR support. The default bundler supports it;
+this only happens with a custom `bundler` that doesn't implement `hmr`.
+
 ## `ERR_INCA_BUILD_NO_ENTRY_CHUNK`
 
 The bundler wrote files, but none of them was marked as the entry, so

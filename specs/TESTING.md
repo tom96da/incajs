@@ -156,6 +156,13 @@ Watch for these when scaffolding a new package too:
   `tests/dev-client/fixtures/*.mts`) needs its executable bit set. One
   added without it fails the test with `EACCES`, not a parse or
   module-resolution error.
+- A test needing its own package's build output (`hmr.test.mts` needs a
+  built `hmr-runtime.js`) must produce it itself, every run, into a
+  scratch dir — call Vite's `build()` directly in `beforeAll`, reusing
+  the real `vite.config.mts` (override only `outDir`/`lib.entry`/
+  `emptyOutDir`, and drop a plugin only when it's a provable no-op for
+  the entry under test), rather than an `existsSync` check shelling out
+  to the package's own build script.
 
 ## Running tests
 

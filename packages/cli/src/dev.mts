@@ -18,7 +18,7 @@ import { resolveEntry } from "./entry.mts";
 import { IncaError } from "./error.mts";
 import { log, printFault, toFault } from "./log.mts";
 import { writeMacosApp } from "./macos-app.mts";
-import type { Bundler, BuildOutput } from "./adapter/types.mts";
+import type { Bundler, BuildOutput, HmrChannel } from "./adapter/types.mts";
 import type { ResolvedAppConfig } from "./config/loader.mts";
 
 export interface DevOptions {
@@ -31,6 +31,11 @@ export interface DevOptions {
   entry?: string;
   /** Overrides the bundler — see {@link defaultBundler} for what's wired in by default. */
   bundler?: Bundler;
+  /**
+   * Delivers module-granular updates instead of a full reload on every
+   * change, over `bundler.hmr` — see `--experimental-hmr`.
+   */
+  experimentalHmr?: boolean;
   /**
    * Overrides host binary resolution. On macOS this is the binary the
    * app bundle wraps; elsewhere it is launched directly.
@@ -179,7 +184,10 @@ export async function dev(options: DevOptions): Promise<void> {
     }
 
     /** Starts the host against `entryFile` and keeps it in `client` once it's up. */
-    async function startHost(entryFile: string): Promise<void> {
+    async function startHost(
+      entryFile: string,
+      integrations?: Record<string, (params: unknown) => void>,
+    ): Promise<void> {
       const next = new HostClient({
         entryFile,
         hostBin,
@@ -198,6 +206,7 @@ export async function dev(options: DevOptions): Promise<void> {
           log(stdout, "host exited — stopping", STAMPED);
           stop();
         },
+        integrations,
       });
       try {
         await next.start();
@@ -232,23 +241,48 @@ export async function dev(options: DevOptions): Promise<void> {
       }
     }
 
-    const watcher = await bundler.watch({
-      entry,
-      outDir,
-      runtimeConfig,
-      mode: "development",
-      stdout,
-      stderr,
-      onBuild: (output) => {
-        // Chained rather than fired independently: two rebuilds landing
-        // before the host finishes starting would otherwise both see no
-        // client yet and each start their own.
-        queue = queue.then(() => onBuild(output));
-      },
-      onError: (error) => {
-        printFault(stderr, "build failed", error, STAMPED);
-      },
-    });
+    let closable: { close(): Promise<void> };
+
+    if (options.experimentalHmr) {
+      if (!bundler.hmr) {
+        throw new IncaError(
+          "ERR_INCA_HMR_UNSUPPORTED",
+          "--experimental-hmr was set, but the configured bundler has no HMR support",
+        );
+      }
+
+      const channel: HmrChannel = await bundler.hmr({
+        entry,
+        cwd,
+        runtimeConfig,
+        stdout,
+        stderr,
+        notify: (payload) => client?.notify("vite", payload),
+        // A full reload needs a fresh Engine/Host, which only inca-host's
+        // own `reload` RPC method gives it — a `"vite"` notification can't.
+        reload: () => void reloadHost(),
+      });
+      await startHost(channel.entryFile, { vite: (params) => channel.dispatch(params) });
+      closable = channel;
+    } else {
+      closable = await bundler.watch({
+        entry,
+        outDir,
+        runtimeConfig,
+        mode: "development",
+        stdout,
+        stderr,
+        onBuild: (output) => {
+          // Chained rather than fired independently: two rebuilds landing
+          // before the host finishes starting would otherwise both see no
+          // client yet and each start their own.
+          queue = queue.then(() => onBuild(output));
+        },
+        onError: (error) => {
+          printFault(stderr, "build failed", error, STAMPED);
+        },
+      });
+    }
 
     if (options.signal.aborted) stop();
     else options.signal.addEventListener("abort", () => stop(), { once: true });
@@ -256,7 +290,7 @@ export async function dev(options: DevOptions): Promise<void> {
 
     await queue;
     await client?.stop();
-    await watcher.close();
+    await closable.close();
   } finally {
     await releaseLock();
   }

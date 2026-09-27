@@ -7,6 +7,17 @@ import type { Plugin } from "vite";
 export const CONFIG_FILE_NAME = "inca.json";
 
 /**
+ * Serializes `config` the way `inca.json` is written: `undefined` for
+ * anything that shouldn't produce a file — `undefined` itself, or an
+ * object with no keys.
+ */
+export function serializeConfig(config: unknown): string | undefined {
+  const serialized = JSON.stringify(config, undefined, 2);
+  if (serialized === undefined || serialized === "{}") return undefined;
+  return `${serialized}\n`;
+}
+
+/**
  * Writes `config` to `inca.json` beside the entry, for `inca-host` to read
  * when it starts the app.
  *
@@ -14,14 +25,13 @@ export const CONFIG_FILE_NAME = "inca.json";
  * `undefined` or an object with no keys
  */
 export function emitConfig(config: unknown): Plugin {
-  const serialized = JSON.stringify(config, undefined, 2);
-  const skip = serialized === undefined || serialized === "{}";
+  const content = serializeConfig(config);
 
   return {
     name: "inca:emit-config",
     generateBundle() {
-      if (skip) return;
-      this.emitFile({ type: "asset", fileName: CONFIG_FILE_NAME, source: `${serialized}\n` });
+      if (!content) return;
+      this.emitFile({ type: "asset", fileName: CONFIG_FILE_NAME, source: content });
     },
   };
 }
