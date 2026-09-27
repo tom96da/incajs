@@ -83,8 +83,6 @@ function connectRunner(dispatch: HmrChannel["dispatch"]): {
     },
     send: (data) => dispatch(data),
   };
-  // Silences this simulated client only — `runtime/index.mts` keeps the
-  // default logger, useful feedback for a real app.
   const runner = new ModuleRunner({ transport, hmr: { logger: false } }, new ESModulesEvaluator());
   return { runner, notify: (payload) => onMessage?.(payload) };
 }
