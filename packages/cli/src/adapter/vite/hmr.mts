@@ -20,7 +20,7 @@ import type {
 import { CONFIG_FILE_NAME, serializeConfig } from "./emitConfig.mts";
 import { streamLogger } from "./logger.mts";
 import { rejectUnsupported } from "./unsupported.mts";
-import type { HmrChannel, HmrOptions } from "../types.mts";
+import type { HmrChannel, HmrOptions, UpdateError } from "../types.mts";
 
 /** The directory a session's synthesized entry and config are written to. */
 function hmrDirOf(cwd: string): string {
@@ -69,15 +69,31 @@ async function writeHmrEntry(cwd: string, entry: string, runtimePath?: string): 
 }
 
 /**
- * A minimal server-side {@link HotChannel}. `send` relays to `notify`,
- * except a `full-reload` payload, which calls `reload` instead — that
- * needs a fresh `Engine`/`Host`, which only `inca-host`'s `reload` RPC
- * gives it. `dispatch` feeds a payload the app sent back into
- * `DevEnvironment`'s own `fetchModule`/HMR machinery.
+ * Pulls a failed update's detail out of the two shapes it reaches this
+ * channel in: a direct `type: "error"` push, or a `fetchModule` RPC's own
+ * error response (the shape `vite:invoke`'s response wraps it in).
+ */
+function updateErrorOf(payload: HotPayload): UpdateError | undefined {
+  if (payload.type === "error") return payload.err;
+  if (payload.type === "custom" && payload.event === "vite:invoke") {
+    return (payload.data as { data?: { error?: UpdateError } })?.data?.error;
+  }
+  return undefined;
+}
+
+/**
+ * A minimal server-side {@link HotChannel}. `send` relays to `notify`.
+ * A `full-reload` payload calls `reload` instead: that needs a fresh
+ * `Engine`/`Host`, which only `inca-host`'s `reload` RPC gives it.
+ * A failed update also calls `onError`. The payload is still relayed
+ * to the app afterward, since its own pending call may be waiting on it.
+ * `dispatch` feeds a payload the app sent back into `DevEnvironment`'s
+ * own `fetchModule`/HMR machinery.
  */
 function createIncaHotChannel(
   notify: (payload: unknown) => void,
   reload: () => void,
+  onError: (error: UpdateError) => void,
 ): { channel: HotChannel; dispatch: (payload: unknown) => void } {
   const listeners = new Map<string, Set<(data: unknown, client: HotChannelClient) => void>>();
   const client: HotChannelClient = { send: outbound };
@@ -87,6 +103,8 @@ function createIncaHotChannel(
       reload();
       return;
     }
+    const error = updateErrorOf(payload);
+    if (error) onError(error);
     notify(payload);
   }
 
@@ -169,6 +187,7 @@ export async function hmr({
   quiet = false,
   notify,
   reload,
+  onError,
 }: HmrOptions): Promise<HmrChannel> {
   const entryFile = await writeHmrEntry(cwd, entry, runtimePath);
 
@@ -177,7 +196,7 @@ export async function hmr({
     await writeFile(path.join(hmrDirOf(cwd), CONFIG_FILE_NAME), configContent);
   }
 
-  const { channel, dispatch } = createIncaHotChannel(notify, reload);
+  const { channel, dispatch } = createIncaHotChannel(notify, reload, onError);
 
   const server: ViteDevServer = await createServer({
     configFile: false,

@@ -52,13 +52,15 @@ describe("printFault", () => {
     expect(out.text()).toContain("[inca] dev failed (ERR_INCA_DEV_RUNNING): busy\n");
   });
 
-  it("prints the message, then the frames it doesn't already repeat", () => {
+  it("prints the frames it doesn't already repeat, then the message", () => {
     const out = sink();
 
     printFault(out.stream, "build failed", toFault(new Error("syntax error")));
 
-    expect(out.text()).toContain("[inca] build failed: syntax error\n");
-    expect(out.text()).toContain("    at ");
-    expect(out.text()).not.toContain("Error: syntax error\n    at");
+    const text = out.text();
+    expect(text).toContain("[inca] build failed: syntax error\n");
+    expect(text).toContain("    at ");
+    expect(text).not.toContain("Error: syntax error\n    at");
+    expect(text.indexOf("    at ")).toBeLessThan(text.indexOf("[inca] build failed"));
   });
 });

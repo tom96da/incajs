@@ -8,6 +8,13 @@ import type { Logger } from "vite";
 const AGGREGATE_REPORT = "Build failed with ";
 
 /**
+ * How Vite opens its own eager pre-warm of an HMR update's static imports.
+ * A real fetch for the same file always follows; `hmr.mts`'s `onError`
+ * reports that one instead.
+ */
+const PRE_TRANSFORM_ERROR = "Pre-transform error";
+
+/**
  * A Vite {@link Logger} writing to the given streams: `info` to `stdout`,
  * `warn`/`error` to `stderr`, all unfiltered by Vite's own `LogOptions` — a
  * custom logger bypasses those. `quiet` drops `info` only; `warn`/`error`
@@ -42,6 +49,7 @@ export function streamLogger(
       // event. Matched anywhere in the message: on a tty the bundler's
       // colour escapes come first.
       if (msg.includes(AGGREGATE_REPORT)) return;
+      if (msg.includes(PRE_TRANSFORM_ERROR)) return;
       stderr.write(`${msg.replace(/\n\s+at .*/g, "")}\n`);
     },
     clearScreen() {},

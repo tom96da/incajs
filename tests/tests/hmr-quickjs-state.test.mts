@@ -13,11 +13,11 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Writable } from "node:stream";
 
-import { afterAll, beforeAll, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, expect, it, onTestFailed, vi } from "vitest";
 
 import { hmr } from "../../packages/cli/src/adapter/vite/index.mts";
 import { HostClient } from "../../packages/cli/src/dev-client/hostClient.mts";
-import type { HmrChannel } from "../../packages/cli/src/adapter/types.mts";
+import type { HmrChannel, UpdateError } from "../../packages/cli/src/adapter/types.mts";
 
 /** How long the host is given to reload/relay before this test gives up on it. */
 const RELOAD_TIMEOUT_MS = 10_000;
@@ -122,6 +122,7 @@ let hostClient: HostClient | undefined;
 let stderrText = "";
 let notifiedCount = 0;
 let ready = false;
+let buildErrors: UpdateError[] = [];
 
 beforeAll(async () => {
   await mkdir(scratchRoot, { recursive: true });
@@ -145,6 +146,7 @@ beforeAll(async () => {
     // `reload` RPC gives it — not expected to fire for a Vue SFC edit
     // that always has an HMR boundary, but wired for real just in case.
     reload: () => void hostClient?.call("reload", undefined, RELOAD_TIMEOUT_MS),
+    onError: (error) => buildErrors.push(error),
   });
 
   hostClient = new HostClient({
@@ -171,6 +173,7 @@ it(
   "keeps Vue component state across a template-only HMR edit, resets it across a script edit",
   async () => {
     const client = hostClient!;
+    onTestFailed(() => console.error(`--- host stderr ---\n${stderrText}`));
 
     await vi.waitFor(() => expect(ready).toBe(true), { timeout: WAIT_TIMEOUT_MS });
     await vi.waitFor(() => expect(stderrText).toContain("[e2e] mounted"), {
@@ -217,16 +220,15 @@ it(
       timeout: WAIT_TIMEOUT_MS,
     });
 
-    // A broken script edit surfaces an error but doesn't take the host down.
-    const stderrBeforeBrokenEdit = stderrText.length;
+    // A broken script edit is reported through `onError` but doesn't take
+    // the host down.
     const brokenVue = appVue(STYLE_V2, "!").replace(
       "const clicks = ref(0);",
       "const clicks = ref(0);\nconst oops = (;",
     );
     await writeFile(vuePath, brokenVue);
-    await vi.waitFor(() => expect(stderrText.slice(stderrBeforeBrokenEdit)).toMatch(/error/i), {
-      timeout: WAIT_TIMEOUT_MS,
-    });
+    await vi.waitFor(() => expect(buildErrors).toHaveLength(1), { timeout: WAIT_TIMEOUT_MS });
+    expect(buildErrors[0]?.message).toContain("Unexpected token");
 
     // Fixing it remounts cleanly and the host keeps responding.
     const beforeRecoveryEdit = notifiedCount;

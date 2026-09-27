@@ -105,6 +105,7 @@ describe("hmr", () => {
         client.notify(payload as HotPayload);
       },
       reload: () => reloads.push(Date.now()),
+      onError: () => {},
     });
     channels.push(channel);
 
@@ -126,6 +127,44 @@ describe("hmr", () => {
     expect(logs()).toBe("");
   }, 20000);
 
+  it("calls onError with a failed update's detail, still relays it to the app", async () => {
+    const { entry, vuePath, streams } = await makeApp(
+      `<script setup>\nconst msg = "first";\n</script>\n<template><div>{{ msg }}</div></template>\n`,
+    );
+
+    const notified: unknown[] = [];
+    const errors: { message: string }[] = [];
+
+    const channel = await hmr({
+      entry,
+      cwd: path.dirname(entry),
+      ...streams,
+      notify: (payload) => {
+        notified.push(payload);
+        client.notify(payload as HotPayload);
+      },
+      reload: () => {},
+      onError: (error) => errors.push(error),
+    });
+    channels.push(channel);
+
+    const client = connectRunner(channel.dispatch);
+    await client.runner.import(entry);
+
+    // A template syntax error: an HMR boundary exists (no full-reload), but
+    // the update itself fails to compile.
+    await writeFile(
+      vuePath,
+      `<script setup>\nconst msg = "first";\n</script>\n<template><div>{{ msg }</div></template>\n`,
+    );
+
+    await vi.waitFor(() => expect(errors.length).toBeGreaterThan(0), { timeout: 15000 });
+
+    expect(errors[0]!.message).toContain("Interpolation end sign was not found");
+    // Still relayed: the app's own pending fetch/HMR call may be waiting on it.
+    expect(notified.length).toBeGreaterThan(0);
+  }, 20000);
+
   it("reloads instead of notifying when a change has no HMR boundary, quiet", async () => {
     const { entry, streams, logs } = await makeApp(
       `<script setup>\nconst msg = "hello";\n</script>\n<template><div>{{ msg }}</div></template>\n`,
@@ -143,6 +182,7 @@ describe("hmr", () => {
         client.notify(payload as HotPayload);
       },
       reload: () => reloads.push(Date.now()),
+      onError: () => {},
     });
     channels.push(channel);
 
@@ -186,6 +226,7 @@ describe("hmr", () => {
         client.notify(payload as HotPayload);
       },
       reload: () => {},
+      onError: () => {},
     });
     channels.push(channel);
 
@@ -217,6 +258,7 @@ describe("hmr", () => {
       ...streams,
       notify: () => {},
       reload: () => {},
+      onError: () => {},
     });
     channels.push(channel);
 
@@ -240,6 +282,7 @@ describe("hmr", () => {
       ...streams,
       notify: () => {},
       reload: () => {},
+      onError: () => {},
     });
     await first.close();
 
@@ -251,6 +294,7 @@ describe("hmr", () => {
       ...streams,
       notify: () => {},
       reload: () => {},
+      onError: () => {},
     });
     channels.push(second);
 

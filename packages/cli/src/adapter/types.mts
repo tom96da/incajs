@@ -52,6 +52,19 @@ export interface BuildOutput {
   changed?: { file: string; at: number };
 }
 
+/**
+ * A failed HMR update's detail — the same fields a Rollup/Vite plugin
+ * error carries beyond `message`/`stack`, when it has them.
+ */
+export interface UpdateError {
+  message: string;
+  stack?: string | null;
+  plugin?: string | null;
+  id?: string | null;
+  frame?: string | null;
+  loc?: { line: number; column: number } | null;
+}
+
 /** Options for {@link Bundler.hmr}. */
 export interface HmrOptions {
   /** The app's own entry point — may import `.vue` files. */
@@ -75,6 +88,8 @@ export interface HmrOptions {
   notify: (payload: unknown) => void;
   /** Called in place of forwarding a whole-app reload payload to the app. */
   reload: () => void;
+  /** Called when an update the app fetched failed to compile. */
+  onError: (error: UpdateError) => void;
 }
 
 /** A running HMR session — the value {@link Bundler.hmr} resolves to. */

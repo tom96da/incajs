@@ -128,12 +128,12 @@ enough overhead for a single maintainer plus AI pairing.
   (`crates/inca-bridge/src/dispatch.rs`) sets `target` to the same node as
   `currentTarget`, the node the call is dispatching for. Making it exact
   means giving every container a hitbox while any node in the tree has a
-  mouse listener, and reading the innermost one hit_test finds — costing a
-  hitbox and a no-op listener call per node per pointer event. The field
-  name doesn't need to change for this to land later; only its accuracy
-  would improve. Until it does, nothing resembling event delegation
-  (a handler relying on which descendant was actually hit) can be written
-  against this framework.
+  mouse listener, then reading the innermost one hit_test finds. That
+  costs a hitbox and a no-op listener call per node per pointer event.
+  The field name doesn't need to change for this to land later; only
+  its accuracy would improve. Until it does, nothing resembling event
+  delegation (a handler relying on which descendant was actually hit)
+  can be written against this framework.
 
 - **No capture-phase listener registration**: GPUI's own mouse dispatch
   already runs a capture phase before the bubble phase
@@ -151,12 +151,11 @@ enough overhead for a single maintainer plus AI pairing.
   `mouseenter` firing on mount for an element already under the pointer
   (GPUI's hover check compares against freshly-initialized state on first
   paint, not against a real pointer move; see `specs/FFI.md`'s "Event
-  dispatch" section). `EventDispatcher` is already where this kind of
-  translation belongs — it exists to turn GPUI's raw input into what a DOM
-  author expects — so grouping these under one `compat` submodule there,
-  rather than a separate crate, is the direction: one place to hold
-  `held_buttons` tracking alongside a "no real pointer move seen yet"
-  flag that would suppress the mount-time `mouseenter`, and later the
+  dispatch" section). `EventDispatcher` exists to turn GPUI's raw input
+  into what a DOM author expects, so this translation belongs there too.
+  Direction: one `compat` submodule inside it, not a separate crate — one
+  place to hold `held_buttons` tracking, a "no real pointer move seen
+  yet" flag suppressing the mount-time `mouseenter`, and later the
   capture-phase and precise-`target` work above.
 
 - **`"focus"`/`"blur"` will need to become `"focusin"`/`"focusout"` once
@@ -261,25 +260,24 @@ enough overhead for a single maintainer plus AI pairing.
   size or a default, with the app's real content appearing moments later
   once mounting finishes, then a one-time resize snaps it to the correct
   size — visibly, a large window with black margins that shrinks after a
-  beat. Root cause: in HMR mode, the entry module that `inca-host`
-  evaluates doesn't mount the app itself — it hands off to a JS module
-  runner that fetches and evaluates the real app code over a round trip
-  to the Node-side dev server, and `inca-host` doesn't wait for that
-  round trip before opening the window (waiting would need the process's
-  stdin reader, which answers that round trip, to already be running —
-  today it only starts once the window has opened). A real fix means
-  starting that stdin reader before the window opens, and having
-  something outside the module-evaluation call keep servicing incoming
-  replies while that evaluation is still in progress, so the app's real
-  content size is known before the window is created. The engine's
-  module-evaluation entry point (`Engine::eval_module`) doesn't support
-  that today: it drives a module's own top-level `Promise` to completion
-  synchronously and reports an error if the `Promise` can't settle on its
-  own, with no hook for external I/O to arrive and resolve it mid-call —
-  making the entry await its own mount, as-is, would just fail immediately
-  rather than wait correctly. Fixing this changes `inca-host`'s startup
-  sequencing itself, not just this one feature, so it's being carried
-  forward rather than attempted alongside the rest of experimental HMR.
+  beat. Cause: in HMR mode, the entry module `inca-host` evaluates doesn't mount
+  the app itself. It hands off to a JS module runner that fetches and
+  evaluates the real app code over a round trip to the Node-side dev
+  server. `inca-host` doesn't wait for that round trip before opening the
+  window: waiting needs the process's stdin reader, which answers that
+  round trip, to already be running, and today it only starts once the
+  window has opened. A real fix starts that stdin reader before the window
+  opens, and keeps servicing incoming replies while module evaluation is
+  still in progress, so the app's real content size is known before the
+  window is created. The engine's module-evaluation entry point
+  (`Engine::eval_module`) doesn't support that today: it drives a module's
+  own top-level `Promise` to completion synchronously, and reports an
+  error if the `Promise` can't settle on its own. There's no hook for
+  external I/O to arrive and resolve it mid-call, so making the entry
+  await its own mount would just fail immediately instead of waiting.
+  Fixing this changes `inca-host`'s own startup sequencing, not just this
+  feature — carried forward rather than attempted alongside
+  the rest of experimental HMR.
 
 - **A style-only change to an already-mounted node doesn't reach the
   screen under `--experimental-hmr`, though the same edit works via a
@@ -300,8 +298,36 @@ enough overhead for a single maintainer plus AI pairing.
   `gpui` on that path. `--experimental-hmr`'s in-place `rerender` is the
   first path in this project that mutates a style property on a node
   `gpui` has already seen, in the same long-lived window, with the same
-  element id, and nothing else about that node changing — pointing at
-  `gpui`'s own element/paint reuse for a stable element id not accounting
-  for a style-only change with no other difference. Not reproduced
-  outside this pattern; a full reload's own repaint after a style edit
-  already works, and always has.
+  element id, and nothing else about that node changing. That points at
+  `gpui`'s own element/paint reuse for a stable element id not
+  accounting for a style-only change with no other difference. Not
+  reproduced outside this pattern — a full reload's own repaint after a
+  style edit already works, and always has.
+
+- **`inca dev --experimental-hmr` never recovers from a source file that
+  was already broken when the session started**: a live edit that
+  introduces a compile error and is later fixed correctly triggers a
+  normal update; starting the session against an already-broken file
+  doesn't — fixing it afterward produces no update, only restarting
+  `inca dev` recovers. Reproduced by hand: launch against a `.vue` file
+  with a syntax error already present, then correct it while the session
+  keeps running. Cause: the very first `import()` never completes, so
+  Vite's dev server never adds the file to its module graph, leaving it
+  nothing to invalidate once the file changes. Likely fix: retry that
+  `import()` directly once a later file change is detected, instead of
+  relying on Vite's own graph-based invalidation. The same broken
+  startup also duplicates its own failure report, a separate, more
+  general gap the next entry covers.
+
+- **The HMR bootstrap's rejection handler doesn't distinguish who's
+  responsible for reporting a failure**: a Vite/bundler-caused failure
+  is Node's own event, and Node already reports it (`hmr.mts`'s
+  `onError`). A genuine error in the running app's own code, unrelated
+  to Vite, has no other reporter, and belongs to the app to report. The
+  HMR bootstrap script (`writeHmrEntry` in `hmr.mts`) doesn't make this
+  distinction: every rejected `import()` goes to `console.error(err)`
+  inside the running app, regardless of which side actually caused it.
+  A Vite-caused failure at startup therefore prints twice — once from
+  Node, once raw and unstyled from the app (see the entry above). Fix:
+  have the bootstrap recognize a Vite-shaped rejection and skip its own
+  report for that one case, while still reporting anything else itself.

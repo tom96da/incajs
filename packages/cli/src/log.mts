@@ -100,9 +100,19 @@ export function toFault(error: unknown): Fault {
   return { message: String(error), stack: null, code: null };
 }
 
+/** Dims only a stack's `at ...` frame lines — a leading header line, when there is one, stays plain. */
+function styleStack(stack: string, stream: NodeJS.WritableStream): string {
+  return stack
+    .split("\n")
+    .map((line) => (/^\s*at\b/.test(line) ? styleText("dim", line, { stream }) : line))
+    .join("\n");
+}
+
 /**
- * Writes `[inca] <label> (<code>): <message>` to `stream` — the code only
- * when the failure carries one — followed by the stack when there is one.
+ * Writes the stack (when there is one) followed by `[inca] <label>
+ * (<code>): <message>` to `stream` — the code only when the failure
+ * carries one. The tagged line goes last so it stays the thing visible
+ * without scrolling back through the stack above it.
  */
 export function printFault(
   stream: NodeJS.WritableStream,
@@ -110,7 +120,7 @@ export function printFault(
   fault: Fault,
   options: LogOptions = {},
 ): void {
+  if (fault.stack) stream.write(`${styleStack(fault.stack, stream)}\n`);
   const code = fault.code ? ` (${styleText("bold", fault.code, { stream })})` : "";
   stream.write(`${tag(stream, options, "red")} ${label}${code}: ${fault.message}\n`);
-  if (fault.stack) stream.write(`${fault.stack}\n`);
 }

@@ -56,15 +56,14 @@ export function createIncaDevTransport(): Required<
  * alternative reads V8 `CallSite` objects off `Error.stack`, and this
  * engine's `Error.stack` is a plain string, not `CallSite` objects.
  *
- * `hmr.logger.debug` is muted: the dev server already reports each update
- * on its own line. `error` stays wired to `console.error` — a failed
- * update still needs to be visible.
+ * `hmr.logger` is fully muted: the dev server already reports each
+ * update, and a failed one, on its own — see `hmr.mts`'s `onError`.
  */
 export function start(entryId: string): Promise<unknown> {
   const runner = new ModuleRunner(
     {
       transport: { ...createIncaDevTransport(), timeout: 0 },
-      hmr: { logger: { debug: () => {}, error: (msg) => console.error(msg) } },
+      hmr: { logger: { debug: () => {}, error: () => {} } },
       sourcemapInterceptor: false,
     },
     new ESModulesEvaluator(),
