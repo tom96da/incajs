@@ -331,3 +331,10 @@ enough overhead for a single maintainer plus AI pairing.
   Node, once raw and unstyled from the app (see the entry above). Fix:
   have the bootstrap recognize a Vite-shaped rejection and skip its own
   report for that one case, while still reporting anything else itself.
+
+- **`[inca] reload`/`[inca] update`'s timing isn't the useful number**:
+  both only measure how long the bundler took to prepare an update, not
+  how long until the app actually applies it and the screen reflects
+  it. Getting the real number needs the host to confirm back to Node
+  once an update is actually applied, which no dev-protocol message
+  does today.

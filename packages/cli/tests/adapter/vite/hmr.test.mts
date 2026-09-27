@@ -165,6 +165,38 @@ describe("hmr", () => {
     expect(notified.length).toBeGreaterThan(0);
   }, 20000);
 
+  it("calls onUpdate with the changed file and how long it took, on a successful update", async () => {
+    const { entry, vuePath, streams } = await makeApp(
+      `<script setup>\nconst msg = "first";\n</script>\n<template><div>{{ msg }}</div></template>\n`,
+    );
+
+    const updates: { file: string; took: number }[] = [];
+
+    const channel = await hmr({
+      entry,
+      cwd: path.dirname(entry),
+      ...streams,
+      notify: (payload) => client.notify(payload as HotPayload),
+      reload: () => {},
+      onError: () => {},
+      onUpdate: (info) => updates.push(info),
+    });
+    channels.push(channel);
+
+    const client = connectRunner(channel.dispatch);
+    await client.runner.import(entry);
+
+    await writeFile(
+      vuePath,
+      `<script setup>\nconst msg = "first";\n</script>\n<template><div>changed {{ msg }}</div></template>\n`,
+    );
+
+    await vi.waitFor(() => expect(updates.length).toBeGreaterThan(0), { timeout: 15000 });
+
+    expect(updates[0]!.file).toBe(vuePath);
+    expect(updates[0]!.took).toBeGreaterThanOrEqual(0);
+  }, 20000);
+
   it("reloads instead of notifying when a change has no HMR boundary, quiet", async () => {
     const { entry, streams, logs } = await makeApp(
       `<script setup>\nconst msg = "hello";\n</script>\n<template><div>{{ msg }}</div></template>\n`,

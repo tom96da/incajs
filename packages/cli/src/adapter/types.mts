@@ -90,6 +90,8 @@ export interface HmrOptions {
   reload: () => void;
   /** Called when an update the app fetched failed to compile. */
   onError: (error: UpdateError) => void;
+  /** Called after a successful update, with the file that changed and how long it took. */
+  onUpdate?: (info: { file: string; took: number }) => void;
 }
 
 /** A running HMR session — the value {@link Bundler.hmr} resolves to. */

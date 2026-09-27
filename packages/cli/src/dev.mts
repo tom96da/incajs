@@ -278,6 +278,10 @@ export async function dev(options: DevOptions): Promise<void> {
         // own `reload` RPC method gives it — a `"vite"` notification can't.
         reload: () => void reloadHost(),
         onError: (error) => printFault(stderr, "build failed", faultOf(error), STAMPED),
+        onUpdate: ({ file, took }) => {
+          const rel = styleText("dim", path.relative(cwd, file), { stream: stdout });
+          log(stdout, `${styleText("green", "update")} ${rel} (${took}ms)`, STAMPED);
+        },
       });
       await startHost(channel.entryFile, { vite: (params) => channel.dispatch(params) });
       closable = channel;

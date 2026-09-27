@@ -85,15 +85,19 @@ function updateErrorOf(payload: HotPayload): UpdateError | undefined {
  * A minimal server-side {@link HotChannel}. `send` relays to `notify`.
  * A `full-reload` payload calls `reload` instead: that needs a fresh
  * `Engine`/`Host`, which only `inca-host`'s `reload` RPC gives it.
- * A failed update also calls `onError`. The payload is still relayed
- * to the app afterward, since its own pending call may be waiting on it.
- * `dispatch` feeds a payload the app sent back into `DevEnvironment`'s
- * own `fetchModule`/HMR machinery.
+ * A failed update also calls `onError`; a successful one calls `onUpdate`
+ * with how long it took since `changed` last saw a file, when there was
+ * one waiting. Either way the payload is still relayed to the app
+ * afterward, since its own pending call may be waiting on it. `dispatch`
+ * feeds a payload the app sent back into `DevEnvironment`'s own
+ * `fetchModule`/HMR machinery.
  */
 function createIncaHotChannel(
   notify: (payload: unknown) => void,
   reload: () => void,
   onError: (error: UpdateError) => void,
+  onUpdate: (info: { file: string; took: number }) => void,
+  changed: { current: { file: string; at: number } | undefined },
 ): { channel: HotChannel; dispatch: (payload: unknown) => void } {
   const listeners = new Map<string, Set<(data: unknown, client: HotChannelClient) => void>>();
   const client: HotChannelClient = { send: outbound };
@@ -105,6 +109,10 @@ function createIncaHotChannel(
     }
     const error = updateErrorOf(payload);
     if (error) onError(error);
+    else if (payload.type === "update" && changed.current) {
+      onUpdate({ file: changed.current.file, took: Date.now() - changed.current.at });
+      changed.current = undefined;
+    }
     notify(payload);
   }
 
@@ -157,12 +165,14 @@ function shimViteClient(): Plugin {
 /**
  * Forwards each changed file to `@vitejs/plugin-vue`'s own HMR support,
  * which only ever sends `file-changed` over the server-wide WebSocket
- * client — one this custom environment doesn't have.
+ * client — one this custom environment doesn't have. Also records when
+ * this happened, for `createIncaHotChannel`'s own `onUpdate` timing.
  */
-function fileChangedPlugin(): Plugin {
+function fileChangedPlugin(changed: { current: { file: string; at: number } | undefined }): Plugin {
   return {
     name: "inca:file-changed",
     hotUpdate(options) {
+      changed.current = { file: options.file, at: Date.now() };
       this.environment.hot.send({
         type: "custom",
         event: "file-changed",
@@ -188,6 +198,7 @@ export async function hmr({
   notify,
   reload,
   onError,
+  onUpdate = () => {},
 }: HmrOptions): Promise<HmrChannel> {
   const entryFile = await writeHmrEntry(cwd, entry, runtimePath);
 
@@ -196,7 +207,8 @@ export async function hmr({
     await writeFile(path.join(hmrDirOf(cwd), CONFIG_FILE_NAME), configContent);
   }
 
-  const { channel, dispatch } = createIncaHotChannel(notify, reload, onError);
+  const changed: { current: { file: string; at: number } | undefined } = { current: undefined };
+  const { channel, dispatch } = createIncaHotChannel(notify, reload, onError, onUpdate, changed);
 
   const server: ViteDevServer = await createServer({
     configFile: false,
@@ -222,7 +234,7 @@ export async function hmr({
       vue({ template: { compilerOptions: { runtimeModuleName: "@vue/runtime-core" } } }),
       rejectUnsupported(),
       shimViteClient(),
-      fileChangedPlugin(),
+      fileChangedPlugin(changed),
     ],
   });
 
