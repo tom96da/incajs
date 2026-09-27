@@ -435,6 +435,56 @@ mod tests {
     }
 
     #[test]
+    fn a_shared_dependency_reached_by_two_different_relative_paths_is_one_module() {
+        let dir = ScratchDir::new("shared-dependency-path-variants");
+        fs::write(
+            dir.0.join("shared.js"),
+            "let calls = 0; export function next() { calls += 1; return calls; }",
+        )
+        .unwrap();
+
+        let a_dir = dir.0.join("a");
+        fs::create_dir_all(&a_dir).unwrap();
+        let first = a_dir.join("x.js");
+        fs::write(
+            &first,
+            "import { next } from '../shared.js'; globalThis.firstSeen = next();",
+        )
+        .unwrap();
+
+        let b_dir = dir.0.join("b");
+        fs::create_dir_all(&b_dir).unwrap();
+        let second = b_dir.join("y.js");
+        fs::write(
+            &second,
+            "import { next } from '../shared.js'; globalThis.secondSeen = next();",
+        )
+        .unwrap();
+
+        let engine = Engine::builder().module_root(&dir.0).build().unwrap();
+        engine
+            .eval_module(
+                &first.to_string_lossy(),
+                &fs::read_to_string(&first).unwrap(),
+            )
+            .unwrap();
+        engine
+            .eval_module(
+                &second.to_string_lossy(),
+                &fs::read_to_string(&second).unwrap(),
+            )
+            .unwrap();
+
+        // `a/x.js` and `b/y.js` both resolve `../shared.js` to the same
+        // file, but through textually different paths (`a/../shared.js`
+        // vs. `b/../shared.js`). Canonicalizing before caching means one
+        // module instance, so the second entry sees `2`, not `1`.
+        let first_seen: i32 = engine.eval("globalThis.firstSeen").unwrap();
+        let second_seen: i32 = engine.eval("globalThis.secondSeen").unwrap();
+        assert_eq!((first_seen, second_seen), (1, 2));
+    }
+
+    #[test]
     fn a_dynamic_import_settles_once_pending_jobs_are_drained() {
         let dir = ScratchDir::new("dynamic-import");
         fs::write(dir.0.join("dep.js"), "export const value = 41;").unwrap();

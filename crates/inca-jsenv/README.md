@@ -17,13 +17,28 @@ Today that is `console`. It writes wherever the caller points it, because
 the process embedding it may already be using stdout for something else.
 
 ```rust
-use std::rc::Rc;
 use inca_jsenv::console;
 
 // `ctx` is an `rquickjs::Ctx`.
-console::install(&ctx, console::to_stderr())?;
+console::install(&ctx, &console::to_stderr())?;
 ctx.eval::<(), _>("console.log('ready', { count: 1 })")?;
 // stderr: log: ready { count: 1 }
+```
+
+## Module loading
+
+`Engine::builder().module_root(dir)` adds a directory `import`s resolve
+against — a bare specifier is searched for under each root, in the order
+added, and a `./`/`../`-relative one resolves against the importing
+module's own path. `eval_module` declares and runs a module by name,
+driving its top-level evaluation (including a top-level `await`) to
+completion:
+
+```rust
+use inca_jsenv::Engine;
+
+let engine = Engine::builder().module_root("src").build()?;
+engine.eval_module("src/main.js", "import './helper.js';")?;
 ```
 
 ## Scope

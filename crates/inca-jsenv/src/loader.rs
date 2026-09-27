@@ -47,7 +47,7 @@ impl Resolver for DiskResolver {
         };
 
         candidate
-            .filter(|path| path.is_file())
+            .and_then(|path| fs::canonicalize(path).ok())
             .map(|path| path.to_string_lossy().into_owned())
             .ok_or_else(|| Error::new_resolving(base, name))
     }
