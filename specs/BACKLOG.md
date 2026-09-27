@@ -227,8 +227,81 @@ enough overhead for a single maintainer plus AI pairing.
     scancode and no left/right or numpad distinction to recover either
     from.
 
+- **No input-synthesis/state-introspection channel on the dev protocol**:
+  `tests/tests/hmr-quickjs-state.test.mts` drives its fixture with a
+  `tick` dev notification standing in for a pointer click, because
+  there's no way to synthesize one against a real running `inca-host`
+  process from outside. A generalized version of that workaround — a dev
+  protocol method for synthesizing input and reading back app state —
+  would be the seed of future automated GUI testing (a Playwright-style
+  tool driving the app), not just this one test's stimulus.
+
 - **A template `ref` still resolves to a plain data object for anything
   beyond `.focus()`/`.blur()`**: `IncaElement`
   (`packages/core/src/vue/nodeOps.mts`) has those two methods; the same
   gap likely applies to any other DOM-element method or property a
   `.vue` app would otherwise reach for on a template `ref`.
+
+- **`inca-host` doesn't exit after reporting a startup failure**: when the
+  very first bundle fails to evaluate (before any window has opened),
+  `report_startup_failure`/`cx.quit()` runs, but the process keeps
+  running instead of actually terminating — reproduced by hand, `--dev`
+  against a bundle that just throws, with the real compiled binary
+  spawned as a child process (not `TestAppContext`, which never exercises
+  real process exit). Suspected cause: `cx.quit()` only takes effect once
+  the platform's native event loop has been kicked into motion by at
+  least one window opening; with zero windows ever created, the quit
+  request seems to go unprocessed. Affects any `inca dev` session (HMR or
+  not) whose first bundle fails to load, not just experimental HMR.
+
+- **`inca dev --experimental-hmr` opens its window at the wrong size on
+  first launch, then resizes**: a plain `inca dev` opens already sized to
+  the app's own declared content (no visible gap). Under
+  `--experimental-hmr`, the window instead opens at the app's configured
+  size or a default, with the app's real content appearing moments later
+  once mounting finishes, then a one-time resize snaps it to the correct
+  size — visibly, a large window with black margins that shrinks after a
+  beat. Root cause: in HMR mode, the entry module that `inca-host`
+  evaluates doesn't mount the app itself — it hands off to a JS module
+  runner that fetches and evaluates the real app code over a round trip
+  to the Node-side dev server, and `inca-host` doesn't wait for that
+  round trip before opening the window (waiting would need the process's
+  stdin reader, which answers that round trip, to already be running —
+  today it only starts once the window has opened). A real fix means
+  starting that stdin reader before the window opens, and having
+  something outside the module-evaluation call keep servicing incoming
+  replies while that evaluation is still in progress, so the app's real
+  content size is known before the window is created. The engine's
+  module-evaluation entry point (`Engine::eval_module`) doesn't support
+  that today: it drives a module's own top-level `Promise` to completion
+  synchronously and reports an error if the `Promise` can't settle on its
+  own, with no hook for external I/O to arrive and resolve it mid-call —
+  making the entry await its own mount, as-is, would just fail immediately
+  rather than wait correctly. Fixing this changes `inca-host`'s startup
+  sequencing itself, not just this one feature, so it's being carried
+  forward rather than attempted alongside the rest of experimental HMR.
+
+- **A style-only change to an already-mounted node doesn't reach the
+  screen under `--experimental-hmr`, though the same edit works via a
+  full reload**: reproduced by hand against `examples/click_counter`,
+  editing only a `:style` value (e.g. `border_color`) with the script and
+  template structure otherwise unchanged. Confirmed at every layer up to
+  and including the native tree: a diagnostic harness driving the real
+  Vue HMR update path (`@vitejs/plugin-vue`'s `rerender`, which patches
+  the existing component instance in place rather than remounting it)
+  showed the correct new value reaching `__inca_native__.setStyle` for
+  the right node, both with a minimal fixture and with `click_counter`'s
+  actual source. Editing something that changes the mounted tree's shape
+  instead — adding, removing, or changing text content — updates the
+  screen correctly and immediately, as does a plain (non-HMR) full
+  reload's rebuilt tree. What's different about the failing case: a full
+  reload discards and rebuilds the whole session, tree, and every node's
+  id from scratch, so the window's underlying elements are always new to
+  `gpui` on that path. `--experimental-hmr`'s in-place `rerender` is the
+  first path in this project that mutates a style property on a node
+  `gpui` has already seen, in the same long-lived window, with the same
+  element id, and nothing else about that node changing — pointing at
+  `gpui`'s own element/paint reuse for a stable element id not accounting
+  for a style-only change with no other difference. Not reproduced
+  outside this pattern; a full reload's own repaint after a style edit
+  already works, and always has.

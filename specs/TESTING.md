@@ -30,7 +30,14 @@ Update this file as real conventions land, same as the other docs here.
   depends on the other. Cargo picks up `tests/tests/*.rs` on its own; a
   file that needs the other language runs it (`config_contract.rs` starts
   Node) or reads what it built (`js_core_integration.rs` reads
-  `packages/core/dist`).
+  `packages/core/dist`). `tests/tests/hmr-quickjs-state.test.mts` sits
+  beside them (Cargo ignores non-`.rs` files there regardless) and is the
+  one JS test in this area — it spawns the real `inca-host` binary and a
+  real Vite dev server, since driving `Session`/`start` any other way
+  would mean making them public just for a test. It's a separate pnpm
+  workspace member (`@incajs/e2e-tests`, not swept into `pnpm test`) and
+  shares `inca-tests`'s own CI job, which already sets up the Rust/gpui
+  toolchain this test needs too.
 
 ### Required checks
 
@@ -176,3 +183,6 @@ Watch for these when scaffolding a new package too:
   plus `cargo clippy`/`cargo fmt --check` from the Required checks list
   above, which aren't bundled into `cargo test` itself the way the root
   `pretest` bundles them on the TypeScript side.
+- The Rust+Vite e2e test: `cargo build -p inca-host` and `pnpm -r build`
+  first, then `pnpm --filter @incajs/e2e-tests test` — outside `pnpm
+  test`'s own run by design, so run it explicitly.

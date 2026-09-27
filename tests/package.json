@@ -1,0 +1,28 @@
+{
+  "name": "@incajs/e2e-tests",
+  "version": "0.0.0-0",
+  "private": true,
+  "description": "Tests that span Rust and TypeScript — see Cargo.toml beside this file for its Rust half.",
+  "license": "(MIT OR Apache-2.0)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tom96da/incajs.git",
+    "directory": "tests"
+  },
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@incajs/cli": "workspace:*",
+    "@vue/runtime-core": "^3.5.43",
+    "incajs": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
+  },
+  "engines": {
+    "node": ">=22.18"
+  }
+}

@@ -329,15 +329,28 @@ jobs:
       - name: Install deps
         run: pnpm ci
 
-      # js_core_integration.rs reads this package's dist/ off disk.
-      - name: Build the incajs package
-        run: pnpm --filter incajs build
+      - name: Build the JS packages
+        run: pnpm -F incajs -F @incajs/cli build
 
       - name: Clippy
         run: cargo clippy -p inca-tests --all-targets -- -D warnings
 
       - name: Test
         run: cargo test -p inca-tests
+
+      # hmr-quickjs-state.test.mts spawns this binary directly.
+      - name: Build inca-host
+        run: cargo build -p inca-host
+
+      # Runs headless: no real display in this container.
+      - name: Install Xvfb
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        # xvfb-run also needs xauth.
+        run: apt-get install -y --no-install-recommends xvfb xauth
+
+      - name: Test (real inca-host + real Vite dev server)
+        run: xvfb-run -a pnpm -F @incajs/e2e-tests test
 
   # One status check whose name survives changes to the jobs above.
   passed:
