@@ -111,7 +111,7 @@ const phases = [
 
 # Roadmap
 
-inca is built in phases, Vue 3 support first and end-to-end, before the
+**Incarnative.js** is built in phases, Vue 3 support first and end-to-end, before the
 surface broadens to more styling, tooling, platforms, and a second
 frontend framework. This page summarizes where each phase stands.
 

@@ -9,9 +9,9 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 # Configuration
 
-`inca` reads `inca.config.ts` from your app's root — other JS and JSON
-extensions work too. `defineConfig` is a typing helper; it returns what you
-give it.
+Configuration is read from `inca.config.ts` in your app's root — other JS
+and JSON extensions work too. `defineConfig` is a typing helper; it returns
+what you give it.
 
 ```ts [inca.config.ts]
 import { defineConfig } from "@incajs/cli/config";

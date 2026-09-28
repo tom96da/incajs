@@ -21,7 +21,7 @@ or Node itself — and its own message is what to search for.
 
 ## `ERR_INCA_ENTRY_NOT_FOUND`
 
-No entry point. `inca` looks for `src/main.mts`, then `src/App.vue` (which
+No entry point. Incarnative.js looks for `src/main.mts`, then `src/App.vue` (which
 it wraps in an entry for you).
 
 Create one of those, or point `entry` in `inca.config.ts` at the file you
@@ -116,8 +116,8 @@ above — see `ERR_INCA_UNSUPPORTED_STYLE`.
 
 ## `ERR_INCA_BUILD_NO_OUTPUT`
 
-The bundler finished without writing anything. This one is a bug in `inca`
-rather than in your app — please
+The bundler finished without writing anything. This one is a bug in
+Incarnative.js rather than in your app — please
 [open an issue](https://github.com/tom96da/incajs/issues).
 
 ## `ERR_INCA_HMR_UNSUPPORTED`
@@ -129,5 +129,5 @@ this only happens with a custom `bundler` that doesn't implement `hmr`.
 ## `ERR_INCA_BUILD_NO_ENTRY_CHUNK`
 
 The bundler wrote files, but none of them was marked as the entry, so
-there is nothing for the host to evaluate. A bug in `inca` too — please
-[open an issue](https://github.com/tom96da/incajs/issues).
+there is nothing for the host to evaluate. A bug in Incarnative.js too —
+please [open an issue](https://github.com/tom96da/incajs/issues).

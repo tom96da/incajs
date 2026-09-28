@@ -1,5 +1,5 @@
 ---
-description: Every event name inca dispatches, the fields it carries, and how propagation and focus work.
+description: Every event name Incarnative.js dispatches, the fields it carries, and how propagation and focus work.
 ---
 
 <!--
@@ -86,8 +86,7 @@ with nothing focused, neither reaches any node. A subset of the DOM's
 [`KeyboardEvent`](https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent)'s
 fields:
 
-- `key` — DOM-named where inca recognizes the key, the raw character
-  otherwise
+- `key` — DOM-named where recognized, the raw character otherwise
 - `repeat` — always `false` for `keyup`
 - `ctrlKey` / `shiftKey` / `altKey` / `metaKey` — modifier keys held
 
@@ -153,6 +152,6 @@ Vue's template event modifiers — `v-on:click.once`, `.passive`,
 - `.once` is fully real: the listener unbinds after its first call.
 - `.passive` and `.capture` are accepted but currently degrade to an
   ordinary bubble-phase listener, for the same reason given in
-  [Propagation](#propagation) above — inca has no capture-phase
+  [Propagation](#propagation) above — Incarnative.js has no capture-phase
   dispatch yet, so `.capture` doesn't run during the capture phase, and
   `.passive` has no effect beyond a plain bind.

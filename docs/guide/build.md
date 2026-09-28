@@ -16,8 +16,8 @@ directory on Linux.
 
 ## Configuration
 
-`inca` reads `inca.config.ts` from your app's root, for the app's name, its
-icon, its window, and where a build reads and writes. Every key, with an
+Configuration is read from `inca.config.ts` in your app's root: the app's
+name, its icon, its window, and where a build reads and writes. Every key, with an
 example, is listed in [Configuration](../reference/configuration).
 
 ## Output

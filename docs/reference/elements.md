@@ -1,5 +1,5 @@
 ---
-description: Every style key inca renders, how elements and `class` work, and which Vue features this renderer doesn't support yet.
+description: Every style key Incarnative.js renders, how elements and `class` work, and which Vue features this renderer doesn't support yet.
 ---
 
 <!--
@@ -110,7 +110,7 @@ build rather than silently no-oping:
   fails at the template-compiler stage with its own error, independent of
   the missing export.
 - **No timers or `fetch`**: `setTimeout`/`setInterval`/`fetch` aren't
-  provided as globals by the JS runtime inca embeds.
+  provided as globals by the JS runtime Incarnative.js embeds.
 - **No text input, no scrolling**: an editable text element and a
   scrollable container are both still unimplemented (see the
   [Roadmap](../roadmap)) — not permanently unsupported, just not built
@@ -123,7 +123,7 @@ Event modifiers (`.once`/`.passive`/`.capture`) are documented in
 
 ## Bootstrapping: `src/main.mts`
 
-`inca` looks for `src/App.vue` and wraps it in a synthesized entry
+Incarnative.js looks for `src/App.vue` and wraps it in a synthesized entry
 equivalent to this — write `src/main.mts` yourself for full control over
 bootstrapping (it wins outright when both files exist):
 
