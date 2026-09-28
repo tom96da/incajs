@@ -45,6 +45,21 @@ from.
 Phase 4 (input & text editing) is running alongside 3.4: pointer input,
 the focus model, and keyboard input are done.
 
+`v0.0.6` is in progress, not yet tagged or published: a pre-release
+review of everything since `v0.0.5` landed a batch of fixes directly on
+`main` — a DOM
+`buttons` bitmask fix for right/middle mouse buttons, a jsenv fix so a
+module reached by two different relative paths still evaluates once,
+Vue `.once`/`.passive`/`.capture` event-modifier support (`.once` is a
+real unbind-after-first-call, the other two degrade to an ordinary
+bubble-phase bind until capture-phase dispatch exists), doc-accuracy
+fixes in `packages/core`, a fix keeping a user-resized window's size
+across an HMR reload, a dependency-catalog consolidation, and a round
+of HMR reliability fixes (a misreported update, a hang when the host
+fails to start in HMR mode, a stricter `INCA_EXPERIMENTAL_HMR` env
+check) plus a flaky e2e test fix. `docs/` and the version bump itself
+are still pending.
+
 The current release is `v0.0.5`, on Node.js 22.18 or newer, zed v1.20.2
 for `gpui` and rquickjs 0.14.0. Linux binaries are built in an
 `ubuntu:22.04` container by both workflows, kept in sync, for a glibc
