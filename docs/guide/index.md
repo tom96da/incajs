@@ -88,6 +88,9 @@ exactly one of two entry points there:
   </template>
   ```
 
+  See [Elements & Styles](../reference/elements) for every style key and
+  what's supported.
+
 - `src/main.mts` — for full control over bootstrapping. It wins
   outright when both exist.
 
