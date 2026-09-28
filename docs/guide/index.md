@@ -16,17 +16,17 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 ::: code-group
 
 ```sh [npm]
-$ npm install incajs
+$ npm install incajs @vue/runtime-core
 $ npm install -D @incajs/cli
 ```
 
 ```sh [pnpm]
-$ pnpm add incajs
+$ pnpm add incajs @vue/runtime-core
 $ pnpm add -D @incajs/cli
 ```
 
 ```sh [yarn]
-$ yarn add incajs
+$ yarn add incajs @vue/runtime-core
 $ yarn add -D @incajs/cli
 ```
 
@@ -44,12 +44,22 @@ Scaffold your app in its own directory (e.g. `./my-app`), with a
 .
 ├─ src
 │  └─ App.vue
+├─ inca.config.ts
 └─ package.json
 ```
 
 The directory containing `package.json` is the app's **project
 root** — every path `inca` resolves, including `src` and the `dist`
 it writes, is relative to it.
+
+`package.json` needs `"type": "module"`, satisfying the ESM-only
+requirement above:
+
+```json [package.json]
+{
+  "type": "module"
+}
+```
 
 ::: tip
 `inca build`/`package` write their output to `dist`. If using Git,
@@ -83,7 +93,7 @@ exactly one of two entry points there:
 
 ## Up and Running
 
-Insert an npm scripts like the following into `package.json`.
+Add an npm script like the following to `package.json`.
 
 ```json [package.json]
 {
@@ -103,7 +113,7 @@ The `dev` script watches your app and opens a live-reloading window.
 
 ```sh [npm]
 $ npm run dev
-``` 
+```
 
 ```sh [pnpm]
 $ pnpm run dev
@@ -130,8 +140,10 @@ optional dependency. Neither Cargo nor Rust are needed to run an app.
 | Windows x64   | Planned          |
 | Windows arm64 | Planned          |
 
-\* Packaged apps still need [these libraries](#linux-runtime-requirements)
-on the machine that runs them — `inca package` doesn't bundle them yet.
+\* The app still needs [these libraries](#linux-runtime-requirements) on
+the machine that runs it, whether via the development window or a
+packaged app.
+`inca package` doesn't bundle them yet.
 
 ## Linux runtime requirements
 

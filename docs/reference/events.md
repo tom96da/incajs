@@ -11,9 +11,14 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 A `.vue` template binds a listener the usual way — `@click`,
 `@mousedown`, and so on. Every listener receives one shared event
-object: `type` (the event's name), `target`/`currentTarget` (the node it
-fired on), the [propagation methods](#propagation) below, and whatever
-fields that event carries.
+object: `type` (the event's name), `target`/`currentTarget`, the
+[propagation methods](#propagation) below, and whatever fields that event
+carries.
+
+`target` and `currentTarget` are both the id of the node currently
+receiving the event — they're always equal, since there's no way yet to
+learn which descendant an event actually started on (no event
+delegation).
 
 ```vue
 <template>

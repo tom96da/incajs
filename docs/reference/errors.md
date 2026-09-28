@@ -52,8 +52,9 @@ enforces.
 
 ## `ERR_INCA_ICON_NOT_FOUND`
 
-`icon` in `inca.config.ts` points at a file that doesn't exist. The path is
-resolved from the app's root.
+`icon` in `inca.config.ts` points at a `.icns` file that doesn't exist. The
+path is resolved from the app's root directory. Applies to macOS only —
+Linux shows no icon.
 
 ## `ERR_INCA_PLATFORM_UNSUPPORTED`
 
@@ -104,7 +105,7 @@ Use instead:
 
 ```vue
 <template>
-  <div :style="{ color: 'red' }">…</div>
+  <div :style="{ text_color: '#ff0000' }">…</div>
 </template>
 ```
 

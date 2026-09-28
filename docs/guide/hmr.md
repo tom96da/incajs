@@ -10,8 +10,8 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 # Hot Module Replacement <Badge type="warning" text="Experimental"/>
 
 > [!WARNING]
-> HMR is experimental and opt-in. Plain `inca dev` always does a full
-> reload, regardless of this flag.
+> HMR is experimental and opt-in. Plain `inca dev` (no flag) always does
+> a full reload.
 
 ## Enabling it
 

@@ -10,24 +10,15 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 # Application Window
 
 An app opens in one window. Everything around its content — the size it
-starts at, the title it carries, its menu — is set in `inca.config.ts`, or
-falls back to a default.
+starts at, the title it carries, its menu — is set under `window` in
+`inca.config.ts` (see [Configuration](../reference/configuration#the-window)
+for the full key list and an example), or falls back to a default.
 
-```ts [inca.config.ts]
-import { defineConfig } from "@incajs/cli/config";
+These apply to the development window and to a packaged app alike.
 
-export default defineConfig({
-  productName: "Click Counter",
-  window: {
-    width: 1024,
-    height: 768,
-    title: "Click Counter",
-  },
-});
-```
-
-These apply to `inca dev` and to a packaged app alike. `inca dev` reads the
-config once, at startup — restart it after editing `inca.config.ts`.
+> [!NOTE]
+> `inca dev` reads `inca.config.ts` once, at startup. Reloading it on
+> change isn't supported yet — restart `inca dev` to pick up an edit.
 
 ## Size
 
@@ -76,18 +67,18 @@ today. There is no way to add items to it yet.
 
 ## Under development
 
-`inca dev` and `--experimental-hmr` add a few dev-only quirks on top of the
-behavior above.
+The development window, and `--experimental-hmr` on top of it, add a few
+dev-only quirks on top of the behavior above.
 
 Under `--experimental-hmr`, the window's first launch can briefly open at
 the wrong size before snapping to the correct one — see the
 [HMR guide](./hmr#known-limitations).
 
-Under `inca dev`, a window resized by hand keeps that size across later
-reloads; a non-resizable window snaps back to its configured size on each
-reload.
+In the development window, resizing it by hand keeps that size across
+later reloads; a non-resizable window snaps back to its configured size on
+each reload.
 
-Closing the window under `inca dev` also stops the dev process.
+Closing the development window also stops the dev process.
 
 ## Closing the app
 

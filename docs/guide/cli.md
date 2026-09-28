@@ -14,8 +14,8 @@ see [Error Codes](../reference/errors) for what each one means.
 
 ## `inca dev`
 
-Watches your app and opens a live-reloading window, reloading on every
-change.
+Watches your app and opens a live-reloading development window, reloading
+on every change.
 
 ### Usage
 

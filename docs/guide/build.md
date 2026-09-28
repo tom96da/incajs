@@ -17,16 +17,19 @@ directory on Linux.
 ## Configuration
 
 `inca` reads `inca.config.ts` from your app's root, for the app's name, its
-icon, its window, and where a build reads and writes:
+icon, its window, and where a build reads and writes. Every key, with an
+example, is listed in [Configuration](../reference/configuration).
 
-```ts [inca.config.ts]
-import { defineConfig } from "@incajs/cli/config";
+## Output
 
-export default defineConfig({
-  productName: "Click Counter",
-  identifier: "com.example.click-counter",
-  icon: "assets/icon.icns",
-});
-```
+`inca package` writes the packaged app under `outDir` (`dist` by
+default), alongside the plain build output:
 
-Every key is listed in [Configuration](../reference/configuration).
+- macOS — `dist/<productName>.app`. Open it, or run the executable
+  inside it directly.
+- Linux — `dist/<slug>`, a plain directory named after a slugified
+  `productName` (lowercased, non-alphanumeric runs collapsed to `-`),
+  holding an executable of the same name.
+
+`inca package` doesn't sign the app yet — macOS Gatekeeper will warn
+before it opens.
