@@ -463,3 +463,31 @@ enough overhead for a single maintainer plus AI pairing.
   (`crates/inca-host/src/dev.rs`) has the unrecognized `method` in hand but
   answers a fixed `"unknown method"` string regardless. A client can't tell
   from its own log which method got rejected.
+
+- **A camelCase (or otherwise miscased) style key is silently ignored**:
+  `style_spec_from_props` (`crates/inca-gpui/src/element.rs`)'s match falls
+  through to `_ => {}` for any key it doesn't recognize, including
+  `flexDirection` where `flex_direction` was meant — no error, no warning,
+  the property just never applies. Someone coming from web-standard CSS/
+  Vue conventions hits this as a silent no-op with nothing to point at the
+  typo. At minimum this should warn in dev mode.
+
+- **`resolveEntry` only recognizes `src/main.mts`, not `.ts`/`.js`**:
+  `packages/cli/src/entry.mts` checks the literal `src/main.mts` path and
+  falls back to synthesizing an entry from `src/App.vue`; an `.mts`-less
+  `src/main.ts`/`src/main.js` is invisible to it. `docs/reference/elements.md`
+  already tells readers this is "intended for later, not yet implemented."
+  Track the actual work here: accept `.ts`/`.js` too, or write down why
+  `.mts` alone is required.
+
+- **`ERR_INCA_HOST_BIN_NOT_FOUND` is `inca package`-only; `inca dev` hits
+  the same failure with no code at all**: `package.mts` resolves
+  `resolveHostBin()` and then explicitly `existsSync`-checks the result,
+  raising `ERR_INCA_HOST_BIN_NOT_FOUND` if it's missing. `dev.mts`'s
+  `HostClient.start` (`packages/cli/src/dev-client/hostClient.mts`) calls
+  `spawn()` on the same resolved path with no existence check and no
+  `"error"` listener on the child process — an `INCA_HOST_BIN` pointing at
+  a nonexistent binary surfaces as an unhandled `ENOENT` `"error"` event,
+  not a reported `IncaError`. Either give `inca dev` the same code for the
+  same failure, or write down why the two commands' error handling for an
+  unresolvable host binary is meant to differ.

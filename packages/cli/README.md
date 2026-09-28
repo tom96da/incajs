@@ -23,7 +23,10 @@ bootstrapping; it wins outright when both exist.
 ## Commands
 
 - **`inca dev`** — watches your app and opens a live-reloading window,
-  reloading on every change.
+  reloading on every change. `--experimental-hmr` (or
+  `INCA_EXPERIMENTAL_HMR=1`) opts into experimental, module-granular
+  hot reloading instead — see the
+  [HMR guide](https://tom96da.github.io/incajs/guide/hmr).
 - **`inca build`** — bundles your app for production, once, with no
   window opened.
 - **`inca package`** — builds your app, then packages it with a

@@ -10,6 +10,18 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- experimental HMR (hot module reloading) became available behind `inca dev --experimental-hmr` ([0f54d9c](https://github.com/tom96da/incajs/commit/0f54d9c))
+
+### Fixed
+
+- right and middle mouse buttons report the correct DOM `buttons` bitmask ([b7803bb](https://github.com/tom96da/incajs/commit/b7803bb))
+- a module reached by two different relative import paths evaluates once instead of twice ([acf8042](https://github.com/tom96da/incajs/commit/acf8042))
+- a resizable window's size no longer snaps back to content size on reload ([d556bc2](https://github.com/tom96da/incajs/commit/d556bc2))
+- `.once` event modifiers really unbind after firing, instead of registering a dead listener ([23a63eb](https://github.com/tom96da/incajs/commit/23a63eb))
+- `.passive`/`.capture` event modifiers no longer break the listener ([23a63eb](https://github.com/tom96da/incajs/commit/23a63eb))
+
 ## [0.0.5] - 2026-09-26
 
 ### Added

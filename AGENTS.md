@@ -57,8 +57,12 @@ fixes in `packages/core`, a fix keeping a user-resized window's size
 across an HMR reload, a dependency-catalog consolidation, and a round
 of HMR reliability fixes (a misreported update, a hang when the host
 fails to start in HMR mode, a stricter `INCA_EXPERIMENTAL_HMR` env
-check) plus a flaky e2e test fix. `docs/` and the version bump itself
-are still pending.
+check) plus a flaky e2e test fix. `docs/` has since been brought up to
+date for the release: the guide gained a dedicated HMR page and an
+application-window page, the reference section gained an elements &
+styles page, and the site got a public roadmap page alongside a
+landing-page and navigation polish. The version bump itself is still
+pending.
 
 The current release is `v0.0.5`, on Node.js 22.18 or newer, zed v1.20.2
 for `gpui` and rquickjs 0.14.0. Linux binaries are built in an
