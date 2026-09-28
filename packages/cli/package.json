@@ -69,14 +69,14 @@
   },
   "dependencies": {
     "@vitejs/plugin-vue": "^6.0.9",
-    "vite": "^8.3.0"
+    "vite": "catalog:"
   },
   "devDependencies": {
-    "@types/node": "^26.6.2",
-    "@vue/runtime-core": "^3.5.43",
+    "@types/node": "catalog:",
+    "@vue/runtime-core": "catalog:",
     "c12": "4.0.0-rc.1",
-    "oxfmt": "^0.68.0",
-    "oxlint": "^1.83.0",
+    "oxfmt": "catalog:",
+    "oxlint": "catalog:",
     "rolldown": "~1.2.9",
     "vue": "^3.5.43"
   },
