@@ -50,6 +50,7 @@ afterEach(() => {
   process.removeAllListeners("SIGINT");
   process.removeAllListeners("SIGTERM");
   process.exitCode = undefined;
+  vi.unstubAllEnvs();
 });
 
 describe("run", () => {
@@ -171,7 +172,17 @@ describe("run", () => {
     await run(["node", "inca", "dev"]);
 
     expect(mockedDev.mock.calls[0]?.[0].experimentalHmr).toBe(true);
-
-    vi.unstubAllEnvs();
   });
+
+  it.each(["0", "false"])(
+    "leaves experimentalHmr off when INCA_EXPERIMENTAL_HMR=%s",
+    async (value) => {
+      mockedDev.mockResolvedValueOnce(undefined);
+      vi.stubEnv("INCA_EXPERIMENTAL_HMR", value);
+
+      await run(["node", "inca", "dev"]);
+
+      expect(mockedDev.mock.calls[0]?.[0].experimentalHmr).toBe(false);
+    },
+  );
 });

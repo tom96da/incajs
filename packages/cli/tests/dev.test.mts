@@ -486,6 +486,42 @@ describe("dev with --experimental-hmr", () => {
     await running;
   });
 
+  it("stops instead of hanging when the host fails to start", async () => {
+    // Reports this process as macOS for this one test, so hostBin
+    // resolution goes through the platform package lookup and fails: this
+    // devcontainer has no @incajs/host-darwin-x64 installed, so start()
+    // rejects before ever spawning anything — the same failure mode the
+    // non-HMR "keeps running when no host binary resolves" test above
+    // relies on.
+    const real = process.platform;
+    Object.defineProperty(process, "platform", { value: "darwin", configurable: true });
+    onTestFinished(() => {
+      Object.defineProperty(process, "platform", { value: real, configurable: true });
+    });
+
+    const bundler = makeFakeHmrBundler("/unused/entry.js");
+    const stdout = makeSink();
+    const stderr = makeSink();
+    const controller = new AbortController();
+
+    const running = dev({
+      entry: "unused",
+      bundler,
+      experimentalHmr: true,
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      signal: controller.signal,
+    });
+
+    // HMR mode has no rebuild loop to retry a failed start on — dev()
+    // itself must resolve rather than wait forever for a signal that
+    // will never come.
+    await vi.waitFor(() => expect(stderr.text()).toContain("failed to start inca-host"));
+    await running;
+
+    expect(stdout.text()).not.toContain("[inca] ready");
+  });
+
   it("throws a clear error when the bundler has no HMR support", async () => {
     const bundler: Bundler = {
       watch: () => Promise.reject(new Error("not used")),

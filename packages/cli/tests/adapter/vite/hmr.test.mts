@@ -134,6 +134,7 @@ describe("hmr", () => {
 
     const notified: unknown[] = [];
     const errors: { message: string }[] = [];
+    const updates: { file: string; took: number }[] = [];
 
     const channel = await hmr({
       entry,
@@ -145,6 +146,7 @@ describe("hmr", () => {
       },
       reload: () => {},
       onError: (error) => errors.push(error),
+      onUpdate: (info) => updates.push(info),
     });
     channels.push(channel);
 
@@ -163,6 +165,9 @@ describe("hmr", () => {
     expect(errors[0]!.message).toContain("Interpolation end sign was not found");
     // Still relayed: the app's own pending fetch/HMR call may be waiting on it.
     expect(notified.length).toBeGreaterThan(0);
+    // A broken edit's `update` payload arrives before its failure does — it
+    // must never be reported as a success.
+    expect(updates).toEqual([]);
   }, 20000);
 
   it("calls onUpdate with the changed file and how long it took, on a successful update", async () => {

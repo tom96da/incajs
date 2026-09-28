@@ -60,7 +60,8 @@ export async function run(argv: readonly string[] = process.argv): Promise<void>
   process.on("SIGTERM", onSignal);
 
   const experimentalHmr =
-    argv.includes("--experimental-hmr") || Boolean(process.env.INCA_EXPERIMENTAL_HMR);
+    argv.includes("--experimental-hmr") ||
+    !["", "0", "false"].includes(process.env.INCA_EXPERIMENTAL_HMR ?? "");
   if (experimentalHmr) log(process.stdout, "experimental HMR active", { timestamp: true });
 
   try {

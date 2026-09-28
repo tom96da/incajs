@@ -285,6 +285,9 @@ export async function dev(options: DevOptions): Promise<void> {
       });
       await startHost(channel.entryFile, { vite: (params) => channel.dispatch(params) });
       closable = channel;
+      // No retry path exists for HMR mode the way a failed non-HMR start is
+      // naturally retried on the next rebuild — stop rather than hang.
+      if (!client) stop();
     } else {
       closable = await bundler.watch({
         entry,

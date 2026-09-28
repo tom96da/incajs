@@ -82,15 +82,29 @@ function updateErrorOf(payload: HotPayload): UpdateError | undefined {
 }
 
 /**
+ * Whether `payload` is a successful `fetchModule` `vite:invoke` response —
+ * the module runner's own RPC for pulling an updated module's compiled
+ * code, and the actual verdict on an HMR update. An `update` payload only
+ * announces that a fetch is coming; its own failure is caught separately
+ * by {@link updateErrorOf} on this same response.
+ */
+function isFetchModuleSuccess(payload: HotPayload): boolean {
+  if (payload.type !== "custom" || payload.event !== "vite:invoke") return false;
+  const invoke = payload.data as { name?: string; data?: { error?: unknown } };
+  return invoke.name === "fetchModule" && !invoke.data?.error;
+}
+
+/**
  * A minimal server-side {@link HotChannel}. `send` relays to `notify`.
  * A `full-reload` payload calls `reload` instead: that needs a fresh
  * `Engine`/`Host`, which only `inca-host`'s `reload` RPC gives it.
  * A failed update also calls `onError`; a successful one calls `onUpdate`
  * with how long it took since `changed` last saw a file, when there was
- * one waiting. Either way the payload is still relayed to the app
- * afterward, since its own pending call may be waiting on it. `dispatch`
- * feeds a payload the app sent back into `DevEnvironment`'s own
- * `fetchModule`/HMR machinery.
+ * one waiting — gated on the module runner's own `fetchModule` response,
+ * so a broken edit never reports success ahead of its own failure. Either
+ * way the payload is still relayed to the app afterward, since its own
+ * pending call may be waiting on it. `dispatch` feeds a payload the app
+ * sent back into `DevEnvironment`'s own `fetchModule`/HMR machinery.
  */
 function createIncaHotChannel(
   notify: (payload: unknown) => void,
@@ -108,8 +122,10 @@ function createIncaHotChannel(
       return;
     }
     const error = updateErrorOf(payload);
-    if (error) onError(error);
-    else if (payload.type === "update" && changed.current) {
+    if (error) {
+      onError(error);
+      changed.current = undefined;
+    } else if (isFetchModuleSuccess(payload) && changed.current) {
       onUpdate({ file: changed.current.file, took: Date.now() - changed.current.at });
       changed.current = undefined;
     }
