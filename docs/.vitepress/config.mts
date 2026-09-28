@@ -22,6 +22,7 @@ export default defineConfig({
     nav: [
       { text: "Guide", link: "/guide/", activeMatch: "^/guide/" },
       { text: "Reference", link: "/reference/configuration", activeMatch: "^/reference/" },
+      { text: "Roadmap", link: "/roadmap" },
       {
         text: `v${incaVersion}`,
         items: [

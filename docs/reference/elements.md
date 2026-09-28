@@ -112,9 +112,9 @@ build rather than silently no-oping:
 - **No timers or `fetch`**: `setTimeout`/`setInterval`/`fetch` aren't
   provided as globals by the JS runtime inca embeds.
 - **No text input, no scrolling**: an editable text element and a
-  scrollable container are both still unimplemented (Phase 4 of the
-  [roadmap](https://github.com/tom96da/incajs/blob/main/specs/ROADMAP.md)) —
-  not permanently unsupported, just not built yet.
+  scrollable container are both still unimplemented (see the
+  [Roadmap](../roadmap)) — not permanently unsupported, just not built
+  yet.
 - **`ref` only exposes `.focus()`/`.blur()`** on the underlying element —
   see [Events: Focus](./events#focus) for how focus works.
 
