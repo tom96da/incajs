@@ -24,6 +24,11 @@ const RELOAD_TIMEOUT_MS = 10_000;
 /** Generous: a real process spawn, a real dev server, and a real file watcher all sit in the loop. */
 const WAIT_TIMEOUT_MS = 30_000;
 
+/** How many times `setup()` has logged its mount marker so far. */
+function mountedCount(text: string): number {
+  return text.match(/\[e2e\] mounted/g)?.length ?? 0;
+}
+
 /** A writable that discards everything — silences the dev server's own logging. */
 function discard(): Writable {
   return new Writable({
@@ -205,10 +210,12 @@ it(
       timeout: WAIT_TIMEOUT_MS,
     });
 
-    // Script edit: a fresh setup() call resets `clicks` back to 0.
-    const beforeScriptEdit = notifiedCount;
+    // Script edit: a fresh setup() call resets `clicks` back to 0. Wait on
+    // the mount marker, not `notify` — `notify` also fires on the earlier
+    // `file-changed` event, before the module actually re-evaluates.
+    const beforeScriptEdit = mountedCount(stderrText);
     await writeFile(vuePath, appVue(STYLE_V2, "!"));
-    await vi.waitFor(() => expect(notifiedCount).toBeGreaterThan(beforeScriptEdit), {
+    await vi.waitFor(() => expect(mountedCount(stderrText)).toBeGreaterThan(beforeScriptEdit), {
       timeout: WAIT_TIMEOUT_MS,
     });
 
@@ -230,10 +237,11 @@ it(
     await vi.waitFor(() => expect(buildErrors).toHaveLength(1), { timeout: WAIT_TIMEOUT_MS });
     expect(buildErrors[0]?.message).toContain("Unexpected token");
 
-    // Fixing it remounts cleanly and the host keeps responding.
-    const beforeRecoveryEdit = notifiedCount;
+    // Fixing it remounts cleanly and the host keeps responding — same race
+    // as the script edit above.
+    const beforeRecoveryEdit = mountedCount(stderrText);
     await writeFile(vuePath, appVue(STYLE_V2, "!"));
-    await vi.waitFor(() => expect(notifiedCount).toBeGreaterThan(beforeRecoveryEdit), {
+    await vi.waitFor(() => expect(mountedCount(stderrText)).toBeGreaterThan(beforeRecoveryEdit), {
       timeout: WAIT_TIMEOUT_MS,
     });
 
