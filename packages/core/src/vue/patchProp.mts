@@ -9,6 +9,32 @@ import type { IncaElement } from "./nodeOps.mts";
 
 const isOn = (key: string): boolean => /^on[A-Z]/.test(key);
 
+// Vue's SFC compiler appends these to the prop name per event modifier,
+// e.g. `@click.once` becomes `onClickOnce`; `@click.once.capture` becomes
+// `onClickOnceCapture`. Matches `@vue/runtime-dom`'s own `patchEvent.ts`.
+const modifierSuffixRE = /(?:Once|Passive|Capture)$/;
+
+interface ParsedEventKey {
+  event: string;
+  once: boolean;
+}
+
+// Strips modifier suffixes off `rawKey`, repeatedly since Vue can combine
+// several, then lower-cases what's left into the native event name.
+// `.passive`/`.capture` are recognized but have no native counterpart yet —
+// accepted and bound as an ordinary bubble listener rather than left to
+// register a dead event name.
+function parseEventKey(rawKey: string): ParsedEventKey {
+  let key = rawKey;
+  let once = false;
+  let match: RegExpMatchArray | null;
+  while ((match = key.match(modifierSuffixRE))) {
+    key = key.slice(0, -match[0].length);
+    if (match[0] === "Once") once = true;
+  }
+  return { event: key.slice(2).toLowerCase(), once };
+}
+
 function patchStyle(core: IncaCore, el: IncaElement, nextValue: unknown): void {
   if (typeof nextValue !== "object" || nextValue === null) return;
 
@@ -37,13 +63,25 @@ function asListener(value: unknown): EventListener | null {
 }
 
 function patchEvent(core: IncaCore, el: IncaElement, rawKey: string, nextValue: unknown): void {
-  const event = rawKey.slice(2).toLowerCase();
+  const { event, once } = parseEventKey(rawKey);
   const listener = asListener(nextValue);
-  if (listener) {
-    core.setEventListener(el.id, event, listener);
-  } else {
+  if (!listener) {
     core.removeEventListener(el.id, event);
+    return;
   }
+
+  if (!once) {
+    core.setEventListener(el.id, event, listener);
+    return;
+  }
+
+  // Real once-semantics: unbind before running the listener, so a
+  // synchronous re-dispatch from inside it can't re-enter.
+  const runOnce: EventListener = (...args) => {
+    core.removeEventListener(el.id, event);
+    listener(...args);
+  };
+  core.setEventListener(el.id, event, runOnce);
 }
 
 /**
@@ -54,9 +92,14 @@ function patchEvent(core: IncaCore, el: IncaElement, rawKey: string, nextValue: 
  *   `core.setStyle` call per entry; an entry whose value isn't a
  *   string/number is skipped.
  * - An `onXxx` key registers `nextValue` as the listener for `xxx`, taking a
- *   function or an array of them, and unbinds `xxx` for anything else — see
- *   {@link EventListener} for which event names are wired to real input by
- *   the native host today; other names are accepted but never fire.
+ *   function or an array of them, and unbinds `xxx` for anything else. A
+ *   trailing `Once`/`Passive`/`Capture` suffix (from Vue's `.once`/
+ *   `.passive`/`.capture` modifiers) is stripped first; `.once` really
+ *   removes the listener after it fires once, while `.passive`/`.capture`
+ *   bind as an ordinary listener with no native passive/capture-phase
+ *   support yet. See {@link EventListener} for which event names are wired
+ *   to real input by the native host today; other names are accepted but
+ *   never fire.
  * - Everything else falls through to `core.setAttribute`, again skipping
  *   a non-string/number/boolean value rather than passing it through.
  *

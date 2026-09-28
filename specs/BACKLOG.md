@@ -171,10 +171,12 @@ enough overhead for a single maintainer plus AI pairing.
   `(node, event, capture)`, with `EventDispatcher::listens` and `dispatch`
   each gaining a capture-phase counterpart wired to GPUI's
   `capture_any_mouse_down`/`capture_any_mouse_up` and friends. Vue's
-  `@click.capture` has nothing to bind to until this lands. Vue's
-  `.once`/`.passive` modifiers are in the same boat — `patchProp.mts`'s
-  event handling has no notion of either, so both are silently ignored
-  rather than honored.
+  `@click.capture` has nothing to bind to until this lands, so
+  `patchProp.mts` strips the suffix and binds an ordinary bubble-phase
+  listener instead. `.passive` degrades the same way, for the same
+  reason — no passive-listener notion anywhere in the bridge yet.
+  `.once` doesn't need native support and is implemented for real:
+  the listener unbinds itself after firing.
 
 - **A GPUI-vs-DOM compat layer for `crates/inca-bridge`**: three separate
   gaps now live loose in `dispatch.rs` — the two entries above plus

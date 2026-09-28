@@ -89,6 +89,45 @@ describe("on*", () => {
   });
 });
 
+describe("on* modifiers", () => {
+  it("fires an .once listener on the first dispatch, then unbinds it", () => {
+    const listener = vi.fn<() => void>();
+    patchProp(el, "onClickOnce", null, listener, undefined, null);
+
+    expect(core.setEventListener).toHaveBeenCalledWith(1, "click", expect.any(Function));
+    const registered = vi.mocked(core.setEventListener).mock.calls[0]![2];
+
+    registered();
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(core.removeEventListener).toHaveBeenCalledWith(1, "click");
+  });
+
+  it("binds .passive as an ordinary listener that fires", () => {
+    const listener = vi.fn<() => void>();
+    patchProp(el, "onClickPassive", null, listener, undefined, null);
+
+    const registered = vi.mocked(core.setEventListener).mock.calls[0]![2];
+    registered();
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it("binds .capture as an ordinary listener that fires", () => {
+    const listener = vi.fn<() => void>();
+    patchProp(el, "onClickCapture", null, listener, undefined, null);
+
+    const registered = vi.mocked(core.setEventListener).mock.calls[0]![2];
+    registered();
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it("strips combined modifier suffixes down to the event name", () => {
+    const listener = vi.fn<() => void>();
+    patchProp(el, "onClickOnceCapture", null, listener, undefined, null);
+
+    expect(core.setEventListener).toHaveBeenCalledWith(1, "click", expect.any(Function));
+  });
+});
+
 describe("everything else", () => {
   it.each([
     ["label", "hello"],
