@@ -14,8 +14,8 @@ export {
 } from "./tree.mts";
 
 /**
- * The subset of `incajs`'s own API a custom renderer (`incajs/vue`, and any
- * future framework adapter alongside it) drives the native tree through.
+ * The tree/event primitives a custom renderer (`incajs/vue`) drives the
+ * native tree through.
  *
  * Also the seam a renderer's own tests mock against, in place of a real
  * `globalThis.__inca_native__`.

@@ -46,7 +46,10 @@ export interface IncaText {
   readonly kind: "text";
   /** The current parent, or `null` if this node isn't attached to the tree. */
   parent: IncaElement | null;
-  /** The text content, mirroring what's been pushed to the native node via {@link setAttribute}. */
+  /**
+   * The text content, mirroring what's been pushed to the native node via
+   * {@link IncaCore.setAttribute}.
+   */
   text: string;
 }
 
@@ -58,9 +61,9 @@ export type NodeOps = Omit<RendererOptions<IncaNode, IncaElement>, "patchProp">;
 
 /**
  * `@vue/runtime-core`'s {@link RendererOptions}`<IncaNode, IncaElement>`,
- * minus `patchProp` (see `./patchProp.mts`) — the host-node lifecycle half
- * of `incajs/vue`'s custom renderer, built entirely on the injected
- * {@link IncaCore}, never on the native bridge directly.
+ * minus `patchProp` — the host-node lifecycle half of `incajs/vue`'s custom
+ * renderer, built entirely on the injected {@link IncaCore}, never on the
+ * native bridge directly.
  * @param core - the incajs bindings to drive the native tree through
  */
 export function createNodeOps(core: IncaCore): NodeOps {

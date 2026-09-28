@@ -3,17 +3,27 @@
 
 // The package's public type surface.
 
-/** Stable handle to a node in the native retained tree, returned by {@link createNode} and used in every later call that touches that node. */
+/**
+ * Stable handle to a node in the native retained tree, returned by `createNode`
+ * and used in every later call that touches that node.
+ */
 export type NodeId = number;
 
-/** Id assigned to one registered event listener. Managed internally by {@link setEventListener}/{@link removeEventListener}/{@link destroyNode} — callers never see or pass one directly. */
+/**
+ * Id assigned to one registered event listener. Managed internally by
+ * `setEventListener`/`removeEventListener`/`destroyNode` — callers never see or
+ * pass one directly.
+ */
 export type CallbackId = number;
 
-/** A value {@link setAttribute}/{@link setStyle} can take. Anything else raises a catchable exception rather than being silently coerced. */
+/**
+ * A value `setAttribute`/`setStyle` can take. Anything else raises a catchable
+ * exception rather than being silently coerced.
+ */
 export type AttributeValue = string | number | boolean;
 
 /**
- * Element kind passed to {@link createNode}. `"text"` is the only tag with
+ * Element kind passed to `createNode`. `"text"` is the only tag with
  * dedicated rendering behavior — a leaf that renders its `"value"`
  * attribute's string content. Any other string is a generic styled
  * container; the `string & {}` half of this type keeps `"text"`'s
@@ -22,7 +32,7 @@ export type AttributeValue = string | number | boolean;
 export type TagName = "text" | (string & {});
 
 /**
- * Style properties recognized by {@link setStyle}'s typed overload. A
+ * Style properties recognized by `setStyle`'s typed overload. A
  * deliberately incomplete, v1 layout/paint vocabulary — an unrecognized key
  * or a value shape that doesn't parse (e.g. a malformed enum string) is
  * ignored by the renderer rather than applied or thrown.
@@ -57,7 +67,7 @@ export interface StyleProps {
 }
 
 /**
- * Signature of a callback registered via {@link setEventListener}. The
+ * Signature of a callback registered via `setEventListener`. The
  * native host calls it with one argument, an object with `type` (the
  * event's name), `target`/`currentTarget` (both the {@link NodeId} it fired
  * on), `stopPropagation`/`stopImmediatePropagation`/`preventDefault`
