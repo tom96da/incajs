@@ -63,10 +63,9 @@ requirement above:
 }
 ```
 
-::: tip
-`inca build`/`package` write their output to `dist`. If using Git,
-add it to your `.gitignore` file.
-:::
+> [!TIP]
+> `inca build`/`package` write their output to `dist`. If using Git,
+> add it to your `.gitignore` file.
 
 ### Source Files
 
@@ -104,9 +103,9 @@ Add an npm script like the following to `package.json`.
 {
   ...
   "scripts": {
-    "dev": "inca dev",
-    "build": "inca build",
-    "package": "inca package"
+    "dev": "inca dev",          // [!code ++]
+    "build": "inca build",      // [!code ++]
+    "package": "inca package"   // [!code ++]
   },
   ...
 }

@@ -12,6 +12,9 @@ hero:
     - theme: alt
       text: GitHub
       link: https://github.com/tom96da/incajs
+    - theme: alt
+      text: Reference
+      link: /reference/configuration
 
 features:
   - icon: ⚡️
@@ -20,7 +23,11 @@ features:
   - icon: 🚀
     title: Micro-sized Runtime
     details: Employs QuickJS — no browser engine to boot, and a minimal memory footprint.
-  - icon: <span class="vue"></span>
+  - icon:
+      src: /vue.svg
+      width: 28
+      height: 28
+      wrap: true
     title: Vue 3, first-class
     details: Author Vue 3 components, with a native styling vocabulary.
 ---

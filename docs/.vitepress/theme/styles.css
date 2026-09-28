@@ -8,13 +8,3 @@
     -webkit-text-fill-color: dimgray !important;
   }
 }
-
-.VPFeature .icon span.vue {
-  display: inline-block;
-  width: 1em;
-  height: 1em;
-  background-image: url("./assets/vue.svg");
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: contain;
-}

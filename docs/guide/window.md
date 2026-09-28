@@ -50,7 +50,7 @@ window, so a window grown past the app's root element shows empty space
 around it. Let a user resize one whose layout survives it:
 
 ```ts [inca.config.ts]
-window: { width: 400, height: 300, resizable: true },
+window: { width: 400, height: 300, resizable: true },  // [!code ++]
 ```
 
 ## Title

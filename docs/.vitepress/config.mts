@@ -15,6 +15,9 @@ export default defineConfig({
     "A GPU-native, Webview-free desktop application framework powered by GPUI and QuickJS.",
   base: "/incajs/",
   lastUpdated: true,
+  sitemap: {
+    hostname: "https://tom96da.github.io/incajs/",
+  },
   themeConfig: {
     nav: [
       { text: "Guide", link: "/guide/", activeMatch: "^/guide/" },
