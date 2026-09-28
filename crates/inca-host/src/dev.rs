@@ -17,7 +17,7 @@ use serde_json::Value;
 use inca_bridge::{ErrorReporter, call_dev_receive, drain_jobs_and_refresh};
 use inca_jsenv::EngineError;
 
-use crate::app::{HostedApp, Session, maybe_auto_resize_to_content};
+use crate::app::{HostedApp, Session, is_resizable, maybe_auto_resize_to_content};
 use crate::protocol::{self, ErrorCode, Incoming, Method, Outgoing};
 
 /// Why a request could not be answered with a result.
@@ -160,9 +160,14 @@ fn reload(
             window
                 .update(cx, |app, window, _| {
                     app.session = session;
-                    // A reload is a fresh bring-up of the reloaded bundle, so
-                    // it gets its own chance to auto-resize to content.
-                    app.auto_resized.set(false);
+                    // A fixed-size window gets a fresh auto-resize chance,
+                    // as if it just launched with the reloaded content. A
+                    // resizable window may carry a manual resize the user
+                    // made since it last auto-resized, which reloading the
+                    // bundle must not discard.
+                    if !is_resizable(app.window_config.as_ref()) {
+                        app.auto_resized.set(false);
+                    }
                     drain_jobs_and_refresh(&app.session.engine, window);
                     maybe_auto_resize_to_content(app, window);
                 })
@@ -413,10 +418,49 @@ mod tests {
         )
     }
 
+    /// A directory holding just this test's entry and its own `inca.json`,
+    /// unlike [`ScratchEntry`] whose files all share the OS temp root as
+    /// their `config::read` parent — fine for entries with no config, but
+    /// not for a config a test needs isolated to itself.
+    struct ScratchApp(std::path::PathBuf);
+
+    impl ScratchApp {
+        fn write(name: &str, source: &str, config_json: &str) -> Self {
+            let dir = std::env::temp_dir().join(format!(
+                "inca-host-dev-test-app-{name}-{}-{:?}",
+                std::process::id(),
+                std::thread::current().id()
+            ));
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join("bundle.js"), source).unwrap();
+            std::fs::write(dir.join("inca.json"), config_json).unwrap();
+            Self(dir)
+        }
+
+        fn entry(&self) -> String {
+            self.0.join("bundle.js").to_str().unwrap().to_owned()
+        }
+    }
+
+    impl Drop for ScratchApp {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn bounds_of(cx: &mut TestAppContext, window: WindowHandle<HostedApp>) -> (f32, f32) {
+        cx.update(|cx| {
+            window
+                .update(cx, |_, window, _| {
+                    let b = window.bounds();
+                    (f32::from(b.size.width), f32::from(b.size.height))
+                })
+                .unwrap()
+        })
+    }
+
     #[gpui::test]
-    fn a_reload_resets_the_auto_resize_latch_so_the_new_content_size_applies(
-        cx: &mut TestAppContext,
-    ) {
+    fn a_reload_resets_a_fixed_size_windows_auto_resize_latch(cx: &mut TestAppContext) {
         let entry = ScratchEntry::write("resize", &mounts_a_div(300, 150));
         let writer: SharedWriter = Rc::new(CapturingWriter::default());
 
@@ -431,18 +475,7 @@ mod tests {
             .unwrap()
         });
         cx.run_until_parked();
-
-        let bounds = |cx: &mut TestAppContext| {
-            cx.update(|cx| {
-                window
-                    .update(cx, |_, window, _| {
-                        let b = window.bounds();
-                        (f32::from(b.size.width), f32::from(b.size.height))
-                    })
-                    .unwrap()
-            })
-        };
-        assert_eq!(bounds(cx), (300.0, 150.0));
+        assert_eq!(bounds_of(cx, window), (300.0, 150.0));
 
         // A relay latches auto_resized — same size, so no visible change,
         // but this is the state a reload has to reset.
@@ -455,9 +488,53 @@ mod tests {
         cx.run_until_parked();
 
         assert_eq!(
-            bounds(cx),
+            bounds_of(cx, window),
             (400.0, 200.0),
             "reload must reset the latch, or the new content's size never applies"
+        );
+    }
+
+    #[gpui::test]
+    fn a_reload_does_not_reset_a_resizable_windows_manual_resize(cx: &mut TestAppContext) {
+        let app = ScratchApp::write(
+            "resizable",
+            &mounts_a_div(300, 150),
+            r#"{"window":{"resizable":true}}"#,
+        );
+        let writer: SharedWriter = Rc::new(CapturingWriter::default());
+
+        let window = cx.update(|cx| {
+            start(
+                cx,
+                &app.entry(),
+                &mounts_a_div(300, 150),
+                stderr_reporter(),
+                Some(&writer),
+            )
+            .unwrap()
+        });
+        cx.run_until_parked();
+        assert_eq!(bounds_of(cx, window), (300.0, 150.0));
+
+        // The user grabs an edge and resizes it by hand.
+        cx.update(|cx| {
+            window
+                .update(cx, |_, window, _| {
+                    window.resize(gpui::size(gpui::px(500.0), gpui::px(500.0)));
+                })
+                .unwrap();
+        });
+        assert_eq!(bounds_of(cx, window), (500.0, 500.0));
+
+        std::fs::write(app.0.join("bundle.js"), mounts_a_div(400, 200)).unwrap();
+        let mut async_cx = cx.to_async();
+        reload(&window, &mut async_cx, &app.entry(), None, &writer);
+        cx.run_until_parked();
+
+        assert_eq!(
+            bounds_of(cx, window),
+            (500.0, 500.0),
+            "a resizable window the user resized by hand must not snap back on reload"
         );
     }
 }

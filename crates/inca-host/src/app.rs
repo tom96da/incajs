@@ -109,6 +109,12 @@ fn window_title(window: Option<&config::WindowConfig>, name: Option<&str>) -> Op
         .or_else(|| name.map(ToOwned::to_owned))
 }
 
+/// Whether the app's config lets a user resize its window by hand.
+/// Unconfigured reads as fixed-size.
+pub(crate) fn is_resizable(window: Option<&config::WindowConfig>) -> bool {
+    window.and_then(|w| w.resizable).unwrap_or(false)
+}
+
 /// The size to open the window at: what the app's config asks for, then
 /// what its root element declares, then [`DEFAULT_WINDOW_SIZE`]. A window
 /// never opens below the minimum it declared.
@@ -253,9 +259,9 @@ pub(crate) fn maybe_auto_resize_to_content(app: &HostedApp, window: &mut Window)
     let window_config = app.window_config.as_ref();
     let content = content_window_size(&app.session.host.borrow(), app.session.root());
     let width_ready =
-        window_config.is_some_and(|w| w.width.is_some()) || usable(content.0).is_some();
+        window_config.is_some_and(|w| usable(w.width).is_some()) || usable(content.0).is_some();
     let height_ready =
-        window_config.is_some_and(|w| w.height.is_some()) || usable(content.1).is_some();
+        window_config.is_some_and(|w| usable(w.height).is_some()) || usable(content.1).is_some();
     if !width_ready || !height_ready {
         return;
     }
@@ -303,7 +309,7 @@ pub(crate) fn start(
                     ..Default::default()
                 }),
                 app_id: app_config.identifier.clone(),
-                is_resizable: window_config.and_then(|w| w.resizable).unwrap_or(false),
+                is_resizable: is_resizable(window_config),
                 window_min_size: window_min_size(window_config),
                 ..Default::default()
             },
@@ -324,6 +330,7 @@ pub(crate) fn start(
     window
         .update(cx, |app, window, _| {
             drain_jobs_and_refresh(&app.session.engine, window);
+            maybe_auto_resize_to_content(app, window);
         })
         .map_err(|err| Failure::Message(ErrorCode::BundleFailed, err.to_string()))?;
 
@@ -739,6 +746,29 @@ mod tests {
     }
 
     #[gpui::test]
+    fn start_auto_resizes_content_that_mounts_only_after_it_returns(cx: &mut TestAppContext) {
+        const MOUNTS_LATER: &str = r"
+            Promise.resolve().then(() => {
+                const node = __inca_native__.createNode('div');
+                __inca_native__.appendChild(__inca_native__.rootNodeId(), node);
+                __inca_native__.setStyle(node, 'width', 300);
+                __inca_native__.setStyle(node, 'height', 150);
+            });
+        ";
+        let window = cx.update(|cx| {
+            start(cx, TEST_ENTRY_PATH, MOUNTS_LATER, stderr_reporter(), None).unwrap()
+        });
+        cx.run_until_parked();
+
+        assert_eq!(
+            bounds_size(cx, window),
+            (300.0, 150.0),
+            "start must give its own initial drain a chance to auto-resize, \
+             not just a later reload or relay"
+        );
+    }
+
+    #[gpui::test]
     fn auto_resize_never_fires_once_both_dimensions_are_configured(cx: &mut TestAppContext) {
         let window_config = config::WindowConfig {
             width: Some(500.0),
@@ -816,6 +846,37 @@ mod tests {
             DEFAULT_WINDOW_SIZE,
             "must not latch on a partial size and strand the other dimension"
         );
+
+        cx.update(|cx| {
+            window
+                .update(cx, |app, window, _| {
+                    mount_content(app, 300.0, 150.0);
+                    maybe_auto_resize_to_content(app, window);
+                })
+                .unwrap();
+        });
+        assert_eq!(bounds_size(cx, window), (300.0, 150.0));
+    }
+
+    #[gpui::test]
+    fn auto_resize_treats_an_unusable_configured_dimension_as_not_ready(cx: &mut TestAppContext) {
+        let window_config = config::WindowConfig {
+            width: Some(-100.0),
+            ..config::WindowConfig::default()
+        };
+        let window = open_hosted(cx, Some(window_config), DEFAULT_WINDOW_SIZE);
+        cx.run_until_parked();
+
+        // A configured width that no window could open at must not count
+        // as ready just because it's `Some(_)` — nothing usable exists yet.
+        cx.update(|cx| {
+            window
+                .update(cx, |app, window, _| {
+                    maybe_auto_resize_to_content(app, window);
+                })
+                .unwrap();
+        });
+        assert_eq!(bounds_size(cx, window), DEFAULT_WINDOW_SIZE);
 
         cx.update(|cx| {
             window
