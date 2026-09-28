@@ -33,15 +33,18 @@ export default defineConfig({
       "/guide/": [
         {
           text: "Introduction",
-          items: [{ text: "Getting Started", link: "/guide/" }],
+          items: [
+            { text: "How it Works", link: "/guide/how-it-works" },
+            { text: "Getting Started", link: "/guide/" },
+          ],
         },
         {
           text: "Guide",
           items: [
-            { text: "CLI", link: "/guide/cli" },
             { text: "HMR", link: "/guide/hmr" },
             { text: "Application Window", link: "/guide/window" },
             { text: "Building for Production", link: "/guide/build" },
+            { text: "Troubleshooting", link: "/guide/troubleshooting" },
           ],
         },
       ],
@@ -49,6 +52,7 @@ export default defineConfig({
         {
           text: "Reference",
           items: [
+            { text: "CLI", link: "/reference/cli" },
             { text: "Configuration", link: "/reference/configuration" },
             { text: "Elements & Styles", link: "/reference/elements" },
             { text: "Events", link: "/reference/events" },

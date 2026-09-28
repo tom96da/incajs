@@ -9,6 +9,8 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 # Getting Started
 
+For how the pieces fit together, see [How it Works](./how-it-works).
+
 ## Installation
 
 [Node.js](https://nodejs.org/) v22.18 or higher.

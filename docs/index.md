@@ -19,10 +19,10 @@ features:
     details: Built on GPUI — no Chromium, no DOM in between your code and the screen.
   - icon: 🚀
     title: Micro-sized Runtime
-    details: Employs QuickJS for sub-second startup times and minimal memory footprint.
+    details: Employs QuickJS — no browser engine to boot, and a minimal memory footprint.
   - icon: <span class="vue"></span>
     title: Vue 3, first-class
-    details: Author .vue components like ordinary web development, nothing else needed.
+    details: Author Vue 3 components, with a native styling vocabulary.
 ---
 
 <!--

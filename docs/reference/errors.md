@@ -67,8 +67,8 @@ that the binary is executable.
 
 ## `ERR_INCA_HOST_BIN_UNRESOLVED`
 
-No `inca-host` binary could be found at all: the `@incajs/host-*` package
-for this platform isn't installed, and `INCA_HOST_BIN` isn't set.
+No host binary could be found at all: the `@incajs/host-*` package for
+this platform isn't installed, and `INCA_HOST_BIN` isn't set.
 
 Install the app's dependencies, or set `INCA_HOST_BIN` to a binary you
 built yourself.
