@@ -23,6 +23,16 @@ change.
 inca dev
 ```
 
+### Options
+
+| Flag                 | Description |
+| -------------------- | ----------- |
+| `--experimental-hmr` | Reloads only the changed module instead of the whole bundle. |
+
+> [!WARNING]
+> `--experimental-hmr` is experimental. See the [HMR guide](./hmr) for
+> what it does differently and its known limitations.
+
 ## `inca build`
 
 Bundles your app for production, once, with no window opened. See
@@ -51,3 +61,4 @@ inca package
 | Variable        | Description          |
 | --------------- | -------------------- |
 | `INCA_HOST_BIN` | Path to a specific `inca-host` binary, used by `dev` and `package` in place of automatic resolution — e.g. on a custom or unpublished build. |
+| `INCA_EXPERIMENTAL_HMR` | Same as `--experimental-hmr`, for `inca dev`. See the [HMR guide](./hmr). |

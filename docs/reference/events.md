@@ -46,7 +46,8 @@ fields:
 - `movementX` / `movementY` — delta from whichever mouse/wheel event
   fired last; `0` for the first one
 - `button` — 0 for a move, which isn't about any one button
-- `buttons` — every button currently held, as a bitmask
+- [`buttons`](https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/buttons) —
+  every button currently held, as a bitmask
 - `detail` — how many clicks this is part of; 0 for a move
 - `ctrlKey` / `shiftKey` / `altKey` / `metaKey` — modifier keys held
 
@@ -138,3 +139,15 @@ function onClick(event) {
 
 Every listener runs in the bubble phase; there's no way yet to listen
 during the capture phase.
+
+## Event modifiers
+
+Vue's template event modifiers — `v-on:click.once`, `.passive`,
+`.capture` — are Vue's own syntax, not a web standard.
+
+- `.once` is fully real: the listener unbinds after its first call.
+- `.passive` and `.capture` are accepted but currently degrade to an
+  ordinary bubble-phase listener, for the same reason given in
+  [Propagation](#propagation) above — inca has no capture-phase
+  dispatch yet, so `.capture` doesn't run during the capture phase, and
+  `.passive` has no effect beyond a plain bind.

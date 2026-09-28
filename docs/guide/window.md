@@ -74,7 +74,21 @@ Every app gets an application menu with a `Quit` item, on `⌘Q` on macOS and
 `Ctrl+Q` on Linux. macOS is the only platform that draws a menu bar for it
 today. There is no way to add items to it yet.
 
+## Under development
+
+`inca dev` and `--experimental-hmr` add a few dev-only quirks on top of the
+behavior above.
+
+Under `--experimental-hmr`, the window's first launch can briefly open at
+the wrong size before snapping to the correct one — see the
+[HMR guide](./hmr#known-limitations).
+
+Under `inca dev`, a window resized by hand keeps that size across later
+reloads; a non-resizable window snaps back to its configured size on each
+reload.
+
+Closing the window under `inca dev` also stops the dev process.
+
 ## Closing the app
 
-Closing the window quits the app. Under `inca dev`, the dev process stops
-with it.
+Closing the window quits the app.

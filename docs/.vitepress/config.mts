@@ -39,6 +39,7 @@ export default defineConfig({
           text: "Guide",
           items: [
             { text: "CLI", link: "/guide/cli" },
+            { text: "HMR", link: "/guide/hmr" },
             { text: "Application Window", link: "/guide/window" },
             { text: "Building for Production", link: "/guide/build" },
           ],
