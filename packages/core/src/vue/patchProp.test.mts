@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import type { ComponentInternalInstance } from "@vue/runtime-core";
 
 import { createPatchProp } from "./patchProp.mts";
@@ -224,6 +224,14 @@ describe("errors thrown by an event handler", () => {
       appContext: { config: { errorHandler } },
     }) as unknown as ComponentInternalInstance;
 
+  let warn: MockInstance<typeof console.warn>;
+  beforeEach(() => {
+    warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    warn.mockRestore();
+  });
+
   it("reaches the app's errorHandler and is not rethrown", () => {
     const errorHandler = vi.fn<() => void>();
     patchProp(el, "onClick", null, throwing, undefined, instanceWith(errorHandler));
@@ -238,6 +246,7 @@ describe("errors thrown by an event handler", () => {
 
     const registered = vi.mocked(core.setEventListener).mock.calls[0]![2];
     expect(() => registered()).toThrow(boom);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("Unhandled error"));
   });
 
   it("calls onErrorCaptured hooks up the parent chain", () => {
