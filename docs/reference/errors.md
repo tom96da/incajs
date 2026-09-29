@@ -50,6 +50,10 @@ a scratch bundle under `node_modules/.inca` while `inca dev` runs. See
 [`productName`](./configuration#productname) for the naming rule this
 enforces.
 
+`inca package` raises it too when the app's directory would share a name
+with a top-level file or folder of the build output, such as `assets` or
+`chunks`. Pick a different `productName`.
+
 ## `ERR_INCA_ICON_NOT_FOUND`
 
 `icon` in `inca.config.ts` points at a `.icns` file that doesn't exist. The

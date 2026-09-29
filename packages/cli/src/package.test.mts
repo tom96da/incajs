@@ -216,4 +216,47 @@ describe("packageApp", () => {
       }),
     ).rejects.toThrow(/no host binary/);
   });
+
+  /** Packages a Linux app named `productName` from a build that also lists `extraFile`. */
+  async function packageWithOutputFile(productName: string, extraFile: string) {
+    const app = await makeApp({ name: "click_counter", version: "1.0.0" });
+    await writeFile(
+      path.join(app, "inca.config.ts"),
+      `export default { productName: ${JSON.stringify(productName)} };\n`,
+    );
+    const hostBin = await makeHostBin(app);
+    const inner = fakeBundler();
+    const bundler: Bundler = {
+      ...inner,
+      build: async (args) => {
+        const out = await inner.build(args);
+        await mkdir(path.dirname(path.join(args.outDir, extraFile)), { recursive: true });
+        await writeFile(path.join(args.outDir, extraFile), "x");
+        return { ...out, files: [...out.files, extraFile] };
+      },
+    };
+    return packageApp({
+      cwd: app,
+      entry: "unused",
+      bundler,
+      hostBin,
+      target: "linux",
+      stdout: makeSink().stream,
+    });
+  }
+
+  it.each([
+    ["Assets", "assets/a.png"],
+    ["chunks", "chunks/other.js"],
+    ["Assets", "Assets/x.js"],
+  ])("refuses productName %s beside build output %s", async (productName, extraFile) => {
+    await expect(packageWithOutputFile(productName, extraFile)).rejects.toMatchObject({
+      code: "ERR_INCA_PRODUCT_NAME_INVALID",
+    });
+  });
+
+  it("allows a productName that only resembles a build output entry", async () => {
+    const { appPath } = await packageWithOutputFile("assets-x", "assets/a.png");
+    expect(await readFile(path.join(appPath, "assets/a.png"), "utf8")).toBe("x");
+  });
 });

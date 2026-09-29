@@ -90,6 +90,25 @@ async function copyBuildOutput(output: BuildOutput, destDir: string): Promise<vo
   );
 }
 
+/**
+ * Refuses a packaged app whose directory name matches a top-level entry of
+ * the build output.
+ * Names compare without regard to case, as the filesystem may.
+ *
+ * @throws if `dirName` collides
+ */
+function assertNoOutputCollision(output: BuildOutput, dirName: string): void {
+  const clash = output.files
+    .map((relPath) => relPath.split("/")[0] ?? relPath)
+    .find((top) => top.toLowerCase() === dirName.toLowerCase());
+  if (clash === undefined) return;
+  throw new IncaError(
+    "ERR_INCA_PRODUCT_NAME_INVALID",
+    `the packaged app's directory "${dirName}" collides with "${clash}" in the build output. ` +
+      `Set a different "productName" in inca.config.ts`,
+  );
+}
+
 /** Writes a macOS `.app` bundle with the build output under `Contents/Resources`. */
 async function packageMacos({ metadata, output, hostBin }: LayoutArgs): Promise<string> {
   const { appPath, resourcesDir } = await writeMacosApp({
@@ -106,6 +125,7 @@ async function packageMacos({ metadata, output, hostBin }: LayoutArgs): Promise<
 /** Writes a plain directory holding the host executable and `bundle.js` beside it. */
 async function packageLinux({ metadata, output, hostBin }: LayoutArgs): Promise<string> {
   const dirName = slugify(metadata.productName);
+  assertNoOutputCollision(output, dirName);
   const appDir = path.join(output.outDir, dirName);
   await rm(appDir, { recursive: true, force: true });
   await mkdir(appDir, { recursive: true });

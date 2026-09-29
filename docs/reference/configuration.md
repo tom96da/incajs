@@ -51,6 +51,9 @@ it instead (lowercased, non-alphanumeric runs collapsed to `-`).
 Either way it can't hold any of `` / \ : * ? " < > | `` or a null byte,
 can't be `.` or `..`, and can't open or close with a space.
 
+`inca package` refuses a name whose directory matches a top-level file or
+folder of the build output, such as `assets` or `chunks`.
+
 ### identifier
 
 - Type: `string`
