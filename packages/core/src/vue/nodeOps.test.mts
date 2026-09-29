@@ -22,7 +22,7 @@ const core: IncaCore = {
   removeEventListener: vi.fn<(nodeId: number, event: string) => void>(),
   destroyNode: vi.fn<(nodeId: number) => void>(),
   focus: vi.fn<(nodeId: number) => void>(),
-  blur: vi.fn<() => void>(),
+  blur: vi.fn<(nodeId: number) => void>(),
 };
 
 const nodeOps = createNodeOps(core);
@@ -92,7 +92,7 @@ describe("focus / blur", () => {
     expect(core.focus).toHaveBeenCalledWith(el.id);
 
     el.blur();
-    expect(core.blur).toHaveBeenCalledWith();
+    expect(core.blur).toHaveBeenCalledWith(el.id);
   });
 });
 

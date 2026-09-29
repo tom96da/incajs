@@ -116,7 +116,7 @@ function installFakeNative(): Map<NodeId, FakeNode> {
       return released;
     },
     focusNode(): void {},
-    blurNode(): void {},
+    blurNode(_nodeId: number): void {},
   };
 
   return nodes;
@@ -146,7 +146,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       parent: null,
       children: [],
       focus: () => focus(rootId),
-      blur,
+      blur: () => blur(rootId),
     };
   });
 

@@ -101,7 +101,7 @@ focus there, unlike a DOM element with a `tabindex`.
 
 Once a node has been focused this way, it stays focusable from then on:
 clicking it moves focus there on its own, the same as a focusable DOM
-element does. `.blur()` unfocuses whatever is currently focused.
+element does. `.blur()` unfocuses the node only if it is the focused one.
 
 A template `ref`'s own element carries `.focus()`/`.blur()` directly,
 the same as a real DOM element:
@@ -156,3 +156,10 @@ Vue's template event modifiers — `v-on:click.once`, `.passive`,
   [Propagation](#propagation) above — Incarnative.js has no capture-phase
   dispatch yet, so `.capture` doesn't run during the capture phase, and
   `.passive` has no effect beyond a plain bind.
+
+## Errors in handlers
+
+An error an `@event` handler throws goes to the app's
+`app.config.errorHandler` and to any `onErrorCaptured` hooks, as in the
+browser. With no `errorHandler`, the host reports it as an application
+error. This covers errors thrown synchronously by a handler.

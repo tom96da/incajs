@@ -102,7 +102,13 @@ export function releaseCallbacks(callbackIds: readonly CallbackId[]): void {
  */
 export function setEventListener(nodeId: NodeId, event: string, listener: EventListener): void {
   removeEventListener(nodeId, event);
-  native().addEventListener(nodeId, event, registrations.add(nodeId, event, listener));
+  const callbackId = registrations.add(nodeId, event, listener);
+  try {
+    native().addEventListener(nodeId, event, callbackId);
+  } catch (error) {
+    registrations.release(callbackId);
+    throw error;
+  }
 }
 
 /**
@@ -132,9 +138,11 @@ export function focus(nodeId: NodeId): void {
 }
 
 /**
- * Requests that whatever is focused become unfocused. Takes effect on the
- * next frame; a no-op if nothing is focused when it runs.
+ * Requests that `nodeId` become unfocused, the way `element.blur()` does.
+ * Takes effect on the next frame; a no-op if `nodeId` isn't the focused node
+ * when it runs.
+ * @param nodeId - the node to unfocus
  */
-export function blur(): void {
-  native().blurNode();
+export function blur(nodeId: NodeId): void {
+  native().blurNode(nodeId);
 }

@@ -28,7 +28,7 @@ const native = {
   ),
   destroyNode: vi.fn<(nodeId: number) => number[]>(() => []),
   focusNode: vi.fn<(nodeId: number) => void>(),
-  blurNode: vi.fn<() => void>(),
+  blurNode: vi.fn<(nodeId: number) => void>(),
 };
 
 beforeEach(() => {

@@ -34,7 +34,7 @@ export interface IncaElement {
   children: IncaNode[];
   /** Focuses this node next frame. */
   focus(): void;
-  /** Unfocuses whatever's focused, next frame. */
+  /** Unfocuses this node next frame, if it is the focused one. */
   blur(): void;
 }
 
@@ -94,7 +94,7 @@ export function createNodeOps(core: IncaCore): NodeOps {
   function focusMethods(id: NodeId): Pick<IncaElement, "focus" | "blur"> {
     return {
       focus: () => core.focus(id),
-      blur: () => core.blur(),
+      blur: () => core.blur(id),
     };
   }
 

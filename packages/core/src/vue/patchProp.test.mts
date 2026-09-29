@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ComponentInternalInstance } from "@vue/runtime-core";
 
 import { createPatchProp } from "./patchProp.mts";
 import type { IncaCore } from "../rendererCore.mts";
@@ -20,7 +21,7 @@ const core: IncaCore = {
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   setStyle: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   focus: vi.fn<(nodeId: number) => void>(),
-  blur: vi.fn<() => void>(),
+  blur: vi.fn<(nodeId: number) => void>(),
 };
 
 const patchProp = createPatchProp(core);
@@ -65,7 +66,9 @@ describe("on*", () => {
     const listener = vi.fn<() => void>();
     patchProp(el, "onClick", null, listener, undefined, null);
 
-    expect(core.setEventListener).toHaveBeenCalledWith(1, "click", listener);
+    expect(core.setEventListener).toHaveBeenCalledWith(1, "click", expect.any(Function));
+    vi.mocked(core.setEventListener).mock.calls[0]![2]("arg");
+    expect(listener).toHaveBeenCalledWith("arg");
   });
 
   it("collapses an array of handlers into one listener", () => {
@@ -125,6 +128,81 @@ describe("on* modifiers", () => {
     patchProp(el, "onClickOnceCapture", null, listener, undefined, null);
 
     expect(core.setEventListener).toHaveBeenCalledWith(1, "click", expect.any(Function));
+  });
+});
+
+describe("errors thrown by an event handler", () => {
+  const boom = new Error("boom");
+  const throwing = (): void => {
+    throw boom;
+  };
+  const instanceWith = (errorHandler?: unknown): ComponentInternalInstance =>
+    ({
+      vnode: null,
+      parent: null,
+      appContext: { config: { errorHandler } },
+    }) as unknown as ComponentInternalInstance;
+
+  it("reaches the app's errorHandler and is not rethrown", () => {
+    const errorHandler = vi.fn<() => void>();
+    patchProp(el, "onClick", null, throwing, undefined, instanceWith(errorHandler));
+
+    const registered = vi.mocked(core.setEventListener).mock.calls[0]![2];
+    expect(() => registered()).not.toThrow();
+    expect(errorHandler).toHaveBeenCalledWith(boom, undefined, "native event handler");
+  });
+
+  it("still propagates when no errorHandler is configured", () => {
+    patchProp(el, "onClick", null, throwing, undefined, instanceWith());
+
+    const registered = vi.mocked(core.setEventListener).mock.calls[0]![2];
+    expect(() => registered()).toThrow(boom);
+  });
+
+  it("calls onErrorCaptured hooks up the parent chain", () => {
+    const hook = vi.fn<() => boolean>(() => false);
+    const child = instanceWith();
+    (child as unknown as { parent: unknown }).parent = { ec: [hook], parent: null };
+    patchProp(el, "onClick", null, throwing, undefined, child);
+
+    const registered = vi.mocked(core.setEventListener).mock.calls[0]![2];
+    expect(() => registered()).toThrow(boom);
+    expect(hook).toHaveBeenCalledWith(boom, undefined, "native event handler");
+  });
+
+  it("rethrows the first failure of an array of handlers", () => {
+    const second = new Error("second");
+    patchProp(
+      el,
+      "onClick",
+      null,
+      [
+        throwing,
+        () => {
+          throw second;
+        },
+      ],
+      undefined,
+      instanceWith(),
+    );
+
+    const registered = vi.mocked(core.setEventListener).mock.calls[0]![2];
+    expect(() => registered()).toThrow(boom);
+  });
+
+  it("unbinds a .once listener and still reports its error", () => {
+    patchProp(el, "onClickOnce", null, throwing, undefined, instanceWith());
+
+    const registered = vi.mocked(core.setEventListener).mock.calls[0]![2];
+    expect(() => registered()).toThrow(boom);
+    expect(core.removeEventListener).toHaveBeenCalledWith(1, "click");
+  });
+
+  it("still propagates with no owning component", () => {
+    patchProp(el, "onClick", null, throwing, undefined, null);
+
+    const registered = vi.mocked(core.setEventListener).mock.calls[0]![2];
+    expect(() => registered()).toThrow(boom);
   });
 });
 

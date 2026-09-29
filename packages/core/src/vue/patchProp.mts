@@ -1,7 +1,12 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import type { RendererOptions } from "@vue/runtime-core";
+import {
+  callWithAsyncErrorHandling,
+  ErrorCodes,
+  type ComponentInternalInstance,
+  type RendererOptions,
+} from "@vue/runtime-core";
 
 import type { IncaCore } from "../rendererCore.mts";
 import type { EventListener } from "../types.mts";
@@ -51,20 +56,46 @@ function patchStyle(core: IncaCore, el: IncaElement, nextValue: unknown): void {
 // `@vue/runtime-core` types an `onXxx` prop as `Function | Function[]`, so
 // several handlers can arrive for one event. Vue's own DOM renderer collapses
 // them into a single native listener; this does the same.
-function asListener(value: unknown): EventListener | null {
-  if (typeof value === "function") return value as EventListener;
-  if (!Array.isArray(value)) return null;
+/**
+ * Collapses `value` into one listener. An error a handler throws goes to the
+ * app's `errorHandler` and the `onErrorCaptured` hooks; with no
+ * `errorHandler`, the first one thrown is also rethrown to the host's error
+ * report, and an `onErrorCaptured` hook returning `false` does not suppress
+ * that. Only errors thrown synchronously are covered by the host report.
+ */
+function asListener(
+  value: unknown,
+  instance: ComponentInternalInstance | null,
+): EventListener | null {
+  const handlers = (Array.isArray(value) ? value : [value]).filter(
+    (entry): entry is EventListener => typeof entry === "function",
+  );
+  if (handlers.length === 0) return null;
 
-  const listeners = value.filter((entry): entry is EventListener => typeof entry === "function");
-  if (listeners.length === 0) return null;
   return (...args: unknown[]) => {
-    for (const listener of listeners) listener(...args);
+    let failure: { error: unknown } | undefined;
+    const recorded = handlers.map((handler) => (...a: unknown[]) => {
+      try {
+        return handler(...a);
+      } catch (error) {
+        failure ??= { error };
+        throw error;
+      }
+    });
+    callWithAsyncErrorHandling(recorded, instance, ErrorCodes.NATIVE_EVENT_HANDLER, args);
+    if (failure && !instance?.appContext.config.errorHandler) throw failure.error;
   };
 }
 
-function patchEvent(core: IncaCore, el: IncaElement, rawKey: string, nextValue: unknown): void {
+function patchEvent(
+  core: IncaCore,
+  el: IncaElement,
+  rawKey: string,
+  nextValue: unknown,
+  instance: ComponentInternalInstance | null,
+): void {
   const { event, once } = parseEventKey(rawKey);
-  const listener = asListener(nextValue);
+  const listener = asListener(nextValue, instance);
   if (!listener) {
     core.removeEventListener(el.id, event);
     return;
@@ -99,7 +130,9 @@ function patchEvent(core: IncaCore, el: IncaElement, rawKey: string, nextValue: 
  *   bind as an ordinary listener with no native passive/capture-phase
  *   support yet. See {@link EventListener} for which event names are wired
  *   to real input by the native host today; other names are accepted but
- *   never fire.
+ *   never fire. An error a handler throws synchronously goes to the app's
+ *   `errorHandler` and `onErrorCaptured` hooks; with no `errorHandler` it is
+ *   also rethrown to the host's error report.
  * - Everything else falls through to `core.setAttribute`, again skipping
  *   a non-string/number/boolean value rather than passing it through.
  *
@@ -110,11 +143,18 @@ function patchEvent(core: IncaCore, el: IncaElement, rawKey: string, nextValue: 
 export function createPatchProp(
   core: IncaCore,
 ): RendererOptions<unknown, IncaElement>["patchProp"] {
-  return (el: IncaElement, key: string, _prevValue: unknown, nextValue: unknown): void => {
+  return (
+    el: IncaElement,
+    key: string,
+    _prevValue: unknown,
+    nextValue: unknown,
+    _namespace?: unknown,
+    parentComponent?: ComponentInternalInstance | null,
+  ): void => {
     if (key === "style") {
       patchStyle(core, el, nextValue);
     } else if (isOn(key)) {
-      patchEvent(core, el, key, nextValue);
+      patchEvent(core, el, key, nextValue, parentComponent ?? null);
     } else if (
       typeof nextValue === "string" ||
       typeof nextValue === "number" ||

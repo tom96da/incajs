@@ -3,7 +3,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { removeEventListener, setEventListener } from "./events.mts";
+import { blur, removeEventListener, setEventListener } from "./events.mts";
 import { destroyNode } from "./tree.mts";
 
 const native = {
@@ -20,7 +20,7 @@ const native = {
   ),
   destroyNode: vi.fn<(nodeId: number) => number[]>(() => []),
   focusNode: vi.fn<(nodeId: number) => void>(),
-  blurNode: vi.fn<() => void>(),
+  blurNode: vi.fn<(nodeId: number) => void>(),
 };
 
 beforeEach(() => {
@@ -30,6 +30,15 @@ beforeEach(() => {
 });
 
 describe("setEventListener's callback registry", () => {
+  it("keeps no listener behind when the native registration throws", () => {
+    native.addEventListener.mockImplementationOnce(() => {
+      throw new Error("node destroyed");
+    });
+
+    expect(() => setEventListener(1, "click", vi.fn())).toThrow("node destroyed");
+    expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(0);
+  });
+
   it("stores the listener at __inca_callbacks__[id] and forwards that id natively", () => {
     const listener = vi.fn<() => void>();
 
@@ -127,5 +136,12 @@ describe("destroyNode", () => {
 
     expect(native.removeEventListener).not.toHaveBeenCalled();
     expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(1);
+  });
+});
+
+describe("blur", () => {
+  it("forwards the node id to native blurNode", () => {
+    blur(7);
+    expect(native.blurNode).toHaveBeenCalledWith(7);
   });
 });

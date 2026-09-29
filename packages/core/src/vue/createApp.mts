@@ -50,7 +50,7 @@ export function createIncaApp(
       parent: null,
       children: [],
       focus: () => core.focus(id),
-      blur: () => core.blur(),
+      blur: () => core.blur(id),
     };
   }
 
