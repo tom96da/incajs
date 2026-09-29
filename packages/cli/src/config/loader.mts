@@ -92,6 +92,45 @@ function assertUsableProductName(productName: unknown): asserts productName is s
   );
 }
 
+/** Whether the platform's default filesystem ignores case. */
+const CASE_INSENSITIVE = process.platform === "darwin" || process.platform === "win32";
+
+/** Whether `target` is `dir` itself or lies under it. */
+function isWithin(dir: string, target: string): boolean {
+  const fold = (p: string) => (CASE_INSENSITIVE ? p.toLowerCase() : p);
+  const rel = path.relative(fold(dir), fold(target));
+  return rel === "" || (rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel));
+}
+
+/**
+ * Resolves `outDir`, refusing one that would hold the app's own sources.
+ * `inca dev` and `inca build` delete whatever a build didn't write under
+ * `outDir`.
+ *
+ * @param cwd - the app's root directory
+ * @param outDir - the configured value, if any
+ * @param entry - the resolved `entry`, if the config set one
+ * @returns an absolute path
+ * @throws if it is, or contains, the app's root, `src/`, `node_modules/`, or the entry
+ */
+function resolveOutDir(cwd: string, outDir: string | undefined, entry: string | undefined): string {
+  const resolved = path.resolve(cwd, outDir ?? defaultConfig.outDir);
+  const protectedPaths = [
+    cwd,
+    path.join(cwd, "src"),
+    path.join(cwd, "node_modules"),
+    ...(entry ? [entry] : []),
+  ];
+  if (protectedPaths.some((p) => isWithin(resolved, p))) {
+    throw new IncaError(
+      "ERR_INCA_OUT_DIR_INVALID",
+      `"outDir" resolves to ${resolved}, which holds the app's own files. ` +
+        `Set it to a directory the build can own, such as "dist"`,
+    );
+  }
+  return resolved;
+}
+
 /** Loads `inca.config.ts`, and reports whether `package.json`'s `"inca"` key supplied anything. */
 async function loadIncaConfig(
   cwd: string,
@@ -111,10 +150,8 @@ async function loadIncaConfig(
 export async function resolveBuildConfig(cwd: string): Promise<ResolvedBuildConfig> {
   const { config } = await loadIncaConfig(cwd);
 
-  return {
-    entry: config.entry ? path.resolve(cwd, config.entry) : undefined,
-    outDir: path.resolve(cwd, config.outDir ?? defaultConfig.outDir),
-  };
+  const entry = config.entry ? path.resolve(cwd, config.entry) : undefined;
+  return { entry, outDir: resolveOutDir(cwd, config.outDir, entry) };
 }
 
 /**
@@ -124,7 +161,8 @@ export async function resolveBuildConfig(cwd: string): Promise<ResolvedBuildConf
  * @param cwd - the app's root directory
  * @returns the resolved config
  * @throws if `package.json` is missing, has neither a `name` nor a
- * `productName`, or an `icon` doesn't resolve to a real file
+ * `productName`, an `icon` doesn't resolve to a real file, or `outDir`
+ * would hold the app's own files
  */
 export async function resolveAppConfig(cwd: string): Promise<ResolvedAppConfig> {
   const pkgPath = path.join(cwd, "package.json");
@@ -162,7 +200,7 @@ export async function resolveAppConfig(cwd: string): Promise<ResolvedAppConfig> 
   }
 
   const entry = config.entry ? path.resolve(cwd, config.entry) : undefined;
-  const outDir = path.resolve(cwd, config.outDir ?? defaultConfig.outDir);
+  const outDir = resolveOutDir(cwd, config.outDir, entry);
 
   return {
     productName,

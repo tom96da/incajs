@@ -6,7 +6,11 @@ import path from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { resolveAppConfig, resolveRuntimeConfig } from "../src/config/loader.mts";
+import {
+  resolveAppConfig,
+  resolveBuildConfig,
+  resolveRuntimeConfig,
+} from "../src/config/loader.mts";
 import { scratchConfigApp } from "./scratchConfigApp.mts";
 
 const { setUp, tearDown, makeApp } = scratchConfigApp("config");
@@ -58,6 +62,56 @@ describe("resolveAppConfig's productName", () => {
     await expect(resolveAppConfig(app)).rejects.toThrow(
       expect.objectContaining({ code: "ERR_INCA_PRODUCT_NAME_INVALID" }),
     );
+  });
+});
+
+describe("resolveAppConfig's outDir", () => {
+  it("resolves from the app's root", async () => {
+    const app = await makeApp({ name: "scratch-app", inca: { outDir: "build" } });
+
+    await expect(resolveAppConfig(app)).resolves.toMatchObject({
+      outDir: path.join(app, "build"),
+    });
+  });
+
+  it.each(["", ".", "..", "src", "node_modules"])(
+    "refuses %j, which holds the app's sources",
+    async (outDir) => {
+      const app = await makeApp({ name: "scratch-app", inca: { outDir } });
+
+      await expect(resolveAppConfig(app)).rejects.toThrow(
+        expect.objectContaining({ code: "ERR_INCA_OUT_DIR_INVALID" }),
+      );
+    },
+  );
+
+  it("refuses one that holds a configured entry", async () => {
+    const app = await makeApp({
+      name: "scratch-app",
+      inca: { outDir: "app", entry: "app/main.mts" },
+    });
+
+    await expect(resolveAppConfig(app)).rejects.toThrow(
+      expect.objectContaining({ code: "ERR_INCA_OUT_DIR_INVALID" }),
+    );
+  });
+});
+
+describe("resolveBuildConfig's outDir", () => {
+  it("refuses the app's root", async () => {
+    const app = await makeApp({ name: "scratch-app", inca: { outDir: "." } });
+
+    await expect(resolveBuildConfig(app)).rejects.toThrow(
+      expect.objectContaining({ code: "ERR_INCA_OUT_DIR_INVALID" }),
+    );
+  });
+
+  it.each(["dist", "..foo", "../sibling-out"])("allows %j", async (outDir) => {
+    const app = await makeApp({ name: "scratch-app", inca: { outDir } });
+
+    await expect(resolveBuildConfig(app)).resolves.toMatchObject({
+      outDir: path.resolve(app, outDir),
+    });
   });
 });
 

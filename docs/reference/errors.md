@@ -56,6 +56,14 @@ enforces.
 path is resolved from the app's root directory. Applies to macOS only —
 Linux shows no icon.
 
+## `ERR_INCA_OUT_DIR_INVALID`
+
+[`outDir`](./configuration#outdir) is, or contains, the app's root
+directory, its `src/` or `node_modules/`, or its configured
+[`entry`](./configuration#entry). `inca dev` and `inca build` delete
+every file under `outDir` that the build didn't write. Set it to a
+directory the build owns, such as `"dist"`.
+
 ## `ERR_INCA_PLATFORM_UNSUPPORTED`
 
 `inca package` runs on macOS and Linux. Windows isn't supported yet.

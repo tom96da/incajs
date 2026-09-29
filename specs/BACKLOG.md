@@ -485,6 +485,18 @@ enough overhead for a single maintainer plus AI pairing.
   errors after spawn. Either give `inca dev` the same code for the same
   failure, or write down why the two commands differ.
 
+- **`outDir`'s guard doesn't follow symlinks or cover every caller**:
+  `resolveOutDir` (`packages/cli/src/config/loader.mts`) refuses an
+  `outDir` that is, or contains, the app's root, `src/`, `node_modules/` or
+  the entry, comparing paths as written. An `outDir` that is a symlink to
+  one of those, or under a symlinked root, passes, and `inca dev` and
+  `inca build` then delete files through it. The check also runs only in
+  `resolveBuildConfig`/`resolveAppConfig`. `build()` accepts
+  `options.config` (`packages/cli/src/build.mts`), and `dev`/`build` accept
+  an `options.entry` override. Neither is checked against `outDir`.
+  A `realpath` on the nearest existing ancestor of each path would close
+  the symlink case.
+
 - **`buttons` stays set after a release nobody listens to**:
   `update_held_buttons` (`crates/inca-bridge/src/dispatch.rs`) only runs
   when a listener is dispatched. A node that listens for `mousedown` and
