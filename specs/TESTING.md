@@ -30,14 +30,14 @@ Update this file as real conventions land, same as the other docs here.
   depends on the other. Cargo picks up `tests/tests/*.rs` on its own; a
   file that needs the other language runs it (`config_contract.rs` starts
   Node) or reads what it built (`js_core_integration.rs` reads
-  `packages/core/dist`). `tests/tests/hmr-quickjs-state.test.mts` sits
-  beside them (Cargo ignores non-`.rs` files there regardless) and is the
-  one JS test in this area — it spawns the real `inca-host` binary and a
-  real Vite dev server, since driving `Session`/`start` any other way
-  would mean making them public just for a test. It's a separate pnpm
-  workspace member (`@incajs/e2e-tests`, not swept into `pnpm test`) and
-  shares `inca-tests`'s own CI job, which already sets up the Rust/gpui
-  toolchain this test needs too.
+  `packages/core/dist`). `tests/tests/hmr-quickjs-state.test.mts` and
+  `host-startup-failure.test.mts` sit beside them (Cargo ignores non-`.rs`
+  files there regardless). They spawn the real `inca-host` binary (the
+  first with a real Vite dev server too), since driving `Session`/`start`
+  any other way would mean making them public just for a test. They are in
+  a separate pnpm workspace member (`@incajs/e2e-tests`, not swept into
+  `pnpm test`) and share `inca-tests`'s own CI job, which already sets up
+  the Rust/gpui toolchain they need.
 
 ### Required checks
 

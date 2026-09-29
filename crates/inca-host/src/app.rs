@@ -348,10 +348,7 @@ pub(crate) fn run_bundle(entry_path: &str, dev: bool) -> ExitCode {
     let entry_path = entry_path.to_owned();
     let writer: Option<SharedWriter> = dev.then(|| Rc::new(StdoutWriter::spawn()) as SharedWriter);
 
-    // `run` blocks until the app quits, so the outcome comes back out
-    // through a cell rather than a return value.
-    let failed = Rc::new(Cell::new(false));
-    let reported = Rc::clone(&failed);
+    let closing = writer.clone();
     application().run(move |cx: &mut App| {
         // macOS keeps an app alive with no windows left; this framework's
         // apps are single-window, so closing the window is quitting.
@@ -377,17 +374,20 @@ pub(crate) fn run_bundle(entry_path: &str, dev: bool) -> ExitCode {
             }
             Err(failure) => {
                 report_startup_failure(&failure, writer.as_ref());
-                reported.set(true);
-                cx.quit();
+                if let Some(writer) = &writer {
+                    writer.close();
+                }
+                // No window ever opened, so the event loop has nothing to
+                // quit from.
+                std::process::exit(1);
             }
         }
     });
 
-    if failed.get() {
-        ExitCode::FAILURE
-    } else {
-        ExitCode::SUCCESS
+    if let Some(writer) = closing {
+        writer.close();
     }
+    ExitCode::SUCCESS
 }
 
 /// Where a packaged app's bundle lives relative to `exe_dir`, tried in

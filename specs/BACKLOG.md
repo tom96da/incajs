@@ -273,18 +273,6 @@ enough overhead for a single maintainer plus AI pairing.
   gap likely applies to any other DOM-element method or property a
   `.vue` app would otherwise reach for on a template `ref`.
 
-- **`inca-host` doesn't exit after reporting a startup failure**: when the
-  very first bundle fails to evaluate (before any window has opened),
-  `report_startup_failure`/`cx.quit()` runs, but the process keeps
-  running instead of actually terminating — reproduced by hand, `--dev`
-  against a bundle that just throws, with the real compiled binary
-  spawned as a child process (not `TestAppContext`, which never exercises
-  real process exit). Suspected cause: `cx.quit()` only takes effect once
-  the platform's native event loop has been kicked into motion by at
-  least one window opening; with zero windows ever created, the quit
-  request seems to go unprocessed. Affects any `inca dev` session (HMR or
-  not) whose first bundle fails to load, not just experimental HMR.
-
 - **`inca dev --experimental-hmr` opens its window at the wrong size on
   first launch, then resizes**: a plain `inca dev` opens already sized to
   the app's own declared content (no visible gap). Under
@@ -437,14 +425,6 @@ enough overhead for a single maintainer plus AI pairing.
   `specs/PROTOCOL.md` used to claim the opposite ("a client that stops
   reading eventually stops the host"); that wording is now fixed to match.
   Fixing the behavior itself means a bounded channel with real backpressure.
-
-- **Queued stdout lines can be lost on exit**: `StdoutWriter`'s writer
-  thread (`crates/inca-host/src/dev.rs`) is spawned and never joined —
-  `run_bundle` (`crates/inca-host/src/app.rs`) doesn't wait for it before
-  the process exits. A line still in the channel (a startup-failure
-  report, say) can be dropped if the process exits first. Fix: keep the
-  `JoinHandle`, drop the sender, and join the thread before `run_bundle`
-  returns.
 
 - **A root that declares one dimension never auto-resizes the window**:
   `maybe_auto_resize_to_content` (`crates/inca-host/src/app.rs`) needs

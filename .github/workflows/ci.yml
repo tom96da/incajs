@@ -338,7 +338,6 @@ jobs:
       - name: Test
         run: cargo test -p inca-tests
 
-      # hmr-quickjs-state.test.mts spawns this binary directly.
       - name: Build inca-host
         run: cargo build -p inca-host
 

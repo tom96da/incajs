@@ -6,6 +6,7 @@
 //! notification into the running app as `__inca_dev__.receive(method,
 //! paramsJson)` — see [`crate::protocol`] for the wire format this speaks.
 
+use std::cell::RefCell;
 use std::fs;
 use std::io::{self, BufRead, Write};
 use std::rc::Rc;
@@ -34,6 +35,9 @@ pub(crate) enum Failure {
 /// read back.
 pub(crate) trait Writer {
     fn write_line(&self, line: String);
+
+    /// Waits until every line already written has reached its destination.
+    fn close(&self) {}
 }
 
 /// Shared so the same writer reaches every place that reports something —
@@ -44,12 +48,15 @@ pub(crate) type SharedWriter = Rc<dyn Writer>;
 /// Owns real stdout on a dedicated thread. `write_line` only pushes onto an
 /// unbounded channel, so a parent that reads its stdin slowly stalls that
 /// thread, never the one rendering frames.
-pub(crate) struct StdoutWriter(async_channel::Sender<String>);
+pub(crate) struct StdoutWriter(
+    async_channel::Sender<String>,
+    RefCell<Option<thread::JoinHandle<()>>>,
+);
 
 impl StdoutWriter {
     pub(crate) fn spawn() -> Self {
         let (sender, receiver) = async_channel::unbounded::<String>();
-        thread::spawn(move || {
+        let handle = thread::spawn(move || {
             let mut stdout = io::stdout().lock();
             while let Ok(line) = receiver.recv_blocking() {
                 if let Err(err) = writeln!(stdout, "{line}").and_then(|()| stdout.flush()) {
@@ -58,7 +65,7 @@ impl StdoutWriter {
                 }
             }
         });
-        Self(sender)
+        Self(sender, RefCell::new(Some(handle)))
     }
 }
 
@@ -66,6 +73,13 @@ impl Writer for StdoutWriter {
     fn write_line(&self, line: String) {
         if self.0.send_blocking(line).is_err() {
             log::warn!("stdout writer thread is gone");
+        }
+    }
+
+    fn close(&self) {
+        self.0.close();
+        if let Some(handle) = self.1.borrow_mut().take() {
+            let _ = handle.join();
         }
     }
 }
