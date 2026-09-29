@@ -9,7 +9,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use rquickjs::{Ctx, Exception, Function, Object, Result as JsResult, Value};
+use rquickjs::{Ctx, Exception, FromJs, Function, Object, Result as JsResult, Value};
 
 use inca_gpui::{AttributeValue, NodeId, TreeError, VirtualTree};
 
@@ -108,6 +108,28 @@ impl Default for Host {
     }
 }
 
+/// A node id argument. Accepts a finite whole number in `u32` range;
+/// anything else (`NaN`, `1.5`, `-1`, `Infinity`, `2**32`, a non-number)
+/// throws a `TypeError`.
+#[derive(Debug, Clone, Copy)]
+struct JsNodeId(NodeId);
+
+impl<'js> FromJs<'js> for JsNodeId {
+    fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> JsResult<Self> {
+        let number = value
+            .as_number()
+            .ok_or_else(|| Exception::throw_type(ctx, "node id must be a number"))?;
+        if number.fract() == 0.0 && (0.0..=f64::from(NodeId::MAX)).contains(&number) {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            return Ok(Self(number as NodeId));
+        }
+        Err(Exception::throw_type(
+            ctx,
+            "node id must be a whole number in the range of an unsigned 32-bit integer",
+        ))
+    }
+}
+
 fn throw_tree_error(ctx: &Ctx<'_>, err: TreeError) -> rquickjs::Error {
     Exception::throw_type(ctx, &err.to_string())
 }
@@ -164,7 +186,10 @@ fn install_tree<'js>(
             "appendChild",
             Function::new(
                 ctx.clone(),
-                move |ctx: Ctx<'js>, parent_id: NodeId, child_id: NodeId| -> JsResult<()> {
+                move |ctx: Ctx<'js>,
+                      JsNodeId(parent_id): JsNodeId,
+                      JsNodeId(child_id): JsNodeId|
+                      -> JsResult<()> {
                     host.borrow_mut()
                         .tree
                         .append_child(parent_id, child_id)
@@ -181,13 +206,13 @@ fn install_tree<'js>(
             Function::new(
                 ctx.clone(),
                 move |ctx: Ctx<'js>,
-                      parent_id: NodeId,
-                      child_id: NodeId,
-                      anchor_id: Option<NodeId>|
+                      JsNodeId(parent_id): JsNodeId,
+                      JsNodeId(child_id): JsNodeId,
+                      anchor_id: Option<JsNodeId>|
                       -> JsResult<()> {
                     host.borrow_mut()
                         .tree
-                        .insert_before(parent_id, child_id, anchor_id)
+                        .insert_before(parent_id, child_id, anchor_id.map(|JsNodeId(id)| id))
                         .map_err(|err| throw_tree_error(&ctx, err))
                 },
             )?,
@@ -200,7 +225,10 @@ fn install_tree<'js>(
             "removeChild",
             Function::new(
                 ctx.clone(),
-                move |ctx: Ctx<'js>, parent_id: NodeId, child_id: NodeId| -> JsResult<()> {
+                move |ctx: Ctx<'js>,
+                      JsNodeId(parent_id): JsNodeId,
+                      JsNodeId(child_id): JsNodeId|
+                      -> JsResult<()> {
                     host.borrow_mut()
                         .tree
                         .remove_child(parent_id, child_id)
@@ -217,7 +245,7 @@ fn install_tree<'js>(
             Function::new(
                 ctx.clone(),
                 move |ctx: Ctx<'js>,
-                      node_id: NodeId,
+                      JsNodeId(node_id): JsNodeId,
                       key: String,
                       value: Value<'js>|
                       -> JsResult<()> {
@@ -238,7 +266,7 @@ fn install_tree<'js>(
             Function::new(
                 ctx.clone(),
                 move |ctx: Ctx<'js>,
-                      node_id: NodeId,
+                      JsNodeId(node_id): JsNodeId,
                       key: String,
                       value: Value<'js>|
                       -> JsResult<()> {
@@ -258,7 +286,7 @@ fn install_tree<'js>(
             "destroyNode",
             Function::new(
                 ctx.clone(),
-                move |ctx: Ctx<'js>, node_id: NodeId| -> JsResult<Vec<u32>> {
+                move |ctx: Ctx<'js>, JsNodeId(node_id): JsNodeId| -> JsResult<Vec<u32>> {
                     let mut host = host.borrow_mut();
                     if node_id == host.root {
                         return Err(Exception::throw_type(
@@ -295,7 +323,7 @@ fn install_events<'js>(
             Function::new(
                 ctx.clone(),
                 move |ctx: Ctx<'js>,
-                      node_id: NodeId,
+                      JsNodeId(node_id): JsNodeId,
                       event: String,
                       callback_id: u32|
                       -> JsResult<()> {
@@ -316,7 +344,7 @@ fn install_events<'js>(
             "removeEventListener",
             Function::new(
                 ctx.clone(),
-                move |node_id: NodeId, event: String, callback_id: u32| -> bool {
+                move |JsNodeId(node_id): JsNodeId, event: String, callback_id: u32| -> bool {
                     host.borrow_mut()
                         .listeners
                         .unregister(node_id, &event, callback_id)
@@ -338,8 +366,12 @@ fn install_focus<'js>(
         let host = Rc::clone(host);
         native.set(
             "focusNode",
-            Function::new(ctx.clone(), move |node_id: NodeId| {
-                host.borrow_mut().focus.request_focus(node_id);
+            Function::new(ctx.clone(), move |JsNodeId(node_id): JsNodeId| {
+                let mut host = host.borrow_mut();
+                // Focusing a node that is gone is a no-op, as in the DOM.
+                if host.tree.get(node_id).is_some() {
+                    host.focus.request_focus(node_id);
+                }
             })?,
         )?;
     }
@@ -348,8 +380,8 @@ fn install_focus<'js>(
         let host = Rc::clone(host);
         native.set(
             "blurNode",
-            Function::new(ctx.clone(), move || {
-                host.borrow_mut().focus.request_blur();
+            Function::new(ctx.clone(), move |JsNodeId(node_id): JsNodeId| {
+                host.borrow_mut().focus.request_blur(node_id);
             })?,
         )?;
     }
@@ -639,6 +671,52 @@ mod tests {
             Some(&AttributeValue::String("flex".into()))
         );
         assert_eq!(host.listeners.callbacks_for(child_id, "click"), &[7]);
+    }
+
+    #[test]
+    fn node_id_that_is_not_a_whole_u32_raises_type_error() {
+        let (engine, _host) = engine_with_bindings();
+
+        for bad in ["NaN", "1.5", "-1", "Infinity", "2 ** 32", "'1'"] {
+            let script = format!(
+                "(() => {{ const node = __inca_native__.createNode('div');
+                 const rejects = (f) => {{
+                     try {{ f(); return false; }} catch (e) {{ return e instanceof TypeError; }}
+                 }};
+                 return [
+                     rejects(() => __inca_native__.setStyle({bad}, 'width', 1)),
+                     rejects(() => __inca_native__.appendChild({bad}, node)),
+                     rejects(() => __inca_native__.appendChild(node, {bad})),
+                     rejects(() => __inca_native__.insertBefore(node, node, {bad})),
+                     rejects(() => __inca_native__.destroyNode({bad})),
+                     rejects(() => __inca_native__.addEventListener({bad}, 'click', 1)),
+                     rejects(() => __inca_native__.removeEventListener({bad}, 'click', 1)),
+                     rejects(() => __inca_native__.focusNode({bad})),
+                 ].every(Boolean); }})()"
+            );
+            assert!(engine.eval::<bool>(&script).unwrap(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_normal_node_id_and_an_absent_anchor_still_work() {
+        let (engine, _host) = engine_with_bindings();
+
+        let ok: bool = engine
+            .eval(
+                r"
+                const n = __inca_native__;
+                const p = n.createNode('div');
+                const c = n.createNode('div');
+                n.setStyle(c, 'width', 1);
+                n.insertBefore(p, c, undefined);
+                n.destroyNode(c);
+                true;
+                ",
+            )
+            .unwrap();
+
+        assert!(ok);
     }
 
     #[test]

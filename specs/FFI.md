@@ -35,6 +35,9 @@ child from wherever it was, so the same call both attaches and moves, and an
 attachment that would make a node its own ancestor throws instead. A walk
 down the tree therefore always terminates, which the render path relies on.
 
+Every `nodeId` argument must be a finite whole number in the `u32`
+range; anything else throws a `TypeError`.
+
 **Nodes are freed only by `destroyNode`,** which frees the whole subtree.
 Detaching with `removeChild` keeps the node alive for re-attachment; a caller
 that drops a subtree without destroying it leaks every node in it, and every
@@ -97,9 +100,9 @@ variants beyond the four above.
 | `setStyle` | `(nodeId: number, key: string, value: any) => void` | Set a style prop — the only JS-reachable way to touch `style_props`; `setAttribute` writes to the separate `attributes` map instead. |
 | `addEventListener` | `(nodeId: number, event: string, callbackId: number) => void` | Register a JS callback for a native input event. Distinct ids on one `(nodeId, event)` stack and all of them are dispatched, as in the DOM; re-registering an id already there is a no-op. |
 | `removeEventListener` | `(nodeId: number, event: string, callbackId: number) => boolean` | Drop one registration, reporting whether it was there. Never throws — a node destroyed first is the normal teardown race, not an error. |
-| `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its whole subtree, and return every `callbackId` that was registered anywhere in it, so the caller can drop the JS functions those ids name. Destroying an already-destroyed or unknown id returns `[]`. Destroying the root throws — it belongs to the host. Also drops `nodeId`'s focus state, if it had any. |
-| `focusNode` | `(nodeId: number) => void` | Request that `nodeId` become focused. Takes effect next frame; works on any node, not only one with a `"focus"`/`"blur"` listener registered. |
-| `blurNode` | `() => void` | Request that whatever's focused become unfocused. Takes effect next frame; a no-op if nothing is focused by then. |
+| `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its whole subtree, and return every `callbackId` that was registered anywhere in it, so the caller can drop the JS functions those ids name. Destroying an already-destroyed or unknown id returns `[]`. Destroying the root throws — it belongs to the host. Also drops `nodeId`'s focus state, if it had any, and cancels a queued focus for it. |
+| `focusNode` | `(nodeId: number) => void` | Request that `nodeId` become focused. Takes effect next frame; works on any node, not only one with a `"focus"`/`"blur"` listener registered. An unknown or destroyed node is ignored. |
+| `blurNode` | `(nodeId: number) => void` | Request that `nodeId` become unfocused. Takes effect next frame; a no-op if `nodeId` isn't the focused node by then. |
 
 On each GPUI `render()` frame cycle, the host recursively converts the
 `VirtualNode` tree into GPUI `AnyElement` instances. A node is wired for
@@ -142,7 +145,8 @@ that would tell them apart. `movementX`/`movementY` are a delta from
 whichever mouse/wheel event `EventDispatcher` last saw, `0` for the first
 one — including a `"mouseenter"`/`"mouseleave"` sharing that same tracker,
 so hovering a node with no pointer movement since an earlier click can
-still report a nonzero delta, against that click's position.
+still report a nonzero delta, against that click's position. Bubbled
+dispatches of one raw event share one movement value.
 
 `"wheel"` carries the same fields as `"mousedown"`/`"mouseup"`/
 `"mousemove"` plus `deltaX`, `deltaY`, `deltaZ`, `deltaMode` — DOM's

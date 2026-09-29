@@ -172,7 +172,7 @@ fn blur_node_blurs_whatever_is_focused(cx: &mut TestAppContext) {
     engine.eval::<()>("globalThis.seen = [];").unwrap();
 
     cx.update_window(window.into(), |_root, window, cx| {
-        host.borrow_mut().focus.request_blur();
+        host.borrow_mut().focus.request_blur(a);
         window.draw(cx).clear(cx);
     })
     .unwrap();
@@ -189,7 +189,7 @@ fn blur_node_blurs_whatever_is_focused(cx: &mut TestAppContext) {
 /// `blurNode` when nothing is focused must not fire a spurious `"blur"`.
 #[gpui::test]
 fn blur_node_with_nothing_focused_reports_nothing(cx: &mut TestAppContext) {
-    let (host, parent, _a) = build_focusable_pair();
+    let (host, parent, a) = build_focusable_pair();
     let engine = Rc::new(Engine::new().unwrap());
     install_focus_recorder(&engine);
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
@@ -205,7 +205,7 @@ fn blur_node_with_nothing_focused_reports_nothing(cx: &mut TestAppContext) {
         .unwrap();
 
     cx.update_window(window.into(), |_root, window, cx| {
-        host.borrow_mut().focus.request_blur();
+        host.borrow_mut().focus.request_blur(a);
         window.draw(cx).clear(cx);
     })
     .unwrap();
@@ -300,4 +300,104 @@ fn two_focus_node_calls_before_the_next_frame_both_take_effect(cx: &mut TestAppC
         format!(r#"["focus:{a}","blur:{a}","focus:{b}"]"#),
         "both requests must take effect, in order, like the DOM's synchronous focus()"
     );
+}
+
+/// Runs `script` against the host's bindings, then draws one frame.
+fn run_then_draw(
+    cx: &mut TestAppContext,
+    engine: &Engine,
+    host: &Rc<RefCell<Host>>,
+    parent: NodeId,
+    script: &str,
+) {
+    engine
+        .with(|ctx| inca_bridge::bindings::install(&ctx, host))
+        .unwrap();
+    let dispatcher = EventDispatcher::new(Rc::new(Engine::new().unwrap()), Rc::clone(host));
+    let window = cx.add_window(|_, _| FocusableRoot {
+        host: Rc::clone(host),
+        node: parent,
+        dispatcher,
+    });
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    engine.eval::<()>(script).unwrap();
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    cx.run_until_parked();
+}
+
+#[gpui::test]
+fn focus_then_destroy_in_one_tick_leaves_no_handle(cx: &mut TestAppContext) {
+    let (host, parent, a) = build_focusable_pair();
+    let engine = Engine::new().unwrap();
+
+    let script = format!("__inca_native__.focusNode({a}); __inca_native__.destroyNode({a});");
+    run_then_draw(cx, &engine, &host, parent, &script);
+
+    assert!(host.borrow().focus.handle(a).is_none());
+}
+
+#[gpui::test]
+fn focus_on_an_unknown_node_leaves_no_handle(cx: &mut TestAppContext) {
+    let (host, parent, _a) = build_focusable_pair();
+    let engine = Engine::new().unwrap();
+
+    run_then_draw(
+        cx,
+        &engine,
+        &host,
+        parent,
+        "__inca_native__.focusNode(999);",
+    );
+
+    assert!(host.borrow().focus.handle(999).is_none());
+}
+
+/// `blurNode(id)` blurs only when `id` is the focused node: another node's
+/// id, or an unknown one, leaves focus alone.
+#[gpui::test]
+fn blur_node_of_a_node_that_is_not_focused_is_a_no_op(cx: &mut TestAppContext) {
+    for other in [Some(1), None] {
+        let (host, parent, a) = build_focusable_pair();
+        let other_id = other.map_or(999, |i| {
+            host.borrow().tree.get(parent).unwrap().children()[i]
+        });
+        let engine = Rc::new(Engine::new().unwrap());
+        install_focus_recorder(&engine);
+        let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
+        let window = cx.add_window(|_, _| FocusableRoot {
+            host: Rc::clone(&host),
+            node: parent,
+            dispatcher,
+        });
+        cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+            .unwrap();
+        cx.update_window(window.into(), |_, window, _cx| window.activate_window())
+            .unwrap();
+        cx.update_window(window.into(), |_root, window, cx| {
+            host.borrow_mut().focus.request_focus(a);
+            window.draw(cx).clear(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        engine.eval::<()>("globalThis.seen = [];").unwrap();
+
+        cx.update_window(window.into(), |_root, window, cx| {
+            host.borrow_mut().focus.request_blur(other_id);
+            window.draw(cx).clear(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+
+        let seen = engine.eval::<String>("JSON.stringify(seen)").unwrap();
+        assert_eq!(seen, "[]", "blur of {other_id} must not blur {a}");
+        let still_focused = cx
+            .update_window(window.into(), |_, window, cx| {
+                host.borrow().focus.handle(a).unwrap().is_focused(window)
+                    && window.focused(cx).is_some()
+            })
+            .unwrap();
+        assert!(still_focused);
+    }
 }

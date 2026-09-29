@@ -56,7 +56,7 @@ impl FocusTransition {
 #[derive(Debug, Clone, Copy)]
 enum PendingFocus {
     Focus(NodeId),
-    Blur,
+    Blur(NodeId),
 }
 
 /// `NodeId` → its persistent `FocusHandle`, the node focused as of the last
@@ -84,10 +84,10 @@ impl FocusRegistry {
         self.pending.push_back(PendingFocus::Focus(node_id));
     }
 
-    /// Queues that whatever's focused at that point should be blurred next
-    /// frame.
-    pub fn request_blur(&mut self) {
-        self.pending.push_back(PendingFocus::Blur);
+    /// Queues that `node_id` should be blurred next frame. Applying it
+    /// blurs only if `node_id` is the focused node at that point.
+    pub fn request_blur(&mut self, node_id: NodeId) {
+        self.pending.push_back(PendingFocus::Blur(node_id));
     }
 
     /// Applies every queued request in order and reports each transition
@@ -116,7 +116,12 @@ impl FocusRegistry {
                     let handle = self.get_or_create(node_id, cx);
                     handle.focus(window, cx);
                 }
-                PendingFocus::Blur => window.blur(cx),
+                PendingFocus::Blur(node_id) => {
+                    let focused = window.focused(cx).and_then(|handle| self.node_for(&handle));
+                    if focused == Some(node_id) {
+                        window.blur(cx);
+                    }
+                }
             }
             transitions.extend(self.sync(window, cx));
         }
@@ -139,11 +144,13 @@ impl FocusRegistry {
         })
     }
 
-    /// Drops `node_id`'s handle, if it has one. `destroyNode` calls this
-    /// for every node a destroyed subtree freed, mirroring how it already
-    /// frees callback ids.
+    /// Drops `node_id`'s handle and any queued request to focus it.
+    /// `destroyNode` calls this for every node a destroyed subtree freed,
+    /// mirroring how it already frees callback ids.
     pub fn forget(&mut self, node_id: NodeId) {
         self.handles.remove(&node_id);
+        self.pending
+            .retain(|request| !matches!(request, PendingFocus::Focus(id) if *id == node_id));
         if self.focused == Some(node_id) {
             // The node is gone — nothing left to dispatch a "blur" to.
             self.focused = None;

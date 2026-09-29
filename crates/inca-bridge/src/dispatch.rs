@@ -68,7 +68,14 @@ pub struct EventDispatcher {
     /// The last mouse/wheel payload's position, to compute `movementX`/
     /// `movementY` as a delta — `None` until the first one arrives.
     last_position: Rc<Cell<Option<(f32, f32)>>>,
+    /// The event name and movement computed for the raw event being
+    /// dispatched right now. One raw pointer event bubbling to several nodes
+    /// shares it; it is cleared once that event's update finishes.
+    current_movement: Rc<RefCell<Option<MovementMemo>>>,
 }
+
+/// What [`EventDispatcher::current_movement`] holds.
+type MovementMemo = (String, (f32, f32));
 
 impl EventDispatcher {
     /// Reports failures through [`stderr_reporter`].
@@ -79,6 +86,7 @@ impl EventDispatcher {
             reporter: stderr_reporter(),
             held_buttons: Rc::new(Cell::new(0)),
             last_position: Rc::new(Cell::new(None)),
+            current_movement: Rc::new(RefCell::new(None)),
         }
     }
 
@@ -144,10 +152,11 @@ impl EventDispatcher {
     /// Returns `payload` with `movementX`/`movementY` set against
     /// [`Self::last_position`] — 0 for whichever mouse/wheel event arrives
     /// first, since there is nothing yet to take a delta from.
-    fn with_movement(&self, payload: &EventPayload) -> EventPayload {
+    fn with_movement(&self, event: &str, payload: &EventPayload, cx: &mut App) -> EventPayload {
         match payload {
             EventPayload::Mouse(mouse) => {
-                let (movement_x, movement_y) = self.take_movement(mouse.client_x, mouse.client_y);
+                let (movement_x, movement_y) =
+                    self.shared_movement(event, mouse.client_x, mouse.client_y, cx);
                 EventPayload::Mouse(MousePayload {
                     movement_x,
                     movement_y,
@@ -156,7 +165,7 @@ impl EventDispatcher {
             }
             EventPayload::Wheel(wheel) => {
                 let (movement_x, movement_y) =
-                    self.take_movement(wheel.mouse.client_x, wheel.mouse.client_y);
+                    self.shared_movement(event, wheel.mouse.client_x, wheel.mouse.client_y, cx);
                 EventPayload::Wheel(WheelPayload {
                     mouse: MousePayload {
                         movement_x,
@@ -168,6 +177,28 @@ impl EventDispatcher {
             }
             EventPayload::None | EventPayload::Key(_) => payload.clone(),
         }
+    }
+
+    /// [`Self::take_movement`], computed once per raw event: the first
+    /// dispatch of `event` computes it and defers clearing it to the end of
+    /// the update, so every node that raw event bubbles to shares it.
+    fn shared_movement(
+        &self,
+        event: &str,
+        client_x: f32,
+        client_y: f32,
+        cx: &mut App,
+    ) -> (f32, f32) {
+        if let Some((name, movement)) = self.current_movement.borrow().as_ref()
+            && name == event
+        {
+            return *movement;
+        }
+        let movement = self.take_movement(client_x, client_y);
+        *self.current_movement.borrow_mut() = Some((event.to_owned(), movement));
+        let current = Rc::clone(&self.current_movement);
+        cx.defer(move |_| *current.borrow_mut() = None);
+        movement
     }
 
     /// Records `(client_x, client_y)` as [`Self::last_position`] and returns
@@ -217,7 +248,7 @@ impl EventDispatcher {
             .to_vec();
 
         let payload = self.with_held_buttons(event, payload);
-        let payload = self.with_movement(&payload);
+        let payload = self.with_movement(event, &payload, cx);
         let payload = &payload;
 
         let stop_propagation = Rc::new(Cell::new(false));

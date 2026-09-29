@@ -820,6 +820,87 @@ fn movement_tracks_the_delta_from_the_last_mouse_event(cx: &mut TestAppContext) 
     assert_eq!(movement(), (20.0, -5.0));
 }
 
+/// One `mousemove` bubbling from a child to its listening parent reports
+/// the same `movementX`/`movementY` to both.
+#[gpui::test]
+fn bubbled_mousemove_gives_every_listener_the_same_movement(cx: &mut TestAppContext) {
+    let (host, parent) = build_tree_listening_for("mousemove");
+    let child = {
+        let mut host = host.borrow_mut();
+        let child = host.tree.create_node("div");
+        host.tree.set_style(child, "width", 100.0).unwrap();
+        host.tree.set_style(child, "height", 100.0).unwrap();
+        host.tree.append_child(parent, child).unwrap();
+        host.listeners.register(child, "mousemove", 0);
+        child
+    };
+    let engine = Rc::new(Engine::new().unwrap());
+    engine
+        .eval::<()>(
+            "globalThis.seen = []; \
+             globalThis.__inca_callbacks__ = { 0: (e) => { \
+                 globalThis.seen.push([e.target, e.movementX, e.movementY]); } };",
+        )
+        .unwrap();
+    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
+    let window = cx.add_window(|_, _| ClickableRoot {
+        host: Rc::clone(&host),
+        node: parent,
+        dispatcher,
+    });
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    let mut cx = VisualTestContext::from_window(window.into(), cx);
+
+    for (x, y) in [(10.0, 10.0), (30.0, 5.0)] {
+        cx.simulate_mouse_move(point(px(x), px(y)), None::<MouseButton>, Modifiers::none());
+    }
+    cx.run_until_parked();
+
+    let seen: Vec<(u32, f32, f32)> =
+        serde_json::from_str(&engine.eval::<String>("JSON.stringify(seen)").unwrap()).unwrap();
+    assert_eq!(seen.len(), 4, "each move reaches the child then the parent");
+    assert!(seen.iter().any(|&(target, ..)| target == child));
+    assert_eq!((seen[0].1, seen[0].2), (seen[1].1, seen[1].2));
+    assert_eq!((seen[2].1, seen[2].2), (20.0, -5.0));
+    assert_eq!((seen[3].1, seen[3].2), (20.0, -5.0));
+}
+
+/// A second genuine `mousemove` at the same position reports no movement,
+/// even though the first one at that position did.
+#[gpui::test]
+fn repeated_mousemove_at_one_position_reports_zero_movement(cx: &mut TestAppContext) {
+    let (host, node) = build_tree_listening_for("mousemove");
+    let engine = Rc::new(Engine::new().unwrap());
+    install_click_counter(&engine);
+    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
+    let window = cx.add_window(|_, _| ClickableRoot {
+        host: Rc::clone(&host),
+        node,
+        dispatcher,
+    });
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    let mut cx = VisualTestContext::from_window(window.into(), cx);
+
+    let mut movements = Vec::new();
+    for x in [5.0, 10.0, 10.0] {
+        cx.simulate_mouse_move(
+            point(px(x), px(10.0)),
+            None::<MouseButton>,
+            Modifiers::none(),
+        );
+        cx.run_until_parked();
+        movements.push(
+            engine
+                .eval::<f32>("globalThis.lastEvent.movementX")
+                .unwrap(),
+        );
+    }
+
+    assert_eq!(movements, [0.0, 5.0, 0.0]);
+}
+
 /// `stopImmediatePropagation()` stops the remaining callbacks on the *same*
 /// node — the second callback below must never run.
 #[gpui::test]
