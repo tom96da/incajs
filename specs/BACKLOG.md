@@ -97,13 +97,13 @@ enough overhead for a single maintainer plus AI pairing.
   item 1.
 
 - **GPUI window options with no `inca.config.ts` surface**: `window_bounds`,
-  `titlebar.title`, `is_resizable` and `app_id` are wired; the rest of
-  `WindowOptions` is not. Two are already felt. `window_min_size` would
-  stop a resizable window shrinking below a fixed-size root and clipping
-  it — `resizable: false` only covers the growing side.
-  `window_background` picks the colour of whatever the app's root doesn't
-  cover, which is what a fixed-size root in a larger window shows; nothing
-  sets it, so it is GPUI's default. The remainder (`is_minimizable`,
+  `titlebar.title`, `is_resizable`, `window_min_size` and `app_id` are
+  wired; the rest of `WindowOptions` is not. `window_background` is felt:
+  it is a `WindowBackgroundAppearance` (opaque, transparent, blurred), not
+  a colour, so it can't fill what a fixed-size root in a larger window
+  leaves uncovered. A background colour needs a full-size wrapper node in
+  `HostedApp::render`, plus a matching `RuntimeConfig` field and an update
+  to `tests/tests/config_contract.rs`. The remainder (`is_minimizable`,
   `is_movable`, `window_decorations`, `kind`, `display_id`, `focus`,
   `show`, `tabbing_identifier`, `titlebar.appears_transparent`,
   `titlebar.traffic_light_position`) is Phase 9 item 1's scope.
@@ -446,18 +446,11 @@ enough overhead for a single maintainer plus AI pairing.
   `JoinHandle`, drop the sender, and join the thread before `run_bundle`
   returns.
 
-- **Auto-resize gaps beyond the v0.0.6 reload-latch fix**: `start()`
-  (`crates/inca-host/src/app.rs`) never calls
-  `maybe_auto_resize_to_content` after its own initial job drain — only
-  `reload`/an unrecognized-notification relay do, so a first launch whose
-  content mounts asynchronously (the HMR bootstrap, notably) only catches
-  up once some later dev-protocol relay happens to fire. Separately,
-  `maybe_auto_resize_to_content`'s `width_ready`/`height_ready` treat a
-  configured dimension as ready whenever it's `Some`, without running it
-  through `usable()` first, so an unusable configured value (`width: 0`)
-  still latches the resize. And a root that only ever declares one
-  dimension (by design, not a timing accident) never auto-resizes at all,
-  since both dimensions have to become ready together.
+- **A root that declares one dimension never auto-resizes the window**:
+  `maybe_auto_resize_to_content` (`crates/inca-host/src/app.rs`) needs
+  both dimensions ready together. A root that only ever sets `width` or
+  `height` (by design, not a timing accident) never triggers it. Resizing
+  the one known axis would fix it.
 
 - **`-32601` still doesn't return the method name**: `handle_unrecognized`
   (`crates/inca-host/src/dev.rs`) has the unrecognized `method` in hand but
@@ -485,9 +478,97 @@ enough overhead for a single maintainer plus AI pairing.
   `resolveHostBin()` and then explicitly `existsSync`-checks the result,
   raising `ERR_INCA_HOST_BIN_NOT_FOUND` if it's missing. `dev.mts`'s
   `HostClient.start` (`packages/cli/src/dev-client/hostClient.mts`) calls
-  `spawn()` on the same resolved path with no existence check and no
-  `"error"` listener on the child process — an `INCA_HOST_BIN` pointing at
-  a nonexistent binary surfaces as an unhandled `ENOENT` `"error"` event,
-  not a reported `IncaError`. Either give `inca dev` the same code for the
-  same failure, or write down why the two commands' error handling for an
-  unresolvable host binary is meant to differ.
+  `spawn()` on the same resolved path with no existence check. An
+  `INCA_HOST_BIN` pointing at a nonexistent binary makes
+  `await once(child, "spawn")` reject with a raw `ENOENT`, not an
+  `IncaError`. The child also has no persistent `"error"` listener for
+  errors after spawn. Either give `inca dev` the same code for the same
+  failure, or write down why the two commands differ.
+
+- **`buttons` stays set after a release nobody listens to**:
+  `update_held_buttons` (`crates/inca-bridge/src/dispatch.rs`) only runs
+  when a listener is dispatched. A node that listens for `mousedown` and
+  `mousemove` but not `mouseup` never clears the pressed bit, so later
+  `mousemove` events report the button as held. Fix: track buttons from the
+  raw window event. This belongs in the `compat` submodule entry above.
+
+- **`click` carries no modifier or button fields**: `click` has
+  `EventPayload::None`, so Vue's `@click.ctrl`/`.shift`/`.alt`/`.meta`
+  checks see `undefined` and never run the handler. `@click.right` compiles
+  to a `contextmenu` listener that never fires. `docs/reference/events.md`'s
+  "Event modifiers" section names neither limit.
+
+- **A multi-root `App` (or a top-level comment) breaks window sizing and
+  `gap`**: Vue marks a Fragment's edges with empty text nodes.
+  `content_window_size` (`crates/inca-host/src/app.rs`) reads the root's
+  first child, so it reads an empty text node, falls back to 800×600, and
+  never auto-resizes. Those text nodes are also real flex children, so
+  `gap` adds space around every `v-for`.
+
+- **Colour parsing is looser than documented**: `parse_hex_color`
+  (`crates/inca-gpui/src/element.rs`) accepts `"#+abcde"` because Rust's
+  hex parser allows a leading `+`. Numeric colours are cast with `as u32`,
+  so a negative or `NaN` value becomes black and a value above `0xFFFFFF`
+  loses its top byte. `docs/reference/elements.md` describes neither.
+
+- **`FAILURES.md` promises a window-size check that doesn't exist**:
+  `specs/FAILURES.md` says a `width` of `-100` "is refused, and the message
+  says which value and which file". The CLI checks nothing, and the host's
+  `usable()` quietly falls back to the default. One wrongly typed field
+  (`width: "800"`) makes the host ignore the whole `inca.json` (name,
+  identifier and title too), with only a stderr line. Either validate in
+  the CLI or change what `FAILURES.md` claims.
+
+- **`inca dev`'s lock is racy and can refuse forever in a container**:
+  `packages/cli/src/dev-lock.mts` refuses to start when the PID in the lock
+  file is alive, and never excludes its own PID. A container that gives
+  `inca dev` the same low PID on every start hits `ERR_INCA_DEV_RUNNING`
+  each time. The read-then-write is also racy between two starts.
+
+- **A malformed `package.json` fails inconsistently**: `resolveAppConfig`
+  (`packages/cli/src/config/loader.mts`) lets the raw `JSON.parse` error
+  escape with no `ERR_INCA_*` code. `resolveRuntimeConfig` swallows the same
+  error and runs unnamed.
+
+- **`focus`/`blur` listeners that call `focusNode` may not take effect**:
+  those listeners run inside `render()`, where GPUI ignores
+  `window.refresh()` (`third_party/zed/crates/gpui/src/window.rs:2178`), so
+  the request may wait for an unrelated redraw. Unconfirmed.
+
+- **Module loader edge cases**: `crates/inca-jsenv`'s loader joins a bare
+  specifier onto an absolute path without a check, and the entry's module
+  name isn't canonicalized, so a module that imports the entry back may
+  evaluate it twice. Unconfirmed.
+
+- **Two small rule mismatches**: `VirtualTree::create_node`'s `.expect` on
+  id exhaustion (`crates/inca-gpui/src/tree.rs`) contradicts
+  `FAILURES.md`'s "doesn't panic" rule, though reaching it isn't
+  practical. `console.log` has no cap on array length.
+
+- **Missing `console` methods**: `crates/inca-jsenv/src/console.rs` has
+  `trace`/`debug`/`log`/`info`/`warn`/`error` only. A dependency that calls
+  `console.assert`/`group`/`groupEnd`/`time`/`timeEnd`/`count`/`table`/`dir`
+  throws "not a function".
+
+- **No `overflow` or scrollable container**: `overflow` isn't a style key.
+  `hidden` needs only `style.overflow` in `apply_style`. `scroll` needs
+  `overflow_y_scroll()`, which requires an element id, so
+  `build_element_inner` must also give an id when `overflow` is `scroll`.
+  The value names (`visible`/`hidden`/`scroll`) and whether it applies to
+  one axis or both are undecided. This is Phase 4's next unit.
+
+- **The style vocabulary lacks `padding`, `margin`, `flex_grow` and
+  `opacity`**: gpui's `StyleRefinement` supports all four, so each is a few
+  lines in `apply_style` plus a row in `recognized_style_keys_are_mapped`.
+  Without `padding`, every inset needs a wrapper node.
+
+- **No engine limits or interrupt handler**: `EngineBuilder`
+  (`crates/inca-jsenv/src/engine.rs`) sets no memory limit, stack size, or
+  interrupt handler, so a runaway app can't be stopped. rquickjs offers
+  `Runtime::set_memory_limit`/`set_max_stack_size`. Defaults and how the
+  host reports a timeout are undecided.
+
+- **A panic in `inca-host` is reported nowhere**: no panic hook writes
+  through the existing error reporter. It is the first half of the crash
+  reporting in [ROADMAP.md](./ROADMAP.md#known-gaps-not-yet-scheduled); the
+  message format is undecided.
