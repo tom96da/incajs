@@ -43,6 +43,17 @@ describe("build", () => {
     expect(bundle).not.toContain("createElementBlock");
   }, 20000);
 
+  it("leaves static siblings unstringified", async () => {
+    const { entry, outDir, streams } = await makeApp(
+      `<template><div>${"<div>a</div>".repeat(25)}</div></template>\n`,
+    );
+
+    const output = await build({ entry, outDir, ...streams });
+
+    // Stringified static content survives as literal markup in the bundle.
+    expect(await readFile(output.entryFile, "utf8")).not.toContain("<div>a</div>");
+  }, 20000);
+
   it("reports a dynamic import as its own chunk alongside the entry", async () => {
     const { entry, outDir, streams } = await makeApp(
       `<script setup>\nconst msg = "hello";\n</script>\n<template><div>{{ msg }}</div></template>\n`,

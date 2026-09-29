@@ -242,10 +242,10 @@ anchor)` needs to insert before a specific sibling for correct Vue list
 `nodeOps` implements `@vue/runtime-core`'s `RendererOptions<HostNode,
 HostElement>` — its 9 required methods (`createElement`, `createText`,
 `createComment`, `insert`, `remove`, `setText`, `setElementText`,
-`parentNode`, `nextSibling`); the 4 optional ones (`querySelector`,
-`setScopeId`, `cloneNode`, `insertStaticContent`) are out of scope, not
-needed without SSR/hydration. Built on `packages/gpjs-ui`, never on
-`__gpjsui_native__` directly.
+`parentNode`, `nextSibling`); the 3 optional ones (`querySelector`,
+`setScopeId`, `cloneNode`) are out of scope. `insertStaticContent` is not
+implemented, so the CLI compiles templates with static hoisting off. Built
+on `packages/gpjs-ui`, never on `__gpjsui_native__` directly.
 
 - [x] `createElement`/`insert`/`remove` — the core node lifecycle, built
       on `packages/gpjs-ui`'s `createNode`/`insertBefore`/`removeChild` —

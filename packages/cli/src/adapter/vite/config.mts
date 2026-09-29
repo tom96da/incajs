@@ -73,7 +73,8 @@ export function resolveViteConfig({
     plugins: [
       vue({
         template: {
-          compilerOptions: { runtimeModuleName: "@vue/runtime-core" },
+          // Hoisted static content is stringified into createStaticVNode, which needs insertStaticContent.
+          compilerOptions: { runtimeModuleName: "@vue/runtime-core", hoistStatic: false },
         },
       }),
       rejectUnsupported(),

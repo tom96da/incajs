@@ -18,6 +18,7 @@ import { afterAll, beforeAll, expect, it, onTestFailed, vi } from "vitest";
 import { hmr } from "../../packages/cli/src/adapter/vite/index.mts";
 import { HostClient } from "../../packages/cli/src/dev-client/hostClient.mts";
 import type { HmrChannel, UpdateError } from "../../packages/cli/src/adapter/types.mts";
+import type { AppErrorParams } from "../../packages/cli/src/dev-client/protocol.mts";
 
 /** How long the host is given to reload/relay before this test gives up on it. */
 const RELOAD_TIMEOUT_MS = 10_000;
@@ -128,6 +129,7 @@ let stderrText = "";
 let notifiedCount = 0;
 let ready = false;
 let buildErrors: UpdateError[] = [];
+let appErrors: AppErrorParams[] = [];
 
 beforeAll(async () => {
   await mkdir(scratchRoot, { recursive: true });
@@ -163,6 +165,7 @@ beforeAll(async () => {
     onReady: () => {
       ready = true;
     },
+    onAppError: (error) => appErrors.push(error),
     integrations: { vite: (params) => channel?.dispatch(params) },
   });
   await hostClient.start();
@@ -252,4 +255,37 @@ it(
     );
   },
   WAIT_TIMEOUT_MS + 30_000,
+);
+
+it(
+  "mounts a template of static siblings under HMR",
+  async () => {
+    const client = hostClient!;
+    onTestFailed(() => console.error(`--- host stderr ---\n${stderrText}`));
+
+    await vi.waitFor(() => expect(ready).toBe(true), { timeout: WAIT_TIMEOUT_MS });
+    await vi.waitFor(() => expect(stderrText).toContain("[e2e] mounted"), {
+      timeout: WAIT_TIMEOUT_MS,
+    });
+
+    // The suffix changes the script, which forces a remount.
+    const beforeMount = mountedCount(stderrText);
+    const statics = `{{ console.log("[e2e] rendered") }}${"<div>a</div>".repeat(25)}`;
+    await writeFile(vuePath, appVue(STYLE_V2, "?").replace("{{ label }}", `{{ label }}${statics}`));
+    await vi.waitFor(() => expect(mountedCount(stderrText)).toBeGreaterThan(beforeMount), {
+      timeout: WAIT_TIMEOUT_MS,
+    });
+    await vi.waitFor(() => expect(stderrText).toContain("[e2e] rendered"), {
+      timeout: WAIT_TIMEOUT_MS,
+    });
+
+    // stderr is one ordered stream, so a later line means the mount has finished.
+    client.notify("tick", {});
+    await vi.waitFor(
+      () => expect(stderrText.slice(stderrText.indexOf("[e2e] rendered"))).toContain("clicks="),
+      { timeout: WAIT_TIMEOUT_MS },
+    );
+    expect(appErrors).toEqual([]);
+  },
+  WAIT_TIMEOUT_MS + 10_000,
 );

@@ -97,14 +97,6 @@ A fixed entry is deleted and its ID is never reused.
   instead of reporting it. It matters only for a module that awaits at
   top level. `Engine::run_jobs` reports these once the app is running.
 
-- **B-062 Static template content is not mounted**
-  `Units: cli · Size: S · Impact: High`
-
-  Static template content stringified by Vue's compiler is mounted through
-  `insertStaticContent`, which the renderer does not define. A template with
-  about 5 static styled boxes or 20 static nodes fails at mount. Turning off
-  static hoisting in the CLI's template compiler options avoids it.
-
 - **B-066 `mouseenter`/`mouseleave` get zero movement**
   `Units: bridge · Size: S · Impact: Medium`
 
