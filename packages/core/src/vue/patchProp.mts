@@ -53,6 +53,18 @@ function patchStyle(core: IncaCore, el: IncaElement, nextValue: unknown): void {
   }
 }
 
+// The bundler replaces `process.env.NODE_ENV`; without it QuickJS has no `process`.
+const isProduction = ((): boolean => {
+  try {
+    return process.env.NODE_ENV === "production";
+  } catch {
+    return false;
+  }
+})();
+
+const isThenable = (value: unknown): value is PromiseLike<unknown> =>
+  value != null && typeof (value as PromiseLike<unknown>).then === "function";
+
 // `@vue/runtime-core` types an `onXxx` prop as `Function | Function[]`, so
 // several handlers can arrive for one event. Vue's own DOM renderer collapses
 // them into a single native listener; this does the same.
@@ -61,7 +73,7 @@ function patchStyle(core: IncaCore, el: IncaElement, nextValue: unknown): void {
  * app's `errorHandler` and the `onErrorCaptured` hooks; with no
  * `errorHandler`, the first one thrown is also rethrown to the host's error
  * report, and an `onErrorCaptured` hook returning `false` does not suppress
- * that. Only errors thrown synchronously are covered by the host report.
+ * that. A rejected promise from an async handler follows the same route.
  */
 function asListener(
   value: unknown,
@@ -76,7 +88,14 @@ function asListener(
     let failure: { error: unknown } | undefined;
     const recorded = handlers.map((handler) => (...a: unknown[]) => {
       try {
-        return handler(...a);
+        const result: unknown = handler(...a);
+        // A production Vue swallows a rejection; keep one unhandled for the host.
+        if (isProduction && isThenable(result)) {
+          result.then(undefined, (error: unknown) => {
+            if (!instance?.appContext.config.errorHandler) throw error;
+          });
+        }
+        return result;
       } catch (error) {
         failure ??= { error };
         throw error;

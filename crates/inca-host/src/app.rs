@@ -29,9 +29,7 @@ use gpui::{
 use gpui_platform::application;
 
 use inca_bridge::bindings::install;
-use inca_bridge::{
-    ErrorReporter, EventDispatcher, Host, drain_jobs_and_refresh, install_dev, stderr_reporter,
-};
+use inca_bridge::{ErrorReporter, EventDispatcher, Host, install_dev, stderr_reporter};
 use inca_gpui::{AttributeValue, NodeId, VirtualNode, render_tree_with_events};
 use inca_jsenv::{Engine, EngineError, console};
 
@@ -147,7 +145,7 @@ pub(crate) fn window_size(
 pub(crate) struct Session {
     pub(crate) engine: Rc<Engine>,
     host: Rc<RefCell<Host>>,
-    dispatcher: EventDispatcher,
+    pub(crate) dispatcher: EventDispatcher,
 }
 
 impl Session {
@@ -329,7 +327,7 @@ pub(crate) fn start(
     // until the first input event — or never, in an app that takes none.
     window
         .update(cx, |app, window, _| {
-            drain_jobs_and_refresh(&app.session.engine, window);
+            app.session.dispatcher.drain_jobs_and_refresh(window);
             maybe_auto_resize_to_content(app, window);
         })
         .map_err(|err| Failure::Message(ErrorCode::BundleFailed, err.to_string()))?;

@@ -304,7 +304,12 @@ impl EventDispatcher {
             window.prevent_default();
         }
 
-        drain_jobs_and_refresh(&self.engine, window);
+        self.drain_jobs_and_refresh(window);
+    }
+
+    /// [`drain_jobs_and_refresh`] with this dispatcher's engine and reporter.
+    pub fn drain_jobs_and_refresh(&self, window: &mut Window) {
+        drain_jobs_and_refresh(&self.engine, &self.reporter, window);
     }
 }
 
@@ -429,15 +434,19 @@ impl EventSink for EventDispatcher {
     }
 }
 
-/// Drains `QuickJS`'s pending-job queue, then requests a redraw. Code that
-/// only schedules work (a `@vue/runtime-core` reactivity effect, batched via
-/// a microtask) hasn't mutated the tree once the scheduling call returns, so
-/// the queue has to run before the frame is drawn.
+/// Drains `QuickJS`'s pending-job queue, sends each failure it leaves (a job
+/// that threw, a promise rejected with no handler) to `reporter`, then
+/// requests a redraw. Code that only schedules work (a `@vue/runtime-core`
+/// reactivity effect, batched via a microtask) hasn't mutated the tree once
+/// the scheduling call returns, so the queue has to run before the frame is
+/// drawn.
 ///
 /// Call it outside any [`Engine::with`] — it takes the context itself, and
 /// nesting that panics with "`RefCell` already borrowed".
-pub fn drain_jobs_and_refresh(engine: &Engine, window: &mut Window) {
-    engine.with(|ctx| while ctx.execute_pending_job() {});
+pub fn drain_jobs_and_refresh(engine: &Engine, reporter: &ErrorReporter, window: &mut Window) {
+    for failure in engine.run_jobs() {
+        reporter(&failure);
+    }
     window.refresh();
 }
 
@@ -544,7 +553,7 @@ mod tests {
         );
 
         let cx = cx.add_empty_window();
-        cx.update(|window, _| drain_jobs_and_refresh(&dispatcher.engine, window));
+        cx.update(|window, _| dispatcher.drain_jobs_and_refresh(window));
 
         assert!(dispatcher.engine.eval::<bool>("globalThis.ran;").unwrap());
     }

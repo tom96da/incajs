@@ -554,3 +554,9 @@ enough overhead for a single maintainer plus AI pairing.
   through the existing error reporter. It is the first half of the crash
   reporting in [ROADMAP.md](./ROADMAP.md#known-gaps-not-yet-scheduled); the
   message format is undecided.
+
+- **A job that throws during a top-level-await module's startup is
+  dropped**: `Engine::eval_module` drives the module's promise with
+  `Ctx::execute_pending_job`, which discards a throwing job's exception
+  instead of reporting it. It matters only for a module that awaits at
+  top level. `Engine::run_jobs` reports these once the app is running.

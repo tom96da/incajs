@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ComponentInternalInstance } from "@vue/runtime-core";
 
 import { createPatchProp } from "./patchProp.mts";
@@ -196,6 +196,66 @@ describe("errors thrown by an event handler", () => {
     const registered = vi.mocked(core.setEventListener).mock.calls[0]![2];
     expect(() => registered()).toThrow(boom);
     expect(core.removeEventListener).toHaveBeenCalledWith(1, "click");
+  });
+
+  describe("async rejections", () => {
+    const unhandled = vi.fn<(reason: unknown, promise: unknown) => void>();
+    beforeEach(() => {
+      unhandled.mockClear();
+      process.on("unhandledRejection", unhandled);
+    });
+    afterEach(() => {
+      process.off("unhandledRejection", unhandled);
+      vi.unstubAllEnvs();
+      vi.unstubAllGlobals();
+      vi.resetModules();
+    });
+
+    // `isProduction` is fixed when the module loads, so each case reloads it.
+    async function register(mode: string, instance: ComponentInternalInstance | null) {
+      vi.stubEnv("NODE_ENV", mode);
+      vi.resetModules();
+      const { createPatchProp: fresh } = await import("./patchProp.mts");
+      fresh(core)!(el, "onClick", null, () => Promise.reject(boom), undefined, instance);
+      const registered = vi.mocked(core.setEventListener).mock.calls[0]![2];
+      registered();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    // The Vue under test is always its dev build, which rethrows an async
+    // failure itself, so a production bundle shows up as one extra report.
+    it.each([
+      ["development", 1],
+      ["production", 2],
+    ])("with NODE_ENV=%s and no errorHandler reports %i time(s)", async (mode, count) => {
+      await register(mode, instanceWith());
+      expect(unhandled).toHaveBeenCalledTimes(count);
+    });
+
+    it("hands the rejection to the errorHandler and adds no report, in production", async () => {
+      const errorHandler = vi.fn<() => void>();
+      await register("production", instanceWith(errorHandler));
+      expect(errorHandler).toHaveBeenCalledWith(boom, undefined, "native event handler");
+      expect(unhandled).not.toHaveBeenCalled();
+    });
+
+    it("still runs the handler when reading `process.env` throws", async () => {
+      const broken = Object.create(process, {
+        env: {
+          get() {
+            throw new ReferenceError("process is not defined");
+          },
+        },
+      });
+      vi.stubGlobal("process", broken);
+      vi.resetModules();
+      const { createPatchProp: fresh } = await import("./patchProp.mts");
+      const handler = vi.fn<() => void>();
+      fresh(core)!(el, "onClick", null, handler, undefined, null);
+      vi.unstubAllGlobals();
+      vi.mocked(core.setEventListener).mock.calls[0]![2]();
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("still propagates with no owning component", () => {

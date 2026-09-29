@@ -15,7 +15,7 @@ use std::thread;
 use gpui::{App, WindowHandle};
 use serde_json::Value;
 
-use inca_bridge::{ErrorReporter, call_dev_receive, drain_jobs_and_refresh};
+use inca_bridge::{ErrorReporter, call_dev_receive};
 use inca_jsenv::EngineError;
 
 use crate::app::{HostedApp, Session, is_resizable, maybe_auto_resize_to_content};
@@ -182,7 +182,7 @@ fn reload(
                     if !is_resizable(app.window_config.as_ref()) {
                         app.auto_resized.set(false);
                     }
-                    drain_jobs_and_refresh(&app.session.engine, window);
+                    app.session.dispatcher.drain_jobs_and_refresh(window);
                     maybe_auto_resize_to_content(app, window);
                 })
                 .map_err(|err| Failure::Message(ErrorCode::BundleFailed, err.to_string()))
@@ -210,7 +210,7 @@ fn relay_to_js(
         if let Some(err) = call_dev_receive(&app.session.engine, method, &params_json) {
             reporter(&err);
         }
-        drain_jobs_and_refresh(&app.session.engine, window);
+        app.session.dispatcher.drain_jobs_and_refresh(window);
         maybe_auto_resize_to_content(app, window);
     });
 }

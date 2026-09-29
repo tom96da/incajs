@@ -10,7 +10,7 @@
 use std::fmt;
 use std::path::PathBuf;
 
-use rquickjs::{Coerced, Context, Ctx, FromJs, Module, Runtime, Value};
+use rquickjs::{Coerced, Context, Ctx, FromJs, Function, Module, Runtime, Value};
 
 use crate::loader::{DiskLoader, DiskResolver};
 
@@ -107,11 +107,28 @@ impl fmt::Display for EngineError {
 
 impl std::error::Error for EngineError {}
 
+const TRACK: &str = "__inca_track_rejection__";
+const TAKE: &str = "__inca_take_rejections__";
+
+/// Keeps each promise rejected with no handler yet, mapped to its reason.
+/// The rejection tracker fills it through `TRACK`; [`Engine::run_jobs`]
+/// empties it through `TAKE`.
+const TRACKER_JS: &str = "{
+    const pending = new Map();
+    globalThis.__inca_track_rejection__ = (promise, reason, handled) =>
+        handled ? pending.delete(promise) : pending.set(promise, reason);
+    globalThis.__inca_take_rejections__ = () => {
+        const reasons = [...pending.values()];
+        pending.clear();
+        return reasons;
+    };
+}";
+
 pub struct Engine {
     // Kept alive for the lifetime of `context`, which internally holds a
     // reference-counted handle back to it; QuickJS ties runtime-wide state
     // (the heap, GC) to this handle rather than to the context.
-    _runtime: Runtime,
+    runtime: Runtime,
     context: Context,
 }
 
@@ -137,10 +154,51 @@ impl Engine {
 
     fn from_runtime(runtime: Runtime) -> EngineResult<Self> {
         let context = Context::full(&runtime).map_err(|err| EngineError::plain(&err))?;
-        Ok(Self {
-            _runtime: runtime,
-            context,
-        })
+        let engine = Self { runtime, context };
+        engine
+            .context
+            .with(|ctx| ctx.eval::<(), _>(TRACKER_JS))
+            .map_err(|err| EngineError::plain(&err))?;
+        engine
+            .runtime
+            .set_host_promise_rejection_tracker(Some(Box::new(
+                |ctx, promise, reason, is_handled| {
+                    if let Ok(track) = ctx.globals().get::<_, Function>(TRACK) {
+                        let _ = track.call::<_, ()>((promise, reason, is_handled));
+                    }
+                },
+            )));
+        Ok(engine)
+    }
+
+    /// Runs every pending promise job and returns each failure the app left
+    /// unreported: a job that threw, and a promise still rejected with no
+    /// handler once the queue is empty. A rejection someone handles during
+    /// the same drain is not a failure.
+    ///
+    /// Call it outside [`with`](Self::with), and handle the result outside
+    /// it too: the handling code may re-enter the engine.
+    #[must_use]
+    pub fn run_jobs(&self) -> Vec<EngineError> {
+        let mut failures = Vec::new();
+        loop {
+            match self.runtime.execute_pending_job() {
+                Ok(true) => {}
+                Ok(false) => break,
+                Err(job) => job.0.with(|ctx| {
+                    failures.push(EngineError::capture(&ctx, &rquickjs::Error::Exception));
+                }),
+            }
+        }
+        let reasons = self.context.with(|ctx| {
+            ctx.globals()
+                .get::<_, Function>(TAKE)
+                .and_then(|take| take.call::<_, Vec<Value>>(()))
+                .map(|values| values.iter().map(EngineError::from_thrown).collect())
+                .unwrap_or_default()
+        });
+        failures.extend::<Vec<EngineError>>(reasons);
+        failures
     }
 
     /// Evaluates `source` as a JS script and converts its completion value
@@ -502,10 +560,62 @@ mod tests {
                 &fs::read_to_string(&entry).unwrap(),
             )
             .unwrap();
-        engine.with(|ctx| while ctx.execute_pending_job() {});
+        let _ = engine.run_jobs();
 
         let seen: i32 = engine.eval("globalThis.seen").unwrap();
         assert_eq!(seen, 42);
+    }
+
+    #[test]
+    fn an_unhandled_rejection_is_returned_once() {
+        let engine = Engine::new().unwrap();
+        engine
+            .eval::<()>("Promise.reject(new Error('lost'));")
+            .unwrap();
+
+        let failures = engine.run_jobs();
+        assert_eq!(failures.len(), 1);
+        assert_eq!(failures[0].message(), "Error: lost");
+        assert!(failures[0].stack().is_some());
+        assert!(engine.run_jobs().is_empty());
+    }
+
+    #[test]
+    fn a_rejection_handled_later_in_the_drain_is_not_returned() {
+        let engine = Engine::new().unwrap();
+        engine
+            .eval::<()>(
+                "const p = Promise.reject(new Error('late'));\n\
+                 Promise.resolve().then(() => p.catch(() => {}));",
+            )
+            .unwrap();
+
+        assert!(engine.run_jobs().is_empty());
+    }
+
+    #[test]
+    fn an_async_function_that_throws_is_returned() {
+        let engine = Engine::new().unwrap();
+        engine
+            .eval::<()>("(async () => { throw new Error('async boom'); })();")
+            .unwrap();
+
+        let failures = engine.run_jobs();
+        assert_eq!(failures.len(), 1);
+        assert_eq!(failures[0].message(), "Error: async boom");
+    }
+
+    #[test]
+    fn a_job_that_throws_is_returned() {
+        let engine = Engine::new().unwrap();
+        engine
+            .eval::<()>("queueMicrotask(() => { throw new Error('job'); });")
+            .unwrap();
+
+        let failures = engine.run_jobs();
+        assert_eq!(failures.len(), 1);
+        assert_eq!(failures[0].message(), "Error: job");
+        assert!(failures[0].stack().is_some());
     }
 
     #[test]

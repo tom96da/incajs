@@ -162,4 +162,5 @@ Vue's template event modifiers — `v-on:click.once`, `.passive`,
 An error an `@event` handler throws goes to the app's
 `app.config.errorHandler` and to any `onErrorCaptured` hooks, as in the
 browser. With no `errorHandler`, the host reports it as an application
-error. This covers errors thrown synchronously by a handler.
+error. A promise that rejects with no handler, such as an `async` handler
+that throws, is reported the same way.

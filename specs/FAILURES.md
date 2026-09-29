@@ -52,8 +52,8 @@ change that raises it. The code is what someone searches for.
   panic on a failure an app's author can cause.
 - A reload evaluates the new bundle before swapping the window over, so a
   broken edit leaves the last working UI on screen.
-- An exception from an event listener is reported and the window keeps
-  rendering.
+- An exception from an event listener, a failing promise job or a promise
+  rejected with no handler are reported and the window keeps rendering.
 
 ## Known gaps
 

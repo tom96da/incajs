@@ -17,7 +17,7 @@ use gpui::{
 };
 use inca_bridge::{EventDispatcher, Host};
 use inca_gpui::{NodeId, render_tree_with_events};
-use inca_jsenv::Engine;
+use inca_jsenv::{Engine, EngineError};
 
 fn build_clickable_tree() -> (Rc<RefCell<Host>>, NodeId) {
     let host = Rc::new(RefCell::new(Host::default()));
@@ -245,6 +245,67 @@ fn click_drains_a_callback_that_defers_its_effect_via_a_microtask(cx: &mut TestA
         1.0,
         "a microtask-deferred effect must already be applied once dispatch returns"
     );
+}
+
+/// Clicks the node once with `body` as its callback and returns what the
+/// dispatcher reported.
+fn failures_from_click(cx: &mut TestAppContext, body: &str) -> Vec<EngineError> {
+    let (host, node) = build_clickable_tree();
+    let engine = Rc::new(Engine::new().unwrap());
+    engine
+        .eval::<()>(&format!("globalThis.__inca_callbacks__ = {{ 0: {body} }};"))
+        .unwrap();
+    let reported = Rc::new(RefCell::new(Vec::new()));
+    let sink = Rc::clone(&reported);
+    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host))
+        .with_reporter(Rc::new(move |err| sink.borrow_mut().push(err.clone())));
+
+    let window = cx.add_window(|_, _| ClickableRoot {
+        host: Rc::clone(&host),
+        node,
+        dispatcher,
+    });
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    let mut cx = VisualTestContext::from_window(window.into(), cx);
+    cx.simulate_click(point(px(10.0), px(10.0)), Modifiers::none());
+    cx.run_until_parked();
+
+    reported.take()
+}
+
+#[gpui::test]
+fn an_async_callback_that_throws_is_reported_like_a_sync_one(cx: &mut TestAppContext) {
+    let sync = failures_from_click(cx, "() => { throw new Error('boom'); }");
+    let asynchronous = failures_from_click(cx, "async () => { throw new Error('boom'); }");
+
+    assert_eq!(sync.len(), 1);
+    assert_eq!(asynchronous.len(), 1);
+    assert_eq!(asynchronous[0].message(), sync[0].message());
+    assert!(asynchronous[0].stack().is_some());
+}
+
+#[gpui::test]
+fn a_failing_microtask_is_reported_once(cx: &mut TestAppContext) {
+    let failures = failures_from_click(
+        cx,
+        "() => { queueMicrotask(() => { throw new Error('later'); }); }",
+    );
+
+    assert_eq!(failures.len(), 1);
+    assert_eq!(failures[0].message(), "Error: later");
+}
+
+#[gpui::test]
+fn a_rejection_handled_in_time_is_not_reported(cx: &mut TestAppContext) {
+    let failures = failures_from_click(cx, "async () => { throw new Error('caught'); }");
+    assert_eq!(failures.len(), 1);
+
+    let failures = failures_from_click(
+        cx,
+        "() => { (async () => { throw new Error('caught'); })().catch(() => {}); }",
+    );
+    assert!(failures.is_empty(), "{failures:?}");
 }
 
 fn build_tree_listening_for(event: &str) -> (Rc<RefCell<Host>>, NodeId) {
