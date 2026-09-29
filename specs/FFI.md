@@ -249,7 +249,8 @@ call returns — it never crosses into a long-lived Rust struct. A missing
 `__inca_callbacks__` entry, or one that isn't a function, is a stale id and
 is skipped. A callback that *throws* is reported through the host's error
 reporter and the remaining callbacks still run: one bad listener must take
-down neither the host nor its siblings.
+down neither the host nor its siblings. A failing promise job or a promise
+rejected with no handler is reported the same way.
 
 That is why `removeEventListener` and `destroyNode` report the ids they
 dropped: each side holds half of a registration, and only the caller can free

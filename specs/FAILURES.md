@@ -40,8 +40,8 @@ way to tell why.
 | `@incajs/cli` | an `IncaError` with an `ERR_INCA_*` code, printed by `printFault` |
 | `inca-host`, answering a protocol message | a JSON-RPC error — see [PROTOCOL.md](./PROTOCOL.md#failure-handling) |
 | `inca-host`, otherwise | its stderr |
-| an app's own event listener | an `appError` notification |
-| `inca-host` exiting before `ready`: the app threw while loading, or a protocol mismatch | an `IncaError` `ERR_INCA_HOST_EXITED_EARLY`, after `inca dev` prints the cause |
+| an app's own event listener, promise job or unhandled rejection | an `appError` notification |
+| `inca-host` exiting before `ready`: the app threw while loading, a protocol mismatch, or a host that can't start | an `IncaError` `ERR_INCA_HOST_EXITED_EARLY`, after `inca dev` prints the cause |
 
 A new `ERR_INCA_*` code is documented in `docs/reference/errors.md` in the
 change that raises it. The code is what someone searches for.
@@ -53,7 +53,7 @@ change that raises it. The code is what someone searches for.
 - A reload evaluates the new bundle before swapping the window over, so a
   broken edit leaves the last working UI on screen.
 - An exception from an event listener, a failing promise job or a promise
-  rejected with no handler are reported and the window keeps rendering.
+  rejected with no handler is reported and the window keeps rendering.
 
 ## Known gaps
 

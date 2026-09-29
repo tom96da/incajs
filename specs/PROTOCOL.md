@@ -106,7 +106,7 @@ a line is a message.
 | `method` | Kind | Meaning |
 | --- | --- | --- |
 | `ready` | notification | The window is open and the first bundle has been evaluated. `params.protocol` is this host's method-set revision. |
-| `appError` | notification | The running app raised something the host caught and recovered from. `params` carries the thrown value. |
+| `appError` | notification | The running app raised something the host caught and recovered from: a listener's throw, a failing promise job, or a promise rejected with no handler. `params` carries the thrown value. |
 
 `params.protocol` versions the method set, not JSON-RPC itself. The client
 and the host binary are published separately, so the pair can be mismatched.
@@ -116,8 +116,9 @@ negotiates: a client depends on an exact host build, so a difference means a
 broken installation.
 
 `appError` is how a fault inside the running app reaches a human. An
-exception thrown by an event listener answers no request and must not take
-the window down, so the host catches it, keeps rendering, and reports it
+exception thrown by an event listener, a failing promise job or a promise
+rejected with no handler answers no request and must not take the window
+down, so the host catches it, keeps rendering, and reports it
 here. The app's own `console` output is not this message — that is a log
 stream, and goes to stderr.
 
@@ -188,7 +189,7 @@ The host never exits because of a message it couldn't use.
 | A `method` this host doesn't implement | `-32601` | echoes the request's `id`; relayed into the app as `__inca_dev__.receive` if it was a notification instead |
 | A bundle that throws while being evaluated | `-32000` | echoes the `id`; the window keeps the tree it already has |
 | A *first* bundle that throws, before any window exists | `-32000` | reported with `id` `null`, then exit 1 |
-| An exception thrown by an app's event listener | — | an `appError` notification; the window keeps rendering |
+| An exception thrown by an app's event listener, a failing promise job or a promise rejected with no handler | — | an `appError` notification; the window keeps rendering |
 
 `-32000` is inside the range JSON-RPC reserves for application-defined
 errors; the rest are the spec's own. It splits a thrown JS value the same way

@@ -73,7 +73,7 @@ function patchStyle(core: IncaCore, el: IncaElement, nextValue: unknown): void {
   }
 }
 
-// The bundler replaces `process.env.NODE_ENV`; without it QuickJS has no `process`.
+// The bundler replaces `process.env.NODE_ENV`; QuickJS has no `process`.
 const isProduction = ((): boolean => {
   try {
     return process.env.NODE_ENV === "production";

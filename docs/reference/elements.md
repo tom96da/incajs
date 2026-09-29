@@ -36,7 +36,8 @@ background color, and nothing makes it clickable on its own (bind
 
 `:style` takes an object; only these 13 keys are read, each with its own
 accepted value shapes. Anything else — a wrong shape, an unrecognized
-enum string, a misspelled key — is silently ignored, not an error.
+enum string, a misspelled key — is silently ignored, not an error. A key
+that was set before and then gets a wrong shape reverts to its default.
 
 Removing a key from the object, or setting it to `null` or `undefined`,
 restores that property to its default. Setting `style` to a string or `null`

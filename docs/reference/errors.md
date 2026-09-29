@@ -97,6 +97,16 @@ second one refuses to start.
 
 Quit the first, or stop the process by that pid if it was left behind.
 
+## `ERR_INCA_HOST_EXITED_EARLY`
+
+The host exited before it reported ready, and `inca dev` exits with a
+non-zero code. Usually your app threw while the host loaded it, or the host
+speaks a protocol revision this `@incajs/cli` wasn't built for. It can also
+be a host that can't start at all, such as a missing Vulkan driver (see
+[Troubleshooting](../guide/troubleshooting)). The line printed just before
+says which. Fix the error in your app, or install matching `@incajs/cli`
+and `@incajs/host-*` versions.
+
 ## `ERR_INCA_UNSUPPORTED_STYLE`
 
 A `.vue` file has a `<style>` block, which isn't supported yet — the
@@ -143,10 +153,3 @@ this only happens with a custom `bundler` that doesn't implement `hmr`.
 The bundler wrote files, but none of them was marked as the entry, so
 there is nothing for the host to evaluate. A bug in Incarnative.js too —
 please [open an issue](https://github.com/tom96da/incajs/issues).
-
-## `ERR_INCA_HOST_EXITED_EARLY`
-
-The host exited before it reported ready. Either your app threw while the
-host loaded it, or the host speaks a protocol revision this `@incajs/cli`
-wasn't built for. The line printed just before it says which. Fix the error in your
-app, or install matching `@incajs/cli` and `@incajs/host-*` versions.
