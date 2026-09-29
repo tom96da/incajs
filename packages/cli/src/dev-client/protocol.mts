@@ -33,7 +33,8 @@ export interface RpcResult {
 
 export interface RpcFailure {
   jsonrpc: typeof JSONRPC;
-  id: number;
+  /** `null` when the host fails before any call could be answered. */
+  id: number | null;
   error: { code: number; message: string; data?: { stack: string | null } };
 }
 

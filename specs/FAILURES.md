@@ -41,6 +41,7 @@ way to tell why.
 | `inca-host`, answering a protocol message | a JSON-RPC error — see [PROTOCOL.md](./PROTOCOL.md#failure-handling) |
 | `inca-host`, otherwise | its stderr |
 | an app's own event listener | an `appError` notification |
+| `inca-host` exiting before `ready`: the app threw while loading, or a protocol mismatch | an `IncaError` `ERR_INCA_HOST_EXITED_EARLY`, after `inca dev` prints the cause |
 
 A new `ERR_INCA_*` code is documented in `docs/reference/errors.md` in the
 change that raises it. The code is what someone searches for.

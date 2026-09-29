@@ -33,10 +33,10 @@ export interface HostClientOptions {
    * speaks the protocol revision this package was built for.
    */
   onReady?: () => void;
-  /** An app's own event listener threw; the host caught it and kept rendering. */
+  /** An app's event listener threw, or the app threw while the host loaded it. */
   onAppError?: (error: AppErrorParams) => void;
   /**
-   * The host exited on its own — its window was closed, or it crashed.
+   * The host exited on its own, or was stopped over a protocol mismatch.
    * Not called for the exit `stop()` asks for.
    */
   onExit?: (code: number | null, signal: NodeJS.Signals | null) => void;
@@ -51,6 +51,9 @@ export interface HostClientOptions {
 const defaultOnStderr = (line: string): void => {
   process.stderr.write(line.endsWith("\n") ? line : `${line}\n`);
 };
+
+/** The code the host reports an app that threw while loading with. */
+const BUNDLE_FAILED = -32000;
 
 /**
  * Spawns `inca-host --dev <entryFile>` and speaks newline-delimited
@@ -126,6 +129,15 @@ export class HostClient {
       return;
     }
 
+    if (message.id === null) {
+      if (!("error" in message)) return;
+      const { code, message: text, data } = message.error;
+      if (code === BUNDLE_FAILED)
+        this.#options.onAppError?.({ message: text, stack: data?.stack ?? null });
+      else onStderr(`[host error ${String(code)}] ${text}`);
+      return;
+    }
+
     const pending = this.#pending.get(message.id);
     if (!pending) return; // a response to a call nobody is waiting for anymore
     this.#pending.delete(message.id);
@@ -167,7 +179,6 @@ export class HostClient {
 
   /** Kills the child and waits for it to actually exit. */
   async #kill(child: ChildProcessWithoutNullStreams): Promise<void> {
-    this.#stopping = true;
     const exited = once(child, "exit");
     child.kill();
     await exited;

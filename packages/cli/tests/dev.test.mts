@@ -20,6 +20,14 @@ import type {
 const mockHost = path.join(import.meta.dirname, "fixtures/mock-host.mts");
 const reloadFailsMockHost = path.join(import.meta.dirname, "fixtures/mock-host-reload-fails.mts");
 const appErrorMockHost = path.join(import.meta.dirname, "fixtures/mock-host-app-error.mts");
+const protocolMismatchMockHost = path.join(
+  import.meta.dirname,
+  "dev-client/fixtures/mock-host-protocol-mismatch.mts",
+);
+const startupFailureMockHost = path.join(
+  import.meta.dirname,
+  "dev-client/fixtures/mock-host-startup-failure.mts",
+);
 const slowReadyMockHost = path.join(import.meta.dirname, "fixtures/mock-host-slow-ready.mts");
 const exitingMockHost = path.join(import.meta.dirname, "fixtures/mock-host-exits.mts");
 const hmrMockHost = path.join(import.meta.dirname, "fixtures/mock-host-hmr.mts");
@@ -326,6 +334,30 @@ describe("dev", () => {
     await running;
 
     expect(stdout.text()).toContain("[inca] host exited");
+    expect(bundler.closed).toBe(true);
+  });
+
+  it.each([
+    ["speaks a protocol this package wasn't built for", protocolMismatchMockHost, "protocol 99"],
+    ["reports an app that threw while loading", startupFailureMockHost, "[inca] app error: boom"],
+  ])("rejects with ERR_INCA_HOST_EXITED_EARLY when the host %s", async (_, hostBin, printed) => {
+    const bundler = makeFakeBundler();
+    const stderr = makeSink();
+
+    const running = dev({
+      entry: "unused",
+      bundler,
+      hostBin,
+      stdout: makeSink().stream,
+      stderr: stderr.stream,
+      signal: new AbortController().signal,
+    });
+
+    await bundler.watching;
+    bundler.emitBuild();
+    await expect(running).rejects.toMatchObject({ code: "ERR_INCA_HOST_EXITED_EARLY" });
+
+    expect(stderr.text()).toContain(printed);
     expect(bundler.closed).toBe(true);
   });
 

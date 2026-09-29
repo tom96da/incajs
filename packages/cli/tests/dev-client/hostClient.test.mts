@@ -6,6 +6,7 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import { HostClient, HostError } from "../../src/dev-client/index.mts";
+import type { AppErrorParams } from "../../src/dev-client/protocol.mts";
 
 const mockHost = path.join(import.meta.dirname, "fixtures/mock-host.mts");
 const wedgedMockHost = path.join(import.meta.dirname, "fixtures/mock-host-wedged.mts");
@@ -14,6 +15,10 @@ const protocolMismatchMockHost = path.join(
   "fixtures/mock-host-protocol-mismatch.mts",
 );
 const appErrorMockHost = path.join(import.meta.dirname, "fixtures/mock-host-app-error.mts");
+const startupFailureMockHost = path.join(
+  import.meta.dirname,
+  "fixtures/mock-host-startup-failure.mts",
+);
 const unknownMethodMockHost = path.join(
   import.meta.dirname,
   "fixtures/mock-host-unknown-method.mts",
@@ -151,6 +156,52 @@ describe("HostClient", () => {
     await client.stop();
 
     expect(lines.some((line) => line.includes("someIntegration"))).toBe(true);
+  });
+
+  it("reports an error response with a null id, which no call is waiting for", async () => {
+    const errors: AppErrorParams[] = [];
+    const client = new HostClient({
+      hostBin: startupFailureMockHost,
+      entryFile: "bundle.js",
+      onStderr: () => {},
+      onAppError: (error) => errors.push(error),
+    });
+
+    await client.start();
+    await vi.waitFor(() => expect(errors).toHaveLength(1));
+    await client.stop();
+
+    expect(errors[0]).toEqual({ message: "boom", stack: "Error: boom\n    at somewhere" });
+  });
+
+  it("reports a null-id error other than a failed bundle as a plain host line", async () => {
+    const errors: AppErrorParams[] = [];
+    const lines: string[] = [];
+    const client = new HostClient({
+      hostBin: startupFailureMockHost,
+      entryFile: "parse",
+      onStderr: (line) => lines.push(line),
+      onAppError: (error) => errors.push(error),
+    });
+
+    await client.start();
+    await vi.waitFor(() => expect(lines.some((line) => line.includes("boom"))).toBe(true));
+
+    expect(errors).toEqual([]);
+  });
+
+  it("calls onExit once it has stopped the host over a protocol mismatch", async () => {
+    const onExit = vi.fn<() => void>();
+    const client = new HostClient({
+      hostBin: protocolMismatchMockHost,
+      entryFile: "bundle.js",
+      onStderr: () => {},
+      onExit,
+    });
+
+    await client.start();
+
+    await vi.waitFor(() => expect(onExit).toHaveBeenCalledOnce());
   });
 
   it("stops the host when ready reports a protocol this package wasn't built for, leaving no child behind", async () => {

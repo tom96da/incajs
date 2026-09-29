@@ -182,6 +182,7 @@ export async function dev(options: DevOptions): Promise<void> {
     let client: HostClient | undefined;
     let ready = false;
     let pendingReload = false;
+    let exitedEarly = false;
     let queue = Promise.resolve();
 
     let stop = (): void => {};
@@ -218,6 +219,7 @@ export async function dev(options: DevOptions): Promise<void> {
         },
         onAppError: (error) => printFault(stderr, "app error", error, STAMPED),
         onExit: () => {
+          exitedEarly = !ready;
           // The window is gone, so there is nothing left to rebuild for.
           log(stdout, "host exited — stopping", STAMPED);
           stop();
@@ -315,6 +317,9 @@ export async function dev(options: DevOptions): Promise<void> {
     await queue;
     await client?.stop();
     await closable.close();
+    if (exitedEarly) {
+      throw new IncaError("ERR_INCA_HOST_EXITED_EARLY", "the host exited before it was ready");
+    }
   } finally {
     await releaseLock();
   }
