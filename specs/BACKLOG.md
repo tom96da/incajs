@@ -139,16 +139,6 @@ enough overhead for a single maintainer plus AI pairing.
   icon at all. Either the config's `icon` feeds both, or the name says
   which one it is.
 
-- **`insert_before` with the anchor equal to the node being moved reorders
-  it instead of leaving it alone**: `VirtualTree::insert_before`
-  (`crates/inca-gpui/src/tree.rs`) detaches the child before resolving the
-  anchor's position, so when the anchor is the child itself, the position
-  lookup fails (the child isn't in the children list anymore) and the node
-  falls through to being appended at the end. The DOM's own
-  `insertBefore(node, node)` is a no-op; this moves it. `packages/core/src/vue/nodeOps.mts`
-  passes the anchor straight through, so the same input pattern likely
-  reaches this from the JS side too.
-
 - **`event.target` is an approximation**: GPUI only gives a container a
   hitbox when something listens on it, so a click on a listener-less child
   can't be traced to that child — `EventDispatcher::dispatch`

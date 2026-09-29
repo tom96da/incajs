@@ -91,7 +91,7 @@ variants beyond the four above.
 | `rootNodeId` | `() => number` | Return the host-allocated root container's id — the node a mounting app attaches itself under. Allocated with the tree, so it always resolves. |
 | `createNode` | `(tag: string) => number` | Allocate a `VirtualNode`, return its id. |
 | `appendChild` | `(parentId: number, childId: number) => void` | Attach a child node at the end of `parentId`'s children. Thin wrapper over `insertBefore` with no anchor. |
-| `insertBefore` | `(parentId: number, childId: number, anchorId: number \| null) => void` | Attach a child node before `anchorId` (or at the end if `null`). If `anchorId` names a real node that isn't currently a child of `parentId`, falls back to appending at the end; only a wholly unknown `anchorId` throws. |
+| `insertBefore` | `(parentId: number, childId: number, anchorId: number \| null) => void` | Attach a child node before `anchorId` (or at the end if `null`). An `anchorId` equal to `childId` changes nothing when the child is already under `parentId`. If `anchorId` names a real node that isn't currently a child of `parentId`, falls back to appending at the end; only a wholly unknown `anchorId` throws. |
 | `removeChild` | `(parentId: number, childId: number) => void` | Detach a child node. |
 | `setAttribute` | `(nodeId: number, key: string, value: any) => void` | Set a non-style attribute prop. |
 | `setStyle` | `(nodeId: number, key: string, value: any) => void` | Set a style prop — the only JS-reachable way to touch `style_props`; `setAttribute` writes to the separate `attributes` map instead. |
@@ -149,7 +149,8 @@ still report a nonzero delta, against that click's position.
 `WheelEvent` extends `MouseEvent`. `deltaMode` is `0`
 (`DOM_DELTA_PIXEL`) or `1` (`DOM_DELTA_LINE`); GPUI has no equivalent of
 `DOM_DELTA_PAGE` (`2`). `deltaZ` is always `0` — GPUI carries no Z-axis
-scroll.
+scroll. `deltaX`/`deltaY` follow the DOM's sign (positive is down/right),
+the negation of GPUI's.
 
 `"mouseenter"`/`"mouseleave"` come from one GPUI hover registration per
 node — GPUI panics if `on_hover` is bound twice on the same element, so

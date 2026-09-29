@@ -317,9 +317,11 @@ impl From<&MouseMoveEvent> for EventPayload {
 
 impl From<&ScrollWheelEvent> for EventPayload {
     fn from(event: &ScrollWheelEvent) -> Self {
+        // GPUI reports a downward/rightward scroll as negative; the DOM
+        // reports it as positive. `0.0 - x` keeps a zero delta at +0.
         let (delta_x, delta_y, delta_mode) = match event.delta {
-            ScrollDelta::Pixels(delta) => (f32::from(delta.x), f32::from(delta.y), 0),
-            ScrollDelta::Lines(delta) => (delta.x, delta.y, 1),
+            ScrollDelta::Pixels(delta) => (0.0 - f32::from(delta.x), 0.0 - f32::from(delta.y), 0),
+            ScrollDelta::Lines(delta) => (0.0 - delta.x, 0.0 - delta.y, 1),
         };
         Self::Wheel(WheelPayload {
             mouse: MousePayload {
@@ -636,8 +638,8 @@ mod tests {
             ..Default::default()
         };
         let wheel = wheel_payload(EventPayload::from(&event));
-        assert_eq!(wheel.delta_x, 3.0);
-        assert_eq!(wheel.delta_y, -4.0);
+        assert_eq!(wheel.delta_x, -3.0);
+        assert_eq!(wheel.delta_y, 4.0);
         assert_eq!(wheel.delta_z, 0.0);
         assert_eq!(wheel.delta_mode, 0);
     }
@@ -650,19 +652,39 @@ mod tests {
         };
         let wheel = wheel_payload(EventPayload::from(&event));
         assert_eq!(wheel.delta_x, 0.0);
-        assert_eq!(wheel.delta_y, 2.0);
+        assert_eq!(wheel.delta_y, -2.0);
         assert_eq!(wheel.delta_mode, 1);
     }
 
     #[test]
-    fn a_negative_line_delta_carries_its_sign() {
-        let event = ScrollWheelEvent {
-            delta: ScrollDelta::Lines(gpui::point(-1.5, 0.0)),
-            ..Default::default()
-        };
-        let wheel = wheel_payload(EventPayload::from(&event));
-        assert_eq!(wheel.delta_x, -1.5);
-        assert_eq!(wheel.delta_mode, 1);
+    fn scrolling_down_or_right_reports_positive_dom_deltas() {
+        // GPUI: down and right are negative.
+        for delta in [
+            ScrollDelta::Pixels(gpui::point(gpui::px(-5.0), gpui::px(-6.0))),
+            ScrollDelta::Lines(gpui::point(-5.0, -6.0)),
+        ] {
+            let event = ScrollWheelEvent {
+                delta,
+                ..Default::default()
+            };
+            let wheel = wheel_payload(EventPayload::from(&event));
+            assert_eq!((wheel.delta_x, wheel.delta_y), (5.0, 6.0));
+        }
+    }
+
+    #[test]
+    fn a_zero_delta_stays_positive_zero() {
+        for delta in [
+            ScrollDelta::Pixels(gpui::point(gpui::px(0.0), gpui::px(-0.0))),
+            ScrollDelta::Lines(gpui::point(0.0, -0.0)),
+        ] {
+            let event = ScrollWheelEvent {
+                delta,
+                ..Default::default()
+            };
+            let wheel = wheel_payload(EventPayload::from(&event));
+            assert!(wheel.delta_x.is_sign_positive() && wheel.delta_y.is_sign_positive());
+        }
     }
 
     #[test]

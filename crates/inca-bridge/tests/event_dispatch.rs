@@ -358,7 +358,7 @@ fn wheel_carries_dom_shaped_delta_fields(cx: &mut TestAppContext) {
             .eval::<String>("JSON.stringify(globalThis.lastEvent)")
             .unwrap(),
         format!(
-            r#"{{"type":"wheel","target":{node},"currentTarget":{node},"clientX":10,"clientY":10,"pageX":10,"pageY":10,"movementX":0,"movementY":0,"button":0,"buttons":0,"detail":0,"ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false,"deltaX":0,"deltaY":-5,"deltaZ":0,"deltaMode":0}}"#
+            r#"{{"type":"wheel","target":{node},"currentTarget":{node},"clientX":10,"clientY":10,"pageX":10,"pageY":10,"movementX":0,"movementY":0,"button":0,"buttons":0,"detail":0,"ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false,"deltaX":0,"deltaY":5,"deltaZ":0,"deltaMode":0}}"#
         )
     );
 }

@@ -194,6 +194,9 @@ impl VirtualTree {
     /// it was attached to first, so this both attaches and moves — a node
     /// never has two parents.
     ///
+    /// If `anchor_id` is `child_id` itself and the child is already in
+    /// `parent_id`, nothing changes.
+    ///
     /// If `anchor_id` names a real node that isn't (or is no longer) among
     /// `parent_id`'s children, this falls back to appending at the end, same
     /// as an absent `remove_child` target — only a truly
@@ -224,6 +227,16 @@ impl VirtualTree {
         }
         if self.is_self_or_ancestor(child_id, parent_id) {
             return Err(TreeError::WouldCycle(child_id));
+        }
+
+        // A child that is its own anchor stays where it is.
+        if anchor_id == Some(child_id)
+            && self
+                .nodes
+                .get(&child_id)
+                .is_some_and(|c| c.parent == Some(parent_id))
+        {
+            return Ok(());
         }
 
         self.detach(child_id);
@@ -406,6 +419,20 @@ mod tests {
         let d = tree.create_node("span");
         tree.insert_before(parent, d, Some(b)).unwrap(); // middle: [a, d, b, c]
         assert_eq!(tree.get(parent).unwrap().children(), &[a, d, b, c]);
+    }
+
+    #[test]
+    fn insert_before_itself_is_a_no_op() {
+        let mut tree = VirtualTree::new();
+        let parent = tree.create_node("div");
+        let a = tree.create_node("span");
+        let b = tree.create_node("span");
+        tree.insert_before(parent, a, None).unwrap();
+        tree.insert_before(parent, b, None).unwrap();
+
+        tree.insert_before(parent, a, Some(a)).unwrap();
+
+        assert_eq!(tree.get(parent).unwrap().children(), &[a, b]);
     }
 
     #[test]

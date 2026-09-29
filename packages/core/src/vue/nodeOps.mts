@@ -165,14 +165,18 @@ export function createNodeOps(core: IncaCore): NodeOps {
 
     /**
      * Attaches `child` to `parent`, before `anchor` (or at the end, if
-     * `anchor` is omitted/`null`). If `child` is already attached elsewhere,
-     * it's detached first — this is how Vue moves a node during a keyed-list
-     * reorder, so the node is never disposed or recreated for a move.
+     * `anchor` is omitted/`null`). If `anchor` is `child` itself and `child`
+     * is already in `parent`, nothing changes. If `child` is already
+     * attached elsewhere, it's detached first — this is how Vue moves a node
+     * during a keyed-list reorder, so the node is never disposed or recreated
+     * for a move.
      * @param child - the node being attached
      * @param parent - the new container
      * @param anchor - the sibling to insert before, or omitted/`null` to append at the end
      */
     insert(child: IncaNode, parent: IncaElement, anchor?: IncaNode | null): void {
+      // A child that is its own anchor stays where it is.
+      if (anchor === child && child.parent === parent) return;
       detach(child);
 
       const anchorIndex = anchor ? parent.children.indexOf(anchor) : -1;

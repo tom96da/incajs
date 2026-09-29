@@ -73,7 +73,8 @@ against that click's position.
 The same fields as `mousedown`, above, plus
 [`WheelEvent`](https://developer.mozilla.org/en-US/docs/Web/API/WheelEvent)'s:
 
-- `deltaX` / `deltaY` — scroll distance
+- `deltaX` / `deltaY` — scroll distance; positive when scrolling down or
+  right, as in the DOM
 - `deltaZ` — always `0`
 - `deltaMode` — `0` (pixels) or `1` (lines), never `2` (page)
 

@@ -159,6 +159,21 @@ describe("insert", () => {
     expect(parent.children).toEqual([first, inserted, anchor]);
   });
 
+  it("leaves a child alone when it is its own anchor", () => {
+    const parent = element();
+    const first = element();
+    const second = element();
+    nodeOps.insert(first, parent);
+    nodeOps.insert(second, parent);
+    vi.clearAllMocks();
+
+    nodeOps.insert(first, parent, first);
+
+    expect(core.removeChild).not.toHaveBeenCalled();
+    expect(core.insertBefore).not.toHaveBeenCalled();
+    expect(parent.children).toEqual([first, second]);
+  });
+
   it("falls back to appending when the anchor isn't currently a child", () => {
     const parent = element();
     const strayAnchor = element();
