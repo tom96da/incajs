@@ -14,6 +14,7 @@ const native = {
   removeChild: vi.fn<(parentId: number, childId: number) => void>(),
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   setStyle: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
+  removeStyle: vi.fn<(nodeId: number, key: string) => void>(),
   addEventListener: vi.fn<(nodeId: number, event: string, callbackId: number) => void>(),
   removeEventListener: vi.fn<(nodeId: number, event: string, callbackId: number) => boolean>(
     () => true,

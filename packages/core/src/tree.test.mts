@@ -12,6 +12,7 @@ import {
   rootNodeId,
   setAttribute,
   setStyle,
+  removeStyle,
 } from "./tree.mts";
 
 const native = {
@@ -22,6 +23,7 @@ const native = {
   removeChild: vi.fn<(parentId: number, childId: number) => void>(),
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   setStyle: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
+  removeStyle: vi.fn<(nodeId: number, key: string) => void>(),
   addEventListener: vi.fn<(nodeId: number, event: string, callbackId: number) => void>(),
   removeEventListener: vi.fn<(nodeId: number, event: string, callbackId: number) => boolean>(
     () => true,
@@ -75,6 +77,11 @@ describe("wrapper functions forward to __inca_native__", () => {
   it("destroyNode", () => {
     destroyNode(7);
     expect(native.destroyNode).toHaveBeenCalledWith(7);
+  });
+
+  it("removeStyle", () => {
+    removeStyle(1, "display");
+    expect(native.removeStyle).toHaveBeenCalledWith(1, "display");
   });
 
   it("setStyle", () => {

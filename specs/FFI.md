@@ -98,6 +98,7 @@ variants beyond the four above.
 | `removeChild` | `(parentId: number, childId: number) => void` | Detach a child node. |
 | `setAttribute` | `(nodeId: number, key: string, value: any) => void` | Set a non-style attribute prop. |
 | `setStyle` | `(nodeId: number, key: string, value: any) => void` | Set a style prop — the only JS-reachable way to touch `style_props`; `setAttribute` writes to the separate `attributes` map instead. |
+| `removeStyle` | `(nodeId: number, key: string) => void` | Remove a style prop so it renders as if never set. Removing a key that isn't set does nothing. |
 | `addEventListener` | `(nodeId: number, event: string, callbackId: number) => void` | Register a JS callback for a native input event. Distinct ids on one `(nodeId, event)` stack and all of them are dispatched, as in the DOM; re-registering an id already there is a no-op. |
 | `removeEventListener` | `(nodeId: number, event: string, callbackId: number) => boolean` | Drop one registration, reporting whether it was there. Never throws — a node destroyed first is the normal teardown race, not an error. |
 | `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its whole subtree, and return every `callbackId` that was registered anywhere in it, so the caller can drop the JS functions those ids name. Destroying an already-destroyed or unknown id returns `[]`. Destroying the root throws — it belongs to the host. Also drops `nodeId`'s focus state, if it had any, and cancels a queued focus for it. |

@@ -40,15 +40,35 @@ function parseEventKey(rawKey: string): ParsedEventKey {
   return { event: key.slice(2).toLowerCase(), once };
 }
 
-function patchStyle(core: IncaCore, el: IncaElement, nextValue: unknown): void {
-  if (typeof nextValue !== "object" || nextValue === null) return;
+// `setStyle` raises on a non-primitive value, the same way `setAttribute`
+// does, so a value shape it can't take (e.g. an array, for DOM's multi-value
+// CSS properties) is never sent.
+const isSendable = (value: unknown): value is string | number =>
+  typeof value === "string" || typeof value === "number";
 
-  for (const [key, value] of Object.entries(nextValue)) {
-    // `setStyle` raises on a non-primitive value, the same way
-    // `setAttribute` does — so a value shape it can't take (e.g. an array,
-    // for DOM's multi-value CSS properties) is skipped rather than thrown.
-    if (typeof value === "string" || typeof value === "number") {
+// What native holds per element, keyed by style key. Vue can pass the same
+// object as both the previous and next value after an in-place mutation, so
+// the diff runs against this snapshot instead of the previous value.
+const sentStyles = new WeakMap<IncaElement, Map<string, string | number>>();
+
+function patchStyle(core: IncaCore, el: IncaElement, nextValue: unknown): void {
+  const next =
+    typeof nextValue === "object" && nextValue !== null
+      ? (nextValue as Record<string, unknown>)
+      : {};
+  let sent = sentStyles.get(el);
+  if (!sent) sentStyles.set(el, (sent = new Map()));
+
+  for (const key of sent.keys()) {
+    if (!isSendable(next[key])) {
+      core.removeStyle(el.id, key);
+      sent.delete(key);
+    }
+  }
+  for (const [key, value] of Object.entries(next)) {
+    if (isSendable(value) && sent.get(key) !== value) {
       core.setStyle(el.id, key, value);
+      sent.set(key, value);
     }
   }
 }
@@ -138,9 +158,11 @@ function patchEvent(
  * {@link RendererOptions.patchProp} — applies one changed `v-bind`/
  * attribute/event prop to a host element:
  *
- * - `style` (an object, per `:style="{...}"`) fans out to one
- *   `core.setStyle` call per entry; an entry whose value isn't a
- *   string/number is skipped.
+ * - `style` (an object, per `:style="{...}"`) is diffed against the entries
+ *   already sent for this element. `core.setStyle` runs for each entry that
+ *   is new or changed. `core.removeStyle` runs for each sent entry that is now
+ *   absent, `null`, or not a string/number. A string or `null` `style`
+ *   removes every entry.
  * - An `onXxx` key registers `nextValue` as the listener for `xxx`, taking a
  *   function or an array of them, and unbinds `xxx` for anything else. A
  *   trailing `Once`/`Passive`/`Capture` suffix (from Vue's `.once`/
@@ -155,8 +177,7 @@ function patchEvent(
  * - Everything else falls through to `core.setAttribute`, again skipping
  *   a non-string/number/boolean value rather than passing it through.
  *
- * There is no native "unset" call, so a prop that's removed entirely (a
- * `null`/`undefined` `nextValue`) is left as-is rather than cleared.
+ * Removing any other prop (a `null`/`undefined` `nextValue`) leaves it as-is.
  * @param core - the incajs bindings to drive the native tree through
  */
 export function createPatchProp(

@@ -312,7 +312,9 @@ enough overhead for a single maintainer plus AI pairing.
   `gpui`'s own element/paint reuse for a stable element id not
   accounting for a style-only change with no other difference. Not
   reproduced outside this pattern — a full reload's own repaint after a
-  style edit already works, and always has.
+  style edit already works, and always has. A removed style key is
+  another style-only change to an already-seen node, so it is probably
+  affected the same way; that is not confirmed.
 
 - **`inca dev --experimental-hmr` never recovers from a source file that
   was already broken when the session started**: a live edit that
@@ -381,19 +383,6 @@ enough overhead for a single maintainer plus AI pairing.
   listener closure rather than a style property, on Vue's own `reload`
   path rather than `rerender`. Not confirmed at the native layer the way
   the style-only entry above was.
-
-- **Commenting out a `:style` property doesn't revert it, and this is true
-  of every property, not just one**: root cause is now known, and it's
-  unrelated to the element/paint reuse issue above. `patchProp.mts`'s
-  `patchStyle` (`packages/core/src/vue/patchProp.mts`) never reads its own
-  `_prevValue` argument, and only ever calls `core.setStyle` for a
-  string/number entry in the next value — a key that disappears (or turns
-  `null`/`undefined`) is simply never touched, and there's no native
-  `removeStyle`/`removeAttribute` to call even if it noticed. Fixing it
-  spans three layers: `crates/inca-gpui` (a `remove_style`/`remove_attribute`
-  on the tree), `crates/inca-bridge` (the matching bindings), and
-  `packages/core` (`native.mts`/`tree.mts`/`rendererCore.mts` plus
-  `patchStyle` actually diffing prev vs next). Deferred past v0.0.6.
 
 - **Dev relay hardening (`__inca_dev__`)**: three related gaps in
   `crates/inca-bridge/src/dev.rs`. `install_dev`'s `send` accepts any method
@@ -479,6 +468,13 @@ enough overhead for a single maintainer plus AI pairing.
   checks see `undefined` and never run the handler. `@click.right` compiles
   to a `contextmenu` listener that never fires. `docs/reference/events.md`'s
   "Event modifiers" section names neither limit.
+
+- **A non-style prop can't be removed once set**: `patchProp` passes a
+  string, number, or boolean `nextValue` to `core.setAttribute` and ignores
+  anything else, and there is no native `removeAttribute`. A prop that
+  disappears from a vnode, or turns `null`/`undefined`, keeps its last
+  value in the node's `attributes` map. Fixing it needs a `remove_attribute`
+  on the tree, a matching bridge binding, and `patchProp` calling it.
 
 - **A multi-root `App` (or a top-level comment) breaks window sizing and
   `gap`**: Vue marks a Fragment's edges with empty text nodes.

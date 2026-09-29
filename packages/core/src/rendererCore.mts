@@ -11,6 +11,7 @@ export {
   rootNodeId,
   setAttribute,
   setStyle,
+  removeStyle,
 } from "./tree.mts";
 
 /**

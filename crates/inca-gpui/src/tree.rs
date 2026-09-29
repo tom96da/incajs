@@ -365,6 +365,21 @@ impl VirtualTree {
         node.style_props.insert(key.into(), value.into());
         Ok(())
     }
+
+    /// Removes one style prop, so the property renders as if never set.
+    /// Removing a key that isn't set is a no-op.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TreeError::NodeNotFound`] if `node_id` names no node.
+    pub fn remove_style(&mut self, node_id: NodeId, key: &str) -> Result<(), TreeError> {
+        let node = self
+            .nodes
+            .get_mut(&node_id)
+            .ok_or(TreeError::NodeNotFound(node_id))?;
+        node.style_props.remove(key);
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -684,6 +699,25 @@ mod tests {
             tree.set_style(999, "k", "v").unwrap_err(),
             TreeError::NodeNotFound(999)
         );
+        assert_eq!(
+            tree.remove_style(999, "k").unwrap_err(),
+            TreeError::NodeNotFound(999)
+        );
+    }
+
+    #[test]
+    fn remove_style_unsets_only_that_key() {
+        let mut tree = VirtualTree::new();
+        let node = tree.create_node("div");
+        tree.set_style(node, "gap", 8.0).unwrap();
+        tree.set_style(node, "width", 10.0).unwrap();
+
+        tree.remove_style(node, "gap").unwrap();
+        tree.remove_style(node, "never_set").unwrap();
+
+        let styles = tree.get(node).unwrap().style_props();
+        assert!(styles.get("gap").is_none());
+        assert!(styles.get("width").is_some());
     }
 
     #[test]

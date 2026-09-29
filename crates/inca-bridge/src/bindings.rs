@@ -283,6 +283,22 @@ fn install_tree<'js>(
     {
         let host = Rc::clone(host);
         native.set(
+            "removeStyle",
+            Function::new(
+                ctx.clone(),
+                move |ctx: Ctx<'js>, JsNodeId(node_id): JsNodeId, key: String| -> JsResult<()> {
+                    host.borrow_mut()
+                        .tree
+                        .remove_style(node_id, &key)
+                        .map_err(|err| throw_tree_error(&ctx, err))
+                },
+            )?,
+        )?;
+    }
+
+    {
+        let host = Rc::clone(host);
+        native.set(
             "destroyNode",
             Function::new(
                 ctx.clone(),
@@ -685,6 +701,7 @@ mod tests {
                  }};
                  return [
                      rejects(() => __inca_native__.setStyle({bad}, 'width', 1)),
+                     rejects(() => __inca_native__.removeStyle({bad}, 'width')),
                      rejects(() => __inca_native__.appendChild({bad}, node)),
                      rejects(() => __inca_native__.appendChild(node, {bad})),
                      rejects(() => __inca_native__.insertBefore(node, node, {bad})),
@@ -766,6 +783,35 @@ mod tests {
             caught,
             "a non-primitive attribute value must raise a catchable exception"
         );
+    }
+
+    #[test]
+    fn remove_style_unsets_the_key_and_rejects_an_unknown_node() {
+        let (engine, host) = engine_with_bindings();
+
+        let ids: Vec<u32> = engine
+            .eval(
+                r"
+                const n = __inca_native__;
+                const node = n.createNode('div');
+                n.setStyle(node, 'gap', 8);
+                n.setStyle(node, 'width', 1);
+                n.removeStyle(node, 'gap');
+                let caught = false;
+                try { n.removeStyle(999, 'gap'); } catch (e) { caught = true; }
+                [node, caught ? 1 : 0];
+                ",
+            )
+            .unwrap();
+
+        let [node, caught] = ids[..] else {
+            panic!("expected the node id and the caught flag");
+        };
+        assert_eq!(caught, 1);
+        let host = host.borrow();
+        let styles = host.tree.get(node).unwrap().style_props();
+        assert!(styles.get("gap").is_none());
+        assert!(styles.get("width").is_some());
     }
 
     #[test]

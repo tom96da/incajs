@@ -17,6 +17,7 @@ const core: IncaCore = {
   removeChild: vi.fn<(parentId: number, childId: number) => void>(),
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   setStyle: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
+  removeStyle: vi.fn<(nodeId: number, key: string) => void>(),
   setEventListener:
     vi.fn<(nodeId: number, event: string, listener: (...args: unknown[]) => void) => void>(),
   removeEventListener: vi.fn<(nodeId: number, event: string) => void>(),

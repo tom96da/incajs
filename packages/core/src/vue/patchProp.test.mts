@@ -20,24 +20,34 @@ const core: IncaCore = {
   removeEventListener: vi.fn<(nodeId: number, event: string) => void>(),
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   setStyle: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
+  removeStyle: vi.fn<(nodeId: number, key: string) => void>(),
   focus: vi.fn<(nodeId: number) => void>(),
   blur: vi.fn<(nodeId: number) => void>(),
 };
 
 const patchProp = createPatchProp(core);
 
-const el: IncaElement = {
+const makeEl = (): IncaElement => ({
   id: 1,
   kind: "element",
   parent: null,
   children: [],
   focus: vi.fn<() => void>(),
   blur: vi.fn<() => void>(),
-};
+});
+
+let el = makeEl();
 
 beforeEach(() => {
   vi.clearAllMocks();
+  el = makeEl();
 });
+
+// Mounts `prev` as the element's style, then forgets those calls.
+function mountStyle(prev: unknown): void {
+  patchProp(el, "style", null, prev, undefined, null);
+  vi.clearAllMocks();
+}
 
 describe("style", () => {
   it("calls setStyle once per primitive-valued entry", () => {
@@ -54,9 +64,80 @@ describe("style", () => {
     expect(core.setStyle).not.toHaveBeenCalled();
   });
 
-  it("does nothing for a null style value", () => {
-    patchProp(el, "style", { background: "#000" }, null, undefined, null);
+  it("removes every key when the whole style goes away", () => {
+    mountStyle({ background: "#000", gap: 8 });
+    patchProp(el, "style", { background: "#000", gap: 8 }, null, undefined, null);
 
+    expect(core.setStyle).not.toHaveBeenCalled();
+    expect(core.removeStyle).toHaveBeenCalledWith(1, "background");
+    expect(core.removeStyle).toHaveBeenCalledWith(1, "gap");
+    expect(core.removeStyle).toHaveBeenCalledTimes(2);
+  });
+
+  it("removes a key that disappears or turns null or undefined", () => {
+    mountStyle({ background: "#000", gap: 8, width: 1 });
+    patchProp(
+      el,
+      "style",
+      { background: "#000", gap: 8, width: 1 },
+      { gap: null, width: undefined },
+      undefined,
+      null,
+    );
+
+    expect(core.removeStyle).toHaveBeenCalledWith(1, "background");
+    expect(core.removeStyle).toHaveBeenCalledWith(1, "gap");
+    expect(core.removeStyle).toHaveBeenCalledWith(1, "width");
+    expect(core.setStyle).not.toHaveBeenCalled();
+  });
+
+  it("re-sends only changed keys", () => {
+    mountStyle({ background: "#000", gap: 8 });
+    patchProp(
+      el,
+      "style",
+      { background: "#000", gap: 8 },
+      { background: "#000", gap: 9 },
+      undefined,
+      null,
+    );
+
+    expect(core.setStyle).toHaveBeenCalledExactlyOnceWith(1, "gap", 9);
+    expect(core.removeStyle).not.toHaveBeenCalled();
+  });
+
+  it("removes every sent key when the style becomes a string", () => {
+    const other = { ...el, id: 2 };
+    patchProp(other, "style", null, { gap: 8 }, undefined, null);
+    patchProp(other, "style", { gap: 8 }, "color: red", undefined, null);
+
+    expect(core.setStyle).toHaveBeenCalledExactlyOnceWith(2, "gap", 8);
+    expect(core.removeStyle).toHaveBeenCalledExactlyOnceWith(2, "gap");
+  });
+
+  it("applies an in-place change when prev and next are the same object", () => {
+    const other = { ...el, id: 3 };
+    const style: Record<string, unknown> = { gap: 8, width: 1 };
+    patchProp(other, "style", null, style, undefined, null);
+    vi.clearAllMocks();
+
+    style.gap = 9;
+    patchProp(other, "style", style, style, undefined, null);
+
+    expect(core.setStyle).toHaveBeenCalledExactlyOnceWith(3, "gap", 9);
+    expect(core.removeStyle).not.toHaveBeenCalled();
+  });
+
+  it("removes a key deleted in place", () => {
+    const other = { ...el, id: 4 };
+    const style: Record<string, unknown> = { gap: 8, width: 1 };
+    patchProp(other, "style", null, style, undefined, null);
+    vi.clearAllMocks();
+
+    delete style.gap;
+    patchProp(other, "style", style, style, undefined, null);
+
+    expect(core.removeStyle).toHaveBeenCalledExactlyOnceWith(4, "gap");
     expect(core.setStyle).not.toHaveBeenCalled();
   });
 });

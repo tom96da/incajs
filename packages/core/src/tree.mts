@@ -103,3 +103,13 @@ export function setStyle(nodeId: NodeId, key: string, value: AttributeValue): vo
 export function setStyle(nodeId: NodeId, key: string, value: AttributeValue): void {
   native().setStyle(nodeId, key, value);
 }
+
+/**
+ * Removes a style property from `nodeId`, so it renders as if never set.
+ * Removing a property that isn't set does nothing.
+ * @param nodeId - the node to update
+ * @param key - the style property name
+ */
+export function removeStyle(nodeId: NodeId, key: string): void {
+  native().removeStyle(nodeId, key);
+}

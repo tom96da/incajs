@@ -659,6 +659,19 @@ mod tests {
         }
 
         #[test]
+        fn a_removed_style_key_renders_as_the_default() {
+            let mut tree = VirtualTree::new();
+            let id = tree.create_node("div");
+            tree.set_style(id, "gap", 8.0).unwrap();
+            tree.set_style(id, "background", f64::from(0x505050))
+                .unwrap();
+            tree.remove_style(id, "gap").unwrap();
+            tree.remove_style(id, "background").unwrap();
+
+            assert_eq!(build_spec(&tree, id).unwrap().style, StyleSpec::default());
+        }
+
+        #[test]
         fn recognized_style_keys_are_mapped() {
             let mut tree = VirtualTree::new();
             let id = tree.create_node("div");

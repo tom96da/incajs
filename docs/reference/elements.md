@@ -38,6 +38,10 @@ background color, and nothing makes it clickable on its own (bind
 accepted value shapes. Anything else — a wrong shape, an unrecognized
 enum string, a misspelled key — is silently ignored, not an error.
 
+Removing a key from the object, or setting it to `null` or `undefined`,
+restores that property to its default. Setting `style` to a string or `null`
+clears every key set before.
+
 | Key | Value | Notes |
 | --- | --- | --- |
 | `display` | `"flex"` \| `"block"` \| `"grid"` \| `"none"` | |
