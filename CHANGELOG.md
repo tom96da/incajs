@@ -10,6 +10,29 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.0.7] - 2026-09-29
+
+### Added
+
+- `inca dev` and `inca build` refuse an `outDir` that holds the app's own files ([8dfe80a](https://github.com/tom96da/incajs/commit/8dfe80a))
+- `inca dev` exits with an error when the host exits before it is ready ([1fe4f0f](https://github.com/tom96da/incajs/commit/1fe4f0f))
+- `inca package` refuses a `productName` that collides with a build output entry ([0e5e518](https://github.com/tom96da/incajs/commit/0e5e518))
+
+### Changed
+
+- wheel `deltaX`/`deltaY` are positive when scrolling down or right, as in the DOM (previously the opposite) ([249c2d6](https://github.com/tom96da/incajs/commit/249c2d6))
+
+### Fixed
+
+- a host startup failure exits with code 1 and prints its queued output ([c730808](https://github.com/tom96da/incajs/commit/c730808))
+- an error thrown while the host loads the app is reported ([1fe4f0f](https://github.com/tom96da/incajs/commit/1fe4f0f))
+- inserting an element before itself no longer moves it ([249c2d6](https://github.com/tom96da/incajs/commit/249c2d6))
+- `el.blur()` no longer removes focus from a different element ([71e9f39](https://github.com/tom96da/incajs/commit/71e9f39))
+- `movementX`/`movementY` are no longer 0 for the second listener a pointer event bubbles to ([71e9f39](https://github.com/tom96da/incajs/commit/71e9f39))
+- errors from `@event` handlers go through Vue's error handling and are still reported to the host ([874f120](https://github.com/tom96da/incajs/commit/874f120))
+- errors thrown in a promise callback and unhandled promise rejections are reported as application errors ([24ff686](https://github.com/tom96da/incajs/commit/24ff686))
+- a style key removed from a `:style` binding reverts to its default ([923860c](https://github.com/tom96da/incajs/commit/923860c))
+
 ## [0.0.6] - 2026-09-28
 
 ### Added
@@ -112,7 +135,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - prebuilt `inca-host` binaries for linux-x64, linux-arm64, and darwin-arm64, resolved automatically per platform
 - click event dispatch from the native tree back into JS
 
-[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.6...HEAD
+[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.7...HEAD
+[0.0.7]: https://github.com/tom96da/incajs/releases/tag/v0.0.7
 [0.0.6]: https://github.com/tom96da/incajs/releases/tag/v0.0.6
 [0.0.5]: https://github.com/tom96da/incajs/releases/tag/v0.0.5
 [0.0.4]: https://github.com/tom96da/incajs/releases/tag/v0.0.4
