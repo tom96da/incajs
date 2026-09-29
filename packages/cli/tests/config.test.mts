@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { writeFile } from "node:fs/promises";
+import { mkdir, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -111,6 +111,72 @@ describe("resolveBuildConfig's outDir", () => {
 
     await expect(resolveBuildConfig(app)).resolves.toMatchObject({
       outDir: path.resolve(app, outDir),
+    });
+  });
+});
+
+describe.skipIf(process.platform === "win32")("outDir through a symlink", () => {
+  it("refuses a symlink to src/", async () => {
+    const app = await makeApp({ name: "scratch-app", inca: { outDir: "out" } });
+    await mkdir(path.join(app, "src"));
+    await symlink(path.join(app, "src"), path.join(app, "out"));
+
+    await expect(resolveBuildConfig(app)).rejects.toThrow(
+      expect.objectContaining({ code: "ERR_INCA_OUT_DIR_INVALID" }),
+    );
+  });
+
+  it("refuses src/ reached through a symlink to the app's root", async () => {
+    const app = await makeApp({ name: "scratch-app", inca: { outDir: "link/src" } });
+    await symlink(app, path.join(app, "link"));
+
+    await expect(resolveBuildConfig(app)).rejects.toThrow(
+      expect.objectContaining({ code: "ERR_INCA_OUT_DIR_INVALID" }),
+    );
+  });
+
+  it("refuses a dangling symlink into src/", async () => {
+    const app = await makeApp({ name: "scratch-app", inca: { outDir: "out" } });
+    await symlink(path.join(app, "src", "missing"), path.join(app, "out"));
+
+    await expect(resolveBuildConfig(app)).rejects.toThrow(
+      expect.objectContaining({ code: "ERR_INCA_OUT_DIR_INVALID" }),
+    );
+  });
+
+  it("refuses a symlink to a directory that contains the app", async () => {
+    const app = await makeApp({ name: "scratch-app", inca: { outDir: "up" } });
+    await symlink(path.dirname(app), path.join(app, "up"));
+
+    await expect(resolveBuildConfig(app)).rejects.toThrow(
+      expect.objectContaining({ code: "ERR_INCA_OUT_DIR_INVALID" }),
+    );
+  });
+
+  it("refuses an outDir in the real src/ when the app is reached through a symlink", async () => {
+    const app = await makeApp({ name: "scratch-app" });
+    await mkdir(path.join(app, "src"));
+    const viaLink = `${app}-link`;
+    await symlink(app, viaLink);
+    await writeFile(
+      path.join(app, "package.json"),
+      JSON.stringify({
+        type: "module",
+        name: "scratch-app",
+        inca: { outDir: path.join(app, "src") },
+      }),
+    );
+
+    await expect(resolveBuildConfig(viaLink)).rejects.toThrow(
+      expect.objectContaining({ code: "ERR_INCA_OUT_DIR_INVALID" }),
+    );
+  });
+
+  it("allows a directory that does not exist yet", async () => {
+    const app = await makeApp({ name: "scratch-app", inca: { outDir: "a/b/dist" } });
+
+    await expect(resolveBuildConfig(app)).resolves.toMatchObject({
+      outDir: path.join(app, "a/b/dist"),
     });
   });
 });

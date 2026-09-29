@@ -383,6 +383,25 @@ describe("dev", () => {
     );
   });
 
+  it("refuses an entry override that lies inside outDir, without watching", async () => {
+    const cwd = await scratch.makeApp({ name: "entry-in-out-dir" });
+    const bundler = makeFakeBundler();
+    const watch = vi.spyOn(bundler, "watch");
+
+    await expect(
+      dev({
+        cwd,
+        entry: path.join(cwd, "dist", "main.mts"),
+        bundler,
+        hostBin: mockHost,
+        stdout: makeSink().stream,
+        stderr: makeSink().stream,
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toThrow(expect.objectContaining({ code: "ERR_INCA_OUT_DIR_INVALID" }));
+    expect(watch).not.toHaveBeenCalled();
+  });
+
   it("refuses to start while another dev is running for the same app", async () => {
     const cwd = await scratch.makeApp({ name: "locked" });
     const bundler = makeFakeBundler();

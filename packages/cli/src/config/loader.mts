@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { existsSync } from "node:fs";
+import { existsSync, lstatSync, realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -103,31 +103,73 @@ function isWithin(dir: string, target: string): boolean {
 }
 
 /**
- * Resolves `outDir`, refusing one that would hold the app's own sources.
- * `inca dev` and `inca build` delete whatever a build didn't write under
- * `outDir`.
+ * Resolves symlinks through the nearest part of a path that exists. The rest
+ * may not exist yet and is appended as written.
+ *
+ * @param target - an absolute or relative path
+ * @returns an absolute path with every existing symlink followed
+ * @throws if a symlink on the way is dangling or loops
+ */
+function realpathThroughAncestor(target: string): string {
+  const full = path.resolve(target);
+  let existing = full;
+  for (
+    let parent;
+    !lstatSync(existing, { throwIfNoEntry: false }) &&
+    (parent = path.dirname(existing)) !== existing;
+  ) {
+    existing = parent;
+  }
+  return path.join(realpathSync.native(existing), path.relative(existing, full));
+}
+
+/**
+ * Refuses an `outDir` that would hold the app's own sources. `inca dev` and
+ * `inca build` delete whatever a build didn't write under `outDir`. Symlinks
+ * are followed on both sides of the comparison.
  *
  * @param cwd - the app's root directory
- * @param outDir - the configured value, if any
- * @param entry - the resolved `entry`, if the config set one
- * @returns an absolute path
- * @throws if it is, or contains, the app's root, `src/`, `node_modules/`, or the entry
+ * @param outDir - the `outDir`, absolute or relative to `cwd`
+ * @param entry - the resolved entry, if any
+ * @throws if it is, or contains, the app's root, `src/`, `node_modules/`, or
+ * the entry, or if a symlink on the way can't be resolved
  */
-function resolveOutDir(cwd: string, outDir: string | undefined, entry: string | undefined): string {
-  const resolved = path.resolve(cwd, outDir ?? defaultConfig.outDir);
-  const protectedPaths = [
-    cwd,
-    path.join(cwd, "src"),
-    path.join(cwd, "node_modules"),
-    ...(entry ? [entry] : []),
-  ];
-  if (protectedPaths.some((p) => isWithin(resolved, p))) {
+export function assertOutDir(cwd: string, outDir: string, entry?: string): void {
+  const resolved = path.resolve(cwd, outDir);
+  let held: boolean;
+  try {
+    const real = realpathThroughAncestor(resolved);
+    held = [
+      cwd,
+      path.join(cwd, "src"),
+      path.join(cwd, "node_modules"),
+      ...(entry ? [entry] : []),
+    ].some((p) => isWithin(real, realpathThroughAncestor(p)));
+  } catch {
+    held = true;
+  }
+  if (held) {
     throw new IncaError(
       "ERR_INCA_OUT_DIR_INVALID",
       `"outDir" resolves to ${resolved}, which holds the app's own files. ` +
         `Set it to a directory the build can own, such as "dist"`,
     );
   }
+}
+
+/**
+ * Resolves `outDir` against the app's root, defaulting to `"dist"`.
+ *
+ * @param cwd - the app's root directory
+ * @param outDir - the configured value, if any
+ * @param entry - the resolved `entry`, if the config set one
+ * @returns an absolute path
+ * @throws if it is, or contains, the app's root, `src/`, `node_modules/`, or
+ * the entry
+ */
+function resolveOutDir(cwd: string, outDir: string | undefined, entry: string | undefined): string {
+  const resolved = path.resolve(cwd, outDir ?? defaultConfig.outDir);
+  assertOutDir(cwd, resolved, entry);
   return resolved;
 }
 

@@ -1,7 +1,9 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { resolveBuildConfig, resolveRuntimeConfig } from "./config/loader.mts";
+import path from "node:path";
+
+import { assertOutDir, resolveBuildConfig, resolveRuntimeConfig } from "./config/loader.mts";
 import { defaultBundler } from "./defaultBundler.mts";
 import { resolveEntry } from "./entry.mts";
 import type { Bundler, BuildOutput } from "./adapter/types.mts";
@@ -35,10 +37,11 @@ export interface BuildAppOptions {
 export async function build(options: BuildAppOptions = {}): Promise<BuildOutput> {
   const cwd = options.cwd ?? process.cwd();
   const config = options.config ?? (await resolveBuildConfig(cwd));
-  const outDir = config.outDir;
+  const outDir = path.resolve(cwd, config.outDir);
   const bundler: Bundler = options.bundler ?? defaultBundler;
 
   const entry = options.entry ?? config.entry ?? (await resolveEntry(cwd));
+  assertOutDir(cwd, outDir, entry);
   const runtimeConfig = options.runtimeConfig ?? (await resolveRuntimeConfig(cwd));
 
   return bundler.build({

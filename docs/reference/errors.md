@@ -64,9 +64,9 @@ Linux shows no icon.
 
 [`outDir`](./configuration#outdir) is, or contains, the app's root
 directory, its `src/` or `node_modules/`, or its configured
-[`entry`](./configuration#entry). `inca dev` and `inca build` delete
-every file under `outDir` that the build didn't write. Set it to a
-directory the build owns, such as `"dist"`.
+[`entry`](./configuration#entry), including through a symlink. `inca dev`
+and `inca build` delete every file under `outDir` that the build didn't
+write. Set it to a directory the build owns, such as `"dist"`.
 
 ## `ERR_INCA_PLATFORM_UNSUPPORTED`
 

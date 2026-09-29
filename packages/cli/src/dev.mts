@@ -9,6 +9,7 @@ import { buildErrorMessage } from "vite";
 import type { RollupError } from "rolldown";
 
 import {
+  assertOutDir,
   resolveAppConfig,
   resolveBuildConfig,
   resolveRuntimeConfig,
@@ -168,12 +169,13 @@ export async function dev(options: DevOptions): Promise<void> {
   const config = await resolveBuildConfig(cwd);
   const releaseLock = await acquireDevLock(cwd);
   try {
-    const outDir = config.outDir;
+    const outDir = path.resolve(cwd, config.outDir);
     const bundler: Bundler = options.bundler ?? defaultBundler;
     const stdout = options.stdout ?? process.stdout;
     const stderr = options.stderr ?? process.stderr;
 
     const entry = options.entry ?? config.entry ?? (await resolveEntry(cwd));
+    assertOutDir(cwd, outDir, entry);
     const metadata = await resolveMetadata(cwd, stdout);
     const runtimeConfig = metadata ? runtimeConfigOf(metadata) : await resolveRuntimeConfig(cwd);
     const hostBin =

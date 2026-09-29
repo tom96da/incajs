@@ -128,5 +128,5 @@ The app's entry point.
 - Default: `"dist"`
 
 Where a build's output is written. It can't be, or contain, the app's root,
-`src/`, `node_modules/` or `entry`. See
+`src/`, `node_modules/` or `entry`, and the check follows symlinks. See
 [`ERR_INCA_OUT_DIR_INVALID`](./errors#err-inca-out-dir-invalid).
