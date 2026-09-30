@@ -28,14 +28,6 @@ A fixed entry is deleted and its ID is never reused.
 
 ## P1
 
-- **B-051 `inca dev`'s lock is racy and can refuse forever in a container**
-  `Units: cli · Size: S · Impact: Medium`
-
-  `packages/cli/src/dev-lock.mts` refuses to start when the PID in the lock
-  file is alive, and never excludes its own PID. A container that gives
-  `inca dev` the same low PID on every start hits `ERR_INCA_DEV_RUNNING`
-  each time. The read-then-write is also racy between two starts.
-
 - **B-057 No `overflow` or scrollable container**
   `Units: gpui,core,docs · Size: M · Impact: Medium`
 
