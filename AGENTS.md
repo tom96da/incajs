@@ -55,7 +55,7 @@ prose, `reference/` for lookup) is deployed by
 
 See [PLAN.md](./specs/PLAN.md) for unit-by-unit detail and deferred items
 (e.g. 3.1's dev-only error panel, waiting on Phase 4's `position`/
-`z-index`/`overflow`), and [BACKLOG.md](./specs/BACKLOG.md) for gaps
+`z-index`), and [BACKLOG.md](./specs/BACKLOG.md) for gaps
 outside the phased plan — several of them are places this framework and
 `gpui` have drifted apart.
 

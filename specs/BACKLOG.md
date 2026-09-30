@@ -28,16 +28,6 @@ A fixed entry is deleted and its ID is never reused.
 
 ## P1
 
-- **B-057 No `overflow` or scrollable container**
-  `Units: gpui,core,docs · Size: M · Impact: Medium`
-
-  `overflow` isn't a style key.
-  `hidden` needs only `style.overflow` in `apply_style`. `scroll` needs
-  `overflow_y_scroll()`, which requires an element id, so
-  `build_element_inner` must also give an id when `overflow` is `scroll`.
-  The value names (`visible`/`hidden`/`scroll`) and whether it applies to
-  one axis or both are undecided. This is Phase 4's next unit.
-
 - **B-058 The style vocabulary lacks `padding`, `margin`, `flex_grow` and `opacity`**
   `Units: gpui,core,docs · Size: S · Impact: Medium`
 
@@ -728,7 +718,9 @@ A fixed entry is deleted and its ID is never reused.
 
   Nodes are keyed to gpui by a node id that restarts at 0 on every full reload
   while the window survives. Per-element state such as a pending mouse-down or
-  hover can carry over to a different node. Found by reading; not reproduced.
+  hover can carry over to a different node. A scroll offset can likewise carry
+  over to a new scrolling container that gets the same id. Found by reading;
+  not reproduced.
 
 - **B-071 Last protocol lines can be lost when quitting on macOS**
   `Units: host · Size: S · Impact: Low`
@@ -777,3 +769,23 @@ A fixed entry is deleted and its ID is never reused.
   A `<text>` element renders its `value` and its descendants' text as one
   string. An element nested in it contributes only its text and loses its
   style and listeners. The DOM renders inline children.
+
+- **B-078 A scrolling container fires no `scroll` event**
+  `Units: gpui,bridge,core · Size: M · Impact: Low`
+
+  The DOM fires `scroll` when an element's offset changes. A container with
+  `overflow` set to `scroll` moves its content but nothing reaches JS.
+
+- **B-079 A scrolling container draws no scrollbar**
+  `Units: gpui · Size: M · Impact: Low`
+
+  The DOM shows a scrollbar for `overflow: scroll`. Here `gpui`'s scrollbar
+  width stays 0, so the wheel is the only way to scroll.
+
+- **B-080 Some `overflow` values are not accepted**
+  `Units: gpui · Size: S · Impact: Low`
+
+  `overflow: clip` clips like `hidden` without creating a scroll container.
+  `overflow` accepts `visible`, `hidden`, `scroll` and `auto` only, and
+  `clip` is ignored like any other unknown value. The two-value form such as
+  `hidden scroll` is ignored the same way, since only a single string is read.

@@ -501,9 +501,9 @@ can't survive a CLI that doesn't know about the token.
       reload that replaces the app's engine, leaves the app's tree alone,
       and can still draw when the first bundle never loaded at all
 - [ ] That engine renders into a second root the host stacks over the
-      app's — the same primitive an app's own modal needs. `position`,
-      `z_index` and `overflow` are absent from the style vocabulary, so it
-      waits on Phase 4
+      app's — the same primitive an app's own modal needs. `position`
+      and `z_index` are absent from the style vocabulary, so it waits on
+      Phase 4
 - [x] Tests: a listener that throws is reported exactly once — to the dev
       channel or to stderr, never both — and the window keeps rendering.
       Needs the injected writer above — landed as

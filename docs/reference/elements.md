@@ -35,7 +35,7 @@ background color, and nothing makes it clickable on its own (bind
 
 ## Recognized style keys
 
-`:style` takes an object; only these 13 keys are read, each with its own
+`:style` takes an object; only these keys are read, each with its own
 accepted value shapes. Anything else — a wrong shape, an unrecognized
 enum string, a misspelled key — is silently ignored, not an error. A key
 that was set before and then gets a wrong shape reverts to its default.
@@ -59,9 +59,9 @@ clears every key set before.
 | `corner_radius` | `number` (px) | applied to all four corners |
 | `text_color` | color (below) | cascades to descendant text leaves |
 | `text_size` | `number` (px) | cascades to descendant text leaves |
+| `overflow` / `overflow_x` / `overflow_y` | `"visible"` \| `"hidden"` \| `"scroll"` \| `"auto"` | `"hidden"` clips, `"scroll"` (and its alias `"auto"`) scrolls with the wheel; `overflow_x`/`overflow_y` win over `overflow` |
 
-There's no `overflow` yet — scrolling isn't implemented (see
-[Vue features that don't work yet](#vue-features-that-don-t-work-yet)).
+A scrolling container draws no scrollbar.
 
 Keys are snake_case, not camelCase — `flexDirection`, `justifyContent`,
 etc. are unrecognized keys and are ignored the same as any other typo.
@@ -117,9 +117,8 @@ build rather than silently no-oping:
   the missing export.
 - **No timers or `fetch`**: `setTimeout`/`setInterval`/`fetch` aren't
   provided as globals by the JS runtime Incarnative.js embeds.
-- **No text input, no scrolling**: an editable text element and a
-  scrollable container are both still unimplemented (see the
-  [Roadmap](../roadmap)) — not permanently unsupported, just not built
+- **No text input**: an editable text element is still unimplemented (see
+  the [Roadmap](../roadmap)) — not permanently unsupported, just not built
   yet.
 - **`ref` only exposes `.focus()`/`.blur()`** on the underlying element —
   see [Events: Focus](./events#focus) for how focus works.

@@ -44,7 +44,7 @@ const phases = [
     title: "Input & text editing",
     status: "in-progress",
     description:
-      "Pointer and keyboard input are done. Text editing (selection, caret, IME composition) and scrolling are not built yet.",
+      "Pointer and keyboard input are done. Scrolling is done. Text editing (selection, caret, IME composition) is not built yet.",
     link: { text: "Elements & Styles", href: "/reference/elements" },
   },
   {

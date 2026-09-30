@@ -18,8 +18,8 @@ use std::collections::HashMap;
 
 use gpui::prelude::*;
 use gpui::{
-    AnyElement, App, Display, ElementId, Fill, FlexDirection, Hsla, Length, StyleRefinement,
-    Window, div, px, rgb,
+    AnyElement, App, Display, ElementId, Fill, FlexDirection, Hsla, Length, Overflow,
+    StyleRefinement, Window, div, px, rgb,
 };
 
 use crate::event_sink::{EventMask, EventPayload, EventSink, MousePayload};
@@ -84,6 +84,14 @@ pub enum AlignSpec {
     Stretch,
 }
 
+/// `gpui`-independent mirror of [`gpui::Overflow`]'s supported variants.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum OverflowSpec {
+    Visible,
+    Hidden,
+    Scroll,
+}
+
 /// A plain-data, `gpui`-independent style description, built from a
 /// [`VirtualNode`](crate::tree::VirtualNode)'s `style_props` — see
 /// `style_spec_from_props`'s match arms for the exact recognized keys.
@@ -109,6 +117,16 @@ pub struct StyleSpec {
     /// `.text_color()` — text leaves carry no style of their own.
     pub text_color: Option<u32>,
     pub text_size: Option<f64>,
+    pub overflow_x: Option<OverflowSpec>,
+    pub overflow_y: Option<OverflowSpec>,
+}
+
+impl StyleSpec {
+    /// Whether either axis scrolls.
+    fn scrolls(&self) -> bool {
+        self.overflow_x == Some(OverflowSpec::Scroll)
+            || self.overflow_y == Some(OverflowSpec::Scroll)
+    }
 }
 
 /// A `gpui`-independent, recursive description of one
@@ -170,6 +188,16 @@ fn parse_hex_color(s: &str) -> Option<u32> {
     }
 }
 
+/// `"auto"` is an alias of `"scroll"`.
+fn overflow_spec_from_str(s: &str) -> Option<OverflowSpec> {
+    match s {
+        "visible" => Some(OverflowSpec::Visible),
+        "hidden" => Some(OverflowSpec::Hidden),
+        "scroll" | "auto" => Some(OverflowSpec::Scroll),
+        _ => None,
+    }
+}
+
 fn length_spec_from(value: &AttributeValue) -> Option<LengthSpec> {
     match value {
         AttributeValue::Number(n) => Some(LengthSpec::Px(*n)),
@@ -212,6 +240,7 @@ fn align_spec_from_str(s: &str) -> Option<AlignSpec> {
 /// or value this layer doesn't (yet) recognize.
 fn style_spec_from_props(props: &HashMap<String, AttributeValue>) -> StyleSpec {
     let mut style = StyleSpec::default();
+    let (mut overflow, mut overflow_x, mut overflow_y) = (None, None, None);
     for (key, value) in props {
         match key.as_str() {
             "display" => style.display = as_str(value).and_then(display_spec_from_str),
@@ -231,9 +260,15 @@ fn style_spec_from_props(props: &HashMap<String, AttributeValue>) -> StyleSpec {
             "corner_radius" => style.corner_radius = as_number(value),
             "text_color" => style.text_color = as_color(value),
             "text_size" => style.text_size = as_number(value),
+            "overflow" => overflow = as_str(value).and_then(overflow_spec_from_str),
+            "overflow_x" => overflow_x = as_str(value).and_then(overflow_spec_from_str),
+            "overflow_y" => overflow_y = as_str(value).and_then(overflow_spec_from_str),
             _ => {}
         }
     }
+    // `props` iterates in arbitrary order, so a per-axis key wins only here.
+    style.overflow_x = overflow_x.or(overflow);
+    style.overflow_y = overflow_y.or(overflow);
     style
 }
 
@@ -391,6 +426,13 @@ fn apply_style(style: &mut StyleRefinement, spec: &StyleSpec) {
     if let Some(size) = spec.text_size {
         style.text.font_size = Some(px(size as f32).into());
     }
+    let overflow = |spec| match spec {
+        OverflowSpec::Visible => Overflow::Visible,
+        OverflowSpec::Hidden => Overflow::Hidden,
+        OverflowSpec::Scroll => Overflow::Scroll,
+    };
+    style.overflow.x = spec.overflow_x.map(overflow);
+    style.overflow.y = spec.overflow_y.map(overflow);
 }
 
 /// Wires whichever of [`EventMask::MOUSE_DOWN`]/[`MOUSE_UP`]/[`MOUSE_MOVE`]/
@@ -466,7 +508,9 @@ where
 /// A container also gets a `gpui` `ElementId` (`.id()`) whenever any wired
 /// kind is [`EventKind::needs_element_id`] — `click` is the only one today,
 /// via `on_click` (a `StatefulInteractiveElement` method); the other kinds
-/// wire through plain `InteractiveElement` methods and need no id.
+/// wire through plain `InteractiveElement` methods and need no id. A container
+/// that scrolls on either axis gets one too, since `gpui` keeps its scroll
+/// offset in element state.
 ///
 /// Every container carries a `.debug_selector("node-{id}")` — a no-op
 /// outside test builds — so a test can look its computed bounds up by
@@ -490,7 +534,7 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
             };
             let element = div().debug_selector(move || format!("node-{id}"));
 
-            if dispatch.is_some() && spec.listens.needs_element_id() {
+            if spec.style.scrolls() || (dispatch.is_some() && spec.listens.needs_element_id()) {
                 let element =
                     wire_stateless(element.id(ElementId::Integer(u64::from(id))), id, &wired);
                 let element = wire_focus(element, dispatch, id);
@@ -783,8 +827,78 @@ mod tests {
                     corner_radius: Some(4.0),
                     text_color: Some(0xffffff),
                     text_size: Some(20.0),
+                    ..StyleSpec::default()
                 }
             );
+        }
+
+        fn overflow_of(props: &[(&str, &str)]) -> (Option<OverflowSpec>, Option<OverflowSpec>) {
+            let mut tree = VirtualTree::new();
+            let id = tree.create_node("div");
+            for (key, value) in props {
+                tree.set_style(id, *key, *value).unwrap();
+            }
+            let style = build_spec(&tree, id).unwrap().style;
+            (style.overflow_x, style.overflow_y)
+        }
+
+        #[test]
+        fn overflow_keys_are_mapped_and_auto_scrolls() {
+            use OverflowSpec::{Hidden, Scroll, Visible};
+            assert_eq!(
+                overflow_of(&[("overflow", "hidden")]),
+                (Some(Hidden), Some(Hidden))
+            );
+            assert_eq!(
+                overflow_of(&[("overflow", "visible")]),
+                (Some(Visible), Some(Visible))
+            );
+            assert_eq!(
+                overflow_of(&[("overflow", "auto")]),
+                (Some(Scroll), Some(Scroll))
+            );
+            assert_eq!(
+                overflow_of(&[("overflow_x", "scroll")]),
+                (Some(Scroll), None)
+            );
+            assert_eq!(overflow_of(&[("overflow_y", "auto")]), (None, Some(Scroll)));
+        }
+
+        #[test]
+        fn an_overflow_axis_key_beats_the_shorthand_in_any_order() {
+            use OverflowSpec::{Hidden, Scroll};
+            let keys = [
+                ("overflow", "hidden"),
+                ("overflow_x", "scroll"),
+                ("overflow_y", "scroll"),
+            ];
+            for order in [[0, 1, 2], [2, 1, 0], [1, 0, 2], [1, 2, 0]] {
+                let props: Vec<_> = order.iter().map(|&i| keys[i]).collect();
+                assert_eq!(overflow_of(&props), (Some(Scroll), Some(Scroll)));
+            }
+            assert_eq!(
+                overflow_of(&[("overflow_y", "scroll"), ("overflow", "hidden")]),
+                (Some(Hidden), Some(Scroll))
+            );
+        }
+
+        #[test]
+        fn a_bad_overflow_value_is_ignored() {
+            assert_eq!(overflow_of(&[("overflow", "clip")]), (None, None));
+            assert_eq!(overflow_of(&[("overflow_x", "nope")]), (None, None));
+            let mut tree = VirtualTree::new();
+            let id = tree.create_node("div");
+            tree.set_style(id, "overflow", 1.0).unwrap();
+            assert_eq!(build_spec(&tree, id).unwrap().style, StyleSpec::default());
+        }
+
+        #[test]
+        fn a_removed_overflow_key_renders_as_the_default() {
+            let mut tree = VirtualTree::new();
+            let id = tree.create_node("div");
+            tree.set_style(id, "overflow", "scroll").unwrap();
+            tree.remove_style(id, "overflow").unwrap();
+            assert_eq!(build_spec(&tree, id).unwrap().style, StyleSpec::default());
         }
 
         #[test]
@@ -869,7 +983,10 @@ mod tests {
 
     mod gpui_layer {
         use super::*;
-        use gpui::{TestAppContext, point, size};
+        use gpui::{
+            Context, Render, ScrollDelta, ScrollWheelEvent, TestAppContext, VisualTestContext,
+            point, size,
+        };
 
         #[gpui::test]
         fn container_with_fixed_size_lays_out_at_that_size(cx: &mut TestAppContext) {
@@ -900,6 +1017,44 @@ mod tests {
             cx.draw(point(px(0.), px(0.)), size(px(800.), px(600.)), |_, _| {
                 render_tree(&tree, root).unwrap()
             });
+        }
+
+        struct TreeView(VirtualTree);
+
+        impl Render for TreeView {
+            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                render_tree(&self.0, 0).unwrap()
+            }
+        }
+
+        #[gpui::test]
+        fn a_scroll_container_scrolls_without_a_dispatcher(cx: &mut TestAppContext) {
+            let mut tree = VirtualTree::new();
+            let root = tree.create_node("div");
+            let child = tree.create_node("div");
+            tree.set_style(root, "width", 100.0).unwrap();
+            tree.set_style(root, "height", 100.0).unwrap();
+            tree.set_style(root, "overflow_y", "scroll").unwrap();
+            tree.set_style(child, "width", 100.0).unwrap();
+            tree.set_style(child, "height", 300.0).unwrap();
+            tree.append_child(root, child).unwrap();
+            assert_eq!((root, child), (0, 1));
+
+            let window = cx.add_window(|_, _| TreeView(tree));
+            cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+                .unwrap();
+            let mut cx = VisualTestContext::from_window(window.into(), cx);
+            cx.simulate_event(ScrollWheelEvent {
+                position: point(px(10.), px(10.)),
+                delta: ScrollDelta::Pixels(point(px(0.), px(-50.))),
+                ..Default::default()
+            });
+            cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+                .unwrap();
+
+            let container = cx.debug_bounds("node-0").unwrap();
+            let content = cx.debug_bounds("node-1").unwrap();
+            assert_eq!(content.origin.y - container.origin.y, px(-50.));
         }
     }
 }

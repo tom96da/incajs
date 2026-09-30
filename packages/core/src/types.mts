@@ -64,6 +64,12 @@ export interface StyleProps {
   corner_radius?: number;
   /** Font size in px for this container's own text. Cascades to descendant text leaves, same as {@link StyleProps.text_color}. */
   text_size?: number;
+  /** Overflow on both axes; `"scroll"` (alias `"auto"`) makes the container scroll with the wheel. Overridden per axis by {@link StyleProps.overflow_x}/{@link StyleProps.overflow_y}. */
+  overflow?: "visible" | "hidden" | "scroll" | "auto";
+  /** Horizontal overflow; wins over {@link StyleProps.overflow}. */
+  overflow_x?: "visible" | "hidden" | "scroll" | "auto";
+  /** Vertical overflow; wins over {@link StyleProps.overflow}. */
+  overflow_y?: "visible" | "hidden" | "scroll" | "auto";
 }
 
 /**

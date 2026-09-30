@@ -77,6 +77,7 @@ there's no channel to raise a catchable exception through.
 | `background` / `border_color` / `text_color` | number (hex `0xRRGGBB`) or string (`"#rrggbb"`/`"#rgb"`) | `Fill`/`Hsla` |
 | `corner_radius` | number (px) | all four `corner_radii.*` (uniform) |
 | `text_size` | number (px) | `text.font_size` |
+| `overflow` / `overflow_x` / `overflow_y` | `"visible"`\|`"hidden"`\|`"scroll"`\|`"auto"` (= `"scroll"`) | `overflow.x` / `overflow.y`; an axis key beats `overflow` |
 
 `text_color`/`text_size` only apply to containers — text leaves cascade
 their style from an ancestor container, exactly like GPUI's own
@@ -84,10 +85,10 @@ their style from an ancestor container, exactly like GPUI's own
 
 Deliberately deferred, not yet implemented: percentage lengths, min/max
 size, margin/padding, flex-grow/shrink/basis, per-side border/corner
-values, box-shadow, `border_style` (solid vs. dashed — GPUI's own
-`Style::border_style`, distinct from `border_width`/`border_color`; unset
-always renders solid, GPUI's default), and additional align/justify
-variants beyond the four above.
+values, box-shadow, the `clip` overflow value, `border_style` (solid vs.
+dashed — GPUI's own `Style::border_style`, distinct from
+`border_width`/`border_color`; unset always renders solid, GPUI's
+default), and additional align/justify variants beyond the four above.
 
 ## Binding functions
 
