@@ -47,7 +47,7 @@ the focus model, keyboard input and scrolling (`overflow`, wheel) are
 done. Text editing and IME, interactive visual state and `position`/
 `z-index` are not built.
 
-The current release is `v0.0.7`, on Node.js 22.18 or newer, zed v1.20.2
+The current release is `v0.0.8`, on Node.js 22.18 or newer, zed v1.20.2
 for `gpui` and rquickjs 0.14.0. Linux binaries are built in an
 `ubuntu:22.04` container by both workflows, kept in sync, for a glibc
 2.35 floor. The public docs site (`docs/`, VitePress — `guide/` for
