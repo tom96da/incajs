@@ -7,7 +7,7 @@ import readline from "node:readline";
 import { setTimeout as delay } from "node:timers/promises";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 
-import { resolveHostBin } from "./hostBin.mts";
+import { assertHostBin, resolveHostBin } from "./hostBin.mts";
 import { HostError } from "./hostError.mts";
 import { HOST_PROTOCOL_VERSION, JSONRPC, isRpcMessage } from "./protocol.mts";
 import type { AppErrorParams, ReadyParams } from "./protocol.mts";
@@ -74,11 +74,13 @@ export class HostClient {
 
   /**
    * Starts the child and wires up its streams. Resolves once the process
-   * has actually spawned; rejects if it never does (e.g. the resolved
-   * binary doesn't exist).
+   * has spawned. Rejects with `ERR_INCA_HOST_BIN_NOT_FOUND` if no file
+   * exists at the host binary's path, or with the spawn error if the
+   * process can't start.
    */
   async start(): Promise<void> {
     const hostBin = this.#options.hostBin ?? resolveHostBin();
+    assertHostBin(hostBin);
     const child = spawn(hostBin, ["--dev", this.#options.entryFile], {
       stdio: ["pipe", "pipe", "pipe"],
     });
@@ -108,7 +110,14 @@ export class HostClient {
       if (!this.#stopping) this.#options.onExit?.(code, signal);
     });
 
+    // A spawn failure rejects start() instead, so report only once spawned.
+    let spawned = false;
+    child.on("error", (error) => {
+      if (spawned) onStderr(`inca-host: ${error.message}\n`);
+    });
+
     await once(child, "spawn");
+    spawned = true;
   }
 
   #handleLine(line: string, onStderr: (line: string) => void): void {

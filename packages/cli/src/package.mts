@@ -1,14 +1,13 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { existsSync } from "node:fs";
 import { chmod, cp, mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 
 import { build } from "./build.mts";
 import { slugify } from "./config/defaults.mts";
 import { resolveAppConfig, runtimeConfigOf } from "./config/loader.mts";
-import { resolveHostBin } from "./dev-client/index.mts";
+import { assertHostBin, resolveHostBin } from "./dev-client/index.mts";
 import { IncaError } from "./error.mts";
 import { log } from "./log.mts";
 import { writeMacosApp } from "./macos-app.mts";
@@ -146,8 +145,9 @@ async function packageLinux({ metadata, output, hostBin }: LayoutArgs): Promise<
  * app's own `dist/`. The app launches with no arguments and no terminal,
  * since `inca-host` finds its own bundle beside its executable.
  *
- * @throws if the app's metadata can't be read, the build fails, or no
- * `inca-host` binary can be resolved for the target platform.
+ * @throws if the app's metadata can't be read, the build fails, no
+ * `inca-host` binary can be resolved for the target platform, or no file
+ * exists at the resolved path.
  */
 export async function packageApp(options: PackageAppOptions = {}): Promise<PackageResult> {
   const cwd = options.cwd ?? process.cwd();
@@ -179,12 +179,7 @@ export async function packageApp(options: PackageAppOptions = {}): Promise<Packa
   });
 
   const hostBin = options.hostBin ?? resolveHostBin();
-  if (!existsSync(hostBin)) {
-    throw new IncaError(
-      "ERR_INCA_HOST_BIN_NOT_FOUND",
-      `no host binary at ${hostBin} — check that it was built and is executable`,
-    );
-  }
+  assertHostBin(hostBin);
 
   const layoutArgs: LayoutArgs = { metadata, output, hostBin };
   const appPath =

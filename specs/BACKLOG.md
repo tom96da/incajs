@@ -28,20 +28,6 @@ A fixed entry is deleted and its ID is never reused.
 
 ## P1
 
-- **B-043 `ERR_INCA_HOST_BIN_NOT_FOUND` is `inca package`-only; `inca dev` hits the same failure with no code at all**
-  `Units: cli · Size: S · Impact: Medium`
-
-  `package.mts` resolves
-  `resolveHostBin()` and then explicitly `existsSync`-checks the result,
-  raising `ERR_INCA_HOST_BIN_NOT_FOUND` if it's missing. `dev.mts`'s
-  `HostClient.start` (`packages/cli/src/dev-client/hostClient.mts`) calls
-  `spawn()` on the same resolved path with no existence check. An
-  `INCA_HOST_BIN` pointing at a nonexistent binary makes
-  `await once(child, "spawn")` reject with a raw `ENOENT`, not an
-  `IncaError`. The child also has no persistent `"error"` listener for
-  errors after spawn. Either give `inca dev` the same code for the same
-  failure, or write down why the two commands differ.
-
 - **B-051 `inca dev`'s lock is racy and can refuse forever in a container**
   `Units: cli · Size: S · Impact: Medium`
 

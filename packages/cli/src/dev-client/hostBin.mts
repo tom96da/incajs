@@ -1,6 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import { statSync } from "node:fs";
 import { createRequire } from "node:module";
 
 import { IncaError } from "../error.mts";
@@ -51,4 +52,18 @@ export function resolveHostBin(): string {
     "ERR_INCA_HOST_BIN_UNRESOLVED",
     `no inca-host binary found — ${platformNote}, and ${HOST_BIN_ENV_VAR} isn't set to one`,
   );
+}
+
+/**
+ * Checks that a host binary is a file.
+ * @param bin - the path to check
+ * @throws if nothing is a file at `bin`
+ */
+export function assertHostBin(bin: string): void {
+  if (!statSync(bin, { throwIfNoEntry: false })?.isFile()) {
+    throw new IncaError(
+      "ERR_INCA_HOST_BIN_NOT_FOUND",
+      `no host binary at ${bin} — check that it was built and is executable`,
+    );
+  }
 }

@@ -74,8 +74,9 @@ write. Set it to a directory the build owns, such as `"dist"`.
 
 ## `ERR_INCA_HOST_BIN_NOT_FOUND`
 
-`INCA_HOST_BIN` points at a path that doesn't exist. Check the path, and
-that the binary is executable.
+`inca dev` or `inca package` found no file at the host binary's path.
+Check the path `INCA_HOST_BIN` points at, and that the binary is
+executable.
 
 ## `ERR_INCA_HOST_BIN_UNRESOLVED`
 

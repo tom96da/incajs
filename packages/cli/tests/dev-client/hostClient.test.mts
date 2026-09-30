@@ -1,6 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import os from "node:os";
 import path from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
@@ -27,6 +28,15 @@ const unknownMethodMockHost = path.join(
 const exitingMockHost = path.join(import.meta.dirname, "../fixtures/mock-host-exits.mts");
 
 describe("HostClient", () => {
+  it.each([
+    ["doesn't exist", "/nonexistent/inca-host"],
+    ["is a directory", os.tmpdir()],
+  ])("rejects with ERR_INCA_HOST_BIN_NOT_FOUND when the host binary %s", async (_, hostBin) => {
+    const client = new HostClient({ hostBin, entryFile: "bundle.js", onStderr: () => {} });
+
+    await expect(client.start()).rejects.toMatchObject({ code: "ERR_INCA_HOST_BIN_NOT_FOUND" });
+  });
+
   it("rejects a call written after the host has exited, rather than crashing", async () => {
     let exited = false;
     const client = new HostClient({
