@@ -187,6 +187,7 @@ The host never exits because of a message it couldn't use.
 | A line that isn't valid JSON | `-32700` | `id` is `null` — there was none to read |
 | Valid JSON that is no request object: not an object, no `jsonrpc: "2.0"`, no readable `method`, or an `id` that is not a string, a number, or null | `-32600` | `id` is `null` |
 | A `method` this host doesn't implement | `-32601` | echoes the request's `id`; relayed into the app as `__inca_dev__.receive` if it was a notification instead |
+| A panic in the host | `-32603` | `id` is `null`; the panic message also goes to stderr |
 | A bundle that throws while being evaluated | `-32000` | echoes the `id`; the window keeps the tree it already has |
 | A *first* bundle that throws, before any window exists | `-32000` | reported with `id` `null`, then exit 1 |
 | An exception thrown by an app's event listener, a failing promise job or a promise rejected with no handler | — | an `appError` notification; the window keeps rendering |

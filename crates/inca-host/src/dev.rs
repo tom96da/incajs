@@ -47,7 +47,8 @@ pub(crate) type SharedWriter = Rc<dyn Writer>;
 
 /// Owns real stdout on a dedicated thread. `write_line` only pushes onto an
 /// unbounded channel, so a parent that reads its stdin slowly stalls that
-/// thread, never the one rendering frames.
+/// thread, never the one rendering frames. The thread holds the stdout lock
+/// one line at a time, so [`install_panic_hook`] can write between lines.
 pub(crate) struct StdoutWriter(
     async_channel::Sender<String>,
     RefCell<Option<thread::JoinHandle<()>>>,
@@ -57,8 +58,8 @@ impl StdoutWriter {
     pub(crate) fn spawn() -> Self {
         let (sender, receiver) = async_channel::unbounded::<String>();
         let handle = thread::spawn(move || {
-            let mut stdout = io::stdout().lock();
             while let Ok(line) = receiver.recv_blocking() {
+                let mut stdout = io::stdout().lock();
                 if let Err(err) = writeln!(stdout, "{line}").and_then(|()| stdout.flush()) {
                     log::warn!("failed to write to stdout: {err}");
                     break;
@@ -91,6 +92,32 @@ pub(crate) fn send(writer: &dyn Writer, message: &Outgoing) {
         Ok(line) => writer.write_line(line),
         Err(err) => log::error!("failed to encode {message:?}: {err}"),
     }
+}
+
+/// Writes the `-32603` line reporting a panic to `out`, with `message` as
+/// the error message, and flushes it. The write is synchronous: a panic
+/// inside a platform callback can abort the process before a queued line
+/// would be sent.
+fn write_panic_line(out: &mut impl Write, message: &str) {
+    let Ok(line) = protocol::encode(&Outgoing::error(
+        Value::Null,
+        ErrorCode::InternalError,
+        message,
+    )) else {
+        return;
+    };
+    let _ = writeln!(out, "{line}").and_then(|()| out.flush());
+}
+
+/// Installs a panic hook that reports each panic to the protocol client as
+/// a `-32603` error with a `null` id, after the previously installed hook
+/// has run.
+pub(crate) fn install_panic_hook() {
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        previous(info);
+        write_panic_line(&mut io::stdout().lock(), &info.to_string());
+    }));
 }
 
 /// Reads stdin on its own thread, because `gpui`'s `AsyncApp` isn't `Send`
@@ -330,6 +357,20 @@ mod tests {
             globalThis.received.push([method, paramsJson]);
         };
     ";
+
+    #[test]
+    fn a_panic_is_written_as_one_internal_error_line() {
+        let mut out = Vec::new();
+
+        write_panic_line(&mut out, "boom\nsecond line");
+
+        let text = String::from_utf8(out).unwrap();
+        assert_eq!(text.lines().count(), 1);
+        let decoded: Value = serde_json::from_str(&text).unwrap();
+        assert!(decoded["id"].is_null());
+        assert_eq!(decoded["error"]["code"], -32603);
+        assert_eq!(decoded["error"]["message"], "boom\nsecond line");
+    }
 
     #[gpui::test]
     fn an_unrecognized_notification_relays_into_the_running_app(cx: &mut TestAppContext) {

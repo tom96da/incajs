@@ -143,7 +143,7 @@ export class HostClient {
       const { code, message: text, data } = message.error;
       if (code === BUNDLE_FAILED)
         this.#options.onAppError?.({ message: text, stack: data?.stack ?? null });
-      else onStderr(`[host error ${String(code)}] ${text}`);
+      else onStderr(`[host error ${String(code)}] ${text}\n`);
       return;
     }
 

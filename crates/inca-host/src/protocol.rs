@@ -62,6 +62,7 @@ pub enum ErrorCode {
     ParseError,
     InvalidRequest,
     MethodNotFound,
+    InternalError,
     BundleFailed,
 }
 
@@ -71,6 +72,7 @@ impl ErrorCode {
             ErrorCode::ParseError => -32700,
             ErrorCode::InvalidRequest => -32600,
             ErrorCode::MethodNotFound => -32601,
+            ErrorCode::InternalError => -32603,
             ErrorCode::BundleFailed => -32000,
         }
     }
@@ -420,6 +422,24 @@ mod tests {
         assert_eq!(
             ready,
             r#"{"jsonrpc":"2.0","method":"ready","params":{"protocol":0}}"#
+        );
+    }
+
+    #[test]
+    fn an_internal_error_encodes_with_a_null_id() {
+        let encoded = encode(&Outgoing::error(
+            Value::Null,
+            ErrorCode::InternalError,
+            "panicked at src/app.rs:1:1:\nboom",
+        ))
+        .unwrap();
+
+        let decoded: Value = serde_json::from_str(&encoded).unwrap();
+        assert!(decoded["id"].is_null());
+        assert_eq!(decoded["error"]["code"], -32603);
+        assert_eq!(
+            decoded["error"]["message"],
+            "panicked at src/app.rs:1:1:\nboom"
         );
     }
 

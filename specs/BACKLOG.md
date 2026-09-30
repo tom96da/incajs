@@ -45,13 +45,18 @@ A fixed entry is deleted and its ID is never reused.
   lines in `apply_style` plus a row in `recognized_style_keys_are_mapped`.
   Without `padding`, every inset needs a wrapper node.
 
-- **B-060 A panic in `inca-host` is reported nowhere**
+- **B-060 A panic in a packaged app is reported nowhere**
   `Units: host · Size: S · Impact: Medium`
 
-  No panic hook writes
-  through the existing error reporter. It is the first half of the crash
-  reporting in [ROADMAP.md](./ROADMAP.md#known-gaps-not-yet-scheduled); the
-  message format is undecided.
+  `inca dev` reports a host panic as a `-32603` error. A packaged app has no
+  stdout client and its stderr goes nowhere, so a panic there leaves nothing
+  behind. It needs a log file or a dialog. In `inca dev` a panic shows twice:
+  once from the default hook on stderr, and once as the `-32603` line the CLI
+  prints. A host thread blocked writing to a stalled stdout pipe holds the
+  hook, though the panic text has already reached stderr. It is the first
+  half of the crash reporting in
+  [ROADMAP.md](./ROADMAP.md#known-gaps-not-yet-scheduled); the destination is
+  undecided.
 
 - **B-066 `mouseenter`/`mouseleave` get zero movement**
   `Units: bridge · Size: S · Impact: Medium`

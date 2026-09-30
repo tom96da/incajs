@@ -210,7 +210,7 @@ describe("HostClient", () => {
     });
 
     await client.start();
-    await vi.waitFor(() => expect(lines.some((line) => line.includes("boom"))).toBe(true));
+    await vi.waitFor(() => expect(lines).toContain("[host error -32700] boom\n"));
 
     expect(errors).toEqual([]);
   });

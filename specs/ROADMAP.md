@@ -409,10 +409,11 @@ phase, and none belongs inside one above.
 - **Release engineering beyond packaging**: auto-update, code signing and
   notarization. Phase 3.3 produces an application; neither is what keeps it
   running in the field.
-- **Crash reporting**: a panic in the host leaves nothing behind for the
-  person whose app died. Its cheap half is a `std::panic::set_hook` writing
-  through the same reporter an app's own failures already use; a native fault
-  under it needs an out-of-process collector, which is separate work.
+- **Crash reporting**: `inca dev` reports a host panic to the client, but a
+  packaged app's panic leaves nothing behind for the person whose app died.
+  Its cheap half is a log file or dialog written from the existing panic hook;
+  a native fault under it needs an out-of-process collector, which is separate
+  work.
 - **A JS debugger**: QuickJS ships no inspector protocol, and nothing maps a
   running frame back to a `.vue` source line. Today a bundle's failure is a
   message and a stack, and nothing steps through it.

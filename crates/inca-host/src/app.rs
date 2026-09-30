@@ -35,7 +35,10 @@ use inca_jsenv::{Engine, EngineError, console};
 
 use inca_host::config;
 
-use crate::dev::{Failure, SharedWriter, StdoutWriter, report_startup_failure, reporter_for, send};
+use crate::dev::{
+    Failure, SharedWriter, StdoutWriter, install_panic_hook, report_startup_failure, reporter_for,
+    send,
+};
 use crate::menu;
 use crate::protocol::{ErrorCode, Outgoing};
 
@@ -345,6 +348,9 @@ pub(crate) fn run_bundle(entry_path: &str, dev: bool) -> ExitCode {
     };
     let entry_path = entry_path.to_owned();
     let writer: Option<SharedWriter> = dev.then(|| Rc::new(StdoutWriter::spawn()) as SharedWriter);
+    if dev {
+        install_panic_hook();
+    }
 
     let closing = writer.clone();
     application().run(move |cx: &mut App| {
