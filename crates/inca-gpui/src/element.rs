@@ -93,6 +93,26 @@ pub enum OverflowSpec {
     Scroll,
 }
 
+/// One value per side of a box. `None` leaves that side at its default.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct EdgesSpec<T> {
+    pub top: Option<T>,
+    pub right: Option<T>,
+    pub bottom: Option<T>,
+    pub left: Option<T>,
+}
+
+impl<T> Default for EdgesSpec<T> {
+    fn default() -> Self {
+        Self {
+            top: None,
+            right: None,
+            bottom: None,
+            left: None,
+        }
+    }
+}
+
 /// A plain-data, `gpui`-independent style description, built from a
 /// [`VirtualNode`](crate::tree::VirtualNode)'s `style_props` — see
 /// `style_spec_from_props`'s match arms for the exact recognized keys.
@@ -120,6 +140,20 @@ pub struct StyleSpec {
     pub text_size: Option<f64>,
     pub overflow_x: Option<OverflowSpec>,
     pub overflow_y: Option<OverflowSpec>,
+    /// Inner spacing (px), each side `>= 0`.
+    pub padding: EdgesSpec<f64>,
+    /// Outer spacing; each side a px number (negative allowed) or `"auto"`.
+    pub margin: EdgesSpec<LengthSpec>,
+    /// `>= 0`.
+    pub flex_grow: Option<f64>,
+    /// `>= 0`.
+    pub flex_shrink: Option<f64>,
+    /// `0.0..=1.0`; multiplies into descendants.
+    pub opacity: Option<f64>,
+    pub min_width: Option<LengthSpec>,
+    pub min_height: Option<LengthSpec>,
+    pub max_width: Option<LengthSpec>,
+    pub max_height: Option<LengthSpec>,
 }
 
 impl StyleSpec {
@@ -207,6 +241,69 @@ fn length_spec_from(value: &AttributeValue) -> Option<LengthSpec> {
     }
 }
 
+/// A finite px number `>= 0`; negatives, `NaN` and infinities are unset.
+fn non_negative(value: &AttributeValue) -> Option<f64> {
+    as_number(value).filter(|n| n.is_finite() && *n >= 0.0)
+}
+
+/// A finite px number or `"auto"`; `NaN` and infinities are unset.
+fn margin_length_from(value: &AttributeValue) -> Option<LengthSpec> {
+    length_spec_from(value).filter(|l| !matches!(l, LengthSpec::Px(n) if !n.is_finite()))
+}
+
+/// Keys of one box property, most general first: the shorthand, the two
+/// axes, then the four sides.
+struct EdgeKeys {
+    all: &'static str,
+    x: &'static str,
+    y: &'static str,
+    top: &'static str,
+    right: &'static str,
+    bottom: &'static str,
+    left: &'static str,
+}
+
+const PADDING_KEYS: EdgeKeys = EdgeKeys {
+    all: "padding",
+    x: "padding_x",
+    y: "padding_y",
+    top: "padding_top",
+    right: "padding_right",
+    bottom: "padding_bottom",
+    left: "padding_left",
+};
+
+const MARGIN_KEYS: EdgeKeys = EdgeKeys {
+    all: "margin",
+    x: "margin_x",
+    y: "margin_y",
+    top: "margin_top",
+    right: "margin_right",
+    bottom: "margin_bottom",
+    left: "margin_left",
+};
+
+/// Resolves each side from the side key, else the axis key, else the
+/// shorthand. A value `parse` rejects counts as unset and falls through to
+/// the next key.
+fn edges_from<T>(
+    props: &HashMap<String, AttributeValue>,
+    keys: &EdgeKeys,
+    parse: fn(&AttributeValue) -> Option<T>,
+) -> EdgesSpec<T> {
+    let pick = |side: &str, axis: &str| {
+        [side, axis, keys.all]
+            .into_iter()
+            .find_map(|key| props.get(key).and_then(parse))
+    };
+    EdgesSpec {
+        top: pick(keys.top, keys.y),
+        right: pick(keys.right, keys.x),
+        bottom: pick(keys.bottom, keys.y),
+        left: pick(keys.left, keys.x),
+    }
+}
+
 fn display_spec_from_str(s: &str) -> Option<DisplaySpec> {
     match s {
         "flex" => Some(DisplaySpec::Flex),
@@ -264,12 +361,25 @@ fn style_spec_from_props(props: &HashMap<String, AttributeValue>) -> StyleSpec {
             "overflow" => overflow = as_str(value).and_then(overflow_spec_from_str),
             "overflow_x" => overflow_x = as_str(value).and_then(overflow_spec_from_str),
             "overflow_y" => overflow_y = as_str(value).and_then(overflow_spec_from_str),
+            "flex_grow" => style.flex_grow = non_negative(value),
+            "flex_shrink" => style.flex_shrink = non_negative(value),
+            "opacity" => {
+                style.opacity = as_number(value)
+                    .filter(|n| !n.is_nan())
+                    .map(|n| n.clamp(0.0, 1.0));
+            }
+            "min_width" => style.min_width = length_spec_from(value),
+            "min_height" => style.min_height = length_spec_from(value),
+            "max_width" => style.max_width = length_spec_from(value),
+            "max_height" => style.max_height = length_spec_from(value),
             _ => {}
         }
     }
-    // `props` iterates in arbitrary order, so a per-axis key wins only here.
+    // `props` iterates in arbitrary order, so precedence is resolved here.
     style.overflow_x = overflow_x.or(overflow);
     style.overflow_y = overflow_y.or(overflow);
+    style.padding = edges_from(props, &PADDING_KEYS, non_negative);
+    style.margin = edges_from(props, &MARGIN_KEYS, margin_length_from);
     style
 }
 
@@ -434,6 +544,22 @@ fn apply_style(style: &mut StyleRefinement, spec: &StyleSpec) {
     };
     style.overflow.x = spec.overflow_x.map(overflow);
     style.overflow.y = spec.overflow_y.map(overflow);
+    let padding = |side: Option<f64>| side.map(|n| px(n as f32).into());
+    style.padding.top = padding(spec.padding.top);
+    style.padding.right = padding(spec.padding.right);
+    style.padding.bottom = padding(spec.padding.bottom);
+    style.padding.left = padding(spec.padding.left);
+    style.margin.top = spec.margin.top.map(length_from_spec);
+    style.margin.right = spec.margin.right.map(length_from_spec);
+    style.margin.bottom = spec.margin.bottom.map(length_from_spec);
+    style.margin.left = spec.margin.left.map(length_from_spec);
+    style.flex_grow = spec.flex_grow.map(|n| n as f32);
+    style.flex_shrink = spec.flex_shrink.map(|n| n as f32);
+    style.opacity = spec.opacity.map(|n| n as f32);
+    style.min_size.width = spec.min_width.map(length_from_spec);
+    style.min_size.height = spec.min_height.map(length_from_spec);
+    style.max_size.width = spec.max_width.map(length_from_spec);
+    style.max_size.height = spec.max_height.map(length_from_spec);
 }
 
 /// Wires whichever of [`EventMask::MOUSE_DOWN`]/[`MOUSE_UP`]/[`MOUSE_MOVE`]/
@@ -747,6 +873,14 @@ pub fn render_tree_with_events<E: EventSink + Clone + 'static>(
 mod tests {
     use super::*;
 
+    fn num(n: f64) -> AttributeValue {
+        AttributeValue::Number(n)
+    }
+
+    fn text(s: &str) -> AttributeValue {
+        AttributeValue::String(s.to_owned())
+    }
+
     mod spec_layer {
         use super::*;
 
@@ -907,6 +1041,285 @@ mod tests {
                     ..StyleSpec::default()
                 }
             );
+        }
+
+        fn style_of(props: &[(&str, AttributeValue)]) -> StyleSpec {
+            let mut tree = VirtualTree::new();
+            let id = tree.create_node("div");
+            for (key, value) in props {
+                tree.set_style(id, *key, value.clone()).unwrap();
+            }
+            build_spec(&tree, id).unwrap().style
+        }
+
+        fn sides<T: Copy>(edges: EdgesSpec<T>) -> [Option<T>; 4] {
+            [edges.top, edges.right, edges.bottom, edges.left]
+        }
+
+        #[test]
+        fn box_keys_are_mapped() {
+            let style = style_of(&[
+                ("padding_top", num(1.0)),
+                ("margin_left", text("auto")),
+                ("flex_grow", num(2.0)),
+                ("flex_shrink", num(0.0)),
+                ("opacity", num(0.5)),
+                ("min_width", num(10.0)),
+                ("min_height", text("auto")),
+                ("max_width", num(300.0)),
+                ("max_height", num(200.0)),
+            ]);
+            assert_eq!(
+                style,
+                StyleSpec {
+                    padding: EdgesSpec {
+                        top: Some(1.0),
+                        ..EdgesSpec::default()
+                    },
+                    margin: EdgesSpec {
+                        left: Some(LengthSpec::Auto),
+                        ..EdgesSpec::default()
+                    },
+                    flex_grow: Some(2.0),
+                    flex_shrink: Some(0.0),
+                    opacity: Some(0.5),
+                    min_width: Some(LengthSpec::Px(10.0)),
+                    min_height: Some(LengthSpec::Auto),
+                    max_width: Some(LengthSpec::Px(300.0)),
+                    max_height: Some(LengthSpec::Px(200.0)),
+                    ..StyleSpec::default()
+                }
+            );
+        }
+
+        #[test]
+        fn a_side_beats_its_axis_which_beats_the_shorthand() {
+            let mut props = vec![
+                ("padding", num(1.0)),
+                ("padding_x", num(2.0)),
+                ("padding_left", num(3.0)),
+            ];
+            // top, right, bottom, left
+            assert_eq!(
+                sides(style_of(&props).padding),
+                [Some(1.0), Some(2.0), Some(1.0), Some(3.0)]
+            );
+            props.remove(2);
+            assert_eq!(
+                sides(style_of(&props).padding),
+                [Some(1.0), Some(2.0), Some(1.0), Some(2.0)]
+            );
+            props.push(("padding_y", num(4.0)));
+            assert_eq!(
+                sides(style_of(&props).padding),
+                [Some(4.0), Some(2.0), Some(4.0), Some(2.0)]
+            );
+        }
+
+        #[test]
+        fn margin_resolves_sides_the_same_way() {
+            let style = style_of(&[
+                ("margin", num(1.0)),
+                ("margin_y", num(2.0)),
+                ("margin_bottom", text("auto")),
+                ("margin_x", num(-3.0)),
+            ]);
+            assert_eq!(
+                sides(style.margin),
+                [
+                    Some(LengthSpec::Px(2.0)),
+                    Some(LengthSpec::Px(-3.0)),
+                    Some(LengthSpec::Auto),
+                    Some(LengthSpec::Px(-3.0)),
+                ]
+            );
+        }
+
+        #[test]
+        fn box_keys_resolve_the_same_in_any_insertion_order() {
+            let keys = [
+                ("padding", num(1.0)),
+                ("padding_x", num(2.0)),
+                ("padding_left", num(3.0)),
+                ("margin", num(4.0)),
+                ("margin_y", text("auto")),
+                ("margin_top", num(-5.0)),
+            ];
+            let expected = style_of(&keys);
+            for shift in 1..keys.len() {
+                let mut rotated = keys.to_vec();
+                rotated.rotate_left(shift);
+                assert_eq!(style_of(&rotated), expected);
+                rotated.reverse();
+                assert_eq!(style_of(&rotated), expected);
+            }
+        }
+
+        #[test]
+        fn a_wrong_typed_side_falls_through_to_the_axis_then_the_shorthand() {
+            let style = style_of(&[
+                ("padding", num(1.0)),
+                ("padding_x", text("2")),
+                ("padding_left", AttributeValue::Bool(true)),
+                ("padding_top", num(-9.0)),
+                ("padding_y", num(f64::NAN)),
+            ]);
+            assert_eq!(
+                sides(style.padding),
+                [Some(1.0), Some(1.0), Some(1.0), Some(1.0)]
+            );
+            let style = style_of(&[("margin", num(6.0)), ("margin_left", text("wide"))]);
+            assert_eq!(style.margin.left, Some(LengthSpec::Px(6.0)));
+        }
+
+        #[test]
+        fn margin_takes_negatives_and_auto_but_padding_does_not() {
+            let margin =
+                style_of(&[("margin_left", num(-8.0)), ("margin_right", text("auto"))]).margin;
+            assert_eq!(margin.left, Some(LengthSpec::Px(-8.0)));
+            assert_eq!(margin.right, Some(LengthSpec::Auto));
+            for bad in [
+                num(-1.0),
+                num(f64::NAN),
+                num(f64::INFINITY),
+                text("auto"),
+                text("1 2"),
+            ] {
+                let padding = style_of(&[("padding", bad)]).padding;
+                assert_eq!(padding, EdgesSpec::default());
+            }
+            for bad in [
+                num(f64::NAN),
+                num(f64::INFINITY),
+                num(f64::NEG_INFINITY),
+                text("1 2"),
+            ] {
+                let margin = style_of(&[("margin", bad)]).margin;
+                assert_eq!(margin, EdgesSpec::default());
+            }
+        }
+
+        #[test]
+        fn flex_factors_reject_negatives_and_nan() {
+            for bad in [num(-1.0), num(f64::NAN), num(f64::INFINITY), text("1")] {
+                let style = style_of(&[("flex_grow", bad.clone()), ("flex_shrink", bad)]);
+                assert_eq!((style.flex_grow, style.flex_shrink), (None, None));
+            }
+            let style = style_of(&[("flex_grow", num(0.0)), ("flex_shrink", num(1.5))]);
+            assert_eq!((style.flex_grow, style.flex_shrink), (Some(0.0), Some(1.5)));
+        }
+
+        #[test]
+        fn opacity_is_clamped_and_nan_is_unset() {
+            let opacity = |value| style_of(&[("opacity", value)]).opacity;
+            assert_eq!(opacity(num(2.0)), Some(1.0));
+            assert_eq!(opacity(num(-1.0)), Some(0.0));
+            assert_eq!(opacity(num(0.25)), Some(0.25));
+            assert_eq!(
+                (opacity(num(0.0)), opacity(num(1.0))),
+                (Some(0.0), Some(1.0))
+            );
+            assert_eq!(opacity(num(f64::INFINITY)), Some(1.0));
+            assert_eq!(opacity(num(f64::NEG_INFINITY)), Some(0.0));
+            assert_eq!(opacity(num(f64::NAN)), None);
+            assert_eq!(opacity(text("0.5")), None);
+        }
+
+        #[test]
+        fn each_padding_and_margin_side_key_sets_its_own_side() {
+            let style = style_of(&[
+                ("padding_top", num(1.0)),
+                ("padding_right", num(2.0)),
+                ("padding_bottom", num(3.0)),
+                ("padding_left", num(4.0)),
+                ("margin_top", num(5.0)),
+                ("margin_right", text("auto")),
+                ("margin_bottom", num(-7.0)),
+                ("margin_left", num(8.0)),
+            ]);
+            assert_eq!(
+                sides(style.padding),
+                [Some(1.0), Some(2.0), Some(3.0), Some(4.0)]
+            );
+            assert_eq!(
+                sides(style.margin),
+                [
+                    Some(LengthSpec::Px(5.0)),
+                    Some(LengthSpec::Auto),
+                    Some(LengthSpec::Px(-7.0)),
+                    Some(LengthSpec::Px(8.0)),
+                ]
+            );
+        }
+
+        #[test]
+        fn auto_margin_on_an_axis_reaches_both_sides() {
+            let style = style_of(&[("margin_x", text("auto")), ("margin_y", text("auto"))]);
+            assert_eq!(sides(style.margin), [Some(LengthSpec::Auto); 4]);
+        }
+
+        #[test]
+        fn box_keys_reach_the_gpui_refinement() {
+            let style = style_of(&[
+                ("padding_right", num(1.0)),
+                ("padding_bottom", num(2.0)),
+                ("padding_left", num(3.0)),
+                ("margin_top", num(-2.0)),
+                ("margin_right", text("auto")),
+                ("margin_bottom", num(4.0)),
+                ("margin_left", num(-5.0)),
+                ("flex_grow", num(2.0)),
+                ("flex_shrink", num(0.5)),
+                ("opacity", num(0.5)),
+                ("min_width", num(10.0)),
+                ("max_height", num(20.0)),
+            ]);
+            let mut refinement = StyleRefinement::default();
+            apply_style(&mut refinement, &style);
+            assert_eq!(refinement.padding.top, None);
+            assert_eq!(refinement.padding.right, Some(px(1.).into()));
+            assert_eq!(refinement.padding.bottom, Some(px(2.).into()));
+            assert_eq!(refinement.padding.left, Some(px(3.).into()));
+            assert_eq!(refinement.margin.top, Some(px(-2.).into()));
+            assert_eq!(refinement.margin.right, Some(Length::Auto));
+            assert_eq!(refinement.margin.bottom, Some(px(4.).into()));
+            assert_eq!(refinement.margin.left, Some(px(-5.).into()));
+            assert_eq!(refinement.flex_grow, Some(2.0));
+            assert_eq!(refinement.flex_shrink, Some(0.5));
+            assert_eq!(refinement.opacity, Some(0.5));
+            assert_eq!(refinement.min_size.width, Some(px(10.).into()));
+            assert_eq!(refinement.max_size.height, Some(px(20.).into()));
+            assert_eq!(refinement.min_size.height, None);
+        }
+
+        #[test]
+        fn min_and_max_ignore_a_wrong_shape() {
+            let style = style_of(&[
+                ("min_width", text("50%")),
+                ("max_width", AttributeValue::Bool(true)),
+                ("min_height", num(1.0)),
+                ("max_height", text("auto")),
+            ]);
+            assert_eq!((style.min_width, style.max_width), (None, None));
+            assert_eq!(style.min_height, Some(LengthSpec::Px(1.0)));
+            assert_eq!(style.max_height, Some(LengthSpec::Auto));
+        }
+
+        #[test]
+        fn removing_a_side_key_falls_back_to_the_axis_then_the_shorthand() {
+            let mut tree = VirtualTree::new();
+            let id = tree.create_node("div");
+            tree.set_style(id, "margin", 1.0).unwrap();
+            tree.set_style(id, "margin_x", 2.0).unwrap();
+            tree.set_style(id, "margin_left", "auto").unwrap();
+            let left = |tree: &VirtualTree| build_spec(tree, id).unwrap().style.margin.left;
+            assert_eq!(left(&tree), Some(LengthSpec::Auto));
+            tree.remove_style(id, "margin_left").unwrap();
+            assert_eq!(left(&tree), Some(LengthSpec::Px(2.0)));
+            tree.remove_style(id, "margin_x").unwrap();
+            assert_eq!(left(&tree), Some(LengthSpec::Px(1.0)));
+            tree.remove_style(id, "margin").unwrap();
+            assert_eq!(left(&tree), None);
         }
 
         fn overflow_of(props: &[(&str, &str)]) -> (Option<OverflowSpec>, Option<OverflowSpec>) {
@@ -1080,7 +1493,7 @@ mod tests {
     }
 
     mod gpui_layer {
-        use super::*;
+        use super::{num as n, text as s, *};
         use gpui::{
             Context, Pixels, Point, Render, ScrollDelta, ScrollWheelEvent, TestAppContext,
             VisualTestContext, point, size,
@@ -1115,6 +1528,170 @@ mod tests {
             cx.draw(point(px(0.), px(0.)), size(px(800.), px(600.)), |_, _| {
                 render_tree(&tree, root).unwrap()
             });
+        }
+
+        /// Bounds of a container styled `root_props` (first) and its `children`
+        /// (at most two), in node order.
+        fn layout(
+            cx: &mut TestAppContext,
+            root_props: &[(&str, AttributeValue)],
+            children: &[&[(&str, AttributeValue)]],
+        ) -> Vec<gpui::Bounds<Pixels>> {
+            let mut tree = VirtualTree::new();
+            let root = tree.create_node("div");
+            for (key, value) in root_props {
+                tree.set_style(root, *key, value.clone()).unwrap();
+            }
+            for props in children {
+                let child = tree.create_node("div");
+                for (key, value) in *props {
+                    tree.set_style(child, *key, value.clone()).unwrap();
+                }
+                tree.append_child(root, child).unwrap();
+            }
+            let cx = cx.add_empty_window();
+            cx.draw(point(px(0.), px(0.)), size(px(800.), px(600.)), |_, _| {
+                render_tree(&tree, root).unwrap()
+            });
+            ["node-0", "node-1", "node-2"][..=children.len()]
+                .iter()
+                .map(|name| cx.debug_bounds(name).unwrap())
+                .collect()
+        }
+
+        #[gpui::test]
+        fn padding_insets_the_child(cx: &mut TestAppContext) {
+            let bounds = layout(
+                cx,
+                &[("width", n(200.)), ("height", n(100.)), ("padding", n(10.))],
+                &[&[("width", n(50.)), ("height", n(30.))]],
+            );
+            assert_eq!(bounds[1].origin - bounds[0].origin, point(px(10.), px(10.)));
+            assert_eq!(bounds[0].size, size(px(200.), px(100.)));
+        }
+
+        #[gpui::test]
+        fn padding_grows_a_container_sized_by_its_content(cx: &mut TestAppContext) {
+            let bounds = layout(
+                cx,
+                &[("padding_top", n(4.)), ("padding_bottom", n(6.))],
+                &[&[("height", n(30.))]],
+            );
+            assert_eq!(bounds[0].size.height, px(40.));
+        }
+
+        #[gpui::test]
+        fn a_negative_margin_pulls_the_child_out(cx: &mut TestAppContext) {
+            let bounds = layout(
+                cx,
+                &[("width", n(200.)), ("height", n(100.))],
+                &[&[
+                    ("width", n(50.)),
+                    ("height", n(30.)),
+                    ("margin_left", n(-5.)),
+                ]],
+            );
+            assert_eq!(bounds[1].origin.x - bounds[0].origin.x, px(-5.));
+        }
+
+        #[gpui::test]
+        fn margin_offsets_the_child(cx: &mut TestAppContext) {
+            let bounds = layout(
+                cx,
+                &[("width", n(200.)), ("height", n(100.))],
+                &[&[
+                    ("width", n(50.)),
+                    ("height", n(30.)),
+                    ("margin", n(2.)),
+                    ("margin_left", n(7.)),
+                    ("margin_top", n(3.)),
+                ]],
+            );
+            assert_eq!(bounds[1].origin - bounds[0].origin, point(px(7.), px(3.)));
+        }
+
+        #[gpui::test]
+        fn an_auto_margin_takes_the_free_space(cx: &mut TestAppContext) {
+            let row = [
+                ("display", s("flex")),
+                ("flex_direction", s("row")),
+                ("width", n(200.)),
+                ("height", n(100.)),
+            ];
+            let pushed = layout(
+                cx,
+                &row,
+                &[&[
+                    ("width", n(50.)),
+                    ("height", n(30.)),
+                    ("margin_left", s("auto")),
+                ]],
+            );
+            assert_eq!(pushed[1].origin.x - pushed[0].origin.x, px(150.));
+            let centered = layout(
+                cx,
+                &row,
+                &[&[
+                    ("width", n(50.)),
+                    ("height", n(30.)),
+                    ("margin_x", s("auto")),
+                ]],
+            );
+            assert_eq!(centered[1].origin.x - centered[0].origin.x, px(75.));
+        }
+
+        #[gpui::test]
+        fn min_width_widens_and_min_height_heightens(cx: &mut TestAppContext) {
+            let bounds = layout(
+                cx,
+                &[
+                    ("width", n(50.)),
+                    ("height", n(20.)),
+                    ("min_width", n(80.)),
+                    ("min_height", n(35.)),
+                ],
+                &[],
+            );
+            assert_eq!(bounds[0].size, size(px(80.), px(35.)));
+        }
+
+        #[gpui::test]
+        fn max_width_narrows_and_max_height_shortens(cx: &mut TestAppContext) {
+            let bounds = layout(
+                cx,
+                &[
+                    ("width", n(200.)),
+                    ("height", n(100.)),
+                    ("max_width", n(120.)),
+                    ("max_height", n(60.)),
+                ],
+                &[],
+            );
+            assert_eq!(bounds[0].size, size(px(120.), px(60.)));
+        }
+
+        fn row() -> [(&'static str, AttributeValue); 4] {
+            [
+                ("display", s("flex")),
+                ("flex_direction", s("row")),
+                ("width", n(200.)),
+                ("height", n(50.)),
+            ]
+        }
+
+        #[gpui::test]
+        fn flex_grow_fills_the_remaining_space(cx: &mut TestAppContext) {
+            let bounds = layout(
+                cx,
+                &row(),
+                &[
+                    &[("width", n(50.)), ("flex_grow", n(1.))],
+                    &[("width", n(50.))],
+                ],
+            );
+            assert_eq!(bounds[1].size.width, px(150.));
+            assert_eq!(bounds[2].size.width, px(50.));
+            assert_eq!(bounds[2].origin.x - bounds[0].origin.x, px(150.));
         }
 
         struct TreeView(VirtualTree);

@@ -60,6 +60,15 @@ clears every key set before.
 | `text_color` | color (below) | cascades to descendant text leaves |
 | `text_size` | `number` (px) | cascades to descendant text leaves |
 | `overflow` / `overflow_x` / `overflow_y` | `"visible"` \| `"hidden"` \| `"scroll"` \| `"auto"` | `"hidden"` clips, `"scroll"` (and its alias `"auto"`) scrolls with the wheel; `overflow_x`/`overflow_y` win over `overflow` |
+| `padding` / `padding_x` / `padding_y` / `padding_top` / `padding_right` / `padding_bottom` / `padding_left` | `number` (px, `>= 0`) | a negative, `NaN` or infinite value is ignored |
+| `margin` / `margin_x` / `margin_y` / `margin_top` / `margin_right` / `margin_bottom` / `margin_left` | `number` (px, negative allowed) \| `"auto"` | |
+| `flex_grow` / `flex_shrink` | `number` (`>= 0`) | |
+| `opacity` | `number` (`0` to `1`) | clamped; applies to descendants too |
+| `min_width` / `min_height` / `max_width` / `max_height` | `number` (px) \| `"auto"` | `"auto"` is the default limit: none for `max_*`, the content size for a flex item's `min_*` |
+
+For `padding` and `margin`, a side key beats its axis key (`_x` for left and
+right, `_y` for top and bottom), and an axis key beats the shorthand. A value
+of the wrong shape counts as unset and the next key applies.
 
 A scrolling container draws no scrollbar. `stopPropagation()` and
 `preventDefault()` on its [`wheel`](./events.md#wheel) event act on the

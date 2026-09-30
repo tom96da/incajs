@@ -28,13 +28,6 @@ A fixed entry is deleted and its ID is never reused.
 
 ## P1
 
-- **B-058 The style vocabulary lacks `padding`, `margin`, `flex_grow` and `opacity`**
-  `Units: gpui,core,docs · Size: S · Impact: Medium`
-
-  Gpui's `StyleRefinement` supports all four, so each is a few
-  lines in `apply_style` plus a row in `recognized_style_keys_are_mapped`.
-  Without `padding`, every inset needs a wrapper node.
-
 - **B-060 A panic in a packaged app is reported nowhere**
   `Units: host · Size: S · Impact: Medium`
 
@@ -256,7 +249,8 @@ A fixed entry is deleted and its ID is never reused.
   `flexDirection` where `flex_direction` was meant — no error, no warning,
   the property just never applies. Someone coming from web-standard CSS/
   Vue conventions hits this as a silent no-op with nothing to point at the
-  typo. At minimum this should warn in dev mode.
+  typo. At minimum this should warn in dev mode. Keys such as `padding_top` are
+  snake_case too, so `paddingTop` is ignored the same way.
 
 - **B-045 `buttons` stays set after a release nobody listens to**
   `Units: bridge · Size: M · Impact: Medium`
@@ -823,3 +817,13 @@ A fixed entry is deleted and its ID is never reused.
   is accepted and binds as an ordinary listener (see B-019), so
   `preventDefault()` in such a listener still cancels the scroll. Line deltas
   are scaled by `gpui`'s line height, which differs from the browser's.
+
+- **B-085 Some box style values are not accepted**
+  `Units: gpui · Size: M · Impact: Low`
+
+  `width`, `height`, `min_*` and `max_*` take px numbers (or `"auto"`) only,
+  and `padding` and `margin` take px numbers (`margin` also `"auto"`), so
+  percentages are ignored, and `flex_basis` is not a key. `padding` and
+  `margin` read one value per key, so the CSS shorthand `"1 2 3 4"` is
+  ignored. A negative `padding` is ignored without a warning. The length
+  keys `width`, `height`, `min_*` and `max_*` accept `NaN` and infinity.

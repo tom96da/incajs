@@ -273,9 +273,9 @@ native styling model:
 
 1. **Native style vocabulary expansion** (`crates/inca-gpui`): close the gaps
    flagged as "deliberately incomplete" since Phase 1 (see
-   [FFI.md](./FFI.md)) — margin/padding, percentage lengths, min/max size,
-   flex-grow/shrink/basis, per-side border width/radius, basic box-shadow,
-   font-weight/family, line-height/letter-spacing.
+   [FFI.md](./FFI.md)) — percentage lengths, flex-basis, per-side border
+   width/radius, basic box-shadow, font-weight/family,
+   line-height/letter-spacing.
 2. **Tailwind class resolver**: Incarnative.js has no real CSS engine, so Tailwind
    utility classes can't generate actual CSS — a Vite plugin (building on
    Phase 3's pipeline) scans `class="..."` usage and maps each recognized

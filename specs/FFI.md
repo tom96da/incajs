@@ -78,17 +78,22 @@ there's no channel to raise a catchable exception through.
 | `corner_radius` | number (px) | all four `corner_radii.*` (uniform) |
 | `text_size` | number (px) | `text.font_size` |
 | `overflow` / `overflow_x` / `overflow_y` | `"visible"`\|`"hidden"`\|`"scroll"`\|`"auto"` (= `"scroll"`) | `overflow.x` / `overflow.y`; an axis key beats `overflow` |
+| `padding` (+ `_x`/`_y`/`_top`/`_right`/`_bottom`/`_left`) | number (px, `>= 0`) | `padding.*`; side beats axis beats shorthand, a wrong-typed value falls through |
+| `margin` (+ the same suffixes) | number (px, negatives allowed) or `"auto"` | `margin.*`, same precedence |
+| `flex_grow` / `flex_shrink` | number `>= 0` | `flex_grow` / `flex_shrink` |
+| `opacity` | number, clamped to `0..=1` (`NaN` ignored) | `opacity` |
+| `min_width` / `min_height` / `max_width` / `max_height` | number (px) or `"auto"` | `min_size.*` / `max_size.*` |
 
 `text_color`/`text_size` only apply to containers — text leaves cascade
 their style from an ancestor container, exactly like GPUI's own
 `.text_color()`/`.text_size()`; there's no separate per-leaf text styling.
 
-Deliberately deferred, not yet implemented: percentage lengths, min/max
-size, margin/padding, flex-grow/shrink/basis, per-side border/corner
-values, box-shadow, the `clip` overflow value, `border_style` (solid vs.
-dashed — GPUI's own `Style::border_style`, distinct from
-`border_width`/`border_color`; unset always renders solid, GPUI's
-default), and additional align/justify variants beyond the four above.
+Deliberately deferred, not yet implemented: percentage lengths,
+flex-basis, per-side border/corner values, box-shadow, the `clip` overflow
+value, `border_style` (solid vs. dashed — GPUI's own `Style::border_style`,
+distinct from `border_width`/`border_color`; unset always renders solid,
+GPUI's default), and additional align/justify variants beyond the four
+above.
 
 ## Binding functions
 

@@ -89,10 +89,10 @@ and [FFI.md](./FFI.md) for the design this implements.
       GPUI's `border_style` (solid vs. dashed) isn't in the v1 style
       vocabulary yet, so it always renders solid
 - [ ] The v1 style vocabulary (`specs/FFI.md`) is deliberately incomplete:
-      percentage lengths, min/max size, margin/padding,
-      flex-grow/shrink/basis, per-side border/corner values, box-shadow, and
-      align/justify variants beyond start/end/center/stretch are not yet
-      implemented — add as real usage needs them
+      percentage lengths, flex-basis, per-side border/corner values,
+      box-shadow, and align/justify variants beyond
+      start/end/center/stretch are not yet implemented — add as real usage
+      needs them
 
 ### Unit vi — event-driven JS invocation (zero-overhead render loop)
 
