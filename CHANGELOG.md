@@ -10,6 +10,12 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Fixed
+
+- a template with many static elements mounts without crashing ([826f187](https://github.com/tom96da/incajs/commit/826f187))
+- `inca dev` and `inca build` refuse an `outDir` that reaches the app's files through a symlink ([5951eff](https://github.com/tom96da/incajs/commit/5951eff))
+- `inca dev` reports a missing host binary as an error and stops before building ([5a4b287](https://github.com/tom96da/incajs/commit/5a4b287), [033cacf](https://github.com/tom96da/incajs/commit/033cacf))
+
 ## [0.0.7] - 2026-09-29
 
 ### Added
