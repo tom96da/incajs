@@ -263,7 +263,8 @@ export class HostClient {
 
     const outcome = await Promise.race([
       exited.then(() => "exited" as const),
-      delay(timeoutMs).then(() => "timeout" as const),
+      // Unref'd: the child handle keeps the process alive while it runs.
+      delay(timeoutMs, undefined, { ref: false }).then(() => "timeout" as const),
     ]);
     if (outcome === "timeout") {
       child.kill();

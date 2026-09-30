@@ -111,6 +111,21 @@ describe("HostClient", () => {
     await expect(client.stop(50)).resolves.toBeUndefined();
   }, 5000);
 
+  it("leaves no ref'd timer behind once the host has exited", async () => {
+    const timers = () => process.getActiveResourcesInfo().filter((r) => r === "Timeout").length;
+    const client = new HostClient({
+      hostBin: mockHost,
+      entryFile: "bundle.js",
+      onStderr: () => {},
+    });
+    await client.start();
+    const before = timers();
+
+    await client.stop(10_000);
+
+    expect(timers()).toBeLessThanOrEqual(before);
+  });
+
   it("rejects a call once its own deadline passes without an answer", async () => {
     const client = new HostClient({ hostBin: wedgedMockHost, entryFile: "bundle.js" });
     await client.start();

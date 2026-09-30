@@ -80,12 +80,6 @@ A fixed entry is deleted and its ID is never reused.
   A `<text>` element renders only its `value` attribute. Child text nodes are
   dropped, so `<text>Hello</text>` shows nothing.
 
-- **B-073 The host client's stop timer keeps Node alive**
-  `Units: cli · Size: S · Impact: Low`
-
-  The 2-second stop timer in the host client keeps Node alive for the rest of
-  its 2 seconds after the host exits, so an `inca dev` shutdown waits that long.
-
 ## P2
 
 - **B-007 `.vue` `<style>` blocks don't reach the screen**
