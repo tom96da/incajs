@@ -61,7 +61,9 @@ clears every key set before.
 | `text_size` | `number` (px) | cascades to descendant text leaves |
 | `overflow` / `overflow_x` / `overflow_y` | `"visible"` \| `"hidden"` \| `"scroll"` \| `"auto"` | `"hidden"` clips, `"scroll"` (and its alias `"auto"`) scrolls with the wheel; `overflow_x`/`overflow_y` win over `overflow` |
 
-A scrolling container draws no scrollbar.
+A scrolling container draws no scrollbar. `stopPropagation()` and
+`preventDefault()` on its [`wheel`](./events.md#wheel) event act on the
+scroll as described there.
 
 Keys are snake_case, not camelCase — `flexDirection`, `justifyContent`,
 etc. are unrecognized keys and are ignored the same as any other typo.

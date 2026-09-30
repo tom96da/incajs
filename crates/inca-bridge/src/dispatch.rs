@@ -24,9 +24,10 @@
 //! before that call returns — it never crosses into Rust-held state.
 
 use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::rc::Rc;
 
-use gpui::{App, Window};
+use gpui::{App, ScrollHandle, Window};
 use inca_gpui::{
     EventKind, EventMask, EventPayload, KeyPayload, MousePayload, NodeId, WheelPayload,
     dom_buttons_bit,
@@ -72,6 +73,12 @@ pub struct EventDispatcher {
     /// now. Every node and event name that raw event produces shares it; it
     /// is cleared once that event's update finishes.
     current_movement: Rc<Cell<Option<(f32, f32)>>>,
+    /// Set while the `wheel` event being dispatched right now has been
+    /// stopped. Later `wheel` dispatches skip their callbacks, and GPUI's own
+    /// bubble carries on so a scroll container still scrolls.
+    wheel_stopped: Rc<Cell<bool>>,
+    /// The scroll state of every scrolling container, created on first ask.
+    scroll_handles: Rc<RefCell<HashMap<NodeId, ScrollHandle>>>,
 }
 
 impl EventDispatcher {
@@ -84,6 +91,8 @@ impl EventDispatcher {
             held_buttons: Rc::new(Cell::new(0)),
             last_position: Rc::new(Cell::new(None)),
             current_movement: Rc::new(Cell::new(None)),
+            wheel_stopped: Rc::new(Cell::new(false)),
+            scroll_handles: Rc::new(RefCell::new(HashMap::new())),
         }
     }
 
@@ -213,6 +222,7 @@ impl EventDispatcher {
     /// callbacks *on this node*. `stopPropagation()`/`preventDefault()` are
     /// read back after every callback here has run, and forwarded to `cx`'s
     /// bubble (`node_id`'s ancestors) and `window`'s default handling.
+    /// For `"wheel"`, `stopPropagation()` only skips the ancestors' callbacks.
     ///
     /// Never panics. A callback that throws is reported and the rest still
     /// run — one bad listener must not take the host down, nor stop its
@@ -230,12 +240,15 @@ impl EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) {
-        let callback_ids = self
-            .host
-            .borrow()
-            .listeners
-            .callbacks_for(node_id, event)
-            .to_vec();
+        let callback_ids = if event == "wheel" && self.wheel_stopped.get() {
+            Vec::new()
+        } else {
+            self.host
+                .borrow()
+                .listeners
+                .callbacks_for(node_id, event)
+                .to_vec()
+        };
 
         let payload = self.with_held_buttons(event, payload);
         let payload = self.with_movement(&payload, cx);
@@ -288,7 +301,13 @@ impl EventDispatcher {
         }
 
         if stop_propagation.get() {
-            cx.stop_propagation();
+            if event == "wheel" {
+                self.wheel_stopped.set(true);
+                let stopped = Rc::clone(&self.wheel_stopped);
+                cx.defer(move |_| stopped.set(false));
+            } else {
+                cx.stop_propagation();
+            }
         }
         if prevent_default.get() {
             window.prevent_default();
@@ -421,6 +440,16 @@ impl EventSink for EventDispatcher {
 
     fn focus_handle(&self, node_id: NodeId) -> Option<gpui::FocusHandle> {
         self.host.borrow().focus.handle(node_id)
+    }
+
+    fn scroll_handle(&self, node_id: NodeId) -> Option<ScrollHandle> {
+        Some(
+            self.scroll_handles
+                .borrow_mut()
+                .entry(node_id)
+                .or_default()
+                .clone(),
+        )
     }
 }
 

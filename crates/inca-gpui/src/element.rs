@@ -18,8 +18,9 @@ use std::collections::HashMap;
 
 use gpui::prelude::*;
 use gpui::{
-    AnyElement, App, Display, ElementId, Fill, FlexDirection, Hsla, Length, Overflow,
-    StyleRefinement, Window, div, px, rgb,
+    AnyElement, App, DispatchPhase, Display, ElementId, Fill, FlexDirection, Global, Hsla, Length,
+    Overflow, Pixels, Point, ScrollHandle, ScrollWheelEvent, StyleRefinement, Window, canvas, div,
+    point, px, rgb,
 };
 
 use crate::event_sink::{EventMask, EventPayload, EventSink, MousePayload};
@@ -501,6 +502,77 @@ where
     })
 }
 
+/// Every scroll container's offset before the wheel event being dispatched,
+/// outermost first.
+#[derive(Default)]
+struct WheelSnapshots(Vec<(ScrollHandle, Point<Pixels>)>);
+
+impl Global for WheelSnapshots {}
+
+/// A zero-size child whose paint records its container's offset in the
+/// capture phase, which runs before any bubble-phase scroll step. Children
+/// paint after their parent, and a container adds this before its own
+/// children, so containers record outermost first.
+fn scroll_recorder(handle: ScrollHandle) -> impl IntoElement {
+    canvas(
+        |_, _, _| (),
+        move |_, (), window, _| {
+            window.on_mouse_event(move |_: &ScrollWheelEvent, phase, window, cx| {
+                if phase != DispatchPhase::Capture {
+                    return;
+                }
+                let snapshots = &mut cx.default_global::<WheelSnapshots>().0;
+                let first = snapshots.is_empty();
+                snapshots.push((handle.clone(), handle.offset()));
+                if first {
+                    window.defer(cx, settle_wheel);
+                }
+            });
+        },
+    )
+    .absolute()
+    .size_0()
+}
+
+/// Undoes, once `gpui`'s scroll steps and the JS listeners have run, all
+/// scrolling after `preventDefault()`, else the scrolling of every container
+/// but the innermost one that can still move.
+///
+/// Runs before the next draw. A `gpui` that applies the wheel step later
+/// than the event breaks this.
+fn settle_wheel(window: &mut Window, cx: &mut App) {
+    let snapshots = std::mem::take(&mut cx.default_global::<WheelSnapshots>().0);
+    let mut settled = window.default_prevented();
+    for (handle, before) in snapshots.into_iter().rev() {
+        // `gpui` clamps the offset on the next draw; compare as it will.
+        let (offset, max) = (handle.offset(), handle.max_offset());
+        let moved = point(
+            offset.x.clamp(-max.x, px(0.)),
+            offset.y.clamp(-max.y, px(0.)),
+        );
+        if !settled && moved != before {
+            settled = true;
+        } else {
+            handle.set_offset(before);
+        }
+    }
+}
+
+/// Tracks a scroll container's [`ScrollHandle`] and records its offset for
+/// [`settle_wheel`]. Without a handle `gpui` scrolls it on its own.
+fn wire_scroll<Elem, E>(element: Elem, dispatch: Option<&E>, spec: &ElementSpec) -> Elem
+where
+    Elem: StatefulInteractiveElement + ParentElement + FluentBuilder,
+    E: EventSink,
+{
+    let handle = dispatch
+        .filter(|_| spec.style.scrolls())
+        .and_then(|d| d.scroll_handle(spec.id));
+    element.when_some(handle, |el, handle| {
+        el.track_scroll(&handle).child(scroll_recorder(handle))
+    })
+}
+
 /// Recursively converts an [`ElementSpec`] into a real `gpui` [`AnyElement`].
 ///
 /// A container gets a hitbox only when something listens on it — GPUI
@@ -538,6 +610,7 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
                 let element =
                     wire_stateless(element.id(ElementId::Integer(u64::from(id))), id, &wired);
                 let element = wire_focus(element, dispatch, id);
+                let element = wire_scroll(element, dispatch, spec);
                 // One `on_hover` covers both `mouseenter`/`mouseleave` —
                 // GPUI panics if it's called twice on the same element, so
                 // which name to dispatch is decided from its `bool` at
@@ -622,6 +695,10 @@ impl EventSink for NeverListens {
     }
 
     fn focus_handle(&self, _node_id: NodeId) -> Option<gpui::FocusHandle> {
+        None
+    }
+
+    fn scroll_handle(&self, _node_id: NodeId) -> Option<ScrollHandle> {
         None
     }
 }
@@ -902,6 +979,27 @@ mod tests {
         }
 
         #[test]
+        fn either_scrolling_axis_makes_a_container_scroll() {
+            let scrolls = |props: &[(&str, &str)]| {
+                let mut tree = VirtualTree::new();
+                let id = tree.create_node("div");
+                for (key, value) in props {
+                    tree.set_style(id, *key, *value).unwrap();
+                }
+                build_spec(&tree, id).unwrap().style.scrolls()
+            };
+            assert!(scrolls(&[("overflow_x", "scroll")]));
+            assert!(scrolls(&[("overflow_y", "auto")]));
+            assert!(scrolls(&[("overflow", "scroll")]));
+            assert!(!scrolls(&[("overflow", "hidden")]));
+            assert!(!scrolls(&[
+                ("overflow_x", "visible"),
+                ("overflow_y", "hidden")
+            ]));
+            assert!(!scrolls(&[]));
+        }
+
+        #[test]
         fn nothing_listens_unless_asked() {
             let mut tree = VirtualTree::new();
             let id = tree.create_node("div");
@@ -984,8 +1082,8 @@ mod tests {
     mod gpui_layer {
         use super::*;
         use gpui::{
-            Context, Render, ScrollDelta, ScrollWheelEvent, TestAppContext, VisualTestContext,
-            point, size,
+            Context, Pixels, Point, Render, ScrollDelta, ScrollWheelEvent, TestAppContext,
+            VisualTestContext, point, size,
         };
 
         #[gpui::test]
@@ -1027,18 +1125,24 @@ mod tests {
             }
         }
 
-        #[gpui::test]
-        fn a_scroll_container_scrolls_without_a_dispatcher(cx: &mut TestAppContext) {
+        /// How far a wheel `delta` over a 100x100 container with `props`
+        /// moves its 300x300 child, without a dispatcher.
+        fn content_shift(
+            cx: &mut TestAppContext,
+            props: &[(&str, &str)],
+            delta: Point<Pixels>,
+        ) -> Point<Pixels> {
             let mut tree = VirtualTree::new();
             let root = tree.create_node("div");
             let child = tree.create_node("div");
             tree.set_style(root, "width", 100.0).unwrap();
             tree.set_style(root, "height", 100.0).unwrap();
-            tree.set_style(root, "overflow_y", "scroll").unwrap();
-            tree.set_style(child, "width", 100.0).unwrap();
+            for (key, value) in props {
+                tree.set_style(root, *key, *value).unwrap();
+            }
+            tree.set_style(child, "width", 300.0).unwrap();
             tree.set_style(child, "height", 300.0).unwrap();
             tree.append_child(root, child).unwrap();
-            assert_eq!((root, child), (0, 1));
 
             let window = cx.add_window(|_, _| TreeView(tree));
             cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
@@ -1046,15 +1150,26 @@ mod tests {
             let mut cx = VisualTestContext::from_window(window.into(), cx);
             cx.simulate_event(ScrollWheelEvent {
                 position: point(px(10.), px(10.)),
-                delta: ScrollDelta::Pixels(point(px(0.), px(-50.))),
+                delta: ScrollDelta::Pixels(delta),
                 ..Default::default()
             });
             cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
                 .unwrap();
-
             let container = cx.debug_bounds("node-0").unwrap();
             let content = cx.debug_bounds("node-1").unwrap();
-            assert_eq!(content.origin.y - container.origin.y, px(-50.));
+            content.origin - container.origin
+        }
+
+        #[gpui::test]
+        fn an_x_only_container_scrolls_along_x_without_a_dispatcher(cx: &mut TestAppContext) {
+            let shift = content_shift(cx, &[("overflow_x", "scroll")], point(px(-50.), px(0.)));
+            assert_eq!(shift, point(px(-50.), px(0.)));
+        }
+
+        #[gpui::test]
+        fn a_scroll_container_scrolls_without_a_dispatcher(cx: &mut TestAppContext) {
+            let shift = content_shift(cx, &[("overflow_y", "scroll")], point(px(0.), px(-50.)));
+            assert_eq!(shift, point(px(0.), px(-50.)));
         }
     }
 }

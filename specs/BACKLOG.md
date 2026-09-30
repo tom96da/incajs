@@ -789,3 +789,37 @@ A fixed entry is deleted and its ID is never reused.
   `overflow` accepts `visible`, `hidden`, `scroll` and `auto` only, and
   `clip` is ignored like any other unknown value. The two-value form such as
   `hidden scroll` is ignored the same way, since only a single string is read.
+
+- **B-081 `stopPropagation()` on events other than `wheel` cuts `gpui`'s own bubble**
+  `Units: bridge · Size: M · Impact: Low`
+
+  `stopPropagation()` on any event but `wheel` also stops `gpui`'s own
+  ancestor listeners. The DOM stops only the ancestors' JS listeners.
+
+- **B-082 Wheel scrolling keeps `gpui`'s axis rules and has no gesture latching**
+  `Units: gpui · Size: M · Impact: Low`
+
+  A vertical wheel scrolls a container that scrolls only on x, and only the
+  dominant axis of a diagonal delta moves. Both are `gpui`'s rules. The DOM
+  latches a continuing gesture to the container it started on. Here a
+  gesture moves to the parent as soon as the inner container reaches its
+  limit.
+
+- **B-083 Wheel rollback depends on `gpui` applying the scroll step in the event**
+  `Units: gpui,bridge · Size: M · Impact: Low`
+
+  A scroll container's `preventDefault()` and nested chaining undo `gpui`'s
+  scroll step after the fact. This needs `gpui` to apply the step
+  synchronously in the event. A `gpui` with smooth or deferred scrolling
+  breaks it. `a_cancelled_scroll_leaves_the_bounds_unmoved` in
+  `crates/inca-bridge/tests/scroll_dispatch.rs` checks the bounds after a
+  cancel. Each scroll container adds one zero-size element, and the handles
+  of removed nodes live until the next full reload.
+
+- **B-084 Wheel scrolling differs from the DOM at the edges**
+  `Units: gpui,bridge · Size: M · Impact: Low`
+
+  There is no `overscroll-behavior` and no rubber-banding. `@wheel.passive`
+  is accepted and binds as an ordinary listener (see B-019), so
+  `preventDefault()` in such a listener still cancels the scroll. Line deltas
+  are scaled by `gpui`'s line height, which differs from the browser's.

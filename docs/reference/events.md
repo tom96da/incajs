@@ -79,6 +79,11 @@ The same fields as `mousedown`, above, plus
 - `deltaZ` — always `0`
 - `deltaMode` — `0` (pixels) or `1` (lines), never `2` (page)
 
+In a scrolling container, `stopPropagation()` keeps ancestors' `wheel`
+listeners from firing, and the container still scrolls. `preventDefault()`
+cancels the scroll. Nested containers scroll the innermost first, and the
+wheel moves to the next container out once the inner one is at its limit.
+
 ## Keyboard
 
 ### `keydown` / `keyup`
@@ -140,8 +145,8 @@ function onClick(event) {
   [`stopImmediatePropagation()`](https://developer.mozilla.org/en-US/docs/Web/API/Event/stopImmediatePropagation) —
   work exactly as the DOM's.
 - `preventDefault()` — suppresses a native default action: [focus](#focus)'s
-  own click-to-focus, or a focused node's `click` firing from
-  `Enter`/`Space`.
+  own click-to-focus, a focused node's `click` firing from `Enter`/`Space`,
+  or a [`wheel`](#wheel)'s scrolling.
 
 Every listener runs in the bubble phase; there's no way yet to listen
 during the capture phase.

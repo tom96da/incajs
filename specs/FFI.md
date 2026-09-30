@@ -161,6 +161,18 @@ dispatch from one raw event, including a pointer move's `"mousemove"` and
 scroll. `deltaX`/`deltaY` follow the DOM's sign (positive is down/right),
 the negation of GPUI's.
 
+A scrolling container (`overflow` `scroll`) is scrolled by GPUI's own
+listener, which ignores `preventDefault()` and never consumes the event, so
+every container under the pointer moves. When the dispatcher hands out a
+`ScrollHandle` (`EventSink::scroll_handle`, kept per node in
+`EventDispatcher`), the container tracks it and paints a zero-size canvas
+child. The canvas records the handle's offset in the capture phase, which
+runs before GPUI's bubble-phase scroll steps. A `Window::defer` after the
+event puts back the recorded offsets that the DOM would not change: all of
+them after `preventDefault()`, otherwise all but the innermost container
+that still moved once clamped to `max_offset`. The deferral runs before the
+next draw. Without a dispatcher there is no handle and GPUI scrolls as is.
+
 `"mouseenter"`/`"mouseleave"` come from one GPUI hover registration per
 node — GPUI panics if `on_hover` is bound twice on the same element, so
 `inca-gpui` picks the event name from the `bool` that registration hands
@@ -215,9 +227,11 @@ reaches any node (tracked in [BACKLOG.md](./BACKLOG.md)).
 the node has run, and forwarded into GPUI's own dispatch — GPUI already
 bubbles from the node a pointer hit outward through its ancestors the same
 way the DOM does, so `stopPropagation()` keeps ancestor listeners for the
-same event from firing. `preventDefault()` reaches only what GPUI itself
-uses it for (`Window::prevent_default`'s doc comment) — narrower than the
-DOM's. `"click"` fires *before* `"mouseup"` on the same node: GPUI
+same event from firing. For `"wheel"`, `stopPropagation()` sets a per-event
+flag in `EventDispatcher` that skips the later `"wheel"` callbacks and leaves
+GPUI's bubble running, because GPUI's scroll steps sit in that bubble.
+`preventDefault()` reaches only what GPUI itself uses it for
+(`Window::prevent_default`'s doc comment) — narrower than the DOM's. `"click"` fires *before* `"mouseup"` on the same node: GPUI
 synthesizes clicks from its own mouse-down/mouse-up bookkeeping, registered
 after this crate's own `mouseup` wiring, and bubble-phase listeners run in
 reverse registration order.
