@@ -19,8 +19,9 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 Every tag other than `"text"` — `<div>`, `<span>`, `<button>`, anything —
 renders identically, as a generic styled container. The tag name itself
-has no rendering meaning; only `"text"` is special, and only because it's
-a leaf that renders its `value` attribute as text content.
+has no rendering meaning; only `"text"` is special, and only because it
+renders text content: its `value` attribute followed by its descendants'
+text in child order. Descendants are not rendered as separate elements.
 
 ```vue
 <template>

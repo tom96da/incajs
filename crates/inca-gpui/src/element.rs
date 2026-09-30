@@ -32,7 +32,7 @@ use crate::tree::{AttributeValue, NodeId, VirtualTree};
 /// element kind is designed.
 ///
 /// Text is deliberately never allowed as a bare string child mixed into a
-/// container's children — it's always its own dedicated leaf node with a
+/// container's children — it's always its own dedicated node with a
 /// stable id. That keeps every rendered text run addressable by [`NodeId`],
 /// which later work (text selection, hit-testing, per-run event handling)
 /// will need — a container that could also hold ad-hoc string children
@@ -41,8 +41,9 @@ use crate::tree::{AttributeValue, NodeId, VirtualTree};
 pub enum ElementTag {
     /// Any tag name other than `"text"`: a generic styled box.
     Container,
-    /// A `"text"` tag: a leaf whose content is its `"value"` attribute
-    /// (missing or non-string → empty content, never a panic).
+    /// A `"text"` tag: its `"value"` attribute (missing or non-string →
+    /// empty) followed by its descendants' text in child order. Descendants
+    /// are not rendered as separate elements.
     Text(String),
 }
 
@@ -236,6 +237,24 @@ fn style_spec_from_props(props: &HashMap<String, AttributeValue>) -> StyleSpec {
     style
 }
 
+/// A node's `"value"` attribute followed by its descendants' text in child
+/// order, whatever their tags. An unresolved child id is skipped.
+fn text_content(tree: &VirtualTree, id: NodeId) -> String {
+    let Some(node) = tree.get(id) else {
+        return String::new();
+    };
+    let mut content = node
+        .attributes()
+        .get("value")
+        .and_then(as_str)
+        .unwrap_or_default()
+        .to_owned();
+    for &child_id in node.children() {
+        content.push_str(&text_content(tree, child_id));
+    }
+    content
+}
+
 /// Builds an [`ElementSpec`] for `root` and its whole subtree, with nothing
 /// listening for input.
 #[must_use]
@@ -259,22 +278,22 @@ pub fn build_spec_with(
 ) -> Option<ElementSpec> {
     let node = tree.get(root)?;
 
-    let tag = if node.tag_name() == "text" {
-        let content = match node.attributes().get("value") {
-            Some(AttributeValue::String(s)) => s.clone(),
-            _ => String::new(),
-        };
-        ElementTag::Text(content)
+    let is_text = node.tag_name() == "text";
+    let tag = if is_text {
+        ElementTag::Text(text_content(tree, root))
     } else {
         ElementTag::Container
     };
 
     let style = style_spec_from_props(node.style_props());
-    let children = node
-        .children()
-        .iter()
-        .filter_map(|&child_id| build_spec_with(tree, child_id, listens))
-        .collect();
+    let children = if is_text {
+        Vec::new()
+    } else {
+        node.children()
+            .iter()
+            .filter_map(|&child_id| build_spec_with(tree, child_id, listens))
+            .collect()
+    };
 
     Some(ElementSpec {
         id: root,
@@ -633,6 +652,61 @@ mod tests {
 
             let spec = build_spec(&tree, id).unwrap();
             assert_eq!(spec.tag, ElementTag::Text("hello".into()));
+        }
+
+        #[test]
+        fn text_tag_uses_its_child_text() {
+            let mut tree = VirtualTree::new();
+            let id = tree.create_node("text");
+            let child = tree.create_node("text");
+            tree.set_attribute(child, "value", "Hello").unwrap();
+            tree.append_child(id, child).unwrap();
+
+            let spec = build_spec(&tree, id).unwrap();
+            assert_eq!(spec.tag, ElementTag::Text("Hello".into()));
+            assert!(spec.children.is_empty());
+        }
+
+        #[test]
+        fn text_tag_puts_its_value_before_its_children_in_order() {
+            let mut tree = VirtualTree::new();
+            let id = tree.create_node("text");
+            tree.set_attribute(id, "value", "a").unwrap();
+            for part in ["b", "c"] {
+                let child = tree.create_node("text");
+                tree.set_attribute(child, "value", part).unwrap();
+                tree.append_child(id, child).unwrap();
+            }
+
+            let spec = build_spec(&tree, id).unwrap();
+            assert_eq!(spec.tag, ElementTag::Text("abc".into()));
+        }
+
+        #[test]
+        fn text_tag_includes_text_nested_in_any_tag() {
+            let mut tree = VirtualTree::new();
+            let id = tree.create_node("text");
+            let wrapper = tree.create_node("div");
+            let leaf = tree.create_node("text");
+            tree.set_attribute(leaf, "value", "nested").unwrap();
+            tree.append_child(wrapper, leaf).unwrap();
+            tree.append_child(id, wrapper).unwrap();
+
+            let spec = build_spec(&tree, id).unwrap();
+            assert_eq!(spec.tag, ElementTag::Text("nested".into()));
+        }
+
+        #[test]
+        fn text_tag_counts_a_non_string_value_as_empty() {
+            let mut tree = VirtualTree::new();
+            let id = tree.create_node("text");
+            tree.set_attribute(id, "value", 1.0).unwrap();
+            let child = tree.create_node("text");
+            tree.set_attribute(child, "value", "kept").unwrap();
+            tree.append_child(id, child).unwrap();
+
+            let spec = build_spec(&tree, id).unwrap();
+            assert_eq!(spec.tag, ElementTag::Text("kept".into()));
         }
 
         #[test]

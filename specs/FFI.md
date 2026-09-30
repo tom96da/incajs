@@ -54,7 +54,7 @@ is designed:
 
 | `tag_name` | Maps to |
 | --- | --- |
-| `"text"` | A leaf. Content comes from the `"value"` string attribute (missing/non-string → empty content, never a panic). |
+| `"text"` | Content is its `"value"` string attribute (missing/non-string → empty, never a panic) followed by its descendants' text in child order. Descendants are not rendered as separate elements. |
 | anything else | A generic styled container (a GPUI `div()`). |
 
 ### Style prop vocabulary (v1)

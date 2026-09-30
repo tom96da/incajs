@@ -24,8 +24,8 @@ export type AttributeValue = string | number | boolean;
 
 /**
  * Element kind passed to `createNode`. `"text"` is the only tag with
- * dedicated rendering behavior — a leaf that renders its `"value"`
- * attribute's string content. Any other string is a generic styled
+ * dedicated rendering behavior — it renders its `"value"` attribute followed
+ * by its descendants' text. Any other string is a generic styled
  * container; the `string & {}` half of this type keeps `"text"`'s
  * autocomplete while still accepting an arbitrary tag name.
  */

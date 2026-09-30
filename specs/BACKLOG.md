@@ -58,12 +58,6 @@ A fixed entry is deleted and its ID is never reused.
   [ROADMAP.md](./ROADMAP.md#known-gaps-not-yet-scheduled); the destination is
   undecided.
 
-- **B-070 `<text>` drops child text nodes**
-  `Units: gpui · Size: S · Impact: Low`
-
-  A `<text>` element renders only its `value` attribute. Child text nodes are
-  dropped, so `<text>Hello</text>` shows nothing.
-
 ## P2
 
 - **B-007 `.vue` `<style>` blocks don't reach the screen**
@@ -776,3 +770,10 @@ A fixed entry is deleted and its ID is never reused.
   parentless root under a node that is not its descendant. `appendChild`
   and `insertBefore` refuse the root as the child, and `destroyNode`
   refuses to destroy it, because the root belongs to the host.
+
+- **B-077 An element nested in `<text>` renders only its text**
+  `Units: gpui · Size: M · Impact: Low`
+
+  A `<text>` element renders its `value` and its descendants' text as one
+  string. An element nested in it contributes only its text and loses its
+  style and listeners. The DOM renders inline children.
