@@ -31,9 +31,11 @@ the custom renderer's output. Each node has:
 | `children` | `Vec<u32>` | Ordered child node handles. |
 
 **A node has at most one parent.** `appendChild`/`insertBefore` detach the
-child from wherever it was, so the same call both attaches and moves, and an
-attachment that would make a node its own ancestor throws instead. A walk
-down the tree therefore always terminates, which the render path relies on.
+child from wherever it was, so the same call both attaches and moves, and
+an attachment that would make a node its own ancestor throws instead. A
+`childId` naming the root, which belongs to the host, throws too. A walk
+down the tree therefore always terminates, which the render path relies
+on.
 
 Every `nodeId` argument must be a finite whole number in the `u32`
 range; anything else throws a `TypeError`.
@@ -93,8 +95,8 @@ variants beyond the four above.
 | --- | --- | --- |
 | `rootNodeId` | `() => number` | Return the host-allocated root container's id — the node a mounting app attaches itself under. Allocated with the tree, so it always resolves. |
 | `createNode` | `(tag: string) => number` | Allocate a `VirtualNode`, return its id. |
-| `appendChild` | `(parentId: number, childId: number) => void` | Attach a child node at the end of `parentId`'s children. Thin wrapper over `insertBefore` with no anchor. |
-| `insertBefore` | `(parentId: number, childId: number, anchorId: number \| null) => void` | Attach a child node before `anchorId` (or at the end if `null`). An `anchorId` equal to `childId` changes nothing when the child is already under `parentId`. If `anchorId` names a real node that isn't currently a child of `parentId`, falls back to appending at the end; only a wholly unknown `anchorId` throws. |
+| `appendChild` | `(parentId: number, childId: number) => void` | Attach a child node at the end of `parentId`'s children. Thin wrapper over `insertBefore` with no anchor. Throws if `childId` is the root. |
+| `insertBefore` | `(parentId: number, childId: number, anchorId: number \| null) => void` | Attach a child node before `anchorId` (or at the end if `null`). An `anchorId` equal to `childId` changes nothing when the child is already under `parentId`. If `anchorId` names a real node that isn't currently a child of `parentId`, falls back to appending at the end; only a wholly unknown `anchorId` throws. Throws if `childId` is the root. |
 | `removeChild` | `(parentId: number, childId: number) => void` | Detach a child node. |
 | `setAttribute` | `(nodeId: number, key: string, value: any) => void` | Set a non-style attribute prop. |
 | `setStyle` | `(nodeId: number, key: string, value: any) => void` | Set a style prop — the only JS-reachable way to touch `style_props`; `setAttribute` writes to the separate `attributes` map instead. |

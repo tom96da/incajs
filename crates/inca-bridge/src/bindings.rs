@@ -130,6 +130,22 @@ impl<'js> FromJs<'js> for JsNodeId {
     }
 }
 
+/// Refuses `id` when it is the root node, which belongs to the host. `verb`
+/// completes the message, as in "cannot be {verb}".
+///
+/// # Errors
+///
+/// Throws a `TypeError` when `id` is the root.
+fn refuse_root(ctx: &Ctx<'_>, host: &Host, id: NodeId, verb: &str) -> JsResult<()> {
+    if id == host.root {
+        return Err(Exception::throw_type(
+            ctx,
+            &format!("the root node belongs to the host and cannot be {verb}"),
+        ));
+    }
+    Ok(())
+}
+
 fn throw_tree_error(ctx: &Ctx<'_>, err: TreeError) -> rquickjs::Error {
     Exception::throw_type(ctx, &err.to_string())
 }
@@ -190,8 +206,9 @@ fn install_tree<'js>(
                       JsNodeId(parent_id): JsNodeId,
                       JsNodeId(child_id): JsNodeId|
                       -> JsResult<()> {
-                    host.borrow_mut()
-                        .tree
+                    let mut host = host.borrow_mut();
+                    refuse_root(&ctx, &host, child_id, "moved")?;
+                    host.tree
                         .append_child(parent_id, child_id)
                         .map_err(|err| throw_tree_error(&ctx, err))
                 },
@@ -210,8 +227,9 @@ fn install_tree<'js>(
                       JsNodeId(child_id): JsNodeId,
                       anchor_id: Option<JsNodeId>|
                       -> JsResult<()> {
-                    host.borrow_mut()
-                        .tree
+                    let mut host = host.borrow_mut();
+                    refuse_root(&ctx, &host, child_id, "moved")?;
+                    host.tree
                         .insert_before(parent_id, child_id, anchor_id.map(|JsNodeId(id)| id))
                         .map_err(|err| throw_tree_error(&ctx, err))
                 },
@@ -304,12 +322,7 @@ fn install_tree<'js>(
                 ctx.clone(),
                 move |ctx: Ctx<'js>, JsNodeId(node_id): JsNodeId| -> JsResult<Vec<u32>> {
                     let mut host = host.borrow_mut();
-                    if node_id == host.root {
-                        return Err(Exception::throw_type(
-                            &ctx,
-                            "the root node belongs to the host and cannot be destroyed",
-                        ));
-                    }
+                    refuse_root(&ctx, &host, node_id, "destroyed")?;
                     let freed = host.tree.destroy_node(node_id);
                     Ok(freed
                         .into_iter()
@@ -552,6 +565,38 @@ mod tests {
         assert!(caught, "the root belongs to the host, not to the app");
         let host = host.borrow();
         assert!(host.tree.get(host.root).is_some());
+    }
+
+    #[test]
+    fn moving_the_root_raises_a_catchable_exception() {
+        let (engine, host) = engine_with_bindings();
+
+        let caught: u32 = engine
+            .eval(
+                r"
+                const root = __inca_native__.rootNodeId();
+                const n = __inca_native__.createNode('div');
+                let caught = 0;
+                try {
+                    __inca_native__.appendChild(n, root);
+                } catch (e) {
+                    if (e instanceof TypeError) caught += 1;
+                }
+                try {
+                    __inca_native__.insertBefore(n, root, null);
+                } catch (e) {
+                    if (e instanceof TypeError) caught += 1;
+                }
+                __inca_native__.destroyNode(n);
+                caught;
+                ",
+            )
+            .unwrap();
+
+        assert_eq!(caught, 2, "the root belongs to the host, not to the app");
+        let host = host.borrow();
+        let root = host.tree.get(host.root).unwrap();
+        assert_eq!(root.parent(), None);
     }
 
     #[test]

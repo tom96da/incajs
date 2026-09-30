@@ -58,12 +58,6 @@ A fixed entry is deleted and its ID is never reused.
   [ROADMAP.md](./ROADMAP.md#known-gaps-not-yet-scheduled); the destination is
   undecided.
 
-- **B-067 The root node can be moved under another node and destroyed**
-  `Units: bridge · Size: S · Impact: Low`
-
-  The root node can be moved under another node and then destroyed through it.
-  After that the app renders an empty div and every append to the root throws.
-
 - **B-070 `<text>` drops child text nodes**
   `Units: gpui · Size: S · Impact: Low`
 
@@ -772,3 +766,13 @@ A fixed entry is deleted and its ID is never reused.
   A possible fix: every start failure ends `inca dev` in both modes, which
   removes the retry path. Keep one check, and decide whether it should verify
   the execute permission.
+
+- **B-076 Bridge tree errors differ from the DOM's**
+  `Units: bridge · Size: S · Impact: Low`
+
+  A cycle throws a `HierarchyRequestError` `DOMException` in the DOM, but a
+  `TypeError` from `appendChild`/`insertBefore`, so code checking
+  `error.name` sees a different value. Separately, the DOM allows moving a
+  parentless root under a node that is not its descendant. `appendChild`
+  and `insertBefore` refuse the root as the child, and `destroyNode`
+  refuses to destroy it, because the root belongs to the host.
