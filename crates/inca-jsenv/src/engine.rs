@@ -7,10 +7,12 @@
 //! `Engine` is fully independent: creating a global on one has no effect on
 //! any other `Engine`, since they don't share a runtime or a heap.
 
+use std::cell::RefCell;
 use std::fmt;
+use std::ops::ControlFlow;
 use std::path::PathBuf;
 
-use rquickjs::{Coerced, Context, Ctx, FromJs, Function, Module, Runtime, Value};
+use rquickjs::{Coerced, Context, Ctx, FromJs, Function, Module, Persistent, Runtime, Value};
 
 use crate::loader::{DiskLoader, DiskResolver};
 
@@ -130,6 +132,10 @@ pub struct Engine {
     // (the heap, GC) to this handle rather than to the context.
     runtime: Runtime,
     context: Context,
+    /// Jobs that threw while [`eval_module`](Self::eval_module) drove a
+    /// module's top-level `await`. The next [`run_jobs`](Self::run_jobs)
+    /// returns them first.
+    startup_failures: RefCell<Vec<EngineError>>,
 }
 
 impl Engine {
@@ -154,7 +160,11 @@ impl Engine {
 
     fn from_runtime(runtime: Runtime) -> EngineResult<Self> {
         let context = Context::full(&runtime).map_err(|err| EngineError::plain(&err))?;
-        let engine = Self { runtime, context };
+        let engine = Self {
+            runtime,
+            context,
+            startup_failures: RefCell::new(Vec::new()),
+        };
         engine
             .context
             .with(|ctx| ctx.eval::<(), _>(TRACKER_JS))
@@ -174,22 +184,15 @@ impl Engine {
     /// Runs every pending promise job and returns each failure the app left
     /// unreported: a job that threw, and a promise still rejected with no
     /// handler once the queue is empty. A rejection someone handles during
-    /// the same drain is not a failure.
+    /// the same drain is not a failure. A job that threw while
+    /// [`eval_module`](Self::eval_module) awaited comes first.
     ///
     /// Call it outside [`with`](Self::with), and handle the result outside
     /// it too: the handling code may re-enter the engine.
     #[must_use]
     pub fn run_jobs(&self) -> Vec<EngineError> {
-        let mut failures = Vec::new();
-        loop {
-            match self.runtime.execute_pending_job() {
-                Ok(true) => {}
-                Ok(false) => break,
-                Err(job) => job.0.with(|ctx| {
-                    failures.push(EngineError::capture(&ctx, &rquickjs::Error::Exception));
-                }),
-            }
-        }
+        let mut failures = self.startup_failures.take();
+        while self.run_job(&mut failures) {}
         let reasons = self.context.with(|ctx| {
             ctx.globals()
                 .get::<_, Function>(TAKE)
@@ -199,6 +202,23 @@ impl Engine {
         });
         failures.extend::<Vec<EngineError>>(reasons);
         failures
+    }
+
+    /// Runs one pending promise job. A job that threw is appended to
+    /// `failures`. Returns whether a job was pending.
+    ///
+    /// Call it outside [`with`](Self::with): it takes the context itself, and
+    /// nesting that panics.
+    fn run_job(&self, failures: &mut Vec<EngineError>) -> bool {
+        match self.runtime.execute_pending_job() {
+            Ok(ran) => ran,
+            Err(job) => {
+                job.0.with(|ctx| {
+                    failures.push(EngineError::capture(&ctx, &rquickjs::Error::Exception));
+                });
+                true
+            }
+        }
     }
 
     /// Evaluates `source` as a JS script and converts its completion value
@@ -249,13 +269,42 @@ impl Engine {
     /// thrown during evaluation, or an unsettled promise if the module
     /// awaits something with no pending job left to drive it (not expected
     /// for a self-contained module with no top-level `await`).
+    ///
+    /// A job that throws while the module awaits does not fail the module.
+    /// The next [`run_jobs`](Self::run_jobs) returns it.
     pub fn eval_module(&self, name: &str, source: &str) -> EngineResult<()> {
-        self.context.with(|ctx| {
+        let mut pending = self.context.with(|ctx| {
             Module::declare(ctx.clone(), name, source)
                 .and_then(rquickjs::Module::eval)
-                .and_then(|(_module, promise)| promise.finish())
+                .map(|(_module, promise)| Persistent::save(&ctx, promise))
                 .map_err(|err| EngineError::capture(&ctx, &err))
-        })
+        })?;
+        loop {
+            let step = self.context.with(|ctx| {
+                let promise = pending
+                    .restore(&ctx)
+                    .map_err(|err| EngineError::plain(&err))?;
+                match promise.result::<()>() {
+                    Some(result) => Ok(ControlFlow::Break(
+                        result.map_err(|err| EngineError::capture(&ctx, &err)),
+                    )),
+                    None => Ok(ControlFlow::Continue(Persistent::save(&ctx, promise))),
+                }
+            });
+            match step? {
+                ControlFlow::Break(result) => return result,
+                ControlFlow::Continue(promise) => pending = promise,
+            }
+            let mut failures = Vec::new();
+            let ran = self.run_job(&mut failures);
+            self.startup_failures.borrow_mut().extend(failures);
+            if !ran {
+                return self.context.with(|ctx| {
+                    drop(pending.restore(&ctx));
+                    Err(EngineError::plain(&rquickjs::Error::WouldBlock))
+                });
+            }
+        }
     }
 }
 
@@ -616,6 +665,61 @@ mod tests {
         assert_eq!(failures.len(), 1);
         assert_eq!(failures[0].message(), "Error: job");
         assert!(failures[0].stack().is_some());
+    }
+
+    #[test]
+    fn a_job_that_throws_during_top_level_await_is_returned_by_run_jobs() {
+        let engine = Engine::new().unwrap();
+        engine
+            .eval_module(
+                "startup.mjs",
+                "queueMicrotask(() => { throw new Error('startup job'); }); await null;",
+            )
+            .unwrap();
+
+        let failures = engine.run_jobs();
+        assert_eq!(failures.len(), 1);
+        assert!(failures[0].message().contains("startup job"));
+        assert!(engine.run_jobs().is_empty());
+    }
+
+    #[test]
+    fn a_top_level_await_that_resolves_completes_the_module() {
+        let engine = Engine::new().unwrap();
+        engine
+            .eval_module(
+                "awaits.mjs",
+                "await Promise.resolve(); globalThis.seen = 42;",
+            )
+            .unwrap();
+
+        let seen: i32 = engine.eval("globalThis.seen").unwrap();
+        assert_eq!(seen, 42);
+        assert!(engine.run_jobs().is_empty());
+    }
+
+    #[test]
+    fn a_top_level_await_that_rejects_returns_its_own_error() {
+        let engine = Engine::new().unwrap();
+        let err = engine
+            .eval_module(
+                "rejects.mjs",
+                "await Promise.resolve(); throw new Error('late boom');",
+            )
+            .unwrap_err();
+
+        assert_eq!(err.message(), "Error: late boom");
+    }
+
+    #[test]
+    fn a_top_level_await_that_never_settles_would_block() {
+        let engine = Engine::new().unwrap();
+        let err = engine
+            .eval_module("stuck.mjs", "await new Promise(() => {});")
+            .unwrap_err();
+
+        assert!(!err.message().is_empty());
+        assert_eq!(err.stack(), None);
     }
 
     #[test]
