@@ -146,8 +146,9 @@ that would tell them apart. `movementX`/`movementY` are a delta from
 whichever mouse/wheel event `EventDispatcher` last saw, `0` for the first
 one — including a `"mouseenter"`/`"mouseleave"` sharing that same tracker,
 so hovering a node with no pointer movement since an earlier click can
-still report a nonzero delta, against that click's position. Bubbled
-dispatches of one raw event share one movement value.
+still report a nonzero delta, against that click's position. Every
+dispatch from one raw event, including a pointer move's `"mousemove"` and
+`"mouseenter"`/`"mouseleave"`, shares one movement value.
 
 `"wheel"` carries the same fields as `"mousedown"`/`"mouseup"`/
 `"mousemove"` plus `deltaX`, `deltaY`, `deltaZ`, `deltaMode` — DOM's

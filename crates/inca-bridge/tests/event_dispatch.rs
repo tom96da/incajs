@@ -790,6 +790,67 @@ fn hover_and_mousemove_wired_together_fire_independently(cx: &mut TestAppContext
     );
 }
 
+/// One pointer move produces both `mousemove` and `mouseenter`, and both
+/// report that move's delta.
+#[gpui::test]
+fn one_move_gives_mousemove_and_mouseenter_the_same_movement(cx: &mut TestAppContext) {
+    let host = Rc::new(RefCell::new(Host::default()));
+    let node = {
+        let mut host = host.borrow_mut();
+        let node = host.tree.create_node("div");
+        host.tree.set_style(node, "width", 100.0).unwrap();
+        host.tree.set_style(node, "height", 100.0).unwrap();
+        node
+    };
+    host.borrow_mut().listeners.register(node, "mouseenter", 0);
+    host.borrow_mut().listeners.register(node, "mousemove", 0);
+    let engine = Rc::new(Engine::new().unwrap());
+    engine
+        .eval::<()>(
+            "globalThis.seen = []; \
+             globalThis.__inca_callbacks__ = { \
+                0: (event) => { \
+                    globalThis.seen.push([event.type, event.movementX, event.movementY]); \
+                } \
+             };",
+        )
+        .unwrap();
+    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
+
+    let window = cx.add_window(|_, _| ClickableRoot {
+        host: Rc::clone(&host),
+        node,
+        dispatcher,
+    });
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    let mut cx = VisualTestContext::from_window(window.into(), cx);
+
+    cx.simulate_mouse_move(
+        point(px(200.0), px(200.0)),
+        None::<MouseButton>,
+        Modifiers::none(),
+    );
+    engine.eval::<()>("globalThis.seen = [];").unwrap();
+
+    cx.simulate_mouse_move(
+        point(px(10.0), px(20.0)),
+        None::<MouseButton>,
+        Modifiers::none(),
+    );
+
+    let seen: serde_json::Value = serde_json::from_str(
+        &engine
+            .eval::<String>("JSON.stringify(globalThis.seen.slice().sort())")
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        seen,
+        serde_json::json!([["mouseenter", -190, -180], ["mousemove", -190, -180]])
+    );
+}
+
 /// DOM's `buttons` reports every button held, not just the one an event is
 /// about: pressing a second button while the first is still down must union
 /// its bit in, and releasing one button must clear only that bit.
@@ -925,6 +986,69 @@ fn bubbled_mousemove_gives_every_listener_the_same_movement(cx: &mut TestAppCont
     assert_eq!((seen[0].1, seen[0].2), (seen[1].1, seen[1].2));
     assert_eq!((seen[2].1, seen[2].2), (20.0, -5.0));
     assert_eq!((seen[3].1, seen[3].2), (20.0, -5.0));
+}
+
+/// A pointer move from one sibling into the next gives the first sibling's
+/// `mouseleave` and the second's `mousemove` the same movement.
+#[gpui::test]
+fn leave_and_mousemove_on_different_nodes_share_one_movement(cx: &mut TestAppContext) {
+    let (host, root) = build_tree_listening_for("click");
+    {
+        let mut host = host.borrow_mut();
+        for (event, id) in [("mouseleave", 0), ("mousemove", 1)] {
+            let child = host.tree.create_node("div");
+            host.tree.set_style(child, "width", 100.0).unwrap();
+            host.tree.set_style(child, "height", 100.0).unwrap();
+            host.tree.append_child(root, child).unwrap();
+            host.listeners.register(child, event, id);
+            if id == 0 {
+                host.listeners.register(child, "mousemove", id);
+            }
+        }
+    }
+    let engine = Rc::new(Engine::new().unwrap());
+    engine
+        .eval::<()>(
+            "globalThis.seen = []; \
+             const record = (e) => { \
+                 globalThis.seen.push([e.type, e.movementX, e.movementY]); }; \
+             globalThis.__inca_callbacks__ = { 0: record, 1: record };",
+        )
+        .unwrap();
+    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
+    let window = cx.add_window(|_, _| ClickableRoot {
+        host: Rc::clone(&host),
+        node: root,
+        dispatcher,
+    });
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    let mut cx = VisualTestContext::from_window(window.into(), cx);
+
+    cx.simulate_mouse_move(
+        point(px(10.0), px(10.0)),
+        None::<MouseButton>,
+        Modifiers::none(),
+    );
+    engine.eval::<()>("globalThis.seen = [];").unwrap();
+
+    cx.simulate_mouse_move(
+        point(px(30.0), px(150.0)),
+        None::<MouseButton>,
+        Modifiers::none(),
+    );
+    cx.run_until_parked();
+
+    let seen: serde_json::Value = serde_json::from_str(
+        &engine
+            .eval::<String>("JSON.stringify(globalThis.seen.slice().sort())")
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        seen,
+        serde_json::json!([["mouseleave", 20, 140], ["mousemove", 20, 140]])
+    );
 }
 
 /// A second genuine `mousemove` at the same position reports no movement,

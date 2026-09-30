@@ -58,13 +58,6 @@ A fixed entry is deleted and its ID is never reused.
   [ROADMAP.md](./ROADMAP.md#known-gaps-not-yet-scheduled); the destination is
   undecided.
 
-- **B-066 `mouseenter`/`mouseleave` get zero movement**
-  `Units: bridge · Size: S · Impact: Medium`
-
-  One pointer move yields both `mousemove` and `mouseenter`/`mouseleave`. The
-  movement memo is keyed by event name, so the second name gets zero
-  `movementX`/`movementY`.
-
 - **B-067 The root node can be moved under another node and destroyed**
   `Units: bridge · Size: S · Impact: Low`
 

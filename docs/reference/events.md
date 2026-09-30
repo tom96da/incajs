@@ -49,7 +49,8 @@ fields:
   scrolls the page itself, which is the only thing that would tell them
   apart
 - `movementX` / `movementY` — delta from whichever mouse/wheel event
-  fired last; `0` for the first one
+  fired last; `0` for the first one. A `mousemove` and the
+  `mouseenter`/`mouseleave` from the same pointer move report the same delta
 - `button` — 0 for a move, which isn't about any one button
 - [`buttons`](https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/buttons) —
   every button currently held, as a bitmask
