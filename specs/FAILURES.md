@@ -42,6 +42,7 @@ way to tell why.
 | `inca-host`, otherwise | its stderr |
 | an app's own event listener, promise job or unhandled rejection | an `appError` notification |
 | `inca-host` exiting before `ready`: the app threw while loading, a protocol mismatch, or a host that can't start | an `IncaError` `ERR_INCA_HOST_EXITED_EARLY`, after `inca dev` prints the cause |
+| `inca-host` exiting after `ready` with a non-zero code or a signal other than SIGINT/SIGTERM | an `IncaError` `ERR_INCA_HOST_CRASHED`, after `inca dev` prints `host exited` |
 
 A new `ERR_INCA_*` code is documented in `docs/reference/errors.md` in the
 change that raises it. The code is what someone searches for.

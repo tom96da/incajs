@@ -394,6 +394,54 @@ describe("dev", () => {
   });
 
   it.each([
+    ["a non-zero code", "101", "code 101"],
+    ["a signal", "SIGKILL", "signal SIGKILL"],
+  ])(
+    "rejects with ERR_INCA_HOST_CRASHED when the host exits by %s once ready",
+    async (_, exit, said) => {
+      vi.stubEnv("MOCK_HOST_EXIT", exit);
+      onTestFinished(() => void vi.unstubAllEnvs());
+      const bundler = makeFakeBundler();
+
+      const running = dev({
+        entry: "unused",
+        bundler,
+        hostBin: exitingMockHost,
+        stdout: makeSink().stream,
+        stderr: makeSink().stream,
+        signal: new AbortController().signal,
+      });
+
+      await bundler.watching;
+      bundler.emitBuild();
+      await expect(running).rejects.toMatchObject({
+        code: "ERR_INCA_HOST_CRASHED",
+        message: expect.stringContaining(said),
+      });
+      expect(bundler.closed).toBe(true);
+    },
+  );
+
+  it("resolves when the host is ended by SIGTERM once ready", async () => {
+    vi.stubEnv("MOCK_HOST_EXIT", "SIGTERM");
+    onTestFinished(() => void vi.unstubAllEnvs());
+    const bundler = makeFakeBundler();
+
+    const running = dev({
+      entry: "unused",
+      bundler,
+      hostBin: exitingMockHost,
+      stdout: makeSink().stream,
+      stderr: makeSink().stream,
+      signal: new AbortController().signal,
+    });
+
+    await bundler.watching;
+    bundler.emitBuild();
+    await expect(running).resolves.toBeUndefined();
+  });
+
+  it.each([
     ["speaks a protocol this package wasn't built for", protocolMismatchMockHost, "protocol 99"],
     ["reports an app that threw while loading", startupFailureMockHost, "[inca] app error: boom"],
   ])("rejects with ERR_INCA_HOST_EXITED_EARLY when the host %s", async (_, hostBin, printed) => {

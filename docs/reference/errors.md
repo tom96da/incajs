@@ -111,6 +111,15 @@ be a host that can't start at all, such as a missing Vulkan driver (see
 says which. Fix the error in your app, or install matching `@incajs/cli`
 and `@incajs/host-*` versions.
 
+## `ERR_INCA_HOST_CRASHED`
+
+The host exited after it reported ready with a non-zero code, or was ended
+by a signal other than SIGINT or SIGTERM. `inca dev` exits with a non-zero
+code. The message gives the exit code or the signal.
+
+The host's own output, printed before the exit, says what went wrong. Report
+it as a bug if your app didn't cause it.
+
 ## `ERR_INCA_UNSUPPORTED_STYLE`
 
 A `.vue` file has a `<style>` block, which isn't supported yet — the

@@ -80,12 +80,6 @@ A fixed entry is deleted and its ID is never reused.
   A `<text>` element renders only its `value` attribute. Child text nodes are
   dropped, so `<text>Hello</text>` shows nothing.
 
-- **B-072 `inca dev` exits 0 when the host crashes**
-  `Units: cli · Size: S · Impact: Low`
-
-  `inca dev` exits 0 when the host crashes after it is ready. A normal window
-  close exits the same way.
-
 - **B-073 The host client's stop timer keeps Node alive**
   `Units: cli · Size: S · Impact: Low`
 

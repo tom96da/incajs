@@ -164,6 +164,8 @@ async function pruneStaleFiles(outDir: string, keep: readonly string[]): Promise
  *
  * @throws if another `inca dev` is already running for this app, or if the
  * host binary can't be resolved or isn't a file. Both stop it before any build.
+ * Also throws if the host exits before it is ready, or exits non-zero or by
+ * a signal other than SIGINT/SIGTERM afterwards.
  */
 export async function dev(options: DevOptions): Promise<void> {
   const cwd = options.cwd ?? process.cwd();
@@ -187,6 +189,7 @@ export async function dev(options: DevOptions): Promise<void> {
     let ready = false;
     let pendingReload = false;
     let exitedEarly = false;
+    let hostExit: { code: number | null; signal: NodeJS.Signals | null } | undefined;
     let queue = Promise.resolve();
 
     let stop = (): void => {};
@@ -222,8 +225,9 @@ export async function dev(options: DevOptions): Promise<void> {
           }
         },
         onAppError: (error) => printFault(stderr, "app error", error, STAMPED),
-        onExit: () => {
+        onExit: (code, signal) => {
           exitedEarly = !ready;
+          hostExit = { code, signal };
           // The window is gone, so there is nothing left to rebuild for.
           log(stdout, "host exited — stopping", STAMPED);
           stop();
@@ -323,6 +327,19 @@ export async function dev(options: DevOptions): Promise<void> {
     await closable.close();
     if (exitedEarly) {
       throw new IncaError("ERR_INCA_HOST_EXITED_EARLY", "the host exited before it was ready");
+    }
+    // Ctrl-C also signals the host's process group, so SIGINT/SIGTERM exits are a quit.
+    if (
+      hostExit &&
+      hostExit.code !== 0 &&
+      hostExit.signal !== "SIGINT" &&
+      hostExit.signal !== "SIGTERM"
+    ) {
+      const { code, signal } = hostExit;
+      throw new IncaError(
+        "ERR_INCA_HOST_CRASHED",
+        `the host exited with ${signal ? `signal ${signal}` : `code ${code}`}`,
+      );
     }
   } finally {
     await releaseLock();

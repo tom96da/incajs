@@ -16,7 +16,8 @@ see [Error Codes](./errors) for what each one means.
 
 Watches your app and opens a live-reloading development window, reloading
 on every change. It stops before building if no host binary can be found.
-See [Error Codes](./errors).
+It exits with code 0 when you close the window and non-zero if the host
+crashes. See [Error Codes](./errors).
 
 ### Usage
 
