@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { readFile, readdir, stat } from "node:fs/promises";
+import { chmod, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Writable } from "node:stream";
 
@@ -85,6 +85,23 @@ function makeFakeBundler(): FakeBundler {
     },
   };
   return fake;
+}
+
+/** Reports this process as `name` for one test. */
+function pretendPlatform(name: NodeJS.Platform): void {
+  const real = process.platform;
+  Object.defineProperty(process, "platform", { value: name, configurable: true });
+  onTestFinished(() => {
+    Object.defineProperty(process, "platform", { value: real, configurable: true });
+  });
+}
+
+/** A host binary in `dir` that exists but can't be spawned. */
+async function makeUnspawnableHost(dir: string): Promise<string> {
+  const hostBin = path.join(dir, "inca-host");
+  await writeFile(hostBin, "#!/bin/sh\n");
+  await chmod(hostBin, 0o644);
+  return hostBin;
 }
 
 function makeSink(): { stream: NodeJS.WritableStream; text: () => string } {
@@ -182,7 +199,46 @@ describe("dev", () => {
     expect(stdout.text()).toMatch(/\[inca\] reload src\/App\.vue \(\d+ms\)/);
   });
 
+  it("rejects before watching and releases the lock when the host binary is missing", async () => {
+    const bundler = makeFakeBundler();
+    const watch = vi.spyOn(bundler, "watch");
+    const options = {
+      entry: "unused",
+      bundler,
+      stdout: makeSink().stream,
+      stderr: makeSink().stream,
+      signal: new AbortController().signal,
+    };
+
+    const missing = { ...options, hostBin: "/nonexistent/inca-host" };
+    await expect(dev(missing)).rejects.toMatchObject({ code: "ERR_INCA_HOST_BIN_NOT_FOUND" });
+    // The lock is free again, so a second attempt reaches the same error.
+    await expect(dev(missing)).rejects.toMatchObject({ code: "ERR_INCA_HOST_BIN_NOT_FOUND" });
+    expect(watch).not.toHaveBeenCalled();
+  });
+
+  it("rejects with ERR_INCA_HOST_BIN_UNRESOLVED when no host binary resolves", async () => {
+    // No platform package exists for win32, so nothing resolves.
+    pretendPlatform("win32");
+    vi.stubEnv("INCA_HOST_BIN", "");
+    onTestFinished(() => void vi.unstubAllEnvs());
+    const bundler = makeFakeBundler();
+    const watch = vi.spyOn(bundler, "watch");
+
+    await expect(
+      dev({
+        entry: "unused",
+        bundler,
+        stdout: makeSink().stream,
+        stderr: makeSink().stream,
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toMatchObject({ code: "ERR_INCA_HOST_BIN_UNRESOLVED" });
+    expect(watch).not.toHaveBeenCalled();
+  });
+
   it("prints a build failure without ever starting the host", async () => {
+    const hostBin = await makeUnspawnableHost(await scratch.makeApp({}));
     const bundler = makeFakeBundler();
     const stderr = makeSink();
     const controller = new AbortController();
@@ -190,9 +246,8 @@ describe("dev", () => {
     const running = dev({
       entry: "unused",
       bundler,
-      // Deliberately unspawnable: a build failure must never reach the
-      // point of starting a host at all.
-      hostBin: "/nonexistent/inca-host",
+      // A start attempt would print "failed to start".
+      hostBin,
       stdout: makeSink().stream,
       stderr: stderr.stream,
       signal: controller.signal,
@@ -207,6 +262,7 @@ describe("dev", () => {
 
     expect(stderr.text()).toContain("[inca] build failed: syntax error");
     expect(stderr.text()).toContain("at somewhere");
+    expect(stderr.text()).not.toContain("failed to start");
   });
 
   it("prints a failed reload (-32000) without throwing", async () => {
@@ -538,18 +594,7 @@ describe("dev with --experimental-hmr", () => {
   });
 
   it("stops instead of hanging when the host fails to start", async () => {
-    // Reports this process as macOS for this one test, so hostBin
-    // resolution goes through the platform package lookup and fails: this
-    // devcontainer has no @incajs/host-darwin-x64 installed, so start()
-    // rejects before ever spawning anything — the same failure mode the
-    // non-HMR "keeps running when no host binary resolves" test above
-    // relies on.
-    const real = process.platform;
-    Object.defineProperty(process, "platform", { value: "darwin", configurable: true });
-    onTestFinished(() => {
-      Object.defineProperty(process, "platform", { value: real, configurable: true });
-    });
-
+    const hostBin = await makeUnspawnableHost(await scratch.makeApp({}));
     const bundler = makeFakeHmrBundler("/unused/entry.js");
     const stdout = makeSink();
     const stderr = makeSink();
@@ -558,6 +603,7 @@ describe("dev with --experimental-hmr", () => {
     const running = dev({
       entry: "unused",
       bundler,
+      hostBin,
       experimentalHmr: true,
       stdout: stdout.stream,
       stderr: stderr.stream,
@@ -567,8 +613,8 @@ describe("dev with --experimental-hmr", () => {
     // HMR mode has no rebuild loop to retry a failed start on — dev()
     // itself must resolve rather than wait forever for a signal that
     // will never come.
-    await vi.waitFor(() => expect(stderr.text()).toContain("failed to start inca-host"));
     await running;
+    expect(stderr.text()).toContain("failed to start inca-host");
 
     expect(stdout.text()).not.toContain("[inca] ready");
   });
@@ -600,11 +646,7 @@ describe("dev on macOS", () => {
 
   /** Reports this process as macOS for one test, so the bundling path runs off one. */
   function pretendMacos(): void {
-    const real = process.platform;
-    Object.defineProperty(process, "platform", { value: "darwin", configurable: true });
-    onTestFinished(() => {
-      Object.defineProperty(process, "platform", { value: real, configurable: true });
-    });
+    pretendPlatform("darwin");
   }
 
   it("assembles a bundle named after the app before starting the host", async () => {
@@ -639,31 +681,24 @@ describe("dev on macOS", () => {
     await running;
   });
 
-  it("keeps running when no host binary resolves", async () => {
+  it("rejects before bundling when no host binary is found", async () => {
     pretendMacos();
     const cwd = await scratch.makeApp({ name: "hostless" });
-    const bundler = makeFakeBundler();
     const stdout = makeSink();
-    const stderr = makeSink();
-    const controller = new AbortController();
 
-    const running = dev({
-      cwd,
-      entry: "unused",
-      bundler,
-      stdout: stdout.stream,
-      stderr: stderr.stream,
-      signal: controller.signal,
-    });
+    await expect(
+      dev({
+        cwd,
+        entry: "unused",
+        bundler: makeFakeBundler(),
+        hostBin: "/nonexistent/inca-host",
+        stdout: stdout.stream,
+        stderr: makeSink().stream,
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toMatchObject({ code: "ERR_INCA_HOST_BIN_NOT_FOUND" });
 
-    await bundler.watching;
-    bundler.emitBuild();
-    await vi.waitFor(() => expect(stderr.text()).toContain("failed to start inca-host"));
-
-    controller.abort();
-    await running;
-
-    expect(stdout.text()).toContain("running unbundled");
+    expect(stdout.text()).not.toContain("running unbundled");
   });
 
   it("runs unnamed and says so when the app names itself nowhere", async () => {

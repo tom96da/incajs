@@ -75,6 +75,8 @@ write. Set it to a directory the build owns, such as `"dist"`.
 ## `ERR_INCA_HOST_BIN_NOT_FOUND`
 
 `inca dev` or `inca package` found no file at the host binary's path.
+`inca dev` stops before it builds anything.
+
 Check the path `INCA_HOST_BIN` points at, and that the binary is
 executable.
 
@@ -82,6 +84,7 @@ executable.
 
 No host binary could be found at all: the `@incajs/host-*` package for
 this platform isn't installed, and `INCA_HOST_BIN` isn't set.
+`inca dev` stops here too.
 
 Install the app's dependencies, or set `INCA_HOST_BIN` to a binary you
 built yourself.

@@ -15,7 +15,8 @@ see [Error Codes](./errors) for what each one means.
 ## `inca dev`
 
 Watches your app and opens a live-reloading development window, reloading
-on every change.
+on every change. It stops before building if no host binary can be found.
+See [Error Codes](./errors).
 
 ### Usage
 

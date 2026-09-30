@@ -58,7 +58,7 @@ change that raises it. The code is what someone searches for.
 ## Known gaps
 
 `inca dev` exits when it fails before its watcher starts — an unreadable
-`inca.config.ts`, or no entry to build. A failure after that point is
+`inca.config.ts`, no entry to build, or no host binary. A failure after that point is
 reported and watched through, so the same edit-and-retry loop doesn't
 apply to both. Phase 3.4's `watchConfig` unit is where that closes.
 

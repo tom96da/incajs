@@ -16,7 +16,7 @@ import {
   runtimeConfigOf,
 } from "./config/loader.mts";
 import { defaultBundler } from "./defaultBundler.mts";
-import { HostClient, resolveHostBin } from "./dev-client/index.mts";
+import { HostClient, assertHostBin, resolveHostBin } from "./dev-client/index.mts";
 import { acquireDevLock } from "./dev-lock.mts";
 import { resolveEntry } from "./entry.mts";
 import { IncaError } from "./error.mts";
@@ -103,7 +103,7 @@ async function resolveMetadata(
 async function bundleExecutable(
   cwd: string,
   metadata: ResolvedAppConfig | undefined,
-  hostBin: string | undefined,
+  hostBin: string,
   stdout: NodeJS.WritableStream,
 ): Promise<string | undefined> {
   if (process.platform !== "darwin" || !metadata) return undefined;
@@ -112,7 +112,7 @@ async function bundleExecutable(
     const app = await writeMacosApp({
       appPath: path.join(cwd, "node_modules/.inca", `${metadata.productName}.app`),
       metadata,
-      hostBin: hostBin ?? resolveHostBin(),
+      hostBin,
       link: true,
     });
     return app.executablePath;
@@ -162,13 +162,16 @@ async function pruneStaleFiles(outDir: string, keep: readonly string[]): Promise
  * reloads it on every rebuild — until `options.signal` aborts or the host
  * exits on its own.
  *
- * @throws if another `inca dev` is already running for this app.
+ * @throws if another `inca dev` is already running for this app, or if the
+ * host binary can't be resolved or isn't a file. Both stop it before any build.
  */
 export async function dev(options: DevOptions): Promise<void> {
   const cwd = options.cwd ?? process.cwd();
   const config = await resolveBuildConfig(cwd);
   const releaseLock = await acquireDevLock(cwd);
   try {
+    const bin = options.hostBin ?? resolveHostBin();
+    assertHostBin(bin);
     const outDir = path.resolve(cwd, config.outDir);
     const bundler: Bundler = options.bundler ?? defaultBundler;
     const stdout = options.stdout ?? process.stdout;
@@ -178,8 +181,7 @@ export async function dev(options: DevOptions): Promise<void> {
     assertOutDir(cwd, outDir, entry);
     const metadata = await resolveMetadata(cwd, stdout);
     const runtimeConfig = metadata ? runtimeConfigOf(metadata) : await resolveRuntimeConfig(cwd);
-    const hostBin =
-      (await bundleExecutable(cwd, metadata, options.hostBin, stdout)) ?? options.hostBin;
+    const hostBin = (await bundleExecutable(cwd, metadata, bin, stdout)) ?? bin;
 
     let client: HostClient | undefined;
     let ready = false;

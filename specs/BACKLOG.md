@@ -784,3 +784,21 @@ A fixed entry is deleted and its ID is never reused.
   With `--experimental-hmr` the runtime installs a Latin-1 `TextDecoder` and a
   minimal `URL` on the app's `globalThis`. A production build has neither, so
   dev and production differ.
+
+- **B-075 A failed host start in inca dev is handled differently per mode, and the checks overlap**
+  `Units: cli · Size: S–M · Impact: Low`
+
+  `dev()` stops right away when no host binary resolves or the path is not a
+  file. `startHost` handles every other start failure. Without HMR it prints
+  "failed to start inca-host", keeps running and retries on the next rebuild.
+  With HMR it stops.
+
+  A file that exists but is not executable passes `assertHostBin`, although
+  the error message and `docs/reference/errors.md` say the binary must be
+  executable. That case takes the mode-dependent path above.
+
+  `dev()` and `HostClient.start` each call `assertHostBin` on the same path.
+
+  A possible fix: every start failure ends `inca dev` in both modes, which
+  removes the retry path. Keep one check, and decide whether it should verify
+  the execute permission.
