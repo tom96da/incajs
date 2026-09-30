@@ -70,9 +70,11 @@ For `padding` and `margin`, a side key beats its axis key (`_x` for left and
 right, `_y` for top and bottom), and an axis key beats the shorthand. A value
 of the wrong shape counts as unset and the next key applies.
 
-A scrolling container draws no scrollbar. `stopPropagation()` and
-`preventDefault()` on its [`wheel`](./events.md#wheel) event act on the
-scroll as described there.
+Scrollbars are not supported. `stopPropagation()` and `preventDefault()` on
+a scrolling container's [`wheel`](./events.md#wheel) event act on the scroll
+as described there.
+
+`position` and `z_index` are not supported, and their keys are ignored.
 
 Keys are snake_case, not camelCase — `flexDirection`, `justifyContent`,
 etc. are unrecognized keys and are ignored the same as any other typo.

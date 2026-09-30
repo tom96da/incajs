@@ -11,16 +11,17 @@ Complements [GIT.md](./GIT.md)'s repo-wide rules the same way
 [FFI.md](./FFI.md) complements [ARCHITECTURE.md](./ARCHITECTURE.md).
 Update this file as real conventions land, same as the other docs here.
 
-## Rust (`crates/inca-gpui`)
+## Rust (`crates/*`)
 
 ### Test placement
 
 - **Unit tests**: `#[cfg(test)] mod tests` inline in the module they test
-  (e.g. `src/tree.rs`, `src/js/bindings.rs`, `src/js/engine.rs`).
-- **Integration tests**: `tests/*.rs`, one file per cross-module concern
-  (`tests/layout_parity.rs`, `tests/event_dispatch.rs`) — Cargo compiles
-  each as its own crate against `inca-gpui`'s public API only, the same
-  boundary a real external caller would see.
+  (e.g. `crates/inca-gpui/src/tree.rs`, `crates/inca-bridge/src/bindings.rs`,
+  `crates/inca-jsenv/src/engine.rs`).
+- **Integration tests**: `tests/*.rs` in each crate, one file per
+  cross-module concern (e.g. `crates/inca-gpui/tests/layout_parity.rs`) —
+  Cargo compiles each as its own crate against that crate's public API
+  only, the same boundary a real external caller would see.
 - **Manual/GUI checks**: tracked in
   [MANUAL_GUI_CHECK.md](./MANUAL_GUI_CHECK.md) instead of automated — see
   that doc for why the devcontainer can't do this alone and how to  actually
@@ -179,10 +180,11 @@ Watch for these when scaffolding a new package too:
 - Single package, for iterating on one — may be incomplete on its own:
   `pnpm --filter <pkg> test` / `typecheck` / `build`
 - Coverage: `pnpm test:coverage`, same run with `--coverage` added
-- Rust: `cargo test -p inca-gpui` (see [AGENTS.md](../AGENTS.md#status)) —
-  plus `cargo clippy`/`cargo fmt --check` from the Required checks list
-  above, which aren't bundled into `cargo test` itself the way the root
-  `pretest` bundles them on the TypeScript side.
+- Rust: `cargo test --workspace --exclude inca-tests` (see
+  [AGENTS.md](../AGENTS.md#status)) — plus `cargo clippy`/`cargo fmt
+  --check` from the Required checks list above, which aren't bundled into
+  `cargo test` itself the way the root `pretest` bundles them on the
+  TypeScript side.
 - The Rust+Vite e2e test: `cargo build -p inca-host` and `pnpm -r build`
   first, then `pnpm --filter @incajs/e2e-tests test` — outside `pnpm
   test`'s own run by design, so run it explicitly.

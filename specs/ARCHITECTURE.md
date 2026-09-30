@@ -7,9 +7,10 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 Target architecture for Incarnative.js. This describes the design agents should
 build toward. See [AGENTS.md](../AGENTS.md#status) for which layers already
-match this design (the Rust host, the `incajs` core JS package, and its Vue
-custom renderer) and which are still forward-looking (the Vite/HMR bridge and
-everything after). Update it as each piece actually lands; don't let it drift
+match this design (the Rust host, the `incajs` core JS package, its Vue custom
+renderer, the Vite adapter, the dev client, the `inca` commands and opt-in
+HMR) and which are still forward-looking (the React renderer and the phases
+after it). Update it as each piece actually lands; don't let it drift
 from reality.
 
 The phased build-out of this design is tracked in [ROADMAP.md](./ROADMAP.md).

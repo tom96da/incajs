@@ -84,6 +84,8 @@ listeners from firing, and the container still scrolls. `preventDefault()`
 cancels the scroll. Nested containers scroll the innermost first, and the
 wheel moves to the next container out once the inner one is at its limit.
 
+The `scroll` event is not supported.
+
 ## Keyboard
 
 ### `keydown` / `keyup`

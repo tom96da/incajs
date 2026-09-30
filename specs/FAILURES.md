@@ -40,6 +40,7 @@ way to tell why.
 | `@incajs/cli` | an `IncaError` with an `ERR_INCA_*` code, printed by `printFault` |
 | `inca-host`, answering a protocol message | a JSON-RPC error — see [PROTOCOL.md](./PROTOCOL.md#failure-handling) |
 | `inca-host`, otherwise | its stderr |
+| a panic in `inca-host` under `--dev` | a `-32603` error with a null `id`, printed by `inca dev` as `[host error -32603]`; if the host then exits non-zero, `inca dev` exits with the host-crash error |
 | an app's own event listener, promise job or unhandled rejection | an `appError` notification |
 | `inca-host` exiting before `ready`: the app threw while loading, a protocol mismatch, or a host that can't start | an `IncaError` `ERR_INCA_HOST_EXITED_EARLY`, after `inca dev` prints the cause |
 | `inca-host` exiting after `ready` with a non-zero code or a signal other than SIGINT/SIGTERM | an `IncaError` `ERR_INCA_HOST_CRASHED`, after `inca dev` prints `host exited` |

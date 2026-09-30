@@ -124,7 +124,7 @@ A fixed entry is deleted and its ID is never reused.
   Direction: one `compat` submodule inside it, not a separate crate — one
   place to hold `held_buttons` tracking, a "no real pointer move seen
   yet" flag suppressing the mount-time `mouseenter`, and later the
-  the capture-phase (B-019) and precise-`target` (B-018) work.
+  capture-phase (B-019) and precise-`target` (B-018) work.
 
 - **B-022 No Tab-key focus navigation**
   `Units: bridge,gpui,core · Size: M–L · Impact: Medium`
@@ -639,8 +639,6 @@ A fixed entry is deleted and its ID is never reused.
   (`crates/inca-host/src/dev.rs`) backs its writer thread with
   `async_channel::unbounded`, so a client that stops reading stdout never
   blocks the host — it grows the host's memory without limit instead.
-  `specs/PROTOCOL.md` used to claim the opposite ("a client that stops
-  reading eventually stops the host"); that wording is now fixed to match.
   Fixing the behavior itself means a bounded channel with real backpressure.
 
 - **B-039 A root that declares one dimension never auto-resizes the window**
@@ -764,13 +762,13 @@ A fixed entry is deleted and its ID is never reused.
   string. An element nested in it contributes only its text and loses its
   style and listeners. The DOM renders inline children.
 
-- **B-078 A scrolling container fires no `scroll` event**
+- **B-078 The `scroll` event is not supported**
   `Units: gpui,bridge,core · Size: M · Impact: Low`
 
   The DOM fires `scroll` when an element's offset changes. A container with
   `overflow` set to `scroll` moves its content but nothing reaches JS.
 
-- **B-079 A scrolling container draws no scrollbar**
+- **B-079 Scrollbars are not supported**
   `Units: gpui · Size: M · Impact: Low`
 
   The DOM shows a scrollbar for `overflow: scroll`. Here `gpui`'s scrollbar

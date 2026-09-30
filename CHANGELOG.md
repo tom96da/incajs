@@ -10,11 +10,20 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- `overflow`/`overflow_x`/`overflow_y` accept `visible`, `hidden`, `scroll` and `auto`; scroll containers scroll with the wheel, `stopPropagation()` on `wheel` does not stop the scroll, `preventDefault()` cancels it, and scrollbars are not supported ([a811daa](https://github.com/tom96da/incajs/commit/a811daa), [cc992f7](https://github.com/tom96da/incajs/commit/cc992f7))
+- box style keys: `padding`, `margin`, `flex_grow`, `flex_shrink`, `opacity` and `min_*`/`max_*` sizes ([09ddef4](https://github.com/tom96da/incajs/commit/09ddef4))
+
 ### Fixed
 
 - a template with many static elements mounts without crashing ([826f187](https://github.com/tom96da/incajs/commit/826f187))
 - `inca dev` and `inca build` refuse an `outDir` that reaches the app's files through a symlink ([5951eff](https://github.com/tom96da/incajs/commit/5951eff))
 - `inca dev` reports a missing host binary as an error and stops before building ([5a4b287](https://github.com/tom96da/incajs/commit/5a4b287), [033cacf](https://github.com/tom96da/incajs/commit/033cacf))
+- `inca dev` exits with an error when the host crashes after it was ready ([0cbbd0b](https://github.com/tom96da/incajs/commit/0cbbd0b))
+- a job that throws while a module awaits at the top level is reported ([68ff9d2](https://github.com/tom96da/incajs/commit/68ff9d2))
+- `mouseenter` and `mouseleave` report the same `movementX`/`movementY` as `mousemove` for one pointer move ([aa31166](https://github.com/tom96da/incajs/commit/aa31166))
+- text inside a `<text>` element's children is rendered ([2c7ea9a](https://github.com/tom96da/incajs/commit/2c7ea9a))
 
 ## [0.0.7] - 2026-09-29
 

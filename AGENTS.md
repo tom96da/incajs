@@ -43,7 +43,9 @@ The CLI prints the bundler's own output beside its own — see
 from.
 
 Phase 4 (input & text editing) is running alongside 3.4: pointer input,
-the focus model, and keyboard input are done.
+the focus model, keyboard input and scrolling (`overflow`, wheel) are
+done. Text editing and IME, interactive visual state and `position`/
+`z-index` are not built.
 
 The current release is `v0.0.7`, on Node.js 22.18 or newer, zed v1.20.2
 for `gpui` and rquickjs 0.14.0. Linux binaries are built in an
@@ -54,7 +56,7 @@ prose, `reference/` for lookup) is deployed by
 [tom96da.github.io/incajs](https://tom96da.github.io/incajs/).
 
 See [PLAN.md](./specs/PLAN.md) for unit-by-unit detail and deferred items
-(e.g. 3.1's dev-only error panel, waiting on Phase 4's `position`/
+(e.g. 3.1's dev-only error panel, waiting on Phase 7's `position`/
 `z-index`), and [BACKLOG.md](./specs/BACKLOG.md) for gaps
 outside the phased plan — several of them are places this framework and
 `gpui` have drifted apart.

@@ -89,11 +89,11 @@ their style from an ancestor container, exactly like GPUI's own
 `.text_color()`/`.text_size()`; there's no separate per-leaf text styling.
 
 Deliberately deferred, not yet implemented: percentage lengths,
-flex-basis, per-side border/corner values, box-shadow, the `clip` overflow
-value, `border_style` (solid vs. dashed — GPUI's own `Style::border_style`,
-distinct from `border_width`/`border_color`; unset always renders solid,
-GPUI's default), and additional align/justify variants beyond the four
-above.
+flex-basis, per-side border/corner values, box-shadow, `position`,
+`z_index`, the `clip` overflow value, `border_style` (solid vs. dashed —
+GPUI's own `Style::border_style`, distinct from
+`border_width`/`border_color`; unset always renders solid, GPUI's
+default), and additional align/justify variants beyond the four above.
 
 ## Binding functions
 

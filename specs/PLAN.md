@@ -503,7 +503,7 @@ can't survive a CLI that doesn't know about the token.
 - [ ] That engine renders into a second root the host stacks over the
       app's — the same primitive an app's own modal needs. `position`
       and `z_index` are absent from the style vocabulary, so it waits on
-      Phase 4
+      Phase 7's `position`/`z-index` item
 - [x] Tests: a listener that throws is reported exactly once — to the dev
       channel or to stderr, never both — and the window keeps rendering.
       Needs the injected writer above — landed as
@@ -682,7 +682,7 @@ dependency change here rather than an edit anywhere else.
 
 ### Docs
 
-- [ ] Update `AGENTS.md`'s Status section once Phase 3.1 lands
+- [x] Update `AGENTS.md`'s Status section once Phase 3.1 lands
 
 ## Phase 3.2: `gpjsui build`
 
@@ -876,10 +876,11 @@ currently provides.
       `params: Option<Value>`).
 - [x] `HostClient` can send notifications — done
       (`packages/cli/src/dev-client/hostClient.mts`'s `notify`).
-- [ ] A rejection tracker on the engine's `Runtime`. Still not installed —
-      `execute_pending_job` still silently swallows a job's thrown error.
-      The HMR bootstrap's own top-level `.catch(console.error)` covers a
-      startup-time rejection today, imperfectly (see
+- [x] A rejection tracker on the engine's `Runtime` — installed in
+      `crates/inca-jsenv/src/engine.rs`. `run_jobs` returns each job that
+      threw and each promise still rejected with no handler, including a job
+      that threw while a module awaited at the top level. The HMR
+      bootstrap's own top-level `.catch(console.error)` remains (see
       `specs/BACKLOG.md`'s "HMR bootstrap's rejection handler" entry).
 - [x] ~~Startup order~~ — **not needed**: the bootstrap's `start(entryId)`
       call is never awaited (fire-and-forget), so `eval_module` returns
@@ -971,6 +972,53 @@ currently provides.
 - [x] Manual: confirmed `inca dev` with no flag still does a full reload,
       unchanged.
 - [x] `AGENTS.md`'s Status section updated.
+
+## Phase 4: Input & text editing
+
+See [ROADMAP.md#phase-4](./ROADMAP.md#phase-4-input--text-editing-in-progress)
+and [FFI.md](./FFI.md#event-dispatch) for the design this implements. It
+runs alongside Phase 3.4.
+
+### Pointer input
+
+- [x] `"mousedown"`/`"mouseup"`/`"mousemove"`/`"wheel"`/`"mouseenter"`/
+      `"mouseleave"` with `MouseEvent`-shaped payloads, including
+      `pageX`/`pageY` and `movementX`/`movementY`
+- [x] `stopPropagation()`/`stopImmediatePropagation()`/`preventDefault()` on
+      every event
+- [x] One pointer move gives `"mousemove"`, `"mouseenter"` and
+      `"mouseleave"` the same movement value
+
+### Focus and keyboard
+
+- [x] `focusNode`/`blurNode` and `"focus"`/`"blur"`, with a template `ref`'s
+      `.focus()`/`.blur()`
+- [x] `"keydown"`/`"keyup"` on the focused node, bubbling to its ancestors
+
+### Scrolling
+
+- [x] `overflow`/`overflow_x`/`overflow_y` (`visible`, `hidden`, `scroll`,
+      `auto`)
+- [x] Wheel scrolling in scroll containers — semantics in
+      [FFI.md](./FFI.md#event-dispatch)
+- [ ] A `scroll` event — see B-078 in `specs/BACKLOG.md`
+- [ ] A scrollbar — see B-079 in `specs/BACKLOG.md`
+
+### Style and content
+
+- [x] Box style keys: `padding`, `margin`, `flex_grow`, `flex_shrink`,
+      `opacity`, `min_*`/`max_*`
+- [x] A `<text>` element renders its `value` followed by its descendants'
+      text
+- [x] The root node cannot be moved or destroyed from JS
+
+### Not started
+
+See Phase 4 items 3 and 5 in
+[ROADMAP.md](./ROADMAP.md#phase-4-input--text-editing-in-progress).
+
+- [ ] Text input with selection, caret and IME composition
+- [ ] Interactive visual state (hover, active and focus styling)
 
 ## Evergreen checklists
 

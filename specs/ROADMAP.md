@@ -166,10 +166,9 @@ Ships **experimental and opt-in**: without the flag, `inca dev` keeps this
 phase's full reload unchanged. See [PLAN.md](./PLAN.md#phase-34-hmr)
 for the opt-in surface and the prerequisites this needs first.
 
-## Phase 4: Input & text editing (future)
+## Phase 4: Input & text editing (in progress)
 
-In progress. Phase 1 wired one input event — a click on a container. Items 1
-and 2 below are done; items 3–5 haven't started. See
+Items 1, 2, 4 and 6 are done; items 3 and 5 haven't started. See
 [FFI.md](./FFI.md#event-dispatch) for what's wired today.
 
 Everything here reaches JS through the existing `addEventListener` surface:
@@ -179,8 +178,7 @@ is a name the host agrees to send, not a new binding.
 1. **Pointer input** (done): press, release, move, wheel, enter, leave —
    `"mousedown"`/`"mouseup"`/`"mousemove"`/`"wheel"`/`"mouseenter"`/
    `"mouseleave"`, DOM-shaped payloads, and propagation via
-   `stopPropagation`/`stopImmediatePropagation`/`preventDefault`. `"click"`
-   is now one name among several rather than the only one.
+   `stopPropagation`/`stopImmediatePropagation`/`preventDefault`.
 2. **Keyboard input** (done): key press/release with modifiers, and a
    focus model deciding which node receives them. The focus model — which
    node is focused, moving it (`focusNode`/`blurNode`, a click on a
@@ -190,9 +188,11 @@ is a name the host agrees to send, not a new binding.
    IME composition. The largest item here, and the one with no partial
    version worth shipping — a text field that drops IME composition is
    unusable in Japanese, Chinese, or Korean.
-4. **Scrolling**: a scrollable container. As much a layout capability as an
-   input one, so `overflow` joins the style vocabulary here rather than
-   waiting for Phase 7.
+4. **Scrolling** (done): `overflow`/`overflow_x`/`overflow_y` (`visible`,
+   `hidden`, `scroll`, `auto`) and wheel scrolling. `stopPropagation()` on
+   `wheel` does not stop the scroll, `preventDefault()` cancels it, and
+   nested containers scroll innermost first. Scrollbars and the `scroll`
+   event are not supported; see [FFI.md](./FFI.md#event-dispatch).
 5. **Interactive visual state**: hover, active, and focus styling mapped
    onto GPUI's own element states rather than re-derived in JS. Phase 12's
    `hover:`/`focus:` Tailwind variants build on this.
@@ -275,7 +275,14 @@ native styling model:
    flagged as "deliberately incomplete" since Phase 1 (see
    [FFI.md](./FFI.md)) — percentage lengths, flex-basis, per-side border
    width/radius, basic box-shadow, font-weight/family,
-   line-height/letter-spacing.
+   line-height/letter-spacing, and `position` with `z-index`. `position`
+   (`relative`/`absolute`, with `top`/`right`/`bottom`/`left`) maps directly
+   onto `gpui`'s own positioning and is small. `gpui` has no z-index: paint
+   order and hit-testing follow tree order, so ordering siblings is a sort at
+   spec build (medium). Lifting an element above everything (a modal, an
+   overlay, the dev error panel) goes through `gpui`'s `deferred` priority
+   and must be checked against focus, hover, scrolling and ancestor
+   clipping (large).
 2. **Tailwind class resolver**: Incarnative.js has no real CSS engine, so Tailwind
    utility classes can't generate actual CSS — a Vite plugin (building on
    Phase 3's pipeline) scans `class="..."` usage and maps each recognized
