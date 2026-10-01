@@ -10,12 +10,18 @@
 
 use std::fmt::Write;
 
-use rquickjs::{Coerced, Type, Value};
+use rquickjs::{Coerced, Ctx, Result as JsResult, Type, Value};
 
-/// How far into nested arrays and objects to descend before printing
-/// `[Array]`/`[Object]` instead. Also what keeps a cycle from recursing
-/// forever, since nothing here tracks values already seen.
+/// Nesting depth after which `[Array]` or `[Object]` is printed. It also bounds a cycle.
 const MAX_DEPTH: usize = 3;
+
+/// The value of a read, or `None` after clearing the exception it threw.
+pub(crate) fn settled<T>(ctx: &Ctx<'_>, result: JsResult<T>) -> Option<T> {
+    if result.is_err() {
+        drop(ctx.catch());
+    }
+    result.ok()
+}
 
 /// Formats one `console` call's arguments into the line it prints.
 pub(crate) fn line(values: &[Value<'_>]) -> String {
@@ -87,11 +93,11 @@ fn write_value(out: &mut String, value: &Value<'_>, depth: usize) {
 /// Falls back to the value's own string coercion, for the types with no
 /// structure worth walking.
 fn write_coerced(out: &mut String, value: &Value<'_>, fallback: &str, suffix: &str) {
-    match value.get::<Coerced<String>>() {
-        Ok(text) => {
+    match settled(value.ctx(), value.get::<Coerced<String>>()) {
+        Some(text) => {
             let _ = write!(out, "{}{suffix}", text.0);
         }
-        Err(_) => out.push_str(fallback),
+        None => out.push_str(fallback),
     }
 }
 
@@ -106,30 +112,25 @@ fn write_symbol(out: &mut String, value: &Value<'_>) {
     let _ = write!(out, "Symbol({description})");
 }
 
-/// Prints `name: message`, then the stack under it when there is one.
-///
-/// `QuickJS` puts only the frames in `error.stack`, unlike V8 — reporting the
-/// stack alone would lose the message, which is the part a reader needs
-/// first.
+/// `name: message`, then the stack. `QuickJS`'s `stack` carries frames only.
 fn write_error(out: &mut String, value: &Value<'_>) {
     let Some(object) = value.as_object() else {
         out.push_str("[Error]");
         return;
     };
 
-    let name = object
-        .get::<_, Option<String>>("name")
-        .ok()
+    let ctx = object.ctx();
+    let name = settled(ctx, object.get::<_, Option<String>>("name"))
         .flatten()
         .unwrap_or_else(|| "Error".to_owned());
-    match object.get::<_, Option<String>>("message").ok().flatten() {
+    match settled(ctx, object.get::<_, Option<String>>("message")).flatten() {
         Some(message) if !message.is_empty() => {
             let _ = write!(out, "{name}: {message}");
         }
         _ => out.push_str(&name),
     }
 
-    if let Ok(Some(stack)) = object.get::<_, Option<String>>("stack")
+    if let Some(Some(stack)) = settled(ctx, object.get::<_, Option<String>>("stack"))
         && !stack.trim().is_empty()
     {
         let _ = write!(out, "\n{}", stack.trim_end());
@@ -139,7 +140,7 @@ fn write_error(out: &mut String, value: &Value<'_>) {
 fn write_function(out: &mut String, value: &Value<'_>) {
     let name = value
         .as_object()
-        .and_then(|object| object.get::<_, Option<String>>("name").ok().flatten())
+        .and_then(|object| settled(object.ctx(), object.get::<_, Option<String>>("name")).flatten())
         .filter(|name| !name.is_empty());
     match name {
         Some(name) => {
@@ -168,9 +169,9 @@ fn write_array(out: &mut String, value: &Value<'_>, depth: usize) {
         if index > 0 {
             out.push_str(", ");
         }
-        match item {
-            Ok(item) => write_value(out, &item, depth + 1),
-            Err(_) => out.push_str("[unreadable]"),
+        match settled(array.ctx(), item) {
+            Some(item) => write_value(out, &item, depth + 1),
+            None => out.push_str("[unreadable]"),
         }
     }
     out.push_str(" ]");
@@ -188,14 +189,18 @@ fn write_object(out: &mut String, value: &Value<'_>, depth: usize) {
 
     let mut entries = 0;
     let mut body = String::new();
-    for key in object.keys::<String>().flatten() {
+    for key in object.keys::<String>() {
+        let Ok(key) = key else {
+            drop(object.ctx().catch());
+            continue;
+        };
         if entries > 0 {
             body.push_str(", ");
         }
         let _ = write!(&mut body, "{key}: ");
-        match object.get::<_, Value<'_>>(key.as_str()) {
-            Ok(item) => write_value(&mut body, &item, depth + 1),
-            Err(_) => body.push_str("[unreadable]"),
+        match settled(object.ctx(), object.get::<_, Value<'_>>(key.as_str())) {
+            Some(item) => write_value(&mut body, &item, depth + 1),
+            None => body.push_str("[unreadable]"),
         }
         entries += 1;
     }

@@ -806,11 +806,13 @@ A fixed entry is deleted and its ID is never reused.
 - **B-086 Some `console` methods only approximate the standard**
   `Units: jsenv · Size: M · Impact: Low`
 
-  There is no Formatter, so `%s`, `%d` and `%o` are printed as they are.
-  A `Symbol` or a label whose `toString` throws becomes the default label
-  where the standard throws. `time`, `timeLog` and `timeEnd` always print
-  milliseconds. `dir` ignores its `options`. `dirxml` formats like `log`.
-  `clear` closes the open groups and leaves the terminal as it is.
+  A format string supports `%s`, `%d`, `%i`, `%f`, `%o`, `%O`, `%c` and `%%`.
+  `%o` and `%O` render alike, and `%c` drops its argument without styling. A
+  conversion that throws prints the value as `dir` does, where the standard
+  throws. A `Symbol` or a label whose `toString` throws becomes the default
+  label where the standard throws. `time`, `timeLog` and `timeEnd` always
+  print milliseconds. `dir` ignores its `options`. `dirxml` formats like
+  `log`. `clear` closes the open groups and leaves the terminal as it is.
   `groupCollapsed` prints its lines like `group`, since a terminal cannot
   fold them. `table` ignores a `columns` argument that is not an array, and
   drops properties keyed by a `Symbol` and a `Symbol` column name. A string

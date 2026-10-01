@@ -15,15 +15,10 @@ const VALUES: &str = "Values";
 
 type Entries<'js> = Vec<(String, Value<'js>)>;
 
-/// Draws `data` as a box-drawn table, or `None` when it is not tabular and
-/// has to be logged as it is.
+/// Draws `data` as a table, or `None` when it is not tabular.
 ///
-/// Only an array, or an object with at least one own enumerable key, is
-/// tabular. Each own key of `data` is a row. A row that is itself tabular
-/// contributes its own keys as columns, in first-seen order; any other row
-/// fills the `Values` column. `columns`, when it is an array, picks the
-/// columns to show and their order, first occurrence winning. Every value is
-/// read once.
+/// An array, or an object with at least one own enumerable key, is tabular.
+/// `columns`, when an array, picks and orders the columns shown.
 pub(super) fn render(data: &Value<'_>, columns: Option<&Value<'_>>) -> Option<String> {
     let rows: Vec<(String, Value<'_>, Option<Entries<'_>>)> = entries(data)?
         .into_iter()
@@ -80,25 +75,23 @@ pub(super) fn render(data: &Value<'_>, columns: Option<&Value<'_>>) -> Option<St
     Some(draw(&header, &body))
 }
 
-/// The own keys and values of an array, or of an object that has any;
-/// `None` for anything else.
 fn entries<'js>(value: &Value<'js>) -> Option<Entries<'js>> {
     if !matches!(value.type_of(), Type::Array | Type::Object) {
         return None;
     }
     let object = value.as_object()?;
+    let ctx = object.ctx();
     let entries: Entries<'js> = object
         .keys::<String>()
-        .flatten()
         .filter_map(|key| {
-            let item = object.get::<_, Value<'_>>(key.as_str()).ok()?;
+            let key = inspect::settled(ctx, key)?;
+            let item = inspect::settled(ctx, object.get::<_, Value<'_>>(key.as_str()))?;
             Some((key, item))
         })
         .collect();
     (value.is_array() || !entries.is_empty()).then_some(entries)
 }
 
-/// One cell's text on a single line.
 fn cell(value: &Value<'_>) -> String {
     match value.as_string().and_then(|text| text.to_string().ok()) {
         Some(text) => format!("'{}'", escape(&text).replace('\'', "\\'")),
@@ -131,13 +124,13 @@ fn escape_controls(text: &str) -> String {
     out
 }
 
-/// The elements of an array, each as a string.
 fn strings(value: &Value<'_>) -> Option<Vec<String>> {
     let array = value.as_array()?;
+    let ctx = array.ctx();
     Some(
         array
             .iter::<Coerced<String>>()
-            .flatten()
+            .filter_map(|item| inspect::settled(ctx, item))
             .map(|item| item.0)
             .collect(),
     )
@@ -188,7 +181,9 @@ mod tests {
         context.with(|ctx| {
             let data: Value<'_> = ctx.eval(data).unwrap();
             let columns: Option<Value<'_>> = columns.map(|c| ctx.eval(c).unwrap());
-            render(&data, columns.as_ref())
+            let drawn = render(&data, columns.as_ref());
+            assert!(!ctx.has_exception(), "a read left an exception");
+            drawn
         })
     }
 
@@ -305,6 +300,45 @@ mod tests {
              │ 1       │ 'ab'   │\n\
              └─────────┴────────┘"
         );
+    }
+
+    #[test]
+    fn a_throwing_property_is_left_out_and_leaves_nothing_pending() {
+        assert_eq!(
+            table("[{ get a() { throw 1; }, b: 2 }]", None).unwrap(),
+            "┌─────────┬───┐\n\
+             │ (index) │ b │\n\
+             ├─────────┼───┤\n\
+             │ 0       │ 2 │\n\
+             └─────────┴───┘"
+        );
+    }
+
+    #[test]
+    fn a_throwing_row_is_left_out_and_leaves_nothing_pending() {
+        let drawn = table(
+            "Object.defineProperty([{ a: 1 }, { a: 2 }], 0, { get() { throw 1; } })",
+            None,
+        )
+        .unwrap();
+
+        assert!(drawn.contains("│ 1       │ 2 │"), "{drawn}");
+        assert!(!drawn.contains("│ 0 "), "{drawn}");
+    }
+
+    #[test]
+    fn a_proxy_row_whose_keys_throw_is_a_value_row() {
+        let drawn = table("[new Proxy({}, { ownKeys() { throw 1; } })]", None).unwrap();
+
+        assert!(drawn.contains("Values"), "{drawn}");
+    }
+
+    #[test]
+    fn a_column_that_cannot_be_stringified_is_skipped() {
+        let drawn = table("[{ a: 1 }]", Some("['a', { toString() { throw 1; } }]")).unwrap();
+
+        assert!(drawn.contains("│ a │"), "{drawn}");
+        assert_eq!(drawn.lines().count(), 5, "{drawn}");
     }
 
     #[test]

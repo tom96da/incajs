@@ -3,6 +3,7 @@
 
 //! `globalThis.console`.
 
+mod format;
 mod state;
 mod table;
 
@@ -10,7 +11,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use rquickjs::{
-    Coerced, Ctx, Function, Object, Result as JsResult, Type, Value,
+    Coerced, Ctx, Function, Object, Result as JsResult, Value,
     function::{Opt, Rest},
 };
 use unicode_width::UnicodeWidthStr;
@@ -18,14 +19,13 @@ use unicode_width::UnicodeWidthStr;
 use crate::inspect;
 use state::State;
 
-/// Drawn once per open group at the start of every line.
+/// Starts every line, once per open group.
 const GROUP_INDENT: &str = "│ ";
 
 /// The label `count`, `time` and their relatives use when given none.
 const DEFAULT_LABEL: &str = "default";
 
-/// Which kind of line `console` produced. Carried through to [`Output`] so a
-/// reader can tell an error from a trace; nothing here filters on it.
+/// The kind of line `console` produced. Nothing here filters on it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Level {
     Trace,
@@ -49,32 +49,22 @@ impl Level {
 }
 
 /// Where a formatted `console` line goes.
-///
-/// Taken as an argument rather than chosen here: an embedder may already be
-/// using stdout for something a stray line would corrupt, and a test wants to
-/// read back what was written.
 pub type Output = Rc<dyn Fn(Level, &str)>;
 
-/// An [`Output`] writing each line to stderr.
-///
-/// Deliberately not routed through the `log` crate. A logger's default filter
-/// discards anything below its threshold, and an application's own `console`
-/// output disappearing is the problem `console` exists to solve.
+/// An [`Output`] writing each line to stderr, bypassing `log`'s level filter.
 #[must_use]
 pub fn to_stderr() -> Output {
     Rc::new(|_, message| eprintln!("{message}"))
 }
 
-/// What every method shares: where lines go and what `console` remembers.
 struct Console {
     output: Output,
     state: RefCell<State>,
 }
 
 impl Console {
-    /// Writes `body` at `level`, behind the open groups' guides and the
-    /// level's symbol. Later lines of a multi-line body line up under the
-    /// first one's text, and an empty line carries no trailing space.
+    /// Writes `body` behind the group guides and the level's symbol; later
+    /// lines align under the first one's text.
     fn write(&self, level: Level, body: &str) {
         let guides = GROUP_INDENT.repeat(self.state.borrow().depth());
         let symbol = level.symbol();
@@ -100,11 +90,11 @@ impl Console {
         self.write(Level::Warn, message);
     }
 
-    fn group(&self, marker: &str, label: &[Value<'_>]) {
+    fn group(&self, ctx: &Ctx<'_>, marker: &str, label: &[Value<'_>]) {
         let label = if label.is_empty() {
             "console.group".to_owned()
         } else {
-            inspect::line(label)
+            format::line(ctx, label)
         };
         let header = format!("{marker} {label}");
         self.write(Level::Log, header.trim_end());
@@ -130,25 +120,45 @@ impl Console {
     }
 }
 
-/// A `label` argument: absent or `undefined` is `"default"`, anything else its
-/// string form.
+/// A `label` argument: `"default"` when absent, `undefined` or unstringifiable.
 fn label_of(label: &Opt<Value<'_>>) -> String {
     match &label.0 {
-        Some(value) if !value.is_undefined() => value
-            .get::<Coerced<String>>()
-            .map_or_else(|_| DEFAULT_LABEL.to_owned(), |text| text.0),
+        Some(value) if !value.is_undefined() => {
+            inspect::settled(value.ctx(), value.get::<Coerced<String>>())
+                .map_or_else(|| DEFAULT_LABEL.to_owned(), |text| text.0)
+        }
         _ => DEFAULT_LABEL.to_owned(),
     }
 }
 
-/// The frames of the JS stack that called `console.trace`, one per line.
-///
-/// `QuickJS` lists no frame for a native function, so dropping the first
-/// frame, the one this evaluation adds, leaves the caller on top.
+/// The `console.assert` line: "Assertion failed", joined to a string first
+/// datum with `: `.
+fn assertion_message<'js>(ctx: &Ctx<'js>, mut data: Vec<Value<'js>>) -> String {
+    const MESSAGE: &str = "Assertion failed";
+    let first = data
+        .first()
+        .and_then(Value::as_string)
+        .and_then(|text| text.to_string().ok());
+    let lead = match first {
+        Some(first) => {
+            data.remove(0);
+            format!("{MESSAGE}: {first}")
+        }
+        None => MESSAGE.to_owned(),
+    };
+    match rquickjs::String::from_str(ctx.clone(), &lead) {
+        Ok(lead) => data.insert(0, lead.into_value()),
+        Err(_) => return MESSAGE.to_owned(),
+    }
+    format::line(ctx, &data)
+}
+
+/// The frames of the stack that called `console.trace`. `QuickJS` lists no
+/// frame for a native function, so skipping this evaluation's own leaves the
+/// caller on top.
 fn caller_stack(ctx: &Ctx<'_>) -> Vec<String> {
-    let stack = ctx
-        .eval::<String, _>("new Error().stack")
-        .unwrap_or_default();
+    let stack =
+        inspect::settled(ctx, ctx.eval::<String, _>("new Error().stack")).unwrap_or_default();
     stack
         .lines()
         .map(str::trim_end)
@@ -159,8 +169,7 @@ fn caller_stack(ctx: &Ctx<'_>) -> Vec<String> {
 
 /// Installs `globalThis.console`, writing through `output`.
 ///
-/// Install this before evaluating anything: a script that logs during its own
-/// top-level evaluation has no other chance.
+/// Install before evaluating any script, so top-level logging works.
 ///
 /// # Errors
 ///
@@ -181,7 +190,6 @@ pub fn install(ctx: &Ctx<'_>, output: &Output) -> JsResult<()> {
     Ok(())
 }
 
-/// `debug`, `log`, `dirxml`, `info`, `warn`, `error` and `trace`.
 fn install_lines<'js>(ctx: &Ctx<'js>, console: &Object<'js>, shared: &Rc<Console>) -> JsResult<()> {
     for (name, level) in [
         ("debug", Level::Debug),
@@ -194,8 +202,8 @@ fn install_lines<'js>(ctx: &Ctx<'js>, console: &Object<'js>, shared: &Rc<Console
         let c = Rc::clone(shared);
         console.set(
             name,
-            Function::new(ctx.clone(), move |values: Rest<Value<'_>>| {
-                c.write(level, &inspect::line(&values.0));
+            Function::new(ctx.clone(), move |ctx: Ctx<'_>, values: Rest<Value<'_>>| {
+                c.write(level, &format::line(&ctx, &values.0));
             })?,
         )?;
     }
@@ -207,7 +215,7 @@ fn install_lines<'js>(ctx: &Ctx<'js>, console: &Object<'js>, shared: &Rc<Console
             let mut text = "Trace".to_owned();
             if !values.0.is_empty() {
                 text.push_str(": ");
-                text.push_str(&inspect::line(&values.0));
+                text.push_str(&format::line(&ctx, &values.0));
             }
             for frame in caller_stack(&ctx) {
                 text.push('\n');
@@ -220,7 +228,6 @@ fn install_lines<'js>(ctx: &Ctx<'js>, console: &Object<'js>, shared: &Rc<Console
     Ok(())
 }
 
-/// `assert`, `count` and `countReset`.
 fn install_counting<'js>(
     ctx: &Ctx<'js>,
     console: &Object<'js>,
@@ -231,7 +238,7 @@ fn install_counting<'js>(
         "assert",
         Function::new(
             ctx.clone(),
-            move |condition: Opt<Value<'_>>, data: Rest<Value<'_>>| {
+            move |ctx: Ctx<'js>, condition: Opt<Value<'js>>, data: Rest<Value<'js>>| {
                 let holds = condition
                     .0
                     .and_then(|value| value.get::<Coerced<bool>>().ok())
@@ -239,14 +246,7 @@ fn install_counting<'js>(
                 if holds {
                     return;
                 }
-                let text = match data.0.first().map(Value::type_of) {
-                    None => "Assertion failed".to_owned(),
-                    Some(Type::String) => {
-                        format!("Assertion failed: {}", inspect::line(&data.0))
-                    }
-                    Some(_) => format!("Assertion failed {}", inspect::line(&data.0)),
-                };
-                c.write(Level::Error, &text);
+                c.write(Level::Error, &assertion_message(&ctx, data.0));
             },
         )?,
     )?;
@@ -275,7 +275,6 @@ fn install_counting<'js>(
     Ok(())
 }
 
-/// `time`, `timeLog` and `timeEnd`.
 fn install_timing<'js>(
     ctx: &Ctx<'js>,
     console: &Object<'js>,
@@ -314,7 +313,6 @@ fn install_timing<'js>(
     Ok(())
 }
 
-/// `group`, `groupCollapsed`, `groupEnd`, `clear`, `dir` and `table`.
 fn install_structure<'js>(
     ctx: &Ctx<'js>,
     console: &Object<'js>,
@@ -323,16 +321,16 @@ fn install_structure<'js>(
     let c = Rc::clone(shared);
     console.set(
         "group",
-        Function::new(ctx.clone(), move |label: Rest<Value<'_>>| {
-            c.group("▼", &label.0);
+        Function::new(ctx.clone(), move |ctx: Ctx<'_>, label: Rest<Value<'_>>| {
+            c.group(&ctx, "▼", &label.0);
         })?,
     )?;
 
     let c = Rc::clone(shared);
     console.set(
         "groupCollapsed",
-        Function::new(ctx.clone(), move |label: Rest<Value<'_>>| {
-            c.group("▶", &label.0);
+        Function::new(ctx.clone(), move |ctx: Ctx<'_>, label: Rest<Value<'_>>| {
+            c.group(&ctx, "▶", &label.0);
         })?,
     )?;
 
@@ -407,6 +405,7 @@ mod tests {
         context.with(|ctx| {
             install(&ctx, &output).unwrap();
             ctx.eval::<(), _>(source).unwrap();
+            assert!(!ctx.has_exception(), "a call left an exception pending");
         });
 
         written.take()
@@ -868,6 +867,175 @@ mod tests {
         assert_eq!(
             texts("console.count(7); console.count(null);"),
             ["7: 1", "null: 1"]
+        );
+    }
+
+    #[test]
+    fn every_formatting_method_substitutes_specifiers() {
+        let written = lines_written_by(
+            "console.log('%s=%d', 'a', 1); console.debug('%s', 'x', 'y'); \
+             console.info('%o', 'i'); console.warn('%f', '1.5'); \
+             console.error('%s', Symbol('e')); console.dirxml('%i', '7.9');",
+        );
+
+        assert_eq!(
+            written,
+            [
+                (Level::Log, "a=1".to_owned()),
+                (Level::Debug, "x y".to_owned()),
+                (Level::Info, "ℹ 'i'".to_owned()),
+                (Level::Warn, "⚠ 1.5".to_owned()),
+                (Level::Error, "✖ Symbol(e)".to_owned()),
+                (Level::Log, "7".to_owned()),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_lone_argument_is_never_formatted() {
+        assert_eq!(
+            texts("console.log('%s %%'); console.error('%d'); console.group('%c'); console.trace('%o');")
+                .iter()
+                .map(|t| t.lines().next().unwrap().to_owned())
+                .collect::<Vec<_>>(),
+            ["%s %%", "✖ %d", "▼ %c", "│ Trace: %o"]
+        );
+    }
+
+    #[test]
+    fn formatting_follows_the_group_guides_and_symbols() {
+        assert_eq!(
+            texts("console.group('g'); console.warn('%s\\n%s', 'a', 'b');"),
+            ["▼ g", "│ ⚠ a\n│   b"]
+        );
+    }
+
+    #[test]
+    fn assert_formats_its_message_and_data() {
+        assert_eq!(
+            texts(
+                "console.assert(false, '%s is %d', 'x', 4, 'end'); \
+                 console.assert(false, 'plain %s'); \
+                 console.assert(false, '%o', 'q'); \
+                 console.assert(false, '%s', 'a'); \
+                 console.assert(false, 7, '%s', 'b'); \
+                 console.assert(false, { a: 1 }); \
+                 console.assert(false, 'v', '%s');"
+            ),
+            [
+                "✖ Assertion failed: x is 4 end",
+                "✖ Assertion failed: plain %s",
+                "✖ Assertion failed: 'q'",
+                "✖ Assertion failed: a",
+                "✖ Assertion failed 7 %s b",
+                "✖ Assertion failed { a: 1 }",
+                "✖ Assertion failed: v %s",
+            ]
+        );
+    }
+
+    #[test]
+    fn assert_does_not_format_when_the_condition_holds() {
+        assert!(
+            texts("console.assert(true, '%s', { toString() { console.log('ran'); } });").is_empty()
+        );
+    }
+
+    #[test]
+    fn a_group_label_substitutes_specifiers() {
+        assert_eq!(
+            texts(
+                "console.group('%s (%d)', 'job', 3, 'extra'); console.groupCollapsed('%c%s', 'css', 'c'); console.group('%s');"
+            ),
+            ["▼ job (3) extra", "│ ▶ c", "│ │ ▼ %s"]
+        );
+    }
+
+    #[test]
+    fn trace_substitutes_specifiers_in_its_label() {
+        let text = &texts("console.trace('%s:%d', 'f', 2, 'x');")[0];
+
+        assert_eq!(text.lines().next(), Some("Trace: f:2 x"));
+    }
+
+    #[test]
+    fn time_log_prints_its_extra_data_without_substituting_specifiers() {
+        let lines = texts(
+            "console.time('%s'); console.timeLog('%s', '%d items', '3'); \
+             console.timeLog('%s', 'a', '%s');",
+        );
+
+        assert_eq!(without_elapsed(&lines[0]), "%s: Nms %d items 3");
+        assert_eq!(without_elapsed(&lines[1]), "%s: Nms a %s");
+    }
+
+    #[test]
+    fn dir_table_and_the_counters_do_not_format() {
+        assert_eq!(
+            texts(
+                "console.dir('%s', 'x'); console.table('%s'); console.count('%s'); \
+                 console.countReset('%d'); console.timeEnd('%i');"
+            ),
+            [
+                "'%s'",
+                "%s",
+                "%s: 1",
+                "⚠ Count for '%d' does not exist",
+                "⚠ Timer '%i' does not exist",
+            ]
+        );
+    }
+
+    #[test]
+    fn time_labels_are_not_formatted() {
+        let lines = texts("console.time('%d'); console.timeEnd('%d');");
+
+        assert_eq!(without_elapsed(&lines[0]), "%d: Nms");
+    }
+
+    #[test]
+    fn a_throwing_conversion_leaves_no_exception_behind() {
+        assert_eq!(
+            texts(
+                "console.log('%s', { toString() { throw new Error('no'); } }); \
+                 try { null.x; } catch (e) { console.log('caught', e instanceof TypeError); }"
+            ),
+            ["{ toString: [Function: toString] }", "caught true"]
+        );
+    }
+
+    #[test]
+    fn unreadable_values_in_any_method_leave_nothing_pending() {
+        assert_eq!(
+            texts(
+                "console.log({ get a() { throw 1; } }); \
+                 console.log([Object.defineProperty([1], 0, { get() { throw 1; } })]); \
+                 console.log(new Proxy({}, { ownKeys() { throw 1; } })); \
+                 console.log(Object.defineProperty(new Error('e'), 'stack', { get() { throw 1; } })); \
+                 console.dir({ get a() { throw 1; } }); \
+                 try { null.x; } catch (e) { console.log('caught'); }"
+            )
+            .iter()
+            .map(|t| t.lines().next().unwrap().to_owned())
+            .collect::<Vec<_>>(),
+            [
+                "{ a: [unreadable] }",
+                "[ [ [unreadable] ] ]",
+                "{}",
+                "Error: e",
+                "{ a: [unreadable] }",
+                "caught"
+            ]
+        );
+    }
+
+    #[test]
+    fn replacing_the_global_parsers_does_not_change_formatting() {
+        assert_eq!(
+            texts(
+                "globalThis.parseInt = () => 99; globalThis.parseFloat = () => 98; console.log('%d %i %f %s', '1', '2', '3.5', 4);"
+            ),
+            ["1 2 3.5 4"]
         );
     }
 
