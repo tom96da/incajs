@@ -53,4 +53,5 @@ Follows [Conventional Commits](https://www.conventionalcommits.org/):
 - `body` is a concise bullet list of what was done and why — not prose. Each bullet follows the same style as the description: starts lower-case unless the first word is a proper noun (a filename, package name, etc.), and has no trailing period.
 - A breaking change is marked either with `!` after the type/scope (`feat!: ...`) or a `BREAKING CHANGE:` footer — not both unless it aids clarity.
 - Scope is optional; use it for the affected area once the workspace has named crates/packages (e.g. `fix(gpui-shell): ...`).
+- A release commit's subject is `chore(release): vX.Y.Z`, and it is the last commit of its push. CD starts only when the pushed head commit has this prefix.
 - Any commit Claude is involved in must include a `Co-Authored-By: Claude <noreply@anthropic.com>` trailer (adjust the model name if relevant, e.g. `Claude Sonnet 5`).
