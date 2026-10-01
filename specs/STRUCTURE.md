@@ -79,7 +79,7 @@ incajs/
     ├── rquickjs/            # DelSkayn/rquickjs @ v0.14.0
     │   └── sys/quickjs/     # nested submodule: quickjs-ng @ the commit rquickjs v0.14.0 pins
     ├── vue/                 # vuejs/core @ v3.5.43
-    └── vite/                # vitejs/vite @ v8.3.0
+    └── vite/                # vitejs/vite @ v8.3.1
 ```
 
 ## Status
@@ -128,7 +128,7 @@ builds from them. The build resolves `gpui` from the git tag in the root
 | `third_party/rquickjs` | [DelSkayn/rquickjs](https://github.com/DelSkayn/rquickjs) | `v0.14.0` | Source of the Rust bindings to QuickJS. |
 | `third_party/rquickjs/sys/quickjs` | [quickjs-ng/quickjs](https://github.com/quickjs-ng/quickjs) | commit pinned by rquickjs `v0.14.0` | rquickjs's own nested submodule — the QuickJS engine itself, the maintained `quickjs-ng` fork rather than `bellard/quickjs`. |
 | `third_party/vue` | [vuejs/core](https://github.com/vuejs/core) | `v3.5.43` | Reference for `@vue/runtime-core`'s `createRenderer`/`RendererOptions` and `runtime-dom`'s `nodeOps`/`patchProp`, which `incajs/vue`'s renderer implements. |
-| `third_party/vite` | [vitejs/vite](https://github.com/vitejs/vite) | `v8.3.0` | Reference for Vite's Runtime API (`vite/module-runner`), whose published docs are thin — Phase 3.4's HMR bridge builds on it. |
+| `third_party/vite` | [vitejs/vite](https://github.com/vitejs/vite) | `v8.3.1` | Reference for Vite's Runtime API (`vite/module-runner`), whose published docs are thin — Phase 3.4's HMR bridge builds on it. |
 
 All are registered **shallow** (`submodule.<name>.shallow = true` in the relevant `.gitmodules`) since full history is large and irrelevant here.
 
