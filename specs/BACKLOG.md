@@ -330,6 +330,33 @@ A fixed entry is deleted and its ID is never reused.
   `click` handler also stops ancestors' `mouseup`. The DOM order is `mouseup`
   then `click`.
 
+- **B-087 Ctrl+C in `inca dev` leaves the terminal echoing arrow keys**
+  `Units: cli,host · Size: S–M · Impact: Medium · Status: needs repro`
+
+  After `inca dev` is stopped with Ctrl+C, the shell echoes arrow keys as
+  `^[[A` instead of recalling the previous command, until the terminal is
+  reset. The cause is not known. It may be the terminal mode left behind by
+  the host or by the CLI process, or a shell that was not given the terminal
+  back. Reproduce on each platform with the CLI run directly and through
+  `pnpm run`, and compare the state with `stty -a` before and after.
+
+- **B-088 Stack frames point into generated code**
+  `Units: cli,host,jsenv · Size: L · Impact: Medium`
+
+  A stack printed by `console` or reported by the host does not lead back to
+  the source. With the HMR runtime, a frame reads `at name (<input>:line:column)`.
+  The runtime builds each module with an `AsyncFunction`, and QuickJS gives
+  every function made by the `Function` constructors the file name `<input>`;
+  it has no `sourceURL` support. The line numbers are lines of the Vite
+  transform of the module. Without HMR the whole app is one bundle, so a
+  frame names `bundle.js` and a line of the generated code, since the build
+  emits no source map. The dev runtime also disables Vite's source map
+  support, which expects V8 call sites. A fix has two parts. The HMR runtime
+  needs a host-provided function that compiles a module's code under its
+  module id. Then the build and the dev transform emit source maps, and the
+  host remaps each frame to the `.vue` or `.ts` file, line and column. This
+  also covers errors the host reports to `inca dev`.
+
 ## P3
 
 - **B-001 Vue template type-checking**
@@ -817,6 +844,8 @@ A fixed entry is deleted and its ID is never reused.
   fold them. `table` ignores a `columns` argument that is not an array, and
   drops properties keyed by a `Symbol` and a `Symbol` column name. A string
   nested in an array or object is quoted without escaping backslashes or
-  control characters, so it can break a line. `trace` reads its stack
-  through the global `Error`, which a script can replace. `profile`,
-  `profileEnd` and `timeStamp` do not exist.
+  control characters, so it can break a line. An object that refers back to
+  itself prints `[Object]` at the depth limit, with no circular marker, and
+  an `Error`'s `cause` is not printed. `trace` reads its stack through the
+  global `Error`, which a script can replace. `profile`, `profileEnd` and
+  `timeStamp` do not exist.
