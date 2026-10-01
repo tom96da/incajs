@@ -22,5 +22,11 @@ export default defineConfig({
       output: { chunkFileNames: "chunks/[name]-[hash].js" },
     },
   },
-  plugins: [dts({ include: ["src"], exclude: ["src/**/*.test.mts"] })],
+  plugins: [
+    dts({
+      tsconfigPath: "./tsconfig.runtime.json",
+      include: ["src"],
+      exclude: ["src/**/*.test.mts"],
+    }),
+  ],
 });

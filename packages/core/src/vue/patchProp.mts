@@ -73,15 +73,6 @@ function patchStyle(core: IncaCore, el: IncaElement, nextValue: unknown): void {
   }
 }
 
-// The bundler replaces `process.env.NODE_ENV`; QuickJS has no `process`.
-const isProduction = ((): boolean => {
-  try {
-    return process.env.NODE_ENV === "production";
-  } catch {
-    return false;
-  }
-})();
-
 const isThenable = (value: unknown): value is PromiseLike<unknown> =>
   value != null && typeof (value as PromiseLike<unknown>).then === "function";
 
@@ -110,7 +101,7 @@ function asListener(
       try {
         const result: unknown = handler(...a);
         // A production Vue swallows a rejection; keep one unhandled for the host.
-        if (isProduction && isThenable(result)) {
+        if (process.env.NODE_ENV === "production" && isThenable(result)) {
           result.then(undefined, (error: unknown) => {
             if (!instance?.appContext.config.errorHandler) throw error;
           });

@@ -297,16 +297,11 @@ describe("errors thrown by an event handler", () => {
     afterEach(() => {
       process.off("unhandledRejection", unhandled);
       vi.unstubAllEnvs();
-      vi.unstubAllGlobals();
-      vi.resetModules();
     });
 
-    // `isProduction` is fixed when the module loads, so each case reloads it.
     async function register(mode: string, instance: ComponentInternalInstance | null) {
       vi.stubEnv("NODE_ENV", mode);
-      vi.resetModules();
-      const { createPatchProp: fresh } = await import("./patchProp.mts");
-      fresh(core)!(el, "onClick", null, () => Promise.reject(boom), undefined, instance);
+      patchProp(el, "onClick", null, () => Promise.reject(boom), undefined, instance);
       const registered = vi.mocked(core.setEventListener).mock.calls[0]![2];
       registered();
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -327,24 +322,6 @@ describe("errors thrown by an event handler", () => {
       await register("production", instanceWith(errorHandler));
       expect(errorHandler).toHaveBeenCalledWith(boom, undefined, "native event handler");
       expect(unhandled).not.toHaveBeenCalled();
-    });
-
-    it("still runs the handler when reading `process.env` throws", async () => {
-      const broken = Object.create(process, {
-        env: {
-          get() {
-            throw new ReferenceError("process is not defined");
-          },
-        },
-      });
-      vi.stubGlobal("process", broken);
-      vi.resetModules();
-      const { createPatchProp: fresh } = await import("./patchProp.mts");
-      const handler = vi.fn<() => void>();
-      fresh(core)!(el, "onClick", null, handler, undefined, null);
-      vi.unstubAllGlobals();
-      vi.mocked(core.setEventListener).mock.calls[0]![2]();
-      expect(handler).toHaveBeenCalledTimes(1);
     });
   });
 
