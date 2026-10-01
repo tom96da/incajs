@@ -75,7 +75,7 @@ incajs/
 │   └── click_counter/       # Vue port of crates/inca-bridge/examples/click_counter.rs (Phase 2 Unit iv, done)
 ├── docs/                    # the public VitePress site, deployed by .github/workflows/docs.yml
 └── third_party/             # pinned upstream sources, as git submodules — see below
-    ├── zed/                 # zed-industries/zed @ v1.20.2
+    ├── zed/                 # zed-industries/zed @ v1.22.0
     ├── rquickjs/            # DelSkayn/rquickjs @ v0.14.0
     │   └── sys/quickjs/     # nested submodule: quickjs-ng @ the commit rquickjs v0.14.0 pins
     ├── vue/                 # vuejs/core @ v3.5.43
@@ -124,7 +124,7 @@ builds from them. The build resolves `gpui` from the git tag in the root
 
 | Path | Upstream | Pinned at | Why it's here |
 |---|---|---|---|
-| `third_party/zed` | [zed-industries/zed](https://github.com/zed-industries/zed) | `v1.20.2` | Source of `gpui`, the crate this project renders through. |
+| `third_party/zed` | [zed-industries/zed](https://github.com/zed-industries/zed) | `v1.22.0` | Source of `gpui`, the crate this project renders through. |
 | `third_party/rquickjs` | [DelSkayn/rquickjs](https://github.com/DelSkayn/rquickjs) | `v0.14.0` | Source of the Rust bindings to QuickJS. |
 | `third_party/rquickjs/sys/quickjs` | [quickjs-ng/quickjs](https://github.com/quickjs-ng/quickjs) | commit pinned by rquickjs `v0.14.0` | rquickjs's own nested submodule — the QuickJS engine itself, the maintained `quickjs-ng` fork rather than `bellard/quickjs`. |
 | `third_party/vue` | [vuejs/core](https://github.com/vuejs/core) | `v3.5.43` | Reference for `@vue/runtime-core`'s `createRenderer`/`RendererOptions` and `runtime-dom`'s `nodeOps`/`patchProp`, which `incajs/vue`'s renderer implements. |

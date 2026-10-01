@@ -979,7 +979,7 @@ dependencies = [
 [[package]]
 name = "collections"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed?tag=v1.20.2#7c451e694f3c52ee0aeb01d7e28b5fa18cd0ad2f"
+source = "git+https://github.com/zed-industries/zed?tag=v1.22.0#76659a55a8c10ed355a070f8764a0b1733e3c115"
 dependencies = [
  "gpui_util",
  "indexmap",
@@ -1385,7 +1385,7 @@ dependencies = [
 [[package]]
 name = "derive_refineable"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed?tag=v1.20.2#7c451e694f3c52ee0aeb01d7e28b5fa18cd0ad2f"
+source = "git+https://github.com/zed-industries/zed?tag=v1.22.0#76659a55a8c10ed355a070f8764a0b1733e3c115"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2157,7 +2157,7 @@ dependencies = [
 [[package]]
 name = "gpui"
 version = "0.2.2"
-source = "git+https://github.com/zed-industries/zed?tag=v1.20.2#7c451e694f3c52ee0aeb01d7e28b5fa18cd0ad2f"
+source = "git+https://github.com/zed-industries/zed?tag=v1.22.0#76659a55a8c10ed355a070f8764a0b1733e3c115"
 dependencies = [
  "accesskit",
  "anyhow",
@@ -2187,6 +2187,8 @@ dependencies = [
  "log",
  "lyon",
  "num_cpus",
+ "objc2-core-foundation",
+ "objc2-core-video",
  "parking",
  "parking_lot",
  "pin-project",
@@ -2211,7 +2213,6 @@ dependencies = [
  "sum_tree",
  "taffy",
  "thiserror 2.0.20",
- "tracing",
  "ttf-parser",
  "url",
  "usvg",
@@ -2222,19 +2223,17 @@ dependencies = [
  "windows 0.62.2",
  "zed-font-kit",
  "zed-scap",
- "ztracing",
 ]
 
 [[package]]
 name = "gpui_apple"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed?tag=v1.20.2#7c451e694f3c52ee0aeb01d7e28b5fa18cd0ad2f"
+source = "git+https://github.com/zed-industries/zed?tag=v1.22.0#76659a55a8c10ed355a070f8764a0b1733e3c115"
 dependencies = [
  "anyhow",
  "block",
  "cbindgen",
  "cocoa 0.26.0",
- "collections",
  "core-foundation 0.10.1",
  "core-video",
  "derive_more",
@@ -2245,13 +2244,14 @@ dependencies = [
  "log",
  "metal",
  "objc",
+ "objc2 0.6.4",
  "parking_lot",
 ]
 
 [[package]]
 name = "gpui_linux"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed?tag=v1.20.2#7c451e694f3c52ee0aeb01d7e28b5fa18cd0ad2f"
+source = "git+https://github.com/zed-industries/zed?tag=v1.22.0#76659a55a8c10ed355a070f8764a0b1733e3c115"
 dependencies = [
  "accesskit",
  "accesskit_unix",
@@ -2297,13 +2297,12 @@ dependencies = [
 [[package]]
 name = "gpui_macos"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed?tag=v1.20.2#7c451e694f3c52ee0aeb01d7e28b5fa18cd0ad2f"
+source = "git+https://github.com/zed-industries/zed?tag=v1.22.0#76659a55a8c10ed355a070f8764a0b1733e3c115"
 dependencies = [
  "accesskit",
  "accesskit_macos",
  "anyhow",
  "async-task",
- "block",
  "block2 0.6.2",
  "cocoa 0.26.0",
  "collections",
@@ -2323,12 +2322,13 @@ dependencies = [
  "libc",
  "log",
  "mach2",
- "media",
- "metal",
  "objc",
  "objc2 0.6.4",
  "objc2-app-kit 0.3.2",
+ "objc2-core-graphics",
+ "objc2-core-media",
  "objc2-foundation 0.3.2",
+ "objc2-screen-capture-kit",
  "objc2-user-notifications",
  "parking_lot",
  "pathfinder_geometry",
@@ -2343,7 +2343,7 @@ dependencies = [
 [[package]]
 name = "gpui_macros"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed?tag=v1.20.2#7c451e694f3c52ee0aeb01d7e28b5fa18cd0ad2f"
+source = "git+https://github.com/zed-industries/zed?tag=v1.22.0#76659a55a8c10ed355a070f8764a0b1733e3c115"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -2354,7 +2354,7 @@ dependencies = [
 [[package]]
 name = "gpui_platform"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed?tag=v1.20.2#7c451e694f3c52ee0aeb01d7e28b5fa18cd0ad2f"
+source = "git+https://github.com/zed-industries/zed?tag=v1.22.0#76659a55a8c10ed355a070f8764a0b1733e3c115"
 dependencies = [
  "console_error_panic_hook",
  "gpui",
@@ -2367,7 +2367,7 @@ dependencies = [
 [[package]]
 name = "gpui_shared_string"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed?tag=v1.20.2#7c451e694f3c52ee0aeb01d7e28b5fa18cd0ad2f"
+source = "git+https://github.com/zed-industries/zed?tag=v1.22.0#76659a55a8c10ed355a070f8764a0b1733e3c115"
 dependencies = [
  "schemars",
  "serde",
@@ -2377,7 +2377,7 @@ dependencies = [
 [[package]]
 name = "gpui_util"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed?tag=v1.20.2#7c451e694f3c52ee0aeb01d7e28b5fa18cd0ad2f"
+source = "git+https://github.com/zed-industries/zed?tag=v1.22.0#76659a55a8c10ed355a070f8764a0b1733e3c115"
 dependencies = [
  "anyhow",
  "log",
@@ -2387,7 +2387,7 @@ dependencies = [
 [[package]]
 name = "gpui_web"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed?tag=v1.20.2#7c451e694f3c52ee0aeb01d7e28b5fa18cd0ad2f"
+source = "git+https://github.com/zed-industries/zed?tag=v1.22.0#76659a55a8c10ed355a070f8764a0b1733e3c115"
 dependencies = [
  "anyhow",
  "console_error_panic_hook",
@@ -2400,6 +2400,10 @@ dependencies = [
  "parking_lot",
  "raw-window-handle",
  "scheduler",
+ "smallvec",
+ "unicode-properties",
+ "unicode-script",
+ "unicode-segmentation",
  "uuid",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -2411,7 +2415,7 @@ dependencies = [
 [[package]]
 name = "gpui_wgpu"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed?tag=v1.20.2#7c451e694f3c52ee0aeb01d7e28b5fa18cd0ad2f"
+source = "git+https://github.com/zed-industries/zed?tag=v1.22.0#76659a55a8c10ed355a070f8764a0b1733e3c115"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -2437,7 +2441,7 @@ dependencies = [
 [[package]]
 name = "gpui_windows"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed?tag=v1.20.2#7c451e694f3c52ee0aeb01d7e28b5fa18cd0ad2f"
+source = "git+https://github.com/zed-industries/zed?tag=v1.22.0#76659a55a8c10ed355a070f8764a0b1733e3c115"
 dependencies = [
  "accesskit",
  "accesskit_windows",
@@ -2614,7 +2618,7 @@ dependencies = [
 [[package]]
 name = "http_client"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed?tag=v1.20.2#7c451e694f3c52ee0aeb01d7e28b5fa18cd0ad2f"
+source = "git+https://github.com/zed-industries/zed?tag=v1.22.0#76659a55a8c10ed355a070f8764a0b1733e3c115"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -3322,20 +3326,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "media"
-version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed?tag=v1.20.2#7c451e694f3c52ee0aeb01d7e28b5fa18cd0ad2f"
-dependencies = [
- "anyhow",
- "bindgen",
- "core-foundation 0.10.1",
- "core-video",
- "foreign-types",
- "metal",
- "objc",
-]
-
-[[package]]
 name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3729,6 +3719,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "objc2-core-audio"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1eebcea8b0dbff5f7c8504f3107c68fc061a3eb44932051c8cf8a68d969c3b2"
+dependencies = [
+ "dispatch2",
+ "objc2 0.6.4",
+ "objc2-core-audio-types",
+ "objc2-core-foundation",
+]
+
+[[package]]
+name = "objc2-core-audio-types"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a89f2ec274a0cf4a32642b2991e8b351a404d290da87bb6a9a9d8632490bd1c"
+dependencies = [
+ "bitflags 2.13.2",
+ "objc2 0.6.4",
+]
+
+[[package]]
 name = "objc2-core-data"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3752,6 +3764,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "objc2-core-graphics"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e022c9d066895efa1345f8e33e584b9f958da2fd4cd116792e15e07e4720a807"
+dependencies = [
+ "bitflags 2.13.2",
+ "dispatch2",
+ "objc2 0.6.4",
+ "objc2-core-foundation",
+ "objc2-io-surface",
+]
+
+[[package]]
 name = "objc2-core-image"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3771,6 +3796,34 @@ checksum = "ca347214e24bc973fc025fd0d36ebb179ff30536ed1f80252706db19ee452009"
 dependencies = [
  "objc2 0.6.4",
  "objc2-foundation 0.3.2",
+]
+
+[[package]]
+name = "objc2-core-media"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05ec576860167a15dd9fce7fbee7512beb4e31f532159d3482d1f9c6caedf31d"
+dependencies = [
+ "bitflags 2.13.2",
+ "dispatch2",
+ "objc2 0.6.4",
+ "objc2-core-audio",
+ "objc2-core-audio-types",
+ "objc2-core-foundation",
+ "objc2-core-video",
+]
+
+[[package]]
+name = "objc2-core-video"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d425caf1df73233f29fd8a5c3e5edbc30d2d4307870f802d18f00d83dc5141a6"
+dependencies = [
+ "bitflags 2.13.2",
+ "objc2 0.6.4",
+ "objc2-core-foundation",
+ "objc2-core-graphics",
+ "objc2-io-surface",
 ]
 
 [[package]]
@@ -3800,6 +3853,17 @@ dependencies = [
  "bitflags 2.13.2",
  "block2 0.6.2",
  "libc",
+ "objc2 0.6.4",
+ "objc2-core-foundation",
+]
+
+[[package]]
+name = "objc2-io-surface"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "180788110936d59bab6bd83b6060ffdfffb3b922ba1396b312ae795e1de9d81d"
+dependencies = [
+ "bitflags 2.13.2",
  "objc2 0.6.4",
  "objc2-core-foundation",
 ]
@@ -3852,6 +3916,20 @@ dependencies = [
  "objc2-core-foundation",
  "objc2-foundation 0.3.2",
  "objc2-metal 0.3.2",
+]
+
+[[package]]
+name = "objc2-screen-capture-kit"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74b7c5390f477482f001bc354d6571a70db7e4f8d5288e860c45521fbce11394"
+dependencies = [
+ "block2 0.6.2",
+ "dispatch2",
+ "objc2 0.6.4",
+ "objc2-core-graphics",
+ "objc2-core-media",
+ "objc2-foundation 0.3.2",
 ]
 
 [[package]]
@@ -4055,7 +4133,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 [[package]]
 name = "perf"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed?tag=v1.20.2#7c451e694f3c52ee0aeb01d7e28b5fa18cd0ad2f"
+source = "git+https://github.com/zed-industries/zed?tag=v1.22.0#76659a55a8c10ed355a070f8764a0b1733e3c115"
 dependencies = [
  "collections",
  "serde",
@@ -4681,7 +4759,7 @@ dependencies = [
 [[package]]
 name = "refineable"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed?tag=v1.20.2#7c451e694f3c52ee0aeb01d7e28b5fa18cd0ad2f"
+source = "git+https://github.com/zed-industries/zed?tag=v1.22.0#76659a55a8c10ed355a070f8764a0b1733e3c115"
 dependencies = [
  "derive_refineable",
 ]
@@ -4894,7 +4972,7 @@ dependencies = [
 [[package]]
 name = "scheduler"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed?tag=v1.20.2#7c451e694f3c52ee0aeb01d7e28b5fa18cd0ad2f"
+source = "git+https://github.com/zed-industries/zed?tag=v1.22.0#76659a55a8c10ed355a070f8764a0b1733e3c115"
 dependencies = [
  "async-task",
  "backtrace",
@@ -5326,7 +5404,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 [[package]]
 name = "sum_tree"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed?tag=v1.20.2#7c451e694f3c52ee0aeb01d7e28b5fa18cd0ad2f"
+source = "git+https://github.com/zed-industries/zed?tag=v1.22.0#76659a55a8c10ed355a070f8764a0b1733e3c115"
 dependencies = [
  "heapless",
  "log",
@@ -5872,9 +5950,9 @@ checksum = "3b09c83c3c29d37506a3e260c08c03743a6bb66a9cd432c6934ab501a190571f"
 
 [[package]]
 name = "unicode-properties"
-version = "0.1.4"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7df058c713841ad818f1dc5d3fd88063241cc61f49f5fbea4b951e8cf5a8d71d"
+checksum = "e70f2a8b45122e719eb623c01822704c4e0907e7e426a05927e1a1cfff5b75d0"
 
 [[package]]
 name = "unicode-script"
@@ -5960,7 +6038,7 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 [[package]]
 name = "util_macros"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed?tag=v1.20.2#7c451e694f3c52ee0aeb01d7e28b5fa18cd0ad2f"
+source = "git+https://github.com/zed-industries/zed?tag=v1.22.0#76659a55a8c10ed355a070f8764a0b1733e3c115"
 dependencies = [
  "perf",
  "quote",
