@@ -1138,4 +1138,34 @@ mod tests {
 
         assert_eq!(bundle_beside(&dir.0), None);
     }
+
+    #[test]
+    fn a_chunk_importing_the_packaged_entry_back_does_not_evaluate_it_twice() {
+        let dir = ScratchDir::new("entry-import-back");
+        let macos_dir = dir.0.join("Contents/MacOS");
+        let assets_dir = dir.0.join("Contents/Resources/assets");
+        fs::create_dir_all(&macos_dir).unwrap();
+        fs::create_dir_all(&assets_dir).unwrap();
+        let entry = dir.0.join("Contents/Resources/bundle.js");
+        fs::write(
+            &entry,
+            "globalThis.evaluations = (globalThis.evaluations ?? 0) + 1;\n\
+             import('./assets/chunk.js');",
+        )
+        .unwrap();
+        fs::write(assets_dir.join("chunk.js"), "import '../bundle.js';").unwrap();
+
+        let path = bundle_beside(&macos_dir).unwrap();
+        let session = Session::load(
+            &path.to_string_lossy(),
+            &fs::read_to_string(&path).unwrap(),
+            stderr_reporter(),
+            None,
+        )
+        .unwrap();
+        assert!(session.engine.run_jobs().is_empty());
+
+        let evaluations: i32 = session.engine.eval("globalThis.evaluations").unwrap();
+        assert_eq!(evaluations, 1);
+    }
 }

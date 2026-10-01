@@ -14,7 +14,7 @@ use std::path::PathBuf;
 
 use rquickjs::{Coerced, Context, Ctx, FromJs, Function, Module, Persistent, Runtime, Value};
 
-use crate::loader::{DiskLoader, DiskResolver};
+use crate::loader::{DiskLoader, DiskResolver, canonical_name};
 
 pub type EngineResult<T> = Result<T, EngineError>;
 
@@ -257,7 +257,9 @@ impl Engine {
     /// if there are none, so `source` then has to be fully self-contained.
     /// `name` also doubles as the base a relative `import` in `source`
     /// resolves against, so pass the source's real path on disk if it has
-    /// one. A module's own completion value is always `undefined` per spec,
+    /// one; it is canonicalized when it names a file.
+    ///
+    /// A module's own completion value is always `undefined` per spec,
     /// so unlike [`eval`](Self::eval) there's nothing meaningful to convert
     /// to a caller-chosen type; state comes back out the same way a plain
     /// script's does — the module's top-level code writes to `globalThis`,
@@ -273,6 +275,7 @@ impl Engine {
     /// A job that throws while the module awaits does not fail the module.
     /// The next [`run_jobs`](Self::run_jobs) returns it.
     pub fn eval_module(&self, name: &str, source: &str) -> EngineResult<()> {
+        let name = canonical_name(name);
         let mut pending = self.context.with(|ctx| {
             Module::declare(ctx.clone(), name, source)
                 .and_then(rquickjs::Module::eval)
@@ -589,6 +592,25 @@ mod tests {
         let first_seen: i32 = engine.eval("globalThis.firstSeen").unwrap();
         let second_seen: i32 = engine.eval("globalThis.secondSeen").unwrap();
         assert_eq!((first_seen, second_seen), (1, 2));
+    }
+
+    #[test]
+    fn a_module_importing_its_entry_back_reaches_the_entry_itself() {
+        let dir = ScratchDir::new("import-entry-back");
+        fs::create_dir_all(dir.0.join("sub")).unwrap();
+        let entry = dir.0.join("sub/../entry.js");
+        let source = "globalThis.runs = (globalThis.runs ?? 0) + 1; import('./back.js');";
+        fs::write(dir.0.join("entry.js"), source).unwrap();
+        fs::write(dir.0.join("back.js"), "import './entry.js';").unwrap();
+
+        let engine = Engine::builder().module_root(&dir.0).build().unwrap();
+        engine
+            .eval_module(&entry.to_string_lossy(), source)
+            .unwrap();
+        let _ = engine.run_jobs();
+
+        let runs: i32 = engine.eval("globalThis.runs").unwrap();
+        assert_eq!(runs, 1);
     }
 
     #[test]

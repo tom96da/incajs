@@ -306,21 +306,6 @@ A fixed entry is deleted and its ID is never reused.
   `window.refresh()` (`third_party/zed/crates/gpui/src/window.rs:2178`), so
   the request may wait for an unrelated redraw. Unconfirmed.
 
-- **B-054 Module loader edge cases**
-  `Units: jsenv,host · Size: S · Impact: Medium`
-
-  `crates/inca-jsenv`'s loader joins a bare specifier onto an absolute path
-  without a check, so `root.join(name)` lets an absolute or `..` name escape
-  the root. The entry's module name isn't canonicalized either, so a module
-  that imports the entry back may evaluate it twice.
-
-  On macOS the packaged entry path is `exe_dir.join("../Resources/bundle.js")`
-  (`bundle_beside` in `crates/inca-host/src/app.rs`), left uncanonicalized.
-  The resolver in `loader.rs` canonicalizes imports, so a dynamic-import chunk
-  that imports back from `../bundle.js` resolves to a different name and
-  evaluates the bundle twice. Both were found by reading and are not
-  reproduced.
-
 - **B-056 Missing `console` methods**
   `Units: jsenv · Size: S–M · Impact: Medium`
 
