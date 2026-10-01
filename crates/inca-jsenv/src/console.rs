@@ -1,13 +1,16 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! `globalThis.console`.
+//! The `globalThis.console` object: [`install`] defines it, and [`Output`]
+//! receives what it prints.
 
 mod format;
 mod state;
 mod table;
 
 use std::cell::RefCell;
+use std::ffi::OsStr;
+use std::io::IsTerminal;
 use std::rc::Rc;
 
 use rquickjs::{
@@ -17,6 +20,7 @@ use rquickjs::{
 use unicode_width::UnicodeWidthStr;
 
 use crate::inspect;
+use crate::paint::{Style, paint};
 use state::State;
 
 /// Starts every line, once per open group.
@@ -37,18 +41,20 @@ pub enum Level {
 }
 
 impl Level {
-    /// The marker a line of this level starts with, after the group guides.
-    fn symbol(self) -> &'static str {
+    /// The glyph and colour a line of this level starts with.
+    fn mark(self) -> Option<(&'static str, Style)> {
         match self {
-            Level::Error => "✖ ",
-            Level::Warn => "⚠ ",
-            Level::Info => "ℹ ",
-            Level::Trace | Level::Debug | Level::Log => "",
+            Level::Error => Some(("✖", Style::Red)),
+            Level::Warn => Some(("⚠", Style::Yellow)),
+            Level::Info => Some(("ℹ", Style::Blue)),
+            Level::Trace | Level::Debug | Level::Log => None,
         }
     }
 }
 
-/// Where a formatted `console` line goes.
+/// Receives each formatted `console` line with its [`Level`]. A line has no
+/// trailing newline, and holds several newline-separated rows when the call
+/// printed more than one.
 pub type Output = Rc<dyn Fn(Level, &str)>;
 
 /// An [`Output`] writing each line to stderr, bypassing `log`'s level filter.
@@ -57,29 +63,88 @@ pub fn to_stderr() -> Output {
     Rc::new(|_, message| eprintln!("{message}"))
 }
 
+/// The colour decision for the given variables and terminal state.
+fn color_enabled(
+    no_color: Option<&OsStr>,
+    force_color: Option<&OsStr>,
+    stderr_is_terminal: bool,
+) -> bool {
+    if no_color.is_some_and(|value| !value.is_empty()) {
+        return false;
+    }
+    match force_color {
+        Some(value) if value == "0" || value == "false" => false,
+        Some(value) if !value.is_empty() => true,
+        _ => stderr_is_terminal,
+    }
+}
+
+/// Whether `console` output to stderr should be coloured, as the environment
+/// asks.
+///
+/// Colour is off when `NO_COLOR` is non-empty, which wins over `FORCE_COLOR`.
+/// Otherwise it is on when `FORCE_COLOR` is set to anything except `0`,
+/// `false` or the empty string, and otherwise on when stderr is a terminal.
+/// Pass the result to [`install`].
+#[must_use]
+pub fn color_from_env() -> bool {
+    color_enabled(
+        std::env::var_os("NO_COLOR").as_deref(),
+        std::env::var_os("FORCE_COLOR").as_deref(),
+        std::io::stderr().is_terminal(),
+    )
+}
+
 struct Console {
     output: Output,
     state: RefCell<State>,
+    color: bool,
 }
 
 impl Console {
+    /// A debug line is dimmed whole, so its values stay uncoloured.
+    fn format(&self, ctx: &Ctx<'_>, level: Level, values: &[Value<'_>]) -> String {
+        format::line(ctx, values, self.color && level != Level::Debug)
+    }
+
     /// Writes `body` behind the group guides and the level's symbol; later
     /// lines align under the first one's text.
     fn write(&self, level: Level, body: &str) {
-        let guides = GROUP_INDENT.repeat(self.state.borrow().depth());
-        let symbol = level.symbol();
-        let pad = " ".repeat(symbol.width());
+        let depth = self.state.borrow().depth();
+        let guide = paint(self.color, Style::Grey, GROUP_INDENT);
+        let guides = guide.repeat(depth);
+        let bare_guides = match depth {
+            0 => String::new(),
+            _ => format!(
+                "{}{}",
+                guide.repeat(depth - 1),
+                paint(self.color, Style::Grey, GROUP_INDENT.trim_end())
+            ),
+        };
+        let pad = " ".repeat(level.mark().map_or(0, |(glyph, _)| glyph.width() + 1));
         let text = body
             .split('\n')
             .enumerate()
             .map(|(index, line)| {
-                let lead = if index == 0 { symbol } else { pad.as_str() };
-                let text = format!("{guides}{lead}{line}");
+                let mark = level.mark().filter(|_| index == 0);
                 if line.is_empty() {
-                    text.trim_end().to_owned()
-                } else {
-                    text
+                    return match mark {
+                        Some((glyph, style)) => {
+                            format!("{guides}{}", paint(self.color, style, glyph))
+                        }
+                        None => bare_guides.clone(),
+                    };
                 }
+                let lead = match mark {
+                    Some((glyph, style)) => format!("{} ", paint(self.color, style, glyph)),
+                    None => pad.clone(),
+                };
+                let line = if level == Level::Debug {
+                    paint(self.color, Style::Grey, line)
+                } else {
+                    line.to_owned()
+                };
+                format!("{guides}{lead}{line}")
             })
             .collect::<Vec<_>>()
             .join("\n");
@@ -94,7 +159,7 @@ impl Console {
         let label = if label.is_empty() {
             "console.group".to_owned()
         } else {
-            format::line(ctx, label)
+            self.format(ctx, Level::Log, label)
         };
         let header = format!("{marker} {label}");
         self.write(Level::Log, header.trim_end());
@@ -114,7 +179,7 @@ impl Console {
         let mut line = format!("{label}: {elapsed:.3}ms");
         if !data.is_empty() {
             line.push(' ');
-            line.push_str(&inspect::line(data));
+            line.push_str(&inspect::line(data, self.color));
         }
         self.write(Level::Log, &line);
     }
@@ -133,7 +198,7 @@ fn label_of(label: &Opt<Value<'_>>) -> String {
 
 /// The `console.assert` line: "Assertion failed", joined to a string first
 /// datum with `: `.
-fn assertion_message<'js>(ctx: &Ctx<'js>, mut data: Vec<Value<'js>>) -> String {
+fn assertion_message<'js>(ctx: &Ctx<'js>, mut data: Vec<Value<'js>>, color: bool) -> String {
     const MESSAGE: &str = "Assertion failed";
     let first = data
         .first()
@@ -150,7 +215,7 @@ fn assertion_message<'js>(ctx: &Ctx<'js>, mut data: Vec<Value<'js>>) -> String {
         Ok(lead) => data.insert(0, lead.into_value()),
         Err(_) => return MESSAGE.to_owned(),
     }
-    format::line(ctx, &data)
+    format::line(ctx, &data, color)
 }
 
 /// The frames of the stack that called `console.trace`. `QuickJS` lists no
@@ -167,18 +232,22 @@ fn caller_stack(ctx: &Ctx<'_>) -> Vec<String> {
         .collect()
 }
 
-/// Installs `globalThis.console`, writing through `output`.
+/// Defines `globalThis.console` with the WHATWG Console methods, writing each
+/// formatted line through `output`.
 ///
-/// Install before evaluating any script, so top-level logging works.
+/// With `color` set, the lines passed to `output` carry ANSI colour sequences;
+/// [`color_from_env`] gives the conventional value. Install before evaluating
+/// any script, so top-level logging works.
 ///
 /// # Errors
 ///
 /// Returns an error if defining `console` or any of its methods fails.
-pub fn install(ctx: &Ctx<'_>, output: &Output) -> JsResult<()> {
+pub fn install(ctx: &Ctx<'_>, output: &Output, color: bool) -> JsResult<()> {
     let console = Object::new(ctx.clone())?;
     let shared = Rc::new(Console {
         output: Rc::clone(output),
         state: RefCell::new(State::default()),
+        color,
     });
 
     install_lines(ctx, &console, &shared)?;
@@ -203,7 +272,7 @@ fn install_lines<'js>(ctx: &Ctx<'js>, console: &Object<'js>, shared: &Rc<Console
         console.set(
             name,
             Function::new(ctx.clone(), move |ctx: Ctx<'_>, values: Rest<Value<'_>>| {
-                c.write(level, &format::line(&ctx, &values.0));
+                c.write(level, &c.format(&ctx, level, &values.0));
             })?,
         )?;
     }
@@ -215,11 +284,11 @@ fn install_lines<'js>(ctx: &Ctx<'js>, console: &Object<'js>, shared: &Rc<Console
             let mut text = "Trace".to_owned();
             if !values.0.is_empty() {
                 text.push_str(": ");
-                text.push_str(&format::line(&ctx, &values.0));
+                text.push_str(&c.format(&ctx, Level::Trace, &values.0));
             }
             for frame in caller_stack(&ctx) {
                 text.push('\n');
-                text.push_str(&frame);
+                text.push_str(&paint(c.color, Style::Grey, &frame));
             }
             c.write(Level::Trace, &text);
         })?,
@@ -246,7 +315,7 @@ fn install_counting<'js>(
                 if holds {
                     return;
                 }
-                c.write(Level::Error, &assertion_message(&ctx, data.0));
+                c.write(Level::Error, &assertion_message(&ctx, data.0, c.color));
             },
         )?,
     )?;
@@ -350,10 +419,10 @@ fn install_structure<'js>(
     console.set(
         "dir",
         Function::new(ctx.clone(), move |item: Opt<Value<'_>>| {
-            let text = item
-                .0
-                .as_ref()
-                .map_or_else(|| "undefined".to_owned(), inspect::quoted);
+            let text = item.0.as_ref().map_or_else(
+                || paint(c.color, Style::Grey, "undefined"),
+                |item| inspect::quoted(item, c.color),
+            );
             c.write(Level::Log, &text);
         })?,
     )?;
@@ -367,11 +436,11 @@ fn install_structure<'js>(
                 let drawn = data
                     .0
                     .as_ref()
-                    .and_then(|data| table::render(data, columns.0.as_ref()));
+                    .and_then(|data| table::render(data, columns.0.as_ref(), c.color));
                 let text = drawn.unwrap_or_else(|| {
                     data.0.as_ref().map_or_else(
-                        || "undefined".to_owned(),
-                        |v| inspect::line(std::slice::from_ref(v)),
+                        || paint(c.color, Style::Grey, "undefined"),
+                        |v| inspect::line(std::slice::from_ref(v), c.color),
                     )
                 });
                 c.write(Level::Log, &text);
@@ -394,6 +463,11 @@ mod tests {
     /// Evaluates `source` against a realm with `console` installed, and
     /// returns every line it wrote.
     fn lines_written_by(source: &str) -> Vec<(Level, String)> {
+        written_with_color(source, false)
+    }
+
+    /// As [`lines_written_by`], with colour switched on or off.
+    fn written_with_color(source: &str, color: bool) -> Vec<(Level, String)> {
         let written = Rc::new(RefCell::new(Vec::new()));
         let sink = Rc::clone(&written);
         let output: Output = Rc::new(move |level, message| {
@@ -403,7 +477,7 @@ mod tests {
         let runtime = Runtime::new().unwrap();
         let context = Context::full(&runtime).unwrap();
         context.with(|ctx| {
-            install(&ctx, &output).unwrap();
+            install(&ctx, &output, color).unwrap();
             ctx.eval::<(), _>(source).unwrap();
             assert!(!ctx.has_exception(), "a call left an exception pending");
         });
@@ -1044,5 +1118,478 @@ mod tests {
         let written = lines_written_by("typeof console === 'object' && console.log('present');");
 
         assert_eq!(written[0].1, "present");
+    }
+
+    fn colored_texts(source: &str) -> Vec<String> {
+        written_with_color(source, true)
+            .into_iter()
+            .map(|(_, t)| t)
+            .collect()
+    }
+
+    /// `text` without ANSI colour sequences.
+    fn strip(text: &str) -> String {
+        let mut out = String::new();
+        let mut rest = text;
+        while let Some(at) = rest.find("\x1b[") {
+            out.push_str(&rest[..at]);
+            let end = rest[at..].find('m').unwrap();
+            rest = &rest[at + end + 1..];
+        }
+        out.push_str(rest);
+        out
+    }
+
+    const GUIDE: &str = "\x1b[90m│ \x1b[39m";
+
+    fn os(text: &str) -> &OsStr {
+        OsStr::new(text)
+    }
+
+    #[test]
+    fn a_non_empty_no_color_turns_colour_off_whatever_else_is_set() {
+        for force in [
+            None,
+            Some(os("")),
+            Some(os("1")),
+            Some(os("0")),
+            Some(os("true")),
+        ] {
+            for terminal in [false, true] {
+                assert!(!color_enabled(Some(os("1")), force, terminal));
+                assert!(!color_enabled(Some(os("anything")), force, terminal));
+            }
+        }
+    }
+
+    #[test]
+    fn an_empty_no_color_is_ignored() {
+        assert!(color_enabled(Some(os("")), None, true));
+        assert!(!color_enabled(Some(os("")), None, false));
+        assert!(color_enabled(Some(os("")), Some(os("1")), false));
+    }
+
+    #[test]
+    fn force_color_zero_or_false_turns_colour_off_on_a_terminal() {
+        assert!(!color_enabled(None, Some(os("0")), true));
+        assert!(!color_enabled(None, Some(os("false")), true));
+        assert!(!color_enabled(None, Some(os("0")), false));
+        assert!(!color_enabled(None, Some(os("false")), false));
+    }
+
+    #[test]
+    fn any_other_non_empty_force_color_turns_colour_on_without_a_terminal() {
+        for value in ["1", "2", "3", "true", "yes", "FALSE", "00"] {
+            assert!(color_enabled(None, Some(os(value)), false), "{value}");
+            assert!(color_enabled(None, Some(os(value)), true), "{value}");
+        }
+    }
+
+    #[test]
+    fn an_empty_force_color_falls_through_to_the_terminal() {
+        assert!(color_enabled(None, Some(os("")), true));
+        assert!(!color_enabled(None, Some(os("")), false));
+    }
+
+    #[test]
+    fn without_either_variable_the_terminal_decides() {
+        assert!(color_enabled(None, None, true));
+        assert!(!color_enabled(None, None, false));
+    }
+
+    #[test]
+    fn values_are_coloured_by_type_in_a_log_line() {
+        assert_eq!(
+            colored_texts("console.log('s', 1, true, null, undefined, { k: 'v' });"),
+            [
+                "s \x1b[33m1\x1b[39m \x1b[33mtrue\x1b[39m \x1b[1mnull\x1b[22m \x1b[90mundefined\x1b[39m { k: \x1b[32m'v'\x1b[39m }"
+            ]
+        );
+    }
+
+    #[test]
+    fn each_level_symbol_is_coloured_and_its_body_is_not() {
+        assert_eq!(
+            colored_texts(
+                "console.error('e'); console.warn('w'); console.info('i'); \
+                 console.log('l'); console.dirxml('x');"
+            ),
+            [
+                "\x1b[31m✖\x1b[39m e",
+                "\x1b[33m⚠\x1b[39m w",
+                "\x1b[34mℹ\x1b[39m i",
+                "l",
+                "x"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_failed_assert_has_a_red_symbol() {
+        assert_eq!(
+            colored_texts("console.assert(false, 'bad');"),
+            ["\x1b[31m✖\x1b[39m Assertion failed: bad"]
+        );
+    }
+
+    #[test]
+    fn a_warning_from_a_counter_or_timer_has_a_yellow_symbol() {
+        assert_eq!(
+            colored_texts("console.countReset('q'); console.timeEnd('q');"),
+            [
+                "\x1b[33m⚠\x1b[39m Count for 'q' does not exist",
+                "\x1b[33m⚠\x1b[39m Timer 'q' does not exist"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_debug_line_is_dim_as_a_whole_without_value_colours() {
+        assert_eq!(
+            colored_texts("console.debug('d', 1, { a: 'b' });"),
+            ["\x1b[90md 1 { a: 'b' }\x1b[39m"]
+        );
+    }
+
+    #[test]
+    fn every_line_of_a_multi_line_debug_body_is_dim() {
+        assert_eq!(
+            colored_texts("console.debug('a\\nb');"),
+            ["\x1b[90ma\x1b[39m\n\x1b[90mb\x1b[39m"]
+        );
+    }
+
+    #[test]
+    fn group_guides_are_dim_at_every_depth() {
+        assert_eq!(
+            colored_texts(
+                "console.group('a'); console.group('b'); console.log('x'); console.warn('w');"
+            ),
+            [
+                "▼ a".to_owned(),
+                format!("{GUIDE}▼ b"),
+                format!("{GUIDE}{GUIDE}x"),
+                format!("{GUIDE}{GUIDE}\x1b[33m⚠\x1b[39m w"),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_multi_line_body_lines_up_with_colour_on() {
+        assert_eq!(
+            colored_texts("console.group('g'); console.error('a\\nb');"),
+            [
+                "▼ g".to_owned(),
+                format!("{GUIDE}\x1b[31m✖\x1b[39m a\n{GUIDE}  b"),
+            ]
+        );
+    }
+
+    #[test]
+    fn an_empty_line_keeps_no_trailing_space_with_colour_on() {
+        assert_eq!(
+            colored_texts("console.group(''); console.log(''); console.error('');"),
+            [
+                "▼".to_owned(),
+                "\x1b[90m│\x1b[39m".to_owned(),
+                format!("{GUIDE}\x1b[31m✖\x1b[39m"),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_first_line_of_an_error_is_plain_and_its_frames_are_dim() {
+        let text = &colored_texts("console.log(new Error('boom'));")[0];
+        let mut lines = text.lines();
+
+        assert_eq!(lines.next(), Some("Error: boom"));
+        for frame in lines {
+            assert!(
+                frame.starts_with("\x1b[90m") && frame.ends_with("\x1b[39m"),
+                "{frame:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn trace_keeps_its_first_line_plain_and_dims_each_frame() {
+        let text = &colored_texts(
+            "function inner() { console.trace('hi', 1); }\nfunction outer() { inner(); }\nouter();",
+        )[0];
+        let lines: Vec<&str> = text.lines().collect();
+
+        assert_eq!(lines[0], "Trace: hi \x1b[33m1\x1b[39m");
+        assert!(lines.len() >= 3, "{lines:?}");
+        for frame in &lines[1..] {
+            assert!(
+                frame.starts_with("\x1b[90m") && frame.ends_with("\x1b[39m"),
+                "{frame:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn trace_inside_a_group_dims_guides_and_frames() {
+        let text = &colored_texts("console.group('g'); console.trace();")[1];
+
+        for (index, line) in text.lines().enumerate() {
+            assert!(line.starts_with(GUIDE), "{line:?}");
+            let rest = &line[GUIDE.len()..];
+            assert_eq!(rest.starts_with("\x1b[90m"), index > 0, "{line:?}");
+        }
+    }
+
+    #[test]
+    fn dir_and_the_table_fallback_colour_their_value() {
+        assert_eq!(
+            colored_texts("console.dir('s'); console.dir(); console.table(5); console.table();"),
+            [
+                "\x1b[32m's'\x1b[39m",
+                "\x1b[90mundefined\x1b[39m",
+                "\x1b[33m5\x1b[39m",
+                "\x1b[90mundefined\x1b[39m"
+            ]
+        );
+    }
+
+    #[test]
+    fn time_log_colours_its_extra_data() {
+        let lines = colored_texts("console.time('t'); console.timeLog('t', 2);");
+
+        assert!(lines[0].ends_with(" \x1b[33m2\x1b[39m"), "{}", lines[0]);
+        assert!(lines[0].starts_with("t: "), "{}", lines[0]);
+    }
+
+    #[test]
+    fn a_group_label_and_assert_data_are_coloured() {
+        assert_eq!(
+            colored_texts("console.group('a', 1); console.assert(false, 'm', 2);"),
+            [
+                "▼ a \x1b[33m1\x1b[39m".to_owned(),
+                format!("{GUIDE}\x1b[31m✖\x1b[39m Assertion failed: m \x1b[33m2\x1b[39m"),
+            ]
+        );
+    }
+
+    #[test]
+    fn format_specifiers_colour_inspected_arguments() {
+        assert_eq!(
+            colored_texts("console.log('%o|%s', 'q', 'r', 3);"),
+            ["\x1b[32m'q'\x1b[39m|r \x1b[33m3\x1b[39m"]
+        );
+    }
+
+    #[test]
+    fn a_coloured_table_has_the_layout_of_the_plain_one() {
+        let source = "console.group('g'); console.table([{ a: 1, b: 'x' }, { a: [1, 'y'], c: null }, 5, 'z']);";
+        let plain = texts(source);
+        let colored = colored_texts(source);
+
+        assert_eq!(colored.len(), plain.len());
+        assert_eq!(strip(&colored[1]), plain[1]);
+        assert!(colored[1].contains("\x1b[33m1\x1b[39m"), "{}", colored[1]);
+        assert!(colored[1].contains("\x1b[32m'x'\x1b[39m"), "{}", colored[1]);
+    }
+
+    #[test]
+    fn a_coloured_table_cell_is_padded_by_its_visible_width() {
+        let drawn = &colored_texts("console.table([{ k: 'ab' }, { k: 1 }]);")[0];
+
+        assert_eq!(
+            drawn.lines().nth(3).unwrap(),
+            "│ 0       │ \x1b[32m'ab'\x1b[39m │"
+        );
+        assert_eq!(
+            drawn.lines().nth(4).unwrap(),
+            "│ 1       │ \x1b[33m1\x1b[39m    │"
+        );
+    }
+
+    #[test]
+    fn a_coloured_table_leaves_headers_and_rules_uncoloured() {
+        let drawn = &colored_texts("console.table([{ a: 1 }]);")[0];
+        let lines: Vec<&str> = drawn.lines().collect();
+
+        assert_eq!(lines[0], "┌─────────┬───┐");
+        assert_eq!(lines[1], "│ (index) │ a │");
+        assert_eq!(lines[2], "├─────────┼───┤");
+    }
+
+    #[test]
+    fn a_coloured_table_escapes_control_characters_like_the_plain_one() {
+        let source = r"console.table([{ k: ['a\nb', 1] }]);";
+
+        assert_eq!(strip(&colored_texts(source)[0]), texts(source)[0]);
+    }
+
+    #[test]
+    fn colour_off_writes_no_escape_sequences_for_any_method() {
+        let source = "console.group('g'); console.log('s', 1, null, undefined, { a: ['b'] }); \
+             console.debug('d'); console.info('i'); console.warn('w'); console.error(new Error('e')); \
+             console.assert(false, 'x'); console.trace('t'); console.dir('q'); \
+             console.table([{ a: 1 }, 'v']); console.count(); console.countReset('z'); \
+             console.groupEnd(); console.log(function f() {}, Symbol('s'), 10n);";
+
+        assert!(texts(source).iter().all(|t| !t.contains('\x1b')));
+    }
+
+    #[test]
+    fn colour_on_adds_only_sequences_to_the_plain_output() {
+        let source = "console.group('g'); console.log('s', 1, null, undefined, { a: ['b'] }); \
+             console.debug('d'); console.info('i'); console.warn('w'); \
+             console.error('e\\nf'); console.assert(false, 'x'); console.dir('q'); \
+             console.table([{ a: 1 }, 'v']); console.count(); console.countReset('z'); \
+             console.groupEnd(); console.log(function f() {}, Symbol('s'), 10n);";
+        let plain = texts(source);
+        let colored: Vec<String> = colored_texts(source).iter().map(|t| strip(t)).collect();
+
+        assert_eq!(colored, plain);
+    }
+
+    #[test]
+    fn colour_does_not_change_the_levels() {
+        let source = "console.trace('a'); console.debug('a'); console.log('a'); \
+             console.info('a'); console.warn('a'); console.error('a');";
+        let levels = |color| -> Vec<Level> {
+            written_with_color(source, color)
+                .iter()
+                .map(|(level, _)| *level)
+                .collect()
+        };
+
+        assert_eq!(levels(true), levels(false));
+    }
+
+    /// Whether every colour sequence on `line` is closed on `line`.
+    fn balanced(line: &str) -> bool {
+        let mut open = 0usize;
+        let mut close = 0usize;
+        let mut rest = line;
+        while let Some(at) = rest.find("\x1b[") {
+            let end = at + rest[at..].find('m').unwrap();
+            if matches!(&rest[at + 2..end], "39" | "22") {
+                close += 1;
+            } else {
+                open += 1;
+            }
+            rest = &rest[end + 1..];
+        }
+        open == close
+    }
+
+    /// `text` without the colour sequences this crate paints.
+    fn without_known_codes(text: &str) -> String {
+        let mut out = text.to_owned();
+        for code in [31, 32, 33, 34, 35, 36, 1, 90, 39, 22] {
+            out = out.replace(&format!("\x1b[{code}m"), "");
+        }
+        out
+    }
+
+    #[test]
+    fn colour_never_crosses_a_line_break_in_a_nested_string() {
+        assert_eq!(
+            colored_texts("console.log(['a\\nb']);"),
+            ["[ \x1b[32m'a\x1b[39m\n\x1b[32mb'\x1b[39m ]"]
+        );
+    }
+
+    #[test]
+    fn colour_never_crosses_a_line_break_inside_nested_groups() {
+        let lines = colored_texts(
+            "console.group('a'); console.group('b'); console.warn(['x\\ny'], Symbol('p\\nq'));",
+        );
+
+        assert_eq!(
+            lines[2],
+            format!(
+                "{GUIDE}{GUIDE}\x1b[33m⚠\x1b[39m [ \x1b[32m'x\x1b[39m\n\
+                 {GUIDE}{GUIDE}  \x1b[32my'\x1b[39m ] \x1b[32mSymbol(p\x1b[39m\n\
+                 {GUIDE}{GUIDE}  \x1b[32mq)\x1b[39m"
+            )
+        );
+        for line in lines[2].lines() {
+            assert!(balanced(line), "{line:?}");
+        }
+    }
+
+    #[test]
+    fn a_multi_line_error_message_is_balanced_on_every_line() {
+        let text = &colored_texts("console.error(new Error('x\\ny'));")[0];
+        let lines: Vec<&str> = text.lines().collect();
+
+        assert_eq!(lines[0], "\x1b[31m✖\x1b[39m Error: x");
+        assert_eq!(lines[1], "  y");
+        assert!(lines.len() > 2);
+        assert!(lines.iter().all(|line| balanced(line)), "{lines:?}");
+    }
+
+    #[test]
+    fn a_debug_line_with_a_multi_line_value_is_dim_on_each_line() {
+        assert_eq!(
+            colored_texts("console.group('g'); console.debug({ a: 'x\\ny' });")[1],
+            format!("{GUIDE}\x1b[90m{{ a: 'x\x1b[39m\n{GUIDE}\x1b[90my' }}\x1b[39m")
+        );
+    }
+
+    #[test]
+    fn every_colour_in_every_method_is_closed_on_its_own_line() {
+        let source = "console.group('g\\nh'); console.log(['a\\nb'], Symbol('s\\nt')); \
+             console.info({ 'k\\nz': 'v\\nw' }); console.error(new Error('e\\nf')); \
+             console.trace('t\\nu'); console.debug('d\\ne'); console.assert(false, ['q\\nr']); \
+             console.dir(['m\\nn']); console.table([['c\\nd', 1]]);";
+
+        for text in colored_texts(source) {
+            for line in text.lines() {
+                assert!(balanced(line), "{line:?}");
+            }
+        }
+    }
+
+    /// The coloured and the plain drawing of `console.table(args)`, both
+    /// checked to be aligned and free of live sequences other than ours.
+    fn drawn_both_ways(args: &str) -> (String, String) {
+        let source = format!("console.table({args});");
+        let plain = texts(&source).remove(0);
+        let colored = colored_texts(&source).remove(0);
+        let bare = without_known_codes(&colored);
+
+        assert!(!bare.contains('\x1b'), "{colored:?}");
+        assert_eq!(bare, plain);
+        let widths: Vec<usize> = plain.lines().map(UnicodeWidthStr::width).collect();
+        assert!(widths.windows(2).all(|w| w[0] == w[1]), "{plain}");
+        assert!(colored.lines().all(balanced), "{colored:?}");
+        (plain, colored)
+    }
+
+    #[test]
+    fn a_table_cell_holding_an_escape_sequence_shows_it_as_text() {
+        let (plain, colored) = drawn_both_ways(r"[{ k: ['\x1b[1mx'] }]");
+
+        assert!(plain.contains(r"[ '\x1b[1mx' ]"), "{plain}");
+        assert!(colored.contains(r"\x1b[1mx"), "{colored}");
+    }
+
+    #[test]
+    fn a_table_cell_holding_a_nested_colour_code_stays_inert() {
+        let (plain, _) = drawn_both_ways(r"[{ k: { v: '\x1b[31m' }, 'z\x1b[0m': 1 }]");
+
+        assert!(plain.contains(r"'\x1b[31m'"), "{plain}");
+        assert!(plain.contains(r"z\x1b[0m"), "{plain}");
+    }
+
+    #[test]
+    fn a_table_cell_with_a_tab_or_newline_stays_on_one_line() {
+        let (plain, _) = drawn_both_ways(r"[{ k: ['a\tb', 'c\nd'], 'e\tf': 1 }, 'x\ty']");
+
+        assert_eq!(plain.lines().count(), 6, "{plain}");
+        assert!(plain.contains(r"'a\tb'"), "{plain}");
+        assert!(plain.contains(r"'c\nd'"), "{plain}");
+        assert!(plain.contains(r"e\tf"), "{plain}");
+    }
+
+    #[test]
+    fn a_table_with_a_wide_and_a_coloured_cell_stays_aligned() {
+        drawn_both_ways(r"[{ a: '日本', b: [1, 'x'], c: null, d: undefined, e: () => 1 }]");
     }
 }

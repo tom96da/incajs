@@ -13,15 +13,15 @@ use crate::inspect;
 /// `%s`, `%d`/`%i`, `%f`, `%o`/`%O`, `%c` and `%%` are replaced; anything else
 /// stays as written. A conversion that throws prints the argument as
 /// `console.dir` shows it.
-pub(super) fn line(ctx: &Ctx<'_>, values: &[Value<'_>]) -> String {
+pub(super) fn line(ctx: &Ctx<'_>, values: &[Value<'_>], color: bool) -> String {
     let Some((first, rest)) = values.split_first() else {
         return String::new();
     };
     let Some(mut target) = first.as_string().and_then(|text| text.to_string().ok()) else {
-        return inspect::line(values);
+        return inspect::line(values, color);
     };
     if rest.is_empty() {
-        return inspect::line(values);
+        return inspect::line(values, color);
     }
 
     let mut args = rest.iter();
@@ -36,7 +36,7 @@ pub(super) fn line(ctx: &Ctx<'_>, values: &[Value<'_>]) -> String {
             at = pos + 2;
             continue;
         };
-        target.replace_range(pos..pos + 2, &convert(ctx, spec, arg));
+        target.replace_range(pos..pos + 2, &convert(ctx, spec, arg, color));
         at = pos;
     }
 
@@ -44,7 +44,7 @@ pub(super) fn line(ctx: &Ctx<'_>, values: &[Value<'_>]) -> String {
     if rest.is_empty() {
         target
     } else {
-        format!("{target} {}", inspect::line(rest))
+        format!("{target} {}", inspect::line(rest, color))
     }
 }
 
@@ -61,18 +61,18 @@ fn next_specifier(target: &str, from: usize) -> Option<(usize, u8)> {
     None
 }
 
-fn convert(ctx: &Ctx<'_>, spec: u8, arg: &Value<'_>) -> String {
+fn convert(ctx: &Ctx<'_>, spec: u8, arg: &Value<'_>, color: bool) -> String {
     let symbol = arg.type_of() == Type::Symbol;
     let converted = match spec {
         b'c' => Some(String::new()),
-        b'o' | b'O' => Some(inspect::quoted(arg)),
-        b's' if symbol => Some(inspect::quoted(arg)),
+        b'o' | b'O' => Some(inspect::quoted(arg, color)),
+        b's' if symbol => Some(inspect::quoted(arg, color)),
         b's' => string_of(ctx, arg),
         _ if symbol => Some("NaN".to_owned()),
         b'f' => string_of(ctx, arg).map(|text| number_text(ctx, parse_float(&text))),
         _ => string_of(ctx, arg).map(|text| number_text(ctx, parse_int(&text))),
     };
-    converted.unwrap_or_else(|| inspect::quoted(arg))
+    converted.unwrap_or_else(|| inspect::quoted(arg, color))
 }
 
 fn string_of(ctx: &Ctx<'_>, arg: &Value<'_>) -> Option<String> {
@@ -155,7 +155,7 @@ mod tests {
         let context = Context::full(&runtime).unwrap();
         context.with(|ctx| {
             let values: Vec<Value<'_>> = ctx.eval(args).unwrap();
-            let out = line(&ctx, &values);
+            let out = line(&ctx, &values, false);
             assert!(!ctx.has_exception(), "a conversion left an exception");
             out
         })

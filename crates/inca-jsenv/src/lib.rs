@@ -15,5 +15,6 @@ pub mod engine;
 
 mod inspect;
 mod loader;
+mod paint;
 
 pub use engine::{Engine, EngineError, EngineResult};

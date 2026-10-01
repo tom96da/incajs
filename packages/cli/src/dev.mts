@@ -158,6 +158,18 @@ async function pruneStaleFiles(outDir: string, keep: readonly string[]): Promise
 }
 
 /**
+ * The environment to start the host with: the current one, plus
+ * `FORCE_COLOR=1` when `stderr` is a terminal, so the host colours output
+ * its piped stderr would otherwise not. `NO_COLOR` and `FORCE_COLOR`, when
+ * set non-empty, are left alone.
+ */
+function hostEnv(stderr: NodeJS.WritableStream): NodeJS.ProcessEnv | undefined {
+  const { NO_COLOR, FORCE_COLOR } = process.env;
+  if (!(stderr as { isTTY?: boolean }).isTTY || NO_COLOR || FORCE_COLOR) return undefined;
+  return { ...process.env, FORCE_COLOR: "1" };
+}
+
+/**
  * Builds the app, starts `inca-host` once the first build lands, and
  * reloads it on every rebuild — until `options.signal` aborts or the host
  * exits on its own.
@@ -215,6 +227,7 @@ export async function dev(options: DevOptions): Promise<void> {
       const next = new HostClient({
         entryFile,
         hostBin,
+        env: hostEnv(stderr),
         onStderr: (line) => stderr.write(line),
         onReady: () => {
           ready = true;

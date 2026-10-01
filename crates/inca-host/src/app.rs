@@ -180,7 +180,7 @@ impl Session {
         let module_root = Path::new(entry_path).parent().unwrap_or(Path::new("."));
         let engine = Engine::builder().module_root(module_root).build()?;
         engine.with(|ctx| {
-            console::install(&ctx, &console::to_stderr())
+            console::install(&ctx, &console::to_stderr(), console::color_from_env())
                 .and_then(|()| install(&ctx, &host))
                 .and_then(|()| match writer {
                     Some(writer) => install_dev(&ctx, crate::dev::dev_send(writer)),

@@ -3,23 +3,39 @@
 
 //! `console.table`.
 
-use std::fmt::Write;
-
 use rquickjs::{Coerced, Type, Value};
 use unicode_width::UnicodeWidthStr;
 
 use crate::inspect;
+use crate::paint::{Style, paint};
 
 const INDEX: &str = "(index)";
 const VALUES: &str = "Values";
 
 type Entries<'js> = Vec<(String, Value<'js>)>;
 
+/// `plain` sets widths; `shown` is printed.
+#[derive(Default)]
+struct Cell {
+    plain: String,
+    shown: String,
+}
+
+impl Cell {
+    fn plain(text: String) -> Self {
+        Self {
+            shown: text.clone(),
+            plain: text,
+        }
+    }
+}
+
 /// Draws `data` as a table, or `None` when it is not tabular.
 ///
 /// An array, or an object with at least one own enumerable key, is tabular.
-/// `columns`, when an array, picks and orders the columns shown.
-pub(super) fn render(data: &Value<'_>, columns: Option<&Value<'_>>) -> Option<String> {
+/// `columns`, when an array, picks and orders the columns shown. Cell values
+/// are coloured when `color` is set.
+pub(super) fn render(data: &Value<'_>, columns: Option<&Value<'_>>, color: bool) -> Option<String> {
     let rows: Vec<(String, Value<'_>, Option<Entries<'_>>)> = entries(data)?
         .into_iter()
         .map(|(index, row)| {
@@ -44,28 +60,28 @@ pub(super) fn render(data: &Value<'_>, columns: Option<&Value<'_>>) -> Option<St
     }
     let has_values = rows.iter().any(|(_, _, own)| own.is_none());
 
-    let mut header = vec![INDEX.to_owned()];
-    header.extend(keys.iter().map(|key| escape(key)));
+    let mut header = vec![Cell::plain(INDEX.to_owned())];
+    header.extend(keys.iter().map(|key| Cell::plain(escape(key))));
     if has_values {
-        header.push(VALUES.to_owned());
+        header.push(Cell::plain(VALUES.to_owned()));
     }
 
-    let body: Vec<Vec<String>> = rows
+    let body: Vec<Vec<Cell>> = rows
         .iter()
         .map(|(index, row, own)| {
-            let mut cells = vec![escape(index)];
+            let mut cells = vec![Cell::plain(escape(index))];
             for key in &keys {
                 let cell = own
                     .as_ref()
                     .and_then(|own| own.iter().find(|(k, _)| k == key))
-                    .map(|(_, value)| cell(value));
+                    .map(|(_, value)| cell(value, color));
                 cells.push(cell.unwrap_or_default());
             }
             if has_values {
                 cells.push(if own.is_none() {
-                    cell(row)
+                    cell(row, color)
                 } else {
-                    String::new()
+                    Cell::default()
                 });
             }
             cells
@@ -92,36 +108,27 @@ fn entries<'js>(value: &Value<'js>) -> Option<Entries<'js>> {
     (value.is_array() || !entries.is_empty()).then_some(entries)
 }
 
-fn cell(value: &Value<'_>) -> String {
-    match value.as_string().and_then(|text| text.to_string().ok()) {
-        Some(text) => format!("'{}'", escape(&text).replace('\'', "\\'")),
-        None => escape_controls(&inspect::quoted(value)),
+fn cell(value: &Value<'_>, color: bool) -> Cell {
+    if let Some(text) = value.as_string().and_then(|text| text.to_string().ok()) {
+        let plain = format!("'{}'", escape(&text).replace('\'', "\\'"));
+        return Cell {
+            shown: paint(color, Style::Green, &plain),
+            plain,
+        };
     }
+    let plain = inspect::quoted_escaped(value, false);
+    let shown = if color {
+        inspect::quoted_escaped(value, true)
+    } else {
+        plain.clone()
+    };
+    Cell { plain, shown }
 }
 
 /// Spells a backslash and every control character as an escape sequence, so
 /// a cell stays on one line.
 fn escape(text: &str) -> String {
-    escape_controls(&text.replace('\\', "\\\\"))
-}
-
-fn escape_controls(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    for c in text.chars() {
-        match c {
-            '\n' => out.push_str("\\n"),
-            '\t' => out.push_str("\\t"),
-            '\r' => out.push_str("\\r"),
-            c if c.is_control() && u32::from(c) < 0x100 => {
-                let _ = write!(out, "\\x{:02x}", u32::from(c));
-            }
-            c if c.is_control() => {
-                let _ = write!(out, "\\u{:04x}", u32::from(c));
-            }
-            c => out.push(c),
-        }
-    }
-    out
+    inspect::escape_controls(&text.replace('\\', "\\\\"))
 }
 
 fn strings(value: &Value<'_>) -> Option<Vec<String>> {
@@ -136,12 +143,12 @@ fn strings(value: &Value<'_>) -> Option<Vec<String>> {
     )
 }
 
-fn draw(header: &[String], body: &[Vec<String>]) -> String {
+fn draw(header: &[Cell], body: &[Vec<Cell>]) -> String {
     let widths: Vec<usize> = (0..header.len())
         .map(|column| {
             body.iter()
-                .map(|row| row[column].width())
-                .chain([header[column].width()])
+                .map(|row| row[column].plain.width())
+                .chain([header[column].plain.width()])
                 .max()
                 .unwrap_or(0)
                 + 2
@@ -152,11 +159,17 @@ fn draw(header: &[String], body: &[Vec<String>]) -> String {
         let bars: Vec<String> = widths.iter().map(|w| "─".repeat(*w)).collect();
         format!("{left}{}{right}", bars.join(mid))
     };
-    let row = |cells: &[String]| {
+    let row = |cells: &[Cell]| {
         let padded: Vec<String> = cells
             .iter()
             .zip(&widths)
-            .map(|(cell, width)| format!(" {cell}{}", " ".repeat(width - 1 - cell.width())))
+            .map(|(cell, width)| {
+                format!(
+                    " {}{}",
+                    cell.shown,
+                    " ".repeat(width - 1 - cell.plain.width())
+                )
+            })
             .collect();
         format!("│{}│", padded.join("│"))
     };
@@ -181,7 +194,7 @@ mod tests {
         context.with(|ctx| {
             let data: Value<'_> = ctx.eval(data).unwrap();
             let columns: Option<Value<'_>> = columns.map(|c| ctx.eval(c).unwrap());
-            let drawn = render(&data, columns.as_ref());
+            let drawn = render(&data, columns.as_ref(), false);
             assert!(!ctx.has_exception(), "a read left an exception");
             drawn
         })

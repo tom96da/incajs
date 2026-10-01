@@ -22,6 +22,8 @@ export interface HostClientOptions {
   entryFile: string;
   /** Overrides which `inca-host` binary gets spawned, in place of automatic resolution. */
   hostBin?: string;
+  /** The environment the host starts with. Defaults to this process's own. */
+  env?: NodeJS.ProcessEnv;
   /**
    * Every diagnostic line the transport itself produces: the host's real
    * stderr, a stray stdout line, and a `ready` protocol mismatch. Defaults
@@ -83,6 +85,7 @@ export class HostClient {
     assertHostBin(hostBin);
     const child = spawn(hostBin, ["--dev", this.#options.entryFile], {
       stdio: ["pipe", "pipe", "pipe"],
+      env: this.#options.env,
     });
     this.#child = child;
 

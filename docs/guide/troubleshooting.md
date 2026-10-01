@@ -15,6 +15,12 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 (and the host's own reports) show up in the same terminal you ran
 `inca dev` from.
 
+`console` output is coloured when it goes to a terminal
+<Badge type="warning" text="unreleased" />. Set `NO_COLOR` to any
+non-empty value to turn the colours off, or `FORCE_COLOR` to a value
+other than `0` or `false` to turn them on when the output is piped.
+`NO_COLOR` wins when both are set.
+
 A packaged app (`inca package`) has no such relay — a double-clicked
 `.app` writes its `console` output to a stderr nobody reads, so it's
 lost. This is a known gap; see

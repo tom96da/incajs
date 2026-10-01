@@ -18,6 +18,7 @@ import type {
 } from "../src/adapter/types.mts";
 
 const mockHost = path.join(import.meta.dirname, "fixtures/mock-host.mts");
+const envMockHost = path.join(import.meta.dirname, "fixtures/mock-host-env.mts");
 const reloadFailsMockHost = path.join(import.meta.dirname, "fixtures/mock-host-reload-fails.mts");
 const appErrorMockHost = path.join(import.meta.dirname, "fixtures/mock-host-app-error.mts");
 const protocolMismatchMockHost = path.join(
@@ -104,7 +105,7 @@ async function makeUnspawnableHost(dir: string): Promise<string> {
   return hostBin;
 }
 
-function makeSink(): { stream: NodeJS.WritableStream; text: () => string } {
+function makeSink(tty = false): { stream: NodeJS.WritableStream; text: () => string } {
   let data = "";
   const stream = new Writable({
     write(chunk: Buffer, _encoding, callback) {
@@ -112,6 +113,7 @@ function makeSink(): { stream: NodeJS.WritableStream; text: () => string } {
       callback();
     },
   });
+  if (tty) Object.assign(stream, { isTTY: true });
   return { stream, text: () => data };
 }
 
@@ -142,6 +144,52 @@ describe("dev", () => {
     await running;
 
     expect(stdout.text()).toContain("[inca] ready");
+  });
+
+  describe("the host's colour environment", () => {
+    /** Starts the host against `stderr` and returns the env line it reported. */
+    async function reportedEnv(stderr: ReturnType<typeof makeSink>): Promise<string> {
+      const bundler = makeFakeBundler();
+      const stdout = makeSink();
+      const controller = new AbortController();
+
+      const running = dev({
+        entry: "unused",
+        bundler,
+        hostBin: envMockHost,
+        stdout: stdout.stream,
+        stderr: stderr.stream,
+        signal: controller.signal,
+      });
+
+      await bundler.watching;
+      bundler.emitBuild();
+      await vi.waitFor(() => expect(stderr.text()).toContain("env NO_COLOR="));
+      controller.abort();
+      await running;
+
+      return /env NO_COLOR=\S+ FORCE_COLOR=\S+/.exec(stderr.text())?.[0] ?? "";
+    }
+
+    it.each([
+      ["a terminal with neither variable set", true, undefined, undefined, "null", '"1"'],
+      ["a terminal with an empty NO_COLOR", true, "", undefined, '""', '"1"'],
+      ["a terminal with an empty FORCE_COLOR", true, undefined, "", "null", '"1"'],
+      ["a pipe with neither variable set", false, undefined, undefined, "null", "null"],
+      ["a terminal with NO_COLOR set", true, "1", undefined, '"1"', "null"],
+      ["a terminal with FORCE_COLOR set", true, undefined, "0", "null", '"0"'],
+      ["a pipe with FORCE_COLOR set", false, undefined, "2", "null", '"2"'],
+    ])("passes the host %s", async (_, tty, noColor, forceColor, seenNoColor, seenForceColor) => {
+      vi.stubEnv("NO_COLOR", noColor);
+      vi.stubEnv("FORCE_COLOR", forceColor);
+      onTestFinished(() => {
+        vi.unstubAllEnvs();
+      });
+
+      const line = await reportedEnv(makeSink(tty));
+
+      expect(line).toBe(`env NO_COLOR=${seenNoColor} FORCE_COLOR=${seenForceColor}`);
+    });
   });
 
   it("reloads the host on a later build without restarting it", async () => {
