@@ -306,14 +306,6 @@ A fixed entry is deleted and its ID is never reused.
   `window.refresh()` (`third_party/zed/crates/gpui/src/window.rs:2178`), so
   the request may wait for an unrelated redraw. Unconfirmed.
 
-- **B-056 Missing `console` methods**
-  `Units: jsenv · Size: S–M · Impact: Medium`
-
-  `crates/inca-jsenv/src/console.rs` has
-  `trace`/`debug`/`log`/`info`/`warn`/`error` only. A dependency that calls
-  `console.assert`/`group`/`groupEnd`/`time`/`timeEnd`/`count`/`table`/`dir`
-  throws "not a function".
-
 - **B-059 No engine limits or interrupt handler**
   `Units: jsenv,host · Size: M · Impact: Medium`
 
@@ -810,3 +802,19 @@ A fixed entry is deleted and its ID is never reused.
   `margin` read one value per key, so the CSS shorthand `"1 2 3 4"` is
   ignored. A negative `padding` is ignored without a warning. The length
   keys `width`, `height`, `min_*` and `max_*` accept `NaN` and infinity.
+
+- **B-086 Some `console` methods only approximate the standard**
+  `Units: jsenv · Size: M · Impact: Low`
+
+  There is no Formatter, so `%s`, `%d` and `%o` are printed as they are.
+  A `Symbol` or a label whose `toString` throws becomes the default label
+  where the standard throws. `time`, `timeLog` and `timeEnd` always print
+  milliseconds. `dir` ignores its `options`. `dirxml` formats like `log`.
+  `clear` closes the open groups and leaves the terminal as it is.
+  `groupCollapsed` prints its lines like `group`, since a terminal cannot
+  fold them. `table` ignores a `columns` argument that is not an array, and
+  drops properties keyed by a `Symbol` and a `Symbol` column name. A string
+  nested in an array or object is quoted without escaping backslashes or
+  control characters, so it can break a line. `trace` reads its stack
+  through the global `Error`, which a script can replace. `profile`,
+  `profileEnd` and `timeStamp` do not exist.

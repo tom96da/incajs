@@ -29,6 +29,15 @@ pub(crate) fn line(values: &[Value<'_>]) -> String {
     out
 }
 
+/// Renders one value as a nested one: a string is quoted, as in `dir` and
+/// `table` cells, and anything else reads as it does in [`line`].
+pub(crate) fn quoted(value: &Value<'_>) -> String {
+    let mut out = String::new();
+    let depth = usize::from(value.type_of() == Type::String);
+    write_value(&mut out, value, depth);
+    out
+}
+
 /// A top-level string prints bare (`console.log('a')` gives `a`); one nested
 /// in an array or object is quoted, so `['a']` doesn't read as `[a]`.
 fn write_value(out: &mut String, value: &Value<'_>, depth: usize) {
@@ -299,6 +308,21 @@ mod tests {
             rendered("({ fn: () => {}, missing: undefined })"),
             "{ fn: [Function: fn], missing: undefined }"
         );
+    }
+
+    #[test]
+    fn quoted_quotes_a_string_and_leaves_the_rest_alone() {
+        let runtime = Runtime::new().unwrap();
+        let context = Context::full(&runtime).unwrap();
+        context.with(|ctx| {
+            let text: Value<'_> = ctx.eval("'it\\'s'").unwrap();
+            let object: Value<'_> = ctx.eval("({ a: 'b' })").unwrap();
+            let number: Value<'_> = ctx.eval("7").unwrap();
+
+            assert_eq!(quoted(&text), "'it\\'s'");
+            assert_eq!(quoted(&object), "{ a: 'b' }");
+            assert_eq!(quoted(&number), "7");
+        });
     }
 
     #[test]

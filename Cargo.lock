@@ -2850,6 +2850,7 @@ name = "inca-jsenv"
 version = "0.0.8"
 dependencies = [
  "rquickjs",
+ "unicode-width",
 ]
 
 [[package]]
