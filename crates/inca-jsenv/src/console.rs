@@ -241,8 +241,10 @@ fn caller_stack(ctx: &Ctx<'_>) -> Vec<String> {
 ///
 /// # Errors
 ///
-/// Returns an error if defining `console` or any of its methods fails.
+/// Returns an error if defining `console` or any of its methods fails, or if
+/// the realm lacks an intrinsic `console` prints values with.
 pub fn install(ctx: &Ctx<'_>, output: &Output, color: bool) -> JsResult<()> {
+    inspect::pin(ctx)?;
     let console = Object::new(ctx.clone())?;
     let shared = Rc::new(Console {
         output: Rc::clone(output),
@@ -882,7 +884,13 @@ mod tests {
             .iter()
             .map(|t| t.lines().next().unwrap().to_owned())
             .collect::<Vec<_>>(),
-            ["{}", "{}", "{}", "Error: x", "{}"]
+            [
+                "1970-01-01T00:00:00.000Z",
+                "Map(1) { 1 => 2 }",
+                "Set(1) { 1 }",
+                "Error: x",
+                "{}"
+            ]
         );
     }
 
@@ -891,9 +899,131 @@ mod tests {
         let drawn = &texts("console.table([new Date(0), new Error('x')]);")[0];
 
         assert!(drawn.contains("Values"), "{drawn}");
+        assert!(
+            drawn.contains("│ 0       │ 1970-01-01T00:00:00.000Z "),
+            "{drawn}"
+        );
         assert!(drawn.contains("Error: x"), "{drawn}");
         assert!(drawn.contains(r"Error: x\n    at "), "{drawn}");
         assert_eq!(drawn.lines().count(), 6, "{drawn}");
+    }
+
+    #[test]
+    fn table_shows_date_regexp_map_and_set_rows_as_one_line_values() {
+        let drawn = &texts(
+            "console.table([new Date(0), new Date(NaN), /a\\nb/g, new Map([['k', { v: 'x' }]]), new Set([1, 'y'])]);",
+        )[0];
+
+        assert_eq!(
+            drawn,
+            "┌─────────┬──────────────────────────────┐\n\
+             │ (index) │ Values                       │\n\
+             ├─────────┼──────────────────────────────┤\n\
+             │ 0       │ 1970-01-01T00:00:00.000Z     │\n\
+             │ 1       │ Invalid Date                 │\n\
+             │ 2       │ /a\\nb/g                      │\n\
+             │ 3       │ Map(1) { 'k' => { v: 'x' } } │\n\
+             │ 4       │ Set(2) { 1, 'y' }            │\n\
+             └─────────┴──────────────────────────────┘"
+        );
+    }
+
+    #[test]
+    fn table_cells_hold_the_four_types_inspected() {
+        let drawn =
+            &texts("console.table([{ d: new Date(0), m: new Map([[1, 2]]), s: new Set() }]);")[0];
+
+        assert!(drawn.contains("│ 1970-01-01T00:00:00.000Z │"), "{drawn}");
+        assert!(drawn.contains("│ Map(1) { 1 => 2 } │"), "{drawn}");
+        assert!(drawn.contains("│ Set(0) {} │"), "{drawn}");
+    }
+
+    #[test]
+    fn table_cells_escape_control_characters_inside_a_collection() {
+        let drawn = &texts("console.table([{ m: new Map([['a\\nb', 'c\\td']]) }]);")[0];
+
+        assert_eq!(drawn.lines().count(), 5, "{drawn}");
+        assert!(drawn.contains(r"Map(1) { 'a\nb' => 'c\td' }"), "{drawn}");
+    }
+
+    #[test]
+    fn dir_dirxml_and_the_specifiers_print_the_four_types() {
+        assert_eq!(
+            texts(
+                "console.dir(new Map([['a', new Set(['b'])]])); console.dirxml(new Date(0)); \
+                 console.log('%o|%O', /x/g, new Set([1])); \
+                 console.log(new Map([[1, 2]]), new Date(NaN));"
+            ),
+            [
+                "Map(1) { 'a' => Set(1) { 'b' } }",
+                "1970-01-01T00:00:00.000Z",
+                "/x/g|Set(1) { 1 }",
+                "Map(1) { 1 => 2 } Invalid Date",
+            ]
+        );
+    }
+
+    #[test]
+    fn an_error_property_holding_the_types_prints_them() {
+        assert_eq!(
+            texts("console.log({ e: Object.assign(new Error('x'), { when: new Date(0) }), m: new Map() });")[0]
+                .lines()
+                .next()
+                .unwrap(),
+            "{ e: Error: x"
+        );
+        assert_eq!(
+            texts("const e = new Error('x'); e.stack = ''; console.log([e, new Set([1])]);"),
+            ["[ Error: x, Set(1) { 1 } ]"]
+        );
+    }
+
+    #[test]
+    fn hostile_values_print_without_leaving_an_exception() {
+        assert_eq!(
+            texts(
+                "const hostile = new Date(0); hostile.valueOf = () => { throw 1; }; \
+                 hostile.toISOString = () => { throw 2; }; console.log(hostile); \
+                 const m = new Map([[1, 2]]); m.entries = () => { throw 3; }; \
+                 m[Symbol.iterator] = () => { throw 4; }; console.log(m); \
+                 console.log(new Proxy(new Map(), {})); \
+                 const r = Proxy.revocable(new Set(), {}); r.revoke(); console.log(r.proxy); \
+                 console.log(new (class S extends Set {})([1])); \
+                 const c = new Map(); c.set('self', c); console.log(c); \
+                 console.log(new Set(Array.from({ length: 100000 }, (_, i) => i)).size); \
+                 try { null.x; } catch (e) { console.log('caught'); }"
+            ),
+            [
+                "1970-01-01T00:00:00.000Z",
+                "Map(1) { 1 => 2 }",
+                "{}",
+                "{}",
+                "Set(1) { 1 }",
+                "Map(1) { 'self' => Map(1) { 'self' => Map(1) { 'self' => [Map] } } }",
+                "100000",
+                "caught"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_coloured_table_of_the_types_has_the_layout_of_the_plain_one() {
+        drawn_both_ways("[new Date(0), /x/g, new Map([['日本', [1]]]), new Set(['a\\nb'])]");
+    }
+
+    #[test]
+    fn colour_off_prints_the_types_without_an_escape_sequence() {
+        let source = "console.log(new Date(0), new Date(NaN), /a/g, new Map([[1, 'x']]), new Set()); \
+                      console.dir(new Map()); console.table([new Date(0)]);";
+
+        assert!(texts(source).iter().all(|t| !t.contains('\x1b')));
+        assert_eq!(
+            colored_texts(source)
+                .iter()
+                .map(|t| without_known_codes(t))
+                .collect::<Vec<_>>(),
+            texts(source)
+        );
     }
 
     #[test]
@@ -1118,6 +1248,46 @@ mod tests {
         let written = lines_written_by("typeof console === 'object' && console.log('present');");
 
         assert_eq!(written[0].1, "present");
+    }
+
+    #[test]
+    fn install_fails_in_a_realm_without_the_intrinsics_and_leaves_nothing_pending() {
+        let runtime = Runtime::new().unwrap();
+        let context = Context::custom::<rquickjs::context::intrinsic::Eval>(&runtime).unwrap();
+        context.with(|ctx| {
+            let output: Output = Rc::new(|_, _| {});
+
+            assert!(install(&ctx, &output, false).is_err());
+            let thrown = format!("{:?}", ctx.catch());
+            assert!(thrown.contains("Date is not defined"), "{thrown}");
+            assert!(!ctx.has_exception());
+        });
+    }
+
+    #[test]
+    fn contexts_in_one_runtime_share_the_pins_after_the_first_is_dropped() {
+        let written = Rc::new(RefCell::new(Vec::new()));
+        let output: Output = {
+            let sink = Rc::clone(&written);
+            Rc::new(move |_, message| sink.borrow_mut().push(message.to_owned()))
+        };
+        let runtime = Runtime::new().unwrap();
+        let first = Context::full(&runtime).unwrap();
+        let second = Context::full(&runtime).unwrap();
+        first.with(|ctx| install(&ctx, &output, false).unwrap());
+        second.with(|ctx| install(&ctx, &output, false).unwrap());
+        drop(first);
+        runtime.run_gc();
+
+        second.with(|ctx| {
+            ctx.eval::<(), _>("console.log(new Date(0), new Map([[1, 2]]), /x/g, new Set([3]));")
+                .unwrap();
+            assert!(!ctx.has_exception());
+        });
+        assert_eq!(
+            written.take(),
+            ["1970-01-01T00:00:00.000Z Map(1) { 1 => 2 } /x/g Set(1) { 3 }"]
+        );
     }
 
     fn colored_texts(source: &str) -> Vec<String> {

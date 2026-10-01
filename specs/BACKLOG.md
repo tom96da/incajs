@@ -357,6 +357,13 @@ A fixed entry is deleted and its ID is never reused.
   host remaps each frame to the `.vue` or `.ts` file, line and column. This
   also covers errors the host reports to `inca dev`.
 
+- **B-089 `console` runs property getters**
+  `Units: jsenv · Size: S–M · Impact: Medium`
+
+  An object property defined with a getter is read when printed, so the
+  getter's code runs and its side effects happen. The standard prints
+  `[Getter]`, `[Setter]` or `[Getter/Setter]` without calling it.
+
 ## P3
 
 - **B-001 Vue template type-checking**
@@ -833,19 +840,31 @@ A fixed entry is deleted and its ID is never reused.
 - **B-086 Some `console` methods only approximate the standard**
   `Units: jsenv · Size: M · Impact: Low`
 
-  A format string supports `%s`, `%d`, `%i`, `%f`, `%o`, `%O`, `%c` and `%%`.
-  `%o` and `%O` render alike, and `%c` drops its argument without styling. A
-  conversion that throws prints the value as `dir` does, where the standard
-  throws. A `Symbol` or a label whose `toString` throws becomes the default
-  label where the standard throws. `time`, `timeLog` and `timeEnd` always
-  print milliseconds. `dir` ignores its `options`. `dirxml` formats like
-  `log`. `clear` closes the open groups and leaves the terminal as it is.
-  `groupCollapsed` prints its lines like `group`, since a terminal cannot
-  fold them. `table` ignores a `columns` argument that is not an array, and
-  drops properties keyed by a `Symbol` and a `Symbol` column name. A string
-  nested in an array or object is quoted without escaping backslashes or
-  control characters, so it can break a line. An object that refers back to
-  itself prints `[Object]` at the depth limit, with no circular marker, and
-  an `Error`'s `cause` is not printed. `trace` reads its stack through the
-  global `Error`, which a script can replace. `profile`, `profileEnd` and
-  `timeStamp` do not exist.
+  A format string supports `%s`, `%d`, `%i`, `%f`, `%o`, `%O`, `%c` and
+  `%%`. `%o` and `%O` render alike, and `%c` drops its argument without
+  styling. A conversion that throws prints the value as `dir` does, where
+  the standard throws. A `Symbol` or a label whose `toString` throws becomes
+  the default label where the standard throws. `time`, `timeLog` and
+  `timeEnd` always print milliseconds. `dir` ignores its `options`. `dirxml`
+  formats like `log`. `clear` closes the open groups and leaves the terminal
+  as it is. `groupCollapsed` prints its lines like `group`, since a terminal
+  cannot fold them. `table` ignores a `columns` argument that is not an
+  array, and drops properties keyed by a `Symbol` and a `Symbol` column
+  name. `trace` reads its stack through the global `Error`, which a script
+  can replace. `profile`, `profileEnd` and `timeStamp` do not exist.
+
+  Printed values differ from the standard in these ways:
+
+  - A string nested in an array or object is quoted without escaping
+    backslashes or control characters, so it can break a line.
+  - An object or collection that refers back to itself prints `[Object]`,
+    `[Array]`, `[Map]` or `[Set]` at the depth limit, with no circular
+    marker. An `Error`'s `cause` is not printed.
+  - A `Map`, `Set`, `Date` or `RegExp` prints without its own properties and
+    without its subclass name, where the standard prints both, as in
+    `Map(0) { foo: 1 }`. An object that only inherits from `Map.prototype`,
+    and a `Proxy` around any of the four, print as `{}`.
+  - A long object, array, `Map` or `Set` is never wrapped across lines,
+    where the standard wraps long output. The standard cuts a collection
+    after 100 items (`... 50 more items`), where every entry is printed.
+  - A `RegExp` has one colour, where the standard highlights its parts.
