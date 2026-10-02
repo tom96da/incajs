@@ -970,3 +970,10 @@ A fixed entry is deleted and its ID is never reused.
   The delta is computed against the last mouse or wheel event, not a real
   pointer move. A hover entered without the pointer moving can report a
   nonzero delta, measured from an earlier click's position.
+
+- **B-100 `inca dev` exits on a failure before its watcher starts**
+  `Units: cli · Size: S · Impact: Low`
+
+  An unreadable `inca.config.ts`, no entry to build and no host binary each
+  end `inca dev`. A failure after the watcher starts is reported and watched
+  through, so the edit-and-retry loop covers only the second kind.

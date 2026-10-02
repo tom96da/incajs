@@ -8,6 +8,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 The function surface exposed to JS as `globalThis.__inca_native__`, bound
 into the QuickJS context by the Rust host via `rquickjs`. JS and Rust run in
 one process, and a call is an in-process function call with typed arguments.
+No C ABI or IPC is involved.
 
 ## Retained virtual tree
 

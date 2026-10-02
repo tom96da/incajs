@@ -5,14 +5,10 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 # Dev protocol (host ↔ dev-client)
 
-What `inca-host` and the Node process that spawns it exchange during
-development: the messages below, and the config file a build leaves beside
-the entry. `@incajs/cli`'s `dev-client` owns that end — it resolves and
-launches the host binary and speaks everything below, driven by the CLI's
-own commands. The counterpart to [FFI.md](./FFI.md), which covers the other
-boundary — JS calling into Rust inside the host's own process.
-
-Update this file whenever a message lands or changes, same as [FFI.md](./FFI.md).
+The messages `inca-host` and the Node process that spawns it exchange during
+development. `@incajs/cli`'s `dev-client` is the Node end: it launches the
+host binary and speaks every message below. [FFI.md](./FFI.md) covers the
+other boundary, JS calling into Rust inside the host process.
 
 ## Transport
 
@@ -22,12 +18,110 @@ Dev mode is opt-in:
 inca-host --dev <path-to-bundle.js>
 ```
 
-Without `--dev` the host reads no stdin and writes no protocol messages —
-the one-shot behaviour its README describes.
+Without `--dev` the host reads no stdin and writes no protocol messages, as
+described in `crates/inca-host/README.md`.
 
-### The app's config
+| Stream | Direction | Carries |
+| --- | --- | --- |
+| host stdin | client → host | protocol messages |
+| host stdout | host → client | protocol messages, and nothing else |
+| host stderr | host → client | human-readable logs, and the running app's own `console` output |
 
-Beside the entry, a build writes `inca.json`:
+One JSON object per line, UTF-8, `\n`-terminated. stdout carries protocol
+messages only. Diagnostics go to stderr.
+
+A client drains stdout while the child lives. The host writes through an
+unbounded channel on its own thread, so a client that stops reading does not
+stall the app, and the host buffers without a limit.
+
+A client logs a stdout line that is not a JSON-RPC object to stderr and
+carries on.
+
+## Envelope
+
+[JSON-RPC 2.0](https://www.jsonrpc.org/specification), one object per line.
+
+```json
+{"jsonrpc": "2.0", "id": 1, "method": "reload"}
+{"jsonrpc": "2.0", "id": 1, "result": null}
+{"jsonrpc": "2.0", "method": "ready", "params": {"protocol": 0}}
+```
+
+- A request carries an `id`. Its response echoes the `id`, so answers stay
+  matched when several requests are in flight.
+- A notification has no `id` and takes no response. `"id": null` makes it a
+  request.
+- An unrecognized `method` in a request is answered `-32601`. In a
+  notification it is relayed into the running app (see "Extending it").
+- Unused `params` are ignored.
+
+## Messages
+
+### To the host
+
+| `method` | Response | Meaning |
+| --- | --- | --- |
+| `reload` | `null` on success | Re-read the bundle at the path given on argv and evaluate it afresh. The config read at startup stands. |
+| `shutdown` | `null` | Exit 0. The client kills the child if it has not exited after the response. |
+
+### From the host
+
+| `method` | Kind | Meaning |
+| --- | --- | --- |
+| `ready` | notification | The window is open and the first bundle has been evaluated. `params.protocol` is the host's method-set revision. A client compares it with the revision it was built for. On a mismatch it reports on its own stderr and terminates the child. |
+| `appError` | notification | The running app raised something the host caught and recovered from: an exception thrown by an event listener, a failing promise job, or a promise rejected with no handler. `params` is `{"message": string, "stack": string \| null}`. `message` is the thrown value as text, and `stack` is `null` when the value has none. The app's own `console` output goes to stderr. |
+
+## Extending it
+
+**New methods.** Add one and document it under Messages. An unrecognized
+method follows the Envelope rules, so the two sides can be upgraded
+separately.
+
+**Bundler traffic.** A bundler integration sends notifications whose `method`
+names the producer and whose `params` carry the payload. The host relays a
+notification with an unrecognized `method` into the running app as
+`globalThis.__inca_dev__.receive?.(method, paramsJson)`, where `paramsJson`
+is `params` as a JSON string. A relay that throws, or finds no
+`__inca_dev__.receive`, is reported as an event listener's throw is.
+
+The app sends a notification back with `__inca_dev__.send(method,
+paramsJson)`. It parses `paramsJson` as JSON and writes it out as a
+notification named `method`. Invalid JSON raises a `TypeError`.
+`__inca_dev__` exists only in dev builds.
+
+Vite's `ModuleRunnerTransport` frames travel as `{"method": "vite",
+"params": {...}}` notifications in both directions. A `fetchModule` goes from
+the host to the client, and an HMR update goes from the client to the host.
+`dev-client` depends on no bundler. The CLI's own commands pass it the handle
+that owns a payload.
+
+## Failure handling
+
+The host never exits because of a message it couldn't use.
+
+| Situation | Code | Response |
+| --- | --- | --- |
+| A line that isn't valid JSON | `-32700` | `id` is `null` — there was none to read |
+| Valid JSON that is no request object: not an object, no `jsonrpc: "2.0"`, no readable `method`, or an `id` that is not a string, a number, or null | `-32600` | `id` is `null` |
+| A `method` this host doesn't implement | `-32601` | echoes the request's `id` |
+| A panic in the host | `-32603` | `id` is `null`; the panic message also goes to stderr |
+| A bundle that throws while being evaluated | `-32000` | echoes the `id`; the window keeps the tree it already has |
+| A *first* bundle that throws, before any window exists | `-32000` | reported with `id` `null`, then exit 1 |
+| An exception the running app raised and the host caught | — | an `appError` notification, and the window keeps rendering. See Messages. |
+
+`-32000` carries a thrown JS value: `message` is the value as text, and
+`data` is `{"stack": string | null}`.
+
+The host answers on the thread that runs the app's JS, so an app stuck in a
+loop answers nothing, `shutdown` included. A client times out and kills the
+child.
+
+A reload evaluates the new bundle into a fresh `Engine` and `Host`, and swaps
+the window over only if that succeeds.
+
+## App config (`inca.json`)
+
+A build writes `inca.json` beside the entry:
 
 ```json
 {
@@ -46,161 +140,3 @@ it the same way whether a client spawned it or a person double-clicked a
 packaged app. A file that is missing reads as the defaults in silence; one
 that cannot be read or parsed is named on the host's stderr, and reads as
 the defaults too.
-
-| Stream | Direction | Carries |
-| --- | --- | --- |
-| host stdin | client → host | protocol messages |
-| host stdout | host → client | protocol messages, and nothing else |
-| host stderr | host → client | human-readable logs, and the running app's own `console` output |
-
-One JSON object per line, UTF-8, `\n`-terminated. **stdout is the protocol
-channel**: a stray `println!` corrupts it, so every diagnostic goes to
-stderr instead.
-
-A client drains stdout for as long as the child lives. The writer side runs
-on its own thread over an unbounded channel, so a client that stops reading
-doesn't stall the app — it grows the host's memory without limit instead
-(tracked in [BACKLOG.md](./BACKLOG.md)).
-
-The host writes nothing else to stdout, but it cannot vouch for a dependency
-that does. A reader therefore treats a line it can't parse as JSON, or one
-that parses without a `jsonrpc` member, as stray output — log it to stderr
-and carry on, never fail on it. Testing for a leading `{` before parsing
-skips almost all of that at no cost.
-
-## Envelope
-
-[JSON-RPC 2.0](https://www.jsonrpc.org/specification), one object per line.
-
-```json
-{"jsonrpc": "2.0", "id": 1, "method": "reload"}
-{"jsonrpc": "2.0", "id": 1, "result": null}
-{"jsonrpc": "2.0", "method": "ready", "params": {"protocol": 0}}
-```
-
-JSON-RPC leaves framing to the transport. This one is newline-delimited, so
-a line is a message.
-
-- A request carries an `id`; its response echoes that `id` unchanged, so
-  answers stay matched to their requests when several are in flight.
-- A **notification** is a call with no `id` at all, and takes no response.
-  An explicit `"id": null` is a request, not a notification.
-- An unrecognized `method` is answered `-32601` when it arrives as a request.
-  As a notification it is relayed into the running app instead of being
-  dropped — see "New bundler integrations" below — so either side can add
-  methods first.
-- `params` this host has no use for are ignored rather than rejected.
-
-## Messages
-
-### To the host
-
-| `method` | Response | Meaning |
-| --- | --- | --- |
-| `reload` | `null` on success | Re-read the bundle at the path given on argv and evaluate it afresh. The config read at startup stands. |
-| `shutdown` | `null` | Exit 0. |
-
-### From the host
-
-| `method` | Kind | Meaning |
-| --- | --- | --- |
-| `ready` | notification | The window is open and the first bundle has been evaluated. `params.protocol` is this host's method-set revision. |
-| `appError` | notification | The running app raised something the host caught and recovered from: a listener's throw, a failing promise job, or a promise rejected with no handler. `params` carries the thrown value. |
-
-`params.protocol` versions the method set, not JSON-RPC itself. The client
-and the host binary are published separately, so the pair can be mismatched.
-A client compares this against the revision it was built for and, on any
-difference, reports it on its own stderr and terminates the child. Nothing
-negotiates: a client depends on an exact host build, so a difference means a
-broken installation.
-
-`appError` is how a fault inside the running app reaches a human. An
-exception thrown by an event listener, a failing promise job or a promise
-rejected with no handler answers no request and must not take the window
-down, so the host catches it, keeps rendering, and reports it
-here. The app's own `console` output is not this message — that is a log
-stream, and goes to stderr.
-
-`params` is `{"message": string, "stack": string | null}`. `message` is the
-thrown value as text; `stack` is its call stack, and is `null` whenever there
-is none — JS can throw any value, and a thrown string or object carries no
-stack at all.
-
-`shutdown` needs no reply beyond its response: the child's exit is the real
-acknowledgement. The client kills the child if it hasn't exited by then, so
-cleanup gets a chance to run without a wedged app being able to block
-Ctrl-C.
-
-## Extending it
-
-Two surfaces grow here, and neither needs the other to change.
-
-**New methods.** Add one and document it above. An unrecognized method is
-answered `-32601` rather than closing the connection, so the two sides can be
-upgraded separately.
-
-**New bundler integrations.** Bundler traffic rides this channel in both
-directions as notifications whose `method` names the producer and whose
-`params` carry the payload untouched, so this crate never has to know the
-name of a bundler or a frontend framework.
-
-A notification the client sends with an unrecognized `method` is relayed
-into the running app's JS as `globalThis.__inca_dev__.receive?.(method,
-paramsJson)` — `paramsJson` is `params` re-encoded as a JSON string, not a
-live value. A relay that throws, or finds no `__inca_dev__.receive`, is
-handled the same way an event listener's throw is: reported, never fatal.
-
-The running app sends one back the same way, from JS: `__inca_dev__.send(
-method, paramsJson)` parses `paramsJson` as JSON and writes it out as a
-notification named `method`; invalid JSON raises a `TypeError` rather than
-silently doing nothing. `__inca_dev__` exists only in dev — a production
-build has no writer to send through and never installs it.
-
-Vite's `ModuleRunnerTransport` frames are one such integration: they arrive
-as `{"method": "vite", "params": {...}}` in Phase 3.4. A `fetchModule` starts
-in the host and is answered by the client, and an HMR update travels the
-other way — both as `vite` notifications, because Vite pairs a call with its
-answer by an id it keeps inside `params`. Nesting therefore keeps their shape
-intact and asks nothing of this layer's own `id`.
-`dev-client` depends on no bundler and reaches a payload's owner only
-through the handle the CLI's own commands pass it, so another integration is
-a new `method` name, not a change here.
-
-**New app-visible events.** These don't travel this protocol at all. The
-host dispatches any `(node id, event name)` pair to whatever JS registered
-for it through `__inca_native__.addEventListener`, and `rootNodeId()` gives
-an app a target not tied to any element, so an app lifecycle hook — cleanup
-before `shutdown`, a warning before a reload discards state — would be a name
-the host agrees to dispatch, not a new binding and not a new message. **No
-lifecycle name is defined and nothing dispatches one**; only the pointer,
-focus, and keyboard events [FFI.md](./FFI.md#event-dispatch) lists are
-dispatched today, and that same doc is where a lifecycle surface gets
-settled.
-
-## Failure handling
-
-The host never exits because of a message it couldn't use.
-
-| Situation | Code | Response |
-| --- | --- | --- |
-| A line that isn't valid JSON | `-32700` | `id` is `null` — there was none to read |
-| Valid JSON that is no request object: not an object, no `jsonrpc: "2.0"`, no readable `method`, or an `id` that is not a string, a number, or null | `-32600` | `id` is `null` |
-| A `method` this host doesn't implement | `-32601` | echoes the request's `id`; relayed into the app as `__inca_dev__.receive` if it was a notification instead |
-| A panic in the host | `-32603` | `id` is `null`; the panic message also goes to stderr |
-| A bundle that throws while being evaluated | `-32000` | echoes the `id`; the window keeps the tree it already has |
-| A *first* bundle that throws, before any window exists | `-32000` | reported with `id` `null`, then exit 1 |
-| An exception thrown by an app's event listener, a failing promise job or a promise rejected with no handler | — | an `appError` notification; the window keeps rendering |
-
-`-32000` is inside the range JSON-RPC reserves for application-defined
-errors; the rest are the spec's own. It splits a thrown JS value the same way
-`appError` does: `message` is the value as text, and `data` is
-`{"stack": string | null}`.
-
-Every response a client waits for needs a deadline. The host answers on the
-same thread that runs the app's JS, so an app stuck in a loop stops
-answering everything, `shutdown` included — ending that is the client's job,
-not something a further message can reach.
-
-A reload evaluates the new bundle into a fresh `Engine` and `Host`, and swaps
-the window over only once that succeeds. A broken edit therefore leaves the
-last working UI on screen.
