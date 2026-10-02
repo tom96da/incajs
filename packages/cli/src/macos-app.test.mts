@@ -1,6 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import { execFileSync, spawnSync } from "node:child_process";
 import { chmod, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -93,5 +94,42 @@ describe("writeMacosApp", () => {
     await writeMacosApp({ appPath, metadata, hostBin });
 
     await expect(stat(path.join(appPath, "Contents/Resources/stale.js"))).rejects.toThrow("ENOENT");
+  });
+});
+
+const hasPlutil =
+  process.platform === "darwin" && spawnSync("plutil", ["-help"]).error === undefined;
+
+/** Runs `plutil` and returns stdout without the trailing newline. */
+function plutil(...args: string[]): string {
+  return execFileSync("plutil", args, { encoding: "utf8" }).replace(/\n$/, "");
+}
+
+describe.skipIf(!hasPlutil)("Info.plist read by plutil (skipped: needs macOS with plutil)", () => {
+  const names = ["Demo", `A&B <C> "D" 'E'`, "two words", "日本語 Ünïcode 🙂", "x".repeat(200)];
+
+  it.each(names)("lints and round-trips the product name %s", async (productName) => {
+    const { dir: root, hostBin } = await makeHostBin();
+    const appPath = path.join(root, "Demo.app");
+
+    await writeMacosApp({ appPath, metadata: { ...metadata, productName }, hostBin });
+
+    const infoPlist = path.join(appPath, "Contents/Info.plist");
+    expect(plutil("-lint", infoPlist)).toMatch(/: OK$/);
+    for (const key of ["CFBundleName", "CFBundleDisplayName", "CFBundleExecutable"]) {
+      expect(plutil("-extract", key, "raw", "-o", "-", infoPlist)).toBe(productName);
+    }
+  });
+
+  it("lints and round-trips an identifier with XML-special characters", async () => {
+    const { dir: root, hostBin } = await makeHostBin();
+    const appPath = path.join(root, "Demo.app");
+    const identifier = `a&b<c>"d'e`;
+
+    await writeMacosApp({ appPath, metadata: { ...metadata, identifier }, hostBin });
+
+    const infoPlist = path.join(appPath, "Contents/Info.plist");
+    expect(plutil("-lint", infoPlist)).toMatch(/: OK$/);
+    expect(plutil("-extract", "CFBundleIdentifier", "raw", "-o", "-", infoPlist)).toBe(identifier);
   });
 });

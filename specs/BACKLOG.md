@@ -889,3 +889,12 @@ A fixed entry is deleted and its ID is never reused.
   modifier, where Vue binds the event `once` or `capture`. A non-function
   value unbinds silently, where Vue warns and keeps a no-op listener. An
   empty array unbinds, where Vue keeps the listener.
+
+- **B-093 A control character in a `productName` writes an invalid `Info.plist`**
+  `Units: cli · Size: S · Impact: Low`
+
+  `encodePlist` escapes `&`, `<` and `>` but passes every other character
+  through. A `productName` or `identifier` holding a control character such
+  as `U+0001` produces a document that XML 1.0 forbids, which `plutil -lint`
+  rejects. The config check could refuse such a name, or the encoder could
+  drop the character; neither is decided.
