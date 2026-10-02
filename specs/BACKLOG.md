@@ -898,3 +898,41 @@ A fixed entry is deleted and its ID is never reused.
   as `U+0001` produces a document that XML 1.0 forbids, which `plutil -lint`
   rejects. The config check could refuse such a name, or the encoder could
   drop the character; neither is decided.
+
+- **B-094 Intel macOS hosted runners are being retired**
+  `Units: ci · Size: M · Impact: Low`
+
+  GitHub has announced that it will stop supporting the Intel architecture on
+  macOS hosted runners after the macOS 15 image retires in autumn 2027.
+  `macos-26-intel` exists and no newer notice gives its retirement date. The
+  x64 macOS host is not built in `cd.yml` or `ci.yml` yet, and
+  `@incajs/host-darwin-x64` is a private placeholder. Once it is built, the
+  runner's end date limits how long it can be built natively. A fallback is
+  to cross-compile `x86_64-apple-darwin` on the arm64 runner and run a smoke
+  test under Rosetta 2, which does not exercise Metal on Intel hardware.
+
+- **B-095 The platform lists are kept in sync by hand**
+  `Units: ci,cli,docs · Size: S · Impact: Low`
+
+  The set of published host platforms is written in `npm/*/package.json`, the
+  CLI's `optionalDependencies`, `hostBin.mts`, `cd.yml` (the matrix, the
+  manifest list in `verify`, and two `for pkg in` loops), the README and guide
+  tables, and the Makefile's `LICENSE_PACKAGES`. A platform missing from the
+  `Place host binaries` loop publishes a package with no binary, and an npm
+  publish cannot be undone. A test could read all of them and compare against
+  the non-private `npm/*` manifests, since a platform is published when its
+  manifest is not private. A `publish` step could check that every non-private
+  host package has an executable `bin/inca-host` before `pnpm publish`. This
+  is needed before the Windows hosts are added.
+
+- **B-096 `missing_docs` is not enforced**
+  `Units: gpui,bridge,ci · Size: M · Impact: Low`
+
+  `inca-bridge` lacks docs on 4 public items and `inca-gpui` on 59, as
+  `RUSTDOCFLAGS="-W missing-docs" cargo doc -p <crate> --no-deps` counts
+  them. `inca-jsenv` and `inca-host` have none. Setting
+  `missing_docs = "warn"` under `[workspace.lints.rust]` applies to every
+  crate that inherits the table. It fails CI, which runs clippy with
+  `-D warnings`, until the gaps are filled. A crate cannot opt out of one
+  inherited lint, so a crate that is not ready needs
+  `#![allow(missing_docs)]` in its source.

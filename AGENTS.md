@@ -40,7 +40,9 @@ full build already is. Known gaps live in
 repaint bugs surfaced by real HMR editing that a full reload never hit.
 The CLI prints the bundler's own output beside its own — see
 [FAILURES.md](./specs/FAILURES.md) for what it refuses and falls back
-from.
+from. The host prints a full WHATWG `console` (all methods, format
+specifiers, and `Date`, `RegExp`, `Map` and `Set` values), in colour on a
+terminal (`NO_COLOR` and `FORCE_COLOR` apply).
 
 Phase 4 (input & text editing) is running alongside 3.4: pointer input,
 the focus model, keyboard input and scrolling (`overflow`, wheel) are

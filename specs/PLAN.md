@@ -1012,6 +1012,25 @@ runs alongside Phase 3.4.
       text
 - [x] The root node cannot be moved or destroyed from JS
 
+### Console and event slots
+
+- [x] A WHATWG `console`: every method, `%` format specifiers, `Date`,
+      `RegExp`, `Map` and `Set` printing, group guides, symbols, and colour on
+      a terminal (`NO_COLOR` and `FORCE_COLOR` apply) — gaps in
+      `specs/BACKLOG.md`'s B-086 and B-089
+- [x] `click` and `click.once` listeners on one node occupy separate slots.
+      `stopImmediatePropagation()` skips the later slots, and a `.once`
+      listener that has fired stays off until its key is removed
+- [x] A module's bare imports resolve only inside the bundle root, and the
+      entry path is canonicalized
+
+### Tests
+
+- [x] The host's `shutdown` request and a packaged launch, in the root
+      `tests/`
+- [x] `Info.plist` validity for special names, read by `plutil` on macOS
+      (`packages/cli/src/macos-app.test.mts`)
+
 ### Not started
 
 See Phase 4 items 3 and 5 in

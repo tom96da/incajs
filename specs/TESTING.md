@@ -39,7 +39,15 @@ Update this file as real conventions land, same as the other docs here.
   any other way would mean making them public just for a test. They are in
   a separate pnpm workspace member (`@incajs/e2e-tests`, not swept into
   `pnpm test`) and share `inca-tests`'s own CI job, which already sets up
-  the Rust/gpui toolchain they need.
+  the Rust/gpui toolchain they need. `host-shutdown` speaks the dev
+  protocol on raw stdio and, on Linux with no display variable set, runs on
+  gpui's headless platform. On macOS it opens a real window and needs a
+  window-server session. `host-packaged-launch` starts the host with no
+  argv, from an unrelated working directory, with the bundle beside the
+  executable. Its bundles open no window, so it needs no display.
+- **Console tests**: console behaviour is unit-tested beside the code in
+  `crates/inca-jsenv/src`. Timers are checked by the shape of the output.
+  Colour is checked by exact SGR sequences and by stripping them.
 
 ### Required checks
 
@@ -88,6 +96,17 @@ guarantee. Phase 13 ends that (see
 installs the floor toolchain and runs `cargo +<msrv> check`, the `+<msrv>`
 overriding `rust-toolchain.toml`. That is a second toolchain, so a second
 full gpui build under its own `Swatinem/rust-cache` key.
+
+### macOS coverage
+
+The `rust-macos` CI job (`macos-latest`) runs the Linux Rust job's steps:
+`cargo fmt --all -- --check`, then `cargo check`, `cargo clippy -- -D warnings`
+and `cargo test` over the workspace with `inca-tests` excluded. The
+Node suites run on Linux only. The plutil tests in
+`packages/cli/src/macos-app.test.mts` run only on macOS with `plutil`.
+Elsewhere vitest skips them. Their title is:
+
+`Info.plist read by plutil (skipped: needs macOS with plutil)`
 
 ## TypeScript (`packages/*`)
 
