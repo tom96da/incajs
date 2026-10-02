@@ -703,13 +703,6 @@ A fixed entry is deleted and its ID is never reused.
   `FAILURES.md`'s "doesn't panic" rule, though reaching it isn't
   practical. `console.log` has no cap on array length.
 
-- **B-064 `@click` and `@click.once` on one element share a listener slot**
-  `Units: core · Size: S · Impact: Low`
-
-  `@click` and `@click.once` on one element share a single listener slot per
-  node and event, so the second replaces the first. A `.once` firing removes the
-  other's listener too.
-
 - **B-065 A throwing handler is reported twice in a production build**
   `Units: core · Size: S · Impact: Low`
 
@@ -868,3 +861,31 @@ A fixed entry is deleted and its ID is never reused.
     where the standard wraps long output. The standard cuts a collection
     after 100 items (`... 50 more items`), where every entry is printed.
   - A `RegExp` has one colour, where the standard highlights its parts.
+
+- **B-090 Only the first error of several throwing handlers reaches the host's report**
+  `Units: core · Size: S · Impact: Low`
+
+  Handlers of one event (an array value, or `onClick` plus `onClickOnce`) run
+  behind one host callback that rethrows the first error after all have run.
+  The others go only to Vue's own error handler or the console, where the host
+  reports every throwing callback.
+
+- **B-091 A handler attached during an event can fire for that same event**
+  `Units: core · Size: S · Impact: Low`
+
+  Vue's DOM renderer drops a handler attached after the event began, using the
+  `_vts` and `attached` timestamps in `runtime-dom`'s `events.ts`. `patchProp`
+  has no such check, so a handler attached to an ancestor by the re-render
+  that a child's handler triggers fires for the same event.
+
+- **B-092 Event props differ from Vue's in name and value handling**
+  `Units: core · Size: S · Impact: Low`
+
+  `onFooBar` binds `foobar` where Vue binds `foo-bar`. The `on:foo` form is
+  not recognized, and any key whose third character is not a lower-case
+  letter is an event in Vue but only `on` plus an upper-case letter is one
+  here. Vue skips `onUpdate:x` model listeners, where this binds an event
+  named `update:x`. A prop named `onOnce` or `onCapture` is read as a
+  modifier, where Vue binds the event `once` or `capture`. A non-function
+  value unbinds silently, where Vue warns and keeps a no-op listener. An
+  empty array unbinds, where Vue keeps the listener.

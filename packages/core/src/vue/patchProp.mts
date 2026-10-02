@@ -97,24 +97,123 @@ function asListener(
 
   return (...args: unknown[]) => {
     let failure: { error: unknown } | undefined;
-    const recorded = handlers.map((handler) => (...a: unknown[]) => {
-      try {
-        const result: unknown = handler(...a);
-        // A production Vue swallows a rejection; keep one unhandled for the host.
-        if (process.env.NODE_ENV === "production" && isThenable(result)) {
-          result.then(undefined, (error: unknown) => {
-            if (!instance?.appContext.config.errorHandler) throw error;
-          });
+    guardStop(args, (stopped) => {
+      const recorded = handlers.map((handler) => (...a: unknown[]) => {
+        if (stopped()) return;
+        try {
+          const result: unknown = handler(...a);
+          // A production Vue swallows a rejection; keep one unhandled for the host.
+          if (process.env.NODE_ENV === "production" && isThenable(result)) {
+            result.then(undefined, (error: unknown) => {
+              if (!instance?.appContext.config.errorHandler) throw error;
+            });
+          }
+          return result;
+        } catch (error) {
+          failure ??= { error };
+          throw error;
         }
-        return result;
-      } catch (error) {
-        failure ??= { error };
-        throw error;
-      }
+      });
+      callWithAsyncErrorHandling(recorded, instance, ErrorCodes.NATIVE_EVENT_HANDLER, args);
     });
-    callWithAsyncErrorHandling(recorded, instance, ErrorCodes.NATIVE_EVENT_HANDLER, args);
     if (failure && !instance?.appContext.config.errorHandler) throw failure.error;
   };
+}
+
+// Runs `body` with the event's `stopImmediatePropagation` wrapped to raise a
+// flag, so handlers behind one host callback stop where the host would have
+// stopped separate callbacks. The original is still called.
+function guardStop(args: unknown[], body: (stopped: () => boolean) => void): void {
+  const event = args[0] as { stopImmediatePropagation?: unknown } | null | undefined;
+  if (typeof event !== "object" || event === null) return body(() => false);
+  const original = event.stopImmediatePropagation;
+  if (typeof original !== "function") return body(() => false);
+
+  const own = Object.hasOwn(event, "stopImmediatePropagation");
+  let stopped = false;
+  try {
+    event.stopImmediatePropagation = (...a: unknown[]): unknown => {
+      stopped = true;
+      return (original as (...a: unknown[]) => unknown).apply(event, a);
+    };
+  } catch {
+    return body(() => false);
+  }
+  try {
+    body(() => stopped);
+  } finally {
+    if (own) event.stopImmediatePropagation = original;
+    else delete event.stopImmediatePropagation;
+  }
+}
+
+// A fired `.once` slot stays as a tombstone until its prop key is removed.
+interface Slot {
+  listener: EventListener;
+  once: boolean;
+  fired: boolean;
+}
+
+// What native holds per element and event: one dispatcher, registered while
+// any slot is live, running the slots in insertion order. Each slot is keyed by
+// the raw prop name, so `onClick` and `onClickOnce` coexist and patch
+// independently.
+interface Entry {
+  slots: Map<string, Slot>;
+  registered: boolean;
+  dispatcher: EventListener;
+}
+
+const entriesByEl = new WeakMap<IncaElement, Map<string, Entry>>();
+
+// Brings the host registration in line with whether a live slot exists.
+function sync(core: IncaCore, el: IncaElement, event: string, entry: Entry): void {
+  const live = Array.from(entry.slots.values()).some((slot) => !slot.fired);
+  if (live && !entry.registered) {
+    core.setEventListener(el.id, event, entry.dispatcher);
+    entry.registered = true;
+  } else if (!live && entry.registered) {
+    entry.registered = false;
+    core.removeEventListener(el.id, event);
+  }
+  if (entry.slots.size === 0) entriesByEl.get(el)?.delete(event);
+}
+
+function createEntry(core: IncaCore, el: IncaElement, event: string): Entry {
+  const entry: Entry = {
+    slots: new Map(),
+    registered: false,
+    dispatcher: (...args) => {
+      let failure: { error: unknown } | undefined;
+      guardStop(args, (stopped) => {
+        // A slot removed by an earlier handler is skipped; one patched keeps its
+        // place; one added meanwhile waits for the next dispatch.
+        for (const key of Array.from(entry.slots.keys())) {
+          if (stopped()) break;
+          const slot = entry.slots.get(key);
+          if (!slot || slot.fired) continue;
+          // Retire a `.once` slot before it runs, so a synchronous re-dispatch can't re-enter.
+          if (slot.once) {
+            slot.fired = true;
+            sync(core, el, event, entry);
+          }
+          try {
+            slot.listener(...args);
+          } catch (error) {
+            failure ??= { error };
+          }
+        }
+      });
+      if (failure) throw failure.error;
+    },
+  };
+  return entry;
+}
+
+function removeSlot(core: IncaCore, el: IncaElement, event: string, rawKey: string): void {
+  const entry = entriesByEl.get(el)?.get(event);
+  if (!entry?.slots.delete(rawKey)) return;
+  sync(core, el, event, entry);
 }
 
 function patchEvent(
@@ -127,22 +226,29 @@ function patchEvent(
   const { event, once } = parseEventKey(rawKey);
   const listener = asListener(nextValue, instance);
   if (!listener) {
-    core.removeEventListener(el.id, event);
+    removeSlot(core, el, event, rawKey);
     return;
   }
 
-  if (!once) {
-    core.setEventListener(el.id, event, listener);
+  let entries = entriesByEl.get(el);
+  if (!entries) entriesByEl.set(el, (entries = new Map()));
+  let entry = entries.get(event);
+  if (!entry) entries.set(event, (entry = createEntry(core, el, event)));
+
+  const existing = entry.slots.get(rawKey);
+  if (existing) {
+    existing.listener = listener;
     return;
   }
 
-  // Real once-semantics: unbind before running the listener, so a
-  // synchronous re-dispatch from inside it can't re-enter.
-  const runOnce: EventListener = (...args) => {
-    core.removeEventListener(el.id, event);
-    listener(...args);
-  };
-  core.setEventListener(el.id, event, runOnce);
+  entry.slots.set(rawKey, { listener, once, fired: false });
+  try {
+    sync(core, el, event, entry);
+  } catch (error) {
+    entry.slots.delete(rawKey);
+    if (entry.slots.size === 0) entries.delete(event);
+    throw error;
+  }
 }
 
 /**
@@ -154,8 +260,13 @@ function patchEvent(
  *   is new or changed. `core.removeStyle` runs for each sent entry that is now
  *   absent, `null`, or not a string/number. A string or `null` `style`
  *   removes every entry.
- * - An `onXxx` key registers `nextValue` as the listener for `xxx`, taking a
- *   function or an array of them, and unbinds `xxx` for anything else. A
+ * - An `onXxx` key registers `nextValue` as a listener for `xxx`, taking a
+ *   function or an array of them, and unbinds that key's listener for
+ *   anything else. Each distinct key (`onClick`, `onClickOnce`) is its own
+ *   listener; they run in the order first registered, a re-patch keeps its
+ *   place, and the host sees one registration per element and event. A
+ *   `.once` listener that has fired stays spent until its key is removed.
+ *   `stopImmediatePropagation()` stops the listeners after it. A
  *   trailing `Once`/`Passive`/`Capture` suffix (from Vue's `.once`/
  *   `.passive`/`.capture` modifiers) is stripped first; `.once` really
  *   removes the listener after it fires once, while `.passive`/`.capture`
