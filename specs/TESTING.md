@@ -31,8 +31,9 @@ Update this file as real conventions land, same as the other docs here.
   depends on the other. Cargo picks up `tests/tests/*.rs` on its own; a
   file that needs the other language runs it (`config_contract.rs` starts
   Node) or reads what it built (`js_core_integration.rs` reads
-  `packages/core/dist`). `tests/tests/hmr-quickjs-state.test.mts` and
-  `host-startup-failure.test.mts` sit beside them (Cargo ignores non-`.rs`
+  `packages/core/dist`). `tests/tests/hmr-quickjs-state.test.mts`,
+  `host-startup-failure.test.mts`, `host-shutdown.test.mts` and
+  `host-packaged-launch.test.mts` sit beside them (Cargo ignores non-`.rs`
   files there regardless). They spawn the real `inca-host` binary (the
   first with a real Vite dev server too), since driving `Session`/`start`
   any other way would mean making them public just for a test. They are in
