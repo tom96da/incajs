@@ -309,6 +309,8 @@ impl EventDispatcher {
                 cx.stop_propagation();
             }
         }
+        // Only GPUI's own defaults read this flag. For `wheel`, the scroll
+        // rollback in `inca-gpui` reads it too and restores the offsets.
         if prevent_default.get() {
             window.prevent_default();
         }

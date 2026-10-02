@@ -118,8 +118,7 @@ A fixed entry is deleted and its ID is never reused.
   gaps now live loose in `dispatch.rs` — B-018 and B-019 plus
   `mouseenter` firing on mount for an element already under the pointer
   (GPUI's hover check compares against freshly-initialized state on first
-  paint, not against a real pointer move; see `handbook/FFI.md`'s "Event
-  dispatch" section). `EventDispatcher` exists to turn GPUI's raw input
+  paint, not against a real pointer move; see `docs/reference/events.md`). `EventDispatcher` exists to turn GPUI's raw input
   into what a DOM author expects, so this translation belongs there too.
   Direction: one `compat` submodule inside it, not a separate crate — one
   place to hold `held_buttons` tracking, a "no real pointer move seen
@@ -791,6 +790,9 @@ A fixed entry is deleted and its ID is never reused.
 
   `stopPropagation()` on any event but `wheel` also stops `gpui`'s own
   ancestor listeners. The DOM stops only the ancestors' JS listeners.
+  In a descendant's `mouseenter`/`mouseleave` callback it can also stop an
+  ancestor's hover re-check, since `gpui` runs hover tracking in the same
+  bubble-phase `mousemove` dispatch.
 
 - **B-082 Wheel scrolling keeps `gpui`'s axis rules and has no gesture latching**
   `Units: gpui · Size: M · Impact: Low`
@@ -948,3 +950,23 @@ A fixed entry is deleted and its ID is never reused.
   `new Uint8Array(3)`, where Node prints `Promise { 1 }` and
   `Uint8Array(3) [ 0, 0, 0 ]`. A nested string is always single-quoted,
   where Node picks the quote that avoids escaping.
+
+- **B-098 The app cannot hook a reload or a shutdown**
+  `Units: bridge,core,host · Size: M · Impact: Low`
+
+  Nothing tells an app that a reload is about to discard its session or
+  that the host is shutting down. The intended design adds no binding. The
+  host dispatches a named event on `rootNodeId()` through the existing
+  `addEventListener` path. The hook is observe-only: when a reload's hook
+  would fire, the new bundle has already loaded, so there is nothing left to
+  veto. A handler can await only microtasks that have already settled,
+  because the job queue drains once after the hook and QuickJS has no timer
+  or I/O to resume it. `packages/core` wraps the event names in helpers, so
+  the strings never become app-facing API.
+
+- **B-099 `movementX`/`movementY` on `mouseenter` and `mouseleave`**
+  `Units: bridge,gpui · Size: S · Impact: Low`
+
+  The delta is computed against the last mouse or wheel event, not a real
+  pointer move. A hover entered without the pointer moving can report a
+  nonzero delta, measured from an earlier click's position.

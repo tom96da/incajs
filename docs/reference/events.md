@@ -34,9 +34,9 @@ delegation).
 
 ### `click`
 
-Fires after a `mousedown` and `mouseup` on the same node, in that
-order — or after `Enter`/`Space` while the node is [focused](#focus).
-Carries no fields of its own.
+Fires on a `mousedown` followed by a `mouseup` on the same node, before
+the `mouseup` listeners run — or after `Enter`/`Space` while the node is
+[focused](#focus). Carries no fields of its own.
 
 ### `mousedown` / `mouseup` / `mousemove`
 

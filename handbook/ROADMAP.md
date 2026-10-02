@@ -216,7 +216,7 @@ rewriting that vocabulary.
 1. **Semantics on the retained tree**: a node's role, name, value, and
    state, carried alongside `style_props`/`attributes`. The `tag_name`
    vocabulary is deliberately thin (see
-   [FFI.md](./FFI.md#tag-vocabulary-v1)), so semantics are declared
+   [FFI.md](./FFI.md#tag-vocabulary)), so semantics are declared
    rather than inferred from a tag.
 2. **Platform accessibility APIs**: expose that tree through each platform's
    own API, following what GPUI already supports and filling in the rest.
@@ -339,15 +339,14 @@ does *around* its content lives here.
 2. **Native menus**: an application menu bar and context menus, with their
    keyboard shortcuts. The host already owns a `Quit` item and its
    shortcut, which an app cannot remove — see
-   [FFI.md](./FFI.md#application-menu-host-owned-one-item). What an app
+   [FFI.md](./FFI.md#application-menu). What an app
    adds beside it, and where those items come from, is this item's work.
 3. **Dialogs**: file open/save and message boxes, drawn by the platform
    rather than in-tree.
 4. **System integration**: clipboard, notifications, a tray icon, and
    handing a URL or file to whatever the platform opens it with.
-5. **Lifecycle beyond a reload**: window close, focus and blur, and the
-   platform's own quit request — Phase 3.1 settles only the moments the dev
-   protocol itself creates.
+5. **App lifecycle**: hooks for a reload and for shutdown, window close,
+   focus and blur, and the platform's own quit request.
 
 ## Phase 10: React custom renderer (future)
 

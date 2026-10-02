@@ -6,14 +6,8 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 # Host bridge (FFI) reference
 
 The function surface exposed to JS as `globalThis.__inca_native__`, bound
-into the QuickJS context by the Rust host via `rquickjs`. The
-tag/style vocabulary below is deliberately incomplete by design and grows as
-real usage needs more of it — update this file whenever a binding, tag, or
-style prop actually lands.
-
-It's called "FFI" for the calling-convention style (JS calling into Rust
-functions with typed arguments), not a real C ABI or cross-process boundary —
-JS and Rust share one process.
+into the QuickJS context by the Rust host via `rquickjs`. JS and Rust run in
+one process, and a call is an in-process function call with typed arguments.
 
 ## Retained virtual tree
 
@@ -29,41 +23,29 @@ the custom renderer's output. Each node has:
 | `parent` | `Option<u32>` | The node this one is attached to, if any. |
 | `children` | `Vec<u32>` | Ordered child node handles. |
 
-**A node has at most one parent.** `appendChild`/`insertBefore` detach the
-child from wherever it was, so the same call both attaches and moves, and
-an attachment that would make a node its own ancestor throws instead. A
-`childId` naming the root, which belongs to the host, throws too. A walk
-down the tree therefore always terminates, which the render path relies
-on.
+- A node has at most one parent.
+- `appendChild` and `insertBefore` detach the child first, so they also move
+  a node.
+- Making a node its own ancestor throws. A `childId` naming the root, which
+  belongs to the host, throws too.
+- Every `nodeId` is a finite whole number in the `u32` range, otherwise a
+  `TypeError` is thrown.
+- Only `destroyNode` frees nodes, and it frees the whole subtree.
+  `removeChild` keeps the node alive for re-attachment.
 
-Every `nodeId` argument must be a finite whole number in the `u32`
-range; anything else throws a `TypeError`.
+### Tag vocabulary
 
-**Nodes are freed only by `destroyNode`,** which frees the whole subtree.
-Detaching with `removeChild` keeps the node alive for re-attachment; a caller
-that drops a subtree without destroying it leaks every node in it, and every
-event listener registered on them.
-
-### Tag vocabulary (v1)
-
-Implemented by `crates/inca-gpui/src/element.rs` (Unit v). Only two
-kinds exist so far — there's no per-tag dispatch table yet, since there's
-exactly one container builder to pick from until a real second element kind
-is designed:
+Implemented in `crates/inca-gpui/src/element.rs`. There are two kinds:
 
 | `tag_name` | Maps to |
 | --- | --- |
 | `"text"` | Content is its `"value"` string attribute (missing/non-string → empty, never a panic) followed by its descendants' text in child order. Descendants are not rendered as separate elements. |
 | anything else | A generic styled container (a GPUI `div()`). |
 
-### Style prop vocabulary (v1)
+### Style prop vocabulary
 
-Also implemented by `element.rs`. This is a deliberately small,
-initial set — exactly what's needed to express `examples/gpui/hello_world.rs`'s
-flex-box shapes and solid fills, not a full CSS surface. Unrecognized keys
-and malformed enum-string values are silently ignored (forward-compatible,
-never a panic) — this is a rendering path, not a JS call boundary, so
-there's no channel to raise a catchable exception through.
+Implemented in `element.rs`. Unrecognized keys and malformed enum strings are
+ignored without an error. The table lists every key the host reads.
 
 | Key | Value | Maps to |
 | --- | --- | --- |
@@ -83,250 +65,108 @@ there's no channel to raise a catchable exception through.
 | `opacity` | number, clamped to `0..=1` (`NaN` ignored) | `opacity` |
 | `min_width` / `min_height` / `max_width` / `max_height` | number (px) or `"auto"` | `min_size.*` / `max_size.*` |
 
-`text_color`/`text_size` only apply to containers — text leaves cascade
-their style from an ancestor container, exactly like GPUI's own
-`.text_color()`/`.text_size()`; there's no separate per-leaf text styling.
-
-Deliberately deferred, not yet implemented: percentage lengths,
-flex-basis, per-side border/corner values, box-shadow, `position`,
-`z_index`, the `clip` overflow value, `border_style` (solid vs. dashed —
-GPUI's own `Style::border_style`, distinct from
-`border_width`/`border_color`; unset always renders solid, GPUI's
-default), and additional align/justify variants beyond the four above.
+`text_color` and `text_size` apply to containers. A text leaf takes them from
+the nearest ancestor container.
 
 ## Binding functions
 
 | Function | Signature | Purpose |
 | --- | --- | --- |
-| `rootNodeId` | `() => number` | Return the host-allocated root container's id — the node a mounting app attaches itself under. Allocated with the tree, so it always resolves. |
+| `rootNodeId` | `() => number` | Return the id of the host-allocated root container, the node a mounting app attaches itself under. |
 | `createNode` | `(tag: string) => number` | Allocate a `VirtualNode`, return its id. |
-| `appendChild` | `(parentId: number, childId: number) => void` | Attach a child node at the end of `parentId`'s children. Thin wrapper over `insertBefore` with no anchor. Throws if `childId` is the root. |
-| `insertBefore` | `(parentId: number, childId: number, anchorId: number \| null) => void` | Attach a child node before `anchorId` (or at the end if `null`). An `anchorId` equal to `childId` changes nothing when the child is already under `parentId`. If `anchorId` names a real node that isn't currently a child of `parentId`, falls back to appending at the end; only a wholly unknown `anchorId` throws. Throws if `childId` is the root. |
+| `appendChild` | `(parentId: number, childId: number) => void` | Attach a child at the end of `parentId`'s children. Same as `insertBefore` with no anchor. |
+| `insertBefore` | `(parentId: number, childId: number, anchorId: number \| null) => void` | Attach a child before `anchorId`, or at the end if `null`. |
 | `removeChild` | `(parentId: number, childId: number) => void` | Detach a child node. |
 | `setAttribute` | `(nodeId: number, key: string, value: any) => void` | Set a non-style attribute prop. |
-| `setStyle` | `(nodeId: number, key: string, value: any) => void` | Set a style prop — the only JS-reachable way to touch `style_props`; `setAttribute` writes to the separate `attributes` map instead. |
+| `setStyle` | `(nodeId: number, key: string, value: any) => void` | Set a style prop. |
 | `removeStyle` | `(nodeId: number, key: string) => void` | Remove a style prop so it renders as if never set. Removing a key that isn't set does nothing. |
-| `addEventListener` | `(nodeId: number, event: string, callbackId: number) => void` | Register a JS callback for a native input event. Distinct ids on one `(nodeId, event)` stack and all of them are dispatched, as in the DOM; re-registering an id already there is a no-op. |
-| `removeEventListener` | `(nodeId: number, event: string, callbackId: number) => boolean` | Drop one registration, reporting whether it was there. Never throws — a node destroyed first is the normal teardown race, not an error. |
-| `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its whole subtree, and return every `callbackId` that was registered anywhere in it, so the caller can drop the JS functions those ids name. Destroying an already-destroyed or unknown id returns `[]`. Destroying the root throws — it belongs to the host. Also drops `nodeId`'s focus state, if it had any, and cancels a queued focus for it. |
-| `focusNode` | `(nodeId: number) => void` | Request that `nodeId` become focused. Takes effect next frame; works on any node, not only one with a `"focus"`/`"blur"` listener registered. An unknown or destroyed node is ignored. |
-| `blurNode` | `(nodeId: number) => void` | Request that `nodeId` become unfocused. Takes effect next frame; a no-op if `nodeId` isn't the focused node by then. |
+| `addEventListener` | `(nodeId: number, event: string, callbackId: number) => void` | Register a callback for an event. Distinct ids on one `(nodeId, event)` stack, and adding an id again is a no-op. |
+| `removeEventListener` | `(nodeId: number, event: string, callbackId: number) => boolean` | Drop one registration and return whether it was there. Never throws. |
+| `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its subtree, and return every `callbackId` registered in it. An unknown id returns `[]`. Destroying the root throws. Also clears the focus state of the destroyed nodes. |
+| `focusNode` | `(nodeId: number) => void` | Request focus for `nodeId`. Takes effect next frame, on any node. An unknown or destroyed node is ignored. |
+| `blurNode` | `(nodeId: number) => void` | Request that `nodeId` lose focus. Takes effect next frame, and does nothing if `nodeId` is not the focused node by then. |
 
-On each GPUI `render()` frame cycle, the host recursively converts the
-`VirtualNode` tree into GPUI `AnyElement` instances. A node is wired for
-input only while something is registered on it: GPUI inserts a hitbox for
-any element carrying a click listener, so wiring a whole tree would cost a
-hitbox and two mouse listeners per node per frame, and hit-test all of them
-on every pointer move.
+`insertBefore` and `appendChild`:
+
+- If `anchorId` equals `childId` and the child is already under `parentId`,
+  nothing changes.
+- If `anchorId` is a real node that is not a child of `parentId`, the child
+  is appended at the end.
+- An `anchorId` that names no node throws.
+- A `childId` naming the root throws.
+
+The host converts the `VirtualNode` tree into GPUI elements on each frame. A
+node is wired for input only while a listener is registered on it.
 
 ### Event dispatch
 
-Implemented by `render_tree_with_events`/`build_element_with_events`
-(`crates/inca-gpui/src/element.rs`, Unit vi), which wire every container's
-`"click"`/`"mousedown"`/`"mouseup"`/`"mousemove"`/`"wheel"`/
-`"mouseenter"`/`"mouseleave"`/`"focus"`/`"blur"`/`"keydown"`/`"keyup"` to
-an `EventDispatcher`
-(`crates/inca-bridge/src/dispatch.rs`), which looks up and calls the JS
-callbacks registered for `(nodeId, event)` via `addEventListener`, then
-requests a redraw.
+The host dispatches native input to the JS callbacks registered for a node
+and event name. Payloads and author-facing behaviour are in
+[events.md](../docs/reference/events.md).
 
-A callback receives one argument, shared across every callback on one node
-for one event: an object shaped `{ type, target, currentTarget, ...payload
-}` plus `stopPropagation`/`stopImmediatePropagation`/`preventDefault`
-methods. `type` is the event's name. `target`/`currentTarget` are both the
-node this call is dispatching for — every container with a listener gets a
-hitbox, but one without a listener doesn't, so the node a pointer visually
-lands on isn't always known; `currentTarget` is exact, `target` will read
-the same until something can compute it precisely (tracked in
-[BACKLOG.md](./BACKLOG.md)). Further fields depend on the event kind —
-`"click"`/`"focus"`/`"blur"` carry none of their own;
-`"mousedown"`/`"mouseup"`/`"mousemove"`/`"mouseenter"`/`"mouseleave"`
-carry `clientX`, `clientY`, `pageX`, `pageY`, `movementX`, `movementY`,
-`button`, `buttons`, `detail`, and `ctrlKey`/`shiftKey`/`altKey`/`metaKey`,
-DOM-`MouseEvent`-named (`platform` becomes `metaKey`; GPUI's `function`
-modifier has no DOM counterpart and is dropped). `buttons` tracks every
-button currently held (`EventDispatcher` keeps this state across events —
-GPUI's own mouse events carry only the one button each is about), not just
-the button `button` names. `pageX`/`pageY` are identical to `clientX`/
-`clientY` — nothing here scrolls the page itself, which is the only thing
-that would tell them apart. `movementX`/`movementY` are a delta from
-whichever mouse/wheel event `EventDispatcher` last saw, `0` for the first
-one — including a `"mouseenter"`/`"mouseleave"` sharing that same tracker,
-so hovering a node with no pointer movement since an earlier click can
-still report a nonzero delta, against that click's position. Every
-dispatch from one raw event, including a pointer move's `"mousemove"` and
-`"mouseenter"`/`"mouseleave"`, shares one movement value.
+#### Registering
 
-`"wheel"` carries the same fields as `"mousedown"`/`"mouseup"`/
-`"mousemove"` plus `deltaX`, `deltaY`, `deltaZ`, `deltaMode` — DOM's
-`WheelEvent` extends `MouseEvent`. `deltaMode` is `0`
-(`DOM_DELTA_PIXEL`) or `1` (`DOM_DELTA_LINE`); GPUI has no equivalent of
-`DOM_DELTA_PAGE` (`2`). `deltaZ` is always `0` — GPUI carries no Z-axis
-scroll. `deltaX`/`deltaY` follow the DOM's sign (positive is down/right),
-the negation of GPUI's.
+- `addEventListener`/`removeEventListener` are in the binding table above.
+  Distinct `callbackId`s stack on one `(nodeId, event)`. Adding an id again
+  is a no-op.
+- The caller stores the function at `globalThis.__inca_callbacks__[callbackId]`
+  before registering. The host stores only the `u32` id.
+- A missing or non-function entry is skipped.
+- A throwing callback, or a promise rejected with no handler, goes to the
+  host's error reporter. Sibling callbacks still run.
+- `removeEventListener` and `destroyNode` return the dropped ids, because
+  only the caller can free the JS half.
+- A dynamically-named event, such as `menu:<id>`, uses the same path with
+  no native input wiring.
 
-A scrolling container (`overflow` `scroll`) is scrolled by GPUI's own
-listener, which ignores `preventDefault()` and never consumes the event, so
-every container under the pointer moves. When the dispatcher hands out a
-`ScrollHandle` (`EventSink::scroll_handle`, kept per node in
-`EventDispatcher`), the container tracks it and paints a zero-size canvas
-child. The canvas records the handle's offset in the capture phase, which
-runs before GPUI's bubble-phase scroll steps. A `Window::defer` after the
-event puts back the recorded offsets that the DOM would not change: all of
-them after `preventDefault()`, otherwise all but the innermost container
-that still moved once clamped to `max_offset`. The deferral runs before the
-next draw. Without a dispatcher there is no handle and GPUI scrolls as is.
+#### Event object
 
-`"mouseenter"`/`"mouseleave"` come from one GPUI hover registration per
-node — GPUI panics if `on_hover` is bound twice on the same element, so
-`inca-gpui` picks the event name from the `bool` that registration hands
-back rather than binding once per name. Their `clientX`/`clientY`/
-`modifiers` come from the window's current pointer position and modifier
-state at the moment hover changes, not from a native move event — GPUI's
-`on_hover` doesn't hand one back. An element already under the pointer
-when it mounts gets a `"mouseenter"` the first time its hover state is
-checked, with no pointer movement involved — unlike the DOM, where
-`mouseenter` only ever follows an actual `mousemove`. GPUI's hover
-tracking also rides the same bubble-phase `mousemove` dispatch as every
-other pointer kind, so `stopPropagation()` from a descendant's hover
-callback can affect whether an ancestor's hover state is re-checked that
-frame — the DOM's `mouseenter`/`mouseleave` don't bubble at all, so this
-has no DOM equivalent.
+- One object is shared by all callbacks on a node for one event:
+  `{ type, target, currentTarget, ...payload }`. `target` equals
+  `currentTarget`.
+- Methods: `stopPropagation`, `stopImmediatePropagation`, `preventDefault`.
+- GPUI's `platform` modifier becomes `metaKey`. `function` is dropped.
 
-`"focus"`/`"blur"` come from `crates/inca-bridge/src/focus.rs`'s
-`FocusRegistry`, which persists a `gpui::FocusHandle` per node and
-compares which node is focused against which was focused last frame, once
-per frame (see that file's own doc comment for why not GPUI's
-`Window::on_focus_in`/`on_focus_out`). A node becomes focusable the first
-time `focusNode` names it or its `.track_focus` wiring is asked for. A
-focusable node with no focusable descendants gets DOM's non-bubbling
-`focus`/`blur`; that stops holding once focusable nodes can nest (tracked
-in [BACKLOG.md](./BACKLOG.md)).
+#### Events
 
-A focusable node also focuses itself on `mousedown`, matching the DOM —
-GPUI wires this automatically. `preventDefault()` on that `mousedown`
-suppresses it.
+| Name | Payload | Notes |
+| --- | --- | --- |
+| `click` | none | Fires before `mouseup` on the same node. |
+| `mousedown`, `mouseup` | mouse | `buttons` holds every button currently held. |
+| `mousemove` | mouse | |
+| `mouseenter`, `mouseleave` | mouse | Do not bubble. Position and modifiers are read when hover changes. |
+| `wheel` | mouse + `deltaX`, `deltaY`, `deltaZ`, `deltaMode` | `deltaX`/`deltaY` are GPUI's values negated. `deltaZ` is `0`. `deltaMode` is `0` or `1`. |
+| `focus`, `blur` | none | Do not bubble. |
+| `keydown`, `keyup` | `key`, `repeat`, `ctrlKey`, `shiftKey`, `altKey`, `metaKey` | Go to the focused node and bubble to its ancestors. `keyup` has `repeat: false`. |
 
-`focusNode`/`blurNode` queue, applied in order on the next frame — two
-calls before then both take effect, dispatching `"blur"`/`"focus"` for
-each in turn, the same as the DOM's synchronous `.focus()` would.
-Destroying a focused node reports no `"blur"` — its listeners are already
-gone by the time `destroyNode` returns (tracked in
-[BACKLOG.md](./BACKLOG.md)).
+The mouse payload is `clientX`, `clientY`, `pageX`, `pageY`, `movementX`,
+`movementY`, `button`, `buttons`, `detail` and the four modifier flags.
+`pageX`/`pageY` equal `clientX`/`clientY`.
 
-`"keydown"`/`"keyup"` carry `key`, `repeat`, and
-`ctrlKey`/`shiftKey`/`altKey`/`metaKey`, DOM-`KeyboardEvent`-named. `key`
-comes from GPUI's own `Keystroke::key`/`key_char` through a name table in
-`crates/inca-gpui/src/event_sink.rs`'s `dom_key`, covering GPUI's special
-key names, grown as real usage needs more of them. `repeat` is GPUI's
-`KeyDownEvent::is_held`;
-`"keyup"` is never a repeat, matching the DOM. GPUI routes a key event to
-whichever node is currently focused and bubbles it up through that node's
-ancestors, the same as the DOM; with nothing focused, GPUI routes to the
-window's own root, which carries no `inca` listeners, so neither event
-reaches any node (tracked in [BACKLOG.md](./BACKLOG.md)).
+#### Propagation and cancellation
 
-`stopImmediatePropagation()` stops the remaining callbacks *on that node*.
-`stopPropagation()`/`preventDefault()` are read back once every callback on
-the node has run, and forwarded into GPUI's own dispatch — GPUI already
-bubbles from the node a pointer hit outward through its ancestors the same
-way the DOM does, so `stopPropagation()` keeps ancestor listeners for the
-same event from firing. For `"wheel"`, `stopPropagation()` sets a per-event
-flag in `EventDispatcher` that skips the later `"wheel"` callbacks and leaves
-GPUI's bubble running, because GPUI's scroll steps sit in that bubble.
-`preventDefault()` reaches only what GPUI itself uses it for
-(`Window::prevent_default`'s doc comment) — narrower than the DOM's. `"click"` fires *before* `"mouseup"` on the same node: GPUI
-synthesizes clicks from its own mouse-down/mouse-up bookkeeping, registered
-after this crate's own `mouseup` wiring, and bubble-phase listeners run in
-reverse registration order.
+- Callbacks run in the bubble phase only.
+- `stopImmediatePropagation()` stops the remaining callbacks on that node.
+- `stopPropagation()` is read back after the node's callbacks and forwarded
+  to GPUI, which also stops its own ancestor listeners.
+- For `wheel`, `stopPropagation()` skips the later `wheel` callbacks. The
+  container still scrolls.
+- `preventDefault()` reaches only what GPUI honours: focus on `mousedown`,
+  the `click` from `Enter`/`Space`, and wheel scrolling.
 
-`crates/inca-gpui`'s `EventKind` enumerates every native event kind a node
-can be wired for, and pairs each with its name and its `EventMask` bit.
-A node's spec carries one mask covering everything it listens for.
-Extending the wired input vocabulary means adding a variant to `EventKind`
-and a payload variant to `EventPayload` — same "deliberately incomplete"
-framing as the style vocabulary.
+#### Ordering
 
-`EventMask` covers only the fixed vocabulary of native input `inca-gpui`
-wires per-frame. A dynamically-named event — a host-lifecycle event or a
-menu item's activation (`menu:<id>`) — reaches JS through the same
-`addEventListener`/`EventDispatcher::dispatch` path; `EventMask` doesn't
-cover it.
+- `focusNode`/`blurNode` queue and apply in order on the next frame.
+- Destroying a focused node fires no `blur`.
+- All dispatches from one raw event share one movement value.
 
-`addEventListener` itself needs no thread-safe/cross-thread callback
-machinery: Incarnative.js's embedded QuickJS and the GPUI event loop share
-one process and are driven synchronously (see
-`crates/inca-jsenv/src/engine.rs`'s `Context::with`), confirmed by
-`crates/inca-bridge/tests/event_dispatch.rs`.
+## Application menu
 
-`EventListeners` (`crates/inca-bridge/src/bindings.rs`) only ever stores the
-plain `u32` `callbackId` it's given — never an
-`rquickjs::Value`/`Function`/`Persistent<T>`, per the FFI safety
-checklist below. The real JS function has to live somewhere, so the
-convention is: **the caller stores it itself**, at
-`globalThis.__inca_callbacks__[callbackId]`, before calling
-`addEventListener` with that id. `EventDispatcher::dispatch` looks the real
-function up fresh inside one `Engine::with` call and drops it before that
-call returns — it never crosses into a long-lived Rust struct. A missing
-`__inca_callbacks__` entry, or one that isn't a function, is a stale id and
-is skipped. A callback that *throws* is reported through the host's error
-reporter and the remaining callbacks still run: one bad listener must take
-down neither the host nor its siblings. A failing promise job or a promise
-rejected with no handler is reported the same way.
+The host sets the menu bar (`crates/inca-host/src/menu.rs`). It holds one
+menu, titled after the app, with one item, `Quit`, bound to `secondary-q`
+(`cmd-q` on macOS, `ctrl-q` elsewhere). `Quit` belongs to the host, so every
+app has a way to quit. Only macOS draws a menu bar today.
 
-That is why `removeEventListener` and `destroyNode` report the ids they
-dropped: each side holds half of a registration, and only the caller can free
-the JS half.
-
-### App lifecycle surface (decided, not yet dispatched)
-
-Settled ahead of `@incajs/cli`'s `inca dev` needing it, per
-[PROTOCOL.md](./PROTOCOL.md)'s own note that an app lifecycle hook is "a name
-the host agrees to dispatch, not a new binding." Recorded here so a future
-unit implements this rather than deciding it again:
-
-- **Moments**: exactly the two the dev protocol itself creates — a reload
-  about to discard the current session, and process exit (`shutdown`).
-  Nothing else; window close/focus/a platform quit request is Phase 9.
-- **Mechanism**: no new binding. A named event (e.g. `"beforeReload"`,
-  `"beforeUnmount"`) dispatched on `rootNodeId()` through the existing
-  `addEventListener`/`EventDispatcher` path above.
-- **Cancellation**: observe-only. By the time a reload's hook would fire,
-  the new bundle has already loaded successfully — `inca-host`'s
-  `reload()` only swaps sessions after that succeeds — so there is
-  nothing left to veto. Shutdown can't be blocked indefinitely either.
-- **What a handler may await**: only already-settled microtasks. The job
-  queue drains once right after the hook fires, the same as every
-  existing `drain_jobs_and_refresh` call site, and nothing pumps it again
-  afterward — QuickJS has no timers or I/O to resume it, so awaiting a
-  timer or `fetch` would hang forever, not fail loudly.
-- **Wrapping**: `packages/core` should expose named helpers (e.g.
-  `onBeforeReload`/`onBeforeUnmount`) over the raw `addEventListener`
-  call, so the event-name strings never become app-facing API.
-
-Nothing dispatches either event yet — wiring `crates/inca-host` to
-actually fire them is separate, future work.
-
-### Application menu (host-owned, one item)
-
-`crates/inca-host` sets the menu bar (`src/menu.rs`): one top-level menu
-titled after the app, holding `Quit`, bound to `secondary-q` — `cmd-q` on
-macOS and `ctrl-q` elsewhere. macOS reads a menu item's key equivalent from
-the keymap, so the shortcut shown beside the item comes from that binding,
-and it titles the application menu from the `.app` bundle's
-`CFBundleName`. macOS is the only platform that draws a menu bar today;
-Linux and Windows keep what `set_menus` was given.
-
-`Quit` is the host's. An app can neither remove nor rebind it, so every app
-has a way to quit.
-
-An item an app defines reaches JS through the same path a lifecycle hook
-does, with no new binding: its activation is dispatched on `rootNodeId()`
-as `menu:<id>`, `<id>` being whatever the app called the item, so an item
-`save` arrives as `("menu:save")`. A GPUI action is a type, so an app's own
-id travels in one action struct with a `SharedString` field (`Action`
-derive, `#[action(no_json)]`), constructed per item.
-
-**Nothing supplies app-defined items yet.** Where they come from —
-`inca.config.ts`, a JS binding, or an SFC — is undecided, and settling it
-changes only what produces the `Vec<Menu>` that `menu::install` takes.
+An item an app defines is dispatched on `rootNodeId()` as the event
+`menu:<id>`, through `addEventListener`. An item `save` arrives as
+`menu:save`.
