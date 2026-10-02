@@ -3,93 +3,39 @@ Copyright (c) 2026 tom96da
 SPDX-License-Identifier: MIT OR Apache-2.0
 -->
 
-# AGENTS.md
+# Incarnative.js
 
-Instructions for AI coding agents working in this repository.
+**Incarnative.js** (`inca`, npm: `incajs`) is an ultra-lightweight, Webview-free desktop application framework powered by **GPUI**, **QuickJS**, and custom renderers. Write Vue 3 components, get native windows drawn directly on the GPU. No Chromium, no DOM.
 
-## Project
+## Why
 
-**Incarnative.js** (`inca`) is an ultra-lightweight, Webview-free desktop application framework:
+- **Webview-free**: no browser engine to ship or boot.
+- **Direct GPU rendering**: Rust and GPUI draw the UI natively.
+- **Micro-sized runtime**: QuickJS gives sub-second startup and a small memory footprint.
+- **Standard Vue 3**: author ordinary `.vue` single-file components.
 
-- **Engine / Core**: Rust, built on [`gpui`](https://www.gpui.rs/) for direct GPU rendering (no Chromium/DOM).
-- **JS Runtime**: QuickJS via [`rquickjs`](https://github.com/DelSkayn/rquickjs), for a micro-sized, sub-second-startup runtime.
-- **Frontend**: Vue 3 (first-class support, built first) via a custom renderer. React and other frameworks are a future, additive goal — not yet implemented, and not started until Vue 3 support is stable.
-- **Bundler / dev tooling**: Vite, used in library/build mode (not as a browser dev server) — see [ARCHITECTURE.md](./specs/ARCHITECTURE.md).
+## How it works
 
-See [README.md](./README.md) for the full pitch.
+```
+.vue source ─ Vite (build mode) ─▶ bundle
+bundle ─ QuickJS ─ custom Vue renderer ─ FFI ─▶ Rust retained tree
+Rust retained tree ─ layout + paint ─▶ GPUI ─▶ GPU
+```
+
+JS never runs per frame. It runs only when reactive state changes and pushes
+the mutations to Rust, which owns the tree and does layout and drawing
+natively. See [ARCHITECTURE.md](./specs/ARCHITECTURE.md) for the details.
 
 ## Status
 
-Phase 1 (Rust host FFI bridge: `crates/inca-gpui`/`inca-bridge`/
-`inca-jsenv`) and Phase 2 (pnpm workspace, `packages/core`, `incajs/vue`,
-two `.vue` examples) are done — [FFI.md](./specs/FFI.md) has the current
-binding vocabulary.
+Early stage. Vue 3 is the only supported frontend. The CLI (`inca dev`,
+`inca build`, `inca package`), HMR, pointer, keyboard and scroll input work.
+Text editing and IME are not built yet.
 
-Phase 3 (the `inca` CLI, `v0.0.1` released after 3.3) is done through 3.3:
-`inca dev`, `inca build`, and `inca package` (per-platform
-`@incajs/host-*` packages published via `cd.yml`; `darwin-x64` stays an
-unpublished placeholder — no free Intel macOS runner). An app's settings
-travel in its own build output — see [PROTOCOL.md](./specs/PROTOCOL.md)
-— and every app carries an application menu with a `Quit` item. 3.4
-(HMR, `v0.0.6`) is functional and opt-in (`--experimental-hmr` /
-`INCA_EXPERIMENTAL_HMR`; `inca dev` reloads the whole bundle by default
-either way): a template-only edit preserves component state, a script
-edit resets it, and a failed update is reported the same way a failed
-full build already is. Known gaps live in
-[BACKLOG.md](./specs/BACKLOG.md), including a couple of `gpui`-layer
-repaint bugs surfaced by real HMR editing that a full reload never hit.
-The CLI prints the bundler's own output beside its own — see
-[FAILURES.md](./specs/FAILURES.md) for what it refuses and falls back
-from. The host prints a full WHATWG `console` (all methods, format
-specifiers, and `Date`, `RegExp`, `Map` and `Set` values), in colour on a
-terminal (`NO_COLOR` and `FORCE_COLOR` apply).
+## Links
 
-Phase 4 (input & text editing) is running alongside 3.4: pointer input,
-the focus model, keyboard input and scrolling (`overflow`, wheel) are
-done. Text editing and IME, interactive visual state and `position`/
-`z-index` are not built.
+- Docs: [tom96da.github.io/incajs](https://tom96da.github.io/incajs/)
+- npm: [`incajs`](https://npmjs.com/package/incajs), [`@incajs/cli`](https://npmjs.com/package/@incajs/cli)
+- [README.md](./README.md), [CHANGELOG.md](./CHANGELOG.md)
 
-The current release is `v0.0.8`, on Node.js 22.18 or newer, zed v1.22.0
-for `gpui` and rquickjs 0.14.0. Linux binaries are built in an
-`ubuntu:22.04` container by both workflows, kept in sync, for a glibc
-2.35 floor. The public docs site (`docs/`, VitePress — `guide/` for
-prose, `reference/` for lookup) is deployed by
-`.github/workflows/docs.yml` to
-[tom96da.github.io/incajs](https://tom96da.github.io/incajs/).
-
-See [PLAN.md](./specs/PLAN.md) for unit-by-unit detail and deferred items
-(e.g. 3.1's dev-only error panel, waiting on Phase 7's `position`/
-`z-index`), and [BACKLOG.md](./specs/BACKLOG.md) for gaps
-outside the phased plan — several of them are places this framework and
-`gpui` have drifted apart.
-
-Keep this section's status prose accurate as real logic lands — don't let it go stale.
-
-## Architecture
-
-- [ARCHITECTURE.md](./specs/ARCHITECTURE.md) — tech stack, system diagram, and how HMR is delivered into the embedded QuickJS runtime.
-- [ROADMAP.md](./specs/ROADMAP.md) — the phased build-out plan (Vue 3 first, React later as an additive package).
-- [FFI.md](./specs/FFI.md) — the JS↔Rust host bridge function surface.
-- [PROTOCOL.md](./specs/PROTOCOL.md) — the dev protocol between `inca-host` and the Node process that spawns it.
-
-### Guiding principles
-
-- **Safety first**: Rust↔QuickJS bindings must handle pointer conversions and reference counts carefully — this boundary is the most likely source of memory leaks or segfaults.
-- **Zero-overhead render loop**: don't run JS on every frame. JS executes only on reactivity updates, pushing snapshot mutations to Rust; Rust owns the retained tree and does layout/drawing natively.
-- **Developer ergonomics**: frontend code stays strictly standard — `.vue`/`.tsx` code should feel identical to ordinary web development, not like it's targeting an embedded runtime.
-
-## Repository structure
-
-See [STRUCTURE.md](./specs/STRUCTURE.md) for the full directory map, including the pinned `third_party/` submodules (zed, rquickjs, quickjs-ng) and how to init/update them.
-
-## Conventions
-
-- **License**: dual-licensed MIT OR Apache-2.0 (see [LICENSE-MIT](./LICENSE-MIT) and [LICENSE-APACHE](./LICENSE-APACHE)). Prefix new source files with the SPDX header used at the top of this file (AGENTS.md):
-  ```
-  Copyright (c) <year> tom96da
-  SPDX-License-Identifier: MIT OR Apache-2.0
-  ```
-- **Dev container**: `.devcontainer/Dockerfile` builds on `mcr.microsoft.com/devcontainers/rust:2-1-trixie`, adding the native build/runtime dependencies `gpui` needs (windowing, Vulkan, fontconfig — see the Dockerfile's comment), plus the `node` devcontainer feature. Use `pnpm` for any JS/frontend tooling — Vite's officially supported and tested runtime is Node.js, and this project's HMR bridge builds directly on Vite's less battle-tested Runtime API (`vite/module-runner`), so avoid introducing a second, less-proven runtime (e.g. Bun) there.
-- **Git & commits**: see [GIT.md](./specs/GIT.md) for the commit message format and, most importantly, the review policy — never run `git commit`/`git commit --amend` without first showing the exact diff and message for explicit approval.
-- **Testing & tooling**: see [TESTING.md](./specs/TESTING.md) for where tests live and the full set of checks (lint, format, type-check, tests) that must pass, for both Rust and TypeScript.
-- Keep this file (not just README.md) up to date as real architecture, module boundaries, and commands land — this is the file agents read first.
+Developing in this repository? Read [CONTRIBUTING.md](./CONTRIBUTING.md).

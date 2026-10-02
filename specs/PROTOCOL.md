@@ -12,7 +12,7 @@ launches the host binary and speaks everything below, driven by the CLI's
 own commands. The counterpart to [FFI.md](./FFI.md), which covers the other
 boundary — JS calling into Rust inside the host's own process.
 
-See [AGENTS.md](../AGENTS.md#status) for how much of this is built. Update
+See [DEVELOPMENT.md](./DEVELOPMENT.md#status) for how much of this is built. Update
 this file whenever a message lands or changes, same as [FFI.md](./FFI.md).
 
 ## Transport

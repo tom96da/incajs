@@ -5,8 +5,8 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 # Repository structure
 
-A map of this repository for AI agents. Read [AGENTS.md](../AGENTS.md)
-first — this file is the detailed reference it points to.
+A map of this repository. Read [CONTRIBUTING.md](../CONTRIBUTING.md) and [DEVELOPMENT.md](./DEVELOPMENT.md)
+first. This file is the detailed reference they point to.
 
 ```
 incajs/
@@ -14,9 +14,10 @@ incajs/
 ├── .gitmodules              # registers the `third_party/` submodules
 ├── LICENSE-MIT
 ├── LICENSE-APACHE           # dual-licensed MIT OR Apache-2.0
-├── AGENTS.md                # agent instructions entry point — read this first
+├── AGENTS.md                # public-facing summary for AI agents and crawlers (what inca is, how it works)
+├── CONTRIBUTING.md          # contributor entry point: setup, rules, pull requests
 ├── CHANGELOG.md             # user-visible changes per release
-├── CLAUDE.md                # Claude Code entry point; just `@AGENTS.md`
+├── CLAUDE.md                # Claude Code entry point; imports CONTRIBUTING.md and specs/DEVELOPMENT.md
 ├── .editorconfig            # editor indentation and newline settings
 ├── .vscode/                 # shared VS Code settings
 ├── .claude/                 # shared Claude Code settings
@@ -24,6 +25,7 @@ incajs/
 ├── .gitignore.d/            # per-topic gitignore fragments (Node/Rust/common) concatenated by `make .gitignore` — edit these, never .gitignore directly
 ├── specs/
 │   ├── STRUCTURE.md         # this file
+│   ├── DEVELOPMENT.md       # project status, architecture links, guiding principles
 │   ├── ARCHITECTURE.md      # target tech stack, system diagram, HMR delivery design
 │   ├── ROADMAP.md           # planned phased implementation (Vue 3 first, React later)
 │   ├── FFI.md               # JS↔Rust host bridge function surface
@@ -84,11 +86,11 @@ incajs/
 
 ## Status
 
-See [AGENTS.md](../AGENTS.md#status) for what has landed so far and what
+See [DEVELOPMENT.md](./DEVELOPMENT.md#status) for what has landed so far and what
 hasn't, and [TESTING.md](./TESTING.md) for the required checks (Rust and
 TypeScript) — not restated here, to avoid drifting out of sync.
 
-Update this file and [AGENTS.md](../AGENTS.md) as real crates, packages, and ownership boundaries land — do not let either go stale.
+Update this file and [DEVELOPMENT.md](./DEVELOPMENT.md) as real crates, packages, and ownership boundaries land — do not let either go stale.
 
 ## Target workspace layout (full plan)
 

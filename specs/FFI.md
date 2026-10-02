@@ -7,7 +7,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 The function surface exposed to JS as `globalThis.__inca_native__`, bound
 into the QuickJS context by the Rust host via `rquickjs`. See
-[AGENTS.md](../AGENTS.md#status) for how much of this is built. The
+[DEVELOPMENT.md](./DEVELOPMENT.md#status) for how much of this is built. The
 tag/style vocabulary below is deliberately incomplete by design and grows as
 real usage needs more of it — update this file whenever a binding, tag, or
 style prop actually lands.
