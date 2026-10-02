@@ -29,14 +29,22 @@ const GROUP_INDENT: &str = "│ ";
 /// The label `count`, `time` and their relatives use when given none.
 const DEFAULT_LABEL: &str = "default";
 
-/// The kind of line `console` produced. Nothing here filters on it.
+/// The kind of line `console` produced, passed to [`Output`] with the line.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Level {
+    /// Written by `console.trace`.
     Trace,
+    /// Written by `console.debug`.
     Debug,
+    /// Written by `console.log`, `dirxml`, `dir`, `table`, `count`, the timer
+    /// methods and `group`/`groupCollapsed`.
     Log,
+    /// Written by `console.info`.
     Info,
+    /// Written by `console.warn`, and by `countReset`, `time`, `timeLog` or
+    /// `timeEnd` when the label is unknown, or for `time` already running.
     Warn,
+    /// Written by `console.error` and by a failed `console.assert`.
     Error,
 }
 

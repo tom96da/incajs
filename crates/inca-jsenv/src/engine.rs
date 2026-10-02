@@ -16,6 +16,7 @@ use rquickjs::{Coerced, Context, Ctx, FromJs, Function, Module, Persistent, Runt
 
 use crate::loader::{DiskLoader, DiskResolver, canonical_name};
 
+/// `Result<T, EngineError>`, what every fallible [`Engine`] method returns.
 pub type EngineResult<T> = Result<T, EngineError>;
 
 /// A failure out of the JS engine, with the thrown value already read from
@@ -126,6 +127,14 @@ const TRACKER_JS: &str = "{
     };
 }";
 
+/// One `QuickJS` runtime with the single context it runs scripts in.
+///
+/// Build one with [`Engine::new`] or [`Engine::builder`]. Run a script with
+/// [`eval`](Self::eval), a module with [`eval_module`](Self::eval_module),
+/// and the promise jobs they queue with [`run_jobs`](Self::run_jobs); reach
+/// the raw context through [`with`](Self::with). An `Engine` is neither
+/// `Send` nor `Sync`, so it stays on the thread that created it. Dropping it
+/// frees the runtime and its realm.
 pub struct Engine {
     // Kept alive for the lifetime of `context`, which internally holds a
     // reference-counted handle back to it; QuickJS ties runtime-wide state
