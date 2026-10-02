@@ -4,4 +4,4 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 -->
 
 @CONTRIBUTING.md
-@specs/DEVELOPMENT.md
+@handbook/DEVELOPMENT.md

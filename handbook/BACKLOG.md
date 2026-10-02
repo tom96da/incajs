@@ -118,7 +118,7 @@ A fixed entry is deleted and its ID is never reused.
   gaps now live loose in `dispatch.rs` — B-018 and B-019 plus
   `mouseenter` firing on mount for an element already under the pointer
   (GPUI's hover check compares against freshly-initialized state on first
-  paint, not against a real pointer move; see `specs/FFI.md`'s "Event
+  paint, not against a real pointer move; see `handbook/FFI.md`'s "Event
   dispatch" section). `EventDispatcher` exists to turn GPUI's raw input
   into what a DOM author expects, so this translation belongs there too.
   Direction: one `compat` submodule inside it, not a separate crate — one
@@ -292,7 +292,7 @@ A fixed entry is deleted and its ID is never reused.
 - **B-050 `FAILURES.md` promises a window-size check that doesn't exist**
   `Units: cli,docs · Size: S–M · Impact: Medium`
 
-  `specs/FAILURES.md` says a `width` of `-100` "is refused, and the message
+  `handbook/FAILURES.md` says a `width` of `-100` "is refused, and the message
   says which value and which file". The CLI checks nothing, and the host's
   `usable()` quietly falls back to the default. One wrongly typed field
   (`width: "800"`) makes the host ignore the whole `inca.json` (name,
@@ -454,7 +454,7 @@ A fixed entry is deleted and its ID is never reused.
 
   `faultOf` (`packages/cli/src/dev.mts`)
   reaches for `buildErrorMessage`/`RollupError` outside the adapter layer
-  `specs/ARCHITECTURE.md` says is the only place that imports `vite`. Move
+  `handbook/ARCHITECTURE.md` says is the only place that imports `vite`. Move
   that formatting into `adapter/vite` and hand `dev.mts` an already-built
   `Fault`.
 
@@ -637,7 +637,7 @@ A fixed entry is deleted and its ID is never reused.
   whatever `.ok()?` swallows when reading `__inca_dev__`/`receive` off
   globals, rather than capturing it as an `EngineError`. `receive` is
   invoked via a bare `Function::call`, leaving `this` unbound instead of
-  bound to `__inca_dev__` — `specs/PROTOCOL.md`'s own
+  bound to `__inca_dev__` — `handbook/PROTOCOL.md`'s own
   `__inca_dev__.receive?.(...)` implies a method call. Also,
   `PROTOCOL_VERSION` (`crates/inca-host/src/protocol.rs`) is still `0`
   despite this new relay surface landing; bump it or write down that it's

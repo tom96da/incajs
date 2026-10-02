@@ -24,7 +24,7 @@ Rust retained tree ─ layout + paint ─▶ GPUI ─▶ GPU
 
 JS never runs per frame. It runs only when reactive state changes and pushes
 the mutations to Rust, which owns the tree and does layout and drawing
-natively. See [ARCHITECTURE.md](./specs/ARCHITECTURE.md) for the details.
+natively. See [ARCHITECTURE.md](./handbook/ARCHITECTURE.md) for the details.
 
 ## Status
 

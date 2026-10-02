@@ -17,13 +17,13 @@ incajs/
 ├── AGENTS.md                # public-facing summary for AI agents and crawlers (what inca is, how it works)
 ├── CONTRIBUTING.md          # contributor entry point: setup, rules, pull requests
 ├── CHANGELOG.md             # user-visible changes per release
-├── CLAUDE.md                # Claude Code entry point; imports CONTRIBUTING.md and specs/DEVELOPMENT.md
+├── CLAUDE.md                # Claude Code entry point; imports CONTRIBUTING.md and handbook/DEVELOPMENT.md
 ├── .editorconfig            # editor indentation and newline settings
 ├── .vscode/                 # shared VS Code settings
 ├── .claude/                 # shared Claude Code settings
 ├── Makefile                 # generates the root .gitignore from .gitignore.d/*.gitignore
 ├── .gitignore.d/            # per-topic gitignore fragments (Node/Rust/common) concatenated by `make .gitignore` — edit these, never .gitignore directly
-├── specs/
+├── handbook/
 │   ├── STRUCTURE.md         # this file
 │   ├── DEVELOPMENT.md       # project status, architecture links, guiding principles
 │   ├── ARCHITECTURE.md      # target tech stack, system diagram, HMR delivery design

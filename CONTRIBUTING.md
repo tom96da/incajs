@@ -25,10 +25,10 @@ approach can be agreed before you write code.
   Copyright (c) <year> tom96da
   SPDX-License-Identifier: MIT OR Apache-2.0
   ```
-- **Commits**: follow [GIT.md](./specs/GIT.md) for the message format and
+- **Commits**: follow [GIT.md](./handbook/GIT.md) for the message format and
   review policy.
 - **Checks**: run the lint, format, type-check and test commands in
-  [TESTING.md](./specs/TESTING.md) before opening a pull request.
+  [TESTING.md](./handbook/TESTING.md) before opening a pull request.
 
 ## Pull requests
 
@@ -38,6 +38,6 @@ user-visible change.
 
 ## More
 
-[specs/DEVELOPMENT.md](./specs/DEVELOPMENT.md) covers the project status,
-architecture and guiding principles. [specs/STRUCTURE.md](./specs/STRUCTURE.md)
+[handbook/DEVELOPMENT.md](./handbook/DEVELOPMENT.md) covers the project status,
+architecture and guiding principles. [handbook/STRUCTURE.md](./handbook/STRUCTURE.md)
 maps the repository.

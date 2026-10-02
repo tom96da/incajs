@@ -9,6 +9,9 @@ Granular, checkbox-tracked task breakdown that complements
 [ROADMAP.md](./ROADMAP.md)'s phase-level design intent with per-task
 tracking.
 
+This directory was named `specs/` until v0.0.9. Paths below that start with
+`specs/` mean `handbook/`.
+
 **Finished work is append-only.** A section whose boxes are ticked is never
 rewritten or deleted, and new scope discovered mid-implementation is
 appended as a new item near the relevant task rather than folded into a
