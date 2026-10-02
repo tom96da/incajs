@@ -8,3 +8,18 @@
     -webkit-text-fill-color: dimgray !important;
   }
 }
+
+/* The console's level markers, in the colours the terminal output uses. */
+.vp-doc code {
+  &.marker-error {
+    color: var(--vp-c-danger-1);
+  }
+
+  &.marker-warn {
+    color: var(--vp-c-warning-1);
+  }
+
+  &.marker-info {
+    color: var(--vp-c-brand-1);
+  }
+}

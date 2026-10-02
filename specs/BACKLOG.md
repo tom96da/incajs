@@ -936,3 +936,15 @@ A fixed entry is deleted and its ID is never reused.
   `-D warnings`, until the gaps are filled. A crate cannot opt out of one
   inherited lint, so a crate that is not ready needs
   `#![allow(missing_docs)]` in its source.
+
+- **B-097 `console` prints some classes and built-ins unlike Node**
+  `Units: jsenv · Size: M · Impact: Medium`
+
+  A class instance prints without its class name, as `{ a: 1 }` where Node
+  prints `Foo { a: 1 }`. Properties keyed by a `Symbol`, array holes
+  (printed as `undefined`) and extra properties on an array or an `Error`
+  are dropped. A `Promise`, a typed array, a `WeakMap` and a boxed primitive
+  print as a plain object: `{}` for most, `{ 0: 0, 1: 0, 2: 0 }` for
+  `new Uint8Array(3)`, where Node prints `Promise { 1 }` and
+  `Uint8Array(3) [ 0, 0, 0 ]`. A nested string is always single-quoted,
+  where Node picks the quote that avoids escaping.

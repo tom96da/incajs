@@ -60,6 +60,7 @@ export default defineConfig({
             { text: "Configuration", link: "/reference/configuration" },
             { text: "Elements & Styles", link: "/reference/elements" },
             { text: "Events", link: "/reference/events" },
+            { text: "Console", link: "/reference/console" },
             { text: "Error Codes", link: "/reference/errors" },
           ],
         },
