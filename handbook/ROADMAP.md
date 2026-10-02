@@ -8,7 +8,6 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 Planned phased implementation of the design in
 [ARCHITECTURE.md](./ARCHITECTURE.md). This file describes phase-level design
 intent only — it doesn't track progress itself. See
-[DEVELOPMENT.md](./DEVELOPMENT.md#status) for which phases have landed so far and
 [PLAN.md](./PLAN.md) for the checkbox-tracked, per-task breakdown.
 
 Vue 3 support is built first end-to-end (Phases 1–3), through to the
@@ -430,6 +429,5 @@ phase, and none belongs inside one above.
 
 ## Implementation guidelines
 
-See [DEVELOPMENT.md](./DEVELOPMENT.md) for the guiding principles (memory safety at the
-FFI boundary, keeping the render loop zero-overhead, developer ergonomics)
-that apply across every phase.
+Memory safety at the FFI boundary, a zero-overhead render loop and developer
+ergonomics apply across every phase.

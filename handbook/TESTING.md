@@ -200,8 +200,7 @@ Watch for these when scaffolding a new package too:
 - Single package, for iterating on one — may be incomplete on its own:
   `pnpm --filter <pkg> test` / `typecheck` / `build`
 - Coverage: `pnpm test:coverage`, same run with `--coverage` added
-- Rust: `cargo test --workspace --exclude inca-tests` (see
-  [DEVELOPMENT.md](./DEVELOPMENT.md#status)) — plus `cargo clippy`/`cargo fmt
+- Rust: `cargo test --workspace --exclude inca-tests` — plus `cargo clippy`/`cargo fmt
   --check` from the Required checks list above, which aren't bundled into
   `cargo test` itself the way the root `pretest` bundles them on the
   TypeScript side.

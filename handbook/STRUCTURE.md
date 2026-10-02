@@ -5,8 +5,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 # Repository structure
 
-A map of this repository. Read [CONTRIBUTING.md](../CONTRIBUTING.md) and [DEVELOPMENT.md](./DEVELOPMENT.md)
-first. This file is the detailed reference they point to.
+A map of this repository.
 
 ```
 incajs/
@@ -86,11 +85,10 @@ incajs/
 
 ## Status
 
-See [DEVELOPMENT.md](./DEVELOPMENT.md#status) for what has landed so far and what
-hasn't, and [TESTING.md](./TESTING.md) for the required checks (Rust and
+See [TESTING.md](./TESTING.md) for the required checks (Rust and
 TypeScript) — not restated here, to avoid drifting out of sync.
 
-Update this file and [DEVELOPMENT.md](./DEVELOPMENT.md) as real crates, packages, and ownership boundaries land — do not let either go stale.
+Update this file as real crates, packages, and ownership boundaries land — do not let it go stale.
 
 ## Target workspace layout (full plan)
 
