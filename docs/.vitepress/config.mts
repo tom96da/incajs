@@ -3,20 +3,61 @@
 
 import { defineConfig } from "vitepress";
 import { groupIconMdPlugin, groupIconVitePlugin } from "vitepress-plugin-group-icons";
+import type { HeadConfig } from "vitepress";
 
 import packageJson from "../../packages/core/package.json" with { type: "json" };
+import structuredData from "./structured-data.json" with { type: "json" };
 
 const incaVersion = packageJson.version;
 const commitRef = process.env.COMMIT_REF?.slice(0, 8) || "dev";
 
+const siteName = "Incarnative.js";
+const siteUrl = packageJson.homepage.replace(/\/$/, "");
+const repoUrl = packageJson.repository.url.replace(/^git\+/, "").replace(/\.git$/, "");
+
+/** The canonical URL of a page, in the `cleanUrls` form the site serves. */
+const pageUrl = (relativePath: string) =>
+  `${siteUrl}/${relativePath.replace(/\.md$/, "").replace(/(^|\/)index$/, "$1")}`;
+
 export default defineConfig({
-  title: "Incarnative.js",
+  title: siteName,
   description:
     "A GPU-native, Webview-free desktop application framework powered by GPUI and QuickJS.",
   base: "/",
   lastUpdated: true,
   sitemap: {
-    hostname: "https://incajs.tom96da.com/",
+    hostname: `${siteUrl}/`,
+  },
+  transformHead({ pageData, title, description }) {
+    if (pageData.relativePath === "404.md") return [];
+    const isHome = pageData.relativePath === "index.md";
+    const url = pageUrl(pageData.relativePath);
+    const head: HeadConfig[] = [
+      ["link", { rel: "canonical", href: url }],
+      ["meta", { property: "og:type", content: isHome ? "website" : "article" }],
+      ["meta", { property: "og:site_name", content: siteName }],
+      ["meta", { property: "og:title", content: title }],
+      ["meta", { property: "og:description", content: description }],
+      ["meta", { property: "og:url", content: url }],
+      ["meta", { name: "twitter:card", content: "summary" }],
+    ];
+    if (isHome) {
+      const softwareSourceCode = {
+        ...structuredData,
+        name: siteName,
+        description,
+        url: `${siteUrl}/`,
+        codeRepository: repoUrl,
+        sameAs: [repoUrl, `https://www.npmjs.com/package/${packageJson.name}`],
+        version: incaVersion,
+      };
+      head.push([
+        "script",
+        { type: "application/ld+json" },
+        JSON.stringify(softwareSourceCode).replace(/</g, "\\u003c"),
+      ]);
+    }
+    return head;
   },
   themeConfig: {
     nav: [

@@ -1,0 +1,8 @@
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareSourceCode",
+  "alternateName": ["incajs", "inca"],
+  "programmingLanguage": ["Rust", "TypeScript"],
+  "license": ["https://spdx.org/licenses/MIT.html", "https://spdx.org/licenses/Apache-2.0.html"],
+  "author": { "@type": "Person", "name": "tom96da", "url": "https://github.com/tom96da" }
+}
