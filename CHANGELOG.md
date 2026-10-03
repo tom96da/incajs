@@ -10,6 +10,23 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.0.9] - 2026-10-03
+
+### Added
+
+- `console` has every standard method, the `%` format specifiers, more value types and colour on a terminal ([fd8c2a9](https://github.com/tom96da/incajs/commit/fd8c2a9), [6d47dc9](https://github.com/tom96da/incajs/commit/6d47dc9), [d4b4a08](https://github.com/tom96da/incajs/commit/d4b4a08), [e3ec293](https://github.com/tom96da/incajs/commit/e3ec293))
+- the `@incajs/host-darwin-x64` package is published, so the host runs on Intel Macs ([9ddc458](https://github.com/tom96da/incajs/commit/9ddc458))
+
+### Changed
+
+- the documentation site moved to https://incajs.tom96da.com/ ([e391c46](https://github.com/tom96da/incajs/commit/e391c46))
+
+### Fixed
+
+- a `click.once` handler removes only itself and no longer removes the `click` handlers on the same element ([5d5a29b](https://github.com/tom96da/incajs/commit/5d5a29b))
+- `stopImmediatePropagation()` on a `click` event stops the later handlers on the same element ([5d5a29b](https://github.com/tom96da/incajs/commit/5d5a29b))
+- the entry bundle runs once even when another file imports it by a different path ([b163ebb](https://github.com/tom96da/incajs/commit/b163ebb))
+
 ## [0.0.8] - 2026-09-30
 
 ### Added
@@ -152,7 +169,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - prebuilt `inca-host` binaries for linux-x64, linux-arm64, and darwin-arm64, resolved automatically per platform
 - click event dispatch from the native tree back into JS
 
-[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.8...HEAD
+[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.9...HEAD
+[0.0.9]: https://github.com/tom96da/incajs/releases/tag/v0.0.9
 [0.0.8]: https://github.com/tom96da/incajs/releases/tag/v0.0.8
 [0.0.7]: https://github.com/tom96da/incajs/releases/tag/v0.0.7
 [0.0.6]: https://github.com/tom96da/incajs/releases/tag/v0.0.6
