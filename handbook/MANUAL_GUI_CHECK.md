@@ -5,17 +5,16 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 # Manually verifying a GPUI window opens
 
-How to run this repo's examples and look at the window. The devcontainer has
-no display, so a person outside it has to do this — see
-[Why an agent can't do this](#why-an-agent-cant-do-this).
+How to run this repo's examples and look at the window. The devcontainer
+mounts no X11 or Wayland socket, so window checks run on a host with a
+display. Under a headless `Xvfb` the window gets its size (`xwininfo` shows
+it), but nothing renders into it.
 
-Option A is enough for most checks. Option B exercises the Linux backend,
-which is what CI and the devcontainer run.
+Option A is enough for most checks. Option B exercises the Linux backend.
 
 ## Option A — natively on macOS (recommended)
 
-The repo is bind-mounted into the container, so the same commands run on the
-host, against the macOS backend.
+Run these on a macOS checkout, against the macOS backend.
 
 ```sh
 cargo run -p inca-gpui --example gpui_hello_world
@@ -58,24 +57,13 @@ open examples/click_counter/dist/click_counter.app
 Same look and click behavior as the dev run. Double-click it from Finder to
 also confirm it starts with no terminal attached.
 
-### No text, but the background and boxes render
+### Metal toolchain
 
-`gpui_platform`'s `font-kit` feature isn't enabled for this platform (see
-`crates/inca-gpui/Cargo.toml`). `gpui_macos` then skips every text draw and
-reports nothing.
+`gpui_apple`'s build script needs the `metal` shader compiler. Xcode 26 and
+later do not bundle it. It is a separate component of the full Xcode.app,
+which the Command Line Tools do not provide.
 
-### Metal toolchain errors
-
-```
-error: cannot execute tool 'metal' due to missing Metal Toolchain; use: xcodebuild -downloadComponent MetalToolchain
-```
-
-```
-xcrun: error: unable to find utility "metal", not a developer tool or in PATH
-```
-
-`gpui_apple`'s build script needs the `metal` shader compiler, which ships
-with the full Xcode.app rather than the Command Line Tools.
+#### Install
 
 1. Install Xcode from the App Store.
 2. Point the active developer directory at it:
@@ -83,20 +71,19 @@ with the full Xcode.app rather than the Command Line Tools.
    sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
    sudo xcodebuild -license accept
    ```
-3. Download the toolchain component (~688 MB):
+3. Download the toolchain component (about 688 MB):
    ```sh
    xcodebuild -downloadComponent MetalToolchain
    ```
-4. Confirm: `xcrun -sdk macosx metal --version` prints a version line.
+   Xcode's Settings → Components installs it too.
+4. Confirm that `xcrun -sdk macosx metal --version` prints a version line.
 
-On macOS 15 (Sequoia) and later, step 3 can download but fail to install,
-logging:
+On macOS 15 (Sequoia) and later, step 3 can download but fail to install.
+Use the manual install below.
 
-```
-Metal Toolchain unable to refresh cache with error: … "Operation not permitted"
-```
+#### Manual install (macOS 15 and later)
 
-SIP blocks the automatic install. Do it by hand:
+SIP blocks the automatic install. Copy the toolchain by hand:
 
 ```sh
 # 1. Find the downloaded DMG (its directory name is a hash)
@@ -115,17 +102,21 @@ cp -R /Volumes/MetalToolchainCryptex/Metal.xctoolchain \
 hdiutil detach /Volumes/MetalToolchainCryptex
 ```
 
-A symbol-loading failure from `xcrun`/`xcodebuild` itself (e.g.
-`Symbol not found: _XPCTypeBool` from `libxcodebuildLoader.dylib`), or
-`Failed fetching catalog for assetType (com.apple.MobileAsset.MetalToolchain)`,
-means a broken Xcode install. Reinstall Xcode, or use Option B.
+#### Errors
+
+| Message | Cause | Fix |
+| --- | --- | --- |
+| `error: cannot execute tool 'metal' due to missing Metal Toolchain; use: xcodebuild -downloadComponent MetalToolchain` | the Metal Toolchain component is not installed | Install, step 3 |
+| `xcrun: error: unable to find utility "metal", not a developer tool or in PATH` | Xcode.app or the developer directory is missing, or the component is not installed | Install, steps 1-2 |
+| `Metal Toolchain unable to refresh cache with error: … "Operation not permitted"` | SIP blocks the automatic install | Manual install |
+| `Symbol not found: _XPCTypeBool` from `libxcodebuildLoader.dylib`, or `Failed fetching catalog for assetType (com.apple.MobileAsset.MetalToolchain)` | the Xcode install is broken | Reinstall Xcode, or use Option B |
 
 ## Option B — devcontainer, forwarded to macOS via XQuartz
 
 Exercises `gpui_linux` without leaving the container.
 
-1. On the Mac host, install XQuartz, then log out and back in — without
-   that it doesn't finish registering itself:
+1. On the Mac host, install XQuartz, then log out and back in. XQuartz does
+   not finish registering itself without that:
    ```sh
    brew install --cask xquartz
    ```
@@ -137,7 +128,7 @@ Exercises `gpui_linux` without leaving the container.
    ```sh
    xhost +127.0.0.1
    ```
-   `xhost +` is the fallback, `xhost -` to revert.
+   `xhost +` also works, and `xhost -` reverts it.
 5. Inside the devcontainer:
    ```sh
    DISPLAY=host.docker.internal:0 cargo run -p inca-gpui --example hello_world
@@ -148,12 +139,3 @@ Exercises `gpui_linux` without leaving the container.
    ```
 
 The window appears on the Mac desktop, rendered by XQuartz.
-
-## Why an agent can't do this
-
-The devcontainer mounts no X11 or Wayland socket (see
-[.devcontainer/devcontainer.json](../.devcontainer/devcontainer.json)). Under
-a headless `Xvfb` an agent can confirm the process survives and a window of
-the right size is created (`xwininfo`), but nothing renders into it — not
-even the background. Pixels need a real compositor and a person looking at
-them.

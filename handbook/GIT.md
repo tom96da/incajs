@@ -6,52 +6,42 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 # Git workflow
 
 Conventions and hard rules for commits and other git operations in this
-repository. Anyone working here — AI agents included — follows these.
+repository.
 
-## Branching model
+## Branching
 
-Just `main`, with short-lived `feature/<name>` branches merged
-directly into it via review. Releasing is not a branch type — it's
-whatever merged commit bumps `packages/core/package.json`'s version;
-CD detects that on the push to `main` and tags/publishes from there.
+GitHub flow. Work lands on `main` through short-lived `feature/<name>`
+branches, and urgent fixes through `hotfix/<name>` branches. Both branch from
+`main` and merge back via review. Never commit directly to `main`. A release
+is prepared on `release/<version>`.
 
-Never commit directly to `main` — land work through a supporting
-branch, merged in via review.
-
-## Never commit without review
-
-Committing (`git commit`, `git commit --amend`, or anything else that
-creates/rewrites history) is never done unilaterally. Before running any
-commit, show the exact staged diff and the exact final commit message, and
-get explicit approval of that specific content — agreement that "committing
-is the next step" in general is not the same as approval of the actual
-diff/message. Preparing a commit and reporting it afterward is backwards;
-review happens before the commit exists, not after.
-
-## Amending vs. new commits
-
-Prefer a new commit over amending. Amending is acceptable only when
-explicitly requested, and only for a commit that hasn't been pushed anywhere
-shared — the review rule above applies to amends exactly the same as to new
-commits.
+CD runs when a push to `main` ends with a `chore(release): vX.Y.Z` commit and
+CI passes.
 
 ## Commit message format
 
-Follows [Conventional Commits](https://www.conventionalcommits.org/):
-
-```
-<type>[optional scope]: <description>
-
-[optional body]
-
-[optional footer(s)]
-```
+Follows [Conventional Commits](https://www.conventionalcommits.org/), with
+these rules:
 
 - `type` is one of `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
-- Before picking a `type`/`scope`, check existing precedent with `git log --oneline -- <path>` for the area being touched, and match it — e.g. this repo's devcontainer changes are `chore(devcontainer)`, not `build(devcontainer)`.
-- `description` is imperative, lower-case, no trailing period (e.g. `feat(runtime): add quickjs bridge`).
-- `body` is a concise bullet list of what was done and why — not prose. Each bullet follows the same style as the description: starts lower-case unless the first word is a proper noun (a filename, package name, etc.), and has no trailing period.
-- A breaking change is marked either with `!` after the type/scope (`feat!: ...`) or a `BREAKING CHANGE:` footer — not both unless it aids clarity.
-- Scope is optional; use it for the affected area once the workspace has named crates/packages (e.g. `fix(gpui-shell): ...`).
-- A release commit's subject is `chore(release): vX.Y.Z`, and it is the last commit of its push. CD starts only when the pushed head commit has this prefix.
-- Any commit Claude is involved in must include a `Co-Authored-By: Claude <noreply@anthropic.com>` trailer (adjust the model name if relevant, e.g. `Claude Sonnet 5`).
+- Match the `type` and scope that `git log --oneline -- <path>` shows for the area you touch. A scope names the affected crate or package.
+- `description` is imperative, lower-case, no trailing period.
+- `body` is a bullet list of what changed and why. Prefer what a user can see over which files or code changed. Each bullet follows the description's style: lower-case unless the first word is a proper noun (a filename, package name, etc.), and no trailing period. Aim for at most 300 characters in total.
+- A release commit's subject is `chore(release): vX.Y.Z`, and it is the last commit of its push.
+
+Example:
+
+    fix(jsenv): print the class name of an instance
+
+    - read the name from the constructor
+    - cover anonymous classes in the tests
+
+## Commits by AI agents
+
+- Show the exact staged diff and the exact commit message, and get explicit
+  approval of that content before running `git commit`. This applies to
+  `--amend` too.
+- Prefer a new commit over amending. Amend only when asked, and only a commit
+  that has not been pushed.
+- A commit whose content an agent wrote carries a `Co-Authored-By:` trailer
+  naming the model.

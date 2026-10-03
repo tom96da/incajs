@@ -13,8 +13,8 @@ approach can be agreed before you write code.
 
 - Use the dev container (`.devcontainer/`). It carries the native
   dependencies `gpui` needs.
-- Use `pnpm` for all JS tooling. Vite's supported runtime is Node.js, and the
-  HMR bridge builds on its Runtime API, so avoid a second runtime such as Bun.
+- Use `pnpm` (the version in `package.json`'s `packageManager`) and Node.js
+  22.18 or newer. Other runtimes such as Bun are not tested.
 
 ## Rules
 
@@ -25,19 +25,18 @@ approach can be agreed before you write code.
   Copyright (c) <year> tom96da
   SPDX-License-Identifier: MIT OR Apache-2.0
   ```
-- **Commits**: follow [GIT.md](./handbook/GIT.md) for the message format and
-  review policy.
+- **Commits**: follow [GIT.md](./handbook/GIT.md) for the message format.
 - **Checks**: run the lint, format, type-check and test commands in
   [TESTING.md](./handbook/TESTING.md) before opening a pull request.
 
 ## Pull requests
 
-Branch from `main` as `feature/<name>`, keep the change focused, and describe
-what it does and why. Add a line to [CHANGELOG.md](./CHANGELOG.md) for any
-user-visible change.
+Keep the change focused, and describe what it does and why. Branching follows
+[GIT.md](./handbook/GIT.md#branching). Add a line to
+[CHANGELOG.md](./CHANGELOG.md) for any user-visible change.
 
 ## More
 
-[handbook/DEVELOPMENT.md](./handbook/DEVELOPMENT.md) covers the project status,
-architecture and guiding principles. [handbook/STRUCTURE.md](./handbook/STRUCTURE.md)
-maps the repository.
+[handbook/DEVELOPMENT.md](./handbook/DEVELOPMENT.md) covers the project
+status, architecture and guiding principles. It links to the rest of the
+handbook, including the repository map.

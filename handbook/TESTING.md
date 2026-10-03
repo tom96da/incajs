@@ -6,10 +6,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 # Testing conventions
 
 Where tests live, what kind of test goes where, and what must pass before a
-change is done — for both languages in this repo, kept as a matched pair.
-Complements [GIT.md](./GIT.md)'s repo-wide rules the same way 
-[FFI.md](./FFI.md) complements [ARCHITECTURE.md](./ARCHITECTURE.md).
-Update this file as real conventions land, same as the other docs here.
+change is done, for Rust and TypeScript.
 
 ## Rust (`crates/*`)
 
@@ -19,94 +16,55 @@ Update this file as real conventions land, same as the other docs here.
   (e.g. `crates/inca-gpui/src/tree.rs`, `crates/inca-bridge/src/bindings.rs`,
   `crates/inca-jsenv/src/engine.rs`).
 - **Integration tests**: `tests/*.rs` in each crate, one file per
-  cross-module concern (e.g. `crates/inca-gpui/tests/layout_parity.rs`) —
-  Cargo compiles each as its own crate against that crate's public API
-  only, the same boundary a real external caller would see.
-- **Manual/GUI checks**: tracked in
-  [MANUAL_GUI_CHECK.md](./MANUAL_GUI_CHECK.md) instead of automated — see
-  that doc for why the devcontainer can't do this alone and how to  actually
-  run the check.
-- **Tests that span both languages**: the root `tests/` package
-  (`inca-tests`), never inside a crate or a package, so neither side
-  depends on the other. Cargo picks up `tests/tests/*.rs` on its own; a
-  file that needs the other language runs it (`config_contract.rs` starts
-  Node) or reads what it built (`js_core_integration.rs` reads
-  `packages/core/dist`). `tests/tests/hmr-quickjs-state.test.mts`,
-  `host-startup-failure.test.mts`, `host-shutdown.test.mts` and
-  `host-packaged-launch.test.mts` sit beside them (Cargo ignores non-`.rs`
-  files there regardless). They spawn the real `inca-host` binary (the
-  first with a real Vite dev server too), since driving `Session`/`start`
-  any other way would mean making them public just for a test. They are in
-  a separate pnpm workspace member (`@incajs/e2e-tests`, not swept into
-  `pnpm test`) and share `inca-tests`'s own CI job, which already sets up
-  the Rust/gpui toolchain they need. `host-shutdown` speaks the dev
-  protocol on raw stdio and, on Linux with no display variable set, runs on
-  gpui's headless platform. On macOS it opens a real window and needs a
-  window-server session. `host-packaged-launch` starts the host with no
-  argv, from an unrelated working directory, with the bundle beside the
-  executable. Its bundles open no window, so it needs no display.
+  cross-module concern (e.g. `crates/inca-gpui/tests/layout_parity.rs`).
+  Cargo compiles each against the crate's public API only.
+- **Window checks**: see [MANUAL_GUI_CHECK.md](./MANUAL_GUI_CHECK.md).
+- **Tests that need both languages**: the root `tests/` package
+  (`inca-tests`), never inside a crate or a package, so neither side depends
+  on the other.
+  - Rust files in `tests/tests/`: `config_contract.rs` starts Node.
+    `js_core_integration.rs` reads `packages/core/dist`.
+  - Node files in `tests/tests/` belong to `@incajs/e2e-tests`, which
+    `pnpm test` does not run: `hmr-quickjs-state`, `host-startup-failure`,
+    `host-shutdown` and `host-packaged-launch`. They spawn the real
+    `inca-host` binary, and the first also starts a real Vite dev server.
+  - `host-shutdown` speaks the dev protocol on raw stdio. On Linux with no
+    display variable set it runs on gpui's headless platform. On macOS it
+    opens a real window and needs a window-server session.
+  - `host-packaged-launch` starts the host with no argv, from an unrelated
+    working directory, with the bundle beside the executable. Its bundles
+    open no window, so it needs no display.
 - **Console tests**: console behaviour is unit-tested beside the code in
   `crates/inca-jsenv/src`. Timers are checked by the shape of the output.
   Colour is checked by exact SGR sequences and by stripping them.
 
 ### Required checks
 
-All of the following must pass, not just `cargo test`:
+All of the following must pass:
 
-- `cargo check --workspace --all-targets` — the `--all-targets` also
-  compile-checks `examples/`, which has no automated test of its own (see
-  `crates/inca-gpui/examples/hello_world.rs`'s doc comment)
-- `cargo clippy --workspace --all-targets`
 - `cargo fmt --all -- --check`
-- `cargo test --workspace --exclude inca-tests` — the crates alone, which
-  need no Node
-- `cargo test -p inca-tests` — the root package, which does: run
-  `pnpm --filter incajs build` first, or `js_core_integration` fails with a
-  message saying so
-
-`--workspace` covers a new crate automatically, the moment it exists.
-`crates/inca-host` opens a window, which stays a manual check like
-`crates/inca-gpui`'s own examples — see
-[MANUAL_GUI_CHECK.md](./MANUAL_GUI_CHECK.md).
+- `cargo check --workspace --all-targets`. `--all-targets` also compiles
+  `examples/`, which has no automated test.
+- `cargo clippy --workspace --all-targets -- -D warnings`
+- `cargo test --workspace --exclude inca-tests`
+- `pnpm -F incajs -F @incajs/cli build`, then `cargo test -p inca-tests`
+- `cargo build -p inca-host`, then `pnpm -F @incajs/e2e-tests test`. CI runs
+  the e2e step under `xvfb-run -a`.
 
 ### Toolchain pinning and MSRV
 
-`rust-toolchain.toml` pins the toolchain. rustup honours it for every
-`cargo`/`rustup` call in this workspace, locally and on CI alike, so one
-`rustc` builds everything. GitHub-hosted runner images ship a different
-Rust version per OS and update on their own schedule, so the
-`ubuntu-latest` and `macos-latest` legs disagree without it.
-
-The pin declares `components` as well, so clippy and rustfmt arrive with
-the toolchain. CI still runs `rustup component add` early, to download the
-pinned toolchain before `Swatinem/rust-cache` derives its key from
-`rustc -vV`. That download is expected on CI: the runner images don't carry
-this exact version.
-
-`Cargo.toml`'s `rust-version` is a separate declaration — the oldest
-`rustc` this workspace supports — and is held equal to the pin. Bump both
-together. It also feeds dependency resolution: `resolver = "3"` is
-MSRV-aware and won't pick a dependency version needing a newer `rustc`.
-
-The two can stay equal only while nothing outside this repo compiles
-against these crates, which both `publish = false` settings currently
-guarantee. Phase 13 ends that (see
-[ROADMAP.md](./ROADMAP.md#phase-13-app-owned-rust-extensions-future)):
-`rust-version` then drops below the pin and needs its own check, which
-installs the floor toolchain and runs `cargo +<msrv> check`, the `+<msrv>`
-overriding `rust-toolchain.toml`. That is a second toolchain, so a second
-full gpui build under its own `Swatinem/rust-cache` key.
+`rust-toolchain.toml` pins the toolchain, and rustup applies it to every
+`cargo` call in the workspace, locally and on CI. `Cargo.toml`'s
+`rust-version` is held equal to the pin. Bump both together. The resolver
+(`resolver = "3"`) is MSRV-aware, so it does not pick a dependency that needs
+a newer `rustc`.
 
 ### macOS coverage
 
-The `rust-macos` CI job (`macos-latest`) runs the Linux Rust job's steps:
-`cargo fmt --all -- --check`, then `cargo check`, `cargo clippy -- -D warnings`
-and `cargo test` over the workspace with `inca-tests` excluded. The
-Node suites run on Linux only. The plutil tests in
-`packages/cli/src/macos-app.test.mts` run only on macOS with `plutil`.
-Elsewhere vitest skips them. Their title is:
-
-`Info.plist read by plutil (skipped: needs macOS with plutil)`
+The `rust-macos` job runs the same Rust steps as the Linux job, with
+`inca-tests` excluded. The Node suites run on Linux only. The `plutil` tests
+in `packages/cli/src/macos-app.test.mts` run only on macOS and are skipped
+elsewhere.
 
 ## TypeScript (`packages/*`)
 
@@ -126,84 +84,53 @@ Mirrors the Rust split above, using Vitest:
 
 ### Required checks
 
-**A change isn't done until root `pnpm test` passes with no warnings.**
+**A change isn't done until root `pnpm test` passes with no warnings.** CI
+also runs `pnpm -r build`, which builds every workspace member that defines
+a build script: the two packages, the examples and the docs site.
 
-Every package under `packages/*` defines the same four scripts, each
-individually useful for checking just one thing directly:
+Every package under `packages/*` defines the same scripts:
 
-- `lint` — `oxlint --type-aware`
-- `format` — `oxfmt --check .`
-- `typecheck` — `oxlint -A all --type-aware --type-check`
-- `test` — `vitest run`
+- `lint`: `oxlint --type-aware`
+- `format`: `oxfmt --check .`
+- `typecheck`: `oxlint -A all --type-aware --type-check`
+- `test`: `vitest run`
 
-CI runs `lint`, `format`, and `typecheck` as their own separate steps,
-not merely as a side effect of `test`.
+CI runs `lint`, `format` and `typecheck` as separate steps.
 
-Run `format` from the root, not from a package: `oxfmt.config.ts` — which
-holds the import-sorting rules — lives there and only the root script
-(`oxfmt --check --disable-nested-config .`) applies it. A package's own
-`format` can pass on imports the root one rejects.
-
-#### Agent-friendly lint output
-
-`oxlint` takes `-f`/`--format=agent` (e.g. `oxlint --type-aware
---format=agent`) for plain, undecorated lines meant to be parsed rather
-than read in a terminal.
+Run `format` from the root. `oxfmt.config.ts` holds the import-sorting rules,
+and only the root script (`oxfmt --check --disable-nested-config .`) applies
+them. A package's own `format` can pass on imports the root one rejects.
 
 ### Build-tooling gotchas
 
-Watch for these when scaffolding a new package too:
-
-- Each package's `vite.config.mts` must exclude test files from
-  `unplugin-dts`'s declaration scan
-  (`dts({ include: ["src"], exclude: ["src/**/*.test.mts"] })`) —
-  otherwise a co-located test file gets published too, as a stray
-  `dist/*.test.d.mts`.
-- `vitest.config`'s `test.passWithNoTests: true` treats a package with
-  zero tests as passing rather than failing `pnpm -r test` — drop it
-  again once real tests land (none of the current packages carry it).
-- Each package's `exports` carries a `"source"` condition pointing at
-  `src/index.mts`, and `tsconfig.base.json` sets
-  `customConditions: ["source"]`, so type-checking resolves workspace
-  imports from source instead of a built `dist/`. Vite/vitest don't read
-  `customConditions`, so a package testing against another workspace
-  package needs the same condition set explicitly, on both
-  `resolve.conditions` and `ssr.resolve.conditions` (vitest resolves
-  through Vite's SSR path) via its own `vitest.config.mts` merged on top
-  of `vite.config.mts` — not currently needed by any package, since
-  `incajs` and `@incajs/cli` each build entirely from their own source.
-- A package's `tsconfig.json` `include` has to list every directory whose
-  files are checked, plus a `*.mts` glob for its own root-level config
-  files — a file outside `include` still gets linted, but under default
-  compiler options rather than `tsconfig.base.json`'s, so `strict` and
-  `customConditions` silently don't apply to it.
-- Vitest replaces rather than merges an array option (`exclude`, etc.) with
-  its default, so extending one means spreading `configDefaults` from
-  `vitest/config` instead of retyping it — see the root `vitest.config.ts`.
-- A test fixture spawned directly as a process (`packages/cli`'s
-  `tests/dev-client/fixtures/*.mts`) needs its executable bit set. One
-  added without it fails the test with `EACCES`, not a parse or
-  module-resolution error.
-- A test needing its own package's build output (`hmr.test.mts` needs a
-  built `hmr-runtime.js`) must produce it itself, every run, into a
-  scratch dir — call Vite's `build()` directly in `beforeAll`, reusing
-  the real `vite.config.mts` (override only `outDir`/`lib.entry`/
-  `emptyOutDir`, and drop a plugin only when it's a provable no-op for
-  the entry under test), rather than an `existsSync` check shelling out
-  to the package's own build script.
+- Each package's `vite.config.mts` excludes test files from `unplugin-dts`'s
+  declaration scan (`dts({ include: ["src"], exclude: ["src/**/*.test.mts"] })`).
+  Without it a co-located test file is published as `dist/*.test.d.mts`.
+- Type-checking resolves workspace imports from source through the `"source"`
+  export condition and `customConditions` in `tsconfig.base.json`. Vitest
+  does not read `customConditions`, so a package that tests against another
+  workspace package sets the condition on `resolve.conditions` and
+  `ssr.resolve.conditions` in its own `vitest.config.mts`.
+- A package's `tsconfig.json` `include` lists every directory whose files are
+  checked, plus a `*.mts` glob for its root-level config files. A file outside
+  `include` is still linted, but without `tsconfig.base.json`'s `strict` and
+  `customConditions`.
+- Vitest replaces an array option such as `exclude` with its default instead
+  of merging. Spread `configDefaults` from `vitest/config` to extend it, as
+  the root `vitest.config.ts` does.
+- A test fixture spawned as a process (`packages/cli`'s
+  `tests/dev-client/fixtures/*.mts`) needs its executable bit set.
+- A test that needs its own package's build output produces it itself on
+  every run: `hmr.test.mts` calls Vite's `build()` in `beforeAll` with the
+  package's `vite.config.mts`, overriding only `outDir`, `lib.entry` and
+  `emptyOutDir`, and writes to a scratch directory.
 
 ## Running tests
 
-- Whole workspace, from the repo root: `pnpm test` (all packages in one
-  process, via `vitest.config.ts`'s `projects`) / `pnpm typecheck` (covers
-  `examples/*` too) / `pnpm -r build`
-- Single package, for iterating on one — may be incomplete on its own:
-  `pnpm --filter <pkg> test` / `typecheck` / `build`
-- Coverage: `pnpm test:coverage`, same run with `--coverage` added
-- Rust: `cargo test --workspace --exclude inca-tests` — plus `cargo clippy`/`cargo fmt
-  --check` from the Required checks list above, which aren't bundled into
-  `cargo test` itself the way the root `pretest` bundles them on the
-  TypeScript side.
-- The Rust+Vite e2e test: `cargo build -p inca-host` and `pnpm -r build`
-  first, then `pnpm --filter @incajs/e2e-tests test` — outside `pnpm
-  test`'s own run by design, so run it explicitly.
+- Whole workspace, from the root: `pnpm test`, `pnpm typecheck` (covers
+  `examples/*` too) and `pnpm -r build`.
+- One package: `pnpm --filter <pkg> test`, `typecheck` or `build`. A single
+  package can miss what another package's tests catch.
+- Coverage: `pnpm test:coverage`.
+- Rust and the e2e test: see Required checks above. `pnpm test` does not run
+  the e2e test.
