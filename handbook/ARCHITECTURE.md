@@ -46,7 +46,7 @@ browser dev server.
 │  │   - Vue 3 application (React: future)                      │  │
 │  │   - Custom renderer (`createRenderer` / `react-reconciler`)│  │
 │  │   - `incajs` core (typed `__inca_native__` wrapper)        │  │
-│  │   - Vite `ModuleRunner` + custom Transport/Evaluator       │  │
+│  │   - Vite `ModuleRunner` + custom Transport                 │  │
 │  │     (dev only; transformed modules run here, not in Node)  │  │
 │  └──────────────────────────┬─────────────────────────────────┘  │
 │                             │ Host bridge call                   │
@@ -70,8 +70,8 @@ client.
   payloads cross the boundary, as JSON.
 - A custom `ModuleRunnerTransport` carries those messages between the Node
   process and the host over the stdio channel `dev-client` owns.
-- A custom module evaluator runs the transformed module source inside
-  QuickJS. Vite's SSR transform emits an async function body, and the
+- Vite's stock `ESModulesEvaluator` runs the transformed module source
+  inside QuickJS. Vite's SSR transform emits an async function body, and the
   evaluator builds and calls it with `new AsyncFunction(...)`.
 
 This reuses Vite's module graph invalidation and its accept and dispose

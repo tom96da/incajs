@@ -24,11 +24,10 @@ described in `crates/inca-host/README.md`.
 | Stream | Direction | Carries |
 | --- | --- | --- |
 | host stdin | client → host | protocol messages |
-| host stdout | host → client | protocol messages, and nothing else |
+| host stdout | host → client | protocol messages only |
 | host stderr | host → client | human-readable logs, and the running app's own `console` output |
 
-One JSON object per line, UTF-8, `\n`-terminated. stdout carries protocol
-messages only. Diagnostics go to stderr.
+One JSON object per line, UTF-8, `\n`-terminated. Diagnostics go to stderr.
 
 A client drains stdout while the child lives. The host writes through an
 unbounded channel on its own thread, so a client that stops reading does not
@@ -101,11 +100,11 @@ The host never exits because of a message it couldn't use.
 
 | Situation | Code | Response |
 | --- | --- | --- |
-| A line that isn't valid JSON | `-32700` | `id` is `null` — there was none to read |
+| A line that isn't valid JSON | `-32700` | `id` is `null`, as there was none to read |
 | Valid JSON that is no request object: not an object, no `jsonrpc: "2.0"`, no readable `method`, or an `id` that is not a string, a number, or null | `-32600` | `id` is `null` |
 | A `method` this host doesn't implement | `-32601` | echoes the request's `id` |
-| A panic in the host | `-32603` | `id` is `null`; the panic message also goes to stderr |
-| A bundle that throws while being evaluated | `-32000` | echoes the `id`; the window keeps the tree it already has |
+| A panic in the host | `-32603` | `id` is `null`. The panic message also goes to stderr |
+| A bundle that throws while being evaluated | `-32000` | echoes the `id`. The window keeps the tree it already has |
 | A *first* bundle that throws, before any window exists | `-32000` | reported with `id` `null`, then exit 1 |
 | An exception the running app raised and the host caught | — | an `appError` notification, and the window keeps rendering. See Messages. |
 
@@ -135,8 +134,8 @@ Every member is optional, and a build that has none of them writes no file.
 `name` is what the platform calls the running app, `identifier` its
 reverse-DNS id, and `window` the size and title it opens at.
 
-The host reads it once, at startup, before opening the window, and reaches
-it the same way whether a client spawned it or a person double-clicked a
-packaged app. A file that is missing reads as the defaults in silence; one
-that cannot be read or parsed is named on the host's stderr, and reads as
-the defaults too.
+The host reads it once, at startup, before opening the window. It reaches
+the file the same way whether a client spawned it or a person double-clicked
+a packaged app. A missing file reads as the defaults in silence. A file that
+cannot be read or parsed is named on the host's stderr and reads as the
+defaults too.

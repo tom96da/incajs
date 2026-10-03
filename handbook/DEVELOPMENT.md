@@ -16,13 +16,12 @@ for the full pitch.
 
 ## Status
 
-Keep this section current as work lands. History belongs in
-[PLAN.md](./PLAN.md) and [CHANGELOG.md](../CHANGELOG.md).
+History is in [PLAN.md](./PLAN.md) and [CHANGELOG.md](../CHANGELOG.md).
 
 ### Done
 
 - **Host**: the Rust FFI bridge (`inca-gpui`, `inca-bridge`, `inca-jsenv`),
-  with a full WHATWG `console`.
+  with a `console`.
 - **Packages**: the pnpm workspace, `packages/core`, `incajs/vue` and the
   `.vue` examples.
 - **CLI**: `inca dev`, `inca build` and `inca package`, with per-platform
@@ -41,7 +40,7 @@ Keep this section current as work lands. History belongs in
 ### Foundation
 
 - **Release**: `v0.0.8`.
-- **Node.js**: 22.18 or newer.
+- **Node.js**: 22.18 or newer for the CLI and tooling.
 - **Toolchain**: zed `v1.22.0` for `gpui`, rquickjs `0.14.0`.
 - **Linux binaries**: built in an `ubuntu:22.04` container by both workflows,
   for a glibc 2.35 floor.
@@ -72,15 +71,20 @@ over the child's stdio.
 
 ### Guiding principles
 
-- **Safety first**: Rust↔QuickJS bindings must handle pointer conversions and reference counts carefully. This boundary is the most likely source of memory leaks or segfaults.
-- **Zero-overhead render loop**: don't run JS on every frame. JS executes only on reactivity updates, pushing snapshot mutations to Rust; Rust owns the retained tree and does layout and drawing natively.
-- **Developer ergonomics**: frontend code stays strictly standard. `.vue` and `.tsx` code should feel identical to ordinary web development.
+- **Safety first**: Rust↔QuickJS bindings must handle pointer conversions
+  and reference counts carefully. This boundary is the most likely source
+  of memory leaks or segfaults.
+- **Zero-overhead render loop**: don't run JS on every frame. JS executes
+  only on reactivity updates. It pushes snapshot mutations to Rust. Rust
+  owns the retained tree and does layout and drawing natively.
+- **Developer ergonomics**: frontend code stays strictly standard. `.vue`
+  and `.tsx` code should feel identical to ordinary web development.
 
 ## Planning
 
 - [ROADMAP.md](./ROADMAP.md): the phased build-out, Vue 3 first and React later.
 - [PLAN.md](./PLAN.md): unit-by-unit tasks and deferred items.
-- [BACKLOG.md](./BACKLOG.md): gaps outside the phased plan. Several are places where this framework and `gpui` have drifted apart.
+- [BACKLOG.md](./BACKLOG.md): gaps outside the phased plan.
 
 ## Repository
 

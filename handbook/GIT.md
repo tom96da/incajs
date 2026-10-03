@@ -15,26 +15,32 @@ branches, and urgent fixes through `hotfix/<name>` branches. Both branch from
 `main` and merge back via review. Never commit directly to `main`. A release
 is prepared on `release/<version>`.
 
-CD runs when a push to `main` ends with a `chore(release): vX.Y.Z` commit and
-CI passes.
+CD runs when a push to `main` ends with a release commit and CI passes.
 
 ## Commit message format
 
 Follows [Conventional Commits](https://www.conventionalcommits.org/), with
 these rules:
 
-- `type` is one of `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
-- Match the `type` and scope that `git log --oneline -- <path>` shows for the area you touch. A scope names the affected crate or package.
+- `type` is one of `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, 
+  `test`, `build`, `ci`, `chore`, `revert`.
+- Match the `type` and scope that `git log --oneline -- <path>` shows for
+  the area you touch. A scope names the affected crate or package.
 - `description` is imperative, lower-case, no trailing period.
-- `body` is a bullet list of what changed and why. Prefer what a user can see over which files or code changed. Each bullet follows the description's style: lower-case unless the first word is a proper noun (a filename, package name, etc.), and no trailing period. Aim for at most 300 characters in total.
-- A release commit's subject is `chore(release): vX.Y.Z`, and it is the last commit of its push.
+- `body` is a bullet list of what changed and why.
+  - Prefer what a user can see over which files or code changed.
+  - Each bullet follows the description's style: lower-case unless the
+    first word is a proper noun (a filename, package name, etc.), and no
+    trailing period.
+  - Keep the body to about 300 characters.
+- A release commit's subject is `chore(release): vX.Y.Z`.
 
 Example:
 
-    fix(jsenv): print the class name of an instance
+    fix(jsenv): print the class name in console output
 
-    - read the name from the constructor
-    - cover anonymous classes in the tests
+    - print an instance of `Foo` as `Foo { a: 1 }`
+    - keep a plain object as `{ a: 1 }`
 
 ## Commits by AI agents
 

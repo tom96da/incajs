@@ -13,8 +13,7 @@ change is done, for Rust and TypeScript.
 ### Test placement
 
 - **Unit tests**: `#[cfg(test)] mod tests` inline in the module they test
-  (e.g. `crates/inca-gpui/src/tree.rs`, `crates/inca-bridge/src/bindings.rs`,
-  `crates/inca-jsenv/src/engine.rs`).
+  (e.g. `crates/inca-gpui/src/tree.rs`).
 - **Integration tests**: `tests/*.rs` in each crate, one file per
   cross-module concern (e.g. `crates/inca-gpui/tests/layout_parity.rs`).
   Cargo compiles each against the crate's public API only.
@@ -43,11 +42,13 @@ change is done, for Rust and TypeScript.
 All of the following must pass:
 
 - `cargo fmt --all -- --check`
-- `cargo check --workspace --all-targets`. `--all-targets` also compiles
-  `examples/`, which has no automated test.
-- `cargo clippy --workspace --all-targets -- -D warnings`
+- `cargo check --workspace --all-targets --exclude inca-tests`.
+  `--all-targets` also compiles `examples/`, which has no automated test.
+- `cargo clippy --workspace --all-targets --exclude inca-tests -- -D warnings`
 - `cargo test --workspace --exclude inca-tests`
-- `pnpm -F incajs -F @incajs/cli build`, then `cargo test -p inca-tests`
+- `pnpm -F incajs -F @incajs/cli build`, then
+  `cargo clippy -p inca-tests --all-targets -- -D warnings` and
+  `cargo test -p inca-tests`
 - `cargo build -p inca-host`, then `pnpm -F @incajs/e2e-tests test`. CI runs
   the e2e step under `xvfb-run -a`.
 
@@ -74,8 +75,8 @@ Mirrors the Rust split above, using Vitest:
 
 - **Unit tests**: `*.test.mts` co-located next to the module it tests
   (e.g. `packages/core/src/tree.test.mts` next to `src/tree.mts`),
-  mocking `globalThis.__inca_native__`/`__inca_callbacks__` rather
-  than driving a real QuickJS engine. A barrel (`src/index.mts`)
+  mocking `globalThis.__inca_native__` and `__inca_callbacks__`. No real
+  QuickJS engine runs. A barrel (`src/index.mts`)
   re-exports only; its modules carry the tests.
 - **Integration tests**: a `tests/` directory at the package root, for
   whatever a package's own unit tests can't reach mocked — e.g.
@@ -105,10 +106,11 @@ them. A package's own `format` can pass on imports the root one rejects.
 
 - Each package's `vite.config.mts` excludes test files from `unplugin-dts`'s
   declaration scan (`dts({ include: ["src"], exclude: ["src/**/*.test.mts"] })`).
-  Without it a co-located test file is published as `dist/*.test.d.mts`.
+  The exclusion keeps test files out of `dist`, so no `dist/*.test.d.mts`
+  is published.
 - Type-checking resolves workspace imports from source through the `"source"`
   export condition and `customConditions` in `tsconfig.base.json`. Vitest
-  does not read `customConditions`, so a package that tests against another
+  does not read `customConditions`. A package that tests against another
   workspace package sets the condition on `resolve.conditions` and
   `ssr.resolve.conditions` in its own `vitest.config.mts`.
 - A package's `tsconfig.json` `include` lists every directory whose files are
@@ -121,8 +123,8 @@ them. A package's own `format` can pass on imports the root one rejects.
 - A test fixture spawned as a process (`packages/cli`'s
   `tests/dev-client/fixtures/*.mts`) needs its executable bit set.
 - A test that needs its own package's build output produces it itself on
-  every run: `hmr.test.mts` calls Vite's `build()` in `beforeAll` with the
-  package's `vite.config.mts`, overriding only `outDir`, `lib.entry` and
+  every run. `hmr.test.mts` calls Vite's `build()` in `beforeAll` with the
+  package's `vite.config.mts`. It overrides only `outDir`, `lib.entry` and
   `emptyOutDir`, and writes to a scratch directory.
 
 ## Running tests
@@ -132,5 +134,4 @@ them. A package's own `format` can pass on imports the root one rejects.
 - One package: `pnpm --filter <pkg> test`, `typecheck` or `build`. A single
   package can miss what another package's tests catch.
 - Coverage: `pnpm test:coverage`.
-- Rust and the e2e test: see Required checks above. `pnpm test` does not run
-  the e2e test.
+- Rust and the e2e test: see Required checks above.

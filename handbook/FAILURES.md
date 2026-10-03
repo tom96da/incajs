@@ -29,12 +29,9 @@ A feature the engine cannot run yet fails the build. A `<style>` block is one
 | `inca-host`, answering a protocol message | a JSON-RPC error (see [PROTOCOL.md](./PROTOCOL.md#failure-handling)) |
 | `inca-host`, otherwise | its stderr |
 | a panic in `inca-host` under `--dev` | a `-32603` error, printed by `inca dev` as `[host error -32603]` |
-| an app's own event listener, promise job or unhandled rejection | an `appError` notification |
+| an error the running app raised and the host caught | an `appError` notification, see [PROTOCOL.md](./PROTOCOL.md#messages) |
 | `inca-host` exiting before `ready` | `ERR_INCA_HOST_EXITED_EARLY`, after `inca dev` prints the cause |
 | `inca-host` exiting after `ready` with a non-zero code or a signal other than SIGINT/SIGTERM | `ERR_INCA_HOST_CRASHED`, after `inca dev` prints `host exited` |
-
-A new `ERR_INCA_*` code is documented in `docs/reference/errors.md` in the
-change that raises it.
 
 ## Guarantees
 

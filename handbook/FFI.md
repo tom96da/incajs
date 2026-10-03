@@ -29,8 +29,8 @@ the custom renderer's output. Each node has:
   a node.
 - Making a node its own ancestor throws. A `childId` naming the root, which
   belongs to the host, throws too.
-- Every `nodeId` is a finite whole number in the `u32` range, otherwise a
-  `TypeError` is thrown.
+- A `nodeId` that is not a finite whole number in the `u32` range throws a
+  `TypeError`.
 - Only `destroyNode` frees nodes, and it frees the whole subtree.
   `removeChild` keeps the node alive for re-attachment.
 
@@ -78,14 +78,21 @@ the nearest ancestor container.
 | `appendChild` | `(parentId: number, childId: number) => void` | Attach a child at the end of `parentId`'s children. Same as `insertBefore` with no anchor. |
 | `insertBefore` | `(parentId: number, childId: number, anchorId: number \| null) => void` | Attach a child before `anchorId`, or at the end if `null`. |
 | `removeChild` | `(parentId: number, childId: number) => void` | Detach a child node. |
-| `setAttribute` | `(nodeId: number, key: string, value: any) => void` | Set a non-style attribute prop. |
-| `setStyle` | `(nodeId: number, key: string, value: any) => void` | Set a style prop. |
+| `setAttribute` | `(nodeId: number, key: string, value: string \| number \| boolean) => void` | Set a non-style attribute prop. |
+| `setStyle` | `(nodeId: number, key: string, value: string \| number \| boolean) => void` | Set a style prop. |
 | `removeStyle` | `(nodeId: number, key: string) => void` | Remove a style prop so it renders as if never set. Removing a key that isn't set does nothing. |
-| `addEventListener` | `(nodeId: number, event: string, callbackId: number) => void` | Register a callback for an event. Distinct ids on one `(nodeId, event)` stack, and adding an id again is a no-op. |
-| `removeEventListener` | `(nodeId: number, event: string, callbackId: number) => boolean` | Drop one registration and return whether it was there. Never throws. |
+| `addEventListener` | `(nodeId: number, event: string, callbackId: number) => void` | Register a callback for an event. Ids stack per `(nodeId, event)`, see [Registering](#registering). |
+| `removeEventListener` | `(nodeId: number, event: string, callbackId: number) => boolean` | Drop one registration and return whether it was there. An unknown node returns `false`. |
 | `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its subtree, and return every `callbackId` registered in it. An unknown id returns `[]`. Destroying the root throws. Also clears the focus state of the destroyed nodes. |
 | `focusNode` | `(nodeId: number) => void` | Request focus for `nodeId`. Takes effect next frame, on any node. An unknown or destroyed node is ignored. |
 | `blurNode` | `(nodeId: number) => void` | Request that `nodeId` lose focus. Takes effect next frame, and does nothing if `nodeId` is not the focused node by then. |
+
+Shared throw rules, all as a `TypeError`:
+
+- A malformed `nodeId` or `callbackId` throws.
+- `setAttribute` and `setStyle` throw for a `value` that is not a string, number or boolean.
+- `addEventListener`, `setAttribute`, `setStyle`, `removeStyle` and `appendChild` throw for an unknown node. `insertBefore` throws for an unknown parent, child or anchor.
+- `removeChild` throws for an unknown `parentId` and ignores an unknown or unattached `childId`.
 
 `insertBefore` and `appendChild`:
 

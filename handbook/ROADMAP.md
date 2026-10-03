@@ -144,7 +144,7 @@ per-platform host packages). The Rust crates stay
 ### Phase 3.4: HMR
 
 **HMR bridge** (`@incajs/cli`'s `adapter/vite`, beside its Node-side dev
-server): a custom `ModuleRunnerTransport` and module evaluator against
+server): a custom `ModuleRunnerTransport` with Vite's stock evaluator against
 Vite's Runtime API (`vite/module-runner`). Updated modules are evaluated
 inside QuickJS and trigger a GPUI redraw. Component state survives where
 Vue's own HMR can: a template-only edit keeps it, and a script edit still
@@ -209,10 +209,9 @@ node vocabulary that grew without one means rewriting that vocabulary.
 
 ## Phase 6: Runtime standard library (future)
 
-Not started. QuickJS provides the language and nothing else: no timers, no
-network, no filesystem, no `console`. Phase 3.1 adds `console`; everything
-else is still absent, and without it an app cannot poll, debounce, animate,
-fetch, or read a file.
+Not started. QuickJS provides the language only. Phase 3.1 adds `console`.
+Timers, network and filesystem are absent, so an app cannot poll, fetch or
+read a file.
 
 Each item is a host binding plus its typed wrapper in `packages/core`,
 and each hands a new capability to app code — the FFI safety checklist in
@@ -230,17 +229,15 @@ workspace's when `console` landed, which is why `console` is ours.
    what pumps the JS job queue between input events, which today is drained
    only when the host has a reason to run JS.
 2. **Network**: `fetch` over a Rust HTTP client, and a WebSocket client.
-   Both are asynchronous, so this is where promise integration stops being
-   "drain what is already queued".
-3. **Filesystem and paths**: reading and writing app data, with a recorded
-   decision on what an app may reach. A desktop app is not a browser origin,
-   so "everything the user can read" is a choice, not a default.
+   Both are asynchronous, so promise integration has to cover them.
+3. **Filesystem and paths**: reading and writing app data. A desktop app has
+   no browser origin to bound it, so what it may reach is a decision this
+   item records.
 4. **Encoding and crypto**: `TextEncoder`/`TextDecoder`, `crypto`'s random
    sources, `structuredClone`, `URL` — small, standard, and assumed present
    by ordinary npm dependencies.
 5. **Engine limits**: a memory ceiling, a stack ceiling, and an interrupt
-   handler, so a runaway app stays recoverable instead of becoming a frozen
-   window that answers no message (see
+   handler, so a runaway app stays recoverable and does not freeze the window (see
    [PROTOCOL.md](./PROTOCOL.md#failure-handling)).
 
 ## Phase 7: Majority style & Tailwind coverage (future)
@@ -323,8 +320,7 @@ does around its content lives in this phase.
    and an app cannot remove them (see [FFI.md](./FFI.md#application-menu)).
    What an app adds beside it, and where those items come from, is this
    item's work. The candidates are `inca.config.ts`, a JS binding and an SFC.
-3. **Dialogs**: file open/save and message boxes, drawn by the platform
-   rather than in-tree.
+3. **Dialogs**: file open/save and message boxes, drawn by the platform.
 4. **System integration**: clipboard, notifications, a tray icon, and
    handing a URL or file to whatever the platform opens it with.
 5. **App lifecycle**: hooks for a reload and for shutdown, window close,
@@ -394,16 +390,14 @@ still ships as a single application:
 
 ## Known gaps, not yet scheduled
 
-Recorded so they stay visible. Each needs a decision before it needs a
-phase, and none belongs inside one above.
+Items that need a decision before they can join a phase.
 
 - **Release engineering beyond packaging**: auto-update, code signing and
-  notarization. Phase 3.3 produces an application, and neither of these
-  keeps it running in the field.
+  notarization. Phase 3.3 produces an application with no update or trust path.
 - **Crash reporting**: `inca dev` reports a host panic to the client, but a
   packaged app's panic leaves nothing behind for the person whose app died.
-  Its cheap half is a log file or dialog written from the existing panic hook;
-  a native fault under it needs an out-of-process collector, which is separate
+  Its cheap half is a log file or dialog written from the existing panic hook.
+  A native fault under it needs an out-of-process collector, which is separate
   work.
 - **A JS debugger**: QuickJS ships no inspector protocol, and nothing maps a
   running frame back to a `.vue` source line. Today a bundle's failure is a

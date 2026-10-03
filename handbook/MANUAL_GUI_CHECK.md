@@ -31,7 +31,7 @@ cargo build -p inca-host
 INCA_HOST_BIN="$(pwd)/target/debug/inca-host" pnpm --filter hello_world dev
 ```
 
-Same look as above. `click_counter` instead gives a clickable box that
+Same look as above. `click_counter` shows a clickable box that
 counts up.
 
 ### The app's name, icon, window and menu (macOS)
@@ -123,8 +123,8 @@ Exercises `gpui_linux` without leaving the container.
 2. Launch XQuartz and look for its "X" icon in the menu bar.
 3. From that icon, open Settings → Security and check "Allow connections
    from network clients". Quit and relaunch XQuartz.
-4. On the Mac host, allow incoming connections from loopback — Docker
-   Desktop's networking makes the container reach XQuartz as `127.0.0.1`:
+4. On the Mac host, allow incoming connections from loopback. Docker
+   Desktop's networking makes the container reach XQuartz as `127.0.0.1`.
    ```sh
    xhost +127.0.0.1
    ```
