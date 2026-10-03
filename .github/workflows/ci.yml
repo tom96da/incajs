@@ -182,7 +182,7 @@ jobs:
       NODE_VERSION: "26"
     steps: *test_node_steps
 
-  # gpui_platform's features differ per platform, so both need checking.
+  # gpui_platform's features differ per platform, so each one needs checking.
   rust-ubuntu:
     name: "Rust: ubuntu:22.04"
     needs: changed
@@ -256,12 +256,26 @@ jobs:
       - name: Test
         run: cargo test --workspace --exclude inca-tests
 
+      # check and test do not link the host binary, and cd.yml builds it only
+      # at release time. The Linux link is covered by the rust-node job.
+      - name: Build the host
+        if: runner.os == 'macOS'
+        run: cargo build -p inca-host
+
   rust-macos:
     name: "Rust: macos-latest"
     needs: changed
     if: needs.changed.outputs.rust == 'true'
     timeout-minutes: 30
     runs-on: macos-latest
+    steps: *rust_steps
+
+  rust-macos-intel:
+    name: "Rust: macos-26-intel"
+    needs: changed
+    if: needs.changed.outputs.rust == 'true'
+    timeout-minutes: 30
+    runs-on: macos-26-intel
     steps: *rust_steps
 
   # The tests that need a crate and a package at once, kept out of both so
@@ -374,6 +388,7 @@ jobs:
         test-node-26,
         rust-ubuntu,
         rust-macos,
+        rust-macos-intel,
         rust-node,
       ]
     runs-on: ubuntu-latest
