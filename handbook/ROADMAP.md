@@ -5,23 +5,20 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 # Roadmap
 
-Planned phased implementation of the design in
-[ARCHITECTURE.md](./ARCHITECTURE.md). This file describes phase-level design
-intent only — it doesn't track progress itself. See
-[PLAN.md](./PLAN.md) for the checkbox-tracked, per-task breakdown.
+The phases of the build-out, with the gate each one waits on.
+[PLAN.md](./PLAN.md) has the per-task breakdown.
 
-Vue 3 support is built first end-to-end (Phases 1–3), through to the
-`v0.0.1` release inside Phase 3.3. What follows that release is what an app
-needs before it can be written at all — the input it is driven by, the
-accessibility that input model makes possible, and the runtime facilities
-every app reaches for — before the surface broadens to more styling, tools
-to develop against, more platform, and a second frontend framework.
+Vue 3 support is built first, end to end, in Phases 1–3. The `v0.0.1` release
+lands inside Phase 3.3. Phases 4–6 add what any app needs: input,
+accessibility and a runtime library. Phases 7–13 broaden the surface: styling,
+developer tools, platform integration, a second frontend framework and
+cross-platform support.
 
 | Phase | Scope |
 | --- | --- |
 | 1 | Rust host & FFI bridge core |
 | 2 | JS core bridge & Vue 3 custom renderer |
-| 3 | Developer tooling & HMR — `v0.0.1` ships at 3.3 |
+| 3 | Developer tooling & HMR |
 | 4 | Input & text editing |
 | 5 | Accessibility |
 | 6 | Runtime standard library |
@@ -33,8 +30,7 @@ to develop against, more platform, and a second frontend framework.
 | 12 | 100% style & Tailwind parity |
 | 13 | App-owned Rust extensions |
 
-Each phase below names the gate it waits on; the numbering is the order they
-are built in, not a set of independent tracks.
+Phases are built in numeric order, and each names its gate.
 
 ## Phase 1: Rust host & FFI bridge core (`inca-gpui`)
 
@@ -51,27 +47,26 @@ are built in, not a set of independent tracks.
 
 1. **`incajs`** (`packages/core`): a framework-agnostic, typed JS wrapper
    around `globalThis.__inca_native__` (see
-   [FFI.md](./FFI.md#binding-functions)) — see
-   [ARCHITECTURE.md](./ARCHITECTURE.md#tech-stack) for why this is shared
-   rather than logic duplicated into each framework adapter.
-2. **`incajs/vue`** (`packages/core/src/vue`): a custom Vue 3 runtime
-   adapter using `@vue/runtime-core`'s `createRenderer`, built on `incajs`
-   rather than calling `__inca_native__` directly — a subpath of the same
-   package as the core, never imported on its own.
+   [FFI.md](./FFI.md#binding-functions)), shared by every framework adapter.
+2. **`incajs/vue`** (`packages/core/src/vue`): a custom Vue 3 runtime adapter
+   using `@vue/runtime-core`'s `createRenderer`, built on `incajs`. It is a
+   subpath of the same package as the core.
 3. Map Vue node lifecycle methods (`createElement`, `insert`, `remove`,
    `patchProp`) to `incajs`'s calls.
 4. A unified mount API, e.g. `createIncaApp(App).mount('#root')`.
 
 ## Phase 3: Developer tooling & HMR integration
 
-The `inca` CLI's process orchestration is owned by the **JS/TS side**:
-`@incajs/cli` (`packages/cli`) is the parent process, internally driving a
-bundler adapter that holds Vite in-process, while its own `dev-client`
-spawns the Rust host (`crates/inca-host`) as a child and bridges
-dev-server messages over its stdio — neither is a separate package, since
-neither is ever imported on its own. The alternatives
-considered — a Rust-primary `crates/inca-cli` owning everything, and
-Rust-primary logic behind a thin npm `bin` wrapper — were rejected because:
+The JS/TS side owns the `inca` CLI's process orchestration. `@incajs/cli`
+(`packages/cli`) is the parent process. It drives a bundler adapter that
+holds Vite in-process, and its own `dev-client` spawns the Rust host
+(`crates/inca-host`) as a child and bridges dev-server messages over its
+stdio. Both modules live inside `@incajs/cli`, since neither is ever imported
+on its own.
+
+Two alternatives were rejected: a Rust-primary `crates/inca-cli` that owns
+everything, and Rust-primary logic behind a thin npm `bin` wrapper. The
+reasons:
 
 - Node already owns every orchestration primitive this needs (Vite's own
   server/watch/restart API, `child_process`, terminal logging), where Rust
@@ -81,14 +76,13 @@ Rust-primary logic behind a thin npm `bin` wrapper — were rejected because:
   CLI would add a second binary to distribute for no gain.
 - It keeps `crates/inca-gpui` and the host free of process/IPC concerns.
 
-Phase 3 lands in four numbered stages, with real HMR deliberately **last**:
-a full-reload dev loop already needs the whole spawn/teardown/remount
-skeleton HMR builds on, and this ordering makes `dev`, `build`, and
-packaging usable end-to-end before the hardest piece starts.
+Phase 3 lands in four numbered stages. Real HMR comes last. A full-reload dev
+loop already needs the spawn, teardown and remount skeleton that HMR builds
+on. This order makes `dev`, `build` and packaging usable end to end before the
+hardest piece starts.
 
-A GitHub Actions **CI** workflow running
-[TESTING.md](./TESTING.md)'s required checks lands before 3.1, so the first
-multi-package phase isn't built without one. Its **CD** counterpart
+A GitHub Actions CI workflow that runs the required checks lands before 3.1,
+so the first multi-package phase is not built without one. Its CD counterpart
 lands after 3.3, when there is something to release.
 
 ### Phase 3.1: `inca dev` (full reload)
@@ -96,24 +90,23 @@ lands after 3.3, when there is something to release.
 1. **`@incajs/cli`** (`packages/cli`): owns the `inca` commands, resolves
    an app's entry point, and wires the two modules below together
    internally. It holds the `Bundler` contract and injects an
-   implementation, so swapping bundlers is a dependency change here and
-   nothing else.
+   implementation. Swapping bundlers is a dependency change here.
 2. **`adapter/vite`** (`packages/cli/src/adapter/vite`): runs Vite in
-   library/watch mode (not its browser dev server), using
-   `@vitejs/plugin-vue` to compile `.vue` SFCs, and announces each rebuild.
-   The only part of the CLI that imports `vite`, and it depends on no
-   first-party package — a future `adapter/rspack` would be a sibling
-   module, not a sibling package, since neither is ever imported on its own.
+   library/watch mode, using `@vitejs/plugin-vue` to compile `.vue` SFCs, and
+   announces each rebuild. It never starts Vite's browser dev server. It is
+   the only part of the CLI that imports `vite`, and it depends on no
+   first-party package. A future `adapter/rspack` would be a sibling module
+   in the same package, since neither is ever imported on its own.
 3. **`dev-client`** (`packages/cli/src/dev-client`): the Node end of
    [PROTOCOL.md](./PROTOCOL.md) — resolves and launches the host
    binary, supervises the child, and carries messages both ways. It depends
    on no bundler and never parses a routed payload, so Vite's HMR traffic
    (Phase 3.4) rides the same channel as a registered `method` name.
-4. **`crates/inca-host`**: the runtime binary — opens the GPUI window
-   and evaluates a bundle in QuickJS, and in dev mode reads newline-delimited
-   JSON messages on stdin, re-evaluating the bundle in a fresh engine against
-   a reset tree on each reload. Its stdout is the protocol channel; logs go
-   to stderr.
+4. **`crates/inca-host`**: the runtime binary. It opens the GPUI window
+   and evaluates a bundle in QuickJS. In dev mode it reads newline-delimited
+   JSON messages on stdin and re-evaluates the bundle in a fresh engine
+   against a reset tree on each reload. Its stdout is the protocol channel,
+   and logs go to stderr.
 5. **Native root handle**: a binding replacing Phase 2's
    `__INCA_ROOT_ID__` source substitution, so an app's entry point is
    plain code (`createIncaApp(App).mount()`) with no host-injected token
@@ -125,8 +118,7 @@ lands after 3.3, when there is something to release.
    continuously makes unavoidable, so they land here rather than after the
    release.
 
-Component state is *not* preserved across a reload — that's exactly what
-Phase 3.4 adds.
+A reload loses component state. Phase 3.4 adds state preservation.
 
 ### Phase 3.2: `inca build`
 
@@ -139,10 +131,10 @@ hand-rolled.
 ### Phase 3.3: Application packaging
 
 Pairs a built bundle with a prebuilt host binary into a distributable
-application — `.app` on macOS, with each other platform's target following
-its support in Phase 11 — plus the per-platform npm distribution of those
-prebuilt hosts. **Design constraint**: keep the host binary swappable, so
-Phase 13 can substitute an app-compiled one.
+application: `.app` on macOS, with each other platform's target following
+its support in Phase 11. It also covers the per-platform npm distribution of
+those prebuilt hosts. **Design constraint**: keep the host binary swappable,
+so Phase 13 can substitute an app-compiled one.
 
 This is the **first release milestone**: once packaging works, the framework
 is published as `v0.0.1`, to npm only (`incajs`, `@incajs/cli`, and the
@@ -153,13 +145,13 @@ per-platform host packages). The Rust crates stay
 
 **HMR bridge** (`@incajs/cli`'s `adapter/vite`, beside its Node-side dev
 server): a custom `ModuleRunnerTransport` and module evaluator against
-Vite's Runtime API (`vite/module-runner`), so updated modules are evaluated
-inside QuickJS and trigger a GPUI redraw, with component state surviving
-where Vue's own HMR can (template-only edits; a script edit still remounts
-the component). The runner itself runs inside QuickJS, not on the Node
-side — see [ARCHITECTURE.md](./ARCHITECTURE.md#hmr-delivery) for why, and
-for why this is preferred over a hand-rolled HMR protocol. A future
-`adapter/rspack` would hold its own Node/QuickJS halves the same way.
+Vite's Runtime API (`vite/module-runner`). Updated modules are evaluated
+inside QuickJS and trigger a GPUI redraw. Component state survives where
+Vue's own HMR can: a template-only edit keeps it, and a script edit still
+remounts the component. The runner itself runs inside QuickJS. See
+[ARCHITECTURE.md](./ARCHITECTURE.md#hmr-delivery) for why, and for why this
+is preferred over a hand-rolled HMR protocol. A future `adapter/rspack` would
+hold its own Node/QuickJS halves the same way.
 
 Ships **experimental and opt-in**: without the flag, `inca dev` keeps this
 phase's full reload unchanged. See [PLAN.md](./PLAN.md#phase-34-hmr)
@@ -167,61 +159,51 @@ for the opt-in surface and the prerequisites this needs first.
 
 ## Phase 4: Input & text editing (in progress)
 
-Items 1, 2, 4 and 6 are done; items 3 and 5 haven't started. See
-[FFI.md](./FFI.md#event-dispatch) for what's wired today.
+Everything here reaches JS through `addEventListener`. The host dispatches
+any `(node id, event name)` pair, so a new event is a name the host agrees to
+send.
 
-Everything here reaches JS through the existing `addEventListener` surface:
-the host already dispatches any `(node id, event name)` pair, so a new event
-is a name the host agrees to send, not a new binding.
-
-1. **Pointer input** (done): press, release, move, wheel, enter, leave —
-   `"mousedown"`/`"mouseup"`/`"mousemove"`/`"wheel"`/`"mouseenter"`/
-   `"mouseleave"`, DOM-shaped payloads, and propagation via
-   `stopPropagation`/`stopImmediatePropagation`/`preventDefault`.
-2. **Keyboard input** (done): key press/release with modifiers, and a
-   focus model deciding which node receives them. The focus model — which
-   node is focused, moving it (`focusNode`/`blurNode`, a click on a
-   focusable node), `"focus"`/`"blur"` — plus `"keydown"`/`"keyup"`,
-   DOM-`KeyboardEvent`-named and bubbling from the focused node.
-3. **Text editing**: an editable text element, with selection, caret, and
-   IME composition. The largest item here, and the one with no partial
-   version worth shipping — a text field that drops IME composition is
-   unusable in Japanese, Chinese, or Korean.
-4. **Scrolling** (done): `overflow`/`overflow_x`/`overflow_y` (`visible`,
-   `hidden`, `scroll`, `auto`) and wheel scrolling. `stopPropagation()` on
-   `wheel` does not stop the scroll, `preventDefault()` cancels it, and
-   nested containers scroll innermost first. Scrollbars and the `scroll`
-   event are not supported; see [FFI.md](./FFI.md#event-dispatch).
-5. **Interactive visual state**: hover, active, and focus styling mapped
-   onto GPUI's own element states rather than re-derived in JS. Phase 12's
-   `hover:`/`focus:` Tailwind variants build on this.
-6. **Event payloads** (done): a listener's callback receives
-   `{ type, target, ...payload }`, and `crates/inca-gpui`'s `EventKind`
-   pairs each wired input with its name and its `EventMask` bit — see
-   [FFI.md](./FFI.md#event-dispatch). Items 1–2 add a variant and a payload
-   shape there; no new plumbing.
+1. **Pointer input**: press, release, move, wheel, enter and leave, with
+   propagation control through `stopPropagation`, `stopImmediatePropagation`
+   and `preventDefault`. See [FFI.md](./FFI.md#event-dispatch).
+2. **Keyboard input**: key press and release with modifiers, and a focus
+   model that decides which node receives them: `focusNode` and `blurNode`,
+   a click on a focusable node, and the `focus` and `blur` events.
+3. **Text editing**: an editable text element, with selection, caret and IME
+   composition. This is the largest item. It has no partial version worth
+   shipping, since a text field that drops IME composition is unusable in
+   Japanese, Chinese and Korean.
+4. **Scrolling**: `overflow`, `overflow_x` and `overflow_y` (`visible`,
+   `hidden`, `scroll`, `auto`) and wheel scrolling. Nested containers scroll
+   innermost first.
+5. **Interactive visual state**: hover, active and focus styling mapped onto
+   GPUI's own element states, instead of re-derived in JS. Phase 12's
+   `hover:` and `focus:` Tailwind variants build on this.
+6. **Event payloads**: a listener's callback receives
+   `{ type, target, currentTarget, ...payload }`. Each wired input has a name
+   and an `EventMask` bit in `crates/inca-gpui`'s `EventKind`, and a new
+   input adds a variant and a payload shape with no new plumbing.
 
 ## Phase 5: Accessibility (future)
 
-Not started, and not begun until Phase 4's focus and text models are stable
-— a screen reader reads a focus path, so there is nothing to expose before
-one exists.
+Not started. It waits on Phase 4's focus and text models being stable. A
+screen reader reads a focus path, so there is nothing to expose before one
+exists.
 
-Electron inherits this entire layer from Chromium. Incarnative.js renders to the
-GPU directly and inherits nothing, so all of it is ours to build. It is
-scheduled immediately after input rather than at the end because retrofitting
-an accessibility tree onto a node vocabulary that grew without one means
-rewriting that vocabulary.
+Electron inherits this layer from Chromium. Incarnative.js renders to the GPU
+directly and inherits none of it, so all of it is ours to build. It is
+scheduled right after input, since retrofitting an accessibility tree onto a
+node vocabulary that grew without one means rewriting that vocabulary.
 
-1. **Semantics on the retained tree**: a node's role, name, value, and
-   state, carried alongside `style_props`/`attributes`. The `tag_name`
-   vocabulary is deliberately thin (see
-   [FFI.md](./FFI.md#tag-vocabulary)), so semantics are declared
-   rather than inferred from a tag.
+1. **Semantics on the retained tree**: a node's role, name, value and state,
+   carried alongside `style_props` and `attributes`. The `tag_name`
+   vocabulary is thin (see [FFI.md](./FFI.md#tag-vocabulary)), so semantics
+   are declared on the node.
 2. **Platform accessibility APIs**: expose that tree through each platform's
    own API, following what GPUI already supports and filling in the rest.
-3. **Keyboard reachability**: every interactive node reachable and operable
-   without a pointer — Phase 4's focus model applied consistently.
+3. **Keyboard reachability**: every interactive node is reachable and
+   operable without a pointer. This is Phase 4's focus model applied
+   consistently.
 4. **The author-facing surface**: `role`/`aria-*` on a `.vue` template maps
    onto the above, so an author writes what they already write for the web.
 
@@ -263,60 +245,61 @@ workspace's when `console` landed, which is why `console` is ours.
 
 ## Phase 7: Majority style & Tailwind coverage (future)
 
-Not started, and not begun until Phase 3.1's Vite integration lands —
-Tailwind's own JIT compiler runs as a build-time step, so it needs a real
-Vite pipeline to plug into. Full CSS/Tailwind parity is not the goal here
-(see Phase 12); this phase targets the "structural" utility categories that
-cover the large majority of real-world usage and map cleanly onto GPUI's
-native styling model:
+Not started. It builds on Phase 3.1's Vite integration: Tailwind's JIT
+compiler runs as a build-time step, so it needs a real Vite pipeline to plug
+into. Full CSS and Tailwind parity is Phase 12's goal. This phase targets the
+structural utility categories that cover most real-world usage and map
+cleanly onto GPUI's native styling model:
 
 1. **Native style vocabulary expansion** (`crates/inca-gpui`): close the gaps
-   flagged as "deliberately incomplete" since Phase 1 (see
-   [FFI.md](./FFI.md)) — percentage lengths, flex-basis, per-side border
-   width/radius, basic box-shadow, font-weight/family,
-   line-height/letter-spacing, and `position` with `z-index`. `position`
-   (`relative`/`absolute`, with `top`/`right`/`bottom`/`left`) maps directly
-   onto `gpui`'s own positioning and is small. `gpui` has no z-index: paint
-   order and hit-testing follow tree order, so ordering siblings is a sort at
-   spec build (medium). Lifting an element above everything (a modal, an
-   overlay, the dev error panel) goes through `gpui`'s `deferred` priority
-   and must be checked against focus, hover, scrolling and ancestor
-   clipping (large).
-2. **Tailwind class resolver**: Incarnative.js has no real CSS engine, so Tailwind
-   utility classes can't generate actual CSS — a Vite plugin (building on
-   Phase 3's pipeline) scans `class="..."` usage and maps each recognized
-   utility directly to a `setStyle` call, rather than through a stylesheet.
-3. **Scope target: roughly 70–75% of Tailwind's utility classes** —
+   in the style vocabulary. The keys in
+   [FFI.md](./FFI.md#style-prop-vocabulary) are the ones the host reads
+   today. The gaps are percentage lengths, flex-basis, per-side border width
+   and radius, basic box-shadow, font-weight and family, line-height and
+   letter-spacing, the `clip` overflow value, `border_style`, further
+   align and justify values, and `position` with `z-index`.
+   - `position` (`relative`/`absolute`, with `top`/`right`/`bottom`/`left`)
+     maps directly onto `gpui`'s own positioning. Small.
+   - `gpui` has no z-index: paint order and hit-testing follow tree order,
+     so ordering siblings is a sort at spec build. Medium.
+   - Lifting an element above everything (a modal, an overlay, the dev error
+     panel) goes through `gpui`'s `deferred` priority. It must be checked
+     against focus, hover, scrolling and ancestor clipping. Large.
+2. **Tailwind class resolver**: Incarnative.js has no CSS engine, so Tailwind
+   utilities cannot generate CSS. A Vite plugin, building on Phase 3's
+   pipeline, scans `class="..."` usage and maps each recognized utility
+   directly to a `setStyle` call.
+3. **Scope target: roughly 70–75% of Tailwind's utility classes**:
    layout/flexbox/grid, spacing, sizing, typography basics, solid
    background/text/border colors, borders/radius, basic shadow. Explicitly
    deferred to Phase 12: responsive breakpoint variants (`sm:`/`md:`/...),
    state variants (`hover:`/`focus:`/`group-*`), dark mode,
    animations/transitions, transforms, filters/backdrop-filters, and
-   arbitrary bracket values (`w-[137px]`) — these need real design work
-   (e.g. mapping `hover:` onto GPUI's own interactive element states)
-   rather than a straightforward style-prop translation.
+   arbitrary bracket values (`w-[137px]`). These need design work, for
+   example mapping `hover:` onto GPUI's own interactive element states. A
+   style-prop translation does not cover them.
 
 ## Phase 8: Developer tools (future)
 
-Not started, and not begun until Phase 6 — `@vue/devtools-kit` is ordinary
-npm code and expects a runtime to live in.
+Not started. It waits on Phase 6, since `@vue/devtools-kit` is ordinary npm
+code and expects a runtime to live in.
 
-The goal is the real Vue DevTools, not a lookalike of it. `vuejs/devtools`
-splits into a collector (`@vue/devtools-kit`, which hooks
-`globalThis.__VUE_DEVTOOLS_GLOBAL_HOOK__` — a hook `@vue/runtime-core` fires
-from `createRenderer`, so this project's renderer is already wired for it)
-and a UI (`@vue/devtools-client`, itself a Vue app). Only the collector has
-to run where the app runs.
+The goal is the real Vue DevTools. `vuejs/devtools` splits into a collector
+and a UI. The collector is `@vue/devtools-kit`, which hooks
+`globalThis.__VUE_DEVTOOLS_GLOBAL_HOOK__`. `@vue/runtime-core` fires that
+hook from `createRenderer`, so this project's renderer is already wired for
+it. The UI is `@vue/devtools-client`, itself a Vue app. Only the collector
+has to run where the app runs.
 
-1. **A dev-only engine.** A second `QuickJS` engine, the host's own, drawing
+1. **A dev-only engine.** A second QuickJS engine, the host's own, drawing
    into a second root stacked over the app's. It outlives the reload that
    replaces the app's engine, leaves the app's tree alone, and can still
-   draw when the first bundle never loaded — which is what Phase 3.1's
-   failure panel needs of it too.
+   draw when the first bundle never loaded. Phase 3.1's failure panel needs
+   that too.
 2. **The collector beside the app.** `@vue/devtools-kit` in the app's own
-   engine, with the dev build's `__VUE_PROD_DEVTOOLS__` on, forwarding over
-   the channel [PROTOCOL.md](./PROTOCOL.md) already carries — nested in
-   `params`, the way Vite's frames are.
+   engine, with the dev build's `__VUE_PROD_DEVTOOLS__` on. It forwards over
+   the channel [PROTOCOL.md](./PROTOCOL.md) already carries, nested in
+   `params` the way Vite's frames are.
 3. **The UI in a browser, first.** `@incajs/cli` serves
    `@vue/devtools-client` and bridges it to that channel. This is how Nuxt
    DevTools works, and it asks nothing of the style vocabulary.
@@ -326,21 +309,20 @@ to run where the app runs.
 
 ## Phase 9: Application shell & platform integration (future)
 
-Not started, and not begun until Phase 3.3's packaging is stable — these are
-the APIs a packaged application calls, and several have no meaning until
-there is one.
+Not started. It builds on Phase 3.3's packaging: these are the APIs a
+packaged application calls, and several have no meaning until there is one.
 
-An Incarnative.js app is one window with no way to address it. Everything an app
-does *around* its content lives here.
+An Incarnative.js app is one window that it cannot address. Everything an app
+does around its content lives in this phase.
 
-1. **Windows**: title, size and position, minimize/maximize/fullscreen,
-   close behaviour, and more than one window per app — which the host's
-   one-session-per-process shape does not currently express.
+1. **Windows**: title, size and position, minimize, maximize and fullscreen,
+   close behaviour, and more than one window per app. The host's
+   one-session-per-process shape does not express that today.
 2. **Native menus**: an application menu bar and context menus, with their
-   keyboard shortcuts. The host already owns a `Quit` item and its
-   shortcut, which an app cannot remove — see
-   [FFI.md](./FFI.md#application-menu). What an app
-   adds beside it, and where those items come from, is this item's work.
+   keyboard shortcuts. The host already owns a `Quit` item and its shortcut,
+   and an app cannot remove them (see [FFI.md](./FFI.md#application-menu)).
+   What an app adds beside it, and where those items come from, is this
+   item's work. The candidates are `inca.config.ts`, a JS binding and an SFC.
 3. **Dialogs**: file open/save and message boxes, drawn by the platform
    rather than in-tree.
 4. **System integration**: clipboard, notifications, a tray icon, and
@@ -350,61 +332,65 @@ does *around* its content lives here.
 
 ## Phase 10: React custom renderer (future)
 
-Not started, and not begun until Vue 3 support (Phases 1–3) is stable. Adds
-`incajs/react` as an additional subpath alongside `incajs/vue`, in the same
-`incajs` package rather than a separate one, using `react-reconciler`
-against the same core (not `__inca_native__` directly — see Phase 2), plus
-`@vitejs/plugin-react` for JSX/TSX compilation and HMR.
+Not started. It waits on Vue 3 support (Phases 1–3) being stable. It adds
+`incajs/react` as a subpath alongside `incajs/vue`, in the same `incajs`
+package. The renderer uses `react-reconciler` and is built on the same core
+(see Phase 2). `@vitejs/plugin-react` compiles JSX and TSX and handles HMR.
 
 ## Phase 11: Cross-platform support (future)
 
-Not started, and not begun until the core Rust host design (Phases 1–2)
-is stable — same reasoning as Phase 10. macOS is the primary development
-target until then. This phase properly supports Linux (resolving the
-devcontainer's unconfirmed rendering — see
-[MANUAL_GUI_CHECK.md](./MANUAL_GUI_CHECK.md)) and adds the `gpui_windows`
-platform backend for Windows.
+Not started. It waits on the core Rust host design (Phases 1–2) being stable,
+for the same reason as Phase 10. macOS is the primary development target until
+then.
+
+1. **Linux**: full support has two parts. The rendering is verified directly
+   on a Linux display, where today it is only seen indirectly through the
+   devcontainer forwarded to a Mac. And the packaged app starts with no system
+   libraries installed by the user, where today the host needs the shared
+   libraries listed in the install guide.
+2. **Windows**: the `gpui_windows` platform backend.
 
 ## Phase 12: 100% style & Tailwind parity (future)
 
-Not started, and not begun until cross-platform support (Phase 11) is
-stable. Closes exactly the gap Phase 7 deferred: full CSS-property parity
-in the native style vocabulary/render pipeline (animations/transitions,
-transforms, filters, gradients, arbitrary values), state variants mapped
-onto GPUI's own interactive element states (hover/focus/active),
-responsive breakpoints (no browser viewport concept exists here, so this
-needs its own window-size-aware style-resolution design), and dark mode.
-The final styling milestone: every Tailwind utility class Vue (and later
-React) authors reach for should resolve to a correct native rendering, not
-just the common ones Phase 7 covers.
+Not started. It waits on cross-platform support (Phase 11) being stable. It
+closes the gap Phase 7 deferred, so that every Tailwind utility class a Vue
+(and later React) author reaches for resolves to a correct native rendering,
+beyond the common ones Phase 7 covers. It is the final styling milestone.
 
-The acceptance test is `@vue/devtools-overlay` running in an app's own
-window through this renderer. It pulls in `shiki`, `vue-virtual-scroller`
-and `focus-trap`, so a real third-party Vue app rendering correctly and
-this phase being finished are the same statement.
+- Full CSS-property parity in the native style vocabulary and render
+  pipeline: animations and transitions, transforms, filters, gradients and
+  arbitrary values.
+- State variants mapped onto GPUI's own interactive element states: hover,
+  focus and active.
+- Responsive breakpoints. There is no browser viewport concept here, so this
+  needs its own window-size-aware style-resolution design.
+- Dark mode.
+
+The acceptance test is `@vue/devtools-overlay` running in an app's own window
+through this renderer. It pulls in `shiki`, `vue-virtual-scroller` and
+`focus-trap`, so the phase is finished when a real third-party Vue app
+renders correctly.
 
 ## Phase 13: App-owned Rust extensions (future)
 
-Not started, and not begun until Phase 3.3's packaging and Phase 12's
-styling are stable. Every phase before this one assumes app authors write
-only JS/TS and consume a prebuilt host binary; this phase adds the opt-in
-case where an app moves its own heavy work (compute, native I/O) into Rust
-and still ships as a single application:
+Not started. It waits on Phase 3.3's packaging and Phase 12's styling being
+stable. Every phase before this one assumes that app authors write only JS
+and TS and consume a prebuilt host binary. This phase adds the opt-in case
+where an app moves its own heavy work (compute, native I/O) into Rust and
+still ships as a single application:
 
 1. **App-owned host build**: an app that carries its own Rust crate gets a
    host compiled from source with that crate linked in, in place of the
-   prebuilt binary — the swappability Phase 3.3 is required to preserve.
-   Apps without one keep needing no Rust toolchain.
+   prebuilt binary. This is the swappability Phase 3.3 is required to
+   preserve. Apps without one keep needing no Rust toolchain.
 2. **Extension binding surface**: a stable way for app-owned Rust code to
    register its own functions alongside `__inca_native__` (see
-   [FFI.md](./FFI.md#binding-functions)), rather than patching the host's
-   own bindings. This is the likely driver for `crates/inca-macros`
-   (see [STRUCTURE.md](./STRUCTURE.md)).
+   [FFI.md](./FFI.md#binding-functions)), instead of patching the host's own
+   bindings.
 3. **MSRV verification**: `rust-version` is held equal to the pinned
    toolchain while these crates have no consumers outside this repo. Once
    app crates compile against them it drops to a real floor, checked by its
-   own job — see
-   [TESTING.md](./TESTING.md#toolchain-pinning-and-msrv).
+   own CI job.
 
 ## Known gaps, not yet scheduled
 
@@ -412,8 +398,8 @@ Recorded so they stay visible. Each needs a decision before it needs a
 phase, and none belongs inside one above.
 
 - **Release engineering beyond packaging**: auto-update, code signing and
-  notarization. Phase 3.3 produces an application; neither is what keeps it
-  running in the field.
+  notarization. Phase 3.3 produces an application, and neither of these
+  keeps it running in the field.
 - **Crash reporting**: `inca dev` reports a host panic to the client, but a
   packaged app's panic leaves nothing behind for the person whose app died.
   Its cheap half is a log file or dialog written from the existing panic hook;
@@ -425,8 +411,3 @@ phase, and none belongs inside one above.
 - **The security model for untrusted code**: every binding this roadmap adds
   is reachable by anything in the bundle, dependencies included. Whether that
   is acceptable, and what would constrain it, is unanswered.
-
-## Implementation guidelines
-
-Memory safety at the FFI boundary, a zero-overhead render loop and developer
-ergonomics apply across every phase.

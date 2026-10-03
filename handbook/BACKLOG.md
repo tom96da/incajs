@@ -7,7 +7,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 Desktop-app-shaped gaps and quality-of-life fixes that fall outside
 [ROADMAP.md](./ROADMAP.md)'s phased plan — things noticed while building.
-Entries are unordered within a priority, and any of them can be picked up at
+Entries are ordered by ID within a priority, and any of them can be picked up at
 any time, independent of the phase currently in progress.
 
 Once a project needs external visibility or outside contribution, this
@@ -362,6 +362,18 @@ A fixed entry is deleted and its ID is never reused.
   An object property defined with a getter is read when printed, so the
   getter's code runs and its side effects happen. The standard prints
   `[Getter]`, `[Setter]` or `[Getter/Setter]` without calling it.
+
+- **B-097 `console` prints some classes and built-ins unlike Node**
+  `Units: jsenv · Size: M · Impact: Medium`
+
+  A class instance prints without its class name, as `{ a: 1 }` where Node
+  prints `Foo { a: 1 }`. Properties keyed by a `Symbol`, array holes
+  (printed as `undefined`) and extra properties on an array or an `Error`
+  are dropped. A `Promise`, a typed array, a `WeakMap` and a boxed primitive
+  print as a plain object: `{}` for most, `{ 0: 0, 1: 0, 2: 0 }` for
+  `new Uint8Array(3)`, where Node prints `Promise { 1 }` and
+  `Uint8Array(3) [ 0, 0, 0 ]`. A nested string is always single-quoted,
+  where Node picks the quote that avoids escaping.
 
 ## P3
 
@@ -939,18 +951,6 @@ A fixed entry is deleted and its ID is never reused.
   inherited lint, so a crate that is not ready needs
   `#![allow(missing_docs)]` in its source.
 
-- **B-097 `console` prints some classes and built-ins unlike Node**
-  `Units: jsenv · Size: M · Impact: Medium`
-
-  A class instance prints without its class name, as `{ a: 1 }` where Node
-  prints `Foo { a: 1 }`. Properties keyed by a `Symbol`, array holes
-  (printed as `undefined`) and extra properties on an array or an `Error`
-  are dropped. A `Promise`, a typed array, a `WeakMap` and a boxed primitive
-  print as a plain object: `{}` for most, `{ 0: 0, 1: 0, 2: 0 }` for
-  `new Uint8Array(3)`, where Node prints `Promise { 1 }` and
-  `Uint8Array(3) [ 0, 0, 0 ]`. A nested string is always single-quoted,
-  where Node picks the quote that avoids escaping.
-
 - **B-098 The app cannot hook a reload or a shutdown**
   `Units: bridge,core,host · Size: M · Impact: Low`
 
@@ -977,3 +977,14 @@ A fixed entry is deleted and its ID is never reused.
   An unreadable `inca.config.ts`, no entry to build and no host binary each
   end `inca dev`. A failure after the watcher starts is reported and watched
   through, so the edit-and-retry loop covers only the second kind.
+
+- **B-101 `rust-version` has no floor check of its own**
+  `Units: ci · Size: S · Impact: Low`
+
+  `rust-version` equals the pinned toolchain, so it states no real floor.
+  That holds while the crates have no consumers outside this repository.
+  Once app crates compile against them (roadmap Phase 13), `rust-version`
+  drops below the pin and needs its own CI job. The job installs the floor
+  toolchain and runs `cargo +<msrv> check`, where `+<msrv>` overrides
+  `rust-toolchain.toml`. It is a second toolchain, so it adds a second full
+  gpui build under its own `Swatinem/rust-cache` key.

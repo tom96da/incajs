@@ -64,10 +64,15 @@ browser dev server.
 HMR uses Vite's Runtime API (`vite/module-runner`) instead of Vite's browser
 client.
 
-- The `ModuleRunner` runs inside QuickJS. Only `fetchModule` results and HMR
+- The `ModuleRunner` runs inside QuickJS. Vite hands the evaluator
+  `__vite_ssr_exports__` and `__vite_ssr_import__` as same-realm objects, so
+  the runner runs beside the evaluator. Only `fetchModule` results and HMR
   payloads cross the boundary, as JSON.
 - A custom `ModuleRunnerTransport` carries those messages between the Node
   process and the host over the stdio channel `dev-client` owns.
 - A custom module evaluator runs the transformed module source inside
   QuickJS. Vite's SSR transform emits an async function body, and the
   evaluator builds and calls it with `new AsyncFunction(...)`.
+
+This reuses Vite's module graph invalidation and its accept and dispose
+boundaries, without a hand-rolled HMR protocol.
