@@ -13,10 +13,10 @@ export default defineConfig({
   title: "Incarnative.js",
   description:
     "A GPU-native, Webview-free desktop application framework powered by GPUI and QuickJS.",
-  base: "/incajs/",
+  base: "/",
   lastUpdated: true,
   sitemap: {
-    hostname: "https://tom96da.github.io/incajs/",
+    hostname: "https://incajs.tom96da.com/",
   },
   themeConfig: {
     nav: [

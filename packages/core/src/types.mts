@@ -120,7 +120,7 @@ export interface StyleProps {
  * event's name), `target`/`currentTarget` (both the {@link NodeId} it fired
  * on), `stopPropagation`/`stopImmediatePropagation`/`preventDefault`
  * methods, plus whatever fields that event kind carries — see
- * https://tom96da.github.io/incajs/reference/events for the full list of
+ * https://incajs.tom96da.com/reference/events for the full list of
  * wired event names and their fields.
  */
 export type EventListener = (...args: unknown[]) => void;

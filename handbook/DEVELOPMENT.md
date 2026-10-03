@@ -46,7 +46,7 @@ History is in [PLAN.md](./PLAN.md) and [CHANGELOG.md](../CHANGELOG.md).
   for a glibc 2.35 floor.
 - **macOS**: the `darwin-x64` package is in preparation and not published yet.
 - **Docs site**: VitePress in `docs/`, deployed by `.github/workflows/docs.yml`
-  to [tom96da.github.io/incajs](https://tom96da.github.io/incajs/).
+  to [incajs.tom96da.com](https://incajs.tom96da.com/).
 
 ## Architecture
 

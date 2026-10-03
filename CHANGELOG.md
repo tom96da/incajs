@@ -110,7 +110,7 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Added
 
-- every failure carries an `ERR_INCA_*` code, listed in the new [error reference](https://tom96da.github.io/incajs/reference/errors) ([7a2e6e4](https://github.com/tom96da/incajs/commit/7a2e6e4))
+- every failure carries an `ERR_INCA_*` code, listed in the new [error reference](https://incajs.tom96da.com/reference/errors) ([7a2e6e4](https://github.com/tom96da/incajs/commit/7a2e6e4))
 - a failed build is reported once, with the bundler's own excerpt ([e5a177d](https://github.com/tom96da/incajs/commit/e5a177d))
 - a `<style>` block or stylesheet import fails the build instead of being ignored ([ecabe7b](https://github.com/tom96da/incajs/commit/ecabe7b))
 - `inca dev`, `build` and `package` show the bundler's own build output ([bafa985](https://github.com/tom96da/incajs/commit/bafa985))

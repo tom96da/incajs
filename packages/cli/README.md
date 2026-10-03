@@ -26,7 +26,7 @@ bootstrapping; it wins outright when both exist.
   reloading on every change. `--experimental-hmr` (or
   `INCA_EXPERIMENTAL_HMR=1`) opts into experimental, module-granular
   hot reloading instead — see the
-  [HMR guide](https://tom96da.github.io/incajs/guide/hmr).
+  [HMR guide](https://incajs.tom96da.com/guide/hmr).
 - **`inca build`** — bundles your app for production, once, with no
   window opened.
 - **`inca package`** — builds your app, then packages it with a
@@ -62,7 +62,7 @@ once it is packaged.
 
 A prebuilt binary is pulled in automatically as a platform-specific
 optional dependency — neither Cargo nor Rust are needed. See
-[Host binary](https://tom96da.github.io/incajs/guide/#host-binary) for
+[Host binary](https://incajs.tom96da.com/guide/#host-binary) for
 per-platform support.
 
 Set `INCA_HOST_BIN` to use a specific binary instead, e.g. on a

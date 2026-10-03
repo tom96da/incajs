@@ -34,7 +34,7 @@ Text editing and IME are not built yet.
 
 ## Links
 
-- Docs: [tom96da.github.io/incajs](https://tom96da.github.io/incajs/)
+- Docs: [incajs.tom96da.com](https://incajs.tom96da.com/)
 - npm: [`incajs`](https://npmjs.com/package/incajs), [`@incajs/cli`](https://npmjs.com/package/@incajs/cli)
 - [README.md](./README.md), [CHANGELOG.md](./CHANGELOG.md)
 
