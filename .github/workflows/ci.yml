@@ -67,6 +67,8 @@ jobs:
               - 'tsconfig*.json'
               - 'oxlint.config.ts'
               - 'oxfmt.config.ts'
+              - 'vitest.config.ts'
+              - 'patches/**'
               - '.github/workflows/ci.yml'
 
   build:
@@ -234,6 +236,7 @@ jobs:
             | sh -s -- -y --no-modify-path --profile minimal
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
+      # Downloads the pinned toolchain before rust-cache keys on `rustc -vV`.
       - name: Install clippy and rustfmt
         run: rustup component add clippy rustfmt
 
@@ -310,6 +313,7 @@ jobs:
             | sh -s -- -y --no-modify-path --profile minimal
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
+      # Downloads the pinned toolchain before rust-cache keys on `rustc -vV`.
       - name: Install clippy
         run: rustup component add clippy
 
