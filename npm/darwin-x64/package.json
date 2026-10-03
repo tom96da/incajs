@@ -1,7 +1,6 @@
 {
   "name": "@incajs/host-darwin-x64",
   "version": "0.0.0-0",
-  "private": true,
   "description": "Prebuilt native runtime for Incarnative.js — macOS on Intel (x64).",
   "keywords": [
     "desktop-app",
@@ -11,6 +10,7 @@
     "incarnative.js",
     "quickjs"
   ],
+  "homepage": "https://incajs.tom96da.com/",
   "license": "(MIT OR Apache-2.0)",
   "repository": {
     "type": "git",
@@ -25,5 +25,11 @@
   ],
   "cpu": [
     "x64"
-  ]
+  ],
+  "publishConfig": {
+    "access": "public",
+    "executableFiles": [
+      "bin/inca-host"
+    ]
+  }
 }
