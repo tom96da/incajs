@@ -90,6 +90,7 @@ jobs:
             packages/core/package.json \
             packages/cli/package.json \
             npm/darwin-arm64/package.json \
+            npm/darwin-x64/package.json \
             npm/linux-arm64/package.json \
             npm/linux-x64/package.json
           do
@@ -142,6 +143,8 @@ jobs:
             container: ubuntu:22.04
           - pkg: darwin-arm64
             runner: macos-latest
+          - pkg: darwin-x64
+            runner: macos-26-intel
     steps:
       # Ahead of the checkout: a bare image lacks git, curl and a compiler.
       # The gpui half is .devcontainer/Dockerfile's list, minus the
@@ -266,7 +269,7 @@ jobs:
       - name: Place host binaries
         run: |
           set -euo pipefail
-          for pkg in linux-x64 linux-arm64 darwin-arm64; do
+          for pkg in linux-x64 linux-arm64 darwin-arm64 darwin-x64; do
             mkdir -p "npm/$pkg/bin"
             tar -xzf "artifacts/inca-host-$pkg/inca-host-$pkg.tar.gz" -C "npm/$pkg/bin"
             chmod 0755 "npm/$pkg/bin/inca-host"
@@ -275,7 +278,7 @@ jobs:
       - name: Verify the packed host tarballs
         run: |
           set -euo pipefail
-          for pkg in linux-x64 linux-arm64 darwin-arm64; do
+          for pkg in linux-x64 linux-arm64 darwin-arm64 darwin-x64; do
             tarball=$(pnpm --dir "npm/$pkg" pack --pack-destination "$RUNNER_TEMP" | tail -1)
             tar -tvzf "$tarball" | tee /dev/stderr | \
               grep -Eq '^-rwxr-xr-x.* package/bin/inca-host$' \
