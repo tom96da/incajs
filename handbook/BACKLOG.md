@@ -194,7 +194,8 @@ A fixed entry is deleted and its ID is never reused.
   reproduced outside this pattern — a full reload's own repaint after a
   style edit already works, and always has. A removed style key is
   another style-only change to an already-seen node, so it is probably
-  affected the same way; that is not confirmed.
+  affected the same way; that is not confirmed. Not reproduced on Intel
+  macOS.
 
 - **B-031 `inca dev --experimental-hmr` never recovers from a source file that was already broken when the session started**
   `Units: cli · Size: M · Impact: Medium`
@@ -238,7 +239,7 @@ A fixed entry is deleted and its ID is never reused.
   reuse already suspected in B-030, this time for an event
   listener closure rather than a style property, on Vue's own `reload`
   path rather than `rerender`. Not confirmed at the native layer the way
-  B-030 was.
+  B-030 was. Reproduced on Intel macOS, where B-030 is not.
 
 - **B-041 A camelCase (or otherwise miscased) style key is silently ignored**
   `Units: gpui · Size: S · Impact: Medium`

@@ -27,6 +27,7 @@ colored boxes. The other Cargo examples are `hello_world` and
 ### The Vue ports
 
 ```sh
+pnpm install && pnpm build
 cargo build -p inca-host
 INCA_HOST_BIN="$(pwd)/target/debug/inca-host" pnpm --filter hello_world dev
 ```
@@ -50,7 +51,7 @@ and launches the host from inside it.
 
 ```sh
 cargo build -p inca-host --release
-pnpm --filter click_counter package
+INCA_HOST_BIN="$(pwd)/target/release/inca-host" pnpm --filter click_counter package
 open examples/click_counter/dist/click_counter.app
 ```
 
@@ -109,6 +110,7 @@ hdiutil detach /Volumes/MetalToolchainCryptex
 | `error: cannot execute tool 'metal' due to missing Metal Toolchain; use: xcodebuild -downloadComponent MetalToolchain` | the Metal Toolchain component is not installed | Install, step 3 |
 | `xcrun: error: unable to find utility "metal", not a developer tool or in PATH` | Xcode.app or the developer directory is missing, or the component is not installed | Install, steps 1-2 |
 | `Metal Toolchain unable to refresh cache with error: … "Operation not permitted"` | SIP blocks the automatic install | Manual install |
+| `A required plugin failed to load` (`CoreSimulator.framework`) | Xcode's first-launch setup has not run | `sudo xcodebuild -runFirstLaunch` |
 | `Symbol not found: _XPCTypeBool` from `libxcodebuildLoader.dylib`, or `Failed fetching catalog for assetType (com.apple.MobileAsset.MetalToolchain)` | the Xcode install is broken | Reinstall Xcode, or use Option B |
 
 ## Option B — devcontainer, forwarded to macOS via XQuartz
