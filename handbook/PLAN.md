@@ -814,6 +814,9 @@ The first release milestone: after this, the framework is publishable.
 - [x] Update `README.md` with real install/usage instructions
 - [x] Update `AGENTS.md`'s Status section
 - [x] `v0.0.1` published to npm and GitHub Releases
+- [x] `darwin-x64` joins the publish set in v0.0.9: `ci.yml` and `cd.yml`
+      build the host on `macos-26-intel`, and `@incajs/host-darwin-x64` is
+      no longer private
 
 ## Phase 3.4: HMR
 

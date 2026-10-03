@@ -57,7 +57,7 @@ incajs/
 │   ├── inca-jsenv/          # the QuickJS Engine, its module loader, value inspection, and the host objects installed in the realm, such as `console`
 │   └── inca-host/           # the runtime binary: loads a bundle, opens the window and serves the dev protocol
 ├── tests/                   # `inca-tests`: the tests that need both Rust and TypeScript, kept out of both so neither depends on the other
-├── pnpm-workspace.yaml      # pnpm workspace member globs (packages/*, examples/*, npm/*, docs, tests; npm/darwin-x64 excluded)
+├── pnpm-workspace.yaml      # pnpm workspace member globs (packages/*, examples/*, npm/*, docs, tests)
 ├── package.json             # root workspace manifest — lint/format/typecheck/test/build scripts
 ├── pnpm-lock.yaml
 ├── tsconfig.base.json       # shared TS compiler options, extended by each package's tsconfig.json

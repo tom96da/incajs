@@ -7,7 +7,7 @@ Copyright (c) 2026 tom96da
 SPDX-License-Identifier: MIT OR Apache-2.0
 -->
 
-# Console <Badge type="warning" text="unreleased" />
+# Console
 
 **Incarnative.js** provides a built-in `console` object. It is available in
 your app without an import.

@@ -44,7 +44,7 @@ History is in [PLAN.md](./PLAN.md) and [CHANGELOG.md](../CHANGELOG.md).
 - **Toolchain**: zed `v1.22.0` for `gpui`, rquickjs `0.14.0`.
 - **Linux binaries**: built in an `ubuntu:22.04` container by both workflows,
   for a glibc 2.35 floor.
-- **macOS**: the `darwin-x64` package is in preparation and not published yet.
+- **macOS**: host packages for arm64 and x64 (Intel).
 - **Docs site**: VitePress in `docs/`, deployed by `.github/workflows/docs.yml`
   to [incajs.tom96da.com](https://incajs.tom96da.com/).
 

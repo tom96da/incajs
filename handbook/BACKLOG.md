@@ -918,11 +918,10 @@ A fixed entry is deleted and its ID is never reused.
 
   GitHub has announced that it will stop supporting the Intel architecture on
   macOS hosted runners after the macOS 15 image retires in autumn 2027.
-  `macos-26-intel` exists and no newer notice gives its retirement date. The
-  x64 macOS host is not built in `cd.yml` or `ci.yml` yet, and
-  `@incajs/host-darwin-x64` is a private placeholder. Once it is built, the
-  runner's end date limits how long it can be built natively. A fallback is
-  to cross-compile `x86_64-apple-darwin` on the arm64 runner and run a smoke
+  `macos-26-intel` exists and no newer notice gives its retirement date.
+  `ci.yml` and `cd.yml` build the x64 macOS host on that runner, so its end
+  date limits how long the host can be built natively. A fallback is to
+  cross-compile `x86_64-apple-darwin` on the arm64 runner and run a smoke
   test under Rosetta 2, which does not exercise Metal on Intel hardware.
 
 - **B-095 The platform lists are kept in sync by hand**

@@ -90,7 +90,7 @@ Install the app's dependencies, or set `INCA_HOST_BIN` to a binary you
 built yourself.
 
 > [!NOTE]
-> `darwin-x64` has no published package — see
+> Windows has no published package yet — see
 > [Host binary](../guide/#host-binary) for platform support.
 
 ## `ERR_INCA_DEV_RUNNING`

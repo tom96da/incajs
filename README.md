@@ -58,7 +58,7 @@ needed to run an app.
 | Linux x64     | Limited support* |
 | Linux arm64   | Limited support* |
 | macOS arm64   | Supported        |
-| macOS x64     | Not planned      |
+| macOS x64     | Supported        |
 | Windows x64   | Planned          |
 | Windows arm64 | Planned          |
 
