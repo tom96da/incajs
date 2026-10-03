@@ -988,3 +988,15 @@ A fixed entry is deleted and its ID is never reused.
   toolchain and runs `cargo +<msrv> check`, where `+<msrv>` overrides
   `rust-toolchain.toml`. It is a second toolchain, so it adds a second full
   gpui build under its own `Swatinem/rust-cache` key.
+
+- **B-102 The HMR state e2e test timed out once in CI**
+  `Units: ci,cli · Size: S · Impact: Low`
+
+  `tests/tests/hmr-quickjs-state.test.mts` timed out once in CI at the edit
+  that fixes a broken script: the second mount did not show up within the
+  30 s `WAIT_TIMEOUT_MS`. The same job passed on a re-run. The path is the
+  recovery from a broken live edit, which works in manual use. The test's
+  own comments note a race between the `file-changed` event and the
+  module's re-evaluation. A longer timeout would hide the cause. Logging the
+  host's stderr and the HMR events at the point of the timeout would show
+  which one is missing.
