@@ -3,6 +3,7 @@
 
 import { defineConfig } from "vitepress";
 import { groupIconMdPlugin, groupIconVitePlugin } from "vitepress-plugin-group-icons";
+import llmstxt from "vitepress-plugin-llms";
 import type { HeadConfig } from "vitepress";
 
 import packageJson from "../../packages/core/package.json" with { type: "json" };
@@ -125,7 +126,15 @@ export default defineConfig({
     },
   },
   vite: {
-    plugins: [groupIconVitePlugin()],
+    plugins: [
+      groupIconVitePlugin(),
+      llmstxt({
+        domain: siteUrl,
+        title: siteName,
+        description:
+          "Incarnative.js (inca) is an ultra-lightweight, Webview-free desktop application framework powered by GPUI, QuickJS, and custom renderers.",
+      }),
+    ],
   },
   cleanUrls: true,
 });
