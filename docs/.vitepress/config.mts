@@ -7,6 +7,7 @@ import llmstxt from "vitepress-plugin-llms";
 import type { HeadConfig } from "vitepress";
 
 import packageJson from "../../packages/core/package.json" with { type: "json" };
+import { roadmapContainers } from "./roadmap-containers.mts";
 import structuredData from "./structured-data.json" with { type: "json" };
 
 const incaVersion = packageJson.version;
@@ -123,6 +124,7 @@ export default defineConfig({
   markdown: {
     config(md) {
       md.use(groupIconMdPlugin);
+      md.use(roadmapContainers);
     },
   },
   vite: {
@@ -130,6 +132,7 @@ export default defineConfig({
       groupIconVitePlugin(),
       llmstxt({
         domain: siteUrl,
+        injectLLMHint: false,
         title: siteName,
         description:
           "Incarnative.js (inca) is an ultra-lightweight, Webview-free desktop application framework powered by GPUI, QuickJS, and custom renderers.",

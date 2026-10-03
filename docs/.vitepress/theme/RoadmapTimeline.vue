@@ -3,35 +3,9 @@ Copyright (c) 2026 tom96da
 SPDX-License-Identifier: MIT OR Apache-2.0
 -->
 
-<script setup lang="ts">
-import { withBase } from "vitepress";
-
-interface Phase {
-  id: string;
-  title: string;
-  status: "shipped" | "in-progress" | "not-started";
-  description: string;
-  link?: { text: string; href: string };
-}
-
-defineProps<{ items: Phase[] }>();
-
-const statusLabel: Record<Phase["status"], string> = {
-  shipped: "Shipped",
-  "in-progress": "In progress",
-  "not-started": "Not started",
-};
-</script>
-
 <template>
   <ol class="roadmap-timeline">
-    <li v-for="phase in items" :key="phase.id" :class="phase.status">
-      <span class="phase-id">Phase {{ phase.id }}</span>
-      <h3 class="phase-title">{{ phase.title }}</h3>
-      <span class="phase-status">{{ statusLabel[phase.status] }}</span>
-      <p class="phase-description">{{ phase.description }}</p>
-      <a v-if="phase.link" :href="withBase(phase.link.href)">{{ phase.link.text }}</a>
-    </li>
+    <slot />
   </ol>
 </template>
 
@@ -56,16 +30,16 @@ const statusLabel: Record<Phase["status"], string> = {
   background: var(--vp-c-divider);
 }
 
-.roadmap-timeline li {
+.roadmap-timeline > :deep(li) {
   position: relative;
   padding: 0 0 1.75rem 1.75rem;
 }
 
-.roadmap-timeline li:last-child {
+.roadmap-timeline > :deep(li:last-child) {
   padding-bottom: 0;
 }
 
-.roadmap-timeline li::before {
+.roadmap-timeline > :deep(li::before) {
   content: "";
   position: absolute;
   top: 0.3rem;
@@ -76,21 +50,21 @@ const statusLabel: Record<Phase["status"], string> = {
   box-shadow: 0 0 0 3px var(--vp-c-bg);
 }
 
-.roadmap-timeline li.shipped::before {
+.roadmap-timeline > :deep(li.shipped::before) {
   background: var(--vp-c-success-1);
 }
 
-.roadmap-timeline li.not-started::before {
+.roadmap-timeline > :deep(li.not-started::before) {
   background: transparent;
   border: 2px solid var(--vp-c-default-3);
 }
 
-.roadmap-timeline li.in-progress::before {
+.roadmap-timeline > :deep(li.in-progress::before) {
   background: var(--vp-c-warning-1);
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .roadmap-timeline li.in-progress::before {
+  .roadmap-timeline > :deep(li.in-progress::before) {
     animation: roadmap-pulse 2s ease-in-out infinite;
   }
 }
@@ -105,32 +79,5 @@ const statusLabel: Record<Phase["status"], string> = {
       0 0 0 3px var(--vp-c-bg),
       0 0 0 6px var(--vp-c-warning-soft);
   }
-}
-
-.phase-id {
-  display: block;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--vp-c-text-2);
-}
-
-.phase-title {
-  margin: 0.1rem 0 0.3rem;
-  font-size: 1.05rem;
-  border-top: none;
-}
-
-.phase-status {
-  display: inline-block;
-  margin-bottom: 0.4rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  color: var(--vp-c-text-2);
-}
-
-.phase-description {
-  margin: 0.2rem 0;
 }
 </style>
