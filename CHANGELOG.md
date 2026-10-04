@@ -19,6 +19,7 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 - every failing handler of one event reaches the host's error report ([20fc77a](https://github.com/tom96da/incajs/commit/20fc77a))
 - a listener added while an event is being handled first runs for the next event ([f83f2dd](https://github.com/tom96da/incajs/commit/f83f2dd))
+- a `<slot/>` or any fragment in a container adds no blank line above its content ([5f4c214](https://github.com/tom96da/incajs/commit/5f4c214))
 - a failed HMR update prints the same message and error code as a failed rebuild ([d998c2a](https://github.com/tom96da/incajs/commit/d998c2a))
 - `console` prints a getter or setter as `[Getter]` or `[Setter]` and a `Proxy` as its target, with their code left idle ([2df1df1](https://github.com/tom96da/incajs/commit/2df1df1))
 - `console` prints array holes as `<1 empty item>` and arrays of any length ([2df1df1](https://github.com/tom96da/incajs/commit/2df1df1))
