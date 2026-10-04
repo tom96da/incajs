@@ -722,6 +722,13 @@ where
     })
 }
 
+/// The selector `build_element` gives the container with this id. A test
+/// passes it to `gpui`'s `debug_bounds` to read that container's bounds.
+#[must_use]
+pub fn debug_selector(id: NodeId) -> String {
+    format!("node-{id}")
+}
+
 /// Recursively converts an [`ElementSpec`] into a real `gpui` [`AnyElement`].
 ///
 /// A container gets a hitbox only when something listens on it — GPUI
@@ -733,8 +740,8 @@ where
 /// that scrolls on either axis gets one too, since `gpui` keeps its scroll
 /// offset in element state.
 ///
-/// Every container carries a `.debug_selector("node-{id}")` — a no-op
-/// outside test builds — so a test can look its computed bounds up by
+/// Every container carries the selector [`debug_selector`] names, a no-op
+/// outside test builds, so a test can look its computed bounds up by
 /// [`NodeId`], wired or not.
 ///
 /// The root container (`root`) also carries the pointer tracker when there is
@@ -757,7 +764,7 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
             let wired = |mask: EventMask| -> Option<E> {
                 dispatch.filter(|_| spec.listens.contains(mask)).cloned()
             };
-            let element = div().debug_selector(move || format!("node-{id}"));
+            let element = div().debug_selector(move || debug_selector(id));
 
             if spec.style.scrolls() || (dispatch.is_some() && spec.listens.needs_element_id()) {
                 let element =
@@ -918,6 +925,11 @@ mod tests {
 
     fn text(s: &str) -> AttributeValue {
         AttributeValue::String(s.to_owned())
+    }
+
+    #[test]
+    fn debug_selector_names_the_node_id() {
+        assert_eq!(debug_selector(7), "node-7");
     }
 
     mod spec_layer {

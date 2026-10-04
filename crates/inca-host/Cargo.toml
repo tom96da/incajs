@@ -28,6 +28,10 @@ log.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
+[features]
+# Exposes `harness` and `snapshot` for tests, and turns on gpui's test platform.
+test-support = ["gpui/test-support"]
+
 [dev-dependencies]
 # test-support gates gpui's TestAppContext, which is how the startup drain
 # is checked without a real display.

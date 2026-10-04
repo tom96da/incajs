@@ -33,6 +33,10 @@ change is done, for Rust and TypeScript.
   - `host-packaged-launch` starts the host with no argv, from an unrelated
     working directory, with the bundle beside the executable. Its bundles
     open no window, so it needs no display.
+- **`test-support` feature**: gates `inca-host`'s `Harness` and `snapshot`
+  and enables gpui's test platform. The root `tests/` dev-dependency turns it
+  on. Its unit tests are in `crates/inca-host/src/harness.rs` and
+  `snapshot.rs`.
 - **Console tests**: console behaviour is unit-tested beside the code in
   `crates/inca-jsenv/src`. Timers are checked by the shape of the output.
   Colour is checked by exact SGR sequences and by stripping them.

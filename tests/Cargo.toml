@@ -18,7 +18,7 @@ publish = false
 [dev-dependencies]
 inca-bridge = { path = "../crates/inca-bridge" }
 inca-gpui = { path = "../crates/inca-gpui" }
-inca-host = { path = "../crates/inca-host" }
+inca-host = { path = "../crates/inca-host", features = ["test-support"] }
 inca-jsenv = { path = "../crates/inca-jsenv" }
 rquickjs.workspace = true
 serde_json.workspace = true

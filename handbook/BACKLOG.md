@@ -985,3 +985,41 @@ A fixed entry is deleted and its ID is never reused.
   `Value::as_proxy` returns `None` for a proxy whose target is callable, so
   `proxy_target` keeps one `unsafe` block. A fix in rquickjs would remove
   both.
+
+- **B-106 Expose the app session to a framework test environment**
+  `Units: host · Size: M · Impact: Low`
+
+  A test environment that app authors use needs mocks and direct event
+  firing. `Session` stays private until that environment is designed, and
+  `Harness` covers what the host's own tests need.
+
+- **B-107 A test protocol and Locator library for Playwright**
+  `Units: host,cli · Size: L · Impact: Low`
+
+  `snapshot`, `click`, `type` and `waitIdle` over a host protocol, plus a
+  Node Locator library (`getByText`, `getByTestId`, auto-wait) under
+  `@playwright/test`. Decide it together with B-005, which keeps the shipped
+  binary's protocol surface small.
+
+- **B-108 Screenshots in tests**
+  `Units: host,ci · Size: L · Impact: Low`
+
+  gpui renders headless on macOS only, and Linux has no offscreen renderer.
+  Image comparison such as `toMatchSnapshot` needs one.
+
+- **B-109 Role and accessible-name queries**
+  `Units: gpui,host · Size: M · Impact: Low`
+
+  gpui's accessibility tree stays inactive under the test platform. Role
+  and name locators need it, or a role derived from the tree.
+
+- **B-110 Real text shaping in the harness on macOS**
+  `Units: host · Size: S · Impact: Low`
+
+  Linux uses the platform text system headless. macOS needs a direct text
+  system, so text widths there come from the fake one.
+
+- **B-111 Text nodes have no bounds in a snapshot**
+  `Units: gpui,host · Size: S · Impact: Low`
+
+  Text leaves carry no selector, so a snapshot gives them no bounds.

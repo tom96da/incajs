@@ -147,7 +147,7 @@ pub(crate) fn window_size(
 /// listener or callback survives a reload.
 pub(crate) struct Session {
     pub(crate) engine: Rc<Engine>,
-    host: Rc<RefCell<Host>>,
+    pub(crate) host: Rc<RefCell<Host>>,
     pub(crate) dispatcher: EventDispatcher,
 }
 

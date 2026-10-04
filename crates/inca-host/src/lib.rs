@@ -10,4 +10,9 @@ mod dev;
 mod menu;
 mod protocol;
 
+#[cfg(any(test, feature = "test-support"))]
+pub mod harness;
+#[cfg(any(test, feature = "test-support"))]
+pub mod snapshot;
+
 pub use app::{bundle_beside_exe, run_bundle};
