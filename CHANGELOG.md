@@ -10,12 +10,18 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Changed
+
+- the host binary is about 50% smaller ([28c6b3c](https://github.com/tom96da/incajs/commit/28c6b3c), [6b5b423](https://github.com/tom96da/incajs/commit/6b5b423))
+
 ### Fixed
 
 - a failed HMR update prints the same message and error code as a failed rebuild ([d998c2a](https://github.com/tom96da/incajs/commit/d998c2a))
 - `console` prints a getter or setter as `[Getter]` or `[Setter]` and a `Proxy` as its target, with their code left idle ([2df1df1](https://github.com/tom96da/incajs/commit/2df1df1))
 - `console` prints array holes as `<1 empty item>` and arrays of any length ([2df1df1](https://github.com/tom96da/incajs/commit/2df1df1))
 - `console` quotes a key that is not an identifier and keeps the sign of `-0` under `%d` and `%s` ([2df1df1](https://github.com/tom96da/incajs/commit/2df1df1))
+- `movementX`/`movementY` are measured from the last pointer move, and a `mouseenter` or `mouseleave` that no move caused reports 0 ([aa9567c](https://github.com/tom96da/incajs/commit/aa9567c))
+- `inca dev` keeps running when the config or the entry fails before the first build, prints the error, and retries on the next save ([bfd2282](https://github.com/tom96da/incajs/commit/bfd2282))
 
 ## [0.0.9] - 2026-10-03
 
