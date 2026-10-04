@@ -10,6 +10,13 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Fixed
+
+- a failed HMR update prints the same message and error code as a failed rebuild ([d998c2a](https://github.com/tom96da/incajs/commit/d998c2a))
+- `console` prints a getter or setter as `[Getter]` or `[Setter]` and a `Proxy` as its target, with their code left idle ([2df1df1](https://github.com/tom96da/incajs/commit/2df1df1))
+- `console` prints array holes as `<1 empty item>` and arrays of any length ([2df1df1](https://github.com/tom96da/incajs/commit/2df1df1))
+- `console` quotes a key that is not an identifier and keeps the sign of `-0` under `%d` and `%s` ([2df1df1](https://github.com/tom96da/incajs/commit/2df1df1))
+
 ## [0.0.9] - 2026-10-03
 
 ### Added
