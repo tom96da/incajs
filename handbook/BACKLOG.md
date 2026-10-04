@@ -1020,3 +1020,23 @@ A fixed entry is deleted and its ID is never reused.
   gives every event a single identity and removes the inference and the edge
   case. It also takes over `stopPropagation` and `preventDefault` from GPUI.
   Decide it with the first adapter other than Vue.
+
+- **B-113 A failed rebuild in `inca dev` prints the same error twice**
+  `Units: cli · Size: S · Impact: Low`
+
+  Renaming a source file during `inca dev` prints the same build failure
+  twice, once for each rebuild the rename starts.
+
+- **B-114 `inca dev` mixes the bundler's output with its own lines**
+  `Units: cli · Size: S · Impact: Low`
+
+  A failed rebuild prints the bundler's `build started...` line and its boxed
+  error frame between the stamped `[inca]` lines, so one failure appears in
+  two output styles.
+
+- **B-115 The config loader's `jiti` hint suggests an unneeded install**
+  `Units: cli · Size: S · Impact: Low`
+
+  When a config file fails to load, `c12` appends `Hint install jiti for
+  compatibility` to the file's own error, such as a syntax error. The hint
+  suggests a package that does not apply to the failure.
