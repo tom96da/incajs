@@ -130,8 +130,14 @@ and event name. Payloads and author-facing behaviour are in
 #### Event object
 
 - One object is shared by all callbacks on a node for one event:
-  `{ type, target, currentTarget, ...payload }`. `target` equals
+  `{ type, target, currentTarget, eventId, ...payload }`. `target` equals
   `currentTarget`.
+- `eventId` is a number that grows with each event. Every node of one event
+  name within one input carries the same value, so an adapter can tell
+  whether two calls belong to one event. A dispatch with no input behind it,
+  such as `focus`/`blur` after a focus change, takes a new value per event
+  name. One engine has one counter, shared by all its dispatchers, and it
+  restarts at 1 with a new engine.
 - Methods: `stopPropagation`, `stopImmediatePropagation`, `preventDefault`.
 - GPUI's `platform` modifier becomes `metaKey`. `function` is dropped.
 

@@ -1,10 +1,11 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { createRenderer, h, onErrorCaptured } from "@vue/runtime-core";
+import { createRenderer, h, nextTick, onErrorCaptured, ref } from "@vue/runtime-core";
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import type { ComponentInternalInstance } from "@vue/runtime-core";
 
+import * as events from "../events.mts";
 import { createNodeOps } from "./nodeOps.mts";
 import { createPatchProp } from "./patchProp.mts";
 import type { IncaCore } from "../rendererCore.mts";
@@ -20,6 +21,7 @@ const core: IncaCore = {
   setEventListener:
     vi.fn<(nodeId: number, event: string, listener: (...args: unknown[]) => void) => void>(),
   removeEventListener: vi.fn<(nodeId: number, event: string) => void>(),
+  latestEventId: vi.fn<() => number>(() => 0),
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   setStyle: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   removeStyle: vi.fn<(nodeId: number, key: string) => void>(),
@@ -1227,5 +1229,224 @@ describe("with a production build of Vue", () => {
     expect(() => dispatch()).not.toThrow();
     expect(errorHandler).toHaveBeenCalledTimes(1);
     expect(error).not.toHaveBeenCalled();
+  });
+});
+
+describe("a listener attached while an event is handled", () => {
+  let latest = 0;
+  const set = (key: string, value: unknown, target = el): void =>
+    patchProp(target, key, null, value, undefined, null);
+  // Delivers event `id` to the newest registration for (nodeId, "click").
+  const send = (id: number | undefined, nodeId = 1): void => {
+    if (id !== undefined) latest = Math.max(latest, id);
+    const calls = vi.mocked(core.setEventListener).mock.calls;
+    calls.findLast(([target, name]) => target === nodeId && name === "click")![2](
+      id === undefined ? {} : { eventId: id },
+    );
+  };
+  const spy = () => vi.fn<() => void>();
+
+  beforeEach(() => {
+    latest = 0;
+    vi.mocked(core.latestEventId).mockImplementation(() => latest);
+  });
+  afterEach(() => {
+    vi.mocked(core.latestEventId).mockImplementation(() => 0);
+  });
+
+  it("is skipped for that event and runs for the next", () => {
+    const late = spy();
+    latest = 5;
+    set("onClick", late);
+    send(5);
+    expect(late).not.toHaveBeenCalled();
+    send(6);
+    expect(late).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs for an event after the one that was latest when it was attached", () => {
+    const early = spy();
+    latest = 4;
+    set("onClick", early);
+    send(5);
+    expect(early).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs for the first event when it was attached before any event", () => {
+    const early = spy();
+    set("onClick", early);
+    send(1);
+    expect(early).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs for an event with no eventId", () => {
+    const late = spy();
+    latest = 5;
+    set("onClick", late);
+    send(undefined);
+    expect(late).toHaveBeenCalledTimes(1);
+  });
+
+  it("is skipped while an older listener on the same event still runs", () => {
+    const old = spy();
+    const late = spy();
+    latest = 4;
+    set("onClick", old);
+    latest = 5;
+    set("onClickPassive", late);
+    send(5);
+    expect(old).toHaveBeenCalledTimes(1);
+    expect(late).not.toHaveBeenCalled();
+  });
+
+  it("skips every function of an array value", () => {
+    const [a, b] = [spy(), spy()];
+    latest = 5;
+    set("onClick", [a, b]);
+    send(5);
+    expect(a).not.toHaveBeenCalled();
+    expect(b).not.toHaveBeenCalled();
+    send(6);
+    expect(a).toHaveBeenCalledTimes(1);
+    expect(b).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps its attach point when a re-render replaces its function", () => {
+    const first = spy();
+    const next = spy();
+    latest = 4;
+    set("onClick", first);
+    latest = 5;
+    set("onClick", next);
+    send(5);
+    expect(first).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledTimes(1);
+
+    const late = spy();
+    const replaced = spy();
+    set("onClickPassive", late);
+    set("onClickPassive", replaced);
+    send(5);
+    expect(late).not.toHaveBeenCalled();
+    expect(replaced).not.toHaveBeenCalled();
+    send(6);
+    expect(replaced).toHaveBeenCalledTimes(1);
+  });
+
+  it("stays unspent when it is a .once listener, and fires once for the next event", () => {
+    const once = spy();
+    latest = 5;
+    set("onClickOnce", once);
+    send(5);
+    expect(once).not.toHaveBeenCalled();
+    expect(core.removeEventListener).not.toHaveBeenCalled();
+    send(6);
+    send(7);
+    expect(once).toHaveBeenCalledTimes(1);
+    expect(core.removeEventListener).toHaveBeenCalledExactlyOnceWith(1, "click");
+  });
+
+  it("is skipped when a handler on the same element attaches it", () => {
+    const late = spy();
+    latest = 4;
+    set("onClick", () => set("onClickPassive", late));
+    send(5);
+    send(5);
+    expect(late).not.toHaveBeenCalled();
+    send(6);
+    expect(late).toHaveBeenCalledTimes(1);
+  });
+
+  it("is judged against the event being dispatched when dispatches nest", () => {
+    const [attachedOuter, attachedInner] = [spy(), spy()];
+    let depth = 0;
+    latest = 4;
+    set("onClick", () => {
+      if (depth++ > 0) return set("onClickCapture", attachedInner);
+      set("onClickPassive", attachedOuter);
+      send(6);
+    });
+    send(5);
+    expect(attachedOuter).toHaveBeenCalledTimes(1);
+    expect(attachedInner).not.toHaveBeenCalled();
+    send(6);
+    expect(attachedInner).not.toHaveBeenCalled();
+    send(7);
+    expect(attachedInner).toHaveBeenCalledTimes(1);
+  });
+
+  it("is skipped by the ancestor dispatch of the event whose handler caused the re-render", async () => {
+    let id = 1;
+    vi.mocked(core.createNode).mockImplementation(() => ++id);
+    const renderer = createRenderer({ ...createNodeOps(core), patchProp });
+    const armed = ref(false);
+    const onAncestor = spy();
+    const App = {
+      render: () =>
+        h("view", { onClick: armed.value ? onAncestor : undefined }, [
+          h("view", { onClick: () => (armed.value = true) }),
+        ]),
+    };
+    renderer.createApp(App).mount(el);
+    const ancestor = 2;
+    const child = 3;
+
+    // The host runs the child, drains jobs, then runs the ancestor.
+    send(1, child);
+    await nextTick();
+    send(1, ancestor);
+    expect(onAncestor).not.toHaveBeenCalled();
+
+    send(2, child);
+    await nextTick();
+    send(2, ancestor);
+    expect(onAncestor).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("with the event tracker of the events layer", () => {
+  const addEventListener = vi.fn<(nodeId: number, event: string, callbackId: number) => void>();
+  const real = createPatchProp({
+    ...core,
+    setEventListener: events.setEventListener,
+    removeEventListener: events.removeEventListener,
+    latestEventId: events.latestEventId,
+  });
+  const other = { ...makeEl(), id: 2 };
+
+  beforeEach(() => {
+    addEventListener.mockClear();
+    globalThis.__inca_native__ = {
+      addEventListener,
+      removeEventListener: vi.fn<() => boolean>(() => true),
+    } as never;
+  });
+  afterEach(() => {
+    delete (globalThis as { __inca_native__?: unknown }).__inca_native__;
+  });
+
+  // Delivers event `eventId` to the newest registration for `nodeId`.
+  const send = (nodeId: number, eventId: number): void => {
+    const [, , callbackId] = addEventListener.mock.calls.findLast(([id]) => id === nodeId)!;
+    globalThis.__inca_callbacks__[callbackId]!({ eventId });
+  };
+
+  it("skips a listener attached by an earlier node's handler until the next event", () => {
+    const late = vi.fn<() => void>();
+    const event = events.latestEventId() + 1;
+    real(
+      el,
+      "onClick",
+      null,
+      () => real(other, "onClick", null, late, undefined, null),
+      undefined,
+      null,
+    );
+
+    send(1, event);
+    send(2, event);
+    expect(late).not.toHaveBeenCalled();
+    send(2, event + 1);
+    expect(late).toHaveBeenCalledTimes(1);
   });
 });

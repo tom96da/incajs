@@ -37,9 +37,9 @@ A fixed entry is deleted and its ID is never reused.
   once from the default hook on stderr, and once as the `-32603` line the CLI
   prints. A host thread blocked writing to a stalled stdout pipe holds the
   hook, though the panic text has already reached stderr. In a production
-  build an error an event handler throws reaches only the console, not the
-  host's report, so the destination also decides whether it carries those.
-  It is the first half of the crash reporting in
+  build an error an event handler throws is logged to the console only, so the
+  destination also decides whether it carries those. It is the first half of
+  the crash reporting in
   [ROADMAP.md](./ROADMAP.md#known-gaps-not-yet-scheduled); the destination is
   undecided.
 
@@ -856,14 +856,6 @@ A fixed entry is deleted and its ID is never reused.
   - `%s`, `%d`, `%i` and `%f` convert an array that holds a `Proxy` through
     the array's own string form, which runs the `Proxy`'s traps.
 
-- **B-091 A handler attached during an event can fire for that same event**
-  `Units: core · Size: S · Impact: Low`
-
-  Vue's DOM renderer drops a handler attached after the event began, using the
-  `_vts` and `attached` timestamps in `runtime-dom`'s `events.ts`. `patchProp`
-  has no such check, so a handler attached to an ancestor by the re-render
-  that a child's handler triggers fires for the same event.
-
 - **B-092 Event props differ from Vue's in name and value handling**
   `Units: core · Size: S · Impact: Low`
 
@@ -1011,3 +1003,20 @@ A fixed entry is deleted and its ID is never reused.
   `Units: gpui,host · Size: S · Impact: Low`
 
   Text leaves carry no selector, so a snapshot gives them no bounds.
+
+- **B-112 Event identity is inferred from GPUI's per-node callbacks**
+  `Units: bridge,gpui · Size: L · Impact: Low`
+
+  GPUI calls the host once per node, so the host reconstructs each event:
+  `eventId` is one number per event name per input, and the end of an input is
+  the next `cx.defer`. A handler attached during a `mouseup` for the `click`
+  of the same input can be skipped, because GPUI dispatches a child's `click`
+  before its `mouseup`. A handler attached by a `mouseenter` handler runs for
+  the `mousemove` of the same move, because hover is dispatched first inside
+  that input and the `mousemove` name gets a later id. Two focus transitions
+  in one update (JS calls `focus()` inside a handler) share the `focus` id, so
+  a handler attached during the first is skipped for the second. A host that
+  builds one event, then walks the path and runs capture and bubble itself,
+  gives every event a single identity and removes the inference and the edge
+  case. It also takes over `stopPropagation` and `preventDefault` from GPUI.
+  Decide it with the first adapter other than Vue.

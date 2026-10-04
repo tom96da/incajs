@@ -156,6 +156,8 @@ function onClick(event) {
 Every listener runs in the bubble phase; there's no way yet to listen
 during the capture phase.
 
+A listener added while an event is being handled first runs for the next event.
+
 ## Event modifiers
 
 Vue's template event modifiers — `v-on:click.once`, `.passive`,

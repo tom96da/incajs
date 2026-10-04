@@ -21,6 +21,7 @@ const core: IncaCore = {
   setEventListener:
     vi.fn<(nodeId: number, event: string, listener: (...args: unknown[]) => void) => void>(),
   removeEventListener: vi.fn<(nodeId: number, event: string) => void>(),
+  latestEventId: vi.fn<() => number>(() => 0),
   destroyNode: vi.fn<(nodeId: number) => void>(),
   focus: vi.fn<(nodeId: number) => void>(),
   blur: vi.fn<(nodeId: number) => void>(),

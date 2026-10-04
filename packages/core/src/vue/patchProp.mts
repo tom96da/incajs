@@ -110,7 +110,10 @@ function guardStop(args: unknown[], body: (stopped: () => boolean) => void): voi
 }
 
 // A fired `.once` slot stays as a tombstone until its prop key is removed.
+// `attachedAt` is the newest `eventId` seen when the slot was created; the
+// slot skips that event and every older one.
 interface Slot {
+  attachedAt: number;
   handlers: EventListener[];
   instance: ComponentInternalInstance | null;
   once: boolean;
@@ -148,13 +151,15 @@ function createEntry(core: IncaCore, el: IncaElement, event: string): Entry {
     registered: false,
     dispatcher: (...args) => {
       const errors: unknown[] = [];
+      const eventId = (args[0] as { eventId?: unknown } | null | undefined)?.eventId;
       guardStop(args, (stopped) => {
         // A slot removed by an earlier handler is skipped; one patched keeps its
-        // place; one added meanwhile waits for the next dispatch.
+        // place; one attached during this event waits for the next event.
         for (const key of Array.from(entry.slots.keys())) {
           if (stopped()) break;
           const slot = entry.slots.get(key);
           if (!slot || slot.fired) continue;
+          if (typeof eventId === "number" && slot.attachedAt >= eventId) continue;
           // Retire a `.once` slot before it runs, so a synchronous re-dispatch can't re-enter.
           if (slot.once) {
             slot.fired = true;
@@ -215,7 +220,13 @@ function patchEvent(
     return;
   }
 
-  entry.slots.set(rawKey, { handlers, instance, once, fired: false });
+  entry.slots.set(rawKey, {
+    attachedAt: core.latestEventId(),
+    handlers,
+    instance,
+    once,
+    fired: false,
+  });
   try {
     sync(core, el, event, entry);
   } catch (error) {
@@ -227,38 +238,51 @@ function patchEvent(
 
 /**
  * {@link RendererOptions.patchProp} — applies one changed `v-bind`/
- * attribute/event prop to a host element:
+ * attribute/event prop to a host element.
  *
- * - `style` (an object, per `:style="{...}"`) is diffed against the entries
- *   already sent for this element. `core.setStyle` runs for each entry that
- *   is new or changed. `core.removeStyle` runs for each sent entry that is now
- *   absent, `null`, or not a string/number. A string or `null` `style`
- *   removes every entry.
- * - An `onXxx` key registers `nextValue` as a listener for `xxx`, taking a
- *   function or an array of them, and unbinds that key's listener for
- *   anything else. Each distinct key (`onClick`, `onClickOnce`) is its own
- *   listener; they run in the order first registered, a re-patch keeps its
- *   place, and the host sees one registration per element and event. A
- *   `.once` listener that has fired stays spent until its key is removed.
- *   `stopImmediatePropagation()` stops the listeners after it. A
- *   trailing `Once`/`Passive`/`Capture` suffix (from Vue's `.once`/
- *   `.passive`/`.capture` modifiers) is stripped first; `.once` really
- *   removes the listener after it fires once, while `.passive`/`.capture`
- *   bind as an ordinary listener with no native passive/capture-phase
- *   support yet. See {@link EventListener} for which event names are wired
- *   to real input by the native host today; other names are accepted but
- *   never fire. An error a handler throws, or a rejection of an async
- *   handler, goes to the `onErrorCaptured` hooks and the app's
- *   `errorHandler`. Every handler of an event runs even when an earlier one
- *   fails, until one calls `stopImmediatePropagation()`. An error that no
- *   hook or `errorHandler` takes is logged to the console in a production
- *   build, or raised to the host's error report when
- *   `throwUnhandledErrorInProduction` is set. A development build warns and
- *   raises it to the host's error report, once per failing handler.
- * - Everything else falls through to `core.setAttribute`, again skipping
- *   a non-string/number/boolean value rather than passing it through.
+ * ### `style`
  *
- * Removing any other prop (a `null`/`undefined` `nextValue`) leaves it as-is.
+ * An object (per `:style="{...}"`) is diffed against the entries already
+ * sent for this element.
+ * - `core.setStyle` runs for each entry that is new or changed.
+ * - `core.removeStyle` runs for each sent entry that is now absent, `null`,
+ *   or not a string/number.
+ * - A string or `null` `style` removes every entry.
+ *
+ * ### `onXxx`
+ *
+ * The key registers `nextValue` as a listener for `xxx`, taking a function
+ * or an array of them, and unbinds that key's listener for anything else.
+ * - Order: each distinct key (`onClick`, `onClickOnce`) is its own listener.
+ *   They run in the order first registered, a re-patch keeps its place, and
+ *   the host sees one registration per element and event.
+ * - Propagation: `stopImmediatePropagation()` stops the listeners after it.
+ * - Timing: a listener attached while an event is being handled first runs
+ *   for the next event; events are told apart by the `eventId` the host puts
+ *   on each one.
+ * - Modifiers: a trailing `Once`/`Passive`/`Capture` suffix (from Vue's
+ *   `.once`/`.passive`/`.capture` modifiers) is stripped first. `.once`
+ *   really removes the listener after it fires once, and a listener that has
+ *   fired stays spent until its key is removed. `.passive`/`.capture` bind
+ *   as an ordinary listener with no native passive/capture-phase support
+ *   yet.
+ * - Event names: see {@link EventListener} for which names are wired to real
+ *   input by the native host today; other names are accepted but never fire.
+ * - Errors: an error a handler throws, or a rejection of an async handler,
+ *   goes to the `onErrorCaptured` hooks and the app's `errorHandler`. Every
+ *   handler of an event runs even when an earlier one fails, until one calls
+ *   `stopImmediatePropagation()`. An error that no hook or `errorHandler`
+ *   takes is logged to the console in a production build, or raised to the
+ *   host's error report when `throwUnhandledErrorInProduction` is set. A
+ *   development build warns and raises it to the host's error report, once
+ *   per failing handler.
+ *
+ * ### Other props
+ *
+ * Everything else falls through to `core.setAttribute`, again skipping a
+ * non-string/number/boolean value rather than passing it through. Removing
+ * any other prop (a `null`/`undefined` `nextValue`) leaves it as-is.
+ *
  * @param core - the incajs bindings to drive the native tree through
  */
 export function createPatchProp(

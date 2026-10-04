@@ -76,6 +76,11 @@ pub struct EventDispatcher {
     /// stopped. Later `wheel` dispatches skip their callbacks, and GPUI's own
     /// bubble carries on so a scroll container still scrolls.
     wheel_stopped: Rc<Cell<bool>>,
+    /// Last number handed out as an `eventId`.
+    last_event_id: Rc<Cell<u64>>,
+    /// The `eventId` of each event name dispatched during the input being
+    /// handled now. Emptied when that input's update ends.
+    current_event_ids: Rc<RefCell<HashMap<String, u64>>>,
     /// The scroll state of every scrolling container, created on first ask.
     scroll_handles: Rc<RefCell<HashMap<NodeId, ScrollHandle>>>,
 }
@@ -91,6 +96,8 @@ impl EventDispatcher {
             last_position: Rc::new(Cell::new(None)),
             current_movement: Rc::new(Cell::new(None)),
             wheel_stopped: Rc::new(Cell::new(false)),
+            last_event_id: Rc::new(Cell::new(0)),
+            current_event_ids: Rc::new(RefCell::new(HashMap::new())),
             scroll_handles: Rc::new(RefCell::new(HashMap::new())),
         }
     }
@@ -117,6 +124,25 @@ impl EventDispatcher {
                     .is_empty()
             })
             .fold(EventMask::NONE, |mask, kind| mask | kind.mask())
+    }
+
+    /// Returns the `eventId` for `event`. The first dispatch of a name during
+    /// one input takes the next number and later dispatches of that name
+    /// during the same input reuse it. The numbers are forgotten when the
+    /// input's update ends.
+    fn event_id(&self, event: &str, cx: &mut App) -> u64 {
+        let mut ids = self.current_event_ids.borrow_mut();
+        if let Some(id) = ids.get(event) {
+            return *id;
+        }
+        let id = self.last_event_id.get() + 1;
+        self.last_event_id.set(id);
+        if ids.is_empty() {
+            let current = Rc::clone(&self.current_event_ids);
+            cx.defer(move |_| current.borrow_mut().clear());
+        }
+        ids.insert(event.to_owned(), id);
+        id
     }
 
     /// Returns `payload` with its `buttons` bitmask corrected against
@@ -193,8 +219,13 @@ impl EventDispatcher {
 
     /// Calls every JS callback registered for `(node_id, event)` (via
     /// `__inca_native__.addEventListener`), passing one shared object shaped
-    /// `{ type, target, currentTarget, ...payload }` plus DOM's three
+    /// `{ type, target, currentTarget, eventId, ...payload }` plus DOM's three
     /// propagation methods, then drains the job queue and requests a redraw.
+    ///
+    /// `eventId` identifies the event. Every node dispatched for one event
+    /// name within one input carries the same number, and a later input gets
+    /// a larger one. A dispatch that no input produced, such as the `focus`
+    /// and `blur` of a focus change, takes a new number per event name.
     ///
     /// `target` and `currentTarget` are both `node_id`. `currentTarget` (the
     /// node this call is dispatching for) is exact; `target` is only an
@@ -235,6 +266,7 @@ impl EventDispatcher {
         let payload = self.with_held_buttons(event, payload);
         let payload = self.with_movement(&payload, event);
         let payload = &payload;
+        let event_id = self.event_id(event, cx);
 
         let stop_propagation = Rc::new(Cell::new(false));
         let stop_immediate = Rc::new(Cell::new(false));
@@ -257,6 +289,10 @@ impl EventDispatcher {
                 &stop_immediate,
                 &prevent_default,
             );
+            let event_object = event_object.and_then(|object| {
+                object.set("eventId", event_id)?;
+                Ok(object)
+            });
             let event_object = match event_object {
                 Ok(event_object) => event_object,
                 Err(err) => {

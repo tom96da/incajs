@@ -178,3 +178,94 @@ fn a_key_up_also_bubbles_from_the_focused_node(cx: &mut TestAppContext) {
         format!(r#"["keyup:{child}:a","keyup:{parent}:a"]"#)
     );
 }
+
+#[gpui::test]
+fn a_key_event_and_its_bubble_share_an_event_id_and_the_next_key_gets_a_higher_one(
+    cx: &mut TestAppContext,
+) {
+    let (host, parent, child) = build_key_pair();
+    let engine = Rc::new(Engine::new().unwrap());
+    engine
+        .eval::<()>(
+            "globalThis.seen = []; \
+             globalThis.__inca_callbacks__ = { \
+                0: (event) => { globalThis.seen.push(event.eventId); } \
+             };",
+        )
+        .unwrap();
+    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
+    let window = cx.add_window(|_, _| KeyableRoot {
+        host: Rc::clone(&host),
+        node: parent,
+        dispatcher,
+    });
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    cx.update_window(window.into(), |_, window, _cx| window.activate_window())
+        .unwrap();
+    cx.update_window(window.into(), |_root, window, cx| {
+        host.borrow_mut().focus.request_focus(child);
+        window.draw(cx).clear(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    engine.eval::<()>("globalThis.seen = [];").unwrap();
+
+    cx.simulate_keystrokes(window.into(), "a");
+    cx.simulate_keystrokes(window.into(), "b");
+
+    let seen: Vec<u64> = serde_json::from_str(
+        &engine
+            .eval::<String>("JSON.stringify(globalThis.seen)")
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(seen.len(), 4);
+    assert_eq!(seen[0], seen[1]);
+    assert_eq!(seen[2], seen[3]);
+    assert!(seen[2] > seen[0]);
+}
+
+#[gpui::test]
+fn a_repeated_key_gets_a_new_event_id_each_time(cx: &mut TestAppContext) {
+    let (host, parent, child) = build_key_pair();
+    let engine = Rc::new(Engine::new().unwrap());
+    engine
+        .eval::<()>(
+            "globalThis.seen = []; \
+             globalThis.__inca_callbacks__ = { \
+                0: (event) => { globalThis.seen.push(event.eventId); } \
+             };",
+        )
+        .unwrap();
+    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
+    let window = cx.add_window(|_, _| KeyableRoot {
+        host: Rc::clone(&host),
+        node: parent,
+        dispatcher,
+    });
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    cx.update_window(window.into(), |_, window, _cx| window.activate_window())
+        .unwrap();
+    cx.update_window(window.into(), |_root, window, cx| {
+        host.borrow_mut().focus.request_focus(child);
+        window.draw(cx).clear(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    engine.eval::<()>("globalThis.seen = [];").unwrap();
+
+    cx.simulate_keystrokes(window.into(), "a a");
+
+    let seen: Vec<u64> = serde_json::from_str(
+        &engine
+            .eval::<String>("JSON.stringify(globalThis.seen)")
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(seen.len(), 4);
+    assert_eq!(seen[0], seen[1]);
+    assert_eq!(seen[2], seen[3]);
+    assert!(seen[2] > seen[0]);
+}

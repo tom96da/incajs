@@ -43,6 +43,13 @@ fn install_click_counter(engine: &Engine) {
         .unwrap();
 }
 
+/// The `eventId` of the event `install_click_counter` saw last, 0 if none.
+fn last_event_id(engine: &Engine) -> u64 {
+    engine
+        .eval::<u64>("globalThis.lastEvent?.eventId ?? 0")
+        .unwrap()
+}
+
 fn clicks(engine: &Engine) -> f64 {
     engine.eval::<f64>("globalThis.clicks || 0").unwrap()
 }
@@ -141,7 +148,7 @@ fn click_dispatches_to_js_exactly_once(cx: &mut TestAppContext) {
         engine
             .eval::<String>("JSON.stringify(globalThis.lastEvent)")
             .unwrap(),
-        format!(r#"{{"type":"click","target":{node},"currentTarget":{node}}}"#)
+        format!(r#"{{"type":"click","target":{node},"currentTarget":{node},"eventId":1}}"#)
     );
 }
 
@@ -350,7 +357,14 @@ fn mousedown_carries_dom_shaped_fields(cx: &mut TestAppContext) {
             .eval::<String>("JSON.stringify(globalThis.lastEvent)")
             .unwrap(),
         format!(
-            r#"{{"type":"mousedown","target":{node},"currentTarget":{node},"clientX":10,"clientY":20,"pageX":10,"pageY":20,"movementX":0,"movementY":0,"button":0,"buttons":1,"detail":1,"ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false}}"#
+            concat!(
+                r#"{{"type":"mousedown","target":{node},"currentTarget":{node},"#,
+                r#""clientX":10,"clientY":20,"pageX":10,"pageY":20,"#,
+                r#""movementX":0,"movementY":0,"button":0,"buttons":1,"detail":1,"#,
+                r#""ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false,"#,
+                r#""eventId":1}}"#
+            ),
+            node = node
         )
     );
 }
@@ -419,7 +433,15 @@ fn wheel_carries_dom_shaped_delta_fields(cx: &mut TestAppContext) {
             .eval::<String>("JSON.stringify(globalThis.lastEvent)")
             .unwrap(),
         format!(
-            r#"{{"type":"wheel","target":{node},"currentTarget":{node},"clientX":10,"clientY":10,"pageX":10,"pageY":10,"movementX":0,"movementY":0,"button":0,"buttons":0,"detail":0,"ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false,"deltaX":0,"deltaY":5,"deltaZ":0,"deltaMode":0}}"#
+            concat!(
+                r#"{{"type":"wheel","target":{node},"currentTarget":{node},"#,
+                r#""clientX":10,"clientY":10,"pageX":10,"pageY":10,"#,
+                r#""movementX":0,"movementY":0,"button":0,"buttons":0,"detail":0,"#,
+                r#""ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false,"#,
+                r#""deltaX":0,"deltaY":5,"deltaZ":0,"deltaMode":0,"#,
+                r#""eventId":1}}"#
+            ),
+            node = node
         )
     );
 }
@@ -685,6 +707,7 @@ fn mouseenter_carries_dom_shaped_fields(cx: &mut TestAppContext) {
         None::<MouseButton>,
         Modifiers::none(),
     );
+    let previous = last_event_id(&engine);
     engine.eval::<()>("globalThis.clicks = 0;").unwrap();
 
     cx.simulate_mouse_move(
@@ -696,12 +719,19 @@ fn mouseenter_carries_dom_shaped_fields(cx: &mut TestAppContext) {
     assert_eq!(clicks(&engine), 1.0);
     assert_eq!(
         engine
-            .eval::<String>("JSON.stringify(globalThis.lastEvent)")
+            .eval::<String>("JSON.stringify({ ...globalThis.lastEvent, eventId: undefined })")
             .unwrap(),
         format!(
-            r#"{{"type":"mouseenter","target":{node},"currentTarget":{node},"clientX":10,"clientY":20,"pageX":10,"pageY":20,"movementX":-190,"movementY":-180,"button":0,"buttons":0,"detail":0,"ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false}}"#
+            concat!(
+                r#"{{"type":"mouseenter","target":{node},"currentTarget":{node},"#,
+                r#""clientX":10,"clientY":20,"pageX":10,"pageY":20,"#,
+                r#""movementX":-190,"movementY":-180,"button":0,"buttons":0,"detail":0,"#,
+                r#""ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false}}"#
+            ),
+            node = node
         )
     );
+    assert!(last_event_id(&engine) > previous);
 }
 
 /// A node listening only for `mouseleave` doesn't spuriously fire it on
@@ -1542,4 +1572,235 @@ fn the_pointer_tracker_leaves_the_layout_unchanged(cx: &mut TestAppContext) {
     assert_eq!(a.origin, root.origin);
     assert_eq!(b.origin, point(px(100.0), px(0.0)));
     assert_eq!((panes.root, panes.a, panes.b), (1, 2, 3));
+}
+
+/// A parent over a child, both listening for `events`; callback 0 records
+/// `[type, currentTarget, eventId]` into `globalThis.seen`.
+fn mount_recording_pair(
+    cx: &mut TestAppContext,
+    events: &[&str],
+) -> (VisualTestContext, Rc<Engine>, NodeId, NodeId) {
+    let host = Rc::new(RefCell::new(Host::default()));
+    let (parent, child) = {
+        let mut host = host.borrow_mut();
+        let parent = host.tree.create_node("div");
+        host.tree.set_style(parent, "width", 100.0).unwrap();
+        host.tree.set_style(parent, "height", 100.0).unwrap();
+        let child = host.tree.create_node("div");
+        host.tree.set_style(child, "width", 100.0).unwrap();
+        host.tree.set_style(child, "height", 100.0).unwrap();
+        host.tree.append_child(parent, child).unwrap();
+        for event in events {
+            host.listeners.register(parent, *event, 0);
+            host.listeners.register(child, *event, 0);
+        }
+        (parent, child)
+    };
+    let engine = Rc::new(Engine::new().unwrap());
+    engine
+        .eval::<()>(
+            "globalThis.seen = []; \
+             globalThis.__inca_callbacks__ = { 0: (e) => { \
+                 globalThis.seen.push([e.type, e.currentTarget, e.eventId]); } };",
+        )
+        .unwrap();
+    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
+    let window = cx.add_window(|_, _| ClickableRoot {
+        host,
+        node: parent,
+        dispatcher,
+    });
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    (
+        VisualTestContext::from_window(window.into(), cx),
+        engine,
+        parent,
+        child,
+    )
+}
+
+fn take_ids(engine: &Engine) -> Vec<(String, NodeId, u64)> {
+    let seen = engine
+        .eval::<String>("JSON.stringify(globalThis.seen.splice(0))")
+        .unwrap();
+    serde_json::from_str(&seen).unwrap()
+}
+
+fn mouse_down(cx: &mut VisualTestContext) {
+    cx.simulate_mouse_down(
+        point(px(10.0), px(10.0)),
+        MouseButton::Left,
+        Modifiers::none(),
+    );
+}
+
+#[gpui::test]
+fn every_node_on_a_bubble_path_sees_the_same_event_id(cx: &mut TestAppContext) {
+    let (mut cx, engine, parent, child) = mount_recording_pair(cx, &["mousedown"]);
+
+    mouse_down(&mut cx);
+
+    assert_eq!(
+        take_ids(&engine),
+        [
+            ("mousedown".to_owned(), child, 1),
+            ("mousedown".to_owned(), parent, 1)
+        ]
+    );
+}
+
+#[gpui::test]
+fn each_input_event_gets_the_next_event_id(cx: &mut TestAppContext) {
+    let (mut cx, engine, _parent, _child) = mount_recording_pair(cx, &["mousedown"]);
+
+    mouse_down(&mut cx);
+    mouse_down(&mut cx);
+    mouse_down(&mut cx);
+
+    let ids: Vec<u64> = take_ids(&engine).iter().map(|seen| seen.2).collect();
+    assert_eq!(ids, [1, 1, 2, 2, 3, 3]);
+}
+
+#[gpui::test]
+fn a_click_has_its_own_event_id_after_its_mousedown(cx: &mut TestAppContext) {
+    let (mut cx, engine, _parent, child) = mount_recording_pair(cx, &["mousedown", "click"]);
+
+    cx.simulate_click(point(px(10.0), px(10.0)), Modifiers::none());
+
+    let seen = take_ids(&engine);
+    let of = |name: &str, node: NodeId| {
+        seen.iter()
+            .find(|entry| entry.0 == name && entry.1 == node)
+            .unwrap()
+            .2
+    };
+    assert!(of("click", child) > of("mousedown", child));
+}
+
+#[gpui::test]
+fn wheel_and_mouseenter_carry_an_event_id(cx: &mut TestAppContext) {
+    let (mut cx, engine, _parent, _child) = mount_recording_pair(cx, &["wheel", "mouseenter"]);
+    let entered = take_ids(&engine);
+    assert!(!entered.is_empty() && entered.iter().all(|seen| seen.2 >= 1));
+    let before = entered.iter().map(|seen| seen.2).max().unwrap();
+
+    cx.simulate_event(ScrollWheelEvent {
+        position: point(px(10.0), px(10.0)),
+        delta: ScrollDelta::Pixels(point(px(0.0), px(-5.0))),
+        ..Default::default()
+    });
+
+    let wheel = take_ids(&engine);
+    assert_eq!(wheel.len(), 2);
+    assert!(
+        wheel
+            .iter()
+            .all(|seen| seen.0 == "wheel" && seen.2 > before)
+    );
+    assert_eq!(wheel[0].2, wheel[1].2);
+}
+
+#[gpui::test]
+fn mouseup_and_click_each_keep_one_event_id_across_a_bubble_path(cx: &mut TestAppContext) {
+    let (mut cx, engine, parent, child) = mount_recording_pair(cx, &["mouseup", "click"]);
+
+    cx.simulate_click(point(px(10.0), px(10.0)), Modifiers::none());
+
+    let seen = take_ids(&engine);
+    let id_of = |name: &str, node: NodeId| {
+        seen.iter()
+            .find(|entry| entry.0 == name && entry.1 == node)
+            .map(|entry| entry.2)
+            .unwrap()
+    };
+    assert_eq!(seen.len(), 4);
+    assert_eq!(id_of("mouseup", child), id_of("mouseup", parent));
+    assert_eq!(id_of("click", child), id_of("click", parent));
+    assert_ne!(id_of("mouseup", child), id_of("click", child));
+}
+
+#[gpui::test]
+fn two_wheel_events_get_different_event_ids(cx: &mut TestAppContext) {
+    let (mut cx, engine, _parent, _child) = mount_recording_pair(cx, &["wheel"]);
+
+    for _ in 0..2 {
+        cx.simulate_event(ScrollWheelEvent {
+            position: point(px(10.0), px(10.0)),
+            delta: ScrollDelta::Pixels(point(px(0.0), px(-5.0))),
+            ..Default::default()
+        });
+    }
+
+    let ids: Vec<u64> = take_ids(&engine).iter().map(|seen| seen.2).collect();
+    assert_eq!(ids.len(), 4);
+    assert_eq!(ids[0], ids[1]);
+    assert_eq!(ids[2], ids[3]);
+    assert!(ids[2] > ids[0]);
+}
+
+#[gpui::test]
+fn mouseleave_carries_an_event_id_shared_along_its_bubble_path(cx: &mut TestAppContext) {
+    let (mut cx, engine, _parent, _child) = mount_recording_pair(cx, &["mouseleave"]);
+    take_ids(&engine);
+
+    cx.simulate_mouse_move(
+        point(px(200.0), px(200.0)),
+        None::<MouseButton>,
+        Modifiers::none(),
+    );
+
+    let seen = take_ids(&engine);
+    assert!(!seen.is_empty());
+    assert!(
+        seen.iter()
+            .all(|entry| entry.0 == "mouseleave" && entry.2 >= 1)
+    );
+    assert!(seen.iter().all(|entry| entry.2 == seen[0].2));
+}
+
+#[gpui::test]
+fn click_and_mouseup_alternate_down_the_bubble_path_with_one_id_per_name(cx: &mut TestAppContext) {
+    let (mut cx, engine, parent, child) = mount_recording_pair(cx, &["click", "mouseup"]);
+
+    cx.simulate_click(point(px(10.0), px(10.0)), Modifiers::none());
+
+    let seen = take_ids(&engine);
+    let order: Vec<(&str, NodeId)> = seen
+        .iter()
+        .map(|entry| (entry.0.as_str(), entry.1))
+        .collect();
+    assert_eq!(
+        order,
+        [
+            ("click", child),
+            ("mouseup", child),
+            ("click", parent),
+            ("mouseup", parent)
+        ]
+    );
+    assert_eq!(seen[0].2, seen[2].2);
+    assert_eq!(seen[1].2, seen[3].2);
+    assert_ne!(seen[0].2, seen[1].2);
+}
+
+#[gpui::test]
+fn a_moves_mousemove_gets_a_later_id_than_its_mouseenter(cx: &mut TestAppContext) {
+    let (mut cx, engine, _parent, _child) = mount_recording_pair(cx, &["mousemove", "mouseenter"]);
+    cx.simulate_mouse_move(
+        point(px(200.0), px(200.0)),
+        None::<MouseButton>,
+        Modifiers::none(),
+    );
+    take_ids(&engine);
+
+    cx.simulate_mouse_move(
+        point(px(10.0), px(10.0)),
+        None::<MouseButton>,
+        Modifiers::none(),
+    );
+
+    let seen = take_ids(&engine);
+    let first_of = |name: &str| seen.iter().find(|entry| entry.0 == name).unwrap().2;
+    assert!(first_of("mousemove") > first_of("mouseenter"));
 }

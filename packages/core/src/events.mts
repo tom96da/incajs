@@ -77,6 +77,26 @@ function createRegistrations(): Registrations {
 
 const registrations = createRegistrations();
 
+let latestId = 0;
+
+/**
+ * @returns the `eventId` of the newest event any registered listener has
+ * received, or 0 before the first. Ids grow with each input event, and every
+ * node dispatch of one event carries the same id.
+ */
+export function latestEventId(): number {
+  return latestId;
+}
+
+// Records the event's `eventId` before the listener runs.
+function tracking(listener: EventListener): EventListener {
+  return (...args) => {
+    const id = (args[0] as { eventId?: unknown } | null | undefined)?.eventId;
+    if (typeof id === "number" && id > latestId) latestId = id;
+    return listener(...args);
+  };
+}
+
 /**
  * Drops the JS half of every registration in `callbackIds`. The native half
  * is already gone by the time this runs — `destroyNode` takes both.
@@ -102,7 +122,7 @@ export function releaseCallbacks(callbackIds: readonly CallbackId[]): void {
  */
 export function setEventListener(nodeId: NodeId, event: string, listener: EventListener): void {
   removeEventListener(nodeId, event);
-  const callbackId = registrations.add(nodeId, event, listener);
+  const callbackId = registrations.add(nodeId, event, tracking(listener));
   try {
     native().addEventListener(nodeId, event, callbackId);
   } catch (error) {

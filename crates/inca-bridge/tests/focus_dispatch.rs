@@ -401,3 +401,100 @@ fn blur_node_of_a_node_that_is_not_focused_is_a_no_op(cx: &mut TestAppContext) {
         assert!(still_focused);
     }
 }
+
+#[gpui::test]
+fn focus_and_blur_each_carry_an_event_id_that_grows(cx: &mut TestAppContext) {
+    let (host, parent, a) = build_focusable_pair();
+    let b = host.borrow().tree.get(parent).unwrap().children()[1];
+    let engine = Rc::new(Engine::new().unwrap());
+    engine
+        .eval::<()>(
+            "globalThis.seen = []; \
+             globalThis.__inca_callbacks__ = { \
+                0: (event) => { globalThis.seen.push([event.type, event.eventId]); } \
+             };",
+        )
+        .unwrap();
+    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
+    let window = cx.add_window(|_, _| FocusableRoot {
+        host: Rc::clone(&host),
+        node: parent,
+        dispatcher,
+    });
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    cx.update_window(window.into(), |_, window, _cx| window.activate_window())
+        .unwrap();
+
+    for target in [a, b] {
+        cx.update_window(window.into(), |_root, window, cx| {
+            host.borrow_mut().focus.request_focus(target);
+            window.draw(cx).clear(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+    }
+
+    let seen: Vec<(String, u64)> = serde_json::from_str(
+        &engine
+            .eval::<String>("JSON.stringify(globalThis.seen)")
+            .unwrap(),
+    )
+    .unwrap();
+    let names: Vec<&str> = seen.iter().map(|entry| entry.0.as_str()).collect();
+    assert_eq!(names, ["focus", "blur", "focus"]);
+    assert!(seen[0].1 >= 1);
+    assert!(seen[1].1 > seen[0].1);
+    assert!(seen[2].1 > seen[1].1);
+}
+
+#[gpui::test]
+fn focus_requests_in_one_frame_share_a_focus_id_and_a_later_frame_gets_a_new_one(
+    cx: &mut TestAppContext,
+) {
+    let (host, parent, a) = build_focusable_pair();
+    let b = host.borrow().tree.get(parent).unwrap().children()[1];
+    let engine = Rc::new(Engine::new().unwrap());
+    engine
+        .eval::<()>(
+            "globalThis.seen = []; \
+             globalThis.__inca_callbacks__ = { \
+                0: (event) => { globalThis.seen.push([event.type, event.eventId]); } \
+             };",
+        )
+        .unwrap();
+    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
+    let window = cx.add_window(|_, _| FocusableRoot {
+        host: Rc::clone(&host),
+        node: parent,
+        dispatcher,
+    });
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    cx.update_window(window.into(), |_, window, _cx| window.activate_window())
+        .unwrap();
+
+    for targets in [vec![a, b], vec![a]] {
+        cx.update_window(window.into(), |_root, window, cx| {
+            for target in targets {
+                host.borrow_mut().focus.request_focus(target);
+            }
+            window.draw(cx).clear(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+    }
+
+    let seen: Vec<(String, u64)> = serde_json::from_str(
+        &engine
+            .eval::<String>("JSON.stringify(globalThis.seen)")
+            .unwrap(),
+    )
+    .unwrap();
+    let names: Vec<&str> = seen.iter().map(|entry| entry.0.as_str()).collect();
+    assert_eq!(names, ["focus", "blur", "focus", "blur", "focus"]);
+    assert_eq!(seen[0].1, seen[2].1, "same frame, same focus id");
+    assert_ne!(seen[0].1, seen[1].1);
+    assert!(seen[4].1 > seen[2].1, "a later frame takes a new focus id");
+    assert!(seen[3].1 > seen[2].1);
+}

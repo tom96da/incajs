@@ -49,7 +49,9 @@ describe("setEventListener's callback registry", () => {
     const [nodeId, event, callbackId] = native.addEventListener.mock.calls[0]!;
     expect(nodeId).toBe(1);
     expect(event).toBe("click");
-    expect(globalThis.__inca_callbacks__[callbackId]).toBe(listener);
+    const delivered = { type: "click" };
+    globalThis.__inca_callbacks__[callbackId]!(delivered);
+    expect(listener).toHaveBeenCalledExactlyOnceWith(delivered);
   });
 
   it("allocates a distinct id per registration", () => {
@@ -137,6 +139,40 @@ describe("destroyNode", () => {
 
     expect(native.removeEventListener).not.toHaveBeenCalled();
     expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(1);
+  });
+});
+
+describe("latestEventId", () => {
+  // A fresh module per test, so the tracker starts at 0.
+  let tracked: typeof import("./events.mts");
+  beforeEach(async () => {
+    vi.resetModules();
+    tracked = await import("./events.mts");
+  });
+
+  const fire = (event: unknown): void => {
+    const id = native.addEventListener.mock.calls.at(-1)![2];
+    globalThis.__inca_callbacks__[id]!(event);
+  };
+
+  it("tracks the highest eventId a listener has received, before it runs", () => {
+    const seen: number[] = [];
+    tracked.setEventListener(1, "click", () => seen.push(tracked.latestEventId()));
+    expect(tracked.latestEventId()).toBe(0);
+    fire({ eventId: 5 });
+    fire({ eventId: 7 });
+    fire({ eventId: 6 });
+
+    expect(seen).toEqual([5, 7, 7]);
+    expect(tracked.latestEventId()).toBe(7);
+  });
+
+  it("ignores an argument with no numeric eventId", () => {
+    tracked.setEventListener(1, "click", vi.fn());
+
+    for (const event of [undefined, null, 3, {}, { eventId: "9" }]) fire(event);
+
+    expect(tracked.latestEventId()).toBe(0);
   });
 });
 
