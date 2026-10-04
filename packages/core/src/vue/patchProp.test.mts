@@ -1,9 +1,11 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import { createRenderer, h, onErrorCaptured } from "@vue/runtime-core";
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import type { ComponentInternalInstance } from "@vue/runtime-core";
 
+import { createNodeOps } from "./nodeOps.mts";
 import { createPatchProp } from "./patchProp.mts";
 import type { IncaCore } from "../rendererCore.mts";
 import type { IncaElement } from "./nodeOps.mts";
@@ -744,17 +746,6 @@ describe("plain and .once listeners on one element", () => {
       expect(warn).toHaveBeenCalledWith(expect.stringContaining("Unhandled error"));
     });
 
-    it("rethrows a failing handler's error to the host when several fail", () => {
-      const second = new Error("second");
-      set("onClick", throwing);
-      set("onClickOnce", () => {
-        throw second;
-      });
-
-      expect(() => fire()).toThrow(boom);
-      expect(warn).toHaveBeenCalledTimes(2);
-    });
-
     it("still retires a throwing once handler", () => {
       const plain = vi.fn<() => void>();
       set("onClickOnce", throwing);
@@ -827,35 +818,253 @@ describe("errors thrown by an event handler", () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("Unhandled error"));
   });
 
-  it("calls onErrorCaptured hooks up the parent chain", () => {
-    const hook = vi.fn<() => boolean>(() => false);
-    const child = instanceWith();
-    (child as unknown as { parent: unknown }).parent = { ec: [hook], parent: null };
-    patchProp(el, "onClick", null, throwing, undefined, child);
+  describe("onErrorCaptured hooks", () => {
+    const withHook = (hook: () => boolean | void): ComponentInternalInstance => {
+      const child = instanceWith();
+      (child as unknown as { parent: unknown }).parent = { ec: [hook], parent: null };
+      return child;
+    };
 
-    const registered = vi.mocked(core.setEventListener).mock.calls[0]![2];
-    expect(() => registered()).toThrow(boom);
-    expect(hook).toHaveBeenCalledWith(boom, undefined, "native event handler");
+    it("receives the error up the parent chain and a false return suppresses the report", () => {
+      const hook = vi.fn<() => boolean>(() => false);
+      patchProp(el, "onClick", null, throwing, undefined, withHook(hook));
+
+      const registered = vi.mocked(core.setEventListener).mock.calls[0]![2];
+      expect(() => registered()).not.toThrow();
+      expect(hook).toHaveBeenCalledWith(boom, undefined, "native event handler");
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it("reports to the host when the hook does not return false", () => {
+      patchProp(
+        el,
+        "onClick",
+        null,
+        throwing,
+        undefined,
+        withHook(() => {}),
+      );
+
+      const registered = vi.mocked(core.setEventListener).mock.calls[0]![2];
+      expect(() => registered()).toThrow(boom);
+    });
   });
 
-  it("rethrows a failing handler's error to the host when an array of handlers fails", () => {
+  describe("several handlers", () => {
     const second = new Error("second");
-    patchProp(
-      el,
-      "onClick",
-      null,
-      [
-        throwing,
-        () => {
-          throw second;
-        },
-      ],
-      undefined,
-      instanceWith(),
-    );
+    const third = new Error("third");
+    const secondThrowing = (): void => {
+      throw second;
+    };
+    const thirdThrowing = (): void => {
+      throw third;
+    };
+    const unhandled = vi.fn<(reason: unknown) => void>();
+    beforeEach(() => {
+      unhandled.mockClear();
+      process.on("unhandledRejection", unhandled);
+    });
+    afterEach(() => {
+      process.off("unhandledRejection", unhandled);
+    });
+    const reasons = (): unknown[] => unhandled.mock.calls.map(([reason]) => reason);
+    const settle = (): Promise<unknown> => new Promise((resolve) => setTimeout(resolve, 0));
+    const registerWith = (
+      value: unknown,
+      instance = instanceWith(),
+      key = "onClick",
+    ): ((...args: unknown[]) => void) => {
+      patchProp(el, key, null, value, undefined, instance);
+      return vi.mocked(core.setEventListener).mock.calls.at(-1)![2];
+    };
+    const stopper = (log: string[], name: string) => (e: unknown) => {
+      log.push(name);
+      (e as { stopImmediatePropagation(): void }).stopImmediatePropagation();
+    };
 
-    const registered = vi.mocked(core.setEventListener).mock.calls[0]![2];
-    expect(() => registered()).toThrow(boom);
+    it("runs every handler and reports each failure once, in order", async () => {
+      const after = vi.fn<() => void>();
+      const registered = registerWith([throwing, secondThrowing, thirdThrowing, after]);
+
+      expect(() => registered()).toThrow(boom);
+      await settle();
+      expect(after).toHaveBeenCalledTimes(1);
+      expect(reasons()).toEqual([second, third]);
+      expect(warn).toHaveBeenCalledTimes(3);
+    });
+
+    it("reports nothing extra when only one handler fails", async () => {
+      const registered = registerWith([vi.fn<() => void>(), throwing, vi.fn<() => void>()]);
+
+      expect(() => registered()).toThrow(boom);
+      await settle();
+      expect(unhandled).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledTimes(1);
+    });
+
+    it("throws nothing when no handler fails", async () => {
+      const registered = registerWith([vi.fn<() => void>(), vi.fn<() => void>()]);
+
+      expect(() => registered()).not.toThrow();
+      await settle();
+      expect(unhandled).not.toHaveBeenCalled();
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it("reports failures in slot order across an array slot and a later slot", async () => {
+      patchProp(el, "onClick", null, [throwing, secondThrowing], undefined, instanceWith());
+      patchProp(el, "onClickOnce", null, thirdThrowing, undefined, instanceWith());
+      const registered = vi.mocked(core.setEventListener).mock.calls[0]![2];
+
+      expect(() => registered()).toThrow(boom);
+      await settle();
+      expect(reasons()).toEqual([second, third]);
+      expect(warn).toHaveBeenCalledTimes(3);
+    });
+
+    it("gives every failure to the errorHandler and reports none to the host", async () => {
+      const errorHandler = vi.fn<(error: unknown) => void>();
+      const registered = registerWith([throwing, secondThrowing], instanceWith(errorHandler));
+
+      expect(() => registered()).not.toThrow();
+      await settle();
+      expect(errorHandler.mock.calls.map(([e]) => e)).toEqual([boom, second]);
+      expect(unhandled).not.toHaveBeenCalled();
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it("reports each rejection of several async handlers once", async () => {
+      const registered = registerWith([
+        () => Promise.reject(boom),
+        () => Promise.reject(second),
+        () => Promise.resolve(),
+      ]);
+
+      expect(() => registered()).not.toThrow();
+      await settle();
+      expect(reasons()).toEqual([boom, second]);
+    });
+
+    it("reports a synchronous failure and an async rejection of one dispatch", async () => {
+      const registered = registerWith([throwing, () => Promise.reject(second)]);
+
+      expect(() => registered()).toThrow(boom);
+      await settle();
+      expect(reasons()).toEqual([second]);
+    });
+
+    it("retires a .once slot whose array fails and reports each failure", async () => {
+      const registered = registerWith([throwing, secondThrowing], instanceWith(), "onClickOnce");
+
+      expect(() => registered()).toThrow(boom);
+      await settle();
+      expect(reasons()).toEqual([second]);
+      expect(core.removeEventListener).toHaveBeenCalledWith(1, "click");
+    });
+
+    it("stops the rest of an array and later slots at stopImmediatePropagation", async () => {
+      const log: string[] = [];
+      const event = { stopImmediatePropagation: vi.fn<() => void>() };
+      patchProp(
+        el,
+        "onClick",
+        null,
+        [() => log.push("a"), stopper(log, "stop"), () => log.push("b")],
+        undefined,
+        instanceWith(),
+      );
+      patchProp(el, "onClickOnce", null, () => log.push("later"), undefined, instanceWith());
+      const registered = vi.mocked(core.setEventListener).mock.calls[0]![2];
+
+      expect(() => registered(event)).not.toThrow();
+      expect(log).toEqual(["a", "stop"]);
+      expect(event.stopImmediatePropagation).toHaveBeenCalledTimes(1);
+    });
+
+    it("reports a failure that precedes stopImmediatePropagation and skips the rest", async () => {
+      const log: string[] = [];
+      const event = { stopImmediatePropagation: vi.fn<() => void>() };
+      const registered = registerWith([throwing, stopper(log, "stop"), secondThrowing]);
+
+      expect(() => registered(event)).toThrow(boom);
+      await settle();
+      expect(log).toEqual(["stop"]);
+      expect(unhandled).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("in a mounted Vue app", () => {
+    const unhandled = vi.fn<(reason: unknown) => void>();
+    beforeEach(() => {
+      unhandled.mockClear();
+      process.on("unhandledRejection", unhandled);
+    });
+    afterEach(() => {
+      process.off("unhandledRejection", unhandled);
+    });
+
+    // Mounts a tree whose `view` carries `onClick`, under a parent with `hook`.
+    function mount(
+      onClick: unknown[],
+      configure: (app: { config: { errorHandler?: unknown } }) => void,
+      hook?: () => boolean | void,
+    ): () => void {
+      let id = 1;
+      vi.mocked(core.createNode).mockImplementation(() => ++id);
+      const renderer = createRenderer({ ...createNodeOps(core), patchProp });
+      const Child = { render: () => h("view", { onClick }) };
+      const Parent = {
+        setup() {
+          if (hook) onErrorCaptured(hook);
+          return () => h(Child);
+        },
+      };
+      const app = renderer.createApp(Parent);
+      configure(app);
+      app.mount(el);
+      return vi.mocked(core.setEventListener).mock.calls.at(-1)![2] as () => void;
+    }
+
+    const first = new Error("first");
+    const second = new Error("second");
+    const fail = (error: Error) => () => {
+      throw error;
+    };
+    const settle = (): Promise<unknown> => new Promise((resolve) => setTimeout(resolve, 0));
+
+    it("gives each failure to onErrorCaptured and then the errorHandler", () => {
+      const errorHandler = vi.fn<(error: unknown) => void>();
+      const hook = vi.fn<() => void>();
+      const dispatch = mount(
+        [fail(first), fail(second)],
+        (a) => (a.config.errorHandler = errorHandler),
+        hook,
+      );
+
+      expect(() => dispatch()).not.toThrow();
+      expect(hook).toHaveBeenCalledTimes(2);
+      expect(errorHandler.mock.calls.map(([e]) => e)).toEqual([first, second]);
+    });
+
+    it("keeps the failures from the errorHandler when a hook returns false", () => {
+      const errorHandler = vi.fn<(error: unknown) => void>();
+      const dispatch = mount(
+        [fail(first)],
+        (a) => (a.config.errorHandler = errorHandler),
+        () => false,
+      );
+
+      expect(() => dispatch()).not.toThrow();
+      expect(errorHandler).not.toHaveBeenCalled();
+    });
+
+    it("reports each failure to the host with no hook and no errorHandler", async () => {
+      const dispatch = mount([fail(first), fail(second)], () => {});
+
+      expect(() => dispatch()).toThrow(first);
+      await settle();
+      expect(unhandled.mock.calls.map(([reason]) => reason)).toEqual([second]);
+    });
   });
 
   it("unbinds a .once listener and still reports its error", () => {
@@ -874,31 +1083,30 @@ describe("errors thrown by an event handler", () => {
     });
     afterEach(() => {
       process.off("unhandledRejection", unhandled);
-      vi.unstubAllEnvs();
     });
 
-    async function register(mode: string, instance: ComponentInternalInstance | null) {
-      vi.stubEnv("NODE_ENV", mode);
-      patchProp(el, "onClick", null, () => Promise.reject(boom), undefined, instance);
+    async function register(handler: () => unknown, instance: ComponentInternalInstance | null) {
+      patchProp(el, "onClick", null, handler, undefined, instance);
       const registered = vi.mocked(core.setEventListener).mock.calls[0]![2];
-      registered();
+      expect(() => registered()).not.toThrow();
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
 
-    // The Vue under test is always its dev build, which rethrows an async
-    // failure itself, so a production bundle shows up as one extra report.
-    it.each([
-      ["development", 1],
-      ["production", 2],
-    ])("with NODE_ENV=%s and no errorHandler reports %i time(s)", async (mode, count) => {
-      await register(mode, instanceWith());
-      expect(unhandled).toHaveBeenCalledTimes(count);
+    it("reports one unhandled rejection with no errorHandler", async () => {
+      await register(() => Promise.reject(boom), instanceWith());
+      expect(unhandled).toHaveBeenCalledTimes(1);
+      expect(unhandled.mock.calls[0]![0]).toBe(boom);
     });
 
-    it("hands the rejection to the errorHandler and adds no report, in production", async () => {
+    it("hands the rejection to the errorHandler and reports nothing else", async () => {
       const errorHandler = vi.fn<() => void>();
-      await register("production", instanceWith(errorHandler));
+      await register(() => Promise.reject(boom), instanceWith(errorHandler));
       expect(errorHandler).toHaveBeenCalledWith(boom, undefined, "native event handler");
+      expect(unhandled).not.toHaveBeenCalled();
+    });
+
+    it("reports nothing when the promise resolves", async () => {
+      await register(() => Promise.resolve(), instanceWith());
       expect(unhandled).not.toHaveBeenCalled();
     });
   });
@@ -926,5 +1134,98 @@ describe("everything else", () => {
     patchProp(el, "data", null, { nested: true }, undefined, null);
 
     expect(core.setAttribute).not.toHaveBeenCalled();
+  });
+});
+
+describe("with a production build of Vue", () => {
+  const boom = new Error("boom");
+  const unhandled = vi.fn<(reason: unknown) => void>();
+  let error: MockInstance<typeof console.error>;
+  let warn: MockInstance<typeof console.warn>;
+  let dispatchOf: (value: unknown, config?: Record<string, unknown>) => () => void;
+
+  beforeEach(async () => {
+    vi.resetModules();
+    const prodBuild = "@vue/runtime-core/dist/runtime-core.cjs.prod.js";
+    vi.doMock("@vue/runtime-core", () => import(/* @vite-ignore */ prodBuild));
+    const { createPatchProp: createProd } = await import("./patchProp.mts");
+    const prodPatchProp = createProd(core);
+    dispatchOf = (value, config = {}) => {
+      const instance = { vnode: null, parent: null, appContext: { config } };
+      prodPatchProp(el, "onClick", null, value, undefined, instance as never);
+      return vi.mocked(core.setEventListener).mock.calls.at(-1)![2] as () => void;
+    };
+    error = vi.spyOn(console, "error").mockImplementation(() => {});
+    warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    unhandled.mockClear();
+    process.on("unhandledRejection", unhandled);
+  });
+  afterEach(() => {
+    process.off("unhandledRejection", unhandled);
+    error.mockRestore();
+    warn.mockRestore();
+    vi.doUnmock("@vue/runtime-core");
+    vi.resetModules();
+  });
+  const settle = (): Promise<unknown> => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it("logs a synchronous failure to the console and throws nothing", () => {
+    const dispatch = dispatchOf(() => {
+      throw boom;
+    });
+
+    expect(() => dispatch()).not.toThrow();
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(error).toHaveBeenCalledWith(boom);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("logs each failing handler of an array once and runs them all", () => {
+    const after = vi.fn<() => void>();
+    const dispatch = dispatchOf([
+      () => {
+        throw boom;
+      },
+      after,
+    ]);
+
+    expect(() => dispatch()).not.toThrow();
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(after).toHaveBeenCalledTimes(1);
+  });
+
+  it("logs an async rejection once and reports no unhandled rejection", async () => {
+    const dispatch = dispatchOf(() => Promise.reject(boom));
+
+    expect(() => dispatch()).not.toThrow();
+    await settle();
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(unhandled).not.toHaveBeenCalled();
+  });
+
+  it("throws to the host with throwUnhandledErrorInProduction", () => {
+    const dispatch = dispatchOf(
+      () => {
+        throw boom;
+      },
+      { throwUnhandledErrorInProduction: true },
+    );
+
+    expect(() => dispatch()).toThrow(boom);
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it("hands the failure to the errorHandler and logs nothing", () => {
+    const errorHandler = vi.fn<() => void>();
+    const dispatch = dispatchOf(
+      () => {
+        throw boom;
+      },
+      { errorHandler },
+    );
+
+    expect(() => dispatch()).not.toThrow();
+    expect(errorHandler).toHaveBeenCalledTimes(1);
+    expect(error).not.toHaveBeenCalled();
   });
 });

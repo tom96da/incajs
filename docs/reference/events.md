@@ -170,8 +170,13 @@ Vue's template event modifiers — `v-on:click.once`, `.passive`,
 
 ## Errors in handlers
 
-An error an `@event` handler throws goes to the app's
-`app.config.errorHandler` and to any `onErrorCaptured` hooks, as in the
-browser. With no `errorHandler`, the host reports it as an application
-error. A promise that rejects with no handler, such as an `async` handler
-that throws, is reported the same way.
+An error an `@event` handler throws, or a rejection of an `async` handler,
+goes to any `onErrorCaptured` hooks and then to `app.config.errorHandler`. A
+hook that returns `false` stops it there. Every handler of an event runs even
+when an earlier one fails, until one calls `stopImmediatePropagation()`.
+
+An error that no hook or `errorHandler` takes follows Vue's unhandled-error
+logging. A production build logs it to the console. A development build warns
+and reports each failing handler to the host as an application error. With
+`app.config.throwUnhandledErrorInProduction` set, a production build throws
+the error to the host, which reports it.

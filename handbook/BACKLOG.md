@@ -29,15 +29,17 @@ A fixed entry is deleted and its ID is never reused.
 ## P1
 
 - **B-060 A panic in a packaged app is reported nowhere**
-  `Units: host · Size: S · Impact: Medium`
+  `Units: host,core · Size: S · Impact: Medium`
 
   `inca dev` reports a host panic as a `-32603` error. A packaged app has no
   stdout client and its stderr goes nowhere, so a panic there leaves nothing
   behind. It needs a log file or a dialog. In `inca dev` a panic shows twice:
   once from the default hook on stderr, and once as the `-32603` line the CLI
   prints. A host thread blocked writing to a stalled stdout pipe holds the
-  hook, though the panic text has already reached stderr. It is the first
-  half of the crash reporting in
+  hook, though the panic text has already reached stderr. In a production
+  build an error an event handler throws reaches only the console, not the
+  host's report, so the destination also decides whether it carries those.
+  It is the first half of the crash reporting in
   [ROADMAP.md](./ROADMAP.md#known-gaps-not-yet-scheduled); the destination is
   undecided.
 
@@ -695,12 +697,6 @@ A fixed entry is deleted and its ID is never reused.
   `FAILURES.md`'s "doesn't panic" rule, though reaching it isn't
   practical. `console.log` has no cap on array length.
 
-- **B-065 A throwing handler is reported twice in a production build**
-  `Units: core · Size: S · Impact: Low`
-
-  In a production build a throwing handler is reported twice. Vue's default
-  error logging reports it once, and the wrapper's rethrow reports it again.
-
 - **B-069 Node ids restart on every full reload while the window survives**
   `Units: gpui,host · Size: M · Impact: Low`
 
@@ -859,14 +855,6 @@ A fixed entry is deleted and its ID is never reused.
   - A `RegExp` has one colour, where the standard highlights its parts.
   - `%s`, `%d`, `%i` and `%f` convert an array that holds a `Proxy` through
     the array's own string form, which runs the `Proxy`'s traps.
-
-- **B-090 Only the first error of several throwing handlers reaches the host's report**
-  `Units: core · Size: S · Impact: Low`
-
-  Handlers of one event (an array value, or `onClick` plus `onClickOnce`) run
-  behind one host callback that rethrows the first error after all have run.
-  The others go only to Vue's own error handler or the console, where the host
-  reports every throwing callback.
 
 - **B-091 A handler attached during an event can fire for that same event**
   `Units: core · Size: S · Impact: Low`

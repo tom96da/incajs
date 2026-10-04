@@ -73,51 +73,13 @@ function patchStyle(core: IncaCore, el: IncaElement, nextValue: unknown): void {
   }
 }
 
-const isThenable = (value: unknown): value is PromiseLike<unknown> =>
-  value != null && typeof (value as PromiseLike<unknown>).then === "function";
-
 // `@vue/runtime-core` types an `onXxx` prop as `Function | Function[]`, so
-// several handlers can arrive for one event. Vue's own DOM renderer collapses
-// them into a single native listener; this does the same.
-/**
- * Collapses `value` into one listener. An error a handler throws goes to the
- * app's `errorHandler` and the `onErrorCaptured` hooks; with no
- * `errorHandler`, the first one thrown is also rethrown to the host's error
- * report, and an `onErrorCaptured` hook returning `false` does not suppress
- * that. A rejected promise from an async handler follows the same route.
- */
-function asListener(
-  value: unknown,
-  instance: ComponentInternalInstance | null,
-): EventListener | null {
+// several handlers can arrive for one event.
+function asHandlers(value: unknown): EventListener[] | null {
   const handlers = (Array.isArray(value) ? value : [value]).filter(
     (entry): entry is EventListener => typeof entry === "function",
   );
-  if (handlers.length === 0) return null;
-
-  return (...args: unknown[]) => {
-    let failure: { error: unknown } | undefined;
-    guardStop(args, (stopped) => {
-      const recorded = handlers.map((handler) => (...a: unknown[]) => {
-        if (stopped()) return;
-        try {
-          const result: unknown = handler(...a);
-          // A production Vue swallows a rejection; keep one unhandled for the host.
-          if (process.env.NODE_ENV === "production" && isThenable(result)) {
-            result.then(undefined, (error: unknown) => {
-              if (!instance?.appContext.config.errorHandler) throw error;
-            });
-          }
-          return result;
-        } catch (error) {
-          failure ??= { error };
-          throw error;
-        }
-      });
-      callWithAsyncErrorHandling(recorded, instance, ErrorCodes.NATIVE_EVENT_HANDLER, args);
-    });
-    if (failure && !instance?.appContext.config.errorHandler) throw failure.error;
-  };
+  return handlers.length === 0 ? null : handlers;
 }
 
 // Runs `body` with the event's `stopImmediatePropagation` wrapped to raise a
@@ -149,7 +111,8 @@ function guardStop(args: unknown[], body: (stopped: () => boolean) => void): voi
 
 // A fired `.once` slot stays as a tombstone until its prop key is removed.
 interface Slot {
-  listener: EventListener;
+  handlers: EventListener[];
+  instance: ComponentInternalInstance | null;
   once: boolean;
   fired: boolean;
 }
@@ -184,7 +147,7 @@ function createEntry(core: IncaCore, el: IncaElement, event: string): Entry {
     slots: new Map(),
     registered: false,
     dispatcher: (...args) => {
-      let failure: { error: unknown } | undefined;
+      const errors: unknown[] = [];
       guardStop(args, (stopped) => {
         // A slot removed by an earlier handler is skipped; one patched keeps its
         // place; one added meanwhile waits for the next dispatch.
@@ -197,14 +160,24 @@ function createEntry(core: IncaCore, el: IncaElement, event: string): Entry {
             slot.fired = true;
             sync(core, el, event, entry);
           }
-          try {
-            slot.listener(...args);
-          } catch (error) {
-            failure ??= { error };
+          for (const handler of slot.handlers) {
+            if (stopped()) break;
+            try {
+              callWithAsyncErrorHandling(
+                handler,
+                slot.instance,
+                ErrorCodes.NATIVE_EVENT_HANDLER,
+                args,
+              );
+            } catch (error) {
+              errors.push(error);
+            }
           }
         }
       });
-      if (failure) throw failure.error;
+      // The first error is thrown to the host; each later one is an unhandled rejection.
+      for (const error of errors.slice(1)) void Promise.reject(error);
+      if (errors.length > 0) throw errors[0];
     },
   };
   return entry;
@@ -224,8 +197,8 @@ function patchEvent(
   instance: ComponentInternalInstance | null,
 ): void {
   const { event, once } = parseEventKey(rawKey);
-  const listener = asListener(nextValue, instance);
-  if (!listener) {
+  const handlers = asHandlers(nextValue);
+  if (!handlers) {
     removeSlot(core, el, event, rawKey);
     return;
   }
@@ -237,11 +210,12 @@ function patchEvent(
 
   const existing = entry.slots.get(rawKey);
   if (existing) {
-    existing.listener = listener;
+    existing.handlers = handlers;
+    existing.instance = instance;
     return;
   }
 
-  entry.slots.set(rawKey, { listener, once, fired: false });
+  entry.slots.set(rawKey, { handlers, instance, once, fired: false });
   try {
     sync(core, el, event, entry);
   } catch (error) {
@@ -273,9 +247,14 @@ function patchEvent(
  *   bind as an ordinary listener with no native passive/capture-phase
  *   support yet. See {@link EventListener} for which event names are wired
  *   to real input by the native host today; other names are accepted but
- *   never fire. An error a handler throws synchronously goes to the app's
- *   `errorHandler` and `onErrorCaptured` hooks; with no `errorHandler` it is
- *   also rethrown to the host's error report.
+ *   never fire. An error a handler throws, or a rejection of an async
+ *   handler, goes to the `onErrorCaptured` hooks and the app's
+ *   `errorHandler`. Every handler of an event runs even when an earlier one
+ *   fails, until one calls `stopImmediatePropagation()`. An error that no
+ *   hook or `errorHandler` takes is logged to the console in a production
+ *   build, or raised to the host's error report when
+ *   `throwUnhandledErrorInProduction` is set. A development build warns and
+ *   raises it to the host's error report, once per failing handler.
  * - Everything else falls through to `core.setAttribute`, again skipping
  *   a non-string/number/boolean value rather than passing it through.
  *
