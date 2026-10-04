@@ -19,8 +19,8 @@ use std::collections::HashMap;
 use gpui::prelude::*;
 use gpui::{
     AnyElement, App, DispatchPhase, Display, ElementId, Fill, FlexDirection, Global, Hsla, Length,
-    Overflow, Pixels, Point, ScrollHandle, ScrollWheelEvent, StyleRefinement, Window, canvas, div,
-    point, px, rgb,
+    MouseExitEvent, MouseMoveEvent, Overflow, Pixels, Point, ScrollHandle, ScrollWheelEvent,
+    StyleRefinement, Window, canvas, div, point, px, rgb,
 };
 
 use crate::event_sink::{EventMask, EventPayload, EventSink, MousePayload};
@@ -660,6 +660,29 @@ fn scroll_recorder(handle: ScrollHandle) -> impl IntoElement {
     .size_0()
 }
 
+// Zero-size child; its capture-phase handlers run before any node's own.
+fn pointer_tracker<E: EventSink + Clone + 'static>(dispatch: E) -> impl IntoElement {
+    canvas(
+        |_, _, _| (),
+        move |_, (), window, _| {
+            let moved = dispatch.clone();
+            window.on_mouse_event(move |event: &MouseMoveEvent, phase, _, cx| {
+                if phase == DispatchPhase::Capture {
+                    moved.pointer_moved(event.position, cx);
+                }
+            });
+            let dispatch = dispatch.clone();
+            window.on_mouse_event(move |_: &MouseExitEvent, phase, _, _| {
+                if phase == DispatchPhase::Capture {
+                    dispatch.pointer_left();
+                }
+            });
+        },
+    )
+    .absolute()
+    .size_0()
+}
+
 /// Undoes, once `gpui`'s scroll steps and the JS listeners have run, all
 /// scrolling after `preventDefault()`, else the scrolling of every container
 /// but the innermost one that can still move.
@@ -713,9 +736,13 @@ where
 /// Every container carries a `.debug_selector("node-{id}")` — a no-op
 /// outside test builds — so a test can look its computed bounds up by
 /// [`NodeId`], wired or not.
+///
+/// The root container (`root`) also carries the pointer tracker when there is
+/// a dispatcher.
 fn build_element_inner<E: EventSink + Clone + 'static>(
     spec: &ElementSpec,
     dispatch: Option<&E>,
+    root: bool,
 ) -> AnyElement {
     match &spec.tag {
         ElementTag::Text(content) => content.clone().into_any_element(),
@@ -770,30 +797,36 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
                         }),
                         spec,
                         dispatch,
+                        root,
                     ),
-                    None => finish_container(element, spec, dispatch),
+                    None => finish_container(element, spec, dispatch, root),
                 }
             } else {
                 let element = wire_stateless(element, id, &wired);
-                finish_container(wire_focus(element, dispatch, id), spec, dispatch)
+                finish_container(wire_focus(element, dispatch, id), spec, dispatch, root)
             }
         }
     }
 }
 
 /// Applies `spec`'s style and children to a container, whichever kind of
-/// element it turned out to be.
+/// element it turned out to be. The root container (`root`) also carries the
+/// pointer tracker, as its first child, when there is a dispatcher.
 fn finish_container<E>(
     mut element: E,
     spec: &ElementSpec,
     dispatch: Option<&(impl EventSink + Clone + 'static)>,
+    root: bool,
 ) -> AnyElement
 where
     E: Styled + ParentElement + IntoElement + 'static,
 {
     apply_style(element.style(), &spec.style);
+    if let Some(dispatch) = dispatch.filter(|_| root) {
+        element = element.child(pointer_tracker(dispatch.clone()));
+    }
     for child in &spec.children {
-        element = element.child(build_element_inner(child, dispatch));
+        element = element.child(build_element_inner(child, dispatch, false));
     }
     element.into_any_element()
 }
@@ -827,6 +860,10 @@ impl EventSink for NeverListens {
     fn scroll_handle(&self, _node_id: NodeId) -> Option<ScrollHandle> {
         None
     }
+
+    fn pointer_moved(&self, _position: Point<Pixels>, _cx: &mut App) {}
+
+    fn pointer_left(&self) {}
 }
 
 /// Recursively converts an [`ElementSpec`] into a real `gpui` [`AnyElement`],
@@ -834,18 +871,20 @@ impl EventSink for NeverListens {
 /// whose containers dispatch `"click"` into JS.
 #[must_use]
 pub fn build_element(spec: &ElementSpec) -> AnyElement {
-    build_element_inner::<NeverListens>(spec, None)
+    build_element_inner::<NeverListens>(spec, None, true)
 }
 
 /// Like [`build_element`], but every container's click dispatches into JS
 /// via `dispatch` (an `inca-bridge::EventDispatcher`, behind this crate's
-/// [`EventSink`] trait).
+/// [`EventSink`] trait). `dispatch` also receives
+/// [`EventSink::pointer_moved`] and [`EventSink::pointer_left`] for the
+/// window's pointer moves and exits.
 #[must_use]
 pub fn build_element_with_events<E: EventSink + Clone + 'static>(
     spec: &ElementSpec,
     dispatch: &E,
 ) -> AnyElement {
-    build_element_inner(spec, Some(dispatch))
+    build_element_inner(spec, Some(dispatch), true)
 }
 
 /// Composes [`build_spec`] and [`build_element`]: builds `root` and its

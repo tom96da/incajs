@@ -951,13 +951,6 @@ A fixed entry is deleted and its ID is never reused.
   or I/O to resume it. `packages/core` wraps the event names in helpers, so
   the strings never become app-facing API.
 
-- **B-099 `movementX`/`movementY` on `mouseenter` and `mouseleave`**
-  `Units: bridge,gpui · Size: S · Impact: Low`
-
-  The delta is computed against the last mouse or wheel event, not a real
-  pointer move. A hover entered without the pointer moving can report a
-  nonzero delta, measured from an earlier click's position.
-
 - **B-100 `inca dev` exits on a failure before its watcher starts**
   `Units: cli · Size: S · Impact: Low`
 

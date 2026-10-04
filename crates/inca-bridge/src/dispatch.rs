@@ -66,12 +66,11 @@ pub struct EventDispatcher {
     /// payload's `buttons` bitmask — GPUI's own mouse events carry only the
     /// one button each is about, not which others are held alongside it.
     held_buttons: Rc<Cell<u8>>,
-    /// The last mouse/wheel payload's position, to compute `movementX`/
-    /// `movementY` as a delta — `None` until the first one arrives.
+    // Position of the previous raw pointer move, shared by every window using
+    // this dispatcher. `None` before the first move and after a window exit.
     last_position: Rc<Cell<Option<(f32, f32)>>>,
-    /// The movement computed for the raw pointer event being dispatched right
-    /// now. Every node and event name that raw event produces shares it; it
-    /// is cleared once that event's update finishes.
+    // Delta of the raw pointer move being dispatched now, shared by every
+    // node and event name that move produces.
     current_movement: Rc<Cell<Option<(f32, f32)>>>,
     /// Set while the `wheel` event being dispatched right now has been
     /// stopped. Later `wheel` dispatches skip their callbacks, and GPUI's own
@@ -155,14 +154,22 @@ impl EventDispatcher {
         self.held_buttons.get()
     }
 
-    /// Returns `payload` with `movementX`/`movementY` set against
-    /// [`Self::last_position`] — 0 for whichever mouse/wheel event arrives
-    /// first, since there is nothing yet to take a delta from.
-    fn with_movement(&self, payload: &EventPayload, cx: &mut App) -> EventPayload {
+    /// Returns `payload` with `movementX`/`movementY` set. `mousemove`,
+    /// `mouseenter` and `mouseleave` take the delta of the raw move being
+    /// dispatched, 0 when none is. Every other event takes its position minus
+    /// [`Self::last_position`], 0 when that is `None`.
+    fn with_movement(&self, payload: &EventPayload, event: &str) -> EventPayload {
+        let movement_for = |mouse: &MousePayload| match event {
+            "mousemove" | "mouseenter" | "mouseleave" => {
+                self.current_movement.get().unwrap_or((0.0, 0.0))
+            }
+            _ => self.last_position.get().map_or((0.0, 0.0), |(x, y)| {
+                (mouse.client_x - x, mouse.client_y - y)
+            }),
+        };
         match payload {
             EventPayload::Mouse(mouse) => {
-                let (movement_x, movement_y) =
-                    self.shared_movement(mouse.client_x, mouse.client_y, cx);
+                let (movement_x, movement_y) = movement_for(mouse);
                 EventPayload::Mouse(MousePayload {
                     movement_x,
                     movement_y,
@@ -170,8 +177,7 @@ impl EventDispatcher {
                 })
             }
             EventPayload::Wheel(wheel) => {
-                let (movement_x, movement_y) =
-                    self.shared_movement(wheel.mouse.client_x, wheel.mouse.client_y, cx);
+                let (movement_x, movement_y) = movement_for(&wheel.mouse);
                 EventPayload::Wheel(WheelPayload {
                     mouse: MousePayload {
                         movement_x,
@@ -183,30 +189,6 @@ impl EventDispatcher {
             }
             EventPayload::None | EventPayload::Key(_) => payload.clone(),
         }
-    }
-
-    /// [`Self::take_movement`], computed once per raw event: the first
-    /// dispatch computes it and defers clearing it to the end of the update,
-    /// so every node and event name that raw event produces shares it, such
-    /// as a `mousemove` and the `mouseenter` from the same pointer move.
-    fn shared_movement(&self, client_x: f32, client_y: f32, cx: &mut App) -> (f32, f32) {
-        if let Some(movement) = self.current_movement.get() {
-            return movement;
-        }
-        let movement = self.take_movement(client_x, client_y);
-        self.current_movement.set(Some(movement));
-        let current = Rc::clone(&self.current_movement);
-        cx.defer(move |_| current.set(None));
-        movement
-    }
-
-    /// Records `(client_x, client_y)` as [`Self::last_position`] and returns
-    /// the delta from whatever was there before.
-    fn take_movement(&self, client_x: f32, client_y: f32) -> (f32, f32) {
-        let previous = self.last_position.replace(Some((client_x, client_y)));
-        previous.map_or((0.0, 0.0), |(prev_x, prev_y)| {
-            (client_x - prev_x, client_y - prev_y)
-        })
     }
 
     /// Calls every JS callback registered for `(node_id, event)` (via
@@ -251,7 +233,7 @@ impl EventDispatcher {
         };
 
         let payload = self.with_held_buttons(event, payload);
-        let payload = self.with_movement(&payload, cx);
+        let payload = self.with_movement(&payload, event);
         let payload = &payload;
 
         let stop_propagation = Rc::new(Cell::new(false));
@@ -453,6 +435,26 @@ impl EventSink for EventDispatcher {
                 .clone(),
         )
     }
+
+    // The first call of an update computes the delta and defers clearing it,
+    // so later calls in that update keep it.
+    fn pointer_moved(&self, position: gpui::Point<gpui::Pixels>, cx: &mut App) {
+        if self.current_movement.get().is_some() {
+            return;
+        }
+        let here = (f32::from(position.x), f32::from(position.y));
+        let movement = self
+            .last_position
+            .replace(Some(here))
+            .map_or((0.0, 0.0), |(x, y)| (here.0 - x, here.1 - y));
+        self.current_movement.set(Some(movement));
+        let current = Rc::clone(&self.current_movement);
+        cx.defer(move |_| current.set(None));
+    }
+
+    fn pointer_left(&self) {
+        self.last_position.set(None);
+    }
 }
 
 /// Drains `QuickJS`'s pending-job queue, sends each failure it leaves (a job
@@ -476,7 +478,7 @@ pub fn drain_jobs_and_refresh(engine: &Engine, reporter: &ErrorReporter, window:
 mod tests {
     use super::*;
     use crate::bindings::install;
-    use gpui::TestAppContext;
+    use gpui::{TestAppContext, point, px};
 
     /// Every failure the dispatcher reported, in order.
     type Reported = Rc<RefCell<Vec<EngineError>>>;
@@ -648,5 +650,150 @@ mod tests {
 
         assert_eq!(reported.borrow().len(), 1);
         assert!(dispatcher.engine.eval::<bool>("globalThis.ran;").unwrap());
+    }
+
+    fn at(x: f32, y: f32) -> gpui::Point<gpui::Pixels> {
+        point(px(x), px(y))
+    }
+
+    fn mouse_at(x: f32, y: f32) -> EventPayload {
+        EventPayload::Mouse(MousePayload::at(at(x, y), gpui::Modifiers::none()))
+    }
+
+    fn movement_of(payload: &EventPayload) -> (f32, f32) {
+        match payload {
+            EventPayload::Mouse(mouse) => (mouse.movement_x, mouse.movement_y),
+            EventPayload::Wheel(wheel) => (wheel.mouse.movement_x, wheel.mouse.movement_y),
+            other => panic!("expected a mouse or wheel payload, got {other:?}"),
+        }
+    }
+
+    fn wheel_at(x: f32, y: f32) -> EventPayload {
+        EventPayload::Wheel(WheelPayload {
+            mouse: MousePayload::at(at(x, y), gpui::Modifiers::none()),
+            delta_x: 0.0,
+            delta_y: 1.0,
+            delta_z: 0.0,
+            delta_mode: 0,
+        })
+    }
+
+    // The deferred clear runs when the recording update ends, so the value is
+    // read inside that update.
+    #[gpui::test]
+    fn pointer_moved_reports_zero_first_then_the_delta(cx: &mut TestAppContext) {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        let cx = cx.add_empty_window();
+
+        let first = cx.update(|_, cx| {
+            dispatcher.pointer_moved(at(10.0, 10.0), cx);
+            dispatcher.current_movement.get()
+        });
+        assert_eq!(first, Some((0.0, 0.0)));
+        assert_eq!(dispatcher.current_movement.get(), None);
+
+        let second = cx.update(|_, cx| {
+            dispatcher.pointer_moved(at(30.0, 5.0), cx);
+            dispatcher.current_movement.get()
+        });
+        assert_eq!(second, Some((20.0, -5.0)));
+        assert_eq!(dispatcher.last_position.get(), Some((30.0, 5.0)));
+    }
+
+    #[gpui::test]
+    fn a_second_pointer_moved_in_one_cycle_keeps_the_first_delta(cx: &mut TestAppContext) {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        let cx = cx.add_empty_window();
+        cx.update(|_, cx| dispatcher.pointer_moved(at(10.0, 10.0), cx));
+
+        let seen = cx.update(|_, cx| {
+            dispatcher.pointer_moved(at(30.0, 5.0), cx);
+            dispatcher.pointer_moved(at(100.0, 100.0), cx);
+            dispatcher.current_movement.get()
+        });
+
+        assert_eq!(seen, Some((20.0, -5.0)));
+        assert_eq!(dispatcher.last_position.get(), Some((30.0, 5.0)));
+    }
+
+    #[gpui::test]
+    fn pointer_left_makes_the_next_move_report_zero(cx: &mut TestAppContext) {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        let cx = cx.add_empty_window();
+        cx.update(|_, cx| dispatcher.pointer_moved(at(10.0, 10.0), cx));
+
+        dispatcher.pointer_left();
+        assert_eq!(dispatcher.last_position.get(), None);
+
+        let seen = cx.update(|_, cx| {
+            dispatcher.pointer_moved(at(50.0, 60.0), cx);
+            dispatcher.current_movement.get()
+        });
+        assert_eq!(seen, Some((0.0, 0.0)));
+    }
+
+    #[gpui::test]
+    fn hover_events_share_the_movement_of_their_raw_move(cx: &mut TestAppContext) {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        let cx = cx.add_empty_window();
+        cx.update(|_, cx| dispatcher.pointer_moved(at(10.0, 10.0), cx));
+
+        let seen = cx.update(|_, cx| {
+            dispatcher.pointer_moved(at(30.0, 5.0), cx);
+            ["mousemove", "mouseenter", "mouseleave"]
+                .map(|event| movement_of(&dispatcher.with_movement(&mouse_at(30.0, 5.0), event)))
+        });
+        assert_eq!(seen, [(20.0, -5.0); 3]);
+    }
+
+    #[gpui::test]
+    fn a_hover_with_no_raw_move_reports_zero(cx: &mut TestAppContext) {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        let cx = cx.add_empty_window();
+        cx.update(|_, cx| dispatcher.pointer_moved(at(10.0, 10.0), cx));
+        cx.run_until_parked();
+        cx.update(|_, cx| dispatcher.pointer_moved(at(30.0, 5.0), cx));
+        cx.run_until_parked();
+
+        for event in ["mouseenter", "mouseleave", "mousemove"] {
+            let payload = dispatcher.with_movement(&mouse_at(90.0, 90.0), event);
+            assert_eq!(movement_of(&payload), (0.0, 0.0), "{event}");
+        }
+    }
+
+    #[test]
+    fn mousedown_mouseup_and_wheel_measure_from_the_last_move_and_leave_it_in_place() {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        dispatcher.last_position.set(Some((10.0, 10.0)));
+
+        for event in ["mousedown", "mouseup"] {
+            let payload = dispatcher.with_movement(&mouse_at(30.0, 40.0), event);
+            assert_eq!(movement_of(&payload), (20.0, 30.0), "{event}");
+        }
+        let payload = dispatcher.with_movement(&wheel_at(30.0, 40.0), "wheel");
+        assert_eq!(movement_of(&payload), (20.0, 30.0));
+        assert_eq!(dispatcher.last_position.get(), Some((10.0, 10.0)));
+    }
+
+    #[test]
+    fn mousedown_mouseup_and_wheel_report_zero_before_any_move() {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+
+        for event in ["mousedown", "mouseup"] {
+            let payload = dispatcher.with_movement(&mouse_at(30.0, 40.0), event);
+            assert_eq!(movement_of(&payload), (0.0, 0.0), "{event}");
+        }
+        let payload = dispatcher.with_movement(&wheel_at(30.0, 40.0), "wheel");
+        assert_eq!(movement_of(&payload), (0.0, 0.0));
+        assert_eq!(dispatcher.last_position.get(), None);
+    }
+
+    #[test]
+    fn a_click_or_key_payload_is_left_alone() {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        dispatcher.last_position.set(Some((10.0, 10.0)));
+
+        let payload = dispatcher.with_movement(&EventPayload::None, "click");
+        assert_eq!(payload, EventPayload::None);
     }
 }

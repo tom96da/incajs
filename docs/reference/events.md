@@ -48,9 +48,15 @@ fields:
 - `pageX` / `pageY` — identical to `clientX`/`clientY`; nothing here
   scrolls the page itself, which is the only thing that would tell them
   apart
-- `movementX` / `movementY` — delta from whichever mouse/wheel event
-  fired last; `0` for the first one. A `mousemove` and the
-  `mouseenter`/`mouseleave` from the same pointer move report the same delta
+- `movementX` / `movementY` — how far the pointer moved:
+  - `mousemove`, and `mouseenter`/`mouseleave` caused by a pointer move:
+    the distance since the previous pointer move, `0` for the first move.
+    Every event from one move reports the same value
+  - `mousedown`, `mouseup` and `wheel`: the event position minus the
+    position of the last pointer move
+  - After the pointer leaves the window, macOS and X11 reset the
+    measurement, so the next move reports `0`. On Wayland the next move
+    reports the full distance
 - `button` — 0 for a move, which isn't about any one button
 - [`buttons`](https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/buttons) —
   every button currently held, as a bitmask
@@ -60,12 +66,9 @@ fields:
 ### `mouseenter` / `mouseleave`
 
 Same fields as `mousedown`, above. An element already under the pointer
-when it mounts gets a `mouseenter` the first time its hover state is
-checked, with no pointer movement involved — unlike the DOM, where
-`mouseenter` only ever follows an actual move. Its `movementX`/`movementY`
-share the same tracker every other mouse event does, so hovering with no
-pointer movement since an earlier click can still report a nonzero delta,
-against that click's position.
+when it mounts, or one a layout change puts under a still pointer, gets a
+`mouseenter` the next time its hover state is checked. That `mouseenter`
+reports `0` for `movementX`/`movementY`.
 
 ## Wheel
 

@@ -151,6 +151,9 @@ The mouse payload is `clientX`, `clientY`, `pageX`, `pageY`, `movementX`,
 `movementY`, `button`, `buttons`, `detail` and the four modifier flags.
 `pageX`/`pageY` equal `clientX`/`clientY`.
 
+`movementX`/`movementY` come from raw pointer moves, which the host records
+once per window.
+
 #### Propagation and cancellation
 
 - Callbacks run in the bubble phase only.

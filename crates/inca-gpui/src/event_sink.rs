@@ -180,9 +180,9 @@ pub enum EventPayload {
 pub struct MousePayload {
     pub client_x: f32,
     pub client_y: f32,
-    /// The delta from the last `mousemove`'s position (DOM's `movementX`/
-    /// `movementY`). Always 0 here — `inca-bridge` fills in the real delta,
-    /// which needs state this crate has no reason to hold.
+    /// The pointer's travel in pixels since the previous pointer move
+    /// (`movementX`/`movementY`). 0 when built by this crate; the
+    /// [`EventSink`] implementor supplies the real value.
     pub movement_x: f32,
     pub movement_y: f32,
     /// The button this event is about. 0 for a move, which isn't about any
@@ -196,9 +196,8 @@ pub struct MousePayload {
 }
 
 impl MousePayload {
-    /// For `mouseenter`/`mouseleave` — GPUI's `on_hover` hands back only a
-    /// `bool`, not a `MouseMoveEvent`, so there's no native event to
-    /// convert from.
+    /// A `mouseenter`/`mouseleave` payload at `position` with the given
+    /// `modifiers`. The movement fields are 0.
     #[must_use]
     pub fn at(position: gpui::Point<gpui::Pixels>, modifiers: gpui::Modifiers) -> Self {
         Self {
@@ -409,7 +408,8 @@ fn dom_key(keystroke: &Keystroke) -> String {
 /// What [`crate::element`] needs from something that can dispatch a native
 /// event into JS — `inca-bridge`'s `EventDispatcher` implements this, kept
 /// as a trait here rather than a direct dependency so this crate never has
-/// to depend on `QuickJS`.
+/// to depend on `QuickJS`. An implementor provides every method, including
+/// [`EventSink::pointer_moved`] and [`EventSink::pointer_left`].
 pub trait EventSink {
     /// Every kind registered on `node_id`. The render path asks before
     /// wiring an element for input.
@@ -434,6 +434,16 @@ pub trait EventSink {
     /// scrolls for the innermost container under the wheel that can still
     /// move, and stays put after `preventDefault()`.
     fn scroll_handle(&self, node_id: NodeId) -> Option<gpui::ScrollHandle>;
+
+    /// Reports a pointer move to `position`, in window coordinates. Called
+    /// for every pointer move in the window, buttons held included, before
+    /// any node's listener runs. `cx` lets the sink schedule work for the end
+    /// of the current update.
+    fn pointer_moved(&self, position: gpui::Point<gpui::Pixels>, cx: &mut App);
+
+    /// Reports that the pointer left the window. The next
+    /// [`EventSink::pointer_moved`] starts a new measurement.
+    fn pointer_left(&self);
 }
 
 #[cfg(test)]
