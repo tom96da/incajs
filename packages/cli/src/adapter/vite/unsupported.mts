@@ -5,7 +5,7 @@ import path from "node:path";
 
 import type { Plugin } from "vite";
 
-import { IncaError } from "../../error.mts";
+import type { AdapterCore } from "../../adapterCore.mts";
 
 /** Something an app can write that the engine can't run yet. */
 export interface UnsupportedFeature {
@@ -45,7 +45,10 @@ export const UNSUPPORTED: readonly UnsupportedFeature[] = [
  * Fails the build on the first module that uses an unsupported feature,
  * naming the file that used it.
  */
-export function rejectUnsupported(features: readonly UnsupportedFeature[] = UNSUPPORTED): Plugin {
+export function rejectUnsupported(
+  core: AdapterCore,
+  features: readonly UnsupportedFeature[] = UNSUPPORTED,
+): Plugin {
   return {
     name: "inca:reject-unsupported",
     enforce: "pre",
@@ -55,7 +58,7 @@ export function rejectUnsupported(features: readonly UnsupportedFeature[] = UNSU
       const file = path.relative(process.cwd(), id.split("?")[0] ?? id);
       // The code is repeated in the message: the bundler re-wraps the
       // error and keeps only its text.
-      throw new IncaError(
+      throw new core.IncaError(
         feature.code,
         `${feature.code}: ${file} uses ${feature.name}, unsupported for now: ${feature.hint}`,
       );

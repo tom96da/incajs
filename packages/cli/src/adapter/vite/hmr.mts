@@ -18,10 +18,10 @@ import type {
   ViteDevServer,
 } from "vite";
 
-import { bundlerFault } from "../../log.mts";
 import { CONFIG_FILE_NAME, serializeConfig } from "./emitConfig.mts";
 import { streamLogger } from "./logger.mts";
 import { rejectUnsupported } from "./unsupported.mts";
+import type { AdapterCore } from "../../adapterCore.mts";
 import type { BuildFailure, HmrChannel, HmrOptions } from "../types.mts";
 
 /**
@@ -42,10 +42,10 @@ interface UpdateError {
  * `code` a failed rebuild reports. Plugin, file and frame detail from Vite's
  * `buildErrorMessage` follows the stack.
  */
-export function faultOfUpdate(error: UpdateError): BuildFailure {
+export function faultOfUpdate(core: AdapterCore, error: UpdateError): BuildFailure {
   const detail = buildErrorMessage(error as unknown as RollupError, [], false);
   const stack = [error.stack, detail].filter((line) => line).join("\n");
-  return { ...bundlerFault(error.message), stack: stack || null };
+  return { ...core.bundlerFault(error.message), stack: stack || null };
 }
 
 /** The directory a session's synthesized entry and config are written to. */
@@ -229,19 +229,22 @@ function fileChangedPlugin(changed: { current: { file: string; at: number } | un
  * a browser: a `"client"` environment with a custom {@link HotChannel}
  * standing in for the WebSocket server `server.ws: false` disables.
  */
-export async function hmr({
-  entry,
-  cwd,
-  runtimeConfig,
-  runtimePath,
-  stdout = process.stdout,
-  stderr = process.stderr,
-  quiet = false,
-  notify,
-  reload,
-  onError,
-  onUpdate = () => {},
-}: HmrOptions): Promise<HmrChannel> {
+export async function hmr(
+  core: AdapterCore,
+  {
+    entry,
+    cwd,
+    runtimeConfig,
+    runtimePath,
+    stdout = process.stdout,
+    stderr = process.stderr,
+    quiet = false,
+    notify,
+    reload,
+    onError,
+    onUpdate = () => {},
+  }: HmrOptions,
+): Promise<HmrChannel> {
   const entryFile = await writeHmrEntry(cwd, entry, runtimePath);
 
   const configContent = serializeConfig(runtimeConfig);
@@ -253,7 +256,7 @@ export async function hmr({
   const { channel, dispatch } = createIncaHotChannel(
     notify,
     reload,
-    (error) => onError(faultOfUpdate(error)),
+    (error) => onError(faultOfUpdate(core, error)),
     onUpdate,
     changed,
   );
@@ -285,7 +288,7 @@ export async function hmr({
           compilerOptions: { runtimeModuleName: "@vue/runtime-core", hoistStatic: false },
         },
       }),
-      rejectUnsupported(),
+      rejectUnsupported(core),
       shimViteClient(),
       fileChangedPlugin(changed),
     ],

@@ -7,11 +7,11 @@ import { describe, expect, it } from "vitest";
 
 import { faultOfUpdate } from "../../../src/adapter/vite/hmr.mts";
 import { UNSUPPORTED } from "../../../src/adapter/vite/unsupported.mts";
-import { bundlerFault } from "../../../src/log.mts";
+import * as adapterCore from "../../../src/adapterCore.mts";
 
 /** The fault with colour removed from its stack. */
-function plain(error: Parameters<typeof faultOfUpdate>[0]) {
-  const fault = faultOfUpdate(error);
+function plain(error: Parameters<typeof faultOfUpdate>[1]) {
+  const fault = faultOfUpdate(adapterCore, error);
   return { ...fault, stack: fault.stack && stripVTControlCharacters(fault.stack) };
 }
 
@@ -74,7 +74,7 @@ describe("faultOfUpdate", () => {
       stack: null,
       code: "ERR_INCA_X",
     });
-    expect(plain({ message })).toMatchObject(bundlerFault(message));
+    expect(plain({ message })).toMatchObject(adapterCore.bundlerFault(message));
   });
 
   it("strips an error-class prefix when there is no code", () => {
@@ -95,7 +95,7 @@ describe("faultOfUpdate", () => {
     const fault = plain({ message, stack: "at x" });
 
     expect(fault.code).toBe(feature.code);
-    expect(fault.message).toBe(bundlerFault(message).message);
+    expect(fault.message).toBe(adapterCore.bundlerFault(message).message);
     expect(fault.message).not.toContain("ERR_INCA");
     expect(fault.stack).toBe("at x");
   });

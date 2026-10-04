@@ -3,9 +3,9 @@
 
 import { build as buildOnce } from "vite";
 
-import { IncaError } from "../../error.mts";
 import { toBuildOutput } from "./captureOutput.mts";
 import { resolveViteConfig } from "./config.mts";
+import type { AdapterCore } from "../../adapterCore.mts";
 import type { BuildOptions, BuildOutput } from "../types.mts";
 
 /**
@@ -13,17 +13,21 @@ import type { BuildOptions, BuildOutput } from "../types.mts";
  * rejects on failure rather than reporting it through a callback. Never
  * starts or talks to `inca-host` — that's `dev.mts`'s job.
  */
-export async function build({
-  entry,
-  outDir,
-  runtimeConfig,
-  stdout = process.stdout,
-  stderr = process.stderr,
-  quiet = false,
-}: BuildOptions): Promise<BuildOutput> {
+export async function build(
+  core: AdapterCore,
+  {
+    entry,
+    outDir,
+    runtimeConfig,
+    stdout = process.stdout,
+    stderr = process.stderr,
+    quiet = false,
+  }: BuildOptions,
+): Promise<BuildOutput> {
   let output: BuildOutput | undefined;
   await buildOnce(
     resolveViteConfig({
+      core,
       entry,
       outDir,
       runtimeConfig,
@@ -37,6 +41,6 @@ export async function build({
       },
     }),
   );
-  if (!output) throw new IncaError("ERR_INCA_BUILD_NO_OUTPUT", "build produced no output");
+  if (!output) throw new core.IncaError("ERR_INCA_BUILD_NO_OUTPUT", "build produced no output");
   return output;
 }

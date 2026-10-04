@@ -12,7 +12,8 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import type { HotPayload } from "vite";
 import type { ModuleRunnerTransport } from "vite/module-runner";
 
-import { hmr as realHmr } from "../../../src/adapter/vite/index.mts";
+import { createViteBundler } from "../../../src/adapter/vite/index.mts";
+import * as adapterCore from "../../../src/adapterCore.mts";
 import packageViteConfig from "../../../vite.config.mts";
 import { scratchApp } from "./scratchApp.mts";
 import type { HmrChannel, HmrOptions } from "../../../src/adapter/types.mts";
@@ -26,8 +27,8 @@ const runtimeScratchDir = path.join(import.meta.dirname, "tmp/hmr-runtime-build"
 const builtRuntimePath = path.join(runtimeScratchDir, "hmr-runtime.js");
 
 /** Wraps the real `hmr()`, defaulting `runtimePath` to this test's own scratch build. */
-function hmr(options: HmrOptions): ReturnType<typeof realHmr> {
-  return realHmr({ runtimePath: builtRuntimePath, ...options });
+function hmr(options: HmrOptions): Promise<HmrChannel> {
+  return createViteBundler(adapterCore).hmr!({ runtimePath: builtRuntimePath, ...options });
 }
 
 // The real vite.config.mts's own "hmr-runtime" entry, reused here rather

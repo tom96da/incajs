@@ -6,8 +6,13 @@ import path from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { build } from "../../../src/adapter/vite/index.mts";
+import { createViteBundler } from "../../../src/adapter/vite/index.mts";
+import * as adapterCore from "../../../src/adapterCore.mts";
 import { scratchApp } from "./scratchApp.mts";
+import type { Bundler } from "../../../src/adapter/types.mts";
+
+const vite = createViteBundler(adapterCore);
+const build: Bundler["build"] = (options) => vite.build(options);
 
 const { setUp, tearDown, makeApp } = scratchApp("build");
 

@@ -5,7 +5,7 @@ import path from "node:path";
 
 import type { Plugin } from "vite";
 
-import { IncaError } from "../../error.mts";
+import type { AdapterCore } from "../../adapterCore.mts";
 import type { BuildOutput } from "../types.mts";
 
 /** What one (re)build actually wrote, relative to its own `outDir`. */
@@ -36,14 +36,14 @@ export function toBuildOutput(
  * one-shot build and every watch rebuild, so both read the bundler's real
  * output instead of assuming a file name or layout.
  */
-export function captureOutput(sink: (output: CapturedOutput) => void): Plugin {
+export function captureOutput(core: AdapterCore, sink: (output: CapturedOutput) => void): Plugin {
   return {
     name: "inca:capture-output",
     writeBundle(_options, bundle) {
       const files = Object.keys(bundle);
       const entry = Object.values(bundle).find((file) => file.type === "chunk" && file.isEntry);
       if (!entry) {
-        throw new IncaError("ERR_INCA_BUILD_NO_ENTRY_CHUNK", "build produced no entry chunk");
+        throw new core.IncaError("ERR_INCA_BUILD_NO_ENTRY_CHUNK", "build produced no entry chunk");
       }
       sink({ entryFile: entry.fileName, files });
     },

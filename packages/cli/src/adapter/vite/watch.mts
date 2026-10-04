@@ -4,9 +4,9 @@
 import { build } from "vite";
 import type { RolldownWatcher } from "rolldown";
 
-import { bundlerFault } from "../../log.mts";
 import { toBuildOutput } from "./captureOutput.mts";
 import { resolveViteConfig } from "./config.mts";
+import type { AdapterCore } from "../../adapterCore.mts";
 import type { BundlerOptions, Watcher } from "../types.mts";
 
 /**
@@ -14,18 +14,22 @@ import type { BundlerOptions, Watcher } from "../types.mts";
  * change, calling `onBuild` with what each rebuild wrote. Never starts,
  * reloads, or talks to `inca-host` — that's `dev.mts`'s job.
  */
-export async function watch({
-  onBuild,
-  onError,
-  stdout = process.stdout,
-  stderr = process.stderr,
-  quiet = false,
-  ...buildOptions
-}: BundlerOptions): Promise<Watcher> {
+export async function watch(
+  core: AdapterCore,
+  {
+    onBuild,
+    onError,
+    stdout = process.stdout,
+    stderr = process.stderr,
+    quiet = false,
+    ...buildOptions
+  }: BundlerOptions,
+): Promise<Watcher> {
   const { outDir } = buildOptions;
   let changed: { file: string; at: number } | undefined;
   const result = await build(
     resolveViteConfig({
+      core,
       ...buildOptions,
       watch: true,
       stdout,
@@ -54,7 +58,7 @@ export async function watch({
     changed = undefined;
     // Rolldown aggregates: errors[0] is the one a plugin actually raised.
     const { errors } = event.error as { errors?: { message?: string }[] };
-    onError(bundlerFault(errors?.[0]?.message ?? event.error.message));
+    onError(core.bundlerFault(errors?.[0]?.message ?? event.error.message));
   });
 
   return { close: () => watcher.close() };

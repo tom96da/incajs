@@ -10,11 +10,13 @@ import { captureOutput } from "./captureOutput.mts";
 import { emitConfig } from "./emitConfig.mts";
 import { streamLogger } from "./logger.mts";
 import { rejectUnsupported } from "./unsupported.mts";
+import type { AdapterCore } from "../../adapterCore.mts";
 import type { CapturedOutput } from "./captureOutput.mts";
 
 export const BUNDLE_FILE_NAME = "bundle.js";
 
 export interface ResolveConfigOptions {
+  core: AdapterCore;
   /** The app's own entry point — may import `.vue` files. */
   entry: string;
   /** Where the build's output is written. */
@@ -46,6 +48,7 @@ export interface ResolveConfigOptions {
  * failing the build.
  */
 export function resolveViteConfig({
+  core,
   entry,
   outDir,
   mode,
@@ -77,9 +80,9 @@ export function resolveViteConfig({
           compilerOptions: { runtimeModuleName: "@vue/runtime-core", hoistStatic: false },
         },
       }),
-      rejectUnsupported(),
+      rejectUnsupported(core),
       emitConfig(runtimeConfig),
-      captureOutput(onOutput),
+      captureOutput(core, onOutput),
     ],
     build: {
       lib: {
