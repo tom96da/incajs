@@ -23,6 +23,9 @@ change is done, for Rust and TypeScript.
   on the other.
   - Rust files in `tests/tests/`: `config_contract.rs` starts Node.
     `js_core_integration.rs` reads `packages/core/dist`.
+  - `tests/tests/ui/` mounts the `.vue` files in `tests/tests/ui-fixtures/`
+    in the `Harness`. `build-ui-fixtures.mjs` bundles them all once per run
+    and needs `packages/core/dist`.
   - Node files in `tests/tests/` belong to `@incajs/e2e-tests`, which
     `pnpm test` does not run: `hmr-quickjs-state`, `host-startup-failure`,
     `host-shutdown` and `host-packaged-launch`. They spawn the real

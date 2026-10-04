@@ -84,6 +84,24 @@ impl Harness {
         self.settle();
     }
 
+    /// Moves the pointer to the center of node `id`, located as in
+    /// [`Harness::click`]. The node and its ancestors receive `mouseenter`
+    /// when the pointer was outside them. Call [`Harness::unhover`] to leave.
+    ///
+    /// # Panics
+    ///
+    /// Panics under the same conditions as [`Harness::click`].
+    pub fn hover(&mut self, id: NodeId) {
+        let at = self.center_of(id);
+        self.move_pointer(at);
+    }
+
+    /// Moves the pointer to a point outside every node, so each node it was
+    /// over receives `mouseleave`.
+    pub fn unhover(&mut self) {
+        self.move_pointer(point(px(-1.0), px(-1.0)));
+    }
+
     /// Scrolls with a pixel wheel event of (`dx`, `dy`) over node `id`,
     /// located as in [`Harness::click`]. A negative `dy` scrolls down.
     ///
@@ -126,6 +144,11 @@ impl Harness {
             .expect("the window is open");
         self.cx.run_until_parked();
         self.cx.update(|window, cx| window.draw(cx).clear(cx));
+    }
+
+    fn move_pointer(&mut self, at: Point<Pixels>) {
+        self.cx.simulate_mouse_move(at, None, Modifiers::none());
+        self.settle();
     }
 
     fn bounds_of(&mut self, id: NodeId) -> Option<Bounds> {
@@ -260,6 +283,179 @@ mod tests {
     #[should_panic(expected = "no node 9999 in the tree")]
     fn click_panics_on_an_unknown_node(cx: &mut TestAppContext) {
         Harness::load(cx, ENTRY, CLICKABLE).click(9999);
+    }
+
+    /// A 100x50 box below a spacer, counting its `mouseenter` and `mouseleave`
+    /// events. The pointer starts over the spacer.
+    const HOVERABLE: &str = r"
+        const n = __inca_native__;
+        const frame = n.createNode('div');
+        n.setStyle(frame, 'width', 200);
+        n.setStyle(frame, 'height', 200);
+        n.appendChild(n.rootNodeId(), frame);
+        const spacer = n.createNode('div');
+        n.setStyle(spacer, 'width', 60);
+        n.setStyle(spacer, 'height', 50);
+        n.appendChild(frame, spacer);
+        const box = n.createNode('div');
+        n.setStyle(box, 'width', 100);
+        n.setStyle(box, 'height', 50);
+        n.appendChild(frame, box);
+        globalThis.enters = 0;
+        globalThis.leaves = 0;
+        globalThis.__inca_callbacks__ = {
+            0: () => { globalThis.enters++; },
+            1: () => { globalThis.leaves++; },
+        };
+        n.addEventListener(box, 'mouseenter', 0);
+        n.addEventListener(box, 'mouseleave', 1);
+    ";
+
+    fn hover_box(h: &mut Harness) -> NodeId {
+        id_where(h, |n| n.bounds.is_some_and(|b| b.width == 100.0))
+    }
+
+    #[gpui::test]
+    fn hover_fires_mouseenter_once(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, HOVERABLE);
+        let boxed = hover_box(&mut h);
+        assert_eq!(eval_f64(&h, "globalThis.enters"), 0.0);
+
+        h.hover(boxed);
+
+        assert_eq!(eval_f64(&h, "globalThis.enters"), 1.0);
+        assert_eq!(eval_f64(&h, "globalThis.leaves"), 0.0);
+    }
+
+    #[gpui::test]
+    fn hovering_the_same_node_again_does_not_repeat_mouseenter(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, HOVERABLE);
+        let boxed = hover_box(&mut h);
+
+        h.hover(boxed);
+        h.hover(boxed);
+
+        assert_eq!(eval_f64(&h, "globalThis.enters"), 1.0);
+    }
+
+    #[gpui::test]
+    fn unhover_fires_mouseleave(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, HOVERABLE);
+        let boxed = hover_box(&mut h);
+        h.hover(boxed);
+
+        h.unhover();
+
+        assert_eq!(eval_f64(&h, "globalThis.leaves"), 1.0);
+    }
+
+    #[gpui::test]
+    fn hover_again_after_leaving_fires_mouseenter_again(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, HOVERABLE);
+        let boxed = hover_box(&mut h);
+
+        h.hover(boxed);
+        h.unhover();
+        h.hover(boxed);
+
+        assert_eq!(eval_f64(&h, "globalThis.enters"), 2.0);
+        assert_eq!(eval_f64(&h, "globalThis.leaves"), 1.0);
+    }
+
+    #[gpui::test]
+    fn unhover_twice_fires_mouseleave_once(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, HOVERABLE);
+        let boxed = hover_box(&mut h);
+        h.hover(boxed);
+
+        h.unhover();
+        h.unhover();
+
+        assert_eq!(eval_f64(&h, "globalThis.leaves"), 1.0);
+    }
+
+    #[gpui::test]
+    fn unhover_before_any_hover_fires_nothing(cx: &mut TestAppContext) {
+        let mut h = Harness::load(
+            cx,
+            ENTRY,
+            r"
+            const n = __inca_native__;
+            const box = n.createNode('div');
+            n.setStyle(box, 'width', 100);
+            n.setStyle(box, 'height', 50);
+            n.setStyle(box, 'margin_left', 200);
+            n.appendChild(n.rootNodeId(), box);
+            globalThis.leaves = 0;
+            globalThis.__inca_callbacks__ = { 0: () => { globalThis.leaves++; } };
+            n.addEventListener(box, 'mouseleave', 0);
+            ",
+        );
+
+        h.unhover();
+
+        assert_eq!(eval_f64(&h, "globalThis.leaves"), 0.0);
+    }
+
+    #[gpui::test]
+    fn hovering_a_child_enters_its_ancestors(cx: &mut TestAppContext) {
+        let mut h = Harness::load(
+            cx,
+            ENTRY,
+            r"
+            const n = __inca_native__;
+            const frame = n.createNode('div');
+            n.setStyle(frame, 'width', 200);
+            n.setStyle(frame, 'height', 200);
+            n.appendChild(n.rootNodeId(), frame);
+            const spacer = n.createNode('div');
+            n.setStyle(spacer, 'width', 100);
+            n.setStyle(spacer, 'height', 50);
+            n.appendChild(frame, spacer);
+            const outer = n.createNode('div');
+            n.setStyle(outer, 'width', 100);
+            n.setStyle(outer, 'height', 100);
+            n.appendChild(frame, outer);
+            const inner = n.createNode('div');
+            n.setStyle(inner, 'width', 20);
+            n.setStyle(inner, 'height', 20);
+            n.appendChild(outer, inner);
+            globalThis.enters = 0;
+            globalThis.__inca_callbacks__ = { 0: () => { globalThis.enters++; } };
+            n.addEventListener(outer, 'mouseenter', 0);
+            ",
+        );
+        assert_eq!(eval_f64(&h, "globalThis.enters"), 0.0);
+        let inner = id_where(&mut h, |n| n.bounds.is_some_and(|b| b.width == 20.0));
+
+        h.hover(inner);
+
+        assert_eq!(eval_f64(&h, "globalThis.enters"), 1.0);
+    }
+
+    #[gpui::test]
+    fn hover_on_a_text_leaf_lands_on_its_container(cx: &mut TestAppContext) {
+        let mut h = Harness::load(
+            cx,
+            ENTRY,
+            &format!(
+                "{HOVERABLE}
+                const label = n.createNode('text');
+                n.setAttribute(label, 'value', 'hi');
+                n.appendChild(box, label);"
+            ),
+        );
+        let leaf = id_where(&mut h, |n| n.text.is_some());
+
+        h.hover(leaf);
+
+        assert_eq!(eval_f64(&h, "globalThis.enters"), 1.0);
+    }
+
+    #[gpui::test]
+    #[should_panic(expected = "no node 9999 in the tree")]
+    fn hover_panics_on_an_unknown_node(cx: &mut TestAppContext) {
+        Harness::load(cx, ENTRY, HOVERABLE).hover(9999);
     }
 
     #[test]

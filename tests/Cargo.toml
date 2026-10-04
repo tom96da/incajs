@@ -16,6 +16,7 @@ homepage.workspace = true
 publish = false
 
 [dev-dependencies]
+gpui = { workspace = true, features = ["test-support"] }
 inca-bridge = { path = "../crates/inca-bridge" }
 inca-gpui = { path = "../crates/inca-gpui" }
 inca-host = { path = "../crates/inca-host", features = ["test-support"] }

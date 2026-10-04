@@ -2857,6 +2857,7 @@ dependencies = [
 name = "inca-tests"
 version = "0.0.9"
 dependencies = [
+ "gpui",
  "inca-bridge",
  "inca-gpui",
  "inca-host",
