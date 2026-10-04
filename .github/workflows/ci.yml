@@ -39,6 +39,7 @@ jobs:
     outputs:
       rust: ${{ steps.filter.outputs.rust }}
       js: ${{ steps.filter.outputs.js }}
+      tests: ${{ steps.filter.outputs.tests }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -52,10 +53,12 @@ jobs:
           filters: |
             rust:
               - 'crates/**'
-              - 'tests/**'
               - 'Cargo.toml'
               - 'Cargo.lock'
               - 'rust-toolchain.toml'
+              - '.github/workflows/ci.yml'
+            tests:
+              - 'tests/**'
               - '.github/workflows/ci.yml'
             js:
               - 'packages/**'
@@ -122,15 +125,16 @@ jobs:
       - name: Install deps
         run: pnpm ci
 
-      # Root scripts, so examples/ is covered too — it defines no `pretest`.
+      # Runs from the root, so examples/ is covered too (it defines no
+      # `pretest`). rust-node-ubuntu checks tests/.
       - name: Lint
-        run: pnpm run lint
+        run: pnpm exec oxlint --type-aware --ignore-pattern 'tests/**'
 
       - name: Check formatting
-        run: pnpm run format
+        run: pnpm exec oxfmt --check --disable-nested-config . '!tests/**'
 
       - name: Typecheck
-        run: pnpm run typecheck
+        run: pnpm exec oxlint -A all --type-aware --type-check --ignore-pattern 'tests/**'
 
   # One job per version instead of a strategy.matrix, so a skip keeps its name.
   test-node-22:
@@ -256,11 +260,20 @@ jobs:
       - name: Test
         run: cargo test --workspace --exclude inca-tests
 
-      # check and test do not link the host binary, and cd.yml builds it only
-      # at release time. The Linux link is covered by the rust-node job.
       - name: Build the host
-        if: runner.os == 'macOS'
         run: cargo build -p inca-host
+
+  rust-ubuntu-arm:
+    name: "Rust: ubuntu:22.04 (arm64)"
+    needs: changed
+    if: needs.changed.outputs.rust == 'true'
+    timeout-minutes: 30
+    runs-on: ubuntu-24.04-arm
+    container: ubuntu:22.04
+    defaults:
+      run:
+        shell: bash
+    steps: *rust_steps
 
   rust-macos:
     name: "Rust: macos-latest"
@@ -279,12 +292,16 @@ jobs:
     steps: *rust_steps
 
   # The tests that need a crate and a package at once, kept out of both so
-  # neither depends on the other. Linux only: nothing here is
-  # platform-specific.
-  rust-node:
+  # neither depends on the other. Checks tests/ and runs the e2e suite.
+  rust-node-ubuntu:
     name: "Rust & Node: ubuntu:22.04"
-    needs: changed
-    if: needs.changed.outputs.rust == 'true' || needs.changed.outputs.js == 'true'
+    needs: [changed, test-node-22, test-node-24, test-node-26, rust-ubuntu]
+    # A needed job that `changed` skipped does not block this one.
+    if: >
+      !cancelled() && !failure() &&
+      (needs.changed.outputs.rust == 'true' ||
+       needs.changed.outputs.js == 'true' ||
+       needs.changed.outputs.tests == 'true')
     timeout-minutes: 30
     runs-on: ubuntu-latest
     container: ubuntu:22.04
@@ -334,6 +351,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: workspace
+          save-if: false
 
       - name: Install pnpm
         uses: pnpm/action-setup@v6
@@ -349,6 +367,15 @@ jobs:
 
       - name: Build the JS packages
         run: pnpm -F incajs -F @incajs/cli build
+
+      - name: Check formatting
+        run: cargo fmt -p inca-tests -- --check
+
+      - name: Lint and typecheck tests/
+        run: pnpm exec oxlint --type-aware --type-check tests
+
+      - name: Check formatting of tests/
+        run: pnpm exec oxfmt --check --disable-nested-config tests
 
       - name: Clippy
         run: cargo clippy -p inca-tests --all-targets -- -D warnings
@@ -374,6 +401,49 @@ jobs:
       - name: Test (real inca-host + real Vite dev server)
         run: xvfb-run -a pnpm -F @incajs/e2e-tests test
 
+  rust-node-macos:
+    name: "Rust & Node: macos-latest"
+    needs: [changed, test-node-22, test-node-24, test-node-26, rust-macos]
+    if: >
+      !cancelled() && !failure() &&
+      (needs.changed.outputs.rust == 'true' ||
+       needs.changed.outputs.js == 'true' ||
+       needs.changed.outputs.tests == 'true')
+    timeout-minutes: 30
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # Downloads the pinned toolchain before rust-cache keys on `rustc -vV`.
+      - name: Install clippy and rustfmt
+        run: rustup component add clippy rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: workspace
+          save-if: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set node version to 26
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+
+      - name: Install deps
+        run: pnpm ci
+
+      - name: Build the JS packages
+        run: pnpm -F incajs -F @incajs/cli build
+
+      - name: Test
+        run: cargo test -p inca-tests
+
   # One status check whose name survives changes to the jobs above.
   passed:
     name: CI Passed
@@ -387,9 +457,11 @@ jobs:
         test-node-24,
         test-node-26,
         rust-ubuntu,
+        rust-ubuntu-arm,
         rust-macos,
         rust-macos-intel,
-        rust-node,
+        rust-node-ubuntu,
+        rust-node-macos,
       ]
     runs-on: ubuntu-latest
     steps:
