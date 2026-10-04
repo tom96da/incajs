@@ -420,7 +420,9 @@ A fixed entry is deleted and its ID is never reused.
   Worth a way to drop it from a release build — a Cargo feature gating
   `mod dev;` and the CLI's `--dev` flag, built once for `inca dev`'s own use
   and once (without the feature) for packaging — once it's worth the two
-  build configurations that implies.
+  build configurations that implies. The code is about 0.14% of the binary,
+  so the gain is a smaller surface in a distributed app. Decide it together
+  with how a packaged app finds and trusts its bundle.
 
 - **B-006 QuickJS bytecode precompilation**
   `Units: jsenv,host,cli · Size: L · Impact: Low`
