@@ -1004,8 +1004,8 @@ mod tests {
             [
                 "1970-01-01T00:00:00.000Z",
                 "Map(1) { 1 => 2 }",
-                "{}",
-                "{}",
+                "Map(0) {}",
+                "<Revoked Proxy>",
                 "Set(1) { 1 }",
                 "Map(1) { 'self' => Map(1) { 'self' => Map(1) { 'self' => [Map] } } }",
                 "100000",
@@ -1217,12 +1217,11 @@ mod tests {
     }
 
     #[test]
-    fn unreadable_values_in_any_method_leave_nothing_pending() {
+    fn accessors_and_a_failing_stack_in_any_method_leave_nothing_pending() {
         assert_eq!(
             texts(
                 "console.log({ get a() { throw 1; } }); \
                  console.log([Object.defineProperty([1], 0, { get() { throw 1; } })]); \
-                 console.log(new Proxy({}, { ownKeys() { throw 1; } })); \
                  console.log(Object.defineProperty(new Error('e'), 'stack', { get() { throw 1; } })); \
                  console.dir({ get a() { throw 1; } }); \
                  try { null.x; } catch (e) { console.log('caught'); }"
@@ -1231,11 +1230,10 @@ mod tests {
             .map(|t| t.lines().next().unwrap().to_owned())
             .collect::<Vec<_>>(),
             [
-                "{ a: [unreadable] }",
-                "[ [ [unreadable] ] ]",
-                "{}",
+                "{ a: [Getter] }",
+                "[ [ [Getter] ] ]",
                 "Error: e",
-                "{ a: [unreadable] }",
+                "{ a: [Getter] }",
                 "caught"
             ]
         );

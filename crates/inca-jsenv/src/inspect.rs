@@ -10,7 +10,7 @@
 
 use std::fmt::Write;
 
-use rquickjs::{Coerced, Ctx, Result as JsResult, Type, Value};
+use rquickjs::{Coerced, Ctx, Object, Result as JsResult, Type, Value, object::Filter, qjs};
 
 use crate::paint::{Style, paint};
 
@@ -117,17 +117,52 @@ fn put(out: &mut String, mode: Mode, style: Style, text: &str) {
     out.push_str(&paint(mode.color, style, &shown));
 }
 
+/// The target a `Proxy` forwards to, or `None` for a revoked one. Reading it
+/// runs no trap.
+fn proxy_target<'js>(proxy: &Value<'js>) -> Option<Value<'js>> {
+    let ctx = proxy.ctx();
+    // SAFETY: `proxy` is a live proxy in `ctx`. The call returns a new
+    // reference to the target, or the exception value (which owns nothing)
+    // after throwing for a revoked proxy. `Value::from_raw` takes over the
+    // reference, so it is released exactly once, when the value drops.
+    let target = unsafe {
+        Value::from_raw(
+            ctx.clone(),
+            qjs::JS_GetProxyTarget(ctx.as_raw().as_ptr(), proxy.as_raw()),
+        )
+    };
+    if target.is_exception() {
+        drop(ctx.catch());
+        return None;
+    }
+    Some(target)
+}
+
+/// The value itself, or for a `Proxy` the target it finally forwards to
+/// (`None` when a link of the chain is revoked). A proxy's target exists
+/// before the proxy does, so a chain cannot loop.
+pub(crate) fn unproxied<'js>(value: &Value<'js>) -> Option<Value<'js>> {
+    let mut current = value.clone();
+    while current.is_proxy() {
+        current = proxy_target(&current)?;
+    }
+    Some(current)
+}
+
 /// A top-level string prints bare (`console.log('a')` gives `a`); one nested
 /// in an array or object is quoted, so `['a']` doesn't read as `[a]`.
 fn write_value(out: &mut String, value: &Value<'_>, depth: usize, mode: Mode) {
+    let Some(value) = &unproxied(value) else {
+        put(out, mode, Style::Cyan, "<Revoked Proxy>");
+        return;
+    };
     match value.type_of() {
         Type::String => {
             let text = value.as_string().and_then(|s| s.to_string().ok());
             match (text, depth) {
                 (Some(text), 0) => plain(out, mode, &text),
                 (Some(text), _) => {
-                    let quoted = format!("'{}'", text.replace('\'', "\\'"));
-                    put(out, mode, Style::Green, &quoted);
+                    put(out, mode, Style::Green, &quote(&text));
                 }
                 (None, _) => out.push_str("[String]"),
             }
@@ -237,22 +272,154 @@ fn write_array(out: &mut String, value: &Value<'_>, depth: usize, mode: Mode) {
         put(out, mode, Style::Cyan, "[Array]");
         return;
     }
-    if array.is_empty() {
+    let object = array.as_object();
+    let ctx = object.ctx();
+    // A length above `i32::MAX` is a float, so `Array::len` cannot read it.
+    let length = settled(ctx, object.get::<_, f64>("length")).unwrap_or(0.0);
+    if length < 1.0 {
         out.push_str("[]");
         return;
     }
 
     out.push_str("[ ");
-    for (index, item) in array.clone().into_iter().enumerate() {
-        if index > 0 {
-            out.push_str(", ");
+    let mut written = false;
+    let mut next = 0.0;
+    // Only the present indices are visited, in ascending order, so a hole run
+    // of any size costs one step.
+    for key in object.own_keys::<String>(Filter::new().string()) {
+        let Some(index) = settled(ctx, key).as_deref().and_then(array_index) else {
+            continue;
+        };
+        if index >= length {
+            continue;
         }
-        match settled(array.ctx(), item) {
-            Some(item) => write_value(out, &item, depth + 1, mode),
-            None => out.push_str("[unreadable]"),
+        if index > next {
+            write_holes(out, &mut written, index - next, mode);
         }
+        separate(out, &mut written);
+        write_slot(out, slot(object, &index.to_string()), depth, mode);
+        next = index + 1.0;
+    }
+    if length > next {
+        write_holes(out, &mut written, length - next, mode);
     }
     out.push_str(" ]");
+}
+
+/// The index an array key names, or `None` for any other key.
+fn array_index(key: &str) -> Option<f64> {
+    let index: u32 = key.parse().ok()?;
+    (index != u32::MAX && index.to_string() == key).then_some(f64::from(index))
+}
+
+/// Starts the next entry of an array.
+fn separate(out: &mut String, written: &mut bool) {
+    if *written {
+        out.push_str(", ");
+    }
+    *written = true;
+}
+
+fn write_holes(out: &mut String, written: &mut bool, count: f64, mode: Mode) {
+    separate(out, written);
+    let count = count.to_string();
+    let plural = if count == "1" { "" } else { "s" };
+    put(
+        out,
+        mode,
+        Style::Grey,
+        &format!("<{count} empty item{plural}>"),
+    );
+}
+
+/// `text` in single quotes.
+fn quote(text: &str) -> String {
+    format!("'{}'", text.replace('\'', "\\'"))
+}
+
+/// A key that is an identifier prints as it is; any other is quoted.
+fn write_key(out: &mut String, key: &str, mode: Mode) {
+    let mut chars = key.chars();
+    let bare = chars
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
+    if bare {
+        plain(out, mode, key);
+    } else {
+        put(out, mode, Style::Green, &quote(key));
+    }
+    out.push_str(": ");
+}
+
+/// What an own property holds.
+enum Slot<'js> {
+    Value(Value<'js>),
+    /// `[Getter]`, `[Setter]` or `[Getter/Setter]`.
+    Accessor(&'static str),
+    /// No such property, or a read that threw (the exception is cleared).
+    Missing,
+}
+
+/// Reads an own property's descriptor, so an accessor is named and never
+/// called.
+fn slot<'js>(object: &Object<'js>, key: &str) -> Slot<'js> {
+    let ctx = object.ctx();
+    // The atom comes from a JS string, so a non-ASCII key finds its own
+    // property.
+    let Some(name) = settled(ctx, rquickjs::String::from_str(ctx.clone(), key)) else {
+        return Slot::Missing;
+    };
+    let raw_ctx = ctx.as_raw().as_ptr();
+    let mut desc = std::mem::MaybeUninit::<qjs::JSPropertyDescriptor>::uninit();
+    // SAFETY: `desc` is only read after a positive result, which fills it.
+    // The atom is released right after the call.
+    let found = unsafe {
+        let atom = qjs::JS_ValueToAtom(raw_ctx, name.as_value().as_raw());
+        if atom == qjs::JS_ATOM_NULL {
+            drop(ctx.catch());
+            return Slot::Missing;
+        }
+        let found =
+            qjs::JS_GetOwnProperty(raw_ctx, desc.as_mut_ptr(), object.as_value().as_raw(), atom);
+        qjs::JS_FreeAtom(raw_ctx, atom);
+        found
+    };
+    if found < 0 {
+        drop(ctx.catch());
+    }
+    if found <= 0 {
+        return Slot::Missing;
+    }
+    // SAFETY: a positive result filled `desc` with three owned values.
+    // `Value::from_raw` takes each over, so each is released once.
+    let (flags, value, getter, setter) = unsafe {
+        let desc = desc.assume_init();
+        (
+            desc.flags,
+            Value::from_raw(ctx.clone(), desc.value),
+            Value::from_raw(ctx.clone(), desc.getter),
+            Value::from_raw(ctx.clone(), desc.setter),
+        )
+    };
+    let accessor = flags & qjs::JS_PROP_GETSET.cast_signed() != 0;
+    match (accessor, getter.is_undefined(), setter.is_undefined()) {
+        (true, false, false) => Slot::Accessor("[Getter/Setter]"),
+        (true, false, true) => Slot::Accessor("[Getter]"),
+        (true, true, false) => Slot::Accessor("[Setter]"),
+        // A data property, or an accessor with neither function, whose value
+        // is `undefined`.
+        _ => Slot::Value(value),
+    }
+}
+
+/// Appends what an own property holds. `undefined` stands for a missing one.
+fn write_slot(out: &mut String, slot: Slot<'_>, depth: usize, mode: Mode) {
+    match slot {
+        Slot::Value(item) => write_value(out, &item, depth + 1, mode),
+        Slot::Accessor(text) => put(out, mode, Style::Cyan, text),
+        Slot::Missing => put(out, mode, Style::Grey, "undefined"),
+    }
 }
 
 fn write_object(out: &mut String, value: &Value<'_>, depth: usize, mode: Mode) {
@@ -278,11 +445,8 @@ fn write_object(out: &mut String, value: &Value<'_>, depth: usize, mode: Mode) {
         if entries > 0 {
             body.push_str(", ");
         }
-        plain(&mut body, mode, &format!("{key}: "));
-        match settled(object.ctx(), object.get::<_, Value<'_>>(key.as_str())) {
-            Some(item) => write_value(&mut body, &item, depth + 1, mode),
-            None => body.push_str("[unreadable]"),
-        }
+        write_key(&mut body, &key, mode);
+        write_slot(&mut body, slot(object, &key), depth, mode);
         entries += 1;
     }
 
@@ -308,8 +472,30 @@ mod tests {
         context.with(|ctx| {
             pin(&ctx).unwrap();
             let value: Value<'_> = ctx.eval(expression).unwrap();
-            line(&[value], false)
+            let out = line(&[value], false);
+            assert!(!ctx.has_exception(), "a read left an exception pending");
+            out
         })
+    }
+
+    #[test]
+    fn a_module_namespace_with_an_uninitialised_export_prints_and_leaves_nothing_pending() {
+        let runtime = Runtime::new().unwrap();
+        let context = Context::full(&runtime).unwrap();
+        context.with(|ctx| {
+            pin(&ctx).unwrap();
+            // The module throws before `x` is initialised, so reading `x` throws.
+            drop(rquickjs::Module::evaluate(
+                ctx.clone(),
+                "m",
+                "import * as self from 'm'; globalThis.ns = self; throw 1; export let x = 1;",
+            ));
+            drop(ctx.catch());
+            let value: Value<'_> = ctx.eval("ns").unwrap();
+            let _ = line(&[value], false);
+
+            assert!(!ctx.has_exception(), "a read left an exception pending");
+        });
     }
 
     #[test]
@@ -397,6 +583,254 @@ mod tests {
         );
     }
 
+    /// Renders `expression` with a `calls` counter in scope, and returns the
+    /// text and the counter.
+    fn counted(expression: &str) -> (String, i32) {
+        let runtime = Runtime::new().unwrap();
+        let context = Context::full(&runtime).unwrap();
+        context.with(|ctx| {
+            pin(&ctx).unwrap();
+            ctx.eval::<(), _>("globalThis.calls = 0;").unwrap();
+            let value: Value<'_> = ctx.eval(expression).unwrap();
+            let text = line(&[value], false);
+            assert!(!ctx.has_exception());
+            (text, ctx.eval("calls").unwrap())
+        })
+    }
+
+    #[test]
+    fn an_accessor_is_named_by_its_kind_and_never_called() {
+        for (source, shown) in [
+            ("({ get a() { calls++; return 1; } })", "{ a: [Getter] }"),
+            ("({ set a(v) { calls++; } })", "{ a: [Setter] }"),
+            (
+                "({ get a() { calls++; }, set a(v) { calls++; } })",
+                "{ a: [Getter/Setter] }",
+            ),
+            (
+                "Object.defineProperty({}, 'a', { get() { calls++; }, enumerable: true })",
+                "{ a: [Getter] }",
+            ),
+            (
+                "Object.defineProperty({}, 'a', { set: undefined, get: undefined, enumerable: true })",
+                "{ a: undefined }",
+            ),
+        ] {
+            assert_eq!(counted(source), (shown.to_owned(), 0), "{source}");
+        }
+    }
+
+    #[test]
+    fn accessors_sit_among_data_properties_in_order() {
+        assert_eq!(
+            rendered("({ x: 1, get y() { return 2; }, z: 'z', set w(v) {} })"),
+            "{ x: 1, y: [Getter], z: 'z', w: [Setter] }"
+        );
+    }
+
+    #[test]
+    fn an_accessor_nests_in_objects_arrays_and_collections() {
+        assert_eq!(
+            rendered("({ a: { b: { get c() { return 1; } } } })"),
+            "{ a: { b: { c: [Getter] } } }"
+        );
+        assert_eq!(
+            rendered("[{ get a() { return 1; } }]"),
+            "[ { a: [Getter] } ]"
+        );
+        assert_eq!(
+            rendered("new Map([[1, { get a() { return 1; } }]])"),
+            "Map(1) { 1 => { a: [Getter] } }"
+        );
+        assert_eq!(
+            rendered("new Set([{ set a(v) {} }])"),
+            "Set(1) { { a: [Setter] } }"
+        );
+    }
+
+    #[test]
+    fn an_accessor_past_the_depth_limit_is_not_reached() {
+        assert_eq!(
+            counted("({ a: { b: { c: { get d() { calls++; } } } } })"),
+            ("{ a: { b: { c: [Object] } } }".to_owned(), 0)
+        );
+    }
+
+    #[test]
+    fn an_array_element_accessor_is_named_and_not_called() {
+        assert_eq!(
+            counted(
+                "const a = [1, 2, 3]; \
+                 Object.defineProperty(a, 1, { get() { calls++; }, enumerable: true }); \
+                 Object.defineProperty(a, 2, { set(v) { calls++; }, enumerable: true }); a"
+            ),
+            ("[ 1, [Getter], [Setter] ]".to_owned(), 0)
+        );
+    }
+
+    #[test]
+    fn array_holes_print_as_counted_empty_items() {
+        for (source, shown) in [
+            ("[1, , 3]", "[ 1, <1 empty item>, 3 ]"),
+            ("[, 1]", "[ <1 empty item>, 1 ]"),
+            ("[1, , ]", "[ 1, <1 empty item> ]"),
+            (
+                "[1, , , 4, , 6]",
+                "[ 1, <2 empty items>, 4, <1 empty item>, 6 ]",
+            ),
+            ("new Array(3)", "[ <3 empty items> ]"),
+            (
+                "[undefined, , undefined]",
+                "[ undefined, <1 empty item>, undefined ]",
+            ),
+        ] {
+            assert_eq!(rendered(source), shown, "{source}");
+        }
+        assert_eq!(
+            colored("[1, , 3]"),
+            format!(
+                "[ {}, {}, {} ]",
+                yellow("1"),
+                grey("<1 empty item>"),
+                yellow("3")
+            )
+        );
+    }
+
+    #[test]
+    fn a_sparse_array_costs_its_present_elements_and_not_its_length() {
+        let started = std::time::Instant::now();
+        for (source, shown) in [
+            (
+                "const a = []; a[1e9] = 1; a",
+                "[ <1000000000 empty items>, 1 ]",
+            ),
+            ("new Array(4294967295)", "[ <4294967295 empty items> ]"),
+            (
+                "const a = []; a.length = 2 ** 31; a",
+                "[ <2147483648 empty items> ]",
+            ),
+            (
+                "const a = []; a[4294967294] = 1; a",
+                "[ <4294967294 empty items>, 1 ]",
+            ),
+            (
+                "const a = []; a[2e9] = 'y'; a[5e8] = 'x'; a",
+                "[ <500000000 empty items>, 'x', <1499999999 empty items>, 'y' ]",
+            ),
+            (
+                "const a = []; a[5] = 1; a[2] = 2; a",
+                "[ <2 empty items>, 2, <2 empty items>, 1 ]",
+            ),
+            (
+                "const a = [1, 2, 3]; a.length = 2 ** 32 - 1; a",
+                "[ 1, 2, 3, <4294967292 empty items> ]",
+            ),
+            (
+                "const a = []; Object.defineProperty(a, 1, { get() { calls++; } }); a[4] = 1; a",
+                "[ <1 empty item>, [Getter], <2 empty items>, 1 ]",
+            ),
+            (
+                "({ a: { b: { c: (() => { const a = []; a[1e9] = 1; return a; })() } } })",
+                "{ a: { b: { c: [Array] } } }",
+            ),
+        ] {
+            assert_eq!(counted(source), (shown.to_owned(), 0), "{source}");
+        }
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(2),
+            "{:?}",
+            started.elapsed()
+        );
+    }
+
+    #[test]
+    fn a_class_getter_lives_on_the_prototype_and_is_neither_shown_nor_run() {
+        assert_eq!(
+            counted("new (class { x = 1; get y() { calls++; return 2; } })()"),
+            ("{ x: 1 }".to_owned(), 0)
+        );
+        assert_eq!(
+            counted("Object.create({ get a() { calls++; } })"),
+            ("{}".to_owned(), 0)
+        );
+    }
+
+    #[test]
+    fn a_class_instance_accessor_defined_on_the_instance_is_named() {
+        assert_eq!(
+            counted(
+                "const o = new (class { constructor() { \
+                 Object.defineProperty(this, 'v', { get: () => { calls++; }, enumerable: true }); } })(); o"
+            ),
+            ("{ v: [Getter] }".to_owned(), 0)
+        );
+    }
+
+    #[test]
+    fn a_hidden_accessor_stays_hidden() {
+        assert_eq!(
+            counted("Object.defineProperty({ a: 1 }, 'h', { get() { calls++; } })"),
+            ("{ a: 1 }".to_owned(), 0)
+        );
+    }
+
+    #[test]
+    fn a_symbol_keyed_accessor_stays_unlisted_and_is_not_run() {
+        assert_eq!(
+            counted("({ get [Symbol('s')]() { calls++; } })"),
+            ("{}".to_owned(), 0)
+        );
+    }
+
+    #[test]
+    fn a_non_ascii_key_finds_its_own_accessor() {
+        assert_eq!(
+            rendered("({ '\u{c3}\u{a9}': 2, '\u{e9}': 1 })"),
+            "{ '\u{c3}\u{a9}': 2, '\u{e9}': 1 }"
+        );
+        assert_eq!(
+            counted("({ '\u{c3}\u{a9}': 2, get '\u{e9}'() { calls++; } })"),
+            ("{ '\u{c3}\u{a9}': 2, '\u{e9}': [Getter] }".to_owned(), 0)
+        );
+    }
+
+    #[test]
+    fn a_numeric_and_an_odd_key_find_their_accessor() {
+        assert_eq!(
+            counted("({ get 1() { calls++; }, get 'a b'() { calls++; }, get 'é'() { calls++; } })"),
+            (
+                "{ '1': [Getter], 'a b': [Getter], 'é': [Getter] }".to_owned(),
+                0
+            )
+        );
+    }
+
+    #[test]
+    fn a_data_property_holding_a_function_is_not_an_accessor() {
+        assert_eq!(rendered("({ f() {} })"), "{ f: [Function: f] }");
+    }
+
+    #[test]
+    fn accessor_text_has_the_same_words_with_colour_on_or_off() {
+        let source = "({ get a() { return 1; }, set b(v) {}, get c() { return 1; }, set c(v) {} })";
+
+        assert_eq!(rendered(source), strip_codes(&colored(source)));
+    }
+
+    #[test]
+    fn accessor_text_is_cyan() {
+        assert_eq!(
+            colored("({ get a() { return 1; }, set b(v) {}, get c() { return 1; }, set c(v) {} })"),
+            format!(
+                "{{ a: {}, b: {}, c: {} }}",
+                cyan("[Getter]"),
+                cyan("[Setter]"),
+                cyan("[Getter/Setter]")
+            )
+        );
+    }
+
     #[test]
     fn quoted_quotes_a_string_and_leaves_the_rest_alone() {
         let runtime = Runtime::new().unwrap();
@@ -431,7 +865,9 @@ mod tests {
         context.with(|ctx| {
             pin(&ctx).unwrap();
             let value: Value<'_> = ctx.eval(expression).unwrap();
-            line(&[value], true)
+            let out = line(&[value], true);
+            assert!(!ctx.has_exception(), "a read left an exception pending");
+            out
         })
     }
 
@@ -490,11 +926,25 @@ mod tests {
     }
 
     #[test]
-    fn object_keys_stay_uncoloured() {
+    fn an_identifier_key_is_uncoloured_and_a_quoted_key_is_green() {
         assert_eq!(
             colored("({ k: 'v', n: 1 })"),
             format!("{{ k: {}, n: {} }}", green("'v'"), yellow("1"))
         );
+        let source = "({ '1': 2, 'a b': 1, _ok9: 3 })";
+
+        assert_eq!(
+            colored(source),
+            format!(
+                "{{ {}: {}, {}: {}, _ok9: {} }}",
+                green("'1'"),
+                yellow("2"),
+                green("'a b'"),
+                yellow("1"),
+                yellow("3")
+            )
+        );
+        assert_eq!(rendered(source), "{ '1': 2, 'a b': 1, _ok9: 3 }");
     }
 
     #[test]
@@ -519,10 +969,9 @@ mod tests {
     }
 
     #[test]
-    fn empty_containers_and_unreadable_slots_are_uncoloured() {
+    fn empty_containers_are_uncoloured() {
         assert_eq!(colored("[]"), "[]");
         assert_eq!(colored("({})"), "{}");
-        assert_eq!(colored("({ get a() { throw 1; } })"), "{ a: [unreadable] }");
     }
 
     #[test]
@@ -605,7 +1054,9 @@ mod tests {
         context.with(|ctx| {
             pin(&ctx).unwrap();
             let value: Value<'_> = ctx.eval(expression).unwrap();
-            quoted_escaped(&value, color)
+            let out = quoted_escaped(&value, color);
+            assert!(!ctx.has_exception(), "a read left an exception pending");
+            out
         })
     }
 
@@ -616,7 +1067,7 @@ mod tests {
             "[ 'a\\nb\\tc\\x01\\x1b[1m' ]"
         );
         assert_eq!(escaped("Symbol('a\\nb')", false), "Symbol(a\\nb)");
-        assert_eq!(escaped("({ 'k\\n': 1 })", false), "{ k\\n: 1 }");
+        assert_eq!(escaped("({ 'k\\n': 1 })", false), "{ 'k\\n': 1 }");
         assert_eq!(escaped("'top\\n'", false), "'top\\n'");
     }
 
@@ -925,29 +1376,141 @@ mod tests {
         );
     }
 
+    /// A `Proxy` around `target` whose handler counts every trap lookup in
+    /// `calls`.
+    fn spied(target: &str) -> String {
+        format!(
+            "new Proxy({target}, new Proxy({{}}, {{ get() {{ calls++; return undefined; }} }}))"
+        )
+    }
+
     #[test]
-    fn a_proxy_is_not_a_collection() {
+    fn a_proxy_prints_as_its_target() {
+        for (target, shown) in [
+            ("new Map([[1, 2]])", "Map(1) { 1 => 2 }"),
+            ("new Set([1])", "Set(1) { 1 }"),
+            ("new Date(0)", "1970-01-01T00:00:00.000Z"),
+            ("/a/g", "/a/g"),
+            ("[1, 'a']", "[ 1, 'a' ]"),
+            ("[]", "[]"),
+            ("({ a: 1 })", "{ a: 1 }"),
+            ("({})", "{}"),
+            ("function named() {}", "[Function: named]"),
+            (
+                "({ get a() { calls++; }, set b(v) {} })",
+                "{ a: [Getter], b: [Setter] }",
+            ),
+        ] {
+            assert_eq!(counted(&spied(target)), (shown.to_owned(), 0), "{target}");
+        }
+    }
+
+    #[test]
+    fn a_proxy_chain_prints_as_its_last_target() {
         assert_eq!(
-            rendered("new Proxy(new Map([[1, 2]]), {})"),
-            "{}",
-            "Node marks the Proxy"
-        );
-        assert_eq!(rendered("new Proxy(new Date(0), {})"), "{}");
-        assert_eq!(
-            rendered("const r = Proxy.revocable(new Map(), {}); r.revoke(); r.proxy"),
-            "{}"
+            counted(&spied(&spied(&spied("new Map([[1, 2]])")))),
+            ("Map(1) { 1 => 2 }".to_owned(), 0)
         );
     }
 
     #[test]
-    fn a_getter_that_throws_inside_a_collection_is_unreadable_only_there() {
+    fn a_revoked_proxy_says_so() {
+        for source in [
+            "const r = Proxy.revocable(new Map(), {}); r.revoke(); r.proxy",
+            "const r = Proxy.revocable({}, {}); r.revoke(); r.proxy",
+            "const r = Proxy.revocable(function () {}, {}); r.revoke(); r.proxy",
+            "const r = Proxy.revocable({}, {}); const p = new Proxy(r.proxy, {}); r.revoke(); p",
+        ] {
+            assert_eq!(rendered(source), "<Revoked Proxy>", "{source}");
+        }
+    }
+
+    #[test]
+    fn a_proxy_nests_in_every_container() {
         assert_eq!(
-            rendered("new Map([[1, { get a() { throw 1; } }]])"),
-            "Map(1) { 1 => { a: [unreadable] } }"
+            counted(&format!(
+                "({{ o: {0}, a: [{1}], m: new Map([[{0}, {2}]]), s: new Set([{1}]) }})",
+                spied("({ x: 1 })"),
+                spied("[2]"),
+                spied("new Date(0)"),
+            )),
+            (
+                "{ o: { x: 1 }, a: [ [ 2 ] ], m: Map(1) { { x: 1 } => 1970-01-01T00:00:00.000Z }, \
+                 s: Set(1) { [ 2 ] } }"
+                    .to_owned(),
+                0
+            )
         );
         assert_eq!(
-            rendered("new Set([new Proxy({}, { ownKeys() { throw 1; } })])"),
-            "Set(1) { {} }"
+            rendered("({ o: new Proxy({ x: 1 }, {}), a: [new Proxy([2], {})] })"),
+            "{ o: { x: 1 }, a: [ [ 2 ] ] }"
+        );
+        assert_eq!(
+            rendered("new Map([[new Proxy({ k: 1 }, {}), new Proxy(new Set([1]), {})]])"),
+            "Map(1) { { k: 1 } => Set(1) { 1 } }"
+        );
+        assert_eq!(
+            rendered("new Set([new Proxy(new Map(), {})])"),
+            "Set(1) { Map(0) {} }"
+        );
+        assert_eq!(
+            rendered(
+                "({ r: (() => { const r = Proxy.revocable({}, {}); r.revoke(); return r.proxy; })() })"
+            ),
+            "{ r: <Revoked Proxy> }"
+        );
+    }
+
+    #[test]
+    fn a_proxy_counts_toward_the_depth_limit_as_its_target_does() {
+        assert_eq!(
+            rendered("({ a: { b: { c: new Proxy({ d: 1 }, {}) } } })"),
+            "{ a: { b: { c: [Object] } } }"
+        );
+        assert_eq!(rendered("[[[new Proxy([1], {})]]]"), "[ [ [ [Array] ] ] ]");
+        assert_eq!(
+            rendered("({ a: { b: { c: new Proxy(new Map(), {}) } } })"),
+            "{ a: { b: { c: [Map] } } }"
+        );
+        assert_eq!(
+            rendered("({ a: { b: { c: new Proxy(function f() {}, {}) } } })"),
+            "{ a: { b: { c: [Function: f] } } }"
+        );
+    }
+
+    #[test]
+    fn a_proxy_prints_the_same_in_colour() {
+        assert_eq!(
+            colored("new Proxy(new Map([['a', 1]]), {})"),
+            colored("new Map([['a', 1]])")
+        );
+        assert_eq!(
+            colored("new Proxy({ k: 'v' }, {})"),
+            format!("{{ k: {} }}", green("'v'"))
+        );
+        assert_eq!(
+            colored("const r = Proxy.revocable({}, {}); r.revoke(); r.proxy"),
+            cyan("<Revoked Proxy>")
+        );
+        assert_eq!(
+            colored("new Proxy(function f() {}, {})"),
+            cyan("[Function: f]")
+        );
+    }
+
+    #[test]
+    fn a_proxy_prints_through_quoted_and_escaped_alike() {
+        assert_eq!(
+            escaped("new Proxy({ 'k\\n': 'v\\n' }, {})", false),
+            "{ 'k\\n': 'v\\n' }"
+        );
+    }
+
+    #[test]
+    fn an_object_inheriting_from_a_proxy_runs_no_trap() {
+        assert_eq!(
+            counted(&format!("Object.create({})", spied("({ a: 1 })"))),
+            ("{}".to_owned(), 0)
         );
     }
 

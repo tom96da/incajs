@@ -62,9 +62,17 @@ fn next_specifier(target: &str, from: usize) -> Option<(usize, u8)> {
 }
 
 fn convert(ctx: &Ctx<'_>, spec: u8, arg: &Value<'_>, color: bool) -> String {
-    let symbol = arg.type_of() == Type::Symbol;
+    // A proxy converts as its target. A revoked one has none and converts as
+    // a symbol does, which has no string form either.
+    let target = inspect::unproxied(arg);
+    let symbol = arg.type_of() == Type::Symbol || target.is_none();
+    let arg = target.as_ref().unwrap_or(arg);
+    let negative_zero = arg
+        .as_number()
+        .is_some_and(|number| number.to_bits() == (-0.0_f64).to_bits());
     let converted = match spec {
         b'c' => Some(String::new()),
+        b's' | b'd' if negative_zero => Some("-0".to_owned()),
         b'o' | b'O' => Some(inspect::quoted(arg, color)),
         b's' if symbol => Some(inspect::quoted(arg, color)),
         b's' => string_of(ctx, arg),
@@ -191,7 +199,7 @@ mod tests {
         assert_eq!(formatted("['%s', 'text', 'x']"), "text x");
         assert_eq!(formatted("['%s', 42]"), "42");
         assert_eq!(formatted("['%s', 1.5]"), "1.5");
-        assert_eq!(formatted("['%s', -0]"), "0");
+        assert_eq!(formatted("['%s', -0]"), "-0");
         assert_eq!(formatted("['%s', NaN]"), "NaN");
         assert_eq!(formatted("['%s', 1 / 0]"), "Infinity");
         assert_eq!(formatted("['%s', true]"), "true");
@@ -233,7 +241,7 @@ mod tests {
             assert_eq!(f("-42.9"), "-42");
             assert_eq!(f("'0x10'"), "0");
             assert_eq!(f("'abc'"), "NaN");
-            assert_eq!(f("-0"), "0");
+            assert_eq!(f("-0"), if spec == "%d" { "-0" } else { "0" });
             assert_eq!(f("123n"), "123");
             assert_eq!(f("Symbol('s')"), "NaN");
             assert_eq!(f("'9'.repeat(30)"), "1e+30");
@@ -250,36 +258,94 @@ mod tests {
     }
 
     #[test]
-    fn unreadable_parts_of_an_inspected_value_leave_nothing_pending() {
+    fn accessors_in_an_inspected_value_are_named_and_not_run() {
         assert_eq!(
             formatted("['%o', { get a() { throw 1; } }]"),
-            "{ a: [unreadable] }"
+            "{ a: [Getter] }"
         );
         assert_eq!(
             formatted("['%O', { get a() { throw 1; }, b: 2 }, 'x']"),
-            "{ a: [unreadable], b: 2 } x"
-        );
-        assert_eq!(
-            formatted("['%O', new Proxy({}, { ownKeys() { throw 1; } })]"),
-            "{}"
+            "{ a: [Getter], b: 2 } x"
         );
         assert_eq!(
             formatted("['%o', [1, { get a() { throw 1; } }]]"),
-            "[ 1, { a: [unreadable] } ]"
+            "[ 1, { a: [Getter] } ]"
         );
         assert_eq!(
             formatted("['%o', Object.defineProperty([1, 2], 0, { get() { throw 1; } })]"),
-            "[ [unreadable], 2 ]"
+            "[ [Getter], 2 ]"
+        );
+    }
+
+    /// A proxy of `target` whose handler counts every trap lookup in `calls`.
+    fn spied(target: &str) -> String {
+        format!(
+            "(globalThis.calls = 0, new Proxy({target}, new Proxy({{}}, {{ get() {{ calls++; }} }})))"
+        )
+    }
+
+    fn calls_after(args: &str) -> (String, i32) {
+        let runtime = Runtime::new().unwrap();
+        let context = Context::full(&runtime).unwrap();
+        context.with(|ctx| {
+            let values: Vec<Value<'_>> = ctx.eval(args).unwrap();
+            let out = line(&ctx, &values, false);
+            assert!(!ctx.has_exception());
+            (out, ctx.eval("calls").unwrap())
+        })
+    }
+
+    #[test]
+    fn a_proxy_converts_as_its_target_and_calls_no_trap() {
+        for target in [
+            "[1, 2]",
+            "function named() {}",
+            "({ toString() { return 'custom'; } })",
+            "({ a: 1 })",
+            "new Map([[1, 2]])",
+        ] {
+            for spec in ["%o", "%O", "%s", "%d", "%i", "%f", "%c"] {
+                let plain = calls_after(&format!("['{spec}', (globalThis.calls = 0, {target})]"));
+
+                assert_eq!(
+                    calls_after(&format!("['{spec}', {}]", spied(target))),
+                    (plain.0, 0),
+                    "{spec} {target}"
+                );
+            }
+        }
+        assert_eq!(
+            calls_after("['%s', (globalThis.calls = 0, new Proxy([1, 2], new Proxy({}, { get() { calls++; } })))]").0,
+            "1,2"
         );
     }
 
     #[test]
-    fn a_revoked_proxy_leaves_nothing_pending() {
+    fn negative_zero_keeps_its_sign_under_s_and_d() {
+        assert_eq!(formatted("['%s %d %i %f', -0, -0, -0, -0]"), "-0 -0 0 0");
+        assert_eq!(formatted("['%o %O', -0, -0]"), "-0 -0");
+        assert_eq!(formatted("['%s %d', 0, 0]"), "0 0");
+        assert_eq!(formatted("['%s', -0, -0]"), "-0 -0");
+    }
+
+    #[test]
+    fn a_revoked_proxy_converts_without_leaving_an_exception() {
         let revoked =
             "(() => { const r = Proxy.revocable({}, {}); r.revoke(); return r.proxy; })()";
-        for spec in ["%s", "%d", "%f", "%o"] {
-            let out = formatted(&format!("['{spec}', {revoked}, 'after']"));
-            assert!(out.ends_with(" after"), "{spec}: {out}");
+        for (spec, shown) in [
+            ("%s", "<Revoked Proxy>"),
+            ("%o", "<Revoked Proxy>"),
+            ("%O", "<Revoked Proxy>"),
+            ("%d", "NaN"),
+            ("%i", "NaN"),
+            ("%f", "NaN"),
+            ("%c", ""),
+        ] {
+            assert_eq!(
+                formatted(&format!("['{spec}', {revoked}]")),
+                shown,
+                "{spec}"
+            );
         }
     }
 

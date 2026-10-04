@@ -153,10 +153,7 @@ fn write_collection<'js>(
         put(out, mode, Style::Cyan, &format!("[{name}]"));
         return;
     }
-    let Some(items) = items(value, each) else {
-        out.push_str("[unreadable]");
-        return;
-    };
+    let items = items(value, each);
     if items.is_empty() {
         let _ = write!(out, "{name}(0) {{}}");
         return;
@@ -176,9 +173,9 @@ fn write_collection<'js>(
     out.push_str(" }");
 }
 
-/// The `(value, key)` pairs `each` (a `forEach`) visits, or `None` after
-/// clearing the exception it threw.
-fn items<'js>(value: &Value<'js>, each: &Function<'js>) -> Option<Vec<(Value<'js>, Value<'js>)>> {
+/// The `(value, key)` pairs `each` (a `forEach`) visits, as far as it got
+/// before any exception, which is cleared.
+fn items<'js>(value: &Value<'js>, each: &Function<'js>) -> Vec<(Value<'js>, Value<'js>)> {
     let ctx = value.ctx();
     let found = Rc::new(RefCell::new(Vec::new()));
     let sink = Rc::clone(&found);
@@ -190,7 +187,9 @@ fn items<'js>(value: &Value<'js>, each: &Function<'js>) -> Option<Vec<(Value<'js
                 sink.borrow_mut().push((item, key));
             }
         }),
-    )?;
-    settled(ctx, each.call::<_, ()>((This(value.clone()), visit)))?;
-    Some(found.take())
+    );
+    if let Some(visit) = visit {
+        settled(ctx, each.call::<_, ()>((This(value.clone()), visit)));
+    }
+    found.take()
 }

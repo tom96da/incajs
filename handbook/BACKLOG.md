@@ -357,23 +357,16 @@ A fixed entry is deleted and its ID is never reused.
   host remaps each frame to the `.vue` or `.ts` file, line and column. This
   also covers errors the host reports to `inca dev`.
 
-- **B-089 `console` runs property getters**
-  `Units: jsenv · Size: S–M · Impact: Medium`
-
-  An object property defined with a getter is read when printed, so the
-  getter's code runs and its side effects happen. The standard prints
-  `[Getter]`, `[Setter]` or `[Getter/Setter]` without calling it.
-
 - **B-097 `console` prints some classes and built-ins unlike Node**
   `Units: jsenv · Size: M · Impact: Medium`
 
   A class instance prints without its class name, as `{ a: 1 }` where Node
-  prints `Foo { a: 1 }`. Properties keyed by a `Symbol`, array holes
-  (printed as `undefined`) and extra properties on an array or an `Error`
-  are dropped. A `Promise`, a typed array, a `WeakMap` and a boxed primitive
-  print as a plain object: `{}` for most, `{ 0: 0, 1: 0, 2: 0 }` for
-  `new Uint8Array(3)`, where Node prints `Promise { 1 }` and
-  `Uint8Array(3) [ 0, 0, 0 ]`. A nested string is always single-quoted,
+  prints `Foo { a: 1 }`. Properties keyed by a `Symbol` and extra
+  properties on an array or an `Error` are dropped. A `Promise`, a typed
+  array, a `WeakMap` and a boxed primitive print as a plain object: `{}` for
+  most, `{ '0': 0, '1': 0, '2': 0 }` for `new Uint8Array(3)`, where Node
+  prints `Promise { 1 }` and `Uint8Array(3) [ 0, 0, 0 ]`. A nested string,
+  and an object key that is not an identifier, is always single-quoted,
   where Node picks the quote that avoids escaping.
 
 ## P3
@@ -854,19 +847,22 @@ A fixed entry is deleted and its ID is never reused.
 
   Printed values differ from the standard in these ways:
 
-  - A string nested in an array or object is quoted without escaping
-    backslashes or control characters, so it can break a line.
+  - A string nested in an array or object, and an object key that is not an
+    identifier, is quoted without escaping backslashes or control
+    characters, so it can break a line.
   - An object or collection that refers back to itself prints `[Object]`,
     `[Array]`, `[Map]` or `[Set]` at the depth limit, with no circular
     marker. An `Error`'s `cause` is not printed.
   - A `Map`, `Set`, `Date` or `RegExp` prints without its own properties and
     without its subclass name, where the standard prints both, as in
-    `Map(0) { foo: 1 }`. An object that only inherits from `Map.prototype`,
-    and a `Proxy` around any of the four, print as `{}`.
+    `Map(0) { foo: 1 }`. An object that only inherits from `Map.prototype`
+    prints as `{}`. A `Proxy` around any of the four prints as its target.
   - A long object, array, `Map` or `Set` is never wrapped across lines,
     where the standard wraps long output. The standard cuts a collection
     after 100 items (`... 50 more items`), where every entry is printed.
   - A `RegExp` has one colour, where the standard highlights its parts.
+  - `%s`, `%d`, `%i` and `%f` convert an array that holds a `Proxy` through
+    the array's own string form, which runs the `Proxy`'s traps.
 
 - **B-090 Only the first error of several throwing handlers reaches the host's report**
   `Units: core · Size: S · Impact: Low`

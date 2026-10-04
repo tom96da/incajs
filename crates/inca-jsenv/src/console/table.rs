@@ -92,6 +92,7 @@ pub(super) fn render(data: &Value<'_>, columns: Option<&Value<'_>>, color: bool)
 }
 
 fn entries<'js>(value: &Value<'js>) -> Option<Entries<'js>> {
+    let value = &inspect::unproxied(value)?;
     if !matches!(value.type_of(), Type::Array | Type::Object) {
         return None;
     }
@@ -132,6 +133,7 @@ fn escape(text: &str) -> String {
 }
 
 fn strings(value: &Value<'_>) -> Option<Vec<String>> {
+    let value = &inspect::unproxied(value)?;
     let array = value.as_array()?;
     let ctx = array.ctx();
     Some(
@@ -340,10 +342,59 @@ mod tests {
     }
 
     #[test]
-    fn a_proxy_row_whose_keys_throw_is_a_value_row() {
-        let drawn = table("[new Proxy({}, { ownKeys() { throw 1; } })]", None).unwrap();
+    fn a_proxy_is_drawn_as_its_target() {
+        let plain = table("[{ a: 1 }, [2]]", None).unwrap();
 
-        assert!(drawn.contains("Values"), "{drawn}");
+        assert_eq!(
+            table("[new Proxy({ a: 1 }, {}), new Proxy([2], {})]", None).unwrap(),
+            plain
+        );
+        assert_eq!(
+            table("new Proxy([{ a: 1 }, [2]], {})", None).unwrap(),
+            plain
+        );
+    }
+
+    #[test]
+    fn a_proxy_row_calls_no_trap() {
+        let runtime = Runtime::new().unwrap();
+        let context = Context::full(&runtime).unwrap();
+        context.with(|ctx| {
+            ctx.eval::<(), _>(
+                "globalThis.calls = 0; globalThis.spy = (t) => new Proxy(t, new Proxy({}, { get() { calls++; } }));",
+            )
+            .unwrap();
+            let data: Value<'_> = ctx.eval("spy([spy({ a: 1 }), spy({}), spy([2])])").unwrap();
+
+            assert!(render(&data, None, false).is_some());
+            assert_eq!(ctx.eval::<i32, _>("calls").unwrap(), 0);
+            assert!(!ctx.has_exception());
+        });
+    }
+
+    #[test]
+    fn a_proxy_of_an_array_picks_the_columns() {
+        let plain = table("[{ a: 1, b: 2 }]", Some("['b']")).unwrap();
+
+        assert_eq!(
+            table("[{ a: 1, b: 2 }]", Some("new Proxy(['b'], {})")).unwrap(),
+            plain
+        );
+        assert!(!plain.contains(" a "), "{plain}");
+    }
+
+    #[test]
+    fn a_revoked_proxy_is_not_tabular() {
+        let runtime = Runtime::new().unwrap();
+        let context = Context::full(&runtime).unwrap();
+        context.with(|ctx| {
+            let data: Value<'_> = ctx
+                .eval("const r = Proxy.revocable([], {}); r.revoke(); r.proxy")
+                .unwrap();
+
+            assert!(render(&data, None, false).is_none());
+            assert!(!ctx.has_exception());
+        });
     }
 
     #[test]
