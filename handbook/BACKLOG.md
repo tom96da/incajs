@@ -728,9 +728,8 @@ A fixed entry is deleted and its ID is never reused.
   "failed to start inca-host", keeps running and retries on the next rebuild.
   With HMR it stops.
 
-  A file that exists but is not executable passes `assertHostBin`, although
-  the error message and `docs/reference/errors.md` say the binary must be
-  executable. That case takes the mode-dependent path above.
+  A file that exists but is not executable passes `assertHostBin` and takes
+  the mode-dependent path above.
 
   `dev()` and `HostClient.start` each call `assertHostBin` on the same path.
 
@@ -1041,3 +1040,11 @@ A fixed entry is deleted and its ID is never reused.
   When a config file fails to load, `c12` appends `Hint install jiti for
   compatibility` to the file's own error, such as a syntax error. The hint
   suggests a package that does not apply to the failure.
+
+- **B-116 `inca package` on Linux writes no icon and no `.desktop` file**
+  `Units: cli · Size: M · Impact: Medium`
+
+  `icon` takes a macOS `.icns` file, and only the macOS package uses it. A
+  Linux package holds the host binary and the bundle, so a launcher or a task
+  bar shows no icon. Linux needs an icon format such as PNG or SVG and a
+  `.desktop` file that matches the window's `identifier`.

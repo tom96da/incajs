@@ -63,7 +63,7 @@ export function assertHostBin(bin: string): void {
   if (!statSync(bin, { throwIfNoEntry: false })?.isFile()) {
     throw new IncaError(
       "ERR_INCA_HOST_BIN_NOT_FOUND",
-      `no host binary at ${bin} — check that it was built and is executable`,
+      `no host binary at ${bin} — check that it was built`,
     );
   }
 }
