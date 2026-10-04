@@ -59,9 +59,7 @@ All of the following must pass:
 - `cargo build -p inca-host`, then `pnpm -F @incajs/e2e-tests test`. CI runs
   the e2e step under `xvfb-run -a`.
 
-On CI, `rust-node-ubuntu` checks `tests/` (`cargo fmt`, lint, formatting and
-types) and runs its suites. The Node unit jobs exclude `tests/`, and the Rust
-unit jobs exclude `inca-tests` from check, clippy and test.
+On CI, only `rust-node-ubuntu` lints and type-checks `tests/`.
 
 ### Toolchain pinning and MSRV
 
@@ -74,13 +72,11 @@ a newer `rustc`.
 ### macOS coverage
 
 The `rust-macos` and `rust-macos-intel` jobs run the same Rust steps as the
-Linux jobs, with `inca-tests` excluded. `rust-node-macos` builds the JS
-packages and runs `cargo test -p inca-tests` on macOS arm64. The Node unit
-suites and the `@incajs/e2e-tests` suite run on Linux only. The `plutil`
-tests in `packages/cli/src/macos-app.test.mts` run only on macOS and are
-skipped elsewhere.
-
-`rust-ubuntu-arm` runs the Linux Rust steps on arm64.
+Linux jobs, with `inca-tests` excluded. `rust-node-macos` runs
+`cargo test -p inca-tests` on macOS arm64. The Node unit suites and the
+`@incajs/e2e-tests` suite run on Linux only. The `plutil` tests in
+`packages/cli/src/macos-app.test.mts` run only on macOS and are skipped
+elsewhere.
 
 ## TypeScript (`packages/*`)
 

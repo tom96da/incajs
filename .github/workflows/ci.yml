@@ -292,10 +292,21 @@ jobs:
     steps: *rust_steps
 
   # The tests that need a crate and a package at once, kept out of both so
-  # neither depends on the other. Checks tests/ and runs the e2e suite.
+  # neither depends on the other. Checks tests/ and runs the e2e suite. Both
+  # Rust & Node jobs wait for every unit job.
   rust-node-ubuntu:
     name: "Rust & Node: ubuntu:22.04"
-    needs: [changed, test-node-22, test-node-24, test-node-26, rust-ubuntu]
+    needs: &unit_jobs
+      - changed
+      - build
+      - lint
+      - test-node-22
+      - test-node-24
+      - test-node-26
+      - rust-ubuntu
+      - rust-ubuntu-arm
+      - rust-macos
+      - rust-macos-intel
     # A needed job that `changed` skipped does not block this one.
     if: >
       !cancelled() && !failure() &&
@@ -403,7 +414,7 @@ jobs:
 
   rust-node-macos:
     name: "Rust & Node: macos-latest"
-    needs: [changed, test-node-22, test-node-24, test-node-26, rust-macos]
+    needs: *unit_jobs
     if: >
       !cancelled() && !failure() &&
       (needs.changed.outputs.rust == 'true' ||
