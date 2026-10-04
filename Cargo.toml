@@ -43,6 +43,7 @@ unreadable_literal = "allow"
 strip = "symbols"
 codegen-units = 1
 lto = "thin"
+panic = "abort"
 
 # See patches/README.md.
 [patch."https://github.com/zed-industries/zed"]
