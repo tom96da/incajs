@@ -33,7 +33,7 @@ use inca_bridge::{ErrorReporter, EventDispatcher, Host, install_dev, stderr_repo
 use inca_gpui::{AttributeValue, NodeId, VirtualNode, render_tree_with_events};
 use inca_jsenv::{Engine, EngineError, console};
 
-use inca_host::config;
+use crate::config;
 
 use crate::dev::{
     Failure, SharedWriter, StdoutWriter, install_panic_hook, report_startup_failure, reporter_for,
@@ -338,7 +338,15 @@ pub(crate) fn start(
     Ok(window)
 }
 
-pub(crate) fn run_bundle(entry_path: &str, dev: bool) -> ExitCode {
+/// Runs the bundle at `entry_path` in a GPUI window and blocks until the
+/// app quits.
+///
+/// With `dev` set, the host also reads rebuild and HMR messages from stdin
+/// and reports errors to the parent process. Returns `ExitCode::SUCCESS`
+/// after a normal quit and `ExitCode::FAILURE` when the file cannot be
+/// read. A bundle that fails to start exits the process with status 1.
+#[must_use]
+pub fn run_bundle(entry_path: &str, dev: bool) -> ExitCode {
     let source = match fs::read_to_string(entry_path) {
         Ok(source) => source,
         Err(err) => {
@@ -406,9 +414,12 @@ fn bundle_beside(exe_dir: &Path) -> Option<PathBuf> {
     .find(|candidate| candidate.is_file())
 }
 
-/// Tried when no bundle path is given on the command line — the case a
-/// packaged app launches into, with no argv and an unpredictable cwd.
-pub(crate) fn bundle_beside_exe() -> Option<PathBuf> {
+/// Finds the `bundle.js` that ships beside the running executable.
+///
+/// Looks next to the executable, then in `../Resources` (a macOS app
+/// bundle). Returns `None` when neither holds a file.
+#[must_use]
+pub fn bundle_beside_exe() -> Option<PathBuf> {
     let exe = env::current_exe().ok()?;
     bundle_beside(exe.parent()?)
 }

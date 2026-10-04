@@ -3,11 +3,6 @@
 
 //! Resolves the entry path and dev flag from argv, then runs the app.
 
-mod app;
-mod dev;
-mod menu;
-mod protocol;
-
 use std::env;
 use std::process::ExitCode;
 
@@ -17,7 +12,7 @@ fn main() -> ExitCode {
     let args: Vec<String> = env::args().skip(1).collect();
     let (dev, entry_path) = match args.as_slice() {
         [] => {
-            let Some(path) = app::bundle_beside_exe() else {
+            let Some(path) = inca_host::bundle_beside_exe() else {
                 eprintln!(
                     "usage: inca-host [--dev] [<path-to-bundle.js>]\n\
                      no bundle.js found beside the executable"
@@ -34,5 +29,5 @@ fn main() -> ExitCode {
         }
     };
 
-    app::run_bundle(&entry_path, dev)
+    inca_host::run_bundle(&entry_path, dev)
 }
