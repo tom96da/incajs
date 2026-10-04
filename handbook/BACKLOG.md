@@ -330,7 +330,8 @@ A fixed entry is deleted and its ID is never reused.
 
   `click` fires before `mouseup` on the same node. `stopPropagation()` in a
   `click` handler also stops ancestors' `mouseup`. The DOM order is `mouseup`
-  then `click`.
+  then `click`. On a focused node, Enter fires `click` before the `keyup`
+  listeners.
 
 - **B-087 Ctrl+C in `inca dev` leaves the terminal echoing arrow keys**
   `Units: cli,host · Size: S–M · Impact: Medium · Status: needs repro`

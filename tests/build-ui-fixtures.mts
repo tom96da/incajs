@@ -19,6 +19,7 @@ if (!outDir) {
   process.exit(2);
 }
 
+// Only top-level files are fixtures; helper components live in `parts/`.
 const fixturesDir = path.join(import.meta.dirname, "tests/ui-fixtures");
 // Under this package so the entries resolve `incajs/vue` from its node_modules.
 const entriesRoot = path.join(import.meta.dirname, "node_modules/.inca-ui");

@@ -5,6 +5,12 @@
 //! One test target, so the fixtures are bundled once per run.
 
 mod common;
+mod components;
+mod handlers;
+mod keyboard;
 mod layout;
 mod lists;
+mod propagation;
 mod reactivity;
+mod scroll;
+mod timing;

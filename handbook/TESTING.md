@@ -25,7 +25,8 @@ change is done, for Rust and TypeScript.
     `js_core_integration.rs` reads `packages/core/dist`.
   - `tests/tests/ui/` mounts the `.vue` files in `tests/tests/ui-fixtures/`
     in the `Harness`. `build-ui-fixtures.mjs` bundles them all once per run
-    and needs `packages/core/dist`.
+    and needs `packages/core/dist`. Only top-level `.vue` files become
+    fixtures; helper components live in `ui-fixtures/parts/`.
   - Node files in `tests/tests/` belong to `@incajs/e2e-tests`, which
     `pnpm test` does not run: `hmr-quickjs-state`, `host-startup-failure`,
     `host-shutdown` and `host-packaged-launch`. They spawn the real

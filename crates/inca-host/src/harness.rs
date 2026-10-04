@@ -9,8 +9,8 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use gpui::{
-    Modifiers, Pixels, Point, ScrollDelta, ScrollWheelEvent, TestAppContext, VisualTestContext,
-    WindowHandle, point, px,
+    KeyUpEvent, Keystroke, Modifiers, Pixels, Point, ScrollDelta, ScrollWheelEvent, TestAppContext,
+    VisualTestContext, WindowHandle, point, px,
 };
 use inca_bridge::{Host, stderr_reporter};
 use inca_gpui::{NodeId, debug_selector};
@@ -119,13 +119,29 @@ impl Harness {
     }
 
     /// Sends space-separated keystrokes, such as `"a cmd-b enter"`, to the
-    /// focused node.
+    /// focused node. Each key is pressed (key-down only);
+    /// [`Harness::key_up`] releases it.
     ///
     /// # Panics
     ///
     /// Panics when a keystroke does not parse.
     pub fn keystrokes(&mut self, keys: &str) {
         self.cx.simulate_keystrokes(keys);
+        self.settle();
+    }
+
+    /// Releases space-separated keys, such as `"a enter"`, to the focused
+    /// node.
+    ///
+    /// # Panics
+    ///
+    /// Panics when a keystroke does not parse.
+    pub fn key_up(&mut self, keys: &str) {
+        for keystroke in keys.split(' ').map(Keystroke::parse) {
+            self.cx.simulate_event(KeyUpEvent {
+                keystroke: keystroke.expect("a parseable keystroke"),
+            });
+        }
         self.settle();
     }
 
@@ -571,6 +587,35 @@ mod tests {
     }
 
     #[gpui::test]
+    fn key_up_reaches_the_focused_node_once_per_key(cx: &mut TestAppContext) {
+        let mut h = Harness::load(
+            cx,
+            ENTRY,
+            r"
+            const n = __inca_native__;
+            const box = n.createNode('div');
+            n.setStyle(box, 'width', 100);
+            n.setStyle(box, 'height', 50);
+            n.appendChild(n.rootNodeId(), box);
+            globalThis.ups = 0;
+            globalThis.downs = 0;
+            globalThis.__inca_callbacks__ = {
+                0: () => { globalThis.ups++; },
+                1: () => { globalThis.downs++; },
+            };
+            n.addEventListener(box, 'keyup', 0);
+            n.addEventListener(box, 'keydown', 1);
+            n.focusNode(box);
+            ",
+        );
+
+        h.key_up("a b");
+
+        assert_eq!(eval_f64(&h, "globalThis.ups"), 2.0);
+        assert_eq!(eval_f64(&h, "globalThis.downs"), 0.0);
+    }
+
+    #[gpui::test]
     fn settle_flushes_a_microtask_mount(cx: &mut TestAppContext) {
         let mut h = Harness::load(cx, ENTRY, "");
         let before = h.snapshot().children.len();
@@ -724,6 +769,12 @@ mod tests {
     #[should_panic(expected = "InvalidKeystrokeError")]
     fn keystrokes_panic_on_an_unparseable_key(cx: &mut TestAppContext) {
         Harness::load(cx, ENTRY, "").keystrokes("a-b");
+    }
+
+    #[gpui::test]
+    #[should_panic(expected = "InvalidKeystrokeError")]
+    fn key_up_panics_on_an_unparseable_key(cx: &mut TestAppContext) {
+        Harness::load(cx, ENTRY, "").key_up("a-b");
     }
 
     #[gpui::test]

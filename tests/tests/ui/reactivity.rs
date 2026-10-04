@@ -5,7 +5,7 @@
 
 #![allow(clippy::unwrap_used)]
 
-use super::common::{by_id, click, load, near, text};
+use super::common::{by_id, click, load, near, text, text_of};
 use gpui::TestAppContext;
 
 #[gpui::test]
@@ -22,7 +22,7 @@ fn a_click_increments_the_rendered_ref(cx: &mut TestAppContext) {
 
     h.click(button);
 
-    assert_eq!(text(by_id(&h.snapshot(), "button")), "Count: 1");
+    assert_eq!(text_of(&mut h, "button"), "Count: 1");
 }
 
 #[gpui::test]
@@ -33,7 +33,7 @@ fn clicking_twice_increments_twice(cx: &mut TestAppContext) {
     h.click(button);
     h.click(button);
 
-    assert_eq!(text(by_id(&h.snapshot(), "button")), "Count: 2");
+    assert_eq!(text_of(&mut h, "button"), "Count: 2");
 }
 
 #[gpui::test]

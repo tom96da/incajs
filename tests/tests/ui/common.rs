@@ -107,6 +107,11 @@ pub fn text(node: &Node) -> String {
     out.trim().to_owned()
 }
 
+/// The text under the node with `id`, from a fresh snapshot.
+pub fn text_of(h: &mut Harness, id: &str) -> String {
+    text(by_id(&h.snapshot(), id))
+}
+
 /// The `id` attributes of `node`'s children that have one, in order.
 pub fn child_ids(node: &Node) -> Vec<String> {
     node.children
