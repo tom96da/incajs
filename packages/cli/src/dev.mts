@@ -17,8 +17,9 @@ import { HostClient, assertHostBin, resolveHostBin } from "./dev-client/index.mt
 import { acquireDevLock } from "./dev-lock.mts";
 import { resolveEntry } from "./entry.mts";
 import { IncaError } from "./error.mts";
-import { log, printFault, toFault } from "./log.mts";
+import { STAMPED, log, printFault, toFault } from "./log.mts";
 import { writeMacosApp } from "./macos-app.mts";
+import { retryOnEdit } from "./retryOnEdit.mts";
 import type { Bundler, BuildOutput, HmrChannel } from "./adapter/types.mts";
 import type { ResolvedAppConfig } from "./config/loader.mts";
 
@@ -49,9 +50,6 @@ export interface DevOptions {
   /** Aborting tears the host and the bundler watcher down and resolves `dev()`. */
   signal: AbortSignal;
 }
-
-/** `inca dev` stamps its lines the way Vite's dev server does. */
-const STAMPED = { timestamp: true } as const;
 
 /**
  * How long `reload` waits for the host before giving up. A wedged app would
@@ -158,27 +156,54 @@ function hostEnv(stderr: NodeJS.WritableStream): NodeJS.ProcessEnv | undefined {
  * reloads it on every rebuild — until `options.signal` aborts or the host
  * exits on its own.
  *
- * @throws if another `inca dev` is already running for this app, or if the
- * host binary can't be resolved or isn't a file. Both stop it before any build.
- * Also throws if the host exits before it is ready, or exits non-zero or by
- * a signal other than SIGINT/SIGTERM afterwards.
+ * A config or entry that can't be used before the first build is printed as
+ * `build failed`. `dev` then retries after the next edit to the config or the
+ * entry.
+ *
+ * @throws if another `inca dev` is already running for this app.
+ * @throws if the host binary can't be resolved or isn't a file.
+ * @throws if `experimentalHmr` is set and the bundler has no HMR support.
+ * @throws if the operating system refuses a file watcher.
+ * @throws if the host exits before it is ready, or exits non-zero or by a
+ * signal other than SIGINT/SIGTERM afterwards.
  */
 export async function dev(options: DevOptions): Promise<void> {
   const cwd = options.cwd ?? process.cwd();
-  const config = await resolveBuildConfig(cwd);
   const releaseLock = await acquireDevLock(cwd);
   try {
     const bin = options.hostBin ?? resolveHostBin();
     assertHostBin(bin);
-    const outDir = path.resolve(cwd, config.outDir);
     const bundler: Bundler = options.bundler ?? defaultBundler;
     const stdout = options.stdout ?? process.stdout;
     const stderr = options.stderr ?? process.stderr;
 
-    const entry = options.entry ?? config.entry ?? (await resolveEntry(cwd));
-    assertOutDir(cwd, outDir, entry);
-    const metadata = await resolveMetadata(cwd, stdout);
-    const runtimeConfig = metadata ? runtimeConfigOf(metadata) : await resolveRuntimeConfig(cwd);
+    const hmr = options.experimentalHmr ? bundler.hmr?.bind(bundler) : undefined;
+    if (options.experimentalHmr && !hmr) {
+      throw new IncaError(
+        "ERR_INCA_HMR_UNSUPPORTED",
+        "--experimental-hmr was set, but the configured bundler has no HMR support",
+      );
+    }
+
+    const resolved = await retryOnEdit({
+      cwd,
+      signal: options.signal,
+      stdout,
+      stderr,
+      async attempt() {
+        const config = await resolveBuildConfig(cwd);
+        const outDir = path.resolve(cwd, config.outDir);
+        const entry = options.entry ?? config.entry ?? (await resolveEntry(cwd));
+        assertOutDir(cwd, outDir, entry);
+        const metadata = await resolveMetadata(cwd, stdout);
+        const runtimeConfig = metadata
+          ? runtimeConfigOf(metadata)
+          : await resolveRuntimeConfig(cwd);
+        return { outDir, entry, metadata, runtimeConfig };
+      },
+    });
+    if (!resolved) return;
+    const { outDir, entry, metadata, runtimeConfig } = resolved;
     const hostBin = (await bundleExecutable(cwd, metadata, bin, stdout)) ?? bin;
 
     let client: HostClient | undefined;
@@ -266,15 +291,8 @@ export async function dev(options: DevOptions): Promise<void> {
 
     let closable: { close(): Promise<void> };
 
-    if (options.experimentalHmr) {
-      if (!bundler.hmr) {
-        throw new IncaError(
-          "ERR_INCA_HMR_UNSUPPORTED",
-          "--experimental-hmr was set, but the configured bundler has no HMR support",
-        );
-      }
-
-      const channel: HmrChannel = await bundler.hmr({
+    if (hmr) {
+      const channel: HmrChannel = await hmr({
         entry,
         cwd,
         runtimeConfig,

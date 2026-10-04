@@ -58,7 +58,7 @@ with a top-level file or folder of the build output, such as `assets` or
 
 `icon` in `inca.config.ts` points at a `.icns` file that doesn't exist. The
 path is resolved from the app's root directory. Applies to macOS only —
-Linux shows no icon.
+Linux shows no icon. `inca dev` retries when the file is created.
 
 ## `ERR_INCA_OUT_DIR_INVALID`
 

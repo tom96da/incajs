@@ -237,6 +237,7 @@ export async function resolveAppConfig(cwd: string): Promise<ResolvedAppConfig> 
       throw new IncaError(
         "ERR_INCA_ICON_NOT_FOUND",
         `"icon" points to ${icon}, which doesn't exist`,
+        icon,
       );
     }
   }

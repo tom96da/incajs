@@ -951,13 +951,6 @@ A fixed entry is deleted and its ID is never reused.
   or I/O to resume it. `packages/core` wraps the event names in helpers, so
   the strings never become app-facing API.
 
-- **B-100 `inca dev` exits on a failure before its watcher starts**
-  `Units: cli · Size: S · Impact: Low`
-
-  An unreadable `inca.config.ts`, no entry to build and no host binary each
-  end `inca dev`. A failure after the watcher starts is reported and watched
-  through, so the edit-and-retry loop covers only the second kind.
-
 - **B-101 `rust-version` has no floor check of its own**
   `Units: ci · Size: S · Impact: Low`
 

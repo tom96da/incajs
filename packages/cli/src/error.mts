@@ -13,6 +13,8 @@ export class IncaError extends Error {
   constructor(
     readonly code: string,
     message: string,
+    /** A file whose creation or change may resolve the error. */
+    readonly path?: string,
   ) {
     super(message);
   }

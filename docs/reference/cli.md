@@ -9,20 +9,23 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 # Command Line Interface
 
-Every command reports a failure as `[inca] <command> failed (<code>): …` —
-see [Error Codes](./errors) for what each one means.
+Every command reports a failure as `[inca] <command> failed (<code>): …`.
+See [Error Codes](./errors) for what each code means.
 
 ## `inca dev`
 
 Watches your app and opens a live-reloading development window, reloading
-on every change. It stops before building if no host binary can be found.
-It exits with code 0 when you close the window and non-zero if the host
-crashes. See [Error Codes](./errors).
+on every change. It exits with code 0 when you close the window and
+non-zero if the host crashes.
+
+When the config or the entry cannot be used before the first build, it
+prints the error and retries when you save the config or the entry. It
+stops before building when no host binary can be found.
 
 ### Usage
 
 ```sh
-inca dev
+$ inca dev
 ```
 
 ### Options
@@ -43,7 +46,7 @@ Bundles your app for production, once, with no window opened. See
 ### Usage
 
 ```sh
-inca build
+$ inca build
 ```
 
 ## `inca package`
@@ -55,7 +58,7 @@ Linux. See [Building for Production](../guide/build).
 ### Usage
 
 ```sh
-inca package
+$ inca package
 ```
 
 ## Environment Variables
