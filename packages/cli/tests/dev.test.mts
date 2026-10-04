@@ -601,6 +601,8 @@ interface FakeHmrBundler extends Bundler {
   emitVite(payload: unknown): void;
   /** Simulates the environment's `HotChannel` seeing a `full-reload` payload. */
   emitFullReload(): void;
+  /** Simulates a failed update the bundler reports. */
+  emitError(error: { message: string; stack: string | null }): void;
   /** Every payload `hmr()`'s channel was asked to `dispatch` back into the app. */
   dispatched: unknown[];
 }
@@ -625,6 +627,9 @@ function makeFakeHmrBundler(entryFile: string): FakeHmrBundler {
     },
     emitFullReload() {
       options?.reload();
+    },
+    emitError(error) {
+      options?.onError(error);
     },
     dispatched,
   };
@@ -687,6 +692,34 @@ describe("dev with --experimental-hmr", () => {
 
     controller.abort();
     await running;
+  });
+
+  it("prints a failed update the way a failed build is printed", async () => {
+    const bundler = makeFakeHmrBundler("/unused/entry.js");
+    const stdout = makeSink();
+    const stderr = makeSink();
+    const controller = new AbortController();
+
+    const running = dev({
+      entry: "unused",
+      bundler,
+      hostBin: mockHost,
+      experimentalHmr: true,
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      signal: controller.signal,
+    });
+
+    await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
+
+    bundler.emitError({ message: "bad template", stack: "at somewhere" });
+    await vi.waitFor(() => expect(stderr.text()).toContain("[inca] build failed"));
+
+    controller.abort();
+    await running;
+
+    expect(stderr.text()).toContain("[inca] build failed: bad template");
+    expect(stderr.text()).toContain("at somewhere");
   });
 
   it("stops instead of hanging when the host fails to start", async () => {

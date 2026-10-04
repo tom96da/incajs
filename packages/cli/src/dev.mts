@@ -5,9 +5,6 @@ import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { styleText } from "node:util";
 
-import { buildErrorMessage } from "vite";
-import type { RollupError } from "rolldown";
-
 import {
   assertOutDir,
   resolveAppConfig,
@@ -22,9 +19,8 @@ import { resolveEntry } from "./entry.mts";
 import { IncaError } from "./error.mts";
 import { log, printFault, toFault } from "./log.mts";
 import { writeMacosApp } from "./macos-app.mts";
-import type { Bundler, BuildOutput, HmrChannel, UpdateError } from "./adapter/types.mts";
+import type { Bundler, BuildOutput, HmrChannel } from "./adapter/types.mts";
 import type { ResolvedAppConfig } from "./config/loader.mts";
-import type { Fault } from "./log.mts";
 
 export interface DevOptions {
   /** The app's root directory. Defaults to `process.cwd()`. */
@@ -120,18 +116,6 @@ async function bundleExecutable(
     log(stdout, `running unbundled — ${toFault(error).message}`, STAMPED);
     return undefined;
   }
-}
-
-/**
- * Reduces a failed HMR update to a {@link Fault}. `plugin`/`id`/`frame`,
- * when present, come from Vite's own `buildErrorMessage`, already colored.
- * They follow the stack, so this detail sits right above `printFault`'s
- * tagged summary line instead of scrolling off above the stack.
- */
-function faultOf(error: UpdateError): Fault {
-  const detail = buildErrorMessage(error as unknown as RollupError, [], false);
-  const stack = [error.stack, detail].filter((line) => line).join("\n");
-  return { message: error.message, stack: stack || null, code: null };
 }
 
 /**
@@ -300,7 +284,7 @@ export async function dev(options: DevOptions): Promise<void> {
         // A full reload needs a fresh Engine/Host, which only inca-host's
         // own `reload` RPC method gives it — a `"vite"` notification can't.
         reload: () => void reloadHost(),
-        onError: (error) => printFault(stderr, "build failed", faultOf(error), STAMPED),
+        onError: (error) => printFault(stderr, "build failed", error, STAMPED),
         onUpdate: ({ file, took }) => {
           const rel = styleText("dim", path.relative(cwd, file), { stream: stdout });
           log(stdout, `${styleText("green", "update")} ${rel} (${took}ms)`, STAMPED);

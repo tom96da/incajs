@@ -7,7 +7,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import vue from "@vitejs/plugin-vue";
-import { DevEnvironment, createServer } from "vite";
+import { DevEnvironment, buildErrorMessage, createServer } from "vite";
+import type { RollupError } from "rolldown";
 import type {
   CustomPayload,
   HotChannel,
@@ -17,10 +18,35 @@ import type {
   ViteDevServer,
 } from "vite";
 
+import { bundlerFault } from "../../log.mts";
 import { CONFIG_FILE_NAME, serializeConfig } from "./emitConfig.mts";
 import { streamLogger } from "./logger.mts";
 import { rejectUnsupported } from "./unsupported.mts";
-import type { HmrChannel, HmrOptions, UpdateError } from "../types.mts";
+import type { BuildFailure, HmrChannel, HmrOptions } from "../types.mts";
+
+/**
+ * A failed update's detail — the same fields a Rollup/Vite plugin
+ * error carries beyond `message`/`stack`, when it has them.
+ */
+interface UpdateError {
+  message: string;
+  stack?: string | null;
+  plugin?: string | null;
+  id?: string | null;
+  frame?: string | null;
+  loc?: { line: number; column: number } | null;
+}
+
+/**
+ * Reduces a failed update to a {@link BuildFailure}, with the message and
+ * `code` a failed rebuild reports. Plugin, file and frame detail from Vite's
+ * `buildErrorMessage` follows the stack.
+ */
+export function faultOfUpdate(error: UpdateError): BuildFailure {
+  const detail = buildErrorMessage(error as unknown as RollupError, [], false);
+  const stack = [error.stack, detail].filter((line) => line).join("\n");
+  return { ...bundlerFault(error.message), stack: stack || null };
+}
 
 /** The directory a session's synthesized entry and config are written to. */
 function hmrDirOf(cwd: string): string {
@@ -224,7 +250,13 @@ export async function hmr({
   }
 
   const changed: { current: { file: string; at: number } | undefined } = { current: undefined };
-  const { channel, dispatch } = createIncaHotChannel(notify, reload, onError, onUpdate, changed);
+  const { channel, dispatch } = createIncaHotChannel(
+    notify,
+    reload,
+    (error) => onError(faultOfUpdate(error)),
+    onUpdate,
+    changed,
+  );
 
   const server: ViteDevServer = await createServer({
     configFile: false,

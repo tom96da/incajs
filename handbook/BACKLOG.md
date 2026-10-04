@@ -461,15 +461,6 @@ A fixed entry is deleted and its ID is never reused.
   runtime installs globals the same way. A bundler that tree-shakes on
   `sideEffects` could drop it.
 
-- **B-011 `dev.mts` imports `vite`/`rolldown` directly, past the "only `adapter/vite` imports vite" rule**
-  `Units: cli · Size: S · Impact: Low`
-
-  `faultOf` (`packages/cli/src/dev.mts`)
-  reaches for `buildErrorMessage`/`RollupError` outside the adapter layer
-  `handbook/ARCHITECTURE.md` says is the only place that imports `vite`. Move
-  that formatting into `adapter/vite` and hand `dev.mts` an already-built
-  `Fault`.
-
 - **B-013 GPUI window options with no `inca.config.ts` surface**
   `Units: host,cli · Size: M–L · Impact: Low`
 

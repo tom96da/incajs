@@ -17,7 +17,7 @@ import { afterAll, beforeAll, expect, it, onTestFailed, vi } from "vitest";
 
 import { hmr } from "../../packages/cli/src/adapter/vite/index.mts";
 import { HostClient } from "../../packages/cli/src/dev-client/hostClient.mts";
-import type { HmrChannel, UpdateError } from "../../packages/cli/src/adapter/types.mts";
+import type { BuildFailure, HmrChannel } from "../../packages/cli/src/adapter/types.mts";
 import type { AppErrorParams } from "../../packages/cli/src/dev-client/protocol.mts";
 
 /** How long the host is given to reload/relay before this test gives up on it. */
@@ -128,7 +128,7 @@ let hostClient: HostClient | undefined;
 let stderrText = "";
 let notifiedCount = 0;
 let ready = false;
-let buildErrors: UpdateError[] = [];
+let buildErrors: BuildFailure[] = [];
 let appErrors: AppErrorParams[] = [];
 
 beforeAll(async () => {

@@ -37,7 +37,16 @@ export interface BundlerOptions extends BuildOptions {
   /** Called after each successful (re)build, with what it wrote. */
   onBuild: (output: BuildOutput) => void;
   /** Called instead of `onBuild` when a (re)build fails. */
-  onError: (error: { message: string; stack: string | null; code?: string | null }) => void;
+  onError: (error: BuildFailure) => void;
+}
+
+/** A failed build or HMR update, in the one shape every bundler adapter reports. */
+export interface BuildFailure {
+  message: string;
+  /** The stack, plus any further detail worth printing under it. */
+  stack: string | null;
+  /** An `ERR_INCA_*` identifier, when the failure has one to look up. */
+  code?: string | null;
 }
 
 /** What a build wrote — the result of {@link Bundler.build}, and every {@link BundlerOptions.onBuild} call. */
@@ -50,19 +59,6 @@ export interface BuildOutput {
   files: readonly string[];
   /** The change that triggered this rebuild. Absent from a one-shot build and a watch's first build. */
   changed?: { file: string; at: number };
-}
-
-/**
- * A failed HMR update's detail — the same fields a Rollup/Vite plugin
- * error carries beyond `message`/`stack`, when it has them.
- */
-export interface UpdateError {
-  message: string;
-  stack?: string | null;
-  plugin?: string | null;
-  id?: string | null;
-  frame?: string | null;
-  loc?: { line: number; column: number } | null;
 }
 
 /** Options for {@link Bundler.hmr}. */
@@ -89,7 +85,7 @@ export interface HmrOptions {
   /** Called in place of forwarding a whole-app reload payload to the app. */
   reload: () => void;
   /** Called when an update the app fetched failed to compile. */
-  onError: (error: UpdateError) => void;
+  onError: (error: BuildFailure) => void;
   /** Called after a successful update, with the file that changed and how long it took. */
   onUpdate?: (info: { file: string; took: number }) => void;
 }
