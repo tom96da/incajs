@@ -7,7 +7,7 @@
  * deprecated — this file wins where both are present.
  */
 export interface IncaConfig {
-  /** Path to an icon file, resolved relative to this config file's own directory. */
+  /** Path to an icon file, resolved from the app's root directory. */
   icon?: string;
   /**
    * A reverse-DNS-style unique id — e.g. macOS's `CFBundleIdentifier`.

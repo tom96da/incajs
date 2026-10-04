@@ -57,8 +57,8 @@ with a top-level file or folder of the build output, such as `assets` or
 ## `ERR_INCA_ICON_NOT_FOUND`
 
 `icon` in `inca.config.ts` points at a `.icns` file that doesn't exist. The
-path is resolved from the app's root directory. Applies to macOS only —
-Linux shows no icon. `inca dev` retries when the file is created.
+path is resolved from the app's root directory. `inca dev` retries when the
+file is created.
 
 ## `ERR_INCA_OUT_DIR_INVALID`
 
@@ -77,8 +77,7 @@ write. Set it to a directory the build owns, such as `"dist"`.
 `inca dev` or `inca package` found no file at the host binary's path.
 `inca dev` stops before it builds anything.
 
-Check the path `INCA_HOST_BIN` points at, and that the binary is
-executable.
+Check the path `INCA_HOST_BIN` points at.
 
 ## `ERR_INCA_HOST_BIN_UNRESOLVED`
 

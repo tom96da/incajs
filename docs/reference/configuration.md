@@ -68,8 +68,8 @@ so `inca package` prints a note when it falls back to the generated one.
 - Type: `string` — a path, resolved from the app's root directory
 - Default: none
 
-A `.icns` file. What the Dock shows, in the development window as well as
-once packaged — macOS only; Linux shows no icon.
+A `.icns` file that must exist. macOS shows it in the Dock, in the
+development window as well as once packaged. Linux shows no icon.
 
 ### version
 

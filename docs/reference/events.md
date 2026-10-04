@@ -54,9 +54,7 @@ fields:
     Every event from one move reports the same value
   - `mousedown`, `mouseup` and `wheel`: the event position minus the
     position of the last pointer move
-  - After the pointer leaves the window, macOS and X11 reset the
-    measurement, so the next move reports `0`. On Wayland the next move
-    reports the full distance
+  - After the pointer leaves the window, the next move reports `0`
 - `button` — 0 for a move, which isn't about any one button
 - [`buttons`](https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/buttons) —
   every button currently held, as a bitmask
