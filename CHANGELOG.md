@@ -10,9 +10,11 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.0.10] - 2026-10-05
+
 ### Changed
 
-- the host binary is about 50% smaller ([28c6b3c](https://github.com/tom96da/incajs/commit/28c6b3c), [6b5b423](https://github.com/tom96da/incajs/commit/6b5b423))
+- the host binary is about 40% smaller ([28c6b3c](https://github.com/tom96da/incajs/commit/28c6b3c), [6b5b423](https://github.com/tom96da/incajs/commit/6b5b423))
 - an `onErrorCaptured` hook that returns `false` keeps a handler error out of the host's error report ([20fc77a](https://github.com/tom96da/incajs/commit/20fc77a))
 
 ### Fixed
@@ -186,7 +188,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - prebuilt `inca-host` binaries for linux-x64, linux-arm64, and darwin-arm64, resolved automatically per platform
 - click event dispatch from the native tree back into JS
 
-[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.9...HEAD
+[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.10...HEAD
+[0.0.10]: https://github.com/tom96da/incajs/releases/tag/v0.0.10
 [0.0.9]: https://github.com/tom96da/incajs/releases/tag/v0.0.9
 [0.0.8]: https://github.com/tom96da/incajs/releases/tag/v0.0.8
 [0.0.7]: https://github.com/tom96da/incajs/releases/tag/v0.0.7
