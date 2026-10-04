@@ -153,3 +153,48 @@ fn virtual_tree_layout_matches_hand_written_gpui(cx: &mut TestAppContext) {
         "layout built through VirtualTree/render_tree must match the same shape built directly with gpui"
     );
 }
+
+/// A 100x100 container holding an empty text node, then a 20x20 box, then
+/// another empty text node and a second 20x20 box. Returns the boxes' y.
+fn y_of_boxes_after_empty_text(cx: &mut TestAppContext, gap: Option<f64>) -> (f32, f32) {
+    let mut tree = VirtualTree::new();
+    let root = tree.create_node("div"); // node-0
+    tree.set_style(root, "width", 100.0).unwrap();
+    tree.set_style(root, "height", 100.0).unwrap();
+    if let Some(gap) = gap {
+        tree.set_style(root, "display", "flex").unwrap();
+        tree.set_style(root, "flex_direction", "column").unwrap();
+        tree.set_style(root, "gap", gap).unwrap();
+    }
+    for _ in 0..2 {
+        let empty = tree.create_node("text");
+        tree.set_attribute(empty, "value", "").unwrap();
+        tree.append_child(root, empty).unwrap();
+        let boxed = tree.create_node("div");
+        tree.set_style(boxed, "width", 20.0).unwrap();
+        tree.set_style(boxed, "height", 20.0).unwrap();
+        tree.append_child(root, boxed).unwrap();
+    }
+    let cx = cx.add_empty_window();
+    cx.draw(point(px(0.), px(0.)), size(px(800.), px(600.)), |_, _| {
+        render_tree(&tree, root).unwrap()
+    });
+    let mut y = |selector| f32::from(cx.debug_bounds(selector).unwrap().origin.y);
+    (y("node-2"), y("node-4"))
+}
+
+#[gpui::test]
+fn an_empty_text_node_takes_no_space_in_a_block_container(cx: &mut TestAppContext) {
+    let (first, second) = y_of_boxes_after_empty_text(cx, None);
+
+    assert!(first.abs() < 0.01, "first box at {first}");
+    assert!((second - 20.0).abs() < 0.01, "second box at {second}");
+}
+
+#[gpui::test]
+fn an_empty_text_node_adds_no_gap_in_a_flex_container(cx: &mut TestAppContext) {
+    let (first, second) = y_of_boxes_after_empty_text(cx, Some(8.0));
+
+    assert!(first.abs() < 0.01, "first box at {first}");
+    assert!((second - 28.0).abs() < 0.01, "second box at {second}");
+}

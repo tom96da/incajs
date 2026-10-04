@@ -833,6 +833,9 @@ where
         element = element.child(pointer_tracker(dispatch.clone()));
     }
     for child in &spec.children {
+        if child.tag == ElementTag::Text(String::new()) {
+            continue;
+        }
         element = element.child(build_element_inner(child, dispatch, false));
     }
     element.into_any_element()
