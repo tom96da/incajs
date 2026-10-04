@@ -410,12 +410,6 @@ A fixed entry is deleted and its ID is never reused.
   the build image changed, so a CI check on the binary's `NEEDED` list
   would keep the docs honest.
 
-- **B-004 `strip = true` for the release profile**
-  `Units: ci · Size: S · Impact: Low`
-
-  Shrink release binaries by
-  stripping symbols.
-
 - **B-005 The dev protocol always ships inside `inca-host`**
   `Units: host,cli · Size: L · Impact: Low`
 
