@@ -3,16 +3,16 @@
 
 //! Renders a JS value as the text `console` prints.
 //!
-//! Modelled on Node's `util.inspect` rather than `JSON.stringify`, which is
-//! the wrong tool here: it throws on a cycle, and silently drops functions,
-//! `undefined` and symbols — exactly the values someone reaches for `console`
-//! to look at.
+//! Modelled on Node's `util.inspect`. `JSON.stringify` throws on a cycle and
+//! drops functions, `undefined` and symbols, which are the values someone
+//! reaches for `console` to look at.
 
 use std::fmt::Write;
 
-use rquickjs::{Coerced, Ctx, Object, Result as JsResult, Type, Value, object::Filter, qjs};
+use rquickjs::{Coerced, Ctx, Object, Result as JsResult, Type, Value, object::Filter};
 
 use crate::paint::{Style, paint};
+use crate::quickjs::{ObjectExt, ValueExt};
 
 mod builtins;
 
@@ -117,36 +117,18 @@ fn put(out: &mut String, mode: Mode, style: Style, text: &str) {
     out.push_str(&paint(mode.color, style, &shown));
 }
 
-/// The target a `Proxy` forwards to, or `None` for a revoked one. Reading it
-/// runs no trap.
-fn proxy_target<'js>(proxy: &Value<'js>) -> Option<Value<'js>> {
-    let ctx = proxy.ctx();
-    // SAFETY: `proxy` is a live proxy in `ctx`. The call returns a new
-    // reference to the target, or the exception value (which owns nothing)
-    // after throwing for a revoked proxy. `Value::from_raw` takes over the
-    // reference, so it is released exactly once, when the value drops.
-    let target = unsafe {
-        Value::from_raw(
-            ctx.clone(),
-            qjs::JS_GetProxyTarget(ctx.as_raw().as_ptr(), proxy.as_raw()),
-        )
-    };
-    if target.is_exception() {
-        drop(ctx.catch());
-        return None;
-    }
-    Some(target)
-}
-
 /// The value itself, or for a `Proxy` the target it finally forwards to
 /// (`None` when a link of the chain is revoked). A proxy's target exists
 /// before the proxy does, so a chain cannot loop.
 pub(crate) fn unproxied<'js>(value: &Value<'js>) -> Option<Value<'js>> {
     let mut current = value.clone();
-    while current.is_proxy() {
-        current = proxy_target(&current)?;
+    loop {
+        if !current.is_proxy() {
+            return Some(current);
+        }
+        let target = settled(value.ctx(), current.proxy_target())?;
+        current = target.into_value();
     }
-    Some(current)
 }
 
 /// A top-level string prints bare (`console.log('a')` gives `a`); one nested
@@ -364,52 +346,20 @@ enum Slot<'js> {
 /// Reads an own property's descriptor, so an accessor is named and never
 /// called.
 fn slot<'js>(object: &Object<'js>, key: &str) -> Slot<'js> {
-    let ctx = object.ctx();
-    // The atom comes from a JS string, so a non-ASCII key finds its own
-    // property.
-    let Some(name) = settled(ctx, rquickjs::String::from_str(ctx.clone(), key)) else {
+    let Some(Some(desc)) = settled(object.ctx(), object.get_own_property_descriptor(key)) else {
         return Slot::Missing;
     };
-    let raw_ctx = ctx.as_raw().as_ptr();
-    let mut desc = std::mem::MaybeUninit::<qjs::JSPropertyDescriptor>::uninit();
-    // SAFETY: `desc` is only read after a positive result, which fills it.
-    // The atom is released right after the call.
-    let found = unsafe {
-        let atom = qjs::JS_ValueToAtom(raw_ctx, name.as_value().as_raw());
-        if atom == qjs::JS_ATOM_NULL {
-            drop(ctx.catch());
-            return Slot::Missing;
-        }
-        let found =
-            qjs::JS_GetOwnProperty(raw_ctx, desc.as_mut_ptr(), object.as_value().as_raw(), atom);
-        qjs::JS_FreeAtom(raw_ctx, atom);
-        found
-    };
-    if found < 0 {
-        drop(ctx.catch());
-    }
-    if found <= 0 {
-        return Slot::Missing;
-    }
-    // SAFETY: a positive result filled `desc` with three owned values.
-    // `Value::from_raw` takes each over, so each is released once.
-    let (flags, value, getter, setter) = unsafe {
-        let desc = desc.assume_init();
-        (
-            desc.flags,
-            Value::from_raw(ctx.clone(), desc.value),
-            Value::from_raw(ctx.clone(), desc.getter),
-            Value::from_raw(ctx.clone(), desc.setter),
-        )
-    };
-    let accessor = flags & qjs::JS_PROP_GETSET.cast_signed() != 0;
-    match (accessor, getter.is_undefined(), setter.is_undefined()) {
+    match (
+        desc.is_accessor(),
+        desc.getter.is_undefined(),
+        desc.setter.is_undefined(),
+    ) {
         (true, false, false) => Slot::Accessor("[Getter/Setter]"),
         (true, false, true) => Slot::Accessor("[Getter]"),
         (true, true, false) => Slot::Accessor("[Setter]"),
         // A data property, or an accessor with neither function, whose value
         // is `undefined`.
-        _ => Slot::Value(value),
+        _ => Slot::Value(desc.value),
     }
 }
 

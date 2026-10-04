@@ -16,5 +16,6 @@ pub mod engine;
 mod inspect;
 mod loader;
 mod paint;
+mod quickjs;
 
 pub use engine::{Engine, EngineError, EngineResult};

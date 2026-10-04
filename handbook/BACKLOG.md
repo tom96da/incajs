@@ -994,3 +994,12 @@ A fixed entry is deleted and its ID is never reused.
   `defaultBundler` (`packages/cli/src/defaultBundler.mts`) wires in the Vite
   adapter, and the CLI picks it itself. How a user selects another adapter
   is not decided. One planned shape is an `@incajs/cli/rspack` entry.
+
+- **B-105 `quickjs.rs` mirrors two gaps of rquickjs**
+  `Units: jsenv · Size: S · Impact: Low`
+
+  A panic stored by a Rust callback stays with the runtime until rquickjs
+  resumes it, because the function that resumes it is private to rquickjs.
+  `Value::as_proxy` returns `None` for a proxy whose target is callable, so
+  `proxy_target` keeps one `unsafe` block. A fix in rquickjs would remove
+  both.

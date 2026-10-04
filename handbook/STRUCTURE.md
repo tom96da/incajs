@@ -54,7 +54,7 @@ incajs/
 ├── crates/
 │   ├── inca-gpui/           # retained tree and GPUI rendering
 │   ├── inca-bridge/         # binds a QuickJS realm to the retained tree: the `__inca_native__` bridge and event dispatch
-│   ├── inca-jsenv/          # the QuickJS Engine, its module loader, value inspection, and the host objects installed in the realm, such as `console`
+│   ├── inca-jsenv/          # the QuickJS Engine, module loader, value inspection and host objects such as `console`. All `unsafe` code of the Rust crates is in `src/quickjs.rs`
 │   └── inca-host/           # the runtime binary: loads a bundle, opens the window and serves the dev protocol
 ├── tests/                   # `inca-tests`: the tests that need both Rust and TypeScript, kept out of both so neither depends on the other
 ├── pnpm-workspace.yaml      # pnpm workspace member globs (packages/*, examples/*, npm/*, docs, tests)

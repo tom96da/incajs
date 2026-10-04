@@ -15,11 +15,11 @@ use std::rc::Rc;
 use rquickjs::{
     Ctx, Error, Function, Result as JsResult, Value,
     function::{Rest, This},
-    qjs,
 };
 
 use super::{MAX_DEPTH, Mode, put, settled, write_value};
 use crate::paint::Style;
+use crate::quickjs::ValueExt;
 
 /// Indexes into the pinned functions.
 const ISO: usize = 0;
@@ -83,21 +83,16 @@ enum Kind {
 }
 
 fn kind_of(value: &Value<'_>) -> Option<Kind> {
-    let raw = value.as_raw();
-    // SAFETY: each check takes the value without changing its reference
-    // count, cannot throw, and only reads the object's class id.
-    unsafe {
-        if qjs::JS_IsDate(raw) {
-            Some(Kind::Date)
-        } else if qjs::JS_IsRegExp(raw) {
-            Some(Kind::RegExp)
-        } else if qjs::JS_IsMap(raw) {
-            Some(Kind::Map)
-        } else if qjs::JS_IsSet(raw) {
-            Some(Kind::Set)
-        } else {
-            None
-        }
+    if value.is_date() {
+        Some(Kind::Date)
+    } else if value.is_reg_exp() {
+        Some(Kind::RegExp)
+    } else if value.is_map() {
+        Some(Kind::Map)
+    } else if value.is_set() {
+        Some(Kind::Set)
+    } else {
+        None
     }
 }
 
