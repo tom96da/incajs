@@ -10,10 +10,12 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.0.11] - 2026-10-06
+
 ### Added
 
 - `src/main.ts` and `src/main.js` work as app entries after `src/main.mts` ([c488257](https://github.com/tom96da/incajs/commit/c488257))
-- the host prints a warning line when a style sets an unknown key or an invalid colour ([255e580](https://github.com/tom96da/incajs/commit/255e580))
+- the host prints a warning line when a style sets an unknown key or an invalid color ([255e580](https://github.com/tom96da/incajs/commit/255e580))
 - templates accept event and key modifiers such as `.stop` and `.enter`, with some limits for now ([a0cb74d](https://github.com/tom96da/incajs/commit/a0cb74d))
 
 ### Changed
@@ -24,7 +26,7 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 ### Fixed
 
 - a root that sets only a width or only a height sizes that axis of the window ([e2ec650](https://github.com/tom96da/incajs/commit/e2ec650))
-- a signed hex colour and a number outside `0` to `0xffffff` are rejected ([255e580](https://github.com/tom96da/incajs/commit/255e580))
+- a signed hex color and a number outside `0` to `0xffffff` are rejected ([255e580](https://github.com/tom96da/incajs/commit/255e580))
 - `inca dev` uses only the settings the current config declares ([0ab33ad](https://github.com/tom96da/incajs/commit/0ab33ad))
 - a malformed `package.json` fails with an error that names the file ([769d777](https://github.com/tom96da/incajs/commit/769d777))
 - a prop that turns `null` or `undefined`, or leaves the template, is removed from the element ([a944795](https://github.com/tom96da/incajs/commit/a944795))
@@ -209,7 +211,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - prebuilt `inca-host` binaries for linux-x64, linux-arm64, and darwin-arm64, resolved automatically per platform
 - click event dispatch from the native tree back into JS
 
-[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.10...HEAD
+[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.11...HEAD
+[0.0.11]: https://github.com/tom96da/incajs/releases/tag/v0.0.11
 [0.0.10]: https://github.com/tom96da/incajs/releases/tag/v0.0.10
 [0.0.9]: https://github.com/tom96da/incajs/releases/tag/v0.0.9
 [0.0.8]: https://github.com/tom96da/incajs/releases/tag/v0.0.8

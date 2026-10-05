@@ -1,6 +1,6 @@
 {
   "name": "@incajs/cli",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "description": "Dev server, bundler, and packager for Incarnative.js apps.",
   "keywords": [
     "bundler",
