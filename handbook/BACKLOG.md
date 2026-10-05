@@ -636,14 +636,6 @@ A fixed entry is deleted and its ID is never reused.
   `height` (by design, not a timing accident) never triggers it. Resizing
   the one known axis would fix it.
 
-- **B-040 `-32601` still doesn't return the method name**
-  `Units: host · Size: S · Impact: Low`
-
-  `handle_unrecognized`
-  (`crates/inca-host/src/dev.rs`) has the unrecognized `method` in hand but
-  answers a fixed `"unknown method"` string regardless. A client can't tell
-  from its own log which method got rejected.
-
 - **B-055 Two small rule mismatches**
   `Units: gpui,jsenv · Size: S · Impact: Low`
 

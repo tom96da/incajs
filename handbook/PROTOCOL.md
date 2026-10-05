@@ -50,8 +50,9 @@ carries on.
   matched when several requests are in flight.
 - A notification has no `id` and takes no response. `"id": null` makes it a
   request.
-- An unrecognized `method` in a request is answered `-32601`. In a
-  notification it is relayed into the running app (see "Extending it").
+- An unrecognized `method` in a request is answered `-32601` with the
+  message `unknown method: <method>`. In a notification it is relayed into
+  the running app (see "Extending it").
 - Unused `params` are ignored.
 
 ## Messages

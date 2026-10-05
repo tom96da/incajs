@@ -97,7 +97,7 @@ it(
 
     expect(await exited).toBe(0);
     expect(messages.slice(1)).toEqual([
-      { jsonrpc: "2.0", id: 5, error: { code: -32601, message: "unknown method" } },
+      { jsonrpc: "2.0", id: 5, error: { code: -32601, message: "unknown method: nope" } },
       { jsonrpc: "2.0", id: 6, result: null },
     ]);
   },

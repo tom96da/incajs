@@ -25,6 +25,6 @@ readline.createInterface({ input: process.stdin }).on("line", (line) => {
     return;
   }
   process.stdout.write(
-    `${JSON.stringify({ jsonrpc: "2.0", id, error: { code: -32601, message: "unknown method" } })}\n`,
+    `${JSON.stringify({ jsonrpc: "2.0", id, error: { code: -32601, message: `unknown method: ${method}` } })}\n`,
   );
 });

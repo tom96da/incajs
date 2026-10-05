@@ -242,9 +242,9 @@ fn relay_to_js(
     });
 }
 
-/// Handles a decoded [`Incoming::Unrecognized`]: a request still answers
-/// `-32601` exactly as before; a notification (no `id`) is relayed on into
-/// the running app instead of being dropped.
+/// Handles a decoded [`Incoming::Unrecognized`]: a request answers `-32601`
+/// with the method's name in the message; a notification (no `id`) is relayed
+/// on into the running app.
 fn handle_unrecognized(
     window: &WindowHandle<HostedApp>,
     cx: &mut gpui::AsyncApp,
@@ -261,7 +261,7 @@ fn handle_unrecognized(
         Some(&id),
         Err(Failure::Message(
             ErrorCode::MethodNotFound,
-            "unknown method".to_owned(),
+            format!("unknown method: {method}"),
         )),
         writer,
     );
@@ -434,6 +434,7 @@ mod tests {
         assert_eq!(sent.len(), 1);
         assert!(sent[0].contains(r#""code":-32601"#));
         assert!(sent[0].contains(r#""id":1"#));
+        assert!(sent[0].contains(r#""message":"unknown method: testEvent""#));
     }
 
     /// A real file on disk, torn down with the test — `reload` (unlike
