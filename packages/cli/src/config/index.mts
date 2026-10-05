@@ -1,8 +1,6 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { createDefineConfig } from "c12";
-
 import type { IncaConfig } from "./types.mts";
 
 export { defaultConfig } from "./defaults.mts";
@@ -22,4 +20,4 @@ export type { IncaConfig } from "./types.mts";
  * });
  * ```
  */
-export const defineConfig = createDefineConfig<IncaConfig>();
+export const defineConfig = (config: IncaConfig) => config;
