@@ -43,6 +43,30 @@ A fixed entry is deleted and its ID is never reused.
   [ROADMAP.md](./ROADMAP.md#known-gaps-not-yet-scheduled); the destination is
   undecided.
 
+- **B-120 Style keys are read in snake_case only**
+  `Units: gpui,docs · Size: M · Impact: High`
+
+  A Vue app writes `:style` keys in camelCase or kebab-case, such as
+  `flexDirection` or `'flex-direction'`. The host reads `flex_direction` and
+  warns about the other spellings. The vocabulary lives only in the host, so
+  one normalising step in `set_style` and `remove_style` can map
+  `flexDirection`, `flex-direction` and `flex_direction` to one key, and the
+  warning keeps the spelling the app wrote. Normalising once per set leaves
+  the render path as it is. `docs/reference/elements.md` lists the CSS
+  spelling first.
+
+- **B-121 Style key names and values differ from CSS**
+  `Units: gpui,docs · Size: L · Impact: High`
+
+  The host names some keys after its own vocabulary: `text_color` for
+  `color`, `background` for `background-color`, `corner_radius` for
+  `border-radius`, `text_size` for `font-size`. Values follow the host too:
+  `justify_content: "start"` where CSS has `flex-start`, a number of px where
+  CSS has `"10px"`. The host can take the CSS names and value forms as
+  aliases next to its own and warn with the key as written. B-085
+  (percentages, shorthands) and B-117 (wrong-shaped values) belong to the same
+  change.
+
 ## P2
 
 - **B-007 `.vue` `<style>` blocks don't reach the screen**
@@ -354,6 +378,33 @@ A fixed entry is deleted and its ID is never reused.
   prints `Promise { 1 }` and `Uint8Array(3) [ 0, 0, 0 ]`. A nested string,
   and an object key that is not an identifier, is always single-quoted,
   where Node picks the quote that avoids escaping.
+
+- **B-122 Colours take fewer notations than CSS**
+  `Units: gpui,docs · Size: M–L · Impact: Medium`
+
+  A colour is a `0xRRGGBB` number or a `#rgb` or `#rrggbb` string. CSS adds,
+  from small to large: `#rgba` and `#rrggbbaa`, `transparent` and
+  `currentcolor`, `rgb()`, `rgba()`, `hsl()` and `hsla()` in the comma and
+  the space syntax with an alpha, the 148 colour names, `hwb()`, `lab()`,
+  `lch()`, `oklab()`, `oklch()`, `color()`, `color-mix()`, relative colours,
+  `light-dark()` and system colours. `var(--x)` waits for CSS variables.
+  gpui colours carry an alpha, so the parser sets the limit. A parsing crate
+  such as `csscolorparser` covers part of the list, and its range needs a
+  check before use. Only `background`, `border_color` and `text_color` take a
+  colour. `outline-color`, per-side border colours, `box-shadow` and
+  `text-decoration-color` come with the properties they belong to.
+
+- **B-124 `inca` has no command that reports the host's settings**
+  `Units: cli · Size: M · Impact: Medium`
+
+  The host prints the settings it applies with `--print-config`, and only
+  the host binary takes that flag. `inca config` could resolve the app's
+  config as `inca dev` does, write it with an empty entry under
+  `node_modules/.inca/config/`, run the host with `--print-config` and print
+  the JSON with the host's exit code. The host comes from `resolveHostBin`,
+  so `INCA_HOST_BIN` and the cache of a compressed host both apply. A
+  follow-up, `inca info`, prints the Node version, the platform, the host
+  package, the host binary's path and the `INCA_*` overrides.
 
 ## P3
 
@@ -981,3 +1032,14 @@ A fixed entry is deleted and its ID is never reused.
   file. `--print-config` then prints those defaults and exits 0. A
   diagnostic for "why is my window that size" could exit 1 and name the
   field or the syntax error.
+
+- **B-123 The style vocabulary has no machine-readable definition**
+  `Units: gpui,core,cli · Size: L · Impact: Low`
+
+  `StyleProps` (`packages/core/src/types.mts`) copies the host's vocabulary
+  by hand. A definition in the host that generates JSON and TypeScript types
+  gives tools one source. The types let an editor check `:style` keys in the
+  spelling the app wrote, and a Vite plugin can warn about static keys with
+  file and line, with no host process at build time. The Tailwind class
+  resolver of Phase 7 reads the same data, and B-001 builds on the types. It
+  follows B-120 and B-121.
