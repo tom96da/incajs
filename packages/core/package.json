@@ -43,6 +43,11 @@
       "source": "./src/vue/index.mts",
       "types": "./dist/vue/index.d.mts",
       "import": "./dist/vue.js"
+    },
+    "./vue/runtime": {
+      "source": "./src/vue/runtime.mts",
+      "types": "./dist/vue/runtime.d.mts",
+      "import": "./dist/vue-runtime.js"
     }
   },
   "publishConfig": {
@@ -54,6 +59,10 @@
       "./vue": {
         "types": "./dist/vue/index.d.mts",
         "import": "./dist/vue.js"
+      },
+      "./vue/runtime": {
+        "types": "./dist/vue/runtime.d.mts",
+        "import": "./dist/vue-runtime.js"
       }
     },
     "access": "public"
@@ -67,14 +76,19 @@
   },
   "devDependencies": {
     "@vue/runtime-core": "catalog:",
+    "@vue/runtime-dom": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:"
   },
   "peerDependencies": {
-    "@vue/runtime-core": "catalog:"
+    "@vue/runtime-core": "catalog:",
+    "@vue/runtime-dom": "catalog:"
   },
   "peerDependenciesMeta": {
     "@vue/runtime-core": {
+      "optional": true
+    },
+    "@vue/runtime-dom": {
       "optional": true
     }
   },

@@ -10,6 +10,7 @@ mod handlers;
 mod keyboard;
 mod layout;
 mod lists;
+mod modifiers;
 mod propagation;
 mod reactivity;
 mod scroll;

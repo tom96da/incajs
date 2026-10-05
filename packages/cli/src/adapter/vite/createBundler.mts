@@ -7,11 +7,15 @@ import { watch } from "./watch.mts";
 import type { AdapterCore } from "../../adapterCore.mts";
 import type { Bundler } from "../types.mts";
 
-/** The Vite adapter. */
-export function createViteBundler(core: AdapterCore): Bundler {
+/**
+ * The Vite adapter.
+ * @param core - the CLI logic the adapter uses
+ * @param runtimeModuleName - the module compiled `.vue` templates import their helpers from
+ */
+export function createViteBundler(core: AdapterCore, runtimeModuleName: string): Bundler {
   return {
-    watch: (options) => watch(core, options),
-    build: (options) => build(core, options),
-    hmr: (options) => hmr(core, options),
+    watch: (options) => watch(core, runtimeModuleName, options),
+    build: (options) => build(core, runtimeModuleName, options),
+    hmr: (options) => hmr(core, runtimeModuleName, options),
   };
 }

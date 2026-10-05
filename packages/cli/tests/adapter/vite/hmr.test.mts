@@ -15,7 +15,7 @@ import type { ModuleRunnerTransport } from "vite/module-runner";
 import { createViteBundler } from "../../../src/adapter/vite/index.mts";
 import * as adapterCore from "../../../src/adapterCore.mts";
 import packageViteConfig from "../../../vite.config.mts";
-import { scratchApp } from "./scratchApp.mts";
+import { scratchApp, TEST_RUNTIME_MODULE } from "./scratchApp.mts";
 import type { HmrChannel, HmrOptions } from "../../../src/adapter/types.mts";
 
 const { setUp, tearDown, makeApp } = scratchApp("hmr");
@@ -28,7 +28,10 @@ const builtRuntimePath = path.join(runtimeScratchDir, "hmr-runtime.js");
 
 /** Wraps the real `hmr()`, defaulting `runtimePath` to this test's own scratch build. */
 function hmr(options: HmrOptions): Promise<HmrChannel> {
-  return createViteBundler(adapterCore).hmr!({ runtimePath: builtRuntimePath, ...options });
+  return createViteBundler(adapterCore, TEST_RUNTIME_MODULE).hmr!({
+    runtimePath: builtRuntimePath,
+    ...options,
+  });
 }
 
 // The real vite.config.mts's own "hmr-runtime" entry, reused here rather
@@ -126,6 +129,31 @@ describe("hmr", () => {
     expect(reloads).toEqual([]);
     // A custom logger bypasses `logLevel`, so `quiet` must suppress this itself.
     expect(logs()).toBe("");
+  }, 20000);
+
+  it("loads the modifier helpers a template imports from the runtime core module", async () => {
+    const { entry, streams } = await makeApp(
+      `<script setup>\nconst msg = "hello";\n</script>\n<template><div @click.stop="msg = 'x'">{{ msg }}</div></template>\n`,
+    );
+
+    const channel = await hmr({
+      entry,
+      cwd: path.dirname(entry),
+      ...streams,
+      notify: (payload) => client.notify(payload as HotPayload),
+      reload: () => {},
+      onError: () => {},
+    });
+    channels.push(channel);
+
+    const client = connectRunner(channel.dispatch);
+    await client.runner.import(entry);
+
+    const modules = client.runner.evaluatedModules;
+    const runtimeId = [...modules.idToModuleMap.keys()].find((id) => id.endsWith("/core.mjs"));
+    expect(runtimeId).toBeDefined();
+    const exports = modules.getModuleById(runtimeId!)?.exports as { withModifiers: () => unknown };
+    expect(String(exports.withModifiers)).toContain("STUB_WITH_MODIFIERS");
   }, 20000);
 
   it("calls onError with a failed update's detail, still relays it to the app", async () => {

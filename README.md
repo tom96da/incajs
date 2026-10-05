@@ -22,8 +22,8 @@
 
 ## :rocket: Getting started
 
-```sh [npm]
-$ npm install incajs
+```sh
+$ npm install incajs @vue/runtime-core @vue/runtime-dom
 $ npm install -D @incajs/cli
 ```
 

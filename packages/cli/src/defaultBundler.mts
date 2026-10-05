@@ -8,6 +8,7 @@ import type { Bundler } from "./adapter/types.mts";
 /**
  * `adapter/vite` wired in as the one adapter `dev` and `build` share by
  * default — a single place to swap bundlers, and the reason they can't
- * drift onto different ones.
+ * drift onto different ones. Compiled `.vue` templates import their helpers
+ * from `incajs/vue/runtime`.
  */
-export const defaultBundler: Bundler = createViteBundler(adapterCore);
+export const defaultBundler: Bundler = createViteBundler(adapterCore, "incajs/vue/runtime");

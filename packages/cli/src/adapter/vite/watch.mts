@@ -16,6 +16,7 @@ import type { BundlerOptions, Watcher } from "../types.mts";
  */
 export async function watch(
   core: AdapterCore,
+  runtimeModuleName: string,
   {
     onBuild,
     onError,
@@ -30,6 +31,7 @@ export async function watch(
   const result = await build(
     resolveViteConfig({
       core,
+      runtimeModuleName,
       ...buildOptions,
       watch: true,
       stdout,

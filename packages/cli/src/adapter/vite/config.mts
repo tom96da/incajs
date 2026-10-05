@@ -17,6 +17,8 @@ export const BUNDLE_FILE_NAME = "bundle.js";
 
 export interface ResolveConfigOptions {
   core: AdapterCore;
+  /** The module compiled `.vue` templates import their helpers from. */
+  runtimeModuleName: string;
   /** The app's own entry point — may import `.vue` files. */
   entry: string;
   /** Where the build's output is written. */
@@ -39,8 +41,8 @@ export interface ResolveConfigOptions {
 
 /**
  * Builds the Vite config shared by `watch` and `build`, compiling `.vue`
- * files via `@vitejs/plugin-vue` targeted at `@vue/runtime-core` rather than
- * the `vue` meta-package it requires to run.
+ * files via `@vitejs/plugin-vue`. Compiled templates import their helpers
+ * from `runtimeModuleName`.
  *
  * An import the entry doesn't inline — a dynamic `import()`, or a `.vue`
  * file's own `<style>` block — lands as its own chunk or asset alongside
@@ -49,6 +51,7 @@ export interface ResolveConfigOptions {
  */
 export function resolveViteConfig({
   core,
+  runtimeModuleName,
   entry,
   outDir,
   mode,
@@ -77,7 +80,7 @@ export function resolveViteConfig({
       vue({
         template: {
           // Hoisted static content is stringified into createStaticVNode, which needs insertStaticContent.
-          compilerOptions: { runtimeModuleName: "@vue/runtime-core", hoistStatic: false },
+          compilerOptions: { runtimeModuleName, hoistStatic: false },
         },
       }),
       rejectUnsupported(core),

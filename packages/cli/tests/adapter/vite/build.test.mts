@@ -8,10 +8,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createViteBundler } from "../../../src/adapter/vite/index.mts";
 import * as adapterCore from "../../../src/adapterCore.mts";
-import { scratchApp } from "./scratchApp.mts";
+import { scratchApp, TEST_RUNTIME_MODULE } from "./scratchApp.mts";
 import type { Bundler } from "../../../src/adapter/types.mts";
 
-const vite = createViteBundler(adapterCore);
+const vite = createViteBundler(adapterCore, TEST_RUNTIME_MODULE);
 const build: Bundler["build"] = (options) => vite.build(options);
 
 const { setUp, tearDown, makeApp } = scratchApp("build");
@@ -57,6 +57,21 @@ describe("build", () => {
 
     // Stringified static content survives as literal markup in the bundle.
     expect(await readFile(output.entryFile, "utf8")).not.toContain("<div>a</div>");
+  }, 20000);
+
+  it("imports the modifier helpers from the runtime core module", async () => {
+    const { entry, outDir, streams } = await makeApp(
+      `<script setup>\nimport { ref } from "@vue/runtime-core";\nconst n = ref(0);\n</script>\n` +
+        `<template><div @click.stop="n++" @keydown.enter="n++">{{ n }}</div></template>\n`,
+    );
+
+    const output = await build({ entry, outDir, ...streams });
+
+    const bundle = await readFile(output.entryFile, "utf8");
+    expect(bundle).toContain("STUB_WITH_MODIFIERS");
+    expect(bundle).toContain("STUB_WITH_KEYS");
+    expect(bundle).toContain('["stop"]');
+    expect(bundle).toContain('["enter"]');
   }, 20000);
 
   it("reports a dynamic import as its own chunk alongside the entry", async () => {

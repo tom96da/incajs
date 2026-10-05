@@ -8,10 +8,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createViteBundler } from "../../../src/adapter/vite/index.mts";
 import * as adapterCore from "../../../src/adapterCore.mts";
-import { scratchApp } from "./scratchApp.mts";
+import { scratchApp, TEST_RUNTIME_MODULE } from "./scratchApp.mts";
 import type { Bundler } from "../../../src/adapter/types.mts";
 
-const vite = createViteBundler(adapterCore);
+const vite = createViteBundler(adapterCore, TEST_RUNTIME_MODULE);
 const build: Bundler["build"] = (options) => vite.build(options);
 
 const { setUp, tearDown, makeApp } = scratchApp("emit-config");

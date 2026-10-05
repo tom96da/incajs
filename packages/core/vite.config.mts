@@ -12,13 +12,14 @@ export default defineConfig({
       entry: {
         index: path.resolve(import.meta.dirname, "src/index.mts"),
         vue: path.resolve(import.meta.dirname, "src/vue/index.mts"),
+        "vue-runtime": path.resolve(import.meta.dirname, "src/vue/runtime.mts"),
         // Not in package.json's `exports` — for inca-tests only.
         rendererCore: path.resolve(import.meta.dirname, "src/rendererCore.mts"),
       },
       formats: ["es"],
     },
     rolldownOptions: {
-      external: ["@vue/runtime-core"],
+      external: ["@vue/runtime-core", "@vue/runtime-dom"],
       output: { chunkFileNames: "chunks/[name]-[hash].js" },
     },
   },

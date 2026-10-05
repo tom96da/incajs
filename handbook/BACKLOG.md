@@ -273,11 +273,17 @@ A fixed entry is deleted and its ID is never reused.
 - **B-046 `click` carries no modifier or button fields**
   `Units: gpui,bridge,docs · Size: M · Impact: Medium`
 
-  `click` has
-  `EventPayload::None`, so Vue's `@click.ctrl`/`.shift`/`.alt`/`.meta`
-  checks see `undefined` and never run the handler. `@click.right` compiles
-  to a `contextmenu` listener that never fires. `docs/reference/events.md`'s
-  "Event modifiers" section names neither limit.
+  `click` has `EventPayload::None`, so Vue's `@click.ctrl`, `.shift`, `.alt`
+  and `.meta` checks see `undefined` and never run the handler, and
+  `@click.exact` runs on every click. `@click.left` runs on every click, since
+  `click` has no `button`. `@click.middle` compiles to a `mouseup` listener.
+  `@click.right` compiles to a `contextmenu` listener that the host never
+  fires.
+
+  Full support for the click modifiers takes this entry for the fields,
+  B-125 for `contextmenu` (`.right`), B-018 for the exact `target`
+  (`.self`), B-019 for the capture and passive options, and B-068 for the
+  order of `click` and `mouseup`.
 
 - **B-047 A non-style prop can't be removed once set**
   `Units: gpui,bridge,core · Size: M · Impact: Medium`
@@ -323,14 +329,6 @@ A fixed entry is deleted and its ID is never reused.
   interrupt handler, so a runaway app can't be stopped. rquickjs offers
   `Runtime::set_memory_limit`/`set_max_stack_size`. Defaults and how the
   host reports a timeout are undecided.
-
-- **B-063 `withModifiers` and `withKeys` are not exported to compiled templates**
-  `Units: cli,core · Size: M · Impact: Medium`
-
-  `withModifiers` and `withKeys` are not exported by the runtime the compiled
-  templates import from. `@click.stop`, `.prevent`, `.ctrl` and key modifiers
-  such as `@keydown.enter` fail the build. Related: B-046 (click carries no
-  modifier fields) assumes these compile.
 
 - **B-068 `click` fires before `mouseup`**
   `Units: gpui · Size: M · Impact: Medium`
@@ -405,6 +403,27 @@ A fixed entry is deleted and its ID is never reused.
   so `INCA_HOST_BIN` and the cache of a compressed host both apply. A
   follow-up, `inca info`, prints the Node version, the platform, the host
   package, the host binary's path and the `INCA_*` overrides.
+
+- **B-125 The host fires no `contextmenu` event**
+  `Units: gpui,bridge,docs · Size: M · Impact: Medium`
+
+  `@click.right` compiles to a `contextmenu` listener, and `@contextmenu`
+  binds the same event. The host fires no `contextmenu`, so those handlers
+  never run. The host could fire it from the secondary button's press and
+  carry the pointer fields, with `preventDefault()` as the hook for a context
+  menu of the app's own (Phase 9 item 2).
+
+- **B-126 A missing `@vue/runtime-dom` fails the build with the bundler's own error**
+  `Units: cli,core,docs · Size: S–M · Impact: Medium`
+
+  Compiled templates import `incajs/vue/runtime`, which re-exports from
+  `@vue/runtime-dom`, an optional peer of `incajs`. When the app lacks the
+  package, `inca build` and `inca dev` fail with the bundler's unresolved
+  import message. It names the package and gives no install hint. A check in
+  the Vite adapter could print the install command, as the adapter does for
+  unsupported style blocks. No test installs the packed `incajs` into a
+  scratch app and resolves `incajs/vue/runtime` through the published
+  `exports`. The UI tests cover the workspace link.
 
 ## P3
 

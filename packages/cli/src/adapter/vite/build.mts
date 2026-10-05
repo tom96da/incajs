@@ -15,6 +15,7 @@ import type { BuildOptions, BuildOutput } from "../types.mts";
  */
 export async function build(
   core: AdapterCore,
+  runtimeModuleName: string,
   {
     entry,
     outDir,
@@ -28,6 +29,7 @@ export async function build(
   await buildOnce(
     resolveViteConfig({
       core,
+      runtimeModuleName,
       entry,
       outDir,
       runtimeConfig,

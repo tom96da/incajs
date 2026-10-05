@@ -18,21 +18,23 @@ For how the pieces fit together, see [How it Works](./how-it-works).
 ::: code-group
 
 ```sh [npm]
-$ npm install incajs @vue/runtime-core
+$ npm install incajs @vue/runtime-core @vue/runtime-dom
 $ npm install -D @incajs/cli
 ```
 
 ```sh [pnpm]
-$ pnpm add incajs @vue/runtime-core
+$ pnpm add incajs @vue/runtime-core @vue/runtime-dom
 $ pnpm add -D @incajs/cli
 ```
 
 ```sh [yarn]
-$ yarn add incajs @vue/runtime-core
+$ yarn add incajs @vue/runtime-core @vue/runtime-dom
 $ yarn add -D @incajs/cli
 ```
 
 :::
+
+Install `@vue/runtime-core` and `@vue/runtime-dom` at the same version.
 
 > [!WARNING]
 > Incarnative.js supports only ES modules.

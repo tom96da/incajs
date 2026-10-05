@@ -10,6 +10,7 @@ packages:
 catalog:
   "@types/node": ^26.6.3
   "@vue/runtime-core": ^3.5.43
+  "@vue/runtime-dom": ^3.5.43
   oxfmt: ^0.71.0
   oxlint: ^1.86.0
   vite: ~8.3.1

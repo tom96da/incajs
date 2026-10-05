@@ -16,6 +16,7 @@
   "dependencies": {
     "@incajs/cli": "workspace:*",
     "@vue/runtime-core": "catalog:",
+    "@vue/runtime-dom": "catalog:",
     "incajs": "workspace:*"
   },
   "devDependencies": {

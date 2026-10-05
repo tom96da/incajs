@@ -10,8 +10,7 @@ import { copyFile, mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promis
 import path from "node:path";
 import { Writable } from "node:stream";
 
-import { createViteBundler } from "../packages/cli/src/adapter/vite/index.mts";
-import * as adapterCore from "../packages/cli/src/adapterCore.mts";
+import { defaultBundler } from "../packages/cli/src/defaultBundler.mts";
 
 const outDir = process.argv[2];
 if (!outDir) {
@@ -23,7 +22,7 @@ if (!outDir) {
 const fixturesDir = path.join(import.meta.dirname, "tests/ui-fixtures");
 // Under this package so the entries resolve `incajs/vue` from its node_modules.
 const entriesRoot = path.join(import.meta.dirname, "node_modules/.inca-ui");
-const bundler = createViteBundler(adapterCore);
+const bundler = defaultBundler;
 const sink = new Writable({
   write(_chunk, _encoding, callback) {
     callback();

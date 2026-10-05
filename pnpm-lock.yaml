@@ -170,6 +170,9 @@ catalogs:
     '@vue/runtime-core':
       specifier: ^3.5.43
       version: 3.5.43
+    '@vue/runtime-dom':
+      specifier: ^3.5.43
+      version: 3.5.43
     oxfmt:
       specifier: ^0.71.0
       version: 0.71.0
@@ -244,6 +247,9 @@ importers:
       '@vue/runtime-core':
         specifier: 'catalog:'
         version: 3.5.43
+      '@vue/runtime-dom':
+        specifier: 'catalog:'
+        version: 3.5.43
       incajs:
         specifier: workspace:*
         version: link:../../packages/core
@@ -261,6 +267,9 @@ importers:
   examples/hello_world:
     dependencies:
       '@vue/runtime-core':
+        specifier: 'catalog:'
+        version: 3.5.43
+      '@vue/runtime-dom':
         specifier: 'catalog:'
         version: 3.5.43
       incajs:
@@ -334,6 +343,9 @@ importers:
       '@vue/runtime-core':
         specifier: 'catalog:'
         version: 3.5.43
+      '@vue/runtime-dom':
+        specifier: 'catalog:'
+        version: 3.5.43
       oxfmt:
         specifier: 'catalog:'
         version: 0.71.0
@@ -347,6 +359,9 @@ importers:
         specifier: workspace:*
         version: link:../packages/cli
       '@vue/runtime-core':
+        specifier: 'catalog:'
+        version: 3.5.43
+      '@vue/runtime-dom':
         specifier: 'catalog:'
         version: 3.5.43
       incajs:

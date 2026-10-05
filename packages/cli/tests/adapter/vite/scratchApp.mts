@@ -28,6 +28,35 @@ function sink(): { stream: Writable; text: () => string } {
   };
 }
 
+const RUNTIME_PACKAGE = "scratch-runtime";
+
+/** The module name the scratch apps' templates import their helpers from. */
+export const TEST_RUNTIME_MODULE = `${RUNTIME_PACKAGE}/core`;
+
+// Stands in for the modifier helpers; the marker shows up in a bundle that imported them.
+const runtimeModule = `export * from "@vue/runtime-core";
+export const withModifiers = (fn) => { "STUB_WITH_MODIFIERS"; return fn; };
+export const withKeys = (fn) => { "STUB_WITH_KEYS"; return fn; };
+`;
+
+/**
+ * Makes `TEST_RUNTIME_MODULE`, the module compiled templates import,
+ * resolve under `scratchRoot` to a stub.
+ */
+async function writeRuntimeModule(scratchRoot: string): Promise<void> {
+  const dir = path.join(scratchRoot, "node_modules", RUNTIME_PACKAGE);
+  await mkdir(dir, { recursive: true });
+  await writeFile(
+    path.join(dir, "package.json"),
+    JSON.stringify({
+      name: RUNTIME_PACKAGE,
+      type: "module",
+      exports: { [TEST_RUNTIME_MODULE.replace(RUNTIME_PACKAGE, ".")]: "./core.mjs" },
+    }),
+  );
+  await writeFile(path.join(dir, "core.mjs"), runtimeModule);
+}
+
 /**
  * A scratch-app scaffold scoped to its own directory under `tests/tmp/`
  * (gitignored) rather than a real OS tmpdir: this mirrors how Vite
@@ -36,14 +65,17 @@ function sink(): { stream: Writable; text: () => string } {
  * concurrently running test files never race on the same directory.
  */
 export function scratchApp(name: string): {
-  setUp: () => Promise<string | undefined>;
+  setUp: () => Promise<void>;
   tearDown: () => Promise<void>;
   makeApp: (vueSource: string) => Promise<ScratchApp>;
 } {
   const scratchRoot = path.join(import.meta.dirname, "tmp", name);
 
   return {
-    setUp: () => mkdir(scratchRoot, { recursive: true }),
+    setUp: async () => {
+      await mkdir(scratchRoot, { recursive: true });
+      await writeRuntimeModule(scratchRoot);
+    },
     tearDown: () => rm(scratchRoot, { recursive: true, force: true }),
     async makeApp(vueSource: string): Promise<ScratchApp> {
       const appDir = await mkdtemp(path.join(scratchRoot, "app-"));

@@ -158,15 +158,42 @@ A listener added while an event is being handled first runs for the next event.
 
 ## Event modifiers
 
-Vue's template event modifiers — `v-on:click.once`, `.passive`,
-`.capture` — are Vue's own syntax, not a web standard.
+Vue's template event modifiers are Vue's own syntax, run by Vue's own
+`withModifiers` and `withKeys`. Each one works on the host's events as
+follows.
 
-- `.once` is fully real: the listener unbinds after its first call.
-- `.passive` and `.capture` are accepted but currently degrade to an
-  ordinary bubble-phase listener, for the same reason given in
-  [Propagation](#propagation) above — Incarnative.js has no capture-phase
+- `.stop` and `.prevent` call `stopPropagation()` and `preventDefault()`.
+- `.self` runs the handler when `target` equals `currentTarget`. The two
+  are always equal here, so `.self` runs every handler.
+- `.ctrl`, `.shift`, `.alt`, `.meta` and `.exact` read the `ctrlKey`,
+  `shiftKey`, `altKey` and `metaKey` fields. `click` carries none of
+  them: `@click.ctrl` runs no handler and `@click.exact` runs every
+  handler. `mousedown`, `mouseup`, `mousemove`, `mouseenter`, `mouseleave`,
+  `wheel`, `keydown` and `keyup` carry them.
+- `.left`, `.middle` and `.right` on a mouse event compare the `button`
+  field with 0, 1 and 2, as on `@mousedown.left`. Three of them compile to
+  another event:
+  - `@click.left` runs on every click, because `click` carries no
+    `button` field.
+  - `@click.middle` compiles to `@mouseup.middle` and runs on a `mouseup`
+    whose `button` is 1.
+  - `@click.right` compiles to `@contextmenu.right`. The host has no
+    `contextmenu` event, so it runs no handler.
+- Key modifiers such as `@keydown.enter`, `.tab`, `.delete`, `.esc`,
+  `.space`, `.up`, `.down`, `.left` and `.right` compare the `key` field.
+  Write other keys in kebab-case: `@keydown.page-up` matches `PageUp`.
+- `.once` unbinds the listener after its first call.
+- `.passive` and `.capture` are accepted and bind an ordinary
+  bubble-phase listener, for the same reason given in
+  [Propagation](#propagation) above. Incarnative.js has no capture-phase
   dispatch yet, so `.capture` doesn't run during the capture phase, and
   `.passive` has no effect beyond a plain bind.
+
+```vue
+<template>
+  <div @click.stop="onClick" @keydown.enter="onEnter">...</div>
+</template>
+```
 
 ## Errors in handlers
 

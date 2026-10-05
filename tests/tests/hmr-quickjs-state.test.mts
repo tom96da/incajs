@@ -15,8 +15,7 @@ import { Writable } from "node:stream";
 
 import { afterAll, beforeAll, expect, it, onTestFailed, vi } from "vitest";
 
-import { createViteBundler } from "../../packages/cli/src/adapter/vite/index.mts";
-import * as adapterCore from "../../packages/cli/src/adapterCore.mts";
+import { defaultBundler } from "../../packages/cli/src/defaultBundler.mts";
 import { HostClient } from "../../packages/cli/src/dev-client/hostClient.mts";
 import type { BuildFailure, HmrChannel } from "../../packages/cli/src/adapter/types.mts";
 import type { AppErrorParams } from "../../packages/cli/src/dev-client/protocol.mts";
@@ -140,7 +139,7 @@ beforeAll(async () => {
   await writeFile(vuePath, appVue(STYLE_V1, ""));
   await writeFile(entry, ENTRY_MTS);
 
-  channel = await createViteBundler(adapterCore).hmr!({
+  channel = await defaultBundler.hmr!({
     entry,
     cwd: fixtureDir,
     stdout: discard(),

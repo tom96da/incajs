@@ -231,6 +231,7 @@ function fileChangedPlugin(changed: { current: { file: string; at: number } | un
  */
 export async function hmr(
   core: AdapterCore,
+  runtimeModuleName: string,
   {
     entry,
     cwd,
@@ -285,7 +286,7 @@ export async function hmr(
       vue({
         template: {
           // Hoisted static content is stringified into createStaticVNode, which needs insertStaticContent.
-          compilerOptions: { runtimeModuleName: "@vue/runtime-core", hoistStatic: false },
+          compilerOptions: { runtimeModuleName, hoistStatic: false },
         },
       }),
       rejectUnsupported(core),

@@ -13,7 +13,8 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 > This page describes today's surface — the style keys, boxed elements,
 > and missing Vue features below aren't a permanent ceiling. Closing the
 > gap with Vue/DOM web standards is an active, ongoing direction for the
-> project.
+> project. Using a feature that isn't supported yet stops the build with an
+> error.
 
 ## Elements are just boxes
 
@@ -120,15 +121,12 @@ object, with the keys above, has any visible effect.
 
 ## Vue features that don't work yet
 
-`.vue` files compile against `@vue/runtime-core` directly (not the `vue`
-meta-package, which pulls in `@vue/runtime-dom`'s browser-specific
-pieces). A few common Vue features live only in `runtime-dom` or depend
-on DOM concepts this renderer doesn't have, and using them fails the
-build rather than silently no-oping:
+A few common Vue features depend on DOM concepts this renderer doesn't
+have, and using them fails the build rather than silently no-oping:
 
 - **`v-show`**, **`v-model`** on a native element, and **`<Transition>`**
   all fail to build with a Rollup `MISSING_EXPORT` error (`"vShow"`/
-  `"vModelText"`/`"Transition"` is not exported by `@vue/runtime-core`).
+  `"vModelText"`/`"Transition"` is not exported by the runtime).
   `v-model` on a non-`<input>`/`<textarea>`/`<select>` element (which is
   every inca element, since there's no native input yet) additionally
   fails at the template-compiler stage with its own error, independent of
@@ -141,8 +139,8 @@ build rather than silently no-oping:
 - **`ref` only exposes `.focus()`/`.blur()`** on the underlying element —
   see [Events: Focus](./events#focus) for how focus works.
 
-Event modifiers (`.once`/`.passive`/`.capture`) are documented in
-[Events: Event modifiers](./events#event-modifiers).
+Event modifiers such as `.stop`, `.once` and `@keydown.enter` are documented
+in [Events: Event modifiers](./events#event-modifiers).
 
 ## Bootstrapping: `src/main.mts`
 
