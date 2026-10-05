@@ -94,8 +94,9 @@ exactly one of two entry points there:
   See [Elements & Styles](../reference/elements) for every style key and
   what's supported.
 
-- `src/main.mts` (or `src/main.ts`, `src/main.js`) — for full control over
-  bootstrapping. It wins outright when both exist.
+- `src/main.mts`, for full control over bootstrapping. It wins over
+  `src/App.vue`. The [`entry`](../reference/configuration#entry) setting
+  lists the other file names.
 
 ## Up and Running
 

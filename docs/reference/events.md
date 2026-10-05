@@ -158,36 +158,48 @@ A listener added while an event is being handled first runs for the next event.
 
 ## Event modifiers
 
-Vue's template event modifiers are Vue's own syntax, run by Vue's own
-`withModifiers` and `withKeys`. Each one works on the host's events as
-follows.
+Templates accept Vue's event modifiers. Each one acts on the host's events as
+described here.
+
+> [!NOTE]
+> Some modifiers cannot reproduce Vue's behavior yet. The sections below
+> describe each difference.
+
+### Calls and listeners
 
 - `.stop` and `.prevent` call `stopPropagation()` and `preventDefault()`.
-- `.self` runs the handler when `target` equals `currentTarget`. The two
-  are always equal here, so `.self` runs every handler.
-- `.ctrl`, `.shift`, `.alt`, `.meta` and `.exact` read the `ctrlKey`,
-  `shiftKey`, `altKey` and `metaKey` fields. `click` carries none of
-  them: `@click.ctrl` runs no handler and `@click.exact` runs every
-  handler. `mousedown`, `mouseup`, `mousemove`, `mouseenter`, `mouseleave`,
-  `wheel`, `keydown` and `keyup` carry them.
-- `.left`, `.middle` and `.right` on a mouse event compare the `button`
-  field with 0, 1 and 2, as on `@mousedown.left`. Three of them compile to
-  another event:
-  - `@click.left` runs on every click, because `click` carries no
-    `button` field.
-  - `@click.middle` compiles to `@mouseup.middle` and runs on a `mouseup`
-    whose `button` is 1.
-  - `@click.right` compiles to `@contextmenu.right`. The host has no
-    `contextmenu` event, so it runs no handler.
-- Key modifiers such as `@keydown.enter`, `.tab`, `.delete`, `.esc`,
-  `.space`, `.up`, `.down`, `.left` and `.right` compare the `key` field.
-  Write other keys in kebab-case: `@keydown.page-up` matches `PageUp`.
-- `.once` unbinds the listener after its first call.
-- `.passive` and `.capture` are accepted and bind an ordinary
-  bubble-phase listener, for the same reason given in
-  [Propagation](#propagation) above. Incarnative.js has no capture-phase
-  dispatch yet, so `.capture` doesn't run during the capture phase, and
-  `.passive` has no effect beyond a plain bind.
+- `.once` removes the listener after its first call.
+- `.self` runs the handler on every event, because `target` and
+  `currentTarget` are always equal.
+- `.passive` and `.capture` bind an ordinary listener. It runs in the bubble
+  phase like every listener, see [Propagation](#propagation).
+
+### Modifier keys
+
+`.ctrl`, `.shift`, `.alt` and `.meta` run the handler while that key is held.
+`.exact` runs it when the keys held are exactly the ones listed.
+
+- `keydown`, `keyup`, `mousedown`, `mouseup`, `mousemove`, `mouseenter`,
+  `mouseleave` and `wheel` carry the key state.
+- `click` carries none, so `@click.ctrl` never runs and `@click.exact` runs on
+  every click.
+
+### Mouse buttons
+
+`.left`, `.middle` and `.right` compare the event's `button` with 0, 1 and 2,
+for example `@mousedown.left`.
+
+- `@click.left` runs on every click, because `click` carries no `button`.
+- `@click.middle` listens for `mouseup` and runs when the released button is
+  1.
+- `@click.right` listens for `contextmenu`, which the host has no event for,
+  so it never runs.
+
+### Keys
+
+On `keydown` and `keyup`, `.enter`, `.tab`, `.esc`, `.space`, `.up`, `.down`,
+`.left` and `.right` compare the `key` field, as in `@keydown.enter`. Write
+other keys in kebab-case: `@keydown.page-up` matches `PageUp`.
 
 ```vue
 <template>

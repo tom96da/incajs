@@ -43,7 +43,7 @@ change is done, for Rust and TypeScript.
   `snapshot.rs`.
 - **Console tests**: console behaviour is unit-tested beside the code in
   `crates/inca-jsenv/src`. Timers are checked by the shape of the output.
-  Colour is checked by exact SGR sequences and by stripping them.
+  Color is checked by exact SGR sequences and by stripping them.
 
 ### Required checks
 

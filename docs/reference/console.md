@@ -1,5 +1,5 @@
 ---
-description: The console methods Incarnative.js provides, format specifiers, output and colour, and where printing differs from Node.
+description: The console methods Incarnative.js provides, format specifiers, output and color, and where printing differs from Node.
 ---
 
 <!--
@@ -76,25 +76,29 @@ A line starts with a marker:
 
 ## Printed values
 
-An object's own accessor properties print as `[Getter]`, `[Setter]` or
-`[Getter/Setter]`, and printing reads only their kind. A `Proxy` prints as
-its target, and its traps stay idle. A revoked one prints
-`<Revoked Proxy>`. An array hole prints as `<1 empty item>`. An array, `Map`
-or `Set` prints its first 100 entries and then `... N more items`. A hole run
-counts as one array entry. A key that is not a plain identifier is quoted.
+- An object's own accessor property prints as `[Getter]`, `[Setter]` or
+  `[Getter/Setter]`. Printing reads only the kind of the accessor.
+- A `Proxy` prints as its target. A revoked `Proxy` prints `<Revoked Proxy>`.
+- An array hole prints as `<1 empty item>`. A run of holes counts as one
+  entry.
+- An array, `Map` or `Set` prints its first 100 entries, then
+  `... N more items`.
+- A key that is not a plain identifier is quoted.
 
-A label given to `count`, `countReset`, `time`, `timeLog` or `timeEnd` is
-converted to a string, which can run the traps of a `Proxy` label.
+A label for `count`, `countReset`, `time`, `timeLog` or `timeEnd` is
+converted to a string. Converting a `Proxy` label can run the code in its
+handlers. An absent label, an `undefined` label and a label that fails to
+convert become `default`.
 
-## Colour
+## Color
 
-Output is coloured when stderr is a terminal, and values are coloured by
+Output is colored when stderr is a terminal, and values are colored by
 type as in Node. These environment variables override the terminal check:
 
 | Variable | Effect |
 | --- | --- |
-| `NO_COLOR` | A non-empty value turns colour off. It wins over `FORCE_COLOR`. |
-| `FORCE_COLOR` | `0` or `false` turns colour off. Any other non-empty value turns it on. An empty value is ignored. |
+| `NO_COLOR` | A non-empty value turns color off. It wins over `FORCE_COLOR`. |
+| `FORCE_COLOR` | `0` or `false` turns color off. Any other non-empty value turns it on. An empty value is ignored. |
 
 ## Differences from Node
 

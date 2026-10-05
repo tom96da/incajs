@@ -21,12 +21,11 @@ or Node itself — and its own message is what to search for.
 
 ## `ERR_INCA_ENTRY_NOT_FOUND`
 
-No entry point. Incarnative.js looks for `src/main.mts`, `src/main.ts` and
-`src/main.js` in that order, then `src/App.vue` (which it wraps in an entry
-for you).
+No entry point exists. The [`entry`](./configuration#entry) setting lists the
+files Incarnative.js looks for.
 
-Create one of those, or point `entry` in `inca.config.ts` at the file you
-use instead.
+Create one of those files, or point `entry` in `inca.config.ts` at the file
+you use.
 
 ## `ERR_INCA_PACKAGE_JSON_INVALID`
 

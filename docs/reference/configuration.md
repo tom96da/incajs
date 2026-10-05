@@ -117,10 +117,11 @@ The smallest the window can be. It opens at least this size.
 ### entry
 
 - Type: `string` — a path, resolved from the app's root directory
-- Default: an existing `src/main.mts`, `src/main.ts` or `src/main.js`, or
-  `src/App.vue` wrapped in a synthesized entry
+- Default: the first of `src/main.mts`, `src/main.ts` and `src/main.js` that
+  exists, otherwise `src/App.vue` wrapped in a synthesized entry
 
-The app's entry point.
+The app's entry point. A `src/main` file gives full control over
+bootstrapping and wins over `src/App.vue`.
 
 ### outDir
 

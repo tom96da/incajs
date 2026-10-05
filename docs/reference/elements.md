@@ -10,11 +10,8 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 # Elements & Styles
 
 > [!TIP]
-> This page describes today's surface — the style keys, boxed elements,
-> and missing Vue features below aren't a permanent ceiling. Closing the
-> gap with Vue/DOM web standards is an active, ongoing direction for the
-> project. Using a feature that isn't supported yet stops the build with an
-> error.
+> This page describes today's surface. Closing the gap with Vue and DOM web
+> standards is an ongoing direction for the project.
 
 ## Elements are just boxes
 
@@ -36,12 +33,13 @@ background color, and nothing makes it clickable on its own (bind
 
 ## Recognized style keys
 
-`:style` takes an object; only these keys are read, each with its own
-accepted value shapes. Anything else — a wrong shape, an unrecognized
-enum string, a misspelled key — is ignored. For an unrecognized key and for
-an invalid color, the host prints one warning line on stderr each time the
-style is set. A key that was set before and then gets a wrong shape reverts
-to its default.
+`:style` takes an object. Only the keys below are read, each with its own
+accepted value shapes. A value of the wrong shape sets the property to its
+default, even when the key held a valid value before. An unrecognized key,
+such as a misspelled one, has no effect.
+
+The host prints one warning line on stderr each time a style sets an
+unrecognized key or an invalid color.
 
 Removing a key from the object, or setting it to `null` or `undefined`,
 restores that property to its default. Setting `style` to a string or `null`
@@ -79,8 +77,8 @@ as described there.
 
 `position` and `z_index` are not supported, and their keys are ignored.
 
-Keys are snake_case. `flexDirection` and `justifyContent` are unrecognized
-keys.
+Keys are snake_case, for example `flex_direction`. A camelCase key such as
+`flexDirection` is an unrecognized key.
 
 ### Color format
 
@@ -89,12 +87,10 @@ keys.
 - a numeric `0xRRGGBB` literal, e.g. `0xff0000`
 - a `"#rrggbb"` or `"#rgb"` string, e.g. `"#ff0000"` or `"#f00"`
 
-A number must lie between `0` and `0xffffff`. A negative number, `NaN`, a
-number above `0xffffff`, and a string with a sign, a missing `#`, the wrong
-digit count or non-hex characters are ignored, and the property keeps its
-default.
-
-There's no alpha channel and no named colors (`"red"` doesn't parse).
+A number must lie from `0` to `0xffffff`. A string must be `#` followed by 3 or
+6 hex digits. Any other number or string sets the property to its default and
+prints a warning. Alpha channels and color names such as `"red"` are not
+supported.
 
 ## `class`, and `style` as a string, do nothing
 
@@ -122,7 +118,7 @@ object, with the keys above, has any visible effect.
 ## Vue features that don't work yet
 
 A few common Vue features depend on DOM concepts this renderer doesn't
-have, and using them fails the build rather than silently no-oping:
+have, and using them fails the build:
 
 - **`v-show`**, **`v-model`** on a native element, and **`<Transition>`**
   all fail to build with a Rollup `MISSING_EXPORT` error (`"vShow"`/
@@ -142,15 +138,14 @@ have, and using them fails the build rather than silently no-oping:
 Event modifiers such as `.stop`, `.once` and `@keydown.enter` are documented
 in [Events: Event modifiers](./events#event-modifiers).
 
-## Bootstrapping: `src/main.mts`
+## Bootstrapping: `src/main.ts`
 
-Incarnative.js looks for `src/App.vue` and wraps it in a synthesized entry
-equivalent to this — write `src/main.mts` yourself for full control over
-bootstrapping (it wins outright when both files exist). The file is
-`src/main.mts`, `src/main.ts` or `src/main.js`, and the first one that
-exists in that order is used:
+Incarnative.js wraps `src/App.vue` in a synthesized entry equivalent to the
+one below. Write `src/main.ts` yourself for full control over bootstrapping.
+The [`entry`](./configuration#entry) setting lists the files Incarnative.js
+looks for.
 
-```ts [src/main.mts]
+```ts [src/main.ts]
 import { createIncaApp } from "incajs/vue";
 import App from "./App.vue";
 
