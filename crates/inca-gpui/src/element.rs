@@ -12,7 +12,7 @@
 //! Unrecognized `style_props` keys, malformed values and unrecognized
 //! `attributes` keys are ignored. This runs on the render path, where nothing
 //! can raise a catchable exception. [`style_warning`] lets the caller that
-//! stores a style report an unknown key or an invalid colour once, when it is
+//! stores a style report an unknown key or an invalid color once, when it is
 //! set.
 
 use std::collections::HashMap;
@@ -356,15 +356,15 @@ fn align_spec_from_str(s: &str) -> Option<AlignSpec> {
 /// A style prop the spec layer drops, which [`style_warning`] reports.
 enum StyleFault<'a> {
     UnknownKey(&'a str),
-    InvalidColour(&'a str),
+    InvalidColor(&'a str),
 }
 
 impl fmt::Display for StyleFault<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::UnknownKey(key) => write!(f, "ignoring unknown style key `{key}`"),
-            Self::InvalidColour(key) => {
-                write!(f, "ignoring invalid colour for style key `{key}`")
+            Self::InvalidColor(key) => {
+                write!(f, "ignoring invalid color for style key `{key}`")
             }
         }
     }
@@ -378,18 +378,18 @@ struct Overflows {
     y: Option<OverflowSpec>,
 }
 
-/// Reads the colour `value` into `slot`.
-fn read_colour<'a>(
+/// Reads the color `value` into `slot`.
+fn read_color<'a>(
     slot: &mut Option<u32>,
     key: &'a str,
     value: &AttributeValue,
 ) -> Option<StyleFault<'a>> {
     *slot = as_color(value);
-    slot.is_none().then_some(StyleFault::InvalidColour(key))
+    slot.is_none().then_some(StyleFault::InvalidColor(key))
 }
 
 /// Reads one style prop into `style` (and `overflow`), returning the fault
-/// when the key is unknown or a colour is invalid. Box keys are resolved by
+/// when the key is unknown or a color is invalid. Box keys are resolved by
 /// `edges_from` afterwards.
 fn read_prop<'a>(
     style: &mut StyleSpec,
@@ -410,10 +410,10 @@ fn read_prop<'a>(
         "width" => style.width = length_spec_from(value),
         "height" => style.height = length_spec_from(value),
         "border_width" => style.border_width = as_number(value),
-        "background" => return read_colour(&mut style.background, key, value),
-        "border_color" => return read_colour(&mut style.border_color, key, value),
+        "background" => return read_color(&mut style.background, key, value),
+        "border_color" => return read_color(&mut style.border_color, key, value),
         "corner_radius" => style.corner_radius = as_number(value),
-        "text_color" => return read_colour(&mut style.text_color, key, value),
+        "text_color" => return read_color(&mut style.text_color, key, value),
         "text_size" => style.text_size = as_number(value),
         "overflow" => overflow.all = as_str(value).and_then(overflow_spec_from_str),
         "overflow_x" => overflow.x = as_str(value).and_then(overflow_spec_from_str),
@@ -452,7 +452,7 @@ fn style_spec_from_props(props: &HashMap<String, AttributeValue>) -> StyleSpec {
 }
 
 /// The message for the style prop `key` set to `value` when the key is
-/// unknown or a colour value is invalid. `None` when the prop applies or is
+/// unknown or a color value is invalid. `None` when the prop applies or is
 /// ignored quietly.
 #[must_use]
 pub fn style_warning(key: &str, value: &AttributeValue) -> Option<String> {
@@ -1681,7 +1681,7 @@ mod tests {
             assert_eq!(style.background, None);
             assert_eq!(
                 warnings,
-                ["ignoring invalid colour for style key `background`"]
+                ["ignoring invalid color for style key `background`"]
             );
         }
 

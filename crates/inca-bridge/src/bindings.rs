@@ -89,7 +89,7 @@ impl EventListeners {
 pub struct Host {
     pub tree: VirtualTree,
     /// Receives one line for each style a `setStyle` call stores with an
-    /// unknown key or an invalid colour. Writes to stderr by default.
+    /// unknown key or an invalid color. Writes to stderr by default.
     pub warn: Rc<dyn Fn(&str)>,
     /// Allocated with the tree, so `rootNodeId` always resolves.
     pub root: NodeId,
@@ -969,7 +969,7 @@ mod tests {
 
         assert_eq!(
             *warnings.borrow(),
-            ["node 1 (div): ignoring invalid colour for style key `background`"; 2]
+            ["node 1 (div): ignoring invalid color for style key `background`"; 2]
         );
     }
 
