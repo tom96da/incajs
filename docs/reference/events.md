@@ -117,7 +117,7 @@ the same as a real DOM element:
 
 ```vue
 <script setup>
-import { onMounted, ref } from "@vue/runtime-core";
+import { onMounted, ref } from "vue";
 
 const input = ref(null);
 onMounted(() => input.value.focus());

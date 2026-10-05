@@ -23,7 +23,7 @@
 ## :rocket: Getting started
 
 ```sh
-$ npm install incajs @vue/runtime-core @vue/runtime-dom
+$ npm install vue incajs
 $ npm install -D @incajs/cli
 ```
 
@@ -32,7 +32,7 @@ Drop a `src/App.vue`. No entry point or bootstrapping code needed:
 
 ```vue
 <script setup>
-import { ref } from "@vue/runtime-core";
+import { ref } from "vue";
 
 const clicks = ref(0);
 </script>

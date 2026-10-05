@@ -19,7 +19,7 @@ framework. No Chromium, no DOM: UI renders directly on the GPU via
   own root container instead of a DOM element; `app.mount()` with no
   argument targets it, and `app.unmount`, `app.use`, etc. behave exactly
   as `@vue/runtime-core` documents them.
-- To use Vue, install the peer dependencies `@vue/runtime-core` and
-  `@vue/runtime-dom` directly, at the same version.
+- To use Vue, install `vue` next to `incajs`. It brings the peer
+  dependencies `@vue/runtime-core` and `@vue/runtime-dom`.
 
 Part of [tom96da/incajs](https://github.com/tom96da/incajs).

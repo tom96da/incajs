@@ -154,5 +154,5 @@ createIncaApp(App).mount();
 
 `createIncaApp(rootComponent, rootProps?)` creates a Vue `App` whose
 `mount()` targets the host's root container when called with no
-argument; otherwise it behaves exactly like `@vue/runtime-core`'s own
+argument; otherwise it behaves exactly like Vue's own
 `App` (`use`, `mixin`, `component`, `directive`, `unmount`, ...).
