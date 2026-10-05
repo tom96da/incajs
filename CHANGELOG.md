@@ -29,6 +29,7 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - a malformed `package.json` fails with an error that names the file ([769d777](https://github.com/tom96da/incajs/commit/769d777))
 - a prop that turns `null` or `undefined`, or leaves the template, is removed from the element ([a944795](https://github.com/tom96da/incajs/commit/a944795))
 - `v-model` on an element registers listeners only for the events the template names ([4df3e50](https://github.com/tom96da/incajs/commit/4df3e50))
+- `defineConfig` provides the types of the config keys, which the package had lost ([53ce7de](https://github.com/tom96da/incajs/commit/53ce7de))
 
 ## [0.0.10] - 2026-10-05
 
