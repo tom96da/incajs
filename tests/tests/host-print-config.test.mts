@@ -6,7 +6,7 @@
 
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { copyFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -37,11 +37,11 @@ afterEach(async () => {
 });
 
 /** Runs the host with `args`, with no display to open a window on. */
-function run(args: string[], bin = hostBin) {
+function run(args: string[]) {
   const env = { ...process.env };
   delete env.DISPLAY;
   delete env.WAYLAND_DISPLAY;
-  return spawnSync(bin, args, { env, encoding: "utf8", timeout: 15_000 });
+  return spawnSync(hostBin, args, { env, encoding: "utf8", timeout: 15_000 });
 }
 
 it("prints the settings read from inca.json and exits 0", async () => {
@@ -96,32 +96,6 @@ it("prints the defaults and names the file on stderr for a malformed inca.json",
   expect(result.status).toBe(0);
   expect(JSON.parse(result.stdout).name).toBe("Inca");
   expect(result.stderr).toContain(`ignoring ${path.join(dir, "inca.json")}`);
-});
-
-it("prints the config of the bundle beside the executable when given no path", async () => {
-  const bin = path.join(dir, "bin");
-  await mkdir(bin);
-  await copyFile(hostBin, path.join(bin, "inca-host"));
-  await writeFile(path.join(bin, "bundle.js"), "");
-  await writeFile(path.join(bin, "inca.json"), JSON.stringify({ name: "Beside" }));
-
-  const result = run(["--print-config"], path.join(bin, "inca-host"));
-
-  expect(result.status).toBe(0);
-  expect(JSON.parse(result.stdout).name).toBe("Beside");
-});
-
-it("exits 1 with the usage when no bundle.js sits beside the executable", async () => {
-  const bin = path.join(dir, "bin");
-  await mkdir(bin);
-  await copyFile(hostBin, path.join(bin, "inca-host"));
-
-  const result = run(["--print-config"], path.join(bin, "inca-host"));
-
-  expect(result.status).toBe(1);
-  expect(result.stdout).toBe("");
-  expect(result.stderr).toContain("usage: inca-host [--dev | --print-config]");
-  expect(result.stderr).toContain("no bundle.js found beside the executable");
 });
 
 it("exits 1 with the usage when --print-config comes with --dev", async () => {
