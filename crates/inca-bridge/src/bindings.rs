@@ -302,6 +302,22 @@ fn install_tree<'js>(
     {
         let host = Rc::clone(host);
         native.set(
+            "removeAttribute",
+            Function::new(
+                ctx.clone(),
+                move |ctx: Ctx<'js>, JsNodeId(node_id): JsNodeId, key: String| -> JsResult<()> {
+                    host.borrow_mut()
+                        .tree
+                        .remove_attribute(node_id, &key)
+                        .map_err(|err| throw_tree_error(&ctx, err))
+                },
+            )?,
+        )?;
+    }
+
+    {
+        let host = Rc::clone(host);
+        native.set(
             "setStyle",
             Function::new(
                 ctx.clone(),
@@ -775,6 +791,7 @@ mod tests {
                  return [
                      rejects(() => __inca_native__.setStyle({bad}, 'width', 1)),
                      rejects(() => __inca_native__.removeStyle({bad}, 'width')),
+                     rejects(() => __inca_native__.removeAttribute({bad}, 'label')),
                      rejects(() => __inca_native__.appendChild({bad}, node)),
                      rejects(() => __inca_native__.appendChild(node, {bad})),
                      rejects(() => __inca_native__.insertBefore(node, node, {bad})),
@@ -856,6 +873,36 @@ mod tests {
             caught,
             "a non-primitive attribute value must raise a catchable exception"
         );
+    }
+
+    #[test]
+    fn remove_attribute_unsets_the_key_and_rejects_an_unknown_node() {
+        let (engine, host) = engine_with_bindings();
+
+        let ids: Vec<u32> = engine
+            .eval(
+                r"
+                const n = __inca_native__;
+                const node = n.createNode('div');
+                n.setAttribute(node, 'label', 'a');
+                n.setAttribute(node, 'count', 1);
+                n.removeAttribute(node, 'label');
+                n.removeAttribute(node, 'never_set');
+                let caught = false;
+                try { n.removeAttribute(999, 'label'); } catch (e) { caught = true; }
+                [node, caught ? 1 : 0];
+                ",
+            )
+            .unwrap();
+
+        let [node, caught] = ids[..] else {
+            panic!("expected the node id and the caught flag");
+        };
+        assert_eq!(caught, 1);
+        let host = host.borrow();
+        let attrs = host.tree.get(node).unwrap().attributes();
+        assert!(attrs.get("label").is_none());
+        assert!(attrs.get("count").is_some());
     }
 
     #[test]

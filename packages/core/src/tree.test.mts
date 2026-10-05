@@ -8,6 +8,7 @@ import {
   createNode,
   destroyNode,
   insertBefore,
+  removeAttribute,
   removeChild,
   rootNodeId,
   setAttribute,
@@ -22,6 +23,7 @@ const native = {
   insertBefore: vi.fn<(parentId: number, childId: number, anchorId: number | null) => void>(),
   removeChild: vi.fn<(parentId: number, childId: number) => void>(),
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
+  removeAttribute: vi.fn<(nodeId: number, key: string) => void>(),
   setStyle: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   removeStyle: vi.fn<(nodeId: number, key: string) => void>(),
   addEventListener: vi.fn<(nodeId: number, event: string, callbackId: number) => void>(),
@@ -72,6 +74,11 @@ describe("wrapper functions forward to __inca_native__", () => {
   it("setAttribute", () => {
     setAttribute(1, "label", "hello");
     expect(native.setAttribute).toHaveBeenCalledWith(1, "label", "hello");
+  });
+
+  it("removeAttribute", () => {
+    removeAttribute(1, "label");
+    expect(native.removeAttribute).toHaveBeenCalledWith(1, "label");
   });
 
   it("destroyNode", () => {

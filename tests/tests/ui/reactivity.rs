@@ -89,3 +89,19 @@ fn a_bound_style_changes_the_height_on_click(cx: &mut TestAppContext) {
     near(tall.width, 100.0);
     near(back.height, 40.0);
 }
+
+#[gpui::test]
+fn an_attribute_that_turns_undefined_is_removed_and_set_again(cx: &mut TestAppContext) {
+    let mut h = load(cx, "attribute");
+    let id = by_id(&h.snapshot(), "box").id;
+    assert_eq!(by_id(&h.snapshot(), "box").attributes["tag"], "on");
+
+    click(&mut h, "box");
+    let removed = by_id(&h.snapshot(), "box").clone();
+    assert!(!removed.attributes.contains_key("tag"));
+    assert_eq!(removed.id, id);
+    assert!(removed.attributes.contains_key("id"));
+
+    click(&mut h, "box");
+    assert_eq!(by_id(&h.snapshot(), "box").attributes["tag"], "on");
+}

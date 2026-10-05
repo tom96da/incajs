@@ -85,6 +85,16 @@ export function setAttribute(nodeId: NodeId, key: string, value: AttributeValue)
 }
 
 /**
+ * Removes a non-style attribute/prop from `nodeId`. Removing an attribute
+ * that isn't set does nothing.
+ * @param nodeId - the node to update
+ * @param key - the attribute name
+ */
+export function removeAttribute(nodeId: NodeId, key: string): void {
+  native().removeAttribute(nodeId, key);
+}
+
+/**
  * Sets a style property on `nodeId` — the only way to reach {@link setAttribute}'s
  * counterpart style map. A key from {@link StyleProps} gets compile-time
  * checking on its value's shape; any other string key still forwards as a

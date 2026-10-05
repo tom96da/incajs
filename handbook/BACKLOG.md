@@ -285,16 +285,6 @@ A fixed entry is deleted and its ID is never reused.
   (`.self`), B-019 for the capture and passive options, and B-068 for the
   order of `click` and `mouseup`.
 
-- **B-047 A non-style prop can't be removed once set**
-  `Units: gpui,bridge,core · Size: M · Impact: Medium`
-
-  `patchProp` passes a
-  string, number, or boolean `nextValue` to `core.setAttribute` and ignores
-  anything else, and there is no native `removeAttribute`. A prop that
-  disappears from a vnode, or turns `null`/`undefined`, keeps its last
-  value in the node's `attributes` map. Fixing it needs a `remove_attribute`
-  on the tree, a matching bridge binding, and `patchProp` calling it.
-
 - **B-048 A multi-root `App` (or a top-level comment) breaks window sizing and `gap`**
   `Units: host,gpui · Size: M · Impact: Medium`
 
@@ -1062,3 +1052,13 @@ A fixed entry is deleted and its ID is never reused.
   file and line, with no host process at build time. The Tailwind class
   resolver of Phase 7 reads the same data, and B-001 builds on the types. It
   follows B-120 and B-121.
+
+- **B-127 A boolean attribute set to `false` stays set**
+  `Units: core · Size: S · Impact: Low`
+
+  `patchProp` stores `false` as a boolean attribute. Vue removes an attribute
+  set to `false` for the names it lists as special boolean attributes, such as
+  `readonly` and `novalidate`, sets `disabled` and `checked` as element
+  properties, and keeps `false` as the text `"false"` for any other attribute.
+  The host reads no boolean attribute yet. The input element decides which
+  names need this.

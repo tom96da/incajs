@@ -23,6 +23,7 @@ const core: IncaCore = {
   removeEventListener: vi.fn<(nodeId: number, event: string) => void>(),
   latestEventId: vi.fn<() => number>(() => 0),
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
+  removeAttribute: vi.fn<(nodeId: number, key: string) => void>(),
   setStyle: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   removeStyle: vi.fn<(nodeId: number, key: string) => void>(),
   focus: vi.fn<(nodeId: number) => void>(),
@@ -1159,10 +1160,71 @@ describe("everything else", () => {
     expect(core.setAttribute).toHaveBeenCalledWith(1, key, value);
   });
 
-  it("skips a value setAttribute can't take", () => {
-    patchProp(el, "data", null, { nested: true }, undefined, null);
+  it.each([
+    ["an object", { nested: true }, "[object Object]"],
+    ["an array", [1, 2], "1,2"],
+    ["a function", function named() {}, "function named() {}"],
+    ["a symbol", Symbol("tag"), "Symbol(tag)"],
+  ])("sets %s as its string form", (_name, value, expected) => {
+    patchProp(el, "data", null, value, undefined, null);
 
-    expect(core.setAttribute).not.toHaveBeenCalled();
+    expect(core.setAttribute).toHaveBeenCalledExactlyOnceWith(1, "data", expected);
+    expect(core.removeAttribute).not.toHaveBeenCalled();
+  });
+
+  it("replaces a string with the string form of an object that follows it", () => {
+    patchProp(el, "data", null, "old", undefined, null);
+    patchProp(el, "data", "old", { nested: true }, undefined, null);
+
+    expect(core.setAttribute).toHaveBeenLastCalledWith(1, "data", "[object Object]");
+    expect(core.removeAttribute).not.toHaveBeenCalled();
+  });
+
+  it.each([null, undefined])("removes the attribute when the value turns %s", (value) => {
+    patchProp(el, "label", null, "hello", undefined, null);
+    patchProp(el, "label", "hello", value, undefined, null);
+
+    expect(core.removeAttribute).toHaveBeenCalledExactlyOnceWith(1, "label");
+  });
+
+  it("removes an attribute that is absent from the new vnode props", async () => {
+    let id = 1;
+    vi.mocked(core.createNode).mockImplementation(() => ++id);
+    const renderer = createRenderer({ ...createNodeOps(core), patchProp });
+    const shown = ref(true);
+    renderer
+      .createApp({ render: () => h("view", shown.value ? { label: "hello" } : {}) })
+      .mount(el);
+    expect(core.setAttribute).toHaveBeenCalledExactlyOnceWith(2, "label", "hello");
+
+    shown.value = false;
+    await nextTick();
+
+    expect(core.removeAttribute).toHaveBeenCalledExactlyOnceWith(2, "label");
+  });
+
+  it("sets a removed attribute again", () => {
+    patchProp(el, "label", null, "a", undefined, null);
+    patchProp(el, "label", "a", null, undefined, null);
+    patchProp(el, "label", null, "b", undefined, null);
+
+    expect(core.setAttribute).toHaveBeenLastCalledWith(1, "label", "b");
+    expect(core.setAttribute).toHaveBeenCalledTimes(2);
+    expect(core.removeAttribute).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a false boolean as an attribute", () => {
+    patchProp(el, "disabled", true, false, undefined, null);
+
+    expect(core.setAttribute).toHaveBeenCalledWith(1, "disabled", false);
+    expect(core.removeAttribute).not.toHaveBeenCalled();
+  });
+
+  it("leaves style and event props on their own paths", () => {
+    patchProp(el, "style", null, null, undefined, null);
+    patchProp(el, "onClick", null, null, undefined, null);
+
+    expect(core.removeAttribute).not.toHaveBeenCalled();
   });
 });
 

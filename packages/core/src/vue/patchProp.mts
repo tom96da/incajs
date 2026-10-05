@@ -280,9 +280,12 @@ function patchEvent(
  *
  * ### Other props
  *
- * Everything else falls through to `core.setAttribute`, again skipping a
- * non-string/number/boolean value rather than passing it through. Removing
- * any other prop (a `null`/`undefined` `nextValue`) leaves it as-is.
+ * A string, number or boolean `nextValue` goes to `core.setAttribute` as it
+ * is. A `null` or `undefined` `nextValue`, which includes a prop that is
+ * absent from the new vnode, goes to `core.removeAttribute`. Any other value
+ * (an object, array, function or symbol) goes to `core.setAttribute` as
+ * `String(nextValue)`. An `onUpdate:` key is a component event and sets
+ * nothing.
  *
  * @param core - the incajs bindings to drive the native tree through
  */
@@ -307,6 +310,10 @@ export function createPatchProp(
       typeof nextValue === "boolean"
     ) {
       core.setAttribute(el.id, key, nextValue);
+    } else if (nextValue === null || nextValue === undefined) {
+      core.removeAttribute(el.id, key);
+    } else if (!key.startsWith("onUpdate:")) {
+      core.setAttribute(el.id, key, String(nextValue));
     }
   };
 }

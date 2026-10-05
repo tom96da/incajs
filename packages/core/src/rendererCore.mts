@@ -10,6 +10,7 @@ export {
   removeChild,
   rootNodeId,
   setAttribute,
+  removeAttribute,
   setStyle,
   removeStyle,
 } from "./tree.mts";
