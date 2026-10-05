@@ -10,6 +10,22 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- `src/main.ts` and `src/main.js` work as app entries after `src/main.mts` ([c488257](https://github.com/tom96da/incajs/commit/c488257))
+- the host prints a warning line when a style sets an unknown key or an invalid colour ([255e580](https://github.com/tom96da/incajs/commit/255e580))
+
+### Changed
+
+- `console` prints the first 100 entries of an array, `Map` or `Set` and counts the rest ([2ba40c3](https://github.com/tom96da/incajs/commit/2ba40c3))
+
+### Fixed
+
+- a root that sets only a width or only a height sizes that axis of the window ([e2ec650](https://github.com/tom96da/incajs/commit/e2ec650))
+- a signed hex colour and a number outside `0` to `0xffffff` are rejected ([255e580](https://github.com/tom96da/incajs/commit/255e580))
+- `inca dev` uses only the settings the current config declares ([0ab33ad](https://github.com/tom96da/incajs/commit/0ab33ad))
+- a malformed `package.json` fails with an error that names the file ([769d777](https://github.com/tom96da/incajs/commit/769d777))
+
 ## [0.0.10] - 2026-10-05
 
 ### Changed
