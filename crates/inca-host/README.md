@@ -30,3 +30,13 @@ It loads that one entry file, resolving any `import` in it against its
 own directory on disk — no knowledge of Vite, dev servers, or HMR, and
 never watches for changes. Rebuild the bundle and re-run it to pick up
 an edit.
+
+`--print-config` reads the `inca.json` beside the entry, prints the settings
+the host applies as JSON, and returns after printing. A `null` marks a value
+the app leaves open: its root element sizes the window, and an unset limit
+stays open. Given no path, it prints the config of the `bundle.js` found by
+that search. It exits 0 after printing and 1 when the path is not a file.
+
+```sh
+cargo run -p inca-host -- --print-config path/to/bundle.js
+```

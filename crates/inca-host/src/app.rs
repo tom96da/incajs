@@ -418,6 +418,54 @@ pub fn run_bundle(entry_path: &str, dev: bool) -> ExitCode {
     ExitCode::SUCCESS
 }
 
+/// The settings the host applies for `config`, as pretty-printed JSON. A
+/// `null` marks a value the config leaves to the host's own choice: the
+/// app's root element sizes the window, and an unset limit stays open.
+pub(crate) fn effective_config(config: &config::AppConfig) -> String {
+    let window = config.window.as_ref();
+    let effective = serde_json::json!({
+        "name": config.name.as_deref().unwrap_or(DEFAULT_APP_NAME),
+        "identifier": config.identifier,
+        "window": {
+            "title": window_title(window, config.name.as_deref()),
+            "width": usable(window.and_then(|w| w.width)),
+            "height": usable(window.and_then(|w| w.height)),
+            "resizable": is_resizable(window),
+            "minWidth": usable(window.and_then(|w| w.min_width)),
+            "minHeight": usable(window.and_then(|w| w.min_height)),
+        },
+    });
+    format!("{effective:#}")
+}
+
+/// The settings the host applies to the app whose entry is `entry_path`,
+/// read from the `inca.json` beside it, or the message to report when
+/// `entry_path` names no file.
+fn config_report(entry_path: &str) -> Result<String, String> {
+    if !Path::new(entry_path).is_file() {
+        return Err(format!("failed to read {entry_path}: not a file"));
+    }
+    Ok(effective_config(&config::read(Path::new(entry_path))))
+}
+
+/// Prints the settings the host applies to the app whose entry is
+/// `entry_path`, read from the `inca.json` beside it, and returns after
+/// printing them. Returns `ExitCode::FAILURE` when `entry_path` names no
+/// file.
+#[must_use]
+pub fn print_config(entry_path: &str) -> ExitCode {
+    match config_report(entry_path) {
+        Ok(report) => {
+            println!("{report}");
+            ExitCode::SUCCESS
+        }
+        Err(message) => {
+            eprintln!("{message}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
 /// Where a packaged app's bundle lives relative to `exe_dir`, tried in
 /// order: a flat layout (Linux, `bundle.js` beside the executable) then a
 /// macOS `.app`'s (`Contents/MacOS/<exe>` next to `Contents/Resources/`).
@@ -1193,6 +1241,94 @@ mod tests {
             (1024.0, DEFAULT_WINDOW_SIZE.1)
         );
         assert_eq!(window_size(None, (None, None)), DEFAULT_WINDOW_SIZE);
+    }
+
+    fn effective(json: &str) -> serde_json::Value {
+        let config: config::AppConfig = serde_json::from_str(json).unwrap();
+        serde_json::from_str(&effective_config(&config)).unwrap()
+    }
+
+    #[test]
+    fn an_app_that_declares_nothing_prints_the_defaults() {
+        assert_eq!(
+            effective("{}"),
+            serde_json::json!({
+                "name": "Inca",
+                "identifier": null,
+                "window": {
+                    "title": null,
+                    "width": null,
+                    "height": null,
+                    "resizable": false,
+                    "minWidth": null,
+                    "minHeight": null,
+                },
+            })
+        );
+    }
+
+    #[test]
+    fn every_declared_setting_is_printed() {
+        assert_eq!(
+            effective(
+                r#"{"name":"Demo","identifier":"org.inca.demo",
+                    "window":{"width":1024,"height":768,"title":"Window",
+                              "resizable":true,"minWidth":320,"minHeight":240}}"#
+            ),
+            serde_json::json!({
+                "name": "Demo",
+                "identifier": "org.inca.demo",
+                "window": {
+                    "title": "Window",
+                    "width": 1024.0,
+                    "height": 768.0,
+                    "resizable": true,
+                    "minWidth": 320.0,
+                    "minHeight": 240.0,
+                },
+            })
+        );
+    }
+
+    #[test]
+    fn the_window_title_falls_back_to_the_name() {
+        let printed = effective(r#"{"name":"Demo","window":{"title":"  "}}"#);
+
+        assert_eq!(printed["window"]["title"], "Demo");
+        assert_eq!(effective(r#"{"name":"Demo"}"#)["window"]["title"], "Demo");
+    }
+
+    #[test]
+    fn a_size_no_window_can_open_at_prints_as_null() {
+        let printed =
+            effective(r#"{"window":{"width":-5,"height":0,"minWidth":-1,"minHeight":0}}"#);
+
+        for key in ["width", "height", "minWidth", "minHeight"] {
+            assert!(printed["window"][key].is_null(), "{key}");
+        }
+    }
+
+    #[test]
+    fn the_report_of_a_missing_entry_names_it() {
+        let dir = ScratchDir::new("print-missing");
+        let entry = dir.0.join("bundle.js").to_string_lossy().into_owned();
+
+        assert_eq!(
+            config_report(&entry),
+            Err(format!("failed to read {entry}: not a file"))
+        );
+    }
+
+    #[test]
+    fn the_report_reads_the_config_beside_the_entry() {
+        let dir = ScratchDir::new("print-present");
+        let entry = dir.0.join("bundle.js");
+        fs::write(&entry, "").unwrap();
+        fs::write(dir.0.join("inca.json"), r#"{"name":"Demo"}"#).unwrap();
+
+        let report: serde_json::Value =
+            serde_json::from_str(&config_report(&entry.to_string_lossy()).unwrap()).unwrap();
+        assert_eq!(report["name"], "Demo");
     }
 
     /// A directory under the OS temp root, unique per test invocation, torn

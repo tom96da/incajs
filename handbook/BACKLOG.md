@@ -451,16 +451,6 @@ A fixed entry is deleted and its ID is never reused.
   `show`, `tabbing_identifier`, `titlebar.appears_transparent`,
   `titlebar.traffic_light_position`) is Phase 9 item 1's scope.
 
-- **B-015 A `--print-config` diagnostic**
-  `Units: host · Size: S · Impact: Low`
-
-  Nothing shows which settings an app is
-  actually running under. The host reads `inca.json` beside the entry and
-  applies what it can use; a flag that read it and printed the result would
-  answer "why is my window that size" without a build. Running it from the
-  CLI to validate would make `inca build` need a host binary, which it
-  doesn't today — so this is a diagnostic, not a build step.
-
 - **B-016 `inca.json`'s shape is declared twice**
   `Units: cli,host · Size: M · Impact: Low`
 
@@ -1004,3 +994,13 @@ A fixed entry is deleted and its ID is never reused.
   sets a bad key on each patch prints a line each time, and a remount prints
   it again. Remembering the keys already reported per node would print each
   once.
+
+- **B-119 `--print-config` prints the defaults for a malformed `inca.json`**
+  `Units: host · Size: S · Impact: Low`
+
+  The host reads `inca.json` through the same function as a normal start,
+  which writes one `ignoring ...` line to stderr and continues with the
+  defaults. A wrongly typed field, such as a string `width`, drops the whole
+  file. `--print-config` then prints those defaults and exits 0. A
+  diagnostic for "why is my window that size" could exit 1 and name the
+  field or the syntax error.
