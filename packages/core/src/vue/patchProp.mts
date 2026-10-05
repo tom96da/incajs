@@ -12,7 +12,8 @@ import type { IncaCore } from "../rendererCore.mts";
 import type { EventListener } from "../types.mts";
 import type { IncaElement } from "./nodeOps.mts";
 
-const isOn = (key: string): boolean => /^on[A-Z]/.test(key);
+// `onUpdate:modelValue` and the like are component events, never native ones.
+const isOn = (key: string): boolean => /^on[A-Z]/.test(key) && !key.startsWith("onUpdate:");
 
 // Vue's SFC compiler appends these to the prop name per event modifier,
 // e.g. `@click.once` becomes `onClickOnce`; `@click.once.capture` becomes

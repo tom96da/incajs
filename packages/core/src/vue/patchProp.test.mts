@@ -185,6 +185,33 @@ describe("on*", () => {
   });
 });
 
+describe("onUpdate:* props", () => {
+  it("binds no listener for a v-model update handler", () => {
+    patchProp(el, "onUpdate:modelValue", null, vi.fn(), undefined, null);
+
+    expect(core.setEventListener).not.toHaveBeenCalled();
+    expect(core.setAttribute).not.toHaveBeenCalled();
+  });
+
+  it("binds no listener for a named v-model update handler", () => {
+    patchProp(el, "onUpdate:count", null, [vi.fn<() => void>()], undefined, null);
+
+    expect(core.setEventListener).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when the handler is removed", () => {
+    patchProp(el, "onUpdate:modelValue", vi.fn(), undefined, undefined, null);
+
+    expect(core.removeEventListener).not.toHaveBeenCalled();
+  });
+
+  it("still binds an on* prop that merely starts with Update", () => {
+    patchProp(el, "onUpdateRequested", null, vi.fn(), undefined, null);
+
+    expect(core.setEventListener).toHaveBeenCalledWith(1, "updaterequested", expect.any(Function));
+  });
+});
+
 describe("on* modifiers", () => {
   it("binds .passive as an ordinary listener that fires", () => {
     const listener = vi.fn<() => void>();
