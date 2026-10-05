@@ -228,8 +228,8 @@ pub(crate) struct HostedApp {
     /// fallback chain.
     pub(crate) window_config: Option<config::WindowConfig>,
     /// Whether [`maybe_auto_resize_to_content`] has already resized the
-    /// window once — it never fires a second time.
-    pub(crate) auto_resized: Cell<bool>,
+    /// window's width and its height — each fires once.
+    pub(crate) auto_resized: Cell<(bool, bool)>,
 }
 
 impl Render for HostedApp {
@@ -245,31 +245,47 @@ impl Render for HostedApp {
     }
 }
 
-/// Resizes the window to fit content the first time it becomes usable
-/// after the window already opened. The HMR bootstrap entry evaluates
-/// fire-and-forget, so nothing is mounted yet when the window's initial
-/// size is computed in [`start`] — this catches up once the app finishes
-/// mounting.
+/// Resizes each window dimension to fit content the first time that
+/// dimension becomes usable after the window already opened. The HMR
+/// bootstrap entry evaluates fire-and-forget, so nothing is mounted yet when
+/// the window's initial size is computed in [`start`] — this catches up once
+/// the app finishes mounting.
 ///
-/// A dimension the config fixes explicitly counts as ready right away;
-/// content could never change it either way.
+/// A dimension the config fixes explicitly counts as ready right away. A
+/// dimension still waiting for content keeps the window's current size.
 pub(crate) fn maybe_auto_resize_to_content(app: &HostedApp, window: &mut Window) {
-    if app.auto_resized.get() {
+    let (width_done, height_done) = app.auto_resized.get();
+    if width_done && height_done {
         return;
     }
     let window_config = app.window_config.as_ref();
     let content = content_window_size(&app.session.host.borrow(), app.session.root());
-    let width_ready =
-        window_config.is_some_and(|w| usable(w.width).is_some()) || usable(content.0).is_some();
-    let height_ready =
-        window_config.is_some_and(|w| usable(w.height).is_some()) || usable(content.1).is_some();
-    if !width_ready || !height_ready {
+    let width_ready = !width_done
+        && (window_config.is_some_and(|w| usable(w.width).is_some())
+            || usable(content.0).is_some());
+    let height_ready = !height_done
+        && (window_config.is_some_and(|w| usable(w.height).is_some())
+            || usable(content.1).is_some());
+    if !width_ready && !height_ready {
         return;
     }
 
     let (width, height) = window_size(window_config, content);
-    window.resize(size(px(width), px(height)));
-    app.auto_resized.set(true);
+    let current = window.bounds().size;
+    window.resize(Size {
+        width: if width_ready {
+            px(width)
+        } else {
+            current.width
+        },
+        height: if height_ready {
+            px(height)
+        } else {
+            current.height
+        },
+    });
+    app.auto_resized
+        .set((width_done || width_ready, height_done || height_ready));
 }
 
 /// Brings up the engine, the tree and the window, under the config the
@@ -318,7 +334,7 @@ pub(crate) fn start(
                 cx.new(|_| HostedApp {
                     session,
                     window_config: window_config.cloned(),
-                    auto_resized: Cell::new(false),
+                    auto_resized: Cell::new((false, false)),
                 })
             },
         )
@@ -663,7 +679,7 @@ mod tests {
                     cx.new(|_| HostedApp {
                         session,
                         window_config,
-                        auto_resized: Cell::new(false),
+                        auto_resized: Cell::new((false, false)),
                     })
                 },
             )
@@ -836,41 +852,122 @@ mod tests {
         assert_eq!(bounds_size(cx, window), (300.0, 150.0));
     }
 
+    /// Mounts an empty `div` under the session's root, then declares each
+    /// given dimension on it.
+    fn mount_partial(app: &HostedApp, width: Option<f64>, height: Option<f64>) {
+        let mut host = app.session.host.borrow_mut();
+        let root = host.root;
+        let content = host.tree.create_node("div");
+        host.tree.append_child(root, content).unwrap();
+        if let Some(width) = width {
+            host.tree.set_style(content, "width", width).unwrap();
+        }
+        if let Some(height) = height {
+            host.tree.set_style(content, "height", height).unwrap();
+        }
+    }
+
     #[gpui::test]
-    fn auto_resize_waits_for_both_dimensions_even_if_one_arrives_first(cx: &mut TestAppContext) {
+    fn auto_resize_fits_the_width_alone_when_the_root_sets_only_a_width(cx: &mut TestAppContext) {
         let window = open_hosted(cx, None, DEFAULT_WINDOW_SIZE);
         cx.run_until_parked();
 
-        // Only width lands on this relay — a component that sets its
-        // dimensions across more than one reactive update.
         cx.update(|cx| {
             window
                 .update(cx, |app, window, _| {
-                    let mut host = app.session.host.borrow_mut();
-                    let root = host.root;
-                    let content = host.tree.create_node("div");
-                    host.tree.append_child(root, content).unwrap();
-                    host.tree.set_style(content, "width", 300.0).unwrap();
-                    drop(host);
+                    mount_partial(app, Some(300.0), None);
+                    maybe_auto_resize_to_content(app, window);
+                })
+                .unwrap();
+        });
+
+        assert_eq!(bounds_size(cx, window), (300.0, DEFAULT_WINDOW_SIZE.1));
+    }
+
+    #[gpui::test]
+    fn auto_resize_fits_the_height_alone_when_the_root_sets_only_a_height(cx: &mut TestAppContext) {
+        let window = open_hosted(cx, None, DEFAULT_WINDOW_SIZE);
+        cx.run_until_parked();
+
+        cx.update(|cx| {
+            window
+                .update(cx, |app, window, _| {
+                    mount_partial(app, None, Some(150.0));
+                    maybe_auto_resize_to_content(app, window);
+                })
+                .unwrap();
+        });
+
+        assert_eq!(bounds_size(cx, window), (DEFAULT_WINDOW_SIZE.0, 150.0));
+    }
+
+    #[gpui::test]
+    fn auto_resize_picks_up_the_second_dimension_when_it_arrives_later(cx: &mut TestAppContext) {
+        let window = open_hosted(cx, None, DEFAULT_WINDOW_SIZE);
+        cx.run_until_parked();
+
+        cx.update(|cx| {
+            window
+                .update(cx, |app, window, _| {
+                    mount_partial(app, Some(300.0), None);
+                    maybe_auto_resize_to_content(app, window);
+                })
+                .unwrap();
+        });
+        assert_eq!(bounds_size(cx, window), (300.0, DEFAULT_WINDOW_SIZE.1));
+
+        cx.update(|cx| {
+            window
+                .update(cx, |app, window, _| {
+                    mount_content(app, 900.0, 150.0);
                     maybe_auto_resize_to_content(app, window);
                 })
                 .unwrap();
         });
         assert_eq!(
             bounds_size(cx, window),
-            DEFAULT_WINDOW_SIZE,
-            "must not latch on a partial size and strand the other dimension"
+            (300.0, 150.0),
+            "the width fired once already, the height still has its turn"
         );
+    }
+
+    #[gpui::test]
+    fn auto_resize_leaves_a_dimension_the_user_resized_while_the_other_one_fires(
+        cx: &mut TestAppContext,
+    ) {
+        let window = open_hosted(cx, None, DEFAULT_WINDOW_SIZE);
+        cx.run_until_parked();
 
         cx.update(|cx| {
             window
                 .update(cx, |app, window, _| {
+                    mount_partial(app, Some(300.0), None);
+                    maybe_auto_resize_to_content(app, window);
+                    window.resize(size(px(350.0), px(450.0)));
                     mount_content(app, 300.0, 150.0);
                     maybe_auto_resize_to_content(app, window);
                 })
                 .unwrap();
         });
-        assert_eq!(bounds_size(cx, window), (300.0, 150.0));
+
+        assert_eq!(bounds_size(cx, window), (350.0, 150.0));
+    }
+
+    #[gpui::test]
+    fn auto_resize_keeps_the_current_height_when_only_the_width_fires(cx: &mut TestAppContext) {
+        let window = open_hosted(cx, None, (700.0, 450.0));
+        cx.run_until_parked();
+
+        cx.update(|cx| {
+            window
+                .update(cx, |app, window, _| {
+                    mount_partial(app, Some(300.0), None);
+                    maybe_auto_resize_to_content(app, window);
+                })
+                .unwrap();
+        });
+
+        assert_eq!(bounds_size(cx, window), (300.0, 450.0));
     }
 
     #[gpui::test]

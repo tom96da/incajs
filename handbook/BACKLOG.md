@@ -54,19 +54,21 @@ A fixed entry is deleted and its ID is never reused.
   (`ERR_INCA_UNSUPPORTED_STYLE`, raised by `adapter/vite/unsupported.mts`);
   rendering them is Phase 7's work.
 
-- **B-012 The window is set once and never follows the app**
+- **B-012 The window and the app control each other only at start**
   `Units: bridge,host,core · Size: L · Impact: Medium`
 
-  `start()`
-  (`crates/inca-host/src/app.rs`) reads the size and title out of the
-  config and the mounted root, hands them to `WindowOptions`, and nothing
-  revisits them. An app that changes its root's `width`/`height`, or wants
-  a title that tracks its state, has no way to move the window. GPUI has
+  The host takes the window's size and title from the config and the
+  mounted root. Each size axis fits once, when its content size first
+  becomes known (`start()` and `maybe_auto_resize_to_content` in
+  `crates/inca-host/src/app.rs`). A later change of the root's
+  `width`/`height`, or of the title the app wants, leaves the window as it
+  is, and the app has no binding to move it. A resize by the user stays in
+  the window, and the host sends the app no event for it. The target is a
+  window that the app and the user can both control at any time. GPUI has
   `Window::resize` and `Window::set_window_title`
-  (`third_party/zed/crates/gpui/src/window.rs:2622, 2732`); reaching them
+  (`third_party/zed/crates/gpui/src/window.rs:2622, 2732`). Reaching them
   from JS is a binding, and settling which of these an app owns is Phase 9
   item 1.
-
 - **B-014 A packaged app's output reaches nobody**
   `Units: host,cli · Size: L · Impact: Medium`
 
@@ -627,14 +629,6 @@ A fixed entry is deleted and its ID is never reused.
   `async_channel::unbounded`, so a client that stops reading stdout never
   blocks the host — it grows the host's memory without limit instead.
   Fixing the behavior itself means a bounded channel with real backpressure.
-
-- **B-039 A root that declares one dimension never auto-resizes the window**
-  `Units: host · Size: S · Impact: Low`
-
-  `maybe_auto_resize_to_content` (`crates/inca-host/src/app.rs`) needs
-  both dimensions ready together. A root that only ever sets `width` or
-  `height` (by design, not a timing accident) never triggers it. Resizing
-  the one known axis would fix it.
 
 - **B-055 Two small rule mismatches**
   `Units: gpui,jsenv · Size: S · Impact: Low`

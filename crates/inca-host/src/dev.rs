@@ -207,7 +207,7 @@ fn reload(
                     // made since it last auto-resized, which reloading the
                     // bundle must not discard.
                     if !is_resizable(app.window_config.as_ref()) {
-                        app.auto_resized.set(false);
+                        app.auto_resized.set((false, false));
                     }
                     app.session.dispatcher.drain_jobs_and_refresh(window);
                     maybe_auto_resize_to_content(app, window);
@@ -474,6 +474,16 @@ mod tests {
         )
     }
 
+    fn mounts_a_div_sized(property: &str, value: u32) -> String {
+        format!(
+            r"
+                const node = __inca_native__.createNode('div');
+                __inca_native__.appendChild(__inca_native__.rootNodeId(), node);
+                __inca_native__.setStyle(node, '{property}', {value});
+            "
+        )
+    }
+
     /// A directory holding just this test's entry and its own `inca.json`,
     /// unlike [`ScratchEntry`] whose files all share the OS temp root as
     /// their `config::read` parent — fine for entries with no config, but
@@ -548,6 +558,58 @@ mod tests {
             (400.0, 200.0),
             "reload must reset the latch, or the new content's size never applies"
         );
+    }
+
+    #[gpui::test]
+    fn a_reload_resets_the_width_latch_when_only_the_width_fired(cx: &mut TestAppContext) {
+        let entry = ScratchEntry::write("resize-width", &mounts_a_div_sized("width", 300));
+        let writer: SharedWriter = Rc::new(CapturingWriter::default());
+
+        let window = cx.update(|cx| {
+            start(
+                cx,
+                entry.path(),
+                &mounts_a_div_sized("width", 300),
+                stderr_reporter(),
+                Some(&writer),
+            )
+            .unwrap()
+        });
+        cx.run_until_parked();
+        assert_eq!(bounds_of(cx, window), (300.0, 600.0));
+
+        std::fs::write(&entry.0, mounts_a_div_sized("width", 400)).unwrap();
+        let mut async_cx = cx.to_async();
+        reload(&window, &mut async_cx, entry.path(), None, &writer);
+        cx.run_until_parked();
+
+        assert_eq!(bounds_of(cx, window), (400.0, 600.0));
+    }
+
+    #[gpui::test]
+    fn a_reload_resets_the_height_latch_when_only_the_height_fired(cx: &mut TestAppContext) {
+        let entry = ScratchEntry::write("resize-height", &mounts_a_div_sized("height", 150));
+        let writer: SharedWriter = Rc::new(CapturingWriter::default());
+
+        let window = cx.update(|cx| {
+            start(
+                cx,
+                entry.path(),
+                &mounts_a_div_sized("height", 150),
+                stderr_reporter(),
+                Some(&writer),
+            )
+            .unwrap()
+        });
+        cx.run_until_parked();
+        assert_eq!(bounds_of(cx, window), (800.0, 150.0));
+
+        std::fs::write(&entry.0, mounts_a_div_sized("height", 200)).unwrap();
+        let mut async_cx = cx.to_async();
+        reload(&window, &mut async_cx, entry.path(), None, &writer);
+        cx.run_until_parked();
+
+        assert_eq!(bounds_of(cx, window), (800.0, 200.0));
     }
 
     #[gpui::test]
