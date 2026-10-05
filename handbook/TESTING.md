@@ -29,11 +29,14 @@ change is done, for Rust and TypeScript.
     fixtures; helper components live in `ui-fixtures/parts/`.
   - Node files in `tests/tests/` belong to `@incajs/e2e-tests`, which
     `pnpm test` does not run: `hmr-quickjs-state`, `host-startup-failure`,
-    `host-shutdown` and `host-packaged-launch`. They spawn the real
-    `inca-host` binary, and the first also starts a real Vite dev server.
+    `host-shutdown`, `host-packaged-launch` and `host-print-config`. They
+    spawn the real `inca-host` binary, and the first also starts a real Vite
+    dev server.
   - `host-shutdown` speaks the dev protocol on raw stdio. On Linux with no
     display variable set it runs on gpui's headless platform. On macOS it
     opens a real window and needs a window-server session.
+  - `host-print-config` runs `--print-config` and compares the printed JSON
+    and the exit code.
   - `host-packaged-launch` starts the host with no argv, from an unrelated
     working directory, with the bundle beside the executable. Its bundles
     open no window, so it needs no display.

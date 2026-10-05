@@ -45,8 +45,10 @@ Implemented in `crates/inca-gpui/src/element.rs`. There are two kinds:
 
 ### Style prop vocabulary
 
-Implemented in `element.rs`. Unrecognized keys and malformed enum strings are
-ignored without an error. The table lists every key the host reads.
+Implemented in `element.rs`. An unrecognized key and an invalid color each
+print one warning line on stderr every time a style sets them. A malformed
+enum string reads as unset and prints nothing. The table lists every key the
+host reads.
 
 | Key | Value | Maps to |
 | --- | --- | --- |
@@ -56,7 +58,7 @@ ignored without an error. The table lists every key the host reads.
 | `gap` | number (px) | `gap.width` & `gap.height` (uniform) |
 | `width` / `height` | number (px) or `"auto"` | `size.width` / `size.height` |
 | `border_width` | number (px) | all four `border_widths.*` (uniform) |
-| `background` / `border_color` / `text_color` | number (hex `0xRRGGBB`) or string (`"#rrggbb"`/`"#rgb"`) | `Fill`/`Hsla` |
+| `background` / `border_color` / `text_color` | number from `0` to `0xffffff`, or string (`"#rrggbb"`/`"#rgb"`); any other value warns | `Fill`/`Hsla` |
 | `corner_radius` | number (px) | all four `corner_radii.*` (uniform) |
 | `text_size` | number (px) | `text.font_size` |
 | `overflow` / `overflow_x` / `overflow_y` | `"visible"`\|`"hidden"`\|`"scroll"`\|`"auto"` (= `"scroll"`) | `overflow.x` / `overflow.y`; an axis key beats `overflow` |
@@ -74,7 +76,7 @@ the nearest ancestor container.
 | Function | Signature | Purpose |
 | --- | --- | --- |
 | `rootNodeId` | `() => number` | Return the id of the host-allocated root container, the node a mounting app attaches itself under. |
-| `createNode` | `(tag: string) => number` | Allocate a `VirtualNode`, return its id. |
+| `createNode` | `(tag: string) => number` | Allocate a `VirtualNode`, return its id. Throws once every id has been used. |
 | `appendChild` | `(parentId: number, childId: number) => void` | Attach a child at the end of `parentId`'s children. Same as `insertBefore` with no anchor. |
 | `insertBefore` | `(parentId: number, childId: number, anchorId: number \| null) => void` | Attach a child before `anchorId`, or at the end if `null`. |
 | `removeChild` | `(parentId: number, childId: number) => void` | Detach a child node. |

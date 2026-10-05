@@ -133,7 +133,8 @@ A build writes `inca.json` beside the entry:
 
 Every member is optional, and a build that has none of them writes no file.
 `name` is what the platform calls the running app, `identifier` its
-reverse-DNS id, and `window` the size and title it opens at.
+reverse-DNS id, and `window` the size, title, resizability and minimum size
+it opens at.
 
 The host reads it once, at startup, before opening the window. It reaches
 the file the same way whether a client spawned it or a person double-clicked
