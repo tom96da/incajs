@@ -21,6 +21,10 @@ pub(crate) use builtins::pin;
 /// Nesting depth after which `[Array]` or `[Object]` is printed. It also bounds a cycle.
 const MAX_DEPTH: usize = 3;
 
+/// Entries of one array, `Map` or `Set` printed before `... N more items`. A
+/// run of array holes is one entry.
+const MAX_ENTRIES: usize = 100;
+
 /// The value of a read, or `None` after clearing the exception it threw.
 pub(crate) fn settled<T>(ctx: &Ctx<'_>, result: JsResult<T>) -> Option<T> {
     if result.is_err() {
@@ -265,6 +269,7 @@ fn write_array(out: &mut String, value: &Value<'_>, depth: usize, mode: Mode) {
 
     out.push_str("[ ");
     let mut written = false;
+    let mut entries = 0;
     let mut next = 0.0;
     // Only the present indices are visited, in ascending order, so a hole run
     // of any size costs one step.
@@ -277,13 +282,27 @@ fn write_array(out: &mut String, value: &Value<'_>, depth: usize, mode: Mode) {
         }
         if index > next {
             write_holes(out, &mut written, index - next, mode);
+            entries += 1;
+            next = index;
+            if entries == MAX_ENTRIES {
+                break;
+            }
         }
         separate(out, &mut written);
         write_slot(out, slot(object, &index.to_string()), depth, mode);
+        entries += 1;
         next = index + 1.0;
+        if entries == MAX_ENTRIES {
+            break;
+        }
     }
-    if length > next {
-        write_holes(out, &mut written, length - next, mode);
+    let rest = length - next;
+    if rest > 0.0 {
+        if entries == MAX_ENTRIES {
+            write_more(out, &mut written, rest, mode);
+        } else {
+            write_holes(out, &mut written, rest, mode);
+        }
     }
     out.push_str(" ]");
 }
@@ -312,6 +331,14 @@ fn write_holes(out: &mut String, written: &mut bool, count: f64, mode: Mode) {
         Style::Grey,
         &format!("<{count} empty item{plural}>"),
     );
+}
+
+/// `... N more items`, closing an array cut at [`MAX_ENTRIES`].
+fn write_more(out: &mut String, written: &mut bool, count: f64, mode: Mode) {
+    separate(out, written);
+    let count = count.to_string();
+    let plural = if count == "1" { "" } else { "s" };
+    plain(out, mode, &format!("... {count} more item{plural}"));
 }
 
 /// `text` in single quotes.
@@ -644,6 +671,125 @@ mod tests {
                 grey("<1 empty item>"),
                 yellow("3")
             )
+        );
+    }
+
+    /// `[ 0, 1, ..., count - 1 ]` as `console` prints it, `tail` after the last.
+    fn numbers(count: usize, tail: &str) -> String {
+        let items: Vec<String> = (0..count).map(|i| i.to_string()).collect();
+        format!("[ {}{tail} ]", items.join(", "))
+    }
+
+    #[test]
+    fn an_array_prints_up_to_100_entries() {
+        for length in [99, 100] {
+            assert_eq!(
+                rendered(&format!("Array.from({{ length: {length} }}, (_, i) => i)")),
+                numbers(length, "")
+            );
+        }
+    }
+
+    #[test]
+    fn an_array_past_100_entries_counts_the_rest() {
+        for (length, tail) in [
+            (101, ", ... 1 more item"),
+            (102, ", ... 2 more items"),
+            (1000, ", ... 900 more items"),
+        ] {
+            assert_eq!(
+                rendered(&format!("Array.from({{ length: {length} }}, (_, i) => i)")),
+                numbers(100, tail),
+                "{length}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_array_cap_leaves_the_text_of_each_entry_alone() {
+        assert_eq!(
+            colored("Array.from({ length: 101 }, () => 'a')")
+                .matches(&green("'a'"))
+                .count(),
+            100
+        );
+        assert!(
+            colored("Array.from({ length: 101 }, () => 1)").ends_with(", ... 1 more item ]"),
+            "the count is uncoloured"
+        );
+        assert_eq!(
+            escaped("Array.from({ length: 101 }, () => 1)", true),
+            colored("Array.from({ length: 101 }, () => 1)")
+        );
+    }
+
+    #[test]
+    fn the_cap_applies_to_a_nested_array_on_its_own() {
+        let inner = numbers(100, ", ... 1 more item");
+        assert_eq!(
+            rendered("[Array.from({ length: 101 }, (_, i) => i), 7]"),
+            format!("[ {inner}, 7 ]")
+        );
+        assert_eq!(
+            rendered("({ a: Array.from({ length: 101 }, (_, i) => i) })"),
+            format!("{{ a: {inner} }}")
+        );
+    }
+
+    #[test]
+    fn a_hole_run_is_one_entry_toward_the_cap() {
+        let dense = |count: usize| {
+            let items: Vec<String> = (0..count).map(|i| i.to_string()).collect();
+            items.join(", ") + ", "
+        };
+        // 99 items, then a hole run and one item: 101 entries.
+        let source = "const a = Array.from({ length: 99 }, (_, i) => i); a[100] = 'x'; a";
+        assert_eq!(
+            rendered(source),
+            format!("[ {}<1 empty item>, ... 1 more item ]", dense(99))
+        );
+        // 98 items, a hole run and one item: exactly 100 entries.
+        let source = "const a = Array.from({ length: 98 }, (_, i) => i); a[99] = 'x'; a";
+        assert_eq!(
+            rendered(source),
+            format!("[ {}<1 empty item>, 'x' ]", dense(98))
+        );
+        // 100 items, then a trailing run of holes.
+        let source = "const a = Array.from({ length: 100 }, (_, i) => i); a.length = 105; a";
+        assert_eq!(rendered(source), numbers(100, ", ... 5 more items"));
+        // 99 items, then a trailing run of holes: the run is the 100th entry.
+        let source = "const a = Array.from({ length: 99 }, (_, i) => i); a.length = 105; a";
+        assert_eq!(
+            rendered(source),
+            format!("[ {}<6 empty items> ]", dense(99))
+        );
+    }
+
+    #[test]
+    fn a_hole_run_that_fills_the_cap_leaves_the_next_item_in_the_count() {
+        // 99 items, a hole run that is the 100th entry, then 2 more items.
+        let source = "const a = Array.from({ length: 99 }, (_, i) => i); a[100] = 1; a[101] = 2; a";
+        let out = rendered(source);
+        assert!(
+            out.ends_with(", <1 empty item>, ... 2 more items ]"),
+            "{out}"
+        );
+        assert_eq!(out.matches(", ").count(), 100);
+    }
+
+    #[test]
+    fn an_array_with_extra_keys_still_stops_at_the_cap() {
+        assert_eq!(
+            rendered("const a = Array.from({ length: 101 }, (_, i) => i); a.extra = 1; a"),
+            numbers(100, ", ... 1 more item")
+        );
+    }
+
+    #[test]
+    fn a_huge_array_is_cut_and_its_tail_counted() {
+        assert_eq!(
+            rendered("const a = Array.from({ length: 100 }, (_, i) => i); a[4e9] = 1; a"),
+            numbers(100, ", ... 3999999901 more items")
         );
     }
 
@@ -1212,18 +1358,78 @@ mod tests {
         );
     }
 
+    /// `Set(total) { 0, 1, ..., shown - 1 tail }`.
+    fn set_text(total: usize, shown: usize, tail: &str) -> String {
+        let items: Vec<String> = (0..shown).map(|i| i.to_string()).collect();
+        format!("Set({total}) {{ {}{tail} }}", items.join(", "))
+    }
+
+    /// `Map(total) { 0 => 0, ..., shown - 1 => shown - 1 tail }`.
+    fn map_text(total: usize, shown: usize, tail: &str) -> String {
+        let items: Vec<String> = (0..shown).map(|i| format!("{i} => {i}")).collect();
+        format!("Map({total}) {{ {}{tail} }}", items.join(", "))
+    }
+
     #[test]
-    fn a_large_collection_prints_every_entry() {
-        let out = rendered("new Set(Array.from({ length: 100000 }, (_, i) => i))");
+    fn a_collection_prints_up_to_100_entries() {
+        for total in [99, 100] {
+            assert_eq!(
+                rendered(&format!(
+                    "new Set(Array.from({{ length: {total} }}, (_, i) => i))"
+                )),
+                set_text(total, total, "")
+            );
+            assert_eq!(
+                rendered(&format!(
+                    "new Map(Array.from({{ length: {total} }}, (_, i) => [i, i]))"
+                )),
+                map_text(total, total, "")
+            );
+        }
+    }
 
-        assert!(out.starts_with("Set(100000) { 0, 1, 2, "), "{}", &out[..40]);
-        assert!(out.ends_with(", 99998, 99999 }"));
-        let out = rendered("new Map(Array.from({ length: 100000 }, (_, i) => [i, i]))");
+    #[test]
+    fn a_collection_past_100_entries_counts_the_rest() {
+        for (total, tail) in [
+            (101, ", ... 1 more item"),
+            (102, ", ... 2 more items"),
+            (100_000, ", ... 99900 more items"),
+        ] {
+            assert_eq!(
+                rendered(&format!(
+                    "new Set(Array.from({{ length: {total} }}, (_, i) => i))"
+                )),
+                set_text(total, 100, tail),
+                "{total}"
+            );
+            assert_eq!(
+                rendered(&format!(
+                    "new Map(Array.from({{ length: {total} }}, (_, i) => [i, i]))"
+                )),
+                map_text(total, 100, tail),
+                "{total}"
+            );
+        }
+    }
 
+    #[test]
+    fn a_nested_collection_is_capped_on_its_own() {
+        let inner = set_text(101, 100, ", ... 1 more item");
+        assert_eq!(
+            rendered("[new Set(Array.from({ length: 101 }, (_, i) => i)), 7]"),
+            format!("[ {inner}, 7 ]")
+        );
+        assert_eq!(
+            rendered("new Map([['k', new Set(Array.from({ length: 101 }, (_, i) => i))]])"),
+            format!("Map(1) {{ 'k' => {inner} }}")
+        );
+    }
+
+    #[test]
+    fn the_collection_count_is_uncoloured() {
         assert!(
-            out.starts_with("Map(100000) { 0 => 0, 1 => 1, "),
-            "{}",
-            &out[..40]
+            colored("new Set(Array.from({ length: 101 }, (_, i) => i))")
+                .ends_with(", ... 1 more item }")
         );
     }
 

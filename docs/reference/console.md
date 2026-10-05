@@ -79,8 +79,9 @@ A line starts with a marker:
 An object's own accessor properties print as `[Getter]`, `[Setter]` or
 `[Getter/Setter]`, and printing reads only their kind. A `Proxy` prints as
 its target, and its traps stay idle. A revoked one prints
-`<Revoked Proxy>`. An array hole prints as `<1 empty item>`. A key that is
-not a plain identifier is quoted.
+`<Revoked Proxy>`. An array hole prints as `<1 empty item>`. An array, `Map`
+or `Set` prints its first 100 entries and then `... N more items`. A hole run
+counts as one array entry. A key that is not a plain identifier is quoted.
 
 A label given to `count`, `countReset`, `time`, `timeLog` or `timeEnd` is
 converted to a string, which can run the traps of a `Proxy` label.
@@ -102,7 +103,7 @@ type as in Node. These environment variables override the terminal check:
 
 ## Known issues
 
-- Output is not wrapped across lines and is not cut after 100 items.
+- Output is not wrapped across lines.
 - A class instance prints without its class name. Symbol-keyed
   properties and extra properties on arrays and errors are dropped. A
   `Promise`, a typed array and a `WeakMap` print as plain objects. A

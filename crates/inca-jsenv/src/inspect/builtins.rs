@@ -17,7 +17,7 @@ use rquickjs::{
     function::{Rest, This},
 };
 
-use super::{MAX_DEPTH, Mode, put, settled, write_value};
+use super::{MAX_DEPTH, MAX_ENTRIES, Mode, put, settled, write_more, write_value};
 use crate::paint::Style;
 use crate::quickjs::ValueExt;
 
@@ -155,7 +155,7 @@ fn write_collection<'js>(
     }
 
     let _ = write!(out, "{name}({}) {{ ", items.len());
-    for (index, (item, key)) in items.iter().enumerate() {
+    for (index, (item, key)) in items.iter().take(MAX_ENTRIES).enumerate() {
         if index > 0 {
             out.push_str(", ");
         }
@@ -164,6 +164,12 @@ fn write_collection<'js>(
             out.push_str(" => ");
         }
         write_value(out, item, depth + 1, mode);
+    }
+    if items.len() > MAX_ENTRIES {
+        // Entries precede it, so it starts with a separator.
+        let mut written = true;
+        #[allow(clippy::cast_precision_loss)]
+        write_more(out, &mut written, (items.len() - MAX_ENTRIES) as f64, mode);
     }
     out.push_str(" }");
 }

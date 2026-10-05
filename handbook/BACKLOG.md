@@ -766,8 +766,7 @@ A fixed entry is deleted and its ID is never reused.
     `Map(0) { foo: 1 }`. An object that only inherits from `Map.prototype`
     prints as `{}`. A `Proxy` around any of the four prints as its target.
   - A long object, array, `Map` or `Set` is never wrapped across lines,
-    where the standard wraps long output. The standard cuts a collection
-    after 100 items (`... 50 more items`), where every entry is printed.
+    where the standard wraps long output.
   - A `RegExp` has one colour, where the standard highlights its parts.
   - `%s`, `%d`, `%i` and `%f` convert an array that holds a `Proxy` through
     the array's own string form, which runs the `Proxy`'s traps.
