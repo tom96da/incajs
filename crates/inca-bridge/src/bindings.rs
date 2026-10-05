@@ -11,7 +11,7 @@ use std::rc::Rc;
 
 use rquickjs::{Ctx, Exception, FromJs, Function, Object, Result as JsResult, Value};
 
-use inca_gpui::{AttributeValue, NodeId, TreeError, VirtualTree};
+use inca_gpui::{AttributeValue, NodeId, TreeError, VirtualNode, VirtualTree, style_warning};
 
 use crate::focus::FocusRegistry;
 
@@ -86,13 +86,26 @@ impl EventListeners {
 /// Everything one `__inca_native__` binding set shares: the retained tree
 /// it mutates, the root a mounting app attaches under, and the
 /// event-listener registrations it records.
-#[derive(Debug)]
 pub struct Host {
     pub tree: VirtualTree,
+    /// Receives one line for each style a `setStyle` call stores with an
+    /// unknown key or an invalid colour. Writes to stderr by default.
+    pub warn: Rc<dyn Fn(&str)>,
     /// Allocated with the tree, so `rootNodeId` always resolves.
     pub root: NodeId,
     pub listeners: EventListeners,
     pub focus: FocusRegistry,
+}
+
+impl std::fmt::Debug for Host {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Host")
+            .field("tree", &self.tree)
+            .field("root", &self.root)
+            .field("listeners", &self.listeners)
+            .field("focus", &self.focus)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Default for Host {
@@ -101,6 +114,7 @@ impl Default for Host {
         let root = tree.create_node("div");
         Self {
             tree,
+            warn: Rc::new(|line| eprintln!("{line}")),
             root,
             listeners: EventListeners::default(),
             focus: FocusRegistry::default(),
@@ -289,10 +303,16 @@ fn install_tree<'js>(
                       value: Value<'js>|
                       -> JsResult<()> {
                     let value = attribute_value_from_js(&ctx, &value)?;
-                    host.borrow_mut()
-                        .tree
+                    let mut host = host.borrow_mut();
+                    let warning = style_warning(&key, &value);
+                    host.tree
                         .set_style(node_id, key, value)
-                        .map_err(|err| throw_tree_error(&ctx, err))
+                        .map_err(|err| throw_tree_error(&ctx, err))?;
+                    if let Some(warning) = warning {
+                        let tag = host.tree.get(node_id).map_or("", VirtualNode::tag_name);
+                        (host.warn)(&format!("node {node_id} ({tag}): {warning}"));
+                    }
+                    Ok(())
                 },
             )?,
         )?;
@@ -857,6 +877,96 @@ mod tests {
         let styles = host.tree.get(node).unwrap().style_props();
         assert!(styles.get("gap").is_none());
         assert!(styles.get("width").is_some());
+    }
+
+    /// Evaluates `script` against bindings whose style warnings are
+    /// collected, and returns them with the host.
+    fn warnings_from(script: &str) -> (Rc<RefCell<Vec<String>>>, Rc<RefCell<Host>>) {
+        let (engine, host) = engine_with_bindings();
+        let warnings = Rc::new(RefCell::new(Vec::new()));
+        let sink = Rc::clone(&warnings);
+        host.borrow_mut().warn = Rc::new(move |line| sink.borrow_mut().push(line.to_owned()));
+        engine.eval::<()>(script).unwrap();
+        (warnings, host)
+    }
+
+    #[test]
+    fn set_style_warns_once_per_unknown_key() {
+        let (warnings, _) = warnings_from(
+            "const n = __inca_native__.createNode('div'); \
+             __inca_native__.setStyle(n, 'flexDirection', 'column');",
+        );
+
+        assert_eq!(
+            *warnings.borrow(),
+            ["node 1 (div): ignoring unknown style key `flexDirection`"]
+        );
+    }
+
+    #[test]
+    fn set_style_warns_for_each_set_of_a_bad_value() {
+        let (warnings, _) = warnings_from(
+            "const n = __inca_native__.createNode('div'); \
+             __inca_native__.setStyle(n, 'background', -1); \
+             __inca_native__.setStyle(n, 'background', -1); \
+             __inca_native__.setStyle(n, 'background', 0xff0000);",
+        );
+
+        assert_eq!(
+            *warnings.borrow(),
+            ["node 1 (div): ignoring invalid colour for style key `background`"; 2]
+        );
+    }
+
+    #[test]
+    fn a_failed_set_style_emits_no_warning() {
+        let (warnings, _) = warnings_from(
+            "try { __inca_native__.setStyle(999, 'bogus', 1); } catch (e) {} \
+             const n = __inca_native__.createNode('div'); \
+             try { __inca_native__.setStyle(n, 'bogus', { nested: true }); } catch (e) {}",
+        );
+
+        assert!(warnings.borrow().is_empty(), "{:?}", warnings.borrow());
+    }
+
+    #[test]
+    fn set_style_names_the_tag_of_the_node() {
+        let (warnings, _) = warnings_from(
+            "const n = __inca_native__.createNode('text'); \
+             __inca_native__.setStyle(n, 'bogus', 1);",
+        );
+
+        assert_eq!(
+            *warnings.borrow(),
+            ["node 1 (text): ignoring unknown style key `bogus`"]
+        );
+    }
+
+    #[test]
+    fn set_style_is_quiet_for_known_keys_and_box_keys() {
+        let (warnings, _) = warnings_from(
+            "const n = __inca_native__.createNode('div'); \
+             for (const k of ['display', 'padding', 'padding_x', 'margin_left', 'gap']) \
+               __inca_native__.setStyle(n, k, 'flex'); \
+             __inca_native__.setStyle(n, 'text_color', '#fff');",
+        );
+
+        assert!(warnings.borrow().is_empty(), "{:?}", warnings.borrow());
+    }
+
+    #[test]
+    fn a_stored_bad_style_does_not_warn_again_when_the_tree_is_read() {
+        let (warnings, host) = warnings_from(
+            "const n = __inca_native__.createNode('div'); \
+             __inca_native__.setStyle(n, 'bogus', 1);",
+        );
+        assert_eq!(warnings.borrow().len(), 1);
+
+        let host = host.borrow();
+        for _ in 0..3 {
+            inca_gpui::build_spec(&host.tree, 1).unwrap();
+        }
+        assert_eq!(warnings.borrow().len(), 1);
     }
 
     #[test]

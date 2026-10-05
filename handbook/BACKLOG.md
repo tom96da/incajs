@@ -235,17 +235,6 @@ A fixed entry is deleted and its ID is never reused.
   path rather than `rerender`. Not confirmed at the native layer the way
   B-030 was. Reproduced on Intel macOS, where B-030 is not.
 
-- **B-041 A camelCase (or otherwise miscased) style key is silently ignored**
-  `Units: gpui · Size: S · Impact: Medium`
-
-  `style_spec_from_props` (`crates/inca-gpui/src/element.rs`)'s match falls
-  through to `_ => {}` for any key it doesn't recognize, including
-  `flexDirection` where `flex_direction` was meant — no error, no warning,
-  the property just never applies. Someone coming from web-standard CSS/
-  Vue conventions hits this as a silent no-op with nothing to point at the
-  typo. At minimum this should warn in dev mode. Keys such as `padding_top` are
-  snake_case too, so `paddingTop` is ignored the same way.
-
 - **B-045 `buttons` stays set after a release nobody listens to**
   `Units: bridge · Size: M · Impact: Medium`
 
@@ -655,15 +644,6 @@ A fixed entry is deleted and its ID is never reused.
   answers a fixed `"unknown method"` string regardless. A client can't tell
   from its own log which method got rejected.
 
-- **B-049 Colour parsing is looser than documented**
-  `Units: gpui,docs · Size: S · Impact: Low`
-
-  `parse_hex_color`
-  (`crates/inca-gpui/src/element.rs`) accepts `"#+abcde"` because Rust's
-  hex parser allows a leading `+`. Numeric colours are cast with `as u32`,
-  so a negative or `NaN` value becomes black and a value above `0xFFFFFF`
-  loses its top byte. `docs/reference/elements.md` describes neither.
-
 - **B-055 Two small rule mismatches**
   `Units: gpui,jsenv · Size: S · Impact: Low`
 
@@ -792,8 +772,8 @@ A fixed entry is deleted and its ID is never reused.
   and `padding` and `margin` take px numbers (`margin` also `"auto"`), so
   percentages are ignored, and `flex_basis` is not a key. `padding` and
   `margin` read one value per key, so the CSS shorthand `"1 2 3 4"` is
-  ignored. A negative `padding` is ignored without a warning. The length
-  keys `width`, `height`, `min_*` and `max_*` accept `NaN` and infinity.
+  ignored. The length keys `width`, `height`, `min_*` and `max_*` accept
+  `NaN` and infinity.
 
 - **B-086 Some `console` methods only approximate the standard**
   `Units: jsenv · Size: M · Impact: Low`
@@ -1022,3 +1002,19 @@ A fixed entry is deleted and its ID is never reused.
   Linux package holds the host binary and the bundle, so a launcher or a task
   bar shows no icon. Linux needs an icon format such as PNG or SVG and a
   `.desktop` file that matches the window's `identifier`.
+
+- **B-117 A known style key with a wrong-shaped value is dropped quietly**
+  `Units: gpui · Size: S–M · Impact: Low`
+
+  An unknown key and an invalid colour print a warning when the style is
+  set. A known key whose value has the wrong type or range, such as
+  `display: "nope"`, `gap: "1"`, a negative `padding` or a string `opacity`,
+  is dropped and prints nothing.
+
+- **B-118 A style warning prints again on every `setStyle` call**
+  `Units: bridge · Size: S · Impact: Low`
+
+  The warning is printed once per `setStyle` call. A reactive `:style` that
+  sets a bad key on each patch prints a line each time, and a remount prints
+  it again. Remembering the keys already reported per node would print each
+  once.

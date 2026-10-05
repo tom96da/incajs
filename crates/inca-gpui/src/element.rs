@@ -9,12 +9,14 @@
 //! - a thin gpui layer ([`build_element`]/[`render_tree`]) that turns that
 //!   spec into a real [`AnyElement`].
 //!
-//! Unrecognized `style_props`/`attributes` keys and malformed values are
-//! silently ignored rather than erroring: this runs on the render path, not
-//! a JS call boundary, so there's no channel to raise a catchable exception
-//! through.
+//! Unrecognized `style_props` keys, malformed values and unrecognized
+//! `attributes` keys are ignored. This runs on the render path, where nothing
+//! can raise a catchable exception. [`style_warning`] lets the caller that
+//! stores a style report an unknown key or an invalid colour once, when it is
+//! set.
 
 use std::collections::HashMap;
+use std::fmt;
 
 use gpui::prelude::*;
 use gpui::{
@@ -190,25 +192,27 @@ fn as_number(value: &AttributeValue) -> Option<f64> {
     }
 }
 
-/// Parses a `0xRRGGBB` number or a `"#rrggbb"`/`"#rgb"` string into a
-/// `0xRRGGBB` color, whichever form `value` is. Any other shape (wrong hex
-/// digit count, missing `#`, non-hex characters, a bool, ...) is ignored,
-/// not an error — same tolerance as every other style value.
+/// Parses a `0x000000..=0xFFFFFF` number or a `"#rrggbb"`/`"#rgb"` string into
+/// a `0xRRGGBB` color. Any other value (a number outside that range, `NaN`,
+/// wrong hex digit count, missing `#`, non-hex characters, a bool, ...) is
+/// ignored.
 fn as_color(value: &AttributeValue) -> Option<u32> {
     match value {
-        // Out-of-range/negative numbers truncate or wrap rather than being
-        // rejected — same "malformed input is tolerated, not an error" policy
-        // as this whole module's other conversions (see this fn's doc
-        // comment).
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        AttributeValue::Number(n) => Some(*n as u32),
+        AttributeValue::Number(n) if (0.0..=f64::from(0x00FF_FFFF_u32)).contains(n) => {
+            // The range check above keeps the cast inside `u32`.
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            Some(*n as u32)
+        }
         AttributeValue::String(s) => parse_hex_color(s),
-        AttributeValue::Bool(_) => None,
+        _ => None,
     }
 }
 
 fn parse_hex_color(s: &str) -> Option<u32> {
     let hex = s.strip_prefix('#')?;
+    if !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
     match hex.len() {
         6 => u32::from_str_radix(hex, 16).ok(),
         3 => {
@@ -261,6 +265,21 @@ struct EdgeKeys {
     right: &'static str,
     bottom: &'static str,
     left: &'static str,
+}
+
+impl EdgeKeys {
+    fn contains(&self, key: &str) -> bool {
+        [
+            self.all,
+            self.x,
+            self.y,
+            self.top,
+            self.right,
+            self.bottom,
+            self.left,
+        ]
+        .contains(&key)
+    }
 }
 
 const PADDING_KEYS: EdgeKeys = EdgeKeys {
@@ -334,53 +353,118 @@ fn align_spec_from_str(s: &str) -> Option<AlignSpec> {
     }
 }
 
+/// A style prop the spec layer drops, which [`style_warning`] reports.
+enum StyleFault<'a> {
+    UnknownKey(&'a str),
+    InvalidColour(&'a str),
+}
+
+impl fmt::Display for StyleFault<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnknownKey(key) => write!(f, "ignoring unknown style key `{key}`"),
+            Self::InvalidColour(key) => {
+                write!(f, "ignoring invalid colour for style key `{key}`")
+            }
+        }
+    }
+}
+
+/// The three overflow keys, resolved once every prop has been read.
+#[derive(Default)]
+struct Overflows {
+    all: Option<OverflowSpec>,
+    x: Option<OverflowSpec>,
+    y: Option<OverflowSpec>,
+}
+
+/// Reads the colour `value` into `slot`.
+fn read_colour<'a>(
+    slot: &mut Option<u32>,
+    key: &'a str,
+    value: &AttributeValue,
+) -> Option<StyleFault<'a>> {
+    *slot = as_color(value);
+    slot.is_none().then_some(StyleFault::InvalidColour(key))
+}
+
+/// Reads one style prop into `style` (and `overflow`), returning the fault
+/// when the key is unknown or a colour is invalid. Box keys are resolved by
+/// `edges_from` afterwards.
+fn read_prop<'a>(
+    style: &mut StyleSpec,
+    overflow: &mut Overflows,
+    key: &'a str,
+    value: &AttributeValue,
+) -> Option<StyleFault<'a>> {
+    match key {
+        "display" => style.display = as_str(value).and_then(display_spec_from_str),
+        "flex_direction" => {
+            style.flex_direction = as_str(value).and_then(flex_direction_spec_from_str);
+        }
+        "justify_content" => {
+            style.justify_content = as_str(value).and_then(align_spec_from_str);
+        }
+        "align_items" => style.align_items = as_str(value).and_then(align_spec_from_str),
+        "gap" => style.gap = as_number(value),
+        "width" => style.width = length_spec_from(value),
+        "height" => style.height = length_spec_from(value),
+        "border_width" => style.border_width = as_number(value),
+        "background" => return read_colour(&mut style.background, key, value),
+        "border_color" => return read_colour(&mut style.border_color, key, value),
+        "corner_radius" => style.corner_radius = as_number(value),
+        "text_color" => return read_colour(&mut style.text_color, key, value),
+        "text_size" => style.text_size = as_number(value),
+        "overflow" => overflow.all = as_str(value).and_then(overflow_spec_from_str),
+        "overflow_x" => overflow.x = as_str(value).and_then(overflow_spec_from_str),
+        "overflow_y" => overflow.y = as_str(value).and_then(overflow_spec_from_str),
+        "flex_grow" => style.flex_grow = non_negative(value),
+        "flex_shrink" => style.flex_shrink = non_negative(value),
+        "opacity" => {
+            style.opacity = as_number(value)
+                .filter(|n| !n.is_nan())
+                .map(|n| n.clamp(0.0, 1.0));
+        }
+        "min_width" => style.min_width = length_spec_from(value),
+        "min_height" => style.min_height = length_spec_from(value),
+        "max_width" => style.max_width = length_spec_from(value),
+        "max_height" => style.max_height = length_spec_from(value),
+        _ if PADDING_KEYS.contains(key) || MARGIN_KEYS.contains(key) => {}
+        _ => return Some(StyleFault::UnknownKey(key)),
+    }
+    None
+}
+
 /// Builds a [`StyleSpec`] from a node's raw `style_props`, ignoring any key
 /// or value this layer doesn't (yet) recognize.
 fn style_spec_from_props(props: &HashMap<String, AttributeValue>) -> StyleSpec {
     let mut style = StyleSpec::default();
-    let (mut overflow, mut overflow_x, mut overflow_y) = (None, None, None);
+    let mut overflow = Overflows::default();
     for (key, value) in props {
-        match key.as_str() {
-            "display" => style.display = as_str(value).and_then(display_spec_from_str),
-            "flex_direction" => {
-                style.flex_direction = as_str(value).and_then(flex_direction_spec_from_str);
-            }
-            "justify_content" => {
-                style.justify_content = as_str(value).and_then(align_spec_from_str);
-            }
-            "align_items" => style.align_items = as_str(value).and_then(align_spec_from_str),
-            "gap" => style.gap = as_number(value),
-            "width" => style.width = length_spec_from(value),
-            "height" => style.height = length_spec_from(value),
-            "border_width" => style.border_width = as_number(value),
-            "background" => style.background = as_color(value),
-            "border_color" => style.border_color = as_color(value),
-            "corner_radius" => style.corner_radius = as_number(value),
-            "text_color" => style.text_color = as_color(value),
-            "text_size" => style.text_size = as_number(value),
-            "overflow" => overflow = as_str(value).and_then(overflow_spec_from_str),
-            "overflow_x" => overflow_x = as_str(value).and_then(overflow_spec_from_str),
-            "overflow_y" => overflow_y = as_str(value).and_then(overflow_spec_from_str),
-            "flex_grow" => style.flex_grow = non_negative(value),
-            "flex_shrink" => style.flex_shrink = non_negative(value),
-            "opacity" => {
-                style.opacity = as_number(value)
-                    .filter(|n| !n.is_nan())
-                    .map(|n| n.clamp(0.0, 1.0));
-            }
-            "min_width" => style.min_width = length_spec_from(value),
-            "min_height" => style.min_height = length_spec_from(value),
-            "max_width" => style.max_width = length_spec_from(value),
-            "max_height" => style.max_height = length_spec_from(value),
-            _ => {}
-        }
+        read_prop(&mut style, &mut overflow, key, value);
     }
     // `props` iterates in arbitrary order, so precedence is resolved here.
-    style.overflow_x = overflow_x.or(overflow);
-    style.overflow_y = overflow_y.or(overflow);
+    style.overflow_x = overflow.x.or(overflow.all);
+    style.overflow_y = overflow.y.or(overflow.all);
     style.padding = edges_from(props, &PADDING_KEYS, non_negative);
     style.margin = edges_from(props, &MARGIN_KEYS, margin_length_from);
     style
+}
+
+/// The message for the style prop `key` set to `value` when the key is
+/// unknown or a colour value is invalid. `None` when the prop applies or is
+/// ignored quietly.
+#[must_use]
+pub fn style_warning(key: &str, value: &AttributeValue) -> Option<String> {
+    // A caller checks each prop as it stores it, so a bad value that stays
+    // in place is reported once and setting it again reports it again.
+    read_prop(
+        &mut StyleSpec::default(),
+        &mut Overflows::default(),
+        key,
+        value,
+    )
+    .map(|fault| fault.to_string())
 }
 
 /// A node's `"value"` attribute followed by its descendants' text in child
@@ -1498,14 +1582,70 @@ mod tests {
             assert_eq!(spec.children[1].listens, EventMask::NONE);
         }
 
-        #[test]
-        fn unrecognized_style_key_is_ignored() {
+        /// The style a node gets from `props`, and what [`style_warning`] says
+        /// about each prop, in order.
+        fn style_and_warnings(props: &[(&str, AttributeValue)]) -> (StyleSpec, Vec<String>) {
             let mut tree = VirtualTree::new();
             let id = tree.create_node("div");
-            tree.set_style(id, "not_a_real_prop", 1.0).unwrap();
+            for (key, value) in props {
+                tree.set_style(id, *key, value.clone()).unwrap();
+            }
+            let warnings = props
+                .iter()
+                .filter_map(|(key, value)| style_warning(key, value))
+                .collect();
+            (build_spec(&tree, id).unwrap().style, warnings)
+        }
 
-            let spec = build_spec(&tree, id).unwrap();
-            assert_eq!(spec.style, StyleSpec::default());
+        #[test]
+        fn unrecognized_style_key_is_ignored_with_a_warning() {
+            let (style, warnings) = style_and_warnings(&[("not_a_real_prop", num(1.0))]);
+            assert_eq!(style, StyleSpec::default());
+            assert_eq!(warnings, ["ignoring unknown style key `not_a_real_prop`"]);
+        }
+
+        #[test]
+        fn a_camel_case_key_is_ignored_with_a_warning_naming_it() {
+            let (style, warnings) =
+                style_and_warnings(&[("flexDirection", text("column")), ("paddingTop", num(4.0))]);
+            assert_eq!(style, StyleSpec::default());
+            assert_eq!(warnings.len(), 2);
+            for key in ["flexDirection", "paddingTop"] {
+                assert!(
+                    warnings.iter().any(|w| w.contains(&format!("`{key}`"))),
+                    "{warnings:?}"
+                );
+            }
+        }
+
+        #[test]
+        fn recognized_style_keys_apply_quietly() {
+            let (_, warnings) = style_and_warnings(&[
+                ("flex_direction", text("column")),
+                ("padding_top", num(4.0)),
+                ("background", num(1.0)),
+                ("overflow", text("scroll")),
+                ("opacity", num(2.0)),
+            ]);
+            assert!(warnings.is_empty(), "{warnings:?}");
+        }
+
+        #[test]
+        fn every_padding_and_margin_key_is_recognized() {
+            for base in ["padding", "margin"] {
+                for suffix in ["", "_x", "_y", "_top", "_right", "_bottom", "_left"] {
+                    let key = format!("{base}{suffix}");
+                    let (_, warnings) = style_and_warnings(&[(key.as_str(), num(1.0))]);
+                    assert!(warnings.is_empty(), "{key}: {warnings:?}");
+                }
+            }
+        }
+
+        #[test]
+        fn a_wrong_shaped_value_of_a_known_key_is_dropped_quietly() {
+            let (_, warnings) =
+                style_and_warnings(&[("display", text("nope")), ("gap", text("1"))]);
+            assert!(warnings.is_empty(), "{warnings:?}");
         }
 
         #[test]
@@ -1536,13 +1676,94 @@ mod tests {
         }
 
         #[test]
-        fn malformed_color_string_is_ignored_not_a_panic() {
-            let mut tree = VirtualTree::new();
-            let id = tree.create_node("div");
-            tree.set_style(id, "background", "not-a-color").unwrap();
+        fn malformed_color_string_is_ignored_with_a_warning() {
+            let (style, warnings) = style_and_warnings(&[("background", text("not-a-color"))]);
+            assert_eq!(style.background, None);
+            assert_eq!(
+                warnings,
+                ["ignoring invalid colour for style key `background`"]
+            );
+        }
 
-            let spec = build_spec(&tree, id).unwrap();
-            assert_eq!(spec.style.background, None);
+        #[test]
+        fn a_color_string_with_a_sign_or_non_hex_digit_is_ignored() {
+            for bad in [
+                "#+abcde", "#-abcde", "#+ab", "#+abcd", "#12345g", "#gg0", "#12", "#1234",
+                "#1234567", "ffffff", "#", "#ééé",
+            ] {
+                let (style, warnings) = style_and_warnings(&[("text_color", text(bad))]);
+                assert_eq!(style.text_color, None, "{bad}");
+                assert_eq!(warnings.len(), 1, "{bad}");
+            }
+        }
+
+        #[test]
+        fn color_strings_accept_either_hex_case() {
+            let (style, warnings) = style_and_warnings(&[
+                ("background", text("#AbCdEf")),
+                ("border_color", text("#FfF")),
+            ]);
+            assert_eq!(style.background, Some(0x00ab_cdef));
+            assert_eq!(style.border_color, Some(0x00ff_ffff));
+            assert!(warnings.is_empty());
+        }
+
+        #[test]
+        fn numeric_colors_cover_exactly_zero_to_ffffff() {
+            for (n, expected) in [(0.0, 0), (f64::from(0xFF_FFFF), 0xFF_FFFF), (255.0, 255)] {
+                let (style, warnings) = style_and_warnings(&[("background", num(n))]);
+                assert_eq!(style.background, Some(expected), "{n}");
+                assert!(warnings.is_empty(), "{n}");
+            }
+        }
+
+        #[test]
+        fn a_fractional_numeric_color_rounds_toward_zero() {
+            for (n, expected) in [(0.5, 0), (1.5, 1), (16_777_214.5, 0xFF_FFFE)] {
+                let (style, warnings) = style_and_warnings(&[("background", num(n))]);
+                assert_eq!(style.background, Some(expected), "{n}");
+                assert!(warnings.is_empty(), "{n}");
+            }
+        }
+
+        #[test]
+        fn a_negative_fractional_numeric_color_is_ignored_with_a_warning() {
+            let (style, warnings) = style_and_warnings(&[("background", num(-0.5))]);
+            assert_eq!(style.background, None);
+            assert_eq!(warnings.len(), 1);
+        }
+
+        #[test]
+        fn an_out_of_range_numeric_color_is_ignored_with_a_warning() {
+            for bad in [
+                -1.0,
+                f64::from(0x0100_0000),
+                f64::from(u32::MAX),
+                1e20,
+                f64::NAN,
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+            ] {
+                let (style, warnings) = style_and_warnings(&[
+                    ("background", num(bad)),
+                    ("border_color", num(bad)),
+                    ("text_color", num(bad)),
+                ]);
+                assert_eq!(
+                    (style.background, style.border_color, style.text_color),
+                    (None, None, None),
+                    "{bad}"
+                );
+                assert_eq!(warnings.len(), 3, "{bad}");
+            }
+        }
+
+        #[test]
+        fn a_bool_color_is_ignored_with_a_warning() {
+            let (style, warnings) =
+                style_and_warnings(&[("background", AttributeValue::Bool(true))]);
+            assert_eq!(style.background, None);
+            assert_eq!(warnings.len(), 1);
         }
     }
 

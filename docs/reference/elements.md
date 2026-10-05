@@ -37,8 +37,10 @@ background color, and nothing makes it clickable on its own (bind
 
 `:style` takes an object; only these keys are read, each with its own
 accepted value shapes. Anything else — a wrong shape, an unrecognized
-enum string, a misspelled key — is silently ignored, not an error. A key
-that was set before and then gets a wrong shape reverts to its default.
+enum string, a misspelled key — is ignored. For an unrecognized key and for
+an invalid color, the host prints one warning line on stderr each time the
+style is set. A key that was set before and then gets a wrong shape reverts
+to its default.
 
 Removing a key from the object, or setting it to `null` or `undefined`,
 restores that property to its default. Setting `style` to a string or `null`
@@ -76,8 +78,8 @@ as described there.
 
 `position` and `z_index` are not supported, and their keys are ignored.
 
-Keys are snake_case, not camelCase — `flexDirection`, `justifyContent`,
-etc. are unrecognized keys and are ignored the same as any other typo.
+Keys are snake_case. `flexDirection` and `justifyContent` are unrecognized
+keys.
 
 ### Color format
 
@@ -86,9 +88,12 @@ etc. are unrecognized keys and are ignored the same as any other typo.
 - a numeric `0xRRGGBB` literal, e.g. `0xff0000`
 - a `"#rrggbb"` or `"#rgb"` string, e.g. `"#ff0000"` or `"#f00"`
 
-There's no alpha channel and no named colors (`"red"` doesn't parse). A
-string missing the `#`, the wrong digit count, or non-hex characters is
-ignored like any other malformed value.
+A number must lie between `0` and `0xffffff`. A negative number, `NaN`, a
+number above `0xffffff`, and a string with a sign, a missing `#`, the wrong
+digit count or non-hex characters are ignored, and the property keeps its
+default.
+
+There's no alpha channel and no named colors (`"red"` doesn't parse).
 
 ## `class`, and `style` as a string, do nothing
 
