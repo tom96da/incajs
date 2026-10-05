@@ -22,7 +22,7 @@ use inca_jsenv::{Engine, EngineError};
 fn build_clickable_tree() -> (Rc<RefCell<Host>>, NodeId) {
     let host = Rc::new(RefCell::new(Host::default()));
     let mut host_mut = host.borrow_mut();
-    let node = host_mut.tree.create_node("div");
+    let node = host_mut.tree.create_node("div").unwrap();
     host_mut.tree.set_style(node, "width", 100.0).unwrap();
     host_mut.tree.set_style(node, "height", 100.0).unwrap();
     host_mut.listeners.register(node, "click", 0);
@@ -160,7 +160,7 @@ fn a_listener_registered_after_the_first_render_still_fires(cx: &mut TestAppCont
     let host = Rc::new(RefCell::new(Host::default()));
     let node = {
         let mut host = host.borrow_mut();
-        let node = host.tree.create_node("div");
+        let node = host.tree.create_node("div").unwrap();
         host.tree.set_style(node, "width", 100.0).unwrap();
         host.tree.set_style(node, "height", 100.0).unwrap();
         node
@@ -318,7 +318,7 @@ fn a_rejection_handled_in_time_is_not_reported(cx: &mut TestAppContext) {
 fn build_tree_listening_for(event: &str) -> (Rc<RefCell<Host>>, NodeId) {
     let host = Rc::new(RefCell::new(Host::default()));
     let mut host_mut = host.borrow_mut();
-    let node = host_mut.tree.create_node("div");
+    let node = host_mut.tree.create_node("div").unwrap();
     host_mut.tree.set_style(node, "width", 100.0).unwrap();
     host_mut.tree.set_style(node, "height", 100.0).unwrap();
     host_mut.listeners.register(node, event, 0);
@@ -489,7 +489,7 @@ fn wheel_with_no_listener_reports_nothing(cx: &mut TestAppContext) {
     let host = Rc::new(RefCell::new(Host::default()));
     let node = {
         let mut host = host.borrow_mut();
-        let node = host.tree.create_node("div");
+        let node = host.tree.create_node("div").unwrap();
         host.tree.set_style(node, "width", 100.0).unwrap();
         host.tree.set_style(node, "height", 100.0).unwrap();
         node
@@ -608,7 +608,7 @@ fn hover_dispatches_enter_then_leave(cx: &mut TestAppContext) {
     let host = Rc::new(RefCell::new(Host::default()));
     let node = {
         let mut host = host.borrow_mut();
-        let node = host.tree.create_node("div");
+        let node = host.tree.create_node("div").unwrap();
         host.tree.set_style(node, "width", 100.0).unwrap();
         host.tree.set_style(node, "height", 100.0).unwrap();
         node
@@ -680,7 +680,7 @@ fn mouseenter_carries_dom_shaped_fields(cx: &mut TestAppContext) {
     let host = Rc::new(RefCell::new(Host::default()));
     let node = {
         let mut host = host.borrow_mut();
-        let node = host.tree.create_node("div");
+        let node = host.tree.create_node("div").unwrap();
         host.tree.set_style(node, "width", 100.0).unwrap();
         host.tree.set_style(node, "height", 100.0).unwrap();
         node
@@ -769,7 +769,7 @@ fn hover_and_mousemove_wired_together_fire_independently(cx: &mut TestAppContext
     let host = Rc::new(RefCell::new(Host::default()));
     let node = {
         let mut host = host.borrow_mut();
-        let node = host.tree.create_node("div");
+        let node = host.tree.create_node("div").unwrap();
         host.tree.set_style(node, "width", 100.0).unwrap();
         host.tree.set_style(node, "height", 100.0).unwrap();
         node
@@ -827,7 +827,7 @@ fn one_move_gives_mousemove_and_mouseenter_the_same_movement(cx: &mut TestAppCon
     let host = Rc::new(RefCell::new(Host::default()));
     let node = {
         let mut host = host.borrow_mut();
-        let node = host.tree.create_node("div");
+        let node = host.tree.create_node("div").unwrap();
         host.tree.set_style(node, "width", 100.0).unwrap();
         host.tree.set_style(node, "height", 100.0).unwrap();
         node
@@ -979,7 +979,7 @@ fn bubbled_mousemove_gives_every_listener_the_same_movement(cx: &mut TestAppCont
     let (host, parent) = build_tree_listening_for("mousemove");
     let child = {
         let mut host = host.borrow_mut();
-        let child = host.tree.create_node("div");
+        let child = host.tree.create_node("div").unwrap();
         host.tree.set_style(child, "width", 100.0).unwrap();
         host.tree.set_style(child, "height", 100.0).unwrap();
         host.tree.append_child(parent, child).unwrap();
@@ -1026,7 +1026,7 @@ fn leave_and_mousemove_on_different_nodes_share_one_movement(cx: &mut TestAppCon
     {
         let mut host = host.borrow_mut();
         for (event, id) in [("mouseleave", 0), ("mousemove", 1)] {
-            let child = host.tree.create_node("div");
+            let child = host.tree.create_node("div").unwrap();
             host.tree.set_style(child, "width", 100.0).unwrap();
             host.tree.set_style(child, "height", 100.0).unwrap();
             host.tree.append_child(root, child).unwrap();
@@ -1167,10 +1167,10 @@ fn stop_propagation_keeps_an_ancestors_listener_from_firing(cx: &mut TestAppCont
     let host = Rc::new(RefCell::new(Host::default()));
     let parent = {
         let mut host_mut = host.borrow_mut();
-        let parent = host_mut.tree.create_node("div");
+        let parent = host_mut.tree.create_node("div").unwrap();
         host_mut.tree.set_style(parent, "width", 100.0).unwrap();
         host_mut.tree.set_style(parent, "height", 100.0).unwrap();
-        let child = host_mut.tree.create_node("div");
+        let child = host_mut.tree.create_node("div").unwrap();
         host_mut.tree.set_style(child, "width", 100.0).unwrap();
         host_mut.tree.set_style(child, "height", 100.0).unwrap();
         host_mut.tree.append_child(parent, child).unwrap();
@@ -1233,13 +1233,13 @@ fn build_panes(a_events: &[&str], root_events: &[&str]) -> Panes {
     let host = Rc::new(RefCell::new(Host::default()));
     let (root, a, b) = {
         let mut host = host.borrow_mut();
-        let root = host.tree.create_node("div");
+        let root = host.tree.create_node("div").unwrap();
         host.tree.set_style(root, "display", "flex").unwrap();
         host.tree.set_style(root, "flex_direction", "row").unwrap();
         host.tree.set_style(root, "width", 300.0).unwrap();
         host.tree.set_style(root, "height", 100.0).unwrap();
         let mut pane = || {
-            let pane = host.tree.create_node("div");
+            let pane = host.tree.create_node("div").unwrap();
             host.tree.set_style(pane, "width", 100.0).unwrap();
             host.tree.set_style(pane, "height", 100.0).unwrap();
             host.tree.append_child(root, pane).unwrap();
@@ -1583,10 +1583,10 @@ fn mount_recording_pair(
     let host = Rc::new(RefCell::new(Host::default()));
     let (parent, child) = {
         let mut host = host.borrow_mut();
-        let parent = host.tree.create_node("div");
+        let parent = host.tree.create_node("div").unwrap();
         host.tree.set_style(parent, "width", 100.0).unwrap();
         host.tree.set_style(parent, "height", 100.0).unwrap();
-        let child = host.tree.create_node("div");
+        let child = host.tree.create_node("div").unwrap();
         host.tree.set_style(child, "width", 100.0).unwrap();
         host.tree.set_style(child, "height", 100.0).unwrap();
         host.tree.append_child(parent, child).unwrap();

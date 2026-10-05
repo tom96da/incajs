@@ -39,9 +39,9 @@ impl Render for FocusableRoot {
 fn build_focusable_pair() -> (Rc<RefCell<Host>>, NodeId, NodeId) {
     let host = Rc::new(RefCell::new(Host::default()));
     let mut host_mut = host.borrow_mut();
-    let parent = host_mut.tree.create_node("div");
-    let a = host_mut.tree.create_node("div");
-    let b = host_mut.tree.create_node("div");
+    let parent = host_mut.tree.create_node("div").unwrap();
+    let a = host_mut.tree.create_node("div").unwrap();
+    let b = host_mut.tree.create_node("div").unwrap();
     host_mut.tree.append_child(parent, a).unwrap();
     host_mut.tree.append_child(parent, b).unwrap();
     for node in [a, b] {

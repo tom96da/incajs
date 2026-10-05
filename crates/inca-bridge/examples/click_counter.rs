@@ -36,7 +36,7 @@ impl Render for ClickCounter {
 /// Builds a clickable, bordered box containing a text label and returns
 /// `(outer, label)`.
 fn build_tree(tree: &mut VirtualTree) -> (NodeId, NodeId) {
-    let outer = tree.create_node("div");
+    let outer = tree.create_node("div").unwrap();
     tree.set_style(outer, "display", "flex").unwrap();
     tree.set_style(outer, "justify_content", "center").unwrap();
     tree.set_style(outer, "align_items", "center").unwrap();
@@ -52,7 +52,7 @@ fn build_tree(tree: &mut VirtualTree) -> (NodeId, NodeId) {
         .unwrap();
     tree.set_style(outer, "text_size", 20.0).unwrap();
 
-    let label = tree.create_node("text");
+    let label = tree.create_node("text").unwrap();
     tree.set_attribute(label, "value", "Click me!").unwrap();
     tree.append_child(outer, label).unwrap();
 

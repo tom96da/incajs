@@ -107,7 +107,7 @@ impl Scene {
 /// Adds a sized div under `parent`, or styles the root when there is none.
 fn add_div(host: &mut Host, parent: Option<NodeId>, height: f64, scrolls: bool) -> NodeId {
     let node = if parent.is_some() {
-        host.tree.create_node("div")
+        host.tree.create_node("div").unwrap()
     } else {
         host.root
     };
@@ -150,7 +150,7 @@ fn styled_container(styles: &[(&str, &str)]) -> Host {
     for (key, value) in styles {
         host.tree.set_style(root, *key, *value).unwrap();
     }
-    let child = host.tree.create_node("div");
+    let child = host.tree.create_node("div").unwrap();
     host.tree.set_style(child, "width", 300.0).unwrap();
     host.tree.set_style(child, "height", 300.0).unwrap();
     host.tree.append_child(root, child).unwrap();

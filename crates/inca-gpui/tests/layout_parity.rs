@@ -42,7 +42,7 @@ fn selectors() -> Vec<&'static str> {
 fn build_tree() -> (VirtualTree, NodeId) {
     let mut tree = VirtualTree::new();
 
-    let outer = tree.create_node("div"); // node-0
+    let outer = tree.create_node("div").unwrap(); // node-0
     tree.set_style(outer, "display", "flex").unwrap();
     tree.set_style(outer, "flex_direction", "column").unwrap();
     tree.set_style(outer, "gap", 12.0).unwrap();
@@ -52,18 +52,18 @@ fn build_tree() -> (VirtualTree, NodeId) {
     tree.set_style(outer, "align_items", "center").unwrap();
     tree.set_style(outer, "border_width", 2.0).unwrap();
 
-    let label = tree.create_node("text"); // node-1
+    let label = tree.create_node("text").unwrap(); // node-1
     tree.set_attribute(label, "value", "Hello, World!").unwrap();
     tree.append_child(outer, label).unwrap();
 
-    let inner = tree.create_node("div"); // node-2
+    let inner = tree.create_node("div").unwrap(); // node-2
     tree.set_style(inner, "display", "flex").unwrap();
     tree.set_style(inner, "flex_direction", "row").unwrap();
     tree.set_style(inner, "gap", 8.0).unwrap();
     tree.append_child(outer, inner).unwrap();
 
     for _ in 0..6 {
-        let square = tree.create_node("div"); // node-3..node-8
+        let square = tree.create_node("div").unwrap(); // node-3..node-8
         tree.set_style(square, "width", 32.0).unwrap();
         tree.set_style(square, "height", 32.0).unwrap();
         tree.set_style(square, "border_width", 2.0).unwrap();
@@ -158,7 +158,7 @@ fn virtual_tree_layout_matches_hand_written_gpui(cx: &mut TestAppContext) {
 /// another empty text node and a second 20x20 box. Returns the boxes' y.
 fn y_of_boxes_after_empty_text(cx: &mut TestAppContext, gap: Option<f64>) -> (f32, f32) {
     let mut tree = VirtualTree::new();
-    let root = tree.create_node("div"); // node-0
+    let root = tree.create_node("div").unwrap(); // node-0
     tree.set_style(root, "width", 100.0).unwrap();
     tree.set_style(root, "height", 100.0).unwrap();
     if let Some(gap) = gap {
@@ -167,10 +167,10 @@ fn y_of_boxes_after_empty_text(cx: &mut TestAppContext, gap: Option<f64>) -> (f3
         tree.set_style(root, "gap", gap).unwrap();
     }
     for _ in 0..2 {
-        let empty = tree.create_node("text");
+        let empty = tree.create_node("text").unwrap();
         tree.set_attribute(empty, "value", "").unwrap();
         tree.append_child(root, empty).unwrap();
-        let boxed = tree.create_node("div");
+        let boxed = tree.create_node("div").unwrap();
         tree.set_style(boxed, "width", 20.0).unwrap();
         tree.set_style(boxed, "height", 20.0).unwrap();
         tree.append_child(root, boxed).unwrap();

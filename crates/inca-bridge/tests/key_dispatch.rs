@@ -40,8 +40,8 @@ impl Render for KeyableRoot {
 fn build_key_pair() -> (Rc<RefCell<Host>>, NodeId, NodeId) {
     let host = Rc::new(RefCell::new(Host::default()));
     let mut host_mut = host.borrow_mut();
-    let parent = host_mut.tree.create_node("div");
-    let child = host_mut.tree.create_node("div");
+    let parent = host_mut.tree.create_node("div").unwrap();
+    let child = host_mut.tree.create_node("div").unwrap();
     host_mut.tree.append_child(parent, child).unwrap();
     for node in [parent, child] {
         host_mut.listeners.register(node, "keydown", 0);

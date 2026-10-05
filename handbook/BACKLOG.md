@@ -606,14 +606,6 @@ A fixed entry is deleted and its ID is never reused.
   blocks the host — it grows the host's memory without limit instead.
   Fixing the behavior itself means a bounded channel with real backpressure.
 
-- **B-055 Two small rule mismatches**
-  `Units: gpui,jsenv · Size: S · Impact: Low`
-
-  `VirtualTree::create_node`'s `.expect` on
-  id exhaustion (`crates/inca-gpui/src/tree.rs`) contradicts
-  `FAILURES.md`'s "doesn't panic" rule, though reaching it isn't
-  practical. `console.log` has no cap on array length.
-
 - **B-069 Node ids restart on every full reload while the window survives**
   `Units: gpui,host · Size: M · Impact: Low`
 

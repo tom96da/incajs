@@ -111,7 +111,9 @@ impl std::fmt::Debug for Host {
 impl Default for Host {
     fn default() -> Self {
         let mut tree = VirtualTree::new();
-        let root = tree.create_node("div");
+        let root = tree
+            .create_node("div")
+            .expect("a new tree has free node ids");
         Self {
             tree,
             warn: Rc::new(|line| eprintln!("{line}")),
@@ -204,9 +206,15 @@ fn install_tree<'js>(
         let host = Rc::clone(host);
         native.set(
             "createNode",
-            Function::new(ctx.clone(), move |tag_name: String| -> NodeId {
-                host.borrow_mut().tree.create_node(tag_name)
-            })?,
+            Function::new(
+                ctx.clone(),
+                move |ctx: Ctx<'js>, tag_name: String| -> JsResult<NodeId> {
+                    host.borrow_mut()
+                        .tree
+                        .create_node(tag_name)
+                        .map_err(|err| throw_tree_error(&ctx, err))
+                },
+            )?,
         )?;
     }
 

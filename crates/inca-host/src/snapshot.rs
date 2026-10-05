@@ -126,8 +126,8 @@ mod tests {
     #[test]
     fn a_container_carries_its_tag_children_and_bounds() {
         let mut tree = VirtualTree::new();
-        let parent = tree.create_node("div");
-        let child = tree.create_node("span");
+        let parent = tree.create_node("div").unwrap();
+        let child = tree.create_node("span").unwrap();
         tree.append_child(parent, child).unwrap();
 
         let snap = snapshot(&tree, parent, &mut unit).unwrap();
@@ -146,9 +146,9 @@ mod tests {
     #[test]
     fn a_text_node_renders_its_content_and_has_no_bounds() {
         let mut tree = VirtualTree::new();
-        let text = tree.create_node("text");
+        let text = tree.create_node("text").unwrap();
         tree.set_attribute(text, "value", "hi").unwrap();
-        let inner = tree.create_node("text");
+        let inner = tree.create_node("text").unwrap();
         tree.set_attribute(inner, "value", " there").unwrap();
         tree.append_child(text, inner).unwrap();
 
@@ -162,7 +162,7 @@ mod tests {
     #[test]
     fn every_attribute_kind_becomes_a_json_value() {
         let mut tree = VirtualTree::new();
-        let id = tree.create_node("div");
+        let id = tree.create_node("div").unwrap();
         tree.set_attribute(id, "label", "x").unwrap();
         tree.set_attribute(id, "count", 3.0).unwrap();
         tree.set_attribute(id, "on", true).unwrap();
@@ -178,7 +178,7 @@ mod tests {
     #[test]
     fn a_number_without_a_json_form_becomes_null() {
         let mut tree = VirtualTree::new();
-        let id = tree.create_node("div");
+        let id = tree.create_node("div").unwrap();
         tree.set_attribute(id, "nan", f64::NAN).unwrap();
         tree.set_attribute(id, "inf", f64::INFINITY).unwrap();
 
@@ -191,7 +191,7 @@ mod tests {
     #[test]
     fn a_snapshot_serializes_to_json() {
         let mut tree = VirtualTree::new();
-        let id = tree.create_node("div");
+        let id = tree.create_node("div").unwrap();
 
         let json = serde_json::to_value(snapshot(&tree, id, &mut unit).unwrap()).unwrap();
 
@@ -203,10 +203,10 @@ mod tests {
     #[test]
     fn find_returns_the_first_match_depth_first() {
         let mut tree = VirtualTree::new();
-        let root = tree.create_node("div");
-        let a = tree.create_node("p");
-        let a_child = tree.create_node("b");
-        let b = tree.create_node("b");
+        let root = tree.create_node("div").unwrap();
+        let a = tree.create_node("p").unwrap();
+        let a_child = tree.create_node("b").unwrap();
+        let b = tree.create_node("b").unwrap();
         tree.append_child(root, a).unwrap();
         tree.append_child(a, a_child).unwrap();
         tree.append_child(root, b).unwrap();
@@ -219,7 +219,7 @@ mod tests {
     #[test]
     fn find_misses_when_nothing_matches() {
         let mut tree = VirtualTree::new();
-        let root = tree.create_node("div");
+        let root = tree.create_node("div").unwrap();
         let snap = snapshot(&tree, root, &mut no_bounds).unwrap();
 
         assert!(snap.find(&|n| n.tag == "nope").is_none());

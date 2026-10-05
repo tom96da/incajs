@@ -745,7 +745,7 @@ mod tests {
         let content = if let Some(id) = existing {
             id
         } else {
-            let id = host.tree.create_node("div");
+            let id = host.tree.create_node("div").unwrap();
             host.tree.append_child(root, id).unwrap();
             id
         };
@@ -905,7 +905,7 @@ mod tests {
     fn mount_partial(app: &HostedApp, width: Option<f64>, height: Option<f64>) {
         let mut host = app.session.host.borrow_mut();
         let root = host.root;
-        let content = host.tree.create_node("div");
+        let content = host.tree.create_node("div").unwrap();
         host.tree.append_child(root, content).unwrap();
         if let Some(width) = width {
             host.tree.set_style(content, "width", width).unwrap();
@@ -1053,7 +1053,7 @@ mod tests {
     fn content_window_size_reads_the_mounted_root_childs_style() {
         let mut host = Host::default();
         let root = host.root;
-        let content = host.tree.create_node("div");
+        let content = host.tree.create_node("div").unwrap();
         host.tree.set_style(content, "width", 300.0).unwrap();
         host.tree.set_style(content, "height", 150.0).unwrap();
         host.tree.append_child(root, content).unwrap();
@@ -1065,7 +1065,7 @@ mod tests {
     fn content_window_size_is_none_when_unset() {
         let mut host = Host::default();
         let root = host.root;
-        let content = host.tree.create_node("div");
+        let content = host.tree.create_node("div").unwrap();
         host.tree.append_child(root, content).unwrap();
 
         assert_eq!(content_window_size(&host, root), (None, None));

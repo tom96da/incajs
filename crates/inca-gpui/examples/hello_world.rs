@@ -29,7 +29,7 @@ impl Render for HelloWorld {
 fn build_tree() -> (VirtualTree, NodeId) {
     let mut tree = VirtualTree::new();
 
-    let outer = tree.create_node("div");
+    let outer = tree.create_node("div").unwrap();
     tree.set_style(outer, "display", "flex").unwrap();
     tree.set_style(outer, "flex_direction", "column").unwrap();
     tree.set_style(outer, "gap", 12.0).unwrap();
@@ -46,11 +46,11 @@ fn build_tree() -> (VirtualTree, NodeId) {
         .unwrap();
     tree.set_style(outer, "text_size", 20.0).unwrap();
 
-    let label = tree.create_node("text");
+    let label = tree.create_node("text").unwrap();
     tree.set_attribute(label, "value", "Hello, inca!").unwrap();
     tree.append_child(outer, label).unwrap();
 
-    let inner = tree.create_node("div");
+    let inner = tree.create_node("div").unwrap();
     tree.set_style(inner, "display", "flex").unwrap();
     tree.set_style(inner, "flex_direction", "row").unwrap();
     tree.set_style(inner, "gap", 8.0).unwrap();
@@ -58,7 +58,7 @@ fn build_tree() -> (VirtualTree, NodeId) {
 
     let colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0x000000, 0xffffff];
     for color in colors {
-        let square = tree.create_node("div");
+        let square = tree.create_node("div").unwrap();
         tree.set_style(square, "width", 32.0).unwrap();
         tree.set_style(square, "height", 32.0).unwrap();
         tree.set_style(square, "background", f64::from(color))

@@ -1031,7 +1031,7 @@ mod tests {
         #[test]
         fn non_text_tag_is_a_container() {
             let mut tree = VirtualTree::new();
-            let id = tree.create_node("div");
+            let id = tree.create_node("div").unwrap();
 
             let spec = build_spec(&tree, id).unwrap();
             assert_eq!(spec.tag, ElementTag::Container);
@@ -1040,7 +1040,7 @@ mod tests {
         #[test]
         fn text_tag_uses_its_value_attribute() {
             let mut tree = VirtualTree::new();
-            let id = tree.create_node("text");
+            let id = tree.create_node("text").unwrap();
             tree.set_attribute(id, "value", "hello").unwrap();
 
             let spec = build_spec(&tree, id).unwrap();
@@ -1050,8 +1050,8 @@ mod tests {
         #[test]
         fn text_tag_uses_its_child_text() {
             let mut tree = VirtualTree::new();
-            let id = tree.create_node("text");
-            let child = tree.create_node("text");
+            let id = tree.create_node("text").unwrap();
+            let child = tree.create_node("text").unwrap();
             tree.set_attribute(child, "value", "Hello").unwrap();
             tree.append_child(id, child).unwrap();
 
@@ -1063,10 +1063,10 @@ mod tests {
         #[test]
         fn text_tag_puts_its_value_before_its_children_in_order() {
             let mut tree = VirtualTree::new();
-            let id = tree.create_node("text");
+            let id = tree.create_node("text").unwrap();
             tree.set_attribute(id, "value", "a").unwrap();
             for part in ["b", "c"] {
-                let child = tree.create_node("text");
+                let child = tree.create_node("text").unwrap();
                 tree.set_attribute(child, "value", part).unwrap();
                 tree.append_child(id, child).unwrap();
             }
@@ -1078,9 +1078,9 @@ mod tests {
         #[test]
         fn text_tag_includes_text_nested_in_any_tag() {
             let mut tree = VirtualTree::new();
-            let id = tree.create_node("text");
-            let wrapper = tree.create_node("div");
-            let leaf = tree.create_node("text");
+            let id = tree.create_node("text").unwrap();
+            let wrapper = tree.create_node("div").unwrap();
+            let leaf = tree.create_node("text").unwrap();
             tree.set_attribute(leaf, "value", "nested").unwrap();
             tree.append_child(wrapper, leaf).unwrap();
             tree.append_child(id, wrapper).unwrap();
@@ -1092,9 +1092,9 @@ mod tests {
         #[test]
         fn text_tag_counts_a_non_string_value_as_empty() {
             let mut tree = VirtualTree::new();
-            let id = tree.create_node("text");
+            let id = tree.create_node("text").unwrap();
             tree.set_attribute(id, "value", 1.0).unwrap();
-            let child = tree.create_node("text");
+            let child = tree.create_node("text").unwrap();
             tree.set_attribute(child, "value", "kept").unwrap();
             tree.append_child(id, child).unwrap();
 
@@ -1105,7 +1105,7 @@ mod tests {
         #[test]
         fn text_tag_missing_value_is_empty_content() {
             let mut tree = VirtualTree::new();
-            let id = tree.create_node("text");
+            let id = tree.create_node("text").unwrap();
 
             let spec = build_spec(&tree, id).unwrap();
             assert_eq!(spec.tag, ElementTag::Text(String::new()));
@@ -1114,9 +1114,9 @@ mod tests {
         #[test]
         fn children_are_built_in_append_order() {
             let mut tree = VirtualTree::new();
-            let parent = tree.create_node("div");
-            let a = tree.create_node("div");
-            let b = tree.create_node("div");
+            let parent = tree.create_node("div").unwrap();
+            let a = tree.create_node("div").unwrap();
+            let b = tree.create_node("div").unwrap();
             tree.append_child(parent, a).unwrap();
             tree.append_child(parent, b).unwrap();
 
@@ -1128,7 +1128,7 @@ mod tests {
         #[test]
         fn a_removed_style_key_renders_as_the_default() {
             let mut tree = VirtualTree::new();
-            let id = tree.create_node("div");
+            let id = tree.create_node("div").unwrap();
             tree.set_style(id, "gap", 8.0).unwrap();
             tree.set_style(id, "background", f64::from(0x505050))
                 .unwrap();
@@ -1141,7 +1141,7 @@ mod tests {
         #[test]
         fn recognized_style_keys_are_mapped() {
             let mut tree = VirtualTree::new();
-            let id = tree.create_node("div");
+            let id = tree.create_node("div").unwrap();
             tree.set_style(id, "display", "flex").unwrap();
             tree.set_style(id, "flex_direction", "column").unwrap();
             tree.set_style(id, "justify_content", "center").unwrap();
@@ -1183,7 +1183,7 @@ mod tests {
 
         fn style_of(props: &[(&str, AttributeValue)]) -> StyleSpec {
             let mut tree = VirtualTree::new();
-            let id = tree.create_node("div");
+            let id = tree.create_node("div").unwrap();
             for (key, value) in props {
                 tree.set_style(id, *key, value.clone()).unwrap();
             }
@@ -1446,7 +1446,7 @@ mod tests {
         #[test]
         fn removing_a_side_key_falls_back_to_the_axis_then_the_shorthand() {
             let mut tree = VirtualTree::new();
-            let id = tree.create_node("div");
+            let id = tree.create_node("div").unwrap();
             tree.set_style(id, "margin", 1.0).unwrap();
             tree.set_style(id, "margin_x", 2.0).unwrap();
             tree.set_style(id, "margin_left", "auto").unwrap();
@@ -1462,7 +1462,7 @@ mod tests {
 
         fn overflow_of(props: &[(&str, &str)]) -> (Option<OverflowSpec>, Option<OverflowSpec>) {
             let mut tree = VirtualTree::new();
-            let id = tree.create_node("div");
+            let id = tree.create_node("div").unwrap();
             for (key, value) in props {
                 tree.set_style(id, *key, *value).unwrap();
             }
@@ -1515,7 +1515,7 @@ mod tests {
             assert_eq!(overflow_of(&[("overflow", "clip")]), (None, None));
             assert_eq!(overflow_of(&[("overflow_x", "nope")]), (None, None));
             let mut tree = VirtualTree::new();
-            let id = tree.create_node("div");
+            let id = tree.create_node("div").unwrap();
             tree.set_style(id, "overflow", 1.0).unwrap();
             assert_eq!(build_spec(&tree, id).unwrap().style, StyleSpec::default());
         }
@@ -1523,7 +1523,7 @@ mod tests {
         #[test]
         fn a_removed_overflow_key_renders_as_the_default() {
             let mut tree = VirtualTree::new();
-            let id = tree.create_node("div");
+            let id = tree.create_node("div").unwrap();
             tree.set_style(id, "overflow", "scroll").unwrap();
             tree.remove_style(id, "overflow").unwrap();
             assert_eq!(build_spec(&tree, id).unwrap().style, StyleSpec::default());
@@ -1533,7 +1533,7 @@ mod tests {
         fn either_scrolling_axis_makes_a_container_scroll() {
             let scrolls = |props: &[(&str, &str)]| {
                 let mut tree = VirtualTree::new();
-                let id = tree.create_node("div");
+                let id = tree.create_node("div").unwrap();
                 for (key, value) in props {
                     tree.set_style(id, *key, *value).unwrap();
                 }
@@ -1553,7 +1553,7 @@ mod tests {
         #[test]
         fn nothing_listens_unless_asked() {
             let mut tree = VirtualTree::new();
-            let id = tree.create_node("div");
+            let id = tree.create_node("div").unwrap();
 
             let spec = build_spec(&tree, id).unwrap();
             assert_eq!(spec.listens, EventMask::NONE);
@@ -1562,9 +1562,9 @@ mod tests {
         #[test]
         fn the_predicate_is_asked_about_every_node() {
             let mut tree = VirtualTree::new();
-            let parent = tree.create_node("div");
-            let listening = tree.create_node("div");
-            let quiet = tree.create_node("div");
+            let parent = tree.create_node("div").unwrap();
+            let listening = tree.create_node("div").unwrap();
+            let quiet = tree.create_node("div").unwrap();
             tree.append_child(parent, listening).unwrap();
             tree.append_child(parent, quiet).unwrap();
 
@@ -1586,7 +1586,7 @@ mod tests {
         /// about each prop, in order.
         fn style_and_warnings(props: &[(&str, AttributeValue)]) -> (StyleSpec, Vec<String>) {
             let mut tree = VirtualTree::new();
-            let id = tree.create_node("div");
+            let id = tree.create_node("div").unwrap();
             for (key, value) in props {
                 tree.set_style(id, *key, value.clone()).unwrap();
             }
@@ -1651,7 +1651,7 @@ mod tests {
         #[test]
         fn malformed_enum_value_is_ignored_not_a_panic() {
             let mut tree = VirtualTree::new();
-            let id = tree.create_node("div");
+            let id = tree.create_node("div").unwrap();
             tree.set_style(id, "display", "not-a-real-display-value")
                 .unwrap();
 
@@ -1662,7 +1662,7 @@ mod tests {
         #[test]
         fn color_accepts_hex_strings_as_well_as_numbers() {
             let mut tree = VirtualTree::new();
-            let id = tree.create_node("div");
+            let id = tree.create_node("div").unwrap();
             tree.set_style(id, "background", "#505050").unwrap();
             tree.set_style(id, "border_color", "#00f").unwrap();
 
@@ -1777,7 +1777,7 @@ mod tests {
         #[gpui::test]
         fn container_with_fixed_size_lays_out_at_that_size(cx: &mut TestAppContext) {
             let mut tree = VirtualTree::new();
-            let root = tree.create_node("div");
+            let root = tree.create_node("div").unwrap();
             tree.set_style(root, "width", 120.0).unwrap();
             tree.set_style(root, "height", 80.0).unwrap();
 
@@ -1796,7 +1796,7 @@ mod tests {
         #[gpui::test]
         fn text_leaf_renders_without_panicking(cx: &mut TestAppContext) {
             let mut tree = VirtualTree::new();
-            let root = tree.create_node("text");
+            let root = tree.create_node("text").unwrap();
             tree.set_attribute(root, "value", "hello").unwrap();
 
             let cx = cx.add_empty_window();
@@ -1813,12 +1813,12 @@ mod tests {
             children: &[&[(&str, AttributeValue)]],
         ) -> Vec<gpui::Bounds<Pixels>> {
             let mut tree = VirtualTree::new();
-            let root = tree.create_node("div");
+            let root = tree.create_node("div").unwrap();
             for (key, value) in root_props {
                 tree.set_style(root, *key, value.clone()).unwrap();
             }
             for props in children {
-                let child = tree.create_node("div");
+                let child = tree.create_node("div").unwrap();
                 for (key, value) in *props {
                     tree.set_style(child, *key, value.clone()).unwrap();
                 }
@@ -1985,8 +1985,8 @@ mod tests {
             delta: Point<Pixels>,
         ) -> Point<Pixels> {
             let mut tree = VirtualTree::new();
-            let root = tree.create_node("div");
-            let child = tree.create_node("div");
+            let root = tree.create_node("div").unwrap();
+            let child = tree.create_node("div").unwrap();
             tree.set_style(root, "width", 100.0).unwrap();
             tree.set_style(root, "height", 100.0).unwrap();
             for (key, value) in props {

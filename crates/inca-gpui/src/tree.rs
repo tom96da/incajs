@@ -123,6 +123,8 @@ pub enum TreeError {
     NodeNotFound(NodeId),
     /// An attachment that would have made a node its own ancestor.
     WouldCycle(NodeId),
+    /// Every id has been handed out.
+    IdsExhausted,
 }
 
 impl fmt::Display for TreeError {
@@ -135,6 +137,7 @@ impl fmt::Display for TreeError {
                     "attaching node {id} there would make it its own ancestor"
                 )
             }
+            TreeError::IdsExhausted => write!(f, "node id space exhausted"),
         }
     }
 }
@@ -160,17 +163,15 @@ impl VirtualTree {
     /// they named is destroyed — a stale id names nothing rather than
     /// something else.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if the id space is exhausted (`u32::MAX` nodes ever created).
-    pub fn create_node(&mut self, tag_name: impl Into<String>) -> NodeId {
+    /// Returns [`TreeError::IdsExhausted`] once `u32::MAX` nodes have been
+    /// created over the tree's lifetime.
+    pub fn create_node(&mut self, tag_name: impl Into<String>) -> Result<NodeId, TreeError> {
         let id = self.next_id;
-        self.next_id = self
-            .next_id
-            .checked_add(1)
-            .expect("VirtualTree node id space exhausted");
+        self.next_id = id.checked_add(1).ok_or(TreeError::IdsExhausted)?;
         self.nodes.insert(id, VirtualNode::new(id, tag_name.into()));
-        id
+        Ok(id)
     }
 
     #[must_use]
@@ -390,7 +391,7 @@ mod tests {
     #[test]
     fn id_uniqueness() {
         let mut tree = VirtualTree::new();
-        let ids: Vec<NodeId> = (0..100).map(|_| tree.create_node("div")).collect();
+        let ids: Vec<NodeId> = (0..100).map(|_| tree.create_node("div").unwrap()).collect();
 
         let mut sorted = ids.clone();
         sorted.sort_unstable();
@@ -403,12 +404,33 @@ mod tests {
     }
 
     #[test]
+    fn create_node_fails_once_the_id_space_is_used_up() {
+        let mut tree = VirtualTree::new();
+        tree.next_id = NodeId::MAX - 1;
+
+        let last = tree.create_node("div").unwrap();
+        assert_eq!(last, NodeId::MAX - 1);
+        assert_eq!(tree.create_node("div"), Err(TreeError::IdsExhausted));
+        assert_eq!(tree.create_node("div"), Err(TreeError::IdsExhausted));
+        assert_eq!(tree.nodes.len(), 1);
+        assert!(tree.get(last).is_some());
+    }
+
+    #[test]
+    fn ids_exhausted_has_a_message() {
+        assert_eq!(
+            TreeError::IdsExhausted.to_string(),
+            "node id space exhausted"
+        );
+    }
+
+    #[test]
     fn append_order() {
         let mut tree = VirtualTree::new();
-        let parent = tree.create_node("div");
-        let a = tree.create_node("span");
-        let b = tree.create_node("span");
-        let c = tree.create_node("span");
+        let parent = tree.create_node("div").unwrap();
+        let a = tree.create_node("span").unwrap();
+        let b = tree.create_node("span").unwrap();
+        let c = tree.create_node("span").unwrap();
 
         tree.append_child(parent, a).unwrap();
         tree.append_child(parent, b).unwrap();
@@ -420,10 +442,10 @@ mod tests {
     #[test]
     fn insert_before_at_start_middle_end() {
         let mut tree = VirtualTree::new();
-        let parent = tree.create_node("div");
-        let a = tree.create_node("span");
-        let b = tree.create_node("span");
-        let c = tree.create_node("span");
+        let parent = tree.create_node("div").unwrap();
+        let a = tree.create_node("span").unwrap();
+        let b = tree.create_node("span").unwrap();
+        let c = tree.create_node("span").unwrap();
 
         tree.insert_before(parent, b, None).unwrap(); // end: [b]
         tree.insert_before(parent, a, Some(b)).unwrap(); // start: [a, b]
@@ -431,7 +453,7 @@ mod tests {
 
         assert_eq!(tree.get(parent).unwrap().children(), &[a, b, c]);
 
-        let d = tree.create_node("span");
+        let d = tree.create_node("span").unwrap();
         tree.insert_before(parent, d, Some(b)).unwrap(); // middle: [a, d, b, c]
         assert_eq!(tree.get(parent).unwrap().children(), &[a, d, b, c]);
     }
@@ -439,9 +461,9 @@ mod tests {
     #[test]
     fn insert_before_itself_is_a_no_op() {
         let mut tree = VirtualTree::new();
-        let parent = tree.create_node("div");
-        let a = tree.create_node("span");
-        let b = tree.create_node("span");
+        let parent = tree.create_node("div").unwrap();
+        let a = tree.create_node("span").unwrap();
+        let b = tree.create_node("span").unwrap();
         tree.insert_before(parent, a, None).unwrap();
         tree.insert_before(parent, b, None).unwrap();
 
@@ -453,9 +475,9 @@ mod tests {
     #[test]
     fn insert_before_unknown_anchor_falls_back_to_append() {
         let mut tree = VirtualTree::new();
-        let parent = tree.create_node("div");
-        let a = tree.create_node("span");
-        let stray_anchor = tree.create_node("span"); // real node, never attached here
+        let parent = tree.create_node("div").unwrap();
+        let a = tree.create_node("span").unwrap();
+        let stray_anchor = tree.create_node("span").unwrap(); // real node, never attached here
 
         tree.insert_before(parent, a, Some(stray_anchor)).unwrap();
 
@@ -465,8 +487,8 @@ mod tests {
     #[test]
     fn insert_before_unknown_ids_error() {
         let mut tree = VirtualTree::new();
-        let parent = tree.create_node("div");
-        let child = tree.create_node("span");
+        let parent = tree.create_node("div").unwrap();
+        let child = tree.create_node("span").unwrap();
 
         assert_eq!(
             tree.insert_before(999, child, None).unwrap_err(),
@@ -485,9 +507,9 @@ mod tests {
     #[test]
     fn a_node_has_one_parent_at_a_time() {
         let mut tree = VirtualTree::new();
-        let first = tree.create_node("div");
-        let second = tree.create_node("div");
-        let child = tree.create_node("span");
+        let first = tree.create_node("div").unwrap();
+        let second = tree.create_node("div").unwrap();
+        let child = tree.create_node("span").unwrap();
 
         tree.append_child(first, child).unwrap();
         tree.append_child(second, child).unwrap();
@@ -503,7 +525,7 @@ mod tests {
     #[test]
     fn a_fresh_node_has_no_parent() {
         let mut tree = VirtualTree::new();
-        let node = tree.create_node("div");
+        let node = tree.create_node("div").unwrap();
 
         assert_eq!(tree.get(node).unwrap().parent(), None);
     }
@@ -511,7 +533,7 @@ mod tests {
     #[test]
     fn attaching_a_node_under_itself_is_refused() {
         let mut tree = VirtualTree::new();
-        let node = tree.create_node("div");
+        let node = tree.create_node("div").unwrap();
 
         assert_eq!(
             tree.append_child(node, node).unwrap_err(),
@@ -522,9 +544,9 @@ mod tests {
     #[test]
     fn attaching_an_ancestor_under_its_descendant_is_refused() {
         let mut tree = VirtualTree::new();
-        let grandparent = tree.create_node("div");
-        let parent = tree.create_node("div");
-        let child = tree.create_node("div");
+        let grandparent = tree.create_node("div").unwrap();
+        let parent = tree.create_node("div").unwrap();
+        let child = tree.create_node("div").unwrap();
         tree.append_child(grandparent, parent).unwrap();
         tree.append_child(parent, child).unwrap();
 
@@ -539,9 +561,9 @@ mod tests {
     #[test]
     fn moving_a_child_within_one_parent_reorders_it() {
         let mut tree = VirtualTree::new();
-        let parent = tree.create_node("div");
-        let a = tree.create_node("span");
-        let b = tree.create_node("span");
+        let parent = tree.create_node("div").unwrap();
+        let a = tree.create_node("span").unwrap();
+        let b = tree.create_node("span").unwrap();
         tree.append_child(parent, a).unwrap();
         tree.append_child(parent, b).unwrap();
 
@@ -557,9 +579,9 @@ mod tests {
     #[test]
     fn destroy_frees_the_whole_subtree() {
         let mut tree = VirtualTree::new();
-        let root = tree.create_node("div");
-        let branch = tree.create_node("div");
-        let leaf = tree.create_node("text");
+        let root = tree.create_node("div").unwrap();
+        let branch = tree.create_node("div").unwrap();
+        let leaf = tree.create_node("text").unwrap();
         tree.append_child(root, branch).unwrap();
         tree.append_child(branch, leaf).unwrap();
 
@@ -579,7 +601,7 @@ mod tests {
     #[test]
     fn destroy_is_a_no_op_the_second_time_and_for_an_unknown_id() {
         let mut tree = VirtualTree::new();
-        let node = tree.create_node("div");
+        let node = tree.create_node("div").unwrap();
 
         assert_eq!(tree.destroy_node(node), vec![node]);
         assert!(tree.destroy_node(node).is_empty());
@@ -589,11 +611,11 @@ mod tests {
     #[test]
     fn destroyed_ids_are_not_handed_out_again() {
         let mut tree = VirtualTree::new();
-        let first = tree.create_node("div");
+        let first = tree.create_node("div").unwrap();
         tree.destroy_node(first);
 
         assert_ne!(
-            tree.create_node("div"),
+            tree.create_node("div").unwrap(),
             first,
             "a stale id must name nothing rather than something else"
         );
@@ -602,8 +624,8 @@ mod tests {
     #[test]
     fn remove_child_clears_the_parent_link() {
         let mut tree = VirtualTree::new();
-        let parent = tree.create_node("div");
-        let child = tree.create_node("span");
+        let parent = tree.create_node("div").unwrap();
+        let child = tree.create_node("span").unwrap();
         tree.append_child(parent, child).unwrap();
 
         tree.remove_child(parent, child).unwrap();
@@ -614,9 +636,9 @@ mod tests {
     #[test]
     fn remove_child_leaves_a_link_to_a_different_parent_alone() {
         let mut tree = VirtualTree::new();
-        let real_parent = tree.create_node("div");
-        let stranger = tree.create_node("div");
-        let child = tree.create_node("span");
+        let real_parent = tree.create_node("div").unwrap();
+        let stranger = tree.create_node("div").unwrap();
+        let child = tree.create_node("span").unwrap();
         tree.append_child(real_parent, child).unwrap();
 
         tree.remove_child(stranger, child).unwrap();
@@ -627,8 +649,8 @@ mod tests {
     #[test]
     fn detach_keeps_node_alive() {
         let mut tree = VirtualTree::new();
-        let parent = tree.create_node("div");
-        let child = tree.create_node("span");
+        let parent = tree.create_node("div").unwrap();
+        let child = tree.create_node("span").unwrap();
         tree.append_child(parent, child).unwrap();
 
         tree.remove_child(parent, child).unwrap();
@@ -643,8 +665,8 @@ mod tests {
     #[test]
     fn remove_of_absent_child_is_a_no_op() {
         let mut tree = VirtualTree::new();
-        let parent = tree.create_node("div");
-        let never_appended = tree.create_node("span");
+        let parent = tree.create_node("div").unwrap();
+        let never_appended = tree.create_node("span").unwrap();
 
         // Absent child that exists elsewhere in the tree.
         assert!(tree.remove_child(parent, never_appended).is_ok());
@@ -657,7 +679,7 @@ mod tests {
     #[test]
     fn set_attribute_overwrites() {
         let mut tree = VirtualTree::new();
-        let node = tree.create_node("input");
+        let node = tree.create_node("input").unwrap();
 
         tree.set_attribute(node, "value", "first").unwrap();
         tree.set_attribute(node, "value", "second").unwrap();
@@ -677,7 +699,7 @@ mod tests {
     #[test]
     fn operations_on_unknown_ids_error_instead_of_panicking() {
         let mut tree = VirtualTree::new();
-        let node = tree.create_node("div");
+        let node = tree.create_node("div").unwrap();
 
         assert_eq!(
             tree.append_child(node, 999).unwrap_err(),
@@ -708,7 +730,7 @@ mod tests {
     #[test]
     fn remove_style_unsets_only_that_key() {
         let mut tree = VirtualTree::new();
-        let node = tree.create_node("div");
+        let node = tree.create_node("div").unwrap();
         tree.set_style(node, "gap", 8.0).unwrap();
         tree.set_style(node, "width", 10.0).unwrap();
 
@@ -723,7 +745,7 @@ mod tests {
     #[test]
     fn set_style_is_independent_of_attributes() {
         let mut tree = VirtualTree::new();
-        let node = tree.create_node("div");
+        let node = tree.create_node("div").unwrap();
 
         tree.set_style(node, "color", "red").unwrap();
 

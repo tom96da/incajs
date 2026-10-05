@@ -536,8 +536,8 @@ mod tests {
     #[test]
     fn listens_reports_click_only_where_something_is_registered() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let registered = host.borrow_mut().tree.create_node("div");
-        let quiet = host.borrow_mut().tree.create_node("div");
+        let registered = host.borrow_mut().tree.create_node("div").unwrap();
+        let quiet = host.borrow_mut().tree.create_node("div").unwrap();
         host.borrow_mut().listeners.register(registered, "click", 0);
 
         assert_eq!(dispatcher.listens(registered), EventMask::CLICK);
@@ -569,7 +569,7 @@ mod tests {
     #[gpui::test]
     fn no_listener_registered_reports_nothing(cx: &mut TestAppContext) {
         let (dispatcher, host, reported) = dispatcher_with_engine();
-        let node_id = host.borrow_mut().tree.create_node("div");
+        let node_id = host.borrow_mut().tree.create_node("div").unwrap();
 
         let cx = cx.add_empty_window();
         cx.update(|window, cx| {
@@ -582,7 +582,7 @@ mod tests {
     #[gpui::test]
     fn a_stale_callback_id_is_skipped_rather_than_reported(cx: &mut TestAppContext) {
         let (dispatcher, host, reported) = dispatcher_with_engine();
-        let node_id = host.borrow_mut().tree.create_node("div");
+        let node_id = host.borrow_mut().tree.create_node("div").unwrap();
         host.borrow_mut().listeners.register(node_id, "click", 0);
 
         // No `__inca_callbacks__` global defined at all.
@@ -620,7 +620,7 @@ mod tests {
     #[gpui::test]
     fn a_pending_job_is_drained_even_when_no_listener_ran(cx: &mut TestAppContext) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node_id = host.borrow_mut().tree.create_node("div");
+        let node_id = host.borrow_mut().tree.create_node("div").unwrap();
         dispatcher
             .engine
             .eval::<()>(
@@ -642,7 +642,7 @@ mod tests {
     #[gpui::test]
     fn a_throwing_callback_is_reported(cx: &mut TestAppContext) {
         let (dispatcher, host, reported) = dispatcher_with_engine();
-        let node_id = host.borrow_mut().tree.create_node("div");
+        let node_id = host.borrow_mut().tree.create_node("div").unwrap();
         host.borrow_mut().listeners.register(node_id, "click", 0);
         dispatcher
             .engine
@@ -665,7 +665,7 @@ mod tests {
     #[gpui::test]
     fn one_throwing_callback_does_not_stop_the_others(cx: &mut TestAppContext) {
         let (dispatcher, host, reported) = dispatcher_with_engine();
-        let node_id = host.borrow_mut().tree.create_node("div");
+        let node_id = host.borrow_mut().tree.create_node("div").unwrap();
         host.borrow_mut().listeners.register(node_id, "click", 0);
         host.borrow_mut().listeners.register(node_id, "click", 1);
         dispatcher
