@@ -216,14 +216,6 @@ A fixed entry is deleted and its ID is never reused.
   startup also duplicates its own failure report, a separate, more
   general gap B-032 covers.
 
-- **B-034 A stale `node_modules/.inca/hmr/inca.json` outlives the config that wrote it**
-  `Units: cli · Size: S · Impact: Medium`
-
-  `hmr()` (`packages/cli/src/adapter/vite/hmr.mts`) only writes
-  the file when `serializeConfig(runtimeConfig)` returns something; if a
-  later session's config no longer produces any content, the old file is
-  never removed, so a stale `window`/etc. section keeps being read.
-
 - **B-036 A script edit's new value doesn't reach a real click, once it reverts to a value already used earlier in the same session**
   `Units: gpui,cli · Size: M · Impact: Medium · Status: needs repro`
 

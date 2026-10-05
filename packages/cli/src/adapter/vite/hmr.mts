@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { existsSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -248,9 +248,9 @@ export async function hmr(
   const entryFile = await writeHmrEntry(cwd, entry, runtimePath);
 
   const configContent = serializeConfig(runtimeConfig);
-  if (configContent) {
-    await writeFile(path.join(hmrDirOf(cwd), CONFIG_FILE_NAME), configContent);
-  }
+  const configPath = path.join(hmrDirOf(cwd), CONFIG_FILE_NAME);
+  if (configContent) await writeFile(configPath, configContent);
+  else await rm(configPath, { force: true });
 
   const changed: { current: { file: string; at: number } | undefined } = { current: undefined };
   const { channel, dispatch } = createIncaHotChannel(
