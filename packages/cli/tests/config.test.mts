@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { mkdir, symlink, writeFile } from "node:fs/promises";
+import { mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -200,6 +200,30 @@ describe("resolveRuntimeConfig", () => {
       name: "Demo",
       identifier: "org.inca.demo",
       window: { width: 1024 },
+    });
+  });
+
+  it("throws one coded error naming the file when package.json is malformed", async () => {
+    const app = await makeApp({});
+    await writeFile(path.join(app, "package.json"), "{ not json");
+
+    await expect(resolveRuntimeConfig(app)).rejects.toThrow(
+      expect.objectContaining({
+        code: "ERR_INCA_PACKAGE_JSON_INVALID",
+        message: expect.stringContaining(path.join(app, "package.json")),
+      }),
+    );
+  });
+
+  it("carries only the window of an app with no package.json", async () => {
+    const app = await makeApp({});
+    await rm(path.join(app, "package.json"));
+    await writeFile(path.join(app, "inca.config.json"), JSON.stringify({ window: { width: 800 } }));
+
+    await expect(resolveRuntimeConfig(app)).resolves.toEqual({
+      name: undefined,
+      identifier: undefined,
+      window: { width: 800 },
     });
   });
 

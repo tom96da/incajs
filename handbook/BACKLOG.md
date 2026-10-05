@@ -664,14 +664,6 @@ A fixed entry is deleted and its ID is never reused.
   so a negative or `NaN` value becomes black and a value above `0xFFFFFF`
   loses its top byte. `docs/reference/elements.md` describes neither.
 
-- **B-052 A malformed `package.json` fails inconsistently**
-  `Units: cli · Size: S · Impact: Low`
-
-  `resolveAppConfig`
-  (`packages/cli/src/config/loader.mts`) lets the raw `JSON.parse` error
-  escape with no `ERR_INCA_*` code. `resolveRuntimeConfig` swallows the same
-  error and runs unnamed.
-
 - **B-055 Two small rule mismatches**
   `Units: gpui,jsenv · Size: S · Impact: Low`
 

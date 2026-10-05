@@ -137,4 +137,16 @@ describe("resolveAppConfig", () => {
 
     await expect(resolveAppConfig(app)).rejects.toThrow(/productName/);
   });
+
+  it("throws one coded error naming the file when package.json is malformed", async () => {
+    const app = await makeApp({});
+    await writeFile(path.join(app, "package.json"), "{ not json");
+
+    await expect(resolveAppConfig(app)).rejects.toThrow(
+      expect.objectContaining({
+        code: "ERR_INCA_PACKAGE_JSON_INVALID",
+        message: expect.stringContaining(path.join(app, "package.json")),
+      }),
+    );
+  });
 });

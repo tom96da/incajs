@@ -28,6 +28,11 @@ for you).
 Create one of those, or point `entry` in `inca.config.ts` at the file you
 use instead.
 
+## `ERR_INCA_PACKAGE_JSON_INVALID`
+
+The app's `package.json` holds malformed JSON. The message names the file and
+the parse error. Fix the syntax and run the command again.
+
 ## `ERR_INCA_PACKAGE_JSON_NOT_FOUND`
 
 `inca package` requires the app's `package.json`, where it reads the name

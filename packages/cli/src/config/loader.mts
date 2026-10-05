@@ -173,6 +173,23 @@ function resolveOutDir(cwd: string, outDir: string | undefined, entry: string | 
   return resolved;
 }
 
+/**
+ * @param raw - the contents of a `package.json`
+ * @param pkgPath - its path, named in the error
+ * @throws if `raw` holds malformed JSON
+ */
+function parsePackageJson(raw: string, pkgPath: string): AppPackageJson {
+  try {
+    return JSON.parse(raw) as AppPackageJson;
+  } catch (error) {
+    throw new IncaError(
+      "ERR_INCA_PACKAGE_JSON_INVALID",
+      `${pkgPath} holds malformed JSON: ${(error as Error).message}`,
+      pkgPath,
+    );
+  }
+}
+
 /** Loads `inca.config.ts`, and reports whether `package.json`'s `"inca"` key supplied anything. */
 async function loadIncaConfig(
   cwd: string,
@@ -202,7 +219,7 @@ export async function resolveBuildConfig(cwd: string): Promise<ResolvedBuildConf
  *
  * @param cwd - the app's root directory
  * @returns the resolved config
- * @throws if `package.json` is missing, has neither a `name` nor a
+ * @throws if `package.json` is missing, holds malformed JSON, has neither a `name` nor a
  * `productName`, an `icon` doesn't resolve to a real file, or `outDir`
  * would hold the app's own files
  */
@@ -214,7 +231,7 @@ export async function resolveAppConfig(cwd: string): Promise<ResolvedAppConfig> 
   } catch {
     throw new IncaError("ERR_INCA_PACKAGE_JSON_NOT_FOUND", `no package.json found at ${pkgPath}`);
   }
-  const pkg = JSON.parse(raw) as AppPackageJson;
+  const pkg = parsePackageJson(raw, pkgPath);
 
   const { config, usedPackageJsonKey } = await loadIncaConfig(cwd);
 
@@ -279,17 +296,16 @@ export function runtimeConfigOf(config: ResolvedAppConfig): RuntimeConfig {
  *
  * @param cwd - the app's root directory
  * @returns the config, or `undefined` when the app declares none of it
+ * @throws if `package.json` exists and holds malformed JSON
  */
 export async function resolveRuntimeConfig(cwd: string): Promise<RuntimeConfig | undefined> {
   const { config } = await loadIncaConfig(cwd);
 
-  let pkg: AppPackageJson = {};
-  try {
-    pkg = JSON.parse(await readFile(path.join(cwd, "package.json"), "utf8")) as AppPackageJson;
-  } catch {
-    // An app without a readable package.json names itself only through
-    // inca.config.ts, if at all.
-  }
+  const pkgPath = path.join(cwd, "package.json");
+  // An app without a readable package.json names itself only through
+  // inca.config.ts, if at all.
+  const raw = await readFile(pkgPath, "utf8").catch(() => undefined);
+  const pkg: AppPackageJson = raw === undefined ? {} : parsePackageJson(raw, pkgPath);
 
   const name = config.productName ?? defaultProductName(pkg.name);
   if (name) assertUsableProductName(name);
