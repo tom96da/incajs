@@ -14,9 +14,11 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 - `src/main.ts` and `src/main.js` work as app entries after `src/main.mts` ([c488257](https://github.com/tom96da/incajs/commit/c488257))
 - the host prints a warning line when a style sets an unknown key or an invalid colour ([255e580](https://github.com/tom96da/incajs/commit/255e580))
+- templates accept event and key modifiers such as `.stop` and `.enter`, with some limits for now ([a0cb74d](https://github.com/tom96da/incajs/commit/a0cb74d))
 
 ### Changed
 
+- `@vue/runtime-dom` becomes a peer dependency of `incajs` ([a0cb74d](https://github.com/tom96da/incajs/commit/a0cb74d))
 - `console` prints the first 100 entries of an array, `Map` or `Set` and counts the rest ([2ba40c3](https://github.com/tom96da/incajs/commit/2ba40c3))
 
 ### Fixed
@@ -25,6 +27,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - a signed hex colour and a number outside `0` to `0xffffff` are rejected ([255e580](https://github.com/tom96da/incajs/commit/255e580))
 - `inca dev` uses only the settings the current config declares ([0ab33ad](https://github.com/tom96da/incajs/commit/0ab33ad))
 - a malformed `package.json` fails with an error that names the file ([769d777](https://github.com/tom96da/incajs/commit/769d777))
+- a prop that turns `null` or `undefined`, or leaves the template, is removed from the element ([a944795](https://github.com/tom96da/incajs/commit/a944795))
+- `v-model` on an element registers listeners only for the events the template names ([4df3e50](https://github.com/tom96da/incajs/commit/4df3e50))
 
 ## [0.0.10] - 2026-10-05
 
