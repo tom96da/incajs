@@ -5,6 +5,8 @@ import { existsSync, watch } from "node:fs";
 import path from "node:path";
 import type { FSWatcher } from "node:fs";
 
+import { MAIN_FILES } from "./entry.mts";
+
 /** A watch that resolves once, when a file that could fix a failed start is saved. */
 export interface EditWatch {
   /** Resolves once, after a relevant change has been quiet for the debounce. */
@@ -19,11 +21,11 @@ export interface EditWatch {
 const CONFIG_FILE = /^(?:inca\.config\.[a-z0-9]+|package\.json)$/;
 
 /** The entry files `resolveEntry` looks for in `src/`, by name. */
-const ENTRY_FILES: readonly string[] = ["main.mts", "App.vue"];
+const ENTRY_FILES: readonly string[] = [...MAIN_FILES, "App.vue"];
 
 /**
  * Watches the files that decide whether an app can start: `inca.config.*`
- * and `package.json` in `cwd`, `src/main.mts` and `src/App.vue`, and every
+ * and `package.json` in `cwd`, `src/main.mts`, `src/main.ts`, `src/main.js` and `src/App.vue`, and every
  * file passed to {@link EditWatch.add}. Creating, deleting, changing or
  * renaming one of them counts as an edit. Edits to other files are ignored.
  *

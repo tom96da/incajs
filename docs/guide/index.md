@@ -92,8 +92,8 @@ exactly one of two entry points there:
   See [Elements & Styles](../reference/elements) for every style key and
   what's supported.
 
-- `src/main.mts` — for full control over bootstrapping. It wins
-  outright when both exist.
+- `src/main.mts` (or `src/main.ts`, `src/main.js`) — for full control over
+  bootstrapping. It wins outright when both exist.
 
 ## Up and Running
 

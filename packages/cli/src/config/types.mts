@@ -26,8 +26,9 @@ export interface IncaConfig {
   version?: string;
   /**
    * The app's entry point.
-   * @default resolved automatically — a committed `src/main.mts`, or
-   * `src/App.vue` wrapped in a synthesized one
+   * @default resolved automatically — a committed `src/main.mts`,
+   * `src/main.ts` or `src/main.js`, or `src/App.vue` wrapped in a
+   * synthesized one
    */
   entry?: string;
   /**

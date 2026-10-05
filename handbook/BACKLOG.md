@@ -655,16 +655,6 @@ A fixed entry is deleted and its ID is never reused.
   answers a fixed `"unknown method"` string regardless. A client can't tell
   from its own log which method got rejected.
 
-- **B-042 `resolveEntry` only recognizes `src/main.mts`, not `.ts`/`.js`**
-  `Units: cli,docs · Size: S · Impact: Low`
-
-  `packages/cli/src/entry.mts` checks the literal `src/main.mts` path and
-  falls back to synthesizing an entry from `src/App.vue`; an `.mts`-less
-  `src/main.ts`/`src/main.js` is invisible to it. `docs/reference/elements.md`
-  already tells readers this is "intended for later, not yet implemented."
-  Track the actual work here: accept `.ts`/`.js` too, or write down why
-  `.mts` alone is required.
-
 - **B-049 Colour parsing is looser than documented**
   `Units: gpui,docs · Size: S · Impact: Low`
 

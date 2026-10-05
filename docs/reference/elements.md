@@ -143,7 +143,9 @@ Event modifiers (`.once`/`.passive`/`.capture`) are documented in
 
 Incarnative.js looks for `src/App.vue` and wraps it in a synthesized entry
 equivalent to this — write `src/main.mts` yourself for full control over
-bootstrapping (it wins outright when both files exist):
+bootstrapping (it wins outright when both files exist). The file is
+`src/main.mts`, `src/main.ts` or `src/main.js`, and the first one that
+exists in that order is used:
 
 ```ts [src/main.mts]
 import { createIncaApp } from "incajs/vue";
@@ -151,13 +153,6 @@ import App from "./App.vue";
 
 createIncaApp(App).mount();
 ```
-
-Only the `.mts` extension is recognized for this file — `src/main.ts`
-isn't picked up.
-
-> [!NOTE]
-> `.ts`/`.js` support for this file is intended for later, not yet
-> implemented.
 
 `createIncaApp(rootComponent, rootProps?)` creates a Vue `App` whose
 `mount()` targets the host's root container when called with no

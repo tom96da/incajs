@@ -23,7 +23,7 @@ export interface PackageAppOptions {
   cwd?: string;
   /**
    * The app's entry point. Defaults to resolving it the same way `inca
-   * dev`/`build` do: a committed `src/main.mts`, or `src/App.vue` wrapped
+   * dev`/`build` do: a committed `src/main.mts`, `src/main.ts` or `src/main.js`, or `src/App.vue` wrapped
    * in a synthesized one.
    */
   entry?: string;

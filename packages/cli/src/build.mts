@@ -14,7 +14,7 @@ export interface BuildAppOptions {
   cwd?: string;
   /**
    * The app's entry point. Defaults to resolving it automatically: a
-   * committed `src/main.mts`, or `src/App.vue` wrapped in a synthesized one.
+   * committed `src/main.mts`, `src/main.ts` or `src/main.js`, or `src/App.vue` wrapped in a synthesized one.
    */
   entry?: string;
   /** Overrides the bundler — see {@link defaultBundler} for what's wired in by default. */

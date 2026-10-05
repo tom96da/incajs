@@ -48,9 +48,30 @@ describe("resolveEntry", () => {
     await expect(resolveEntry(app)).resolves.toBe(mainPath);
   });
 
-  it("throws naming both filenames when neither exists", async () => {
+  it.each(["main.ts", "main.js"])("uses a committed src/%s", async (file) => {
+    const app = await makeApp();
+    const mainPath = path.join(app, "src", file);
+    await writeFile(mainPath, "// a hand-written entry\n");
+    await writeFile(path.join(app, "src/App.vue"), "<template><div/></template>\n");
+
+    await expect(resolveEntry(app)).resolves.toBe(mainPath);
+  });
+
+  it("prefers main.mts over main.ts over main.js", async () => {
+    const app = await makeApp();
+    await writeFile(path.join(app, "src/main.js"), "");
+    await writeFile(path.join(app, "src/main.ts"), "");
+    await expect(resolveEntry(app)).resolves.toBe(path.join(app, "src/main.ts"));
+
+    await writeFile(path.join(app, "src/main.mts"), "");
+    await expect(resolveEntry(app)).resolves.toBe(path.join(app, "src/main.mts"));
+  });
+
+  it("throws asking for main.ts or App.vue when no entry exists", async () => {
     const app = await makeApp();
 
-    await expect(resolveEntry(app)).rejects.toThrow(/expected .*main\.mts.* or .*App\.vue/);
+    await expect(resolveEntry(app)).rejects.toThrow(
+      `no app entry found — check that ${path.join(app, "src/main.ts")} or ${path.join(app, "src/App.vue")} exists`,
+    );
   });
 });

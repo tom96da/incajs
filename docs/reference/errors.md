@@ -13,7 +13,7 @@ Every failure the CLI raises itself carries an `ERR_INCA_*` code, printed
 with the message:
 
 ```
-[inca] build failed (ERR_INCA_ENTRY_NOT_FOUND): no app entry found — expected …
+[inca] build failed (ERR_INCA_ENTRY_NOT_FOUND): no app entry found — check that …
 ```
 
 A failure with no code came from somewhere else — the bundler, the host,
@@ -21,8 +21,9 @@ or Node itself — and its own message is what to search for.
 
 ## `ERR_INCA_ENTRY_NOT_FOUND`
 
-No entry point. Incarnative.js looks for `src/main.mts`, then `src/App.vue` (which
-it wraps in an entry for you).
+No entry point. Incarnative.js looks for `src/main.mts`, `src/main.ts` and
+`src/main.js` in that order, then `src/App.vue` (which it wraps in an entry
+for you).
 
 Create one of those, or point `entry` in `inca.config.ts` at the file you
 use instead.

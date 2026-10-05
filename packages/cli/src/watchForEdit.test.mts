@@ -95,16 +95,19 @@ describe("watchForEdit", () => {
     expect(await settled(watcher.edited, SETTLE_MS)).toBe(true);
   });
 
-  it.each(["main.mts", "App.vue"])("resolves once src/%s exists", async (file) => {
-    const app = await makeApp();
-    const watcher = arm(app);
+  it.each(["main.mts", "main.ts", "main.js", "App.vue"])(
+    "resolves once src/%s exists",
+    async (file) => {
+      const app = await makeApp();
+      const watcher = arm(app);
 
-    await writeFile(path.join(app, "src", file), "");
+      await writeFile(path.join(app, "src", file), "");
 
-    expect(await settled(watcher.edited, SETTLE_MS)).toBe(true);
-  });
+      expect(await settled(watcher.edited, SETTLE_MS)).toBe(true);
+    },
+  );
 
-  it.each(["main.mts", "App.vue"])(
+  it.each(["main.mts", "main.ts", "main.js", "App.vue"])(
     "resolves once src/%s is created along with a src/ that was absent",
     async (file) => {
       const app = await makeApp();

@@ -117,8 +117,8 @@ The smallest the window can be. It opens at least this size.
 ### entry
 
 - Type: `string` — a path, resolved from the app's root directory
-- Default: an existing `src/main.mts`, or `src/App.vue` wrapped in a
-  synthesized entry
+- Default: an existing `src/main.mts`, `src/main.ts` or `src/main.js`, or
+  `src/App.vue` wrapped in a synthesized entry
 
 The app's entry point.
 

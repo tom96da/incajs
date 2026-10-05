@@ -17,7 +17,7 @@ npm i -D @incajs/cli
 ## App entry
 
 No entry point is required. Drop a `src/App.vue` and that's a whole
-app. Commit a `src/main.mts` instead for full control over
+app. Commit a `src/main.mts`, `src/main.ts` or `src/main.js` instead for full control over
 bootstrapping; it wins outright when both exist.
 
 ## Commands
