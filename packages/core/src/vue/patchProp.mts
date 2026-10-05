@@ -313,6 +313,8 @@ export function createPatchProp(
     } else if (nextValue === null || nextValue === undefined) {
       core.removeAttribute(el.id, key);
     } else if (!key.startsWith("onUpdate:")) {
+      // objects stringify as in a browser attribute
+      // oxlint-disable-next-line typescript/no-base-to-string
       core.setAttribute(el.id, key, String(nextValue));
     }
   };
