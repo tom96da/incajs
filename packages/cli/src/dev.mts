@@ -14,11 +14,11 @@ import {
 } from "./config/loader.mts";
 import { defaultBundler } from "./defaultBundler.mts";
 import { HostClient, assertHostBin, resolveHostBin } from "./dev-client/index.mts";
-import { acquireDevLock } from "./dev-lock.mts";
+import { acquireDevLock } from "./devLock.mts";
 import { resolveEntry } from "./entry.mts";
 import { IncaError } from "./error.mts";
 import { STAMPED, log, printFault, toFault } from "./log.mts";
-import { writeMacosApp } from "./macos-app.mts";
+import { writeMacosApp } from "./macosApp.mts";
 import { retryOnEdit } from "./retryOnEdit.mts";
 import type { Bundler, BuildOutput, HmrChannel } from "./adapter/types.mts";
 import type { ResolvedAppConfig } from "./config/loader.mts";

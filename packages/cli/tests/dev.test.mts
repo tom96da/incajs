@@ -7,8 +7,8 @@ import { Writable } from "node:stream";
 
 import { afterAll, beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
 
-import { acquireDevLock } from "../src/dev-lock.mts";
 import { dev } from "../src/dev.mts";
+import { acquireDevLock } from "../src/devLock.mts";
 import { scratchConfigApp } from "./scratchConfigApp.mts";
 import type {
   Bundler,

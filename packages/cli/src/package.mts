@@ -10,7 +10,7 @@ import { resolveAppConfig, runtimeConfigOf } from "./config/loader.mts";
 import { assertHostBin, resolveHostBin } from "./dev-client/index.mts";
 import { IncaError } from "./error.mts";
 import { log } from "./log.mts";
-import { writeMacosApp } from "./macos-app.mts";
+import { writeMacosApp } from "./macosApp.mts";
 import type { Bundler, BuildOutput } from "./adapter/types.mts";
 import type { ResolvedAppConfig } from "./config/loader.mts";
 

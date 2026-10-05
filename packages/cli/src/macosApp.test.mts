@@ -8,7 +8,7 @@ import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { writeMacosApp } from "./macos-app.mts";
+import { writeMacosApp } from "./macosApp.mts";
 
 let dir: string | undefined;
 

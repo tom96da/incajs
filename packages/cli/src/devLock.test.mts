@@ -8,7 +8,7 @@ import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { acquireDevLock } from "./dev-lock.mts";
+import { acquireDevLock } from "./devLock.mts";
 
 let cwd: string | undefined;
 const releases: (() => Promise<void>)[] = [];
