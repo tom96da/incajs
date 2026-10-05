@@ -422,20 +422,6 @@ A fixed entry is deleted and its ID is never reused.
   It currently only auto-updates the devcontainer image/
   features.
 
-- **B-009 CI's path filter skips JS jobs for a `tests/`-only change**
-  `Units: ci · Size: S · Impact: Low`
-
-  `.github/workflows/ci.yml`'s `changed` job lists `tests/**` only under
-  its `rust` filter, not `js`, even though `tests/` also holds `.mts`
-  tests. A PR touching only those runs no lint/format/typecheck job.
-
-- **B-010 `packages/cli`'s `sideEffects` list omits `dist/hmr-runtime.js`**
-  `Units: cli · Size: S · Impact: Low`
-
-  only `src/adapter/vite/runtime/globals.mts` is declared, but the built
-  runtime installs globals the same way. A bundler that tree-shakes on
-  `sideEffects` could drop it.
-
 - **B-013 GPUI window options with no `inca.config.ts` surface**
   `Units: host,cli · Size: M–L · Impact: Low`
 
