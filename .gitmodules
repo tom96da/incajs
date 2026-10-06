@@ -30,3 +30,27 @@
 	path = specs/w3c/csswg-drafts
 	url = https://github.com/w3c/csswg-drafts.git
 	shallow = true
+[submodule "specs/w3c/pointerevents"]
+	path = specs/w3c/pointerevents
+	url = https://github.com/w3c/pointerevents.git
+	shallow = true
+[submodule "specs/w3c/input-events"]
+	path = specs/w3c/input-events
+	url = https://github.com/w3c/input-events.git
+	shallow = true
+[submodule "specs/w3c/uievents-key"]
+	path = specs/w3c/uievents-key
+	url = https://github.com/w3c/uievents-key.git
+	shallow = true
+[submodule "specs/w3c/uievents-code"]
+	path = specs/w3c/uievents-code
+	url = https://github.com/w3c/uievents-code.git
+	shallow = true
+[submodule "specs/w3c/clipboard-apis"]
+	path = specs/w3c/clipboard-apis
+	url = https://github.com/w3c/clipboard-apis.git
+	shallow = true
+[submodule "specs/w3c/pointerlock"]
+	path = specs/w3c/pointerlock
+	url = https://github.com/w3c/pointerlock.git
+	shallow = true

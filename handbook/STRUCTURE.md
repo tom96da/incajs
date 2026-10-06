@@ -126,7 +126,13 @@ Policy: the standard decides. Where it is silent, two of the three engines
 
 | Path | Upstream | Pinned at | Covers |
 |---|---|---|---|
-| `specs/whatwg/html` | [whatwg/html](https://github.com/whatwg/html) | `ba3400b` (2026-10-06) | Focus, `tabindex`, Tab order, the focus fixup rules. The text is `source`. |
-| `specs/whatwg/dom` | [whatwg/dom](https://github.com/whatwg/dom) | `b76da7a` (2026-10-05) | Event dispatch, propagation, `preventDefault`. The text is `dom.bs`. |
-| `specs/w3c/uievents` | [w3c/uievents](https://github.com/w3c/uievents) | `8c1b809` (2026-02-21) | `focus`, `blur`, `focusin`, `focusout`, keyboard and mouse events. |
+| `specs/w3c/clipboard-apis` | [w3c/clipboard-apis](https://github.com/w3c/clipboard-apis) | `6201fd1` (2026-06-24) | `copy`, `cut` and `paste`. |
 | `specs/w3c/csswg-drafts` | [w3c/csswg-drafts](https://github.com/w3c/csswg-drafts) | `dddf78d` (2026-10-03) | `display`, `visibility`, `overflow`, `:focus`, scrolling. One folder per spec. |
+| `specs/w3c/input-events` | [w3c/input-events](https://github.com/w3c/input-events) | `2ba5101` (2026-05-01) | `input` and `beforeinput`. |
+| `specs/w3c/pointerevents` | [w3c/pointerevents](https://github.com/w3c/pointerevents) | `707191e` (2026-10-01) | `MouseEvent`, `WheelEvent` and pointer events. |
+| `specs/w3c/pointerlock` | [w3c/pointerlock](https://github.com/w3c/pointerlock) | `c2692a6` (2026-02-25) | `movementX` and `movementY`. |
+| `specs/w3c/uievents` | [w3c/uievents](https://github.com/w3c/uievents) | `8c1b809` (2026-02-21) | `focus`, `blur`, `focusin`, `focusout`, keyboard and mouse events. |
+| `specs/w3c/uievents-code` | [w3c/uievents-code](https://github.com/w3c/uievents-code) | `b201684` (2023-08-18) | The values of `code`. |
+| `specs/w3c/uievents-key` | [w3c/uievents-key](https://github.com/w3c/uievents-key) | `140cae8` (2024-09-28) | The values of `key`. |
+| `specs/whatwg/dom` | [whatwg/dom](https://github.com/whatwg/dom) | `b76da7a` (2026-10-05) | Event dispatch, propagation, `preventDefault`. The text is `dom.bs`. |
+| `specs/whatwg/html` | [whatwg/html](https://github.com/whatwg/html) | `ba3400b` (2026-10-06) | Focus, `tabindex`, Tab order, the focus fixup rules. The text is `source`. |
