@@ -153,6 +153,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       children: [],
       focus: () => focus(rootId),
       blur: () => blur(rootId),
+      tabIndex: -1,
     };
   });
 

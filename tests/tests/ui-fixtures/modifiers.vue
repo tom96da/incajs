@@ -18,6 +18,7 @@ onMounted(() => field.value.focus());
     </div>
     <div
       id="field"
+      tabindex="0"
       ref="field"
       :style="{ width: 100, height: 40 }"
       @keydown.enter="log += 'enter '"

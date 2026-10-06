@@ -87,7 +87,7 @@ the nearest ancestor container.
 | `addEventListener` | `(nodeId: number, event: string, callbackId: number) => void` | Register a callback for an event. Ids stack per `(nodeId, event)`, see [Registering](#registering). |
 | `removeEventListener` | `(nodeId: number, event: string, callbackId: number) => boolean` | Drop one registration and return whether it was there. An unknown node returns `false`. |
 | `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its subtree, and return every `callbackId` registered in it. An unknown id returns `[]`. Destroying the root throws. Also clears the focus state of the destroyed nodes. |
-| `focusNode` | `(nodeId: number) => void` | Request focus for `nodeId`. Takes effect next frame, on any node. An unknown or destroyed node is ignored. |
+| `focusNode` | `(nodeId: number) => void` | Request focus for `nodeId`. Takes effect next frame. A node with a `tabindex`, and only that node, takes focus. |
 | `blurNode` | `(nodeId: number) => void` | Request that `nodeId` lose focus. Takes effect next frame, and does nothing if `nodeId` is not the focused node by then. |
 
 Shared throw rules, all as a `TypeError`:
@@ -171,12 +171,17 @@ once per window.
   to GPUI, which also stops its own ancestor listeners.
 - For `wheel`, `stopPropagation()` skips the later `wheel` callbacks. The
   container still scrolls.
-- `preventDefault()` reaches only what GPUI honours: focus on `mousedown`,
-  the `click` from `Enter`/`Space`, and wheel scrolling.
+- `preventDefault()` reaches only what GPUI honours: the focus change and
+  the blur of a `mousedown`, the `click` from `Enter`/`Space`, and wheel
+  scrolling.
 
 #### Ordering
 
 - `focusNode`/`blurNode` queue and apply in order on the next frame.
+- The host reads `tabindex` on `setAttribute`/`removeAttribute` (key
+  compared case-insensitively) and on `display` style changes, and applies
+  the change before the queued focus requests of that frame. The user rules
+  are in `docs/reference/events.md`.
 - Destroying a focused node fires no `blur`.
 - All dispatches from one raw event share one movement value.
 

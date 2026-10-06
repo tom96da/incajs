@@ -849,6 +849,14 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
                 dispatch.filter(|_| spec.listens.contains(mask)).cloned()
             };
             let element = div().debug_selector(move || debug_selector(id));
+            // Registered first, so it runs after every other press listener.
+            let element = element.when(dispatch.is_some() && root, |el| {
+                el.on_any_mouse_down(|_, window, cx| {
+                    if !window.default_prevented() {
+                        window.blur(cx);
+                    }
+                })
+            });
 
             if spec.style.scrolls() || (dispatch.is_some() && spec.listens.needs_element_id()) {
                 let element =

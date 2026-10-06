@@ -40,10 +40,11 @@ export function createIncaApp(
   // Captured before the override, or the replacement would call itself.
   const mountAt = app.mount.bind(app);
 
-  // The host's root container, with the same `.focus()`/`.blur()`
+  // The host's root container, with the same `.focus()`/`.blur()`/`tabIndex`
   // `createNodeOps`'s own elements get.
   function rootElement(): IncaElement {
     const id = core.rootNodeId();
+    let tabIndex = -1;
     return {
       id,
       kind: "element",
@@ -51,6 +52,13 @@ export function createIncaApp(
       children: [],
       focus: () => core.focus(id),
       blur: () => core.blur(id),
+      get tabIndex() {
+        return tabIndex;
+      },
+      set tabIndex(value: number) {
+        tabIndex = Math.trunc(value);
+        core.setAttribute(id, "tabindex", tabIndex);
+      },
     };
   }
 

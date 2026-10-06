@@ -44,6 +44,7 @@ function element(): IncaElement {
     children: [],
     focus: vi.fn<() => void>(),
     blur: vi.fn<() => void>(),
+    tabIndex: -1,
   };
 }
 
@@ -58,6 +59,7 @@ describe("createElement", () => {
       children: [],
       focus: expect.any(Function),
       blur: expect.any(Function),
+      tabIndex: -1,
     });
   });
 });
@@ -83,6 +85,7 @@ describe("createComment", () => {
       children: [],
       focus: expect.any(Function),
       blur: expect.any(Function),
+      tabIndex: -1,
     });
   });
 });
@@ -96,6 +99,18 @@ describe("focus / blur", () => {
 
     el.blur();
     expect(core.blur).toHaveBeenCalledWith(el.id);
+  });
+});
+
+describe("tabIndex", () => {
+  it("reads -1 first, then sets the tabindex attribute to the integer part", () => {
+    const el = nodeOps.createElement("div");
+    expect(el.tabIndex).toBe(-1);
+
+    el.tabIndex = 2.9;
+
+    expect(el.tabIndex).toBe(2);
+    expect(core.setAttribute).toHaveBeenCalledExactlyOnceWith(el.id, "tabindex", 2);
   });
 });
 

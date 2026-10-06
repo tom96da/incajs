@@ -16,6 +16,7 @@ onMounted(() => a.value.focus());
   <div :style="{ width: 300, height: 300 }">
     <div
       id="a"
+      tabindex="0"
       ref="a"
       :style="{ width: 100, height: 40 }"
       @keydown="log += `a:${$event.type}:${$event.key} `"
@@ -26,6 +27,7 @@ onMounted(() => a.value.focus());
     />
     <div
       id="b"
+      tabindex="0"
       ref="b"
       :style="{ width: 100, height: 40 }"
       @keydown="log += `b:${$event.type}:${$event.key} `"

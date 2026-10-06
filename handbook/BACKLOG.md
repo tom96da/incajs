@@ -153,15 +153,15 @@ A fixed entry is deleted and its ID is never reused.
   yet" flag suppressing the mount-time `mouseenter`, and later the
   capture-phase (B-019) and precise-`target` (B-018) work.
 
-- **B-022 No Tab-key focus navigation**
+- **B-022 Tab and Shift+Tab are unwired**
   `Units: bridge,gpui,core · Size: M–L · Impact: Medium`
 
-  `crates/inca-bridge/src/focus.rs` only
-  moves focus on an explicit `focusNode` call or a click landing on a
-  focusable, `.id()`-bearing node. GPUI already has `tab_index`/
-  `tab_stop`/`window.focus_next(cx)` for this — wiring it means deciding
-  what `inca`'s tab-order vocabulary looks like (a style prop? an
-  attribute?) and is a separate unit from the focus model itself.
+  Focus moves on `focusNode` and on a click. A node is focusable through its
+  `tabindex` attribute, and `gpui_tab_order` in
+  `crates/inca-bridge/src/focus.rs` maps positive values ahead of `0` for
+  `window.focus_next(cx)`. Tab and Shift+Tab reach no handler yet, so the order
+  is unused and focus stays in the window. The fix is a Tab handler
+  that calls `focus_next`/`focus_prev` after the JS `keydown` listeners ran.
 
 - **B-024 Destroying a focused node must come to fire `"blur"`**
   `Units: bridge,core · Size: L · Impact: Medium`
@@ -519,31 +519,14 @@ A fixed entry is deleted and its ID is never reused.
   icon at all. Either the config's `icon` feeds both, or the name says
   which one it is.
 
-- **B-021 `"focus"`/`"blur"` will need to become `"focusin"`/`"focusout"` once focusable nodes can nest**
+- **B-021 `"focus"`/`"blur"` need `"focusin"`/`"focusout"` for nested focusable nodes**
   `Units: bridge · Size: S–M · Impact: Low`
 
-  `crates/inca-bridge/src/focus.rs`'s
-  `FocusRegistry` dispatches DOM's non-bubbling `focus`/`blur` today,
-  correct only because no focusable node has a focusable descendant yet.
-  A focusable container wrapping a focusable child would need the
-  bubbling pair instead — checking whether the node whose focus state
-  changed is the exact one focused, not just an ancestor of it.
-
-- **B-023 No way to make a node focusable without also focusing it**
-  `Units: bridge,core · Size: M · Impact: Low`
-
-  `FocusRegistry::get_or_create` (`crates/inca-bridge/src/focus.rs`) is
-  the only place a `FocusHandle` gets allocated, and it only ever runs
-  from `apply_pending`'s `PendingFocus::Focus` branch, which calls
-  `handle.focus(window, cx)` immediately afterward — `focusNode`
-  conflates "become focusable" with "focus now." A future `input`/
-  `button`-like element that should already be click-focusable when it
-  mounts, the way a real `<input>` is with no script ever calling
-  `.focus()`, needs a binding that only allocates the handle and wires
-  `.track_focus` (`crates/inca-gpui/src/element.rs`'s `wire_focus`),
-  without moving focus. Separate from Tab-key navigation (B-022) — that's
-  about keyboard order once a node is already focusable, this is about
-  becoming focusable at all.
+  `FocusRegistry` (`crates/inca-bridge/src/focus.rs`) dispatches `focus` and
+  `blur` to the exact node. A node with `tabindex` can contain another one,
+  so a listener on the container sees neither event of the descendant. The
+  fix is the bubbling pair, checking that the node whose focus state changed
+  is the exact one focused.
 
 - **B-026 More `MouseEvent`/`KeyboardEvent` fields could reach JS**
   `Units: gpui,bridge · Size: M–L · Impact: Low`
@@ -1062,3 +1045,50 @@ A fixed entry is deleted and its ID is never reused.
   properties, and keeps `false` as the text `"false"` for any other attribute.
   The host reads no boolean attribute yet. The input element decides which
   names need this.
+
+- **B-129 A focused node looks like an unfocused one**
+  `Units: gpui,core · Size: L · Impact: Low`
+
+  The `focus` and `blur` events are the only sign of focus. The fix adds a
+  `:focus` state to the host's style model: a style variant that applies while
+  the node holds focus, set from the same focus transitions that dispatch
+  `focus` and `blur`.
+
+- **B-131 Focus state is readable through events only**
+  `Units: core,bridge · Size: M · Impact: Low`
+
+  `document.activeElement` and `:focus` are unsupported. The fix adds a
+  binding that returns the focused node id, and core wraps it as the focused
+  element.
+
+- **B-132 A node inside a `display: none` ancestor takes focus**
+  `Units: bridge · Size: M · Impact: Low`
+
+  Only a node whose own `display` is `none` loses focusability. A descendant
+  of a hidden node keeps its `tabindex`. The fix walks the ancestors in
+  `tab_index_of` and marks the whole subtree dirty when a `display` value
+  changes.
+
+- **B-133 `disabled`, `inert` and `hidden` leave a node focusable**
+  `Units: bridge · Size: M · Impact: Low`
+
+  A node with one of these attributes and a `tabindex` takes focus. The fix
+  reads the three attributes in `tab_index_of` and drops the handle while one
+  is present. `disabled` applies to the elements that define it, which starts
+  with the input element (B-127).
+
+- **B-134 `focus()` ignores its options and leaves the scroll offset**
+  `Units: bridge,core · Size: M · Impact: Low`
+
+  `focus({ preventScroll })` ignores the argument, and focusing a node outside
+  its scroll container keeps the offset. The fix adds a scroll-into-view
+  operation to the host and calls it from `focus()` unless `preventScroll` is
+  set.
+
+- **B-136 `el.tabIndex` reads only the last assigned value**
+  `Units: core,bridge · Size: M · Impact: Low`
+
+  A `tabindex` set through a template prop is invisible to the getter, which
+  returns `-1` until the property is assigned. The fix adds an attribute read
+  binding to the host, `native.mts` and `rendererCore.mts`, and every mock of
+  the native object gains it.

@@ -32,10 +32,15 @@ export interface IncaElement {
   parent: IncaElement | null;
   /** This node's children, in render order. */
   children: IncaNode[];
-  /** Focuses this node next frame. */
+  /** Focuses this node next frame. The node needs a `tabindex` attribute. */
   focus(): void;
   /** Unfocuses this node next frame, if it is the focused one. */
   blur(): void;
+  /**
+   * Assigning sets the `tabindex` attribute to the integer part of the
+   * value. Reading returns the last value assigned, or `-1`.
+   */
+  tabIndex: number;
 }
 
 /** A text leaf host node — `@vue/runtime-core`'s `HostNode` for text. */
@@ -91,10 +96,22 @@ export function createNodeOps(core: IncaCore): NodeOps {
   }
 
   // Shared by createElement/createComment.
-  function focusMethods(id: NodeId): Pick<IncaElement, "focus" | "blur"> {
+  function hostElement(id: NodeId, kind: IncaElement["kind"]): IncaElement {
+    let tabIndex = -1;
     return {
+      id,
+      kind,
+      parent: null,
+      children: [],
       focus: () => core.focus(id),
       blur: () => core.blur(id),
+      get tabIndex() {
+        return tabIndex;
+      },
+      set tabIndex(value: number) {
+        tabIndex = Math.trunc(value);
+        core.setAttribute(id, "tabindex", tabIndex);
+      },
     };
   }
 
@@ -108,7 +125,7 @@ export function createNodeOps(core: IncaCore): NodeOps {
      */
     createElement(tag: TagName): IncaElement {
       const id = core.createNode(tag);
-      return { id, kind: "element", parent: null, children: [], ...focusMethods(id) };
+      return hostElement(id, "element");
     },
 
     /**
@@ -130,7 +147,7 @@ export function createNodeOps(core: IncaCore): NodeOps {
     createComment(_text: string): IncaElement {
       const id = core.createNode("div");
       core.setStyle(id, "display", "none");
-      return { id, kind: "comment", parent: null, children: [], ...focusMethods(id) };
+      return hostElement(id, "comment");
     },
 
     /**

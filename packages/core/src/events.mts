@@ -150,7 +150,8 @@ export function removeEventListener(nodeId: NodeId, event: string): void {
  * dispatching `"blur"`/`"focus"` for whatever actually changed — `nodeId`
  * doesn't need a `"focus"`/`"blur"` listener registered for this to work,
  * the same way `element.focus()` works on any focusable DOM element
- * regardless of whether it's being listened to.
+ * regardless of whether it's being listened to. The node needs a `tabindex`
+ * attribute to take focus.
  * @param nodeId - the node to focus
  */
 export function focus(nodeId: NodeId): void {

@@ -24,7 +24,10 @@ struct FocusableRoot {
 
 impl Render for FocusableRoot {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let transitions = self.host.borrow_mut().focus.apply_pending(window, cx);
+        let transitions = {
+            let host = &mut *self.host.borrow_mut();
+            host.focus.apply_pending(&host.tree, window, cx)
+        };
         for transition in &transitions {
             transition.dispatch(&self.dispatcher, window, cx);
         }
@@ -47,6 +50,8 @@ fn build_focusable_pair() -> (Rc<RefCell<Host>>, NodeId, NodeId) {
     for node in [a, b] {
         host_mut.listeners.register(node, "focus", 0);
         host_mut.listeners.register(node, "blur", 0);
+        host_mut.tree.set_attribute(node, "tabindex", "0").unwrap();
+        host_mut.focus.mark_tab_dirty(node);
     }
     drop(host_mut);
     (host, parent, a)

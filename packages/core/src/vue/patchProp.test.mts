@@ -39,6 +39,7 @@ const makeEl = (): IncaElement => ({
   children: [],
   focus: vi.fn<() => void>(),
   blur: vi.fn<() => void>(),
+  tabIndex: -1,
 });
 
 let el = makeEl();

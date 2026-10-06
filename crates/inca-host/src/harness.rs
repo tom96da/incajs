@@ -577,6 +577,7 @@ mod tests {
             globalThis.keys = 0;
             globalThis.__inca_callbacks__ = { 0: () => { globalThis.keys++; } };
             n.addEventListener(box, 'keydown', 0);
+            n.setAttribute(box, 'tabindex', '0');
             n.focusNode(box);
             ",
         );
@@ -605,6 +606,7 @@ mod tests {
             };
             n.addEventListener(box, 'keyup', 0);
             n.addEventListener(box, 'keydown', 1);
+            n.setAttribute(box, 'tabindex', '0');
             n.focusNode(box);
             ",
         );
@@ -769,6 +771,164 @@ mod tests {
     #[should_panic(expected = "InvalidKeystrokeError")]
     fn keystrokes_panic_on_an_unparseable_key(cx: &mut TestAppContext) {
         Harness::load(cx, ENTRY, "").keystrokes("a-b");
+    }
+
+    /// A 200x200 frame holding a 100x50 `box` at its top-left corner. `box`
+    /// records its `focus` and `blur` events in `globalThis.log`. The frame's
+    /// centre lies outside `box`.
+    const FOCUSABLE: &str = r"
+        const n = __inca_native__;
+        const frame = n.createNode('div');
+        n.setStyle(frame, 'width', 200);
+        n.setStyle(frame, 'height', 200);
+        n.appendChild(n.rootNodeId(), frame);
+        const box = n.createNode('div');
+        n.setStyle(box, 'width', 100);
+        n.setStyle(box, 'height', 50);
+        n.appendChild(frame, box);
+        globalThis.frame = frame;
+        globalThis.box = box;
+        globalThis.log = [];
+        globalThis.__inca_callbacks__ = {
+            0: (e) => { globalThis.log.push(e.type); },
+            1: (e) => { e.preventDefault(); },
+        };
+        n.addEventListener(box, 'focus', 0);
+        n.addEventListener(box, 'blur', 0);
+    ";
+
+    fn run_js(h: &mut Harness, code: &str) {
+        h.window
+            .read_with(&h.cx, |app, _| app.session.engine.eval::<()>(code).unwrap())
+            .unwrap();
+        h.settle();
+    }
+
+    fn log(h: &Harness) -> String {
+        h.window
+            .read_with(&h.cx, |app, _| {
+                app.session
+                    .engine
+                    .eval::<String>("globalThis.log.join(',')")
+                    .unwrap()
+            })
+            .unwrap()
+    }
+
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    fn node(h: &Harness, name: &str) -> NodeId {
+        eval_f64(h, &format!("globalThis.{name}")) as NodeId
+    }
+
+    #[gpui::test]
+    fn a_click_focuses_a_tabindex_node(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, FOCUSABLE);
+        run_js(
+            &mut h,
+            "__inca_native__.setAttribute(box, 'tabindex', '0');",
+        );
+        let boxed = node(&h, "box");
+        h.click(boxed);
+        assert_eq!(log(&h), "focus");
+    }
+
+    #[gpui::test]
+    fn a_numeric_tabindex_makes_a_node_focusable(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, FOCUSABLE);
+        run_js(&mut h, "__inca_native__.setAttribute(box, 'tabindex', 0);");
+        let boxed = node(&h, "box");
+        h.click(boxed);
+        assert_eq!(log(&h), "focus");
+    }
+
+    #[gpui::test]
+    fn a_negative_tabindex_takes_click_and_focus(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, FOCUSABLE);
+        run_js(
+            &mut h,
+            "__inca_native__.setAttribute(box, 'tabindex', '-1');",
+        );
+        let boxed = node(&h, "box");
+        h.click(boxed);
+        assert_eq!(log(&h), "focus");
+        let frame = node(&h, "frame");
+        h.click(frame);
+        run_js(&mut h, "__inca_native__.focusNode(box);");
+        assert_eq!(log(&h), "focus,blur,focus");
+    }
+
+    #[gpui::test]
+    fn tabindex_then_focus_in_one_tick_focuses(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, FOCUSABLE);
+        run_js(
+            &mut h,
+            "__inca_native__.setAttribute(box, 'tabindex', '0'); __inca_native__.focusNode(box);",
+        );
+        assert_eq!(log(&h), "focus");
+    }
+
+    #[gpui::test]
+    fn a_click_on_an_empty_area_blurs_the_focused_node(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, FOCUSABLE);
+        run_js(
+            &mut h,
+            "__inca_native__.setAttribute(box, 'tabindex', '0'); __inca_native__.focusNode(box);",
+        );
+        let frame = node(&h, "frame");
+        h.click(frame);
+        assert_eq!(log(&h), "focus,blur");
+    }
+
+    #[gpui::test]
+    fn a_prevented_mousedown_keeps_the_focused_node(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, FOCUSABLE);
+        run_js(
+            &mut h,
+            "__inca_native__.setAttribute(box, 'tabindex', '0'); \
+             __inca_native__.focusNode(box); \
+             __inca_native__.addEventListener(frame, 'mousedown', 1);",
+        );
+        let frame = node(&h, "frame");
+        h.click(frame);
+        assert_eq!(log(&h), "focus");
+    }
+
+    #[gpui::test]
+    fn a_prevented_mousedown_on_the_root_keeps_the_focused_node(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, FOCUSABLE);
+        run_js(
+            &mut h,
+            "__inca_native__.setAttribute(box, 'tabindex', '0'); \
+             __inca_native__.focusNode(box); \
+             __inca_native__.addEventListener(__inca_native__.rootNodeId(), 'mousedown', 1);",
+        );
+        let frame = node(&h, "frame");
+        h.click(frame);
+        assert_eq!(log(&h), "focus");
+    }
+
+    #[gpui::test]
+    fn hiding_a_focused_node_blurs_it(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, FOCUSABLE);
+        run_js(
+            &mut h,
+            "__inca_native__.setAttribute(box, 'tabindex', '0'); __inca_native__.focusNode(box);",
+        );
+        run_js(&mut h, "__inca_native__.setStyle(box, 'display', 'none');");
+        assert_eq!(log(&h), "focus,blur");
+    }
+
+    #[gpui::test]
+    fn a_prevented_mousedown_does_not_focus_the_node(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, FOCUSABLE);
+        run_js(
+            &mut h,
+            "__inca_native__.setAttribute(box, 'tabindex', '0'); \
+             __inca_native__.addEventListener(box, 'mousedown', 1);",
+        );
+        let boxed = node(&h, "box");
+        h.click(boxed);
+        assert_eq!(log(&h), "");
     }
 
     #[gpui::test]

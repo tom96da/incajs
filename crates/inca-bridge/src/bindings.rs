@@ -166,6 +166,15 @@ fn throw_tree_error(ctx: &Ctx<'_>, err: TreeError) -> rquickjs::Error {
     Exception::throw_type(ctx, &err.to_string())
 }
 
+// Attribute names are case-insensitive, so `tabIndex` is `tabindex`.
+fn canonical_attribute_key(key: String) -> String {
+    if key.eq_ignore_ascii_case("tabindex") {
+        "tabindex".to_owned()
+    } else {
+        key
+    }
+}
+
 fn attribute_value_from_js<'js>(ctx: &Ctx<'js>, value: &Value<'js>) -> JsResult<AttributeValue> {
     if value.is_string() {
         return value.get::<String>().map(AttributeValue::String);
@@ -290,10 +299,16 @@ fn install_tree<'js>(
                       value: Value<'js>|
                       -> JsResult<()> {
                     let value = attribute_value_from_js(&ctx, &value)?;
-                    host.borrow_mut()
-                        .tree
+                    let mut host = host.borrow_mut();
+                    let key = canonical_attribute_key(key);
+                    let is_tab_index = key == "tabindex";
+                    host.tree
                         .set_attribute(node_id, key, value)
-                        .map_err(|err| throw_tree_error(&ctx, err))
+                        .map_err(|err| throw_tree_error(&ctx, err))?;
+                    if is_tab_index {
+                        host.focus.mark_tab_dirty(node_id);
+                    }
+                    Ok(())
                 },
             )?,
         )?;
@@ -306,10 +321,15 @@ fn install_tree<'js>(
             Function::new(
                 ctx.clone(),
                 move |ctx: Ctx<'js>, JsNodeId(node_id): JsNodeId, key: String| -> JsResult<()> {
-                    host.borrow_mut()
-                        .tree
+                    let mut host = host.borrow_mut();
+                    let key = canonical_attribute_key(key);
+                    host.tree
                         .remove_attribute(node_id, &key)
-                        .map_err(|err| throw_tree_error(&ctx, err))
+                        .map_err(|err| throw_tree_error(&ctx, err))?;
+                    if key == "tabindex" {
+                        host.focus.mark_tab_dirty(node_id);
+                    }
+                    Ok(())
                 },
             )?,
         )?;
@@ -329,9 +349,13 @@ fn install_tree<'js>(
                     let value = attribute_value_from_js(&ctx, &value)?;
                     let mut host = host.borrow_mut();
                     let warning = style_warning(&key, &value);
+                    let is_display = key == "display";
                     host.tree
                         .set_style(node_id, key, value)
                         .map_err(|err| throw_tree_error(&ctx, err))?;
+                    if is_display {
+                        host.focus.mark_tab_dirty(node_id);
+                    }
                     if let Some(warning) = warning {
                         let tag = host.tree.get(node_id).map_or("", VirtualNode::tag_name);
                         (host.warn)(&format!("node {node_id} ({tag}): {warning}"));
@@ -349,10 +373,14 @@ fn install_tree<'js>(
             Function::new(
                 ctx.clone(),
                 move |ctx: Ctx<'js>, JsNodeId(node_id): JsNodeId, key: String| -> JsResult<()> {
-                    host.borrow_mut()
-                        .tree
+                    let mut host = host.borrow_mut();
+                    host.tree
                         .remove_style(node_id, &key)
-                        .map_err(|err| throw_tree_error(&ctx, err))
+                        .map_err(|err| throw_tree_error(&ctx, err))?;
+                    if key == "display" {
+                        host.focus.mark_tab_dirty(node_id);
+                    }
+                    Ok(())
                 },
             )?,
         )?;
@@ -488,6 +516,47 @@ mod tests {
         let host = Rc::new(RefCell::new(Host::default()));
         engine.with(|ctx| install(&ctx, &host)).unwrap();
         (engine, host)
+    }
+
+    #[test]
+    fn only_tabindex_and_display_mark_a_node_for_a_focus_check() {
+        let (engine, host) = engine_with_bindings();
+        let node: u32 = engine
+            .eval("globalThis.n = __inca_native__.createNode('div')")
+            .unwrap();
+        let dirty =
+            |host: &Rc<RefCell<Host>>| std::mem::take(&mut host.borrow_mut().focus.tab_dirty);
+        assert!(dirty(&host).is_empty());
+
+        engine
+            .eval::<()>(
+                "__inca_native__.setAttribute(n, 'label', 'x'); \
+                 __inca_native__.removeAttribute(n, 'label'); \
+                 __inca_native__.setStyle(n, 'width', 5); \
+                 __inca_native__.removeStyle(n, 'width');",
+            )
+            .unwrap();
+        assert!(dirty(&host).is_empty());
+
+        for call in [
+            "setAttribute(n, 'tabindex', '0')",
+            "setAttribute(n, 'tabIndex', 0)",
+            "removeAttribute(n, 'TABINDEX')",
+            "setStyle(n, 'display', 'none')",
+            "removeStyle(n, 'display')",
+        ] {
+            engine
+                .eval::<()>(&format!("__inca_native__.{call}"))
+                .unwrap();
+            assert!(dirty(&host).contains(&node), "{call}");
+        }
+        engine
+            .eval::<()>("__inca_native__.setAttribute(n, 'tabIndex', 1)")
+            .unwrap();
+        let host = host.borrow();
+        let attrs = host.tree.get(node).unwrap().attributes();
+        assert_eq!(attrs.get("tabindex"), Some(&AttributeValue::Number(1.0)));
+        assert!(!attrs.contains_key("tabIndex"));
     }
 
     #[test]

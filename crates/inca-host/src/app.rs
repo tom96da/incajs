@@ -235,7 +235,10 @@ pub(crate) struct HostedApp {
 impl Render for HostedApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let session = &self.session;
-        let transitions = session.host.borrow_mut().focus.apply_pending(window, cx);
+        let transitions = {
+            let host = &mut *session.host.borrow_mut();
+            host.focus.apply_pending(&host.tree, window, cx)
+        };
         for transition in &transitions {
             transition.dispatch(&session.dispatcher, window, cx);
         }

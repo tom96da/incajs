@@ -14,4 +14,5 @@ mod modifiers;
 mod propagation;
 mod reactivity;
 mod scroll;
+mod tabindex;
 mod timing;
