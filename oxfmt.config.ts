@@ -4,7 +4,7 @@
 import { defineConfig } from "oxfmt";
 
 export default defineConfig({
-  ignorePatterns: ["**.md", "third_party/**"],
+  ignorePatterns: ["**.md", "third_party/**", "specs/**"],
   sortImports: {
     order: "asc",
     ignoreCase: true,

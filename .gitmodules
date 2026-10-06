@@ -14,3 +14,19 @@
 	path = third_party/vite
 	url = https://github.com/vitejs/vite.git
 	shallow = true
+[submodule "specs/whatwg/html"]
+	path = specs/whatwg/html
+	url = https://github.com/whatwg/html.git
+	shallow = true
+[submodule "specs/whatwg/dom"]
+	path = specs/whatwg/dom
+	url = https://github.com/whatwg/dom.git
+	shallow = true
+[submodule "specs/w3c/uievents"]
+	path = specs/w3c/uievents
+	url = https://github.com/w3c/uievents.git
+	shallow = true
+[submodule "specs/w3c/csswg-drafts"]
+	path = specs/w3c/csswg-drafts
+	url = https://github.com/w3c/csswg-drafts.git
+	shallow = true

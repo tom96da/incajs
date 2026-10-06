@@ -3,7 +3,7 @@
 
 import { configDefaults, defineConfig } from "vitest/config";
 
-const exclude = [...configDefaults.exclude, "**/third_party/**", "**/target/**"];
+const exclude = [...configDefaults.exclude, "**/third_party/**", "**/specs/**", "**/target/**"];
 
 export default defineConfig({
   test: {

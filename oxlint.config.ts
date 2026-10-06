@@ -6,7 +6,7 @@ import { defineConfig } from "oxlint";
 export default defineConfig({
   plugins: ["eslint", "typescript", "unicorn", "oxc", "import", "node", "jsdoc", "vitest", "vue"],
   jsPlugins: ["eslint-plugin-check-file"],
-  ignorePatterns: ["third_party/**"],
+  ignorePatterns: ["third_party/**", "specs/**"],
   rules: {
     "check-file/folder-naming-convention": ["error", { "packages/*/src/**/": "KEBAB_CASE" }],
     "check-file/filename-naming-convention": [

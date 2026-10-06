@@ -76,6 +76,7 @@ incajs/
 │   ├── hello_world/         # Vue port of `crates/inca-gpui/examples/hello_world.rs`
 │   └── click_counter/       # Vue port of `crates/inca-bridge/examples/click_counter.rs`
 ├── docs/                    # the public VitePress site, deployed by .github/workflows/docs.yml
+├── specs/                   # pinned web standards, as git submodules — see below
 └── third_party/             # pinned upstream sources, as git submodules — see below
     ├── zed/                 # zed-industries/zed
     ├── rquickjs/            # DelSkayn/rquickjs
@@ -113,3 +114,19 @@ is large and not needed. The nested `third_party/rquickjs/sys/quickjs` is not.
 - To bump a pin, `cd` into the submodule, run
   `git fetch --depth 1 origin <new-tag> && git checkout FETCH_HEAD`, then
   commit the updated gitlink from the superproject.
+
+## `specs/`: pinned web standards
+
+Git submodules of the standards the framework follows for DOM behavior. They
+are reference material, registered shallow, and pinned to a commit because the
+upstream repositories have no release tags. Init with
+`git submodule update --init --depth 1 specs/whatwg/html`, for example.
+Policy: the standard decides. Where it is silent, two of the three engines
+(Chromium, Firefox, WebKit) decide.
+
+| Path | Upstream | Pinned at | Covers |
+|---|---|---|---|
+| `specs/whatwg/html` | [whatwg/html](https://github.com/whatwg/html) | `ba3400b` (2026-10-06) | Focus, `tabindex`, Tab order, the focus fixup rules. The text is `source`. |
+| `specs/whatwg/dom` | [whatwg/dom](https://github.com/whatwg/dom) | `b76da7a` (2026-10-05) | Event dispatch, propagation, `preventDefault`. The text is `dom.bs`. |
+| `specs/w3c/uievents` | [w3c/uievents](https://github.com/w3c/uievents) | `8c1b809` (2026-02-21) | `focus`, `blur`, `focusin`, `focusout`, keyboard and mouse events. |
+| `specs/w3c/csswg-drafts` | [w3c/csswg-drafts](https://github.com/w3c/csswg-drafts) | `dddf78d` (2026-10-03) | `display`, `visibility`, `overflow`, `:focus`, scrolling. One folder per spec. |
