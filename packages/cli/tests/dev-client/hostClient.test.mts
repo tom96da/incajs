@@ -134,7 +134,7 @@ describe("HostClient", () => {
     // pending forever without the deadline this call passes.
     await expect(client.call("reload", undefined, 50)).rejects.toThrow(/timed out/);
 
-    await client.stop();
+    await client.stop(50);
   }, 5000);
 
   it("forwards appError to its own callback rather than a generic notification handler", async () => {
