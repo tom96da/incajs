@@ -10,6 +10,19 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- `el.tabIndex` sets the `tabindex` attribute ([9f63f4a](https://github.com/tom96da/incajs/commit/9f63f4a))
+
+### Changed
+
+- a node takes focus through its `tabindex` attribute, and `focus()` on other nodes is ignored ([9f63f4a](https://github.com/tom96da/incajs/commit/9f63f4a))
+- a click outside every `tabindex` node blurs the focused node ([9f63f4a](https://github.com/tom96da/incajs/commit/9f63f4a))
+
+### Fixed
+
+- with `--experimental-hmr`, the last of two saves made within 50 ms of each other is applied ([9df1cce](https://github.com/tom96da/incajs/commit/9df1cce))
+
 ## [0.0.11] - 2026-10-06
 
 ### Added

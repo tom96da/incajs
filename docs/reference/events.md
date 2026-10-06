@@ -104,13 +104,21 @@ There's no `code`, `location`, or `isComposing` yet.
 
 ## Focus
 
-A node isn't focusable until `.focus()` has been called on it at least
-once — clicking a node that's never been focused this way doesn't move
-focus there, unlike a DOM element with a `tabindex`.
+A node takes focus through its `tabindex` attribute. Any integer works,
+including a negative one. A text node and a node whose own `display` is `none`
+ignore `tabindex`.
 
-Once a node has been focused this way, it stays focusable from then on:
-clicking it moves focus there on its own, the same as a focusable DOM
-element does. `.blur()` unfocuses the node only if it is the focused one.
+A click on a node with `tabindex` focuses it, and so does `.focus()`.
+`.focus()` on any other node is ignored. A click on a plain child focuses the
+nearest ancestor with `tabindex`. A click on an area outside every such node
+blurs the focused node. `preventDefault()` in a `mousedown` handler cancels
+both the focus change and the blur.
+
+A change of `tabindex` applies at once. When the attribute is removed, or its
+value is ignored, the node leaves focus and the host fires `blur`.
+`el.tabIndex = n` sets the attribute.
+
+`.blur()` unfocuses the node when it is the focused one.
 
 A template `ref`'s own element carries `.focus()`/`.blur()` directly,
 the same as a real DOM element:
@@ -124,7 +132,7 @@ onMounted(() => input.value.focus());
 </script>
 
 <template>
-  <div ref="input" @focus="onFocused" @blur="onBlurred">...</div>
+  <div ref="input" tabindex="0" @focus="onFocused" @blur="onBlurred">...</div>
 </template>
 ```
 
