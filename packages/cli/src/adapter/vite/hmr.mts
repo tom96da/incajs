@@ -270,7 +270,12 @@ export async function hmr(
     logLevel: quiet ? "silent" : "info",
     customLogger: streamLogger(stdout, stderr, quiet),
     define: { "process.env.NODE_ENV": JSON.stringify("development") },
-    server: { middlewareMode: true, ws: false },
+    server: {
+      middlewareMode: true,
+      ws: false,
+      // Coalesces saves that land within the watcher's 50 ms per-file throttle into one change event.
+      watch: { awaitWriteFinish: { stabilityThreshold: 20, pollInterval: 10 } },
+    },
     optimizeDeps: { noDiscovery: true },
     environments: {
       client: {

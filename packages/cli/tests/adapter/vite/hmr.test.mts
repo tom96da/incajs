@@ -5,6 +5,7 @@ import { existsSync } from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Writable } from "node:stream";
+import { setTimeout } from "node:timers/promises";
 
 import { build } from "vite";
 import { ESModulesEvaluator, ModuleRunner } from "vite/module-runner";
@@ -229,6 +230,41 @@ describe("hmr", () => {
 
     expect(updates[0]!.file).toBe(vuePath);
     expect(updates[0]!.took).toBeGreaterThanOrEqual(0);
+  }, 20000);
+
+  it("applies the last of two saves 15 ms apart", async () => {
+    const { entry, vuePath, streams } = await makeApp(
+      `<script setup>\nconst msg = "first";\n</script>\n<template><div>{{ msg }}</div></template>\n`,
+    );
+
+    const errors: unknown[] = [];
+    const updates: { file: string; took: number }[] = [];
+
+    const channel = await hmr({
+      entry,
+      cwd: path.dirname(entry),
+      ...streams,
+      notify: (payload) => client.notify(payload as HotPayload),
+      reload: () => {},
+      onError: (error) => errors.push(error),
+      onUpdate: (info) => updates.push(info),
+    });
+    channels.push(channel);
+
+    const client = connectRunner(channel.dispatch);
+    await client.runner.import(entry);
+
+    await writeFile(
+      vuePath,
+      `<script setup>\nconst msg = "first";\n</script>\n<template><div>{{ msg }</div></template>\n`,
+    );
+    await setTimeout(15);
+    await writeFile(
+      vuePath,
+      `<script setup>\nconst msg = "first";\n</script>\n<template><div>fixed {{ msg }}</div></template>\n`,
+    );
+
+    await vi.waitFor(() => expect(updates.length).toBeGreaterThan(0), { timeout: 15000 });
   }, 20000);
 
   it("reloads instead of notifying when a change has no HMR boundary, quiet", async () => {
