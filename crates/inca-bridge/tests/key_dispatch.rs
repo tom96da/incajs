@@ -111,18 +111,29 @@ fn a_key_down_bubbles_from_the_focused_node_to_its_ancestor(cx: &mut TestAppCont
     );
 }
 
-/// With nothing focused, a key reaches no node in the tree — GPUI routes it
-/// to the window's own root instead, which carries no `inca` listeners.
+/// With nothing focused, a key goes to the host root, which is the event's
+/// `target`, and bubbles from there.
 #[gpui::test]
-fn a_key_down_with_nothing_focused_reaches_no_node(cx: &mut TestAppContext) {
+fn a_key_event_with_nothing_focused_targets_the_root(cx: &mut TestAppContext) {
     let (host, parent, _child) = build_key_pair();
+    let root = host.borrow().root;
+    host.borrow_mut().tree.append_child(root, parent).unwrap();
+    for event in ["keydown", "keyup"] {
+        host.borrow_mut().listeners.register(root, event, 1);
+    }
     let engine = Rc::new(Engine::new().unwrap());
     install_key_recorder(&engine);
+    engine
+        .eval::<()>(
+            "globalThis.__inca_callbacks__[1] = (e) => { globalThis.seen.push( \
+                `${e.type}:${e.currentTarget}:${e.target}:${e.eventPhase}:${e.key}`); };",
+        )
+        .unwrap();
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
     let window = cx.add_window(|_, _| KeyableRoot {
         host: Rc::clone(&host),
-        node: parent,
+        node: root,
         dispatcher,
     });
     cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
@@ -131,12 +142,22 @@ fn a_key_down_with_nothing_focused_reaches_no_node(cx: &mut TestAppContext) {
         .unwrap();
 
     cx.simulate_keystrokes(window.into(), "a");
+    cx.update_window(window.into(), |_root, window, cx| {
+        window.dispatch_event(
+            PlatformInput::KeyUp(KeyUpEvent {
+                keystroke: a_keystroke(),
+            }),
+            cx,
+        );
+    })
+    .unwrap();
+    cx.run_until_parked();
 
     assert_eq!(
         engine
             .eval::<String>("JSON.stringify(globalThis.seen)")
             .unwrap(),
-        "[]"
+        format!(r#"["keydown:{root}:{root}:2:a","keyup:{root}:{root}:2:a"]"#)
     );
 }
 

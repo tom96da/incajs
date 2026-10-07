@@ -15,6 +15,7 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - the event object has `composedPath()`
 - the event object carries `bubbles`, `cancelable`, `composed`, `defaultPrevented`, `eventPhase`, `isTrusted` and `timeStamp`
 - the `button` element has a default `tabindex` of 0, fires `click` from Enter and Space, and takes a `disabled` attribute
+- `keydown` and `keyup` carry `location`, `isComposing` and `getModifierState()`, and mouse events carry `getModifierState()`
 - `focusin` and `focusout` events, and `relatedTarget` on `focus`, `blur`, `focusin` and `focusout`
 - `el.tabIndex` sets the `tabindex` attribute ([9f63f4a](https://github.com/tom96da/incajs/commit/9f63f4a))
 
@@ -23,6 +24,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - a focused node that gets `hidden`, `inert` or `display: none`, or sits under an ancestor that does, loses focus
 - `hidden` renders as `display: none`, and an `inert` subtree receives no mouse events
 - `event.target` is the node the event started on, so a listener on an ancestor can delegate, `.self` runs only for the node itself, and `eventPhase` is 2 on that node and 3 above it
+- `keydown` and `keyup` fire on the root node when nothing is focused
+- `key` is `"Unidentified"` when the platform reports no key, and a shifted letter keeps its upper case
 - Enter and Space fire `click` on a focused `button` only
 - a node takes focus through its `tabindex` attribute, and `focus()` on other nodes is ignored ([9f63f4a](https://github.com/tom96da/incajs/commit/9f63f4a))
 - a click outside every `tabindex` node blurs the focused node ([9f63f4a](https://github.com/tom96da/incajs/commit/9f63f4a))

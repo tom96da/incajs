@@ -289,9 +289,10 @@ impl EventDispatcher {
     /// `currentTarget` is `node_id`. `target` is the deepest container under
     /// the pointer for `mousedown`, `mouseup`, `mousemove` and `wheel`, the
     /// nearest common ancestor of the press and release containers for
-    /// `click`, and the focused node for `keydown` and `keyup`. Every other
-    /// event, and any of these when no target is recorded (a dispatch made
-    /// outside input handling), uses `node_id`.
+    /// `click`, and the focused node for `keydown` and `keyup`, which the root
+    /// receives when nothing is focused. Every other event, and any of these
+    /// when no target is recorded (a dispatch made outside input handling),
+    /// uses `node_id`.
     ///
     /// A callback calling `stopImmediatePropagation()` stops the remaining
     /// callbacks *on this node*. `stopPropagation()`/`preventDefault()` are
@@ -712,6 +713,9 @@ fn set_mouse_fields(event_object: &Object, mouse: &MousePayload) -> rquickjs::Re
 fn set_key_fields(event_object: &Object, key: &KeyPayload) -> rquickjs::Result<()> {
     event_object.set("key", key.key.clone())?;
     event_object.set("repeat", key.repeat)?;
+    // gpui reports no key location or composition state.
+    event_object.set("location", 0)?;
+    event_object.set("isComposing", false)?;
     set_modifier_fields(event_object, key.modifiers)
 }
 
@@ -722,7 +726,32 @@ fn set_modifier_fields(event_object: &Object, modifiers: gpui::Modifiers) -> rqu
     event_object.set("shiftKey", modifiers.shift)?;
     event_object.set("altKey", modifiers.alt)?;
     event_object.set("metaKey", modifiers.platform)?;
+    event_object.set(
+        "getModifierState",
+        Function::new(event_object.ctx().clone(), move |name: String| {
+            modifier_state(modifiers, &name)
+        })?,
+    )?;
     Ok(())
+}
+
+/// Whether the modifier `name` is held. `Accel` is Meta on macOS and Control
+/// elsewhere. Other names return false.
+fn modifier_state(modifiers: gpui::Modifiers, name: &str) -> bool {
+    match name {
+        "Control" => modifiers.control,
+        "Shift" => modifiers.shift,
+        "Alt" => modifiers.alt,
+        "Meta" => modifiers.platform,
+        "Accel" => {
+            if cfg!(target_os = "macos") {
+                modifiers.platform
+            } else {
+                modifiers.control
+            }
+        }
+        _ => false,
+    }
 }
 
 impl EventSink for EventDispatcher {
@@ -752,7 +781,12 @@ impl EventSink for EventDispatcher {
     }
 
     fn focus_handle(&self, node_id: NodeId) -> Option<gpui::FocusHandle> {
-        self.host.borrow().focus.handle(node_id)
+        let host = self.host.borrow();
+        host.focus.handle(node_id).or_else(|| {
+            (node_id == host.root)
+                .then(|| host.focus.parked_handle())
+                .flatten()
+        })
     }
 
     fn scroll_handle(&self, node_id: NodeId) -> Option<ScrollHandle> {
@@ -808,6 +842,32 @@ mod tests {
     use super::*;
     use crate::bindings::install;
     use gpui::{TestAppContext, point, px};
+
+    #[test]
+    fn modifier_state_reports_each_held_modifier_and_no_lock() {
+        let mut mismatches = Vec::new();
+        for (name, held) in [
+            ("Control", gpui::Modifiers::control()),
+            ("Shift", gpui::Modifiers::shift()),
+            ("Alt", gpui::Modifiers::alt()),
+            ("Meta", gpui::Modifiers::command()),
+        ] {
+            for other in ["Control", "Shift", "Alt", "Meta", "CapsLock", "NumLock"] {
+                if modifier_state(held, other) != (other == name) {
+                    mismatches.push(format!("{name} held, {other} queried"));
+                }
+            }
+        }
+        let accel = if cfg!(target_os = "macos") {
+            gpui::Modifiers::command()
+        } else {
+            gpui::Modifiers::control()
+        };
+        if !modifier_state(accel, "Accel") || modifier_state(gpui::Modifiers::default(), "Accel") {
+            mismatches.push("Accel".to_string());
+        }
+        assert!(mismatches.is_empty(), "{mismatches:?}");
+    }
 
     /// Every failure the dispatcher reported, in order.
     type Reported = Rc<RefCell<Vec<EngineError>>>;

@@ -1075,8 +1075,14 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
             // dispatcher" a fact the type checker holds, not one this
             // function has to keep true by hand.
             let wired = |mask: EventMask| -> Option<E> {
+                // The root takes every key event, so one with nothing focused
+                // reaches it.
+                let keys = EventMask::KEY_DOWN | EventMask::KEY_UP;
                 dispatch
-                    .filter(|_| spec.listens.contains(mask) && !held_back(mask))
+                    .filter(|_| {
+                        (spec.listens.contains(mask) || (root && keys.contains(mask)))
+                            && !held_back(mask)
+                    })
                     .cloned()
             };
             let element = div().debug_selector(move || debug_selector(id));

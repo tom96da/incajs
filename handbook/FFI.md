@@ -164,6 +164,13 @@ and event name. Payloads and author-facing behaviour are in
   (getter and setter with ToBoolean coercion) read the flags the methods set.
   The phase constants and `srcElement` are non-enumerable data properties.
 - GPUI's `platform` modifier becomes `metaKey`. `function` is dropped.
+  `getModifierState` exists on key and mouse events and reads those four.
+  `Accel` reads `platform` on macOS and `control` elsewhere.
+- With nothing focused, the window focus rests on a handle the root container
+  tracks (`FocusRegistry::parked_handle`, mapped to no node). The root's key
+  listeners run and `target` is the root. The root wires `keydown` and
+  `keyup` even without a listener. `key` is `"Unidentified"` for an empty
+  key, and a letter with Shift held and no `key_char` is upper case.
 
 #### Events
 
@@ -176,7 +183,7 @@ and event name. Payloads and author-facing behaviour are in
 | `wheel` | mouse + `deltaX`, `deltaY`, `deltaZ`, `deltaMode` | `deltaX`/`deltaY` are GPUI's values negated. `deltaZ` is `0`. `deltaMode` is `0` or `1`. |
 | `focus`, `blur` | `relatedTarget` | Do not bubble. |
 | `focusin`, `focusout` | `relatedTarget` | `EventDispatcher::dispatch` runs the node's callbacks, then each ancestor's, with `target` the node. A focus change dispatches `blur`, `focusout`, `focus`, `focusin`. |
-| `keydown`, `keyup` | `key`, `repeat`, `ctrlKey`, `shiftKey`, `altKey`, `metaKey` | Go to the focused node and bubble to its ancestors. `keyup` has `repeat: false`. |
+| `keydown`, `keyup` | `key`, `repeat`, `location` (0), `isComposing` (false), `ctrlKey`, `shiftKey`, `altKey`, `metaKey`, `getModifierState` | Go to the focused node, or the root when none is focused, and bubble to its ancestors. `keyup` has `repeat: false`. |
 
 The mouse payload is `clientX`, `clientY`, `pageX`, `pageY`, `movementX`,
 `movementY`, `button`, `buttons`, `detail` and the four modifier flags.

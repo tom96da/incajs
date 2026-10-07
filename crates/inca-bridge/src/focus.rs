@@ -82,6 +82,9 @@ enum PendingFocus {
 pub struct FocusRegistry {
     handles: HashMap<NodeId, FocusHandle>,
     focused: Option<NodeId>,
+    // Holds the window's focus while no node does, so key events reach the
+    // root container. It maps to no node.
+    parked: Option<FocusHandle>,
     pending: VecDeque<PendingFocus>,
     pub(crate) tab_dirty: HashSet<NodeId>,
 }
@@ -194,6 +197,13 @@ impl FocusRegistry {
         explicit.or(button.then_some(0))
     }
 
+    /// The handle the root container tracks, once [`Self::apply_pending`]
+    /// has run. It holds the window's focus while no node is focused.
+    #[must_use]
+    pub fn parked_handle(&self) -> Option<FocusHandle> {
+        self.parked.clone()
+    }
+
     /// Queues that `node_id` should be focused next frame.
     pub fn request_focus(&mut self, node_id: NodeId) {
         self.pending.push_back(PendingFocus::Focus(node_id));
@@ -217,6 +227,20 @@ impl FocusRegistry {
     /// returns, once that borrow is released.
     #[must_use]
     pub fn apply_pending(
+        &mut self,
+        tree: &VirtualTree,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Vec<FocusTransition> {
+        let transitions = self.apply_requests(tree, window, cx);
+        let parked = self.parked.get_or_insert_with(|| cx.focus_handle());
+        if window.focused(cx).is_none() {
+            parked.focus(window, cx);
+        }
+        transitions
+    }
+
+    fn apply_requests(
         &mut self,
         tree: &VirtualTree,
         window: &mut Window,

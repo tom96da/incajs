@@ -646,3 +646,45 @@ fn an_ancestor_becoming_display_none_blurs_the_focused_node(cx: &mut TestAppCont
     );
     assert!(host.borrow().focus.handle(a).is_none());
 }
+
+/// Parking the window focus on the root container reports no transition,
+/// maps to no node and does not flip per frame.
+#[gpui::test]
+fn the_parked_focus_fires_no_focus_event(cx: &mut TestAppContext) {
+    let (host, _parent, _a) = build_focusable_pair();
+    let window = cx.add_window(|_, _| gpui::Empty);
+    cx.update_window(window.into(), |_, window, cx| {
+        for _ in 0..2 {
+            let host = &mut *host.borrow_mut();
+            let transitions = host.focus.apply_pending(&host.tree, window, cx);
+            assert!(transitions.is_empty());
+            assert!(window.focused(cx).is_some());
+            assert_eq!(host.focus.focused_node(window, cx), None);
+        }
+    })
+    .unwrap();
+}
+
+/// A root with `tabindex` takes focus like any node, and the parked focus
+/// leaves it alone.
+#[gpui::test]
+fn a_root_with_tabindex_still_focuses_normally(cx: &mut TestAppContext) {
+    let (host, _parent, _a) = build_focusable_pair();
+    let root = host.borrow().root;
+    {
+        let mut host = host.borrow_mut();
+        host.tree.set_attribute(root, "tabindex", "0").unwrap();
+        host.focus.mark_tab_dirty(root);
+    }
+    let window = cx.add_window(|_, _| gpui::Empty);
+    cx.update_window(window.into(), |_, window, cx| {
+        let host = &mut *host.borrow_mut();
+        assert!(host.focus.apply_pending(&host.tree, window, cx).is_empty());
+        host.focus.request_focus(root);
+        let transitions = host.focus.apply_pending(&host.tree, window, cx);
+        assert_eq!(transitions.len(), 1);
+        assert_eq!(host.focus.focused_node(window, cx), Some(root));
+        assert!(host.focus.apply_pending(&host.tree, window, cx).is_empty());
+    })
+    .unwrap();
+}

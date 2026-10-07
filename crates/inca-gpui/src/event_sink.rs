@@ -404,10 +404,18 @@ fn dom_key(keystroke: &Keystroke) -> String {
     {
         return format!("F{function}");
     }
-    keystroke
-        .key_char
-        .clone()
-        .unwrap_or_else(|| keystroke.key.clone())
+    if let Some(typed) = keystroke.key_char.as_ref().filter(|c| !c.is_empty()) {
+        return typed.clone();
+    }
+    // A shifted letter with no `key_char` (a shortcut) keeps its case.
+    let mut letter = keystroke.key.chars();
+    match (letter.next(), letter.next()) {
+        (Some(c), None) if c.is_ascii_lowercase() && keystroke.modifiers.shift => {
+            c.to_ascii_uppercase().to_string()
+        }
+        (None, _) => "Unidentified".to_string(),
+        _ => keystroke.key.clone(),
+    }
 }
 
 /// What [`crate::element`] needs from something that can dispatch a native
@@ -558,6 +566,38 @@ mod tests {
             modifiers: gpui::Modifiers::default(),
         };
         assert_eq!(dom_key(&cmd_s), "s");
+    }
+
+    #[test]
+    fn dom_key_covers_the_unidentified_and_shifted_fallbacks() {
+        let shift = gpui::Modifiers {
+            shift: true,
+            ..gpui::Modifiers::default()
+        };
+        let none = gpui::Modifiers::default();
+        // (key, key_char, modifiers, expected)
+        let cases = [
+            ("", None, none, "Unidentified"),
+            ("", Some(""), none, "Unidentified"),
+            ("s", Some(""), none, "s"),
+            ("s", None, shift, "S"),
+            ("1", None, shift, "1"),
+            ("shift", None, shift, "shift"),
+            ("s", Some("S"), shift, "S"),
+        ];
+        let mismatches: Vec<_> = cases
+            .iter()
+            .filter_map(|&(key, key_char, modifiers, expected)| {
+                let keystroke = Keystroke {
+                    key: key.to_string(),
+                    key_char: key_char.map(str::to_string),
+                    modifiers,
+                };
+                let got = dom_key(&keystroke);
+                (got != expected).then(|| format!("{key:?}/{key_char:?}: {got} != {expected}"))
+            })
+            .collect();
+        assert!(mismatches.is_empty(), "{mismatches:?}");
     }
 
     fn mouse_payload(payload: EventPayload) -> MousePayload {

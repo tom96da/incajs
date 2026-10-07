@@ -1430,6 +1430,37 @@ mod tests {
     }
 
     #[gpui::test]
+    fn key_events_with_nothing_focused_reach_the_root(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, TARGETS);
+        run_js(
+            &mut h,
+            r"
+            const root = __inca_native__.rootNodeId();
+            globalThis.__inca_callbacks__[1] = (e) => {
+                globalThis.log.push([e.type, e.currentTarget === root,
+                    e.target === root, e.eventPhase, e.key, e.location,
+                    e.isComposing, e.repeat, e.getModifierState('Shift'),
+                    e.getModifierState('Control'), e.getModifierState('Alt'),
+                    e.getModifierState('Meta'), e.getModifierState('Accel'),
+                    e.getModifierState('CapsLock')].join(':'));
+            };
+            __inca_native__.addEventListener(root, 'keydown', 1);
+            __inca_native__.addEventListener(root, 'keyup', 1);
+            __inca_native__.addEventListener(frame, 'keydown', 0);
+            ",
+        );
+
+        h.keystrokes("shift-a");
+        h.key_up("ctrl-b");
+
+        assert_eq!(
+            targets_log(&mut h),
+            "keydown:true:true:2:A:0:false:false:true:false:false:false:false:false,\
+             keyup:true:true:2:b:0:false:false:false:true:false:false:true:false"
+        );
+    }
+
+    #[gpui::test]
     fn wheel_scrolls_and_enter_leave_target_their_own_node(cx: &mut TestAppContext) {
         let mut h = Harness::load(cx, ENTRY, TARGETS);
         listen(&mut h, "frame", "wheel mouseenter mouseleave", 0);

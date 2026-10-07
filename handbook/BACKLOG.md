@@ -162,16 +162,6 @@ A fixed entry is deleted and its ID is never reused.
   dispatch boundary every `crate::bindings` function currently shares).
   Land it alongside whatever else motivates that wider change.
 
-- **B-025 `"keydown"`/`"keyup"` reach no node with nothing focused**
-  `Units: gpui,host · Size: M · Impact: Medium`
-
-  The DOM
-  falls back to `document.body` as the target; `inca` has no such
-  fallback, so a key press before anything is focused is silently
-  dropped. `key` can also stay lowercase for a shifted letter on a
-  platform whose `Keystroke::key_char` doesn't report the shifted
-  character.
-
 - **B-028 A template `ref` still resolves to a plain data object for anything beyond `.focus()`/`.blur()`**
   `Units: core · Size: M · Impact: Medium`
 
@@ -520,7 +510,17 @@ A fixed entry is deleted and its ID is never reused.
     (`third_party/zed/crates/gpui/src/platform/keystroke.rs`) carries
     only `{ modifiers, key, key_char }`, with no layout-independent
     scancode and no left/right or numpad distinction to recover either
-    from.
+    from. `location` is 0 for every key and `code` is absent. The fix
+    direction is a `gpui` platform change that reports the scancode and
+    the key location, then `code` and `location` read them.
+  - `getModifierState` supports Control, Shift, Alt, Meta and Accel.
+    `gpui`'s `Modifiers` holds four flags (plus `function`), so the lock
+    keys (`CapsLock`, `NumLock`, `ScrollLock`) and `AltGraph`, `Fn`,
+    `Hyper`, `Super` and `Symbol` return false. The fix direction is a
+    platform query added to `gpui` for the lock state.
+  - `key` for a shifted letter is upper case and for Shift+1 with no
+    `key_char` it is `"1"`. The fix direction is a keyboard layout table in
+    `inca-gpui`, or the layout's shifted character reported by `gpui`.
 
 - **B-027 No input-synthesis/state-introspection channel on the dev protocol**
   `Units: host,cli · Size: L · Impact: Low`

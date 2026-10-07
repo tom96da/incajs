@@ -149,16 +149,24 @@ The `scroll` event is not supported.
 
 ### `keydown` / `keyup`
 
-Fire on whichever node is [focused](#focus), bubbling to its ancestors —
-with nothing focused, neither reaches any node. A subset of the DOM's
-[`KeyboardEvent`](https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent)'s
-fields:
+Fire on whichever node is [focused](#focus), bubbling to its ancestors. With
+nothing focused, they fire on the root node, which is the `target`. The fields
+are a subset of the DOM's
+[`KeyboardEvent`](https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent):
 
-- `key` — DOM-named where recognized, the raw character otherwise
+- `key` — DOM-named where recognized, the typed character otherwise, and
+  `"Unidentified"` when the platform reports none
 - `repeat` — always `false` for `keyup`
+- `location` — always `0`
+- `isComposing` — always `false`
 - `ctrlKey` / `shiftKey` / `altKey` / `metaKey` — modifier keys held
+- `getModifierState(name)` — whether `"Control"`, `"Shift"`, `"Alt"`, `"Meta"`
+  or `"Accel"` is held. `"Accel"` is the virtual accelerator modifier, `Meta`
+  on macOS and `Control` elsewhere. Other names return `false`. Mouse events
+  carry it as well.
 
-There's no `code`, `location`, or `isComposing` yet.
+The fields above are the supported set. `keydown` and `keyup` are the only key
+events.
 
 ## Focus
 
