@@ -238,7 +238,7 @@ once per window. Only `mousemove` takes them. Every other event holds 0.
 - The host reads `tabindex` on `setAttribute`/`removeAttribute` (key
   compared case-insensitively), `disabled` on a button, and `hidden`,
   `inert` and `display` changes, which re-check the node's subtree. Moving a
-  node re-checks its subtree too. `createNode("button")` also queues a read.
+  node re-checks its subtree too.
   The host applies the change before the queued focus requests of that
   frame. `build_spec_with` gives an `inert` node and its subtree an empty
   listener mask. The user rules are in `docs/reference/events.md`.

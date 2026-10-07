@@ -8,10 +8,10 @@ use gpui::{
 
 use crate::tree::NodeId;
 
-/// Defines [`EventKind`] and its `ALL` slice from one variant/name list, so
-/// a variant can't be added to the enum without also landing in `ALL`.
+/// Defines [`EventKind`], its `ALL` slice and the [`EventMask`] bit constants
+/// from one list.
 macro_rules! event_kinds {
-    ($($variant:ident => $name:literal),+ $(,)?) => {
+    ($($variant:ident => $name:literal, $bit:ident),+ $(,)?) => {
         /// A native event kind `inca-gpui` can wire a node for.
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         pub enum EventKind {
@@ -29,70 +29,59 @@ macro_rules! event_kinds {
                     $(Self::$variant => $name),+
                 }
             }
+
+            /// The bit [`EventMask`] uses for this kind.
+            #[must_use]
+            pub const fn mask(self) -> EventMask {
+                EventMask(1 << self as u16)
+            }
+        }
+
+        impl EventMask {
+            $(
+                #[doc = concat!("Wired for [`EventKind::", stringify!($variant), "`].")]
+                pub const $bit: Self = EventKind::$variant.mask();
+            )+
         }
     };
 }
 
 event_kinds! {
-    Click => "click",
-    DblClick => "dblclick",
-    AuxClick => "auxclick",
-    ContextMenu => "contextmenu",
-    MouseDown => "mousedown",
-    MouseUp => "mouseup",
-    MouseMove => "mousemove",
-    Wheel => "wheel",
-    MouseEnter => "mouseenter",
-    MouseLeave => "mouseleave",
-    MouseOver => "mouseover",
-    MouseOut => "mouseout",
-    Focus => "focus",
-    Blur => "blur",
-    KeyDown => "keydown",
-    KeyUp => "keyup",
+    Click => "click", CLICK,
+    DblClick => "dblclick", DBL_CLICK,
+    AuxClick => "auxclick", AUX_CLICK,
+    ContextMenu => "contextmenu", CONTEXT_MENU,
+    MouseDown => "mousedown", MOUSE_DOWN,
+    MouseUp => "mouseup", MOUSE_UP,
+    MouseMove => "mousemove", MOUSE_MOVE,
+    Wheel => "wheel", WHEEL,
+    MouseEnter => "mouseenter", MOUSE_ENTER,
+    MouseLeave => "mouseleave", MOUSE_LEAVE,
+    MouseOver => "mouseover", MOUSE_OVER,
+    MouseOut => "mouseout", MOUSE_OUT,
+    Focus => "focus", FOCUS,
+    Blur => "blur", BLUR,
+    KeyDown => "keydown", KEY_DOWN,
+    KeyUp => "keyup", KEY_UP,
 }
 
 impl EventKind {
-    /// The bit [`EventMask`] uses for this kind.
-    #[must_use]
-    pub const fn mask(self) -> EventMask {
-        match self {
-            Self::Click => EventMask::CLICK,
-            Self::DblClick => EventMask::DBL_CLICK,
-            Self::AuxClick => EventMask::AUX_CLICK,
-            Self::ContextMenu => EventMask::CONTEXT_MENU,
-            Self::MouseDown => EventMask::MOUSE_DOWN,
-            Self::MouseUp => EventMask::MOUSE_UP,
-            Self::MouseMove => EventMask::MOUSE_MOVE,
-            Self::Wheel => EventMask::WHEEL,
-            Self::MouseEnter => EventMask::MOUSE_ENTER,
-            Self::MouseLeave => EventMask::MOUSE_LEAVE,
-            Self::MouseOver => EventMask::MOUSE_OVER,
-            Self::MouseOut => EventMask::MOUSE_OUT,
-            Self::Focus => EventMask::FOCUS,
-            Self::Blur => EventMask::BLUR,
-            Self::KeyDown => EventMask::KEY_DOWN,
-            Self::KeyUp => EventMask::KEY_UP,
-        }
-    }
-
     /// GPUI's own dispatch requires a `gpui` `ElementId` (`.id()`) to keep
-    /// state for this kind across frames.
+    /// state for this kind across frames. The hover kinds get one from the
+    /// hover tracking.
     #[must_use]
     pub const fn needs_element_id(self) -> bool {
         match self {
-            Self::Click
-            | Self::DblClick
-            | Self::AuxClick
-            | Self::MouseEnter
-            | Self::MouseLeave
-            | Self::MouseOver
-            | Self::MouseOut => true,
+            Self::Click | Self::DblClick | Self::AuxClick => true,
             Self::ContextMenu
             | Self::MouseDown
             | Self::MouseUp
             | Self::MouseMove
             | Self::Wheel
+            | Self::MouseEnter
+            | Self::MouseLeave
+            | Self::MouseOver
+            | Self::MouseOut
             | Self::Focus
             | Self::Blur
             | Self::KeyDown
@@ -108,38 +97,6 @@ pub struct EventMask(u16);
 impl EventMask {
     /// Wired for nothing.
     pub const NONE: Self = Self(0);
-    /// Wired for [`EventKind::Click`].
-    pub const CLICK: Self = Self(1 << 0);
-    /// Wired for [`EventKind::MouseDown`].
-    pub const MOUSE_DOWN: Self = Self(1 << 1);
-    /// Wired for [`EventKind::MouseUp`].
-    pub const MOUSE_UP: Self = Self(1 << 2);
-    /// Wired for [`EventKind::MouseMove`].
-    pub const MOUSE_MOVE: Self = Self(1 << 3);
-    /// Wired for [`EventKind::Wheel`].
-    pub const WHEEL: Self = Self(1 << 4);
-    /// Wired for [`EventKind::MouseEnter`].
-    pub const MOUSE_ENTER: Self = Self(1 << 5);
-    /// Wired for [`EventKind::MouseLeave`].
-    pub const MOUSE_LEAVE: Self = Self(1 << 6);
-    /// Wired for [`EventKind::Focus`].
-    pub const FOCUS: Self = Self(1 << 7);
-    /// Wired for [`EventKind::Blur`].
-    pub const BLUR: Self = Self(1 << 8);
-    /// Wired for [`EventKind::KeyDown`].
-    pub const KEY_DOWN: Self = Self(1 << 9);
-    /// Wired for [`EventKind::KeyUp`].
-    pub const KEY_UP: Self = Self(1 << 10);
-    /// Wired for [`EventKind::DblClick`].
-    pub const DBL_CLICK: Self = Self(1 << 11);
-    /// Wired for [`EventKind::ContextMenu`].
-    pub const CONTEXT_MENU: Self = Self(1 << 12);
-    /// Wired for [`EventKind::AuxClick`].
-    pub const AUX_CLICK: Self = Self(1 << 13);
-    /// Wired for [`EventKind::MouseOver`].
-    pub const MOUSE_OVER: Self = Self(1 << 14);
-    /// Wired for [`EventKind::MouseOut`].
-    pub const MOUSE_OUT: Self = Self(1 << 15);
 
     /// Whether every bit set in `other` is also set in `self`.
     #[must_use]
@@ -176,6 +133,14 @@ impl EventMask {
             .iter()
             .find(|kind| kind.name() == name)
             .map_or(Self::NONE, |kind| kind.mask())
+    }
+}
+
+impl std::ops::Not for EventMask {
+    type Output = Self;
+
+    fn not(self) -> Self {
+        Self(!self.0)
     }
 }
 
@@ -1005,25 +970,19 @@ mod tests {
     }
 
     #[test]
-    fn clicks_and_hover_need_an_element_id_today() {
+    fn clicks_need_an_element_id_today() {
         assert_eq!(
             EventMask::needing_element_id(),
-            EventMask::CLICK
-                | EventMask::DBL_CLICK
-                | EventMask::AUX_CLICK
-                | EventMask::MOUSE_ENTER
-                | EventMask::MOUSE_LEAVE
-                | EventMask::MOUSE_OVER
-                | EventMask::MOUSE_OUT
+            EventMask::CLICK | EventMask::DBL_CLICK | EventMask::AUX_CLICK
         );
         assert!(EventMask::CLICK.needs_element_id());
         assert!(EventMask::DBL_CLICK.needs_element_id());
         assert!(EventMask::AUX_CLICK.needs_element_id());
         assert!(!EventMask::CONTEXT_MENU.needs_element_id());
-        assert!(EventMask::MOUSE_ENTER.needs_element_id());
-        assert!(EventMask::MOUSE_LEAVE.needs_element_id());
-        assert!(EventMask::MOUSE_OVER.needs_element_id());
-        assert!(EventMask::MOUSE_OUT.needs_element_id());
+        assert!(!EventMask::MOUSE_ENTER.needs_element_id());
+        assert!(!EventMask::MOUSE_LEAVE.needs_element_id());
+        assert!(!EventMask::MOUSE_OVER.needs_element_id());
+        assert!(!EventMask::MOUSE_OUT.needs_element_id());
         assert!(!EventMask::MOUSE_DOWN.needs_element_id());
         assert!(!EventMask::MOUSE_UP.needs_element_id());
         assert!(!EventMask::MOUSE_MOVE.needs_element_id());

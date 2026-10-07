@@ -166,13 +166,17 @@ fn throw_tree_error(ctx: &Ctx<'_>, err: TreeError) -> rquickjs::Error {
     Exception::throw_type(ctx, &err.to_string())
 }
 
-// Queues the focus re-check a mutation needs. A change that hides or shows
-// a node re-checks its whole subtree.
-fn mark_focus_dirty(host: &mut Host, node_id: NodeId, node_only: bool, subtree: bool) {
-    if subtree {
-        host.focus.mark_subtree_dirty(&host.tree, node_id);
-    } else if node_only {
-        host.focus.mark_tab_dirty(node_id);
+// Queues a focus re-check of the node and its subtree.
+fn mark_focus_dirty(host: &mut Host, node_id: NodeId) {
+    host.focus.mark_subtree_dirty(&host.tree, node_id);
+}
+
+// Queues the focus re-check an attribute change needs.
+fn mark_focus_dirty_for(host: &mut Host, node_id: NodeId, key: &str) {
+    match key {
+        "tabindex" | "disabled" => host.focus.mark_tab_dirty(node_id),
+        "hidden" | "inert" => mark_focus_dirty(host, node_id),
+        _ => {}
     }
 }
 
@@ -229,15 +233,9 @@ fn install_tree<'js>(
                 ctx.clone(),
                 move |ctx: Ctx<'js>, tag_name: String| -> JsResult<NodeId> {
                     let mut host = host.borrow_mut();
-                    let is_button = tag_name == "button";
-                    let node_id = host
-                        .tree
+                    host.tree
                         .create_node(tag_name)
-                        .map_err(|err| throw_tree_error(&ctx, err))?;
-                    if is_button {
-                        host.focus.mark_tab_dirty(node_id);
-                    }
-                    Ok(node_id)
+                        .map_err(|err| throw_tree_error(&ctx, err))
                 },
             )?,
         )?;
@@ -258,7 +256,7 @@ fn install_tree<'js>(
                     host.tree
                         .append_child(parent_id, child_id)
                         .map_err(|err| throw_tree_error(&ctx, err))?;
-                    mark_focus_dirty(&mut host, child_id, false, true);
+                    mark_focus_dirty(&mut host, child_id);
                     Ok(())
                 },
             )?,
@@ -281,7 +279,7 @@ fn install_tree<'js>(
                     host.tree
                         .insert_before(parent_id, child_id, anchor_id.map(|JsNodeId(id)| id))
                         .map_err(|err| throw_tree_error(&ctx, err))?;
-                    mark_focus_dirty(&mut host, child_id, false, true);
+                    mark_focus_dirty(&mut host, child_id);
                     Ok(())
                 },
             )?,
@@ -321,12 +319,10 @@ fn install_tree<'js>(
                     let value = attribute_value_from_js(&ctx, &value)?;
                     let mut host = host.borrow_mut();
                     let key = canonical_attribute_key(key);
-                    let affects_focus = key == "tabindex" || key == "disabled";
-                    let hides = key == "hidden" || key == "inert";
                     host.tree
-                        .set_attribute(node_id, key, value)
+                        .set_attribute(node_id, key.clone(), value)
                         .map_err(|err| throw_tree_error(&ctx, err))?;
-                    mark_focus_dirty(&mut host, node_id, affects_focus, hides);
+                    mark_focus_dirty_for(&mut host, node_id, &key);
                     Ok(())
                 },
             )?,
@@ -345,9 +341,7 @@ fn install_tree<'js>(
                     host.tree
                         .remove_attribute(node_id, &key)
                         .map_err(|err| throw_tree_error(&ctx, err))?;
-                    let affects_focus = key == "tabindex" || key == "disabled";
-                    let hides = key == "hidden" || key == "inert";
-                    mark_focus_dirty(&mut host, node_id, affects_focus, hides);
+                    mark_focus_dirty_for(&mut host, node_id, &key);
                     Ok(())
                 },
             )?,
@@ -372,7 +366,9 @@ fn install_tree<'js>(
                     host.tree
                         .set_style(node_id, key, value)
                         .map_err(|err| throw_tree_error(&ctx, err))?;
-                    mark_focus_dirty(&mut host, node_id, false, is_display);
+                    if is_display {
+                        mark_focus_dirty(&mut host, node_id);
+                    }
                     if let Some(warning) = warning {
                         let tag = host.tree.get(node_id).map_or("", VirtualNode::tag_name);
                         (host.warn)(&format!("node {node_id} ({tag}): {warning}"));
@@ -394,7 +390,9 @@ fn install_tree<'js>(
                     host.tree
                         .remove_style(node_id, &key)
                         .map_err(|err| throw_tree_error(&ctx, err))?;
-                    mark_focus_dirty(&mut host, node_id, false, key == "display");
+                    if key == "display" {
+                        mark_focus_dirty(&mut host, node_id);
+                    }
                     Ok(())
                 },
             )?,
@@ -579,17 +577,6 @@ mod tests {
         let attrs = host.tree.get(node).unwrap().attributes();
         assert_eq!(attrs.get("tabindex"), Some(&AttributeValue::Number(1.0)));
         assert!(!attrs.contains_key("tabIndex"));
-    }
-
-    #[test]
-    fn only_creating_a_button_marks_a_node_for_a_focus_check() {
-        let (engine, host) = engine_with_bindings();
-        let button: u32 = engine.eval("__inca_native__.createNode('button')").unwrap();
-        let div: u32 = engine.eval("__inca_native__.createNode('div')").unwrap();
-
-        let dirty = &host.borrow().focus.tab_dirty;
-        assert!(dirty.contains(&button));
-        assert!(!dirty.contains(&div));
     }
 
     #[test]

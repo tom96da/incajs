@@ -991,21 +991,10 @@ pub fn debug_selector(id: NodeId) -> String {
 }
 
 /// Whether any node of `spec` listens to a mouse event that reports a target.
+/// Every kind except focus, blur and the key events is a mouse kind.
 fn listens_mouse(spec: &ElementSpec) -> bool {
-    spec.listens.intersects(
-        EventMask::CLICK
-            | EventMask::DBL_CLICK
-            | EventMask::AUX_CLICK
-            | EventMask::CONTEXT_MENU
-            | EventMask::MOUSE_DOWN
-            | EventMask::MOUSE_UP
-            | EventMask::MOUSE_MOVE
-            | EventMask::WHEEL
-            | EventMask::MOUSE_ENTER
-            | EventMask::MOUSE_LEAVE
-            | EventMask::MOUSE_OVER
-            | EventMask::MOUSE_OUT,
-    ) || spec.children.iter().any(listens_mouse)
+    let non_mouse = EventMask::FOCUS | EventMask::BLUR | EventMask::KEY_DOWN | EventMask::KEY_UP;
+    spec.listens.intersects(!non_mouse) || spec.children.iter().any(listens_mouse)
 }
 
 /// Recursively converts an [`ElementSpec`] into a real `gpui` [`AnyElement`].

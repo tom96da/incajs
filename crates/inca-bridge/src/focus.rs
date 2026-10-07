@@ -130,16 +130,6 @@ fn number_text(value: f64) -> String {
     }
 }
 
-/// The gpui `(tab_index, tab_stop)` for a web `tabindex`. gpui orders tab
-/// stops ascending, so web order 0 maps after every positive value.
-fn gpui_tab_order(index: i32) -> (isize, bool) {
-    if index > 0 {
-        (isize::try_from(index).unwrap_or(isize::MAX), true)
-    } else {
-        (isize::MAX, index == 0)
-    }
-}
-
 /// The target of a Tab press. `stops` lists every focusable node with its
 /// `tabindex` in tree order. Positive values come first in ascending order,
 /// then 0 in tree order, and negative values are outside the order. Past either
@@ -333,13 +323,8 @@ impl FocusRegistry {
         let mut transitions = Vec::new();
         for node_id in std::mem::take(&mut self.tab_dirty) {
             match Self::tab_index_of(tree, node_id) {
-                Some(index) => {
-                    let (order, stop) = gpui_tab_order(index);
-                    let handle = self
-                        .get_or_create(node_id, cx)
-                        .tab_index(order)
-                        .tab_stop(stop);
-                    self.handles.insert(node_id, handle);
+                Some(_) => {
+                    self.get_or_create(node_id, cx);
                 }
                 None => {
                     if let Some(handle) = self.handles.get(&node_id).cloned() {
@@ -657,32 +642,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn gpui_tab_order_maps_web_values() {
-        assert_eq!(gpui_tab_order(3), (3, true));
-        assert_eq!(gpui_tab_order(0), (isize::MAX, true));
-        assert_eq!(gpui_tab_order(-1), (isize::MAX, false));
-    }
-
-    #[gpui::test]
-    fn apply_pending_gives_a_handle_with_the_mapped_order(cx: &mut TestAppContext) {
-        let cx = cx.add_empty_window();
-        for (text, order, stop) in [
-            ("2", 2, true),
-            ("0", isize::MAX, true),
-            ("-1", isize::MAX, false),
-        ] {
-            let (tree, id) = tree_with("div", Some(AttributeValue::from(text)));
-            let mut registry = FocusRegistry::default();
-            registry.mark_tab_dirty(id);
-            cx.update(|window, cx| {
-                let _ = registry.apply_pending(&tree, window, cx);
-            });
-            let handle = registry.handle(id).unwrap();
-            assert_eq!((handle.tab_index, handle.tab_stop), (order, stop), "{text}");
-        }
-    }
-
     #[gpui::test]
     fn changing_tabindex_keeps_the_focused_handle(cx: &mut TestAppContext) {
         let cx = cx.add_empty_window();
@@ -701,7 +660,6 @@ mod tests {
 
         let after = registry.handle(id).unwrap();
         assert_eq!(before, after);
-        assert!(!after.tab_stop);
         assert!(transitions.is_empty());
         assert!(cx.update(|window, _| after.is_focused(window)));
     }

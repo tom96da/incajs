@@ -3,6 +3,7 @@
 
 import type { RendererOptions } from "@vue/runtime-core";
 
+import { hostElement } from "./hostElement.mts";
 import type { IncaCore } from "../rendererCore.mts";
 import type { NodeId, TagName } from "../types.mts";
 
@@ -96,26 +97,6 @@ export function createNodeOps(core: IncaCore): NodeOps {
     unlink(child);
   }
 
-  // Shared by createElement/createComment.
-  function hostElement(id: NodeId, kind: IncaElement["kind"], tag?: TagName): IncaElement {
-    let tabIndex = tag === "button" ? 0 : -1;
-    return {
-      id,
-      kind,
-      parent: null,
-      children: [],
-      focus: () => core.focus(id),
-      blur: () => core.blur(id),
-      get tabIndex() {
-        return tabIndex;
-      },
-      set tabIndex(value: number) {
-        tabIndex = Math.trunc(value);
-        core.setAttribute(id, "tabindex", tabIndex);
-      },
-    };
-  }
-
   return {
     /**
      * Allocates a new element node for `tag`. Vue's other `createElement`
@@ -126,7 +107,7 @@ export function createNodeOps(core: IncaCore): NodeOps {
      */
     createElement(tag: TagName): IncaElement {
       const id = core.createNode(tag);
-      return hostElement(id, "element", tag);
+      return hostElement(core, id, "element", tag);
     },
 
     /**
@@ -148,7 +129,7 @@ export function createNodeOps(core: IncaCore): NodeOps {
     createComment(_text: string): IncaElement {
       const id = core.createNode("div");
       core.setStyle(id, "display", "none");
-      return hostElement(id, "comment");
+      return hostElement(core, id, "comment");
     },
 
     /**
