@@ -262,7 +262,9 @@ once per window. Only `mousemove` takes them. Every other event holds 0.
 - `HostedApp` observes the window's activation. A change dispatches `blur` and
   `focusout`, or `focus` and `focusin`, to the focused node
   (`FocusTransition::window_activation`). `FocusRegistry::set_window_blurred`
-  holds back a later `blur` of that node while the window is inactive.
+  holds back a later `blur` of that node while the window is inactive. A node
+  focused while the window is inactive receives `focus` and `focusin` on
+  activation.
 - An inert scroll container records its offset in `scroll_recorder` like any
   other, and `settle_wheel` always restores it and leaves the wheel to the
   next container.

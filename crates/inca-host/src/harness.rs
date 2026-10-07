@@ -1729,6 +1729,51 @@ mod tests {
     }
 
     #[gpui::test]
+    fn focusing_in_an_inactive_window_fires_focus_when_it_activates(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, TARGETS);
+        run_js(
+            &mut h,
+            "__inca_native__.setAttribute(inner, 'tabindex', '0');",
+        );
+        listen(&mut h, "inner", "focus blur", 0);
+        h.cx.update(|window, _| window.activate_window());
+        h.settle();
+        h.cx.deactivate_window();
+        h.settle();
+
+        run_js(&mut h, "__inca_native__.focusNode(inner);");
+        let held = log(&h);
+        h.cx.update(|window, _| window.activate_window());
+        h.settle();
+
+        assert_eq!(
+            (held.as_str(), log(&h).as_str()),
+            ("", "focus@inner/inner/2")
+        );
+    }
+
+    #[gpui::test]
+    fn focusing_then_blurring_in_an_inactive_window_fires_nothing(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, TARGETS);
+        run_js(
+            &mut h,
+            "__inca_native__.setAttribute(inner, 'tabindex', '0');",
+        );
+        listen(&mut h, "inner", "focus blur", 0);
+        h.cx.update(|window, _| window.activate_window());
+        h.settle();
+        h.cx.deactivate_window();
+        h.settle();
+
+        run_js(&mut h, "__inca_native__.focusNode(inner);");
+        run_js(&mut h, "__inca_native__.blurNode(inner);");
+        h.cx.update(|window, _| window.activate_window());
+        h.settle();
+
+        assert_eq!(log(&h), "");
+    }
+
+    #[gpui::test]
     fn deactivating_the_window_with_nothing_focused_fires_nothing(cx: &mut TestAppContext) {
         let mut h = Harness::load(cx, ENTRY, TARGETS);
         listen(&mut h, "frame", "blur focusout", 0);

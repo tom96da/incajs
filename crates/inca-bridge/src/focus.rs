@@ -376,10 +376,11 @@ impl FocusRegistry {
         if focused_now == self.focused {
             return None;
         }
-        // The window's deactivation already blurred the old node.
-        let blurred = self.focused.filter(|_| !self.window_blurred);
+        let blurred = self.focused;
         self.focused = focused_now;
-        if blurred.is_none() && focused_now.is_none() {
+        // An inactive window holds the events. Its deactivation already
+        // blurred the old node and its activation focuses the new one.
+        if self.window_blurred || (blurred.is_none() && focused_now.is_none()) {
             return None;
         }
         Some(FocusTransition {

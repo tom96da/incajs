@@ -1063,16 +1063,6 @@ A fixed entry is deleted and its ID is never reused.
   starting-point node set by the mouse target and clears it when focus moves
   by another route. `tab_move` starts from it when nothing is focused.
 
-- **B-150 A focus change in an inactive window fires `focus` at once**
-  `Units: bridge · Size: S · Impact: Low`
-
-  `focusNode()`, `blurNode()` and a `tabindex` change report their `focus` and
-  `blur` events on the next frame, whether or not the window is active.
-  Browsers hold the events until the window regains focus. The fix has
-  `FocusRegistry::apply_pending` keep the transitions while
-  `window.is_window_active()` is false and the activation observer dispatch
-  them.
-
 - **B-151 `beforeinput` is unsupported**
   `Units: gpui,bridge,docs · Size: L · Impact: Low`
 
