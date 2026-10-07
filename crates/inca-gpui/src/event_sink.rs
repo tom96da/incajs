@@ -610,10 +610,16 @@ pub trait EventSink {
     /// sink fires the hover events for it at once.
     fn pointer_over(&self, node_id: NodeId, window: &mut Window, cx: &mut App);
 
-    /// Moves focus to the next (or, `backward`, previous) tab stop, or to
-    /// nothing past the last one. Called after the `keydown` of an
-    /// unprevented Tab has been dispatched.
-    fn tab_navigate(&self, backward: bool, window: &mut Window, cx: &mut App);
+    /// Reports that a mouse button was pressed. Ends a pending Space press.
+    fn pointer_pressed(&self);
+
+    /// Runs the default action of a key press (`up` false) or release once the
+    /// key's dispatch has ended, unless a listener called `preventDefault()`.
+    /// Tab and Shift+Tab move focus; Control, Alt or Meta cancel the move. On
+    /// a focused enabled button, Enter clicks it on press and Space clicks it
+    /// on release. A pending Space press ends at the next key press or mouse
+    /// press.
+    fn key_default(&self, keystroke: &gpui::Keystroke, up: bool, window: &mut Window, cx: &mut App);
 }
 
 #[cfg(test)]

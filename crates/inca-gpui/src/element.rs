@@ -30,7 +30,7 @@ use crate::tree::{AttributeValue, NodeId, VirtualNode, VirtualTree};
 
 /// What kind of element a [`VirtualNode`](crate::tree::VirtualNode) maps to.
 ///
-/// Three kinds exist, chosen by the `"text"` and `"button"` tag names.
+/// Two kinds exist, chosen by the `"text"` tag name.
 ///
 /// Text is deliberately never allowed as a bare string child mixed into a
 /// container's children — it's always its own dedicated node with a
@@ -40,12 +40,8 @@ use crate::tree::{AttributeValue, NodeId, VirtualNode, VirtualTree};
 /// would make some rendered text invisible to that addressing.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ElementTag {
-    /// Any tag name other than `"text"` and `"button"`: a generic styled box.
+    /// Any tag name other than `"text"`: a generic styled box.
     Container,
-    /// A `"button"` tag: a styled box that clicks from the keyboard (Enter
-    /// and Space) while focused. With the `disabled` attribute present, it
-    /// drops its mouse presses and clicks, and its ancestors'.
-    Button { disabled: bool },
     /// A `"text"` tag: its `"value"` attribute (missing or non-string →
     /// empty) followed by its descendants' text in child order. Descendants
     /// are not rendered as separate elements.
@@ -545,9 +541,6 @@ fn build_spec_inner(
     let is_text = node.tag_name() == "text";
     let tag = match node.tag_name() {
         "text" => ElementTag::Text(text_content(tree, root)),
-        "button" => ElementTag::Button {
-            disabled: node.attributes().contains_key("disabled"),
-        },
         _ => ElementTag::Container,
     };
 
@@ -707,9 +700,7 @@ where
     element
         .when_some(wired(EventMask::MOUSE_DOWN), |el, listening| {
             el.on_any_mouse_down(move |event, window, cx| {
-                if !press_cut(cx) {
-                    listening.dispatch(id, "mousedown", &event.into(), window, cx);
-                }
+                listening.dispatch(id, "mousedown", &event.into(), window, cx);
             })
         })
         .when_some(wired(EventMask::MOUSE_UP), |mut el, listening| {
@@ -718,9 +709,7 @@ where
             // imperative form takes "any" rather than one button.
             el.interactivity()
                 .on_any_mouse_up(move |event, window, cx| {
-                    if !press_cut(cx) {
-                        listening.dispatch(id, "mouseup", &event.into(), window, cx);
-                    }
+                    listening.dispatch(id, "mouseup", &event.into(), window, cx);
                 });
             el
         })
@@ -744,22 +733,6 @@ where
                 listening.dispatch(id, "keyup", &event.into(), window, cx);
             })
         })
-}
-
-// Set by a disabled button's press until the event ends. Other nodes skip
-// their mouse callbacks meanwhile.
-#[derive(Default)]
-struct PressCut(bool);
-
-impl Global for PressCut {}
-
-fn press_cut(cx: &App) -> bool {
-    cx.try_global::<PressCut>().is_some_and(|cut| cut.0)
-}
-
-fn cut_press(cx: &mut App) {
-    cx.default_global::<PressCut>().0 = true;
-    cx.defer(|cx| cx.default_global::<PressCut>().0 = false);
 }
 
 // The deepest container under the pointer for the mouse event being handled,
@@ -845,81 +818,6 @@ where
     })
 }
 
-// The Space press waiting for its release. Any other key press or mouse press
-// cancels it.
-#[derive(Default)]
-struct SpaceDown(Option<(gpui::WindowId, NodeId)>);
-
-impl Global for SpaceDown {}
-
-/// Wires a `button` for the keyboard clicks and, once disabled, for cutting
-/// its mouse presses and clicks, and its ancestors', from their callbacks.
-/// Other tags pass through.
-///
-/// An enabled button replaces [`wire_stateless`]'s key wiring: it dispatches
-/// `keydown`/`keyup` itself, then clicks unless a listener called
-/// `preventDefault()`. Enter clicks on press (Control, Alt and Meta cancel
-/// it) and Space on release.
-fn wire_button<Elem, E>(element: Elem, dispatch: Option<&E>, spec: &ElementSpec) -> Elem
-where
-    Elem: InteractiveElement + FluentBuilder,
-    E: EventSink + Clone + 'static,
-{
-    let (ElementTag::Button { disabled }, Some(dispatch)) = (&spec.tag, dispatch) else {
-        return element;
-    };
-    if *disabled {
-        // gpui's focus handling and click tracking keep running for the
-        // ancestors. Only their callbacks are skipped, see `press_cut`.
-        let mut element = element.on_any_mouse_down(|_, _, cx| cut_press(cx));
-        element
-            .interactivity()
-            .on_any_mouse_up(|_, _, cx| cut_press(cx));
-        return element;
-    }
-    let (id, listens) = (spec.id, spec.listens);
-    let (down, up) = (dispatch.clone(), dispatch.clone());
-    element
-        .on_key_down(move |event, window, cx| {
-            let window_id = window.window_handle().window_id();
-            cx.default_global::<SpaceDown>().0 = None;
-            if listens.contains(EventMask::KEY_DOWN) {
-                down.dispatch(id, "keydown", &event.into(), window, cx);
-            }
-            if window.default_prevented() {
-                return;
-            }
-            // A key press bubbling up from a focused descendant belongs to
-            // that descendant.
-            if !down.focus_handle(id).is_some_and(|h| h.is_focused(window)) {
-                return;
-            }
-            let modifiers = event.keystroke.modifiers;
-            match event.keystroke.key.as_str() {
-                "enter" if !(modifiers.control || modifiers.alt || modifiers.platform) => {
-                    click_by_key(&down, id, modifiers, window, cx);
-                }
-                "space" => cx.default_global::<SpaceDown>().0 = Some((window_id, id)),
-                _ => {}
-            }
-        })
-        .on_key_up(move |event, window, cx| {
-            if listens.contains(EventMask::KEY_UP) {
-                up.dispatch(id, "keyup", &event.into(), window, cx);
-            }
-            let window_id = window.window_handle().window_id();
-            if !up.focus_handle(id).is_some_and(|h| h.is_focused(window)) {
-                return;
-            }
-            if event.keystroke.key == "space"
-                && cx.default_global::<SpaceDown>().0.take() == Some((window_id, id))
-                && !window.default_prevented()
-            {
-                click_by_key(&up, id, event.keystroke.modifiers, window, cx);
-            }
-        })
-}
-
 /// Tracks `node_id`'s focus state on `element`, if it has a
 /// [`gpui::FocusHandle`] — orthogonal to [`EventMask::needs_element_id`]:
 /// `.track_focus` is an [`InteractiveElement`] method, so this applies the
@@ -966,18 +864,6 @@ fn scroll_recorder(handle: ScrollHandle, inert: bool) -> impl IntoElement {
     .size_0()
 }
 
-// The `click` a key press on `id` produces.
-fn click_by_key(
-    sink: &impl EventSink,
-    id: NodeId,
-    modifiers: gpui::Modifiers,
-    window: &mut Window,
-    cx: &mut App,
-) {
-    let payload = EventPayload::Mouse(MousePayload::keyboard_click(modifiers));
-    sink.fire(id, "click", &payload, window, cx);
-}
-
 // Zero-size child; its capture-phase handlers run before any node's own.
 fn pointer_tracker<E: EventSink + Clone + 'static>(root: NodeId, dispatch: E) -> impl IntoElement {
     canvas(
@@ -990,10 +876,11 @@ fn pointer_tracker<E: EventSink + Clone + 'static>(root: NodeId, dispatch: E) ->
                     moved.pointer_moved(event.position, cx);
                 }
             });
+            let pressed = dispatch.clone();
             let menu = dispatch.clone();
             window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
                 if phase == DispatchPhase::Capture {
-                    cx.default_global::<SpaceDown>().0 = None;
+                    pressed.pointer_pressed();
                     *cx.default_global::<MouseTarget>() = MouseTarget::default();
                     if event.button == gpui::MouseButton::Right {
                         // Runs after the press's own listeners.
@@ -1028,26 +915,26 @@ fn pointer_tracker<E: EventSink + Clone + 'static>(root: NodeId, dispatch: E) ->
 }
 
 // Runs on the root in the capture phase, before any node's key listener. The
-// move waits for the end of the key's dispatch and applies unless a listener
-// called `preventDefault()`.
-fn tab_on_capture<Elem, E>(element: Elem, dispatch: E) -> Elem
+// default action waits for the end of the key's dispatch.
+fn key_defaults<Elem, E>(element: Elem, dispatch: E) -> Elem
 where
     Elem: InteractiveElement,
     E: EventSink + Clone + 'static,
 {
-    element.capture_key_down(move |event, window, cx| {
-        let modifiers = event.keystroke.modifiers;
-        if event.keystroke.key != "tab" || modifiers.control || modifiers.alt || modifiers.platform
-        {
-            return;
-        }
-        let (dispatch, backward) = (dispatch.clone(), modifiers.shift);
-        window.defer(cx, move |window, cx| {
-            if !window.default_prevented() {
-                dispatch.tab_navigate(backward, window, cx);
-            }
-        });
-    })
+    let up = dispatch.clone();
+    element
+        .capture_key_down(move |event, window, cx| {
+            let (dispatch, keystroke) = (dispatch.clone(), event.keystroke.clone());
+            window.defer(cx, move |window, cx| {
+                dispatch.key_default(&keystroke, false, window, cx);
+            });
+        })
+        .capture_key_up(move |event, window, cx| {
+            let (dispatch, keystroke) = (up.clone(), event.keystroke.clone());
+            window.defer(cx, move |window, cx| {
+                dispatch.key_default(&keystroke, true, window, cx);
+            });
+        })
 }
 
 /// Undoes, once `gpui`'s scroll steps and the JS listeners have run, all
@@ -1149,21 +1036,8 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
 ) -> AnyElement {
     match &spec.tag {
         ElementTag::Text(content) => content.clone().into_any_element(),
-        ElementTag::Container | ElementTag::Button { .. } => {
+        ElementTag::Container => {
             let id = spec.id;
-            let button = match spec.tag {
-                ElementTag::Button { disabled } => Some(disabled),
-                _ => None,
-            };
-            // A disabled button drops presses and clicks. An enabled one
-            // takes the key events itself, see `wire_button`.
-            let held_back = |mask: EventMask| match button {
-                Some(true) => {
-                    mask.intersects(EventMask::MOUSE_DOWN | EventMask::MOUSE_UP | EventMask::CLICK)
-                }
-                Some(false) => mask.intersects(EventMask::KEY_DOWN | EventMask::KEY_UP),
-                None => false,
-            };
             // `Some(dispatch.clone())` when `mask` is both listened for and
             // there's a dispatcher to call — `None` otherwise. Threading the
             // dispatcher itself through `when_some` (rather than a `bool`
@@ -1175,10 +1049,7 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
                 // reaches it.
                 let keys = EventMask::KEY_DOWN | EventMask::KEY_UP;
                 dispatch
-                    .filter(|_| {
-                        (spec.listens.contains(mask) || (root && keys.contains(mask)))
-                            && !held_back(mask)
-                    })
+                    .filter(|_| spec.listens.contains(mask) || (root && keys.contains(mask)))
                     .cloned()
             };
             let element = div().debug_selector(move || debug_selector(id));
@@ -1192,7 +1063,7 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
             });
 
             let element = element.when_some(dispatch.filter(|_| root), |el, dispatch| {
-                wire_modifier_keys(tab_on_capture(el, dispatch.clone()), dispatch)
+                wire_modifier_keys(key_defaults(el, dispatch.clone()), dispatch)
             });
 
             // Every container of a tree with a mouse listener reports its
@@ -1203,18 +1074,16 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
             {
                 let element =
                     wire_stateless(element.id(ElementId::Integer(u64::from(id))), id, &wired);
-                let element = wire_button(element, dispatch, spec);
                 let element = wire_focus(element, dispatch, id);
                 let element = wire_scroll(element, dispatch, spec);
                 let element = wire_hover(element, dispatch.filter(|_| hover), id);
                 let element = element.when(track && !spec.inert, |el| {
                     mark_mouse_target(el, id, dispatch.cloned())
                 });
-                let element = wire_click(element, dispatch, spec, held_back(EventMask::CLICK));
+                let element = wire_click(element, dispatch, spec);
                 finish_container(element, spec, dispatch, root, track)
             } else {
                 let element = wire_stateless(element, id, &wired);
-                let element = wire_button(element, dispatch, spec);
                 let element = element.when(track && !spec.inert, |el| {
                     mark_mouse_target(el, id, dispatch.cloned())
                 });
@@ -1232,14 +1101,8 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
 
 /// Wires `click` and `dblclick` on one `on_click` listener and `auxclick` on
 /// `on_aux_click`. `dblclick` runs right after the `click` whose release
-/// counts 2. `held_back` leaves a disabled button's `click` and `dblclick`
-/// unwired. `auxclick` ignores it.
-fn wire_click<Elem, E>(
-    element: Elem,
-    dispatch: Option<&E>,
-    spec: &ElementSpec,
-    held_back: bool,
-) -> Elem
+/// counts 2.
+fn wire_click<Elem, E>(element: Elem, dispatch: Option<&E>, spec: &ElementSpec) -> Elem
 where
     Elem: StatefulInteractiveElement + FluentBuilder,
     E: EventSink + Clone + 'static,
@@ -1262,10 +1125,10 @@ where
                 aux.dispatch(id, "auxclick", &EventPayload::from(event), window, cx);
             })
         })
-        .when((clicks || double_clicks) && !held_back, |el| {
+        .when(clicks || double_clicks, |el| {
             el.on_click(move |event, window, cx| {
-                // Key clicks come from `wire_button`.
-                if event.is_keyboard() || press_cut(cx) {
+                // Key clicks come from `EventSink::key_default`.
+                if event.is_keyboard() {
                     return;
                 }
                 // Runs before this node's own mouse-up marker.
@@ -1369,7 +1232,9 @@ impl EventSink for NeverListens {
 
     fn pointer_over(&self, _node_id: NodeId, _window: &mut Window, _cx: &mut App) {}
 
-    fn tab_navigate(&self, _backward: bool, _window: &mut Window, _cx: &mut App) {}
+    fn pointer_pressed(&self) {}
+
+    fn key_default(&self, _: &gpui::Keystroke, _: bool, _: &mut Window, _: &mut App) {}
 }
 
 /// Recursively converts an [`ElementSpec`] into a real `gpui` [`AnyElement`],
@@ -1450,19 +1315,6 @@ mod tests {
         }
 
         #[test]
-        fn button_tag_is_a_button_disabled_by_the_attribute() {
-            let mut tree = VirtualTree::new();
-            let id = tree.create_node("button").unwrap();
-            let spec = |tree: &VirtualTree| build_spec(tree, id).unwrap().tag;
-            assert_eq!(spec(&tree), ElementTag::Button { disabled: false });
-
-            tree.set_attribute(id, "disabled", true).unwrap();
-            assert_eq!(spec(&tree), ElementTag::Button { disabled: true });
-            tree.remove_attribute(id, "disabled").unwrap();
-            assert_eq!(spec(&tree), ElementTag::Button { disabled: false });
-        }
-
-        #[test]
         fn the_hidden_attribute_makes_the_spec_display_none_unless_display_is_set() {
             let mut tree = VirtualTree::new();
             let id = tree.create_node("div").unwrap();
@@ -1514,15 +1366,6 @@ mod tests {
             assert_eq!(listening, 2);
             // A subtree built from the child alone still sees the inert ancestor.
             assert_eq!(masks(child), vec![EventMask::NONE]);
-        }
-
-        #[test]
-        fn a_disabled_attribute_on_another_tag_changes_nothing() {
-            let mut tree = VirtualTree::new();
-            let id = tree.create_node("div").unwrap();
-            tree.set_attribute(id, "disabled", true).unwrap();
-
-            assert_eq!(build_spec(&tree, id).unwrap().tag, ElementTag::Container);
         }
 
         #[test]
@@ -2576,7 +2419,9 @@ mod tests {
 
             fn pointer_over(&self, _: NodeId, _: &mut Window, _: &mut App) {}
 
-            fn tab_navigate(&self, _: bool, _: &mut Window, _: &mut App) {}
+            fn pointer_pressed(&self) {}
+
+            fn key_default(&self, _: &gpui::Keystroke, _: bool, _: &mut Window, _: &mut App) {}
         }
 
         struct ProbeView(VirtualTree, Probe);

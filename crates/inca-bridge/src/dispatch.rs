@@ -229,6 +229,9 @@ pub struct EventDispatcher {
     /// Whether the update being handled already reported its deepest
     /// container.
     hover_settled: Rc<Cell<bool>>,
+    /// The Space press waiting for its release: the window and the focused
+    /// button. A mouse press or another key press ends it.
+    space_down: Rc<Cell<Option<(gpui::WindowId, NodeId)>>>,
 }
 
 impl EventDispatcher {
@@ -251,6 +254,7 @@ impl EventDispatcher {
             hover_prev: Rc::new(RefCell::new(Vec::new())),
             hover_scheduled: Rc::new(Cell::new(false)),
             hover_settled: Rc::new(Cell::new(false)),
+            space_down: Rc::new(Cell::new(None)),
         }
     }
 
@@ -397,7 +401,9 @@ impl EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) {
-        let callback_ids = if event == "wheel" && self.wheel_stopped.get() {
+        let callback_ids = if (event == "wheel" && self.wheel_stopped.get())
+            || self.cut_by_disabled_button(node_id, event, cx)
+        {
             Vec::new()
         } else {
             self.host
@@ -428,6 +434,30 @@ impl EventDispatcher {
         }
 
         self.drain_jobs_and_refresh(window);
+    }
+
+    /// Whether `node_id` is a disabled button, or an ancestor of one, on the
+    /// path from the target of this `mousedown`, `mouseup` or `click` or from
+    /// its pressed target. Listeners below the button run.
+    fn cut_by_disabled_button(&self, node_id: NodeId, event: &str, cx: &App) -> bool {
+        if !matches!(event, "mousedown" | "mouseup" | "click") {
+            return false;
+        }
+        let host = self.host.borrow();
+        let disabled = |id: &NodeId| {
+            host.tree.get(*id).is_some_and(|node| {
+                node.tag_name() == "button" && node.attributes().contains_key("disabled")
+            })
+        };
+        [inca_gpui::mouse_target(cx), inca_gpui::pressed_target(cx)]
+            .into_iter()
+            .flatten()
+            .any(|start| {
+                let path = self.path_from(start);
+                path.iter()
+                    .position(disabled)
+                    .is_some_and(|cut| path[cut..].contains(&node_id))
+            })
     }
 
     /// `payload` as a listener sees it: a `related_target` that left the tree
@@ -1036,11 +1066,60 @@ impl EventSink for EventDispatcher {
         self.schedule_hover_report(window, cx);
     }
 
-    // Focus changes dispatch nothing here. The next frame reports them.
-    fn tab_navigate(&self, backward: bool, window: &mut Window, cx: &mut App) {
-        let host = self.host.borrow();
-        host.focus
-            .tab_move(&host.tree, host.root, window, cx, backward);
+    fn pointer_pressed(&self) {
+        self.space_down.set(None);
+    }
+
+    // Tab moves focus and dispatches nothing here. The next frame reports it.
+    fn key_default(
+        &self,
+        keystroke: &gpui::Keystroke,
+        up: bool,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let key = keystroke.key.as_str();
+        let modifiers = keystroke.modifiers;
+        let window_id = window.window_handle().window_id();
+        let pending = if up {
+            (key == "space").then(|| self.space_down.take()).flatten()
+        } else {
+            self.space_down.set(None);
+            None
+        };
+        if window.default_prevented() {
+            return;
+        }
+        let focused_button = || {
+            let host = self.host.borrow();
+            host.focus.focused_node(window, cx).filter(|id| {
+                host.tree.get(*id).is_some_and(|node| {
+                    node.tag_name() == "button" && !node.attributes().contains_key("disabled")
+                })
+            })
+        };
+        let click = match (key, up) {
+            ("tab", false) if !(modifiers.control || modifiers.alt || modifiers.platform) => {
+                let host = self.host.borrow();
+                host.focus
+                    .tab_move(&host.tree, host.root, window, cx, modifiers.shift);
+                None
+            }
+            ("enter", false) if !(modifiers.control || modifiers.alt || modifiers.platform) => {
+                focused_button()
+            }
+            ("space", false) => {
+                self.space_down
+                    .set(focused_button().map(|button| (window_id, button)));
+                None
+            }
+            ("space", true) => focused_button().filter(|b| pending == Some((window_id, *b))),
+            _ => None,
+        };
+        if let Some(button) = click {
+            let payload = EventPayload::Mouse(MousePayload::keyboard_click(modifiers));
+            self.fire(button, "click", &payload, window, cx);
+        }
     }
 
     fn hover_changed(&self, node_id: NodeId, hovered: bool, window: &mut Window, cx: &mut App) {

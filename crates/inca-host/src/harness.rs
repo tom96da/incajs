@@ -1125,12 +1125,53 @@ mod tests {
     }
 
     #[gpui::test]
+    fn a_pending_space_press_does_not_click_another_button(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, BUTTON);
+        run_js(
+            &mut h,
+            "globalThis.b2 = __inca_native__.createNode('button'); \
+             __inca_native__.appendChild(frame, b2);",
+        );
+        listen(&mut h, "box", "click", 0);
+        listen(&mut h, "b2", "click", 0);
+
+        h.keystrokes("space");
+        run_js(&mut h, "__inca_native__.focusNode(b2);");
+        h.key_up("space");
+
+        assert_eq!(log(&h), "");
+    }
+
+    #[gpui::test]
+    fn space_clicks_on_key_up_with_a_modifier_held(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, BUTTON);
+        listen(&mut h, "box", "click", 0);
+
+        h.keystrokes("space");
+        h.key_up("ctrl-space");
+
+        assert_eq!(log(&h), "click@box/box");
+    }
+
+    #[gpui::test]
     fn a_prevented_key_down_cancels_the_enter_click(cx: &mut TestAppContext) {
         let mut h = Harness::load(cx, ENTRY, BUTTON);
         listen(&mut h, "box", "keydown", 1);
         listen(&mut h, "box", "click", 0);
 
         h.keystrokes("enter");
+
+        assert_eq!(log(&h), "");
+    }
+
+    #[gpui::test]
+    fn an_ancestors_prevented_key_down_cancels_the_key_click(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, BUTTON);
+        listen(&mut h, "frame", "keydown", 1);
+        listen(&mut h, "box", "click", 0);
+
+        h.keystrokes("enter space");
+        h.key_up("space");
 
         assert_eq!(log(&h), "");
     }
@@ -1299,6 +1340,56 @@ mod tests {
         h.click(button);
 
         assert!(log(&h).contains("click@box/box"), "{}", log(&h));
+    }
+
+    #[gpui::test]
+    fn a_key_click_on_an_enabled_button_reaches_the_ancestor_after_a_disabled_hover(
+        cx: &mut TestAppContext,
+    ) {
+        let mut h = Harness::load(cx, ENTRY, BUTTON);
+        run_js(
+            &mut h,
+            "globalThis.b2 = __inca_native__.createNode('button'); \
+             __inca_native__.setStyle(b2, 'width', 100); \
+             __inca_native__.setStyle(b2, 'height', 50); \
+             __inca_native__.appendChild(frame, b2); \
+             __inca_native__.setAttribute(box, 'disabled', true);",
+        );
+        listen(&mut h, "frame", "click", 0);
+        let button = node(&h, "box");
+        h.hover(button);
+        run_js(&mut h, "__inca_native__.focusNode(b2);");
+
+        h.keystrokes("enter");
+
+        assert_eq!(log(&h), "click@frame/kid");
+    }
+
+    #[gpui::test]
+    fn a_press_on_a_disabled_button_released_on_an_ancestor_fires_nothing(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, BUTTON);
+        for target in ["box", "frame", "__inca_native__.rootNodeId()"] {
+            listen(&mut h, target, "mouseup click", 0);
+        }
+        run_js(
+            &mut h,
+            "__inca_native__.setAttribute(box, 'disabled', true);",
+        );
+        h.cx.simulate_event(gpui::MouseDownEvent {
+            position: point(px(10.0), px(10.0)),
+            button: gpui::MouseButton::Left,
+            click_count: 1,
+            ..Default::default()
+        });
+        h.cx.simulate_event(gpui::MouseUpEvent {
+            position: point(px(150.0), px(150.0)),
+            button: gpui::MouseButton::Left,
+            click_count: 1,
+            ..Default::default()
+        });
+        h.settle();
+
+        assert_eq!(log(&h), "");
     }
 
     #[gpui::test]

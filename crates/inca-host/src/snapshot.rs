@@ -71,7 +71,7 @@ fn node(
     let source = tree.get(spec.id)?;
     let (text, layout) = match &spec.tag {
         ElementTag::Text(content) => (Some(content.clone()), None),
-        ElementTag::Container | ElementTag::Button { .. } => (None, bounds(spec.id)),
+        ElementTag::Container => (None, bounds(spec.id)),
     };
     Some(Node {
         id: spec.id,

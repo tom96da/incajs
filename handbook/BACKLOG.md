@@ -1064,14 +1064,6 @@ A fixed entry is deleted and its ID is never reused.
   an attribute read binding to the host, `native.mts` and `rendererCore.mts`,
   and every mock of the native object gains it.
 
-- **B-137 An ancestor's `preventDefault()` misses a button's key click**
-  `Units: gpui,bridge · Size: M · Impact: Low`
-
-  The button runs its key click right after its own `keydown`/`keyup`
-  listeners. An ancestor's `preventDefault()` runs too late to cancel it. The
-  fix moves the activation to a root key listener that runs after every
-  node's listeners.
-
 - **B-140 A container with `pointer-events: none` becomes `target`**
   `Units: gpui,core · Size: M · Impact: Low`
 

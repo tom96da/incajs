@@ -177,10 +177,10 @@ and event name. Payloads and author-facing behaviour are in
 
 | Name | Payload | Notes |
 | --- | --- | --- |
-| `click` | mouse + pointer | Fires before `mouseup` on the same node. gpui runs click listeners before the node's own mouse-up listeners, so a mouse click's marker call runs inside the click closure. gpui's `on_click` serves the primary button only. The payload is `From<&ClickEvent>`: the release position and modifiers, `button` and `buttons` at 0, `detail` the release's click count, pointer source mouse. A button wires its own `keydown`/`keyup` listeners, runs the JS callbacks, then clicks. `EventSink::fire` runs the node's callbacks, then each ancestor's, with `target` the button. Its payload is `MousePayload::keyboard_click`: coordinates, `button`, `buttons` and `detail` at 0, the key event's modifiers, pointer source keyboard. A disabled button's mouse down and up set a flag until the end of the event. The `mousedown`, `mouseup` and `click` wiring of every other node skips its callbacks while the flag is set, and the button leaves its own unwired. |
+| `click` | mouse + pointer | Fires before `mouseup` on the same node. gpui runs click listeners before the node's own mouse-up listeners, so a mouse click's marker call runs inside the click closure. gpui's `on_click` serves the primary button only. The payload is `From<&ClickEvent>`: the release position and modifiers, `button` and `buttons` at 0, `detail` the release's click count, pointer source mouse. A key click comes from `EventSink::key_default`: it fires `click` through `EventSink::fire` at the focused enabled button, with `target` the button. Its payload is `MousePayload::keyboard_click`: coordinates, `button`, `buttons` and `detail` at 0, the key event's modifiers, pointer source keyboard. `EventDispatcher::dispatch` drops the callbacks of `mousedown`, `mouseup` and `click` for a node that is a disabled button or an ancestor of one on the path from the mouse target or the pressed target. Listeners below the button run. |
 | `dblclick` | mouse | Dispatched inside the same `on_click` closure right after `click` with the pointer source cleared, when the release's click count is 2. A node listening to `dblclick` alone gets the closure too (`EventMask::DBL_CLICK` needs an element id). `target` follows the `click` rule. |
-| `auxclick` | mouse + pointer | gpui's `on_aux_click` serves the other buttons. The payload is `From<&ClickEvent>` with `button` the released button. It ignores the disabled-button flag. `target` follows the `click` rule. |
-| `contextmenu` | mouse + pointer | The root tracker's capture listener for a right `MouseDownEvent` queues `window.defer`, which runs after the press's bubble. `EventSink::fire` then runs `contextmenu` at the mouse target (the root when none), so it fires whichever way `mousedown` propagated. The payload is `EventPayload::context_menu`: `button` 2, `buttons` 2, `detail` 0, pointer source mouse. It ignores the disabled-button flag. |
+| `auxclick` | mouse + pointer | gpui's `on_aux_click` serves the other buttons. The payload is `From<&ClickEvent>` with `button` the released button. `target` follows the `click` rule. |
+| `contextmenu` | mouse + pointer | The root tracker's capture listener for a right `MouseDownEvent` queues `window.defer`, which runs after the press's bubble. `EventSink::fire` then runs `contextmenu` at the mouse target (the root when none), so it fires whichever way `mousedown` propagated. The payload is `EventPayload::context_menu`: `button` 2, `buttons` 2, `detail` 0, pointer source mouse. |
 | `mousedown`, `mouseup` | mouse | `buttons` holds every button currently held. |
 | `mousemove` | mouse | `movementX`/`movementY` hold the delta of the raw move. |
 | `mouseenter`, `mouseleave` | mouse + `relatedTarget` | Do not bubble. `EventDispatcher::fire` runs only the node's own callbacks, with `target` the node. |
@@ -242,10 +242,13 @@ once per window. Only `mousemove` takes them. Every other event holds 0.
   The host applies the change before the queued focus requests of that
   frame. `build_spec_with` gives an `inert` node and its subtree an empty
   listener mask. The user rules are in `docs/reference/events.md`.
-- A capture-phase key listener on the root container reads `Tab` and
-  `Shift+Tab` before any node's listener. It defers the move until the key's
-  dispatch ended and calls `EventSink::tab_navigate` unless
-  `window.default_prevented()` is set.
+- A capture-phase `key_down` and `key_up` listener on the root container
+  defers until the key's dispatch ended, then calls `EventSink::key_default`.
+  It acts when `window.default_prevented()` is unset. `Tab` and `Shift+Tab`
+  move focus (Control, Alt and Meta cancel the move). Enter clicks a focused
+  enabled button on key down. Space records the button in `space_down` and
+  clicks on key up with any modifier. Another key down, a mouse press
+  (`EventSink::pointer_pressed`) or a Space key up clears the pending Space.
   `FocusRegistry::tab_move` collects the handled nodes in tree order and
   focuses the target, or blurs for the end of the order. `apply_pending`
   reports the transition on the next frame.
