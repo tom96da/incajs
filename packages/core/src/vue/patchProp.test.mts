@@ -1214,10 +1214,18 @@ describe("everything else", () => {
     expect(core.removeAttribute).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps a false boolean as an attribute", () => {
+  it("removes disabled when it is set to false and sets it when true", () => {
+    patchProp(el, "disabled", null, true, undefined, null);
     patchProp(el, "disabled", true, false, undefined, null);
 
-    expect(core.setAttribute).toHaveBeenCalledWith(1, "disabled", false);
+    expect(core.setAttribute).toHaveBeenCalledExactlyOnceWith(1, "disabled", true);
+    expect(core.removeAttribute).toHaveBeenCalledExactlyOnceWith(1, "disabled");
+  });
+
+  it("keeps a false boolean on any other name as an attribute", () => {
+    patchProp(el, "readonly", true, false, undefined, null);
+
+    expect(core.setAttribute).toHaveBeenCalledWith(1, "readonly", false);
     expect(core.removeAttribute).not.toHaveBeenCalled();
   });
 

@@ -35,8 +35,24 @@ delegation).
 ### `click`
 
 Fires on a `mousedown` followed by a `mouseup` on the same node, before
-the `mouseup` listeners run — or after `Enter`/`Space` while the node is
-[focused](#focus). Carries no fields of its own.
+the `mouseup` listeners run. A mouse `click` carries no fields of its own.
+
+A [focused](#focus) [`button`](./elements#button) also fires `click` from the
+keyboard. `Enter` fires it when the key goes down and again for each repeat
+while the key is held. `Space` fires it when the key goes up. `Ctrl`, `Alt`
+or `Meta` held with `Enter` cancels the click. `Shift` allows it. Only a
+button clicks from `Enter` and `Space`.
+
+A keyboard click bubbles from the button to its ancestors, with the button as
+`target`. It carries `detail`, `button`, `buttons`, `clientX` and `clientY` at
+0, and the modifier keys.
+
+A button with the `disabled` attribute is unfocusable. Its `mousedown`,
+`mouseup` and `click` end at the button: listeners on its descendants run, and
+listeners on the button and its ancestors stay silent. `mouseenter`,
+`mousemove` and `wheel` reach every listener as usual. A press on a disabled
+button moves focus as a press on any other node does. `:disabled="false"`
+removes the attribute.
 
 ### `mousedown` / `mouseup` / `mousemove`
 
@@ -114,6 +130,8 @@ nearest ancestor with `tabindex`. A click on an area outside every such node
 blurs the focused node. `preventDefault()` in a `mousedown` handler cancels
 both the focus change and the blur.
 
+A [`button`](./elements#button) has a default `tabindex` of 0.
+
 A change of `tabindex` applies at once. When the attribute is removed, or its
 value is ignored, the node leaves focus and the host fires `blur`.
 `el.tabIndex = n` sets the attribute.
@@ -156,8 +174,9 @@ function onClick(event) {
   [`stopImmediatePropagation()`](https://developer.mozilla.org/en-US/docs/Web/API/Event/stopImmediatePropagation) —
   work exactly as the DOM's.
 - `preventDefault()` — suppresses a native default action: [focus](#focus)'s
-  own click-to-focus, a focused node's `click` firing from `Enter`/`Space`,
-  or a [`wheel`](#wheel)'s scrolling.
+  own click-to-focus, a [`button`](./elements#button)'s `click` from
+  `Enter` (in `keydown`) or `Space` (in `keyup`), or a [`wheel`](#wheel)'s
+  scrolling.
 
 Every listener runs in the bubble phase; there's no way yet to listen
 during the capture phase.

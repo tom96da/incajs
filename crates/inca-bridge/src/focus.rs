@@ -125,22 +125,28 @@ impl FocusRegistry {
         self.tab_dirty.insert(node_id);
     }
 
-    /// The `tabindex` of `node_id`. A text node, and a node whose own
-    /// `display` is `none`, have none.
+    /// The `tabindex` of `node_id`. A text node, a node whose own `display`
+    /// is `none` and a `disabled` button have none. A button whose
+    /// `tabindex` is missing or unparsable has 0.
     fn tab_index_of(tree: &VirtualTree, node_id: NodeId) -> Option<i32> {
         let node = tree.get(node_id)?;
         let hidden = matches!(
             node.style_props().get("display"),
             Some(AttributeValue::String(value)) if value == "none"
         );
-        if node.tag_name() == "text" || hidden {
+        let button = node.tag_name() == "button";
+        if node.tag_name() == "text"
+            || hidden
+            || (button && node.attributes().contains_key("disabled"))
+        {
             return None;
         }
-        match node.attributes().get("tabindex")? {
-            AttributeValue::String(value) => parse_tab_index(value),
-            AttributeValue::Number(value) => parse_tab_index(&number_text(*value)),
-            AttributeValue::Bool(_) => None,
-        }
+        let explicit = match node.attributes().get("tabindex") {
+            Some(AttributeValue::String(value)) => parse_tab_index(value),
+            Some(AttributeValue::Number(value)) => parse_tab_index(&number_text(*value)),
+            Some(AttributeValue::Bool(_)) | None => None,
+        };
+        explicit.or(button.then_some(0))
     }
 
     /// Queues that `node_id` should be focused next frame.
@@ -341,6 +347,32 @@ mod tests {
         assert_eq!(FocusRegistry::tab_index_of(&tree, id), None);
         tree.set_style(id, "display", "flex").unwrap();
         assert_eq!(FocusRegistry::tab_index_of(&tree, id), Some(0));
+    }
+
+    #[test]
+    fn a_button_has_tab_index_0_unless_told_otherwise() {
+        let cases = [
+            (None, Some(0)),
+            (Some(AttributeValue::from("3")), Some(3)),
+            (Some(AttributeValue::from("-1")), Some(-1)),
+            (Some(AttributeValue::from("abc")), Some(0)),
+            (Some(AttributeValue::Bool(true)), Some(0)),
+        ];
+        for (value, want) in cases {
+            let (tree, id) = tree_with("button", value.clone());
+            assert_eq!(FocusRegistry::tab_index_of(&tree, id), want, "{value:?}");
+        }
+    }
+
+    #[test]
+    fn a_disabled_button_has_no_tab_index_but_a_disabled_div_keeps_it() {
+        for (tag, want) in [("button", None), ("div", Some(2))] {
+            let (mut tree, id) = tree_with(tag, Some(AttributeValue::from("2")));
+            tree.set_attribute(id, "disabled", true).unwrap();
+            assert_eq!(FocusRegistry::tab_index_of(&tree, id), want, "{tag}");
+            tree.remove_attribute(id, "disabled").unwrap();
+            assert_eq!(FocusRegistry::tab_index_of(&tree, id), Some(2), "{tag}");
+        }
     }
 
     #[test]

@@ -26,20 +26,6 @@ fn the_focused_node_receives_keydown_and_keyup(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn enter_fires_click_on_key_up_before_the_keyup_listeners(cx: &mut TestAppContext) {
-    let mut h = load(cx, "keys");
-
-    h.keystrokes("enter");
-    assert_eq!(text_of(&mut h, "log"), "a:focus a:keydown:Enter");
-
-    h.key_up("enter");
-    assert_eq!(
-        text_of(&mut h, "log"),
-        "a:focus a:keydown:Enter a:click a:keyup:Enter"
-    );
-}
-
-#[gpui::test]
 fn focus_moves_blur_the_old_node_and_focus_the_new_one(cx: &mut TestAppContext) {
     let mut h = load(cx, "keys");
 

@@ -112,6 +112,15 @@ describe("tabIndex", () => {
     expect(el.tabIndex).toBe(2);
     expect(core.setAttribute).toHaveBeenCalledExactlyOnceWith(el.id, "tabindex", 2);
   });
+
+  it("reads 0 for a button until a value is assigned", () => {
+    const el = nodeOps.createElement("button");
+    expect(el.tabIndex).toBe(0);
+
+    el.tabIndex = -1;
+
+    expect(el.tabIndex).toBe(-1);
+  });
 });
 
 describe("setText", () => {

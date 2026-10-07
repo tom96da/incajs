@@ -36,11 +36,12 @@ the custom renderer's output. Each node has:
 
 ### Tag vocabulary
 
-Implemented in `crates/inca-gpui/src/element.rs`. There are two kinds:
+Implemented in `crates/inca-gpui/src/element.rs`. There are three kinds:
 
 | `tag_name` | Maps to |
 | --- | --- |
 | `"text"` | Content is its `"value"` string attribute (missing/non-string → empty, never a panic) followed by its descendants' text in child order. Descendants are not rendered as separate elements. |
+| `"button"` | A styled container. The host reads its `tabindex` with a default of 0. [Events](../docs/reference/events.md#click) covers its key clicks and `disabled` presses. |
 | anything else | A generic styled container (a GPUI `div()`). |
 
 ### Style prop vocabulary
@@ -148,7 +149,7 @@ and event name. Payloads and author-facing behaviour are in
 
 | Name | Payload | Notes |
 | --- | --- | --- |
-| `click` | none | Fires before `mouseup` on the same node. |
+| `click` | none, or mouse for a key click | Fires before `mouseup` on the same node. A button wires its own `keydown`/`keyup` listeners, runs the JS callbacks, then clicks. `EventSink::activate` runs the node's callbacks, then each ancestor's, with `target` the button. The payload has `button`, `buttons`, `detail` and the coordinates at 0, plus the key event's modifiers. A disabled button's mouse down and up set a flag until the end of the event. The `mousedown`, `mouseup` and `click` wiring of every other node skips its callbacks while the flag is set, and the button leaves its own unwired. |
 | `mousedown`, `mouseup` | mouse | `buttons` holds every button currently held. |
 | `mousemove` | mouse | |
 | `mouseenter`, `mouseleave` | mouse | Do not bubble. Position and modifiers are read when hover changes. |
@@ -172,14 +173,15 @@ once per window.
 - For `wheel`, `stopPropagation()` skips the later `wheel` callbacks. The
   container still scrolls.
 - `preventDefault()` reaches only what GPUI honours: the focus change and
-  the blur of a `mousedown`, the `click` from `Enter`/`Space`, and wheel
-  scrolling.
+  the blur of a `mousedown` and wheel scrolling. For a `button`,
+  `preventDefault()` in `keydown` or `keyup` also ends the key click.
 
 #### Ordering
 
 - `focusNode`/`blurNode` queue and apply in order on the next frame.
 - The host reads `tabindex` on `setAttribute`/`removeAttribute` (key
-  compared case-insensitively) and on `display` style changes, and applies
+  compared case-insensitively), `disabled` on a button and `display` style
+  changes. `createNode("button")` also queues a read. The host applies
   the change before the queued focus requests of that frame. The user rules
   are in `docs/reference/events.md`.
 - Destroying a focused node fires no `blur`.

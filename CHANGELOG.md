@@ -12,10 +12,12 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Added
 
+- the `button` element has a default `tabindex` of 0, fires `click` from Enter and Space, and takes a `disabled` attribute
 - `el.tabIndex` sets the `tabindex` attribute ([9f63f4a](https://github.com/tom96da/incajs/commit/9f63f4a))
 
 ### Changed
 
+- Enter and Space fire `click` on a focused `button` only
 - a node takes focus through its `tabindex` attribute, and `focus()` on other nodes is ignored ([9f63f4a](https://github.com/tom96da/incajs/commit/9f63f4a))
 - a click outside every `tabindex` node blurs the focused node ([9f63f4a](https://github.com/tom96da/incajs/commit/9f63f4a))
 

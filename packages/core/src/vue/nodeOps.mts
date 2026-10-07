@@ -38,7 +38,8 @@ export interface IncaElement {
   blur(): void;
   /**
    * Assigning sets the `tabindex` attribute to the integer part of the
-   * value. Reading returns the last value assigned, or `-1`.
+   * value. Reading returns the last value assigned, or `-1` (`0` for a
+   * `button`).
    */
   tabIndex: number;
 }
@@ -96,8 +97,8 @@ export function createNodeOps(core: IncaCore): NodeOps {
   }
 
   // Shared by createElement/createComment.
-  function hostElement(id: NodeId, kind: IncaElement["kind"]): IncaElement {
-    let tabIndex = -1;
+  function hostElement(id: NodeId, kind: IncaElement["kind"], tag?: TagName): IncaElement {
+    let tabIndex = tag === "button" ? 0 : -1;
     return {
       id,
       kind,
@@ -125,7 +126,7 @@ export function createNodeOps(core: IncaCore): NodeOps {
      */
     createElement(tag: TagName): IncaElement {
       const id = core.createNode(tag);
-      return hostElement(id, "element");
+      return hostElement(id, "element", tag);
     },
 
     /**

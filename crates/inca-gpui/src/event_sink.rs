@@ -427,6 +427,16 @@ pub trait EventSink {
         cx: &mut App,
     );
 
+    /// Fires the `click` a key press on `node_id` produces, bubbling to its
+    /// ancestors. `modifiers` are the key event's.
+    fn activate(
+        &self,
+        node_id: NodeId,
+        modifiers: gpui::Modifiers,
+        window: &mut Window,
+        cx: &mut App,
+    );
+
     /// The handle to track this node's focus with, if it's focusable.
     fn focus_handle(&self, node_id: NodeId) -> Option<gpui::FocusHandle>;
 

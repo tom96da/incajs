@@ -265,9 +265,39 @@ impl EventDispatcher {
 
         let payload = self.with_held_buttons(event, payload);
         let payload = self.with_movement(&payload, event);
-        let payload = &payload;
         let event_id = self.event_id(event, cx);
+        let outcome = self.run_callbacks(node_id, node_id, event, &payload, event_id, callback_ids);
 
+        if outcome.stop_propagation {
+            if event == "wheel" {
+                self.wheel_stopped.set(true);
+                let stopped = Rc::clone(&self.wheel_stopped);
+                cx.defer(move |_| stopped.set(false));
+            } else {
+                cx.stop_propagation();
+            }
+        }
+        // Only GPUI's own defaults read this flag. For `wheel`, the scroll
+        // rollback in `inca-gpui` reads it too and restores the offsets.
+        if outcome.prevent_default {
+            window.prevent_default();
+        }
+
+        self.drain_jobs_and_refresh(window);
+    }
+
+    /// Calls `callback_ids` for one `event` with `target` as the event's
+    /// `target` and `node_id` as its `currentTarget`. Reports what the
+    /// callbacks asked for; the caller acts on it.
+    fn run_callbacks(
+        &self,
+        node_id: NodeId,
+        target: NodeId,
+        event: &str,
+        payload: &EventPayload,
+        event_id: u64,
+        callback_ids: Vec<u32>,
+    ) -> Outcome {
         let stop_propagation = Rc::new(Cell::new(false));
         let stop_immediate = Rc::new(Cell::new(false));
         let prevent_default = Rc::new(Cell::new(false));
@@ -290,6 +320,7 @@ impl EventDispatcher {
                 &prevent_default,
             );
             let event_object = event_object.and_then(|object| {
+                object.set("target", target)?;
                 object.set("eventId", event_id)?;
                 Ok(object)
             });
@@ -317,29 +348,68 @@ impl EventDispatcher {
         for failure in &failures {
             (self.reporter)(failure);
         }
+        Outcome {
+            stop_propagation: stop_propagation.get(),
+            prevent_default: prevent_default.get(),
+        }
+    }
 
-        if stop_propagation.get() {
-            if event == "wheel" {
-                self.wheel_stopped.set(true);
-                let stopped = Rc::clone(&self.wheel_stopped);
-                cx.defer(move |_| stopped.set(false));
-            } else {
-                cx.stop_propagation();
+    /// Fires the `click` a key press on `node_id` produces: `button` 0,
+    /// `buttons` 0, `detail` 0 and coordinates 0, with the key event's
+    /// `modifiers`. It runs the listeners of `node_id` and then each
+    /// ancestor's, with `target` the node pressed, until one calls
+    /// `stopPropagation()`.
+    pub fn activate(
+        &self,
+        node_id: NodeId,
+        modifiers: gpui::Modifiers,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let payload = EventPayload::Mouse(MousePayload {
+            client_x: 0.0,
+            client_y: 0.0,
+            movement_x: 0.0,
+            movement_y: 0.0,
+            button: 0,
+            buttons: 0,
+            detail: 0,
+            modifiers,
+        });
+        let event_id = self.event_id("click", cx);
+        let mut current = Some(node_id);
+        while let Some(id) = current {
+            let callback_ids = self
+                .host
+                .borrow()
+                .listeners
+                .callbacks_for(id, "click")
+                .to_vec();
+            let outcome =
+                self.run_callbacks(id, node_id, "click", &payload, event_id, callback_ids);
+            self.drain_jobs_and_refresh(window);
+            if outcome.stop_propagation {
+                break;
             }
+            current = self
+                .host
+                .borrow()
+                .tree
+                .get(id)
+                .and_then(inca_gpui::VirtualNode::parent);
         }
-        // Only GPUI's own defaults read this flag. For `wheel`, the scroll
-        // rollback in `inca-gpui` reads it too and restores the offsets.
-        if prevent_default.get() {
-            window.prevent_default();
-        }
-
-        self.drain_jobs_and_refresh(window);
     }
 
     /// [`drain_jobs_and_refresh`] with this dispatcher's engine and reporter.
     pub fn drain_jobs_and_refresh(&self, window: &mut Window) {
         drain_jobs_and_refresh(&self.engine, &self.reporter, window);
     }
+}
+
+/// What the callbacks of one dispatch asked for.
+struct Outcome {
+    stop_propagation: bool,
+    prevent_default: bool,
 }
 
 /// Builds the shared `{ type, target, currentTarget, ...payload }` object a
@@ -456,6 +526,16 @@ impl EventSink for EventDispatcher {
         cx: &mut App,
     ) {
         self.dispatch(node_id, event, payload, window, cx);
+    }
+
+    fn activate(
+        &self,
+        node_id: NodeId,
+        modifiers: gpui::Modifiers,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        self.activate(node_id, modifiers, window, cx);
     }
 
     fn focus_handle(&self, node_id: NodeId) -> Option<gpui::FocusHandle> {

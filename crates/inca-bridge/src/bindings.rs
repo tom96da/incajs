@@ -218,10 +218,16 @@ fn install_tree<'js>(
             Function::new(
                 ctx.clone(),
                 move |ctx: Ctx<'js>, tag_name: String| -> JsResult<NodeId> {
-                    host.borrow_mut()
+                    let mut host = host.borrow_mut();
+                    let is_button = tag_name == "button";
+                    let node_id = host
                         .tree
                         .create_node(tag_name)
-                        .map_err(|err| throw_tree_error(&ctx, err))
+                        .map_err(|err| throw_tree_error(&ctx, err))?;
+                    if is_button {
+                        host.focus.mark_tab_dirty(node_id);
+                    }
+                    Ok(node_id)
                 },
             )?,
         )?;
@@ -301,11 +307,11 @@ fn install_tree<'js>(
                     let value = attribute_value_from_js(&ctx, &value)?;
                     let mut host = host.borrow_mut();
                     let key = canonical_attribute_key(key);
-                    let is_tab_index = key == "tabindex";
+                    let affects_focus = key == "tabindex" || key == "disabled";
                     host.tree
                         .set_attribute(node_id, key, value)
                         .map_err(|err| throw_tree_error(&ctx, err))?;
-                    if is_tab_index {
+                    if affects_focus {
                         host.focus.mark_tab_dirty(node_id);
                     }
                     Ok(())
@@ -326,7 +332,7 @@ fn install_tree<'js>(
                     host.tree
                         .remove_attribute(node_id, &key)
                         .map_err(|err| throw_tree_error(&ctx, err))?;
-                    if key == "tabindex" {
+                    if key == "tabindex" || key == "disabled" {
                         host.focus.mark_tab_dirty(node_id);
                     }
                     Ok(())
@@ -519,7 +525,7 @@ mod tests {
     }
 
     #[test]
-    fn only_tabindex_and_display_mark_a_node_for_a_focus_check() {
+    fn only_tabindex_disabled_and_display_mark_a_node_for_a_focus_check() {
         let (engine, host) = engine_with_bindings();
         let node: u32 = engine
             .eval("globalThis.n = __inca_native__.createNode('div')")
@@ -542,6 +548,8 @@ mod tests {
             "setAttribute(n, 'tabindex', '0')",
             "setAttribute(n, 'tabIndex', 0)",
             "removeAttribute(n, 'TABINDEX')",
+            "setAttribute(n, 'disabled', true)",
+            "removeAttribute(n, 'disabled')",
             "setStyle(n, 'display', 'none')",
             "removeStyle(n, 'display')",
         ] {
@@ -557,6 +565,17 @@ mod tests {
         let attrs = host.tree.get(node).unwrap().attributes();
         assert_eq!(attrs.get("tabindex"), Some(&AttributeValue::Number(1.0)));
         assert!(!attrs.contains_key("tabIndex"));
+    }
+
+    #[test]
+    fn only_creating_a_button_marks_a_node_for_a_focus_check() {
+        let (engine, host) = engine_with_bindings();
+        let button: u32 = engine.eval("__inca_native__.createNode('button')").unwrap();
+        let div: u32 = engine.eval("__inca_native__.createNode('div')").unwrap();
+
+        let dirty = &host.borrow().focus.tab_dirty;
+        assert!(dirty.contains(&button));
+        assert!(!dirty.contains(&div));
     }
 
     #[test]

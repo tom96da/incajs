@@ -325,8 +325,7 @@ A fixed entry is deleted and its ID is never reused.
 
   `click` fires before `mouseup` on the same node. `stopPropagation()` in a
   `click` handler also stops ancestors' `mouseup`. The DOM order is `mouseup`
-  then `click`. On a focused node, Enter fires `click` before the `keyup`
-  listeners.
+  then `click`.
 
 - **B-087 Ctrl+C in `inca dev` leaves the terminal echoing arrow keys**
   `Units: cli,host · Size: S–M · Impact: Medium · Status: needs repro`
@@ -1039,12 +1038,12 @@ A fixed entry is deleted and its ID is never reused.
 - **B-127 A boolean attribute set to `false` stays set**
   `Units: core · Size: S · Impact: Low`
 
-  `patchProp` stores `false` as a boolean attribute. Vue removes an attribute
-  set to `false` for the names it lists as special boolean attributes, such as
-  `readonly` and `novalidate`, sets `disabled` and `checked` as element
-  properties, and keeps `false` as the text `"false"` for any other attribute.
-  The host reads no boolean attribute yet. The input element decides which
-  names need this.
+  `patchProp` stores `false` as a boolean attribute for every name except
+  `disabled`, which it removes. Vue removes an attribute set to `false` for
+  the names it lists as special boolean attributes, such as `readonly` and
+  `novalidate`, sets `checked` as an element property, and keeps `false` as
+  the text `"false"` for any other attribute. The host reads only `disabled`,
+  on a button. The input element decides which other names need this.
 
 - **B-129 A focused node looks like an unfocused one**
   `Units: gpui,core · Size: L · Impact: Low`
@@ -1072,10 +1071,11 @@ A fixed entry is deleted and its ID is never reused.
 - **B-133 `disabled`, `inert` and `hidden` leave a node focusable**
   `Units: bridge · Size: M · Impact: Low`
 
-  A node with one of these attributes and a `tabindex` takes focus. The fix
-  reads the three attributes in `tab_index_of` and drops the handle while one
-  is present. `disabled` applies to the elements that define it, which starts
-  with the input element (B-127).
+  A node with `inert` or `hidden` and a `tabindex` takes focus, and so does a
+  `disabled` node other than a button. The fix reads the three attributes in
+  `tab_index_of` and drops the handle while one is present. `disabled`
+  applies to the elements that define it, which adds the input element to
+  the button (B-127).
 
 - **B-134 `focus()` ignores its options and leaves the scroll offset**
   `Units: bridge,core · Size: M · Impact: Low`
@@ -1089,6 +1089,14 @@ A fixed entry is deleted and its ID is never reused.
   `Units: core,bridge · Size: M · Impact: Low`
 
   A `tabindex` set through a template prop is invisible to the getter, which
-  returns `-1` until the property is assigned. The fix adds an attribute read
-  binding to the host, `native.mts` and `rendererCore.mts`, and every mock of
-  the native object gains it.
+  returns `-1` (`0` for a button) until the property is assigned. The fix adds
+  an attribute read binding to the host, `native.mts` and `rendererCore.mts`,
+  and every mock of the native object gains it.
+
+- **B-137 An ancestor's `preventDefault()` misses a button's key click**
+  `Units: gpui,bridge · Size: M · Impact: Low`
+
+  The button runs its key click right after its own `keydown`/`keyup`
+  listeners. An ancestor's `preventDefault()` runs too late to cancel it. The
+  fix moves the activation to a root key listener that runs after every
+  node's listeners.

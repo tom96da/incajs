@@ -16,20 +16,34 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 ## Elements are just boxes
 
 Every tag other than `"text"` — `<div>`, `<span>`, `<button>`, anything —
-renders identically, as a generic styled container. The tag name itself
-has no rendering meaning; only `"text"` is special, and only because it
-renders text content: its `value` attribute followed by its descendants'
-text in child order. Descendants are not rendered as separate elements.
+renders as a generic styled container. Elements carry no default styles, so
+a `<button>` starts as the same plain box as a `<div>` and `:style` sets
+everything. Only `"text"` renders differently: its `value` attribute followed
+by its descendants' text in child order. Descendants are not rendered as
+separate elements.
+
+### `button`
+
+A `button` is a box that also takes keyboard focus and clicks from the
+keyboard.
+
+- Its `tabindex` is 0 by default, so it takes focus on its own. An explicit
+  `tabindex` overrides that, and `el.tabIndex` reads `0` until a value is
+  assigned.
+- `Enter`, `Space` and the `disabled` attribute are described under
+  [`click`](./events#click).
 
 ```vue
 <template>
-  <button :style="{ background: 0x2266ff }">Hi</button>
+  <button
+    :style="{ width: 80, height: 32, background: 0x2266ff }"
+    :disabled="saving"
+    @click="save"
+  >
+    Save
+  </button>
 </template>
 ```
-
-`<button>` here isn't a native button — it's a `<div>`-shaped box with a
-background color, and nothing makes it clickable on its own (bind
-`@click`, same as any other element).
 
 ## Recognized style keys
 

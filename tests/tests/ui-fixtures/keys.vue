@@ -21,7 +21,6 @@ onMounted(() => a.value.focus());
       :style="{ width: 100, height: 40 }"
       @keydown="log += `a:${$event.type}:${$event.key} `"
       @keyup="log += `a:${$event.type}:${$event.key} `"
-      @click="log += 'a:click '"
       @focus="log += 'a:focus '"
       @blur="log += 'a:blur '"
     />
