@@ -26,7 +26,7 @@ use gpui::{
 };
 
 use crate::event_sink::{EventMask, EventPayload, EventSink, MousePayload};
-use crate::tree::{AttributeValue, NodeId, VirtualTree};
+use crate::tree::{AttributeValue, NodeId, VirtualNode, VirtualTree};
 
 /// What kind of element a [`VirtualNode`](crate::tree::VirtualNode) maps to.
 ///
@@ -177,6 +177,9 @@ pub struct ElementSpec {
     pub style: StyleSpec,
     /// Every kind of event something is listening for on this node.
     pub listens: EventMask,
+    /// The node or an ancestor has the `inert` attribute. The node reports
+    /// no mouse target and listens for nothing.
+    pub inert: bool,
     pub children: Vec<ElementSpec>,
 }
 
@@ -508,7 +511,36 @@ pub fn build_spec_with(
     root: NodeId,
     listens: &dyn Fn(NodeId) -> EventMask,
 ) -> Option<ElementSpec> {
+    let mut inert = false;
+    let mut cursor = tree.get(root)?.parent();
+    while let Some(ancestor) = cursor.and_then(|id| tree.get(id)) {
+        inert |= ancestor.attributes().contains_key("inert");
+        cursor = ancestor.parent();
+    }
+    build_spec_inner(tree, root, listens, inert)
+}
+
+/// Whether the `hidden` attribute hides `node`: it is present in the Hidden
+/// state (any value except `until-found`) and the node sets no `display`.
+#[must_use]
+pub fn hidden_by_attribute(node: &VirtualNode) -> bool {
+    let until_found = matches!(
+        node.attributes().get("hidden"),
+        Some(AttributeValue::String(value)) if value.eq_ignore_ascii_case("until-found")
+    );
+    node.attributes().contains_key("hidden")
+        && !until_found
+        && !node.style_props().contains_key("display")
+}
+
+fn build_spec_inner(
+    tree: &VirtualTree,
+    root: NodeId,
+    listens: &dyn Fn(NodeId) -> EventMask,
+    inert_above: bool,
+) -> Option<ElementSpec> {
     let node = tree.get(root)?;
+    let inert = inert_above || node.attributes().contains_key("inert");
 
     let is_text = node.tag_name() == "text";
     let tag = match node.tag_name() {
@@ -519,13 +551,16 @@ pub fn build_spec_with(
         _ => ElementTag::Container,
     };
 
-    let style = style_spec_from_props(node.style_props());
+    let mut style = style_spec_from_props(node.style_props());
+    if hidden_by_attribute(node) {
+        style.display = Some(DisplaySpec::None);
+    }
     let children = if is_text {
         Vec::new()
     } else {
         node.children()
             .iter()
-            .filter_map(|&child_id| build_spec_with(tree, child_id, listens))
+            .filter_map(|&child_id| build_spec_inner(tree, child_id, listens, inert))
             .collect()
     };
 
@@ -533,7 +568,12 @@ pub fn build_spec_with(
         id: root,
         tag,
         style,
-        listens: listens(root),
+        listens: if inert {
+            EventMask::NONE
+        } else {
+            listens(root)
+        },
+        inert,
         children,
     })
 }
@@ -1081,7 +1121,7 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
                         })
                     },
                 );
-                let element = element.when(track, |el| mark_mouse_target(el, id));
+                let element = element.when(track && !spec.inert, |el| mark_mouse_target(el, id));
                 match wired(EventMask::CLICK) {
                     Some(listening) => finish_container(
                         element.on_click(move |event, window, cx| {
@@ -1102,7 +1142,7 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
             } else {
                 let element = wire_stateless(element, id, &wired);
                 let element = wire_button(element, dispatch, spec);
-                let element = element.when(track, |el| mark_mouse_target(el, id));
+                let element = element.when(track && !spec.inert, |el| mark_mouse_target(el, id));
                 finish_container(
                     wire_focus(element, dispatch, id),
                     spec,
@@ -1273,6 +1313,60 @@ mod tests {
             assert_eq!(spec(&tree), ElementTag::Button { disabled: true });
             tree.remove_attribute(id, "disabled").unwrap();
             assert_eq!(spec(&tree), ElementTag::Button { disabled: false });
+        }
+
+        #[test]
+        fn the_hidden_attribute_makes_the_spec_display_none_unless_display_is_set() {
+            let mut tree = VirtualTree::new();
+            let id = tree.create_node("div").unwrap();
+            let display = |tree: &VirtualTree| build_spec(tree, id).unwrap().style.display;
+            assert_eq!(display(&tree), None);
+            for (value, want) in [
+                ("", Some(DisplaySpec::None)),
+                ("hidden", Some(DisplaySpec::None)),
+                ("until-found", None),
+                ("UNTIL-FOUND", None),
+            ] {
+                tree.set_attribute(id, "hidden", value).unwrap();
+                assert_eq!(display(&tree), want, "{value:?}");
+            }
+            tree.set_attribute(id, "hidden", true).unwrap();
+            assert_eq!(display(&tree), Some(DisplaySpec::None));
+            tree.set_style(id, "display", "flex").unwrap();
+            assert_eq!(display(&tree), Some(DisplaySpec::Flex));
+            tree.remove_style(id, "display").unwrap();
+            tree.remove_attribute(id, "hidden").unwrap();
+            assert_eq!(display(&tree), None);
+        }
+
+        #[test]
+        fn an_inert_node_and_its_subtree_listen_for_nothing() {
+            let mut tree = VirtualTree::new();
+            let [outer, inert, child, sibling] =
+                ["div"; 4].map(|tag| tree.create_node(tag).unwrap());
+            tree.append_child(outer, inert).unwrap();
+            tree.append_child(inert, child).unwrap();
+            tree.append_child(outer, sibling).unwrap();
+            tree.set_attribute(inert, "inert", true).unwrap();
+            let all = |_: NodeId| EventMask::CLICK;
+            let masks = |root| {
+                let spec = build_spec_with(&tree, root, &all).unwrap();
+                let mut seen = vec![spec.listens];
+                let mut stack = spec.children;
+                while let Some(spec) = stack.pop() {
+                    seen.push(spec.listens);
+                    stack.extend(spec.children);
+                }
+                seen
+            };
+            // outer and sibling listen; inert and child do not.
+            let listening = masks(outer)
+                .iter()
+                .filter(|m| **m == EventMask::CLICK)
+                .count();
+            assert_eq!(listening, 2);
+            // A subtree built from the child alone still sees the inert ancestor.
+            assert_eq!(masks(child), vec![EventMask::NONE]);
         }
 
         #[test]
@@ -2433,6 +2527,7 @@ mod tests {
                 tag: ElementTag::Container,
                 style: StyleSpec::default(),
                 listens,
+                inert: false,
                 children: Vec::new(),
             };
             let mut parent = spec(EventMask::MOUSE_ENTER | EventMask::FOCUS);

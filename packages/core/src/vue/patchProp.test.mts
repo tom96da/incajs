@@ -1214,12 +1214,16 @@ describe("everything else", () => {
     expect(core.removeAttribute).toHaveBeenCalledTimes(1);
   });
 
-  it("removes disabled when it is set to false and sets it when true", () => {
-    patchProp(el, "disabled", null, true, undefined, null);
-    patchProp(el, "disabled", true, false, undefined, null);
+  it("removes disabled, hidden and inert when set to false and sets them when true", () => {
+    for (const name of ["disabled", "hidden", "inert"]) {
+      vi.mocked(core.setAttribute).mockClear();
+      vi.mocked(core.removeAttribute).mockClear();
+      patchProp(el, name, null, true, undefined, null);
+      patchProp(el, name, true, false, undefined, null);
 
-    expect(core.setAttribute).toHaveBeenCalledExactlyOnceWith(1, "disabled", true);
-    expect(core.removeAttribute).toHaveBeenCalledExactlyOnceWith(1, "disabled");
+      expect(core.setAttribute).toHaveBeenCalledExactlyOnceWith(1, name, true);
+      expect(core.removeAttribute).toHaveBeenCalledExactlyOnceWith(1, name);
+    }
   });
 
   it("keeps a false boolean on any other name as an attribute", () => {

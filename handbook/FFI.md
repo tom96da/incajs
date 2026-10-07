@@ -201,10 +201,12 @@ once per window.
 
 - `focusNode`/`blurNode` queue and apply in order on the next frame.
 - The host reads `tabindex` on `setAttribute`/`removeAttribute` (key
-  compared case-insensitively), `disabled` on a button and `display` style
-  changes. `createNode("button")` also queues a read. The host applies
-  the change before the queued focus requests of that frame. The user rules
-  are in `docs/reference/events.md`.
+  compared case-insensitively), `disabled` on a button, and `hidden`,
+  `inert` and `display` changes, which re-check the node's subtree. Moving a
+  node re-checks its subtree too. `createNode("button")` also queues a read.
+  The host applies the change before the queued focus requests of that
+  frame. `build_spec_with` gives an `inert` node and its subtree an empty
+  listener mask. The user rules are in `docs/reference/events.md`.
 - Destroying a focused node fires no `blur`.
 - All dispatches from one raw event share one movement value.
 

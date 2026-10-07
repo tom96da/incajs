@@ -237,6 +237,9 @@ function patchEvent(
   }
 }
 
+// Props the host reads by presence.
+const BOOLEAN_PRESENCE = new Set(["disabled", "hidden", "inert"]);
+
 /**
  * {@link RendererOptions.patchProp} — applies one changed `v-bind`/
  * attribute/event prop to a host element.
@@ -281,10 +284,10 @@ function patchEvent(
  * ### Other props
  *
  * A string, number or boolean `nextValue` goes to `core.setAttribute` as it
- * is. A `disabled` set to `false` goes to `core.removeAttribute`, as does a
- * `null` or `undefined` `nextValue`, which includes a prop that is absent
- * from the new vnode. Any other value
- * (an object, array, function or symbol) goes to `core.setAttribute` as
+ * is. A `disabled`, `hidden` or `inert` set to `false` goes to
+ * `core.removeAttribute`, as does a `null` or `undefined` `nextValue`, which
+ * includes a prop that is absent from the new vnode. Any other value (an
+ * object, array, function or symbol) goes to `core.setAttribute` as
  * `String(nextValue)`. An `onUpdate:` key is a component event and sets
  * nothing.
  *
@@ -305,7 +308,7 @@ export function createPatchProp(
       patchStyle(core, el, nextValue);
     } else if (isOn(key)) {
       patchEvent(core, el, key, nextValue, parentComponent ?? null);
-    } else if (key === "disabled" && nextValue === false) {
+    } else if (BOOLEAN_PRESENCE.has(key) && nextValue === false) {
       core.removeAttribute(el.id, key);
     } else if (
       typeof nextValue === "string" ||

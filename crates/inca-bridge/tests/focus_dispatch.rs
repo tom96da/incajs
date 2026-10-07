@@ -596,3 +596,53 @@ fn focus_changes_fire_four_events_with_related_targets(cx: &mut TestAppContext) 
     }
     assert!(mismatches.is_empty(), "{mismatches:#?}");
 }
+
+/// `setStyle` on an ancestor re-checks the focused node.
+#[gpui::test]
+fn an_ancestor_becoming_display_none_blurs_the_focused_node(cx: &mut TestAppContext) {
+    let (host, parent, a) = build_focusable_pair();
+    for event in ["blur", "focusout"] {
+        host.borrow_mut().listeners.register(a, event, 0);
+    }
+    let engine = Rc::new(Engine::new().unwrap());
+    engine
+        .eval::<()>(
+            "globalThis.seen = []; \
+             globalThis.__inca_callbacks__ = { 0: (e) => { globalThis.seen.push( \
+             `${e.type}:${e.relatedTarget}`); } };",
+        )
+        .unwrap();
+    engine
+        .with(|ctx| inca_bridge::bindings::install(&ctx, &host))
+        .unwrap();
+    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
+    let window = cx.add_window(|_, _| FocusableRoot {
+        host: Rc::clone(&host),
+        node: parent,
+        dispatcher,
+    });
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    cx.update_window(window.into(), |_, window, _cx| window.activate_window())
+        .unwrap();
+    cx.update_window(window.into(), |_, window, cx| {
+        host.borrow_mut().focus.request_focus(a);
+        window.draw(cx).clear(cx);
+    })
+    .unwrap();
+
+    engine
+        .eval::<()>(&format!(
+            "seen = []; __inca_native__.setStyle({parent}, 'display', 'none');"
+        ))
+        .unwrap();
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    cx.run_until_parked();
+
+    assert_eq!(
+        engine.eval::<String>("seen.join(' ')").unwrap(),
+        "blur:null focusout:null"
+    );
+    assert!(host.borrow().focus.handle(a).is_none());
+}

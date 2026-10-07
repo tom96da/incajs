@@ -20,6 +20,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Changed
 
+- a focused node that gets `hidden`, `inert` or `display: none`, or sits under an ancestor that does, loses focus
+- `hidden` renders as `display: none`, and an `inert` subtree receives no mouse events
 - `event.target` is the node the event started on, so a listener on an ancestor can delegate, `.self` runs only for the node itself, and `eventPhase` is 2 on that node and 3 above it
 - Enter and Space fire `click` on a focused `button` only
 - a node takes focus through its `tabindex` attribute, and `focus()` on other nodes is ignored ([9f63f4a](https://github.com/tom96da/incajs/commit/9f63f4a))

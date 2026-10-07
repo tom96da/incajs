@@ -24,7 +24,9 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use gpui::{App, FocusHandle, Window};
 
-use inca_gpui::{AttributeValue, EventPayload, EventSink, NodeId, VirtualTree};
+use inca_gpui::{
+    AttributeValue, EventPayload, EventSink, NodeId, VirtualTree, hidden_by_attribute,
+};
 
 /// What changed since [`FocusRegistry::apply_pending`] was last called.
 #[derive(Debug, Clone, Copy, Default)]
@@ -143,15 +145,40 @@ impl FocusRegistry {
         self.tab_dirty.insert(node_id);
     }
 
-    /// The `tabindex` of `node_id`. A text node, a node whose own `display`
-    /// is `none` and a `disabled` button have none. A button whose
-    /// `tabindex` is missing or unparsable has 0.
+    /// Like [`Self::mark_tab_dirty`] for `node_id` and its descendants that
+    /// have, or could take, a handle.
+    pub fn mark_subtree_dirty(&mut self, tree: &VirtualTree, node_id: NodeId) {
+        let mut stack = vec![node_id];
+        while let Some(id) = stack.pop() {
+            let Some(node) = tree.get(id) else { continue };
+            if self.handles.contains_key(&id)
+                || node.tag_name() == "button"
+                || node.attributes().contains_key("tabindex")
+            {
+                self.tab_dirty.insert(id);
+            }
+            stack.extend(node.children());
+        }
+    }
+
+    /// The `tabindex` of `node_id`. A text node, a node that has an ancestor
+    /// (or itself) with `display: none`, `inert` or a hiding `hidden`, and a
+    /// `disabled` button have none. A button whose `tabindex` is missing or
+    /// unparsable has 0.
     fn tab_index_of(tree: &VirtualTree, node_id: NodeId) -> Option<i32> {
         let node = tree.get(node_id)?;
-        let hidden = matches!(
-            node.style_props().get("display"),
-            Some(AttributeValue::String(value)) if value == "none"
-        );
+        let mut hidden = false;
+        let mut cursor = Some(node_id);
+        while let Some(ancestor) = cursor.and_then(|id| tree.get(id)) {
+            let attrs = ancestor.attributes();
+            hidden |= hidden_by_attribute(ancestor)
+                || attrs.contains_key("inert")
+                || matches!(
+                    ancestor.style_props().get("display"),
+                    Some(AttributeValue::String(value)) if value == "none"
+                );
+            cursor = ancestor.parent();
+        }
         let button = node.tag_name() == "button";
         if node.tag_name() == "text"
             || hidden
@@ -365,6 +392,64 @@ mod tests {
         assert_eq!(FocusRegistry::tab_index_of(&tree, id), None);
         tree.set_style(id, "display", "flex").unwrap();
         assert_eq!(FocusRegistry::tab_index_of(&tree, id), Some(0));
+    }
+
+    #[test]
+    fn a_node_under_display_none_hidden_or_inert_has_no_tab_index() {
+        let mut mismatches = Vec::new();
+        for hide in ["display", "hidden", "inert"] {
+            let (mut tree, child) = tree_with("div", Some(AttributeValue::from("0")));
+            let parent = tree.create_node("div").unwrap();
+            tree.append_child(parent, child).unwrap();
+            for (target, name) in [(child, "self"), (parent, "ancestor")] {
+                if hide == "display" {
+                    tree.set_style(target, "display", "none").unwrap();
+                } else {
+                    tree.set_attribute(target, hide, true).unwrap();
+                }
+                if FocusRegistry::tab_index_of(&tree, child).is_some() {
+                    mismatches.push(format!("{hide} on {name} keeps the tab index"));
+                }
+                if hide == "display" {
+                    tree.remove_style(target, "display").unwrap();
+                } else {
+                    tree.remove_attribute(target, hide).unwrap();
+                }
+                if FocusRegistry::tab_index_of(&tree, child) != Some(0) {
+                    mismatches.push(format!("removing {hide} on {name} loses the tab index"));
+                }
+            }
+        }
+        assert!(mismatches.is_empty(), "{mismatches:#?}");
+    }
+
+    #[test]
+    fn hidden_with_an_own_display_or_until_found_keeps_the_tab_index() {
+        let (mut tree, id) = tree_with("div", Some(AttributeValue::from("0")));
+        tree.set_attribute(id, "hidden", "").unwrap();
+        assert_eq!(FocusRegistry::tab_index_of(&tree, id), None);
+        tree.set_style(id, "display", "flex").unwrap();
+        assert_eq!(FocusRegistry::tab_index_of(&tree, id), Some(0));
+        tree.remove_style(id, "display").unwrap();
+        tree.set_attribute(id, "hidden", "until-found").unwrap();
+        assert_eq!(FocusRegistry::tab_index_of(&tree, id), Some(0));
+    }
+
+    #[gpui::test]
+    fn mark_subtree_dirty_queues_nodes_that_can_hold_focus(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (mut tree, focusable) = tree_with("div", Some(AttributeValue::from("0")));
+        let parent = tree.create_node("div").unwrap();
+        let plain = tree.create_node("div").unwrap();
+        let button = tree.create_node("button").unwrap();
+        let held = tree.create_node("div").unwrap();
+        for child in [focusable, plain, button, held] {
+            tree.append_child(parent, child).unwrap();
+        }
+        let mut registry = FocusRegistry::default();
+        cx.update(|_, cx| registry.get_or_create(held, cx));
+        registry.mark_subtree_dirty(&tree, parent);
+        assert_eq!(registry.tab_dirty, HashSet::from([focusable, button, held]));
     }
 
     #[test]

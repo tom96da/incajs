@@ -1030,6 +1030,49 @@ fn bubbled_mousemove_gives_every_listener_the_same_movement(cx: &mut TestAppCont
     assert_eq!((seen[3].1, seen[3].2), (20.0, -5.0));
 }
 
+/// An inert child never becomes the target, so the listening parent does.
+#[gpui::test]
+fn an_inert_child_is_never_the_event_target(cx: &mut TestAppContext) {
+    let (host, parent) = build_tree_listening_for("mousemove");
+    {
+        let mut host = host.borrow_mut();
+        let child = host.tree.create_node("div").unwrap();
+        host.tree.set_style(child, "width", 100.0).unwrap();
+        host.tree.set_style(child, "height", 100.0).unwrap();
+        host.tree.set_attribute(child, "inert", true).unwrap();
+        host.tree.append_child(parent, child).unwrap();
+        host.listeners.register(child, "mousemove", 0);
+    }
+    let engine = Rc::new(Engine::new().unwrap());
+    engine
+        .eval::<()>(
+            "globalThis.seen = []; \
+             globalThis.__inca_callbacks__ = { 0: (e) => { \
+                 globalThis.seen.push(e.target); } };",
+        )
+        .unwrap();
+    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
+    let window = cx.add_window(|_, _| ClickableRoot {
+        host: Rc::clone(&host),
+        node: parent,
+        dispatcher,
+    });
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    let mut cx = VisualTestContext::from_window(window.into(), cx);
+
+    cx.simulate_mouse_move(
+        point(px(10.0), px(10.0)),
+        None::<MouseButton>,
+        Modifiers::none(),
+    );
+    cx.run_until_parked();
+
+    let seen: Vec<u32> =
+        serde_json::from_str(&engine.eval::<String>("JSON.stringify(seen)").unwrap()).unwrap();
+    assert_eq!(seen, vec![parent]);
+}
+
 /// A pointer move from one sibling into the next gives the first sibling's
 /// `mouseleave` and the second's `mousemove` the same movement.
 #[gpui::test]

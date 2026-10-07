@@ -166,6 +166,16 @@ fn throw_tree_error(ctx: &Ctx<'_>, err: TreeError) -> rquickjs::Error {
     Exception::throw_type(ctx, &err.to_string())
 }
 
+// Queues the focus re-check a mutation needs. A change that hides or shows
+// a node re-checks its whole subtree.
+fn mark_focus_dirty(host: &mut Host, node_id: NodeId, node_only: bool, subtree: bool) {
+    if subtree {
+        host.focus.mark_subtree_dirty(&host.tree, node_id);
+    } else if node_only {
+        host.focus.mark_tab_dirty(node_id);
+    }
+}
+
 // Attribute names are case-insensitive, so `tabIndex` is `tabindex`.
 fn canonical_attribute_key(key: String) -> String {
     if key.eq_ignore_ascii_case("tabindex") {
@@ -247,7 +257,9 @@ fn install_tree<'js>(
                     refuse_root(&ctx, &host, child_id, "moved")?;
                     host.tree
                         .append_child(parent_id, child_id)
-                        .map_err(|err| throw_tree_error(&ctx, err))
+                        .map_err(|err| throw_tree_error(&ctx, err))?;
+                    mark_focus_dirty(&mut host, child_id, false, true);
+                    Ok(())
                 },
             )?,
         )?;
@@ -268,7 +280,9 @@ fn install_tree<'js>(
                     refuse_root(&ctx, &host, child_id, "moved")?;
                     host.tree
                         .insert_before(parent_id, child_id, anchor_id.map(|JsNodeId(id)| id))
-                        .map_err(|err| throw_tree_error(&ctx, err))
+                        .map_err(|err| throw_tree_error(&ctx, err))?;
+                    mark_focus_dirty(&mut host, child_id, false, true);
+                    Ok(())
                 },
             )?,
         )?;
@@ -308,12 +322,11 @@ fn install_tree<'js>(
                     let mut host = host.borrow_mut();
                     let key = canonical_attribute_key(key);
                     let affects_focus = key == "tabindex" || key == "disabled";
+                    let hides = key == "hidden" || key == "inert";
                     host.tree
                         .set_attribute(node_id, key, value)
                         .map_err(|err| throw_tree_error(&ctx, err))?;
-                    if affects_focus {
-                        host.focus.mark_tab_dirty(node_id);
-                    }
+                    mark_focus_dirty(&mut host, node_id, affects_focus, hides);
                     Ok(())
                 },
             )?,
@@ -332,9 +345,9 @@ fn install_tree<'js>(
                     host.tree
                         .remove_attribute(node_id, &key)
                         .map_err(|err| throw_tree_error(&ctx, err))?;
-                    if key == "tabindex" || key == "disabled" {
-                        host.focus.mark_tab_dirty(node_id);
-                    }
+                    let affects_focus = key == "tabindex" || key == "disabled";
+                    let hides = key == "hidden" || key == "inert";
+                    mark_focus_dirty(&mut host, node_id, affects_focus, hides);
                     Ok(())
                 },
             )?,
@@ -359,9 +372,7 @@ fn install_tree<'js>(
                     host.tree
                         .set_style(node_id, key, value)
                         .map_err(|err| throw_tree_error(&ctx, err))?;
-                    if is_display {
-                        host.focus.mark_tab_dirty(node_id);
-                    }
+                    mark_focus_dirty(&mut host, node_id, false, is_display);
                     if let Some(warning) = warning {
                         let tag = host.tree.get(node_id).map_or("", VirtualNode::tag_name);
                         (host.warn)(&format!("node {node_id} ({tag}): {warning}"));
@@ -383,9 +394,7 @@ fn install_tree<'js>(
                     host.tree
                         .remove_style(node_id, &key)
                         .map_err(|err| throw_tree_error(&ctx, err))?;
-                    if key == "display" {
-                        host.focus.mark_tab_dirty(node_id);
-                    }
+                    mark_focus_dirty(&mut host, node_id, false, key == "display");
                     Ok(())
                 },
             )?,
@@ -525,7 +534,7 @@ mod tests {
     }
 
     #[test]
-    fn only_tabindex_disabled_and_display_mark_a_node_for_a_focus_check() {
+    fn only_focus_attributes_and_display_mark_a_node_for_a_focus_check() {
         let (engine, host) = engine_with_bindings();
         let node: u32 = engine
             .eval("globalThis.n = __inca_native__.createNode('div')")
@@ -544,14 +553,19 @@ mod tests {
             .unwrap();
         assert!(dirty(&host).is_empty());
 
+        // A subtree check queues only nodes that have a tabindex.
         for call in [
             "setAttribute(n, 'tabindex', '0')",
             "setAttribute(n, 'tabIndex', 0)",
-            "removeAttribute(n, 'TABINDEX')",
             "setAttribute(n, 'disabled', true)",
             "removeAttribute(n, 'disabled')",
             "setStyle(n, 'display', 'none')",
             "removeStyle(n, 'display')",
+            "setAttribute(n, 'hidden', true)",
+            "removeAttribute(n, 'hidden')",
+            "setAttribute(n, 'inert', true)",
+            "removeAttribute(n, 'inert')",
+            "removeAttribute(n, 'TABINDEX')",
         ] {
             engine
                 .eval::<()>(&format!("__inca_native__.{call}"))

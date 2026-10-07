@@ -163,8 +163,12 @@ There's no `code`, `location`, or `isComposing` yet.
 ## Focus
 
 A node takes focus through its `tabindex` attribute. Any integer works,
-including a negative one. A text node and a node whose own `display` is `none`
-ignore `tabindex`.
+including a negative one. A text node ignores `tabindex`. So does a node that
+has `display: none`, `inert` or `hidden` on itself or on any ancestor. `hidden`
+renders the node as `display: none` unless the node sets its own `display`.
+`hidden="until-found"` is treated as unhidden. An `inert` subtree receives no
+mouse events and never becomes `event.target`. Wheel scrolling of an `inert`
+scroll container still works.
 
 A click on a node with `tabindex` focuses it, and so does `.focus()`.
 `.focus()` on any other node is ignored. A click on a plain child focuses the
@@ -174,9 +178,9 @@ both the focus change and the blur.
 
 A [`button`](./elements#button) has a default `tabindex` of 0.
 
-A change of `tabindex` applies at once. When the attribute is removed, or its
-value is ignored, the node leaves focus and the host fires `blur` and `focusout`.
-`el.tabIndex = n` sets the attribute.
+A change of any of these applies at once. When the node becomes unfocusable, it
+leaves focus and the host fires `blur` and `focusout`. `el.tabIndex = n` sets
+the attribute.
 
 `.blur()` unfocuses the node when it is the focused one.
 
