@@ -501,15 +501,6 @@ A fixed entry is deleted and its ID is never reused.
   icon at all. Either the config's `icon` feeds both, or the name says
   which one it is.
 
-- **B-021 `"focus"`/`"blur"` need `"focusin"`/`"focusout"` for nested focusable nodes**
-  `Units: bridge · Size: S–M · Impact: Low`
-
-  `FocusRegistry` (`crates/inca-bridge/src/focus.rs`) dispatches `focus` and
-  `blur` to the exact node. A node with `tabindex` can contain another one,
-  so a listener on the container sees neither event of the descendant. The
-  fix is the bubbling pair, checking that the node whose focus state changed
-  is the exact one focused.
-
 - **B-026 More `MouseEvent`/`KeyboardEvent` fields could reach JS**
   `Units: gpui,bridge · Size: M–L · Impact: Low`
 

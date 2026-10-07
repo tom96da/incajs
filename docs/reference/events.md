@@ -23,8 +23,8 @@ node the event started on:
 - `click` reports the nearest common ancestor of the elements under the
   press and the release.
 - `keydown` and `keyup` report the focused node.
-- `mouseenter`, `mouseleave`, `focus` and `blur` report the node entered,
-  left, focused or blurred.
+- `mouseenter`, `mouseleave`, `focus`, `blur`, `focusin` and `focusout`
+  report the node entered, left, focused or blurred.
 
 A listener on an ancestor reads `event.target` to tell which descendant the
 event came from. `composedPath()` returns the ids from `target` up to the
@@ -64,6 +64,7 @@ Every event carries `bubbles`, `cancelable`, `composed`, `defaultPrevented`,
 | `click`, `mousedown`, `mouseup`, `mousemove`, `wheel`, `keydown`, `keyup` | `true` | `true` | `true` |
 | `mouseenter`, `mouseleave` | `false` | `false` | `false` |
 | `focus`, `blur` | `false` | `false` | `true` |
+| `focusin`, `focusout` | `true` | `false` | `true` |
 
 An event with any other name has all three set to `false`.
 
@@ -174,7 +175,7 @@ both the focus change and the blur.
 A [`button`](./elements#button) has a default `tabindex` of 0.
 
 A change of `tabindex` applies at once. When the attribute is removed, or its
-value is ignored, the node leaves focus and the host fires `blur`.
+value is ignored, the node leaves focus and the host fires `blur` and `focusout`.
 `el.tabIndex = n` sets the attribute.
 
 `.blur()` unfocuses the node when it is the focused one.
@@ -195,7 +196,13 @@ onMounted(() => input.value.focus());
 </template>
 ```
 
-`focus`/`blur` carry no fields of their own.
+A focus change fires `blur`, `focusout`, `focus` and `focusin`, in that
+order. `focusin` and `focusout` bubble, so a listener on an ancestor sees the
+focus changes of its descendants. `focus` and `blur` stay on the node.
+
+`relatedTarget` is the id of the node on the other side of the change, or
+`null` when there is none. `blur` and `focusout` carry the node gaining
+focus. `focus` and `focusin` carry the node losing it. The four events carry only `relatedTarget`.
 
 ## Propagation
 

@@ -503,3 +503,96 @@ fn focus_requests_in_one_frame_share_a_focus_id_and_a_later_frame_gets_a_new_one
     assert!(seen[4].1 > seen[2].1, "a later frame takes a new focus id");
     assert!(seen[3].1 > seen[2].1);
 }
+
+/// Each focus change fires `blur`, `focusout`, `focus`, `focusin` in that
+/// order. `relatedTarget` is the node on the other side of the change.
+/// `focusin` and `focusout` reach the parent at phase 3, `focus` and `blur`
+/// stay on the node.
+#[gpui::test]
+fn focus_changes_fire_four_events_with_related_targets(cx: &mut TestAppContext) {
+    enum Step {
+        Focus(usize),
+        Blur(usize),
+        RemoveTabindex(usize),
+    }
+    let (host, parent, a) = build_focusable_pair();
+    let b = host.borrow().tree.get(parent).unwrap().children()[1];
+    for (node, events) in [
+        (a, &["focusin", "focusout"][..]),
+        (b, &["focusin", "focusout"][..]),
+        (parent, &["focus", "blur", "focusin", "focusout"][..]),
+    ] {
+        for event in events {
+            host.borrow_mut().listeners.register(node, *event, 0);
+        }
+    }
+    let engine = Rc::new(Engine::new().unwrap());
+    engine
+        .eval::<()>(
+            "globalThis.seen = []; \
+             globalThis.__inca_callbacks__ = { 0: (e) => { globalThis.seen.push( \
+             `${e.type}:${e.target}:${e.relatedTarget}:${e.eventPhase}:${e.bubbles}`); } };",
+        )
+        .unwrap();
+    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
+    let window = cx.add_window(|_, _| FocusableRoot {
+        host: Rc::clone(&host),
+        node: parent,
+        dispatcher,
+    });
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    cx.update_window(window.into(), |_, window, _cx| window.activate_window())
+        .unwrap();
+
+    let nodes = [a, b];
+    let steps = [
+        (
+            Step::Focus(0),
+            format!("focus:{a}:null:2:false focusin:{a}:null:2:true focusin:{a}:null:3:true"),
+        ),
+        (
+            Step::Focus(1),
+            format!(
+                "blur:{a}:{b}:2:false focusout:{a}:{b}:2:true focusout:{a}:{b}:3:true \
+                 focus:{b}:{a}:2:false focusin:{b}:{a}:2:true focusin:{b}:{a}:3:true"
+            ),
+        ),
+        (
+            Step::Blur(1),
+            format!("blur:{b}:null:2:false focusout:{b}:null:2:true focusout:{b}:null:3:true"),
+        ),
+        (
+            Step::Focus(1),
+            format!("focus:{b}:null:2:false focusin:{b}:null:2:true focusin:{b}:null:3:true"),
+        ),
+        (
+            Step::RemoveTabindex(1),
+            format!("blur:{b}:null:2:false focusout:{b}:null:2:true focusout:{b}:null:3:true"),
+        ),
+    ];
+    let mut mismatches = Vec::new();
+    for (step, want) in steps {
+        engine.eval::<()>("globalThis.seen = [];").unwrap();
+        cx.update_window(window.into(), |_root, window, cx| {
+            let mut host = host.borrow_mut();
+            match step {
+                Step::Focus(i) => host.focus.request_focus(nodes[i]),
+                Step::Blur(i) => host.focus.request_blur(nodes[i]),
+                Step::RemoveTabindex(i) => {
+                    host.tree.remove_attribute(nodes[i], "tabindex").unwrap();
+                    host.focus.mark_tab_dirty(nodes[i]);
+                }
+            }
+            drop(host);
+            window.draw(cx).clear(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        let seen = engine.eval::<String>("seen.join(' ')").unwrap();
+        if seen != want {
+            mismatches.push(format!("want {want}\n got {seen}"));
+        }
+    }
+    assert!(mismatches.is_empty(), "{mismatches:#?}");
+}

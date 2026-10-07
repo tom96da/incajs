@@ -852,6 +852,27 @@ mod tests {
     }
 
     #[gpui::test]
+    fn focusin_and_focusout_bubble_with_related_target(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, FOCUSABLE);
+        run_js(
+            &mut h,
+            "__inca_callbacks__[2] = (e) => { globalThis.log.push([e.type, \
+                e.target === box ? 'box' : 'other', String(e.relatedTarget), e.eventPhase].join('/')); }; \
+             for (const t of [box, frame]) { \
+                __inca_native__.addEventListener(t, 'focusin', 2); \
+                __inca_native__.addEventListener(t, 'focusout', 2); } \
+             __inca_native__.setAttribute(box, 'tabindex', '0'); __inca_native__.focusNode(box);",
+        );
+        let frame = node(&h, "frame");
+        h.click(frame);
+        assert_eq!(
+            log(&h),
+            "focus,focusin/box/null/2,focusin/box/null/3,\
+             blur,focusout/box/null/2,focusout/box/null/3"
+        );
+    }
+
+    #[gpui::test]
     fn a_numeric_tabindex_makes_a_node_focusable(cx: &mut TestAppContext) {
         let mut h = Harness::load(cx, ENTRY, FOCUSABLE);
         run_js(&mut h, "__inca_native__.setAttribute(box, 'tabindex', 0);");

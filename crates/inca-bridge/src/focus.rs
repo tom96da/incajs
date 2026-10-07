@@ -3,7 +3,7 @@
 
 //! Persists GPUI's per-node focus state across frames — `FocusHandle`s
 //! don't come from the retained tree, so nothing else keeps them alive —
-//! and turns GPUI's own focus changes into `"focus"`/`"blur"` dispatches.
+//! and turns GPUI's own focus changes into the four focus events.
 //!
 //! `focusNode`/`blurNode` (see [`crate::bindings`]) run outside any GPUI render
 //! or dispatch, with no `Window`/`App` to act on immediately — every
@@ -34,9 +34,11 @@ pub struct FocusTransition {
 }
 
 impl FocusTransition {
-    /// Dispatches `"blur"`/`"focus"` for whichever of `blurred`/`focused`
-    /// this transition carries. Call after releasing whatever borrow
-    /// produced this transition — see [`FocusRegistry::apply_pending`].
+    /// Dispatches `blur`, `focusout`, `focus` and `focusin`, in that order,
+    /// for whichever of `blurred`/`focused` this transition carries. Each
+    /// carries the other node as `relatedTarget`. Call after releasing
+    /// whatever borrow produced this transition — see
+    /// [`FocusRegistry::apply_pending`].
     pub fn dispatch(
         &self,
         dispatch: &(impl EventSink + Clone + 'static),
@@ -44,10 +46,20 @@ impl FocusTransition {
         cx: &mut App,
     ) {
         if let Some(blurred) = self.blurred {
-            dispatch.dispatch(blurred, "blur", &EventPayload::None, window, cx);
+            let payload = EventPayload::Focus {
+                related_target: self.focused,
+            };
+            for event in ["blur", "focusout"] {
+                dispatch.dispatch(blurred, event, &payload, window, cx);
+            }
         }
         if let Some(focused) = self.focused {
-            dispatch.dispatch(focused, "focus", &EventPayload::None, window, cx);
+            let payload = EventPayload::Focus {
+                related_target: self.blurred,
+            };
+            for event in ["focus", "focusin"] {
+                dispatch.dispatch(focused, event, &payload, window, cx);
+            }
         }
     }
 }

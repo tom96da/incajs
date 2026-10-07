@@ -165,13 +165,18 @@ impl std::ops::BitOr for EventMask {
 pub enum EventPayload {
     /// No data beyond the node and the event's name.
     None,
-    /// A mouse position, button, and modifier state, DOM-`MouseEvent`-shaped.
+    /// A mouse position, button, and modifier state, as in a mouse event.
     Mouse(MousePayload),
     /// A scroll delta plus the same fields as [`EventPayload::Mouse`],
-    /// DOM-`WheelEvent`-shaped (`WheelEvent` extends `MouseEvent`).
+    /// as in a wheel event.
     Wheel(WheelPayload),
-    /// A key and modifier state, DOM-`KeyboardEvent`-shaped.
+    /// A key and modifier state, as in a keyboard event.
     Key(KeyPayload),
+    /// The other node of a focus change.
+    /// `related_target` is the node gaining focus for `blur` and `focusout`,
+    /// the node losing it for `focus` and `focusin`, and `None` when there
+    /// is no such node.
+    Focus { related_target: Option<NodeId> },
 }
 
 /// [`EventPayload::Mouse`]'s fields, named and shaped after DOM's

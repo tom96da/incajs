@@ -147,7 +147,7 @@ and event name. Payloads and author-facing behaviour are in
 - `eventId` is a number that grows with each event. Every node of one event
   name within one input carries the same value, so an adapter can tell
   whether two calls belong to one event. A dispatch with no input behind it,
-  such as `focus`/`blur` after a focus change, takes a new value per event
+  such as the focus events after a focus change, takes a new value per event
   name. One engine has one counter, shared by all its dispatchers, and it
   restarts at 1 with a new engine.
 - Base fields: `bubbles`, `cancelable` and `composed` come from one table
@@ -174,7 +174,8 @@ and event name. Payloads and author-facing behaviour are in
 | `mousemove` | mouse | |
 | `mouseenter`, `mouseleave` | mouse | Do not bubble. Position and modifiers are read when hover changes. |
 | `wheel` | mouse + `deltaX`, `deltaY`, `deltaZ`, `deltaMode` | `deltaX`/`deltaY` are GPUI's values negated. `deltaZ` is `0`. `deltaMode` is `0` or `1`. |
-| `focus`, `blur` | none | Do not bubble. |
+| `focus`, `blur` | `relatedTarget` | Do not bubble. |
+| `focusin`, `focusout` | `relatedTarget` | `EventDispatcher::dispatch` runs the node's callbacks, then each ancestor's, with `target` the node. A focus change dispatches `blur`, `focusout`, `focus`, `focusin`. |
 | `keydown`, `keyup` | `key`, `repeat`, `ctrlKey`, `shiftKey`, `altKey`, `metaKey` | Go to the focused node and bubble to its ancestors. `keyup` has `repeat: false`. |
 
 The mouse payload is `clientX`, `clientY`, `pageX`, `pageY`, `movementX`,

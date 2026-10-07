@@ -60,7 +60,7 @@ pub fn stderr_reporter() -> ErrorReporter {
 
 /// `bubbles`, `cancelable` and `composed` of every event the host dispatches.
 /// Any other name takes all three as false.
-const EVENT_FLAGS: [(&str, [bool; 3]); 11] = [
+const EVENT_FLAGS: [(&str, [bool; 3]); 13] = [
     ("click", [true, true, true]),
     ("mousedown", [true, true, true]),
     ("mouseup", [true, true, true]),
@@ -72,6 +72,8 @@ const EVENT_FLAGS: [(&str, [bool; 3]); 11] = [
     ("keyup", [true, true, true]),
     ("focus", [false, false, true]),
     ("blur", [false, false, true]),
+    ("focusin", [true, false, true]),
+    ("focusout", [true, false, true]),
 ];
 
 fn flags_of(event: &str) -> [bool; 3] {
@@ -209,7 +211,9 @@ impl EventDispatcher {
                 },
                 ..*wheel
             }),
-            EventPayload::None | EventPayload::Key(_) => payload.clone(),
+            EventPayload::None | EventPayload::Key(_) | EventPayload::Focus { .. } => {
+                payload.clone()
+            }
         }
     }
 
@@ -261,7 +265,9 @@ impl EventDispatcher {
                     ..*wheel
                 })
             }
-            EventPayload::None | EventPayload::Key(_) => payload.clone(),
+            EventPayload::None | EventPayload::Key(_) | EventPayload::Focus { .. } => {
+                payload.clone()
+            }
         }
     }
 
@@ -309,6 +315,11 @@ impl EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) {
+        let payload = &self.live_related(payload);
+        if matches!(event, "focusin" | "focusout") {
+            self.bubble_from(node_id, event, payload, window, cx);
+            return;
+        }
         let callback_ids = if event == "wheel" && self.wheel_stopped.get() {
             Vec::new()
         } else {
@@ -341,6 +352,18 @@ impl EventDispatcher {
         }
 
         self.drain_jobs_and_refresh(window);
+    }
+
+    /// `payload` with a focus `related_target` that left the tree set to `None`.
+    fn live_related(&self, payload: &EventPayload) -> EventPayload {
+        match payload {
+            EventPayload::Focus {
+                related_target: Some(id),
+            } if self.host.borrow().tree.get(*id).is_none() => EventPayload::Focus {
+                related_target: None,
+            },
+            _ => payload.clone(),
+        }
     }
 
     /// The `target` of `event` dispatched for `node_id`.
@@ -479,28 +502,34 @@ impl EventDispatcher {
             detail: 0,
             modifiers,
         });
-        let mut current = Some(node_id);
+        self.bubble_from(node_id, "click", &payload, window, cx);
+    }
+
+    /// Runs the `event` listeners of `start` and then of each ancestor, with
+    /// `target` `start`, until one calls `stopPropagation()`.
+    fn bubble_from(
+        &self,
+        start: NodeId,
+        event: &str,
+        payload: &EventPayload,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let mut current = Some(start);
         while let Some(id) = current {
             let callback_ids = self
                 .host
                 .borrow()
                 .listeners
-                .callbacks_for(id, "click")
+                .callbacks_for(id, event)
                 .to_vec();
-            if callback_ids.is_empty() {
-                current = self
-                    .host
-                    .borrow()
-                    .tree
-                    .get(id)
-                    .and_then(inca_gpui::VirtualNode::parent);
-                continue;
-            }
-            let state = self.event_state("click", cx);
-            let outcome = self.run_callbacks(id, node_id, "click", &payload, state, callback_ids);
-            self.drain_jobs_and_refresh(window);
-            if outcome.stop_propagation {
-                break;
+            if !callback_ids.is_empty() {
+                let state = self.event_state(event, cx);
+                let outcome = self.run_callbacks(id, start, event, payload, state, callback_ids);
+                self.drain_jobs_and_refresh(window);
+                if outcome.stop_propagation {
+                    break;
+                }
             }
             current = self
                 .host
@@ -653,6 +682,10 @@ fn set_payload(event_object: &Object, payload: &EventPayload) -> rquickjs::Resul
             event_object.set("deltaMode", wheel.delta_mode)?;
         }
         EventPayload::Key(key) => set_key_fields(event_object, key)?,
+        EventPayload::Focus { related_target } => match related_target {
+            Some(id) => event_object.set("relatedTarget", *id)?,
+            None => event_object.set("relatedTarget", rquickjs::Null)?,
+        },
     }
     Ok(())
 }
@@ -1133,6 +1166,8 @@ mod tests {
             ("keydown", true, true, true),
             ("focus", false, false, true),
             ("blur", false, false, true),
+            ("focusin", true, false, true),
+            ("focusout", true, false, true),
         ] {
             listen(&host, node, event);
             cx.update(|window, cx| {
@@ -1147,6 +1182,34 @@ mod tests {
             }
         }
         assert!(mismatches.is_empty(), "{mismatches:#?}");
+    }
+
+    #[gpui::test]
+    fn a_related_target_that_left_the_tree_reads_null(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        dispatcher
+            .engine
+            .eval::<()>(
+                "globalThis.seen = []; globalThis.__inca_callbacks__ = { \
+                 0: (e) => { globalThis.seen.push(e.relatedTarget); } };",
+            )
+            .unwrap();
+        listen(&host, node, "focus");
+        let cx = cx.add_empty_window();
+        for related in [Some(node), Some(9999), None] {
+            cx.update(|window, cx| {
+                let payload = EventPayload::Focus {
+                    related_target: related,
+                };
+                dispatcher.dispatch(node, "focus", &payload, window, cx);
+            });
+        }
+        let json = dispatcher
+            .engine
+            .eval::<String>("JSON.stringify(globalThis.seen)")
+            .unwrap();
+        assert_eq!(json, format!("[{node},null,null]"));
     }
 
     #[gpui::test]
