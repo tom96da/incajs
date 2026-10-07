@@ -59,3 +59,16 @@ fn removing_tabindex_blurs_the_node_and_stops_click_focus(cx: &mut TestAppContex
 
     assert_eq!(text_of(&mut h, "log"), "target:focus target:blur");
 }
+
+#[gpui::test]
+fn tab_moves_focus_through_the_tabindex_order_from_a_node_with_tabindex_minus_one(
+    cx: &mut TestAppContext,
+) {
+    let mut h = load(cx, "taborder");
+    click(&mut h, "t4");
+
+    h.keystrokes("tab tab");
+    h.keystrokes("shift-tab");
+
+    assert_eq!(text_of(&mut h, "log"), "t4 t5 t0 t5");
+}

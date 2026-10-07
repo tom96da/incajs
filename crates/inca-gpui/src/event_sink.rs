@@ -583,6 +583,11 @@ pub trait EventSink {
     /// pointer move being handled, before any listener of that move runs. The
     /// sink fires the hover events for it at once.
     fn pointer_over(&self, node_id: NodeId, window: &mut Window, cx: &mut App);
+
+    /// Moves focus to the next (or, `backward`, previous) tab stop, or to
+    /// nothing past the last one. Called after the `keydown` of an
+    /// unprevented Tab has been dispatched.
+    fn tab_navigate(&self, backward: bool, window: &mut Window, cx: &mut App);
 }
 
 #[cfg(test)]

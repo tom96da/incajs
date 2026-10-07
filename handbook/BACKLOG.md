@@ -137,16 +137,6 @@ A fixed entry is deleted and its ID is never reused.
   yet" flag suppressing the mount-time `mouseenter`, and later the
   capture-phase (B-019) work.
 
-- **B-022 Tab and Shift+Tab are unwired**
-  `Units: bridge,gpui,core · Size: M–L · Impact: Medium`
-
-  Focus moves on `focusNode` and on a click. A node is focusable through its
-  `tabindex` attribute, and `gpui_tab_order` in
-  `crates/inca-bridge/src/focus.rs` maps positive values ahead of `0` for
-  `window.focus_next(cx)`. Tab and Shift+Tab reach no handler yet, so the order
-  is unused and focus stays in the window. The fix is a Tab handler
-  that calls `focus_next`/`focus_prev` after the JS `keydown` listeners ran.
-
 - **B-024 Destroying a focused node must come to fire `"blur"`**
   `Units: bridge,core · Size: L · Impact: Medium`
 
@@ -1092,3 +1082,11 @@ A fixed entry is deleted and its ID is never reused.
   Once a `pointer_events` style key exists, a container that sets `none`
   skips its target marker and its hitbox, so the next container below reports
   itself.
+
+- **B-149 Tab after a click starts at the first stop**
+  `Units: gpui,bridge · Size: M · Impact: Low`
+
+  A click on an empty area leaves nothing focused, so the next Tab goes to the
+  first stop. Browsers continue from the clicked position. The fix keeps a
+  starting-point node set by the mouse target and clears it when focus moves
+  by another route. `tab_move` starts from it when nothing is focused.

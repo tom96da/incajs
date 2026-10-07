@@ -47,6 +47,24 @@ and launches the host from inside it.
 3. The application menu has a `Quit` item with `⌘Q` beside it.
 4. `⌘Q` quits, and `inca dev` stops with it.
 
+### Tab key
+
+In the development window of an app whose nodes carry `tabindex` 3, 1, 0, 0,
+-1 and 2 in tree order, with focus and blur listeners that log:
+
+1. `Tab` and `Shift+Tab` arrive, and macOS full keyboard access leaves them
+   to the window.
+2. Focus visits the nodes in the order 1, 2, 3, then the two 0 nodes.
+3. `Tab` on the last node leaves nothing focused. The next `Tab` focuses the
+   first node.
+4. Holding `Tab` moves focus on every repeat.
+5. `Cmd-Tab` and `Ctrl-Tab` keep their system meaning and cancel no focus
+   move.
+6. `preventDefault()` in `keydown` cancels the move.
+7. In a window with no focusable node, `Tab` does nothing and fires `keydown`
+   on the root.
+8. After a click on an empty area, `Tab` focuses the first node.
+
 ### A packaged app
 
 ```sh

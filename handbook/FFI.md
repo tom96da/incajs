@@ -239,6 +239,13 @@ once per window.
   The host applies the change before the queued focus requests of that
   frame. `build_spec_with` gives an `inert` node and its subtree an empty
   listener mask. The user rules are in `docs/reference/events.md`.
+- A capture-phase key listener on the root container reads `Tab` and
+  `Shift+Tab` before any node's listener. It defers the move until the key's
+  dispatch ended and calls `EventSink::tab_navigate` unless
+  `window.default_prevented()` is set.
+  `FocusRegistry::tab_move` collects the handled nodes in tree order and
+  focuses the target, or blurs for the end of the order. `apply_pending`
+  reports the transition on the next frame.
 - Destroying a focused node fires no `blur`.
 - All dispatches from one raw event share one movement value.
 

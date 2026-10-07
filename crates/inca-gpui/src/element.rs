@@ -1001,6 +1001,29 @@ fn pointer_tracker<E: EventSink + Clone + 'static>(dispatch: E) -> impl IntoElem
     .size_0()
 }
 
+// Runs on the root in the capture phase, before any node's key listener. The
+// move waits for the end of the key's dispatch and applies unless a listener
+// called `preventDefault()`.
+fn tab_on_capture<Elem, E>(element: Elem, dispatch: E) -> Elem
+where
+    Elem: InteractiveElement,
+    E: EventSink + Clone + 'static,
+{
+    element.capture_key_down(move |event, window, cx| {
+        let modifiers = event.keystroke.modifiers;
+        if event.keystroke.key != "tab" || modifiers.control || modifiers.alt || modifiers.platform
+        {
+            return;
+        }
+        let (dispatch, backward) = (dispatch.clone(), modifiers.shift);
+        window.defer(cx, move |window, cx| {
+            if !window.default_prevented() {
+                dispatch.tab_navigate(backward, window, cx);
+            }
+        });
+    })
+}
+
 /// Undoes, once `gpui`'s scroll steps and the JS listeners have run, all
 /// scrolling after `preventDefault()`, else the scrolling of every container
 /// but the innermost one that can still move.
@@ -1133,6 +1156,10 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
                         window.blur(cx);
                     }
                 })
+            });
+
+            let element = element.when_some(dispatch.filter(|_| root), |el, dispatch| {
+                tab_on_capture(el, dispatch.clone())
             });
 
             // Every container of a tree with a mouse listener reports its
@@ -1298,6 +1325,8 @@ impl EventSink for NeverListens {
     }
 
     fn pointer_over(&self, _node_id: NodeId, _window: &mut Window, _cx: &mut App) {}
+
+    fn tab_navigate(&self, _backward: bool, _window: &mut Window, _cx: &mut App) {}
 }
 
 /// Recursively converts an [`ElementSpec`] into a real `gpui` [`AnyElement`],
@@ -2494,6 +2523,8 @@ mod tests {
             fn hover_changed(&self, _: NodeId, _: bool, _: &mut Window, _: &mut App) {}
 
             fn pointer_over(&self, _: NodeId, _: &mut Window, _: &mut App) {}
+
+            fn tab_navigate(&self, _: bool, _: &mut Window, _: &mut App) {}
         }
 
         struct ProbeView(VirtualTree, Probe);

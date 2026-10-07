@@ -22,6 +22,7 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - `contextmenu` event on the right button, so `@click.right` and `@contextmenu` run
 - mouse events carry `x`, `y` and `relatedTarget`
 - `mouseover` and `mouseout` events
+- `Tab` and `Shift+Tab` move focus through the `tabindex` order
 - `el.tabIndex` sets the `tabindex` attribute ([9f63f4a](https://github.com/tom96da/incajs/commit/9f63f4a))
 
 ### Changed

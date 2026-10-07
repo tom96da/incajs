@@ -1812,4 +1812,180 @@ mod tests {
             )
         );
     }
+
+    /// A `frame` of 10x10 nodes `n3`, `n1`, `z1`, `z2`, `m1` and `n2` with
+    /// `tabindex` 3, 1, 0, 0, -1 and 2, and `mk(name, tabindex, tag)` for more.
+    /// Callback 0 logs `type@target/relatedTarget`, 1 calls `preventDefault`,
+    /// 2 calls `stopPropagation`, 4 logs `type@target`. `watch(4)` listens to
+    /// `focus` and `blur` on every node made so far.
+    const TABS: &str = r"
+        const n = __inca_native__;
+        const names = {};
+        const nm = (id) => names[id] ?? 'null';
+        const frame = n.createNode('div');
+        n.setStyle(frame, 'width', 200);
+        n.setStyle(frame, 'height', 200);
+        n.appendChild(n.rootNodeId(), frame);
+        globalThis.frame = frame;
+        globalThis.mk = (name, tabindex, tag = 'div') => {
+            const id = n.createNode(tag);
+            n.setStyle(id, 'width', 10);
+            n.setStyle(id, 'height', 10);
+            if (tabindex !== null) n.setAttribute(id, 'tabindex', String(tabindex));
+            n.appendChild(frame, id);
+            names[id] = name;
+            globalThis[name] = id;
+            return id;
+        };
+        for (const [name, index] of [['n3', 3], ['n1', 1], ['z1', 0], ['z2', 0], ['m1', -1], ['n2', 2]]) {
+            mk(name, index);
+        }
+        globalThis.log = [];
+        globalThis.__inca_callbacks__ = {
+            0: (e) => { globalThis.log.push(`${e.type}@${nm(e.target)}/${nm(e.relatedTarget)}`); },
+            1: (e) => { e.preventDefault(); },
+            2: (e) => { e.stopPropagation(); },
+            4: (e) => { globalThis.log.push(`${e.type}@${nm(e.target)}`); },
+        };
+        globalThis.watch = (callback, types = ['focus', 'blur']) => {
+            for (const id of Object.keys(names)) {
+                for (const type of types) n.addEventListener(Number(id), type, callback);
+            }
+        };
+    ";
+
+    fn tabs(cx: &mut TestAppContext) -> Harness {
+        let mut h = Harness::load(cx, ENTRY, TABS);
+        run_js(&mut h, "watch(4);");
+        h
+    }
+
+    #[gpui::test]
+    fn tab_follows_the_order_and_wraps_through_nothing(cx: &mut TestAppContext) {
+        let mut h = tabs(cx);
+        for _ in 0..7 {
+            h.keystrokes("tab");
+        }
+        assert_eq!(
+            log(&h),
+            "focus@n1,blur@n1,focus@n2,blur@n2,focus@n3,blur@n3,focus@z1,blur@z1,focus@z2,\
+             blur@z2,focus@n1"
+        );
+    }
+
+    #[gpui::test]
+    fn shift_tab_walks_backward_and_wraps_through_nothing(cx: &mut TestAppContext) {
+        let mut h = tabs(cx);
+        for _ in 0..7 {
+            h.keystrokes("shift-tab");
+        }
+        assert_eq!(
+            log(&h),
+            "focus@z2,blur@z2,focus@z1,blur@z1,focus@n3,blur@n3,focus@n2,blur@n2,focus@n1,\
+             blur@n1,focus@z2"
+        );
+    }
+
+    #[gpui::test]
+    fn tab_from_a_negative_tabindex_continues_in_tree_order(cx: &mut TestAppContext) {
+        let mut h = tabs(cx);
+        run_js(&mut h, "__inca_native__.focusNode(m1);");
+        h.keystrokes("tab");
+        run_js(&mut h, "__inca_native__.focusNode(m1);");
+        h.keystrokes("shift-tab");
+        assert_eq!(
+            log(&h),
+            "focus@m1,blur@m1,focus@n2,blur@n2,focus@m1,blur@m1,focus@z2"
+        );
+    }
+
+    #[gpui::test]
+    fn focus_events_of_a_tab_move_carry_related_targets(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, TABS);
+        run_js(
+            &mut h,
+            "watch(0, ['focus', 'blur', 'focusin', 'focusout']);",
+        );
+        h.keystrokes("tab tab");
+        assert_eq!(
+            log(&h),
+            "focus@n1/null,focusin@n1/null,blur@n1/n2,focusout@n1/n2,focus@n2/n1,focusin@n2/n1"
+        );
+    }
+
+    #[gpui::test]
+    fn a_prevented_key_down_cancels_the_tab_move(cx: &mut TestAppContext) {
+        let mut h = tabs(cx);
+        run_js(&mut h, "__inca_native__.focusNode(n1);");
+        run_js(
+            &mut h,
+            "__inca_native__.addEventListener(__inca_native__.rootNodeId(), 'keydown', 1);",
+        );
+        h.keystrokes("tab shift-tab");
+        assert_eq!(log(&h), "focus@n1");
+    }
+
+    #[gpui::test]
+    fn stopping_a_key_down_keeps_the_tab_move(cx: &mut TestAppContext) {
+        let mut h = tabs(cx);
+        run_js(&mut h, "__inca_native__.focusNode(n1);");
+        run_js(
+            &mut h,
+            "__inca_native__.addEventListener(n1, 'keydown', 4); \
+             __inca_native__.addEventListener(n1, 'keydown', 2);",
+        );
+        h.keystrokes("tab");
+        assert_eq!(log(&h), "focus@n1,keydown@n1,blur@n1,focus@n2");
+    }
+
+    #[gpui::test]
+    fn tab_moves_after_a_prevented_mouse_down(cx: &mut TestAppContext) {
+        let mut h = tabs(cx);
+        run_js(
+            &mut h,
+            "__inca_native__.addEventListener(frame, 'mousedown', 1);",
+        );
+        let frame = node(&h, "frame");
+        h.click(frame);
+        h.keystrokes("tab");
+        assert_eq!(log(&h), "focus@n1");
+    }
+
+    #[gpui::test]
+    fn tab_after_a_click_on_an_empty_area_focuses_the_first_node(cx: &mut TestAppContext) {
+        let mut h = tabs(cx);
+        run_js(&mut h, "__inca_native__.focusNode(n2);");
+        let frame = node(&h, "frame");
+        h.click(frame);
+        h.keystrokes("tab");
+        assert_eq!(log(&h), "focus@n2,blur@n2,focus@n1");
+    }
+
+    #[gpui::test]
+    fn control_alt_and_cmd_tab_leave_focus_alone(cx: &mut TestAppContext) {
+        let mut h = tabs(cx);
+        run_js(&mut h, "__inca_native__.focusNode(n1);");
+        h.keystrokes("ctrl-tab alt-tab cmd-tab ctrl-shift-tab");
+        assert_eq!(log(&h), "focus@n1");
+    }
+
+    #[gpui::test]
+    fn tab_skips_a_disabled_button_and_a_hidden_node_and_leaves_a_button(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, TABS);
+        run_js(
+            &mut h,
+            "const n = __inca_native__; \
+             n.setAttribute(mk('bd', 1, 'button'), 'disabled', true); \
+             n.setAttribute(mk('hid', 1), 'hidden', true); \
+             mk('bt', null, 'button'); watch(4);",
+        );
+        for _ in 0..7 {
+            h.keystrokes("tab");
+        }
+        assert_eq!(
+            log(&h),
+            "focus@n1,blur@n1,focus@n2,blur@n2,focus@n3,blur@n3,focus@z1,blur@z1,focus@z2,\
+             blur@z2,focus@bt,blur@bt"
+        );
+    }
 }

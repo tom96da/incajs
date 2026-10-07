@@ -245,6 +245,17 @@ both the focus change and the blur.
 
 A [`button`](./elements#button) has a default `tabindex` of 0.
 
+`Tab` moves focus to the next node and `Shift+Tab` to the previous one.
+Positive `tabindex` values come first in ascending order, then the nodes with
+`0` in tree order. A node with a negative `tabindex` is outside the order. A
+press on such a node continues from its place in the tree. A disabled
+`button` and a node that cannot take focus are skipped.
+
+A press on the last node leaves nothing focused, and the next one starts again
+at the first node. `preventDefault()` in the `keydown` of `Tab` cancels the
+move. The system handles `Ctrl`, `Alt` and `Meta` with `Tab`. Focus stays in
+the window.
+
 A change of any of these applies at once. When the node becomes unfocusable, it
 leaves focus and the host fires `blur` and `focusout`. `el.tabIndex = n` sets
 the attribute.
@@ -293,9 +304,9 @@ function onClick(event) {
   [`stopImmediatePropagation()`](https://developer.mozilla.org/en-US/docs/Web/API/Event/stopImmediatePropagation) —
   work exactly as the DOM's.
 - `preventDefault()` — suppresses a native default action: [focus](#focus)'s
-  own click-to-focus, a [`button`](./elements#button)'s `click` from
-  `Enter` (in `keydown`) or `Space` (in `keyup`), or a [`wheel`](#wheel)'s
-  scrolling.
+  own click-to-focus, a `Tab` navigation, a [`button`](./elements#button)'s
+  `click` from `Enter` (in `keydown`) or `Space` (in `keyup`), or a
+  [`wheel`](#wheel)'s scrolling.
 
   `preventDefault()` takes effect on a cancelable event only.
 

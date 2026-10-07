@@ -980,6 +980,13 @@ impl EventSink for EventDispatcher {
         self.schedule_hover_report(window, cx);
     }
 
+    // Focus changes dispatch nothing here. The next frame reports them.
+    fn tab_navigate(&self, backward: bool, window: &mut Window, cx: &mut App) {
+        let host = self.host.borrow();
+        host.focus
+            .tab_move(&host.tree, host.root, window, cx, backward);
+    }
+
     fn hover_changed(&self, node_id: NodeId, hovered: bool, window: &mut Window, cx: &mut App) {
         {
             let mut set = self.hovered.borrow_mut();
