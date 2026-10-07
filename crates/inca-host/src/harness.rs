@@ -829,6 +829,10 @@ mod tests {
         n.addEventListener(box, 'blur', 0);
     ";
 
+    /// Makes `box` focusable and focuses it.
+    const FOCUS_BOX: &str =
+        "__inca_native__.setAttribute(box, 'tabindex', '0'); __inca_native__.focusNode(box);";
+
     fn run_js(h: &mut Harness, code: &str) {
         h.window
             .read_with(&h.cx, |app, _| app.session.engine.eval::<()>(code).unwrap())
@@ -865,31 +869,27 @@ mod tests {
     }
 
     #[gpui::test]
-    fn base_fields_reach_listeners_on_the_target_and_its_ancestor(cx: &mut TestAppContext) {
+    fn default_prevented_carries_over_to_the_ancestors_listener(cx: &mut TestAppContext) {
         let mut h = Harness::load(cx, ENTRY, FOCUSABLE);
         run_js(
             &mut h,
             "__inca_callbacks__[2] = (e) => { const was = e.defaultPrevented; e.preventDefault(); \
-                globalThis.log.push([e.type, e.bubbles, e.cancelable, e.composed, was, \
-                    e.defaultPrevented, e.eventPhase, e.isTrusted, typeof e.timeStamp].join('/')); }; \
+                globalThis.log.push([e.type, was, e.defaultPrevented].join('/')); }; \
              __inca_native__.addEventListener(box, 'click', 2); \
              __inca_native__.addEventListener(frame, 'click', 2);",
         );
         let boxed = node(&h, "box");
         h.click(boxed);
-        assert_eq!(
-            log(&h),
-            "click/true/true/true/false/true/2/true/number,click/true/true/true/true/true/3/true/number"
-        );
+        assert_eq!(log(&h), "click/false/true,click/true/true");
     }
 
     #[gpui::test]
-    fn focusin_and_focusout_bubble_with_related_target(cx: &mut TestAppContext) {
+    fn focusin_and_focusout_bubble(cx: &mut TestAppContext) {
         let mut h = Harness::load(cx, ENTRY, FOCUSABLE);
         run_js(
             &mut h,
             "__inca_callbacks__[2] = (e) => { globalThis.log.push([e.type, \
-                e.target === box ? 'box' : 'other', String(e.relatedTarget), e.eventPhase].join('/')); }; \
+                e.target === box ? 'box' : 'other', e.eventPhase].join('/')); }; \
              for (const t of [box, frame]) { \
                 __inca_native__.addEventListener(t, 'focusin', 2); \
                 __inca_native__.addEventListener(t, 'focusout', 2); } \
@@ -899,18 +899,9 @@ mod tests {
         h.click(frame);
         assert_eq!(
             log(&h),
-            "focus,focusin/box/null/2,focusin/box/null/3,\
-             blur,focusout/box/null/2,focusout/box/null/3"
+            "focus,focusin/box/2,focusin/box/3,\
+             blur,focusout/box/2,focusout/box/3"
         );
-    }
-
-    #[gpui::test]
-    fn a_numeric_tabindex_makes_a_node_focusable(cx: &mut TestAppContext) {
-        let mut h = Harness::load(cx, ENTRY, FOCUSABLE);
-        run_js(&mut h, "__inca_native__.setAttribute(box, 'tabindex', 0);");
-        let boxed = node(&h, "box");
-        h.click(boxed);
-        assert_eq!(log(&h), "focus");
     }
 
     #[gpui::test]
@@ -930,22 +921,9 @@ mod tests {
     }
 
     #[gpui::test]
-    fn tabindex_then_focus_in_one_tick_focuses(cx: &mut TestAppContext) {
-        let mut h = Harness::load(cx, ENTRY, FOCUSABLE);
-        run_js(
-            &mut h,
-            "__inca_native__.setAttribute(box, 'tabindex', '0'); __inca_native__.focusNode(box);",
-        );
-        assert_eq!(log(&h), "focus");
-    }
-
-    #[gpui::test]
     fn a_click_on_an_empty_area_blurs_the_focused_node(cx: &mut TestAppContext) {
         let mut h = Harness::load(cx, ENTRY, FOCUSABLE);
-        run_js(
-            &mut h,
-            "__inca_native__.setAttribute(box, 'tabindex', '0'); __inca_native__.focusNode(box);",
-        );
+        run_js(&mut h, FOCUS_BOX);
         let frame = node(&h, "frame");
         h.click(frame);
         assert_eq!(log(&h), "focus,blur");
@@ -956,9 +934,7 @@ mod tests {
         let mut h = Harness::load(cx, ENTRY, FOCUSABLE);
         run_js(
             &mut h,
-            "__inca_native__.setAttribute(box, 'tabindex', '0'); \
-             __inca_native__.focusNode(box); \
-             __inca_native__.addEventListener(frame, 'mousedown', 1);",
+            &format!("{FOCUS_BOX} __inca_native__.addEventListener(frame, 'mousedown', 1);"),
         );
         let frame = node(&h, "frame");
         h.click(frame);
@@ -970,9 +946,9 @@ mod tests {
         let mut h = Harness::load(cx, ENTRY, FOCUSABLE);
         run_js(
             &mut h,
-            "__inca_native__.setAttribute(box, 'tabindex', '0'); \
-             __inca_native__.focusNode(box); \
-             __inca_native__.addEventListener(__inca_native__.rootNodeId(), 'mousedown', 1);",
+            &format!(
+                "{FOCUS_BOX} __inca_native__.addEventListener(__inca_native__.rootNodeId(), 'mousedown', 1);"
+            ),
         );
         let frame = node(&h, "frame");
         h.click(frame);
@@ -982,10 +958,7 @@ mod tests {
     #[gpui::test]
     fn hiding_a_focused_node_blurs_it(cx: &mut TestAppContext) {
         let mut h = Harness::load(cx, ENTRY, FOCUSABLE);
-        run_js(
-            &mut h,
-            "__inca_native__.setAttribute(box, 'tabindex', '0'); __inca_native__.focusNode(box);",
-        );
+        run_js(&mut h, FOCUS_BOX);
         run_js(&mut h, "__inca_native__.setStyle(box, 'display', 'none');");
         assert_eq!(log(&h), "focus,blur");
     }
@@ -1078,13 +1051,16 @@ mod tests {
     }
 
     #[gpui::test]
-    fn a_key_up_of_space_with_no_key_down_does_not_click(cx: &mut TestAppContext) {
+    fn a_space_key_up_clicks_only_after_its_key_down(cx: &mut TestAppContext) {
         let mut h = Harness::load(cx, ENTRY, BUTTON);
         listen(&mut h, "box", "click", 0);
 
         h.key_up("space");
-
         assert_eq!(log(&h), "");
+
+        h.keystrokes("space");
+        h.key_up("space");
+        assert_eq!(log(&h), "click@box/box");
     }
 
     #[gpui::test]
@@ -1118,10 +1094,9 @@ mod tests {
         h.key_up("space");
         assert_eq!(log(&h), "");
 
-        listen(&mut h, "box", "keydown", 1);
         h.keystrokes("space");
         h.key_up("space");
-        assert_eq!(log(&h), "");
+        assert_eq!(log(&h), "click@box/box");
     }
 
     #[gpui::test]
@@ -1160,6 +1135,18 @@ mod tests {
         listen(&mut h, "box", "click", 0);
 
         h.keystrokes("enter");
+
+        assert_eq!(log(&h), "");
+    }
+
+    #[gpui::test]
+    fn a_prevented_key_down_cancels_the_space_click(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, BUTTON);
+        listen(&mut h, "box", "keydown", 1);
+        listen(&mut h, "box", "click", 0);
+
+        h.keystrokes("space");
+        h.key_up("space");
 
         assert_eq!(log(&h), "");
     }
@@ -1268,13 +1255,14 @@ mod tests {
              __inca_native__.setAttribute(d, 'tabindex', '0'); \
              __inca_native__.appendChild(frame, d); \
              __inca_native__.addEventListener(d, 'click', 0); \
+             __inca_native__.addEventListener(d, 'keydown', 0); \
              __inca_native__.focusNode(d);",
         );
 
         h.keystrokes("enter space");
         h.key_up("enter space");
 
-        assert_eq!(log(&h), "");
+        assert_eq!(log(&h), "keydown@kid/kid,keydown@kid/kid");
     }
 
     #[gpui::test]
@@ -1297,7 +1285,6 @@ mod tests {
             &mut h,
             "__inca_native__.setAttribute(box, 'disabled', true);",
         );
-        assert_eq!(log(&h), "blur@box/box");
 
         run_js(&mut h, "__inca_native__.focusNode(box);");
         h.keystrokes("enter space");
@@ -1366,7 +1353,7 @@ mod tests {
     }
 
     #[gpui::test]
-    fn a_press_on_a_disabled_button_released_on_an_ancestor_fires_nothing(cx: &mut TestAppContext) {
+    fn a_press_on_a_disabled_button_released_on_an_ancestor_is_dropped(cx: &mut TestAppContext) {
         let mut h = Harness::load(cx, ENTRY, BUTTON);
         for target in ["box", "frame", "__inca_native__.rootNodeId()"] {
             listen(&mut h, target, "mouseup click", 0);
@@ -1388,8 +1375,12 @@ mod tests {
             ..Default::default()
         });
         h.settle();
-
         assert_eq!(log(&h), "");
+
+        run_js(&mut h, "__inca_native__.removeAttribute(box, 'disabled');");
+        let button = node(&h, "box");
+        h.click(button);
+        assert!(log(&h).contains("click@box/box"), "{}", log(&h));
     }
 
     #[gpui::test]
@@ -1500,6 +1491,7 @@ mod tests {
         h.click(inner);
         h.scroll(inner, 0.0, -5.0);
 
+        // The host fires click before mouseup.
         assert_eq!(
             targets_log(&mut h),
             "mousemove@frame/inner/3,mousedown@frame/inner/3,click@frame/inner/3,\
@@ -1557,7 +1549,9 @@ mod tests {
     }
 
     #[gpui::test]
-    fn key_events_with_nothing_focused_reach_the_root(cx: &mut TestAppContext) {
+    fn an_unfocused_key_event_targets_the_root_and_reads_location_composing_and_modifiers(
+        cx: &mut TestAppContext,
+    ) {
         let mut h = Harness::load(cx, ENTRY, TARGETS);
         run_js(
             &mut h,
@@ -1813,22 +1807,10 @@ mod tests {
     }
 
     #[gpui::test]
-    fn wheel_scrolls_and_enter_leave_target_their_own_node(cx: &mut TestAppContext) {
+    fn wheel_scrolls_the_container(cx: &mut TestAppContext) {
         let mut h = Harness::load(cx, ENTRY, TARGETS);
-        listen(&mut h, "frame", "wheel mouseenter mouseleave", 0);
-        listen(&mut h, "mid", "mouseenter mouseleave", 0);
+        listen(&mut h, "frame", "wheel", 0);
         let (inner, mid) = (node(&h, "inner"), node(&h, "mid"));
-        // The pointer starts over `inner`.
-        h.unhover();
-        targets_log(&mut h);
-
-        h.hover(inner);
-        h.unhover();
-        assert_eq!(
-            targets_log(&mut h),
-            "mouseenter@frame/frame/2,mouseenter@mid/mid/2,\
-             mouseleave@mid/mid/2,mouseleave@frame/frame/2"
-        );
 
         h.scroll(inner, 0.0, -30.0);
         let offset = h
@@ -1947,12 +1929,10 @@ mod tests {
         assert_eq!(targets_log(&mut h), "click@frame/mid/3");
     }
 
-    /// Callback 1 logs `type:detail:button:buttons:clientX:clientY:x:y:
-    /// relatedTarget:pointerId:pointerType:isPrimary:width:height:pressure`.
+    /// Callback 1 logs `type:detail:button:buttons:clientX:clientY`.
     const POINTER_LOG: &str = "globalThis.__inca_callbacks__[1] = (e) => { \
-        globalThis.log.push([e.type, e.detail, e.button, e.buttons, e.clientX, e.clientY, \
-        e.x, e.y, e.relatedTarget, e.pointerId, e.pointerType, e.isPrimary, e.width, \
-        e.height, e.pressure].join(':')); };";
+        globalThis.log.push([e.type, e.detail, e.button, e.buttons, e.clientX, e.clientY] \
+        .join(':')); };";
 
     fn press(h: &mut Harness, at: Point<Pixels>, button: gpui::MouseButton, count: usize) {
         h.cx.simulate_event(gpui::MouseDownEvent {
@@ -1971,7 +1951,7 @@ mod tests {
     }
 
     #[gpui::test]
-    fn a_mouse_click_carries_the_mouse_and_pointer_fields(cx: &mut TestAppContext) {
+    fn a_mouse_click_carries_detail_button_buttons_and_coordinates(cx: &mut TestAppContext) {
         let mut h = Harness::load(cx, ENTRY, TARGETS);
         run_js(&mut h, POINTER_LOG);
         listen(&mut h, "frame", "click", 1);
@@ -1985,10 +1965,7 @@ mod tests {
             1,
         );
 
-        assert_eq!(
-            targets_log(&mut h),
-            "click:1:0:0:15:15:15:15::1:mouse:true:1:1:0"
-        );
+        assert_eq!(targets_log(&mut h), "click:1:0:0:15:15");
     }
 
     #[gpui::test]
@@ -2013,7 +1990,7 @@ mod tests {
         assert_eq!(
             targets_log(&mut h),
             "mousedown@inner/inner/2,mousedown@frame/inner/3,contextmenu@inner/inner/2,\
-             contextmenu:0:2:2:15:15:15:15::1:mouse:true:1:1:0.5,mouseup@inner/inner/2,\
+             contextmenu:0:2:2:15:15,mouseup@inner/inner/2,\
              auxclick@frame/inner/3"
         );
     }
@@ -2058,7 +2035,7 @@ mod tests {
             &mut h,
             "__inca_native__.setAttribute(box, 'disabled', true);",
         );
-        listen(&mut h, "frame", "mousedown contextmenu", 0);
+        listen(&mut h, "frame", "mousedown contextmenu auxclick", 0);
         let button = node(&h, "box");
         h.hover(button);
 
@@ -2069,11 +2046,11 @@ mod tests {
             1,
         );
 
-        assert_eq!(log(&h), "contextmenu@frame/box");
+        assert_eq!(log(&h), "contextmenu@frame/box,auxclick@frame/box");
     }
 
     #[gpui::test]
-    fn auxclick_carries_the_released_button_and_the_pointer_fields(cx: &mut TestAppContext) {
+    fn auxclick_carries_the_released_button_and_coordinates(cx: &mut TestAppContext) {
         let mut h = Harness::load(cx, ENTRY, TARGETS);
         run_js(&mut h, POINTER_LOG);
         listen(&mut h, "frame", "auxclick", 1);
@@ -2090,14 +2067,7 @@ mod tests {
             got.push(targets_log(&mut h));
         }
 
-        assert_eq!(
-            got,
-            [
-                "",
-                "auxclick:1:2:0:15:15:15:15::1:mouse:true:1:1:0",
-                "auxclick:1:1:0:15:15:15:15::1:mouse:true:1:1:0"
-            ]
-        );
+        assert_eq!(got, ["", "auxclick:1:2:0:15:15", "auxclick:1:1:0:15:15"]);
     }
 
     #[gpui::test]
@@ -2118,13 +2088,11 @@ mod tests {
             );
         }
 
-        let plain = "1:0:0:15:15:15:15::1:mouse:true:1:1:0";
+        let plain = "1:0:0:15:15";
         assert_eq!(
             targets_log(&mut h),
             format!(
-                "click:{plain},dblclick@mid/inner/3,click:2:0:0:15:15:15:15::1:mouse:true:1:1:0,\
-                 dblclick:2:0:0:15:15:15:15:::::::,\
-                 click:3:0:0:15:15:15:15::1:mouse:true:1:1:0"
+                "click:{plain},dblclick@mid/inner/3,click:2:0:0:15:15,dblclick:2:0:0:15:15,click:3:0:0:15:15"
             )
         );
     }

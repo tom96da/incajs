@@ -25,7 +25,10 @@ const bare = ref(null);
       id="focus-bare"
       :style="{ width: 100, height: 40 }"
       @mousedown.prevent
-      @click="bare.focus()"
+      @click="
+        bare.focus();
+        log += 'called ';
+      "
     />
     <div id="remove" :style="{ width: 100, height: 40 }" @mousedown.prevent @click="tab = null" />
     <div id="negative" :style="{ width: 100, height: 40 }" @mousedown.prevent @click="tab = -1" />

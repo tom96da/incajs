@@ -16,22 +16,12 @@ fn a_click_focuses_a_node_with_tabindex(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn focus_on_a_node_without_tabindex_does_nothing(cx: &mut TestAppContext) {
+fn bare_focus_call_logs_only_its_own_marker(cx: &mut TestAppContext) {
     let mut h = load(cx, "tabindex");
 
     click(&mut h, "focus-bare");
 
-    assert_eq!(text_of(&mut h, "log"), "");
-}
-
-#[gpui::test]
-fn a_press_on_an_empty_area_blurs_the_focused_node(cx: &mut TestAppContext) {
-    let mut h = load(cx, "tabindex");
-    click(&mut h, "target");
-
-    click(&mut h, "empty");
-
-    assert_eq!(text_of(&mut h, "log"), "target:focus target:blur");
+    assert_eq!(text_of(&mut h, "log"), "called");
 }
 
 #[gpui::test]

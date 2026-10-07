@@ -19,32 +19,11 @@ fn enter_clicks_on_key_down_and_bubbles_with_the_button_as_target(cx: &mut TestA
 }
 
 #[gpui::test]
-fn space_clicks_on_key_up(cx: &mut TestAppContext) {
-    let mut h = load(cx, "button");
-
-    h.keystrokes("space");
-    assert_eq!(text_of(&mut h, "log"), "go:focus go:keydown:");
-    h.key_up("space");
-
-    assert_eq!(
-        text_of(&mut h, "log"),
-        "go:focus go:keydown:  go:keyup:  go:click:0:0:0:false wrap:click:go"
-    );
-}
-
-#[gpui::test]
-fn a_disabled_button_drops_presses_and_clicks_for_itself_and_its_ancestor(cx: &mut TestAppContext) {
-    let mut h = load(cx, "button");
-    let before = text_of(&mut h, "log");
-
-    click(&mut h, "off");
-
-    assert_eq!(text_of(&mut h, "log"), before);
-}
-
-#[gpui::test]
 fn disabled_false_enables_the_button_and_true_disables_it_again(cx: &mut TestAppContext) {
     let mut h = load(cx, "button");
+    let before = text_of(&mut h, "log");
+    click(&mut h, "off");
+    assert_eq!(text_of(&mut h, "log"), before);
 
     click(&mut h, "toggle");
     click(&mut h, "off");

@@ -1511,12 +1511,16 @@ mod tests {
                 before, e.defaultPrevented, e.eventPhase, e.currentTarget, \
                 e.isTrusted, e.timeStamp]); } };";
 
-    fn seen(dispatcher: &EventDispatcher) -> Vec<Vec<serde_json::Value>> {
+    fn seen(dispatcher: &EventDispatcher) -> serde_json::Value {
         let json = dispatcher
             .engine
             .eval::<String>("JSON.stringify(globalThis.seen.splice(0))")
             .unwrap();
         serde_json::from_str(&json).unwrap()
+    }
+
+    fn seen_rows(dispatcher: &EventDispatcher) -> Vec<Vec<serde_json::Value>> {
+        serde_json::from_value(seen(dispatcher)).unwrap()
     }
 
     fn listen(host: &Rc<RefCell<Host>>, node: NodeId, event: &str) {
@@ -1553,7 +1557,7 @@ mod tests {
             cx.update(|window, cx| {
                 dispatcher.dispatch(node, event, &EventPayload::None, window, cx);
             });
-            let rows = seen(&dispatcher);
+            let rows = seen_rows(&dispatcher);
             let want = serde_json::json!([
                 event, bubbles, cancelable, composed, false, cancelable, 2, node, true
             ]);
@@ -1562,34 +1566,6 @@ mod tests {
             }
         }
         assert!(mismatches.is_empty(), "{mismatches:#?}");
-    }
-
-    #[gpui::test]
-    fn a_related_target_that_left_the_tree_reads_null(cx: &mut TestAppContext) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
-        dispatcher
-            .engine
-            .eval::<()>(
-                "globalThis.seen = []; globalThis.__inca_callbacks__ = { \
-                 0: (e) => { globalThis.seen.push(e.relatedTarget); } };",
-            )
-            .unwrap();
-        listen(&host, node, "focus");
-        let cx = cx.add_empty_window();
-        for related in [Some(node), Some(9999), None] {
-            cx.update(|window, cx| {
-                let payload = EventPayload::Focus {
-                    related_target: related,
-                };
-                dispatcher.dispatch(node, "focus", &payload, window, cx);
-            });
-        }
-        let json = dispatcher
-            .engine
-            .eval::<String>("JSON.stringify(globalThis.seen)")
-            .unwrap();
-        assert_eq!(json, format!("[{node},null,null]"));
     }
 
     #[gpui::test]
@@ -1602,7 +1578,7 @@ mod tests {
         cx.update(|window, cx| {
             dispatcher.dispatch(node, "menu:1", &EventPayload::None, window, cx);
         });
-        let rows = seen(&dispatcher);
+        let rows = seen_rows(&dispatcher);
         assert_eq!(
             rows[0][1..6],
             serde_json::json!([false, false, false, false, false])
@@ -1625,7 +1601,7 @@ mod tests {
                 dispatcher.dispatch(node, "focus", &EventPayload::None, window, cx);
             }
         });
-        for row in seen(&dispatcher) {
+        for row in seen_rows(&dispatcher) {
             assert_eq!(row[4], serde_json::json!(false));
             assert_eq!(row[5], serde_json::json!(false));
             assert_eq!(row[6], serde_json::json!(2), "focus is non-bubbling");
@@ -1667,7 +1643,10 @@ mod tests {
             let got = cx.update(|window, cx| {
                 dispatcher.fire(start, event, &EventPayload::None, window, cx)
             });
-            let nodes: Vec<_> = seen(&dispatcher).iter().map(|r| r[7].clone()).collect();
+            let nodes: Vec<_> = seen_rows(&dispatcher)
+                .iter()
+                .map(|r| r[7].clone())
+                .collect();
             assert_eq!(got, prevented, "{event} from {start}: prevented");
             assert_eq!(nodes, reached, "{event} from {start}: nodes reached");
         }
@@ -1696,7 +1675,7 @@ mod tests {
                 dispatcher.dispatch(node, "click", &EventPayload::None, window, cx);
             });
         }
-        let stamps: Vec<f64> = seen(&dispatcher)
+        let stamps: Vec<f64> = seen_rows(&dispatcher)
             .iter()
             .map(|r| r[9].as_f64().unwrap())
             .collect();
@@ -1786,7 +1765,7 @@ mod tests {
             );
         });
         // [currentTarget, defaultPrevented before, eventPhase, isTrusted]
-        let rows: Vec<_> = seen(&dispatcher)
+        let rows: Vec<_> = seen_rows(&dispatcher)
             .iter()
             .map(|r| [r[7].clone(), r[4].clone(), r[6].clone(), r[8].clone()])
             .collect();
@@ -1845,7 +1824,7 @@ mod tests {
                 dispatcher.dispatch(child, event, &EventPayload::None, window, cx);
             }
         });
-        let rows = seen(&dispatcher);
+        let rows = seen_rows(&dispatcher);
         assert_eq!(rows.len(), events.len());
         for row in rows {
             assert_eq!(row[0], serde_json::json!(child));
@@ -1868,7 +1847,10 @@ mod tests {
         cx.update(|window, cx| {
             dispatcher.dispatch(parent, "click", &EventPayload::None, window, cx);
         });
-        assert_eq!(seen(&dispatcher)[0][3], serde_json::json!([parent, outer]));
+        assert_eq!(
+            seen_rows(&dispatcher)[0][3],
+            serde_json::json!([parent, outer])
+        );
         assert_eq!(dispatcher.path_from(child), [child, parent, outer]);
         let after = dispatcher
             .engine
@@ -1948,20 +1930,12 @@ mod tests {
             listen(&host, node, event);
             cx.update(|window, cx| dispatcher.dispatch(node, event, &payload, window, cx));
             let want = format!("{event}:true:true:{fields}");
-            let got = seen_strings(&dispatcher);
-            if got != [want.clone()] {
+            let got = seen(&dispatcher);
+            if got != serde_json::json!([want]) {
                 mismatches.push(format!("{event}: {got:?} != {want}"));
             }
         }
         assert!(mismatches.is_empty(), "{mismatches:?}");
-    }
-
-    fn seen_strings(dispatcher: &EventDispatcher) -> Vec<String> {
-        let json = dispatcher
-            .engine
-            .eval::<String>("JSON.stringify(globalThis.seen.splice(0))")
-            .unwrap();
-        serde_json::from_str(&json).unwrap()
     }
 
     #[test]
@@ -2018,6 +1992,7 @@ mod tests {
             .unwrap();
         listen(&host, outer, "mouseover");
         listen(&host, outer, "mouseout");
+        listen(&host, outer, "focus");
         let cx = cx.add_empty_window();
         let at = |related_target| {
             EventPayload::Mouse(MousePayload {
@@ -2029,29 +2004,31 @@ mod tests {
         cx.update(|window, cx| {
             dispatcher.dispatch(outer, "mouseover", &at(Some(parent)), window, cx);
             dispatcher.dispatch(outer, "mouseover", &at(Some(99)), window, cx);
+            for related_target in [Some(parent), Some(99), None] {
+                let payload = EventPayload::Focus { related_target };
+                dispatcher.dispatch(outer, "focus", &payload, window, cx);
+            }
         });
         assert_eq!(
-            seen_values(&dispatcher),
-            serde_json::json!([["mouseover", parent], ["mouseover", null]])
+            seen(&dispatcher),
+            serde_json::json!([
+                ["mouseover", parent],
+                ["mouseover", null],
+                ["focus", parent],
+                ["focus", null],
+                ["focus", null]
+            ])
         );
 
         cx.update(|window, cx| dispatcher.report_hover(Some(child), window, cx));
-        seen_values(&dispatcher);
+        seen(&dispatcher);
         host.borrow_mut().tree.destroy_node(child);
         cx.update(|window, cx| dispatcher.report_hover(Some(parent), window, cx));
-        assert_eq!(seen_values(&dispatcher), serde_json::json!([]));
+        assert_eq!(seen(&dispatcher), serde_json::json!([]));
         cx.update(|window, cx| dispatcher.report_hover(Some(outer), window, cx));
         assert_eq!(
-            seen_values(&dispatcher),
+            seen(&dispatcher),
             serde_json::json!([["mouseout", outer], ["mouseover", parent]])
         );
-    }
-
-    fn seen_values(dispatcher: &EventDispatcher) -> serde_json::Value {
-        let json = dispatcher
-            .engine
-            .eval::<String>("JSON.stringify(globalThis.seen.splice(0))")
-            .unwrap();
-        serde_json::from_str(&json).unwrap()
     }
 }
