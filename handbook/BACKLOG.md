@@ -1100,3 +1100,12 @@ A fixed entry is deleted and its ID is never reused.
   listeners. An ancestor's `preventDefault()` runs too late to cancel it. The
   fix moves the activation to a root key listener that runs after every
   node's listeners.
+
+- **B-139 `eventPhase` is approximate and `composedPath()` is unimplemented**
+  `Units: bridge · Size: S · Impact: Low`
+
+  `eventPhase` is 2 on the innermost node with a listener and 3 above it. A
+  click on a child that has no listener reports 3 on its ancestor, while the
+  child's own path starts at phase 2. The fix is the exact `target` (B-018):
+  `eventPhase` is 2 where `currentTarget` equals `target`, and a new
+  `composedPath()` returns the ancestor chain from `target`.

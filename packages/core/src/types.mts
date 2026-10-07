@@ -120,6 +120,12 @@ export interface StyleProps {
  * The native host calls it with one argument, an object with:
  * - `type`: the event's name.
  * - `target` and `currentTarget`: both the {@link NodeId} the event fired on.
+ * - `bubbles`, `cancelable` and `composed`: fixed per event name.
+ * - `defaultPrevented`: `true` once a listener called `preventDefault()` on a
+ *   cancelable event.
+ * - `eventPhase`: 2 on the innermost node with a listener, 3 above it.
+ * - `isTrusted`: always `true`.
+ * - `timeStamp`: milliseconds since the host started, as a number.
  * - `eventId`: a number that grows with each event and is the same on every
  *   node that event reaches.
  * - `stopPropagation()`, `stopImmediatePropagation()` and `preventDefault()`.

@@ -142,7 +142,19 @@ and event name. Payloads and author-facing behaviour are in
   such as `focus`/`blur` after a focus change, takes a new value per event
   name. One engine has one counter, shared by all its dispatchers, and it
   restarts at 1 with a new engine.
+- Base fields: `bubbles`, `cancelable` and `composed` come from one table
+  (`EVENT_FLAGS` in `dispatch.rs`; other names get all three `false`). The
+  `timeStamp` origin is a process-wide `Instant` fixed when the first
+  dispatcher is created. `defaultPrevented` and `eventPhase` come from the
+  per-input state the `eventId` lives in. The origin node of that state is the
+  first node an event name runs listeners on, in `dispatch` and in
+  `EventDispatcher::activate`. A `preventDefault()` call on a cancelable event
+  marks the state, so later nodes start with it `true`.
 - Methods: `stopPropagation`, `stopImmediatePropagation`, `preventDefault`.
+  `preventDefault` reaches the window only for a cancelable event.
+- Accessors: `defaultPrevented` (getter), `returnValue` and `cancelBubble`
+  (getter and setter with ToBoolean coercion) read the flags the methods set.
+  The phase constants and `srcElement` are non-enumerable data properties.
 - GPUI's `platform` modifier becomes `metaKey`. `function` is dropped.
 
 #### Events

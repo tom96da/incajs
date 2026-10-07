@@ -12,6 +12,7 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Added
 
+- the event object carries `bubbles`, `cancelable`, `composed`, `defaultPrevented`, `eventPhase`, `isTrusted` and `timeStamp`
 - the `button` element has a default `tabindex` of 0, fires `click` from Enter and Space, and takes a `disabled` attribute
 - `el.tabIndex` sets the `tabindex` attribute ([9f63f4a](https://github.com/tom96da/incajs/commit/9f63f4a))
 

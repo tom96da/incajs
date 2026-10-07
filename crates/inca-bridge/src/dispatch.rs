@@ -26,6 +26,8 @@
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::OnceLock;
+use std::time::Instant;
 
 use gpui::{App, ScrollHandle, Window};
 use inca_gpui::{
@@ -33,6 +35,8 @@ use inca_gpui::{
     dom_buttons_bit,
 };
 use inca_jsenv::{Engine, EngineError};
+use rquickjs::convert::Coerced;
+use rquickjs::object::{Accessor, Property};
 use rquickjs::{Ctx, Function, Object};
 
 use inca_gpui::EventSink;
@@ -52,6 +56,47 @@ pub type ErrorReporter = Rc<dyn Fn(&EngineError)>;
 #[must_use]
 pub fn stderr_reporter() -> ErrorReporter {
     Rc::new(|err| eprintln!("{err}"))
+}
+
+/// `bubbles`, `cancelable` and `composed` of every event the host dispatches.
+/// Any other name takes all three as false.
+const EVENT_FLAGS: [(&str, [bool; 3]); 11] = [
+    ("click", [true, true, true]),
+    ("mousedown", [true, true, true]),
+    ("mouseup", [true, true, true]),
+    ("mousemove", [true, true, true]),
+    ("mouseenter", [false, false, false]),
+    ("mouseleave", [false, false, false]),
+    ("wheel", [true, true, true]),
+    ("keydown", [true, true, true]),
+    ("keyup", [true, true, true]),
+    ("focus", [false, false, true]),
+    ("blur", [false, false, true]),
+];
+
+fn flags_of(event: &str) -> [bool; 3] {
+    EVENT_FLAGS
+        .iter()
+        .find(|(name, _)| *name == event)
+        .map_or([false; 3], |(_, flags)| *flags)
+}
+
+/// The origin of every `timeStamp`.
+fn time_origin() -> Instant {
+    static ORIGIN: OnceLock<Instant> = OnceLock::new();
+    *ORIGIN.get_or_init(Instant::now)
+}
+
+/// What every node of one event shares: the `eventId`, the `origin`, whether
+/// a callback has called `preventDefault()` and the `timeStamp`. The origin is
+/// the first node the event runs listeners on, the innermost node with a
+/// listener. It gets `eventPhase` 2 and the nodes above it get 3.
+#[derive(Clone, Copy)]
+struct EventState {
+    id: u64,
+    origin: NodeId,
+    prevented: bool,
+    time_stamp: f64,
 }
 
 /// Everything needed to dispatch a native event into JS: the engine to call
@@ -78,9 +123,9 @@ pub struct EventDispatcher {
     wheel_stopped: Rc<Cell<bool>>,
     /// Last number handed out as an `eventId`.
     last_event_id: Rc<Cell<u64>>,
-    /// The `eventId` of each event name dispatched during the input being
+    /// The state of each event name dispatched during the input being
     /// handled now. Emptied when that input's update ends.
-    current_event_ids: Rc<RefCell<HashMap<String, u64>>>,
+    current_events: Rc<RefCell<HashMap<String, EventState>>>,
     /// The scroll state of every scrolling container, created on first ask.
     scroll_handles: Rc<RefCell<HashMap<NodeId, ScrollHandle>>>,
 }
@@ -88,6 +133,7 @@ pub struct EventDispatcher {
 impl EventDispatcher {
     /// Reports failures through [`stderr_reporter`].
     pub fn new(engine: Rc<Engine>, host: Rc<RefCell<Host>>) -> Self {
+        time_origin();
         Self {
             engine,
             host,
@@ -97,7 +143,7 @@ impl EventDispatcher {
             current_movement: Rc::new(Cell::new(None)),
             wheel_stopped: Rc::new(Cell::new(false)),
             last_event_id: Rc::new(Cell::new(0)),
-            current_event_ids: Rc::new(RefCell::new(HashMap::new())),
+            current_events: Rc::new(RefCell::new(HashMap::new())),
             scroll_handles: Rc::new(RefCell::new(HashMap::new())),
         }
     }
@@ -126,23 +172,29 @@ impl EventDispatcher {
             .fold(EventMask::NONE, |mask, kind| mask | kind.mask())
     }
 
-    /// Returns the `eventId` for `event`. The first dispatch of a name during
-    /// one input takes the next number and later dispatches of that name
-    /// during the same input reuse it. The numbers are forgotten when the
-    /// input's update ends.
-    fn event_id(&self, event: &str, cx: &mut App) -> u64 {
-        let mut ids = self.current_event_ids.borrow_mut();
-        if let Some(id) = ids.get(event) {
-            return *id;
+    /// Returns the [`EventState`] for `event`. The first dispatch of a name
+    /// during one input takes the next `eventId`, `node_id` as origin and the
+    /// current time. Later dispatches of that name during the same input
+    /// reuse them. The state is forgotten when the input's update ends.
+    fn event_state(&self, event: &str, node_id: NodeId, cx: &mut App) -> EventState {
+        let mut events = self.current_events.borrow_mut();
+        if let Some(state) = events.get(event) {
+            return *state;
         }
         let id = self.last_event_id.get() + 1;
         self.last_event_id.set(id);
-        if ids.is_empty() {
-            let current = Rc::clone(&self.current_event_ids);
+        if events.is_empty() {
+            let current = Rc::clone(&self.current_events);
             cx.defer(move |_| current.borrow_mut().clear());
         }
-        ids.insert(event.to_owned(), id);
-        id
+        let state = EventState {
+            id,
+            origin: node_id,
+            prevented: false,
+            time_stamp: time_origin().elapsed().as_secs_f64() * 1000.0,
+        };
+        events.insert(event.to_owned(), state);
+        state
     }
 
     /// Returns `payload` with its `buttons` bitmask corrected against
@@ -227,6 +279,10 @@ impl EventDispatcher {
     /// a larger one. A dispatch that no input produced, such as the `focus`
     /// and `blur` of a focus change, takes a new number per event name.
     ///
+    /// `bubbles`, `cancelable`, `composed`, `defaultPrevented`, `eventPhase`,
+    /// `isTrusted` and `timeStamp` are the base fields. `eventPhase` is 2
+    /// on the innermost node with a listener and 3 above it.
+    ///
     /// `target` and `currentTarget` are both `node_id`. `currentTarget` (the
     /// node this call is dispatching for) is exact; `target` is only an
     /// approximation of the same value.
@@ -265,8 +321,8 @@ impl EventDispatcher {
 
         let payload = self.with_held_buttons(event, payload);
         let payload = self.with_movement(&payload, event);
-        let event_id = self.event_id(event, cx);
-        let outcome = self.run_callbacks(node_id, node_id, event, &payload, event_id, callback_ids);
+        let state = self.event_state(event, node_id, cx);
+        let outcome = self.run_callbacks(node_id, node_id, event, &payload, state, callback_ids);
 
         if outcome.stop_propagation {
             if event == "wheel" {
@@ -295,12 +351,12 @@ impl EventDispatcher {
         target: NodeId,
         event: &str,
         payload: &EventPayload,
-        event_id: u64,
+        state: EventState,
         callback_ids: Vec<u32>,
     ) -> Outcome {
         let stop_propagation = Rc::new(Cell::new(false));
         let stop_immediate = Rc::new(Cell::new(false));
-        let prevent_default = Rc::new(Cell::new(false));
+        let prevent_default = Rc::new(Cell::new(state.prevented));
 
         // Collected rather than reported in place: a reporter is free to do
         // anything, and re-entering the engine from inside `with` panics.
@@ -313,15 +369,17 @@ impl EventDispatcher {
             let event_object = build_event_object(
                 &ctx,
                 event,
-                node_id,
+                (node_id, target),
                 payload,
-                &stop_propagation,
-                &stop_immediate,
-                &prevent_default,
+                &state,
+                &[
+                    Rc::clone(&stop_propagation),
+                    Rc::clone(&stop_immediate),
+                    Rc::clone(&prevent_default),
+                ],
             );
             let event_object = event_object.and_then(|object| {
-                object.set("target", target)?;
-                object.set("eventId", event_id)?;
+                object.set("eventId", state.id)?;
                 Ok(object)
             });
             let event_object = match event_object {
@@ -347,6 +405,9 @@ impl EventDispatcher {
         });
         for failure in &failures {
             (self.reporter)(failure);
+        }
+        if let Some(shared) = self.current_events.borrow_mut().get_mut(event) {
+            shared.prevented |= prevent_default.get();
         }
         Outcome {
             stop_propagation: stop_propagation.get(),
@@ -376,7 +437,6 @@ impl EventDispatcher {
             detail: 0,
             modifiers,
         });
-        let event_id = self.event_id("click", cx);
         let mut current = Some(node_id);
         while let Some(id) = current {
             let callback_ids = self
@@ -385,8 +445,17 @@ impl EventDispatcher {
                 .listeners
                 .callbacks_for(id, "click")
                 .to_vec();
-            let outcome =
-                self.run_callbacks(id, node_id, "click", &payload, event_id, callback_ids);
+            if callback_ids.is_empty() {
+                current = self
+                    .host
+                    .borrow()
+                    .tree
+                    .get(id)
+                    .and_then(inca_gpui::VirtualNode::parent);
+                continue;
+            }
+            let state = self.event_state("click", id, cx);
+            let outcome = self.run_callbacks(id, node_id, "click", &payload, state, callback_ids);
             self.drain_jobs_and_refresh(window);
             if outcome.stop_propagation {
                 break;
@@ -419,16 +488,81 @@ struct Outcome {
 fn build_event_object<'js>(
     ctx: &Ctx<'js>,
     event: &str,
-    node_id: NodeId,
+    (node_id, target): (NodeId, NodeId),
     payload: &EventPayload,
-    stop_propagation: &Rc<Cell<bool>>,
-    stop_immediate: &Rc<Cell<bool>>,
-    prevent_default: &Rc<Cell<bool>>,
+    state: &EventState,
+    signals: &[Rc<Cell<bool>>; 3],
 ) -> rquickjs::Result<Object<'js>> {
+    let [stop_propagation, stop_immediate, prevent_default] = signals;
+    let [bubbles, cancelable, composed] = flags_of(event);
     let event_object = Object::new(ctx.clone())?;
     event_object.set("type", event)?;
-    event_object.set("target", node_id)?;
+    event_object.set("target", target)?;
     event_object.set("currentTarget", node_id)?;
+    event_object.prop("srcElement", Property::from(target))?;
+    for (name, value) in [
+        ("NONE", 0),
+        ("CAPTURING_PHASE", 1),
+        ("AT_TARGET", 2),
+        ("BUBBLING_PHASE", 3),
+    ] {
+        event_object.prop(name, Property::from(value))?;
+    }
+    event_object.set("bubbles", bubbles)?;
+    event_object.set("cancelable", cancelable)?;
+    event_object.set("composed", composed)?;
+    event_object.prop(
+        "defaultPrevented",
+        Accessor::new_get({
+            let prevent_default = Rc::clone(prevent_default);
+            move || prevent_default.get()
+        })
+        .enumerable(),
+    )?;
+    event_object.prop(
+        "returnValue",
+        Accessor::new_get({
+            let prevent_default = Rc::clone(prevent_default);
+            move || !prevent_default.get()
+        })
+        .set({
+            let prevent_default = Rc::clone(prevent_default);
+            move |value: Coerced<bool>| {
+                let value = value.0;
+                if !value && cancelable {
+                    prevent_default.set(true);
+                }
+            }
+        }),
+    )?;
+    event_object.prop(
+        "cancelBubble",
+        Accessor::new_get({
+            let stop_propagation = Rc::clone(stop_propagation);
+            move || stop_propagation.get()
+        })
+        .set({
+            let stop_propagation = Rc::clone(stop_propagation);
+            move |value: Coerced<bool>| {
+                let value = value.0;
+                if value {
+                    stop_propagation.set(true);
+                }
+            }
+        }),
+    )?;
+    // 2 on the innermost node with a listener and on every node of a
+    // non-bubbling event, 3 above it.
+    event_object.set(
+        "eventPhase",
+        if !bubbles || node_id == state.origin {
+            2
+        } else {
+            3
+        },
+    )?;
+    event_object.set("isTrusted", true)?;
+    event_object.set("timeStamp", state.time_stamp)?;
     set_payload(&event_object, payload)?;
 
     event_object.set(
@@ -453,7 +587,11 @@ fn build_event_object<'js>(
         "preventDefault",
         Function::new(ctx.clone(), {
             let prevent_default = Rc::clone(prevent_default);
-            move || prevent_default.set(true)
+            move || {
+                if cancelable {
+                    prevent_default.set(true);
+                }
+            }
         })?,
     )?;
 
@@ -911,5 +1049,212 @@ mod tests {
 
         let payload = dispatcher.with_movement(&EventPayload::None, "click");
         assert_eq!(payload, EventPayload::None);
+    }
+
+    // Snapshot per call: [type, bubbles, cancelable, composed, defaultPrevented
+    // before, defaultPrevented after preventDefault(), eventPhase,
+    // currentTarget, isTrusted, timeStamp].
+    const RECORDER: &str = "globalThis.seen = []; \
+        globalThis.__inca_callbacks__ = { 0: (e) => { \
+            const before = e.defaultPrevented; e.preventDefault(); \
+            globalThis.seen.push([e.type, e.bubbles, e.cancelable, e.composed, \
+                before, e.defaultPrevented, e.eventPhase, e.currentTarget, \
+                e.isTrusted, e.timeStamp]); } };";
+
+    fn seen(dispatcher: &EventDispatcher) -> Vec<Vec<serde_json::Value>> {
+        let json = dispatcher
+            .engine
+            .eval::<String>("JSON.stringify(globalThis.seen.splice(0))")
+            .unwrap();
+        serde_json::from_str(&json).unwrap()
+    }
+
+    fn listen(host: &Rc<RefCell<Host>>, node: NodeId, event: &str) {
+        host.borrow_mut().listeners.register(node, event, 0);
+    }
+
+    #[gpui::test]
+    fn base_fields_follow_the_spec_rows_and_prevent_default_needs_cancelable(
+        cx: &mut TestAppContext,
+    ) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        dispatcher.engine.eval::<()>(RECORDER).unwrap();
+        let cx = cx.add_empty_window();
+        let mut mismatches = Vec::new();
+        // (event, bubbles, cancelable, composed)
+        for (event, bubbles, cancelable, composed) in [
+            ("click", true, true, true),
+            ("mouseenter", false, false, false),
+            ("mouseleave", false, false, false),
+            ("wheel", true, true, true),
+            ("keydown", true, true, true),
+            ("focus", false, false, true),
+            ("blur", false, false, true),
+        ] {
+            listen(&host, node, event);
+            cx.update(|window, cx| {
+                dispatcher.dispatch(node, event, &EventPayload::None, window, cx);
+            });
+            let rows = seen(&dispatcher);
+            let want = serde_json::json!([
+                event, bubbles, cancelable, composed, false, cancelable, 2, node, true
+            ]);
+            if rows.len() != 1 || rows[0][..9] != *want.as_array().unwrap() {
+                mismatches.push(format!("{event}: {rows:?}"));
+            }
+        }
+        assert!(mismatches.is_empty(), "{mismatches:#?}");
+    }
+
+    #[gpui::test]
+    fn an_unlisted_event_name_takes_all_three_flags_false(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        dispatcher.engine.eval::<()>(RECORDER).unwrap();
+        listen(&host, node, "menu:1");
+        let cx = cx.add_empty_window();
+        cx.update(|window, cx| {
+            dispatcher.dispatch(node, "menu:1", &EventPayload::None, window, cx);
+        });
+        let rows = seen(&dispatcher);
+        assert_eq!(
+            rows[0][1..6],
+            serde_json::json!([false, false, false, false, false])
+                .as_array()
+                .unwrap()[..]
+        );
+    }
+
+    #[gpui::test]
+    fn a_non_cancelable_event_stays_unprevented_on_every_node(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let child = host.borrow_mut().tree.create_node("div").unwrap();
+        let parent = host.borrow_mut().tree.create_node("div").unwrap();
+        dispatcher.engine.eval::<()>(RECORDER).unwrap();
+        listen(&host, child, "focus");
+        listen(&host, parent, "focus");
+        let cx = cx.add_empty_window();
+        cx.update(|window, cx| {
+            for node in [child, parent] {
+                dispatcher.dispatch(node, "focus", &EventPayload::None, window, cx);
+            }
+        });
+        for row in seen(&dispatcher) {
+            assert_eq!(row[4], serde_json::json!(false));
+            assert_eq!(row[5], serde_json::json!(false));
+            assert_eq!(row[6], serde_json::json!(2), "focus is non-bubbling");
+        }
+    }
+
+    #[gpui::test]
+    fn time_stamp_counts_milliseconds_from_the_host_start_and_grows(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        dispatcher.engine.eval::<()>(RECORDER).unwrap();
+        listen(&host, node, "click");
+        let cx = cx.add_empty_window();
+        for _ in 0..3 {
+            cx.update(|window, cx| {
+                dispatcher.dispatch(node, "click", &EventPayload::None, window, cx);
+            });
+        }
+        let stamps: Vec<f64> = seen(&dispatcher)
+            .iter()
+            .map(|r| r[9].as_f64().unwrap())
+            .collect();
+        assert!(stamps[0] > 0.0, "{stamps:?}");
+        assert!(stamps.windows(2).all(|w| w[1] >= w[0]), "{stamps:?}");
+    }
+
+    #[gpui::test]
+    fn the_legacy_members_follow_the_event_state(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        listen(&host, node, "click");
+        // Each entry runs in its own dispatch and reports one string.
+        let probes = [
+            (
+                "[e.NONE, e.CAPTURING_PHASE, e.AT_TARGET, e.BUBBLING_PHASE].join()",
+                "0,1,2,3",
+            ),
+            ("e.srcElement === e.target", "true"),
+            (
+                "[e.cancelBubble, (e.cancelBubble = true, e.cancelBubble)].join()",
+                "false,true",
+            ),
+            ("(e.cancelBubble = false, e.cancelBubble)", "false"),
+            ("(e.cancelBubble = 1, e.cancelBubble)", "true"),
+            ("(e.cancelBubble = '', e.cancelBubble)", "false"),
+            (
+                "[e.returnValue, (e.returnValue = false, e.returnValue), e.defaultPrevented].join()",
+                "true,false,true",
+            ),
+            ("(e.returnValue = true, e.defaultPrevented)", "false"),
+            ("(e.returnValue = 0, e.defaultPrevented)", "true"),
+            ("(e.returnValue = 'no', e.defaultPrevented)", "false"),
+            (
+                "(e.preventDefault(), [e.defaultPrevented, e.returnValue].join())",
+                "true,false",
+            ),
+            (
+                "(() => { const p = e.preventDefault; p(); return e.defaultPrevented; })()",
+                "true",
+            ),
+            (
+                "(e.preventDefault(), (() => { try { e.defaultPrevented = false; } catch {} return e.defaultPrevented; })())",
+                "true",
+            ),
+        ];
+        let cx = cx.add_empty_window();
+        let mut mismatches = Vec::new();
+        for (expr, want) in probes {
+            dispatcher
+                .engine
+                .eval::<()>(&format!(
+                    "globalThis.out = ''; globalThis.__inca_callbacks__ = {{ 0: (e) => {{ \
+                        globalThis.out = String({expr}); }} }};"
+                ))
+                .unwrap();
+            cx.update(|window, cx| {
+                dispatcher.dispatch(node, "click", &EventPayload::None, window, cx);
+            });
+            let got = dispatcher.engine.eval::<String>("globalThis.out").unwrap();
+            if got != want {
+                mismatches.push(format!("{expr}: {got} (want {want})"));
+            }
+        }
+        assert!(mismatches.is_empty(), "{mismatches:#?}");
+    }
+
+    #[gpui::test]
+    fn a_keyboard_click_starts_at_the_innermost_node_with_a_listener(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let outer = host.borrow_mut().tree.create_node("div").unwrap();
+        let parent = host.borrow_mut().tree.create_node("div").unwrap();
+        let button = host.borrow_mut().tree.create_node("button").unwrap();
+        host.borrow_mut().tree.append_child(outer, parent).unwrap();
+        host.borrow_mut().tree.append_child(parent, button).unwrap();
+        dispatcher.engine.eval::<()>(RECORDER).unwrap();
+        listen(&host, parent, "click");
+        listen(&host, outer, "click");
+        let cx = cx.add_empty_window();
+        cx.update(|window, cx| {
+            dispatcher.activate(button, gpui::Modifiers::none(), window, cx);
+        });
+        // [currentTarget, defaultPrevented before, eventPhase, isTrusted]
+        let rows: Vec<_> = seen(&dispatcher)
+            .iter()
+            .map(|r| [r[7].clone(), r[4].clone(), r[6].clone(), r[8].clone()])
+            .collect();
+        let want = |node: NodeId, before: bool, phase: u8| {
+            [
+                serde_json::json!(node),
+                serde_json::json!(before),
+                serde_json::json!(phase),
+                serde_json::json!(true),
+            ]
+        };
+        assert_eq!(rows, [want(parent, false, 2), want(outer, true, 3)]);
     }
 }

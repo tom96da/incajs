@@ -12,8 +12,8 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 A `.vue` template binds a listener the usual way — `@click`,
 `@mousedown`, and so on. Every listener receives one shared event
 object: `type` (the event's name), `target`/`currentTarget`, the
-[propagation methods](#propagation) below, and whatever fields that event
-carries.
+[base fields](#base-fields), the [propagation methods](#propagation) below,
+and whatever fields that event carries.
 
 `target` and `currentTarget` are both the id of the node currently
 receiving the event — they're always equal, since there's no way yet to
@@ -25,6 +25,37 @@ delegation).
   <div @mousedown="onMouseDown">Click and hold</div>
 </template>
 ```
+
+## Base fields
+
+Every event carries `bubbles`, `cancelable`, `composed`, `defaultPrevented`,
+`eventPhase`, `isTrusted` and `timeStamp`.
+
+- `defaultPrevented` turns `true` when a listener calls `preventDefault()` on
+  a cancelable event. Listeners that run later for the same event read it.
+  Only `preventDefault()` changes it.
+- `eventPhase` is `2` on the innermost node with a listener and `3` on the
+  nodes above it. A non-bubbling event reports `2` on every node.
+- `NONE`, `CAPTURING_PHASE`, `AT_TARGET` and `BUBBLING_PHASE` (0 to 3) sit on
+  the event object.
+- `isTrusted` is `true`. The host produces every event, including a
+  `button`'s keyboard `click`.
+- `timeStamp` is a number of milliseconds since the host started. Every node
+  of one event reads the same value, and a later event reads a larger or equal
+  one.
+- `srcElement` equals `target`.
+- `cancelBubble` reads whether propagation is stopped. Assigning a truthy
+  value stops it.
+- `returnValue` equals the negation of `defaultPrevented`. Assigning a falsy
+  value calls `preventDefault()`.
+
+| Event | `bubbles` | `cancelable` | `composed` |
+| --- | --- | --- | --- |
+| `click`, `mousedown`, `mouseup`, `mousemove`, `wheel`, `keydown`, `keyup` | `true` | `true` | `true` |
+| `mouseenter`, `mouseleave` | `false` | `false` | `false` |
+| `focus`, `blur` | `false` | `false` | `true` |
+
+An event with any other name has all three set to `false`.
 
 > [!NOTE]
 > These are the only event names wired to real input. Binding any other
@@ -177,6 +208,8 @@ function onClick(event) {
   own click-to-focus, a [`button`](./elements#button)'s `click` from
   `Enter` (in `keydown`) or `Space` (in `keyup`), or a [`wheel`](#wheel)'s
   scrolling.
+
+  `preventDefault()` takes effect on a cancelable event only.
 
 Every listener runs in the bubble phase; there's no way yet to listen
 during the capture phase.

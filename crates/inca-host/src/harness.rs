@@ -833,6 +833,25 @@ mod tests {
     }
 
     #[gpui::test]
+    fn base_fields_reach_listeners_on_the_target_and_its_ancestor(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, FOCUSABLE);
+        run_js(
+            &mut h,
+            "__inca_callbacks__[2] = (e) => { const was = e.defaultPrevented; e.preventDefault(); \
+                globalThis.log.push([e.type, e.bubbles, e.cancelable, e.composed, was, \
+                    e.defaultPrevented, e.eventPhase, e.isTrusted, typeof e.timeStamp].join('/')); }; \
+             __inca_native__.addEventListener(box, 'click', 2); \
+             __inca_native__.addEventListener(frame, 'click', 2);",
+        );
+        let boxed = node(&h, "box");
+        h.click(boxed);
+        assert_eq!(
+            log(&h),
+            "click/true/true/true/false/true/2/true/number,click/true/true/true/true/true/3/true/number"
+        );
+    }
+
+    #[gpui::test]
     fn a_numeric_tabindex_makes_a_node_focusable(cx: &mut TestAppContext) {
         let mut h = Harness::load(cx, ENTRY, FOCUSABLE);
         run_js(&mut h, "__inca_native__.setAttribute(box, 'tabindex', 0);");
