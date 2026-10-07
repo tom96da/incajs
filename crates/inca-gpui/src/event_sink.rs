@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use gpui::{
-    App, KeyDownEvent, KeyUpEvent, Keystroke, MouseButton, MouseDownEvent, MouseMoveEvent,
-    MouseUpEvent, ScrollDelta, ScrollWheelEvent, Window,
+    App, ClickEvent, KeyDownEvent, KeyUpEvent, Keystroke, MouseButton, MouseDownEvent,
+    MouseMoveEvent, MouseUpEvent, ScrollDelta, ScrollWheelEvent, Window,
 };
 
 use crate::tree::NodeId;
@@ -35,6 +35,9 @@ macro_rules! event_kinds {
 
 event_kinds! {
     Click => "click",
+    DblClick => "dblclick",
+    AuxClick => "auxclick",
+    ContextMenu => "contextmenu",
     MouseDown => "mousedown",
     MouseUp => "mouseup",
     MouseMove => "mousemove",
@@ -53,6 +56,9 @@ impl EventKind {
     pub const fn mask(self) -> EventMask {
         match self {
             Self::Click => EventMask::CLICK,
+            Self::DblClick => EventMask::DBL_CLICK,
+            Self::AuxClick => EventMask::AUX_CLICK,
+            Self::ContextMenu => EventMask::CONTEXT_MENU,
             Self::MouseDown => EventMask::MOUSE_DOWN,
             Self::MouseUp => EventMask::MOUSE_UP,
             Self::MouseMove => EventMask::MOUSE_MOVE,
@@ -71,8 +77,11 @@ impl EventKind {
     #[must_use]
     pub const fn needs_element_id(self) -> bool {
         match self {
-            Self::Click | Self::MouseEnter | Self::MouseLeave => true,
-            Self::MouseDown
+            Self::Click | Self::DblClick | Self::AuxClick | Self::MouseEnter | Self::MouseLeave => {
+                true
+            }
+            Self::ContextMenu
+            | Self::MouseDown
             | Self::MouseUp
             | Self::MouseMove
             | Self::Wheel
@@ -113,6 +122,12 @@ impl EventMask {
     pub const KEY_DOWN: Self = Self(1 << 9);
     /// Wired for [`EventKind::KeyUp`].
     pub const KEY_UP: Self = Self(1 << 10);
+    /// Wired for [`EventKind::DblClick`].
+    pub const DBL_CLICK: Self = Self(1 << 11);
+    /// Wired for [`EventKind::ContextMenu`].
+    pub const CONTEXT_MENU: Self = Self(1 << 12);
+    /// Wired for [`EventKind::AuxClick`].
+    pub const AUX_CLICK: Self = Self(1 << 13);
 
     /// Whether every bit set in `other` is also set in `self`.
     #[must_use]
@@ -198,6 +213,17 @@ pub struct MousePayload {
     /// How many clicks this is part of (DOM's `detail`). 0 for a move.
     pub detail: u32,
     pub modifiers: gpui::Modifiers,
+    /// Set for `click`, `auxclick` and `contextmenu`, which carry the pointer fields.
+    pub pointer: Option<PointerSource>,
+}
+
+/// What produced a `PointerEvent`-typed event.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PointerSource {
+    /// The mouse: `pointerId` 1, `pointerType` `"mouse"`, `isPrimary` true.
+    Mouse,
+    /// The keyboard: `pointerId` -1, `pointerType` `""`, `isPrimary` false.
+    Keyboard,
 }
 
 impl MousePayload {
@@ -214,6 +240,17 @@ impl MousePayload {
             buttons: 0,
             detail: 0,
             modifiers,
+            pointer: None,
+        }
+    }
+
+    /// The `click` a key press produces: position, `button`, `buttons` and
+    /// `detail` at 0, with the key event's `modifiers`.
+    #[must_use]
+    pub fn keyboard_click(modifiers: gpui::Modifiers) -> Self {
+        Self {
+            pointer: Some(PointerSource::Keyboard),
+            ..Self::at(gpui::Point::default(), modifiers)
         }
     }
 }
@@ -282,6 +319,7 @@ impl From<&MouseDownEvent> for EventPayload {
             buttons: dom_buttons_bit(bit),
             detail: u32::try_from(event.click_count).unwrap_or(u32::MAX),
             modifiers: event.modifiers,
+            pointer: None,
         })
     }
 }
@@ -298,6 +336,46 @@ impl From<&MouseUpEvent> for EventPayload {
             buttons: 0,
             detail: u32::try_from(event.click_count).unwrap_or(u32::MAX),
             modifiers: event.modifiers,
+            pointer: None,
+        })
+    }
+}
+
+impl From<&ClickEvent> for EventPayload {
+    /// `button` is the released button, 2 for a touch long press. `detail` is
+    /// the click count, 1 for a touch. A keyboard click is
+    /// [`MousePayload::keyboard_click`].
+    fn from(event: &ClickEvent) -> Self {
+        let (button, detail) = match event {
+            ClickEvent::Mouse(click) => (
+                dom_button_bit(click.up.button),
+                u32::try_from(click.up.click_count).unwrap_or(u32::MAX),
+            ),
+            ClickEvent::Touch(touch) => (if touch.long_press { 2 } else { 0 }, 1),
+            ClickEvent::Keyboard(_) => {
+                return Self::Mouse(MousePayload::keyboard_click(event.modifiers()));
+            }
+        };
+        Self::Mouse(MousePayload {
+            button,
+            detail,
+            pointer: Some(PointerSource::Mouse),
+            ..MousePayload::at(event.position(), event.modifiers())
+        })
+    }
+}
+
+impl EventPayload {
+    /// The `contextmenu` a press of `event`'s button produces: `detail` 0 and
+    /// `buttons` the pressed button.
+    #[must_use]
+    pub fn context_menu(event: &MouseDownEvent) -> Self {
+        let bit = dom_button_bit(event.button);
+        Self::Mouse(MousePayload {
+            button: bit,
+            buttons: dom_buttons_bit(bit),
+            pointer: Some(PointerSource::Mouse),
+            ..MousePayload::at(event.position, event.modifiers)
         })
     }
 }
@@ -315,6 +393,7 @@ impl From<&MouseMoveEvent> for EventPayload {
                 .map_or(0, |button| dom_buttons_bit(dom_button_bit(button))),
             detail: 0,
             modifiers: event.modifiers,
+            pointer: None,
         })
     }
 }
@@ -339,6 +418,7 @@ impl From<&ScrollWheelEvent> for EventPayload {
                 buttons: 0,
                 detail: 0,
                 modifiers: event.modifiers,
+                pointer: None,
             },
             delta_x,
             delta_y,
@@ -457,6 +537,11 @@ pub trait EventSink {
     /// scrolls for the innermost container under the wheel that can still
     /// move, and stays put after `preventDefault()`.
     fn scroll_handle(&self, node_id: NodeId) -> Option<gpui::ScrollHandle>;
+
+    /// Fires the `contextmenu` a secondary button press produces, after the
+    /// press's own dispatches have run. `payload` is
+    /// [`EventPayload::context_menu`].
+    fn context_menu(&self, payload: &EventPayload, window: &mut Window, cx: &mut App);
 
     /// Reports a pointer move to `position`, in window coordinates. Called
     /// for every pointer move in the window, buttons held included, before
@@ -701,6 +786,88 @@ mod tests {
         assert_eq!(mouse.modifiers, modifiers);
     }
 
+    /// (name, got, want) for each field of `mouse` that differs from `want`.
+    fn field_mismatches(
+        mouse: &MousePayload,
+        want: (f32, f32, u8, u8, u32, Option<PointerSource>),
+    ) -> Vec<String> {
+        let got = (
+            mouse.client_x,
+            mouse.client_y,
+            mouse.button,
+            mouse.buttons,
+            mouse.detail,
+            mouse.pointer,
+        );
+        if got == want {
+            Vec::new()
+        } else {
+            vec![format!("{got:?} != {want:?}")]
+        }
+    }
+
+    #[test]
+    fn click_payloads_carry_the_release_point_the_click_count_and_the_source() {
+        let shift = gpui::Modifiers {
+            shift: true,
+            ..Default::default()
+        };
+        let mouse = |count| {
+            ClickEvent::Mouse(gpui::MouseClickEvent {
+                down: MouseDownEvent::default(),
+                up: MouseUpEvent {
+                    position: gpui::point(gpui::px(3.0), gpui::px(4.0)),
+                    modifiers: shift,
+                    click_count: count,
+                    ..Default::default()
+                },
+            })
+        };
+        let touch = ClickEvent::Touch(gpui::TouchClickEvent {
+            position: gpui::point(gpui::px(5.0), gpui::px(6.0)),
+            tap_count: 2,
+            ..Default::default()
+        });
+        let pointer = Some(PointerSource::Mouse);
+        // (event, modifiers, expected fields)
+        let cases = [
+            (mouse(1), shift, (3.0, 4.0, 0, 0, 1, pointer)),
+            (mouse(2), shift, (3.0, 4.0, 0, 0, 2, pointer)),
+            (
+                touch,
+                gpui::Modifiers::default(),
+                (5.0, 6.0, 0, 0, 1, pointer),
+            ),
+            (
+                ClickEvent::default(),
+                gpui::Modifiers::default(),
+                (0.0, 0.0, 0, 0, 0, Some(PointerSource::Keyboard)),
+            ),
+        ];
+        let mut mismatches = Vec::new();
+        for (event, modifiers, want) in cases {
+            let payload = mouse_payload(EventPayload::from(&event));
+            mismatches.extend(field_mismatches(&payload, want));
+            if payload.modifiers != modifiers {
+                mismatches.push(format!("modifiers {:?}", payload.modifiers));
+            }
+        }
+        assert!(mismatches.is_empty(), "{mismatches:?}");
+    }
+
+    #[test]
+    fn a_context_menu_payload_is_the_pressed_button_with_detail_zero() {
+        let event = MouseDownEvent {
+            button: MouseButton::Right,
+            position: gpui::point(gpui::px(8.0), gpui::px(9.0)),
+            click_count: 1,
+            ..Default::default()
+        };
+        let payload = mouse_payload(EventPayload::context_menu(&event));
+        let want = (8.0, 9.0, 2, 0b0_0010, 0, Some(PointerSource::Mouse));
+        assert_eq!(field_mismatches(&payload, want), Vec::<String>::new());
+    }
+
     #[test]
     fn a_pixel_delta_reports_dom_delta_pixel() {
         let event = ScrollWheelEvent {
@@ -770,12 +937,19 @@ mod tests {
     }
 
     #[test]
-    fn click_and_hover_need_an_element_id_today() {
+    fn clicks_and_hover_need_an_element_id_today() {
         assert_eq!(
             EventMask::needing_element_id(),
-            EventMask::CLICK | EventMask::MOUSE_ENTER | EventMask::MOUSE_LEAVE
+            EventMask::CLICK
+                | EventMask::DBL_CLICK
+                | EventMask::AUX_CLICK
+                | EventMask::MOUSE_ENTER
+                | EventMask::MOUSE_LEAVE
         );
         assert!(EventMask::CLICK.needs_element_id());
+        assert!(EventMask::DBL_CLICK.needs_element_id());
+        assert!(EventMask::AUX_CLICK.needs_element_id());
+        assert!(!EventMask::CONTEXT_MENU.needs_element_id());
         assert!(EventMask::MOUSE_ENTER.needs_element_id());
         assert!(EventMask::MOUSE_LEAVE.needs_element_id());
         assert!(!EventMask::MOUSE_DOWN.needs_element_id());

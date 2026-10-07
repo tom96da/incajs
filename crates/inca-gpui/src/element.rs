@@ -942,10 +942,18 @@ fn pointer_tracker<E: EventSink + Clone + 'static>(dispatch: E) -> impl IntoElem
                     moved.pointer_moved(event.position, cx);
                 }
             });
-            window.on_mouse_event(move |_: &MouseDownEvent, phase, _, cx| {
+            let menu = dispatch.clone();
+            window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
                 if phase == DispatchPhase::Capture {
                     cx.default_global::<SpaceDown>().0 = None;
                     *cx.default_global::<MouseTarget>() = MouseTarget::default();
+                    if event.button == gpui::MouseButton::Right {
+                        // Runs after the press's own listeners.
+                        let (menu, payload) = (menu.clone(), EventPayload::context_menu(event));
+                        window.defer(cx, move |window, cx| {
+                            menu.context_menu(&payload, window, cx);
+                        });
+                    }
                 }
             });
             window.on_mouse_event(move |_: &MouseUpEvent, phase, _, cx| {
@@ -1020,6 +1028,9 @@ pub fn debug_selector(id: NodeId) -> String {
 fn listens_mouse(spec: &ElementSpec) -> bool {
     spec.listens.intersects(
         EventMask::CLICK
+            | EventMask::DBL_CLICK
+            | EventMask::AUX_CLICK
+            | EventMask::CONTEXT_MENU
             | EventMask::MOUSE_DOWN
             | EventMask::MOUSE_UP
             | EventMask::MOUSE_MOVE
@@ -1032,8 +1043,9 @@ fn listens_mouse(spec: &ElementSpec) -> bool {
 /// A container gets a hitbox only when something listens on it — GPUI
 /// inserts one for any element carrying a mouse listener, `click` included.
 /// A container also gets a `gpui` `ElementId` (`.id()`) whenever any wired
-/// kind is [`EventKind::needs_element_id`] — `click` is the only one today,
-/// via `on_click` (a `StatefulInteractiveElement` method); the other kinds
+/// kind is [`EventKind::needs_element_id`] — `click`, `dblclick` and
+/// `auxclick`, via `on_click` and `on_aux_click` (`StatefulInteractiveElement`
+/// methods) — and `mouseenter`/`mouseleave` via `on_hover`. The other kinds
 /// wire through plain `InteractiveElement` methods and need no id. A container
 /// that scrolls on either axis gets one too, since `gpui` keeps its scroll
 /// offset in element state.
@@ -1128,23 +1140,8 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
                     },
                 );
                 let element = element.when(track && !spec.inert, |el| mark_mouse_target(el, id));
-                match wired(EventMask::CLICK) {
-                    Some(listening) => finish_container(
-                        element.on_click(move |event, window, cx| {
-                            // Key clicks come from `wire_button`.
-                            if !event.is_keyboard() && !press_cut(cx) {
-                                // Runs before this node's own mouse-up marker.
-                                mark_target(cx, id);
-                                listening.dispatch(id, "click", &EventPayload::None, window, cx);
-                            }
-                        }),
-                        spec,
-                        dispatch,
-                        root,
-                        track,
-                    ),
-                    None => finish_container(element, spec, dispatch, root, track),
-                }
+                let element = wire_click(element, dispatch, spec, held_back(EventMask::CLICK));
+                finish_container(element, spec, dispatch, root, track)
             } else {
                 let element = wire_stateless(element, id, &wired);
                 let element = wire_button(element, dispatch, spec);
@@ -1159,6 +1156,59 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
             }
         }
     }
+}
+
+/// Wires `click` and `dblclick` on one `on_click` listener and `auxclick` on
+/// `on_aux_click`. `dblclick` runs right after the `click` whose release
+/// counts 2. `held_back` leaves a disabled button's `click` and `dblclick`
+/// unwired. `auxclick` ignores it.
+fn wire_click<Elem, E>(
+    element: Elem,
+    dispatch: Option<&E>,
+    spec: &ElementSpec,
+    held_back: bool,
+) -> Elem
+where
+    Elem: StatefulInteractiveElement + FluentBuilder,
+    E: EventSink + Clone + 'static,
+{
+    let id = spec.id;
+    let (clicks, double_clicks, aux_clicks) = (
+        spec.listens.contains(EventMask::CLICK),
+        spec.listens.contains(EventMask::DBL_CLICK),
+        spec.listens.contains(EventMask::AUX_CLICK),
+    );
+    let Some(listening) = dispatch.cloned() else {
+        return element;
+    };
+    let aux = listening.clone();
+    element
+        .when(aux_clicks, |el| {
+            el.on_aux_click(move |event, window, cx| {
+                // Runs before this node's own mouse-up marker.
+                mark_target(cx, id);
+                aux.dispatch(id, "auxclick", &EventPayload::from(event), window, cx);
+            })
+        })
+        .when((clicks || double_clicks) && !held_back, |el| {
+            el.on_click(move |event, window, cx| {
+                // Key clicks come from `wire_button`.
+                if event.is_keyboard() || press_cut(cx) {
+                    return;
+                }
+                // Runs before this node's own mouse-up marker.
+                mark_target(cx, id);
+                let payload = EventPayload::from(event);
+                if clicks {
+                    listening.dispatch(id, "click", &payload, window, cx);
+                }
+                if double_clicks
+                    && matches!(event, gpui::ClickEvent::Mouse(c) if c.up.click_count == 2)
+                {
+                    listening.dispatch(id, "dblclick", &payload, window, cx);
+                }
+            })
+        })
 }
 
 /// Applies `spec`'s style and children to a container, whichever kind of
@@ -1227,6 +1277,8 @@ impl EventSink for NeverListens {
     }
 
     fn pointer_moved(&self, _position: Point<Pixels>, _cx: &mut App) {}
+
+    fn context_menu(&self, _payload: &EventPayload, _window: &mut Window, _cx: &mut App) {}
 
     fn pointer_left(&self) {}
 }
@@ -2417,6 +2469,8 @@ mod tests {
             }
 
             fn pointer_moved(&self, _: Point<Pixels>, _: &mut App) {}
+
+            fn context_menu(&self, _payload: &EventPayload, _window: &mut Window, _cx: &mut App) {}
 
             fn pointer_left(&self) {}
         }

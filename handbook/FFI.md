@@ -176,7 +176,10 @@ and event name. Payloads and author-facing behaviour are in
 
 | Name | Payload | Notes |
 | --- | --- | --- |
-| `click` | none, or mouse for a key click | Fires before `mouseup` on the same node. A mouse click's marker call runs inside the click closure, because gpui runs click listeners before the node's own mouse-up listeners. A button wires its own `keydown`/`keyup` listeners, runs the JS callbacks, then clicks. `EventSink::activate` runs the node's callbacks, then each ancestor's, with `target` the button. The payload has `button`, `buttons`, `detail` and the coordinates at 0, plus the key event's modifiers. A disabled button's mouse down and up set a flag until the end of the event. The `mousedown`, `mouseup` and `click` wiring of every other node skips its callbacks while the flag is set, and the button leaves its own unwired. |
+| `click` | mouse + pointer | Fires before `mouseup` on the same node. gpui runs click listeners before the node's own mouse-up listeners, so a mouse click's marker call runs inside the click closure. gpui's `on_click` serves the primary button only. The payload is `From<&ClickEvent>`: the release position and modifiers, `button` and `buttons` at 0, `detail` the release's click count, pointer source mouse. A button wires its own `keydown`/`keyup` listeners, runs the JS callbacks, then clicks. `EventSink::activate` runs the node's callbacks, then each ancestor's, with `target` the button. Its payload is `MousePayload::keyboard_click`: coordinates, `button`, `buttons` and `detail` at 0, the key event's modifiers, pointer source keyboard. A disabled button's mouse down and up set a flag until the end of the event. The `mousedown`, `mouseup` and `click` wiring of every other node skips its callbacks while the flag is set, and the button leaves its own unwired. |
+| `dblclick` | mouse | Dispatched inside the same `on_click` closure right after `click`, when the release's click count is 2. A node listening to `dblclick` alone gets the closure too (`EventMask::DBL_CLICK` needs an element id). `target` follows the `click` rule. |
+| `auxclick` | mouse + pointer | gpui's `on_aux_click` serves the other buttons. The payload is `From<&ClickEvent>` with `button` the released button. It ignores the disabled-button flag. `target` follows the `click` rule. |
+| `contextmenu` | mouse + pointer | The root tracker's capture listener for a right `MouseDownEvent` queues `window.defer`, which runs after the press's bubble. `EventSink::context_menu` then calls `bubble_from` at the mouse target (the root when none), so it fires whichever way `mousedown` propagated. The payload is `EventPayload::context_menu`: `button` 2, `buttons` 2, `detail` 0, pointer source mouse. It ignores the disabled-button flag. |
 | `mousedown`, `mouseup` | mouse | `buttons` holds every button currently held. |
 | `mousemove` | mouse | |
 | `mouseenter`, `mouseleave` | mouse | Do not bubble. Position and modifiers are read when hover changes. |
@@ -185,9 +188,15 @@ and event name. Payloads and author-facing behaviour are in
 | `focusin`, `focusout` | `relatedTarget` | `EventDispatcher::dispatch` runs the node's callbacks, then each ancestor's, with `target` the node. A focus change dispatches `blur`, `focusout`, `focus`, `focusin`. |
 | `keydown`, `keyup` | `key`, `repeat`, `location` (0), `isComposing` (false), `ctrlKey`, `shiftKey`, `altKey`, `metaKey`, `getModifierState` | Go to the focused node, or the root when none is focused, and bubble to its ancestors. `keyup` has `repeat: false`. |
 
-The mouse payload is `clientX`, `clientY`, `pageX`, `pageY`, `movementX`,
-`movementY`, `button`, `buttons`, `detail` and the four modifier flags.
-`pageX`/`pageY` equal `clientX`/`clientY`.
+The mouse payload is `clientX`, `clientY`, `x`, `y`, `pageX`, `pageY`,
+`movementX`, `movementY`, `button`, `buttons`, `detail`, `relatedTarget`
+(`null`) and the four modifier flags. `x`/`y` and `pageX`/`pageY` equal
+`clientX`/`clientY`. `MousePayload::pointer` adds `pointerId`, `pointerType`,
+`isPrimary`, `width`, `height` and `pressure`: mouse is 1, `"mouse"`, true,
+1, 1, 0 and keyboard is -1, `""`, false, 1, 1, 0.
+
+`click`, `dblclick`, `auxclick` and `contextmenu` keep the `buttons` of their own payload.
+The other mouse events take it from the held-button tracker.
 
 `movementX`/`movementY` come from raw pointer moves, which the host records
 once per window.

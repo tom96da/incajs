@@ -31,8 +31,8 @@ use std::time::Instant;
 
 use gpui::{App, ScrollHandle, Window};
 use inca_gpui::{
-    EventKind, EventMask, EventPayload, KeyPayload, MousePayload, NodeId, WheelPayload,
-    dom_buttons_bit,
+    EventKind, EventMask, EventPayload, KeyPayload, MousePayload, NodeId, PointerSource,
+    WheelPayload, dom_buttons_bit,
 };
 use inca_jsenv::{Engine, EngineError};
 use rquickjs::convert::Coerced;
@@ -60,8 +60,11 @@ pub fn stderr_reporter() -> ErrorReporter {
 
 /// `bubbles`, `cancelable` and `composed` of every event the host dispatches.
 /// Any other name takes all three as false.
-const EVENT_FLAGS: [(&str, [bool; 3]); 13] = [
+const EVENT_FLAGS: [(&str, [bool; 3]); 16] = [
     ("click", [true, true, true]),
+    ("dblclick", [true, true, true]),
+    ("auxclick", [true, true, true]),
+    ("contextmenu", [true, true, true]),
     ("mousedown", [true, true, true]),
     ("mouseup", [true, true, true]),
     ("mousemove", [true, true, true]),
@@ -199,6 +202,10 @@ impl EventDispatcher {
     /// [`Self::held_buttons`]. A DOM `mouseup` excludes the button just
     /// released; every other kind includes every button still held.
     fn with_held_buttons(&self, event: &str, payload: &EventPayload) -> EventPayload {
+        // These events carry the `buttons` of their own press or release.
+        if matches!(event, "click" | "dblclick" | "auxclick" | "contextmenu") {
+            return payload.clone();
+        }
         match payload {
             EventPayload::Mouse(mouse) => EventPayload::Mouse(MousePayload {
                 buttons: self.update_held_buttons(event, mouse.button),
@@ -287,10 +294,11 @@ impl EventDispatcher {
     /// returns the node ids from `target` up to the root.
     ///
     /// `currentTarget` is `node_id`. `target` is the deepest container under
-    /// the pointer for `mousedown`, `mouseup`, `mousemove` and `wheel`, the
-    /// nearest common ancestor of the press and release containers for
-    /// `click`, and the focused node for `keydown` and `keyup`, which the root
-    /// receives when nothing is focused. Every other event, and any of these
+    /// the pointer for `mousedown`, `mouseup`, `mousemove`, `wheel` and
+    /// `contextmenu`. It is the nearest common ancestor of the press and
+    /// release containers for `click`, `dblclick` and `auxclick`. It is the
+    /// focused node for `keydown` and `keyup`, which the root receives when
+    /// nothing is focused. Every other event, and any of these
     /// when no target is recorded (a dispatch made outside input handling),
     /// uses `node_id`.
     ///
@@ -370,11 +378,15 @@ impl EventDispatcher {
     /// The `target` of `event` dispatched for `node_id`.
     fn target_of(&self, node_id: NodeId, event: &str, window: &Window, cx: &App) -> NodeId {
         let found = match event {
-            "mousedown" | "mouseup" | "mousemove" | "wheel" => inca_gpui::mouse_target(cx),
-            "click" => match (inca_gpui::pressed_target(cx), inca_gpui::mouse_target(cx)) {
-                (Some(down), Some(up)) => self.common_ancestor(down, up),
-                (_, up) => up,
-            },
+            "mousedown" | "mouseup" | "mousemove" | "wheel" | "contextmenu" => {
+                inca_gpui::mouse_target(cx)
+            }
+            "click" | "dblclick" | "auxclick" => {
+                match (inca_gpui::pressed_target(cx), inca_gpui::mouse_target(cx)) {
+                    (Some(down), Some(up)) => self.common_ancestor(down, up),
+                    (_, up) => up,
+                }
+            }
             "keydown" | "keyup" => self.host.borrow().focus.focused_node(window, cx),
             _ => None,
         };
@@ -482,10 +494,10 @@ impl EventDispatcher {
     }
 
     /// Fires the `click` a key press on `node_id` produces: `button` 0,
-    /// `buttons` 0, `detail` 0 and coordinates 0, with the key event's
-    /// `modifiers`. It runs the listeners of `node_id` and then each
-    /// ancestor's, with `target` the node pressed, until one calls
-    /// `stopPropagation()`.
+    /// `buttons` 0, `detail` 0 and coordinates 0, `pointerId` -1 and
+    /// `pointerType` `""`, with the key event's `modifiers`. It runs the
+    /// listeners of `node_id` and then each ancestor's, with `target` the
+    /// node pressed, until one calls `stopPropagation()`.
     pub fn activate(
         &self,
         node_id: NodeId,
@@ -493,16 +505,7 @@ impl EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) {
-        let payload = EventPayload::Mouse(MousePayload {
-            client_x: 0.0,
-            client_y: 0.0,
-            movement_x: 0.0,
-            movement_y: 0.0,
-            button: 0,
-            buttons: 0,
-            detail: 0,
-            modifiers,
-        });
+        let payload = EventPayload::Mouse(MousePayload::keyboard_click(modifiers));
         self.bubble_from(node_id, "click", &payload, window, cx);
     }
 
@@ -697,6 +700,9 @@ fn set_payload(event_object: &Object, payload: &EventPayload) -> rquickjs::Resul
 fn set_mouse_fields(event_object: &Object, mouse: &MousePayload) -> rquickjs::Result<()> {
     event_object.set("clientX", mouse.client_x)?;
     event_object.set("clientY", mouse.client_y)?;
+    event_object.set("x", mouse.client_x)?;
+    event_object.set("y", mouse.client_y)?;
+    event_object.set("relatedTarget", rquickjs::Null)?;
     // Identical to clientX/clientY today — nothing here scrolls the page
     // itself, which is the only thing that would tell them apart.
     event_object.set("pageX", mouse.client_x)?;
@@ -706,6 +712,18 @@ fn set_mouse_fields(event_object: &Object, mouse: &MousePayload) -> rquickjs::Re
     event_object.set("button", mouse.button)?;
     event_object.set("buttons", mouse.buttons)?;
     event_object.set("detail", mouse.detail)?;
+    if let Some(source) = mouse.pointer {
+        let (id, kind, primary) = match source {
+            PointerSource::Mouse => (1, "mouse", true),
+            PointerSource::Keyboard => (-1, "", false),
+        };
+        event_object.set("pointerId", id)?;
+        event_object.set("pointerType", kind)?;
+        event_object.set("isPrimary", primary)?;
+        event_object.set("width", 1)?;
+        event_object.set("height", 1)?;
+        event_object.set("pressure", 0)?;
+    }
     set_modifier_fields(event_object, mouse.modifiers)
 }
 
@@ -813,6 +831,13 @@ impl EventSink for EventDispatcher {
         self.current_movement.set(Some(movement));
         let current = Rc::clone(&self.current_movement);
         cx.defer(move |_| current.set(None));
+    }
+
+    fn context_menu(&self, payload: &EventPayload, window: &mut Window, cx: &mut App) {
+        let (root, target) = (self.host.borrow().root, inca_gpui::mouse_target(cx));
+        let start = self.resolve(target, root);
+        let payload = self.with_movement(payload, "contextmenu");
+        self.bubble_from(start, "contextmenu", &payload, window, cx);
     }
 
     fn pointer_left(&self) {
@@ -1220,6 +1245,9 @@ mod tests {
         // (event, bubbles, cancelable, composed)
         for (event, bubbles, cancelable, composed) in [
             ("click", true, true, true),
+            ("dblclick", true, true, true),
+            ("auxclick", true, true, true),
+            ("contextmenu", true, true, true),
             ("mouseenter", false, false, false),
             ("mouseleave", false, false, false),
             ("wheel", true, true, true),
@@ -1505,6 +1533,81 @@ mod tests {
         host.borrow_mut().tree.destroy_node(child);
         assert_eq!(dispatcher.resolve(Some(child), parent), parent);
         assert_eq!(dispatcher.resolve(None, parent), parent);
+    }
+
+    /// Every mouse-shaped event carries the `x`/`y` aliases and a null
+    /// `relatedTarget`. A payload with a pointer source adds the pointer
+    /// fields.
+    #[gpui::test]
+    fn mouse_events_carry_the_aliases_and_the_pointer_fields_of_their_type(
+        cx: &mut TestAppContext,
+    ) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        dispatcher
+            .engine
+            .eval::<()>(
+                "globalThis.seen = []; globalThis.__inca_callbacks__ = { 0: (e) => { \
+                 globalThis.seen.push([e.type, e.x === e.clientX && e.y === e.clientY, \
+                 e.relatedTarget === null, e.pointerId, e.pointerType, e.isPrimary, \
+                 e.width, e.height, e.pressure].join(':')); } };",
+            )
+            .unwrap();
+        let cx = cx.add_empty_window();
+        let plain = || MousePayload::at(at(7.0, 9.0), gpui::Modifiers::none());
+        let pointer = |source| MousePayload {
+            pointer: Some(source),
+            ..plain()
+        };
+        let wheel = WheelPayload {
+            mouse: plain(),
+            delta_x: 0.0,
+            delta_y: 0.0,
+            delta_z: 0.0,
+            delta_mode: 0,
+        };
+        let blank = ":::::";
+        let mut cases = vec![
+            (
+                "click",
+                EventPayload::Mouse(pointer(PointerSource::Keyboard)),
+                "-1::false:1:1:0",
+            ),
+            ("wheel", EventPayload::Wheel(wheel), blank),
+        ];
+        for event in ["click", "auxclick", "contextmenu"] {
+            let payload = EventPayload::Mouse(pointer(PointerSource::Mouse));
+            cases.push((event, payload, "1:mouse:true:1:1:0"));
+        }
+        for event in [
+            "mousedown",
+            "mouseup",
+            "mousemove",
+            "mouseenter",
+            "mouseleave",
+            "dblclick",
+        ] {
+            cases.push((event, EventPayload::Mouse(plain()), blank));
+        }
+        let mut mismatches = Vec::new();
+        for (event, payload, fields) in cases {
+            listen(&host, node, event);
+            cx.update(|window, cx| dispatcher.dispatch(node, event, &payload, window, cx));
+            let want = format!("{event}:true:true:{fields}");
+            let got = seen_strings(&dispatcher);
+            if got != [want.clone()] {
+                mismatches.push(format!("{event}: {got:?} != {want}"));
+            }
+        }
+        assert!(mismatches.is_empty(), "{mismatches:?}");
+    }
+
+    fn seen_strings(dispatcher: &EventDispatcher) -> Vec<String> {
+        let json = dispatcher
+            .engine
+            .eval::<String>("JSON.stringify(globalThis.seen.splice(0))")
+            .unwrap();
+        serde_json::from_str(&json).unwrap()
     }
 
     #[test]

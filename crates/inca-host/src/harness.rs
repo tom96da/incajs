@@ -9,8 +9,8 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use gpui::{
-    KeyUpEvent, Keystroke, Modifiers, Pixels, Point, ScrollDelta, ScrollWheelEvent, TestAppContext,
-    VisualTestContext, WindowHandle, point, px,
+    KeyUpEvent, Keystroke, Modifiers, MouseButton, MouseDownEvent, MouseUpEvent, Pixels, Point,
+    ScrollDelta, ScrollWheelEvent, TestAppContext, VisualTestContext, WindowHandle, point, px,
 };
 use inca_bridge::{Host, stderr_reporter};
 use inca_gpui::{NodeId, debug_selector};
@@ -81,6 +81,38 @@ impl Harness {
     pub fn click(&mut self, id: NodeId) {
         let at = self.center_of(id);
         self.cx.simulate_click(at, Modifiers::none());
+        self.settle();
+    }
+
+    /// Presses and releases `button` at the center of node `id`, located as
+    /// in [`Harness::click`], with `modifiers` held and `click_count` as the
+    /// number of clicks the press is part of.
+    ///
+    /// # Panics
+    ///
+    /// Panics under the same conditions as [`Harness::click`].
+    pub fn click_with(
+        &mut self,
+        id: NodeId,
+        button: MouseButton,
+        modifiers: Modifiers,
+        click_count: usize,
+    ) {
+        let position = self.center_of(id);
+        self.move_pointer(position);
+        self.cx.simulate_event(MouseDownEvent {
+            position,
+            button,
+            modifiers,
+            click_count,
+            first_mouse: false,
+        });
+        self.cx.simulate_event(MouseUpEvent {
+            position,
+            button,
+            modifiers,
+            click_count,
+        });
         self.settle();
     }
 
@@ -994,7 +1026,8 @@ mod tests {
             1: (e) => { e.preventDefault(); },
             2: (e) => { e.stopPropagation(); },
             3: (e) => {
-                globalThis.log.push([e.detail, e.button, e.buttons, e.clientX, e.clientY, e.shiftKey].join(':'));
+                globalThis.log.push([e.detail, e.button, e.buttons, e.clientX, e.clientY, e.shiftKey,
+                    e.pointerId, e.pointerType, e.isPrimary, e.width, e.height, e.pressure].join(':'));
             },
         };
         n.focusNode(box);
@@ -1063,7 +1096,10 @@ mod tests {
         assert_eq!(log(&h), "");
         h.keystrokes("enter shift-enter");
 
-        assert_eq!(log(&h), "0:0:0:0:0:false,0:0:0:0:0:true");
+        assert_eq!(
+            log(&h),
+            "0:0:0:0:0:false:-1::false:1:1:0,0:0:0:0:0:true:-1::false:1:1:0"
+        );
     }
 
     #[gpui::test]
@@ -1499,5 +1535,187 @@ mod tests {
         h.settle();
 
         assert_eq!(targets_log(&mut h), "click@frame/mid/3");
+    }
+
+    /// Callback 1 logs `type:detail:button:buttons:clientX:clientY:x:y:
+    /// relatedTarget:pointerId:pointerType:isPrimary:width:height:pressure`.
+    const POINTER_LOG: &str = "globalThis.__inca_callbacks__[1] = (e) => { \
+        globalThis.log.push([e.type, e.detail, e.button, e.buttons, e.clientX, e.clientY, \
+        e.x, e.y, e.relatedTarget, e.pointerId, e.pointerType, e.isPrimary, e.width, \
+        e.height, e.pressure].join(':')); };";
+
+    fn press(h: &mut Harness, at: Point<Pixels>, button: gpui::MouseButton, count: usize) {
+        h.cx.simulate_event(gpui::MouseDownEvent {
+            position: at,
+            button,
+            click_count: count,
+            ..Default::default()
+        });
+        h.cx.simulate_event(gpui::MouseUpEvent {
+            position: at,
+            button,
+            click_count: count,
+            ..Default::default()
+        });
+        h.settle();
+    }
+
+    #[gpui::test]
+    fn a_mouse_click_carries_the_mouse_and_pointer_fields(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, TARGETS);
+        run_js(&mut h, POINTER_LOG);
+        listen(&mut h, "frame", "click", 1);
+        let inner = node(&h, "inner");
+        h.hover(inner);
+
+        press(
+            &mut h,
+            point(px(15.0), px(15.0)),
+            gpui::MouseButton::Left,
+            1,
+        );
+
+        assert_eq!(
+            targets_log(&mut h),
+            "click:1:0:0:15:15:15:15::1:mouse:true:1:1:0"
+        );
+    }
+
+    #[gpui::test]
+    fn a_right_press_fires_contextmenu_after_mousedown_and_no_click(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, TARGETS);
+        run_js(&mut h, POINTER_LOG);
+        listen(&mut h, "inner", "mousedown", 0);
+        listen(&mut h, "frame", "mousedown", 0);
+        listen(&mut h, "frame", "contextmenu", 1);
+        listen(&mut h, "inner", "contextmenu mouseup click", 0);
+        listen(&mut h, "frame", "auxclick", 0);
+        let inner = node(&h, "inner");
+        h.hover(inner);
+
+        press(
+            &mut h,
+            point(px(15.0), px(15.0)),
+            gpui::MouseButton::Right,
+            1,
+        );
+
+        assert_eq!(
+            targets_log(&mut h),
+            "mousedown@inner/inner/2,mousedown@frame/inner/3,contextmenu@inner/inner/2,\
+             contextmenu:0:2:2:15:15:15:15::1:mouse:true:1:1:0,mouseup@inner/inner/2,\
+             auxclick@frame/inner/3"
+        );
+    }
+
+    #[gpui::test]
+    fn a_stopped_mousedown_still_fires_contextmenu_and_a_middle_press_does_not(
+        cx: &mut TestAppContext,
+    ) {
+        let mut h = Harness::load(cx, ENTRY, TARGETS);
+        run_js(
+            &mut h,
+            "globalThis.__inca_callbacks__[2] = (e) => { e.stopPropagation(); };",
+        );
+        listen(&mut h, "inner", "mousedown", 0);
+        listen(&mut h, "inner", "mousedown", 2);
+        listen(&mut h, "frame", "mousedown contextmenu click", 0);
+        let inner = node(&h, "inner");
+        h.hover(inner);
+
+        press(
+            &mut h,
+            point(px(15.0), px(15.0)),
+            gpui::MouseButton::Right,
+            1,
+        );
+        let right = targets_log(&mut h);
+        press(
+            &mut h,
+            point(px(15.0), px(15.0)),
+            gpui::MouseButton::Middle,
+            1,
+        );
+
+        assert_eq!(right, "mousedown@inner/inner/2,contextmenu@frame/inner/3");
+        assert_eq!(targets_log(&mut h), "mousedown@inner/inner/2");
+    }
+
+    #[gpui::test]
+    fn contextmenu_and_auxclick_reach_a_disabled_buttons_ancestors(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, BUTTON);
+        run_js(
+            &mut h,
+            "__inca_native__.setAttribute(box, 'disabled', true);",
+        );
+        listen(&mut h, "frame", "mousedown contextmenu", 0);
+        let button = node(&h, "box");
+        h.hover(button);
+
+        press(
+            &mut h,
+            point(px(10.0), px(10.0)),
+            gpui::MouseButton::Right,
+            1,
+        );
+
+        assert_eq!(log(&h), "contextmenu@frame/box");
+    }
+
+    #[gpui::test]
+    fn auxclick_carries_the_released_button_and_the_pointer_fields(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, TARGETS);
+        run_js(&mut h, POINTER_LOG);
+        listen(&mut h, "frame", "auxclick", 1);
+        let inner = node(&h, "inner");
+        h.hover(inner);
+        let mut got = Vec::new();
+
+        for button in [
+            gpui::MouseButton::Left,
+            gpui::MouseButton::Right,
+            gpui::MouseButton::Middle,
+        ] {
+            press(&mut h, point(px(15.0), px(15.0)), button, 1);
+            got.push(targets_log(&mut h));
+        }
+
+        assert_eq!(
+            got,
+            [
+                "",
+                "auxclick:1:2:0:15:15:15:15::1:mouse:true:1:1:0",
+                "auxclick:1:1:0:15:15:15:15::1:mouse:true:1:1:0"
+            ]
+        );
+    }
+
+    #[gpui::test]
+    fn a_double_click_fires_dblclick_after_the_second_click(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, TARGETS);
+        run_js(&mut h, POINTER_LOG);
+        listen(&mut h, "frame", "click dblclick", 1);
+        listen(&mut h, "mid", "dblclick", 0);
+        let inner = node(&h, "inner");
+        h.hover(inner);
+
+        for count in 1..=3 {
+            press(
+                &mut h,
+                point(px(15.0), px(15.0)),
+                gpui::MouseButton::Left,
+                count,
+            );
+        }
+
+        let plain = "1:0:0:15:15:15:15::1:mouse:true:1:1:0";
+        assert_eq!(
+            targets_log(&mut h),
+            format!(
+                "click:{plain},dblclick@mid/inner/3,click:2:0:0:15:15:15:15::1:mouse:true:1:1:0,\
+                 dblclick:2:0:0:15:15:15:15::1:mouse:true:1:1:0,\
+                 click:3:0:0:15:15:15:15::1:mouse:true:1:1:0"
+            )
+        );
     }
 }

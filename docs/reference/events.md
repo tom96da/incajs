@@ -18,10 +18,10 @@ and whatever fields that event carries.
 `currentTarget` is the id of the node whose listener runs. `target` is the
 node the event started on:
 
-- `mousedown`, `mouseup`, `mousemove` and `wheel` report the deepest element
-  under the pointer. Text resolves to its parent element.
-- `click` reports the nearest common ancestor of the elements under the
-  press and the release.
+- `mousedown`, `mouseup`, `mousemove`, `wheel` and `contextmenu` report the
+  deepest element under the pointer. Text resolves to its parent element.
+- `click`, `dblclick` and `auxclick` report the nearest common ancestor of the elements
+  under the press and the release.
 - `keydown` and `keyup` report the focused node.
 - `mouseenter`, `mouseleave`, `focus`, `blur`, `focusin` and `focusout`
   report the node entered, left, focused or blurred.
@@ -61,7 +61,7 @@ Every event carries `bubbles`, `cancelable`, `composed`, `defaultPrevented`,
 
 | Event | `bubbles` | `cancelable` | `composed` |
 | --- | --- | --- | --- |
-| `click`, `mousedown`, `mouseup`, `mousemove`, `wheel`, `keydown`, `keyup` | `true` | `true` | `true` |
+| `click`, `dblclick`, `auxclick`, `contextmenu`, `mousedown`, `mouseup`, `mousemove`, `wheel`, `keydown`, `keyup` | `true` | `true` | `true` |
 | `mouseenter`, `mouseleave` | `false` | `false` | `false` |
 | `focus`, `blur` | `false` | `false` | `true` |
 | `focusin`, `focusout` | `true` | `false` | `true` |
@@ -74,10 +74,54 @@ An event with any other name has all three set to `false`.
 
 ## Pointer
 
+The mouse events carry a subset of the DOM's
+[`MouseEvent`](https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent)'s
+fields:
+
+- `clientX` / `clientY` — pointer position
+- `x` / `y` — identical to `clientX`/`clientY`
+- `pageX` / `pageY` — identical to `clientX`/`clientY`; nothing here
+  scrolls the page itself, which is the only thing that would tell them
+  apart
+- `movementX` / `movementY` — how far the pointer moved:
+  - `mousemove`, and `mouseenter`/`mouseleave` caused by a pointer move:
+    the distance since the previous pointer move, `0` for the first move.
+    Every event from one move reports the same value
+  - every other event: the event position minus the position of the last
+    pointer move
+  - After the pointer leaves the window, the next move reports `0`
+- `button` — the button the event is about; `0` for a move, which isn't
+  about any one button
+- [`buttons`](https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/buttons) —
+  every button currently held, as a bitmask
+- `detail` — how many clicks this is part of; `0` for a move
+- `relatedTarget` — always `null`
+- `ctrlKey` / `shiftKey` / `altKey` / `metaKey` — modifier keys held
+
+### `mousedown` / `mouseup` / `mousemove`
+
+The mouse fields above.
+
+### `mouseenter` / `mouseleave`
+
+The mouse fields above. An element already under the pointer
+when it mounts, or one a layout change puts under a still pointer, gets a
+`mouseenter` the next time its hover state is checked. That `mouseenter`
+reports `0` for `movementX`/`movementY`.
+
 ### `click`
 
-Fires on a `mousedown` followed by a `mouseup` on the same node, before
-the `mouseup` listeners run. A mouse `click` carries no fields of its own.
+Fires when the primary button is pressed and released on the same node, before
+the `mouseup` listeners run. Only the primary button fires `click`. The right
+button fires [`contextmenu`](#contextmenu). The right and middle buttons fire
+[`auxclick`](#auxclick).
+
+`click` carries the mouse fields above, with `button` and `buttons` at `0`,
+`detail` the click count and the position and modifier keys of the release. It
+also carries a subset of the DOM's
+[`PointerEvent`](https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent)'s
+fields: `pointerId` `1`, `pointerType` `"mouse"`, `isPrimary` `true`, `width`
+`1`, `height` `1` and `pressure` `0`.
 
 A [focused](#focus) [`button`](./elements#button) also fires `click` from the
 keyboard. `Enter` fires it when the key goes down and again for each repeat
@@ -86,45 +130,38 @@ or `Meta` held with `Enter` cancels the click. `Shift` allows it. Only a
 button clicks from `Enter` and `Space`.
 
 A keyboard click bubbles from the button to its ancestors, with the button as
-`target`. It carries `detail`, `button`, `buttons`, `clientX` and `clientY` at
-0, and the modifier keys.
+`target`. It carries `detail`, `button`, `buttons`, `clientX`, `clientY` and
+`pressure` at `0`, `pointerId` `-1`, `pointerType` `""`, `isPrimary` `false`,
+`width` and `height` `1`, and the modifier keys.
 
 A button with the `disabled` attribute is unfocusable. Its `mousedown`,
 `mouseup` and `click` end at the button: listeners on its descendants run, and
 listeners on the button and its ancestors stay silent. `mouseenter`,
-`mousemove` and `wheel` reach every listener as usual. A press on a disabled
-button moves focus as a press on any other node does. `:disabled="false"`
-removes the attribute.
+`mousemove` and `wheel` reach every listener as usual. `contextmenu` and
+`auxclick` reach the button's ancestors with the button as `target`. A press
+on a disabled button moves focus as a press on any other node does.
+`:disabled="false"` removes the attribute.
 
-### `mousedown` / `mouseup` / `mousemove`
+### `dblclick`
 
-A subset of the DOM's
-[`MouseEvent`](https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent)'s
-fields:
+Fires on the node after the second `click` of a double click of the primary
+button. It carries the mouse fields above with `button` and `buttons` at `0`
+and `detail` `2`. A third click fires only `click`, with `detail` `3`.
 
-- `clientX` / `clientY` — pointer position
-- `pageX` / `pageY` — identical to `clientX`/`clientY`; nothing here
-  scrolls the page itself, which is the only thing that would tell them
-  apart
-- `movementX` / `movementY` — how far the pointer moved:
-  - `mousemove`, and `mouseenter`/`mouseleave` caused by a pointer move:
-    the distance since the previous pointer move, `0` for the first move.
-    Every event from one move reports the same value
-  - `mousedown`, `mouseup` and `wheel`: the event position minus the
-    position of the last pointer move
-  - After the pointer leaves the window, the next move reports `0`
-- `button` — 0 for a move, which isn't about any one button
-- [`buttons`](https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/buttons) —
-  every button currently held, as a bitmask
-- `detail` — how many clicks this is part of; 0 for a move
-- `ctrlKey` / `shiftKey` / `altKey` / `metaKey` — modifier keys held
+### `auxclick`
 
-### `mouseenter` / `mouseleave`
+Fires when the right or middle button is pressed and released on the same
+node. It carries the same fields as `click`, with `button` `2` or `1`.
 
-Same fields as `mousedown`, above. An element already under the pointer
-when it mounts, or one a layout change puts under a still pointer, gets a
-`mouseenter` the next time its hover state is checked. That `mouseenter`
-reports `0` for `movementX`/`movementY`.
+### `contextmenu`
+
+Fires on a press of the right button, after the `mousedown` listeners of every
+node have run, whether or not one of them called `stopPropagation()`. The
+`target` is the deepest element under the pointer.
+
+`contextmenu` carries the mouse fields above with `button` `2`, `buttons` `2`
+and `detail` `0`, and the `PointerEvent` fields of a mouse `click`. The
+`mouseup` follows it. `preventDefault()` only sets `defaultPrevented`.
 
 ## Wheel
 
@@ -267,21 +304,21 @@ described here.
 `.ctrl`, `.shift`, `.alt` and `.meta` run the handler while that key is held.
 `.exact` runs it when the keys held are exactly the ones listed.
 
-- `keydown`, `keyup`, `mousedown`, `mouseup`, `mousemove`, `mouseenter`,
-  `mouseleave` and `wheel` carry the key state.
-- `click` carries none, so `@click.ctrl` never runs and `@click.exact` runs on
-  every click.
+- `keydown`, `keyup`, `click`, `dblclick`, `auxclick`, `contextmenu`, `mousedown`,
+  `mouseup`, `mousemove`, `mouseenter`, `mouseleave` and `wheel` carry the key
+  state.
+- `click` and `dblclick` carry the key state of the release.
 
 ### Mouse buttons
 
 `.left`, `.middle` and `.right` compare the event's `button` with 0, 1 and 2,
 for example `@mousedown.left`.
 
-- `@click.left` runs on every click, because `click` carries no `button`.
+- `@click.left` runs on every `click`, which carries `button` `0`.
 - `@click.middle` listens for `mouseup` and runs when the released button is
   1.
-- `@click.right` listens for `contextmenu`, which the host has no event for,
-  so it never runs.
+- `@click.right` listens for `contextmenu` and runs for the right button's
+  press.
 
 ### Keys
 

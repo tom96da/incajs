@@ -17,6 +17,10 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - the `button` element has a default `tabindex` of 0, fires `click` from Enter and Space, and takes a `disabled` attribute
 - `keydown` and `keyup` carry `location`, `isComposing` and `getModifierState()`, and mouse events carry `getModifierState()`
 - `focusin` and `focusout` events, and `relatedTarget` on `focus`, `blur`, `focusin` and `focusout`
+- `click` carries the mouse and `PointerEvent` fields, so `@click.ctrl`, `@click.left` and `@click.exact` work
+- `dblclick` and `auxclick` events
+- `contextmenu` event on the right button, so `@click.right` and `@contextmenu` run
+- mouse events carry `x`, `y` and `relatedTarget`
 - `el.tabIndex` sets the `tabindex` attribute ([9f63f4a](https://github.com/tom96da/incajs/commit/9f63f4a))
 
 ### Changed

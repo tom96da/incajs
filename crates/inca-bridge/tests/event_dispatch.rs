@@ -151,7 +151,11 @@ fn click_dispatches_to_js_exactly_once(cx: &mut TestAppContext) {
         format!(
             concat!(
                 r#"{{"type":"click","target":{node},"currentTarget":{node},"#,
-                r#""bubbles":true,"cancelable":true,"composed":true,"defaultPrevented":false,"eventPhase":2,"isTrusted":true,"eventId":1}}"#
+                r#""bubbles":true,"cancelable":true,"composed":true,"defaultPrevented":false,"eventPhase":2,"isTrusted":true,"#,
+                r#""clientX":10,"clientY":10,"x":10,"y":10,"relatedTarget":null,"pageX":10,"pageY":10,"#,
+                r#""movementX":0,"movementY":0,"button":0,"buttons":0,"detail":1,"#,
+                r#""pointerId":1,"pointerType":"mouse","isPrimary":true,"width":1,"height":1,"pressure":0,"#,
+                r#""ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false,"eventId":1}}"#
             ),
             node = node
         )
@@ -367,7 +371,7 @@ fn mousedown_carries_dom_shaped_fields(cx: &mut TestAppContext) {
                 r#"{{"type":"mousedown","target":{node},"currentTarget":{node},"#,
                 r#""bubbles":true,"cancelable":true,"composed":true,"defaultPrevented":false,"#,
                 r#""eventPhase":2,"isTrusted":true,"#,
-                r#""clientX":10,"clientY":20,"pageX":10,"pageY":20,"#,
+                r#""clientX":10,"clientY":20,"x":10,"y":20,"relatedTarget":null,"pageX":10,"pageY":20,"#,
                 r#""movementX":0,"movementY":0,"button":0,"buttons":1,"detail":1,"#,
                 r#""ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false,"#,
                 r#""eventId":1}}"#
@@ -445,7 +449,7 @@ fn wheel_carries_dom_shaped_delta_fields(cx: &mut TestAppContext) {
                 r#"{{"type":"wheel","target":{node},"currentTarget":{node},"#,
                 r#""bubbles":true,"cancelable":true,"composed":true,"defaultPrevented":false,"#,
                 r#""eventPhase":2,"isTrusted":true,"#,
-                r#""clientX":10,"clientY":10,"pageX":10,"pageY":10,"#,
+                r#""clientX":10,"clientY":10,"x":10,"y":10,"relatedTarget":null,"pageX":10,"pageY":10,"#,
                 r#""movementX":0,"movementY":0,"button":0,"buttons":0,"detail":0,"#,
                 r#""ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false,"#,
                 r#""deltaX":0,"deltaY":5,"deltaZ":0,"deltaMode":0,"#,
@@ -736,7 +740,7 @@ fn mouseenter_carries_dom_shaped_fields(cx: &mut TestAppContext) {
                 r#"{{"type":"mouseenter","target":{node},"currentTarget":{node},"#,
                 r#""bubbles":false,"cancelable":false,"composed":false,"defaultPrevented":false,"#,
                 r#""eventPhase":2,"isTrusted":true,"#,
-                r#""clientX":10,"clientY":20,"pageX":10,"pageY":20,"#,
+                r#""clientX":10,"clientY":20,"x":10,"y":20,"relatedTarget":null,"pageX":10,"pageY":20,"#,
                 r#""movementX":-190,"movementY":-180,"button":0,"buttons":0,"detail":0,"#,
                 r#""ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false}}"#
             ),

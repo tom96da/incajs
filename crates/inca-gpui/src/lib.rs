@@ -12,7 +12,7 @@ pub use element::{
     style_warning,
 };
 pub use event_sink::{
-    EventKind, EventMask, EventPayload, EventSink, KeyPayload, MousePayload, WheelPayload,
-    dom_buttons_bit,
+    EventKind, EventMask, EventPayload, EventSink, KeyPayload, MousePayload, PointerSource,
+    WheelPayload, dom_buttons_bit,
 };
 pub use tree::{AttributeValue, NodeId, TreeError, VirtualNode, VirtualTree};

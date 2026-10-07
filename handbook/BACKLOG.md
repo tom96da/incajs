@@ -244,20 +244,6 @@ A fixed entry is deleted and its ID is never reused.
   `mousemove` events report the button as held. Fix: track buttons from the
   raw window event. This belongs in the `compat` submodule of B-020.
 
-- **B-046 `click` carries no modifier or button fields**
-  `Units: gpui,bridge,docs · Size: M · Impact: Medium`
-
-  `click` has `EventPayload::None`, so Vue's `@click.ctrl`, `.shift`, `.alt`
-  and `.meta` checks see `undefined` and never run the handler, and
-  `@click.exact` runs on every click. `@click.left` runs on every click, since
-  `click` has no `button`. `@click.middle` compiles to a `mouseup` listener.
-  `@click.right` compiles to a `contextmenu` listener that the host never
-  fires.
-
-  Full support for the click modifiers takes this entry for the fields,
-  B-125 for `contextmenu` (`.right`), B-019 for the capture and passive
-  options, and B-068 for the order of `click` and `mouseup`.
-
 - **B-048 A multi-root `App` (or a top-level comment) breaks window sizing and `gap`**
   `Units: host,gpui · Size: M · Impact: Medium`
 
@@ -296,9 +282,10 @@ A fixed entry is deleted and its ID is never reused.
 - **B-068 `click` fires before `mouseup`**
   `Units: gpui · Size: M · Impact: Medium`
 
-  `click` fires before `mouseup` on the same node. `stopPropagation()` in a
-  `click` handler also stops ancestors' `mouseup`. The DOM order is `mouseup`
-  then `click`.
+  `click` and `auxclick` fire before `mouseup` on the same node, and
+  `dblclick` follows the second `click` there. `stopPropagation()` in a
+  `click` handler also stops ancestors' `mouseup` and `dblclick`. The browser
+  order is `mouseup`, `click` or `auxclick`, then `dblclick`.
 
 - **B-087 Ctrl+C in `inca dev` leaves the terminal echoing arrow keys**
   `Units: cli,host · Size: S–M · Impact: Medium · Status: needs repro`
@@ -365,15 +352,6 @@ A fixed entry is deleted and its ID is never reused.
   so `INCA_HOST_BIN` and the cache of a compressed host both apply. A
   follow-up, `inca info`, prints the Node version, the platform, the host
   package, the host binary's path and the `INCA_*` overrides.
-
-- **B-125 The host fires no `contextmenu` event**
-  `Units: gpui,bridge,docs · Size: M · Impact: Medium`
-
-  `@click.right` compiles to a `contextmenu` listener, and `@contextmenu`
-  binds the same event. The host fires no `contextmenu`, so those handlers
-  never run. The host could fire it from the secondary button's press and
-  carry the pointer fields, with `preventDefault()` as the hook for a context
-  menu of the app's own (Phase 9 item 2).
 
 - **B-126 A missing `@vue/runtime-dom` fails the build with the bundler's own error**
   `Units: cli,core,docs · Size: S–M · Impact: Medium`
@@ -502,10 +480,12 @@ A fixed entry is deleted and its ID is never reused.
     target's bounds are computed once, for hitbox insertion, and need to be
     kept where `dispatch` can reach them, since `gpui` has no production API
     to look a node's bounds up by id at event time.
-  - `relatedTarget` needs the container the pointer came from or went to.
-    The mouse target slot holds the current container only, so the fix
-    keeps the previous move's container as well. `isComposing` needs the
-    text-editing/IME unit, which hasn't started.
+  - `relatedTarget` reads `null` on `mouseenter` and `mouseleave`. The real
+    value is the container the pointer came from or went to. The mouse
+    target slot holds the current container only, so the fix keeps the
+    previous move's container as well and reads both when the hover
+    callbacks run. `isComposing` needs the text-editing/IME unit, which
+    hasn't started.
   - Blocked on `gpui` itself: `code` and `location` — `Keystroke`
     (`third_party/zed/crates/gpui/src/platform/keystroke.rs`) carries
     only `{ modifiers, key, key_char }`, with no layout-independent
@@ -521,6 +501,39 @@ A fixed entry is deleted and its ID is never reused.
   - `key` for a shifted letter is upper case and for Shift+1 with no
     `key_char` it is `"1"`. The fix direction is a keyboard layout table in
     `inca-gpui`, or the layout's shifted character reported by `gpui`.
+
+- **B-145 `contextmenu` fires on the press on every platform**
+  `Units: gpui,bridge · Size: S · Impact: Low`
+
+  `contextmenu` fires after `mousedown` of the secondary button, which is the
+  macOS and Linux timing. Windows fires it after `mouseup`. Fix: when a
+  Windows host ships, the root tracker in `inca-gpui` dispatches it from the
+  secondary button's release on that platform.
+
+- **B-146 Pointer-field values differ between engines**
+  `Units: bridge,docs · Size: S · Impact: Low`
+
+  `click`, `auxclick` and `contextmenu` report `pointerId` 1, `isPrimary` true,
+  `pressure` 0 and, for `contextmenu`, `detail` 0. Firefox reports `pointerId` 0
+  and `contextmenu` `detail` 1, Chromium reports `isPrimary` false and WebKit
+  reports `contextmenu` `pressure` 0.5. Fix: revisit the values when the
+  `pointer*` events (B-148) land.
+
+- **B-147 `mouseover` and `mouseout` are unsupported**
+  `Units: gpui,bridge · Size: M · Impact: Low`
+
+  Binding either name has no effect. Fix: keep the previous deepest container
+  in the hover callbacks and fire both with `relatedTarget`. The per-ancestor
+  `mouseenter`/`mouseleave` work implements them together with the real
+  `relatedTarget` of `mouseenter` and `mouseleave`.
+
+- **B-148 The `pointer*` events are unsupported**
+  `Units: gpui,bridge,docs · Size: L · Impact: Medium`
+
+  `pointerdown`, `pointerup`, `pointermove`, `pointerover`, `pointerout`,
+  `pointerenter`, `pointerleave`, `pointercancel`, `gotpointercapture` and
+  `lostpointercapture` have no effect. Fix: dispatch them from the same mouse input
+  with the `PointerEvent` fields `click` carries, then add pointer capture.
 
 - **B-027 No input-synthesis/state-introspection channel on the dev protocol**
   `Units: host,cli · Size: L · Impact: Low`
