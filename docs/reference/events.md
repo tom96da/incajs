@@ -266,6 +266,8 @@ the attribute.
 
 `.blur()` unfocuses the node when it is the focused one.
 
+Removing the focused node from the tree fires no `blur`.
+
 A template `ref`'s own element carries `.focus()`/`.blur()` directly,
 the same as a real DOM element:
 

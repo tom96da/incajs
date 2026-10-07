@@ -126,31 +126,11 @@ A fixed entry is deleted and its ID is never reused.
 - **B-020 A GPUI-vs-DOM compat layer for `crates/inca-bridge`**
   `Units: bridge · Size: M · Impact: Medium`
 
-  Two separate
-  gaps now live loose in `dispatch.rs` — B-019 plus
-  `mouseenter` firing on mount for an element already under the pointer
-  (GPUI's hover check compares against freshly-initialized state on first
-  paint, not against a real pointer move; see `docs/reference/events.md`). `EventDispatcher` exists to turn GPUI's raw input
-  into what a DOM author expects, so this translation belongs there too.
-  Direction: one `compat` submodule inside it, not a separate crate — one
-  place to hold `held_buttons` tracking, a "no real pointer move seen
-  yet" flag suppressing the mount-time `mouseenter`, and later the
-  capture-phase (B-019) work.
-
-- **B-024 Destroying a focused node must come to fire `"blur"`**
-  `Units: bridge,core · Size: L · Impact: Medium`
-
-  It doesn't
-  today — `destroyNode`'s JS wrapper (`packages/core/src/tree.mts`) drops
-  every freed callback synchronously (`releaseCallbacks`), so even a
-  deferred, next-frame `"blur"` dispatch would find nothing left to call.
-  Closing this needs one of: delaying a focused node's own callback
-  release by one frame (a `destroyNode` contract change — every other
-  node's callbacks still free immediately), or giving native bindings
-  synchronous `Window`/`App` access so `destroyNode` itself can dispatch
-  `"blur"` before anything is freed (a wider change to the binding/
-  dispatch boundary every `crate::bindings` function currently shares).
-  Land it alongside whatever else motivates that wider change.
+  `EventDispatcher` turns GPUI's raw input into DOM events, and two gaps sit
+  loose in `dispatch.rs`: the `held_buttons` update that runs only for a
+  dispatched listener (B-045) and the capture phase (B-019). Direction: one
+  `compat` submodule in the bridge crate holding the `held_buttons` tracking
+  and later the capture-phase work.
 
 - **B-028 A template `ref` still resolves to a plain data object for anything beyond `.focus()`/`.blur()`**
   `Units: core · Size: M · Impact: Medium`
@@ -232,7 +212,8 @@ A fixed entry is deleted and its ID is never reused.
   when a listener is dispatched. A node that listens for `mousedown` and
   `mousemove` but not `mouseup` never clears the pressed bit, so later
   `mousemove` events report the button as held. Fix: track buttons from the
-  raw window event. This belongs in the `compat` submodule of B-020.
+  raw window event, in the pointer tracker of `inca-gpui` or the `compat`
+  submodule of B-020.
 
 - **B-048 A multi-root `App` (or a top-level comment) breaks window sizing and `gap`**
   `Units: host,gpui · Size: M · Impact: Medium`
@@ -256,7 +237,7 @@ A fixed entry is deleted and its ID is never reused.
 - **B-053 `focus`/`blur` listeners that call `focusNode` may not take effect**
   `Units: bridge,host · Size: S–M · Impact: Medium`
 
-  those listeners run inside `render()`, where GPUI ignores
+  `focus` and `blur` listeners run inside `render()`, where GPUI ignores
   `window.refresh()` (`third_party/zed/crates/gpui/src/window.rs:2178`), so
   the request may wait for an unrelated redraw. Unconfirmed.
 
@@ -470,10 +451,10 @@ A fixed entry is deleted and its ID is never reused.
     target's bounds are computed once, for hitbox insertion, and need to be
     kept where `dispatch` can reach them, since `gpui` has no production API
     to look a node's bounds up by id at event time.
-  - `screenX`/`screenY` add `Window::bounds`' origin to the client position.
-    Wayland reports no window position, so they equal `clientX`/`clientY`
-    there, and X11 may report an origin that leaves out the window
-    decorations. The fix direction is a platform query in `gpui` for the
+  - `screenX`/`screenY` are `Window::bounds`' origin plus the client
+    position. Wayland reports no window position, so they equal
+    `clientX`/`clientY` there, and X11 may report an origin that leaves out
+    the window decorations. The fix direction is a platform query in `gpui` for the
     client area's screen position.
   - `isComposing` needs the text-editing/IME unit, which hasn't started.
   - Blocked on `gpui` itself: `code` and `location` — `Keystroke`
@@ -931,10 +912,12 @@ A fixed entry is deleted and its ID is never reused.
   the `mousemove` of the same move, because hover is dispatched first inside
   that input and the `mousemove` name gets a later id. Two focus transitions
   in one update (JS calls `focus()` inside a handler) share the `focus` id, so
-  a handler attached during the first is skipped for the second. A host that
-  builds one event, then walks the path and runs capture and bubble itself,
-  gives every event a single identity and removes the inference and the edge
-  case. It also takes over `stopPropagation` and `preventDefault` from GPUI.
+  a handler attached during the first is skipped for the second. Each node on
+  the path gets a fresh event object, so a property a listener sets on it is
+  invisible to the listeners of its ancestors. A host that builds one event,
+  then walks the path and runs capture and bubble itself, gives every event a
+  single identity and removes the inference, the edge case and the fresh
+  object per node. It also takes over `stopPropagation` and `preventDefault` from GPUI.
   Decide it with the first adapter other than Vue.
 
 - **B-113 A failed rebuild in `inca dev` prints the same error twice**
@@ -1089,3 +1072,52 @@ A fixed entry is deleted and its ID is never reused.
   `FocusRegistry::apply_pending` keep the transitions while
   `window.is_window_active()` is false and the activation observer dispatch
   them.
+
+- **B-151 `beforeinput` is unsupported**
+  `Units: gpui,bridge,docs · Size: L · Impact: Low`
+
+  A `beforeinput` listener has no effect. Fix: after the text-editing unit
+  lands, dispatch it before each edit as a cancelable event with `data`,
+  `inputType` and `isComposing`, and apply the edit when no listener calls
+  `preventDefault()`.
+
+- **B-152 `contextmenu` has no keyboard trigger**
+  `Units: gpui,bridge · Size: S-M · Impact: Medium`
+
+  `contextmenu` fires only from a secondary-button press. The Menu key and
+  Shift+F10 have no effect. Fix: the key hook dispatches it at the focused
+  node with the keyboard pointer source.
+
+- **B-153 `KeyboardEvent` has no `keyCode`, `which` or `charCode`**
+  `Units: bridge · Size: S-M · Impact: Medium`
+
+  `keydown` and `keyup` carry `key` and no legacy code fields. Fix: a table
+  from `key` to `keyCode` in `set_key_fields`, with `which` equal to
+  `keyCode`.
+
+- **B-154 `input` and `change` are unsupported**
+  `Units: gpui,bridge,docs · Size: L · Impact: High`
+
+  `input` and `change` listeners have no effect. Fix: dispatch them from the
+  text-editing unit together with `beforeinput` (B-151).
+
+- **B-155 Drag-and-drop events are unsupported**
+  `Units: gpui,bridge,docs · Size: L · Impact: Medium`
+
+  `dragstart`, `drag`, `dragover`, `drop` and `dragend` listeners have no
+  effect. Fix: start a drag from a `draggable` node on pointer movement and
+  dispatch the sequence to the source and the drop target.
+
+- **B-156 Touch events are unsupported**
+  `Units: gpui,bridge,docs · Size: L · Impact: Low`
+
+  `touchstart`, `touchmove`, `touchend` and `touchcancel` listeners have no
+  effect, and a touch tap produces a `click` only. Fix: dispatch the touch
+  sequence from `gpui` touch input with `touches` and `changedTouches`.
+
+- **B-157 Nodes lack `dispatchEvent()` and `click()`**
+  `Units: core,bridge · Size: M-L · Impact: Low-Medium`
+
+  Listeners register through the native `addEventListener` only, and app code
+  has no call that dispatches an event on a node. Fix: expose `dispatchEvent()`
+  and `click()` on the element wrapper and route them to the host dispatcher.
