@@ -151,12 +151,13 @@ and event name. Payloads and author-facing behaviour are in
   name. One engine has one counter, shared by all its dispatchers, and it
   restarts at 1 with a new engine.
 - Base fields: `bubbles`, `cancelable` and `composed` come from one table
-  (`EVENT_FLAGS` in `dispatch.rs`; other names get all three `false`). The
+  (`EVENTS` in `dispatch.rs`, which also holds each event's target rule,
+  movement rule and own-buttons rule; other names get all three `false`). The
   `timeStamp` origin is a process-wide `Instant` fixed when the first
   dispatcher is created. `defaultPrevented` and `eventPhase` come from the
   per-input state the `eventId` lives in. The origin node of that state is the
   first node an event name runs listeners on, in `dispatch` and in
-  `EventDispatcher::activate`. A `preventDefault()` call on a cancelable event
+  `EventDispatcher::fire`. A `preventDefault()` call on a cancelable event
   marks the state, so later nodes start with it `true`.
 - Methods: `stopPropagation`, `stopImmediatePropagation`, `preventDefault`.
   `preventDefault` reaches the window only for a cancelable event.
@@ -176,17 +177,17 @@ and event name. Payloads and author-facing behaviour are in
 
 | Name | Payload | Notes |
 | --- | --- | --- |
-| `click` | mouse + pointer | Fires before `mouseup` on the same node. gpui runs click listeners before the node's own mouse-up listeners, so a mouse click's marker call runs inside the click closure. gpui's `on_click` serves the primary button only. The payload is `From<&ClickEvent>`: the release position and modifiers, `button` and `buttons` at 0, `detail` the release's click count, pointer source mouse. A button wires its own `keydown`/`keyup` listeners, runs the JS callbacks, then clicks. `EventSink::activate` runs the node's callbacks, then each ancestor's, with `target` the button. Its payload is `MousePayload::keyboard_click`: coordinates, `button`, `buttons` and `detail` at 0, the key event's modifiers, pointer source keyboard. A disabled button's mouse down and up set a flag until the end of the event. The `mousedown`, `mouseup` and `click` wiring of every other node skips its callbacks while the flag is set, and the button leaves its own unwired. |
+| `click` | mouse + pointer | Fires before `mouseup` on the same node. gpui runs click listeners before the node's own mouse-up listeners, so a mouse click's marker call runs inside the click closure. gpui's `on_click` serves the primary button only. The payload is `From<&ClickEvent>`: the release position and modifiers, `button` and `buttons` at 0, `detail` the release's click count, pointer source mouse. A button wires its own `keydown`/`keyup` listeners, runs the JS callbacks, then clicks. `EventSink::fire` runs the node's callbacks, then each ancestor's, with `target` the button. Its payload is `MousePayload::keyboard_click`: coordinates, `button`, `buttons` and `detail` at 0, the key event's modifiers, pointer source keyboard. A disabled button's mouse down and up set a flag until the end of the event. The `mousedown`, `mouseup` and `click` wiring of every other node skips its callbacks while the flag is set, and the button leaves its own unwired. |
 | `dblclick` | mouse | Dispatched inside the same `on_click` closure right after `click` with the pointer source cleared, when the release's click count is 2. A node listening to `dblclick` alone gets the closure too (`EventMask::DBL_CLICK` needs an element id). `target` follows the `click` rule. |
 | `auxclick` | mouse + pointer | gpui's `on_aux_click` serves the other buttons. The payload is `From<&ClickEvent>` with `button` the released button. It ignores the disabled-button flag. `target` follows the `click` rule. |
-| `contextmenu` | mouse + pointer | The root tracker's capture listener for a right `MouseDownEvent` queues `window.defer`, which runs after the press's bubble. `EventSink::context_menu` then calls `bubble_from` at the mouse target (the root when none), so it fires whichever way `mousedown` propagated. The payload is `EventPayload::context_menu`: `button` 2, `buttons` 2, `detail` 0, pointer source mouse. It ignores the disabled-button flag. |
+| `contextmenu` | mouse + pointer | The root tracker's capture listener for a right `MouseDownEvent` queues `window.defer`, which runs after the press's bubble. `EventSink::fire` then runs `contextmenu` at the mouse target (the root when none), so it fires whichever way `mousedown` propagated. The payload is `EventPayload::context_menu`: `button` 2, `buttons` 2, `detail` 0, pointer source mouse. It ignores the disabled-button flag. |
 | `mousedown`, `mouseup` | mouse | `buttons` holds every button currently held. |
 | `mousemove` | mouse | `movementX`/`movementY` hold the delta of the raw move. |
-| `mouseenter`, `mouseleave` | mouse + `relatedTarget` | Do not bubble. `EventDispatcher::fire_at` runs only the node's own callbacks, with `target` the node. |
-| `mouseover`, `mouseout` | mouse + `relatedTarget` | `EventDispatcher::bubble_from` runs the callbacks of the deepest container, then each ancestor's. |
+| `mouseenter`, `mouseleave` | mouse + `relatedTarget` | Do not bubble. `EventDispatcher::fire` runs only the node's own callbacks, with `target` the node. |
+| `mouseover`, `mouseout` | mouse + `relatedTarget` | `EventDispatcher::fire` runs the callbacks of the deepest container, then each ancestor's. |
 | `wheel` | mouse + `deltaX`, `deltaY`, `deltaZ`, `deltaMode` | `deltaX`/`deltaY` are GPUI's values negated. `deltaZ` is `0`. `deltaMode` is `0` or `1`. |
 | `focus`, `blur` | `relatedTarget` | Do not bubble. |
-| `focusin`, `focusout` | `relatedTarget` | `EventDispatcher::dispatch` runs the node's callbacks, then each ancestor's, with `target` the node. A focus change dispatches `blur`, `focusout`, `focus`, `focusin`. |
+| `focusin`, `focusout` | `relatedTarget` | `EventDispatcher::fire` runs the node's callbacks, then each ancestor's, with `target` the node. A focus change dispatches `blur`, `focusout`, `focus`, `focusin`. |
 | `keydown`, `keyup` | `key`, `repeat`, `location` (0), `isComposing` (false), `ctrlKey`, `shiftKey`, `altKey`, `metaKey`, `getModifierState` | Go to the focused node, or the root when none is focused, and bubble to its ancestors. `keyup` has `repeat: false`. |
 
 Every container of a tree with a mouse listener (`track`, non-inert) wires one

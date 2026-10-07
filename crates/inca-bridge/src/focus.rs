@@ -62,7 +62,7 @@ impl FocusTransition {
                 related_target: self.focused,
             };
             for event in ["blur", "focusout"] {
-                dispatch.dispatch(blurred, event, &payload, window, cx);
+                dispatch.fire(blurred, event, &payload, window, cx);
             }
         }
         if let Some(focused) = self.focused {
@@ -70,7 +70,7 @@ impl FocusTransition {
                 related_target: self.blurred,
             };
             for event in ["focus", "focusin"] {
-                dispatch.dispatch(focused, event, &payload, window, cx);
+                dispatch.fire(focused, event, &payload, window, cx);
             }
         }
     }

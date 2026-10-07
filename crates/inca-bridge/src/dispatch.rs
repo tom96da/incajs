@@ -32,7 +32,7 @@ use std::time::Instant;
 use gpui::{App, ScrollHandle, Window};
 use inca_gpui::{
     EventKind, EventMask, EventPayload, KeyPayload, MousePayload, NodeId, PointerSource,
-    WheelPayload, dom_buttons_bit,
+    dom_buttons_bit,
 };
 use inca_jsenv::{Engine, EngineError};
 use rquickjs::convert::Coerced;
@@ -58,34 +58,118 @@ pub fn stderr_reporter() -> ErrorReporter {
     Rc::new(|err| eprintln!("{err}"))
 }
 
-/// `bubbles`, `cancelable` and `composed` of every event the host dispatches.
-/// Any other name takes all three as false.
-const EVENT_FLAGS: [(&str, [bool; 3]); 18] = [
-    ("click", [true, true, true]),
-    ("dblclick", [true, true, true]),
-    ("auxclick", [true, true, true]),
-    ("contextmenu", [true, true, true]),
-    ("mousedown", [true, true, true]),
-    ("mouseup", [true, true, true]),
-    ("mousemove", [true, true, true]),
-    ("mouseenter", [false, false, false]),
-    ("mouseleave", [false, false, false]),
-    ("mouseover", [true, true, true]),
-    ("mouseout", [true, true, true]),
-    ("wheel", [true, true, true]),
-    ("keydown", [true, true, true]),
-    ("keyup", [true, true, true]),
-    ("focus", [false, false, true]),
-    ("blur", [false, false, true]),
-    ("focusin", [true, false, true]),
-    ("focusout", [true, false, true]),
+/// Where an event's `target` comes from.
+#[derive(Clone, Copy)]
+enum TargetRule {
+    /// The node the event is dispatched for.
+    Node,
+    /// The deepest container under the pointer.
+    Pointer,
+    /// The nearest common ancestor of the press and release containers.
+    PressRelease,
+    /// The focused node.
+    Focused,
+}
+
+/// `bubbles`, `cancelable` and `composed` of one event.
+#[derive(Clone, Copy)]
+struct Flags {
+    bubbles: bool,
+    cancelable: bool,
+    composed: bool,
+}
+
+impl Flags {
+    const ALL: Self = Self {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+    };
+    const NONE: Self = Self {
+        bubbles: false,
+        cancelable: false,
+        composed: false,
+    };
+    /// Focus events: composed and not cancelable.
+    const FOCUS: Self = Self {
+        composed: true,
+        ..Self::NONE
+    };
+}
+
+/// The rules of one event name.
+#[derive(Clone, Copy)]
+struct EventSpec {
+    name: &'static str,
+    flags: Flags,
+    target: TargetRule,
+    /// Takes `movementX`/`movementY` from the raw pointer move.
+    movement: bool,
+    /// Carries the `buttons` of its own press or release.
+    own_buttons: bool,
+}
+
+const fn spec(name: &'static str, flags: Flags, target: TargetRule) -> EventSpec {
+    EventSpec {
+        name,
+        flags,
+        target,
+        movement: false,
+        own_buttons: false,
+    }
+}
+
+const fn own_buttons(mut event: EventSpec) -> EventSpec {
+    event.own_buttons = true;
+    event
+}
+
+/// Every event the host dispatches.
+const EVENTS: [EventSpec; 18] = [
+    own_buttons(spec("click", Flags::ALL, TargetRule::PressRelease)),
+    own_buttons(spec("dblclick", Flags::ALL, TargetRule::PressRelease)),
+    own_buttons(spec("auxclick", Flags::ALL, TargetRule::PressRelease)),
+    own_buttons(spec("contextmenu", Flags::ALL, TargetRule::Pointer)),
+    spec("mousedown", Flags::ALL, TargetRule::Pointer),
+    spec("mouseup", Flags::ALL, TargetRule::Pointer),
+    EventSpec {
+        movement: true,
+        ..spec("mousemove", Flags::ALL, TargetRule::Pointer)
+    },
+    spec("mouseenter", Flags::NONE, TargetRule::Node),
+    spec("mouseleave", Flags::NONE, TargetRule::Node),
+    spec("mouseover", Flags::ALL, TargetRule::Node),
+    spec("mouseout", Flags::ALL, TargetRule::Node),
+    spec("wheel", Flags::ALL, TargetRule::Pointer),
+    spec("keydown", Flags::ALL, TargetRule::Focused),
+    spec("keyup", Flags::ALL, TargetRule::Focused),
+    spec("focus", Flags::FOCUS, TargetRule::Node),
+    spec("blur", Flags::FOCUS, TargetRule::Node),
+    spec(
+        "focusin",
+        Flags {
+            bubbles: true,
+            ..Flags::FOCUS
+        },
+        TargetRule::Node,
+    ),
+    spec(
+        "focusout",
+        Flags {
+            bubbles: true,
+            ..Flags::FOCUS
+        },
+        TargetRule::Node,
+    ),
 ];
 
-fn flags_of(event: &str) -> [bool; 3] {
-    EVENT_FLAGS
+/// The rules of `event`. Any other name takes all three flags as false.
+fn spec_of(event: &str) -> EventSpec {
+    EVENTS
         .iter()
-        .find(|(name, _)| *name == event)
-        .map_or([false; 3], |(_, flags)| *flags)
+        .find(|spec| spec.name == event)
+        .copied()
+        .unwrap_or(spec("", Flags::NONE, TargetRule::Node))
 }
 
 /// The origin of every `timeStamp`.
@@ -222,26 +306,11 @@ impl EventDispatcher {
     /// [`Self::held_buttons`]. A DOM `mouseup` excludes the button just
     /// released; every other kind includes every button still held.
     fn with_held_buttons(&self, event: &str, payload: &EventPayload) -> EventPayload {
-        // These events carry the `buttons` of their own press or release.
-        if matches!(event, "click" | "dblclick" | "auxclick" | "contextmenu") {
-            return payload.clone();
+        let mut payload = payload.clone();
+        if let Some(mouse) = payload.mouse_mut().filter(|_| !spec_of(event).own_buttons) {
+            mouse.buttons = self.update_held_buttons(event, mouse.button);
         }
-        match payload {
-            EventPayload::Mouse(mouse) => EventPayload::Mouse(MousePayload {
-                buttons: self.update_held_buttons(event, mouse.button),
-                ..*mouse
-            }),
-            EventPayload::Wheel(wheel) => EventPayload::Wheel(WheelPayload {
-                mouse: MousePayload {
-                    buttons: self.update_held_buttons(event, wheel.mouse.button),
-                    ..wheel.mouse
-                },
-                ..*wheel
-            }),
-            EventPayload::None | EventPayload::Key(_) | EventPayload::Focus { .. } => {
-                payload.clone()
-            }
-        }
+        payload
     }
 
     /// Updates [`Self::held_buttons`] for `"mousedown"`/`"mouseup"` and
@@ -263,17 +332,15 @@ impl EventDispatcher {
     /// raw pointer move being dispatched, for `mousemove`. Every other event
     /// keeps 0.
     fn with_movement(&self, payload: &EventPayload, event: &str) -> EventPayload {
-        match payload {
-            EventPayload::Mouse(mouse) if event == "mousemove" => {
-                let (movement_x, movement_y) = self.current_movement.get().unwrap_or((0.0, 0.0));
-                EventPayload::Mouse(MousePayload {
-                    movement_x,
-                    movement_y,
-                    ..*mouse
-                })
-            }
-            _ => payload.clone(),
+        let mut payload = payload.clone();
+        if spec_of(event).movement
+            && let EventPayload::Mouse(mouse) = &mut payload
+        {
+            let (movement_x, movement_y) = self.current_movement.get().unwrap_or((0.0, 0.0));
+            mouse.movement_x = movement_x;
+            mouse.movement_y = movement_y;
         }
+        payload
     }
 
     /// Takes the window's current modifier keys as the baseline for the next
@@ -330,11 +397,6 @@ impl EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) {
-        let payload = &self.live_related(payload);
-        if matches!(event, "focusin" | "focusout") {
-            self.bubble_from(node_id, event, payload, window, cx);
-            return;
-        }
         let callback_ids = if event == "wheel" && self.wheel_stopped.get() {
             Vec::new()
         } else {
@@ -345,9 +407,7 @@ impl EventDispatcher {
                 .to_vec()
         };
 
-        let payload = self.with_held_buttons(event, payload);
-        let payload = self.with_movement(&payload, event);
-        let payload = with_screen(&payload, window);
+        let payload = self.prepare(event, payload, window);
         let state = self.event_state(event, cx);
         let target = self.target_of(node_id, event, window, cx);
         let outcome = self.run_callbacks(node_id, target, event, &payload, state, callback_ids);
@@ -370,39 +430,48 @@ impl EventDispatcher {
         self.drain_jobs_and_refresh(window);
     }
 
+    /// `payload` as a listener sees it: a `related_target` that left the tree
+    /// reads `None`, and the buttons, movement and screen fields are set.
+    fn prepare(&self, event: &str, payload: &EventPayload, window: &Window) -> EventPayload {
+        let payload = self.live_related(payload);
+        let payload = self.with_held_buttons(event, &payload);
+        let payload = self.with_movement(&payload, event);
+        with_screen(&payload, window)
+    }
+
     /// `payload` with a `related_target` that left the tree set to `None`.
     fn live_related(&self, payload: &EventPayload) -> EventPayload {
         let gone = |id: &NodeId| self.host.borrow().tree.get(*id).is_none();
-        match payload {
-            EventPayload::Focus {
-                related_target: Some(id),
-            } if gone(id) => EventPayload::Focus {
-                related_target: None,
-            },
-            EventPayload::Mouse(mouse) if mouse.related_target.is_some_and(|id| gone(&id)) => {
-                EventPayload::Mouse(MousePayload {
-                    related_target: None,
-                    ..*mouse
-                })
+        let mut payload = payload.clone();
+        match &mut payload {
+            EventPayload::Focus { related_target } => {
+                if related_target.as_ref().is_some_and(gone) {
+                    *related_target = None;
+                }
             }
-            _ => payload.clone(),
+            other => {
+                if let Some(mouse) = other.mouse_mut()
+                    && mouse.related_target.as_ref().is_some_and(gone)
+                {
+                    mouse.related_target = None;
+                }
+            }
         }
+        payload
     }
 
     /// The `target` of `event` dispatched for `node_id`.
     fn target_of(&self, node_id: NodeId, event: &str, window: &Window, cx: &App) -> NodeId {
-        let found = match event {
-            "mousedown" | "mouseup" | "mousemove" | "wheel" | "contextmenu" => {
-                inca_gpui::mouse_target(cx)
-            }
-            "click" | "dblclick" | "auxclick" => {
+        let found = match spec_of(event).target {
+            TargetRule::Node => None,
+            TargetRule::Pointer => inca_gpui::mouse_target(cx),
+            TargetRule::PressRelease => {
                 match (inca_gpui::pressed_target(cx), inca_gpui::mouse_target(cx)) {
                     (Some(down), Some(up)) => self.common_ancestor(down, up),
                     (_, up) => up,
                 }
             }
-            "keydown" | "keyup" => self.host.borrow().focus.focused_node(window, cx),
-            _ => None,
+            TargetRule::Focused => self.host.borrow().focus.focused_node(window, cx),
         };
         self.resolve(found, node_id)
     }
@@ -507,33 +576,25 @@ impl EventDispatcher {
         }
     }
 
-    /// Fires the `click` a key press on `node_id` produces: `button` 0,
-    /// `buttons` 0, `detail` 0 and coordinates 0, `pointerId` -1 and
-    /// `pointerType` `""`, with the key event's `modifiers`. It runs the
-    /// listeners of `node_id` and then each ancestor's, with `target` the
-    /// node pressed, until one calls `stopPropagation()`.
-    pub fn activate(
-        &self,
-        node_id: NodeId,
-        modifiers: gpui::Modifiers,
-        window: &mut Window,
-        cx: &mut App,
-    ) {
-        let payload = EventPayload::Mouse(MousePayload::keyboard_click(modifiers));
-        self.bubble_from(node_id, "click", &payload, window, cx);
-    }
-
-    /// Runs the `event` listeners of `start` and then of each ancestor, with
-    /// `target` `start`, until one calls `stopPropagation()`.
-    fn bubble_from(
+    /// Fires `event` at `start` with `start` as the `target`. The listeners
+    /// of `start` run first, then those of each ancestor while the event
+    /// bubbles, until one calls `stopPropagation()`. Returns whether a
+    /// listener prevented the default action. A `start` that left the tree
+    /// fires nothing. The job queue drains after the walk.
+    pub fn fire(
         &self,
         start: NodeId,
         event: &str,
         payload: &EventPayload,
         window: &mut Window,
         cx: &mut App,
-    ) {
-        let payload = &with_screen(payload, window);
+    ) -> bool {
+        if self.host.borrow().tree.get(start).is_none() {
+            return false;
+        }
+        let payload = &self.prepare(event, payload, window);
+        let bubbles = spec_of(event).flags.bubbles;
+        let mut prevented = false;
         let mut current = Some(start);
         while let Some(id) = current {
             let callback_ids = self
@@ -545,7 +606,7 @@ impl EventDispatcher {
             if !callback_ids.is_empty() {
                 let state = self.event_state(event, cx);
                 let outcome = self.run_callbacks(id, start, event, payload, state, callback_ids);
-                self.drain_jobs_and_refresh(window);
+                prevented |= outcome.prevent_default;
                 if outcome.stop_propagation {
                     break;
                 }
@@ -555,8 +616,11 @@ impl EventDispatcher {
                 .borrow()
                 .tree
                 .get(id)
+                .filter(|_| bubbles)
                 .and_then(inca_gpui::VirtualNode::parent);
         }
+        self.drain_jobs_and_refresh(window);
+        prevented
     }
 
     /// The deepest container `gpui` reports as hovered. Containers that left
@@ -608,56 +672,17 @@ impl EventDispatcher {
             })
         };
         if let Some(old) = prev {
-            self.bubble_prepared(old, "mouseout", &with(next), window, cx);
+            self.fire(old, "mouseout", &with(next), window, cx);
         }
         for id in leave {
-            self.fire_at(id, "mouseleave", &with(next), window, cx);
+            self.fire(id, "mouseleave", &with(next), window, cx);
         }
         if let Some(new) = next {
-            self.bubble_prepared(new, "mouseover", &with(prev), window, cx);
+            self.fire(new, "mouseover", &with(prev), window, cx);
         }
         for id in enter {
-            self.fire_at(id, "mouseenter", &with(prev), window, cx);
+            self.fire(id, "mouseenter", &with(prev), window, cx);
         }
-    }
-
-    /// [`Self::bubble_from`] for a mouse event whose payload still needs its
-    /// held buttons.
-    fn bubble_prepared(
-        &self,
-        start: NodeId,
-        event: &str,
-        payload: &EventPayload,
-        window: &mut Window,
-        cx: &mut App,
-    ) {
-        let payload = self.with_held_buttons(event, payload);
-        self.bubble_from(start, event, &payload, window, cx);
-    }
-
-    /// Runs the `event` listeners of `node_id` only, with `target` `node_id`.
-    fn fire_at(
-        &self,
-        node_id: NodeId,
-        event: &str,
-        payload: &EventPayload,
-        window: &mut Window,
-        cx: &mut App,
-    ) {
-        let callback_ids = self
-            .host
-            .borrow()
-            .listeners
-            .callbacks_for(node_id, event)
-            .to_vec();
-        if callback_ids.is_empty() {
-            return;
-        }
-        let payload = self.with_held_buttons(event, payload);
-        let payload = with_screen(&payload, window);
-        let state = self.event_state(event, cx);
-        self.run_callbacks(node_id, node_id, event, &payload, state, callback_ids);
-        self.drain_jobs_and_refresh(window);
     }
 
     /// [`drain_jobs_and_refresh`] with this dispatcher's engine and reporter.
@@ -670,19 +695,18 @@ impl EventDispatcher {
 /// on the screen plus the client position.
 fn with_screen(payload: &EventPayload, window: &Window) -> EventPayload {
     let origin = window.bounds().origin;
-    let place = |mouse: &MousePayload| MousePayload {
-        screen_x: f32::from(origin.x) + mouse.client_x,
-        screen_y: f32::from(origin.y) + mouse.client_y,
-        ..*mouse
-    };
-    match payload {
-        EventPayload::Mouse(mouse) => EventPayload::Mouse(place(mouse)),
-        EventPayload::Wheel(wheel) => EventPayload::Wheel(WheelPayload {
-            mouse: place(&wheel.mouse),
-            ..*wheel
-        }),
-        _ => payload.clone(),
+    let mut payload = payload.clone();
+    if let Some(mouse) = payload.mouse_mut() {
+        mouse.screen_x = f32::from(origin.x) + mouse.client_x;
+        mouse.screen_y = f32::from(origin.y) + mouse.client_y;
     }
+    payload
+}
+
+fn set_flags(event_object: &Object, flags: Flags) -> rquickjs::Result<()> {
+    event_object.set("bubbles", flags.bubbles)?;
+    event_object.set("cancelable", flags.cancelable)?;
+    event_object.set("composed", flags.composed)
 }
 
 /// What the callbacks of one dispatch asked for.
@@ -705,7 +729,7 @@ fn build_event_object<'js>(
     signals: &[Rc<Cell<bool>>; 3],
 ) -> rquickjs::Result<Object<'js>> {
     let [stop_propagation, stop_immediate, prevent_default] = signals;
-    let [bubbles, cancelable, composed] = flags_of(event);
+    let Flags { cancelable, .. } = spec_of(event).flags;
     let event_object = Object::new(ctx.clone())?;
     event_object.set("type", event)?;
     event_object.set("target", target)?;
@@ -719,9 +743,7 @@ fn build_event_object<'js>(
     ] {
         event_object.prop(name, Property::from(value))?;
     }
-    event_object.set("bubbles", bubbles)?;
-    event_object.set("cancelable", cancelable)?;
-    event_object.set("composed", composed)?;
+    set_flags(&event_object, spec_of(event).flags)?;
     event_object.prop(
         "defaultPrevented",
         Accessor::new_get({
@@ -929,14 +951,15 @@ impl EventSink for EventDispatcher {
         self.dispatch(node_id, event, payload, window, cx);
     }
 
-    fn activate(
+    fn fire(
         &self,
-        node_id: NodeId,
-        modifiers: gpui::Modifiers,
+        start: NodeId,
+        event: &str,
+        payload: &EventPayload,
         window: &mut Window,
         cx: &mut App,
-    ) {
-        self.activate(node_id, modifiers, window, cx);
+    ) -> bool {
+        self.fire(start, event, payload, window, cx)
     }
 
     fn focus_handle(&self, node_id: NodeId) -> Option<gpui::FocusHandle> {
@@ -974,12 +997,6 @@ impl EventSink for EventDispatcher {
         cx.defer(move |_| current.set(None));
     }
 
-    fn context_menu(&self, payload: &EventPayload, window: &mut Window, cx: &mut App) {
-        let (root, target) = (self.host.borrow().root, inca_gpui::mouse_target(cx));
-        let start = self.resolve(target, root);
-        self.bubble_from(start, "contextmenu", payload, window, cx);
-    }
-
     // Changed flags fire in the order Shift, Control, Alt, Meta.
     fn modifiers_changed(&self, modifiers: gpui::Modifiers, window: &mut Window, cx: &mut App) {
         let before = self
@@ -1004,7 +1021,7 @@ impl EventSink for EventDispatcher {
                     modifiers,
                 });
                 let event = if is { "keydown" } else { "keyup" };
-                self.bubble_from(start, event, &payload, window, cx);
+                self.fire(start, event, &payload, window, cx);
             }
         }
     }
@@ -1081,6 +1098,7 @@ mod tests {
     use super::*;
     use crate::bindings::install;
     use gpui::{TestAppContext, point, px};
+    use inca_gpui::WheelPayload;
 
     #[test]
     fn modifier_state_reports_each_held_modifier_and_no_lock() {
@@ -1536,6 +1554,58 @@ mod tests {
     }
 
     #[gpui::test]
+    fn fire_walks_up_only_bubbling_events_and_reports_prevention(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let parent = host.borrow_mut().tree.create_node("div").unwrap();
+        let child = host.borrow_mut().tree.create_node("div").unwrap();
+        host.borrow_mut().tree.append_child(parent, child).unwrap();
+        dispatcher.engine.eval::<()>(RECORDER).unwrap();
+        dispatcher
+            .engine
+            .eval::<()>(
+                "globalThis.__inca_callbacks__[1] = (e) => { \
+                 globalThis.__inca_callbacks__[0](e); e.stopPropagation(); };",
+            )
+            .unwrap();
+        let cx = cx.add_empty_window();
+        // (event, start, callback of start, listening nodes, nodes reached, prevented)
+        #[allow(clippy::type_complexity)]
+        let rows: [(&str, NodeId, u32, &[NodeId], &[NodeId], bool); 8] = [
+            ("click", child, 0, &[], &[], false),
+            ("click", child, 0, &[child, parent], &[child, parent], true),
+            ("click", child, 1, &[child, parent], &[child], true),
+            ("contextmenu", child, 0, &[child], &[child], true),
+            ("keydown", child, 0, &[child], &[child], true),
+            ("mouseenter", child, 0, &[child, parent], &[child], false),
+            ("focusin", child, 0, &[child], &[child], false),
+            ("click", 99, 0, &[99, parent], &[], false),
+        ];
+        for (event, start, callback, listening, reached, prevented) in rows {
+            host.borrow_mut().listeners = crate::bindings::EventListeners::default();
+            for node in listening {
+                host.borrow_mut().listeners.register(*node, event, callback);
+            }
+            let got = cx.update(|window, cx| {
+                dispatcher.fire(start, event, &EventPayload::None, window, cx)
+            });
+            let nodes: Vec<_> = seen(&dispatcher).iter().map(|r| r[7].clone()).collect();
+            assert_eq!(got, prevented, "{event} from {start}: prevented");
+            assert_eq!(nodes, reached, "{event} from {start}: nodes reached");
+        }
+    }
+
+    #[test]
+    fn every_event_kind_has_a_table_row() {
+        for kind in EventKind::ALL {
+            assert!(
+                EVENTS.iter().any(|spec| spec.name == kind.name()),
+                "{} has a row",
+                kind.name()
+            );
+        }
+    }
+
+    #[gpui::test]
     fn time_stamp_counts_milliseconds_from_the_host_start_and_grows(cx: &mut TestAppContext) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.borrow_mut().tree.create_node("div").unwrap();
@@ -1628,7 +1698,13 @@ mod tests {
         listen(&host, outer, "click");
         let cx = cx.add_empty_window();
         cx.update(|window, cx| {
-            dispatcher.activate(button, gpui::Modifiers::none(), window, cx);
+            dispatcher.fire(
+                button,
+                "click",
+                &EventPayload::Mouse(MousePayload::keyboard_click(gpui::Modifiers::none())),
+                window,
+                cx,
+            );
         });
         // [currentTarget, defaultPrevented before, eventPhase, isTrusted]
         let rows: Vec<_> = seen(&dispatcher)

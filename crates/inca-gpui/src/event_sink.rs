@@ -395,6 +395,15 @@ impl From<&ClickEvent> for EventPayload {
 }
 
 impl EventPayload {
+    /// The mouse fields of a `Mouse` or `Wheel` payload.
+    pub fn mouse_mut(&mut self) -> Option<&mut MousePayload> {
+        match self {
+            Self::Mouse(mouse) => Some(mouse),
+            Self::Wheel(wheel) => Some(&mut wheel.mouse),
+            _ => None,
+        }
+    }
+
     /// The `contextmenu` a press of `event`'s button produces: `detail` 0 and
     /// `buttons` the pressed button.
     #[must_use]
@@ -555,15 +564,17 @@ pub trait EventSink {
         cx: &mut App,
     );
 
-    /// Fires the `click` a key press on `node_id` produces, bubbling to its
-    /// ancestors. `modifiers` are the key event's.
-    fn activate(
+    /// Fires `event` at `start`, with `start` as its target. The event
+    /// bubbles to the ancestors of `start` when its kind bubbles. Returns
+    /// whether a listener prevented the default action.
+    fn fire(
         &self,
-        node_id: NodeId,
-        modifiers: gpui::Modifiers,
+        start: NodeId,
+        event: &str,
+        payload: &EventPayload,
         window: &mut Window,
         cx: &mut App,
-    );
+    ) -> bool;
 
     /// The handle to track this node's focus with, if it's focusable.
     fn focus_handle(&self, node_id: NodeId) -> Option<gpui::FocusHandle>;
@@ -572,11 +583,6 @@ pub trait EventSink {
     /// scrolls for the innermost container under the wheel that can still
     /// move, and stays put after `preventDefault()`.
     fn scroll_handle(&self, node_id: NodeId) -> Option<gpui::ScrollHandle>;
-
-    /// Fires the `contextmenu` a secondary button press produces, after the
-    /// press's own dispatches have run. `payload` is
-    /// [`EventPayload::context_menu`].
-    fn context_menu(&self, payload: &EventPayload, window: &mut Window, cx: &mut App);
 
     /// Reports a pointer move to `position`, in window coordinates. Called
     /// for every pointer move in the window, buttons held included, before

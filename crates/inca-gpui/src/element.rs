@@ -897,7 +897,7 @@ where
             let modifiers = event.keystroke.modifiers;
             match event.keystroke.key.as_str() {
                 "enter" if !(modifiers.control || modifiers.alt || modifiers.platform) => {
-                    down.activate(id, modifiers, window, cx);
+                    click_by_key(&down, id, modifiers, window, cx);
                 }
                 "space" => cx.default_global::<SpaceDown>().0 = Some((window_id, id)),
                 _ => {}
@@ -915,7 +915,7 @@ where
                 && cx.default_global::<SpaceDown>().0.take() == Some((window_id, id))
                 && !window.default_prevented()
             {
-                up.activate(id, event.keystroke.modifiers, window, cx);
+                click_by_key(&up, id, event.keystroke.modifiers, window, cx);
             }
         })
 }
@@ -966,8 +966,20 @@ fn scroll_recorder(handle: ScrollHandle, inert: bool) -> impl IntoElement {
     .size_0()
 }
 
+// The `click` a key press on `id` produces.
+fn click_by_key(
+    sink: &impl EventSink,
+    id: NodeId,
+    modifiers: gpui::Modifiers,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    let payload = EventPayload::Mouse(MousePayload::keyboard_click(modifiers));
+    sink.fire(id, "click", &payload, window, cx);
+}
+
 // Zero-size child; its capture-phase handlers run before any node's own.
-fn pointer_tracker<E: EventSink + Clone + 'static>(dispatch: E) -> impl IntoElement {
+fn pointer_tracker<E: EventSink + Clone + 'static>(root: NodeId, dispatch: E) -> impl IntoElement {
     canvas(
         |_, _, _| (),
         move |_, (), window, _| {
@@ -987,7 +999,8 @@ fn pointer_tracker<E: EventSink + Clone + 'static>(dispatch: E) -> impl IntoElem
                         // Runs after the press's own listeners.
                         let (menu, payload) = (menu.clone(), EventPayload::context_menu(event));
                         window.defer(cx, move |window, cx| {
-                            menu.context_menu(&payload, window, cx);
+                            let start = mouse_target(cx).unwrap_or(root);
+                            menu.fire(start, "contextmenu", &payload, window, cx);
                         });
                     }
                 }
@@ -1293,7 +1306,7 @@ where
 {
     apply_style(element.style(), &spec.style);
     if let Some(dispatch) = dispatch.filter(|_| root) {
-        element = element.child(pointer_tracker(dispatch.clone()));
+        element = element.child(pointer_tracker(spec.id, dispatch.clone()));
     }
     for child in &spec.children {
         if child.tag == ElementTag::Text(String::new()) {
@@ -1326,13 +1339,15 @@ impl EventSink for NeverListens {
     ) {
     }
 
-    fn activate(
+    fn fire(
         &self,
-        _node_id: NodeId,
-        _modifiers: gpui::Modifiers,
+        _start: NodeId,
+        _event: &str,
+        _payload: &EventPayload,
         _window: &mut Window,
         _cx: &mut App,
-    ) {
+    ) -> bool {
+        false
     }
 
     fn focus_handle(&self, _node_id: NodeId) -> Option<gpui::FocusHandle> {
@@ -1344,8 +1359,6 @@ impl EventSink for NeverListens {
     }
 
     fn pointer_moved(&self, _position: Point<Pixels>, _cx: &mut App) {}
-
-    fn context_menu(&self, _payload: &EventPayload, _window: &mut Window, _cx: &mut App) {}
 
     fn pointer_left(&self) {}
 
@@ -2534,7 +2547,16 @@ mod tests {
                 ));
             }
 
-            fn activate(&self, _: NodeId, _: gpui::Modifiers, _: &mut Window, _: &mut App) {}
+            fn fire(
+                &self,
+                _: NodeId,
+                _: &str,
+                _: &EventPayload,
+                _: &mut Window,
+                _: &mut App,
+            ) -> bool {
+                false
+            }
 
             fn focus_handle(&self, _: NodeId) -> Option<gpui::FocusHandle> {
                 None
@@ -2545,8 +2567,6 @@ mod tests {
             }
 
             fn pointer_moved(&self, _: Point<Pixels>, _: &mut App) {}
-
-            fn context_menu(&self, _payload: &EventPayload, _window: &mut Window, _cx: &mut App) {}
 
             fn pointer_left(&self) {}
 
