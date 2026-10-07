@@ -480,12 +480,7 @@ A fixed entry is deleted and its ID is never reused.
     target's bounds are computed once, for hitbox insertion, and need to be
     kept where `dispatch` can reach them, since `gpui` has no production API
     to look a node's bounds up by id at event time.
-  - `relatedTarget` reads `null` on `mouseenter` and `mouseleave`. The real
-    value is the container the pointer came from or went to. The mouse
-    target slot holds the current container only, so the fix keeps the
-    previous move's container as well and reads both when the hover
-    callbacks run. `isComposing` needs the text-editing/IME unit, which
-    hasn't started.
+  - `isComposing` needs the text-editing/IME unit, which hasn't started.
   - Blocked on `gpui` itself: `code` and `location` — `Keystroke`
     (`third_party/zed/crates/gpui/src/platform/keystroke.rs`) carries
     only `{ modifiers, key, key_char }`, with no layout-independent
@@ -518,14 +513,6 @@ A fixed entry is deleted and its ID is never reused.
   and `contextmenu` `detail` 1, Chromium reports `isPrimary` false and WebKit
   reports `contextmenu` `pressure` 0.5. Fix: revisit the values when the
   `pointer*` events (B-148) land.
-
-- **B-147 `mouseover` and `mouseout` are unsupported**
-  `Units: gpui,bridge · Size: M · Impact: Low`
-
-  Binding either name has no effect. Fix: keep the previous deepest container
-  in the hover callbacks and fire both with `relatedTarget`. The per-ancestor
-  `mouseenter`/`mouseleave` work implements them together with the real
-  `relatedTarget` of `mouseenter` and `mouseleave`.
 
 - **B-148 The `pointer*` events are unsupported**
   `Units: gpui,bridge,docs · Size: L · Impact: Medium`

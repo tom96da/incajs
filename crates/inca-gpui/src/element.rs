@@ -25,7 +25,7 @@ use gpui::{
     ScrollHandle, ScrollWheelEvent, StyleRefinement, Window, canvas, div, point, px, rgb,
 };
 
-use crate::event_sink::{EventMask, EventPayload, EventSink, MousePayload};
+use crate::event_sink::{EventMask, EventPayload, EventSink};
 use crate::tree::{AttributeValue, NodeId, VirtualNode, VirtualTree};
 
 /// What kind of element a [`VirtualNode`](crate::tree::VirtualNode) maps to.
@@ -795,18 +795,41 @@ fn mark_target(cx: &mut App, id: NodeId) {
 /// Reports `id` as the event's target when no deeper container has. Add it
 /// after every other mouse listener of the container: a node's listeners
 /// run in reverse order, so this one runs first.
-fn mark_mouse_target<Elem: InteractiveElement + FluentBuilder>(element: Elem, id: NodeId) -> Elem {
+fn mark_mouse_target<Elem: InteractiveElement + FluentBuilder>(
+    element: Elem,
+    id: NodeId,
+    sink: Option<impl EventSink + 'static>,
+) -> Elem {
     let mut element = element
         .on_any_mouse_down(move |_, _, cx| {
             mark_target(cx, id);
             cx.default_global::<MouseTarget>().pressed.get_or_insert(id);
         })
-        .on_mouse_move(move |_, _, cx| mark_target(cx, id))
+        .on_mouse_move(move |_, window, cx| {
+            // The first container to report is the deepest one.
+            let deepest = mouse_target(cx).is_none();
+            mark_target(cx, id);
+            if deepest && let Some(sink) = &sink {
+                sink.pointer_over(id, window, cx);
+            }
+        })
         .on_scroll_wheel(move |_, _, cx| mark_target(cx, id));
     element
         .interactivity()
         .on_any_mouse_up(move |_, _, cx| mark_target(cx, id));
     element
+}
+
+/// Reports `id`'s hover state changes to `dispatch`. `gpui` panics when a
+/// node calls `on_hover` twice, so this is the only caller.
+fn wire_hover<Elem, E>(element: Elem, dispatch: Option<&E>, id: NodeId) -> Elem
+where
+    Elem: StatefulInteractiveElement + FluentBuilder,
+    E: EventSink + Clone + 'static,
+{
+    element.when_some(dispatch.cloned(), |el, sink| {
+        el.on_hover(move |hovered, window, cx| sink.hover_changed(id, *hovered, window, cx))
+    })
 }
 
 // The Space press waiting for its release. Any other key press or mouse press
@@ -1034,7 +1057,11 @@ fn listens_mouse(spec: &ElementSpec) -> bool {
             | EventMask::MOUSE_DOWN
             | EventMask::MOUSE_UP
             | EventMask::MOUSE_MOVE
-            | EventMask::WHEEL,
+            | EventMask::WHEEL
+            | EventMask::MOUSE_ENTER
+            | EventMask::MOUSE_LEAVE
+            | EventMask::MOUSE_OVER
+            | EventMask::MOUSE_OUT,
     ) || spec.children.iter().any(listens_mouse)
 }
 
@@ -1045,7 +1072,8 @@ fn listens_mouse(spec: &ElementSpec) -> bool {
 /// A container also gets a `gpui` `ElementId` (`.id()`) whenever any wired
 /// kind is [`EventKind::needs_element_id`] — `click`, `dblclick` and
 /// `auxclick`, via `on_click` and `on_aux_click` (`StatefulInteractiveElement`
-/// methods) — and `mouseenter`/`mouseleave` via `on_hover`. The other kinds
+/// methods). With `track`, every non-inert container reports its
+/// hover state through `on_hover`, which needs an id as well. The other kinds
 /// wire through plain `InteractiveElement` methods and need no id. A container
 /// that scrolls on either axis gets one too, since `gpui` keeps its scroll
 /// offset in element state.
@@ -1107,45 +1135,29 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
                 })
             });
 
-            if spec.style.scrolls() || (dispatch.is_some() && spec.listens.needs_element_id()) {
+            // Every container of a tree with a mouse listener reports its
+            // hover state.
+            let hover = track && !spec.inert;
+            if spec.style.scrolls()
+                || (dispatch.is_some() && (hover || spec.listens.needs_element_id()))
+            {
                 let element =
                     wire_stateless(element.id(ElementId::Integer(u64::from(id))), id, &wired);
                 let element = wire_button(element, dispatch, spec);
                 let element = wire_focus(element, dispatch, id);
                 let element = wire_scroll(element, dispatch, spec);
-                // One `on_hover` covers both `mouseenter`/`mouseleave` —
-                // GPUI panics if it's called twice on the same element, so
-                // which name to dispatch is decided from its `bool` at
-                // call time, not by registering per kind.
-                let element = element.when_some(
-                    dispatch
-                        .filter(|_| {
-                            spec.listens
-                                .intersects(EventMask::MOUSE_ENTER | EventMask::MOUSE_LEAVE)
-                        })
-                        .cloned(),
-                    |el, listening| {
-                        el.on_hover(move |is_hovered, window, cx| {
-                            let event = if *is_hovered {
-                                "mouseenter"
-                            } else {
-                                "mouseleave"
-                            };
-                            let payload = EventPayload::Mouse(MousePayload::at(
-                                window.mouse_position(),
-                                window.modifiers(),
-                            ));
-                            listening.dispatch(id, event, &payload, window, cx);
-                        })
-                    },
-                );
-                let element = element.when(track && !spec.inert, |el| mark_mouse_target(el, id));
+                let element = wire_hover(element, dispatch.filter(|_| hover), id);
+                let element = element.when(track && !spec.inert, |el| {
+                    mark_mouse_target(el, id, dispatch.cloned())
+                });
                 let element = wire_click(element, dispatch, spec, held_back(EventMask::CLICK));
                 finish_container(element, spec, dispatch, root, track)
             } else {
                 let element = wire_stateless(element, id, &wired);
                 let element = wire_button(element, dispatch, spec);
-                let element = element.when(track && !spec.inert, |el| mark_mouse_target(el, id));
+                let element = element.when(track && !spec.inert, |el| {
+                    mark_mouse_target(el, id, dispatch.cloned())
+                });
                 finish_container(
                     wire_focus(element, dispatch, id),
                     spec,
@@ -1281,6 +1293,11 @@ impl EventSink for NeverListens {
     fn context_menu(&self, _payload: &EventPayload, _window: &mut Window, _cx: &mut App) {}
 
     fn pointer_left(&self) {}
+
+    fn hover_changed(&self, _node_id: NodeId, _hovered: bool, _window: &mut Window, _cx: &mut App) {
+    }
+
+    fn pointer_over(&self, _node_id: NodeId, _window: &mut Window, _cx: &mut App) {}
 }
 
 /// Recursively converts an [`ElementSpec`] into a real `gpui` [`AnyElement`],
@@ -2473,6 +2490,10 @@ mod tests {
             fn context_menu(&self, _payload: &EventPayload, _window: &mut Window, _cx: &mut App) {}
 
             fn pointer_left(&self) {}
+
+            fn hover_changed(&self, _: NodeId, _: bool, _: &mut Window, _: &mut App) {}
+
+            fn pointer_over(&self, _: NodeId, _: &mut Window, _: &mut App) {}
         }
 
         struct ProbeView(VirtualTree, Probe);
@@ -2590,8 +2611,16 @@ mod tests {
                 inert: false,
                 children: Vec::new(),
             };
-            let mut parent = spec(EventMask::MOUSE_ENTER | EventMask::FOCUS);
+            let mut parent = spec(EventMask::FOCUS | EventMask::KEY_DOWN);
             assert!(!listens_mouse(&parent));
+            for hover in [
+                EventMask::MOUSE_ENTER,
+                EventMask::MOUSE_LEAVE,
+                EventMask::MOUSE_OVER,
+                EventMask::MOUSE_OUT,
+            ] {
+                assert!(listens_mouse(&spec(hover)));
+            }
             parent.children.push(spec(EventMask::WHEEL));
             assert!(listens_mouse(&parent));
 

@@ -182,15 +182,31 @@ and event name. Payloads and author-facing behaviour are in
 | `contextmenu` | mouse + pointer | The root tracker's capture listener for a right `MouseDownEvent` queues `window.defer`, which runs after the press's bubble. `EventSink::context_menu` then calls `bubble_from` at the mouse target (the root when none), so it fires whichever way `mousedown` propagated. The payload is `EventPayload::context_menu`: `button` 2, `buttons` 2, `detail` 0, pointer source mouse. It ignores the disabled-button flag. |
 | `mousedown`, `mouseup` | mouse | `buttons` holds every button currently held. |
 | `mousemove` | mouse | |
-| `mouseenter`, `mouseleave` | mouse | Do not bubble. Position and modifiers are read when hover changes. |
+| `mouseenter`, `mouseleave` | mouse + `relatedTarget` | Do not bubble. `EventDispatcher::fire_at` runs only the node's own callbacks, with `target` the node. |
+| `mouseover`, `mouseout` | mouse + `relatedTarget` | `EventDispatcher::bubble_from` runs the callbacks of the deepest container, then each ancestor's. |
 | `wheel` | mouse + `deltaX`, `deltaY`, `deltaZ`, `deltaMode` | `deltaX`/`deltaY` are GPUI's values negated. `deltaZ` is `0`. `deltaMode` is `0` or `1`. |
 | `focus`, `blur` | `relatedTarget` | Do not bubble. |
 | `focusin`, `focusout` | `relatedTarget` | `EventDispatcher::dispatch` runs the node's callbacks, then each ancestor's, with `target` the node. A focus change dispatches `blur`, `focusout`, `focus`, `focusin`. |
 | `keydown`, `keyup` | `key`, `repeat`, `location` (0), `isComposing` (false), `ctrlKey`, `shiftKey`, `altKey`, `metaKey`, `getModifierState` | Go to the focused node, or the root when none is focused, and bubble to its ancestors. `keyup` has `repeat: false`. |
 
+Every container of a tree with a mouse listener (`track`, non-inert) wires one
+`on_hover`, which calls `EventSink::hover_changed` and keeps the hovered set.
+The first container to report in a pointer move calls `EventSink::pointer_over`
+with itself as the deepest one, which reports at once. Any other change (a layout change under a
+still pointer, a window exit) reports once at the end of the update from the
+deepest container of the hovered set, with the move's delta carried over. A
+report compares the deepest container with the previous one
+(`EventDispatcher::hover_prev`) and fires, per `hover_path_difference`:
+`mouseout` at the old container, `mouseleave` on each container left
+(innermost first), `mouseover` at the new one, `mouseenter` on each container
+entered (outermost first). `relatedTarget` of the first two is the new
+container and of the last two the old one. Position and modifiers are read
+from the window when the report runs.
+
 The mouse payload is `clientX`, `clientY`, `x`, `y`, `pageX`, `pageY`,
 `movementX`, `movementY`, `button`, `buttons`, `detail`, `relatedTarget`
-(`null`) and the four modifier flags. `x`/`y` and `pageX`/`pageY` equal
+(`MousePayload::related_target`, `null` on events other than the hover
+events) and the four modifier flags. `x`/`y` and `pageX`/`pageY` equal
 `clientX`/`clientY`. `MousePayload::pointer` adds `pointerId`, `pointerType`,
 `isPrimary`, `width`, `height` and `pressure`: mouse is 1, `"mouse"`, true,
 1, 1, 0 and keyboard is -1, `""`, false, 1, 1, 0.

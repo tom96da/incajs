@@ -24,7 +24,7 @@
 //! before that call returns — it never crosses into Rust-held state.
 
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::rc::Rc;
 use std::sync::OnceLock;
 use std::time::Instant;
@@ -60,7 +60,7 @@ pub fn stderr_reporter() -> ErrorReporter {
 
 /// `bubbles`, `cancelable` and `composed` of every event the host dispatches.
 /// Any other name takes all three as false.
-const EVENT_FLAGS: [(&str, [bool; 3]); 16] = [
+const EVENT_FLAGS: [(&str, [bool; 3]); 18] = [
     ("click", [true, true, true]),
     ("dblclick", [true, true, true]),
     ("auxclick", [true, true, true]),
@@ -70,6 +70,8 @@ const EVENT_FLAGS: [(&str, [bool; 3]); 16] = [
     ("mousemove", [true, true, true]),
     ("mouseenter", [false, false, false]),
     ("mouseleave", [false, false, false]),
+    ("mouseover", [true, true, true]),
+    ("mouseout", [true, true, true]),
     ("wheel", [true, true, true]),
     ("keydown", [true, true, true]),
     ("keyup", [true, true, true]),
@@ -130,6 +132,16 @@ pub struct EventDispatcher {
     current_events: Rc<RefCell<HashMap<String, EventState>>>,
     /// The scroll state of every scrolling container, created on first ask.
     scroll_handles: Rc<RefCell<HashMap<NodeId, ScrollHandle>>>,
+    /// The containers `gpui` reports as hovered.
+    hovered: Rc<RefCell<BTreeSet<NodeId>>>,
+    /// The deepest hovered container the hover events last reported and its
+    /// ancestors, nearest first.
+    hover_prev: Rc<RefCell<Vec<NodeId>>>,
+    /// Whether a hover report is waiting for the end of the update.
+    hover_scheduled: Rc<Cell<bool>>,
+    /// Whether the update being handled already reported its deepest
+    /// container.
+    hover_settled: Rc<Cell<bool>>,
 }
 
 impl EventDispatcher {
@@ -147,6 +159,10 @@ impl EventDispatcher {
             last_event_id: Rc::new(Cell::new(0)),
             current_events: Rc::new(RefCell::new(HashMap::new())),
             scroll_handles: Rc::new(RefCell::new(HashMap::new())),
+            hovered: Rc::new(RefCell::new(BTreeSet::new())),
+            hover_prev: Rc::new(RefCell::new(Vec::new())),
+            hover_scheduled: Rc::new(Cell::new(false)),
+            hover_settled: Rc::new(Cell::new(false)),
         }
     }
 
@@ -240,12 +256,13 @@ impl EventDispatcher {
     }
 
     /// Returns `payload` with `movementX`/`movementY` set. `mousemove`,
-    /// `mouseenter` and `mouseleave` take the delta of the raw move being
-    /// dispatched, 0 when none is. Every other event takes its position minus
-    /// [`Self::last_position`], 0 when that is `None`.
+    /// `mouseenter`, `mouseleave`, `mouseover` and `mouseout` take the delta
+    /// of the raw move being dispatched, 0 when none is. Every other event
+    /// takes its position minus [`Self::last_position`], 0 when that is
+    /// `None`.
     fn with_movement(&self, payload: &EventPayload, event: &str) -> EventPayload {
         let movement_for = |mouse: &MousePayload| match event {
-            "mousemove" | "mouseenter" | "mouseleave" => {
+            "mousemove" | "mouseenter" | "mouseleave" | "mouseover" | "mouseout" => {
                 self.current_movement.get().unwrap_or((0.0, 0.0))
             }
             _ => self.last_position.get().map_or((0.0, 0.0), |(x, y)| {
@@ -363,14 +380,21 @@ impl EventDispatcher {
         self.drain_jobs_and_refresh(window);
     }
 
-    /// `payload` with a focus `related_target` that left the tree set to `None`.
+    /// `payload` with a `related_target` that left the tree set to `None`.
     fn live_related(&self, payload: &EventPayload) -> EventPayload {
+        let gone = |id: &NodeId| self.host.borrow().tree.get(*id).is_none();
         match payload {
             EventPayload::Focus {
                 related_target: Some(id),
-            } if self.host.borrow().tree.get(*id).is_none() => EventPayload::Focus {
+            } if gone(id) => EventPayload::Focus {
                 related_target: None,
             },
+            EventPayload::Mouse(mouse) if mouse.related_target.is_some_and(|id| gone(&id)) => {
+                EventPayload::Mouse(MousePayload {
+                    related_target: None,
+                    ..*mouse
+                })
+            }
             _ => payload.clone(),
         }
     }
@@ -544,6 +568,109 @@ impl EventDispatcher {
         }
     }
 
+    /// The deepest container `gpui` reports as hovered. Containers that left
+    /// the tree drop out of the set.
+    fn deepest_hovered(&self) -> Option<NodeId> {
+        let mut set = self.hovered.borrow_mut();
+        set.retain(|id| self.host.borrow().tree.get(*id).is_some());
+        set.iter()
+            .copied()
+            .max_by_key(|id| (self.path_from(*id).len(), *id))
+    }
+
+    /// Queues the hover report for the end of the update, once. It reports the
+    /// hovered set unless the update already reported its deepest container.
+    fn schedule_hover_report(&self, window: &mut Window, cx: &mut App) {
+        if self.hover_scheduled.replace(true) {
+            return;
+        }
+        // The move's delta is cleared before this runs, so carry it over.
+        let (this, movement) = (self.clone(), self.current_movement.get());
+        window.defer(cx, move |window, cx| {
+            this.hover_scheduled.set(false);
+            if !this.hover_settled.replace(false) {
+                this.current_movement.set(movement);
+                this.report_hover(this.deepest_hovered(), window, cx);
+                this.current_movement.set(None);
+            }
+        });
+    }
+
+    /// Fires the hover events for the pointer moving from the deepest
+    /// container reported last time to the deepest one hovered now: `mouseout`
+    /// at the old one, `mouseleave` at each container left (innermost first),
+    /// `mouseover` at the new one and `mouseenter` at each container entered
+    /// (outermost first).
+    fn report_hover(&self, next: Option<NodeId>, window: &mut Window, cx: &mut App) {
+        let live = |id: &NodeId| self.host.borrow().tree.get(*id).is_some();
+        let next_path = next.map(|id| self.path_from(id)).unwrap_or_default();
+        // A removed container is replaced by its nearest live ancestor.
+        let old_path = self.hover_prev.replace(next_path.clone());
+        let old_path: Vec<_> = old_path.into_iter().skip_while(|id| !live(id)).collect();
+        let prev = old_path.first().copied();
+        if prev == next {
+            return;
+        }
+        let (leave, enter) = hover_path_difference(&old_path, &next_path);
+        let mouse = MousePayload::at(window.mouse_position(), window.modifiers());
+        let with = |related_target| {
+            EventPayload::Mouse(MousePayload {
+                related_target,
+                ..mouse
+            })
+        };
+        if let Some(old) = prev {
+            self.bubble_prepared(old, "mouseout", &with(next), window, cx);
+        }
+        for id in leave {
+            self.fire_at(id, "mouseleave", &with(next), window, cx);
+        }
+        if let Some(new) = next {
+            self.bubble_prepared(new, "mouseover", &with(prev), window, cx);
+        }
+        for id in enter {
+            self.fire_at(id, "mouseenter", &with(prev), window, cx);
+        }
+    }
+
+    /// [`Self::bubble_from`] for a mouse event whose payload still needs its
+    /// held buttons and movement.
+    fn bubble_prepared(
+        &self,
+        start: NodeId,
+        event: &str,
+        payload: &EventPayload,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let payload = self.with_movement(&self.with_held_buttons(event, payload), event);
+        self.bubble_from(start, event, &payload, window, cx);
+    }
+
+    /// Runs the `event` listeners of `node_id` only, with `target` `node_id`.
+    fn fire_at(
+        &self,
+        node_id: NodeId,
+        event: &str,
+        payload: &EventPayload,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let callback_ids = self
+            .host
+            .borrow()
+            .listeners
+            .callbacks_for(node_id, event)
+            .to_vec();
+        if callback_ids.is_empty() {
+            return;
+        }
+        let payload = self.with_movement(&self.with_held_buttons(event, payload), event);
+        let state = self.event_state(event, cx);
+        self.run_callbacks(node_id, node_id, event, &payload, state, callback_ids);
+        self.drain_jobs_and_refresh(window);
+    }
+
     /// [`drain_jobs_and_refresh`] with this dispatcher's engine and reporter.
     pub fn drain_jobs_and_refresh(&self, window: &mut Window) {
         drain_jobs_and_refresh(&self.engine, &self.reporter, window);
@@ -702,7 +829,10 @@ fn set_mouse_fields(event_object: &Object, mouse: &MousePayload) -> rquickjs::Re
     event_object.set("clientY", mouse.client_y)?;
     event_object.set("x", mouse.client_x)?;
     event_object.set("y", mouse.client_y)?;
-    event_object.set("relatedTarget", rquickjs::Null)?;
+    match mouse.related_target {
+        Some(id) => event_object.set("relatedTarget", id)?,
+        None => event_object.set("relatedTarget", rquickjs::Null)?,
+    }
     // Identical to clientX/clientY today — nothing here scrolls the page
     // itself, which is the only thing that would tell them apart.
     event_object.set("pageX", mouse.client_x)?;
@@ -843,6 +973,44 @@ impl EventSink for EventDispatcher {
     fn pointer_left(&self) {
         self.last_position.set(None);
     }
+
+    fn pointer_over(&self, node_id: NodeId, window: &mut Window, cx: &mut App) {
+        self.hover_settled.set(true);
+        self.report_hover(Some(node_id), window, cx);
+        self.schedule_hover_report(window, cx);
+    }
+
+    fn hover_changed(&self, node_id: NodeId, hovered: bool, window: &mut Window, cx: &mut App) {
+        {
+            let mut set = self.hovered.borrow_mut();
+            if hovered {
+                set.insert(node_id);
+            } else {
+                set.remove(&node_id);
+            }
+        }
+        self.schedule_hover_report(window, cx);
+    }
+}
+
+/// The containers a pointer leaves and enters when its deepest container
+/// changes from the end of `old_path` to the end of `new_path`. Each path
+/// lists a container and its ancestors, nearest first. The first list holds
+/// the containers only `old_path` has, innermost first. The second holds the
+/// ones only `new_path` has, outermost first.
+fn hover_path_difference(old_path: &[NodeId], new_path: &[NodeId]) -> (Vec<NodeId>, Vec<NodeId>) {
+    let leave = old_path
+        .iter()
+        .copied()
+        .filter(|id| !new_path.contains(id))
+        .collect();
+    let enter = new_path
+        .iter()
+        .rev()
+        .copied()
+        .filter(|id| !old_path.contains(id))
+        .collect();
+    (leave, enter)
 }
 
 /// Drains `QuickJS`'s pending-job queue, sends each failure it leaves (a job
@@ -1154,10 +1322,16 @@ mod tests {
 
         let seen = cx.update(|_, cx| {
             dispatcher.pointer_moved(at(30.0, 5.0), cx);
-            ["mousemove", "mouseenter", "mouseleave"]
-                .map(|event| movement_of(&dispatcher.with_movement(&mouse_at(30.0, 5.0), event)))
+            [
+                "mousemove",
+                "mouseenter",
+                "mouseleave",
+                "mouseover",
+                "mouseout",
+            ]
+            .map(|event| movement_of(&dispatcher.with_movement(&mouse_at(30.0, 5.0), event)))
         });
-        assert_eq!(seen, [(20.0, -5.0); 3]);
+        assert_eq!(seen, [(20.0, -5.0); 5]);
     }
 
     #[gpui::test]
@@ -1169,7 +1343,13 @@ mod tests {
         cx.update(|_, cx| dispatcher.pointer_moved(at(30.0, 5.0), cx));
         cx.run_until_parked();
 
-        for event in ["mouseenter", "mouseleave", "mousemove"] {
+        for event in [
+            "mouseenter",
+            "mouseleave",
+            "mouseover",
+            "mouseout",
+            "mousemove",
+        ] {
             let payload = dispatcher.with_movement(&mouse_at(90.0, 90.0), event);
             assert_eq!(movement_of(&payload), (0.0, 0.0), "{event}");
         }
@@ -1250,6 +1430,8 @@ mod tests {
             ("contextmenu", true, true, true),
             ("mouseenter", false, false, false),
             ("mouseleave", false, false, false),
+            ("mouseover", true, true, true),
+            ("mouseout", true, true, true),
             ("wheel", true, true, true),
             ("keydown", true, true, true),
             ("focus", false, false, true),
@@ -1483,6 +1665,8 @@ mod tests {
             "blur",
             "mouseenter",
             "mouseleave",
+            "mouseover",
+            "mouseout",
         ];
         for event in events {
             listen(&host, child, event);
@@ -1585,6 +1769,8 @@ mod tests {
             "mousemove",
             "mouseenter",
             "mouseleave",
+            "mouseover",
+            "mouseout",
             "dblclick",
         ] {
             cases.push((event, EventPayload::Mouse(plain()), blank));
@@ -1624,5 +1810,80 @@ mod tests {
         assert_eq!(dispatcher.common_ancestor(child, parent), Some(parent));
         assert_eq!(dispatcher.common_ancestor(child, child), Some(child));
         assert_eq!(dispatcher.common_ancestor(child, outer), Some(outer));
+    }
+
+    #[test]
+    fn the_hover_path_difference_lists_the_containers_left_and_entered() {
+        // Paths run nearest first: 3 sits in 2, which sits in 1, then 0.
+        let nested = [3, 2, 1, 0];
+        let cases: [[&[NodeId]; 4]; 5] = [
+            // into a nested container
+            [&[0], &nested, &[], &[1, 2, 3]],
+            // to a sibling inside the same parent
+            [&nested, &[4, 2, 1, 0], &[3], &[4]],
+            // out of everything
+            [&nested, &[], &[3, 2, 1, 0], &[]],
+            // within the same container
+            [&nested, &nested, &[], &[]],
+            // the first move after entering the window
+            [&[], &nested, &[], &[0, 1, 2, 3]],
+        ];
+        for [old, new, leave, enter] in cases {
+            assert_eq!(
+                hover_path_difference(old, new),
+                (leave.to_vec(), enter.to_vec()),
+                "{old:?} -> {new:?}"
+            );
+        }
+    }
+
+    #[gpui::test]
+    fn a_removed_node_is_no_related_target_and_no_previous_container(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [outer, parent, child] = tree_of_three(&host);
+        dispatcher
+            .engine
+            .eval::<()>(
+                "globalThis.seen = []; globalThis.__inca_callbacks__ = { 0: (e) => { \
+                 globalThis.seen.push([e.type, e.relatedTarget]); } };",
+            )
+            .unwrap();
+        listen(&host, outer, "mouseover");
+        listen(&host, outer, "mouseout");
+        let cx = cx.add_empty_window();
+        let at = |related_target| {
+            EventPayload::Mouse(MousePayload {
+                related_target,
+                ..MousePayload::at(gpui::Point::default(), gpui::Modifiers::none())
+            })
+        };
+
+        cx.update(|window, cx| {
+            dispatcher.dispatch(outer, "mouseover", &at(Some(parent)), window, cx);
+            dispatcher.dispatch(outer, "mouseover", &at(Some(99)), window, cx);
+        });
+        assert_eq!(
+            seen_values(&dispatcher),
+            serde_json::json!([["mouseover", parent], ["mouseover", null]])
+        );
+
+        cx.update(|window, cx| dispatcher.report_hover(Some(child), window, cx));
+        seen_values(&dispatcher);
+        host.borrow_mut().tree.destroy_node(child);
+        cx.update(|window, cx| dispatcher.report_hover(Some(parent), window, cx));
+        assert_eq!(seen_values(&dispatcher), serde_json::json!([]));
+        cx.update(|window, cx| dispatcher.report_hover(Some(outer), window, cx));
+        assert_eq!(
+            seen_values(&dispatcher),
+            serde_json::json!([["mouseout", outer], ["mouseover", parent]])
+        );
+    }
+
+    fn seen_values(dispatcher: &EventDispatcher) -> serde_json::Value {
+        let json = dispatcher
+            .engine
+            .eval::<String>("JSON.stringify(globalThis.seen.splice(0))")
+            .unwrap();
+        serde_json::from_str(&json).unwrap()
     }
 }

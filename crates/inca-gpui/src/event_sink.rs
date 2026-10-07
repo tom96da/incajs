@@ -44,6 +44,8 @@ event_kinds! {
     Wheel => "wheel",
     MouseEnter => "mouseenter",
     MouseLeave => "mouseleave",
+    MouseOver => "mouseover",
+    MouseOut => "mouseout",
     Focus => "focus",
     Blur => "blur",
     KeyDown => "keydown",
@@ -65,6 +67,8 @@ impl EventKind {
             Self::Wheel => EventMask::WHEEL,
             Self::MouseEnter => EventMask::MOUSE_ENTER,
             Self::MouseLeave => EventMask::MOUSE_LEAVE,
+            Self::MouseOver => EventMask::MOUSE_OVER,
+            Self::MouseOut => EventMask::MOUSE_OUT,
             Self::Focus => EventMask::FOCUS,
             Self::Blur => EventMask::BLUR,
             Self::KeyDown => EventMask::KEY_DOWN,
@@ -77,9 +81,13 @@ impl EventKind {
     #[must_use]
     pub const fn needs_element_id(self) -> bool {
         match self {
-            Self::Click | Self::DblClick | Self::AuxClick | Self::MouseEnter | Self::MouseLeave => {
-                true
-            }
+            Self::Click
+            | Self::DblClick
+            | Self::AuxClick
+            | Self::MouseEnter
+            | Self::MouseLeave
+            | Self::MouseOver
+            | Self::MouseOut => true,
             Self::ContextMenu
             | Self::MouseDown
             | Self::MouseUp
@@ -128,6 +136,10 @@ impl EventMask {
     pub const CONTEXT_MENU: Self = Self(1 << 12);
     /// Wired for [`EventKind::AuxClick`].
     pub const AUX_CLICK: Self = Self(1 << 13);
+    /// Wired for [`EventKind::MouseOver`].
+    pub const MOUSE_OVER: Self = Self(1 << 14);
+    /// Wired for [`EventKind::MouseOut`].
+    pub const MOUSE_OUT: Self = Self(1 << 15);
 
     /// Whether every bit set in `other` is also set in `self`.
     #[must_use]
@@ -215,6 +227,9 @@ pub struct MousePayload {
     pub modifiers: gpui::Modifiers,
     /// Set for `click`, `auxclick` and `contextmenu`, which carry the pointer fields.
     pub pointer: Option<PointerSource>,
+    /// `relatedTarget`: the node the pointer came from for `mouseover`
+    /// and `mouseenter`, the node it went to for `mouseout` and `mouseleave`.
+    pub related_target: Option<NodeId>,
 }
 
 /// What produced a `PointerEvent`-typed event.
@@ -227,8 +242,8 @@ pub enum PointerSource {
 }
 
 impl MousePayload {
-    /// A `mouseenter`/`mouseleave` payload at `position` with the given
-    /// `modifiers`. The movement fields are 0.
+    /// A payload at `position` with the given `modifiers`, as the hover events
+    /// carry. The movement fields are 0 and `related_target` is `None`.
     #[must_use]
     pub fn at(position: gpui::Point<gpui::Pixels>, modifiers: gpui::Modifiers) -> Self {
         Self {
@@ -241,6 +256,7 @@ impl MousePayload {
             detail: 0,
             modifiers,
             pointer: None,
+            related_target: None,
         }
     }
 
@@ -320,6 +336,7 @@ impl From<&MouseDownEvent> for EventPayload {
             detail: u32::try_from(event.click_count).unwrap_or(u32::MAX),
             modifiers: event.modifiers,
             pointer: None,
+            related_target: None,
         })
     }
 }
@@ -337,6 +354,7 @@ impl From<&MouseUpEvent> for EventPayload {
             detail: u32::try_from(event.click_count).unwrap_or(u32::MAX),
             modifiers: event.modifiers,
             pointer: None,
+            related_target: None,
         })
     }
 }
@@ -394,6 +412,7 @@ impl From<&MouseMoveEvent> for EventPayload {
             detail: 0,
             modifiers: event.modifiers,
             pointer: None,
+            related_target: None,
         })
     }
 }
@@ -419,6 +438,7 @@ impl From<&ScrollWheelEvent> for EventPayload {
                 detail: 0,
                 modifiers: event.modifiers,
                 pointer: None,
+                related_target: None,
             },
             delta_x,
             delta_y,
@@ -552,6 +572,17 @@ pub trait EventSink {
     /// Reports that the pointer left the window. The next
     /// [`EventSink::pointer_moved`] starts a new measurement.
     fn pointer_left(&self);
+
+    /// Reports that `node_id` became hovered or stopped being hovered, as
+    /// `gpui` decides it. The sink fires `mouseover`, `mouseout`,
+    /// `mouseenter` and `mouseleave` for the net change once the current
+    /// update ends.
+    fn hover_changed(&self, node_id: NodeId, hovered: bool, window: &mut Window, cx: &mut App);
+
+    /// Reports `node_id` as the deepest container under the pointer for the
+    /// pointer move being handled, before any listener of that move runs. The
+    /// sink fires the hover events for it at once.
+    fn pointer_over(&self, node_id: NodeId, window: &mut Window, cx: &mut App);
 }
 
 #[cfg(test)]
@@ -945,6 +976,8 @@ mod tests {
                 | EventMask::AUX_CLICK
                 | EventMask::MOUSE_ENTER
                 | EventMask::MOUSE_LEAVE
+                | EventMask::MOUSE_OVER
+                | EventMask::MOUSE_OUT
         );
         assert!(EventMask::CLICK.needs_element_id());
         assert!(EventMask::DBL_CLICK.needs_element_id());
@@ -952,6 +985,8 @@ mod tests {
         assert!(!EventMask::CONTEXT_MENU.needs_element_id());
         assert!(EventMask::MOUSE_ENTER.needs_element_id());
         assert!(EventMask::MOUSE_LEAVE.needs_element_id());
+        assert!(EventMask::MOUSE_OVER.needs_element_id());
+        assert!(EventMask::MOUSE_OUT.needs_element_id());
         assert!(!EventMask::MOUSE_DOWN.needs_element_id());
         assert!(!EventMask::MOUSE_UP.needs_element_id());
         assert!(!EventMask::MOUSE_MOVE.needs_element_id());

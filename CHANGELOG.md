@@ -21,6 +21,7 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - `dblclick` and `auxclick` events
 - `contextmenu` event on the right button, so `@click.right` and `@contextmenu` run
 - mouse events carry `x`, `y` and `relatedTarget`
+- `mouseover` and `mouseout` events
 - `el.tabIndex` sets the `tabindex` attribute ([9f63f4a](https://github.com/tom96da/incajs/commit/9f63f4a))
 
 ### Changed
@@ -33,6 +34,7 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - Enter and Space fire `click` on a focused `button` only
 - a node takes focus through its `tabindex` attribute, and `focus()` on other nodes is ignored ([9f63f4a](https://github.com/tom96da/incajs/commit/9f63f4a))
 - a click outside every `tabindex` node blurs the focused node ([9f63f4a](https://github.com/tom96da/incajs/commit/9f63f4a))
+- `mouseenter` and `mouseleave` fire on every entered or left ancestor and carry `relatedTarget`
 
 ### Fixed
 

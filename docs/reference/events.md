@@ -23,6 +23,8 @@ node the event started on:
 - `click`, `dblclick` and `auxclick` report the nearest common ancestor of the elements
   under the press and the release.
 - `keydown` and `keyup` report the focused node.
+- `mouseover` and `mouseout` report the deepest element the pointer entered or
+  left.
 - `mouseenter`, `mouseleave`, `focus`, `blur`, `focusin` and `focusout`
   report the node entered, left, focused or blurred.
 
@@ -61,7 +63,7 @@ Every event carries `bubbles`, `cancelable`, `composed`, `defaultPrevented`,
 
 | Event | `bubbles` | `cancelable` | `composed` |
 | --- | --- | --- | --- |
-| `click`, `dblclick`, `auxclick`, `contextmenu`, `mousedown`, `mouseup`, `mousemove`, `wheel`, `keydown`, `keyup` | `true` | `true` | `true` |
+| `click`, `dblclick`, `auxclick`, `contextmenu`, `mousedown`, `mouseup`, `mousemove`, `mouseover`, `mouseout`, `wheel`, `keydown`, `keyup` | `true` | `true` | `true` |
 | `mouseenter`, `mouseleave` | `false` | `false` | `false` |
 | `focus`, `blur` | `false` | `false` | `true` |
 | `focusin`, `focusout` | `true` | `false` | `true` |
@@ -84,8 +86,9 @@ fields:
   scrolls the page itself, which is the only thing that would tell them
   apart
 - `movementX` / `movementY` — how far the pointer moved:
-  - `mousemove`, and `mouseenter`/`mouseleave` caused by a pointer move:
-    the distance since the previous pointer move, `0` for the first move.
+  - `mousemove`, and `mouseover`, `mouseout`, `mouseenter` and `mouseleave`
+    caused by a pointer move: the distance since the previous pointer move,
+    `0` for the first move.
     Every event from one move reports the same value
   - every other event: the event position minus the position of the last
     pointer move
@@ -95,19 +98,38 @@ fields:
 - [`buttons`](https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/buttons) —
   every button currently held, as a bitmask
 - `detail` — how many clicks this is part of; `0` for a move
-- `relatedTarget` — always `null`
+- `relatedTarget` — the node on the other side of a hover change, see
+  [the hover events](#mouseenter-mouseleave-mouseover-mouseout). `null` on
+  every other mouse event
 - `ctrlKey` / `shiftKey` / `altKey` / `metaKey` — modifier keys held
 
 ### `mousedown` / `mouseup` / `mousemove`
 
 The mouse fields above.
 
-### `mouseenter` / `mouseleave`
+### `mouseenter` / `mouseleave` / `mouseover` / `mouseout`
 
-The mouse fields above. An element already under the pointer
-when it mounts, or one a layout change puts under a still pointer, gets a
-`mouseenter` the next time its hover state is checked. That `mouseenter`
-reports `0` for `movementX`/`movementY`.
+`mouseover`, `mouseout`, `mouseenter` and `mouseleave` fire when the deepest
+element under the pointer changes.
+
+- `mouseout` fires first at the element the pointer left, then `mouseleave`
+  at each element the pointer left, innermost first. `mouseover` fires at the
+  element the pointer entered, then `mouseenter` at each element it entered,
+  outermost first.
+- `mouseover` and `mouseout` bubble. A pointer moving into `C` inside `B`
+  inside `A` fires `mouseover` on `C`, `B` and `A`, then `mouseenter` on `A`,
+  `B` and `C`. Each `mouseenter` and `mouseleave` runs only the listeners of
+  its own element, and `target` is that element.
+- `relatedTarget` is the element the pointer left for `mouseover` and
+  `mouseenter`, and the element it entered for `mouseout` and `mouseleave`.
+  It is `null` when the pointer comes from or goes outside the window.
+- The `mousemove` of the same pointer move fires after these events.
+- The other fields are the mouse fields above.
+
+An element already under the pointer when it mounts, or one a layout change
+puts under a still pointer, fires these events the next time its hover state
+is checked. They report `0` for `movementX`/`movementY` and `null` for
+`relatedTarget` when no element was hovered before.
 
 ### `click`
 

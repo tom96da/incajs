@@ -1502,6 +1502,9 @@ mod tests {
         listen(&mut h, "frame", "wheel mouseenter mouseleave", 0);
         listen(&mut h, "mid", "mouseenter mouseleave", 0);
         let (inner, mid) = (node(&h, "inner"), node(&h, "mid"));
+        // The pointer starts over `inner`.
+        h.unhover();
+        targets_log(&mut h);
 
         h.hover(inner);
         h.unhover();
@@ -1520,6 +1523,97 @@ mod tests {
             .unwrap();
         assert_eq!(offset.y, px(-30.0));
         assert!(targets_log(&mut h).starts_with("wheel@frame/inner/3"));
+    }
+
+    /// A > B > (C, D), each listening for the four hover events. The pointer
+    /// starts outside A.
+    const HOVER_ORDER: &str = r"
+        const n = __inca_native__;
+        const make = (parent, w, h) => {
+            const id = n.createNode('div');
+            n.setStyle(id, 'width', w);
+            n.setStyle(id, 'height', h);
+            n.appendChild(parent, id);
+            return id;
+        };
+        const A = make(n.rootNodeId(), 200, 200);
+        n.setStyle(A, 'margin_left', 50);
+        const B = make(A, 100, 100);
+        const C = make(B, 30, 30);
+        const D = make(B, 30, 30);
+        Object.assign(globalThis, { A, B, C, D });
+        globalThis.log = [];
+        const names = { [n.rootNodeId()]: 'root', [A]: 'A', [B]: 'B', [C]: 'C', [D]: 'D' };
+        globalThis.__inca_callbacks__ = {
+            0: (e) => { globalThis.log.push(`${e.type}@${names[e.currentTarget]}/${names[e.target]}/${
+                e.relatedTarget === null ? 'none' : names[e.relatedTarget]}`); },
+        };
+        for (const id of [A, B, C, D]) {
+            for (const t of ['mouseover', 'mouseout', 'mouseenter', 'mouseleave']) {
+                n.addEventListener(id, t, 0);
+            }
+        }
+    ";
+
+    #[gpui::test]
+    fn entering_a_nested_node_fires_over_then_enter_on_each_ancestor(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, HOVER_ORDER);
+        let c = node(&h, "C");
+        targets_log(&mut h);
+
+        h.hover(c);
+
+        assert_eq!(
+            targets_log(&mut h),
+            "mouseover@C/C/root,mouseover@B/C/root,mouseover@A/C/root,\
+             mouseenter@A/A/root,mouseenter@B/B/root,mouseenter@C/C/root"
+        );
+    }
+
+    #[gpui::test]
+    fn the_hover_events_of_a_move_precede_its_mousemove(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, HOVER_ORDER);
+        let c = node(&h, "C");
+        listen(&mut h, "C", "mousemove", 0);
+        targets_log(&mut h);
+
+        h.hover(c);
+
+        assert!(targets_log(&mut h).ends_with("mouseenter@C/C/root,mousemove@C/C/none"));
+    }
+
+    #[gpui::test]
+    fn moving_to_a_sibling_fires_out_leave_over_enter_with_related_targets(
+        cx: &mut TestAppContext,
+    ) {
+        let mut h = Harness::load(cx, ENTRY, HOVER_ORDER);
+        let (c, d) = (node(&h, "C"), node(&h, "D"));
+        h.hover(c);
+        targets_log(&mut h);
+
+        h.hover(d);
+
+        assert_eq!(
+            targets_log(&mut h),
+            "mouseout@C/C/D,mouseout@B/C/D,mouseout@A/C/D,mouseleave@C/C/D,\
+             mouseover@D/D/C,mouseover@B/D/C,mouseover@A/D/C,mouseenter@D/D/C"
+        );
+    }
+
+    #[gpui::test]
+    fn leaving_everything_fires_out_then_leave_from_the_inside_out(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, HOVER_ORDER);
+        let d = node(&h, "D");
+        h.hover(d);
+        targets_log(&mut h);
+
+        h.unhover();
+
+        assert_eq!(
+            targets_log(&mut h),
+            "mouseout@D/D/none,mouseout@B/D/none,mouseout@A/D/none,\
+             mouseleave@D/D/none,mouseleave@B/B/none,mouseleave@A/A/none"
+        );
     }
 
     #[gpui::test]
