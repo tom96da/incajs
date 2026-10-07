@@ -87,14 +87,11 @@ fn time_origin() -> Instant {
     *ORIGIN.get_or_init(Instant::now)
 }
 
-/// What every node of one event shares: the `eventId`, the `origin`, whether
-/// a callback has called `preventDefault()` and the `timeStamp`. The origin is
-/// the first node the event runs listeners on, the innermost node with a
-/// listener. It gets `eventPhase` 2 and the nodes above it get 3.
+/// What every node of one event shares: the `eventId`, whether a callback
+/// has called `preventDefault()` and the `timeStamp`.
 #[derive(Clone, Copy)]
 struct EventState {
     id: u64,
-    origin: NodeId,
     prevented: bool,
     time_stamp: f64,
 }
@@ -173,10 +170,10 @@ impl EventDispatcher {
     }
 
     /// Returns the [`EventState`] for `event`. The first dispatch of a name
-    /// during one input takes the next `eventId`, `node_id` as origin and the
-    /// current time. Later dispatches of that name during the same input
-    /// reuse them. The state is forgotten when the input's update ends.
-    fn event_state(&self, event: &str, node_id: NodeId, cx: &mut App) -> EventState {
+    /// during one input takes the next `eventId` and the current time. Later
+    /// dispatches of that name during the same input reuse them. The state is
+    /// forgotten when the input's update ends.
+    fn event_state(&self, event: &str, cx: &mut App) -> EventState {
         let mut events = self.current_events.borrow_mut();
         if let Some(state) = events.get(event) {
             return *state;
@@ -189,7 +186,6 @@ impl EventDispatcher {
         }
         let state = EventState {
             id,
-            origin: node_id,
             prevented: false,
             time_stamp: time_origin().elapsed().as_secs_f64() * 1000.0,
         };
@@ -281,11 +277,15 @@ impl EventDispatcher {
     ///
     /// `bubbles`, `cancelable`, `composed`, `defaultPrevented`, `eventPhase`,
     /// `isTrusted` and `timeStamp` are the base fields. `eventPhase` is 2
-    /// on the innermost node with a listener and 3 above it.
+    /// where `currentTarget` is `target` and 3 elsewhere. `composedPath()`
+    /// returns the node ids from `target` up to the root.
     ///
-    /// `target` and `currentTarget` are both `node_id`. `currentTarget` (the
-    /// node this call is dispatching for) is exact; `target` is only an
-    /// approximation of the same value.
+    /// `currentTarget` is `node_id`. `target` is the deepest container under
+    /// the pointer for `mousedown`, `mouseup`, `mousemove` and `wheel`, the
+    /// nearest common ancestor of the press and release containers for
+    /// `click`, and the focused node for `keydown` and `keyup`. Every other
+    /// event, and any of these when no target is recorded (a dispatch made
+    /// outside input handling), uses `node_id`.
     ///
     /// A callback calling `stopImmediatePropagation()` stops the remaining
     /// callbacks *on this node*. `stopPropagation()`/`preventDefault()` are
@@ -321,8 +321,9 @@ impl EventDispatcher {
 
         let payload = self.with_held_buttons(event, payload);
         let payload = self.with_movement(&payload, event);
-        let state = self.event_state(event, node_id, cx);
-        let outcome = self.run_callbacks(node_id, node_id, event, &payload, state, callback_ids);
+        let state = self.event_state(event, cx);
+        let target = self.target_of(node_id, event, window, cx);
+        let outcome = self.run_callbacks(node_id, target, event, &payload, state, callback_ids);
 
         if outcome.stop_propagation {
             if event == "wheel" {
@@ -340,6 +341,43 @@ impl EventDispatcher {
         }
 
         self.drain_jobs_and_refresh(window);
+    }
+
+    /// The `target` of `event` dispatched for `node_id`.
+    fn target_of(&self, node_id: NodeId, event: &str, window: &Window, cx: &App) -> NodeId {
+        let found = match event {
+            "mousedown" | "mouseup" | "mousemove" | "wheel" => inca_gpui::mouse_target(cx),
+            "click" => match (inca_gpui::pressed_target(cx), inca_gpui::mouse_target(cx)) {
+                (Some(down), Some(up)) => self.common_ancestor(down, up),
+                (_, up) => up,
+            },
+            "keydown" | "keyup" => self.host.borrow().focus.focused_node(window, cx),
+            _ => None,
+        };
+        self.resolve(found, node_id)
+    }
+
+    /// `found` when that node is still in the tree, else `node_id`.
+    fn resolve(&self, found: Option<NodeId>, node_id: NodeId) -> NodeId {
+        let host = self.host.borrow();
+        found
+            .filter(|id| host.tree.get(*id).is_some())
+            .unwrap_or(node_id)
+    }
+
+    /// `target` and its ancestors, nearest first.
+    fn path_from(&self, target: NodeId) -> Vec<NodeId> {
+        let host = self.host.borrow();
+        std::iter::successors(Some(target), |&id| {
+            host.tree.get(id).and_then(inca_gpui::VirtualNode::parent)
+        })
+        .collect()
+    }
+
+    /// The nearest node that is `a`, `b` or an ancestor of both.
+    fn common_ancestor(&self, a: NodeId, b: NodeId) -> Option<NodeId> {
+        let above_b = self.path_from(b);
+        self.path_from(a).into_iter().find(|i| above_b.contains(i))
     }
 
     /// Calls `callback_ids` for one `event` with `target` as the event's
@@ -360,6 +398,8 @@ impl EventDispatcher {
 
         // Collected rather than reported in place: a reporter is free to do
         // anything, and re-entering the engine from inside `with` panics.
+        let path = self.path_from(target);
+        let live = Rc::new(Cell::new(true));
         let failures = self.engine.with(|ctx| {
             let mut failures = Vec::new();
             let Ok(callbacks) = ctx.globals().get::<_, Object>("__inca_callbacks__") else {
@@ -370,6 +410,7 @@ impl EventDispatcher {
                 &ctx,
                 event,
                 (node_id, target),
+                (&path, &live),
                 payload,
                 &state,
                 &[
@@ -403,6 +444,7 @@ impl EventDispatcher {
             }
             failures
         });
+        live.set(false);
         for failure in &failures {
             (self.reporter)(failure);
         }
@@ -454,7 +496,7 @@ impl EventDispatcher {
                     .and_then(inca_gpui::VirtualNode::parent);
                 continue;
             }
-            let state = self.event_state("click", id, cx);
+            let state = self.event_state("click", cx);
             let outcome = self.run_callbacks(id, node_id, "click", &payload, state, callback_ids);
             self.drain_jobs_and_refresh(window);
             if outcome.stop_propagation {
@@ -489,6 +531,7 @@ fn build_event_object<'js>(
     ctx: &Ctx<'js>,
     event: &str,
     (node_id, target): (NodeId, NodeId),
+    (path, live): (&[NodeId], &Rc<Cell<bool>>),
     payload: &EventPayload,
     state: &EventState,
     signals: &[Rc<Cell<bool>>; 3],
@@ -551,15 +594,14 @@ fn build_event_object<'js>(
             }
         }),
     )?;
-    // 2 on the innermost node with a listener and on every node of a
-    // non-bubbling event, 3 above it.
+    event_object.set("eventPhase", if node_id == target { 2 } else { 3 })?;
     event_object.set(
-        "eventPhase",
-        if !bubbles || node_id == state.origin {
-            2
-        } else {
-            3
-        },
+        "composedPath",
+        Function::new(ctx.clone(), {
+            let path = path.to_vec();
+            let live = Rc::clone(live);
+            move || if live.get() { path.clone() } else { Vec::new() }
+        })?,
     )?;
     event_object.set("isTrusted", true)?;
     event_object.set("timeStamp", state.time_stamp)?;
@@ -1255,6 +1297,106 @@ mod tests {
                 serde_json::json!(true),
             ]
         };
-        assert_eq!(rows, [want(parent, false, 2), want(outer, true, 3)]);
+        assert_eq!(rows, [want(parent, false, 3), want(outer, true, 3)]);
+    }
+
+    const PATHS: &str = "globalThis.seen = []; \
+        globalThis.__inca_callbacks__ = { 0: (e) => { \
+            globalThis.seen.push([e.target, e.currentTarget, e.eventPhase, \
+                e.composedPath()]); globalThis.kept = e; } };";
+
+    fn tree_of_three(host: &Rc<RefCell<Host>>) -> [NodeId; 3] {
+        let mut h = host.borrow_mut();
+        let outer = h.tree.create_node("div").unwrap();
+        let parent = h.tree.create_node("div").unwrap();
+        let child = h.tree.create_node("div").unwrap();
+        h.tree.append_child(outer, parent).unwrap();
+        h.tree.append_child(parent, child).unwrap();
+        [outer, parent, child]
+    }
+
+    #[gpui::test]
+    fn without_a_recorded_target_every_event_targets_its_own_node(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [outer, _, child] = tree_of_three(&host);
+        dispatcher.engine.eval::<()>(PATHS).unwrap();
+        let events = [
+            "mousedown",
+            "mouseup",
+            "mousemove",
+            "wheel",
+            "click",
+            "keydown",
+            "keyup",
+            "focus",
+            "blur",
+            "mouseenter",
+            "mouseleave",
+        ];
+        for event in events {
+            listen(&host, child, event);
+        }
+        let cx = cx.add_empty_window();
+        cx.update(|window, cx| {
+            for event in events {
+                dispatcher.dispatch(child, event, &EventPayload::None, window, cx);
+            }
+        });
+        let rows = seen(&dispatcher);
+        assert_eq!(rows.len(), events.len());
+        for row in rows {
+            assert_eq!(row[0], serde_json::json!(child));
+            assert_eq!(row[1], serde_json::json!(child));
+            assert_eq!(row[2], serde_json::json!(2));
+            assert_eq!(
+                row[3].as_array().unwrap().last(),
+                Some(&serde_json::json!(outer))
+            );
+        }
+    }
+
+    #[gpui::test]
+    fn composed_path_lists_the_target_and_its_ancestors(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [outer, parent, child] = tree_of_three(&host);
+        dispatcher.engine.eval::<()>(PATHS).unwrap();
+        listen(&host, parent, "click");
+        let cx = cx.add_empty_window();
+        cx.update(|window, cx| {
+            dispatcher.dispatch(parent, "click", &EventPayload::None, window, cx);
+        });
+        assert_eq!(seen(&dispatcher)[0][3], serde_json::json!([parent, outer]));
+        assert_eq!(dispatcher.path_from(child), [child, parent, outer]);
+        let after = dispatcher
+            .engine
+            .eval::<usize>("globalThis.kept.composedPath().length")
+            .unwrap();
+        assert_eq!(after, 0, "the path is empty once dispatch ends");
+    }
+
+    #[test]
+    fn a_target_gone_from_the_tree_falls_back_to_the_current_target() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, parent, child] = tree_of_three(&host);
+        assert_eq!(dispatcher.resolve(Some(child), parent), child);
+        host.borrow_mut().tree.destroy_node(child);
+        assert_eq!(dispatcher.resolve(Some(child), parent), parent);
+        assert_eq!(dispatcher.resolve(None, parent), parent);
+    }
+
+    #[test]
+    fn a_click_targets_the_nearest_common_ancestor_of_press_and_release() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [outer, parent, child] = tree_of_three(&host);
+        let other = {
+            let mut h = host.borrow_mut();
+            let other = h.tree.create_node("div").unwrap();
+            h.tree.append_child(parent, other).unwrap();
+            other
+        };
+        assert_eq!(dispatcher.common_ancestor(child, other), Some(parent));
+        assert_eq!(dispatcher.common_ancestor(child, parent), Some(parent));
+        assert_eq!(dispatcher.common_ancestor(child, child), Some(child));
+        assert_eq!(dispatcher.common_ancestor(child, outer), Some(outer));
     }
 }

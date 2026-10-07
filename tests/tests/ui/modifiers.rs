@@ -43,3 +43,18 @@ fn keydown_enter_skips_other_keys(cx: &mut TestAppContext) {
 
     assert_eq!(text_of(&mut h, "log"), "");
 }
+
+#[gpui::test]
+fn self_runs_only_for_the_node_itself_and_a_listener_reads_the_deep_target(
+    cx: &mut TestAppContext,
+) {
+    let mut h = load(cx, "self");
+
+    click(&mut h, "inner");
+    assert_eq!(text_of(&mut h, "log"), "");
+    click(&mut h, "outer");
+    click(&mut h, "kid");
+    click(&mut h, "wrap");
+
+    assert_eq!(text_of(&mut h, "log"), "self delegated wrap");
+}

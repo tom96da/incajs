@@ -15,10 +15,20 @@ object: `type` (the event's name), `target`/`currentTarget`, the
 [base fields](#base-fields), the [propagation methods](#propagation) below,
 and whatever fields that event carries.
 
-`target` and `currentTarget` are both the id of the node currently
-receiving the event — they're always equal, since there's no way yet to
-learn which descendant an event actually started on (no event
-delegation).
+`currentTarget` is the id of the node whose listener runs. `target` is the
+node the event started on:
+
+- `mousedown`, `mouseup`, `mousemove` and `wheel` report the deepest element
+  under the pointer. Text resolves to its parent element.
+- `click` reports the nearest common ancestor of the elements under the
+  press and the release.
+- `keydown` and `keyup` report the focused node.
+- `mouseenter`, `mouseleave`, `focus` and `blur` report the node entered,
+  left, focused or blurred.
+
+A listener on an ancestor reads `event.target` to tell which descendant the
+event came from. `composedPath()` returns the ids from `target` up to the
+root.
 
 ```vue
 <template>
@@ -34,8 +44,8 @@ Every event carries `bubbles`, `cancelable`, `composed`, `defaultPrevented`,
 - `defaultPrevented` turns `true` when a listener calls `preventDefault()` on
   a cancelable event. Listeners that run later for the same event read it.
   Only `preventDefault()` changes it.
-- `eventPhase` is `2` on the innermost node with a listener and `3` on the
-  nodes above it. A non-bubbling event reports `2` on every node.
+- `eventPhase` is `2` where `currentTarget` is `target` and `3` on the
+  ancestors above it.
 - `NONE`, `CAPTURING_PHASE`, `AT_TARGET` and `BUBBLING_PHASE` (0 to 3) sit on
   the event object.
 - `isTrusted` is `true`. The host produces every event, including a
@@ -229,8 +239,7 @@ described here.
 
 - `.stop` and `.prevent` call `stopPropagation()` and `preventDefault()`.
 - `.once` removes the listener after its first call.
-- `.self` runs the handler on every event, because `target` and
-  `currentTarget` are always equal.
+- `.self` runs the handler when `target` is `currentTarget`.
 - `.passive` and `.capture` bind an ordinary listener. It runs in the bubble
   phase like every listener, see [Propagation](#propagation).
 

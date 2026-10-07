@@ -119,6 +119,12 @@ impl FocusRegistry {
         self.handles.get(&node_id).cloned()
     }
 
+    /// The node holding focus in `window` right now.
+    #[must_use]
+    pub fn focused_node(&self, window: &Window, cx: &App) -> Option<NodeId> {
+        window.focused(cx).and_then(|handle| self.node_for(&handle))
+    }
+
     /// Records that `node_id`'s `tabindex` may have changed. The next
     /// [`Self::apply_pending`] re-reads it.
     pub fn mark_tab_dirty(&mut self, node_id: NodeId) {
@@ -546,5 +552,20 @@ mod tests {
         let _cx = cx.add_empty_window();
 
         assert!(registry.handle(1).is_none());
+    }
+
+    #[gpui::test]
+    fn focused_node_names_the_node_holding_focus(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, id) = tree_with("div", Some(AttributeValue::from("0")));
+        let mut registry = FocusRegistry::default();
+        registry.mark_tab_dirty(id);
+        cx.update(|window, cx| {
+            let _ = registry.apply_pending(&tree, window, cx);
+            assert_eq!(registry.focused_node(window, cx), None);
+            registry.request_focus(id);
+            let _ = registry.apply_pending(&tree, window, cx);
+            assert_eq!(registry.focused_node(window, cx), Some(id));
+        });
     }
 }

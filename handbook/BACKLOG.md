@@ -104,22 +104,6 @@ A fixed entry is deleted and its ID is never reused.
   somewhere to write. Where it lives per platform, how it rotates, and
   whether an app can opt out are all undecided.
 
-- **B-018 `event.target` is an approximation**
-  `Units: bridge,gpui · Size: L · Impact: Medium`
-
-  GPUI only gives a container a
-  hitbox when something listens on it, so a click on a listener-less child
-  can't be traced to that child — `EventDispatcher::dispatch`
-  (`crates/inca-bridge/src/dispatch.rs`) sets `target` to the same node as
-  `currentTarget`, the node the call is dispatching for. Making it exact
-  means giving every container a hitbox while any node in the tree has a
-  mouse listener, then reading the innermost one hit_test finds. That
-  costs a hitbox and a no-op listener call per node per pointer event.
-  The field name doesn't need to change for this to land later; only
-  its accuracy would improve. Until it does, nothing resembling event
-  delegation (a handler relying on which descendant was actually hit)
-  can be written against this framework.
-
 - **B-019 No capture-phase listener registration**
   `Units: bridge,gpui,core · Size: L · Impact: Medium`
 
@@ -142,8 +126,8 @@ A fixed entry is deleted and its ID is never reused.
 - **B-020 A GPUI-vs-DOM compat layer for `crates/inca-bridge`**
   `Units: bridge · Size: M · Impact: Medium`
 
-  Three separate
-  gaps now live loose in `dispatch.rs` — B-018 and B-019 plus
+  Two separate
+  gaps now live loose in `dispatch.rs` — B-019 plus
   `mouseenter` firing on mount for an element already under the pointer
   (GPUI's hover check compares against freshly-initialized state on first
   paint, not against a real pointer move; see `docs/reference/events.md`). `EventDispatcher` exists to turn GPUI's raw input
@@ -151,7 +135,7 @@ A fixed entry is deleted and its ID is never reused.
   Direction: one `compat` submodule inside it, not a separate crate — one
   place to hold `held_buttons` tracking, a "no real pointer move seen
   yet" flag suppressing the mount-time `mouseenter`, and later the
-  capture-phase (B-019) and precise-`target` (B-018) work.
+  capture-phase (B-019) work.
 
 - **B-022 Tab and Shift+Tab are unwired**
   `Units: bridge,gpui,core · Size: M–L · Impact: Medium`
@@ -281,9 +265,8 @@ A fixed entry is deleted and its ID is never reused.
   fires.
 
   Full support for the click modifiers takes this entry for the fields,
-  B-125 for `contextmenu` (`.right`), B-018 for the exact `target`
-  (`.self`), B-019 for the capture and passive options, and B-068 for the
-  order of `click` and `mouseup`.
+  B-125 for `contextmenu` (`.right`), B-019 for the capture and passive
+  options, and B-068 for the order of `click` and `mouseup`.
 
 - **B-048 A multi-root `App` (or a top-level comment) breaks window sizing and `gap`**
   `Units: host,gpui · Size: M · Impact: Medium`
@@ -533,16 +516,15 @@ A fixed entry is deleted and its ID is never reused.
   `crates/inca-gpui/src/event_sink.rs`'s `MousePayload`/`KeyPayload`
   carry a deliberate subset of each DOM type's own fields. What's between
   each missing one and landing differs:
-  - Computable today, but not a small change — no `gpui` change needed,
-    but its own state has to be threaded from element-build time into
-    dispatch, and `gpui` has no production API to look a node's bounds
-    up by id at event time otherwise: `offsetX`/`offsetY` (a target's
-    own bounds are already computed once, for hitbox insertion, just
-    never kept anywhere `dispatch` can reach).
-  - Blocked on another `inca` gap, not on `gpui`: `relatedTarget` needs
-    the same precise hit-testing the `event.target` approximation (B-018)
-    is waiting on; `isComposing` needs the text-editing/IME unit,
-    which hasn't started.
+  - Computable today, but not a small change — no `gpui` change needed.
+    `offsetX`/`offsetY` are measured from the event's `target`. The
+    target's bounds are computed once, for hitbox insertion, and need to be
+    kept where `dispatch` can reach them, since `gpui` has no production API
+    to look a node's bounds up by id at event time.
+  - `relatedTarget` needs the container the pointer came from or went to.
+    The mouse target slot holds the current container only, so the fix
+    keeps the previous move's container as well. `isComposing` needs the
+    text-editing/IME unit, which hasn't started.
   - Blocked on `gpui` itself: `code` and `location` — `Keystroke`
     (`third_party/zed/crates/gpui/src/platform/keystroke.rs`) carries
     only `{ modifiers, key, key_char }`, with no layout-independent
@@ -1101,11 +1083,10 @@ A fixed entry is deleted and its ID is never reused.
   fix moves the activation to a root key listener that runs after every
   node's listeners.
 
-- **B-139 `eventPhase` is approximate and `composedPath()` is unimplemented**
-  `Units: bridge · Size: S · Impact: Low`
+- **B-140 A container with `pointer-events: none` becomes `target`**
+  `Units: gpui,core · Size: M · Impact: Low`
 
-  `eventPhase` is 2 on the innermost node with a listener and 3 above it. A
-  click on a child that has no listener reports 3 on its ancestor, while the
-  child's own path starts at phase 2. The fix is the exact `target` (B-018):
-  `eventPhase` is 2 where `currentTarget` equals `target`, and a new
-  `composedPath()` returns the ancestor chain from `target`.
+  Every container under the pointer can become `target`, whatever its style.
+  Once a `pointer_events` style key exists, a container that sets `none`
+  skips its target marker and its hitbox, so the next container below reports
+  itself.

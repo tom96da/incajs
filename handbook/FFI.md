@@ -134,8 +134,16 @@ and event name. Payloads and author-facing behaviour are in
 #### Event object
 
 - One object is shared by all callbacks on a node for one event:
-  `{ type, target, currentTarget, eventId, ...payload }`. `target` equals
-  `currentTarget`.
+  `{ type, target, currentTarget, eventId, ...payload }`. `currentTarget` is
+  the listener's node. `target` falls back to `currentTarget` when the slot
+  is empty or names a destroyed node. `composedPath()` returns an empty array
+  once the dispatch ends.
+- The mouse target slot is a gpui global in `inca-gpui`. The root container's
+  capture listeners clear it for each mouse event. A tree with a mouse
+  listener gives every container a marker that runs first among that
+  container's mouse listeners. Bubbling runs the deepest container first, and
+  the first marker to run keeps the slot. A press also records its own
+  container, kept until the next press.
 - `eventId` is a number that grows with each event. Every node of one event
   name within one input carries the same value, so an adapter can tell
   whether two calls belong to one event. A dispatch with no input behind it,
@@ -161,7 +169,7 @@ and event name. Payloads and author-facing behaviour are in
 
 | Name | Payload | Notes |
 | --- | --- | --- |
-| `click` | none, or mouse for a key click | Fires before `mouseup` on the same node. A button wires its own `keydown`/`keyup` listeners, runs the JS callbacks, then clicks. `EventSink::activate` runs the node's callbacks, then each ancestor's, with `target` the button. The payload has `button`, `buttons`, `detail` and the coordinates at 0, plus the key event's modifiers. A disabled button's mouse down and up set a flag until the end of the event. The `mousedown`, `mouseup` and `click` wiring of every other node skips its callbacks while the flag is set, and the button leaves its own unwired. |
+| `click` | none, or mouse for a key click | Fires before `mouseup` on the same node. A mouse click's marker call runs inside the click closure, because gpui runs click listeners before the node's own mouse-up listeners. A button wires its own `keydown`/`keyup` listeners, runs the JS callbacks, then clicks. `EventSink::activate` runs the node's callbacks, then each ancestor's, with `target` the button. The payload has `button`, `buttons`, `detail` and the coordinates at 0, plus the key event's modifiers. A disabled button's mouse down and up set a flag until the end of the event. The `mousedown`, `mouseup` and `click` wiring of every other node skips its callbacks while the flag is set, and the button leaves its own unwired. |
 | `mousedown`, `mouseup` | mouse | `buttons` holds every button currently held. |
 | `mousemove` | mouse | |
 | `mouseenter`, `mouseleave` | mouse | Do not bubble. Position and modifiers are read when hover changes. |

@@ -1188,7 +1188,7 @@ mod tests {
 
         h.click(button);
 
-        assert_eq!(log(&h), "click@box/box,click@frame/frame");
+        assert_eq!(log(&h), "click@box/box,click@frame/box");
     }
 
     #[gpui::test]
@@ -1261,7 +1261,7 @@ mod tests {
         for want in [
             "mouseenter@box/box",
             "mousemove@box/box",
-            "mousemove@frame/frame",
+            "mousemove@frame/box",
         ] {
             assert!(log.contains(want), "{log}");
         }
@@ -1300,5 +1300,152 @@ mod tests {
         let mut h = Harness::load(cx, ENTRY, "");
         h.cx.update(|window, _| window.remove_window());
         h.settle();
+    }
+
+    // frame > mid (scrolls) > [inner, label (text), tall]; `log` records
+    // `type@currentTarget/target/eventPhase` by node name.
+    const TARGETS: &str = r"
+        const n = __inca_native__;
+        const make = (parent, w, h) => {
+            const id = n.createNode('div');
+            n.setStyle(id, 'width', w);
+            n.setStyle(id, 'height', h);
+            n.appendChild(parent, id);
+            return id;
+        };
+        const frame = make(n.rootNodeId(), 200, 200);
+        const mid = make(frame, 100, 50);
+        n.setStyle(mid, 'overflow_y', 'scroll');
+        const inner = make(mid, 30, 30);
+        const label = n.createNode('text');
+        n.setAttribute(label, 'value', 'hi');
+        n.appendChild(mid, label);
+        const tall = make(mid, 100, 300);
+        Object.assign(globalThis, { frame, mid, inner, label, tall });
+        globalThis.log = [];
+        const names = { [frame]: 'frame', [mid]: 'mid', [inner]: 'inner' };
+        const name = (id) => names[id] ?? 'other';
+        globalThis.__inca_callbacks__ = {
+            0: (e) => { globalThis.log.push(
+                `${e.type}@${name(e.currentTarget)}/${name(e.target)}/${e.eventPhase}`); },
+        };
+    ";
+
+    fn targets_log(h: &mut Harness) -> String {
+        let log = log(h);
+        run_js(h, "globalThis.log.length = 0;");
+        log
+    }
+
+    #[gpui::test]
+    fn a_listener_on_an_ancestor_reads_the_deepest_node_as_target(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, TARGETS);
+        listen(
+            &mut h,
+            "frame",
+            "mousemove mousedown mouseup click wheel",
+            0,
+        );
+        let inner = node(&h, "inner");
+
+        h.hover(inner);
+        h.click(inner);
+        h.scroll(inner, 0.0, -5.0);
+
+        assert_eq!(
+            targets_log(&mut h),
+            "mousemove@frame/inner/3,mousedown@frame/inner/3,click@frame/inner/3,\
+             mouseup@frame/inner/3,wheel@frame/inner/3"
+        );
+    }
+
+    #[gpui::test]
+    fn a_text_child_reports_its_container_as_target(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, TARGETS);
+        listen(&mut h, "frame", "click", 0);
+        let label = node(&h, "label");
+
+        h.click(label);
+
+        assert_eq!(targets_log(&mut h), "click@frame/mid/3");
+    }
+
+    #[gpui::test]
+    fn the_phase_is_2_where_current_target_is_target(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, TARGETS);
+        listen(&mut h, "inner", "click", 0);
+        listen(&mut h, "mid", "click", 0);
+        listen(&mut h, "frame", "click", 0);
+        let inner = node(&h, "inner");
+        let mid = node(&h, "mid");
+
+        h.click(inner);
+        assert_eq!(
+            targets_log(&mut h),
+            "click@inner/inner/2,click@mid/inner/3,click@frame/inner/3"
+        );
+        h.click(mid);
+        assert_eq!(targets_log(&mut h), "click@mid/mid/2,click@frame/mid/3");
+    }
+
+    #[gpui::test]
+    fn a_key_event_targets_the_focused_node(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, TARGETS);
+        run_js(
+            &mut h,
+            "__inca_native__.setAttribute(inner, 'tabindex', '0'); __inca_native__.focusNode(inner);",
+        );
+        listen(&mut h, "frame", "keydown keyup focus blur", 0);
+        listen(&mut h, "inner", "focus blur", 0);
+
+        h.keystrokes("a");
+        h.key_up("a");
+        run_js(&mut h, "__inca_native__.blurNode(inner);");
+
+        assert_eq!(
+            targets_log(&mut h),
+            "keydown@frame/inner/3,keyup@frame/inner/3,blur@inner/inner/2"
+        );
+    }
+
+    #[gpui::test]
+    fn wheel_scrolls_and_enter_leave_target_their_own_node(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, TARGETS);
+        listen(&mut h, "frame", "wheel mouseenter mouseleave", 0);
+        listen(&mut h, "mid", "mouseenter mouseleave", 0);
+        let (inner, mid) = (node(&h, "inner"), node(&h, "mid"));
+
+        h.hover(inner);
+        h.unhover();
+        assert_eq!(
+            targets_log(&mut h),
+            "mouseenter@frame/frame/2,mouseenter@mid/mid/2,\
+             mouseleave@mid/mid/2,mouseleave@frame/frame/2"
+        );
+
+        h.scroll(inner, 0.0, -30.0);
+        let offset = h
+            .window
+            .read_with(&h.cx, |app, _| {
+                app.session.dispatcher.scroll_handle(mid).unwrap().offset()
+            })
+            .unwrap();
+        assert_eq!(offset.y, px(-30.0));
+        assert!(targets_log(&mut h).starts_with("wheel@frame/inner/3"));
+    }
+
+    #[gpui::test]
+    fn a_click_between_two_nodes_targets_their_common_ancestor(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, TARGETS);
+        listen(&mut h, "frame", "click", 0);
+        let inner = node(&h, "inner");
+        h.hover(inner);
+        let (down, up) = (point(px(15.0), px(15.0)), point(px(60.0), px(40.0)));
+
+        h.cx.simulate_mouse_down(down, gpui::MouseButton::Left, gpui::Modifiers::none());
+        h.cx.simulate_mouse_up(up, gpui::MouseButton::Left, gpui::Modifiers::none());
+        h.settle();
+
+        assert_eq!(targets_log(&mut h), "click@frame/mid/3");
     }
 }

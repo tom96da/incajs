@@ -8,7 +8,7 @@ pub mod tree;
 pub use element::{
     AlignSpec, DisplaySpec, ElementSpec, ElementTag, FlexDirectionSpec, LengthSpec, StyleSpec,
     build_element, build_element_with_events, build_spec, build_spec_with, debug_selector,
-    render_tree, render_tree_with_events, style_warning,
+    mouse_target, pressed_target, render_tree, render_tree_with_events, style_warning,
 };
 pub use event_sink::{
     EventKind, EventMask, EventPayload, EventSink, KeyPayload, MousePayload, WheelPayload,

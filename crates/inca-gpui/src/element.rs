@@ -21,8 +21,8 @@ use std::fmt;
 use gpui::prelude::*;
 use gpui::{
     AnyElement, App, DispatchPhase, Display, ElementId, Fill, FlexDirection, Global, Hsla, Length,
-    MouseDownEvent, MouseExitEvent, MouseMoveEvent, Overflow, Pixels, Point, ScrollHandle,
-    ScrollWheelEvent, StyleRefinement, Window, canvas, div, point, px, rgb,
+    MouseDownEvent, MouseExitEvent, MouseMoveEvent, MouseUpEvent, Overflow, Pixels, Point,
+    ScrollHandle, ScrollWheelEvent, StyleRefinement, Window, canvas, div, point, px, rgb,
 };
 
 use crate::event_sink::{EventMask, EventPayload, EventSink, MousePayload};
@@ -722,6 +722,53 @@ fn cut_press(cx: &mut App) {
     cx.defer(|cx| cx.default_global::<PressCut>().0 = false);
 }
 
+// The deepest container under the pointer for the mouse event being handled,
+// and the one under the last press. The root clears them in the capture
+// phase and the first container to report in the bubble phase wins.
+#[derive(Default)]
+struct MouseTarget {
+    current: Option<NodeId>,
+    pressed: Option<NodeId>,
+}
+
+impl Global for MouseTarget {}
+
+/// The deepest container under the pointer for the mouse event being
+/// handled. `None` outside a mouse event and for a tree that has no mouse
+/// listener.
+#[must_use]
+pub fn mouse_target(cx: &App) -> Option<NodeId> {
+    cx.try_global::<MouseTarget>().and_then(|t| t.current)
+}
+
+/// The deepest container under the pointer at the last mouse press.
+#[must_use]
+pub fn pressed_target(cx: &App) -> Option<NodeId> {
+    cx.try_global::<MouseTarget>().and_then(|t| t.pressed)
+}
+
+fn mark_target(cx: &mut App, id: NodeId) {
+    let target = cx.default_global::<MouseTarget>();
+    target.current.get_or_insert(id);
+}
+
+/// Reports `id` as the event's target when no deeper container has. Add it
+/// after every other mouse listener of the container: a node's listeners
+/// run in reverse order, so this one runs first.
+fn mark_mouse_target<Elem: InteractiveElement + FluentBuilder>(element: Elem, id: NodeId) -> Elem {
+    let mut element = element
+        .on_any_mouse_down(move |_, _, cx| {
+            mark_target(cx, id);
+            cx.default_global::<MouseTarget>().pressed.get_or_insert(id);
+        })
+        .on_mouse_move(move |_, _, cx| mark_target(cx, id))
+        .on_scroll_wheel(move |_, _, cx| mark_target(cx, id));
+    element
+        .interactivity()
+        .on_any_mouse_up(move |_, _, cx| mark_target(cx, id));
+    element
+}
+
 // The Space press waiting for its release. Any other key press or mouse press
 // cancels it.
 #[derive(Default)]
@@ -851,12 +898,24 @@ fn pointer_tracker<E: EventSink + Clone + 'static>(dispatch: E) -> impl IntoElem
             let moved = dispatch.clone();
             window.on_mouse_event(move |event: &MouseMoveEvent, phase, _, cx| {
                 if phase == DispatchPhase::Capture {
+                    cx.default_global::<MouseTarget>().current = None;
                     moved.pointer_moved(event.position, cx);
                 }
             });
             window.on_mouse_event(move |_: &MouseDownEvent, phase, _, cx| {
                 if phase == DispatchPhase::Capture {
                     cx.default_global::<SpaceDown>().0 = None;
+                    *cx.default_global::<MouseTarget>() = MouseTarget::default();
+                }
+            });
+            window.on_mouse_event(move |_: &MouseUpEvent, phase, _, cx| {
+                if phase == DispatchPhase::Capture {
+                    cx.default_global::<MouseTarget>().current = None;
+                }
+            });
+            window.on_mouse_event(move |_: &ScrollWheelEvent, phase, _, cx| {
+                if phase == DispatchPhase::Capture {
+                    cx.default_global::<MouseTarget>().current = None;
                 }
             });
             let dispatch = dispatch.clone();
@@ -917,6 +976,17 @@ pub fn debug_selector(id: NodeId) -> String {
     format!("node-{id}")
 }
 
+/// Whether any node of `spec` listens to a mouse event that reports a target.
+fn listens_mouse(spec: &ElementSpec) -> bool {
+    spec.listens.intersects(
+        EventMask::CLICK
+            | EventMask::MOUSE_DOWN
+            | EventMask::MOUSE_UP
+            | EventMask::MOUSE_MOVE
+            | EventMask::WHEEL,
+    ) || spec.children.iter().any(listens_mouse)
+}
+
 /// Recursively converts an [`ElementSpec`] into a real `gpui` [`AnyElement`].
 ///
 /// A container gets a hitbox only when something listens on it — GPUI
@@ -933,11 +1003,13 @@ pub fn debug_selector(id: NodeId) -> String {
 /// [`NodeId`], wired or not.
 ///
 /// The root container (`root`) also carries the pointer tracker when there is
-/// a dispatcher.
+/// a dispatcher. With `track`, every container also reports itself as the
+/// mouse target, which gives it a hitbox.
 fn build_element_inner<E: EventSink + Clone + 'static>(
     spec: &ElementSpec,
     dispatch: Option<&E>,
     root: bool,
+    track: bool,
 ) -> AnyElement {
     match &spec.tag {
         ElementTag::Text(content) => content.clone().into_any_element(),
@@ -1009,24 +1081,35 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
                         })
                     },
                 );
+                let element = element.when(track, |el| mark_mouse_target(el, id));
                 match wired(EventMask::CLICK) {
                     Some(listening) => finish_container(
                         element.on_click(move |event, window, cx| {
                             // Key clicks come from `wire_button`.
                             if !event.is_keyboard() && !press_cut(cx) {
+                                // Runs before this node's own mouse-up marker.
+                                mark_target(cx, id);
                                 listening.dispatch(id, "click", &EventPayload::None, window, cx);
                             }
                         }),
                         spec,
                         dispatch,
                         root,
+                        track,
                     ),
-                    None => finish_container(element, spec, dispatch, root),
+                    None => finish_container(element, spec, dispatch, root, track),
                 }
             } else {
                 let element = wire_stateless(element, id, &wired);
                 let element = wire_button(element, dispatch, spec);
-                finish_container(wire_focus(element, dispatch, id), spec, dispatch, root)
+                let element = element.when(track, |el| mark_mouse_target(el, id));
+                finish_container(
+                    wire_focus(element, dispatch, id),
+                    spec,
+                    dispatch,
+                    root,
+                    track,
+                )
             }
         }
     }
@@ -1040,6 +1123,7 @@ fn finish_container<E>(
     spec: &ElementSpec,
     dispatch: Option<&(impl EventSink + Clone + 'static)>,
     root: bool,
+    track: bool,
 ) -> AnyElement
 where
     E: Styled + ParentElement + IntoElement + 'static,
@@ -1052,7 +1136,7 @@ where
         if child.tag == ElementTag::Text(String::new()) {
             continue;
         }
-        element = element.child(build_element_inner(child, dispatch, false));
+        element = element.child(build_element_inner(child, dispatch, false, track));
     }
     element.into_any_element()
 }
@@ -1106,7 +1190,7 @@ impl EventSink for NeverListens {
 /// whose containers dispatch `"click"` into JS.
 #[must_use]
 pub fn build_element(spec: &ElementSpec) -> AnyElement {
-    build_element_inner::<NeverListens>(spec, None, true)
+    build_element_inner::<NeverListens>(spec, None, true, false)
 }
 
 /// Like [`build_element`], but every container's click dispatches into JS
@@ -1119,7 +1203,7 @@ pub fn build_element_with_events<E: EventSink + Clone + 'static>(
     spec: &ElementSpec,
     dispatch: &E,
 ) -> AnyElement {
-    build_element_inner(spec, Some(dispatch), true)
+    build_element_inner(spec, Some(dispatch), true, listens_mouse(spec))
 }
 
 /// Composes [`build_spec`] and [`build_element`]: builds `root` and its
@@ -1932,9 +2016,12 @@ mod tests {
 
     mod gpui_layer {
         use super::{num as n, text as s, *};
+        use std::cell::RefCell;
+        use std::rc::Rc;
+
         use gpui::{
-            Context, Pixels, Point, Render, ScrollDelta, ScrollWheelEvent, TestAppContext,
-            VisualTestContext, point, size,
+            Context, MouseButton, Pixels, Point, Render, ScrollDelta, ScrollWheelEvent,
+            TestAppContext, VisualTestContext, point, size,
         };
 
         #[gpui::test]
@@ -2185,6 +2272,183 @@ mod tests {
         fn a_scroll_container_scrolls_without_a_dispatcher(cx: &mut TestAppContext) {
             let shift = content_shift(cx, &[("overflow_y", "scroll")], point(px(0.), px(-50.)));
             assert_eq!(shift, point(px(0.), px(-50.)));
+        }
+        type Calls = Rc<RefCell<Vec<(NodeId, String, Option<NodeId>, Option<NodeId>)>>>;
+
+        // Records `(node, event, mouse_target, pressed_target)` per dispatch.
+        #[derive(Clone)]
+        struct Probe {
+            listens: Rc<HashMap<NodeId, EventMask>>,
+            calls: Calls,
+        }
+
+        impl EventSink for Probe {
+            fn listens(&self, node_id: NodeId) -> EventMask {
+                self.listens
+                    .get(&node_id)
+                    .copied()
+                    .unwrap_or(EventMask::NONE)
+            }
+
+            fn dispatch(
+                &self,
+                node_id: NodeId,
+                event: &str,
+                _: &EventPayload,
+                _: &mut Window,
+                cx: &mut App,
+            ) {
+                self.calls.borrow_mut().push((
+                    node_id,
+                    event.to_owned(),
+                    mouse_target(cx),
+                    pressed_target(cx),
+                ));
+            }
+
+            fn activate(&self, _: NodeId, _: gpui::Modifiers, _: &mut Window, _: &mut App) {}
+
+            fn focus_handle(&self, _: NodeId) -> Option<gpui::FocusHandle> {
+                None
+            }
+
+            fn scroll_handle(&self, _: NodeId) -> Option<ScrollHandle> {
+                None
+            }
+
+            fn pointer_moved(&self, _: Point<Pixels>, _: &mut App) {}
+
+            fn pointer_left(&self) {}
+        }
+
+        struct ProbeView(VirtualTree, Probe);
+
+        impl Render for ProbeView {
+            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                render_tree_with_events(&self.0, 0, &self.1).unwrap()
+            }
+        }
+
+        fn mouse() -> EventMask {
+            EventMask::CLICK
+                | EventMask::MOUSE_DOWN
+                | EventMask::MOUSE_UP
+                | EventMask::MOUSE_MOVE
+                | EventMask::WHEEL
+        }
+
+        const LEAF: (f32, f32) = (10., 10.);
+        const MID: (f32, f32) = (80., 80.);
+
+        // Node 0 (200x200) holds node 1 (100x100), which holds node 2 (50x50),
+        // all at the origin.
+        fn probe_tree(cx: &mut TestAppContext, listening: &[NodeId]) -> (VisualTestContext, Calls) {
+            let mut tree = VirtualTree::new();
+            let ids: Vec<_> = (0..3).map(|_| tree.create_node("div").unwrap()).collect();
+            for (id, side) in ids.iter().zip([200.0, 100.0, 50.0]) {
+                tree.set_style(*id, "width", side).unwrap();
+                tree.set_style(*id, "height", side).unwrap();
+            }
+            tree.append_child(ids[0], ids[1]).unwrap();
+            tree.append_child(ids[1], ids[2]).unwrap();
+            let calls = Calls::default();
+            let probe = Probe {
+                listens: Rc::new(listening.iter().map(|id| (*id, mouse())).collect()),
+                calls: Rc::clone(&calls),
+            };
+            let window = cx.add_window(|_, _| ProbeView(tree, probe));
+            cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+                .unwrap();
+            (VisualTestContext::from_window(window.into(), cx), calls)
+        }
+
+        fn at((x, y): (f32, f32)) -> Point<Pixels> {
+            point(px(x), px(y))
+        }
+
+        /// Runs one of each mouse event at `pos`.
+        fn mouse_events(cx: &mut VisualTestContext, pos: (f32, f32)) {
+            cx.simulate_mouse_move(at(pos), None, gpui::Modifiers::none());
+            cx.simulate_event(ScrollWheelEvent {
+                position: at(pos),
+                delta: ScrollDelta::Pixels(point(px(0.), px(-5.))),
+                ..Default::default()
+            });
+            cx.simulate_click(at(pos), gpui::Modifiers::none());
+        }
+
+        const NAMES: [&str; 5] = ["mousemove", "wheel", "mousedown", "click", "mouseup"];
+
+        fn targets(calls: &Calls, node: NodeId) -> Vec<(String, Option<NodeId>)> {
+            calls
+                .borrow()
+                .iter()
+                .filter(|c| c.0 == node)
+                .map(|c| (c.1.clone(), c.2))
+                .collect()
+        }
+
+        #[gpui::test]
+        fn every_kind_reports_the_deepest_container_to_each_listener(cx: &mut TestAppContext) {
+            // Listeners on node 2 itself see its own mark, so the marker runs
+            // before the node's own listener of every kind.
+            let (mut cx, calls) = probe_tree(cx, &[0, 2]);
+            mouse_events(&mut cx, LEAF);
+            let want: Vec<_> = NAMES.iter().map(|n| ((*n).to_owned(), Some(2))).collect();
+            assert_eq!(targets(&calls, 0), want);
+            assert_eq!(targets(&calls, 2), want);
+        }
+
+        #[gpui::test]
+        fn the_target_is_cleared_for_each_event(cx: &mut TestAppContext) {
+            let (mut cx, calls) = probe_tree(cx, &[0]);
+            mouse_events(&mut cx, LEAF);
+            mouse_events(&mut cx, MID);
+            let all = targets(&calls, 0);
+            assert!(all[..5].iter().all(|t| t.1 == Some(2)), "{all:?}");
+            assert!(all[5..].iter().all(|t| t.1 == Some(1)), "{all:?}");
+        }
+
+        #[gpui::test]
+        fn the_pressed_target_lasts_until_the_next_press(cx: &mut TestAppContext) {
+            let (mut cx, calls) = probe_tree(cx, &[0]);
+            cx.simulate_mouse_down(at(LEAF), MouseButton::Left, gpui::Modifiers::none());
+            cx.simulate_mouse_up(at(MID), MouseButton::Left, gpui::Modifiers::none());
+            let ups: Vec<_> = calls
+                .borrow()
+                .iter()
+                .filter(|c| c.1 == "mouseup")
+                .map(|c| (c.2, c.3))
+                .collect();
+            assert_eq!(ups, [(Some(1), Some(2))]);
+            cx.simulate_mouse_down(at(MID), MouseButton::Left, gpui::Modifiers::none());
+            let down = calls.borrow().iter().rfind(|c| c.1 == "mousedown").cloned();
+            assert_eq!(down.map(|c| c.3), Some(Some(1)));
+        }
+
+        #[gpui::test]
+        fn tracking_needs_a_mouse_listener_and_leaves_layout_alone(cx: &mut TestAppContext) {
+            let spec = |listens| ElementSpec {
+                id: 0,
+                tag: ElementTag::Container,
+                style: StyleSpec::default(),
+                listens,
+                children: Vec::new(),
+            };
+            let mut parent = spec(EventMask::MOUSE_ENTER | EventMask::FOCUS);
+            assert!(!listens_mouse(&parent));
+            parent.children.push(spec(EventMask::WHEEL));
+            assert!(listens_mouse(&parent));
+
+            let bounds = |cx: &mut VisualTestContext| -> Vec<_> {
+                ["node-0", "node-1", "node-2"]
+                    .map(|selector| cx.debug_bounds(selector).unwrap())
+                    .to_vec()
+            };
+            let (mut tracked, _) = probe_tree(cx, &[0]);
+            let tracked = bounds(&mut tracked);
+            let (mut plain, _) = probe_tree(cx, &[]);
+            assert_eq!(tracked, bounds(&mut plain));
         }
     }
 }
