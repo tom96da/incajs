@@ -1496,6 +1496,231 @@ mod tests {
         );
     }
 
+    /// Callback 1 logs `type:key:` and the four modifier flags as 0 or 1.
+    const MODIFIER_LOG: &str = "globalThis.__inca_callbacks__[1] = (e) => { \
+        globalThis.log.push(`${e.type}:${e.key}:${+e.shiftKey}${+e.ctrlKey}${+e.altKey}${+e.metaKey}`); };";
+
+    #[gpui::test]
+    fn a_modifier_alone_fires_keydown_and_keyup_in_flag_order(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, TARGETS);
+        run_js(
+            &mut h,
+            "__inca_native__.setAttribute(inner, 'tabindex', '0'); __inca_native__.focusNode(inner);",
+        );
+        run_js(&mut h, MODIFIER_LOG);
+        listen(&mut h, "frame", "keydown keyup", 1);
+        let shift_control = Modifiers {
+            shift: true,
+            control: true,
+            ..Modifiers::none()
+        };
+
+        for modifiers in [
+            Modifiers::none(),
+            Modifiers::shift(),
+            Modifiers::shift(),
+            shift_control,
+            Modifiers::alt(),
+            Modifiers::command(),
+            Modifiers::none(),
+        ] {
+            h.cx.simulate_modifiers_change(modifiers);
+        }
+        h.settle();
+
+        assert_eq!(
+            log(&h),
+            "keydown:Shift:1000,keydown:Control:1100,keyup:Shift:0010,keyup:Control:0010,\
+             keydown:Alt:0010,keyup:Alt:0001,keydown:Meta:0001,keyup:Meta:0000"
+        );
+    }
+
+    #[gpui::test]
+    fn a_modifier_alone_with_nothing_focused_reaches_the_root(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, TARGETS);
+        run_js(
+            &mut h,
+            r"
+            const root = __inca_native__.rootNodeId();
+            globalThis.__inca_callbacks__[1] = (e) => {
+                globalThis.log.push(`${e.type}:${e.currentTarget === root}:${e.target === root}`);
+            };
+            __inca_native__.addEventListener(root, 'keydown', 1);
+            ",
+        );
+
+        h.cx.simulate_modifiers_change(Modifiers::shift());
+        h.settle();
+
+        assert_eq!(log(&h), "keydown:true:true");
+    }
+
+    #[gpui::test]
+    fn a_stopped_modifier_keydown_skips_the_ancestors(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, TARGETS);
+        run_js(
+            &mut h,
+            "__inca_native__.setAttribute(inner, 'tabindex', '0'); __inca_native__.focusNode(inner);\
+             globalThis.__inca_callbacks__[2] = (e) => { e.stopPropagation(); };",
+        );
+        listen(&mut h, "inner", "keydown", 2);
+        listen(&mut h, "frame", "keydown", 0);
+
+        h.cx.simulate_modifiers_change(Modifiers::shift());
+        h.settle();
+
+        assert_eq!(log(&h), "");
+    }
+
+    #[gpui::test]
+    fn screen_coordinates_are_the_window_origin_plus_the_client_position(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, TARGETS);
+        run_js(
+            &mut h,
+            "globalThis.__inca_callbacks__[1] = (e) => { \
+             globalThis.log.push(`${e.screenX - e.clientX}:${e.screenY - e.clientY}`); };",
+        );
+        listen(&mut h, "frame", "click mousemove", 1);
+        let origin = h.cx.update(|window, _| window.bounds().origin);
+        let inner = node(&h, "inner");
+
+        h.click(inner);
+
+        assert!(origin.x > px(0.0) && origin.y > px(0.0), "{origin:?}");
+        let expected = format!("{}:{}", f32::from(origin.x), f32::from(origin.y));
+        assert!(log(&h).ends_with(&expected), "{} vs {expected}", log(&h));
+    }
+
+    #[gpui::test]
+    fn the_window_losing_and_regaining_focus_blurs_and_focuses_the_focused_node(
+        cx: &mut TestAppContext,
+    ) {
+        let mut h = Harness::load(cx, ENTRY, TARGETS);
+        run_js(
+            &mut h,
+            "__inca_native__.setAttribute(inner, 'tabindex', '0'); __inca_native__.focusNode(inner);\
+             globalThis.__inca_callbacks__[1] = (e) => { \
+             globalThis.log.push(`${e.type}:${e.relatedTarget}`); };",
+        );
+        listen(&mut h, "inner", "focus blur focusin focusout", 1);
+        h.cx.update(|window, _| window.activate_window());
+        h.settle();
+        run_js(&mut h, "globalThis.log.length = 0;");
+
+        h.cx.deactivate_window();
+        h.settle();
+        let lost = targets_log(&mut h);
+        h.cx.update(|window, _| window.activate_window());
+        h.settle();
+
+        assert_eq!(lost, "blur:null,focusout:null");
+        assert_eq!(log(&h), "focus:null,focusin:null");
+    }
+
+    #[gpui::test]
+    fn a_node_made_inert_while_the_window_is_inactive_fires_no_second_blur(
+        cx: &mut TestAppContext,
+    ) {
+        let mut h = Harness::load(cx, ENTRY, TARGETS);
+        run_js(
+            &mut h,
+            "__inca_native__.setAttribute(inner, 'tabindex', '0'); __inca_native__.focusNode(inner);",
+        );
+        listen(&mut h, "inner", "focus blur", 0);
+        h.cx.update(|window, _| window.activate_window());
+        h.settle();
+        run_js(&mut h, "globalThis.log.length = 0;");
+
+        h.cx.deactivate_window();
+        h.settle();
+        run_js(
+            &mut h,
+            "__inca_native__.setAttribute(inner, 'inert', true);",
+        );
+        h.cx.update(|window, _| window.activate_window());
+        h.settle();
+
+        assert_eq!(log(&h), "blur@inner/inner/2");
+    }
+
+    #[gpui::test]
+    fn deactivating_the_window_with_nothing_focused_fires_nothing(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, TARGETS);
+        listen(&mut h, "frame", "blur focusout", 0);
+        h.cx.update(|window, _| window.activate_window());
+        h.settle();
+
+        h.cx.deactivate_window();
+        h.settle();
+
+        assert_eq!(log(&h), "");
+    }
+
+    /// `outer` scrolls 50 of 350 and holds `held` (50 high, tall content) and a
+    /// 300 high spacer.
+    fn nested_scrollers(h: &mut Harness, held_inert: bool) -> (NodeId, NodeId) {
+        run_js(
+            h,
+            &format!(
+                r"
+                const n = __inca_native__;
+                const box = (parent, h, scroll) => {{
+                    const id = n.createNode('div');
+                    n.setStyle(id, 'width', 100);
+                    n.setStyle(id, 'height', h);
+                    if (scroll) n.setStyle(id, 'overflow_y', 'scroll');
+                    n.appendChild(parent, id);
+                    return id;
+                }};
+                globalThis.outer = box(n.rootNodeId(), 50, true);
+                globalThis.held = box(outer, 50, true);
+                box(held, 300, false);
+                box(outer, 300, false);
+                if ({held_inert}) n.setAttribute(held, 'inert', true);
+                "
+            ),
+        );
+        (node(h, "outer"), node(h, "held"))
+    }
+
+    fn scroll_offset(h: &Harness, id: NodeId) -> Pixels {
+        h.window
+            .read_with(&h.cx, |app, _| {
+                app.session.dispatcher.scroll_handle(id).unwrap().offset().y
+            })
+            .unwrap()
+    }
+
+    #[gpui::test]
+    fn an_inert_scroll_container_ignores_the_wheel_and_leaves_it_to_its_ancestor(
+        cx: &mut TestAppContext,
+    ) {
+        let mut h = Harness::load(cx, ENTRY, "");
+        let (outer, held) = nested_scrollers(&mut h, true);
+
+        h.scroll(held, 0.0, -30.0);
+
+        assert_eq!(
+            (scroll_offset(&h, held), scroll_offset(&h, outer)),
+            (px(0.0), px(-30.0))
+        );
+    }
+
+    #[gpui::test]
+    fn a_scroll_container_that_is_not_inert_takes_the_wheel_before_its_ancestor(
+        cx: &mut TestAppContext,
+    ) {
+        let mut h = Harness::load(cx, ENTRY, "");
+        let (outer, held) = nested_scrollers(&mut h, false);
+
+        h.scroll(held, 0.0, -30.0);
+
+        assert_eq!(
+            (scroll_offset(&h, held), scroll_offset(&h, outer)),
+            (px(-30.0), px(0.0))
+        );
+    }
+
     #[gpui::test]
     fn wheel_scrolls_and_enter_leave_target_their_own_node(cx: &mut TestAppContext) {
         let mut h = Harness::load(cx, ENTRY, TARGETS);
@@ -1697,7 +1922,7 @@ mod tests {
         assert_eq!(
             targets_log(&mut h),
             "mousedown@inner/inner/2,mousedown@frame/inner/3,contextmenu@inner/inner/2,\
-             contextmenu:0:2:2:15:15:15:15::1:mouse:true:1:1:0,mouseup@inner/inner/2,\
+             contextmenu:0:2:2:15:15:15:15::1:mouse:true:1:1:0.5,mouseup@inner/inner/2,\
              auxclick@frame/inner/3"
         );
     }
@@ -1807,7 +2032,7 @@ mod tests {
             targets_log(&mut h),
             format!(
                 "click:{plain},dblclick@mid/inner/3,click:2:0:0:15:15:15:15::1:mouse:true:1:1:0,\
-                 dblclick:2:0:0:15:15:15:15::1:mouse:true:1:1:0,\
+                 dblclick:2:0:0:15:15:15:15:::::::,\
                  click:3:0:0:15:15:15:15::1:mouse:true:1:1:0"
             )
         );

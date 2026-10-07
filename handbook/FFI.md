@@ -177,11 +177,11 @@ and event name. Payloads and author-facing behaviour are in
 | Name | Payload | Notes |
 | --- | --- | --- |
 | `click` | mouse + pointer | Fires before `mouseup` on the same node. gpui runs click listeners before the node's own mouse-up listeners, so a mouse click's marker call runs inside the click closure. gpui's `on_click` serves the primary button only. The payload is `From<&ClickEvent>`: the release position and modifiers, `button` and `buttons` at 0, `detail` the release's click count, pointer source mouse. A button wires its own `keydown`/`keyup` listeners, runs the JS callbacks, then clicks. `EventSink::activate` runs the node's callbacks, then each ancestor's, with `target` the button. Its payload is `MousePayload::keyboard_click`: coordinates, `button`, `buttons` and `detail` at 0, the key event's modifiers, pointer source keyboard. A disabled button's mouse down and up set a flag until the end of the event. The `mousedown`, `mouseup` and `click` wiring of every other node skips its callbacks while the flag is set, and the button leaves its own unwired. |
-| `dblclick` | mouse | Dispatched inside the same `on_click` closure right after `click`, when the release's click count is 2. A node listening to `dblclick` alone gets the closure too (`EventMask::DBL_CLICK` needs an element id). `target` follows the `click` rule. |
+| `dblclick` | mouse | Dispatched inside the same `on_click` closure right after `click` with the pointer source cleared, when the release's click count is 2. A node listening to `dblclick` alone gets the closure too (`EventMask::DBL_CLICK` needs an element id). `target` follows the `click` rule. |
 | `auxclick` | mouse + pointer | gpui's `on_aux_click` serves the other buttons. The payload is `From<&ClickEvent>` with `button` the released button. It ignores the disabled-button flag. `target` follows the `click` rule. |
 | `contextmenu` | mouse + pointer | The root tracker's capture listener for a right `MouseDownEvent` queues `window.defer`, which runs after the press's bubble. `EventSink::context_menu` then calls `bubble_from` at the mouse target (the root when none), so it fires whichever way `mousedown` propagated. The payload is `EventPayload::context_menu`: `button` 2, `buttons` 2, `detail` 0, pointer source mouse. It ignores the disabled-button flag. |
 | `mousedown`, `mouseup` | mouse | `buttons` holds every button currently held. |
-| `mousemove` | mouse | |
+| `mousemove` | mouse | `movementX`/`movementY` hold the delta of the raw move. |
 | `mouseenter`, `mouseleave` | mouse + `relatedTarget` | Do not bubble. `EventDispatcher::fire_at` runs only the node's own callbacks, with `target` the node. |
 | `mouseover`, `mouseout` | mouse + `relatedTarget` | `EventDispatcher::bubble_from` runs the callbacks of the deepest container, then each ancestor's. |
 | `wheel` | mouse + `deltaX`, `deltaY`, `deltaZ`, `deltaMode` | `deltaX`/`deltaY` are GPUI's values negated. `deltaZ` is `0`. `deltaMode` is `0` or `1`. |
@@ -194,7 +194,7 @@ Every container of a tree with a mouse listener (`track`, non-inert) wires one
 The first container to report in a pointer move calls `EventSink::pointer_over`
 with itself as the deepest one, which reports at once. Any other change (a layout change under a
 still pointer, a window exit) reports once at the end of the update from the
-deepest container of the hovered set, with the move's delta carried over. A
+deepest container of the hovered set. A
 report compares the deepest container with the previous one
 (`EventDispatcher::hover_prev`) and fires, per `hover_path_difference`:
 `mouseout` at the old container, `mouseleave` on each container left
@@ -203,19 +203,21 @@ entered (outermost first). `relatedTarget` of the first two is the new
 container and of the last two the old one. Position and modifiers are read
 from the window when the report runs.
 
-The mouse payload is `clientX`, `clientY`, `x`, `y`, `pageX`, `pageY`,
-`movementX`, `movementY`, `button`, `buttons`, `detail`, `relatedTarget`
-(`MousePayload::related_target`, `null` on events other than the hover
-events) and the four modifier flags. `x`/`y` and `pageX`/`pageY` equal
-`clientX`/`clientY`. `MousePayload::pointer` adds `pointerId`, `pointerType`,
-`isPrimary`, `width`, `height` and `pressure`: mouse is 1, `"mouse"`, true,
-1, 1, 0 and keyboard is -1, `""`, false, 1, 1, 0.
+The mouse payload is `clientX`, `clientY`, `screenX`, `screenY`, `x`, `y`,
+`pageX`, `pageY`, `movementX`, `movementY`, `button`, `buttons`, `detail`,
+`relatedTarget` (`MousePayload::related_target`, `null` on events other than
+the hover events) and the four modifier flags. `x`/`y` and `pageX`/`pageY`
+equal `clientX`/`clientY`. The sink sets `screen_x`/`screen_y` from
+`Window::bounds` plus the client position (`with_screen`).
+`MousePayload::pointer` adds `pointerId`, `pointerType`, `isPrimary`, `width`,
+`height` and `pressure`: mouse is 1, `"mouse"`, true, 1, 1 and keyboard is -1,
+`""`, false, 1, 1. `pressure` is 0.5 when `buttons` is non-zero, else 0.
 
-`click`, `dblclick`, `auxclick` and `contextmenu` keep the `buttons` of their own payload.
-The other mouse events take it from the held-button tracker.
+`click`, `dblclick`, `auxclick` and `contextmenu` keep the `buttons` of
+their own payload. The other mouse events take it from the held-button tracker.
 
 `movementX`/`movementY` come from raw pointer moves, which the host records
-once per window.
+once per window. Only `mousemove` takes them. Every other event holds 0.
 
 #### Propagation and cancellation
 
@@ -247,7 +249,19 @@ once per window.
   focuses the target, or blurs for the end of the order. `apply_pending`
   reports the transition on the next frame.
 - Destroying a focused node fires no `blur`.
-- All dispatches from one raw event share one movement value.
+- All `mousemove` dispatches from one raw event share one movement value.
+- The root wires `on_modifiers_changed` into `EventSink::modifiers_changed`.
+  The dispatcher diffs the flags against `held_modifiers`, which
+  `sync_modifiers` seeds from the window on the first frame and on every
+  activation. It bubbles `keydown` or `keyup` named `Shift`, `Control`, `Alt`
+  or `Meta`, in that order, from the focused node or the root.
+- `HostedApp` observes the window's activation. A change dispatches `blur` and
+  `focusout`, or `focus` and `focusin`, to the focused node
+  (`FocusTransition::window_activation`). `FocusRegistry::set_window_blurred`
+  holds back a later `blur` of that node while the window is inactive.
+- An inert scroll container records its offset in `scroll_recorder` like any
+  other, and `settle_wheel` always restores it and leaves the wheel to the
+  next container.
 
 ## Application menu
 

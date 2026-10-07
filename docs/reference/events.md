@@ -85,14 +85,12 @@ fields:
 - `pageX` / `pageY` — identical to `clientX`/`clientY`; nothing here
   scrolls the page itself, which is the only thing that would tell them
   apart
-- `movementX` / `movementY` — how far the pointer moved:
-  - `mousemove`, and `mouseover`, `mouseout`, `mouseenter` and `mouseleave`
-    caused by a pointer move: the distance since the previous pointer move,
-    `0` for the first move.
-    Every event from one move reports the same value
-  - every other event: the event position minus the position of the last
-    pointer move
-  - After the pointer leaves the window, the next move reports `0`
+- `screenX` / `screenY` — the window's position on the screen plus
+  `clientX`/`clientY`. On Wayland the window has no position, so they equal
+  `clientX`/`clientY`
+- `movementX` / `movementY` — on `mousemove`, the distance since the previous
+  pointer move, `0` for the first move and for the first move after the
+  pointer leaves the window. Every other event reports `0`
 - `button` — the button the event is about; `0` for a move, which isn't
   about any one button
 - [`buttons`](https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/buttons) —
@@ -128,8 +126,8 @@ element under the pointer changes.
 
 An element already under the pointer when it mounts, or one a layout change
 puts under a still pointer, fires these events the next time its hover state
-is checked. They report `0` for `movementX`/`movementY` and `null` for
-`relatedTarget` when no element was hovered before.
+is checked. They report `null` for `relatedTarget` when no element was hovered
+before.
 
 ### `click`
 
@@ -182,8 +180,9 @@ node have run, whether or not one of them called `stopPropagation()`. The
 `target` is the deepest element under the pointer.
 
 `contextmenu` carries the mouse fields above with `button` `2`, `buttons` `2`
-and `detail` `0`, and the `PointerEvent` fields of a mouse `click`. The
-`mouseup` follows it. `preventDefault()` only sets `defaultPrevented`.
+and `detail` `0`, and the `PointerEvent` fields of a mouse `click` with
+`pressure` `0.5`. The `mouseup` follows it. `preventDefault()` only sets
+`defaultPrevented`.
 
 ## Wheel
 
@@ -224,8 +223,9 @@ are a subset of the DOM's
   on macOS and `Control` elsewhere. Other names return `false`. Mouse events
   carry it as well.
 
-The fields above are the supported set. `keydown` and `keyup` are the only key
-events.
+Pressing or releasing `Shift`, `Control`, `Alt` or `Meta` alone fires
+`keydown` or `keyup` with that name as `key`. The modifier fields hold the
+state after the change. `keydown` and `keyup` are the only key events.
 
 ## Focus
 
@@ -234,8 +234,8 @@ including a negative one. A text node ignores `tabindex`. So does a node that
 has `display: none`, `inert` or `hidden` on itself or on any ancestor. `hidden`
 renders the node as `display: none` unless the node sets its own `display`.
 `hidden="until-found"` is treated as unhidden. An `inert` subtree receives no
-mouse events and never becomes `event.target`. Wheel scrolling of an `inert`
-scroll container still works.
+mouse events and never becomes `event.target`. An `inert` scroll container
+ignores the wheel and leaves it to the next container out.
 
 A click on a node with `tabindex` focuses it, and so does `.focus()`.
 `.focus()` on any other node is ignored. A click on a plain child focuses the
@@ -255,6 +255,10 @@ A press on the last node leaves nothing focused, and the next one starts again
 at the first node. `preventDefault()` in the `keydown` of `Tab` cancels the
 move. The system handles `Ctrl`, `Alt` and `Meta` with `Tab`. Focus stays in
 the window.
+
+When the window loses focus, the focused node fires `blur` and `focusout`.
+It fires `focus` and `focusin` when the window regains focus. `relatedTarget`
+is `null` in all four.
 
 A change of any of these applies at once. When the node becomes unfocusable, it
 leaves focus and the host fires `blur` and `focusout`. `el.tabIndex = n` sets

@@ -217,6 +217,11 @@ pub struct MousePayload {
     /// [`EventSink`] implementor supplies the real value.
     pub movement_x: f32,
     pub movement_y: f32,
+    /// The window's position on the screen plus the client position
+    /// (`screenX`/`screenY`). 0 when built by this crate; the [`EventSink`]
+    /// implementor supplies the real value.
+    pub screen_x: f32,
+    pub screen_y: f32,
     /// The button this event is about. 0 for a move, which isn't about any
     /// one button.
     pub button: u8,
@@ -251,6 +256,8 @@ impl MousePayload {
             client_y: f32::from(position.y),
             movement_x: 0.0,
             movement_y: 0.0,
+            screen_x: 0.0,
+            screen_y: 0.0,
             button: 0,
             buttons: 0,
             detail: 0,
@@ -331,6 +338,8 @@ impl From<&MouseDownEvent> for EventPayload {
             client_y: f32::from(event.position.y),
             movement_x: 0.0,
             movement_y: 0.0,
+            screen_x: 0.0,
+            screen_y: 0.0,
             button: bit,
             buttons: dom_buttons_bit(bit),
             detail: u32::try_from(event.click_count).unwrap_or(u32::MAX),
@@ -349,6 +358,8 @@ impl From<&MouseUpEvent> for EventPayload {
             client_y: f32::from(event.position.y),
             movement_x: 0.0,
             movement_y: 0.0,
+            screen_x: 0.0,
+            screen_y: 0.0,
             button: bit,
             buttons: 0,
             detail: u32::try_from(event.click_count).unwrap_or(u32::MAX),
@@ -405,6 +416,8 @@ impl From<&MouseMoveEvent> for EventPayload {
             client_y: f32::from(event.position.y),
             movement_x: 0.0,
             movement_y: 0.0,
+            screen_x: 0.0,
+            screen_y: 0.0,
             button: 0,
             buttons: event
                 .pressed_button
@@ -431,6 +444,8 @@ impl From<&ScrollWheelEvent> for EventPayload {
                 client_y: f32::from(event.position.y),
                 movement_x: 0.0,
                 movement_y: 0.0,
+                screen_x: 0.0,
+                screen_y: 0.0,
                 // Not about any one button; `inca-bridge` fills in the
                 // buttons actually held.
                 button: 0,
@@ -572,6 +587,11 @@ pub trait EventSink {
     /// Reports that the pointer left the window. The next
     /// [`EventSink::pointer_moved`] starts a new measurement.
     fn pointer_left(&self);
+
+    /// Reports the window's modifier keys after a change. The sink fires
+    /// `keydown` for each modifier pressed and `keyup` for each released, at
+    /// the focused node or the root.
+    fn modifiers_changed(&self, modifiers: gpui::Modifiers, window: &mut Window, cx: &mut App);
 
     /// Reports that `node_id` became hovered or stopped being hovered, as
     /// `gpui` decides it. The sink fires `mouseover`, `mouseout`,

@@ -16,7 +16,7 @@ use gpui::{
     TestAppContext, VisualTestContext, Window, point, prelude::*, px,
 };
 use inca_bridge::{EventDispatcher, Host};
-use inca_gpui::{EventSink, NodeId, render_tree_with_events};
+use inca_gpui::{NodeId, render_tree_with_events};
 use inca_jsenv::{Engine, EngineError};
 
 fn build_clickable_tree() -> (Rc<RefCell<Host>>, NodeId) {
@@ -152,7 +152,7 @@ fn click_dispatches_to_js_exactly_once(cx: &mut TestAppContext) {
             concat!(
                 r#"{{"type":"click","target":{node},"currentTarget":{node},"#,
                 r#""bubbles":true,"cancelable":true,"composed":true,"defaultPrevented":false,"eventPhase":2,"isTrusted":true,"#,
-                r#""clientX":10,"clientY":10,"x":10,"y":10,"relatedTarget":null,"pageX":10,"pageY":10,"#,
+                r#""clientX":10,"clientY":10,"screenX":10,"screenY":10,"x":10,"y":10,"relatedTarget":null,"pageX":10,"pageY":10,"#,
                 r#""movementX":0,"movementY":0,"button":0,"buttons":0,"detail":1,"#,
                 r#""pointerId":1,"pointerType":"mouse","isPrimary":true,"width":1,"height":1,"pressure":0,"#,
                 r#""ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false,"eventId":1}}"#
@@ -371,7 +371,7 @@ fn mousedown_carries_dom_shaped_fields(cx: &mut TestAppContext) {
                 r#"{{"type":"mousedown","target":{node},"currentTarget":{node},"#,
                 r#""bubbles":true,"cancelable":true,"composed":true,"defaultPrevented":false,"#,
                 r#""eventPhase":2,"isTrusted":true,"#,
-                r#""clientX":10,"clientY":20,"x":10,"y":20,"relatedTarget":null,"pageX":10,"pageY":20,"#,
+                r#""clientX":10,"clientY":20,"screenX":10,"screenY":20,"x":10,"y":20,"relatedTarget":null,"pageX":10,"pageY":20,"#,
                 r#""movementX":0,"movementY":0,"button":0,"buttons":1,"detail":1,"#,
                 r#""ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false,"#,
                 r#""eventId":1}}"#
@@ -449,7 +449,7 @@ fn wheel_carries_dom_shaped_delta_fields(cx: &mut TestAppContext) {
                 r#"{{"type":"wheel","target":{node},"currentTarget":{node},"#,
                 r#""bubbles":true,"cancelable":true,"composed":true,"defaultPrevented":false,"#,
                 r#""eventPhase":2,"isTrusted":true,"#,
-                r#""clientX":10,"clientY":10,"x":10,"y":10,"relatedTarget":null,"pageX":10,"pageY":10,"#,
+                r#""clientX":10,"clientY":10,"screenX":10,"screenY":10,"x":10,"y":10,"relatedTarget":null,"pageX":10,"pageY":10,"#,
                 r#""movementX":0,"movementY":0,"button":0,"buttons":0,"detail":0,"#,
                 r#""ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false,"#,
                 r#""deltaX":0,"deltaY":5,"deltaZ":0,"deltaMode":0,"#,
@@ -740,8 +740,8 @@ fn mouseenter_carries_dom_shaped_fields(cx: &mut TestAppContext) {
                 r#"{{"type":"mouseenter","target":{node},"currentTarget":{node},"#,
                 r#""bubbles":false,"cancelable":false,"composed":false,"defaultPrevented":false,"#,
                 r#""eventPhase":2,"isTrusted":true,"#,
-                r#""clientX":10,"clientY":20,"x":10,"y":20,"relatedTarget":null,"pageX":10,"pageY":20,"#,
-                r#""movementX":-190,"movementY":-180,"button":0,"buttons":0,"detail":0,"#,
+                r#""clientX":10,"clientY":20,"screenX":10,"screenY":20,"x":10,"y":20,"relatedTarget":null,"pageX":10,"pageY":20,"#,
+                r#""movementX":0,"movementY":0,"button":0,"buttons":0,"detail":0,"#,
                 r#""ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false}}"#
             ),
             node = node
@@ -836,10 +836,10 @@ fn hover_and_mousemove_wired_together_fire_independently(cx: &mut TestAppContext
     );
 }
 
-/// One pointer move produces both `mousemove` and `mouseenter`, and both
-/// report that move's delta.
+/// One pointer move produces both `mousemove` and `mouseenter`. Only
+/// `mousemove` reports the delta.
 #[gpui::test]
-fn one_move_gives_mousemove_and_mouseenter_the_same_movement(cx: &mut TestAppContext) {
+fn one_move_gives_mousemove_the_delta_and_mouseenter_zero(cx: &mut TestAppContext) {
     let host = Rc::new(RefCell::new(Host::default()));
     let node = {
         let mut host = host.borrow_mut();
@@ -893,7 +893,7 @@ fn one_move_gives_mousemove_and_mouseenter_the_same_movement(cx: &mut TestAppCon
     .unwrap();
     assert_eq!(
         seen,
-        serde_json::json!([["mouseenter", -190, -180], ["mousemove", -190, -180]])
+        serde_json::json!([["mouseenter", 0, 0], ["mousemove", -190, -180]])
     );
 }
 
@@ -1075,69 +1075,6 @@ fn an_inert_child_is_never_the_event_target(cx: &mut TestAppContext) {
     let seen: Vec<u32> =
         serde_json::from_str(&engine.eval::<String>("JSON.stringify(seen)").unwrap()).unwrap();
     assert_eq!(seen, vec![parent]);
-}
-
-/// A pointer move from one sibling into the next gives the first sibling's
-/// `mouseleave` and the second's `mousemove` the same movement.
-#[gpui::test]
-fn leave_and_mousemove_on_different_nodes_share_one_movement(cx: &mut TestAppContext) {
-    let (host, root) = build_tree_listening_for("click");
-    {
-        let mut host = host.borrow_mut();
-        for (event, id) in [("mouseleave", 0), ("mousemove", 1)] {
-            let child = host.tree.create_node("div").unwrap();
-            host.tree.set_style(child, "width", 100.0).unwrap();
-            host.tree.set_style(child, "height", 100.0).unwrap();
-            host.tree.append_child(root, child).unwrap();
-            host.listeners.register(child, event, id);
-            if id == 0 {
-                host.listeners.register(child, "mousemove", id);
-            }
-        }
-    }
-    let engine = Rc::new(Engine::new().unwrap());
-    engine
-        .eval::<()>(
-            "globalThis.seen = []; \
-             const record = (e) => { \
-                 globalThis.seen.push([e.type, e.movementX, e.movementY]); }; \
-             globalThis.__inca_callbacks__ = { 0: record, 1: record };",
-        )
-        .unwrap();
-    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
-    let window = cx.add_window(|_, _| ClickableRoot {
-        host: Rc::clone(&host),
-        node: root,
-        dispatcher,
-    });
-    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-        .unwrap();
-    let mut cx = VisualTestContext::from_window(window.into(), cx);
-
-    cx.simulate_mouse_move(
-        point(px(10.0), px(10.0)),
-        None::<MouseButton>,
-        Modifiers::none(),
-    );
-    engine.eval::<()>("globalThis.seen = [];").unwrap();
-
-    cx.simulate_mouse_move(
-        point(px(30.0), px(150.0)),
-        None::<MouseButton>,
-        Modifiers::none(),
-    );
-    cx.run_until_parked();
-
-    let seen: serde_json::Value = serde_json::from_str(
-        &engine
-            .eval::<String>("JSON.stringify(globalThis.seen.slice().sort())")
-            .unwrap(),
-    )
-    .unwrap();
-    assert_eq!(
-        seen,
-        serde_json::json!([["mouseleave", 20, 140], ["mousemove", 20, 140]])
-    );
 }
 
 /// A second genuine `mousemove` at the same position reports no movement,
@@ -1360,86 +1297,10 @@ fn move_to(cx: &mut VisualTestContext, x: f32, y: f32) {
     cx.simulate_mouse_move(point(px(x), px(y)), None::<MouseButton>, Modifiers::none());
 }
 
-/// Redraws with the pointer still, so a changed layout is hit-tested again.
-fn relayout(cx: &mut VisualTestContext) {
-    cx.update(|window, _| window.refresh());
-    cx.run_until_parked();
-}
-
-fn widen_a(panes: &Panes) {
-    panes
-        .host
-        .borrow_mut()
-        .tree
-        .set_style(panes.a, "width", 200.0)
-        .unwrap();
-}
-
-/// A click at one position and a move over an unlistened area leave the next
-/// hover with nothing to measure from the click.
-#[gpui::test]
-fn a_hover_after_a_click_elsewhere_reports_zero_movement(cx: &mut TestAppContext) {
-    let panes = build_panes(&["mouseenter"], &["mousedown"]);
-    let mut cx = mount_panes(cx, &panes);
-
-    cx.simulate_mouse_down(
-        point(px(160.0), px(60.0)),
-        MouseButton::Left,
-        Modifiers::none(),
-    );
-    move_to(&mut cx, 170.0, 60.0);
-    take_seen(&panes.engine);
-
-    widen_a(&panes);
-    relayout(&mut cx);
-
-    assert_eq!(
-        take_seen(&panes.engine),
-        [seen_event("mouseenter", 0.0, 0.0)]
-    );
-}
-
-#[gpui::test]
-fn a_layout_change_under_a_still_pointer_gives_mouseenter_zero_movement(cx: &mut TestAppContext) {
-    let panes = build_panes(&["mouseenter"], &[]);
-    let mut cx = mount_panes(cx, &panes);
-    move_to(&mut cx, 20.0, 20.0);
-    move_to(&mut cx, 150.0, 20.0);
-    take_seen(&panes.engine);
-
-    widen_a(&panes);
-    relayout(&mut cx);
-
-    assert_eq!(
-        take_seen(&panes.engine),
-        [seen_event("mouseenter", 0.0, 0.0)]
-    );
-}
-
-/// An element already under the pointer when it mounts is entered with no
-/// movement, whatever an earlier move left behind.
-#[gpui::test]
-fn a_mount_time_hover_reports_zero_movement(cx: &mut TestAppContext) {
-    let panes = build_panes(&["mouseenter"], &[]);
-    // The window's pointer starts at (0,0). The seed is a nonzero baseline.
-    cx.update(|app| {
-        panes
-            .dispatcher
-            .pointer_moved(point(px(40.0), px(70.0)), app);
-    });
-
-    let _cx = mount_panes(cx, &panes);
-
-    assert_eq!(
-        take_seen(&panes.engine),
-        [seen_event("mouseenter", 0.0, 0.0)]
-    );
-}
-
 /// Moves over a node nothing listens on still advance the baseline.
 #[gpui::test]
 fn moves_over_an_unlistened_node_advance_the_movement_baseline(cx: &mut TestAppContext) {
-    let panes = build_panes(&["mouseenter"], &[]);
+    let panes = build_panes(&["mousemove"], &[]);
     let mut cx = mount_panes(cx, &panes);
     move_to(&mut cx, 10.0, 10.0);
     take_seen(&panes.engine);
@@ -1450,34 +1311,14 @@ fn moves_over_an_unlistened_node_advance_the_movement_baseline(cx: &mut TestAppC
 
     assert_eq!(
         take_seen(&panes.engine),
-        [seen_event("mouseenter", -150.0, 0.0)]
+        [seen_event("mousemove", -150.0, 0.0)]
     );
 }
 
-/// A drag move is a pointer move like any other.
+/// A move that leaves a pane gives its `mouseleave` 0 and its `mousemove` the
+/// delta, with a `mousedown` between the two moves.
 #[gpui::test]
-fn a_drag_move_over_an_unlistened_area_advances_the_baseline(cx: &mut TestAppContext) {
-    let panes = build_panes(&["mouseenter"], &[]);
-    let mut cx = mount_panes(cx, &panes);
-    move_to(&mut cx, 10.0, 10.0);
-    take_seen(&panes.engine);
-
-    cx.simulate_mouse_move(
-        point(px(150.0), px(10.0)),
-        Some(MouseButton::Left),
-        Modifiers::none(),
-    );
-    move_to(&mut cx, 10.0, 10.0);
-
-    assert_eq!(
-        take_seen(&panes.engine),
-        [seen_event("mouseenter", -140.0, 0.0)]
-    );
-}
-
-/// A `mousedown` between the two moves leaves the baseline in place.
-#[gpui::test]
-fn mouseleave_from_a_move_reports_that_moves_mousemove_delta(cx: &mut TestAppContext) {
+fn mouseleave_reports_zero_where_mousemove_reports_the_delta(cx: &mut TestAppContext) {
     let panes = build_panes(&["mouseleave"], &["mousemove", "mousedown"]);
     let mut cx = mount_panes(cx, &panes);
     move_to(&mut cx, 10.0, 10.0);
@@ -1495,32 +1336,9 @@ fn mouseleave_from_a_move_reports_that_moves_mousemove_delta(cx: &mut TestAppCon
     assert_eq!(
         seen,
         [
-            seen_event("mouseleave", 190.0, 0.0),
+            seen_event("mouseleave", 0.0, 0.0),
             seen_event("mousemove", 190.0, 0.0)
         ]
-    );
-}
-
-/// After a window exit, a layout change under the pointer enters with no
-/// movement.
-#[gpui::test]
-fn a_hover_after_a_window_exit_reports_zero_movement(cx: &mut TestAppContext) {
-    let panes = build_panes(&["mouseenter"], &[]);
-    let mut cx = mount_panes(cx, &panes);
-    move_to(&mut cx, 10.0, 10.0);
-    move_to(&mut cx, 150.0, 20.0);
-    cx.simulate_event(MouseExitEvent {
-        position: point(px(150.0), px(20.0)),
-        ..Default::default()
-    });
-    take_seen(&panes.engine);
-
-    widen_a(&panes);
-    relayout(&mut cx);
-
-    assert_eq!(
-        take_seen(&panes.engine),
-        [seen_event("mouseenter", 0.0, 0.0)]
     );
 }
 
@@ -1532,35 +1350,24 @@ fn wheel_at(cx: &mut VisualTestContext, x: f32, y: f32) {
     });
 }
 
-/// With no pointer move yet, a wheel has nothing to measure from.
+/// A move with a button held reports the delta like any other move.
 #[gpui::test]
-fn a_wheel_before_any_move_reports_zero_movement(cx: &mut TestAppContext) {
-    let panes = build_panes(&[], &["wheel"]);
-    let mut cx = mount_panes(cx, &panes);
-    take_seen(&panes.engine);
-
-    wheel_at(&mut cx, 30.0, 40.0);
-
-    assert_eq!(take_seen(&panes.engine), [seen_event("wheel", 0.0, 0.0)]);
-}
-
-/// A wheel measures from the last move, and from nothing after a window exit.
-#[gpui::test]
-fn a_wheel_measures_from_the_last_move_and_from_nothing_after_an_exit(cx: &mut TestAppContext) {
-    let panes = build_panes(&[], &["wheel"]);
+fn a_drag_move_reports_the_delta(cx: &mut TestAppContext) {
+    let panes = build_panes(&[], &["mousemove"]);
     let mut cx = mount_panes(cx, &panes);
     move_to(&mut cx, 10.0, 10.0);
     take_seen(&panes.engine);
 
-    wheel_at(&mut cx, 30.0, 40.0);
-    assert_eq!(take_seen(&panes.engine), [seen_event("wheel", 20.0, 30.0)]);
+    cx.simulate_mouse_move(
+        point(px(150.0), px(10.0)),
+        Some(MouseButton::Left),
+        Modifiers::none(),
+    );
 
-    cx.simulate_event(MouseExitEvent {
-        position: point(px(10.0), px(10.0)),
-        ..Default::default()
-    });
-    wheel_at(&mut cx, 30.0, 40.0);
-    assert_eq!(take_seen(&panes.engine), [seen_event("wheel", 0.0, 0.0)]);
+    assert_eq!(
+        take_seen(&panes.engine),
+        [seen_event("mousemove", 140.0, 0.0)]
+    );
 }
 
 /// A window exit's `mouseleave` reports 0, and so does the first move after
@@ -1588,12 +1395,10 @@ fn a_window_exit_gives_mouseleave_zero_and_resets_the_next_move(cx: &mut TestApp
     );
 }
 
-/// `mousedown`, `mouseup` and `wheel` measure from the last pointer move and
-/// leave it where it was, so the move that follows reports the same distance.
+/// `mousedown`, `mouseup` and `wheel` report 0 and leave the baseline where
+/// the last move put it, so the move that follows reports the full distance.
 #[gpui::test]
-fn button_and_wheel_events_measure_from_the_last_move_and_leave_it_in_place(
-    cx: &mut TestAppContext,
-) {
+fn button_and_wheel_events_report_zero_and_keep_the_baseline(cx: &mut TestAppContext) {
     let panes = build_panes(&[], &["mousedown", "mouseup", "wheel", "mousemove"]);
     let mut cx = mount_panes(cx, &panes);
     move_to(&mut cx, 10.0, 10.0);
@@ -1608,9 +1413,9 @@ fn button_and_wheel_events_measure_from_the_last_move_and_leave_it_in_place(
     assert_eq!(
         take_seen(&panes.engine),
         [
-            seen_event("mousedown", 20.0, 30.0),
-            seen_event("mouseup", 20.0, 30.0),
-            seen_event("wheel", 20.0, 30.0),
+            seen_event("mousedown", 0.0, 0.0),
+            seen_event("mouseup", 0.0, 0.0),
+            seen_event("wheel", 0.0, 0.0),
             seen_event("mousemove", 20.0, 30.0),
         ]
     );

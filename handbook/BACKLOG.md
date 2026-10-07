@@ -470,6 +470,11 @@ A fixed entry is deleted and its ID is never reused.
     target's bounds are computed once, for hitbox insertion, and need to be
     kept where `dispatch` can reach them, since `gpui` has no production API
     to look a node's bounds up by id at event time.
+  - `screenX`/`screenY` add `Window::bounds`' origin to the client position.
+    Wayland reports no window position, so they equal `clientX`/`clientY`
+    there, and X11 may report an origin that leaves out the window
+    decorations. The fix direction is a platform query in `gpui` for the
+    client area's screen position.
   - `isComposing` needs the text-editing/IME unit, which hasn't started.
   - Blocked on `gpui` itself: `code` and `location` — `Keystroke`
     (`third_party/zed/crates/gpui/src/platform/keystroke.rs`) carries
@@ -498,11 +503,10 @@ A fixed entry is deleted and its ID is never reused.
 - **B-146 Pointer-field values differ between engines**
   `Units: bridge,docs · Size: S · Impact: Low`
 
-  `click`, `auxclick` and `contextmenu` report `pointerId` 1, `isPrimary` true,
-  `pressure` 0 and, for `contextmenu`, `detail` 0. Firefox reports `pointerId` 0
-  and `contextmenu` `detail` 1, Chromium reports `isPrimary` false and WebKit
-  reports `contextmenu` `pressure` 0.5. Fix: revisit the values when the
-  `pointer*` events (B-148) land.
+  `click`, `auxclick` and `contextmenu` report `pointerId` 1, `isPrimary` true
+  and, for `contextmenu`, `detail` 0. Firefox reports `pointerId` 0 and
+  `contextmenu` `detail` 1, and Chromium reports `isPrimary` false. Fix:
+  revisit the values when the `pointer*` events (B-148) land.
 
 - **B-148 The `pointer*` events are unsupported**
   `Units: gpui,bridge,docs · Size: L · Impact: Medium`
@@ -1037,13 +1041,6 @@ A fixed entry is deleted and its ID is never reused.
   adds a `content-visibility` style that skips painting and the focus
   handles of the subtree, and maps `until-found` to it.
 
-- **B-144 An `inert` scroll container still scrolls with the wheel**
-  `Units: gpui · Size: S · Impact: Low`
-
-  The wheel scrolls the container through gpui's own handling, which ignores
-  the empty listener mask. The fix drops the container's `overflow` scroll
-  while it is inert, keeping its offset.
-
 - **B-142 `visibility` style is unsupported**
   `Units: gpui,bridge · Size: M · Impact: Low`
 
@@ -1090,3 +1087,13 @@ A fixed entry is deleted and its ID is never reused.
   first stop. Browsers continue from the clicked position. The fix keeps a
   starting-point node set by the mouse target and clears it when focus moves
   by another route. `tab_move` starts from it when nothing is focused.
+
+- **B-150 A focus change in an inactive window fires `focus` at once**
+  `Units: bridge · Size: S · Impact: Low`
+
+  `focusNode()`, `blurNode()` and a `tabindex` change report their `focus` and
+  `blur` events on the next frame, whether or not the window is active.
+  Browsers hold the events until the window regains focus. The fix has
+  `FocusRegistry::apply_pending` keep the transitions while
+  `window.is_window_active()` is false and the activation observer dispatch
+  them.

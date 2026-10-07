@@ -25,7 +25,7 @@ use gpui::{
     ScrollHandle, ScrollWheelEvent, StyleRefinement, Window, canvas, div, point, px, rgb,
 };
 
-use crate::event_sink::{EventMask, EventPayload, EventSink};
+use crate::event_sink::{EventMask, EventPayload, EventSink, MousePayload};
 use crate::tree::{AttributeValue, NodeId, VirtualNode, VirtualTree};
 
 /// What kind of element a [`VirtualNode`](crate::tree::VirtualNode) maps to.
@@ -832,6 +832,19 @@ where
     })
 }
 
+/// Reports each `ModifiersChangedEvent` of the window to the sink, which fires
+/// the modifier key events. The root sees every one.
+fn wire_modifier_keys<Elem, E>(element: Elem, dispatch: &E) -> Elem
+where
+    Elem: InteractiveElement,
+    E: EventSink + Clone + 'static,
+{
+    let sink = dispatch.clone();
+    element.on_modifiers_changed(move |event, window, cx| {
+        sink.modifiers_changed(event.modifiers, window, cx);
+    })
+}
+
 // The Space press waiting for its release. Any other key press or mouse press
 // cancels it.
 #[derive(Default)]
@@ -922,9 +935,9 @@ where
 }
 
 /// Every scroll container's offset before the wheel event being dispatched,
-/// outermost first.
+/// outermost first, and whether the container is inert.
 #[derive(Default)]
-struct WheelSnapshots(Vec<(ScrollHandle, Point<Pixels>)>);
+struct WheelSnapshots(Vec<(ScrollHandle, Point<Pixels>, bool)>);
 
 impl Global for WheelSnapshots {}
 
@@ -932,7 +945,7 @@ impl Global for WheelSnapshots {}
 /// capture phase, which runs before any bubble-phase scroll step. Children
 /// paint after their parent, and a container adds this before its own
 /// children, so containers record outermost first.
-fn scroll_recorder(handle: ScrollHandle) -> impl IntoElement {
+fn scroll_recorder(handle: ScrollHandle, inert: bool) -> impl IntoElement {
     canvas(
         |_, _, _| (),
         move |_, (), window, _| {
@@ -942,7 +955,7 @@ fn scroll_recorder(handle: ScrollHandle) -> impl IntoElement {
                 }
                 let snapshots = &mut cx.default_global::<WheelSnapshots>().0;
                 let first = snapshots.is_empty();
-                snapshots.push((handle.clone(), handle.offset()));
+                snapshots.push((handle.clone(), handle.offset(), inert));
                 if first {
                     window.defer(cx, settle_wheel);
                 }
@@ -1033,7 +1046,12 @@ where
 fn settle_wheel(window: &mut Window, cx: &mut App) {
     let snapshots = std::mem::take(&mut cx.default_global::<WheelSnapshots>().0);
     let mut settled = window.default_prevented();
-    for (handle, before) in snapshots.into_iter().rev() {
+    for (handle, before, inert) in snapshots.into_iter().rev() {
+        // An inert container never scrolls and leaves the wheel to the next.
+        if inert {
+            handle.set_offset(before);
+            continue;
+        }
         // `gpui` clamps the offset on the next draw; compare as it will.
         let (offset, max) = (handle.offset(), handle.max_offset());
         let moved = point(
@@ -1049,7 +1067,8 @@ fn settle_wheel(window: &mut Window, cx: &mut App) {
 }
 
 /// Tracks a scroll container's [`ScrollHandle`] and records its offset for
-/// [`settle_wheel`]. Without a handle `gpui` scrolls it on its own.
+/// [`settle_wheel`], which keeps an inert container at that offset. Without a
+/// handle `gpui` scrolls it on its own.
 fn wire_scroll<Elem, E>(element: Elem, dispatch: Option<&E>, spec: &ElementSpec) -> Elem
 where
     Elem: StatefulInteractiveElement + ParentElement + FluentBuilder,
@@ -1059,7 +1078,8 @@ where
         .filter(|_| spec.style.scrolls())
         .and_then(|d| d.scroll_handle(spec.id));
     element.when_some(handle, |el, handle| {
-        el.track_scroll(&handle).child(scroll_recorder(handle))
+        el.track_scroll(&handle)
+            .child(scroll_recorder(handle, spec.inert))
     })
 }
 
@@ -1159,7 +1179,7 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
             });
 
             let element = element.when_some(dispatch.filter(|_| root), |el, dispatch| {
-                tab_on_capture(el, dispatch.clone())
+                wire_modifier_keys(tab_on_capture(el, dispatch.clone()), dispatch)
             });
 
             // Every container of a tree with a mouse listener reports its
@@ -1244,6 +1264,14 @@ where
                 if double_clicks
                     && matches!(event, gpui::ClickEvent::Mouse(c) if c.up.click_count == 2)
                 {
+                    // `dblclick` carries the mouse fields only.
+                    let payload = match payload {
+                        EventPayload::Mouse(mouse) => EventPayload::Mouse(MousePayload {
+                            pointer: None,
+                            ..mouse
+                        }),
+                        other => other,
+                    };
                     listening.dispatch(id, "dblclick", &payload, window, cx);
                 }
             })
@@ -1320,6 +1348,8 @@ impl EventSink for NeverListens {
     fn context_menu(&self, _payload: &EventPayload, _window: &mut Window, _cx: &mut App) {}
 
     fn pointer_left(&self) {}
+
+    fn modifiers_changed(&self, _: gpui::Modifiers, _: &mut Window, _: &mut App) {}
 
     fn hover_changed(&self, _node_id: NodeId, _hovered: bool, _window: &mut Window, _cx: &mut App) {
     }
@@ -2519,6 +2549,8 @@ mod tests {
             fn context_menu(&self, _payload: &EventPayload, _window: &mut Window, _cx: &mut App) {}
 
             fn pointer_left(&self) {}
+
+            fn modifiers_changed(&self, _: gpui::Modifiers, _: &mut Window, _: &mut App) {}
 
             fn hover_changed(&self, _: NodeId, _: bool, _: &mut Window, _: &mut App) {}
 

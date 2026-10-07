@@ -36,6 +36,16 @@ pub struct FocusTransition {
 }
 
 impl FocusTransition {
+    /// The window lost (`active` false) or regained the focus of `node`. The
+    /// node keeps its focus in the tree. No other node is involved.
+    #[must_use]
+    pub fn window_activation(node: NodeId, active: bool) -> Self {
+        Self {
+            blurred: (!active).then_some(node),
+            focused: active.then_some(node),
+        }
+    }
+
     /// Dispatches `blur`, `focusout`, `focus` and `focusin`, in that order,
     /// for whichever of `blurred`/`focused` this transition carries. Each
     /// carries the other node as `relatedTarget`. Call after releasing
@@ -86,6 +96,8 @@ pub struct FocusRegistry {
     // root container. It maps to no node.
     parked: Option<FocusHandle>,
     pending: VecDeque<PendingFocus>,
+    // Set while the window is inactive, after the focused node got its `blur`.
+    window_blurred: bool,
     pub(crate) tab_dirty: HashSet<NodeId>,
 }
 
@@ -270,6 +282,12 @@ impl FocusRegistry {
         self.parked.clone()
     }
 
+    /// Records that the window lost (`blurred`) or regained focus after the
+    /// focused node's `blur` or `focus` was reported.
+    pub fn set_window_blurred(&mut self, blurred: bool) {
+        self.window_blurred = blurred;
+    }
+
     /// Queues that `node_id` should be focused next frame.
     pub fn request_focus(&mut self, node_id: NodeId) {
         self.pending.push_back(PendingFocus::Focus(node_id));
@@ -373,8 +391,12 @@ impl FocusRegistry {
         if focused_now == self.focused {
             return None;
         }
-        let blurred = self.focused;
+        // The window's deactivation already blurred the old node.
+        let blurred = self.focused.filter(|_| !self.window_blurred);
         self.focused = focused_now;
+        if blurred.is_none() && focused_now.is_none() {
+            return None;
+        }
         Some(FocusTransition {
             blurred,
             focused: focused_now,

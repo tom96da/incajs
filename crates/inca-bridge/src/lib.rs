@@ -16,4 +16,4 @@ pub mod focus;
 pub use bindings::{EventListeners, Host};
 pub use dev::{DevSend, call_dev_receive, install_dev};
 pub use dispatch::{ErrorReporter, EventDispatcher, drain_jobs_and_refresh, stderr_reporter};
-pub use focus::FocusRegistry;
+pub use focus::{FocusRegistry, FocusTransition};

@@ -121,6 +121,9 @@ pub struct EventDispatcher {
     // Delta of the raw pointer move being dispatched now, shared by every
     // node and event name that move produces.
     current_movement: Rc<Cell<Option<(f32, f32)>>>,
+    /// The window's modifier keys as of the last change. `None` until
+    /// [`Self::sync_modifiers`] first reads them.
+    held_modifiers: Rc<Cell<Option<gpui::Modifiers>>>,
     /// Set while the `wheel` event being dispatched right now has been
     /// stopped. Later `wheel` dispatches skip their callbacks, and GPUI's own
     /// bubble carries on so a scroll container still scrolls.
@@ -155,6 +158,7 @@ impl EventDispatcher {
             held_buttons: Rc::new(Cell::new(0)),
             last_position: Rc::new(Cell::new(None)),
             current_movement: Rc::new(Cell::new(None)),
+            held_modifiers: Rc::new(Cell::new(None)),
             wheel_stopped: Rc::new(Cell::new(false)),
             last_event_id: Rc::new(Cell::new(0)),
             current_events: Rc::new(RefCell::new(HashMap::new())),
@@ -255,43 +259,28 @@ impl EventDispatcher {
         self.held_buttons.get()
     }
 
-    /// Returns `payload` with `movementX`/`movementY` set. `mousemove`,
-    /// `mouseenter`, `mouseleave`, `mouseover` and `mouseout` take the delta
-    /// of the raw move being dispatched, 0 when none is. Every other event
-    /// takes its position minus [`Self::last_position`], 0 when that is
-    /// `None`.
+    /// Returns `payload` with `movementX`/`movementY` set to the delta of the
+    /// raw pointer move being dispatched, for `mousemove`. Every other event
+    /// keeps 0.
     fn with_movement(&self, payload: &EventPayload, event: &str) -> EventPayload {
-        let movement_for = |mouse: &MousePayload| match event {
-            "mousemove" | "mouseenter" | "mouseleave" | "mouseover" | "mouseout" => {
-                self.current_movement.get().unwrap_or((0.0, 0.0))
-            }
-            _ => self.last_position.get().map_or((0.0, 0.0), |(x, y)| {
-                (mouse.client_x - x, mouse.client_y - y)
-            }),
-        };
         match payload {
-            EventPayload::Mouse(mouse) => {
-                let (movement_x, movement_y) = movement_for(mouse);
+            EventPayload::Mouse(mouse) if event == "mousemove" => {
+                let (movement_x, movement_y) = self.current_movement.get().unwrap_or((0.0, 0.0));
                 EventPayload::Mouse(MousePayload {
                     movement_x,
                     movement_y,
                     ..*mouse
                 })
             }
-            EventPayload::Wheel(wheel) => {
-                let (movement_x, movement_y) = movement_for(&wheel.mouse);
-                EventPayload::Wheel(WheelPayload {
-                    mouse: MousePayload {
-                        movement_x,
-                        movement_y,
-                        ..wheel.mouse
-                    },
-                    ..*wheel
-                })
-            }
-            EventPayload::None | EventPayload::Key(_) | EventPayload::Focus { .. } => {
-                payload.clone()
-            }
+            _ => payload.clone(),
+        }
+    }
+
+    /// Takes the window's current modifier keys as the baseline for the next
+    /// change. With `force` unset, an existing baseline stays.
+    pub fn sync_modifiers(&self, window: &Window, force: bool) {
+        if force || self.held_modifiers.get().is_none() {
+            self.held_modifiers.set(Some(window.modifiers()));
         }
     }
 
@@ -358,6 +347,7 @@ impl EventDispatcher {
 
         let payload = self.with_held_buttons(event, payload);
         let payload = self.with_movement(&payload, event);
+        let payload = with_screen(&payload, window);
         let state = self.event_state(event, cx);
         let target = self.target_of(node_id, event, window, cx);
         let outcome = self.run_callbacks(node_id, target, event, &payload, state, callback_ids);
@@ -543,6 +533,7 @@ impl EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) {
+        let payload = &with_screen(payload, window);
         let mut current = Some(start);
         while let Some(id) = current {
             let callback_ids = self
@@ -584,14 +575,11 @@ impl EventDispatcher {
         if self.hover_scheduled.replace(true) {
             return;
         }
-        // The move's delta is cleared before this runs, so carry it over.
-        let (this, movement) = (self.clone(), self.current_movement.get());
+        let this = self.clone();
         window.defer(cx, move |window, cx| {
             this.hover_scheduled.set(false);
             if !this.hover_settled.replace(false) {
-                this.current_movement.set(movement);
                 this.report_hover(this.deepest_hovered(), window, cx);
-                this.current_movement.set(None);
             }
         });
     }
@@ -634,7 +622,7 @@ impl EventDispatcher {
     }
 
     /// [`Self::bubble_from`] for a mouse event whose payload still needs its
-    /// held buttons and movement.
+    /// held buttons.
     fn bubble_prepared(
         &self,
         start: NodeId,
@@ -643,7 +631,7 @@ impl EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) {
-        let payload = self.with_movement(&self.with_held_buttons(event, payload), event);
+        let payload = self.with_held_buttons(event, payload);
         self.bubble_from(start, event, &payload, window, cx);
     }
 
@@ -665,7 +653,8 @@ impl EventDispatcher {
         if callback_ids.is_empty() {
             return;
         }
-        let payload = self.with_movement(&self.with_held_buttons(event, payload), event);
+        let payload = self.with_held_buttons(event, payload);
+        let payload = with_screen(&payload, window);
         let state = self.event_state(event, cx);
         self.run_callbacks(node_id, node_id, event, &payload, state, callback_ids);
         self.drain_jobs_and_refresh(window);
@@ -674,6 +663,25 @@ impl EventDispatcher {
     /// [`drain_jobs_and_refresh`] with this dispatcher's engine and reporter.
     pub fn drain_jobs_and_refresh(&self, window: &mut Window) {
         drain_jobs_and_refresh(&self.engine, &self.reporter, window);
+    }
+}
+
+/// Returns `payload` with `screenX`/`screenY` set to the window's position
+/// on the screen plus the client position.
+fn with_screen(payload: &EventPayload, window: &Window) -> EventPayload {
+    let origin = window.bounds().origin;
+    let place = |mouse: &MousePayload| MousePayload {
+        screen_x: f32::from(origin.x) + mouse.client_x,
+        screen_y: f32::from(origin.y) + mouse.client_y,
+        ..*mouse
+    };
+    match payload {
+        EventPayload::Mouse(mouse) => EventPayload::Mouse(place(mouse)),
+        EventPayload::Wheel(wheel) => EventPayload::Wheel(WheelPayload {
+            mouse: place(&wheel.mouse),
+            ..*wheel
+        }),
+        _ => payload.clone(),
     }
 }
 
@@ -827,6 +835,8 @@ fn set_payload(event_object: &Object, payload: &EventPayload) -> rquickjs::Resul
 fn set_mouse_fields(event_object: &Object, mouse: &MousePayload) -> rquickjs::Result<()> {
     event_object.set("clientX", mouse.client_x)?;
     event_object.set("clientY", mouse.client_y)?;
+    event_object.set("screenX", mouse.screen_x)?;
+    event_object.set("screenY", mouse.screen_y)?;
     event_object.set("x", mouse.client_x)?;
     event_object.set("y", mouse.client_y)?;
     match mouse.related_target {
@@ -852,7 +862,8 @@ fn set_mouse_fields(event_object: &Object, mouse: &MousePayload) -> rquickjs::Re
         event_object.set("isPrimary", primary)?;
         event_object.set("width", 1)?;
         event_object.set("height", 1)?;
-        event_object.set("pressure", 0)?;
+        // Pointer events report 0.5 while a button is held.
+        event_object.set("pressure", if mouse.buttons == 0 { 0.0 } else { 0.5 })?;
     }
     set_modifier_fields(event_object, mouse.modifiers)
 }
@@ -966,8 +977,36 @@ impl EventSink for EventDispatcher {
     fn context_menu(&self, payload: &EventPayload, window: &mut Window, cx: &mut App) {
         let (root, target) = (self.host.borrow().root, inca_gpui::mouse_target(cx));
         let start = self.resolve(target, root);
-        let payload = self.with_movement(payload, "contextmenu");
-        self.bubble_from(start, "contextmenu", &payload, window, cx);
+        self.bubble_from(start, "contextmenu", payload, window, cx);
+    }
+
+    // Changed flags fire in the order Shift, Control, Alt, Meta.
+    fn modifiers_changed(&self, modifiers: gpui::Modifiers, window: &mut Window, cx: &mut App) {
+        let before = self
+            .held_modifiers
+            .replace(Some(modifiers))
+            .unwrap_or(modifiers);
+        let (root, focused) = {
+            let host = self.host.borrow();
+            (host.root, host.focus.focused_node(window, cx))
+        };
+        let start = self.resolve(focused, root);
+        for (key, was, is) in [
+            ("Shift", before.shift, modifiers.shift),
+            ("Control", before.control, modifiers.control),
+            ("Alt", before.alt, modifiers.alt),
+            ("Meta", before.platform, modifiers.platform),
+        ] {
+            if was != is {
+                let payload = EventPayload::Key(KeyPayload {
+                    key: key.to_owned(),
+                    repeat: false,
+                    modifiers,
+                });
+                let event = if is { "keydown" } else { "keyup" };
+                self.bubble_from(start, event, &payload, window, cx);
+            }
+        }
     }
 
     fn pointer_left(&self) {
@@ -1322,71 +1361,38 @@ mod tests {
     }
 
     #[gpui::test]
-    fn hover_events_share_the_movement_of_their_raw_move(cx: &mut TestAppContext) {
+    fn only_mousemove_takes_the_movement_of_the_raw_move(cx: &mut TestAppContext) {
         let (dispatcher, _host, _reported) = dispatcher_with_engine();
         let cx = cx.add_empty_window();
         cx.update(|_, cx| dispatcher.pointer_moved(at(10.0, 10.0), cx));
 
-        let seen = cx.update(|_, cx| {
+        let (moved, others) = cx.update(|_, cx| {
             dispatcher.pointer_moved(at(30.0, 5.0), cx);
-            [
-                "mousemove",
+            let moved = dispatcher.with_movement(&mouse_at(30.0, 5.0), "mousemove");
+            let others = [
                 "mouseenter",
                 "mouseleave",
                 "mouseover",
                 "mouseout",
+                "mousedown",
+                "mouseup",
             ]
-            .map(|event| movement_of(&dispatcher.with_movement(&mouse_at(30.0, 5.0), event)))
+            .map(|event| movement_of(&dispatcher.with_movement(&mouse_at(30.0, 5.0), event)));
+            let wheel = dispatcher.with_movement(&wheel_at(30.0, 5.0), "wheel");
+            (movement_of(&moved), (others, movement_of(&wheel)))
         });
-        assert_eq!(seen, [(20.0, -5.0); 5]);
-    }
 
-    #[gpui::test]
-    fn a_hover_with_no_raw_move_reports_zero(cx: &mut TestAppContext) {
-        let (dispatcher, _host, _reported) = dispatcher_with_engine();
-        let cx = cx.add_empty_window();
-        cx.update(|_, cx| dispatcher.pointer_moved(at(10.0, 10.0), cx));
-        cx.run_until_parked();
-        cx.update(|_, cx| dispatcher.pointer_moved(at(30.0, 5.0), cx));
-        cx.run_until_parked();
-
-        for event in [
-            "mouseenter",
-            "mouseleave",
-            "mouseover",
-            "mouseout",
-            "mousemove",
-        ] {
-            let payload = dispatcher.with_movement(&mouse_at(90.0, 90.0), event);
-            assert_eq!(movement_of(&payload), (0.0, 0.0), "{event}");
-        }
+        assert_eq!(moved, (20.0, -5.0));
+        assert_eq!(others, ([(0.0, 0.0); 6], (0.0, 0.0)));
     }
 
     #[test]
-    fn mousedown_mouseup_and_wheel_measure_from_the_last_move_and_leave_it_in_place() {
-        let (dispatcher, _host, _reported) = dispatcher_with_engine();
-        dispatcher.last_position.set(Some((10.0, 10.0)));
-
-        for event in ["mousedown", "mouseup"] {
-            let payload = dispatcher.with_movement(&mouse_at(30.0, 40.0), event);
-            assert_eq!(movement_of(&payload), (20.0, 30.0), "{event}");
-        }
-        let payload = dispatcher.with_movement(&wheel_at(30.0, 40.0), "wheel");
-        assert_eq!(movement_of(&payload), (20.0, 30.0));
-        assert_eq!(dispatcher.last_position.get(), Some((10.0, 10.0)));
-    }
-
-    #[test]
-    fn mousedown_mouseup_and_wheel_report_zero_before_any_move() {
+    fn a_mousemove_with_no_raw_move_reports_zero() {
         let (dispatcher, _host, _reported) = dispatcher_with_engine();
 
-        for event in ["mousedown", "mouseup"] {
-            let payload = dispatcher.with_movement(&mouse_at(30.0, 40.0), event);
-            assert_eq!(movement_of(&payload), (0.0, 0.0), "{event}");
-        }
-        let payload = dispatcher.with_movement(&wheel_at(30.0, 40.0), "wheel");
+        let payload = dispatcher.with_movement(&mouse_at(90.0, 90.0), "mousemove");
+
         assert_eq!(movement_of(&payload), (0.0, 0.0));
-        assert_eq!(dispatcher.last_position.get(), None);
     }
 
     #[test]
