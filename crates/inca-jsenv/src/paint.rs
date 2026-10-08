@@ -1,9 +1,9 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! ANSI colours for terminal output.
+//! ANSI colors for terminal output.
 
-/// A colour or weight, with the codes that open and close it.
+/// A color or weight, with the codes that open and close it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Style {
     Red,

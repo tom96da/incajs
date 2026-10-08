@@ -49,7 +49,7 @@ pub enum Level {
 }
 
 impl Level {
-    /// The glyph and colour a line of this level starts with.
+    /// The glyph and color a line of this level starts with.
     fn mark(self) -> Option<(&'static str, Style)> {
         match self {
             Level::Error => Some(("✖", Style::Red)),
@@ -71,7 +71,7 @@ pub fn to_stderr() -> Output {
     Rc::new(|_, message| eprintln!("{message}"))
 }
 
-/// The colour decision for the given variables and terminal state.
+/// The color decision for the given variables and terminal state.
 fn color_enabled(
     no_color: Option<&OsStr>,
     force_color: Option<&OsStr>,
@@ -87,10 +87,10 @@ fn color_enabled(
     }
 }
 
-/// Whether `console` output to stderr should be coloured, as the environment
+/// Whether `console` output to stderr should be colored, as the environment
 /// asks.
 ///
-/// Colour is off when `NO_COLOR` is non-empty, which wins over `FORCE_COLOR`.
+/// Color is off when `NO_COLOR` is non-empty, which wins over `FORCE_COLOR`.
 /// Otherwise it is on when `FORCE_COLOR` is set to anything except `0`,
 /// `false` or the empty string, and otherwise on when stderr is a terminal.
 /// Pass the result to [`install`].
@@ -110,7 +110,7 @@ struct Console {
 }
 
 impl Console {
-    /// A debug line is dimmed whole, so its values stay uncoloured.
+    /// A debug line is dimmed whole, so its values stay uncolored.
     fn format(&self, ctx: &Ctx<'_>, level: Level, values: &[Value<'_>]) -> String {
         format::line(ctx, values, self.color && level != Level::Debug)
     }
@@ -243,7 +243,7 @@ fn caller_stack(ctx: &Ctx<'_>) -> Vec<String> {
 /// Defines `globalThis.console` with the WHATWG Console methods, writing each
 /// formatted line through `output`.
 ///
-/// With `color` set, the lines passed to `output` carry ANSI colour sequences;
+/// With `color` set, the lines passed to `output` carry ANSI color sequences;
 /// [`color_from_env`] gives the conventional value. Install before evaluating
 /// any script, so top-level logging works.
 ///
@@ -476,7 +476,7 @@ mod tests {
         written_with_color(source, false)
     }
 
-    /// As [`lines_written_by`], with colour switched on or off.
+    /// As [`lines_written_by`], with color switched on or off.
     fn written_with_color(source: &str, color: bool) -> Vec<(Level, String)> {
         let written = Rc::new(RefCell::new(Vec::new()));
         let sink = Rc::clone(&written);
@@ -1015,12 +1015,12 @@ mod tests {
     }
 
     #[test]
-    fn a_coloured_table_of_the_types_has_the_layout_of_the_plain_one() {
+    fn a_colored_table_of_the_types_has_the_layout_of_the_plain_one() {
         drawn_both_ways("[new Date(0), /x/g, new Map([['日本', [1]]]), new Set(['a\\nb'])]");
     }
 
     #[test]
-    fn colour_off_prints_the_types_without_an_escape_sequence() {
+    fn color_off_prints_the_types_without_an_escape_sequence() {
         let source = "console.log(new Date(0), new Date(NaN), /a/g, new Map([[1, 'x']]), new Set()); \
                       console.dir(new Map()); console.table([new Date(0)]);";
 
@@ -1303,7 +1303,7 @@ mod tests {
             .collect()
     }
 
-    /// `text` without ANSI colour sequences.
+    /// `text` without ANSI color sequences.
     fn strip(text: &str) -> String {
         let mut out = String::new();
         let mut rest = text;
@@ -1323,7 +1323,7 @@ mod tests {
     }
 
     #[test]
-    fn a_non_empty_no_color_turns_colour_off_whatever_else_is_set() {
+    fn a_non_empty_no_color_turns_color_off_whatever_else_is_set() {
         for force in [
             None,
             Some(os("")),
@@ -1346,7 +1346,7 @@ mod tests {
     }
 
     #[test]
-    fn force_color_zero_or_false_turns_colour_off_on_a_terminal() {
+    fn force_color_zero_or_false_turns_color_off_on_a_terminal() {
         assert!(!color_enabled(None, Some(os("0")), true));
         assert!(!color_enabled(None, Some(os("false")), true));
         assert!(!color_enabled(None, Some(os("0")), false));
@@ -1354,7 +1354,7 @@ mod tests {
     }
 
     #[test]
-    fn any_other_non_empty_force_color_turns_colour_on_without_a_terminal() {
+    fn any_other_non_empty_force_color_turns_color_on_without_a_terminal() {
         for value in ["1", "2", "3", "true", "yes", "FALSE", "00"] {
             assert!(color_enabled(None, Some(os(value)), false), "{value}");
             assert!(color_enabled(None, Some(os(value)), true), "{value}");
@@ -1374,7 +1374,7 @@ mod tests {
     }
 
     #[test]
-    fn values_are_coloured_by_type_in_a_log_line() {
+    fn values_are_colored_by_type_in_a_log_line() {
         assert_eq!(
             colored_texts("console.log('s', 1, true, null, undefined, { k: 'v' });"),
             [
@@ -1384,7 +1384,7 @@ mod tests {
     }
 
     #[test]
-    fn each_level_symbol_is_coloured_and_its_body_is_not() {
+    fn each_level_symbol_is_colored_and_its_body_is_not() {
         assert_eq!(
             colored_texts(
                 "console.error('e'); console.warn('w'); console.info('i'); \
@@ -1420,7 +1420,7 @@ mod tests {
     }
 
     #[test]
-    fn a_debug_line_is_dim_as_a_whole_without_value_colours() {
+    fn a_debug_line_is_dim_as_a_whole_without_value_colors() {
         assert_eq!(
             colored_texts("console.debug('d', 1, { a: 'b' });"),
             ["\x1b[90md 1 { a: 'b' }\x1b[39m"]
@@ -1451,7 +1451,7 @@ mod tests {
     }
 
     #[test]
-    fn a_multi_line_body_lines_up_with_colour_on() {
+    fn a_multi_line_body_lines_up_with_color_on() {
         assert_eq!(
             colored_texts("console.group('g'); console.error('a\\nb');"),
             [
@@ -1462,7 +1462,7 @@ mod tests {
     }
 
     #[test]
-    fn an_empty_line_keeps_no_trailing_space_with_colour_on() {
+    fn an_empty_line_keeps_no_trailing_space_with_color_on() {
         assert_eq!(
             colored_texts("console.group(''); console.log(''); console.error('');"),
             [
@@ -1516,7 +1516,7 @@ mod tests {
     }
 
     #[test]
-    fn dir_and_the_table_fallback_colour_their_value() {
+    fn dir_and_the_table_fallback_color_their_value() {
         assert_eq!(
             colored_texts("console.dir('s'); console.dir(); console.table(5); console.table();"),
             [
@@ -1529,7 +1529,7 @@ mod tests {
     }
 
     #[test]
-    fn time_log_colours_its_extra_data() {
+    fn time_log_colors_its_extra_data() {
         let lines = colored_texts("console.time('t'); console.timeLog('t', 2);");
 
         assert!(lines[0].ends_with(" \x1b[33m2\x1b[39m"), "{}", lines[0]);
@@ -1537,7 +1537,7 @@ mod tests {
     }
 
     #[test]
-    fn a_group_label_and_assert_data_are_coloured() {
+    fn a_group_label_and_assert_data_are_colored() {
         assert_eq!(
             colored_texts("console.group('a', 1); console.assert(false, 'm', 2);"),
             [
@@ -1548,7 +1548,7 @@ mod tests {
     }
 
     #[test]
-    fn format_specifiers_colour_inspected_arguments() {
+    fn format_specifiers_color_inspected_arguments() {
         assert_eq!(
             colored_texts("console.log('%o|%s', 'q', 'r', 3);"),
             ["\x1b[32m'q'\x1b[39m|r \x1b[33m3\x1b[39m"]
@@ -1556,7 +1556,7 @@ mod tests {
     }
 
     #[test]
-    fn a_coloured_table_has_the_layout_of_the_plain_one() {
+    fn a_colored_table_has_the_layout_of_the_plain_one() {
         let source = "console.group('g'); console.table([{ a: 1, b: 'x' }, { a: [1, 'y'], c: null }, 5, 'z']);";
         let plain = texts(source);
         let colored = colored_texts(source);
@@ -1568,7 +1568,7 @@ mod tests {
     }
 
     #[test]
-    fn a_coloured_table_cell_is_padded_by_its_visible_width() {
+    fn a_colored_table_cell_is_padded_by_its_visible_width() {
         let drawn = &colored_texts("console.table([{ k: 'ab' }, { k: 1 }]);")[0];
 
         assert_eq!(
@@ -1582,7 +1582,7 @@ mod tests {
     }
 
     #[test]
-    fn a_coloured_table_leaves_headers_and_rules_uncoloured() {
+    fn a_colored_table_leaves_headers_and_rules_uncolored() {
         let drawn = &colored_texts("console.table([{ a: 1 }]);")[0];
         let lines: Vec<&str> = drawn.lines().collect();
 
@@ -1592,14 +1592,14 @@ mod tests {
     }
 
     #[test]
-    fn a_coloured_table_escapes_control_characters_like_the_plain_one() {
+    fn a_colored_table_escapes_control_characters_like_the_plain_one() {
         let source = r"console.table([{ k: ['a\nb', 1] }]);";
 
         assert_eq!(strip(&colored_texts(source)[0]), texts(source)[0]);
     }
 
     #[test]
-    fn colour_off_writes_no_escape_sequences_for_any_method() {
+    fn color_off_writes_no_escape_sequences_for_any_method() {
         let source = "console.group('g'); console.log('s', 1, null, undefined, { a: ['b'] }); \
              console.debug('d'); console.info('i'); console.warn('w'); console.error(new Error('e')); \
              console.assert(false, 'x'); console.trace('t'); console.dir('q'); \
@@ -1610,7 +1610,7 @@ mod tests {
     }
 
     #[test]
-    fn colour_on_adds_only_sequences_to_the_plain_output() {
+    fn color_on_adds_only_sequences_to_the_plain_output() {
         let source = "console.group('g'); console.log('s', 1, null, undefined, { a: ['b'] }); \
              console.debug('d'); console.info('i'); console.warn('w'); \
              console.error('e\\nf'); console.assert(false, 'x'); console.dir('q'); \
@@ -1623,7 +1623,7 @@ mod tests {
     }
 
     #[test]
-    fn colour_does_not_change_the_levels() {
+    fn color_does_not_change_the_levels() {
         let source = "console.trace('a'); console.debug('a'); console.log('a'); \
              console.info('a'); console.warn('a'); console.error('a');";
         let levels = |color| -> Vec<Level> {
@@ -1636,7 +1636,7 @@ mod tests {
         assert_eq!(levels(true), levels(false));
     }
 
-    /// Whether every colour sequence on `line` is closed on `line`.
+    /// Whether every color sequence on `line` is closed on `line`.
     fn balanced(line: &str) -> bool {
         let mut open = 0usize;
         let mut close = 0usize;
@@ -1653,7 +1653,7 @@ mod tests {
         open == close
     }
 
-    /// `text` without the colour sequences this crate paints.
+    /// `text` without the color sequences this crate paints.
     fn without_known_codes(text: &str) -> String {
         let mut out = text.to_owned();
         for code in [31, 32, 33, 34, 35, 36, 1, 90, 39, 22] {
@@ -1663,7 +1663,7 @@ mod tests {
     }
 
     #[test]
-    fn colour_never_crosses_a_line_break_in_a_nested_string() {
+    fn color_never_crosses_a_line_break_in_a_nested_string() {
         assert_eq!(
             colored_texts("console.log(['a\\nb']);"),
             ["[ \x1b[32m'a\x1b[39m\n\x1b[32mb'\x1b[39m ]"]
@@ -1671,7 +1671,7 @@ mod tests {
     }
 
     #[test]
-    fn colour_never_crosses_a_line_break_inside_nested_groups() {
+    fn color_never_crosses_a_line_break_inside_nested_groups() {
         let lines = colored_texts(
             "console.group('a'); console.group('b'); console.warn(['x\\ny'], Symbol('p\\nq'));",
         );
@@ -1709,7 +1709,7 @@ mod tests {
     }
 
     #[test]
-    fn every_colour_in_every_method_is_closed_on_its_own_line() {
+    fn every_color_in_every_method_is_closed_on_its_own_line() {
         let source = "console.group('g\\nh'); console.log(['a\\nb'], Symbol('s\\nt')); \
              console.info({ 'k\\nz': 'v\\nw' }); console.error(new Error('e\\nf')); \
              console.trace('t\\nu'); console.debug('d\\ne'); console.assert(false, ['q\\nr']); \
@@ -1722,7 +1722,7 @@ mod tests {
         }
     }
 
-    /// The coloured and the plain drawing of `console.table(args)`, both
+    /// The colored and the plain drawing of `console.table(args)`, both
     /// checked to be aligned and free of live sequences other than ours.
     fn drawn_both_ways(args: &str) -> (String, String) {
         let source = format!("console.table({args});");
@@ -1747,7 +1747,7 @@ mod tests {
     }
 
     #[test]
-    fn a_table_cell_holding_a_nested_colour_code_stays_inert() {
+    fn a_table_cell_holding_a_nested_color_code_stays_inert() {
         let (plain, _) = drawn_both_ways(r"[{ k: { v: '\x1b[31m' }, 'z\x1b[0m': 1 }]");
 
         assert!(plain.contains(r"'\x1b[31m'"), "{plain}");
@@ -1765,7 +1765,7 @@ mod tests {
     }
 
     #[test]
-    fn a_table_with_a_wide_and_a_coloured_cell_stays_aligned() {
+    fn a_table_with_a_wide_and_a_colored_cell_stays_aligned() {
         drawn_both_ways(r"[{ a: '日本', b: [1, 'x'], c: null, d: undefined, e: () => 1 }]");
     }
 }

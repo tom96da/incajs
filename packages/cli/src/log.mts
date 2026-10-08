@@ -24,7 +24,7 @@ export interface LogOptions {
 /** `inca dev` stamps its lines the way Vite's dev server does. */
 export const STAMPED = { timestamp: true } as const;
 
-/** Builds the line's prefix. `styleText` leaves it unstyled for a stream that can't colour. */
+/** Builds the line's prefix. `styleText` leaves it unstyled for a stream that can't color. */
 function tag(stream: NodeJS.WritableStream, options: LogOptions, color: "cyan" | "red"): string {
   const label = styleText(["bold", color], TAG, { stream });
   if (!options.timestamp) return label;

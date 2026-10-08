@@ -34,7 +34,7 @@ impl Cell {
 ///
 /// An array, or an object with at least one own enumerable key, is tabular.
 /// `columns`, when an array, picks and orders the columns shown. Cell values
-/// are coloured when `color` is set.
+/// are colored when `color` is set.
 pub(super) fn render(data: &Value<'_>, columns: Option<&Value<'_>>, color: bool) -> Option<String> {
     let rows: Vec<(String, Value<'_>, Option<Entries<'_>>)> = entries(data)?
         .into_iter()

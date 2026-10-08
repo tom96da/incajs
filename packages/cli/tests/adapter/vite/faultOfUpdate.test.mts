@@ -9,7 +9,7 @@ import { faultOfUpdate } from "../../../src/adapter/vite/hmr.mts";
 import { UNSUPPORTED } from "../../../src/adapter/vite/unsupported.mts";
 import * as adapterCore from "../../../src/adapterCore.mts";
 
-/** The fault with colour removed from its stack. */
+/** The fault with color removed from its stack. */
 function plain(error: Parameters<typeof faultOfUpdate>[1]) {
   const fault = faultOfUpdate(adapterCore, error);
   return { ...fault, stack: fault.stack && stripVTControlCharacters(fault.stack) };

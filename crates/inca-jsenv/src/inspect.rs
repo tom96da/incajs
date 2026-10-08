@@ -1004,7 +1004,7 @@ mod tests {
         );
         assert!(
             colored("Array.from({ length: 101 }, () => 1)").ends_with(", ... 1 more item ]"),
-            "the count is uncoloured"
+            "the count is uncolored"
         );
         assert_eq!(
             escaped("Array.from({ length: 101 }, () => 1)", true),
@@ -1197,7 +1197,7 @@ mod tests {
     }
 
     #[test]
-    fn accessor_text_has_the_same_words_with_colour_on_or_off() {
+    fn accessor_text_has_the_same_words_with_color_on_or_off() {
         let source = "({ get a() { return 1; }, set b(v) {}, get c() { return 1; }, set c(v) {} })";
 
         assert_eq!(rendered(source), strip_codes(&colored(source)));
@@ -1243,7 +1243,7 @@ mod tests {
         assert_eq!(out, "a 1 { k: true }");
     }
 
-    /// As [`rendered`], with colours on.
+    /// As [`rendered`], with colors on.
     fn colored(expression: &str) -> String {
         let runtime = Runtime::new().unwrap();
         let context = Context::full(&runtime).unwrap();
@@ -1296,7 +1296,7 @@ mod tests {
     }
 
     #[test]
-    fn a_top_level_string_stays_uncoloured() {
+    fn a_top_level_string_stays_uncolored() {
         assert_eq!(colored("'plain'"), "plain");
         assert_eq!(colored("''"), "");
     }
@@ -1311,7 +1311,7 @@ mod tests {
     }
 
     #[test]
-    fn an_identifier_key_is_uncoloured_and_a_quoted_key_is_green() {
+    fn an_identifier_key_is_uncolored_and_a_quoted_key_is_green() {
         assert_eq!(
             colored("({ k: 'v', n: 1 })"),
             format!("{{ k: {}, n: {} }}", green("'v'"), yellow("1"))
@@ -1354,7 +1354,7 @@ mod tests {
     }
 
     #[test]
-    fn empty_containers_are_uncoloured() {
+    fn empty_containers_are_uncolored() {
         assert_eq!(colored("[]"), "[]");
         assert_eq!(colored("({})"), "{}");
     }
@@ -1383,7 +1383,7 @@ mod tests {
     }
 
     #[test]
-    fn arguments_are_coloured_one_by_one_and_joined_plainly() {
+    fn arguments_are_colored_one_by_one_and_joined_plainly() {
         let runtime = Runtime::new().unwrap();
         let context = Context::full(&runtime).unwrap();
         let out = context.with(|ctx| {
@@ -1395,7 +1395,7 @@ mod tests {
     }
 
     #[test]
-    fn quoted_colours_a_string_green_and_a_number_yellow() {
+    fn quoted_colors_a_string_green_and_a_number_yellow() {
         let runtime = Runtime::new().unwrap();
         let context = Context::full(&runtime).unwrap();
         context.with(|ctx| {
@@ -1408,7 +1408,7 @@ mod tests {
     }
 
     #[test]
-    fn colour_never_crosses_a_line_break() {
+    fn color_never_crosses_a_line_break() {
         assert_eq!(
             colored("['a\\nb']"),
             "[ \x1b[32m'a\x1b[39m\n\x1b[32mb'\x1b[39m ]"
@@ -1474,7 +1474,7 @@ mod tests {
     }
 
     #[test]
-    fn escaping_and_colour_leave_the_visible_text_alone() {
+    fn escaping_and_color_leave_the_visible_text_alone() {
         let source = "({ s: 'x\\t', n: [1, null], e: new Error('m') })";
 
         assert_eq!(escaped(source, false), strip_codes(&escaped(source, true)));
@@ -1715,7 +1715,7 @@ mod tests {
     }
 
     #[test]
-    fn the_collection_count_is_uncoloured() {
+    fn the_collection_count_is_uncolored() {
         assert!(
             colored("new Set(Array.from({ length: 101 }, (_, i) => i))")
                 .ends_with(", ... 1 more item }")
@@ -1924,7 +1924,7 @@ mod tests {
     }
 
     #[test]
-    fn a_proxy_prints_the_same_in_colour() {
+    fn a_proxy_prints_the_same_in_color() {
         assert_eq!(
             colored("new Proxy(new Map([['a', 1]]), {})"),
             colored("new Map([['a', 1]])")
@@ -2004,7 +2004,7 @@ mod tests {
     }
 
     #[test]
-    fn the_types_are_coloured_whole_with_their_contents_inside() {
+    fn the_types_are_colored_whole_with_their_contents_inside() {
         assert_eq!(colored("new Date(0)"), magenta("1970-01-01T00:00:00.000Z"));
         assert_eq!(colored("new Date(NaN)"), magenta("Invalid Date"));
         assert_eq!(colored("/a/gi"), red("/a/gi"));
@@ -2039,7 +2039,7 @@ mod tests {
     }
 
     #[test]
-    fn the_types_nest_coloured_inside_a_collection() {
+    fn the_types_nest_colored_inside_a_collection() {
         assert_eq!(
             colored("new Map([[new Date(0), /x/]])"),
             format!(
@@ -2051,7 +2051,7 @@ mod tests {
     }
 
     #[test]
-    fn the_types_print_the_same_text_with_colour_on_or_off() {
+    fn the_types_print_the_same_text_with_color_on_or_off() {
         let source = "[new Date(0), new Date(NaN), /a\\/b/gi, new Map([['k', new Set([1, 'v'])]]), new Set()]";
 
         assert_eq!(rendered(source), strip_codes(&colored(source)));
@@ -2146,7 +2146,7 @@ mod tests {
         });
     }
 
-    /// `text` without the colour sequences this module paints.
+    /// `text` without the color sequences this module paints.
     fn strip_codes(text: &str) -> String {
         let mut out = text.to_owned();
         for code in [31, 32, 33, 34, 35, 36, 1, 90, 39, 22] {

@@ -147,7 +147,7 @@ describe("dev", () => {
     expect(stdout.text()).toContain("[inca] ready");
   });
 
-  describe("the host's colour environment", () => {
+  describe("the host's color environment", () => {
     /** Starts the host against `stderr` and returns the env line it reported. */
     async function reportedEnv(stderr: ReturnType<typeof makeSink>): Promise<string> {
       const bundler = makeFakeBundler();

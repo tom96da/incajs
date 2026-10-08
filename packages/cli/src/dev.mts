@@ -141,7 +141,7 @@ async function pruneStaleFiles(outDir: string, keep: readonly string[]): Promise
 
 /**
  * The environment to start the host with: the current one, plus
- * `FORCE_COLOR=1` when `stderr` is a terminal, so the host colours output
+ * `FORCE_COLOR=1` when `stderr` is a terminal, so the host colors output
  * its piped stderr would otherwise not. `NO_COLOR` and `FORCE_COLOR`, when
  * set non-empty, are left alone.
  */

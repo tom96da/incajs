@@ -47,7 +47,7 @@ export function streamLogger(
       if (options?.error) loggedErrors.add(options.error);
       // The CLI reports a failed build itself, from the watcher's ERROR
       // event. Matched anywhere in the message: on a tty the bundler's
-      // colour escapes come first.
+      // color escapes come first.
       if (msg.includes(AGGREGATE_REPORT)) return;
       if (msg.includes(PRE_TRANSFORM_ERROR)) return;
       stderr.write(`${msg.replace(/\n\s+at .*/g, "")}\n`);

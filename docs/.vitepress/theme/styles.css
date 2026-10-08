@@ -9,7 +9,7 @@
   }
 }
 
-/* The console's level markers, in the colours the terminal output uses. */
+/* The console's level markers, in the colors the terminal output uses. */
 .vp-doc code {
   &.marker-error {
     color: var(--vp-c-danger-1);

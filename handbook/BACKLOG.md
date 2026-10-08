@@ -296,19 +296,19 @@ A fixed entry is deleted and its ID is never reused.
   not an identifier, is always single-quoted, where Node picks the quote
   that avoids escaping.
 
-- **B-122 Colours take fewer notations than CSS**
+- **B-122 Colors take fewer notations than CSS**
   `Units: gpui,docs · Size: M–L · Impact: Medium`
 
-  A colour is a `0xRRGGBB` number or a `#rgb` or `#rrggbb` string. CSS adds,
+  A color is a `0xRRGGBB` number or a `#rgb` or `#rrggbb` string. CSS adds,
   from small to large: `#rgba` and `#rrggbbaa`, `transparent` and
   `currentcolor`, `rgb()`, `rgba()`, `hsl()` and `hsla()` in the comma and
-  the space syntax with an alpha, the 148 colour names, `hwb()`, `lab()`,
-  `lch()`, `oklab()`, `oklch()`, `color()`, `color-mix()`, relative colours,
-  `light-dark()` and system colours. `var(--x)` waits for CSS variables.
-  gpui colours carry an alpha, so the parser sets the limit. A parsing crate
+  the space syntax with an alpha, the 148 color names, `hwb()`, `lab()`,
+  `lch()`, `oklab()`, `oklch()`, `color()`, `color-mix()`, relative colors,
+  `light-dark()` and system colors. `var(--x)` waits for CSS variables.
+  gpui colors carry an alpha, so the parser sets the limit. A parsing crate
   such as `csscolorparser` covers part of the list, and its range needs a
   check before use. Only `background`, `border_color` and `text_color` take a
-  colour. `outline-color`, per-side border colours, `box-shadow` and
+  color. `outline-color`, per-side border colors, `box-shadow` and
   `text-decoration-color` come with the properties they belong to.
 
 - **B-124 `inca` has no command that reports the host's settings**
@@ -409,8 +409,8 @@ A fixed entry is deleted and its ID is never reused.
   `titlebar.title`, `is_resizable`, `window_min_size` and `app_id` are
   wired; the rest of `WindowOptions` is not. `window_background` is felt:
   it is a `WindowBackgroundAppearance` (opaque, transparent, blurred), not
-  a colour, so it can't fill what a fixed-size root in a larger window
-  leaves uncovered. A background colour needs a full-size wrapper node in
+  a color, so it can't fill what a fixed-size root in a larger window
+  leaves uncovered. A background color needs a full-size wrapper node in
   `HostedApp::render`, plus a matching `RuntimeConfig` field and an update
   to `tests/tests/config_contract.rs`. The remainder (`is_minimizable`,
   `is_movable`, `window_decorations`, `kind`, `display_id`, `focus`,
@@ -753,7 +753,7 @@ A fixed entry is deleted and its ID is never reused.
     prints as `{}`. A `Proxy` around any of the four prints as its target.
   - A long object, array, `Map` or `Set` is never wrapped across lines,
     where the standard wraps long output.
-  - A `RegExp` has one colour, where the standard highlights its parts.
+  - A `RegExp` has one color, where the standard highlights its parts.
   - `%s`, `%d`, `%i` and `%f` convert an array that holds a `Proxy` through
     the array's own string form, which runs the `Proxy`'s traps.
 
@@ -955,7 +955,7 @@ A fixed entry is deleted and its ID is never reused.
 - **B-117 A known style key with a wrong-shaped value is dropped quietly**
   `Units: gpui · Size: S–M · Impact: Low`
 
-  An unknown key and an invalid colour print a warning when the style is
+  An unknown key and an invalid color print a warning when the style is
   set. A known key whose value has the wrong type or range, such as
   `display: "nope"`, `gap: "1"`, a negative `padding` or a string `opacity`,
   is dropped and prints nothing.
