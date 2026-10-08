@@ -722,7 +722,10 @@ A fixed entry is deleted and its ID is never reused.
   `Units: jsenv · Size: M · Impact: Low`
 
   A format string supports `%s`, `%d`, `%i`, `%f`, `%o`, `%O`, `%c` and `%%`.
-  `%o` follows Node with `showProxy` off. `%c` takes its argument and applies
+  `%o` follows Node with `showProxy` off, but leaves out the hidden
+  properties of a function and of an `Error`, such as `[stack]` and
+  `[message]`. Fix: list the non-enumerable own properties of a function and
+  of an `Error`. `%c` takes its argument and applies
   no styling, and the Console Standard leaves `%c` undefined. Fix: map the CSS
   properties `color`, `background-color`, `font-weight`, `font-style` and
   `text-decoration` to terminal styles. A conversion that throws prints the
