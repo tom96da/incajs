@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -90,6 +90,44 @@ describe("watch", () => {
     expect(output.changed?.file).toBe(vuePath);
     const bundle = await readFile(output.entryFile, "utf8");
     expect(bundle).toContain("second");
+  }, 20000);
+
+  it("rebuilds once, without an error, when a save replaces the file", async () => {
+    const { entry, outDir, vuePath, streams } = await makeApp(
+      `<script setup>\nconst msg = "first";\n</script>\n<template><div>{{ msg }}</div></template>\n`,
+    );
+
+    const errors: string[] = [];
+    let resolveBuild!: (output: BuildOutput) => void;
+    let nextBuild = new Promise<BuildOutput>((resolve) => {
+      resolveBuild = resolve;
+    });
+    const watcher = await watch({
+      entry,
+      outDir,
+      mode: "development",
+      ...streams,
+      onBuild: (output) => resolveBuild(output),
+      onError: (error) => errors.push(error.message),
+    });
+    watchers.push(watcher);
+
+    await nextBuild;
+    nextBuild = new Promise((resolve) => {
+      resolveBuild = resolve;
+    });
+
+    const temp = `${vuePath}.tmp`;
+    await writeFile(
+      temp,
+      `<script setup>\nconst msg = "second";\n</script>\n<template><div>{{ msg }}</div></template>\n`,
+    );
+    await rm(vuePath);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await rename(temp, vuePath);
+    await nextBuild;
+
+    expect(errors).toEqual([]);
   }, 20000);
 
   it("rewrites the app's config on every rebuild", async () => {

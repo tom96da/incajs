@@ -99,7 +99,8 @@ export function resolveViteConfig({
       // regardless of mode.
       emptyOutDir: mode === "production",
       minify: mode === "production",
-      watch: watch ? {} : undefined,
+      // An editor that replaces a file deletes it for a moment; the delay lets that pair coalesce.
+      watch: watch ? { buildDelay: 30 } : undefined,
       rolldownOptions: {
         output: {
           chunkFileNames: "chunks/[name]-[hash].js",
