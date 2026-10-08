@@ -54,3 +54,7 @@
 	path = specs/w3c/pointerlock
 	url = https://github.com/w3c/pointerlock.git
 	shallow = true
+[submodule "specs/whatwg/console"]
+	path = specs/whatwg/console
+	url = https://github.com/whatwg/console.git
+	shallow = true
