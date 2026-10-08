@@ -1111,3 +1111,20 @@ A fixed entry is deleted and its ID is never reused.
   Listeners register through the native `addEventListener` only, and app code
   has no call that dispatches an event on a node. Fix: expose `dispatchEvent()`
   and `click()` on the element wrapper and route them to the host dispatcher.
+
+- **B-158 Keys with nothing focused reach only the host root, which templates cannot listen on**
+  `Units: core,bridge,docs · Size: M · Impact: Medium`
+
+  With nothing focused, `keydown` and `keyup` target the host root node. A
+  listener on the app's top element is a child of that node and never runs, so
+  an app cannot react to keys while nothing is focused. Fix: expose a
+  listener target for the root, such as `window` or `document`, through
+  `addEventListener` on the element wrapper of the root.
+
+- **B-159 `inca dev --experimental-hmr` prints Vue's feature flag warning**
+  `Units: cli · Size: S · Impact: Low`
+
+  The development server prints a warning that `__VUE_OPTIONS_API__`,
+  `__VUE_PROD_DEVTOOLS__` and `__VUE_PROD_HYDRATION_MISMATCH_DETAILS__` are not
+  defined. Fix: define the three flags in the Vite configurations of the
+  development server and the build.
