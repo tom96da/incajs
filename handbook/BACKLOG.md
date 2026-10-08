@@ -93,6 +93,7 @@ A fixed entry is deleted and its ID is never reused.
   (`third_party/zed/crates/gpui/src/window.rs:2622, 2732`). Reaching them
   from JS is a binding, and settling which of these an app owns is Phase 9
   item 1.
+
 - **B-014 A packaged app's output reaches nobody**
   `Units: host,cli · Size: L · Impact: Medium`
 
@@ -140,35 +141,6 @@ A fixed entry is deleted and its ID is never reused.
   gap likely applies to any other DOM-element method or property a
   `.vue` app would otherwise reach for on a template `ref`.
 
-- **B-030 A style-only change to an already-mounted node doesn't reach the screen under `--experimental-hmr`, though the same edit works via a full reload**
-  `Units: gpui,bridge,cli · Size: M · Impact: Medium · Status: needs repro`
-
-  Reproduced by hand against `examples/click_counter`,
-  editing only a `:style` value (e.g. `border_color`) with the script and
-  template structure otherwise unchanged. Confirmed at every layer up to
-  and including the native tree: a diagnostic harness driving the real
-  Vue HMR update path (`@vitejs/plugin-vue`'s `rerender`, which patches
-  the existing component instance in place rather than remounting it)
-  showed the correct new value reaching `__inca_native__.setStyle` for
-  the right node, both with a minimal fixture and with `click_counter`'s
-  actual source. Editing something that changes the mounted tree's shape
-  instead — adding, removing, or changing text content — updates the
-  screen correctly and immediately, as does a plain (non-HMR) full
-  reload's rebuilt tree. What's different about the failing case: a full
-  reload rebuilds the whole session and tree, so its elements are mostly
-  new to `gpui`. B-069: node ids restart on a full reload, so `gpui` can
-  see a reused id after a full reload. `--experimental-hmr`'s in-place `rerender` is the
-  first path in this project that mutates a style property on a node
-  `gpui` has already seen, in the same long-lived window, with the same
-  element id, and nothing else about that node changing. That points at
-  `gpui`'s own element/paint reuse for a stable element id not
-  accounting for a style-only change with no other difference. Not
-  reproduced outside this pattern — a full reload's own repaint after a
-  style edit already works, and always has. A removed style key is
-  another style-only change to an already-seen node, so it is probably
-  affected the same way; that is not confirmed. Not reproduced on Intel
-  macOS.
-
 - **B-031 `inca dev --experimental-hmr` never recovers from a source file that was already broken when the session started**
   `Units: cli · Size: M · Impact: Medium`
 
@@ -186,24 +158,21 @@ A fixed entry is deleted and its ID is never reused.
   startup also duplicates its own failure report, a separate, more
   general gap B-032 covers.
 
-- **B-036 A script edit's new value doesn't reach a real click, once it reverts to a value already used earlier in the same session**
-  `Units: gpui,cli · Size: M · Impact: Medium · Status: needs repro`
+- **B-036 Reverting a script edit under `--experimental-hmr` sometimes applies nothing**
+  `Units: cli · Size: M · Impact: Medium · Status: needs repro`
 
-  reproduced by hand against `examples/click_counter`, repeatedly
-  changing `onClick`'s `clicks.value += 1` to `+= 2`, then `+= 3` — each
-  takes effect correctly on the next click. Changing it back to `+= 1`
-  doesn't: clicks keep incrementing by whatever amount was last
-  genuinely applied. Ruled out at the Node/Vite layer: a diagnostic
-  driving the exact same edit sequence through a synthetic dev-protocol
-  stimulus, bypassing gpui's own click dispatch entirely, applies every
-  value correctly, reverts included. Vite always serves fresh, correct
-  code, confirmed by inspecting the served module's own source each
-  time. The difference from that diagnostic is a real click, dispatched
-  through gpui's own event system, pointing at the same element/paint
-  reuse already suspected in B-030, this time for an event
-  listener closure rather than a style property, on Vue's own `reload`
-  path rather than `rerender`. Not confirmed at the native layer the way
-  B-030 was. Reproduced on Intel macOS, where B-030 is not.
+  Editing `onClick` in `examples/click_counter` from `clicks.value += 1` to
+  `+= 2` and then `+= 3` applies each value on the next click. Editing back
+  to `+= 1` sometimes leaves the app on `+= 3`: the host receives nothing,
+  the count keeps its value and the increment stays 3. A later style edit
+  applies the style only. Linux and macOS both showed runs that applied the
+  revert and runs that left it.
+
+  A Vite dev server with `@vitejs/plugin-vue` delivers every revert: 18 of
+  18 edits over six sessions, including reverts to the startup content. The
+  loss sits in the CLI pipeline (`fileChangedPlugin`, the module runner, the
+  50 ms merge of saves) or between the editor save and the watcher. A repro
+  records the terminal output and the time between saves.
 
 - **B-045 `buttons` stays set after a release nobody listens to**
   `Units: bridge · Size: M · Impact: Medium`
