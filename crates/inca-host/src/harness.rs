@@ -1574,10 +1574,14 @@ mod tests {
         h.keystrokes("shift-a");
         h.key_up("ctrl-b");
 
+        // Accel is Meta on macOS and Control elsewhere.
+        let accel = !cfg!(target_os = "macos");
         assert_eq!(
             targets_log(&mut h),
-            "keydown:true:true:2:A:0:false:false:true:false:false:false:false:false,\
-             keyup:true:true:2:b:0:false:false:false:true:false:false:true:false"
+            format!(
+                "keydown:true:true:2:A:0:false:false:true:false:false:false:false:false,\
+                 keyup:true:true:2:b:0:false:false:false:true:false:false:{accel}:false"
+            )
         );
     }
 
