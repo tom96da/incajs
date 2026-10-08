@@ -12,34 +12,33 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Added
 
-- the event object has `composedPath()`
-- the event object carries `bubbles`, `cancelable`, `composed`, `defaultPrevented`, `eventPhase`, `isTrusted` and `timeStamp`
-- the `button` element has a default `tabindex` of 0, fires `click` from Enter and Space, and takes a `disabled` attribute
-- `keydown` and `keyup` carry `location`, `isComposing` and `getModifierState()`, and mouse events carry `getModifierState()`
-- `focusin` and `focusout` events, and `relatedTarget` on `focus`, `blur`, `focusin` and `focusout`
-- `click` carries the mouse and `PointerEvent` fields, so `@click.ctrl`, `@click.left` and `@click.exact` work
-- `dblclick` and `auxclick` events
-- `contextmenu` event on the right button, so `@click.right` and `@contextmenu` run
-- mouse events carry `x`, `y` and `relatedTarget`
-- `mouseover` and `mouseout` events
-- `Tab` and `Shift+Tab` move focus through the `tabindex` order
-- `el.tabIndex` sets the `tabindex` attribute ([9f63f4a](https://github.com/tom96da/incajs/commit/9f63f4a))
+- events carry the standard base fields, and the event object has `composedPath()` ([e398454](https://github.com/tom96da/incajs/commit/e398454)) ([e880159](https://github.com/tom96da/incajs/commit/e880159))
+- `button` element: default `tabindex` 0, `disabled`, and `click` from Enter and Space ([79556f0](https://github.com/tom96da/incajs/commit/79556f0))
+- `tabindex` makes a node focusable, `el.tabIndex` sets it, and Tab and Shift+Tab move focus ([9f63f4a](https://github.com/tom96da/incajs/commit/9f63f4a)) ([3e946fa](https://github.com/tom96da/incajs/commit/3e946fa))
+- `hidden` and `inert` attributes: `hidden` is `display: none`, `inert` ignores mouse and wheel ([02fa193](https://github.com/tom96da/incajs/commit/02fa193)) ([9fd5b5e](https://github.com/tom96da/incajs/commit/9fd5b5e))
+- a focused node that becomes `hidden`, `inert` or `display: none` loses focus ([02fa193](https://github.com/tom96da/incajs/commit/02fa193))
+- `focusin` and `focusout` events, and `relatedTarget` on the four focus events ([b4a6d39](https://github.com/tom96da/incajs/commit/b4a6d39))
+- the focused node gets `blur` and `focusout` when the window loses focus, and `focus` on return ([9fd5b5e](https://github.com/tom96da/incajs/commit/9fd5b5e)) ([5a5c638](https://github.com/tom96da/incajs/commit/5a5c638))
+- `keydown` and `keyup` carry `location`, `isComposing` and `getModifierState()` ([fab78ed](https://github.com/tom96da/incajs/commit/fab78ed))
+- pressing or releasing `Shift`, `Control`, `Alt` or `Meta` alone fires `keydown` or `keyup` ([9fd5b5e](https://github.com/tom96da/incajs/commit/9fd5b5e))
+- `click` carries `PointerEvent` fields, so `@click.ctrl`, `@click.left` and `.exact` work ([f8f4174](https://github.com/tom96da/incajs/commit/f8f4174))
+- `dblclick`, `auxclick`, `contextmenu`, `mouseover` and `mouseout` events ([f8f4174](https://github.com/tom96da/incajs/commit/f8f4174)) ([849cf76](https://github.com/tom96da/incajs/commit/849cf76))
+- mouse events carry `x`, `y`, `screenX`, `screenY`, `relatedTarget` and `getModifierState()` ([f8f4174](https://github.com/tom96da/incajs/commit/f8f4174)) ([849cf76](https://github.com/tom96da/incajs/commit/849cf76)) ([9fd5b5e](https://github.com/tom96da/incajs/commit/9fd5b5e))
 
 ### Changed
 
-- a focused node that gets `hidden`, `inert` or `display: none`, or sits under an ancestor that does, loses focus
-- `hidden` renders as `display: none`, and an `inert` subtree receives no mouse events
-- `event.target` is the node the event started on, so a listener on an ancestor can delegate, `.self` runs only for the node itself, and `eventPhase` is 2 on that node and 3 above it
-- `keydown` and `keyup` fire on the root node when nothing is focused
-- `key` is `"Unidentified"` when the platform reports no key, and a shifted letter keeps its upper case
-- Enter and Space fire `click` on a focused `button` only
-- a node takes focus through its `tabindex` attribute, and `focus()` on other nodes is ignored ([9f63f4a](https://github.com/tom96da/incajs/commit/9f63f4a))
-- a click outside every `tabindex` node blurs the focused node ([9f63f4a](https://github.com/tom96da/incajs/commit/9f63f4a))
-- `mouseenter` and `mouseleave` fire on every entered or left ancestor and carry `relatedTarget`
+- `event.target` is the node the event started on, so `.self` and delegation work ([e880159](https://github.com/tom96da/incajs/commit/e880159))
+- `keydown` and `keyup` fire on the root node when nothing is focused ([fab78ed](https://github.com/tom96da/incajs/commit/fab78ed))
+- `key` is `"Unidentified"` when the platform reports none, and shifted letters keep their case ([fab78ed](https://github.com/tom96da/incajs/commit/fab78ed))
+- `focus()` ignores nodes without `tabindex`, and a click outside every `tabindex` node blurs ([9f63f4a](https://github.com/tom96da/incajs/commit/9f63f4a))
+- `mouseenter` and `mouseleave` fire on every entered or left ancestor ([849cf76](https://github.com/tom96da/incajs/commit/849cf76))
+- `movementX` and `movementY` are set on `mousemove` only and are 0 on other events ([9fd5b5e](https://github.com/tom96da/incajs/commit/9fd5b5e))
 
 ### Fixed
 
 - with `--experimental-hmr`, the last of two saves made within 50 ms of each other is applied ([9df1cce](https://github.com/tom96da/incajs/commit/9df1cce))
+- `inca dev` rebuilds once when an editor saves a file by replacing it ([d3a4b74](https://github.com/tom96da/incajs/commit/d3a4b74))
+- hovered nodes stay hovered while a key is pressed ([ea1829a](https://github.com/tom96da/incajs/commit/ea1829a))
 
 ## [0.0.11] - 2026-10-06
 
