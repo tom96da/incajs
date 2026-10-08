@@ -31,7 +31,7 @@ keyboard.
   `tabindex` overrides that, and `el.tabIndex` reads `0` until a value is
   assigned.
 - `Enter`, `Space` and the `disabled` attribute are described under
-  [`click`](./events#click).
+  [`click`](./events#focus).
 
 ```vue
 <template>
@@ -86,7 +86,7 @@ right, `_y` for top and bottom), and an axis key beats the shorthand. A value
 of the wrong shape counts as unset and the next key applies.
 
 Scrollbars are not supported. `stopPropagation()` and `preventDefault()` on
-a scrolling container's [`wheel`](./events.md#wheel) event act on the scroll
+a scrolling container's [`wheel`](./events#mouse) event act on the scroll
 as described there.
 
 `position` and `z_index` are not supported, and their keys are ignored.

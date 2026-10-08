@@ -41,7 +41,7 @@ Implemented in `crates/inca-gpui/src/element.rs`. There are three kinds:
 | `tag_name` | Maps to |
 | --- | --- |
 | `"text"` | Content is its `"value"` string attribute (missing/non-string → empty, never a panic) followed by its descendants' text in child order. Descendants are not rendered as separate elements. |
-| `"button"` | A styled container. The host reads its `tabindex` with a default of 0. [Events](../docs/reference/events.md#click) covers its key clicks and `disabled` presses. |
+| `"button"` | A styled container. The host reads its `tabindex` with a default of 0. [Events](../docs/reference/events.md#focus) covers its key clicks and `disabled` presses. |
 | anything else | A generic styled container (a GPUI `div()`). |
 
 ### Style prop vocabulary
