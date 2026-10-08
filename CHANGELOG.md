@@ -10,6 +10,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.0.12] - 2026-10-08
+
 ### Added
 
 - events carry the standard base fields, and the event object has `composedPath()` ([e398454](https://github.com/tom96da/incajs/commit/e398454)) ([e880159](https://github.com/tom96da/incajs/commit/e880159))
@@ -33,6 +35,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - `focus()` ignores nodes without `tabindex`, and a click outside every `tabindex` node blurs ([9f63f4a](https://github.com/tom96da/incajs/commit/9f63f4a))
 - `mouseenter` and `mouseleave` fire on every entered or left ancestor ([849cf76](https://github.com/tom96da/incajs/commit/849cf76))
 - `movementX` and `movementY` are set on `mousemove` only and are 0 on other events ([9fd5b5e](https://github.com/tom96da/incajs/commit/9fd5b5e))
+- `console` prints a class instance with its class name ([d4a53bc](https://github.com/tom96da/incajs/commit/d4a53bc))
+- `console` `%o` shows hidden keys and nests to depth 4 ([d4a53bc](https://github.com/tom96da/incajs/commit/d4a53bc))
 
 ### Fixed
 
@@ -241,7 +245,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - prebuilt `inca-host` binaries for linux-x64, linux-arm64, and darwin-arm64, resolved automatically per platform
 - click event dispatch from the native tree back into JS
 
-[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.11...HEAD
+[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.12...HEAD
+[0.0.12]: https://github.com/tom96da/incajs/releases/tag/v0.0.12
 [0.0.11]: https://github.com/tom96da/incajs/releases/tag/v0.0.11
 [0.0.10]: https://github.com/tom96da/incajs/releases/tag/v0.0.10
 [0.0.9]: https://github.com/tom96da/incajs/releases/tag/v0.0.9
