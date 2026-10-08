@@ -14,7 +14,7 @@ import type { IncaElement } from "./nodeOps.mts";
  * @param tag - the node's element kind, if it has one; a `button` starts at tab index `0`
  * @returns the new handle
  */
-export function hostElement(
+export function createIncaElement(
   core: IncaCore,
   id: NodeId,
   kind: IncaElement["kind"],

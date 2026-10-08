@@ -5,7 +5,7 @@ import { createRenderer } from "@vue/runtime-core";
 import type { App, Component, ComponentPublicInstance } from "@vue/runtime-core";
 
 import * as core from "../rendererCore.mts";
-import { hostElement } from "./hostElement.mts";
+import { createIncaElement } from "./createElement.mts";
 import { createNodeOps } from "./nodeOps.mts";
 import { createPatchProp } from "./patchProp.mts";
 import type { IncaElement, IncaNode } from "./nodeOps.mts";
@@ -43,6 +43,6 @@ export function createIncaApp(
 
   return Object.assign(app, {
     mount: (rootContainer?: IncaElement) =>
-      mountAt(rootContainer ?? hostElement(core, core.rootNodeId(), "element")),
+      mountAt(rootContainer ?? createIncaElement(core, core.rootNodeId(), "element")),
   });
 }

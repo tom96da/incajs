@@ -3,7 +3,7 @@
 
 import type { RendererOptions } from "@vue/runtime-core";
 
-import { hostElement } from "./hostElement.mts";
+import { createIncaElement } from "./createElement.mts";
 import type { IncaCore } from "../rendererCore.mts";
 import type { NodeId, TagName } from "../types.mts";
 
@@ -107,7 +107,7 @@ export function createNodeOps(core: IncaCore): NodeOps {
      */
     createElement(tag: TagName): IncaElement {
       const id = core.createNode(tag);
-      return hostElement(core, id, "element", tag);
+      return createIncaElement(core, id, "element", tag);
     },
 
     /**
@@ -129,7 +129,7 @@ export function createNodeOps(core: IncaCore): NodeOps {
     createComment(_text: string): IncaElement {
       const id = core.createNode("div");
       core.setStyle(id, "display", "none");
-      return hostElement(core, id, "comment");
+      return createIncaElement(core, id, "comment");
     },
 
     /**
