@@ -41,6 +41,12 @@ impl PropertyDescriptor<'_> {
     pub fn is_accessor(&self) -> bool {
         self.flags & qjs::JS_PROP_GETSET.cast_signed() != 0
     }
+
+    /// Returns whether the property is enumerable.
+    #[must_use]
+    pub fn is_enumerable(&self) -> bool {
+        self.flags & qjs::JS_PROP_ENUMERABLE.cast_signed() != 0
+    }
 }
 
 /// Property access on [`Object`].
@@ -281,8 +287,8 @@ mod tests {
                 assert!(d.is_accessor());
                 assert!(d.value.is_undefined());
             }
-            assert_ne!(g.flags & qjs::JS_PROP_ENUMERABLE.cast_signed(), 0);
-            assert_eq!(s.flags & qjs::JS_PROP_ENUMERABLE.cast_signed(), 0);
+            assert!(g.is_enumerable());
+            assert!(!s.is_enumerable());
             assert!(g.getter.is_function() && g.setter.is_undefined());
             assert!(s.getter.is_undefined() && s.setter.is_function());
             assert!(b.getter.is_function() && b.setter.is_function());

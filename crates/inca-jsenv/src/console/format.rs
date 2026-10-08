@@ -73,7 +73,8 @@ fn convert(ctx: &Ctx<'_>, spec: u8, arg: &Value<'_>, color: bool) -> String {
     let converted = match spec {
         b'c' => Some(String::new()),
         b's' | b'd' if negative_zero => Some("-0".to_owned()),
-        b'o' | b'O' => Some(inspect::quoted(arg, color)),
+        b'o' => Some(inspect::detailed(arg, color)),
+        b'O' => Some(inspect::quoted(arg, color)),
         b's' if symbol => Some(inspect::quoted(arg, color)),
         b's' => string_of(ctx, arg),
         _ if symbol => Some("NaN".to_owned()),
@@ -229,7 +230,7 @@ mod tests {
         );
         assert_eq!(
             formatted("['%s', Object.create(null), 'after']"),
-            "{} after"
+            "[Object: null prototype] {} after"
         );
     }
 
@@ -268,11 +269,11 @@ mod tests {
             "{ a: [Getter], b: 2 } x"
         );
         assert_eq!(
-            formatted("['%o', [1, { get a() { throw 1; } }]]"),
+            formatted("['%O', [1, { get a() { throw 1; } }]]"),
             "[ 1, { a: [Getter] } ]"
         );
         assert_eq!(
-            formatted("['%o', Object.defineProperty([1, 2], 0, { get() { throw 1; } })]"),
+            formatted("['%O', Object.defineProperty([1, 2], 0, { get() { throw 1; } })]"),
             "[ [Getter], 2 ]"
         );
     }
@@ -381,7 +382,7 @@ mod tests {
     }
 
     #[test]
-    fn o_and_o_show_the_value_the_way_dir_does() {
+    fn o_and_o_show_a_primitive_and_an_object_the_way_dir_does() {
         for spec in ["%o", "%O"] {
             let f = |arg: &str| formatted(&format!("['{spec}', {arg}]"));
             assert_eq!(f("'text'"), "'text'");
@@ -389,8 +390,7 @@ mod tests {
             assert_eq!(f("5"), "5");
             assert_eq!(f("null"), "null");
             assert_eq!(f("undefined"), "undefined");
-            assert_eq!(f("{ a: 'b', c: [1, 'd'] }"), "{ a: 'b', c: [ 1, 'd' ] }");
-            assert_eq!(f("[]"), "[]");
+            assert_eq!(f("{ a: 'b', c: 'd' }"), "{ a: 'b', c: 'd' }");
             assert_eq!(f("Symbol('s')"), "Symbol(s)");
             assert_eq!(f("7n"), "7n");
             assert_eq!(f("function named() {}"), "[Function: named]");
@@ -399,6 +399,75 @@ mod tests {
                 "{ toString: [Function: toString] }"
             );
         }
+    }
+
+    #[test]
+    fn o_shows_hidden_properties_and_o_leaves_them_out() {
+        let cases = [
+            ("[1, 2, 3]", "[ 1, 2, 3, [length]: 3 ]", "[ 1, 2, 3 ]"),
+            ("[]", "[ [length]: 0 ]", "[]"),
+            (
+                "{ a: { b: [1] } }",
+                "{ a: { b: [ 1, [length]: 1 ] } }",
+                "{ a: { b: [ 1 ] } }",
+            ),
+            (
+                "Object.defineProperty({ a: 1 }, 'h', { value: 'x' })",
+                "{ a: 1, [h]: 'x' }",
+                "{ a: 1 }",
+            ),
+            (
+                "Object.defineProperty({}, 'a b', { value: 1 })",
+                "{ ['a b']: 1 }",
+                "{}",
+            ),
+            (
+                "Object.defineProperty({}, 'g', { get() { throw 1; } })",
+                "{ [g]: [Getter] }",
+                "{}",
+            ),
+        ];
+        for (arg, detailed, plain) in cases {
+            assert_eq!(formatted(&format!("['%o', {arg}]")), detailed, "%o {arg}");
+            assert_eq!(formatted(&format!("['%O', {arg}]")), plain, "%O {arg}");
+        }
+    }
+
+    #[test]
+    fn o_shows_the_class_name_and_the_holes_of_a_value() {
+        let cases = [
+            ("new (class Foo { a = 1 })()", "Foo { a: 1 }"),
+            (
+                "Object.assign(Object.create(null), { a: 1 })",
+                "[Object: null prototype] { a: 1 }",
+            ),
+            ("[1, , , 4]", "[ 1, <2 empty items>, 4, [length]: 4 ]"),
+        ];
+        for (arg, expected) in cases {
+            assert_eq!(formatted(&format!("['%o', {arg}]")), expected, "{arg}");
+        }
+    }
+
+    #[test]
+    fn o_ends_a_cut_array_with_the_count_and_the_length() {
+        let text = formatted("['%o', Array.from({ length: 101 }, (_, i) => i)]");
+        assert!(
+            text.ends_with("99, ... 1 more item, [length]: 101 ]"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn o_nests_four_levels_and_o_nests_two() {
+        let arg = "{ a: { b: { c: { d: { e: { f: 1 } } } } } }";
+        assert_eq!(
+            formatted(&format!("['%o', {arg}]")),
+            "{ a: { b: { c: { d: { e: [Object] } } } } }"
+        );
+        assert_eq!(
+            formatted(&format!("['%O', {arg}]")),
+            "{ a: { b: { c: [Object] } } }"
+        );
     }
 
     #[test]

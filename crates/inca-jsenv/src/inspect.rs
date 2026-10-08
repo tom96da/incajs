@@ -21,6 +21,9 @@ pub(crate) use builtins::pin;
 /// Nesting depth after which `[Array]` or `[Object]` is printed. It also bounds a cycle.
 const MAX_DEPTH: usize = 3;
 
+/// The depth cap of `%o`, which matches Node's depth 4.
+const DETAILED_DEPTH: usize = 5;
+
 /// Entries of one array, `Map` or `Set` printed before `... N more items`. A
 /// run of array holes is one entry.
 const MAX_ENTRIES: usize = 100;
@@ -34,10 +37,7 @@ pub(crate) fn settled<T>(ctx: &Ctx<'_>, result: JsResult<T>) -> Option<T> {
 }
 
 pub(crate) fn line(values: &[Value<'_>], color: bool) -> String {
-    let mode = Mode {
-        color,
-        escape: false,
-    };
+    let mode = Mode::new(color, false);
     let mut out = String::new();
     for (index, value) in values.iter().enumerate() {
         if index > 0 {
@@ -51,11 +51,18 @@ pub(crate) fn line(values: &[Value<'_>], color: bool) -> String {
 /// Renders one value as a nested one: a string is quoted, as in `dir` and
 /// `table` cells, and anything else reads as it does in [`line`].
 pub(crate) fn quoted(value: &Value<'_>, color: bool) -> String {
+    render_quoted(value, Mode::new(color, false))
+}
+
+/// As [`quoted`], with the depth cap of `%o` and the non-enumerable own
+/// properties shown in square brackets.
+pub(crate) fn detailed(value: &Value<'_>, color: bool) -> String {
     render_quoted(
         value,
         Mode {
-            color,
-            escape: false,
+            max_depth: DETAILED_DEPTH,
+            hidden: true,
+            ..Mode::new(color, false)
         },
     )
 }
@@ -63,13 +70,7 @@ pub(crate) fn quoted(value: &Value<'_>, color: bool) -> String {
 /// As [`quoted`], with every control character in the value's text spelled
 /// as an escape sequence, so the result is a single line.
 pub(crate) fn quoted_escaped(value: &Value<'_>, color: bool) -> String {
-    render_quoted(
-        value,
-        Mode {
-            color,
-            escape: true,
-        },
-    )
+    render_quoted(value, Mode::new(color, true))
 }
 
 fn render_quoted(value: &Value<'_>, mode: Mode) -> String {
@@ -84,6 +85,21 @@ fn render_quoted(value: &Value<'_>, mode: Mode) -> String {
 struct Mode {
     color: bool,
     escape: bool,
+    /// Nesting depth after which `[Array]` or `[Object]` is printed.
+    max_depth: usize,
+    /// Whether non-enumerable own string keys are printed as `[key]: value`.
+    hidden: bool,
+}
+
+impl Mode {
+    const fn new(color: bool, escape: bool) -> Self {
+        Self {
+            color,
+            escape,
+            max_depth: MAX_DEPTH,
+            hidden: false,
+        }
+    }
 }
 
 /// Spells every control character as an escape sequence.
@@ -254,7 +270,7 @@ fn write_array(out: &mut String, value: &Value<'_>, depth: usize, mode: Mode) {
         put(out, mode, Style::Cyan, "[Array]");
         return;
     };
-    if depth >= MAX_DEPTH {
+    if depth >= mode.max_depth {
         put(out, mode, Style::Cyan, "[Array]");
         return;
     }
@@ -262,7 +278,7 @@ fn write_array(out: &mut String, value: &Value<'_>, depth: usize, mode: Mode) {
     let ctx = object.ctx();
     // A length above `i32::MAX` is a float, so `Array::len` cannot read it.
     let length = settled(ctx, object.get::<_, f64>("length")).unwrap_or(0.0);
-    if length < 1.0 {
+    if length < 1.0 && !mode.hidden {
         out.push_str("[]");
         return;
     }
@@ -303,6 +319,11 @@ fn write_array(out: &mut String, value: &Value<'_>, depth: usize, mode: Mode) {
         } else {
             write_holes(out, &mut written, rest, mode);
         }
+    }
+    if mode.hidden {
+        separate(out, &mut written);
+        out.push_str("[length]: ");
+        put(out, mode, Style::Yellow, &length.to_string());
     }
     out.push_str(" ]");
 }
@@ -347,7 +368,10 @@ fn quote(text: &str) -> String {
 }
 
 /// A key that is an identifier prints as it is; any other is quoted.
-fn write_key(out: &mut String, key: &str, mode: Mode) {
+fn write_key(out: &mut String, key: &str, bracketed: bool, mode: Mode) {
+    if bracketed {
+        out.push('[');
+    }
     let mut chars = key.chars();
     let bare = chars
         .next()
@@ -358,7 +382,7 @@ fn write_key(out: &mut String, key: &str, mode: Mode) {
     } else {
         put(out, mode, Style::Green, &quote(key));
     }
-    out.push_str(": ");
+    out.push_str(if bracketed { "]: " } else { ": " });
 }
 
 /// What an own property holds.
@@ -407,31 +431,151 @@ fn write_object(out: &mut String, value: &Value<'_>, depth: usize, mode: Mode) {
         put(out, mode, Style::Cyan, "[Object]");
         return;
     };
-    if depth >= MAX_DEPTH {
-        put(out, mode, Style::Cyan, "[Object]");
+    // The label of a prototype-less object is a tag in brackets.
+    let (label, tag) = match constructor_name(object) {
+        None if is_module_namespace(object) => ("Module: null prototype".to_owned(), true),
+        None => ("Object: null prototype".to_owned(), true),
+        Some(name) => (name, false),
+    };
+    if depth >= mode.max_depth {
+        put(out, mode, Style::Cyan, &format!("[{label}]"));
         return;
     }
+    let prefix = match (tag, label.as_str()) {
+        (true, _) => format!("[{label}] "),
+        (false, "Object") => String::new(),
+        _ => format!("{label} "),
+    };
 
     let mut entries = 0;
     let mut body = String::new();
-    for key in object.keys::<String>() {
+    let keys = if mode.hidden {
+        object.own_keys::<String>(Filter::new().string())
+    } else {
+        object.keys::<String>()
+    };
+    for key in keys {
         let Ok(key) = key else {
             drop(object.ctx().catch());
             continue;
         };
+        let shown = mode.hidden
+            && settled(object.ctx(), object.get_own_property_descriptor(&key[..]))
+                .flatten()
+                .is_some_and(|desc| !desc.is_enumerable());
         if entries > 0 {
             body.push_str(", ");
         }
-        write_key(&mut body, &key, mode);
+        write_key(&mut body, &key, shown, mode);
         write_slot(&mut body, slot(object, &key), depth, mode);
         entries += 1;
     }
 
     if entries == 0 {
-        out.push_str("{}");
+        let _ = write!(out, "{prefix}{{}}");
     } else {
-        let _ = write!(out, "{{ {body} }}");
+        let _ = write!(out, "{prefix}{{ {body} }}");
     }
+}
+
+/// The name of the first constructor on the prototype chain that the object
+/// is an instance of. `None` for an object with no prototype. When no
+/// constructor qualifies, `Object <name of the prototype>`. Only own data
+/// properties are read. A constructor that is a `Proxy` reads as its target,
+/// and a `Proxy` on the chain reads as `Object`, so no getter or trap runs.
+fn constructor_name(object: &Object<'_>) -> Option<String> {
+    let first = prototype_of(object)?;
+    let mut current = first.clone();
+    loop {
+        if current.as_value().is_proxy() {
+            return Some("Object".to_owned());
+        }
+        let own = settled(
+            object.ctx(),
+            current.get_own_property_descriptor("constructor"),
+        )
+        .flatten();
+        if let Some(constructor) = own
+            .and_then(|desc| unproxied(&desc.value))
+            .and_then(Value::into_object)
+            && constructor.is_function()
+            && let Some(name) = own_string(&constructor, "name").filter(|name| !name.is_empty())
+            && is_instance(object, &constructor)
+        {
+            return Some(name);
+        }
+        match prototype_of(&current) {
+            Some(next) => current = next,
+            None => break,
+        }
+    }
+    let inner = constructor_name(&first).unwrap_or_else(|| detached(&first));
+    Some(format!("Object <{inner}>"))
+}
+
+/// A prototype-less object as a prototype label: `[Object: null prototype]`,
+/// then `{}` when it has no enumerable keys.
+fn detached(object: &Object<'_>) -> String {
+    if object.keys::<String>().next().is_none() {
+        "[Object: null prototype] {}".to_owned()
+    } else {
+        "[Object: null prototype]".to_owned()
+    }
+}
+
+/// The string held by an own data property, or `None`.
+fn own_string(object: &Object<'_>, key: &str) -> Option<String> {
+    let desc = settled(object.ctx(), object.get_own_property_descriptor(key)).flatten()?;
+    desc.value.as_string()?.to_string().ok()
+}
+
+/// Whether the object is a module namespace, which has no prototype and the
+/// tag `Module`.
+fn is_module_namespace(object: &Object<'_>) -> bool {
+    let ctx = object.ctx();
+    let Ok(symbol) = ctx.globals().get::<_, Object<'_>>("Symbol") else {
+        drop(ctx.catch());
+        return false;
+    };
+    let Some(Some(tag)) = settled(ctx, symbol.get_own_property_descriptor("toStringTag")) else {
+        return false;
+    };
+    object.get_prototype().is_none()
+        && settled(ctx, object.get_own_property_descriptor(tag.value))
+            .flatten()
+            .and_then(|desc| desc.value.as_string()?.to_string().ok())
+            .is_some_and(|tag| tag == "Module")
+}
+
+/// The prototype, clearing the exception a `Proxy` prototype's trap threw.
+fn prototype_of<'js>(object: &Object<'js>) -> Option<Object<'js>> {
+    let prototype = object.get_prototype();
+    if object.ctx().has_exception() {
+        drop(object.ctx().catch());
+    }
+    prototype
+}
+
+/// Whether the data property `constructor.prototype` is on the object's chain.
+fn is_instance<'js>(object: &Object<'js>, constructor: &Object<'js>) -> bool {
+    let ctx = object.ctx();
+    let Some(target) = settled(ctx, constructor.get_own_property_descriptor("prototype"))
+        .flatten()
+        .and_then(|desc| desc.value.into_object())
+    else {
+        return false;
+    };
+    let mut current = prototype_of(object);
+    while let Some(next) = current {
+        if next == target {
+            return true;
+        }
+        if next.as_value().is_proxy() {
+            return false;
+        }
+        current = prototype_of(&next);
+    }
+    false
 }
 
 #[cfg(test)]
@@ -472,6 +616,151 @@ mod tests {
             let _ = line(&[value], false);
 
             assert!(!ctx.has_exception(), "a read left an exception pending");
+        });
+    }
+
+    #[test]
+    fn an_instance_prints_with_its_class_name() {
+        let cases = [
+            (
+                "class Foo { constructor() { this.a = 1; } }; new Foo()",
+                "Foo { a: 1 }",
+            ),
+            ("class Foo {}; new Foo()", "Foo {}"),
+            (
+                "class A {}; class B extends A { a = 1 }; new B()",
+                "B { a: 1 }",
+            ),
+            ("function F() { this.a = 1; }; new F()", "F { a: 1 }"),
+            (
+                "const f = new (class Foo { a = 1 })(); delete f.constructor; f",
+                "Foo { a: 1 }",
+            ),
+            ("class Foo {}; ({ x: [new Foo()] })", "{ x: [ Foo {} ] }"),
+            (
+                "class Foo { a = 1 }; ({ x: { y: { z: new Foo() } } })",
+                "{ x: { y: { z: [Foo] } } }",
+            ),
+            ("Object.create({ a: 1 })", "{}"),
+            (
+                "class Foo { a = 1 }; Object.setPrototypeOf(Foo.prototype, null); new Foo()",
+                "Foo { a: 1 }",
+            ),
+            (
+                "class Foo { a = 1 }; \
+                 Foo.prototype.constructor = new Proxy(Foo, { get() { throw 1; } }); new Foo()",
+                "Foo { a: 1 }",
+            ),
+            ("({ a: 1 })", "{ a: 1 }"),
+        ];
+        for (expression, expected) in cases {
+            assert_eq!(rendered(expression), expected, "{expression}");
+        }
+    }
+
+    #[test]
+    fn a_prototype_less_object_prints_a_tag() {
+        assert_eq!(
+            rendered("Object.assign(Object.create(null), { a: 1 })"),
+            "[Object: null prototype] { a: 1 }"
+        );
+        assert_eq!(
+            rendered("Object.create(null)"),
+            "[Object: null prototype] {}"
+        );
+        assert_eq!(
+            rendered("({ x: { y: { z: Object.assign(Object.create(null), { a: 1 }) } } })"),
+            "{ x: { y: { z: [Object: null prototype] } } }"
+        );
+    }
+
+    #[test]
+    fn a_constructor_that_cannot_name_the_object_falls_back_to_object() {
+        let cases = [
+            // Anonymous class.
+            ("new (class { a = 1 })()", "{ a: 1 }"),
+            // Foo.prototype has no Foo.prototype on its chain.
+            ("class Foo {}; Foo.prototype", "{}"),
+            (
+                "const o = { a: 1 }; o.constructor = 5; o",
+                "{ a: 1, constructor: 5 }",
+            ),
+            (
+                "class Foo { a = 1 }; delete Foo.prototype.constructor; new Foo()",
+                "{ a: 1 }",
+            ),
+            (
+                "class Foo { a = 1 }; Foo.prototype.constructor = 5; new Foo()",
+                "{ a: 1 }",
+            ),
+            (
+                "class Foo { a = 1 }; Object.defineProperty(Foo.prototype, 'constructor', \
+                 { get() { throw 1; } }); new Foo()",
+                "{ a: 1 }",
+            ),
+            (
+                "class Foo { a = 1; static get name() { throw 1; } }; new Foo()",
+                "{ a: 1 }",
+            ),
+            ("Object.create(new Proxy({}, {}))", "{}"),
+            (
+                "class Foo { a = 1 }; \
+                 Object.defineProperty(Foo, 'name', { get() { throw 1; } }); new Foo()",
+                "{ a: 1 }",
+            ),
+            (
+                "class Foo { a = 1 }; Foo.prototype.constructor = (function () {}).bind(); new Foo()",
+                "{ a: 1 }",
+            ),
+        ];
+        for (expression, expected) in cases {
+            let runtime = Runtime::new().unwrap();
+            let context = Context::full(&runtime).unwrap();
+            context.with(|ctx| {
+                let value: Value<'_> = ctx.eval(expression).unwrap();
+                assert_eq!(line(&[value], false), expected, "{expression}");
+                assert!(!ctx.has_exception(), "{expression} left an exception");
+            });
+        }
+    }
+
+    #[test]
+    fn an_object_whose_prototypes_name_no_constructor_names_its_prototype() {
+        let cases = [
+            (
+                "Object.create(Object.create(null))",
+                "Object <[Object: null prototype] {}> {}",
+            ),
+            (
+                "Object.assign(Object.create(Object.create(null)), { a: 1 })",
+                "Object <[Object: null prototype] {}> { a: 1 }",
+            ),
+            (
+                "Object.create(Object.create(null, { x: { value: 1, enumerable: true } }))",
+                "Object <[Object: null prototype]> {}",
+            ),
+            (
+                "Object.create(Object.create(Object.create(null)))",
+                "Object <Object <[Object: null prototype] {}>> {}",
+            ),
+        ];
+        for (expression, expected) in cases {
+            assert_eq!(rendered(expression), expected, "{expression}");
+        }
+    }
+
+    #[test]
+    fn a_module_namespace_is_tagged_as_a_module() {
+        let runtime = Runtime::new().unwrap();
+        let context = Context::full(&runtime).unwrap();
+        context.with(|ctx| {
+            drop(rquickjs::Module::evaluate(
+                ctx.clone(),
+                "n",
+                "import * as self from 'n'; globalThis.ns = self; export let x = 1;",
+            ));
+            let value: Value<'_> = ctx.eval("ns").unwrap();
+            assert_eq!(line(&[value], false), "[Module: null prototype] { x: 1 }");
         });
     }
 
@@ -1708,10 +1997,10 @@ mod tests {
 
     #[test]
     fn a_collection_is_not_mistaken_for_a_plain_object() {
-        assert_eq!(rendered("Object.create(Map.prototype)"), "{}");
-        assert_eq!(rendered("Object.create(Date.prototype)"), "{}");
-        assert_eq!(rendered("Object.create(Set.prototype)"), "{}");
-        assert_eq!(rendered("Object.create(RegExp.prototype)"), "{}");
+        assert_eq!(rendered("Object.create(Map.prototype)"), "Map {}");
+        assert_eq!(rendered("Object.create(Date.prototype)"), "Date {}");
+        assert_eq!(rendered("Object.create(Set.prototype)"), "Set {}");
+        assert_eq!(rendered("Object.create(RegExp.prototype)"), "RegExp {}");
     }
 
     #[test]
@@ -1847,7 +2136,7 @@ mod tests {
                 .eval("[new Date(0), /x/g, new Map([[1, 2]]), new Set([1])]")
                 .unwrap();
 
-            assert_eq!(line(&values, false), "{} {} {} {}");
+            assert_eq!(line(&values, false), "Date {} RegExp {} Map {} Set {}");
             assert!(!ctx.has_exception());
             pin(&ctx).unwrap();
             assert_eq!(

@@ -44,7 +44,8 @@ specifiers take the next argument:
 | `%s` | The argument as a string |
 | `%d`, `%i` | The integer at the start of the argument, or `NaN` |
 | `%f` | The decimal number at the start of the argument, or `NaN` |
-| `%o`, `%O` | The argument as `console.dir` prints it |
+| `%o` | The argument nested up to four levels, with non-enumerable own properties in square brackets, as `[length]: 3` |
+| `%O` | The argument as `console.dir` prints it |
 | `%c` | Nothing. Takes its argument |
 | `%%` | A `%` |
 
@@ -108,12 +109,12 @@ type as in Node. These environment variables override the terminal check:
 ## Known issues
 
 - Output is not wrapped across lines.
-- A class instance prints without its class name. Symbol-keyed
-  properties and extra properties on arrays and errors are dropped. A
-  `Promise`, a typed array and a `WeakMap` print as plain objects. A
-  circular reference prints `[Object]` at the depth limit, with no marker.
+- Symbol-keyed properties and extra properties on arrays and errors are
+  dropped. A `Promise`, a typed array and a `WeakMap` print as plain
+  objects. A circular reference prints `[Object]` at the depth limit, with
+  no marker.
 - A `Date`, `RegExp`, `Map` or `Set` prints like Node, but properties
   added to it and the name of a subclass are left out.
 - A string inside an array or object is always single-quoted.
-- `%o` and `%O` print alike, and `%c` drops its styling.
+- `%c` drops its styling.
 - Timers always print milliseconds.

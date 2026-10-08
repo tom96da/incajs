@@ -288,14 +288,13 @@ A fixed entry is deleted and its ID is never reused.
 - **B-097 `console` prints some classes and built-ins unlike Node**
   `Units: jsenv · Size: M · Impact: Medium`
 
-  A class instance prints without its class name, as `{ a: 1 }` where Node
-  prints `Foo { a: 1 }`. Properties keyed by a `Symbol` and extra
-  properties on an array or an `Error` are dropped. A `Promise`, a typed
-  array, a `WeakMap` and a boxed primitive print as a plain object: `{}` for
-  most, `{ '0': 0, '1': 0, '2': 0 }` for `new Uint8Array(3)`, where Node
-  prints `Promise { 1 }` and `Uint8Array(3) [ 0, 0, 0 ]`. A nested string,
-  and an object key that is not an identifier, is always single-quoted,
-  where Node picks the quote that avoids escaping.
+  Properties keyed by a `Symbol` and extra properties on an array or an
+  `Error` are dropped. A `Promise`, a typed array, a `WeakMap` and a boxed
+  primitive print as a plain object: `{}` for most, `{ '0': 0, '1': 0,
+  '2': 0 }` for `new Uint8Array(3)`, where Node prints `Promise { 1 }` and
+  `Uint8Array(3) [ 0, 0, 0 ]`. A nested string, and an object key that is
+  not an identifier, is always single-quoted, where Node picks the quote
+  that avoids escaping.
 
 - **B-122 Colours take fewer notations than CSS**
   `Units: gpui,docs · Size: M–L · Impact: Medium`
@@ -722,18 +721,20 @@ A fixed entry is deleted and its ID is never reused.
 - **B-086 Some `console` methods only approximate the standard**
   `Units: jsenv · Size: M · Impact: Low`
 
-  A format string supports `%s`, `%d`, `%i`, `%f`, `%o`, `%O`, `%c` and
-  `%%`. `%o` and `%O` render alike, and `%c` drops its argument without
-  styling. A conversion that throws prints the value as `dir` does, where
-  the standard throws. A `Symbol` or a label whose `toString` throws becomes
-  the default label where the standard throws. `time`, `timeLog` and
-  `timeEnd` always print milliseconds. `dir` ignores its `options`. `dirxml`
-  formats like `log`. `clear` closes the open groups and leaves the terminal
-  as it is. `groupCollapsed` prints its lines like `group`, since a terminal
-  cannot fold them. `table` ignores a `columns` argument that is not an
-  array, and drops properties keyed by a `Symbol` and a `Symbol` column
-  name. `trace` reads its stack through the global `Error`, which a script
-  can replace. `profile`, `profileEnd` and `timeStamp` do not exist.
+  A format string supports `%s`, `%d`, `%i`, `%f`, `%o`, `%O`, `%c` and `%%`.
+  `%o` follows Node with `showProxy` off. `%c` takes its argument and applies
+  no styling, and the Console Standard leaves `%c` undefined. Fix: map the CSS
+  properties `color`, `background-color`, `font-weight`, `font-style` and
+  `text-decoration` to terminal styles. A conversion that throws prints the
+  value as `dir` does, where the standard throws. A `Symbol` or a label whose
+  `toString` throws becomes the default label where the standard throws.
+  `time`, `timeLog` and `timeEnd` always print milliseconds. `dir` ignores its
+  `options`. `dirxml` formats like `log`. `clear` closes the open groups and
+  leaves the terminal as it is. `groupCollapsed` prints its lines like
+  `group`, since a terminal cannot fold them. `table` ignores a `columns`
+  argument that is not an array, and drops properties keyed by a `Symbol` and
+  a `Symbol` column name. `trace` reads its stack through the global `Error`,
+  which a script can replace.
 
   Printed values differ from the standard in these ways:
 

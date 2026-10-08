@@ -17,7 +17,7 @@ use rquickjs::{
     function::{Rest, This},
 };
 
-use super::{MAX_DEPTH, MAX_ENTRIES, Mode, put, settled, write_more, write_value};
+use super::{MAX_ENTRIES, Mode, put, settled, write_more, write_value};
 use crate::paint::Style;
 use crate::quickjs::ValueExt;
 
@@ -144,7 +144,7 @@ fn write_collection<'js>(
     depth: usize,
     mode: Mode,
 ) {
-    if depth >= MAX_DEPTH {
+    if depth >= mode.max_depth {
         put(out, mode, Style::Cyan, &format!("[{name}]"));
         return;
     }
