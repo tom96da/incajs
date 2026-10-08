@@ -1914,6 +1914,37 @@ mod tests {
     }
 
     #[gpui::test]
+    fn a_replaced_node_under_a_resting_pointer_gets_enter_events(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, HOVER_ORDER);
+        let d = node(&h, "D");
+        h.hover(d);
+        targets_log(&mut h);
+
+        run_js(
+            &mut h,
+            r"
+            const n = __inca_native__;
+            n.removeChild(B, D);
+            const N = n.createNode('div');
+            n.setStyle(N, 'width', 30);
+            n.setStyle(N, 'height', 30);
+            n.appendChild(B, N);
+            globalThis.N = N;
+            for (const t of ['mouseover', 'mouseenter']) {
+                n.addEventListener(N, t, 0);
+            }
+            ",
+        );
+
+        // The new node is outside the name table, so the log spells it undefined.
+        assert_eq!(
+            targets_log(&mut h),
+            "mouseover@undefined/undefined/B,mouseover@B/undefined/B,\
+             mouseover@A/undefined/B,mouseenter@undefined/undefined/B"
+        );
+    }
+
+    #[gpui::test]
     fn the_hover_events_of_a_move_precede_its_mousemove(cx: &mut TestAppContext) {
         let mut h = Harness::load(cx, ENTRY, HOVER_ORDER);
         let c = node(&h, "C");

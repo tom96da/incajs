@@ -201,8 +201,9 @@ report compares the deepest container with the previous one
 `mouseout` at the old container, `mouseleave` on each container left
 (innermost first), `mouseover` at the new one, `mouseenter` on each container
 entered (outermost first). `relatedTarget` of the first two is the new
-container and of the last two the old one. Position and modifiers are read
-from the window when the report runs.
+container and of the last two the old one. A removed old container receives
+no `mouseout` or `mouseleave`, and its nearest remaining ancestor is the old
+one. Position and modifiers are read from the window when the report runs.
 
 The mouse payload is `clientX`, `clientY`, `screenX`, `screenY`, `x`, `y`,
 `pageX`, `pageY`, `movementX`, `movementY`, `button`, `buttons`, `detail`,

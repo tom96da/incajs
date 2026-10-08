@@ -684,10 +684,13 @@ impl EventDispatcher {
     /// `mouseover` at the new one and `mouseenter` at each container entered
     /// (outermost first).
     fn report_hover(&self, next: Option<NodeId>, window: &mut Window, cx: &mut App) {
-        let live = |id: &NodeId| self.host.borrow().tree.get(*id).is_some();
         let next_path = next.map(|id| self.path_from(id)).unwrap_or_default();
         // A removed container is replaced by its nearest live ancestor.
         let old_path = self.hover_prev.replace(next_path.clone());
+        // A container is live while it still hangs below the old path's top.
+        let top = old_path.last().copied();
+        let live = |id: &NodeId| self.path_from(*id).last().copied() == top;
+        let removed = old_path.first().is_some_and(|id| !live(id));
         let old_path: Vec<_> = old_path.into_iter().skip_while(|id| !live(id)).collect();
         let prev = old_path.first().copied();
         if prev == next {
@@ -701,7 +704,8 @@ impl EventDispatcher {
                 ..mouse
             })
         };
-        if let Some(old) = prev {
+        // A removed container receives no `mouseout`.
+        if let Some(old) = prev.filter(|_| !removed) {
             self.fire(old, "mouseout", &with(next), window, cx);
         }
         for id in leave {
@@ -1983,6 +1987,11 @@ mod tests {
     fn a_removed_node_is_no_related_target_and_no_previous_container(cx: &mut TestAppContext) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [outer, parent, child] = tree_of_three(&host);
+        {
+            let mut host = host.borrow_mut();
+            let root = host.root;
+            host.tree.append_child(root, outer).unwrap();
+        }
         dispatcher
             .engine
             .eval::<()>(
@@ -2030,5 +2039,12 @@ mod tests {
             seen(&dispatcher),
             serde_json::json!([["mouseout", outer], ["mouseover", parent]])
         );
+
+        // A detached deepest container gets no mouseout.
+        cx.update(|window, cx| dispatcher.report_hover(Some(parent), window, cx));
+        seen(&dispatcher);
+        host.borrow_mut().tree.remove_child(outer, parent).unwrap();
+        cx.update(|window, cx| dispatcher.report_hover(None, window, cx));
+        assert_eq!(seen(&dispatcher), serde_json::json!([]));
     }
 }
