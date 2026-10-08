@@ -1945,6 +1945,64 @@ mod tests {
     }
 
     #[gpui::test]
+    fn swapping_a_node_under_a_resting_pointer_keeps_the_parent_hovered(cx: &mut TestAppContext) {
+        let mut h = Harness::load(
+            cx,
+            ENTRY,
+            r"
+            const n = __inca_native__;
+            const make = (parent, tag, w, h) => {
+                const id = n.createNode(tag);
+                n.setStyle(id, 'width', w);
+                n.setStyle(id, 'height', h);
+                n.appendChild(parent, id);
+                return id;
+            };
+            const F = make(n.rootNodeId(), 'div', 200, 200);
+            const K = make(F, 'div', 200, 30);
+            n.setAttribute(K, 'tabindex', '0');
+            const P = make(F, 'div', 200, 50);
+            n.setStyle(P, 'padding', 4);
+            n.setStyle(P, 'border_width', 1);
+            const D = make(P, 'div', 180, 30);
+            make(D, 'div', 100, 10);
+            Object.assign(globalThis, { K, P, D });
+            globalThis.log = [];
+            const names = { [P]: 'P', [D]: 'D' };
+            globalThis.__inca_callbacks__ = {
+                0: (e) => { globalThis.log.push(`${e.type}@${names[e.currentTarget] ?? 'new'}/${
+                    names[e.target] ?? 'new'}/${
+                    (e.relatedTarget === null ? 'none' : (names[e.relatedTarget] ?? 'new'))}`); },
+                1: () => {
+                    n.removeChild(P, D);
+                    const N = make(P, 'button', 180, 30);
+                    make(N, 'div', 100, 10);
+                    for (const t of ['mouseover', 'mouseout', 'mouseenter', 'mouseleave']) {
+                        n.addEventListener(N, t, 0);
+                    }
+                },
+            };
+            for (const t of ['mouseover', 'mouseout', 'mouseenter', 'mouseleave']) {
+                n.addEventListener(P, t, 0);
+                n.addEventListener(D, t, 0);
+            }
+            n.addEventListener(K, 'keydown', 1);
+            ",
+        );
+        run_js(&mut h, "__inca_native__.focusNode(K)");
+        let d = node(&h, "D");
+        h.hover(d);
+        targets_log(&mut h);
+
+        h.keystrokes("s");
+
+        assert_eq!(
+            targets_log(&mut h),
+            "mouseover@new/new/P,mouseover@P/new/P,mouseenter@new/new/P"
+        );
+    }
+
+    #[gpui::test]
     fn the_hover_events_of_a_move_precede_its_mousemove(cx: &mut TestAppContext) {
         let mut h = Harness::load(cx, ENTRY, HOVER_ORDER);
         let c = node(&h, "C");
@@ -2230,6 +2288,22 @@ mod tests {
             log(&h),
             "focus@n1,blur@n1,focus@n2,blur@n2,focus@n3,blur@n3,focus@z1,blur@z1,focus@z2,\
              blur@z2,focus@n1"
+        );
+    }
+
+    #[gpui::test]
+    fn keys_after_the_wrap_to_nothing_reach_the_root(cx: &mut TestAppContext) {
+        let mut h = tabs(cx);
+        run_js(
+            &mut h,
+            "__inca_native__.addEventListener(__inca_native__.rootNodeId(), 'keydown', 4);\
+             for (const id of [n1, n2, n3, z1, m1]) __inca_native__.removeAttribute(id, 'tabindex');\
+             __inca_native__.focusNode(z2);",
+        );
+        h.keystrokes("tab x tab");
+        assert_eq!(
+            log(&h),
+            "focus@z2,keydown@z2,blur@z2,keydown@null,keydown@null,focus@z2"
         );
     }
 

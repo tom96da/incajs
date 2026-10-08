@@ -801,7 +801,9 @@ where
     E: EventSink + Clone + 'static,
 {
     element.when_some(dispatch.cloned(), |el, sink| {
-        el.on_hover(move |hovered, window, cx| sink.hover_changed(id, *hovered, window, cx))
+        // Hover state ignores the last input kind, so a key press keeps it.
+        el.hover_listener_mode(gpui::HoverListenerMode::InputModalityIndependent)
+            .on_hover(move |hovered, window, cx| sink.hover_changed(id, *hovered, window, cx))
     })
 }
 
