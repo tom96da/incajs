@@ -9,10 +9,11 @@
 
 use std::cell::RefCell;
 use std::fmt;
-use std::ops::ControlFlow;
 use std::path::PathBuf;
 
-use rquickjs::{Coerced, Context, Ctx, FromJs, Function, Module, Persistent, Runtime, Value};
+use rquickjs::{
+    Coerced, Context, Ctx, FromJs, Function, Module, Persistent, Promise, Runtime, Value,
+};
 
 use crate::loader::{DiskLoader, DiskResolver, canonical_name};
 
@@ -130,18 +131,21 @@ const TRACKER_JS: &str = "{
 /// One `QuickJS` runtime with the single context it runs scripts in.
 ///
 /// Build one with [`Engine::new`] or [`Engine::builder`]. Run a script with
-/// [`eval`](Self::eval), a module with [`eval_module`](Self::eval_module),
-/// and the promise jobs they queue with [`run_jobs`](Self::run_jobs); reach
-/// the raw context through [`with`](Self::with). An `Engine` is neither
-/// `Send` nor `Sync`, so it stays on the thread that created it. Dropping it
-/// frees the runtime and its realm.
+/// [`eval`](Self::eval) and a module with
+/// [`eval_module`](Self::eval_module). A module whose top-level `await`
+/// settles later runs with [`start_module`](Self::start_module) and
+/// [`poll_module`](Self::poll_module). Run the promise jobs they queue with
+/// [`run_jobs`](Self::run_jobs). Reach the raw context through
+/// [`with`](Self::with). An `Engine` is neither `Send` nor `Sync`, so it
+/// stays on the thread that created it. Dropping it frees the runtime and
+/// its realm.
 pub struct Engine {
     // Kept alive for the lifetime of `context`, which internally holds a
     // reference-counted handle back to it; QuickJS ties runtime-wide state
     // (the heap, GC) to this handle rather than to the context.
     runtime: Runtime,
     context: Context,
-    /// Jobs that threw while [`eval_module`](Self::eval_module) drove a
+    /// Jobs that threw while [`poll_module`](Self::poll_module) drove a
     /// module's top-level `await`. The next [`run_jobs`](Self::run_jobs)
     /// returns them first.
     startup_failures: RefCell<Vec<EngineError>>,
@@ -194,7 +198,8 @@ impl Engine {
     /// unreported: a job that threw, and a promise still rejected with no
     /// handler once the queue is empty. A rejection someone handles during
     /// the same drain is not a failure. A job that threw while
-    /// [`eval_module`](Self::eval_module) awaited comes first.
+    /// [`eval_module`](Self::eval_module) or [`poll_module`](Self::poll_module)
+    /// ran comes first.
     ///
     /// Call it outside [`with`](Self::with), and handle the result outside
     /// it too: the handling code may re-enter the engine.
@@ -274,6 +279,10 @@ impl Engine {
     /// script's does — the module's top-level code writes to `globalThis`,
     /// and a separate `eval` call reads it back afterward.
     ///
+    /// This is [`start_module`](Self::start_module) followed by one
+    /// [`poll_module`](Self::poll_module). A module that is still pending
+    /// after that poll is an error.
+    ///
     /// # Errors
     ///
     /// Returns an error for a syntax/link error, an uncaught exception
@@ -281,44 +290,86 @@ impl Engine {
     /// awaits something with no pending job left to drive it (not expected
     /// for a self-contained module with no top-level `await`).
     ///
-    /// A job that throws while the module awaits does not fail the module.
-    /// The next [`run_jobs`](Self::run_jobs) returns it.
+    /// The failure of a job that throws while the module awaits goes to the
+    /// next [`run_jobs`](Self::run_jobs). The module's result is unaffected.
     pub fn eval_module(&self, name: &str, source: &str) -> EngineResult<()> {
+        let module = self.start_module(name, source)?;
+        self.poll_module(&module)
+            .unwrap_or_else(|| Err(EngineError::plain(&rquickjs::Error::WouldBlock)))
+    }
+
+    /// Declares `source` as an ES module named `name` and evaluates it up to
+    /// its first top-level `await`. Drive it with
+    /// [`poll_module`](Self::poll_module).
+    ///
+    /// `name` and `import` resolution follow
+    /// [`eval_module`](Self::eval_module).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a syntax/link error or an uncaught exception
+    /// thrown before the first `await`.
+    pub fn start_module(&self, name: &str, source: &str) -> EngineResult<PendingModule> {
         let name = canonical_name(name);
-        let mut pending = self.context.with(|ctx| {
+        self.context.with(|ctx| {
             Module::declare(ctx.clone(), name, source)
                 .and_then(rquickjs::Module::eval)
-                .map(|(_module, promise)| Persistent::save(&ctx, promise))
+                .map(|(_module, promise)| PendingModule(Persistent::save(&ctx, promise)))
                 .map_err(|err| EngineError::capture(&ctx, &err))
-        })?;
+        })
+    }
+
+    /// Runs promise jobs until `module` settles or the job queue is empty.
+    ///
+    /// Returns `None` while the module is pending. Settle it by evaluating
+    /// code that resolves what it awaits, then poll again. Returns
+    /// `Some(Ok(()))` once the module has completed, and `Some(Err(_))` once
+    /// it has thrown. Every later poll returns the same result.
+    ///
+    /// The failure of a job that throws during a poll goes to the next
+    /// [`run_jobs`](Self::run_jobs), whether the module is pending or
+    /// settled. The module's result is unaffected.
+    ///
+    /// A module that settled with `Some(Err(_))` is also in the next
+    /// [`run_jobs`](Self::run_jobs) result.
+    ///
+    /// Call it outside [`with`](Self::with).
+    ///
+    /// # Errors
+    ///
+    /// Returns `Some(Err(_))` for an exception the module threw while
+    /// evaluating, or for a module that another engine started.
+    pub fn poll_module(&self, module: &PendingModule) -> Option<EngineResult<()>> {
         loop {
-            let step = self.context.with(|ctx| {
-                let promise = pending
-                    .restore(&ctx)
-                    .map_err(|err| EngineError::plain(&err))?;
-                match promise.result::<()>() {
-                    Some(result) => Ok(ControlFlow::Break(
-                        result.map_err(|err| EngineError::capture(&ctx, &err)),
-                    )),
-                    None => Ok(ControlFlow::Continue(Persistent::save(&ctx, promise))),
-                }
-            });
-            match step? {
-                ControlFlow::Break(result) => return result,
-                ControlFlow::Continue(promise) => pending = promise,
+            if let Some(result) = self.settled(module) {
+                return Some(result);
             }
             let mut failures = Vec::new();
             let ran = self.run_job(&mut failures);
             self.startup_failures.borrow_mut().extend(failures);
             if !ran {
-                return self.context.with(|ctx| {
-                    drop(pending.restore(&ctx));
-                    Err(EngineError::plain(&rquickjs::Error::WouldBlock))
-                });
+                return None;
             }
         }
     }
+
+    /// The module's result, or `None` while its promise is pending.
+    fn settled(&self, module: &PendingModule) -> Option<EngineResult<()>> {
+        self.context.with(|ctx| {
+            let promise = match module.0.clone().restore(&ctx) {
+                Ok(promise) => promise,
+                Err(err) => return Some(Err(EngineError::plain(&err))),
+            };
+            promise
+                .result::<()>()
+                .map(|result| result.map_err(|err| EngineError::capture(&ctx, &err)))
+        })
+    }
 }
+
+/// A module started by [`Engine::start_module`] and polled with
+/// [`Engine::poll_module`]. Drop it before its engine.
+pub struct PendingModule(Persistent<Promise<'static>>);
 
 /// Builds an [`Engine`], configuring where its `import`s resolve against.
 ///
@@ -751,6 +802,117 @@ mod tests {
 
         assert!(!err.message().is_empty());
         assert_eq!(err.stack(), None);
+    }
+
+    #[test]
+    fn a_pending_module_settles_once_a_later_eval_resolves_it() {
+        let engine = Engine::new().unwrap();
+        let module = engine
+            .start_module(
+                "pending.mjs",
+                "await new Promise((r) => { globalThis.release = r; }); globalThis.seen = 42;",
+            )
+            .unwrap();
+
+        assert!(engine.poll_module(&module).is_none());
+        engine.eval::<()>("release();").unwrap();
+        assert_eq!(engine.poll_module(&module), Some(Ok(())));
+
+        let seen: i32 = engine.eval("globalThis.seen").unwrap();
+        assert_eq!(seen, 42);
+    }
+
+    #[test]
+    fn a_pending_module_returns_a_later_rejection_as_its_own_error() {
+        let engine = Engine::new().unwrap();
+        let module = engine
+            .start_module(
+                "pending-rejects.mjs",
+                "await new Promise((_, reject) => { globalThis.fail = reject; });",
+            )
+            .unwrap();
+
+        assert!(engine.poll_module(&module).is_none());
+        engine.eval::<()>("fail(new Error('later'));").unwrap();
+        let err = engine.poll_module(&module).unwrap().unwrap_err();
+        assert_eq!(err.message(), "Error: later");
+    }
+
+    #[test]
+    fn a_job_that_throws_during_a_poll_is_returned_by_run_jobs() {
+        let engine = Engine::new().unwrap();
+        let module = engine
+            .start_module(
+                "poll-job.mjs",
+                "queueMicrotask(() => { throw new Error('poll job'); });\n\
+                 await new Promise((r) => { globalThis.release = r; });",
+            )
+            .unwrap();
+
+        assert!(engine.poll_module(&module).is_none());
+        let failures = engine.run_jobs();
+        assert_eq!(failures.len(), 1);
+        assert_eq!(failures[0].message(), "Error: poll job");
+        assert!(engine.run_jobs().is_empty());
+
+        engine.eval::<()>("release();").unwrap();
+        assert_eq!(engine.poll_module(&module), Some(Ok(())));
+    }
+
+    #[test]
+    fn polling_a_completed_module_again_returns_ok() {
+        let engine = Engine::new().unwrap();
+        let module = engine
+            .start_module("done.mjs", "await Promise.resolve();")
+            .unwrap();
+
+        assert_eq!(engine.poll_module(&module), Some(Ok(())));
+        assert_eq!(engine.poll_module(&module), Some(Ok(())));
+    }
+
+    #[test]
+    fn polling_a_rejected_module_again_returns_the_same_error() {
+        let engine = Engine::new().unwrap();
+        let module = engine
+            .start_module(
+                "rejected.mjs",
+                "await Promise.resolve(); throw new Error('again');",
+            )
+            .unwrap();
+
+        let first = engine.poll_module(&module).unwrap().unwrap_err();
+        let second = engine.poll_module(&module).unwrap().unwrap_err();
+        assert_eq!(first.message(), "Error: again");
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn a_module_from_another_engine_is_an_error() {
+        let other = Engine::new().unwrap();
+        let module = other
+            .start_module("foreign.mjs", "await new Promise(() => {});")
+            .unwrap();
+        let engine = Engine::new().unwrap();
+
+        let err = engine.poll_module(&module).unwrap().unwrap_err();
+        assert!(!err.message().is_empty());
+        assert_eq!(err.stack(), None);
+    }
+
+    #[test]
+    fn a_settled_rejection_is_also_returned_by_run_jobs() {
+        let engine = Engine::new().unwrap();
+        let module = engine
+            .start_module(
+                "settled.mjs",
+                "await Promise.resolve(); throw new Error('settled');",
+            )
+            .unwrap();
+
+        let err = engine.poll_module(&module).unwrap().unwrap_err();
+        let failures = engine.run_jobs();
+        assert_eq!(failures, vec![err]);
+        assert!(engine.run_jobs().is_empty());
     }
 
     #[test]

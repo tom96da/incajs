@@ -483,7 +483,7 @@ A fixed entry is deleted and its ID is never reused.
   tool driving the app), not just this one test's stimulus.
 
 - **B-029 `inca dev --experimental-hmr` opens its window at the wrong size on first launch, then resizes**
-  `Units: host,jsenv · Size: L · Impact: Low`
+  `Units: host,cli · Size: L · Impact: Low`
 
   A plain `inca dev` opens already sized to
   the app's own declared content (no visible gap). Under
@@ -500,15 +500,12 @@ A fixed entry is deleted and its ID is never reused.
   window has opened. A real fix starts that stdin reader before the window
   opens, and keeps servicing incoming replies while module evaluation is
   still in progress, so the app's real content size is known before the
-  window is created. The engine's module-evaluation entry point
-  (`Engine::eval_module`) doesn't support that today: it drives a module's
-  own top-level `Promise` to completion synchronously, and reports an
-  error if the `Promise` can't settle on its own. There's no hook for
-  external I/O to arrive and resolve it mid-call, so making the entry
-  await its own mount would just fail immediately instead of waiting.
-  Fixing this changes `inca-host`'s own startup sequencing, not just this
-  feature — carried forward rather than attempted alongside
-  the rest of experimental HMR.
+  window is created. The engine side exists: `Engine::start_module` and
+  `Engine::poll_module` let a module's top-level `await` settle from
+  external I/O. The remaining work is in `inca-host` and the CLI's HMR
+  entry. `Session::load` still calls `Engine::eval_module`, and the HMR
+  entry returns before its app mounts. Fixing this changes `inca-host`'s own
+  startup sequencing.
 
 - **B-032 The HMR bootstrap's rejection handler doesn't distinguish who's responsible for reporting a failure**
   `Units: cli · Size: S · Impact: Low`

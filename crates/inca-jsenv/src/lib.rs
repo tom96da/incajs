@@ -18,4 +18,4 @@ mod loader;
 mod paint;
 mod quickjs;
 
-pub use engine::{Engine, EngineError, EngineResult};
+pub use engine::{Engine, EngineError, EngineResult, PendingModule};
