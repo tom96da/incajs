@@ -43,19 +43,35 @@ A fixed entry is deleted and its ID is never reused.
   [ROADMAP.md](./ROADMAP.md#known-gaps-not-yet-scheduled); the destination is
   undecided.
 
-- **B-121 Style key names and values differ from CSS**
-  `Units: gpui,docs · Size: L · Impact: High`
+- **B-121 Styles follow the host's vocabulary, not W3C CSS**
+  `Units: gpui,core,docs · Size: L · Impact: High`
 
-  The host names some keys after its own vocabulary: `text_color` for
-  `color`, `background` for `background-color`, `corner_radius` for
-  `border-radius`, `text_size` for `font-size`. Values follow the host too:
-  `justify_content: "start"` where CSS has `flex-start`, a number of px where
-  CSS has `"10px"`. The host can take the CSS names and value forms as
-  aliases next to its own and warn with the key as written. B-085
-  (percentages, shorthands) and B-117 (wrong-shaped values) belong to the same
-  change. The host warns about uppercase or mixed-case kebab keys such as
-  `Flex-Direction`, vendor prefixes and `--custom` properties, which CSS
-  accepts.
+  An app writes `:style` with the host's names and values, such as
+  `textColor`, `background`, `cornerRadius`, `textSize` and
+  `justifyContent: "start"`, with sizes as numbers of px. A Vue developer
+  knows `color`, `backgroundColor`, `borderRadius`, `fontSize`,
+  `justifyContent: "flex-start"` and `"10px"`. Goal: an app writes standard
+  CSS in `:style` and meets no host vocabulary. The host maps each CSS
+  property and value form to its own style, the reference lists the CSS
+  names, and the host's own names stay accepted as aliases. A warning names
+  the key as written. CSS accepts key spellings that the host warns about:
+  uppercase or mixed-case kebab keys such as `Flex-Direction`, vendor
+  prefixes and `--custom` properties. B-085 (percentages, shorthands) and
+  B-117 (wrong-shaped values) belong to the same change. B-123 generates the
+  types from the same mapping.
+
+- **B-123 The style vocabulary has no machine-readable definition**
+  `Units: gpui,core,cli · Size: L · Impact: Medium`
+
+  `StyleProps` (`packages/core/src/types.mts`) copies the host's vocabulary
+  by hand and lists snake_case keys. Vue's `CSSProperties` type lists only CSS
+  properties, so an editor that checks `:style` flags the host's own keys. A
+  definition in the host that generates JSON and TypeScript types gives tools
+  one source. The types let an editor check `:style` keys, and a Vite plugin
+  can warn about static keys with file and line, with no host process at
+  build time. The Tailwind class resolver of Phase 7 reads the same data, and
+  B-001 builds on the types. It follows B-121 and generates from its CSS
+  mapping.
 
 ## P2
 
@@ -938,17 +954,6 @@ A fixed entry is deleted and its ID is never reused.
   diagnostic for "why is my window that size" could exit 1 and name the
   field or the syntax error.
 
-- **B-123 The style vocabulary has no machine-readable definition**
-  `Units: gpui,core,cli · Size: L · Impact: Low`
-
-  `StyleProps` (`packages/core/src/types.mts`) copies the host's vocabulary
-  by hand. A definition in the host that generates JSON and TypeScript types
-  gives tools one source. The types let an editor check `:style` keys in the
-  spelling the app wrote, and a Vite plugin can warn about static keys with
-  file and line, with no host process at build time. The Tailwind class
-  resolver of Phase 7 reads the same data, and B-001 builds on the types. It
-  follows B-121.
-
 - **B-127 A boolean attribute set to `false` stays set**
   `Units: core · Size: S · Impact: Low`
 
@@ -1092,3 +1097,15 @@ A fixed entry is deleted and its ID is never reused.
   `__VUE_PROD_DEVTOOLS__` and `__VUE_PROD_HYDRATION_MISMATCH_DETAILS__` are not
   defined. Fix: define the three flags in the Vite configurations of the
   development server and the build.
+
+- **B-162 Style warnings print as plain text outside the console**
+  `Units: gpui,bridge,jsenv · Size: L · Impact: Low`
+
+  `console` prints decorated lines, with colors, class names and the detail of
+  `%o`. A style warning such as ``node 1 (div): ignoring unknown style key
+  `justifyContent` `` is a plain line written by `eprintln!`, so it cannot use
+  that output. The formatting code lives in `inca-jsenv`. Fix: move the
+  output formatting into a crate that `inca-jsenv`, `inca-bridge` and
+  `inca-gpui` depend on, so JS and Rust print through one path. A smaller
+  first step is to route the bridge's style warnings through the console
+  output, because `inca-bridge` already depends on `inca-jsenv`.
