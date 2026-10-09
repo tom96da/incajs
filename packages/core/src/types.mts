@@ -32,9 +32,10 @@ export type AttributeValue = string | number | boolean;
 export type TagName = "text" | (string & {});
 
 /**
- * Style properties recognized by `setStyle`'s typed overload. A
- * deliberately incomplete, v1 layout/paint vocabulary — an unrecognized key
- * or a value shape that doesn't parse (e.g. a malformed enum string) is
+ * Style properties, in their snake_case spelling, that `setStyle`'s typed
+ * overload checks. A deliberately incomplete, v1 layout/paint vocabulary. The
+ * renderer also reads the camelCase and kebab-case spellings. An unrecognized
+ * key or a value shape that doesn't parse (e.g. a malformed enum string) is
  * ignored by the renderer rather than applied or thrown.
  */
 export interface StyleProps {

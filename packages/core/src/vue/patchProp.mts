@@ -60,14 +60,17 @@ function patchStyle(core: IncaCore, el: IncaElement, nextValue: unknown): void {
   let sent = sentStyles.get(el);
   if (!sent) sentStyles.set(el, (sent = new Map()));
 
+  let removed = false;
   for (const key of sent.keys()) {
     if (!isSendable(next[key])) {
       core.removeStyle(el.id, key);
       sent.delete(key);
+      removed = true;
     }
   }
+  // A removal can clear a property that another spelling of the key still sets.
   for (const [key, value] of Object.entries(next)) {
-    if (isSendable(value) && sent.get(key) !== value) {
+    if (isSendable(value) && (removed || sent.get(key) !== value)) {
       core.setStyle(el.id, key, value);
       sent.set(key, value);
     }
@@ -250,8 +253,13 @@ const BOOLEAN_PRESENCE = new Set(["disabled", "hidden", "inert"]);
  * sent for this element.
  * - `core.setStyle` runs for each entry that is new or changed.
  * - `core.removeStyle` runs for each sent entry that is now absent, `null`,
- *   or not a string/number.
+ *   or not a string/number. After a removal, `core.setStyle` runs again for
+ *   every remaining string/number entry.
  * - A string or `null` `style` removes every entry.
+ * - A key takes any of three spellings: kebab-case (`flex-direction`),
+ *   camelCase (`flexDirection`) or snake_case (`flex_direction`). If an
+ *   object names one property in two spellings, the value set most recently
+ *   applies.
  *
  * ### `onXxx`
  *

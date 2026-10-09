@@ -112,6 +112,24 @@ describe("style", () => {
     expect(core.removeStyle).not.toHaveBeenCalled();
   });
 
+  it("re-sends every remaining key after a removal, in object order", () => {
+    const style = { flexDirection: "row", "flex-direction": "column", width: 1 };
+    mountStyle(style);
+    patchProp(
+      el,
+      "style",
+      style,
+      { flexDirection: "row", "flex-direction": "column" },
+      undefined,
+      null,
+    );
+
+    expect(core.removeStyle).toHaveBeenCalledExactlyOnceWith(1, "width");
+    expect(core.setStyle).toHaveBeenCalledWith(1, "flexDirection", "row");
+    expect(core.setStyle).toHaveBeenLastCalledWith(1, "flex-direction", "column");
+    expect(core.setStyle).toHaveBeenCalledTimes(2);
+  });
+
   it("removes every sent key when the style becomes a string", () => {
     const other = { ...el, id: 2 };
     patchProp(other, "style", null, { gap: 8 }, undefined, null);
@@ -144,7 +162,7 @@ describe("style", () => {
     patchProp(other, "style", style, style, undefined, null);
 
     expect(core.removeStyle).toHaveBeenCalledExactlyOnceWith(4, "gap");
-    expect(core.setStyle).not.toHaveBeenCalled();
+    expect(core.setStyle).toHaveBeenCalledExactlyOnceWith(4, "width", 1);
   });
 });
 

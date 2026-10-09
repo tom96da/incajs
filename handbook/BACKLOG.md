@@ -924,8 +924,9 @@ A fixed entry is deleted and its ID is never reused.
 
   The warning is printed once per `setStyle` call. A reactive `:style` that
   sets a bad key on each patch prints a line each time, and a remount prints
-  it again. Remembering the keys already reported per node would print each
-  once.
+  it again. A removal in a patch resends every remaining entry, so each bad
+  key warns again. Remembering the keys already reported per node would
+  print each once.
 
 - **B-119 `--print-config` prints the defaults for a malformed `inca.json`**
   `Units: host · Size: S · Impact: Low`
