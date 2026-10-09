@@ -25,16 +25,16 @@ function onClick() {
   <div
     :style="{
       display: 'flex',
-      justify_content: 'center',
-      align_items: 'center',
+      justifyContent: 'center',
+      alignItems: 'center',
       width: 300,
       height: 150,
       background: 0x505050,
-      border_width: 1,
-      border_color: 0x0000ff,
-      corner_radius: 8,
-      text_color: 0xffffff,
-      text_size: 20,
+      borderWidth: 1,
+      borderColor: 0x0000ff,
+      cornerRadius: 8,
+      textColor: 0xffffff,
+      textSize: 20,
     }"
     @click="onClick"
   >

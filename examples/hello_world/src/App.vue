@@ -26,21 +26,21 @@ const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0x000000, 0xffffff];
   <div
     :style="{
       display: 'flex',
-      flex_direction: 'column',
+      flexDirection: 'column',
       gap: 12,
       width: 500,
       height: 500,
-      justify_content: 'center',
-      align_items: 'center',
+      justifyContent: 'center',
+      alignItems: 'center',
       background: 0x505050,
-      border_width: 1,
-      border_color: 0x0000ff,
-      text_color: 0xffffff,
-      text_size: 20,
+      borderWidth: 1,
+      borderColor: 0x0000ff,
+      textColor: 0xffffff,
+      textSize: 20,
     }"
   >
     {{ "Hello, Incarnative.js!" }}
-    <div :style="{ display: 'flex', flex_direction: 'row', gap: 8 }">
+    <div :style="{ display: 'flex', flexDirection: 'row', gap: 8 }">
       <div
         v-for="color in colors"
         :key="color"
@@ -48,9 +48,9 @@ const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0x000000, 0xffffff];
           width: 32,
           height: 32,
           background: color,
-          border_width: 1,
-          border_color: 0xffffff,
-          corner_radius: 4,
+          borderWidth: 1,
+          borderColor: 0xffffff,
+          cornerRadius: 4,
         }"
       />
     </div>
