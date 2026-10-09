@@ -43,18 +43,6 @@ A fixed entry is deleted and its ID is never reused.
   [ROADMAP.md](./ROADMAP.md#known-gaps-not-yet-scheduled); the destination is
   undecided.
 
-- **B-120 Style keys are read in snake_case only**
-  `Units: gpui,docs · Size: M · Impact: High`
-
-  A Vue app writes `:style` keys in camelCase or kebab-case, such as
-  `flexDirection` or `'flex-direction'`. The host reads `flex_direction` and
-  warns about the other spellings. The vocabulary lives only in the host, so
-  one normalising step in `set_style` and `remove_style` can map
-  `flexDirection`, `flex-direction` and `flex_direction` to one key, and the
-  warning keeps the spelling the app wrote. Normalising once per set leaves
-  the render path as it is. `docs/reference/elements.md` lists the CSS
-  spelling first.
-
 - **B-121 Style key names and values differ from CSS**
   `Units: gpui,docs · Size: L · Impact: High`
 
@@ -65,7 +53,9 @@ A fixed entry is deleted and its ID is never reused.
   CSS has `"10px"`. The host can take the CSS names and value forms as
   aliases next to its own and warn with the key as written. B-085
   (percentages, shorthands) and B-117 (wrong-shaped values) belong to the same
-  change.
+  change. The host warns about uppercase or mixed-case kebab keys such as
+  `Flex-Direction`, vendor prefixes and `--custom` properties, which CSS
+  accepts.
 
 ## P2
 
@@ -956,7 +946,7 @@ A fixed entry is deleted and its ID is never reused.
   spelling the app wrote, and a Vite plugin can warn about static keys with
   file and line, with no host process at build time. The Tailwind class
   resolver of Phase 7 reads the same data, and B-001 builds on the types. It
-  follows B-120 and B-121.
+  follows B-121.
 
 - **B-127 A boolean attribute set to `false` stays set**
   `Units: core · Size: S · Impact: Low`

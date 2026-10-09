@@ -144,7 +144,7 @@ Use instead:
 
 ```vue
 <template>
-  <div :style="{ text_color: '#ff0000' }">…</div>
+  <div :style="{ textColor: '#ff0000' }">…</div>
 </template>
 ```
 

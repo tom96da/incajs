@@ -45,7 +45,7 @@ keyboard.
 </template>
 ```
 
-## Recognized style keys
+## Recognized style keys <Badge type="warning" text="unreleased" />
 
 `:style` takes an object. Only the keys below are read, each with its own
 accepted value shapes. A value of the wrong shape sets the property to its
@@ -62,41 +62,39 @@ clears every key set before.
 | Key | Value | Notes |
 | --- | --- | --- |
 | `display` | `"flex"` \| `"block"` \| `"grid"` \| `"none"` | |
-| `flex_direction` | `"row"` \| `"column"` \| `"row_reverse"` \| `"column_reverse"` | |
-| `justify_content` | `"start"` \| `"end"` \| `"center"` \| `"stretch"` | main-axis alignment |
-| `align_items` | `"start"` \| `"end"` \| `"center"` \| `"stretch"` | cross-axis alignment |
+| `flexDirection` | `"row"` \| `"column"` \| `"row_reverse"` \| `"column_reverse"` | |
+| `justifyContent` | `"start"` \| `"end"` \| `"center"` \| `"stretch"` | main-axis alignment |
+| `alignItems` | `"start"` \| `"end"` \| `"center"` \| `"stretch"` | cross-axis alignment |
 | `gap` | `number` (px) | applied on both axes |
 | `width` | `number` (px) \| `"auto"` | |
 | `height` | `number` (px) \| `"auto"` | |
-| `border_width` | `number` (px) | applied to all four sides |
+| `borderWidth` | `number` (px) | applied to all four sides |
 | `background` | color (below) | fill |
-| `border_color` | color (below) | |
-| `corner_radius` | `number` (px) | applied to all four corners |
-| `text_color` | color (below) | cascades to descendant text leaves |
-| `text_size` | `number` (px) | cascades to descendant text leaves |
-| `overflow` / `overflow_x` / `overflow_y` | `"visible"` \| `"hidden"` \| `"scroll"` \| `"auto"` | `"hidden"` clips, `"scroll"` (and its alias `"auto"`) scrolls with the wheel; `overflow_x`/`overflow_y` win over `overflow` |
-| `padding` / `padding_x` / `padding_y` / `padding_top` / `padding_right` / `padding_bottom` / `padding_left` | `number` (px, `>= 0`) | a negative, `NaN` or infinite value is ignored |
-| `margin` / `margin_x` / `margin_y` / `margin_top` / `margin_right` / `margin_bottom` / `margin_left` | `number` (px, negative allowed) \| `"auto"` | |
-| `flex_grow` / `flex_shrink` | `number` (`>= 0`) | |
+| `borderColor` | color (below) | |
+| `cornerRadius` | `number` (px) | applied to all four corners |
+| `textColor` | color (below) | cascades to descendant text leaves |
+| `textSize` | `number` (px) | cascades to descendant text leaves |
+| `overflow` / `overflowX` / `overflowY` | `"visible"` \| `"hidden"` \| `"scroll"` \| `"auto"` | `"hidden"` clips, `"scroll"` (and its alias `"auto"`) scrolls with the wheel; `overflowX`/`overflowY` win over `overflow` |
+| `padding` / `paddingX` / `paddingY` / `paddingTop` / `paddingRight` / `paddingBottom` / `paddingLeft` | `number` (px, `>= 0`) | a negative, `NaN` or infinite value is ignored |
+| `margin` / `marginX` / `marginY` / `marginTop` / `marginRight` / `marginBottom` / `marginLeft` | `number` (px, negative allowed) \| `"auto"` | |
+| `flexGrow` / `flexShrink` | `number` (`>= 0`) | |
 | `opacity` | `number` (`0` to `1`) | clamped; applies to descendants too |
-| `min_width` / `min_height` / `max_width` / `max_height` | `number` (px) \| `"auto"` | `"auto"` is the default limit: none for `max_*`, the content size for a flex item's `min_*` |
+| `minWidth` / `minHeight` / `maxWidth` / `maxHeight` | `number` (px) \| `"auto"` | `"auto"` is the default limit: none for the `max` keys, the content size for a flex item's `min` keys |
 
-For `padding` and `margin`, a side key beats its axis key (`_x` for left and
-right, `_y` for top and bottom), and an axis key beats the shorthand. A value
-of the wrong shape counts as unset and the next key applies.
+For `padding` and `margin`, a side key beats its axis key (`paddingX` for left
+and right, `paddingY` for top and bottom), and an axis key beats the
+shorthand. A value of the wrong shape counts as unset and the next key
+applies.
 
 Scrollbars are not supported. `stopPropagation()` and `preventDefault()` on
 a scrolling container's [`wheel`](./events#mouse) event act on the scroll
 as described there.
 
-`position` and `z_index` are not supported, and their keys are ignored.
-
-Keys are snake_case, for example `flex_direction`. A camelCase key such as
-`flexDirection` is an unrecognized key.
+`position` and `zIndex` are not supported, and their keys are ignored.
 
 ### Color format
 
-`background`, `border_color`, and `text_color` each accept:
+`background`, `borderColor`, and `textColor` each accept:
 
 - a numeric `0xRRGGBB` literal, e.g. `0xff0000`
 - a `"#rrggbb"` or `"#rgb"` string, e.g. `"#ff0000"` or `"#f00"`
@@ -125,7 +123,7 @@ object, with the keys above, has any visible effect.
   <div class="card" style="color: red">…</div>
   <div :style="'color: red'">…</div>
   <!-- works -->
-  <div :style="{ text_color: 0xff0000 }">…</div>
+  <div :style="{ textColor: 0xff0000 }">…</div>
 </template>
 ```
 

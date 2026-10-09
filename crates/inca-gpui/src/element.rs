@@ -16,7 +16,6 @@
 //! set.
 
 use std::collections::HashMap;
-use std::fmt;
 
 use gpui::prelude::*;
 use gpui::{
@@ -26,7 +25,7 @@ use gpui::{
 };
 
 use crate::event_sink::{EventMask, EventPayload, EventSink, MousePayload};
-use crate::tree::{AttributeValue, NodeId, VirtualNode, VirtualTree};
+use crate::tree::{AttributeValue, NodeId, VirtualNode, VirtualTree, style_key};
 
 /// What kind of element a [`VirtualNode`](crate::tree::VirtualNode) maps to.
 ///
@@ -355,20 +354,9 @@ fn align_spec_from_str(s: &str) -> Option<AlignSpec> {
 }
 
 /// A style prop the spec layer drops, which [`style_warning`] reports.
-enum StyleFault<'a> {
-    UnknownKey(&'a str),
-    InvalidColor(&'a str),
-}
-
-impl fmt::Display for StyleFault<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::UnknownKey(key) => write!(f, "ignoring unknown style key `{key}`"),
-            Self::InvalidColor(key) => {
-                write!(f, "ignoring invalid color for style key `{key}`")
-            }
-        }
-    }
+enum StyleFault {
+    UnknownKey,
+    InvalidColor,
 }
 
 /// The three overflow keys, resolved once every prop has been read.
@@ -380,24 +368,20 @@ struct Overflows {
 }
 
 /// Reads the color `value` into `slot`.
-fn read_color<'a>(
-    slot: &mut Option<u32>,
-    key: &'a str,
-    value: &AttributeValue,
-) -> Option<StyleFault<'a>> {
+fn read_color(slot: &mut Option<u32>, value: &AttributeValue) -> Option<StyleFault> {
     *slot = as_color(value);
-    slot.is_none().then_some(StyleFault::InvalidColor(key))
+    slot.is_none().then_some(StyleFault::InvalidColor)
 }
 
 /// Reads one style prop into `style` (and `overflow`), returning the fault
 /// when the key is unknown or a color is invalid. Box keys are resolved by
 /// `edges_from` afterwards.
-fn read_prop<'a>(
+fn read_prop(
     style: &mut StyleSpec,
     overflow: &mut Overflows,
-    key: &'a str,
+    key: &str,
     value: &AttributeValue,
-) -> Option<StyleFault<'a>> {
+) -> Option<StyleFault> {
     match key {
         "display" => style.display = as_str(value).and_then(display_spec_from_str),
         "flex_direction" => {
@@ -411,10 +395,10 @@ fn read_prop<'a>(
         "width" => style.width = length_spec_from(value),
         "height" => style.height = length_spec_from(value),
         "border_width" => style.border_width = as_number(value),
-        "background" => return read_color(&mut style.background, key, value),
-        "border_color" => return read_color(&mut style.border_color, key, value),
+        "background" => return read_color(&mut style.background, value),
+        "border_color" => return read_color(&mut style.border_color, value),
         "corner_radius" => style.corner_radius = as_number(value),
-        "text_color" => return read_color(&mut style.text_color, key, value),
+        "text_color" => return read_color(&mut style.text_color, value),
         "text_size" => style.text_size = as_number(value),
         "overflow" => overflow.all = as_str(value).and_then(overflow_spec_from_str),
         "overflow_x" => overflow.x = as_str(value).and_then(overflow_spec_from_str),
@@ -431,7 +415,7 @@ fn read_prop<'a>(
         "max_width" => style.max_width = length_spec_from(value),
         "max_height" => style.max_height = length_spec_from(value),
         _ if PADDING_KEYS.contains(key) || MARGIN_KEYS.contains(key) => {}
-        _ => return Some(StyleFault::UnknownKey(key)),
+        _ => return Some(StyleFault::UnknownKey),
     }
     None
 }
@@ -453,19 +437,23 @@ fn style_spec_from_props(props: &HashMap<String, AttributeValue>) -> StyleSpec {
 }
 
 /// The message for the style prop `key` set to `value` when the key is
-/// unknown or a color value is invalid. `None` when the prop applies or is
-/// ignored quietly.
+/// unknown or a color value is invalid. `key` may be `camelCase`,
+/// `kebab-case` or `snake_case`, and the message names it as written. `None`
+/// when the prop applies or is ignored quietly.
 #[must_use]
 pub fn style_warning(key: &str, value: &AttributeValue) -> Option<String> {
     // A caller checks each prop as it stores it, so a bad value that stays
     // in place is reported once and setting it again reports it again.
-    read_prop(
+    let fault = read_prop(
         &mut StyleSpec::default(),
         &mut Overflows::default(),
-        key,
+        &style_key(key),
         value,
-    )
-    .map(|fault| fault.to_string())
+    )?;
+    Some(match fault {
+        StyleFault::UnknownKey => format!("ignoring unknown style key `{key}`"),
+        StyleFault::InvalidColor => format!("ignoring invalid color for style key `{key}`"),
+    })
 }
 
 /// A node's `"value"` attribute followed by its descendants' text in child
@@ -1927,15 +1915,35 @@ mod tests {
         }
 
         #[test]
-        fn a_camel_case_key_is_ignored_with_a_warning_naming_it() {
-            let (style, warnings) =
-                style_and_warnings(&[("flexDirection", text("column")), ("paddingTop", num(4.0))]);
-            assert_eq!(style, StyleSpec::default());
-            assert_eq!(warnings.len(), 2);
-            for key in ["flexDirection", "paddingTop"] {
-                assert!(
-                    warnings.iter().any(|w| w.contains(&format!("`{key}`"))),
-                    "{warnings:?}"
+        fn every_spelling_of_a_known_key_applies_quietly() {
+            for key in ["flexDirection", "flex-direction", "flex_direction"] {
+                let (style, warnings) = style_and_warnings(&[(key, text("column"))]);
+                assert_eq!(
+                    style.flex_direction,
+                    Some(FlexDirectionSpec::Column),
+                    "{key}"
+                );
+                assert!(warnings.is_empty(), "{key}: {warnings:?}");
+            }
+            for key in ["paddingTop", "padding-top"] {
+                let (style, warnings) = style_and_warnings(&[(key, num(4.0))]);
+                assert_eq!(style.padding.top, Some(4.0), "{key}");
+                assert!(warnings.is_empty(), "{key}: {warnings:?}");
+            }
+        }
+
+        #[test]
+        fn a_warning_names_the_key_as_written() {
+            for key in ["fooBar", "foo-bar", "FlexDirection", "flex-Direction"] {
+                let (_, warnings) = style_and_warnings(&[(key, num(1.0))]);
+                assert_eq!(warnings, [format!("ignoring unknown style key `{key}`")]);
+            }
+            for key in ["textColor", "text-color", "text_color"] {
+                let (style, warnings) = style_and_warnings(&[(key, num(-1.0))]);
+                assert_eq!(style.text_color, None, "{key}");
+                assert_eq!(
+                    warnings,
+                    [format!("ignoring invalid color for style key `{key}`")]
                 );
             }
         }

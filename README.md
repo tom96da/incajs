@@ -38,7 +38,7 @@ const clicks = ref(0);
 </script>
 
 <template>
-  <div :style="{ text_color: 0xffffff }" @click="clicks++">
+  <div :style="{ textColor: 0xffffff }" @click="clicks++">
     Clicked {{ clicks }} time(s)
   </div>
 </template>

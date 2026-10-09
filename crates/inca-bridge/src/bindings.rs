@@ -1038,12 +1038,12 @@ mod tests {
     fn set_style_warns_once_per_unknown_key() {
         let (warnings, _) = warnings_from(
             "const n = __inca_native__.createNode('div'); \
-             __inca_native__.setStyle(n, 'flexDirection', 'column');",
+             __inca_native__.setStyle(n, 'flexDirections', 'column');",
         );
 
         assert_eq!(
             *warnings.borrow(),
-            ["node 1 (div): ignoring unknown style key `flexDirection`"]
+            ["node 1 (div): ignoring unknown style key `flexDirections`"]
         );
     }
 

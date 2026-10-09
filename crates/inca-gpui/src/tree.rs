@@ -13,6 +13,7 @@
 //! [`VirtualTree::remove_child`] detaches and keeps the node alive.
 //! [`VirtualTree::destroy_node`] is the only call that frees.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
 
@@ -362,7 +363,8 @@ impl VirtualTree {
         Ok(())
     }
 
-    /// Sets (inserting or overwriting) one style prop.
+    /// Sets (inserting or overwriting) one style prop. `key` may be
+    /// `camelCase`, `kebab-case` or `snake_case`, and all three name one prop.
     ///
     /// # Errors
     ///
@@ -377,12 +379,19 @@ impl VirtualTree {
             .nodes
             .get_mut(&node_id)
             .ok_or(TreeError::NodeNotFound(node_id))?;
-        node.style_props.insert(key.into(), value.into());
+        let key = key.into();
+        let canonical = match style_key(&key) {
+            Cow::Owned(k) => Some(k),
+            Cow::Borrowed(_) => None,
+        };
+        node.style_props
+            .insert(canonical.unwrap_or(key), value.into());
         Ok(())
     }
 
     /// Removes one style prop, so the property renders as if never set.
-    /// Removing a key that isn't set is a no-op.
+    /// `key` may be `camelCase`, `kebab-case` or `snake_case`. Removing a key
+    /// that isn't set is a no-op.
     ///
     /// # Errors
     ///
@@ -392,9 +401,30 @@ impl VirtualTree {
             .nodes
             .get_mut(&node_id)
             .ok_or(TreeError::NodeNotFound(node_id))?;
-        node.style_props.remove(key);
+        node.style_props.remove(&*style_key(key));
         Ok(())
     }
+}
+
+/// The `snake_case` spelling of a style key: each ASCII uppercase letter
+/// becomes `_` and its lowercase form, and each `-` becomes `_`. A key that
+/// is already `snake_case` is returned borrowed.
+pub(crate) fn style_key(key: &str) -> Cow<'_, str> {
+    if !key.bytes().any(|b| b.is_ascii_uppercase() || b == b'-') {
+        return Cow::Borrowed(key);
+    }
+    let mut out = String::with_capacity(key.len() + 2);
+    for c in key.chars() {
+        match c {
+            '-' => out.push('_'),
+            c if c.is_ascii_uppercase() => {
+                out.push('_');
+                out.push(c.to_ascii_lowercase());
+            }
+            c => out.push(c),
+        }
+    }
+    Cow::Owned(out)
 }
 
 #[cfg(test)]
@@ -825,5 +855,52 @@ mod tests {
             Some(&AttributeValue::String("red".into()))
         );
         assert!(got.attributes().get("color").is_none());
+    }
+
+    #[test]
+    fn a_style_key_reads_back_in_snake_case_whatever_its_spelling() {
+        for key in ["flexDirection", "flex-direction", "flex_direction"] {
+            let mut tree = VirtualTree::new();
+            let id = tree.create_node("div").unwrap();
+            tree.set_style(id, key, "column").unwrap();
+            let props = tree.get(id).unwrap().style_props();
+            assert_eq!(props.len(), 1, "{key}");
+            assert_eq!(props.get("flex_direction"), Some(&"column".into()), "{key}");
+        }
+    }
+
+    #[test]
+    fn a_style_key_in_another_spelling_overwrites_and_removes() {
+        let mut tree = VirtualTree::new();
+        let id = tree.create_node("div").unwrap();
+        tree.set_style(id, "flexDirection", "row").unwrap();
+        tree.set_style(id, "flex-direction", "column").unwrap();
+        let props = tree.get(id).unwrap().style_props();
+        assert_eq!(props.len(), 1);
+        assert_eq!(props.get("flex_direction"), Some(&"column".into()));
+
+        tree.remove_style(id, "flexDirection").unwrap();
+        assert!(tree.get(id).unwrap().style_props().is_empty());
+    }
+
+    #[test]
+    fn style_key_borrows_a_snake_case_key() {
+        assert!(matches!(style_key("flex_direction"), Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn style_key_edge_cases() {
+        for (key, want) in [
+            ("flexDirection", "flex_direction"),
+            ("flex-direction", "flex_direction"),
+            ("FlexDirection", "_flex_direction"),
+            ("--x", "__x"),
+            ("flex-Direction", "flex__direction"),
+            ("", ""),
+            ("é-Z", "é__z"),
+            ("幅", "幅"),
+        ] {
+            assert_eq!(style_key(key), want, "{key}");
+        }
     }
 }
