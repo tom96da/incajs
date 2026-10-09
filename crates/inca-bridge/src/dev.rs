@@ -7,11 +7,13 @@
 //! nothing about that protocol's wire format or any particular bundler; it
 //! only carries a method name and a parsed `params` value each way, exactly
 //! like [`crate::dispatch`] carries a native input event into JS without
-//! knowing what a caller does with it.
+//! knowing what a caller does with it. [`install_load_signal`] adds a flag
+//! the app sets to report that its load failed or recovered.
 
+use std::cell::Cell;
 use std::rc::Rc;
 
-use rquickjs::{Ctx, Exception, Function, Object, Result as JsResult};
+use rquickjs::{Ctx, Exception, Function, Object, Result as JsResult, Value as JsValue};
 use serde_json::Value;
 
 use inca_jsenv::{Engine, EngineError};
@@ -22,7 +24,7 @@ use inca_jsenv::{Engine, EngineError};
 /// say) is entirely up to the caller.
 pub type DevSend = Rc<dyn Fn(&str, Value)>;
 
-/// Installs `globalThis.__inca_dev__`, with one method:
+/// Installs `globalThis.__inca_dev__`, with the method
 /// `send(method: string, paramsJson: string)`. `paramsJson` is parsed as
 /// JSON before `on_send` is called; invalid JSON raises a JS `TypeError`
 /// rather than panicking or silently doing nothing.
@@ -48,6 +50,36 @@ pub fn install_dev(ctx: &Ctx<'_>, on_send: DevSend) -> JsResult<()> {
     )?;
     ctx.globals().set("__inca_dev__", dev)?;
     Ok(())
+}
+
+/// Adds `setLoadFailed(failed: boolean)` to `globalThis.__inca_dev__`. Each
+/// call stores `failed` in `flag`, so the latest call wins and repeating a
+/// value changes nothing.
+///
+/// An app passes `true` when its load failed and a retry may follow, and
+/// `false` when a new attempt begins or the load recovered. A non-boolean
+/// argument raises a JS `TypeError` and leaves `flag` as it was.
+///
+/// # Errors
+///
+/// Returns an error if `globalThis.__inca_dev__` is missing or is not an
+/// object (call [`install_dev`] first), or defining `setLoadFailed` on
+/// it fails.
+pub fn install_load_signal(ctx: &Ctx<'_>, flag: Rc<Cell<bool>>) -> JsResult<()> {
+    let dev: Object = ctx.globals().get("__inca_dev__")?;
+    dev.set(
+        "setLoadFailed",
+        Function::new(
+            ctx.clone(),
+            move |ctx: Ctx<'_>, failed: JsValue<'_>| -> JsResult<()> {
+                let failed = failed
+                    .as_bool()
+                    .ok_or_else(|| Exception::throw_type(&ctx, "setLoadFailed takes a boolean"))?;
+                flag.set(failed);
+                Ok(())
+            },
+        )?,
+    )
 }
 
 /// Calls `globalThis.__inca_dev__.receive?.(method, paramsJson)` inside
@@ -118,6 +150,61 @@ mod tests {
             .unwrap();
 
         assert!(engine.eval::<bool>("globalThis.threw;").unwrap());
+    }
+
+    fn flag_engine(initial: bool) -> (Engine, Rc<Cell<bool>>) {
+        let engine = engine_with_dev(Rc::new(|_, _| {}));
+        let flag = Rc::new(Cell::new(initial));
+        let handle = Rc::clone(&flag);
+        engine
+            .with(|ctx| install_load_signal(&ctx, handle))
+            .unwrap();
+        (engine, flag)
+    }
+
+    #[test]
+    fn set_load_failed_keeps_the_latest_call() {
+        let (engine, flag) = flag_engine(false);
+        engine
+            .eval::<()>("__inca_dev__.setLoadFailed(true); __inca_dev__.setLoadFailed(false);")
+            .unwrap();
+        assert!(!flag.get());
+        engine
+            .eval::<()>("__inca_dev__.setLoadFailed(false); __inca_dev__.setLoadFailed(true);")
+            .unwrap();
+        assert!(flag.get());
+    }
+
+    #[test]
+    fn set_load_failed_reads_only_the_first_argument() {
+        let (engine, flag) = flag_engine(false);
+        engine
+            .eval::<()>("__inca_dev__.setLoadFailed(true, 1);")
+            .unwrap();
+        assert!(flag.get());
+    }
+
+    #[test]
+    fn set_load_failed_rejects_a_non_boolean_and_keeps_the_flag() {
+        for arg in ["'true'", "1", "undefined", "null", ""] {
+            let (engine, flag) = flag_engine(true);
+            engine
+                .eval::<()>(&format!(
+                    "globalThis.threw = false; \
+                     try {{ __inca_dev__.setLoadFailed({arg}); }} \
+                     catch (e) {{ globalThis.threw = e instanceof TypeError; }}"
+                ))
+                .unwrap();
+            assert!(engine.eval::<bool>("globalThis.threw;").unwrap(), "{arg:?}");
+            assert!(flag.get(), "{arg:?}");
+        }
+    }
+
+    #[test]
+    fn install_load_signal_fails_before_install_dev() {
+        let engine = Engine::new().unwrap();
+        let result = engine.with(|ctx| install_load_signal(&ctx, Rc::new(Cell::new(false))));
+        assert!(result.is_err());
     }
 
     #[test]

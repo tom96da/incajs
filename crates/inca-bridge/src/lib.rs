@@ -14,6 +14,8 @@ pub mod dispatch;
 pub mod focus;
 
 pub use bindings::{EventListeners, Host};
-pub use dev::{DevSend, call_dev_receive, install_dev};
-pub use dispatch::{ErrorReporter, EventDispatcher, drain_jobs_and_refresh, stderr_reporter};
+pub use dev::{DevSend, call_dev_receive, install_dev, install_load_signal};
+pub use dispatch::{
+    ErrorReporter, EventDispatcher, drain_jobs_and_refresh, report_jobs, stderr_reporter,
+};
 pub use focus::{FocusRegistry, FocusTransition};

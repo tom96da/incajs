@@ -1159,19 +1159,26 @@ fn hover_path_difference(old_path: &[NodeId], new_path: &[NodeId]) -> (Vec<NodeI
     (leave, enter)
 }
 
-/// Drains `QuickJS`'s pending-job queue, sends each failure it leaves (a job
-/// that threw, a promise rejected with no handler) to `reporter`, then
-/// requests a redraw. Code that only schedules work (a `@vue/runtime-core`
-/// reactivity effect, batched via a microtask) hasn't mutated the tree once
-/// the scheduling call returns, so the queue has to run before the frame is
-/// drawn.
+/// Runs `engine`'s pending promise jobs and sends each failure to `reporter`:
+/// a job that threw, including during module startup, and a promise rejected
+/// with no handler. Use it where no window is open yet.
 ///
-/// Call it outside any [`Engine::with`] — it takes the context itself, and
+/// Call it outside any [`Engine::with`]: it takes the context itself, and
 /// nesting that panics with "`RefCell` already borrowed".
-pub fn drain_jobs_and_refresh(engine: &Engine, reporter: &ErrorReporter, window: &mut Window) {
+pub fn report_jobs(engine: &Engine, reporter: &ErrorReporter) {
     for failure in engine.run_jobs() {
         reporter(&failure);
     }
+}
+
+/// [`report_jobs`], then requests a redraw. Code that only schedules work (a
+/// `@vue/runtime-core` reactivity effect, batched via a microtask) hasn't
+/// mutated the tree once the scheduling call returns, so the queue has to run
+/// before the frame is drawn.
+///
+/// Call it outside any [`Engine::with`].
+pub fn drain_jobs_and_refresh(engine: &Engine, reporter: &ErrorReporter, window: &mut Window) {
+    report_jobs(engine, reporter);
     window.refresh();
 }
 
@@ -1209,7 +1216,7 @@ mod tests {
         assert!(mismatches.is_empty(), "{mismatches:?}");
     }
 
-    /// Every failure the dispatcher reported, in order.
+    /// Every failure a test reporter received, in order.
     type Reported = Rc<RefCell<Vec<EngineError>>>;
 
     fn dispatcher_with_engine() -> (EventDispatcher, Rc<RefCell<Host>>, Reported) {
@@ -1308,6 +1315,24 @@ mod tests {
         cx.update(|window, _| dispatcher.drain_jobs_and_refresh(window));
 
         assert!(dispatcher.engine.eval::<bool>("globalThis.ran;").unwrap());
+    }
+
+    #[test]
+    fn report_jobs_delivers_a_failed_job_once() {
+        let engine = Engine::new().unwrap();
+        engine
+            .eval::<()>("Promise.resolve().then(() => { throw new Error('boom'); });")
+            .unwrap();
+        let reported: Reported = Rc::new(RefCell::new(Vec::new()));
+        let sink = Rc::clone(&reported);
+        let report: ErrorReporter = Rc::new(move |err| sink.borrow_mut().push(err.clone()));
+
+        report_jobs(&engine, &report);
+        assert_eq!(reported.borrow().len(), 1);
+        assert_eq!(reported.borrow()[0].message(), "Error: boom");
+
+        report_jobs(&engine, &report);
+        assert_eq!(reported.borrow().len(), 1);
     }
 
     #[gpui::test]
