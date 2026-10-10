@@ -528,7 +528,9 @@ pub trait EventSink {
     fn pointer_pressed(&self);
 
     /// Reports a mouse button release once every listener of the release has
-    /// run. `pressed` is the deepest container under the press of the same
+    /// run. `event.click_count` is the click count of the press of the same
+    /// button, and the release's own count when `pressed` is `None`.
+    /// `pressed` is the deepest container under the press of the same
     /// button, and `None` when no such press is recorded. `released` is the
     /// deepest container under the release, or the root when none is. The
     /// sink fires `click` for the left button, `auxclick` for the others and

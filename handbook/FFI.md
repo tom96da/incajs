@@ -180,8 +180,8 @@ and event name. Payloads and author-facing behaviour are in
 
 | Name | Payload | Notes |
 | --- | --- | --- |
-| `click` | mouse + pointer | Fires after `mouseup` at the nearest common ancestor of the press container of that button and the release container, so a press must be recorded. A release over no container uses the root. The payload is `EventPayload::click`: the release position and modifiers, `button` the released button, `buttons` at 0, `detail` the click count, pointer source mouse. A key click fires through `EventSink::key_default` at the focused enabled button with `MousePayload::keyboard_click`. |
-| `dblclick` | mouse | Fired through `EventSink::fire` at the `click` ancestor right after the `click` whose release counts 2, with the pointer source cleared. |
+| `click` | mouse + pointer | Fires after `mouseup` at the nearest common ancestor of the press container of that button and the release container, so a press must be recorded. A release over no container uses the root. The payload is `EventPayload::click`: the release position and modifiers, `button` the released button, `buttons` at 0, `detail` the click count of the press, pointer source mouse. A key click fires through `EventSink::key_default` at the focused enabled button with `MousePayload::keyboard_click`. |
+| `dblclick` | mouse | Fired through `EventSink::fire` at the `click` ancestor right after the `click` whose press counts 2, with the pointer source cleared. |
 | `auxclick` | mouse + pointer | Fired through `EventSink::fire` at the same ancestor for the release of any button but the left one. The payload is `EventPayload::click` with `button` the released button. |
 | `contextmenu` | mouse + pointer | The root tracker's capture listener for a right `MouseDownEvent` queues `window.defer`, which runs after the press's bubble. `EventSink::fire` then runs `contextmenu` at the mouse target (the root when none), so it fires whichever way `mousedown` propagated. The payload is `EventPayload::context_menu`: `button` 2, `buttons` 2, `detail` 0, pointer source mouse. |
 | `mousedown`, `mouseup` | mouse | `buttons` holds every button currently held. |

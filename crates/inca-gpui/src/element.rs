@@ -696,7 +696,8 @@ where
             // imperative form takes "any" rather than one button.
             el.interactivity()
                 .on_any_mouse_up(move |event, window, cx| {
-                    listening.dispatch(id, "mouseup", &event.into(), window, cx);
+                    let counted = with_press_count(event, cx);
+                    listening.dispatch(id, "mouseup", &(&counted).into(), window, cx);
                 });
             el
         })
@@ -726,8 +727,9 @@ where
 #[derive(Default)]
 struct MouseTarget {
     current: Option<NodeId>,
-    /// The press container of each button, indexed by `MousePayload::button`.
-    pressed: [Option<NodeId>; 5],
+    /// The press container and click count of each button, indexed by
+    /// `MousePayload::button`.
+    pressed: [Option<(NodeId, usize)>; 5],
 }
 
 impl Global for MouseTarget {}
@@ -747,6 +749,7 @@ pub fn mouse_target(cx: &App) -> Option<NodeId> {
 pub fn pressed_target(cx: &App, button: u8) -> Option<NodeId> {
     cx.try_global::<MouseTarget>()
         .and_then(|t| t.pressed.get(usize::from(button)).copied().flatten())
+        .map(|(id, _)| id)
 }
 
 /// Forgets every recorded press. A release that follows reports no press.
@@ -771,7 +774,7 @@ fn mark_mouse_target<Elem: InteractiveElement + FluentBuilder>(
         .on_any_mouse_down(move |event, _, cx| {
             mark_target(cx, id);
             let slot = usize::from(dom_button_bit(event.button));
-            cx.default_global::<MouseTarget>().pressed[slot].get_or_insert(id);
+            cx.default_global::<MouseTarget>().pressed[slot].get_or_insert((id, event.click_count));
         })
         .on_mouse_move(move |_, window, cx| {
             // The first container to report is the deepest one.
@@ -861,6 +864,16 @@ fn scroll_recorder(handle: ScrollHandle, inert: bool) -> impl IntoElement {
     .size_0()
 }
 
+/// `event` with the click count of its button's recorded press, if any.
+fn with_press_count(event: &MouseUpEvent, cx: &App) -> MouseUpEvent {
+    let slot = usize::from(dom_button_bit(event.button));
+    let mut event = event.clone();
+    if let Some((_, count)) = cx.try_global::<MouseTarget>().and_then(|t| t.pressed[slot]) {
+        event.click_count = count;
+    }
+    event
+}
+
 /// Reports the release of `event`, under `root` when no container is, and
 /// forgets that button's press.
 fn report_release(
@@ -872,8 +885,10 @@ fn report_release(
 ) {
     let slot = usize::from(dom_button_bit(event.button));
     let target = cx.default_global::<MouseTarget>();
-    let (pressed, released) = (target.pressed[slot], target.current.unwrap_or(root));
-    sink.pointer_released(event, pressed, released, window, cx);
+    let released = target.current.unwrap_or(root);
+    let pressed = target.pressed[slot].map(|(id, _)| id);
+    let event = with_press_count(event, cx);
+    sink.pointer_released(&event, pressed, released, window, cx);
     cx.default_global::<MouseTarget>().pressed[slot] = None;
 }
 

@@ -1650,20 +1650,25 @@ fn take_clicks(engine: &Engine) -> Vec<(String, NodeId, NodeId, u32, Option<i32>
     serde_json::from_str(&seen).unwrap()
 }
 
-fn press_and_release(cx: &mut VisualTestContext, button: MouseButton, click_count: usize) {
+/// Presses `down` and releases `up`, each a `(button, click_count)`.
+fn press_and_release(
+    cx: &mut VisualTestContext,
+    (down, down_count): (MouseButton, usize),
+    (up, up_count): (MouseButton, usize),
+) {
     let position = point(px(10.0), px(10.0));
     cx.simulate_event(MouseDownEvent {
         position,
-        button,
+        button: down,
         modifiers: Modifiers::none(),
-        click_count,
+        click_count: down_count,
         first_mouse: false,
     });
     cx.simulate_event(MouseUpEvent {
         position,
-        button,
+        button: up,
         modifiers: Modifiers::none(),
-        click_count,
+        click_count: up_count,
     });
 }
 
@@ -1672,7 +1677,7 @@ fn another_button_releases_as_auxclick_and_not_click(cx: &mut TestAppContext) {
     let (mut cx, engine, parent, child) = mount_click_recorder(cx, &["click", "auxclick"]);
 
     for button in [MouseButton::Right, MouseButton::Middle] {
-        press_and_release(&mut cx, button, 1);
+        press_and_release(&mut cx, (button, 1), (button, 1));
     }
 
     let aux = |target| ("auxclick".to_owned(), child, target, 1, Some(1));
@@ -1688,9 +1693,9 @@ fn the_second_click_of_a_double_click_fires_dblclick_with_no_pointer_fields(
 ) {
     let (mut cx, engine, parent, child) = mount_click_recorder(cx, &["click", "dblclick"]);
 
-    press_and_release(&mut cx, MouseButton::Left, 1);
+    press_and_release(&mut cx, (MouseButton::Left, 1), (MouseButton::Left, 1));
     let single = take_clicks(&engine);
-    press_and_release(&mut cx, MouseButton::Left, 2);
+    press_and_release(&mut cx, (MouseButton::Left, 2), (MouseButton::Left, 2));
 
     let click = |count, target| ("click".to_owned(), child, target, count, Some(1));
     let double = |target| ("dblclick".to_owned(), child, target, 2, None);
@@ -1704,6 +1709,77 @@ fn the_second_click_of_a_double_click_fires_dblclick_with_no_pointer_fields(
             double(parent)
         ]
     );
+}
+
+#[gpui::test]
+fn a_release_reports_the_click_count_of_its_press(cx: &mut TestAppContext) {
+    let (mut cx, engine, _parent, _child) =
+        mount_click_recorder(cx, &["mouseup", "click", "dblclick"]);
+
+    press_and_release(&mut cx, (MouseButton::Left, 1), (MouseButton::Left, 0));
+    let single = take_clicks(&engine);
+    press_and_release(&mut cx, (MouseButton::Left, 2), (MouseButton::Left, 0));
+    let double = take_clicks(&engine);
+
+    let details = |seen: &[(String, NodeId, NodeId, u32, Option<i32>)]| -> Vec<(String, u32)> {
+        seen.iter().map(|c| (c.0.clone(), c.3)).collect()
+    };
+    let at = |name: &str, count| (name.to_owned(), count);
+    assert_eq!(
+        details(&single),
+        [
+            at("mouseup", 1),
+            at("mouseup", 1),
+            at("click", 1),
+            at("click", 1)
+        ]
+    );
+    assert_eq!(
+        details(&double),
+        [
+            at("mouseup", 2),
+            at("mouseup", 2),
+            at("click", 2),
+            at("click", 2),
+            at("dblclick", 2),
+            at("dblclick", 2)
+        ]
+    );
+}
+
+#[gpui::test]
+fn an_auxclick_takes_its_detail_from_the_press(cx: &mut TestAppContext) {
+    let (mut cx, engine, _parent, _child) = mount_click_recorder(cx, &["auxclick"]);
+
+    press_and_release(&mut cx, (MouseButton::Right, 2), (MouseButton::Right, 0));
+
+    let counts: Vec<_> = take_clicks(&engine).into_iter().map(|c| c.3).collect();
+    assert_eq!(counts, [2, 2]);
+}
+
+#[gpui::test]
+fn a_release_of_another_button_keeps_its_own_click_count(cx: &mut TestAppContext) {
+    let (mut cx, engine, _parent, _child) = mount_click_recorder(cx, &["mouseup"]);
+
+    press_and_release(&mut cx, (MouseButton::Left, 2), (MouseButton::Right, 1));
+
+    let counts: Vec<_> = take_clicks(&engine).into_iter().map(|c| c.3).collect();
+    assert_eq!(counts, [1, 1]);
+}
+
+#[gpui::test]
+fn a_release_with_no_press_keeps_its_own_click_count(cx: &mut TestAppContext) {
+    let (mut cx, engine, _parent, _child) = mount_click_recorder(cx, &["mouseup"]);
+
+    cx.simulate_event(MouseUpEvent {
+        position: point(px(10.0), px(10.0)),
+        button: MouseButton::Left,
+        modifiers: Modifiers::none(),
+        click_count: 5,
+    });
+
+    let counts: Vec<_> = take_clicks(&engine).into_iter().map(|c| c.3).collect();
+    assert_eq!(counts, [5, 5]);
 }
 
 #[gpui::test]
