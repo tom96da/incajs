@@ -123,7 +123,7 @@ pub(crate) fn install_panic_hook() {
 /// Reads stdin on its own thread, because `gpui`'s `AsyncApp` isn't `Send`
 /// and a blocking read must not sit on the main thread. The channel closing
 /// means end of input: the parent went away.
-fn stdin_lines() -> async_channel::Receiver<String> {
+pub(crate) fn stdin_lines() -> async_channel::Receiver<String> {
     let (sender, receiver) = async_channel::unbounded();
     thread::spawn(move || {
         for line in io::stdin().lock().lines() {
@@ -197,25 +197,32 @@ fn reload(
             Session::load(entry_path, &source, reporter_for(writer), Some(writer))
                 .map_err(Failure::Thrown)
         })
-        .and_then(|session| {
-            window
-                .update(cx, |app, window, _| {
-                    app.session = session;
-                    // A fixed-size window gets a fresh auto-resize chance,
-                    // as if it just launched with the reloaded content. A
-                    // resizable window may carry a manual resize the user
-                    // made since it last auto-resized, which reloading the
-                    // bundle must not discard.
-                    if !is_resizable(app.window_config.as_ref()) {
-                        app.auto_resized.set((false, false));
-                    }
-                    app.session.dispatcher.drain_jobs_and_refresh(window);
-                    maybe_auto_resize_to_content(app, window);
-                })
-                .map_err(|err| Failure::Message(ErrorCode::BundleFailed, err.to_string()))
-        });
+        .and_then(|session| swap_in(window, cx, session));
 
     respond(id, outcome, writer);
+}
+
+/// Puts `session` on screen in place of the window's current one.
+fn swap_in(
+    window: &WindowHandle<HostedApp>,
+    cx: &mut gpui::AsyncApp,
+    session: Session,
+) -> Result<(), Failure> {
+    window
+        .update(cx, |app, window, _| {
+            app.session = session;
+            // A fixed-size window gets a fresh auto-resize chance,
+            // as if it just launched with the reloaded content. A
+            // resizable window may carry a manual resize the user
+            // made since it last auto-resized, which reloading the
+            // bundle must not discard.
+            if !is_resizable(app.window_config.as_ref()) {
+                app.auto_resized.set((false, false));
+            }
+            app.session.dispatcher.drain_jobs_and_refresh(window);
+            maybe_auto_resize_to_content(app, window);
+        })
+        .map_err(|err| Failure::Message(ErrorCode::BundleFailed, err.to_string()))
 }
 
 /// Relays an unrecognized notification (no `id`) into the running app via
@@ -267,15 +274,15 @@ fn handle_unrecognized(
     );
 }
 
-/// Answers protocol messages until `shutdown`, or until the parent closes
-/// stdin, then quits the app.
+/// Answers the protocol messages arriving on `lines` until `shutdown`, or
+/// until the channel closes, then quits the app.
 pub(crate) fn serve_dev_protocol(
     cx: &mut App,
+    lines: async_channel::Receiver<String>,
     window: WindowHandle<HostedApp>,
     entry_path: String,
     writer: SharedWriter,
 ) {
-    let lines = stdin_lines();
     cx.spawn(async move |cx: &mut gpui::AsyncApp| {
         while let Ok(line) = lines.recv().await {
             let (id, method) = match protocol::decode(&line) {
@@ -654,5 +661,142 @@ mod tests {
             (500.0, 500.0),
             "a resizable window the user resized by hand must not snap back on reload"
         );
+    }
+
+    /// Starts the serve loop on a fresh channel and returns its sender. The
+    /// loop owns the only receiver, so `receiver_count() == 0` means it ended.
+    fn serve(
+        cx: &mut TestAppContext,
+        window: WindowHandle<HostedApp>,
+        entry_path: &str,
+        writer: &SharedWriter,
+    ) -> async_channel::Sender<String> {
+        let (sender, lines) = async_channel::unbounded();
+        cx.update(|cx| {
+            serve_dev_protocol(cx, lines, window, entry_path.to_owned(), Rc::clone(writer));
+        });
+        sender
+    }
+
+    fn open_empty(cx: &mut TestAppContext, writer: &SharedWriter) -> WindowHandle<HostedApp> {
+        let window = cx
+            .update(|cx| start(cx, TEST_ENTRY_PATH, "", stderr_reporter(), Some(writer)).unwrap());
+        cx.run_until_parked();
+        window
+    }
+
+    #[gpui::test]
+    fn shutdown_is_answered_and_later_lines_are_ignored(cx: &mut TestAppContext) {
+        let capturing = Rc::new(CapturingWriter::default());
+        let writer: SharedWriter = Rc::clone(&capturing) as SharedWriter;
+        let window = open_empty(cx, &writer);
+        let sender = serve(cx, window, TEST_ENTRY_PATH, &writer);
+
+        sender
+            .send_blocking(r#"{"jsonrpc":"2.0","id":1,"method":"shutdown"}"#.to_owned())
+            .unwrap();
+        sender
+            .send_blocking(r#"{"jsonrpc":"2.0","id":2,"method":"nope"}"#.to_owned())
+            .unwrap();
+        cx.run_until_parked();
+
+        let sent = capturing.0.borrow();
+        assert_eq!(sent.len(), 1);
+        assert!(sent[0].contains(r#""id":1"#));
+        assert!(sent[0].contains(r#""result":null"#));
+        assert_eq!(sender.receiver_count(), 0, "the loop ended");
+    }
+
+    #[gpui::test]
+    fn a_closed_channel_ends_the_loop(cx: &mut TestAppContext) {
+        let capturing = Rc::new(CapturingWriter::default());
+        let writer: SharedWriter = Rc::clone(&capturing) as SharedWriter;
+        let window = open_empty(cx, &writer);
+        let sender = serve(cx, window, TEST_ENTRY_PATH, &writer);
+        cx.run_until_parked();
+        assert_eq!(sender.receiver_count(), 1, "the loop is waiting");
+
+        sender.close();
+        cx.run_until_parked();
+
+        assert_eq!(sender.receiver_count(), 0, "the loop ended");
+        assert!(capturing.0.borrow().is_empty());
+    }
+
+    #[gpui::test]
+    fn a_reload_line_is_answered_null_and_swaps_the_session_in(cx: &mut TestAppContext) {
+        let entry = ScratchEntry::write("serve-reload", &mounts_a_div(300, 150));
+        let capturing = Rc::new(CapturingWriter::default());
+        let writer: SharedWriter = Rc::clone(&capturing) as SharedWriter;
+        let window = cx.update(|cx| {
+            start(
+                cx,
+                entry.path(),
+                &mounts_a_div(300, 150),
+                stderr_reporter(),
+                Some(&writer),
+            )
+            .unwrap()
+        });
+        cx.run_until_parked();
+        let sender = serve(cx, window, entry.path(), &writer);
+        std::fs::write(&entry.0, mounts_a_div(400, 200)).unwrap();
+
+        sender
+            .send_blocking(r#"{"jsonrpc":"2.0","id":7,"method":"reload"}"#.to_owned())
+            .unwrap();
+        cx.run_until_parked();
+
+        let sent = capturing.0.borrow();
+        assert_eq!(sent.len(), 1);
+        assert!(sent[0].contains(r#""id":7"#));
+        assert!(sent[0].contains(r#""result":null"#));
+        assert_eq!(bounds_of(cx, window), (400.0, 200.0));
+        assert_eq!(sender.receiver_count(), 1, "the loop keeps serving");
+    }
+
+    #[gpui::test]
+    fn an_unusable_line_is_answered_and_the_loop_keeps_serving(cx: &mut TestAppContext) {
+        let capturing = Rc::new(CapturingWriter::default());
+        let writer: SharedWriter = Rc::clone(&capturing) as SharedWriter;
+        let window = open_empty(cx, &writer);
+        let sender = serve(cx, window, TEST_ENTRY_PATH, &writer);
+
+        for (line, code) in [("not json", "-32700"), ("[1]", "-32600")] {
+            capturing.0.borrow_mut().clear();
+            sender.send_blocking(line.to_owned()).unwrap();
+            cx.run_until_parked();
+
+            let sent = capturing.0.borrow();
+            assert_eq!(sent.len(), 1, "{line}");
+            assert!(sent[0].contains(&format!(r#""code":{code}"#)), "{line}");
+            assert!(sent[0].contains(r#""id":null"#), "{line}");
+            assert_eq!(sender.receiver_count(), 1, "{line}");
+        }
+
+        capturing.0.borrow_mut().clear();
+        sender.send_blocking("  ".to_owned()).unwrap();
+        cx.run_until_parked();
+        assert!(capturing.0.borrow().is_empty());
+        assert_eq!(sender.receiver_count(), 1);
+    }
+
+    #[gpui::test]
+    fn an_unknown_request_line_is_answered_method_not_found(cx: &mut TestAppContext) {
+        let capturing = Rc::new(CapturingWriter::default());
+        let writer: SharedWriter = Rc::clone(&capturing) as SharedWriter;
+        let window = open_empty(cx, &writer);
+        let sender = serve(cx, window, TEST_ENTRY_PATH, &writer);
+
+        sender
+            .send_blocking(r#"{"jsonrpc":"2.0","id":3,"method":"nope"}"#.to_owned())
+            .unwrap();
+        cx.run_until_parked();
+
+        let sent = capturing.0.borrow();
+        assert_eq!(sent.len(), 1);
+        assert!(sent[0].contains(r#""code":-32601"#));
+        assert!(sent[0].contains(r#""id":3"#));
+        assert_eq!(sender.receiver_count(), 1, "the loop keeps serving");
     }
 }

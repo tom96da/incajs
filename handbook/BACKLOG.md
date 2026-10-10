@@ -89,7 +89,7 @@ A fixed entry is deleted and its ID is never reused.
 
   The host takes the window's size and title from the config and the
   mounted root. Each size axis fits once, when its content size first
-  becomes known (`start()` and `maybe_auto_resize_to_content` in
+  becomes known (`open()` and `maybe_auto_resize_to_content` in
   `crates/inca-host/src/app.rs`). A later change of the root's
   `width`/`height`, or of the title the app wants, leaves the window as it
   is, and the app has no binding to move it. A resize by the user stays in

@@ -39,7 +39,7 @@ use crate::config;
 
 use crate::dev::{
     Failure, SharedWriter, StdoutWriter, install_panic_hook, report_startup_failure, reporter_for,
-    send,
+    send, stdin_lines,
 };
 use crate::menu;
 use crate::protocol::{ErrorCode, Outgoing};
@@ -254,7 +254,7 @@ impl Render for HostedApp {
 /// Resizes each window dimension to fit content the first time that
 /// dimension becomes usable after the window already opened. The HMR
 /// bootstrap entry evaluates fire-and-forget, so nothing is mounted yet when
-/// the window's initial size is computed in [`start`] — this catches up once
+/// the window's initial size is computed in [`open`] — this catches up once
 /// the app finishes mounting.
 ///
 /// A dimension the config fixes explicitly counts as ready right away. A
@@ -300,7 +300,9 @@ pub(crate) fn maybe_auto_resize_to_content(app: &HostedApp, window: &mut Window)
 ///
 /// # Errors
 ///
-/// Returns the window that failed to open, or the value the entry threw.
+/// Returns `Failure::Thrown` with the value the entry threw, or
+/// `Failure::Message` when the window cannot open or cannot run its first
+/// update.
 pub(crate) fn start(
     cx: &mut App,
     entry_path: &str,
@@ -309,6 +311,21 @@ pub(crate) fn start(
     writer: Option<&SharedWriter>,
 ) -> Result<WindowHandle<HostedApp>, Failure> {
     let session = Session::load(entry_path, source, reporter, writer).map_err(Failure::Thrown)?;
+    open(cx, session, entry_path)
+}
+
+/// Opens the window on `session`, under the config the app's build wrote
+/// beside `entry_path`, then runs the work that mounting queued.
+///
+/// # Errors
+///
+/// Returns `Failure::Message` when the window cannot open or cannot run its
+/// first update.
+pub(crate) fn open(
+    cx: &mut App,
+    session: Session,
+    entry_path: &str,
+) -> Result<WindowHandle<HostedApp>, Failure> {
     let app_config = config::read(Path::new(entry_path));
 
     if let (Some(name), Some(identifier)) = (&app_config.name, &app_config.identifier) {
@@ -416,12 +433,14 @@ pub fn run_bundle(entry_path: &str, dev: bool) -> ExitCode {
         .detach();
 
         let error_reporter = writer.as_ref().map_or_else(stderr_reporter, reporter_for);
+        let lines = writer.is_some().then(stdin_lines);
         match start(cx, &entry_path, &source, error_reporter, writer.as_ref()) {
             Ok(window) => {
-                if let Some(writer) = &writer {
+                if let (Some(writer), Some(lines)) = (&writer, lines) {
                     send(&**writer, &Outgoing::ready());
                     crate::dev::serve_dev_protocol(
                         cx,
+                        lines,
                         window,
                         entry_path.clone(),
                         Rc::clone(writer),
@@ -732,7 +751,7 @@ mod tests {
         assert!(sent[0].contains("boom"));
     }
 
-    /// Opens a window directly (bypassing [`start`]'s disk-backed config
+    /// Opens a window directly (bypassing [`open`]'s disk-backed config
     /// read) so a test can hand it a chosen `window_config` and starting
     /// size without a real `inca.json` on disk.
     fn open_hosted(
