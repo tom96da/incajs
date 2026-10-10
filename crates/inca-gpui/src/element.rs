@@ -24,7 +24,7 @@ use gpui::{
     ScrollHandle, ScrollWheelEvent, StyleRefinement, Window, canvas, div, point, px, rgb,
 };
 
-use crate::event_sink::{EventMask, EventPayload, EventSink, dom_button_bit};
+use crate::event_sink::{EventPayload, EventSink, dom_button_bit};
 use crate::tree::{AttributeValue, NodeId, VirtualNode, VirtualTree, style_key};
 
 /// What kind of element a [`VirtualNode`](crate::tree::VirtualNode) maps to.
@@ -170,10 +170,8 @@ pub struct ElementSpec {
     pub id: NodeId,
     pub tag: ElementTag,
     pub style: StyleSpec,
-    /// Every kind of event something is listening for on this node.
-    pub listens: EventMask,
     /// The node or an ancestor has the `inert` attribute. The node reports
-    /// no mouse target and listens for nothing.
+    /// no mouse target and no hover.
     pub inert: bool,
     pub children: Vec<ElementSpec>,
 }
@@ -474,34 +472,18 @@ fn text_content(tree: &VirtualTree, id: NodeId) -> String {
     content
 }
 
-/// Builds an [`ElementSpec`] for `root` and its whole subtree, with nothing
-/// listening for input.
+/// Builds an [`ElementSpec`] for `root` and its whole subtree. `None` if `root`
+/// doesn't resolve, matching [`VirtualTree::get`]'s convention. The render path
+/// is fed by JS-supplied data, so it skips a child id that doesn't resolve.
 #[must_use]
 pub fn build_spec(tree: &VirtualTree, root: NodeId) -> Option<ElementSpec> {
-    build_spec_with(tree, root, &|_| EventMask::NONE)
-}
-
-/// Builds an [`ElementSpec`] for `root` and its whole subtree, asking
-/// `listens` about each node. `None` if `root` doesn't resolve, matching
-/// [`VirtualTree::get`]'s convention. A child id that doesn't resolve is
-/// skipped rather than panicking — this is ultimately fed by JS-supplied
-/// data, so the render path stays defensive.
-///
-/// A predicate rather than the registry itself, so this layer stays free of
-/// it.
-#[must_use]
-pub fn build_spec_with(
-    tree: &VirtualTree,
-    root: NodeId,
-    listens: &dyn Fn(NodeId) -> EventMask,
-) -> Option<ElementSpec> {
     let mut inert = false;
     let mut cursor = tree.get(root)?.parent();
     while let Some(ancestor) = cursor.and_then(|id| tree.get(id)) {
         inert |= ancestor.attributes().contains_key("inert");
         cursor = ancestor.parent();
     }
-    build_spec_inner(tree, root, listens, inert)
+    build_spec_inner(tree, root, inert)
 }
 
 /// Whether the `hidden` attribute hides `node`: it is present in the Hidden
@@ -517,12 +499,7 @@ pub fn hidden_by_attribute(node: &VirtualNode) -> bool {
         && !node.style_props().contains_key("display")
 }
 
-fn build_spec_inner(
-    tree: &VirtualTree,
-    root: NodeId,
-    listens: &dyn Fn(NodeId) -> EventMask,
-    inert_above: bool,
-) -> Option<ElementSpec> {
+fn build_spec_inner(tree: &VirtualTree, root: NodeId, inert_above: bool) -> Option<ElementSpec> {
     let node = tree.get(root)?;
     let inert = inert_above || node.attributes().contains_key("inert");
 
@@ -541,7 +518,7 @@ fn build_spec_inner(
     } else {
         node.children()
             .iter()
-            .filter_map(|&child_id| build_spec_inner(tree, child_id, listens, inert))
+            .filter_map(|&child_id| build_spec_inner(tree, child_id, inert))
             .collect()
     };
 
@@ -549,11 +526,6 @@ fn build_spec_inner(
         id: root,
         tag,
         style,
-        listens: if inert {
-            EventMask::NONE
-        } else {
-            listens(root)
-        },
         inert,
         children,
     })
@@ -671,58 +643,6 @@ fn apply_style(style: &mut StyleRefinement, spec: &StyleSpec) {
     style.max_size.height = spec.max_height.map(length_from_spec);
 }
 
-/// Wires whichever of [`EventMask::MOUSE_DOWN`]/[`MOUSE_UP`]/[`MOUSE_MOVE`]/
-/// [`WHEEL`](EventMask::WHEEL)/[`KEY_DOWN`](EventMask::KEY_DOWN)/
-/// [`KEY_UP`](EventMask::KEY_UP) `wired` reports as present. `Elem` can be
-/// `Div` or `Stateful<Div>` interchangeably; both are [`InteractiveElement`].
-fn wire_stateless<Elem, E>(
-    element: Elem,
-    id: NodeId,
-    wired: &impl Fn(EventMask) -> Option<E>,
-) -> Elem
-where
-    Elem: InteractiveElement + FluentBuilder,
-    E: EventSink + Clone + 'static,
-{
-    element
-        .when_some(wired(EventMask::MOUSE_DOWN), |el, listening| {
-            el.on_any_mouse_down(move |event, window, cx| {
-                listening.dispatch(id, "mousedown", &event.into(), window, cx);
-            })
-        })
-        .when_some(wired(EventMask::MOUSE_UP), |mut el, listening| {
-            // No fluent `on_any_mouse_up` exists — DOM's `mouseup`
-            // fires for any button, and only `Interactivity`'s
-            // imperative form takes "any" rather than one button.
-            el.interactivity()
-                .on_any_mouse_up(move |event, window, cx| {
-                    let counted = with_press_count(event, cx);
-                    listening.dispatch(id, "mouseup", &(&counted).into(), window, cx);
-                });
-            el
-        })
-        .when_some(wired(EventMask::MOUSE_MOVE), |el, listening| {
-            el.on_mouse_move(move |event, window, cx| {
-                listening.dispatch(id, "mousemove", &event.into(), window, cx);
-            })
-        })
-        .when_some(wired(EventMask::WHEEL), |el, listening| {
-            el.on_scroll_wheel(move |event, window, cx| {
-                listening.dispatch(id, "wheel", &event.into(), window, cx);
-            })
-        })
-        .when_some(wired(EventMask::KEY_DOWN), |el, listening| {
-            el.on_key_down(move |event, window, cx| {
-                listening.dispatch(id, "keydown", &event.into(), window, cx);
-            })
-        })
-        .when_some(wired(EventMask::KEY_UP), |el, listening| {
-            el.on_key_up(move |event, window, cx| {
-                listening.dispatch(id, "keyup", &event.into(), window, cx);
-            })
-        })
-}
-
 // The first container to report in the bubble phase wins; a release clears its button's press.
 #[derive(Default)]
 struct MouseTarget {
@@ -736,7 +656,7 @@ impl Global for MouseTarget {}
 
 /// The deepest container under the pointer for the mouse event being
 /// handled, and after it until the next mouse event starts. `None` when no
-/// container has reported, and for a tree with no mouse listener.
+/// container has reported, and for a sink that tracks no pointer.
 #[must_use]
 pub fn mouse_target(cx: &App) -> Option<NodeId> {
     cx.try_global::<MouseTarget>().and_then(|t| t.current)
@@ -762,9 +682,7 @@ fn mark_target(cx: &mut App, id: NodeId) {
     target.current.get_or_insert(id);
 }
 
-/// Reports `id` as the event's target when no deeper container has. Add it
-/// after every other mouse listener of the container: a node's listeners
-/// run in reverse order, so this one runs first.
+/// Reports `id` as the event's target when no deeper container has.
 fn mark_mouse_target<Elem: InteractiveElement + FluentBuilder>(
     element: Elem,
     id: NodeId,
@@ -874,8 +792,14 @@ fn with_press_count(event: &MouseUpEvent, cx: &App) -> MouseUpEvent {
     event
 }
 
-/// Reports the release of `event`, under `root` when no container is, and
-/// forgets that button's press.
+/// The deepest container that reported for the mouse event being handled,
+/// else `root`.
+fn target_or(cx: &App, root: NodeId) -> NodeId {
+    mouse_target(cx).unwrap_or(root)
+}
+
+/// Reports the release of `event`, under `root` when no container is: its
+/// `mouseup`, then the clicks it completes. Forgets that button's press.
 fn report_release(
     sink: &impl EventSink,
     root: NodeId,
@@ -888,57 +812,68 @@ fn report_release(
     let released = target.current.unwrap_or(root);
     let pressed = target.pressed[slot].map(|(id, _)| id);
     let event = with_press_count(event, cx);
+    sink.pointer_input("mouseup", released, &(&event).into(), window, cx);
     sink.pointer_released(&event, pressed, released, window, cx);
     cx.default_global::<MouseTarget>().pressed[slot] = None;
 }
 
-// Zero-size child; its capture-phase handlers run before any node's own.
+// Zero-size first child of the root. Its capture handlers run before any
+// container's, and its bubble handlers run after every container's below the
+// root, so each input is reported once, with its target settled.
 fn pointer_tracker<E: EventSink + Clone + 'static>(root: NodeId, dispatch: E) -> impl IntoElement {
     canvas(
         |_, _, _| (),
         move |_, (), window, _| {
             let moved = dispatch.clone();
-            window.on_mouse_event(move |event: &MouseMoveEvent, phase, _, cx| {
-                if phase == DispatchPhase::Capture {
-                    cx.default_global::<MouseTarget>().current = None;
-                    moved.pointer_moved(event.position, cx);
-                }
-            });
-            let pressed = dispatch.clone();
-            let menu = dispatch.clone();
-            window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
-                if phase == DispatchPhase::Capture {
-                    pressed.pointer_pressed();
-                    let slot = usize::from(dom_button_bit(event.button));
-                    let target = cx.default_global::<MouseTarget>();
-                    target.current = None;
-                    target.pressed[slot] = None;
-                    if event.button == gpui::MouseButton::Right {
-                        // Runs after the press's own listeners.
-                        let (menu, payload) = (menu.clone(), EventPayload::context_menu(event));
-                        window.defer(cx, move |window, cx| {
-                            let start = mouse_target(cx).unwrap_or(root);
-                            menu.fire(start, "contextmenu", &payload, window, cx);
-                        });
+            window.on_mouse_event(
+                move |event: &MouseMoveEvent, phase, window, cx| match phase {
+                    DispatchPhase::Capture => {
+                        cx.default_global::<MouseTarget>().current = None;
+                        moved.pointer_moved(event.position, cx);
                     }
-                }
-            });
+                    DispatchPhase::Bubble => {
+                        let target = target_or(cx, root);
+                        moved.pointer_input("mousemove", target, &event.into(), window, cx);
+                    }
+                },
+            );
+            let pressed = dispatch.clone();
+            window.on_mouse_event(
+                move |event: &MouseDownEvent, phase, window, cx| match phase {
+                    DispatchPhase::Capture => {
+                        pressed.pointer_pressed();
+                        let slot = usize::from(dom_button_bit(event.button));
+                        let target = cx.default_global::<MouseTarget>();
+                        target.current = None;
+                        target.pressed[slot] = None;
+                        // gpui would focus before the listeners run; the sink focuses after.
+                        window.prevent_default();
+                    }
+                    DispatchPhase::Bubble => {
+                        let target = target_or(cx, root);
+                        pressed.pointer_input("mousedown", target, &event.into(), window, cx);
+                        if event.button == gpui::MouseButton::Right {
+                            let payload = EventPayload::context_menu(event);
+                            pressed.fire(target, "contextmenu", &payload, window, cx);
+                        }
+                    }
+                },
+            );
             let released = dispatch.clone();
-            window.on_mouse_event(move |event: &MouseUpEvent, phase, window, cx| {
-                if phase == DispatchPhase::Capture {
-                    cx.default_global::<MouseTarget>().current = None;
-                    // Queued in the capture phase so a stopped mouseup keeps it.
-                    let (released, event) = (released.clone(), event.clone());
-                    window.defer(cx, move |window, cx| {
-                        report_release(&released, root, &event, window, cx);
-                    });
-                }
+            window.on_mouse_event(move |event: &MouseUpEvent, phase, window, cx| match phase {
+                DispatchPhase::Capture => cx.default_global::<MouseTarget>().current = None,
+                DispatchPhase::Bubble => report_release(&released, root, event, window, cx),
             });
-            window.on_mouse_event(move |_: &ScrollWheelEvent, phase, _, cx| {
-                if phase == DispatchPhase::Capture {
-                    cx.default_global::<MouseTarget>().current = None;
-                }
-            });
+            let scrolled = dispatch.clone();
+            window.on_mouse_event(
+                move |event: &ScrollWheelEvent, phase, window, cx| match phase {
+                    DispatchPhase::Capture => cx.default_global::<MouseTarget>().current = None,
+                    DispatchPhase::Bubble => {
+                        let target = target_or(cx, root);
+                        scrolled.pointer_input("wheel", target, &event.into(), window, cx);
+                    }
+                },
+            );
             let dispatch = dispatch.clone();
             window.on_mouse_event(move |_: &MouseExitEvent, phase, _, _| {
                 if phase == DispatchPhase::Capture {
@@ -951,9 +886,9 @@ fn pointer_tracker<E: EventSink + Clone + 'static>(root: NodeId, dispatch: E) ->
     .size_0()
 }
 
-// Runs on the root in the capture phase, before any node's key listener. The
-// default action waits for the end of the key's dispatch.
-fn key_defaults<Elem, E>(element: Elem, dispatch: E) -> Elem
+// The root's capture handlers run before any other key listener of the
+// window, so the sink sees every key once, whatever is focused.
+fn root_keys<Elem, E>(element: Elem, dispatch: E) -> Elem
 where
     Elem: InteractiveElement,
     E: EventSink + Clone + 'static,
@@ -961,16 +896,10 @@ where
     let up = dispatch.clone();
     element
         .capture_key_down(move |event, window, cx| {
-            let (dispatch, keystroke) = (dispatch.clone(), event.keystroke.clone());
-            window.defer(cx, move |window, cx| {
-                dispatch.key_default(&keystroke, false, window, cx);
-            });
+            dispatch.key_input(&event.keystroke, false, &event.into(), window, cx);
         })
         .capture_key_up(move |event, window, cx| {
-            let (dispatch, keystroke) = (up.clone(), event.keystroke.clone());
-            window.defer(cx, move |window, cx| {
-                dispatch.key_default(&keystroke, true, window, cx);
-            });
+            up.key_input(&event.keystroke, true, &event.into(), window, cx);
         })
 }
 
@@ -1027,28 +956,20 @@ pub fn debug_selector(id: NodeId) -> String {
     format!("node-{id}")
 }
 
-/// Whether any node of `spec` listens to a mouse event that reports a target.
-/// Every kind except focus, blur and the key events is a mouse kind.
-fn listens_mouse(spec: &ElementSpec) -> bool {
-    let non_mouse = EventMask::FOCUS | EventMask::BLUR | EventMask::KEY_DOWN | EventMask::KEY_UP;
-    spec.listens.intersects(!non_mouse) || spec.children.iter().any(listens_mouse)
-}
-
 /// Recursively converts an [`ElementSpec`] into a real `gpui` [`AnyElement`].
 ///
-/// A container gets a hitbox when it carries a mouse listener. With `track`,
-/// every non-inert container reports itself as the mouse target, which gives
-/// it a hitbox, and reports its hover state through `on_hover`, which needs a
-/// `gpui` `ElementId` (`.id()`). A container that scrolls on either axis gets
-/// an id too, since `gpui` keeps its scroll offset in element state. The event
-/// kinds wire through plain `InteractiveElement` methods and need no id.
+/// With `track`, every non-inert container reports itself as the mouse target,
+/// which gives it a hitbox, and reports its hover state through `on_hover`,
+/// which needs a `gpui` `ElementId` (`.id()`). A container that scrolls on
+/// either axis gets an id too, since `gpui` keeps its scroll offset in element
+/// state.
 ///
 /// Every container carries the selector [`debug_selector`] names, a no-op
 /// outside test builds, so a test can look its computed bounds up by
-/// [`NodeId`], wired or not.
+/// [`NodeId`].
 ///
-/// The root container (`root`) also carries the pointer tracker when there is
-/// a dispatcher.
+/// The root container (`root`) also carries the pointer tracker and the key
+/// listeners when there is a dispatcher.
 fn build_element_inner<E: EventSink + Clone + 'static>(
     spec: &ElementSpec,
     dispatch: Option<&E>,
@@ -1059,52 +980,22 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
         ElementTag::Text(content) => content.clone().into_any_element(),
         ElementTag::Container => {
             let id = spec.id;
-            // `Some(dispatch.clone())` when `mask` is both listened for and
-            // there's a dispatcher to call — `None` otherwise. Threading the
-            // dispatcher itself through `when_some` (rather than a `bool`
-            // plus a later `dispatch.expect(..)`) makes "wired implies a
-            // dispatcher" a fact the type checker holds, not one this
-            // function has to keep true by hand.
-            let wired = |mask: EventMask| -> Option<E> {
-                // The root takes every key event, so one with nothing focused
-                // reaches it.
-                let keys = EventMask::KEY_DOWN | EventMask::KEY_UP;
-                dispatch
-                    .filter(|_| spec.listens.contains(mask) || (root && keys.contains(mask)))
-                    .cloned()
-            };
             let element = div().debug_selector(move || debug_selector(id));
-            // Registered first, so it runs after every other press listener.
-            let element = element.when(dispatch.is_some() && root, |el| {
-                el.on_any_mouse_down(|_, window, cx| {
-                    if !window.default_prevented() {
-                        window.blur(cx);
-                    }
-                })
-            });
 
             let element = element.when_some(dispatch.filter(|_| root), |el, dispatch| {
-                wire_modifier_keys(key_defaults(el, dispatch.clone()), dispatch)
+                wire_modifier_keys(root_keys(el, dispatch.clone()), dispatch)
             });
 
-            // Every container of a tree with a mouse listener reports its
-            // hover state.
             let hover = track && !spec.inert;
             if spec.style.scrolls() || (dispatch.is_some() && hover) {
-                let element =
-                    wire_stateless(element.id(ElementId::Integer(u64::from(id))), id, &wired);
+                let element = element.id(ElementId::Integer(u64::from(id)));
                 let element = wire_focus(element, dispatch, id);
                 let element = wire_scroll(element, dispatch, spec);
                 let element = wire_hover(element, dispatch.filter(|_| hover), id);
-                let element = element.when(track && !spec.inert, |el| {
-                    mark_mouse_target(el, id, dispatch.cloned())
-                });
+                let element =
+                    element.when(hover, |el| mark_mouse_target(el, id, dispatch.cloned()));
                 finish_container(element, spec, dispatch, root, track)
             } else {
-                let element = wire_stateless(element, id, &wired);
-                let element = element.when(track && !spec.inert, |el| {
-                    mark_mouse_target(el, id, dispatch.cloned())
-                });
                 finish_container(
                     wire_focus(element, dispatch, id),
                     spec,
@@ -1145,24 +1036,14 @@ where
 
 /// Type-only stand-in for [`build_element_inner`]'s `dispatch` parameter
 /// when there's no dispatcher at all — [`build_element`] always passes
-/// `None`, so [`EventSink::dispatch`] is unreachable here, but a concrete
-/// type is still needed to name in that `None`.
+/// `None`, so no method here is reachable, but a concrete type is still needed
+/// to name in that `None`.
 #[derive(Clone)]
-struct NeverListens;
+struct NoSink;
 
-impl EventSink for NeverListens {
-    fn listens(&self, _node_id: NodeId) -> EventMask {
-        EventMask::NONE
-    }
-
-    fn dispatch(
-        &self,
-        _node_id: NodeId,
-        _event: &str,
-        _payload: &EventPayload,
-        _window: &mut Window,
-        _cx: &mut App,
-    ) {
+impl EventSink for NoSink {
+    fn tracks_pointer(&self) -> bool {
+        false
     }
 
     fn fire(
@@ -1197,6 +1078,8 @@ impl EventSink for NeverListens {
 
     fn pointer_pressed(&self) {}
 
+    fn pointer_input(&self, _: &str, _: NodeId, _: &EventPayload, _: &mut Window, _: &mut App) {}
+
     fn pointer_released(
         &self,
         _: &MouseUpEvent,
@@ -1207,7 +1090,15 @@ impl EventSink for NeverListens {
     ) {
     }
 
-    fn key_default(&self, _: &gpui::Keystroke, _: bool, _: &mut Window, _: &mut App) {}
+    fn key_input(
+        &self,
+        _: &gpui::Keystroke,
+        _: bool,
+        _: &EventPayload,
+        _: &mut Window,
+        _: &mut App,
+    ) {
+    }
 }
 
 /// Recursively converts an [`ElementSpec`] into a real `gpui` [`AnyElement`],
@@ -1215,20 +1106,18 @@ impl EventSink for NeverListens {
 /// whose containers dispatch input events into JS.
 #[must_use]
 pub fn build_element(spec: &ElementSpec) -> AnyElement {
-    build_element_inner::<NeverListens>(spec, None, true, false)
+    build_element_inner::<NoSink>(spec, None, true, false)
 }
 
 /// Like [`build_element`], but input on the containers dispatches into JS
 /// via `dispatch` (an `inca-bridge::EventDispatcher`, behind this crate's
-/// [`EventSink`] trait). `dispatch` also receives
-/// [`EventSink::pointer_moved`] and [`EventSink::pointer_left`] for the
-/// window's pointer moves and exits.
+/// [`EventSink`] trait).
 #[must_use]
 pub fn build_element_with_events<E: EventSink + Clone + 'static>(
     spec: &ElementSpec,
     dispatch: &E,
 ) -> AnyElement {
-    build_element_inner(spec, Some(dispatch), true, listens_mouse(spec))
+    build_element_inner(spec, Some(dispatch), true, dispatch.tracks_pointer())
 }
 
 /// Composes [`build_spec`] and [`build_element`]: builds `root` and its
@@ -1247,8 +1136,7 @@ pub fn render_tree_with_events<E: EventSink + Clone + 'static>(
     root: NodeId,
     dispatch: &E,
 ) -> Option<AnyElement> {
-    build_spec_with(tree, root, &|id| dispatch.listens(id))
-        .map(|spec| build_element_with_events(&spec, dispatch))
+    build_spec(tree, root).map(|spec| build_element_with_events(&spec, dispatch))
 }
 
 #[cfg(test)]
@@ -1312,7 +1200,7 @@ mod tests {
         }
 
         #[test]
-        fn an_inert_node_and_its_subtree_listen_for_nothing() {
+        fn an_inert_node_and_its_subtree_are_inert() {
             let mut tree = VirtualTree::new();
             let [outer, inert, child, sibling] =
                 ["div"; 4].map(|tag| tree.create_node(tag).unwrap());
@@ -1320,25 +1208,28 @@ mod tests {
             tree.append_child(inert, child).unwrap();
             tree.append_child(outer, sibling).unwrap();
             tree.set_attribute(inert, "inert", true).unwrap();
-            let all = |_: NodeId| EventMask::CLICK;
-            let masks = |root| {
-                let spec = build_spec_with(&tree, root, &all).unwrap();
-                let mut seen = vec![spec.listens];
+            let inerts = |root| {
+                let spec = build_spec(&tree, root).unwrap();
+                let mut seen = vec![(spec.id, spec.inert)];
                 let mut stack = spec.children;
                 while let Some(spec) = stack.pop() {
-                    seen.push(spec.listens);
+                    seen.push((spec.id, spec.inert));
                     stack.extend(spec.children);
                 }
+                seen.sort_unstable();
                 seen
             };
-            // outer and sibling listen; inert and child do not.
-            let listening = masks(outer)
-                .iter()
-                .filter(|m| **m == EventMask::CLICK)
-                .count();
-            assert_eq!(listening, 2);
+            assert_eq!(
+                inerts(outer),
+                [
+                    (outer, false),
+                    (inert, true),
+                    (child, true),
+                    (sibling, false)
+                ]
+            );
             // A subtree built from the child alone still sees the inert ancestor.
-            assert_eq!(masks(child), vec![EventMask::NONE]);
+            assert_eq!(inerts(child), [(child, true)]);
         }
 
         #[test]
@@ -1854,38 +1745,6 @@ mod tests {
             assert!(!scrolls(&[]));
         }
 
-        #[test]
-        fn nothing_listens_unless_asked() {
-            let mut tree = VirtualTree::new();
-            let id = tree.create_node("div").unwrap();
-
-            let spec = build_spec(&tree, id).unwrap();
-            assert_eq!(spec.listens, EventMask::NONE);
-        }
-
-        #[test]
-        fn the_predicate_is_asked_about_every_node() {
-            let mut tree = VirtualTree::new();
-            let parent = tree.create_node("div").unwrap();
-            let listening = tree.create_node("div").unwrap();
-            let quiet = tree.create_node("div").unwrap();
-            tree.append_child(parent, listening).unwrap();
-            tree.append_child(parent, quiet).unwrap();
-
-            let spec = build_spec_with(&tree, parent, &|id| {
-                if id == listening {
-                    EventMask::CLICK
-                } else {
-                    EventMask::NONE
-                }
-            })
-            .unwrap();
-
-            assert_eq!(spec.listens, EventMask::NONE);
-            assert_eq!(spec.children[0].listens, EventMask::CLICK);
-            assert_eq!(spec.children[1].listens, EventMask::NONE);
-        }
-
         /// The style a node gets from `props`, and what [`style_warning`] says
         /// about each prop, in order.
         fn style_and_warnings(props: &[(&str, AttributeValue)]) -> (StyleSpec, Vec<String>) {
@@ -2350,58 +2209,38 @@ mod tests {
             let shift = content_shift(cx, &[("overflow_y", "scroll")], point(px(0.), px(-50.)));
             assert_eq!(shift, point(px(0.), px(-50.)));
         }
-        type Calls = Rc<RefCell<Vec<(NodeId, String, Option<NodeId>, Option<NodeId>)>>>;
 
-        /// The `node` of a release in [`Calls`], which no container has.
-        const RELEASE: NodeId = NodeId::MAX;
+        /// `(event, target, mouse_target, pressed_target)` of each report.
+        type Calls = Rc<RefCell<Vec<(String, NodeId, Option<NodeId>, Option<NodeId>)>>>;
 
-        // Records `(node, event, mouse_target, pressed_target)`; a release uses `RELEASE`.
+        // Records what the tracker reports; a release is `"release"`.
         #[derive(Clone)]
         struct Probe {
-            listens: Rc<HashMap<NodeId, EventMask>>,
+            tracks: bool,
             calls: Calls,
-            stop_mouse_up: bool,
+            /// `(event, Window::default_prevented)` at each `pointer_input`.
+            prevented: Rc<RefCell<Vec<(String, bool)>>>,
         }
 
         impl EventSink for Probe {
-            fn listens(&self, node_id: NodeId) -> EventMask {
-                self.listens
-                    .get(&node_id)
-                    .copied()
-                    .unwrap_or(EventMask::NONE)
-            }
-
-            fn dispatch(
-                &self,
-                node_id: NodeId,
-                event: &str,
-                payload: &EventPayload,
-                _: &mut Window,
-                cx: &mut App,
-            ) {
-                let button = match payload {
-                    EventPayload::Mouse(mouse) => mouse.button,
-                    _ => 0,
-                };
-                self.calls.borrow_mut().push((
-                    node_id,
-                    event.to_owned(),
-                    mouse_target(cx),
-                    pressed_target(cx, button),
-                ));
-                if self.stop_mouse_up && event == "mouseup" {
-                    cx.stop_propagation();
-                }
+            fn tracks_pointer(&self) -> bool {
+                self.tracks
             }
 
             fn fire(
                 &self,
-                _: NodeId,
-                _: &str,
+                start: NodeId,
+                event: &str,
                 _: &EventPayload,
                 _: &mut Window,
-                _: &mut App,
+                cx: &mut App,
             ) -> bool {
+                self.calls.borrow_mut().push((
+                    format!("fire {event}"),
+                    start,
+                    mouse_target(cx),
+                    None,
+                ));
                 false
             }
 
@@ -2425,6 +2264,29 @@ mod tests {
 
             fn pointer_pressed(&self) {}
 
+            fn pointer_input(
+                &self,
+                event: &str,
+                target: NodeId,
+                payload: &EventPayload,
+                window: &mut Window,
+                cx: &mut App,
+            ) {
+                let button = match payload {
+                    EventPayload::Mouse(mouse) => mouse.button,
+                    _ => 0,
+                };
+                self.calls.borrow_mut().push((
+                    event.to_owned(),
+                    target,
+                    mouse_target(cx),
+                    pressed_target(cx, button),
+                ));
+                self.prevented
+                    .borrow_mut()
+                    .push((event.to_owned(), window.default_prevented()));
+            }
+
             fn pointer_released(
                 &self,
                 _: &MouseUpEvent,
@@ -2434,14 +2296,22 @@ mod tests {
                 _: &mut App,
             ) {
                 self.calls.borrow_mut().push((
-                    RELEASE,
                     "release".to_owned(),
+                    released,
                     Some(released),
                     pressed,
                 ));
             }
 
-            fn key_default(&self, _: &gpui::Keystroke, _: bool, _: &mut Window, _: &mut App) {}
+            fn key_input(
+                &self,
+                _: &gpui::Keystroke,
+                _: bool,
+                _: &EventPayload,
+                _: &mut Window,
+                _: &mut App,
+            ) {
+            }
         }
 
         struct ProbeView(VirtualTree, Probe);
@@ -2452,24 +2322,20 @@ mod tests {
             }
         }
 
-        fn mouse() -> EventMask {
-            EventMask::MOUSE_DOWN | EventMask::MOUSE_UP | EventMask::MOUSE_MOVE | EventMask::WHEEL
-        }
-
         const LEAF: (f32, f32) = (10., 10.);
         const MID: (f32, f32) = (80., 80.);
+        const ROOT_ONLY: (f32, f32) = (150., 150.);
+        const OUTSIDE: (f32, f32) = (300., 300.);
+
+        struct Scene {
+            cx: VisualTestContext,
+            calls: Calls,
+            prevented: Rc<RefCell<Vec<(String, bool)>>>,
+        }
 
         // Node 0 (200x200) holds node 1 (100x100), which holds node 2 (50x50),
         // all at the origin.
-        fn probe_tree(cx: &mut TestAppContext, listening: &[NodeId]) -> (VisualTestContext, Calls) {
-            stopping_probe_tree(cx, listening, false)
-        }
-
-        fn stopping_probe_tree(
-            cx: &mut TestAppContext,
-            listening: &[NodeId],
-            stop_mouse_up: bool,
-        ) -> (VisualTestContext, Calls) {
+        fn probe_tree(cx: &mut TestAppContext, tracks: bool) -> Scene {
             let mut tree = VirtualTree::new();
             let ids: Vec<_> = (0..3).map(|_| tree.create_node("div").unwrap()).collect();
             for (id, side) in ids.iter().zip([200.0, 100.0, 50.0]) {
@@ -2479,15 +2345,20 @@ mod tests {
             tree.append_child(ids[0], ids[1]).unwrap();
             tree.append_child(ids[1], ids[2]).unwrap();
             let calls = Calls::default();
+            let prevented = Rc::default();
             let probe = Probe {
-                listens: Rc::new(listening.iter().map(|id| (*id, mouse())).collect()),
+                tracks,
                 calls: Rc::clone(&calls),
-                stop_mouse_up,
+                prevented: Rc::clone(&prevented),
             };
             let window = cx.add_window(|_, _| ProbeView(tree, probe));
             cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
                 .unwrap();
-            (VisualTestContext::from_window(window.into(), cx), calls)
+            Scene {
+                cx: VisualTestContext::from_window(window.into(), cx),
+                calls,
+                prevented,
+            }
         }
 
         fn at((x, y): (f32, f32)) -> Point<Pixels> {
@@ -2505,200 +2376,253 @@ mod tests {
             cx.simulate_click(at(pos), gpui::Modifiers::none());
         }
 
-        const NAMES: [&str; 4] = ["mousemove", "wheel", "mousedown", "mouseup"];
+        /// `(event, target)` of each report, in order.
+        fn reports(calls: &Calls) -> Vec<(String, NodeId)> {
+            calls.borrow().iter().map(|c| (c.0.clone(), c.1)).collect()
+        }
 
-        fn targets(calls: &Calls, node: NodeId) -> Vec<(String, Option<NodeId>)> {
-            calls
-                .borrow()
-                .iter()
-                .filter(|c| c.0 == node)
-                .map(|c| (c.1.clone(), c.2))
-                .collect()
+        fn report(event: &str, target: NodeId) -> (String, NodeId) {
+            (event.to_owned(), target)
         }
 
         #[gpui::test]
-        fn every_kind_reports_the_deepest_container_to_each_listener(cx: &mut TestAppContext) {
-            // Listeners on node 2 itself see its own mark, so the marker runs
-            // before the node's own listener of every kind.
-            let (mut cx, calls) = probe_tree(cx, &[0, 2]);
-            mouse_events(&mut cx, LEAF);
-            let want: Vec<_> = NAMES.iter().map(|n| ((*n).to_owned(), Some(2))).collect();
-            assert_eq!(targets(&calls, 0), want);
-            assert_eq!(targets(&calls, 2), want);
+        fn every_input_is_reported_once_with_the_deepest_container_as_target(
+            cx: &mut TestAppContext,
+        ) {
+            let mut scene = probe_tree(cx, true);
+            mouse_events(&mut scene.cx, LEAF);
+            assert_eq!(
+                reports(&scene.calls),
+                [
+                    report("mousemove", 2),
+                    report("wheel", 2),
+                    report("mousedown", 2),
+                    report("mouseup", 2),
+                    report("release", 2),
+                ]
+            );
+            assert!(
+                scene.calls.borrow()[..4].iter().all(|c| c.2 == Some(2)),
+                "every container below the root reported before the sink"
+            );
         }
 
         #[gpui::test]
         fn the_target_is_cleared_for_each_event(cx: &mut TestAppContext) {
-            let (mut cx, calls) = probe_tree(cx, &[0]);
-            mouse_events(&mut cx, LEAF);
-            mouse_events(&mut cx, MID);
-            let all = targets(&calls, 0);
-            assert!(all[..4].iter().all(|t| t.1 == Some(2)), "{all:?}");
-            assert!(all[4..].iter().all(|t| t.1 == Some(1)), "{all:?}");
+            let mut scene = probe_tree(cx, true);
+            mouse_events(&mut scene.cx, LEAF);
+            scene.calls.borrow_mut().clear();
+            mouse_events(&mut scene.cx, MID);
+            let targets: Vec<_> = scene.calls.borrow().iter().map(|c| c.1).collect();
+            assert_eq!(targets, [1; 5]);
+        }
+
+        #[gpui::test]
+        fn the_root_is_the_target_when_only_the_root_is_under_the_pointer(cx: &mut TestAppContext) {
+            let mut scene = probe_tree(cx, true);
+            mouse_events(&mut scene.cx, ROOT_ONLY);
+            let calls = scene.calls.borrow();
+            assert!(calls.iter().all(|c| c.1 == 0), "{calls:?}");
+            assert!(
+                calls[..4].iter().all(|c| c.2.is_none()),
+                "the root marks itself after the tracker reports"
+            );
+        }
+
+        #[gpui::test]
+        fn a_sink_that_tracks_no_pointer_gets_the_root_as_every_target(cx: &mut TestAppContext) {
+            let mut scene = probe_tree(cx, false);
+            mouse_events(&mut scene.cx, LEAF);
+            let calls = scene.calls.borrow();
+            assert_eq!(calls.len(), 5);
+            assert!(
+                calls[..4].iter().all(|c| c.1 == 0 && c.2.is_none()),
+                "{calls:?}"
+            );
+            assert_eq!(calls[4].1, 0);
+        }
+
+        #[gpui::test]
+        fn a_release_outside_every_container_reports_the_root(cx: &mut TestAppContext) {
+            let mut scene = probe_tree(cx, true);
+            scene
+                .cx
+                .simulate_mouse_down(at(LEAF), MouseButton::Left, gpui::Modifiers::none());
+            scene
+                .cx
+                .simulate_mouse_up(at(OUTSIDE), MouseButton::Left, gpui::Modifiers::none());
+            assert_eq!(
+                reports(&scene.calls)[1..],
+                [report("mouseup", 0), report("release", 0)]
+            );
+        }
+
+        /// Every `(event, target, pressed)` after the last `mousedown`.
+        fn since_press(calls: &Calls) -> Vec<(String, NodeId, Option<NodeId>)> {
+            let calls = calls.borrow();
+            let last = calls.iter().rposition(|c| c.0 == "mousedown").unwrap();
+            calls[last..]
+                .iter()
+                .map(|c| (c.0.clone(), c.1, c.3))
+                .collect()
         }
 
         #[gpui::test]
         fn the_pressed_target_is_the_press_container_while_the_release_runs(
             cx: &mut TestAppContext,
         ) {
-            let (mut cx, calls) = probe_tree(cx, &[0]);
-            cx.simulate_mouse_down(at(LEAF), MouseButton::Left, gpui::Modifiers::none());
-            cx.simulate_mouse_up(at(MID), MouseButton::Left, gpui::Modifiers::none());
-            let ups: Vec<_> = calls
+            let none = gpui::Modifiers::none();
+            let mut scene = probe_tree(cx, true);
+            scene
+                .cx
+                .simulate_mouse_down(at(LEAF), MouseButton::Left, none);
+            scene.cx.simulate_mouse_up(at(MID), MouseButton::Left, none);
+            let ev = |name: &str, target, pressed| (name.to_owned(), target, pressed);
+            assert_eq!(
+                since_press(&scene.calls)[1..],
+                [ev("mouseup", 1, Some(2)), ev("release", 1, Some(2))]
+            );
+            assert_eq!(scene.cx.update(|_, cx| pressed_target(cx, 0)), None);
+            scene
+                .cx
+                .simulate_mouse_down(at(MID), MouseButton::Left, none);
+            let down = scene
+                .calls
                 .borrow()
                 .iter()
-                .filter(|c| c.1 == "mouseup")
-                .map(|c| (c.2, c.3))
-                .collect();
-            assert_eq!(ups, [(Some(1), Some(2))]);
-            assert_eq!(cx.update(|_, cx| pressed_target(cx, 0)), None);
-            cx.simulate_mouse_down(at(MID), MouseButton::Left, gpui::Modifiers::none());
-            let down = calls.borrow().iter().rfind(|c| c.1 == "mousedown").cloned();
+                .rfind(|c| c.0 == "mousedown")
+                .cloned();
             assert_eq!(down.map(|c| c.3), Some(Some(1)));
         }
 
-        /// Every `(event, released, pressed)` after the last `mousedown`.
-        fn since_press(calls: &Calls) -> Vec<(String, Option<NodeId>, Option<NodeId>)> {
-            let calls = calls.borrow();
-            let last = calls.iter().rposition(|c| c.1 == "mousedown").unwrap();
-            calls[last..]
-                .iter()
-                .map(|c| (c.1.clone(), c.2, c.3))
-                .collect()
-        }
-
         #[gpui::test]
-        fn every_mouseup_is_followed_by_one_release_report_naming_its_press(
-            cx: &mut TestAppContext,
-        ) {
+        fn a_mouseup_is_followed_by_one_release_report_naming_its_press(cx: &mut TestAppContext) {
             let none = gpui::Modifiers::none();
-            let (mut cx, calls) = probe_tree(cx, &[0, 2]);
-            let ev = |name: &str, released, pressed| (name.to_owned(), released, pressed);
-
-            // Press and release on the leaf: both mouseup listeners run first.
-            cx.simulate_click(at(LEAF), none);
-            assert_eq!(
-                since_press(&calls)[1..],
-                [
-                    ev("mouseup", Some(2), Some(2)),
-                    ev("mouseup", Some(2), Some(2)),
-                    ev("release", Some(2), Some(2)),
-                ]
-            );
-
-            // Press on the leaf, release on its parent: the release reports both.
-            cx.simulate_mouse_down(at(LEAF), MouseButton::Left, none);
-            cx.simulate_mouse_up(at(MID), MouseButton::Left, none);
-            assert_eq!(
-                since_press(&calls).last(),
-                Some(&ev("release", Some(1), Some(2)))
-            );
-
-            // A press by another button is not the release's press.
-            cx.simulate_mouse_down(at(LEAF), MouseButton::Left, none);
-            cx.simulate_mouse_up(at(LEAF), MouseButton::Right, none);
-            assert_eq!(
-                since_press(&calls).last(),
-                Some(&ev("release", Some(2), None))
-            );
+            let mut scene = probe_tree(cx, true);
+            let ev = |name: &str, target, pressed| (name.to_owned(), target, pressed);
 
             // A release after a completed click has no press to report.
-            cx.simulate_click(at(LEAF), none);
-            cx.simulate_mouse_up(at(LEAF), MouseButton::Left, none);
-            assert_eq!(calls.borrow().last().unwrap().3, None);
+            scene.cx.simulate_click(at(LEAF), none);
+            scene
+                .cx
+                .simulate_mouse_up(at(LEAF), MouseButton::Left, none);
+            assert_eq!(scene.calls.borrow().last().unwrap().3, None);
+
+            // A press by another button is not the release's press.
+            scene
+                .cx
+                .simulate_mouse_down(at(LEAF), MouseButton::Left, none);
+            scene
+                .cx
+                .simulate_mouse_up(at(LEAF), MouseButton::Right, none);
+            assert_eq!(
+                since_press(&scene.calls)[1..],
+                [ev("mouseup", 2, None), ev("release", 2, None)]
+            );
 
             // Every release reports, whichever button.
             let releases =
-                |calls: &Calls| calls.borrow().iter().filter(|c| c.1 == "release").count();
-            let before = releases(&calls);
+                |calls: &Calls| calls.borrow().iter().filter(|c| c.0 == "release").count();
+            let before = releases(&scene.calls);
             for button in [MouseButton::Right, MouseButton::Middle] {
-                cx.simulate_mouse_down(at(LEAF), button, none);
-                cx.simulate_mouse_up(at(LEAF), button, none);
+                scene.cx.simulate_mouse_down(at(LEAF), button, none);
+                scene.cx.simulate_mouse_up(at(LEAF), button, none);
             }
-            assert_eq!(releases(&calls) - before, 2);
+            assert_eq!(releases(&scene.calls) - before, 2);
         }
 
         #[gpui::test]
         fn each_button_keeps_its_own_press_until_its_release(cx: &mut TestAppContext) {
             let none = gpui::Modifiers::none();
-            let (mut cx, calls) = probe_tree(cx, &[0]);
+            let mut scene = probe_tree(cx, true);
             let release = |calls: &Calls| {
                 let calls = calls.borrow();
-                let last = calls.iter().rfind(|c| c.1 == "release").unwrap();
-                (last.2, last.3)
+                let last = calls.iter().rfind(|c| c.0 == "release").unwrap();
+                (last.1, last.3)
             };
 
-            cx.simulate_mouse_down(at(LEAF), MouseButton::Left, none);
-            cx.simulate_mouse_down(at(MID), MouseButton::Right, none);
-            cx.simulate_mouse_up(at(LEAF), MouseButton::Left, none);
-            assert_eq!(release(&calls), (Some(2), Some(2)));
-            cx.simulate_mouse_up(at(LEAF), MouseButton::Right, none);
-            assert_eq!(release(&calls), (Some(2), Some(1)));
-        }
-
-        #[gpui::test]
-        fn a_release_outside_every_container_reports_the_root(cx: &mut TestAppContext) {
-            let (mut cx, calls) = probe_tree(cx, &[0]);
-
-            cx.simulate_mouse_down(at(LEAF), MouseButton::Left, gpui::Modifiers::none());
-            cx.simulate_mouse_up(at((300., 300.)), MouseButton::Left, gpui::Modifiers::none());
-
-            assert_eq!(since_press(&calls).last().unwrap().1, Some(0));
+            scene
+                .cx
+                .simulate_mouse_down(at(LEAF), MouseButton::Left, none);
+            scene
+                .cx
+                .simulate_mouse_down(at(MID), MouseButton::Right, none);
+            scene
+                .cx
+                .simulate_mouse_up(at(LEAF), MouseButton::Left, none);
+            assert_eq!(release(&scene.calls), (2, Some(2)));
+            scene
+                .cx
+                .simulate_mouse_up(at(LEAF), MouseButton::Right, none);
+            assert_eq!(release(&scene.calls), (2, Some(1)));
         }
 
         #[gpui::test]
         fn after_clearing_the_presses_a_release_reports_no_press(cx: &mut TestAppContext) {
-            let (mut cx, calls) = probe_tree(cx, &[0]);
+            let mut scene = probe_tree(cx, true);
+            let none = gpui::Modifiers::none();
 
-            cx.simulate_mouse_down(at(LEAF), MouseButton::Left, gpui::Modifiers::none());
-            cx.update(|_, cx| clear_presses(cx));
-            cx.simulate_mouse_up(at(LEAF), MouseButton::Left, gpui::Modifiers::none());
+            scene
+                .cx
+                .simulate_mouse_down(at(LEAF), MouseButton::Left, none);
+            scene.cx.update(|_, cx| clear_presses(cx));
+            scene
+                .cx
+                .simulate_mouse_up(at(LEAF), MouseButton::Left, none);
 
-            assert_eq!(since_press(&calls).last().unwrap().2, None);
+            assert_eq!(since_press(&scene.calls).last().unwrap().2, None);
         }
 
         #[gpui::test]
-        fn a_stopped_mouseup_still_reports_its_release(cx: &mut TestAppContext) {
-            let (mut cx, calls) = stopping_probe_tree(cx, &[0, 2], true);
-
-            cx.simulate_click(at(LEAF), gpui::Modifiers::none());
-
-            let names: Vec<_> = since_press(&calls).into_iter().map(|c| c.0).collect();
-            assert_eq!(names, ["mousedown", "mouseup", "release"]);
+        fn only_a_press_prevents_the_default_before_it_is_reported(cx: &mut TestAppContext) {
+            let mut scene = probe_tree(cx, true);
+            mouse_events(&mut scene.cx, LEAF);
+            let prevented: Vec<_> = scene.prevented.borrow().clone();
+            let want = |event: &str, prevented| (event.to_owned(), prevented);
+            assert_eq!(
+                prevented,
+                [
+                    want("mousemove", false),
+                    want("wheel", false),
+                    want("mousedown", true),
+                    want("mouseup", false),
+                ]
+            );
         }
 
         #[gpui::test]
-        fn tracking_needs_a_mouse_listener_and_leaves_layout_alone(cx: &mut TestAppContext) {
-            let spec = |listens| ElementSpec {
-                id: 0,
-                tag: ElementTag::Container,
-                style: StyleSpec::default(),
-                listens,
-                inert: false,
-                children: Vec::new(),
-            };
-            let mut parent = spec(EventMask::FOCUS | EventMask::KEY_DOWN);
-            assert!(!listens_mouse(&parent));
-            for hover in [
-                EventMask::MOUSE_ENTER,
-                EventMask::MOUSE_LEAVE,
-                EventMask::MOUSE_OVER,
-                EventMask::MOUSE_OUT,
-            ] {
-                assert!(listens_mouse(&spec(hover)));
-            }
-            parent.children.push(spec(EventMask::WHEEL));
-            assert!(listens_mouse(&parent));
+        fn a_right_press_fires_contextmenu_at_its_target_after_the_mousedown(
+            cx: &mut TestAppContext,
+        ) {
+            let mut scene = probe_tree(cx, true);
+            let none = gpui::Modifiers::none();
+            scene
+                .cx
+                .simulate_mouse_down(at(LEAF), MouseButton::Right, none);
+            scene
+                .cx
+                .simulate_mouse_down(at(LEAF), MouseButton::Left, none);
+            assert_eq!(
+                reports(&scene.calls),
+                [
+                    report("mousedown", 2),
+                    report("fire contextmenu", 2),
+                    report("mousedown", 2)
+                ]
+            );
+        }
 
+        #[gpui::test]
+        fn tracking_the_pointer_leaves_layout_alone(cx: &mut TestAppContext) {
             let bounds = |cx: &mut VisualTestContext| -> Vec<_> {
                 ["node-0", "node-1", "node-2"]
                     .map(|selector| cx.debug_bounds(selector).unwrap())
                     .to_vec()
             };
-            let (mut tracked, _) = probe_tree(cx, &[0]);
-            let tracked = bounds(&mut tracked);
-            let (mut plain, _) = probe_tree(cx, &[]);
-            assert_eq!(tracked, bounds(&mut plain));
+            let mut tracked = probe_tree(cx, true);
+            let tracked = bounds(&mut tracked.cx);
+            let mut plain = probe_tree(cx, false);
+            assert_eq!(tracked, bounds(&mut plain.cx));
         }
     }
 }

@@ -8,8 +8,8 @@
 //! [`crate::dev`] polls it until it settles.
 //!
 //! One binary serves any app, so it cannot know whether a bundle registers
-//! input handlers; it always renders through `EventDispatcher`, which wires
-//! only the nodes something listens to.
+//! input handlers; it always renders through `EventDispatcher`, which tracks
+//! the pointer once a listener is registered or a node can take focus.
 //!
 //! `--dev` additionally answers messages on stdin and writes them on
 //! stdout, via [`crate::dev`] speaking [`crate::protocol`]'s wire format.
@@ -898,7 +898,7 @@ mod tests {
                         .children()[0];
                     app.session
                         .dispatcher
-                        .dispatch(node, "click", &EventPayload::None, window, cx);
+                        .fire(node, "click", &EventPayload::None, window, cx);
                 })
                 .unwrap();
         });

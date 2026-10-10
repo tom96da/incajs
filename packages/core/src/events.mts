@@ -81,8 +81,8 @@ let latestId = 0;
 
 /**
  * @returns the `eventId` of the newest event any registered listener has
- * received, or 0 before the first. Ids grow with each input event, and every
- * node dispatch of one event carries the same id.
+ * received, or 0 before the first. Ids grow with each event, and every
+ * listener of one event receives the same id.
  */
 export function latestEventId(): number {
   return latestId;

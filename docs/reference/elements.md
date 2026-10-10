@@ -86,9 +86,7 @@ and right, `paddingY` for top and bottom), and an axis key beats the
 shorthand. A value of the wrong shape counts as unset and the next key
 applies.
 
-Scrollbars are not supported. `stopPropagation()` and `preventDefault()` on
-a scrolling container's [`wheel`](./events#mouse) event act on the scroll
-as described there.
+Scrollbars are not supported.
 
 `position` and `zIndex` are not supported, and their keys are ignored.
 

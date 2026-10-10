@@ -119,9 +119,9 @@ A fixed entry is deleted and its ID is never reused.
   ask for it — every JS listener is bubble-phase only. Adding it means an
   options parameter on `addEventListener` (`{ capture: true }`, matching
   the DOM) and splitting `EventListeners`' `(node, event)` key into
-  `(node, event, capture)`, with `EventDispatcher::listens` and `dispatch`
-  each gaining a capture-phase counterpart wired to GPUI's
-  `capture_any_mouse_down`/`capture_any_mouse_up` and friends. Vue's
+  `(node, event, capture)`, with the walk of an event
+  (`crates/inca-bridge/src/event.rs`) running the capture listeners from the
+  root down to the target before the bubble listeners. Vue's
   `@click.capture` has nothing to bind to until this lands, so
   `patchProp.mts` strips the suffix and binds an ordinary bubble-phase
   listener instead. `.passive` degrades the same way, for the same
@@ -132,11 +132,9 @@ A fixed entry is deleted and its ID is never reused.
 - **B-020 A GPUI-vs-DOM compat layer for `crates/inca-bridge`**
   `Units: bridge · Size: M · Impact: Medium`
 
-  `EventDispatcher` turns GPUI's raw input into DOM events, and two gaps sit
-  loose in `dispatch.rs`: the `held_buttons` update that runs only for a
-  dispatched listener (B-045) and the capture phase (B-019). Direction: one
-  `compat` submodule in the bridge crate holding the `held_buttons` tracking
-  and later the capture-phase work.
+  `EventDispatcher` turns GPUI's raw input into DOM events, and the capture
+  phase (B-019) is a gap that sits loose in the bridge crate. Direction: one
+  `compat` submodule in the bridge crate holding the capture-phase work.
 
 - **B-028 A template `ref` still resolves to a plain data object for anything beyond `.focus()`/`.blur()`**
   `Units: core · Size: M · Impact: Medium`
@@ -161,16 +159,6 @@ A fixed entry is deleted and its ID is never reused.
   loss sits in the CLI pipeline (`fileChangedPlugin`, the module runner, the
   50 ms merge of saves) or between the editor save and the watcher. A repro
   records the terminal output and the time between saves.
-
-- **B-045 `buttons` stays set after a release nobody listens to**
-  `Units: bridge · Size: M · Impact: Medium`
-
-  `update_held_buttons` (`crates/inca-bridge/src/dispatch.rs`) only runs
-  when a listener is dispatched. A node that listens for `mousedown` and
-  `mousemove` but not `mouseup` never clears the pressed bit, so later
-  `mousemove` events report the button as held. Fix: track buttons from the
-  raw window event, in the pointer tracker of `inca-gpui` or the `compat`
-  submodule of B-020.
 
 - **B-048 A multi-root `App` (or a top-level comment) breaks window sizing and `gap`**
   `Units: host,gpui · Size: M · Impact: Medium`
@@ -390,8 +378,8 @@ A fixed entry is deleted and its ID is never reused.
   - Computable today, but not a small change — no `gpui` change needed.
     `offsetX`/`offsetY` are measured from the event's `target`. The
     target's bounds are computed once, for hitbox insertion, and need to be
-    kept where `dispatch` can reach them, since `gpui` has no production API
-    to look a node's bounds up by id at event time.
+    kept where `EventDispatcher` can reach them, since `gpui` has no
+    production API to look a node's bounds up by id at event time.
   - `screenX`/`screenY` are `Window::bounds`' origin plus the client
     position. Wayland reports no window position, so they equal
     `clientX`/`clientY` there, and X11 may report an origin that leaves out
@@ -566,15 +554,6 @@ A fixed entry is deleted and its ID is never reused.
   `overflow` accepts `visible`, `hidden`, `scroll` and `auto` only, and
   `clip` is ignored like any other unknown value. The two-value form such as
   `hidden scroll` is ignored the same way, since only a single string is read.
-
-- **B-081 `stopPropagation()` on events other than `wheel` cuts `gpui`'s own bubble**
-  `Units: bridge · Size: M · Impact: Low`
-
-  `stopPropagation()` on any event but `wheel` also stops `gpui`'s own
-  ancestor listeners. The DOM stops only the ancestors' JS listeners.
-  In a descendant's `mouseenter`/`mouseleave` callback it can also stop an
-  ancestor's hover re-check, since `gpui` runs hover tracking in the same
-  bubble-phase `mousemove` dispatch.
 
 - **B-082 Wheel scrolling keeps `gpui`'s axis rules and has no gesture latching**
   `Units: gpui · Size: M · Impact: Low`
@@ -800,23 +779,6 @@ A fixed entry is deleted and its ID is never reused.
   `Units: gpui,host · Size: S · Impact: Low`
 
   Text leaves carry no selector, so a snapshot gives them no bounds.
-
-- **B-112 Event identity is inferred from GPUI's per-node callbacks**
-  `Units: bridge,gpui · Size: L · Impact: Low`
-
-  GPUI calls the host once per node, so the host reconstructs each event:
-  `eventId` is one number per event name per input, and the end of an input is
-  the next `cx.defer`. A handler attached by a `mouseenter` handler runs for
-  the `mousemove` of the same move, because hover is dispatched first inside
-  that input and the `mousemove` name gets a later id. Two focus transitions
-  in one update (JS calls `focus()` inside a handler) share the `focus` id, so
-  a handler attached during the first is skipped for the second. Each node on
-  the path gets a fresh event object, so a property a listener sets on it is
-  invisible to the listeners of its ancestors. A host that builds one event,
-  then walks the path and runs capture and bubble itself, gives every event a
-  single identity and removes the inference, the edge case and the fresh
-  object per node. It also takes over `stopPropagation` and `preventDefault` from GPUI.
-  Decide it with the first adapter other than Vue.
 
 - **B-113 A failed rebuild in `inca dev` prints the same error twice**
   `Units: cli · Size: S · Impact: Low`

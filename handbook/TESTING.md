@@ -17,6 +17,10 @@ change is done, for Rust and TypeScript.
 - **Integration tests**: `tests/*.rs` in each crate, one file per
   cross-module concern (e.g. `crates/inca-gpui/tests/layout_parity.rs`).
   Cargo compiles each against the crate's public API only.
+- **gpui behavior pins**: `crates/inca-gpui/tests/gpui_behavior.rs` checks the
+  facts the event dispatch assumes about gpui (listener order, hit testing,
+  focus on press, scroll step, key propagation) on gpui's test platform. A
+  gpui upgrade that changes one fails there first.
 - **Window checks**: see [MANUAL_GUI_CHECK.md](./MANUAL_GUI_CHECK.md).
 - **Tests that need both languages**: the root `tests/` package, see
   [Root tests](#root-tests-tests).

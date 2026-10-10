@@ -108,8 +108,9 @@ Shared throw rules, all as a `TypeError`:
 - An `anchorId` that names no node throws.
 - A `childId` naming the root throws.
 
-The host converts the `VirtualNode` tree into GPUI elements on each frame. A
-node is wired for input only while a listener is registered on it.
+The host converts the `VirtualNode` tree into GPUI elements on each frame.
+While a listener is registered or a node can take focus, every container that
+is not inert reports the pointer (`EventSink::tracks_pointer`).
 
 ### Event dispatch
 
@@ -129,44 +130,55 @@ and event name. Payloads and author-facing behaviour are in
   host's error reporter. Sibling callbacks still run.
 - `removeEventListener` and `destroyNode` return the dropped ids, because
   only the caller can free the JS half.
-- A dynamically-named event, such as `menu:<id>`, uses the same path with
-  no native input wiring.
+- A dynamically-named event, such as `menu:<id>`, uses the same registry and
+  is fired by the host.
 
 #### Event object
 
-- One object is shared by all callbacks on a node for one event:
-  `{ type, target, currentTarget, eventId, ...payload }`. `currentTarget` is
-  the listener's node. `target` falls back to `currentTarget` when the slot
-  is empty or names a destroyed node. `composedPath()` returns an empty array
-  once the dispatch ends.
-- The mouse target slot is a gpui global in `inca-gpui`. The root container's
-  capture listeners clear it for each mouse event. A tree with a mouse
-  listener gives every container a marker that runs first among that
-  container's mouse listeners. Bubbling runs the deepest container first, and
-  the first marker to run keeps the slot. A press also records its own
-  container per button, kept until a release of that button has been reported.
-  A press of another button leaves it. The window losing activation clears
-  every recorded press (`inca_gpui::clear_presses`).
-- `eventId` is a number that grows with each event. Every node of one event
-  name within one input carries the same value, so an adapter can tell
-  whether two calls belong to one event. A dispatch with no input behind it,
-  such as the focus events after a focus change, takes a new value per event
-  name. One engine has one counter, shared by all its dispatchers, and it
+- A walk creates one object per event and passes it to every listener on the
+  path. Its own fields are `type`, `target`, `currentTarget`, `eventId` and
+  the payload. A property one listener sets is visible to the listeners after
+  it. `currentTarget` is the node whose listeners run. Once the walk ends,
+  `currentTarget` is `null`, `eventPhase` is 0, `composedPath()` returns an
+  empty array and the stop flags are clear. `defaultPrevented` keeps its value.
+- The object inherits from a prototype that the host creates once per
+  engine. The prototype holds `stopPropagation`, `stopImmediatePropagation`,
+  `preventDefault`, `composedPath`, the accessors `defaultPrevented`,
+  `returnValue` and `cancelBubble`, and the phase constants. They read and
+  write a state record kept in a `WeakMap` that lives in the engine's
+  userdata (`crates/inca-bridge/src/event.rs`) and is private to the host. A
+  call whose receiver has no record, such as a detached
+  `const p = e.preventDefault; p()`, throws a `TypeError`.
+- The target of a pointer event (`mousedown`, `mouseup`, `mousemove`,
+  `wheel`, `contextmenu`) is the deepest container under the pointer, or the
+  root when there is none. The mouse target slot is a gpui global in
+  `inca-gpui`. The root's pointer tracker clears it in the capture phase of
+  each mouse event. While the sink tracks the pointer, every container that
+  is not inert adds a marker listener, and the first marker to run, the
+  deepest container, keeps the slot. The tracker is the first child of the
+  root, so its bubble handlers run after every container below the root. It
+  reports each input once through `EventSink::pointer_input`. A press also
+  records its own container per button, kept until a release of that button
+  has been reported. A press of another button leaves it. The window losing
+  activation clears every recorded press (`inca_gpui::clear_presses`).
+- The target of `keydown` and `keyup` is the focused node, or the root when
+  nothing is focused. Every other event takes the node it is fired at.
+- `eventId` is a number that grows with each event. All listeners of one walk
+  carry the same value. Only an event with a listener on its path enters the
+  engine, drains jobs, requests a redraw and takes a number. One engine has
+  one counter (`Host::last_event_id`), shared by all its dispatchers, and it
   restarts at 1 with a new engine.
 - Base fields: `bubbles`, `cancelable` and `composed` come from one table
-  (`EVENTS` in `dispatch.rs`, which also holds each event's target rule,
-  movement rule and own-buttons rule; other names get all three `false`). The
-  `timeStamp` origin is a process-wide `Instant` fixed when the first
-  dispatcher is created. `defaultPrevented` and `eventPhase` come from the
-  per-input state the `eventId` lives in. The origin node of that state is the
-  first node an event name runs listeners on, in `dispatch` and in
-  `EventDispatcher::fire`. A `preventDefault()` call on a cancelable event
-  marks the state, so later nodes start with it `true`.
-- Methods: `stopPropagation`, `stopImmediatePropagation`, `preventDefault`.
-  `preventDefault` reaches the window only for a cancelable event.
+  (`EVENTS` in `dispatch.rs`, which also holds each event's movement rule
+  and own-buttons rule; other names get every rule `false`). The `timeStamp`
+  origin is a process-wide `Instant` fixed when the first dispatcher is
+  created. `eventPhase` is 2 at the target and 3 on its ancestors.
+  `defaultPrevented` is set by a `preventDefault()` call on a cancelable
+  event, and later nodes of the walk read it as `true`.
 - Accessors: `defaultPrevented` (getter), `returnValue` and `cancelBubble`
   (getter and setter with ToBoolean coercion) read the flags the methods set.
-  The phase constants and `srcElement` are non-enumerable data properties.
+  The phase constants are non-enumerable data properties of the prototype and
+  `srcElement` is a non-enumerable data property of the event.
 - GPUI's `platform` modifier becomes `metaKey`. `function` is dropped.
   `getModifierState` exists on key and mouse events and reads those four.
   `Accel` reads `platform` on macOS and `control` elsewhere.
@@ -180,10 +192,10 @@ and event name. Payloads and author-facing behaviour are in
 
 | Name | Payload | Notes |
 | --- | --- | --- |
-| `click` | mouse + pointer | Fires after `mouseup` at the nearest common ancestor of the press container of that button and the release container, so a press must be recorded. A release over no container uses the root. The payload is `EventPayload::click`: the release position and modifiers, `button` the released button, `buttons` at 0, `detail` the click count of the press, pointer source mouse. A key click fires through `EventSink::key_default` at the focused enabled button with `MousePayload::keyboard_click`. |
+| `click` | mouse + pointer | Fires after `mouseup` at the nearest common ancestor of the press container of that button and the release container, so a press must be recorded. A release over no container uses the root. The payload is `EventPayload::click`: the release position and modifiers, `button` the released button, `buttons` at 0, `detail` the click count of the press, pointer source mouse. A key click fires from `EventSink::key_input` at the focused enabled button with `MousePayload::keyboard_click`. |
 | `dblclick` | mouse | Fired through `EventSink::fire` at the `click` ancestor right after the `click` whose press counts 2, with the pointer source cleared. |
 | `auxclick` | mouse + pointer | Fired through `EventSink::fire` at the same ancestor for the release of any button but the left one. The payload is `EventPayload::click` with `button` the released button. |
-| `contextmenu` | mouse + pointer | The root tracker's capture listener for a right `MouseDownEvent` queues `window.defer`, which runs after the press's bubble. `EventSink::fire` then runs `contextmenu` at the mouse target (the root when none), so it fires whichever way `mousedown` propagated. The payload is `EventPayload::context_menu`: `button` 2, `buttons` 2, `detail` 0, pointer source mouse. |
+| `contextmenu` | mouse + pointer | The root tracker fires `contextmenu` through `EventSink::fire` for a right `MouseDownEvent`, right after the `mousedown` input and at its target. The payload is `EventPayload::context_menu`: `button` 2, `buttons` 2, `detail` 0, pointer source mouse. |
 | `mousedown`, `mouseup` | mouse | `buttons` holds every button currently held. |
 | `mousemove` | mouse | `movementX`/`movementY` hold the delta of the raw move. |
 | `mouseenter`, `mouseleave` | mouse + `relatedTarget` | Do not bubble. `EventDispatcher::fire` runs only the node's own callbacks, with `target` the node. |
@@ -193,20 +205,21 @@ and event name. Payloads and author-facing behaviour are in
 | `focusin`, `focusout` | `relatedTarget` | `EventDispatcher::fire` runs the node's callbacks, then each ancestor's, with `target` the node. A focus change dispatches `blur`, `focusout`, `focus`, `focusin`. |
 | `keydown`, `keyup` | `key`, `repeat`, `location` (0), `isComposing` (false), `ctrlKey`, `shiftKey`, `altKey`, `metaKey`, `getModifierState` | Go to the focused node, or the root when none is focused, and bubble to its ancestors. `keyup` has `repeat: false`. |
 
-Every container of a tree with a mouse listener (`track`, non-inert) wires one
-`on_hover`, which calls `EventSink::hover_changed` and keeps the hovered set.
-The first container to report in a pointer move calls `EventSink::pointer_over`
-with itself as the deepest one, which reports at once. Any other change (a layout change under a
+While the sink tracks the pointer (`EventSink::tracks_pointer`), every
+non-inert container wires one `on_hover`, which calls
+`EventSink::hover_changed` and keeps the hovered set. The first container to
+report in a pointer move calls `EventSink::pointer_over` with itself as the
+deepest one, which reports at once. Any other change (a layout change under a
 still pointer, a window exit) reports once at the end of the update from the
-deepest container of the hovered set. A
-report compares the deepest container with the previous one
-(`EventDispatcher::hover_prev`) and fires, per `hover_path_difference`:
-`mouseout` at the old container, `mouseleave` on each container left
-(innermost first), `mouseover` at the new one, `mouseenter` on each container
-entered (outermost first). `relatedTarget` of the first two is the new
-container and of the last two the old one. A removed old container receives
-no `mouseout` or `mouseleave`, and its nearest remaining ancestor is the old
-one. Position and modifiers are read from the window when the report runs.
+deepest container of the hovered set. A report compares the deepest container
+with the previous one (`EventDispatcher::hover_prev`) and fires, per
+`hover_path_difference`: `mouseout` at the old container, `mouseleave` on each
+container left (innermost first), `mouseover` at the new one, `mouseenter` on
+each container entered (outermost first). `relatedTarget` of the first two is
+the new container and of the last two the old one. A removed old container
+receives no `mouseout` or `mouseleave`, and its nearest remaining ancestor is
+the old one. Position and modifiers are read from the window when the report
+runs.
 
 The mouse payload is `clientX`, `clientY`, `screenX`, `screenY`, `x`, `y`,
 `pageX`, `pageY`, `movementX`, `movementY`, `button`, `buttons`, `detail`,
@@ -226,18 +239,30 @@ once per window. Only `mousemove` takes them. Every other event holds 0.
 
 #### Propagation and cancellation
 
-- Callbacks run in the bubble phase only.
-- `stopImmediatePropagation()` stops the remaining callbacks on that node.
-- `stopPropagation()` is read back after the node's callbacks and forwarded
-  to GPUI, which also stops its own ancestor listeners.
-- For `wheel`, `stopPropagation()` skips the later `wheel` callbacks. The
-  container still scrolls.
-- `EventDispatcher::dispatch` and `fire` drop the callbacks of `mousedown`,
-  `mouseup`, a mouse `click` and `dblclick` for a disabled button and its
-  ancestors. A key click always runs. Listeners below the button run.
-- `preventDefault()` reaches only what GPUI honours: the focus change and
-  the blur of a `mousedown` and wheel scrolling. For a `button`,
+- Listeners run in the bubble phase only. A walk runs the listeners of the
+  target, then those of each ancestor while the event bubbles.
+- The path is fixed when the walk starts. A node's listeners are the ones
+  registered when the walk reaches it, minus any removed since. A listener
+  added to a node while its own listeners run waits for the next event.
+- `stopPropagation()` lets the remaining listeners on that node run and gives
+  the nodes after it none. `stopImmediatePropagation()` also stops the
+  remaining listeners on that node. Both act on the walk and leave gpui's own
+  propagation running, so hover, scrolling and every other gpui listener run
+  as they do for any input.
+- `EventDispatcher::fire` and the pointer walks drop the callbacks of
+  `mousedown`, `mouseup`, a mouse `click` and `dblclick` for a disabled
+  button and its ancestors. A key click always runs. Listeners below the
+  button run.
+- `preventDefault()` marks a cancelable event. The default action is the
+  focus change or the blur of a `mousedown`, wheel scrolling (the scroll
+  rolls back), and the Tab, Enter and Space actions of a key. For a `button`,
   `preventDefault()` in `keydown` or `keyup` also ends the key click.
+- A canceled `keydown` or `keyup` calls `Window::prevent_default` and
+  `App::stop_propagation` once its walk ends. The platform then treats the key
+  as handled (for example macOS `performKeyEquivalent`) and later key
+  listeners of gpui stay idle. A stopped or unlistened key stays unhandled.
+  Keybindings run before key listeners, so a bound action consumes its key
+  before any walk.
 
 #### Ordering
 
@@ -247,11 +272,12 @@ once per window. Only `mousemove` takes them. Every other event holds 0.
   `inert` and `display` changes, which re-check the node's subtree. Moving a
   node re-checks its subtree too.
   The host applies the change before the queued focus requests of that
-  frame. `build_spec_with` gives an `inert` node and its subtree an empty
-  listener mask. The user rules are in `docs/reference/events.md`.
+  frame. `build_spec` marks an `inert` node and its subtree `inert`. They stay
+  outside hit testing and hover. The user rules are in
+  `docs/reference/events.md`.
 - A capture-phase `key_down` and `key_up` listener on the root container
-  defers until the key's dispatch ended, then calls `EventSink::key_default`.
-  It acts when `window.default_prevented()` is unset. `Tab` and `Shift+Tab`
+  calls `EventSink::key_input`, which walks `keydown` or `keyup` and then runs
+  the default action when the event is not canceled. `Tab` and `Shift+Tab`
   move focus (Control, Alt and Meta cancel the move). Enter clicks a focused
   enabled button on key down. Space records the button in `space_down` and
   clicks on key up with any modifier. Another key down, a mouse press
@@ -259,12 +285,17 @@ once per window. Only `mousemove` takes them. Every other event holds 0.
   `FocusRegistry::tab_move` collects the handled nodes in tree order and
   focuses the target, or blurs for the end of the order. `apply_pending`
   reports the transition on the next frame.
-- The root tracker's capture listener for a `MouseUpEvent` queues
-  `window.defer`, which runs after every listener of the release and calls
-  `EventSink::pointer_released`. The click events fire after that `mouseup`,
-  then the press of that button is forgotten.
+- The root tracker's bubble handler for a `MouseDownEvent` reports the
+  `mousedown` input. Its capture handler calls `Window::prevent_default`, which
+  stops gpui's own focus-on-press from running. After the walk, a `mousedown`
+  that is not canceled focuses the nearest node on the target's path that has
+  a `FocusRegistry` handle, and blurs the window when there is none.
+- The root tracker's bubble handler for a `MouseUpEvent` reports the `mouseup`
+  input and then calls `EventSink::pointer_released`. The click events fire
+  after that `mouseup`, then the press of that button is forgotten.
+- Every raw `mousedown` and `mouseup` updates the held buttons. `mousemove`,
+  `wheel` and the other events without own buttons read them.
 - Destroying a focused node fires no `blur`.
-- All `mousemove` dispatches from one raw event share one movement value.
 - The root wires `on_modifiers_changed` into `EventSink::modifiers_changed`.
   The dispatcher diffs the flags against `held_modifiers`, which
   `sync_modifiers` seeds from the window on the first frame and on every

@@ -124,11 +124,13 @@ export interface StyleProps {
  *   under the pointer for pointer events, the nearest common ancestor of the
  *   press and the release for `click`, `dblclick` and `auxclick`, and the
  *   focused node (the root when nothing is focused) for key events.
- * - `currentTarget`: the {@link NodeId} whose listener is running.
+ * - `currentTarget`: the {@link NodeId} whose listener is running, and
+ *   `null` once the event has been handled.
  * - `bubbles`, `cancelable` and `composed`: fixed per event name.
  * - `defaultPrevented`: `true` once a listener called `preventDefault()` on a
  *   cancelable event.
- * - `eventPhase`: 2 where `currentTarget` is `target`, 3 on its ancestors.
+ * - `eventPhase`: 2 where `currentTarget` is `target`, 3 on its ancestors,
+ *   and 0 once the event has been handled.
  * - `isTrusted`: always `true`.
  * - `timeStamp`: milliseconds since the host started, as a number.
  * - `eventId`: a number that grows with each event and is the same on every

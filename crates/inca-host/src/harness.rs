@@ -942,6 +942,20 @@ mod tests {
     }
 
     #[gpui::test]
+    fn a_stopped_mousedown_still_focuses_the_node(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, FOCUSABLE);
+        run_js(
+            &mut h,
+            "__inca_native__.setAttribute(box, 'tabindex', '0'); \
+             __inca_callbacks__[2] = (e) => { e.stopPropagation(); }; \
+             __inca_native__.addEventListener(box, 'mousedown', 2);",
+        );
+        let boxed = node(&h, "box");
+        h.click(boxed);
+        assert_eq!(log(&h), "focus");
+    }
+
+    #[gpui::test]
     fn a_prevented_mousedown_on_the_root_keeps_the_focused_node(cx: &mut TestAppContext) {
         let mut h = Harness::load(cx, ENTRY, FOCUSABLE);
         run_js(
@@ -1031,6 +1045,22 @@ mod tests {
             log(&h),
             "keydown@box/box,click@box/box,keydown@box/box,click@box/box,keyup@box/box"
         );
+    }
+
+    #[gpui::test]
+    fn a_job_queued_by_a_key_down_listener_lands_before_the_enter_click(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, BUTTON);
+        run_js(
+            &mut h,
+            "__inca_callbacks__[5] = () => { Promise.resolve().then(() => \
+                __inca_native__.setAttribute(box, 'disabled', true)); }; \
+             __inca_native__.addEventListener(box, 'keydown', 5);",
+        );
+        listen(&mut h, "box", "click", 0);
+
+        h.keystrokes("enter");
+
+        assert_eq!(log(&h), "");
     }
 
     #[gpui::test]
@@ -1436,6 +1466,8 @@ mod tests {
         );
         let button = node(&h, "box");
 
+        // The button is focusable, so the pointer rests on it from load.
+        h.unhover();
         h.hover(button);
 
         let log = log(&h);
@@ -2432,6 +2464,22 @@ mod tests {
         );
         h.keystrokes("tab");
         assert_eq!(log(&h), "focus@n1,keydown@n1,blur@n1,focus@n2");
+    }
+
+    #[gpui::test]
+    fn a_job_queued_by_a_key_down_listener_lands_before_the_tab_move(cx: &mut TestAppContext) {
+        let mut h = tabs(cx);
+        run_js(
+            &mut h,
+            "__inca_native__.focusNode(n1); \
+             __inca_callbacks__[5] = () => { Promise.resolve().then(() => \
+                __inca_native__.setAttribute(n2, 'tabindex', '-1')); }; \
+             __inca_native__.addEventListener(n1, 'keydown', 5);",
+        );
+
+        h.keystrokes("tab");
+
+        assert_eq!(log(&h), "focus@n1,blur@n1,focus@n3");
     }
 
     #[gpui::test]

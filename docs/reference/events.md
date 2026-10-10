@@ -96,6 +96,7 @@ focused. `target` is that node.
   Meta on macOS and Control elsewhere.
 - Pressing a modifier alone fires `keydown` and `keyup` with its name as
   `key`.
+- The quit shortcut (Cmd+Q on macOS, Ctrl+Q elsewhere) goes to the host only.
 
 ## Focus
 

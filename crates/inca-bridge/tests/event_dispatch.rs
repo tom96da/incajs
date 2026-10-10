@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Integration tests for `inca_bridge::dispatch`'s event dispatch: a real
-//! `VirtualTree`, wired to a real `QuickJS` callback via the
+//! `VirtualTree`, connected to a real `QuickJS` callback via the
 //! `__inca_callbacks__` convention (see `EventDispatcher`'s doc comment),
 //! rendered through `render_tree_with_events`.
 
@@ -111,9 +111,9 @@ impl Render for ClickableRoot {
 
 // Note: this doesn't assert on `ClickableRoot`'s render count. A click on
 // any interactive element already makes GPUI redraw for its own hover/
-// active bookkeeping, regardless of whether `dispatch()` also calls
+// active bookkeeping, regardless of whether the walk also calls
 // `window.refresh()` — confirmed empirically, not just assumed — so a
-// render-count assertion here couldn't actually isolate `dispatch()`'s own
+// render-count assertion here couldn't actually isolate the walk's own
 // effect. The JS-side call count below is the real, unambiguous signal.
 #[gpui::test]
 fn click_dispatches_to_js_exactly_once(cx: &mut TestAppContext) {
@@ -151,8 +151,8 @@ fn click_dispatches_to_js_exactly_once(cx: &mut TestAppContext) {
             .unwrap(),
         format!(
             concat!(
-                r#"{{"type":"click","target":{node},"currentTarget":{node},"#,
-                r#""bubbles":true,"cancelable":true,"composed":true,"defaultPrevented":false,"eventPhase":2,"isTrusted":true,"#,
+                r#"{{"type":"click","target":{node},"currentTarget":null,"#,
+                r#""bubbles":true,"cancelable":true,"composed":true,"eventPhase":0,"isTrusted":true,"#,
                 r#""clientX":10,"clientY":10,"screenX":10,"screenY":10,"x":10,"y":10,"relatedTarget":null,"pageX":10,"pageY":10,"#,
                 r#""movementX":0,"movementY":0,"button":0,"buttons":0,"detail":1,"#,
                 r#""pointerId":1,"pointerType":"mouse","isPrimary":true,"width":1,"height":1,"pressure":0,"#,
@@ -163,9 +163,9 @@ fn click_dispatches_to_js_exactly_once(cx: &mut TestAppContext) {
     );
 }
 
-/// A node is wired for input only while something listens on it, so a
-/// listener registered after the first frame has to survive the re-render
-/// that follows.
+/// The containers track the pointer only while something listens or can take
+/// focus, so a listener registered after the first frame has to survive the
+/// re-render that follows.
 #[gpui::test]
 fn a_listener_registered_after_the_first_render_still_fires(cx: &mut TestAppContext) {
     let host = Rc::new(RefCell::new(Host::default()));
@@ -237,7 +237,7 @@ fn a_click_reaches_every_callback_registered_for_it(cx: &mut TestAppContext) {
 
 /// A callback that only schedules its effect via a microtask (as any real
 /// reactivity scheduler does) must still have that effect applied by the
-/// time `dispatch` returns — not left pending until some later, unrelated
+/// time the walk returns — not left pending until some later, unrelated
 /// engine call happens to drain the job queue.
 #[gpui::test]
 fn click_drains_a_callback_that_defers_its_effect_via_a_microtask(cx: &mut TestAppContext) {
@@ -369,9 +369,9 @@ fn mousedown_carries_dom_shaped_fields(cx: &mut TestAppContext) {
             .unwrap(),
         format!(
             concat!(
-                r#"{{"type":"mousedown","target":{node},"currentTarget":{node},"#,
-                r#""bubbles":true,"cancelable":true,"composed":true,"defaultPrevented":false,"#,
-                r#""eventPhase":2,"isTrusted":true,"#,
+                r#"{{"type":"mousedown","target":{node},"currentTarget":null,"#,
+                r#""bubbles":true,"cancelable":true,"composed":true,"#,
+                r#""eventPhase":0,"isTrusted":true,"#,
                 r#""clientX":10,"clientY":20,"screenX":10,"screenY":20,"x":10,"y":20,"relatedTarget":null,"pageX":10,"pageY":20,"#,
                 r#""movementX":0,"movementY":0,"button":0,"buttons":1,"detail":1,"#,
                 r#""ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false,"#,
@@ -380,40 +380,6 @@ fn mousedown_carries_dom_shaped_fields(cx: &mut TestAppContext) {
             node = node
         )
     );
-}
-
-/// `preventDefault()` reaches GPUI's own `Window::default_prevented` state.
-#[gpui::test]
-fn prevent_default_reaches_the_window(cx: &mut TestAppContext) {
-    let (host, node) = build_tree_listening_for("mousedown");
-    let engine = Rc::new(Engine::new().unwrap());
-    engine
-        .eval::<()>(
-            "globalThis.__inca_callbacks__ = { 0: (event) => { event.preventDefault(); } };",
-        )
-        .unwrap();
-    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
-
-    let window = cx.add_window(|_, _| ClickableRoot {
-        host: Rc::clone(&host),
-        node,
-        dispatcher,
-    });
-    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-        .unwrap();
-
-    let mut cx = VisualTestContext::from_window(window.into(), cx);
-    cx.simulate_mouse_down(
-        point(px(10.0), px(10.0)),
-        MouseButton::Left,
-        Modifiers::none(),
-    );
-    cx.run_until_parked();
-
-    let prevented = cx
-        .update_window(window.into(), |_, window, _| window.default_prevented())
-        .unwrap();
-    assert!(prevented, "preventDefault() must reach the window");
 }
 
 /// A `wheel`'s payload carries DOM-`WheelEvent`-shaped delta fields plus
@@ -447,9 +413,9 @@ fn wheel_carries_dom_shaped_delta_fields(cx: &mut TestAppContext) {
             .unwrap(),
         format!(
             concat!(
-                r#"{{"type":"wheel","target":{node},"currentTarget":{node},"#,
-                r#""bubbles":true,"cancelable":true,"composed":true,"defaultPrevented":false,"#,
-                r#""eventPhase":2,"isTrusted":true,"#,
+                r#"{{"type":"wheel","target":{node},"currentTarget":null,"#,
+                r#""bubbles":true,"cancelable":true,"composed":true,"#,
+                r#""eventPhase":0,"isTrusted":true,"#,
                 r#""clientX":10,"clientY":10,"screenX":10,"screenY":10,"x":10,"y":10,"relatedTarget":null,"pageX":10,"pageY":10,"#,
                 r#""movementX":0,"movementY":0,"button":0,"buttons":0,"detail":0,"#,
                 r#""ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false,"#,
@@ -529,88 +495,6 @@ fn wheel_with_no_listener_reports_nothing(cx: &mut TestAppContext) {
     });
 
     assert_eq!(clicks(&engine), 0.0);
-}
-
-/// Two kinds wired on the same node fire independently, at the values each
-/// carries — wiring one kind doesn't steal or block another's dispatch.
-#[gpui::test]
-fn wheel_and_mousedown_wired_together_fire_independently(cx: &mut TestAppContext) {
-    let (host, node) = build_tree_listening_for("wheel");
-    host.borrow_mut().listeners.register(node, "mousedown", 0);
-    let engine = Rc::new(Engine::new().unwrap());
-    engine
-        .eval::<()>(
-            "globalThis.seen = []; \
-             globalThis.__inca_callbacks__ = { \
-                0: (event) => { globalThis.seen.push(event.type); } \
-             };",
-        )
-        .unwrap();
-    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
-
-    let window = cx.add_window(|_, _| ClickableRoot {
-        host: Rc::clone(&host),
-        node,
-        dispatcher,
-    });
-    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-        .unwrap();
-    let mut cx = VisualTestContext::from_window(window.into(), cx);
-
-    cx.simulate_mouse_down(
-        point(px(10.0), px(10.0)),
-        MouseButton::Left,
-        Modifiers::none(),
-    );
-    cx.run_until_parked();
-    cx.simulate_event(ScrollWheelEvent {
-        position: point(px(10.0), px(10.0)),
-        delta: ScrollDelta::Lines(point(0.0, 1.0)),
-        ..Default::default()
-    });
-
-    assert_eq!(
-        engine
-            .eval::<String>("JSON.stringify(globalThis.seen)")
-            .unwrap(),
-        r#"["mousedown","wheel"]"#
-    );
-}
-
-/// `mousedown` and `click` wired on the same node both fire, in that order.
-#[gpui::test]
-fn click_and_mousedown_wired_together_fire_independently(cx: &mut TestAppContext) {
-    let (host, node) = build_clickable_tree();
-    host.borrow_mut().listeners.register(node, "mousedown", 0);
-    let engine = Rc::new(Engine::new().unwrap());
-    engine
-        .eval::<()>(
-            "globalThis.seen = []; \
-             globalThis.__inca_callbacks__ = { \
-                0: (event) => { globalThis.seen.push(event.type); } \
-             };",
-        )
-        .unwrap();
-    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
-
-    let window = cx.add_window(|_, _| ClickableRoot {
-        host: Rc::clone(&host),
-        node,
-        dispatcher,
-    });
-    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-        .unwrap();
-    let mut cx = VisualTestContext::from_window(window.into(), cx);
-
-    cx.simulate_click(point(px(10.0), px(10.0)), Modifiers::none());
-    cx.run_until_parked();
-
-    assert_eq!(
-        engine
-            .eval::<String>("JSON.stringify(globalThis.seen)")
-            .unwrap(),
-        r#"["mousedown","click"]"#
-    );
 }
 
 /// `on_hover` covers both `mouseenter` and `mouseleave` with one GPUI
@@ -736,9 +620,9 @@ fn mouseenter_carries_dom_shaped_fields(cx: &mut TestAppContext) {
             .unwrap(),
         format!(
             concat!(
-                r#"{{"type":"mouseenter","target":{node},"currentTarget":{node},"#,
-                r#""bubbles":false,"cancelable":false,"composed":false,"defaultPrevented":false,"#,
-                r#""eventPhase":2,"isTrusted":true,"#,
+                r#"{{"type":"mouseenter","target":{node},"currentTarget":null,"#,
+                r#""bubbles":false,"cancelable":false,"composed":false,"#,
+                r#""eventPhase":0,"isTrusted":true,"#,
                 r#""clientX":10,"clientY":20,"screenX":10,"screenY":20,"x":10,"y":20,"relatedTarget":null,"pageX":10,"pageY":20,"#,
                 r#""movementX":0,"movementY":0,"button":0,"buttons":0,"detail":0,"#,
                 r#""ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false}}"#
@@ -750,8 +634,8 @@ fn mouseenter_carries_dom_shaped_fields(cx: &mut TestAppContext) {
 }
 
 /// A node listening only for `mouseleave` doesn't spuriously fire it on
-/// mount just because the pointer already sits over it — `was_hovered`
-/// starts `false`, so the mount-time check can only ever produce an enter
+/// mount just because the pointer already sits over it — the hover state
+/// starts empty, so the mount-time check can only ever produce an enter
 /// transition, never a leave one, regardless of which names JS registered.
 #[gpui::test]
 fn mounting_already_hovered_does_not_fire_a_spurious_leave(cx: &mut TestAppContext) {
@@ -773,64 +657,6 @@ fn mounting_already_hovered_does_not_fire_a_spurious_leave(cx: &mut TestAppConte
         clicks(&engine),
         0.0,
         "a mouseleave-only listener must not fire just from mounting already hovered"
-    );
-}
-
-/// Hover (needs a `gpui` element id) and a stateless kind wired on the same
-/// node both still fire.
-#[gpui::test]
-fn hover_and_mousemove_wired_together_fire_independently(cx: &mut TestAppContext) {
-    let host = Rc::new(RefCell::new(Host::default()));
-    let node = {
-        let mut host = host.borrow_mut();
-        let node = host.tree.create_node("div").unwrap();
-        host.tree.set_style(node, "width", 100.0).unwrap();
-        host.tree.set_style(node, "height", 100.0).unwrap();
-        node
-    };
-    host.borrow_mut().listeners.register(node, "mouseenter", 0);
-    host.borrow_mut().listeners.register(node, "mousemove", 0);
-    let engine = Rc::new(Engine::new().unwrap());
-    engine
-        .eval::<()>(
-            "globalThis.seen = []; \
-             globalThis.__inca_callbacks__ = { \
-                0: (event) => { globalThis.seen.push(event.type); } \
-             };",
-        )
-        .unwrap();
-    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
-
-    let window = cx.add_window(|_, _| ClickableRoot {
-        host: Rc::clone(&host),
-        node,
-        dispatcher,
-    });
-    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-        .unwrap();
-    let mut cx = VisualTestContext::from_window(window.into(), cx);
-
-    // Settle the implicit initial hover before the transition below.
-    cx.simulate_mouse_move(
-        point(px(200.0), px(200.0)),
-        None::<MouseButton>,
-        Modifiers::none(),
-    );
-    engine.eval::<()>("globalThis.seen = [];").unwrap();
-
-    cx.simulate_mouse_move(
-        point(px(10.0), px(10.0)),
-        None::<MouseButton>,
-        Modifiers::none(),
-    );
-
-    // Membership only, not order — which of the two GPUI dispatches first
-    // is its own internal detail, not a contract this crate makes.
-    assert_eq!(
-        engine
-            .eval::<String>("JSON.stringify(globalThis.seen.slice().sort())")
-            .unwrap(),
-        r#"["mouseenter","mousemove"]"#
     );
 }
 
@@ -942,6 +768,38 @@ fn buttons_tracks_every_button_currently_held(cx: &mut TestAppContext) {
         0b0_0010,
         "releasing one button clears only its bit"
     );
+}
+
+/// A release that no listener hears still clears its button, so a later
+/// `mousemove` reports nothing held.
+#[gpui::test]
+fn buttons_clears_after_a_release_nobody_listens_to(cx: &mut TestAppContext) {
+    let (host, node) = build_tree_listening_for("mousedown");
+    host.borrow_mut().listeners.register(node, "mousemove", 0);
+    let engine = Rc::new(Engine::new().unwrap());
+    install_click_counter(&engine);
+    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
+    let window = cx.add_window(|_, _| ClickableRoot {
+        host: Rc::clone(&host),
+        node,
+        dispatcher,
+    });
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    let mut cx = VisualTestContext::from_window(window.into(), cx);
+    let point = point(px(10.0), px(10.0));
+    let buttons = || -> u8 { engine.eval("globalThis.lastEvent.buttons").unwrap() };
+
+    cx.simulate_mouse_down(point, MouseButton::Left, Modifiers::none());
+    assert_eq!(buttons(), 0b0_0001);
+    cx.simulate_mouse_up(point, MouseButton::Left, Modifiers::none());
+    cx.simulate_mouse_move(point, None::<MouseButton>, Modifiers::none());
+
+    assert_eq!(
+        engine.eval::<String>("lastEvent.type").unwrap(),
+        "mousemove"
+    );
+    assert_eq!(buttons(), 0);
 }
 
 /// `movementX`/`movementY` are a delta from the last pointer move, measured
@@ -1110,52 +968,8 @@ fn repeated_mousemove_at_one_position_reports_zero_movement(cx: &mut TestAppCont
     assert_eq!(movements, [0.0, 5.0, 0.0]);
 }
 
-/// `stopImmediatePropagation()` stops the remaining callbacks on the *same*
-/// node — the second callback below must never run.
-#[gpui::test]
-fn stop_immediate_propagation_skips_the_rest_of_this_nodes_callbacks(cx: &mut TestAppContext) {
-    let (host, node) = build_tree_listening_for("mousedown");
-    host.borrow_mut().listeners.register(node, "mousedown", 1);
-
-    let engine = Rc::new(Engine::new().unwrap());
-    engine
-        .eval::<()>(
-            "globalThis.ran = []; \
-             globalThis.__inca_callbacks__ = { \
-                0: (event) => { globalThis.ran.push(0); event.stopImmediatePropagation(); }, \
-                1: () => { globalThis.ran.push(1); } \
-             };",
-        )
-        .unwrap();
-    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
-
-    let window = cx.add_window(|_, _| ClickableRoot {
-        host: Rc::clone(&host),
-        node,
-        dispatcher,
-    });
-    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-        .unwrap();
-
-    let mut cx = VisualTestContext::from_window(window.into(), cx);
-    cx.simulate_mouse_down(
-        point(px(10.0), px(10.0)),
-        MouseButton::Left,
-        Modifiers::none(),
-    );
-    cx.run_until_parked();
-
-    assert_eq!(
-        engine
-            .eval::<String>("JSON.stringify(globalThis.ran)")
-            .unwrap(),
-        "[0]",
-        "the second callback on the same node must not run"
-    );
-}
-
-/// `stopPropagation()` reaches GPUI's own bubble: an ancestor's listener for
-/// the same event must not fire once a descendant's callback calls it.
+/// `stopPropagation()` ends the walk: an ancestor's listener for the same
+/// event stays silent once a descendant's callback calls it.
 #[gpui::test]
 fn stop_propagation_keeps_an_ancestors_listener_from_firing(cx: &mut TestAppContext) {
     let host = Rc::new(RefCell::new(Host::default()));
@@ -1295,7 +1109,7 @@ fn move_to(cx: &mut VisualTestContext, x: f32, y: f32) {
     cx.simulate_mouse_move(point(px(x), px(y)), None::<MouseButton>, Modifiers::none());
 }
 
-/// Moves over a node nothing listens on still advance the baseline.
+/// A move over a node nothing listens on still advances the baseline.
 #[gpui::test]
 fn moves_over_an_unlistened_node_advance_the_movement_baseline(cx: &mut TestAppContext) {
     let panes = build_panes(&["mousemove"], &[]);
@@ -1541,7 +1355,7 @@ fn a_click_has_its_own_event_id_after_its_mousedown(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn wheel_and_mouseenter_carry_an_event_id(cx: &mut TestAppContext) {
+fn a_wheel_takes_a_larger_event_id_than_the_mouseenter_before_it(cx: &mut TestAppContext) {
     let (mut cx, engine, _parent, _child) = mount_recording_pair(cx, &["wheel", "mouseenter"]);
     let entered = take_ids(&engine);
     assert!(!entered.is_empty() && entered.iter().all(|seen| seen.2 >= 1));
@@ -1583,7 +1397,7 @@ fn two_wheel_events_get_different_event_ids(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn mouseleave_carries_an_event_id_shared_along_its_bubble_path(cx: &mut TestAppContext) {
+fn each_mouseleave_of_one_move_takes_its_own_event_id(cx: &mut TestAppContext) {
     let (mut cx, engine, _parent, _child) = mount_recording_pair(cx, &["mouseleave"]);
     take_ids(&engine);
 
@@ -1594,12 +1408,9 @@ fn mouseleave_carries_an_event_id_shared_along_its_bubble_path(cx: &mut TestAppC
     );
 
     let seen = take_ids(&engine);
-    assert!(!seen.is_empty());
-    assert!(
-        seen.iter()
-            .all(|entry| entry.0 == "mouseleave" && entry.2 >= 1)
-    );
-    assert!(seen.iter().all(|entry| entry.2 == seen[0].2));
+    assert_eq!(seen.len(), 2, "the child and the parent are left");
+    assert!(seen.iter().all(|entry| entry.0 == "mouseleave"));
+    assert!(seen[0].2 >= 1 && seen[1].2 > seen[0].2, "{seen:?}");
 }
 
 #[gpui::test]

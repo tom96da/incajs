@@ -1,14 +1,13 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Dispatches a native input event into the JS callbacks registered for it
-//! via `__inca_native__.addEventListener` (see [`crate::bindings`]), then
-//! requests a redraw.
+//! Turns the native input of a window into events and runs the JS listeners
+//! registered for them via `__inca_native__.addEventListener` (see
+//! [`crate::bindings`]), then requests a redraw.
 //!
-//! Zero-overhead by construction: [`EventDispatcher::dispatch`] is the only
-//! thing that ever touches the JS engine or calls
-//! [`Window::refresh`](gpui::Window::refresh) on this path, so a re-render
-//! with no new input never runs JS.
+//! An event only enters the JS engine when a node on its path listens for it.
+//! Only an event that entered the engine drains the job queue and requests a
+//! redraw. Rendering runs JS only when input arrives.
 //!
 //! ## Where the real JS function lives
 //!
@@ -19,9 +18,9 @@
 //! is:
 //! the JS caller stores it itself, at
 //! `globalThis.__inca_callbacks__[callbackId]`, before calling
-//! `addEventListener` with that id. [`EventDispatcher::dispatch`] looks the
-//! real function up fresh inside one `Engine::with` call and drops it
-//! before that call returns — it never crosses into Rust-held state.
+//! `addEventListener` with that id. The walk of an event looks the real
+//! function up fresh inside one `Engine::with` call and drops it before that
+//! call returns — it never crosses into Rust-held state.
 
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeSet, HashMap};
@@ -30,18 +29,13 @@ use std::sync::OnceLock;
 use std::time::Instant;
 
 use gpui::{App, MouseButton, MouseUpEvent, ScrollHandle, Window};
-use inca_gpui::{
-    EventKind, EventMask, EventPayload, KeyPayload, MousePayload, NodeId, PointerSource,
-    dom_buttons_bit,
-};
+use inca_gpui::{EventPayload, KeyPayload, MousePayload, NodeId, PointerSource, dom_buttons_bit};
 use inca_jsenv::{Engine, EngineError};
-use rquickjs::convert::Coerced;
-use rquickjs::object::{Accessor, Property};
-use rquickjs::{Ctx, Function, Object};
 
 use inca_gpui::EventSink;
 
 use crate::bindings::Host;
+use crate::event::{self, Flags, Walk};
 
 /// Where a failure inside the running app goes. Nothing asked for it, so
 /// there is no caller to return it to and no `Result` to put it in.
@@ -58,60 +52,21 @@ pub fn stderr_reporter() -> ErrorReporter {
     Rc::new(|err| eprintln!("{err}"))
 }
 
-/// Where an event's `target` comes from.
-#[derive(Clone, Copy)]
-enum TargetRule {
-    /// The node the event is dispatched for.
-    Node,
-    /// The deepest container under the pointer.
-    Pointer,
-    /// The focused node.
-    Focused,
-}
-
-/// `bubbles`, `cancelable` and `composed` of one event.
-#[derive(Clone, Copy)]
-struct Flags {
-    bubbles: bool,
-    cancelable: bool,
-    composed: bool,
-}
-
-impl Flags {
-    const ALL: Self = Self {
-        bubbles: true,
-        cancelable: true,
-        composed: true,
-    };
-    const NONE: Self = Self {
-        bubbles: false,
-        cancelable: false,
-        composed: false,
-    };
-    /// Focus events: composed and not cancelable.
-    const FOCUS: Self = Self {
-        composed: true,
-        ..Self::NONE
-    };
-}
-
 /// The rules of one event name.
 #[derive(Clone, Copy)]
 struct EventSpec {
     name: &'static str,
     flags: Flags,
-    target: TargetRule,
     /// Takes `movementX`/`movementY` from the raw pointer move.
     movement: bool,
     /// Carries the `buttons` of its own press or release.
     own_buttons: bool,
 }
 
-const fn spec(name: &'static str, flags: Flags, target: TargetRule) -> EventSpec {
+const fn spec(name: &'static str, flags: Flags) -> EventSpec {
     EventSpec {
         name,
         flags,
-        target,
         movement: false,
         own_buttons: false,
     }
@@ -124,32 +79,31 @@ const fn own_buttons(mut event: EventSpec) -> EventSpec {
 
 /// Every event the host dispatches.
 const EVENTS: [EventSpec; 18] = [
-    own_buttons(spec("click", Flags::ALL, TargetRule::Node)),
-    own_buttons(spec("dblclick", Flags::ALL, TargetRule::Node)),
-    own_buttons(spec("auxclick", Flags::ALL, TargetRule::Node)),
-    own_buttons(spec("contextmenu", Flags::ALL, TargetRule::Pointer)),
-    spec("mousedown", Flags::ALL, TargetRule::Pointer),
-    spec("mouseup", Flags::ALL, TargetRule::Pointer),
+    own_buttons(spec("click", Flags::ALL)),
+    own_buttons(spec("dblclick", Flags::ALL)),
+    own_buttons(spec("auxclick", Flags::ALL)),
+    own_buttons(spec("contextmenu", Flags::ALL)),
+    spec("mousedown", Flags::ALL),
+    spec("mouseup", Flags::ALL),
     EventSpec {
         movement: true,
-        ..spec("mousemove", Flags::ALL, TargetRule::Pointer)
+        ..spec("mousemove", Flags::ALL)
     },
-    spec("mouseenter", Flags::NONE, TargetRule::Node),
-    spec("mouseleave", Flags::NONE, TargetRule::Node),
-    spec("mouseover", Flags::ALL, TargetRule::Node),
-    spec("mouseout", Flags::ALL, TargetRule::Node),
-    spec("wheel", Flags::ALL, TargetRule::Pointer),
-    spec("keydown", Flags::ALL, TargetRule::Focused),
-    spec("keyup", Flags::ALL, TargetRule::Focused),
-    spec("focus", Flags::FOCUS, TargetRule::Node),
-    spec("blur", Flags::FOCUS, TargetRule::Node),
+    spec("mouseenter", Flags::NONE),
+    spec("mouseleave", Flags::NONE),
+    spec("mouseover", Flags::ALL),
+    spec("mouseout", Flags::ALL),
+    spec("wheel", Flags::ALL),
+    spec("keydown", Flags::ALL),
+    spec("keyup", Flags::ALL),
+    spec("focus", Flags::FOCUS),
+    spec("blur", Flags::FOCUS),
     spec(
         "focusin",
         Flags {
             bubbles: true,
             ..Flags::FOCUS
         },
-        TargetRule::Node,
     ),
     spec(
         "focusout",
@@ -157,7 +111,6 @@ const EVENTS: [EventSpec; 18] = [
             bubbles: true,
             ..Flags::FOCUS
         },
-        TargetRule::Node,
     ),
 ];
 
@@ -167,22 +120,13 @@ fn spec_of(event: &str) -> EventSpec {
         .iter()
         .find(|spec| spec.name == event)
         .copied()
-        .unwrap_or(spec("", Flags::NONE, TargetRule::Node))
+        .unwrap_or(spec("", Flags::NONE))
 }
 
 /// The origin of every `timeStamp`.
 fn time_origin() -> Instant {
     static ORIGIN: OnceLock<Instant> = OnceLock::new();
     *ORIGIN.get_or_init(Instant::now)
-}
-
-/// What every node of one event shares: the `eventId`, whether a callback
-/// has called `preventDefault()` and the `timeStamp`.
-#[derive(Clone, Copy)]
-struct EventState {
-    id: u64,
-    prevented: bool,
-    time_stamp: f64,
 }
 
 /// Everything needed to dispatch a native event into JS: the engine to call
@@ -206,15 +150,6 @@ pub struct EventDispatcher {
     /// The window's modifier keys as of the last change. `None` until
     /// [`Self::sync_modifiers`] first reads them.
     held_modifiers: Rc<Cell<Option<gpui::Modifiers>>>,
-    /// Set while the `wheel` event being dispatched right now has been
-    /// stopped. Later `wheel` dispatches skip their callbacks, and GPUI's own
-    /// bubble carries on so a scroll container still scrolls.
-    wheel_stopped: Rc<Cell<bool>>,
-    /// Last number handed out as an `eventId`.
-    last_event_id: Rc<Cell<u64>>,
-    /// The state of each event name dispatched during the input being
-    /// handled now. Emptied when that input's update ends.
-    current_events: Rc<RefCell<HashMap<String, EventState>>>,
     /// The scroll state of every scrolling container, created on first ask.
     scroll_handles: Rc<RefCell<HashMap<NodeId, ScrollHandle>>>,
     /// The containers `gpui` reports as hovered.
@@ -244,9 +179,6 @@ impl EventDispatcher {
             last_position: Rc::new(Cell::new(None)),
             current_movement: Rc::new(Cell::new(None)),
             held_modifiers: Rc::new(Cell::new(None)),
-            wheel_stopped: Rc::new(Cell::new(false)),
-            last_event_id: Rc::new(Cell::new(0)),
-            current_events: Rc::new(RefCell::new(HashMap::new())),
             scroll_handles: Rc::new(RefCell::new(HashMap::new())),
             hovered: Rc::new(RefCell::new(BTreeSet::new())),
             hover_prev: Rc::new(RefCell::new(Vec::new())),
@@ -264,44 +196,12 @@ impl EventDispatcher {
         self
     }
 
-    /// Every kind registered on `node_id`. The render path asks before
-    /// wiring an element for input.
+    /// Whether the containers report the pointer: a listener is registered
+    /// or a node can take focus. The render path asks once per frame.
     #[must_use]
-    pub fn listens(&self, node_id: NodeId) -> EventMask {
+    pub fn tracks_pointer(&self) -> bool {
         let host = self.host.borrow();
-        EventKind::ALL
-            .iter()
-            .filter(|kind| {
-                !host
-                    .listeners
-                    .callbacks_for(node_id, kind.name())
-                    .is_empty()
-            })
-            .fold(EventMask::NONE, |mask, kind| mask | kind.mask())
-    }
-
-    /// Returns the [`EventState`] for `event`. The first dispatch of a name
-    /// during one input takes the next `eventId` and the current time. Later
-    /// dispatches of that name during the same input reuse them. The state is
-    /// forgotten when the input's update ends.
-    fn event_state(&self, event: &str, cx: &mut App) -> EventState {
-        let mut events = self.current_events.borrow_mut();
-        if let Some(state) = events.get(event) {
-            return *state;
-        }
-        let id = self.last_event_id.get() + 1;
-        self.last_event_id.set(id);
-        if events.is_empty() {
-            let current = Rc::clone(&self.current_events);
-            cx.defer(move |_| current.borrow_mut().clear());
-        }
-        let state = EventState {
-            id,
-            prevented: false,
-            time_stamp: time_origin().elapsed().as_secs_f64() * 1000.0,
-        };
-        events.insert(event.to_owned(), state);
-        state
+        !host.listeners.is_empty() || host.focus.has_handles()
     }
 
     /// Returns `payload` with its `buttons` bitmask corrected against
@@ -353,96 +253,44 @@ impl EventDispatcher {
         }
     }
 
-    /// Calls every JS callback registered for `(node_id, event)` (via
-    /// `__inca_native__.addEventListener`), passing one shared object shaped
-    /// `{ type, target, currentTarget, eventId, ...payload }` plus DOM's three
-    /// propagation methods, then drains the job queue and requests a redraw.
-    ///
-    /// `eventId` identifies the event. Every node dispatched for one event
-    /// name within one input carries the same number, and a later input gets
-    /// a larger one. A dispatch that no input produced, such as the `focus`
-    /// and `blur` of a focus change, takes a new number per event name.
-    ///
-    /// `bubbles`, `cancelable`, `composed`, `defaultPrevented`, `eventPhase`,
-    /// `isTrusted` and `timeStamp` are the base fields. `eventPhase` is 2
-    /// where `currentTarget` is `target` and 3 elsewhere. `composedPath()`
-    /// returns the node ids from `target` up to the root.
-    ///
-    /// `currentTarget` is `node_id`. `target` is the deepest container under
-    /// the pointer for `mousedown`, `mouseup`, `mousemove`, `wheel` and
-    /// `contextmenu`. It is the focused node for `keydown` and `keyup`, which
-    /// the root receives when nothing is focused. Every other event, and any
-    /// of these when no target is recorded (a dispatch made outside input
-    /// handling), uses `node_id`.
-    ///
-    /// A callback calling `stopImmediatePropagation()` stops the remaining
-    /// callbacks *on this node*. `stopPropagation()`/`preventDefault()` are
-    /// read back after every callback here has run, and forwarded to `cx`'s
-    /// bubble (`node_id`'s ancestors) and `window`'s default handling.
-    /// For `"wheel"`, `stopPropagation()` only skips the ancestors' callbacks.
-    ///
-    /// Never panics. A callback that throws is reported and the rest still
-    /// run — one bad listener must not take the host down, nor stop its
-    /// siblings. A missing `__inca_callbacks__` registry, or an entry that
-    /// is missing or isn't a function, is a stale id and is skipped.
-    ///
-    /// The drain happens whether or not a listener ran: a job queued earlier
-    /// is still owed a turn, and whether this particular event had a
-    /// listener says nothing about that.
-    pub fn dispatch(
+    /// Dispatches `event` along the path of `target`, with `target` as its
+    /// target, and reports what the listeners threw. Returns whether a
+    /// listener prevented the default action and whether the walk entered the
+    /// engine. `cut` lists the nodes whose listeners stay silent.
+    fn walk(
         &self,
-        node_id: NodeId,
+        target: NodeId,
         event: &str,
         payload: &EventPayload,
-        window: &mut Window,
-        cx: &mut App,
-    ) {
-        let callback_ids = if (event == "wheel" && self.wheel_stopped.get())
-            || self.cut_by_disabled_button(node_id, event, payload, cx)
-        {
-            Vec::new()
-        } else {
-            self.host
-                .borrow()
-                .listeners
-                .callbacks_for(node_id, event)
-                .to_vec()
-        };
-
-        let payload = self.prepare(event, payload, window);
-        let state = self.event_state(event, cx);
-        let target = self.target_of(node_id, event, window, cx);
-        let outcome = self.run_callbacks(node_id, target, event, &payload, state, callback_ids);
-
-        if outcome.stop_propagation {
-            if event == "wheel" {
-                self.wheel_stopped.set(true);
-                let stopped = Rc::clone(&self.wheel_stopped);
-                cx.defer(move |_| stopped.set(false));
-            } else {
-                cx.stop_propagation();
-            }
+        cut: &[NodeId],
+    ) -> (bool, bool) {
+        let path = self.path_from(target);
+        let outcome = event::walk(
+            &self.engine,
+            &self.host,
+            &Walk {
+                name: event,
+                flags: spec_of(event).flags,
+                target,
+                path: &path,
+                cut,
+                payload,
+                time_stamp: time_origin().elapsed().as_secs_f64() * 1000.0,
+            },
+        );
+        // Reported after the walk: a reporter is free to do anything, and
+        // re-entering the engine from inside `Engine::with` panics.
+        for failure in &outcome.failures {
+            (self.reporter)(failure);
         }
-        // Only GPUI's own defaults read this flag. For `wheel`, the scroll
-        // rollback in `inca-gpui` reads it too and restores the offsets.
-        if outcome.prevent_default {
-            window.prevent_default();
-        }
-
-        self.drain_jobs_and_refresh(window);
+        (outcome.canceled, outcome.entered)
     }
 
-    /// Whether `node_id` is a disabled button, or an ancestor of one, on the
-    /// path from the mouse target or the pressed target of a pointer
-    /// `mousedown`, `mouseup`, `click` or `dblclick`. Listeners below the
-    /// button run. A keyboard click always runs.
-    fn cut_by_disabled_button(
-        &self,
-        node_id: NodeId,
-        event: &str,
-        payload: &EventPayload,
-        cx: &App,
-    ) -> bool {
+    /// The nodes that receive no pointer `mousedown`, `mouseup`, `click` or
+    /// `dblclick`: a disabled button on the path from the mouse target or the
+    /// pressed target of the event, and the ancestors of that button. Listeners
+    /// below the button run. A keyboard click always runs.
+    fn cut_by_disabled_button(&self, event: &str, payload: &EventPayload, cx: &App) -> Vec<NodeId> {
         let keyboard = matches!(
             payload,
             EventPayload::Mouse(MousePayload {
@@ -451,7 +299,7 @@ impl EventDispatcher {
             })
         );
         if keyboard || !matches!(event, "mousedown" | "mouseup" | "click" | "dblclick") {
-            return false;
+            return Vec::new();
         }
         let host = self.host.borrow();
         let disabled = |id: &NodeId| {
@@ -464,15 +312,32 @@ impl EventDispatcher {
             _ => None,
         };
         let pressed = button.and_then(|button| inca_gpui::pressed_target(cx, button));
-        [inca_gpui::mouse_target(cx), pressed]
-            .into_iter()
-            .flatten()
-            .any(|start| {
-                let path = self.path_from(start);
-                path.iter()
-                    .position(disabled)
-                    .is_some_and(|cut| path[cut..].contains(&node_id))
-            })
+        let mut cut = Vec::new();
+        for start in [inca_gpui::mouse_target(cx), pressed].into_iter().flatten() {
+            let path = self.path_from(start);
+            if let Some(button) = path.iter().position(disabled) {
+                cut.extend_from_slice(&path[button..]);
+            }
+        }
+        cut
+    }
+
+    /// The default action of a `mousedown` that reached `target`: the nearest
+    /// node on its path that can take focus takes it, else the window blurs.
+    /// A prevented `mousedown` leaves the focus alone.
+    fn focus_on_press(&self, target: NodeId, prevented: bool, window: &mut Window, cx: &mut App) {
+        if prevented {
+            return;
+        }
+        let path = self.path_from(target);
+        let handle = {
+            let host = self.host.borrow();
+            path.iter().find_map(|id| host.focus.handle(*id))
+        };
+        match handle {
+            Some(handle) => handle.focus(window, cx),
+            None => window.blur(cx),
+        }
     }
 
     /// `payload` as a listener sees it: a `related_target` that left the tree
@@ -505,16 +370,6 @@ impl EventDispatcher {
         payload
     }
 
-    /// The `target` of `event` dispatched for `node_id`.
-    fn target_of(&self, node_id: NodeId, event: &str, window: &Window, cx: &App) -> NodeId {
-        let found = match spec_of(event).target {
-            TargetRule::Node => None,
-            TargetRule::Pointer => inca_gpui::mouse_target(cx),
-            TargetRule::Focused => self.host.borrow().focus.focused_node(window, cx),
-        };
-        self.resolve(found, node_id)
-    }
-
     /// `found` when that node is still in the tree, else `node_id`.
     fn resolve(&self, found: Option<NodeId>, node_id: NodeId) -> NodeId {
         let host = self.host.borrow();
@@ -538,90 +393,21 @@ impl EventDispatcher {
         self.path_from(a).into_iter().find(|i| above_b.contains(i))
     }
 
-    /// Calls `callback_ids` for one `event` with `target` as the event's
-    /// `target` and `node_id` as its `currentTarget`. Reports what the
-    /// callbacks asked for; the caller acts on it.
-    fn run_callbacks(
-        &self,
-        node_id: NodeId,
-        target: NodeId,
-        event: &str,
-        payload: &EventPayload,
-        state: EventState,
-        callback_ids: Vec<u32>,
-    ) -> Outcome {
-        let stop_propagation = Rc::new(Cell::new(false));
-        let stop_immediate = Rc::new(Cell::new(false));
-        let prevent_default = Rc::new(Cell::new(state.prevented));
-
-        // Collected rather than reported in place: a reporter is free to do
-        // anything, and re-entering the engine from inside `with` panics.
-        let path = self.path_from(target);
-        let live = Rc::new(Cell::new(true));
-        let failures = self.engine.with(|ctx| {
-            let mut failures = Vec::new();
-            let Ok(callbacks) = ctx.globals().get::<_, Object>("__inca_callbacks__") else {
-                return failures;
-            };
-
-            let event_object = build_event_object(
-                &ctx,
-                event,
-                (node_id, target),
-                (&path, &live),
-                payload,
-                &state,
-                &[
-                    Rc::clone(&stop_propagation),
-                    Rc::clone(&stop_immediate),
-                    Rc::clone(&prevent_default),
-                ],
-            );
-            let event_object = event_object.and_then(|object| {
-                object.set("eventId", state.id)?;
-                Ok(object)
-            });
-            let event_object = match event_object {
-                Ok(event_object) => event_object,
-                Err(err) => {
-                    failures.push(EngineError::capture(&ctx, &err));
-                    return failures;
-                }
-            };
-
-            for callback_id in callback_ids {
-                if stop_immediate.get() {
-                    break;
-                }
-                let Ok(callback) = callbacks.get::<_, Function>(callback_id) else {
-                    continue;
-                };
-                if let Err(err) = callback.call::<_, ()>((event_object.clone(),)) {
-                    failures.push(EngineError::capture(&ctx, &err));
-                }
-            }
-            failures
-        });
-        live.set(false);
-        for failure in &failures {
-            (self.reporter)(failure);
-        }
-        if let Some(shared) = self.current_events.borrow_mut().get_mut(event) {
-            shared.prevented |= prevent_default.get();
-        }
-        Outcome {
-            stop_propagation: stop_propagation.get(),
-            prevent_default: prevent_default.get(),
-        }
-    }
-
     /// Fires `event` at `start` with `start` as the `target`. The listeners
     /// of `start` run first, then those of each ancestor while the event
-    /// bubbles, until one calls `stopPropagation()`. Returns whether a listener
-    /// prevented the default action. A pointer `click` or `dblclick` skips a
-    /// disabled button and its ancestors, as `mousedown` and `mouseup` do. A
-    /// `start` that left the tree fires nothing. The job queue drains after the
-    /// walk.
+    /// bubbles, until one calls `stopPropagation()`. Every listener receives
+    /// the same event object, whose `eventId` is larger than the one of the
+    /// event fired before. Returns whether a listener prevented the default
+    /// action. A pointer `click` or `dblclick` skips a disabled button and its
+    /// ancestors, as `mousedown` and `mouseup` do. A `start` that left the tree
+    /// fires nothing. When a listener ran, the job queue drains after the walk
+    /// and the window redraws.
+    ///
+    /// While the listeners run, `eventPhase` is 2 where `currentTarget` is
+    /// `target` and 3 elsewhere, and `composedPath()` lists the node ids from
+    /// `target` up to the root. Afterwards `currentTarget` is `null`,
+    /// `eventPhase` is 0 and `composedPath()` is empty. A listener that throws
+    /// is reported, and the remaining listeners run.
     pub fn fire(
         &self,
         start: NodeId,
@@ -634,37 +420,12 @@ impl EventDispatcher {
             return false;
         }
         let payload = &self.prepare(event, payload, window);
-        let bubbles = spec_of(event).flags.bubbles;
-        let mut prevented = false;
-        let mut current = Some(start);
-        while let Some(id) = current {
-            let callback_ids = if self.cut_by_disabled_button(id, event, payload, cx) {
-                Vec::new()
-            } else {
-                self.host
-                    .borrow()
-                    .listeners
-                    .callbacks_for(id, event)
-                    .to_vec()
-            };
-            if !callback_ids.is_empty() {
-                let state = self.event_state(event, cx);
-                let outcome = self.run_callbacks(id, start, event, payload, state, callback_ids);
-                prevented |= outcome.prevent_default;
-                if outcome.stop_propagation {
-                    break;
-                }
-            }
-            current = self
-                .host
-                .borrow()
-                .tree
-                .get(id)
-                .filter(|_| bubbles)
-                .and_then(inca_gpui::VirtualNode::parent);
+        let cut = self.cut_by_disabled_button(event, payload, cx);
+        let (canceled, entered) = self.walk(start, event, payload, &cut);
+        if entered {
+            self.drain_jobs_and_refresh(window);
         }
-        self.drain_jobs_and_refresh(window);
-        prevented
+        canceled
     }
 
     /// The deepest container `gpui` reports as hovered. Containers that left
@@ -751,252 +512,9 @@ fn with_screen(payload: &EventPayload, window: &Window) -> EventPayload {
     payload
 }
 
-fn set_flags(event_object: &Object, flags: Flags) -> rquickjs::Result<()> {
-    event_object.set("bubbles", flags.bubbles)?;
-    event_object.set("cancelable", flags.cancelable)?;
-    event_object.set("composed", flags.composed)
-}
-
-/// What the callbacks of one dispatch asked for.
-struct Outcome {
-    stop_propagation: bool,
-    prevent_default: bool,
-}
-
-/// Builds the shared `{ type, target, currentTarget, ...payload }` object a
-/// callback is called with, wired to DOM's three propagation methods —
-/// setting one of `stop_propagation`/`stop_immediate`/`prevent_default` is
-/// how a callback signals it back to the caller.
-fn build_event_object<'js>(
-    ctx: &Ctx<'js>,
-    event: &str,
-    (node_id, target): (NodeId, NodeId),
-    (path, live): (&[NodeId], &Rc<Cell<bool>>),
-    payload: &EventPayload,
-    state: &EventState,
-    signals: &[Rc<Cell<bool>>; 3],
-) -> rquickjs::Result<Object<'js>> {
-    let [stop_propagation, stop_immediate, prevent_default] = signals;
-    let Flags { cancelable, .. } = spec_of(event).flags;
-    let event_object = Object::new(ctx.clone())?;
-    event_object.set("type", event)?;
-    event_object.set("target", target)?;
-    event_object.set("currentTarget", node_id)?;
-    event_object.prop("srcElement", Property::from(target))?;
-    for (name, value) in [
-        ("NONE", 0),
-        ("CAPTURING_PHASE", 1),
-        ("AT_TARGET", 2),
-        ("BUBBLING_PHASE", 3),
-    ] {
-        event_object.prop(name, Property::from(value))?;
-    }
-    set_flags(&event_object, spec_of(event).flags)?;
-    event_object.prop(
-        "defaultPrevented",
-        Accessor::new_get({
-            let prevent_default = Rc::clone(prevent_default);
-            move || prevent_default.get()
-        })
-        .enumerable(),
-    )?;
-    event_object.prop(
-        "returnValue",
-        Accessor::new_get({
-            let prevent_default = Rc::clone(prevent_default);
-            move || !prevent_default.get()
-        })
-        .set({
-            let prevent_default = Rc::clone(prevent_default);
-            move |value: Coerced<bool>| {
-                let value = value.0;
-                if !value && cancelable {
-                    prevent_default.set(true);
-                }
-            }
-        }),
-    )?;
-    event_object.prop(
-        "cancelBubble",
-        Accessor::new_get({
-            let stop_propagation = Rc::clone(stop_propagation);
-            move || stop_propagation.get()
-        })
-        .set({
-            let stop_propagation = Rc::clone(stop_propagation);
-            move |value: Coerced<bool>| {
-                let value = value.0;
-                if value {
-                    stop_propagation.set(true);
-                }
-            }
-        }),
-    )?;
-    event_object.set("eventPhase", if node_id == target { 2 } else { 3 })?;
-    event_object.set(
-        "composedPath",
-        Function::new(ctx.clone(), {
-            let path = path.to_vec();
-            let live = Rc::clone(live);
-            move || if live.get() { path.clone() } else { Vec::new() }
-        })?,
-    )?;
-    event_object.set("isTrusted", true)?;
-    event_object.set("timeStamp", state.time_stamp)?;
-    set_payload(&event_object, payload)?;
-
-    event_object.set(
-        "stopImmediatePropagation",
-        Function::new(ctx.clone(), {
-            let stop_propagation = Rc::clone(stop_propagation);
-            let stop_immediate = Rc::clone(stop_immediate);
-            move || {
-                stop_propagation.set(true);
-                stop_immediate.set(true);
-            }
-        })?,
-    )?;
-    event_object.set(
-        "stopPropagation",
-        Function::new(ctx.clone(), {
-            let stop_propagation = Rc::clone(stop_propagation);
-            move || stop_propagation.set(true)
-        })?,
-    )?;
-    event_object.set(
-        "preventDefault",
-        Function::new(ctx.clone(), {
-            let prevent_default = Rc::clone(prevent_default);
-            move || {
-                if cancelable {
-                    prevent_default.set(true);
-                }
-            }
-        })?,
-    )?;
-
-    Ok(event_object)
-}
-
-/// Writes `payload`'s fields onto `event_object`, DOM-named.
-fn set_payload(event_object: &Object, payload: &EventPayload) -> rquickjs::Result<()> {
-    match payload {
-        EventPayload::None => {}
-        EventPayload::Mouse(mouse) => set_mouse_fields(event_object, mouse)?,
-        EventPayload::Wheel(wheel) => {
-            set_mouse_fields(event_object, &wheel.mouse)?;
-            event_object.set("deltaX", wheel.delta_x)?;
-            event_object.set("deltaY", wheel.delta_y)?;
-            event_object.set("deltaZ", wheel.delta_z)?;
-            event_object.set("deltaMode", wheel.delta_mode)?;
-        }
-        EventPayload::Key(key) => set_key_fields(event_object, key)?,
-        EventPayload::Focus { related_target } => match related_target {
-            Some(id) => event_object.set("relatedTarget", *id)?,
-            None => event_object.set("relatedTarget", rquickjs::Null)?,
-        },
-    }
-    Ok(())
-}
-
-/// Writes [`MousePayload`]'s fields onto `event_object`, DOM-named — shared
-/// by [`EventPayload::Mouse`] and [`EventPayload::Wheel`] (DOM's
-/// `WheelEvent` extends `MouseEvent`).
-fn set_mouse_fields(event_object: &Object, mouse: &MousePayload) -> rquickjs::Result<()> {
-    event_object.set("clientX", mouse.client_x)?;
-    event_object.set("clientY", mouse.client_y)?;
-    event_object.set("screenX", mouse.screen_x)?;
-    event_object.set("screenY", mouse.screen_y)?;
-    event_object.set("x", mouse.client_x)?;
-    event_object.set("y", mouse.client_y)?;
-    match mouse.related_target {
-        Some(id) => event_object.set("relatedTarget", id)?,
-        None => event_object.set("relatedTarget", rquickjs::Null)?,
-    }
-    // Identical to clientX/clientY today — nothing here scrolls the page
-    // itself, which is the only thing that would tell them apart.
-    event_object.set("pageX", mouse.client_x)?;
-    event_object.set("pageY", mouse.client_y)?;
-    event_object.set("movementX", mouse.movement_x)?;
-    event_object.set("movementY", mouse.movement_y)?;
-    event_object.set("button", mouse.button)?;
-    event_object.set("buttons", mouse.buttons)?;
-    event_object.set("detail", mouse.detail)?;
-    if let Some(source) = mouse.pointer {
-        let (id, kind, primary) = match source {
-            PointerSource::Mouse => (1, "mouse", true),
-            PointerSource::Keyboard => (-1, "", false),
-        };
-        event_object.set("pointerId", id)?;
-        event_object.set("pointerType", kind)?;
-        event_object.set("isPrimary", primary)?;
-        event_object.set("width", 1)?;
-        event_object.set("height", 1)?;
-        // Pointer events report 0.5 while a button is held.
-        event_object.set("pressure", if mouse.buttons == 0 { 0.0 } else { 0.5 })?;
-    }
-    set_modifier_fields(event_object, mouse.modifiers)
-}
-
-/// Writes [`KeyPayload`]'s fields onto `event_object`, DOM-named.
-fn set_key_fields(event_object: &Object, key: &KeyPayload) -> rquickjs::Result<()> {
-    event_object.set("key", key.key.clone())?;
-    event_object.set("repeat", key.repeat)?;
-    // gpui reports no key location or composition state.
-    event_object.set("location", 0)?;
-    event_object.set("isComposing", false)?;
-    set_modifier_fields(event_object, key.modifiers)
-}
-
-/// Writes `modifiers`' fields onto `event_object`, DOM-named — shared by
-/// [`set_mouse_fields`] and [`set_key_fields`].
-fn set_modifier_fields(event_object: &Object, modifiers: gpui::Modifiers) -> rquickjs::Result<()> {
-    event_object.set("ctrlKey", modifiers.control)?;
-    event_object.set("shiftKey", modifiers.shift)?;
-    event_object.set("altKey", modifiers.alt)?;
-    event_object.set("metaKey", modifiers.platform)?;
-    event_object.set(
-        "getModifierState",
-        Function::new(event_object.ctx().clone(), move |name: String| {
-            modifier_state(modifiers, &name)
-        })?,
-    )?;
-    Ok(())
-}
-
-/// Whether the modifier `name` is held. `Accel` is Meta on macOS and Control
-/// elsewhere. Other names return false.
-fn modifier_state(modifiers: gpui::Modifiers, name: &str) -> bool {
-    match name {
-        "Control" => modifiers.control,
-        "Shift" => modifiers.shift,
-        "Alt" => modifiers.alt,
-        "Meta" => modifiers.platform,
-        "Accel" => {
-            if cfg!(target_os = "macos") {
-                modifiers.platform
-            } else {
-                modifiers.control
-            }
-        }
-        _ => false,
-    }
-}
-
 impl EventSink for EventDispatcher {
-    fn listens(&self, node_id: NodeId) -> EventMask {
-        self.listens(node_id)
-    }
-
-    fn dispatch(
-        &self,
-        node_id: NodeId,
-        event: &str,
-        payload: &EventPayload,
-        window: &mut Window,
-        cx: &mut App,
-    ) {
-        self.dispatch(node_id, event, payload, window, cx);
+    fn tracks_pointer(&self) -> bool {
+        self.tracks_pointer()
     }
 
     fn fire(
@@ -1117,11 +635,75 @@ impl EventSink for EventDispatcher {
         }
     }
 
+    fn pointer_input(
+        &self,
+        event: &str,
+        target: NodeId,
+        payload: &EventPayload,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let payload = self.prepare(event, payload, window);
+        let cut = self.cut_by_disabled_button(event, &payload, cx);
+        let (canceled, entered) = self.walk(target, event, &payload, &cut);
+        // The default action reads the tree the listeners' queued jobs leave.
+        if entered {
+            self.drain_jobs_and_refresh(window);
+        }
+        match event {
+            "mousedown" => self.focus_on_press(target, canceled, window, cx),
+            // The scroll rollback of `inca-gpui` reads the flag.
+            "wheel" if canceled => window.prevent_default(),
+            _ => {}
+        }
+    }
+
+    fn hover_changed(&self, node_id: NodeId, hovered: bool, window: &mut Window, cx: &mut App) {
+        {
+            let mut set = self.hovered.borrow_mut();
+            if hovered {
+                set.insert(node_id);
+            } else {
+                set.remove(&node_id);
+            }
+        }
+        self.schedule_hover_report(window, cx);
+    }
+
+    fn key_input(
+        &self,
+        keystroke: &gpui::Keystroke,
+        up: bool,
+        payload: &EventPayload,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let (root, focused) = {
+            let host = self.host.borrow();
+            (host.root, host.focus.focused_node(window, cx))
+        };
+        let target = self.resolve(focused, root);
+        let event = if up { "keyup" } else { "keydown" };
+        let (canceled, entered) = self.walk(target, event, payload, &[]);
+        if entered {
+            self.drain_jobs_and_refresh(window);
+        }
+        if canceled {
+            // Handled for the platform: a shortcut or an input method sees nothing.
+            window.prevent_default();
+            cx.stop_propagation();
+        }
+        self.key_default(keystroke, up, canceled, window, cx);
+    }
+}
+
+impl EventDispatcher {
     // Tab moves focus and dispatches nothing here. The next frame reports it.
     fn key_default(
         &self,
         keystroke: &gpui::Keystroke,
         up: bool,
+        canceled: bool,
         window: &mut Window,
         cx: &mut App,
     ) {
@@ -1134,7 +716,7 @@ impl EventSink for EventDispatcher {
             self.space_down.set(None);
             None
         };
-        if window.default_prevented() {
+        if canceled {
             return;
         }
         let focused_button = || {
@@ -1167,18 +749,6 @@ impl EventSink for EventDispatcher {
             let payload = EventPayload::Mouse(MousePayload::keyboard_click(modifiers));
             self.fire(button, "click", &payload, window, cx);
         }
-    }
-
-    fn hover_changed(&self, node_id: NodeId, hovered: bool, window: &mut Window, cx: &mut App) {
-        {
-            let mut set = self.hovered.borrow_mut();
-            if hovered {
-                set.insert(node_id);
-            } else {
-                set.remove(&node_id);
-            }
-        }
-        self.schedule_hover_report(window, cx);
     }
 }
 
@@ -1233,32 +803,6 @@ mod tests {
     use gpui::{TestAppContext, point, px};
     use inca_gpui::WheelPayload;
 
-    #[test]
-    fn modifier_state_reports_each_held_modifier_and_no_lock() {
-        let mut mismatches = Vec::new();
-        for (name, held) in [
-            ("Control", gpui::Modifiers::control()),
-            ("Shift", gpui::Modifiers::shift()),
-            ("Alt", gpui::Modifiers::alt()),
-            ("Meta", gpui::Modifiers::command()),
-        ] {
-            for other in ["Control", "Shift", "Alt", "Meta", "CapsLock", "NumLock"] {
-                if modifier_state(held, other) != (other == name) {
-                    mismatches.push(format!("{name} held, {other} queried"));
-                }
-            }
-        }
-        let accel = if cfg!(target_os = "macos") {
-            gpui::Modifiers::command()
-        } else {
-            gpui::Modifiers::control()
-        };
-        if !modifier_state(accel, "Accel") || modifier_state(gpui::Modifiers::default(), "Accel") {
-            mismatches.push("Accel".to_string());
-        }
-        assert!(mismatches.is_empty(), "{mismatches:?}");
-    }
-
     /// Every failure a test reporter received, in order.
     type Reported = Rc<RefCell<Vec<EngineError>>>;
 
@@ -1274,17 +818,6 @@ mod tests {
         ));
 
         (dispatcher, host, reported)
-    }
-
-    #[test]
-    fn listens_reports_click_only_where_something_is_registered() {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let registered = host.borrow_mut().tree.create_node("div").unwrap();
-        let quiet = host.borrow_mut().tree.create_node("div").unwrap();
-        host.borrow_mut().listeners.register(registered, "click", 0);
-
-        assert_eq!(dispatcher.listens(registered), EventMask::CLICK);
-        assert_eq!(dispatcher.listens(quiet), EventMask::NONE);
     }
 
     /// `inca-gpui` only ever produces a `button` index in `0..=4`, but
@@ -1316,7 +849,7 @@ mod tests {
 
         let cx = cx.add_empty_window();
         cx.update(|window, cx| {
-            dispatcher.dispatch(node_id, "click", &EventPayload::None, window, cx);
+            dispatcher.fire(node_id, "click", &EventPayload::None, window, cx);
         });
 
         assert!(reported.borrow().is_empty());
@@ -1331,7 +864,7 @@ mod tests {
         // No `__inca_callbacks__` global defined at all.
         let cx = cx.add_empty_window();
         cx.update(|window, cx| {
-            dispatcher.dispatch(node_id, "click", &EventPayload::None, window, cx);
+            dispatcher.fire(node_id, "click", &EventPayload::None, window, cx);
         });
 
         assert!(
@@ -1379,7 +912,7 @@ mod tests {
     }
 
     #[gpui::test]
-    fn a_pending_job_is_drained_even_when_no_listener_ran(cx: &mut TestAppContext) {
+    fn a_pending_job_waits_when_no_listener_ran(cx: &mut TestAppContext) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node_id = host.borrow_mut().tree.create_node("div").unwrap();
         dispatcher
@@ -1391,12 +924,12 @@ mod tests {
 
         let cx = cx.add_empty_window();
         cx.update(|window, cx| {
-            dispatcher.dispatch(node_id, "click", &EventPayload::None, window, cx);
+            dispatcher.fire(node_id, "click", &EventPayload::None, window, cx);
         });
 
         assert!(
-            dispatcher.engine.eval::<bool>("globalThis.ran;").unwrap(),
-            "a job already queued is owed a turn regardless of this event"
+            !dispatcher.engine.eval::<bool>("globalThis.ran;").unwrap(),
+            "an event nobody hears neither enters the engine nor drains it"
         );
     }
 
@@ -1414,7 +947,7 @@ mod tests {
 
         let cx = cx.add_empty_window();
         cx.update(|window, cx| {
-            dispatcher.dispatch(node_id, "click", &EventPayload::None, window, cx);
+            dispatcher.fire(node_id, "click", &EventPayload::None, window, cx);
         });
 
         let reported = reported.borrow();
@@ -1442,7 +975,7 @@ mod tests {
 
         let cx = cx.add_empty_window();
         cx.update(|window, cx| {
-            dispatcher.dispatch(node_id, "click", &EventPayload::None, window, cx);
+            dispatcher.fire(node_id, "click", &EventPayload::None, window, cx);
         });
 
         assert_eq!(reported.borrow().len(), 1);
@@ -1609,7 +1142,7 @@ mod tests {
         let cx = cx.add_empty_window();
         let mut mismatches = Vec::new();
         // (event, bubbles, cancelable, composed)
-        for (event, bubbles, cancelable, composed) in [
+        let rows = [
             ("click", true, true, true),
             ("dblclick", true, true, true),
             ("auxclick", true, true, true),
@@ -1618,16 +1151,22 @@ mod tests {
             ("mouseleave", false, false, false),
             ("mouseover", true, true, true),
             ("mouseout", true, true, true),
+            ("mousedown", true, true, true),
+            ("mouseup", true, true, true),
+            ("mousemove", true, true, true),
             ("wheel", true, true, true),
             ("keydown", true, true, true),
+            ("keyup", true, true, true),
             ("focus", false, false, true),
             ("blur", false, false, true),
             ("focusin", true, false, true),
             ("focusout", true, false, true),
-        ] {
+        ];
+        assert_eq!(rows.len(), EVENTS.len(), "every EVENTS row has a test row");
+        for (event, bubbles, cancelable, composed) in rows {
             listen(&host, node, event);
             cx.update(|window, cx| {
-                dispatcher.dispatch(node, event, &EventPayload::None, window, cx);
+                dispatcher.fire(node, event, &EventPayload::None, window, cx);
             });
             let rows = seen_rows(&dispatcher);
             let want = serde_json::json!([
@@ -1648,7 +1187,7 @@ mod tests {
         listen(&host, node, "menu:1");
         let cx = cx.add_empty_window();
         cx.update(|window, cx| {
-            dispatcher.dispatch(node, "menu:1", &EventPayload::None, window, cx);
+            dispatcher.fire(node, "menu:1", &EventPayload::None, window, cx);
         });
         let rows = seen_rows(&dispatcher);
         assert_eq!(
@@ -1657,27 +1196,6 @@ mod tests {
                 .as_array()
                 .unwrap()[..]
         );
-    }
-
-    #[gpui::test]
-    fn a_non_cancelable_event_stays_unprevented_on_every_node(cx: &mut TestAppContext) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let child = host.borrow_mut().tree.create_node("div").unwrap();
-        let parent = host.borrow_mut().tree.create_node("div").unwrap();
-        dispatcher.engine.eval::<()>(RECORDER).unwrap();
-        listen(&host, child, "focus");
-        listen(&host, parent, "focus");
-        let cx = cx.add_empty_window();
-        cx.update(|window, cx| {
-            for node in [child, parent] {
-                dispatcher.dispatch(node, "focus", &EventPayload::None, window, cx);
-            }
-        });
-        for row in seen_rows(&dispatcher) {
-            assert_eq!(row[4], serde_json::json!(false));
-            assert_eq!(row[5], serde_json::json!(false));
-            assert_eq!(row[6], serde_json::json!(2), "focus is non-bubbling");
-        }
     }
 
     #[gpui::test]
@@ -1724,17 +1242,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn every_event_kind_has_a_table_row() {
-        for kind in EventKind::ALL {
-            assert!(
-                EVENTS.iter().any(|spec| spec.name == kind.name()),
-                "{} has a row",
-                kind.name()
-            );
-        }
-    }
-
     #[gpui::test]
     fn time_stamp_counts_milliseconds_from_the_host_start_and_grows(cx: &mut TestAppContext) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
@@ -1744,7 +1251,7 @@ mod tests {
         let cx = cx.add_empty_window();
         for _ in 0..3 {
             cx.update(|window, cx| {
-                dispatcher.dispatch(node, "click", &EventPayload::None, window, cx);
+                dispatcher.fire(node, "click", &EventPayload::None, window, cx);
             });
         }
         let stamps: Vec<f64> = seen_rows(&dispatcher)
@@ -1786,8 +1293,8 @@ mod tests {
                 "true,false",
             ),
             (
-                "(() => { const p = e.preventDefault; p(); return e.defaultPrevented; })()",
-                "true",
+                "(() => { const p = e.preventDefault; try { p(); } catch (err) { return `${err instanceof TypeError}:${e.defaultPrevented}`; } return 'ran'; })()",
+                "true:false",
             ),
             (
                 "(e.preventDefault(), (() => { try { e.defaultPrevented = false; } catch {} return e.defaultPrevented; })())",
@@ -1805,7 +1312,7 @@ mod tests {
                 ))
                 .unwrap();
             cx.update(|window, cx| {
-                dispatcher.dispatch(node, "click", &EventPayload::None, window, cx);
+                dispatcher.fire(node, "click", &EventPayload::None, window, cx);
             });
             let got = dispatcher.engine.eval::<String>("globalThis.out").unwrap();
             if got != want {
@@ -1868,7 +1375,7 @@ mod tests {
     }
 
     #[gpui::test]
-    fn without_a_recorded_target_every_event_targets_its_own_node(cx: &mut TestAppContext) {
+    fn every_event_fired_at_a_node_targets_that_node(cx: &mut TestAppContext) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [outer, _, child] = tree_of_three(&host);
         dispatcher.engine.eval::<()>(PATHS).unwrap();
@@ -1893,7 +1400,7 @@ mod tests {
         let cx = cx.add_empty_window();
         cx.update(|window, cx| {
             for event in events {
-                dispatcher.dispatch(child, event, &EventPayload::None, window, cx);
+                dispatcher.fire(child, event, &EventPayload::None, window, cx);
             }
         });
         let rows = seen_rows(&dispatcher);
@@ -1917,7 +1424,7 @@ mod tests {
         listen(&host, parent, "click");
         let cx = cx.add_empty_window();
         cx.update(|window, cx| {
-            dispatcher.dispatch(parent, "click", &EventPayload::None, window, cx);
+            dispatcher.fire(parent, "click", &EventPayload::None, window, cx);
         });
         assert_eq!(
             seen_rows(&dispatcher)[0][3],
@@ -2000,7 +1507,7 @@ mod tests {
         let mut mismatches = Vec::new();
         for (event, payload, fields) in cases {
             listen(&host, node, event);
-            cx.update(|window, cx| dispatcher.dispatch(node, event, &payload, window, cx));
+            cx.update(|window, cx| dispatcher.fire(node, event, &payload, window, cx));
             let want = format!("{event}:true:true:{fields}");
             let got = seen(&dispatcher);
             if got != serde_json::json!([want]) {
@@ -2115,11 +1622,11 @@ mod tests {
         };
 
         cx.update(|window, cx| {
-            dispatcher.dispatch(outer, "mouseover", &at(Some(parent)), window, cx);
-            dispatcher.dispatch(outer, "mouseover", &at(Some(99)), window, cx);
+            dispatcher.fire(outer, "mouseover", &at(Some(parent)), window, cx);
+            dispatcher.fire(outer, "mouseover", &at(Some(99)), window, cx);
             for related_target in [Some(parent), Some(99), None] {
                 let payload = EventPayload::Focus { related_target };
-                dispatcher.dispatch(outer, "focus", &payload, window, cx);
+                dispatcher.fire(outer, "focus", &payload, window, cx);
             }
         });
         assert_eq!(
@@ -2150,5 +1657,410 @@ mod tests {
         host.borrow_mut().tree.remove_child(outer, parent).unwrap();
         cx.update(|window, cx| dispatcher.report_hover(None, window, cx));
         assert_eq!(seen(&dispatcher), serde_json::json!([]));
+    }
+
+    /// Fires `event` at `start` once and returns `globalThis.out` as JSON.
+    fn fire_and_read(
+        cx: &mut TestAppContext,
+        dispatcher: &EventDispatcher,
+        start: NodeId,
+        event: &str,
+    ) -> serde_json::Value {
+        let cx = cx.add_empty_window();
+        cx.update(|window, cx| {
+            dispatcher.fire(start, event, &EventPayload::None, window, cx);
+        });
+        let json = dispatcher
+            .engine
+            .eval::<String>("JSON.stringify(globalThis.out)")
+            .unwrap();
+        serde_json::from_str(&json).unwrap()
+    }
+
+    fn callbacks(dispatcher: &EventDispatcher, js: &str) {
+        dispatcher
+            .engine
+            .eval::<()>(&format!(
+                "globalThis.out = []; globalThis.__inca_callbacks__ = {{ {js} }};"
+            ))
+            .unwrap();
+    }
+
+    #[gpui::test]
+    fn one_event_object_reaches_every_node(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [outer, parent, child] = tree_of_three(&host);
+        for node in [child, parent, outer] {
+            listen(&host, node, "click");
+        }
+        callbacks(
+            &dispatcher,
+            "0: (e) => { globalThis.first ??= e; e.seen = (e.seen ?? 0) + 1; \
+                out.push([e === first, e.seen]); }",
+        );
+
+        let out = fire_and_read(cx, &dispatcher, child, "click");
+
+        assert_eq!(out, serde_json::json!([[true, 1], [true, 2], [true, 3]]));
+    }
+
+    #[gpui::test]
+    fn after_dispatch_current_target_is_null_phase_0_and_stop_flags_clear(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, _, child] = tree_of_three(&host);
+        listen(&host, child, "click");
+        callbacks(
+            &dispatcher,
+            "0: (e) => { globalThis.kept = e; e.stopPropagation(); e.preventDefault(); \
+                out.push([e.currentTarget, e.eventPhase, e.cancelBubble]); }",
+        );
+        let during = fire_and_read(cx, &dispatcher, child, "click");
+        assert_eq!(during, serde_json::json!([[child, 2, true]]));
+
+        let after = dispatcher
+            .engine
+            .eval::<String>(
+                "JSON.stringify([kept.currentTarget, kept.eventPhase, kept.cancelBubble, \
+                 kept.defaultPrevented, kept.composedPath().length])",
+            )
+            .unwrap();
+        assert_eq!(after, "[null,0,false,true,0]");
+    }
+
+    #[gpui::test]
+    fn the_path_is_fixed_when_dispatch_starts(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [outer, parent, child] = tree_of_three(&host);
+        for node in [child, parent, outer] {
+            listen(&host, node, "click");
+        }
+        callbacks(
+            &dispatcher,
+            &format!(
+                "0: (e) => {{ out.push([e.currentTarget, e.composedPath()]); \
+                    if (e.currentTarget === {child}) \
+                        __inca_native__.removeChild({parent}, {child}); }}"
+            ),
+        );
+
+        let out = fire_and_read(cx, &dispatcher, child, "click");
+
+        let path = serde_json::json!([child, parent, outer]);
+        assert_eq!(
+            out,
+            serde_json::json!([[child, path], [parent, path], [outer, path]])
+        );
+    }
+
+    #[gpui::test]
+    fn a_listener_removed_mid_dispatch_does_not_run(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, parent, child] = tree_of_three(&host);
+        for (node, id) in [(child, 0), (child, 1), (parent, 2)] {
+            host.borrow_mut().listeners.register(node, "click", id);
+        }
+        callbacks(
+            &dispatcher,
+            &format!(
+                "0: () => {{ out.push(0); \
+                    __inca_native__.removeEventListener({child}, 'click', 1); \
+                    __inca_native__.removeEventListener({parent}, 'click', 2); }}, \
+                 1: () => out.push(1), \
+                 2: () => out.push(2)"
+            ),
+        );
+
+        let out = fire_and_read(cx, &dispatcher, child, "click");
+
+        assert_eq!(out, serde_json::json!([0]));
+    }
+
+    #[gpui::test]
+    fn a_listener_added_to_an_ancestor_mid_dispatch_runs_and_one_added_to_the_node_waits(
+        cx: &mut TestAppContext,
+    ) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, parent, child] = tree_of_three(&host);
+        host.borrow_mut().listeners.register(child, "click", 0);
+        host.borrow_mut().listeners.register(parent, "click", 1);
+        callbacks(
+            &dispatcher,
+            &format!(
+                "0: () => {{ out.push(0); \
+                    __inca_native__.addEventListener({child}, 'click', 2); \
+                    __inca_native__.addEventListener({parent}, 'click', 3); }}, \
+                 1: () => out.push(1), 2: () => out.push(2), 3: () => out.push(3)"
+            ),
+        );
+
+        let out = fire_and_read(cx, &dispatcher, child, "click");
+
+        assert_eq!(out, serde_json::json!([0, 1, 3]));
+    }
+
+    #[gpui::test]
+    fn each_dispatch_takes_the_next_event_id_and_an_unheard_one_takes_none(
+        cx: &mut TestAppContext,
+    ) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, parent, child] = tree_of_three(&host);
+        listen(&host, parent, "click");
+        listen(&host, parent, "focusin");
+        callbacks(&dispatcher, "0: (e) => out.push([e.type, e.eventId])");
+        let cx = cx.add_empty_window();
+
+        cx.update(|window, cx| {
+            let none = EventPayload::None;
+            dispatcher.fire(child, "click", &none, window, cx);
+            dispatcher.fire(child, "keydown", &none, window, cx);
+            dispatcher.fire(child, "click", &none, window, cx);
+            dispatcher.fire(child, "focusin", &none, window, cx);
+        });
+
+        let out = dispatcher
+            .engine
+            .eval::<String>("JSON.stringify(out)")
+            .unwrap();
+        assert_eq!(out, r#"[["click",1],["click",2],["focusin",3]]"#);
+    }
+
+    #[gpui::test]
+    fn stop_propagation_keeps_the_nodes_other_listeners_and_stop_immediate_does_not(
+        cx: &mut TestAppContext,
+    ) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, parent, child] = tree_of_three(&host);
+        for (node, id) in [(child, 0), (child, 1), (parent, 2)] {
+            host.borrow_mut().listeners.register(node, "click", id);
+        }
+        callbacks(
+            &dispatcher,
+            "0: (e) => { out.push(0); globalThis.immediate ? \
+                    e.stopImmediatePropagation() : e.stopPropagation(); }, \
+             1: () => out.push(1), 2: () => out.push(2)",
+        );
+        let stopped = fire_and_read(cx, &dispatcher, child, "click");
+        assert_eq!(stopped, serde_json::json!([0, 1]));
+
+        dispatcher
+            .engine
+            .eval::<()>("out.length = 0; globalThis.immediate = true;")
+            .unwrap();
+        let immediate = fire_and_read(cx, &dispatcher, child, "click");
+        assert_eq!(immediate, serde_json::json!([0]));
+    }
+
+    #[gpui::test]
+    fn every_event_shares_one_prototype_and_its_methods(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        listen(&host, node, "click");
+        callbacks(
+            &dispatcher,
+            "0: (e) => { (globalThis.events ??= []).push(e); }",
+        );
+        fire_and_read(cx, &dispatcher, node, "click");
+        fire_and_read(cx, &dispatcher, node, "click");
+
+        let same = dispatcher
+            .engine
+            .eval::<bool>(
+                "const [a, b] = events; \
+                 a !== b && Object.getPrototypeOf(a) === Object.getPrototypeOf(b) \
+                    && a.preventDefault === b.preventDefault \
+                    && Object.getPrototypeOf(a) !== Object.prototype",
+            )
+            .unwrap();
+        assert!(same);
+    }
+
+    #[gpui::test]
+    fn an_event_method_throws_a_type_error_for_any_receiver_that_is_not_an_event(
+        cx: &mut TestAppContext,
+    ) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        listen(&host, node, "click");
+        callbacks(
+            &dispatcher,
+            "0: (e) => { \
+                const proto = Object.getPrototypeOf(e); \
+                const getter = (name) => Object.getOwnPropertyDescriptor(proto, name).get; \
+                const setter = (name) => Object.getOwnPropertyDescriptor(proto, name).set; \
+                const calls = [ \
+                    e.stopPropagation, e.stopImmediatePropagation, e.preventDefault, \
+                    e.composedPath, getter('defaultPrevented'), getter('returnValue'), \
+                    getter('cancelBubble'), (r) => setter('returnValue').call(r, false), \
+                    (r) => setter('cancelBubble').call(r, true), \
+                ]; \
+                for (const receiver of [undefined, null, 5, {}, Object.create(e), proto]) { \
+                    for (const call of calls) { \
+                        try { call.call(receiver, receiver); out.push('ran'); } \
+                        catch (err) { out.push(err instanceof TypeError); } \
+                    } \
+                } \
+                e.preventDefault(); \
+                out.push(e.defaultPrevented); }",
+        );
+
+        let out = fire_and_read(cx, &dispatcher, node, "click");
+
+        let mut want = vec![serde_json::json!(true); 6 * 9];
+        want.push(serde_json::json!(true));
+        assert_eq!(out, serde_json::Value::Array(want));
+    }
+
+    #[gpui::test]
+    fn tracks_pointer_only_with_a_listener_or_a_focusable_node(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        assert!(!dispatcher.tracks_pointer());
+
+        host.borrow_mut().listeners.register(node, "keydown", 0);
+        assert!(dispatcher.tracks_pointer());
+        host.borrow_mut().listeners.unregister(node, "keydown", 0);
+        assert!(!dispatcher.tracks_pointer());
+
+        host.borrow_mut()
+            .tree
+            .set_attribute(node, "tabindex", "0")
+            .unwrap();
+        host.borrow_mut().focus.mark_tab_dirty(node);
+        let cx = cx.add_empty_window();
+        cx.update(|window, cx| {
+            let host = &mut *host.borrow_mut();
+            let _ = host.focus.apply_pending(&host.tree, window, cx);
+        });
+        assert!(dispatcher.tracks_pointer());
+    }
+
+    #[gpui::test]
+    fn an_event_nobody_keeps_is_collected_with_its_state(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        listen(&host, node, "click");
+        callbacks(
+            &dispatcher,
+            "0: (e) => { globalThis.weak = new WeakRef(e); e.stopPropagation(); }",
+        );
+        fire_and_read(cx, &dispatcher, node, "click");
+
+        dispatcher.engine.with(|ctx| ctx.run_gc());
+
+        let gone = dispatcher
+            .engine
+            .eval::<bool>("weak.deref() === undefined")
+            .unwrap();
+        assert!(gone);
+    }
+
+    #[gpui::test]
+    fn an_unlistened_pointer_or_key_input_leaves_the_engine_untouched(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        listen(&host, node, "click");
+        dispatcher
+            .engine
+            .eval::<()>(
+                "globalThis.ran = false; Promise.resolve().then(() => globalThis.ran = true);",
+            )
+            .unwrap();
+        let cx = cx.add_empty_window();
+        let key = gpui::Keystroke::parse("a").unwrap();
+        let ran = |d: &EventDispatcher| d.engine.eval::<bool>("globalThis.ran").unwrap();
+
+        cx.update(|window, cx| {
+            let sink: &dyn EventSink = &dispatcher;
+            sink.pointer_input("mousemove", node, &mouse_at(1.0, 1.0), window, cx);
+            sink.pointer_input("wheel", node, &wheel_at(1.0, 1.0), window, cx);
+            sink.pointer_input("mousedown", node, &mouse_at(1.0, 1.0), window, cx);
+            sink.pointer_input("mouseup", node, &mouse_at(1.0, 1.0), window, cx);
+            sink.key_input(&key, false, &EventPayload::None, window, cx);
+        });
+        assert!(!ran(&dispatcher), "no listener, no drain");
+
+        for event in ["mousemove", "wheel", "keydown"] {
+            // A key goes to the root when nothing is focused.
+            let listener = if event == "keydown" {
+                host.borrow().root
+            } else {
+                node
+            };
+            listen(&host, listener, event);
+            dispatcher
+                .engine
+                .eval::<()>(
+                    "globalThis.ran = false; Promise.resolve().then(() => globalThis.ran = true);",
+                )
+                .unwrap();
+            cx.update(|window, cx| {
+                let sink: &dyn EventSink = &dispatcher;
+                match event {
+                    "keydown" => sink.key_input(&key, false, &EventPayload::None, window, cx),
+                    "wheel" => sink.pointer_input(event, node, &wheel_at(1.0, 1.0), window, cx),
+                    _ => sink.pointer_input(event, node, &mouse_at(1.0, 1.0), window, cx),
+                }
+            });
+            assert!(ran(&dispatcher), "a heard {event} drains");
+        }
+    }
+
+    #[gpui::test]
+    fn stopping_a_handled_event_changes_nothing(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, parent, child] = tree_of_three(&host);
+        listen(&host, child, "click");
+        listen(&host, parent, "click");
+        callbacks(
+            &dispatcher,
+            "0: (e) => { out.push(e.type); if (!globalThis.kept) globalThis.kept = e; }",
+        );
+        fire_and_read(cx, &dispatcher, child, "click");
+        let state = dispatcher
+            .engine
+            .eval::<String>(
+                "kept.stopPropagation(); kept.stopImmediatePropagation(); kept.cancelBubble = true; \
+                 String(kept.cancelBubble)",
+            )
+            .unwrap();
+        assert_eq!(state, "false");
+
+        let again = fire_and_read(cx, &dispatcher, child, "click");
+        assert_eq!(
+            again,
+            serde_json::json!(["click", "click", "click", "click"])
+        );
+    }
+
+    #[gpui::test]
+    fn a_script_that_patches_the_builtins_cannot_reach_or_break_event_state(
+        cx: &mut TestAppContext,
+    ) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        listen(&host, node, "click");
+        dispatcher
+            .engine
+            .eval::<()>(
+                "WeakMap.prototype.get = () => { throw new Error('get'); }; \
+                 WeakMap.prototype.set = () => { throw new Error('set'); }; \
+                 Reflect.apply = () => { throw new Error('apply'); };",
+            )
+            .unwrap();
+        callbacks(
+            &dispatcher,
+            "0: (e) => { \
+                const proto = Object.getPrototypeOf(e); \
+                const names = (o) => [...Object.getOwnPropertyNames(o), \
+                    ...Object.getOwnPropertySymbols(o).map(String)]; \
+                e.preventDefault(); \
+                out.push(e.defaultPrevented, \
+                    ['stop', 'immediate', 'canceled', 'dispatching', 'path'] \
+                        .some((n) => names(e).includes(n) || names(proto).includes(n))); }",
+        );
+
+        let out = fire_and_read(cx, &dispatcher, node, "click");
+
+        assert_eq!(out, serde_json::json!([true, false]));
     }
 }

@@ -13,8 +13,9 @@ virtual tree (`inca-gpui`'s `VirtualTree`):
   tree, register input-event callbacks, and free what it no longer needs.
 - `dispatch` carries a native input event the other way: from `gpui` into
   whichever JS callbacks are registered for it, via
-  `globalThis.__inca_callbacks__`, implementing `inca-gpui`'s `EventSink`
-  trait so the render layer never has to depend on `QuickJS` itself.
+  `globalThis.__inca_callbacks__`, with one event object passed along the
+  path of its target. It implements `inca-gpui`'s `EventSink` trait so the
+  render layer never has to depend on `QuickJS` itself.
 - `dev` installs `globalThis.__inca_dev__` — the relay a bundler integration
   uses to exchange messages with the host, and `setLoadFailed`, which the app
   calls to report that its load failed or recovered.

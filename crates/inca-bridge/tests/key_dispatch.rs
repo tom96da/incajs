@@ -1,10 +1,9 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Integration tests for `"keydown"`/`"keyup"` (`crate::element`'s
-//! `wire_stateless`): routing from GPUI's own key dispatch, through a real
-//! `FocusRegistry`, to the JS callbacks registered for it — see
-//! `KeyableRoot::render` below.
+//! Integration tests for `"keydown"`/`"keyup"`: routing from GPUI's own key
+//! dispatch, through a real `FocusRegistry`, to the JS callbacks registered
+//! for it — see `KeyableRoot::render` below.
 
 #![allow(clippy::unwrap_used)]
 
@@ -12,9 +11,10 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use gpui::{
-    Context, KeyUpEvent, Keystroke, PlatformInput, Render, TestAppContext, Window, prelude::*,
+    AnyWindowHandle, Context, DispatchEventResult, KeyBinding, KeyDownEvent, KeyUpEvent, Keystroke,
+    PlatformInput, Render, TestAppContext, Window, prelude::*,
 };
-use inca_bridge::{EventDispatcher, Host};
+use inca_bridge::{EventDispatcher, EventListeners, Host};
 use inca_gpui::{NodeId, render_tree_with_events};
 use inca_jsenv::Engine;
 
@@ -75,42 +75,6 @@ fn a_keystroke() -> Keystroke {
     }
 }
 
-#[gpui::test]
-fn a_key_down_bubbles_from_the_focused_node_to_its_ancestor(cx: &mut TestAppContext) {
-    let (host, parent, child) = build_key_pair();
-    let engine = Rc::new(Engine::new().unwrap());
-    install_key_recorder(&engine);
-    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
-
-    let window = cx.add_window(|_, _| KeyableRoot {
-        host: Rc::clone(&host),
-        node: parent,
-        dispatcher,
-    });
-    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-        .unwrap();
-    cx.update_window(window.into(), |_, window, _cx| window.activate_window())
-        .unwrap();
-
-    cx.update_window(window.into(), |_root, window, cx| {
-        host.borrow_mut().focus.request_focus(child);
-        window.draw(cx).clear(cx);
-    })
-    .unwrap();
-    cx.run_until_parked();
-    engine.eval::<()>("globalThis.seen = [];").unwrap();
-
-    cx.simulate_keystrokes(window.into(), "a");
-
-    assert_eq!(
-        engine
-            .eval::<String>("JSON.stringify(globalThis.seen)")
-            .unwrap(),
-        format!(r#"["keydown:{child}:a","keydown:{parent}:a"]"#),
-        "keydown must bubble from the focused node up through its ancestors"
-    );
-}
-
 /// With nothing focused, a key goes to the host root, which is the event's
 /// `target`, and bubbles from there.
 #[gpui::test]
@@ -161,13 +125,21 @@ fn a_key_event_with_nothing_focused_targets_the_root(cx: &mut TestAppContext) {
     );
 }
 
-#[gpui::test]
-fn a_key_up_also_bubbles_from_the_focused_node(cx: &mut TestAppContext) {
+gpui::actions!(key_dispatch_tests, [Bound]);
+
+/// A window of the `build_key_pair` tree with its child focused. Callback 0
+/// is `js`; the parent and the child listen for `keydown` and `keyup`.
+type Pair = (AnyWindowHandle, Rc<Engine>, Rc<RefCell<Host>>, [NodeId; 2]);
+
+fn focused_pair(cx: &mut TestAppContext, js: &str) -> Pair {
     let (host, parent, child) = build_key_pair();
     let engine = Rc::new(Engine::new().unwrap());
-    install_key_recorder(&engine);
+    engine
+        .eval::<()>(&format!(
+            "globalThis.seen = []; globalThis.__inca_callbacks__ = {{ 0: (e) => {{ {js} }} }};"
+        ))
+        .unwrap();
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
-
     let window = cx.add_window(|_, _| KeyableRoot {
         host: Rc::clone(&host),
         node: parent,
@@ -177,121 +149,125 @@ fn a_key_up_also_bubbles_from_the_focused_node(cx: &mut TestAppContext) {
         .unwrap();
     cx.update_window(window.into(), |_, window, _cx| window.activate_window())
         .unwrap();
-
     cx.update_window(window.into(), |_root, window, cx| {
         host.borrow_mut().focus.request_focus(child);
         window.draw(cx).clear(cx);
     })
     .unwrap();
     cx.run_until_parked();
-    engine.eval::<()>("globalThis.seen = [];").unwrap();
+    (window.into(), engine, host, [parent, child])
+}
 
-    cx.update_window(window.into(), |_root, window, cx| {
-        window.dispatch_event(
-            PlatformInput::KeyUp(KeyUpEvent {
-                keystroke: a_keystroke(),
-            }),
-            cx,
-        );
-    })
-    .unwrap();
-    cx.run_until_parked();
+/// What the platform is told about one key press or release.
+fn platform_result(
+    cx: &mut TestAppContext,
+    window: AnyWindowHandle,
+    up: bool,
+    key: &str,
+) -> DispatchEventResult {
+    let keystroke = Keystroke::parse(key).unwrap();
+    let event = if up {
+        PlatformInput::KeyUp(KeyUpEvent { keystroke })
+    } else {
+        PlatformInput::KeyDown(KeyDownEvent {
+            keystroke,
+            is_held: false,
+            prefer_character_input: false,
+        })
+    };
+    cx.update_window(window, |_, window, cx| window.dispatch_event(event, cx))
+        .unwrap()
+}
 
+fn seen(engine: &Engine) -> String {
+    engine
+        .eval::<String>("JSON.stringify(globalThis.seen)")
+        .unwrap()
+}
+
+#[gpui::test]
+fn a_canceled_key_event_is_reported_to_the_platform_as_handled(cx: &mut TestAppContext) {
+    let (window, engine, _host, _) = focused_pair(cx, "seen.push(e.type); e.preventDefault();");
+
+    for up in [false, true] {
+        let result = platform_result(cx, window, up, "a");
+        assert!(!result.propagate, "up: {up}");
+        assert!(result.default_prevented, "up: {up}");
+    }
     assert_eq!(
-        engine
-            .eval::<String>("JSON.stringify(globalThis.seen)")
-            .unwrap(),
-        format!(r#"["keyup:{child}:a","keyup:{parent}:a"]"#)
+        seen(&engine),
+        r#"["keydown","keydown","keyup","keyup"]"#,
+        "the listeners of both nodes ran before the key was reported handled"
     );
 }
 
 #[gpui::test]
-fn a_key_event_and_its_bubble_share_an_event_id_and_the_next_key_gets_a_higher_one(
-    cx: &mut TestAppContext,
-) {
-    let (host, parent, child) = build_key_pair();
-    let engine = Rc::new(Engine::new().unwrap());
-    engine
-        .eval::<()>(
-            "globalThis.seen = []; \
-             globalThis.__inca_callbacks__ = { \
-                0: (event) => { globalThis.seen.push(event.eventId); } \
-             };",
-        )
-        .unwrap();
-    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
-    let window = cx.add_window(|_, _| KeyableRoot {
-        host: Rc::clone(&host),
-        node: parent,
-        dispatcher,
-    });
-    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-        .unwrap();
-    cx.update_window(window.into(), |_, window, _cx| window.activate_window())
-        .unwrap();
-    cx.update_window(window.into(), |_root, window, cx| {
-        host.borrow_mut().focus.request_focus(child);
-        window.draw(cx).clear(cx);
-    })
-    .unwrap();
-    cx.run_until_parked();
-    engine.eval::<()>("globalThis.seen = [];").unwrap();
+fn a_stopped_key_event_is_reported_to_the_platform_as_unhandled(cx: &mut TestAppContext) {
+    let (window, engine, _host, _) = focused_pair(cx, "seen.push(e.type); e.stopPropagation();");
 
-    cx.simulate_keystrokes(window.into(), "a");
-    cx.simulate_keystrokes(window.into(), "b");
-
-    let seen: Vec<u64> = serde_json::from_str(
-        &engine
-            .eval::<String>("JSON.stringify(globalThis.seen)")
-            .unwrap(),
-    )
-    .unwrap();
-    assert_eq!(seen.len(), 4);
-    assert_eq!(seen[0], seen[1]);
-    assert_eq!(seen[2], seen[3]);
-    assert!(seen[2] > seen[0]);
+    for up in [false, true] {
+        let result = platform_result(cx, window, up, "a");
+        assert!(result.propagate && !result.default_prevented, "up: {up}");
+    }
+    assert_eq!(seen(&engine), r#"["keydown","keyup"]"#);
 }
 
 #[gpui::test]
-fn a_repeated_key_gets_a_new_event_id_each_time(cx: &mut TestAppContext) {
-    let (host, parent, child) = build_key_pair();
-    let engine = Rc::new(Engine::new().unwrap());
-    engine
-        .eval::<()>(
-            "globalThis.seen = []; \
-             globalThis.__inca_callbacks__ = { \
-                0: (event) => { globalThis.seen.push(event.eventId); } \
-             };",
-        )
-        .unwrap();
-    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
-    let window = cx.add_window(|_, _| KeyableRoot {
-        host: Rc::clone(&host),
-        node: parent,
-        dispatcher,
+fn a_key_event_nobody_listens_for_is_reported_to_the_platform_as_unhandled(
+    cx: &mut TestAppContext,
+) {
+    let (window, engine, host, _) = focused_pair(cx, "seen.push(e.type); e.preventDefault();");
+    host.borrow_mut().listeners = EventListeners::default();
+
+    let result = platform_result(cx, window, false, "a");
+
+    assert!(result.propagate && !result.default_prevented);
+    assert_eq!(seen(&engine), "[]");
+}
+
+#[gpui::test]
+fn a_bound_action_runs_and_no_listener_sees_its_key(cx: &mut TestAppContext) {
+    let (window, engine, _host, _) = focused_pair(cx, "seen.push(e.type);");
+    let acted = Rc::new(RefCell::new(0));
+    cx.update(|cx| {
+        cx.bind_keys([KeyBinding::new("b", Bound, None)]);
+        let acted = Rc::clone(&acted);
+        cx.on_action(move |_: &Bound, _| *acted.borrow_mut() += 1);
     });
-    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-        .unwrap();
-    cx.update_window(window.into(), |_, window, _cx| window.activate_window())
-        .unwrap();
-    cx.update_window(window.into(), |_root, window, cx| {
-        host.borrow_mut().focus.request_focus(child);
-        window.draw(cx).clear(cx);
-    })
-    .unwrap();
-    cx.run_until_parked();
-    engine.eval::<()>("globalThis.seen = [];").unwrap();
 
-    cx.simulate_keystrokes(window.into(), "a a");
+    let result = platform_result(cx, window, false, "b");
 
-    let seen: Vec<u64> = serde_json::from_str(
-        &engine
-            .eval::<String>("JSON.stringify(globalThis.seen)")
-            .unwrap(),
-    )
-    .unwrap();
-    assert_eq!(seen.len(), 4);
-    assert_eq!(seen[0], seen[1]);
-    assert_eq!(seen[2], seen[3]);
-    assert!(seen[2] > seen[0]);
+    assert_eq!(*acted.borrow(), 1);
+    assert_eq!(seen(&engine), "[]");
+    assert!(!result.propagate);
+}
+
+#[gpui::test]
+fn a_key_event_bubbles_from_the_focused_node_to_its_ancestor(cx: &mut TestAppContext) {
+    let js = "seen.push(`${e.type}:${e.currentTarget}:${e.key}`);";
+    let (window, engine, _host, [parent, child]) = focused_pair(cx, js);
+
+    cx.simulate_keystrokes(window, "a");
+    platform_result(cx, window, true, "a");
+
+    assert_eq!(
+        seen(&engine),
+        format!(
+            r#"["keydown:{child}:a","keydown:{parent}:a","keyup:{child}:a","keyup:{parent}:a"]"#
+        )
+    );
+}
+
+#[gpui::test]
+fn each_key_event_takes_its_own_event_id_shared_along_its_bubble(cx: &mut TestAppContext) {
+    let (window, engine, _host, _) = focused_pair(cx, "seen.push(e.eventId);");
+
+    cx.simulate_keystrokes(window, "a a b");
+
+    let ids: Vec<u64> = serde_json::from_str(&seen(&engine)).unwrap();
+    assert_eq!(ids.len(), 6);
+    for pair in ids.chunks(2) {
+        assert_eq!(pair[0], pair[1]);
+    }
+    assert!(ids[0] >= 1 && ids[2] > ids[0] && ids[4] > ids[2], "{ids:?}");
 }

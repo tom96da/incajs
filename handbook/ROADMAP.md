@@ -180,9 +180,10 @@ send.
    GPUI's own element states, instead of re-derived in JS. Phase 12's
    `hover:` and `focus:` Tailwind variants build on this.
 6. **Event payloads**: a listener's callback receives
-   `{ type, target, currentTarget, ...payload }`. Each wired input has a name
-   and an `EventMask` bit in `crates/inca-gpui`'s `EventKind`, and a new
-   input adds a variant and a payload shape with no new plumbing.
+   `{ type, target, currentTarget, ...payload }`. Each input has a name and a
+   row in the event table of `crates/inca-bridge`, and a new input adds a row,
+   a payload shape and, for a pointer input, a handler in the pointer tracker
+   of `crates/inca-gpui`.
 
 ## Phase 5: Accessibility (future)
 

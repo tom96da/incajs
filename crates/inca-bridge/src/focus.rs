@@ -204,6 +204,12 @@ impl FocusRegistry {
         self.handles.get(&node_id).cloned()
     }
 
+    /// Whether any node has a handle, which makes the node focusable.
+    #[must_use]
+    pub fn has_handles(&self) -> bool {
+        !self.handles.is_empty()
+    }
+
     /// The node holding focus in `window` right now.
     #[must_use]
     pub fn focused_node(&self, window: &Window, cx: &App) -> Option<NodeId> {
@@ -295,7 +301,7 @@ impl FocusRegistry {
     ///
     /// Returns the transitions rather than dispatching them directly: the
     /// caller holds `self` through a borrow of the same `Rc<RefCell<Host>>`
-    /// that `EventSink::dispatch` re-borrows internally to look up
+    /// that `EventSink::fire` re-borrows internally to look up
     /// callbacks, so dispatching from inside this call would panic with
     /// "already mutably borrowed". The caller dispatches after this
     /// returns, once that borrow is released.

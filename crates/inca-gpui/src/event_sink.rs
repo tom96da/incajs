@@ -8,110 +8,6 @@ use gpui::{
 
 use crate::tree::NodeId;
 
-/// Defines [`EventKind`], its `ALL` slice and the [`EventMask`] bit constants
-/// from one list.
-macro_rules! event_kinds {
-    ($($variant:ident => $name:literal, $bit:ident),+ $(,)?) => {
-        /// A native event kind `inca-gpui` can wire a node for.
-        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        pub enum EventKind {
-            $($variant),+
-        }
-
-        impl EventKind {
-            /// Every kind, in no particular order.
-            pub const ALL: &[Self] = &[$(Self::$variant),+];
-
-            /// The name `addEventListener`/`EventSink::dispatch` use for this kind.
-            #[must_use]
-            pub const fn name(self) -> &'static str {
-                match self {
-                    $(Self::$variant => $name),+
-                }
-            }
-
-            /// The bit [`EventMask`] uses for this kind.
-            #[must_use]
-            pub const fn mask(self) -> EventMask {
-                EventMask(1 << self as u16)
-            }
-        }
-
-        impl EventMask {
-            $(
-                #[doc = concat!("Wired for [`EventKind::", stringify!($variant), "`].")]
-                pub const $bit: Self = EventKind::$variant.mask();
-            )+
-        }
-    };
-}
-
-event_kinds! {
-    Click => "click", CLICK,
-    DblClick => "dblclick", DBL_CLICK,
-    AuxClick => "auxclick", AUX_CLICK,
-    ContextMenu => "contextmenu", CONTEXT_MENU,
-    MouseDown => "mousedown", MOUSE_DOWN,
-    MouseUp => "mouseup", MOUSE_UP,
-    MouseMove => "mousemove", MOUSE_MOVE,
-    Wheel => "wheel", WHEEL,
-    MouseEnter => "mouseenter", MOUSE_ENTER,
-    MouseLeave => "mouseleave", MOUSE_LEAVE,
-    MouseOver => "mouseover", MOUSE_OVER,
-    MouseOut => "mouseout", MOUSE_OUT,
-    Focus => "focus", FOCUS,
-    Blur => "blur", BLUR,
-    KeyDown => "keydown", KEY_DOWN,
-    KeyUp => "keyup", KEY_UP,
-}
-
-/// Which of [`EventKind::ALL`] a node is wired for, as one bit per kind.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct EventMask(u16);
-
-impl EventMask {
-    /// Wired for nothing.
-    pub const NONE: Self = Self(0);
-
-    /// Whether every bit set in `other` is also set in `self`.
-    #[must_use]
-    pub fn contains(self, other: Self) -> bool {
-        self.0 & other.0 == other.0
-    }
-
-    /// Whether `self` and `other` share at least one bit.
-    #[must_use]
-    pub fn intersects(self, other: Self) -> bool {
-        self.0 & other.0 != 0
-    }
-
-    /// The bit `name` occupies, or [`EventMask::NONE`] if `name` names no
-    /// [`EventKind`].
-    #[must_use]
-    pub fn for_name(name: &str) -> Self {
-        EventKind::ALL
-            .iter()
-            .find(|kind| kind.name() == name)
-            .map_or(Self::NONE, |kind| kind.mask())
-    }
-}
-
-impl std::ops::Not for EventMask {
-    type Output = Self;
-
-    fn not(self) -> Self {
-        Self(!self.0)
-    }
-}
-
-impl std::ops::BitOr for EventMask {
-    type Output = Self;
-
-    fn bitor(self, other: Self) -> Self {
-        Self(self.0 | other.0)
-    }
-}
-
 /// What a dispatch carries beyond the node it fired on.
 #[derive(Debug, Clone, PartialEq)]
 pub enum EventPayload {
@@ -459,24 +355,12 @@ fn dom_key(keystroke: &Keystroke) -> String {
 /// What [`crate::element`] needs from something that can dispatch a native
 /// event into JS — `inca-bridge`'s `EventDispatcher` implements this, kept
 /// as a trait here rather than a direct dependency so this crate never has
-/// to depend on `QuickJS`. An implementor provides every method, including
-/// [`EventSink::pointer_moved`] and [`EventSink::pointer_left`].
+/// to depend on `QuickJS`. An implementor provides every method.
 pub trait EventSink {
-    /// Every kind registered on `node_id`. The render path asks before
-    /// wiring an element for input.
-    fn listens(&self, node_id: NodeId) -> EventMask;
-
-    /// Calls whatever is registered for `(node_id, event)`, passing
-    /// `payload`. `cx` lets a callback's `stopPropagation`/`preventDefault`
-    /// reach GPUI's own dispatch.
-    fn dispatch(
-        &self,
-        node_id: NodeId,
-        event: &str,
-        payload: &EventPayload,
-        window: &mut Window,
-        cx: &mut App,
-    );
+    /// Whether the containers report the pointer. The render path asks once
+    /// per frame. With `true`, every container that is not inert becomes a
+    /// pointer target, which gives it a hitbox and a hover state.
+    fn tracks_pointer(&self) -> bool;
 
     /// Fires `event` at `start`, with `start` as its target. The event
     /// bubbles to the ancestors of `start` when its kind bubbles. Returns
@@ -500,7 +384,7 @@ pub trait EventSink {
 
     /// Reports a pointer move to `position`, in window coordinates. Called
     /// for every pointer move in the window, buttons held included, before
-    /// any node's listener runs. `cx` lets the sink schedule work for the end
+    /// any container reports. `cx` lets the sink schedule work for the end
     /// of the current update.
     fn pointer_moved(&self, position: gpui::Point<gpui::Pixels>, cx: &mut App);
 
@@ -520,15 +404,31 @@ pub trait EventSink {
     fn hover_changed(&self, node_id: NodeId, hovered: bool, window: &mut Window, cx: &mut App);
 
     /// Reports `node_id` as the deepest container under the pointer for the
-    /// pointer move being handled, before any listener of that move runs. The
+    /// pointer move being handled, before the move itself is reported. The
     /// sink fires the hover events for it at once.
     fn pointer_over(&self, node_id: NodeId, window: &mut Window, cx: &mut App);
 
-    /// Reports that a mouse button was pressed. Ends a pending Space press.
+    /// Reports that a mouse button was pressed, before the press itself is
+    /// reported. Ends a pending Space press.
     fn pointer_pressed(&self);
 
-    /// Reports a mouse button release once every listener of the release has
-    /// run. `event.click_count` is the click count of the press of the same
+    /// Reports one `mousedown`, `mouseup`, `mousemove` or `wheel` (`event`)
+    /// once every container has reported itself. `target` is the deepest
+    /// container under the pointer, or the root when none is. The sink
+    /// dispatches the event along the path of `target` and runs its default
+    /// action. A `mousedown` focuses the nearest focusable node on the path
+    /// and leaves the focus alone when a listener prevented the default.
+    fn pointer_input(
+        &self,
+        event: &str,
+        target: NodeId,
+        payload: &EventPayload,
+        window: &mut Window,
+        cx: &mut App,
+    );
+
+    /// Reports a mouse button release right after its `mouseup`.
+    /// `event.click_count` is the click count of the press of the same
     /// button, and the release's own count when `pressed` is `None`.
     /// `pressed` is the deepest container under the press of the same
     /// button, and `None` when no such press is recorded. `released` is the
@@ -545,71 +445,29 @@ pub trait EventSink {
         cx: &mut App,
     );
 
-    /// Runs the default action of a key press (`up` false) or release once the
-    /// key's dispatch has ended, unless a listener called `preventDefault()`.
-    /// Tab and Shift+Tab move focus; Control, Alt or Meta cancel the move. On
-    /// a focused enabled button, Enter clicks it on press and Space clicks it
-    /// on release. A pending Space press ends at the next key press or mouse
-    /// press.
-    fn key_default(&self, keystroke: &gpui::Keystroke, up: bool, window: &mut Window, cx: &mut App);
+    /// Reports a key press (`up` false) or release before any other key
+    /// listener of the window runs. The sink dispatches `keydown` or `keyup`
+    /// to the focused node, or to the root when none is focused, then runs
+    /// the default action unless a listener prevented it. Tab and Shift+Tab
+    /// move focus; Control, Alt or Meta cancel the move. On a focused enabled
+    /// button, Enter clicks it on press and Space clicks it on release. A
+    /// pending Space press ends at the next key press or mouse press. When a
+    /// listener prevented the default, the sink calls `Window::prevent_default`
+    /// and `App::stop_propagation`.
+    fn key_input(
+        &self,
+        keystroke: &gpui::Keystroke,
+        up: bool,
+        payload: &EventPayload,
+        window: &mut Window,
+        cx: &mut App,
+    );
 }
 
 #[cfg(test)]
 #[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn none_contains_only_none() {
-        assert!(EventMask::NONE.contains(EventMask::NONE));
-        assert!(!EventMask::NONE.contains(EventMask::CLICK));
-    }
-
-    #[test]
-    fn a_mask_contains_itself_and_none() {
-        assert!(EventMask::CLICK.contains(EventMask::CLICK));
-        assert!(EventMask::CLICK.contains(EventMask::NONE));
-    }
-
-    #[test]
-    fn union_contains_both_operands() {
-        let union = EventMask::CLICK | EventMask::NONE;
-        assert!(union.contains(EventMask::CLICK));
-    }
-
-    /// Every kind carries its own bit; no two share one.
-    #[test]
-    fn every_kind_has_its_own_bit() {
-        let mut seen = EventMask::NONE;
-        for kind in EventKind::ALL {
-            let bit = kind.mask();
-            assert_ne!(bit, EventMask::NONE, "{kind:?} has no bit");
-            assert!(
-                !seen.contains(bit),
-                "{kind:?}'s bit collides with an earlier kind's"
-            );
-            seen = seen | bit;
-        }
-    }
-
-    #[test]
-    fn for_name_matches_every_kind() {
-        for kind in EventKind::ALL {
-            assert_eq!(EventMask::for_name(kind.name()), kind.mask());
-        }
-        assert_eq!(EventMask::for_name("not-a-real-event"), EventMask::NONE);
-    }
-
-    #[test]
-    fn no_two_kinds_share_a_name() {
-        let mut names = std::collections::HashSet::new();
-        for kind in EventKind::ALL {
-            assert!(
-                names.insert(kind.name()),
-                "{kind:?} repeats an earlier name"
-            );
-        }
-    }
 
     #[test]
     fn dom_key_prefers_a_named_key_over_its_key_char() {
@@ -916,24 +774,6 @@ mod tests {
         assert_eq!(wheel.delta_x, 0.0);
         assert_eq!(wheel.delta_y, 0.0);
         assert_eq!(wheel.delta_mode, 0);
-    }
-
-    #[test]
-    fn disjoint_masks_do_not_intersect() {
-        assert!(!EventMask::MOUSE_DOWN.intersects(EventMask::MOUSE_UP));
-    }
-
-    #[test]
-    fn a_mask_intersects_a_union_it_is_part_of() {
-        let union = EventMask::CLICK | EventMask::WHEEL;
-        assert!(union.intersects(EventMask::CLICK));
-        assert!(union.intersects(EventMask::WHEEL));
-    }
-
-    #[test]
-    fn none_intersects_nothing() {
-        assert!(!EventMask::NONE.intersects(EventMask::NONE));
-        assert!(!EventMask::NONE.intersects(EventMask::CLICK));
     }
 
     #[test]

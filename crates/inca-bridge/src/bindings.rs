@@ -75,6 +75,18 @@ impl EventListeners {
             .unwrap_or_default()
     }
 
+    /// Whether `callback_id` is registered for `(node_id, event)`.
+    #[must_use]
+    pub fn contains(&self, node_id: NodeId, event: &str, callback_id: u32) -> bool {
+        self.callbacks_for(node_id, event).contains(&callback_id)
+    }
+
+    /// Whether nothing is registered anywhere.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.by_node.is_empty()
+    }
+
     pub fn callbacks_for(&self, node_id: NodeId, event: &str) -> &[u32] {
         self.by_node
             .get(&node_id)
@@ -95,6 +107,8 @@ pub struct Host {
     pub root: NodeId,
     pub listeners: EventListeners,
     pub focus: FocusRegistry,
+    /// Last number handed out as an `eventId`. Each event takes the next one.
+    pub last_event_id: u64,
 }
 
 impl std::fmt::Debug for Host {
@@ -120,6 +134,7 @@ impl Default for Host {
             root,
             listeners: EventListeners::default(),
             focus: FocusRegistry::default(),
+            last_event_id: 0,
         }
     }
 }
@@ -514,6 +529,7 @@ pub fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
     install_tree(ctx, host, &native)?;
     install_events(ctx, host, &native)?;
     install_focus(ctx, host, &native)?;
+    crate::event::install(ctx)?;
     ctx.globals().set("__inca_native__", native)?;
     Ok(())
 }
