@@ -67,18 +67,13 @@ today. There is no way to add items to it yet.
 
 ## Under development
 
-The development window, and `--experimental-hmr` on top of it, add a few
-dev-only quirks on top of the behavior above.
-
-Under `--experimental-hmr`, the window opens at the configured size, else
-the default size, on first launch and takes the app's content size once the
-app mounts — see the [HMR guide](./hmr#known-limitations).
+The development window adds a few quirks on top of the behavior above.
 
 In the development window, resizing it by hand keeps that size across
 later reloads; a non-resizable window snaps back to its configured size on
 each reload.
 
-Closing the development window also stops the dev process.
+Closing the development window also stops `inca dev`.
 
 ## Closing the app
 

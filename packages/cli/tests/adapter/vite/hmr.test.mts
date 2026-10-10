@@ -367,7 +367,7 @@ describe("hmr", () => {
     const content = await readFile(channel.entryFile, "utf8");
     const specifier = content.match(/from\s+"([^"]+)"/)?.[1];
     expect(specifier).toBeTruthy();
-    expect(content).toMatch(/start\("[^"]+"\)\.catch\(/);
+    expect(content).toMatch(/^await start\("[^"]+"\);$/m);
 
     const resolved = path.resolve(path.dirname(channel.entryFile), specifier!);
     expect(existsSync(resolved)).toBe(true);

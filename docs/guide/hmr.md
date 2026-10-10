@@ -36,9 +36,6 @@ the changed module:
 
 ## Known limitations
 
-- The development window opens at the configured size, else the default
-  size, on first launch and takes the app's content size once the app
-  mounts.
 - A style-only change to an already-mounted node doesn't repaint. A
   structural edit (adding, removing, or changing text) repaints
   correctly, and a full reload repaints a style-only change too.

@@ -24,6 +24,7 @@ globalThis.__inca_dev__.receive = (method, paramsJson) => {
 
 watch(clicks, (v) => console.log(`[e2e] clicks=${v}`));
 console.log("[e2e] mounted");
+__inca_dev__.send("mounted", "{}");
 </script>
 
 <template>

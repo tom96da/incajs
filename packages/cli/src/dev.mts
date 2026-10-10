@@ -152,9 +152,9 @@ function hostEnv(stderr: NodeJS.WritableStream): NodeJS.ProcessEnv | undefined {
 }
 
 /**
- * Builds the app, starts `inca-host` once the first build lands, and
- * reloads it on every rebuild — until `options.signal` aborts or the host
- * exits on its own.
+ * Builds the app, starts the host once the first build lands (at once under
+ * `experimentalHmr`), and reloads it on every rebuild until `options.signal`
+ * aborts or the host exits on its own.
  *
  * A config or entry that can't be used before the first build is printed as
  * `build failed`. `dev` then retries after the next edit to the config or the
@@ -301,9 +301,14 @@ export async function dev(options: DevOptions): Promise<void> {
         notify: (payload) => client?.notify("vite", payload),
         // A full reload needs a fresh Engine/Host, which only inca-host's
         // own `reload` RPC method gives it — a `"vite"` notification can't.
-        reload: () => void reloadHost(),
+        reload: () => {
+          if (ready) void reloadHost();
+          else pendingReload = true;
+        },
         onError: (error) => printFault(stderr, "build failed", error, STAMPED),
         onUpdate: ({ file, took }) => {
+          // Before `ready`, a start that recovers after an edit is reported as `ready`.
+          if (!ready) return;
           const rel = styleText("dim", path.relative(cwd, file), { stream: stdout });
           log(stdout, `${styleText("green", "update")} ${rel} (${took}ms)`, STAMPED);
         },

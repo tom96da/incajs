@@ -896,6 +896,10 @@ currently provides.
       `maybe_auto_resize_to_content` (`crates/inca-host/src/app.rs`)
       catches the window up to its real size once mounting finishes,
       instead — see Unit ii.
+- [x] Startup order, taken up in v0.0.13 — the bootstrap awaits
+      `start(entryId)`. The host opens the development window when the first
+      load settles, or after 2 seconds, and keeps it closed while the app
+      reports a failed load. The window opens at the app's content size.
 - [ ] Re-apply the FFI safety checklist below to every new binding
 
 ### Unit i — the QuickJS-side Vite runtime

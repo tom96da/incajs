@@ -792,6 +792,8 @@ interface FakeHmrBundler extends Bundler {
   emitFullReload(): void;
   /** Simulates a failed update the bundler reports. */
   emitError(error: { message: string; stack: string | null }): void;
+  /** Simulates a successful update the bundler reports. */
+  emitUpdate(info: { file: string; took: number }): void;
   /** Every payload `hmr()`'s channel was asked to `dispatch` back into the app. */
   dispatched: unknown[];
 }
@@ -819,6 +821,9 @@ function makeFakeHmrBundler(entryFile: string): FakeHmrBundler {
     },
     emitError(error) {
       options?.onError(error);
+    },
+    emitUpdate(info) {
+      options?.onUpdate?.(info);
     },
     dispatched,
   };
@@ -909,6 +914,67 @@ describe("dev with --experimental-hmr", () => {
 
     expect(stderr.text()).toContain("[inca] build failed: bad template");
     expect(stderr.text()).toContain("at somewhere");
+  });
+
+  it("prints an update only once the host is ready", async () => {
+    const bundler = makeFakeHmrBundler("/unused/entry.js");
+    const hmr = vi.spyOn(bundler, "hmr");
+    const stdout = makeSink();
+    const controller = new AbortController();
+
+    const running = dev({
+      entry: "unused",
+      bundler,
+      hostBin: slowReadyMockHost,
+      experimentalHmr: true,
+      stdout: stdout.stream,
+      stderr: makeSink().stream,
+      signal: controller.signal,
+    });
+
+    // The mock host sends `ready` 200 ms after it starts.
+    await vi.waitFor(() => expect(hmr).toHaveBeenCalled());
+    bundler.emitUpdate({ file: path.join(process.cwd(), "src/early.vue"), took: 1 });
+    expect(stdout.text()).not.toContain("update");
+
+    await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
+    bundler.emitUpdate({ file: path.join(process.cwd(), "src/late.vue"), took: 2 });
+
+    controller.abort();
+    await running;
+
+    expect(stdout.text()).toMatch(/\[inca\] update src\/late\.vue \(2ms\)/);
+    expect(stdout.text()).not.toContain("early.vue");
+  });
+
+  it("reloads once after ready for a full reload that arrives before it", async () => {
+    const bundler = makeFakeHmrBundler("/unused/entry.js");
+    const hmr = vi.spyOn(bundler, "hmr");
+    const stdout = makeSink();
+    const stderr = makeSink();
+    const controller = new AbortController();
+
+    const running = dev({
+      entry: "unused",
+      bundler,
+      hostBin: slowReadyMockHost,
+      experimentalHmr: true,
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      signal: controller.signal,
+    });
+
+    // The mock host sends `ready` 200 ms after it starts.
+    await vi.waitFor(() => expect(hmr).toHaveBeenCalled());
+    bundler.emitFullReload();
+    await vi.waitFor(() => expect(stderr.text()).toContain("reload #1"));
+    expect(stdout.text()).toContain("[inca] ready");
+
+    controller.abort();
+    await running;
+
+    expect(stderr.text()).not.toContain("reload #2");
+    expect(stderr.text()).not.toContain("reload failed");
   });
 
   it("stops instead of hanging when the host fails to start", async () => {

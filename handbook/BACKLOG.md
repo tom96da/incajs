@@ -465,25 +465,6 @@ A fixed entry is deleted and its ID is never reused.
   would be the seed of future automated GUI testing (a Playwright-style
   tool driving the app), not just this one test's stimulus.
 
-- **B-029 `inca dev --experimental-hmr` opens its window at the wrong size on first launch, then resizes**
-  `Units: cli · Size: M · Impact: Low`
-
-  A plain `inca dev` opens already sized to the app's own declared content
-  (no visible gap). Under `--experimental-hmr`, the window instead opens at
-  the app's configured size or a default, with the app's real content
-  appearing moments later once mounting finishes, then a one-time resize
-  snaps it to the correct size — visibly, a large window with black margins
-  that shrinks after a beat. Cause: the entry the host evaluates hands off
-  to a JS module runner that fetches and evaluates the real app code over a
-  round trip to the Node-side development server. The host waits for the
-  entry's top-level promise for at most 2 seconds, and for as long as the
-  app reports a failed load, before it opens the window. The HMR entry
-  (`writeHmrEntry` in `hmr.mts`) still returns before the app mounts, so the
-  promise settles early and the window opens at the default size. Fix: the entry `await`s `start(entryId)`, and its retry
-  loop calls `__inca_dev__.setLoadFailed(true)` on a failed start and
-  `__inca_dev__.setLoadFailed(false)` when a retry begins. The host then opens
-  the window at the app's content size once the first load succeeds.
-
 - **B-033 `[inca] reload`/`[inca] update`'s timing isn't the useful number**
   `Units: cli,host · Size: M · Impact: Low`
 
@@ -493,17 +474,13 @@ A fixed entry is deleted and its ID is never reused.
   once an update is actually applied, which no dev-protocol message
   does today.
 
-- **B-035 A `full-reload` HMR payload skips the ready/pendingReload guard, and reports nothing**
+- **B-035 A `full-reload` HMR payload logs nothing on success**
   `Units: cli · Size: S · Impact: Low`
 
-  `dev.mts`'s `reload: () => void reloadHost()` (passed
-  to `bundler.hmr`) calls straight through to `reloadHost()` regardless of
-  whether the host has finished its first load — the non-HMR `onBuild`
-  path guards this with `pendingReload`, but a `full-reload` payload has no
-  equivalent. It also logs nothing on success, unlike the "reload ... (Nms)"
-  line `onBuild` prints, so a full reload under `--experimental-hmr` is
-  invisible to the user. The host answers a `reload` once the first
-  evaluation ends, so the gap is on the CLI side.
+  `dev.mts`'s `reload: () => void reloadHost()` (passed to `bundler.hmr`)
+  logs no line on success, so a full reload under `--experimental-hmr` is
+  invisible to the user. `onBuild` logs a `reload ... (Nms)` line for the
+  same step.
 
 - **B-037 Dev relay hardening (`__inca_dev__`)**
   `Units: bridge,host · Size: S–M · Impact: Low`
@@ -1075,12 +1052,13 @@ A fixed entry is deleted and its ID is never reused.
 
   The development server creates the Vite server and starts the host at once.
   The host then fetches each module of the app through the `vite` relay and
-  evaluates it. A measured start spends about 0.3 s between the host opening
-  and the app mounting. Fix: before `startHost`, call the Vite server's
-  `warmupRequest` for the entry so the transform time passes before the host
-  exists. A transform failure then shows before any host starts, the same as
-  a failed first build without HMR. Evaluation and mount errors still need
-  the host's wait.
+  evaluates it, and the development window opens once the app has mounted. A
+  measured start spends about 0.3 s between the host starting and the window
+  opening. Fix: before `startHost`, call the Vite server's `warmupRequest`
+  for the entry so the transform time passes before the host exists. A
+  transform failure then shows before any host starts, the same as a failed
+  first build without HMR. Evaluation and mount errors still need the host's
+  wait.
 
 - **B-164 Gaps in the host's wait for the first load**
   `Units: host · Size: S · Impact: Low`

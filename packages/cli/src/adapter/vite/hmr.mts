@@ -75,9 +75,9 @@ function importSpecifierTo(fromDir: string, target: string): string {
 }
 
 /**
- * Writes the entry `inca-host` evaluates for an HMR session: it starts the
- * bundled module runner fire-and-forget, so evaluating it never waits on
- * the runner's first `fetchModule` round-trip.
+ * Writes the entry the host evaluates for an HMR session. The entry awaits
+ * the bundled module runner's import of the app, so the host opens the
+ * development window once the app has mounted.
  */
 async function writeHmrEntry(cwd: string, entry: string, runtimePath?: string): Promise<string> {
   const dir = hmrDirOf(cwd);
@@ -89,7 +89,7 @@ async function writeHmrEntry(cwd: string, entry: string, runtimePath?: string): 
   await writeFile(
     entryPath,
     `import { start } from ${JSON.stringify(runtimeImport)};\n` +
-      `start(${JSON.stringify(entryId)}).catch((err) => console.error(err));\n`,
+      `await start(${JSON.stringify(entryId)});\n`,
   );
   return entryPath;
 }
