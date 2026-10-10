@@ -110,32 +110,6 @@ A fixed entry is deleted and its ID is never reused.
   somewhere to write. Where it lives per platform, how it rotates, and
   whether an app can opt out are all undecided.
 
-- **B-019 No capture-phase listener registration**
-  `Units: bridge,gpui,core · Size: L · Impact: Medium`
-
-  GPUI's own mouse dispatch
-  already runs a capture phase before the bubble phase
-  (`Window::dispatch_mouse_event`), but `addEventListener` has no way to
-  ask for it — every JS listener is bubble-phase only. Adding it means an
-  options parameter on `addEventListener` (`{ capture: true }`, matching
-  the DOM) and splitting `EventListeners`' `(node, event)` key into
-  `(node, event, capture)`, with the walk of an event
-  (`crates/inca-bridge/src/event.rs`) running the capture listeners from the
-  root down to the target before the bubble listeners. Vue's
-  `@click.capture` has nothing to bind to until this lands, so
-  `patchProp.mts` strips the suffix and binds an ordinary bubble-phase
-  listener instead. `.passive` degrades the same way, for the same
-  reason — no passive-listener notion anywhere in the bridge yet.
-  `.once` doesn't need native support and is implemented for real:
-  the listener unbinds itself after firing.
-
-- **B-020 A GPUI-vs-DOM compat layer for `crates/inca-bridge`**
-  `Units: bridge · Size: M · Impact: Medium`
-
-  `EventDispatcher` turns GPUI's raw input into DOM events, and the capture
-  phase (B-019) is a gap that sits loose in the bridge crate. Direction: one
-  `compat` submodule in the bridge crate holding the capture-phase work.
-
 - **B-028 A template `ref` still resolves to a plain data object for anything beyond `.focus()`/`.blur()`**
   `Units: core · Size: M · Impact: Medium`
 
@@ -578,10 +552,8 @@ A fixed entry is deleted and its ID is never reused.
 - **B-084 Wheel scrolling differs from the DOM at the edges**
   `Units: gpui,bridge · Size: M · Impact: Low`
 
-  There is no `overscroll-behavior` and no rubber-banding. `@wheel.passive`
-  is accepted and binds as an ordinary listener (see B-019), so
-  `preventDefault()` in such a listener still cancels the scroll. Line deltas
-  are scaled by `gpui`'s line height, which differs from the browser's.
+  There is no `overscroll-behavior` and no rubber-banding. Line deltas are
+  scaled by `gpui`'s line height, which differs from the browser's.
 
 - **B-085 Some box style values are not accepted**
   `Units: gpui · Size: M · Impact: Low`
@@ -638,11 +610,8 @@ A fixed entry is deleted and its ID is never reused.
   `onFooBar` binds `foobar` where Vue binds `foo-bar`. The `on:foo` form is
   not recognized, and any key whose third character is not a lower-case
   letter is an event in Vue but only `on` plus an upper-case letter is one
-  here. Vue skips `onUpdate:x` model listeners, where this binds an event
-  named `update:x`. A prop named `onOnce` or `onCapture` is read as a
-  modifier, where Vue binds the event `once` or `capture`. A non-function
-  value unbinds silently, where Vue warns and keeps a no-op listener. An
-  empty array unbinds, where Vue keeps the listener.
+  here. A non-function value unbinds silently, where Vue warns and keeps a
+  no-op listener. An empty array unbinds, where Vue keeps the listener.
 
 - **B-093 A control character in a `productName` writes an invalid `Info.plist`**
   `Units: cli · Size: S · Impact: Low`

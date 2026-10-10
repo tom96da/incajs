@@ -9,38 +9,69 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use rquickjs::function::Opt;
 use rquickjs::{Ctx, Exception, FromJs, Function, Object, Result as JsResult, Value};
 
 use inca_gpui::{AttributeValue, NodeId, TreeError, VirtualNode, VirtualTree, style_warning};
 
 use crate::focus::FocusRegistry;
 
+/// One registration: the callback id, the phase it listens in and whether it
+/// is passive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Listener {
+    /// The id the JS caller stored its function under.
+    pub callback: u32,
+    /// Listens while the event travels down to the target.
+    pub capture: bool,
+    /// `preventDefault()` calls from the callback are ignored.
+    pub passive: bool,
+}
+
 /// Every `(node id, event name)` a JS caller has registered through
-/// `addEventListener`, mapped to the plain integer callback handles it gave
-/// us. Only ever stores owned Rust data — never a JS value or function —
-/// so it stays readable by Rust code running outside of any JS call, such
-/// as the input-event dispatcher.
+/// `addEventListener`, mapped to the [`Listener`]s it gave us. Holds owned
+/// Rust data only, so Rust code outside any JS call, such as the input-event
+/// dispatcher, can read it.
 ///
 /// Nothing expires on its own: a registration lives until
 /// [`unregister`](Self::unregister) drops it, or [`release`](Self::release)
 /// does when the node goes away.
 #[derive(Debug, Default)]
 pub struct EventListeners {
-    by_node: HashMap<NodeId, HashMap<String, Vec<u32>>>,
+    by_node: HashMap<NodeId, HashMap<String, Vec<Listener>>>,
 }
 
 impl EventListeners {
-    /// Adds `callback_id` to `(node_id, event)`. Registering an id already
-    /// there is a no-op, not a second entry.
+    /// Adds `callback_id` to `(node_id, event)` as a bubble-phase, active
+    /// listener. Registering an id already there leaves the registrations
+    /// unchanged.
     pub fn register(&mut self, node_id: NodeId, event: impl Into<String>, callback_id: u32) {
-        let callbacks = self
+        self.register_with(node_id, event, callback_id, false, false);
+    }
+
+    /// Adds `callback_id` to `(node_id, event)` with the given phase and
+    /// passivity. Registering an id already there leaves the registrations
+    /// unchanged.
+    pub fn register_with(
+        &mut self,
+        node_id: NodeId,
+        event: impl Into<String>,
+        callback_id: u32,
+        capture: bool,
+        passive: bool,
+    ) {
+        let listeners = self
             .by_node
             .entry(node_id)
             .or_default()
             .entry(event.into())
             .or_default();
-        if !callbacks.contains(&callback_id) {
-            callbacks.push(callback_id);
+        if !listeners.iter().any(|l| l.callback == callback_id) {
+            listeners.push(Listener {
+                callback: callback_id,
+                capture,
+                passive,
+            });
         }
     }
 
@@ -50,13 +81,13 @@ impl EventListeners {
         let Some(events) = self.by_node.get_mut(&node_id) else {
             return false;
         };
-        let Some(callbacks) = events.get_mut(event) else {
+        let Some(listeners) = events.get_mut(event) else {
             return false;
         };
-        let before = callbacks.len();
-        callbacks.retain(|&id| id != callback_id);
-        let removed = callbacks.len() != before;
-        if callbacks.is_empty() {
+        let before = listeners.len();
+        listeners.retain(|l| l.callback != callback_id);
+        let removed = listeners.len() != before;
+        if listeners.is_empty() {
             events.remove(event);
         }
         if events.is_empty() {
@@ -71,14 +102,16 @@ impl EventListeners {
     pub fn release(&mut self, node_id: NodeId) -> Vec<u32> {
         self.by_node
             .remove(&node_id)
-            .map(|events| events.into_values().flatten().collect())
+            .map(|events| events.into_values().flatten().map(|l| l.callback).collect())
             .unwrap_or_default()
     }
 
     /// Whether `callback_id` is registered for `(node_id, event)`.
     #[must_use]
     pub fn contains(&self, node_id: NodeId, event: &str, callback_id: u32) -> bool {
-        self.callbacks_for(node_id, event).contains(&callback_id)
+        self.listeners_for(node_id, event)
+            .iter()
+            .any(|l| l.callback == callback_id)
     }
 
     /// Whether nothing is registered anywhere.
@@ -87,7 +120,18 @@ impl EventListeners {
         self.by_node.is_empty()
     }
 
-    pub fn callbacks_for(&self, node_id: NodeId, event: &str) -> &[u32] {
+    /// The callback ids of `(node_id, event)` in registration order.
+    #[must_use]
+    pub fn callbacks_for(&self, node_id: NodeId, event: &str) -> Vec<u32> {
+        self.listeners_for(node_id, event)
+            .iter()
+            .map(|l| l.callback)
+            .collect()
+    }
+
+    /// The registrations of `(node_id, event)` in registration order.
+    #[must_use]
+    pub fn listeners_for(&self, node_id: NodeId, event: &str) -> &[Listener] {
         self.by_node
             .get(&node_id)
             .and_then(|events| events.get(event))
@@ -454,13 +498,21 @@ fn install_events<'js>(
                 move |ctx: Ctx<'js>,
                       JsNodeId(node_id): JsNodeId,
                       event: String,
-                      callback_id: u32|
+                      callback_id: u32,
+                      capture: Opt<bool>,
+                      passive: Opt<bool>|
                       -> JsResult<()> {
                     let mut host = host.borrow_mut();
                     if host.tree.get(node_id).is_none() {
                         return Err(throw_tree_error(&ctx, TreeError::NodeNotFound(node_id)));
                     }
-                    host.listeners.register(node_id, event, callback_id);
+                    host.listeners.register_with(
+                        node_id,
+                        event,
+                        callback_id,
+                        capture.0.unwrap_or(false),
+                        passive.0.unwrap_or(false),
+                    );
                     Ok(())
                 },
             )?,
@@ -611,6 +663,56 @@ mod tests {
         listeners.register(1, "click", 8);
 
         assert_eq!(listeners.callbacks_for(1, "click"), &[7, 8]);
+    }
+
+    #[test]
+    fn a_registration_keeps_its_phase_and_passivity_and_the_first_one_wins() {
+        let mut listeners = EventListeners::default();
+        listeners.register_with(1, "wheel", 7, true, true);
+        listeners.register_with(1, "wheel", 7, false, false);
+        listeners.register(1, "wheel", 8);
+
+        assert_eq!(
+            listeners.listeners_for(1, "wheel"),
+            &[
+                Listener {
+                    callback: 7,
+                    capture: true,
+                    passive: true
+                },
+                Listener {
+                    callback: 8,
+                    capture: false,
+                    passive: false
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn add_event_listener_takes_optional_capture_and_passive_flags() {
+        let (engine, host) = engine_with_bindings();
+        engine
+            .eval::<()>(
+                "const n = __inca_native__.createNode('div'); \
+                 __inca_native__.addEventListener(n, 'a', 1); \
+                 __inca_native__.addEventListener(n, 'a', 2, true); \
+                 __inca_native__.addEventListener(n, 'a', 3, false, true); \
+                 __inca_native__.addEventListener(n, 'a', 4, true, true); \
+                 __inca_native__.removeEventListener(n, 'a', 4);",
+            )
+            .unwrap();
+        let host = host.borrow();
+        let flags: Vec<_> = host
+            .listeners
+            .listeners_for(1, "a")
+            .iter()
+            .map(|l| (l.callback, l.capture, l.passive))
+            .collect();
+        assert_eq!(
+            flags,
+            [(1, false, false), (2, true, false), (3, false, true)]
+        );
     }
 
     #[test]

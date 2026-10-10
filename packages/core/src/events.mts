@@ -2,34 +2,32 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { native } from "./native.mts";
-import type { CallbackId, EventListener, NodeId } from "./types.mts";
+import type { CallbackId, EventListener, ListenerOptions, NodeId } from "./types.mts";
 
 /**
  * The JS half of every registration: the `callbackId` the host holds, the
  * listener at `globalThis.__inca_callbacks__[callbackId]`, and which
- * `(nodeId, event)` that id belongs to.
+ * `(nodeId, event, capture, passive)` that id belongs to.
  *
- * A registration is reached from either end — by `(nodeId, event)` when
- * replacing a listener, by `callbackId` when the host reports one released —
- * so all three move together in here, and none can be updated without the
- * others.
+ * A registration is reached from either end: by `(nodeId, event, capture,
+ * passive)` when replacing a listener, and by `callbackId` when the host
+ * reports one released. All three move together in here, and none can be
+ * updated without the others.
  */
 interface Registrations {
   /**
    * Records `listener` under a fresh id.
-   * @param nodeId - the node being listened on
-   * @param event - the event name
+   * @param key - the registration's node, event, capture and passive flags as one string
    * @param listener - the function to run
    * @returns the id the host should be given
    */
-  add(nodeId: NodeId, event: string, listener: EventListener): CallbackId;
+  add(key: string, listener: EventListener): CallbackId;
 
   /**
-   * @param nodeId - the node to look under
-   * @param event - the event name
-   * @returns the id registered for that pair, or `undefined`
+   * @param key - the registration's node, event, capture and passive flags as one string
+   * @returns the id registered under `key`, or `undefined`
    */
-  idFor(nodeId: NodeId, event: string): CallbackId | undefined;
+  idFor(key: string): CallbackId | undefined;
 
   /**
    * Forgets `callbackId` and the listener it named. A no-op for an id that
@@ -47,22 +45,20 @@ function createRegistrations(): Registrations {
   const keyById = new Map<CallbackId, string>();
   let nextCallbackId = 0;
 
-  const keyOf = (nodeId: NodeId, event: string): string => `${nodeId}:${event}`;
-
   // Lazily, because the host defines nothing until the first registration.
   const listeners = (): Record<CallbackId, EventListener> => (globalThis.__inca_callbacks__ ??= {});
 
   return {
-    add(nodeId, event, listener) {
+    add(key, listener) {
       const callbackId = nextCallbackId++;
       listeners()[callbackId] = listener;
-      idByKey.set(keyOf(nodeId, event), callbackId);
-      keyById.set(callbackId, keyOf(nodeId, event));
+      idByKey.set(key, callbackId);
+      keyById.set(callbackId, key);
       return callbackId;
     },
 
-    idFor(nodeId, event) {
-      return idByKey.get(keyOf(nodeId, event));
+    idFor(key) {
+      return idByKey.get(key);
     },
 
     release(callbackId) {
@@ -76,6 +72,13 @@ function createRegistrations(): Registrations {
 }
 
 const registrations = createRegistrations();
+
+/**
+ * The phase and passivity are part of the identity: the same node and event
+ * can hold a bubble, a capture and a passive listener side by side.
+ */
+const keyOf = (nodeId: NodeId, event: string, { capture, passive }: ListenerOptions): string =>
+  `${nodeId}:${event}:${capture === true}:${passive === true}`;
 
 let latestId = 0;
 
@@ -108,23 +111,36 @@ export function releaseCallbacks(callbackIds: readonly CallbackId[]): void {
 }
 
 /**
- * Makes `listener` the one thing that runs when `event` fires on `nodeId`,
- * replacing whatever was registered for that pair before.
+ * Makes `listener` the one thing that runs when `event` fires on `nodeId` in
+ * the phase `options` names, replacing whatever was registered for that
+ * combination before.
  *
  * The host holds a list per `(nodeId, event)` and dispatches to all of it;
- * this wrapper keeps one, the way a framework adapter composes its own
- * handlers into a single callback. See {@link EventListener} for which
- * event names are wired to real native input today; other names are
- * accepted but never fire.
+ * this wrapper keeps one per combination of `capture` and `passive`. See
+ * {@link EventListener} for the fields an event carries. Any event name is
+ * accepted, and it fires when the host dispatches that name.
  * @param nodeId - the node to listen on
  * @param event - the event name (e.g. `"click"`)
  * @param listener - called when the event fires
+ * @param options - `capture` listens while the event travels down to the
+ * target, and `passive` ignores `preventDefault()` calls in `listener`
  */
-export function setEventListener(nodeId: NodeId, event: string, listener: EventListener): void {
-  removeEventListener(nodeId, event);
-  const callbackId = registrations.add(nodeId, event, tracking(listener));
+export function setEventListener(
+  nodeId: NodeId,
+  event: string,
+  listener: EventListener,
+  options: ListenerOptions = {},
+): void {
+  removeEventListener(nodeId, event, options);
+  const callbackId = registrations.add(keyOf(nodeId, event, options), tracking(listener));
   try {
-    native().addEventListener(nodeId, event, callbackId);
+    native().addEventListener(
+      nodeId,
+      event,
+      callbackId,
+      options.capture === true,
+      options.passive === true,
+    );
   } catch (error) {
     registrations.release(callbackId);
     throw error;
@@ -132,13 +148,19 @@ export function setEventListener(nodeId: NodeId, event: string, listener: EventL
 }
 
 /**
- * Drops whatever {@link setEventListener} registered for `(nodeId, event)`,
- * on both the native and the JS side. A no-op if nothing is registered.
+ * Drops whatever {@link setEventListener} registered for `(nodeId, event)`
+ * with the same `capture` and `passive` options, on both the native and the JS
+ * side. A no-op if nothing is registered.
  * @param nodeId - the node to stop listening on
  * @param event - the event name
+ * @param options - the options the listener was registered with
  */
-export function removeEventListener(nodeId: NodeId, event: string): void {
-  const callbackId = registrations.idFor(nodeId, event);
+export function removeEventListener(
+  nodeId: NodeId,
+  event: string,
+  options: ListenerOptions = {},
+): void {
+  const callbackId = registrations.idFor(keyOf(nodeId, event, options));
   if (callbackId === undefined) return;
 
   native().removeEventListener(nodeId, event, callbackId);

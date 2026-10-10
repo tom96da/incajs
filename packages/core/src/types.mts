@@ -116,6 +116,16 @@ export interface StyleProps {
 }
 
 /**
+ * How a listener registered via `setEventListener` takes part in an event.
+ */
+export interface ListenerOptions {
+  /** Listen while the event travels from the root down to the target. The default listens while it travels back up. */
+  capture?: boolean;
+  /** `preventDefault()` calls inside the listener are ignored. */
+  passive?: boolean;
+}
+
+/**
  * Signature of a callback registered via `setEventListener`.
  *
  * The native host calls it with one argument, an object with:
@@ -129,8 +139,9 @@ export interface StyleProps {
  * - `bubbles`, `cancelable` and `composed`: fixed per event name.
  * - `defaultPrevented`: `true` once a listener called `preventDefault()` on a
  *   cancelable event.
- * - `eventPhase`: 2 where `currentTarget` is `target`, 3 on its ancestors,
- *   and 0 once the event has been handled.
+ * - `eventPhase`: 1 on the ancestors of `target` while the event travels
+ *   down, 2 where `currentTarget` is `target`, 3 on the ancestors while it
+ *   travels up, and 0 once the event has been handled.
  * - `isTrusted`: always `true`.
  * - `timeStamp`: milliseconds since the host started, as a number.
  * - `eventId`: a number that grows with each event and is the same on every
@@ -138,7 +149,7 @@ export interface StyleProps {
  * - `stopPropagation()`, `stopImmediatePropagation()` and `preventDefault()`.
  * - the fields that event kind carries.
  *
- * See https://incajs.tom96da.com/reference/events for the full list of wired
- * event names and their fields.
+ * See https://incajs.tom96da.com/reference/events for the event names the
+ * host dispatches and their fields.
  */
 export type EventListener = (...args: unknown[]) => void;

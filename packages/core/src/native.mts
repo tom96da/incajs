@@ -14,7 +14,13 @@ interface IncaNative {
   removeAttribute(nodeId: NodeId, key: string): void;
   setStyle(nodeId: NodeId, key: string, value: AttributeValue): void;
   removeStyle(nodeId: NodeId, key: string): void;
-  addEventListener(nodeId: NodeId, event: string, callbackId: CallbackId): void;
+  addEventListener(
+    nodeId: NodeId,
+    event: string,
+    callbackId: CallbackId,
+    capture?: boolean,
+    passive?: boolean,
+  ): void;
   removeEventListener(nodeId: NodeId, event: string, callbackId: CallbackId): boolean;
   destroyNode(nodeId: NodeId): CallbackId[];
   focusNode(nodeId: NodeId): void;

@@ -362,9 +362,11 @@ pub trait EventSink {
     /// pointer target, which gives it a hitbox and a hover state.
     fn tracks_pointer(&self) -> bool;
 
-    /// Fires `event` at `start`, with `start` as its target. The event
-    /// bubbles to the ancestors of `start` when its kind bubbles. Returns
-    /// whether a listener prevented the default action.
+    /// Fires `event` at `start`, with `start` as its target. The event runs a
+    /// capture pass over the ancestors of `start`, then a bubble pass that
+    /// reaches the ancestors when its kind bubbles. `preventDefault()` calls
+    /// from passive listeners are ignored. Returns whether a listener
+    /// prevented the default action.
     fn fire(
         &self,
         start: NodeId,

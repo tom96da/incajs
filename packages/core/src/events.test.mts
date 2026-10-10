@@ -16,7 +16,16 @@ const native = {
   removeAttribute: vi.fn<(nodeId: number, key: string) => void>(),
   setStyle: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   removeStyle: vi.fn<(nodeId: number, key: string) => void>(),
-  addEventListener: vi.fn<(nodeId: number, event: string, callbackId: number) => void>(),
+  addEventListener:
+    vi.fn<
+      (
+        nodeId: number,
+        event: string,
+        callbackId: number,
+        capture?: boolean,
+        passive?: boolean,
+      ) => void
+    >(),
   removeEventListener: vi.fn<(nodeId: number, event: string, callbackId: number) => boolean>(
     () => true,
   ),
@@ -73,6 +82,66 @@ describe("setEventListener's callback registry", () => {
     expect(secondId).not.toBe(firstId);
     expect(globalThis.__inca_callbacks__[firstId]).toBeUndefined();
     expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(1);
+  });
+});
+
+describe("listener options", () => {
+  it("forward capture and passive to the host, false when absent", () => {
+    setEventListener(100, "a", vi.fn());
+    setEventListener(100, "b", vi.fn(), { capture: true });
+    setEventListener(100, "c", vi.fn(), { passive: true });
+    setEventListener(100, "d", vi.fn(), { capture: true, passive: true });
+
+    const flags = native.addEventListener.mock.calls.map(([, event, , capture, passive]) => [
+      event,
+      capture,
+      passive,
+    ]);
+    expect(flags).toEqual([
+      ["a", false, false],
+      ["b", true, false],
+      ["c", false, true],
+      ["d", true, true],
+    ]);
+  });
+
+  it("keep a bubble, a capture and a passive listener of one node and event apart", () => {
+    setEventListener(110, "click", vi.fn());
+    setEventListener(110, "click", vi.fn(), { capture: true });
+    setEventListener(110, "click", vi.fn(), { passive: true });
+
+    expect(native.removeEventListener).not.toHaveBeenCalled();
+    expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(3);
+  });
+
+  it("replace the listener of the same node, event, capture and passive", () => {
+    setEventListener(120, "click", vi.fn(), { capture: true });
+    const firstId = native.addEventListener.mock.calls[0]![2];
+
+    setEventListener(120, "click", vi.fn(), { capture: true });
+
+    expect(native.removeEventListener).toHaveBeenCalledExactlyOnceWith(120, "click", firstId);
+    expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(1);
+  });
+
+  it("select the registration that removeEventListener drops", () => {
+    setEventListener(130, "click", vi.fn());
+    setEventListener(130, "click", vi.fn(), { capture: true });
+    const [plainId, captureId] = native.addEventListener.mock.calls.map((call) => call[2]);
+
+    removeEventListener(130, "click", { capture: true });
+
+    expect(native.removeEventListener).toHaveBeenCalledExactlyOnceWith(130, "click", captureId);
+    expect(globalThis.__inca_callbacks__[plainId!]).toBeDefined();
+    expect(globalThis.__inca_callbacks__[captureId!]).toBeUndefined();
+  });
+
+  it("leave a registration of other options alone when none matches", () => {
+    setEventListener(140, "click", vi.fn());
+
+    removeEventListener(140, "click", { capture: true });
+
+    expect(native.removeEventListener).not.toHaveBeenCalled();
   });
 });
 

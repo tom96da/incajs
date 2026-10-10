@@ -9,6 +9,7 @@ import * as events from "../events.mts";
 import { createNodeOps } from "./nodeOps.mts";
 import { createPatchProp } from "./patchProp.mts";
 import type { IncaCore } from "../rendererCore.mts";
+import type { ListenerOptions } from "../types.mts";
 import type { IncaElement } from "./nodeOps.mts";
 
 const core: IncaCore = {
@@ -19,8 +20,15 @@ const core: IncaCore = {
   removeChild: vi.fn<(parentId: number, childId: number) => void>(),
   destroyNode: vi.fn<(nodeId: number) => void>(),
   setEventListener:
-    vi.fn<(nodeId: number, event: string, listener: (...args: unknown[]) => void) => void>(),
-  removeEventListener: vi.fn<(nodeId: number, event: string) => void>(),
+    vi.fn<
+      (
+        nodeId: number,
+        event: string,
+        listener: (...args: unknown[]) => void,
+        options?: ListenerOptions,
+      ) => void
+    >(),
+  removeEventListener: vi.fn<(nodeId: number, event: string, options?: ListenerOptions) => void>(),
   latestEventId: vi.fn<() => number>(() => 0),
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   removeAttribute: vi.fn<(nodeId: number, key: string) => void>(),
@@ -31,6 +39,8 @@ const core: IncaCore = {
 };
 
 const patchProp = createPatchProp(core);
+
+const BUBBLE = { capture: false, passive: false };
 
 const makeEl = (): IncaElement => ({
   id: 1,
@@ -171,7 +181,7 @@ describe("on*", () => {
     const listener = vi.fn<() => void>();
     patchProp(el, "onClick", null, listener, undefined, null);
 
-    expect(core.setEventListener).toHaveBeenCalledWith(1, "click", expect.any(Function));
+    expect(core.setEventListener).toHaveBeenCalledWith(1, "click", expect.any(Function), BUBBLE);
     vi.mocked(core.setEventListener).mock.calls[0]![2]("arg");
     expect(listener).toHaveBeenCalledWith("arg");
   });
@@ -194,7 +204,7 @@ describe("on*", () => {
     patchProp(el, "onClick", vi.fn(), undefined, undefined, null);
 
     expect(core.setEventListener).toHaveBeenCalledTimes(1);
-    expect(core.removeEventListener).toHaveBeenCalledExactlyOnceWith(1, "click");
+    expect(core.removeEventListener).toHaveBeenCalledExactlyOnceWith(1, "click", BUBBLE);
   });
 
   it("does nothing when unbinding an event that was never bound", () => {
@@ -228,34 +238,113 @@ describe("onUpdate:* props", () => {
   it("still binds an on* prop that merely starts with Update", () => {
     patchProp(el, "onUpdateRequested", null, vi.fn(), undefined, null);
 
-    expect(core.setEventListener).toHaveBeenCalledWith(1, "updaterequested", expect.any(Function));
+    expect(core.setEventListener).toHaveBeenCalledWith(
+      1,
+      "updaterequested",
+      expect.any(Function),
+      BUBBLE,
+    );
   });
 });
 
 describe("on* modifiers", () => {
-  it("binds .passive as an ordinary listener that fires", () => {
-    const listener = vi.fn<() => void>();
-    patchProp(el, "onClickPassive", null, listener, undefined, null);
-
-    const registered = vi.mocked(core.setEventListener).mock.calls[0]![2];
-    registered();
-    expect(listener).toHaveBeenCalledTimes(1);
+  it("registers each suffix combination with its capture and passive flags", () => {
+    const mismatches: string[] = [];
+    const cases: [string, ListenerOptions][] = [
+      ["onClick", { capture: false, passive: false }],
+      ["onClickCapture", { capture: true, passive: false }],
+      ["onClickPassive", { capture: false, passive: true }],
+      ["onClickOnce", { capture: false, passive: false }],
+      ["onClickOnceCapture", { capture: true, passive: false }],
+      ["onClickCapturePassive", { capture: true, passive: true }],
+      ["onClickOncePassiveCapture", { capture: true, passive: true }],
+    ];
+    for (const [key, options] of cases) {
+      vi.clearAllMocks();
+      el = makeEl();
+      patchProp(el, key, null, vi.fn(), undefined, null);
+      const calls = vi.mocked(core.setEventListener).mock.calls;
+      if (
+        calls.length !== 1 ||
+        calls[0]![1] !== "click" ||
+        JSON.stringify(calls[0]![3]) !== JSON.stringify(options)
+      ) {
+        mismatches.push(`${key}: ${JSON.stringify(calls.map((call) => call[3]))}`);
+      }
+    }
+    expect(mismatches).toEqual([]);
   });
 
-  it("binds .capture as an ordinary listener that fires", () => {
-    const listener = vi.fn<() => void>();
-    patchProp(el, "onClickCapture", null, listener, undefined, null);
-
-    const registered = vi.mocked(core.setEventListener).mock.calls[0]![2];
-    registered();
-    expect(listener).toHaveBeenCalledTimes(1);
+  it("binds a prop named after a bare modifier as the event of that name", () => {
+    const mismatches: string[] = [];
+    for (const [key, event] of [
+      ["onOnce", "once"],
+      ["onPassive", "passive"],
+      ["onCapture", "capture"],
+      ["onOnceCapture", "once"],
+    ] as const) {
+      vi.clearAllMocks();
+      el = makeEl();
+      patchProp(el, key, null, vi.fn(), undefined, null);
+      const calls = vi.mocked(core.setEventListener).mock.calls;
+      if (
+        calls.length !== 1 ||
+        calls[0]![1] !== event ||
+        calls[0]![3]?.capture !== (key === "onOnceCapture")
+      ) {
+        mismatches.push(`${key}: ${JSON.stringify(calls.map((call) => call.slice(1)))}`);
+      }
+    }
+    expect(mismatches).toEqual([]);
   });
 
-  it("strips combined modifier suffixes down to the event name", () => {
+  it("runs a capture handler and a passive handler through their own registrations", () => {
+    const capture = vi.fn<() => void>();
+    const passive = vi.fn<() => void>();
+    patchProp(el, "onClickCapture", null, capture, undefined, null);
+    patchProp(el, "onClickPassive", null, passive, undefined, null);
+
+    const [first, second] = vi.mocked(core.setEventListener).mock.calls;
+    expect(vi.mocked(core.setEventListener)).toHaveBeenCalledTimes(2);
+    first![2]();
+    expect(capture).toHaveBeenCalledTimes(1);
+    expect(passive).not.toHaveBeenCalled();
+    second![2]();
+    expect(passive).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a plain, a capture and a passive listener of one event apart", () => {
+    patchProp(el, "onClick", null, vi.fn(), undefined, null);
+    patchProp(el, "onClickCapture", null, vi.fn(), undefined, null);
+    patchProp(el, "onClickPassive", null, vi.fn(), undefined, null);
+    vi.mocked(core.removeEventListener).mockClear();
+
+    patchProp(el, "onClickCapture", vi.fn(), null, undefined, null);
+
+    expect(core.removeEventListener).toHaveBeenCalledExactlyOnceWith(1, "click", {
+      capture: true,
+      passive: false,
+    });
+  });
+
+  it("shares one registration between slots of the same phase and passivity", () => {
+    patchProp(el, "onClickCapture", null, vi.fn(), undefined, null);
+    patchProp(el, "onClickOnceCapture", null, vi.fn(), undefined, null);
+
+    expect(core.setEventListener).toHaveBeenCalledTimes(1);
+  });
+
+  it("retires a once capture listener from the host after it fires", () => {
     const listener = vi.fn<() => void>();
     patchProp(el, "onClickOnceCapture", null, listener, undefined, null);
 
-    expect(core.setEventListener).toHaveBeenCalledWith(1, "click", expect.any(Function));
+    vi.mocked(core.setEventListener).mock.calls[0]![2]();
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(core.removeEventListener).toHaveBeenCalledExactlyOnceWith(1, "click", {
+      capture: true,
+      passive: false,
+    });
   });
 });
 
@@ -299,7 +388,7 @@ describe("plain and .once listeners on one element", () => {
     registered();
 
     expect(once).toHaveBeenCalledTimes(1);
-    expect(core.removeEventListener).toHaveBeenCalledExactlyOnceWith(1, "click");
+    expect(core.removeEventListener).toHaveBeenCalledExactlyOnceWith(1, "click", BUBBLE);
   });
 
   it("registers one host listener for both and runs them in registration order", () => {
@@ -332,7 +421,7 @@ describe("plain and .once listeners on one element", () => {
     expect(core.removeEventListener).not.toHaveBeenCalled();
 
     patchProp(el, "onClick", plain, undefined, undefined, null);
-    expect(core.removeEventListener).toHaveBeenCalledExactlyOnceWith(1, "click");
+    expect(core.removeEventListener).toHaveBeenCalledExactlyOnceWith(1, "click", BUBBLE);
   });
 
   it("re-registers with the host after every slot went away", () => {
@@ -375,7 +464,7 @@ describe("plain and .once listeners on one element", () => {
     fire();
 
     expect(log).toEqual(["once"]);
-    expect(core.removeEventListener).toHaveBeenCalledExactlyOnceWith(1, "click");
+    expect(core.removeEventListener).toHaveBeenCalledExactlyOnceWith(1, "click", BUBBLE);
   });
 
   it("removes the once handler alone, before it ever fires", () => {
@@ -395,16 +484,16 @@ describe("plain and .once listeners on one element", () => {
     const other = fn(log, "other");
     const toggled = fn(log, "toggled");
     set("onClick", toggled);
-    set("onClickPassive", other);
+    // A repeated suffix is a distinct raw key on the same entry.
+    set("onClickOnceOnce", other);
     // A key change unpatches the old key, then patches the new one.
     patchProp(el, "onClick", toggled, undefined, undefined, null);
     patchProp(el, "onClickOnce", undefined, toggled, undefined, null);
     fire();
-    fire();
 
-    expect(log).toEqual(["other", "toggled", "other"]);
+    expect(log).toEqual(["other", "toggled"]);
     expect(core.setEventListener).toHaveBeenCalledTimes(1);
-    expect(core.removeEventListener).not.toHaveBeenCalled();
+    expect(core.removeEventListener).toHaveBeenCalledExactlyOnceWith(1, "click", BUBBLE);
   });
 
   it("toggles a lone handler from once to plain, re-registering with the host", () => {
@@ -439,7 +528,7 @@ describe("plain and .once listeners on one element", () => {
     set("onKeydown", key);
     patchProp(el, "onClick", null, undefined, undefined, null);
 
-    expect(core.removeEventListener).toHaveBeenCalledExactlyOnceWith(1, "click");
+    expect(core.removeEventListener).toHaveBeenCalledExactlyOnceWith(1, "click", BUBBLE);
     fire("keydown");
     expect(key).toHaveBeenCalledTimes(1);
   });
@@ -456,7 +545,7 @@ describe("plain and .once listeners on one element", () => {
     fire("click", 2);
     expect(b).toHaveBeenCalledTimes(1);
     expect(a).not.toHaveBeenCalled();
-    expect(core.removeEventListener).toHaveBeenCalledExactlyOnceWith(2, "click");
+    expect(core.removeEventListener).toHaveBeenCalledExactlyOnceWith(2, "click", BUBBLE);
 
     fire("click", 1);
     expect(a).toHaveBeenCalledTimes(1);
@@ -581,13 +670,13 @@ describe("plain and .once listeners on one element", () => {
       fire();
       patchProp(el, "onClick", null, undefined, undefined, null);
 
-      expect(core.removeEventListener).toHaveBeenCalledExactlyOnceWith(1, "click");
+      expect(core.removeEventListener).toHaveBeenCalledExactlyOnceWith(1, "click", BUBBLE);
     });
   });
 
   it("runs a handler added under a new key during dispatch on the next dispatch only", () => {
     const late = vi.fn<() => void>();
-    set("onClick", () => set("onClickPassive", late));
+    set("onClick", () => set("onClickOnce", late));
     fire();
     expect(late).not.toHaveBeenCalled();
     fire();
@@ -743,7 +832,7 @@ describe("plain and .once listeners on one element", () => {
         }
       });
       set("onClickOnce", stopper(log, "stopper"));
-      set("onClickPassive", fn(log, "last"));
+      set("onClickOnceOnce", fn(log, "last"));
       fireWith(event);
 
       expect(log).toEqual(["first", "first", "stopper"]);
@@ -1008,7 +1097,7 @@ describe("errors thrown by an event handler", () => {
       expect(() => registered()).toThrow(boom);
       await settle();
       expect(reasons()).toEqual([second]);
-      expect(core.removeEventListener).toHaveBeenCalledWith(1, "click");
+      expect(core.removeEventListener).toHaveBeenCalledWith(1, "click", BUBBLE);
     });
 
     it("stops the rest of an array and later slots at stopImmediatePropagation", async () => {
@@ -1121,7 +1210,7 @@ describe("errors thrown by an event handler", () => {
 
     const registered = vi.mocked(core.setEventListener).mock.calls[0]![2];
     expect(() => registered()).toThrow(boom);
-    expect(core.removeEventListener).toHaveBeenCalledWith(1, "click");
+    expect(core.removeEventListener).toHaveBeenCalledWith(1, "click", BUBBLE);
   });
 
   describe("async rejections", () => {
@@ -1413,7 +1502,7 @@ describe("a listener attached while an event is handled", () => {
     latest = 4;
     set("onClick", old);
     latest = 5;
-    set("onClickPassive", late);
+    set("onClickOnce", late);
     send(5);
     expect(old).toHaveBeenCalledTimes(1);
     expect(late).not.toHaveBeenCalled();
@@ -1444,8 +1533,8 @@ describe("a listener attached while an event is handled", () => {
 
     const late = spy();
     const replaced = spy();
-    set("onClickPassive", late);
-    set("onClickPassive", replaced);
+    set("onClickOnce", late);
+    set("onClickOnce", replaced);
     send(5);
     expect(late).not.toHaveBeenCalled();
     expect(replaced).not.toHaveBeenCalled();
@@ -1463,13 +1552,13 @@ describe("a listener attached while an event is handled", () => {
     send(6);
     send(7);
     expect(once).toHaveBeenCalledTimes(1);
-    expect(core.removeEventListener).toHaveBeenCalledExactlyOnceWith(1, "click");
+    expect(core.removeEventListener).toHaveBeenCalledExactlyOnceWith(1, "click", BUBBLE);
   });
 
   it("is skipped when a handler on the same element attaches it", () => {
     const late = spy();
     latest = 4;
-    set("onClick", () => set("onClickPassive", late));
+    set("onClick", () => set("onClickOnce", late));
     send(5);
     send(5);
     expect(late).not.toHaveBeenCalled();
@@ -1482,8 +1571,8 @@ describe("a listener attached while an event is handled", () => {
     let depth = 0;
     latest = 4;
     set("onClick", () => {
-      if (depth++ > 0) return set("onClickCapture", attachedInner);
-      set("onClickPassive", attachedOuter);
+      if (depth++ > 0) return set("onClickOnceOnce", attachedInner);
+      set("onClickOnce", attachedOuter);
       send(6);
     });
     send(5);

@@ -86,7 +86,7 @@ the nearest ancestor container.
 | `removeAttribute` | `(nodeId: number, key: string) => void` | Remove a non-style attribute prop. Removing a key that isn't set does nothing. |
 | `setStyle` | `(nodeId: number, key: string, value: string \| number \| boolean) => void` | Set a style prop. |
 | `removeStyle` | `(nodeId: number, key: string) => void` | Remove a style prop so it renders as if never set. Removing a key that isn't set does nothing. |
-| `addEventListener` | `(nodeId: number, event: string, callbackId: number) => void` | Register a callback for an event. Ids stack per `(nodeId, event)`, see [Registering](#registering). |
+| `addEventListener` | `(nodeId: number, event: string, callbackId: number, capture?: boolean, passive?: boolean) => void` | Register a callback for an event. Ids stack per `(nodeId, event)`, see [Registering](#registering). `capture` and `passive` default to `false`. |
 | `removeEventListener` | `(nodeId: number, event: string, callbackId: number) => boolean` | Drop one registration and return whether it was there. An unknown node returns `false`. |
 | `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its subtree, and return every `callbackId` registered in it. An unknown id returns `[]`. Destroying the root throws. Also clears the focus state of the destroyed nodes. |
 | `focusNode` | `(nodeId: number) => void` | Request focus for `nodeId`. Takes effect next frame. A node with a `tabindex`, and only that node, takes focus. |
@@ -122,7 +122,9 @@ and event name. Payloads and author-facing behaviour are in
 
 - `addEventListener`/`removeEventListener` are in the binding table above.
   Distinct `callbackId`s stack on one `(nodeId, event)`. Adding an id again
-  is a no-op.
+  is a no-op and keeps its first `capture` and `passive`.
+- `capture` and `passive` belong to the registration. A callback id belongs to
+  one registration, so `removeEventListener` takes the id only.
 - The caller stores the function at `globalThis.__inca_callbacks__[callbackId]`
   before registering. The host stores only the `u32` id.
 - A missing or non-function entry is skipped.
@@ -164,7 +166,7 @@ and event name. Payloads and author-facing behaviour are in
 - The target of `keydown` and `keyup` is the focused node, or the root when
   nothing is focused. Every other event takes the node it is fired at.
 - `eventId` is a number that grows with each event. All listeners of one walk
-  carry the same value. Only an event with a listener on its path enters the
+  carry the same value. Only an event with a listener it reaches enters the
   engine, drains jobs, requests a redraw and takes a number. One engine has
   one counter (`Host::last_event_id`), shared by all its dispatchers, and it
   restarts at 1 with a new engine.
@@ -172,9 +174,8 @@ and event name. Payloads and author-facing behaviour are in
   (`EVENTS` in `dispatch.rs`, which also holds each event's movement rule
   and own-buttons rule; other names get every rule `false`). The `timeStamp`
   origin is a process-wide `Instant` fixed when the first dispatcher is
-  created. `eventPhase` is 2 at the target and 3 on its ancestors.
-  `defaultPrevented` is set by a `preventDefault()` call on a cancelable
-  event, and later nodes of the walk read it as `true`.
+  created. `defaultPrevented` is set by a `preventDefault()` call on a
+  cancelable event, and later nodes of the walk read it as `true`.
 - Accessors: `defaultPrevented` (getter), `returnValue` and `cancelBubble`
   (getter and setter with ToBoolean coercion) read the flags the methods set.
   The phase constants are non-enumerable data properties of the prototype and
@@ -198,11 +199,11 @@ and event name. Payloads and author-facing behaviour are in
 | `contextmenu` | mouse + pointer | The root tracker fires `contextmenu` through `EventSink::fire` for a right `MouseDownEvent`, right after the `mousedown` input and at its target. The payload is `EventPayload::context_menu`: `button` 2, `buttons` 2, `detail` 0, pointer source mouse. |
 | `mousedown`, `mouseup` | mouse | `buttons` holds every button currently held. |
 | `mousemove` | mouse | `movementX`/`movementY` hold the delta of the raw move. |
-| `mouseenter`, `mouseleave` | mouse + `relatedTarget` | Do not bubble. `EventDispatcher::fire` runs only the node's own callbacks, with `target` the node. |
-| `mouseover`, `mouseout` | mouse + `relatedTarget` | `EventDispatcher::fire` runs the callbacks of the deepest container, then each ancestor's. |
+| `mouseenter`, `mouseleave` | mouse + `relatedTarget` | Does not bubble. |
+| `mouseover`, `mouseout` | mouse + `relatedTarget` | `EventDispatcher::fire` runs the walk from the deepest container. |
 | `wheel` | mouse + `deltaX`, `deltaY`, `deltaZ`, `deltaMode` | `deltaX`/`deltaY` are GPUI's values negated. `deltaZ` is `0`. `deltaMode` is `0` or `1`. |
-| `focus`, `blur` | `relatedTarget` | Do not bubble. |
-| `focusin`, `focusout` | `relatedTarget` | `EventDispatcher::fire` runs the node's callbacks, then each ancestor's, with `target` the node. A focus change dispatches `blur`, `focusout`, `focus`, `focusin`. |
+| `focus`, `blur` | `relatedTarget` | Does not bubble. |
+| `focusin`, `focusout` | `relatedTarget` | `EventDispatcher::fire` runs the walk with `target` the node. A focus change dispatches `blur`, `focusout`, `focus`, `focusin`. |
 | `keydown`, `keyup` | `key`, `repeat`, `location` (0), `isComposing` (false), `ctrlKey`, `shiftKey`, `altKey`, `metaKey`, `getModifierState` | Go to the focused node, or the root when none is focused, and bubble to its ancestors. `keyup` has `repeat: false`. |
 
 While the sink tracks the pointer (`EventSink::tracks_pointer`), every
@@ -239,24 +240,34 @@ once per window. Only `mousemove` takes them. Every other event holds 0.
 
 #### Propagation and cancellation
 
-- Listeners run in the bubble phase only. A walk runs the listeners of the
-  target, then those of each ancestor while the event bubbles.
+- A walk has two passes. The capture pass runs the `capture` callbacks of
+  each node from the root down to the target, with `eventPhase` 1 on the
+  ancestors and 2 on the target. The bubble pass then runs the other callbacks
+  from the target up through the ancestors while the event bubbles, with
+  `eventPhase` 2 on the target and 3 on the ancestors. An event that does not
+  bubble runs the capture pass over the whole path and the bubble pass on the
+  target only. At the target, capture callbacks run before the others.
 - The path is fixed when the walk starts. A node's listeners are the ones
   registered when the walk reaches it, minus any removed since. A listener
-  added to a node while its own listeners run waits for the next event.
-- `stopPropagation()` lets the remaining listeners on that node run and gives
-  the nodes after it none. `stopImmediatePropagation()` also stops the
-  remaining listeners on that node. Both act on the walk and leave gpui's own
+  added to a node during that node's callbacks of a pass skips that pass.
+  The node's other pass includes it, when the event reaches that pass.
+- `stopPropagation()` lets the remaining callbacks of that node in the current
+  pass run and gives every later node and pass none. The target's capture
+  callbacks and its bubble callbacks are separate passes, so a stop in the
+  first skips the second. `stopImmediatePropagation()` also stops the
+  remaining callbacks of that node. Both act on the walk and leave gpui's own
   propagation running, so hover, scrolling and every other gpui listener run
   as they do for any input.
 - `EventDispatcher::fire` and the pointer walks drop the callbacks of
   `mousedown`, `mouseup`, a mouse `click` and `dblclick` for a disabled
   button and its ancestors. A key click always runs. Listeners below the
   button run.
-- `preventDefault()` marks a cancelable event. The default action is the
-  focus change or the blur of a `mousedown`, wheel scrolling (the scroll
-  rolls back), and the Tab, Enter and Space actions of a key. For a `button`,
-  `preventDefault()` in `keydown` or `keyup` also ends the key click.
+- `preventDefault()` marks a cancelable event unless the running callback is
+  passive. A passive callback can still stop propagation. The default action
+  is the focus change or the blur of a `mousedown`, wheel scrolling (the
+  scroll rolls back), and the Tab, Enter and Space actions of a key. For a
+  `button`, `preventDefault()` in `keydown` or `keyup` also ends the key
+  click.
 - A canceled `keydown` or `keyup` calls `Window::prevent_default` and
   `App::stop_propagation` once its walk ends. The platform then treats the key
   as handled (for example macOS `performKeyEquivalent`) and later key

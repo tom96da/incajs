@@ -7,6 +7,7 @@ export type {
   AttributeValue,
   CallbackId,
   EventListener,
+  ListenerOptions,
   NodeId,
   StyleProps,
   TagName,

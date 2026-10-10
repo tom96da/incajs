@@ -10,6 +10,11 @@ import { createIncaApp } from "../src/vue/index.mts";
 import type { NodeId } from "../src/index.mts";
 import type { IncaElement } from "../src/vue/index.mts";
 
+/**
+ * What the fake host knows of each registration beyond its node and event.
+ */
+const phases = new Map<number, { capture: boolean; passive: boolean }>();
+
 interface FakeNode {
   tag: string;
   attributes: Record<string, unknown>;
@@ -93,9 +98,17 @@ function installFakeNative(): Map<NodeId, FakeNode> {
     removeStyle(nodeId: NodeId, key: string): void {
       delete requireNode(nodeId).style[key];
     },
-    addEventListener(nodeId: NodeId, event: string, callbackId: number): void {
+    addEventListener(
+      nodeId: NodeId,
+      event: string,
+      callbackId: number,
+      capture = false,
+      passive = false,
+    ): void {
       const callbacks = (requireNode(nodeId).listeners[event] ??= []);
-      if (!callbacks.includes(callbackId)) callbacks.push(callbackId);
+      if (callbacks.includes(callbackId)) return;
+      callbacks.push(callbackId);
+      phases.set(callbackId, { capture, passive });
     },
     removeEventListener(nodeId: NodeId, event: string, callbackId: number): boolean {
       const callbacks = nodes.get(nodeId)?.listeners[event];
@@ -126,6 +139,26 @@ function installFakeNative(): Map<NodeId, FakeNode> {
   };
 
   return nodes;
+}
+
+/**
+ * Runs the listeners of `event` along `chain` (root first, target last): the
+ * capture ones going down, then the bubble ones going up. Returns the
+ * `passive` flag the host holds for each callback it ran, in order.
+ */
+function walk(chain: FakeNode[], event: string): boolean[] {
+  const ran: boolean[] = [];
+  const run = (node: FakeNode, capture: boolean): void => {
+    for (const callbackId of node.listeners[event] ?? []) {
+      const phase = phases.get(callbackId)!;
+      if (phase.capture !== capture) continue;
+      ran.push(phase.passive);
+      globalThis.__inca_callbacks__[callbackId]!();
+    }
+  };
+  for (const node of chain) run(node, true);
+  for (const node of chain.toReversed()) run(node, false);
+  return ran;
 }
 
 function dispatch(node: FakeNode, event: string): void {
@@ -269,6 +302,31 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
     expect(state.count).toBe(2);
     expect(div.listeners["click"]).toHaveLength(1);
     expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(1);
+  });
+
+  it("registers .capture and .passive handlers with the host's phase and passivity", async () => {
+    const log: string[] = [];
+    const App = {
+      setup() {
+        return () =>
+          h("div", { onClickCapture: () => log.push("parent capture") }, [
+            h("div", {
+              onClick: () => log.push("child"),
+              onClickCapturePassive: () => log.push("child capture passive"),
+            }),
+          ]);
+      },
+    };
+
+    createIncaApp(App).mount(root);
+    await nextTick();
+
+    const parent = nodes.get(nodes.get(root.id)!.children[0]!)!;
+    const child = nodes.get(parent.children[0]!)!;
+    const passive = walk([parent, child], "click");
+
+    expect(log).toEqual(["parent capture", "child capture passive", "child"]);
+    expect(passive).toEqual([false, true, false]);
   });
 
   it("unbinds a handler that goes away", async () => {

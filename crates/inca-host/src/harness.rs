@@ -970,6 +970,19 @@ mod tests {
     }
 
     #[gpui::test]
+    fn a_passive_mousedown_listener_still_lets_the_node_take_focus(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, FOCUSABLE);
+        run_js(
+            &mut h,
+            "__inca_native__.setAttribute(box, 'tabindex', '0'); \
+             __inca_native__.addEventListener(box, 'mousedown', 1, false, true);",
+        );
+        let boxed = node(&h, "box");
+        h.click(boxed);
+        assert_eq!(log(&h), "focus");
+    }
+
+    #[gpui::test]
     fn hiding_a_focused_node_blurs_it(cx: &mut TestAppContext) {
         let mut h = Harness::load(cx, ENTRY, FOCUSABLE);
         run_js(&mut h, FOCUS_BOX);

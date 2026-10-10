@@ -5,18 +5,19 @@
 //! registered for them via `__inca_native__.addEventListener` (see
 //! [`crate::bindings`]), then requests a redraw.
 //!
-//! An event only enters the JS engine when a node on its path listens for it.
+//! An event only enters the JS engine when it reaches a listener: a capture
+//! listener on its path, or a bubble listener on the nodes the event bubbles
+//! to.
 //! Only an event that entered the engine drains the job queue and requests a
 //! redraw. Rendering runs JS only when input arrives.
 //!
 //! ## Where the real JS function lives
 //!
-//! [`crate::bindings::EventListeners`] only ever stores a plain `u32`
-//! callback id, never an `rquickjs::Value`/`Function`/`Persistent<T>`: a JS
+//! [`crate::bindings::EventListeners`] stores a [`crate::bindings::Listener`]
+//! per registration: a plain `u32` callback id with its capture and passive
+//! flags, never an `rquickjs::Value`/`Function`/`Persistent<T>`, because a JS
 //! handle kept past the call that produced it outlives the context it
-//! belongs to. The actual function has to live somewhere, so the convention
-//! is:
-//! the JS caller stores it itself, at
+//! belongs to. The JS caller stores the function itself, at
 //! `globalThis.__inca_callbacks__[callbackId]`, before calling
 //! `addEventListener` with that id. The walk of an event looks the real
 //! function up fresh inside one `Engine::with` call and drops it before that
@@ -393,21 +394,24 @@ impl EventDispatcher {
         self.path_from(a).into_iter().find(|i| above_b.contains(i))
     }
 
-    /// Fires `event` at `start` with `start` as the `target`. The listeners
-    /// of `start` run first, then those of each ancestor while the event
-    /// bubbles, until one calls `stopPropagation()`. Every listener receives
-    /// the same event object, whose `eventId` is larger than the one of the
-    /// event fired before. Returns whether a listener prevented the default
-    /// action. A pointer `click` or `dblclick` skips a disabled button and its
-    /// ancestors, as `mousedown` and `mouseup` do. A `start` that left the tree
-    /// fires nothing. When a listener ran, the job queue drains after the walk
-    /// and the window redraws.
+    /// Fires `event` at `start` with `start` as the `target`. The capture
+    /// listeners of the root down to `start` run first, then the bubble
+    /// listeners of `start` and, while the event bubbles, of each ancestor,
+    /// until one calls `stopPropagation()`. Every listener receives the same
+    /// event object, whose `eventId` is larger than the one of the event
+    /// fired before. Returns whether a listener prevented the default
+    /// action. `preventDefault()` calls from a passive listener are ignored.
+    /// A pointer `click` or `dblclick` skips a disabled button and its
+    /// ancestors, as `mousedown` and `mouseup` do. A `start` that left the
+    /// tree fires nothing. When a listener ran, the job queue drains after
+    /// the walk and the window redraws.
     ///
-    /// While the listeners run, `eventPhase` is 2 where `currentTarget` is
-    /// `target` and 3 elsewhere, and `composedPath()` lists the node ids from
-    /// `target` up to the root. Afterwards `currentTarget` is `null`,
-    /// `eventPhase` is 0 and `composedPath()` is empty. A listener that throws
-    /// is reported, and the remaining listeners run.
+    /// While the listeners run, `eventPhase` is 1 on the ancestors of `target`
+    /// during the capture pass, 2 where `currentTarget` is `target` and 3 on
+    /// the ancestors during the bubble pass, and `composedPath()` lists the
+    /// node ids from `target` up to the root. Afterwards `currentTarget` is
+    /// `null`, `eventPhase` is 0 and `composedPath()` is empty. A listener
+    /// that throws is reported, and the remaining listeners run.
     pub fn fire(
         &self,
         start: NodeId,
@@ -1848,6 +1852,452 @@ mod tests {
             .unwrap();
         let immediate = fire_and_read(cx, &dispatcher, child, "click");
         assert_eq!(immediate, serde_json::json!([0]));
+    }
+
+    fn listen_in(host: &Rc<RefCell<Host>>, node: NodeId, id: u32, capture: bool, passive: bool) {
+        host.borrow_mut()
+            .listeners
+            .register_with(node, "click", id, capture, passive);
+    }
+
+    /// Callbacks `0..names.len()` that push `[name, currentTarget, eventPhase]`.
+    fn tagged(names: &[&str]) -> String {
+        names
+            .iter()
+            .enumerate()
+            .map(|(id, name)| {
+                format!("{id}: (e) => out.push(['{name}', e.currentTarget, e.eventPhase])")
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
+    #[gpui::test]
+    fn capture_listeners_run_root_down_before_the_bubble_listeners_run_target_up(
+        cx: &mut TestAppContext,
+    ) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [outer, parent, child] = tree_of_three(&host);
+        // Bubble listeners register first, so the walk order differs from the registration order.
+        for (id, node, capture) in [
+            (0, child, false),
+            (1, parent, false),
+            (2, outer, false),
+            (3, child, true),
+            (4, parent, true),
+            (5, outer, true),
+        ] {
+            listen_in(&host, node, id, capture, false);
+        }
+        callbacks(
+            &dispatcher,
+            &tagged(&[
+                "child",
+                "parent",
+                "outer",
+                "child-capture",
+                "parent-capture",
+                "outer-capture",
+            ]),
+        );
+
+        let out = fire_and_read(cx, &dispatcher, child, "click");
+
+        assert_eq!(
+            out,
+            serde_json::json!([
+                ["outer-capture", outer, 1],
+                ["parent-capture", parent, 1],
+                ["child-capture", child, 2],
+                ["child", child, 2],
+                ["parent", parent, 3],
+                ["outer", outer, 3],
+            ])
+        );
+    }
+
+    #[gpui::test]
+    fn capture_listeners_of_one_node_run_apart_from_its_bubble_listeners(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, _, child] = tree_of_three(&host);
+        for (id, capture) in [(0, false), (1, true), (2, false), (3, true)] {
+            listen_in(&host, child, id, capture, false);
+        }
+        callbacks(&dispatcher, &tagged(&["b0", "c1", "b2", "c3"]));
+
+        let out = fire_and_read(cx, &dispatcher, child, "click");
+
+        let names: Vec<_> = out
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r[0].as_str().unwrap())
+            .collect();
+        assert_eq!(names, ["c1", "c3", "b0", "b2"]);
+    }
+
+    #[gpui::test]
+    fn an_event_that_does_not_bubble_still_captures_through_its_ancestors(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [outer, parent, child] = tree_of_three(&host);
+        for (id, node, capture) in [
+            (0, outer, true),
+            (1, outer, false),
+            (2, parent, true),
+            (3, parent, false),
+            (4, child, true),
+            (5, child, false),
+        ] {
+            host.borrow_mut()
+                .listeners
+                .register_with(node, "focus", id, capture, false);
+        }
+        callbacks(
+            &dispatcher,
+            &tagged(&[
+                "outer",
+                "outer-bubble",
+                "parent",
+                "parent-bubble",
+                "child",
+                "child-bubble",
+            ]),
+        );
+
+        let out = fire_and_read(cx, &dispatcher, child, "focus");
+
+        assert_eq!(
+            out,
+            serde_json::json!([
+                ["outer", outer, 1],
+                ["parent", parent, 1],
+                ["child", child, 2],
+                ["child-bubble", child, 2],
+            ])
+        );
+    }
+
+    #[gpui::test]
+    fn stop_propagation_in_a_capture_listener_ends_the_walk_after_that_node(
+        cx: &mut TestAppContext,
+    ) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [outer, parent, child] = tree_of_three(&host);
+        for (id, node, capture) in [
+            (0, outer, true),
+            (1, parent, true),
+            (2, parent, true),
+            (3, child, true),
+            (4, child, false),
+            (5, parent, false),
+        ] {
+            listen_in(&host, node, id, capture, false);
+        }
+        callbacks(
+            &dispatcher,
+            "0: (e) => out.push(['outer', e.currentTarget, e.eventPhase]), \
+             1: (e) => { out.push(['stopper', e.currentTarget, e.eventPhase]); e.stopPropagation(); }, \
+             2: (e) => out.push(['parent-second', e.currentTarget, e.eventPhase]), \
+             3: () => out.push('child'), 4: () => out.push('child-bubble'), \
+             5: () => out.push('parent-bubble')",
+        );
+
+        let out = fire_and_read(cx, &dispatcher, child, "click");
+
+        assert_eq!(
+            out,
+            serde_json::json!([
+                ["outer", outer, 1],
+                ["stopper", parent, 1],
+                ["parent-second", parent, 1],
+            ])
+        );
+    }
+
+    #[gpui::test]
+    fn stop_propagation_in_a_target_capture_listener_skips_the_target_bubble_listeners(
+        cx: &mut TestAppContext,
+    ) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, parent, child] = tree_of_three(&host);
+        listen_in(&host, child, 0, true, false);
+        listen_in(&host, child, 1, true, false);
+        listen_in(&host, child, 2, false, false);
+        listen_in(&host, parent, 3, false, false);
+        callbacks(
+            &dispatcher,
+            "0: (e) => { out.push(0); e.stopPropagation(); }, 1: () => out.push(1), \
+             2: () => out.push(2), 3: () => out.push(3)",
+        );
+
+        let out = fire_and_read(cx, &dispatcher, child, "click");
+
+        assert_eq!(out, serde_json::json!([0, 1]));
+    }
+
+    #[gpui::test]
+    fn stop_immediate_propagation_in_a_capture_listener_skips_the_rest_of_the_walk(
+        cx: &mut TestAppContext,
+    ) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [outer, _, child] = tree_of_three(&host);
+        listen_in(&host, outer, 0, true, false);
+        listen_in(&host, outer, 1, true, false);
+        listen_in(&host, child, 2, false, false);
+        callbacks(
+            &dispatcher,
+            "0: (e) => { out.push(0); e.stopImmediatePropagation(); }, 1: () => out.push(1), \
+             2: () => out.push(2)",
+        );
+
+        let out = fire_and_read(cx, &dispatcher, child, "click");
+
+        assert_eq!(out, serde_json::json!([0]));
+    }
+
+    #[gpui::test]
+    fn a_passive_listener_cannot_cancel_and_an_active_one_after_it_can(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, parent, child] = tree_of_three(&host);
+        listen_in(&host, parent, 0, true, true);
+        listen_in(&host, child, 1, false, true);
+        listen_in(&host, child, 2, false, true);
+        listen_in(&host, child, 3, false, false);
+        callbacks(
+            &dispatcher,
+            "0: (e) => { e.preventDefault(); out.push(e.defaultPrevented); }, \
+             1: (e) => { e.returnValue = false; out.push(e.defaultPrevented); }, \
+             2: (e) => { e.stopPropagation(); e.preventDefault(); out.push(e.defaultPrevented); }, \
+             3: (e) => { out.push(e.defaultPrevented); e.preventDefault(); \
+                out.push(e.defaultPrevented); }",
+        );
+        let cx = cx.add_empty_window();
+
+        let canceled = cx
+            .update(|window, cx| dispatcher.fire(child, "click", &EventPayload::None, window, cx));
+
+        let out = dispatcher
+            .engine
+            .eval::<String>("JSON.stringify(out)")
+            .unwrap();
+        assert_eq!(out, "[false,false,false,false,true]");
+        assert!(canceled);
+    }
+
+    #[gpui::test]
+    fn an_event_only_passive_listeners_heard_stays_uncanceled(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, _, child] = tree_of_three(&host);
+        listen_in(&host, child, 0, false, true);
+        callbacks(&dispatcher, "0: (e) => { e.preventDefault(); }");
+        let cx = cx.add_empty_window();
+
+        let canceled = cx
+            .update(|window, cx| dispatcher.fire(child, "click", &EventPayload::None, window, cx));
+
+        assert!(!canceled);
+    }
+
+    #[gpui::test]
+    fn a_passive_listener_can_still_stop_propagation(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, parent, child] = tree_of_three(&host);
+        listen_in(&host, child, 0, false, true);
+        listen_in(&host, parent, 1, false, false);
+        callbacks(
+            &dispatcher,
+            "0: (e) => { out.push(0); e.stopPropagation(); }, 1: () => out.push(1)",
+        );
+
+        let out = fire_and_read(cx, &dispatcher, child, "click");
+
+        assert_eq!(out, serde_json::json!([0]));
+    }
+
+    #[gpui::test]
+    fn a_capture_listener_that_removes_a_later_listener_keeps_it_from_running(
+        cx: &mut TestAppContext,
+    ) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [outer, parent, child] = tree_of_three(&host);
+        listen_in(&host, outer, 0, true, false);
+        listen_in(&host, parent, 1, true, false);
+        listen_in(&host, child, 2, false, false);
+        listen_in(&host, parent, 3, false, false);
+        callbacks(
+            &dispatcher,
+            &format!(
+                "0: () => {{ out.push(0); \
+                    __inca_native__.removeEventListener({parent}, 'click', 1); \
+                    __inca_native__.removeEventListener({child}, 'click', 2); \
+                    __inca_native__.addEventListener({parent}, 'click', 4, true); }}, \
+                 1: () => out.push(1), 2: () => out.push(2), 3: () => out.push(3), \
+                 4: () => out.push(4)"
+            ),
+        );
+
+        let out = fire_and_read(cx, &dispatcher, child, "click");
+
+        assert_eq!(out, serde_json::json!([0, 4, 3]));
+    }
+
+    #[gpui::test]
+    fn a_listener_re_added_with_other_flags_mid_walk_runs_once_in_its_new_pass(
+        cx: &mut TestAppContext,
+    ) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [outer, parent, child] = tree_of_three(&host);
+        listen_in(&host, outer, 0, true, false);
+        listen_in(&host, parent, 1, false, false);
+        callbacks(
+            &dispatcher,
+            &format!(
+                "0: () => {{ out.push(0); \
+                    __inca_native__.removeEventListener({parent}, 'click', 1); \
+                    __inca_native__.addEventListener({parent}, 'click', 1, true); }}, \
+                 1: (e) => out.push([1, e.eventPhase])"
+            ),
+        );
+
+        let out = fire_and_read(cx, &dispatcher, child, "click");
+
+        assert_eq!(out, serde_json::json!([0, [1, 1]]));
+    }
+
+    #[gpui::test]
+    fn a_listener_re_registered_with_other_flags_in_its_own_pass_skips_that_pass(
+        cx: &mut TestAppContext,
+    ) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, _, child] = tree_of_three(&host);
+        listen_in(&host, child, 0, true, false);
+        listen_in(&host, child, 1, true, false);
+        callbacks(
+            &dispatcher,
+            &format!(
+                "0: () => {{ out.push(0); \
+                    __inca_native__.removeEventListener({child}, 'click', 1); \
+                    __inca_native__.addEventListener({child}, 'click', 1, true, true); }}, \
+                 1: (e) => {{ out.push(1); e.preventDefault(); }}"
+            ),
+        );
+        let cx = cx.add_empty_window();
+
+        let canceled = cx
+            .update(|window, cx| dispatcher.fire(child, "click", &EventPayload::None, window, cx));
+
+        let out = dispatcher
+            .engine
+            .eval::<String>("JSON.stringify(out)")
+            .unwrap();
+        assert_eq!(out, "[0]");
+        assert!(!canceled);
+    }
+
+    #[gpui::test]
+    fn a_listener_added_to_the_target_during_its_capture_pass_joins_the_bubble_pass_only(
+        cx: &mut TestAppContext,
+    ) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, _, child] = tree_of_three(&host);
+        listen_in(&host, child, 0, true, false);
+        callbacks(
+            &dispatcher,
+            &format!(
+                "0: () => {{ out.push(0); \
+                    __inca_native__.addEventListener({child}, 'click', 1); \
+                    __inca_native__.addEventListener({child}, 'click', 2, true); }}, \
+                 1: () => out.push(1), 2: () => out.push(2)"
+            ),
+        );
+
+        let out = fire_and_read(cx, &dispatcher, child, "click");
+
+        assert_eq!(out, serde_json::json!([0, 1]));
+    }
+
+    #[gpui::test]
+    fn the_cut_nodes_are_skipped_in_both_passes(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [outer, parent, child] = tree_of_three(&host);
+        for (id, node, capture) in [
+            (0, outer, true),
+            (1, parent, true),
+            (2, child, true),
+            (3, child, false),
+            (4, parent, false),
+            (5, outer, false),
+        ] {
+            listen_in(&host, node, id, capture, false);
+        }
+        callbacks(
+            &dispatcher,
+            &tagged(&[
+                "outer-capture",
+                "parent-capture",
+                "child-capture",
+                "child",
+                "parent",
+                "outer",
+            ]),
+        );
+        let cx = cx.add_empty_window();
+        let path = dispatcher.path_from(child);
+
+        cx.update(|_, _| {
+            event::walk(
+                &dispatcher.engine,
+                &dispatcher.host,
+                &Walk {
+                    name: "click",
+                    flags: Flags::ALL,
+                    target: child,
+                    path: &path,
+                    cut: &[parent, outer],
+                    payload: &EventPayload::None,
+                    time_stamp: 0.0,
+                },
+            );
+        });
+
+        let out = dispatcher
+            .engine
+            .eval::<String>("JSON.stringify(out)")
+            .unwrap();
+        assert_eq!(
+            out,
+            serde_json::json!([["child-capture", child, 2], ["child", child, 2]]).to_string()
+        );
+    }
+
+    #[gpui::test]
+    fn only_a_listener_the_event_reaches_enters_the_engine(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, parent, child] = tree_of_three(&host);
+        callbacks(&dispatcher, "0: () => {}");
+        let cx = cx.add_empty_window();
+        let mut drained = |dispatcher: &EventDispatcher| {
+            dispatcher
+                .engine
+                .eval::<()>(
+                    "globalThis.ran = false; Promise.resolve().then(() => globalThis.ran = true);",
+                )
+                .unwrap();
+            cx.update(|window, cx| {
+                dispatcher.fire(child, "focus", &EventPayload::None, window, cx);
+            });
+            dispatcher.engine.eval::<bool>("globalThis.ran").unwrap()
+        };
+
+        // A bubble listener on an ancestor of a `focus` event stays out of reach.
+        host.borrow_mut().listeners.register(parent, "focus", 0);
+        assert!(!drained(&dispatcher), "bubble listener on an ancestor");
+
+        host.borrow_mut().listeners.unregister(parent, "focus", 0);
+        host.borrow_mut()
+            .listeners
+            .register_with(parent, "focus", 0, true, false);
+        assert!(drained(&dispatcher), "capture listener on an ancestor");
     }
 
     #[gpui::test]

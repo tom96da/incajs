@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createNodeOps } from "./nodeOps.mts";
 import type { IncaCore } from "../rendererCore.mts";
+import type { ListenerOptions } from "../types.mts";
 import type { IncaElement, IncaText } from "./nodeOps.mts";
 
 let nextId = 1;
@@ -20,8 +21,15 @@ const core: IncaCore = {
   setStyle: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   removeStyle: vi.fn<(nodeId: number, key: string) => void>(),
   setEventListener:
-    vi.fn<(nodeId: number, event: string, listener: (...args: unknown[]) => void) => void>(),
-  removeEventListener: vi.fn<(nodeId: number, event: string) => void>(),
+    vi.fn<
+      (
+        nodeId: number,
+        event: string,
+        listener: (...args: unknown[]) => void,
+        options?: ListenerOptions,
+      ) => void
+    >(),
+  removeEventListener: vi.fn<(nodeId: number, event: string, options?: ListenerOptions) => void>(),
   latestEventId: vi.fn<() => number>(() => 0),
   destroyNode: vi.fn<(nodeId: number) => void>(),
   focus: vi.fn<(nodeId: number) => void>(),

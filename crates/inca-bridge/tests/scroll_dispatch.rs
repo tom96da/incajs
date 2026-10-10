@@ -233,6 +233,29 @@ fn prevent_default_from_a_child_cancels_the_scroll(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn a_passive_listener_cannot_cancel_the_scroll(cx: &mut TestAppContext) {
+    let mut host = one_container();
+    host.listeners.register_with(1, "wheel", 2, false, true);
+    let mut scene = Scene::new(cx, host, RECORD_WHEEL);
+    scene.wheel(-50.);
+    assert_eq!(scene.ran(), r#"["child"]"#);
+    assert_eq!(scene.offset(0).y, px(-50.));
+}
+
+#[gpui::test]
+fn prevent_default_from_a_capture_listener_of_the_container_cancels_the_scroll(
+    cx: &mut TestAppContext,
+) {
+    let mut host = one_container();
+    host.listeners.register_with(0, "wheel", 3, true, false);
+    host.listeners.register(1, "wheel", 4);
+    let mut scene = Scene::new(cx, host, RECORD_WHEEL);
+    scene.wheel(-50.);
+    assert_eq!(scene.ran(), r#"["container","second"]"#);
+    assert_eq!(scene.offset(0).y, px(0.));
+}
+
+#[gpui::test]
 fn prevent_default_from_the_container_itself_cancels_the_scroll(cx: &mut TestAppContext) {
     let mut host = one_container();
     host.listeners.register(0, "wheel", 3);

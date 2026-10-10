@@ -9,7 +9,7 @@ import {
 } from "@vue/runtime-core";
 
 import type { IncaCore } from "../rendererCore.mts";
-import type { EventListener } from "../types.mts";
+import type { EventListener, ListenerOptions } from "../types.mts";
 import type { IncaElement } from "./nodeOps.mts";
 
 // `onUpdate:modelValue` and the like are component events, never native ones.
@@ -19,26 +19,30 @@ const isOn = (key: string): boolean => /^on[A-Z]/.test(key) && !key.startsWith("
 // e.g. `@click.once` becomes `onClickOnce`; `@click.once.capture` becomes
 // `onClickOnceCapture`. Matches `@vue/runtime-dom`'s own `patchEvent.ts`.
 const modifierSuffixRE = /(?:Once|Passive|Capture)$/;
+/**
+ * A key that is a bare modifier name is the event of that name.
+ */
+const bareModifierRE = /^on(?:Once|Passive|Capture)$/;
 
-interface ParsedEventKey {
+interface ParsedEventKey extends ListenerOptions {
   event: string;
   once: boolean;
 }
 
 // Strips modifier suffixes off `rawKey`, repeatedly since Vue can combine
 // several, then lower-cases what's left into the native event name.
-// `.passive`/`.capture` are recognized but have no native counterpart yet —
-// accepted and bound as an ordinary bubble listener rather than left to
-// register a dead event name.
 function parseEventKey(rawKey: string): ParsedEventKey {
   let key = rawKey;
-  let once = false;
+  const parsed: ParsedEventKey = { event: "", once: false, capture: false, passive: false };
   let match: RegExpMatchArray | null;
-  while ((match = key.match(modifierSuffixRE))) {
+  while ((match = key.match(modifierSuffixRE)) && !bareModifierRE.test(key)) {
     key = key.slice(0, -match[0].length);
-    if (match[0] === "Once") once = true;
+    if (match[0] === "Once") parsed.once = true;
+    else if (match[0] === "Capture") parsed.capture = true;
+    else parsed.passive = true;
   }
-  return { event: key.slice(2).toLowerCase(), once };
+  parsed.event = key.slice(2).toLowerCase();
+  return parsed;
 }
 
 // `setStyle` raises on a non-primitive value, the same way `setAttribute`
@@ -124,11 +128,15 @@ interface Slot {
   fired: boolean;
 }
 
-// What native holds per element and event: one dispatcher, registered while
-// any slot is live, running the slots in insertion order. Each slot is keyed by
-// the raw prop name, so `onClick` and `onClickOnce` coexist and patch
-// independently.
+/**
+ * What native holds per element, event, phase and passivity: one dispatcher,
+ * registered while any slot is live, running the slots in insertion order.
+ * Each slot is keyed by the raw prop name, so `onClick` and `onClickOnce`
+ * coexist and patch independently.
+ */
 interface Entry {
+  event: string;
+  options: ListenerOptions;
   slots: Map<string, Slot>;
   registered: boolean;
   dispatcher: EventListener;
@@ -136,21 +144,31 @@ interface Entry {
 
 const entriesByEl = new WeakMap<IncaElement, Map<string, Entry>>();
 
+const entryKeyOf = ({ event, capture, passive }: ParsedEventKey): string =>
+  `${event}:${capture === true}:${passive === true}`;
+
 // Brings the host registration in line with whether a live slot exists.
-function sync(core: IncaCore, el: IncaElement, event: string, entry: Entry): void {
+function sync(core: IncaCore, el: IncaElement, entryKey: string, entry: Entry): void {
   const live = Array.from(entry.slots.values()).some((slot) => !slot.fired);
   if (live && !entry.registered) {
-    core.setEventListener(el.id, event, entry.dispatcher);
+    core.setEventListener(el.id, entry.event, entry.dispatcher, entry.options);
     entry.registered = true;
   } else if (!live && entry.registered) {
     entry.registered = false;
-    core.removeEventListener(el.id, event);
+    core.removeEventListener(el.id, entry.event, entry.options);
   }
-  if (entry.slots.size === 0) entriesByEl.get(el)?.delete(event);
+  if (entry.slots.size === 0) entriesByEl.get(el)?.delete(entryKey);
 }
 
-function createEntry(core: IncaCore, el: IncaElement, event: string): Entry {
+function createEntry(
+  core: IncaCore,
+  el: IncaElement,
+  entryKey: string,
+  { event, capture, passive }: ParsedEventKey,
+): Entry {
   const entry: Entry = {
+    event,
+    options: { capture, passive },
     slots: new Map(),
     registered: false,
     dispatcher: (...args) => {
@@ -167,7 +185,7 @@ function createEntry(core: IncaCore, el: IncaElement, event: string): Entry {
           // Retire a `.once` slot before it runs, so a synchronous re-dispatch can't re-enter.
           if (slot.once) {
             slot.fired = true;
-            sync(core, el, event, entry);
+            sync(core, el, entryKey, entry);
           }
           for (const handler of slot.handlers) {
             if (stopped()) break;
@@ -192,10 +210,11 @@ function createEntry(core: IncaCore, el: IncaElement, event: string): Entry {
   return entry;
 }
 
-function removeSlot(core: IncaCore, el: IncaElement, event: string, rawKey: string): void {
-  const entry = entriesByEl.get(el)?.get(event);
+function removeSlot(core: IncaCore, el: IncaElement, parsed: ParsedEventKey, rawKey: string): void {
+  const entryKey = entryKeyOf(parsed);
+  const entry = entriesByEl.get(el)?.get(entryKey);
   if (!entry?.slots.delete(rawKey)) return;
-  sync(core, el, event, entry);
+  sync(core, el, entryKey, entry);
 }
 
 function patchEvent(
@@ -205,17 +224,18 @@ function patchEvent(
   nextValue: unknown,
   instance: ComponentInternalInstance | null,
 ): void {
-  const { event, once } = parseEventKey(rawKey);
+  const parsed = parseEventKey(rawKey);
   const handlers = asHandlers(nextValue);
   if (!handlers) {
-    removeSlot(core, el, event, rawKey);
+    removeSlot(core, el, parsed, rawKey);
     return;
   }
 
+  const entryKey = entryKeyOf(parsed);
   let entries = entriesByEl.get(el);
   if (!entries) entriesByEl.set(el, (entries = new Map()));
-  let entry = entries.get(event);
-  if (!entry) entries.set(event, (entry = createEntry(core, el, event)));
+  let entry = entries.get(entryKey);
+  if (!entry) entries.set(entryKey, (entry = createEntry(core, el, entryKey, parsed)));
 
   const existing = entry.slots.get(rawKey);
   if (existing) {
@@ -228,14 +248,14 @@ function patchEvent(
     attachedAt: core.latestEventId(),
     handlers,
     instance,
-    once,
+    once: parsed.once,
     fired: false,
   });
   try {
-    sync(core, el, event, entry);
+    sync(core, el, entryKey, entry);
   } catch (error) {
     entry.slots.delete(rawKey);
-    if (entry.slots.size === 0) entries.delete(event);
+    if (entry.slots.size === 0) entries.delete(entryKey);
     throw error;
   }
 }
@@ -266,20 +286,24 @@ const BOOLEAN_PRESENCE = new Set(["disabled", "hidden", "inert"]);
  * The key registers `nextValue` as a listener for `xxx`, taking a function
  * or an array of them, and unbinds that key's listener for anything else.
  * - Order: each distinct key (`onClick`, `onClickOnce`) is its own listener.
- *   They run in the order first registered, a re-patch keeps its place, and
- *   the host sees one registration per element and event.
+ *   Keys that share the event, phase and passivity run in the order first
+ *   registered, a re-patch keeps its place, and the host sees one registration
+ *   per element, event, phase and passivity. Capture registrations run before
+ *   every bubble registration, also on the target. Within a pass,
+ *   registrations run in the order the host registered them.
  * - Propagation: `stopImmediatePropagation()` stops the listeners after it.
  * - Timing: a listener attached while an event is being handled first runs
  *   for the next event; events are told apart by the `eventId` the host puts
  *   on each one.
  * - Modifiers: a trailing `Once`/`Passive`/`Capture` suffix (from Vue's
  *   `.once`/`.passive`/`.capture` modifiers) is stripped first. `.once`
- *   really removes the listener after it fires once, and a listener that has
- *   fired stays spent until its key is removed. `.passive`/`.capture` bind
- *   as an ordinary listener with no native passive/capture-phase support
- *   yet.
- * - Event names: see {@link EventListener} for which names are wired to real
- *   input by the native host today; other names are accepted but never fire.
+ *   removes the listener after it fires once, and a listener that has fired
+ *   stays spent until its key is removed. `.capture` registers the listener
+ *   for the phase in which the event travels down to the target, and
+ *   `.passive` ignores `preventDefault()` calls inside it.
+ * - Event names: any name is accepted, and the listener runs when the host
+ *   dispatches that name. See {@link EventListener} for the fields an event
+ *   carries.
  * - Errors: an error a handler throws, or a rejection of an async handler,
  *   goes to the `onErrorCaptured` hooks and the app's `errorHandler`. Every
  *   handler of an event runs even when an earlier one fails, until one calls

@@ -38,7 +38,6 @@ and `returnValue`. The three flags depend on the event:
 - `isTrusted` is `true` for every event.
 - `timeStamp` counts milliseconds since the host started.
 - `preventDefault()` acts on cancelable events only.
-- Listeners run in the bubble phase.
 - A listener added while an event is handled first runs for the next event.
 - Removing the focused node fires no `blur`.
 
@@ -133,11 +132,10 @@ and the
 [key modifiers](https://vuejs.org/guide/essentials/event-handling#key-modifiers)
 of Vue. They work as in Vue, with these differences:
 
-| Modifier               | In the host                                            |
-| ---------------------- | ------------------------------------------------------ |
-| `.capture`, `.passive` | bind an ordinary bubble-phase listener                 |
-| `@click.middle`        | listens for `mouseup` and compares `button` with 1     |
-| `@click.right`         | listens for `contextmenu` and compares `button` with 2 |
+| Modifier        | In the host                                            |
+| --------------- | ------------------------------------------------------ |
+| `@click.middle` | listens for `mouseup` and compares `button` with 1     |
+| `@click.right`  | listens for `contextmenu` and compares `button` with 2 |
 
 ## Errors in handlers
 

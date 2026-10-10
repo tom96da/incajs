@@ -14,7 +14,7 @@ pub mod dispatch;
 mod event;
 pub mod focus;
 
-pub use bindings::{EventListeners, Host};
+pub use bindings::{EventListeners, Host, Listener};
 pub use dev::{DevSend, LoadSignal, call_dev_receive, install_dev, install_load_signal};
 pub use dispatch::{
     ErrorReporter, EventDispatcher, drain_jobs_and_refresh, report_jobs, stderr_reporter,

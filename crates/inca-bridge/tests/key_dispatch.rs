@@ -226,6 +226,26 @@ fn a_key_event_nobody_listens_for_is_reported_to_the_platform_as_unhandled(
 }
 
 #[gpui::test]
+fn a_passive_key_listener_leaves_the_platform_result_untouched(cx: &mut TestAppContext) {
+    let (window, engine, host, [parent, child]) =
+        focused_pair(cx, "seen.push(e.type); e.preventDefault();");
+    host.borrow_mut().listeners = EventListeners::default();
+    for node in [parent, child] {
+        for event in ["keydown", "keyup"] {
+            host.borrow_mut()
+                .listeners
+                .register_with(node, event, 0, false, true);
+        }
+    }
+
+    for up in [false, true] {
+        let result = platform_result(cx, window, up, "a");
+        assert!(result.propagate && !result.default_prevented, "up: {up}");
+    }
+    assert_eq!(seen(&engine), r#"["keydown","keydown","keyup","keyup"]"#);
+}
+
+#[gpui::test]
 fn a_bound_action_runs_and_no_listener_sees_its_key(cx: &mut TestAppContext) {
     let (window, engine, _host, _) = focused_pair(cx, "seen.push(e.type);");
     let acted = Rc::new(RefCell::new(0));

@@ -4,8 +4,9 @@
 //! The event object a listener receives and the walk of one event over its
 //! path.
 //!
-//! One event is one object. The walk creates it, runs the listeners of each
-//! node on the path with that same object, then resets its `currentTarget` and
+//! One event is one object. The walk creates it, runs the capture listeners
+//! from the root down to the target and then the bubble listeners from the
+//! target up, all with that same object, then resets its `currentTarget` and
 //! `eventPhase`. The object's methods and accessors live on a prototype built
 //! once per runtime. What they read and write sits in a record that a
 //! `WeakMap` keeps, so no script can reach it.
@@ -20,7 +21,7 @@ use rquickjs::function::This;
 use rquickjs::object::{Accessor, Property};
 use rquickjs::{Ctx, Exception, Function, Null, Object, Result as JsResult, Value};
 
-use crate::bindings::Host;
+use crate::bindings::{Host, Listener};
 
 /// `bubbles`, `cancelable` and `composed` of one event.
 #[derive(Clone, Copy)]
@@ -129,6 +130,12 @@ fn flag(record: &Object<'_>, key: &str) -> bool {
     record.get::<_, bool>(key).unwrap_or(false)
 }
 
+/// Whether a cancel request takes effect now: the event is cancelable and the
+/// running listener is active.
+fn cancels(record: &Object<'_>) -> bool {
+    flag(record, "cancelable") && !flag(record, "passive")
+}
+
 /// The prototype of event objects: the phase constants, the propagation
 /// methods, `composedPath` and the accessors.
 fn prototype<'js>(ctx: &Ctx<'js>) -> JsResult<Object<'js>> {
@@ -183,7 +190,7 @@ fn define_methods<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<()> {
             ctx.clone(),
             |ctx: Ctx<'js>, This(event): This<Object<'js>>| -> JsResult<()> {
                 let record = record_of(&ctx, &event)?;
-                if flag(&record, "cancelable") {
+                if cancels(&record) {
                     record.set("canceled", true)?;
                 }
                 Ok(())
@@ -226,7 +233,7 @@ fn define_accessors<'js>(proto: &Object<'js>) -> JsResult<()> {
         .set(
             |ctx: Ctx<'js>, This(event): This<Object<'js>>, value: Coerced<bool>| -> JsResult<()> {
                 let record = record_of(&ctx, &event)?;
-                if !value.0 && flag(&record, "cancelable") {
+                if !value.0 && cancels(&record) {
                     record.set("canceled", true)?;
                 }
                 Ok(())
@@ -277,22 +284,31 @@ pub(crate) struct Outcome {
     pub failures: Vec<EngineError>,
 }
 
-/// Runs the listeners of `walk.name` on `walk.target` and its ancestors with
-/// one event object, nearest node first. A node's listeners are those
-/// registered when the walk reaches it, minus any removed while an earlier
-/// listener ran. The engine is entered only when a node on the path listens.
+/// Runs the listeners of `walk.name` along `walk.path` with one event object.
+/// Capture listeners run from the root down to the target, then bubble
+/// listeners from the target up, the latter only while the event bubbles.
+/// At the target, capture listeners run before bubble listeners. A node's
+/// listeners are those registered when the walk reaches it, minus any removed
+/// while an earlier listener ran. The engine is entered only when the event
+/// reaches a listener.
 pub(crate) fn walk(engine: &Engine, host: &Rc<RefCell<Host>>, walk: &Walk<'_>) -> Outcome {
-    let reach = if walk.flags.bubbles {
+    let bubble = if walk.flags.bubbles {
         walk.path
     } else {
         &walk.path[..walk.path.len().min(1)]
     };
-    let listened = {
+    let hears = |capture: bool, nodes: &[NodeId]| {
         let host = host.borrow();
-        reach.iter().any(|node| {
-            !walk.cut.contains(node) && !host.listeners.callbacks_for(*node, walk.name).is_empty()
+        nodes.iter().any(|node| {
+            !walk.cut.contains(node)
+                && host
+                    .listeners
+                    .listeners_for(*node, walk.name)
+                    .iter()
+                    .any(|l| l.capture == capture)
         })
     };
+    let listened = hears(true, walk.path) || hears(false, bubble);
     if !listened {
         return Outcome::default();
     }
@@ -301,7 +317,7 @@ pub(crate) fn walk(engine: &Engine, host: &Rc<RefCell<Host>>, walk: &Walk<'_>) -
         host.last_event_id += 1;
         host.last_event_id
     };
-    let mut outcome = engine.with(|ctx| run(&ctx, host, walk, reach, id));
+    let mut outcome = engine.with(|ctx| run(&ctx, host, walk, bubble, id));
     outcome.entered = true;
     outcome
 }
@@ -310,7 +326,7 @@ fn run(
     ctx: &Ctx<'_>,
     host: &Rc<RefCell<Host>>,
     walk: &Walk<'_>,
-    reach: &[NodeId],
+    bubble: &[NodeId],
     id: u64,
 ) -> Outcome {
     let mut failures = Vec::new();
@@ -327,42 +343,56 @@ fn run(
             };
         }
     };
-    for &node in reach {
-        if walk.cut.contains(&node) {
-            continue;
-        }
-        let ids = host
-            .borrow()
-            .listeners
-            .callbacks_for(node, walk.name)
-            .to_vec();
-        if ids.is_empty() {
-            continue;
-        }
-        let phase = if node == walk.target { 2 } else { 3 };
-        let entered = event
-            .set("currentTarget", node)
-            .and_then(|()| event.set("eventPhase", phase));
-        note(ctx, &mut failures, entered);
-        for callback_id in ids {
-            if flag(&record, "immediate") {
-                break;
+    let down: Vec<NodeId> = walk.path.iter().rev().copied().collect();
+    'phases: for (capture, nodes) in [(true, &down[..]), (false, bubble)] {
+        for &node in nodes {
+            if walk.cut.contains(&node) {
+                continue;
             }
-            if !host
+            let listeners: Vec<Listener> = host
                 .borrow()
                 .listeners
-                .contains(node, walk.name, callback_id)
-            {
+                .listeners_for(node, walk.name)
+                .iter()
+                .filter(|l| l.capture == capture)
+                .copied()
+                .collect();
+            if listeners.is_empty() {
                 continue;
             }
-            let Ok(callback) = callbacks.get::<_, Function>(callback_id) else {
-                continue;
+            let phase = match (node == walk.target, capture) {
+                (true, _) => 2,
+                (false, true) => 1,
+                (false, false) => 3,
             };
-            let called = callback.call::<_, ()>((event.clone(),));
-            note(ctx, &mut failures, called);
-        }
-        if flag(&record, "stop") {
-            break;
+            let entered = event
+                .set("currentTarget", node)
+                .and_then(|()| event.set("eventPhase", phase));
+            note(ctx, &mut failures, entered);
+            for listener in listeners {
+                if flag(&record, "immediate") {
+                    break;
+                }
+                // The full value is compared: a re-registration with other flags replaces the entry.
+                if !host
+                    .borrow()
+                    .listeners
+                    .listeners_for(node, walk.name)
+                    .contains(&listener)
+                {
+                    continue;
+                }
+                let Ok(callback) = callbacks.get::<_, Function>(listener.callback) else {
+                    continue;
+                };
+                let armed = record.set("passive", listener.passive);
+                note(ctx, &mut failures, armed);
+                let called = callback.call::<_, ()>((event.clone(),));
+                note(ctx, &mut failures, called);
+            }
+            if flag(&record, "stop") {
+                break 'phases;
+            }
         }
     }
     let canceled = flag(&record, "canceled");
@@ -370,6 +400,7 @@ fn run(
         .set("currentTarget", Null)
         .and_then(|()| event.set("eventPhase", 0))
         .and_then(|()| record.set("dispatching", false))
+        .and_then(|()| record.set("passive", false))
         .and_then(|()| record.set("stop", false))
         .and_then(|()| record.set("immediate", false));
     note(ctx, &mut failures, left);
@@ -404,6 +435,7 @@ fn create<'js>(ctx: &Ctx<'js>, walk: &Walk<'_>, id: u64) -> JsResult<(Object<'js
     record.set("stop", false)?;
     record.set("immediate", false)?;
     record.set("canceled", false)?;
+    record.set("passive", false)?;
     record.set("cancelable", cancelable)?;
     record.set("dispatching", true)?;
     record.set("path", walk.path.to_vec())?;
