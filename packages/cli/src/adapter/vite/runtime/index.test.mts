@@ -78,7 +78,7 @@ describe("hmr-runtime build output", () => {
   });
 });
 
-type Fetch = () => Promise<unknown> | unknown;
+type Fetch = () => unknown;
 
 /** What the development server answers a `fetchModule` with when the module compiles. */
 function module(code: string): unknown {
