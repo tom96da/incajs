@@ -32,10 +32,9 @@ export interface HostClientOptions {
   onStderr?: (line: string) => void;
   /**
    * The window is open and the first bundle's evaluation has ended: its
-   * top-level `await` settled, or 2 seconds passed with it pending, in which
-   * case the window opens at the size the config gives, else the default size.
-   * A failed load the app reported keeps the window closed. The host speaks the protocol revision this
-   * package was built for.
+   * top-level `await` settled, or 2 seconds passed with it pending. A failed
+   * load the app reported keeps the window closed. The host speaks the
+   * protocol revision this package was built for.
    */
   onReady?: () => void;
   /** An app's event listener threw, or the app threw or rejected while the host loaded it. */

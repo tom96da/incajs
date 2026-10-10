@@ -7,8 +7,8 @@ import { ESModulesEvaluator, ModuleRunner } from "vite/module-runner";
 import type { ModuleRunnerTransport } from "vite/module-runner";
 
 /**
- * A running app's own `globalThis.__inca_dev__`, installed by the host in
- * dev builds only.
+ * A running app's own `globalThis.__inca_dev__`, installed by the host
+ * under `--dev`.
  */
 interface IncaDev {
   send: (method: string, paramsJson: string) => void;
@@ -24,9 +24,9 @@ declare global {
 /**
  * A `ModuleRunnerTransport` that carries Vite's runner protocol over
  * `globalThis.__inca_dev__`, nested under the `"vite"` method name so the
- * host's own dev-protocol channel stays bundler-agnostic. `onFileChanged`
- * runs on each `file-changed` payload before the payload is forwarded to the
- * runner.
+ * host's own dev-protocol channel stays bundler-agnostic.
+ * @param onFileChanged - runs on each `file-changed` payload before the
+ * payload is forwarded to the runner
  */
 export function createIncaDevTransport(
   onFileChanged?: () => void,
@@ -62,19 +62,20 @@ function isServerFailure(error: unknown): boolean {
  * imports `entryId` through it. `./globals.mts`'s import above already
  * installed the runtime globals `vite/module-runner` needs.
  *
- * Resolves with the entry's exports and never rejects for a broken source.
  * A failed import is retried after the next `file-changed` payload, until
- * one succeeds. A failure the development server reported stays silent. Any other
- * failure is rethrown as an unhandled rejection.
+ * one succeeds. A failure the development server reported stays silent. Any
+ * other failure is rethrown as an unhandled rejection.
  * `__inca_dev__.setLoadFailed(true)` follows a failed attempt and
  * `setLoadFailed(false)` precedes each retry.
  *
- * `sourcemapInterceptor: false` is required, not just faster: the
- * alternative reads V8 `CallSite` objects off `Error.stack`, and this
- * engine's `Error.stack` is a plain string, not `CallSite` objects.
+ * `sourcemapInterceptor: false` is required: the interceptor reads V8
+ * `CallSite` objects off `Error.stack`, and this engine's `Error.stack` is a
+ * plain string.
  *
  * `hmr.logger` is fully muted: the development server already reports each
  * update, and a failed one, on its own — see `hmr.mts`'s `onError`.
+ * @param entryId - the module id the development server serves the entry under
+ * @returns the entry's exports, once an import succeeds
  */
 export async function start(entryId: string): Promise<unknown> {
   let edited = (): void => {};
@@ -98,7 +99,7 @@ export async function start(entryId: string): Promise<unknown> {
       globalThis.__inca_dev__?.setLoadFailed?.(true);
     }
     await changed;
-    // Clears every cached module, so dependencies that already loaded, such as the Vue runtime, are evaluated again.
+    // Clears every cached module, so loaded dependencies evaluate again.
     runner.clearCache();
     globalThis.__inca_dev__?.setLoadFailed?.(false);
   }
