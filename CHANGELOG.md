@@ -10,6 +10,16 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- style keys allow camelCase, kebab-case and snake_case ([acb8bbf](https://github.com/tom96da/incajs/commit/acb8bbf)) ([ac38fea](https://github.com/tom96da/incajs/commit/ac38fea))
+
+### Fixed
+
+- the development window opens at the app's content size under `--experimental-hmr` ([f73df37](https://github.com/tom96da/incajs/commit/f73df37)) ([3501563](https://github.com/tom96da/incajs/commit/3501563))
+- `--experimental-hmr` recovers when the app starts on a broken file ([dfc20f6](https://github.com/tom96da/incajs/commit/dfc20f6))
+- the shell's arrow keys keep working after Ctrl+C under `pnpm run` ([39c745a](https://github.com/tom96da/incajs/commit/39c745a))
+
 ## [0.0.12] - 2026-10-08
 
 ### Added
