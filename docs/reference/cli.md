@@ -36,7 +36,7 @@ $ inca dev
 
 > [!WARNING]
 > `--experimental-hmr` is experimental. See the [HMR guide](../guide/hmr) for
-> what it does differently and its known limitations.
+> what it does differently.
 
 ## `inca build`
 

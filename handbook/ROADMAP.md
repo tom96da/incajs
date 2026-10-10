@@ -103,7 +103,7 @@ lands after 3.3, when there is something to release.
    on no bundler and never parses a routed payload, so Vite's HMR traffic
    (Phase 3.4) rides the same channel as a registered `method` name.
 4. **`crates/inca-host`**: the runtime binary. It opens the GPUI window
-   and evaluates a bundle in QuickJS. In dev mode it reads newline-delimited
+   and evaluates a bundle in QuickJS. Under `--dev` it reads newline-delimited
    JSON messages on stdin and re-evaluates the bundle in a fresh engine
    against a reset tree on each reload. Its stdout is the protocol channel,
    and logs go to stderr.

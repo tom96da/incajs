@@ -1,5 +1,5 @@
 ---
-description: Hot module replacement under inca dev --experimental-hmr — how to enable it, what it does differently, and its known limitations.
+description: Hot module replacement under inca dev --experimental-hmr — how to enable it and what it does differently.
 ---
 
 <!--
@@ -33,9 +33,3 @@ the changed module:
 
 - A template-only edit preserves the component's state.
 - A script edit resets state — the component remounts.
-
-## Known limitations
-
-- A style-only change to an already-mounted node doesn't repaint. A
-  structural edit (adding, removing, or changing text) repaints
-  correctly, and a full reload repaints a style-only change too.

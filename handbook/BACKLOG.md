@@ -43,7 +43,7 @@ A fixed entry is deleted and its ID is never reused.
   [ROADMAP.md](./ROADMAP.md#known-gaps-not-yet-scheduled); the destination is
   undecided.
 
-- **B-121 Styles follow the host's vocabulary, not W3C CSS**
+- **B-121 Style keys and values use the host's vocabulary**
   `Units: gpui,core,docs · Size: L · Impact: High`
 
   An app writes `:style` with the host's names and values, such as
@@ -68,10 +68,9 @@ A fixed entry is deleted and its ID is never reused.
   properties, so an editor that checks `:style` flags the host's own keys. A
   definition in the host that generates JSON and TypeScript types gives tools
   one source. The types let an editor check `:style` keys, and a Vite plugin
-  can warn about static keys with file and line, with no host process at
-  build time. The Tailwind class resolver of Phase 7 reads the same data, and
-  B-001 builds on the types. It follows B-121 and generates from its CSS
-  mapping.
+  can warn about static keys with file and line during the build. The
+  Tailwind class resolver of Phase 7 reads the same data, and B-001 builds on
+  the types. It follows B-121 and generates from its CSS mapping.
 
 ## P2
 
@@ -1054,10 +1053,9 @@ A fixed entry is deleted and its ID is never reused.
   `Units: host · Size: S · Impact: Low`
 
   Two gaps remain in `crates/inca-host/src/dev.rs`. While a reload is pending,
-  relayed notifications go to the pending session and the old session receives
-  none. When the first entry rejects with no window, the host exits right
-  after it reports the rejection, so the job failures of the final poll are
-  dropped.
+  relayed notifications go to the pending session until it settles. When the
+  first entry rejects while no window exists, the host exits right after it
+  reports the rejection, so the job failures of the final poll are dropped.
 
 - **B-165 A stale `DISPLAY` makes the host panic on Linux**
   `Units: host · Size: S · Impact: Low`
