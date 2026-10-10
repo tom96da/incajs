@@ -207,14 +207,6 @@ A fixed entry is deleted and its ID is never reused.
   `Runtime::set_memory_limit`/`set_max_stack_size`. Defaults and how the
   host reports a timeout are undecided.
 
-- **B-068 `click` fires before `mouseup`**
-  `Units: gpui · Size: M · Impact: Medium`
-
-  `click` and `auxclick` fire before `mouseup` on the same node, and
-  `dblclick` follows the second `click` there. `stopPropagation()` in a
-  `click` handler also stops ancestors' `mouseup` and `dblclick`. The browser
-  order is `mouseup`, `click` or `auxclick`, then `dblclick`.
-
 - **B-088 Stack frames point into generated code**
   `Units: cli,host,jsenv · Size: L · Impact: Medium`
 
@@ -295,6 +287,9 @@ A fixed entry is deleted and its ID is never reused.
   `:style` binding or a `v-for` has nothing to check against. Declaring
   that typing is the prerequisite; only after that does adding `vue-tsc`
   (plus the full `vue` package, `@vue/tsconfig`) actually buy anything.
+  The same typing covers event names: a misspelled `@click`, or a `v-on`
+  object key such as `onMousedown`, fails the check, and custom event names
+  keep a `string` entry.
 
 - **B-002 Linux runtime dependencies in `inca package`**
   `Units: cli · Size: L · Impact: Low`
@@ -811,9 +806,7 @@ A fixed entry is deleted and its ID is never reused.
 
   GPUI calls the host once per node, so the host reconstructs each event:
   `eventId` is one number per event name per input, and the end of an input is
-  the next `cx.defer`. A handler attached during a `mouseup` for the `click`
-  of the same input can be skipped, because GPUI dispatches a child's `click`
-  before its `mouseup`. A handler attached by a `mouseenter` handler runs for
+  the next `cx.defer`. A handler attached by a `mouseenter` handler runs for
   the `mousemove` of the same move, because hover is dispatched first inside
   that input and the `mousemove` name gets a later id. Two focus transitions
   in one update (JS calls `focus()` inside a handler) share the `focus` id, so
@@ -997,8 +990,9 @@ A fixed entry is deleted and its ID is never reused.
   `Units: gpui,bridge,docs · Size: L · Impact: Low`
 
   `touchstart`, `touchmove`, `touchend` and `touchcancel` listeners have no
-  effect, and a touch tap produces a `click` only. Fix: dispatch the touch
-  sequence from `gpui` touch input with `touches` and `changedTouches`.
+  effect, and a touch tap produces the mouse events and a `click`. A long
+  press fires nothing. Fix: dispatch the touch sequence from `gpui` touch
+  input with `touches` and `changedTouches`.
 
 - **B-157 Nodes lack `dispatchEvent()` and `click()`**
   `Units: core,bridge · Size: M-L · Impact: Low-Medium`

@@ -1330,6 +1330,48 @@ mod tests {
     }
 
     #[gpui::test]
+    fn a_press_ends_when_the_window_deactivates(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, BUTTON);
+        listen(&mut h, "box", "click", 0);
+        let button = node(&h, "box");
+        let at = h.center_of(button);
+        let none = Modifiers::none();
+        h.cx.update(|window, _| window.activate_window());
+        h.settle();
+
+        h.cx.simulate_mouse_down(at, gpui::MouseButton::Left, none);
+        h.cx.deactivate_window();
+        h.settle();
+        h.cx.simulate_mouse_up(at, gpui::MouseButton::Left, none);
+        h.settle();
+        assert_eq!(log(&h), "");
+
+        h.click(button);
+        assert!(log(&h).contains("click@box/box"), "{}", log(&h));
+    }
+
+    #[gpui::test]
+    fn a_disabled_button_and_its_ancestors_get_no_dblclick(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, BUTTON);
+        for target in ["box", "frame", "__inca_native__.rootNodeId()"] {
+            listen(&mut h, target, "dblclick", 0);
+        }
+        run_js(
+            &mut h,
+            "__inca_native__.setAttribute(box, 'disabled', true);",
+        );
+        let button = node(&h, "box");
+
+        h.click_with(button, gpui::MouseButton::Left, Modifiers::none(), 1);
+        h.click_with(button, gpui::MouseButton::Left, Modifiers::none(), 2);
+        assert_eq!(log(&h), "");
+        run_js(&mut h, "__inca_native__.removeAttribute(box, 'disabled');");
+        h.click_with(button, gpui::MouseButton::Left, Modifiers::none(), 2);
+
+        assert!(log(&h).contains("dblclick@box/box"), "{}", log(&h));
+    }
+
+    #[gpui::test]
     fn a_key_click_on_an_enabled_button_reaches_the_ancestor_after_a_disabled_hover(
         cx: &mut TestAppContext,
     ) {
@@ -1491,11 +1533,29 @@ mod tests {
         h.click(inner);
         h.scroll(inner, 0.0, -5.0);
 
-        // The host fires click before mouseup.
         assert_eq!(
             targets_log(&mut h),
-            "mousemove@frame/inner/3,mousedown@frame/inner/3,click@frame/inner/3,\
-             mouseup@frame/inner/3,wheel@frame/inner/3"
+            "mousemove@frame/inner/3,mousedown@frame/inner/3,mouseup@frame/inner/3,\
+             click@frame/inner/3,wheel@frame/inner/3"
+        );
+    }
+
+    #[gpui::test]
+    fn stopping_a_click_leaves_the_ancestors_mouseup(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, TARGETS);
+        run_js(
+            &mut h,
+            "__inca_callbacks__[1] = (e) => { __inca_callbacks__[0](e); e.stopPropagation(); };",
+        );
+        listen(&mut h, "frame", "mouseup click", 0);
+        listen(&mut h, "inner", "click", 1);
+        let inner = node(&h, "inner");
+
+        h.click(inner);
+
+        assert_eq!(
+            targets_log(&mut h),
+            "mouseup@frame/inner/3,click@inner/inner/2"
         );
     }
 
@@ -2226,12 +2286,10 @@ mod tests {
             );
         }
 
-        let plain = "1:0:0:15:15";
         assert_eq!(
             targets_log(&mut h),
-            format!(
-                "click:{plain},dblclick@mid/inner/3,click:2:0:0:15:15,dblclick:2:0:0:15:15,click:3:0:0:15:15"
-            )
+            "click:1:0:0:15:15,click:2:0:0:15:15,dblclick@mid/inner/3,dblclick:2:0:0:15:15,\
+             click:3:0:0:15:15"
         );
     }
 

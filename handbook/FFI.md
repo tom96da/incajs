@@ -144,7 +144,9 @@ and event name. Payloads and author-facing behaviour are in
   listener gives every container a marker that runs first among that
   container's mouse listeners. Bubbling runs the deepest container first, and
   the first marker to run keeps the slot. A press also records its own
-  container, kept until the next press.
+  container per button, kept until a release of that button has been reported.
+  A press of another button leaves it. The window losing activation clears
+  every recorded press (`inca_gpui::clear_presses`).
 - `eventId` is a number that grows with each event. Every node of one event
   name within one input carries the same value, so an adapter can tell
   whether two calls belong to one event. A dispatch with no input behind it,
@@ -178,9 +180,9 @@ and event name. Payloads and author-facing behaviour are in
 
 | Name | Payload | Notes |
 | --- | --- | --- |
-| `click` | mouse + pointer | Fires before `mouseup` on the same node. gpui runs click listeners before the node's own mouse-up listeners, so a mouse click's marker call runs inside the click closure. gpui's `on_click` serves the primary button only. The payload is `From<&ClickEvent>`: the release position and modifiers, `button` and `buttons` at 0, `detail` the release's click count, pointer source mouse. A key click comes from `EventSink::key_default`: it fires `click` through `EventSink::fire` at the focused enabled button, with `target` the button. Its payload is `MousePayload::keyboard_click`: coordinates, `button`, `buttons` and `detail` at 0, the key event's modifiers, pointer source keyboard. `EventDispatcher::dispatch` drops the callbacks of `mousedown`, `mouseup` and `click` for a node that is a disabled button or an ancestor of one on the path from the mouse target or the pressed target. Listeners below the button run. |
-| `dblclick` | mouse | Dispatched inside the same `on_click` closure right after `click` with the pointer source cleared, when the release's click count is 2. A node listening to `dblclick` alone gets the closure too (`EventMask::DBL_CLICK` needs an element id). `target` follows the `click` rule. |
-| `auxclick` | mouse + pointer | gpui's `on_aux_click` serves the other buttons. The payload is `From<&ClickEvent>` with `button` the released button. `target` follows the `click` rule. |
+| `click` | mouse + pointer | Fires after `mouseup` at the nearest common ancestor of the press container of that button and the release container, so a press must be recorded. A release over no container uses the root. The payload is `EventPayload::click`: the release position and modifiers, `button` the released button, `buttons` at 0, `detail` the click count, pointer source mouse. A key click fires through `EventSink::key_default` at the focused enabled button with `MousePayload::keyboard_click`. |
+| `dblclick` | mouse | Fired through `EventSink::fire` at the `click` ancestor right after the `click` whose release counts 2, with the pointer source cleared. |
+| `auxclick` | mouse + pointer | Fired through `EventSink::fire` at the same ancestor for the release of any button but the left one. The payload is `EventPayload::click` with `button` the released button. |
 | `contextmenu` | mouse + pointer | The root tracker's capture listener for a right `MouseDownEvent` queues `window.defer`, which runs after the press's bubble. `EventSink::fire` then runs `contextmenu` at the mouse target (the root when none), so it fires whichever way `mousedown` propagated. The payload is `EventPayload::context_menu`: `button` 2, `buttons` 2, `detail` 0, pointer source mouse. |
 | `mousedown`, `mouseup` | mouse | `buttons` holds every button currently held. |
 | `mousemove` | mouse | `movementX`/`movementY` hold the delta of the raw move. |
@@ -230,6 +232,9 @@ once per window. Only `mousemove` takes them. Every other event holds 0.
   to GPUI, which also stops its own ancestor listeners.
 - For `wheel`, `stopPropagation()` skips the later `wheel` callbacks. The
   container still scrolls.
+- `EventDispatcher::dispatch` and `fire` drop the callbacks of `mousedown`,
+  `mouseup`, a mouse `click` and `dblclick` for a disabled button and its
+  ancestors. A key click always runs. Listeners below the button run.
 - `preventDefault()` reaches only what GPUI honours: the focus change and
   the blur of a `mousedown` and wheel scrolling. For a `button`,
   `preventDefault()` in `keydown` or `keyup` also ends the key click.
@@ -254,6 +259,10 @@ once per window. Only `mousemove` takes them. Every other event holds 0.
   `FocusRegistry::tab_move` collects the handled nodes in tree order and
   focuses the target, or blurs for the end of the order. `apply_pending`
   reports the transition on the next frame.
+- The root tracker's capture listener for a `MouseUpEvent` queues
+  `window.defer`, which runs after every listener of the release and calls
+  `EventSink::pointer_released`. The click events fire after that `mouseup`,
+  then the press of that button is forgotten.
 - Destroying a focused node fires no `blur`.
 - All `mousemove` dispatches from one raw event share one movement value.
 - The root wires `on_modifiers_changed` into `EventSink::modifiers_changed`.

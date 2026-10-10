@@ -62,13 +62,15 @@ events yet. `pointerType` is `"mouse"`, or `""` for the click of a key.
 | ------------- | ------ | ------- | ----------- |
 | `click`       | 0      | 0       | click count |
 | `dblclick`    | 0      | 0       | 2           |
-| `auxclick`    | 1 or 2 | 0       | click count |
+| `auxclick`    | 1 to 4 | 0       | click count |
 | `contextmenu` | 2      | 2       | 0           |
+
+A disabled `button` and its ancestors receive no pointer `mousedown`,
+`mouseup`, `click` or `dblclick`; listeners below the button run. `auxclick`
+and `contextmenu` still reach them.
 
 ### Host differences
 
-- `click` fires before `mouseup`, and `stopPropagation()` in a `click`
-  listener also stops the `mouseup` listeners of the ancestors.
 - `preventDefault()` in a `contextmenu` listener only sets `defaultPrevented`.
 - `screenX` and `screenY` add the window position. On Wayland they equal the
   client position.

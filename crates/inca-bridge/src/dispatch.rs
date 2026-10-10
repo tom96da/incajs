@@ -29,7 +29,7 @@ use std::rc::Rc;
 use std::sync::OnceLock;
 use std::time::Instant;
 
-use gpui::{App, ScrollHandle, Window};
+use gpui::{App, MouseButton, MouseUpEvent, ScrollHandle, Window};
 use inca_gpui::{
     EventKind, EventMask, EventPayload, KeyPayload, MousePayload, NodeId, PointerSource,
     dom_buttons_bit,
@@ -65,8 +65,6 @@ enum TargetRule {
     Node,
     /// The deepest container under the pointer.
     Pointer,
-    /// The nearest common ancestor of the press and release containers.
-    PressRelease,
     /// The focused node.
     Focused,
 }
@@ -126,9 +124,9 @@ const fn own_buttons(mut event: EventSpec) -> EventSpec {
 
 /// Every event the host dispatches.
 const EVENTS: [EventSpec; 18] = [
-    own_buttons(spec("click", Flags::ALL, TargetRule::PressRelease)),
-    own_buttons(spec("dblclick", Flags::ALL, TargetRule::PressRelease)),
-    own_buttons(spec("auxclick", Flags::ALL, TargetRule::PressRelease)),
+    own_buttons(spec("click", Flags::ALL, TargetRule::Node)),
+    own_buttons(spec("dblclick", Flags::ALL, TargetRule::Node)),
+    own_buttons(spec("auxclick", Flags::ALL, TargetRule::Node)),
     own_buttons(spec("contextmenu", Flags::ALL, TargetRule::Pointer)),
     spec("mousedown", Flags::ALL, TargetRule::Pointer),
     spec("mouseup", Flags::ALL, TargetRule::Pointer),
@@ -372,12 +370,10 @@ impl EventDispatcher {
     ///
     /// `currentTarget` is `node_id`. `target` is the deepest container under
     /// the pointer for `mousedown`, `mouseup`, `mousemove`, `wheel` and
-    /// `contextmenu`. It is the nearest common ancestor of the press and
-    /// release containers for `click`, `dblclick` and `auxclick`. It is the
-    /// focused node for `keydown` and `keyup`, which the root receives when
-    /// nothing is focused. Every other event, and any of these
-    /// when no target is recorded (a dispatch made outside input handling),
-    /// uses `node_id`.
+    /// `contextmenu`. It is the focused node for `keydown` and `keyup`, which
+    /// the root receives when nothing is focused. Every other event, and any
+    /// of these when no target is recorded (a dispatch made outside input
+    /// handling), uses `node_id`.
     ///
     /// A callback calling `stopImmediatePropagation()` stops the remaining
     /// callbacks *on this node*. `stopPropagation()`/`preventDefault()` are
@@ -402,7 +398,7 @@ impl EventDispatcher {
         cx: &mut App,
     ) {
         let callback_ids = if (event == "wheel" && self.wheel_stopped.get())
-            || self.cut_by_disabled_button(node_id, event, cx)
+            || self.cut_by_disabled_button(node_id, event, payload, cx)
         {
             Vec::new()
         } else {
@@ -437,10 +433,24 @@ impl EventDispatcher {
     }
 
     /// Whether `node_id` is a disabled button, or an ancestor of one, on the
-    /// path from the target of this `mousedown`, `mouseup` or `click` or from
-    /// its pressed target. Listeners below the button run.
-    fn cut_by_disabled_button(&self, node_id: NodeId, event: &str, cx: &App) -> bool {
-        if !matches!(event, "mousedown" | "mouseup" | "click") {
+    /// path from the mouse target or the pressed target of a pointer
+    /// `mousedown`, `mouseup`, `click` or `dblclick`. Listeners below the
+    /// button run. A keyboard click always runs.
+    fn cut_by_disabled_button(
+        &self,
+        node_id: NodeId,
+        event: &str,
+        payload: &EventPayload,
+        cx: &App,
+    ) -> bool {
+        let keyboard = matches!(
+            payload,
+            EventPayload::Mouse(MousePayload {
+                pointer: Some(PointerSource::Keyboard),
+                ..
+            })
+        );
+        if keyboard || !matches!(event, "mousedown" | "mouseup" | "click" | "dblclick") {
             return false;
         }
         let host = self.host.borrow();
@@ -449,7 +459,12 @@ impl EventDispatcher {
                 node.tag_name() == "button" && node.attributes().contains_key("disabled")
             })
         };
-        [inca_gpui::mouse_target(cx), inca_gpui::pressed_target(cx)]
+        let button = match payload {
+            EventPayload::Mouse(mouse) => Some(mouse.button),
+            _ => None,
+        };
+        let pressed = button.and_then(|button| inca_gpui::pressed_target(cx, button));
+        [inca_gpui::mouse_target(cx), pressed]
             .into_iter()
             .flatten()
             .any(|start| {
@@ -495,12 +510,6 @@ impl EventDispatcher {
         let found = match spec_of(event).target {
             TargetRule::Node => None,
             TargetRule::Pointer => inca_gpui::mouse_target(cx),
-            TargetRule::PressRelease => {
-                match (inca_gpui::pressed_target(cx), inca_gpui::mouse_target(cx)) {
-                    (Some(down), Some(up)) => self.common_ancestor(down, up),
-                    (_, up) => up,
-                }
-            }
             TargetRule::Focused => self.host.borrow().focus.focused_node(window, cx),
         };
         self.resolve(found, node_id)
@@ -608,9 +617,11 @@ impl EventDispatcher {
 
     /// Fires `event` at `start` with `start` as the `target`. The listeners
     /// of `start` run first, then those of each ancestor while the event
-    /// bubbles, until one calls `stopPropagation()`. Returns whether a
-    /// listener prevented the default action. A `start` that left the tree
-    /// fires nothing. The job queue drains after the walk.
+    /// bubbles, until one calls `stopPropagation()`. Returns whether a listener
+    /// prevented the default action. A pointer `click` or `dblclick` skips a
+    /// disabled button and its ancestors, as `mousedown` and `mouseup` do. A
+    /// `start` that left the tree fires nothing. The job queue drains after the
+    /// walk.
     pub fn fire(
         &self,
         start: NodeId,
@@ -627,12 +638,15 @@ impl EventDispatcher {
         let mut prevented = false;
         let mut current = Some(start);
         while let Some(id) = current {
-            let callback_ids = self
-                .host
-                .borrow()
-                .listeners
-                .callbacks_for(id, event)
-                .to_vec();
+            let callback_ids = if self.cut_by_disabled_button(id, event, payload, cx) {
+                Vec::new()
+            } else {
+                self.host
+                    .borrow()
+                    .listeners
+                    .callbacks_for(id, event)
+                    .to_vec()
+            };
             if !callback_ids.is_empty() {
                 let state = self.event_state(event, cx);
                 let outcome = self.run_callbacks(id, start, event, payload, state, callback_ids);
@@ -1072,6 +1086,35 @@ impl EventSink for EventDispatcher {
 
     fn pointer_pressed(&self) {
         self.space_down.set(None);
+    }
+
+    fn pointer_released(
+        &self,
+        event: &MouseUpEvent,
+        pressed: Option<NodeId>,
+        released: NodeId,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let Some(pressed) = pressed else {
+            return;
+        };
+        let Some(start) = self.common_ancestor(pressed, released) else {
+            return;
+        };
+        let mut payload = EventPayload::click(event);
+        if event.button != MouseButton::Left {
+            self.fire(start, "auxclick", &payload, window, cx);
+            return;
+        }
+        self.fire(start, "click", &payload, window, cx);
+        if event.click_count == 2 {
+            // `dblclick` carries the mouse fields only.
+            if let Some(mouse) = payload.mouse_mut() {
+                mouse.pointer = None;
+            }
+            self.fire(start, "dblclick", &payload, window, cx);
+        }
     }
 
     // Tab moves focus and dispatches nothing here. The next frame reports it.
@@ -1981,6 +2024,42 @@ mod tests {
         assert_eq!(dispatcher.common_ancestor(child, parent), Some(parent));
         assert_eq!(dispatcher.common_ancestor(child, child), Some(child));
         assert_eq!(dispatcher.common_ancestor(child, outer), Some(outer));
+    }
+
+    #[gpui::test]
+    fn a_release_clicks_only_when_both_containers_share_an_ancestor(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, parent, a] = tree_of_three(&host);
+        let (b, apart) = {
+            let mut h = host.borrow_mut();
+            let b = h.tree.create_node("div").unwrap();
+            h.tree.append_child(parent, b).unwrap();
+            (b, h.tree.create_node("div").unwrap())
+        };
+        dispatcher.engine.eval::<()>(RECORDER).unwrap();
+        for node in [parent, a, b, apart] {
+            listen(&host, node, "click");
+        }
+        let release = gpui::MouseUpEvent {
+            button: gpui::MouseButton::Left,
+            click_count: 1,
+            ..Default::default()
+        };
+        let cx = cx.add_empty_window();
+        let mut clicked = |pressed, released| {
+            cx.update(|window, cx| {
+                dispatcher.pointer_released(&release, pressed, released, window, cx);
+            });
+            seen_rows(&dispatcher).len()
+        };
+
+        assert_eq!(clicked(Some(a), b), 1, "siblings share the parent");
+        assert_eq!(clicked(Some(a), apart), 0, "no common ancestor");
+        assert_eq!(clicked(None, a), 0, "no press container");
+
+        host.borrow_mut().tree.destroy_node(b);
+        assert_eq!(clicked(Some(a), b), 0, "the release node is gone");
+        assert_eq!(clicked(Some(b), a), 0, "the press node is gone");
     }
 
     #[test]

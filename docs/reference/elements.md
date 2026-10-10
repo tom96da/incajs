@@ -30,8 +30,8 @@ keyboard.
 - Its `tabindex` is 0 by default, so it takes focus on its own. An explicit
   `tabindex` overrides that, and `el.tabIndex` reads `0` until a value is
   assigned.
-- `Enter`, `Space` and the `disabled` attribute are described under
-  [`click`](./events#focus).
+- `Enter` and `Space` are described under [Focus](./events#focus).
+- The `disabled` attribute is described under [Mouse](./events#mouse).
 
 ```vue
 <template>

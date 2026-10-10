@@ -454,6 +454,9 @@ pub(crate) fn open(
                     cx.observe_window_activation(window, |app: &mut HostedApp, window, cx| {
                         app.session.dispatcher.sync_modifiers(window, true);
                         let active = window.is_window_active();
+                        if !active {
+                            inca_gpui::clear_presses(cx);
+                        }
                         app.session
                             .host
                             .borrow_mut()

@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use gpui::{
-    App, ClickEvent, KeyDownEvent, KeyUpEvent, Keystroke, MouseButton, MouseDownEvent,
-    MouseMoveEvent, MouseUpEvent, ScrollDelta, ScrollWheelEvent, Window,
+    App, KeyDownEvent, KeyUpEvent, Keystroke, MouseButton, MouseDownEvent, MouseMoveEvent,
+    MouseUpEvent, ScrollDelta, ScrollWheelEvent, Window,
 };
 
 use crate::tree::NodeId;
@@ -65,31 +65,6 @@ event_kinds! {
     KeyUp => "keyup", KEY_UP,
 }
 
-impl EventKind {
-    /// GPUI's own dispatch requires a `gpui` `ElementId` (`.id()`) to keep
-    /// state for this kind across frames. The hover kinds get one from the
-    /// hover tracking.
-    #[must_use]
-    pub const fn needs_element_id(self) -> bool {
-        match self {
-            Self::Click | Self::DblClick | Self::AuxClick => true,
-            Self::ContextMenu
-            | Self::MouseDown
-            | Self::MouseUp
-            | Self::MouseMove
-            | Self::Wheel
-            | Self::MouseEnter
-            | Self::MouseLeave
-            | Self::MouseOver
-            | Self::MouseOut
-            | Self::Focus
-            | Self::Blur
-            | Self::KeyDown
-            | Self::KeyUp => false,
-        }
-    }
-}
-
 /// Which of [`EventKind::ALL`] a node is wired for, as one bit per kind.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct EventMask(u16);
@@ -108,21 +83,6 @@ impl EventMask {
     #[must_use]
     pub fn intersects(self, other: Self) -> bool {
         self.0 & other.0 != 0
-    }
-
-    /// Every [`EventKind::needs_element_id`] kind's bit, combined.
-    #[must_use]
-    pub fn needing_element_id() -> Self {
-        EventKind::ALL
-            .iter()
-            .filter(|kind| kind.needs_element_id())
-            .fold(Self::NONE, |mask, kind| mask | kind.mask())
-    }
-
-    /// Whether `self` includes a kind that requires a `gpui` `ElementId`.
-    #[must_use]
-    pub fn needs_element_id(self) -> bool {
-        self.intersects(Self::needing_element_id())
     }
 
     /// The bit `name` occupies, or [`EventMask::NONE`] if `name` names no
@@ -270,7 +230,7 @@ pub struct KeyPayload {
 
 /// DOM's `button` numbering for a [`MouseButton`]: the index of that
 /// button's bit in `buttons`, not the bit itself.
-const fn dom_button_bit(button: MouseButton) -> u8 {
+pub(crate) const fn dom_button_bit(button: MouseButton) -> u8 {
     match button {
         MouseButton::Left => 0,
         MouseButton::Middle => 1,
@@ -335,30 +295,6 @@ impl From<&MouseUpEvent> for EventPayload {
     }
 }
 
-impl From<&ClickEvent> for EventPayload {
-    /// `button` is the released button, 2 for a touch long press. `detail` is
-    /// the click count, 1 for a touch. A keyboard click is
-    /// [`MousePayload::keyboard_click`].
-    fn from(event: &ClickEvent) -> Self {
-        let (button, detail) = match event {
-            ClickEvent::Mouse(click) => (
-                dom_button_bit(click.up.button),
-                u32::try_from(click.up.click_count).unwrap_or(u32::MAX),
-            ),
-            ClickEvent::Touch(touch) => (if touch.long_press { 2 } else { 0 }, 1),
-            ClickEvent::Keyboard(_) => {
-                return Self::Mouse(MousePayload::keyboard_click(event.modifiers()));
-            }
-        };
-        Self::Mouse(MousePayload {
-            button,
-            detail,
-            pointer: Some(PointerSource::Mouse),
-            ..MousePayload::at(event.position(), event.modifiers())
-        })
-    }
-}
-
 impl EventPayload {
     /// The mouse fields of a `Mouse` or `Wheel` payload.
     pub fn mouse_mut(&mut self) -> Option<&mut MousePayload> {
@@ -367,6 +303,19 @@ impl EventPayload {
             Self::Wheel(wheel) => Some(&mut wheel.mouse),
             _ => None,
         }
+    }
+
+    /// The `click` or `auxclick` a release of `event`'s button produces:
+    /// `button` is the released button, `detail` the click count and `buttons`
+    /// 0, at the release point.
+    #[must_use]
+    pub fn click(event: &MouseUpEvent) -> Self {
+        Self::Mouse(MousePayload {
+            button: dom_button_bit(event.button),
+            detail: u32::try_from(event.click_count).unwrap_or(u32::MAX),
+            pointer: Some(PointerSource::Mouse),
+            ..MousePayload::at(event.position, event.modifiers)
+        })
     }
 
     /// The `contextmenu` a press of `event`'s button produces: `detail` 0 and
@@ -577,6 +526,22 @@ pub trait EventSink {
 
     /// Reports that a mouse button was pressed. Ends a pending Space press.
     fn pointer_pressed(&self);
+
+    /// Reports a mouse button release once every listener of the release has
+    /// run. `pressed` is the deepest container under the press of the same
+    /// button, and `None` when no such press is recorded. `released` is the
+    /// deepest container under the release, or the root when none is. The
+    /// sink fires `click` for the left button, `auxclick` for the others and
+    /// `dblclick` after the second `click`, at the nearest common ancestor of
+    /// the two containers. With `pressed` `None`, nothing fires.
+    fn pointer_released(
+        &self,
+        event: &MouseUpEvent,
+        pressed: Option<NodeId>,
+        released: NodeId,
+        window: &mut Window,
+        cx: &mut App,
+    );
 
     /// Runs the default action of a key press (`up` false) or release once the
     /// key's dispatch has ended, unless a listener called `preventDefault()`.
@@ -840,48 +805,30 @@ mod tests {
     }
 
     #[test]
-    fn click_payloads_carry_the_release_point_the_click_count_and_the_source() {
+    fn a_click_payload_carries_the_release_point_count_and_button() {
         let shift = gpui::Modifiers {
             shift: true,
             ..Default::default()
         };
-        let mouse = |count| {
-            ClickEvent::Mouse(gpui::MouseClickEvent {
-                down: MouseDownEvent::default(),
-                up: MouseUpEvent {
-                    position: gpui::point(gpui::px(3.0), gpui::px(4.0)),
-                    modifiers: shift,
-                    click_count: count,
-                    ..Default::default()
-                },
-            })
+        let release = |button, count| MouseUpEvent {
+            button,
+            position: gpui::point(gpui::px(3.0), gpui::px(4.0)),
+            modifiers: shift,
+            click_count: count,
         };
-        let touch = ClickEvent::Touch(gpui::TouchClickEvent {
-            position: gpui::point(gpui::px(5.0), gpui::px(6.0)),
-            tap_count: 2,
-            ..Default::default()
-        });
-        let pointer = Some(PointerSource::Mouse);
-        // (event, modifiers, expected fields)
+        let mouse = Some(PointerSource::Mouse);
+        // (event, expected fields)
         let cases = [
-            (mouse(1), shift, (3.0, 4.0, 0, 0, 1, pointer)),
-            (mouse(2), shift, (3.0, 4.0, 0, 0, 2, pointer)),
-            (
-                touch,
-                gpui::Modifiers::default(),
-                (5.0, 6.0, 0, 0, 1, pointer),
-            ),
-            (
-                ClickEvent::default(),
-                gpui::Modifiers::default(),
-                (0.0, 0.0, 0, 0, 0, Some(PointerSource::Keyboard)),
-            ),
+            (release(MouseButton::Left, 1), (3.0, 4.0, 0, 0, 1, mouse)),
+            (release(MouseButton::Left, 2), (3.0, 4.0, 0, 0, 2, mouse)),
+            (release(MouseButton::Middle, 1), (3.0, 4.0, 1, 0, 1, mouse)),
+            (release(MouseButton::Right, 1), (3.0, 4.0, 2, 0, 1, mouse)),
         ];
         let mut mismatches = Vec::new();
-        for (event, modifiers, want) in cases {
-            let payload = mouse_payload(EventPayload::from(&event));
+        for (event, want) in cases {
+            let payload = mouse_payload(EventPayload::click(&event));
             mismatches.extend(field_mismatches(&payload, want));
-            if payload.modifiers != modifiers {
+            if payload.modifiers != shift {
                 mismatches.push(format!("modifiers {:?}", payload.modifiers));
             }
         }
@@ -967,39 +914,6 @@ mod tests {
         assert_eq!(wheel.delta_x, 0.0);
         assert_eq!(wheel.delta_y, 0.0);
         assert_eq!(wheel.delta_mode, 0);
-    }
-
-    #[test]
-    fn clicks_need_an_element_id_today() {
-        assert_eq!(
-            EventMask::needing_element_id(),
-            EventMask::CLICK | EventMask::DBL_CLICK | EventMask::AUX_CLICK
-        );
-        assert!(EventMask::CLICK.needs_element_id());
-        assert!(EventMask::DBL_CLICK.needs_element_id());
-        assert!(EventMask::AUX_CLICK.needs_element_id());
-        assert!(!EventMask::CONTEXT_MENU.needs_element_id());
-        assert!(!EventMask::MOUSE_ENTER.needs_element_id());
-        assert!(!EventMask::MOUSE_LEAVE.needs_element_id());
-        assert!(!EventMask::MOUSE_OVER.needs_element_id());
-        assert!(!EventMask::MOUSE_OUT.needs_element_id());
-        assert!(!EventMask::MOUSE_DOWN.needs_element_id());
-        assert!(!EventMask::MOUSE_UP.needs_element_id());
-        assert!(!EventMask::MOUSE_MOVE.needs_element_id());
-        assert!(!EventMask::WHEEL.needs_element_id());
-        assert!(!EventMask::FOCUS.needs_element_id());
-        assert!(!EventMask::BLUR.needs_element_id());
-        assert!(!EventMask::KEY_DOWN.needs_element_id());
-        assert!(!EventMask::KEY_UP.needs_element_id());
-    }
-
-    /// A mask still needs an id if `.needs_element_id()`-requiring kind is
-    /// only one bit among several — union with an unrelated kind can't
-    /// hide it.
-    #[test]
-    fn needing_an_element_id_survives_a_union_with_other_kinds() {
-        let mixed = EventMask::CLICK | EventMask::MOUSE_MOVE;
-        assert!(mixed.needs_element_id());
     }
 
     #[test]
