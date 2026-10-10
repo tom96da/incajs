@@ -18,39 +18,8 @@ change is done, for Rust and TypeScript.
   cross-module concern (e.g. `crates/inca-gpui/tests/layout_parity.rs`).
   Cargo compiles each against the crate's public API only.
 - **Window checks**: see [MANUAL_GUI_CHECK.md](./MANUAL_GUI_CHECK.md).
-- **Tests that need both languages**: the root `tests/` package
-  (`inca-tests`), never inside a crate or a package, so neither side depends
-  on the other.
-  - Rust files in `tests/tests/`: `config_contract.rs` starts Node.
-    `js_core_integration.rs` reads `packages/core/dist`.
-  - `tests/tests/ui/` mounts the `.vue` files in `tests/tests/ui-fixtures/`
-    in the `Harness`. `build-ui-fixtures.mjs` bundles them all once per run
-    and needs `packages/core/dist`. Only top-level `.vue` files become
-    fixtures; helper components live in `ui-fixtures/parts/`.
-  - Node files in `tests/tests/` belong to `@incajs/e2e-tests`, which
-    `pnpm test` does not run: `hmr-quickjs-state`, `host-startup-failure`,
-    `host-startup-wait`, `host-shutdown`, `host-packaged-launch` and
-    `host-print-config`. They spawn the real `inca-host` binary, and the
-    first also starts a real Vite dev server.
-  - `tests/support/headless.mts` is a vitest setup file. It removes
-    `DISPLAY` and `WAYLAND_DISPLAY`, so on Linux every spawned host runs on
-    gpui's headless platform and the tests need no X server. A new test
-    needs no code for this.
-  - `host-shutdown` speaks the dev protocol on raw stdio. On macOS it opens a
-    real window and needs a window-server session.
-  - `host-startup-wait` starts the host on entries whose top-level `await`
-    stays pending and checks when `ready` arrives. Its tests run together
-    and wait out the 2 seconds in real time. Other tests that depend on that
-    wait use gpui's fake clock in `inca-host`.
-  - `host-print-config` runs `--print-config` and compares the printed JSON
-    and the exit code.
-  - `host-packaged-launch` starts the host with no argv, from an unrelated
-    working directory, with the bundle beside the executable. Its bundles
-    open no window, so it needs no display.
-- **`test-support` feature**: gates `inca-host`'s `Harness` and `snapshot`
-  and enables gpui's test platform. The root `tests/` dev-dependency turns it
-  on. Its unit tests are in `crates/inca-host/src/harness.rs` and
-  `snapshot.rs`.
+- **Tests that need both languages**: the root `tests/` package, see
+  [Root tests](#root-tests-tests).
 - **Console tests**: console behaviour is unit-tested beside the code in
   `crates/inca-jsenv/src`. Timers are checked by the shape of the output.
   Color is checked by exact SGR sequences and by stripping them.
@@ -64,13 +33,6 @@ All of the following must pass:
   `--all-targets` also compiles `examples/`, which has no automated test.
 - `cargo clippy --workspace --all-targets --exclude inca-tests -- -D warnings`
 - `cargo test --workspace --exclude inca-tests`
-- `pnpm -F incajs -F @incajs/cli build`, then
-  `cargo clippy -p inca-tests --all-targets -- -D warnings` and
-  `cargo test -p inca-tests`
-- `cargo build -p inca-host`, then `pnpm -F @incajs/e2e-tests test`. CI runs
-  the e2e step under `xvfb-run -a`.
-
-On CI, only `rust-node-ubuntu` lints and type-checks `tests/`.
 
 ### Toolchain pinning and MSRV
 
@@ -149,6 +111,65 @@ them. A package's own `format` can pass on imports the root one rejects.
   package's `vite.config.mts`. It overrides only `outDir`, `lib.entry` and
   `emptyOutDir`, and writes to a scratch directory.
 
+## Root tests (`tests/`)
+
+The root `tests/` package holds the tests that need both languages. It sits
+outside every crate and package, so neither side depends on the other. A test
+that spawns the real `inca-host` binary lives here, never in a crate or a
+package.
+
+### Rust tests (`inca-tests`)
+
+- Rust files in `tests/tests/`: `config_contract.rs` starts Node.
+  `js_core_integration.rs` reads `packages/core/dist`.
+- `tests/tests/ui/` mounts the `.vue` files in `tests/tests/ui-fixtures/` in
+  the `Harness`. `build-ui-fixtures.mjs` bundles them all once per run and
+  needs `packages/core/dist`. Only top-level `.vue` files become fixtures;
+  helper components live in `ui-fixtures/parts/`.
+- The **`test-support` feature** gates `inca-host`'s `Harness` and `snapshot`
+  and enables gpui's test platform. The root `tests/` dev-dependency turns it
+  on. Its unit tests are in `crates/inca-host/src/harness.rs` and
+  `snapshot.rs`.
+
+### Node e2e tests (`@incajs/e2e-tests`)
+
+The Node files in `tests/tests/` belong to `@incajs/e2e-tests`, which
+`pnpm test` does not run: `hmr-quickjs-state`, `host-startup-failure`,
+`host-startup-wait`, `host-shutdown`, `host-packaged-launch` and
+`host-print-config`. They spawn the real `inca-host` binary, and the first
+also starts a real Vite dev server.
+
+- `tests/support/headless.mts` is a vitest setup file. It removes `DISPLAY`
+  and `WAYLAND_DISPLAY`, so on Linux every spawned host runs on gpui's
+  headless platform and the tests need no X server. A new test needs no code
+  for this.
+- `tests/support/hostBin.mts` exports `resolveTestHostBin()`, which returns
+  `target/debug/inca-host`, else `target/release/inca-host`. The tests that
+  spawn the host import it.
+- `host-shutdown` speaks the dev protocol on raw stdio. On macOS it opens a
+  real window and needs a window-server session.
+- `host-startup-wait` starts the host on entries whose top-level `await`
+  stays pending and checks when `ready` arrives. Its tests run together and
+  wait out the 2 seconds in real time. Other tests that depend on that wait
+  use gpui's fake clock in `inca-host`.
+- `host-print-config` runs `--print-config` and compares the printed JSON and
+  the exit code.
+- `host-packaged-launch` starts the host with no argv, from an unrelated
+  working directory, with the bundle beside the executable. Its bundles open
+  no window, so it needs no display.
+
+### Required checks
+
+All of the following must pass:
+
+- `pnpm -F incajs -F @incajs/cli build`, then
+  `cargo clippy -p inca-tests --all-targets -- -D warnings` and
+  `cargo test -p inca-tests`
+- `cargo build -p inca-host`, then `pnpm -F @incajs/e2e-tests test`. CI runs
+  the e2e step under `xvfb-run -a`.
+
+On CI, only `rust-node-ubuntu` lints and type-checks `tests/`.
+
 ## Running tests
 
 - Whole workspace, from the root: `pnpm test`, `pnpm typecheck` (covers
@@ -156,4 +177,4 @@ them. A package's own `format` can pass on imports the root one rejects.
 - One package: `pnpm --filter <pkg> test`, `typecheck` or `build`. A single
   package can miss what another package's tests catch.
 - Coverage: `pnpm test:coverage`.
-- Rust and the e2e test: see Required checks above.
+- Rust and the root tests: see the Required checks of each section.
