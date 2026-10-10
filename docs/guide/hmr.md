@@ -42,5 +42,3 @@ the changed module:
 - A style-only change to an already-mounted node doesn't repaint. A
   structural edit (adding, removing, or changing text) repaints
   correctly, and a full reload repaints a style-only change too.
-- HMR can't recover from a source file that was already broken when the
-  session started.

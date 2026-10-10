@@ -13,7 +13,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Writable } from "node:stream";
 
-import { afterAll, beforeAll, expect, it, onTestFailed, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, onTestFailed, vi } from "vitest";
 
 import { defaultBundler } from "../../packages/cli/src/defaultBundler.mts";
 import { HostClient } from "../../packages/cli/src/dev-client/hostClient.mts";
@@ -289,3 +289,126 @@ it(
   },
   WAIT_TIMEOUT_MS + 10_000,
 );
+
+describe("a session that starts on a broken source", () => {
+  const BROKEN_APP = appVue(STYLE_V1, "").replace(
+    "const clicks = ref(0);",
+    "const clicks = ref(0);\nconst oops = (;",
+  );
+  const THROWING_ENTRY = `throw new Error("startup boom");\n`;
+
+  interface Session {
+    dir: string;
+    channel: HmrChannel;
+    client: HostClient;
+    stderr: () => string;
+    buildErrors: BuildFailure[];
+    appErrors: AppErrorParams[];
+    ready: () => boolean;
+  }
+
+  const sessions: Session[] = [];
+
+  /** Starts a host on a fresh fixture holding `entryText` and `appText`. */
+  async function startSession(entryText: string, appText: string): Promise<Session> {
+    const dir = await mkdtemp(path.join(scratchRoot, "broken-"));
+    const entry = path.join(dir, "entry.mts");
+    await writeFile(path.join(dir, "App.vue"), appText);
+    await writeFile(entry, entryText);
+
+    let stderr = "";
+    let isReady = false;
+    const session = { buildErrors: [], appErrors: [] } as unknown as Session;
+    const channel = await defaultBundler.hmr!({
+      entry,
+      cwd: dir,
+      stdout: discard(),
+      stderr: discard(),
+      quiet: true,
+      notify: (payload) => session.client?.notify("vite", payload),
+      reload: () => void session.client?.call("reload", undefined, RELOAD_TIMEOUT_MS),
+      onError: (error) => session.buildErrors.push(error),
+    });
+    const client = new HostClient({
+      entryFile: channel.entryFile,
+      hostBin,
+      onStderr: (line) => {
+        stderr += line;
+      },
+      onReady: () => {
+        isReady = true;
+      },
+      onAppError: (error) => session.appErrors.push(error),
+      integrations: { vite: (params) => channel.dispatch(params) },
+    });
+    Object.assign(session, { dir, channel, client, stderr: () => stderr, ready: () => isReady });
+    sessions.push(session);
+    await client.start();
+    return session;
+  }
+
+  afterAll(async () => {
+    for (const { client, channel } of sessions) {
+      try {
+        await client.stop();
+      } finally {
+        await channel.close();
+      }
+    }
+  });
+
+  it(
+    "reports the failure once, and mounts once the file is fixed",
+    async () => {
+      const session = await startSession(ENTRY_MTS, BROKEN_APP);
+      onTestFailed(() => console.error(`--- host stderr ---\n${session.stderr()}`));
+
+      await vi.waitFor(() => expect(session.buildErrors).toHaveLength(1), {
+        timeout: WAIT_TIMEOUT_MS,
+      });
+      expect(session.buildErrors[0]?.message).toContain("Unexpected token");
+      expect(session.appErrors).toEqual([]);
+      expect(mountedCount(session.stderr())).toBe(0);
+
+      await writeFile(path.join(session.dir, "App.vue"), appVue(STYLE_V1, ""));
+      await vi.waitFor(() => expect(mountedCount(session.stderr())).toBe(1), {
+        timeout: WAIT_TIMEOUT_MS,
+      });
+
+      session.client.notify("tick", {});
+      await vi.waitFor(() => expect(session.stderr()).toContain("[e2e] clicks=1"), {
+        timeout: WAIT_TIMEOUT_MS,
+      });
+      expect(session.buildErrors).toHaveLength(1);
+      expect(session.appErrors).toEqual([]);
+    },
+    WAIT_TIMEOUT_MS * 2 + 10_000,
+  );
+
+  it(
+    "reports an entry that throws once, and mounts once the entry is fixed",
+    async () => {
+      const session = await startSession(THROWING_ENTRY, appVue(STYLE_V1, ""));
+      onTestFailed(() => console.error(`--- host stderr ---\n${session.stderr()}`));
+
+      await vi.waitFor(() => expect(session.appErrors).toHaveLength(1), {
+        timeout: WAIT_TIMEOUT_MS,
+      });
+      expect(session.appErrors[0]?.message).toContain("startup boom");
+      expect(session.buildErrors).toEqual([]);
+
+      await writeFile(path.join(session.dir, "entry.mts"), ENTRY_MTS);
+      await vi.waitFor(() => expect(mountedCount(session.stderr())).toBe(1), {
+        timeout: WAIT_TIMEOUT_MS,
+      });
+
+      session.client.notify("tick", {});
+      await vi.waitFor(() => expect(session.stderr()).toContain("[e2e] clicks=1"), {
+        timeout: WAIT_TIMEOUT_MS,
+      });
+      expect(session.appErrors).toHaveLength(1);
+      expect(session.buildErrors).toEqual([]);
+    },
+    WAIT_TIMEOUT_MS * 2 + 10_000,
+  );
+});

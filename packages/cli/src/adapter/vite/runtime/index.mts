@@ -13,6 +13,7 @@ import type { ModuleRunnerTransport } from "vite/module-runner";
 interface IncaDev {
   send: (method: string, paramsJson: string) => void;
   receive?: (method: string, paramsJson: string) => void;
+  setLoadFailed?: (failed: boolean) => void;
 }
 
 declare global {
@@ -23,11 +24,13 @@ declare global {
 /**
  * A `ModuleRunnerTransport` that carries Vite's runner protocol over
  * `globalThis.__inca_dev__`, nested under the `"vite"` method name so the
- * host's own dev-protocol channel stays bundler-agnostic.
+ * host's own dev-protocol channel stays bundler-agnostic. `onFileChanged`
+ * runs on each `file-changed` payload before the payload is forwarded to the
+ * runner.
  */
-export function createIncaDevTransport(): Required<
-  Pick<ModuleRunnerTransport, "connect" | "send">
-> {
+export function createIncaDevTransport(
+  onFileChanged?: () => void,
+): Required<Pick<ModuleRunnerTransport, "connect" | "send">> {
   return {
     connect({ onMessage }) {
       const dev = globalThis.__inca_dev__;
@@ -36,7 +39,9 @@ export function createIncaDevTransport(): Required<
       // nothing to call `onDisconnection` for.
       dev.receive = (method, paramsJson) => {
         if (method !== "vite") return;
-        onMessage(JSON.parse(paramsJson));
+        const payload = JSON.parse(paramsJson);
+        if (payload?.type === "custom" && payload.event === "file-changed") onFileChanged?.();
+        onMessage(payload);
       };
     },
     send(data) {
@@ -47,26 +52,54 @@ export function createIncaDevTransport(): Required<
   };
 }
 
+/** Whether `error` came from the development server, which has already reported it. */
+function isServerFailure(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "runnerError" in error;
+}
+
 /**
  * Builds a `ModuleRunner` wired to the app's `__inca_dev__` channel and
  * imports `entryId` through it. `./globals.mts`'s import above already
  * installed the runtime globals `vite/module-runner` needs.
  *
+ * Resolves with the entry's exports and never rejects for a broken source.
+ * A failed import is retried after the next `file-changed` payload, until
+ * one succeeds. A failure the development server reported stays silent. Any other
+ * failure is rethrown as an unhandled rejection.
+ * `__inca_dev__.setLoadFailed(true)` follows a failed attempt and
+ * `setLoadFailed(false)` precedes each retry.
+ *
  * `sourcemapInterceptor: false` is required, not just faster: the
  * alternative reads V8 `CallSite` objects off `Error.stack`, and this
  * engine's `Error.stack` is a plain string, not `CallSite` objects.
  *
- * `hmr.logger` is fully muted: the dev server already reports each
+ * `hmr.logger` is fully muted: the development server already reports each
  * update, and a failed one, on its own — see `hmr.mts`'s `onError`.
  */
-export function start(entryId: string): Promise<unknown> {
+export async function start(entryId: string): Promise<unknown> {
+  let edited = (): void => {};
   const runner = new ModuleRunner(
     {
-      transport: { ...createIncaDevTransport(), timeout: 0 },
+      transport: { ...createIncaDevTransport(() => edited()), timeout: 0 },
       hmr: { logger: { debug: () => {}, error: () => {} } },
       sourcemapInterceptor: false,
     },
     new ESModulesEvaluator(),
   );
-  return runner.import(entryId);
+  for (;;) {
+    // Armed before the attempt, so an edit that lands during it is caught.
+    const changed = new Promise<void>((resolve) => {
+      edited = resolve;
+    });
+    try {
+      return await runner.import(entryId);
+    } catch (error) {
+      if (!isServerFailure(error)) void Promise.reject(error);
+      globalThis.__inca_dev__?.setLoadFailed?.(true);
+    }
+    await changed;
+    // Clears every cached module, so dependencies that already loaded, such as the Vue runtime, are evaluated again.
+    runner.clearCache();
+    globalThis.__inca_dev__?.setLoadFailed?.(false);
+  }
 }

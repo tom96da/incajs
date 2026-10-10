@@ -147,23 +147,6 @@ A fixed entry is deleted and its ID is never reused.
   gap likely applies to any other DOM-element method or property a
   `.vue` app would otherwise reach for on a template `ref`.
 
-- **B-031 `inca dev --experimental-hmr` never recovers from a source file that was already broken when the session started**
-  `Units: cli · Size: M · Impact: Medium`
-
-  A live edit that
-  introduces a compile error and is later fixed correctly triggers a
-  normal update; starting the session against an already-broken file
-  doesn't — fixing it afterward produces no update, only restarting
-  `inca dev` recovers. Reproduced by hand: launch against a `.vue` file
-  with a syntax error already present, then correct it while the session
-  keeps running. Cause: the very first `import()` never completes, so
-  Vite's dev server never adds the file to its module graph, leaving it
-  nothing to invalidate once the file changes. Likely fix: retry that
-  `import()` directly once a later file change is detected, instead of
-  relying on Vite's own graph-based invalidation. The same broken
-  startup also duplicates its own failure report, a separate, more
-  general gap B-032 covers.
-
 - **B-036 Reverting a script edit under `--experimental-hmr` sometimes applies nothing**
   `Units: cli · Size: M · Impact: Medium · Status: needs repro`
 
@@ -500,21 +483,6 @@ A fixed entry is deleted and its ID is never reused.
   loop calls `__inca_dev__.setLoadFailed(true)` on a failed start and
   `__inca_dev__.setLoadFailed(false)` when a retry begins. The host then opens
   the window at the app's content size once the first load succeeds.
-
-- **B-032 The HMR bootstrap's rejection handler doesn't distinguish who's responsible for reporting a failure**
-  `Units: cli · Size: S · Impact: Low`
-
-  A Vite/bundler-caused failure
-  is Node's own event, and Node already reports it (`hmr.mts`'s
-  `onError`). A genuine error in the running app's own code, unrelated
-  to Vite, has no other reporter, and belongs to the app to report. The
-  HMR bootstrap script (`writeHmrEntry` in `hmr.mts`) doesn't make this
-  distinction: every rejected `import()` goes to `console.error(err)`
-  inside the running app, regardless of which side actually caused it.
-  A Vite-caused failure at startup therefore prints twice — once from
-  Node, once raw and unstyled from the app (see B-031). Fix:
-  have the bootstrap recognize a Vite-shaped rejection and skip its own
-  report for that one case, while still reporting anything else itself.
 
 - **B-033 `[inca] reload`/`[inca] update`'s timing isn't the useful number**
   `Units: cli,host · Size: M · Impact: Low`
