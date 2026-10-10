@@ -10,6 +10,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.0.13] - 2026-10-10
+
 ### Added
 
 - style keys allow camelCase, kebab-case and snake_case ([acb8bbf](https://github.com/tom96da/incajs/commit/acb8bbf)) ([ac38fea](https://github.com/tom96da/incajs/commit/ac38fea))
@@ -255,7 +257,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - prebuilt `inca-host` binaries for linux-x64, linux-arm64, and darwin-arm64, resolved automatically per platform
 - click event dispatch from the native tree back into JS
 
-[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.12...HEAD
+[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.13...HEAD
+[0.0.13]: https://github.com/tom96da/incajs/releases/tag/v0.0.13
 [0.0.12]: https://github.com/tom96da/incajs/releases/tag/v0.0.12
 [0.0.11]: https://github.com/tom96da/incajs/releases/tag/v0.0.11
 [0.0.10]: https://github.com/tom96da/incajs/releases/tag/v0.0.10

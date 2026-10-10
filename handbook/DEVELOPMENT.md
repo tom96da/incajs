@@ -39,7 +39,7 @@ History is in [PLAN.md](./PLAN.md) and [CHANGELOG.md](../CHANGELOG.md).
 
 ### Foundation
 
-- **Release**: `v0.0.12`.
+- **Release**: `v0.0.13`.
 - **Node.js**: 22.18 or newer.
 - **Toolchain**: zed `v1.22.0` for `gpui`, rquickjs `0.14.0`.
 - **Linux binaries**: built in an `ubuntu:22.04` container by both workflows,
