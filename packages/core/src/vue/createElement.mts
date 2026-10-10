@@ -1,8 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import type { IncaCore } from "../rendererCore.mts";
-import type { NodeId, TagName } from "../types.mts";
+import type { IncaCore, NodeId, TagName } from "../rendererCore.mts";
 import type { IncaElement } from "./nodeOps.mts";
 
 /**

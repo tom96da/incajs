@@ -14,6 +14,7 @@ export {
   setStyle,
   removeStyle,
 } from "./tree.mts";
+export type * from "./types.mts";
 
 /**
  * The tree/event primitives a custom renderer (`incajs/vue`) drives the

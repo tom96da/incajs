@@ -4,8 +4,7 @@
 import type { RendererOptions } from "@vue/runtime-core";
 
 import { createIncaElement } from "./createElement.mts";
-import type { IncaCore } from "../rendererCore.mts";
-import type { NodeId, TagName } from "../types.mts";
+import type { IncaCore, NodeId, TagName } from "../rendererCore.mts";
 
 /**
  * A container host node: either a real element or the hidden stand-in
