@@ -216,16 +216,6 @@ A fixed entry is deleted and its ID is never reused.
   `click` handler also stops ancestors' `mouseup` and `dblclick`. The browser
   order is `mouseup`, `click` or `auxclick`, then `dblclick`.
 
-- **B-087 Ctrl+C in `inca dev` leaves the terminal echoing arrow keys**
-  `Units: cli,host · Size: S–M · Impact: Medium · Status: needs repro`
-
-  After `inca dev` is stopped with Ctrl+C, the shell echoes arrow keys as
-  `^[[A` instead of recalling the previous command, until the terminal is
-  reset. The cause is not known. It may be the terminal mode left behind by
-  the host or by the CLI process, or a shell that was not given the terminal
-  back. Reproduce on each platform with the CLI run directly and through
-  `pnpm run`, and compare the state with `stty -a` before and after.
-
 - **B-088 Stack frames point into generated code**
   `Units: cli,host,jsenv · Size: L · Impact: Medium`
 

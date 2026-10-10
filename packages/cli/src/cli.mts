@@ -1,6 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import fs from "node:fs";
 import path from "node:path";
 
 import { build } from "./build.mts";
@@ -13,6 +14,18 @@ const USAGE = "Usage: inca <dev|build|package>";
 /** Formats a path relative to the working directory, the way the bundler reports its own. */
 function relative(target: string): string {
   return path.relative(process.cwd(), target);
+}
+
+/**
+ * Closes fds 0-2 so Node's exit-time terminal reset hits closed fds. Call it
+ * last: a log line or shutdown step after it loses its output.
+ */
+function closeStdio(): void {
+  for (const fd of [0, 1, 2]) {
+    try {
+      fs.closeSync(fd);
+    } catch {}
+  }
 }
 
 /** Parses argv and runs the named subcommand: `dev`, `build`, or `package`. */
@@ -66,6 +79,7 @@ export async function run(argv: readonly string[] = process.argv): Promise<void>
 
   try {
     await dev({ signal: controller.signal, experimentalHmr });
+    if (controller.signal.aborted) closeStdio();
   } catch (error) {
     printFault(process.stderr, "dev failed", toFault(error), { timestamp: true });
     process.exitCode = 1;

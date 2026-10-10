@@ -1,6 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import fs from "node:fs";
 import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -125,6 +126,24 @@ describe("run", () => {
       expect(written(stderr)).toContain("[inca] shutting down");
     },
   );
+
+  it("closes fds 0-2 once dev() returns after a signal, and not after a normal return", async () => {
+    const close = vi.spyOn(fs, "closeSync").mockImplementation(() => {});
+    try {
+      mockedDev.mockResolvedValueOnce(undefined);
+      await run(["node", "inca", "dev"]);
+      expect(close).not.toHaveBeenCalled();
+
+      mockedDev.mockImplementationOnce(async ({ signal }) => {
+        process.emit("SIGINT");
+        expect(signal.aborted).toBe(true);
+      });
+      await run(["node", "inca", "dev"]);
+      expect(close.mock.calls.map((call) => call[0])).toEqual([0, 1, 2]);
+    } finally {
+      close.mockRestore();
+    }
+  });
 
   it("shuts down once when both signals arrive", () => {
     void run(["node", "inca", "dev"]);
