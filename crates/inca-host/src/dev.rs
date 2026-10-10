@@ -267,10 +267,15 @@ impl Serve {
                 .is_some_and(|pending| pending.loading.start_failed())
     }
 
-    /// Restarts the deadline when the app clears a failed-load report.
+    /// Restarts the deadline when the app clears a failed-load report, even
+    /// when the report and the clearing happened between two polls.
     fn track_hold(&mut self, cx: &App) {
         let held = self.held();
-        if self.was_held && !held {
+        let reported = self
+            .pending
+            .as_ref()
+            .is_some_and(|pending| pending.loading.reported_failure());
+        if (self.was_held || reported) && !held {
             self.deadline = cx.background_executor().now() + LOAD_TIMEOUT;
         }
         self.was_held = held;
@@ -332,7 +337,8 @@ impl Serve {
     /// opens on whatever the app has mounted.
     fn time_out(&mut self, cx: &mut App) {
         self.advance(cx);
-        if self.window.is_some() || self.held() {
+        // A report or a clear made in the final poll moves the deadline on.
+        if self.window.is_some() || self.held() || cx.background_executor().now() < self.deadline {
             return;
         }
         if let Some(Pending { loading, ids }) = self.pending.take() {
@@ -1324,6 +1330,105 @@ mod tests {
         assert_eq!(methods(&capturing), ["ready"]);
         let window = the_window(cx).unwrap();
         assert_eq!(bounds_of(cx, window), (800.0, 600.0));
+    }
+
+    #[gpui::test]
+    fn a_report_cleared_within_one_poll_restarts_the_timeout(cx: &mut TestAppContext) {
+        let (capturing, writer) = capture();
+        let sender = serve(
+            cx,
+            "__inca_dev__.receive = () => { \
+                 __inca_dev__.setLoadFailed(true); __inca_dev__.setLoadFailed(false); }; \
+             await new Promise(() => {});",
+            TEST_ENTRY_PATH,
+            &writer,
+        );
+        cx.run_until_parked();
+        cx.executor().advance_clock(Duration::from_millis(1500));
+        notify(&sender, "blink");
+        cx.run_until_parked();
+
+        cx.executor().advance_clock(Duration::from_millis(1900));
+        cx.run_until_parked();
+        assert!(the_window(cx).is_none());
+
+        cx.executor().advance_clock(Duration::from_millis(100));
+        cx.run_until_parked();
+        assert_eq!(methods(&capturing), ["ready"]);
+    }
+
+    /// Serves `source` until 1 ms before the deadline, and returns the loop's
+    /// sender with an engine handle for queueing jobs that no poll has drained.
+    fn serve_with_engine_handle(
+        cx: &mut TestAppContext,
+        source: &str,
+        writer: &SharedWriter,
+    ) -> (async_channel::Sender<String>, Rc<inca_jsenv::Engine>) {
+        let started = cx.executor().now();
+        let first =
+            Session::begin(TEST_ENTRY_PATH, source, reporter_for(writer), Some(writer)).unwrap();
+        let engine = Rc::clone(&first.session().engine);
+        let sender = serve_started(cx, first, started, TEST_ENTRY_PATH, writer);
+        cx.run_until_parked();
+        cx.executor().advance_clock(Duration::from_millis(1999));
+        cx.run_until_parked();
+        (sender, engine)
+    }
+
+    #[gpui::test]
+    fn a_failed_load_report_made_by_the_final_poll_keeps_the_window_closed(
+        cx: &mut TestAppContext,
+    ) {
+        let (capturing, writer) = capture();
+        let (_sender, engine) = serve_with_engine_handle(cx, NEVER_SETTLES, &writer);
+        engine
+            .eval::<()>("Promise.resolve().then(() => __inca_dev__.setLoadFailed(true));")
+            .unwrap();
+
+        cx.executor().advance_clock(Duration::from_millis(1));
+        cx.run_until_parked();
+
+        assert!(the_window(cx).is_none());
+        assert!(capturing.0.borrow().is_empty());
+    }
+
+    #[gpui::test]
+    fn a_report_cleared_by_the_final_poll_restarts_the_timeout(cx: &mut TestAppContext) {
+        let (capturing, writer) = capture();
+        let (_sender, engine) = serve_with_engine_handle(cx, NEVER_SETTLES, &writer);
+        engine
+            .eval::<()>(
+                "Promise.resolve().then(() => { \
+                     __inca_dev__.setLoadFailed(true); __inca_dev__.setLoadFailed(false); });",
+            )
+            .unwrap();
+
+        cx.executor().advance_clock(Duration::from_millis(1));
+        cx.run_until_parked();
+        assert!(the_window(cx).is_none());
+        assert!(capturing.0.borrow().is_empty());
+
+        cx.executor().advance_clock(Duration::from_secs(2));
+        cx.run_until_parked();
+        assert!(the_window(cx).is_some());
+        assert_eq!(written(&capturing), [ready_message()]);
+    }
+
+    #[gpui::test]
+    fn an_entry_that_settles_at_the_deadline_opens_one_window(cx: &mut TestAppContext) {
+        let (capturing, writer) = capture();
+        let (_sender, engine) = serve_with_engine_handle(
+            cx,
+            "await new Promise((r) => { globalThis.release = r; });",
+            &writer,
+        );
+        engine.eval::<()>("release();").unwrap();
+
+        cx.executor().advance_clock(Duration::from_millis(1));
+        cx.run_until_parked();
+
+        assert!(the_window(cx).is_some());
+        assert_eq!(written(&capturing), [ready_message()]);
     }
 
     #[gpui::test]

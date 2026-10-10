@@ -35,9 +35,12 @@ With `--dev` the host also reads JSON-RPC messages on stdin and writes its
 own on stdout. It starts the entry and serves those messages while the entry's
 top-level `await` is pending. The window opens at the entry's content size once
 the `await` settles. An entry still pending after 2 seconds opens the window at
-the size the config gives, else the default size, unless the app reported a
-failed load with `__inca_dev__.setLoadFailed(true)`. The host then keeps waiting until a load
-succeeds. A new attempt reported by the app restarts the 2 seconds.
+the size the config gives, else the size of the content already mounted, else
+the default size. When the app reports a failed load with
+`__inca_dev__.setLoadFailed(true)`, the window stays closed until a load
+succeeds, and a new attempt reported by the app restarts the 2 seconds. While a
+reload's load is pending, notifications go to the loading app, and to the
+window's app after the load settles.
 
 `--print-config` reads the `inca.json` beside the entry, prints the settings
 the host applies as JSON, and returns after printing. A `null` marks a value

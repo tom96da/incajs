@@ -1,14 +1,14 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Binds `globalThis.__inca_dev__`, the dev-only channel a running app uses
-//! to trade arbitrary-named messages with whatever is on the other end of
-//! the host's own protocol — a bundler's HMR channel, say. This crate knows
-//! nothing about that protocol's wire format or any particular bundler; it
-//! only carries a method name and a parsed `params` value each way, exactly
-//! like [`crate::dispatch`] carries a native input event into JS without
-//! knowing what a caller does with it. [`install_load_signal`] adds a flag
-//! the app sets to report that its load failed or recovered.
+//! Binds `globalThis.__inca_dev__`, the channel a running app in the
+//! development window uses to trade arbitrary-named messages with whatever is
+//! on the other end of the host's own protocol — a bundler's HMR channel, say.
+//! This crate knows nothing about that protocol's wire format or any particular
+//! bundler; it only carries a method name and a parsed `params` value each way,
+//! exactly like [`crate::dispatch`] carries a native input event into JS
+//! without knowing what a caller does with it. [`install_load_signal`] adds a
+//! flag the app sets to report that its load failed or recovered.
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -26,8 +26,7 @@ pub type DevSend = Rc<dyn Fn(&str, Value)>;
 
 /// Installs `globalThis.__inca_dev__`, with the method
 /// `send(method: string, paramsJson: string)`. `paramsJson` is parsed as
-/// JSON before `on_send` is called; invalid JSON raises a JS `TypeError`
-/// rather than panicking or silently doing nothing.
+/// JSON before `on_send` is called; invalid JSON raises a JS `TypeError`.
 ///
 /// # Errors
 ///
@@ -52,20 +51,43 @@ pub fn install_dev(ctx: &Ctx<'_>, on_send: DevSend) -> JsResult<()> {
     Ok(())
 }
 
+/// What `setLoadFailed` reports: the latest value, and how many times the app
+/// reported `true`.
+#[derive(Debug, Default)]
+pub struct LoadSignal {
+    failed: Cell<bool>,
+    failures: Cell<u32>,
+}
+
+impl LoadSignal {
+    /// The value of the latest `setLoadFailed` call, `false` before any.
+    #[must_use]
+    pub fn failed(&self) -> bool {
+        self.failed.get()
+    }
+
+    /// How many `setLoadFailed(true)` calls have happened. Compare two reads
+    /// to detect a `true` that a later `false` cleared.
+    #[must_use]
+    pub fn failures(&self) -> u32 {
+        self.failures.get()
+    }
+}
+
 /// Adds `setLoadFailed(failed: boolean)` to `globalThis.__inca_dev__`. Each
-/// call stores `failed` in `flag`, so the latest call wins and repeating a
-/// value changes nothing.
+/// call updates `signal`: the latest call sets [`LoadSignal::failed`], and a
+/// `true` adds one to [`LoadSignal::failures`].
 ///
 /// An app passes `true` when its load failed and a retry may follow, and
 /// `false` when a new attempt begins or the load recovered. A non-boolean
-/// argument raises a JS `TypeError` and leaves `flag` as it was.
+/// argument raises a JS `TypeError` and leaves `signal` as it was.
 ///
 /// # Errors
 ///
 /// Returns an error if `globalThis.__inca_dev__` is missing or is not an
 /// object (call [`install_dev`] first), or defining `setLoadFailed` on
 /// it fails.
-pub fn install_load_signal(ctx: &Ctx<'_>, flag: Rc<Cell<bool>>) -> JsResult<()> {
+pub fn install_load_signal(ctx: &Ctx<'_>, signal: Rc<LoadSignal>) -> JsResult<()> {
     let dev: Object = ctx.globals().get("__inca_dev__")?;
     dev.set(
         "setLoadFailed",
@@ -75,7 +97,10 @@ pub fn install_load_signal(ctx: &Ctx<'_>, flag: Rc<Cell<bool>>) -> JsResult<()> 
                 let failed = failed
                     .as_bool()
                     .ok_or_else(|| Exception::throw_type(&ctx, "setLoadFailed takes a boolean"))?;
-                flag.set(failed);
+                signal.failed.set(failed);
+                if failed {
+                    signal.failures.set(signal.failures.get().wrapping_add(1));
+                }
                 Ok(())
             },
         )?,
@@ -84,10 +109,9 @@ pub fn install_load_signal(ctx: &Ctx<'_>, flag: Rc<Cell<bool>>) -> JsResult<()> 
 
 /// Calls `globalThis.__inca_dev__.receive?.(method, paramsJson)` inside
 /// `engine`, so a message the host's own protocol doesn't recognize as one
-/// of its own methods still reaches the running app. Defensive by design: a
-/// missing `__inca_dev__`/`receive` is a no-op, never a fault. A throw from
-/// `receive` itself is captured and returned rather than propagated — the
-/// caller decides how to report it, same as any other JS fault.
+/// of its own methods still reaches the running app. A missing
+/// `__inca_dev__` or `receive` does nothing. A throw from `receive` is
+/// returned as an [`EngineError`], and the caller decides how to report it.
 #[must_use]
 pub fn call_dev_receive(engine: &Engine, method: &str, params_json: &str) -> Option<EngineError> {
     engine.with(|ctx| {
@@ -152,9 +176,10 @@ mod tests {
         assert!(engine.eval::<bool>("globalThis.threw;").unwrap());
     }
 
-    fn flag_engine(initial: bool) -> (Engine, Rc<Cell<bool>>) {
+    fn flag_engine(initial: bool) -> (Engine, Rc<LoadSignal>) {
         let engine = engine_with_dev(Rc::new(|_, _| {}));
-        let flag = Rc::new(Cell::new(initial));
+        let flag = Rc::new(LoadSignal::default());
+        flag.failed.set(initial);
         let handle = Rc::clone(&flag);
         engine
             .with(|ctx| install_load_signal(&ctx, handle))
@@ -168,11 +193,24 @@ mod tests {
         engine
             .eval::<()>("__inca_dev__.setLoadFailed(true); __inca_dev__.setLoadFailed(false);")
             .unwrap();
-        assert!(!flag.get());
+        assert!(!flag.failed());
         engine
             .eval::<()>("__inca_dev__.setLoadFailed(false); __inca_dev__.setLoadFailed(true);")
             .unwrap();
-        assert!(flag.get());
+        assert!(flag.failed());
+    }
+
+    #[test]
+    fn set_load_failed_counts_each_true_even_when_false_follows() {
+        let (engine, flag) = flag_engine(false);
+        engine
+            .eval::<()>("__inca_dev__.setLoadFailed(true); __inca_dev__.setLoadFailed(false);")
+            .unwrap();
+        assert_eq!(flag.failures(), 1);
+        engine
+            .eval::<()>("__inca_dev__.setLoadFailed(false); __inca_dev__.setLoadFailed(true);")
+            .unwrap();
+        assert_eq!(flag.failures(), 2);
     }
 
     #[test]
@@ -181,11 +219,11 @@ mod tests {
         engine
             .eval::<()>("__inca_dev__.setLoadFailed(true, 1);")
             .unwrap();
-        assert!(flag.get());
+        assert!(flag.failed());
     }
 
     #[test]
-    fn set_load_failed_rejects_a_non_boolean_and_keeps_the_flag() {
+    fn set_load_failed_rejects_a_non_boolean_and_keeps_the_signal() {
         for arg in ["'true'", "1", "undefined", "null", ""] {
             let (engine, flag) = flag_engine(true);
             engine
@@ -196,14 +234,15 @@ mod tests {
                 ))
                 .unwrap();
             assert!(engine.eval::<bool>("globalThis.threw;").unwrap(), "{arg:?}");
-            assert!(flag.get(), "{arg:?}");
+            assert!(flag.failed(), "{arg:?}");
+            assert_eq!(flag.failures(), 0, "{arg:?}");
         }
     }
 
     #[test]
     fn install_load_signal_fails_before_install_dev() {
         let engine = Engine::new().unwrap();
-        let result = engine.with(|ctx| install_load_signal(&ctx, Rc::new(Cell::new(false))));
+        let result = engine.with(|ctx| install_load_signal(&ctx, Rc::new(LoadSignal::default())));
         assert!(result.is_err());
     }
 
@@ -235,7 +274,7 @@ mod tests {
     }
 
     #[test]
-    fn call_dev_receive_reports_a_throw_rather_than_propagating_it() {
+    fn call_dev_receive_returns_a_throw_as_an_engine_error() {
         let engine = Engine::new().unwrap();
         engine
             .eval::<()>(

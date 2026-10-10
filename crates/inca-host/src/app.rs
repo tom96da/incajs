@@ -33,8 +33,8 @@ use gpui_platform::application;
 
 use inca_bridge::bindings::install;
 use inca_bridge::{
-    ErrorReporter, EventDispatcher, FocusTransition, Host, install_dev, install_load_signal,
-    stderr_reporter,
+    ErrorReporter, EventDispatcher, FocusTransition, Host, LoadSignal, install_dev,
+    install_load_signal, stderr_reporter,
 };
 use inca_gpui::{AttributeValue, NodeId, VirtualNode, render_tree_with_events};
 use inca_jsenv::{Engine, EngineError, PendingModule, console};
@@ -145,9 +145,13 @@ pub(crate) fn window_size(
     )
 }
 
-/// An engine ready for an entry: its host, the engine, and the flag
-/// `setLoadFailed` sets.
-type StartedEngine = (Rc<RefCell<Host>>, Engine, Rc<Cell<bool>>);
+/// An engine ready for an entry: its host, the engine, and what
+/// `setLoadFailed` reports.
+struct StartedEngine {
+    host: Rc<RefCell<Host>>,
+    engine: Engine,
+    signal: Rc<LoadSignal>,
+}
 
 /// One loaded bundle: the engine running its JS, the tree that JS built, and
 /// the dispatcher wiring events back. A reload replaces all of it at once,
@@ -175,8 +179,9 @@ impl Session {
     /// runs, so an entry that logs while evaluating finds `console`.
     ///
     /// `__inca_dev__` exists only when `writer` is `Some`; see
-    /// [`inca_bridge::install_dev`] for what it does. The returned flag is
-    /// what `setLoadFailed` sets, and stays `false` in production.
+    /// [`inca_bridge::install_dev`] for what it does. The returned `signal`
+    /// records what `setLoadFailed` reports, and stays at its defaults in
+    /// production.
     ///
     /// # Errors
     ///
@@ -187,7 +192,7 @@ impl Session {
         writer: Option<&SharedWriter>,
     ) -> Result<StartedEngine, EngineError> {
         let host = Rc::new(RefCell::new(Host::default()));
-        let start_failed = Rc::new(Cell::new(false));
+        let signal = Rc::new(LoadSignal::default());
 
         let module_root = Path::new(entry_path).parent().unwrap_or(Path::new("."));
         let engine = Engine::builder().module_root(module_root).build()?;
@@ -196,12 +201,16 @@ impl Session {
                 .and_then(|()| install(&ctx, &host))
                 .and_then(|()| match writer {
                     Some(writer) => install_dev(&ctx, crate::dev::dev_send(writer))
-                        .and_then(|()| install_load_signal(&ctx, Rc::clone(&start_failed))),
+                        .and_then(|()| install_load_signal(&ctx, Rc::clone(&signal))),
                     None => Ok(()),
                 })
                 .map_err(|err| EngineError::capture(&ctx, &err))
         })?;
-        Ok((host, engine, start_failed))
+        Ok(StartedEngine {
+            host,
+            engine,
+            signal,
+        })
     }
 
     /// Wires event dispatch onto an engine whose entry has been started.
@@ -218,8 +227,7 @@ impl Session {
 
     /// Evaluates `source` — the entry's own already-read content — into a
     /// fresh engine, then wires up event dispatch. An `import` in `source`
-    /// resolves against a sibling file next to `entry_path`. A `Some`
-    /// `writer` gives the engine `__inca_dev__` — see [`Self::start_engine`].
+    /// resolves against a sibling file next to `entry_path`.
     ///
     /// # Errors
     ///
@@ -232,9 +240,8 @@ impl Session {
         entry_path: &str,
         source: &str,
         reporter: ErrorReporter,
-        writer: Option<&SharedWriter>,
     ) -> Result<Self, EngineError> {
-        let (host, engine, _) = Self::start_engine(entry_path, writer)?;
+        let StartedEngine { host, engine, .. } = Self::start_engine(entry_path, None)?;
         engine.eval_module(entry_path, source)?;
         Ok(Self::from_parts(host, engine, reporter))
     }
@@ -254,12 +261,17 @@ impl Session {
         reporter: ErrorReporter,
         writer: Option<&SharedWriter>,
     ) -> Result<Loading, EngineError> {
-        let (host, engine, start_failed) = Self::start_engine(entry_path, writer)?;
+        let StartedEngine {
+            host,
+            engine,
+            signal,
+        } = Self::start_engine(entry_path, writer)?;
         let module = engine.start_module(entry_path, source)?;
         let loading = Loading {
             module,
             session: Self::from_parts(host, engine, reporter),
-            start_failed,
+            seen_failures: Cell::new(0),
+            signal,
         };
         match loading.poll() {
             Some(Err(err)) => Err(err),
@@ -269,14 +281,11 @@ impl Session {
 }
 
 /// A [`Session`] whose entry is still evaluating.
-///
-/// Dropping one is safe at any time: the module handle goes before the
-/// engine it belongs to.
 pub(crate) struct Loading {
-    // Declared first, so it drops before the engine inside `session`.
     module: PendingModule,
     session: Session,
-    start_failed: Rc<Cell<bool>>,
+    signal: Rc<LoadSignal>,
+    seen_failures: Cell<u32>,
 }
 
 impl Loading {
@@ -294,16 +303,18 @@ impl Loading {
     /// Whether the app last reported through `__inca_dev__.setLoadFailed`
     /// that its load failed.
     pub(crate) fn start_failed(&self) -> bool {
-        self.start_failed.get()
+        self.signal.failed()
+    }
+
+    /// Whether the app reported a failed load since the previous call, even
+    /// when a later report cleared it.
+    pub(crate) fn reported_failure(&self) -> bool {
+        self.seen_failures.replace(self.signal.failures()) != self.signal.failures()
     }
 
     /// The session, once the entry has settled.
     pub(crate) fn into_session(self) -> Session {
-        let Self {
-            module, session, ..
-        } = self;
-        drop(module);
-        session
+        self.session
     }
 }
 
@@ -380,8 +391,7 @@ pub(crate) fn maybe_auto_resize_to_content(app: &HostedApp, window: &mut Window)
 
 /// Evaluates the entry to completion, then opens the window, under the
 /// config the app's build wrote beside its entry. Production starts the host
-/// this way. A `Some` `writer` gives the engine `__inca_dev__` — see
-/// [`Session::start_engine`].
+/// this way.
 ///
 /// # Errors
 ///
@@ -393,9 +403,8 @@ pub(crate) fn start(
     entry_path: &str,
     source: &str,
     reporter: ErrorReporter,
-    writer: Option<&SharedWriter>,
 ) -> Result<WindowHandle<HostedApp>, Failure> {
-    let session = Session::load(entry_path, source, reporter, writer).map_err(Failure::Thrown)?;
+    let session = Session::load(entry_path, source, reporter).map_err(Failure::Thrown)?;
     open(cx, session, entry_path)
 }
 
@@ -539,7 +548,7 @@ pub fn run_bundle(entry_path: &str, dev: bool) -> ExitCode {
                 }
             }
             _ => {
-                if let Err(failure) = start(cx, &entry_path, &source, error_reporter, None) {
+                if let Err(failure) = start(cx, &entry_path, &source, error_reporter) {
                     fail_startup(&failure, None);
                 }
             }
@@ -637,7 +646,7 @@ mod tests {
     const TEST_ENTRY_PATH: &str = "/test/entry.js";
 
     fn load(source: &str) -> Result<Session, EngineError> {
-        Session::load(TEST_ENTRY_PATH, source, stderr_reporter(), None)
+        Session::load(TEST_ENTRY_PATH, source, stderr_reporter())
     }
 
     /// Captures every line written to it instead of touching real stdout, so
@@ -663,7 +672,7 @@ mod tests {
         let capturing = Rc::new(CapturingWriter::default());
         let writer: SharedWriter = Rc::clone(&capturing) as SharedWriter;
 
-        Session::load(
+        Session::begin(
             TEST_ENTRY_PATH,
             r"__inca_dev__.send('testEvent', JSON.stringify({ a: 1 }));",
             stderr_reporter(),
@@ -718,6 +727,19 @@ mod tests {
     }
 
     #[test]
+    fn reported_failure_is_true_once_per_report_even_when_cleared() {
+        let loading = begin("await new Promise(() => {});").unwrap();
+        let eval = |script| loading.session().engine.eval::<()>(script).unwrap();
+
+        assert!(!loading.reported_failure());
+        eval("__inca_dev__.setLoadFailed(true); __inca_dev__.setLoadFailed(false);");
+        assert!(loading.reported_failure());
+        assert!(!loading.reported_failure());
+        eval("__inca_dev__.setLoadFailed(true);");
+        assert!(loading.reported_failure());
+    }
+
+    #[test]
     fn begin_returns_the_error_of_an_entry_that_throws_or_rejects_before_it_waits() {
         for source in [
             "throw new Error('sync');",
@@ -727,13 +749,6 @@ mod tests {
             assert!(err.message().starts_with("Error: "), "{source}");
             assert!(err.stack().is_some(), "{source}");
         }
-    }
-
-    #[test]
-    fn dropping_a_pending_loading_is_safe() {
-        let loading = begin("await new Promise(() => {});").unwrap();
-
-        drop(loading);
     }
 
     #[test]
@@ -779,16 +794,7 @@ mod tests {
 
     #[gpui::test]
     fn bringing_the_window_up_runs_what_mounting_only_queued(cx: &mut TestAppContext) {
-        cx.update(|cx| {
-            start(
-                cx,
-                TEST_ENTRY_PATH,
-                DEFERS_ITS_MOUNT,
-                stderr_reporter(),
-                None,
-            )
-            .unwrap()
-        });
+        cx.update(|cx| start(cx, TEST_ENTRY_PATH, DEFERS_ITS_MOUNT, stderr_reporter()).unwrap());
         cx.run_until_parked();
 
         let ran: bool = cx.update(|cx| {
@@ -864,14 +870,15 @@ mod tests {
         let reporter = reporter_for(&writer);
 
         let window = cx.update(|cx| {
-            start(
-                cx,
+            let session = Session::begin(
                 TEST_ENTRY_PATH,
                 THROWING_LISTENER_BUNDLE,
                 reporter,
                 Some(&writer),
             )
             .unwrap()
+            .into_session();
+            open(cx, session, TEST_ENTRY_PATH).unwrap()
         });
         cx.run_until_parked();
 
@@ -1034,9 +1041,8 @@ mod tests {
                 __inca_native__.setStyle(node, 'height', 150);
             });
         ";
-        let window = cx.update(|cx| {
-            start(cx, TEST_ENTRY_PATH, MOUNTS_LATER, stderr_reporter(), None).unwrap()
-        });
+        let window =
+            cx.update(|cx| start(cx, TEST_ENTRY_PATH, MOUNTS_LATER, stderr_reporter()).unwrap());
         cx.run_until_parked();
 
         assert_eq!(
@@ -1604,7 +1610,6 @@ mod tests {
             &path.to_string_lossy(),
             &fs::read_to_string(&path).unwrap(),
             stderr_reporter(),
-            None,
         )
         .unwrap();
         assert!(session.engine.run_jobs().is_empty());

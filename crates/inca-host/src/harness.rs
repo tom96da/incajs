@@ -42,7 +42,7 @@ impl Harness {
     /// the window cannot open.
     pub fn load(cx: &mut TestAppContext, entry_path: &str, source: &str) -> Self {
         let window = cx
-            .update(|cx| start(cx, entry_path, source, stderr_reporter(), None))
+            .update(|cx| start(cx, entry_path, source, stderr_reporter()))
             .unwrap_or_else(|failure| panic!("the bundle failed to start: {failure:?}"));
         let host = cx
             .update(|cx| window.read_with(cx, |app, _| Rc::clone(&app.session.host)))

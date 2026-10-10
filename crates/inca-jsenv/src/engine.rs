@@ -237,7 +237,7 @@ impl Engine {
 
     /// Evaluates `source` as a JS script and converts its completion value
     /// to `V`. A syntax error, a thrown exception, or a value that can't
-    /// convert to `V` are all returned as an `Err`, never a panic.
+    /// convert to `V` are all returned as an `Err`.
     ///
     /// # Errors
     ///
@@ -281,7 +281,9 @@ impl Engine {
     ///
     /// This is [`start_module`](Self::start_module) followed by one
     /// [`poll_module`](Self::poll_module). A module that is still pending
-    /// after that poll is an error.
+    /// after that poll is an error. The failure of a job that throws while
+    /// the module awaits goes to the next [`run_jobs`](Self::run_jobs), and
+    /// the module's result is unaffected.
     ///
     /// # Errors
     ///
@@ -289,9 +291,6 @@ impl Engine {
     /// thrown during evaluation, or an unsettled promise if the module
     /// awaits something with no pending job left to drive it (not expected
     /// for a self-contained module with no top-level `await`).
-    ///
-    /// The failure of a job that throws while the module awaits goes to the
-    /// next [`run_jobs`](Self::run_jobs). The module's result is unaffected.
     pub fn eval_module(&self, name: &str, source: &str) -> EngineResult<()> {
         let module = self.start_module(name, source)?;
         self.poll_module(&module)
@@ -314,7 +313,10 @@ impl Engine {
         self.context.with(|ctx| {
             Module::declare(ctx.clone(), name, source)
                 .and_then(rquickjs::Module::eval)
-                .map(|(_module, promise)| PendingModule(Persistent::save(&ctx, promise)))
+                .map(|(_module, promise)| PendingModule {
+                    promise: Persistent::save(&ctx, promise),
+                    _runtime: self.runtime.clone(),
+                })
                 .map_err(|err| EngineError::capture(&ctx, &err))
         })
     }
@@ -326,12 +328,10 @@ impl Engine {
     /// `Some(Ok(()))` once the module has completed, and `Some(Err(_))` once
     /// it has thrown. Every later poll returns the same result.
     ///
-    /// The failure of a job that throws during a poll goes to the next
-    /// [`run_jobs`](Self::run_jobs), whether the module is pending or
-    /// settled. The module's result is unaffected.
-    ///
-    /// A module that settled with `Some(Err(_))` is also in the next
-    /// [`run_jobs`](Self::run_jobs) result.
+    /// The next [`run_jobs`](Self::run_jobs) returns the failure of a job
+    /// that throws during a poll, whether the module is pending or settled,
+    /// and the error of a module that settled with `Some(Err(_))`. The
+    /// module's result is unaffected.
     ///
     /// Call it outside [`with`](Self::with).
     ///
@@ -356,7 +356,7 @@ impl Engine {
     /// The module's result, or `None` while its promise is pending.
     fn settled(&self, module: &PendingModule) -> Option<EngineResult<()>> {
         self.context.with(|ctx| {
-            let promise = match module.0.clone().restore(&ctx) {
+            let promise = match module.promise.clone().restore(&ctx) {
                 Ok(promise) => promise,
                 Err(err) => return Some(Err(EngineError::plain(&err))),
             };
@@ -368,8 +368,12 @@ impl Engine {
 }
 
 /// A module started by [`Engine::start_module`] and polled with
-/// [`Engine::poll_module`]. Drop it before its engine.
-pub struct PendingModule(Persistent<Promise<'static>>);
+/// [`Engine::poll_module`].
+pub struct PendingModule {
+    // Declared first, so the promise drops before the runtime handle.
+    promise: Persistent<Promise<'static>>,
+    _runtime: Runtime,
+}
 
 /// Builds an [`Engine`], configuring where its `import`s resolve against.
 ///
@@ -462,6 +466,17 @@ mod tests {
 
         let seen_by_b: String = b.eval("typeof probe").unwrap();
         assert_eq!(seen_by_b, "undefined");
+    }
+
+    #[test]
+    fn a_pending_module_can_outlive_its_engine() {
+        let engine = Engine::new().unwrap();
+        let module = engine
+            .start_module("probe.mjs", "await new Promise(() => {});")
+            .unwrap();
+
+        drop(engine);
+        drop(module);
     }
 
     #[test]

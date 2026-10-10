@@ -44,12 +44,13 @@ that arrive before `ready` into the loading app.
 An entry whose evaluation settles in time opens the window at the app's
 content size, then the host sends `ready`. An entry still pending 2 seconds
 after it started opens the window at the size the config gives, else the
-default size, then the host sends `ready`. The window resizes to the app's
-content once the app mounts.
+size of the content already mounted, else the default size, then the host
+sends `ready`. The window resizes to the app's content once the app mounts.
 
-While the app reports a failed load, the host keeps waiting with no window.
-The window opens when the load succeeds, or 2 seconds after the app reports a
-new attempt. `shutdown` answers at any time.
+While the app reports a failed load, the window stays closed. The window
+opens when the load succeeds, or 2 seconds after the app reports a new
+attempt, including a report and its retraction made within one poll.
+`shutdown` answers at any time.
 
 ## Envelope
 
@@ -76,7 +77,7 @@ new attempt. `shutdown` answers at any time.
 
 | `method` | Response | Meaning |
 | --- | --- | --- |
-| `reload` | `null` once the new bundle's evaluation ends | Re-read the bundle at the path given on argv and evaluate it afresh. The config read at startup stands. The window keeps the old bundle meanwhile. A later `reload` replaces a pending one, and every queued id gets the later outcome. Relayed notifications go to the loading bundle. |
+| `reload` | `null` once the new bundle's evaluation ends | Re-read the bundle at the path given on argv and evaluate it afresh. The config read at startup stands. The window keeps the old bundle meanwhile. A later `reload` replaces a pending one, and every queued id gets the later outcome. Relayed notifications go to the loading bundle while it is pending, and to the window's bundle after it settles. |
 | `shutdown` | `null` | Exit 0. The client kills the child if it has not exited after the response. |
 
 ### From the host
@@ -106,8 +107,8 @@ notification named `method`. Invalid JSON raises a `TypeError`.
 
 The app reports a failed first load with `__inca_dev__.setLoadFailed(failed)`.
 `true` says the load failed and a retry may follow. `false` says a new
-attempt begins or the load recovered. The call flips a flag in the host and
-writes no message, so `PROTOCOL_VERSION` stays as it is.
+attempt begins or the load recovered. The call changes a host flag only, and
+the wire protocol is unchanged.
 
 Vite's `ModuleRunnerTransport` frames travel as `{"method": "vite",
 "params": {...}}` notifications in both directions. A `fetchModule` goes from
