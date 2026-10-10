@@ -17,6 +17,7 @@ import { afterAll, beforeAll, describe, expect, it, onTestFailed, vi } from "vit
 
 import { defaultBundler } from "../../packages/cli/src/defaultBundler.mts";
 import { HostClient } from "../../packages/cli/src/dev-client/hostClient.mts";
+import { resolveTestHostBin } from "../support/hostBin.mts";
 import type { BuildFailure, HmrChannel } from "../../packages/cli/src/adapter/types.mts";
 import type { AppErrorParams } from "../../packages/cli/src/dev-client/protocol.mts";
 
@@ -37,22 +38,6 @@ function discard(): Writable {
       callback();
     },
   });
-}
-
-/**
- * `target/debug/inca-host` (or `target/release/inca-host`, whichever
- * exists), resolved relative to the repo root two directories up from this
- * file. Never built here — fails with a message instead.
- */
-function resolveTestHostBin(): string {
-  const repoRoot = path.resolve(import.meta.dirname, "../..");
-  const debug = path.join(repoRoot, "target/debug/inca-host");
-  const release = path.join(repoRoot, "target/release/inca-host");
-  if (existsSync(debug)) return debug;
-  if (existsSync(release)) return release;
-  throw new Error(
-    `no inca-host binary found at ${debug} or ${release} — run \`cargo build -p inca-host\` first`,
-  );
 }
 
 /**

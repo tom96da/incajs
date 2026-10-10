@@ -7,26 +7,15 @@
 // on any platform.
 
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
 import { cp, link, mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const TIMEOUT_MS = 15_000;
+import { resolveTestHostBin } from "../support/hostBin.mts";
 
-/** `target/debug/inca-host` or `target/release/inca-host`; never built here. */
-function resolveTestHostBin(): string {
-  const repoRoot = path.resolve(import.meta.dirname, "../..");
-  const debug = path.join(repoRoot, "target/debug/inca-host");
-  const release = path.join(repoRoot, "target/release/inca-host");
-  if (existsSync(debug)) return debug;
-  if (existsSync(release)) return release;
-  throw new Error(
-    `no inca-host binary found at ${debug} or ${release} — run \`cargo build -p inca-host\` first`,
-  );
-}
+const TIMEOUT_MS = 15_000;
 
 const hostBin = resolveTestHostBin();
 

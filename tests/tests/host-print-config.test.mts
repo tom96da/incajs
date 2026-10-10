@@ -5,24 +5,13 @@
 // exits before any window opens.
 
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { afterEach, beforeEach, expect, it } from "vitest";
 
-/** `target/debug/inca-host` or `target/release/inca-host`; never built here. */
-function resolveTestHostBin(): string {
-  const repoRoot = path.resolve(import.meta.dirname, "../..");
-  const debug = path.join(repoRoot, "target/debug/inca-host");
-  const release = path.join(repoRoot, "target/release/inca-host");
-  if (existsSync(debug)) return debug;
-  if (existsSync(release)) return release;
-  throw new Error(
-    `no inca-host binary found at ${debug} or ${release} — run \`cargo build -p inca-host\` first`,
-  );
-}
+import { resolveTestHostBin } from "../support/hostBin.mts";
 
 const hostBin = resolveTestHostBin();
 
