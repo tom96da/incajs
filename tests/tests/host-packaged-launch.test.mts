@@ -51,10 +51,7 @@ async function placeExecutable(exeDir: string): Promise<string> {
 
 /** Runs `exe` with no argv from `/`, resolving with its exit code and stderr. */
 function launch(exe: string): Promise<{ code: number | null; stdout: string; stderr: string }> {
-  const env = { ...process.env };
-  delete env.DISPLAY;
-  delete env.WAYLAND_DISPLAY;
-  const child = spawn(exe, [], { cwd: "/", env, stdio: ["ignore", "pipe", "pipe"] });
+  const child = spawn(exe, [], { cwd: "/", stdio: ["ignore", "pipe", "pipe"] });
   let stdout = "";
   let stderr = "";
   child.stdout.setEncoding("utf8").on("data", (chunk: string) => (stdout += chunk));

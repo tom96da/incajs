@@ -38,10 +38,7 @@ afterEach(async () => {
 
 /** Runs the host with `args`, with no display to open a window on. */
 function run(args: string[]) {
-  const env = { ...process.env };
-  delete env.DISPLAY;
-  delete env.WAYLAND_DISPLAY;
-  return spawnSync(hostBin, args, { env, encoding: "utf8", timeout: 15_000 });
+  return spawnSync(hostBin, args, { encoding: "utf8", timeout: 15_000 });
 }
 
 it("prints the settings read from inca.json and exits 0", async () => {

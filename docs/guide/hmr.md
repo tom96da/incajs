@@ -36,9 +36,9 @@ the changed module:
 
 ## Known limitations
 
-- The window can briefly open at the wrong size on first launch, then
-  snap to the correct size moments later. The host doesn't wait on
-  the module round-trip before opening the window.
+- The development window opens at the configured size, else the default
+  size, on first launch and takes the app's content size once the app
+  mounts.
 - A style-only change to an already-mounted node doesn't repaint. A
   structural edit (adding, removing, or changing text) repaints
   correctly, and a full reload repaints a style-only change too.

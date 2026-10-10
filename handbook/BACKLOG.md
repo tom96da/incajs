@@ -483,29 +483,23 @@ A fixed entry is deleted and its ID is never reused.
   tool driving the app), not just this one test's stimulus.
 
 - **B-029 `inca dev --experimental-hmr` opens its window at the wrong size on first launch, then resizes**
-  `Units: host,cli · Size: L · Impact: Low`
+  `Units: cli · Size: M · Impact: Low`
 
-  A plain `inca dev` opens already sized to
-  the app's own declared content (no visible gap). Under
-  `--experimental-hmr`, the window instead opens at the app's configured
-  size or a default, with the app's real content appearing moments later
-  once mounting finishes, then a one-time resize snaps it to the correct
-  size — visibly, a large window with black margins that shrinks after a
-  beat. Cause: in HMR mode, the entry module `inca-host` evaluates doesn't mount
-  the app itself. It hands off to a JS module runner that fetches and
-  evaluates the real app code over a round trip to the Node-side dev
-  server. `inca-host` doesn't wait for that round trip before opening the
-  window: waiting needs the process's stdin reader, which answers that
-  round trip, to already be running, and today it only starts once the
-  window has opened. A real fix starts that stdin reader before the window
-  opens, and keeps servicing incoming replies while module evaluation is
-  still in progress, so the app's real content size is known before the
-  window is created. The engine side exists: `Engine::start_module` and
-  `Engine::poll_module` let a module's top-level `await` settle from
-  external I/O. The remaining work is in `inca-host` and the CLI's HMR
-  entry. `Session::load` still calls `Engine::eval_module`, and the HMR
-  entry returns before its app mounts. Fixing this changes `inca-host`'s own
-  startup sequencing.
+  A plain `inca dev` opens already sized to the app's own declared content
+  (no visible gap). Under `--experimental-hmr`, the window instead opens at
+  the app's configured size or a default, with the app's real content
+  appearing moments later once mounting finishes, then a one-time resize
+  snaps it to the correct size — visibly, a large window with black margins
+  that shrinks after a beat. Cause: the entry the host evaluates hands off
+  to a JS module runner that fetches and evaluates the real app code over a
+  round trip to the Node-side development server. The host waits for the
+  entry's top-level promise for at most 2 seconds, and for as long as the
+  app reports a failed load, before it opens the window. The HMR entry
+  (`writeHmrEntry` in `hmr.mts`) still returns before the app mounts, so the
+  promise settles early and the window opens at the default size. Fix: the entry `await`s `start(entryId)`, and its retry
+  loop calls `__inca_dev__.setLoadFailed(true)` on a failed start and
+  `__inca_dev__.setLoadFailed(false)` when a retry begins. The host then opens
+  the window at the app's content size once the first load succeeds.
 
 - **B-032 The HMR bootstrap's rejection handler doesn't distinguish who's responsible for reporting a failure**
   `Units: cli · Size: S · Impact: Low`
@@ -540,7 +534,8 @@ A fixed entry is deleted and its ID is never reused.
   path guards this with `pendingReload`, but a `full-reload` payload has no
   equivalent. It also logs nothing on success, unlike the "reload ... (Nms)"
   line `onBuild` prints, so a full reload under `--experimental-hmr` is
-  invisible to the user.
+  invisible to the user. The host answers a `reload` once the first
+  evaluation ends, so the gap is on the CLI side.
 
 - **B-037 Dev relay hardening (`__inca_dev__`)**
   `Units: bridge,host · Size: S–M · Impact: Low`
@@ -1106,3 +1101,35 @@ A fixed entry is deleted and its ID is never reused.
   `inca-gpui` depend on, so JS and Rust print through one path. A smaller
   first step is to route the bridge's style warnings through the console
   output, because `inca-bridge` already depends on `inca-jsenv`.
+
+- **B-163 `--experimental-hmr` starts the host before the app's modules are transformed**
+  `Units: cli · Size: S–M · Impact: Low`
+
+  The development server creates the Vite server and starts the host at once.
+  The host then fetches each module of the app through the `vite` relay and
+  evaluates it. A measured start spends about 0.3 s between the host opening
+  and the app mounting. Fix: before `startHost`, call the Vite server's
+  `warmupRequest` for the entry so the transform time passes before the host
+  exists. A transform failure then shows before any host starts, the same as
+  a failed first build without HMR. Evaluation and mount errors still need
+  the host's wait.
+
+- **B-164 Gaps in the host's wait for the first load**
+  `Units: host · Size: S · Impact: Low`
+
+  Two gaps remain in `crates/inca-host/src/dev.rs`. While a reload is pending,
+  relayed notifications go to the pending session and the old session receives
+  none. When the first entry rejects with no window, the host exits right
+  after it reports the rejection, so the job failures of the final poll are
+  dropped.
+
+- **B-165 A stale `DISPLAY` makes the host panic on Linux**
+  `Units: host · Size: S · Impact: Low`
+
+  The host connects to X11 when `DISPLAY` is set and to Wayland when
+  `WAYLAND_DISPLAY` is set. A variable that points to no running server ends
+  the host with a panic and exit code 101, and the message names only
+  `Failed to initialize X11 client`. A shell left over from an SSH session
+  or a closed X server shows this. Fix: check the connection before the
+  window opens and exit 1 with a message that names the variable and tells
+  the user to unset it.

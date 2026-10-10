@@ -1,8 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! JSON-RPC 2.0 over newline-delimited JSON, the dev protocol this host
-//! speaks on stdin/stdout.
+//! JSON-RPC 2.0 over newline-delimited JSON, the protocol the host speaks
+//! under `--dev` on stdin/stdout.
 
 use inca_jsenv::EngineError;
 use serde::{Deserialize, Serialize};
@@ -45,8 +45,9 @@ pub enum Incoming {
     },
     /// A method this host doesn't implement, kept with its own name and
     /// `params` so the caller can decide what to do with it: a request still
-    /// answers `-32601`, but a notification is relayed on into the running
-    /// app as `__inca_dev__.receive(method, paramsJson)`.
+    /// answers `-32601`, but a notification goes to the loading app while a
+    /// load is pending, and to the running app otherwise, as
+    /// `__inca_dev__.receive(method, paramsJson)`.
     Unrecognized {
         id: Option<Value>,
         method: String,
@@ -182,8 +183,9 @@ impl Outgoing {
         )
     }
 
-    /// The notification announcing that the window is up and the first
-    /// bundle has been evaluated.
+    /// The notification the host sends once the window is open. The first
+    /// bundle's top-level `await` has settled, or two seconds have passed
+    /// with it pending, unless the app reported a failed load.
     #[must_use]
     pub fn ready() -> Self {
         Outgoing::notification("ready", serde_json::json!({ "protocol": PROTOCOL_VERSION }))

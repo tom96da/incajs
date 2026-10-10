@@ -31,6 +31,14 @@ own directory on disk — no knowledge of Vite, dev servers, or HMR, and
 never watches for changes. Rebuild the bundle and re-run it to pick up
 an edit.
 
+With `--dev` the host also reads JSON-RPC messages on stdin and writes its
+own on stdout. It starts the entry and serves those messages while the entry's
+top-level `await` is pending. The window opens at the entry's content size once
+the `await` settles. An entry still pending after 2 seconds opens the window at
+the size the config gives, else the default size, unless the app reported a
+failed load with `__inca_dev__.setLoadFailed(true)`. The host then keeps waiting until a load
+succeeds. A new attempt reported by the app restarts the 2 seconds.
+
 `--print-config` reads the `inca.json` beside the entry, prints the settings
 the host applies as JSON, and returns after printing. A `null` marks a value
 the app leaves open: its root element sizes the window, and an unset limit

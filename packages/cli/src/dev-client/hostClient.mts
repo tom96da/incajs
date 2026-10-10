@@ -31,11 +31,14 @@ export interface HostClientOptions {
    */
   onStderr?: (line: string) => void;
   /**
-   * The window is up and the first bundle has been evaluated, and the host
-   * speaks the protocol revision this package was built for.
+   * The window is open and the first bundle's evaluation has ended: its
+   * top-level `await` settled, or 2 seconds passed with it pending, in which
+   * case the window opens at the size the config gives, else the default size.
+   * A failed load the app reported keeps the window closed. The host speaks the protocol revision this
+   * package was built for.
    */
   onReady?: () => void;
-  /** An app's event listener threw, or the app threw while the host loaded it. */
+  /** An app's event listener threw, or the app threw or rejected while the host loaded it. */
   onAppError?: (error: AppErrorParams) => void;
   /**
    * The host exited on its own, or was stopped over a protocol mismatch.
@@ -200,8 +203,7 @@ export class HostClient {
    * Sends a request and resolves with its result once the host answers.
    * With `timeoutMs`, rejects once that much time passes with no answer —
    * the host answers on the same thread that runs the app's JS, so a
-   * wedged app leaves a call pending forever otherwise (PROTOCOL.md:
-   * "every response a client waits for needs a deadline").
+   * wedged app leaves a call pending forever otherwise.
    */
   async call(method: string, params?: unknown, timeoutMs?: number): Promise<unknown> {
     const child = this.#child;

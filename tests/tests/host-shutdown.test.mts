@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 // Speaks the dev protocol to the real `inca-host` binary on raw stdio. On
-// Linux with `DISPLAY` and `WAYLAND_DISPLAY` removed, gpui falls back to its
-// headless platform, so no display is needed. On macOS the host opens a real
-// window, which needs a window-server session.
+// Linux the host runs on gpui's headless platform (the vitest setup removes
+// the display variables), so no display is needed. On macOS the host opens a
+// real window, which needs a window-server session.
 
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -41,11 +41,7 @@ let exited: Promise<number | null>;
 beforeEach(async () => {
   dir = await mkdtemp(path.join(tmpdir(), "inca-host-shutdown-"));
   await writeFile(path.join(dir, "bundle.js"), "");
-  const env = { ...process.env };
-  delete env.DISPLAY;
-  delete env.WAYLAND_DISPLAY;
   child = spawn(hostBin, ["--dev", path.join(dir, "bundle.js")], {
-    env,
     stdio: ["pipe", "pipe", "pipe"],
   });
   let stderr = "";

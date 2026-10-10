@@ -29,12 +29,19 @@ change is done, for Rust and TypeScript.
     fixtures; helper components live in `ui-fixtures/parts/`.
   - Node files in `tests/tests/` belong to `@incajs/e2e-tests`, which
     `pnpm test` does not run: `hmr-quickjs-state`, `host-startup-failure`,
-    `host-shutdown`, `host-packaged-launch` and `host-print-config`. They
-    spawn the real `inca-host` binary, and the first also starts a real Vite
-    dev server.
-  - `host-shutdown` speaks the dev protocol on raw stdio. On Linux with no
-    display variable set it runs on gpui's headless platform. On macOS it
-    opens a real window and needs a window-server session.
+    `host-startup-wait`, `host-shutdown`, `host-packaged-launch` and
+    `host-print-config`. They spawn the real `inca-host` binary, and the
+    first also starts a real Vite dev server.
+  - `tests/support/headless.mts` is a vitest setup file. It removes
+    `DISPLAY` and `WAYLAND_DISPLAY`, so on Linux every spawned host runs on
+    gpui's headless platform and the tests need no X server. A new test
+    needs no code for this.
+  - `host-shutdown` speaks the dev protocol on raw stdio. On macOS it opens a
+    real window and needs a window-server session.
+  - `host-startup-wait` starts the host on entries whose top-level `await`
+    stays pending and checks when `ready` arrives. Its tests run together
+    and wait out the 2 seconds in real time. Other tests that depend on that
+    wait use gpui's fake clock in `inca-host`.
   - `host-print-config` runs `--print-config` and compares the printed JSON
     and the exit code.
   - `host-packaged-launch` starts the host with no argv, from an unrelated

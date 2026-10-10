@@ -3,6 +3,9 @@
 
 //! Loads an entry module — resolving its own `import`s against sibling
 //! files on disk — and opens a GPUI window on whatever tree it mounts.
+//! Production evaluates the entry to completion before the window opens. The
+//! host starts it as a [`Loading`] for the development window, and
+//! [`crate::dev`] polls it until it settles.
 //!
 //! One binary serves any app, so it cannot know whether a bundle registers
 //! input handlers; it always renders through `EventDispatcher`, which wires
@@ -30,19 +33,20 @@ use gpui_platform::application;
 
 use inca_bridge::bindings::install;
 use inca_bridge::{
-    ErrorReporter, EventDispatcher, FocusTransition, Host, install_dev, stderr_reporter,
+    ErrorReporter, EventDispatcher, FocusTransition, Host, install_dev, install_load_signal,
+    stderr_reporter,
 };
 use inca_gpui::{AttributeValue, NodeId, VirtualNode, render_tree_with_events};
-use inca_jsenv::{Engine, EngineError, console};
+use inca_jsenv::{Engine, EngineError, PendingModule, console};
 
 use crate::config;
 
 use crate::dev::{
-    Failure, SharedWriter, StdoutWriter, install_panic_hook, report_startup_failure, reporter_for,
-    send, stdin_lines,
+    Failure, SharedWriter, StdoutWriter, fail_startup, install_panic_hook, reporter_for,
+    serve_dev_protocol, stdin_lines,
 };
 use crate::menu;
-use crate::protocol::{ErrorCode, Outgoing};
+use crate::protocol::ErrorCode;
 
 /// What an app is called when nothing named it.
 const DEFAULT_APP_NAME: &str = "Inca";
@@ -141,6 +145,10 @@ pub(crate) fn window_size(
     )
 }
 
+/// An engine ready for an entry: its host, the engine, and the flag
+/// `setLoadFailed` sets.
+type StartedEngine = (Rc<RefCell<Host>>, Engine, Rc<Cell<bool>>);
+
 /// One loaded bundle: the engine running its JS, the tree that JS built, and
 /// the dispatcher wiring events back. A reload replaces all of it at once,
 /// so it travels together and a half-swapped state cannot exist.
@@ -161,13 +169,14 @@ impl Session {
     }
 
     /// Starts an engine rooted at `entry_path`'s directory and gives it
-    /// everything an entry expects to find — `console`, the native
-    /// bindings, and, in dev (`writer.is_some()`), `__inca_dev__` — before
-    /// any entry code runs, so one that logs while evaluating is heard
-    /// rather than met with a `ReferenceError`.
+    /// everything an entry expects to find: `console`, the native bindings
+    /// and, for the development window (`writer.is_some()`), `__inca_dev__`
+    /// with its `setLoadFailed`. All of it is in place before any entry code
+    /// runs, so an entry that logs while evaluating finds `console`.
     ///
-    /// `__inca_dev__` doesn't exist at all when `writer` is `None`
-    /// (production) — see [`inca_bridge::install_dev`] for what it does.
+    /// `__inca_dev__` exists only when `writer` is `Some`; see
+    /// [`inca_bridge::install_dev`] for what it does. The returned flag is
+    /// what `setLoadFailed` sets, and stays `false` in production.
     ///
     /// # Errors
     ///
@@ -176,8 +185,9 @@ impl Session {
     fn start_engine(
         entry_path: &str,
         writer: Option<&SharedWriter>,
-    ) -> Result<(Rc<RefCell<Host>>, Engine), EngineError> {
+    ) -> Result<StartedEngine, EngineError> {
         let host = Rc::new(RefCell::new(Host::default()));
+        let start_failed = Rc::new(Cell::new(false));
 
         let module_root = Path::new(entry_path).parent().unwrap_or(Path::new("."));
         let engine = Engine::builder().module_root(module_root).build()?;
@@ -185,41 +195,115 @@ impl Session {
             console::install(&ctx, &console::to_stderr(), console::color_from_env())
                 .and_then(|()| install(&ctx, &host))
                 .and_then(|()| match writer {
-                    Some(writer) => install_dev(&ctx, crate::dev::dev_send(writer)),
+                    Some(writer) => install_dev(&ctx, crate::dev::dev_send(writer))
+                        .and_then(|()| install_load_signal(&ctx, Rc::clone(&start_failed))),
                     None => Ok(()),
                 })
                 .map_err(|err| EngineError::capture(&ctx, &err))
         })?;
-        Ok((host, engine))
+        Ok((host, engine, start_failed))
+    }
+
+    /// Wires event dispatch onto an engine whose entry has been started.
+    fn from_parts(host: Rc<RefCell<Host>>, engine: Engine, reporter: ErrorReporter) -> Self {
+        let engine = Rc::new(engine);
+        let dispatcher =
+            EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host)).with_reporter(reporter);
+        Self {
+            engine,
+            host,
+            dispatcher,
+        }
     }
 
     /// Evaluates `source` — the entry's own already-read content — into a
     /// fresh engine, then wires up event dispatch. An `import` in `source`
-    /// resolves against a sibling file next to `entry_path`. `writer` is
-    /// `Some` only in dev — see [`Self::start_engine`].
+    /// resolves against a sibling file next to `entry_path`. A `Some`
+    /// `writer` gives the engine `__inca_dev__` — see [`Self::start_engine`].
     ///
     /// # Errors
     ///
     /// Returns the thrown value if the engine fails to start, the bindings
     /// or `console` fail to install, or `source` throws while evaluating —
-    /// including an unresolved `import` for a sibling file that isn't there.
+    /// including an unresolved `import` for a sibling file that isn't there,
+    /// and a top-level `await` that is still pending once the queued jobs
+    /// have run.
     pub(crate) fn load(
         entry_path: &str,
         source: &str,
         reporter: ErrorReporter,
         writer: Option<&SharedWriter>,
     ) -> Result<Self, EngineError> {
-        let (host, engine) = Self::start_engine(entry_path, writer)?;
+        let (host, engine, _) = Self::start_engine(entry_path, writer)?;
         engine.eval_module(entry_path, source)?;
+        Ok(Self::from_parts(host, engine, reporter))
+    }
 
-        let engine = Rc::new(engine);
-        let dispatcher =
-            EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host)).with_reporter(reporter);
-        Ok(Self {
-            engine,
-            host,
-            dispatcher,
-        })
+    /// Starts evaluating `source` as [`Self::load`] does, and returns once
+    /// the entry waits on something unsettled, or has completed.
+    /// [`Loading::poll`] drives the rest.
+    ///
+    /// # Errors
+    ///
+    /// Returns the thrown value if the engine fails to start, the bindings
+    /// or `console` fail to install, or `source` fails to link, throws, or
+    /// rejects before it waits.
+    pub(crate) fn begin(
+        entry_path: &str,
+        source: &str,
+        reporter: ErrorReporter,
+        writer: Option<&SharedWriter>,
+    ) -> Result<Loading, EngineError> {
+        let (host, engine, start_failed) = Self::start_engine(entry_path, writer)?;
+        let module = engine.start_module(entry_path, source)?;
+        let loading = Loading {
+            module,
+            session: Self::from_parts(host, engine, reporter),
+            start_failed,
+        };
+        match loading.poll() {
+            Some(Err(err)) => Err(err),
+            _ => Ok(loading),
+        }
+    }
+}
+
+/// A [`Session`] whose entry is still evaluating.
+///
+/// Dropping one is safe at any time: the module handle goes before the
+/// engine it belongs to.
+pub(crate) struct Loading {
+    // Declared first, so it drops before the engine inside `session`.
+    module: PendingModule,
+    session: Session,
+    start_failed: Rc<Cell<bool>>,
+}
+
+impl Loading {
+    /// Runs the jobs the entry waits on. `None` while the entry is pending,
+    /// then the entry's result.
+    pub(crate) fn poll(&self) -> Option<Result<(), EngineError>> {
+        self.session.engine.poll_module(&self.module)
+    }
+
+    /// The session the entry is mounting into.
+    pub(crate) fn session(&self) -> &Session {
+        &self.session
+    }
+
+    /// Whether the app last reported through `__inca_dev__.setLoadFailed`
+    /// that its load failed.
+    pub(crate) fn start_failed(&self) -> bool {
+        self.start_failed.get()
+    }
+
+    /// The session, once the entry has settled.
+    pub(crate) fn into_session(self) -> Session {
+        let Self {
+            module, session, ..
+        } = self;
+        drop(module);
+        session
     }
 }
 
@@ -252,10 +336,10 @@ impl Render for HostedApp {
 }
 
 /// Resizes each window dimension to fit content the first time that
-/// dimension becomes usable after the window already opened. The HMR
-/// bootstrap entry evaluates fire-and-forget, so nothing is mounted yet when
-/// the window's initial size is computed in [`open`] — this catches up once
-/// the app finishes mounting.
+/// dimension becomes usable after the window already opened. An app that
+/// mounts after the window opened (an entry still pending when the load
+/// timeout passed) has nothing mounted when [`open`] computes the initial
+/// size — this catches up once the app finishes mounting.
 ///
 /// A dimension the config fixes explicitly counts as ready right away. A
 /// dimension still waiting for content keeps the window's current size.
@@ -294,9 +378,10 @@ pub(crate) fn maybe_auto_resize_to_content(app: &HostedApp, window: &mut Window)
         .set((width_done || width_ready, height_done || height_ready));
 }
 
-/// Brings up the engine, the tree and the window, under the config the
-/// app's build wrote beside its entry. `writer` is `Some` only in dev,
-/// installing `__inca_dev__` — see [`Session::start_engine`].
+/// Evaluates the entry to completion, then opens the window, under the
+/// config the app's build wrote beside its entry. Production starts the host
+/// this way. A `Some` `writer` gives the engine `__inca_dev__` — see
+/// [`Session::start_engine`].
 ///
 /// # Errors
 ///
@@ -402,10 +487,14 @@ pub(crate) fn open(
 /// Runs the bundle at `entry_path` in a GPUI window and blocks until the
 /// app quits.
 ///
+/// In production the entry evaluates to completion before the window opens.
 /// With `dev` set, the host also reads rebuild and HMR messages from stdin
-/// and reports errors to the parent process. Returns `ExitCode::SUCCESS`
-/// after a normal quit and `ExitCode::FAILURE` when the file cannot be
-/// read. A bundle that fails to start exits the process with status 1.
+/// and reports errors to the parent process. The entry then runs while the
+/// host serves those messages, and the window opens once the entry's
+/// top-level `await` settles or two seconds pass. While the app reports a
+/// failed load, the window stays closed. Returns `ExitCode::SUCCESS`
+/// after a normal quit and `ExitCode::FAILURE` when the file cannot be read.
+/// A bundle that fails to start exits the process with status 1.
 #[must_use]
 pub fn run_bundle(entry_path: &str, dev: bool) -> ExitCode {
     let source = match fs::read_to_string(entry_path) {
@@ -434,27 +523,25 @@ pub fn run_bundle(entry_path: &str, dev: bool) -> ExitCode {
 
         let error_reporter = writer.as_ref().map_or_else(stderr_reporter, reporter_for);
         let lines = writer.is_some().then(stdin_lines);
-        match start(cx, &entry_path, &source, error_reporter, writer.as_ref()) {
-            Ok(window) => {
-                if let (Some(writer), Some(lines)) = (&writer, lines) {
-                    send(&**writer, &Outgoing::ready());
-                    crate::dev::serve_dev_protocol(
+        match (&writer, lines) {
+            (Some(writer), Some(lines)) => {
+                let started = cx.background_executor().now();
+                match Session::begin(&entry_path, &source, error_reporter, Some(writer)) {
+                    Ok(first) => serve_dev_protocol(
                         cx,
                         lines,
-                        window,
+                        first,
+                        started,
                         entry_path.clone(),
                         Rc::clone(writer),
-                    );
+                    ),
+                    Err(err) => fail_startup(&Failure::Thrown(err), Some(writer)),
                 }
             }
-            Err(failure) => {
-                report_startup_failure(&failure, writer.as_ref());
-                if let Some(writer) = &writer {
-                    writer.close();
+            _ => {
+                if let Err(failure) = start(cx, &entry_path, &source, error_reporter, None) {
+                    fail_startup(&failure, None);
                 }
-                // No window ever opened, so the event loop has nothing to
-                // quit from.
-                std::process::exit(1);
             }
         }
     });
@@ -565,7 +652,7 @@ mod tests {
     }
 
     #[test]
-    fn inca_dev_does_not_exist_outside_dev() {
+    fn inca_dev_exists_only_with_a_writer() {
         let session = load("globalThis.hasDev = typeof __inca_dev__ !== 'undefined';").unwrap();
 
         assert!(!session.engine.eval::<bool>("globalThis.hasDev;").unwrap());
@@ -588,6 +675,72 @@ mod tests {
         assert_eq!(sent.len(), 1);
         assert!(sent[0].contains(r#""method":"testEvent""#));
         assert!(sent[0].contains(r#""a":1"#));
+    }
+
+    fn capturing_writer() -> SharedWriter {
+        Rc::new(CapturingWriter::default())
+    }
+
+    fn begin(source: &str) -> Result<Loading, EngineError> {
+        Session::begin(
+            TEST_ENTRY_PATH,
+            source,
+            stderr_reporter(),
+            Some(&capturing_writer()),
+        )
+    }
+
+    #[test]
+    fn a_pending_entry_begins_as_a_loading_that_settles_when_resolved() {
+        let loading =
+            begin("await new Promise((r) => { globalThis.release = r; }); globalThis.done = true;")
+                .unwrap();
+
+        assert_eq!(loading.poll(), None);
+        loading.session().engine.eval::<()>("release();").unwrap();
+        assert_eq!(loading.poll(), Some(Ok(())));
+        let session = loading.into_session();
+        assert!(session.engine.eval::<bool>("globalThis.done;").unwrap());
+    }
+
+    #[test]
+    fn a_load_failed_report_in_the_synchronous_part_shows_right_after_begin() {
+        let loading =
+            begin("__inca_dev__.setLoadFailed(true); await new Promise(() => {});").unwrap();
+
+        assert!(loading.start_failed());
+        loading
+            .session()
+            .engine
+            .eval::<()>("__inca_dev__.setLoadFailed(false);")
+            .unwrap();
+        assert!(!loading.start_failed());
+    }
+
+    #[test]
+    fn begin_returns_the_error_of_an_entry_that_throws_or_rejects_before_it_waits() {
+        for source in [
+            "throw new Error('sync');",
+            "await Promise.resolve(); throw new Error('async');",
+        ] {
+            let err = begin(source).err().unwrap();
+            assert!(err.message().starts_with("Error: "), "{source}");
+            assert!(err.stack().is_some(), "{source}");
+        }
+    }
+
+    #[test]
+    fn dropping_a_pending_loading_is_safe() {
+        let loading = begin("await new Promise(() => {});").unwrap();
+
+        drop(loading);
+    }
+
+    #[test]
+    fn load_reports_a_pending_entry_as_an_error() {
+        let err = load("await new Promise(() => {});").err().unwrap();
+
+        assert!(!err.message().is_empty());
     }
 
     #[test]
@@ -821,7 +974,7 @@ mod tests {
         cx.run_until_parked();
         assert_eq!(bounds_size(cx, window), DEFAULT_WINDOW_SIZE);
 
-        // Nothing mounted yet: the check runs (as it would on every dev
+        // Nothing mounted yet: the check runs (as it would on every
         // relay) but finds no usable content, so the window stays put.
         cx.update(|cx| {
             window

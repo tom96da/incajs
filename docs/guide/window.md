@@ -70,9 +70,9 @@ today. There is no way to add items to it yet.
 The development window, and `--experimental-hmr` on top of it, add a few
 dev-only quirks on top of the behavior above.
 
-Under `--experimental-hmr`, the window's first launch can briefly open at
-the wrong size before snapping to the correct one — see the
-[HMR guide](./hmr#known-limitations).
+Under `--experimental-hmr`, the window opens at the configured size, else
+the default size, on first launch and takes the app's content size once the
+app mounts — see the [HMR guide](./hmr#known-limitations).
 
 In the development window, resizing it by hand keeps that size across
 later reloads; a non-resizable window snaps back to its configured size on

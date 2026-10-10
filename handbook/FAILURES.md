@@ -31,7 +31,7 @@ A feature the engine cannot run yet fails the build. A `<style>` block is one
 | a panic in `inca-host` under `--dev` | a `-32603` error, printed by `inca dev` as `[host error -32603]` |
 | an error the running app raised and the host caught | an `appError` notification, see [PROTOCOL.md](./PROTOCOL.md#messages) |
 | a config or entry failure before the first build | `build failed`, then a retry on the next edit |
-| `inca-host` exiting before `ready` | `ERR_INCA_HOST_EXITED_EARLY`, after `inca dev` prints the cause |
+| `inca-host` exiting before `ready`, which includes a first bundle that throws or rejects | `ERR_INCA_HOST_EXITED_EARLY`, after `inca dev` prints the cause |
 | `inca-host` exiting after `ready` with a non-zero code or a signal other than SIGINT/SIGTERM | `ERR_INCA_HOST_CRASHED`, after `inca dev` prints `host exited` |
 
 ## Guarantees
