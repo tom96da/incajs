@@ -8,6 +8,7 @@ export default defineConfig({
   jsPlugins: ["eslint-plugin-check-file"],
   ignorePatterns: ["third_party/**", "specs/**"],
   rules: {
+    "import/no-duplicates": "error",
     "check-file/folder-naming-convention": ["error", { "packages/*/src/**/": "KEBAB_CASE" }],
     "check-file/filename-naming-convention": [
       "error",
