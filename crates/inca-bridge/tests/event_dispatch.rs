@@ -112,9 +112,8 @@ impl Render for ClickableRoot {
 // Note: this doesn't assert on `ClickableRoot`'s render count. A click on
 // any interactive element already makes GPUI redraw for its own hover/
 // active bookkeeping, regardless of whether the walk also calls
-// `window.refresh()` — confirmed empirically, not just assumed — so a
-// render-count assertion here couldn't actually isolate the walk's own
-// effect. The JS-side call count below is the real, unambiguous signal.
+// `window.refresh()`, so a render-count assertion cannot isolate the walk's
+// own effect. The JS-side call count below is the signal.
 #[gpui::test]
 fn click_dispatches_to_js_exactly_once(cx: &mut TestAppContext) {
     let (host, node) = build_clickable_tree();
@@ -200,8 +199,8 @@ fn a_listener_registered_after_the_first_render_still_fires(cx: &mut TestAppCont
     assert_eq!(clicks(&engine), 1.0);
 }
 
-/// The host holds a list of callbacks per `(node, event)`, the way the DOM
-/// does, and dispatches to all of it. `packages/core` registers one — a
+/// The host holds a list of callbacks per `(node, event)` and dispatches to
+/// all of it. `packages/core` registers one — a
 /// framework adapter composes its own handlers first — so nothing above this
 /// layer exercises the list.
 #[gpui::test]
@@ -237,8 +236,7 @@ fn a_click_reaches_every_callback_registered_for_it(cx: &mut TestAppContext) {
 
 /// A callback that only schedules its effect via a microtask (as any real
 /// reactivity scheduler does) must still have that effect applied by the
-/// time the walk returns — not left pending until some later, unrelated
-/// engine call happens to drain the job queue.
+/// time the walk returns.
 #[gpui::test]
 fn click_drains_a_callback_that_defers_its_effect_via_a_microtask(cx: &mut TestAppContext) {
     let (host, node) = build_clickable_tree();
@@ -721,9 +719,9 @@ fn one_move_gives_mousemove_the_delta_and_mouseenter_zero(cx: &mut TestAppContex
     );
 }
 
-/// DOM's `buttons` reports every button held, not just the one an event is
-/// about: pressing a second button while the first is still down must union
-/// its bit in, and releasing one button must clear only that bit.
+/// `buttons` reports every button held. Pressing a second button while the
+/// first is still down unions its bit in, and releasing one button clears
+/// only that bit.
 #[gpui::test]
 fn buttons_tracks_every_button_currently_held(cx: &mut TestAppContext) {
     let (host, node) = build_tree_listening_for("mousedown");
@@ -884,7 +882,7 @@ fn bubbled_mousemove_gives_every_listener_the_same_movement(cx: &mut TestAppCont
     let seen: Vec<(u32, f32, f32)> =
         serde_json::from_str(&engine.eval::<String>("JSON.stringify(seen)").unwrap()).unwrap();
     assert_eq!(seen.len(), 4, "each move reaches the child then the parent");
-    assert!(seen.iter().any(|&(target, ..)| target == child));
+    assert!(seen.iter().all(|&(target, ..)| target == child));
     assert_eq!((seen[0].1, seen[0].2), (seen[1].1, seen[1].2));
     assert_eq!((seen[2].1, seen[2].2), (20.0, -5.0));
     assert_eq!((seen[3].1, seen[3].2), (20.0, -5.0));

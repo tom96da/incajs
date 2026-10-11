@@ -265,8 +265,7 @@ impl From<&ScrollWheelEvent> for EventPayload {
                 movement_y: 0.0,
                 screen_x: 0.0,
                 screen_y: 0.0,
-                // Not about any one button; `inca-bridge` fills in the
-                // buttons actually held.
+                // Not about any one button.
                 button: 0,
                 buttons: 0,
                 detail: 0,
@@ -353,9 +352,8 @@ fn dom_key(keystroke: &Keystroke) -> String {
 }
 
 /// What [`crate::element`] needs from something that can dispatch a native
-/// event into JS — `inca-bridge`'s `EventDispatcher` implements this, kept
-/// as a trait here rather than a direct dependency so this crate never has
-/// to depend on `QuickJS`. An implementor provides every method.
+/// event into JS. The trait keeps this crate free of a `QuickJS` dependency.
+/// An implementor provides every method.
 pub trait EventSink {
     /// Whether the containers report the pointer. The render path asks once
     /// per frame. With `true`, every container that is not inert becomes a

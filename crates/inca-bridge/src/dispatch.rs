@@ -53,9 +53,9 @@ pub fn stderr_reporter() -> ErrorReporter {
 
 /// The rules of one event name.
 #[derive(Clone, Copy)]
-struct EventSpec {
+pub(crate) struct EventSpec {
     name: &'static str,
-    flags: Flags,
+    pub(crate) flags: Flags,
     /// Takes `movementX`/`movementY` from the raw pointer move.
     movement: bool,
     /// Carries the `buttons` of its own press or release.
@@ -113,13 +113,8 @@ const EVENTS: [EventSpec; 18] = [
     ),
 ];
 
-/// The flags of `event`. Any other name takes all three as false.
-pub(crate) fn flags_of(event: &str) -> Flags {
-    spec_of(event).flags
-}
-
 /// The rules of `event`. Any other name takes all three flags as false.
-fn spec_of(event: &str) -> EventSpec {
+pub(crate) fn spec_of(event: &str) -> EventSpec {
     EVENTS
         .iter()
         .find(|spec| spec.name == event)
@@ -282,8 +277,8 @@ impl EventDispatcher {
         (outcome.canceled, outcome.entered)
     }
 
-    /// Reports, in the order they happened, the errors that listeners threw
-    /// and nobody has reported yet. Call it outside any [`Engine::with`].
+    /// Reports listener errors, in the order they happened. Call it outside any
+    /// [`Engine::with`].
     pub fn report_pending(&self) {
         let pending = std::mem::take(&mut self.host.borrow_mut().failures);
         for failure in &pending {
@@ -658,7 +653,7 @@ impl EventSink for EventDispatcher {
         }
         match event {
             "mousedown" => self.focus_on_press(target, canceled, window, cx),
-            // The scroll rollback of `inca-gpui` reads the flag.
+            // gpui's scroll rollback reads `Window::default_prevented`.
             "wheel" if canceled => window.prevent_default(),
             _ => {}
         }
@@ -2797,6 +2792,25 @@ mod tests {
     }
 
     #[test]
+    fn a_nested_dispatch_throws_an_error_that_is_a_domexception_instance() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        listen(&host, node, "ping");
+        callbacks(
+            &dispatcher,
+            &format!(
+                "0: (e) => {{ try {{ __inca_native__.dispatchEvent({node}, e); }} \
+                    catch (err) {{ out.push([typeof DOMException, err instanceof DOMException]); }} }}"
+            ),
+        );
+        let got = eval_json(
+            &dispatcher,
+            &format!("(__inca_native__.dispatchEvent({node}, new Event('ping')), out)"),
+        );
+        assert_eq!(got, serde_json::json!([["function", true]]));
+    }
+
+    #[test]
     fn dispatch_event_rejects_anything_that_is_not_an_event_of_this_host() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.borrow_mut().tree.create_node("div").unwrap();
@@ -2999,7 +3013,7 @@ mod tests {
     }
 
     #[test]
-    fn a_listener_that_freezes_the_event_leaves_it_free_to_dispatch_again() {
+    fn a_listener_that_freezes_the_event_gets_a_type_error_on_redispatch() {
         let (dispatcher, host, reported) = dispatcher_with_engine();
         let node = host.borrow_mut().tree.create_node("div").unwrap();
         listen(&host, node, "ping");
@@ -3162,7 +3176,7 @@ mod tests {
     }
 
     #[test]
-    fn an_event_whose_dispatch_fails_midway_stays_free_for_the_next_dispatch() {
+    fn a_frozen_event_id_lets_the_first_dispatch_through_then_throws_type_error() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.borrow_mut().tree.create_node("div").unwrap();
         listen(&host, node, "ping");

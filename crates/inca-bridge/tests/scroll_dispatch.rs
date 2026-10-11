@@ -455,8 +455,8 @@ fn a_diagonal_wheel_scrolls_only_the_scrolling_axis(cx: &mut TestAppContext) {
     assert_eq!(scene.offset(0), point(px(0.), px(-50.)));
 }
 
-// Pins gpui's axis rule (B-082): the y delta moves the container even when
-// the x delta is larger.
+// Pins gpui's axis rule: the y delta moves the container even when the x
+// delta is larger.
 #[gpui::test]
 fn an_x_dominant_wheel_moves_a_y_only_container_by_its_y_delta(cx: &mut TestAppContext) {
     let host = styled_container(&[("overflow_x", "hidden"), ("overflow_y", "scroll")]);
@@ -472,7 +472,7 @@ fn a_horizontal_wheel_scrolls_an_x_only_container(cx: &mut TestAppContext) {
     assert_eq!(scene.offset(0), point(px(-50.), px(0.)));
 }
 
-// Pins gpui's axis rule (B-082).
+// Pins gpui's axis rule.
 #[gpui::test]
 fn a_vertical_wheel_scrolls_an_x_only_container_along_x(cx: &mut TestAppContext) {
     let mut scene = Scene::new(cx, styled_container(&[("overflow_x", "scroll")]), "");

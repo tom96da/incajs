@@ -13,9 +13,8 @@ use rquickjs::{Ctx, Function, Result};
 /// the order given. The source is `(async function (params) {` on line 1,
 /// then `body` from line 2, so a frame on line `N` of `body` reports line
 /// `N + 1` of `filename`, and columns on every line of `body` are exact.
-/// Lines are counted by JavaScript line terminators (`\n`, `\r\n`, `\r`,
-/// U+2028, U+2029), and each `params` entry must fit on one line. A `//`
-/// comment on the last line of `body` is allowed.
+/// Lines are counted as `QuickJS` counts them, and each `params` entry must
+/// fit on one line. A `//` comment on the last line of `body` is allowed.
 ///
 /// `params` and `body` run as code, so pass only trusted source.
 ///

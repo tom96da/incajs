@@ -267,8 +267,8 @@ fn destroying_a_focused_node_reports_no_blur(cx: &mut TestAppContext) {
     );
 }
 
-/// `focusNode` queues its requests — two calls before the next frame both
-/// take effect, in order, the same as the DOM's synchronous `.focus()`.
+/// `focusNode` queues its requests: two calls before the next frame both
+/// take effect, in order.
 #[gpui::test]
 fn two_focus_node_calls_before_the_next_frame_both_take_effect(cx: &mut TestAppContext) {
     let (host, parent, a) = build_focusable_pair();
@@ -303,7 +303,7 @@ fn two_focus_node_calls_before_the_next_frame_both_take_effect(cx: &mut TestAppC
             .eval::<String>("JSON.stringify(globalThis.seen)")
             .unwrap(),
         format!(r#"["focus:{a}","blur:{a}","focus:{b}"]"#),
-        "both requests must take effect, in order, like the DOM's synchronous focus()"
+        "both requests must take effect, in order"
     );
 }
 

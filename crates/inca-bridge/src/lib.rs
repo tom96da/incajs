@@ -6,8 +6,7 @@
 //! renderers drive to build and mutate it, the event dispatch that carries
 //! native input back into JS, and the `__inca_dev__` channel ([`dev`]) the
 //! development window uses and a bundler integration rides, without this crate
-//! knowing its name. The `__inca_dev__` object carries `compile`, which builds
-//! app source into an async function.
+//! knowing its name.
 
 pub mod bindings;
 pub mod dev;

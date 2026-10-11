@@ -86,8 +86,7 @@ enum PendingFocus {
 /// `NodeId` → its persistent `FocusHandle`, the node focused as of the last
 /// frame this was checked, and every pending request left by a binding
 /// that had no live `Window`/`App`, oldest first — see the module doc for
-/// why. Two requests queued before the next frame both apply, in order —
-/// the same as the DOM's synchronous `.focus()`.
+/// why. Two requests queued before the next frame both apply, in order.
 #[derive(Debug, Default)]
 pub struct FocusRegistry {
     handles: HashMap<NodeId, FocusHandle>,
@@ -204,7 +203,7 @@ impl FocusRegistry {
         self.handles.get(&node_id).cloned()
     }
 
-    /// Whether any node has a handle, which makes the node focusable.
+    /// Whether any node can take focus.
     #[must_use]
     pub fn has_handles(&self) -> bool {
         !self.handles.is_empty()

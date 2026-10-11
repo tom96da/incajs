@@ -109,14 +109,6 @@ impl EventListeners {
             .unwrap_or_default()
     }
 
-    /// Whether `callback_id` is registered for `(node_id, event)`.
-    #[must_use]
-    pub fn contains(&self, node_id: NodeId, event: &str, callback_id: u32) -> bool {
-        self.listeners_for(node_id, event)
-            .iter()
-            .any(|l| l.callback == callback_id)
-    }
-
     /// Whether nothing is registered anywhere.
     #[must_use]
     pub fn is_empty(&self) -> bool {
@@ -591,7 +583,7 @@ fn install_focus<'js>(
             "focusNode",
             Function::new(ctx.clone(), move |JsNodeId(node_id): JsNodeId| {
                 let mut host = host.borrow_mut();
-                // Focusing a node that is gone is a no-op, as in the DOM.
+                // Focusing a node that is gone is a no-op.
                 if host.tree.get(node_id).is_some() {
                     host.focus.request_focus(node_id);
                 }
@@ -1048,6 +1040,8 @@ mod tests {
                      rejects(() => __inca_native__.addEventListener({bad}, 'click', 1)),
                      rejects(() => __inca_native__.removeEventListener({bad}, 'click', 1)),
                      rejects(() => __inca_native__.focusNode({bad})),
+                     rejects(() => __inca_native__.dispatchEvent({bad}, {{}})),
+                     rejects(() => __inca_native__.click({bad})),
                  ].every(Boolean); }})()"
             );
             assert!(engine.eval::<bool>(&script).unwrap(), "{bad}");

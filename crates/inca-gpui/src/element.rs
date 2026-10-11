@@ -1110,8 +1110,7 @@ pub fn build_element(spec: &ElementSpec) -> AnyElement {
 }
 
 /// Like [`build_element`], but input on the containers dispatches into JS
-/// via `dispatch` (an `inca-bridge::EventDispatcher`, behind this crate's
-/// [`EventSink`] trait).
+/// via `dispatch` (any type implementing this crate's [`EventSink`] trait).
 #[must_use]
 pub fn build_element_with_events<E: EventSink + Clone + 'static>(
     spec: &ElementSpec,

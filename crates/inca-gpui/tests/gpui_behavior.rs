@@ -1,9 +1,9 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Facts about `gpui` that the event dispatch of `inca-gpui` and `inca-bridge`
-//! relies on, checked against `gpui` itself on its test platform. A `gpui`
-//! upgrade that changes one of them fails here first.
+//! Facts about `gpui` that the event dispatch relies on, checked against
+//! `gpui` itself on its test platform. A `gpui` upgrade that changes one of
+//! them fails here first.
 
 #![allow(clippy::unwrap_used, clippy::float_cmp)]
 

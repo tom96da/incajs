@@ -61,9 +61,9 @@ pub fn install_dev(ctx: &Ctx<'_>, on_send: DevSend) -> JsResult<()> {
     Ok(())
 }
 
-/// The `compile` method of [`install_dev`]. An argument of the wrong type
-/// raises a JS `TypeError`, and a failure inside [`compile_async_function`]
-/// raises the error it left pending.
+/// The `compile` method of [`install_dev`]. An argument of the wrong type, or
+/// a NUL byte in any string, raises a JS `TypeError`. A syntax error raises
+/// the `SyntaxError` that [`compile_async_function`] left pending.
 #[allow(clippy::needless_pass_by_value)]
 fn compile(
     ctx: Ctx<'_>,
@@ -265,6 +265,19 @@ mod tests {
                 &format!("__inca_dev__.compile({params}, 'return 1;', 'f.js')"),
             );
             assert!(thrown.starts_with("TypeError"), "{params}: {thrown}");
+        }
+    }
+
+    #[test]
+    fn compile_raises_type_error_for_a_nul_byte_in_params_body_or_filename() {
+        let engine = engine_with_dev(Rc::new(|_, _| {}));
+        for args in [
+            r"['a\u0000b'], 'return 1;', 'f.js'",
+            r"[], 'return\u00001;', 'f.js'",
+            r"[], 'return 1;', 'f\u0000.js'",
+        ] {
+            let thrown = thrown_by(&engine, &format!("__inca_dev__.compile({args})"));
+            assert!(thrown.starts_with("TypeError"), "{args}: {thrown}");
         }
     }
 

@@ -243,8 +243,12 @@ impl Session {
         reporter: ErrorReporter,
     ) -> Result<Self, EngineError> {
         let StartedEngine { host, engine, .. } = Self::start_engine(entry_path, None)?;
-        engine.eval_module(entry_path, source)?;
-        Ok(Self::from_parts(host, engine, reporter))
+        let session = Self::from_parts(host, engine, reporter);
+        session
+            .engine
+            .eval_module(entry_path, source)
+            .inspect_err(|_| session.dispatcher.report_pending())?;
+        Ok(session)
     }
 
     /// Starts evaluating `source` as [`Self::load`] does, and returns once
@@ -267,15 +271,19 @@ impl Session {
             engine,
             signal,
         } = Self::start_engine(entry_path, writer)?;
-        let module = engine.start_module(entry_path, source)?;
+        let session = Self::from_parts(host, engine, reporter);
+        let module = session.engine.start_module(entry_path, source)?;
         let loading = Loading {
             module,
-            session: Self::from_parts(host, engine, reporter),
+            session,
             seen_failures: Cell::new(0),
             signal,
         };
         match loading.poll() {
-            Some(Err(err)) => Err(err),
+            Some(Err(err)) => {
+                loading.session.dispatcher.report_pending();
+                Err(err)
+            }
             _ => Ok(loading),
         }
     }
@@ -911,6 +919,84 @@ mod tests {
             1,
             "a throwing listener must be reported exactly once, not once per drain"
         );
+        assert!(sent[0].contains(r#""method":"appError""#));
+        assert!(sent[0].contains("boom"));
+    }
+
+    #[test]
+    fn a_listener_error_is_reported_when_the_entry_throws_after_dispatching_it() {
+        let capturing = Rc::new(CapturingWriter::default());
+        let writer: SharedWriter = Rc::clone(&capturing) as SharedWriter;
+
+        let err = Session::begin(
+            TEST_ENTRY_PATH,
+            &format!(
+                "{THROWING_LISTENER_BUNDLE}\n__inca_native__.click(node);\nthrow new Error('entry');"
+            ),
+            reporter_for(&writer),
+            Some(&writer),
+        )
+        .err()
+        .unwrap();
+
+        assert_eq!(err.message(), "Error: entry");
+        let sent = capturing.0.borrow();
+        assert_eq!(
+            sent.len(),
+            1,
+            "the listener error is reported before the session is dropped"
+        );
+        assert!(sent[0].contains(r#""method":"appError""#));
+        assert!(sent[0].contains("boom"));
+    }
+
+    #[test]
+    fn a_listener_error_is_reported_when_load_throws_after_dispatching_it() {
+        let capturing = Rc::new(CapturingWriter::default());
+        let writer: SharedWriter = Rc::clone(&capturing) as SharedWriter;
+
+        let err = Session::load(
+            TEST_ENTRY_PATH,
+            &format!(
+                "{THROWING_LISTENER_BUNDLE}\n__inca_native__.click(node);\nthrow new Error('entry');"
+            ),
+            reporter_for(&writer),
+        )
+        .err()
+        .unwrap();
+
+        assert_eq!(err.message(), "Error: entry");
+        let sent = capturing.0.borrow();
+        assert_eq!(
+            sent.len(),
+            1,
+            "the listener error is reported before the session is dropped"
+        );
+        assert!(sent[0].contains(r#""method":"appError""#));
+        assert!(sent[0].contains("boom"));
+    }
+
+    #[gpui::test]
+    fn a_listener_that_throws_during_load_is_reported_when_the_window_opens(
+        cx: &mut TestAppContext,
+    ) {
+        let capturing = Rc::new(CapturingWriter::default());
+        let writer: SharedWriter = Rc::clone(&capturing) as SharedWriter;
+        let reporter = reporter_for(&writer);
+        let source = format!("{THROWING_LISTENER_BUNDLE}\n__inca_native__.click(node);");
+
+        cx.update(|cx| {
+            let session = Session::load(TEST_ENTRY_PATH, &source, reporter).unwrap();
+            assert!(
+                capturing.0.borrow().is_empty(),
+                "nothing is reported before open"
+            );
+            open(cx, session, TEST_ENTRY_PATH).unwrap();
+        });
+        cx.run_until_parked();
+
+        let sent = capturing.0.borrow();
+        assert_eq!(sent.len(), 1);
         assert!(sent[0].contains(r#""method":"appError""#));
         assert!(sent[0].contains("boom"));
     }

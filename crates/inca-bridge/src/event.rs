@@ -442,7 +442,7 @@ fn deliver<'js>(
                 if flag(record, "immediate") {
                     break;
                 }
-                // The full value is compared: a re-registration with other flags replaces the entry.
+                // The full value is compared. Flags change only through unregister, then register.
                 if !host
                     .borrow()
                     .listeners
@@ -478,7 +478,7 @@ fn deliver<'js>(
 }
 
 /// Files a thrown error of `result` in `Host::failures`, where the dispatcher
-/// reports every error in the order it happened.
+/// reports listener errors in the order they happened.
 fn note(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, result: JsResult<()>) {
     if let Err(err) = result {
         host.borrow_mut()
@@ -556,7 +556,7 @@ pub(crate) fn click(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, target: NodeId) {
     let payload = EventPayload::Mouse(MousePayload::keyboard_click(gpui::Modifiers::none()));
     let walk = script_walk(
         "click",
-        crate::dispatch::flags_of("click"),
+        crate::dispatch::spec_of("click").flags,
         target,
         &path,
         &payload,
