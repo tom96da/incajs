@@ -14,6 +14,9 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 - mouse and wheel events carry `offsetX` and `offsetY` ([4b2825d](https://github.com/tom96da/incajs/commit/4b2825d))
 - a template `ref` reads its box with `getBoundingClientRect()`, `offset*` and `client*` ([ab57a35](https://github.com/tom96da/incajs/commit/ab57a35))
+- a template `ref` scrolls a container with `scrollTop`, `scrollLeft`, `scrollTo()` and `scrollBy()` ([10bb7b7](https://github.com/tom96da/incajs/commit/10bb7b7))
+- the `scroll` event fires when a container scrolls ([be6ecde](https://github.com/tom96da/incajs/commit/be6ecde))
+- `focus()` and Tab scroll the node into view, and a ref has `focus({ preventScroll })` and `scrollIntoView()` ([22e125e](https://github.com/tom96da/incajs/commit/22e125e))
 - `activeElement()` from `incajs/vue` returns the focused element ([42f3df0](https://github.com/tom96da/incajs/commit/42f3df0))
 
 ### Fixed
