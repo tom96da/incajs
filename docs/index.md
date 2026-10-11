@@ -22,17 +22,17 @@ hero:
 features:
   - icon: ⚡️
     title: Direct GPU rendering
-    details: Built on GPUI — no Chromium, no DOM in between your code and the screen.
+    details: Built on GPUI. No Chromium, no DOM in between your code and the screen.
   - icon: 🚀
     title: Micro-sized Runtime
-    details: Employs QuickJS — no browser engine to boot, and a minimal memory footprint.
+    details: Employs QuickJS. No browser engine to boot, and a minimal memory footprint.
   - icon:
       src: /vue.svg
       width: 28
       height: 28
       wrap: true
     title: Vue 3, first-class
-    details: Author Vue 3 components, with a native styling vocabulary.
+    details: Write Vue 3 components. A native styling vocabulary.
 ---
 
 <!--
