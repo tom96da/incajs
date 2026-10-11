@@ -25,7 +25,7 @@ export default defineConfig({
   },
   plugins: [
     dts({
-      tsconfigPath: "./tsconfig.runtime.json",
+      tsconfigPath: path.resolve(import.meta.dirname, "tsconfig.runtime.json"),
       include: ["src"],
       exclude: ["src/**/*.test.mts"],
     }),
