@@ -290,6 +290,9 @@ describe("a session that starts on a broken source", () => {
     "const clicks = ref(0);\nconst oops = (;",
   );
   const THROWING_ENTRY = `throw new Error("startup boom");\n`;
+  // The throw is on line 5 and `Error` starts at column 11. The compiler strips
+  // the interface, so the generated line differs.
+  const MAPPED_ENTRY = `interface Shape {\n  size: number;\n}\nconst shape: Shape = { size: 1 };\nthrow new Error("mapped boom");\n`;
 
   interface Session {
     dir: string;
@@ -417,5 +420,20 @@ describe("a session that starts on a broken source", () => {
       expect(session.buildErrors).toEqual([]);
     },
     WAIT_TIMEOUT_MS * 2 + 10_000,
+  );
+
+  it(
+    "reports an entry's stack at its source line and column",
+    async () => {
+      const session = await startSession(MAPPED_ENTRY, appVue(STYLE_V1, ""));
+      onTestFailed(() => console.error(`--- host stderr ---\n${session.stderr()}`));
+
+      await vi.waitFor(() => expect(session.appErrors).toHaveLength(1), {
+        timeout: WAIT_TIMEOUT_MS,
+      });
+      expect(session.appErrors[0]?.message).toContain("mapped boom");
+      expect(session.appErrors[0]?.stack).toMatch(/entry\.mts:5:11/);
+    },
+    WAIT_TIMEOUT_MS + 10_000,
   );
 });
