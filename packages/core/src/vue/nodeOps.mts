@@ -7,6 +7,7 @@ import { createIncaElement } from "./createElement.mts";
 import { markDestroyed } from "./destroyedNodes.mts";
 import { skipReactive } from "./skipReactive.mts";
 import type { IncaCore, IncaEventTarget, NodeId, TagName } from "../rendererCore.mts";
+import type { RectLike } from "./domRect.mts";
 
 /**
  * A container host node: either a real element or the hidden stand-in
@@ -51,6 +52,29 @@ export interface IncaElement extends IncaEventTarget {
    * nothing.
    */
   tabIndex: number;
+  /**
+   * The box this node was drawn at in the last frame, in window logical
+   * pixels. A node created in the same task reads all zeros.
+   */
+  getBoundingClientRect(): RectLike;
+  /** The box width from the last frame, rounded. `0` until a frame draws the node. */
+  readonly offsetWidth: number;
+  /** The box height from the last frame, rounded. `0` until a frame draws the node. */
+  readonly offsetHeight: number;
+  /** The box's left edge from the last frame, relative to {@link offsetParent}. */
+  readonly offsetLeft: number;
+  /** The box's top edge from the last frame, relative to {@link offsetParent}. */
+  readonly offsetTop: number;
+  /** The parent, when it and this node both have a box from the last frame; `null` otherwise. */
+  readonly offsetParent: IncaElement | null;
+  /** The box width less both borders, rounded, at least `0`. */
+  readonly clientWidth: number;
+  /** The box height less both borders, rounded, at least `0`. */
+  readonly clientHeight: number;
+  /** The border width, rounded. */
+  readonly clientLeft: number;
+  /** The border width, rounded. */
+  readonly clientTop: number;
 }
 
 /** A text leaf host node — `@vue/runtime-core`'s `HostNode` for text. */

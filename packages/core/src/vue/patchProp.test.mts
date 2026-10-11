@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import type { ComponentInternalInstance } from "@vue/runtime-core";
 
 import * as events from "../events.mts";
+import { domRect } from "./domRect.mts";
 import { createNodeOps } from "./nodeOps.mts";
 import { createPatchProp } from "./patchProp.mts";
 import type { IncaCore } from "../rendererCore.mts";
@@ -43,6 +44,9 @@ const core: IncaCore = {
   focus: vi.fn<(nodeId: number) => void>(),
   blur: vi.fn<(nodeId: number) => void>(),
   focusedNode: vi.fn<() => number | null>(() => null),
+  layoutOf: vi.fn<(nodeId: number) => readonly [number, number, number, number, number] | null>(
+    () => null,
+  ),
   click: vi.fn<(nodeId: number) => void>(),
   dispatchEvent: vi.fn<(nodeId: number, event: EventLike) => boolean>(() => true),
 };
@@ -61,6 +65,16 @@ const makeEl = (): IncaElement => ({
   click: vi.fn<() => void>(),
   ...makeTarget(),
   tabIndex: -1,
+  getBoundingClientRect: () => domRect(null),
+  offsetWidth: 0,
+  offsetHeight: 0,
+  offsetLeft: 0,
+  offsetTop: 0,
+  offsetParent: null,
+  clientWidth: 0,
+  clientHeight: 0,
+  clientLeft: 0,
+  clientTop: 0,
 });
 
 let el = makeEl();

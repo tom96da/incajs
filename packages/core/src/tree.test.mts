@@ -9,6 +9,7 @@ import {
   destroyNode,
   getAttribute,
   insertBefore,
+  layoutOf,
   removeAttribute,
   removeChild,
   rootNodeId,
@@ -39,6 +40,9 @@ const native = {
   focusNode: vi.fn<(nodeId: number) => void>(),
   blurNode: vi.fn<(nodeId: number) => void>(),
   focusedNode: vi.fn<() => number | null>(() => null),
+  layoutOf: vi.fn<(nodeId: number) => readonly [number, number, number, number, number] | null>(
+    () => null,
+  ),
   dispatchEvent: vi.fn<(nodeId: number, event: EventLike) => boolean>(() => true),
   click: vi.fn<(nodeId: number) => void>(),
 };
@@ -88,6 +92,12 @@ describe("wrapper functions forward to __inca_native__", () => {
     native.getAttribute.mockReturnValueOnce("hello");
     expect(getAttribute(1, "label")).toBe("hello");
     expect(native.getAttribute).toHaveBeenCalledWith(1, "label");
+  });
+
+  it("layoutOf", () => {
+    native.layoutOf.mockReturnValueOnce([1, 2, 3, 4, 0]);
+    expect(layoutOf(1)).toEqual([1, 2, 3, 4, 0]);
+    expect(native.layoutOf).toHaveBeenCalledWith(1);
   });
 
   it("removeAttribute", () => {

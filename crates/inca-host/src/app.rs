@@ -26,7 +26,7 @@ use std::process::ExitCode;
 use std::rc::Rc;
 
 use gpui::{
-    App, Bounds, Context, Pixels, SharedString, Size, TitlebarOptions, Window, WindowBounds,
+    App, Bounds, Context, Pixels, Point, SharedString, Size, TitlebarOptions, Window, WindowBounds,
     WindowHandle, WindowOptions, div, prelude::*, px, size,
 };
 use gpui_platform::application;
@@ -36,7 +36,9 @@ use inca_bridge::{
     ErrorReporter, EventDispatcher, FocusTransition, Host, LoadSignal, install_dev,
     install_load_signal, stderr_reporter,
 };
-use inca_gpui::{AttributeValue, NodeId, VirtualNode, render_tree_with_events};
+use inca_gpui::{
+    AttributeValue, EventSink, NodeId, NodeLayout, VirtualNode, render_tree_with_events,
+};
 use inca_jsenv::{Engine, EngineError, PendingModule, console};
 
 use crate::config;
@@ -350,8 +352,17 @@ impl Render for HostedApp {
             transition.dispatch(&session.dispatcher, window, cx);
         }
         let host = session.host.borrow();
-        render_tree_with_events(&host.tree, host.root, &session.dispatcher)
-            .unwrap_or_else(|| div().into_any_element())
+        let element = render_tree_with_events(&host.tree, host.root, &session.dispatcher)
+            .unwrap_or_else(|| div().into_any_element());
+        // The root fills the window; the walk records only its children.
+        session.dispatcher.record_layout(
+            host.root,
+            NodeLayout {
+                bounds: Bounds::new(Point::default(), window.viewport_size()),
+                border: px(0.0),
+            },
+        );
+        element
     }
 }
 

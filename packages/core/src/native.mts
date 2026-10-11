@@ -27,6 +27,7 @@ interface IncaNative {
   focusNode(nodeId: NodeId): void;
   blurNode(nodeId: NodeId): void;
   focusedNode(): NodeId | null;
+  layoutOf(nodeId: NodeId): readonly [number, number, number, number, number] | null;
   dispatchEvent(nodeId: NodeId, event: EventLike): boolean;
   click(nodeId: NodeId): void;
 }

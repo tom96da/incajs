@@ -10,13 +10,15 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use gpui::ScrollHandle;
+use gpui::{Bounds, ScrollHandle};
 use rquickjs::function::Opt;
 use rquickjs::{Ctx, Exception, FromJs, Function, IntoJs, Object, Result as JsResult, Value};
 
 use inca_jsenv::EngineError;
 
-use inca_gpui::{AttributeValue, NodeId, TreeError, VirtualNode, VirtualTree, style_warning};
+use inca_gpui::{
+    AttributeValue, NodeId, NodeLayout, TreeError, VirtualNode, VirtualTree, style_warning,
+};
 
 use crate::focus::FocusRegistry;
 
@@ -152,6 +154,8 @@ pub struct Host {
     // Scroll state of the containers, created on first ask. Its own cell, so
     // it can be written while a shared borrow of `Host` is held.
     pub(crate) scroll_handles: RefCell<HashMap<NodeId, ScrollHandle>>,
+    // Boxes of the last drawn frame. Its own cell, as the draw runs under a shared borrow.
+    pub(crate) layout: RefCell<HashMap<NodeId, NodeLayout>>,
     // Errors listeners threw, in order; the dispatcher reports them once the engine is idle.
     pub(crate) failures: Vec<EngineError>,
     // The nodes whose `click()` is running.
@@ -183,6 +187,7 @@ impl Default for Host {
             focus: FocusRegistry::default(),
             last_event_id: 0,
             scroll_handles: RefCell::new(HashMap::new()),
+            layout: RefCell::new(HashMap::new()),
             failures: Vec::new(),
             clicking: HashSet::new(),
         }
@@ -666,6 +671,29 @@ fn install_focus<'js>(
                     None => Ok(Value::new_null(ctx.clone())),
                 }
             })?,
+        )?;
+    }
+
+    {
+        let host = Rc::clone(host);
+        native.set(
+            "layoutOf",
+            Function::new(
+                ctx.clone(),
+                move |ctx: Ctx<'js>, JsNodeId(node_id): JsNodeId| -> JsResult<Value<'js>> {
+                    let host = host.borrow();
+                    if host.tree.get(node_id).is_none() {
+                        return Err(throw_tree_error(&ctx, TreeError::NodeNotFound(node_id)));
+                    }
+                    let Some(layout) = host.layout.borrow().get(&node_id).copied() else {
+                        return Ok(Value::new_null(ctx.clone()));
+                    };
+                    let Bounds { origin, size } = layout.bounds;
+                    [origin.x, origin.y, size.width, size.height, layout.border]
+                        .map(|px| f64::from(f32::from(px)))
+                        .into_js(&ctx)
+                },
+            )?,
         )?;
     }
 
@@ -1203,6 +1231,58 @@ mod tests {
             .unwrap();
 
         assert!(caught, "an unknown node id must raise a TypeError");
+    }
+
+    fn layout(x: f32) -> NodeLayout {
+        NodeLayout {
+            bounds: Bounds::new(
+                gpui::point(gpui::px(x), gpui::px(2.0)),
+                gpui::size(gpui::px(3.0), gpui::px(4.5)),
+            ),
+            border: gpui::px(1.0),
+        }
+    }
+
+    #[test]
+    fn layout_of_reads_the_recorded_box() {
+        let (engine, host) = engine_with_bindings();
+        let node: u32 = engine.eval("__inca_native__.createNode('div')").unwrap();
+        host.borrow().layout.borrow_mut().insert(node, layout(1.5));
+
+        let read: Vec<f64> = engine
+            .eval(&format!("__inca_native__.layoutOf({node})"))
+            .unwrap();
+
+        assert_eq!(read, [1.5, 2.0, 3.0, 4.5, 1.0]);
+    }
+
+    #[test]
+    fn layout_of_a_node_with_no_record_is_null() {
+        let (engine, _host) = engine_with_bindings();
+        let node: u32 = engine.eval("__inca_native__.createNode('div')").unwrap();
+
+        let is_null: bool = engine
+            .eval(&format!("__inca_native__.layoutOf({node}) === null"))
+            .unwrap();
+
+        assert!(is_null);
+    }
+
+    #[test]
+    fn layout_of_an_unknown_node_raises_type_error() {
+        let (engine, _host) = engine_with_bindings();
+
+        let caught: bool = engine
+            .eval(
+                r"
+                let caught = false;
+                try { __inca_native__.layoutOf(999); } catch (e) { caught = e instanceof TypeError; }
+                caught;
+                ",
+            )
+            .unwrap();
+
+        assert!(caught);
     }
 
     #[test]

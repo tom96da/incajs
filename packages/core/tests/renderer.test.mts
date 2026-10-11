@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createEventTarget } from "../src/createEventTarget.mts";
 import { blur, click, focus } from "../src/events.mts";
 import { createNode, rootNodeId } from "../src/tree.mts";
+import { domRect } from "../src/vue/domRect.mts";
 import { createIncaApp } from "../src/vue/index.mts";
 import type { NodeId } from "../src/index.mts";
 import type { IncaElement } from "../src/vue/index.mts";
@@ -92,6 +93,9 @@ function installFakeNative(): Map<NodeId, FakeNode> {
     },
     getAttribute(nodeId: NodeId, key: string): string | number | boolean | null {
       return (requireNode(nodeId).attributes[key] ?? null) as string | number | boolean | null;
+    },
+    layoutOf(_nodeId: NodeId): readonly [number, number, number, number, number] | null {
+      return null;
     },
     removeAttribute(nodeId: NodeId, key: string): void {
       delete requireNode(nodeId).attributes[key];
@@ -200,6 +204,16 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       click: () => click(rootId),
       ...createEventTarget(() => rootId),
       tabIndex: -1,
+      getBoundingClientRect: () => domRect(null),
+      offsetWidth: 0,
+      offsetHeight: 0,
+      offsetLeft: 0,
+      offsetTop: 0,
+      offsetParent: null,
+      clientWidth: 0,
+      clientHeight: 0,
+      clientLeft: 0,
+      clientTop: 0,
     };
   });
 

@@ -3,6 +3,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { domRect } from "./domRect.mts";
 import { elements } from "./elements.mts";
 import { createNodeOps } from "./nodeOps.mts";
 import type { IncaCore } from "../rendererCore.mts";
@@ -41,8 +42,24 @@ const core: IncaCore = {
   focus: vi.fn<(nodeId: number) => void>(),
   blur: vi.fn<(nodeId: number) => void>(),
   focusedNode: vi.fn<() => number | null>(() => null),
+  layoutOf: vi.fn<(nodeId: number) => readonly [number, number, number, number, number] | null>(
+    () => null,
+  ),
   click: vi.fn<(nodeId: number) => void>(),
   dispatchEvent: vi.fn<(nodeId: number, event: EventLike) => boolean>(() => true),
+};
+
+const noLayout = {
+  getBoundingClientRect: () => domRect(null),
+  offsetWidth: 0,
+  offsetHeight: 0,
+  offsetLeft: 0,
+  offsetTop: 0,
+  offsetParent: null,
+  clientWidth: 0,
+  clientHeight: 0,
+  clientLeft: 0,
+  clientTop: 0,
 };
 
 const nodeOps = createNodeOps(core);
@@ -65,6 +82,7 @@ function element(): IncaElement {
     click: vi.fn<() => void>(),
     ...target,
     tabIndex: -1,
+    ...noLayout,
   };
 }
 
@@ -84,6 +102,16 @@ describe("createElement", () => {
       removeEventListener: expect.any(Function),
       dispatchEvent: expect.any(Function),
       tabIndex: -1,
+      getBoundingClientRect: expect.any(Function),
+      offsetWidth: 0,
+      offsetHeight: 0,
+      offsetLeft: 0,
+      offsetTop: 0,
+      offsetParent: null,
+      clientWidth: 0,
+      clientHeight: 0,
+      clientLeft: 0,
+      clientTop: 0,
     });
   });
 });
@@ -114,6 +142,16 @@ describe("createComment", () => {
       removeEventListener: expect.any(Function),
       dispatchEvent: expect.any(Function),
       tabIndex: -1,
+      getBoundingClientRect: expect.any(Function),
+      offsetWidth: 0,
+      offsetHeight: 0,
+      offsetLeft: 0,
+      offsetTop: 0,
+      offsetParent: null,
+      clientWidth: 0,
+      clientHeight: 0,
+      clientLeft: 0,
+      clientTop: 0,
     });
   });
 });
@@ -156,16 +194,6 @@ describe("event target methods", () => {
     expect(remove).toHaveBeenCalledExactlyOnceWith("click", listener, true);
     expect(el.dispatchEvent(event)).toBe(false);
     expect(dispatch).toHaveBeenCalledExactlyOnceWith(event);
-  });
-});
-
-describe("tabIndex", () => {
-  it("sets the tabindex attribute to the integer part", () => {
-    const el = nodeOps.createElement("div");
-
-    el.tabIndex = 2.9;
-
-    expect(core.setAttribute).toHaveBeenCalledExactlyOnceWith(el.id, "tabindex", 2);
   });
 });
 

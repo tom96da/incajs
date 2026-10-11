@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { isDestroyed } from "./destroyedNodes.mts";
+import { domRect } from "./domRect.mts";
 import { elements } from "./elements.mts";
+import { layoutBox } from "./layoutBox.mts";
+import { offsetOf } from "./offsetOf.mts";
+import { offsetParentOf } from "./offsetParent.mts";
 import { skipReactive } from "./skipReactive.mts";
 import { tabIndexOf } from "./tabIndexOf.mts";
 import type { IncaCore, NodeId, TagName } from "../rendererCore.mts";
@@ -11,7 +15,7 @@ import type { IncaElement } from "./nodeOps.mts";
 /**
  * Builds the {@link IncaElement} handle for a native node: parentless,
  * childless, with `focus()`, `blur()`, `click()`, the listener methods of an
- * event target and `tabIndex`, all driven through `core`.
+ * event target, `tabIndex` and the layout members, all driven through `core`.
  * @param core - the incajs bindings the handle drives
  * @param id - the native node's id
  * @param kind - whether the node is an element or a comment stand-in
@@ -45,6 +49,36 @@ export function createIncaElement(
     },
     set tabIndex(value: number) {
       if (!isDestroyed(element)) core.setAttribute(id, "tabindex", value | 0);
+    },
+    getBoundingClientRect: () => domRect(layoutBox(core, element)),
+    get offsetWidth() {
+      return Math.round(layoutBox(core, element)?.[2] ?? 0);
+    },
+    get offsetHeight() {
+      return Math.round(layoutBox(core, element)?.[3] ?? 0);
+    },
+    get offsetLeft() {
+      return offsetOf(core, element).left;
+    },
+    get offsetTop() {
+      return offsetOf(core, element).top;
+    },
+    get offsetParent() {
+      return offsetParentOf(core, element);
+    },
+    get clientWidth() {
+      const box = layoutBox(core, element);
+      return box ? Math.max(0, Math.round(box[2] - 2 * box[4])) : 0;
+    },
+    get clientHeight() {
+      const box = layoutBox(core, element);
+      return box ? Math.max(0, Math.round(box[3] - 2 * box[4])) : 0;
+    },
+    get clientLeft() {
+      return Math.round(layoutBox(core, element)?.[4] ?? 0);
+    },
+    get clientTop() {
+      return Math.round(layoutBox(core, element)?.[4] ?? 0);
     },
   };
   if (kind === "element") elements.set(id, element);

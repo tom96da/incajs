@@ -6,6 +6,7 @@ use gpui::{
     MouseUpEvent, ScrollDelta, ScrollWheelEvent, Window,
 };
 
+use crate::element::NodeLayout;
 use crate::tree::NodeId;
 
 /// What a dispatch carries beyond the node it fired on.
@@ -381,6 +382,14 @@ pub trait EventSink {
     /// scrolls for the innermost container under the wheel that can still
     /// move, and stays put after `preventDefault()`.
     fn scroll_handle(&self, node_id: NodeId) -> Option<gpui::ScrollHandle>;
+
+    /// Forgets every recorded layout. Called before each frame's tree is
+    /// built, so only nodes laid out in the new frame have a record.
+    fn clear_layout(&self);
+
+    /// Records the box `node_id` was laid out in. Called during prepaint for
+    /// each displayed child of a container, as the frame is drawn.
+    fn record_layout(&self, node_id: NodeId, layout: NodeLayout);
 
     /// Reports a pointer move to `position`, in window coordinates. Called
     /// for every pointer move in the window, buttons held included, before

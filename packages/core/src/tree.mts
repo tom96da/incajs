@@ -96,6 +96,16 @@ export function getAttribute(nodeId: NodeId, key: string): AttributeValue | null
 }
 
 /**
+ * Returns the box `nodeId` was drawn at in the last frame, in window logical
+ * pixels, or `null` if the node has no recorded box.
+ * @param nodeId - the node to read
+ * @returns `[x, y, width, height, border]`, or `null`. `border` is one uniform width on all sides.
+ */
+export function layoutOf(nodeId: NodeId): readonly [number, number, number, number, number] | null {
+  return native().layoutOf(nodeId);
+}
+
+/**
  * Removes a non-style attribute/prop from `nodeId`. Removing an attribute
  * that isn't set does nothing.
  * @param nodeId - the node to update

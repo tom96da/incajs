@@ -110,15 +110,23 @@ A fixed entry is deleted and its ID is never reused.
   somewhere to write. Where it lives per platform, how it rotates, and
   whether an app can opt out are all undecided.
 
-- **B-028 A template `ref` resolves to a plain data object that lacks most element properties**
-  `Units: core · Size: M · Impact: Medium`
+- **B-028 A template `ref` lacks most element members**
+  `Units: core,bridge · Size: L · Impact: Medium`
 
-  `IncaElement`
-  (`packages/core/src/vue/nodeOps.mts`) has `focus()`, `blur()`, `click()`,
-  `addEventListener()`, `removeEventListener()`, `dispatchEvent()` and
-  `tabIndex`. The DOM element members a `.vue` app would otherwise reach for
-  on a template `ref` are missing, such as `getBoundingClientRect()` and the
-  size and scroll properties.
+  The element has `focus()`, `blur()`, `tabIndex`, `getBoundingClientRect()`,
+  the `offset*` and `client*` members and the listener methods. It lacks:
+  - the scroll members (`scrollTop`, `scrollLeft`, `scrollWidth`,
+    `scrollHeight`, `scrollTo()`, `scrollBy()`);
+  - the attribute members (`getAttribute()`, `setAttribute()`,
+    `hasAttribute()`, `removeAttribute()`, `attributes`);
+  - `classList`, `className`, `dataset`, `style`, `tagName`;
+  - the tree members (`parentElement`, `children`, `firstChild`,
+    `nextSibling`, `contains()`, `closest()`).
+
+  The wrapper's own `id`, `children` and `parent` fields use DOM names with
+  other meanings, so `el.id` needs those fields renamed first. Fix: build the
+  attribute members on the `getAttribute` binding, and the tree members on the
+  JS shadow tree.
 
 - **B-036 Reverting a script edit under `--experimental-hmr` sometimes applies nothing**
   `Units: cli · Size: M · Impact: Medium · Status: needs repro`
@@ -919,6 +927,24 @@ A fixed entry is deleted and its ID is never reused.
   `__VUE_PROD_DEVTOOLS__` and `__VUE_PROD_HYDRATION_MISMATCH_DETAILS__` are not
   defined. Fix: define the three flags in the Vite configurations of the
   development server and the build.
+
+- **B-160 Element reads see the last drawn frame**
+  `Units: gpui,bridge,core · Size: L · Impact: Medium`
+
+  `getBoundingClientRect()` and the `offset*` and `client*` members return the
+  box of the last drawn frame. A node created or changed in the same task
+  reads as before the change, or as zeros. A read in `onMounted` gets zeros.
+  Fix: a layout pass the bindings can call, or a notification after each
+  frame, which fits the rule that JS runs only on change.
+
+- **B-161 Offsets of a template `ref` differ from the browser**
+  `Units: core · Size: S · Impact: Low`
+
+  `offsetLeft` and `offsetTop` change when the parent scrolls, and
+  `offsetParent` is always the direct parent. A browser ignores the scroll of
+  the offset parent and measures from the nearest positioned ancestor. Fix:
+  add the scroll offset of the parent once scroll reads exist, and pick the
+  nearest ancestor with a `position` once that style exists.
 
 - **B-162 Style warnings print as plain text outside the console**
   `Units: gpui,bridge,jsenv · Size: L · Impact: Low`

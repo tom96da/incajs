@@ -45,6 +45,9 @@ const native = {
   focusNode: vi.fn<(nodeId: number) => void>(),
   blurNode: vi.fn<(nodeId: number) => void>(),
   focusedNode: vi.fn<() => number | null>(() => null),
+  layoutOf: vi.fn<(nodeId: number) => readonly [number, number, number, number, number] | null>(
+    () => null,
+  ),
   dispatchEvent: vi.fn<(nodeId: number, event: EventLike) => boolean>(() => true),
   click: vi.fn<(nodeId: number) => void>(),
 };

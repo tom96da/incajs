@@ -6,8 +6,8 @@ pub mod event_sink;
 pub mod tree;
 
 pub use element::{
-    AlignSpec, DisplaySpec, ElementSpec, ElementTag, FlexDirectionSpec, LengthSpec, StyleSpec,
-    build_element, build_element_with_events, build_spec, clear_presses, debug_selector,
+    AlignSpec, DisplaySpec, ElementSpec, ElementTag, FlexDirectionSpec, LengthSpec, NodeLayout,
+    StyleSpec, build_element, build_element_with_events, build_spec, clear_presses, debug_selector,
     hidden_by_attribute, mouse_target, pressed_target, render_tree, render_tree_with_events,
     style_warning,
 };

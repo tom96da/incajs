@@ -8,6 +8,7 @@ mod active;
 mod button;
 mod common;
 mod components;
+mod geometry;
 mod handlers;
 mod keyboard;
 mod layout;

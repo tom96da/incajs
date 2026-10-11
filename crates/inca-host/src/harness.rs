@@ -286,6 +286,18 @@ mod tests {
     }
 
     #[gpui::test]
+    fn the_root_has_a_layout_record_after_a_render(cx: &mut TestAppContext) {
+        let h = Harness::load(cx, ENTRY, CLICKABLE);
+
+        let width = eval_f64(
+            &h,
+            "__inca_native__.layoutOf(__inca_native__.rootNodeId())[2]",
+        );
+
+        assert!(width > 0.0);
+    }
+
+    #[gpui::test]
     fn load_mounts_the_bundle_and_reports_bounds(cx: &mut TestAppContext) {
         let mut h = Harness::load(cx, ENTRY, CLICKABLE);
 

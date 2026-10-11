@@ -21,6 +21,7 @@ export {
   rootNodeId,
   setAttribute,
   getAttribute,
+  layoutOf,
   removeAttribute,
   setStyle,
   removeStyle,

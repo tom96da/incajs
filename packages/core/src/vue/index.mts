@@ -6,4 +6,5 @@ export { activeElement } from "./activeElement.mts";
 
 export type { IncaApp } from "./createApp.mts";
 export type { IncaCore } from "../rendererCore.mts";
+export type { RectLike, RectValues } from "./domRect.mts";
 export type { IncaElement, IncaNode } from "./nodeOps.mts";

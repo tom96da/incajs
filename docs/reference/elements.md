@@ -122,6 +122,20 @@ object, with the keys above, has any visible effect.
 </template>
 ```
 
+## Template refs
+
+A template `ref` has `focus()`, `blur()`, `click()`, `tabIndex` and the
+listener methods of [Event targets](./events#event-targets). It reads its box
+through `getBoundingClientRect()`, `offsetWidth`, `offsetHeight`,
+`offsetLeft`, `offsetTop`, `offsetParent`, `clientWidth`, `clientHeight`,
+`clientLeft` and `clientTop`. `activeElement()` from `incajs/vue` returns the
+focused one.
+
+- A box read returns the box of the last drawn frame, so `onMounted` reads
+  zeros.
+- `offsetParent` is the parent element, or `null` when the node or its parent
+  has no box. `offsetLeft` and `offsetTop` follow the scroll of the parent.
+
 ## Vue features that don't work yet
 
 A few common Vue features depend on DOM concepts this renderer doesn't
@@ -139,10 +153,8 @@ have, and using them fails the build:
 - **No text input**: an editable text element is still unimplemented (see
   the [Roadmap](../roadmap)) — not permanently unsupported, just not built
   yet.
-- **`ref` lacks most element members**: `getBoundingClientRect()` and the
-  size and scroll properties are missing. A `ref` has `.focus()`, `.blur()`,
-  `.click()`, `tabIndex` and the listener methods of
-  [Event targets](./events#event-targets).
+- **`ref` lacks other element members**: the scroll, attribute, class, style and
+  tree members are missing.
 
 Event modifiers such as `.stop`, `.once` and `@keydown.enter` are documented
 in [Events: Event modifiers](./events#event-modifiers).

@@ -19,8 +19,8 @@ use std::collections::HashMap;
 
 use gpui::prelude::*;
 use gpui::{
-    AnyElement, App, DispatchPhase, Display, ElementId, Fill, FlexDirection, Global, Hsla, Length,
-    MouseDownEvent, MouseExitEvent, MouseMoveEvent, MouseUpEvent, Overflow, Pixels, Point,
+    AnyElement, App, Bounds, DispatchPhase, Display, ElementId, Fill, FlexDirection, Global, Hsla,
+    Length, MouseDownEvent, MouseExitEvent, MouseMoveEvent, MouseUpEvent, Overflow, Pixels, Point,
     ScrollHandle, ScrollWheelEvent, StyleRefinement, Window, canvas, div, point, px, rgb,
 };
 
@@ -935,14 +935,10 @@ fn settle_wheel(window: &mut Window, cx: &mut App) {
 /// Tracks a scroll container's [`ScrollHandle`] and records its offset for
 /// [`settle_wheel`], which keeps an inert container at that offset. Without a
 /// handle `gpui` scrolls it on its own.
-fn wire_scroll<Elem, E>(element: Elem, dispatch: Option<&E>, spec: &ElementSpec) -> Elem
+fn wire_scroll<Elem>(element: Elem, handle: Option<ScrollHandle>, spec: &ElementSpec) -> Elem
 where
     Elem: StatefulInteractiveElement + ParentElement + FluentBuilder,
-    E: EventSink,
 {
-    let handle = dispatch
-        .filter(|_| spec.style.scrolls())
-        .and_then(|d| d.scroll_handle(spec.id));
     element.when_some(handle, |el, handle| {
         el.track_scroll(&handle)
             .child(scroll_recorder(handle, spec.inert))
@@ -980,7 +976,14 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
         ElementTag::Text(content) => content.clone().into_any_element(),
         ElementTag::Container => {
             let id = spec.id;
+            let handle = dispatch
+                .filter(|_| spec.style.scrolls())
+                .and_then(|d| d.scroll_handle(id));
             let element = div().debug_selector(move || debug_selector(id));
+            // Before `.id()`: only `Div` has the listener.
+            let element = element.when_some(dispatch, |el, dispatch| {
+                record_children(el, spec, handle.clone(), dispatch.clone())
+            });
 
             let element = element.when_some(dispatch.filter(|_| root), |el, dispatch| {
                 wire_modifier_keys(root_keys(el, dispatch.clone()), dispatch)
@@ -990,7 +993,7 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
             if spec.style.scrolls() || (dispatch.is_some() && hover) {
                 let element = element.id(ElementId::Integer(u64::from(id)));
                 let element = wire_focus(element, dispatch, id);
-                let element = wire_scroll(element, dispatch, spec);
+                let element = wire_scroll(element, handle, spec);
                 let element = wire_hover(element, dispatch.filter(|_| hover), id);
                 let element =
                     element.when(hover, |el| mark_mouse_target(el, id, dispatch.cloned()));
@@ -1025,13 +1028,87 @@ where
     if let Some(dispatch) = dispatch.filter(|_| root) {
         element = element.child(pointer_tracker(spec.id, dispatch.clone()));
     }
-    for child in &spec.children {
-        if child.tag == ElementTag::Text(String::new()) {
-            continue;
-        }
+    for child in rendered_children(spec) {
         element = element.child(build_element_inner(child, dispatch, false, track));
     }
     element.into_any_element()
+}
+
+/// The children of `spec` that become `gpui` elements, in order. An empty
+/// text child renders nothing.
+fn rendered_children(spec: &ElementSpec) -> impl Iterator<Item = &ElementSpec> {
+    spec.children
+        .iter()
+        .filter(|child| child.tag != ElementTag::Text(String::new()))
+}
+
+/// The laid-out box of a node, as the last drawn frame placed it.
+///
+/// `bounds` is in window coordinates, after the scrolling of every ancestor.
+/// A node inside a scrolled container is therefore reported where it is
+/// drawn.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NodeLayout {
+    /// The border box.
+    pub bounds: Bounds<Pixels>,
+    /// The border width, the same on all four sides. 0 when the node has no
+    /// border and for text.
+    pub border: Pixels,
+}
+
+/// Reports the box of each rendered child of `spec` to `sink` once `element`
+/// has laid its children out. A child with `display: none` has no box and
+/// reports nothing.
+fn record_children<E>(
+    element: gpui::Div,
+    spec: &ElementSpec,
+    handle: Option<ScrollHandle>,
+    sink: E,
+) -> gpui::Div
+where
+    E: EventSink + 'static,
+{
+    // The border of each rendered child; `None` when it is not displayed.
+    #[allow(clippy::cast_possible_truncation)]
+    let children: Vec<(NodeId, Option<Pixels>)> = rendered_children(spec)
+        .map(|child| {
+            let shown = child.style.display != Some(DisplaySpec::None);
+            let border = px(child.style.border_width.unwrap_or(0.0) as f32);
+            (child.id, shown.then_some(border))
+        })
+        .collect();
+    element.when(!children.is_empty(), |el| {
+        el.on_children_prepainted(move |listed, window, _| {
+            // `gpui` hands a scroll-tracked container's bounds to its handle
+            // and passes the listener none.
+            let raw: Vec<Bounds<Pixels>> = match &handle {
+                Some(handle) => (0..).map_while(|ix| handle.bounds_for_item(ix)).collect(),
+                None => listed,
+            };
+            let offset = handle
+                .as_ref()
+                .map(ScrollHandle::offset)
+                .unwrap_or_default();
+            // `gpui` snaps the whole accumulated offset, and the raw bounds
+            // already hold the snapped offset of the ancestors.
+            let outer = window.element_offset();
+            let offset = snapped_extra(window, outer + offset, outer);
+            // The tracker and the scroll recorder come before the children.
+            let first = raw.len().saturating_sub(children.len());
+            for (&(id, border), bounds) in children.iter().zip(&raw[first..]) {
+                if let Some(border) = border {
+                    let bounds = Bounds::new(bounds.origin + offset, bounds.size);
+                    sink.record_layout(id, NodeLayout { bounds, border });
+                }
+            }
+        })
+    })
+}
+
+/// What the snapped offset `total` adds to bounds already placed at the
+/// snapped offset `outer`.
+fn snapped_extra(window: &Window, total: Point<Pixels>, outer: Point<Pixels>) -> Point<Pixels> {
+    window.pixel_snap_point(total) - window.pixel_snap_point(outer)
 }
 
 /// Type-only stand-in for [`build_element_inner`]'s `dispatch` parameter
@@ -1064,6 +1141,10 @@ impl EventSink for NoSink {
     fn scroll_handle(&self, _node_id: NodeId) -> Option<ScrollHandle> {
         None
     }
+
+    fn clear_layout(&self) {}
+
+    fn record_layout(&self, _node_id: NodeId, _layout: NodeLayout) {}
 
     fn pointer_moved(&self, _position: Point<Pixels>, _cx: &mut App) {}
 
@@ -1135,6 +1216,7 @@ pub fn render_tree_with_events<E: EventSink + Clone + 'static>(
     root: NodeId,
     dispatch: &E,
 ) -> Option<AnyElement> {
+    dispatch.clear_layout();
     build_spec(tree, root).map(|spec| build_element_with_events(&spec, dispatch))
 }
 
@@ -2219,6 +2301,8 @@ mod tests {
             calls: Calls,
             /// `(event, Window::default_prevented)` at each `pointer_input`.
             prevented: Rc<RefCell<Vec<(String, bool)>>>,
+            layouts: Rc<RefCell<HashMap<NodeId, NodeLayout>>>,
+            handles: Rc<RefCell<HashMap<NodeId, ScrollHandle>>>,
         }
 
         impl EventSink for Probe {
@@ -2247,8 +2331,16 @@ mod tests {
                 None
             }
 
-            fn scroll_handle(&self, _: NodeId) -> Option<ScrollHandle> {
-                None
+            fn scroll_handle(&self, id: NodeId) -> Option<ScrollHandle> {
+                Some(self.handles.borrow_mut().entry(id).or_default().clone())
+            }
+
+            fn clear_layout(&self) {
+                self.layouts.borrow_mut().clear();
+            }
+
+            fn record_layout(&self, id: NodeId, layout: NodeLayout) {
+                self.layouts.borrow_mut().insert(id, layout);
             }
 
             fn pointer_moved(&self, _: Point<Pixels>, _: &mut App) {}
@@ -2349,6 +2441,8 @@ mod tests {
                 tracks,
                 calls: Rc::clone(&calls),
                 prevented: Rc::clone(&prevented),
+                layouts: Rc::default(),
+                handles: Rc::default(),
             };
             let window = cx.add_window(|_, _| ProbeView(tree, probe));
             cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
@@ -2609,6 +2703,226 @@ mod tests {
                     report("mousedown", 2)
                 ]
             );
+        }
+
+        fn probe() -> Probe {
+            Probe {
+                tracks: true,
+                calls: Calls::default(),
+                prevented: Rc::default(),
+                layouts: Rc::default(),
+                handles: Rc::default(),
+            }
+        }
+
+        fn draw(cx: &mut gpui::VisualTestContext, tree: &VirtualTree, probe: &Probe) {
+            cx.draw(point(px(0.), px(0.)), size(px(800.), px(600.)), |_, _| {
+                render_tree_with_events(tree, 0, probe).unwrap()
+            });
+        }
+
+        fn boxed(tree: &mut VirtualTree, parent: Option<NodeId>, w: f64, h: f64) -> NodeId {
+            let id = tree.create_node("div").unwrap();
+            tree.set_style(id, "width", w).unwrap();
+            tree.set_style(id, "height", h).unwrap();
+            if let Some(parent) = parent {
+                tree.append_child(parent, id).unwrap();
+            }
+            id
+        }
+
+        fn rect(x: f32, y: f32, w: f32, h: f32) -> gpui::Bounds<Pixels> {
+            gpui::Bounds::new(point(px(x), px(y)), size(px(w), px(h)))
+        }
+
+        #[gpui::test]
+        fn nested_boxes_record_window_bounds_and_border(cx: &mut TestAppContext) {
+            let mut tree = VirtualTree::new();
+            let root = boxed(&mut tree, None, 200., 200.);
+            let mid = boxed(&mut tree, Some(root), 100., 100.);
+            tree.set_style(mid, "border_width", 2.0).unwrap();
+            tree.set_style(root, "padding", 10.0).unwrap();
+            let leaf = boxed(&mut tree, Some(mid), 50., 40.);
+            let probe = probe();
+            draw(cx.add_empty_window(), &tree, &probe);
+            let layouts = probe.layouts.borrow();
+            let mid = layouts[&mid];
+            assert_eq!(mid.bounds, rect(10., 10., 100., 100.));
+            assert_eq!(mid.border, px(2.));
+            let leaf = layouts[&leaf];
+            assert_eq!(leaf.bounds, rect(12., 12., 50., 40.));
+            assert_eq!(leaf.border, px(0.));
+            assert!(!layouts.contains_key(&root), "the root is the host's");
+        }
+
+        #[gpui::test]
+        fn the_parents_scroll_offset_moves_the_children(cx: &mut TestAppContext) {
+            let mut tree = VirtualTree::new();
+            let root = boxed(&mut tree, None, 100., 100.);
+            tree.set_style(root, "overflow_y", "scroll").unwrap();
+            let first = boxed(&mut tree, Some(root), 100., 300.);
+            let second = boxed(&mut tree, Some(root), 100., 20.);
+            let probe = probe();
+            let view = probe.clone();
+            let window = cx.add_window(|_, _| ProbeView(tree, view));
+            let frame = |cx: &mut TestAppContext| {
+                cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+                    .unwrap();
+            };
+            frame(cx);
+            assert_eq!(
+                probe.layouts.borrow()[&first].bounds,
+                rect(0., 0., 100., 300.)
+            );
+            probe.handles.borrow()[&root].set_offset(point(px(0.), px(-50.)));
+            frame(cx);
+            let layouts = probe.layouts.borrow();
+            assert_eq!(layouts[&first].bounds, rect(0., -50., 100., 300.));
+            assert_eq!(layouts[&second].bounds, rect(0., 250., 100., 20.));
+        }
+
+        #[gpui::test]
+        fn a_fractional_scroll_offset_is_snapped_to_the_device_pixel(cx: &mut TestAppContext) {
+            let mut tree = VirtualTree::new();
+            let root = boxed(&mut tree, None, 100., 100.);
+            tree.set_style(root, "overflow_y", "scroll").unwrap();
+            let child = boxed(&mut tree, Some(root), 100., 300.);
+            let probe = probe();
+            let view = probe.clone();
+            let window = cx.add_window(|_, _| ProbeView(tree, view));
+            // The test window has a scale factor of 2, so the grid is 0.5px.
+            for (offset, drawn) in [(-50.4, -50.5), (-50.25, -50.), (-50.75, -50.5)] {
+                cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+                    .unwrap();
+                probe.handles.borrow()[&root].set_offset(point(px(0.), px(offset)));
+                cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+                    .unwrap();
+                assert_eq!(
+                    probe.layouts.borrow()[&child].bounds,
+                    rect(0., drawn, 100., 300.)
+                );
+            }
+        }
+
+        /// Draws an outer and an inner scroll container at `scale`, scrolled
+        /// by `outer` and `inner`, and returns the leaf's recorded y.
+        fn nested_leaf_y(cx: &mut TestAppContext, scale: f32, outer: f32, inner: f32) -> Pixels {
+            let mut tree = VirtualTree::new();
+            let root = boxed(&mut tree, None, 100., 100.);
+            tree.set_style(root, "overflow_y", "scroll").unwrap();
+            let mid = boxed(&mut tree, Some(root), 100., 300.);
+            tree.set_style(mid, "overflow_y", "scroll").unwrap();
+            let leaf = boxed(&mut tree, Some(mid), 100., 600.);
+            let probe = probe();
+            let view = probe.clone();
+            let window = cx.add_window(|_, _| ProbeView(tree, view));
+            cx.simulate_window_scale_factor_change(window.into(), scale);
+            let frame = |cx: &mut TestAppContext| {
+                cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+                    .unwrap();
+            };
+            frame(cx);
+            probe.handles.borrow()[&root].set_offset(point(px(0.), px(outer)));
+            probe.handles.borrow()[&mid].set_offset(point(px(0.), px(inner)));
+            frame(cx);
+            probe.layouts.borrow()[&leaf].bounds.origin.y
+        }
+
+        #[gpui::test]
+        fn nested_fractional_offsets_are_snapped_as_one_sum(cx: &mut TestAppContext) {
+            // Drawn at the snap of outer + inner, not the sum of two snaps.
+            assert_eq!(nested_leaf_y(cx, 2., -10.3, -10.3), px(-20.5));
+            assert_eq!(nested_leaf_y(cx, 1., -10.3, -10.3), px(-21.));
+        }
+
+        #[gpui::test]
+        fn a_fractional_scroll_offset_snaps_to_whole_pixels_at_scale_one(cx: &mut TestAppContext) {
+            let mut tree = VirtualTree::new();
+            let root = boxed(&mut tree, None, 100., 100.);
+            tree.set_style(root, "overflow_y", "scroll").unwrap();
+            let child = boxed(&mut tree, Some(root), 100., 300.);
+            let probe = probe();
+            let view = probe.clone();
+            let window = cx.add_window(|_, _| ProbeView(tree, view));
+            cx.simulate_window_scale_factor_change(window.into(), 1.);
+            for (offset, drawn) in [(-50.4, -50.), (-50.6, -51.)] {
+                cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+                    .unwrap();
+                probe.handles.borrow()[&root].set_offset(point(px(0.), px(offset)));
+                cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+                    .unwrap();
+                assert_eq!(
+                    probe.layouts.borrow()[&child].bounds,
+                    rect(0., drawn, 100., 300.)
+                );
+            }
+        }
+
+        #[gpui::test]
+        fn a_display_none_child_has_no_record_and_keeps_its_siblings_aligned(
+            cx: &mut TestAppContext,
+        ) {
+            let mut tree = VirtualTree::new();
+            let root = boxed(&mut tree, None, 200., 200.);
+            let hidden = boxed(&mut tree, Some(root), 100., 100.);
+            tree.set_style(hidden, "display", "none").unwrap();
+            let shown = boxed(&mut tree, Some(root), 30., 30.);
+            let inside = boxed(&mut tree, Some(hidden), 10., 10.);
+            let probe = probe();
+            draw(cx.add_empty_window(), &tree, &probe);
+            let layouts = probe.layouts.borrow();
+            assert_eq!(layouts[&shown].bounds, rect(0., 0., 30., 30.));
+            assert!(!layouts.contains_key(&hidden) && !layouts.contains_key(&inside));
+        }
+
+        #[gpui::test]
+        fn a_display_none_child_under_a_scroll_container_keeps_its_siblings_aligned(
+            cx: &mut TestAppContext,
+        ) {
+            let mut tree = VirtualTree::new();
+            let root = boxed(&mut tree, None, 200., 200.);
+            tree.set_style(root, "overflow_y", "scroll").unwrap();
+            let hidden = boxed(&mut tree, Some(root), 100., 100.);
+            tree.set_style(hidden, "display", "none").unwrap();
+            let shown = boxed(&mut tree, Some(root), 30., 30.);
+            let inside = boxed(&mut tree, Some(hidden), 10., 10.);
+            let probe = probe();
+            let view = probe.clone();
+            let window = cx.add_window(|_, _| ProbeView(tree, view));
+            cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+                .unwrap();
+            let layouts = probe.layouts.borrow();
+            assert_eq!(layouts[&shown].bounds, rect(0., 0., 30., 30.));
+            assert!(!layouts.contains_key(&hidden) && !layouts.contains_key(&inside));
+        }
+
+        #[gpui::test]
+        fn a_text_child_is_recorded(cx: &mut TestAppContext) {
+            let mut tree = VirtualTree::new();
+            let root = boxed(&mut tree, None, 200., 200.);
+            let label = tree.create_node("text").unwrap();
+            tree.set_attribute(label, "value", "hello").unwrap();
+            tree.append_child(root, label).unwrap();
+            let probe = probe();
+            draw(cx.add_empty_window(), &tree, &probe);
+            let layout = probe.layouts.borrow()[&label];
+            assert_eq!(layout.bounds.origin, point(px(0.), px(0.)));
+            assert!(layout.bounds.size.width > px(0.) && layout.bounds.size.height > px(0.));
+            assert_eq!(layout.border, px(0.));
+        }
+
+        #[gpui::test]
+        fn the_record_clears_between_frames(cx: &mut TestAppContext) {
+            let mut tree = VirtualTree::new();
+            let root = boxed(&mut tree, None, 200., 200.);
+            let child = boxed(&mut tree, Some(root), 50., 50.);
+            let probe = probe();
+            let cx = cx.add_empty_window();
+            draw(cx, &tree, &probe);
+            assert!(probe.layouts.borrow().contains_key(&child));
+            tree.remove_child(root, child).unwrap();
+            draw(cx, &tree, &probe);
+            assert!(probe.layouts.borrow().is_empty());
         }
 
         #[gpui::test]

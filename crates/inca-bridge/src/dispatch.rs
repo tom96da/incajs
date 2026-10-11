@@ -528,6 +528,18 @@ impl EventSink for EventDispatcher {
         self.tracks_pointer()
     }
 
+    fn clear_layout(&self) {
+        self.host.borrow().layout.borrow_mut().clear();
+    }
+
+    fn record_layout(&self, node_id: NodeId, layout: inca_gpui::NodeLayout) {
+        self.host
+            .borrow()
+            .layout
+            .borrow_mut()
+            .insert(node_id, layout);
+    }
+
     fn fire(
         &self,
         start: NodeId,
@@ -827,6 +839,22 @@ mod tests {
         ));
 
         (dispatcher, host, reported)
+    }
+
+    #[test]
+    fn record_layout_stores_and_clear_layout_empties() {
+        let (dispatcher, host, _) = dispatcher_with_engine();
+        let root = host.borrow().root;
+        let layout = inca_gpui::NodeLayout {
+            bounds: gpui::Bounds::default(),
+            border: px(2.0),
+        };
+
+        dispatcher.record_layout(root, layout);
+        assert_eq!(host.borrow().layout.borrow().get(&root), Some(&layout));
+
+        dispatcher.clear_layout();
+        assert!(host.borrow().layout.borrow().is_empty());
     }
 
     /// `inca-gpui` only ever produces a `button` index in `0..=4`, but
