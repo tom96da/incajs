@@ -172,21 +172,15 @@ A fixed entry is deleted and its ID is never reused.
   host reports a timeout are undecided.
 
 - **B-088 Stack frames point into generated code**
-  `Units: cli,host,jsenv · Size: L · Impact: Medium`
+  `Units: cli,jsenv · Size: M · Impact: Medium`
 
-  A stack printed by `console` or reported by the host does not lead back to
-  the source. With the HMR runtime, a frame reads `at name (<input>:line:column)`.
-  The runtime builds each module with an `AsyncFunction`, and QuickJS gives
-  every function made by the `Function` constructors the file name `<input>`;
-  it has no `sourceURL` support. The line numbers are lines of the Vite
-  transform of the module. Without HMR the whole app is one bundle, so a
-  frame names `bundle.js` and a line of the generated code, since the build
-  emits no source map. The dev runtime also disables Vite's source map
-  support, which expects V8 call sites. A fix has two parts. The HMR runtime
-  needs a host-provided function that compiles a module's code under its
-  module id. Then the build and the dev transform emit source maps, and the
-  host remaps each frame to the `.vue` or `.ts` file, line and column. This
-  also covers errors the host reports to `inca dev`.
+  A frame of an HMR module names the module's id, and its line is a line of
+  the Vite transform of that module. A build runs as one bundle, so a frame names
+  `bundle.js` and a line of the generated code. The fix emits source maps from
+  the build and from the dev transform, and the host remaps each frame to the
+  `.vue` or `.ts` file, line and column. The dev runtime disables Vite's
+  source map support, which expects V8 call sites, so the host does the
+  remapping. This also covers errors the host reports to `inca dev`.
 
 - **B-097 `console` prints some classes and built-ins unlike Node**
   `Units: jsenv · Size: M · Impact: Medium`

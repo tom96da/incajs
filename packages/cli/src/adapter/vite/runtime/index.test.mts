@@ -80,6 +80,11 @@ describe("hmr-runtime build output", () => {
 
 type Fetch = () => unknown;
 
+/** Stands in for the host's `compile`; it ignores the file name. */
+const AsyncFunction = async function () {}.constructor as new (
+  ...args: string[]
+) => (...args: unknown[]) => Promise<unknown>;
+
 /** What the development server answers a `fetchModule` with when the module compiles. */
 function module(code: string): unknown {
   return { code, file: "/entry.js", id: "/entry.js", url: "/entry.js", invalidate: false };
@@ -95,6 +100,7 @@ function installDev(fetches: Fetch[]) {
   let fetched = 0;
   const dev: NonNullable<typeof globalThis.__inca_dev__> = {
     setLoadFailed: (failed) => calls.push(failed),
+    compile: (params, body) => new AsyncFunction(...params, body),
     send(_method, paramsJson) {
       const { data } = JSON.parse(paramsJson) as {
         data: { id: string; name: string };

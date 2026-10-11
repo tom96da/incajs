@@ -397,6 +397,9 @@ describe("a session that starts on a broken source", () => {
         timeout: WAIT_TIMEOUT_MS,
       });
       expect(session.appErrors[0]?.message).toContain("startup boom");
+      // The stack names the module by its file.
+      expect(session.appErrors[0]?.stack).toContain("entry.mts:");
+      expect(session.appErrors[0]?.stack).not.toContain("<input>");
       expect(session.buildErrors).toEqual([]);
       expect(session.ready()).toBe(false);
 

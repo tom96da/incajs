@@ -3,8 +3,10 @@
 
 // Provides the globals vite/module-runner needs (TextDecoder/URL).
 import "./globals.mts";
-import { ESModulesEvaluator, ModuleRunner } from "vite/module-runner";
+import { ModuleRunner } from "vite/module-runner";
 import type { ModuleRunnerTransport } from "vite/module-runner";
+
+import { createIncaEvaluator } from "./createIncaEvaluator.mts";
 
 /**
  * A running app's own `globalThis.__inca_dev__`, installed by the host
@@ -14,6 +16,17 @@ interface IncaDev {
   send: (method: string, paramsJson: string) => void;
   receive?: (method: string, paramsJson: string) => void;
   setLoadFailed?: (failed: boolean) => void;
+  /**
+   * Builds an async function from `body` that takes `params` in order. Its
+   * stack frames name `filename`, and a frame on line N of `body` reports
+   * line N + 1. A NUL byte in any argument is rejected, and a syntax error
+   * raises a `SyntaxError` that names `filename`.
+   */
+  compile?: (
+    params: string[],
+    body: string,
+    filename: string,
+  ) => (...args: unknown[]) => Promise<unknown>;
 }
 
 declare global {
@@ -68,6 +81,9 @@ function isServerFailure(error: unknown): boolean {
  * `__inca_dev__.setLoadFailed(true)` follows a failed attempt and
  * `setLoadFailed(false)` precedes each retry.
  *
+ * Every module runs through `__inca_dev__.compile`, so a host without it
+ * fails the import.
+ *
  * `sourcemapInterceptor: false` is required: the interceptor reads V8
  * `CallSite` objects off `Error.stack`, and this engine's `Error.stack` is a
  * plain string.
@@ -85,7 +101,7 @@ export async function start(entryId: string): Promise<unknown> {
       hmr: { logger: { debug: () => {}, error: () => {} } },
       sourcemapInterceptor: false,
     },
-    new ESModulesEvaluator(),
+    createIncaEvaluator(),
   );
   for (;;) {
     // Armed before the attempt, so an edit that lands during it is caught.
