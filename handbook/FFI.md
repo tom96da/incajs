@@ -41,7 +41,7 @@ Implemented in `crates/inca-gpui/src/element.rs`. There are three kinds:
 | `tag_name` | Maps to |
 | --- | --- |
 | `"text"` | Content is its `"value"` string attribute (missing/non-string → empty, never a panic) followed by its descendants' text in child order. Descendants are not rendered as separate elements. |
-| `"button"` | A styled container. The host reads its `tabindex` with a default of 0. [Events](../docs/reference/events.md#focus) covers its key clicks and `disabled` presses. |
+| `"button"` | A styled container. The host reads its `tabindex` with a default of 0. [Elements](../docs/reference/elements.md#button) covers its key clicks. |
 | anything else | A generic styled container (a GPUI `div()`). |
 
 ### Style prop vocabulary
@@ -90,7 +90,7 @@ the nearest ancestor container.
 | `removeEventListener` | `(nodeId: number, event: string, callbackId: number) => boolean` | Drop one registration and return whether it was there. An unknown node returns `false`. |
 | `dispatchEvent` | `(nodeId: number, event: Event) => boolean` | Walk a script-built event over the path of `nodeId` and return `false` when a listener canceled it, see [Dispatching from script](#dispatching-from-script). |
 | `click` | `(nodeId: number) => void` | Walk an untrusted `click` at `nodeId`, see [Dispatching from script](#dispatching-from-script). |
-| `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its subtree, and return every `callbackId` registered in it. An unknown id returns `[]`. Destroying the root throws. Also clears the focus state of the destroyed nodes, and `blur` stays unfired. |
+| `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its subtree, and return every `callbackId` registered in it. An unknown id returns `[]`. Destroying the root throws. Also clears the focus state of the destroyed nodes, and `blur` and `focusout` stay unfired. |
 | `focusNode` | `(nodeId: number) => void` | Request focus for `nodeId`. Takes effect next frame. A node with a `tabindex`, and only that node, takes focus. |
 | `blurNode` | `(nodeId: number) => void` | Request that `nodeId` lose focus. Takes effect next frame, and does nothing if `nodeId` is not the focused node by then. |
 
@@ -98,11 +98,15 @@ Shared throw rules, all as a `TypeError`:
 
 - A malformed `nodeId` or `callbackId` throws.
 - `setAttribute` and `setStyle` throw for a `value` that is not a string, number or boolean.
-- `dispatchEvent` throws for an argument that is not an `Event` or `CustomEvent` of the host.
-- `addEventListener`, `dispatchEvent`, `setAttribute`, `removeAttribute`, `setStyle`, `removeStyle` and `appendChild` throw for an unknown node. `insertBefore` throws for an unknown parent, child or anchor.
+- `dispatchEvent` throws for an argument that is not an `Event` or
+  `CustomEvent` of the host.
+- `addEventListener`, `dispatchEvent`, `setAttribute`, `removeAttribute`,
+  `setStyle`, `removeStyle` and `appendChild` throw for an unknown node.
+  `insertBefore` throws for an unknown parent, child or anchor.
 - `removeChild` throws for an unknown `parentId` and ignores an unknown or unattached `childId`.
 
-`dispatchEvent` also throws an `Error` named `InvalidStateError` for an event that is being dispatched.
+`dispatchEvent` also throws a `DOMException` named `InvalidStateError` for an
+event that is being dispatched.
 
 `insertBefore` and `appendChild`:
 
@@ -137,10 +141,12 @@ and author-facing behaviour are in [events.md](../docs/reference/events.md).
 - The caller stores the function at `globalThis.__inca_callbacks__[callbackId]`
   before registering, and the host stores the `u32` id. A missing or
   non-function entry is skipped.
-- A throwing callback or an unhandled promise rejection goes to
-  `Host::failures`, and sibling callbacks still run. Failures are reported in
-  order after each walk, after `drain_jobs_and_refresh` and by the development
-  window's load poll (`EventDispatcher::report_pending`).
+- A throwing callback goes to `Host::failures`, and sibling callbacks still
+  run. Unhandled promise rejections and failed jobs are reported through the
+  job drain before listener errors, and only listener errors go to
+  `Host::failures`. Failures are reported in order after each walk, after
+  `drain_jobs_and_refresh` and by the development window's load poll
+  (`EventDispatcher::report_pending`).
 
 #### Event object
 
@@ -196,10 +202,11 @@ and author-facing behaviour are in [events.md](../docs/reference/events.md).
 - The target of `mousedown`, `mouseup`, `mousemove`, `wheel` and
   `contextmenu` is the deepest container under the pointer, or the root when
   there is none.
-- Every non-inert container that has a listener or can take focus reports the
-  pointer (`EventSink::tracks_pointer`) through a marker listener and one
-  `on_hover` (`EventSink::hover_changed`), which keeps the hovered set. An
-  inert node and its subtree stay outside hit testing and hover.
+- While any listener is registered or any node can take focus, every non-inert
+  container reports the pointer (`EventSink::tracks_pointer`) through a marker
+  listener and one `on_hover` (`EventSink::hover_changed`), which keeps the
+  hovered set. An inert node and its subtree stay outside hit testing and
+  hover.
 - An inert scroll container records its offset in `scroll_recorder` like any
   other, and `settle_wheel` always restores it and leaves the wheel to the
   next container. A canceled `wheel` rolls the scroll back.
@@ -313,15 +320,14 @@ and author-facing behaviour are in [events.md](../docs/reference/events.md).
   (`bubbles`, `cancelable`, `composed`) from the event's record and returns
   the negated canceled flag. Default actions and the job queue belong to the
   caller. The `dispatching` flag is set last and cleared before the event
-  object is touched, so a frozen event stays dispatchable.
+  object is touched. A listener that freezes the event therefore clears the
+  flag, and dispatching that frozen event again throws a `TypeError` when it
+  sets `target`.
 - `click()` walks a `click` event with `MousePayload::keyboard_click`.
   `Host::clicking` holds the nodes whose click is running, as a re-entrancy
   guard. A disabled `button` and an unknown node return at once.
 
 #### Event table
-
-Every event in the table bubbles except `mouseenter`, `mouseleave`, `focus` and
-`blur`.
 
 | Name | Payload |
 | --- | --- |

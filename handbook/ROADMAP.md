@@ -144,9 +144,9 @@ per-platform host packages). The Rust crates stay
 ### Phase 3.4: HMR
 
 **HMR bridge** (`@incajs/cli`'s `adapter/vite`, beside its Node-side dev
-server): a custom `ModuleRunnerTransport` with Vite's stock evaluator against
-Vite's Runtime API (`vite/module-runner`). Updated modules are evaluated
-inside QuickJS and trigger a GPUI redraw. Component state survives where
+server): a custom `ModuleRunnerTransport` and evaluator against Vite's
+Runtime API (`vite/module-runner`). Updated modules are evaluated inside
+QuickJS and trigger a GPUI redraw. Component state survives where
 Vue's own HMR can: a template-only edit keeps it, and a script edit still
 remounts the component. The runner itself runs inside QuickJS. See
 [ARCHITECTURE.md](./ARCHITECTURE.md#hmr-delivery) for why, and for why this

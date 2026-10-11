@@ -175,12 +175,12 @@ A fixed entry is deleted and its ID is never reused.
   `Units: cli,jsenv · Size: M · Impact: Medium`
 
   A frame of an HMR module names the module's id, and its line is a line of
-  the Vite transform of that module. A build runs as one bundle, so a frame names
-  `bundle.js` and a line of the generated code. The fix emits source maps from
-  the build and from the dev transform, and the host remaps each frame to the
-  `.vue` or `.ts` file, line and column. The dev runtime disables Vite's
-  source map support, which expects V8 call sites, so the host does the
-  remapping. This also covers errors the host reports to `inca dev`.
+  the Vite transform of that module. A build runs as one bundle, so a frame
+  names `bundle.js` and a line of the generated code. The fix emits source maps
+  from the build and from the development transform, and the host remaps each
+  frame to the `.vue` or `.ts` file, line and column. The development runtime
+  disables Vite's source map support, which expects V8 call sites, so the host
+  does the remapping. This also covers errors the host reports to `inca dev`.
 
 - **B-097 `console` prints some classes and built-ins unlike Node**
   `Units: jsenv · Size: M · Impact: Medium`
@@ -977,11 +977,8 @@ A fixed entry is deleted and its ID is never reused.
   `Units: bridge,core,docs · Size: M · Impact: Low`
 
   A script cannot build a `MouseEvent`, `KeyboardEvent`, `FocusEvent`,
-  `WheelEvent`, `UIEvent` or `PointerEvent`, `Event` has no `initEvent()`, and
-  an error thrown for an event dispatched while it is being dispatched is a
-  plain `Error` named `InvalidStateError`, since the realm has no
-  `DOMException` class. Fix: add the subclasses with their init dictionaries,
-  `initEvent()` and a `DOMException` class.
+  `WheelEvent`, `UIEvent` or `PointerEvent`, and `Event` has no `initEvent()`.
+  Fix: add the subclasses with their init dictionaries and `initEvent()`.
 
 - **B-168 `window` has the listener methods only and `document` is undefined**
   `Units: core,bridge,docs · Size: M · Impact: Low`
@@ -989,10 +986,11 @@ A fixed entry is deleted and its ID is never reused.
   `window` is a named export of `incajs` with `addEventListener()`,
   `removeEventListener()` and `dispatchEvent()` as its only members. The
   globals `window` and `document` are undefined, and the `signal` option of
-  `addEventListener()` is unsupported. Fix: install a global `document` and
-  decide how a global `window` coexists with the `typeof window` checks of
-  libraries. The `signal` option needs an `AbortController` in the runtime
-  first.
+  `addEventListener()` is unsupported. Activating or leaving the window fires
+  `focus` and `blur` at the focused node only, where browsers also fire them at
+  `window`. Fix: install a global `document` and decide how a global `window`
+  coexists with the `typeof window` checks of libraries. The `signal` option
+  needs an `AbortController` in the runtime first.
 
 - **B-169 `console` prints a stack written in a string as plain text**
   `Units: jsenv · Size: S · Impact: Low`
@@ -1001,3 +999,18 @@ A fixed entry is deleted and its ID is never reused.
   into a string prints in the text color, such as the component trace of a
   Vue warning (`at <App>`). Fix: dim a line of a string that starts with
   `at `.
+
+- **B-170 Listener methods throw on an unmounted node**
+  `Units: core,bridge,docs · Size: S · Impact: Low`
+
+  Vue destroys a node on unmount, and `addEventListener()` and
+  `dispatchEvent()` on its element then throw a `TypeError`. A browser accepts
+  both on a detached element. Fix: keep a destroyed node's id as a dead target
+  that registers nothing and dispatches to the element's own path.
+
+- **B-171 A frozen event cannot be dispatched again**
+  `Units: bridge,docs · Size: S · Impact: Low`
+
+  Dispatching sets `target` on the event first, which throws a `TypeError` on a
+  frozen object. Browsers dispatch a frozen event. Fix: keep the dispatch state
+  outside the event object.

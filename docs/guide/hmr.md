@@ -33,3 +33,5 @@ the changed module:
 
 - A template-only edit preserves the component's state.
 - A script edit resets state — the component remounts.
+- A stack frame of a module names the module's file, with a line of the
+  transformed module. <Badge type="warning" text="unreleased" />

@@ -19,6 +19,24 @@ methods of the DOM `Event` interface (see Base fields).
 </template>
 ```
 
+## Event targets <Badge type="warning" text="unreleased" />
+
+`window` from `incajs` (`import { window } from "incajs"`) and a template `ref`
+have `addEventListener()`, `removeEventListener()` and `dispatchEvent()`.
+
+- A listener on `window` runs on the root node. `document` is unsupported.
+- `addEventListener()` and `dispatchEvent()` on the element of an unmounted
+  `ref` throw a `TypeError`.
+- The `signal` option of `addEventListener()` is unsupported.
+
+## Event modifiers
+
+Templates accept the
+[event modifiers](https://vuejs.org/guide/essentials/event-handling#event-modifiers)
+and the
+[key modifiers](https://vuejs.org/guide/essentials/event-handling#key-modifiers)
+of Vue.
+
 ## Base fields
 
 Every event object carries the fields of the DOM
@@ -36,7 +54,6 @@ and `returnValue`. The three flags depend on the event:
 - `target` and `currentTarget` are node ids, and `composedPath()` returns node
   ids.
 - `timeStamp` counts milliseconds since the host started.
-- `preventDefault()` acts on cancelable events only.
 - Removing the focused node leaves `blur` and `focusout` unfired.
 
 ## Mouse
@@ -61,10 +78,6 @@ events yet. `pointerType` is `"mouse"`, or `""` for the click of a key.
 | `dblclick`    | 0      | 0       | 2           |
 | `auxclick`    | 1 to 4 | 0       | click count |
 | `contextmenu` | 2      | 2       | 0           |
-
-A disabled `button` and its ancestors receive no pointer `mousedown`,
-`mouseup`, `click` or `dblclick`; listeners below the button run. `auxclick`
-and `contextmenu` still reach them.
 
 ### Host differences
 
@@ -104,9 +117,6 @@ Focus and Tab navigation follow the
 [HTML `tabindex`](https://html.spec.whatwg.org/commit-snapshots/ba3400bb4f3d86477a5c8cfc07ff91fc0caaf21c/#attr-tabindex)
 rules, with the differences below.
 
-Enter clicks a focused `button` on key down, and Space on key up, as in
-browsers.
-
 ### Host differences
 
 - A node takes focus through its `tabindex` attribute, and a `button` is
@@ -120,31 +130,14 @@ browsers.
 - Tab after a click starts at the first node, where browsers continue from the
   click position.
 
-## Dispatching events
+## Dispatching events <Badge type="warning" text="unreleased" />
+
+`dispatchEvent()` sends an event that a script builds with `Event` or
+`CustomEvent`.
 
 - `MouseEvent`, `KeyboardEvent`, `FocusEvent`, `WheelEvent`, `UIEvent` and
-  `PointerEvent` are unsupported, as are `initEvent()` and `DOMException`. An
-  event dispatched while it is being dispatched throws a plain `Error` named
-  `InvalidStateError`.
-
-## Event targets
-
-- `window` is a named export of `incajs` (`import { window } from "incajs"`)
-  that carries the three listener methods. `document` is unsupported.
-- The `signal` option of `addEventListener()` is unsupported.
-
-## Event modifiers
-
-Templates accept the
-[event modifiers](https://vuejs.org/guide/essentials/event-handling#event-modifiers)
-and the
-[key modifiers](https://vuejs.org/guide/essentials/event-handling#key-modifiers)
-of Vue. They work as in Vue, with these differences:
-
-| Modifier        | In the host                                            |
-| --------------- | ------------------------------------------------------ |
-| `@click.middle` | listens for `mouseup` and compares `button` with 1     |
-| `@click.right`  | listens for `contextmenu` and compares `button` with 2 |
+  `PointerEvent` are unsupported, as is `initEvent()`.
+- Dispatching an event again after a listener froze it throws a `TypeError`.
 
 ## Errors in handlers
 
@@ -153,7 +146,7 @@ An error a handler throws, or an `async` handler rejects with, follows Vue's
 
 The development window reports an error that no hook takes to the terminal
 that ran `inca dev`, and shows it as an application error. A packaged app
-writes it to stderr, which has no readable output.
+writes it to stderr.
 
 > [!TIP]
 > A packaged app has no readable stderr. Install `app.config.errorHandler` to

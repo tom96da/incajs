@@ -122,8 +122,8 @@ from line 2. `params` is an array of strings, bound as the parameters in
 order, and each entry fits on one line. The function runs in strict mode in
 the global scope. A frame on line N of `body` reports line N + 1 of
 `filename`, and columns are exact on every line. Line numbers count `\n`,
-`\r\n`, `\r`, U+2028 and U+2029. A `//` comment on the last line of `body` is
-allowed.
+`\r\n`, `\r`, U+2028 and U+2029. A `//` comment on the last line of `body`
+is allowed.
 
 `params` and `body` run as code, so pass trusted source. A NUL byte in any
 argument raises an error, and an argument of the wrong type raises a

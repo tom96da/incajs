@@ -12,9 +12,9 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Added
 
-- `Capture`, `Passive` and `Once` suffixes on event props register capture, passive and one-shot listeners ([966f0b8](https://github.com/tom96da/incajs/commit/966f0b8))
+- the `.capture` and `.passive` modifiers register capture and passive listeners ([966f0b8](https://github.com/tom96da/incajs/commit/966f0b8))
 - `Event`, `CustomEvent`, `dispatchEvent()` and a ref's `click()` fire events from a script ([54a3089](https://github.com/tom96da/incajs/commit/54a3089))
-- `window` from `incajs` and the listener methods of a ref listen for events at the root ([17aad54](https://github.com/tom96da/incajs/commit/17aad54))
+- `window` from `incajs` listens at the root, and a ref has the three listener methods ([17aad54](https://github.com/tom96da/incajs/commit/17aad54))
 
 ### Changed
 
@@ -23,12 +23,13 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 ### Fixed
 
 - `mousedown`, `mouseup` and `click` fire in the order a pointer produces them ([68e79bd](https://github.com/tom96da/incajs/commit/68e79bd))
-- `click` fires on the common ancestor of the press and the release, and each button keeps its own press ([68e79bd](https://github.com/tom96da/incajs/commit/68e79bd))
+- `click` fires on the common ancestor of a press and the release of the same button ([68e79bd](https://github.com/tom96da/incajs/commit/68e79bd))
 - `click` and `dblclick` skip a disabled `button` ([68e79bd](https://github.com/tom96da/incajs/commit/68e79bd))
 - a click after a drag has `detail` 1 on macOS ([5121705](https://github.com/tom96da/incajs/commit/5121705))
 - one event object reaches every listener on the path, so a stop or a property holds for the rest ([67b0af3](https://github.com/tom96da/incajs/commit/67b0af3))
 - a canceled `mousedown` keeps the focus and a canceled key counts as handled ([67b0af3](https://github.com/tom96da/incajs/commit/67b0af3))
-- a move after a release never reports a stale button ([67b0af3](https://github.com/tom96da/incajs/commit/67b0af3))
+- `buttons` on a move after a release lists only the buttons still held ([67b0af3](https://github.com/tom96da/incajs/commit/67b0af3))
+- template event names follow Vue: `@my-event` listens for `my-event` ([b28a142](https://github.com/tom96da/incajs/commit/b28a142))
 
 ## [0.0.13] - 2026-10-10
 

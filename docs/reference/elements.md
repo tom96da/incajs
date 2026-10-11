@@ -24,14 +24,12 @@ separate elements.
 
 ### `button`
 
-A `button` is a box that also takes keyboard focus and clicks from the
-keyboard.
+A `button` is a box that also takes keyboard focus.
 
 - Its `tabindex` is 0 by default, so it takes focus on its own. An explicit
   `tabindex` overrides that, and `el.tabIndex` reads `0` until a value is
   assigned.
-- `Enter` and `Space` are described under [Focus](./events#focus).
-- The `disabled` attribute is described under [Mouse](./events#mouse).
+- `Enter` and `Space` click it from the keyboard.
 
 ```vue
 <template>
@@ -144,8 +142,9 @@ have, and using them fails the build:
   yet.
 - **`ref` lacks most element members**: `getBoundingClientRect()` and the
   size and scroll properties are missing. A `ref` has `.focus()`, `.blur()`,
-  `.click()`, `tabIndex` and the event target methods described in
-  [Events](./events).
+  `.click()`, `tabIndex` and the listener methods of
+  [Event targets](./events#event-targets).
+  <Badge type="warning" text="unreleased" />
 
 Event modifiers such as `.stop`, `.once` and `@keydown.enter` are documented
 in [Events: Event modifiers](./events#event-modifiers).
