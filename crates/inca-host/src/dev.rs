@@ -195,7 +195,7 @@ fn swap_in(
     session: Session,
 ) -> Result<(), Failure> {
     window
-        .update(cx, |app, window, _| {
+        .update(cx, |app, window, cx| {
             app.session = session;
             // A fixed-size window gets a fresh auto-resize chance,
             // as if it just launched with the reloaded content. A
@@ -205,7 +205,7 @@ fn swap_in(
             if !is_resizable(app.window_config.as_ref()) {
                 app.auto_resized.set((false, false));
             }
-            app.session.dispatcher.drain_jobs_and_refresh(window);
+            app.session.dispatcher.drain_jobs_and_refresh(window, cx);
             maybe_auto_resize_to_content(app, window);
         })
         .map_err(|err| Failure::Message(ErrorCode::BundleFailed, err.to_string()))
@@ -230,11 +230,12 @@ fn relay_to_js(
     let params_json = params_json(params);
     let reporter = reporter_for(writer);
 
-    let _ = window.update(cx, |app, window, _| {
+    let _ = window.update(cx, |app, window, cx| {
+        app.session.dispatcher.observe_focus(window, cx);
         if let Some(err) = call_dev_receive(&app.session.engine, method, &params_json) {
             reporter(&err);
         }
-        app.session.dispatcher.drain_jobs_and_refresh(window);
+        app.session.dispatcher.drain_jobs_and_refresh(window, cx);
         maybe_auto_resize_to_content(app, window);
     });
 }

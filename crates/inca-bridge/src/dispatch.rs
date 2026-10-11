@@ -420,7 +420,7 @@ impl EventDispatcher {
         let cut = self.cut_by_disabled_button(event, payload, cx);
         let (canceled, entered) = self.walk(start, event, payload, &cut);
         if entered {
-            self.drain_jobs_and_refresh(window);
+            self.drain_observed(window);
         }
         canceled
     }
@@ -491,9 +491,21 @@ impl EventDispatcher {
         }
     }
 
-    /// [`drain_jobs_and_refresh`] with this dispatcher's engine and reporter,
-    /// then [`Self::report_pending`].
-    pub fn drain_jobs_and_refresh(&self, window: &mut Window) {
+    /// Records the node the window focuses, so `focusedNode()` in JS that runs
+    /// next sees focus the window applied itself. Call it before running JS
+    /// from outside an event.
+    pub fn observe_focus(&self, window: &Window, cx: &App) {
+        self.host.borrow_mut().focus.observe(window, cx);
+    }
+
+    /// [`Self::observe_focus`], then [`drain_jobs_and_refresh`] with this
+    /// dispatcher's engine and reporter, then [`Self::report_pending`].
+    pub fn drain_jobs_and_refresh(&self, window: &mut Window, cx: &App) {
+        self.observe_focus(window, cx);
+        self.drain_observed(window);
+    }
+
+    fn drain_observed(&self, window: &mut Window) {
         drain_jobs_and_refresh(&self.engine, &self.reporter, window);
         self.report_pending();
     }
@@ -642,7 +654,7 @@ impl EventSink for EventDispatcher {
         let (canceled, entered) = self.walk(target, event, &payload, &cut);
         // The default action reads the tree the listeners' queued jobs leave.
         if entered {
-            self.drain_jobs_and_refresh(window);
+            self.drain_observed(window);
         }
         match event {
             "mousedown" => self.focus_on_press(target, canceled, window, cx),
@@ -681,7 +693,7 @@ impl EventSink for EventDispatcher {
         let event = if up { "keyup" } else { "keydown" };
         let (canceled, entered) = self.walk(target, event, payload, &[]);
         if entered {
-            self.drain_jobs_and_refresh(window);
+            self.drain_observed(window);
         }
         if canceled {
             // Handled for the platform: a shortcut or an input method sees nothing.
@@ -885,7 +897,7 @@ mod tests {
         );
 
         let cx = cx.add_empty_window();
-        cx.update(|window, _| dispatcher.drain_jobs_and_refresh(window));
+        cx.update(|window, cx| dispatcher.drain_jobs_and_refresh(window, cx));
 
         assert!(dispatcher.engine.eval::<bool>("globalThis.ran;").unwrap());
     }
@@ -3163,10 +3175,41 @@ mod tests {
             .unwrap();
         let cx = cx.add_empty_window();
 
-        cx.update(|window, _| dispatcher.drain_jobs_and_refresh(window));
+        cx.update(|window, cx| dispatcher.drain_jobs_and_refresh(window, cx));
 
         assert_eq!(reported.borrow().len(), 1);
         assert_eq!(reported.borrow()[0].message(), "Error: boom");
+    }
+
+    #[gpui::test]
+    fn drain_jobs_and_refresh_shows_js_the_focus_the_window_applied(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        host.borrow_mut()
+            .tree
+            .set_attribute(node, "tabindex", inca_gpui::AttributeValue::from("0"))
+            .unwrap();
+        let cx = cx.add_empty_window();
+        cx.update(|window, cx| {
+            let mut host = host.borrow_mut();
+            let host = &mut *host;
+            host.focus.mark_tab_dirty(node);
+            let _ = host.focus.apply_pending(&host.tree, window, cx);
+            host.focus.handle(node).unwrap().focus(window, cx);
+        });
+        dispatcher
+            .engine
+            .eval::<()>(
+                "var seen; Promise.resolve().then(() => { seen = __inca_native__.focusedNode(); });",
+            )
+            .unwrap();
+
+        cx.update(|window, cx| dispatcher.drain_jobs_and_refresh(window, cx));
+
+        assert_eq!(
+            dispatcher.engine.eval::<u64>("seen").unwrap(),
+            u64::from(node)
+        );
     }
 
     #[test]

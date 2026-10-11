@@ -186,8 +186,8 @@ impl Harness {
     /// Panics when the window has closed.
     pub fn settle(&mut self) {
         self.window
-            .update(&mut self.cx, |app, window, _| {
-                app.session.dispatcher.drain_jobs_and_refresh(window);
+            .update(&mut self.cx, |app, window, cx| {
+                app.session.dispatcher.drain_jobs_and_refresh(window, cx);
             })
             .expect("the window is open");
         self.cx.run_until_parked();

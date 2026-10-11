@@ -496,8 +496,8 @@ pub(crate) fn open(
     // mounting leaves work queued that nothing else would come back for
     // until the first input event — or never, in an app that takes none.
     window
-        .update(cx, |app, window, _| {
-            app.session.dispatcher.drain_jobs_and_refresh(window);
+        .update(cx, |app, window, cx| {
+            app.session.dispatcher.drain_jobs_and_refresh(window, cx);
             maybe_auto_resize_to_content(app, window);
         })
         .map_err(|err| Failure::Message(ErrorCode::BundleFailed, err.to_string()))?;
