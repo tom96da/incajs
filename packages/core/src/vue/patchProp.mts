@@ -11,25 +11,36 @@ import {
 import type { IncaCore, EventListener, ListenerOptions } from "../rendererCore.mts";
 import type { IncaElement } from "./nodeOps.mts";
 
-// `onUpdate:modelValue` and the like are component events, never native ones.
-const isOn = (key: string): boolean => /^on[A-Z]/.test(key) && !key.startsWith("onUpdate:");
+/**
+ * Whether a prop is a native event. `onUpdate:modelValue` and the like are
+ * component events, never native ones.
+ */
+const isOn = (key: string): boolean => /^on[^a-z]/.test(key) && !key.startsWith("onUpdate:");
 
-// Vue's SFC compiler appends these to the prop name per event modifier,
-// e.g. `@click.once` becomes `onClickOnce`; `@click.once.capture` becomes
-// `onClickOnceCapture`. Matches `@vue/runtime-dom`'s own `patchEvent.ts`.
+/**
+ * The suffix Vue's SFC compiler appends per event modifier: `@click.once`
+ * becomes `onClickOnce`, `@click.once.capture` becomes `onClickOnceCapture`.
+ * Matches `@vue/runtime-dom`'s `modules/events.ts`.
+ */
 const modifierSuffixRE = /(?:Once|Passive|Capture)$/;
 /**
  * A key that is a bare modifier name is the event of that name.
  */
-const bareModifierRE = /^on(?:Once|Passive|Capture)$/;
+const bareModifierRE = /^on:?(?:Once|Passive|Capture)$/;
+
+/** Same as `@vue/shared`'s `hyphenate`; core does not depend on `vue`. */
+const hyphenate = (str: string): string => str.replace(/\B([A-Z])/g, "-$1").toLowerCase();
 
 interface ParsedEventKey extends ListenerOptions {
   event: string;
   once: boolean;
 }
 
-// Strips modifier suffixes off `rawKey`, repeatedly since Vue can combine
-// several, then lower-cases what's left into the native event name.
+/**
+ * Strips modifier suffixes off `rawKey`, repeatedly since Vue can combine
+ * several, then reads what's left as the event name: `on:name` keeps the
+ * name as written, `onXxx` is hyphenated (`onMyEvent` becomes `my-event`).
+ */
 function parseEventKey(rawKey: string): ParsedEventKey {
   let key = rawKey;
   const parsed: ParsedEventKey = { event: "", once: false, capture: false, passive: false };
@@ -40,7 +51,7 @@ function parseEventKey(rawKey: string): ParsedEventKey {
     else if (match[0] === "Capture") parsed.capture = true;
     else parsed.passive = true;
   }
-  parsed.event = key.slice(2).toLowerCase();
+  parsed.event = key[2] === ":" ? key.slice(3) : hyphenate(key.slice(2));
   return parsed;
 }
 
@@ -146,7 +157,9 @@ const entriesByEl = new WeakMap<IncaElement, Map<string, Entry>>();
 const entryKeyOf = ({ event, capture, passive }: ParsedEventKey): string =>
   `${event}:${capture === true}:${passive === true}`;
 
-// Brings the host registration in line with whether a live slot exists.
+/**
+ * Brings the host registration in line with whether a live slot exists.
+ */
 function sync(core: IncaCore, el: IncaElement, entryKey: string, entry: Entry): void {
   const live = Array.from(entry.slots.values()).some((slot) => !slot.fired);
   if (live && !entry.registered) {
@@ -300,9 +313,11 @@ const BOOLEAN_PRESENCE = new Set(["disabled", "hidden", "inert"]);
  *   stays spent until its key is removed. `.capture` registers the listener
  *   for the phase in which the event travels down to the target, and
  *   `.passive` ignores `preventDefault()` calls inside it.
- * - Event names: any name is accepted, and the listener runs when the host
- *   dispatches that name. See {@link EventListener} for the fields an event
- *   carries.
+ * - Event names: `onXxx` listens for the hyphenated name (`onMyEvent` listens
+ *   for `my-event`), and `on:xxx` listens for the name after the colon as
+ *   written (`on:myEvent` listens for `myEvent`). The listener runs when the
+ *   host dispatches that name. See {@link EventListener} for the fields an
+ *   event carries.
  * - Errors: an error a handler throws, or a rejection of an async handler,
  *   goes to the `onErrorCaptured` hooks and the app's `errorHandler`. Every
  *   handler of an event runs even when an earlier one fails, until one calls

@@ -184,7 +184,48 @@ describe("style", () => {
 });
 
 describe("on*", () => {
-  it("registers a function listener under the lower-cased event name", () => {
+  it("registers an on* prop's camelCase name as the hyphenated event name", () => {
+    patchProp(el, "onMyEvent", null, vi.fn(), undefined, null);
+
+    expect(core.addEventListener).toHaveBeenCalledWith(1, "my-event", expect.any(Function), BUBBLE);
+  });
+
+  it("splits every capital letter of an on* prop name, as Vue does", () => {
+    patchProp(el, "onXMLEvent", null, vi.fn(), undefined, null);
+
+    expect(core.addEventListener).toHaveBeenCalledWith(
+      1,
+      "x-m-l-event",
+      expect.any(Function),
+      BUBBLE,
+    );
+  });
+
+  it("strips a suffix off an on:name prop and applies it to the listener", () => {
+    const listener = vi.fn<() => void>();
+    patchProp(el, "on:myEventOnce", null, listener, undefined, null);
+    const registered = listenerOf(vi.mocked(core.addEventListener).mock.calls[0]!);
+
+    expect(core.addEventListener).toHaveBeenCalledWith(1, "myEvent", expect.any(Function), BUBBLE);
+    registered();
+    registered();
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(core.removeEventListener).toHaveBeenCalledExactlyOnceWith(
+      1,
+      "myEvent",
+      expect.any(Function),
+      BUBBLE,
+    );
+  });
+
+  it("registers an on:name prop as the event name written after the colon", () => {
+    patchProp(el, "on:myEvent", null, vi.fn(), undefined, null);
+
+    expect(core.addEventListener).toHaveBeenCalledWith(1, "myEvent", expect.any(Function), BUBBLE);
+    expect(core.setAttribute).not.toHaveBeenCalled();
+  });
+
+  it("registers a function listener under the event name", () => {
     const listener = vi.fn<() => void>();
     patchProp(el, "onClick", null, listener, undefined, null);
 
@@ -248,7 +289,7 @@ describe("onUpdate:* props", () => {
 
     expect(core.addEventListener).toHaveBeenCalledWith(
       1,
-      "updaterequested",
+      "update-requested",
       expect.any(Function),
       BUBBLE,
     );
@@ -290,6 +331,7 @@ describe("on* modifiers", () => {
       ["onPassive", "passive"],
       ["onCapture", "capture"],
       ["onOnceCapture", "once"],
+      ["on:Once", "Once"],
     ] as const) {
       vi.clearAllMocks();
       el = makeEl();
@@ -304,21 +346,6 @@ describe("on* modifiers", () => {
       }
     }
     expect(mismatches).toEqual([]);
-  });
-
-  it("runs a capture handler and a passive handler through their own registrations", () => {
-    const capture = vi.fn<() => void>();
-    const passive = vi.fn<() => void>();
-    patchProp(el, "onClickCapture", null, capture, undefined, null);
-    patchProp(el, "onClickPassive", null, passive, undefined, null);
-
-    const [first, second] = vi.mocked(core.addEventListener).mock.calls;
-    expect(vi.mocked(core.addEventListener)).toHaveBeenCalledTimes(2);
-    listenerOf(first!)();
-    expect(capture).toHaveBeenCalledTimes(1);
-    expect(passive).not.toHaveBeenCalled();
-    listenerOf(second!)();
-    expect(passive).toHaveBeenCalledTimes(1);
   });
 
   it("keeps a plain, a capture and a passive listener of one event apart", () => {
