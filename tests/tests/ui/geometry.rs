@@ -60,3 +60,13 @@ fn a_read_during_mount_sees_zeros_and_a_null_offset_parent(cx: &mut TestAppConte
 
     assert_eq!(text_of(&mut h, "mounted"), "0,0,null");
 }
+
+#[gpui::test]
+fn a_click_at_the_centre_reads_the_offset_inside_the_box(cx: &mut TestAppContext) {
+    let mut h = load(cx, "offset");
+    click(&mut h, "box");
+
+    // The 100x50 box sits at (10,10) with a 2px border, so its centre is
+    // client (60,35) and offset (60-12, 35-12).
+    assert_eq!(text_of(&mut h, "result"), "48,23,60,35");
+}

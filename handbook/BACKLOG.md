@@ -353,11 +353,6 @@ A fixed entry is deleted and its ID is never reused.
   `crates/inca-gpui/src/event_sink.rs`'s `MousePayload`/`KeyPayload`
   carry a deliberate subset of each DOM type's own fields. What's between
   each missing one and landing differs:
-  - Computable today, but not a small change — no `gpui` change needed.
-    `offsetX`/`offsetY` are measured from the event's `target`. The
-    target's bounds are computed once, for hitbox insertion, and need to be
-    kept where `EventDispatcher` can reach them, since `gpui` has no
-    production API to look a node's bounds up by id at event time.
   - `screenX`/`screenY` are `Window::bounds`' origin plus the client
     position. Wayland reports no window position, so they equal
     `clientX`/`clientY` there, and X11 may report an origin that leaves out
@@ -931,11 +926,13 @@ A fixed entry is deleted and its ID is never reused.
 - **B-160 Element reads see the last drawn frame**
   `Units: gpui,bridge,core · Size: L · Impact: Medium`
 
-  `getBoundingClientRect()` and the `offset*` and `client*` members return the
-  box of the last drawn frame. A node created or changed in the same task
-  reads as before the change, or as zeros. A read in `onMounted` gets zeros.
-  Fix: a layout pass the bindings can call, or a notification after each
-  frame, which fits the rule that JS runs only on change.
+  `getBoundingClientRect()`, the `offset*` and `client*` members and the
+  `offsetX` and `offsetY` of mouse events use the box of the last drawn
+  frame. A node created or changed in the same task reads as before the
+  change, or as zeros. A read in `onMounted` gets zeros. A keyboard click has
+  the client position `(0, 0)`, so its offsets count from there. Fix: a layout
+  pass the bindings can call, or a notification after each frame, which fits
+  the rule that JS runs only on change.
 
 - **B-161 Offsets of a template `ref` differ from the browser**
   `Units: core · Size: S · Impact: Low`

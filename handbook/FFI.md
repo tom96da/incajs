@@ -252,11 +252,15 @@ and author-facing behaviour are in [events.md](../docs/reference/events.md).
 
 #### Mouse payload
 
-- The payload is `clientX`, `clientY`, `screenX`, `screenY`, `x`, `y`,
-  `pageX`, `pageY`, `movementX`, `movementY`, `button`, `buttons`, `detail`,
-  `relatedTarget` (`null` except on hover events) and the four modifier flags.
+- The payload is `clientX`, `clientY`, `screenX`, `screenY`, `offsetX`,
+  `offsetY`, `x`, `y`, `pageX`, `pageY`, `movementX`, `movementY`, `button`,
+  `buttons`, `detail`, `relatedTarget` (`null` except on hover events) and the
+  four modifier flags.
   `x`/`y` and `pageX`/`pageY` equal `clientX`/`clientY`, and the sink sets
   `screenX`/`screenY` from `Window::bounds` plus the client position.
+  The dispatcher sets `offsetX`/`offsetY` from the target's recorded box:
+  the client position minus the box origin and border. A target with no
+  record gets `clientX`/`clientY`.
 - `MousePayload::pointer` adds `pointerId`, `pointerType`, `isPrimary`,
   `width`, `height` and `pressure`: mouse is 1, `"mouse"`, true, 1, 1 and
   keyboard is -1, `""`, false, 1, 1. `pressure` is 0.5 when `buttons` is

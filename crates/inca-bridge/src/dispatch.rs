@@ -338,12 +338,41 @@ impl EventDispatcher {
     }
 
     /// `payload` as a listener sees it: a `related_target` that left the tree
-    /// reads `None`, and the buttons, movement and screen fields are set.
-    fn prepare(&self, event: &str, payload: &EventPayload, window: &Window) -> EventPayload {
+    /// reads `None`, and the buttons, movement, screen and offset fields are
+    /// set. `target` is the node the event fires at.
+    fn prepare(
+        &self,
+        event: &str,
+        target: NodeId,
+        payload: &EventPayload,
+        window: &Window,
+    ) -> EventPayload {
         let payload = self.live_related(payload);
         let payload = self.with_held_buttons(event, &payload);
         let payload = self.with_movement(&payload, event);
-        with_screen(&payload, window)
+        let payload = with_screen(&payload, window);
+        self.with_offset(target, &payload)
+    }
+
+    /// `payload` with `offsetX`/`offsetY` measured from the padding edge of
+    /// `target` in the last drawn frame, or equal to the client position when
+    /// `target` has no recorded box.
+    fn with_offset(&self, target: NodeId, payload: &EventPayload) -> EventPayload {
+        let host = self.host.borrow();
+        let layout = host.layout.borrow().get(&target).copied();
+        let mut payload = payload.clone();
+        if let Some(mouse) = payload.mouse_mut() {
+            let (left, top) = layout.map_or((0.0, 0.0), |l| {
+                let border = f32::from(l.border);
+                (
+                    f32::from(l.bounds.origin.x) + border,
+                    f32::from(l.bounds.origin.y) + border,
+                )
+            });
+            mouse.offset_x = mouse.client_x - left;
+            mouse.offset_y = mouse.client_y - top;
+        }
+        payload
     }
 
     /// `payload` with a `related_target` that left the tree set to `None`.
@@ -416,7 +445,7 @@ impl EventDispatcher {
             return false;
         }
         self.host.borrow_mut().focus.observe(window, cx);
-        let payload = &self.prepare(event, payload, window);
+        let payload = &self.prepare(event, start, payload, window);
         let cut = self.cut_by_disabled_button(event, payload, cx);
         let (canceled, entered) = self.walk(start, event, payload, &cut);
         if entered {
@@ -661,7 +690,7 @@ impl EventSink for EventDispatcher {
         cx: &mut App,
     ) {
         self.host.borrow_mut().focus.observe(window, cx);
-        let payload = self.prepare(event, payload, window);
+        let payload = self.prepare(event, target, payload, window);
         let cut = self.cut_by_disabled_button(event, &payload, cx);
         let (canceled, entered) = self.walk(target, event, &payload, &cut);
         // The default action reads the tree the listeners' queued jobs leave.
@@ -1721,6 +1750,108 @@ mod tests {
                 "globalThis.out = []; globalThis.__inca_callbacks__ = {{ {js} }};"
             ))
             .unwrap();
+    }
+
+    /// Fires `event` with `payload` at `start` and returns `globalThis.out`.
+    fn fire_payload_and_read(
+        cx: &mut TestAppContext,
+        dispatcher: &EventDispatcher,
+        start: NodeId,
+        event: &str,
+        payload: &EventPayload,
+    ) -> serde_json::Value {
+        let cx = cx.add_empty_window();
+        cx.update(|window, cx| {
+            dispatcher.fire(start, event, payload, window, cx);
+        });
+        let json = dispatcher
+            .engine
+            .eval::<String>("JSON.stringify(globalThis.out)")
+            .unwrap();
+        serde_json::from_str(&json).unwrap()
+    }
+
+    fn record_box(host: &Rc<RefCell<Host>>, node: NodeId, left: f32, top: f32, border: f32) {
+        host.borrow().layout.borrow_mut().insert(
+            node,
+            inca_gpui::NodeLayout {
+                bounds: gpui::Bounds::new(
+                    point(px(left), px(top)),
+                    gpui::size(px(100.0), px(50.0)),
+                ),
+                border: px(border),
+            },
+        );
+    }
+
+    #[gpui::test]
+    fn offset_is_measured_from_the_targets_padding_edge(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, parent, child] = tree_of_three(&host);
+        listen(&host, parent, "click");
+        callbacks(
+            &dispatcher,
+            "0: (e) => out.push([e.target, e.offsetX, e.offsetY, e.clientX, e.clientY])",
+        );
+        let click = EventPayload::Mouse(MousePayload::at(at(60.0, 40.0), gpui::Modifiers::none()));
+
+        // No record: the offset equals the client position.
+        let out = fire_payload_and_read(cx, &dispatcher, child, "click", &click);
+        assert_eq!(out, serde_json::json!([[child, 60, 40, 60, 40]]));
+
+        // The listener on the parent reads the child's offset.
+        dispatcher.engine.eval::<()>("out.length = 0").unwrap();
+        record_box(&host, parent, 500.0, 500.0, 9.0);
+        record_box(&host, child, 10.0, 20.0, 2.0);
+        let out = fire_payload_and_read(cx, &dispatcher, child, "click", &click);
+        assert_eq!(out, serde_json::json!([[child, 48, 18, 60, 40]]));
+    }
+
+    #[gpui::test]
+    fn hover_events_measure_the_offset_from_the_node_they_fire_at(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, parent, child] = tree_of_three(&host);
+        listen(&host, parent, "mouseover");
+        listen(&host, parent, "mouseenter");
+        callbacks(
+            &dispatcher,
+            "0: (e) => out.push([e.type, e.target, e.offsetX, e.offsetY, e.clientX, e.clientY])",
+        );
+        record_box(&host, parent, 10.0, 20.0, 2.0);
+        record_box(&host, child, 30.0, 40.0, 0.0);
+
+        // The pointer is over `child`: `mouseover` fires there and bubbles to
+        // `parent`, then `mouseenter` fires at `parent`.
+        let cx = cx.add_empty_window();
+        cx.update(|window, cx| dispatcher.report_hover(Some(child), window, cx));
+
+        let json = dispatcher
+            .engine
+            .eval::<String>("JSON.stringify(globalThis.out)")
+            .unwrap();
+        let out: serde_json::Value = serde_json::from_str(&json).unwrap();
+        // The pointer is at (0,0) in the test window. Each event reads the box
+        // of its own target.
+        assert_eq!(
+            out,
+            serde_json::json!([
+                ["mouseover", child, -30, -40, 0, 0],
+                ["mouseenter", parent, -12, -22, 0, 0]
+            ])
+        );
+    }
+
+    #[gpui::test]
+    fn a_wheel_event_carries_the_offset(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, _, child] = tree_of_three(&host);
+        listen(&host, child, "wheel");
+        callbacks(&dispatcher, "0: (e) => out.push([e.offsetX, e.offsetY])");
+        record_box(&host, child, 10.0, 20.0, 0.0);
+
+        let out = fire_payload_and_read(cx, &dispatcher, child, "wheel", &wheel_at(60.0, 40.0));
+
+        assert_eq!(out, serde_json::json!([[50, 20]]));
     }
 
     #[gpui::test]

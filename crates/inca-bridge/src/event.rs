@@ -750,6 +750,8 @@ fn set_mouse_fields(event_object: &Object, mouse: &MousePayload) -> JsResult<()>
     event_object.set("clientY", mouse.client_y)?;
     event_object.set("screenX", mouse.screen_x)?;
     event_object.set("screenY", mouse.screen_y)?;
+    event_object.set("offsetX", mouse.offset_x)?;
+    event_object.set("offsetY", mouse.offset_y)?;
     event_object.set("x", mouse.client_x)?;
     event_object.set("y", mouse.client_y)?;
     match mouse.related_target {

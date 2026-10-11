@@ -44,6 +44,11 @@ pub struct MousePayload {
     /// implementor supplies the real value.
     pub screen_x: f32,
     pub screen_y: f32,
+    /// The position relative to the padding edge of the event's `target`
+    /// (`offsetX`/`offsetY`). 0 when built by this crate; the [`EventSink`]
+    /// implementor supplies the real value.
+    pub offset_x: f32,
+    pub offset_y: f32,
     /// The button this event is about. 0 for a move, which isn't about any
     /// one button.
     pub button: u8,
@@ -80,6 +85,8 @@ impl MousePayload {
             movement_y: 0.0,
             screen_x: 0.0,
             screen_y: 0.0,
+            offset_x: 0.0,
+            offset_y: 0.0,
             button: 0,
             buttons: 0,
             detail: 0,
@@ -162,6 +169,8 @@ impl From<&MouseDownEvent> for EventPayload {
             movement_y: 0.0,
             screen_x: 0.0,
             screen_y: 0.0,
+            offset_x: 0.0,
+            offset_y: 0.0,
             button: bit,
             buttons: dom_buttons_bit(bit),
             detail: u32::try_from(event.click_count).unwrap_or(u32::MAX),
@@ -182,6 +191,8 @@ impl From<&MouseUpEvent> for EventPayload {
             movement_y: 0.0,
             screen_x: 0.0,
             screen_y: 0.0,
+            offset_x: 0.0,
+            offset_y: 0.0,
             button: bit,
             buttons: 0,
             detail: u32::try_from(event.click_count).unwrap_or(u32::MAX),
@@ -238,6 +249,8 @@ impl From<&MouseMoveEvent> for EventPayload {
             movement_y: 0.0,
             screen_x: 0.0,
             screen_y: 0.0,
+            offset_x: 0.0,
+            offset_y: 0.0,
             button: 0,
             buttons: event
                 .pressed_button
@@ -266,6 +279,8 @@ impl From<&ScrollWheelEvent> for EventPayload {
                 movement_y: 0.0,
                 screen_x: 0.0,
                 screen_y: 0.0,
+                offset_x: 0.0,
+                offset_y: 0.0,
                 // Not about any one button.
                 button: 0,
                 buttons: 0,
