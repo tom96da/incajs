@@ -6,6 +6,11 @@
  * already provide one. Leaves an existing implementation untouched.
  */
 
+export {};
+
+// oxlint-disable-next-line no-shadow-restricted-names
+declare const globalThis: Record<string, unknown>;
+
 if (typeof globalThis.TextDecoder === "undefined") {
   globalThis.TextDecoder = class TextDecoder {
     /**
@@ -17,7 +22,7 @@ if (typeof globalThis.TextDecoder === "undefined") {
       for (const byte of bytes) out += String.fromCharCode(byte);
       return out;
     }
-  } as any;
+  };
 }
 
 if (typeof globalThis.URL === "undefined") {
@@ -30,5 +35,5 @@ if (typeof globalThis.URL === "undefined") {
     constructor(input: string) {
       this.href = input;
     }
-  } as any;
+  };
 }

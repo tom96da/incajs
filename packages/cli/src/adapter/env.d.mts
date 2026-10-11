@@ -27,7 +27,5 @@ interface IncaDev {
   ) => (...args: unknown[]) => Promise<unknown>;
 }
 
-declare global {
-  // eslint-disable-next-line no-var
-  var __inca_dev__: IncaDev | undefined;
-}
+// eslint-disable-next-line no-var
+declare var __inca_dev__: IncaDev | undefined;
