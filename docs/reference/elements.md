@@ -43,7 +43,7 @@ A `button` is a box that also takes keyboard focus.
 </template>
 ```
 
-## Recognized style keys <Badge type="warning" text="unreleased" />
+## Recognized style keys
 
 `:style` takes an object. Only the keys below are read, each with its own
 accepted value shapes. A value of the wrong shape sets the property to its
@@ -144,7 +144,6 @@ have, and using them fails the build:
   size and scroll properties are missing. A `ref` has `.focus()`, `.blur()`,
   `.click()`, `tabIndex` and the listener methods of
   [Event targets](./events#event-targets).
-  <Badge type="warning" text="unreleased" />
 
 Event modifiers such as `.stop`, `.once` and `@keydown.enter` are documented
 in [Events: Event modifiers](./events#event-modifiers).

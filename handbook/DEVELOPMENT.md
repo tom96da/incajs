@@ -28,7 +28,8 @@ History is in [PLAN.md](./PLAN.md) and [CHANGELOG.md](../CHANGELOG.md).
   `@incajs/host-*` packages published by `cd.yml`.
 - **HMR**: opt-in through `--experimental-hmr` or `INCA_EXPERIMENTAL_HMR`.
   A template edit keeps component state and a script edit resets it.
-- **Input**: pointer, focus, keyboard and scrolling (`overflow`, wheel).
+- **Input**: pointer, focus, keyboard and scrolling (`overflow`, wheel), and
+  events fired from a script.
 
 ### Not started
 
@@ -39,7 +40,7 @@ History is in [PLAN.md](./PLAN.md) and [CHANGELOG.md](../CHANGELOG.md).
 
 ### Foundation
 
-- **Release**: `v0.0.13`.
+- **Release**: `v0.0.14`.
 - **Node.js**: 22.18 or newer.
 - **Toolchain**: zed `v1.22.0` for `gpui`, rquickjs `0.14.0`.
 - **Linux binaries**: built in an `ubuntu:22.04` container by both workflows,

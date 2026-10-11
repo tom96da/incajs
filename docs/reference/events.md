@@ -19,7 +19,7 @@ methods of the DOM `Event` interface (see Base fields).
 </template>
 ```
 
-## Event targets <Badge type="warning" text="unreleased" />
+## Event targets
 
 `window` from `incajs` (`import { window } from "incajs"`) and a template `ref`
 have `addEventListener()`, `removeEventListener()` and `dispatchEvent()`.
@@ -130,7 +130,7 @@ rules, with the differences below.
 - Tab after a click starts at the first node, where browsers continue from the
   click position.
 
-## Dispatching events <Badge type="warning" text="unreleased" />
+## Dispatching events
 
 `dispatchEvent()` sends an event that a script builds with `Event` or
 `CustomEvent`.
