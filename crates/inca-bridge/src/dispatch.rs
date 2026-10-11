@@ -24,7 +24,7 @@
 //! call returns — it never crosses into Rust-held state.
 
 use std::cell::{Cell, RefCell};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use gpui::{App, MouseButton, MouseUpEvent, ScrollHandle, Window};
@@ -143,8 +143,6 @@ pub struct EventDispatcher {
     /// The window's modifier keys as of the last change. `None` until
     /// [`Self::sync_modifiers`] first reads them.
     held_modifiers: Rc<Cell<Option<gpui::Modifiers>>>,
-    /// The scroll state of every scrolling container, created on first ask.
-    scroll_handles: Rc<RefCell<HashMap<NodeId, ScrollHandle>>>,
     /// The containers `gpui` reports as hovered.
     hovered: Rc<RefCell<BTreeSet<NodeId>>>,
     /// The deepest hovered container the hover events last reported and its
@@ -172,7 +170,6 @@ impl EventDispatcher {
             last_position: Rc::new(Cell::new(None)),
             current_movement: Rc::new(Cell::new(None)),
             held_modifiers: Rc::new(Cell::new(None)),
-            scroll_handles: Rc::new(RefCell::new(HashMap::new())),
             hovered: Rc::new(RefCell::new(BTreeSet::new())),
             hover_prev: Rc::new(RefCell::new(Vec::new())),
             hover_scheduled: Rc::new(Cell::new(false)),
@@ -540,13 +537,7 @@ impl EventSink for EventDispatcher {
     }
 
     fn scroll_handle(&self, node_id: NodeId) -> Option<ScrollHandle> {
-        Some(
-            self.scroll_handles
-                .borrow_mut()
-                .entry(node_id)
-                .or_default()
-                .clone(),
-        )
+        Some(self.host.borrow().scroll_handle(node_id))
     }
 
     // The first call of an update computes the delta and defers clearing it,

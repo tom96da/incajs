@@ -10,6 +10,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
+use gpui::ScrollHandle;
 use rquickjs::function::Opt;
 use rquickjs::{Ctx, Exception, FromJs, Function, IntoJs, Object, Result as JsResult, Value};
 
@@ -148,6 +149,9 @@ pub struct Host {
     pub focus: FocusRegistry,
     /// Last number handed out as an `eventId`. Each event takes the next one.
     pub last_event_id: u64,
+    // Scroll state of the containers, created on first ask. Its own cell, so
+    // it can be written while a shared borrow of `Host` is held.
+    pub(crate) scroll_handles: RefCell<HashMap<NodeId, ScrollHandle>>,
     // Errors listeners threw, in order; the dispatcher reports them once the engine is idle.
     pub(crate) failures: Vec<EngineError>,
     // The nodes whose `click()` is running.
@@ -178,9 +182,21 @@ impl Default for Host {
             listeners: EventListeners::default(),
             focus: FocusRegistry::default(),
             last_event_id: 0,
+            scroll_handles: RefCell::new(HashMap::new()),
             failures: Vec::new(),
             clicking: HashSet::new(),
         }
+    }
+}
+
+impl Host {
+    // Returns a clone of the node's handle, creating it on first ask.
+    pub(crate) fn scroll_handle(&self, node_id: NodeId) -> ScrollHandle {
+        self.scroll_handles
+            .borrow_mut()
+            .entry(node_id)
+            .or_default()
+            .clone()
     }
 }
 
@@ -504,6 +520,9 @@ fn install_tree<'js>(
                     let mut host = host.borrow_mut();
                     refuse_root(&ctx, &host, node_id, "destroyed")?;
                     let freed = host.tree.destroy_node(node_id);
+                    for id in &freed {
+                        host.scroll_handles.get_mut().remove(id);
+                    }
                     Ok(freed
                         .into_iter()
                         .flat_map(|id| {
@@ -859,6 +878,45 @@ mod tests {
         let host = host.borrow();
         assert!(host.tree.get(host.root).unwrap().children().is_empty());
         assert!(host.listeners.callbacks_for(1, "click").is_empty());
+    }
+
+    #[test]
+    fn destroy_node_frees_the_scroll_handles_of_the_subtree_only() {
+        let (engine, host) = engine_with_bindings();
+        let ids: Vec<NodeId> = engine
+            .eval(
+                r"
+                const root = __inca_native__.rootNodeId();
+                const branch = __inca_native__.createNode('div');
+                const leaf = __inca_native__.createNode('div');
+                const kept = __inca_native__.createNode('div');
+                __inca_native__.appendChild(root, branch);
+                __inca_native__.appendChild(branch, leaf);
+                __inca_native__.appendChild(root, kept);
+                [branch, leaf, kept]
+                ",
+            )
+            .unwrap();
+        let (branch, leaf, kept) = (ids[0], ids[1], ids[2]);
+        for id in [branch, leaf, kept] {
+            host.borrow().scroll_handle(id);
+        }
+
+        engine
+            .eval::<()>(&format!("__inca_native__.destroyNode({branch})"))
+            .unwrap();
+
+        let host = host.borrow();
+        let handles = host.scroll_handles.borrow();
+        assert!(!handles.contains_key(&branch));
+        assert!(
+            !handles.contains_key(&leaf),
+            "a descendant's handle goes with its ancestor"
+        );
+        assert!(
+            handles.contains_key(&kept),
+            "a surviving node keeps its handle"
+        );
     }
 
     #[test]
