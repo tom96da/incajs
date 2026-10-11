@@ -73,9 +73,12 @@ client.
   payloads cross the boundary, as JSON.
 - A custom `ModuleRunnerTransport` carries those messages between the Node
   process and the host over the stdio channel `dev-client` owns.
-- Vite's stock `ESModulesEvaluator` runs the transformed module source
-  inside QuickJS. Vite's SSR transform emits an async function body, and the
-  evaluator builds and calls it with `new AsyncFunction(...)`.
+- The CLI's own evaluator runs the transformed module source inside QuickJS.
+  It subclasses Vite's `ESModulesEvaluator`. Its module step builds the SSR
+  transform's async function body with `__inca_dev__.compile`, named after the
+  module's id, so a stack frame names the module. Its `startOffset` of 1
+  shifts the inlined source map down by the header line of the compiled
+  source.
 
 This reuses Vite's module graph invalidation and its accept and dispose
 boundaries, without a hand-rolled HMR protocol.

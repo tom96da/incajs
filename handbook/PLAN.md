@@ -911,6 +911,10 @@ currently provides.
 - [x] A `ModuleEvaluator` running transformed code inside QuickJS — done:
       Vite's own stock `ESModulesEvaluator`, with `sourcemapInterceptor:
       false`.
+- [x] A `ModuleEvaluator` that builds each module through
+      `__inca_dev__.compile`, so a stack frame names the module — done:
+      `createIncaEvaluator.mts` in `@incajs/cli`, on the `compile` binding in
+      `crates/inca-bridge/src/dev.rs` and `crates/inca-jsenv/src/compile.rs`.
 - [x] The environment runs as `consumer: 'client'` with
       `dev.moduleRunnerTransform: true` — done
       (`packages/cli/src/adapter/vite/hmr.mts`), including the

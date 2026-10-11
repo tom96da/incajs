@@ -116,6 +116,20 @@ the host to the client, and an HMR update goes from the client to the host.
 `dev-client` depends on no bundler. The CLI's own commands pass it the handle
 that owns a payload.
 
+**Compiling app source.** `__inca_dev__.compile(params, body, filename)`
+returns an async function: `(async function (params) {` on line 1 and `body`
+from line 2. `params` is an array of strings, bound as the parameters in
+order, and each entry fits on one line. The function runs in strict mode in
+the global scope. A frame on line N of `body` reports line N + 1 of
+`filename`, and columns are exact on every line. Line numbers count `\n`,
+`\r\n`, `\r`, U+2028 and U+2029. A `//` comment on the last line of `body` is
+allowed.
+
+`params` and `body` run as code, so pass trusted source. A NUL byte in any
+argument raises an error, and an argument of the wrong type raises a
+`TypeError`. A syntax error raises a `SyntaxError` whose stack names
+`filename` and the line.
+
 ## Failure handling
 
 The host never exits because of a message it couldn't use.

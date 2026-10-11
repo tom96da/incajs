@@ -993,3 +993,11 @@ A fixed entry is deleted and its ID is never reused.
   decide how a global `window` coexists with the `typeof window` checks of
   libraries. The `signal` option needs an `AbortController` in the runtime
   first.
+
+- **B-169 `console` prints a stack written in a string as plain text**
+  `Units: jsenv · Size: S · Impact: Low`
+
+  The frames of an `Error` value print dimmed. A stack that an app writes
+  into a string prints in the text color, such as the component trace of a
+  Vue warning (`at <App>`). Fix: dim a line of a string that starts with
+  `at `.
