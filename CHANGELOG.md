@@ -18,6 +18,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - the `scroll` event fires when a container scrolls ([be6ecde](https://github.com/tom96da/incajs/commit/be6ecde))
 - `focus()` and Tab scroll the node into view, and a ref has `focus({ preventScroll })` and `scrollIntoView()` ([22e125e](https://github.com/tom96da/incajs/commit/22e125e))
 - `activeElement()` from `incajs/vue` returns the focused element ([42f3df0](https://github.com/tom96da/incajs/commit/42f3df0))
+- errors name the `.vue` or `.ts` file, line and column ([759a994](https://github.com/tom96da/incajs/commit/759a994))
+- `inca build` and `inca package` write a source map with `sourcemap` or `--sourcemap` ([aeaa9af](https://github.com/tom96da/incajs/commit/aeaa9af))
 
 ### Fixed
 
