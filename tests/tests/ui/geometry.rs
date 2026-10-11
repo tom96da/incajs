@@ -86,6 +86,16 @@ fn script_scroll_top_moves_the_children_up(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn a_script_scroll_fires_one_scroll_event(cx: &mut TestAppContext) {
+    let mut h = load(cx, "scroll_position");
+    assert_eq!(text_of(&mut h, "scrolls"), "0");
+
+    click(&mut h, "scroll40");
+
+    assert_eq!(text_of(&mut h, "scrolls"), "1");
+}
+
+#[gpui::test]
 fn scroll_height_after_an_append_reaches_the_bottom(cx: &mut TestAppContext) {
     let mut h = load(cx, "scroll_position");
     click(&mut h, "append");

@@ -10,6 +10,7 @@ const box = ref(null);
 const hidden = ref(null);
 const items = ref(["first", "second", "third"]);
 const result = ref("");
+const scrolls = ref(0);
 
 function scrollBoxTo40() {
   box.value.scrollTop = 40;
@@ -34,6 +35,7 @@ function scrollBoxToBottom() {
     <div
       id="box"
       ref="box"
+      @scroll="scrolls++"
       :style="{ width: 120, height: 100, padding: 10, border_width: 3, overflow: 'scroll' }"
     >
       <div v-for="item in items" :id="item" :key="item" :style="{ width: 80, height: 60 }" />
@@ -66,5 +68,6 @@ function scrollBoxToBottom() {
       @click="scrollBoxToBottom"
     />
     <div id="result">{{ result }}</div>
+    <div id="scrolls">{{ scrolls }}</div>
   </div>
 </template>
