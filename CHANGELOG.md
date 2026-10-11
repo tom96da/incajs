@@ -10,6 +10,18 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- mouse and wheel events carry `offsetX` and `offsetY` ([4b2825d](https://github.com/tom96da/incajs/commit/4b2825d))
+- a template `ref` reads its box with `getBoundingClientRect()`, `offset*` and `client*` ([ab57a35](https://github.com/tom96da/incajs/commit/ab57a35))
+- `activeElement()` from `incajs/vue` returns the focused element ([42f3df0](https://github.com/tom96da/incajs/commit/42f3df0))
+
+### Fixed
+
+- `activeElement()` sees a focus the window applied before the script ran ([dea95b7](https://github.com/tom96da/incajs/commit/dea95b7))
+- `el.tabIndex` reads the `tabindex` attribute of the template ([81ce80f](https://github.com/tom96da/incajs/commit/81ce80f))
+- a ref of a removed element accepts listener and `tabIndex` calls ([81ce80f](https://github.com/tom96da/incajs/commit/81ce80f))
+
 ## [0.0.14] - 2026-10-11
 
 ### Added
