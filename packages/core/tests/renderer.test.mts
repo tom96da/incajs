@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { h, nextTick, reactive, ref } from "@vue/runtime-core";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createEventTarget } from "../src/createEventTarget.mts";
 import { blur, click, focus } from "../src/events.mts";
@@ -398,5 +398,45 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
     expect(hostRoot).not.toBe(nodes.get(root.id));
     expect(hostRoot.children).toHaveLength(1);
     expect(nodes.get(hostRoot.children[0]!)!.attributes["class"]).toBe("box");
+  });
+
+  it("a ref of an element removed by v-if ignores listener and tabIndex calls", async () => {
+    const state = reactive({ show: true });
+    const button = ref<IncaElement | null>(null);
+    const App = {
+      setup() {
+        return () => (state.show ? h("button", { ref: button }) : null);
+      },
+    };
+
+    createIncaApp(App).mount(root);
+    await nextTick();
+    const handle = button.value!;
+
+    const host = globalThis.__inca_native__;
+    const spies = [
+      vi.spyOn(host, "addEventListener"),
+      vi.spyOn(host, "removeEventListener"),
+      vi.spyOn(host, "dispatchEvent"),
+      vi.spyOn(host, "getAttribute"),
+      vi.spyOn(host, "setAttribute"),
+    ];
+
+    state.show = false;
+    await nextTick();
+    for (const spy of spies) spy.mockClear();
+
+    const listener = (): void => {};
+    let dispatched: boolean | undefined;
+    expect(() => {
+      handle.addEventListener("click", listener);
+      handle.removeEventListener("click", listener);
+      dispatched = handle.dispatchEvent(new Event("click"));
+      handle.tabIndex = 5;
+    }).not.toThrow();
+
+    expect(dispatched).toBe(true);
+    expect(handle.tabIndex).toBe(0);
+    for (const spy of spies) expect(spy.mock.calls).toEqual([]);
   });
 });
