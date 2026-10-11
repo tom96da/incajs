@@ -14,6 +14,8 @@ import {
   ssrModuleExportsKey,
 } from "vite/module-runner";
 
+import "./incaDev.mts";
+
 /** Runs each module through `__inca_dev__.compile`. */
 class IncaEvaluator extends (ESModulesEvaluator as new () => ModuleEvaluator) {
   // A frame on line N of the body reports line N + 1, which Vite's source map lookup removes.
