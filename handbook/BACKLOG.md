@@ -507,12 +507,6 @@ A fixed entry is deleted and its ID is never reused.
   string. An element nested in it contributes only its text and loses its
   style and listeners. The DOM renders inline children.
 
-- **B-078 The `scroll` event is not supported**
-  `Units: gpui,bridge,core · Size: M · Impact: Low`
-
-  The DOM fires `scroll` when an element's offset changes. A container with
-  `overflow` set to `scroll` moves its content but nothing reaches JS.
-
 - **B-079 Scrollbars are not supported**
   `Units: gpui · Size: M · Impact: Low`
 
@@ -544,7 +538,9 @@ A fixed entry is deleted and its ID is never reused.
   synchronously in the event. A `gpui` with smooth or deferred scrolling
   breaks it. `a_cancelled_scroll_leaves_the_bounds_unmoved` in
   `crates/inca-bridge/tests/scroll_dispatch.rs` checks the bounds after a
-  cancel. Each scroll container adds one zero-size element.
+  cancel. Each scroll container adds one zero-size element. A `wheel`
+  listener that sets an offset on a container other than the one the wheel
+  moved has that offset undone by `settle_wheel`.
 
 - **B-084 Wheel scrolling differs from the DOM at the edges**
   `Units: gpui,bridge · Size: M · Impact: Low`
@@ -1060,3 +1056,16 @@ A fixed entry is deleted and its ID is never reused.
 
   Fix: an animation the host drives per frame, because the JS runtime runs
   only when reactive state changes.
+
+- **B-175 The `scrollend` event is missing**
+  `Units: gpui,bridge · Size: M · Impact: Low`
+
+  Chromium and Gecko fire `scrollend` once a scroll has settled. The host fires
+  `scroll` alone. A script write can fire `scrollend` in the same pass right
+  after `scroll`. A wheel scroll needs a time threshold, because no frame
+  follows the last wheel step and a quiet frame in the middle of a gesture
+  would end it early.
+
+  Fix: a `gpui` executor timer that fires `scrollend` after the threshold, with
+  a rule for trackpad momentum. The threshold and the rule are design
+  decisions.

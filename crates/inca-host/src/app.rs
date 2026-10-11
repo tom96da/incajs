@@ -351,6 +351,7 @@ impl Render for HostedApp {
         for transition in &transitions {
             transition.dispatch(&session.dispatcher, window, cx);
         }
+        session.dispatcher.fire_scrolls(window, cx);
         let host = session.host.borrow();
         let element = render_tree_with_events(&host.tree, host.root, &session.dispatcher)
             .unwrap_or_else(|| div().into_any_element());

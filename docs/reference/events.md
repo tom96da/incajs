@@ -46,6 +46,7 @@ and `returnValue`. The three flags depend on the event:
 | -------------------------------- | ------- | ---------- | -------- |
 | mouse, wheel and keyboard events | yes     | yes        | yes      |
 | `mouseenter`, `mouseleave`       | no      | no         | no       |
+| `scroll`                         | no      | no         | no       |
 | `focus`, `blur`                  | no      | no         | yes      |
 | `focusin`, `focusout`            | yes     | no         | yes      |
 
@@ -82,7 +83,8 @@ events yet. `pointerType` is `"mouse"`, or `""` for the click of a key.
 - `preventDefault()` in a `contextmenu` listener only sets `defaultPrevented`.
 - `screenX` and `screenY` add the window position. On Wayland they equal the
   client position.
-- Pointer events (`pointerdown` and the rest) and `scroll` are unsupported.
+- Pointer events (`pointerdown` and the rest) are unsupported.
+- `scrollend` is unsupported.
 
 ## Keyboard
 

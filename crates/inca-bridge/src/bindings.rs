@@ -155,6 +155,8 @@ pub struct Host {
     // Scroll state of the containers, created on first ask. Its own cell, so
     // it can be written while a shared borrow of `Host` is held.
     pub(crate) scroll_handles: RefCell<HashMap<NodeId, ScrollHandle>>,
+    // The offset of each container as of the last `scroll` check.
+    scroll_reported: HashMap<NodeId, gpui::Point<gpui::Pixels>>,
     // Boxes of the last drawn frame. Its own cell, as the draw runs under a shared borrow.
     pub(crate) layout: RefCell<HashMap<NodeId, NodeLayout>>,
     // Errors listeners threw, in order; the dispatcher reports them once the engine is idle.
@@ -188,6 +190,7 @@ impl Default for Host {
             focus: FocusRegistry::default(),
             last_event_id: 0,
             scroll_handles: RefCell::new(HashMap::new()),
+            scroll_reported: HashMap::new(),
             layout: RefCell::new(HashMap::new()),
             failures: Vec::new(),
             clicking: HashSet::new(),
@@ -196,6 +199,33 @@ impl Default for Host {
 }
 
 impl Host {
+    // Containers whose clamped offset moved since the last call and whose
+    // `scroll` a listener reaches: one on the container, or a capture one on
+    // an ancestor. Every container's offset is recorded, so a listener added
+    // later sees only later movement.
+    pub(crate) fn scrolled_nodes(&mut self) -> Vec<NodeId> {
+        let mut moved = Vec::new();
+        for (&id, handle) in self.scroll_handles.get_mut().iter() {
+            let (offset, max) = (handle.offset(), handle.max_offset());
+            let now = gpui::point(
+                offset.x.clamp(-max.x, px(0.)),
+                offset.y.clamp(-max.y, px(0.)),
+            );
+            let before = self.scroll_reported.insert(id, now).unwrap_or_default();
+            if before != now {
+                moved.push(id);
+            }
+        }
+        let flags = crate::dispatch::spec_of("scroll").flags;
+        let host: &Host = self;
+        moved.retain(|&id| {
+            let path = crate::event::path_from(host, id);
+            crate::event::listened(host, "scroll", flags, &path, &[])
+        });
+        moved.sort_unstable();
+        moved
+    }
+
     // Returns a clone of the node's handle, creating it on first ask.
     pub(crate) fn scroll_handle(&self, node_id: NodeId) -> ScrollHandle {
         self.scroll_handles
@@ -528,6 +558,7 @@ fn install_tree<'js>(
                     let freed = host.tree.destroy_node(node_id);
                     for id in &freed {
                         host.scroll_handles.get_mut().remove(id);
+                        host.scroll_reported.remove(id);
                     }
                     Ok(freed
                         .into_iter()

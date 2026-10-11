@@ -77,7 +77,7 @@ const fn own_buttons(mut event: EventSpec) -> EventSpec {
 }
 
 /// Every event the host dispatches.
-const EVENTS: [EventSpec; 18] = [
+const EVENTS: [EventSpec; 19] = [
     own_buttons(spec("click", Flags::ALL)),
     own_buttons(spec("dblclick", Flags::ALL)),
     own_buttons(spec("auxclick", Flags::ALL)),
@@ -93,6 +93,7 @@ const EVENTS: [EventSpec; 18] = [
     spec("mouseover", Flags::ALL),
     spec("mouseout", Flags::ALL),
     spec("wheel", Flags::ALL),
+    spec("scroll", Flags::NONE),
     spec("keydown", Flags::ALL),
     spec("keyup", Flags::ALL),
     spec("focus", Flags::FOCUS),
@@ -406,7 +407,7 @@ impl EventDispatcher {
 
     /// `target` and its ancestors, nearest first.
     fn path_from(&self, target: NodeId) -> Vec<NodeId> {
-        event::path_from(&self.host, target)
+        event::path_from(&self.host.borrow(), target)
     }
 
     /// The nearest node that is `a`, `b` or an ancestor of both.
@@ -452,6 +453,16 @@ impl EventDispatcher {
             self.drain_observed(window);
         }
         canceled
+    }
+
+    /// Fires `scroll` at each container whose offset changed since the last
+    /// call and that a `scroll` listener reaches. A script write and a wheel
+    /// scroll each fire once. Only the containers a listener reaches run JS.
+    pub fn fire_scrolls(&self, window: &mut Window, cx: &mut App) {
+        let moved = self.host.borrow_mut().scrolled_nodes();
+        for node in moved {
+            self.fire(node, "scroll", &EventPayload::None, window, cx);
+        }
     }
 
     /// The deepest container `gpui` reports as hovered. Containers that left
@@ -1222,6 +1233,7 @@ mod tests {
             ("mouseup", true, true, true),
             ("mousemove", true, true, true),
             ("wheel", true, true, true),
+            ("scroll", false, false, false),
             ("keydown", true, true, true),
             ("keyup", true, true, true),
             ("focus", false, false, true),

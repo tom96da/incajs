@@ -24,13 +24,15 @@ struct Root {
 }
 
 impl Render for Root {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.dispatcher.fire_scrolls(window, cx);
         let host = self.host.borrow();
         render_tree_with_events(&host.tree, 0, &self.dispatcher).unwrap()
     }
 }
 
 struct Scene {
+    host: Rc<RefCell<Host>>,
     engine: Rc<Engine>,
     dispatcher: EventDispatcher,
     cx: VisualTestContext,
@@ -62,12 +64,13 @@ impl Scene {
         let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host))
             .with_reporter(Rc::new(move |err| sink.borrow_mut().push(err.clone())));
         let window = cx.add_window(|_, _| Root {
-            host,
+            host: Rc::clone(&host),
             dispatcher: dispatcher.clone(),
         });
         cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
             .unwrap();
         Self {
+            host,
             engine,
             dispatcher,
             cx: VisualTestContext::from_window(window.into(), cx),
@@ -620,4 +623,162 @@ fn a_node_with_visible_overflow_ignores_a_script_offset(cx: &mut TestAppContext)
             .eval::<bool>("__inca_native__.scrollOf(0) === null")
             .unwrap()
     );
+}
+
+/// Callbacks 0 and 1 record `scroll` at the container and at its parent.
+const RECORD_SCROLL: &str = "0: (e) => { ran.push('scroll:' + e.target + ':' + e.bubbles); }, \
+                             1: () => { ran.push('parent'); }";
+
+/// A scrolling node 1 under the plain root 0, with a `scroll` listener on node 1.
+fn listened_container() -> Host {
+    let mut host = Host::default();
+    let root = add_div(&mut host, None, 100.0, false);
+    let container = add_div(&mut host, Some(root), 100.0, true);
+    add_div(&mut host, Some(container), 300.0, false);
+    host.listeners.register(container, "scroll", 0);
+    host
+}
+
+#[gpui::test]
+fn a_wheel_scroll_fires_scroll_once_at_the_container(cx: &mut TestAppContext) {
+    let record =
+        "0: (e) => { ran.push('scroll:' + e.target + ':' + e.currentTarget + ':' + e.bubbles); }";
+    let mut scene = Scene::new(cx, listened_container(), record);
+    scene.wheel(-50.);
+    assert_eq!(scene.ran(), r#"["scroll:1:1:false"]"#);
+}
+
+#[gpui::test]
+fn a_script_offset_before_the_first_draw_fires_once_after_it(cx: &mut TestAppContext) {
+    let mut scene = Scene::with_bindings(
+        cx,
+        listened_container(),
+        RECORD_SCROLL,
+        "__inca_native__.scrollNode(1, null, 40)",
+    );
+    scene.cx.update(|window, cx| window.draw(cx).clear(cx));
+    scene.cx.update(|window, cx| window.draw(cx).clear(cx));
+    assert_eq!(scene.ran(), r#"["scroll:1:false"]"#);
+}
+
+#[gpui::test]
+fn removing_the_listener_between_frames_fires_nothing(cx: &mut TestAppContext) {
+    let mut scene = Scene::new(cx, listened_container(), RECORD_SCROLL);
+    scene.wheel(-50.);
+    assert!(scene.host.borrow_mut().listeners.unregister(1, "scroll", 0));
+    scene.wheel(-20.);
+    assert_eq!(scene.ran(), r#"["scroll:1:false"]"#);
+}
+
+#[gpui::test]
+fn destroying_the_container_between_frames_fires_nothing(cx: &mut TestAppContext) {
+    let mut scene = Scene::new(cx, listened_container(), RECORD_SCROLL);
+    scene.wheel(-50.);
+    let stale = scene.dispatcher.scroll_handle(1).unwrap();
+    scene.js("__inca_native__.destroyNode(1)");
+    stale.set_offset(point(px(0.), px(-30.)));
+    scene.cx.update(|window, cx| window.draw(cx).clear(cx));
+    assert_eq!(scene.ran(), r#"["scroll:1:false"]"#);
+}
+
+#[gpui::test]
+fn a_script_write_fires_scroll_once(cx: &mut TestAppContext) {
+    let mut scene = Scene::new(cx, listened_container(), RECORD_SCROLL);
+    scene.js("__inca_native__.scrollNode(1, null, 40)");
+    scene.cx.update(|window, _| window.refresh());
+    scene.cx.run_until_parked();
+    scene.cx.update(|window, cx| window.draw(cx).clear(cx));
+    scene.cx.update(|window, cx| window.draw(cx).clear(cx));
+    assert_eq!(scene.ran(), r#"["scroll:1:false"]"#);
+}
+
+#[gpui::test]
+fn no_scroll_fires_while_the_offset_is_unchanged(cx: &mut TestAppContext) {
+    let mut scene = Scene::new(cx, listened_container(), RECORD_SCROLL);
+    scene.js("__inca_native__.scrollNode(1, null, 50)");
+    scene.cx.update(|window, cx| window.draw(cx).clear(cx));
+    scene.js("__inca_native__.scrollNode(1, null, 50)");
+    scene.cx.update(|window, cx| window.draw(cx).clear(cx));
+    scene.cx.update(|window, cx| window.draw(cx).clear(cx));
+    assert_eq!(scene.ran(), r#"["scroll:1:false"]"#);
+}
+
+#[gpui::test]
+fn a_scroll_past_the_end_fires_for_the_clamped_offset_once(cx: &mut TestAppContext) {
+    let mut scene = Scene::new(cx, listened_container(), RECORD_SCROLL);
+    scene.js("__inca_native__.scrollNode(1, null, 999)");
+    scene.cx.update(|window, cx| window.draw(cx).clear(cx));
+    scene.cx.update(|window, cx| window.draw(cx).clear(cx));
+    scene.js("__inca_native__.scrollNode(1, null, 200)");
+    scene.cx.update(|window, cx| window.draw(cx).clear(cx));
+    assert_eq!(scene.ran(), r#"["scroll:1:false"]"#);
+}
+
+#[gpui::test]
+fn a_listener_added_later_sees_only_the_scrolling_after_it_was_added(cx: &mut TestAppContext) {
+    let mut scene = Scene::new(cx, one_container(), RECORD_SCROLL);
+    scene.wheel(-50.);
+    assert_eq!(scene.ran(), "[]");
+    scene.host.borrow_mut().listeners.register(0, "scroll", 0);
+    scene.cx.update(|window, cx| window.draw(cx).clear(cx));
+    assert_eq!(
+        scene.ran(),
+        "[]",
+        "the offset moved before the listener existed"
+    );
+    scene.wheel(-20.);
+    assert_eq!(scene.ran(), r#"["scroll:0:false"]"#);
+}
+
+#[gpui::test]
+fn an_ancestor_capture_listener_sees_a_listenerless_container_scroll_once(cx: &mut TestAppContext) {
+    let mut host = Host::default();
+    let root = add_div(&mut host, None, 100.0, false);
+    let container = add_div(&mut host, Some(root), 100.0, true);
+    add_div(&mut host, Some(container), 300.0, false);
+    host.listeners.register_with(root, "scroll", 0, true, false);
+    let record = "0: (e) => { ran.push('capture:' + e.target + ':' + e.eventPhase); }";
+    let mut scene = Scene::new(cx, host, record);
+    scene.wheel(-50.);
+    assert_eq!(scene.ran(), r#"["capture:1:1"]"#);
+    scene.wheel(-20.);
+    assert_eq!(scene.ran(), r#"["capture:1:1","capture:1:1"]"#);
+}
+
+#[gpui::test]
+fn an_ancestor_bubble_listener_sees_nothing_of_a_listenerless_container_scroll(
+    cx: &mut TestAppContext,
+) {
+    let mut host = Host::default();
+    let root = add_div(&mut host, None, 100.0, false);
+    let container = add_div(&mut host, Some(root), 100.0, true);
+    add_div(&mut host, Some(container), 300.0, false);
+    host.listeners.register(root, "scroll", 1);
+    let mut scene = Scene::new(cx, host, RECORD_SCROLL);
+    scene.wheel(-50.);
+    assert_eq!(scene.ran(), "[]");
+}
+
+#[gpui::test]
+fn a_scroll_no_listener_reaches_runs_no_js(cx: &mut TestAppContext) {
+    let mut scene = Scene::new(cx, one_container(), "");
+    // Counts each read of the callback table, which only a walk that
+    // reaches a listener makes.
+    scene.js(
+        "globalThis.reads = 0; const table = globalThis.__inca_callbacks__; \
+         Object.defineProperty(globalThis, '__inca_callbacks__', { configurable: true, \
+         get() { globalThis.reads++; return table; } });",
+    );
+    scene.wheel(-50.);
+    assert_eq!(scene.offset(0).y, px(-50.));
+    assert_eq!(scene.engine.eval::<i32>("globalThis.reads").unwrap(), 0);
+}
+
+#[gpui::test]
+fn scroll_does_not_reach_an_ancestor_listener(cx: &mut TestAppContext) {
+    let mut host = listened_container();
+    host.listeners.register(0, "scroll", 1);
+    let mut scene = Scene::new(cx, host, RECORD_SCROLL);
+    scene.wheel(-50.);
+    assert_eq!(scene.ran(), r#"["scroll:1:false"]"#);
 }

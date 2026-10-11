@@ -308,8 +308,7 @@ pub(crate) struct Outcome {
 }
 
 /// `target` and its ancestors, nearest first.
-pub(crate) fn path_from(host: &Rc<RefCell<Host>>, target: NodeId) -> Vec<NodeId> {
-    let host = host.borrow();
+pub(crate) fn path_from(host: &Host, target: NodeId) -> Vec<NodeId> {
     std::iter::successors(Some(target), |&id| {
         host.tree.get(id).and_then(inca_gpui::VirtualNode::parent)
     })
@@ -317,28 +316,34 @@ pub(crate) fn path_from(host: &Rc<RefCell<Host>>, target: NodeId) -> Vec<NodeId>
 }
 
 /// The nodes whose bubble listeners the event reaches.
-fn bubble_nodes<'a>(walk: &Walk<'a>) -> &'a [NodeId] {
-    if walk.flags.bubbles {
-        walk.path
+fn bubble_nodes(flags: Flags, path: &[NodeId]) -> &[NodeId] {
+    if flags.bubbles {
+        path
     } else {
-        &walk.path[..walk.path.len().min(1)]
+        &path[..path.len().min(1)]
     }
 }
 
-/// Whether a listener the event reaches exists.
-fn listened(host: &Rc<RefCell<Host>>, walk: &Walk<'_>) -> bool {
+/// Whether a listener of `name` exists that an event with `flags` on `path`
+/// reaches. Nodes in `cut` stay silent.
+pub(crate) fn listened(
+    host: &Host,
+    name: &str,
+    flags: Flags,
+    path: &[NodeId],
+    cut: &[NodeId],
+) -> bool {
     let hears = |capture: bool, nodes: &[NodeId]| {
-        let host = host.borrow();
         nodes.iter().any(|node| {
-            !walk.cut.contains(node)
+            !cut.contains(node)
                 && host
                     .listeners
-                    .listeners_for(*node, walk.name)
+                    .listeners_for(*node, name)
                     .iter()
                     .any(|l| l.capture == capture)
         })
     };
-    hears(true, walk.path) || hears(false, bubble_nodes(walk))
+    hears(true, path) || hears(false, bubble_nodes(flags, path))
 }
 
 fn next_event_id(host: &Rc<RefCell<Host>>) -> u64 {
@@ -355,7 +360,7 @@ fn next_event_id(host: &Rc<RefCell<Host>>) -> u64 {
 /// while an earlier listener ran. The engine is entered only when the event
 /// reaches a listener.
 pub(crate) fn walk(engine: &Engine, host: &Rc<RefCell<Host>>, walk: &Walk<'_>) -> Outcome {
-    if !listened(host, walk) {
+    if !listened(&host.borrow(), walk.name, walk.flags, walk.path, walk.cut) {
         return Outcome::default();
     }
     let id = next_event_id(host);
@@ -413,7 +418,8 @@ fn deliver<'js>(
     record: &Object<'js>,
 ) -> bool {
     let down: Vec<NodeId> = walk.path.iter().rev().copied().collect();
-    'phases: for (capture, nodes) in [(true, &down[..]), (false, bubble_nodes(walk))] {
+    let bubble = bubble_nodes(walk.flags, walk.path);
+    'phases: for (capture, nodes) in [(true, &down[..]), (false, bubble)] {
         for &node in nodes {
             if walk.cut.contains(&node) {
                 continue;
@@ -516,7 +522,7 @@ pub(crate) fn dispatch_event<'js>(
         ));
     }
     let name: String = record.get("type")?;
-    let path = path_from(host, target);
+    let path = path_from(&host.borrow(), target);
     let flags = Flags {
         bubbles: flag(&record, "bubbles"),
         cancelable: flag(&record, "cancelable"),
@@ -525,7 +531,7 @@ pub(crate) fn dispatch_event<'js>(
     let walk = script_walk(&name, flags, target, &path, &EventPayload::None);
     event.set("target", target)?;
     event.set("isTrusted", false)?;
-    if listened(host, &walk) {
+    if listened(&host.borrow(), walk.name, walk.flags, walk.path, walk.cut) {
         let callbacks = ctx
             .globals()
             .get::<_, Object>("__inca_callbacks__")
@@ -552,7 +558,7 @@ pub(crate) fn click(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, target: NodeId) {
             return;
         }
     }
-    let path = path_from(host, target);
+    let path = path_from(&host.borrow(), target);
     let payload = EventPayload::Mouse(MousePayload::keyboard_click(gpui::Modifiers::none()));
     let walk = script_walk(
         "click",
@@ -561,7 +567,7 @@ pub(crate) fn click(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, target: NodeId) {
         &path,
         &payload,
     );
-    if listened(host, &walk) {
+    if listened(&host.borrow(), walk.name, walk.flags, walk.path, walk.cut) {
         run(ctx, host, &walk, next_event_id(host));
     }
     host.borrow_mut().clicking.remove(&target);

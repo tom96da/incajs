@@ -337,6 +337,12 @@ and author-facing behaviour are in [events.md](../docs/reference/events.md).
   `Host::clicking` holds the nodes whose click is running, as a re-entrancy
   guard. A disabled `button` and an unknown node return at once.
 
+- `HostedApp::render` fires `scroll` after the focus transitions and before
+  building the tree. `Host::scrolled_nodes` compares each handle's clamped
+  offset with the one recorded last and returns the changed nodes that a
+  `scroll` listener reaches: a listener on the node itself, or a capture
+  listener on one of its ancestors.
+
 #### Event table
 
 | Name | Payload |
@@ -345,6 +351,7 @@ and author-facing behaviour are in [events.md](../docs/reference/events.md).
 | `dblclick`, `mousedown`, `mouseup`, `mousemove` | mouse |
 | `mouseenter`, `mouseleave`, `mouseover`, `mouseout` | mouse + `relatedTarget` |
 | `wheel` | mouse + `deltaX`, `deltaY`, `deltaZ`, `deltaMode` |
+| `scroll` | none; every flag is false |
 | `focus`, `blur`, `focusin`, `focusout` | `relatedTarget` |
 | `keydown`, `keyup` | `key`, `repeat`, modifier flags, `getModifierState` |
 
