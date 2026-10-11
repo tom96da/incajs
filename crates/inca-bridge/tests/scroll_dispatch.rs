@@ -40,6 +40,12 @@ struct Scene {
 impl Scene {
     /// Renders node 0 of `host` with `js` as the `__inca_callbacks__` body.
     fn new(cx: &mut TestAppContext, host: Host, js: &str) -> Self {
+        Self::with_bindings(cx, host, js, "")
+    }
+
+    /// Like [`Self::new`], with the bindings installed and `before_draw` run
+    /// before the first draw.
+    fn with_bindings(cx: &mut TestAppContext, host: Host, js: &str, before_draw: &str) -> Self {
         let host = Rc::new(RefCell::new(host));
         let engine = Rc::new(Engine::new().unwrap());
         engine
@@ -47,6 +53,10 @@ impl Scene {
                 "globalThis.ran = []; globalThis.__inca_callbacks__ = {{ {js} }};"
             ))
             .unwrap();
+        engine
+            .with(|ctx| inca_bridge::bindings::install(&ctx, &host))
+            .unwrap();
+        engine.eval::<()>(before_draw).unwrap();
         let reported = Rc::new(RefCell::new(Vec::new()));
         let sink = Rc::clone(&reported);
         let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host))
@@ -282,6 +292,20 @@ fn an_inner_container_at_its_limit_chains_to_the_outer(cx: &mut TestAppContext) 
 
     scene.wheel(-50.);
     assert_eq!(scene.offset(1).y, px(-200.));
+    assert_eq!(scene.offset(0).y, px(-50.));
+}
+
+#[gpui::test]
+fn a_script_offset_past_the_end_still_lets_the_ancestor_scroll(cx: &mut TestAppContext) {
+    let mut scene = Scene::new(cx, nested_containers(), "");
+    // No draw between the script offset and the wheel, so the offset is unclamped.
+    scene.js("__inca_native__.scrollNode(1, null, 999)");
+    scene.cx.simulate_event(ScrollWheelEvent {
+        position: point(px(10.), px(10.)),
+        delta: ScrollDelta::Pixels(point(px(0.), px(-50.))),
+        ..Default::default()
+    });
+    scene.cx.run_until_parked();
     assert_eq!(scene.offset(0).y, px(-50.));
 }
 
@@ -541,4 +565,59 @@ fn stop_propagation_with_prevent_default_skips_ancestors_and_cancels(cx: &mut Te
     scene.wheel(-50.);
     assert_eq!(scene.ran(), r#"["child"]"#);
     assert_eq!(scene.offset(0).y, px(0.));
+}
+
+fn scroll_of(scene: &Scene, node: NodeId) -> Vec<f64> {
+    scene
+        .engine
+        .eval(&format!("__inca_native__.scrollOf({node})"))
+        .unwrap()
+}
+
+#[gpui::test]
+fn a_script_offset_set_before_the_first_draw_is_applied(cx: &mut TestAppContext) {
+    let scene = Scene::with_bindings(
+        cx,
+        one_container(),
+        "",
+        "__inca_native__.scrollNode(0, null, 40)",
+    );
+    assert_eq!(scene.offset(0).y, px(-40.));
+    assert_eq!(scroll_of(&scene, 0), [0., 40., 0., 200.]);
+}
+
+#[gpui::test]
+fn a_hidden_container_takes_a_script_offset(cx: &mut TestAppContext) {
+    let scene = Scene::with_bindings(
+        cx,
+        styled_container(&[("overflow", "hidden")]),
+        "",
+        "__inca_native__.scrollNode(0, 30, 40)",
+    );
+    assert_eq!(scene.offset(0), point(px(-30.), px(-40.)));
+    assert_eq!(scroll_of(&scene, 0), [30., 40., 200., 200.]);
+}
+
+#[gpui::test]
+fn the_getter_clamps_to_the_last_frames_range(cx: &mut TestAppContext) {
+    let scene = Scene::new(cx, one_container(), "");
+    scene.js("__inca_native__.scrollNode(0, null, 999)");
+    assert_eq!(scroll_of(&scene, 0), [0., 200., 0., 200.]);
+}
+
+#[gpui::test]
+fn a_node_with_visible_overflow_ignores_a_script_offset(cx: &mut TestAppContext) {
+    let scene = Scene::with_bindings(
+        cx,
+        styled_container(&[]),
+        "",
+        "__inca_native__.scrollNode(0, 30, 40)",
+    );
+    assert_eq!(scene.offset(0), point(px(0.), px(0.)));
+    assert!(
+        scene
+            .engine
+            .eval::<bool>("__inca_native__.scrollOf(0) === null")
+            .unwrap()
+    );
 }

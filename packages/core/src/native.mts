@@ -27,7 +27,11 @@ interface IncaNative {
   focusNode(nodeId: NodeId): void;
   blurNode(nodeId: NodeId): void;
   focusedNode(): NodeId | null;
-  layoutOf(nodeId: NodeId): readonly [number, number, number, number, number] | null;
+  layoutOf(
+    nodeId: NodeId,
+  ): readonly [number, number, number, number, number, number, number] | null;
+  scrollOf(nodeId: NodeId): readonly [number, number, number, number] | null;
+  scrollNode(nodeId: NodeId, left: number | null, top: number | null): void;
   dispatchEvent(nodeId: NodeId, event: EventLike): boolean;
   click(nodeId: NodeId): void;
 }

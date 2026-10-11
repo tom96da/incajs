@@ -7,10 +7,12 @@ import { elements } from "./elements.mts";
 import { layoutBox } from "./layoutBox.mts";
 import { offsetOf } from "./offsetOf.mts";
 import { offsetParentOf } from "./offsetParent.mts";
+import { scrollPosition } from "./scrollPosition.mts";
 import { skipReactive } from "./skipReactive.mts";
 import { tabIndexOf } from "./tabIndexOf.mts";
 import type { IncaCore, NodeId, TagName } from "../rendererCore.mts";
 import type { IncaElement } from "./nodeOps.mts";
+import type { ScrollArgs } from "./scrollPosition.mts";
 
 /**
  * Builds the {@link IncaElement} handle for a native node: parentless,
@@ -29,6 +31,7 @@ export function createIncaElement(
   tag?: TagName,
 ): IncaElement {
   const target = core.createEventTarget(() => id);
+  const scroll = () => (isDestroyed(element) ? null : core.scrollOf(id));
   const element: IncaElement = {
     id,
     kind,
@@ -80,6 +83,26 @@ export function createIncaElement(
     get clientTop() {
       return Math.round(layoutBox(core, element)?.[4] ?? 0);
     },
+    get scrollLeft() {
+      return scroll()?.[0] ?? 0;
+    },
+    set scrollLeft(value: number) {
+      scrollPosition(core, element, [value], false);
+    },
+    get scrollTop() {
+      return scroll()?.[1] ?? 0;
+    },
+    set scrollTop(value: number) {
+      scrollPosition(core, element, [undefined, value], false);
+    },
+    get scrollWidth() {
+      return element.clientWidth + Math.round(scroll()?.[2] ?? 0);
+    },
+    get scrollHeight() {
+      return element.clientHeight + Math.round(scroll()?.[3] ?? 0);
+    },
+    scrollTo: (...args: ScrollArgs) => scrollPosition(core, element, args, false),
+    scrollBy: (...args: ScrollArgs) => scrollPosition(core, element, args, true),
   };
   if (kind === "element") elements.set(id, element);
   // A plain object in `ref()` becomes a proxy, which differs from `activeElement()`.

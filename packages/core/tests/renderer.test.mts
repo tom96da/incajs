@@ -94,9 +94,15 @@ function installFakeNative(): Map<NodeId, FakeNode> {
     getAttribute(nodeId: NodeId, key: string): string | number | boolean | null {
       return (requireNode(nodeId).attributes[key] ?? null) as string | number | boolean | null;
     },
-    layoutOf(_nodeId: NodeId): readonly [number, number, number, number, number] | null {
+    layoutOf(
+      _nodeId: NodeId,
+    ): readonly [number, number, number, number, number, number, number] | null {
       return null;
     },
+    scrollOf(_nodeId: NodeId): readonly [number, number, number, number] | null {
+      return null;
+    },
+    scrollNode(_nodeId: NodeId, _left: number | null, _top: number | null): void {},
     removeAttribute(nodeId: NodeId, key: string): void {
       delete requireNode(nodeId).attributes[key];
     },
@@ -214,6 +220,12 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       clientHeight: 0,
       clientLeft: 0,
       clientTop: 0,
+      scrollLeft: 0,
+      scrollTop: 0,
+      scrollWidth: 0,
+      scrollHeight: 0,
+      scrollTo: () => {},
+      scrollBy: () => {},
     };
   });
 

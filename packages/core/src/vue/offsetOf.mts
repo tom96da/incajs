@@ -20,8 +20,9 @@ export function offsetOf(core: IncaCore, el: IncaElement): { left: number; top: 
 
   const parent = offsetParentOf(core, el);
   const origin = parent ? layoutBox(core, parent) : null;
+  // The box moved with the scroll its parent applied when it was recorded.
   return {
-    left: Math.round(box[0] - (origin ? origin[0] + origin[4] : 0)) || 0,
-    top: Math.round(box[1] - (origin ? origin[1] + origin[4] : 0)) || 0,
+    left: Math.round(box[0] - (origin ? origin[0] + origin[4] : 0) + box[5]) || 0,
+    top: Math.round(box[1] - (origin ? origin[1] + origin[4] : 0) + box[6]) || 0,
   };
 }

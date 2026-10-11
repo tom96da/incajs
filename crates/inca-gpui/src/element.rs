@@ -156,10 +156,10 @@ pub struct StyleSpec {
 }
 
 impl StyleSpec {
-    /// Whether either axis scrolls.
-    fn scrolls(&self) -> bool {
-        self.overflow_x == Some(OverflowSpec::Scroll)
-            || self.overflow_y == Some(OverflowSpec::Scroll)
+    /// Whether either axis clips (`hidden`) or scrolls.
+    fn clips(&self) -> bool {
+        let clips = |axis| matches!(axis, Some(OverflowSpec::Hidden | OverflowSpec::Scroll));
+        clips(self.overflow_x) || clips(self.overflow_y)
     }
 }
 
@@ -484,6 +484,13 @@ pub fn build_spec(tree: &VirtualTree, root: NodeId) -> Option<ElementSpec> {
         cursor = ancestor.parent();
     }
     build_spec_inner(tree, root, inert)
+}
+
+/// Whether script can scroll `node`: either overflow axis is `hidden`,
+/// `scroll` or `auto`.
+#[must_use]
+pub fn is_scroll_container(node: &VirtualNode) -> bool {
+    style_spec_from_props(node.style_props()).clips()
 }
 
 /// Whether the `hidden` attribute hides `node`: it is present in the Hidden
@@ -919,12 +926,15 @@ fn settle_wheel(window: &mut Window, cx: &mut App) {
             continue;
         }
         // `gpui` clamps the offset on the next draw; compare as it will.
-        let (offset, max) = (handle.offset(), handle.max_offset());
-        let moved = point(
-            offset.x.clamp(-max.x, px(0.)),
-            offset.y.clamp(-max.y, px(0.)),
-        );
-        if !settled && moved != before {
+        let max = handle.max_offset();
+        let clamp = |offset: Point<Pixels>| {
+            point(
+                offset.x.clamp(-max.x, px(0.)),
+                offset.y.clamp(-max.y, px(0.)),
+            )
+        };
+        // An unclamped `before` past the end would always differ from `moved`.
+        if !settled && clamp(handle.offset()) != clamp(before) {
             settled = true;
         } else {
             handle.set_offset(before);
@@ -956,9 +966,9 @@ pub fn debug_selector(id: NodeId) -> String {
 ///
 /// With `track`, every non-inert container reports itself as the mouse target,
 /// which gives it a hitbox, and reports its hover state through `on_hover`,
-/// which needs a `gpui` `ElementId` (`.id()`). A container that scrolls on
-/// either axis gets an id too, since `gpui` keeps its scroll offset in element
-/// state.
+/// which needs a `gpui` `ElementId` (`.id()`). A container that clips or
+/// scrolls on either axis gets an id too, since `gpui` keeps its scroll offset
+/// in element state.
 ///
 /// Every container carries the selector [`debug_selector`] names, a no-op
 /// outside test builds, so a test can look its computed bounds up by
@@ -977,7 +987,7 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
         ElementTag::Container => {
             let id = spec.id;
             let handle = dispatch
-                .filter(|_| spec.style.scrolls())
+                .filter(|_| spec.style.clips())
                 .and_then(|d| d.scroll_handle(id));
             let element = div().debug_selector(move || debug_selector(id));
             // Before `.id()`: only `Div` has the listener.
@@ -990,7 +1000,7 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
             });
 
             let hover = track && !spec.inert;
-            if spec.style.scrolls() || (dispatch.is_some() && hover) {
+            if spec.style.clips() || (dispatch.is_some() && hover) {
                 let element = element.id(ElementId::Integer(u64::from(id)));
                 let element = wire_focus(element, dispatch, id);
                 let element = wire_scroll(element, handle, spec);
@@ -1054,6 +1064,9 @@ pub struct NodeLayout {
     /// The border width, the same on all four sides. 0 when the node has no
     /// border and for text.
     pub border: Pixels,
+    /// The scroll offset (positive) the parent applied to `bounds`. Adding it
+    /// back gives the box as laid out before scrolling.
+    pub scroll: Point<Pixels>,
 }
 
 /// Reports the box of each rendered child of `spec` to `sink` once `element`
@@ -1098,7 +1111,15 @@ where
             for (&(id, border), bounds) in children.iter().zip(&raw[first..]) {
                 if let Some(border) = border {
                     let bounds = Bounds::new(bounds.origin + offset, bounds.size);
-                    sink.record_layout(id, NodeLayout { bounds, border });
+                    let scroll = point(-offset.x, -offset.y);
+                    sink.record_layout(
+                        id,
+                        NodeLayout {
+                            bounds,
+                            border,
+                            scroll,
+                        },
+                    );
                 }
             }
         })
@@ -1806,23 +1827,24 @@ mod tests {
         }
 
         #[test]
-        fn either_scrolling_axis_makes_a_container_scroll() {
+        fn either_clipping_axis_makes_a_container_scrollable() {
             let scrolls = |props: &[(&str, &str)]| {
                 let mut tree = VirtualTree::new();
                 let id = tree.create_node("div").unwrap();
                 for (key, value) in props {
                     tree.set_style(id, *key, *value).unwrap();
                 }
-                build_spec(&tree, id).unwrap().style.scrolls()
+                build_spec(&tree, id).unwrap().style.clips()
             };
             assert!(scrolls(&[("overflow_x", "scroll")]));
             assert!(scrolls(&[("overflow_y", "auto")]));
             assert!(scrolls(&[("overflow", "scroll")]));
-            assert!(!scrolls(&[("overflow", "hidden")]));
-            assert!(!scrolls(&[
+            assert!(scrolls(&[("overflow", "hidden")]));
+            assert!(scrolls(&[
                 ("overflow_x", "visible"),
                 ("overflow_y", "hidden")
             ]));
+            assert!(!scrolls(&[("overflow", "visible")]));
             assert!(!scrolls(&[]));
         }
 
@@ -2782,6 +2804,38 @@ mod tests {
         }
 
         #[gpui::test]
+        fn a_hidden_container_ignores_the_wheel_and_takes_a_script_offset(cx: &mut TestAppContext) {
+            let mut tree = VirtualTree::new();
+            let root = boxed(&mut tree, None, 100., 100.);
+            tree.set_style(root, "overflow_y", "hidden").unwrap();
+            let child = boxed(&mut tree, Some(root), 100., 300.);
+            let probe = probe();
+            let view = probe.clone();
+            let window = cx.add_window(|_, _| ProbeView(tree, view));
+            let frame = |cx: &mut TestAppContext| {
+                cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+                    .unwrap();
+            };
+            frame(cx);
+            let mut vcx = VisualTestContext::from_window(window.into(), cx);
+            vcx.simulate_event(ScrollWheelEvent {
+                position: point(px(10.), px(10.)),
+                delta: ScrollDelta::Pixels(point(px(0.), px(-50.))),
+                ..Default::default()
+            });
+            vcx.update(|window, cx| window.draw(cx).clear(cx));
+            let handle = probe.handles.borrow()[&root].clone();
+            assert_eq!(handle.offset(), point(px(0.), px(0.)));
+            handle.set_offset(point(px(0.), px(-50.)));
+            vcx.update(|window, cx| window.draw(cx).clear(cx));
+            assert_eq!(handle.max_offset().y, px(200.));
+            assert_eq!(
+                probe.layouts.borrow()[&child].bounds,
+                rect(0., -50., 100., 300.)
+            );
+        }
+
+        #[gpui::test]
         fn a_fractional_scroll_offset_is_snapped_to_the_device_pixel(cx: &mut TestAppContext) {
             let mut tree = VirtualTree::new();
             let root = boxed(&mut tree, None, 100., 100.);
@@ -2833,6 +2887,34 @@ mod tests {
             // Drawn at the snap of outer + inner, not the sum of two snaps.
             assert_eq!(nested_leaf_y(cx, 2., -10.3, -10.3), px(-20.5));
             assert_eq!(nested_leaf_y(cx, 1., -10.3, -10.3), px(-21.));
+        }
+
+        #[gpui::test]
+        fn a_record_carries_the_snapped_scroll_its_parent_applied(cx: &mut TestAppContext) {
+            let mut tree = VirtualTree::new();
+            let root = boxed(&mut tree, None, 100., 100.);
+            tree.set_style(root, "overflow_y", "scroll").unwrap();
+            tree.set_style(root, "padding", 4.0).unwrap();
+            let mid = boxed(&mut tree, Some(root), 100., 300.);
+            tree.set_style(mid, "overflow_y", "scroll").unwrap();
+            tree.set_style(mid, "border_width", 2.0).unwrap();
+            let leaf = boxed(&mut tree, Some(mid), 100., 600.);
+            let probe = probe();
+            let view = probe.clone();
+            let window = cx.add_window(|_, _| ProbeView(tree, view));
+            cx.simulate_window_scale_factor_change(window.into(), 2.);
+            let frame = |cx: &mut TestAppContext| {
+                cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+                    .unwrap();
+            };
+            frame(cx);
+            probe.handles.borrow()[&root].set_offset(point(px(0.), px(-10.3)));
+            probe.handles.borrow()[&mid].set_offset(point(px(0.), px(-10.3)));
+            frame(cx);
+            let layouts = probe.layouts.borrow();
+            // The outer scroll snaps to 10.5; the sum 20.6 snaps to 20.5.
+            assert_eq!(layouts[&mid].scroll, point(px(0.), px(10.5)));
+            assert_eq!(layouts[&leaf].scroll, point(px(0.), px(10.)));
         }
 
         #[gpui::test]

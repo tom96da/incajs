@@ -11,15 +11,16 @@ import type { IncaCore } from "../rendererCore.mts";
 
 function makeCore(
   stored: string | number | boolean | null = null,
-  boxes: Record<number, readonly [number, number, number, number, number]> = {},
+  boxes: Record<number, readonly [number, number, number, number, number, number, number]> = {},
 ): IncaCore {
   return {
     getAttribute: vi.fn<(nodeId: number, key: string) => string | number | boolean | null>(
       () => stored,
     ),
-    layoutOf: vi.fn<(nodeId: number) => readonly [number, number, number, number, number] | null>(
-      (nodeId) => boxes[nodeId] ?? null,
-    ),
+    layoutOf: vi.fn<
+      (nodeId: number) => readonly [number, number, number, number, number, number, number] | null
+    >((nodeId) => boxes[nodeId] ?? null),
+    scrollOf: vi.fn<(nodeId: number) => null>(() => null),
     setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
     focus: vi.fn<() => void>(),
     blur: vi.fn<() => void>(),
@@ -61,7 +62,12 @@ describe("createIncaElement tabIndex", () => {
 
 describe("createIncaElement layout", () => {
   it("reads the rect from the last drawn box", () => {
-    const el = createIncaElement(makeCore(null, { 1: [10, 20, 30, 40, 2] }), 1, "element", "div");
+    const el = createIncaElement(
+      makeCore(null, { 1: [10, 20, 30, 40, 2, 0, 0] }),
+      1,
+      "element",
+      "div",
+    );
     const rect = el.getBoundingClientRect();
     expect([
       rect.x,
@@ -88,7 +94,7 @@ describe("createIncaElement layout", () => {
 
   it("rounds the offset and client members", () => {
     const el = createIncaElement(
-      makeCore(null, { 1: [10.4, 20.6, 30.5, 40.2, 1.6] }),
+      makeCore(null, { 1: [10.4, 20.6, 30.5, 40.2, 1.6, 0, 0] }),
       1,
       "element",
       "div",
@@ -100,7 +106,7 @@ describe("createIncaElement layout", () => {
   });
 
   it("measures offsets from inside the border of the offsetParent", () => {
-    const core = makeCore(null, { 1: [100, 50, 200, 100, 4], 2: [110, 60, 20, 20, 0] });
+    const core = makeCore(null, { 1: [100, 50, 200, 100, 4, 0, 0], 2: [110, 60, 20, 20, 0, 0, 0] });
     const parent = createIncaElement(core, 1, "element", "div");
     const child = createIncaElement(core, 2, "element", "div");
     child.parent = parent;
@@ -109,7 +115,10 @@ describe("createIncaElement layout", () => {
   });
 
   it("reads a position slightly above the parent as 0", () => {
-    const core = makeCore(null, { 1: [100, 50, 200, 100, 0], 2: [99.7, 49.7, 20, 20, 0] });
+    const core = makeCore(null, {
+      1: [100, 50, 200, 100, 0, 0, 0],
+      2: [99.7, 49.7, 20, 20, 0, 0, 0],
+    });
     const parent = createIncaElement(core, 1, "element", "div");
     const child = createIncaElement(core, 2, "element", "div");
     child.parent = parent;
@@ -118,12 +127,15 @@ describe("createIncaElement layout", () => {
   });
 
   it("clamps the client size at zero", () => {
-    const el = createIncaElement(makeCore(null, { 1: [0, 0, 2, 2, 5] }), 1, "element", "div");
+    const el = createIncaElement(makeCore(null, { 1: [0, 0, 2, 2, 5, 0, 0] }), 1, "element", "div");
     expect([el.clientWidth, el.clientHeight]).toEqual([0, 0]);
   });
 
   it("measures offsets from the offsetParent", () => {
-    const core = makeCore(null, { 1: [100, 50, 200, 100, 0], 2: [110.4, 60.6, 20, 20, 0] });
+    const core = makeCore(null, {
+      1: [100, 50, 200, 100, 0, 0, 0],
+      2: [110.4, 60.6, 20, 20, 0, 0, 0],
+    });
     const parent = createIncaElement(core, 1, "element", "div");
     const child = createIncaElement(core, 2, "element", "div");
     child.parent = parent;
@@ -133,7 +145,7 @@ describe("createIncaElement layout", () => {
   });
 
   it("gives a null offsetParent when the parent has no record", () => {
-    const core = makeCore(null, { 2: [110, 60, 20, 20, 0] });
+    const core = makeCore(null, { 2: [110, 60, 20, 20, 0, 0, 0] });
     const child = createIncaElement(core, 2, "element", "div");
     child.parent = createIncaElement(core, 1, "element", "div");
 
@@ -142,13 +154,23 @@ describe("createIncaElement layout", () => {
   });
 
   it("gives a null offsetParent to the root wrapper", () => {
-    const el = createIncaElement(makeCore(null, { 1: [5.4, 6, 10, 10, 0] }), 1, "element", "div");
+    const el = createIncaElement(
+      makeCore(null, { 1: [5.4, 6, 10, 10, 0, 0, 0] }),
+      1,
+      "element",
+      "div",
+    );
     expect(el.offsetParent).toBeNull();
     expect([el.offsetLeft, el.offsetTop]).toEqual([5, 6]);
   });
 
   it("reads zeros for a destroyed element", () => {
-    const el = createIncaElement(makeCore(null, { 1: [10, 20, 30, 40, 2] }), 1, "element", "div");
+    const el = createIncaElement(
+      makeCore(null, { 1: [10, 20, 30, 40, 2, 0, 0] }),
+      1,
+      "element",
+      "div",
+    );
     markDestroyed(el);
     expect([
       el.getBoundingClientRect().width,

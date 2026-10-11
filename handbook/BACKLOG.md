@@ -114,9 +114,8 @@ A fixed entry is deleted and its ID is never reused.
   `Units: core,bridge · Size: L · Impact: Medium`
 
   The element has `focus()`, `blur()`, `tabIndex`, `getBoundingClientRect()`,
-  the `offset*` and `client*` members and the listener methods. It lacks:
-  - the scroll members (`scrollTop`, `scrollLeft`, `scrollWidth`,
-    `scrollHeight`, `scrollTo()`, `scrollBy()`);
+  the `offset*` and `client*` members, the scroll members and the listener
+  methods. It lacks:
   - the attribute members (`getAttribute()`, `setAttribute()`,
     `hasAttribute()`, `removeAttribute()`, `attributes`);
   - `classList`, `className`, `dataset`, `style`, `tagName`;
@@ -937,11 +936,9 @@ A fixed entry is deleted and its ID is never reused.
 - **B-161 Offsets of a template `ref` differ from the browser**
   `Units: core · Size: S · Impact: Low`
 
-  `offsetLeft` and `offsetTop` change when the parent scrolls, and
-  `offsetParent` is always the direct parent. A browser ignores the scroll of
-  the offset parent and measures from the nearest positioned ancestor. Fix:
-  add the scroll offset of the parent once scroll reads exist, and pick the
-  nearest ancestor with a `position` once that style exists.
+  `offsetParent` is always the direct parent. A browser uses the nearest
+  positioned ancestor, and the offsets measure from it. Fix: pick the nearest
+  ancestor with a `position` once that style exists.
 
 - **B-162 Style warnings print as plain text outside the console**
   `Units: gpui,bridge,jsenv · Size: L · Impact: Low`
@@ -1029,3 +1026,37 @@ A fixed entry is deleted and its ID is never reused.
   Dispatching sets `target` on the event first, which throws a `TypeError` on a
   frozen object. Browsers dispatch a frozen event. Fix: keep the dispatch state
   outside the event object.
+
+- **B-172 Scroll members of a template `ref` read the last drawn layout**
+  `Units: gpui,bridge,core · Size: M · Impact: Low`
+
+  The scroll maxima come from the last drawn frame. Two differences from a
+  browser remain:
+  - An offset set beyond the end, or before the first draw, is clamped at the
+    next frame, so a read right after the set returns a smaller offset. A
+    browser clamps at once.
+  - For a `visible` element, `scrollWidth` and `scrollHeight` equal the client
+    size. A browser reports the size of the content, overflow included.
+
+  Fix: a layout pass the bindings can call, as in B-160. Both need the layout
+  of the current tree.
+
+- **B-173 The scroll range of a container ends before its bottom padding**
+  `Units: gpui · Size: M · Impact: Low`
+
+  At the maximum offset the last child stops short of the client bottom by the
+  `padding-bottom` of the container, and `scrollHeight` leaves that padding
+  out. A browser includes `padding-bottom` in the scroll range.
+
+  Fix: `gpui` derives the content height from the children. The range needs
+  the trailing padding added, for example through a spacer child of that
+  height.
+
+- **B-174 `behavior: "smooth"` scrolls jump**
+  `Units: gpui,bridge,core · Size: M · Impact: Low`
+
+  `scrollTo` and `scrollBy` apply every scroll at once. A browser animates a
+  `smooth` scroll.
+
+  Fix: an animation the host drives per frame, because the JS runtime runs
+  only when reactive state changes.

@@ -8,6 +8,7 @@ import { markDestroyed } from "./destroyedNodes.mts";
 import { skipReactive } from "./skipReactive.mts";
 import type { IncaCore, IncaEventTarget, NodeId, TagName } from "../rendererCore.mts";
 import type { RectLike } from "./domRect.mts";
+import type { ScrollOptions } from "./scrollPosition.mts";
 
 /**
  * A container host node: either a real element or the hidden stand-in
@@ -61,9 +62,9 @@ export interface IncaElement extends IncaEventTarget {
   readonly offsetWidth: number;
   /** The box height from the last frame, rounded. `0` until a frame draws the node. */
   readonly offsetHeight: number;
-  /** The box's left edge from the last frame, relative to {@link offsetParent}. */
+  /** The box's left edge from the last frame, relative to {@link offsetParent}. Stays fixed while the parent scrolls. */
   readonly offsetLeft: number;
-  /** The box's top edge from the last frame, relative to {@link offsetParent}. */
+  /** The box's top edge from the last frame, relative to {@link offsetParent}. Stays fixed while the parent scrolls. */
   readonly offsetTop: number;
   /** The parent, when it and this node both have a box from the last frame; `null` otherwise. */
   readonly offsetParent: IncaElement | null;
@@ -75,6 +76,20 @@ export interface IncaElement extends IncaEventTarget {
   readonly clientLeft: number;
   /** The border width, rounded. */
   readonly clientTop: number;
+  /** The horizontal scroll offset. Assigning moves it at once, and reads are clamped to the last frame's maximum. */
+  scrollLeft: number;
+  /** The vertical scroll offset. Assigning moves it at once, and reads are clamped to the last frame's maximum. */
+  scrollTop: number;
+  /** The content width: {@link clientWidth} plus the largest horizontal offset. */
+  readonly scrollWidth: number;
+  /** The content height: {@link clientHeight} plus the largest vertical offset. */
+  readonly scrollHeight: number;
+  /** Sets the offset to `(left, top)`, or to the options object's `left` and `top`. */
+  scrollTo(left?: number, top?: number): void;
+  scrollTo(options: ScrollOptions): void;
+  /** Adds `(left, top)` to the offset, or the options object's `left` and `top`. */
+  scrollBy(left?: number, top?: number): void;
+  scrollBy(options: ScrollOptions): void;
 }
 
 /** A text leaf host node — `@vue/runtime-core`'s `HostNode` for text. */

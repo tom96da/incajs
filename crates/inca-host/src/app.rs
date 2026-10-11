@@ -360,6 +360,7 @@ impl Render for HostedApp {
             NodeLayout {
                 bounds: Bounds::new(Point::default(), window.viewport_size()),
                 border: px(0.0),
+                scroll: Point::default(),
             },
         );
         element

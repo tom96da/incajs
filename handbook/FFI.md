@@ -63,7 +63,7 @@ spellings of a key to its snake_case form.
 | `background` / `border_color` / `text_color` | number from `0` to `0xffffff`, or string (`"#rrggbb"`/`"#rgb"`); any other value warns | `Fill`/`Hsla` |
 | `corner_radius` | number (px) | all four `corner_radii.*` (uniform) |
 | `text_size` | number (px) | `text.font_size` |
-| `overflow` / `overflow_x` / `overflow_y` | `"visible"`\|`"hidden"`\|`"scroll"`\|`"auto"` (= `"scroll"`) | `overflow.x` / `overflow.y`; an axis key beats `overflow` |
+| `overflow` / `overflow_x` / `overflow_y` | `"visible"`\|`"hidden"`\|`"scroll"`\|`"auto"` (= `"scroll"`) | `overflow.x` / `overflow.y`; an axis key beats `overflow`; `hidden` clips and takes script scrolling, only `scroll` takes the wheel |
 | `padding` (+ `_x`/`_y`/`_top`/`_right`/`_bottom`/`_left`) | number (px, `>= 0`) | `padding.*`; side beats axis beats shorthand, a wrong-typed value falls through |
 | `margin` (+ the same suffixes) | number (px, negatives allowed) or `"auto"` | `margin.*`, same precedence |
 | `flex_grow` / `flex_shrink` | number `>= 0` | `flex_grow` / `flex_shrink` |
@@ -94,6 +94,9 @@ the nearest ancestor container.
 | `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its subtree, and return every `callbackId` registered in it. An unknown id returns `[]`. Destroying the root throws. Also clears the focus state of the destroyed nodes, and `blur` and `focusout` stay unfired. |
 | `focusNode` | `(nodeId: number) => void` | Request focus for `nodeId`. Takes effect next frame. A node with a `tabindex`, and only that node, takes focus. |
 | `blurNode` | `(nodeId: number) => void` | Request that `nodeId` lose focus. Takes effect next frame, and does nothing if `nodeId` is not the focused node by then. |
+| `layoutOf` | `(nodeId: number) => [x, y, width, height, border, scrollX, scrollY] \| null` | Read the border box of `nodeId` in window pixels as the last drawn frame placed it, with `border` the uniform border width. `scrollX` and `scrollY` are the positive scroll offset the parent applied to that box. `null` for a node with no recorded box. |
+| `scrollOf` | `(nodeId: number) => [left, top, maxLeft, maxTop] \| null` | Read the scroll offset (positive) and its maximum as of the last drawn frame, with the offset clamped to that maximum. `null` for a node whose `overflow` is `visible` on both axes. |
+| `scrollNode` | `(nodeId: number, left: number \| null, top: number \| null) => void` | Set the scroll offset of the axes given, a `null` axis keeps its value. Values below 0 become 0, and the host clamps the upper end at the next frame. A node whose `overflow` is `visible` on both axes ignores the call. |
 
 Shared throw rules, all as a `TypeError`:
 
@@ -101,11 +104,12 @@ Shared throw rules, all as a `TypeError`:
 - `setAttribute` and `setStyle` throw for a `value` that is not a string, number or boolean.
 - `dispatchEvent` throws for an argument that is not an `Event` or
   `CustomEvent` of the host.
-- `addEventListener`, `dispatchEvent`, `getAttribute`, `setAttribute`,
-  `removeAttribute`, `setStyle`, `removeStyle` and `appendChild` throw for an
-  unknown node.
-  `insertBefore` throws for an unknown parent, child or anchor.
-- `removeChild` throws for an unknown `parentId` and ignores an unknown or unattached `childId`.
+- `addEventListener`, `dispatchEvent`, `getAttribute`, `layoutOf`, `scrollOf`,
+  `scrollNode`, `setAttribute`, `removeAttribute`, `setStyle`, `removeStyle` and
+  `appendChild` throw for an unknown node. `insertBefore` throws for an unknown
+  parent, child or anchor.
+- `removeChild` throws for an unknown `parentId` and ignores an unknown or
+  unattached `childId`.
 
 `dispatchEvent` also throws a `DOMException` named `InvalidStateError` for an
 event that is being dispatched.

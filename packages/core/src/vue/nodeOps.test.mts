@@ -42,9 +42,11 @@ const core: IncaCore = {
   focus: vi.fn<(nodeId: number) => void>(),
   blur: vi.fn<(nodeId: number) => void>(),
   focusedNode: vi.fn<() => number | null>(() => null),
-  layoutOf: vi.fn<(nodeId: number) => readonly [number, number, number, number, number] | null>(
-    () => null,
-  ),
+  layoutOf: vi.fn<
+    (nodeId: number) => readonly [number, number, number, number, number, number, number] | null
+  >(() => null),
+  scrollOf: vi.fn<(nodeId: number) => readonly [number, number, number, number] | null>(() => null),
+  scrollNode: vi.fn<(nodeId: number, left: number | null, top: number | null) => void>(),
   click: vi.fn<(nodeId: number) => void>(),
   dispatchEvent: vi.fn<(nodeId: number, event: EventLike) => boolean>(() => true),
 };
@@ -60,6 +62,12 @@ const noLayout = {
   clientHeight: 0,
   clientLeft: 0,
   clientTop: 0,
+  scrollLeft: 0,
+  scrollTop: 0,
+  scrollWidth: 0,
+  scrollHeight: 0,
+  scrollTo: () => {},
+  scrollBy: () => {},
 };
 
 const nodeOps = createNodeOps(core);
@@ -112,6 +120,12 @@ describe("createElement", () => {
       clientHeight: 0,
       clientLeft: 0,
       clientTop: 0,
+      scrollLeft: 0,
+      scrollTop: 0,
+      scrollWidth: 0,
+      scrollHeight: 0,
+      scrollTo: expect.any(Function),
+      scrollBy: expect.any(Function),
     });
   });
 });
@@ -152,6 +166,12 @@ describe("createComment", () => {
       clientHeight: 0,
       clientLeft: 0,
       clientTop: 0,
+      scrollLeft: 0,
+      scrollTop: 0,
+      scrollWidth: 0,
+      scrollHeight: 0,
+      scrollTo: expect.any(Function),
+      scrollBy: expect.any(Function),
     });
   });
 });

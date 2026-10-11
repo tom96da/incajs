@@ -71,7 +71,7 @@ clears every key set before.
 | `cornerRadius` | `number` (px) | applied to all four corners |
 | `textColor` | color (below) | cascades to descendant text leaves |
 | `textSize` | `number` (px) | cascades to descendant text leaves |
-| `overflow` / `overflowX` / `overflowY` | `"visible"` \| `"hidden"` \| `"scroll"` \| `"auto"` | `"hidden"` clips, `"scroll"` (and its alias `"auto"`) scrolls with the wheel; `overflowX`/`overflowY` win over `overflow` |
+| `overflow` / `overflowX` / `overflowY` | `"visible"` \| `"hidden"` \| `"scroll"` \| `"auto"` | `"hidden"` clips and script can scroll it; `"scroll"` (and its alias `"auto"`) also scrolls with the wheel; `overflowX`/`overflowY` win over `overflow` |
 | `padding` / `paddingX` / `paddingY` / `paddingTop` / `paddingRight` / `paddingBottom` / `paddingLeft` | `number` (px, `>= 0`) | a negative, `NaN` or infinite value is ignored |
 | `margin` / `marginX` / `marginY` / `marginTop` / `marginRight` / `marginBottom` / `marginLeft` | `number` (px, negative allowed) \| `"auto"` | |
 | `flexGrow` / `flexShrink` | `number` (`>= 0`) | |
@@ -131,10 +131,20 @@ through `getBoundingClientRect()`, `offsetWidth`, `offsetHeight`,
 `clientLeft` and `clientTop`. `activeElement()` from `incajs/vue` returns the
 focused one.
 
+It also reads and sets its scroll offset through `scrollTop` and `scrollLeft`,
+and reads `scrollWidth` and `scrollHeight`. `scrollTo()` and `scrollBy()` take
+either `(left, top)` or `{ left, top }`. An omitted axis keeps its offset.
+
 - A box read returns the box of the last drawn frame, so `onMounted` reads
   zeros.
 - `offsetParent` is the parent element, or `null` when the node or its parent
-  has no box. `offsetLeft` and `offsetTop` follow the scroll of the parent.
+  has no box. `offsetLeft` and `offsetTop` stay fixed while the parent scrolls.
+- A scroll write is stored at once. A read clamps it to the maximum of the
+  last drawn frame, so a write beyond that maximum, or one made before the
+  first draw, reads smaller until the next frame.
+- `scrollWidth` and `scrollHeight` of a `"visible"` element equal its
+  client size.
+- Every scroll applies at once, whatever `behavior` says.
 
 ## Vue features that don't work yet
 
@@ -153,8 +163,8 @@ have, and using them fails the build:
 - **No text input**: an editable text element is still unimplemented (see
   the [Roadmap](../roadmap)) — not permanently unsupported, just not built
   yet.
-- **`ref` lacks other element members**: the scroll, attribute, class, style and
-  tree members are missing.
+- **`ref` lacks other element members**: the attribute, class, style and tree
+  members are missing.
 
 Event modifiers such as `.stop`, `.once` and `@keydown.enter` are documented
 in [Events: Event modifiers](./events#event-modifiers).

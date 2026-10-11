@@ -10,14 +10,15 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use gpui::{Bounds, ScrollHandle};
+use gpui::{Bounds, ScrollHandle, px};
 use rquickjs::function::Opt;
 use rquickjs::{Ctx, Exception, FromJs, Function, IntoJs, Object, Result as JsResult, Value};
 
 use inca_jsenv::EngineError;
 
 use inca_gpui::{
-    AttributeValue, NodeId, NodeLayout, TreeError, VirtualNode, VirtualTree, style_warning,
+    AttributeValue, NodeId, NodeLayout, TreeError, VirtualNode, VirtualTree, is_scroll_container,
+    style_warning,
 };
 
 use crate::focus::FocusRegistry;
@@ -689,9 +690,91 @@ fn install_focus<'js>(
                         return Ok(Value::new_null(ctx.clone()));
                     };
                     let Bounds { origin, size } = layout.bounds;
-                    [origin.x, origin.y, size.width, size.height, layout.border]
-                        .map(|px| f64::from(f32::from(px)))
-                        .into_js(&ctx)
+                    [
+                        origin.x,
+                        origin.y,
+                        size.width,
+                        size.height,
+                        layout.border,
+                        layout.scroll.x,
+                        layout.scroll.y,
+                    ]
+                    .map(|px| f64::from(f32::from(px)))
+                    .into_js(&ctx)
+                },
+            )?,
+        )?;
+    }
+
+    Ok(())
+}
+
+fn install_scroll<'js>(
+    ctx: &Ctx<'js>,
+    host: &Rc<RefCell<Host>>,
+    native: &Object<'js>,
+) -> JsResult<()> {
+    {
+        let host = Rc::clone(host);
+        native.set(
+            "scrollOf",
+            Function::new(
+                ctx.clone(),
+                move |ctx: Ctx<'js>, JsNodeId(node_id): JsNodeId| -> JsResult<Value<'js>> {
+                    let host = host.borrow();
+                    let Some(node) = host.tree.get(node_id) else {
+                        return Err(throw_tree_error(&ctx, TreeError::NodeNotFound(node_id)));
+                    };
+                    if !is_scroll_container(node) {
+                        return Ok(Value::new_null(ctx.clone()));
+                    }
+                    let handle = host.scroll_handle(node_id);
+                    let (offset, max) = (handle.offset(), handle.max_offset());
+                    // gpui clamps on the next draw; report the same value.
+                    [
+                        -offset.x.clamp(-max.x, px(0.)),
+                        -offset.y.clamp(-max.y, px(0.)),
+                        max.x,
+                        max.y,
+                    ]
+                    .map(|px| f64::from(f32::from(px)))
+                    .into_js(&ctx)
+                },
+            )?,
+        )?;
+    }
+
+    {
+        let host = Rc::clone(host);
+        native.set(
+            "scrollNode",
+            Function::new(
+                ctx.clone(),
+                move |ctx: Ctx<'js>,
+                      JsNodeId(node_id): JsNodeId,
+                      left: Option<f64>,
+                      top: Option<f64>|
+                      -> JsResult<()> {
+                    let host = host.borrow();
+                    let Some(node) = host.tree.get(node_id) else {
+                        return Err(throw_tree_error(&ctx, TreeError::NodeNotFound(node_id)));
+                    };
+                    if !is_scroll_container(node) {
+                        return Ok(());
+                    }
+                    let handle = host.scroll_handle(node_id);
+                    let mut offset = handle.offset();
+                    // Narrowing is fine for pixel offsets; the upper clamp is gpui's.
+                    #[allow(clippy::cast_possible_truncation)]
+                    let negated = |v: f64| px(-(v.max(0.0) as f32));
+                    if let Some(left) = left {
+                        offset.x = negated(left);
+                    }
+                    if let Some(top) = top {
+                        offset.y = negated(top);
+                    }
+                    handle.set_offset(offset);
+                    Ok(())
                 },
             )?,
         )?;
@@ -711,6 +794,7 @@ pub fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
     install_tree(ctx, host, &native)?;
     install_events(ctx, host, &native)?;
     install_focus(ctx, host, &native)?;
+    install_scroll(ctx, host, &native)?;
     crate::event::install(ctx)?;
     ctx.globals().set("__inca_native__", native)?;
     Ok(())
@@ -1240,6 +1324,7 @@ mod tests {
                 gpui::size(gpui::px(3.0), gpui::px(4.5)),
             ),
             border: gpui::px(1.0),
+            scroll: gpui::point(gpui::px(6.0), gpui::px(7.5)),
         }
     }
 
@@ -1253,7 +1338,7 @@ mod tests {
             .eval(&format!("__inca_native__.layoutOf({node})"))
             .unwrap();
 
-        assert_eq!(read, [1.5, 2.0, 3.0, 4.5, 1.0]);
+        assert_eq!(read, [1.5, 2.0, 3.0, 4.5, 1.0, 6.0, 7.5]);
     }
 
     #[test]
@@ -1283,6 +1368,54 @@ mod tests {
             .unwrap();
 
         assert!(caught);
+    }
+
+    #[test]
+    fn scroll_node_writes_the_given_axes_negated_and_clamps_below_zero() {
+        let (engine, host) = engine_with_bindings();
+        let node: u32 = engine
+            .eval("globalThis.n = __inca_native__.createNode('div')")
+            .unwrap();
+        engine
+            .eval::<()>("__inca_native__.setStyle(n, 'overflow', 'scroll')")
+            .unwrap();
+        let offset = |host: &Rc<RefCell<Host>>| {
+            let offset = host.borrow().scroll_handle(node).offset();
+            (f32::from(offset.x), f32::from(offset.y))
+        };
+
+        engine
+            .eval::<()>("__inca_native__.scrollNode(n, 5, 7)")
+            .unwrap();
+        assert_eq!(offset(&host), (-5., -7.));
+        engine
+            .eval::<()>("__inca_native__.scrollNode(n, null, 9)")
+            .unwrap();
+        assert_eq!(offset(&host), (-5., -9.));
+        engine
+            .eval::<()>("__inca_native__.scrollNode(n, 3, undefined)")
+            .unwrap();
+        assert_eq!(offset(&host), (-3., -9.));
+        engine
+            .eval::<()>("__inca_native__.scrollNode(n, -4, -1)")
+            .unwrap();
+        assert_eq!(offset(&host), (0., 0.));
+    }
+
+    #[test]
+    fn scroll_of_and_scroll_node_raise_type_error_for_an_unknown_node() {
+        let (engine, _host) = engine_with_bindings();
+
+        let caught: Vec<bool> = engine
+            .eval(
+                r"
+                const caught = (f) => { try { f(); } catch (e) { return e instanceof TypeError; } return false; };
+                [caught(() => __inca_native__.scrollOf(999)), caught(() => __inca_native__.scrollNode(999, 1, 1))];
+                ",
+            )
+            .unwrap();
+
+        assert_eq!(caught, [true, true]);
     }
 
     #[test]

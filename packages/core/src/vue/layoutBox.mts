@@ -5,8 +5,8 @@ import { isDestroyed } from "./destroyedNodes.mts";
 import type { IncaCore } from "../rendererCore.mts";
 import type { IncaElement } from "./nodeOps.mts";
 
-/** `[x, y, width, height, border]` of a node's last drawn frame. */
-export type LayoutBox = readonly [number, number, number, number, number];
+/** `[x, y, width, height, border, scrollX, scrollY]` of a node's last drawn frame. */
+export type LayoutBox = readonly [number, number, number, number, number, number, number];
 
 /**
  * Reads the box a node was last drawn at. A destroyed node, or one with no

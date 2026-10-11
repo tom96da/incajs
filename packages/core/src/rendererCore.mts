@@ -22,6 +22,8 @@ export {
   setAttribute,
   getAttribute,
   layoutOf,
+  scrollOf,
+  scrollNode,
   removeAttribute,
   setStyle,
   removeStyle,

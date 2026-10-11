@@ -877,6 +877,7 @@ mod tests {
         let layout = inca_gpui::NodeLayout {
             bounds: gpui::Bounds::default(),
             border: px(2.0),
+            scroll: gpui::Point::default(),
         };
 
         dispatcher.record_layout(root, layout);
@@ -1780,6 +1781,7 @@ mod tests {
                     gpui::size(px(100.0), px(50.0)),
                 ),
                 border: px(border),
+                scroll: gpui::Point::default(),
             },
         );
     }
