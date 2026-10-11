@@ -8,6 +8,7 @@ mod active;
 mod button;
 mod common;
 mod components;
+mod focus_scroll;
 mod geometry;
 mod handlers;
 mod keyboard;
