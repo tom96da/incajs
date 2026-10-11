@@ -42,6 +42,7 @@ const core: IncaCore = {
   removeStyle: vi.fn<(nodeId: number, key: string) => void>(),
   focus: vi.fn<(nodeId: number) => void>(),
   blur: vi.fn<(nodeId: number) => void>(),
+  focusedNode: vi.fn<() => number | null>(() => null),
   click: vi.fn<(nodeId: number) => void>(),
   dispatchEvent: vi.fn<(nodeId: number, event: EventLike) => boolean>(() => true),
 };

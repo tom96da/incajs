@@ -636,6 +636,20 @@ fn install_focus<'js>(
         )?;
     }
 
+    {
+        let host = Rc::clone(host);
+        native.set(
+            "focusedNode",
+            Function::new(ctx.clone(), move |ctx: Ctx<'js>| -> JsResult<Value<'js>> {
+                let host = host.borrow();
+                match host.focus.active_node(&host.tree) {
+                    Some(node_id) => node_id.into_js(&ctx),
+                    None => Ok(Value::new_null(ctx.clone())),
+                }
+            })?,
+        )?;
+    }
+
     Ok(())
 }
 
@@ -1454,6 +1468,56 @@ mod tests {
         assert!(
             caught,
             "an unknown anchor id must raise a catchable exception"
+        );
+    }
+
+    #[test]
+    fn focused_node_is_null_until_a_focusable_node_is_focused() {
+        let (engine, _host) = engine_with_bindings();
+
+        let flags: Vec<bool> = engine
+            .eval(
+                r"
+                const n = __inca_native__;
+                const node = n.createNode('div');
+                const plain = n.createNode('div');
+                n.setAttribute(node, 'tabindex', 0);
+                const before = n.focusedNode() === null;
+                n.focusNode(plain);
+                const ignored = n.focusedNode() === null;
+                n.focusNode(node);
+                [before, ignored && n.focusedNode() === node];
+                ",
+            )
+            .unwrap();
+
+        assert_eq!(flags, [true, true]);
+    }
+
+    #[test]
+    fn blur_node_of_the_focused_node_makes_focused_node_null() {
+        let (engine, _host) = engine_with_bindings();
+
+        let cleared: bool = engine
+            .eval(
+                r"
+                const n = __inca_native__;
+                const node = n.createNode('div');
+                const other = n.createNode('div');
+                n.setAttribute(node, 'tabindex', 0);
+                n.setAttribute(other, 'tabindex', 0);
+                n.focusNode(node);
+                n.blurNode(other);
+                const kept = n.focusedNode() === node;
+                n.blurNode(node);
+                kept && n.focusedNode() === null;
+                ",
+            )
+            .unwrap();
+
+        assert!(
+            cleared,
+            "a blur of the focused node clears it, another node's blur keeps it"
         );
     }
 }

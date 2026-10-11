@@ -813,17 +813,17 @@ A fixed entry is deleted and its ID is never reused.
 - **B-129 A focused node looks like an unfocused one**
   `Units: gpui,core · Size: L · Impact: Low`
 
-  The `focus` and `blur` events are the only sign of focus. The fix adds a
+  A focused node has no visual sign. The fix adds a
   `:focus` state to the host's style model: a style variant that applies while
   the node holds focus, set from the same focus transitions that dispatch
   `focus` and `blur`.
 
-- **B-131 Focus state is readable through events only**
-  `Units: core,bridge · Size: M · Impact: Low`
+- **B-131 `document.activeElement` and `:focus` are unsupported**
+  `Units: core · Size: S · Impact: Low`
 
-  `document.activeElement` and `:focus` are unsupported. The fix adds a
-  binding that returns the focused node id, and core wraps it as the focused
-  element.
+  `activeElement()` from `incajs/vue` returns the focused element. Fix:
+  expose it as `document.activeElement` once the `document` of the event plan
+  exists, and add `:focus` with the interactive visual state.
 
 - **B-143 `disabled` has no handling for the input element**
   `Units: bridge · Size: S · Impact: Low`

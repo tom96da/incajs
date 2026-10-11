@@ -8,6 +8,7 @@ export {
   latestEventId,
   focus,
   blur,
+  focusedNode,
   dispatchEvent,
   click,
 } from "./events.mts";

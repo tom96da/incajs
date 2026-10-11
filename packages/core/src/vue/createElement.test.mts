@@ -1,9 +1,11 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import { reactive, ref } from "@vue/runtime-core";
 import { describe, expect, it, vi } from "vitest";
 
 import { createIncaElement } from "./createElement.mts";
+import { elements } from "./elements.mts";
 import type { IncaCore } from "../rendererCore.mts";
 
 function makeCore(stored: string | number | boolean | null = null): IncaCore {
@@ -18,6 +20,13 @@ function makeCore(stored: string | number | boolean | null = null): IncaCore {
     createEventTarget: vi.fn<() => object>(() => ({})),
   } as unknown as IncaCore;
 }
+
+describe("createIncaElement registration", () => {
+  it("registers the element under its node id", () => {
+    const el = createIncaElement(makeCore(), 11, "element", "div");
+    expect(elements.get(11)).toBe(el);
+  });
+});
 
 describe("createIncaElement tabIndex", () => {
   it("reads -1 for a div and 0 for a button when no tabindex is stored", () => {
@@ -47,5 +56,21 @@ describe("createIncaElement tabIndex", () => {
 
     el.tabIndex = Infinity;
     expect(core.setAttribute).toHaveBeenLastCalledWith(1, "tabindex", 0);
+  });
+});
+
+describe("createIncaElement reactivity", () => {
+  it("keeps the same object inside reactive() and ref()", () => {
+    const el = createIncaElement(makeCore(), 1, "element", "div");
+
+    expect(reactive(el)).toBe(el);
+    expect(ref(el).value).toBe(el);
+  });
+
+  it("registers an element and leaves a comment stand-in out", () => {
+    const el = createIncaElement(makeCore(), 7, "element", "div");
+    createIncaElement(makeCore(), 8, "comment");
+
+    expect([elements.get(7), elements.has(8)]).toEqual([el, false]);
   });
 });

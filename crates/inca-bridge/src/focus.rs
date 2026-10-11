@@ -91,6 +91,8 @@ enum PendingFocus {
 pub struct FocusRegistry {
     handles: HashMap<NodeId, FocusHandle>,
     focused: Option<NodeId>,
+    // The focused node as the window last reported it. See `observe`.
+    observed: Option<NodeId>,
     // Holds the window's focus while no node does, so key events reach the
     // root container. It maps to no node.
     parked: Option<FocusHandle>,
@@ -213,6 +215,49 @@ impl FocusRegistry {
     #[must_use]
     pub fn focused_node(&self, window: &Window, cx: &App) -> Option<NodeId> {
         window.focused(cx).and_then(|handle| self.node_for(&handle))
+    }
+
+    /// Records the node the window focuses now. Call it before a read of
+    /// [`Self::active_node`], so the read starts from the focus GPUI applied
+    /// itself.
+    pub fn observe(&mut self, window: &Window, cx: &App) {
+        self.observed = self.focused_node(window, cx);
+    }
+
+    /// The node holding focus once the queued requests apply. It starts from
+    /// the node last observed, drops it when a queued check removes its
+    /// focusability, then replays the queue in order.
+    #[must_use]
+    pub fn active_node(&self, tree: &VirtualTree) -> Option<NodeId> {
+        let mut active = self
+            .observed
+            .filter(|&id| self.focusable_after_frame(tree, id));
+        for request in &self.pending {
+            match *request {
+                PendingFocus::Focus(id) => {
+                    if self.focusable_after_frame(tree, id) {
+                        active = Some(id);
+                    }
+                }
+                PendingFocus::Blur(id) => {
+                    if active == Some(id) {
+                        active = None;
+                    }
+                }
+            }
+        }
+        active
+    }
+
+    /// Whether `node_id` can hold focus once this frame's tab check has run.
+    /// A node in `tab_dirty` holds it when it has a tab index, and any other
+    /// node holds it when it has a handle.
+    fn focusable_after_frame(&self, tree: &VirtualTree, node_id: NodeId) -> bool {
+        if self.tab_dirty.contains(&node_id) {
+            Self::tab_index_of(tree, node_id).is_some()
+        } else {
+            self.handles.contains_key(&node_id)
+        }
     }
 
     /// Records that `node_id`'s `tabindex` may have changed. The next
@@ -378,6 +423,7 @@ impl FocusRegistry {
     /// only one made through [`Self::request_focus`].
     fn sync(&mut self, window: &mut Window, cx: &mut App) -> Option<FocusTransition> {
         let focused_now = window.focused(cx).and_then(|handle| self.node_for(&handle));
+        self.observed = focused_now;
         if focused_now == self.focused {
             return None;
         }
@@ -807,5 +853,88 @@ mod tests {
             let _ = registry.apply_pending(&tree, window, cx);
             assert_eq!(registry.focused_node(window, cx), Some(id));
         });
+    }
+
+    #[gpui::test]
+    fn observe_takes_the_node_the_window_focuses(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, id) = tree_with("div", Some(AttributeValue::from("0")));
+        let mut registry = FocusRegistry::default();
+        registry.mark_tab_dirty(id);
+        cx.update(|window, cx| {
+            let _ = registry.apply_pending(&tree, window, cx);
+            registry.handle(id).unwrap().focus(window, cx);
+            registry.observe(window, cx);
+        });
+        assert_eq!(registry.active_node(&tree), Some(id));
+    }
+
+    #[gpui::test]
+    fn a_pending_focus_on_a_node_with_a_handle_is_active(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, id) = tree_with("div", Some(AttributeValue::from("0")));
+        let mut registry = FocusRegistry::default();
+        registry.mark_tab_dirty(id);
+        cx.update(|window, cx| {
+            let _ = registry.apply_pending(&tree, window, cx);
+        });
+        registry.request_focus(id);
+        assert_eq!(registry.active_node(&tree), Some(id));
+    }
+
+    #[test]
+    fn a_pending_blur_of_the_observed_node_clears_it() {
+        let (tree, id) = tree_with("div", Some(AttributeValue::from("0")));
+        let mut registry = FocusRegistry::default();
+        registry.mark_tab_dirty(id);
+        registry.observed = Some(id);
+        registry.request_blur(id);
+        assert_eq!(registry.active_node(&tree), None);
+    }
+
+    #[test]
+    fn a_pending_blur_of_another_node_keeps_the_observed_one() {
+        let (mut tree, id) = tree_with("div", Some(AttributeValue::from("0")));
+        let other = tree.create_node("div").unwrap();
+        let mut registry = FocusRegistry::default();
+        registry.mark_tab_dirty(id);
+        registry.observed = Some(id);
+        registry.request_blur(other);
+        assert_eq!(registry.active_node(&tree), Some(id));
+    }
+
+    #[test]
+    fn a_pending_focus_on_an_unfocusable_node_changes_nothing() {
+        let (mut tree, id) = tree_with("div", Some(AttributeValue::from("0")));
+        let plain = tree.create_node("div").unwrap();
+        let mut registry = FocusRegistry::default();
+        registry.mark_tab_dirty(id);
+        registry.observed = Some(id);
+        registry.request_focus(plain);
+        assert_eq!(registry.active_node(&tree), Some(id));
+    }
+
+    #[test]
+    fn a_tab_dirty_node_is_focusable_only_with_a_tab_index() {
+        let (mut tree, focusable) = tree_with("div", Some(AttributeValue::from("0")));
+        let plain = tree.create_node("div").unwrap();
+        let mut registry = FocusRegistry::default();
+        registry.mark_tab_dirty(focusable);
+        registry.mark_tab_dirty(plain);
+        registry.request_focus(plain);
+        assert_eq!(registry.active_node(&tree), None);
+        registry.request_focus(focusable);
+        assert_eq!(registry.active_node(&tree), Some(focusable));
+    }
+
+    #[test]
+    fn a_tab_dirty_node_that_loses_its_tab_index_drops_out_of_active() {
+        let (mut tree, id) = tree_with("div", Some(AttributeValue::from("0")));
+        let mut registry = FocusRegistry::default();
+        registry.mark_tab_dirty(id);
+        registry.observed = Some(id);
+        assert_eq!(registry.active_node(&tree), Some(id));
+        tree.remove_attribute(id, "tabindex").unwrap();
+        assert_eq!(registry.active_node(&tree), None);
     }
 }

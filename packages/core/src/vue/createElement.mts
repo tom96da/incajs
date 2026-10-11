@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { isDestroyed } from "./destroyedNodes.mts";
+import { elements } from "./elements.mts";
+import { skipReactive } from "./skipReactive.mts";
 import { tabIndexOf } from "./tabIndexOf.mts";
 import type { IncaCore, NodeId, TagName } from "../rendererCore.mts";
 import type { IncaElement } from "./nodeOps.mts";
@@ -45,5 +47,7 @@ export function createIncaElement(
       if (!isDestroyed(element)) core.setAttribute(id, "tabindex", value | 0);
     },
   };
-  return element;
+  if (kind === "element") elements.set(id, element);
+  // A plain object in `ref()` becomes a proxy, which differs from `activeElement()`.
+  return skipReactive(element);
 }

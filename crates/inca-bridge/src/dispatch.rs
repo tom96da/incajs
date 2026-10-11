@@ -418,6 +418,7 @@ impl EventDispatcher {
         if self.host.borrow().tree.get(start).is_none() {
             return false;
         }
+        self.host.borrow_mut().focus.observe(window, cx);
         let payload = &self.prepare(event, payload, window);
         let cut = self.cut_by_disabled_button(event, payload, cx);
         let (canceled, entered) = self.walk(start, event, payload, &cut);
@@ -644,6 +645,7 @@ impl EventSink for EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) {
+        self.host.borrow_mut().focus.observe(window, cx);
         let payload = self.prepare(event, payload, window);
         let cut = self.cut_by_disabled_button(event, &payload, cx);
         let (canceled, entered) = self.walk(target, event, &payload, &cut);
@@ -679,6 +681,7 @@ impl EventSink for EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) {
+        self.host.borrow_mut().focus.observe(window, cx);
         let (root, focused) = {
             let host = self.host.borrow();
             (host.root, host.focus.focused_node(window, cx))

@@ -253,3 +253,11 @@ export function focus(nodeId: NodeId): void {
 export function blur(nodeId: NodeId): void {
   native().blurNode(nodeId);
 }
+
+/**
+ * Returns the id of the focused node.
+ * @returns the focused node's id, or `null` when no node has focus
+ */
+export function focusedNode(): NodeId | null {
+  return native().focusedNode();
+}

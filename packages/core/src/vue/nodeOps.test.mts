@@ -3,6 +3,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { elements } from "./elements.mts";
 import { createNodeOps } from "./nodeOps.mts";
 import type { IncaCore } from "../rendererCore.mts";
 import type { EventLike, IncaEventTarget } from "../types.mts";
@@ -39,6 +40,7 @@ const core: IncaCore = {
   destroyNode: vi.fn<(nodeId: number) => void>(),
   focus: vi.fn<(nodeId: number) => void>(),
   blur: vi.fn<(nodeId: number) => void>(),
+  focusedNode: vi.fn<() => number | null>(() => null),
   click: vi.fn<(nodeId: number) => void>(),
   dispatchEvent: vi.fn<(nodeId: number, event: EventLike) => boolean>(() => true),
 };
@@ -47,6 +49,7 @@ const nodeOps = createNodeOps(core);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  elements.clear();
   nextId = 1;
   vi.mocked(core.createNode).mockImplementation(() => nextId++);
 });
@@ -333,6 +336,35 @@ describe("remove", () => {
 
     expect(core.destroyNode).toHaveBeenCalledWith(child.id);
     expect(core.removeChild).not.toHaveBeenCalled();
+  });
+});
+
+describe("element registry", () => {
+  it("drops the whole removed subtree", () => {
+    const root = nodeOps.createElement("div");
+    const mid = nodeOps.createElement("div");
+    const leaf = nodeOps.createElement("button");
+    nodeOps.insert(leaf, mid);
+    nodeOps.insert(mid, root);
+    expect([root, mid, leaf].map((el) => elements.get(el.id))).toEqual([root, mid, leaf]);
+
+    nodeOps.remove(root);
+
+    expect([root, mid, leaf].map((el) => elements.has(el.id))).toEqual([false, false, false]);
+  });
+
+  it("drops the children setElementText replaces, and their descendants", () => {
+    const root = nodeOps.createElement("div");
+    const child = nodeOps.createElement("div");
+    const grandchild = nodeOps.createElement("div");
+    nodeOps.insert(grandchild, child);
+    nodeOps.insert(child, root);
+
+    nodeOps.setElementText(root, "hello");
+
+    expect(elements.has(child.id)).toBe(false);
+    expect(elements.has(grandchild.id)).toBe(false);
+    expect(elements.get(root.id)).toBe(root);
   });
 });
 

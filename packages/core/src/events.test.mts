@@ -8,6 +8,7 @@ import {
   blur,
   click,
   dispatchEvent,
+  focusedNode,
   registeredGroupCount,
   removeEventListener,
 } from "./events.mts";
@@ -43,6 +44,7 @@ const native = {
   destroyNode: vi.fn<(nodeId: number) => number[]>(() => []),
   focusNode: vi.fn<(nodeId: number) => void>(),
   blurNode: vi.fn<(nodeId: number) => void>(),
+  focusedNode: vi.fn<() => number | null>(() => null),
   dispatchEvent: vi.fn<(nodeId: number, event: EventLike) => boolean>(() => true),
   click: vi.fn<(nodeId: number) => void>(),
 };
@@ -427,6 +429,15 @@ describe("blur", () => {
   it("forwards the node id to native blurNode", () => {
     blur(7);
     expect(native.blurNode).toHaveBeenCalledWith(7);
+  });
+});
+
+describe("focusedNode", () => {
+  it("returns the id native reports, or null", () => {
+    native.focusedNode.mockReturnValueOnce(7);
+    expect(focusedNode()).toBe(7);
+
+    expect(focusedNode()).toBeNull();
   });
 });
 

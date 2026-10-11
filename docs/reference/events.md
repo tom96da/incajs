@@ -120,8 +120,9 @@ rules, with the differences below.
 - A node takes focus through its `tabindex` attribute, and a `button` is
   focusable by default. `.focus()` on other nodes is ignored.
 - `hidden="until-found"` counts as shown.
-- A focused node shows no focus ring, and the focused node is readable
-  through the focus events only.
+- A focused node shows no focus ring.
+- `activeElement()` from `incajs/vue` returns the focused element or `null`.
+  It replaces `document.activeElement`, which is unsupported.
 - After the last node, Tab leaves nothing focused and the next Tab starts at
   the first node, as in Chromium and WebKit. Focus stays in the window.
 - Tab after a click starts at the first node, where browsers continue from the

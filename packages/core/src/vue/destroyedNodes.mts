@@ -1,6 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import { elements } from "./elements.mts";
 import type { IncaNode } from "./nodeOps.mts";
 
 const destroyed = new WeakSet<IncaNode>();
@@ -15,11 +16,13 @@ export function isDestroyed(node: IncaNode): boolean {
 }
 
 /**
- * Records that the host freed `node` and every descendant of it.
+ * Records that the host freed `node` and every descendant of it, and drops
+ * their element handles from the registry.
  * @param node - the root of the freed subtree
  */
 export function markDestroyed(node: IncaNode): void {
   destroyed.add(node);
   if (node.kind === "text") return;
+  elements.delete(node.id);
   for (const child of node.children) markDestroyed(child);
 }

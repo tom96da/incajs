@@ -5,6 +5,7 @@ import type { RendererOptions } from "@vue/runtime-core";
 
 import { createIncaElement } from "./createElement.mts";
 import { markDestroyed } from "./destroyedNodes.mts";
+import { skipReactive } from "./skipReactive.mts";
 import type { IncaCore, IncaEventTarget, NodeId, TagName } from "../rendererCore.mts";
 
 /**
@@ -84,7 +85,8 @@ export function createNodeOps(core: IncaCore): NodeOps {
   function createTextNode(text: string): IncaText {
     const id = core.createNode("text");
     core.setAttribute(id, "value", text);
-    return { id, kind: "text", parent: null, text };
+    // Same as elements: `ref()` keeps the handle itself.
+    return skipReactive({ id, kind: "text", parent: null, text });
   }
 
   // Drops `child` from its parent in this module's shadow of the native tree.

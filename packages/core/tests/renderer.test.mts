@@ -140,6 +140,9 @@ function installFakeNative(): Map<NodeId, FakeNode> {
     },
     focusNode(): void {},
     blurNode(_nodeId: number): void {},
+    focusedNode(): NodeId | null {
+      return null;
+    },
     dispatchEvent(): boolean {
       return true;
     },

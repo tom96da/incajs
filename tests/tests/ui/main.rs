@@ -4,6 +4,7 @@
 //! Mounts real `.vue` apps in the `Harness` and checks the tree they draw.
 //! One test target, so the fixtures are bundled once per run.
 
+mod active;
 mod button;
 mod common;
 mod components;
