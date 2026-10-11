@@ -128,7 +128,22 @@ is allowed.
 `params` and `body` run as code, so pass trusted source. A NUL byte in any
 argument raises an error, and an argument of the wrong type raises a
 `TypeError`. A syntax error raises a `SyntaxError` whose stack names
-`filename` and the line.
+`filename` and the line (the original position when `body` carries a map).
+
+### Source maps
+
+The host reads the last `//# sourceMappingURL=` line of each module it loads:
+the body that `compile` receives, the entry bundle and each chunk. A `data:`
+URL carries the map inline. Any other value is a path beside the module, such
+as `bundle.js.map`, and the map's `sources` are relative to the map. The first
+line of a `compile` body is line 2 of `filename`, so a map for it starts with
+one empty line (Vite's `startOffset = 1`).
+
+The stack of an error the host reports (`appError`, a `-32000` error and the
+console output of an `Error`) names the original file, line and column for
+every frame of such a module. A module whose map is missing or unreadable
+keeps the generated positions. The `stack` property a script reads from an
+`Error` itself holds the generated positions.
 
 ## Failure handling
 

@@ -16,6 +16,7 @@ use rquickjs::{
 };
 
 use crate::loader::{DiskLoader, DiskResolver, canonical_name};
+use crate::sourcemap::remap_stack;
 
 /// `Result<T, EngineError>`, what every fallible [`Engine`] method returns.
 pub type EngineResult<T> = Result<T, EngineError>;
@@ -80,7 +81,7 @@ impl EngineError {
             .ok()
             .flatten()
             .filter(|stack| !stack.trim().is_empty())
-            .map(|stack| stack.trim_end().to_owned());
+            .map(|stack| remap_stack(thrown.ctx(), stack.trim_end()));
 
         Self { message, stack }
     }
@@ -92,7 +93,8 @@ impl EngineError {
     }
 
     /// The frames behind it, or `None` — `QuickJS` records them only for an
-    /// `Error`, and only the frames: the message is not part of them.
+    /// `Error`, and only the frames: the message is separate. A frame
+    /// in a file with a source map reads as its original position.
     #[must_use]
     pub fn stack(&self) -> Option<&str> {
         self.stack.as_deref()
@@ -302,7 +304,8 @@ impl Engine {
     /// [`poll_module`](Self::poll_module).
     ///
     /// `name` and `import` resolution follow
-    /// [`eval_module`](Self::eval_module).
+    /// [`eval_module`](Self::eval_module). A frame of a module whose source
+    /// ends in a `//# sourceMappingURL=` line names the original source.
     ///
     /// # Errors
     ///
@@ -311,6 +314,7 @@ impl Engine {
     pub fn start_module(&self, name: &str, source: &str) -> EngineResult<PendingModule> {
         let name = canonical_name(name);
         self.context.with(|ctx| {
+            crate::sourcemap::register(&ctx, &name, source);
             Module::declare(ctx.clone(), name, source)
                 .and_then(rquickjs::Module::eval)
                 .map(|(_module, promise)| PendingModule {
@@ -513,6 +517,42 @@ mod tests {
             "{:?}",
             err.stack()
         );
+    }
+
+    #[test]
+    fn a_frame_of_a_compiled_function_reads_at_its_source() {
+        let engine = Engine::new().unwrap();
+        let body = crate::sourcemap::app_vue_body("throw new Error('bad edit');");
+        engine.with(|ctx| {
+            let f = crate::compile_async_function(&ctx, &[], &body, "virtual.js").unwrap();
+            ctx.globals().set("f", f).unwrap();
+        });
+        engine.eval::<()>("f();").unwrap();
+        let errors = engine.run_jobs();
+
+        let stack = errors[0].stack().unwrap();
+        assert!(stack.contains("src/App.vue:12:5"), "{stack}");
+        assert!(!stack.contains("virtual.js:"), "{stack}");
+    }
+
+    #[test]
+    fn a_frame_of_a_module_reads_through_its_sidecar_map() {
+        let dir = ScratchDir::new("module-sidecar-map");
+        fs::write(
+            dir.0.join("bundle.js.map"),
+            r#"{"version":3,"sources":["../src/App.vue"],"mappings":";AAWI"}"#,
+        )
+        .unwrap();
+        let entry = dir.0.join("bundle.js");
+        let source = "globalThis.ready = true;\nthrow new Error('bad edit');\n//# sourceMappingURL=bundle.js.map";
+
+        let engine = Engine::new().unwrap();
+        let err = engine
+            .eval_module(&entry.to_string_lossy(), source)
+            .unwrap_err();
+
+        let stack = err.stack().unwrap();
+        assert!(stack.contains("src/App.vue:12:5"), "{stack}");
     }
 
     #[test]

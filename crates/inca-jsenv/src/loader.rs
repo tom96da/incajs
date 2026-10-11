@@ -94,6 +94,7 @@ impl Loader for DiskLoader {
     ) -> Result<Module<'js>> {
         let source = fs::read_to_string(path)
             .map_err(|err| Error::new_loading_message(path, err.to_string()))?;
+        crate::sourcemap::register(ctx, path, &source);
         Module::declare(ctx.clone(), path, source)
     }
 }
@@ -212,6 +213,34 @@ mod tests {
         assert_eq!(canonical_name(&dotted.to_string_lossy()), canonical);
         let doubled = format!("{}//sub//dep.js", root.display());
         assert_eq!(canonical_name(&doubled), canonical);
+    }
+
+    #[test]
+    fn a_frame_of_an_imported_chunk_reads_through_its_sidecar_map() {
+        let dir = ScratchDir::new("chunk-sidecar-map");
+        fs::write(
+            dir.0.join("chunk.js.map"),
+            r#"{"version":3,"sources":["../src/Chunk.vue"],"mappings":";AAWI"}"#,
+        )
+        .unwrap();
+        fs::write(
+            dir.0.join("chunk.js"),
+            "globalThis.ready = true;\nthrow new Error('bad edit');\n//# sourceMappingURL=chunk.js.map",
+        )
+        .unwrap();
+        let entry = dir.0.join("entry.js");
+        fs::write(&entry, "import './chunk.js';").unwrap();
+
+        let engine = Engine::builder().module_root(&dir.0).build().unwrap();
+        let err = engine
+            .eval_module(
+                &entry.to_string_lossy(),
+                &fs::read_to_string(&entry).unwrap(),
+            )
+            .unwrap_err();
+
+        let stack = err.stack().unwrap();
+        assert!(stack.contains("src/Chunk.vue:12:5"), "{stack}");
     }
 
     #[test]

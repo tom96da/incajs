@@ -180,16 +180,13 @@ A fixed entry is deleted and its ID is never reused.
   `Runtime::set_memory_limit`/`set_max_stack_size`. Defaults and how the
   host reports a timeout are undecided.
 
-- **B-088 Stack frames point into generated code**
-  `Units: cli,jsenv · Size: M · Impact: Medium`
+- **B-088 Frames of a built or packaged app name generated code**
+  `Units: cli · Size: S · Impact: Medium`
 
-  A frame of an HMR module names the module's id, and its line is a line of
-  the Vite transform of that module. A build runs as one bundle, so a frame
-  names `bundle.js` and a line of the generated code. The fix emits source maps
-  from the build and from the development transform, and the host remaps each
-  frame to the `.vue` or `.ts` file, line and column. The development runtime
-  disables Vite's source map support, which expects V8 call sites, so the host
-  does the remapping. This also covers errors the host reports to `inca dev`.
+  A frame of a built or packaged app names `bundle.js` and a line of the
+  generated code. `inca dev` emits a source map beside the bundle and the host
+  remaps the frames through it. The fix adds a `sourcemap` config field and
+  `--sourcemap` and `--no-sourcemap` flags to the build and package commands.
 
 - **B-097 `console` prints some classes and built-ins unlike Node**
   `Units: jsenv · Size: M · Impact: Medium`

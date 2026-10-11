@@ -17,7 +17,26 @@
 
 use std::mem::MaybeUninit;
 
-use rquickjs::{Ctx, Error, IntoJs, Object, Result, Value, object::PropertyFlags, qjs};
+use rquickjs::{Ctx, Error, IntoJs, JsLifetime, Object, Result, Value, object::PropertyFlags, qjs};
+
+/// Userdata for a type whose lifetimes are all `'static`.
+///
+/// `ctx.store_userdata` requires [`JsLifetime`].
+#[derive(Default)]
+pub struct Plain<T>(pub T);
+
+// SAFETY: `T: 'static` carries no `'js` lifetime, so the lifetime change is the identity.
+unsafe impl<T: 'static> JsLifetime<'_> for Plain<T> {
+    type Changed<'to> = Plain<T>;
+}
+
+impl<T> std::ops::Deref for Plain<T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        &self.0
+    }
+}
 
 /// What `Object.getOwnPropertyDescriptor` describes.
 ///

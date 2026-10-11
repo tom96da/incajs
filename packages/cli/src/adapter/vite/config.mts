@@ -99,12 +99,16 @@ export function resolveViteConfig({
       // regardless of mode.
       emptyOutDir: mode === "production",
       minify: mode === "production",
+      // Development only; the production build skips the map.
+      sourcemap: mode === "development",
       // An editor that replaces a file deletes it for a moment; the delay lets that pair coalesce.
       watch: watch ? { buildDelay: 30 } : undefined,
       rolldownOptions: {
         output: {
           chunkFileNames: "chunks/[name]-[hash].js",
           assetFileNames: "assets/[name]-[hash][extname]",
+          // Development only; the map holds paths and positions, no sources.
+          sourcemapExcludeSources: mode === "development",
         },
       },
     },

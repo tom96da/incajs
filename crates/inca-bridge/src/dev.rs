@@ -34,8 +34,10 @@ pub type DevSend = Rc<dyn Fn(&str, Value)>;
 /// raises a JS `TypeError`. `compile` returns an async function whose body is
 /// `body` and whose parameters are named by `params`, built by
 /// [`inca_jsenv::compile_async_function`]. Its stack frames name `filename`,
-/// and a frame on line N of `body` reports line N + 1. A syntax error raises
-/// a JS `SyntaxError` whose stack names `filename` and the line.
+/// and a frame on line N of `body` reports line N + 1. An inline source map
+/// in `body` points the frames the host reports at the original source. A
+/// syntax error raises a JS `SyntaxError` whose stack names `filename` and the
+/// line.
 ///
 /// # Errors
 ///

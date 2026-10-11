@@ -7,7 +7,8 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 The `QuickJS` runtime bootstrap (`Engine`), plus the host objects installed
 into a `QuickJS` realm so ordinary JavaScript can run in it. It also builds
-source text into an async function whose stack frames name its file.
+source text into an async function whose stack frames name its file. An
+inline source map in that text points the frames at the original source.
 
 `QuickJS` supplies the language — `Array`, `JSON`, `Promise`, `Math` and the
 rest of the ECMAScript intrinsics. It supplies nothing else: no `console`,
@@ -75,8 +76,11 @@ let f = compile_async_function(&ctx, &["a", "b"], body, "app/Counter.vue")?;
 ```
 
 The stack frames of `f` name `app/Counter.vue`, and a frame on line `N` of
-`body` reports line `N + 1`. A syntax error is left pending on `ctx`, where
-`EngineError::capture` reads it.
+`body` reports line `N + 1`. When `body` ends with an inline
+`//# sourceMappingURL=data:` source map, the frames that `EngineError` and
+`console` report name the original file, line and column, and the `stack`
+property a script reads keeps the generated positions. A syntax error is left
+pending on `ctx`, where `EngineError::capture` reads it.
 
 ## Scope
 

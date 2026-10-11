@@ -13,6 +13,7 @@ use rquickjs::{Coerced, Ctx, Object, Result as JsResult, Type, Value, object::Fi
 
 use crate::paint::{Style, paint};
 use crate::quickjs::{ObjectExt, ValueExt};
+use crate::sourcemap::remap_stack;
 
 mod builtins;
 
@@ -246,7 +247,8 @@ fn write_error(out: &mut String, value: &Value<'_>, mode: Mode) {
     if let Some(Some(stack)) = settled(ctx, object.get::<_, Option<String>>("stack"))
         && !stack.trim().is_empty()
     {
-        for frame in stack.trim_end().split('\n') {
+        let stack = remap_stack(ctx, stack.trim_end());
+        for frame in stack.split('\n') {
             out.push_str(if mode.escape { "\\n" } else { "\n" });
             put(out, mode, Style::Grey, frame);
         }
@@ -584,6 +586,7 @@ mod tests {
     use rquickjs::{Context, Runtime};
 
     use super::*;
+    use crate::{Engine, compile_async_function};
 
     /// Evaluates `expression` and renders its value the way `console` would
     /// render a single argument.
@@ -815,6 +818,27 @@ mod tests {
             "{ self: { self: { self: [Object] } } }",
             "JSON.stringify throws here, which is why console does not use it"
         );
+    }
+
+    #[test]
+    fn an_error_prints_its_frames_at_their_source() {
+        let engine = Engine::new().unwrap();
+        let body = crate::sourcemap::app_vue_body("throw new Error('bad edit');");
+        engine.with(|ctx| {
+            let f = compile_async_function(&ctx, &[], &body, "virtual.js").unwrap();
+            ctx.globals().set("f", f).unwrap();
+        });
+        engine
+            .eval::<()>("f().catch((e) => { globalThis.caught = e; });")
+            .unwrap();
+        assert!(engine.run_jobs().is_empty());
+
+        let out = engine.with(|ctx| {
+            let value: Value<'_> = ctx.globals().get("caught").unwrap();
+            line(&[value], false)
+        });
+        assert!(out.contains("src/App.vue:12:5"), "{out}");
+        assert!(!out.contains("virtual.js:"), "{out}");
     }
 
     #[test]

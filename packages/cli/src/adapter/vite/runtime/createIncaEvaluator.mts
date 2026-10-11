@@ -38,7 +38,8 @@ class IncaEvaluator extends (ESModulesEvaluator as new () => ModuleEvaluator) {
       ssrExportAllKey,
       ssrExportNameKey,
     ];
-    // `compile` takes the place of `new AsyncFunction`, so a frame names the module.
+    // `compile` takes the place of `new AsyncFunction`, so a frame names the module and the
+    // host can read the module's inline source map.
     // It rejects a NUL byte, so each one is written as `\u0000`, which keeps its value in a
     // literal. A virtual module's id starts with one.
     const initModule = dev.compile(
@@ -56,7 +57,8 @@ class IncaEvaluator extends (ESModulesEvaluator as new () => ModuleEvaluator) {
 /**
  * Builds a `ModuleEvaluator` that runs each HMR module through the host's
  * `__inca_dev__.compile`. A stack frame of a module names the module's id,
- * with each NUL byte written as `\u0000`.
+ * with each NUL byte written as `\u0000`. The host maps a reported frame to
+ * the original source through the inline source map Vite appends.
  * Running a module rejects when `globalThis.__inca_dev__` or its `compile`
  * is missing.
  * @returns the evaluator for a `ModuleRunner`

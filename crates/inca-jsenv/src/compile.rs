@@ -15,6 +15,9 @@ use rquickjs::{Ctx, Function, Result};
 /// `N + 1` of `filename`, and columns on every line of `body` are exact.
 /// Lines are counted as `QuickJS` counts them, and each `params` entry must
 /// fit on one line. A `//` comment on the last line of `body` is allowed.
+/// An inline `data:` source map in `body` maps its frames to the original
+/// file, line and column. The map is registered before evaluation, so a
+/// syntax error is mapped too.
 ///
 /// `params` and `body` run as code, so pass only trusted source.
 ///
@@ -31,6 +34,8 @@ pub fn compile_async_function<'js>(
     filename: &str,
 ) -> Result<Function<'js>> {
     let source = format!("(async function ({}) {{\n{body}\n}})", params.join(", "));
+    // Registered before the eval so a syntax error's frame is remapped too.
+    crate::sourcemap::register(ctx, filename, &source);
     let mut options = EvalOptions::default();
     options.filename = Some(filename.to_owned());
     ctx.eval_with_options(source, options)
@@ -135,6 +140,15 @@ mod tests {
         let err = compile(&engine, &[], "const a = 1;\nconst = ;", "broken.js").unwrap_err();
 
         assert!(err.to_string().contains("broken.js:3"), "{err}");
+    }
+
+    #[test]
+    fn a_syntax_error_in_a_mapped_body_names_the_original_file() {
+        let engine = Engine::new().unwrap();
+        let body = crate::sourcemap::app_vue_body("const = ;");
+        let err = compile(&engine, &[], &body, "virtual.js").unwrap_err();
+
+        assert!(err.to_string().contains("src/App.vue:12:5"), "{err}");
     }
 
     #[test]

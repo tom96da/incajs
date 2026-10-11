@@ -21,6 +21,7 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::inspect;
 use crate::paint::{Style, paint};
+use crate::sourcemap::remap_stack;
 use state::State;
 
 /// Starts every line, once per open group.
@@ -232,6 +233,7 @@ fn assertion_message<'js>(ctx: &Ctx<'js>, mut data: Vec<Value<'js>>, color: bool
 fn caller_stack(ctx: &Ctx<'_>) -> Vec<String> {
     let stack =
         inspect::settled(ctx, ctx.eval::<String, _>("new Error().stack")).unwrap_or_default();
+    let stack = remap_stack(ctx, &stack);
     stack
         .lines()
         .map(str::trim_end)
@@ -478,6 +480,12 @@ mod tests {
 
     /// As [`lines_written_by`], with color switched on or off.
     fn written_with_color(source: &str, color: bool) -> Vec<(Level, String)> {
+        written_by(color, |ctx| ctx.eval::<(), _>(source).unwrap())
+    }
+
+    /// Runs `run` against a realm with `console` installed, and returns every
+    /// line it wrote.
+    fn written_by(color: bool, run: impl FnOnce(&Ctx<'_>)) -> Vec<(Level, String)> {
         let written = Rc::new(RefCell::new(Vec::new()));
         let sink = Rc::clone(&written);
         let output: Output = Rc::new(move |level, message| {
@@ -488,7 +496,7 @@ mod tests {
         let context = Context::full(&runtime).unwrap();
         context.with(|ctx| {
             install(&ctx, &output, color).unwrap();
-            ctx.eval::<(), _>(source).unwrap();
+            run(&ctx);
             assert!(!ctx.has_exception(), "a call left an exception pending");
         });
 
@@ -844,6 +852,20 @@ mod tests {
             !lines.iter().any(|l| l.contains("console.trace")),
             "{lines:?}"
         );
+    }
+
+    #[test]
+    fn trace_frames_read_at_their_source() {
+        let body = crate::sourcemap::app_vue_body("console.trace('hi');");
+        let written = written_by(false, |ctx| {
+            let f = crate::compile_async_function(ctx, &[], &body, "virtual.js").unwrap();
+            ctx.globals().set("f", f).unwrap();
+            ctx.eval::<(), _>("f();").unwrap();
+        });
+
+        let text = &written[0].1;
+        assert!(text.contains("src/App.vue:12:5"), "{text}");
+        assert!(!text.contains("virtual.js:"), "{text}");
     }
 
     #[test]

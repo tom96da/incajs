@@ -76,7 +76,8 @@ client.
 - The CLI's own evaluator runs the transformed module source inside QuickJS.
   It subclasses Vite's `ESModulesEvaluator`. Its module step builds each module
   with `__inca_dev__.compile` ([PROTOCOL.md](./PROTOCOL.md#extending-it)), so a
-  stack frame names the module.
+  stack frame names the module. The host maps the frame to the original source
+  through the inline source map that Vite appends.
 
 This reuses Vite's module graph invalidation and its accept and dispose
 boundaries, without a hand-rolled HMR protocol.

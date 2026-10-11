@@ -20,7 +20,8 @@ virtual tree (`inca-gpui`'s `VirtualTree`):
   uses to exchange messages with the host. It also carries `setLoadFailed`,
   which the app calls to report that its load failed or recovered, and
   `compile(params, body, filename)`, which builds source into an async
-  function that names `filename` in its stack frames.
+  function that names `filename` in its stack frames, or the original file when
+  `body` carries an inline source map.
 - `focus` holds `FocusRegistry`, which keeps a `gpui::FocusHandle` per node
   and dispatches `"focus"`/`"blur"` when the focused node changes.
 

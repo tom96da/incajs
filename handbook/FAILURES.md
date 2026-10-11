@@ -14,6 +14,7 @@ and where each is reported.
 | --- | --- |
 | said nothing | the documented default, in silence |
 | said something unusable | a failure, named |
+| shipped a source map the host cannot read | the frames keep the generated positions, in silence |
 
 For example, a `width` nobody set falls through to the app's root element
 and then to 800 × 600.

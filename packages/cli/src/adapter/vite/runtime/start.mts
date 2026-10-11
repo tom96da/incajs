@@ -28,7 +28,8 @@ function isServerFailure(error: unknown): boolean {
  *
  * `sourcemapInterceptor: false` is required: the interceptor reads V8
  * `CallSite` objects off `Error.stack`, and this engine's `Error.stack` is a
- * plain string.
+ * plain string. The host remaps the frames it reports through each module's
+ * inline source map.
  *
  * `hmr.logger` is fully muted: the development server already reports each
  * update, and a failed one, on its own — see `hmr.mts`'s `onError`.

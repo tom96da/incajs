@@ -21,6 +21,7 @@ publish = false
 name = "inca_jsenv"
 
 [dependencies]
+base64.workspace = true
 rquickjs.workspace = true
 unicode-width.workspace = true
 

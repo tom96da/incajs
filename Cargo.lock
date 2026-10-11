@@ -2849,6 +2849,7 @@ dependencies = [
 name = "inca-jsenv"
 version = "0.0.14"
 dependencies = [
+ "base64",
  "rquickjs",
  "unicode-width",
 ]
