@@ -16,9 +16,11 @@ virtual tree (`inca-gpui`'s `VirtualTree`):
   `globalThis.__inca_callbacks__`, with one event object passed along the
   path of its target. It implements `inca-gpui`'s `EventSink` trait so the
   render layer never has to depend on `QuickJS` itself.
-- `dev` installs `globalThis.__inca_dev__` — the relay a bundler integration
-  uses to exchange messages with the host, and `setLoadFailed`, which the app
-  calls to report that its load failed or recovered.
+- `dev` installs `globalThis.__inca_dev__`, the relay a bundler integration
+  uses to exchange messages with the host. It also carries `setLoadFailed`,
+  which the app calls to report that its load failed or recovered, and
+  `compile(params, body, filename)`, which builds source into an async
+  function that names `filename` in its stack frames.
 - `focus` holds `FocusRegistry`, which keeps a `gpui::FocusHandle` per node
   and dispatches `"focus"`/`"blur"` when the focused node changes.
 

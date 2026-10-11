@@ -175,8 +175,9 @@ impl Session {
     /// Starts an engine rooted at `entry_path`'s directory and gives it
     /// everything an entry expects to find: `console`, the native bindings
     /// and, for the development window (`writer.is_some()`), `__inca_dev__`
-    /// with its `setLoadFailed`. All of it is in place before any entry code
-    /// runs, so an entry that logs while evaluating finds `console`.
+    /// with its `send`, `setLoadFailed` and `compile` methods. All of it is in
+    /// place before any entry code runs, so an entry that logs while evaluating
+    /// finds `console`.
     ///
     /// `__inca_dev__` exists only when `writer` is `Some`; see
     /// [`inca_bridge::install_dev`] for what it does. The returned `signal`

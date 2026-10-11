@@ -5,7 +5,8 @@
 //!
 //! `QuickJS` supplies the language — `Array`, `JSON`, `Promise` and the rest
 //! of the ECMAScript intrinsics — and nothing around it. Everything a script
-//! expects the *host* to provide starts here.
+//! expects the *host* to provide starts here. [`compile_async_function`] builds
+//! source text into an async function whose stack frames name its file.
 //!
 //! Depends on `rquickjs` and nothing else, so what it installs can be
 //! replaced without reaching the code that draws a UI.
@@ -13,9 +14,11 @@
 pub mod console;
 pub mod engine;
 
+mod compile;
 mod inspect;
 mod loader;
 mod paint;
 mod quickjs;
 
+pub use compile::compile_async_function;
 pub use engine::{Engine, EngineError, EngineResult, PendingModule};

@@ -5,10 +5,12 @@
 //! development window uses to trade arbitrary-named messages with whatever is
 //! on the other end of the host's own protocol — a bundler's HMR channel, say.
 //! This crate knows nothing about that protocol's wire format or any particular
-//! bundler; it only carries a method name and a parsed `params` value each way,
-//! exactly like [`crate::dispatch`] carries a native input event into JS
-//! without knowing what a caller does with it. [`install_load_signal`] adds a
-//! flag the app sets to report that its load failed or recovered.
+//! bundler; the relay carries a method name and a parsed `params` value each
+//! way, exactly like [`crate::dispatch`] carries a native input event into JS
+//! without knowing what a caller does with it. [`install_dev`] also adds
+//! `compile`, which builds app source into an async function.
+//! [`install_load_signal`] adds a flag the app sets to report that its load
+//! failed or recovered.
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -16,7 +18,7 @@ use std::rc::Rc;
 use rquickjs::{Ctx, Exception, Function, Object, Result as JsResult, Value as JsValue};
 use serde_json::Value;
 
-use inca_jsenv::{Engine, EngineError};
+use inca_jsenv::{Engine, EngineError, compile_async_function};
 
 /// Called with `(method, params)` whenever JS calls
 /// `__inca_dev__.send(method, paramsJson)` — `params` already parsed out of
@@ -24,14 +26,21 @@ use inca_jsenv::{Engine, EngineError};
 /// say) is entirely up to the caller.
 pub type DevSend = Rc<dyn Fn(&str, Value)>;
 
-/// Installs `globalThis.__inca_dev__`, with the method
-/// `send(method: string, paramsJson: string)`. `paramsJson` is parsed as
-/// JSON before `on_send` is called; invalid JSON raises a JS `TypeError`.
+/// Installs `globalThis.__inca_dev__`, with the methods
+/// `send(method: string, paramsJson: string)` and
+/// `compile(params: string[], body: string, filename: string)`.
+///
+/// `paramsJson` is parsed as JSON before `on_send` is called; invalid JSON
+/// raises a JS `TypeError`. `compile` returns an async function whose body is
+/// `body` and whose parameters are named by `params`, built by
+/// [`inca_jsenv::compile_async_function`]. Its stack frames name `filename`,
+/// and a frame on line N of `body` reports line N + 1. A syntax error raises
+/// a JS `SyntaxError` whose stack names `filename` and the line.
 ///
 /// # Errors
 ///
-/// Returns an error if defining `globalThis.__inca_dev__` or its `send`
-/// method on `ctx` fails.
+/// Returns an error if defining `globalThis.__inca_dev__` or its methods on
+/// `ctx` fails.
 pub fn install_dev(ctx: &Ctx<'_>, on_send: DevSend) -> JsResult<()> {
     let dev = Object::new(ctx.clone())?;
     dev.set(
@@ -47,8 +56,23 @@ pub fn install_dev(ctx: &Ctx<'_>, on_send: DevSend) -> JsResult<()> {
             },
         )?,
     )?;
+    dev.set("compile", Function::new(ctx.clone(), compile)?)?;
     ctx.globals().set("__inca_dev__", dev)?;
     Ok(())
+}
+
+/// The `compile` method of [`install_dev`]. An argument of the wrong type
+/// raises a JS `TypeError`, and a failure inside [`compile_async_function`]
+/// raises the error it left pending.
+#[allow(clippy::needless_pass_by_value)]
+fn compile(
+    ctx: Ctx<'_>,
+    params: Vec<String>,
+    body: String,
+    filename: String,
+) -> JsResult<Function<'_>> {
+    let params: Vec<&str> = params.iter().map(String::as_str).collect();
+    compile_async_function(&ctx, &params, &body, &filename)
 }
 
 /// What `setLoadFailed` reports: the latest value, and how many times the app
@@ -174,6 +198,99 @@ mod tests {
             .unwrap();
 
         assert!(engine.eval::<bool>("globalThis.threw;").unwrap());
+    }
+
+    /// Calls `f(args)` and returns what its promise settled with: the value as
+    /// text, or the name and stack of a rejection.
+    fn settle(engine: &Engine, args: &str) -> String {
+        engine
+            .eval::<()>(&format!(
+                "f({args}).then((v) => {{ globalThis.out = String(v); }}, \
+                 (e) => {{ globalThis.out = e.name + '\\n' + e.stack; }});"
+            ))
+            .unwrap();
+        assert!(engine.run_jobs().is_empty());
+        engine.eval("globalThis.out").unwrap()
+    }
+
+    /// Runs `__inca_dev__.compile(params, body, filename)` into the global `f`.
+    fn compile_f(engine: &Engine, params: &str, body: &str, filename: &str) {
+        engine
+            .eval::<()>(&format!(
+                "globalThis.f = __inca_dev__.compile({params}, {}, {});",
+                serde_json::to_string(body).unwrap(),
+                serde_json::to_string(filename).unwrap(),
+            ))
+            .unwrap();
+    }
+
+    /// The constructor name and message of what `source` throws, or
+    /// `no throw`.
+    fn thrown_by(engine: &Engine, source: &str) -> String {
+        engine
+            .eval::<String>(&format!(
+                "(() => {{ try {{ {source}; return 'no throw'; }} \
+                 catch (e) {{ return e.constructor.name + ': ' + e.message; }} }})()"
+            ))
+            .unwrap()
+    }
+
+    #[test]
+    fn compile_binds_params_in_the_order_given() {
+        let engine = engine_with_dev(Rc::new(|_, _| {}));
+        compile_f(&engine, "['a', 'b']", "return a - b;", "order.js");
+
+        assert_eq!(settle(&engine, "5, 2"), "3");
+    }
+
+    #[test]
+    fn compile_frames_name_the_filename_and_add_one_to_the_body_line() {
+        let engine = engine_with_dev(Rc::new(|_, _| {}));
+        compile_f(
+            &engine,
+            "[]",
+            "const a = 1;\nthrow new Error('x');",
+            "app/Counter.vue",
+        );
+
+        assert!(settle(&engine, "").contains("app/Counter.vue:3:"));
+    }
+
+    #[test]
+    fn compile_raises_type_error_for_non_string_array_params() {
+        let engine = engine_with_dev(Rc::new(|_, _| {}));
+        for params in ["'a'", "null", "[1]", "[null]"] {
+            let thrown = thrown_by(
+                &engine,
+                &format!("__inca_dev__.compile({params}, 'return 1;', 'f.js')"),
+            );
+            assert!(thrown.starts_with("TypeError"), "{params}: {thrown}");
+        }
+    }
+
+    #[test]
+    fn compile_raises_type_error_for_a_non_string_body_or_filename() {
+        let engine = engine_with_dev(Rc::new(|_, _| {}));
+        for args in ["[], 1, 'f.js'", "[], 'return 1;', 1"] {
+            let thrown = thrown_by(&engine, &format!("__inca_dev__.compile({args})"));
+            assert!(thrown.starts_with("TypeError"), "{args}: {thrown}");
+        }
+    }
+
+    #[test]
+    fn compile_throws_a_syntax_error_whose_stack_names_the_file_and_line() {
+        let engine = engine_with_dev(Rc::new(|_, _| {}));
+        let thrown: String = engine
+            .eval(
+                "(() => { try { __inca_dev__.compile([], 'const a = 1;\\nconst = ;', 'broken.js'); \
+                 return 'no throw'; } catch (e) { return e.name + '\\n' + e.stack; } })()",
+            )
+            .unwrap();
+
+        assert!(
+            thrown.starts_with("SyntaxError\n") && thrown.contains("broken.js:3"),
+            "{thrown}"
+        );
     }
 
     fn flag_engine(initial: bool) -> (Engine, Rc<LoadSignal>) {

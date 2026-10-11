@@ -6,7 +6,8 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 # inca-jsenv
 
 The `QuickJS` runtime bootstrap (`Engine`), plus the host objects installed
-into a `QuickJS` realm so ordinary JavaScript can run in it.
+into a `QuickJS` realm so ordinary JavaScript can run in it. It also builds
+source text into an async function whose stack frames name its file.
 
 `QuickJS` supplies the language — `Array`, `JSON`, `Promise`, `Math` and the
 rest of the ECMAScript intrinsics. It supplies nothing else: no `console`,
@@ -60,6 +61,22 @@ let result = loop {
 };
 result?;
 ```
+
+## Compiling a function
+
+`compile_async_function` takes parameter names, a body, and the file name
+to report. It returns the async function as a `Function`.
+
+```rust
+use inca_jsenv::compile_async_function;
+
+// `ctx` is an `rquickjs::Ctx`; `body` is the source text.
+let f = compile_async_function(&ctx, &["a", "b"], body, "app/Counter.vue")?;
+```
+
+The stack frames of `f` name `app/Counter.vue`, and a frame on line `N` of
+`body` reports line `N + 1`. A syntax error is left pending on `ctx`, where
+`EngineError::capture` reads it.
 
 ## Scope
 
