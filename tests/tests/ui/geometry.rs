@@ -5,7 +5,7 @@
 
 #![allow(clippy::unwrap_used)]
 
-use super::common::{by_id, click, load, text_of};
+use super::common::{by_id, click, load, near, text_of};
 use gpui::TestAppContext;
 
 #[gpui::test]
@@ -69,4 +69,40 @@ fn a_click_at_the_centre_reads_the_offset_inside_the_box(cx: &mut TestAppContext
     // The 100x50 box sits at (10,10) with a 2px border, so its centre is
     // client (60,35) and offset (60-12, 35-12).
     assert_eq!(text_of(&mut h, "result"), "48,23,60,35");
+}
+
+fn y(h: &mut inca_host::harness::Harness, id: &str) -> f32 {
+    by_id(&h.snapshot(), id).bounds.unwrap().y
+}
+
+#[gpui::test]
+fn script_scroll_top_moves_the_children_up(cx: &mut TestAppContext) {
+    let mut h = load(cx, "scroll_position");
+    let first = y(&mut h, "first");
+
+    click(&mut h, "scroll40");
+
+    near(y(&mut h, "first"), first - 40.0);
+}
+
+#[gpui::test]
+fn scroll_height_after_an_append_reaches_the_bottom(cx: &mut TestAppContext) {
+    let mut h = load(cx, "scroll_position");
+    click(&mut h, "append");
+    click(&mut h, "bottom");
+
+    // The offset clamps to scrollHeight - clientHeight: 254 - 94 = 160.
+    assert_eq!(text_of(&mut h, "result"), "160,254,94");
+    // The last of four 60px items ends 160px into the content.
+    near(y(&mut h, "fourth") + 60.0, 103.0);
+}
+
+#[gpui::test]
+fn overflow_hidden_takes_a_script_scroll_top(cx: &mut TestAppContext) {
+    let mut h = load(cx, "scroll_position");
+    let first = y(&mut h, "hidden-first");
+
+    click(&mut h, "hidden40");
+
+    near(y(&mut h, "hidden-first"), first - 40.0);
 }
