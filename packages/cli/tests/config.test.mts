@@ -115,6 +115,16 @@ describe("resolveBuildConfig's outDir", () => {
   });
 });
 
+describe("resolveBuildConfig's sourcemap", () => {
+  it("turns on from the inca key and is off by default", async () => {
+    const on = await makeApp({ name: "scratch-app", inca: { sourcemap: true } });
+    const off = await makeApp({ name: "scratch-app" });
+
+    await expect(resolveBuildConfig(on)).resolves.toMatchObject({ sourcemap: true });
+    await expect(resolveBuildConfig(off)).resolves.toMatchObject({ sourcemap: false });
+  });
+});
+
 describe.skipIf(process.platform === "win32")("outDir through a symlink", () => {
   it("refuses a symlink to src/", async () => {
     const app = await makeApp({ name: "scratch-app", inca: { outDir: "out" } });

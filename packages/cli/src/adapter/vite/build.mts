@@ -19,6 +19,7 @@ export async function build(
   {
     entry,
     outDir,
+    sourcemap,
     runtimeConfig,
     stdout = process.stdout,
     stderr = process.stderr,
@@ -34,6 +35,7 @@ export async function build(
       outDir,
       runtimeConfig,
       mode: "production",
+      sourcemap,
       watch: false,
       stdout,
       stderr,

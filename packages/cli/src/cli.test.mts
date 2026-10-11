@@ -165,6 +165,43 @@ describe("run", () => {
     );
   });
 
+  it.each([
+    [["--sourcemap"], true],
+    [["--no-sourcemap"], false],
+    [[], undefined],
+    [["--sourcemap", "--no-sourcemap"], false],
+    [["--no-sourcemap", "--sourcemap"], true],
+  ] as const)("passes sourcemap %j to build as %j", async (flags, expected) => {
+    mockedBuild.mockResolvedValue({
+      outDir: "/app/dist",
+      entryFile: "/app/dist/bundle.js",
+      files: ["bundle.js"],
+    });
+
+    await run(["node", "inca", "build", ...flags]);
+
+    expect(mockedBuild.mock.calls[0]?.[0]?.sourcemap).toBe(expected);
+  });
+
+  it.each([
+    [["--sourcemap"], true],
+    [["--no-sourcemap"], false],
+  ] as const)("passes sourcemap %j to package as %j", async (flags, expected) => {
+    mockedPackageApp.mockResolvedValue({ appPath: "/app/dist/click_counter.app" });
+
+    await run(["node", "inca", "package", ...flags]);
+
+    expect(mockedPackageApp.mock.calls[0]?.[0]?.sourcemap).toBe(expected);
+  });
+
+  it("ignores the sourcemap flags for dev", async () => {
+    mockedDev.mockResolvedValueOnce(undefined);
+
+    await run(["node", "inca", "dev", "--sourcemap", "--no-sourcemap"]);
+
+    expect(mockedDev.mock.calls[0]?.[0]).not.toHaveProperty("sourcemap");
+  });
+
   it("leaves experimentalHmr off and stays silent about it by default", async () => {
     mockedDev.mockResolvedValueOnce(undefined);
 

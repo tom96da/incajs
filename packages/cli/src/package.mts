@@ -35,6 +35,8 @@ export interface PackageAppOptions {
    * per-platform `@incajs/host-*` package — see {@link resolveHostBin}).
    */
   hostBin?: string;
+  /** Writes `bundle.js.map` beside the bundle. Overrides the config's `sourcemap` when set. */
+  sourcemap?: boolean;
   /**
    * The platform to package for. Defaults to whichever one the current
    * process is running on.
@@ -121,7 +123,7 @@ async function packageMacos({ metadata, output, hostBin }: LayoutArgs): Promise<
   return appPath;
 }
 
-/** Writes a plain directory holding the host executable and `bundle.js` beside it. */
+/** Writes a plain directory holding the host executable and the build output beside it. */
 async function packageLinux({ metadata, output, hostBin }: LayoutArgs): Promise<string> {
   const dirName = slugify(metadata.productName);
   assertNoOutputCollision(output, dirName);
@@ -172,6 +174,7 @@ export async function packageApp(options: PackageAppOptions = {}): Promise<Packa
     cwd,
     entry: options.entry,
     config: metadata,
+    sourcemap: options.sourcemap,
     runtimeConfig: runtimeConfigOf(metadata),
     bundler: options.bundler,
     stdout,

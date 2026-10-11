@@ -17,6 +17,20 @@ function relative(target: string): string {
 }
 
 /**
+ * @param argv - the full argv
+ * @returns `true` for `--sourcemap`, `false` for `--no-sourcemap`, whichever
+ * appears last; `undefined` when neither does
+ */
+function sourcemapFlag(argv: readonly string[]): boolean | undefined {
+  let last: boolean | undefined;
+  for (const arg of argv) {
+    if (arg === "--sourcemap") last = true;
+    else if (arg === "--no-sourcemap") last = false;
+  }
+  return last;
+}
+
+/**
  * Closes fds 0-2 so Node's exit-time terminal reset hits closed fds. Call it
  * last: a log line or shutdown step after it loses its output.
  */
@@ -34,7 +48,7 @@ export async function run(argv: readonly string[] = process.argv): Promise<void>
 
   if (command === "build") {
     try {
-      const output = await build();
+      const output = await build({ sourcemap: sourcemapFlag(argv) });
       log(process.stdout, `built ${relative(output.entryFile)}`);
     } catch (error) {
       printFault(process.stderr, "build failed", toFault(error));
@@ -45,7 +59,7 @@ export async function run(argv: readonly string[] = process.argv): Promise<void>
 
   if (command === "package") {
     try {
-      const { appPath } = await packageApp();
+      const { appPath } = await packageApp({ sourcemap: sourcemapFlag(argv) });
       log(process.stdout, `packaged ${relative(appPath)}`);
     } catch (error) {
       printFault(process.stderr, "package failed", toFault(error));

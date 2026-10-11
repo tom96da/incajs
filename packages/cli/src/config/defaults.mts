@@ -18,8 +18,9 @@ import type { IncaConfig } from "./types.mts";
  * });
  * ```
  */
-export const defaultConfig: Required<Pick<IncaConfig, "outDir" | "version">> = {
+export const defaultConfig: Required<Pick<IncaConfig, "outDir" | "sourcemap" | "version">> = {
   outDir: "dist",
+  sourcemap: false,
   version: "0.0.0",
 };
 

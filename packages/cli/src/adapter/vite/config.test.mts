@@ -40,6 +40,14 @@ describe("resolveViteConfig source maps", () => {
     const config = resolveViteConfig(optionsFor("production"));
 
     expect(config.build?.sourcemap).toBe(false);
+    expect(config.build?.rolldownOptions?.output).toMatchObject({ sourcemapExcludeSources: false });
+  });
+
+  it("writes a map with paths only in production when sourcemap is on", () => {
+    const config = resolveViteConfig({ ...optionsFor("production"), sourcemap: true });
+
+    expect(config.build?.sourcemap).toBe(true);
+    expect(config.build?.rolldownOptions?.output).toMatchObject({ sourcemapExcludeSources: true });
   });
 });
 

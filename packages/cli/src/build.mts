@@ -21,6 +21,8 @@ export interface BuildAppOptions {
   bundler?: Bundler;
   /** An already-resolved config — lets `packageApp` avoid loading it twice. */
   config?: ResolvedBuildConfig;
+  /** Writes `bundle.js.map` beside the bundle. Overrides the config's `sourcemap` when set. */
+  sourcemap?: boolean;
   /** What the build carries for `inca-host` to read. Resolved from the app's config when absent. */
   runtimeConfig?: RuntimeConfig;
   /** Where the bundler's own output goes. Defaults to `process.stdout`. */
@@ -47,6 +49,7 @@ export async function build(options: BuildAppOptions = {}): Promise<BuildOutput>
   return bundler.build({
     entry,
     outDir,
+    sourcemap: options.sourcemap ?? config.sourcemap,
     runtimeConfig,
     stdout: options.stdout,
     stderr: options.stderr,

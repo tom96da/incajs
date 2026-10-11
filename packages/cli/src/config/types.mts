@@ -36,6 +36,12 @@ export interface IncaConfig {
    * @default "dist"
    */
   outDir?: string;
+  /**
+   * Whether `inca build` and `inca package` write `bundle.js.map` beside
+   * the bundle. `inca dev` always writes it.
+   * @default false
+   */
+  sourcemap?: boolean;
   /** The window the app opens in. */
   window?: WindowConfig;
 }

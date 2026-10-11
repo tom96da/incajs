@@ -37,6 +37,8 @@ export interface ResolvedBuildConfig {
   entry?: string;
   /** Absolute path. */
   outDir: string;
+  /** Whether `build`/`package` write `bundle.js.map`. */
+  sourcemap: boolean;
 }
 
 /** An app's full config, as `inca package` needs it. */
@@ -210,7 +212,11 @@ export async function resolveBuildConfig(cwd: string): Promise<ResolvedBuildConf
   const { config } = await loadIncaConfig(cwd);
 
   const entry = config.entry ? path.resolve(cwd, config.entry) : undefined;
-  return { entry, outDir: resolveOutDir(cwd, config.outDir, entry) };
+  return {
+    entry,
+    outDir: resolveOutDir(cwd, config.outDir, entry),
+    sourcemap: config.sourcemap ?? defaultConfig.sourcemap,
+  };
 }
 
 /**
@@ -271,6 +277,7 @@ export async function resolveAppConfig(cwd: string): Promise<ResolvedAppConfig> 
     window: config.window,
     entry,
     outDir,
+    sourcemap: config.sourcemap ?? defaultConfig.sourcemap,
     usedPackageJsonKey,
   };
 }

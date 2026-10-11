@@ -106,6 +106,19 @@ describe("resolveAppConfig", () => {
     });
   });
 
+  it("defaults sourcemap to false", async () => {
+    const app = await makeApp({ name: "click_counter", version: "0.0.0-0" });
+
+    await expect(resolveAppConfig(app)).resolves.toMatchObject({ sourcemap: false });
+  });
+
+  it("reads sourcemap: true from inca.config.ts", async () => {
+    const app = await makeApp({ name: "click_counter", version: "0.0.0-0" });
+    await writeConfig(app, `export default { sourcemap: true };\n`);
+
+    await expect(resolveAppConfig(app)).resolves.toMatchObject({ sourcemap: true });
+  });
+
   it("loads inca.config.js and inca.config.json too", async () => {
     const jsApp = await makeApp({ name: "click_counter", version: "0.0.0-0" });
     await writeConfig(jsApp, `export default { productName: "From JS" };\n`, "js");

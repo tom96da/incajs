@@ -13,6 +13,8 @@ export interface BuildOptions {
   entry: string;
   /** Where the build's output is written. */
   outDir: string;
+  /** Writes `bundle.js.map` beside the bundle. Defaults to `false`. */
+  sourcemap?: boolean;
   /**
    * Values the built app carries for `inca-host` to read — its name, id
    * and window. Any JSON-serializable object.

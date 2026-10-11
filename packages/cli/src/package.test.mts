@@ -122,6 +122,36 @@ describe("packageApp", () => {
     expect(await readFile(path.join(appPath, "chunks/shared.js"), "utf8")).toContain("shared");
   });
 
+  it("copies bundle.js.map into the Linux directory when the build writes it", async () => {
+    const app = await makeApp({ name: "click_counter", version: "1.2.3" });
+    const hostBin = await makeHostBin(app);
+    const bundler: Bundler = {
+      watch: (): Promise<Watcher> => Promise.reject(new Error("not used by packageApp()")),
+      build: async ({ outDir, sourcemap }): Promise<BuildOutput> => {
+        await mkdir(outDir, { recursive: true });
+        await writeFile(path.join(outDir, "bundle.js"), "console.log('packaged');\n");
+        await writeFile(path.join(outDir, "bundle.js.map"), "{}");
+        return {
+          outDir,
+          entryFile: path.join(outDir, "bundle.js"),
+          files: sourcemap ? ["bundle.js", "bundle.js.map"] : ["bundle.js"],
+        };
+      },
+    };
+
+    const { appPath } = await packageApp({
+      cwd: app,
+      entry: "unused",
+      bundler,
+      hostBin,
+      sourcemap: true,
+      target: "linux",
+      stdout: makeSink().stream,
+    });
+
+    expect(await readFile(path.join(appPath, "bundle.js.map"), "utf8")).toBe("{}");
+  });
+
   it("reports a generated identifier when the app didn't set one", async () => {
     const app = await makeApp({ name: "click_counter", version: "1.0.0" });
     const hostBin = await makeHostBin(app);

@@ -14,6 +14,6 @@ describe("defineConfig", () => {
 
 describe("defaultConfig", () => {
   it("is importable alongside defineConfig", () => {
-    expect(defaultConfig).toEqual({ outDir: "dist", version: "0.0.0" });
+    expect(defaultConfig).toEqual({ outDir: "dist", sourcemap: false, version: "0.0.0" });
   });
 });

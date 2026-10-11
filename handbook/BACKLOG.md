@@ -180,14 +180,6 @@ A fixed entry is deleted and its ID is never reused.
   `Runtime::set_memory_limit`/`set_max_stack_size`. Defaults and how the
   host reports a timeout are undecided.
 
-- **B-088 Frames of a built or packaged app name generated code**
-  `Units: cli · Size: S · Impact: Medium`
-
-  A frame of a built or packaged app names `bundle.js` and a line of the
-  generated code. `inca dev` emits a source map beside the bundle and the host
-  remaps the frames through it. The fix adds a `sourcemap` config field and
-  `--sourcemap` and `--no-sourcemap` flags to the build and package commands.
-
 - **B-097 `console` prints some classes and built-ins unlike Node**
   `Units: jsenv · Size: M · Impact: Medium`
 

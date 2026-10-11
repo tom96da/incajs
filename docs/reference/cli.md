@@ -49,6 +49,15 @@ Bundles your app for production, once, with no window opened. See
 $ inca build
 ```
 
+### Options
+
+| Flag             | Description |
+| ---------------- | ----------- |
+| `--sourcemap`    | Writes `bundle.js.map` beside the bundle. |
+| `--no-sourcemap` | Turns the map off when the [`sourcemap`](./configuration#sourcemap) key turns it on. |
+
+When both flags are given, the last one wins.
+
 ## `inca package`
 
 Builds your app, then packages it with a prebuilt host binary into a
@@ -60,6 +69,15 @@ Linux. See [Building for Production](../guide/build).
 ```sh
 $ inca package
 ```
+
+### Options
+
+| Flag             | Description |
+| ---------------- | ----------- |
+| `--sourcemap`    | Writes `bundle.js.map` beside the bundle. |
+| `--no-sourcemap` | Turns the map off when the [`sourcemap`](./configuration#sourcemap) key turns it on. |
+
+When both flags are given, the last one wins.
 
 ## Environment Variables
 

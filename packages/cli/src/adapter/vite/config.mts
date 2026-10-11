@@ -25,6 +25,8 @@ export interface ResolveConfigOptions {
   outDir: string;
   /** `"development"` keeps `@vue/runtime-core`'s own warnings; `"production"` strips them. */
   mode: "development" | "production";
+  /** Writes the map in a production build too. Development always writes it. */
+  sourcemap?: boolean;
   /** Whether Vite should keep rebuilding on file changes. */
   watch: boolean;
   /** Called with what each successful (re)build wrote. */
@@ -55,6 +57,7 @@ export function resolveViteConfig({
   entry,
   outDir,
   mode,
+  sourcemap = false,
   watch,
   onOutput,
   stdout,
@@ -62,6 +65,7 @@ export function resolveViteConfig({
   quiet,
   runtimeConfig,
 }: ResolveConfigOptions): InlineConfig {
+  const emitMap = mode === "development" || sourcemap;
   return {
     configFile: false,
     root: path.dirname(entry),
@@ -99,16 +103,16 @@ export function resolveViteConfig({
       // regardless of mode.
       emptyOutDir: mode === "production",
       minify: mode === "production",
-      // Development only; the production build skips the map.
-      sourcemap: mode === "development",
+      // A production build writes the map when `sourcemap` is true.
+      sourcemap: emitMap,
       // An editor that replaces a file deletes it for a moment; the delay lets that pair coalesce.
       watch: watch ? { buildDelay: 30 } : undefined,
       rolldownOptions: {
         output: {
           chunkFileNames: "chunks/[name]-[hash].js",
           assetFileNames: "assets/[name]-[hash][extname]",
-          // Development only; the map holds paths and positions, no sources.
-          sourcemapExcludeSources: mode === "development",
+          // The map holds paths and positions only.
+          sourcemapExcludeSources: emitMap,
         },
       },
     },
