@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use rquickjs::function::Opt;
-use rquickjs::{Ctx, Exception, FromJs, Function, Object, Result as JsResult, Value};
+use rquickjs::{Ctx, Exception, FromJs, Function, IntoJs, Object, Result as JsResult, Value};
 
 use inca_jsenv::EngineError;
 
@@ -265,6 +265,19 @@ fn attribute_value_from_js<'js>(ctx: &Ctx<'js>, value: &Value<'js>) -> JsResult<
     ))
 }
 
+// A missing key converts to `null`.
+fn attribute_value_to_js<'js>(
+    ctx: &Ctx<'js>,
+    value: Option<&AttributeValue>,
+) -> JsResult<Value<'js>> {
+    match value {
+        None => Ok(Value::new_null(ctx.clone())),
+        Some(AttributeValue::String(s)) => s.as_str().into_js(ctx),
+        Some(AttributeValue::Number(n)) => n.into_js(ctx),
+        Some(AttributeValue::Bool(b)) => b.into_js(ctx),
+    }
+}
+
 /// The retained tree itself: allocating, attaching, and describing nodes,
 /// plus `destroyNode` — freeing a subtree is a tree operation first, even
 /// though it also releases the listener/focus state that named its nodes.
@@ -384,6 +397,28 @@ fn install_tree<'js>(
                         .map_err(|err| throw_tree_error(&ctx, err))?;
                     mark_focus_dirty_for(&mut host, node_id, &key);
                     Ok(())
+                },
+            )?,
+        )?;
+    }
+
+    {
+        let host = Rc::clone(host);
+        native.set(
+            "getAttribute",
+            Function::new(
+                ctx.clone(),
+                move |ctx: Ctx<'js>,
+                      JsNodeId(node_id): JsNodeId,
+                      key: String|
+                      -> JsResult<Value<'js>> {
+                    let key = canonical_attribute_key(key);
+                    let host = host.borrow();
+                    let node = host
+                        .tree
+                        .get(node_id)
+                        .ok_or_else(|| throw_tree_error(&ctx, TreeError::NodeNotFound(node_id)))?;
+                    attribute_value_to_js(&ctx, node.attributes().get(&key))
                 },
             )?,
         )?;
@@ -1020,6 +1055,85 @@ mod tests {
     }
 
     #[test]
+    fn get_attribute_returns_the_stored_value_in_its_own_type() {
+        let (engine, _host) = engine_with_bindings();
+
+        let same: bool = engine
+            .eval(
+                r"
+                const n = __inca_native__;
+                const node = n.createNode('div');
+                n.setAttribute(node, 'label', 'hello');
+                n.setAttribute(node, 'count', 3);
+                n.setAttribute(node, 'visible', true);
+                n.getAttribute(node, 'label') === 'hello' &&
+                    n.getAttribute(node, 'count') === 3 &&
+                    n.getAttribute(node, 'visible') === true;
+                ",
+            )
+            .unwrap();
+
+        assert!(same, "string, number and boolean must read back unchanged");
+    }
+
+    #[test]
+    fn get_attribute_reads_the_canonical_key() {
+        let (engine, _host) = engine_with_bindings();
+
+        let same: bool = engine
+            .eval(
+                r"
+                const n = __inca_native__;
+                const node = n.createNode('div');
+                n.setAttribute(node, 'tabIndex', 2);
+                n.getAttribute(node, 'tabindex') === 2 &&
+                    n.getAttribute(node, 'TABINDEX') === 2;
+                ",
+            )
+            .unwrap();
+
+        assert!(same, "attribute names are case-insensitive for tabindex");
+    }
+
+    #[test]
+    fn get_attribute_of_a_missing_key_is_null() {
+        let (engine, _host) = engine_with_bindings();
+
+        let is_null: bool = engine
+            .eval(
+                r"
+                const n = __inca_native__;
+                const node = n.createNode('div');
+                n.getAttribute(node, 'never_set') === null;
+                ",
+            )
+            .unwrap();
+
+        assert!(is_null);
+    }
+
+    #[test]
+    fn get_attribute_on_an_unknown_node_raises_type_error() {
+        let (engine, _host) = engine_with_bindings();
+
+        let caught: bool = engine
+            .eval(
+                r"
+                let caught = false;
+                try {
+                    __inca_native__.getAttribute(999, 'label');
+                } catch (e) {
+                    caught = e instanceof TypeError;
+                }
+                caught;
+                ",
+            )
+            .unwrap();
+
+        assert!(caught, "an unknown node id must raise a TypeError");
+    }
+
+    #[test]
     fn node_id_that_is_not_a_whole_u32_raises_type_error() {
         let (engine, _host) = engine_with_bindings();
 
@@ -1032,6 +1146,7 @@ mod tests {
                  return [
                      rejects(() => __inca_native__.setStyle({bad}, 'width', 1)),
                      rejects(() => __inca_native__.removeStyle({bad}, 'width')),
+                     rejects(() => __inca_native__.getAttribute({bad}, 'label')),
                      rejects(() => __inca_native__.removeAttribute({bad}, 'label')),
                      rejects(() => __inca_native__.appendChild({bad}, node)),
                      rejects(() => __inca_native__.appendChild(node, {bad})),

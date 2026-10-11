@@ -1,6 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import { isDestroyed } from "./destroyedNodes.mts";
+import { tabIndexOf } from "./tabIndexOf.mts";
 import type { IncaCore, NodeId, TagName } from "../rendererCore.mts";
 import type { IncaElement } from "./nodeOps.mts";
 
@@ -11,7 +13,7 @@ import type { IncaElement } from "./nodeOps.mts";
  * @param core - the incajs bindings the handle drives
  * @param id - the native node's id
  * @param kind - whether the node is an element or a comment stand-in
- * @param tag - the node's element kind, if it has one; a `button` starts at tab index `0`
+ * @param tag - the node's element kind, if it has one; a `button` defaults to tab index `0`
  * @returns the new handle
  */
 export function createIncaElement(
@@ -20,8 +22,8 @@ export function createIncaElement(
   kind: IncaElement["kind"],
   tag?: TagName,
 ): IncaElement {
-  let tabIndex = tag === "button" ? 0 : -1;
-  return {
+  const target = core.createEventTarget(() => id);
+  const element: IncaElement = {
     id,
     kind,
     parent: null,
@@ -29,13 +31,19 @@ export function createIncaElement(
     focus: () => core.focus(id),
     blur: () => core.blur(id),
     click: () => core.click(id),
-    ...core.createEventTarget(() => id),
+    addEventListener: (...args) => {
+      if (!isDestroyed(element)) target.addEventListener(...args);
+    },
+    removeEventListener: (...args) => {
+      if (!isDestroyed(element)) target.removeEventListener(...args);
+    },
+    dispatchEvent: (event) => isDestroyed(element) || target.dispatchEvent(event),
     get tabIndex() {
-      return tabIndex;
+      return tabIndexOf(isDestroyed(element) ? null : core.getAttribute(id, "tabindex"), tag ?? "");
     },
     set tabIndex(value: number) {
-      tabIndex = Math.trunc(value);
-      core.setAttribute(id, "tabindex", tabIndex);
+      if (!isDestroyed(element)) core.setAttribute(id, "tabindex", value | 0);
     },
   };
+  return element;
 }

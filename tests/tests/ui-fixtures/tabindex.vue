@@ -9,6 +9,8 @@ import { ref } from "@vue/runtime-core";
 const log = ref("");
 const tab = ref("0");
 const bare = ref(null);
+const probe = ref(null);
+const readback = ref("");
 </script>
 
 <template>
@@ -33,6 +35,14 @@ const bare = ref(null);
     <div id="remove" :style="{ width: 100, height: 40 }" @mousedown.prevent @click="tab = null" />
     <div id="negative" :style="{ width: 100, height: 40 }" @mousedown.prevent @click="tab = -1" />
     <div id="empty" :style="{ width: 100, height: 40 }" />
+    <div id="probe" ref="probe" tabindex="3" :style="{ width: 100, height: 40 }" />
+    <div
+      id="read-tabindex"
+      :style="{ width: 100, height: 40 }"
+      @mousedown.prevent
+      @click="readback = String(probe.tabIndex)"
+    />
+    <div id="readback">{{ readback }}</div>
     <div id="log">{{ log }}</div>
   </div>
 </template>

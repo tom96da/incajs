@@ -11,6 +11,7 @@ interface IncaNative {
   insertBefore(parentId: NodeId, childId: NodeId, anchorId: NodeId | null): void;
   removeChild(parentId: NodeId, childId: NodeId): void;
   setAttribute(nodeId: NodeId, key: string, value: AttributeValue): void;
+  getAttribute(nodeId: NodeId, key: string): AttributeValue | null;
   removeAttribute(nodeId: NodeId, key: string): void;
   setStyle(nodeId: NodeId, key: string, value: AttributeValue): void;
   removeStyle(nodeId: NodeId, key: string): void;

@@ -83,6 +83,7 @@ the nearest ancestor container.
 | `insertBefore` | `(parentId: number, childId: number, anchorId: number \| null) => void` | Attach a child before `anchorId`, or at the end if `null`. |
 | `removeChild` | `(parentId: number, childId: number) => void` | Detach a child node. |
 | `setAttribute` | `(nodeId: number, key: string, value: string \| number \| boolean) => void` | Set a non-style attribute prop. |
+| `getAttribute` | `(nodeId: number, key: string) => string \| number \| boolean \| null` | Read a non-style attribute prop as stored, or `null` when the key is unset. |
 | `removeAttribute` | `(nodeId: number, key: string) => void` | Remove a non-style attribute prop. Removing a key that isn't set does nothing. |
 | `setStyle` | `(nodeId: number, key: string, value: string \| number \| boolean) => void` | Set a style prop. |
 | `removeStyle` | `(nodeId: number, key: string) => void` | Remove a style prop so it renders as if never set. Removing a key that isn't set does nothing. |
@@ -100,8 +101,9 @@ Shared throw rules, all as a `TypeError`:
 - `setAttribute` and `setStyle` throw for a `value` that is not a string, number or boolean.
 - `dispatchEvent` throws for an argument that is not an `Event` or
   `CustomEvent` of the host.
-- `addEventListener`, `dispatchEvent`, `setAttribute`, `removeAttribute`,
-  `setStyle`, `removeStyle` and `appendChild` throw for an unknown node.
+- `addEventListener`, `dispatchEvent`, `getAttribute`, `setAttribute`,
+  `removeAttribute`, `setStyle`, `removeStyle` and `appendChild` throw for an
+  unknown node.
   `insertBefore` throws for an unknown parent, child or anchor.
 - `removeChild` throws for an unknown `parentId` and ignores an unknown or unattached `childId`.
 

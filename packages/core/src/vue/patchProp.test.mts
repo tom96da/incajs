@@ -34,6 +34,9 @@ const core: IncaCore = {
   createEventTarget: vi.fn<() => IncaEventTarget>(() => makeTarget()),
   latestEventId: vi.fn<() => number>(() => 0),
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
+  getAttribute: vi.fn<(nodeId: number, key: string) => string | number | boolean | null>(
+    () => null,
+  ),
   removeAttribute: vi.fn<(nodeId: number, key: string) => void>(),
   setStyle: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   removeStyle: vi.fn<(nodeId: number, key: string) => void>(),

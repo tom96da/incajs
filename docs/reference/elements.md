@@ -27,8 +27,7 @@ separate elements.
 A `button` is a box that also takes keyboard focus.
 
 - Its `tabindex` is 0 by default, so it takes focus on its own. An explicit
-  `tabindex` overrides that, and `el.tabIndex` reads `0` until a value is
-  assigned.
+  `tabindex` overrides that.
 - `Enter` and `Space` click it from the keyboard.
 
 ```vue

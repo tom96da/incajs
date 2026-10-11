@@ -62,3 +62,12 @@ fn tab_moves_focus_through_the_tabindex_order_from_a_node_with_tabindex_minus_on
 
     assert_eq!(text_of(&mut h, "log"), "t4 t5 t0 t5");
 }
+
+#[gpui::test]
+fn a_template_tabindex_reads_back_through_the_ref(cx: &mut TestAppContext) {
+    let mut h = load(cx, "tabindex");
+
+    click(&mut h, "read-tabindex");
+
+    assert_eq!(text_of(&mut h, "readback"), "3");
+}

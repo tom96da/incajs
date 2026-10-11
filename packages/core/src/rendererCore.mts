@@ -19,6 +19,7 @@ export {
   removeChild,
   rootNodeId,
   setAttribute,
+  getAttribute,
   removeAttribute,
   setStyle,
   removeStyle,

@@ -150,7 +150,6 @@ export interface IncaEventTarget {
    * @param listener - a function, or an object whose `handleEvent` method is
    * called when the event fires
    * @param options - a {@link ListenerOptions}, or a boolean for `capture`
-   * @throws TypeError when the target's node was destroyed
    */
   addEventListener(
     type: string,
@@ -175,7 +174,6 @@ export interface IncaEventTarget {
    * Dispatches an `Event` or `CustomEvent` at the target.
    * @param event - the event to dispatch
    * @returns `false` when a listener canceled a cancelable event, else `true`
-   * @throws TypeError when the target's node was destroyed
    * @throws TypeError when `event` is not an `Event` or `CustomEvent`
    * @throws DOMException named `InvalidStateError` when `event` is being dispatched
    */

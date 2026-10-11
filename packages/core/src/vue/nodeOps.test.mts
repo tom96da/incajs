@@ -26,6 +26,9 @@ const core: IncaCore = {
   insertBefore: vi.fn<(parentId: number, childId: number, anchorId: number | null) => void>(),
   removeChild: vi.fn<(parentId: number, childId: number) => void>(),
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
+  getAttribute: vi.fn<(nodeId: number, key: string) => string | number | boolean | null>(
+    () => null,
+  ),
   removeAttribute: vi.fn<(nodeId: number, key: string) => void>(),
   setStyle: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   removeStyle: vi.fn<(nodeId: number, key: string) => void>(),
@@ -154,23 +157,12 @@ describe("event target methods", () => {
 });
 
 describe("tabIndex", () => {
-  it("reads -1 first, then sets the tabindex attribute to the integer part", () => {
+  it("sets the tabindex attribute to the integer part", () => {
     const el = nodeOps.createElement("div");
-    expect(el.tabIndex).toBe(-1);
 
     el.tabIndex = 2.9;
 
-    expect(el.tabIndex).toBe(2);
     expect(core.setAttribute).toHaveBeenCalledExactlyOnceWith(el.id, "tabindex", 2);
-  });
-
-  it("reads 0 for a button until a value is assigned", () => {
-    const el = nodeOps.createElement("button");
-    expect(el.tabIndex).toBe(0);
-
-    el.tabIndex = -1;
-
-    expect(el.tabIndex).toBe(-1);
   });
 });
 
@@ -295,6 +287,43 @@ describe("remove", () => {
     ).not.toHaveBeenCalled();
     expect(parent.children).toHaveLength(0);
     expect(child.parent).toBeNull();
+  });
+
+  it("turns the handles of the removed subtree into inert targets", () => {
+    const root = nodeOps.createElement("div");
+    const mid = nodeOps.createElement("div");
+    const leaf = nodeOps.createElement("button");
+    nodeOps.insert(nodeOps.createText("t"), mid);
+    nodeOps.insert(leaf, mid);
+    nodeOps.insert(mid, root);
+    vi.mocked(core.setAttribute).mockClear();
+
+    nodeOps.remove(root);
+
+    for (const el of [root, leaf]) {
+      el.addEventListener("click", vi.fn<() => void>());
+      el.removeEventListener("click", vi.fn<() => void>());
+      el.tabIndex = 5;
+    }
+    expect(root.dispatchEvent({ type: "ping" })).toBe(true);
+    expect([root.tabIndex, leaf.tabIndex]).toEqual([-1, 0]);
+    expect(add).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(core.getAttribute).not.toHaveBeenCalled();
+    expect(core.setAttribute).not.toHaveBeenCalled();
+  });
+
+  it("does the same for the children setElementText frees", () => {
+    const root = nodeOps.createElement("div");
+    const child = nodeOps.createElement("div");
+    nodeOps.insert(child, root);
+
+    nodeOps.setElementText(root, "");
+    child.addEventListener("click", vi.fn<() => void>());
+
+    expect(add).not.toHaveBeenCalled();
+    expect(child.dispatchEvent({ type: "ping" })).toBe(true);
   });
 
   it("frees a node that was never attached", () => {

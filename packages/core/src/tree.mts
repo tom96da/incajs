@@ -85,6 +85,17 @@ export function setAttribute(nodeId: NodeId, key: string, value: AttributeValue)
 }
 
 /**
+ * Returns the attribute/prop stored on `nodeId` under `key`, or `null` if it
+ * isn't set.
+ * @param nodeId - the node to read
+ * @param key - the attribute name
+ * @returns the stored value, or `null`
+ */
+export function getAttribute(nodeId: NodeId, key: string): AttributeValue | null {
+  return native().getAttribute(nodeId, key);
+}
+
+/**
  * Removes a non-style attribute/prop from `nodeId`. Removing an attribute
  * that isn't set does nothing.
  * @param nodeId - the node to update

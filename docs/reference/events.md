@@ -25,8 +25,6 @@ methods of the DOM `Event` interface (see Base fields).
 have `addEventListener()`, `removeEventListener()` and `dispatchEvent()`.
 
 - A listener on `window` runs on the root node. `document` is unsupported.
-- `addEventListener()` and `dispatchEvent()` on the element of an unmounted
-  `ref` throw a `TypeError`.
 - The `signal` option of `addEventListener()` is unsupported.
 
 ## Event modifiers
@@ -121,7 +119,6 @@ rules, with the differences below.
 
 - A node takes focus through its `tabindex` attribute, and a `button` is
   focusable by default. `.focus()` on other nodes is ignored.
-- `el.tabIndex` reads back the last assigned value.
 - `hidden="until-found"` counts as shown.
 - A focused node shows no focus ring, and the focused node is readable
   through the focus events only.

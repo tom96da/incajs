@@ -854,14 +854,6 @@ A fixed entry is deleted and its ID is never reused.
   operation to the host and calls it from `focus()` unless `preventScroll` is
   set.
 
-- **B-136 `el.tabIndex` reads only the last assigned value**
-  `Units: core,bridge · Size: M · Impact: Low`
-
-  A `tabindex` set through a template prop is invisible to the getter, which
-  returns `-1` (`0` for a button) until the property is assigned. The fix adds
-  an attribute read binding to the host, `native.mts` and `rendererCore.mts`,
-  and every mock of the native object gains it.
-
 - **B-140 A container with `pointer-events: none` becomes `target`**
   `Units: gpui,core · Size: M · Impact: Low`
 
@@ -1000,13 +992,14 @@ A fixed entry is deleted and its ID is never reused.
   Vue warning (`at <App>`). Fix: dim a line of a string that starts with
   `at `.
 
-- **B-170 Listener methods throw on an unmounted node**
-  `Units: core,bridge,docs · Size: S · Impact: Low`
+- **B-170 The handles of a removed element are inert**
+  `Units: core · Size: S · Impact: Low`
 
-  Vue destroys a node on unmount, and `addEventListener()` and
-  `dispatchEvent()` on its element then throw a `TypeError`. A browser accepts
-  both on a detached element. Fix: keep a destroyed node's id as a dead target
-  that registers nothing and dispatches to the element's own path.
+  Vue destroys a node on unmount. Listeners registered before are released,
+  `addEventListener()` afterwards does nothing, `dispatchEvent()` returns
+  `true` without validating its argument, and `tabIndex` reads the default. A
+  browser keeps the listeners and the attribute of a detached element. Fix:
+  keep a destroyed node as a detached element in the host tree.
 
 - **B-171 A frozen event cannot be dispatched again**
   `Units: bridge,docs · Size: S · Impact: Low`

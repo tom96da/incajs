@@ -90,6 +90,9 @@ function installFakeNative(): Map<NodeId, FakeNode> {
     setAttribute(nodeId: NodeId, key: string, value: unknown): void {
       requireNode(nodeId).attributes[key] = value;
     },
+    getAttribute(nodeId: NodeId, key: string): string | number | boolean | null {
+      return (requireNode(nodeId).attributes[key] ?? null) as string | number | boolean | null;
+    },
     removeAttribute(nodeId: NodeId, key: string): void {
       delete requireNode(nodeId).attributes[key];
     },

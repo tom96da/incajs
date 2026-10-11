@@ -21,6 +21,9 @@ const native = {
   insertBefore: vi.fn<(parentId: number, childId: number, anchorId: number | null) => void>(),
   removeChild: vi.fn<(parentId: number, childId: number) => void>(),
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
+  getAttribute: vi.fn<(nodeId: number, key: string) => string | number | boolean | null>(
+    () => null,
+  ),
   removeAttribute: vi.fn<(nodeId: number, key: string) => void>(),
   setStyle: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   removeStyle: vi.fn<(nodeId: number, key: string) => void>(),

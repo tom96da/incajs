@@ -4,6 +4,7 @@
 import type { RendererOptions } from "@vue/runtime-core";
 
 import { createIncaElement } from "./createElement.mts";
+import { markDestroyed } from "./destroyedNodes.mts";
 import type { IncaCore, IncaEventTarget, NodeId, TagName } from "../rendererCore.mts";
 
 /**
@@ -42,9 +43,11 @@ export interface IncaElement extends IncaEventTarget {
    */
   click(): void;
   /**
-   * Assigning sets the `tabindex` attribute to the integer part of the
-   * value. Reading returns the last value assigned, or `-1` (`0` for a
-   * `button`).
+   * Assigning sets the `tabindex` attribute to the value's integer part,
+   * wrapped to 32 bits. Reading returns the `tabindex` attribute as an
+   * integer, or `-1` (`0` for a `button`) when it is unset or invalid.
+   * After the node is removed, reading gives that default and assigning does
+   * nothing.
    */
   tabIndex: number;
 }
@@ -156,6 +159,7 @@ export function createNodeOps(core: IncaCore): NodeOps {
     setElementText(el: IncaElement, text: string): void {
       for (const child of el.children.splice(0)) {
         core.destroyNode(child.id);
+        markDestroyed(child);
         child.parent = null;
       }
       if (!text) return;
@@ -203,6 +207,7 @@ export function createNodeOps(core: IncaCore): NodeOps {
     remove(child: IncaNode): void {
       unlink(child);
       core.destroyNode(child.id);
+      markDestroyed(child);
     },
 
     /**

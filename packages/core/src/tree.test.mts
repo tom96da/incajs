@@ -7,6 +7,7 @@ import {
   appendChild,
   createNode,
   destroyNode,
+  getAttribute,
   insertBefore,
   removeAttribute,
   removeChild,
@@ -24,6 +25,9 @@ const native = {
   insertBefore: vi.fn<(parentId: number, childId: number, anchorId: number | null) => void>(),
   removeChild: vi.fn<(parentId: number, childId: number) => void>(),
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
+  getAttribute: vi.fn<(nodeId: number, key: string) => string | number | boolean | null>(
+    () => null,
+  ),
   removeAttribute: vi.fn<(nodeId: number, key: string) => void>(),
   setStyle: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   removeStyle: vi.fn<(nodeId: number, key: string) => void>(),
@@ -77,6 +81,12 @@ describe("wrapper functions forward to __inca_native__", () => {
   it("setAttribute", () => {
     setAttribute(1, "label", "hello");
     expect(native.setAttribute).toHaveBeenCalledWith(1, "label", "hello");
+  });
+
+  it("getAttribute", () => {
+    native.getAttribute.mockReturnValueOnce("hello");
+    expect(getAttribute(1, "label")).toBe("hello");
+    expect(native.getAttribute).toHaveBeenCalledWith(1, "label");
   });
 
   it("removeAttribute", () => {
