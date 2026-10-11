@@ -4,7 +4,7 @@
 import { h, nextTick, reactive } from "@vue/runtime-core";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { blur, focus } from "../src/events.mts";
+import { blur, click, dispatchEvent, focus } from "../src/events.mts";
 import { createNode, rootNodeId } from "../src/tree.mts";
 import { createIncaApp } from "../src/vue/index.mts";
 import type { NodeId } from "../src/index.mts";
@@ -136,6 +136,10 @@ function installFakeNative(): Map<NodeId, FakeNode> {
     },
     focusNode(): void {},
     blurNode(_nodeId: number): void {},
+    dispatchEvent(): boolean {
+      return true;
+    },
+    click(): void {},
   };
 
   return nodes;
@@ -186,6 +190,8 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       children: [],
       focus: () => focus(rootId),
       blur: () => blur(rootId),
+      click: () => click(rootId),
+      dispatchEvent: (event) => dispatchEvent(rootId, event),
       tabIndex: -1,
     };
   });

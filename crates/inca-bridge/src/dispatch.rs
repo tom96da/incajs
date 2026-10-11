@@ -26,8 +26,6 @@
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeSet, HashMap};
 use std::rc::Rc;
-use std::sync::OnceLock;
-use std::time::Instant;
 
 use gpui::{App, MouseButton, MouseUpEvent, ScrollHandle, Window};
 use inca_gpui::{EventPayload, KeyPayload, MousePayload, NodeId, PointerSource, dom_buttons_bit};
@@ -115,6 +113,11 @@ const EVENTS: [EventSpec; 18] = [
     ),
 ];
 
+/// The flags of `event`. Any other name takes all three as false.
+pub(crate) fn flags_of(event: &str) -> Flags {
+    spec_of(event).flags
+}
+
 /// The rules of `event`. Any other name takes all three flags as false.
 fn spec_of(event: &str) -> EventSpec {
     EVENTS
@@ -122,12 +125,6 @@ fn spec_of(event: &str) -> EventSpec {
         .find(|spec| spec.name == event)
         .copied()
         .unwrap_or(spec("", Flags::NONE))
-}
-
-/// The origin of every `timeStamp`.
-fn time_origin() -> Instant {
-    static ORIGIN: OnceLock<Instant> = OnceLock::new();
-    *ORIGIN.get_or_init(Instant::now)
 }
 
 /// Everything needed to dispatch a native event into JS: the engine to call
@@ -171,7 +168,7 @@ pub struct EventDispatcher {
 impl EventDispatcher {
     /// Reports failures through [`stderr_reporter`].
     pub fn new(engine: Rc<Engine>, host: Rc<RefCell<Host>>) -> Self {
-        time_origin();
+        event::time_stamp();
         Self {
             engine,
             host,
@@ -276,15 +273,22 @@ impl EventDispatcher {
                 path: &path,
                 cut,
                 payload,
-                time_stamp: time_origin().elapsed().as_secs_f64() * 1000.0,
+                trusted: true,
             },
         );
         // Reported after the walk: a reporter is free to do anything, and
         // re-entering the engine from inside `Engine::with` panics.
-        for failure in &outcome.failures {
+        self.report_pending();
+        (outcome.canceled, outcome.entered)
+    }
+
+    /// Reports, in the order they happened, the errors that listeners threw
+    /// and nobody has reported yet. Call it outside any [`Engine::with`].
+    pub fn report_pending(&self) {
+        let pending = std::mem::take(&mut self.host.borrow_mut().failures);
+        for failure in &pending {
             (self.reporter)(failure);
         }
-        (outcome.canceled, outcome.entered)
     }
 
     /// The nodes that receive no pointer `mousedown`, `mouseup`, `click` or
@@ -381,11 +385,7 @@ impl EventDispatcher {
 
     /// `target` and its ancestors, nearest first.
     fn path_from(&self, target: NodeId) -> Vec<NodeId> {
-        let host = self.host.borrow();
-        std::iter::successors(Some(target), |&id| {
-            host.tree.get(id).and_then(inca_gpui::VirtualNode::parent)
-        })
-        .collect()
+        event::path_from(&self.host, target)
     }
 
     /// The nearest node that is `a`, `b` or an ancestor of both.
@@ -498,9 +498,11 @@ impl EventDispatcher {
         }
     }
 
-    /// [`drain_jobs_and_refresh`] with this dispatcher's engine and reporter.
+    /// [`drain_jobs_and_refresh`] with this dispatcher's engine and reporter,
+    /// then [`Self::report_pending`].
     pub fn drain_jobs_and_refresh(&self, window: &mut Window) {
         drain_jobs_and_refresh(&self.engine, &self.reporter, window);
+        self.report_pending();
     }
 }
 
@@ -778,7 +780,9 @@ fn hover_path_difference(old_path: &[NodeId], new_path: &[NodeId]) -> (Vec<NodeI
 
 /// Runs `engine`'s pending promise jobs and sends each failure to `reporter`:
 /// a job that threw, including during module startup, and a promise rejected
-/// with no handler. Use it where no window is open yet.
+/// with no handler. Use it where no window is open yet. A caller that also
+/// has an [`EventDispatcher`] calls [`EventDispatcher::report_pending`] after
+/// it, for the errors listeners threw during those jobs.
 ///
 /// Call it outside any [`Engine::with`]: it takes the context itself, and
 /// nesting that panics with "`RefCell` already borrowed".
@@ -2255,7 +2259,7 @@ mod tests {
                     path: &path,
                     cut: &[parent, outer],
                     payload: &EventPayload::None,
-                    time_stamp: 0.0,
+                    trusted: true,
                 },
             );
         });
@@ -2298,30 +2302,6 @@ mod tests {
             .listeners
             .register_with(parent, "focus", 0, true, false);
         assert!(drained(&dispatcher), "capture listener on an ancestor");
-    }
-
-    #[gpui::test]
-    fn every_event_shares_one_prototype_and_its_methods(cx: &mut TestAppContext) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
-        listen(&host, node, "click");
-        callbacks(
-            &dispatcher,
-            "0: (e) => { (globalThis.events ??= []).push(e); }",
-        );
-        fire_and_read(cx, &dispatcher, node, "click");
-        fire_and_read(cx, &dispatcher, node, "click");
-
-        let same = dispatcher
-            .engine
-            .eval::<bool>(
-                "const [a, b] = events; \
-                 a !== b && Object.getPrototypeOf(a) === Object.getPrototypeOf(b) \
-                    && a.preventDefault === b.preventDefault \
-                    && Object.getPrototypeOf(a) !== Object.prototype",
-            )
-            .unwrap();
-        assert!(same);
     }
 
     #[gpui::test]
@@ -2502,15 +2482,703 @@ mod tests {
             "0: (e) => { \
                 const proto = Object.getPrototypeOf(e); \
                 const names = (o) => [...Object.getOwnPropertyNames(o), \
-                    ...Object.getOwnPropertySymbols(o).map(String)]; \
+                    ...Object.getOwnPropertySymbols(o).map(String)].sort(); \
                 e.preventDefault(); \
-                out.push(e.defaultPrevented, \
-                    ['stop', 'immediate', 'canceled', 'dispatching', 'path'] \
-                        .some((n) => names(e).includes(n) || names(proto).includes(n))); }",
+                out.push(e.defaultPrevented, names(e), names(proto)); }",
         );
 
         let out = fire_and_read(cx, &dispatcher, node, "click");
 
-        assert_eq!(out, serde_json::json!([true, false]));
+        assert_eq!(
+            out,
+            serde_json::json!([
+                true,
+                [
+                    "bubbles",
+                    "cancelable",
+                    "composed",
+                    "currentTarget",
+                    "eventId",
+                    "eventPhase",
+                    "isTrusted",
+                    "target",
+                    "timeStamp",
+                    "type"
+                ],
+                [
+                    "AT_TARGET",
+                    "BUBBLING_PHASE",
+                    "CAPTURING_PHASE",
+                    "NONE",
+                    "cancelBubble",
+                    "composedPath",
+                    "constructor",
+                    "defaultPrevented",
+                    "preventDefault",
+                    "returnValue",
+                    "srcElement",
+                    "stopImmediatePropagation",
+                    "stopPropagation"
+                ]
+            ])
+        );
+    }
+
+    fn eval_json(dispatcher: &EventDispatcher, js: &str) -> serde_json::Value {
+        let json = dispatcher
+            .engine
+            .eval::<String>(&format!("JSON.stringify({js})"))
+            .unwrap();
+        serde_json::from_str(&json).unwrap()
+    }
+
+    #[test]
+    fn a_new_event_starts_idle_and_untrusted_with_every_flag_false() {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        let got = eval_json(
+            &dispatcher,
+            "(() => { const e = new Event('ping'); \
+                return [e.type, e.bubbles, e.cancelable, e.composed, e.isTrusted, e.target, \
+                    e.currentTarget, e.srcElement, e.eventPhase, e.defaultPrevented, \
+                    e.returnValue, e.cancelBubble, e.composedPath().length, \
+                    typeof e.timeStamp, e.constructor === Event, e instanceof Event]; })()",
+        );
+        assert_eq!(
+            got,
+            serde_json::json!([
+                "ping", false, false, false, false, null, null, null, 0, false, true, false, 0,
+                "number", true, true
+            ])
+        );
+    }
+
+    #[test]
+    fn the_init_object_sets_the_flags_by_truthiness() {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        let got = eval_json(
+            &dispatcher,
+            "[new Event('a', { bubbles: 1, cancelable: 'x', composed: {} }), \
+              new Event('b', { bubbles: 0, cancelable: '' }), \
+              new Event('c', null), new Event('d', undefined), new Event(5), \
+              new Event(undefined)].map((e) => [e.type, e.bubbles, e.cancelable, e.composed])",
+        );
+        assert_eq!(
+            got,
+            serde_json::json!([
+                ["a", true, true, true],
+                ["b", false, false, false],
+                ["c", false, false, false],
+                ["d", false, false, false],
+                ["5", false, false, false],
+                ["undefined", false, false, false]
+            ])
+        );
+    }
+
+    #[test]
+    fn the_constructors_refuse_a_plain_call_a_missing_type_and_a_primitive_init() {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        let got = eval_json(
+            &dispatcher,
+            "['Event', 'CustomEvent'].flatMap((name) => { const C = globalThis[name]; \
+                return [() => C('x'), () => C.call(function () {}, 'x'), () => new C(), \
+                    () => new C('x', 5), () => new C(Symbol())].map((f) => { \
+                    try { f(); return 'ran'; } catch (err) { return err instanceof TypeError; } }); })",
+        );
+        assert_eq!(
+            got,
+            serde_json::Value::Array(vec![serde_json::json!(true); 10])
+        );
+    }
+
+    #[test]
+    fn a_custom_event_carries_detail_and_inherits_from_event() {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        let got = eval_json(
+            &dispatcher,
+            "(() => { const d = { n: 1 }; \
+                const a = new CustomEvent('a', { detail: d, bubbles: true }); \
+                const b = new CustomEvent('b'); \
+                const c = new CustomEvent('c', { detail: undefined }); \
+                return [a.detail === d, a.bubbles, b.detail, c.detail, \
+                    a instanceof CustomEvent, a instanceof Event, \
+                    Object.getPrototypeOf(CustomEvent) === Event, \
+                    a.preventDefault === new Event('x').preventDefault, \
+                    CustomEvent.name, Event.name, Event.AT_TARGET, CustomEvent.BUBBLING_PHASE]; })()",
+        );
+        assert_eq!(
+            got,
+            serde_json::json!([
+                true,
+                true,
+                null,
+                null,
+                true,
+                true,
+                true,
+                true,
+                "CustomEvent",
+                "Event",
+                2,
+                3
+            ])
+        );
+    }
+
+    #[test]
+    fn a_subclass_of_event_keeps_its_own_prototype() {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        let got = eval_json(
+            &dispatcher,
+            "(() => { class Mine extends Event { hi() { return this.type; } } \
+                const e = new Mine('m'); \
+                e.preventDefault(); \
+                return [e.hi(), e instanceof Mine, e instanceof Event, e.defaultPrevented]; })()",
+        );
+        assert_eq!(got, serde_json::json!(["m", true, true, false]));
+    }
+
+    #[gpui::test]
+    fn host_events_are_trusted_instances_of_event_that_share_one_prototype(
+        cx: &mut TestAppContext,
+    ) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        listen(&host, node, "click");
+        callbacks(
+            &dispatcher,
+            "0: (e) => { (globalThis.events ??= []).push(e); \
+                out.push([e instanceof Event, e.constructor === Event, e.isTrusted]); }",
+        );
+        fire_and_read(cx, &dispatcher, node, "click");
+        let out = fire_and_read(cx, &dispatcher, node, "click");
+        assert_eq!(
+            out,
+            serde_json::json!([[true, true, true], [true, true, true]])
+        );
+        let shared = dispatcher
+            .engine
+            .eval::<bool>(
+                "const [a, b] = events; \
+                 a !== b && Object.getPrototypeOf(a) === Object.getPrototypeOf(b) \
+                    && a.preventDefault === b.preventDefault \
+                    && Object.getPrototypeOf(a) !== Object.prototype",
+            )
+            .unwrap();
+        assert!(shared);
+    }
+
+    #[test]
+    fn dispatch_event_walks_capture_target_bubble_and_returns_true_when_not_canceled() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [outer, parent, child] = tree_of_three(&host);
+        for (id, node, capture) in [(0, outer, true), (1, child, false), (2, parent, false)] {
+            host.borrow_mut()
+                .listeners
+                .register_with(node, "ping", id, capture, false);
+        }
+        callbacks(
+            &dispatcher,
+            "0: (e) => out.push(['cap', e.currentTarget, e.eventPhase, e.target, e.isTrusted]), \
+             1: (e) => out.push(['at', e.currentTarget, e.eventPhase]), \
+             2: (e) => out.push(['up', e.currentTarget, e.eventPhase])",
+        );
+        let got = eval_json(
+            &dispatcher,
+            &format!(
+                "(() => {{ const e = new Event('ping', {{ bubbles: true }}); \
+                    const r = __inca_native__.dispatchEvent({child}, e); \
+                    return [r, out, e.target, e.currentTarget, e.eventPhase, e.composedPath().length]; }})()"
+            ),
+        );
+        assert_eq!(
+            got,
+            serde_json::json!([
+                true,
+                [
+                    ["cap", outer, 1, child, false],
+                    ["at", child, 2],
+                    ["up", parent, 3]
+                ],
+                child,
+                null,
+                0,
+                0
+            ])
+        );
+    }
+
+    #[test]
+    fn dispatch_event_skips_the_ancestors_of_an_event_that_does_not_bubble() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, parent, child] = tree_of_three(&host);
+        listen(&host, child, "ping");
+        host.borrow_mut().listeners.register(parent, "ping", 1);
+        callbacks(
+            &dispatcher,
+            "0: () => out.push('child'), 1: () => out.push('parent')",
+        );
+        let got = eval_json(
+            &dispatcher,
+            &format!("(__inca_native__.dispatchEvent({child}, new Event('ping')), out)"),
+        );
+        assert_eq!(got, serde_json::json!(["child"]));
+    }
+
+    #[test]
+    fn dispatch_event_returns_false_for_a_canceled_cancelable_event_only() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        listen(&host, node, "ping");
+        callbacks(&dispatcher, "0: (e) => e.preventDefault()");
+        let got = eval_json(
+            &dispatcher,
+            &format!(
+                "[true, false].map((cancelable) => {{ const e = new Event('ping', {{ cancelable }}); \
+                    return [__inca_native__.dispatchEvent({node}, e), e.defaultPrevented]; }})"
+            ),
+        );
+        assert_eq!(got, serde_json::json!([[false, true], [true, false]]));
+    }
+
+    #[test]
+    fn a_dispatched_event_stays_canceled_and_can_be_dispatched_again_with_a_new_event_id() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        listen(&host, node, "ping");
+        callbacks(
+            &dispatcher,
+            "0: (e) => { out.push(e.eventId); e.preventDefault(); }",
+        );
+        let got = eval_json(
+            &dispatcher,
+            &format!(
+                "(() => {{ const e = new Event('ping', {{ cancelable: true }}); \
+                    const r = [__inca_native__.dispatchEvent({node}, e), \
+                        __inca_native__.dispatchEvent({node}, e)]; \
+                    return [r, out]; }})()"
+            ),
+        );
+        assert_eq!(got, serde_json::json!([[false, false], [1, 2]]));
+    }
+
+    #[test]
+    fn an_event_nobody_hears_takes_no_event_id_but_gets_its_target() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let got = eval_json(
+            &dispatcher,
+            &format!(
+                "(() => {{ const e = new Event('ping'); \
+                    return [__inca_native__.dispatchEvent({node}, e), e.target, 'eventId' in e]; }})()"
+            ),
+        );
+        assert_eq!(got, serde_json::json!([true, node, false]));
+        assert_eq!(host.borrow().last_event_id, 0);
+    }
+
+    #[test]
+    fn dispatch_event_while_dispatching_throws_invalid_state_and_leaves_the_walk_running() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        listen(&host, node, "ping");
+        callbacks(
+            &dispatcher,
+            &format!(
+                "0: (e) => {{ try {{ __inca_native__.dispatchEvent({node}, e); out.push('ran'); }} \
+                    catch (err) {{ out.push([err.name, e.eventPhase]); }} }}"
+            ),
+        );
+        let got = eval_json(
+            &dispatcher,
+            &format!("(__inca_native__.dispatchEvent({node}, new Event('ping')), out)"),
+        );
+        assert_eq!(got, serde_json::json!([["InvalidStateError", 2]]));
+    }
+
+    #[test]
+    fn dispatch_event_rejects_anything_that_is_not_an_event_of_this_host() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let got = eval_json(
+            &dispatcher,
+            &format!(
+                "[undefined, null, 5, 'click', {{ type: 'click' }}, Object.create(new Event('x')), \
+                  Event.prototype].map((v) => {{ \
+                    try {{ __inca_native__.dispatchEvent({node}, v); return 'ran'; }} \
+                    catch (err) {{ return err instanceof TypeError; }} }})"
+            ),
+        );
+        assert_eq!(
+            got,
+            serde_json::Value::Array(vec![serde_json::json!(true); 7])
+        );
+    }
+
+    #[test]
+    fn dispatch_event_on_an_unknown_node_throws_a_type_error() {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        let got = eval_json(
+            &dispatcher,
+            "(() => { try { __inca_native__.dispatchEvent(99, new Event('x')); return 'ran'; } \
+                catch (err) { return err instanceof TypeError; } })()",
+        );
+        assert_eq!(got, serde_json::json!(true));
+    }
+
+    #[test]
+    fn a_listener_that_throws_during_dispatch_event_is_reported_and_the_others_run() {
+        let (dispatcher, host, reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        listen(&host, node, "ping");
+        host.borrow_mut().listeners.register(node, "ping", 1);
+        callbacks(
+            &dispatcher,
+            "0: () => { throw new Error('boom'); }, 1: () => out.push('second')",
+        );
+        let got = eval_json(
+            &dispatcher,
+            &format!("[__inca_native__.dispatchEvent({node}, new Event('ping')), out]"),
+        );
+        assert_eq!(got, serde_json::json!([true, ["second"]]));
+        assert!(
+            reported.borrow().is_empty(),
+            "reported once the engine is idle"
+        );
+
+        dispatcher.report_pending();
+        assert_eq!(reported.borrow().len(), 1);
+        assert_eq!(reported.borrow()[0].message(), "Error: boom");
+        dispatcher.report_pending();
+        assert_eq!(reported.borrow().len(), 1);
+    }
+
+    #[gpui::test]
+    fn errors_are_reported_in_the_order_they_happened_across_nested_dispatches(
+        cx: &mut TestAppContext,
+    ) {
+        let (dispatcher, host, reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        listen(&host, node, "click");
+        host.borrow_mut().listeners.register(node, "ping", 1);
+        callbacks(
+            &dispatcher,
+            &format!(
+                "0: () => {{ __inca_native__.dispatchEvent({node}, new Event('ping')); \
+                    throw new Error('outer'); }}, \
+                 1: () => {{ throw new Error('inner'); }}"
+            ),
+        );
+        fire_and_read(cx, &dispatcher, node, "click");
+        let messages: Vec<_> = reported
+            .borrow()
+            .iter()
+            .map(|e| e.message().to_owned())
+            .collect();
+        assert_eq!(messages, ["Error: inner", "Error: outer"]);
+    }
+
+    #[test]
+    fn click_runs_an_untrusted_click_that_bubbles_with_the_pointer_fields_of_a_key_click() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, parent, child] = tree_of_three(&host);
+        listen(&host, child, "click");
+        host.borrow_mut().listeners.register(parent, "click", 1);
+        callbacks(
+            &dispatcher,
+            "0: (e) => out.push([e.type, e.isTrusted, e.bubbles, e.cancelable, e.target, \
+                e.currentTarget, e.pointerId, e.pointerType, e.button, e.buttons, e.detail, \
+                e.ctrlKey, e.eventId]), \
+             1: (e) => out.push(['parent', e.currentTarget, e.eventPhase])",
+        );
+        let got = eval_json(
+            &dispatcher,
+            &format!("(__inca_native__.click({child}), out)"),
+        );
+        assert_eq!(
+            got,
+            serde_json::json!([
+                [
+                    "click", false, true, true, child, child, -1, "", 0, 0, 0, false, 1
+                ],
+                ["parent", parent, 3]
+            ])
+        );
+    }
+
+    #[test]
+    fn click_on_a_disabled_button_does_nothing_and_on_an_enabled_one_runs() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let button = host.borrow_mut().tree.create_node("button").unwrap();
+        listen(&host, button, "click");
+        callbacks(&dispatcher, "0: () => out.push('click')");
+        host.borrow_mut()
+            .tree
+            .set_attribute(button, "disabled", true)
+            .unwrap();
+        let disabled = eval_json(
+            &dispatcher,
+            &format!("(__inca_native__.click({button}), out.length)"),
+        );
+        host.borrow_mut()
+            .tree
+            .remove_attribute(button, "disabled")
+            .unwrap();
+        let enabled = eval_json(
+            &dispatcher,
+            &format!("(__inca_native__.click({button}), out.length)"),
+        );
+        assert_eq!(
+            (disabled, enabled),
+            (serde_json::json!(0), serde_json::json!(1))
+        );
+    }
+
+    #[test]
+    fn click_inside_the_nodes_own_click_does_nothing_and_a_later_click_runs() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        listen(&host, node, "click");
+        callbacks(
+            &dispatcher,
+            &format!("0: () => {{ out.push('click'); __inca_native__.click({node}); }}"),
+        );
+        let got = eval_json(
+            &dispatcher,
+            &format!("(__inca_native__.click({node}), __inca_native__.click({node}), out)"),
+        );
+        assert_eq!(got, serde_json::json!(["click", "click"]));
+        assert!(host.borrow().clicking.is_empty());
+    }
+
+    #[test]
+    fn click_on_one_node_inside_the_click_of_another_runs() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, parent, child] = tree_of_three(&host);
+        listen(&host, parent, "click");
+        host.borrow_mut().listeners.register(child, "click", 1);
+        callbacks(
+            &dispatcher,
+            &format!(
+                "0: (e) => {{ out.push(e.target); if (e.target === {parent}) __inca_native__.click({child}); }}, \
+                 1: () => {{}}"
+            ),
+        );
+        let got = eval_json(
+            &dispatcher,
+            &format!("(__inca_native__.click({parent}), out)"),
+        );
+        assert_eq!(got, serde_json::json!([parent, child]));
+    }
+
+    #[test]
+    fn click_on_an_unheard_or_unknown_node_takes_no_event_id_and_throws_nothing() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        dispatcher
+            .engine
+            .eval::<()>(&format!(
+                "__inca_native__.click({node}); __inca_native__.click(99);"
+            ))
+            .unwrap();
+        assert_eq!(host.borrow().last_event_id, 0);
+    }
+
+    #[test]
+    fn click_reports_a_throwing_listener_through_the_pending_failures() {
+        let (dispatcher, host, reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        listen(&host, node, "click");
+        callbacks(&dispatcher, "0: () => { throw new Error('boom'); }");
+        dispatcher
+            .engine
+            .eval::<()>(&format!("__inca_native__.click({node});"))
+            .unwrap();
+        dispatcher.report_pending();
+        assert_eq!(reported.borrow()[0].message(), "Error: boom");
+    }
+
+    #[test]
+    fn a_listener_that_freezes_the_event_leaves_it_free_to_dispatch_again() {
+        let (dispatcher, host, reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        listen(&host, node, "ping");
+        callbacks(
+            &dispatcher,
+            "0: (e) => { e.stopImmediatePropagation(); Object.freeze(e); }",
+        );
+        let got = eval_json(
+            &dispatcher,
+            &format!(
+                "(() => {{ const e = new Event('ping'); \
+                    __inca_native__.dispatchEvent({node}, e); \
+                    const stop = e.cancelBubble; \
+                    try {{ __inca_native__.dispatchEvent({node}, e); }} \
+                    catch (err) {{ return [stop, err.name]; }} return [stop, 'ran']; }})()"
+            ),
+        );
+        assert_eq!(got, serde_json::json!([false, "TypeError"]));
+        dispatcher.report_pending();
+        assert!(
+            !reported.borrow().is_empty(),
+            "the failed reset is reported"
+        );
+    }
+
+    #[test]
+    fn a_listener_that_locks_current_target_does_not_block_the_next_dispatch() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        listen(&host, node, "ping");
+        callbacks(
+            &dispatcher,
+            "0: (e) => { out.push(e.currentTarget); e.stopPropagation(); \
+                Object.defineProperty(e, 'currentTarget', { writable: false }); }",
+        );
+        let got = eval_json(
+            &dispatcher,
+            &format!(
+                "(() => {{ const e = new Event('ping'); \
+                    __inca_native__.dispatchEvent({node}, e); \
+                    const stop = e.cancelBubble; \
+                    __inca_native__.dispatchEvent({node}, e); \
+                    return [stop, out]; }})()"
+            ),
+        );
+        assert_eq!(got, serde_json::json!([false, [node, node]]));
+    }
+
+    #[gpui::test]
+    fn a_trusted_host_event_kept_by_a_listener_is_untrusted_when_dispatched_again(
+        cx: &mut TestAppContext,
+    ) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        listen(&host, node, "click");
+        callbacks(
+            &dispatcher,
+            "0: (e) => { out.push(e.isTrusted); globalThis.kept ??= e; }",
+        );
+        fire_and_read(cx, &dispatcher, node, "click");
+        let got = eval_json(
+            &dispatcher,
+            &format!("(__inca_native__.dispatchEvent({node}, kept), out)"),
+        );
+        assert_eq!(got, serde_json::json!([true, false]));
+    }
+
+    #[test]
+    fn the_stop_state_of_an_outer_event_survives_a_nested_dispatch() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, parent, child] = tree_of_three(&host);
+        listen(&host, child, "ping");
+        host.borrow_mut().listeners.register(parent, "ping", 1);
+        host.borrow_mut().listeners.register(child, "inner", 2);
+        callbacks(
+            &dispatcher,
+            &format!(
+                "0: (e) => {{ e.stopPropagation(); \
+                    __inca_native__.dispatchEvent({child}, new Event('inner')); \
+                    out.push(['child', e.cancelBubble]); }}, \
+                 1: () => out.push('parent'), 2: () => out.push('inner')"
+            ),
+        );
+        let got = eval_json(
+            &dispatcher,
+            &format!(
+                "(__inca_native__.dispatchEvent({child}, new Event('ping', {{ bubbles: true }})), out)"
+            ),
+        );
+        assert_eq!(got, serde_json::json!(["inner", ["child", true]]));
+    }
+
+    #[test]
+    fn a_custom_event_shows_its_detail_to_the_listener_it_is_dispatched_to() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        listen(&host, node, "ping");
+        callbacks(
+            &dispatcher,
+            "0: (e) => out.push([e.detail, e instanceof CustomEvent, e.isTrusted])",
+        );
+        let got = eval_json(
+            &dispatcher,
+            &format!(
+                "(__inca_native__.dispatchEvent({node}, new CustomEvent('ping', {{ detail: {{ n: 1 }} }})), out)"
+            ),
+        );
+        assert_eq!(got, serde_json::json!([[{"n": 1}, true, false]]));
+    }
+
+    #[test]
+    fn dispatch_event_of_a_click_reaches_a_disabled_button_and_its_ancestors() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, parent, _] = tree_of_three(&host);
+        let button = host.borrow_mut().tree.create_node("button").unwrap();
+        host.borrow_mut().tree.append_child(parent, button).unwrap();
+        host.borrow_mut()
+            .tree
+            .set_attribute(button, "disabled", true)
+            .unwrap();
+        listen(&host, button, "click");
+        host.borrow_mut()
+            .listeners
+            .register_with(parent, "click", 1, true, false);
+        host.borrow_mut().listeners.register(parent, "click", 2);
+        callbacks(
+            &dispatcher,
+            "0: () => out.push('button'), 1: () => out.push('capture'), 2: () => out.push('bubble')",
+        );
+        let got = eval_json(
+            &dispatcher,
+            &format!(
+                "(__inca_native__.dispatchEvent({button}, new Event('click', {{ bubbles: true }})), out)"
+            ),
+        );
+        assert_eq!(got, serde_json::json!(["capture", "button", "bubble"]));
+    }
+
+    #[gpui::test]
+    fn listener_errors_of_a_dispatch_in_a_job_are_reported_when_the_jobs_drain(
+        cx: &mut TestAppContext,
+    ) {
+        let (dispatcher, host, reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        listen(&host, node, "ping");
+        callbacks(&dispatcher, "0: () => { throw new Error('boom'); }");
+        dispatcher
+            .engine
+            .eval::<()>(&format!(
+                "Promise.resolve().then(() => \
+                    __inca_native__.dispatchEvent({node}, new Event('ping')));"
+            ))
+            .unwrap();
+        let cx = cx.add_empty_window();
+
+        cx.update(|window, _| dispatcher.drain_jobs_and_refresh(window));
+
+        assert_eq!(reported.borrow().len(), 1);
+        assert_eq!(reported.borrow()[0].message(), "Error: boom");
+    }
+
+    #[test]
+    fn an_event_whose_dispatch_fails_midway_stays_free_for_the_next_dispatch() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        listen(&host, node, "ping");
+        callbacks(
+            &dispatcher,
+            "0: (e) => Object.defineProperty(e, 'eventId', { writable: false })",
+        );
+        let got = eval_json(
+            &dispatcher,
+            &format!(
+                "(() => {{ const e = new Event('ping'); \
+                    return [1, 2, 3].map(() => {{ \
+                        try {{ __inca_native__.dispatchEvent({node}, e); return 'ok'; }} \
+                        catch (err) {{ return err.name; }} }}); }})()"
+            ),
+        );
+        assert_eq!(got, serde_json::json!(["ok", "TypeError", "TypeError"]));
     }
 }

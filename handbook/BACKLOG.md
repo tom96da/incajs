@@ -110,13 +110,15 @@ A fixed entry is deleted and its ID is never reused.
   somewhere to write. Where it lives per platform, how it rotates, and
   whether an app can opt out are all undecided.
 
-- **B-028 A template `ref` still resolves to a plain data object for anything beyond `.focus()`/`.blur()`**
+- **B-028 A template `ref` resolves to a plain data object that lacks most element properties**
   `Units: core · Size: M · Impact: Medium`
 
   `IncaElement`
-  (`packages/core/src/vue/nodeOps.mts`) has those two methods; the same
-  gap likely applies to any other DOM-element method or property a
-  `.vue` app would otherwise reach for on a template `ref`.
+  (`packages/core/src/vue/nodeOps.mts`) has `focus()`, `blur()`, `click()`,
+  `dispatchEvent()` and `tabIndex`. The DOM element members a `.vue` app
+  would otherwise reach for on a template `ref` are missing, such as
+  `addEventListener()`, `removeEventListener()`, `getBoundingClientRect()`
+  and the size and scroll properties.
 
 - **B-036 Reverting a script edit under `--experimental-hmr` sometimes applies nothing**
   `Units: cli · Size: M · Impact: Medium · Status: needs repro`
@@ -925,21 +927,14 @@ A fixed entry is deleted and its ID is never reused.
   press fires nothing. Fix: dispatch the touch sequence from `gpui` touch
   input with `touches` and `changedTouches`.
 
-- **B-157 Nodes lack `dispatchEvent()` and `click()`**
-  `Units: core,bridge · Size: M-L · Impact: Low-Medium`
-
-  Listeners register through the native `addEventListener` only, and app code
-  has no call that dispatches an event on a node. Fix: expose `dispatchEvent()`
-  and `click()` on the element wrapper and route them to the host dispatcher.
-
 - **B-158 Keys with nothing focused reach only the host root, which templates cannot listen on**
   `Units: core,bridge,docs · Size: M · Impact: Medium`
 
   With nothing focused, `keydown` and `keyup` target the host root node. A
   listener on the app's top element is a child of that node and never runs, so
   an app cannot react to keys while nothing is focused. Fix: expose a
-  listener target for the root, such as `window` or `document`, through
-  `addEventListener` on the element wrapper of the root.
+  listener target for the root, such as `window` or `document`, with
+  `addEventListener` and `dispatchEvent` on the element wrapper of the root.
 
 - **B-159 `inca dev --experimental-hmr` prints Vue's feature flag warning**
   `Units: cli · Size: S · Impact: Low`
@@ -992,3 +987,13 @@ A fixed entry is deleted and its ID is never reused.
   or a closed X server shows this. Fix: check the connection before the
   window opens and exit 1 with a message that names the variable and tells
   the user to unset it.
+
+- **B-167 Only `Event` and `CustomEvent` can be constructed**
+  `Units: bridge,core,docs · Size: M · Impact: Low`
+
+  A script cannot build a `MouseEvent`, `KeyboardEvent`, `FocusEvent`,
+  `WheelEvent`, `UIEvent` or `PointerEvent`, `Event` has no `initEvent()`, and
+  an error thrown for an event dispatched while it is being dispatched is a
+  plain `Error` named `InvalidStateError`, since the realm has no
+  `DOMException` class. Fix: add the subclasses with their init dictionaries,
+  `initEvent()` and a `DOMException` class.

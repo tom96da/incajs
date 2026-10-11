@@ -88,6 +88,8 @@ the nearest ancestor container.
 | `removeStyle` | `(nodeId: number, key: string) => void` | Remove a style prop so it renders as if never set. Removing a key that isn't set does nothing. |
 | `addEventListener` | `(nodeId: number, event: string, callbackId: number, capture?: boolean, passive?: boolean) => void` | Register a callback for an event. Ids stack per `(nodeId, event)`, see [Registering](#registering). `capture` and `passive` default to `false`. |
 | `removeEventListener` | `(nodeId: number, event: string, callbackId: number) => boolean` | Drop one registration and return whether it was there. An unknown node returns `false`. |
+| `dispatchEvent` | `(nodeId: number, event: Event) => boolean` | Walk a script-built event over the path of `nodeId` and return `false` when a listener canceled it, see [Dispatching from script](#dispatching-from-script). |
+| `click` | `(nodeId: number) => void` | Walk an untrusted `click` at `nodeId`, see [Dispatching from script](#dispatching-from-script). |
 | `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its subtree, and return every `callbackId` registered in it. An unknown id returns `[]`. Destroying the root throws. Also clears the focus state of the destroyed nodes. |
 | `focusNode` | `(nodeId: number) => void` | Request focus for `nodeId`. Takes effect next frame. A node with a `tabindex`, and only that node, takes focus. |
 | `blurNode` | `(nodeId: number) => void` | Request that `nodeId` lose focus. Takes effect next frame, and does nothing if `nodeId` is not the focused node by then. |
@@ -96,8 +98,11 @@ Shared throw rules, all as a `TypeError`:
 
 - A malformed `nodeId` or `callbackId` throws.
 - `setAttribute` and `setStyle` throw for a `value` that is not a string, number or boolean.
-- `addEventListener`, `setAttribute`, `removeAttribute`, `setStyle`, `removeStyle` and `appendChild` throw for an unknown node. `insertBefore` throws for an unknown parent, child or anchor.
+- `dispatchEvent` throws for an argument that is not an `Event` or `CustomEvent` of the host.
+- `addEventListener`, `dispatchEvent`, `setAttribute`, `removeAttribute`, `setStyle`, `removeStyle` and `appendChild` throw for an unknown node. `insertBefore` throws for an unknown parent, child or anchor.
 - `removeChild` throws for an unknown `parentId` and ignores an unknown or unattached `childId`.
+
+`dispatchEvent` also throws an `Error` named `InvalidStateError` for an event that is being dispatched. `click` ignores an unknown node.
 
 `insertBefore` and `appendChild`:
 
@@ -137,19 +142,20 @@ and event name. Payloads and author-facing behaviour are in
 
 #### Event object
 
-- A walk creates one object per event and passes it to every listener on the
-  path. Its own fields are `type`, `target`, `currentTarget`, `eventId` and
-  the payload. A property one listener sets is visible to the listeners after
-  it. `currentTarget` is the node whose listeners run. Once the walk ends,
+- A walk passes one object to every listener on the path. The host creates
+  it for its own events, and a script builds it for the events it dispatches.
+  Its own fields are `type`, `target`, `currentTarget`, `eventId` and the
+  payload. A property one listener sets is visible to the listeners after it.
+  `currentTarget` is the node whose listeners run. Once the walk ends,
   `currentTarget` is `null`, `eventPhase` is 0, `composedPath()` returns an
   empty array and the stop flags are clear. `defaultPrevented` keeps its value.
 - The object inherits from a prototype that the host creates once per
   engine. The prototype holds `stopPropagation`, `stopImmediatePropagation`,
   `preventDefault`, `composedPath`, the accessors `defaultPrevented`,
-  `returnValue` and `cancelBubble`, and the phase constants. They read and
-  write a state record kept in a `WeakMap` that lives in the engine's
-  userdata (`crates/inca-bridge/src/event.rs`) and is private to the host. A
-  call whose receiver has no record, such as a detached
+  `returnValue`, `cancelBubble` and `srcElement`, and the phase constants.
+  They read and write a state record kept in a `WeakMap` that lives in the
+  engine's userdata (`crates/inca-bridge/src/event.rs`) and is private to the
+  host. A call whose receiver has no record, such as a detached
   `const p = e.preventDefault; p()`, throws a `TypeError`.
 - The target of a pointer event (`mousedown`, `mouseup`, `mousemove`,
   `wheel`, `contextmenu`) is the deepest container under the pointer, or the
@@ -178,8 +184,8 @@ and event name. Payloads and author-facing behaviour are in
   cancelable event, and later nodes of the walk read it as `true`.
 - Accessors: `defaultPrevented` (getter), `returnValue` and `cancelBubble`
   (getter and setter with ToBoolean coercion) read the flags the methods set.
-  The phase constants are non-enumerable data properties of the prototype and
-  `srcElement` is a non-enumerable data property of the event.
+  `srcElement` reads `target`. The phase constants are non-enumerable data
+  properties of the prototype and of `Event`.
 - GPUI's `platform` modifier becomes `metaKey`. `function` is dropped.
   `getModifierState` exists on key and mouse events and reads those four.
   `Accel` reads `platform` on macOS and `control` elsewhere.
@@ -188,6 +194,28 @@ and event name. Payloads and author-facing behaviour are in
   listeners run and `target` is the root. The root wires `keydown` and
   `keyup` even without a listener. `key` is `"Unidentified"` for an empty
   key, and a letter with Shift held and no `key_char` is upper case.
+
+#### Dispatching from script
+
+- `event.rs` installs the globals `Event` and `CustomEvent` with
+  `Constructor::new_prototype`. Their events get the shared prototype and a
+  record in the same `WeakMap`, with `isTrusted` false and `target` `null`.
+  A call without `new` (`Params::is_constructor`), a missing type and an init
+  that is neither `null`, `undefined` nor an object throw a `TypeError`. `CustomEvent.prototype` inherits from
+  `Event.prototype`.
+- `dispatchEvent` runs the walk inside the caller's context, so a listener
+  can call it. It sets `target` and `isTrusted`, takes a new `eventId` when a
+  listener is reached, reads `type` and the flags from the record, and returns
+  the negated canceled flag. Default actions and the job queue belong to the
+  caller. The `dispatching` flag is set last and cleared before the event
+  object is touched, so a frozen event stays dispatchable.
+- `click` walks `click` with `MousePayload::keyboard_click`. `Host::clicking`
+  holds the nodes whose click is running. A disabled `button` and an unknown
+  node return at once.
+- Listener errors of every walk go to `Host::failures` as they happen.
+  The dispatcher reports them in that order after each walk and after
+  `drain_jobs_and_refresh`, and the development window's load poll reports
+  them with `EventDispatcher::report_pending`.
 
 #### Events
 

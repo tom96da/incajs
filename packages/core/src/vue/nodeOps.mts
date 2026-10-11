@@ -4,7 +4,7 @@
 import type { RendererOptions } from "@vue/runtime-core";
 
 import { createIncaElement } from "./createElement.mts";
-import type { IncaCore, NodeId, TagName } from "../rendererCore.mts";
+import type { EventLike, IncaCore, NodeId, TagName } from "../rendererCore.mts";
 
 /**
  * A container host node: either a real element or the hidden stand-in
@@ -36,6 +36,19 @@ export interface IncaElement {
   focus(): void;
   /** Unfocuses this node next frame, if it is the focused one. */
   blur(): void;
+  /**
+   * Fires an untrusted `click` at this node. A disabled `button`, a node whose
+   * own click is still running and an unknown node ignore the call.
+   */
+  click(): void;
+  /**
+   * Dispatches an `Event` or `CustomEvent` at this node.
+   * @param event - the event to dispatch
+   * @returns `false` when a listener canceled a cancelable event, else `true`
+   * @throws TypeError when `event` is not an `Event` or `CustomEvent`
+   * @throws Error named `InvalidStateError` when `event` is being dispatched
+   */
+  dispatchEvent(event: EventLike): boolean;
   /**
    * Assigning sets the `tabindex` attribute to the integer part of the
    * value. Reading returns the last value assigned, or `-1` (`0` for a

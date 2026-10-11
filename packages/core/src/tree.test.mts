@@ -15,6 +15,7 @@ import {
   setStyle,
   removeStyle,
 } from "./tree.mts";
+import type { EventLike } from "./types.mts";
 
 const native = {
   rootNodeId: vi.fn<() => number>(() => 42),
@@ -33,6 +34,8 @@ const native = {
   destroyNode: vi.fn<(nodeId: number) => number[]>(() => []),
   focusNode: vi.fn<(nodeId: number) => void>(),
   blurNode: vi.fn<(nodeId: number) => void>(),
+  dispatchEvent: vi.fn<(nodeId: number, event: EventLike) => boolean>(() => true),
+  click: vi.fn<(nodeId: number) => void>(),
 };
 
 beforeEach(() => {

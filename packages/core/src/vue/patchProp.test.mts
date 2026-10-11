@@ -9,7 +9,7 @@ import * as events from "../events.mts";
 import { createNodeOps } from "./nodeOps.mts";
 import { createPatchProp } from "./patchProp.mts";
 import type { IncaCore } from "../rendererCore.mts";
-import type { ListenerOptions } from "../types.mts";
+import type { EventLike, ListenerOptions } from "../types.mts";
 import type { IncaElement } from "./nodeOps.mts";
 
 const core: IncaCore = {
@@ -36,6 +36,8 @@ const core: IncaCore = {
   removeStyle: vi.fn<(nodeId: number, key: string) => void>(),
   focus: vi.fn<(nodeId: number) => void>(),
   blur: vi.fn<(nodeId: number) => void>(),
+  click: vi.fn<(nodeId: number) => void>(),
+  dispatchEvent: vi.fn<(nodeId: number, event: EventLike) => boolean>(() => true),
 };
 
 const patchProp = createPatchProp(core);
@@ -49,6 +51,8 @@ const makeEl = (): IncaElement => ({
   children: [],
   focus: vi.fn<() => void>(),
   blur: vi.fn<() => void>(),
+  click: vi.fn<() => void>(),
+  dispatchEvent: vi.fn<(event: EventLike) => boolean>(() => true),
   tabIndex: -1,
 });
 

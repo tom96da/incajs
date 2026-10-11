@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createNodeOps } from "./nodeOps.mts";
 import type { IncaCore } from "../rendererCore.mts";
-import type { ListenerOptions } from "../types.mts";
+import type { EventLike, ListenerOptions } from "../types.mts";
 import type { IncaElement, IncaText } from "./nodeOps.mts";
 
 let nextId = 1;
@@ -34,6 +34,8 @@ const core: IncaCore = {
   destroyNode: vi.fn<(nodeId: number) => void>(),
   focus: vi.fn<(nodeId: number) => void>(),
   blur: vi.fn<(nodeId: number) => void>(),
+  click: vi.fn<(nodeId: number) => void>(),
+  dispatchEvent: vi.fn<(nodeId: number, event: EventLike) => boolean>(() => true),
 };
 
 const nodeOps = createNodeOps(core);
@@ -52,6 +54,8 @@ function element(): IncaElement {
     children: [],
     focus: vi.fn<() => void>(),
     blur: vi.fn<() => void>(),
+    click: vi.fn<() => void>(),
+    dispatchEvent: vi.fn<(event: EventLike) => boolean>(() => true),
     tabIndex: -1,
   };
 }
@@ -67,6 +71,8 @@ describe("createElement", () => {
       children: [],
       focus: expect.any(Function),
       blur: expect.any(Function),
+      click: expect.any(Function),
+      dispatchEvent: expect.any(Function),
       tabIndex: -1,
     });
   });
@@ -93,6 +99,8 @@ describe("createComment", () => {
       children: [],
       focus: expect.any(Function),
       blur: expect.any(Function),
+      click: expect.any(Function),
+      dispatchEvent: expect.any(Function),
       tabIndex: -1,
     });
   });
@@ -107,6 +115,20 @@ describe("focus / blur", () => {
 
     el.blur();
     expect(core.blur).toHaveBeenCalledWith(el.id);
+  });
+});
+
+describe("click / dispatchEvent", () => {
+  it("forward to core.click and core.dispatchEvent bound to the element's own id", () => {
+    const el = nodeOps.createElement("div");
+    const event = { type: "ping" };
+    vi.mocked(core.dispatchEvent).mockReturnValueOnce(false);
+
+    el.click();
+    expect(core.click).toHaveBeenCalledExactlyOnceWith(el.id);
+
+    expect(el.dispatchEvent(event)).toBe(false);
+    expect(core.dispatchEvent).toHaveBeenCalledExactlyOnceWith(el.id, event);
   });
 });
 

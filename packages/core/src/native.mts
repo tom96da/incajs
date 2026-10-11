@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import type { AttributeValue, CallbackId, EventListener, NodeId } from "./types.mts";
+import type { AttributeValue, CallbackId, EventLike, EventListener, NodeId } from "./types.mts";
 
 /** The host-injected object every wrapper in this package forwards to. Not part of the public surface — reach it through the wrappers instead. */
 interface IncaNative {
@@ -25,6 +25,8 @@ interface IncaNative {
   destroyNode(nodeId: NodeId): CallbackId[];
   focusNode(nodeId: NodeId): void;
   blurNode(nodeId: NodeId): void;
+  dispatchEvent(nodeId: NodeId, event: EventLike): boolean;
+  click(nodeId: NodeId): void;
 }
 
 declare global {

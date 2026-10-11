@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { native } from "./native.mts";
-import type { CallbackId, EventListener, ListenerOptions, NodeId } from "./types.mts";
+import type { CallbackId, EventLike, EventListener, ListenerOptions, NodeId } from "./types.mts";
 
 /**
  * The JS half of every registration: the `callbackId` the host holds, the
@@ -165,6 +165,30 @@ export function removeEventListener(
 
   native().removeEventListener(nodeId, event, callbackId);
   registrations.release(callbackId);
+}
+
+/**
+ * Dispatches `event` at `nodeId` along the path to the root.
+ * @param nodeId - the node to dispatch at
+ * @param event - the event to dispatch
+ * @returns `false` when a listener canceled a cancelable event, else `true`
+ * @throws TypeError when `nodeId` is malformed
+ * @throws TypeError when `nodeId` names no node
+ * @throws TypeError when `event` is not an `Event` or `CustomEvent`
+ * @throws Error named `InvalidStateError` when `event` is being dispatched
+ */
+export function dispatchEvent(nodeId: NodeId, event: EventLike): boolean {
+  return native().dispatchEvent(nodeId, event);
+}
+
+/**
+ * Fires an untrusted `click` at `nodeId`. A disabled `button`, a node whose
+ * own click is still running and an unknown node ignore the call.
+ * @param nodeId - the node to click
+ * @throws TypeError when `nodeId` is malformed
+ */
+export function click(nodeId: NodeId): void {
+  native().click(nodeId);
 }
 
 /**

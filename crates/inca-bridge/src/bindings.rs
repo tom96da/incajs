@@ -3,14 +3,17 @@
 
 //! Binds `globalThis.__inca_native__`: the small set of native functions
 //! JS calls to read the root handle, mutate the retained virtual tree,
-//! register input-event callbacks, and free what it no longer needs.
+//! register input-event callbacks, dispatch events from script, and free what
+//! it no longer needs.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use rquickjs::function::Opt;
 use rquickjs::{Ctx, Exception, FromJs, Function, Object, Result as JsResult, Value};
+
+use inca_jsenv::EngineError;
 
 use inca_gpui::{AttributeValue, NodeId, TreeError, VirtualNode, VirtualTree, style_warning};
 
@@ -153,6 +156,10 @@ pub struct Host {
     pub focus: FocusRegistry,
     /// Last number handed out as an `eventId`. Each event takes the next one.
     pub last_event_id: u64,
+    // Errors listeners threw, in order; the dispatcher reports them once the engine is idle.
+    pub(crate) failures: Vec<EngineError>,
+    // The nodes whose `click()` is running.
+    pub(crate) clicking: HashSet<NodeId>,
 }
 
 impl std::fmt::Debug for Host {
@@ -179,6 +186,8 @@ impl Default for Host {
             listeners: EventListeners::default(),
             focus: FocusRegistry::default(),
             last_event_id: 0,
+            failures: Vec::new(),
+            clicking: HashSet::new(),
         }
     }
 }
@@ -483,7 +492,8 @@ fn install_tree<'js>(
     Ok(())
 }
 
-/// Registering and dropping input-event callbacks.
+/// Registering and dropping input-event callbacks, and dispatching events
+/// from script.
 fn install_events<'js>(
     ctx: &Ctx<'js>,
     host: &Rc<RefCell<Host>>,
@@ -529,6 +539,38 @@ fn install_events<'js>(
                     host.borrow_mut()
                         .listeners
                         .unregister(node_id, &event, callback_id)
+                },
+            )?,
+        )?;
+    }
+
+    {
+        let host = Rc::clone(host);
+        native.set(
+            "dispatchEvent",
+            Function::new(
+                ctx.clone(),
+                move |ctx: Ctx<'js>,
+                      JsNodeId(node_id): JsNodeId,
+                      event: Value<'js>|
+                      -> JsResult<bool> {
+                    if host.borrow().tree.get(node_id).is_none() {
+                        return Err(throw_tree_error(&ctx, TreeError::NodeNotFound(node_id)));
+                    }
+                    crate::event::dispatch_event(&ctx, &host, node_id, event)
+                },
+            )?,
+        )?;
+    }
+
+    {
+        let host = Rc::clone(host);
+        native.set(
+            "click",
+            Function::new(
+                ctx.clone(),
+                move |ctx: Ctx<'js>, JsNodeId(node_id): JsNodeId| {
+                    crate::event::click(&ctx, &host, node_id);
                 },
             )?,
         )?;

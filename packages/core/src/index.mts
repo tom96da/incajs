@@ -6,6 +6,7 @@
 export type {
   AttributeValue,
   CallbackId,
+  EventLike,
   EventListener,
   ListenerOptions,
   NodeId,

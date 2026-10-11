@@ -35,7 +35,6 @@ and `returnValue`. The three flags depend on the event:
 
 - `target` and `currentTarget` are node ids, and `composedPath()` returns node
   ids.
-- `isTrusted` is `true` for every event.
 - `timeStamp` counts milliseconds since the host started.
 - `preventDefault()` acts on cancelable events only.
 - A listener added while an event is handled first runs for the next event.
@@ -113,8 +112,6 @@ browsers.
 
 - A node takes focus through its `tabindex` attribute, and a `button` is
   focusable by default. `.focus()` on other nodes is ignored.
-- `.focus()` and `.blur()` are available on the element of a template `ref`,
-  without the `FocusOptions` argument.
 - `el.tabIndex` reads back the last assigned value.
 - `hidden="until-found"` counts as shown.
 - A focused node shows no focus ring, and the focused node is readable
@@ -123,6 +120,15 @@ browsers.
   the first node, as in Chromium and WebKit. Focus stays in the window.
 - Tab after a click starts at the first node, where browsers continue from the
   click position.
+
+## Dispatching events
+
+- `MouseEvent`, `KeyboardEvent`, `FocusEvent`, `WheelEvent`, `UIEvent` and
+  `PointerEvent` are unsupported, as are `initEvent()` and `DOMException`. A
+  event dispatched while it is being dispatched throws a plain `Error` named
+  `InvalidStateError`.
+- `window`, `document` and other non-element targets have no
+  `dispatchEvent()`.
 
 ## Event modifiers
 

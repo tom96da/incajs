@@ -116,6 +116,14 @@ export interface StyleProps {
 }
 
 /**
+ * An `Event` or `CustomEvent` built in this runtime. The host throws a
+ * `TypeError` for any other value.
+ */
+export interface EventLike {
+  readonly type: string;
+}
+
+/**
  * How a listener registered via `setEventListener` takes part in an event.
  */
 export interface ListenerOptions {
@@ -142,7 +150,8 @@ export interface ListenerOptions {
  * - `eventPhase`: 1 on the ancestors of `target` while the event travels
  *   down, 2 where `currentTarget` is `target`, 3 on the ancestors while it
  *   travels up, and 0 once the event has been handled.
- * - `isTrusted`: always `true`.
+ * - `isTrusted`: `true` for events the host dispatches and `false` for events a
+ *   script dispatches.
  * - `timeStamp`: milliseconds since the host started, as a number.
  * - `eventId`: a number that grows with each event and is the same on every
  *   node that event reaches.

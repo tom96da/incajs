@@ -3,8 +3,9 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { blur, removeEventListener, setEventListener } from "./events.mts";
+import { blur, click, dispatchEvent, removeEventListener, setEventListener } from "./events.mts";
 import { destroyNode } from "./tree.mts";
+import type { EventLike } from "./types.mts";
 
 const native = {
   rootNodeId: vi.fn<() => number>(() => 0),
@@ -32,6 +33,8 @@ const native = {
   destroyNode: vi.fn<(nodeId: number) => number[]>(() => []),
   focusNode: vi.fn<(nodeId: number) => void>(),
   blurNode: vi.fn<(nodeId: number) => void>(),
+  dispatchEvent: vi.fn<(nodeId: number, event: EventLike) => boolean>(() => true),
+  click: vi.fn<(nodeId: number) => void>(),
 };
 
 beforeEach(() => {
@@ -250,5 +253,22 @@ describe("blur", () => {
   it("forwards the node id to native blurNode", () => {
     blur(7);
     expect(native.blurNode).toHaveBeenCalledWith(7);
+  });
+});
+
+describe("dispatchEvent", () => {
+  it("forwards the node and event to native and returns its answer", () => {
+    const event = { type: "ping" };
+    native.dispatchEvent.mockReturnValueOnce(false);
+
+    expect(dispatchEvent(7, event)).toBe(false);
+    expect(native.dispatchEvent).toHaveBeenCalledExactlyOnceWith(7, event);
+  });
+});
+
+describe("click", () => {
+  it("forwards the node id to native click", () => {
+    click(7);
+    expect(native.click).toHaveBeenCalledExactlyOnceWith(7);
   });
 });

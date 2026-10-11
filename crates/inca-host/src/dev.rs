@@ -294,13 +294,13 @@ impl Serve {
     fn advance(&mut self, cx: &mut App) {
         let Some(pending) = &self.pending else { return };
         let Some(result) = pending.loading.poll() else {
-            report_jobs(
-                &pending.loading.session().engine,
-                &reporter_for(&self.writer),
-            );
+            let session = pending.loading.session();
+            report_jobs(&session.engine, &reporter_for(&self.writer));
+            session.dispatcher.report_pending();
             self.track_hold(cx);
             return;
         };
+        pending.loading.session().dispatcher.report_pending();
         let Some(Pending { loading, ids }) = self.pending.take() else {
             return;
         };
@@ -1046,6 +1046,23 @@ mod tests {
         cx.run_until_parked();
         assert_eq!(methods(&capturing), ["ready"]);
         assert!(the_window(cx).is_some());
+    }
+
+    #[gpui::test]
+    fn a_listener_error_of_a_dispatch_while_pending_is_one_app_error_before_the_window(
+        cx: &mut TestAppContext,
+    ) {
+        let (capturing, writer) = capture();
+        let source = "const n = __inca_native__.createNode('div');\n\
+            __inca_native__.addEventListener(n, 'ping', 0);\n\
+            globalThis.__inca_callbacks__ = { 0() { throw new Error('x'); } };\n\
+            __inca_native__.dispatchEvent(n, new Event('ping'));\n\
+            await new Promise(() => {});";
+        serve(cx, source, TEST_ENTRY_PATH, &writer);
+        cx.run_until_parked();
+
+        assert_eq!(methods(&capturing), ["appError"]);
+        assert!(the_window(cx).is_none());
     }
 
     #[gpui::test]
