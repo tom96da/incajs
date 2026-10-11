@@ -3,14 +3,13 @@
 
 import type { ModuleRunnerTransport } from "vite/module-runner";
 
-import "./incaDev.mts";
-
 /**
  * A `ModuleRunnerTransport` that carries Vite's runner protocol over
  * `globalThis.__inca_dev__`, nested under the `"vite"` method name so the
  * host's own dev-protocol channel stays bundler-agnostic.
  * @param onFileChanged - runs on each `file-changed` payload before the
  * payload is forwarded to the runner
+ * @returns the `connect` and `send` methods of a `ModuleRunnerTransport`
  */
 export function createIncaDevTransport(
   onFileChanged?: () => void,

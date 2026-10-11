@@ -5,15 +5,20 @@
  * A running app's own `globalThis.__inca_dev__`, installed by the host
  * under `--dev`.
  */
-export interface IncaDev {
+interface IncaDev {
   send: (method: string, paramsJson: string) => void;
   receive?: (method: string, paramsJson: string) => void;
   setLoadFailed?: (failed: boolean) => void;
   /**
    * Builds an async function from `body` that takes `params` in order. Its
    * stack frames name `filename`, and a frame on line N of `body` reports
-   * line N + 1. A NUL byte in any argument is rejected, and a syntax error
-   * raises a `SyntaxError` that names `filename`.
+   * line N + 1.
+   * @param params - the parameter names, in order
+   * @param body - the function body source
+   * @param filename - the file name that stack frames report
+   * @returns the async function, taking one argument per name in `params`
+   * @throws `TypeError` when any argument holds a NUL byte
+   * @throws `SyntaxError` when `body` does not parse, its stack naming `filename` and the line
    */
   compile?: (
     params: string[],

@@ -217,7 +217,7 @@ export function removeEventListener(
  * @throws TypeError when `nodeId` is malformed
  * @throws TypeError when `nodeId` names no node
  * @throws TypeError when `event` is not an `Event` or `CustomEvent`
- * @throws Error named `InvalidStateError` when `event` is being dispatched
+ * @throws DOMException named `InvalidStateError` when `event` is being dispatched
  */
 export function dispatchEvent(nodeId: NodeId, event: EventLike): boolean {
   return native().dispatchEvent(nodeId, event);

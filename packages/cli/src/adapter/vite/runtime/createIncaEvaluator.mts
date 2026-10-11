@@ -14,14 +14,12 @@ import {
   ssrModuleExportsKey,
 } from "vite/module-runner";
 
-import "./incaDev.mts";
-
+// The cast gives the base class the `ModuleEvaluator` signature, which carries the module.
 /** Runs each module through `__inca_dev__.compile`. */
 class IncaEvaluator extends (ESModulesEvaluator as new () => ModuleEvaluator) {
-  // A frame on line N of the body reports line N + 1, which Vite's source map lookup removes.
+  // Offsets Vite's source map lookup by the header line `compile` adds.
   override readonly startOffset = 1;
 
-  // The cast gives the base class the `ModuleEvaluator` signature, which carries the module.
   override async runInlinedModule(
     context: ModuleRunnerContext,
     code: string,
@@ -29,7 +27,7 @@ class IncaEvaluator extends (ESModulesEvaluator as new () => ModuleEvaluator) {
   ): Promise<void> {
     const dev = globalThis.__inca_dev__;
     if (!dev?.compile) {
-      throw new Error("__inca_dev__.compile is not installed — the host does not provide it");
+      throw new Error("__inca_dev__.compile is not installed");
     }
     // Same parameter order as the stock evaluator.
     const keys: (keyof ModuleRunnerContext)[] = [

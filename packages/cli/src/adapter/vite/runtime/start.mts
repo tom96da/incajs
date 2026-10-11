@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-// Provides the globals vite/module-runner needs (TextDecoder/URL).
+// Provides the globals vite/module-runner needs (TextDecoder/URL); importing it installs them.
 import "./globals.mts";
 import { ModuleRunner } from "vite/module-runner";
 
@@ -15,8 +15,7 @@ function isServerFailure(error: unknown): boolean {
 
 /**
  * Builds a `ModuleRunner` wired to the app's `__inca_dev__` channel and
- * imports `entryId` through it. The `./globals.mts` import above installs the
- * runtime globals `vite/module-runner` needs.
+ * imports `entryId` through it.
  *
  * A failed import is retried after the next `file-changed` payload, until
  * one succeeds. A failure the development server reported stays silent. Any
@@ -24,8 +23,8 @@ function isServerFailure(error: unknown): boolean {
  * `__inca_dev__.setLoadFailed(true)` follows a failed attempt and
  * `setLoadFailed(false)` precedes each retry.
  *
- * Every module runs through `__inca_dev__.compile`, so a host without it
- * fails the import.
+ * Every inlined module runs through `__inca_dev__.compile`; the import fails
+ * when the host lacks it.
  *
  * `sourcemapInterceptor: false` is required: the interceptor reads V8
  * `CallSite` objects off `Error.stack`, and this engine's `Error.stack` is a

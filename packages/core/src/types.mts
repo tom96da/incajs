@@ -177,7 +177,7 @@ export interface IncaEventTarget {
    * @returns `false` when a listener canceled a cancelable event, else `true`
    * @throws TypeError when the target's node was destroyed
    * @throws TypeError when `event` is not an `Event` or `CustomEvent`
-   * @throws Error named `InvalidStateError` when `event` is being dispatched
+   * @throws DOMException named `InvalidStateError` when `event` is being dispatched
    */
   dispatchEvent(event: EventLike): boolean;
 }

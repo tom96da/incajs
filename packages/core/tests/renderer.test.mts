@@ -148,16 +148,16 @@ function installFakeNative(): Map<NodeId, FakeNode> {
 
 /**
  * Runs the listeners of `event` along `chain` (root first, target last): the
- * capture ones going down, then the bubble ones going up. Returns the
- * `passive` flag the host holds for each callback it ran, in order.
+ * capture ones going down, then the bubble ones going up. Returns the phase
+ * the host holds for each callback it ran, in order.
  */
-function walk(chain: FakeNode[], event: string): boolean[] {
-  const ran: boolean[] = [];
+function walk(chain: FakeNode[], event: string): { capture: boolean; passive: boolean }[] {
+  const ran: { capture: boolean; passive: boolean }[] = [];
   const run = (node: FakeNode, capture: boolean): void => {
     for (const callbackId of node.listeners[event] ?? []) {
       const phase = phases.get(callbackId)!;
       if (phase.capture !== capture) continue;
-      ran.push(phase.passive);
+      ran.push(phase);
       globalThis.__inca_callbacks__[callbackId]!();
     }
   };
@@ -312,14 +312,13 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
   });
 
   it("registers .capture and .passive handlers with the host's phase and passivity", async () => {
-    const log: string[] = [];
     const App = {
       setup() {
         return () =>
-          h("div", { onClickCapture: () => log.push("parent capture") }, [
+          h("div", { onClickCapture: () => {} }, [
             h("div", {
-              onClick: () => log.push("child"),
-              onClickCapturePassive: () => log.push("child capture passive"),
+              onClick: () => {},
+              onClickCapturePassive: () => {},
             }),
           ]);
       },
@@ -330,10 +329,11 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
 
     const parent = nodes.get(nodes.get(root.id)!.children[0]!)!;
     const child = nodes.get(parent.children[0]!)!;
-    const passive = walk([parent, child], "click");
-
-    expect(log).toEqual(["parent capture", "child capture passive", "child"]);
-    expect(passive).toEqual([false, true, false]);
+    expect(walk([parent, child], "click")).toEqual([
+      { capture: true, passive: false }, // parent's onClickCapture
+      { capture: true, passive: true }, // child's onClickCapturePassive
+      { capture: false, passive: false }, // child's onClick
+    ]);
   });
 
   it("lets a template ref add and remove listeners next to the template's own", async () => {

@@ -196,6 +196,19 @@ describe("listener objects", () => {
     expect(seen).toEqual([object, { type: "click" }]);
   });
 
+  it("calls the handleEvent present at dispatch, not the one present at registration", () => {
+    const original = vi.fn<() => void>();
+    const object = { handleEvent: original };
+    const replaced = vi.fn<() => void>();
+    addEventListener(1, "click", object);
+    object.handleEvent = replaced;
+
+    globalThis.__inca_callbacks__[native.addEventListener.mock.calls[0]![2]]!({ type: "click" });
+
+    expect(original).not.toHaveBeenCalled();
+    expect(replaced).toHaveBeenCalledTimes(1);
+  });
+
   it("keys the registration on the object", () => {
     const object = { handleEvent: vi.fn<() => void>() };
     addEventListener(1, "click", object);
