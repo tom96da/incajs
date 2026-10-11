@@ -37,8 +37,7 @@ and `returnValue`. The three flags depend on the event:
   ids.
 - `timeStamp` counts milliseconds since the host started.
 - `preventDefault()` acts on cancelable events only.
-- A listener added while an event is handled first runs for the next event.
-- Removing the focused node fires no `blur`.
+- Removing the focused node leaves `blur` and `focusout` unfired.
 
 ## Mouse
 
