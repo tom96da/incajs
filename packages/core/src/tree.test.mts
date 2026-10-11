@@ -47,6 +47,7 @@ const native = {
   >(() => null),
   scrollOf: vi.fn<(nodeId: number) => readonly [number, number, number, number] | null>(() => null),
   scrollNode: vi.fn<(nodeId: number, left: number | null, top: number | null) => void>(),
+  scrollIntoViewNode: vi.fn<(nodeId: number, block: string, inline: string) => void>(),
   dispatchEvent: vi.fn<(nodeId: number, event: EventLike) => boolean>(() => true),
   click: vi.fn<(nodeId: number) => void>(),
 };

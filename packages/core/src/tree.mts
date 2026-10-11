@@ -3,7 +3,7 @@
 
 import { releaseCallbacks } from "./events.mts";
 import { native } from "./native.mts";
-import type { AttributeValue, NodeId, StyleProps, TagName } from "./types.mts";
+import type { AttributeValue, NodeId, ScrollAlignment, StyleProps, TagName } from "./types.mts";
 
 /**
  * Returns the host-allocated root container's id — the node an app attaches
@@ -132,6 +132,23 @@ export function scrollOf(nodeId: NodeId): readonly [number, number, number, numb
  */
 export function scrollNode(nodeId: NodeId, left: number | null, top: number | null): void {
   native().scrollNode(nodeId, left, top);
+}
+
+/**
+ * Scrolls each scroll container around `nodeId` so the node shows, the way
+ * `element.scrollIntoView()` does.
+ * @param nodeId - the node to bring into view
+ * @param block - the vertical alignment: `"start"`, `"center"`, `"end"` or `"nearest"`
+ * @param inline - the horizontal alignment: `"start"`, `"center"`, `"end"` or `"nearest"`
+ * @throws {TypeError} when `nodeId` names no node
+ * @throws {TypeError} when `block` or `inline` is not an alignment name
+ */
+export function scrollIntoViewNode(
+  nodeId: NodeId,
+  block: ScrollAlignment,
+  inline: ScrollAlignment,
+): void {
+  native().scrollIntoViewNode(nodeId, block, inline);
 }
 
 /**

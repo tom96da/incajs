@@ -49,6 +49,7 @@ const core: IncaCore = {
   >(() => null),
   scrollOf: vi.fn<(nodeId: number) => readonly [number, number, number, number] | null>(() => null),
   scrollNode: vi.fn<(nodeId: number, left: number | null, top: number | null) => void>(),
+  scrollIntoViewNode: vi.fn<(nodeId: number, block: string, inline: string) => void>(),
   click: vi.fn<(nodeId: number) => void>(),
   dispatchEvent: vi.fn<(nodeId: number, event: EventLike) => boolean>(() => true),
 };
@@ -83,6 +84,7 @@ const makeEl = (): IncaElement => ({
   scrollHeight: 0,
   scrollTo: () => {},
   scrollBy: () => {},
+  scrollIntoView: () => {},
 });
 
 let el = makeEl();

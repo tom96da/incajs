@@ -113,14 +113,16 @@ A fixed entry is deleted and its ID is never reused.
 - **B-028 A template `ref` lacks most element members**
   `Units: core,bridge · Size: L · Impact: Medium`
 
-  The element has `focus()`, `blur()`, `tabIndex`, `getBoundingClientRect()`,
-  the `offset*` and `client*` members, the scroll members and the listener
-  methods. It lacks:
+  The element handle lacks:
   - the attribute members (`getAttribute()`, `setAttribute()`,
     `hasAttribute()`, `removeAttribute()`, `attributes`);
   - `classList`, `className`, `dataset`, `style`, `tagName`;
   - the tree members (`parentElement`, `children`, `firstChild`,
     `nextSibling`, `contains()`, `closest()`).
+
+  The members it has differ from a browser in the box reads (B-160), the
+  `offsetParent` chain (B-161), the scroll members (B-172, B-173, B-174) and
+  `scroll-margin` (B-176).
 
   The wrapper's own `id`, `children` and `parent` fields use DOM names with
   other meanings, so `el.id` needs those fields renamed first. Fix: build the
@@ -843,14 +845,6 @@ A fixed entry is deleted and its ID is never reused.
   `visibility` prop that skips painting and the focus handle, and descendants
   inherit it unless they override it.
 
-- **B-134 `focus()` ignores its options and leaves the scroll offset**
-  `Units: bridge,core · Size: M · Impact: Low`
-
-  `focus({ preventScroll })` ignores the argument, and focusing a node outside
-  its scroll container keeps the offset. The fix adds a scroll-into-view
-  operation to the host and calls it from `focus()` unless `preventScroll` is
-  set.
-
 - **B-140 A container with `pointer-events: none` becomes `target`**
   `Units: gpui,core · Size: M · Impact: Low`
 
@@ -1051,8 +1045,8 @@ A fixed entry is deleted and its ID is never reused.
 - **B-174 `behavior: "smooth"` scrolls jump**
   `Units: gpui,bridge,core · Size: M · Impact: Low`
 
-  `scrollTo` and `scrollBy` apply every scroll at once. A browser animates a
-  `smooth` scroll.
+  `scrollTo`, `scrollBy` and `scrollIntoView` apply every scroll at once. A
+  browser animates a `smooth` scroll.
 
   Fix: an animation the host drives per frame, because the JS runtime runs
   only when reactive state changes.
@@ -1069,3 +1063,27 @@ A fixed entry is deleted and its ID is never reused.
   Fix: a `gpui` executor timer that fires `scrollend` after the threshold, with
   a rule for trackpad momentum. The threshold and the rule are design
   decisions.
+
+- **B-176 `scroll-margin` and `scroll-padding` are missing**
+  `Units: core,bridge · Size: M · Impact: Low`
+
+  A browser keeps a node that `scrollIntoView()` or focus brings into view a
+  `scroll-margin` away from the container edge, and a container's
+  `scroll-padding` sets the edge that scrolling stops at. The host scrolls the
+  node flush with the container edge in both cases.
+
+  Fix: add `scroll-margin` on nodes and `scroll-padding` on containers as
+  style keys, and subtract them from the visible box in the reveal geometry
+  before aligning.
+
+- **B-177 A root taller than the window is cut off**
+  `Units: gpui,host · Size: M · Impact: Medium`
+
+  The host draws the root node with the default `overflow: visible`, so content
+  below the window edge is clipped, and the wheel moves it only inside a
+  container with `overflow` set to `scroll` or `auto`. A browser scrolls the
+  document, so the same content scrolls under the wheel and under focus.
+
+  Fix: give the host root a scroll handle (`overflow: auto`) with an opt-out.
+  That also lets focus and `scrollIntoView` reach content below the window. The
+  default and the opt-out are design decisions for the owner.

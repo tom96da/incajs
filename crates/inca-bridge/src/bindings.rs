@@ -22,6 +22,7 @@ use inca_gpui::{
 };
 
 use crate::focus::FocusRegistry;
+use crate::scroll_into_view::Align;
 
 /// One registration: the callback id, the phase it listens in and whether it
 /// is passive.
@@ -224,6 +225,23 @@ impl Host {
         });
         moved.sort_unstable();
         moved
+    }
+
+    /// Scrolls the scroll containers above the node whose focus request asked
+    /// for it, using the boxes of the last drawn frame. A node whose box the
+    /// frame lacks gets one more frame to receive it. Call it once per frame
+    /// after `FocusRegistry::apply_pending`.
+    pub fn reveal_focus(&mut self, window: &mut gpui::Window) {
+        let (retries, fresh) = self.focus.take_reveals();
+        for node in retries {
+            crate::scroll_into_view::reveal(self, node, Align::Reveal, Align::CenterOutside);
+        }
+        for node in fresh {
+            if !crate::scroll_into_view::reveal(self, node, Align::Reveal, Align::CenterOutside) {
+                self.focus.retry_reveal(node);
+                window.request_animation_frame();
+            }
+        }
     }
 
     // Returns a clone of the node's handle, creating it on first ask.
@@ -672,13 +690,17 @@ fn install_focus<'js>(
         let host = Rc::clone(host);
         native.set(
             "focusNode",
-            Function::new(ctx.clone(), move |JsNodeId(node_id): JsNodeId| {
-                let mut host = host.borrow_mut();
-                // Focusing a node that is gone is a no-op.
-                if host.tree.get(node_id).is_some() {
-                    host.focus.request_focus(node_id);
-                }
-            })?,
+            Function::new(
+                ctx.clone(),
+                move |JsNodeId(node_id): JsNodeId, prevent_scroll: Opt<bool>| {
+                    let mut host = host.borrow_mut();
+                    // Focusing a node that is gone is a no-op.
+                    if host.tree.get(node_id).is_some() {
+                        host.focus
+                            .request_focus(node_id, prevent_scroll.0 != Some(true));
+                    }
+                },
+            )?,
         )?;
     }
 
@@ -805,6 +827,39 @@ fn install_scroll<'js>(
                         offset.y = negated(top);
                     }
                     handle.set_offset(offset);
+                    Ok(())
+                },
+            )?,
+        )?;
+    }
+
+    {
+        let host = Rc::clone(host);
+        native.set(
+            "scrollIntoViewNode",
+            Function::new(
+                ctx.clone(),
+                move |ctx: Ctx<'js>,
+                      JsNodeId(node_id): JsNodeId,
+                      block: String,
+                      inline: String|
+                      -> JsResult<()> {
+                    let align = |name: &str| match name {
+                        "start" => Ok(Align::Start),
+                        "center" => Ok(Align::Center),
+                        "end" => Ok(Align::End),
+                        "nearest" => Ok(Align::Nearest),
+                        _ => Err(Exception::throw_type(
+                            &ctx,
+                            &format!("unknown scroll alignment: {name}"),
+                        )),
+                    };
+                    let (block, inline) = (align(&block)?, align(&inline)?);
+                    let host = host.borrow();
+                    if host.tree.get(node_id).is_none() {
+                        return Err(throw_tree_error(&ctx, TreeError::NodeNotFound(node_id)));
+                    }
+                    crate::scroll_into_view::reveal(&host, node_id, block, inline);
                     Ok(())
                 },
             )?,
@@ -1447,6 +1502,29 @@ mod tests {
             .unwrap();
 
         assert_eq!(caught, [true, true]);
+    }
+
+    #[test]
+    fn scroll_into_view_node_rejects_an_unknown_node_and_an_unknown_alignment() {
+        let (engine, _host) = engine_with_bindings();
+
+        let caught: Vec<bool> = engine
+            .eval(
+                r"
+                const caught = (f) => { try { f(); } catch (e) { return e instanceof TypeError; } return false; };
+                const n = __inca_native__;
+                const node = n.createNode('div');
+                [
+                    caught(() => n.scrollIntoViewNode(999, 'start', 'start')),
+                    caught(() => n.scrollIntoViewNode(node, 'middle', 'start')),
+                    caught(() => n.scrollIntoViewNode(node, 'start', 'middle')),
+                    caught(() => n.scrollIntoViewNode(node, 'start', 'nearest')),
+                ];
+                ",
+            )
+            .unwrap();
+
+        assert_eq!(caught, [true, true, true, false]);
     }
 
     #[test]

@@ -79,7 +79,11 @@ impl FocusTransition {
 /// What a `focusNode`/`blurNode` call left for the next frame to apply.
 #[derive(Debug, Clone, Copy)]
 enum PendingFocus {
-    Focus(NodeId),
+    /// Focus the node, and scroll it into view when `scroll` is set.
+    Focus {
+        node: NodeId,
+        scroll: bool,
+    },
     Blur(NodeId),
 }
 
@@ -97,6 +101,10 @@ pub struct FocusRegistry {
     // root container. It maps to no node.
     parked: Option<FocusHandle>,
     pending: VecDeque<PendingFocus>,
+    // The latest focused node waiting for `Host::reveal_focus`, and the
+    // node it found lacking a box that waits for the next frame.
+    reveal: Vec<NodeId>,
+    retry: Vec<NodeId>,
     // Set while the window is inactive, after the focused node got its `blur`.
     window_blurred: bool,
     pub(crate) tab_dirty: HashSet<NodeId>,
@@ -170,15 +178,17 @@ fn next_stop(stops: &[(NodeId, i32)], current: Option<NodeId>, backward: bool) -
 impl FocusRegistry {
     /// Moves focus one tab stop forward, or `backward`. Past the last stop
     /// nothing holds focus, and the next press starts over at the first. The
-    /// transition is reported by the next [`Self::apply_pending`].
+    /// transition is reported by the next [`Self::apply_pending`]. Returns
+    /// the node that took focus. The move also drops the scroll requests of
+    /// earlier focus calls.
     pub fn tab_move(
-        &self,
+        &mut self,
         tree: &VirtualTree,
         root: NodeId,
         window: &mut Window,
         cx: &mut App,
         backward: bool,
-    ) {
+    ) -> Option<NodeId> {
         let mut stops = Vec::new();
         let mut stack = vec![root];
         while let Some(id) = stack.pop() {
@@ -190,11 +200,15 @@ impl FocusRegistry {
             }
             stack.extend(node.children().iter().rev());
         }
-        let target = next_stop(&stops, self.focused_node(window, cx), backward)
-            .and_then(|id| self.handles.get(&id));
-        match target {
-            Some(handle) => handle.focus(window, cx),
-            None => window.blur(cx),
+        let target = next_stop(&stops, self.focused_node(window, cx), backward);
+        self.reveal.clear();
+        self.retry.clear();
+        if let Some((id, handle)) = target.and_then(|id| Some((id, self.handles.get(&id)?))) {
+            handle.focus(window, cx);
+            Some(id)
+        } else {
+            window.blur(cx);
+            None
         }
     }
 
@@ -234,7 +248,7 @@ impl FocusRegistry {
             .filter(|&id| self.focusable_after_frame(tree, id));
         for request in &self.pending {
             match *request {
-                PendingFocus::Focus(id) => {
+                PendingFocus::Focus { node: id, .. } => {
                     if self.focusable_after_frame(tree, id) {
                         active = Some(id);
                     }
@@ -328,9 +342,14 @@ impl FocusRegistry {
         self.window_blurred = blurred;
     }
 
-    /// Queues that `node_id` should be focused next frame.
-    pub fn request_focus(&mut self, node_id: NodeId) {
-        self.pending.push_back(PendingFocus::Focus(node_id));
+    /// Queues that `node_id` should be focused next frame. With `scroll`,
+    /// [`Host::reveal_focus`](crate::Host::reveal_focus) then scrolls it into
+    /// view.
+    pub fn request_focus(&mut self, node_id: NodeId, scroll: bool) {
+        self.pending.push_back(PendingFocus::Focus {
+            node: node_id,
+            scroll,
+        });
     }
 
     /// Queues that `node_id` should be blurred next frame. Applying it
@@ -400,10 +419,16 @@ impl FocusRegistry {
         }
         for request in pending {
             match request {
-                PendingFocus::Focus(node_id) => {
+                PendingFocus::Focus { node, scroll } => {
                     // Only a node with a handle takes focus.
-                    if let Some(handle) = self.handles.get(&node_id) {
+                    if let Some(handle) = self.handles.get(&node) {
                         handle.focus(window, cx);
+                        // The last focus decides what scrolls.
+                        self.reveal.clear();
+                        self.retry.clear();
+                        if scroll {
+                            self.reveal.push(node);
+                        }
                     }
                 }
                 PendingFocus::Blur(node_id) => {
@@ -416,6 +441,21 @@ impl FocusRegistry {
             transitions.extend(self.sync(window, cx));
         }
         transitions
+    }
+
+    /// Hands over the focused nodes to scroll into view this frame:
+    /// `(retries, fresh)`. A retry is a node whose box the previous frame
+    /// lacked.
+    pub(crate) fn take_reveals(&mut self) -> (Vec<NodeId>, Vec<NodeId>) {
+        (
+            std::mem::take(&mut self.retry),
+            std::mem::take(&mut self.reveal),
+        )
+    }
+
+    /// Keeps `node_id` for one more frame.
+    pub(crate) fn retry_reveal(&mut self, node_id: NodeId) {
+        self.retry.push(node_id);
     }
 
     /// Reports a transition if which node is focused changed since the
@@ -446,8 +486,11 @@ impl FocusRegistry {
     pub fn forget(&mut self, node_id: NodeId) {
         self.handles.remove(&node_id);
         self.tab_dirty.remove(&node_id);
-        self.pending
-            .retain(|request| !matches!(request, PendingFocus::Focus(id) if *id == node_id));
+        self.pending.retain(
+            |request| !matches!(request, PendingFocus::Focus { node, .. } if *node == node_id),
+        );
+        self.reveal.retain(|&id| id != node_id);
+        self.retry.retain(|&id| id != node_id);
         if self.focused == Some(node_id) {
             // The node is gone — nothing left to dispatch a "blur" to.
             self.focused = None;
@@ -700,7 +743,7 @@ mod tests {
         let (mut tree, id) = tree_with("div", Some(AttributeValue::from("0")));
         let mut registry = FocusRegistry::default();
         registry.mark_tab_dirty(id);
-        registry.request_focus(id);
+        registry.request_focus(id, true);
         cx.update(|window, cx| {
             let _ = registry.apply_pending(&tree, window, cx);
         });
@@ -722,7 +765,7 @@ mod tests {
         let (mut tree, id) = tree_with("div", Some(AttributeValue::from("0")));
         let mut registry = FocusRegistry::default();
         registry.mark_tab_dirty(id);
-        registry.request_focus(id);
+        registry.request_focus(id, true);
         cx.update(|window, cx| {
             let _ = registry.apply_pending(&tree, window, cx);
         });
@@ -745,7 +788,7 @@ mod tests {
         let cx = cx.add_empty_window();
         let (tree, id) = tree_with("div", None);
         let mut registry = FocusRegistry::default();
-        registry.request_focus(id);
+        registry.request_focus(id, true);
         let transitions = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
         assert!(transitions.is_empty());
         assert!(registry.handle(id).is_none());
@@ -849,7 +892,7 @@ mod tests {
         cx.update(|window, cx| {
             let _ = registry.apply_pending(&tree, window, cx);
             assert_eq!(registry.focused_node(window, cx), None);
-            registry.request_focus(id);
+            registry.request_focus(id, true);
             let _ = registry.apply_pending(&tree, window, cx);
             assert_eq!(registry.focused_node(window, cx), Some(id));
         });
@@ -878,7 +921,7 @@ mod tests {
         cx.update(|window, cx| {
             let _ = registry.apply_pending(&tree, window, cx);
         });
-        registry.request_focus(id);
+        registry.request_focus(id, true);
         assert_eq!(registry.active_node(&tree), Some(id));
     }
 
@@ -910,7 +953,7 @@ mod tests {
         let mut registry = FocusRegistry::default();
         registry.mark_tab_dirty(id);
         registry.observed = Some(id);
-        registry.request_focus(plain);
+        registry.request_focus(plain, true);
         assert_eq!(registry.active_node(&tree), Some(id));
     }
 
@@ -921,9 +964,9 @@ mod tests {
         let mut registry = FocusRegistry::default();
         registry.mark_tab_dirty(focusable);
         registry.mark_tab_dirty(plain);
-        registry.request_focus(plain);
+        registry.request_focus(plain, true);
         assert_eq!(registry.active_node(&tree), None);
-        registry.request_focus(focusable);
+        registry.request_focus(focusable, true);
         assert_eq!(registry.active_node(&tree), Some(focusable));
     }
 
@@ -936,5 +979,61 @@ mod tests {
         assert_eq!(registry.active_node(&tree), Some(id));
         tree.remove_attribute(id, "tabindex").unwrap();
         assert_eq!(registry.active_node(&tree), None);
+    }
+
+    #[gpui::test]
+    fn tab_move_returns_the_node_it_focused_and_none_past_the_end(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, id) = tree_with("div", Some(AttributeValue::from("0")));
+        let mut registry = FocusRegistry::default();
+        registry.mark_tab_dirty(id);
+        cx.update(|window, cx| {
+            let _ = registry.apply_pending(&tree, window, cx);
+            assert_eq!(registry.tab_move(&tree, id, window, cx, false), Some(id));
+            let _ = registry.apply_pending(&tree, window, cx);
+            assert_eq!(registry.tab_move(&tree, id, window, cx, false), None);
+        });
+    }
+
+    #[gpui::test]
+    fn a_tab_move_drops_the_scroll_requests_of_earlier_focus_calls(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (mut tree, a) = tree_with("div", Some(AttributeValue::from("0")));
+        let b = tree.create_node("div").unwrap();
+        tree.set_attribute(b, "tabindex", "0").unwrap();
+        tree.append_child(a, b).unwrap();
+        let mut registry = FocusRegistry::default();
+        registry.mark_tab_dirty(a);
+        registry.mark_tab_dirty(b);
+        cx.update(|window, cx| {
+            let _ = registry.apply_pending(&tree, window, cx);
+            registry.request_focus(a, true);
+            let _ = registry.apply_pending(&tree, window, cx);
+            registry.retry_reveal(a);
+            assert_eq!(registry.tab_move(&tree, a, window, cx, false), Some(b));
+            assert_eq!(registry.take_reveals(), (vec![], vec![]));
+        });
+    }
+
+    #[gpui::test]
+    fn the_last_focus_request_decides_what_scrolls(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (mut tree, a) = tree_with("div", Some(AttributeValue::from("0")));
+        let b = tree.create_node("div").unwrap();
+        tree.set_attribute(b, "tabindex", "0").unwrap();
+        let mut registry = FocusRegistry::default();
+        registry.mark_tab_dirty(a);
+        registry.mark_tab_dirty(b);
+        cx.update(|window, cx| {
+            let _ = registry.apply_pending(&tree, window, cx);
+            registry.request_focus(a, true);
+            registry.request_focus(b, true);
+            let _ = registry.apply_pending(&tree, window, cx);
+            assert_eq!(registry.take_reveals(), (vec![], vec![b]));
+            registry.request_focus(a, true);
+            registry.request_focus(b, false);
+            let _ = registry.apply_pending(&tree, window, cx);
+            assert_eq!(registry.take_reveals(), (vec![], vec![]));
+        });
     }
 }

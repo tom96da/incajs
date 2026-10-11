@@ -25,6 +25,7 @@ function makeCore(
     focus: vi.fn<() => void>(),
     blur: vi.fn<() => void>(),
     click: vi.fn<() => void>(),
+    scrollIntoViewNode: vi.fn<(nodeId: number, block: string, inline: string) => void>(),
     createEventTarget: vi.fn<() => object>(() => ({})),
   } as unknown as IncaCore;
 }
@@ -195,5 +196,60 @@ describe("createIncaElement reactivity", () => {
     createIncaElement(makeCore(), 8, "comment");
 
     expect([elements.get(7), elements.has(8)]).toEqual([el, false]);
+  });
+});
+
+describe("focus and scrollIntoView on the element handle", () => {
+  it("focus passes no second argument, or false or true", () => {
+    const core = makeCore();
+    const el = createIncaElement(core, 3, "element", "div");
+
+    el.focus();
+    expect(core.focus).toHaveBeenLastCalledWith(3);
+
+    el.focus({});
+    expect(core.focus).toHaveBeenLastCalledWith(3);
+
+    el.focus({ preventScroll: false });
+    expect(core.focus).toHaveBeenLastCalledWith(3, false);
+
+    el.focus({ preventScroll: true });
+    expect(core.focus).toHaveBeenLastCalledWith(3, true);
+  });
+
+  it("focus reads preventScroll by truthiness", () => {
+    const core = makeCore();
+    const el = createIncaElement(core, 3, "element", "div");
+
+    el.focus({ preventScroll: 1 as unknown as boolean });
+    expect(core.focus).toHaveBeenLastCalledWith(3, true);
+
+    el.focus({ preventScroll: 0 as unknown as boolean });
+    expect(core.focus).toHaveBeenLastCalledWith(3, false);
+  });
+
+  it("scrollIntoView forwards the normalised alignments to the host", () => {
+    const core = makeCore();
+    const el = createIncaElement(core, 3, "element", "div");
+
+    el.scrollIntoView();
+    expect(core.scrollIntoViewNode).toHaveBeenLastCalledWith(3, "start", "nearest");
+
+    el.scrollIntoView(false);
+    expect(core.scrollIntoViewNode).toHaveBeenLastCalledWith(3, "end", "nearest");
+
+    el.scrollIntoView({ block: "center", inline: "end", behavior: "smooth" });
+    expect(core.scrollIntoViewNode).toHaveBeenLastCalledWith(3, "center", "end");
+  });
+
+  it("a destroyed element ignores focus and scrollIntoView", () => {
+    const core = makeCore();
+    const el = createIncaElement(core, 3, "element", "div");
+    markDestroyed(el);
+
+    el.focus({ preventScroll: true });
+    el.scrollIntoView(false);
+    expect(core.focus).not.toHaveBeenCalled();
+    expect(core.scrollIntoViewNode).not.toHaveBeenCalled();
   });
 });

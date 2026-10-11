@@ -31,6 +31,9 @@ export type AttributeValue = string | number | boolean;
  */
 export type TagName = "text" | (string & {});
 
+/** Where `scrollIntoView` aligns a node on one axis. */
+export type ScrollAlignment = "start" | "center" | "end" | "nearest";
+
 /**
  * Style properties, in their snake_case spelling, that `setStyle`'s typed
  * overload checks. A deliberately incomplete, v1 layout/paint vocabulary. The

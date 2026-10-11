@@ -8,6 +8,7 @@ import { markDestroyed } from "./destroyedNodes.mts";
 import { skipReactive } from "./skipReactive.mts";
 import type { IncaCore, IncaEventTarget, NodeId, TagName } from "../rendererCore.mts";
 import type { RectLike } from "./domRect.mts";
+import type { ScrollIntoViewOptions } from "./scrollIntoViewArgs.mts";
 import type { ScrollOptions } from "./scrollPosition.mts";
 
 /**
@@ -36,8 +37,12 @@ export interface IncaElement extends IncaEventTarget {
   parent: IncaElement | null;
   /** This node's children, in render order. */
   children: IncaNode[];
-  /** Focuses this node next frame. The node needs a `tabindex` attribute. */
-  focus(): void;
+  /**
+   * Focuses this node next frame. The node needs a `tabindex` attribute. A
+   * `true` `preventScroll` keeps every scroll container where it is. After
+   * the node is removed, the call does nothing.
+   */
+  focus(options?: { preventScroll?: boolean }): void;
   /** Unfocuses this node next frame, if it is the focused one. */
   blur(): void;
   /**
@@ -90,6 +95,14 @@ export interface IncaElement extends IncaEventTarget {
   /** Adds `(left, top)` to the offset, or the options object's `left` and `top`. */
   scrollBy(left?: number, top?: number): void;
   scrollBy(options: ScrollOptions): void;
+  /**
+   * Scrolls each scroll container around this node so the node shows. `true`
+   * or no argument aligns to the start and `false` to the end. An options
+   * object sets `block` (default `"start"`) and `inline` (default `"nearest"`);
+   * `behavior` is accepted and ignored. After the node is removed, the call
+   * does nothing.
+   */
+  scrollIntoView(arg?: boolean | ScrollIntoViewOptions): void;
 }
 
 /** A text leaf host node — `@vue/runtime-core`'s `HostNode` for text. */

@@ -103,6 +103,7 @@ function installFakeNative(): Map<NodeId, FakeNode> {
       return null;
     },
     scrollNode(_nodeId: NodeId, _left: number | null, _top: number | null): void {},
+    scrollIntoViewNode(_nodeId: NodeId, _block: string, _inline: string): void {},
     removeAttribute(nodeId: NodeId, key: string): void {
       delete requireNode(nodeId).attributes[key];
     },
@@ -226,6 +227,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       scrollHeight: 0,
       scrollTo: () => {},
       scrollBy: () => {},
+      scrollIntoView: () => {},
     };
   });
 

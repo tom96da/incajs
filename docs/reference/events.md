@@ -129,6 +129,7 @@ rules, with the differences below.
   the first node, as in Chromium and WebKit. Focus stays in the window.
 - Tab after a click starts at the first node, where browsers continue from the
   click position.
+- Focus brings the node into view within its scrollable ancestors.
 
 ## Dispatching events
 

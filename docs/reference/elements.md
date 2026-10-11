@@ -78,6 +78,10 @@ clears every key set before.
 | `opacity` | `number` (`0` to `1`) | clamped; applies to descendants too |
 | `minWidth` / `minHeight` / `maxWidth` / `maxHeight` | `number` (px) \| `"auto"` | `"auto"` is the default limit: none for the `max` keys, the content size for a flex item's `min` keys |
 
+Content taller than the window is cut off at the window edge. It scrolls only
+inside an element with `"scroll"` or `"auto"`; see
+[Why doesn't my content scroll](../guide/troubleshooting).
+
 For `padding` and `margin`, a side key beats its axis key (`paddingX` for left
 and right, `paddingY` for top and bottom), and an axis key beats the
 shorthand. A value of the wrong shape counts as unset and the next key
@@ -124,16 +128,12 @@ object, with the keys above, has any visible effect.
 
 ## Template refs
 
-A template `ref` has `focus()`, `blur()`, `click()`, `tabIndex` and the
-listener methods of [Event targets](./events#event-targets). It reads its box
-through `getBoundingClientRect()`, `offsetWidth`, `offsetHeight`,
-`offsetLeft`, `offsetTop`, `offsetParent`, `clientWidth`, `clientHeight`,
-`clientLeft` and `clientTop`. `activeElement()` from `incajs/vue` returns the
-focused one.
-
-It also reads and sets its scroll offset through `scrollTop` and `scrollLeft`,
-and reads `scrollWidth` and `scrollHeight`. `scrollTo()` and `scrollBy()` take
-either `(left, top)` or `{ left, top }`. An omitted axis keeps its offset.
+A template `ref` is an element handle. Its members behave as described for
+[`Element`](https://developer.mozilla.org/en-US/docs/Web/API/Element) and
+[`HTMLElement`](https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement),
+with the differences below. The listener methods are described in
+[Event targets](./events#event-targets).
+`activeElement()` from `incajs/vue` returns the focused element.
 
 - A box read returns the box of the last drawn frame, so `onMounted` reads
   zeros.
@@ -145,6 +145,8 @@ either `(left, top)` or `{ left, top }`. An omitted axis keeps its offset.
 - `scrollWidth` and `scrollHeight` of a `"visible"` element equal its
   client size.
 - Every scroll applies at once, whatever `behavior` says.
+- `focus()` on a node that has no box yet scrolls when the next frame draws
+  it. A node drawn later stays where it is.
 
 ## Vue features that don't work yet
 

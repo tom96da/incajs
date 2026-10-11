@@ -7,11 +7,13 @@ import { elements } from "./elements.mts";
 import { layoutBox } from "./layoutBox.mts";
 import { offsetOf } from "./offsetOf.mts";
 import { offsetParentOf } from "./offsetParent.mts";
+import { scrollIntoViewArgs } from "./scrollIntoViewArgs.mts";
 import { scrollPosition } from "./scrollPosition.mts";
 import { skipReactive } from "./skipReactive.mts";
 import { tabIndexOf } from "./tabIndexOf.mts";
 import type { IncaCore, NodeId, TagName } from "../rendererCore.mts";
 import type { IncaElement } from "./nodeOps.mts";
+import type { ScrollIntoViewOptions } from "./scrollIntoViewArgs.mts";
 import type { ScrollArgs } from "./scrollPosition.mts";
 
 /**
@@ -37,7 +39,12 @@ export function createIncaElement(
     kind,
     parent: null,
     children: [],
-    focus: () => core.focus(id),
+    focus: (options?: { preventScroll?: boolean }) => {
+      if (isDestroyed(element)) return;
+      const preventScroll = options?.preventScroll;
+      if (preventScroll === undefined) core.focus(id);
+      else core.focus(id, Boolean(preventScroll));
+    },
     blur: () => core.blur(id),
     click: () => core.click(id),
     addEventListener: (...args) => {
@@ -103,6 +110,11 @@ export function createIncaElement(
     },
     scrollTo: (...args: ScrollArgs) => scrollPosition(core, element, args, false),
     scrollBy: (...args: ScrollArgs) => scrollPosition(core, element, args, true),
+    scrollIntoView: (arg?: boolean | ScrollIntoViewOptions) => {
+      if (isDestroyed(element)) return;
+      const { block, inline } = scrollIntoViewArgs(arg);
+      core.scrollIntoViewNode(id, block, inline);
+    },
   };
   if (kind === "element") elements.set(id, element);
   // A plain object in `ref()` becomes a proxy, which differs from `activeElement()`.

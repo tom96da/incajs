@@ -8,6 +8,7 @@ import {
   blur,
   click,
   dispatchEvent,
+  focus,
   focusedNode,
   registeredGroupCount,
   removeEventListener,
@@ -51,6 +52,7 @@ const native = {
   dispatchEvent: vi.fn<(nodeId: number, event: EventLike) => boolean>(() => true),
   scrollOf: vi.fn<(nodeId: number) => readonly [number, number, number, number] | null>(() => null),
   scrollNode: vi.fn<(nodeId: number, left: number | null, top: number | null) => void>(),
+  scrollIntoViewNode: vi.fn<(nodeId: number, block: string, inline: string) => void>(),
   click: vi.fn<(nodeId: number) => void>(),
 };
 
@@ -427,6 +429,20 @@ describe("latestEventId", () => {
     for (const event of [undefined, null, 3, {}, { eventId: "9" }]) fire(event);
 
     expect(tracked.latestEventId()).toBe(0);
+  });
+});
+
+describe("focus", () => {
+  it("passes no second argument when preventScroll is omitted", () => {
+    focus(7);
+    expect(native.focusNode).toHaveBeenCalledExactlyOnceWith(7);
+  });
+
+  it("passes the preventScroll flag through", () => {
+    focus(7, true);
+    focus(7, false);
+    expect(native.focusNode).toHaveBeenNthCalledWith(1, 7, true);
+    expect(native.focusNode).toHaveBeenNthCalledWith(2, 7, false);
   });
 });
 

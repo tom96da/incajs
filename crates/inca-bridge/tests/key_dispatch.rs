@@ -150,7 +150,7 @@ fn focused_pair(cx: &mut TestAppContext, js: &str) -> Pair {
     cx.update_window(window.into(), |_, window, _cx| window.activate_window())
         .unwrap();
     cx.update_window(window.into(), |_root, window, cx| {
-        host.borrow_mut().focus.request_focus(child);
+        host.borrow_mut().focus.request_focus(child, true);
         window.draw(cx).clear(cx);
     })
     .unwrap();

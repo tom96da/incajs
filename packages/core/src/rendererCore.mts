@@ -24,6 +24,7 @@ export {
   layoutOf,
   scrollOf,
   scrollNode,
+  scrollIntoViewNode,
   removeAttribute,
   setStyle,
   removeStyle,

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import type { AttributeValue, CallbackId, EventLike, NodeId } from "./types.mts";
+import type { AttributeValue, CallbackId, EventLike, NodeId, ScrollAlignment } from "./types.mts";
 
 /** The host-injected object every wrapper in this package forwards to. Not part of the public surface — reach it through the wrappers instead. */
 interface IncaNative {
@@ -24,7 +24,7 @@ interface IncaNative {
   ): void;
   removeEventListener(nodeId: NodeId, event: string, callbackId: CallbackId): boolean;
   destroyNode(nodeId: NodeId): CallbackId[];
-  focusNode(nodeId: NodeId): void;
+  focusNode(nodeId: NodeId, preventScroll?: boolean): void;
   blurNode(nodeId: NodeId): void;
   focusedNode(): NodeId | null;
   layoutOf(
@@ -32,6 +32,7 @@ interface IncaNative {
   ): readonly [number, number, number, number, number, number, number] | null;
   scrollOf(nodeId: NodeId): readonly [number, number, number, number] | null;
   scrollNode(nodeId: NodeId, left: number | null, top: number | null): void;
+  scrollIntoViewNode(nodeId: NodeId, block: ScrollAlignment, inline: ScrollAlignment): void;
   dispatchEvent(nodeId: NodeId, event: EventLike): boolean;
   click(nodeId: NodeId): void;
 }

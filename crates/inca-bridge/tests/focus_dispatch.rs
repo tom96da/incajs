@@ -93,7 +93,7 @@ fn focus_node_dispatches_focus_next_frame(cx: &mut TestAppContext) {
     );
 
     cx.update_window(window.into(), |_root, window, cx| {
-        host.borrow_mut().focus.request_focus(a);
+        host.borrow_mut().focus.request_focus(a, true);
         window.draw(cx).clear(cx);
     })
     .unwrap();
@@ -129,7 +129,7 @@ fn moving_focus_to_another_node_blurs_the_first(cx: &mut TestAppContext) {
         .unwrap();
 
     cx.update_window(window.into(), |_root, window, cx| {
-        host.borrow_mut().focus.request_focus(a);
+        host.borrow_mut().focus.request_focus(a, true);
         window.draw(cx).clear(cx);
     })
     .unwrap();
@@ -137,7 +137,7 @@ fn moving_focus_to_another_node_blurs_the_first(cx: &mut TestAppContext) {
     engine.eval::<()>("globalThis.seen = [];").unwrap();
 
     cx.update_window(window.into(), |_root, window, cx| {
-        host.borrow_mut().focus.request_focus(b);
+        host.borrow_mut().focus.request_focus(b, true);
         window.draw(cx).clear(cx);
     })
     .unwrap();
@@ -169,7 +169,7 @@ fn blur_node_blurs_whatever_is_focused(cx: &mut TestAppContext) {
         .unwrap();
 
     cx.update_window(window.into(), |_root, window, cx| {
-        host.borrow_mut().focus.request_focus(a);
+        host.borrow_mut().focus.request_focus(a, true);
         window.draw(cx).clear(cx);
     })
     .unwrap();
@@ -245,7 +245,7 @@ fn destroying_a_focused_node_reports_no_blur(cx: &mut TestAppContext) {
         .unwrap();
 
     cx.update_window(window.into(), |_root, window, cx| {
-        host.borrow_mut().focus.request_focus(a);
+        host.borrow_mut().focus.request_focus(a, true);
         window.draw(cx).clear(cx);
     })
     .unwrap();
@@ -291,8 +291,8 @@ fn two_focus_node_calls_before_the_next_frame_both_take_effect(cx: &mut TestAppC
         .unwrap();
 
     cx.update_window(window.into(), |_root, window, cx| {
-        host.borrow_mut().focus.request_focus(a);
-        host.borrow_mut().focus.request_focus(b);
+        host.borrow_mut().focus.request_focus(a, true);
+        host.borrow_mut().focus.request_focus(b, true);
         window.draw(cx).clear(cx);
     })
     .unwrap();
@@ -381,7 +381,7 @@ fn blur_node_of_a_node_that_is_not_focused_is_a_no_op(cx: &mut TestAppContext) {
         cx.update_window(window.into(), |_, window, _cx| window.activate_window())
             .unwrap();
         cx.update_window(window.into(), |_root, window, cx| {
-            host.borrow_mut().focus.request_focus(a);
+            host.borrow_mut().focus.request_focus(a, true);
             window.draw(cx).clear(cx);
         })
         .unwrap();
@@ -434,7 +434,7 @@ fn each_focus_transition_gets_its_own_event_id(cx: &mut TestAppContext) {
     for targets in [vec![a, b], vec![a]] {
         cx.update_window(window.into(), |_root, window, cx| {
             for target in targets {
-                host.borrow_mut().focus.request_focus(target);
+                host.borrow_mut().focus.request_focus(target, true);
             }
             window.draw(cx).clear(cx);
         })
@@ -530,7 +530,7 @@ fn focus_changes_fire_four_events_with_related_targets(cx: &mut TestAppContext) 
         cx.update_window(window.into(), |_root, window, cx| {
             let mut host = host.borrow_mut();
             match step {
-                Step::Focus(i) => host.focus.request_focus(nodes[i]),
+                Step::Focus(i) => host.focus.request_focus(nodes[i], true),
                 Step::Blur(i) => host.focus.request_blur(nodes[i]),
                 Step::RemoveTabindex(i) => {
                     host.tree.remove_attribute(nodes[i], "tabindex").unwrap();
@@ -579,7 +579,7 @@ fn an_ancestor_becoming_display_none_blurs_the_focused_node(cx: &mut TestAppCont
     cx.update_window(window.into(), |_, window, _cx| window.activate_window())
         .unwrap();
     cx.update_window(window.into(), |_, window, cx| {
-        host.borrow_mut().focus.request_focus(a);
+        host.borrow_mut().focus.request_focus(a, true);
         window.draw(cx).clear(cx);
     })
     .unwrap();
@@ -633,7 +633,7 @@ fn a_root_with_tabindex_still_focuses_normally(cx: &mut TestAppContext) {
     cx.update_window(window.into(), |_, window, cx| {
         let host = &mut *host.borrow_mut();
         assert!(host.focus.apply_pending(&host.tree, window, cx).is_empty());
-        host.focus.request_focus(root);
+        host.focus.request_focus(root, true);
         let transitions = host.focus.apply_pending(&host.tree, window, cx);
         assert_eq!(transitions.len(), 1);
         assert_eq!(host.focus.focused_node(window, cx), Some(root));

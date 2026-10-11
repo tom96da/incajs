@@ -35,6 +35,7 @@ use inca_gpui::EventSink;
 
 use crate::bindings::Host;
 use crate::event::{self, Flags, Walk};
+use crate::scroll_into_view::Align;
 
 /// Where a failure inside the running app goes. Nothing asked for it, so
 /// there is no caller to return it to and no `Result` to put it in.
@@ -788,9 +789,18 @@ impl EventDispatcher {
         };
         let click = match (key, up) {
             ("tab", false) if !(modifiers.control || modifiers.alt || modifiers.platform) => {
-                let host = self.host.borrow();
-                host.focus
+                let host = &mut *self.host.borrow_mut();
+                let moved = host
+                    .focus
                     .tab_move(&host.tree, host.root, window, cx, modifiers.shift);
+                if let Some(node) = moved {
+                    crate::scroll_into_view::reveal(
+                        host,
+                        node,
+                        Align::Reveal,
+                        Align::CenterOutside,
+                    );
+                }
                 None
             }
             ("enter", false) if !(modifiers.control || modifiers.alt || modifiers.platform) => {

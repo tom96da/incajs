@@ -21,3 +21,19 @@ If the machine is missing a required library or a Vulkan driver, the
 app fails to start rather than falling back to a software renderer. See
 [Linux runtime requirements](./#linux-runtime-requirements) for the
 libraries and driver package it needs, and how to check for them.
+
+## Why doesn't my content scroll when it is taller than the window?
+
+Content taller than the window is cut off at the window edge. Put the content
+in an element with a `height` and `overflow: "scroll"`, and the wheel scrolls
+that element:
+
+```vue
+<template>
+  <div :style="{ overflow: 'scroll', height: 400 }">
+    <!-- content taller than 400px -->
+  </div>
+</template>
+```
+
+[`overflow`](../reference/elements) lists the other values.

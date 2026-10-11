@@ -13,6 +13,7 @@ pub mod dev;
 pub mod dispatch;
 mod event;
 pub mod focus;
+mod scroll_into_view;
 
 pub use bindings::{EventListeners, Host, Listener};
 pub use dev::{DevSend, LoadSignal, call_dev_receive, install_dev, install_load_signal};
