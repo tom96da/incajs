@@ -142,11 +142,10 @@ have, and using them fails the build:
 - **No text input**: an editable text element is still unimplemented (see
   the [Roadmap](../roadmap)) — not permanently unsupported, just not built
   yet.
-- **`ref` reaches a few element members**: `.focus()` and `.blur()` (which
-  accept no argument), `.click()`, `.dispatchEvent()` and `tabIndex`. Other
-  DOM element members, such as `addEventListener()` and
-  `getBoundingClientRect()`, are missing. See [Events: Focus](./events#focus)
-  and [Events: Dispatching events](./events#dispatching-events).
+- **`ref` lacks most element members**: `getBoundingClientRect()` and the
+  size and scroll properties are missing. A `ref` has `.focus()`, `.blur()`,
+  `.click()`, `tabIndex` and the event target methods described in
+  [Events](./events).
 
 Event modifiers such as `.stop`, `.once` and `@keydown.enter` are documented
 in [Events: Event modifiers](./events#event-modifiers).

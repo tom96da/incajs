@@ -150,11 +150,11 @@ const entryKeyOf = ({ event, capture, passive }: ParsedEventKey): string =>
 function sync(core: IncaCore, el: IncaElement, entryKey: string, entry: Entry): void {
   const live = Array.from(entry.slots.values()).some((slot) => !slot.fired);
   if (live && !entry.registered) {
-    core.setEventListener(el.id, entry.event, entry.dispatcher, entry.options);
+    core.addEventListener(el.id, entry.event, entry.dispatcher, entry.options);
     entry.registered = true;
   } else if (!live && entry.registered) {
     entry.registered = false;
-    core.removeEventListener(el.id, entry.event, entry.options);
+    core.removeEventListener(el.id, entry.event, entry.dispatcher, entry.options);
   }
   if (entry.slots.size === 0) entriesByEl.get(el)?.delete(entryKey);
 }

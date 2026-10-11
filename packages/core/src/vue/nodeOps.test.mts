@@ -5,10 +5,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createNodeOps } from "./nodeOps.mts";
 import type { IncaCore } from "../rendererCore.mts";
-import type { EventLike, ListenerOptions } from "../types.mts";
+import type { EventLike, IncaEventTarget } from "../types.mts";
 import type { IncaElement, IncaText } from "./nodeOps.mts";
 
 let nextId = 1;
+
+const add = vi.fn<IncaEventTarget["addEventListener"]>();
+const remove = vi.fn<IncaEventTarget["removeEventListener"]>();
+const dispatch = vi.fn<(event: EventLike) => boolean>(() => true);
+const target: IncaEventTarget = {
+  addEventListener: add,
+  removeEventListener: remove,
+  dispatchEvent: dispatch,
+};
 
 const core: IncaCore = {
   rootNodeId: vi.fn<() => number>(),
@@ -20,16 +29,9 @@ const core: IncaCore = {
   removeAttribute: vi.fn<(nodeId: number, key: string) => void>(),
   setStyle: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   removeStyle: vi.fn<(nodeId: number, key: string) => void>(),
-  setEventListener:
-    vi.fn<
-      (
-        nodeId: number,
-        event: string,
-        listener: (...args: unknown[]) => void,
-        options?: ListenerOptions,
-      ) => void
-    >(),
-  removeEventListener: vi.fn<(nodeId: number, event: string, options?: ListenerOptions) => void>(),
+  addEventListener: vi.fn<IncaCore["addEventListener"]>(),
+  removeEventListener: vi.fn<IncaCore["removeEventListener"]>(),
+  createEventTarget: vi.fn<IncaCore["createEventTarget"]>(() => target),
   latestEventId: vi.fn<() => number>(() => 0),
   destroyNode: vi.fn<(nodeId: number) => void>(),
   focus: vi.fn<(nodeId: number) => void>(),
@@ -55,7 +57,7 @@ function element(): IncaElement {
     focus: vi.fn<() => void>(),
     blur: vi.fn<() => void>(),
     click: vi.fn<() => void>(),
-    dispatchEvent: vi.fn<(event: EventLike) => boolean>(() => true),
+    ...target,
     tabIndex: -1,
   };
 }
@@ -72,6 +74,8 @@ describe("createElement", () => {
       focus: expect.any(Function),
       blur: expect.any(Function),
       click: expect.any(Function),
+      addEventListener: expect.any(Function),
+      removeEventListener: expect.any(Function),
       dispatchEvent: expect.any(Function),
       tabIndex: -1,
     });
@@ -100,6 +104,8 @@ describe("createComment", () => {
       focus: expect.any(Function),
       blur: expect.any(Function),
       click: expect.any(Function),
+      addEventListener: expect.any(Function),
+      removeEventListener: expect.any(Function),
       dispatchEvent: expect.any(Function),
       tabIndex: -1,
     });
@@ -118,17 +124,32 @@ describe("focus / blur", () => {
   });
 });
 
-describe("click / dispatchEvent", () => {
-  it("forward to core.click and core.dispatchEvent bound to the element's own id", () => {
+describe("click", () => {
+  it("forwards to core.click bound to the element's own id", () => {
     const el = nodeOps.createElement("div");
-    const event = { type: "ping" };
-    vi.mocked(core.dispatchEvent).mockReturnValueOnce(false);
 
     el.click();
-    expect(core.click).toHaveBeenCalledExactlyOnceWith(el.id);
 
+    expect(core.click).toHaveBeenCalledExactlyOnceWith(el.id);
+  });
+});
+
+describe("event target methods", () => {
+  it("come from core.createEventTarget, resolving the element's own id", () => {
+    const el = nodeOps.createElement("div");
+    const comment = nodeOps.createComment("v-if");
+
+    const resolvers = vi.mocked(core.createEventTarget).mock.calls.map(([resolve]) => resolve());
+    expect(resolvers).toEqual([el.id, comment.id]);
+    const listener = vi.fn<() => void>();
+    const event = { type: "ping" };
+    dispatch.mockReturnValueOnce(false);
+    el.addEventListener("click", listener, true);
+    el.removeEventListener("click", listener, true);
+    expect(add).toHaveBeenCalledExactlyOnceWith("click", listener, true);
+    expect(remove).toHaveBeenCalledExactlyOnceWith("click", listener, true);
     expect(el.dispatchEvent(event)).toBe(false);
-    expect(core.dispatchEvent).toHaveBeenCalledExactlyOnceWith(el.id, event);
+    expect(dispatch).toHaveBeenCalledExactlyOnceWith(event);
   });
 });
 

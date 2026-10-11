@@ -6,8 +6,8 @@ import type { IncaElement } from "./nodeOps.mts";
 
 /**
  * Builds the {@link IncaElement} handle for a native node: parentless,
- * childless, with `focus()`, `blur()`, `click()`, `dispatchEvent()` and
- * `tabIndex` wired to `core`.
+ * childless, with `focus()`, `blur()`, `click()`, the listener methods of an
+ * event target and `tabIndex`, all driven through `core`.
  * @param core - the incajs bindings the handle drives
  * @param id - the native node's id
  * @param kind - whether the node is an element or a comment stand-in
@@ -29,7 +29,7 @@ export function createIncaElement(
     focus: () => core.focus(id),
     blur: () => core.blur(id),
     click: () => core.click(id),
-    dispatchEvent: (event) => core.dispatchEvent(id, event),
+    ...core.createEventTarget(() => id),
     get tabIndex() {
       return tabIndex;
     },

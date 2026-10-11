@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import type { AttributeValue, CallbackId, EventLike, EventListener, NodeId } from "./types.mts";
+import type { AttributeValue, CallbackId, EventLike, NodeId } from "./types.mts";
 
 /** The host-injected object every wrapper in this package forwards to. Not part of the public surface — reach it through the wrappers instead. */
 interface IncaNative {
@@ -29,11 +29,14 @@ interface IncaNative {
   click(nodeId: NodeId): void;
 }
 
+/** What the host calls: it passes the event object as the first argument. */
+export type HostCallback = (...args: unknown[]) => void;
+
 declare global {
   // eslint-disable-next-line no-var
   var __inca_native__: IncaNative;
   // eslint-disable-next-line no-var
-  var __inca_callbacks__: Record<CallbackId, EventListener>;
+  var __inca_callbacks__: Record<CallbackId, HostCallback>;
 }
 
 export function native(): IncaNative {

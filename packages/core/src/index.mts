@@ -1,13 +1,17 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-// Value exports live in `rendererCore.mts`, not here.
+// The renderer's value exports live in `rendererCore.mts`.
 
+export { window } from "./window.mts";
 export type {
   AttributeValue,
   CallbackId,
   EventLike,
   EventListener,
+  EventListenerObject,
+  EventListenerOrObject,
+  IncaEventTarget,
   ListenerOptions,
   NodeId,
   StyleProps,

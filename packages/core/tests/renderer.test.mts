@@ -1,10 +1,11 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { h, nextTick, reactive } from "@vue/runtime-core";
+import { h, nextTick, reactive, ref } from "@vue/runtime-core";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { blur, click, dispatchEvent, focus } from "../src/events.mts";
+import { createEventTarget } from "../src/createEventTarget.mts";
+import { blur, click, focus } from "../src/events.mts";
 import { createNode, rootNodeId } from "../src/tree.mts";
 import { createIncaApp } from "../src/vue/index.mts";
 import type { NodeId } from "../src/index.mts";
@@ -191,7 +192,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       focus: () => focus(rootId),
       blur: () => blur(rootId),
       click: () => click(rootId),
-      dispatchEvent: (event) => dispatchEvent(rootId, event),
+      ...createEventTarget(() => rootId),
       tabIndex: -1,
     };
   });
@@ -333,6 +334,30 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
 
     expect(log).toEqual(["parent capture", "child capture passive", "child"]);
     expect(passive).toEqual([false, true, false]);
+  });
+
+  it("lets a template ref add and remove listeners next to the template's own", async () => {
+    const box = ref<IncaElement | null>(null);
+    const log: string[] = [];
+    const onRef = (): number => log.push("ref");
+    const App = {
+      setup() {
+        return () => h("div", { ref: box, onClick: () => log.push("template") });
+      },
+    };
+
+    createIncaApp(App).mount(root);
+    await nextTick();
+    const div = nodes.get(nodes.get(root.id)!.children[0]!)!;
+
+    box.value!.addEventListener("click", onRef);
+    box.value!.addEventListener("click", onRef);
+    dispatch(div, "click");
+    box.value!.removeEventListener("click", onRef);
+    dispatch(div, "click");
+
+    expect(log).toEqual(["template", "ref", "template"]);
+    expect(div.listeners["click"]).toHaveLength(1);
   });
 
   it("unbinds a handler that goes away", async () => {

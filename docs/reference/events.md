@@ -124,11 +124,15 @@ browsers.
 ## Dispatching events
 
 - `MouseEvent`, `KeyboardEvent`, `FocusEvent`, `WheelEvent`, `UIEvent` and
-  `PointerEvent` are unsupported, as are `initEvent()` and `DOMException`. A
+  `PointerEvent` are unsupported, as are `initEvent()` and `DOMException`. An
   event dispatched while it is being dispatched throws a plain `Error` named
   `InvalidStateError`.
-- `window`, `document` and other non-element targets have no
-  `dispatchEvent()`.
+
+## Event targets
+
+- `window` is a named export of `incajs` (`import { window } from "incajs"`)
+  that carries the three listener methods. `document` is unsupported.
+- The `signal` option of `addEventListener()` is unsupported.
 
 ## Event modifiers
 

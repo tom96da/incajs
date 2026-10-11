@@ -11,7 +11,7 @@ export type NodeId = number;
 
 /**
  * Id assigned to one registered event listener. Managed internally by
- * `setEventListener`/`removeEventListener`/`destroyNode` — callers never see or
+ * `addEventListener`/`removeEventListener`/`destroyNode` — callers never see or
  * pass one directly.
  */
 export type CallbackId = number;
@@ -124,17 +124,67 @@ export interface EventLike {
 }
 
 /**
- * How a listener registered via `setEventListener` takes part in an event.
+ * How a listener registered via `addEventListener` takes part in an event.
  */
 export interface ListenerOptions {
   /** Listen while the event travels from the root down to the target. The default listens while it travels back up. */
   capture?: boolean;
   /** `preventDefault()` calls inside the listener are ignored. */
   passive?: boolean;
+  /** The listener is removed before it first runs. */
+  once?: boolean;
 }
 
 /**
- * Signature of a callback registered via `setEventListener`.
+ * The listener methods of an object that receives events, such as the
+ * `window` export and a template `ref`. A registration is identified by the
+ * event name, the listener and `capture`. `removeEventListener` takes the
+ * same listener that `addEventListener` received.
+ */
+export interface IncaEventTarget {
+  /**
+   * Registers `listener` for `type`. Registering the same listener for the
+   * same `type` and `capture` again changes nothing. A `null` listener is
+   * ignored.
+   * @param type - the event name (e.g. `"keydown"`)
+   * @param listener - a function, or an object whose `handleEvent` method is
+   * called when the event fires
+   * @param options - a {@link ListenerOptions}, or a boolean for `capture`
+   * @throws TypeError when the target's node was destroyed
+   */
+  addEventListener(
+    type: string,
+    listener: EventListenerOrObject | null,
+    options?: boolean | ListenerOptions,
+  ): void;
+
+  /**
+   * Drops the registration of `listener` for `type` with the same `capture`.
+   * A call that matches no registration changes nothing.
+   * @param type - the event name
+   * @param listener - the listener that was registered
+   * @param options - an object with `capture`, or a boolean for `capture`
+   */
+  removeEventListener(
+    type: string,
+    listener: EventListenerOrObject | null,
+    options?: boolean | Pick<ListenerOptions, "capture">,
+  ): void;
+
+  /**
+   * Dispatches an `Event` or `CustomEvent` at the target.
+   * @param event - the event to dispatch
+   * @returns `false` when a listener canceled a cancelable event, else `true`
+   * @throws TypeError when the target's node was destroyed
+   * @throws TypeError when `event` is not an `Event` or `CustomEvent`
+   * @throws Error named `InvalidStateError` when `event` is being dispatched
+   */
+  dispatchEvent(event: EventLike): boolean;
+}
+
+/**
+ * Signature of a callback registered via `addEventListener`. Declare its
+ * parameter as the event object, such as `(event: { key: string }) => void`.
  *
  * The native host calls it with one argument, an object with:
  * - `type`: the event's name.
@@ -161,4 +211,18 @@ export interface ListenerOptions {
  * See https://incajs.tom96da.com/reference/events for the event names the
  * host dispatches and their fields.
  */
-export type EventListener = (...args: unknown[]) => void;
+export type EventListener = (...args: never[]) => void;
+
+/**
+ * An object whose `handleEvent` method receives the events, called with the
+ * object as `this`. It takes the arguments of an {@link EventListener}.
+ */
+export interface EventListenerObject {
+  handleEvent: EventListener;
+}
+
+/**
+ * What `addEventListener` accepts as a listener: an {@link EventListener} or
+ * an {@link EventListenerObject}.
+ */
+export type EventListenerOrObject = EventListener | EventListenerObject;

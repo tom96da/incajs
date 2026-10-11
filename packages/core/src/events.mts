@@ -1,33 +1,41 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { native } from "./native.mts";
-import type { CallbackId, EventLike, EventListener, ListenerOptions, NodeId } from "./types.mts";
+import { native, type HostCallback } from "./native.mts";
+import type {
+  CallbackId,
+  EventLike,
+  EventListenerOrObject,
+  ListenerOptions,
+  NodeId,
+} from "./types.mts";
 
 /**
  * The JS half of every registration: the `callbackId` the host holds, the
- * listener at `globalThis.__inca_callbacks__[callbackId]`, and which
- * `(nodeId, event, capture, passive)` that id belongs to.
+ * callback at `globalThis.__inca_callbacks__[callbackId]`, and the
+ * `(nodeId, event, capture)` group and listener that id belongs to.
  *
- * A registration is reached from either end: by `(nodeId, event, capture,
- * passive)` when replacing a listener, and by `callbackId` when the host
- * reports one released. All three move together in here, and none can be
- * updated without the others.
+ * A registration is reached from either end: by group and listener when a
+ * listener is added or removed, and by `callbackId` when the host reports
+ * one released. All of it moves together in here.
  */
 interface Registrations {
   /**
-   * Records `listener` under a fresh id.
-   * @param key - the registration's node, event, capture and passive flags as one string
-   * @param listener - the function to run
+   * Records `callable` under a fresh id.
+   * @param group - the node, event and capture flag as one string
+   * @param listener - the listener the caller registered, which identifies
+   * the registration
+   * @param callable - the function the host runs
    * @returns the id the host should be given
    */
-  add(key: string, listener: EventListener): CallbackId;
+  add(group: string, listener: EventListenerOrObject, callable: HostCallback): CallbackId;
 
   /**
-   * @param key - the registration's node, event, capture and passive flags as one string
-   * @returns the id registered under `key`, or `undefined`
+   * @param group - the node, event and capture flag as one string
+   * @param listener - the listener the caller registered
+   * @returns the id registered for the pair, or `undefined`
    */
-  idFor(key: string): CallbackId | undefined;
+  idFor(group: string, listener: EventListenerOrObject): CallbackId | undefined;
 
   /**
    * Forgets `callbackId` and the listener it named. A no-op for an id that
@@ -35,50 +43,67 @@ interface Registrations {
    * @param callbackId - the id to drop
    */
   release(callbackId: CallbackId): void;
+
+  /** @returns how many `(nodeId, event, capture)` groups hold a registration */
+  groupCount(): number;
 }
 
 /**
  * @returns a new, empty {@link Registrations}
  */
 function createRegistrations(): Registrations {
-  const idByKey = new Map<string, CallbackId>();
-  const keyById = new Map<CallbackId, string>();
+  const idsByGroup = new Map<string, Map<EventListenerOrObject, CallbackId>>();
+  const ownerById = new Map<CallbackId, { group: string; listener: EventListenerOrObject }>();
   let nextCallbackId = 0;
 
   // Lazily, because the host defines nothing until the first registration.
-  const listeners = (): Record<CallbackId, EventListener> => (globalThis.__inca_callbacks__ ??= {});
+  const callables = (): Record<CallbackId, HostCallback> => (globalThis.__inca_callbacks__ ??= {});
 
   return {
-    add(key, listener) {
+    add(group, listener, callable) {
       const callbackId = nextCallbackId++;
-      listeners()[callbackId] = listener;
-      idByKey.set(key, callbackId);
-      keyById.set(callbackId, key);
+      callables()[callbackId] = callable;
+      let ids = idsByGroup.get(group);
+      if (!ids) idsByGroup.set(group, (ids = new Map()));
+      ids.set(listener, callbackId);
+      ownerById.set(callbackId, { group, listener });
       return callbackId;
     },
 
-    idFor(key) {
-      return idByKey.get(key);
+    idFor(group, listener) {
+      return idsByGroup.get(group)?.get(listener);
     },
 
     release(callbackId) {
-      delete listeners()[callbackId];
-      const key = keyById.get(callbackId);
-      if (key === undefined) return;
-      keyById.delete(callbackId);
-      idByKey.delete(key);
+      delete callables()[callbackId];
+      const owner = ownerById.get(callbackId);
+      if (owner === undefined) return;
+      ownerById.delete(callbackId);
+      const ids = idsByGroup.get(owner.group);
+      ids?.delete(owner.listener);
+      if (ids?.size === 0) idsByGroup.delete(owner.group);
     },
+
+    groupCount: () => idsByGroup.size,
   };
 }
 
 const registrations = createRegistrations();
 
 /**
- * The phase and passivity are part of the identity: the same node and event
- * can hold a bubble, a capture and a passive listener side by side.
+ * The capture flag is part of the identity: the same node, event and function
+ * can listen in both phases side by side.
  */
-const keyOf = (nodeId: NodeId, event: string, { capture, passive }: ListenerOptions): string =>
-  `${nodeId}:${event}:${capture === true}:${passive === true}`;
+const groupOf = (nodeId: NodeId, event: string, capture: boolean | undefined): string =>
+  `${nodeId}:${event}:${capture === true}`;
+
+/**
+ * @returns how many `(nodeId, event, capture)` groups hold a registration
+ * @internal
+ */
+export function registeredGroupCount(): number {
+  return registrations.groupCount();
+}
 
 let latestId = 0;
 
@@ -91,8 +116,8 @@ export function latestEventId(): number {
   return latestId;
 }
 
-// Records the event's `eventId` before the listener runs.
-function tracking(listener: EventListener): EventListener {
+/** Records the event's `eventId` before the listener runs. */
+function tracking(listener: HostCallback): HostCallback {
   return (...args) => {
     const id = (args[0] as { eventId?: unknown } | null | undefined)?.eventId;
     if (typeof id === "number" && id > latestId) latestId = id;
@@ -111,28 +136,43 @@ export function releaseCallbacks(callbackIds: readonly CallbackId[]): void {
 }
 
 /**
- * Makes `listener` the one thing that runs when `event` fires on `nodeId` in
- * the phase `options` names, replacing whatever was registered for that
- * combination before.
+ * Registers `listener` for `event` on `nodeId`. Registering the same listener
+ * for the same node, event and `capture` again changes nothing, and the first
+ * registration keeps its other options. A `null` listener is ignored.
  *
- * The host holds a list per `(nodeId, event)` and dispatches to all of it;
- * this wrapper keeps one per combination of `capture` and `passive`. See
- * {@link EventListener} for the fields an event carries. Any event name is
- * accepted, and it fires when the host dispatches that name.
+ * Any event name is accepted, and it fires when the host dispatches that name.
+ * See the `EventListener` type for the fields an event carries.
  * @param nodeId - the node to listen on
  * @param event - the event name (e.g. `"click"`)
- * @param listener - called when the event fires
+ * @param listener - a function, or an object whose `handleEvent` method is
+ * called with the object as `this` when the event fires
  * @param options - `capture` listens while the event travels down to the
- * target, and `passive` ignores `preventDefault()` calls in `listener`
+ * target, `passive` ignores `preventDefault()` calls in `listener`, and
+ * `once` removes the listener before it first runs
+ * @throws TypeError when `nodeId` is malformed
+ * @throws TypeError when `nodeId` names no node
  */
-export function setEventListener(
+export function addEventListener(
   nodeId: NodeId,
   event: string,
-  listener: EventListener,
+  listener: EventListenerOrObject | null,
   options: ListenerOptions = {},
 ): void {
-  removeEventListener(nodeId, event, options);
-  const callbackId = registrations.add(keyOf(nodeId, event, options), tracking(listener));
+  if (listener === null || listener === undefined) return;
+  const group = groupOf(nodeId, event, options.capture);
+  if (registrations.idFor(group, listener) !== undefined) return;
+
+  const call: HostCallback = (...args) =>
+    typeof listener === "function"
+      ? (listener as HostCallback)(...args)
+      : (listener.handleEvent as HostCallback).apply(listener, args);
+  const run: HostCallback = options.once
+    ? (...args) => {
+        removeEventListener(nodeId, event, listener, options);
+        return call(...args);
+      }
+    : call;
+  const callbackId = registrations.add(group, listener, tracking(run));
   try {
     native().addEventListener(
       nodeId,
@@ -148,19 +188,21 @@ export function setEventListener(
 }
 
 /**
- * Drops whatever {@link setEventListener} registered for `(nodeId, event)`
- * with the same `capture` and `passive` options, on both the native and the JS
- * side. A no-op if nothing is registered.
+ * Drops the registration {@link addEventListener} made for `listener` on
+ * `nodeId` with the same `event` and `capture`. A no-op if there is none.
  * @param nodeId - the node to stop listening on
  * @param event - the event name
- * @param options - the options the listener was registered with
+ * @param listener - the listener that was registered
+ * @param options - `capture` of the registration to drop
  */
 export function removeEventListener(
   nodeId: NodeId,
   event: string,
-  options: ListenerOptions = {},
+  listener: EventListenerOrObject | null,
+  options: Pick<ListenerOptions, "capture"> = {},
 ): void {
-  const callbackId = registrations.idFor(keyOf(nodeId, event, options));
+  if (listener === null || listener === undefined) return;
+  const callbackId = registrations.idFor(groupOf(nodeId, event, options.capture), listener);
   if (callbackId === undefined) return;
 
   native().removeEventListener(nodeId, event, callbackId);
@@ -193,11 +235,9 @@ export function click(nodeId: NodeId): void {
 
 /**
  * Requests that `nodeId` become focused. Takes effect on the next frame,
- * dispatching `"blur"`/`"focus"` for whatever actually changed — `nodeId`
- * doesn't need a `"focus"`/`"blur"` listener registered for this to work,
- * the same way `element.focus()` works on any focusable DOM element
- * regardless of whether it's being listened to. The node needs a `tabindex`
- * attribute to take focus.
+ * dispatching `"blur"`/`"focus"` for whatever actually changed. The node
+ * needs a `tabindex` attribute to take focus, and a listener for either event
+ * is optional.
  * @param nodeId - the node to focus
  */
 export function focus(nodeId: NodeId): void {

@@ -130,6 +130,13 @@ and event name. Payloads and author-facing behaviour are in
   is a no-op and keeps its first `capture` and `passive`.
 - `capture` and `passive` belong to the registration. A callback id belongs to
   one registration, so `removeEventListener` takes the id only.
+- `packages/core` keys a registration by node, event, capture and listener,
+  so `removeEventListener(type, listener, options)` finds it by identity and
+  adding the same listener again changes nothing. A listener object keeps its
+  own identity and receives `handleEvent` calls. `once` is a wrapper that
+  removes the registration before the listener runs. `createEventTarget`
+  builds the three listener methods for one node, and `window` resolves
+  `rootNodeId()` when a method runs.
 - The caller stores the function at `globalThis.__inca_callbacks__[callbackId]`
   before registering. The host stores only the `u32` id.
 - A missing or non-function entry is skipped.

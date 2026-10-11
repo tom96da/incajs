@@ -115,10 +115,10 @@ A fixed entry is deleted and its ID is never reused.
 
   `IncaElement`
   (`packages/core/src/vue/nodeOps.mts`) has `focus()`, `blur()`, `click()`,
-  `dispatchEvent()` and `tabIndex`. The DOM element members a `.vue` app
-  would otherwise reach for on a template `ref` are missing, such as
-  `addEventListener()`, `removeEventListener()`, `getBoundingClientRect()`
-  and the size and scroll properties.
+  `addEventListener()`, `removeEventListener()`, `dispatchEvent()` and
+  `tabIndex`. The DOM element members a `.vue` app would otherwise reach for
+  on a template `ref` are missing, such as `getBoundingClientRect()` and the
+  size and scroll properties.
 
 - **B-036 Reverting a script edit under `--experimental-hmr` sometimes applies nothing**
   `Units: cli · Size: M · Impact: Medium · Status: needs repro`
@@ -927,15 +927,6 @@ A fixed entry is deleted and its ID is never reused.
   press fires nothing. Fix: dispatch the touch sequence from `gpui` touch
   input with `touches` and `changedTouches`.
 
-- **B-158 Keys with nothing focused reach only the host root, which templates cannot listen on**
-  `Units: core,bridge,docs · Size: M · Impact: Medium`
-
-  With nothing focused, `keydown` and `keyup` target the host root node. A
-  listener on the app's top element is a child of that node and never runs, so
-  an app cannot react to keys while nothing is focused. Fix: expose a
-  listener target for the root, such as `window` or `document`, with
-  `addEventListener` and `dispatchEvent` on the element wrapper of the root.
-
 - **B-159 `inca dev --experimental-hmr` prints Vue's feature flag warning**
   `Units: cli · Size: S · Impact: Low`
 
@@ -997,3 +988,14 @@ A fixed entry is deleted and its ID is never reused.
   plain `Error` named `InvalidStateError`, since the realm has no
   `DOMException` class. Fix: add the subclasses with their init dictionaries,
   `initEvent()` and a `DOMException` class.
+
+- **B-168 `window` has the listener methods only and `document` is undefined**
+  `Units: core,bridge,docs · Size: M · Impact: Low`
+
+  `window` is a named export of `incajs` with `addEventListener()`,
+  `removeEventListener()` and `dispatchEvent()` as its only members. The
+  globals `window` and `document` are undefined, and the `signal` option of
+  `addEventListener()` is unsupported. Fix: install a global `document` and
+  decide how a global `window` coexists with the `typeof window` checks of
+  libraries. The `signal` option needs an `AbortController` in the runtime
+  first.
