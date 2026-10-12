@@ -17,11 +17,11 @@
 //! per registration: a plain `u32` callback id with its capture and passive
 //! flags, never an `rquickjs::Value`/`Function`/`Persistent<T>`, because a JS
 //! handle kept past the call that produced it outlives the context it
-//! belongs to. The JS caller stores the function itself, at
-//! `globalThis.__inca_callbacks__[callbackId]`, before calling
-//! `addEventListener` with that id. The walk of an event looks the real
-//! function up fresh inside one `Engine::with` call and drops it before that
-//! call returns — it never crosses into Rust-held state.
+//! belongs to. `addEventListener` returns the id the host allocated, and the JS
+//! caller stores the function at `globalThis.__inca_callbacks__[callbackId]`.
+//! The walk of an event looks the real function up fresh inside one
+//! `Engine::with` call and drops it before that call returns — it never
+//! crosses into Rust-held state.
 
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeSet;
@@ -1971,14 +1971,14 @@ mod tests {
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [_, parent, child] = tree_of_three(&host);
-        host.borrow_mut().listeners.register(child, "click", 0);
-        host.borrow_mut().listeners.register(parent, "click", 1);
+        add_in(&host, child, false, false);
+        add_in(&host, parent, false, false);
         callbacks(
             &dispatcher,
             &format!(
                 "0: () => {{ out.push(0); \
-                    __inca_native__.addEventListener({child}, 'click', 2); \
-                    __inca_native__.addEventListener({parent}, 'click', 3); }}, \
+                    __inca_native__.addEventListener({child}, 'click'); \
+                    __inca_native__.addEventListener({parent}, 'click'); }}, \
                  1: () => out.push(1), 2: () => out.push(2), 3: () => out.push(3)"
             ),
         );
@@ -2038,6 +2038,14 @@ mod tests {
             .unwrap();
         let immediate = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
         assert_eq!(immediate, serde_json::json!([0]));
+    }
+
+    /// Registers a `click` listener under the next host-allocated callback id.
+    fn add_in(host: &Rc<RefCell<Host>>, node: NodeId, capture: bool, passive: bool) -> u32 {
+        host.borrow_mut()
+            .listeners
+            .add(node, "click", capture, passive)
+            .unwrap()
     }
 
     fn listen_in(host: &Rc<RefCell<Host>>, node: NodeId, id: u32, capture: bool, passive: bool) {
@@ -2306,17 +2314,17 @@ mod tests {
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [outer, parent, child] = tree_of_three(&host);
-        listen_in(&host, outer, 0, true, false);
-        listen_in(&host, parent, 1, true, false);
-        listen_in(&host, child, 2, false, false);
-        listen_in(&host, parent, 3, false, false);
+        add_in(&host, outer, true, false);
+        add_in(&host, parent, true, false);
+        add_in(&host, child, false, false);
+        add_in(&host, parent, false, false);
         callbacks(
             &dispatcher,
             &format!(
                 "0: () => {{ out.push(0); \
                     __inca_native__.removeEventListener({parent}, 'click', 1); \
                     __inca_native__.removeEventListener({child}, 'click', 2); \
-                    __inca_native__.addEventListener({parent}, 'click', 4, true); }}, \
+                    __inca_native__.addEventListener({parent}, 'click', true); }}, \
                  1: () => out.push(1), 2: () => out.push(2), 3: () => out.push(3), \
                  4: () => out.push(4)"
             ),
@@ -2333,14 +2341,15 @@ mod tests {
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [outer, parent, child] = tree_of_three(&host);
-        listen_in(&host, outer, 0, true, false);
-        listen_in(&host, parent, 1, false, false);
+        add_in(&host, outer, true, false);
+        add_in(&host, parent, false, false);
         callbacks(
             &dispatcher,
             &format!(
                 "0: () => {{ out.push(0); \
                     __inca_native__.removeEventListener({parent}, 'click', 1); \
-                    __inca_native__.addEventListener({parent}, 'click', 1, true); }}, \
+                    const id = __inca_native__.addEventListener({parent}, 'click', true); \
+                    __inca_callbacks__[id] = __inca_callbacks__[1]; }}, \
                  1: (e) => out.push([1, e.eventPhase])"
             ),
         );
@@ -2356,14 +2365,15 @@ mod tests {
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [_, _, child] = tree_of_three(&host);
-        listen_in(&host, child, 0, true, false);
-        listen_in(&host, child, 1, true, false);
+        add_in(&host, child, true, false);
+        add_in(&host, child, true, false);
         callbacks(
             &dispatcher,
             &format!(
                 "0: () => {{ out.push(0); \
                     __inca_native__.removeEventListener({child}, 'click', 1); \
-                    __inca_native__.addEventListener({child}, 'click', 1, true, true); }}, \
+                    const id = __inca_native__.addEventListener({child}, 'click', true, true); \
+                    __inca_callbacks__[id] = __inca_callbacks__[1]; }}, \
                  1: (e) => {{ out.push(1); e.preventDefault(); }}"
             ),
         );
@@ -2386,13 +2396,13 @@ mod tests {
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [_, _, child] = tree_of_three(&host);
-        listen_in(&host, child, 0, true, false);
+        add_in(&host, child, true, false);
         callbacks(
             &dispatcher,
             &format!(
                 "0: () => {{ out.push(0); \
-                    __inca_native__.addEventListener({child}, 'click', 1); \
-                    __inca_native__.addEventListener({child}, 'click', 2, true); }}, \
+                    __inca_native__.addEventListener({child}, 'click'); \
+                    __inca_native__.addEventListener({child}, 'click', true); }}, \
                  1: () => out.push(1), 2: () => out.push(2)"
             ),
         );
@@ -2905,6 +2915,25 @@ mod tests {
             &format!("(__inca_native__.dispatchEvent({child}, new Event('ping')), out)"),
         );
         assert_eq!(got, serde_json::json!(["child"]));
+    }
+
+    #[test]
+    fn a_dispatched_event_calls_the_function_stored_under_the_returned_id() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let got = eval_json(
+            &dispatcher,
+            &format!(
+                "(() => {{ const out = []; globalThis.__inca_callbacks__ = {{}}; \
+                 const first = __inca_native__.addEventListener({node}, 'ping'); \
+                 const second = __inca_native__.addEventListener({node}, 'ping'); \
+                 __inca_callbacks__[first] = () => out.push('first'); \
+                 __inca_callbacks__[second] = () => out.push('second'); \
+                 __inca_native__.dispatchEvent({node}, new Event('ping')); \
+                 return [first, second, out]; }})()"
+            ),
+        );
+        assert_eq!(got, serde_json::json!([0, 1, ["first", "second"]]));
     }
 
     #[test]

@@ -87,7 +87,7 @@ the nearest ancestor container.
 | `removeAttribute` | `(nodeId: number, key: string) => void` | Remove a non-style attribute prop. Removing a key that isn't set does nothing. |
 | `setStyle` | `(nodeId: number, key: string, value: string \| number \| boolean) => void` | Set a style prop. |
 | `removeStyle` | `(nodeId: number, key: string) => void` | Remove a style prop so it renders as if never set. Removing a key that isn't set does nothing. |
-| `addEventListener` | `(nodeId: number, event: string, callbackId: number, capture?: boolean, passive?: boolean) => void` | Register a callback for an event, see [Registering](#registering). `capture` and `passive` default to `false`. |
+| `addEventListener` | `(nodeId: number, event: string, capture?: boolean, passive?: boolean) => number` | Register a callback for an event and return its id, see [Registering](#registering). `capture` and `passive` default to `false`. |
 | `removeEventListener` | `(nodeId: number, event: string, callbackId: number) => boolean` | Drop one registration and return whether it was there. An unknown node returns `false`. |
 | `dispatchEvent` | `(nodeId: number, event: Event) => boolean` | Walk a script-built event over the path of `nodeId` and return `false` when a listener canceled it, see [Dispatching from script](#dispatching-from-script). |
 | `click` | `(nodeId: number) => void` | Walk an untrusted `click` at `nodeId`, see [Dispatching from script](#dispatching-from-script). |
@@ -99,9 +99,10 @@ the nearest ancestor container.
 | `scrollIntoViewNode` | `(nodeId: number, block: string, inline: string) => void` | Scroll every scroll container above `nodeId` until the node shows, innermost first. `block` is the vertical and `inline` the horizontal alignment: `"start"`, `"center"`, `"end"` or `"nearest"`. `"nearest"` keeps a node that shows in place. A node shorter than the box aligns the edge that lies outside it, and a longer node aligns its end when its start lies before the box, and its start when its end lies after the box. Uses the boxes of the last drawn frame. A node with no recorded box is retried once on the next frame. |
 | `scrollNode` | `(nodeId: number, left: number \| null, top: number \| null) => void` | Set the scroll offset of the axes given, a `null` axis keeps its value. Values below 0 become 0, and the host clamps the upper end at the next frame. A node whose `overflow` is `visible` on both axes ignores the call. |
 
-Shared throw rules, all as a `TypeError`:
+Shared throw rules, all as a `TypeError` except where noted:
 
 - A malformed `nodeId` or `callbackId` throws.
+- `addEventListener` throws a `RangeError` after the last id.
 - `setAttribute` and `setStyle` throw for a `value` that is not a string, number or boolean.
 - `dispatchEvent` throws for an argument that is not an `Event` or
   `CustomEvent` of the host.
@@ -136,20 +137,21 @@ and author-facing behaviour are in [events.md](../docs/reference/events.md).
 
 #### Registering
 
-- Distinct `callbackId`s stack on one `(nodeId, event)`. Re-adding an id is a
-  no-op that keeps its first `capture` and `passive`, which belong to the
-  registration. An id belongs to one registration, so `removeEventListener`
-  takes the id only. `destroyNode` returns the dropped ids because only the
-  caller can free the JS half.
+- `addEventListener` allocates the id and returns it. Each id is issued once.
+  The ids run from 0 to `u32::MAX - 1`, and the call after the last one
+  throws a `RangeError`. Distinct ids stack on one `(nodeId, event)`, and
+  `capture` and `passive` belong to the registration. An id belongs to one
+  registration, so `removeEventListener` takes the id only. `destroyNode`
+  returns the dropped ids because only the caller can free the JS half.
 - `packages/core` keys a registration by node, event, capture and listener, so
   `removeEventListener(type, listener, options)` finds it by identity and
   adding the same listener again changes nothing. A listener object keeps its
   identity and receives `handleEvent` calls. `once` removes the registration
   before the listener runs. `createEventTarget` builds the listener methods
   for one node, and `window` resolves `rootNodeId()` per call.
-- The caller stores the function at `globalThis.__inca_callbacks__[callbackId]`
-  before registering, and the host stores the `u32` id. A missing or
-  non-function entry is skipped.
+- The caller stores the function at `globalThis.__inca_callbacks__[id]` after
+  `addEventListener` returns `id`. A listener runs only after the call returns.
+  A missing or non-function entry is skipped.
 - A throwing callback goes to `Host::failures`, and sibling callbacks still
   run. Unhandled promise rejections and failed jobs are reported through the
   job drain before listener errors, and only listener errors go to

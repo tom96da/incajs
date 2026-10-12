@@ -59,26 +59,23 @@ fn build_tree(tree: &mut VirtualTree) -> (NodeId, NodeId) {
     (outer, label)
 }
 
-/// Wires the box's click, via JS, to update the label's text. Relies on the
-/// convention that a real callback function must be stored at
-/// `globalThis.__inca_callbacks__[callbackId]` before calling
-/// `addEventListener` with that id (see `EventDispatcher`'s doc comment
-/// for why).
+/// Wires the box's click, via JS, to update the label's text. Stores the callback
+/// function at `globalThis.__inca_callbacks__[callbackId]` with the id that
+/// `addEventListener` returns (see `EventDispatcher`'s doc comment for why).
 fn install_click_handler(engine: &Engine, outer: NodeId, label: NodeId) {
     engine
         .eval::<()>(&format!(
             "globalThis.__inca_clicks__ = 0;
-             globalThis.__inca_callbacks__ = {{
-                 0: function () {{
-                     globalThis.__inca_clicks__ += 1;
-                     __inca_native__.setAttribute(
-                         {label},
-                         'value',
-                         'Clicked ' + globalThis.__inca_clicks__ + ' time(s)'
-                     );
-                 }}
-             }};
-             __inca_native__.addEventListener({outer}, 'click', 0);"
+             globalThis.__inca_callbacks__ = {{}};
+             const id = __inca_native__.addEventListener({outer}, 'click');
+             globalThis.__inca_callbacks__[id] = function () {{
+                 globalThis.__inca_clicks__ += 1;
+                 __inca_native__.setAttribute(
+                     {label},
+                     'value',
+                     'Clicked ' + globalThis.__inca_clicks__ + ' time(s)'
+                 );
+             }};"
         ))
         .unwrap();
 }

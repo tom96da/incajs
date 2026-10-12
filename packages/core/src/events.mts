@@ -41,6 +41,7 @@ function tracking(listener: HostCallback): HostCallback {
  * `once` removes the listener before it first runs
  * @throws TypeError when `nodeId` is malformed
  * @throws TypeError when `nodeId` names no node
+ * @throws RangeError when the host has issued its last callback id
  */
 export function addEventListener(
   nodeId: NodeId,
@@ -62,19 +63,13 @@ export function addEventListener(
         return call(...args);
       }
     : call;
-  const callbackId = addCallback(group, listener, tracking(run));
-  try {
-    native().addEventListener(
-      nodeId,
-      event,
-      callbackId,
-      options.capture === true,
-      options.passive === true,
-    );
-  } catch (error) {
-    releaseCallback(callbackId);
-    throw error;
-  }
+  const callbackId = native().addEventListener(
+    nodeId,
+    event,
+    options.capture === true,
+    options.passive === true,
+  );
+  addCallback(group, listener, callbackId, tracking(run));
 }
 
 /**

@@ -1037,6 +1037,9 @@ runs alongside Phase 3.4.
       listener that has fired stays off until its key is removed
 - [x] A module's bare imports resolve only inside the bundle root, and the
       entry path is canonicalized
+- [x] The host allocates callback ids: `addEventListener` returns the id and
+      each id is issued once, so a retried load that evaluates `incajs` again
+      keeps every earlier registration on its own function
 
 ### Tests
 

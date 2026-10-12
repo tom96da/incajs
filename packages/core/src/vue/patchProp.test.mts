@@ -1732,7 +1732,8 @@ describe("a listener attached while an event is handled", () => {
 });
 
 describe("with the event tracker of the events layer", () => {
-  const addEventListener = vi.fn<(nodeId: number, event: string, callbackId: number) => void>();
+  let nextCallbackId = 0;
+  const addEventListener = vi.fn<(nodeId: number, event: string) => number>(() => nextCallbackId++);
   const real = createPatchProp({
     ...core,
     addEventListener: events.addEventListener,
@@ -1754,7 +1755,8 @@ describe("with the event tracker of the events layer", () => {
 
   // Delivers event `eventId` to the newest registration for `nodeId`.
   const send = (nodeId: number, eventId: number): void => {
-    const [, , callbackId] = addEventListener.mock.calls.findLast(([id]) => id === nodeId)!;
+    const index = addEventListener.mock.calls.findLastIndex(([id]) => id === nodeId);
+    const callbackId = addEventListener.mock.results[index]!.value;
     globalThis.__inca_callbacks__[callbackId]!({ eventId });
   };
 

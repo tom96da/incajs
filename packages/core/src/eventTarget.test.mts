@@ -6,17 +6,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createEventTarget } from "./eventTarget.mts";
 import type { EventLike } from "./types.mts";
 
+// Ids come from the host, which numbers them in order.
+let nextCallbackId = 0;
+
 const native = {
-  addEventListener:
-    vi.fn<
-      (
-        nodeId: number,
-        event: string,
-        callbackId: number,
-        capture?: boolean,
-        passive?: boolean,
-      ) => void
-    >(),
+  addEventListener: vi.fn<
+    (nodeId: number, event: string, capture?: boolean, passive?: boolean) => number
+  >(() => nextCallbackId++),
   removeEventListener: vi.fn<(nodeId: number, event: string, callbackId: number) => boolean>(
     () => true,
   ),
@@ -25,13 +21,14 @@ const native = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  nextCallbackId = 0;
   globalThis.__inca_native__ = native as never;
   delete (globalThis as { __inca_callbacks__?: unknown }).__inca_callbacks__;
 });
 
 // Flags of every host registration as [event, capture, passive].
 const registered = (): unknown[][] =>
-  native.addEventListener.mock.calls.map(([, event, , capture, passive]) => [
+  native.addEventListener.mock.calls.map(([, event, capture, passive]) => [
     event,
     capture,
     passive,
@@ -107,7 +104,7 @@ describe("removeEventListener", () => {
     const listener = vi.fn<() => void>();
     target.addEventListener("click", listener);
     target.addEventListener("click", listener, true);
-    const [plainId, captureId] = native.addEventListener.mock.calls.map((call) => call[2]);
+    const [plainId, captureId] = native.addEventListener.mock.results.map((result) => result.value);
 
     target.removeEventListener("click", listener);
     target.removeEventListener("click", listener, { capture: true });

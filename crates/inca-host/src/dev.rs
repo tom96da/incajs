@@ -1060,7 +1060,7 @@ mod tests {
     ) {
         let (capturing, writer) = capture();
         let source = "const n = __inca_native__.createNode('div');\n\
-            __inca_native__.addEventListener(n, 'ping', 0);\n\
+            __inca_native__.addEventListener(n, 'ping');\n\
             globalThis.__inca_callbacks__ = { 0() { throw new Error('x'); } };\n\
             __inca_native__.dispatchEvent(n, new Event('ping'));\n\
             await new Promise(() => {});";

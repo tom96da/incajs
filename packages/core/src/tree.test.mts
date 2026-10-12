@@ -23,6 +23,9 @@ import {
 } from "./tree.mts";
 import type { EventLike } from "./types.mts";
 
+// Ids come from the host, which numbers them in order.
+let nextCallbackId = 0;
+
 const native = {
   rootNodeId: vi.fn<() => number>(() => 42),
   createNode: vi.fn<(tag: string) => number>((_tag: string) => 1),
@@ -36,7 +39,9 @@ const native = {
   removeAttribute: vi.fn<(nodeId: number, key: string) => void>(),
   setStyle: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   removeStyle: vi.fn<(nodeId: number, key: string) => void>(),
-  addEventListener: vi.fn<(nodeId: number, event: string, callbackId: number) => void>(),
+  addEventListener: vi.fn<
+    (nodeId: number, event: string, capture?: boolean, passive?: boolean) => number
+  >(() => nextCallbackId++),
   removeEventListener: vi.fn<(nodeId: number, event: string, callbackId: number) => boolean>(
     () => true,
   ),
@@ -56,6 +61,7 @@ const native = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  nextCallbackId = 0;
   globalThis.__inca_native__ = native;
 });
 

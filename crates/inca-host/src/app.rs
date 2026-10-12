@@ -857,7 +857,7 @@ mod tests {
     const MOUNTING_BUNDLE: &str = r"
         const node = __inca_native__.createNode('div');
         __inca_native__.appendChild(__inca_native__.rootNodeId(), node);
-        __inca_native__.addEventListener(node, 'click', 0);
+        __inca_native__.addEventListener(node, 'click');
     ";
 
     #[test]
@@ -894,7 +894,7 @@ mod tests {
     const THROWING_LISTENER_BUNDLE: &str = r"
         const node = __inca_native__.createNode('div');
         __inca_native__.appendChild(__inca_native__.rootNodeId(), node);
-        __inca_native__.addEventListener(node, 'click', 0);
+        __inca_native__.addEventListener(node, 'click');
         globalThis.__inca_callbacks__ = {
             0: () => { throw new Error('boom'); },
         };

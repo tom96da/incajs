@@ -47,9 +47,31 @@ pub struct Listener {
 #[derive(Debug, Default)]
 pub struct EventListeners {
     by_node: HashMap<NodeId, HashMap<String, Vec<Listener>>>,
+    next_callback: u32,
 }
 
 impl EventListeners {
+    /// Allocates the next callback id, registers it on `(node_id, event)` with the given
+    /// phase and passivity, and returns it. Ids rise from 0 in call order, and each id is
+    /// issued once, also after [`unregister`](Self::unregister) or [`release`](Self::release).
+    /// The last id is `u32::MAX - 1`. After it the call returns `None` and leaves the
+    /// registrations unchanged.
+    ///
+    /// Ids from `add` and explicit ids passed to [`register`](Self::register) share one
+    /// space, so a caller uses one or the other.
+    pub fn add(
+        &mut self,
+        node_id: NodeId,
+        event: impl Into<String>,
+        capture: bool,
+        passive: bool,
+    ) -> Option<u32> {
+        let id = self.next_callback;
+        self.next_callback = id.checked_add(1)?;
+        self.register_with(node_id, event, id, capture, passive);
+        Some(id)
+    }
+
     /// Adds `callback_id` to `(node_id, event)` as a bubble-phase, active
     /// listener. Registering an id already there leaves the registrations
     /// unchanged.
@@ -637,22 +659,21 @@ fn install_events<'js>(
                 move |ctx: Ctx<'js>,
                       JsNodeId(node_id): JsNodeId,
                       event: String,
-                      callback_id: u32,
                       capture: Opt<bool>,
                       passive: Opt<bool>|
-                      -> JsResult<()> {
+                      -> JsResult<u32> {
                     let mut host = host.borrow_mut();
                     if host.tree.get(node_id).is_none() {
                         return Err(throw_tree_error(&ctx, TreeError::NodeNotFound(node_id)));
                     }
-                    host.listeners.register_with(
-                        node_id,
-                        event,
-                        callback_id,
-                        capture.0.unwrap_or(false),
-                        passive.0.unwrap_or(false),
-                    );
-                    Ok(())
+                    host.listeners
+                        .add(
+                            node_id,
+                            event,
+                            capture.0.unwrap_or(false),
+                            passive.0.unwrap_or(false),
+                        )
+                        .ok_or_else(|| Exception::throw_range(&ctx, "callback ids are exhausted"))
                 },
             )?,
         )?;
@@ -1045,11 +1066,11 @@ mod tests {
         engine
             .eval::<()>(
                 "const n = __inca_native__.createNode('div'); \
-                 __inca_native__.addEventListener(n, 'a', 1); \
-                 __inca_native__.addEventListener(n, 'a', 2, true); \
-                 __inca_native__.addEventListener(n, 'a', 3, false, true); \
-                 __inca_native__.addEventListener(n, 'a', 4, true, true); \
-                 __inca_native__.removeEventListener(n, 'a', 4);",
+                 __inca_native__.addEventListener(n, 'a'); \
+                 __inca_native__.addEventListener(n, 'a', true); \
+                 __inca_native__.addEventListener(n, 'a', false, true); \
+                 __inca_native__.addEventListener(n, 'a', true, true); \
+                 __inca_native__.removeEventListener(n, 'a', 3);",
             )
             .unwrap();
         let host = host.borrow();
@@ -1061,8 +1082,108 @@ mod tests {
             .collect();
         assert_eq!(
             flags,
-            [(1, false, false), (2, true, false), (3, false, true)]
+            [(0, false, false), (1, true, false), (2, false, true)]
         );
+    }
+
+    #[test]
+    fn add_hands_out_ids_from_zero_in_call_order_across_nodes_and_events() {
+        let mut listeners = EventListeners::default();
+
+        assert_eq!(listeners.add(1, "click", false, false), Some(0));
+        assert_eq!(listeners.add(2, "click", true, false), Some(1));
+        assert_eq!(listeners.add(1, "focus", false, true), Some(2));
+        assert_eq!(listeners.callbacks_for(1, "click"), &[0]);
+        assert_eq!(listeners.callbacks_for(2, "click"), &[1]);
+        assert_eq!(listeners.callbacks_for(1, "focus"), &[2]);
+        assert_eq!(
+            listeners.listeners_for(1, "focus"),
+            &[Listener {
+                callback: 2,
+                capture: false,
+                passive: true
+            }]
+        );
+    }
+
+    #[test]
+    fn add_never_reuses_an_id_after_unregister_or_release() {
+        let mut listeners = EventListeners::default();
+        let first = listeners.add(1, "click", false, false).unwrap();
+        listeners.unregister(1, "click", first);
+        let second = listeners.add(1, "click", false, false).unwrap();
+        listeners.release(1);
+
+        assert_eq!((first, second), (0, 1));
+        assert_eq!(listeners.add(1, "click", false, false), Some(2));
+    }
+
+    #[test]
+    fn add_returns_none_and_registers_nothing_once_the_ids_run_out() {
+        let mut listeners = EventListeners {
+            next_callback: u32::MAX - 1,
+            ..EventListeners::default()
+        };
+
+        assert_eq!(listeners.add(1, "click", false, false), Some(u32::MAX - 1));
+        assert_eq!(listeners.add(1, "focus", false, false), None);
+        assert_eq!(listeners.add(1, "focus", false, false), None);
+        assert!(listeners.callbacks_for(1, "focus").is_empty());
+    }
+
+    #[test]
+    fn add_event_listener_returns_the_ids_in_call_order() {
+        let (engine, _host) = engine_with_bindings();
+
+        let ids: Vec<u32> = engine
+            .eval(
+                "const n = __inca_native__.createNode('div'); \
+                 [__inca_native__.addEventListener(n, 'a'), \
+                  __inca_native__.addEventListener(n, 'b', true), \
+                  __inca_native__.addEventListener(n, 'a')]",
+            )
+            .unwrap();
+
+        assert_eq!(ids, [0, 1, 2]);
+    }
+
+    #[test]
+    fn add_event_listener_on_an_unknown_node_raises_type_error_and_takes_no_id() {
+        let (engine, _host) = engine_with_bindings();
+
+        engine
+            .eval::<()>(
+                "globalThis.n = __inca_native__.createNode('div'); \
+                 globalThis.typeError = false; \
+                 try { __inca_native__.addEventListener(9999, 'click'); } \
+                 catch (e) { globalThis.typeError = e instanceof TypeError; }",
+            )
+            .unwrap();
+
+        assert!(engine.eval::<bool>("typeError").unwrap());
+        assert_eq!(
+            engine
+                .eval::<u32>("__inca_native__.addEventListener(n, 'click')")
+                .unwrap(),
+            0
+        );
+    }
+
+    #[test]
+    fn add_event_listener_raises_range_error_once_the_ids_run_out() {
+        let (engine, host) = engine_with_bindings();
+        host.borrow_mut().listeners.next_callback = u32::MAX;
+
+        let range_error: bool = engine
+            .eval(
+                "(() => { const n = __inca_native__.createNode('div'); \
+                 try { __inca_native__.addEventListener(n, 'click'); return false; } \
+                 catch (e) { return e instanceof RangeError; } })()",
+            )
+            .unwrap();
+
+        assert!(range_error);
+        assert!(host.borrow().listeners.is_empty());
     }
 
     #[test]
@@ -1107,8 +1228,8 @@ mod tests {
                 const leaf = __inca_native__.createNode('text');
                 __inca_native__.appendChild(root, branch);
                 __inca_native__.appendChild(branch, leaf);
-                __inca_native__.addEventListener(branch, 'click', 1);
-                __inca_native__.addEventListener(leaf, 'click', 2);
+                __inca_native__.addEventListener(branch, 'click');
+                __inca_native__.addEventListener(leaf, 'click');
 
                 __inca_native__.destroyNode(branch);
                 ",
@@ -1119,7 +1240,7 @@ mod tests {
 
         assert_eq!(
             released,
-            vec![1, 2],
+            vec![0, 1],
             "a descendant's callback is unreachable from JS once its root is gone"
         );
 
@@ -1247,8 +1368,8 @@ mod tests {
             .eval(
                 r"
                 const node = __inca_native__.createNode('div');
-                __inca_native__.addEventListener(node, 'click', 3);
-                __inca_native__.removeEventListener(node, 'click', 3);
+                const id = __inca_native__.addEventListener(node, 'click');
+                __inca_native__.removeEventListener(node, 'click', id);
                 ",
             )
             .unwrap();
@@ -1329,7 +1450,7 @@ mod tests {
                 __inca_native__.setAttribute(child, 'count', 3);
                 __inca_native__.setAttribute(child, 'visible', true);
                 __inca_native__.setStyle(child, 'display', 'flex');
-                __inca_native__.addEventListener(child, 'click', 7);
+                __inca_native__.addEventListener(child, 'click');
 
                 [parent, child];
                 ",
@@ -1371,7 +1492,7 @@ mod tests {
             child.style_props().get("display"),
             Some(&AttributeValue::String("flex".into()))
         );
-        assert_eq!(host.listeners.callbacks_for(child_id, "click"), &[7]);
+        assert_eq!(host.listeners.callbacks_for(child_id, "click"), &[0]);
     }
 
     #[test]
@@ -1622,7 +1743,7 @@ mod tests {
                      rejects(() => __inca_native__.appendChild(node, {bad})),
                      rejects(() => __inca_native__.insertBefore(node, node, {bad})),
                      rejects(() => __inca_native__.destroyNode({bad})),
-                     rejects(() => __inca_native__.addEventListener({bad}, 'click', 1)),
+                     rejects(() => __inca_native__.addEventListener({bad}, 'click')),
                      rejects(() => __inca_native__.removeEventListener({bad}, 'click', 1)),
                      rejects(() => __inca_native__.focusNode({bad})),
                      rejects(() => __inca_native__.dispatchEvent({bad}, {{}})),

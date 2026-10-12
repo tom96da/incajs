@@ -5,18 +5,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { window } from "./window.mts";
 
+// Ids come from the host, which numbers them in order.
+let nextCallbackId = 0;
+
 const native = {
   rootNodeId: vi.fn<() => number>(() => 77),
-  addEventListener:
-    vi.fn<
-      (
-        nodeId: number,
-        event: string,
-        callbackId: number,
-        capture?: boolean,
-        passive?: boolean,
-      ) => void
-    >(),
+  addEventListener: vi.fn<
+    (nodeId: number, event: string, capture?: boolean, passive?: boolean) => number
+  >(() => nextCallbackId++),
   removeEventListener: vi.fn<(nodeId: number, event: string, callbackId: number) => boolean>(
     () => true,
   ),
@@ -25,6 +21,7 @@ const native = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  nextCallbackId = 0;
   globalThis.__inca_native__ = native as never;
   delete (globalThis as { __inca_callbacks__?: unknown }).__inca_callbacks__;
 });
@@ -34,10 +31,10 @@ describe("window", () => {
     const listener = vi.fn<() => void>();
 
     window.addEventListener("keydown", listener);
-    const callbackId = native.addEventListener.mock.calls[0]![2];
+    const callbackId = native.addEventListener.mock.results[0]!.value;
     window.removeEventListener("keydown", listener);
 
-    expect(native.addEventListener).toHaveBeenCalledWith(77, "keydown", callbackId, false, false);
+    expect(native.addEventListener).toHaveBeenCalledWith(77, "keydown", false, false);
     expect(native.removeEventListener).toHaveBeenCalledExactlyOnceWith(77, "keydown", callbackId);
   });
 
@@ -60,7 +57,7 @@ describe("window", () => {
   it("takes a listener that declares the event fields it reads", () => {
     const keys: string[] = [];
     window.addEventListener("keydown", (event: { key: string }) => keys.push(event.key));
-    const callbackId = native.addEventListener.mock.calls[0]![2];
+    const callbackId = native.addEventListener.mock.results[0]!.value;
 
     globalThis.__inca_callbacks__[callbackId]!({ key: "a" });
 
@@ -72,6 +69,6 @@ describe("window", () => {
     window.addEventListener("wheel", vi.fn<() => void>(), { passive: false });
     window.addEventListener("scroll", vi.fn<() => void>());
 
-    expect(native.addEventListener.mock.calls.map((call) => call[4])).toEqual([true, false, false]);
+    expect(native.addEventListener.mock.calls.map((call) => call[3])).toEqual([true, false, false]);
   });
 });

@@ -15,30 +15,27 @@ const idsByGroup = new Map<string, Map<EventListenerOrObject, CallbackId>>();
  */
 const ownerById = new Map<CallbackId, { group: string; listener: EventListenerOrObject }>();
 
-let nextCallbackId = 0;
-
 // Lazily, because the host defines nothing until the first registration.
 const callables = (): Record<CallbackId, HostCallback> => (globalThis.__inca_callbacks__ ??= {});
 
 /**
- * Records `callable` under a fresh id at `globalThis.__inca_callbacks__`.
+ * Records `callable` under `callbackId` at `globalThis.__inca_callbacks__`.
  * @param group - the node, event and capture flag as one string, from {@link groupOf}
  * @param listener - the listener the caller registered, which identifies the registration
+ * @param callbackId - the id the host returned for the registration
  * @param callable - the function the host runs
- * @returns the id the host should be given
  */
 export function addCallback(
   group: string,
   listener: EventListenerOrObject,
+  callbackId: CallbackId,
   callable: HostCallback,
-): CallbackId {
-  const callbackId = nextCallbackId++;
+): void {
   callables()[callbackId] = callable;
   let ids = idsByGroup.get(group);
   if (!ids) idsByGroup.set(group, (ids = new Map()));
   ids.set(listener, callbackId);
   ownerById.set(callbackId, { group, listener });
-  return callbackId;
 }
 
 /**

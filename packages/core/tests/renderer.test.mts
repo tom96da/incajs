@@ -36,6 +36,7 @@ interface FakeNode {
 function installFakeNative(): Map<NodeId, FakeNode> {
   const nodes = new Map<NodeId, FakeNode>();
   let nextId = 0;
+  let nextCallbackId = 0;
 
   function requireNode(id: NodeId): FakeNode {
     const node = nodes.get(id);
@@ -112,17 +113,12 @@ function installFakeNative(): Map<NodeId, FakeNode> {
     removeStyle(nodeId: NodeId, key: string): void {
       delete requireNode(nodeId).style[key];
     },
-    addEventListener(
-      nodeId: NodeId,
-      event: string,
-      callbackId: number,
-      capture = false,
-      passive = false,
-    ): void {
+    addEventListener(nodeId: NodeId, event: string, capture = false, passive = false): number {
       const callbacks = (requireNode(nodeId).listeners[event] ??= []);
-      if (callbacks.includes(callbackId)) return;
+      const callbackId = nextCallbackId++;
       callbacks.push(callbackId);
       phases.set(callbackId, { capture, passive });
+      return callbackId;
     },
     removeEventListener(nodeId: NodeId, event: string, callbackId: number): boolean {
       const callbacks = nodes.get(nodeId)?.listeners[event];
