@@ -1,0 +1,200 @@
+// Copyright (c) 2026 tom96da
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+use super::*;
+use std::cell::RefCell;
+
+use gpui::TestAppContext;
+use serde_json::json;
+
+mod loading;
+mod reload;
+mod serve;
+
+const TEST_ENTRY_PATH: &str = "/test/entry.js";
+
+/// Captures every line written to it instead of touching real stdout, so
+/// a test can read back what was sent.
+#[derive(Default)]
+struct CapturingWriter(RefCell<Vec<String>>);
+
+impl Writer for CapturingWriter {
+    fn write_line(&self, line: String) {
+        self.0.borrow_mut().push(line);
+    }
+}
+
+const RECEIVES_DEV_EVENTS: &str = r"
+    globalThis.received = [];
+    __inca_dev__.receive = (method, paramsJson) => {
+        globalThis.received.push([method, paramsJson]);
+    };
+";
+
+/// A real file on disk, torn down with the test — `reload` (unlike
+/// `start`'s test call sites elsewhere) reads its entry back off disk.
+struct ScratchEntry(std::path::PathBuf);
+
+impl ScratchEntry {
+    fn write(name: &str, source: &str) -> Self {
+        let path = std::env::temp_dir().join(format!(
+            "inca-host-dev-test-{name}-{}-{:?}.js",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        std::fs::write(&path, source).unwrap();
+        Self(path)
+    }
+
+    fn path(&self) -> &str {
+        self.0.to_str().unwrap()
+    }
+}
+
+impl Drop for ScratchEntry {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+fn mounts_a_div(width: u32, height: u32) -> String {
+    format!(
+        r"
+            const node = __inca_native__.createNode('div');
+            __inca_native__.appendChild(__inca_native__.rootNodeId(), node);
+            __inca_native__.setStyle(node, 'width', {width});
+            __inca_native__.setStyle(node, 'height', {height});
+        "
+    )
+}
+
+fn bounds_of(cx: &mut TestAppContext, window: WindowHandle<HostedApp>) -> (f32, f32) {
+    cx.update(|cx| {
+        window
+            .update(cx, |_, window, _| {
+                let b = window.bounds();
+                (f32::from(b.size.width), f32::from(b.size.height))
+            })
+            .unwrap()
+    })
+}
+
+/// One JSON-RPC line.
+fn line(message: &Value) -> String {
+    let mut message = message.clone();
+    message["jsonrpc"] = json!("2.0");
+    message.to_string()
+}
+
+fn notify(sender: &async_channel::Sender<String>, method: &str) {
+    sender
+        .send_blocking(line(&json!({ "method": method })))
+        .unwrap();
+}
+
+fn request(sender: &async_channel::Sender<String>, id: u32, method: &str) {
+    sender
+        .send_blocking(line(&json!({ "id": id, "method": method })))
+        .unwrap();
+}
+
+/// Every line written so far, decoded.
+fn written(capturing: &CapturingWriter) -> Vec<Value> {
+    capturing
+        .0
+        .borrow()
+        .iter()
+        .map(|sent| serde_json::from_str(sent).unwrap())
+        .collect()
+}
+
+fn methods(capturing: &CapturingWriter) -> Vec<String> {
+    written(capturing)
+        .iter()
+        .map(|sent| sent["method"].as_str().unwrap_or("").to_owned())
+        .collect()
+}
+
+fn the_window(cx: &mut TestAppContext) -> Option<WindowHandle<HostedApp>> {
+    cx.update(|cx| {
+        cx.windows()
+            .first()
+            .and_then(gpui::AnyWindowHandle::downcast::<HostedApp>)
+    })
+}
+
+/// Evaluates `script` in the session the window shows.
+fn eval_in_window(
+    cx: &mut TestAppContext,
+    window: WindowHandle<HostedApp>,
+    script: &str,
+) -> String {
+    cx.update(|cx| {
+        window
+            .update(cx, |app, _, _| app.session.engine.eval(script).unwrap())
+            .unwrap()
+    })
+}
+
+/// Starts the serve loop on a fresh channel with `first` evaluating, and
+/// returns its sender. The loop owns the only receiver, so
+/// `receiver_count() == 0` means it ended.
+fn serve_started(
+    cx: &mut TestAppContext,
+    first: Loading,
+    started: Instant,
+    entry_path: &str,
+    writer: &SharedWriter,
+) -> async_channel::Sender<String> {
+    let (sender, lines) = async_channel::unbounded();
+    cx.update(|cx| {
+        serve_dev_protocol(
+            cx,
+            lines,
+            first,
+            started,
+            entry_path.to_owned(),
+            Rc::clone(writer),
+        );
+    });
+    sender
+}
+
+fn serve(
+    cx: &mut TestAppContext,
+    source: &str,
+    entry_path: &str,
+    writer: &SharedWriter,
+) -> async_channel::Sender<String> {
+    let started = cx.executor().now();
+    let first = Session::begin(entry_path, source, reporter_for(writer), Some(writer)).unwrap();
+    serve_started(cx, first, started, entry_path, writer)
+}
+
+/// Serves an entry that settles at once, and forgets the `ready` line.
+fn serve_idle(
+    cx: &mut TestAppContext,
+    source: &str,
+    entry_path: &str,
+    capturing: &Rc<CapturingWriter>,
+) -> (WindowHandle<HostedApp>, async_channel::Sender<String>) {
+    let writer: SharedWriter = Rc::clone(capturing) as SharedWriter;
+    let sender = serve(cx, source, entry_path, &writer);
+    cx.run_until_parked();
+    assert_eq!(methods(capturing), ["ready"]);
+    capturing.0.borrow_mut().clear();
+    (the_window(cx).unwrap(), sender)
+}
+
+fn capture() -> (Rc<CapturingWriter>, SharedWriter) {
+    let capturing = Rc::new(CapturingWriter::default());
+    let writer: SharedWriter = Rc::clone(&capturing) as SharedWriter;
+    (capturing, writer)
+}
+
+/// An entry no notification settles.
+const NEVER_SETTLES: &str = "await new Promise(() => {});";
+
+fn ready_message() -> Value {
+    json!({ "jsonrpc": "2.0", "method": "ready", "params": { "protocol": 0 } })
+}

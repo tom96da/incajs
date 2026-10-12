@@ -134,7 +134,7 @@ package.
   helper components live in `ui-fixtures/parts/`.
 - The **`test-support` feature** gates `inca-host`'s `Harness` and `snapshot`
   and enables gpui's test platform. The root `tests/` dev-dependency turns it
-  on. Its unit tests are in `crates/inca-host/src/harness.rs` and
+  on. Its unit tests are in `crates/inca-host/src/harness/tests/` and
   `snapshot.rs`.
 
 ### Node e2e tests (`@incajs/e2e-tests`)
