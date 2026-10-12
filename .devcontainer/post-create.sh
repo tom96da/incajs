@@ -63,6 +63,9 @@ main() {
     # Install dependencies
     cargo fetch
     pn i -r
+
+    pnpm completion bash > ~/completion-for-pnpm.bash
+    echo 'source ~/completion-for-pnpm.bash' >> ~/.bashrc
 }
 
 main
