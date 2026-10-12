@@ -11,6 +11,8 @@ virtual tree (`inca-gpui`'s `VirtualTree`):
 - `bindings` installs `globalThis.__inca_native__` — the small set of native
   functions JS calls to read the root handle, mutate the retained virtual
   tree, register input-event callbacks, and free what it no longer needs.
+  They also read the attribute, focus, layout and scroll offset of a node,
+  and scroll a node or bring it into view. `Host::reveal_focus` carries out the reveal.
 - `dispatch` carries a native input event the other way: from `gpui` into
   whichever JS callbacks are registered for it, via
   `globalThis.__inca_callbacks__`, with one event object passed along the

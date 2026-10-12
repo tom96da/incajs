@@ -164,6 +164,10 @@ pub struct Host {
     pub(crate) failures: Vec<EngineError>,
     // The nodes whose `click()` is running.
     pub(crate) clicking: HashSet<NodeId>,
+    // `scrollIntoViewNode` calls whose node had no box yet: awaiting the next
+    // `reveal_focus`, and awaiting the frame after it.
+    scroll_fresh: Vec<(NodeId, Align, Align)>,
+    scroll_retry: Vec<(NodeId, Align, Align)>,
 }
 
 impl std::fmt::Debug for Host {
@@ -195,6 +199,8 @@ impl Default for Host {
             layout: RefCell::new(HashMap::new()),
             failures: Vec::new(),
             clicking: HashSet::new(),
+            scroll_fresh: Vec::new(),
+            scroll_retry: Vec::new(),
         }
     }
 }
@@ -229,19 +235,39 @@ impl Host {
 
     /// Scrolls the scroll containers above the node whose focus request asked
     /// for it, using the boxes of the last drawn frame. A node whose box the
-    /// frame lacks gets one more frame to receive it. Call it once per frame
-    /// after `FocusRegistry::apply_pending`.
+    /// frame lacks gets one more frame to receive it. It also runs the
+    /// `scrollIntoViewNode` calls that waited for a box, with the same one-frame
+    /// retry. Call it once per frame after `FocusRegistry::apply_pending`.
     pub fn reveal_focus(&mut self, window: &mut gpui::Window) {
         let (retries, fresh) = self.focus.take_reveals();
         for node in retries {
             crate::scroll_into_view::reveal(self, node, Align::Reveal, Align::CenterOutside);
         }
+        let mut wait = false;
         for node in fresh {
             if !crate::scroll_into_view::reveal(self, node, Align::Reveal, Align::CenterOutside) {
                 self.focus.retry_reveal(node);
-                window.request_animation_frame();
+                wait = true;
             }
         }
+        wait |= self.reveal_scrolls();
+        if wait {
+            window.request_animation_frame();
+        }
+    }
+
+    // Runs the queued `scrollIntoViewNode` calls. A call whose node still has
+    // no box waits one more frame. Returns whether one waits.
+    fn reveal_scrolls(&mut self) -> bool {
+        for (node, block, inline) in std::mem::take(&mut self.scroll_retry) {
+            crate::scroll_into_view::reveal(self, node, block, inline);
+        }
+        for (node, block, inline) in std::mem::take(&mut self.scroll_fresh) {
+            if !crate::scroll_into_view::reveal(self, node, block, inline) {
+                self.scroll_retry.push((node, block, inline));
+            }
+        }
+        !self.scroll_retry.is_empty()
     }
 
     // Returns a clone of the node's handle, creating it on first ask.
@@ -582,6 +608,8 @@ fn install_tree<'js>(
                         .into_iter()
                         .flat_map(|id| {
                             host.focus.forget(id);
+                            host.scroll_fresh.retain(|&(node, ..)| node != id);
+                            host.scroll_retry.retain(|&(node, ..)| node != id);
                             host.listeners.release(id)
                         })
                         .collect())
@@ -826,7 +854,19 @@ fn install_scroll<'js>(
                     if let Some(top) = top {
                         offset.y = negated(top);
                     }
+                    let (before, max) = (handle.offset(), handle.max_offset());
+                    let clamped = |v: gpui::Pixels, max: gpui::Pixels| {
+                        -f32::from(v).clamp(-f32::from(max), 0.0)
+                    };
                     handle.set_offset(offset);
+                    // Recorded boxes follow the new offset, so a reveal in the same tick
+                    // starts from where the content now is.
+                    crate::scroll_into_view::shift_descendants(
+                        &host,
+                        node_id,
+                        clamped(offset.x, max.x) - clamped(before.x, max.x),
+                        clamped(offset.y, max.y) - clamped(before.y, max.y),
+                    );
                     Ok(())
                 },
             )?,
@@ -855,11 +895,13 @@ fn install_scroll<'js>(
                         )),
                     };
                     let (block, inline) = (align(&block)?, align(&inline)?);
-                    let host = host.borrow();
+                    let mut host = host.borrow_mut();
                     if host.tree.get(node_id).is_none() {
                         return Err(throw_tree_error(&ctx, TreeError::NodeNotFound(node_id)));
                     }
-                    crate::scroll_into_view::reveal(&host, node_id, block, inline);
+                    if !crate::scroll_into_view::reveal(&host, node_id, block, inline) {
+                        host.scroll_fresh.push((node_id, block, inline));
+                    }
                     Ok(())
                 },
             )?,
@@ -1505,6 +1547,32 @@ mod tests {
     }
 
     #[test]
+    fn a_scroll_into_view_of_a_boxless_node_retries_on_one_frame() {
+        let (engine, host) = engine_with_bindings();
+        engine
+            .eval::<()>("globalThis.n = __inca_native__.createNode('div'); __inca_native__.scrollIntoViewNode(n, 'start', 'start')")
+            .unwrap();
+        let mut host = host.borrow_mut();
+
+        assert!(host.reveal_scrolls());
+        assert!(!host.reveal_scrolls());
+    }
+
+    #[test]
+    fn destroying_a_node_drops_its_waiting_scroll_into_view() {
+        let (engine, host) = engine_with_bindings();
+        engine
+            .eval::<()>(
+                "const n = __inca_native__; const node = n.createNode('div'); \
+                 n.appendChild(0, node); n.scrollIntoViewNode(node, 'start', 'start'); \
+                 n.destroyNode(node);",
+            )
+            .unwrap();
+
+        assert!(!host.borrow_mut().reveal_scrolls());
+    }
+
+    #[test]
     fn scroll_into_view_node_rejects_an_unknown_node_and_an_unknown_alignment() {
         let (engine, _host) = engine_with_bindings();
 
@@ -1852,7 +1920,7 @@ mod tests {
     }
 
     #[test]
-    fn focused_node_is_null_until_a_focusable_node_is_focused() {
+    fn focused_node_follows_focus_node_and_blur_node() {
         let (engine, _host) = engine_with_bindings();
 
         let flags: Vec<bool> = engine
@@ -1860,44 +1928,23 @@ mod tests {
                 r"
                 const n = __inca_native__;
                 const node = n.createNode('div');
+                const other = n.createNode('div');
                 const plain = n.createNode('div');
                 n.setAttribute(node, 'tabindex', 0);
+                n.setAttribute(other, 'tabindex', 0);
                 const before = n.focusedNode() === null;
                 n.focusNode(plain);
-                const ignored = n.focusedNode() === null;
+                const plainSkipped = n.focusedNode() === null;
                 n.focusNode(node);
-                [before, ignored && n.focusedNode() === node];
-                ",
-            )
-            .unwrap();
-
-        assert_eq!(flags, [true, true]);
-    }
-
-    #[test]
-    fn blur_node_of_the_focused_node_makes_focused_node_null() {
-        let (engine, _host) = engine_with_bindings();
-
-        let cleared: bool = engine
-            .eval(
-                r"
-                const n = __inca_native__;
-                const node = n.createNode('div');
-                const other = n.createNode('div');
-                n.setAttribute(node, 'tabindex', 0);
-                n.setAttribute(other, 'tabindex', 0);
-                n.focusNode(node);
+                const focused = n.focusedNode() === node;
                 n.blurNode(other);
                 const kept = n.focusedNode() === node;
                 n.blurNode(node);
-                kept && n.focusedNode() === null;
+                [before, plainSkipped, focused, kept, n.focusedNode() === null];
                 ",
             )
             .unwrap();
 
-        assert!(
-            cleared,
-            "a blur of the focused node clears it, another node's blur keeps it"
-        );
+        assert_eq!(flags, [true; 5]);
     }
 }

@@ -427,7 +427,8 @@ impl EventDispatcher {
     /// A pointer `click` or `dblclick` skips a disabled button and its
     /// ancestors, as `mousedown` and `mouseup` do. A `start` that left the
     /// tree fires nothing. When a listener ran, the job queue drains after
-    /// the walk and the window redraws.
+    /// the walk and the window refreshes. A call made while the window draws
+    /// has no refresh to make, and the caller requests the next frame.
     ///
     /// While the listeners run, `eventPhase` is 1 on the ancestors of `target`
     /// during the capture pass, 2 where `currentTarget` is `target` and 3 on
@@ -461,8 +462,14 @@ impl EventDispatcher {
     /// scroll each fire once. Only the containers a listener reaches run JS.
     pub fn fire_scrolls(&self, window: &mut Window, cx: &mut App) {
         let moved = self.host.borrow_mut().scrolled_nodes();
+        let any = !moved.is_empty();
         for node in moved {
             self.fire(node, "scroll", &EventPayload::None, window, cx);
+        }
+        // A refresh requested while drawing has no effect, so a listener's own
+        // writes need the next frame.
+        if any {
+            window.request_animation_frame();
         }
     }
 
@@ -1748,17 +1755,8 @@ mod tests {
         assert_eq!(seen(&dispatcher), serde_json::json!([]));
     }
 
-    /// Fires `event` at `start` once and returns `globalThis.out` as JSON.
-    fn fire_and_read(
-        cx: &mut TestAppContext,
-        dispatcher: &EventDispatcher,
-        start: NodeId,
-        event: &str,
-    ) -> serde_json::Value {
-        let cx = cx.add_empty_window();
-        cx.update(|window, cx| {
-            dispatcher.fire(start, event, &EventPayload::None, window, cx);
-        });
+    /// Returns `globalThis.out` as JSON.
+    fn read_out(dispatcher: &EventDispatcher) -> serde_json::Value {
         let json = dispatcher
             .engine
             .eval::<String>("JSON.stringify(globalThis.out)")
@@ -1766,17 +1764,8 @@ mod tests {
         serde_json::from_str(&json).unwrap()
     }
 
-    fn callbacks(dispatcher: &EventDispatcher, js: &str) {
-        dispatcher
-            .engine
-            .eval::<()>(&format!(
-                "globalThis.out = []; globalThis.__inca_callbacks__ = {{ {js} }};"
-            ))
-            .unwrap();
-    }
-
-    /// Fires `event` with `payload` at `start` and returns `globalThis.out`.
-    fn fire_payload_and_read(
+    /// Fires `event` with `payload` at `start` once and returns `globalThis.out`.
+    fn fire_and_read(
         cx: &mut TestAppContext,
         dispatcher: &EventDispatcher,
         start: NodeId,
@@ -1787,11 +1776,16 @@ mod tests {
         cx.update(|window, cx| {
             dispatcher.fire(start, event, payload, window, cx);
         });
-        let json = dispatcher
+        read_out(dispatcher)
+    }
+
+    fn callbacks(dispatcher: &EventDispatcher, js: &str) {
+        dispatcher
             .engine
-            .eval::<String>("JSON.stringify(globalThis.out)")
+            .eval::<()>(&format!(
+                "globalThis.out = []; globalThis.__inca_callbacks__ = {{ {js} }};"
+            ))
             .unwrap();
-        serde_json::from_str(&json).unwrap()
     }
 
     fn record_box(host: &Rc<RefCell<Host>>, node: NodeId, left: f32, top: f32, border: f32) {
@@ -1809,7 +1803,7 @@ mod tests {
     }
 
     #[gpui::test]
-    fn offset_is_measured_from_the_targets_padding_edge(cx: &mut TestAppContext) {
+    fn offset_falls_back_to_the_client_position_when_unrecorded(cx: &mut TestAppContext) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [_, parent, child] = tree_of_three(&host);
         listen(&host, parent, "click");
@@ -1819,15 +1813,23 @@ mod tests {
         );
         let click = EventPayload::Mouse(MousePayload::at(at(60.0, 40.0), gpui::Modifiers::none()));
 
-        // No record: the offset equals the client position.
-        let out = fire_payload_and_read(cx, &dispatcher, child, "click", &click);
+        let out = fire_and_read(cx, &dispatcher, child, "click", &click);
         assert_eq!(out, serde_json::json!([[child, 60, 40, 60, 40]]));
+    }
 
-        // The listener on the parent reads the child's offset.
-        dispatcher.engine.eval::<()>("out.length = 0").unwrap();
+    #[gpui::test]
+    fn a_parent_listener_reads_the_targets_offset(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, parent, child] = tree_of_three(&host);
+        listen(&host, parent, "click");
+        callbacks(
+            &dispatcher,
+            "0: (e) => out.push([e.target, e.offsetX, e.offsetY, e.clientX, e.clientY])",
+        );
+        let click = EventPayload::Mouse(MousePayload::at(at(60.0, 40.0), gpui::Modifiers::none()));
         record_box(&host, parent, 500.0, 500.0, 9.0);
         record_box(&host, child, 10.0, 20.0, 2.0);
-        let out = fire_payload_and_read(cx, &dispatcher, child, "click", &click);
+        let out = fire_and_read(cx, &dispatcher, child, "click", &click);
         assert_eq!(out, serde_json::json!([[child, 48, 18, 60, 40]]));
     }
 
@@ -1849,11 +1851,7 @@ mod tests {
         let cx = cx.add_empty_window();
         cx.update(|window, cx| dispatcher.report_hover(Some(child), window, cx));
 
-        let json = dispatcher
-            .engine
-            .eval::<String>("JSON.stringify(globalThis.out)")
-            .unwrap();
-        let out: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let out = read_out(&dispatcher);
         // The pointer is at (0,0) in the test window. Each event reads the box
         // of its own target.
         assert_eq!(
@@ -1873,7 +1871,7 @@ mod tests {
         callbacks(&dispatcher, "0: (e) => out.push([e.offsetX, e.offsetY])");
         record_box(&host, child, 10.0, 20.0, 0.0);
 
-        let out = fire_payload_and_read(cx, &dispatcher, child, "wheel", &wheel_at(60.0, 40.0));
+        let out = fire_and_read(cx, &dispatcher, child, "wheel", &wheel_at(60.0, 40.0));
 
         assert_eq!(out, serde_json::json!([[50, 20]]));
     }
@@ -1891,7 +1889,7 @@ mod tests {
                 out.push([e === first, e.seen]); }",
         );
 
-        let out = fire_and_read(cx, &dispatcher, child, "click");
+        let out = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
 
         assert_eq!(out, serde_json::json!([[true, 1], [true, 2], [true, 3]]));
     }
@@ -1906,7 +1904,7 @@ mod tests {
             "0: (e) => { globalThis.kept = e; e.stopPropagation(); e.preventDefault(); \
                 out.push([e.currentTarget, e.eventPhase, e.cancelBubble]); }",
         );
-        let during = fire_and_read(cx, &dispatcher, child, "click");
+        let during = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
         assert_eq!(during, serde_json::json!([[child, 2, true]]));
 
         let after = dispatcher
@@ -1935,7 +1933,7 @@ mod tests {
             ),
         );
 
-        let out = fire_and_read(cx, &dispatcher, child, "click");
+        let out = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
 
         let path = serde_json::json!([child, parent, outer]);
         assert_eq!(
@@ -1962,7 +1960,7 @@ mod tests {
             ),
         );
 
-        let out = fire_and_read(cx, &dispatcher, child, "click");
+        let out = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
 
         assert_eq!(out, serde_json::json!([0]));
     }
@@ -1985,7 +1983,7 @@ mod tests {
             ),
         );
 
-        let out = fire_and_read(cx, &dispatcher, child, "click");
+        let out = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
 
         assert_eq!(out, serde_json::json!([0, 1, 3]));
     }
@@ -2031,14 +2029,14 @@ mod tests {
                     e.stopImmediatePropagation() : e.stopPropagation(); }, \
              1: () => out.push(1), 2: () => out.push(2)",
         );
-        let stopped = fire_and_read(cx, &dispatcher, child, "click");
+        let stopped = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
         assert_eq!(stopped, serde_json::json!([0, 1]));
 
         dispatcher
             .engine
             .eval::<()>("out.length = 0; globalThis.immediate = true;")
             .unwrap();
-        let immediate = fire_and_read(cx, &dispatcher, child, "click");
+        let immediate = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
         assert_eq!(immediate, serde_json::json!([0]));
     }
 
@@ -2089,7 +2087,7 @@ mod tests {
             ]),
         );
 
-        let out = fire_and_read(cx, &dispatcher, child, "click");
+        let out = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
 
         assert_eq!(
             out,
@@ -2113,7 +2111,7 @@ mod tests {
         }
         callbacks(&dispatcher, &tagged(&["b0", "c1", "b2", "c3"]));
 
-        let out = fire_and_read(cx, &dispatcher, child, "click");
+        let out = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
 
         let names: Vec<_> = out
             .as_array()
@@ -2152,7 +2150,7 @@ mod tests {
             ]),
         );
 
-        let out = fire_and_read(cx, &dispatcher, child, "focus");
+        let out = fire_and_read(cx, &dispatcher, child, "focus", &EventPayload::None);
 
         assert_eq!(
             out,
@@ -2190,7 +2188,7 @@ mod tests {
              5: () => out.push('parent-bubble')",
         );
 
-        let out = fire_and_read(cx, &dispatcher, child, "click");
+        let out = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
 
         assert_eq!(
             out,
@@ -2218,7 +2216,7 @@ mod tests {
              2: () => out.push(2), 3: () => out.push(3)",
         );
 
-        let out = fire_and_read(cx, &dispatcher, child, "click");
+        let out = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
 
         assert_eq!(out, serde_json::json!([0, 1]));
     }
@@ -2238,7 +2236,7 @@ mod tests {
              2: () => out.push(2)",
         );
 
-        let out = fire_and_read(cx, &dispatcher, child, "click");
+        let out = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
 
         assert_eq!(out, serde_json::json!([0]));
     }
@@ -2297,7 +2295,7 @@ mod tests {
             "0: (e) => { out.push(0); e.stopPropagation(); }, 1: () => out.push(1)",
         );
 
-        let out = fire_and_read(cx, &dispatcher, child, "click");
+        let out = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
 
         assert_eq!(out, serde_json::json!([0]));
     }
@@ -2324,7 +2322,7 @@ mod tests {
             ),
         );
 
-        let out = fire_and_read(cx, &dispatcher, child, "click");
+        let out = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
 
         assert_eq!(out, serde_json::json!([0, 4, 3]));
     }
@@ -2347,7 +2345,7 @@ mod tests {
             ),
         );
 
-        let out = fire_and_read(cx, &dispatcher, child, "click");
+        let out = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
 
         assert_eq!(out, serde_json::json!([0, [1, 1]]));
     }
@@ -2399,7 +2397,7 @@ mod tests {
             ),
         );
 
-        let out = fire_and_read(cx, &dispatcher, child, "click");
+        let out = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
 
         assert_eq!(out, serde_json::json!([0, 1]));
     }
@@ -2517,7 +2515,7 @@ mod tests {
                 out.push(e.defaultPrevented); }",
         );
 
-        let out = fire_and_read(cx, &dispatcher, node, "click");
+        let out = fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
 
         let mut want = vec![serde_json::json!(true); 6 * 9];
         want.push(serde_json::json!(true));
@@ -2557,7 +2555,7 @@ mod tests {
             &dispatcher,
             "0: (e) => { globalThis.weak = new WeakRef(e); e.stopPropagation(); }",
         );
-        fire_and_read(cx, &dispatcher, node, "click");
+        fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
 
         dispatcher.engine.with(|ctx| ctx.run_gc());
 
@@ -2629,7 +2627,7 @@ mod tests {
             &dispatcher,
             "0: (e) => { out.push(e.type); if (!globalThis.kept) globalThis.kept = e; }",
         );
-        fire_and_read(cx, &dispatcher, child, "click");
+        fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
         let state = dispatcher
             .engine
             .eval::<String>(
@@ -2639,7 +2637,7 @@ mod tests {
             .unwrap();
         assert_eq!(state, "false");
 
-        let again = fire_and_read(cx, &dispatcher, child, "click");
+        let again = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
         assert_eq!(
             again,
             serde_json::json!(["click", "click", "click", "click"])
@@ -2671,7 +2669,7 @@ mod tests {
                 out.push(e.defaultPrevented, names(e), names(proto)); }",
         );
 
-        let out = fire_and_read(cx, &dispatcher, node, "click");
+        let out = fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
 
         assert_eq!(
             out,
@@ -2834,8 +2832,8 @@ mod tests {
             "0: (e) => { (globalThis.events ??= []).push(e); \
                 out.push([e instanceof Event, e.constructor === Event, e.isTrusted]); }",
         );
-        fire_and_read(cx, &dispatcher, node, "click");
-        let out = fire_and_read(cx, &dispatcher, node, "click");
+        fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
+        let out = fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
         assert_eq!(
             out,
             serde_json::json!([[true, true, true], [true, true, true]])
@@ -3072,7 +3070,7 @@ mod tests {
                  1: () => {{ throw new Error('inner'); }}"
             ),
         );
-        fire_and_read(cx, &dispatcher, node, "click");
+        fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
         let messages: Vec<_> = reported
             .borrow()
             .iter()
@@ -3262,7 +3260,7 @@ mod tests {
             &dispatcher,
             "0: (e) => { out.push(e.isTrusted); globalThis.kept ??= e; }",
         );
-        fire_and_read(cx, &dispatcher, node, "click");
+        fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
         let got = eval_json(
             &dispatcher,
             &format!("(__inca_native__.dispatchEvent({node}, kept), out)"),

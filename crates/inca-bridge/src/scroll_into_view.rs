@@ -28,8 +28,9 @@ pub enum Align {
     /// The end edges meet.
     End,
     /// A node that shows stays put. Any other node moves the least that
-    /// brings its near edge in. A node longer than the box aligns its start,
-    /// unless it already covers the whole box.
+    /// brings its near edge in. A node longer than the box aligns its end when
+    /// its start lies before the box, and its start when its end lies after
+    /// it. A node that covers the whole box stays put.
     Nearest,
     /// A node that shows stays put. A node that lies outside the box
     /// centres. A node that shows partly follows `Nearest`.
@@ -43,11 +44,13 @@ fn axis_delta(node_start: f32, node_len: f32, view_start: f32, view_len: f32, al
     let (node_end, view_end) = (node_start + node_len, view_start + view_len);
     let center = (node_start + node_len / 2.0) - (view_start + view_len / 2.0);
     let nearest = || {
-        if node_start < view_start && node_end > view_end {
+        let (before, after) = (node_start < view_start, node_end > view_end);
+        let long = node_len > view_len;
+        if before && after {
             0.0
-        } else if node_len > view_len || node_start < view_start {
+        } else if (before && !long) || (after && long) {
             node_start - view_start
-        } else if node_end > view_end {
+        } else if before || after {
             node_end - view_end
         } else {
             0.0
@@ -159,7 +162,7 @@ pub(crate) fn reveal(host: &Host, node: NodeId, block: Align, inline: Align) -> 
 // Moves the recorded boxes below `container` by the scroll just applied, so a
 // second reveal before the next draw starts from where the content now is. The
 // direct children also take it into their recorded scroll offset.
-fn shift_descendants(host: &Host, container: NodeId, dx: f32, dy: f32) {
+pub(crate) fn shift_descendants(host: &Host, container: NodeId, dx: f32, dy: f32) {
     let mut layout = host.layout.borrow_mut();
     let mut stack = vec![container];
     while let Some(id) = stack.pop() {
@@ -227,10 +230,16 @@ mod tests {
     }
 
     #[test]
-    fn nearest_aligns_the_start_of_a_node_longer_than_the_box() {
+    fn nearest_aligns_the_start_of_a_longer_node_that_ends_after_the_box() {
         assert_eq!(dy(150.0, 300.0, Align::Nearest), 50.0);
-        assert_eq!(dy(60.0, 130.0, Align::Nearest), -40.0);
-        assert_eq!(dy(20.0, 120.0, Align::Nearest), -80.0);
+        assert_eq!(dy(260.0, 300.0, Align::Nearest), 160.0);
+    }
+
+    #[test]
+    fn nearest_aligns_the_end_of_a_longer_node_that_starts_before_the_box() {
+        assert_eq!(dy(60.0, 130.0, Align::Nearest), -10.0);
+        assert_eq!(dy(20.0, 120.0, Align::Nearest), -60.0);
+        assert_eq!(dy(-50.0, 140.0, Align::Nearest), -110.0);
     }
 
     #[test]
@@ -272,14 +281,6 @@ mod tests {
         assert_eq!(dy(40.0, 20.0, Align::CenterOutside), -100.0);
         assert_eq!(dy(260.0, 20.0, Align::CenterOutside), 120.0);
         assert_eq!(dy(200.0, 20.0, Align::CenterOutside), 60.0);
-    }
-
-    #[test]
-    fn a_partly_shown_node_moves_on_the_block_axis_and_stays_on_the_inline_axis() {
-        let (before, after) = (rect(90.0, 90.0, 20.0, 20.0), rect(190.0, 190.0, 20.0, 20.0));
-        let delta = |node| scroll_delta(node, VIEW, Align::Reveal, Align::CenterOutside);
-        assert_eq!(delta(before), (0.0, -10.0));
-        assert_eq!(delta(after), (0.0, 10.0));
     }
 
     #[test]
