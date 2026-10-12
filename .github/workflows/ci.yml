@@ -305,7 +305,7 @@ jobs:
       - rust-macos
       - rust-macos-intel
     # A needed job that `changed` skipped does not block this one.
-    if: >
+    if: &rust_node_if >
       !cancelled() && !failure() &&
       (needs.changed.outputs.rust == 'true' ||
        needs.changed.outputs.js == 'true' ||
@@ -316,9 +316,10 @@ jobs:
     defaults:
       run:
         shell: bash
-    steps:
-      # Ahead of the checkout: a bare image lacks git, curl and a compiler.
+    steps: &rust_node_steps
       - name: Install gpui's native build dependencies
+        # Ahead of the checkout: a bare image lacks git, curl and a compiler.
+        if: runner.os == 'Linux'
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
@@ -347,14 +348,15 @@ jobs:
 
       # The runner's own toolchain lives outside the container.
       - name: Install Rust
+        if: runner.os == 'Linux'
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
             | sh -s -- -y --no-modify-path --profile minimal
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
       # Downloads the pinned toolchain before rust-cache keys on `rustc -vV`.
-      - name: Install clippy
-        run: rustup component add clippy
+      - name: Install clippy and rustfmt
+        run: rustup component add clippy rustfmt
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -400,51 +402,10 @@ jobs:
   rust-node-macos:
     name: "Rust & Node: macos-latest"
     needs: *unit_jobs
-    if: >
-      !cancelled() && !failure() &&
-      (needs.changed.outputs.rust == 'true' ||
-       needs.changed.outputs.js == 'true' ||
-       needs.changed.outputs.tests == 'true')
+    if: *rust_node_if
     timeout-minutes: 30
     runs-on: macos-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-
-      # Downloads the pinned toolchain before rust-cache keys on `rustc -vV`.
-      - name: Install clippy and rustfmt
-        run: rustup component add clippy rustfmt
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: workspace
-          save-if: false
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v6
-
-      - name: Set node version to 26
-        uses: actions/setup-node@v7
-        with:
-          node-version: 26
-          cache: pnpm
-
-      - name: Install deps
-        run: pnpm ci
-
-      - name: Build the JS packages
-        run: pnpm -F incajs -F @incajs/cli build
-
-      - name: Test
-        run: cargo test -p inca-tests
-
-      - name: Build inca-host
-        run: cargo build -p inca-host
-
-      - name: Test (real inca-host + real Vite dev server)
-        run: pnpm -F @incajs/e2e-tests test
+    steps: *rust_node_steps
 
   # One status check whose name survives changes to the jobs above.
   passed:
