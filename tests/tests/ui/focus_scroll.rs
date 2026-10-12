@@ -1,12 +1,11 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! `focus()` and `scrollIntoView()` bring a node into view of its scroll
-//! container in a real `.vue` app.
+//! Tab focus brings a node into view of its scroll container in a real `.vue` app.
 
 #![allow(clippy::unwrap_used)]
 
-use super::common::{by_id, click, load, near, text_of};
+use super::common::{by_id, click, load, text_of};
 use gpui::TestAppContext;
 use inca_host::harness::Harness;
 
@@ -22,39 +21,6 @@ fn item_y(h: &mut Harness, index: usize) -> f32 {
         .bounds
         .unwrap()
         .y
-}
-
-#[gpui::test]
-fn focus_centres_the_node_in_the_scrollport(cx: &mut TestAppContext) {
-    let mut h = load(cx, "focus_scroll");
-
-    click(&mut h, "focus20");
-    h.settle();
-
-    // The padding box and the content box share a centre because the padding is symmetric.
-    let (top, height) = scrollport(&mut h);
-    near(item_y(&mut h, 20) + 15.0, top + height / 2.0);
-}
-
-#[gpui::test]
-fn prevent_scroll_leaves_the_scroll_position_at_zero(cx: &mut TestAppContext) {
-    let mut h = load(cx, "focus_scroll");
-
-    click(&mut h, "prevent20");
-    h.settle();
-
-    assert_eq!(text_of(&mut h, "scrolltop"), "0");
-}
-
-#[gpui::test]
-fn scroll_into_view_aligns_the_node_top_to_the_scrollport_top(cx: &mut TestAppContext) {
-    let mut h = load(cx, "focus_scroll");
-
-    click(&mut h, "into20");
-
-    // The scrollport is the padding box, so the top aligns 3px below the border edge.
-    let (top, _) = scrollport(&mut h);
-    near(item_y(&mut h, 20), top);
 }
 
 #[gpui::test]

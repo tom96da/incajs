@@ -5,14 +5,10 @@
 
 #![allow(clippy::unwrap_used)]
 
-use super::common::{by_id, load, near, text_of};
+use super::common::{by_id, click, load, near, text_of, y};
 use gpui::TestAppContext;
 use inca_gpui::NodeId;
 use inca_host::harness::Harness;
-
-fn y(h: &mut Harness, id: &str) -> f32 {
-    by_id(&h.snapshot(), id).bounds.unwrap().y
-}
 
 fn node(h: &mut Harness, id: &str) -> NodeId {
     by_id(&h.snapshot(), id).id
@@ -74,4 +70,14 @@ fn prevent_default_on_wheel_keeps_the_container_from_scrolling(cx: &mut TestAppC
     h.scroll(locked, 0.0, -30.0);
 
     near(y(&mut h, "locked-first"), first);
+}
+
+#[gpui::test]
+fn script_scroll_top_moves_the_children_up(cx: &mut TestAppContext) {
+    let mut h = load(cx, "scroll_position");
+    let first = y(&mut h, "first");
+
+    click(&mut h, "scroll40");
+
+    near(y(&mut h, "first"), first - 40.0);
 }

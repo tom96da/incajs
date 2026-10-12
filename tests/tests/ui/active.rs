@@ -36,7 +36,7 @@ fn blur_gives_null(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn focusing_a_node_without_tabindex_leaves_null(cx: &mut TestAppContext) {
+fn focusing_a_node_with_no_tabindex_reads_null(cx: &mut TestAppContext) {
     let mut h = load(cx, "active");
 
     click(&mut h, "focus-n");
@@ -60,7 +60,7 @@ fn tab_focus_is_visible_in_the_focus_handler(cx: &mut TestAppContext) {
 
     h.keystrokes("tab");
 
-    assert_eq!(text_of(&mut h, "result"), "true");
+    assert_eq!(text_of(&mut h, "focus-result"), "true");
 }
 
 #[gpui::test]

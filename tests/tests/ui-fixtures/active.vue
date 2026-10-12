@@ -15,6 +15,7 @@ const doomed = ref(null);
 const alive = ref(true);
 const result = ref("");
 const result2 = ref("");
+const focusResult = ref("");
 
 function record(value) {
   result.value = String(value);
@@ -41,7 +42,7 @@ function focusN() {
 }
 
 function onFocusB() {
-  record(activeElement() === b.value);
+  focusResult.value = String(activeElement() === b.value);
 }
 
 function onClickTarget() {
@@ -93,5 +94,6 @@ function probeDoomedFocused() {
     />
     <div id="result">{{ result }}</div>
     <div id="result2">{{ result2 }}</div>
+    <div id="focus-result">{{ focusResult }}</div>
   </div>
 </template>

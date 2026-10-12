@@ -139,9 +139,9 @@ package.
 
 The Node files in `tests/tests/` belong to `@incajs/e2e-tests`, which
 `pnpm test` does not run: `hmr-quickjs-state`, `host-startup-failure`,
-`host-startup-wait`, `host-shutdown`, `host-packaged-launch` and
-`host-print-config`. They spawn the real `inca-host` binary, and the first
-also starts a real Vite dev server.
+`host-startup-wait`, `host-shutdown`, `host-packaged-launch`,
+`host-print-config` and `host-source-map`. They spawn the real `inca-host`
+binary, and the first also starts a real Vite dev server.
 
 - `tests/support/headless.mts` is a vitest setup file. It removes `DISPLAY`
   and `WAYLAND_DISPLAY`, so on Linux every spawned host runs on gpui's

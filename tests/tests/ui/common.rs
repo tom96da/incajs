@@ -93,6 +93,11 @@ pub fn click(h: &mut Harness, id: &str) {
     h.click(node);
 }
 
+/// The top edge of the node with `id`.
+pub fn y(h: &mut Harness, id: &str) -> f32 {
+    by_id(&h.snapshot(), id).bounds.unwrap().y
+}
+
 /// Asserts `a` and `b` differ by less than 0.01.
 pub fn near(a: f32, b: f32) {
     assert!((a - b).abs() < 0.01, "{a} is not {b}");
