@@ -11,7 +11,7 @@ export interface ScrollOptions {
   left?: number;
   /** The vertical offset. Omit to keep the current one. */
   top?: number;
-  /** Accepted for compatibility; every scroll applies at once. */
+  /** `behavior` is ignored; every scroll applies at once. */
   behavior?: "auto" | "instant" | "smooth";
 }
 
@@ -37,8 +37,11 @@ export function scrollPosition(
   const [first, second] = args;
   const [x, y] = typeof first === "object" ? [first?.left, first?.top] : [first, second];
   const [left, top] = relative ? (core.scrollOf(el.id) ?? [0, 0]) : [0, 0];
-  const target = (value: number | undefined, from: number): number | null =>
-    value === undefined ? null : (relative ? from : 0) + (Number.isFinite(value) ? value : 0);
+  const target = (value: number | undefined, from: number): number | null => {
+    if (value === undefined) return null;
+    const amount = Number(value);
+    return (relative ? from : 0) + (Number.isFinite(amount) ? amount : 0);
+  };
 
   core.scrollNode(el.id, target(x, left), target(y, top));
 }

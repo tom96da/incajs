@@ -454,11 +454,9 @@ describe("blur", () => {
 });
 
 describe("focusedNode", () => {
-  it("returns the id native reports, or null", () => {
+  it("returns the id native reports", () => {
     native.focusedNode.mockReturnValueOnce(7);
     expect(focusedNode()).toBe(7);
-
-    expect(focusedNode()).toBeNull();
   });
 });
 

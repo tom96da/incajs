@@ -10,6 +10,7 @@ import {
   getAttribute,
   insertBefore,
   layoutOf,
+  scrollIntoViewNode,
   scrollNode,
   scrollOf,
   removeAttribute,
@@ -114,6 +115,11 @@ describe("wrapper functions forward to __inca_native__", () => {
   it("scrollNode", () => {
     scrollNode(1, 5, null);
     expect(native.scrollNode).toHaveBeenCalledWith(1, 5, null);
+  });
+
+  it("scrollIntoViewNode", () => {
+    scrollIntoViewNode(1, "center", "end");
+    expect(native.scrollIntoViewNode).toHaveBeenCalledWith(1, "center", "end");
   });
 
   it("removeAttribute", () => {

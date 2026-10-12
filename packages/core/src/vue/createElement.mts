@@ -3,7 +3,7 @@
 
 import { isDestroyed } from "./destroyedNodes.mts";
 import { domRect } from "./domRect.mts";
-import { elements } from "./elements.mts";
+import { registerElement } from "./elements.mts";
 import { layoutBox } from "./layoutBox.mts";
 import { offsetOf } from "./offsetOf.mts";
 import { offsetParentOf } from "./offsetParent.mts";
@@ -116,7 +116,7 @@ export function createIncaElement(
       core.scrollIntoViewNode(id, block, inline);
     },
   };
-  if (kind === "element") elements.set(id, element);
+  if (kind === "element") registerElement(element);
   // A plain object in `ref()` becomes a proxy, which differs from `activeElement()`.
   return skipReactive(element);
 }

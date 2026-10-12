@@ -459,12 +459,10 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
 
     const listener = (): void => {};
     let dispatched: boolean | undefined;
-    expect(() => {
-      handle.addEventListener("click", listener);
-      handle.removeEventListener("click", listener);
-      dispatched = handle.dispatchEvent(new Event("click"));
-      handle.tabIndex = 5;
-    }).not.toThrow();
+    handle.addEventListener("click", listener);
+    handle.removeEventListener("click", listener);
+    dispatched = handle.dispatchEvent(new Event("click"));
+    handle.tabIndex = 5;
 
     expect(dispatched).toBe(true);
     expect(handle.tabIndex).toBe(0);

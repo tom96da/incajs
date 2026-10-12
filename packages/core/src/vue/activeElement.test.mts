@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { activeElement } from "./activeElement.mts";
 import { createIncaElement } from "./createElement.mts";
-import { elements } from "./elements.mts";
+import { unregisterElement } from "./elements.mts";
 import type { IncaCore } from "../rendererCore.mts";
 
 const focused = vi.fn<() => number | null>(() => null);
@@ -15,7 +15,7 @@ const core = {
 } as unknown as IncaCore;
 
 beforeEach(() => {
-  elements.clear();
+  for (const id of [21, 22]) unregisterElement(id);
   focused.mockReset();
   focused.mockReturnValue(null);
   globalThis.__inca_native__ = { focusedNode: focused } as never;

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import * as core from "../rendererCore.mts";
-import { elements } from "./elements.mts";
+import { elementOf } from "./elements.mts";
 import type { IncaElement } from "./nodeOps.mts";
 
 /**
@@ -12,5 +12,5 @@ import type { IncaElement } from "./nodeOps.mts";
  */
 export function activeElement(): IncaElement | null {
   const id = core.focusedNode();
-  return id === null ? null : (elements.get(id) ?? null);
+  return id === null ? null : (elementOf(id) ?? null);
 }

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { elements } from "./elements.mts";
+import { unregisterElement } from "./elements.mts";
 import type { IncaNode } from "./nodeOps.mts";
 
 const destroyed = new WeakSet<IncaNode>();
@@ -23,6 +23,6 @@ export function isDestroyed(node: IncaNode): boolean {
 export function markDestroyed(node: IncaNode): void {
   destroyed.add(node);
   if (node.kind === "text") return;
-  elements.delete(node.id);
+  unregisterElement(node.id);
   for (const child of node.children) markDestroyed(child);
 }

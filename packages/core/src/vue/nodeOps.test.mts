@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { domRect } from "./domRect.mts";
-import { elements } from "./elements.mts";
+import { elementOf, unregisterElement } from "./elements.mts";
 import { createNodeOps } from "./nodeOps.mts";
 import type { IncaCore } from "../rendererCore.mts";
 import type { EventLike, IncaEventTarget } from "../types.mts";
@@ -76,7 +76,7 @@ const nodeOps = createNodeOps(core);
 
 beforeEach(() => {
   vi.clearAllMocks();
-  elements.clear();
+  for (let id = 1; id < nextId; id++) unregisterElement(id);
   nextId = 1;
   vi.mocked(core.createNode).mockImplementation(() => nextId++);
 });
@@ -369,7 +369,7 @@ describe("remove", () => {
     expect(core.setAttribute).not.toHaveBeenCalled();
   });
 
-  it("does the same for the children setElementText frees", () => {
+  it("turns the children setElementText frees into inert targets", () => {
     const root = nodeOps.createElement("div");
     const child = nodeOps.createElement("div");
     nodeOps.insert(child, root);
@@ -398,11 +398,15 @@ describe("element registry", () => {
     const leaf = nodeOps.createElement("button");
     nodeOps.insert(leaf, mid);
     nodeOps.insert(mid, root);
-    expect([root, mid, leaf].map((el) => elements.get(el.id))).toEqual([root, mid, leaf]);
+    expect([root, mid, leaf].map((el) => elementOf(el.id))).toEqual([root, mid, leaf]);
 
     nodeOps.remove(root);
 
-    expect([root, mid, leaf].map((el) => elements.has(el.id))).toEqual([false, false, false]);
+    expect([root, mid, leaf].map((el) => elementOf(el.id) !== undefined)).toEqual([
+      false,
+      false,
+      false,
+    ]);
   });
 
   it("drops the children setElementText replaces, and their descendants", () => {
@@ -414,9 +418,9 @@ describe("element registry", () => {
 
     nodeOps.setElementText(root, "hello");
 
-    expect(elements.has(child.id)).toBe(false);
-    expect(elements.has(grandchild.id)).toBe(false);
-    expect(elements.get(root.id)).toBe(root);
+    expect(elementOf(child.id) !== undefined).toBe(false);
+    expect(elementOf(grandchild.id) !== undefined).toBe(false);
+    expect(elementOf(root.id)).toBe(root);
   });
 });
 
