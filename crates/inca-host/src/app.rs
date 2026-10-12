@@ -245,11 +245,12 @@ impl Session {
         reporter: ErrorReporter,
     ) -> Result<Self, EngineError> {
         let StartedEngine { host, engine, .. } = Self::start_engine(entry_path, None)?;
-        let session = Self::from_parts(host, engine, Rc::clone(&reporter));
+        let failed = Rc::clone(&reporter);
+        let session = Self::from_parts(host, engine, reporter);
         session
             .engine
             .eval_module(entry_path, source)
-            .inspect_err(|_| session.report_failed_start(&reporter))?;
+            .inspect_err(|_| session.report_failed_start(&failed))?;
         Ok(session)
     }
 
@@ -282,7 +283,8 @@ impl Session {
             engine,
             signal,
         } = Self::start_engine(entry_path, writer)?;
-        let session = Self::from_parts(host, engine, Rc::clone(&reporter));
+        let failed = Rc::clone(&reporter);
+        let session = Self::from_parts(host, engine, reporter);
         let module = session.engine.start_module(entry_path, source)?;
         let loading = Loading {
             module,
@@ -292,7 +294,7 @@ impl Session {
         };
         match loading.poll() {
             Some(Err(err)) => {
-                loading.session.report_failed_start(&reporter);
+                loading.session.report_failed_start(&failed);
                 Err(err)
             }
             _ => Ok(loading),

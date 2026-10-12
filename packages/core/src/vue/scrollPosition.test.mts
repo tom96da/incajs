@@ -7,7 +7,6 @@ import { createIncaElement } from "./createElement.mts";
 import { markDestroyed } from "./destroyedNodes.mts";
 import { scrollPosition } from "./scrollPosition.mts";
 import type { IncaCore } from "../rendererCore.mts";
-import type { ScrollOptions } from "./scrollPosition.mts";
 
 function makeCore(scroll: readonly [number, number, number, number] | null = null): IncaCore {
   return {

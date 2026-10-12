@@ -832,7 +832,7 @@ fn a_scroll_listener_run_requests_the_next_frame(cx: &mut TestAppContext) {
         "__inca_native__.scrollNode(1, null, 40)",
     );
     scene.frame();
-    let frames = scene.cx.update(|window, cx| window.simulate_next_frame(cx));
+    let frames = scene.cx.update(gpui::Window::simulate_next_frame);
     assert_eq!(scene.ran(), r#"["scroll:1:false"]"#);
     assert!(frames > 0);
 }
@@ -844,7 +844,7 @@ fn a_script_offset_then_a_reveal_in_the_same_tick_lands_on_the_item(cx: &mut Tes
     add_div(&mut host, Some(container), 200.0, false);
     let item = add_div(&mut host, Some(container), 50.0, false);
     add_div(&mut host, Some(container), 300.0, false);
-    let mut scene = Scene::new(cx, host, "");
+    let scene = Scene::new(cx, host, "");
     scene.js(&format!(
         "__inca_native__.scrollNode(0, null, 100); \
          __inca_native__.scrollIntoViewNode({item}, 'start', 'nearest');"

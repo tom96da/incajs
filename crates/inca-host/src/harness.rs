@@ -2639,12 +2639,6 @@ mod tests {
         )
     }
 
-    #[allow(clippy::cast_possible_truncation)]
-    fn layout(h: &Harness, node: &str) -> [f32; 5] {
-        let read = |i: usize| eval_f64(h, &format!("__inca_native__.layoutOf({node})[{i}]")) as f32;
-        [read(0), read(1), read(2), read(3), read(4)]
-    }
-
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     fn node_of(h: &Harness, expression: &str) -> NodeId {
         eval_f64(h, expression) as NodeId

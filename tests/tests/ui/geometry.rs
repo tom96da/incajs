@@ -9,6 +9,7 @@ use super::common::{by_id, click, load, near, text_of, y};
 use gpui::TestAppContext;
 
 #[gpui::test]
+#[allow(clippy::cast_possible_truncation)]
 fn the_rect_is_the_bounds_the_node_is_drawn_at(cx: &mut TestAppContext) {
     let mut h = load(cx, "measure");
     click(&mut h, "measure");

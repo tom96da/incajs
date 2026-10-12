@@ -790,6 +790,47 @@ fn install_focus<'js>(
     Ok(())
 }
 
+fn install_scroll_into_view<'js>(
+    ctx: &Ctx<'js>,
+    host: &Rc<RefCell<Host>>,
+    native: &Object<'js>,
+) -> JsResult<()> {
+    let host = Rc::clone(host);
+    native.set(
+        "scrollIntoViewNode",
+        Function::new(
+            ctx.clone(),
+            move |ctx: Ctx<'js>,
+                  JsNodeId(node_id): JsNodeId,
+                  block: String,
+                  inline: String|
+                  -> JsResult<()> {
+                let align = |name: &str| match name {
+                    "start" => Ok(Align::Start),
+                    "center" => Ok(Align::Center),
+                    "end" => Ok(Align::End),
+                    "nearest" => Ok(Align::Nearest),
+                    _ => Err(Exception::throw_type(
+                        &ctx,
+                        &format!("unknown scroll alignment: {name}"),
+                    )),
+                };
+                let (block, inline) = (align(&block)?, align(&inline)?);
+                let mut host = host.borrow_mut();
+                if host.tree.get(node_id).is_none() {
+                    return Err(throw_tree_error(&ctx, TreeError::NodeNotFound(node_id)));
+                }
+                if !crate::scroll_into_view::reveal(&host, node_id, block, inline) {
+                    host.scroll_fresh.push((node_id, block, inline));
+                }
+                Ok(())
+            },
+        )?,
+    )?;
+
+    Ok(())
+}
+
 fn install_scroll<'js>(
     ctx: &Ctx<'js>,
     host: &Rc<RefCell<Host>>,
@@ -873,40 +914,7 @@ fn install_scroll<'js>(
         )?;
     }
 
-    {
-        let host = Rc::clone(host);
-        native.set(
-            "scrollIntoViewNode",
-            Function::new(
-                ctx.clone(),
-                move |ctx: Ctx<'js>,
-                      JsNodeId(node_id): JsNodeId,
-                      block: String,
-                      inline: String|
-                      -> JsResult<()> {
-                    let align = |name: &str| match name {
-                        "start" => Ok(Align::Start),
-                        "center" => Ok(Align::Center),
-                        "end" => Ok(Align::End),
-                        "nearest" => Ok(Align::Nearest),
-                        _ => Err(Exception::throw_type(
-                            &ctx,
-                            &format!("unknown scroll alignment: {name}"),
-                        )),
-                    };
-                    let (block, inline) = (align(&block)?, align(&inline)?);
-                    let mut host = host.borrow_mut();
-                    if host.tree.get(node_id).is_none() {
-                        return Err(throw_tree_error(&ctx, TreeError::NodeNotFound(node_id)));
-                    }
-                    if !crate::scroll_into_view::reveal(&host, node_id, block, inline) {
-                        host.scroll_fresh.push((node_id, block, inline));
-                    }
-                    Ok(())
-                },
-            )?,
-        )?;
-    }
+    install_scroll_into_view(ctx, host, native)?;
 
     Ok(())
 }
