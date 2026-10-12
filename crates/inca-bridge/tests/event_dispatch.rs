@@ -57,7 +57,7 @@ fn clicks(engine: &Engine) -> f64 {
 
 /// Unlike `install_click_counter`, defers the actual mutation to a
 /// microtask — the same way a real framework's reactivity scheduler
-/// (e.g. `@vue/runtime-core`'s, batched via `Promise.resolve().then(...)`)
+/// (batched via `Promise.resolve().then(...)`)
 /// doesn't apply an effect synchronously within the event callback itself.
 fn install_deferred_click_counter(engine: &Engine) {
     engine

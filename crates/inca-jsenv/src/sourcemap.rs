@@ -363,10 +363,10 @@ fn fold(path: &Path) -> PathBuf {
 }
 
 /// A function body for tests in other modules. Its first line is `code`, and
-/// an inline map sends that line to `src/App.vue` line 12, column 5.
+/// an inline map sends that line to `src/app.ts` line 12, column 5.
 #[cfg(test)]
-pub(crate) fn app_vue_body(code: &str) -> String {
-    let json = r#"{"version":3,"mappings":";AAWI","sources":["src/App.vue"]}"#;
+pub(crate) fn mapped_body(code: &str) -> String {
+    let json = r#"{"version":3,"mappings":";AAWI","sources":["src/app.ts"]}"#;
     format!(
         "{code}\n//# sourceMappingURL=data:application/json;base64,{}",
         STANDARD.encode(json)

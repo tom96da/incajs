@@ -532,7 +532,7 @@ mod tests {
     #[test]
     fn a_frame_of_a_compiled_function_reads_at_its_source() {
         let engine = Engine::new().unwrap();
-        let body = crate::sourcemap::app_vue_body("throw new Error('bad edit');");
+        let body = crate::sourcemap::mapped_body("throw new Error('bad edit');");
         engine.with(|ctx| {
             let f = crate::compile_async_function(&ctx, &[], &body, "virtual.js").unwrap();
             ctx.globals().set("f", f).unwrap();
@@ -541,7 +541,7 @@ mod tests {
         let errors = engine.run_jobs();
 
         let stack = errors[0].stack().unwrap();
-        assert!(stack.contains("src/App.vue:12:5"), "{stack}");
+        assert!(stack.contains("src/app.ts:12:5"), "{stack}");
         assert!(!stack.contains("virtual.js:"), "{stack}");
     }
 
@@ -550,7 +550,7 @@ mod tests {
         let dir = ScratchDir::new("module-sidecar-map");
         fs::write(
             dir.0.join("bundle.js.map"),
-            r#"{"version":3,"sources":["../src/App.vue"],"mappings":";AAWI"}"#,
+            r#"{"version":3,"sources":["../src/app.ts"],"mappings":";AAWI"}"#,
         )
         .unwrap();
         let entry = dir.0.join("bundle.js");
@@ -562,7 +562,7 @@ mod tests {
             .unwrap_err();
 
         let stack = err.stack().unwrap();
-        assert!(stack.contains("src/App.vue:12:5"), "{stack}");
+        assert!(stack.contains("src/app.ts:12:5"), "{stack}");
     }
 
     #[test]

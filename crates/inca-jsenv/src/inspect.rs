@@ -823,7 +823,7 @@ mod tests {
     #[test]
     fn an_error_prints_its_frames_at_their_source() {
         let engine = Engine::new().unwrap();
-        let body = crate::sourcemap::app_vue_body("throw new Error('bad edit');");
+        let body = crate::sourcemap::mapped_body("throw new Error('bad edit');");
         engine.with(|ctx| {
             let f = compile_async_function(&ctx, &[], &body, "virtual.js").unwrap();
             ctx.globals().set("f", f).unwrap();
@@ -837,7 +837,7 @@ mod tests {
             let value: Value<'_> = ctx.globals().get("caught").unwrap();
             line(&[value], false)
         });
-        assert!(out.contains("src/App.vue:12:5"), "{out}");
+        assert!(out.contains("src/app.ts:12:5"), "{out}");
         assert!(!out.contains("virtual.js:"), "{out}");
     }
 

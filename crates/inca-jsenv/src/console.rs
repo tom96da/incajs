@@ -856,7 +856,7 @@ mod tests {
 
     #[test]
     fn trace_frames_read_at_their_source() {
-        let body = crate::sourcemap::app_vue_body("console.trace('hi');");
+        let body = crate::sourcemap::mapped_body("console.trace('hi');");
         let written = written_by(false, |ctx| {
             let f = crate::compile_async_function(ctx, &[], &body, "virtual.js").unwrap();
             ctx.globals().set("f", f).unwrap();
@@ -864,7 +864,7 @@ mod tests {
         });
 
         let text = &written[0].1;
-        assert!(text.contains("src/App.vue:12:5"), "{text}");
+        assert!(text.contains("src/app.ts:12:5"), "{text}");
         assert!(!text.contains("virtual.js:"), "{text}");
     }
 

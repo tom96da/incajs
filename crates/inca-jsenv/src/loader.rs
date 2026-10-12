@@ -220,7 +220,7 @@ mod tests {
         let dir = ScratchDir::new("chunk-sidecar-map");
         fs::write(
             dir.0.join("chunk.js.map"),
-            r#"{"version":3,"sources":["../src/Chunk.vue"],"mappings":";AAWI"}"#,
+            r#"{"version":3,"sources":["../src/chunk.ts"],"mappings":";AAWI"}"#,
         )
         .unwrap();
         fs::write(
@@ -240,7 +240,7 @@ mod tests {
             .unwrap_err();
 
         let stack = err.stack().unwrap();
-        assert!(stack.contains("src/Chunk.vue:12:5"), "{stack}");
+        assert!(stack.contains("src/chunk.ts:12:5"), "{stack}");
     }
 
     #[test]

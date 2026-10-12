@@ -252,10 +252,10 @@ mod tests {
             &engine,
             "[]",
             "const a = 1;\nthrow new Error('x');",
-            "app/Counter.vue",
+            "app/counter.ts",
         );
 
-        assert!(settle(&engine, "").contains("app/Counter.vue:3:"));
+        assert!(settle(&engine, "").contains("app/counter.ts:3:"));
     }
 
     #[test]

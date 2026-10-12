@@ -145,10 +145,10 @@ mod tests {
     #[test]
     fn a_syntax_error_in_a_mapped_body_names_the_original_file() {
         let engine = Engine::new().unwrap();
-        let body = crate::sourcemap::app_vue_body("const = ;");
+        let body = crate::sourcemap::mapped_body("const = ;");
         let err = compile(&engine, &[], &body, "virtual.js").unwrap_err();
 
-        assert!(err.to_string().contains("src/App.vue:12:5"), "{err}");
+        assert!(err.to_string().contains("src/app.ts:12:5"), "{err}");
     }
 
     #[test]

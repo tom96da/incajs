@@ -863,7 +863,7 @@ pub fn report_jobs(engine: &Engine, reporter: &ErrorReporter) {
 }
 
 /// [`report_jobs`], then requests a redraw. Code that only schedules work (a
-/// `@vue/runtime-core` reactivity effect, batched via a microtask) hasn't
+/// reactivity effect, batched via a microtask) hasn't
 /// mutated the tree once the scheduling call returns, so the queue has to run
 /// before the frame is drawn.
 ///
