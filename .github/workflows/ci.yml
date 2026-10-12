@@ -440,6 +440,12 @@ jobs:
       - name: Test
         run: cargo test -p inca-tests
 
+      - name: Build inca-host
+        run: cargo build -p inca-host
+
+      - name: Test (real inca-host + real Vite dev server)
+        run: pnpm -F @incajs/e2e-tests test
+
   # One status check whose name survives changes to the jobs above.
   passed:
     name: CI Passed
