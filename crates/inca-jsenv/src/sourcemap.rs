@@ -243,9 +243,15 @@ fn remap_frame(ctx: &Ctx<'_>, maps: &SourceMaps, line: &str) -> Option<String> {
     let row = number(parts.next()?)?;
     let head = parts.next()?;
     let start = head.find("at ")? + 3;
-    let split = head[start..].find(" (").map_or(start, |at| start + at + 2);
-    let (prefix, file) = head.split_at(split);
-    let entry = Rc::clone(maps.0.borrow().get(file)?);
+    let (prefix, entry) = head[start..]
+        .match_indices(" (")
+        .map(|(at, _)| start + at + 2)
+        .chain([start])
+        .find_map(|split| {
+            let (prefix, file) = head.split_at(split);
+            let entry = maps.0.borrow().get(file).map(Rc::clone)?;
+            Some((prefix, entry))
+        })?;
     let parsed = entry
         .parsed
         .get_or_init(|| parse(ctx, entry.raw.as_ref()?))
@@ -623,6 +629,16 @@ mod tests {
         assert_eq!(
             one(&src, "Error: x\n    at f (a.js:2:5)\n"),
             "Error: x\n    at f (orig.ts:1:8)\n"
+        );
+    }
+
+    #[test]
+    fn function_name_containing_a_parenthesis_is_rewritten() {
+        let json = map_json(3, ";AAAA", r#"["orig.ts"]"#, None);
+        let src = format!("h\nabc\n{}", inline(&json));
+        assert_eq!(
+            one(&src, "    at f (g) (a.js:2:1)"),
+            "    at f (g) (orig.ts:1:1)"
         );
     }
 
