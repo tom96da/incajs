@@ -12,8 +12,10 @@ change is done, for Rust and TypeScript.
 
 ### Test placement
 
-- **Unit tests**: `#[cfg(test)] mod tests` inline in the module they test
-  (e.g. `crates/inca-gpui/src/tree.rs`).
+- **Unit tests**: `#[cfg(test)] mod tests;` in the module they test, with the
+  tests in `<module>/tests.rs` (e.g. `crates/inca-gpui/src/tree/tests.rs`). A
+  module with many tests keeps shared helpers in `tests.rs` and the tests in
+  `<module>/tests/<topic>.rs`. A file stays at or below 800 lines.
 - **Integration tests**: `tests/*.rs` in each crate, one file per
   cross-module concern (e.g. `crates/inca-gpui/tests/layout_parity.rs`).
   Cargo compiles each against the crate's public API only.

@@ -36,7 +36,7 @@ the custom renderer's output. Each node has:
 
 ### Tag vocabulary
 
-Implemented in `crates/inca-gpui/src/element.rs`. There are three kinds:
+Implemented in `crates/inca-gpui/src/element/`. There are three kinds:
 
 | `tag_name` | Maps to |
 | --- | --- |
@@ -46,11 +46,11 @@ Implemented in `crates/inca-gpui/src/element.rs`. There are three kinds:
 
 ### Style prop vocabulary
 
-Implemented in `element.rs`. An unrecognized key and an invalid color each
-print one warning line on stderr every time a style sets them. A malformed
-enum string reads as unset and prints nothing. The table lists every key the
-host reads. `set_style` and `remove_style` map the camelCase and kebab-case
-spellings of a key to its snake_case form.
+Implemented in `element/parse.rs` and `element/style.rs`. An unrecognized key
+and an invalid color each print one warning line on stderr every time a style
+sets them. A malformed enum string reads as unset and prints nothing. The
+table lists every key the host reads. `set_style` and `remove_style` map the
+camelCase and kebab-case spellings of a key to its snake_case form.
 
 | Key | Value | Maps to |
 | --- | --- | --- |
