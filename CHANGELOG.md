@@ -10,6 +10,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.0.15] - 2026-10-12
+
 ### Added
 
 - mouse and wheel events carry `offsetX` and `offsetY` ([4b2825d](https://github.com/tom96da/incajs/commit/4b2825d))
@@ -296,7 +298,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - prebuilt `inca-host` binaries for linux-x64, linux-arm64, and darwin-arm64, resolved automatically per platform
 - click event dispatch from the native tree back into JS
 
-[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.14...HEAD
+[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.15...HEAD
+[0.0.15]: https://github.com/tom96da/incajs/releases/tag/v0.0.15
 [0.0.14]: https://github.com/tom96da/incajs/releases/tag/v0.0.14
 [0.0.13]: https://github.com/tom96da/incajs/releases/tag/v0.0.13
 [0.0.12]: https://github.com/tom96da/incajs/releases/tag/v0.0.12
