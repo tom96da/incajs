@@ -9,7 +9,7 @@ import { dev } from "./dev.mts";
 import { log, printFault, toFault } from "./log.mts";
 import { packageApp } from "./package.mts";
 
-const USAGE = "Usage: inca <dev|build|package>";
+const USAGE = "Usage: inca <dev|build|package> [--sourcemap|--no-sourcemap]";
 
 /** Formats a path relative to the working directory, the way the bundler reports its own. */
 function relative(target: string): string {

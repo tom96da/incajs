@@ -62,7 +62,7 @@ describe("development library build", () => {
     await rm(scratch, { recursive: true, force: true });
   });
 
-  it("writes bundle.js.map that names the source and omits sourcesContent, reports it as output, and links it from bundle.js", async () => {
+  it("writes a linked bundle.js.map with source paths only", async () => {
     const srcDir = path.join(scratch, "app");
     await mkdir(srcDir);
     const entry = path.join(srcDir, "main.ts");

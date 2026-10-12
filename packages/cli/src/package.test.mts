@@ -26,15 +26,16 @@ afterEach(async () => {
 function fakeBundler(): Bundler {
   return {
     watch: (): Promise<Watcher> => Promise.reject(new Error("not used by packageApp()")),
-    build: async ({ outDir }): Promise<BuildOutput> => {
+    build: async ({ outDir, sourcemap }): Promise<BuildOutput> => {
       await mkdir(path.join(outDir, "chunks"), { recursive: true });
       await writeFile(path.join(outDir, "bundle.js"), "console.log('packaged');\n");
       await writeFile(path.join(outDir, "chunks", "shared.js"), "export const shared = true;\n");
-      return {
-        outDir,
-        entryFile: path.join(outDir, "bundle.js"),
-        files: ["bundle.js", "chunks/shared.js"],
-      };
+      const files = ["bundle.js", "chunks/shared.js"];
+      if (sourcemap) {
+        await writeFile(path.join(outDir, "bundle.js.map"), "{}");
+        files.push("bundle.js.map");
+      }
+      return { outDir, entryFile: path.join(outDir, "bundle.js"), files };
     },
   };
 }
@@ -125,24 +126,10 @@ describe("packageApp", () => {
   it("copies bundle.js.map into the Linux directory when the build writes it", async () => {
     const app = await makeApp({ name: "click_counter", version: "1.2.3" });
     const hostBin = await makeHostBin(app);
-    const bundler: Bundler = {
-      watch: (): Promise<Watcher> => Promise.reject(new Error("not used by packageApp()")),
-      build: async ({ outDir, sourcemap }): Promise<BuildOutput> => {
-        await mkdir(outDir, { recursive: true });
-        await writeFile(path.join(outDir, "bundle.js"), "console.log('packaged');\n");
-        await writeFile(path.join(outDir, "bundle.js.map"), "{}");
-        return {
-          outDir,
-          entryFile: path.join(outDir, "bundle.js"),
-          files: sourcemap ? ["bundle.js", "bundle.js.map"] : ["bundle.js"],
-        };
-      },
-    };
-
     const { appPath } = await packageApp({
       cwd: app,
       entry: "unused",
-      bundler,
+      bundler: fakeBundler(),
       hostBin,
       sourcemap: true,
       target: "linux",

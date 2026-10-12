@@ -103,7 +103,6 @@ export function resolveViteConfig({
       // regardless of mode.
       emptyOutDir: mode === "production",
       minify: mode === "production",
-      // A production build writes the map when `sourcemap` is true.
       sourcemap: emitMap,
       // An editor that replaces a file deletes it for a moment; the delay lets that pair coalesce.
       watch: watch ? { buildDelay: 30 } : undefined,

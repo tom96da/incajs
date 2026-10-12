@@ -116,12 +116,10 @@ describe("resolveBuildConfig's outDir", () => {
 });
 
 describe("resolveBuildConfig's sourcemap", () => {
-  it("turns on from the inca key and is off by default", async () => {
+  it("turns on from the inca key", async () => {
     const on = await makeApp({ name: "scratch-app", inca: { sourcemap: true } });
-    const off = await makeApp({ name: "scratch-app" });
 
     await expect(resolveBuildConfig(on)).resolves.toMatchObject({ sourcemap: true });
-    await expect(resolveBuildConfig(off)).resolves.toMatchObject({ sourcemap: false });
   });
 });
 

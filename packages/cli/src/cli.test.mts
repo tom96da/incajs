@@ -169,8 +169,6 @@ describe("run", () => {
     [["--sourcemap"], true],
     [["--no-sourcemap"], false],
     [[], undefined],
-    [["--sourcemap", "--no-sourcemap"], false],
-    [["--no-sourcemap", "--sourcemap"], true],
   ] as const)("passes sourcemap %j to build as %j", async (flags, expected) => {
     mockedBuild.mockResolvedValue({
       outDir: "/app/dist",

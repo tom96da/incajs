@@ -1,40 +1,45 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
 import { build } from "./build.mts";
-import type { Bundler, BuildOptions, BuildOutput, Watcher } from "./adapter/types.mts";
+import type { Bundler, BuildOptions, BuildOutput } from "./adapter/types.mts";
 
-function makeFakeBundler(result: () => Promise<BuildOutput>): Bundler {
-  return {
+type RecordingBundler = Bundler & { seen: BuildOptions | undefined };
+
+function makeFakeBundler(
+  result: (options: BuildOptions) => Promise<BuildOutput>,
+): RecordingBundler {
+  const bundler: RecordingBundler = {
+    seen: undefined,
     watch: () => Promise.reject(new Error("not used by build()")),
-    build: (): Promise<BuildOutput> => result(),
+    build: (options) => {
+      bundler.seen = options;
+      return result(options);
+    },
   };
+  return bundler;
 }
+
+const writeNothing = (options: BuildOptions): Promise<BuildOutput> =>
+  Promise.resolve({ outDir: options.outDir, entryFile: "bundle.js", files: [] });
 
 describe("build", () => {
   it("builds through the bundler and returns what it wrote", async () => {
-    let seen: BuildOptions | undefined;
-    const bundler: Bundler = {
-      watch: (): Promise<Watcher> => Promise.reject(new Error("not used by build()")),
-      build: (options) => {
-        seen = options;
-        return Promise.resolve({
-          outDir: options.outDir,
-          entryFile: path.join(options.outDir, "bundle.js"),
-          files: ["bundle.js"],
-        });
-      },
-    };
+    const bundler = makeFakeBundler((options) =>
+      Promise.resolve({
+        outDir: options.outDir,
+        entryFile: path.join(options.outDir, "bundle.js"),
+        files: ["bundle.js"],
+      }),
+    );
 
     const output = await build({ cwd: "/app", entry: "unused", bundler });
 
-    expect(seen).toEqual({ entry: "unused", outDir: "/app/dist", sourcemap: false });
+    expect(bundler.seen).toEqual({ entry: "unused", outDir: "/app/dist", sourcemap: false });
     expect(output.entryFile).toBe("/app/dist/bundle.js");
   });
 
@@ -68,40 +73,22 @@ describe("build", () => {
     expect(buildSpy).not.toHaveBeenCalled();
   });
 
-  it("writes bundle.js.map when the sourcemap option overrides a config that leaves it off", async () => {
-    const scratch = await mkdtemp(path.join(tmpdir(), "inca-build-map-"));
-    try {
-      const app = path.join(scratch, "app");
-      await mkdir(path.join(app, "src"), { recursive: true });
-      const entry = path.join(app, "src", "main.ts");
-      await writeFile(entry, 'console.log("hello");\n');
-      const outDir = path.join(scratch, "dist");
+  it("passes sourcemap: true when the option overrides a config that leaves it off", async () => {
+    const bundler = makeFakeBundler(writeNothing);
 
-      const output = await build({
-        cwd: app,
-        entry,
-        sourcemap: true,
-        config: { outDir, entry: undefined, sourcemap: false },
-      });
+    await build({
+      cwd: "/app",
+      entry: "unused",
+      bundler,
+      sourcemap: true,
+      config: { outDir: "/app/dist", entry: undefined, sourcemap: false },
+    });
 
-      expect(output.files).toContain("bundle.js.map");
-      await expect(stat(path.join(outDir, "bundle.js.map"))).resolves.toBeDefined();
-      const js = await readFile(path.join(outDir, "bundle.js"), "utf8");
-      expect(js.trimEnd().endsWith("//# sourceMappingURL=bundle.js.map")).toBe(true);
-    } finally {
-      await rm(scratch, { recursive: true, force: true });
-    }
+    expect(bundler.seen?.sourcemap).toBe(true);
   });
 
   it("lets an explicit sourcemap option turn off a config that turns it on", async () => {
-    let seen: BuildOptions | undefined;
-    const bundler: Bundler = {
-      watch: (): Promise<Watcher> => Promise.reject(new Error("not used by build()")),
-      build: (options) => {
-        seen = options;
-        return Promise.resolve({ outDir: options.outDir, entryFile: "bundle.js", files: [] });
-      },
-    };
+    const bundler = makeFakeBundler(writeNothing);
 
     await build({
       cwd: "/app",
@@ -111,18 +98,11 @@ describe("build", () => {
       config: { outDir: "/app/dist", entry: undefined, sourcemap: true },
     });
 
-    expect(seen?.sourcemap).toBe(false);
+    expect(bundler.seen?.sourcemap).toBe(false);
   });
 
   it("uses the config's sourcemap when no option is given", async () => {
-    let seen: BuildOptions | undefined;
-    const bundler: Bundler = {
-      watch: (): Promise<Watcher> => Promise.reject(new Error("not used by build()")),
-      build: (options) => {
-        seen = options;
-        return Promise.resolve({ outDir: options.outDir, entryFile: "bundle.js", files: [] });
-      },
-    };
+    const bundler = makeFakeBundler(writeNothing);
 
     await build({
       cwd: "/app",
@@ -131,7 +111,7 @@ describe("build", () => {
       config: { outDir: "/app/dist", entry: undefined, sourcemap: true },
     });
 
-    expect(seen?.sourcemap).toBe(true);
+    expect(bundler.seen?.sourcemap).toBe(true);
   });
 
   it("propagates a bundler build failure", async () => {
