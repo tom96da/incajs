@@ -5,13 +5,12 @@ import { setFlagsFromString } from "node:v8";
 import { runInNewContext } from "node:vm";
 
 import { reactive, ref } from "@vue/runtime-core";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createIncaElement } from "./createElement.mts";
-import { markDestroyed } from "./destroyedNodes.mts";
-import { elementOf, recordedCount } from "./elements.mts";
+import { elementOf, markDestroyed, recordedCount, unregisterElement } from "./elementLifecycle.mts";
+import { activeElement, createIncaElement } from "./createElement.mts";
 import type { IncaCore } from "../rendererCore.mts";
-import type { ScrollOptions } from "./scrollPosition.mts";
+import type { ScrollOptions } from "./elementScroll.mts";
 
 function makeCore(
   stored: string | number | boolean | null = null,
@@ -344,5 +343,39 @@ describe("createIncaElement registry", () => {
 
     expect(first.deref()).toBeUndefined();
     expect(elementOf(33)).toBe(el);
+  });
+});
+
+const focused = vi.fn<() => number | null>(() => null);
+
+const focusCore = {
+  createEventTarget: vi.fn<() => object>(() => ({})),
+} as unknown as IncaCore;
+
+describe("activeElement", () => {
+  beforeEach(() => {
+    for (const id of [21, 22]) unregisterElement(id);
+    focused.mockReset();
+    focused.mockReturnValue(null);
+    globalThis.__inca_native__ = { focusedNode: focused } as never;
+  });
+
+  it("returns the registered element of the focused node", () => {
+    const el = createIncaElement(focusCore, 21, "element", "div");
+    focused.mockReturnValue(21);
+
+    expect(activeElement()).toBe(el);
+  });
+
+  it("returns null when no node has focus", () => {
+    createIncaElement(focusCore, 22, "element", "div");
+
+    expect(activeElement()).toBeNull();
+  });
+
+  it("returns null for a focused id with no registered element", () => {
+    focused.mockReturnValue(999);
+
+    expect(activeElement()).toBeNull();
   });
 });

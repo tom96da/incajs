@@ -3,9 +3,9 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { elementOf, unregisterElement } from "./elements.mts";
+import { rectOf } from "./elementGeometry.mts";
+import { elementOf, unregisterElement } from "./elementLifecycle.mts";
 import { createNodeOps } from "./nodeOps.mts";
-import { rectOf } from "./rectOf.mts";
 import type { IncaCore } from "../rendererCore.mts";
 import type { EventLike, IncaEventTarget } from "../types.mts";
 import type { IncaElement, IncaText } from "./nodeOps.mts";

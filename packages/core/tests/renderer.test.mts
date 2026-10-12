@@ -7,8 +7,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createEventTarget } from "../src/createEventTarget.mts";
 import { blur, click, focus } from "../src/events.mts";
 import { createNode, rootNodeId } from "../src/tree.mts";
+import { rectOf } from "../src/vue/elementGeometry.mts";
 import { createIncaApp } from "../src/vue/index.mts";
-import { rectOf } from "../src/vue/rectOf.mts";
 import type { NodeId } from "../src/index.mts";
 import type { IncaElement } from "../src/vue/index.mts";
 

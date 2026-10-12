@@ -1,20 +1,13 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { isDestroyed } from "./destroyedNodes.mts";
-import { registerElement } from "./elements.mts";
-import { layoutBox } from "./layoutBox.mts";
-import { offsetOf } from "./offsetOf.mts";
-import { offsetParentOf } from "./offsetParent.mts";
-import { rectOf } from "./rectOf.mts";
-import { scrollIntoViewArgs } from "./scrollIntoViewArgs.mts";
-import { scrollPosition } from "./scrollPosition.mts";
-import { skipReactive } from "./skipReactive.mts";
-import { tabIndexOf } from "./tabIndexOf.mts";
+import * as nativeCore from "../rendererCore.mts";
+import { layoutBox, offsetOf, offsetParentOf, rectOf, tabIndexOf } from "./elementGeometry.mts";
+import { elementOf, isDestroyed, registerElement, skipReactive } from "./elementLifecycle.mts";
+import { scrollIntoViewArgs, scrollPosition } from "./elementScroll.mts";
 import type { IncaCore, NodeId, TagName } from "../rendererCore.mts";
+import type { ScrollArgs, ScrollIntoViewOptions } from "./elementScroll.mts";
 import type { IncaElement } from "./nodeOps.mts";
-import type { ScrollIntoViewOptions } from "./scrollIntoViewArgs.mts";
-import type { ScrollArgs } from "./scrollPosition.mts";
 
 /**
  * Builds the {@link IncaElement} handle for a native node: parentless,
@@ -119,4 +112,14 @@ export function createIncaElement(
   if (kind === "element") registerElement(element);
   // A plain object in `ref()` becomes a proxy, which differs from `activeElement()`.
   return skipReactive(element);
+}
+
+/**
+ * Returns the element that currently has focus. A `focus()` or `blur()` call
+ * takes effect for this function at once.
+ * @returns the focused element, or `null` when no element has focus
+ */
+export function activeElement(): IncaElement | null {
+  const id = nativeCore.focusedNode();
+  return id === null ? null : (elementOf(id) ?? null);
 }

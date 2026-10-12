@@ -6,9 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import type { ComponentInternalInstance } from "@vue/runtime-core";
 
 import * as events from "../events.mts";
+import { rectOf } from "./elementGeometry.mts";
 import { createNodeOps } from "./nodeOps.mts";
 import { createPatchProp } from "./patchProp.mts";
-import { rectOf } from "./rectOf.mts";
 import type { IncaCore } from "../rendererCore.mts";
 import type { EventLike, IncaEventTarget, ListenerOptions } from "../types.mts";
 import type { IncaElement } from "./nodeOps.mts";

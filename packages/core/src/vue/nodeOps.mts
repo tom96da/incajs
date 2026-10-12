@@ -3,13 +3,11 @@
 
 import type { RendererOptions } from "@vue/runtime-core";
 
+import { markDestroyed, skipReactive } from "./elementLifecycle.mts";
 import { createIncaElement } from "./createElement.mts";
-import { markDestroyed } from "./destroyedNodes.mts";
-import { skipReactive } from "./skipReactive.mts";
 import type { IncaCore, IncaEventTarget, NodeId, TagName } from "../rendererCore.mts";
-import type { RectLike } from "./rectOf.mts";
-import type { ScrollIntoViewOptions } from "./scrollIntoViewArgs.mts";
-import type { ScrollOptions } from "./scrollPosition.mts";
+import type { RectLike } from "./elementGeometry.mts";
+import type { ScrollIntoViewOptions, ScrollOptions } from "./elementScroll.mts";
 
 /**
  * A container host node: either a real element or the hidden stand-in
