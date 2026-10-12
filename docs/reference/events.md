@@ -125,7 +125,7 @@ rules, with the differences below.
   focusable by default. `.focus()` on other nodes is ignored.
 - `hidden="until-found"` counts as shown.
 - A focus ring is unsupported.
-- `activeElement()` (`import { activeElement } from "incajs/vue"`) returns the
+- `activeElement()` (`import { activeElement } from "incajs"`) returns the
   focused element or `null`. It replaces `document.activeElement`, which is
   unsupported.
 - After the last node, Tab leaves nothing focused and the next Tab starts at

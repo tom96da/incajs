@@ -9,8 +9,7 @@ import { rectOf } from "../src/element/geometry.mts";
 import { blur, click, focus } from "../src/events.mts";
 import { createNode, rootNodeId } from "../src/tree.mts";
 import { createIncaApp } from "../src/vue/index.mts";
-import type { NodeId } from "../src/index.mts";
-import type { IncaElement } from "../src/vue/index.mts";
+import type { IncaElement, NodeId } from "../src/index.mts";
 
 /**
  * What the fake host knows of each registration beyond its node and event.

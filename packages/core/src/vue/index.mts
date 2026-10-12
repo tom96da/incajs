@@ -2,9 +2,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 export { createIncaApp } from "./createApp.mts";
-export { activeElement } from "../element/handle.mts";
 
 export type { IncaApp } from "./createApp.mts";
-export type { RectLike, RectValues } from "../element/geometry.mts";
-export type { ScrollIntoViewOptions, ScrollOptions } from "../element/scroll.mts";
-export type { IncaElement, IncaNode } from "../element/types.mts";
