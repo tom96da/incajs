@@ -8,8 +8,8 @@ import {
   type RendererOptions,
 } from "@vue/runtime-core";
 
+import type { IncaElement } from "../element/types.mts";
 import type { IncaCore, EventListener, ListenerOptions } from "../rendererCore.mts";
-import type { IncaElement } from "./nodeOps.mts";
 
 /**
  * Whether a prop is a native event. `onUpdate:modelValue` and the like are

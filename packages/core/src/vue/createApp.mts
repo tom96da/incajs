@@ -4,11 +4,11 @@
 import { createRenderer } from "@vue/runtime-core";
 import type { App, Component, ComponentPublicInstance } from "@vue/runtime-core";
 
+import { createIncaElement } from "../element/handle.mts";
 import * as core from "../rendererCore.mts";
-import { createIncaElement } from "./createElement.mts";
-import { createNodeOps } from "./nodeOps.mts";
+import { createNodeOps, skipReactive } from "./nodeOps.mts";
 import { createPatchProp } from "./patchProp.mts";
-import type { IncaElement, IncaNode } from "./nodeOps.mts";
+import type { IncaElement, IncaNode } from "../element/types.mts";
 
 /**
  * `@vue/runtime-core`'s `App`, with `mount` additionally callable with no
@@ -43,6 +43,6 @@ export function createIncaApp(
 
   return Object.assign(app, {
     mount: (rootContainer?: IncaElement) =>
-      mountAt(rootContainer ?? createIncaElement(core, core.rootNodeId(), "element")),
+      mountAt(rootContainer ?? skipReactive(createIncaElement(core, core.rootNodeId(), "element"))),
   });
 }

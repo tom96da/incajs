@@ -3,8 +3,8 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-import { offsetOf, rectOf, tabIndexOf } from "./elementGeometry.mts";
-import { createIncaElement } from "./createElement.mts";
+import { offsetOf, rectOf, tabIndexOf } from "./geometry.mts";
+import { createIncaElement } from "./handle.mts";
 import type { IncaCore } from "../rendererCore.mts";
 
 type Box = readonly [number, number, number, number, number, number, number];

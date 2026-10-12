@@ -1,9 +1,9 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { isDestroyed } from "./elementLifecycle.mts";
+import { isDestroyed } from "./lifecycle.mts";
 import type { IncaCore } from "../rendererCore.mts";
-import type { IncaElement } from "./nodeOps.mts";
+import type { IncaElement } from "./types.mts";
 
 /** `[x, y, width, height, border, scrollX, scrollY]` of a node's last drawn frame. */
 export type LayoutBox = readonly [number, number, number, number, number, number, number];

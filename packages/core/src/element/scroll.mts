@@ -1,10 +1,10 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { isDestroyed } from "./elementLifecycle.mts";
+import { isDestroyed } from "./lifecycle.mts";
 import type { IncaCore } from "../rendererCore.mts";
 import type { ScrollAlignment } from "../types.mts";
-import type { IncaElement } from "./nodeOps.mts";
+import type { IncaElement } from "./types.mts";
 
 /** The options form of `scrollTo()` and `scrollBy()`. `behavior` is accepted and ignored. */
 export interface ScrollOptions {

@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import * as nativeCore from "../rendererCore.mts";
-import { layoutBox, offsetOf, offsetParentOf, rectOf, tabIndexOf } from "./elementGeometry.mts";
-import { elementOf, isDestroyed, registerElement, skipReactive } from "./elementLifecycle.mts";
-import { scrollIntoViewArgs, scrollPosition } from "./elementScroll.mts";
+import { layoutBox, offsetOf, offsetParentOf, rectOf, tabIndexOf } from "./geometry.mts";
+import { elementOf, isDestroyed, registerElement } from "./lifecycle.mts";
+import { scrollIntoViewArgs, scrollPosition } from "./scroll.mts";
 import type { IncaCore, NodeId, TagName } from "../rendererCore.mts";
-import type { ScrollArgs, ScrollIntoViewOptions } from "./elementScroll.mts";
-import type { IncaElement } from "./nodeOps.mts";
+import type { ScrollArgs, ScrollIntoViewOptions } from "./scroll.mts";
+import type { IncaElement } from "./types.mts";
 
 /**
  * Builds the {@link IncaElement} handle for a native node: parentless,
@@ -110,8 +110,7 @@ export function createIncaElement(
     },
   };
   if (kind === "element") registerElement(element);
-  // A plain object in `ref()` becomes a proxy, which differs from `activeElement()`.
-  return skipReactive(element);
+  return element;
 }
 
 /**

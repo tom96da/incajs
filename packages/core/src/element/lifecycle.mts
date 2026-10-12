@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import type { NodeId } from "../rendererCore.mts";
-import type { IncaElement, IncaNode } from "./nodeOps.mts";
+import type { IncaElement, IncaNode } from "./types.mts";
 
 /**
  * Weak references to the element handles, keyed by native node id. A handle
  * that nothing references can be collected, and its record stays until
- * `collected` drops it. A record leaves at once when Vue removes the node or
- * replaces the text of its parent.
+ * `collected` drops it. A record leaves at once when the node is removed or
+ * the text of its parent is replaced.
  */
 const elements = new Map<NodeId, WeakRef<IncaElement>>();
 
@@ -76,16 +76,4 @@ export function markDestroyed(node: IncaNode): void {
   if (node.kind === "text") return;
   unregisterElement(node.id);
   for (const child of node.children) markDestroyed(child);
-}
-
-/**
- * Marks `handle` so that Vue's `reactive()` and `ref()` keep the object itself.
- * A template ref then holds the same object the application receives from
- * `activeElement()`.
- * @param handle - the node handle to mark
- * @returns `handle`
- */
-export function skipReactive<T extends object>(handle: T): T {
-  Object.defineProperty(handle, "__v_skip", { value: true });
-  return handle;
 }

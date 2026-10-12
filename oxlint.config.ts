@@ -7,6 +7,24 @@ export default defineConfig({
   plugins: ["eslint", "typescript", "unicorn", "oxc", "import", "node", "jsdoc", "vitest", "vue"],
   jsPlugins: ["eslint-plugin-check-file"],
   ignorePatterns: ["third_party/**", "specs/**"],
+  overrides: [
+    {
+      files: ["packages/core/src/element/**/*.mts", "packages/core/src/*.mts"],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            patterns: [
+              {
+                group: ["@vue/*", "**/vue/**"],
+                message: "The framework-independent layers cannot import Vue or src/vue.",
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ],
   rules: {
     "import/no-duplicates": "error",
     "check-file/folder-naming-convention": ["error", { "packages/*/src/**/": "KEBAB_CASE" }],

@@ -3,9 +3,9 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-import { markDestroyed } from "./elementLifecycle.mts";
-import { scrollIntoViewArgs, scrollPosition } from "./elementScroll.mts";
-import { createIncaElement } from "./createElement.mts";
+import { createIncaElement } from "./handle.mts";
+import { markDestroyed } from "./lifecycle.mts";
+import { scrollIntoViewArgs, scrollPosition } from "./scroll.mts";
 import type { IncaCore } from "../rendererCore.mts";
 
 function makeCore(scroll: readonly [number, number, number, number] | null = null): IncaCore {

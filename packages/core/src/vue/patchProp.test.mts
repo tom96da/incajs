@@ -5,13 +5,13 @@ import { createRenderer, h, nextTick, onErrorCaptured, ref } from "@vue/runtime-
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import type { ComponentInternalInstance } from "@vue/runtime-core";
 
+import { rectOf } from "../element/geometry.mts";
 import * as events from "../events.mts";
-import { rectOf } from "./elementGeometry.mts";
 import { createNodeOps } from "./nodeOps.mts";
 import { createPatchProp } from "./patchProp.mts";
+import type { IncaElement } from "../element/types.mts";
 import type { IncaCore } from "../rendererCore.mts";
 import type { EventLike, IncaEventTarget, ListenerOptions } from "../types.mts";
-import type { IncaElement } from "./nodeOps.mts";
 
 /** The function a registration call received, callable with any event. */
 const listenerOf = (call: readonly unknown[]): ((...args: unknown[]) => void) =>

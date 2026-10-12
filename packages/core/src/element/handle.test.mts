@@ -4,13 +4,12 @@
 import { setFlagsFromString } from "node:v8";
 import { runInNewContext } from "node:vm";
 
-import { reactive, ref } from "@vue/runtime-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { elementOf, markDestroyed, recordedCount, unregisterElement } from "./elementLifecycle.mts";
-import { activeElement, createIncaElement } from "./createElement.mts";
+import { activeElement, createIncaElement } from "./handle.mts";
+import { elementOf, markDestroyed, recordedCount, unregisterElement } from "./lifecycle.mts";
 import type { IncaCore } from "../rendererCore.mts";
-import type { ScrollOptions } from "./elementScroll.mts";
+import type { ScrollOptions } from "./scroll.mts";
 
 function makeCore(
   stored: string | number | boolean | null = null,
@@ -166,14 +165,7 @@ describe("createIncaElement layout", () => {
   });
 });
 
-describe("createIncaElement reactivity", () => {
-  it("keeps the same object inside reactive() and ref()", () => {
-    const el = createIncaElement(makeCore(), 1, "element", "div");
-
-    expect(reactive(el)).toBe(el);
-    expect(ref(el).value).toBe(el);
-  });
-
+describe("createIncaElement registration", () => {
   it("registers an element and leaves a comment stand-in out", () => {
     const el = createIncaElement(makeCore(), 7, "element", "div");
     createIncaElement(makeCore(), 8, "comment");
