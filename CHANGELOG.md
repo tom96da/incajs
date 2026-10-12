@@ -18,6 +18,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 ### Fixed
 
 - with experimental HMR, a retried load after an error keeps window listeners on their own handlers ([5cc65ad](https://github.com/tom96da/incajs/commit/5cc65ad))
+- an error stack maps to the original source when a function name contains a parenthesis ([b8db569](https://github.com/tom96da/incajs/commit/b8db569))
+- on macOS the development window delivers its last reply to the CLI before it quits ([c43bd85](https://github.com/tom96da/incajs/commit/c43bd85))
 
 ## [0.0.15] - 2026-10-12
 
