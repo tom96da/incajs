@@ -30,7 +30,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "lint": "oxlint --type-aware",
-    "lint:fix": "oxlint --fix",
+    "lint:fix": "oxlint --type-aware --fix",
     "format": "oxfmt --check --disable-nested-config .",
     "format:write": "oxfmt --write --disable-nested-config .",
     "check": "oxlint && oxfmt --check --disable-nested-config .",
