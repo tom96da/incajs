@@ -566,6 +566,9 @@ pub fn run_bundle(entry_path: &str, dev: bool) -> ExitCode {
             }
         })
         .detach();
+        if let Some(writer) = writer.clone() {
+            close_writer_on_quit(cx, writer);
+        }
 
         let error_reporter = writer.as_ref().map_or_else(stderr_reporter, reporter_for);
         let lines = writer.is_some().then(stdin_lines);
@@ -596,6 +599,15 @@ pub fn run_bundle(entry_path: &str, dev: bool) -> ExitCode {
         writer.close();
     }
     ExitCode::SUCCESS
+}
+
+// macOS ends the process inside `quit`, so `run` never returns to close the writer.
+fn close_writer_on_quit(cx: &mut App, writer: SharedWriter) {
+    cx.on_app_quit(move |_| {
+        writer.close();
+        async {}
+    })
+    .detach();
 }
 
 /// The settings the host applies for `config`, as pretty-printed JSON. A
@@ -827,6 +839,28 @@ mod tests {
             !session.engine.eval::<bool>("globalThis.mounted;").unwrap(),
             "which is what start has to drain once the window is up"
         );
+    }
+
+    struct ClosingWriter(Rc<Cell<bool>>);
+
+    impl Writer for ClosingWriter {
+        fn write_line(&self, _line: String) {}
+
+        fn close(&self) {
+            self.0.set(true);
+        }
+    }
+
+    #[gpui::test]
+    fn quitting_closes_the_writer(cx: &mut TestAppContext) {
+        let closed = Rc::new(Cell::new(false));
+        cx.update(|cx| {
+            close_writer_on_quit(cx, Rc::new(ClosingWriter(Rc::clone(&closed))));
+            cx.shutdown();
+        });
+        cx.run_until_parked();
+
+        assert!(closed.get());
     }
 
     #[gpui::test]
