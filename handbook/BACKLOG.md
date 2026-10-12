@@ -230,6 +230,20 @@ A fixed entry is deleted and its ID is never reused.
   scratch app and resolves `incajs/vue/runtime` through the published
   `exports`. The UI tests cover the workspace link.
 
+- **B-181 A node Vue creates and never inserts stays in the host tree**
+  `Units: core,bridge · Size: M · Impact: Medium`
+
+  Vue's `mountElement` creates the element, mounts its children under it and
+  inserts it last. A development build rethrows an exception of a child
+  `setup` when the app sets no `errorHandler`, and the exception leaves the
+  element and its subtree in the host tree, never inserted and never
+  destroyed. Each such error keeps the nodes for the life of the app. A
+  production build logs the exception and inserts the element.
+
+  Fix: free the nodes of an element that the renderer created and never
+  inserted, for example through a pending-node list that the next insert or a
+  frame boundary checks.
+
 ## P3
 
 - **B-001 Vue template type-checking**
@@ -1074,3 +1088,37 @@ A fixed entry is deleted and its ID is never reused.
   Fix: give the host root a scroll handle (`overflow: auto`) with an opt-out.
   That also lets focus and `scrollIntoView` reach content below the window. The
   default and the opt-out are design decisions for the owner.
+
+- **B-178 A queued scroll into view waits for any later frame**
+  `Units: bridge · Size: S–M · Impact: Low`
+
+  `scrollIntoView()` on a node with no box yet waits for the next frame. When
+  no change requests a frame, such as a node that stays at `display: none`,
+  the call stays queued and scrolls whenever a later frame draws. A browser
+  scrolls at once, because layout is synchronous.
+
+  Fix: request an animation frame when the call is queued, and give the host
+  binding the window handle it needs for that.
+
+- **B-179 A recompile of a module name replaces its source map**
+  `Units: jsenv · Size: M · Impact: Low`
+
+  The source map registry keys each entry by filename. Under
+  `--experimental-hmr`, a recompile of the same module replaces its source and
+  map. A frame of a function from the previous compile that is still alive,
+  such as an old listener or timer, maps through the new map and names a wrong
+  line and column. A browser maps a frame through the map of its own script.
+
+  Fix: key each entry by a per-compile generation in the filename the engine
+  sees, and print the original filename.
+
+- **B-180 A wheel listener's write equal to the wheel step is undone**
+  `Units: gpui,bridge · Size: S–M · Impact: Low`
+
+  When a `wheel` listener calls `preventDefault()` and sets the held container
+  to exactly the offset the wheel step produced, `settle_wheel` reads that
+  write as the step and restores the container. A browser keeps the write.
+
+  Fix: have `scrollNode` and the reveal record the handles they wrote, and
+  have `settle_wheel` leave those handles alone. B-083 describes the same
+  rollback.
