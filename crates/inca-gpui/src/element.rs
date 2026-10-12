@@ -760,7 +760,12 @@ where
 /// Every scroll container's offset before the wheel event being dispatched,
 /// outermost first, and whether the container is inert.
 #[derive(Default)]
-struct WheelSnapshots(Vec<(ScrollHandle, Point<Pixels>, bool)>);
+struct WheelSnapshots(Vec<Snapshot>);
+
+/// A container's handle, its offset before the wheel event, whether it is
+/// inert and whether it is the root, whose step runs after the root's bubble
+/// handler.
+type Snapshot = (ScrollHandle, Point<Pixels>, bool, bool);
 
 impl Global for WheelSnapshots {}
 
@@ -768,7 +773,7 @@ impl Global for WheelSnapshots {}
 /// capture phase, which runs before any bubble-phase scroll step. Children
 /// paint after their parent, and a container adds this before its own
 /// children, so containers record outermost first.
-fn scroll_recorder(handle: ScrollHandle, inert: bool) -> impl IntoElement {
+fn scroll_recorder(handle: ScrollHandle, inert: bool, root: bool) -> impl IntoElement {
     canvas(
         |_, _, _| (),
         move |_, (), window, _| {
@@ -778,7 +783,7 @@ fn scroll_recorder(handle: ScrollHandle, inert: bool) -> impl IntoElement {
                 }
                 let snapshots = &mut cx.default_global::<WheelSnapshots>().0;
                 let first = snapshots.is_empty();
-                snapshots.push((handle.clone(), handle.offset(), inert));
+                snapshots.push((handle.clone(), handle.offset(), inert, root));
                 if first {
                     window.defer(cx, settle_wheel);
                 }
@@ -876,6 +881,7 @@ fn pointer_tracker<E: EventSink + Clone + 'static>(root: NodeId, dispatch: E) ->
                 move |event: &ScrollWheelEvent, phase, window, cx| match phase {
                     DispatchPhase::Capture => cx.default_global::<MouseTarget>().current = None,
                     DispatchPhase::Bubble => {
+                        roll_back_extra_steps(cx);
                         let target = target_or(cx, root);
                         scrolled.pointer_input("wheel", target, &event.into(), window, cx);
                     }
@@ -910,16 +916,22 @@ where
         })
 }
 
-/// Undoes, once `gpui`'s scroll steps and the JS listeners have run, all
-/// scrolling after `preventDefault()`, else the scrolling of every container
-/// but the innermost one that can still move.
-///
-/// Runs before the next draw. A `gpui` that applies the wheel step later
-/// than the event breaks this.
-fn settle_wheel(window: &mut Window, cx: &mut App) {
-    let snapshots = std::mem::take(&mut cx.default_global::<WheelSnapshots>().0);
-    let mut settled = window.default_prevented();
-    for (handle, before, inert) in snapshots.into_iter().rev() {
+/// The container whose wheel step [`roll_back_extra_steps`] kept: its handle,
+/// the offset before the step and the offset after it.
+#[derive(Default)]
+struct WheelKept(Option<(ScrollHandle, Point<Pixels>, Point<Pixels>)>);
+
+impl Global for WheelKept {}
+
+/// Undoes the wheel steps of every container but the innermost one that can
+/// still move, and returns the kept container. `settled` true restores that
+/// one too.
+fn undo_steps(
+    snapshots: Vec<Snapshot>,
+    mut settled: bool,
+) -> Option<(ScrollHandle, Point<Pixels>, Point<Pixels>)> {
+    let mut kept = None;
+    for (handle, before, inert, _) in snapshots.into_iter().rev() {
         // An inert container never scrolls and leaves the wheel to the next.
         if inert {
             handle.set_offset(before);
@@ -936,22 +948,60 @@ fn settle_wheel(window: &mut Window, cx: &mut App) {
         // An unclamped `before` past the end would always differ from `moved`.
         if !settled && clamp(handle.offset()) != clamp(before) {
             settled = true;
+            let after = handle.offset();
+            kept = Some((handle, before, after));
         } else {
             handle.set_offset(before);
         }
+    }
+    kept
+}
+
+/// Runs in the root's bubble phase, once `gpui`'s scroll steps have run and
+/// before the JS listeners. Restores every container but the innermost one
+/// that can still move, so a listener's own scroll writes stay.
+fn roll_back_extra_steps(cx: &mut App) {
+    let all = std::mem::take(&mut cx.default_global::<WheelSnapshots>().0);
+    // The root's own step is still to come; `settle_wheel` handles it.
+    let (root, below): (Vec<_>, Vec<_>) = all.into_iter().partition(|s| s.3);
+    cx.default_global::<WheelSnapshots>().0 = root;
+    cx.default_global::<WheelKept>().0 = undo_steps(below, false);
+}
+
+/// Runs before the next draw, after the JS listeners. Restores the kept
+/// container when a listener prevented the default and left its offset at
+/// the wheel step's result.
+///
+/// A `gpui` that applies the wheel step later than the event breaks this.
+fn settle_wheel(window: &mut Window, cx: &mut App) {
+    let snapshots = std::mem::take(&mut cx.default_global::<WheelSnapshots>().0);
+    let prevented = window.default_prevented();
+    let kept = cx.default_global::<WheelKept>().0.take();
+    // The root's snapshot, or all of them when the root's bubble phase did not run.
+    undo_steps(snapshots, prevented || kept.is_some());
+    if let Some((handle, before, after)) = kept
+        && prevented
+        && handle.offset() == after
+    {
+        handle.set_offset(before);
     }
 }
 
 /// Tracks a scroll container's [`ScrollHandle`] and records its offset for
 /// [`settle_wheel`], which keeps an inert container at that offset. Without a
 /// handle `gpui` scrolls it on its own.
-fn wire_scroll<Elem>(element: Elem, handle: Option<ScrollHandle>, spec: &ElementSpec) -> Elem
+fn wire_scroll<Elem>(
+    element: Elem,
+    handle: Option<ScrollHandle>,
+    spec: &ElementSpec,
+    root: bool,
+) -> Elem
 where
     Elem: StatefulInteractiveElement + ParentElement + FluentBuilder,
 {
     element.when_some(handle, |el, handle| {
         el.track_scroll(&handle)
-            .child(scroll_recorder(handle, spec.inert))
+            .child(scroll_recorder(handle, spec.inert, root))
     })
 }
 
@@ -1003,7 +1053,7 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
             if spec.style.clips() || (dispatch.is_some() && hover) {
                 let element = element.id(ElementId::Integer(u64::from(id)));
                 let element = wire_focus(element, dispatch, id);
-                let element = wire_scroll(element, handle, spec);
+                let element = wire_scroll(element, handle, spec, root);
                 let element = wire_hover(element, dispatch.filter(|_| hover), id);
                 let element =
                     element.when(hover, |el| mark_mouse_target(el, id, dispatch.cloned()));
@@ -1081,7 +1131,7 @@ fn record_children<E>(
 where
     E: EventSink + 'static,
 {
-    // The border of each rendered child; `None` when it is not displayed.
+    // The border of each rendered child; `None` for `display: none`.
     #[allow(clippy::cast_possible_truncation)]
     let children: Vec<(NodeId, Option<Pixels>)> = rendered_children(spec)
         .map(|child| {
@@ -2737,6 +2787,18 @@ mod tests {
             }
         }
 
+        fn mounted(cx: &mut TestAppContext, tree: VirtualTree) -> (Probe, gpui::AnyWindowHandle) {
+            let probe = probe();
+            let view = probe.clone();
+            let window = cx.add_window(|_, _| ProbeView(tree, view));
+            (probe, window.into())
+        }
+
+        fn frame(cx: &mut TestAppContext, window: gpui::AnyWindowHandle) {
+            cx.update_window(window, |_, window, cx| window.draw(cx).clear(cx))
+                .unwrap();
+        }
+
         fn draw(cx: &mut gpui::VisualTestContext, tree: &VirtualTree, probe: &Probe) {
             cx.draw(point(px(0.), px(0.)), size(px(800.), px(600.)), |_, _| {
                 render_tree_with_events(tree, 0, probe).unwrap()
@@ -2784,20 +2846,14 @@ mod tests {
             tree.set_style(root, "overflow_y", "scroll").unwrap();
             let first = boxed(&mut tree, Some(root), 100., 300.);
             let second = boxed(&mut tree, Some(root), 100., 20.);
-            let probe = probe();
-            let view = probe.clone();
-            let window = cx.add_window(|_, _| ProbeView(tree, view));
-            let frame = |cx: &mut TestAppContext| {
-                cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-                    .unwrap();
-            };
-            frame(cx);
+            let (probe, window) = mounted(cx, tree);
+            frame(cx, window);
             assert_eq!(
                 probe.layouts.borrow()[&first].bounds,
                 rect(0., 0., 100., 300.)
             );
             probe.handles.borrow()[&root].set_offset(point(px(0.), px(-50.)));
-            frame(cx);
+            frame(cx, window);
             let layouts = probe.layouts.borrow();
             assert_eq!(layouts[&first].bounds, rect(0., -50., 100., 300.));
             assert_eq!(layouts[&second].bounds, rect(0., 250., 100., 20.));
@@ -2809,15 +2865,9 @@ mod tests {
             let root = boxed(&mut tree, None, 100., 100.);
             tree.set_style(root, "overflow_y", "hidden").unwrap();
             let child = boxed(&mut tree, Some(root), 100., 300.);
-            let probe = probe();
-            let view = probe.clone();
-            let window = cx.add_window(|_, _| ProbeView(tree, view));
-            let frame = |cx: &mut TestAppContext| {
-                cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-                    .unwrap();
-            };
-            frame(cx);
-            let mut vcx = VisualTestContext::from_window(window.into(), cx);
+            let (probe, window) = mounted(cx, tree);
+            frame(cx, window);
+            let mut vcx = VisualTestContext::from_window(window, cx);
             vcx.simulate_event(ScrollWheelEvent {
                 position: point(px(10.), px(10.)),
                 delta: ScrollDelta::Pixels(point(px(0.), px(-50.))),
@@ -2841,16 +2891,12 @@ mod tests {
             let root = boxed(&mut tree, None, 100., 100.);
             tree.set_style(root, "overflow_y", "scroll").unwrap();
             let child = boxed(&mut tree, Some(root), 100., 300.);
-            let probe = probe();
-            let view = probe.clone();
-            let window = cx.add_window(|_, _| ProbeView(tree, view));
+            let (probe, window) = mounted(cx, tree);
             // The test window has a scale factor of 2, so the grid is 0.5px.
             for (offset, drawn) in [(-50.4, -50.5), (-50.25, -50.), (-50.75, -50.5)] {
-                cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-                    .unwrap();
+                frame(cx, window);
                 probe.handles.borrow()[&root].set_offset(point(px(0.), px(offset)));
-                cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-                    .unwrap();
+                frame(cx, window);
                 assert_eq!(
                     probe.layouts.borrow()[&child].bounds,
                     rect(0., drawn, 100., 300.)
@@ -2867,24 +2913,18 @@ mod tests {
             let mid = boxed(&mut tree, Some(root), 100., 300.);
             tree.set_style(mid, "overflow_y", "scroll").unwrap();
             let leaf = boxed(&mut tree, Some(mid), 100., 600.);
-            let probe = probe();
-            let view = probe.clone();
-            let window = cx.add_window(|_, _| ProbeView(tree, view));
-            cx.simulate_window_scale_factor_change(window.into(), scale);
-            let frame = |cx: &mut TestAppContext| {
-                cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-                    .unwrap();
-            };
-            frame(cx);
+            let (probe, window) = mounted(cx, tree);
+            cx.simulate_window_scale_factor_change(window, scale);
+            frame(cx, window);
             probe.handles.borrow()[&root].set_offset(point(px(0.), px(outer)));
             probe.handles.borrow()[&mid].set_offset(point(px(0.), px(inner)));
-            frame(cx);
+            frame(cx, window);
             probe.layouts.borrow()[&leaf].bounds.origin.y
         }
 
         #[gpui::test]
         fn nested_fractional_offsets_are_snapped_as_one_sum(cx: &mut TestAppContext) {
-            // Drawn at the snap of outer + inner, not the sum of two snaps.
+            // Drawn at the snap of the summed offset.
             assert_eq!(nested_leaf_y(cx, 2., -10.3, -10.3), px(-20.5));
             assert_eq!(nested_leaf_y(cx, 1., -10.3, -10.3), px(-21.));
         }
@@ -2899,18 +2939,12 @@ mod tests {
             tree.set_style(mid, "overflow_y", "scroll").unwrap();
             tree.set_style(mid, "border_width", 2.0).unwrap();
             let leaf = boxed(&mut tree, Some(mid), 100., 600.);
-            let probe = probe();
-            let view = probe.clone();
-            let window = cx.add_window(|_, _| ProbeView(tree, view));
-            cx.simulate_window_scale_factor_change(window.into(), 2.);
-            let frame = |cx: &mut TestAppContext| {
-                cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-                    .unwrap();
-            };
-            frame(cx);
+            let (probe, window) = mounted(cx, tree);
+            cx.simulate_window_scale_factor_change(window, 2.);
+            frame(cx, window);
             probe.handles.borrow()[&root].set_offset(point(px(0.), px(-10.3)));
             probe.handles.borrow()[&mid].set_offset(point(px(0.), px(-10.3)));
-            frame(cx);
+            frame(cx, window);
             let layouts = probe.layouts.borrow();
             // The outer scroll snaps to 10.5; the sum 20.6 snaps to 20.5.
             assert_eq!(layouts[&mid].scroll, point(px(0.), px(10.5)));
@@ -2923,16 +2957,12 @@ mod tests {
             let root = boxed(&mut tree, None, 100., 100.);
             tree.set_style(root, "overflow_y", "scroll").unwrap();
             let child = boxed(&mut tree, Some(root), 100., 300.);
-            let probe = probe();
-            let view = probe.clone();
-            let window = cx.add_window(|_, _| ProbeView(tree, view));
-            cx.simulate_window_scale_factor_change(window.into(), 1.);
+            let (probe, window) = mounted(cx, tree);
+            cx.simulate_window_scale_factor_change(window, 1.);
             for (offset, drawn) in [(-50.4, -50.), (-50.6, -51.)] {
-                cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-                    .unwrap();
+                frame(cx, window);
                 probe.handles.borrow()[&root].set_offset(point(px(0.), px(offset)));
-                cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-                    .unwrap();
+                frame(cx, window);
                 assert_eq!(
                     probe.layouts.borrow()[&child].bounds,
                     rect(0., drawn, 100., 300.)
@@ -2968,11 +2998,8 @@ mod tests {
             tree.set_style(hidden, "display", "none").unwrap();
             let shown = boxed(&mut tree, Some(root), 30., 30.);
             let inside = boxed(&mut tree, Some(hidden), 10., 10.);
-            let probe = probe();
-            let view = probe.clone();
-            let window = cx.add_window(|_, _| ProbeView(tree, view));
-            cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-                .unwrap();
+            let (probe, window) = mounted(cx, tree);
+            frame(cx, window);
             let layouts = probe.layouts.borrow();
             assert_eq!(layouts[&shown].bounds, rect(0., 0., 30., 30.));
             assert!(!layouts.contains_key(&hidden) && !layouts.contains_key(&inside));

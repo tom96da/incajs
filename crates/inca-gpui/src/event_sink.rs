@@ -393,9 +393,9 @@ pub trait EventSink {
     /// The handle to track this node's focus with, if it's focusable.
     fn focus_handle(&self, node_id: NodeId) -> Option<gpui::FocusHandle>;
 
-    /// Tracks this node's scroll offset. A scrolling container that gets one
-    /// scrolls for the innermost container under the wheel that can still
-    /// move, and stays put after `preventDefault()`.
+    /// Tracks this node's scroll offset. A container that clips or scrolls
+    /// gets one. Wheel scrolling applies to the innermost container whose overflow
+    /// is `scroll` or `auto` that can still move, and stays put after `preventDefault()`.
     fn scroll_handle(&self, node_id: NodeId) -> Option<gpui::ScrollHandle>;
 
     /// Forgets every recorded layout. Called before each frame's tree is

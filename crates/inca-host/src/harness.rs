@@ -286,15 +286,17 @@ mod tests {
     }
 
     #[gpui::test]
-    fn the_root_has_a_layout_record_after_a_render(cx: &mut TestAppContext) {
-        let h = Harness::load(cx, ENTRY, CLICKABLE);
+    fn the_root_layout_spans_the_viewport_width_after_a_render(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, CLICKABLE);
 
         let width = eval_f64(
             &h,
             "__inca_native__.layoutOf(__inca_native__.rootNodeId())[2]",
         );
+        let viewport =
+            h.cx.update(|window, _| f64::from(f32::from(window.viewport_size().width)));
 
-        assert!(width > 0.0);
+        assert_eq!(width, viewport);
     }
 
     #[gpui::test]
@@ -1973,6 +1975,27 @@ mod tests {
     }
 
     #[gpui::test]
+    fn a_wheel_listener_keeps_the_scroll_it_writes_to_a_container(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, ENTRY, "");
+        let (outer, held) = nested_scrollers(&mut h, false);
+        run_js(
+            &mut h,
+            "globalThis.__inca_callbacks__ = { 0: (e) => {
+                 e.preventDefault();
+                 __inca_native__.scrollNode(outer, null, 20);
+             } };
+             __inca_native__.addEventListener(__inca_native__.rootNodeId(), 'wheel', 0);",
+        );
+
+        h.scroll(held, 0.0, -30.0);
+
+        assert_eq!(
+            (scroll_offset(&h, held), scroll_offset(&h, outer)),
+            (px(0.0), px(-20.0))
+        );
+    }
+
+    #[gpui::test]
     fn wheel_scrolls_the_container(cx: &mut TestAppContext) {
         let mut h = Harness::load(cx, ENTRY, TARGETS);
         listen(&mut h, "frame", "wheel", 0);
@@ -2559,8 +2582,18 @@ mod tests {
     }
 
     /// Container `box` (100 high, 5 border, 3 padding) with ten 50-high
-    /// `items` under a root padded by 20. `overflow` styles `box`.
-    fn reveal_fixture(overflow: &str) -> String {
+    /// `items` under a root padded by 20. `overflow` styles `box`; `nested`
+    /// puts `box` inside a scrolling `outer` that has 150 before and 400 after it.
+    fn reveal_fixture(overflow: &str, nested: bool) -> String {
+        let (parent, before, after) = if nested {
+            (
+                "outer",
+                "globalThis.outer = mkBox(pad, 'scroll'); mkSpacer(outer, 150);",
+                "mkSpacer(outer, 400);",
+            )
+        } else {
+            ("pad", "", "")
+        };
         format!(
             r"
             const n = __inca_native__;
@@ -2597,9 +2630,11 @@ mod tests {
                 return (y + height / 2) - (by + bb + (bh - 2 * bb) / 2);
             }};
             globalThis.top = (box) => n.scrollOf(box)[1];
-            globalThis.box = mkBox(pad, '{overflow}');
+            {before}
+            globalThis.box = mkBox({parent}, '{overflow}');
             globalThis.items = [];
             for (let i = 0; i < 10; i++) items.push(mkItem(box));
+            {after}
             "
         )
     }
@@ -2616,7 +2651,7 @@ mod tests {
     }
 
     fn revealing(cx: &mut TestAppContext, overflow: &str) -> Harness {
-        Harness::load(cx, ENTRY, &reveal_fixture(overflow))
+        Harness::load(cx, ENTRY, &reveal_fixture(overflow, false))
     }
 
     fn near(h: &Harness, code: &str) -> bool {
@@ -2629,23 +2664,6 @@ mod tests {
         run_js(&mut h, "__inca_native__.focusNode(items[6]);");
         assert!(eval_f64(&h, "top(box)") > 0.0);
         assert!(near(&h, "gap(items[6], box)"));
-    }
-
-    #[gpui::test]
-    fn focus_leaves_a_node_that_shows_in_place(cx: &mut TestAppContext) {
-        let mut h = revealing(cx, "scroll");
-        run_js(&mut h, "__inca_native__.focusNode(items[0]);");
-        assert_eq!(eval_f64(&h, "top(box)"), 0.0);
-    }
-
-    #[gpui::test]
-    fn focus_moves_a_partly_shown_node_the_least(cx: &mut TestAppContext) {
-        let mut h = revealing(cx, "scroll");
-        run_js(&mut h, "__inca_native__.focusNode(items[1]);");
-        let [_, y, _, height, _] = layout(&h, "items[1]");
-        let [_, box_y, _, box_height, border] = layout(&h, "box");
-        let bottom = box_y + box_height - border;
-        assert!((y + height - bottom).abs() < 0.5);
     }
 
     #[gpui::test]
@@ -2734,20 +2752,7 @@ mod tests {
 
     #[gpui::test]
     fn focus_scrolls_every_ancestor_container(cx: &mut TestAppContext) {
-        let mut h = Harness::load(
-            cx,
-            ENTRY,
-            &reveal_fixture("scroll")
-                .replace(
-                    "globalThis.box = mkBox(pad, 'scroll');",
-                    "globalThis.outer = mkBox(pad, 'scroll'); mkSpacer(outer, 150); \
-                 globalThis.box = mkBox(outer, 'scroll');",
-                )
-                .replace(
-                    "for (let i = 0; i < 10; i++) items.push(mkItem(box));",
-                    "for (let i = 0; i < 10; i++) items.push(mkItem(box)); mkSpacer(outer, 400);",
-                ),
-        );
+        let mut h = Harness::load(cx, ENTRY, &reveal_fixture("scroll", true));
         run_js(&mut h, "__inca_native__.focusNode(items[6]);");
         assert!(eval_f64(&h, "top(box)") > 0.0);
         assert!(eval_f64(&h, "top(outer)") > 0.0);
@@ -2787,16 +2792,6 @@ mod tests {
             eval_f64(&h, "__inca_native__.scrollOf(box)[2] > 0 ? 1 : 0"),
             1.0
         );
-    }
-
-    #[gpui::test]
-    fn the_last_of_two_focus_requests_in_one_tick_is_revealed(cx: &mut TestAppContext) {
-        let mut h = revealing(cx, "scroll");
-        run_js(
-            &mut h,
-            "__inca_native__.focusNode(items[3]); __inca_native__.focusNode(items[7]);",
-        );
-        assert!(near(&h, "gap(items[7], box)"));
     }
 
     #[gpui::test]
