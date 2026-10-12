@@ -251,9 +251,6 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
 
-      - name: Check
-        run: cargo check --workspace --all-targets --exclude inca-tests
-
       - name: Clippy
         run: cargo clippy --workspace --all-targets --exclude inca-tests -- -D warnings
 
@@ -397,20 +394,8 @@ jobs:
       - name: Build inca-host
         run: cargo build -p inca-host
 
-      # Runs headless: no real display or GPU in this container.
-      - name: Install Xvfb
-        env:
-          DEBIAN_FRONTEND: noninteractive
-        # xvfb-run also needs xauth; gpui needs a Vulkan driver to render.
-        run: |
-          apt-get install -y --no-install-recommends \
-            xvfb \
-            xauth \
-            libvulkan1 \
-            mesa-vulkan-drivers
-
       - name: Test (real inca-host + real Vite dev server)
-        run: xvfb-run -a pnpm -F @incajs/e2e-tests test
+        run: pnpm -F @incajs/e2e-tests test
 
   rust-node-macos:
     name: "Rust & Node: macos-latest"
