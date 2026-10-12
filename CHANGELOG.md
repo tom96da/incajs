@@ -15,6 +15,10 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - `activeElement()` and the element types moved from `incajs/vue` to `incajs` ([2048804](https://github.com/tom96da/incajs/commit/2048804)) ([f2f54b1](https://github.com/tom96da/incajs/commit/f2f54b1))
 - `IncaCore` became an internal type ([50fc3ad](https://github.com/tom96da/incajs/commit/50fc3ad))
 
+### Fixed
+
+- with experimental HMR, a retried load after an error keeps window listeners on their own handlers ([5cc65ad](https://github.com/tom96da/incajs/commit/5cc65ad))
+
 ## [0.0.15] - 2026-10-12
 
 ### Added
