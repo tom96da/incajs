@@ -1,109 +1,9 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import { addCallback, callbackIdFor, groupOf, releaseCallback } from "./callbacks.mts";
 import { native, type HostCallback } from "./native.mts";
-import type {
-  CallbackId,
-  EventLike,
-  EventListenerOrObject,
-  ListenerOptions,
-  NodeId,
-} from "./types.mts";
-
-/**
- * The JS half of every registration: the `callbackId` the host holds, the
- * callback at `globalThis.__inca_callbacks__[callbackId]`, and the
- * `(nodeId, event, capture)` group and listener that id belongs to.
- *
- * A registration is reached from either end: by group and listener when a
- * listener is added or removed, and by `callbackId` when the host reports
- * one released. All of it moves together in here.
- */
-interface Registrations {
-  /**
-   * Records `callable` under a fresh id.
-   * @param group - the node, event and capture flag as one string
-   * @param listener - the listener the caller registered, which identifies
-   * the registration
-   * @param callable - the function the host runs
-   * @returns the id the host should be given
-   */
-  add(group: string, listener: EventListenerOrObject, callable: HostCallback): CallbackId;
-
-  /**
-   * @param group - the node, event and capture flag as one string
-   * @param listener - the listener the caller registered
-   * @returns the id registered for the pair, or `undefined`
-   */
-  idFor(group: string, listener: EventListenerOrObject): CallbackId | undefined;
-
-  /**
-   * Forgets `callbackId` and the listener it named. A no-op for an id that
-   * was never registered, or was released already.
-   * @param callbackId - the id to drop
-   */
-  release(callbackId: CallbackId): void;
-
-  /** @returns how many `(nodeId, event, capture)` groups hold a registration */
-  groupCount(): number;
-}
-
-/**
- * @returns a new, empty {@link Registrations}
- */
-function createRegistrations(): Registrations {
-  const idsByGroup = new Map<string, Map<EventListenerOrObject, CallbackId>>();
-  const ownerById = new Map<CallbackId, { group: string; listener: EventListenerOrObject }>();
-  let nextCallbackId = 0;
-
-  // Lazily, because the host defines nothing until the first registration.
-  const callables = (): Record<CallbackId, HostCallback> => (globalThis.__inca_callbacks__ ??= {});
-
-  return {
-    add(group, listener, callable) {
-      const callbackId = nextCallbackId++;
-      callables()[callbackId] = callable;
-      let ids = idsByGroup.get(group);
-      if (!ids) idsByGroup.set(group, (ids = new Map()));
-      ids.set(listener, callbackId);
-      ownerById.set(callbackId, { group, listener });
-      return callbackId;
-    },
-
-    idFor(group, listener) {
-      return idsByGroup.get(group)?.get(listener);
-    },
-
-    release(callbackId) {
-      delete callables()[callbackId];
-      const owner = ownerById.get(callbackId);
-      if (owner === undefined) return;
-      ownerById.delete(callbackId);
-      const ids = idsByGroup.get(owner.group);
-      ids?.delete(owner.listener);
-      if (ids?.size === 0) idsByGroup.delete(owner.group);
-    },
-
-    groupCount: () => idsByGroup.size,
-  };
-}
-
-const registrations = createRegistrations();
-
-/**
- * The capture flag is part of the identity: the same node, event and function
- * can listen in both phases side by side.
- */
-const groupOf = (nodeId: NodeId, event: string, capture: boolean | undefined): string =>
-  `${nodeId}:${event}:${capture === true}`;
-
-/**
- * @returns how many `(nodeId, event, capture)` groups hold a registration
- * @internal
- */
-export function registeredGroupCount(): number {
-  return registrations.groupCount();
-}
+import type { EventLike, EventListenerOrObject, ListenerOptions, NodeId } from "./types.mts";
 
 let latestId = 0;
 
@@ -123,16 +23,6 @@ function tracking(listener: HostCallback): HostCallback {
     if (typeof id === "number" && id > latestId) latestId = id;
     return listener(...args);
   };
-}
-
-/**
- * Drops the JS half of every registration in `callbackIds`. The native half
- * is already gone by the time this runs — `destroyNode` takes both.
- * @param callbackIds - ids the host reported as released
- * @internal
- */
-export function releaseCallbacks(callbackIds: readonly CallbackId[]): void {
-  for (const callbackId of callbackIds) registrations.release(callbackId);
 }
 
 /**
@@ -160,7 +50,7 @@ export function addEventListener(
 ): void {
   if (listener === null || listener === undefined) return;
   const group = groupOf(nodeId, event, options.capture);
-  if (registrations.idFor(group, listener) !== undefined) return;
+  if (callbackIdFor(group, listener) !== undefined) return;
 
   const call: HostCallback = (...args) =>
     typeof listener === "function"
@@ -172,7 +62,7 @@ export function addEventListener(
         return call(...args);
       }
     : call;
-  const callbackId = registrations.add(group, listener, tracking(run));
+  const callbackId = addCallback(group, listener, tracking(run));
   try {
     native().addEventListener(
       nodeId,
@@ -182,7 +72,7 @@ export function addEventListener(
       options.passive === true,
     );
   } catch (error) {
-    registrations.release(callbackId);
+    releaseCallback(callbackId);
     throw error;
   }
 }
@@ -202,11 +92,11 @@ export function removeEventListener(
   options: Pick<ListenerOptions, "capture"> = {},
 ): void {
   if (listener === null || listener === undefined) return;
-  const callbackId = registrations.idFor(groupOf(nodeId, event, options.capture), listener);
+  const callbackId = callbackIdFor(groupOf(nodeId, event, options.capture), listener);
   if (callbackId === undefined) return;
 
   native().removeEventListener(nodeId, event, callbackId);
-  registrations.release(callbackId);
+  releaseCallback(callbackId);
 }
 
 /**
@@ -254,12 +144,4 @@ export function focus(nodeId: NodeId, preventScroll?: boolean): void {
  */
 export function blur(nodeId: NodeId): void {
   native().blurNode(nodeId);
-}
-
-/**
- * Returns the id of the focused node.
- * @returns the focused node's id, or `null` when no node has focus
- */
-export function focusedNode(): NodeId | null {
-  return native().focusedNode();
 }

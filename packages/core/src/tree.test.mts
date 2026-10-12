@@ -7,6 +7,7 @@ import {
   appendChild,
   createNode,
   destroyNode,
+  focusedNode,
   getAttribute,
   insertBefore,
   layoutOf,
@@ -140,5 +141,10 @@ describe("wrapper functions forward to __inca_native__", () => {
   it("setStyle", () => {
     setStyle(1, "display", "flex");
     expect(native.setStyle).toHaveBeenCalledWith(1, "display", "flex");
+  });
+
+  it("focusedNode", () => {
+    native.focusedNode.mockReturnValueOnce(7);
+    expect(focusedNode()).toBe(7);
   });
 });

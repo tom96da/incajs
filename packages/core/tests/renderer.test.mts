@@ -4,9 +4,9 @@
 import { h, nextTick, reactive, ref } from "@vue/runtime-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createEventTarget } from "../src/createEventTarget.mts";
 import { rectOf } from "../src/element/geometry.mts";
 import { blur, click, focus } from "../src/events.mts";
+import { createEventTarget } from "../src/eventTarget.mts";
 import { createNode, rootNodeId } from "../src/tree.mts";
 import { createIncaApp } from "../src/vue/index.mts";
 import type { IncaElement, NodeId } from "../src/index.mts";

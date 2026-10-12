@@ -3,7 +3,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createEventTarget } from "./createEventTarget.mts";
+import { createEventTarget } from "./eventTarget.mts";
 import type { EventLike } from "./types.mts";
 
 const native = {

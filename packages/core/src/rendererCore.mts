@@ -1,18 +1,18 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-export { createEventTarget } from "./createEventTarget.mts";
+export { createEventTarget } from "./eventTarget.mts";
 export {
   addEventListener,
   removeEventListener,
   latestEventId,
   focus,
   blur,
-  focusedNode,
   dispatchEvent,
   click,
 } from "./events.mts";
 export {
+  focusedNode,
   appendChild,
   createNode,
   destroyNode,

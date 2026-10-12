@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { releaseCallbacks } from "./events.mts";
+import { releaseCallbacks } from "./callbacks.mts";
 import { native } from "./native.mts";
 import type { AttributeValue, NodeId, ScrollAlignment, StyleProps, TagName } from "./types.mts";
 
@@ -196,4 +196,12 @@ export function setStyle(nodeId: NodeId, key: string, value: AttributeValue): vo
  */
 export function removeStyle(nodeId: NodeId, key: string): void {
   native().removeStyle(nodeId, key);
+}
+
+/**
+ * Returns the id of the focused node.
+ * @returns the focused node's id, or `null` when no node has focus
+ */
+export function focusedNode(): NodeId | null {
+  return native().focusedNode();
 }

@@ -3,14 +3,13 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { registeredGroupCount } from "./callbacks.mts";
 import {
   addEventListener,
   blur,
   click,
   dispatchEvent,
   focus,
-  focusedNode,
-  registeredGroupCount,
   removeEventListener,
 } from "./events.mts";
 import { destroyNode } from "./tree.mts";
@@ -450,13 +449,6 @@ describe("blur", () => {
   it("forwards the node id to native blurNode", () => {
     blur(7);
     expect(native.blurNode).toHaveBeenCalledWith(7);
-  });
-});
-
-describe("focusedNode", () => {
-  it("returns the id native reports", () => {
-    native.focusedNode.mockReturnValueOnce(7);
-    expect(focusedNode()).toBe(7);
   });
 });
 
