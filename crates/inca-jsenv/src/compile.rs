@@ -16,8 +16,8 @@ use rquickjs::{Ctx, Function, Result};
 /// Lines are counted as `QuickJS` counts them, and each `params` entry must
 /// fit on one line. A `//` comment on the last line of `body` is allowed.
 /// An inline `data:` source map in `body` maps its frames to the original
-/// file, line and column. The map is registered before evaluation, so a
-/// syntax error is mapped too.
+/// file, line and column. A syntax error is mapped too. A recompile of the
+/// same `filename` replaces its source and map.
 ///
 /// `params` and `body` run as code, so pass only trusted source.
 ///

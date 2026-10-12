@@ -37,7 +37,7 @@ const MAX_SHIFT: u32 = 60;
 
 /// Decodes `mappings` into one segment list per generated line.
 ///
-/// Returns `None` for an invalid base64 digit, a truncated VLQ, a segment of
+/// Returns `None` for an invalid base64 digit, a truncated VLQ, an empty segment, a segment of
 /// 2, 3 or more than 5 fields, or a value outside 0..=`u32::MAX`.
 pub(crate) fn decode_mappings(mappings: &str) -> Option<Vec<Vec<Segment>>> {
     let mut lines = Vec::new();
@@ -172,8 +172,8 @@ struct Parsed {
     sources: Vec<String>,
 }
 
-/// Registers the generated `source` of `filename`, replacing an earlier
-/// registration of the same name. A sidecar map file is read here and the map
+/// Registers the generated `source` of `filename`. A recompile of the same
+/// filename replaces its source and map. A sidecar map file is read here and the map
 /// is parsed on the first remap.
 pub(crate) fn register(ctx: &Ctx<'_>, filename: &str, source: &str) {
     let Some(url) = marker_url(source) else {
@@ -268,12 +268,11 @@ fn remap_frame(ctx: &Ctx<'_>, maps: &SourceMaps, line: &str) -> Option<String> {
     ))
 }
 
-/// The `index`th line of `source`, split at `\n`, `\r\n`, `\r`, U+2028 and
-/// U+2029 as `QuickJS` counts lines.
+/// The `index`th line of `source`, split at `\n`, `\r\n` and `\r`.
 fn nth_line(source: &str, index: usize) -> Option<&str> {
     let mut rest = source;
     for _ in 0..index {
-        let at = rest.find(['\n', '\r', '\u{2028}', '\u{2029}'])?;
+        let at = rest.find(['\n', '\r'])?;
         let skip = if rest[at..].starts_with("\r\n") {
             2
         } else {
@@ -281,7 +280,7 @@ fn nth_line(source: &str, index: usize) -> Option<&str> {
         };
         rest = &rest[at + skip..];
     }
-    rest.split(['\n', '\r', '\u{2028}', '\u{2029}']).next()
+    rest.split(['\n', '\r']).next()
 }
 
 fn number(text: &str) -> Option<usize> {
@@ -589,10 +588,32 @@ mod tests {
         remap(&[("a.js", source)], stack)
     }
 
-    fn temp_dir(name: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("inca-sm-{}-{name}", std::process::id()));
+    /// A directory under the OS temp root, unique per test invocation, torn
+    /// down on drop.
+    struct ScratchDir(std::path::PathBuf);
+
+    impl std::ops::Deref for ScratchDir {
+        type Target = Path;
+
+        fn deref(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for ScratchDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn temp_dir(name: &str) -> ScratchDir {
+        let dir = std::env::temp_dir().join(format!(
+            "inca-sm-{}-{name}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
         std::fs::create_dir_all(&dir).unwrap();
-        dir
+        ScratchDir(dir)
     }
 
     #[test]
@@ -672,7 +693,6 @@ mod tests {
         let file = format!("{}/b.js", dir.display());
         let src = "h\nabc\n//# sourceMappingURL=b.js.map";
         let out = remap(&[(&file, src)], &format!("    at f ({file}:2:1)"));
-        std::fs::remove_dir_all(&dir).unwrap();
         assert_eq!(out, "    at f (/abs/a.ts:1:1)");
     }
 
@@ -685,7 +705,6 @@ mod tests {
         let src = "h\nabc\n//# sourceMappingURL=bundle.js.map\n";
         let out = remap(&[(&file, src)], &format!("    at f ({file}:2:1)"));
         let expected = format!("    at f ({}/src/a.ts:1:1)", dir.display());
-        std::fs::remove_dir_all(&dir).unwrap();
         assert_eq!(out, expected);
     }
 
@@ -815,17 +834,24 @@ mod tests {
     }
 
     #[test]
-    fn line_terminators_split_generated_lines_as_quickjs_counts_them() {
-        // Lines: h, ', ' (after U+2028), 日本x, abc (after a lone CR).
-        let json = map_json(3, ";;;AAAA,EAAC;AAAA", r#"["o.ts"]"#, None);
+    fn lf_crlf_and_lone_cr_split_generated_lines() {
+        // Lines: h, '' with a U+2028 inside, 日本x, abc (after a lone CR).
+        let json = map_json(3, ";;AAAA,EAAC;AAAA", r#"["o.ts"]"#, None);
         let src = format!("h\n'\u{2028}'\n日本x\rabc\n{}", inline(&json));
         // Byte column 7 follows 日本, which is 2 UTF-16 units.
-        assert_eq!(one(&src, "    at f (a.js:4:7)"), "    at f (o.ts:1:2)");
-        assert_eq!(one(&src, "    at f (a.js:5:1)"), "    at f (o.ts:1:2)");
+        assert_eq!(one(&src, "    at f (a.js:3:7)"), "    at f (o.ts:1:2)");
+        assert_eq!(one(&src, "    at f (a.js:4:1)"), "    at f (o.ts:1:2)");
     }
 
     #[test]
-    fn source_position_at_u32_max_does_not_overflow() {
+    fn line_separator_inside_a_string_keeps_the_column() {
+        let json = map_json(3, ";GAAA", r#"["o.ts"]"#, None);
+        let src = format!("h\n'\u{2028}'x\n{}", inline(&json));
+        assert_eq!(one(&src, "    at f (a.js:2:6)"), "    at f (o.ts:1:1)");
+    }
+
+    #[test]
+    fn source_position_at_u32_max_maps() {
         // Source line delta 4294967295 is the VLQ `+/////H`.
         let json = map_json(3, ";AA+/////HA", r#"["o.ts"]"#, None);
         let src = format!("h\nabc\n{}", inline(&json));
@@ -878,7 +904,6 @@ mod tests {
             remap_stack(&ctx, &format!("    at f ({file}:2:1)"))
         });
         let root = dir.display().to_string();
-        std::fs::remove_dir_all(&dir).unwrap();
         (out, root)
     }
 
