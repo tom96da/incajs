@@ -10,12 +10,9 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
-### Added
-
-- `activeElement()` and the element types are available from `incajs` ([2048804](https://github.com/tom96da/incajs/commit/2048804))
-
 ### Changed
 
+- `activeElement()` and the element types moved from `incajs/vue` to `incajs` ([2048804](https://github.com/tom96da/incajs/commit/2048804)) ([f2f54b1](https://github.com/tom96da/incajs/commit/f2f54b1))
 - `IncaCore` became an internal type ([50fc3ad](https://github.com/tom96da/incajs/commit/50fc3ad))
 
 ## [0.0.15] - 2026-10-12
