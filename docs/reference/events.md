@@ -26,6 +26,8 @@ have `addEventListener()`, `removeEventListener()` and `dispatchEvent()`.
 
 - A listener on `window` runs on the root node. `document` is unsupported.
 - The `signal` option of `addEventListener()` is unsupported.
+- The ref of an unmounted element ignores `addEventListener()`, and
+  `dispatchEvent()` returns `true`.
 
 ## Event modifiers
 
@@ -122,14 +124,14 @@ rules, with the differences below.
 - A node takes focus through its `tabindex` attribute, and a `button` is
   focusable by default. `.focus()` on other nodes is ignored.
 - `hidden="until-found"` counts as shown.
-- A focused node shows no focus ring.
-- `activeElement()` from `incajs/vue` returns the focused element or `null`.
-  It replaces `document.activeElement`, which is unsupported.
+- A focus ring is unsupported.
+- `activeElement()` (`import { activeElement } from "incajs/vue"`) returns the
+  focused element or `null`. It replaces `document.activeElement`, which is
+  unsupported.
 - After the last node, Tab leaves nothing focused and the next Tab starts at
   the first node, as in Chromium and WebKit. Focus stays in the window.
 - Tab after a click starts at the first node, where browsers continue from the
   click position.
-- Focus brings the node into view within its scrollable ancestors.
 
 ## Dispatching events
 

@@ -78,9 +78,8 @@ clears every key set before.
 | `opacity` | `number` (`0` to `1`) | clamped; applies to descendants too |
 | `minWidth` / `minHeight` / `maxWidth` / `maxHeight` | `number` (px) \| `"auto"` | `"auto"` is the default limit: none for the `max` keys, the content size for a flex item's `min` keys |
 
-Content taller than the window is cut off at the window edge. It scrolls only
-inside an element with `"scroll"` or `"auto"`; see
-[Why doesn't my content scroll](../guide/troubleshooting).
+Content taller than the window is cut off at the window edge; see
+[Why doesn't my content scroll](../guide/troubleshooting#why-doesn-t-my-content-scroll-when-it-is-taller-than-the-window).
 
 For `padding` and `margin`, a side key beats its axis key (`paddingX` for left
 and right, `paddingY` for top and bottom), and an axis key beats the
@@ -133,20 +132,19 @@ A template `ref` is an element handle. Its members behave as described for
 [`HTMLElement`](https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement),
 with the differences below. The listener methods are described in
 [Event targets](./events#event-targets).
-`activeElement()` from `incajs/vue` returns the focused element.
 
 - A box read returns the box of the last drawn frame, so `onMounted` reads
   zeros.
 - `offsetParent` is the parent element, or `null` when the node or its parent
-  has no box. `offsetLeft` and `offsetTop` stay fixed while the parent scrolls.
+  has no box.
 - A scroll write is stored at once. A read clamps it to the maximum of the
   last drawn frame, so a write beyond that maximum, or one made before the
   first draw, reads smaller until the next frame.
 - `scrollWidth` and `scrollHeight` of a `"visible"` element equal its
   client size.
 - Every scroll applies at once, whatever `behavior` says.
-- `focus()` on a node that has no box yet scrolls when the next frame draws
-  it. A node drawn later stays where it is.
+- `focus()` and `scrollIntoView()` on a node that has no box yet scroll when
+  the next frame draws it.
 
 ## Vue features that don't work yet
 

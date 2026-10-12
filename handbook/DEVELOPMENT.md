@@ -25,11 +25,12 @@ History is in [PLAN.md](./PLAN.md) and [CHANGELOG.md](../CHANGELOG.md).
 - **Packages**: the pnpm workspace, `packages/core`, `incajs/vue` and the
   `.vue` examples.
 - **CLI**: `inca dev`, `inca build` and `inca package`, with per-platform
-  `@incajs/host-*` packages published by `cd.yml`.
+  `@incajs/host-*` packages published by `cd.yml`. Errors name the source
+  file, and `sourcemap` writes a source map.
 - **HMR**: opt-in through `--experimental-hmr` or `INCA_EXPERIMENTAL_HMR`.
   A template edit keeps component state and a script edit resets it.
 - **Input**: pointer, focus, keyboard and scrolling (`overflow`, wheel), and
-  events fired from a script.
+  events fired from a script. Template refs read their box and scroll.
 
 ### Not started
 

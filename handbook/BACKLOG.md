@@ -529,9 +529,7 @@ A fixed entry is deleted and its ID is never reused.
   synchronously in the event. A `gpui` with smooth or deferred scrolling
   breaks it. `a_cancelled_scroll_leaves_the_bounds_unmoved` in
   `crates/inca-bridge/tests/scroll_dispatch.rs` checks the bounds after a
-  cancel. Each scroll container adds one zero-size element. A `wheel`
-  listener that sets an offset on a container other than the one the wheel
-  moved has that offset undone by `settle_wheel`.
+  cancel. Each scroll container adds one zero-size element.
 
 - **B-084 Wheel scrolling differs from the DOM at the edges**
   `Units: gpui,bridge · Size: M · Impact: Low`
@@ -994,10 +992,10 @@ A fixed entry is deleted and its ID is never reused.
   `Units: core · Size: S · Impact: Low`
 
   Vue destroys a node on unmount. Listeners registered before are released,
-  `addEventListener()` afterwards does nothing, `dispatchEvent()` returns
-  `true` without validating its argument, and `tabIndex` reads the default. A
-  browser keeps the listeners and the attribute of a detached element. Fix:
-  keep a destroyed node as a detached element in the host tree.
+  `addEventListener()` afterwards ignores the listener, `dispatchEvent()`
+  returns `true` and skips the argument check, and `tabIndex` reads the
+  default. A browser keeps the listeners and the attribute of a detached
+  element. Fix: keep a destroyed node as a detached element in the host tree.
 
 - **B-171 A frozen event cannot be dispatched again**
   `Units: bridge,docs · Size: S · Impact: Low`

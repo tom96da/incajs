@@ -14,16 +14,15 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 - mouse and wheel events carry `offsetX` and `offsetY` ([4b2825d](https://github.com/tom96da/incajs/commit/4b2825d))
 - a template `ref` reads its box with `getBoundingClientRect()`, `offset*` and `client*` ([ab57a35](https://github.com/tom96da/incajs/commit/ab57a35))
-- a template `ref` scrolls a container with `scrollTop`, `scrollLeft`, `scrollTo()` and `scrollBy()` ([10bb7b7](https://github.com/tom96da/incajs/commit/10bb7b7))
+- a template `ref` scrolls with `scrollTop`, `scrollLeft`, `scrollTo()` and `scrollBy()` ([10bb7b7](https://github.com/tom96da/incajs/commit/10bb7b7))
 - the `scroll` event fires when a container scrolls ([be6ecde](https://github.com/tom96da/incajs/commit/be6ecde))
-- `focus()` and Tab scroll the node into view, and a ref has `focus({ preventScroll })` and `scrollIntoView()` ([22e125e](https://github.com/tom96da/incajs/commit/22e125e))
-- `activeElement()` from `incajs/vue` returns the focused element ([42f3df0](https://github.com/tom96da/incajs/commit/42f3df0))
+- `focus()` and Tab scroll the node into view, and a ref has `scrollIntoView()` ([22e125e](https://github.com/tom96da/incajs/commit/22e125e))
+- `activeElement()` from `incajs/vue` returns the focused element ([42f3df0](https://github.com/tom96da/incajs/commit/42f3df0)) ([dea95b7](https://github.com/tom96da/incajs/commit/dea95b7))
 - errors name the `.vue` or `.ts` file, line and column ([759a994](https://github.com/tom96da/incajs/commit/759a994))
 - `inca build` and `inca package` write a source map with `sourcemap` or `--sourcemap` ([aeaa9af](https://github.com/tom96da/incajs/commit/aeaa9af))
 
 ### Fixed
 
-- `activeElement()` sees a focus the window applied before the script ran ([dea95b7](https://github.com/tom96da/incajs/commit/dea95b7))
 - `el.tabIndex` reads the `tabindex` attribute of the template ([81ce80f](https://github.com/tom96da/incajs/commit/81ce80f))
 - a ref of a removed element accepts listener and `tabIndex` calls ([81ce80f](https://github.com/tom96da/incajs/commit/81ce80f))
 
