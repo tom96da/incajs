@@ -62,6 +62,7 @@ const EARLY_MTS = `
 import { window } from "incajs";
 
 // Only the first evaluation registers. The retry evaluates this module again.
+// Editing this module sends a full reload, which starts a fresh engine and drops the registration.
 if (!globalThis.__e2eEarlySeen) {
   globalThis.__e2eEarlySeen = true;
   window.addEventListener("ping", () => console.log("[e2e] early ran"));
