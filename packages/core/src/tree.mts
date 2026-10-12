@@ -85,11 +85,11 @@ export function setAttribute(nodeId: NodeId, key: string, value: AttributeValue)
 }
 
 /**
- * Returns the attribute/prop stored on `nodeId` under `key`, or `null` if it
- * isn't set.
+ * Returns the attribute/prop stored on `nodeId` under `key`, or `null` when unset.
  * @param nodeId - the node to read
  * @param key - the attribute name
  * @returns the stored value, or `null`
+ * @throws {TypeError} when `nodeId` names no node
  */
 export function getAttribute(nodeId: NodeId, key: string): AttributeValue | null {
   return native().getAttribute(nodeId, key);
@@ -102,6 +102,7 @@ export function getAttribute(nodeId: NodeId, key: string): AttributeValue | null
  * @returns `[x, y, width, height, border, scrollX, scrollY]`, or `null`. `border` is one uniform
  *   width on all sides. `scrollX` and `scrollY` are the positive scroll offset the parent applied
  *   to the box.
+ * @throws {TypeError} when `nodeId` names no node
  */
 export function layoutOf(
   nodeId: NodeId,
@@ -114,7 +115,9 @@ export function layoutOf(
  * since the last draw is included, clamped to the maximum of the last drawn
  * frame.
  * @param nodeId - the node to read
- * @returns `[left, top, maxLeft, maxTop]`, or `null` for a node whose `overflow` is `visible` on both axes, which cannot scroll. The maxima are the largest offsets the node can take, as of the last drawn frame.
+ * @returns `[left, top, maxLeft, maxTop]`, or `null` for a node whose `overflow` is
+ *   `visible` on both axes. The maxima are the largest offsets the node can take, as
+ *   of the last drawn frame.
  * @throws {TypeError} when `nodeId` names no node
  */
 export function scrollOf(nodeId: NodeId): readonly [number, number, number, number] | null {
@@ -124,7 +127,7 @@ export function scrollOf(nodeId: NodeId): readonly [number, number, number, numb
 /**
  * Sets the scroll offset of `nodeId` on one or both axes. A `null` axis keeps
  * its current offset. The host clamps each value to the scrollable range on
- * the next frame. A node that cannot scroll ignores the call.
+ * the next frame. A node with `overflow: visible` on both axes ignores the call.
  * @param nodeId - the node to scroll
  * @param left - the horizontal offset, or `null` to keep it
  * @param top - the vertical offset, or `null` to keep it
@@ -135,8 +138,7 @@ export function scrollNode(nodeId: NodeId, left: number | null, top: number | nu
 }
 
 /**
- * Scrolls each scroll container around `nodeId` so the node shows, the way
- * `element.scrollIntoView()` does.
+ * Scrolls each scroll container around `nodeId` so the node shows.
  * @param nodeId - the node to bring into view
  * @param block - the vertical alignment: `"start"`, `"center"`, `"end"` or `"nearest"`
  * @param inline - the horizontal alignment: `"start"`, `"center"`, `"end"` or `"nearest"`

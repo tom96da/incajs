@@ -15,7 +15,10 @@ export interface RectValues {
   readonly bottom: number;
 }
 
-/** The shape {@link IncaElement.getBoundingClientRect} returns. */
+/**
+ * A rectangle with its position, its size and its four edges. `toJSON()` returns
+ * the plain values.
+ */
 export interface RectLike extends RectValues {
   toJSON(): RectValues;
 }
@@ -25,7 +28,7 @@ export interface RectLike extends RectValues {
  * @param layout - the box from {@link LayoutBox}, or `null` for no record
  * @returns the rect; all zeros for `null`
  */
-export function domRect(layout: LayoutBox | null): RectLike {
+export function rectOf(layout: LayoutBox | null): RectLike {
   const [x, y, width, height] = layout ?? [0, 0, 0, 0, 0];
   const values: RectValues = {
     x,

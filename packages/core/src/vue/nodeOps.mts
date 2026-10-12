@@ -7,7 +7,7 @@ import { createIncaElement } from "./createElement.mts";
 import { markDestroyed } from "./destroyedNodes.mts";
 import { skipReactive } from "./skipReactive.mts";
 import type { IncaCore, IncaEventTarget, NodeId, TagName } from "../rendererCore.mts";
-import type { RectLike } from "./domRect.mts";
+import type { RectLike } from "./rectOf.mts";
 import type { ScrollIntoViewOptions } from "./scrollIntoViewArgs.mts";
 import type { ScrollOptions } from "./scrollPosition.mts";
 
@@ -20,6 +20,9 @@ import type { ScrollOptions } from "./scrollPosition.mts";
  * node's children, so `parent`/`children` are maintained here as a
  * JS-side shadow of the tree, kept in sync by {@link NodeOps.insert}/
  * {@link NodeOps.remove}.
+ *
+ * After the node is removed, `addEventListener()` and `removeEventListener()`
+ * ignore the call, and `dispatchEvent()` returns `true`.
  */
 export interface IncaElement extends IncaEventTarget {
   /**
@@ -71,7 +74,10 @@ export interface IncaElement extends IncaEventTarget {
   readonly offsetLeft: number;
   /** The box's top edge from the last frame, relative to {@link offsetParent}. Stays fixed while the parent scrolls. */
   readonly offsetTop: number;
-  /** The parent, when it and this node both have a box from the last frame; `null` otherwise. */
+  /**
+   * The parent, when this node and the parent both have a box from the last frame.
+   * `null` when either lacks a box or there is no parent.
+   */
   readonly offsetParent: IncaElement | null;
   /** The box width less both borders, rounded, at least `0`. */
   readonly clientWidth: number;

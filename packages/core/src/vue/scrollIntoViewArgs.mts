@@ -9,7 +9,7 @@ export interface ScrollIntoViewOptions {
   block?: ScrollAlignment;
   /** The horizontal alignment. Defaults to `"nearest"`. */
   inline?: ScrollAlignment;
-  /** Accepted for compatibility; every scroll applies at once. */
+  /** `behavior` is ignored; every scroll applies at once. */
   behavior?: "auto" | "instant" | "smooth";
 }
 

@@ -6,5 +6,7 @@ export { activeElement } from "./activeElement.mts";
 
 export type { IncaApp } from "./createApp.mts";
 export type { IncaCore } from "../rendererCore.mts";
-export type { RectLike, RectValues } from "./domRect.mts";
+export type { RectLike, RectValues } from "./rectOf.mts";
+export type { ScrollOptions } from "./scrollPosition.mts";
+export type { ScrollIntoViewOptions } from "./scrollIntoViewArgs.mts";
 export type { IncaElement, IncaNode } from "./nodeOps.mts";

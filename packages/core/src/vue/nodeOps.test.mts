@@ -3,9 +3,9 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { domRect } from "./domRect.mts";
 import { elementOf, unregisterElement } from "./elements.mts";
 import { createNodeOps } from "./nodeOps.mts";
+import { rectOf } from "./rectOf.mts";
 import type { IncaCore } from "../rendererCore.mts";
 import type { EventLike, IncaEventTarget } from "../types.mts";
 import type { IncaElement, IncaText } from "./nodeOps.mts";
@@ -53,7 +53,7 @@ const core: IncaCore = {
 };
 
 const noLayout = {
-  getBoundingClientRect: () => domRect(null),
+  getBoundingClientRect: () => rectOf(null),
   offsetWidth: 0,
   offsetHeight: 0,
   offsetLeft: 0,

@@ -3,17 +3,17 @@
 
 import { describe, expect, it } from "vitest";
 
-import { domRect } from "./domRect.mts";
+import { rectOf } from "./rectOf.mts";
 
-describe("domRect", () => {
+describe("rectOf", () => {
   it("derives the edges from the box and keeps fractional values", () => {
-    const rect = domRect([10.5, 20.25, 30.75, 40, 2, 0, 0]);
+    const rect = rectOf([10.5, 20.25, 30.75, 40, 2, 0, 0]);
     expect([rect.x, rect.y, rect.width, rect.height]).toEqual([10.5, 20.25, 30.75, 40]);
     expect([rect.left, rect.top, rect.right, rect.bottom]).toEqual([10.5, 20.25, 41.25, 60.25]);
   });
 
   it("returns the plain values from toJSON", () => {
-    const rect = domRect([1, 2, 3, 4, 0, 0, 0]);
+    const rect = rectOf([1, 2, 3, 4, 0, 0, 0]);
     expect(rect.toJSON()).toEqual({
       x: 1,
       y: 2,
@@ -27,7 +27,7 @@ describe("domRect", () => {
   });
 
   it("gives all zeros for a null layout", () => {
-    const rect = domRect(null);
+    const rect = rectOf(null);
     expect([
       rect.x,
       rect.y,

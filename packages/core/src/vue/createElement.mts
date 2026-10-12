@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { isDestroyed } from "./destroyedNodes.mts";
-import { domRect } from "./domRect.mts";
 import { registerElement } from "./elements.mts";
 import { layoutBox } from "./layoutBox.mts";
 import { offsetOf } from "./offsetOf.mts";
 import { offsetParentOf } from "./offsetParent.mts";
+import { rectOf } from "./rectOf.mts";
 import { scrollIntoViewArgs } from "./scrollIntoViewArgs.mts";
 import { scrollPosition } from "./scrollPosition.mts";
 import { skipReactive } from "./skipReactive.mts";
@@ -60,7 +60,7 @@ export function createIncaElement(
     set tabIndex(value: number) {
       if (!isDestroyed(element)) core.setAttribute(id, "tabindex", value | 0);
     },
-    getBoundingClientRect: () => domRect(layoutBox(core, element)),
+    getBoundingClientRect: () => rectOf(layoutBox(core, element)),
     get offsetWidth() {
       return Math.round(layoutBox(core, element)?.[2] ?? 0);
     },

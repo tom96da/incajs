@@ -237,8 +237,7 @@ export function click(nodeId: NodeId): void {
  * Requests that `nodeId` become focused. Takes effect on the next frame,
  * dispatching `"blur"`/`"focus"` for whatever actually changed. The node
  * needs a `tabindex` attribute to take focus, and a listener for either event
- * is optional. The scroll containers around the node scroll it into view,
- * unless `preventScroll` is `true`.
+ * is optional. The scroll containers around the node scroll it into view.
  * @param nodeId - the node to focus
  * @param preventScroll - `true` to leave the scroll containers in place; omitted or `false` scrolls the node into view
  */

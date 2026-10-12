@@ -7,8 +7,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createEventTarget } from "../src/createEventTarget.mts";
 import { blur, click, focus } from "../src/events.mts";
 import { createNode, rootNodeId } from "../src/tree.mts";
-import { domRect } from "../src/vue/domRect.mts";
 import { createIncaApp } from "../src/vue/index.mts";
+import { rectOf } from "../src/vue/rectOf.mts";
 import type { NodeId } from "../src/index.mts";
 import type { IncaElement } from "../src/vue/index.mts";
 
@@ -211,7 +211,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       click: () => click(rootId),
       ...createEventTarget(() => rootId),
       tabIndex: -1,
-      getBoundingClientRect: () => domRect(null),
+      getBoundingClientRect: () => rectOf(null),
       offsetWidth: 0,
       offsetHeight: 0,
       offsetLeft: 0,
