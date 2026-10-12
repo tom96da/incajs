@@ -1,0 +1,327 @@
+// Copyright (c) 2026 tom96da
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use rquickjs::{Ctx, Exception, Function, IntoJs, Object, Result as JsResult, Value};
+
+use inca_gpui::{AttributeValue, NodeId, TreeError, VirtualNode, style_warning};
+
+use super::convert::{JsNodeId, throw_tree_error};
+use super::host::Host;
+
+/// The retained tree itself: allocating, attaching, and describing nodes,
+/// plus `destroyNode` — freeing a subtree is a tree operation first, even
+/// though it also releases the listener/focus state that named its nodes.
+// Long from repeating one registration block per binding, not from
+// complexity — splitting it up further would just spread that same list
+// across more functions.
+#[allow(clippy::too_many_lines)]
+pub(super) fn install_tree<'js>(
+    ctx: &Ctx<'js>,
+    host: &Rc<RefCell<Host>>,
+    native: &Object<'js>,
+) -> JsResult<()> {
+    {
+        let host = Rc::clone(host);
+        native.set(
+            "rootNodeId",
+            Function::new(ctx.clone(), move || -> NodeId { host.borrow().root })?,
+        )?;
+    }
+
+    {
+        let host = Rc::clone(host);
+        native.set(
+            "createNode",
+            Function::new(
+                ctx.clone(),
+                move |ctx: Ctx<'js>, tag_name: String| -> JsResult<NodeId> {
+                    let mut host = host.borrow_mut();
+                    host.tree
+                        .create_node(tag_name)
+                        .map_err(|err| throw_tree_error(&ctx, err))
+                },
+            )?,
+        )?;
+    }
+
+    {
+        let host = Rc::clone(host);
+        native.set(
+            "appendChild",
+            Function::new(
+                ctx.clone(),
+                move |ctx: Ctx<'js>,
+                      JsNodeId(parent_id): JsNodeId,
+                      JsNodeId(child_id): JsNodeId|
+                      -> JsResult<()> {
+                    let mut host = host.borrow_mut();
+                    refuse_root(&ctx, &host, child_id, "moved")?;
+                    host.tree
+                        .append_child(parent_id, child_id)
+                        .map_err(|err| throw_tree_error(&ctx, err))?;
+                    mark_focus_dirty(&mut host, child_id);
+                    Ok(())
+                },
+            )?,
+        )?;
+    }
+
+    {
+        let host = Rc::clone(host);
+        native.set(
+            "insertBefore",
+            Function::new(
+                ctx.clone(),
+                move |ctx: Ctx<'js>,
+                      JsNodeId(parent_id): JsNodeId,
+                      JsNodeId(child_id): JsNodeId,
+                      anchor_id: Option<JsNodeId>|
+                      -> JsResult<()> {
+                    let mut host = host.borrow_mut();
+                    refuse_root(&ctx, &host, child_id, "moved")?;
+                    host.tree
+                        .insert_before(parent_id, child_id, anchor_id.map(|JsNodeId(id)| id))
+                        .map_err(|err| throw_tree_error(&ctx, err))?;
+                    mark_focus_dirty(&mut host, child_id);
+                    Ok(())
+                },
+            )?,
+        )?;
+    }
+
+    {
+        let host = Rc::clone(host);
+        native.set(
+            "removeChild",
+            Function::new(
+                ctx.clone(),
+                move |ctx: Ctx<'js>,
+                      JsNodeId(parent_id): JsNodeId,
+                      JsNodeId(child_id): JsNodeId|
+                      -> JsResult<()> {
+                    host.borrow_mut()
+                        .tree
+                        .remove_child(parent_id, child_id)
+                        .map_err(|err| throw_tree_error(&ctx, err))
+                },
+            )?,
+        )?;
+    }
+
+    {
+        let host = Rc::clone(host);
+        native.set(
+            "setAttribute",
+            Function::new(
+                ctx.clone(),
+                move |ctx: Ctx<'js>,
+                      JsNodeId(node_id): JsNodeId,
+                      key: String,
+                      value: Value<'js>|
+                      -> JsResult<()> {
+                    let value = attribute_value_from_js(&ctx, &value)?;
+                    let mut host = host.borrow_mut();
+                    let key = canonical_attribute_key(key);
+                    host.tree
+                        .set_attribute(node_id, key.clone(), value)
+                        .map_err(|err| throw_tree_error(&ctx, err))?;
+                    mark_focus_dirty_for(&mut host, node_id, &key);
+                    Ok(())
+                },
+            )?,
+        )?;
+    }
+
+    {
+        let host = Rc::clone(host);
+        native.set(
+            "getAttribute",
+            Function::new(
+                ctx.clone(),
+                move |ctx: Ctx<'js>,
+                      JsNodeId(node_id): JsNodeId,
+                      key: String|
+                      -> JsResult<Value<'js>> {
+                    let key = canonical_attribute_key(key);
+                    let host = host.borrow();
+                    let node = host
+                        .tree
+                        .get(node_id)
+                        .ok_or_else(|| throw_tree_error(&ctx, TreeError::NodeNotFound(node_id)))?;
+                    attribute_value_to_js(&ctx, node.attributes().get(&key))
+                },
+            )?,
+        )?;
+    }
+
+    {
+        let host = Rc::clone(host);
+        native.set(
+            "removeAttribute",
+            Function::new(
+                ctx.clone(),
+                move |ctx: Ctx<'js>, JsNodeId(node_id): JsNodeId, key: String| -> JsResult<()> {
+                    let mut host = host.borrow_mut();
+                    let key = canonical_attribute_key(key);
+                    host.tree
+                        .remove_attribute(node_id, &key)
+                        .map_err(|err| throw_tree_error(&ctx, err))?;
+                    mark_focus_dirty_for(&mut host, node_id, &key);
+                    Ok(())
+                },
+            )?,
+        )?;
+    }
+
+    {
+        let host = Rc::clone(host);
+        native.set(
+            "setStyle",
+            Function::new(
+                ctx.clone(),
+                move |ctx: Ctx<'js>,
+                      JsNodeId(node_id): JsNodeId,
+                      key: String,
+                      value: Value<'js>|
+                      -> JsResult<()> {
+                    let value = attribute_value_from_js(&ctx, &value)?;
+                    let mut host = host.borrow_mut();
+                    let warning = style_warning(&key, &value);
+                    let is_display = key == "display";
+                    host.tree
+                        .set_style(node_id, key, value)
+                        .map_err(|err| throw_tree_error(&ctx, err))?;
+                    if is_display {
+                        mark_focus_dirty(&mut host, node_id);
+                    }
+                    if let Some(warning) = warning {
+                        let tag = host.tree.get(node_id).map_or("", VirtualNode::tag_name);
+                        (host.warn)(&format!("node {node_id} ({tag}): {warning}"));
+                    }
+                    Ok(())
+                },
+            )?,
+        )?;
+    }
+
+    {
+        let host = Rc::clone(host);
+        native.set(
+            "removeStyle",
+            Function::new(
+                ctx.clone(),
+                move |ctx: Ctx<'js>, JsNodeId(node_id): JsNodeId, key: String| -> JsResult<()> {
+                    let mut host = host.borrow_mut();
+                    host.tree
+                        .remove_style(node_id, &key)
+                        .map_err(|err| throw_tree_error(&ctx, err))?;
+                    if key == "display" {
+                        mark_focus_dirty(&mut host, node_id);
+                    }
+                    Ok(())
+                },
+            )?,
+        )?;
+    }
+
+    {
+        let host = Rc::clone(host);
+        native.set(
+            "destroyNode",
+            Function::new(
+                ctx.clone(),
+                move |ctx: Ctx<'js>, JsNodeId(node_id): JsNodeId| -> JsResult<Vec<u32>> {
+                    let mut host = host.borrow_mut();
+                    refuse_root(&ctx, &host, node_id, "destroyed")?;
+                    let freed = host.tree.destroy_node(node_id);
+                    for id in &freed {
+                        host.scroll_handles.get_mut().remove(id);
+                        host.scroll_reported.remove(id);
+                    }
+                    Ok(freed
+                        .into_iter()
+                        .flat_map(|id| {
+                            host.focus.forget(id);
+                            host.scroll_fresh.retain(|&(node, ..)| node != id);
+                            host.scroll_retry.retain(|&(node, ..)| node != id);
+                            host.listeners.release(id)
+                        })
+                        .collect())
+                },
+            )?,
+        )?;
+    }
+
+    Ok(())
+}
+
+/// Refuses `id` when it is the root node, which belongs to the host. `verb`
+/// completes the message, as in "cannot be {verb}".
+///
+/// # Errors
+///
+/// Throws a `TypeError` when `id` is the root.
+fn refuse_root(ctx: &Ctx<'_>, host: &Host, id: NodeId, verb: &str) -> JsResult<()> {
+    if id == host.root {
+        return Err(Exception::throw_type(
+            ctx,
+            &format!("the root node belongs to the host and cannot be {verb}"),
+        ));
+    }
+    Ok(())
+}
+
+// Queues a focus re-check of the node and its subtree.
+fn mark_focus_dirty(host: &mut Host, node_id: NodeId) {
+    host.focus.mark_subtree_dirty(&host.tree, node_id);
+}
+
+// Queues the focus re-check an attribute change needs.
+fn mark_focus_dirty_for(host: &mut Host, node_id: NodeId, key: &str) {
+    match key {
+        "tabindex" | "disabled" => host.focus.mark_tab_dirty(node_id),
+        "hidden" | "inert" => mark_focus_dirty(host, node_id),
+        _ => {}
+    }
+}
+
+// Attribute names are case-insensitive, so `tabIndex` is `tabindex`.
+fn canonical_attribute_key(key: String) -> String {
+    if key.eq_ignore_ascii_case("tabindex") {
+        "tabindex".to_owned()
+    } else {
+        key
+    }
+}
+
+fn attribute_value_from_js<'js>(ctx: &Ctx<'js>, value: &Value<'js>) -> JsResult<AttributeValue> {
+    if value.is_string() {
+        return value.get::<String>().map(AttributeValue::String);
+    }
+    if value.is_number() {
+        return value.get::<f64>().map(AttributeValue::Number);
+    }
+    if value.is_bool() {
+        return value.get::<bool>().map(AttributeValue::Bool);
+    }
+    Err(Exception::throw_type(
+        ctx,
+        "value must be a string, number, or boolean",
+    ))
+}
+
+// A missing key converts to `null`.
+fn attribute_value_to_js<'js>(
+    ctx: &Ctx<'js>,
+    value: Option<&AttributeValue>,
+) -> JsResult<Value<'js>> {
+    match value {
+        None => Ok(Value::new_null(ctx.clone())),
+        Some(AttributeValue::String(s)) => s.as_str().into_js(ctx),
+        Some(AttributeValue::Number(n)) => n.into_js(ctx),
+        Some(AttributeValue::Bool(b)) => b.into_js(ctx),
+    }
+}

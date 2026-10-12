@@ -1,0 +1,391 @@
+// Copyright (c) 2026 tom96da
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+use super::*;
+
+#[gpui::test]
+fn a_container_scrolls(cx: &mut TestAppContext) {
+    let mut scene = Scene::new(cx, one_container(), "");
+    scene.wheel(-50.);
+    assert_eq!(scene.offset(0).y, px(-50.));
+}
+
+#[gpui::test]
+fn stop_propagation_skips_ancestors_but_not_the_scroll(cx: &mut TestAppContext) {
+    let mut host = one_container();
+    host.listeners.register(0, "wheel", 0);
+    host.listeners.register(1, "wheel", 1);
+    let mut scene = Scene::new(cx, host, RECORD_WHEEL);
+    scene.wheel(-50.);
+    assert_eq!(scene.ran(), r#"["child"]"#);
+    assert_eq!(scene.offset(0).y, px(-50.));
+
+    scene.wheel(-20.);
+    assert_eq!(
+        scene.ran(),
+        r#"["child","child"]"#,
+        "the stop ends with its event"
+    );
+    assert_eq!(scene.offset(0).y, px(-70.));
+}
+
+#[gpui::test]
+fn prevent_default_from_a_child_cancels_the_scroll(cx: &mut TestAppContext) {
+    let mut host = one_container();
+    host.listeners.register(1, "wheel", 2);
+    let mut scene = Scene::new(cx, host, RECORD_WHEEL);
+    scene.wheel(-50.);
+    assert_eq!(scene.ran(), r#"["child"]"#);
+    assert_eq!(scene.offset(0).y, px(0.));
+}
+
+#[gpui::test]
+fn a_passive_listener_cannot_cancel_the_scroll(cx: &mut TestAppContext) {
+    let mut host = one_container();
+    host.listeners.register_with(1, "wheel", 2, false, true);
+    let mut scene = Scene::new(cx, host, RECORD_WHEEL);
+    scene.wheel(-50.);
+    assert_eq!(scene.ran(), r#"["child"]"#);
+    assert_eq!(scene.offset(0).y, px(-50.));
+}
+
+#[gpui::test]
+fn prevent_default_from_a_capture_listener_of_the_container_cancels_the_scroll(
+    cx: &mut TestAppContext,
+) {
+    let mut host = one_container();
+    host.listeners.register_with(0, "wheel", 3, true, false);
+    host.listeners.register(1, "wheel", 4);
+    let mut scene = Scene::new(cx, host, RECORD_WHEEL);
+    scene.wheel(-50.);
+    assert_eq!(scene.ran(), r#"["container","second"]"#);
+    assert_eq!(scene.offset(0).y, px(0.));
+}
+
+#[gpui::test]
+fn prevent_default_from_the_container_itself_cancels_the_scroll(cx: &mut TestAppContext) {
+    let mut host = one_container();
+    host.listeners.register(0, "wheel", 3);
+    let mut scene = Scene::new(cx, host, RECORD_WHEEL);
+    scene.wheel(-50.);
+    assert_eq!(scene.ran(), r#"["container"]"#);
+    assert_eq!(scene.offset(0).y, px(0.));
+}
+
+#[gpui::test]
+fn only_the_innermost_container_scrolls(cx: &mut TestAppContext) {
+    let mut scene = Scene::new(cx, nested_containers(), "");
+    scene.wheel(-50.);
+    assert_eq!(scene.offset(1).y, px(-50.));
+    assert_eq!(scene.offset(0).y, px(0.));
+}
+
+#[gpui::test]
+fn an_inner_container_at_its_limit_chains_to_the_outer(cx: &mut TestAppContext) {
+    let mut scene = Scene::new(cx, nested_containers(), "");
+    scene.wheel(-200.);
+    assert_eq!(scene.offset(1).y, px(-200.));
+    assert_eq!(scene.offset(0).y, px(0.));
+
+    scene.wheel(-50.);
+    assert_eq!(scene.offset(1).y, px(-200.));
+    assert_eq!(scene.offset(0).y, px(-50.));
+}
+
+#[gpui::test]
+fn a_script_offset_past_the_end_still_lets_the_ancestor_scroll(cx: &mut TestAppContext) {
+    let mut scene = Scene::new(cx, nested_containers(), "");
+    // No draw between the script offset and the wheel, so the offset is unclamped.
+    scene.js("__inca_native__.scrollNode(1, null, 999)");
+    scene.cx.simulate_event(ScrollWheelEvent {
+        position: point(px(10.), px(10.)),
+        delta: ScrollDelta::Pixels(point(px(0.), px(-50.))),
+        ..Default::default()
+    });
+    scene.cx.run_until_parked();
+    assert_eq!(scene.offset(0).y, px(-50.));
+}
+
+#[gpui::test]
+fn a_cancelled_scroll_leaves_the_bounds_unmoved(cx: &mut TestAppContext) {
+    let mut host = one_container();
+    host.listeners.register(1, "wheel", 2);
+    let mut scene = Scene::new(cx, host, RECORD_WHEEL);
+    let before = scene.cx.debug_bounds("node-1").unwrap();
+    scene.wheel(-50.);
+    assert_eq!(scene.cx.debug_bounds("node-1").unwrap(), before);
+}
+
+#[gpui::test]
+fn a_wheel_over_no_container_leaves_every_offset_alone(cx: &mut TestAppContext) {
+    let mut host = Host::default();
+    let root = add_div(&mut host, None, 250.0, false);
+    for _ in 0..2 {
+        let sibling = add_div(&mut host, Some(root), 100.0, true);
+        add_div(&mut host, Some(sibling), 300.0, false);
+    }
+    let mut scene = Scene::new(cx, host, "");
+    scene.wheel(-50.);
+    scene.wheel_at(220., -50.);
+    assert_eq!(scene.offset(1).y, px(-50.));
+    assert_eq!(scene.offset(3).y, px(0.));
+}
+
+#[gpui::test]
+fn only_the_container_under_the_pointer_scrolls(cx: &mut TestAppContext) {
+    let mut host = Host::default();
+    let root = add_div(&mut host, None, 200.0, false);
+    for _ in 0..2 {
+        let sibling = add_div(&mut host, Some(root), 100.0, true);
+        add_div(&mut host, Some(sibling), 300.0, false);
+    }
+    let mut scene = Scene::new(cx, host, "");
+    scene.wheel(-50.);
+    assert_eq!(scene.offset(1).y, px(-50.));
+    assert_eq!(scene.offset(3).y, px(0.));
+
+    scene.wheel_at(110., -30.);
+    assert_eq!(scene.offset(1).y, px(-50.));
+    assert_eq!(scene.offset(3).y, px(-30.));
+}
+
+#[gpui::test]
+fn prevent_default_from_the_inner_container_cancels_both_scrolls(cx: &mut TestAppContext) {
+    let mut host = nested_containers();
+    host.listeners.register(1, "wheel", 2);
+    let mut scene = Scene::new(cx, host, RECORD_WHEEL);
+    scene.wheel(-50.);
+    scene.wheel(-250.);
+    assert_eq!(scene.offset(1).y, px(0.));
+    assert_eq!(scene.offset(0).y, px(0.));
+}
+
+#[gpui::test]
+fn stop_propagation_from_the_container_itself_keeps_its_other_listeners(cx: &mut TestAppContext) {
+    let mut host = one_container();
+    host.listeners.register(0, "wheel", 6);
+    host.listeners.register(0, "wheel", 4);
+    let mut scene = Scene::new(cx, host, RECORD_WHEEL);
+    scene.wheel(-50.);
+    assert_eq!(scene.ran(), r#"["container","second"]"#);
+    assert_eq!(scene.offset(0).y, px(-50.));
+}
+
+#[gpui::test]
+fn stop_immediate_propagation_from_a_child_still_scrolls(cx: &mut TestAppContext) {
+    let mut host = one_container();
+    host.listeners.register(0, "wheel", 0);
+    host.listeners.register(1, "wheel", 5);
+    host.listeners.register(1, "wheel", 4);
+    let mut scene = Scene::new(cx, host, RECORD_WHEEL);
+    scene.wheel(-50.);
+    assert_eq!(scene.ran(), r#"["immediate"]"#);
+    assert_eq!(scene.offset(0).y, px(-50.));
+}
+
+#[gpui::test]
+fn a_stopped_wheel_does_not_silence_the_next_one(cx: &mut TestAppContext) {
+    let mut host = one_container();
+    host.listeners.register(0, "wheel", 0);
+    host.listeners.register(1, "wheel", 8);
+    let mut scene = Scene::new(cx, host, RECORD_WHEEL);
+    scene.js("globalThis.stop = true;");
+    scene.wheel(-10.);
+    scene.js("globalThis.stop = false;");
+    scene.wheel(-10.);
+    assert_eq!(scene.ran(), r#"["child","child","container"]"#);
+    assert_eq!(scene.offset(0).y, px(-20.));
+}
+
+#[gpui::test]
+fn repeated_wheels_add_up_and_stop_at_the_end(cx: &mut TestAppContext) {
+    let mut scene = Scene::new(cx, one_container(), "");
+    scene.wheel(-50.);
+    scene.wheel(-50.);
+    assert_eq!(scene.offset(0).y, px(-100.));
+    scene.wheel(-300.);
+    assert_eq!(scene.offset(0).y, px(-200.));
+    scene.wheel(-50.);
+    assert_eq!(scene.offset(0).y, px(-200.));
+}
+
+#[gpui::test]
+fn scrolling_up_at_the_top_moves_nothing(cx: &mut TestAppContext) {
+    let mut scene = Scene::new(cx, one_container(), "");
+    scene.wheel(50.);
+    assert_eq!(scene.offset(0).y, px(0.));
+}
+
+#[gpui::test]
+fn scrolling_up_chains_outward_from_an_inner_container_at_the_top(cx: &mut TestAppContext) {
+    let mut host = Host::default();
+    let outer = add_div(&mut host, None, 150.0, true);
+    let inner = add_div(&mut host, Some(outer), 100.0, true);
+    add_div(&mut host, Some(inner), 300.0, false);
+    add_div(&mut host, Some(outer), 200.0, false);
+    let mut scene = Scene::new(cx, host, "");
+    scene.wheel_at(120., -50.);
+    assert_eq!(scene.offset(0).y, px(-50.));
+
+    scene.wheel(30.);
+    assert_eq!(scene.offset(1).y, px(0.));
+    assert_eq!(scene.offset(0).y, px(-20.));
+}
+
+#[gpui::test]
+fn three_nested_containers_chain_from_the_inside_out(cx: &mut TestAppContext) {
+    let mut scene = Scene::new(cx, triple_containers(), "");
+    let offsets = |scene: &Scene| [2, 1, 0].map(|node| scene.offset(node).y);
+
+    scene.wheel(-200.);
+    assert_eq!(offsets(&scene), [px(-200.), px(0.), px(0.)]);
+    scene.wheel(-50.);
+    assert_eq!(offsets(&scene), [px(-200.), px(-50.), px(0.)]);
+    scene.wheel(-150.);
+    assert_eq!(offsets(&scene), [px(-200.), px(-200.), px(0.)]);
+    scene.wheel(-50.);
+    assert_eq!(offsets(&scene), [px(-200.), px(-200.), px(-50.)]);
+}
+
+#[gpui::test]
+fn prevent_default_from_an_ancestor_cancels_the_scroll(cx: &mut TestAppContext) {
+    let mut host = Host::default();
+    let root = add_div(&mut host, None, 100.0, false);
+    let container = add_div(&mut host, Some(root), 100.0, true);
+    add_div(&mut host, Some(container), 300.0, false);
+    host.listeners.register(root, "wheel", 2);
+    let mut scene = Scene::new(cx, host, RECORD_WHEEL);
+    scene.wheel(-50.);
+    assert_eq!(scene.ran(), r#"["child"]"#);
+    assert_eq!(scene.offset(container).y, px(0.));
+}
+
+#[gpui::test]
+fn a_hidden_container_does_not_scroll(cx: &mut TestAppContext) {
+    let mut scene = Scene::new(cx, styled_container(&[("overflow", "hidden")]), "");
+    let before = scene.cx.debug_bounds("node-1").unwrap();
+    scene.wheel(-50.);
+    assert_eq!(scene.cx.debug_bounds("node-1").unwrap(), before);
+}
+
+#[gpui::test]
+fn a_diagonal_wheel_scrolls_only_the_scrolling_axis(cx: &mut TestAppContext) {
+    let host = styled_container(&[("overflow_x", "hidden"), ("overflow_y", "scroll")]);
+    let mut scene = Scene::new(cx, host, "");
+    scene.wheel_delta(10., ScrollDelta::Pixels(point(px(-10.), px(-50.))));
+    assert_eq!(scene.offset(0), point(px(0.), px(-50.)));
+}
+
+// Pins gpui's axis rule: the y delta moves the container even when the x
+// delta is larger.
+#[gpui::test]
+fn an_x_dominant_wheel_moves_a_y_only_container_by_its_y_delta(cx: &mut TestAppContext) {
+    let host = styled_container(&[("overflow_x", "hidden"), ("overflow_y", "scroll")]);
+    let mut scene = Scene::new(cx, host, "");
+    scene.wheel_delta(10., ScrollDelta::Pixels(point(px(-50.), px(-10.))));
+    assert_eq!(scene.offset(0), point(px(0.), px(-10.)));
+}
+
+#[gpui::test]
+fn a_horizontal_wheel_scrolls_an_x_only_container(cx: &mut TestAppContext) {
+    let mut scene = Scene::new(cx, styled_container(&[("overflow_x", "scroll")]), "");
+    scene.wheel_delta(10., ScrollDelta::Pixels(point(px(-50.), px(0.))));
+    assert_eq!(scene.offset(0), point(px(-50.), px(0.)));
+}
+
+// Pins gpui's axis rule.
+#[gpui::test]
+fn a_vertical_wheel_scrolls_an_x_only_container_along_x(cx: &mut TestAppContext) {
+    let mut scene = Scene::new(cx, styled_container(&[("overflow_x", "scroll")]), "");
+    scene.wheel(-50.);
+    assert_eq!(scene.offset(0), point(px(-50.), px(0.)));
+}
+
+#[gpui::test]
+fn a_line_delta_scrolls_by_the_line_height(cx: &mut TestAppContext) {
+    let mut scene = Scene::new(cx, one_container(), "");
+    scene.wheel_delta(10., ScrollDelta::Lines(point(0., -2.)));
+    assert_eq!(scene.offset(0).y, scene.line_height() * -2.);
+}
+
+#[gpui::test]
+fn a_wheel_after_a_prevented_one_scrolls_again(cx: &mut TestAppContext) {
+    let mut host = one_container();
+    host.listeners.register(0, "wheel", 7);
+    let mut scene = Scene::new(cx, host, RECORD_WHEEL);
+    scene.js("globalThis.prevent = true;");
+    scene.wheel(-50.);
+    assert_eq!(scene.offset(0).y, px(0.));
+
+    scene.js("globalThis.prevent = false;");
+    scene.wheel(-50.);
+    assert_eq!(scene.offset(0).y, px(-50.));
+}
+
+#[gpui::test]
+fn listeners_run_child_first_and_the_container_still_scrolls(cx: &mut TestAppContext) {
+    let mut host = one_container();
+    host.listeners.register(0, "wheel", 0);
+    host.listeners.register(1, "wheel", 8);
+    let mut scene = Scene::new(cx, host, RECORD_WHEEL);
+    scene.wheel(-50.);
+    assert_eq!(scene.ran(), r#"["child","container"]"#);
+    assert_eq!(scene.offset(0).y, px(-50.));
+}
+
+#[gpui::test]
+fn a_throw_after_stop_propagation_still_stops_ancestors_and_scrolls(cx: &mut TestAppContext) {
+    let mut host = one_container();
+    host.listeners.register(0, "wheel", 0);
+    host.listeners.register(1, "wheel", 9);
+    let mut scene = Scene::new(cx, host, RECORD_WHEEL);
+    scene.js("globalThis.stop = true;");
+    scene.wheel(-50.);
+    assert_eq!(scene.ran(), r#"["child"]"#);
+    assert_eq!(scene.offset(0).y, px(-50.));
+    assert_eq!(scene.reported.borrow().len(), 1);
+    assert_eq!(scene.reported.borrow()[0].message(), "Error: boom");
+
+    scene.js("globalThis.stop = false;");
+    scene.wheel(-50.);
+    assert_eq!(scene.ran(), r#"["child","child","container"]"#);
+    assert_eq!(scene.offset(0).y, px(-100.));
+    assert_eq!(scene.reported.borrow().len(), 1);
+}
+
+#[gpui::test]
+fn stop_propagation_with_prevent_default_skips_ancestors_and_cancels(cx: &mut TestAppContext) {
+    let mut host = one_container();
+    host.listeners.register(0, "wheel", 0);
+    host.listeners.register(1, "wheel", 10);
+    let mut scene = Scene::new(cx, host, RECORD_WHEEL);
+    scene.wheel(-50.);
+    assert_eq!(scene.ran(), r#"["child"]"#);
+    assert_eq!(scene.offset(0).y, px(0.));
+}
+
+/// Callbacks by id, each recording its name in `ran`.
+const RECORD_WHEEL: &str = concat!(
+    // container: records only
+    "0: () => { ran.push('container'); }, ",
+    // child: stops propagation
+    "1: (e) => { ran.push('child'); e.stopPropagation(); }, ",
+    // child: prevents default
+    "2: (e) => { ran.push('child'); e.preventDefault(); }, ",
+    // container: prevents default
+    "3: (e) => { ran.push('container'); e.preventDefault(); }, ",
+    // a second listener on the same node
+    "4: () => { ran.push('second'); }, ",
+    // stops immediately
+    "5: (e) => { ran.push('immediate'); e.stopImmediatePropagation(); }, ",
+    // container: stops propagation
+    "6: (e) => { ran.push('container'); e.stopPropagation(); }, ",
+    // prevents default while `globalThis.prevent` is set
+    "7: (e) => { ran.push('prevent'); if (globalThis.prevent) e.preventDefault(); }, ",
+    // child: stops propagation while `globalThis.stop` is set
+    "8: (e) => { ran.push('child'); if (globalThis.stop) e.stopPropagation(); }, ",
+    // child: stops propagation, then throws, while `globalThis.stop` is set
+    "9: (e) => { ran.push('child'); if (globalThis.stop) { e.stopPropagation(); throw new Error('boom'); } }, ",
+    // child: stops propagation and prevents default
+    "10: (e) => { ran.push('child'); e.stopPropagation(); e.preventDefault(); }",
+);

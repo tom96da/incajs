@@ -542,7 +542,7 @@ A fixed entry is deleted and its ID is never reused.
   scroll step after the fact. This needs `gpui` to apply the step
   synchronously in the event. A `gpui` with smooth or deferred scrolling
   breaks it. `a_cancelled_scroll_leaves_the_bounds_unmoved` in
-  `crates/inca-bridge/tests/scroll_dispatch.rs` checks the bounds after a
+  `crates/inca-bridge/tests/scroll_dispatch/wheel.rs` checks the bounds after a
   cancel. Each scroll container adds one zero-size element.
 
 - **B-084 Wheel scrolling differs from the DOM at the edges**

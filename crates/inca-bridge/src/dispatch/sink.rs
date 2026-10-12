@@ -1,0 +1,267 @@
+// Copyright (c) 2026 tom96da
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+use std::rc::Rc;
+
+use gpui::{App, MouseButton, MouseUpEvent, ScrollHandle, Window};
+use inca_gpui::{EventPayload, EventSink, KeyPayload, MousePayload, NodeId};
+
+use super::EventDispatcher;
+use crate::scroll_into_view::Align;
+
+impl EventSink for EventDispatcher {
+    fn tracks_pointer(&self) -> bool {
+        self.tracks_pointer()
+    }
+
+    fn clear_layout(&self) {
+        self.host.borrow().layout.borrow_mut().clear();
+    }
+
+    fn record_layout(&self, node_id: NodeId, layout: inca_gpui::NodeLayout) {
+        self.host
+            .borrow()
+            .layout
+            .borrow_mut()
+            .insert(node_id, layout);
+    }
+
+    fn fire(
+        &self,
+        start: NodeId,
+        event: &str,
+        payload: &EventPayload,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> bool {
+        self.fire(start, event, payload, window, cx)
+    }
+
+    fn focus_handle(&self, node_id: NodeId) -> Option<gpui::FocusHandle> {
+        let host = self.host.borrow();
+        host.focus.handle(node_id).or_else(|| {
+            (node_id == host.root)
+                .then(|| host.focus.parked_handle())
+                .flatten()
+        })
+    }
+
+    fn scroll_handle(&self, node_id: NodeId) -> Option<ScrollHandle> {
+        Some(self.host.borrow().scroll_handle(node_id))
+    }
+
+    // The first call of an update computes the delta and defers clearing it,
+    // so later calls in that update keep it.
+    fn pointer_moved(&self, position: gpui::Point<gpui::Pixels>, cx: &mut App) {
+        if self.current_movement.get().is_some() {
+            return;
+        }
+        let here = (f32::from(position.x), f32::from(position.y));
+        let movement = self
+            .last_position
+            .replace(Some(here))
+            .map_or((0.0, 0.0), |(x, y)| (here.0 - x, here.1 - y));
+        self.current_movement.set(Some(movement));
+        let current = Rc::clone(&self.current_movement);
+        cx.defer(move |_| current.set(None));
+    }
+
+    // Changed flags fire in the order Shift, Control, Alt, Meta.
+    fn modifiers_changed(&self, modifiers: gpui::Modifiers, window: &mut Window, cx: &mut App) {
+        let before = self
+            .held_modifiers
+            .replace(Some(modifiers))
+            .unwrap_or(modifiers);
+        let (root, focused) = {
+            let host = self.host.borrow();
+            (host.root, host.focus.focused_node(window, cx))
+        };
+        let start = self.resolve(focused, root);
+        for (key, was, is) in [
+            ("Shift", before.shift, modifiers.shift),
+            ("Control", before.control, modifiers.control),
+            ("Alt", before.alt, modifiers.alt),
+            ("Meta", before.platform, modifiers.platform),
+        ] {
+            if was != is {
+                let payload = EventPayload::Key(KeyPayload {
+                    key: key.to_owned(),
+                    repeat: false,
+                    modifiers,
+                });
+                let event = if is { "keydown" } else { "keyup" };
+                self.fire(start, event, &payload, window, cx);
+            }
+        }
+    }
+
+    fn pointer_left(&self) {
+        self.last_position.set(None);
+    }
+
+    fn pointer_over(&self, node_id: NodeId, window: &mut Window, cx: &mut App) {
+        self.hover_settled.set(true);
+        self.report_hover(Some(node_id), window, cx);
+        self.schedule_hover_report(window, cx);
+    }
+
+    fn pointer_pressed(&self) {
+        self.space_down.set(None);
+    }
+
+    fn pointer_released(
+        &self,
+        event: &MouseUpEvent,
+        pressed: Option<NodeId>,
+        released: NodeId,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let Some(pressed) = pressed else {
+            return;
+        };
+        let Some(start) = self.common_ancestor(pressed, released) else {
+            return;
+        };
+        let mut payload = EventPayload::click(event);
+        if event.button != MouseButton::Left {
+            self.fire(start, "auxclick", &payload, window, cx);
+            return;
+        }
+        self.fire(start, "click", &payload, window, cx);
+        if event.click_count == 2 {
+            // `dblclick` carries the mouse fields only.
+            if let Some(mouse) = payload.mouse_mut() {
+                mouse.pointer = None;
+            }
+            self.fire(start, "dblclick", &payload, window, cx);
+        }
+    }
+
+    fn pointer_input(
+        &self,
+        event: &str,
+        target: NodeId,
+        payload: &EventPayload,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        self.host.borrow_mut().focus.observe(window, cx);
+        let payload = self.prepare(event, target, payload, window);
+        let cut = self.cut_by_disabled_button(event, &payload, cx);
+        let (canceled, entered) = self.walk(target, event, &payload, &cut);
+        // The default action reads the tree the listeners' queued jobs leave.
+        if entered {
+            self.drain_observed(window);
+        }
+        match event {
+            "mousedown" => self.focus_on_press(target, canceled, window, cx),
+            // gpui's scroll rollback reads `Window::default_prevented`.
+            "wheel" if canceled => window.prevent_default(),
+            _ => {}
+        }
+    }
+
+    fn hover_changed(&self, node_id: NodeId, hovered: bool, window: &mut Window, cx: &mut App) {
+        {
+            let mut set = self.hovered.borrow_mut();
+            if hovered {
+                set.insert(node_id);
+            } else {
+                set.remove(&node_id);
+            }
+        }
+        self.schedule_hover_report(window, cx);
+    }
+
+    fn key_input(
+        &self,
+        keystroke: &gpui::Keystroke,
+        up: bool,
+        payload: &EventPayload,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        self.host.borrow_mut().focus.observe(window, cx);
+        let (root, focused) = {
+            let host = self.host.borrow();
+            (host.root, host.focus.focused_node(window, cx))
+        };
+        let target = self.resolve(focused, root);
+        let event = if up { "keyup" } else { "keydown" };
+        let (canceled, entered) = self.walk(target, event, payload, &[]);
+        if entered {
+            self.drain_observed(window);
+        }
+        if canceled {
+            // Handled for the platform: a shortcut or an input method sees nothing.
+            window.prevent_default();
+            cx.stop_propagation();
+        }
+        self.key_default(keystroke, up, canceled, window, cx);
+    }
+}
+
+impl EventDispatcher {
+    // Tab moves focus and dispatches nothing here. The next frame reports it.
+    fn key_default(
+        &self,
+        keystroke: &gpui::Keystroke,
+        up: bool,
+        canceled: bool,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let key = keystroke.key.as_str();
+        let modifiers = keystroke.modifiers;
+        let window_id = window.window_handle().window_id();
+        let pending = if up {
+            (key == "space").then(|| self.space_down.take()).flatten()
+        } else {
+            self.space_down.set(None);
+            None
+        };
+        if canceled {
+            return;
+        }
+        let focused_button = || {
+            let host = self.host.borrow();
+            host.focus.focused_node(window, cx).filter(|id| {
+                host.tree.get(*id).is_some_and(|node| {
+                    node.tag_name() == "button" && !node.attributes().contains_key("disabled")
+                })
+            })
+        };
+        let click = match (key, up) {
+            ("tab", false) if !(modifiers.control || modifiers.alt || modifiers.platform) => {
+                let host = &mut *self.host.borrow_mut();
+                let moved = host
+                    .focus
+                    .tab_move(&host.tree, host.root, window, cx, modifiers.shift);
+                if let Some(node) = moved {
+                    crate::scroll_into_view::reveal(
+                        host,
+                        node,
+                        Align::Reveal,
+                        Align::CenterOutside,
+                    );
+                }
+                None
+            }
+            ("enter", false) if !(modifiers.control || modifiers.alt || modifiers.platform) => {
+                focused_button()
+            }
+            ("space", false) => {
+                self.space_down
+                    .set(focused_button().map(|button| (window_id, button)));
+                None
+            }
+            ("space", true) => focused_button().filter(|b| pending == Some((window_id, *b))),
+            _ => None,
+        };
+        if let Some(button) = click {
+            let payload = EventPayload::Mouse(MousePayload::keyboard_click(modifiers));
+            self.fire(button, "click", &payload, window, cx);
+        }
+    }
+}
