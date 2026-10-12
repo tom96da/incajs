@@ -29,6 +29,7 @@
     "pretest": "oxlint --type-aware --type-check && oxfmt --check --disable-nested-config .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:e2e": "vitest run --root ./tests",
     "lint": "oxlint --type-aware",
     "lint:fix": "oxlint --type-aware --fix",
     "format": "oxfmt --check --disable-nested-config .",
