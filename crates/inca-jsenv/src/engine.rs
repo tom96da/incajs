@@ -220,6 +220,16 @@ impl Engine {
         failures
     }
 
+    /// Takes the failures of jobs that threw while
+    /// [`eval_module`](Self::eval_module) or [`poll_module`](Self::poll_module)
+    /// ran, oldest first. The next [`run_jobs`](Self::run_jobs) starts from an
+    /// empty list. Call it to report the failures when the module's own error
+    /// is reported separately.
+    #[must_use]
+    pub fn take_startup_failures(&self) -> Vec<EngineError> {
+        self.startup_failures.take()
+    }
+
     /// Runs one pending promise job. A job that threw is appended to
     /// `failures`. Returns whether a job was pending.
     ///
@@ -309,8 +319,8 @@ impl Engine {
     ///
     /// # Errors
     ///
-    /// Returns an error for a syntax/link error or an uncaught exception
-    /// thrown before the first `await`.
+    /// Returns an error for a syntax or link error. An exception the module
+    /// throws while evaluating comes from [`poll_module`](Self::poll_module).
     pub fn start_module(&self, name: &str, source: &str) -> EngineResult<PendingModule> {
         let name = canonical_name(name);
         self.context.with(|ctx| {
@@ -968,6 +978,26 @@ mod tests {
         let failures = engine.run_jobs();
         assert_eq!(failures, vec![err]);
         assert!(engine.run_jobs().is_empty());
+    }
+
+    #[test]
+    fn take_startup_failures_returns_the_jobs_that_threw_before_the_module_rejected() {
+        let engine = Engine::new().unwrap();
+        let module = engine
+            .start_module(
+                "taken.mjs",
+                "queueMicrotask(() => { throw new Error('side'); });\n\
+                 await Promise.resolve(); throw new Error('entry');",
+            )
+            .unwrap();
+
+        let err = engine.poll_module(&module).unwrap().unwrap_err();
+        let taken = engine.take_startup_failures();
+        assert_eq!(taken.len(), 1);
+        assert_eq!(taken[0].message(), "Error: side");
+        assert_eq!(err.message(), "Error: entry");
+        assert!(engine.take_startup_failures().is_empty());
+        assert_eq!(engine.run_jobs(), vec![err]);
     }
 
     #[test]

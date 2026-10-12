@@ -245,12 +245,21 @@ impl Session {
         reporter: ErrorReporter,
     ) -> Result<Self, EngineError> {
         let StartedEngine { host, engine, .. } = Self::start_engine(entry_path, None)?;
-        let session = Self::from_parts(host, engine, reporter);
+        let session = Self::from_parts(host, engine, Rc::clone(&reporter));
         session
             .engine
             .eval_module(entry_path, source)
-            .inspect_err(|_| session.dispatcher.report_pending())?;
+            .inspect_err(|_| session.report_failed_start(&reporter))?;
         Ok(session)
+    }
+
+    /// Reports what the app failed on before its entry failed: the jobs that
+    /// threw and the listener errors. The entry's own error is the caller's.
+    pub(crate) fn report_failed_start(&self, reporter: &ErrorReporter) {
+        for failure in self.engine.take_startup_failures() {
+            reporter(&failure);
+        }
+        self.dispatcher.report_pending();
     }
 
     /// Starts evaluating `source` as [`Self::load`] does, and returns once
@@ -273,7 +282,7 @@ impl Session {
             engine,
             signal,
         } = Self::start_engine(entry_path, writer)?;
-        let session = Self::from_parts(host, engine, reporter);
+        let session = Self::from_parts(host, engine, Rc::clone(&reporter));
         let module = session.engine.start_module(entry_path, source)?;
         let loading = Loading {
             module,
@@ -283,7 +292,7 @@ impl Session {
         };
         match loading.poll() {
             Some(Err(err)) => {
-                loading.session.dispatcher.report_pending();
+                loading.session.report_failed_start(&reporter);
                 Err(err)
             }
             _ => Ok(loading),
@@ -988,6 +997,47 @@ mod tests {
         );
         assert!(sent[0].contains(r#""method":"appError""#));
         assert!(sent[0].contains("boom"));
+    }
+
+    #[test]
+    fn a_job_error_is_reported_once_when_begin_rejects_after_it() {
+        let capturing = Rc::new(CapturingWriter::default());
+        let writer: SharedWriter = Rc::clone(&capturing) as SharedWriter;
+
+        let err = Session::begin(
+            TEST_ENTRY_PATH,
+            "queueMicrotask(() => { throw new Error('side'); });\n\
+             await Promise.resolve(); throw new Error('entry');",
+            reporter_for(&writer),
+            Some(&writer),
+        )
+        .err()
+        .unwrap();
+
+        assert_eq!(err.message(), "Error: entry");
+        let sent = capturing.0.borrow();
+        assert_eq!(sent.len(), 1);
+        assert!(sent[0].contains("side"));
+    }
+
+    #[test]
+    fn a_job_error_is_reported_once_when_load_rejects_after_it() {
+        let capturing = Rc::new(CapturingWriter::default());
+        let writer: SharedWriter = Rc::clone(&capturing) as SharedWriter;
+
+        let err = Session::load(
+            TEST_ENTRY_PATH,
+            "queueMicrotask(() => { throw new Error('side'); });\n\
+             await Promise.resolve(); throw new Error('entry');",
+            reporter_for(&writer),
+        )
+        .err()
+        .unwrap();
+
+        assert_eq!(err.message(), "Error: entry");
+        let sent = capturing.0.borrow();
+        assert_eq!(sent.len(), 1);
+        assert!(sent[0].contains("side"));
     }
 
     #[gpui::test]

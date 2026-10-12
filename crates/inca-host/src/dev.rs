@@ -301,7 +301,12 @@ impl Serve {
             self.track_hold(cx);
             return;
         };
-        pending.loading.session().dispatcher.report_pending();
+        if result.is_err() {
+            let reporter = reporter_for(&self.writer);
+            pending.loading.session().report_failed_start(&reporter);
+        } else {
+            pending.loading.session().dispatcher.report_pending();
+        }
         let Some(Pending { loading, ids }) = self.pending.take() else {
             return;
         };
@@ -1191,6 +1196,31 @@ mod tests {
         assert_eq!(sent[0]["error"]["message"], "Error: late");
         assert!(sent[0]["error"]["data"]["stack"].is_string());
         assert_eq!(eval_in_window(cx, window, "globalThis.marker;"), "old");
+    }
+
+    #[gpui::test]
+    fn a_job_error_is_reported_once_when_a_pending_reload_rejects_after_it(
+        cx: &mut TestAppContext,
+    ) {
+        let entry = ScratchEntry::write(
+            "side-then-reject",
+            "await new Promise((_, reject) => { __inca_dev__.receive = () => { \
+                 queueMicrotask(() => { throw new Error('side'); }); \
+                 Promise.resolve().then(() => reject(new Error('late'))); }; });",
+        );
+        let (capturing, _) = capture();
+        let (_, sender) = serve_idle(cx, "", entry.path(), &capturing);
+
+        request(&sender, 7, "reload");
+        notify(&sender, "go");
+        cx.run_until_parked();
+
+        let sent = written(&capturing);
+        assert_eq!(sent.len(), 2);
+        assert_eq!(sent[0]["method"], "appError");
+        assert_eq!(sent[0]["params"]["message"], "Error: side");
+        assert_eq!(sent[1]["id"], 7);
+        assert_eq!(sent[1]["error"]["message"], "Error: late");
     }
 
     #[gpui::test]
