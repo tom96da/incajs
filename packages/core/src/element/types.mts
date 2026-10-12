@@ -114,8 +114,7 @@ export interface IncaText {
   /** The current parent, or `null` if this node isn't attached to the tree. */
   parent: IncaElement | null;
   /**
-   * The text content, mirroring what's been pushed to the native node via
-   * {@link IncaCore.setAttribute}.
+   * The text content, mirroring the value pushed to the native node.
    */
   text: string;
 }
