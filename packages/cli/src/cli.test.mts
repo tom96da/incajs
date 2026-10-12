@@ -168,6 +168,8 @@ describe("run", () => {
   it.each([
     [["--sourcemap"], true],
     [["--no-sourcemap"], false],
+    [["--sourcemap", "--no-sourcemap"], false],
+    [["--no-sourcemap", "--sourcemap"], true],
     [[], undefined],
   ] as const)("passes sourcemap %j to build as %j", async (flags, expected) => {
     mockedBuild.mockResolvedValue({
