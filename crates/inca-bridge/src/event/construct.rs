@@ -9,7 +9,8 @@ use rquickjs::{Ctx, Exception, Null, Object, Result as JsResult, Value};
 
 use super::payload::set_payload;
 use super::walk::Walk;
-use super::{Flags, PROTOTYPE, REMEMBER, function_slot, slot, time_stamp};
+use super::{Flags, PHASES, PROTOTYPE, REMEMBER, function_slot, slot, time_stamp};
+use crate::bindings::convert::or_null;
 
 /// A new idle event object and its record, filed in the runtime's record
 /// store.
@@ -96,12 +97,7 @@ pub(super) fn constructors<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult
     )?;
     custom.set_name("CustomEvent")?;
     custom.set_prototype(Some(&event))?;
-    for (name, value) in [
-        ("NONE", 0),
-        ("CAPTURING_PHASE", 1),
-        ("AT_TARGET", 2),
-        ("BUBBLING_PHASE", 3),
-    ] {
+    for (name, value) in PHASES {
         event.prop(name, Property::from(value))?;
     }
     let globals = ctx.globals();
@@ -166,10 +162,7 @@ impl<'js> IntoJsFunc<'js, ()> for Construct {
                 .map(|init| init.get::<_, Value>("detail"))
                 .transpose()?
                 .filter(|detail| !detail.is_undefined());
-            match detail {
-                Some(detail) => event.set("detail", detail)?,
-                None => event.set("detail", Null)?,
-            }
+            event.set("detail", or_null(ctx, detail)?)?;
         }
         Ok(event.into_value())
     }

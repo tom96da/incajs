@@ -1,8 +1,9 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use crate::bindings::convert::or_null;
 use inca_gpui::{EventPayload, KeyPayload, MousePayload, PointerSource};
-use rquickjs::{Function, Null, Object, Result as JsResult};
+use rquickjs::{Function, Object, Result as JsResult};
 
 /// Writes `payload`'s fields onto `event_object`.
 pub(super) fn set_payload(event_object: &Object, payload: &EventPayload) -> JsResult<()> {
@@ -17,10 +18,12 @@ pub(super) fn set_payload(event_object: &Object, payload: &EventPayload) -> JsRe
             event_object.set("deltaMode", wheel.delta_mode)?;
         }
         EventPayload::Key(key) => set_key_fields(event_object, key)?,
-        EventPayload::Focus { related_target } => match related_target {
-            Some(id) => event_object.set("relatedTarget", *id)?,
-            None => event_object.set("relatedTarget", Null)?,
-        },
+        EventPayload::Focus { related_target } => {
+            event_object.set(
+                "relatedTarget",
+                or_null(event_object.ctx(), *related_target)?,
+            )?;
+        }
     }
     Ok(())
 }
@@ -37,10 +40,10 @@ fn set_mouse_fields(event_object: &Object, mouse: &MousePayload) -> JsResult<()>
     event_object.set("offsetY", mouse.offset_y)?;
     event_object.set("x", mouse.client_x)?;
     event_object.set("y", mouse.client_y)?;
-    match mouse.related_target {
-        Some(id) => event_object.set("relatedTarget", id)?,
-        None => event_object.set("relatedTarget", Null)?,
-    }
+    event_object.set(
+        "relatedTarget",
+        or_null(event_object.ctx(), mouse.related_target)?,
+    )?;
     // Identical to clientX/clientY today. Nothing here scrolls the page
     // itself, which is the only thing that would tell them apart.
     event_object.set("pageX", mouse.client_x)?;

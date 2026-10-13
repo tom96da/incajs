@@ -139,16 +139,19 @@ fn cancels(record: &Object<'_>) -> bool {
     flag(record, "cancelable") && !flag(record, "passive")
 }
 
+/// The phase constants on `Event`, its prototype and `CustomEvent`.
+const PHASES: [(&str, i32); 4] = [
+    ("NONE", 0),
+    ("CAPTURING_PHASE", 1),
+    ("AT_TARGET", 2),
+    ("BUBBLING_PHASE", 3),
+];
+
 /// The prototype of event objects: the phase constants, the propagation
 /// methods, `composedPath` and the accessors.
 fn prototype<'js>(ctx: &Ctx<'js>) -> JsResult<Object<'js>> {
     let proto = Object::new(ctx.clone())?;
-    for (name, value) in [
-        ("NONE", 0),
-        ("CAPTURING_PHASE", 1),
-        ("AT_TARGET", 2),
-        ("BUBBLING_PHASE", 3),
-    ] {
+    for (name, value) in PHASES {
         proto.prop(name, Property::from(value))?;
     }
     define_methods(ctx, &proto)?;

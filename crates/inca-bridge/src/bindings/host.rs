@@ -81,6 +81,11 @@ impl Default for Host {
     }
 }
 
+/// A scroll `offset` clamped into `[-max, 0]`, the range gpui draws.
+pub(super) fn clamped_offset(offset: Pixels, max: Pixels) -> Pixels {
+    offset.clamp(-max, px(0.))
+}
+
 impl Host {
     // Containers whose clamped offset moved since the last call and whose
     // `scroll` a listener reaches: one on the container, or a capture one on
@@ -91,8 +96,8 @@ impl Host {
         for (&id, handle) in self.scroll_handles.get_mut().iter() {
             let (offset, max) = (handle.offset(), handle.max_offset());
             let now = gpui::point(
-                offset.x.clamp(-max.x, px(0.)),
-                offset.y.clamp(-max.y, px(0.)),
+                clamped_offset(offset.x, max.x),
+                clamped_offset(offset.y, max.y),
             );
             let before = self.scroll_reported.insert(id, now).unwrap_or_default();
             if before != now {
@@ -180,7 +185,7 @@ impl Host {
             let handle = self.scroll_handle(id);
             let (offset, max) = (handle.offset(), handle.max_offset());
             let step = |wanted: f32, offset: Pixels, max: Pixels| {
-                let from = -f32::from(offset).clamp(-f32::from(max), 0.0);
+                let from = -f32::from(clamped_offset(offset, max));
                 let to = (from + wanted).clamp(0.0, f32::from(max));
                 (to, to - from)
             };

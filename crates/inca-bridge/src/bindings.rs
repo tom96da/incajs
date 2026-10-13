@@ -6,7 +6,7 @@
 //! register input-event callbacks, dispatch events from script, and free what
 //! it no longer needs.
 
-mod convert;
+pub(crate) mod convert;
 mod focus;
 mod host;
 mod listeners;

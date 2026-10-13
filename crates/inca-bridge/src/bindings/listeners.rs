@@ -8,10 +8,10 @@ use std::rc::Rc;
 use rquickjs::function::Opt;
 use rquickjs::{Ctx, Exception, Result as JsResult, Value};
 
-use inca_gpui::{NodeId, TreeError};
+use inca_gpui::NodeId;
 
 use super::Natives;
-use super::convert::{JsNodeId, throw_tree_error};
+use super::convert::{JsNodeId, existing_node};
 use super::host::Host;
 
 /// One registration: the callback id, the phase it listens in and whether it
@@ -145,9 +145,7 @@ fn add_event_listener<'js>(
 ) -> impl Fn(Ctx<'js>, JsNodeId, String, Opt<bool>, Opt<bool>) -> JsResult<u32> {
     move |ctx, JsNodeId(node_id), event, capture, passive| {
         let mut host = host.borrow_mut();
-        if host.tree.get(node_id).is_none() {
-            return Err(throw_tree_error(&ctx, TreeError::NodeNotFound(node_id)));
-        }
+        existing_node(&ctx, &host.tree, node_id)?;
         host.listeners
             .add(
                 node_id,
@@ -171,9 +169,7 @@ fn dispatch_event<'js>(
     host: Rc<RefCell<Host>>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, Value<'js>) -> JsResult<bool> {
     move |ctx, JsNodeId(node_id), event| {
-        if host.borrow().tree.get(node_id).is_none() {
-            return Err(throw_tree_error(&ctx, TreeError::NodeNotFound(node_id)));
-        }
+        existing_node(&ctx, &host.borrow().tree, node_id)?;
         crate::event::dispatch_event(&ctx, &host, node_id, event)
     }
 }

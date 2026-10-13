@@ -5,14 +5,14 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use gpui::px;
-use rquickjs::{Ctx, Exception, IntoJs, Result as JsResult, Value};
+use rquickjs::{Ctx, Exception, Result as JsResult, Value};
 
 use inca_gpui::element::scroll::Align;
-use inca_gpui::{TreeError, is_scroll_container};
+use inca_gpui::is_scroll_container;
 
 use super::Natives;
-use super::convert::{JsNodeId, throw_tree_error};
-use super::host::Host;
+use super::convert::{JsNodeId, existing_node, or_null};
+use super::host::{Host, clamped_offset};
 
 pub(super) fn install_scroll(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("scrollOf", scroll_of)?;
@@ -23,23 +23,20 @@ pub(super) fn install_scroll(n: &Natives<'_, '_>) -> JsResult<()> {
 fn scroll_of<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Value<'js>> {
     move |ctx, JsNodeId(node_id)| {
         let host = host.borrow();
-        let Some(node) = host.tree.get(node_id) else {
-            return Err(throw_tree_error(&ctx, TreeError::NodeNotFound(node_id)));
-        };
-        if !is_scroll_container(node) {
-            return Ok(Value::new_null(ctx.clone()));
-        }
-        let handle = host.scroll_handle(node_id);
-        let (offset, max) = (handle.offset(), handle.max_offset());
-        // gpui clamps on the next draw; report the same value.
-        [
-            -offset.x.clamp(-max.x, px(0.)),
-            -offset.y.clamp(-max.y, px(0.)),
-            max.x,
-            max.y,
-        ]
-        .map(|px| f64::from(f32::from(px)))
-        .into_js(&ctx)
+        let node = existing_node(&ctx, &host.tree, node_id)?;
+        let rect = is_scroll_container(node).then(|| {
+            let handle = host.scroll_handle(node_id);
+            let (offset, max) = (handle.offset(), handle.max_offset());
+            // gpui clamps on the next draw; report the same value.
+            [
+                -clamped_offset(offset.x, max.x),
+                -clamped_offset(offset.y, max.y),
+                max.x,
+                max.y,
+            ]
+            .map(|px: gpui::Pixels| f64::from(f32::from(px)))
+        });
+        or_null(&ctx, rect.as_ref().map(<[f64; 4]>::as_slice))
     }
 }
 
@@ -48,9 +45,7 @@ fn scroll_node<'js>(
 ) -> impl Fn(Ctx<'js>, JsNodeId, Option<f64>, Option<f64>) -> JsResult<()> {
     move |ctx, JsNodeId(node_id), left, top| {
         let host = host.borrow();
-        let Some(node) = host.tree.get(node_id) else {
-            return Err(throw_tree_error(&ctx, TreeError::NodeNotFound(node_id)));
-        };
+        let node = existing_node(&ctx, &host.tree, node_id)?;
         if !is_scroll_container(node) {
             return Ok(());
         }
@@ -66,8 +61,7 @@ fn scroll_node<'js>(
             offset.y = negated(top);
         }
         let (before, max) = (handle.offset(), handle.max_offset());
-        let clamped =
-            |v: gpui::Pixels, max: gpui::Pixels| -f32::from(v).clamp(-f32::from(max), 0.0);
+        let clamped = |v, max| -f32::from(clamped_offset(v, max));
         handle.set_offset(offset);
         // Recorded boxes follow the new offset, so a reveal in the same tick
         // starts from where the content now is.
@@ -96,9 +90,7 @@ fn scroll_into_view_node<'js>(
         };
         let (block, inline) = (align(&block)?, align(&inline)?);
         let mut host = host.borrow_mut();
-        if host.tree.get(node_id).is_none() {
-            return Err(throw_tree_error(&ctx, TreeError::NodeNotFound(node_id)));
-        }
+        existing_node(&ctx, &host.tree, node_id)?;
         if !host.reveal(node_id, block, inline) {
             host.scroll_fresh.push((node_id, block, inline));
         }

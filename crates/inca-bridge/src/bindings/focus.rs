@@ -6,12 +6,10 @@ use std::rc::Rc;
 
 use gpui::Bounds;
 use rquickjs::function::Opt;
-use rquickjs::{Ctx, IntoJs, Result as JsResult, Value};
-
-use inca_gpui::TreeError;
+use rquickjs::{Ctx, Result as JsResult, Value};
 
 use super::Natives;
-use super::convert::{JsNodeId, throw_tree_error};
+use super::convert::{JsNodeId, existing_node, or_null};
 use super::host::Host;
 
 /// Requesting and releasing focus.
@@ -40,34 +38,29 @@ fn blur_node(host: Rc<RefCell<Host>>) -> impl Fn(JsNodeId) {
 fn focused_node<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>) -> JsResult<Value<'js>> {
     move |ctx| {
         let host = host.borrow();
-        match host.focus.active_node(&host.tree) {
-            Some(node_id) => node_id.into_js(&ctx),
-            None => Ok(Value::new_null(ctx.clone())),
-        }
+        or_null(&ctx, host.focus.active_node(&host.tree))
     }
 }
 
 fn layout_of<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Value<'js>> {
     move |ctx, JsNodeId(node_id)| {
         let host = host.borrow();
-        if host.tree.get(node_id).is_none() {
-            return Err(throw_tree_error(&ctx, TreeError::NodeNotFound(node_id)));
-        }
-        let Some(layout) = host.layout.borrow().get(&node_id).copied() else {
-            return Ok(Value::new_null(ctx.clone()));
-        };
-        let Bounds { origin, size } = layout.bounds;
-        [
-            origin.x,
-            origin.y,
-            size.width,
-            size.height,
-            layout.border,
-            layout.scroll.x,
-            layout.scroll.y,
-        ]
-        .map(|px| f64::from(f32::from(px)))
-        .into_js(&ctx)
+        existing_node(&ctx, &host.tree, node_id)?;
+        let layout = host.layout.borrow().get(&node_id).copied();
+        let rect = layout.map(|layout| {
+            let Bounds { origin, size } = layout.bounds;
+            [
+                origin.x,
+                origin.y,
+                size.width,
+                size.height,
+                layout.border,
+                layout.scroll.x,
+                layout.scroll.y,
+            ]
+            .map(|px| f64::from(f32::from(px)))
+        });
+        or_null(&ctx, rect.as_ref().map(<[f64; 7]>::as_slice))
     }
 }
 

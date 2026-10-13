@@ -6,10 +6,10 @@ use std::rc::Rc;
 
 use rquickjs::{Ctx, Exception, IntoJs, Result as JsResult, Value};
 
-use inca_gpui::{AttributeValue, NodeId, TreeError, VirtualNode, style_warning};
+use inca_gpui::{AttributeValue, NodeId, VirtualNode, style_warning};
 
 use super::Natives;
-use super::convert::{JsNodeId, throw_tree_error};
+use super::convert::{JsNodeId, existing_node, or_null, throw_tree_error};
 use super::host::Host;
 
 /// The retained tree itself: allocating, attaching, and describing nodes,
@@ -102,10 +102,7 @@ fn get_attribute<'js>(
     move |ctx, JsNodeId(node_id), key| {
         let key = canonical_attribute_key(key);
         let host = host.borrow();
-        let node = host
-            .tree
-            .get(node_id)
-            .ok_or_else(|| throw_tree_error(&ctx, TreeError::NodeNotFound(node_id)))?;
+        let node = existing_node(&ctx, &host.tree, node_id)?;
         attribute_value_to_js(&ctx, node.attributes().get(&key))
     }
 }
@@ -242,12 +239,14 @@ fn attribute_value_to_js<'js>(
     ctx: &Ctx<'js>,
     value: Option<&AttributeValue>,
 ) -> JsResult<Value<'js>> {
-    match value {
-        None => Ok(Value::new_null(ctx.clone())),
-        Some(AttributeValue::String(s)) => s.as_str().into_js(ctx),
-        Some(AttributeValue::Number(n)) => n.into_js(ctx),
-        Some(AttributeValue::Bool(b)) => b.into_js(ctx),
-    }
+    let value = value
+        .map(|value| match value {
+            AttributeValue::String(s) => s.as_str().into_js(ctx),
+            AttributeValue::Number(n) => n.into_js(ctx),
+            AttributeValue::Bool(b) => b.into_js(ctx),
+        })
+        .transpose()?;
+    or_null(ctx, value)
 }
 
 #[cfg(test)]
