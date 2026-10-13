@@ -41,7 +41,7 @@ fn set_mouse_fields(event_object: &Object, mouse: &MousePayload) -> JsResult<()>
         Some(id) => event_object.set("relatedTarget", id)?,
         None => event_object.set("relatedTarget", Null)?,
     }
-    // Identical to clientX/clientY today — nothing here scrolls the page
+    // Identical to clientX/clientY today. Nothing here scrolls the page
     // itself, which is the only thing that would tell them apart.
     event_object.set("pageX", mouse.client_x)?;
     event_object.set("pageY", mouse.client_y)?;

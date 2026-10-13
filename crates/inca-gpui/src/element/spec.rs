@@ -9,10 +9,10 @@ use crate::tree::{AttributeValue, NodeId, VirtualNode, VirtualTree};
 /// Two kinds exist, chosen by the `"text"` tag name.
 ///
 /// Text is deliberately never allowed as a bare string child mixed into a
-/// container's children — it's always its own dedicated node with a
+/// container's children. It's always its own dedicated node with a
 /// stable id. That keeps every rendered text run addressable by [`NodeId`],
 /// which later work (text selection, hit-testing, per-run event handling)
-/// will need — a container that could also hold ad-hoc string children
+/// will need. A container that could also hold ad-hoc string children
 /// would make some rendered text invisible to that addressing.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ElementTag {
@@ -51,7 +51,7 @@ pub enum FlexDirectionSpec {
 }
 
 /// `gpui`-independent mirror of the common subset of `gpui`'s `AlignItems`
-/// and `JustifyContent` (`= AlignContent`) enums — the variants both share
+/// and `JustifyContent` (`= AlignContent`) enums: the variants both share
 /// and that this layer supports.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AlignSpec {
@@ -90,7 +90,7 @@ impl<T> Default for EdgesSpec<T> {
 }
 
 /// A plain-data, `gpui`-independent style description, built from a
-/// [`VirtualNode`](crate::tree::VirtualNode)'s `style_props` — see
+/// [`VirtualNode`](crate::tree::VirtualNode)'s `style_props`. See
 /// `style_spec_from_props`'s match arms for the exact recognized keys.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct StyleSpec {
@@ -111,7 +111,7 @@ pub struct StyleSpec {
     /// Uniform corner radius (px) applied to all four corners.
     pub corner_radius: Option<f64>,
     /// `0xRRGGBB`. Cascades to descendant text, like `gpui`'s own
-    /// `.text_color()` — text leaves carry no style of their own.
+    /// `.text_color()`. Text leaves carry no style of their own.
     pub text_color: Option<u32>,
     pub text_size: Option<f64>,
     pub overflow_x: Option<OverflowSpec>,

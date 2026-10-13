@@ -5,8 +5,8 @@
 //!
 //! `VirtualTree` owns every `VirtualNode` and hands JS a [`NodeId`] for each.
 //!
-//! Two invariants the render path relies on: a node has at most one parent —
-//! attaching it somewhere new detaches it from where it was — and an
+//! Two invariants the render path relies on: a node has at most one parent
+//! (attaching it somewhere new detaches it from where it was), and an
 //! attachment that would make a node its own ancestor is refused, so a walk
 //! down the tree always terminates.
 //!
@@ -83,7 +83,7 @@ pub fn is_disabled_button(node: &VirtualNode) -> bool {
     node.tag_name() == "button" && node.attributes().contains_key("disabled")
 }
 
-/// A single retained node. Always accessed through a [`VirtualTree`] — there
+/// A single retained node. Always accessed through a [`VirtualTree`]. There
 /// is no way to construct one standalone, since its [`id`](VirtualNode::id)
 /// is only meaningful within the tree that allocated it.
 #[derive(Debug, Clone)]
@@ -143,7 +143,7 @@ impl VirtualNode {
 
 /// How a [`VirtualTree`] operation fails. Returned as a `Result` rather than
 /// panicking so a caller further up the stack can turn it into whatever
-/// handling it needs — at the JS boundary, a catchable exception.
+/// handling it needs (at the JS boundary, a catchable exception).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TreeError {
     /// An id that doesn't, or no longer does, resolve to a node.
@@ -171,8 +171,8 @@ impl fmt::Display for TreeError {
 
 impl std::error::Error for TreeError {}
 
-/// Owns the whole retained tree. One instance per `QuickJS` engine/document —
-/// ids from one `VirtualTree` are meaningless in another.
+/// Owns the whole retained tree. One instance per `QuickJS` engine/document.
+/// Ids from one `VirtualTree` are meaningless in another.
 #[derive(Debug, Default)]
 pub struct VirtualTree {
     nodes: HashMap<NodeId, VirtualNode>,
@@ -187,7 +187,7 @@ impl VirtualTree {
 
     /// Allocates a new node and returns its id. Ids are assigned
     /// sequentially starting at 0 and are never reused, even after the node
-    /// they named is destroyed — a stale id names nothing rather than
+    /// they named is destroyed, so a stale id names nothing rather than
     /// something else.
     ///
     /// # Errors
@@ -225,7 +225,7 @@ impl VirtualTree {
 
     /// Inserts `child_id` into `parent_id`'s children, before `anchor_id` if
     /// given, or at the end if `None`. `child_id` is detached from whatever
-    /// it was attached to first, so this both attaches and moves — a node
+    /// it was attached to first, so this both attaches and moves. A node
     /// never has two parents.
     ///
     /// If `anchor_id` is `child_id` itself and the child is already in
@@ -233,7 +233,7 @@ impl VirtualTree {
     ///
     /// If `anchor_id` names a real node that isn't (or is no longer) among
     /// `parent_id`'s children, this falls back to appending at the end, same
-    /// as an absent `remove_child` target — only a truly
+    /// as an absent `remove_child` target. Only a truly
     /// unknown/never-allocated `anchor_id` is an error.
     ///
     /// # Errors
@@ -339,7 +339,7 @@ impl VirtualTree {
 
     /// Unlinks `child_id` from `parent_id`'s children, if present. `child_id`
     /// not being (or no longer being) a child of `parent_id` is a no-op, not
-    /// an error — only an unknown `parent_id` is. The child node stays alive
+    /// an error. Only an unknown `parent_id` is. The child node stays alive
     /// and keeps its own children; [`destroy_node`](Self::destroy_node) is
     /// what frees.
     ///

@@ -22,12 +22,12 @@ The window carries an application menu with a `Quit` item, bound to `cmd-q`
 on macOS and `ctrl-q` elsewhere. Only macOS draws a menu bar for it.
 
 Run with no arguments, it looks for `bundle.js` beside its own executable,
-then beside it in `../Resources/` (a macOS `.app`'s layout) — the search a
+then beside it in `../Resources/` (a macOS `.app`'s layout), the search a
 packaged app's launcher relies on, since a double-clicked `.app` gets no
 argv and an unpredictable working directory.
 
 It loads that one entry file, resolving any `import` in it against its
-own directory on disk — no knowledge of Vite, dev servers, or HMR, and
+own directory on disk, with no knowledge of Vite, dev servers, or HMR, and
 never watches for changes. Rebuild the bundle and re-run it to pick up
 an edit.
 

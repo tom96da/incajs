@@ -19,7 +19,7 @@ use serde_json::Value;
 use inca_jsenv::{Engine, EngineError, compile_async_function};
 
 /// Called with `(method, params)` whenever JS calls
-/// `__inca_dev__.send(method, paramsJson)` — `params` already parsed out of
+/// `__inca_dev__.send(method, paramsJson)`, with `params` already parsed out of
 /// `paramsJson`. What happens with it (writing a line to some transport,
 /// say) is entirely up to the caller.
 pub(crate) type DevSend = Rc<dyn Fn(&str, Value)>;

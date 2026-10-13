@@ -11,7 +11,7 @@ fn last_event_id(engine: &Engine) -> u64 {
 }
 
 /// `on_hover` covers both `mouseenter` and `mouseleave` with one GPUI
-/// registration — moving the pointer in, then out, must dispatch each
+/// registration. Moving the pointer in, then out, must dispatch each
 /// exactly once, in order.
 #[gpui::test]
 fn hover_dispatches_enter_then_leave(cx: &mut TestAppContext) {
@@ -47,7 +47,7 @@ fn hover_dispatches_enter_then_leave(cx: &mut TestAppContext) {
 
     // The window starts with the mouse at its default position, which lands
     // inside this 100x100 node, so mounting alone already fired a real
-    // "mouseenter" — assert that before discarding it, so this test proves
+    // "mouseenter". Assert that before discarding it, so this test proves
     // the reset below is throwing away a real event, not a no-op.
     assert_ne!(
         engine
@@ -147,7 +147,7 @@ fn mouseenter_carries_the_mouse_fields(cx: &mut TestAppContext) {
 }
 
 /// A node listening only for `mouseleave` doesn't spuriously fire it on
-/// mount just because the pointer already sits over it — the hover state
+/// mount just because the pointer already sits over it. The hover state
 /// starts empty, so the mount-time check can only ever produce an enter
 /// transition, never a leave one, regardless of which names JS registered.
 #[gpui::test]

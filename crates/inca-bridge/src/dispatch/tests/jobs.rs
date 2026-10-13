@@ -21,7 +21,7 @@ fn record_layout_stores_and_clear_layout_empties() {
 }
 
 /// `inca-gpui` only ever produces a `button` index in `0..=4`, but
-/// `update_held_buttons` takes a plain `u8` — a value outside that
+/// `update_held_buttons` takes a plain `u8`. A value outside that
 /// range must not panic, only fail to set any bit.
 #[test]
 fn an_out_of_range_button_does_not_panic() {

@@ -36,7 +36,7 @@ fn open_hosted(
 }
 
 /// Mounts a `div` under the session's root with a declared
-/// `width`/`height`, replacing any prior mount — simulates content
+/// `width`/`height`, replacing any prior mount, which simulates content
 /// becoming available after the window already opened.
 fn mount_content(app: &HostedApp, width: f32, height: f32) {
     let mut host = app.session.host.borrow_mut();
@@ -120,7 +120,7 @@ fn auto_resize_keeps_an_explicit_dimension_but_still_picks_up_the_other_from_con
         bounds_size(cx, window),
         (500.0, 150.0),
         "the configured width must win, but the never-configured height still \
-         comes from content — matching window_size's own per-dimension precedence"
+         comes from content, matching window_size's own per-dimension precedence"
     );
 }
 
@@ -327,7 +327,7 @@ fn auto_resize_treats_an_unusable_configured_dimension_as_not_ready(cx: &mut Tes
     cx.run_until_parked();
 
     // A configured width that no window could open at must not count
-    // as ready just because it's `Some(_)` — nothing usable exists yet.
+    // as ready just because it's `Some(_)`. Nothing usable exists yet.
     cx.update(|cx| {
         window
             .update(cx, |app, window, _| {

@@ -5,7 +5,7 @@
 
 [package]
 name = "inca-jsenv"
-description = "The QuickJS runtime bootstrap and host environment inca installs into it — the language plus what a script expects the host to provide."
+description = "The QuickJS runtime bootstrap and host environment inca installs into it: the language plus what a script expects the host to provide."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

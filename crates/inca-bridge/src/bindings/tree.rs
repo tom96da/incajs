@@ -12,10 +12,10 @@ use super::convert::{JsNodeId, throw_tree_error};
 use super::host::Host;
 
 /// The retained tree itself: allocating, attaching, and describing nodes,
-/// plus `destroyNode` — freeing a subtree is a tree operation first, even
+/// plus `destroyNode`. Freeing a subtree is a tree operation first, even
 /// though it also releases the listener/focus state that named its nodes.
 // Long from repeating one registration block per binding, not from
-// complexity — splitting it up further would just spread that same list
+// complexity. Splitting it up further would just spread that same list
 // across more functions.
 #[allow(clippy::too_many_lines)]
 pub(super) fn install_tree<'js>(

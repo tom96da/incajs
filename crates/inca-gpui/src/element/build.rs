@@ -188,7 +188,7 @@ where
 }
 
 /// Type-only stand-in for [`build_element_inner`]'s `dispatch` parameter
-/// when there's no dispatcher at all — [`build_element`] always passes
+/// when there's no dispatcher at all. [`build_element`] always passes
 /// `None`, so no method here is reachable, but a concrete type is still needed
 /// to name in that `None`.
 #[derive(Clone)]
@@ -259,7 +259,7 @@ impl EventSink for NoSink {
 }
 
 /// Recursively converts an [`ElementSpec`] into a real `gpui` [`AnyElement`],
-/// with no event wiring — see [`build_element_with_events`] for a version
+/// with no event wiring. See [`build_element_with_events`] for a version
 /// whose containers dispatch input events into JS.
 #[must_use]
 pub fn build_element(spec: &ElementSpec) -> AnyElement {

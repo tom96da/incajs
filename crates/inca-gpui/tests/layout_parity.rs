@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Layout-parity test for `inca_gpui::element`'s `VirtualTree` →
-//! `gpui` conversion: builds the same box structure two ways — directly
+//! `gpui` conversion: builds the same box structure two ways (directly
 //! with `gpui`'s own builder API, and through a
-//! `VirtualTree` via `render_tree` — and asserts the computed layout (sizes
+//! `VirtualTree` via `render_tree`) and asserts the computed layout (sizes
 //! and positions, not pixel content) matches. Modeled on
 //! `examples/gpui/hello_world.rs`'s shape (a bordered, centered column
 //! containing a text line and a row of six bordered squares), not a literal
 //! copy of it (that's a binary example, not importable, and its
 //! Tailwind-scale style values aren't guaranteed to equal particular pixel
-//! amounts) — this uses its own literal pixel values instead, applied to
+//! amounts), so this uses its own literal pixel values instead, applied to
 //! both sides identically.
 
 #![allow(clippy::unwrap_used)]
@@ -37,7 +37,7 @@ fn selectors() -> Vec<&'static str> {
 }
 
 /// A bordered, centered column containing a text line and a row of six
-/// bordered squares — built purely through the `VirtualTree`/`set_style`
+/// bordered squares, built purely through the `VirtualTree`/`set_style`
 /// API, no JS involved.
 fn build_tree() -> (VirtualTree, NodeId) {
     let mut tree = VirtualTree::new();
@@ -82,7 +82,7 @@ fn set_uniform_border(style: &mut gpui::StyleRefinement, width: f32) {
 }
 
 /// The same shape as [`build_tree`], expressed directly against `gpui`'s
-/// `StyleRefinement` — independent of the conversion under test.
+/// `StyleRefinement`, independent of the conversion under test.
 fn build_reference() -> AnyElement {
     let mut outer = div().debug_selector(|| OUTER.into());
     {

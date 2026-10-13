@@ -10,7 +10,7 @@ into a `QuickJS` realm so ordinary JavaScript can run in it. It also builds
 source text into an async function whose stack frames name its file. An
 inline source map in that text points the frames at the original source.
 
-`QuickJS` supplies the language — `Array`, `JSON`, `Promise`, `Math` and the
+`QuickJS` supplies the language: `Array`, `JSON`, `Promise`, `Math` and the
 rest of the ECMAScript intrinsics. It supplies nothing else: no `console`,
 no timers, no network, no filesystem. Those are the host's to provide, and
 this crate is where they live.
@@ -32,7 +32,7 @@ ctx.eval::<(), _>("console.log('ready', { count: 1 })")?;
 ## Module loading
 
 `Engine::builder().module_root(dir)` adds a directory `import`s resolve
-against — a bare specifier is searched for under each root, in the order
+against. A bare specifier is searched for under each root, in the order
 added, and a `./`/`../`-relative one resolves against the importing
 module's own path. `eval_module` declares and runs a module by name,
 driving its top-level evaluation (including a top-level `await`) to
@@ -86,7 +86,7 @@ pending on `ctx`, where `EngineError::capture` reads it.
 
 ## Scope
 
-This crate depends on `rquickjs` and nothing else — not on the renderer, not
-on any window or process. That is deliberate: the runtime and what it
-installs are replaceable, either by a third-party implementation or by an
+This crate depends on `rquickjs`, `base64` and `unicode-width`. The renderer,
+windows and processes are outside it. That is deliberate: the runtime and what
+it installs are replaceable, either by a third-party implementation or by an
 application's own, without any of that reaching the code that draws a UI.

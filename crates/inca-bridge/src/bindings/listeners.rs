@@ -116,7 +116,7 @@ impl EventListeners {
     }
 
     /// Drops every registration on `node_id` and returns the callback ids
-    /// that were there, in no particular order — the JS side needs them to
+    /// that were there, in no particular order. The JS side needs them to
     /// drop the functions they name.
     pub fn release(&mut self, node_id: NodeId) -> Vec<u32> {
         self.by_node

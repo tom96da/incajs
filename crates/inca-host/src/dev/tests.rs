@@ -31,7 +31,7 @@ const RECEIVES_DEV_EVENTS: &str = r"
     };
 ";
 
-/// A real file on disk, torn down with the test — `reload` (unlike
+/// A real file on disk, torn down with the test. `reload` (unlike
 /// `start`'s test call sites elsewhere) reads its entry back off disk.
 struct ScratchEntry(std::path::PathBuf);
 

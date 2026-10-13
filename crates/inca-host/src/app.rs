@@ -1,8 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Loads an entry module — resolving its own `import`s against sibling
-//! files on disk — and opens a GPUI window on whatever tree it mounts.
+//! Loads an entry module (resolving its own `import`s against sibling
+//! files on disk) and opens a GPUI window on whatever tree it mounts.
 //! Production evaluates the entry to completion before the window opens. The
 //! host starts it as a [`Loading`] for the development window, and
 //! [`crate::dev`] polls it until it settles.
@@ -55,7 +55,7 @@ use crate::menu;
 /// window fits its content.
 ///
 /// `root` is the empty container the [`Host`] allocates for the bundle to
-/// `mount()` against — the mounted app becomes `root`'s first (and only)
+/// `mount()` against. The mounted app becomes `root`'s first (and only)
 /// child, never `root` itself, so `width`/`height` are read from that
 /// child's style, not `root`'s.
 ///
@@ -69,7 +69,7 @@ pub(crate) fn content_window_size(host: &Host, root: NodeId) -> (Option<f32>, Op
         .map(VirtualNode::style_props);
 
     // A window dimension in px is always far within f32's
-    // precision range — no meaningful truncation risk here.
+    // precision range. No meaningful truncation risk here.
     #[allow(clippy::cast_possible_truncation)]
     let dimension = |key: &str| {
         style
@@ -111,7 +111,7 @@ pub(crate) struct Session {
 }
 
 impl Session {
-    /// The empty container the entry mounts against — [`Host::root`]'s own
+    /// The empty container the entry mounts against: [`Host::root`]'s own
     /// value, fixed once allocated.
     fn root(&self) -> NodeId {
         self.host.borrow().root
@@ -171,14 +171,14 @@ impl Session {
         }
     }
 
-    /// Evaluates `source` — the entry's own already-read content — into a
+    /// Evaluates `source` (the entry's own already-read content) into a
     /// fresh engine, then wires up event dispatch. An `import` in `source`
     /// resolves against a sibling file next to `entry_path`.
     ///
     /// # Errors
     ///
     /// Returns the thrown value if the engine fails to start, the bindings
-    /// or `console` fail to install, or `source` throws while evaluating —
+    /// or `console` fail to install, or `source` throws while evaluating,
     /// including an unresolved `import` for a sibling file that isn't there,
     /// and a top-level `await` that is still pending once the queued jobs
     /// have run.
@@ -290,7 +290,7 @@ pub(crate) struct HostedApp {
     /// fallback chain.
     pub(crate) window_config: Option<config::WindowConfig>,
     /// Whether [`maybe_auto_resize_to_content`] has already resized the
-    /// window's width and its height — each fires once.
+    /// window's width and its height. Each fires once.
     pub(crate) auto_resized: Cell<(bool, bool)>,
 }
 
@@ -318,7 +318,7 @@ impl Render for HostedApp {
 /// dimension becomes usable after the window already opened. An app that
 /// mounts after the window opened (an entry still pending when the load
 /// timeout passed) has nothing mounted when [`open`] computes the initial
-/// size — this catches up once the app finishes mounting.
+/// size. This catches up once the app finishes mounting.
 ///
 /// A dimension the config fixes explicitly counts as ready right away. A
 /// dimension still waiting for content keeps the window's current size.
@@ -437,7 +437,7 @@ pub(crate) fn open(
 
     // A reactivity scheduler batches its first effects into a microtask, so
     // mounting leaves work queued that nothing else would come back for
-    // until the first input event — or never, in an app that takes none.
+    // until the first input event, or never, in an app that takes none.
     window
         .update(cx, |app, window, cx| {
             app.session.dispatcher.drain_jobs_and_refresh(window, cx);

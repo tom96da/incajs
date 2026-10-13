@@ -217,7 +217,7 @@ fn write_bigint(out: &mut String, value: &Value<'_>, mode: Mode) {
     put(out, mode, Style::Yellow, &text);
 }
 
-/// A symbol has no string coercion — `String(sym)` throws — so this reads the
+/// A symbol has no string coercion (`String(sym)` throws), so this reads the
 /// description the way `Symbol.prototype.toString` would render it.
 fn write_symbol(out: &mut String, value: &Value<'_>, mode: Mode) {
     let description = value

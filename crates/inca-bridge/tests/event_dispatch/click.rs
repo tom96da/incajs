@@ -15,7 +15,7 @@ fn build_clickable_tree() -> (Rc<RefCell<Host>>, NodeId) {
 }
 
 /// Unlike `install_click_counter`, defers the actual mutation to a
-/// microtask — the same way a real framework's reactivity scheduler
+/// microtask, the same way a real framework's reactivity scheduler
 /// (batched via `Promise.resolve().then(...)`)
 /// doesn't apply an effect synchronously within the event callback itself.
 fn install_deferred_click_counter(engine: &Engine) {
@@ -34,7 +34,7 @@ fn install_deferred_click_counter(engine: &Engine) {
 }
 
 /// Building the element tree (what happens on every re-render) must never
-/// touch the JS engine by itself — only an actual dispatched event may.
+/// touch the JS engine by itself. Only an actual dispatched event may.
 /// Plain `#[test]`: building an `AnyElement` needs no `gpui` App/Window.
 #[test]
 fn repeated_builds_with_no_event_never_touch_the_js_engine() {
@@ -146,8 +146,8 @@ fn a_listener_registered_after_the_first_render_still_fires(cx: &mut TestAppCont
 }
 
 /// The host holds a list of callbacks per `(node, event)` and dispatches to
-/// all of it. `packages/core` registers one — a
-/// framework adapter composes its own handlers first — so nothing above this
+/// all of it. `packages/core` registers one (a
+/// framework adapter composes its own handlers first), so nothing above this
 /// layer exercises the list.
 #[gpui::test]
 fn a_click_reaches_every_callback_registered_for_it(cx: &mut TestAppContext) {

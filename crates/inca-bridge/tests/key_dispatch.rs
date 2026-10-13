@@ -3,7 +3,7 @@
 
 //! Integration tests for `"keydown"`/`"keyup"`: routing from GPUI's own key
 //! dispatch, through a real `FocusRegistry`, to the JS callbacks registered
-//! for it — see `KeyableRoot::render` below.
+//! for it; see `KeyableRoot::render` below.
 
 #![allow(clippy::unwrap_used)]
 

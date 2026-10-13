@@ -297,7 +297,7 @@ fn a_queued_reload_is_answered_when_the_first_load_settles_in_time(cx: &mut Test
 
 /// A directory holding just this test's entry and its own `inca.json`,
 /// unlike [`ScratchEntry`] whose files all share the OS temp root as
-/// their `config::read` parent — fine for entries with no config, but
+/// their `config::read` parent. That is fine for entries with no config, but
 /// not for a config a test needs isolated to itself.
 struct ScratchApp(std::path::PathBuf);
 
@@ -332,7 +332,7 @@ fn a_reload_resets_a_fixed_size_windows_auto_resize_latch(cx: &mut TestAppContex
     let (window, sender) = serve_idle(cx, &mounts_a_div(300, 150), entry.path(), &capturing);
     assert_eq!(bounds_of(cx, window), (300.0, 150.0));
 
-    // A relay latches auto_resized — same size, so no visible change,
+    // A relay latches auto_resized (same size, so no visible change),
     // but this is the state a reload has to reset.
     notify(&sender, "testEvent");
     request(&sender, 1, "reload");

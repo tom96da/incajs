@@ -5,7 +5,7 @@
 //! answers on stdout. A `reload` evaluates the new entry as a pending load
 //! that swaps into the window when it settles. Any other notification goes
 //! to the loading app while a load is pending, and to the window's app
-//! otherwise, as `__inca_dev__.receive(method, paramsJson)` — see
+//! otherwise, as `__inca_dev__.receive(method, paramsJson)`; see
 //! [`wire`] for the wire format this speaks.
 //!
 //! The first entry starts as a [`Loading`] and the window opens once its
@@ -46,8 +46,8 @@ pub(crate) trait Writer {
     fn close(&self) {}
 }
 
-/// Shared so the same writer reaches every place that reports something —
-/// `respond`, a reload's failure, the dispatcher's reporter — without each
+/// Shared so the same writer reaches every place that reports something
+/// (`respond`, a reload's failure, the dispatcher's reporter) without each
 /// owning a copy of the underlying channel or thread.
 pub(crate) type SharedWriter = Rc<dyn Writer>;
 
@@ -92,7 +92,7 @@ impl Writer for StdoutWriter {
 }
 
 /// Encodes and writes one protocol line. A message that fails to encode
-/// never reaches `writer` — there is nothing sound to send instead.
+/// never reaches `writer`. There is nothing sound to send instead.
 pub(crate) fn send(writer: &dyn Writer, message: &Outgoing) {
     match wire::encode(message) {
         Ok(line) => writer.write_line(line),
@@ -215,7 +215,7 @@ fn params_json(params: Option<Value>) -> String {
 
 /// Relays an unrecognized notification (no `id`) into the window's app via
 /// [`crate::dev::call_dev_receive`], then drains the job queue and
-/// refreshes the window as a swap does — a callback may have queued
+/// refreshes the window as a swap does. A callback may have queued
 /// reactivity work or thrown.
 fn relay_to_js(
     window: &WindowHandle<HostedApp>,

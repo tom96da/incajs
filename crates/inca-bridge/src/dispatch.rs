@@ -20,7 +20,7 @@
 //! belongs to. `addEventListener` returns the id the host allocated, and the JS
 //! caller stores the function at `globalThis.__inca_callbacks__[callbackId]`.
 //! The walk of an event looks the real function up fresh inside one
-//! `Engine::with` call and drops it before that call returns — it never
+//! `Engine::with` call and drops it before that call returns. It never
 //! crosses into Rust-held state.
 
 use std::cell::{Cell, RefCell};
@@ -51,7 +51,7 @@ pub struct EventDispatcher {
     host: Rc<RefCell<Host>>,
     reporter: ErrorReporter,
     /// Every button currently held, as a `mousedown`/`mouseup`/`mousemove`
-    /// payload's `buttons` bitmask — GPUI's own mouse events carry only the
+    /// payload's `buttons` bitmask. GPUI's own mouse events carry only the
     /// one button each is about, not which others are held alongside it.
     held_buttons: Rc<Cell<u8>>,
     // Position of the previous raw pointer move, shared by every window using
@@ -126,7 +126,7 @@ impl EventDispatcher {
     }
 
     /// Updates [`Self::held_buttons`] for `"mousedown"`/`"mouseup"` and
-    /// returns the current value — `"mousemove"`/`"wheel"` only read it.
+    /// returns the current value. `"mousemove"`/`"wheel"` only read it.
     /// `button` is `MousePayload`'s own field, a public part of
     /// `inca-gpui`'s API, so an out-of-range value (only 0..=4 are ever
     /// produced by this crate) is handled: [`buttons_mask`] maps it to 0.

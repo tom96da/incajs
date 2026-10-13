@@ -3,7 +3,7 @@
 
 //! Integration tests for `inca_bridge::focus`: `focusNode`/`blurNode`
 //! (`crate::bindings`) through to the `"focus"`/`"blur"` dispatched into
-//! JS, via a real `FocusRegistry::apply_pending` running once per frame —
+//! JS, via a real `FocusRegistry::apply_pending` running once per frame;
 //! see `FocusableRoot::render` below.
 
 #![allow(clippy::unwrap_used)]
@@ -31,7 +31,7 @@ impl Render for FocusableRoot {
 }
 
 /// Two sibling nodes, both listening for `"focus"`/`"blur"` via the same
-/// callback id, wrapped in a common parent — the root `FocusableRoot`
+/// callback id, wrapped in a common parent, the root `FocusableRoot`
 /// renders.
 fn build_focusable_pair() -> (Rc<RefCell<Host>>, NodeId, NodeId) {
     let host = Rc::new(RefCell::new(Host::default()));
@@ -218,7 +218,7 @@ fn blur_node_with_nothing_focused_reports_nothing(cx: &mut TestAppContext) {
     );
 }
 
-/// Destroying a focused node reports no `"blur"` — its listeners are
+/// Destroying a focused node reports no `"blur"`. Its listeners are
 /// already gone by the time `destroyNode` returns, the same as any other
 /// event kind's registrations on a destroyed node.
 #[gpui::test]

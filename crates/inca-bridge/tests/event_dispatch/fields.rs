@@ -94,7 +94,7 @@ fn wheel_carries_the_delta_fields(cx: &mut TestAppContext) {
 }
 
 /// A mouse button held while scrolling still shows up in a `wheel`'s
-/// `buttons` — the `held_buttons` tracking `mousedown`/`mouseup` update is
+/// `buttons`. The `held_buttons` tracking `mousedown`/`mouseup` update is
 /// shared with every payload kind, not copied per kind.
 #[gpui::test]
 fn wheel_reports_a_button_held_from_an_earlier_mousedown(cx: &mut TestAppContext) {
@@ -129,7 +129,7 @@ fn wheel_reports_a_button_held_from_an_earlier_mousedown(cx: &mut TestAppContext
     assert_eq!(buttons, 0b0_0100);
 }
 
-/// A `wheel` on a node nothing listens for must not call into JS — same
+/// A `wheel` on a node nothing listens for must not call into JS. It is the same
 /// guarantee `no_listener_registered_reports_nothing` gives `click`.
 #[gpui::test]
 fn wheel_with_no_listener_reports_nothing(cx: &mut TestAppContext) {

@@ -17,7 +17,7 @@ fn length_from_spec(spec: LengthSpec) -> Length {
 
 /// Applies a [`StyleSpec`] onto a real `gpui` [`StyleRefinement`], by direct
 /// field assignment rather than `gpui`'s named Tailwind-scale builder
-/// methods (`.gap_3()`, `.size_8()`, ...) — those only cover fixed steps,
+/// methods (`.gap_3()`, `.size_8()`, ...). Those only cover fixed steps,
 /// not the arbitrary numbers this spec carries.
 // f64 -> f32 for `gpui`'s `Pixels` type: real UI dimensions never carry
 // enough precision or magnitude for this narrowing to matter.

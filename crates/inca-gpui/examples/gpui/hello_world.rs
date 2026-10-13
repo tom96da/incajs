@@ -3,7 +3,7 @@
 
 //! A copy of gpui's own `examples/hello_world.rs`, built through inca's
 //! own Cargo workspace to check its `gpui`/`gpui_platform` setup renders
-//! correctly — not an inca demo (uses none of it). Needs a human to look
+//! correctly. It is a plain gpui demo that uses none of inca. Needs a human to look
 //! at it; if it doesn't render, set `RUST_LOG=warn` to surface gpui's
 //! diagnostics.
 

@@ -27,7 +27,7 @@ fn the_report_reads_the_config_beside_the_entry() {
 }
 
 /// A directory under the OS temp root, unique per test invocation, torn
-/// down on drop — this crate has no `tempfile` dependency to reach for.
+/// down on drop. This crate has no `tempfile` dependency to reach for.
 struct ScratchDir(PathBuf);
 
 impl ScratchDir {

@@ -1,8 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Persists GPUI's per-node focus state across frames — `FocusHandle`s
-//! don't come from the retained tree, so nothing else keeps them alive —
+//! Persists GPUI's per-node focus state across frames (`FocusHandle`s
+//! don't come from the retained tree, so nothing else keeps them alive)
 //! and turns GPUI's own focus changes into the four focus events.
 //!
 //! A focus or blur request arrives outside any GPUI render or dispatch, with
@@ -12,7 +12,7 @@
 //!
 //! Dispatching is done by comparing which node is focused now against
 //! which was focused last frame, rather than GPUI's own
-//! `Window::on_focus_in`/`on_focus_out` — those return a `Subscription`
+//! `Window::on_focus_in`/`on_focus_out`. Those return a `Subscription`
 //! whose activation is deferred (`cx.defer`) to after the current update
 //! finishes, so one registered in the same frame focus moves to it would
 //! miss that very transition. A plain per-frame diff has no such gap.
@@ -47,7 +47,7 @@ impl FocusTransition {
     /// Dispatches `blur`, `focusout`, `focus` and `focusin`, in that order,
     /// for whichever of `blurred`/`focused` this transition carries. Each
     /// carries the other node as `relatedTarget`. Call after releasing
-    /// whatever borrow produced this transition — see
+    /// whatever borrow produced this transition. See
     /// [`FocusRegistry::apply_pending`].
     pub fn dispatch(
         &self,
@@ -87,7 +87,7 @@ enum PendingFocus {
 
 /// `NodeId` → its persistent `FocusHandle`, the node focused as of the last
 /// frame this was checked, and every pending request left by a binding
-/// that had no live `Window`/`App`, oldest first — see the module doc for
+/// that had no live `Window`/`App`, oldest first. See the module doc for
 /// why. Two requests queued before the next frame both apply, in order.
 #[derive(Debug, Default)]
 pub struct FocusRegistry {
@@ -211,8 +211,8 @@ impl FocusRegistry {
         }
     }
 
-    /// The handle to `.track_focus(...)` `node_id` with, if it has one —
-    /// backs [`EventSink::focus_handle`] for `EventDispatcher`.
+    /// The handle to `.track_focus(...)` `node_id` with, if it has one.
+    /// Backs [`EventSink::focus_handle`] for `EventDispatcher`.
     #[must_use]
     pub fn handle(&self, node_id: NodeId) -> Option<FocusHandle> {
         self.handles.get(&node_id).cloned()
@@ -353,7 +353,7 @@ impl FocusRegistry {
     }
 
     /// Applies every queued request in order and reports each transition
-    /// it produced — called once per frame, before the element tree that
+    /// it produced. Call once per frame, before the element tree that
     /// needs the resulting `track_focus` wiring is built.
     ///
     /// Returns the transitions rather than dispatching them directly: the
@@ -405,7 +405,7 @@ impl FocusRegistry {
         }
         let pending = std::mem::take(&mut self.pending);
         if pending.is_empty() {
-            // Nothing queued this frame doesn't mean focus didn't move —
+            // Nothing queued this frame doesn't mean focus didn't move:
             // GPUI's own click-to-focus moves it without ever going
             // through `request_focus`.
             transitions.extend(self.sync(window, cx));
@@ -486,7 +486,7 @@ impl FocusRegistry {
         self.reveal.retain(|&id| id != node_id);
         self.retry.retain(|&id| id != node_id);
         if self.focused == Some(node_id) {
-            // The node is gone — nothing left to dispatch a "blur" to.
+            // The node is gone: nothing left to dispatch a "blur" to.
             self.focused = None;
         }
     }

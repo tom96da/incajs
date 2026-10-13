@@ -116,7 +116,7 @@ pub enum Outgoing {
 }
 
 impl Outgoing {
-    /// A notification carrying an arbitrary `method` name — how a bundler
+    /// A notification carrying an arbitrary `method` name, which is how a bundler
     /// integration and the running app trade messages this host never reads
     /// itself.
     #[must_use]
@@ -221,7 +221,7 @@ struct RawCall {
 ///
 /// Returns the code and message to answer with for a line that isn't a JSON
 /// object, or is one this host can't read a call out of. Report it and keep
-/// reading — a line the host can't use is never a reason to exit.
+/// reading. A line the host can't use is never a reason to exit.
 pub fn decode(line: &str) -> Result<Incoming, (ErrorCode, String)> {
     if line.trim().is_empty() {
         return Ok(Incoming::Empty);

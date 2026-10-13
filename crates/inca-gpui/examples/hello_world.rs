@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Recreates the look of gpui's own `hello_world` example (see
-//! `examples/gpui/hello_world.rs`) — a bordered box, a text label, and a row
-//! of six colored squares — but built through inca-gpui's `element.rs`
+//! `examples/gpui/hello_world.rs`): a bordered box, a text label, and a row
+//! of six colored squares. It is built through inca-gpui's `element.rs`
 //! conversion instead of calling gpui's builder API directly. Builds the
 //! tree via the Rust `VirtualTree` API, not through `QuickJS`, to isolate the
 //! render conversion from the JS bridge.

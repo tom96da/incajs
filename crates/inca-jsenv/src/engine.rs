@@ -57,7 +57,7 @@ impl EngineError {
 
     /// JS can throw any value. An `Error` gives up a name, a message and its
     /// frames; anything else is coerced to text, so a thrown object reads as
-    /// `[object Object]` — nothing here walks its shape.
+    /// `[object Object]`. Nothing here walks its shape.
     fn from_thrown(thrown: &Value<'_>) -> Self {
         let Some(object) = thrown.as_object().filter(|_| thrown.is_error()) else {
             return Self {
@@ -93,7 +93,7 @@ impl EngineError {
         &self.message
     }
 
-    /// The frames behind it, or `None` — `QuickJS` records them only for an
+    /// The frames behind it, or `None`: `QuickJS` records them only for an
     /// `Error`, and only the frames: the message is separate. A frame
     /// in a file with a source map reads as its original position.
     #[must_use]
@@ -167,7 +167,7 @@ impl Engine {
         Self::builder().build()
     }
 
-    /// Starts building an [`Engine`] with one or more module roots — see
+    /// Starts building an [`Engine`] with one or more module roots. See
     /// [`EngineBuilder`].
     #[must_use]
     pub fn builder() -> EngineBuilder {
@@ -267,7 +267,7 @@ impl Engine {
     }
 
     /// Runs `f` with access to this engine's [`Ctx`], for operations `eval`
-    /// doesn't cover — such as registering native functions on the global
+    /// doesn't cover, such as registering native functions on the global
     /// object.
     pub fn with<F, R>(&self, f: F) -> R
     where
@@ -280,7 +280,7 @@ impl Engine {
     /// its top-level evaluation to completion before returning.
     ///
     /// An unresolved `import` in `source` resolves against this engine's
-    /// module roots (see [`EngineBuilder::module_root`]) — against nothing,
+    /// module roots (see [`EngineBuilder::module_root`]), or against nothing
     /// if there are none, so `source` then has to be fully self-contained.
     /// `name` also doubles as the base a relative `import` in `source`
     /// resolves against, so pass the source's real path on disk if it has
@@ -289,7 +289,7 @@ impl Engine {
     /// A module's own completion value is always `undefined` per spec,
     /// so unlike [`eval`](Self::eval) there's nothing meaningful to convert
     /// to a caller-chosen type; state comes back out the same way a plain
-    /// script's does — the module's top-level code writes to `globalThis`,
+    /// script's does: the module's top-level code writes to `globalThis`,
     /// and a separate `eval` call reads it back afterward.
     ///
     /// This is [`start_module`](Self::start_module) followed by one
@@ -393,7 +393,7 @@ pub struct PendingModule {
 /// Builds an [`Engine`], configuring where its `import`s resolve against.
 ///
 /// [`Engine::new`] is [`Engine::builder().build()`](Self::build) with no
-/// module root — every `import` in evaluated source is then unresolved.
+/// module root. Every `import` in evaluated source is then unresolved.
 #[derive(Default)]
 pub struct EngineBuilder {
     module_roots: Vec<PathBuf>,
