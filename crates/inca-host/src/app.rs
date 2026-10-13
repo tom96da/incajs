@@ -32,7 +32,7 @@ use gpui::{
 use gpui_platform::application;
 
 use inca_bridge::bindings::install;
-use inca_bridge::{ErrorReporter, EventDispatcher, FocusTransition, Host, stderr_reporter};
+use inca_bridge::{ErrorReporter, EventDispatcher, Host, stderr_reporter};
 use inca_gpui::{
     AttributeValue, EventSink, NodeId, NodeLayout, VirtualNode, render_tree_with_events,
 };
@@ -349,16 +349,7 @@ pub(crate) struct HostedApp {
 impl Render for HostedApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let session = &self.session;
-        session.dispatcher.sync_modifiers(window, false);
-        let transitions = {
-            let host = &mut *session.host.borrow_mut();
-            host.focus.apply_pending(&host.tree, window, cx)
-        };
-        for transition in &transitions {
-            transition.dispatch(&session.dispatcher, window, cx);
-        }
-        session.host.borrow_mut().reveal_focus(window);
-        session.dispatcher.fire_scrolls(window, cx);
+        session.dispatcher.begin_frame(window, cx);
         let host = session.host.borrow();
         let element = render_tree_with_events(&host.tree, host.root, &session.dispatcher)
             .unwrap_or_else(|| div().into_any_element());
@@ -481,24 +472,8 @@ pub(crate) fn open(
                     // The focused node loses `focus` with the window and gets
                     // it back with the window.
                     cx.observe_window_activation(window, |app: &mut HostedApp, window, cx| {
-                        app.session.dispatcher.sync_modifiers(window, true);
                         let active = window.is_window_active();
-                        if !active {
-                            inca_gpui::clear_presses(cx);
-                        }
-                        app.session
-                            .host
-                            .borrow_mut()
-                            .focus
-                            .set_window_blurred(!active);
-                        let focused = app.session.host.borrow().focus.focused_node(window, cx);
-                        if let Some(node) = focused {
-                            FocusTransition::window_activation(node, active).dispatch(
-                                &app.session.dispatcher,
-                                window,
-                                cx,
-                            );
-                        }
+                        app.session.dispatcher.window_activated(active, window, cx);
                     })
                     .detach();
                     HostedApp {

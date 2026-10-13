@@ -24,13 +24,7 @@ struct FocusableRoot {
 
 impl Render for FocusableRoot {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let transitions = {
-            let host = &mut *self.host.borrow_mut();
-            host.focus.apply_pending(&host.tree, window, cx)
-        };
-        for transition in &transitions {
-            transition.dispatch(&self.dispatcher, window, cx);
-        }
+        self.dispatcher.begin_frame(window, cx);
         let host = self.host.borrow();
         render_tree_with_events(&host.tree, self.node, &self.dispatcher).unwrap()
     }

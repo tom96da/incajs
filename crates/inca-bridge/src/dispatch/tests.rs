@@ -12,6 +12,7 @@ mod base_fields;
 mod click;
 mod dispatch_event;
 mod engine_entry;
+mod frame;
 mod jobs;
 mod movement;
 mod targets;

@@ -25,8 +25,7 @@ struct Root {
 
 impl Render for Root {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.host.borrow_mut().reveal_focus(window);
-        self.dispatcher.fire_scrolls(window, cx);
+        self.dispatcher.begin_frame(window, cx);
         let host = self.host.borrow();
         let element = render_tree_with_events(&host.tree, 0, &self.dispatcher).unwrap();
         // The walk records only the children of node 0, which is 100x100.

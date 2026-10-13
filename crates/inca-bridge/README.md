@@ -17,7 +17,9 @@ virtual tree (`inca-gpui`'s `VirtualTree`):
   whichever JS callbacks are registered for it, via
   `globalThis.__inca_callbacks__`, with one event object passed along the
   path of its target. It implements `inca-gpui`'s `EventSink` trait so the
-  render layer never has to depend on `QuickJS` itself.
+  render layer never has to depend on `QuickJS` itself. A window calls
+  `EventDispatcher::begin_frame` first in its render and
+  `EventDispatcher::window_activated` when it gains or loses focus.
 - `focus` re-exports `inca-gpui`'s `focus` module: `FocusRegistry` keeps a
   `gpui::FocusHandle` per node and dispatches `"focus"`/`"blur"` when the
   focused node changes.

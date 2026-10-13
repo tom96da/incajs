@@ -36,6 +36,7 @@ use inca_jsenv::{Engine, EngineError};
 
 use crate::bindings::Host;
 use crate::event::{self, Walk};
+use crate::focus::FocusTransition;
 
 mod sink;
 
@@ -383,6 +384,38 @@ impl EventDispatcher {
             self.drain_observed(window);
         }
         canceled
+    }
+
+    /// Runs the work a window owes before it draws a frame: syncs the
+    /// modifier keys, applies a requested focus and fires the resulting
+    /// `focus`/`blur` events, reveals the focused node and fires pending
+    /// `scroll` events. Call it first in the window's render.
+    pub fn begin_frame(&self, window: &mut Window, cx: &mut App) {
+        self.sync_modifiers(window, false);
+        let transitions = {
+            let host = &mut *self.host.borrow_mut();
+            host.focus.apply_pending(&host.tree, window, cx)
+        };
+        for transition in &transitions {
+            transition.dispatch(self, window, cx);
+        }
+        self.host.borrow_mut().reveal_focus(window);
+        self.fire_scrolls(window, cx);
+    }
+
+    /// Handles the window gaining (`active` true) or losing focus. The
+    /// modifier keys are re-read, a lost window clears the held presses, and
+    /// the focused node receives `focus` or `blur` while keeping its focus.
+    pub fn window_activated(&self, active: bool, window: &mut Window, cx: &mut App) {
+        self.sync_modifiers(window, true);
+        if !active {
+            inca_gpui::clear_presses(cx);
+        }
+        self.host.borrow_mut().focus.set_window_blurred(!active);
+        let focused = self.host.borrow().focus.focused_node(window, cx);
+        if let Some(node) = focused {
+            FocusTransition::window_activation(node, active).dispatch(self, window, cx);
+        }
     }
 
     /// Fires `scroll` at each container whose offset changed since the last
