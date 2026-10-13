@@ -34,7 +34,7 @@ const BUNDLE_PATH: &str = concat!(
 #[test]
 fn compiled_inca_bundle_drives_the_real_virtual_tree() {
     let source = fs::read_to_string(BUNDLE_PATH).unwrap_or_else(|_| {
-        panic!("{BUNDLE_PATH} is missing — run `pnpm --filter incajs build` first")
+        panic!("{BUNDLE_PATH} is missing. run `pnpm --filter incajs build` first")
     });
     let dist_dir = Path::new(BUNDLE_PATH).parent().unwrap();
 

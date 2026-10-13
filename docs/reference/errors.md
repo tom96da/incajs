@@ -13,7 +13,7 @@ Every failure the CLI raises itself carries an `ERR_INCA_*` code, printed
 with the message:
 
 ```
-[inca] build failed (ERR_INCA_ENTRY_NOT_FOUND): no app entry found — check that …
+[inca] build failed (ERR_INCA_ENTRY_NOT_FOUND): no app entry found. check that …
 ```
 
 A failure with no code came from somewhere else — the bundler, the host,

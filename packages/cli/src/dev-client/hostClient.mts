@@ -172,7 +172,7 @@ export class HostClient {
         if (protocol !== HOST_PROTOCOL_VERSION) {
           onStderr(
             `inca-host speaks protocol ${String(protocol)}, this package was built for ` +
-              `${String(HOST_PROTOCOL_VERSION)} — stopping it rather than carrying on`,
+              `${String(HOST_PROTOCOL_VERSION)}. stopping it rather than carrying on`,
           );
           if (this.#child) void this.#kill(this.#child);
           return;

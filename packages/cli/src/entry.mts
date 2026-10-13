@@ -31,7 +31,7 @@ export async function resolveEntry(cwd: string): Promise<string> {
 
   throw new IncaError(
     "ERR_INCA_ENTRY_NOT_FOUND",
-    `no app entry found — check that ${path.join(cwd, "src/main.ts")} or ${appPath} exists`,
+    `no app entry found. check that ${path.join(cwd, "src/main.ts")} or ${appPath} exists`,
   );
 }
 

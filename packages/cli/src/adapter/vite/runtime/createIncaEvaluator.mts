@@ -27,7 +27,9 @@ class IncaEvaluator extends (ESModulesEvaluator as new () => ModuleEvaluator) {
   ): Promise<void> {
     const dev = globalThis.__inca_dev__;
     if (!dev?.compile) {
-      throw new Error("__inca_dev__.compile is not installed");
+      throw new Error(
+        "this code needs a host that compiles modules for the development protocol. start the app with `inca dev`.",
+      );
     }
     // Same parameter order as the stock evaluator.
     const keys: (keyof ModuleRunnerContext)[] = [

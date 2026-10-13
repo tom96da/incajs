@@ -16,6 +16,6 @@ export function resolveTestHostBin(): string {
   if (existsSync(debug)) return debug;
   if (existsSync(release)) return release;
   throw new Error(
-    `no inca-host binary found at ${debug} or ${release} — run \`cargo build -p inca-host\` first`,
+    `no inca-host binary found at ${debug} or ${release}. run \`cargo build -p inca-host\` first`,
   );
 }

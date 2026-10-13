@@ -28,7 +28,7 @@ fn bundles() -> &'static HashMap<String, String> {
         let dist = format!("{ROOT}/packages/core/dist");
         assert!(
             Path::new(&dist).exists(),
-            "missing build output: {dist} — run `pnpm -F incajs build` first"
+            "missing build output: {dist}. run `pnpm -F incajs build` first"
         );
 
         let out = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))

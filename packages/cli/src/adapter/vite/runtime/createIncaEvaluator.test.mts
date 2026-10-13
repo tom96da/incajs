@@ -112,7 +112,7 @@ describe("createIncaEvaluator", () => {
       globalThis.__inca_dev__ = dev;
       await expect(
         createIncaEvaluator().runInlinedModule(contextWith({}), "", module),
-      ).rejects.toThrow("__inca_dev__.compile is not installed");
+      ).rejects.toThrow("a host that compiles modules for the development protocol");
     }
   });
 });

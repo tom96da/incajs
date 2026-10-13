@@ -71,7 +71,7 @@ describe("resolveEntry", () => {
     const app = await makeApp();
 
     await expect(resolveEntry(app)).rejects.toThrow(
-      `no app entry found — check that ${path.join(app, "src/main.ts")} or ${path.join(app, "src/App.vue")} exists`,
+      `no app entry found. check that ${path.join(app, "src/main.ts")} or ${path.join(app, "src/App.vue")} exists`,
     );
   });
 });

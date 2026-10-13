@@ -79,7 +79,7 @@ async function resolveMetadata(
     return await resolveAppConfig(cwd);
   } catch (error) {
     if (!(error instanceof IncaError) || !UNNAMED.includes(error.code)) throw error;
-    log(stdout, `running unnamed — ${error.message}`, STAMPED);
+    log(stdout, `running unnamed. ${error.message}`, STAMPED);
     return undefined;
   }
 }
@@ -111,7 +111,7 @@ async function bundleExecutable(
     });
     return app.executablePath;
   } catch (error) {
-    log(stdout, `running unbundled — ${toFault(error).message}`, STAMPED);
+    log(stdout, `running unbundled. ${toFault(error).message}`, STAMPED);
     return undefined;
   }
 }
@@ -251,7 +251,7 @@ export async function dev(options: DevOptions): Promise<void> {
           exitedEarly = !ready;
           hostExit = { code, signal };
           // The window is gone, so there is nothing left to rebuild for.
-          log(stdout, "host exited — stopping", STAMPED);
+          log(stdout, "host exited. stopping", STAMPED);
           stop();
         },
         integrations,

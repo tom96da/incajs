@@ -160,13 +160,13 @@ export async function packageApp(options: PackageAppOptions = {}): Promise<Packa
   if (metadata.usedPackageJsonKey) {
     log(
       stdout,
-      `the "inca" key in package.json is deprecated — move these settings to inca.config.ts`,
+      `the "inca" key in package.json is deprecated. move these settings to inca.config.ts`,
     );
   }
   if (metadata.identifierIsDefault) {
     log(
       stdout,
-      `no "identifier" set in inca.config.ts — using generated identifier ${metadata.identifier}`,
+      `no "identifier" set in inca.config.ts. using generated identifier ${metadata.identifier}`,
     );
   }
 

@@ -31,13 +31,13 @@ export const UNSUPPORTED: readonly UnsupportedFeature[] = [
     code: "ERR_INCA_UNSUPPORTED_STYLE",
     name: "a <style> block",
     matches: (id) => id.includes("vue&type=style"),
-    hint: "the renderer applies no stylesheet — use a :style binding instead",
+    hint: "the renderer applies no stylesheet. use a :style binding instead",
   },
   {
     code: "ERR_INCA_UNSUPPORTED_STYLESHEET",
     name: "a stylesheet import",
     matches: (id) => STYLESHEET_RE.test(id),
-    hint: "the renderer applies no stylesheet — use a :style binding instead",
+    hint: "the renderer applies no stylesheet. use a :style binding instead",
   },
 ];
 

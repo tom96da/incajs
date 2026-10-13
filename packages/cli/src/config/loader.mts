@@ -89,7 +89,7 @@ function assertUsableProductName(productName: unknown): asserts productName is s
   if (typeof productName === "string" && namesADirectory(productName)) return;
   throw new IncaError(
     "ERR_INCA_PRODUCT_NAME_INVALID",
-    `${JSON.stringify(productName)} can't name a directory — set a "productName" in ` +
+    `${JSON.stringify(productName)} can't name a directory. set a "productName" in ` +
       `inca.config.ts with no leading or trailing space, and none of \`/\\:*?"<>|\``,
   );
 }

@@ -52,7 +52,7 @@ function checkJsPackagesAreBuilt(): void {
   ].filter((p) => !existsSync(p));
   if (missing.length > 0) {
     throw new Error(
-      `missing build output: ${missing.join(", ")} — run ` +
+      `missing build output: ${missing.join(", ")}. run ` +
         "`pnpm --filter incajs --filter @incajs/cli build` first",
     );
   }
