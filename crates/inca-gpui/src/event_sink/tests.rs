@@ -4,49 +4,49 @@
 use super::*;
 
 #[test]
-fn dom_key_prefers_a_named_key_over_its_key_char() {
+fn key_name_prefers_a_named_key_over_its_key_char() {
     let enter = Keystroke {
         key: "enter".to_string(),
         key_char: Some("\n".to_string()),
         modifiers: gpui::Modifiers::default(),
     };
-    assert_eq!(dom_key(&enter), "Enter");
+    assert_eq!(key_name(&enter), "Enter");
 }
 
 #[test]
-fn dom_key_names_every_function_key() {
+fn key_name_names_every_function_key() {
     for n in 1..=35u8 {
         let keystroke = Keystroke {
             key: format!("f{n}"),
             key_char: None,
             modifiers: gpui::Modifiers::default(),
         };
-        assert_eq!(dom_key(&keystroke), format!("F{n}"));
+        assert_eq!(key_name(&keystroke), format!("F{n}"));
     }
 }
 
 #[test]
-fn dom_key_falls_back_to_key_char_for_an_unnamed_key() {
+fn key_name_falls_back_to_key_char_for_an_unnamed_key() {
     let shifted_s = Keystroke {
         key: "s".to_string(),
         key_char: Some("S".to_string()),
         modifiers: gpui::Modifiers::default(),
     };
-    assert_eq!(dom_key(&shifted_s), "S");
+    assert_eq!(key_name(&shifted_s), "S");
 }
 
 #[test]
-fn dom_key_falls_back_to_key_when_key_char_is_none() {
+fn key_name_falls_back_to_key_when_key_char_is_none() {
     let cmd_s = Keystroke {
         key: "s".to_string(),
         key_char: None,
         modifiers: gpui::Modifiers::default(),
     };
-    assert_eq!(dom_key(&cmd_s), "s");
+    assert_eq!(key_name(&cmd_s), "s");
 }
 
 #[test]
-fn dom_key_covers_the_unidentified_and_shifted_fallbacks() {
+fn key_name_covers_the_unidentified_and_shifted_fallbacks() {
     let shift = gpui::Modifiers {
         shift: true,
         ..gpui::Modifiers::default()
@@ -70,7 +70,7 @@ fn dom_key_covers_the_unidentified_and_shifted_fallbacks() {
                 key_char: key_char.map(str::to_string),
                 modifiers,
             };
-            let got = dom_key(&keystroke);
+            let got = key_name(&keystroke);
             (got != expected).then(|| format!("{key:?}/{key_char:?}: {got} != {expected}"))
         })
         .collect();
@@ -243,7 +243,7 @@ fn a_context_menu_payload_is_the_pressed_button_with_detail_zero() {
 }
 
 #[test]
-fn a_pixel_delta_reports_dom_delta_pixel() {
+fn a_pixel_delta_reports_delta_mode_0() {
     let event = ScrollWheelEvent {
         delta: ScrollDelta::Pixels(gpui::point(gpui::px(3.0), gpui::px(-4.0))),
         ..Default::default()
@@ -256,7 +256,7 @@ fn a_pixel_delta_reports_dom_delta_pixel() {
 }
 
 #[test]
-fn a_line_delta_reports_dom_delta_line() {
+fn a_line_delta_reports_delta_mode_1() {
     let event = ScrollWheelEvent {
         delta: ScrollDelta::Lines(gpui::point(0.0, 2.0)),
         ..Default::default()
@@ -268,7 +268,7 @@ fn a_line_delta_reports_dom_delta_line() {
 }
 
 #[test]
-fn scrolling_down_or_right_reports_positive_dom_deltas() {
+fn scrolling_down_or_right_reports_positive_deltas() {
     // GPUI: down and right are negative.
     for delta in [
         ScrollDelta::Pixels(gpui::point(gpui::px(-5.0), gpui::px(-6.0))),

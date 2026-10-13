@@ -82,11 +82,11 @@ fn hover_dispatches_enter_then_leave(cx: &mut TestAppContext) {
     );
 }
 
-/// A `mouseenter` carries the same DOM-`MouseEvent`-shaped fields as
-/// `mousedown`/etc, built from the pointer's current position rather than
-/// a native GPUI event (`on_hover` hands back only a `bool`).
+/// A `mouseenter` carries the same mouse fields as
+/// `mousedown`, built from the pointer's current position. `on_hover` hands
+/// back only a `bool`.
 #[gpui::test]
-fn mouseenter_carries_dom_shaped_fields(cx: &mut TestAppContext) {
+fn mouseenter_carries_the_mouse_fields(cx: &mut TestAppContext) {
     let host = Rc::new(RefCell::new(Host::default()));
     let node = {
         let mut host = host.borrow_mut();

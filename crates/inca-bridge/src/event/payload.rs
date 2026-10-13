@@ -4,7 +4,7 @@
 use inca_gpui::{EventPayload, KeyPayload, MousePayload, PointerSource};
 use rquickjs::{Function, Null, Object, Result as JsResult};
 
-/// Writes `payload`'s fields onto `event_object`, DOM-named.
+/// Writes `payload`'s fields onto `event_object`.
 pub(super) fn set_payload(event_object: &Object, payload: &EventPayload) -> JsResult<()> {
     match payload {
         EventPayload::None => {}
@@ -25,9 +25,9 @@ pub(super) fn set_payload(event_object: &Object, payload: &EventPayload) -> JsRe
     Ok(())
 }
 
-/// Writes [`MousePayload`]'s fields onto `event_object`, DOM-named — shared
-/// by [`EventPayload::Mouse`] and [`EventPayload::Wheel`] (DOM's
-/// `WheelEvent` extends `MouseEvent`).
+/// Writes [`MousePayload`]'s fields onto `event_object`. Shared by
+/// [`EventPayload::Mouse`] and [`EventPayload::Wheel`] (a wheel payload
+/// carries every mouse field).
 fn set_mouse_fields(event_object: &Object, mouse: &MousePayload) -> JsResult<()> {
     event_object.set("clientX", mouse.client_x)?;
     event_object.set("clientY", mouse.client_y)?;
@@ -66,7 +66,7 @@ fn set_mouse_fields(event_object: &Object, mouse: &MousePayload) -> JsResult<()>
     set_modifier_fields(event_object, mouse.modifiers)
 }
 
-/// Writes [`KeyPayload`]'s fields onto `event_object`, DOM-named.
+/// Writes [`KeyPayload`]'s fields onto `event_object`.
 fn set_key_fields(event_object: &Object, key: &KeyPayload) -> JsResult<()> {
     event_object.set("key", key.key.clone())?;
     event_object.set("repeat", key.repeat)?;
@@ -76,7 +76,7 @@ fn set_key_fields(event_object: &Object, key: &KeyPayload) -> JsResult<()> {
     set_modifier_fields(event_object, key.modifiers)
 }
 
-/// Writes `modifiers`' fields onto `event_object`, DOM-named — shared by
+/// Writes `modifiers`' fields onto `event_object`. Shared by
 /// [`set_mouse_fields`] and [`set_key_fields`].
 fn set_modifier_fields(event_object: &Object, modifiers: gpui::Modifiers) -> JsResult<()> {
     event_object.set("ctrlKey", modifiers.control)?;

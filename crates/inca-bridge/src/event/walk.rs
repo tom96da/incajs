@@ -234,7 +234,10 @@ pub(crate) fn dispatch_event<'js>(
     let not_event = || {
         Exception::throw_type(
             ctx,
-            "Failed to execute 'dispatchEvent': parameter 1 is not of type 'Event'.",
+            concat!(
+                "dispatchEvent needs an event object, ",
+                "so pass one made with new Event(type)"
+            ),
         )
     };
     let event = event.into_object().ok_or_else(not_event)?;
@@ -243,7 +246,10 @@ pub(crate) fn dispatch_event<'js>(
         return Err(Exception::throw_dom(
             ctx,
             "InvalidStateError",
-            "Failed to execute 'dispatchEvent': The event is already being dispatched.",
+            concat!(
+                "the event is already being dispatched, ",
+                "so dispatch it again after its listeners return"
+            ),
         ));
     }
     let name: String = record.get("type")?;

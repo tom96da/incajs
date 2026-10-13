@@ -124,23 +124,29 @@ impl<'js> IntoJsFunc<'js, ()> for Construct {
         let ctx = params.ctx();
         let name = self.name;
         let type_error = |message: &str| {
-            Exception::throw_type(ctx, &format!("Failed to construct '{name}': {message}"))
+            Exception::throw_type(ctx, &format!("cannot construct {name}: {message}"))
         };
         if !params.is_constructor() {
             return Err(type_error(
-                "Please use the 'new' operator, this constructor cannot be called as a function.",
+                "the event constructor needs new, so write new Event(type)",
             ));
         }
         let Some(kind) = params.arg(0) else {
-            return Err(type_error("1 argument required, but only 0 present."));
+            return Err(type_error(concat!(
+                "the event type is missing, so pass a type string such as \"click\" ",
+                "as the first argument"
+            )));
         };
         let kind = kind.get::<Coerced<String>>()?.0;
         let init = match params.arg(1) {
-            Some(value) if !value.is_undefined() && !value.is_null() => Some(
-                value
-                    .into_object()
-                    .ok_or_else(|| type_error("The provided value is not of type 'EventInit'."))?,
-            ),
+            Some(value) if !value.is_undefined() && !value.is_null() => {
+                Some(value.into_object().ok_or_else(|| {
+                    type_error(concat!(
+                        "the event init is not an object, so pass an object such as ",
+                        "{ bubbles: true } or leave it out"
+                    ))
+                })?)
+            }
             _ => None,
         };
         let read = |key: &str| -> JsResult<bool> {

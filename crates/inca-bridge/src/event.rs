@@ -116,7 +116,15 @@ fn find_record<'js>(ctx: &Ctx<'js>, event: &Object<'js>) -> JsResult<Option<Obje
 ///
 /// Throws a `TypeError` when `event` is not an event object of this host.
 fn record_of<'js>(ctx: &Ctx<'js>, event: &Object<'js>) -> JsResult<Object<'js>> {
-    find_record(ctx, event)?.ok_or_else(|| Exception::throw_type(ctx, "Illegal invocation"))
+    find_record(ctx, event)?.ok_or_else(|| {
+        Exception::throw_type(
+            ctx,
+            concat!(
+                "not an event object, so call the method on an Event ",
+                "such as the one a listener receives"
+            ),
+        )
+    })
 }
 
 fn flag(record: &Object<'_>, key: &str) -> bool {

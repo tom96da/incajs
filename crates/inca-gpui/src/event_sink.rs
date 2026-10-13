@@ -28,8 +28,7 @@ pub enum EventPayload {
     Focus { related_target: Option<NodeId> },
 }
 
-/// [`EventPayload::Mouse`]'s fields, named and shaped after DOM's
-/// `MouseEvent`.
+/// [`EventPayload::Mouse`]'s fields.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MousePayload {
     pub client_x: f32,
@@ -52,9 +51,9 @@ pub struct MousePayload {
     /// The button this event is about. 0 for a move, which isn't about any
     /// one button.
     pub button: u8,
-    /// Every button held during this event, as a bitmask (DOM's `buttons`).
+    /// Every button held during this event, as a bitmask.
     pub buttons: u8,
-    /// How many clicks this is part of (DOM's `detail`). 0 for a move.
+    /// How many clicks this is part of. 0 for a move.
     pub detail: u32,
     pub modifiers: gpui::Modifiers,
     /// Set for `click`, `auxclick` and `contextmenu`, which carry the pointer fields.
@@ -116,25 +115,23 @@ pub struct WheelPayload {
     pub delta_y: f32,
     /// GPUI carries no Z-axis scroll; always 0.
     pub delta_z: f32,
-    /// DOM's `deltaMode`: 0 (`DOM_DELTA_PIXEL`) or 1 (`DOM_DELTA_LINE`).
-    /// GPUI has no equivalent of `DOM_DELTA_PAGE` (2).
+    /// Delta mode: 0 for pixels or 1 for lines. GPUI has no page mode.
     pub delta_mode: u8,
 }
 
-/// [`EventPayload::Key`]'s fields, named and shaped after DOM's
-/// `KeyboardEvent`.
+/// [`EventPayload::Key`]'s fields.
 #[derive(Debug, Clone, PartialEq)]
 pub struct KeyPayload {
-    /// DOM's `key`, from [`dom_key`].
+    /// The key's name, such as `Enter`, `F5` or the typed character.
     pub key: String,
-    /// DOM's `repeat`.
+    /// Whether the key press is an auto-repeat.
     pub repeat: bool,
     pub modifiers: gpui::Modifiers,
 }
 
-/// DOM's `button` numbering for a [`MouseButton`]: the index of that
-/// button's bit in `buttons`, not the bit itself.
-pub(crate) const fn dom_button_bit(button: MouseButton) -> u8 {
+/// The `button` index of a [`MouseButton`]: the position of that button's bit
+/// in the `buttons` mask.
+pub(crate) const fn button_index(button: MouseButton) -> u8 {
     match button {
         MouseButton::Left => 0,
         MouseButton::Middle => 1,
@@ -144,11 +141,11 @@ pub(crate) const fn dom_button_bit(button: MouseButton) -> u8 {
     }
 }
 
-/// Maps a [`dom_button_bit`] index (equivalently, `MousePayload::button`) to
-/// its DOM `buttons` bitmask value, ordered left/right/middle/back/forward.
+/// Maps a button index (the value of `MousePayload::button`) to its
+/// `buttons` bitmask value, ordered left/right/middle/back/forward.
 /// An index outside `0..=4` maps to 0.
 #[must_use]
-pub const fn dom_buttons_bit(index: u8) -> u8 {
+pub const fn buttons_mask(index: u8) -> u8 {
     match index {
         0 => 0b0_0001, // left
         1 => 0b0_0100, // middle
@@ -161,7 +158,7 @@ pub const fn dom_buttons_bit(index: u8) -> u8 {
 
 impl From<&MouseDownEvent> for EventPayload {
     fn from(event: &MouseDownEvent) -> Self {
-        let bit = dom_button_bit(event.button);
+        let bit = button_index(event.button);
         Self::Mouse(MousePayload {
             client_x: f32::from(event.position.x),
             client_y: f32::from(event.position.y),
@@ -172,7 +169,7 @@ impl From<&MouseDownEvent> for EventPayload {
             offset_x: 0.0,
             offset_y: 0.0,
             button: bit,
-            buttons: dom_buttons_bit(bit),
+            buttons: buttons_mask(bit),
             detail: u32::try_from(event.click_count).unwrap_or(u32::MAX),
             modifiers: event.modifiers,
             pointer: None,
@@ -183,7 +180,7 @@ impl From<&MouseDownEvent> for EventPayload {
 
 impl From<&MouseUpEvent> for EventPayload {
     fn from(event: &MouseUpEvent) -> Self {
-        let bit = dom_button_bit(event.button);
+        let bit = button_index(event.button);
         Self::Mouse(MousePayload {
             client_x: f32::from(event.position.x),
             client_y: f32::from(event.position.y),
@@ -219,7 +216,7 @@ impl EventPayload {
     #[must_use]
     pub fn click(event: &MouseUpEvent) -> Self {
         Self::Mouse(MousePayload {
-            button: dom_button_bit(event.button),
+            button: button_index(event.button),
             detail: u32::try_from(event.click_count).unwrap_or(u32::MAX),
             pointer: Some(PointerSource::Mouse),
             ..MousePayload::at(event.position, event.modifiers)
@@ -230,10 +227,10 @@ impl EventPayload {
     /// `buttons` the pressed button.
     #[must_use]
     pub fn context_menu(event: &MouseDownEvent) -> Self {
-        let bit = dom_button_bit(event.button);
+        let bit = button_index(event.button);
         Self::Mouse(MousePayload {
             button: bit,
-            buttons: dom_buttons_bit(bit),
+            buttons: buttons_mask(bit),
             pointer: Some(PointerSource::Mouse),
             ..MousePayload::at(event.position, event.modifiers)
         })
@@ -254,7 +251,7 @@ impl From<&MouseMoveEvent> for EventPayload {
             button: 0,
             buttons: event
                 .pressed_button
-                .map_or(0, |button| dom_buttons_bit(dom_button_bit(button))),
+                .map_or(0, |button| buttons_mask(button_index(button))),
             detail: 0,
             modifiers: event.modifiers,
             pointer: None,
@@ -265,8 +262,8 @@ impl From<&MouseMoveEvent> for EventPayload {
 
 impl From<&ScrollWheelEvent> for EventPayload {
     fn from(event: &ScrollWheelEvent) -> Self {
-        // GPUI reports a downward/rightward scroll as negative; the DOM
-        // reports it as positive. `0.0 - x` keeps a zero delta at +0.
+        // GPUI reports a downward/rightward scroll as negative; the
+        // payload reports it as positive. `0.0 - x` keeps a zero delta at +0.
         let (delta_x, delta_y, delta_mode) = match event.delta {
             ScrollDelta::Pixels(delta) => (0.0 - f32::from(delta.x), 0.0 - f32::from(delta.y), 0),
             ScrollDelta::Lines(delta) => (0.0 - delta.x, 0.0 - delta.y, 1),
@@ -300,7 +297,7 @@ impl From<&ScrollWheelEvent> for EventPayload {
 impl From<&KeyDownEvent> for EventPayload {
     fn from(event: &KeyDownEvent) -> Self {
         Self::Key(KeyPayload {
-            key: dom_key(&event.keystroke),
+            key: key_name(&event.keystroke),
             repeat: event.is_held,
             modifiers: event.keystroke.modifiers,
         })
@@ -310,19 +307,19 @@ impl From<&KeyDownEvent> for EventPayload {
 impl From<&KeyUpEvent> for EventPayload {
     fn from(event: &KeyUpEvent) -> Self {
         Self::Key(KeyPayload {
-            key: dom_key(&event.keystroke),
-            // DOM's `keyup` is never a repeat.
+            key: key_name(&event.keystroke),
+            // A key release is never a repeat.
             repeat: false,
             modifiers: event.keystroke.modifiers,
         })
     }
 }
 
-/// GPUI's `Keystroke::key` to DOM's `KeyboardEvent.key`, covering GPUI's
+/// GPUI's `Keystroke::key` to the key name, covering GPUI's
 /// special key names, grown as real usage needs more of them. Falls
 /// through to `key_char` (the character actually typed, when the platform
 /// reports one) and then to `key` itself for anything not in the table.
-fn dom_key(keystroke: &Keystroke) -> String {
+fn key_name(keystroke: &Keystroke) -> String {
     let named = match keystroke.key.as_str() {
         "space" => Some(" "),
         "tab" => Some("Tab"),

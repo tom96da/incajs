@@ -30,7 +30,7 @@ use std::rc::Rc;
 use gpui::{App, Window};
 use inca_gpui::event_sink::{hover_path_difference, with_screen};
 use inca_gpui::{
-    EventPayload, MousePayload, NodeId, PointerSource, dom_buttons_bit, is_disabled_button,
+    EventPayload, MousePayload, NodeId, PointerSource, buttons_mask, is_disabled_button,
 };
 use inca_jsenv::{Engine, ErrorReporter, report_jobs, stderr_reporter};
 
@@ -115,7 +115,7 @@ impl EventDispatcher {
     }
 
     /// Returns `payload` with its `buttons` bitmask corrected against
-    /// [`Self::held_buttons`]. A DOM `mouseup` excludes the button just
+    /// [`Self::held_buttons`]. A `mouseup` excludes the button just
     /// released; every other kind includes every button still held.
     fn with_held_buttons(&self, event: &str, payload: &EventPayload) -> EventPayload {
         let mut payload = payload.clone();
@@ -129,9 +129,9 @@ impl EventDispatcher {
     /// returns the current value — `"mousemove"`/`"wheel"` only read it.
     /// `button` is `MousePayload`'s own field, a public part of
     /// `inca-gpui`'s API, so an out-of-range value (only 0..=4 are ever
-    /// produced by this crate) is handled: [`dom_buttons_bit`] maps it to 0.
+    /// produced by this crate) is handled: [`buttons_mask`] maps it to 0.
     fn update_held_buttons(&self, event: &str, button: u8) -> u8 {
-        let bit = dom_buttons_bit(button);
+        let bit = buttons_mask(button);
         match event {
             "mousedown" => self.held_buttons.set(self.held_buttons.get() | bit),
             "mouseup" => self.held_buttons.set(self.held_buttons.get() & !bit),

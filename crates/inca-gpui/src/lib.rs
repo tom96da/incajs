@@ -13,6 +13,6 @@ pub use element::{
     render_tree_with_events, style_warning,
 };
 pub use event_sink::{
-    EventPayload, EventSink, KeyPayload, MousePayload, PointerSource, WheelPayload, dom_buttons_bit,
+    EventPayload, EventSink, KeyPayload, MousePayload, PointerSource, WheelPayload, buttons_mask,
 };
 pub use tree::{AttributeValue, NodeId, TreeError, VirtualNode, VirtualTree, is_disabled_button};

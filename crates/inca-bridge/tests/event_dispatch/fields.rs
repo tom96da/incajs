@@ -3,10 +3,10 @@
 
 use super::*;
 
-/// A `mousedown`'s payload is DOM-`MouseEvent`-shaped: coordinates, which
-/// button, and which buttons are held (just the one just pressed).
+/// A `mousedown`'s payload carries coordinates, the button
+/// and the buttons held (just the one just pressed).
 #[gpui::test]
-fn mousedown_carries_dom_shaped_fields(cx: &mut TestAppContext) {
+fn mousedown_carries_the_mouse_fields(cx: &mut TestAppContext) {
     let (host, node) = build_tree_listening_for("mousedown");
     let engine = Rc::new(Engine::new().unwrap());
     install_click_counter(&engine);
@@ -48,10 +48,10 @@ fn mousedown_carries_dom_shaped_fields(cx: &mut TestAppContext) {
     );
 }
 
-/// A `wheel`'s payload carries DOM-`WheelEvent`-shaped delta fields plus
-/// every field a `mouse` payload does — `WheelEvent` extends `MouseEvent`.
+/// A `wheel`'s payload carries the delta fields plus
+/// every field a `mouse` payload carries.
 #[gpui::test]
-fn wheel_carries_dom_shaped_delta_fields(cx: &mut TestAppContext) {
+fn wheel_carries_the_delta_fields(cx: &mut TestAppContext) {
     let (host, node) = build_tree_listening_for("wheel");
     let engine = Rc::new(Engine::new().unwrap());
     install_click_counter(&engine);
