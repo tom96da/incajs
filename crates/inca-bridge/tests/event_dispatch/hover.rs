@@ -28,10 +28,12 @@ fn hover_dispatches_enter_then_leave(cx: &mut TestAppContext) {
     let engine = Rc::new(Engine::new().unwrap());
     engine
         .eval::<()>(
-            "globalThis.seen = []; \
-             globalThis.__inca_callbacks__ = { \
-                0: (event) => { globalThis.seen.push(event.type); } \
-             };",
+            r"
+            globalThis.seen = [];
+            globalThis.__inca_callbacks__ = {
+               0: (event) => { globalThis.seen.push(event.type); }
+            };
+            ",
         )
         .unwrap();
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
@@ -190,12 +192,14 @@ fn one_move_gives_mousemove_the_delta_and_mouseenter_zero(cx: &mut TestAppContex
     let engine = Rc::new(Engine::new().unwrap());
     engine
         .eval::<()>(
-            "globalThis.seen = []; \
-             globalThis.__inca_callbacks__ = { \
-                0: (event) => { \
-                    globalThis.seen.push([event.type, event.movementX, event.movementY]); \
-                } \
-             };",
+            r"
+            globalThis.seen = [];
+            globalThis.__inca_callbacks__ = {
+               0: (event) => {
+                   globalThis.seen.push([event.type, event.movementX, event.movementY]);
+               }
+            };
+            ",
         )
         .unwrap();
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
@@ -374,9 +378,11 @@ fn bubbled_mousemove_gives_every_listener_the_same_movement(cx: &mut TestAppCont
     let engine = Rc::new(Engine::new().unwrap());
     engine
         .eval::<()>(
-            "globalThis.seen = []; \
-             globalThis.__inca_callbacks__ = { 0: (e) => { \
-                 globalThis.seen.push([e.target, e.movementX, e.movementY]); } };",
+            r"
+            globalThis.seen = [];
+            globalThis.__inca_callbacks__ = { 0: (e) => {
+                globalThis.seen.push([e.target, e.movementX, e.movementY]); } };
+            ",
         )
         .unwrap();
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
@@ -419,9 +425,11 @@ fn an_inert_child_is_never_the_event_target(cx: &mut TestAppContext) {
     let engine = Rc::new(Engine::new().unwrap());
     engine
         .eval::<()>(
-            "globalThis.seen = []; \
-             globalThis.__inca_callbacks__ = { 0: (e) => { \
-                 globalThis.seen.push(e.target); } };",
+            r"
+            globalThis.seen = [];
+            globalThis.__inca_callbacks__ = { 0: (e) => {
+                globalThis.seen.push(e.target); } };
+            ",
         )
         .unwrap();
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
@@ -503,11 +511,13 @@ fn stop_propagation_keeps_an_ancestors_listener_from_firing(cx: &mut TestAppCont
     let engine = Rc::new(Engine::new().unwrap());
     engine
         .eval::<()>(
-            "globalThis.ran = []; \
-             globalThis.__inca_callbacks__ = { \
-                0: () => { globalThis.ran.push('parent'); }, \
-                1: (event) => { globalThis.ran.push('child'); event.stopPropagation(); } \
-             };",
+            r"
+            globalThis.ran = [];
+            globalThis.__inca_callbacks__ = {
+               0: () => { globalThis.ran.push('parent'); },
+               1: (event) => { globalThis.ran.push('child'); event.stopPropagation(); }
+            };
+            ",
         )
         .unwrap();
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));

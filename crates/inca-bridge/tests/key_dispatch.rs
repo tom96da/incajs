@@ -53,10 +53,12 @@ fn build_key_pair() -> (Rc<RefCell<Host>>, NodeId, NodeId) {
 fn install_key_recorder(engine: &Engine) {
     engine
         .eval::<()>(
-            "globalThis.seen = []; \
-             globalThis.__inca_callbacks__ = { \
-                0: (event) => { globalThis.seen.push(`${event.type}:${event.currentTarget}:${event.key}`); } \
-             };",
+            r"
+            globalThis.seen = [];
+            globalThis.__inca_callbacks__ = {
+               0: (event) => { globalThis.seen.push(`${event.type}:${event.currentTarget}:${event.key}`); }
+            };
+            ",
         )
         .unwrap();
 }
@@ -83,8 +85,10 @@ fn a_key_event_with_nothing_focused_targets_the_root(cx: &mut TestAppContext) {
     install_key_recorder(&engine);
     engine
         .eval::<()>(
-            "globalThis.__inca_callbacks__[1] = (e) => { globalThis.seen.push( \
-                `${e.type}:${e.currentTarget}:${e.target}:${e.eventPhase}:${e.key}`); };",
+            r"
+            globalThis.__inca_callbacks__[1] = (e) => { globalThis.seen.push(
+            `${e.type}:${e.currentTarget}:${e.target}:${e.eventPhase}:${e.key}`); };
+            ",
         )
         .unwrap();
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));

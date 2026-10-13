@@ -60,9 +60,11 @@ fn a_proxy_nests_in_every_container() {
             spied("new Date(0)"),
         )),
         (
-            "{ o: { x: 1 }, a: [ [ 2 ] ], m: Map(1) { { x: 1 } => 1970-01-01T00:00:00.000Z }, \
-             s: Set(1) { [ 2 ] } }"
-                .to_owned(),
+            concat!(
+                "{ o: { x: 1 }, a: [ [ 2 ] ], m: Map(1) { { x: 1 } => 1970-01-01T00:00:00.000Z }, ",
+                "s: Set(1) { [ 2 ] } }"
+            )
+            .to_owned(),
             0
         )
     );

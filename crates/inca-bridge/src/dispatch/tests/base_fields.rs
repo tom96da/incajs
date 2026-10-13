@@ -78,8 +78,10 @@ fn fire_walks_up_only_bubbling_events_and_reports_prevention(cx: &mut TestAppCon
     dispatcher
         .engine
         .eval::<()>(
-            "globalThis.__inca_callbacks__[1] = (e) => { \
-             globalThis.__inca_callbacks__[0](e); e.stopPropagation(); };",
+            r"
+            globalThis.__inca_callbacks__[1] = (e) => {
+            globalThis.__inca_callbacks__[0](e); e.stopPropagation(); };
+            ",
         )
         .unwrap();
     let cx = cx.add_empty_window();
@@ -176,8 +178,10 @@ fn the_legacy_members_follow_the_event_state(cx: &mut TestAppContext) {
         dispatcher
             .engine
             .eval::<()>(&format!(
-                "globalThis.out = ''; globalThis.__inca_callbacks__ = {{ 0: (e) => {{ \
-                    globalThis.out = String({expr}); }} }};"
+                r"
+                globalThis.out = ''; globalThis.__inca_callbacks__ = {{ 0: (e) => {{
+                globalThis.out = String({expr}); }} }};
+                "
             ))
             .unwrap();
         cx.update(|window, cx| {
@@ -228,10 +232,12 @@ fn a_keyboard_click_starts_at_the_innermost_node_with_a_listener(cx: &mut TestAp
     assert_eq!(rows, [want(parent, false, 3), want(outer, true, 3)]);
 }
 
-const PATHS: &str = "globalThis.seen = []; \
-    globalThis.__inca_callbacks__ = { 0: (e) => { \
-        globalThis.seen.push([e.target, e.currentTarget, e.eventPhase, \
-            e.composedPath()]); globalThis.kept = e; } };";
+const PATHS: &str = r"
+    globalThis.seen = [];
+    globalThis.__inca_callbacks__ = { 0: (e) => {
+        globalThis.seen.push([e.target, e.currentTarget, e.eventPhase,
+            e.composedPath()]); globalThis.kept = e; } };
+    ";
 
 #[gpui::test]
 fn every_event_fired_at_a_node_targets_that_node(cx: &mut TestAppContext) {
@@ -317,10 +323,12 @@ fn mouse_events_carry_the_aliases_and_the_pointer_fields_of_their_type(cx: &mut 
     dispatcher
         .engine
         .eval::<()>(
-            "globalThis.seen = []; globalThis.__inca_callbacks__ = { 0: (e) => { \
-             globalThis.seen.push([e.type, e.x === e.clientX && e.y === e.clientY, \
-             e.relatedTarget === null, e.pointerId, e.pointerType, e.isPrimary, \
-             e.width, e.height, e.pressure].join(':')); } };",
+            r"
+            globalThis.seen = []; globalThis.__inca_callbacks__ = { 0: (e) => {
+            globalThis.seen.push([e.type, e.x === e.clientX && e.y === e.clientY,
+            e.relatedTarget === null, e.pointerId, e.pointerType, e.isPrimary,
+            e.width, e.height, e.pressure].join(':')); } };
+            ",
         )
         .unwrap();
     let cx = cx.add_empty_window();

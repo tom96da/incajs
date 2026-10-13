@@ -114,10 +114,12 @@ mod tests {
 
         engine
             .eval::<()>(
-                "__inca_native__.setAttribute(n, 'label', 'x'); \
-                 __inca_native__.removeAttribute(n, 'label'); \
-                 __inca_native__.setStyle(n, 'width', 5); \
-                 __inca_native__.removeStyle(n, 'width');",
+                r"
+                __inca_native__.setAttribute(n, 'label', 'x');
+                __inca_native__.removeAttribute(n, 'label');
+                __inca_native__.setStyle(n, 'width', 5);
+                __inca_native__.removeStyle(n, 'width');
+                ",
             )
             .unwrap();
         assert!(dirty(&host).is_empty());

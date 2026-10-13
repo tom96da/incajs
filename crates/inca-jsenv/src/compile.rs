@@ -63,9 +63,11 @@ mod tests {
     fn settle(engine: &Engine, args: &str) -> String {
         engine
             .eval::<()>(&format!(
-                "f({args}).then(\
-                    (v) => {{ globalThis.out = String(v); }},\
-                    (e) => {{ globalThis.out = e.name + '\\n' + e.stack; }});"
+                r"
+                f({args}).then(
+                (v) => {{ globalThis.out = String(v); }},
+                (e) => {{ globalThis.out = e.name + '\n' + e.stack; }});
+                "
             ))
             .unwrap();
         assert!(engine.run_jobs().is_empty());

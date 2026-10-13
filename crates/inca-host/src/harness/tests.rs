@@ -102,8 +102,10 @@ fn listen(h: &mut Harness, target: &str, types: &str, callback: u32) {
     run_js(
         h,
         &format!(
-            "for (const t of '{types}'.split(' ')) \
-             listen({target}, t, {callback});"
+            r"
+            for (const t of '{types}'.split(' '))
+            listen({target}, t, {callback});
+            "
         ),
     );
 }

@@ -67,8 +67,10 @@ fn a_removed_node_is_no_related_target_and_no_previous_container(cx: &mut TestAp
     dispatcher
         .engine
         .eval::<()>(
-            "globalThis.seen = []; globalThis.__inca_callbacks__ = { 0: (e) => { \
-             globalThis.seen.push([e.type, e.relatedTarget]); } };",
+            r"
+            globalThis.seen = []; globalThis.__inca_callbacks__ = { 0: (e) => {
+            globalThis.seen.push([e.type, e.relatedTarget]); } };
+            ",
         )
         .unwrap();
     listen(&host, outer, "mouseover");

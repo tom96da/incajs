@@ -54,10 +54,12 @@ fn build_focusable_pair() -> (Rc<RefCell<Host>>, NodeId, NodeId) {
 fn install_focus_recorder(engine: &Engine) {
     engine
         .eval::<()>(
-            "globalThis.seen = []; \
-             globalThis.__inca_callbacks__ = { \
-                0: (event) => { globalThis.seen.push(`${event.type}:${event.target}`); } \
-             };",
+            r"
+            globalThis.seen = [];
+            globalThis.__inca_callbacks__ = {
+               0: (event) => { globalThis.seen.push(`${event.type}:${event.target}`); }
+            };
+            ",
         )
         .unwrap();
 }
@@ -408,10 +410,12 @@ fn each_focus_transition_gets_its_own_event_id(cx: &mut TestAppContext) {
     let engine = Rc::new(Engine::new().unwrap());
     engine
         .eval::<()>(
-            "globalThis.seen = []; \
-             globalThis.__inca_callbacks__ = { \
-                0: (event) => { globalThis.seen.push([event.type, event.eventId]); } \
-             };",
+            r"
+            globalThis.seen = [];
+            globalThis.__inca_callbacks__ = {
+               0: (event) => { globalThis.seen.push([event.type, event.eventId]); }
+            };
+            ",
         )
         .unwrap();
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
@@ -476,9 +480,11 @@ fn focus_changes_fire_four_events_with_related_targets(cx: &mut TestAppContext) 
     let engine = Rc::new(Engine::new().unwrap());
     engine
         .eval::<()>(
-            "globalThis.seen = []; \
-             globalThis.__inca_callbacks__ = { 0: (e) => { globalThis.seen.push( \
-             `${e.type}:${e.target}:${e.relatedTarget}:${e.eventPhase}:${e.bubbles}`); } };",
+            r"
+            globalThis.seen = [];
+            globalThis.__inca_callbacks__ = { 0: (e) => { globalThis.seen.push(
+            `${e.type}:${e.target}:${e.relatedTarget}:${e.eventPhase}:${e.bubbles}`); } };
+            ",
         )
         .unwrap();
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
@@ -501,8 +507,12 @@ fn focus_changes_fire_four_events_with_related_targets(cx: &mut TestAppContext) 
         (
             Step::Focus(1),
             format!(
-                "blur:{a}:{b}:2:false focusout:{a}:{b}:2:true focusout:{a}:{b}:3:true \
-                 focus:{b}:{a}:2:false focusin:{b}:{a}:2:true focusin:{b}:{a}:3:true"
+                concat!(
+                    "blur:{a}:{b}:2:false focusout:{a}:{b}:2:true focusout:{a}:{b}:3:true ",
+                    "focus:{b}:{a}:2:false focusin:{b}:{a}:2:true focusin:{b}:{a}:3:true"
+                ),
+                a = a,
+                b = b
             ),
         ),
         (
@@ -554,9 +564,11 @@ fn an_ancestor_becoming_display_none_blurs_the_focused_node(cx: &mut TestAppCont
     let engine = Rc::new(Engine::new().unwrap());
     engine
         .eval::<()>(
-            "globalThis.seen = []; \
-             globalThis.__inca_callbacks__ = { 0: (e) => { globalThis.seen.push( \
-             `${e.type}:${e.relatedTarget}`); } };",
+            r"
+            globalThis.seen = [];
+            globalThis.__inca_callbacks__ = { 0: (e) => { globalThis.seen.push(
+            `${e.type}:${e.relatedTarget}`); } };
+            ",
         )
         .unwrap();
     engine

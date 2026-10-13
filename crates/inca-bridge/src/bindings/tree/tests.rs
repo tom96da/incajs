@@ -47,8 +47,10 @@ fn warnings_from(script: &str) -> (Rc<RefCell<Vec<String>>>, Rc<RefCell<Host>>) 
 #[test]
 fn set_style_warns_once_per_unknown_key() {
     let (warnings, _) = warnings_from(
-        "const n = __inca_native__.createNode('div'); \
-         __inca_native__.setStyle(n, 'flexDirections', 'column');",
+        r"
+        const n = __inca_native__.createNode('div');
+        __inca_native__.setStyle(n, 'flexDirections', 'column');
+        ",
     );
 
     assert_eq!(
@@ -60,10 +62,12 @@ fn set_style_warns_once_per_unknown_key() {
 #[test]
 fn set_style_warns_for_each_set_of_a_bad_value() {
     let (warnings, _) = warnings_from(
-        "const n = __inca_native__.createNode('div'); \
-         __inca_native__.setStyle(n, 'background', -1); \
-         __inca_native__.setStyle(n, 'background', -1); \
-         __inca_native__.setStyle(n, 'background', 0xff0000);",
+        r"
+        const n = __inca_native__.createNode('div');
+        __inca_native__.setStyle(n, 'background', -1);
+        __inca_native__.setStyle(n, 'background', -1);
+        __inca_native__.setStyle(n, 'background', 0xff0000);
+        ",
     );
 
     assert_eq!(
@@ -75,9 +79,11 @@ fn set_style_warns_for_each_set_of_a_bad_value() {
 #[test]
 fn a_failed_set_style_emits_no_warning() {
     let (warnings, _) = warnings_from(
-        "try { __inca_native__.setStyle(999, 'bogus', 1); } catch (e) {} \
-         const n = __inca_native__.createNode('div'); \
-         try { __inca_native__.setStyle(n, 'bogus', { nested: true }); } catch (e) {}",
+        r"
+        try { __inca_native__.setStyle(999, 'bogus', 1); } catch (e) {}
+        const n = __inca_native__.createNode('div');
+        try { __inca_native__.setStyle(n, 'bogus', { nested: true }); } catch (e) {}
+        ",
     );
 
     assert!(warnings.borrow().is_empty(), "{:?}", warnings.borrow());
@@ -86,8 +92,10 @@ fn a_failed_set_style_emits_no_warning() {
 #[test]
 fn set_style_names_the_tag_of_the_node() {
     let (warnings, _) = warnings_from(
-        "const n = __inca_native__.createNode('text'); \
-         __inca_native__.setStyle(n, 'bogus', 1);",
+        r"
+        const n = __inca_native__.createNode('text');
+        __inca_native__.setStyle(n, 'bogus', 1);
+        ",
     );
 
     assert_eq!(
@@ -99,10 +107,12 @@ fn set_style_names_the_tag_of_the_node() {
 #[test]
 fn set_style_is_quiet_for_known_keys_and_box_keys() {
     let (warnings, _) = warnings_from(
-        "const n = __inca_native__.createNode('div'); \
-         for (const k of ['display', 'padding', 'padding_x', 'margin_left', 'gap']) \
-           __inca_native__.setStyle(n, k, 'flex'); \
-         __inca_native__.setStyle(n, 'text_color', '#fff');",
+        r"
+        const n = __inca_native__.createNode('div');
+        for (const k of ['display', 'padding', 'padding_x', 'margin_left', 'gap'])
+          __inca_native__.setStyle(n, k, 'flex');
+        __inca_native__.setStyle(n, 'text_color', '#fff');
+        ",
     );
 
     assert!(warnings.borrow().is_empty(), "{:?}", warnings.borrow());
@@ -111,8 +121,10 @@ fn set_style_is_quiet_for_known_keys_and_box_keys() {
 #[test]
 fn a_stored_bad_style_does_not_warn_again_when_the_tree_is_read() {
     let (warnings, host) = warnings_from(
-        "const n = __inca_native__.createNode('div'); \
-         __inca_native__.setStyle(n, 'bogus', 1);",
+        r"
+        const n = __inca_native__.createNode('div');
+        __inca_native__.setStyle(n, 'bogus', 1);
+        ",
     );
     assert_eq!(warnings.borrow().len(), 1);
 

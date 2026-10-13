@@ -23,12 +23,14 @@ use inca_jsenv::{Engine, EngineError};
 fn install_click_counter(engine: &Engine) {
     engine
         .eval::<()>(
-            "globalThis.__inca_callbacks__ = { \
-                0: (event) => { \
-                    globalThis.clicks = (globalThis.clicks || 0) + 1; \
-                    globalThis.lastEvent = event; \
-                } \
-            };",
+            r"
+            globalThis.__inca_callbacks__ = {
+                0: (event) => {
+                    globalThis.clicks = (globalThis.clicks || 0) + 1;
+                    globalThis.lastEvent = event;
+                }
+            };
+            ",
         )
         .unwrap();
 }
@@ -102,9 +104,11 @@ fn build_panes(a_events: &[&str], root_events: &[&str]) -> Panes {
     let engine = Rc::new(Engine::new().unwrap());
     engine
         .eval::<()>(
-            "globalThis.seen = []; \
-             globalThis.__inca_callbacks__ = { 0: (e) => { \
-                 globalThis.seen.push([e.type, e.movementX, e.movementY]); } };",
+            r"
+            globalThis.seen = [];
+            globalThis.__inca_callbacks__ = { 0: (e) => {
+                globalThis.seen.push([e.type, e.movementX, e.movementY]); } };
+            ",
         )
         .unwrap();
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
@@ -155,9 +159,11 @@ fn mount_recording_pair(
     let engine = Rc::new(Engine::new().unwrap());
     engine
         .eval::<()>(
-            "globalThis.seen = []; \
-             globalThis.__inca_callbacks__ = { 0: (e) => { \
-                 globalThis.seen.push([e.type, e.currentTarget, e.eventId]); } };",
+            r"
+            globalThis.seen = [];
+            globalThis.__inca_callbacks__ = { 0: (e) => {
+                globalThis.seen.push([e.type, e.currentTarget, e.eventId]); } };
+            ",
         )
         .unwrap();
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));

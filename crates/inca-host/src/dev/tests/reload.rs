@@ -7,9 +7,14 @@ use super::*;
 /// `globalThis.got`, and says which session it is in `globalThis.marker`.
 fn records_until_go(marker: &str) -> String {
     format!(
-        "globalThis.marker = '{marker}'; globalThis.got = [];\n\
-         await new Promise((r) => {{ __inca_dev__.receive = (m) => {{ \
-             globalThis.got.push(m); if (m === 'go') r(); }}; }});\n{}",
+        r"
+        globalThis.marker = '{marker}'; globalThis.got = [];
+        await new Promise((r) => {{ __inca_dev__.receive = (m) => {{
+            globalThis.got.push(m); if (m === 'go') r();
+            }};
+        }});
+        {}
+        ",
         mounts_a_div(400, 200)
     )
 }
@@ -90,8 +95,11 @@ fn a_later_reload_replaces_a_pending_one_and_both_ids_get_its_outcome(cx: &mut T
 fn a_pending_reload_that_rejects_is_answered_thrown_and_the_old_app_stays(cx: &mut TestAppContext) {
     let entry = ScratchEntry::write(
         "rejected-reload",
-        "await new Promise((_, reject) => { \
-             __inca_dev__.receive = () => reject(new Error('late')); });",
+        r"
+        await new Promise((_, reject) => {
+            __inca_dev__.receive = () => reject(new Error('late'));
+        });
+        ",
     );
     let (capturing, _) = capture();
     let first = format!("globalThis.marker = 'old';\n{}", mounts_a_div(300, 150));
@@ -114,9 +122,14 @@ fn a_pending_reload_that_rejects_is_answered_thrown_and_the_old_app_stays(cx: &m
 fn a_job_error_is_reported_once_when_a_pending_reload_rejects_after_it(cx: &mut TestAppContext) {
     let entry = ScratchEntry::write(
         "side-then-reject",
-        "await new Promise((_, reject) => { __inca_dev__.receive = () => { \
-             queueMicrotask(() => { throw new Error('side'); }); \
-             Promise.resolve().then(() => reject(new Error('late'))); }; });",
+        r"
+        await new Promise((_, reject) => {
+            __inca_dev__.receive = () => {
+                queueMicrotask(() => { throw new Error('side'); });
+                Promise.resolve().then(() => reject(new Error('late')));
+            };
+        });
+        ",
     );
     let (capturing, _) = capture();
     let (_, sender) = serve_idle(cx, "", entry.path(), &capturing);

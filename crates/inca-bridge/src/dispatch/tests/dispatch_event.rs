@@ -8,11 +8,13 @@ fn a_new_event_starts_idle_and_untrusted_with_every_flag_false() {
     let (dispatcher, _host, _reported) = dispatcher_with_engine();
     let got = eval_json(
         &dispatcher,
-        "(() => { const e = new Event('ping'); \
-            return [e.type, e.bubbles, e.cancelable, e.composed, e.isTrusted, e.target, \
-                e.currentTarget, e.srcElement, e.eventPhase, e.defaultPrevented, \
-                e.returnValue, e.cancelBubble, e.composedPath().length, \
-                typeof e.timeStamp, e.constructor === Event, e instanceof Event]; })()",
+        r"
+        (() => { const e = new Event('ping');
+        return [e.type, e.bubbles, e.cancelable, e.composed, e.isTrusted, e.target,
+            e.currentTarget, e.srcElement, e.eventPhase, e.defaultPrevented,
+            e.returnValue, e.cancelBubble, e.composedPath().length,
+            typeof e.timeStamp, e.constructor === Event, e instanceof Event]; })()
+        ",
     );
     assert_eq!(
         got,
@@ -28,10 +30,12 @@ fn the_init_object_sets_the_flags_by_truthiness() {
     let (dispatcher, _host, _reported) = dispatcher_with_engine();
     let got = eval_json(
         &dispatcher,
-        "[new Event('a', { bubbles: 1, cancelable: 'x', composed: {} }), \
-          new Event('b', { bubbles: 0, cancelable: '' }), \
-          new Event('c', null), new Event('d', undefined), new Event(5), \
-          new Event(undefined)].map((e) => [e.type, e.bubbles, e.cancelable, e.composed])",
+        r"
+        [new Event('a', { bubbles: 1, cancelable: 'x', composed: {} }),
+        new Event('b', { bubbles: 0, cancelable: '' }),
+        new Event('c', null), new Event('d', undefined), new Event(5),
+        new Event(undefined)].map((e) => [e.type, e.bubbles, e.cancelable, e.composed])
+        ",
     );
     assert_eq!(
         got,
@@ -51,10 +55,12 @@ fn the_constructors_refuse_a_plain_call_a_missing_type_and_a_primitive_init() {
     let (dispatcher, _host, _reported) = dispatcher_with_engine();
     let got = eval_json(
         &dispatcher,
-        "['Event', 'CustomEvent'].flatMap((name) => { const C = globalThis[name]; \
-            return [() => C('x'), () => C.call(function () {}, 'x'), () => new C(), \
-                () => new C('x', 5), () => new C(Symbol())].map((f) => { \
-                try { f(); return 'ran'; } catch (err) { return err instanceof TypeError; } }); })",
+        r"
+        ['Event', 'CustomEvent'].flatMap((name) => { const C = globalThis[name];
+        return [() => C('x'), () => C.call(function () {}, 'x'), () => new C(),
+            () => new C('x', 5), () => new C(Symbol())].map((f) => {
+            try { f(); return 'ran'; } catch (err) { return err instanceof TypeError; } }); })
+        ",
     );
     assert_eq!(
         got,
@@ -67,15 +73,17 @@ fn a_custom_event_carries_detail_and_inherits_from_event() {
     let (dispatcher, _host, _reported) = dispatcher_with_engine();
     let got = eval_json(
         &dispatcher,
-        "(() => { const d = { n: 1 }; \
-            const a = new CustomEvent('a', { detail: d, bubbles: true }); \
-            const b = new CustomEvent('b'); \
-            const c = new CustomEvent('c', { detail: undefined }); \
-            return [a.detail === d, a.bubbles, b.detail, c.detail, \
-                a instanceof CustomEvent, a instanceof Event, \
-                Object.getPrototypeOf(CustomEvent) === Event, \
-                a.preventDefault === new Event('x').preventDefault, \
-                CustomEvent.name, Event.name, Event.AT_TARGET, CustomEvent.BUBBLING_PHASE]; })()",
+        r"
+        (() => { const d = { n: 1 };
+        const a = new CustomEvent('a', { detail: d, bubbles: true });
+        const b = new CustomEvent('b');
+        const c = new CustomEvent('c', { detail: undefined });
+        return [a.detail === d, a.bubbles, b.detail, c.detail,
+            a instanceof CustomEvent, a instanceof Event,
+            Object.getPrototypeOf(CustomEvent) === Event,
+            a.preventDefault === new Event('x').preventDefault,
+            CustomEvent.name, Event.name, Event.AT_TARGET, CustomEvent.BUBBLING_PHASE]; })()
+        ",
     );
     assert_eq!(
         got,
@@ -101,10 +109,12 @@ fn a_subclass_of_event_keeps_its_own_prototype() {
     let (dispatcher, _host, _reported) = dispatcher_with_engine();
     let got = eval_json(
         &dispatcher,
-        "(() => { class Mine extends Event { hi() { return this.type; } } \
-            const e = new Mine('m'); \
-            e.preventDefault(); \
-            return [e.hi(), e instanceof Mine, e instanceof Event, e.defaultPrevented]; })()",
+        r"
+        (() => { class Mine extends Event { hi() { return this.type; } }
+        const e = new Mine('m');
+        e.preventDefault();
+        return [e.hi(), e instanceof Mine, e instanceof Event, e.defaultPrevented]; })()
+        ",
     );
     assert_eq!(got, serde_json::json!(["m", true, true, false]));
 }
@@ -116,8 +126,10 @@ fn host_events_are_trusted_instances_of_event_that_share_one_prototype(cx: &mut 
     listen(&host, node, "click");
     callbacks(
         &dispatcher,
-        "0: (e) => { (globalThis.events ??= []).push(e); \
-            out.push([e instanceof Event, e.constructor === Event, e.isTrusted]); }",
+        r"
+        0: (e) => { (globalThis.events ??= []).push(e);
+        out.push([e instanceof Event, e.constructor === Event, e.isTrusted]); }
+        ",
     );
     fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
     let out = fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
@@ -128,10 +140,12 @@ fn host_events_are_trusted_instances_of_event_that_share_one_prototype(cx: &mut 
     let shared = dispatcher
         .engine
         .eval::<bool>(
-            "const [a, b] = events; \
-             a !== b && Object.getPrototypeOf(a) === Object.getPrototypeOf(b) \
-                && a.preventDefault === b.preventDefault \
-                && Object.getPrototypeOf(a) !== Object.prototype",
+            r"
+            const [a, b] = events;
+            a !== b && Object.getPrototypeOf(a) === Object.getPrototypeOf(b)
+               && a.preventDefault === b.preventDefault
+               && Object.getPrototypeOf(a) !== Object.prototype
+            ",
         )
         .unwrap();
     assert!(shared);
@@ -148,16 +162,20 @@ fn dispatch_event_walks_capture_target_bubble_and_returns_true_when_not_canceled
     }
     callbacks(
         &dispatcher,
-        "0: (e) => out.push(['cap', e.currentTarget, e.eventPhase, e.target, e.isTrusted]), \
-         1: (e) => out.push(['at', e.currentTarget, e.eventPhase]), \
-         2: (e) => out.push(['up', e.currentTarget, e.eventPhase])",
+        r"
+        0: (e) => out.push(['cap', e.currentTarget, e.eventPhase, e.target, e.isTrusted]),
+        1: (e) => out.push(['at', e.currentTarget, e.eventPhase]),
+        2: (e) => out.push(['up', e.currentTarget, e.eventPhase])
+        ",
     );
     let got = eval_json(
         &dispatcher,
         &format!(
-            "(() => {{ const e = new Event('ping', {{ bubbles: true }}); \
-                const r = __inca_native__.dispatchEvent({child}, e); \
-                return [r, out, e.target, e.currentTarget, e.eventPhase, e.composedPath().length]; }})()"
+            r"
+            (() => {{ const e = new Event('ping', {{ bubbles: true }});
+            const r = __inca_native__.dispatchEvent({child}, e);
+            return [r, out, e.target, e.currentTarget, e.eventPhase, e.composedPath().length]; }})()
+            "
         ),
     );
     assert_eq!(
@@ -201,13 +219,15 @@ fn a_dispatched_event_calls_the_function_stored_under_the_returned_id() {
     let got = eval_json(
         &dispatcher,
         &format!(
-            "(() => {{ const out = []; globalThis.__inca_callbacks__ = {{}}; \
-             const first = __inca_native__.addEventListener({node}, 'ping'); \
-             const second = __inca_native__.addEventListener({node}, 'ping'); \
-             __inca_callbacks__[first] = () => out.push('first'); \
-             __inca_callbacks__[second] = () => out.push('second'); \
-             __inca_native__.dispatchEvent({node}, new Event('ping')); \
-             return [first, second, out]; }})()"
+            r"
+            (() => {{ const out = []; globalThis.__inca_callbacks__ = {{}};
+            const first = __inca_native__.addEventListener({node}, 'ping');
+            const second = __inca_native__.addEventListener({node}, 'ping');
+            __inca_callbacks__[first] = () => out.push('first');
+            __inca_callbacks__[second] = () => out.push('second');
+            __inca_native__.dispatchEvent({node}, new Event('ping'));
+            return [first, second, out]; }})()
+            "
         ),
     );
     assert_eq!(got, serde_json::json!([0, 1, ["first", "second"]]));
@@ -222,8 +242,10 @@ fn dispatch_event_returns_false_for_a_canceled_cancelable_event_only() {
     let got = eval_json(
         &dispatcher,
         &format!(
-            "[true, false].map((cancelable) => {{ const e = new Event('ping', {{ cancelable }}); \
-                return [__inca_native__.dispatchEvent({node}, e), e.defaultPrevented]; }})"
+            r"
+            [true, false].map((cancelable) => {{ const e = new Event('ping', {{ cancelable }});
+            return [__inca_native__.dispatchEvent({node}, e), e.defaultPrevented]; }})
+            "
         ),
     );
     assert_eq!(got, serde_json::json!([[false, true], [true, false]]));
@@ -241,10 +263,12 @@ fn a_dispatched_event_stays_canceled_and_can_be_dispatched_again_with_a_new_even
     let got = eval_json(
         &dispatcher,
         &format!(
-            "(() => {{ const e = new Event('ping', {{ cancelable: true }}); \
-                const r = [__inca_native__.dispatchEvent({node}, e), \
-                    __inca_native__.dispatchEvent({node}, e)]; \
-                return [r, out]; }})()"
+            r"
+            (() => {{ const e = new Event('ping', {{ cancelable: true }});
+            const r = [__inca_native__.dispatchEvent({node}, e),
+                __inca_native__.dispatchEvent({node}, e)];
+            return [r, out]; }})()
+            "
         ),
     );
     assert_eq!(got, serde_json::json!([[false, false], [1, 2]]));
@@ -257,8 +281,10 @@ fn an_event_nobody_hears_takes_no_event_id_but_gets_its_target() {
     let got = eval_json(
         &dispatcher,
         &format!(
-            "(() => {{ const e = new Event('ping'); \
-                return [__inca_native__.dispatchEvent({node}, e), e.target, 'eventId' in e]; }})()"
+            r"
+            (() => {{ const e = new Event('ping');
+            return [__inca_native__.dispatchEvent({node}, e), e.target, 'eventId' in e]; }})()
+            "
         ),
     );
     assert_eq!(got, serde_json::json!([true, node, false]));
@@ -273,8 +299,10 @@ fn dispatch_event_while_dispatching_throws_invalid_state_and_leaves_the_walk_run
     callbacks(
         &dispatcher,
         &format!(
-            "0: (e) => {{ try {{ __inca_native__.dispatchEvent({node}, e); out.push('ran'); }} \
-                catch (err) {{ out.push([err.name, e.eventPhase]); }} }}"
+            r"
+            0: (e) => {{ try {{ __inca_native__.dispatchEvent({node}, e); out.push('ran'); }}
+            catch (err) {{ out.push([err.name, e.eventPhase]); }} }}
+            "
         ),
     );
     let got = eval_json(
@@ -292,8 +320,10 @@ fn a_nested_dispatch_throws_an_error_that_is_a_domexception_instance() {
     callbacks(
         &dispatcher,
         &format!(
-            "0: (e) => {{ try {{ __inca_native__.dispatchEvent({node}, e); }} \
-                catch (err) {{ out.push([typeof DOMException, err instanceof DOMException]); }} }}"
+            r"
+            0: (e) => {{ try {{ __inca_native__.dispatchEvent({node}, e); }}
+            catch (err) {{ out.push([typeof DOMException, err instanceof DOMException]); }} }}
+            "
         ),
     );
     let got = eval_json(
@@ -310,10 +340,12 @@ fn dispatch_event_rejects_anything_that_is_not_an_event_of_this_host() {
     let got = eval_json(
         &dispatcher,
         &format!(
-            "[undefined, null, 5, 'click', {{ type: 'click' }}, Object.create(new Event('x')), \
-              Event.prototype].map((v) => {{ \
-                try {{ __inca_native__.dispatchEvent({node}, v); return 'ran'; }} \
-                catch (err) {{ return err instanceof TypeError; }} }})"
+            r"
+            [undefined, null, 5, 'click', {{ type: 'click' }}, Object.create(new Event('x')),
+            Event.prototype].map((v) => {{
+              try {{ __inca_native__.dispatchEvent({node}, v); return 'ran'; }}
+              catch (err) {{ return err instanceof TypeError; }} }})
+            "
         ),
     );
     assert_eq!(
@@ -327,8 +359,10 @@ fn dispatch_event_on_an_unknown_node_throws_a_type_error() {
     let (dispatcher, _host, _reported) = dispatcher_with_engine();
     let got = eval_json(
         &dispatcher,
-        "(() => { try { __inca_native__.dispatchEvent(99, new Event('x')); return 'ran'; } \
-            catch (err) { return err instanceof TypeError; } })()",
+        r"
+        (() => { try { __inca_native__.dispatchEvent(99, new Event('x')); return 'ran'; }
+        catch (err) { return err instanceof TypeError; } })()
+        ",
     );
     assert_eq!(got, serde_json::json!(true));
 }
@@ -371,9 +405,11 @@ fn errors_are_reported_in_the_order_they_happened_across_nested_dispatches(
     callbacks(
         &dispatcher,
         &format!(
-            "0: () => {{ __inca_native__.dispatchEvent({node}, new Event('ping')); \
-                throw new Error('outer'); }}, \
-             1: () => {{ throw new Error('inner'); }}"
+            r"
+            0: () => {{ __inca_native__.dispatchEvent({node}, new Event('ping'));
+               throw new Error('outer'); }},
+            1: () => {{ throw new Error('inner'); }}
+            "
         ),
     );
     fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
@@ -397,11 +433,13 @@ fn a_listener_that_freezes_the_event_gets_a_type_error_on_redispatch() {
     let got = eval_json(
         &dispatcher,
         &format!(
-            "(() => {{ const e = new Event('ping'); \
-                __inca_native__.dispatchEvent({node}, e); \
-                const stop = e.cancelBubble; \
-                try {{ __inca_native__.dispatchEvent({node}, e); }} \
-                catch (err) {{ return [stop, err.name]; }} return [stop, 'ran']; }})()"
+            r"
+            (() => {{ const e = new Event('ping');
+            __inca_native__.dispatchEvent({node}, e);
+            const stop = e.cancelBubble;
+            try {{ __inca_native__.dispatchEvent({node}, e); }}
+            catch (err) {{ return [stop, err.name]; }} return [stop, 'ran']; }})()
+            "
         ),
     );
     assert_eq!(got, serde_json::json!([false, "TypeError"]));
@@ -419,17 +457,21 @@ fn a_listener_that_locks_current_target_does_not_block_the_next_dispatch() {
     listen(&host, node, "ping");
     callbacks(
         &dispatcher,
-        "0: (e) => { out.push(e.currentTarget); e.stopPropagation(); \
-            Object.defineProperty(e, 'currentTarget', { writable: false }); }",
+        r"
+        0: (e) => { out.push(e.currentTarget); e.stopPropagation();
+        Object.defineProperty(e, 'currentTarget', { writable: false }); }
+        ",
     );
     let got = eval_json(
         &dispatcher,
         &format!(
-            "(() => {{ const e = new Event('ping'); \
-                __inca_native__.dispatchEvent({node}, e); \
-                const stop = e.cancelBubble; \
-                __inca_native__.dispatchEvent({node}, e); \
-                return [stop, out]; }})()"
+            r"
+            (() => {{ const e = new Event('ping');
+            __inca_native__.dispatchEvent({node}, e);
+            const stop = e.cancelBubble;
+            __inca_native__.dispatchEvent({node}, e);
+            return [stop, out]; }})()
+            "
         ),
     );
     assert_eq!(got, serde_json::json!([false, [node, node]]));
@@ -464,10 +506,12 @@ fn the_stop_state_of_an_outer_event_survives_a_nested_dispatch() {
     callbacks(
         &dispatcher,
         &format!(
-            "0: (e) => {{ e.stopPropagation(); \
-                __inca_native__.dispatchEvent({child}, new Event('inner')); \
-                out.push(['child', e.cancelBubble]); }}, \
-             1: () => out.push('parent'), 2: () => out.push('inner')"
+            r"
+            0: (e) => {{ e.stopPropagation();
+               __inca_native__.dispatchEvent({child}, new Event('inner'));
+               out.push(['child', e.cancelBubble]); }},
+            1: () => out.push('parent'), 2: () => out.push('inner')
+            "
         ),
     );
     let got = eval_json(
@@ -537,10 +581,12 @@ fn a_frozen_event_id_lets_the_first_dispatch_through_then_throws_type_error() {
     let got = eval_json(
         &dispatcher,
         &format!(
-            "(() => {{ const e = new Event('ping'); \
-                return [1, 2, 3].map(() => {{ \
-                    try {{ __inca_native__.dispatchEvent({node}, e); return 'ok'; }} \
-                    catch (err) {{ return err.name; }} }}); }})()"
+            r"
+            (() => {{ const e = new Event('ping');
+            return [1, 2, 3].map(() => {{
+                try {{ __inca_native__.dispatchEvent({node}, e); return 'ok'; }}
+                catch (err) {{ return err.name; }} }}); }})()
+            "
         ),
     );
     assert_eq!(got, serde_json::json!(["ok", "TypeError", "TypeError"]));

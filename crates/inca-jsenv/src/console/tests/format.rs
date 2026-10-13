@@ -27,9 +27,11 @@ fn a_non_string_label_is_stringified() {
 #[test]
 fn every_formatting_method_substitutes_specifiers() {
     let written = lines_written_by(
-        "console.log('%s=%d', 'a', 1); console.debug('%s', 'x', 'y'); \
-         console.info('%o', 'i'); console.warn('%f', '1.5'); \
-         console.error('%s', Symbol('e')); console.dirxml('%i', '7.9');",
+        r"
+        console.log('%s=%d', 'a', 1); console.debug('%s', 'x', 'y');
+        console.info('%o', 'i'); console.warn('%f', '1.5');
+        console.error('%s', Symbol('e')); console.dirxml('%i', '7.9');
+        ",
     );
 
     assert_eq!(
@@ -70,13 +72,15 @@ fn formatting_follows_the_group_guides_and_symbols() {
 fn assert_formats_its_message_and_data() {
     assert_eq!(
         texts(
-            "console.assert(false, '%s is %d', 'x', 4, 'end'); \
-             console.assert(false, 'plain %s'); \
-             console.assert(false, '%o', 'q'); \
-             console.assert(false, '%s', 'a'); \
-             console.assert(false, 7, '%s', 'b'); \
-             console.assert(false, { a: 1 }); \
-             console.assert(false, 'v', '%s');"
+            r"
+            console.assert(false, '%s is %d', 'x', 4, 'end');
+            console.assert(false, 'plain %s');
+            console.assert(false, '%o', 'q');
+            console.assert(false, '%s', 'a');
+            console.assert(false, 7, '%s', 'b');
+            console.assert(false, { a: 1 });
+            console.assert(false, 'v', '%s');
+            "
         ),
         [
             "✖ Assertion failed: x is 4 end",
@@ -117,8 +121,10 @@ fn trace_substitutes_specifiers_in_its_label() {
 #[test]
 fn time_log_prints_its_extra_data_without_substituting_specifiers() {
     let lines = texts(
-        "console.time('%s'); console.timeLog('%s', '%d items', '3'); \
-         console.timeLog('%s', 'a', '%s');",
+        r"
+        console.time('%s'); console.timeLog('%s', '%d items', '3');
+        console.timeLog('%s', 'a', '%s');
+        ",
     );
 
     assert_eq!(without_elapsed(&lines[0]), "%s: Nms %d items 3");
@@ -129,8 +135,10 @@ fn time_log_prints_its_extra_data_without_substituting_specifiers() {
 fn dir_table_and_the_counters_do_not_format() {
     assert_eq!(
         texts(
-            "console.dir('%s', 'x'); console.table('%s'); console.count('%s'); \
-             console.countReset('%d'); console.timeEnd('%i');"
+            r"
+            console.dir('%s', 'x'); console.table('%s'); console.count('%s');
+            console.countReset('%d'); console.timeEnd('%i');
+            "
         ),
         [
             "'%s'",
@@ -153,8 +161,10 @@ fn time_labels_are_not_formatted() {
 fn a_throwing_conversion_leaves_no_exception_behind() {
     assert_eq!(
         texts(
-            "console.log('%s', { toString() { throw new Error('no'); } }); \
-             try { null.x; } catch (e) { console.log('caught', e instanceof TypeError); }"
+            r"
+            console.log('%s', { toString() { throw new Error('no'); } });
+            try { null.x; } catch (e) { console.log('caught', e instanceof TypeError); }
+            "
         ),
         ["{ toString: [Function: toString] }", "caught true"]
     );
@@ -164,11 +174,13 @@ fn a_throwing_conversion_leaves_no_exception_behind() {
 fn accessors_and_a_failing_stack_in_any_method_leave_nothing_pending() {
     assert_eq!(
         texts(
-            "console.log({ get a() { throw 1; } }); \
-             console.log([Object.defineProperty([1], 0, { get() { throw 1; } })]); \
-             console.log(Object.defineProperty(new Error('e'), 'stack', { get() { throw 1; } })); \
-             console.dir({ get a() { throw 1; } }); \
-             try { null.x; } catch (e) { console.log('caught'); }"
+            r"
+            console.log({ get a() { throw 1; } });
+            console.log([Object.defineProperty([1], 0, { get() { throw 1; } })]);
+            console.log(Object.defineProperty(new Error('e'), 'stack', { get() { throw 1; } }));
+            console.dir({ get a() { throw 1; } });
+            try { null.x; } catch (e) { console.log('caught'); }
+            "
         )
         .iter()
         .map(|t| t.lines().next().unwrap().to_owned())

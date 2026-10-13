@@ -8,14 +8,16 @@ fn a_press_on_a_disabled_button_moves_focus_to_its_tabindex_ancestor(cx: &mut Te
     let mut h = load_listening(cx, BUTTON);
     run_js(
         &mut h,
-        "globalThis.other = __inca_native__.createNode('div'); \
-         __inca_native__.setAttribute(other, 'tabindex', '0'); \
-         __inca_native__.setStyle(other, 'width', 10); \
-         __inca_native__.setStyle(other, 'height', 10); \
-         __inca_native__.appendChild(__inca_native__.rootNodeId(), other); \
-         __inca_native__.setAttribute(frame, 'tabindex', '0'); \
-         __inca_native__.setAttribute(box, 'disabled', true); \
-         __inca_native__.focusNode(other);",
+        r"
+        globalThis.other = __inca_native__.createNode('div');
+        __inca_native__.setAttribute(other, 'tabindex', '0');
+        __inca_native__.setStyle(other, 'width', 10);
+        __inca_native__.setStyle(other, 'height', 10);
+        __inca_native__.appendChild(__inca_native__.rootNodeId(), other);
+        __inca_native__.setAttribute(frame, 'tabindex', '0');
+        __inca_native__.setAttribute(box, 'disabled', true);
+        __inca_native__.focusNode(other);
+        ",
     );
     listen(&mut h, "other", "focus blur", 0);
     listen(&mut h, "frame", "focus blur", 0);
@@ -160,14 +162,16 @@ fn a_disabled_button_keeps_a_descendant_listener(cx: &mut TestAppContext) {
     let mut h = load_listening(cx, BUTTON);
     run_js(
         &mut h,
-        "globalThis.k = __inca_native__.createNode('div'); \
-         __inca_native__.setStyle(k, 'width', 100); \
-         __inca_native__.setStyle(k, 'height', 50); \
-         __inca_native__.appendChild(box, k); \
-         listen(k, 'click', 0); \
-         listen(box, 'click', 0); \
-         listen(frame, 'click', 0); \
-         __inca_native__.setAttribute(box, 'disabled', true);",
+        r"
+        globalThis.k = __inca_native__.createNode('div');
+        __inca_native__.setStyle(k, 'width', 100);
+        __inca_native__.setStyle(k, 'height', 50);
+        __inca_native__.appendChild(box, k);
+        listen(k, 'click', 0);
+        listen(box, 'click', 0);
+        listen(frame, 'click', 0);
+        __inca_native__.setAttribute(box, 'disabled', true);
+        ",
     );
     let kid = node(&h, "k");
 

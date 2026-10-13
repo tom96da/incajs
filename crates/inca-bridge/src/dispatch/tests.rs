@@ -57,12 +57,14 @@ fn wheel_at(x: f32, y: f32) -> EventPayload {
 // Snapshot per call: [type, bubbles, cancelable, composed, defaultPrevented
 // before, defaultPrevented after preventDefault(), eventPhase,
 // currentTarget, isTrusted, timeStamp].
-const RECORDER: &str = "globalThis.seen = []; \
-    globalThis.__inca_callbacks__ = { 0: (e) => { \
-        const before = e.defaultPrevented; e.preventDefault(); \
-        globalThis.seen.push([e.type, e.bubbles, e.cancelable, e.composed, \
-            before, e.defaultPrevented, e.eventPhase, e.currentTarget, \
-            e.isTrusted, e.timeStamp]); } };";
+const RECORDER: &str = r"
+    globalThis.seen = [];
+    globalThis.__inca_callbacks__ = { 0: (e) => {
+        const before = e.defaultPrevented; e.preventDefault();
+        globalThis.seen.push([e.type, e.bubbles, e.cancelable, e.composed,
+            before, e.defaultPrevented, e.eventPhase, e.currentTarget,
+            e.isTrusted, e.timeStamp]); } };
+    ";
 
 fn seen(dispatcher: &EventDispatcher) -> serde_json::Value {
     let json = dispatcher

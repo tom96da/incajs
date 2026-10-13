@@ -42,24 +42,26 @@ fn an_event_method_throws_a_type_error_for_any_receiver_that_is_not_an_event(
     listen(&host, node, "click");
     callbacks(
         &dispatcher,
-        "0: (e) => { \
-            const proto = Object.getPrototypeOf(e); \
-            const getter = (name) => Object.getOwnPropertyDescriptor(proto, name).get; \
-            const setter = (name) => Object.getOwnPropertyDescriptor(proto, name).set; \
-            const calls = [ \
-                e.stopPropagation, e.stopImmediatePropagation, e.preventDefault, \
-                e.composedPath, getter('defaultPrevented'), getter('returnValue'), \
-                getter('cancelBubble'), (r) => setter('returnValue').call(r, false), \
-                (r) => setter('cancelBubble').call(r, true), \
-            ]; \
-            for (const receiver of [undefined, null, 5, {}, Object.create(e), proto]) { \
-                for (const call of calls) { \
-                    try { call.call(receiver, receiver); out.push('ran'); } \
-                    catch (err) { out.push(err instanceof TypeError); } \
-                } \
-            } \
-            e.preventDefault(); \
-            out.push(e.defaultPrevented); }",
+        r"
+        0: (e) => {
+        const proto = Object.getPrototypeOf(e);
+        const getter = (name) => Object.getOwnPropertyDescriptor(proto, name).get;
+        const setter = (name) => Object.getOwnPropertyDescriptor(proto, name).set;
+        const calls = [
+            e.stopPropagation, e.stopImmediatePropagation, e.preventDefault,
+            e.composedPath, getter('defaultPrevented'), getter('returnValue'),
+            getter('cancelBubble'), (r) => setter('returnValue').call(r, false),
+            (r) => setter('cancelBubble').call(r, true),
+        ];
+        for (const receiver of [undefined, null, 5, {}, Object.create(e), proto]) {
+            for (const call of calls) {
+                try { call.call(receiver, receiver); out.push('ran'); }
+                catch (err) { out.push(err instanceof TypeError); }
+            }
+        }
+        e.preventDefault();
+        out.push(e.defaultPrevented); }
+        ",
     );
 
     let out = fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
@@ -176,8 +178,10 @@ fn stopping_a_handled_event_changes_nothing(cx: &mut TestAppContext) {
     let state = dispatcher
         .engine
         .eval::<String>(
-            "kept.stopPropagation(); kept.stopImmediatePropagation(); kept.cancelBubble = true; \
-             String(kept.cancelBubble)",
+            r"
+            kept.stopPropagation(); kept.stopImmediatePropagation(); kept.cancelBubble = true;
+            String(kept.cancelBubble)
+            ",
         )
         .unwrap();
     assert_eq!(state, "false");
@@ -197,19 +201,23 @@ fn a_script_that_patches_the_builtins_cannot_reach_or_break_event_state(cx: &mut
     dispatcher
         .engine
         .eval::<()>(
-            "WeakMap.prototype.get = () => { throw new Error('get'); }; \
-             WeakMap.prototype.set = () => { throw new Error('set'); }; \
-             Reflect.apply = () => { throw new Error('apply'); };",
+            r"
+            WeakMap.prototype.get = () => { throw new Error('get'); };
+            WeakMap.prototype.set = () => { throw new Error('set'); };
+            Reflect.apply = () => { throw new Error('apply'); };
+            ",
         )
         .unwrap();
     callbacks(
         &dispatcher,
-        "0: (e) => { \
-            const proto = Object.getPrototypeOf(e); \
-            const names = (o) => [...Object.getOwnPropertyNames(o), \
-                ...Object.getOwnPropertySymbols(o).map(String)].sort(); \
-            e.preventDefault(); \
-            out.push(e.defaultPrevented, names(e), names(proto)); }",
+        r"
+        0: (e) => {
+        const proto = Object.getPrototypeOf(e);
+        const names = (o) => [...Object.getOwnPropertyNames(o),
+            ...Object.getOwnPropertySymbols(o).map(String)].sort();
+        e.preventDefault();
+        out.push(e.defaultPrevented, names(e), names(proto)); }
+        ",
     );
 
     let out = fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);

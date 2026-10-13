@@ -200,9 +200,11 @@ mod tests {
         let app = AppDir::new(
             "full",
             Some(
-                r#"{"name":"Demo","identifier":"org.inca.demo",
-                    "window":{"width":1024,"height":768,"title":"Demo Window",
-                              "resizable":true,"minWidth":320,"minHeight":240}}"#,
+                r#"
+                {"name":"Demo","identifier":"org.inca.demo",
+                "window":{"width":1024,"height":768,"title":"Demo Window",
+                          "resizable":true,"minWidth":320,"minHeight":240}}
+                "#,
             ),
         );
 
@@ -440,9 +442,11 @@ mod tests {
     fn every_declared_setting_is_printed() {
         assert_eq!(
             effective(
-                r#"{"name":"Demo","identifier":"org.inca.demo",
-                    "window":{"width":1024,"height":768,"title":"Window",
-                              "resizable":true,"minWidth":320,"minHeight":240}}"#
+                r#"
+                {"name":"Demo","identifier":"org.inca.demo",
+                "window":{"width":1024,"height":768,"title":"Window",
+                          "resizable":true,"minWidth":320,"minHeight":240}}
+                "#
             ),
             serde_json::json!({
                 "name": "Demo",

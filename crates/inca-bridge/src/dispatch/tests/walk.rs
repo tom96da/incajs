@@ -12,8 +12,10 @@ fn one_event_object_reaches_every_node(cx: &mut TestAppContext) {
     }
     callbacks(
         &dispatcher,
-        "0: (e) => { globalThis.first ??= e; e.seen = (e.seen ?? 0) + 1; \
-            out.push([e === first, e.seen]); }",
+        r"
+        0: (e) => { globalThis.first ??= e; e.seen = (e.seen ?? 0) + 1;
+        out.push([e === first, e.seen]); }
+        ",
     );
 
     let out = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
@@ -28,8 +30,10 @@ fn after_dispatch_current_target_is_null_phase_0_and_stop_flags_clear(cx: &mut T
     listen(&host, child, "click");
     callbacks(
         &dispatcher,
-        "0: (e) => { globalThis.kept = e; e.stopPropagation(); e.preventDefault(); \
-            out.push([e.currentTarget, e.eventPhase, e.cancelBubble]); }",
+        r"
+        0: (e) => { globalThis.kept = e; e.stopPropagation(); e.preventDefault();
+        out.push([e.currentTarget, e.eventPhase, e.cancelBubble]); }
+        ",
     );
     let during = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
     assert_eq!(during, serde_json::json!([[child, 2, true]]));
@@ -37,8 +41,10 @@ fn after_dispatch_current_target_is_null_phase_0_and_stop_flags_clear(cx: &mut T
     let after = dispatcher
         .engine
         .eval::<String>(
-            "JSON.stringify([kept.currentTarget, kept.eventPhase, kept.cancelBubble, \
-             kept.defaultPrevented, kept.composedPath().length])",
+            r"
+            JSON.stringify([kept.currentTarget, kept.eventPhase, kept.cancelBubble,
+            kept.defaultPrevented, kept.composedPath().length])
+            ",
         )
         .unwrap();
     assert_eq!(after, "[null,0,false,true,0]");
@@ -54,9 +60,11 @@ fn the_path_is_fixed_when_dispatch_starts(cx: &mut TestAppContext) {
     callbacks(
         &dispatcher,
         &format!(
-            "0: (e) => {{ out.push([e.currentTarget, e.composedPath()]); \
-                if (e.currentTarget === {child}) \
-                    __inca_native__.removeChild({parent}, {child}); }}"
+            r"
+            0: (e) => {{ out.push([e.currentTarget, e.composedPath()]);
+            if (e.currentTarget === {child})
+                __inca_native__.removeChild({parent}, {child}); }}
+            "
         ),
     );
 
@@ -79,11 +87,13 @@ fn a_listener_removed_mid_dispatch_does_not_run(cx: &mut TestAppContext) {
     callbacks(
         &dispatcher,
         &format!(
-            "0: () => {{ out.push(0); \
-                __inca_native__.removeEventListener({child}, 'click', 1); \
-                __inca_native__.removeEventListener({parent}, 'click', 2); }}, \
-             1: () => out.push(1), \
-             2: () => out.push(2)"
+            r"
+            0: () => {{ out.push(0);
+               __inca_native__.removeEventListener({child}, 'click', 1);
+               __inca_native__.removeEventListener({parent}, 'click', 2); }},
+            1: () => out.push(1),
+            2: () => out.push(2)
+            "
         ),
     );
 
@@ -103,10 +113,12 @@ fn a_listener_added_to_an_ancestor_mid_dispatch_runs_and_one_added_to_the_node_w
     callbacks(
         &dispatcher,
         &format!(
-            "0: () => {{ out.push(0); \
-                __inca_native__.addEventListener({child}, 'click'); \
-                __inca_native__.addEventListener({parent}, 'click'); }}, \
-             1: () => out.push(1), 2: () => out.push(2), 3: () => out.push(3)"
+            r"
+            0: () => {{ out.push(0);
+               __inca_native__.addEventListener({child}, 'click');
+               __inca_native__.addEventListener({parent}, 'click'); }},
+            1: () => out.push(1), 2: () => out.push(2), 3: () => out.push(3)
+            "
         ),
     );
 
@@ -150,9 +162,11 @@ fn stop_propagation_keeps_the_nodes_other_listeners_and_stop_immediate_does_not(
     }
     callbacks(
         &dispatcher,
-        "0: (e) => { out.push(0); globalThis.immediate ? \
-                e.stopImmediatePropagation() : e.stopPropagation(); }, \
-         1: () => out.push(1), 2: () => out.push(2)",
+        r"
+        0: (e) => { out.push(0); globalThis.immediate ?
+               e.stopImmediatePropagation() : e.stopPropagation(); },
+        1: () => out.push(1), 2: () => out.push(2)
+        ",
     );
     let stopped = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
     assert_eq!(stopped, serde_json::json!([0, 1]));
@@ -312,11 +326,13 @@ fn stop_propagation_in_a_capture_listener_ends_the_walk_after_that_node(cx: &mut
     }
     callbacks(
         &dispatcher,
-        "0: (e) => out.push(['outer', e.currentTarget, e.eventPhase]), \
-         1: (e) => { out.push(['stopper', e.currentTarget, e.eventPhase]); e.stopPropagation(); }, \
-         2: (e) => out.push(['parent-second', e.currentTarget, e.eventPhase]), \
-         3: () => out.push('child'), 4: () => out.push('child-bubble'), \
-         5: () => out.push('parent-bubble')",
+        r"
+        0: (e) => out.push(['outer', e.currentTarget, e.eventPhase]),
+        1: (e) => { out.push(['stopper', e.currentTarget, e.eventPhase]); e.stopPropagation(); },
+        2: (e) => out.push(['parent-second', e.currentTarget, e.eventPhase]),
+        3: () => out.push('child'), 4: () => out.push('child-bubble'),
+        5: () => out.push('parent-bubble')
+        ",
     );
 
     let out = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
@@ -343,8 +359,10 @@ fn stop_propagation_in_a_target_capture_listener_skips_the_target_bubble_listene
     listen_in(&host, parent, 3, false, false);
     callbacks(
         &dispatcher,
-        "0: (e) => { out.push(0); e.stopPropagation(); }, 1: () => out.push(1), \
-         2: () => out.push(2), 3: () => out.push(3)",
+        r"
+        0: (e) => { out.push(0); e.stopPropagation(); }, 1: () => out.push(1),
+        2: () => out.push(2), 3: () => out.push(3)
+        ",
     );
 
     let out = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
@@ -363,8 +381,10 @@ fn stop_immediate_propagation_in_a_capture_listener_skips_the_rest_of_the_walk(
     listen_in(&host, child, 2, false, false);
     callbacks(
         &dispatcher,
-        "0: (e) => { out.push(0); e.stopImmediatePropagation(); }, 1: () => out.push(1), \
-         2: () => out.push(2)",
+        r"
+        0: (e) => { out.push(0); e.stopImmediatePropagation(); }, 1: () => out.push(1),
+        2: () => out.push(2)
+        ",
     );
 
     let out = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
@@ -382,11 +402,13 @@ fn a_passive_listener_cannot_cancel_and_an_active_one_after_it_can(cx: &mut Test
     listen_in(&host, child, 3, false, false);
     callbacks(
         &dispatcher,
-        "0: (e) => { e.preventDefault(); out.push(e.defaultPrevented); }, \
-         1: (e) => { e.returnValue = false; out.push(e.defaultPrevented); }, \
-         2: (e) => { e.stopPropagation(); e.preventDefault(); out.push(e.defaultPrevented); }, \
-         3: (e) => { out.push(e.defaultPrevented); e.preventDefault(); \
-            out.push(e.defaultPrevented); }",
+        r"
+        0: (e) => { e.preventDefault(); out.push(e.defaultPrevented); },
+        1: (e) => { e.returnValue = false; out.push(e.defaultPrevented); },
+        2: (e) => { e.stopPropagation(); e.preventDefault(); out.push(e.defaultPrevented); },
+        3: (e) => { out.push(e.defaultPrevented); e.preventDefault();
+           out.push(e.defaultPrevented); }
+        ",
     );
     let cx = cx.add_empty_window();
 
@@ -442,12 +464,14 @@ fn a_capture_listener_that_removes_a_later_listener_keeps_it_from_running(cx: &m
     callbacks(
         &dispatcher,
         &format!(
-            "0: () => {{ out.push(0); \
-                __inca_native__.removeEventListener({parent}, 'click', 1); \
-                __inca_native__.removeEventListener({child}, 'click', 2); \
-                __inca_native__.addEventListener({parent}, 'click', true); }}, \
-             1: () => out.push(1), 2: () => out.push(2), 3: () => out.push(3), \
-             4: () => out.push(4)"
+            r"
+            0: () => {{ out.push(0);
+               __inca_native__.removeEventListener({parent}, 'click', 1);
+               __inca_native__.removeEventListener({child}, 'click', 2);
+               __inca_native__.addEventListener({parent}, 'click', true); }},
+            1: () => out.push(1), 2: () => out.push(2), 3: () => out.push(3),
+            4: () => out.push(4)
+            "
         ),
     );
 
@@ -467,11 +491,13 @@ fn a_listener_re_added_with_other_flags_mid_walk_runs_once_in_its_new_pass(
     callbacks(
         &dispatcher,
         &format!(
-            "0: () => {{ out.push(0); \
-                __inca_native__.removeEventListener({parent}, 'click', 1); \
-                const id = __inca_native__.addEventListener({parent}, 'click', true); \
-                __inca_callbacks__[id] = __inca_callbacks__[1]; }}, \
-             1: (e) => out.push([1, e.eventPhase])"
+            r"
+            0: () => {{ out.push(0);
+               __inca_native__.removeEventListener({parent}, 'click', 1);
+               const id = __inca_native__.addEventListener({parent}, 'click', true);
+               __inca_callbacks__[id] = __inca_callbacks__[1]; }},
+            1: (e) => out.push([1, e.eventPhase])
+            "
         ),
     );
 
@@ -491,11 +517,13 @@ fn a_listener_re_registered_with_other_flags_in_its_own_pass_skips_that_pass(
     callbacks(
         &dispatcher,
         &format!(
-            "0: () => {{ out.push(0); \
-                __inca_native__.removeEventListener({child}, 'click', 1); \
-                const id = __inca_native__.addEventListener({child}, 'click', true, true); \
-                __inca_callbacks__[id] = __inca_callbacks__[1]; }}, \
-             1: (e) => {{ out.push(1); e.preventDefault(); }}"
+            r"
+            0: () => {{ out.push(0);
+               __inca_native__.removeEventListener({child}, 'click', 1);
+               const id = __inca_native__.addEventListener({child}, 'click', true, true);
+               __inca_callbacks__[id] = __inca_callbacks__[1]; }},
+            1: (e) => {{ out.push(1); e.preventDefault(); }}
+            "
         ),
     );
     let cx = cx.add_empty_window();
@@ -521,10 +549,12 @@ fn a_listener_added_to_the_target_during_its_capture_pass_joins_the_bubble_pass_
     callbacks(
         &dispatcher,
         &format!(
-            "0: () => {{ out.push(0); \
-                __inca_native__.addEventListener({child}, 'click'); \
-                __inca_native__.addEventListener({child}, 'click', true); }}, \
-             1: () => out.push(1), 2: () => out.push(2)"
+            r"
+            0: () => {{ out.push(0);
+               __inca_native__.addEventListener({child}, 'click');
+               __inca_native__.addEventListener({child}, 'click', true); }},
+            1: () => out.push(1), 2: () => out.push(2)
+            "
         ),
     );
 

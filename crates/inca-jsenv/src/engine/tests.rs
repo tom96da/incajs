@@ -354,8 +354,10 @@ fn a_rejection_handled_later_in_the_drain_is_not_returned() {
     let engine = Engine::new().unwrap();
     engine
         .eval::<()>(
-            "const p = Promise.reject(new Error('late'));\n\
-             Promise.resolve().then(() => p.catch(() => {}));",
+            r"
+            const p = Promise.reject(new Error('late'));
+            Promise.resolve().then(() => p.catch(() => {}));
+            ",
         )
         .unwrap();
 
@@ -482,8 +484,10 @@ fn a_job_that_throws_during_a_poll_is_returned_by_run_jobs() {
     let module = engine
         .start_module(
             "poll-job.mjs",
-            "queueMicrotask(() => { throw new Error('poll job'); });\n\
-             await new Promise((r) => { globalThis.release = r; });",
+            r"
+            queueMicrotask(() => { throw new Error('poll job'); });
+            await new Promise((r) => { globalThis.release = r; });
+            ",
         )
         .unwrap();
 
@@ -559,8 +563,10 @@ fn take_startup_failures_returns_the_jobs_that_threw_before_the_module_rejected(
     let module = engine
         .start_module(
             "taken.mjs",
-            "queueMicrotask(() => { throw new Error('side'); });\n\
-             await Promise.resolve(); throw new Error('entry');",
+            r"
+            queueMicrotask(() => { throw new Error('side'); });
+            await Promise.resolve(); throw new Error('entry');
+            ",
         )
         .unwrap();
 

@@ -6,8 +6,10 @@ use super::*;
 #[test]
 fn every_method_writes_at_its_own_level() {
     let written = lines_written_by(
-        "console.trace('a'); console.debug('a'); console.log('a'); \
-         console.info('a'); console.warn('a'); console.error('a');",
+        r"
+        console.trace('a'); console.debug('a'); console.log('a');
+        console.info('a'); console.warn('a'); console.error('a');
+        ",
     );
 
     let levels: Vec<Level> = written.iter().map(|(level, _)| *level).collect();
@@ -43,8 +45,10 @@ fn logging_nothing_writes_an_empty_line() {
 fn symbols_mark_error_warn_and_info_only() {
     assert_eq!(
         texts(
-            "console.error('e'); console.warn('w'); console.info('i'); \
-             console.log('l'); console.debug('d'); console.dirxml('x');"
+            r"
+            console.error('e'); console.warn('w'); console.info('i');
+            console.log('l'); console.debug('d'); console.dirxml('x');
+            "
         ),
         ["✖ e", "⚠ w", "ℹ i", "l", "d", "x"]
     );
@@ -207,8 +211,10 @@ fn an_unknown_time_label_warns_for_both_log_and_end() {
 fn groups_indent_what_follows_and_nest() {
     assert_eq!(
         texts(
-            "console.group('a'); console.log('1'); console.group('b'); console.log('2'); \
-             console.groupEnd(); console.log('3'); console.groupEnd(); console.log('4');"
+            r"
+            console.group('a'); console.log('1'); console.group('b'); console.log('2');
+            console.groupEnd(); console.log('3'); console.groupEnd(); console.log('4');
+            "
         ),
         ["▼ a", "│ 1", "│ ▼ b", "│ │ 2", "│ 3", "4"]
     );
@@ -322,8 +328,10 @@ fn trace_stack_lines_follow_the_group_guides() {
 fn empty_lines_carry_no_trailing_whitespace() {
     assert_eq!(
         texts(
-            "console.group(''); console.log(''); console.log('a\\n\\nb'); \
-             console.error(''); console.error('a\\n\\nb'); console.log();"
+            r"
+            console.group(''); console.log(''); console.log('a\n\nb');
+            console.error(''); console.error('a\n\nb'); console.log();
+            "
         ),
         ["▼", "│", "│ a\n│\n│ b", "│ ✖", "│ ✖ a\n│\n│   b", "│"]
     );

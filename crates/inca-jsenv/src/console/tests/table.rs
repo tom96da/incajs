@@ -62,8 +62,10 @@ fn table_escapes_control_characters_and_backslashes_in_cells() {
 fn table_treats_date_map_set_and_error_as_not_tabular() {
     assert_eq!(
         texts(
-            "console.table(new Date(0)); console.table(new Map([[1, 2]])); \
-             console.table(new Set([1])); console.table(new Error('x')); console.table({});"
+            r"
+            console.table(new Date(0)); console.table(new Map([[1, 2]]));
+            console.table(new Set([1])); console.table(new Error('x')); console.table({});
+            "
         )
         .iter()
         .map(|t| t.lines().next().unwrap().to_owned())
@@ -100,15 +102,17 @@ fn table_shows_date_regexp_map_and_set_rows_as_one_line_values() {
 
     assert_eq!(
         drawn,
-        "┌─────────┬──────────────────────────────┐\n\
-         │ (index) │ Values                       │\n\
-         ├─────────┼──────────────────────────────┤\n\
-         │ 0       │ 1970-01-01T00:00:00.000Z     │\n\
-         │ 1       │ Invalid Date                 │\n\
-         │ 2       │ /a\\nb/g                      │\n\
-         │ 3       │ Map(1) { 'k' => { v: 'x' } } │\n\
-         │ 4       │ Set(2) { 1, 'y' }            │\n\
-         └─────────┴──────────────────────────────┘"
+        concat!(
+            "┌─────────┬──────────────────────────────┐\n",
+            "│ (index) │ Values                       │\n",
+            "├─────────┼──────────────────────────────┤\n",
+            "│ 0       │ 1970-01-01T00:00:00.000Z     │\n",
+            "│ 1       │ Invalid Date                 │\n",
+            "│ 2       │ /a\\nb/g                      │\n",
+            "│ 3       │ Map(1) { 'k' => { v: 'x' } } │\n",
+            "│ 4       │ Set(2) { 1, 'y' }            │\n",
+            "└─────────┴──────────────────────────────┘",
+        )
     );
 }
 
@@ -134,9 +138,11 @@ fn table_cells_escape_control_characters_inside_a_collection() {
 fn dir_dirxml_and_the_specifiers_print_the_four_types() {
     assert_eq!(
         texts(
-            "console.dir(new Map([['a', new Set(['b'])]])); console.dirxml(new Date(0)); \
-             console.log('%o|%O', /x/g, new Set([1])); \
-             console.log(new Map([[1, 2]]), new Date(NaN));"
+            r"
+            console.dir(new Map([['a', new Set(['b'])]])); console.dirxml(new Date(0));
+            console.log('%o|%O', /x/g, new Set([1]));
+            console.log(new Map([[1, 2]]), new Date(NaN));
+            "
         ),
         [
             "Map(1) { 'a' => Set(1) { 'b' } }",
@@ -166,16 +172,18 @@ fn an_error_property_holding_the_types_prints_them() {
 fn hostile_values_print_without_leaving_an_exception() {
     assert_eq!(
         texts(
-            "const hostile = new Date(0); hostile.valueOf = () => { throw 1; }; \
-             hostile.toISOString = () => { throw 2; }; console.log(hostile); \
-             const m = new Map([[1, 2]]); m.entries = () => { throw 3; }; \
-             m[Symbol.iterator] = () => { throw 4; }; console.log(m); \
-             console.log(new Proxy(new Map(), {})); \
-             const r = Proxy.revocable(new Set(), {}); r.revoke(); console.log(r.proxy); \
-             console.log(new (class S extends Set {})([1])); \
-             const c = new Map(); c.set('self', c); console.log(c); \
-             console.log(new Set(Array.from({ length: 100000 }, (_, i) => i)).size); \
-             try { null.x; } catch (e) { console.log('caught'); }"
+            r"
+            const hostile = new Date(0); hostile.valueOf = () => { throw 1; };
+            hostile.toISOString = () => { throw 2; }; console.log(hostile);
+            const m = new Map([[1, 2]]); m.entries = () => { throw 3; };
+            m[Symbol.iterator] = () => { throw 4; }; console.log(m);
+            console.log(new Proxy(new Map(), {}));
+            const r = Proxy.revocable(new Set(), {}); r.revoke(); console.log(r.proxy);
+            console.log(new (class S extends Set {})([1]));
+            const c = new Map(); c.set('self', c); console.log(c);
+            console.log(new Set(Array.from({ length: 100000 }, (_, i) => i)).size);
+            try { null.x; } catch (e) { console.log('caught'); }
+            "
         ),
         [
             "1970-01-01T00:00:00.000Z",
@@ -197,8 +205,10 @@ fn a_colored_table_of_the_types_has_the_layout_of_the_plain_one() {
 
 #[test]
 fn color_off_prints_the_types_without_an_escape_sequence() {
-    let source = "console.log(new Date(0), new Date(NaN), /a/g, new Map([[1, 'x']]), new Set()); \
-                  console.dir(new Map()); console.table([new Date(0)]);";
+    let source = r"
+        console.log(new Date(0), new Date(NaN), /a/g, new Map([[1, 'x']]), new Set());
+        console.dir(new Map()); console.table([new Date(0)]);
+        ";
 
     assert!(texts(source).iter().all(|t| !t.contains('\x1b')));
     assert_eq!(
@@ -213,8 +223,10 @@ fn color_off_prints_the_types_without_an_escape_sequence() {
 #[test]
 fn table_reads_each_getter_once() {
     let lines = texts(
-        "console.table([{ get a() { console.count('g'); return 1; } }, \
-         { get a() { console.count('h'); return 2; } }], ['a', 'a']);",
+        r"
+        console.table([{ get a() { console.count('g'); return 1; } },
+        { get a() { console.count('h'); return 2; } }], ['a', 'a']);
+        ",
     );
 
     assert_eq!(lines[..2], ["g: 1", "h: 1"]);

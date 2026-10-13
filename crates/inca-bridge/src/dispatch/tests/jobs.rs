@@ -141,11 +141,13 @@ fn one_throwing_callback_does_not_stop_the_others(cx: &mut TestAppContext) {
     dispatcher
         .engine
         .eval::<()>(
-            "globalThis.ran = false; \
-             globalThis.__inca_callbacks__ = { \
-                0: () => { throw new Error('boom'); }, \
-                1: () => { globalThis.ran = true; } \
-             };",
+            r"
+            globalThis.ran = false;
+            globalThis.__inca_callbacks__ = {
+               0: () => { throw new Error('boom'); },
+               1: () => { globalThis.ran = true; }
+            };
+            ",
         )
         .unwrap();
 
@@ -169,8 +171,10 @@ fn listener_errors_of_a_dispatch_in_a_job_are_reported_when_the_jobs_drain(
     dispatcher
         .engine
         .eval::<()>(&format!(
-            "Promise.resolve().then(() => \
-                __inca_native__.dispatchEvent({node}, new Event('ping')));"
+            r"
+            Promise.resolve().then(() =>
+            __inca_native__.dispatchEvent({node}, new Event('ping')));
+            "
         ))
         .unwrap();
     let cx = cx.add_empty_window();

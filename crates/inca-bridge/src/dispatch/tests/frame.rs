@@ -4,10 +4,12 @@
 use super::*;
 use gpui::{AppContext as _, Context};
 
-const SEEN: &str = "globalThis.seen = []; \
-    globalThis.__inca_callbacks__ = { \
-        0: (e) => { globalThis.seen.push(e.type + ':' + e.target); } \
-    };";
+const SEEN: &str = r"
+    globalThis.seen = [];
+    globalThis.__inca_callbacks__ = {
+        0: (e) => { globalThis.seen.push(e.type + ':' + e.target); }
+    };
+    ";
 
 fn focusable_node(dispatcher: &EventDispatcher, host: &Rc<RefCell<Host>>) -> NodeId {
     let mut host = host.borrow_mut();

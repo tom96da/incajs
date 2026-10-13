@@ -20,8 +20,10 @@ fn a_listener_on_an_ancestor_reads_the_deepest_node_as_target(cx: &mut TestAppCo
 
     assert_eq!(
         targets_log(&mut h),
-        "mousemove@frame/inner/3,mousedown@frame/inner/3,mouseup@frame/inner/3,\
-         click@frame/inner/3,wheel@frame/inner/3"
+        concat!(
+            "mousemove@frame/inner/3,mousedown@frame/inner/3,mouseup@frame/inner/3,",
+            "click@frame/inner/3,wheel@frame/inner/3"
+        )
     );
 }
 
@@ -121,15 +123,20 @@ fn an_unfocused_key_event_targets_the_root_and_reads_location_composing_and_modi
     assert_eq!(
         targets_log(&mut h),
         format!(
-            "keydown:true:true:2:A:0:false:false:true:false:false:false:false:false,\
-             keyup:true:true:2:b:0:false:false:false:true:false:false:{accel}:false"
+            concat!(
+                "keydown:true:true:2:A:0:false:false:true:false:false:false:false:false,",
+                "keyup:true:true:2:b:0:false:false:false:true:false:false:{accel}:false"
+            ),
+            accel = accel
         )
     );
 }
 
 /// Callback 1 logs `type:key:` and the four modifier flags as 0 or 1.
-const MODIFIER_LOG: &str = "cb[1] = (e) => { \
-    globalThis.log.push(`${e.type}:${e.key}:${+e.shiftKey}${+e.ctrlKey}${+e.altKey}${+e.metaKey}`); };";
+const MODIFIER_LOG: &str = r"
+    cb[1] = (e) => {
+    globalThis.log.push(`${e.type}:${e.key}:${+e.shiftKey}${+e.ctrlKey}${+e.altKey}${+e.metaKey}`); };
+    ";
 
 #[gpui::test]
 fn a_modifier_alone_fires_keydown_and_keyup_in_flag_order(cx: &mut TestAppContext) {
@@ -161,8 +168,10 @@ fn a_modifier_alone_fires_keydown_and_keyup_in_flag_order(cx: &mut TestAppContex
 
     assert_eq!(
         log(&h),
-        "keydown:Shift:1000,keydown:Control:1100,keyup:Shift:0010,keyup:Control:0010,\
-         keydown:Alt:0010,keyup:Alt:0001,keydown:Meta:0001,keyup:Meta:0000"
+        concat!(
+            "keydown:Shift:1000,keydown:Control:1100,keyup:Shift:0010,keyup:Control:0010,",
+            "keydown:Alt:0010,keyup:Alt:0001,keydown:Meta:0001,keyup:Meta:0000"
+        )
     );
 }
 
@@ -191,8 +200,10 @@ fn a_stopped_modifier_keydown_skips_the_ancestors(cx: &mut TestAppContext) {
     let mut h = load_listening(cx, TARGETS);
     run_js(
         &mut h,
-        "__inca_native__.setAttribute(inner, 'tabindex', '0'); __inca_native__.focusNode(inner);\
-         cb[2] = (e) => { e.stopPropagation(); };",
+        r"
+        __inca_native__.setAttribute(inner, 'tabindex', '0'); __inca_native__.focusNode(inner);
+        cb[2] = (e) => { e.stopPropagation(); };
+        ",
     );
     listen(&mut h, "inner", "keydown", 2);
     listen(&mut h, "frame", "keydown", 0);
@@ -208,8 +219,10 @@ fn screen_coordinates_are_the_window_origin_plus_the_client_position(cx: &mut Te
     let mut h = load_listening(cx, TARGETS);
     run_js(
         &mut h,
-        "cb[1] = (e) => { \
-         globalThis.log.push(`${e.screenX - e.clientX}:${e.screenY - e.clientY}`); };",
+        r"
+        cb[1] = (e) => {
+        globalThis.log.push(`${e.screenX - e.clientX}:${e.screenY - e.clientY}`); };
+        ",
     );
     listen(&mut h, "frame", "click mousemove", 1);
     let origin = h.cx.update(|window, _| window.bounds().origin);

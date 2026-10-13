@@ -21,14 +21,16 @@ fn build_clickable_tree() -> (Rc<RefCell<Host>>, NodeId) {
 fn install_deferred_click_counter(engine: &Engine) {
     engine
         .eval::<()>(
-            "globalThis.__inca_callbacks__ = { \
-                0: (event) => { \
-                    Promise.resolve().then(() => { \
-                        globalThis.clicks = (globalThis.clicks || 0) + 1; \
-                        globalThis.lastEvent = event; \
-                    }); \
-                } \
-            };",
+            r"
+            globalThis.__inca_callbacks__ = {
+                0: (event) => {
+                    Promise.resolve().then(() => {
+                        globalThis.clicks = (globalThis.clicks || 0) + 1;
+                        globalThis.lastEvent = event;
+                    });
+                }
+            };
+            ",
         )
         .unwrap();
 }
@@ -157,10 +159,12 @@ fn a_click_reaches_every_callback_registered_for_it(cx: &mut TestAppContext) {
     let engine = Rc::new(Engine::new().unwrap());
     engine
         .eval::<()>(
-            "globalThis.__inca_callbacks__ = { \
-                0: () => { globalThis.clicks = (globalThis.clicks || 0) + 1; }, \
-                1: () => { globalThis.clicks = (globalThis.clicks || 0) + 10; } \
-            };",
+            r"
+            globalThis.__inca_callbacks__ = {
+                0: () => { globalThis.clicks = (globalThis.clicks || 0) + 1; },
+                1: () => { globalThis.clicks = (globalThis.clicks || 0) + 10; }
+            };
+            ",
         )
         .unwrap();
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));

@@ -24,9 +24,12 @@ fn a_job_queued_by_a_key_down_listener_lands_before_the_enter_click(cx: &mut Tes
     let mut h = load_listening(cx, BUTTON);
     run_js(
         &mut h,
-        "cb[5] = () => { Promise.resolve().then(() => \
-            __inca_native__.setAttribute(box, 'disabled', true)); }; \
-         listen(box, 'keydown', 5);",
+        r"
+        cb[5] = () => {
+            Promise.resolve().then(() => __inca_native__.setAttribute(box, 'disabled', true));
+        };
+        listen(box, 'keydown', 5);
+        ",
     );
     listen(&mut h, "box", "click", 0);
 
@@ -106,8 +109,10 @@ fn a_pending_space_press_does_not_click_another_button(cx: &mut TestAppContext) 
     let mut h = load_listening(cx, BUTTON);
     run_js(
         &mut h,
-        "globalThis.b2 = __inca_native__.createNode('button'); \
-         __inca_native__.appendChild(frame, b2);",
+        r"
+        globalThis.b2 = __inca_native__.createNode('button');
+        __inca_native__.appendChild(frame, b2);
+        ",
     );
     listen(&mut h, "box", "click", 0);
     listen(&mut h, "b2", "click", 0);
@@ -213,10 +218,12 @@ fn a_key_press_in_a_focused_descendant_does_not_click_the_button(cx: &mut TestAp
     listen(&mut h, "box", "click", 0);
     run_js(
         &mut h,
-        "globalThis.k = __inca_native__.createNode('div'); \
-         __inca_native__.setAttribute(k, 'tabindex', '0'); \
-         __inca_native__.appendChild(box, k); \
-         __inca_native__.focusNode(k);",
+        r"
+        globalThis.k = __inca_native__.createNode('div');
+        __inca_native__.setAttribute(k, 'tabindex', '0');
+        __inca_native__.appendChild(box, k);
+        __inca_native__.focusNode(k);
+        ",
     );
 
     h.keystrokes("enter space");
@@ -230,12 +237,14 @@ fn enter_and_space_click_only_a_button(cx: &mut TestAppContext) {
     let mut h = load_listening(cx, BUTTON);
     run_js(
         &mut h,
-        "const d = __inca_native__.createNode('div'); \
-         __inca_native__.setAttribute(d, 'tabindex', '0'); \
-         __inca_native__.appendChild(frame, d); \
-         listen(d, 'click', 0); \
-         listen(d, 'keydown', 0); \
-         __inca_native__.focusNode(d);",
+        r"
+        const d = __inca_native__.createNode('div');
+        __inca_native__.setAttribute(d, 'tabindex', '0');
+        __inca_native__.appendChild(frame, d);
+        listen(d, 'click', 0);
+        listen(d, 'keydown', 0);
+        __inca_native__.focusNode(d);
+        ",
     );
 
     h.keystrokes("enter space");
@@ -251,11 +260,13 @@ fn a_key_click_on_an_enabled_button_reaches_the_ancestor_after_a_disabled_hover(
     let mut h = load_listening(cx, BUTTON);
     run_js(
         &mut h,
-        "globalThis.b2 = __inca_native__.createNode('button'); \
-         __inca_native__.setStyle(b2, 'width', 100); \
-         __inca_native__.setStyle(b2, 'height', 50); \
-         __inca_native__.appendChild(frame, b2); \
-         __inca_native__.setAttribute(box, 'disabled', true);",
+        r"
+        globalThis.b2 = __inca_native__.createNode('button');
+        __inca_native__.setStyle(b2, 'width', 100);
+        __inca_native__.setStyle(b2, 'height', 50);
+        __inca_native__.appendChild(frame, b2);
+        __inca_native__.setAttribute(box, 'disabled', true);
+        ",
     );
     listen(&mut h, "frame", "click", 0);
     let button = node(&h, "box");

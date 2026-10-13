@@ -171,11 +171,11 @@ fn a_scroll_no_listener_reaches_runs_no_js(cx: &mut TestAppContext) {
     let mut scene = Scene::new(cx, one_container(), "");
     // Counts each read of the callback table, which only a walk that
     // reaches a listener makes.
-    scene.js(
-        "globalThis.reads = 0; const table = globalThis.__inca_callbacks__; \
-         Object.defineProperty(globalThis, '__inca_callbacks__', { configurable: true, \
-         get() { globalThis.reads++; return table; } });",
-    );
+    scene.js(r"
+        globalThis.reads = 0; const table = globalThis.__inca_callbacks__;
+        Object.defineProperty(globalThis, '__inca_callbacks__', { configurable: true,
+        get() { globalThis.reads++; return table; } });
+        ");
     scene.wheel(-50.);
     assert_eq!(scene.offset(0).y, px(-50.));
     assert_eq!(scene.engine.eval::<i32>("globalThis.reads").unwrap(), 0);
@@ -193,11 +193,11 @@ fn scroll_stops_at_the_listening_container(cx: &mut TestAppContext) {
 #[gpui::test]
 fn a_node_appended_in_the_same_tick_scrolls_into_view_once_it_has_a_box(cx: &mut TestAppContext) {
     let mut scene = Scene::with_bindings(cx, one_container(), "", "");
-    scene.js(
-        "const n = __inca_native__; const node = n.createNode('div'); \
-         n.setStyle(node, 'width', 100); n.setStyle(node, 'height', 50); \
-         n.appendChild(0, node); n.scrollIntoViewNode(node, 'start', 'nearest');",
-    );
+    scene.js(r"
+        const n = __inca_native__; const node = n.createNode('div');
+        n.setStyle(node, 'width', 100); n.setStyle(node, 'height', 50);
+        n.appendChild(0, node); n.scrollIntoViewNode(node, 'start', 'nearest');
+        ");
     assert_eq!(scene.offset(0).y, px(0.));
 
     scene.draw();
@@ -229,8 +229,10 @@ fn a_script_offset_then_a_reveal_in_the_same_tick_lands_on_the_item(cx: &mut Tes
     add_div(&mut host, Some(container), 300.0, false);
     let scene = Scene::new(cx, host, "");
     scene.js(&format!(
-        "__inca_native__.scrollNode(0, null, 100); \
-         __inca_native__.scrollIntoViewNode({item}, 'start', 'nearest');"
+        r"
+        __inca_native__.scrollNode(0, null, 100);
+        __inca_native__.scrollIntoViewNode({item}, 'start', 'nearest');
+        "
     ));
     assert_eq!(scene.offset(0).y, px(-200.));
 }
@@ -243,8 +245,10 @@ fn scroll_of(scene: &Scene, node: NodeId) -> Vec<f64> {
 }
 
 /// Callbacks 0 and 1 record `scroll` at the container and at its parent.
-const RECORD_SCROLL: &str = "0: (e) => { ran.push('scroll:' + e.target + ':' + e.bubbles); }, \
-                             1: () => { ran.push('parent'); }";
+const RECORD_SCROLL: &str = r"
+    0: (e) => { ran.push('scroll:' + e.target + ':' + e.bubbles); },
+    1: () => { ran.push('parent'); }
+    ";
 
 /// A scrolling node 1 under the plain root 0.
 fn parented_container() -> Host {

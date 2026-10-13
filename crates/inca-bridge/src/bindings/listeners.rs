@@ -289,12 +289,14 @@ mod tests {
         let (engine, host) = engine_with_bindings();
         engine
             .eval::<()>(
-                "const n = __inca_native__.createNode('div'); \
-                 __inca_native__.addEventListener(n, 'a'); \
-                 __inca_native__.addEventListener(n, 'a', true); \
-                 __inca_native__.addEventListener(n, 'a', false, true); \
-                 __inca_native__.addEventListener(n, 'a', true, true); \
-                 __inca_native__.removeEventListener(n, 'a', 3);",
+                r"
+                const n = __inca_native__.createNode('div');
+                __inca_native__.addEventListener(n, 'a');
+                __inca_native__.addEventListener(n, 'a', true);
+                __inca_native__.addEventListener(n, 'a', false, true);
+                __inca_native__.addEventListener(n, 'a', true, true);
+                __inca_native__.removeEventListener(n, 'a', 3);
+                ",
             )
             .unwrap();
         let host = host.borrow();
@@ -361,10 +363,12 @@ mod tests {
 
         let ids: Vec<u32> = engine
             .eval(
-                "const n = __inca_native__.createNode('div'); \
-                 [__inca_native__.addEventListener(n, 'a'), \
-                  __inca_native__.addEventListener(n, 'b', true), \
-                  __inca_native__.addEventListener(n, 'a')]",
+                r"
+                const n = __inca_native__.createNode('div');
+                [__inca_native__.addEventListener(n, 'a'),
+                 __inca_native__.addEventListener(n, 'b', true),
+                 __inca_native__.addEventListener(n, 'a')]
+                ",
             )
             .unwrap();
 
@@ -377,10 +381,12 @@ mod tests {
 
         engine
             .eval::<()>(
-                "globalThis.n = __inca_native__.createNode('div'); \
-                 globalThis.typeError = false; \
-                 try { __inca_native__.addEventListener(9999, 'click'); } \
-                 catch (e) { globalThis.typeError = e instanceof TypeError; }",
+                r"
+                globalThis.n = __inca_native__.createNode('div');
+                globalThis.typeError = false;
+                try { __inca_native__.addEventListener(9999, 'click'); }
+                catch (e) { globalThis.typeError = e instanceof TypeError; }
+                ",
             )
             .unwrap();
 
@@ -400,9 +406,11 @@ mod tests {
 
         let range_error: bool = engine
             .eval(
-                "(() => { const n = __inca_native__.createNode('div'); \
-                 try { __inca_native__.addEventListener(n, 'click'); return false; } \
-                 catch (e) { return e instanceof RangeError; } })()",
+                r"
+                (() => { const n = __inca_native__.createNode('div');
+                try { __inca_native__.addEventListener(n, 'click'); return false; }
+                catch (e) { return e instanceof RangeError; } })()
+                ",
             )
             .unwrap();
 

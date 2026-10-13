@@ -106,13 +106,15 @@ fn settle_flushes_a_microtask_mount(cx: &mut TestAppContext) {
             app.session
                 .engine
                 .eval::<()>(
-                    r"Promise.resolve().then(() => {
-                            const n = __inca_native__;
-                            const d = n.createNode('div');
-                            n.setStyle(d, 'width', 40);
-                            n.setStyle(d, 'height', 20);
-                            n.appendChild(n.rootNodeId(), d);
-                        });",
+                    r"
+                    Promise.resolve().then(() => {
+                        const n = __inca_native__;
+                        const d = n.createNode('div');
+                        n.setStyle(d, 'width', 40);
+                        n.setStyle(d, 'height', 20);
+                        n.appendChild(n.rootNodeId(), d);
+                    });
+                    ",
                 )
                 .unwrap();
         })
@@ -339,8 +341,8 @@ fn a_wheel_listener_keeps_the_scroll_it_writes_to_a_container(cx: &mut TestAppCo
     run_js(
         &mut h,
         "globalThis.__inca_callbacks__ = { 0: (e) => {
-             e.preventDefault();
-             __inca_native__.scrollNode(outer, null, 20);
+            e.preventDefault();
+            __inca_native__.scrollNode(outer, null, 20);
          } };
          __inca_native__.addEventListener(__inca_native__.rootNodeId(), 'wheel');",
     );

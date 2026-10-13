@@ -119,8 +119,10 @@ fn auto_resize_keeps_an_explicit_dimension_but_still_picks_up_the_other_from_con
     assert_eq!(
         bounds_size(cx, window),
         (500.0, 150.0),
-        "the configured width must win, but the never-configured height still \
-         comes from content, matching window_size's own per-dimension precedence"
+        concat!(
+            "the configured width must win, but the never-configured height still ",
+            "comes from content, matching window_size's own per-dimension precedence"
+        )
     );
 }
 
@@ -141,8 +143,10 @@ fn start_auto_resizes_content_that_mounts_only_after_it_returns(cx: &mut TestApp
     assert_eq!(
         bounds_size(cx, window),
         (300.0, 150.0),
-        "start must give its own initial drain a chance to auto-resize, \
-         not just a later reload or relay"
+        concat!(
+            "start must give its own initial drain a chance to auto-resize, ",
+            "not just a later reload or relay"
+        )
     );
 }
 

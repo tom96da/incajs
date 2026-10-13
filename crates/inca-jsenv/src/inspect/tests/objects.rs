@@ -52,8 +52,10 @@ fn an_instance_prints_with_its_class_name() {
             "Foo { a: 1 }",
         ),
         (
-            "class Foo { a = 1 }; \
-             Foo.prototype.constructor = new Proxy(Foo, { get() { throw 1; } }); new Foo()",
+            r"
+            class Foo { a = 1 };
+            Foo.prototype.constructor = new Proxy(Foo, { get() { throw 1; } }); new Foo()
+            ",
             "Foo { a: 1 }",
         ),
         ("({ a: 1 })", "{ a: 1 }"),
@@ -99,8 +101,10 @@ fn a_constructor_that_cannot_name_the_object_falls_back_to_object() {
             "{ a: 1 }",
         ),
         (
-            "class Foo { a = 1 }; Object.defineProperty(Foo.prototype, 'constructor', \
-             { get() { throw 1; } }); new Foo()",
+            r"
+            class Foo { a = 1 }; Object.defineProperty(Foo.prototype, 'constructor',
+            { get() { throw 1; } }); new Foo()
+            ",
             "{ a: 1 }",
         ),
         (
@@ -109,8 +113,10 @@ fn a_constructor_that_cannot_name_the_object_falls_back_to_object() {
         ),
         ("Object.create(new Proxy({}, {}))", "{}"),
         (
-            "class Foo { a = 1 }; \
-             Object.defineProperty(Foo, 'name', { get() { throw 1; } }); new Foo()",
+            r"
+            class Foo { a = 1 };
+            Object.defineProperty(Foo, 'name', { get() { throw 1; } }); new Foo()
+            ",
             "{ a: 1 }",
         ),
         (
@@ -337,9 +343,11 @@ fn an_accessor_past_the_depth_limit_is_not_reached() {
 fn an_array_element_accessor_is_named_and_not_called() {
     assert_eq!(
         counted(
-            "const a = [1, 2, 3]; \
-             Object.defineProperty(a, 1, { get() { calls++; }, enumerable: true }); \
-             Object.defineProperty(a, 2, { set(v) { calls++; }, enumerable: true }); a"
+            r"
+            const a = [1, 2, 3];
+            Object.defineProperty(a, 1, { get() { calls++; }, enumerable: true });
+            Object.defineProperty(a, 2, { set(v) { calls++; }, enumerable: true }); a
+            "
         ),
         ("[ 1, [Getter], [Setter] ]".to_owned(), 0)
     );
@@ -361,8 +369,10 @@ fn a_class_getter_lives_on_the_prototype_and_is_neither_shown_nor_run() {
 fn a_class_instance_accessor_defined_on_the_instance_is_named() {
     assert_eq!(
         counted(
-            "const o = new (class { constructor() { \
-             Object.defineProperty(this, 'v', { get: () => { calls++; }, enumerable: true }); } })(); o"
+            r"
+            const o = new (class { constructor() {
+            Object.defineProperty(this, 'v', { get: () => { calls++; }, enumerable: true }); } })(); o
+            "
         ),
         ("{ v: [Getter] }".to_owned(), 0)
     );

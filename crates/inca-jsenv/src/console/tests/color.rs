@@ -19,8 +19,10 @@ fn values_are_colored_by_type_in_a_log_line() {
 fn each_level_symbol_is_colored_and_its_body_is_not() {
     assert_eq!(
         colored_texts(
-            "console.error('e'); console.warn('w'); console.info('i'); \
-             console.log('l'); console.dirxml('x');"
+            r"
+            console.error('e'); console.warn('w'); console.info('i');
+            console.log('l'); console.dirxml('x');
+            "
         ),
         [
             "\x1b[31m✖\x1b[39m e",
@@ -189,22 +191,26 @@ fn format_specifiers_color_inspected_arguments() {
 
 #[test]
 fn color_off_writes_no_escape_sequences_for_any_method() {
-    let source = "console.group('g'); console.log('s', 1, null, undefined, { a: ['b'] }); \
-         console.debug('d'); console.info('i'); console.warn('w'); console.error(new Error('e')); \
-         console.assert(false, 'x'); console.trace('t'); console.dir('q'); \
-         console.table([{ a: 1 }, 'v']); console.count(); console.countReset('z'); \
-         console.groupEnd(); console.log(function f() {}, Symbol('s'), 10n);";
+    let source = r"
+        console.group('g'); console.log('s', 1, null, undefined, { a: ['b'] });
+        console.debug('d'); console.info('i'); console.warn('w'); console.error(new Error('e'));
+        console.assert(false, 'x'); console.trace('t'); console.dir('q');
+        console.table([{ a: 1 }, 'v']); console.count(); console.countReset('z');
+        console.groupEnd(); console.log(function f() {}, Symbol('s'), 10n);
+        ";
 
     assert!(texts(source).iter().all(|t| !t.contains('\x1b')));
 }
 
 #[test]
 fn color_on_adds_only_sequences_to_the_plain_output() {
-    let source = "console.group('g'); console.log('s', 1, null, undefined, { a: ['b'] }); \
-         console.debug('d'); console.info('i'); console.warn('w'); \
-         console.error('e\\nf'); console.assert(false, 'x'); console.dir('q'); \
-         console.table([{ a: 1 }, 'v']); console.count(); console.countReset('z'); \
-         console.groupEnd(); console.log(function f() {}, Symbol('s'), 10n);";
+    let source = r"
+        console.group('g'); console.log('s', 1, null, undefined, { a: ['b'] });
+        console.debug('d'); console.info('i'); console.warn('w');
+        console.error('e\nf'); console.assert(false, 'x'); console.dir('q');
+        console.table([{ a: 1 }, 'v']); console.count(); console.countReset('z');
+        console.groupEnd(); console.log(function f() {}, Symbol('s'), 10n);
+        ";
     let plain = texts(source);
     let colored: Vec<String> = colored_texts(source).iter().map(|t| strip(t)).collect();
 
@@ -213,8 +219,10 @@ fn color_on_adds_only_sequences_to_the_plain_output() {
 
 #[test]
 fn color_does_not_change_the_levels() {
-    let source = "console.trace('a'); console.debug('a'); console.log('a'); \
-         console.info('a'); console.warn('a'); console.error('a');";
+    let source = r"
+        console.trace('a'); console.debug('a'); console.log('a');
+        console.info('a'); console.warn('a'); console.error('a');
+        ";
     let levels = |color| -> Vec<Level> {
         written_with_color(source, color)
             .iter()
@@ -242,9 +250,12 @@ fn color_never_crosses_a_line_break_inside_nested_groups() {
     assert_eq!(
         lines[2],
         format!(
-            "{GUIDE}{GUIDE}\x1b[33m⚠\x1b[39m [ \x1b[32m'x\x1b[39m\n\
-             {GUIDE}{GUIDE}  \x1b[32my'\x1b[39m ] \x1b[32mSymbol(p\x1b[39m\n\
-             {GUIDE}{GUIDE}  \x1b[32mq)\x1b[39m"
+            concat!(
+                "{0}{0}\x1b[33m⚠\x1b[39m [ \x1b[32m'x\x1b[39m\n",
+                "{0}{0}  \x1b[32my'\x1b[39m ] \x1b[32mSymbol(p\x1b[39m\n",
+                "{0}{0}  \x1b[32mq)\x1b[39m",
+            ),
+            GUIDE
         )
     );
     for line in lines[2].lines() {
@@ -273,10 +284,12 @@ fn a_debug_line_with_a_multi_line_value_is_dim_on_each_line() {
 
 #[test]
 fn every_color_in_every_method_is_closed_on_its_own_line() {
-    let source = "console.group('g\\nh'); console.log(['a\\nb'], Symbol('s\\nt')); \
-         console.info({ 'k\\nz': 'v\\nw' }); console.error(new Error('e\\nf')); \
-         console.trace('t\\nu'); console.debug('d\\ne'); console.assert(false, ['q\\nr']); \
-         console.dir(['m\\nn']); console.table([['c\\nd', 1]]);";
+    let source = r"
+        console.group('g\nh'); console.log(['a\nb'], Symbol('s\nt'));
+        console.info({ 'k\nz': 'v\nw' }); console.error(new Error('e\nf'));
+        console.trace('t\nu'); console.debug('d\ne'); console.assert(false, ['q\nr']);
+        console.dir(['m\nn']); console.table([['c\nd', 1]]);
+        ";
 
     for text in colored_texts(source) {
         for line in text.lines() {

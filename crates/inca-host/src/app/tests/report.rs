@@ -88,8 +88,11 @@ fn a_chunk_importing_the_packaged_entry_back_does_not_evaluate_it_twice() {
     let entry = dir.0.join("Contents/Resources/bundle.js");
     fs::write(
         &entry,
-        "globalThis.evaluations = (globalThis.evaluations ?? 0) + 1;\n\
-         import('./assets/chunk.js');",
+        r"
+        globalThis.evaluations = (globalThis.evaluations ?? 0) + 1;
+
+        import('./assets/chunk.js');
+        ",
     )
     .unwrap();
     fs::write(assets_dir.join("chunk.js"), "import '../bundle.js';").unwrap();

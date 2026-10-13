@@ -92,11 +92,13 @@ fn a_listener_error_of_a_dispatch_while_pending_is_one_app_error_before_the_wind
     cx: &mut TestAppContext,
 ) {
     let (capturing, writer) = capture();
-    let source = "const n = __inca_native__.createNode('div');\n\
-        __inca_native__.addEventListener(n, 'ping');\n\
-        globalThis.__inca_callbacks__ = { 0() { throw new Error('x'); } };\n\
-        __inca_native__.dispatchEvent(n, new Event('ping'));\n\
-        await new Promise(() => {});";
+    let source = r"
+        const n = __inca_native__.createNode('div');
+        __inca_native__.addEventListener(n, 'ping');
+        globalThis.__inca_callbacks__ = { 0() { throw new Error('x'); } };
+        __inca_native__.dispatchEvent(n, new Event('ping'));
+        await new Promise(() => {});
+        ";
     serve(cx, source, TEST_ENTRY_PATH, &writer);
     cx.run_until_parked();
 
@@ -127,8 +129,11 @@ fn a_rejection_after_the_timeout_is_one_app_error_and_the_window_stays(cx: &mut 
     let (capturing, writer) = capture();
     let sender = serve(
         cx,
-        "await new Promise((_, reject) => { \
-             __inca_dev__.receive = () => reject(new Error('late')); });",
+        r"
+        await new Promise((_, reject) => {
+            __inca_dev__.receive = () => reject(new Error('late'));
+        });
+        ",
         TEST_ENTRY_PATH,
         &writer,
     );
@@ -178,10 +183,15 @@ fn a_closed_channel_while_loading_ends_the_loop(cx: &mut TestAppContext) {
 /// clears the report on `clear`.
 fn reports_load_failures() -> String {
     format!(
-        "await new Promise((r) => {{ __inca_dev__.receive = (m) => {{ \
-             if (m === 'fail') __inca_dev__.setLoadFailed(true); \
-             if (m === 'clear') __inca_dev__.setLoadFailed(false); \
-             if (m === 'go') r(); }}; }});\n{}",
+        r"
+        await new Promise((r) => {{ __inca_dev__.receive = (m) => {{
+                if (m === 'fail') __inca_dev__.setLoadFailed(true);
+                if (m === 'clear') __inca_dev__.setLoadFailed(false);
+                if (m === 'go') r();
+            }};
+        }});
+        {}
+        ",
         mounts_a_div(300, 150)
     )
 }
@@ -233,9 +243,12 @@ fn a_report_cleared_within_one_poll_restarts_the_timeout(cx: &mut TestAppContext
     let (capturing, writer) = capture();
     let sender = serve(
         cx,
-        "__inca_dev__.receive = () => { \
-             __inca_dev__.setLoadFailed(true); __inca_dev__.setLoadFailed(false); }; \
-         await new Promise(() => {});",
+        r"
+        __inca_dev__.receive = () => {
+            __inca_dev__.setLoadFailed(true); __inca_dev__.setLoadFailed(false);
+        };
+        await new Promise(() => {});
+        ",
         TEST_ENTRY_PATH,
         &writer,
     );
@@ -292,8 +305,11 @@ fn a_report_cleared_by_the_final_poll_restarts_the_timeout(cx: &mut TestAppConte
     let (_sender, engine) = serve_with_engine_handle(cx, NEVER_SETTLES, &writer);
     engine
         .eval::<()>(
-            "Promise.resolve().then(() => { \
-                 __inca_dev__.setLoadFailed(true); __inca_dev__.setLoadFailed(false); });",
+            r"
+            Promise.resolve().then(() => {
+                __inca_dev__.setLoadFailed(true); __inca_dev__.setLoadFailed(false);
+            });
+            ",
         )
         .unwrap();
 

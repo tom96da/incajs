@@ -43,8 +43,10 @@ fn entering_a_nested_node_fires_over_then_enter_on_each_ancestor(cx: &mut TestAp
 
     assert_eq!(
         targets_log(&mut h),
-        "mouseover@C/C/root,mouseover@B/C/root,mouseover@A/C/root,\
-         mouseenter@A/A/root,mouseenter@B/B/root,mouseenter@C/C/root"
+        concat!(
+            "mouseover@C/C/root,mouseover@B/C/root,mouseover@A/C/root,",
+            "mouseenter@A/A/root,mouseenter@B/B/root,mouseenter@C/C/root"
+        )
     );
 }
 
@@ -74,8 +76,10 @@ fn a_replaced_node_under_a_resting_pointer_gets_enter_events(cx: &mut TestAppCon
     // The new node is outside the name table, so the log spells it undefined.
     assert_eq!(
         targets_log(&mut h),
-        "mouseover@undefined/undefined/B,mouseover@B/undefined/B,\
-         mouseover@A/undefined/B,mouseenter@undefined/undefined/B"
+        concat!(
+            "mouseover@undefined/undefined/B,mouseover@B/undefined/B,",
+            "mouseover@A/undefined/B,mouseenter@undefined/undefined/B"
+        )
     );
 }
 
@@ -159,8 +163,10 @@ fn moving_to_a_sibling_fires_out_leave_over_enter_with_related_targets(cx: &mut 
 
     assert_eq!(
         targets_log(&mut h),
-        "mouseout@C/C/D,mouseout@B/C/D,mouseout@A/C/D,mouseleave@C/C/D,\
-         mouseover@D/D/C,mouseover@B/D/C,mouseover@A/D/C,mouseenter@D/D/C"
+        concat!(
+            "mouseout@C/C/D,mouseout@B/C/D,mouseout@A/C/D,mouseleave@C/C/D,",
+            "mouseover@D/D/C,mouseover@B/D/C,mouseover@A/D/C,mouseenter@D/D/C"
+        )
     );
 }
 
@@ -175,8 +181,10 @@ fn leaving_everything_fires_out_then_leave_from_the_inside_out(cx: &mut TestAppC
 
     assert_eq!(
         targets_log(&mut h),
-        "mouseout@D/D/none,mouseout@B/D/none,mouseout@A/D/none,\
-         mouseleave@D/D/none,mouseleave@B/B/none,mouseleave@A/A/none"
+        concat!(
+            "mouseout@D/D/none,mouseout@B/D/none,mouseout@A/D/none,",
+            "mouseleave@D/D/none,mouseleave@B/B/none,mouseleave@A/A/none"
+        )
     );
 }
 
@@ -196,9 +204,11 @@ fn a_click_between_two_nodes_targets_their_common_ancestor(cx: &mut TestAppConte
 }
 
 /// Callback 1 logs `type:detail:button:buttons:clientX:clientY`.
-const POINTER_LOG: &str = "cb[1] = (e) => { \
-    globalThis.log.push([e.type, e.detail, e.button, e.buttons, e.clientX, e.clientY] \
-    .join(':')); };";
+const POINTER_LOG: &str = r"
+    cb[1] = (e) => {
+        globalThis.log.push([e.type, e.detail, e.button, e.buttons, e.clientX, e.clientY].join(':'));
+    };
+    ";
 
 #[gpui::test]
 fn a_mouse_click_carries_detail_button_buttons_and_coordinates(cx: &mut TestAppContext) {
@@ -239,9 +249,11 @@ fn a_right_press_fires_contextmenu_after_mousedown_and_no_click(cx: &mut TestApp
 
     assert_eq!(
         targets_log(&mut h),
-        "mousedown@inner/inner/2,mousedown@frame/inner/3,contextmenu@inner/inner/2,\
-         contextmenu:0:2:2:15:15,mouseup@inner/inner/2,\
-         auxclick@frame/inner/3"
+        concat!(
+            "mousedown@inner/inner/2,mousedown@frame/inner/3,contextmenu@inner/inner/2,",
+            "contextmenu:0:2:2:15:15,mouseup@inner/inner/2,",
+            "auxclick@frame/inner/3"
+        )
     );
 }
 
@@ -337,8 +349,10 @@ fn a_double_click_fires_dblclick_after_the_second_click(cx: &mut TestAppContext)
 
     assert_eq!(
         targets_log(&mut h),
-        "click:1:0:0:15:15,click:2:0:0:15:15,dblclick@mid/inner/3,dblclick:2:0:0:15:15,\
-         click:3:0:0:15:15"
+        concat!(
+            "click:1:0:0:15:15,click:2:0:0:15:15,dblclick@mid/inner/3,dblclick:2:0:0:15:15,",
+            "click:3:0:0:15:15"
+        )
     );
 }
 

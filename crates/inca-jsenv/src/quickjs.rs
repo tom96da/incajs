@@ -291,11 +291,14 @@ mod tests {
     #[test]
     fn an_accessor_names_its_functions_and_runs_none() {
         with("globalThis.calls = 0;", |ctx| {
-            let source = "Object.defineProperties({}, { \
-                g: { get() { calls++; }, enumerable: true }, \
-                s: { set(v) { calls++; } }, \
-                b: { get() { calls++; }, set(v) { calls++; } }, \
-                n: { get: undefined, set: undefined } })";
+            let source = r"
+                Object.defineProperties({}, {
+                    g: { get() { calls++; }, enumerable: true },
+                    s: { set(v) { calls++; } },
+                    b: { get() { calls++; }, set(v) { calls++; } },
+                    n: { get: undefined, set: undefined }
+                })
+                ";
             let object: Object<'_> = ctx.eval(source).unwrap();
             let read = |key: &str| object.get_own_property_descriptor(key).unwrap().unwrap();
             let (g, s, b, n) = (read("g"), read("s"), read("b"), read("n"));
@@ -568,9 +571,13 @@ mod tests {
         let context = Context::full(&runtime).unwrap();
         context.with(|ctx| {
             ctx.eval::<(), _>(
-                "globalThis.objs = { data: { a: 1 }, get: { get a() {} }, set: { set a(v) {} }, \
-                 both: { get a() {}, set a(v) {} }, none: Object.defineProperty({}, 'a', { get: undefined }), \
-                 date: new Date(0), map: new Map(), proxy: new Proxy({}, { getOwnPropertyDescriptor() { throw 1; } }) };",
+                r"
+                globalThis.objs = {
+                    data: { a: 1 }, get: { get a() {} }, set: { set a(v) {} },
+                    both: { get a() {}, set a(v) {} }, none: Object.defineProperty({}, 'a', { get: undefined }),
+                    date: new Date(0), map: new Map(), proxy: new Proxy({}, { getOwnPropertyDescriptor() { throw 1; } })
+                };
+                ",
             )
             .unwrap();
             each(&ctx);

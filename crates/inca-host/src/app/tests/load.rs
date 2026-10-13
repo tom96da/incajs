@@ -318,8 +318,10 @@ fn a_job_error_is_reported_once_when_begin_rejects_after_it() {
 
     let err = Session::begin(
         TEST_ENTRY_PATH,
-        "queueMicrotask(() => { throw new Error('side'); });\n\
-         await Promise.resolve(); throw new Error('entry');",
+        r"
+        queueMicrotask(() => { throw new Error('side'); });
+        await Promise.resolve(); throw new Error('entry');
+        ",
         reporter_for(&writer),
         Some(&writer),
     )
@@ -339,8 +341,10 @@ fn a_job_error_is_reported_once_when_load_rejects_after_it() {
 
     let err = Session::load(
         TEST_ENTRY_PATH,
-        "queueMicrotask(() => { throw new Error('side'); });\n\
-         await Promise.resolve(); throw new Error('entry');",
+        r"
+        queueMicrotask(() => { throw new Error('side'); });
+        await Promise.resolve(); throw new Error('entry');
+        ",
         reporter_for(&writer),
     )
     .err()

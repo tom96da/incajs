@@ -37,8 +37,10 @@ fn mount_click_recorder(
     let (cx, engine, parent, child) = mount_recording_pair(cx, events);
     engine
         .eval::<()>(
-            "globalThis.__inca_callbacks__ = { 0: (e) => { globalThis.seen.push([\
-             e.type, e.target, e.currentTarget, e.detail, e.pointerId ?? null]); } };",
+            r"
+            globalThis.__inca_callbacks__ = { 0: (e) => { globalThis.seen.push([
+            e.type, e.target, e.currentTarget, e.detail, e.pointerId ?? null]); } };
+            ",
         )
         .unwrap();
     (cx, engine, parent, child)
@@ -204,8 +206,10 @@ fn mount_target_recorder(cx: &mut TestAppContext, events: &[&str]) -> (VisualTes
     panes
         .engine
         .eval::<()>(
-            "globalThis.__inca_callbacks__ = { 0: (e) => { \
-             globalThis.seen.push([e.type, e.target, e.button]); } };",
+            r"
+            globalThis.__inca_callbacks__ = { 0: (e) => {
+            globalThis.seen.push([e.type, e.target, e.button]); } };
+            ",
         )
         .unwrap();
     (mount_panes(cx, &panes), panes)
@@ -264,8 +268,10 @@ fn a_press_and_release_in_two_panes_clicks_their_common_ancestor(cx: &mut TestAp
     panes
         .engine
         .eval::<()>(
-            "globalThis.__inca_callbacks__ = { 0: (e) => { \
-             globalThis.seen.push([e.type, e.target, e.currentTarget]); } };",
+            r"
+            globalThis.__inca_callbacks__ = { 0: (e) => {
+            globalThis.seen.push([e.type, e.target, e.currentTarget]); } };
+            ",
         )
         .unwrap();
     let mut cx = mount_panes(cx, &panes);

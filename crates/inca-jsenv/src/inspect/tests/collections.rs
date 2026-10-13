@@ -266,26 +266,30 @@ fn replacing_the_date_machinery_does_not_change_a_date() {
 
 #[test]
 fn a_date_ignores_its_own_overrides() {
-    let date = "const d = new Date(0); \
-                d.toISOString = () => 'own'; d.valueOf = () => { throw 1; }; \
-                d.getTime = () => { throw 2; }; Object.defineProperty(d, Symbol.toPrimitive, { value() { throw 3; } }); d";
+    let date = r"
+        const d = new Date(0);
+        d.toISOString = () => 'own'; d.valueOf = () => { throw 1; };
+        d.getTime = () => { throw 2; }; Object.defineProperty(d, Symbol.toPrimitive, { value() { throw 3; } }); d
+        ";
     assert_eq!(rendered(date), "1970-01-01T00:00:00.000Z");
 }
 
 #[test]
 fn replacing_the_collection_and_regexp_machinery_changes_nothing() {
-    let setup = "globalThis.m = new Map([[1, 2]]); globalThis.s = new Set([1]); \
-                 globalThis.r = /x/g; Map.prototype.forEach = () => { throw 1; }; \
-                 Map.prototype.entries = () => { throw 2; }; \
-                 Map.prototype[Symbol.iterator] = () => { throw 3; }; \
-                 Set.prototype.forEach = () => { throw 4; }; \
-                 Set.prototype.values = () => { throw 5; }; \
-                 Set.prototype[Symbol.iterator] = () => { throw 6; }; \
-                 Object.defineProperty(Map.prototype, 'size', { get() { throw 7; } }); \
-                 Object.defineProperty(Set.prototype, 'size', { get() { throw 8; } }); \
-                 Object.defineProperty(RegExp.prototype, 'source', { get() { throw 9; } }); \
-                 RegExp.prototype.toString = () => 'hijacked'; \
-                 globalThis.Map = globalThis.Set = globalThis.RegExp = undefined;";
+    let setup = r"
+        globalThis.m = new Map([[1, 2]]); globalThis.s = new Set([1]);
+        globalThis.r = /x/g; Map.prototype.forEach = () => { throw 1; };
+        Map.prototype.entries = () => { throw 2; };
+        Map.prototype[Symbol.iterator] = () => { throw 3; };
+        Set.prototype.forEach = () => { throw 4; };
+        Set.prototype.values = () => { throw 5; };
+        Set.prototype[Symbol.iterator] = () => { throw 6; };
+        Object.defineProperty(Map.prototype, 'size', { get() { throw 7; } });
+        Object.defineProperty(Set.prototype, 'size', { get() { throw 8; } });
+        Object.defineProperty(RegExp.prototype, 'source', { get() { throw 9; } });
+        RegExp.prototype.toString = () => 'hijacked';
+        globalThis.Map = globalThis.Set = globalThis.RegExp = undefined;
+        ";
     assert_eq!(after(setup, "m", false), "Map(1) { 1 => 2 }");
     assert_eq!(after(setup, "s", false), "Set(1) { 1 }");
     assert_eq!(after(setup, "r", false), "/x/g");
@@ -295,16 +299,20 @@ fn replacing_the_collection_and_regexp_machinery_changes_nothing() {
 fn a_collections_own_overrides_are_ignored() {
     assert_eq!(
         rendered(
-            "const m = new Map([[1, 2]]); m.forEach = () => { throw 1; }; \
-             m.entries = () => { throw 2; }; m[Symbol.iterator] = () => { throw 3; }; \
-             Object.defineProperty(m, 'size', { value: 99 }); m"
+            r"
+            const m = new Map([[1, 2]]); m.forEach = () => { throw 1; };
+            m.entries = () => { throw 2; }; m[Symbol.iterator] = () => { throw 3; };
+            Object.defineProperty(m, 'size', { value: 99 }); m
+            "
         ),
         "Map(1) { 1 => 2 }"
     );
     assert_eq!(
         rendered(
-            "const s = new Set([1]); s.forEach = () => { throw 1; }; \
-             s.values = () => { throw 2; }; s[Symbol.iterator] = () => { throw 3; }; s"
+            r"
+            const s = new Set([1]); s.forEach = () => { throw 1; };
+            s.values = () => { throw 2; }; s[Symbol.iterator] = () => { throw 3; }; s
+            "
         ),
         "Set(1) { 1 }"
     );
@@ -455,8 +463,10 @@ fn a_regexp_is_read_without_running_any_of_its_accessors() {
         "source",
     ] {
         let setup = format!(
-            "globalThis.calls = 0; globalThis.r = /a/gy; \
-             Object.defineProperty(r, '{key}', {{ get() {{ calls++; throw 1; }} }});"
+            r"
+            globalThis.calls = 0; globalThis.r = /a/gy;
+            Object.defineProperty(r, '{key}', {{ get() {{ calls++; throw 1; }} }});
+            "
         );
         let runtime = Runtime::new().unwrap();
         let context = Context::full(&runtime).unwrap();

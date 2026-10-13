@@ -105,8 +105,10 @@ fn tab_centres_the_node_it_focuses(cx: &mut TestAppContext) {
     let mut h = revealing(cx, "scroll");
     run_js(
         &mut h,
-        "for (let i = 1; i < 7; i++) __inca_native__.setAttribute(items[i], 'tabindex', '-1'); \
-         __inca_native__.focusNode(items[0]);",
+        r"
+        for (let i = 1; i < 7; i++) __inca_native__.setAttribute(items[i], 'tabindex', '-1');
+        __inca_native__.focusNode(items[0]);
+        ",
     );
     h.keystrokes("tab");
     assert_eq!(
@@ -133,8 +135,10 @@ fn a_node_that_gains_its_box_later_scrolls_on_the_retry_frame(cx: &mut TestAppCo
     let mut h = revealing(cx, "scroll");
     run_js(
         &mut h,
-        "globalThis.late = mkItem(box); mkSpacer(box, 300); \
-         __inca_native__.focusNode(late);",
+        r"
+        globalThis.late = mkItem(box); mkSpacer(box, 300);
+        __inca_native__.focusNode(late);
+        ",
     );
     assert!(eval_f64(&h, "top(box)") > 0.0);
     assert!(near(&h, "gap(late, box)"));
@@ -145,12 +149,14 @@ fn a_node_that_gets_its_box_after_the_retry_frame_keeps_the_offset(cx: &mut Test
     let mut h = revealing(cx, "scroll");
     run_js(
         &mut h,
-        "const n = __inca_native__; \
-         globalThis.late = n.createNode('div'); \
-         n.setStyle(late, 'width', 50); \
-         n.setStyle(late, 'height', 50); \
-         n.setAttribute(late, 'tabindex', '0'); \
-         n.focusNode(late);",
+        r"
+        const n = __inca_native__;
+        globalThis.late = n.createNode('div');
+        n.setStyle(late, 'width', 50);
+        n.setStyle(late, 'height', 50);
+        n.setAttribute(late, 'tabindex', '0');
+        n.focusNode(late);
+        ",
     );
     run_js(
         &mut h,
@@ -182,8 +188,10 @@ fn scroll_into_view_node_aligns_the_start(cx: &mut TestAppContext) {
     );
     assert!(near(
         &h,
-        "__inca_native__.layoutOf(items[6])[1] - (__inca_native__.layoutOf(box)[1] \
-         + __inca_native__.layoutOf(box)[4])"
+        r"
+        __inca_native__.layoutOf(items[6])[1] - (__inca_native__.layoutOf(box)[1]
+        + __inca_native__.layoutOf(box)[4])
+        "
     ));
 }
 
@@ -192,14 +200,16 @@ fn focus_leaves_a_horizontally_partly_shown_node_in_place(cx: &mut TestAppContex
     let mut h = revealing(cx, "scroll");
     run_js(
         &mut h,
-        "const n = __inca_native__; \
-         globalThis.wide = n.createNode('div'); \
-         n.setStyle(wide, 'width', 300); \
-         n.setStyle(wide, 'height', 20); \
-         n.setAttribute(wide, 'tabindex', '0'); \
-         n.setStyle(box, 'overflow_x', 'scroll'); \
-         n.insertBefore(box, wide, items[0]); \
-         n.focusNode(wide);",
+        r"
+        const n = __inca_native__;
+        globalThis.wide = n.createNode('div');
+        n.setStyle(wide, 'width', 300);
+        n.setStyle(wide, 'height', 20);
+        n.setAttribute(wide, 'tabindex', '0');
+        n.setStyle(box, 'overflow_x', 'scroll');
+        n.insertBefore(box, wide, items[0]);
+        n.focusNode(wide);
+        ",
     );
     assert_eq!(eval_f64(&h, "__inca_native__.scrollOf(box)[0]"), 0.0);
     assert_eq!(
@@ -215,8 +225,10 @@ fn a_focus_after_scroll_into_view_in_one_tick_is_revealed_from_the_new_offset(
     let mut h = revealing(cx, "scroll");
     run_js(
         &mut h,
-        "__inca_native__.scrollIntoViewNode(items[3], 'start', 'nearest'); \
-         __inca_native__.focusNode(items[7]);",
+        r"
+        __inca_native__.scrollIntoViewNode(items[3], 'start', 'nearest');
+        __inca_native__.focusNode(items[7]);
+        ",
     );
     assert!(near(&h, "gap(items[7], box)"));
 }

@@ -48,10 +48,14 @@ fn default_prevented_carries_over_to_the_ancestors_listener(cx: &mut TestAppCont
     let mut h = load_listening(cx, FOCUSABLE);
     run_js(
         &mut h,
-        "cb[2] = (e) => { const was = e.defaultPrevented; e.preventDefault(); \
-            globalThis.log.push([e.type, was, e.defaultPrevented].join('/')); }; \
-         listen(box, 'click', 2); \
-         listen(frame, 'click', 2);",
+        r"
+        cb[2] = (e) => {
+            const was = e.defaultPrevented; e.preventDefault();
+            globalThis.log.push([e.type, was, e.defaultPrevented].join('/'));
+        };
+        listen(box, 'click', 2);
+        listen(frame, 'click', 2);
+        ",
     );
     let boxed = node(&h, "box");
     h.click(boxed);
@@ -63,19 +67,25 @@ fn focusin_and_focusout_bubble(cx: &mut TestAppContext) {
     let mut h = load_listening(cx, FOCUSABLE);
     run_js(
         &mut h,
-        "cb[2] = (e) => { globalThis.log.push([e.type, \
-            e.target === box ? 'box' : 'other', e.eventPhase].join('/')); }; \
-         for (const t of [box, frame]) { \
-            listen(t, 'focusin', 2); \
-            listen(t, 'focusout', 2); } \
-         __inca_native__.setAttribute(box, 'tabindex', '0'); __inca_native__.focusNode(box);",
+        r"
+        cb[2] = (e) => {
+            globalThis.log.push([e.type, e.target === box ? 'box' : 'other', e.eventPhase].join('/'));
+        };
+        for (const t of [box, frame]) {
+            listen(t, 'focusin', 2);
+            listen(t, 'focusout', 2);
+        }
+        __inca_native__.setAttribute(box, 'tabindex', '0'); __inca_native__.focusNode(box);
+        ",
     );
     let frame = node(&h, "frame");
     h.click(frame);
     assert_eq!(
         log(&h),
-        "focus,focusin/box/2,focusin/box/3,\
-         blur,focusout/box/2,focusout/box/3"
+        concat!(
+            "focus,focusin/box/2,focusin/box/3,",
+            "blur,focusout/box/2,focusout/box/3"
+        )
     );
 }
 
@@ -121,9 +131,11 @@ fn a_stopped_mousedown_still_focuses_the_node(cx: &mut TestAppContext) {
     let mut h = load_listening(cx, FOCUSABLE);
     run_js(
         &mut h,
-        "__inca_native__.setAttribute(box, 'tabindex', '0'); \
-         cb[2] = (e) => { e.stopPropagation(); }; \
-         listen(box, 'mousedown', 2);",
+        r"
+        __inca_native__.setAttribute(box, 'tabindex', '0');
+        cb[2] = (e) => { e.stopPropagation(); };
+        listen(box, 'mousedown', 2);
+        ",
     );
     let boxed = node(&h, "box");
     h.click(boxed);
@@ -147,8 +159,10 @@ fn a_passive_mousedown_listener_still_lets_the_node_take_focus(cx: &mut TestAppC
     let mut h = load_listening(cx, FOCUSABLE);
     run_js(
         &mut h,
-        "__inca_native__.setAttribute(box, 'tabindex', '0'); \
-         listen(box, 'mousedown', 1, false, true);",
+        r"
+        __inca_native__.setAttribute(box, 'tabindex', '0');
+        listen(box, 'mousedown', 1, false, true);
+        ",
     );
     let boxed = node(&h, "box");
     h.click(boxed);
@@ -168,8 +182,10 @@ fn a_prevented_mousedown_does_not_focus_the_node(cx: &mut TestAppContext) {
     let mut h = load_listening(cx, FOCUSABLE);
     run_js(
         &mut h,
-        "__inca_native__.setAttribute(box, 'tabindex', '0'); \
-         listen(box, 'mousedown', 1);",
+        r"
+        __inca_native__.setAttribute(box, 'tabindex', '0');
+        listen(box, 'mousedown', 1);
+        ",
     );
     let boxed = node(&h, "box");
     h.click(boxed);
@@ -272,8 +288,10 @@ fn tab_follows_the_order_and_wraps_through_nothing(cx: &mut TestAppContext) {
     }
     assert_eq!(
         log(&h),
-        "focus@n1,blur@n1,focus@n2,blur@n2,focus@n3,blur@n3,focus@z1,blur@z1,focus@z2,\
-         blur@z2,focus@n1"
+        concat!(
+            "focus@n1,blur@n1,focus@n2,blur@n2,focus@n3,blur@n3,focus@z1,blur@z1,focus@z2,",
+            "blur@z2,focus@n1"
+        )
     );
 }
 
@@ -282,9 +300,11 @@ fn keys_after_the_wrap_to_nothing_reach_the_root(cx: &mut TestAppContext) {
     let mut h = tabs(cx);
     run_js(
         &mut h,
-        "listen(__inca_native__.rootNodeId(), 'keydown', 4);\
-         for (const id of [n1, n2, n3, z1, m1]) __inca_native__.removeAttribute(id, 'tabindex');\
-         __inca_native__.focusNode(z2);",
+        r"
+        listen(__inca_native__.rootNodeId(), 'keydown', 4);
+        for (const id of [n1, n2, n3, z1, m1]) __inca_native__.removeAttribute(id, 'tabindex');
+        __inca_native__.focusNode(z2);
+        ",
     );
     h.keystrokes("tab x tab");
     assert_eq!(
@@ -301,8 +321,10 @@ fn shift_tab_walks_backward_and_wraps_through_nothing(cx: &mut TestAppContext) {
     }
     assert_eq!(
         log(&h),
-        "focus@z2,blur@z2,focus@z1,blur@z1,focus@n3,blur@n3,focus@n2,blur@n2,focus@n1,\
-         blur@n1,focus@z2"
+        concat!(
+            "focus@z2,blur@z2,focus@z1,blur@z1,focus@n3,blur@n3,focus@n2,blur@n2,focus@n1,",
+            "blur@n1,focus@z2"
+        )
     );
 }
 
@@ -351,8 +373,10 @@ fn stopping_a_key_down_keeps_the_tab_move(cx: &mut TestAppContext) {
     run_js(&mut h, "__inca_native__.focusNode(n1);");
     run_js(
         &mut h,
-        "listen(n1, 'keydown', 4); \
-         listen(n1, 'keydown', 2);",
+        r"
+        listen(n1, 'keydown', 4);
+        listen(n1, 'keydown', 2);
+        ",
     );
     h.keystrokes("tab");
     assert_eq!(log(&h), "focus@n1,keydown@n1,blur@n1,focus@n2");
@@ -363,10 +387,13 @@ fn a_job_queued_by_a_key_down_listener_lands_before_the_tab_move(cx: &mut TestAp
     let mut h = tabs(cx);
     run_js(
         &mut h,
-        "__inca_native__.focusNode(n1); \
-         cb[5] = () => { Promise.resolve().then(() => \
-            __inca_native__.setAttribute(n2, 'tabindex', '-1')); }; \
-         listen(n1, 'keydown', 5);",
+        r"
+        __inca_native__.focusNode(n1);
+        cb[5] = () => {
+            Promise.resolve().then(() => __inca_native__.setAttribute(n2, 'tabindex', '-1'));
+        };
+        listen(n1, 'keydown', 5);
+        ",
     );
 
     h.keystrokes("tab");
@@ -407,18 +434,22 @@ fn tab_skips_a_disabled_button_and_a_hidden_node_and_leaves_a_button(cx: &mut Te
     let mut h = load_listening(cx, TABS);
     run_js(
         &mut h,
-        "const n = __inca_native__; \
-         n.setAttribute(mk('bd', 1, 'button'), 'disabled', true); \
-         n.setAttribute(mk('hid', 1), 'hidden', true); \
-         mk('bt', null, 'button'); watch(4);",
+        r"
+        const n = __inca_native__;
+        n.setAttribute(mk('bd', 1, 'button'), 'disabled', true);
+        n.setAttribute(mk('hid', 1), 'hidden', true);
+        mk('bt', null, 'button'); watch(4);
+        ",
     );
     for _ in 0..7 {
         h.keystrokes("tab");
     }
     assert_eq!(
         log(&h),
-        "focus@n1,blur@n1,focus@n2,blur@n2,focus@n3,blur@n3,focus@z1,blur@z1,focus@z2,\
-         blur@z2,focus@bt,blur@bt"
+        concat!(
+            "focus@n1,blur@n1,focus@n2,blur@n2,focus@n3,blur@n3,focus@z1,blur@z1,focus@z2,",
+            "blur@z2,focus@bt,blur@bt"
+        )
     );
 }
 
@@ -429,9 +460,12 @@ fn the_window_losing_and_regaining_focus_blurs_and_focuses_the_focused_node(
     let mut h = load_listening(cx, TARGETS);
     run_js(
         &mut h,
-        "__inca_native__.setAttribute(inner, 'tabindex', '0'); __inca_native__.focusNode(inner);\
-         cb[1] = (e) => { \
-         globalThis.log.push(`${e.type}:${e.relatedTarget}`); };",
+        r"
+        __inca_native__.setAttribute(inner, 'tabindex', '0'); __inca_native__.focusNode(inner);
+        cb[1] = (e) => {
+            globalThis.log.push(`${e.type}:${e.relatedTarget}`);
+        };
+        ",
     );
     listen(&mut h, "inner", "focus blur focusin focusout", 1);
     h.cx.update(|window, _| window.activate_window());

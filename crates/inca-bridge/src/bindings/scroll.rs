@@ -214,9 +214,11 @@ mod tests {
         let (engine, host) = engine_with_bindings();
         engine
             .eval::<()>(
-                "const n = __inca_native__; const node = n.createNode('div'); \
-                 n.appendChild(0, node); n.scrollIntoViewNode(node, 'start', 'start'); \
-                 n.destroyNode(node);",
+                r"
+                const n = __inca_native__; const node = n.createNode('div');
+                n.appendChild(0, node); n.scrollIntoViewNode(node, 'start', 'start');
+                n.destroyNode(node);
+                ",
             )
             .unwrap();
 

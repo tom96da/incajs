@@ -209,8 +209,10 @@ mod tests {
     fn settle(engine: &Engine, args: &str) -> String {
         engine
             .eval::<()>(&format!(
-                "f({args}).then((v) => {{ globalThis.out = String(v); }}, \
-                 (e) => {{ globalThis.out = e.name + '\\n' + e.stack; }});"
+                r"
+                f({args}).then((v) => {{ globalThis.out = String(v); }},
+                (e) => {{ globalThis.out = e.name + '\n' + e.stack; }});
+                "
             ))
             .unwrap();
         assert!(engine.run_jobs().is_empty());
@@ -233,8 +235,12 @@ mod tests {
     fn thrown_by(engine: &Engine, source: &str) -> String {
         engine
             .eval::<String>(&format!(
-                "(() => {{ try {{ {source}; return 'no throw'; }} \
-                 catch (e) {{ return e.constructor.name + ': ' + e.message; }} }})()"
+                r"
+                (() => {{
+                    try {{ {source}; return 'no throw'; }}
+                    catch (e) {{ return e.constructor.name + ': ' + e.message; }}
+                }})()
+                "
             ))
             .unwrap()
     }
@@ -299,8 +305,14 @@ mod tests {
         let engine = engine_with_dev(Rc::new(|_, _| {}));
         let thrown: String = engine
             .eval(
-                "(() => { try { __inca_dev__.compile([], 'const a = 1;\\nconst = ;', 'broken.js'); \
-                 return 'no throw'; } catch (e) { return e.name + '\\n' + e.stack; } })()",
+                r"
+                (() => {
+                    try {
+                        __inca_dev__.compile([], 'const a = 1;\nconst = ;', 'broken.js');
+                        return 'no throw';
+                    } catch (e) { return e.name + '\n' + e.stack; }
+                })()
+                ",
             )
             .unwrap();
 
@@ -362,9 +374,11 @@ mod tests {
             let (engine, flag) = flag_engine(true);
             engine
                 .eval::<()>(&format!(
-                    "globalThis.threw = false; \
-                     try {{ __inca_dev__.setLoadFailed({arg}); }} \
-                     catch (e) {{ globalThis.threw = e instanceof TypeError; }}"
+                    r"
+                    globalThis.threw = false;
+                    try {{ __inca_dev__.setLoadFailed({arg}); }}
+                    catch (e) {{ globalThis.threw = e instanceof TypeError; }}
+                    "
                 ))
                 .unwrap();
             assert!(engine.eval::<bool>("globalThis.threw;").unwrap(), "{arg:?}");
@@ -385,10 +399,12 @@ mod tests {
         let engine = Engine::new().unwrap();
         engine
             .eval::<()>(
-                "globalThis.received = []; \
-                 globalThis.__inca_dev__ = { \
-                     receive: (m, p) => globalThis.received.push([m, p]), \
-                 };",
+                r"
+                globalThis.received = [];
+                globalThis.__inca_dev__ = {
+                    receive: (m, p) => globalThis.received.push([m, p]),
+                };
+                ",
             )
             .unwrap();
 

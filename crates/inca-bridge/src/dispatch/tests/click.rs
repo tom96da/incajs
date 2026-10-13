@@ -11,10 +11,12 @@ fn click_runs_an_untrusted_click_that_bubbles_with_the_pointer_fields_of_a_key_c
     host.borrow_mut().listeners.register(parent, "click", 1);
     callbacks(
         &dispatcher,
-        "0: (e) => out.push([e.type, e.isTrusted, e.bubbles, e.cancelable, e.target, \
-            e.currentTarget, e.pointerId, e.pointerType, e.button, e.buttons, e.detail, \
-            e.ctrlKey, e.eventId]), \
-         1: (e) => out.push(['parent', e.currentTarget, e.eventPhase])",
+        r"
+        0: (e) => out.push([e.type, e.isTrusted, e.bubbles, e.cancelable, e.target,
+           e.currentTarget, e.pointerId, e.pointerType, e.button, e.buttons, e.detail,
+           e.ctrlKey, e.eventId]),
+        1: (e) => out.push(['parent', e.currentTarget, e.eventPhase])
+        ",
     );
     let got = eval_json(
         &dispatcher,
@@ -85,8 +87,10 @@ fn click_on_one_node_inside_the_click_of_another_runs() {
     callbacks(
         &dispatcher,
         &format!(
-            "0: (e) => {{ out.push(e.target); if (e.target === {parent}) __inca_native__.click({child}); }}, \
-             1: () => {{}}"
+            r"
+            0: (e) => {{ out.push(e.target); if (e.target === {parent}) __inca_native__.click({child}); }},
+            1: () => {{}}
+            "
         ),
     );
     let got = eval_json(
