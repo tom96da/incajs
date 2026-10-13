@@ -10,8 +10,15 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- the CLI prints help, its version and a usage for each command ([169758d](https://github.com/tom96da/incajs/commit/169758d))
+- `inca dev` warns that it ignores the source map options ([169758d](https://github.com/tom96da/incajs/commit/169758d))
+
 ### Changed
 
+- when the CLI gets opposite options together, the negative one takes precedence ([169758d](https://github.com/tom96da/incajs/commit/169758d))
+- event error messages are easier to understand ([2cde8da](https://github.com/tom96da/incajs/commit/2cde8da))
 - `activeElement()` and the element types moved from `incajs/vue` to `incajs` ([2048804](https://github.com/tom96da/incajs/commit/2048804)) ([f2f54b1](https://github.com/tom96da/incajs/commit/f2f54b1))
 - `IncaCore` became an internal type ([50fc3ad](https://github.com/tom96da/incajs/commit/50fc3ad))
 
