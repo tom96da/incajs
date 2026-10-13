@@ -71,7 +71,7 @@ fn set_mouse_fields(event_object: &Object, mouse: &MousePayload) -> JsResult<()>
 
 /// Writes [`KeyPayload`]'s fields onto `event_object`.
 fn set_key_fields(event_object: &Object, key: &KeyPayload) -> JsResult<()> {
-    event_object.set("key", key.key.clone())?;
+    event_object.set("key", key.key.as_str())?;
     event_object.set("repeat", key.repeat)?;
     // gpui reports no key location or composition state.
     event_object.set("location", 0)?;

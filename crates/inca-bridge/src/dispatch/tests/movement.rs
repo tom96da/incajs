@@ -73,7 +73,7 @@ fn only_mousemove_takes_the_movement_of_the_raw_move(cx: &mut TestAppContext) {
 
     let (moved, others) = cx.update(|_, cx| {
         dispatcher.pointer_moved(at(30.0, 5.0), cx);
-        let moved = dispatcher.with_movement(&mouse_at(30.0, 5.0), "mousemove");
+        let moved = dispatcher.with_movement(mouse_at(30.0, 5.0), "mousemove");
         let others = [
             "mouseenter",
             "mouseleave",
@@ -82,8 +82,8 @@ fn only_mousemove_takes_the_movement_of_the_raw_move(cx: &mut TestAppContext) {
             "mousedown",
             "mouseup",
         ]
-        .map(|event| movement_of(&dispatcher.with_movement(&mouse_at(30.0, 5.0), event)));
-        let wheel = dispatcher.with_movement(&wheel_at(30.0, 5.0), "wheel");
+        .map(|event| movement_of(&dispatcher.with_movement(mouse_at(30.0, 5.0), event)));
+        let wheel = dispatcher.with_movement(wheel_at(30.0, 5.0), "wheel");
         (movement_of(&moved), (others, movement_of(&wheel)))
     });
 
@@ -95,7 +95,7 @@ fn only_mousemove_takes_the_movement_of_the_raw_move(cx: &mut TestAppContext) {
 fn a_mousemove_with_no_raw_move_reports_zero() {
     let (dispatcher, _host, _reported) = dispatcher_with_engine();
 
-    let payload = dispatcher.with_movement(&mouse_at(90.0, 90.0), "mousemove");
+    let payload = dispatcher.with_movement(mouse_at(90.0, 90.0), "mousemove");
 
     assert_eq!(movement_of(&payload), (0.0, 0.0));
 }
@@ -105,6 +105,6 @@ fn a_click_or_key_payload_is_left_alone() {
     let (dispatcher, _host, _reported) = dispatcher_with_engine();
     dispatcher.last_position.set(Some((10.0, 10.0)));
 
-    let payload = dispatcher.with_movement(&EventPayload::None, "click");
+    let payload = dispatcher.with_movement(EventPayload::None, "click");
     assert_eq!(payload, EventPayload::None);
 }

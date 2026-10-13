@@ -67,7 +67,7 @@ pub(super) fn create<'js>(
 ) -> JsResult<(Object<'js>, Object<'js>)> {
     let (event, record) = new_event(ctx, walk.name, walk.flags, walk.trusted)?;
     record.set("dispatching", true)?;
-    record.set("path", walk.path.to_vec())?;
+    record.set("path", walk.path)?;
     event.set("target", walk.target)?;
     set_payload(&event, walk.payload)?;
     event.set("eventId", id)?;

@@ -268,7 +268,7 @@ pub(crate) fn dispatch_event<'js>(
             .get::<_, Object>("__inca_callbacks__")
             .or_else(|_| Object::new(ctx.clone()))?;
         event.set("eventId", next_event_id(host))?;
-        record.set("path", path.clone())?;
+        record.set("path", walk.path)?;
         // Last, so a failure above leaves the event free to dispatch again.
         record.set("dispatching", true)?;
         deliver(ctx, host, &walk, &callbacks, &event, &record);

@@ -117,8 +117,7 @@ impl EventDispatcher {
     /// Returns `payload` with its `buttons` bitmask corrected against
     /// [`Self::held_buttons`]. A `mouseup` excludes the button just
     /// released; every other kind includes every button still held.
-    fn with_held_buttons(&self, event: &str, payload: &EventPayload) -> EventPayload {
-        let mut payload = payload.clone();
+    fn with_held_buttons(&self, event: &str, mut payload: EventPayload) -> EventPayload {
         if let Some(mouse) = payload.mouse_mut().filter(|_| !spec_of(event).own_buttons) {
             mouse.buttons = self.update_held_buttons(event, mouse.button);
         }
@@ -143,8 +142,7 @@ impl EventDispatcher {
     /// Returns `payload` with `movementX`/`movementY` set to the delta of the
     /// raw pointer move being dispatched, for `mousemove`. Every other event
     /// keeps 0.
-    fn with_movement(&self, payload: &EventPayload, event: &str) -> EventPayload {
-        let mut payload = payload.clone();
+    fn with_movement(&self, mut payload: EventPayload, event: &str) -> EventPayload {
         if spec_of(event).movement
             && let EventPayload::Mouse(mouse) = &mut payload
         {
@@ -263,20 +261,19 @@ impl EventDispatcher {
         payload: &EventPayload,
         window: &Window,
     ) -> EventPayload {
-        let payload = self.live_related(payload);
-        let payload = self.with_held_buttons(event, &payload);
-        let payload = self.with_movement(&payload, event);
+        let payload = self.live_related(payload.clone());
+        let payload = self.with_held_buttons(event, payload);
+        let payload = self.with_movement(payload, event);
         let payload = with_screen(&payload, window);
-        self.with_offset(target, &payload)
+        self.with_offset(target, payload)
     }
 
     /// `payload` with `offsetX`/`offsetY` measured from the padding edge of
     /// `target` in the last drawn frame, or equal to the client position when
     /// `target` has no recorded box.
-    fn with_offset(&self, target: NodeId, payload: &EventPayload) -> EventPayload {
+    fn with_offset(&self, target: NodeId, mut payload: EventPayload) -> EventPayload {
         let host = self.host.borrow();
         let layout = host.layout.borrow().get(&target).copied();
-        let mut payload = payload.clone();
         if let Some(mouse) = payload.mouse_mut() {
             let (left, top) = layout.map_or((0.0, 0.0), |l| {
                 let border = f32::from(l.border);
@@ -292,9 +289,8 @@ impl EventDispatcher {
     }
 
     /// `payload` with a `related_target` that left the tree set to `None`.
-    fn live_related(&self, payload: &EventPayload) -> EventPayload {
+    fn live_related(&self, mut payload: EventPayload) -> EventPayload {
         let gone = |id: &NodeId| self.host.borrow().tree.get(*id).is_none();
-        let mut payload = payload.clone();
         match &mut payload {
             EventPayload::Focus { related_target } => {
                 if related_target.as_ref().is_some_and(gone) {
