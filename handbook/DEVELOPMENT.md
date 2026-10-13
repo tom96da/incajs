@@ -76,6 +76,10 @@ over the child's stdio.
 - **Safety first**: Rust↔QuickJS bindings must handle pointer conversions
   and reference counts carefully. This boundary is the most likely source
   of memory leaks or segfaults.
+- **JS values stay in JS**: Rust keeps ids and plain data. A handle kept
+  past the call that produced it outlives its context, so functions and
+  objects live on the JS side and Rust refers to them by id. Listener
+  callbacks are the model, see [FFI.md](./FFI.md#js-values-stay-in-js).
 - **Zero-overhead render loop**: don't run JS on every frame. JS executes
   only on reactivity updates. It pushes snapshot mutations to Rust. Rust
   owns the retained tree and does layout and drawing natively.

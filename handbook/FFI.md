@@ -10,6 +10,13 @@ into the QuickJS context by the Rust host via `rquickjs`. JS and Rust run in
 one process, and a call is an in-process function call with typed arguments.
 No C ABI or IPC is involved.
 
+## JS values stay in JS
+
+Rust keeps ids and plain data. A handle kept past the call that produced it
+outlives the context it belongs to, so every function and object lives on the
+JS side. [Registering](#registering) is the implementation example: listener
+functions stay in JS and Rust holds only the callback ids.
+
 ## Retained virtual tree
 
 The Rust host keeps an in-memory node structure (`VirtualNode`) that mirrors

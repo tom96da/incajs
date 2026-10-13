@@ -244,6 +244,53 @@ A fixed entry is deleted and its ID is never reused.
   inserted, for example through a pending-node list that the next insert or a
   frame boundary checks.
 
+- **B-184 `getModifierState` exists on every event**
+  `Units: bridge · Size: M · Impact: Low`
+
+  Every event has `getModifierState`, including focus events and plain
+  `Event` objects. Browsers define it on mouse and keyboard events only. One
+  event prototype serves every kind.
+
+  Fix: split the event prototype into mouse and keyboard kinds, so the method
+  sits where browsers put it.
+
+- **B-187 The bridge globals can be overwritten by the app**
+  `Units: bridge,jsenv,host,core · Size: M · Impact: Medium`
+
+  `__inca_native__`, `__inca_dev__`, `__inca_callbacks__`,
+  `__inca_track_rejection__` and `__inca_take_rejections__` are plain
+  globals. A script can assign to or delete them, which breaks the host
+  channel or the report of unhandled rejections.
+
+  Fix: define them with `Object::prop(key, value)` of rquickjs, which creates
+  a read-only property that stays in place. The JS side creates
+  `__inca_callbacks__` (`??=` in `callbacks.mts`), so the host creates and
+  protects it first.
+
+- **B-188 The pending module holds a promise handle**
+  `Units: jsenv · Size: M · Impact: Medium`
+
+  `PendingModule` in `engine.rs` keeps a `Persistent<Promise>` while the
+  top-level `await` of a module is pending. Rust keeps ids and plain data,
+  and a handle kept past the call that produced it outlives its context
+  (listener ids are the model, see ARCHITECTURE.md). A fix keeps the promise
+  in JS and gives Rust an id.
+
+- **B-189 The event store holds JS values in Rust**
+  `Units: bridge · Size: M · Impact: Medium`
+
+  The event store of `event.rs` keeps the record `WeakMap`, the prototype and
+  two functions as userdata of the context. They are JS values held by Rust.
+  A fix keeps them in JS and lets Rust refer to them by id. B-185 covers the
+  shape of the same store.
+
+- **B-190 The inspector keeps function handles in Rust**
+  `Units: jsenv · Size: S–M · Impact: Medium`
+
+  The `console` printing of dates, regular expressions, maps and sets keeps a
+  `Vec<Function>` of built-in functions as userdata of the context
+  (`inspect/builtins.rs`). A fix looks the functions up in JS at each use.
+
 ## P3
 
 - **B-001 Vue template type-checking**
@@ -1129,3 +1176,54 @@ A fixed entry is deleted and its ID is never reused.
   store needs only QuickJS, so it fits jsenv beside the other realm helpers.
   The planned native event record replaces the store, so the move applies
   only if that record is dropped.
+
+- **B-183 Event fields can be reassigned**
+  `Units: bridge · Size: M · Impact: Low`
+
+  Fields such as `ctrlKey`, `key` and `clientX` are writable data properties
+  of the event object. `Object::prop(key, value)` of rquickjs defines a
+  read-only property.
+
+- **B-185 The event store keeps its pieces by index**
+  `Units: bridge · Size: S · Impact: Low`
+
+  `event.rs` keeps the `WeakMap` record store, the prototype and two
+  functions in a `Vec<Value>` addressed by index constants. A struct with
+  named fields needs `JsLifetime`. The `macro` feature of rquickjs provides
+  `#[derive(JsLifetime)]`, which generates the `unsafe impl` and checks at
+  compile time that every field type is valid, so the bridge keeps no
+  hand-written `unsafe`. With `"macro"` in the workspace rquickjs features,
+  `cargo check -p inca-bridge` compiles and `Cargo.lock` gains
+  `rquickjs-macro` and its dependencies. `clippy -D warnings` is unchecked.
+  The workspace sets `unsafe_code = "deny"` and keeps all `unsafe` in
+  `inca-jsenv/src/quickjs.rs`, so the policy for macro-generated `unsafe` is
+  decided first.
+
+- **B-186 `Plain` implements `JsLifetime` by hand**
+  `Units: jsenv · Size: S · Impact: Low`
+
+  `quickjs.rs` holds the one hand-written `unsafe impl JsLifetime`, for
+  `Plain<T>`. Check whether `#[derive(JsLifetime)]` (see B-185) can replace
+  it and shrink the hand-written `unsafe` surface.
+
+- **B-191 The event walk allocates on every event**
+  `Units: bridge · Size: M · Impact: Low`
+
+  `event/walk.rs` builds the `down` list with `collect` for each event, and
+  `path_from` returns a `Vec`. Borrowing the tree path instead would hold a
+  `RefCell` borrow across the engine call, which can panic. A fix has to end
+  the borrow before the call.
+
+- **B-192 Natives treat a missing node in two ways**
+  `Units: bridge,docs · Size: S · Impact: Low`
+
+  `focusNode`, `blurNode`, `removeEventListener` and `click` ignore a node
+  that is gone. The other natives throw a `TypeError`. State the rule in
+  `FFI.md`.
+
+- **B-193 Optional native parameters use two types**
+  `Units: bridge · Size: S · Impact: Low`
+
+  `Opt<T>` passes `undefined` and `null` to `T::from_js`, and `Option<T>`
+  maps both to `None`. The natives use both. Pick one type for each
+  parameter by the handling `null` should get.
