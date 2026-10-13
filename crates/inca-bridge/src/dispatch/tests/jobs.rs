@@ -91,24 +91,6 @@ fn drain_jobs_and_refresh_runs_what_a_microtask_only_scheduled(cx: &mut TestAppC
     assert!(dispatcher.engine.eval::<bool>("globalThis.ran;").unwrap());
 }
 
-#[test]
-fn report_jobs_delivers_a_failed_job_once() {
-    let engine = Engine::new().unwrap();
-    engine
-        .eval::<()>("Promise.resolve().then(() => { throw new Error('boom'); });")
-        .unwrap();
-    let reported: Reported = Rc::new(RefCell::new(Vec::new()));
-    let sink = Rc::clone(&reported);
-    let report: ErrorReporter = Rc::new(move |err| sink.borrow_mut().push(err.clone()));
-
-    report_jobs(&engine, &report);
-    assert_eq!(reported.borrow().len(), 1);
-    assert_eq!(reported.borrow()[0].message(), "Error: boom");
-
-    report_jobs(&engine, &report);
-    assert_eq!(reported.borrow().len(), 1);
-}
-
 #[gpui::test]
 fn a_pending_job_waits_when_no_listener_ran(cx: &mut TestAppContext) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();

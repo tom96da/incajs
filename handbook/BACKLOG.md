@@ -1121,3 +1121,11 @@ A fixed entry is deleted and its ID is never reused.
   Fix: have `scrollNode` and the reveal record the handles they wrote, and
   have `settle_wheel` leave those handles alone. B-083 describes the same
   rollback.
+
+- **B-182 The event store helper lives in the bridge**
+  `Units: bridge,jsenv · Size: S · Impact: Low`
+
+  `event.rs` builds a private `WeakMap` store by evaluating a script. The
+  store needs only QuickJS, so it fits jsenv beside the other realm helpers.
+  The planned native event record replaces the store, so the move applies
+  only if that record is dropped.

@@ -19,10 +19,12 @@ Today that is `console`. It writes wherever the caller points it, because
 the process embedding it may already be using stdout for something else.
 
 ```rust
+use std::rc::Rc;
 use inca_jsenv::console;
 
 // `ctx` is an `rquickjs::Ctx`.
-console::install(&ctx, &console::to_stderr())?;
+let to_stderr: console::Output = Rc::new(|_, line: &str| eprintln!("{line}"));
+console::install(&ctx, &to_stderr, false)?;
 ctx.eval::<(), _>("console.log('ready', { count: 1 })")?;
 // stderr: log: ready { count: 1 }
 ```

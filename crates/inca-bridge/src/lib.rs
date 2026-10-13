@@ -11,8 +11,6 @@ pub mod dispatch;
 mod event;
 
 pub use bindings::{EventListeners, Host, Listener};
-pub use dispatch::{
-    ErrorReporter, EventDispatcher, drain_jobs_and_refresh, report_jobs, stderr_reporter,
-};
+pub use dispatch::{EventDispatcher, drain_jobs_and_refresh};
 pub use focus::{FocusRegistry, FocusTransition};
 pub use inca_gpui::focus;

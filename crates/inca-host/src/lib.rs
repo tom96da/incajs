@@ -6,6 +6,7 @@
 
 mod app;
 pub mod config;
+mod console_output;
 mod dev;
 mod menu;
 

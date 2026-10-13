@@ -12,8 +12,9 @@ use gpui::{
     KeyUpEvent, Keystroke, Modifiers, MouseButton, MouseDownEvent, MouseUpEvent, Pixels, Point,
     ScrollDelta, ScrollWheelEvent, TestAppContext, VisualTestContext, WindowHandle, point, px,
 };
-use inca_bridge::{Host, stderr_reporter};
+use inca_bridge::Host;
 use inca_gpui::{NodeId, debug_selector};
+use inca_jsenv::stderr_reporter;
 
 use crate::app::{HostedApp, start};
 use crate::snapshot::{Bounds, Node, snapshot};

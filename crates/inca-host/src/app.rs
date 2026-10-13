@@ -26,33 +26,30 @@ use std::process::ExitCode;
 use std::rc::Rc;
 
 use gpui::{
-    App, Bounds, Context, Pixels, Point, SharedString, Size, TitlebarOptions, Window, WindowBounds,
+    App, Bounds, Context, Point, SharedString, Size, TitlebarOptions, Window, WindowBounds,
     WindowHandle, WindowOptions, div, prelude::*, px, size,
 };
 use gpui_platform::application;
 
 use inca_bridge::bindings::install;
-use inca_bridge::{ErrorReporter, EventDispatcher, Host, stderr_reporter};
+use inca_bridge::{EventDispatcher, Host};
 use inca_gpui::{
     AttributeValue, EventSink, NodeId, NodeLayout, VirtualNode, render_tree_with_events,
 };
-use inca_jsenv::{Engine, EngineError, PendingModule, console};
+use inca_jsenv::{Engine, EngineError, ErrorReporter, PendingModule, console, stderr_reporter};
 
-use crate::config;
+use crate::config::{
+    self, DEFAULT_APP_NAME, effective_config, is_resizable, usable, window_min_size, window_size,
+    window_title,
+};
 
+use crate::console_output::{color_from_env, to_stderr};
 use crate::dev::{ErrorCode, LoadSignal, install_dev, install_load_signal};
 use crate::dev::{
-    Failure, SharedWriter, StdoutWriter, fail_startup, install_panic_hook, reporter_for,
-    serve_dev_protocol, stdin_lines,
+    SharedWriter, StdoutWriter, fail_startup, install_panic_hook, reporter_for, serve_dev_protocol,
+    stdin_lines,
 };
 use crate::menu;
-
-/// What an app is called when nothing named it.
-const DEFAULT_APP_NAME: &str = "Inca";
-
-/// Window size to fall back to when neither the app's config nor its root
-/// element gives one.
-const DEFAULT_WINDOW_SIZE: (f32, f32) = (800.0, 600.0);
 
 /// Reads the window size straight from the app the bundle mounted, so the
 /// window fits its content.
@@ -84,62 +81,13 @@ pub(crate) fn content_window_size(host: &Host, root: NodeId) -> (Option<f32>, Op
     (dimension("width"), dimension("height"))
 }
 
-/// A window dimension that is finite and above zero. Anything else reads
-/// as absent.
-pub(crate) fn usable(dimension: Option<f32>) -> Option<f32> {
-    dimension.filter(|value| value.is_finite() && *value > 0.0)
-}
-
-/// The smallest size the window can be resized to, where the app's config
-/// gives one. A dimension it leaves out is unconstrained.
-fn window_min_size(window: Option<&config::WindowConfig>) -> Option<Size<Pixels>> {
-    let min_width = usable(window.and_then(|w| w.min_width));
-    let min_height = usable(window.and_then(|w| w.min_height));
-    if min_width.is_none() && min_height.is_none() {
-        return None;
-    }
-    Some(size(
-        px(min_width.unwrap_or(0.0)),
-        px(min_height.unwrap_or(0.0)),
-    ))
-}
-
-/// The window's title: what the app's config asks for, then the app's own
-/// name. A title of nothing but spaces counts as none.
-fn window_title(window: Option<&config::WindowConfig>, name: Option<&str>) -> Option<String> {
-    window
-        .and_then(|window| window.title.clone())
-        .filter(|title| !title.trim().is_empty())
-        .or_else(|| name.map(ToOwned::to_owned))
-}
-
-/// Whether the app's config lets a user resize its window by hand.
-/// Unconfigured reads as fixed-size.
-pub(crate) fn is_resizable(window: Option<&config::WindowConfig>) -> bool {
-    window.and_then(|w| w.resizable).unwrap_or(false)
-}
-
-/// The size to open the window at: what the app's config asks for, then
-/// what its root element declares, then [`DEFAULT_WINDOW_SIZE`]. A window
-/// never opens below the minimum it declared.
-pub(crate) fn window_size(
-    window: Option<&config::WindowConfig>,
-    content: (Option<f32>, Option<f32>),
-) -> (f32, f32) {
-    let configured = |pick: fn(&config::WindowConfig) -> Option<f32>| usable(window.and_then(pick));
-    let at_least = |pick: fn(&config::WindowConfig) -> Option<f32>| {
-        usable(window.and_then(pick)).unwrap_or(0.0)
-    };
-    (
-        configured(|w| w.width)
-            .or(usable(content.0))
-            .unwrap_or(DEFAULT_WINDOW_SIZE.0)
-            .max(at_least(|w| w.min_width)),
-        configured(|w| w.height)
-            .or(usable(content.1))
-            .unwrap_or(DEFAULT_WINDOW_SIZE.1)
-            .max(at_least(|w| w.min_height)),
-    )
+/// Why a request could not be answered with a result.
+#[derive(Debug)]
+pub(crate) enum Failure {
+    /// Something outside JS: an unreadable file, a window that went away.
+    Message(ErrorCode, String),
+    /// A value the app threw, which carries its own frames.
+    Thrown(EngineError),
 }
 
 /// An engine ready for an entry: its host, the engine, and what
@@ -195,7 +143,7 @@ impl Session {
         let module_root = Path::new(entry_path).parent().unwrap_or(Path::new("."));
         let engine = Engine::builder().module_root(module_root).build()?;
         engine.with(|ctx| {
-            console::install(&ctx, &console::to_stderr(), console::color_from_env())
+            console::install(&ctx, &to_stderr(), color_from_env())
                 .and_then(|()| install(&ctx, &host))
                 .and_then(|()| match writer {
                     Some(writer) => install_dev(&ctx, crate::dev::dev_send(writer))
@@ -578,26 +526,6 @@ fn close_writer_on_quit(cx: &mut App, writer: SharedWriter) {
         async {}
     })
     .detach();
-}
-
-/// The settings the host applies for `config`, as pretty-printed JSON. A
-/// `null` marks a value the config leaves to the host's own choice: the
-/// app's root element sizes the window, and an unset limit stays open.
-pub(crate) fn effective_config(config: &config::AppConfig) -> String {
-    let window = config.window.as_ref();
-    let effective = serde_json::json!({
-        "name": config.name.as_deref().unwrap_or(DEFAULT_APP_NAME),
-        "identifier": config.identifier,
-        "window": {
-            "title": window_title(window, config.name.as_deref()),
-            "width": usable(window.and_then(|w| w.width)),
-            "height": usable(window.and_then(|w| w.height)),
-            "resizable": is_resizable(window),
-            "minWidth": usable(window.and_then(|w| w.min_width)),
-            "minHeight": usable(window.and_then(|w| w.min_height)),
-        },
-    });
-    format!("{effective:#}")
 }
 
 /// The settings the host applies to the app whose entry is `entry_path`,

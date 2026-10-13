@@ -9,8 +9,6 @@ mod state;
 mod table;
 
 use std::cell::RefCell;
-use std::ffi::OsStr;
-use std::io::IsTerminal;
 use std::rc::Rc;
 
 use rquickjs::{
@@ -65,44 +63,6 @@ impl Level {
 /// trailing newline, and holds several newline-separated rows when the call
 /// printed more than one.
 pub type Output = Rc<dyn Fn(Level, &str)>;
-
-/// An [`Output`] writing each line to stderr, bypassing `log`'s level filter.
-#[must_use]
-pub fn to_stderr() -> Output {
-    Rc::new(|_, message| eprintln!("{message}"))
-}
-
-/// The color decision for the given variables and terminal state.
-fn color_enabled(
-    no_color: Option<&OsStr>,
-    force_color: Option<&OsStr>,
-    stderr_is_terminal: bool,
-) -> bool {
-    if no_color.is_some_and(|value| !value.is_empty()) {
-        return false;
-    }
-    match force_color {
-        Some(value) if value == "0" || value == "false" => false,
-        Some(value) if !value.is_empty() => true,
-        _ => stderr_is_terminal,
-    }
-}
-
-/// Whether `console` output to stderr should be colored, as the environment
-/// asks.
-///
-/// Color is off when `NO_COLOR` is non-empty, which wins over `FORCE_COLOR`.
-/// Otherwise it is on when `FORCE_COLOR` is set to anything except `0`,
-/// `false` or the empty string, and otherwise on when stderr is a terminal.
-/// Pass the result to [`install`].
-#[must_use]
-pub fn color_from_env() -> bool {
-    color_enabled(
-        std::env::var_os("NO_COLOR").as_deref(),
-        std::env::var_os("FORCE_COLOR").as_deref(),
-        std::io::stderr().is_terminal(),
-    )
-}
 
 struct Console {
     output: Output,
@@ -246,7 +206,7 @@ fn caller_stack(ctx: &Ctx<'_>) -> Vec<String> {
 /// formatted line through `output`.
 ///
 /// With `color` set, the lines passed to `output` carry ANSI color sequences;
-/// [`color_from_env`] gives the conventional value. Install before evaluating
+/// The `NO_COLOR` and `FORCE_COLOR` conventions are the usual source of it. Install before evaluating
 /// any script, so top-level logging works.
 ///
 /// # Errors

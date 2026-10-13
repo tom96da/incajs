@@ -24,11 +24,10 @@ use std::time::{Duration, Instant};
 use gpui::{App, FutureExt, WindowHandle};
 use serde_json::Value;
 
-use inca_bridge::{ErrorReporter, report_jobs};
+use inca_jsenv::{EngineError, ErrorReporter, report_jobs};
 
-use inca_jsenv::EngineError;
-
-use crate::app::{HostedApp, Loading, Session, is_resizable, maybe_auto_resize_to_content, open};
+use crate::app::{Failure, HostedApp, Loading, Session, maybe_auto_resize_to_content, open};
+use crate::config::is_resizable;
 pub(crate) use wire::ErrorCode;
 use wire::{Incoming, Method, Outgoing};
 
@@ -36,15 +35,6 @@ mod globals;
 mod wire;
 
 pub(crate) use globals::{DevSend, LoadSignal, call_dev_receive, install_dev, install_load_signal};
-
-/// Why a request could not be answered with a result.
-#[derive(Debug)]
-pub(crate) enum Failure {
-    /// Something outside JS: an unreadable file, a window that went away.
-    Message(ErrorCode, String),
-    /// A value the app threw, which carries its own frames.
-    Thrown(EngineError),
-}
 
 /// Where an encoded protocol line goes. Production writes to real stdout on
 /// its own thread (see [`StdoutWriter`]); tests substitute something they can

@@ -32,7 +32,7 @@ use inca_gpui::event_sink::{hover_path_difference, with_screen};
 use inca_gpui::{
     EventPayload, MousePayload, NodeId, PointerSource, dom_buttons_bit, is_disabled_button,
 };
-use inca_jsenv::{Engine, EngineError};
+use inca_jsenv::{Engine, ErrorReporter, report_jobs, stderr_reporter};
 
 use crate::bindings::Host;
 use crate::event::{self, Walk};
@@ -41,21 +41,6 @@ use crate::focus::FocusTransition;
 mod sink;
 
 pub(crate) use inca_gpui::event_sink::spec_of;
-
-/// Where a failure inside the running app goes. Nothing asked for it, so
-/// there is no caller to return it to and no `Result` to put it in.
-pub type ErrorReporter = Rc<dyn Fn(&EngineError)>;
-
-/// The reporter a dispatcher uses unless given another: one line per failure
-/// on stderr.
-///
-/// stderr rather than stdout because an embedder may be using stdout as a
-/// message channel, and because a failure that reaches nobody is the reason
-/// this exists at all.
-#[must_use]
-pub fn stderr_reporter() -> ErrorReporter {
-    Rc::new(|err| eprintln!("{err}"))
-}
 
 /// Everything needed to dispatch a native event into JS: the engine to call
 /// into, and the registry of which JS callback ids are listening for which
@@ -517,20 +502,6 @@ impl EventDispatcher {
     fn drain_observed(&self, window: &mut Window) {
         drain_jobs_and_refresh(&self.engine, &self.reporter, window);
         self.report_pending();
-    }
-}
-
-/// Runs `engine`'s pending promise jobs and sends each failure to `reporter`:
-/// a job that threw, including during module startup, and a promise rejected
-/// with no handler. Use it where no window is open yet. A caller that also
-/// has an [`EventDispatcher`] calls [`EventDispatcher::report_pending`] after
-/// it, for the errors listeners threw during those jobs.
-///
-/// Call it outside any [`Engine::with`]: it takes the context itself, and
-/// nesting that panics with "`RefCell` already borrowed".
-pub fn report_jobs(engine: &Engine, reporter: &ErrorReporter) {
-    for failure in engine.run_jobs() {
-        reporter(&failure);
     }
 }
 

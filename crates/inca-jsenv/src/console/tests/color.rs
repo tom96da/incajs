@@ -5,61 +5,6 @@ use super::*;
 
 const GUIDE: &str = "\x1b[90m│ \x1b[39m";
 
-fn os(text: &str) -> &OsStr {
-    OsStr::new(text)
-}
-
-#[test]
-fn a_non_empty_no_color_turns_color_off_whatever_else_is_set() {
-    for force in [
-        None,
-        Some(os("")),
-        Some(os("1")),
-        Some(os("0")),
-        Some(os("true")),
-    ] {
-        for terminal in [false, true] {
-            assert!(!color_enabled(Some(os("1")), force, terminal));
-            assert!(!color_enabled(Some(os("anything")), force, terminal));
-        }
-    }
-}
-
-#[test]
-fn an_empty_no_color_is_ignored() {
-    assert!(color_enabled(Some(os("")), None, true));
-    assert!(!color_enabled(Some(os("")), None, false));
-    assert!(color_enabled(Some(os("")), Some(os("1")), false));
-}
-
-#[test]
-fn force_color_zero_or_false_turns_color_off_on_a_terminal() {
-    assert!(!color_enabled(None, Some(os("0")), true));
-    assert!(!color_enabled(None, Some(os("false")), true));
-    assert!(!color_enabled(None, Some(os("0")), false));
-    assert!(!color_enabled(None, Some(os("false")), false));
-}
-
-#[test]
-fn any_other_non_empty_force_color_turns_color_on_without_a_terminal() {
-    for value in ["1", "2", "3", "true", "yes", "FALSE", "00"] {
-        assert!(color_enabled(None, Some(os(value)), false), "{value}");
-        assert!(color_enabled(None, Some(os(value)), true), "{value}");
-    }
-}
-
-#[test]
-fn an_empty_force_color_falls_through_to_the_terminal() {
-    assert!(color_enabled(None, Some(os("")), true));
-    assert!(!color_enabled(None, Some(os("")), false));
-}
-
-#[test]
-fn without_either_variable_the_terminal_decides() {
-    assert!(color_enabled(None, None, true));
-    assert!(!color_enabled(None, None, false));
-}
-
 #[test]
 fn values_are_colored_by_type_in_a_log_line() {
     assert_eq!(

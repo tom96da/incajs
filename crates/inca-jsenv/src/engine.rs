@@ -10,6 +10,7 @@
 use std::cell::RefCell;
 use std::fmt;
 use std::path::PathBuf;
+use std::rc::Rc;
 
 use rquickjs::{
     Coerced, Context, Ctx, FromJs, Function, Module, Persistent, Promise, Runtime, Value,
@@ -422,6 +423,32 @@ impl EngineBuilder {
             runtime.set_loader(DiskResolver::new(self.module_roots), DiskLoader);
         }
         Engine::from_runtime(runtime)
+    }
+}
+
+/// Where a failure inside the running app goes. Nothing asked for it, so
+/// there is no caller to return it to and no `Result` to put it in.
+pub type ErrorReporter = Rc<dyn Fn(&EngineError)>;
+
+/// The default [`ErrorReporter`]: one line per failure on stderr.
+///
+/// stderr leaves stdout free for an embedder that uses it as a message
+/// channel, and a failure that reaches nobody is the reason a reporter
+/// exists at all.
+#[must_use]
+pub fn stderr_reporter() -> ErrorReporter {
+    Rc::new(|err| eprintln!("{err}"))
+}
+
+/// Runs `engine`'s pending promise jobs and sends each failure to `reporter`:
+/// a job that threw, including during module startup, and a promise rejected
+/// with no handler. Use it where no window is open yet.
+///
+/// Call it outside any [`Engine::with`]: it takes the context itself, and
+/// nesting that panics with "`RefCell` already borrowed".
+pub fn report_jobs(engine: &Engine, reporter: &ErrorReporter) {
+    for failure in engine.run_jobs() {
+        reporter(&failure);
     }
 }
 

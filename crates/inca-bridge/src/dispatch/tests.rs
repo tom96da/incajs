@@ -7,6 +7,7 @@ use crate::event::Flags;
 use gpui::{TestAppContext, point, px};
 use inca_gpui::event_sink::EVENTS;
 use inca_gpui::{EventSink, WheelPayload};
+use inca_jsenv::EngineError;
 
 mod base_fields;
 mod click;

@@ -22,4 +22,6 @@ mod quickjs;
 mod sourcemap;
 
 pub use compile::compile_async_function;
-pub use engine::{Engine, EngineError, EngineResult, PendingModule};
+pub use engine::{
+    Engine, EngineError, EngineResult, ErrorReporter, PendingModule, report_jobs, stderr_reporter,
+};
