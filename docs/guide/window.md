@@ -1,5 +1,5 @@
 ---
-description: The window an inca app opens: its size, its title, its menu, and how it closes.
+description: The window an inca app opens, with its size, its title, its menu, and how it closes.
 ---
 
 <!--
