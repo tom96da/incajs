@@ -74,10 +74,10 @@ to report. It returns the async function as a `Function`.
 use inca_jsenv::compile_async_function;
 
 // `ctx` is an `rquickjs::Ctx`; `body` is the source text.
-let f = compile_async_function(&ctx, &["a", "b"], body, "app/Counter.vue")?;
+let f = compile_async_function(&ctx, &["a", "b"], body, "app/widget.js")?;
 ```
 
-The stack frames of `f` name `app/Counter.vue`, and a frame on line `N` of
+The stack frames of `f` name `app/widget.js`, and a frame on line `N` of
 `body` reports line `N + 1`. When `body` ends with an inline
 `//# sourceMappingURL=data:` source map, the frames that `EngineError` and
 `console` report name the original file, line and column, and the `stack`

@@ -216,20 +216,20 @@ mod tests {
     }
 
     #[test]
-    fn a_frame_of_an_imported_chunk_reads_through_its_sidecar_map() {
-        let dir = ScratchDir::new("chunk-sidecar-map");
+    fn a_frame_of_an_imported_module_reads_through_its_sidecar_map() {
+        let dir = ScratchDir::new("dep-sidecar-map");
         fs::write(
-            dir.0.join("chunk.js.map"),
-            r#"{"version":3,"sources":["../src/chunk.ts"],"mappings":";AAWI"}"#,
+            dir.0.join("dep.js.map"),
+            r#"{"version":3,"sources":["../src/dep.ts"],"mappings":";AAWI"}"#,
         )
         .unwrap();
         fs::write(
-            dir.0.join("chunk.js"),
-            "globalThis.ready = true;\nthrow new Error('bad edit');\n//# sourceMappingURL=chunk.js.map",
+            dir.0.join("dep.js"),
+            "globalThis.ready = true;\nthrow new Error('bad edit');\n//# sourceMappingURL=dep.js.map",
         )
         .unwrap();
         let entry = dir.0.join("entry.js");
-        fs::write(&entry, "import './chunk.js';").unwrap();
+        fs::write(&entry, "import './dep.js';").unwrap();
 
         let engine = Engine::builder().module_root(&dir.0).build().unwrap();
         let err = engine
@@ -240,7 +240,7 @@ mod tests {
             .unwrap_err();
 
         let stack = err.stack().unwrap();
-        assert!(stack.contains("src/chunk.ts:12:5"), "{stack}");
+        assert!(stack.contains("src/dep.ts:12:5"), "{stack}");
     }
 
     #[test]
