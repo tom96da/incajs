@@ -1,7 +1,7 @@
 {
   "name": "@incajs/host-darwin-arm64",
-  "version": "0.0.15",
-  "description": "Prebuilt native runtime for Incarnative.js — macOS on Apple Silicon (arm64).",
+  "version": "0.0.16",
+  "description": "Prebuilt native runtime for Incarnative.js on macOS (Apple Silicon, arm64).",
   "keywords": [
     "desktop-app",
     "gpui",
