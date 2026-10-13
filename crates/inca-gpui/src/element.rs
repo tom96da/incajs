@@ -18,7 +18,7 @@
 mod build;
 mod parse;
 mod pointer;
-mod scroll;
+pub mod scroll;
 mod spec;
 mod style;
 
@@ -34,5 +34,5 @@ pub use spec::{
 };
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
+#[allow(clippy::float_cmp, clippy::unwrap_used)]
 mod tests;

@@ -8,20 +8,6 @@ use super::spec::{
 };
 use crate::tree::{AttributeValue, style_key};
 
-pub(super) fn as_str(value: &AttributeValue) -> Option<&str> {
-    match value {
-        AttributeValue::String(s) => Some(s.as_str()),
-        _ => None,
-    }
-}
-
-fn as_number(value: &AttributeValue) -> Option<f64> {
-    match value {
-        AttributeValue::Number(n) => Some(*n),
-        _ => None,
-    }
-}
-
 /// Parses a `0x000000..=0xFFFFFF` number or a `"#rrggbb"`/`"#rgb"` string into
 /// a `0xRRGGBB` color. Any other value (a number outside that range, `NaN`,
 /// wrong hex digit count, missing `#`, non-hex characters, a bool, ...) is
@@ -77,7 +63,7 @@ fn length_spec_from(value: &AttributeValue) -> Option<LengthSpec> {
 
 /// A finite px number `>= 0`; negatives, `NaN` and infinities are unset.
 fn non_negative(value: &AttributeValue) -> Option<f64> {
-    as_number(value).filter(|n| n.is_finite() && *n >= 0.0)
+    value.as_number().filter(|n| n.is_finite() && *n >= 0.0)
 }
 
 /// A finite px number or `"auto"`; `NaN` and infinities are unset.
@@ -213,30 +199,31 @@ fn read_prop(
     value: &AttributeValue,
 ) -> Option<StyleFault> {
     match key {
-        "display" => style.display = as_str(value).and_then(display_spec_from_str),
+        "display" => style.display = value.as_str().and_then(display_spec_from_str),
         "flex_direction" => {
-            style.flex_direction = as_str(value).and_then(flex_direction_spec_from_str);
+            style.flex_direction = value.as_str().and_then(flex_direction_spec_from_str);
         }
         "justify_content" => {
-            style.justify_content = as_str(value).and_then(align_spec_from_str);
+            style.justify_content = value.as_str().and_then(align_spec_from_str);
         }
-        "align_items" => style.align_items = as_str(value).and_then(align_spec_from_str),
-        "gap" => style.gap = as_number(value),
+        "align_items" => style.align_items = value.as_str().and_then(align_spec_from_str),
+        "gap" => style.gap = value.as_number(),
         "width" => style.width = length_spec_from(value),
         "height" => style.height = length_spec_from(value),
-        "border_width" => style.border_width = as_number(value),
+        "border_width" => style.border_width = value.as_number(),
         "background" => return read_color(&mut style.background, value),
         "border_color" => return read_color(&mut style.border_color, value),
-        "corner_radius" => style.corner_radius = as_number(value),
+        "corner_radius" => style.corner_radius = value.as_number(),
         "text_color" => return read_color(&mut style.text_color, value),
-        "text_size" => style.text_size = as_number(value),
-        "overflow" => overflow.all = as_str(value).and_then(overflow_spec_from_str),
-        "overflow_x" => overflow.x = as_str(value).and_then(overflow_spec_from_str),
-        "overflow_y" => overflow.y = as_str(value).and_then(overflow_spec_from_str),
+        "text_size" => style.text_size = value.as_number(),
+        "overflow" => overflow.all = value.as_str().and_then(overflow_spec_from_str),
+        "overflow_x" => overflow.x = value.as_str().and_then(overflow_spec_from_str),
+        "overflow_y" => overflow.y = value.as_str().and_then(overflow_spec_from_str),
         "flex_grow" => style.flex_grow = non_negative(value),
         "flex_shrink" => style.flex_shrink = non_negative(value),
         "opacity" => {
-            style.opacity = as_number(value)
+            style.opacity = value
+                .as_number()
                 .filter(|n| !n.is_nan())
                 .map(|n| n.clamp(0.0, 1.0));
         }

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use super::parse::{as_str, style_spec_from_props};
+use super::parse::style_spec_from_props;
 use crate::tree::{AttributeValue, NodeId, VirtualNode, VirtualTree};
 
 /// What kind of element a [`VirtualNode`](crate::tree::VirtualNode) maps to.
@@ -162,7 +162,7 @@ fn text_content(tree: &VirtualTree, id: NodeId) -> String {
     let mut content = node
         .attributes()
         .get("value")
-        .and_then(as_str)
+        .and_then(AttributeValue::as_str)
         .unwrap_or_default()
         .to_owned();
     for &child_id in node.children() {

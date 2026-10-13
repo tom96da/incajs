@@ -28,16 +28,18 @@ use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use gpui::{App, Window};
-use inca_gpui::{EventPayload, MousePayload, NodeId, PointerSource, dom_buttons_bit};
+use inca_gpui::event_sink::{hover_path_difference, with_screen};
+use inca_gpui::{
+    EventPayload, MousePayload, NodeId, PointerSource, dom_buttons_bit, is_disabled_button,
+};
 use inca_jsenv::{Engine, EngineError};
 
 use crate::bindings::Host;
 use crate::event::{self, Walk};
 
 mod sink;
-mod spec;
 
-pub(crate) use spec::spec_of;
+pub(crate) use inca_gpui::event_sink::spec_of;
 
 /// Where a failure inside the running app goes. Nothing asked for it, so
 /// there is no caller to return it to and no `Result` to put it in.
@@ -231,11 +233,7 @@ impl EventDispatcher {
             return Vec::new();
         }
         let host = self.host.borrow();
-        let disabled = |id: &NodeId| {
-            host.tree.get(*id).is_some_and(|node| {
-                node.tag_name() == "button" && node.attributes().contains_key("disabled")
-            })
-        };
+        let disabled = |id: &NodeId| host.tree.get(*id).is_some_and(is_disabled_button);
         let button = match payload {
             EventPayload::Mouse(mouse) => Some(mouse.button),
             _ => None,
@@ -487,38 +485,6 @@ impl EventDispatcher {
         drain_jobs_and_refresh(&self.engine, &self.reporter, window);
         self.report_pending();
     }
-}
-
-/// The containers a pointer leaves and enters when its deepest container
-/// changes from the end of `old_path` to the end of `new_path`. Each path
-/// lists a container and its ancestors, nearest first. The first list holds
-/// the containers only `old_path` has, innermost first. The second holds the
-/// ones only `new_path` has, outermost first.
-fn hover_path_difference(old_path: &[NodeId], new_path: &[NodeId]) -> (Vec<NodeId>, Vec<NodeId>) {
-    let leave = old_path
-        .iter()
-        .copied()
-        .filter(|id| !new_path.contains(id))
-        .collect();
-    let enter = new_path
-        .iter()
-        .rev()
-        .copied()
-        .filter(|id| !old_path.contains(id))
-        .collect();
-    (leave, enter)
-}
-
-/// Returns `payload` with `screenX`/`screenY` set to the window's position
-/// on the screen plus the client position.
-fn with_screen(payload: &EventPayload, window: &Window) -> EventPayload {
-    let origin = window.bounds().origin;
-    let mut payload = payload.clone();
-    if let Some(mouse) = payload.mouse_mut() {
-        mouse.screen_x = f32::from(origin.x) + mouse.client_x;
-        mouse.screen_y = f32::from(origin.y) + mouse.client_y;
-    }
-    payload
 }
 
 /// Runs `engine`'s pending promise jobs and sends each failure to `reporter`:

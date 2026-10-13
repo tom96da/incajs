@@ -52,7 +52,7 @@ incajs/
 ├── rust-toolchain.toml      # pins the Rust toolchain
 ├── patches/                 # no-op stand-ins for zed's tracing crates, `[patch]`ed into the build
 ├── crates/
-│   ├── inca-gpui/           # retained tree and GPUI rendering
+│   ├── inca-gpui/           # retained tree, GPUI rendering, focus and Tab order, scroll-into-view geometry and the event table
 │   ├── inca-bridge/         # binds a QuickJS realm to the retained tree: the `__inca_native__` bridge and event dispatch
 │   ├── inca-jsenv/          # the QuickJS Engine, module loader, value inspection and host objects such as `console`. All `unsafe` code of the Rust crates is in `src/quickjs.rs`
 │   └── inca-host/           # the runtime binary: loads a bundle, opens the window and serves the dev protocol

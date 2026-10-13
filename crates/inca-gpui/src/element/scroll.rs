@@ -3,8 +3,8 @@
 
 use gpui::prelude::*;
 use gpui::{
-    App, DispatchPhase, Global, Pixels, Point, ScrollHandle, ScrollWheelEvent, Window, canvas,
-    point, px,
+    App, Bounds, DispatchPhase, Global, Pixels, Point, ScrollHandle, ScrollWheelEvent, Window,
+    canvas, point, px,
 };
 
 use super::spec::ElementSpec;
@@ -143,4 +143,112 @@ pub(super) fn snapped_extra(
     outer: Point<Pixels>,
 ) -> Point<Pixels> {
     window.pixel_snap_point(total) - window.pixel_snap_point(outer)
+}
+
+/// A box in window coordinates.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Rect {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+/// Where the node's edge or centre lands in the visible box, per axis.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Align {
+    /// The start edges meet.
+    Start,
+    /// The centres meet.
+    Center,
+    /// The end edges meet.
+    End,
+    /// A node that shows stays put. Any other node moves the least that
+    /// brings its near edge in. A node longer than the box aligns its end when
+    /// its start lies before the box, and its start when its end lies after
+    /// it. A node that covers the whole box stays put.
+    Nearest,
+    /// A node that shows stays put. A node that lies outside the box
+    /// centres. A node that shows partly follows `Nearest`.
+    Reveal,
+    /// A node that shows fully or partly stays put. A node that lies outside
+    /// the box centres.
+    CenterOutside,
+}
+
+fn axis_delta(node_start: f32, node_len: f32, view_start: f32, view_len: f32, align: Align) -> f32 {
+    let (node_end, view_end) = (node_start + node_len, view_start + view_len);
+    let center = (node_start + node_len / 2.0) - (view_start + view_len / 2.0);
+    let nearest = || {
+        let (before, after) = (node_start < view_start, node_end > view_end);
+        let long = node_len > view_len;
+        if before && after {
+            0.0
+        } else if (before && !long) || (after && long) {
+            node_start - view_start
+        } else if before || after {
+            node_end - view_end
+        } else {
+            0.0
+        }
+    };
+    match align {
+        Align::Start => node_start - view_start,
+        Align::End => node_end - view_end,
+        Align::Center => center,
+        Align::Nearest => nearest(),
+        Align::Reveal | Align::CenterOutside => {
+            if node_start >= view_start && node_end <= view_end {
+                0.0
+            } else if node_end <= view_start || node_start >= view_end {
+                center
+            } else if align == Align::Reveal {
+                nearest()
+            } else {
+                0.0
+            }
+        }
+    }
+}
+
+/// The scroll change `(dx, dy)` that moves `node` to `inline` (horizontal)
+/// and `block` (vertical) alignment in `view`. A positive value scrolls
+/// towards the end of the axis.
+#[must_use]
+pub fn scroll_delta(node: Rect, view: Rect, block: Align, inline: Align) -> (f32, f32) {
+    (
+        axis_delta(node.x, node.width, view.x, view.width, inline),
+        axis_delta(node.y, node.height, view.y, view.height, block),
+    )
+}
+
+/// Scrolls each container of `chain`, innermost first, to show `node`.
+/// `chain` pairs a container with its visible box. `scroll` receives the
+/// container and the wanted change, and returns the change it applied. The
+/// node moves by the applied change before the next container is handled.
+pub fn scroll_chain<I: Copy>(
+    mut node: Rect,
+    chain: &[(I, Rect)],
+    block: Align,
+    inline: Align,
+    mut scroll: impl FnMut(I, f32, f32) -> (f32, f32),
+) {
+    for &(container, view) in chain {
+        let (dx, dy) = scroll_delta(node, view, block, inline);
+        let (applied_x, applied_y) = scroll(container, dx, dy);
+        node.x -= applied_x;
+        node.y -= applied_y;
+    }
+}
+
+/// The box `bounds` shrunk by `inset` on every side, in window coordinates. A
+/// negative size reads as 0.
+#[must_use]
+pub fn rect_of(bounds: Bounds<Pixels>, inset: Pixels) -> Rect {
+    Rect {
+        x: f32::from(bounds.origin.x + inset),
+        y: f32::from(bounds.origin.y + inset),
+        width: f32::from(bounds.size.width - inset * 2.0).max(0.0),
+        height: f32::from(bounds.size.height - inset * 2.0).max(0.0),
+    }
 }

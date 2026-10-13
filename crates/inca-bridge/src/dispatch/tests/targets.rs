@@ -55,31 +55,6 @@ fn a_release_clicks_only_when_both_containers_share_an_ancestor(cx: &mut TestApp
     assert_eq!(clicked(Some(b), a), 0, "the press node is gone");
 }
 
-#[test]
-fn the_hover_path_difference_lists_the_containers_left_and_entered() {
-    // Paths run nearest first: 3 sits in 2, which sits in 1, then 0.
-    let nested = [3, 2, 1, 0];
-    let cases: [[&[NodeId]; 4]; 5] = [
-        // into a nested container
-        [&[0], &nested, &[], &[1, 2, 3]],
-        // to a sibling inside the same parent
-        [&nested, &[4, 2, 1, 0], &[3], &[4]],
-        // out of everything
-        [&nested, &[], &[3, 2, 1, 0], &[]],
-        // within the same container
-        [&nested, &nested, &[], &[]],
-        // the first move after entering the window
-        [&[], &nested, &[], &[0, 1, 2, 3]],
-    ];
-    for [old, new, leave, enter] in cases {
-        assert_eq!(
-            hover_path_difference(old, new),
-            (leave.to_vec(), enter.to_vec()),
-            "{old:?} -> {new:?}"
-        );
-    }
-}
-
 #[gpui::test]
 fn a_removed_node_is_no_related_target_and_no_previous_container(cx: &mut TestAppContext) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();

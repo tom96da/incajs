@@ -324,3 +324,28 @@ fn mouse_payload_at_carries_position_and_modifiers() {
     assert_eq!(mouse.detail, 0);
     assert_eq!(mouse.modifiers, modifiers);
 }
+
+#[test]
+fn the_hover_path_difference_lists_the_containers_left_and_entered() {
+    // Paths run nearest first: 3 sits in 2, which sits in 1, then 0.
+    let nested = [3, 2, 1, 0];
+    let cases: [[&[NodeId]; 4]; 5] = [
+        // into a nested container
+        [&[0], &nested, &[], &[1, 2, 3]],
+        // to a sibling inside the same parent
+        [&nested, &[4, 2, 1, 0], &[3], &[4]],
+        // out of everything
+        [&nested, &[], &[3, 2, 1, 0], &[]],
+        // within the same container
+        [&nested, &nested, &[], &[]],
+        // the first move after entering the window
+        [&[], &nested, &[], &[0, 1, 2, 3]],
+    ];
+    for [old, new, leave, enter] in cases {
+        assert_eq!(
+            hover_path_difference(old, new),
+            (leave.to_vec(), enter.to_vec()),
+            "{old:?} -> {new:?}"
+        );
+    }
+}

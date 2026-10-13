@@ -3,6 +3,7 @@
 
 pub mod element;
 pub mod event_sink;
+pub mod focus;
 pub mod tree;
 
 pub use element::{
@@ -14,4 +15,4 @@ pub use element::{
 pub use event_sink::{
     EventPayload, EventSink, KeyPayload, MousePayload, PointerSource, WheelPayload, dom_buttons_bit,
 };
-pub use tree::{AttributeValue, NodeId, TreeError, VirtualNode, VirtualTree};
+pub use tree::{AttributeValue, NodeId, TreeError, VirtualNode, VirtualTree, is_disabled_button};

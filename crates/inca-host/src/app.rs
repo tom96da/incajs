@@ -74,16 +74,14 @@ pub(crate) fn content_window_size(host: &Host, root: NodeId) -> (Option<f32>, Op
         .and_then(|&content_id| host.tree.get(content_id))
         .map(VirtualNode::style_props);
 
+    // A window dimension in px is always far within f32's
+    // precision range — no meaningful truncation risk here.
+    #[allow(clippy::cast_possible_truncation)]
     let dimension = |key: &str| {
         style
             .and_then(|props| props.get(key))
-            .and_then(|value| match value {
-                // A window dimension in px is always far within f32's
-                // precision range — no meaningful truncation risk here.
-                #[allow(clippy::cast_possible_truncation)]
-                AttributeValue::Number(n) => Some(*n as f32),
-                _ => None,
-            })
+            .and_then(AttributeValue::as_number)
+            .map(|n| n as f32)
     };
 
     (dimension("width"), dimension("height"))

@@ -5,13 +5,10 @@
 //! don't come from the retained tree, so nothing else keeps them alive —
 //! and turns GPUI's own focus changes into the four focus events.
 //!
-//! `focusNode`/`blurNode` (see [`crate::bindings`]) run outside any GPUI render
-//! or dispatch, with no `Window`/`App` to act on immediately — every
-//! native binding closure only ever closes over `Rc<RefCell<Host>>`, never
-//! a borrow that can't outlive the call that produced it. A request is
-//! recorded here instead and applied the next time something does hold a
-//! live `Window`/`App` — the host's own per-frame render, before building
-//! the element tree.
+//! A focus or blur request arrives outside any GPUI render or dispatch, with
+//! no `Window`/`App` to act on immediately. The request is recorded here and
+//! applied the next time something holds a live `Window`/`App`: the host's
+//! per-frame render, before it builds the element tree.
 //!
 //! Dispatching is done by comparing which node is focused now against
 //! which was focused last frame, rather than GPUI's own
@@ -24,8 +21,9 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use gpui::{App, FocusHandle, Window};
 
-use inca_gpui::{
+use crate::{
     AttributeValue, EventPayload, EventSink, NodeId, VirtualTree, hidden_by_attribute,
+    is_disabled_button,
 };
 
 /// What changed since [`FocusRegistry::apply_pending`] was last called.
@@ -101,13 +99,14 @@ pub struct FocusRegistry {
     // root container. It maps to no node.
     parked: Option<FocusHandle>,
     pending: VecDeque<PendingFocus>,
-    // The latest focused node waiting for `Host::reveal_focus`, and the
-    // node it found lacking a box that waits for the next frame.
+    // The latest focused node waiting to be scrolled into view, and the
+    // node found lacking a box that waits for the next frame.
     reveal: Vec<NodeId>,
     retry: Vec<NodeId>,
     // Set while the window is inactive, after the focused node got its `blur`.
     window_blurred: bool,
-    pub(crate) tab_dirty: HashSet<NodeId>,
+    /// Nodes whose `tabindex` changed since the host last took them.
+    pub tab_dirty: HashSet<NodeId>,
 }
 
 /// Parses a `tabindex` value: optional leading ASCII whitespace, an optional
@@ -302,23 +301,19 @@ impl FocusRegistry {
     /// unparsable has 0.
     fn tab_index_of(tree: &VirtualTree, node_id: NodeId) -> Option<i32> {
         let node = tree.get(node_id)?;
-        let mut hidden = false;
-        let mut cursor = Some(node_id);
-        while let Some(ancestor) = cursor.and_then(|id| tree.get(id)) {
-            let attrs = ancestor.attributes();
-            hidden |= hidden_by_attribute(ancestor)
-                || attrs.contains_key("inert")
-                || matches!(
-                    ancestor.style_props().get("display"),
-                    Some(AttributeValue::String(value)) if value == "none"
-                );
-            cursor = ancestor.parent();
-        }
+        let hidden = tree
+            .ancestors(node_id)
+            .filter_map(|id| tree.get(id))
+            .any(|ancestor| {
+                hidden_by_attribute(ancestor)
+                    || ancestor.attributes().contains_key("inert")
+                    || matches!(
+                        ancestor.style_props().get("display"),
+                        Some(AttributeValue::String(value)) if value == "none"
+                    )
+            });
         let button = node.tag_name() == "button";
-        if node.tag_name() == "text"
-            || hidden
-            || (button && node.attributes().contains_key("disabled"))
-        {
+        if node.tag_name() == "text" || hidden || is_disabled_button(node) {
             return None;
         }
         let explicit = match node.attributes().get("tabindex") {
@@ -343,8 +338,7 @@ impl FocusRegistry {
     }
 
     /// Queues that `node_id` should be focused next frame. With `scroll`,
-    /// [`Host::reveal_focus`](crate::Host::reveal_focus) then scrolls it into
-    /// view.
+    /// the host then scrolls it into view.
     pub fn request_focus(&mut self, node_id: NodeId, scroll: bool) {
         self.pending.push_back(PendingFocus::Focus {
             node: node_id,
@@ -446,7 +440,7 @@ impl FocusRegistry {
     /// Hands over the focused nodes to scroll into view this frame:
     /// `(retries, fresh)`. A retry is a node whose box the previous frame
     /// lacked.
-    pub(crate) fn take_reveals(&mut self) -> (Vec<NodeId>, Vec<NodeId>) {
+    pub fn take_reveals(&mut self) -> (Vec<NodeId>, Vec<NodeId>) {
         (
             std::mem::take(&mut self.retry),
             std::mem::take(&mut self.reveal),
@@ -454,7 +448,7 @@ impl FocusRegistry {
     }
 
     /// Keeps `node_id` for one more frame.
-    pub(crate) fn retry_reveal(&mut self, node_id: NodeId) {
+    pub fn retry_reveal(&mut self, node_id: NodeId) {
         self.retry.push(node_id);
     }
 

@@ -12,8 +12,6 @@ pub mod bindings;
 pub mod dev;
 pub mod dispatch;
 mod event;
-pub mod focus;
-mod scroll_into_view;
 
 pub use bindings::{EventListeners, Host, Listener};
 pub use dev::{DevSend, LoadSignal, call_dev_receive, install_dev, install_load_signal};
@@ -21,3 +19,4 @@ pub use dispatch::{
     ErrorReporter, EventDispatcher, drain_jobs_and_refresh, report_jobs, stderr_reporter,
 };
 pub use focus::{FocusRegistry, FocusTransition};
+pub use inca_gpui::focus;

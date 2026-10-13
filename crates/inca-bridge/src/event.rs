@@ -17,6 +17,7 @@ use std::sync::OnceLock;
 use std::time::Instant;
 
 use inca_gpui::NodeId;
+pub(crate) use inca_gpui::event_sink::Flags;
 use rquickjs::convert::Coerced;
 use rquickjs::function::This;
 use rquickjs::object::{Accessor, Property};
@@ -28,32 +29,6 @@ mod walk;
 
 use construct::constructors;
 pub(crate) use walk::{Walk, click, dispatch_event, listened, path_from, walk};
-
-/// `bubbles`, `cancelable` and `composed` of one event.
-#[derive(Clone, Copy)]
-pub(crate) struct Flags {
-    pub bubbles: bool,
-    pub cancelable: bool,
-    pub composed: bool,
-}
-
-impl Flags {
-    pub const ALL: Self = Self {
-        bubbles: true,
-        cancelable: true,
-        composed: true,
-    };
-    pub const NONE: Self = Self {
-        bubbles: false,
-        cancelable: false,
-        composed: false,
-    };
-    /// Focus events: composed and not cancelable.
-    pub const FOCUS: Self = Self {
-        composed: true,
-        ..Self::NONE
-    };
-}
 
 /// What the event machinery keeps in the runtime's userdata, in the order of
 /// [`PROTOTYPE`], [`REMEMBER`] and [`RECALL`].

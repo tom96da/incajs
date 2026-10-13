@@ -5,13 +5,13 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use gpui::{ScrollHandle, px};
+use gpui::{Pixels, ScrollHandle, point, px};
 
-use inca_gpui::{NodeId, NodeLayout, VirtualTree};
+use inca_gpui::element::scroll::{Align, rect_of, scroll_chain};
+use inca_gpui::{NodeId, NodeLayout, VirtualTree, is_scroll_container};
 use inca_jsenv::EngineError;
 
 use crate::focus::FocusRegistry;
-use crate::scroll_into_view::Align;
 
 use super::listeners::EventListeners;
 
@@ -117,11 +117,11 @@ impl Host {
     pub fn reveal_focus(&mut self, window: &mut gpui::Window) {
         let (retries, fresh) = self.focus.take_reveals();
         for node in retries {
-            crate::scroll_into_view::reveal(self, node, Align::Reveal, Align::CenterOutside);
+            self.reveal(node, Align::Reveal, Align::CenterOutside);
         }
         let mut wait = false;
         for node in fresh {
-            if !crate::scroll_into_view::reveal(self, node, Align::Reveal, Align::CenterOutside) {
+            if !self.reveal(node, Align::Reveal, Align::CenterOutside) {
                 self.focus.retry_reveal(node);
                 wait = true;
             }
@@ -136,10 +136,10 @@ impl Host {
     // no box waits one more frame. Returns whether one waits.
     pub(super) fn reveal_scrolls(&mut self) -> bool {
         for (node, block, inline) in std::mem::take(&mut self.scroll_retry) {
-            crate::scroll_into_view::reveal(self, node, block, inline);
+            self.reveal(node, block, inline);
         }
         for (node, block, inline) in std::mem::take(&mut self.scroll_fresh) {
-            if !crate::scroll_into_view::reveal(self, node, block, inline) {
+            if !self.reveal(node, block, inline) {
                 self.scroll_retry.push((node, block, inline));
             }
         }
@@ -153,5 +153,75 @@ impl Host {
             .entry(node_id)
             .or_default()
             .clone()
+    }
+
+    /// Scrolls every scroll container above `node` so the node shows. Returns
+    /// false when the last frame recorded no box for the node.
+    pub(crate) fn reveal(&self, node: NodeId, block: Align, inline: Align) -> bool {
+        let (own, chain) = {
+            let layout = self.layout.borrow();
+            let Some(own) = layout.get(&node) else {
+                return false;
+            };
+            let mut chain = Vec::new();
+            for id in self.tree.ancestors(node).skip(1) {
+                let Some(ancestor) = self.tree.get(id) else {
+                    break;
+                };
+                if is_scroll_container(ancestor)
+                    && let Some(l) = layout.get(&id)
+                {
+                    chain.push((id, rect_of(l.bounds, l.border)));
+                }
+            }
+            (rect_of(own.bounds, px(0.0)), chain)
+        };
+        scroll_chain(own, &chain, block, inline, |id, dx, dy| {
+            let handle = self.scroll_handle(id);
+            let (offset, max) = (handle.offset(), handle.max_offset());
+            let step = |wanted: f32, offset: Pixels, max: Pixels| {
+                let from = -f32::from(offset).clamp(-f32::from(max), 0.0);
+                let to = (from + wanted).clamp(0.0, f32::from(max));
+                (to, to - from)
+            };
+            let (mut x, mut y) = (offset.x, offset.y);
+            let (mut applied_x, mut applied_y) = (0.0, 0.0);
+            if dx != 0.0 {
+                let (to, applied) = step(dx, offset.x, max.x);
+                (x, applied_x) = (px(-to), applied);
+            }
+            if dy != 0.0 {
+                let (to, applied) = step(dy, offset.y, max.y);
+                (y, applied_y) = (px(-to), applied);
+            }
+            handle.set_offset(point(x, y));
+            self.shift_descendants(id, applied_x, applied_y);
+            (applied_x, applied_y)
+        });
+        true
+    }
+
+    // Moves the recorded boxes below `container` by the scroll just applied, so a
+    // second reveal before the next draw starts from where the content now is. The
+    // direct children also take it into their recorded scroll offset.
+    pub(crate) fn shift_descendants(&self, container: NodeId, dx: f32, dy: f32) {
+        let mut layout = self.layout.borrow_mut();
+        let mut stack = vec![container];
+        while let Some(id) = stack.pop() {
+            let Some(node) = self.tree.get(id) else {
+                continue;
+            };
+            stack.extend(node.children());
+            if id != container
+                && let Some(l) = layout.get_mut(&id)
+            {
+                l.bounds.origin.x -= px(dx);
+                l.bounds.origin.y -= px(dy);
+                if self.tree.get(id).and_then(inca_gpui::VirtualNode::parent) == Some(container) {
+                    l.scroll.x += px(dx);
+                    l.scroll.y += px(dy);
+                }
+            }
+        }
     }
 }

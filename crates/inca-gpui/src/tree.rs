@@ -33,6 +33,26 @@ pub enum AttributeValue {
     Bool(bool),
 }
 
+impl AttributeValue {
+    /// The text of a `String` value, `None` for any other kind.
+    #[must_use]
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            Self::String(s) => Some(s.as_str()),
+            _ => None,
+        }
+    }
+
+    /// The number of a `Number` value, `None` for any other kind.
+    #[must_use]
+    pub fn as_number(&self) -> Option<f64> {
+        match self {
+            Self::Number(n) => Some(*n),
+            _ => None,
+        }
+    }
+}
+
 impl From<&str> for AttributeValue {
     fn from(value: &str) -> Self {
         AttributeValue::String(value.to_owned())
@@ -55,6 +75,12 @@ impl From<bool> for AttributeValue {
     fn from(value: bool) -> Self {
         AttributeValue::Bool(value)
     }
+}
+
+/// Whether `node` is a `button` carrying the `disabled` attribute.
+#[must_use]
+pub fn is_disabled_button(node: &VirtualNode) -> bool {
+    node.tag_name() == "button" && node.attributes().contains_key("disabled")
 }
 
 /// A single retained node. Always accessed through a [`VirtualTree`] — there
@@ -178,6 +204,12 @@ impl VirtualTree {
     #[must_use]
     pub fn get(&self, id: NodeId) -> Option<&VirtualNode> {
         self.nodes.get(&id)
+    }
+
+    /// `id` and its ancestors up to the root, nearest first. An id that names
+    /// no node yields only itself.
+    pub fn ancestors(&self, id: NodeId) -> impl Iterator<Item = NodeId> + '_ {
+        std::iter::successors(Some(id), |&id| self.get(id).and_then(VirtualNode::parent))
     }
 
     /// Appends `child_id` to `parent_id`'s children. Thin wrapper over

@@ -474,3 +474,47 @@ fn style_key_edge_cases() {
         assert_eq!(style_key(key), want, "{key}");
     }
 }
+
+#[test]
+fn ancestors_lists_the_node_then_its_parents_up_to_the_root() {
+    let mut tree = VirtualTree::new();
+    let root = tree.create_node("div").unwrap();
+    let mid = tree.create_node("div").unwrap();
+    let leaf = tree.create_node("div").unwrap();
+    tree.append_child(root, mid).unwrap();
+    tree.append_child(mid, leaf).unwrap();
+
+    assert_eq!(tree.ancestors(leaf).collect::<Vec<_>>(), [leaf, mid, root]);
+    assert_eq!(tree.ancestors(root).collect::<Vec<_>>(), [root]);
+}
+
+#[test]
+fn ancestors_of_an_unknown_id_yields_only_that_id() {
+    let tree = VirtualTree::new();
+    assert_eq!(tree.ancestors(7).collect::<Vec<_>>(), [7]);
+}
+
+#[test]
+fn is_disabled_button_needs_the_button_tag_and_the_disabled_attribute() {
+    let mut tree = VirtualTree::new();
+    let button = tree.create_node("button").unwrap();
+    let div = tree.create_node("div").unwrap();
+    assert!(!is_disabled_button(tree.get(button).unwrap()));
+    tree.set_attribute(button, "disabled", true).unwrap();
+    tree.set_attribute(div, "disabled", true).unwrap();
+    assert!(is_disabled_button(tree.get(button).unwrap()));
+    assert!(!is_disabled_button(tree.get(div).unwrap()));
+}
+
+#[test]
+fn attribute_value_reads_back_only_its_own_kind() {
+    let text = AttributeValue::from("a");
+    let number = AttributeValue::from(2.5);
+    let flag = AttributeValue::from(true);
+    assert_eq!(text.as_str(), Some("a"));
+    assert_eq!(number.as_str(), None);
+    assert_eq!(flag.as_str(), None);
+    assert_eq!(number.as_number(), Some(2.5));
+    assert_eq!(text.as_number(), None);
+    assert_eq!(flag.as_number(), None);
+}

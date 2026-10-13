@@ -1,11 +1,11 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use super::spec::EVENTS;
 use super::*;
 use crate::bindings::install;
 use crate::event::Flags;
 use gpui::{TestAppContext, point, px};
+use inca_gpui::event_sink::EVENTS;
 use inca_gpui::{EventSink, WheelPayload};
 
 mod base_fields;

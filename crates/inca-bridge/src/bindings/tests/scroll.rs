@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::*;
+use gpui::{point, px};
 
 #[test]
 fn scroll_node_writes_the_given_axes_negated_and_clamps_below_zero() {
@@ -98,4 +99,41 @@ fn scroll_into_view_node_rejects_an_unknown_node_and_an_unknown_alignment() {
         .unwrap();
 
     assert_eq!(caught, [true, true, true, false]);
+}
+
+#[test]
+fn a_scroll_moves_the_recorded_boxes_below_the_container() {
+    let mut host = Host::default();
+    let container = host.root;
+    let child = host.tree.create_node("div").unwrap();
+    let grandchild = host.tree.create_node("div").unwrap();
+    host.tree.append_child(container, child).unwrap();
+    host.tree.append_child(child, grandchild).unwrap();
+    let record = |id| {
+        let layout = inca_gpui::NodeLayout {
+            bounds: Bounds::new(point(px(10.0), px(50.0)), gpui::size(px(5.0), px(5.0))),
+            border: px(0.0),
+            scroll: point(px(1.0), px(2.0)),
+        };
+        host.layout.borrow_mut().insert(id, layout);
+    };
+    for id in [container, child, grandchild] {
+        record(id);
+    }
+
+    host.shift_descendants(container, 3.0, 20.0);
+
+    let layout = host.layout.borrow();
+    let read = |id| {
+        let l = layout[&id];
+        (
+            f32::from(l.bounds.origin.x),
+            f32::from(l.bounds.origin.y),
+            f32::from(l.scroll.x),
+            f32::from(l.scroll.y),
+        )
+    };
+    assert_eq!(read(container), (10.0, 50.0, 1.0, 2.0));
+    assert_eq!(read(child), (7.0, 30.0, 4.0, 22.0));
+    assert_eq!(read(grandchild), (7.0, 30.0, 1.0, 2.0));
 }

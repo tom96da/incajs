@@ -24,8 +24,9 @@ virtual tree (`inca-gpui`'s `VirtualTree`):
   `compile(params, body, filename)`, which builds source into an async
   function that names `filename` in its stack frames, or the original file when
   `body` carries an inline source map.
-- `focus` holds `FocusRegistry`, which keeps a `gpui::FocusHandle` per node
-  and dispatches `"focus"`/`"blur"` when the focused node changes.
+- `focus` re-exports `inca-gpui`'s `focus` module: `FocusRegistry` keeps a
+  `gpui::FocusHandle` per node and dispatches `"focus"`/`"blur"` when the
+  focused node changes.
 
 This is where `gpui` and `QuickJS` actually meet — `inca-gpui` and
 `inca-jsenv` know nothing about each other.

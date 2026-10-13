@@ -488,6 +488,143 @@ pub trait EventSink {
     );
 }
 
+/// `bubbles`, `cancelable` and `composed` of one event.
+#[derive(Clone, Copy)]
+pub struct Flags {
+    pub bubbles: bool,
+    pub cancelable: bool,
+    pub composed: bool,
+}
+
+impl Flags {
+    pub const ALL: Self = Self {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+    };
+    pub const NONE: Self = Self {
+        bubbles: false,
+        cancelable: false,
+        composed: false,
+    };
+    /// Focus events: composed and not cancelable.
+    pub const FOCUS: Self = Self {
+        composed: true,
+        ..Self::NONE
+    };
+}
+
+/// The rules of one event name.
+#[derive(Clone, Copy)]
+pub struct EventSpec {
+    /// The event name.
+    pub name: &'static str,
+    pub flags: Flags,
+    /// Takes `movementX`/`movementY` from the raw pointer move.
+    pub movement: bool,
+    /// Carries the `buttons` of its own press or release.
+    pub own_buttons: bool,
+}
+
+const fn spec(name: &'static str, flags: Flags) -> EventSpec {
+    EventSpec {
+        name,
+        flags,
+        movement: false,
+        own_buttons: false,
+    }
+}
+
+const fn own_buttons(mut event: EventSpec) -> EventSpec {
+    event.own_buttons = true;
+    event
+}
+
+/// Every event the host dispatches.
+pub const EVENTS: [EventSpec; 19] = [
+    own_buttons(spec("click", Flags::ALL)),
+    own_buttons(spec("dblclick", Flags::ALL)),
+    own_buttons(spec("auxclick", Flags::ALL)),
+    own_buttons(spec("contextmenu", Flags::ALL)),
+    spec("mousedown", Flags::ALL),
+    spec("mouseup", Flags::ALL),
+    EventSpec {
+        movement: true,
+        ..spec("mousemove", Flags::ALL)
+    },
+    spec("mouseenter", Flags::NONE),
+    spec("mouseleave", Flags::NONE),
+    spec("mouseover", Flags::ALL),
+    spec("mouseout", Flags::ALL),
+    spec("wheel", Flags::ALL),
+    spec("scroll", Flags::NONE),
+    spec("keydown", Flags::ALL),
+    spec("keyup", Flags::ALL),
+    spec("focus", Flags::FOCUS),
+    spec("blur", Flags::FOCUS),
+    spec(
+        "focusin",
+        Flags {
+            bubbles: true,
+            ..Flags::FOCUS
+        },
+    ),
+    spec(
+        "focusout",
+        Flags {
+            bubbles: true,
+            ..Flags::FOCUS
+        },
+    ),
+];
+
+/// The rules of `event`. Any other name takes all three flags as false.
+#[must_use]
+pub fn spec_of(event: &str) -> EventSpec {
+    EVENTS
+        .iter()
+        .find(|spec| spec.name == event)
+        .copied()
+        .unwrap_or(spec("", Flags::NONE))
+}
+
+/// The containers a pointer leaves and enters when its deepest container
+/// changes from the end of `old_path` to the end of `new_path`. Each path
+/// lists a container and its ancestors, nearest first. The first list holds
+/// the containers only `old_path` has, innermost first. The second holds the
+/// ones only `new_path` has, outermost first.
+#[must_use]
+pub fn hover_path_difference(
+    old_path: &[NodeId],
+    new_path: &[NodeId],
+) -> (Vec<NodeId>, Vec<NodeId>) {
+    let leave = old_path
+        .iter()
+        .copied()
+        .filter(|id| !new_path.contains(id))
+        .collect();
+    let enter = new_path
+        .iter()
+        .rev()
+        .copied()
+        .filter(|id| !old_path.contains(id))
+        .collect();
+    (leave, enter)
+}
+
+/// Returns `payload` with `screenX`/`screenY` set to the window's position
+/// on the screen plus the client position.
+#[must_use]
+pub fn with_screen(payload: &EventPayload, window: &Window) -> EventPayload {
+    let origin = window.bounds().origin;
+    let mut payload = payload.clone();
+    if let Some(mouse) = payload.mouse_mut() {
+        mouse.screen_x = f32::from(origin.x) + mouse.client_x;
+        mouse.screen_y = f32::from(origin.y) + mouse.client_y;
+    }
+    payload
+}
+
 #[cfg(test)]
 #[allow(clippy::float_cmp)]
 mod tests;

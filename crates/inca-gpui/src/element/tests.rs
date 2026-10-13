@@ -1,13 +1,14 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use super::scroll::{Align, Rect, rect_of, scroll_chain, scroll_delta};
 use super::style::apply_style;
 use super::*;
 use crate::event_sink::{EventPayload, EventSink};
 use crate::tree::AttributeValue;
 use crate::tree::{NodeId, VirtualTree};
 use gpui::prelude::*;
-use gpui::{App, MouseUpEvent, ScrollHandle, Window, px};
+use gpui::{App, Bounds, MouseUpEvent, ScrollHandle, Window, point, px};
 use gpui::{Length, StyleRefinement};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -184,4 +185,163 @@ fn probe_tree(cx: &mut TestAppContext, tracks: bool) -> Scene {
         calls,
         prevented,
     }
+}
+
+const fn rect(x: f32, y: f32, width: f32, height: f32) -> Rect {
+    Rect {
+        x,
+        y,
+        width,
+        height,
+    }
+}
+
+// The box spans 100..200 on both axes.
+const VIEW: Rect = rect(100.0, 100.0, 100.0, 100.0);
+
+fn dy(top: f32, height: f32, block: Align) -> f32 {
+    scroll_delta(rect(100.0, top, 10.0, height), VIEW, block, Align::Nearest).1
+}
+
+#[test]
+fn start_end_and_center_align_the_matching_edges() {
+    assert_eq!(dy(130.0, 20.0, Align::Start), 30.0);
+    assert_eq!(dy(130.0, 20.0, Align::End), -50.0);
+    assert_eq!(dy(130.0, 20.0, Align::Center), -10.0);
+}
+
+#[test]
+fn nearest_keeps_a_node_that_shows() {
+    assert_eq!(dy(130.0, 20.0, Align::Nearest), 0.0);
+    assert_eq!(dy(100.0, 100.0, Align::Nearest), 0.0);
+}
+
+#[test]
+fn nearest_brings_the_near_edge_in_for_a_node_outside_the_box() {
+    assert_eq!(dy(40.0, 20.0, Align::Nearest), -60.0);
+    assert_eq!(dy(260.0, 20.0, Align::Nearest), 80.0);
+}
+
+#[test]
+fn nearest_moves_a_partly_shown_node_the_least() {
+    assert_eq!(dy(90.0, 20.0, Align::Nearest), -10.0);
+    assert_eq!(dy(190.0, 20.0, Align::Nearest), 10.0);
+}
+
+#[test]
+fn nearest_aligns_the_start_of_a_longer_node_that_ends_after_the_box() {
+    assert_eq!(dy(150.0, 300.0, Align::Nearest), 50.0);
+    assert_eq!(dy(260.0, 300.0, Align::Nearest), 160.0);
+}
+
+#[test]
+fn nearest_aligns_the_end_of_a_longer_node_that_starts_before_the_box() {
+    assert_eq!(dy(60.0, 130.0, Align::Nearest), -10.0);
+    assert_eq!(dy(20.0, 120.0, Align::Nearest), -60.0);
+    assert_eq!(dy(-50.0, 140.0, Align::Nearest), -110.0);
+}
+
+#[test]
+fn nearest_keeps_a_node_that_covers_the_box() {
+    assert_eq!(dy(50.0, 300.0, Align::Nearest), 0.0);
+}
+
+#[test]
+fn reveal_keeps_a_node_that_shows() {
+    assert_eq!(dy(130.0, 20.0, Align::Reveal), 0.0);
+}
+
+#[test]
+fn reveal_centres_a_node_outside_the_box() {
+    assert_eq!(dy(40.0, 20.0, Align::Reveal), -100.0);
+    assert_eq!(dy(260.0, 20.0, Align::Reveal), 120.0);
+    assert_eq!(dy(200.0, 20.0, Align::Reveal), 60.0);
+    assert_eq!(dy(80.0, 20.0, Align::Reveal), -60.0);
+}
+
+#[test]
+fn reveal_moves_a_partly_shown_node_the_least() {
+    assert_eq!(dy(90.0, 20.0, Align::Reveal), -10.0);
+    assert_eq!(dy(190.0, 20.0, Align::Reveal), 10.0);
+    assert_eq!(dy(150.0, 300.0, Align::Reveal), 50.0);
+}
+
+#[test]
+fn center_outside_keeps_a_node_that_shows_fully_or_partly() {
+    let center_outside = |top, height| dy(top, height, Align::CenterOutside);
+    assert_eq!(center_outside(130.0, 20.0), 0.0);
+    assert_eq!(center_outside(90.0, 20.0), 0.0);
+    assert_eq!(center_outside(190.0, 20.0), 0.0);
+    assert_eq!(center_outside(150.0, 300.0), 0.0);
+}
+
+#[test]
+fn center_outside_centres_a_node_outside_the_box() {
+    assert_eq!(dy(40.0, 20.0, Align::CenterOutside), -100.0);
+    assert_eq!(dy(260.0, 20.0, Align::CenterOutside), 120.0);
+    assert_eq!(dy(200.0, 20.0, Align::CenterOutside), 60.0);
+}
+
+#[test]
+fn a_zero_size_node_inside_or_on_the_edge_of_the_box_shows() {
+    for top in [100.0, 150.0, 200.0] {
+        assert_eq!(dy(top, 0.0, Align::Reveal), 0.0);
+        assert_eq!(dy(top, 0.0, Align::CenterOutside), 0.0);
+    }
+}
+
+#[test]
+fn a_zero_size_node_outside_the_box_centres() {
+    assert_eq!(dy(60.0, 0.0, Align::Reveal), -90.0);
+    assert_eq!(dy(260.0, 0.0, Align::CenterOutside), 110.0);
+}
+
+#[test]
+fn a_box_of_zero_height_centres_a_node_outside_it() {
+    let view = rect(100.0, 100.0, 100.0, 0.0);
+    let node = rect(100.0, 140.0, 10.0, 20.0);
+    assert_eq!(
+        scroll_delta(node, view, Align::Reveal, Align::Reveal).1,
+        50.0
+    );
+}
+
+#[test]
+fn a_border_wider_than_half_the_box_leaves_a_zero_size_view() {
+    let bounds = Bounds::new(point(px(10.0), px(10.0)), gpui::size(px(10.0), px(6.0)));
+    let view = rect_of(bounds, px(8.0));
+    assert_eq!((view.width, view.height), (0.0, 0.0));
+    assert_eq!((view.x, view.y), (18.0, 18.0));
+}
+
+#[test]
+fn the_axes_take_their_own_alignment() {
+    let node = rect(260.0, 40.0, 20.0, 20.0);
+    let delta = scroll_delta(node, VIEW, Align::Start, Align::End);
+    assert_eq!(delta, (80.0, -60.0));
+}
+
+#[test]
+fn the_inline_axis_is_horizontal() {
+    let node = rect(260.0, 130.0, 20.0, 20.0);
+    assert_eq!(
+        scroll_delta(node, VIEW, Align::Nearest, Align::Nearest),
+        (80.0, 0.0)
+    );
+}
+
+#[test]
+fn a_container_sees_the_node_shifted_by_the_scroll_of_the_one_before() {
+    let node = rect(0.0, 500.0, 10.0, 20.0);
+    let chain = [
+        (1, rect(0.0, 0.0, 50.0, 100.0)),
+        (2, rect(0.0, 0.0, 50.0, 300.0)),
+    ];
+    let mut seen = Vec::new();
+    scroll_chain(node, &chain, Align::Start, Align::Nearest, |id, dx, dy| {
+        seen.push((id, dx, dy));
+        // The inner container reaches only half of the way.
+        (dx, if id == 1 { dy / 2.0 } else { dy })
+    });
+    assert_eq!(seen, [(1, 0.0, 500.0), (2, 0.0, 250.0)]);
 }

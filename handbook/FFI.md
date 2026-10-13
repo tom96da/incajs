@@ -174,9 +174,9 @@ and author-facing behaviour are in [events.md](../docs/reference/events.md).
   Only an event that reaches a listener enters the engine, drains jobs,
   requests a redraw and takes a number. One counter (`Host::last_event_id`)
   serves an engine's dispatchers and restarts at 1 with a new engine.
-- `bubbles`, `cancelable` and `composed` come from one table (`EVENTS` in
-  `dispatch/spec.rs`) that also holds each event's movement rule and own-buttons
-  rule. Other names get every rule `false`. The `timeStamp` origin is a
+- `bubbles`, `cancelable` and `composed` come from one table (`EVENTS` in the
+  `event_sink` module of `inca-gpui`) that also holds each event's movement rule and
+  own-buttons rule. Other names get every rule `false`. The `timeStamp` origin is a
   process-wide `Instant` fixed when the first dispatcher is created.
 - The object inherits from a per-engine prototype holding `stopPropagation`,
   `stopImmediatePropagation`, `preventDefault`, `composedPath`, the phase

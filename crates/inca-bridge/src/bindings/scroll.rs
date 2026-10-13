@@ -9,7 +9,7 @@ use rquickjs::{Ctx, Exception, Function, IntoJs, Object, Result as JsResult, Val
 
 use inca_gpui::{TreeError, is_scroll_container};
 
-use crate::scroll_into_view::Align;
+use inca_gpui::element::scroll::Align;
 
 use super::convert::{JsNodeId, throw_tree_error};
 use super::host::Host;
@@ -44,7 +44,7 @@ fn install_scroll_into_view<'js>(
                 if host.tree.get(node_id).is_none() {
                     return Err(throw_tree_error(&ctx, TreeError::NodeNotFound(node_id)));
                 }
-                if !crate::scroll_into_view::reveal(&host, node_id, block, inline) {
+                if !host.reveal(node_id, block, inline) {
                     host.scroll_fresh.push((node_id, block, inline));
                 }
                 Ok(())
@@ -126,8 +126,7 @@ pub(super) fn install_scroll<'js>(
                     handle.set_offset(offset);
                     // Recorded boxes follow the new offset, so a reveal in the same tick
                     // starts from where the content now is.
-                    crate::scroll_into_view::shift_descendants(
-                        &host,
+                    host.shift_descendants(
                         node_id,
                         clamped(offset.x, max.x) - clamped(before.x, max.x),
                         clamped(offset.y, max.y) - clamped(before.y, max.y),

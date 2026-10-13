@@ -7,7 +7,7 @@ use gpui::{App, MouseButton, MouseUpEvent, ScrollHandle, Window};
 use inca_gpui::{EventPayload, EventSink, KeyPayload, MousePayload, NodeId};
 
 use super::EventDispatcher;
-use crate::scroll_into_view::Align;
+use inca_gpui::element::scroll::Align;
 
 impl EventSink for EventDispatcher {
     fn tracks_pointer(&self) -> bool {
@@ -228,7 +228,7 @@ impl EventDispatcher {
             let host = self.host.borrow();
             host.focus.focused_node(window, cx).filter(|id| {
                 host.tree.get(*id).is_some_and(|node| {
-                    node.tag_name() == "button" && !node.attributes().contains_key("disabled")
+                    node.tag_name() == "button" && !inca_gpui::is_disabled_button(node)
                 })
             })
         };
@@ -239,12 +239,7 @@ impl EventDispatcher {
                     .focus
                     .tab_move(&host.tree, host.root, window, cx, modifiers.shift);
                 if let Some(node) = moved {
-                    crate::scroll_into_view::reveal(
-                        host,
-                        node,
-                        Align::Reveal,
-                        Align::CenterOutside,
-                    );
+                    host.reveal(node, Align::Reveal, Align::CenterOutside);
                 }
                 None
             }

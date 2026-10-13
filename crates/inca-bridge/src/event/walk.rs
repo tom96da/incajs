@@ -37,10 +37,7 @@ pub(crate) struct Outcome {
 
 /// `target` and its ancestors, nearest first.
 pub(crate) fn path_from(host: &Host, target: NodeId) -> Vec<NodeId> {
-    std::iter::successors(Some(target), |&id| {
-        host.tree.get(id).and_then(inca_gpui::VirtualNode::parent)
-    })
-    .collect()
+    host.tree.ancestors(target).collect()
 }
 
 /// The nodes whose bubble listeners the event reaches.
@@ -281,8 +278,7 @@ pub(crate) fn click(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, target: NodeId) {
         let Some(node) = host.tree.get(target) else {
             return;
         };
-        let disabled = node.tag_name() == "button" && node.attributes().contains_key("disabled");
-        if disabled || !host.clicking.insert(target) {
+        if inca_gpui::is_disabled_button(node) || !host.clicking.insert(target) {
             return;
         }
     }
