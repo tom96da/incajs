@@ -13,7 +13,7 @@ use std::rc::Rc;
 
 use rquickjs::{
     Coerced, Ctx, Function, Object, Result as JsResult, Value,
-    function::{Opt, Rest},
+    function::{IntoJsFunc, Opt, Rest},
 };
 use unicode_width::UnicodeWidthStr;
 
@@ -222,16 +222,40 @@ pub fn install(ctx: &Ctx<'_>, output: &Output, color: bool) -> JsResult<()> {
         color,
     });
 
-    install_lines(ctx, &console, &shared)?;
-    install_counting(ctx, &console, &shared)?;
-    install_timing(ctx, &console, &shared)?;
-    install_structure(ctx, &console, &shared)?;
+    let methods = Methods {
+        ctx,
+        console: &console,
+        shared: &shared,
+    };
+    install_methods(&methods)?;
 
     ctx.globals().set("console", console)?;
     Ok(())
 }
 
-fn install_lines<'js>(ctx: &Ctx<'js>, console: &Object<'js>, shared: &Rc<Console>) -> JsResult<()> {
+/// Registers methods on the console object, handing each one its own clone of the shared state.
+struct Methods<'a, 'js> {
+    ctx: &'a Ctx<'js>,
+    console: &'a Object<'js>,
+    shared: &'a Rc<Console>,
+}
+
+impl<'js> Methods<'_, 'js> {
+    /// Sets the method `name`, built by `make` from a clone of the shared state.
+    fn set<P, F>(&self, name: &str, make: impl FnOnce(Rc<Console>) -> F) -> JsResult<()>
+    where
+        F: IntoJsFunc<'js, P> + 'js,
+    {
+        self.console.set(
+            name,
+            Function::new(self.ctx.clone(), make(Rc::clone(self.shared)))?,
+        )
+    }
+}
+
+/// Registers every console method.
+fn install_methods(m: &Methods<'_, '_>) -> JsResult<()> {
+    // output
     for (name, level) in [
         ("debug", Level::Debug),
         ("log", Level::Log),
@@ -240,187 +264,149 @@ fn install_lines<'js>(ctx: &Ctx<'js>, console: &Object<'js>, shared: &Rc<Console
         ("warn", Level::Warn),
         ("error", Level::Error),
     ] {
-        let c = Rc::clone(shared);
-        console.set(
-            name,
-            Function::new(ctx.clone(), move |ctx: Ctx<'_>, values: Rest<Value<'_>>| {
-                c.write(level, &c.format(&ctx, level, &values.0));
-            })?,
-        )?;
+        m.set(name, |c| print_at(c, level))?;
     }
+    m.set("trace", trace)?;
 
-    let c = Rc::clone(shared);
-    console.set(
-        "trace",
-        Function::new(ctx.clone(), move |ctx: Ctx<'_>, values: Rest<Value<'_>>| {
-            let mut text = "Trace".to_owned();
-            if !values.0.is_empty() {
-                text.push_str(": ");
-                text.push_str(&c.format(&ctx, Level::Trace, &values.0));
-            }
-            for frame in caller_stack(&ctx) {
-                text.push('\n');
-                text.push_str(&paint(c.color, Style::Grey, &frame));
-            }
-            c.write(Level::Trace, &text);
-        })?,
-    )?;
+    // counting
+    m.set("assert", assert)?;
+    m.set("count", count)?;
+    m.set("countReset", count_reset)?;
 
-    Ok(())
+    // timing
+    m.set("time", time)?;
+    m.set("timeLog", time_log)?;
+    m.set("timeEnd", time_end)?;
+
+    // structure
+    m.set("group", group)?;
+    m.set("groupCollapsed", group_collapsed)?;
+    m.set("groupEnd", group_end)?;
+    m.set("clear", clear)?;
+    m.set("dir", dir)?;
+    m.set("table", table)
 }
 
-fn install_counting<'js>(
-    ctx: &Ctx<'js>,
-    console: &Object<'js>,
-    shared: &Rc<Console>,
-) -> JsResult<()> {
-    let c = Rc::clone(shared);
-    console.set(
-        "assert",
-        Function::new(
-            ctx.clone(),
-            move |ctx: Ctx<'js>, condition: Opt<Value<'js>>, data: Rest<Value<'js>>| {
-                let holds = condition
-                    .0
-                    .and_then(|value| value.get::<Coerced<bool>>().ok())
-                    .is_some_and(|flag| flag.0);
-                if holds {
-                    return;
-                }
-                c.write(Level::Error, &assertion_message(&ctx, data.0, c.color));
-            },
-        )?,
-    )?;
-
-    let c = Rc::clone(shared);
-    console.set(
-        "count",
-        Function::new(ctx.clone(), move |label: Opt<Value<'_>>| {
-            let label = label_of(&label);
-            let count = c.state.borrow_mut().count(&label);
-            c.write(Level::Log, &format!("{label}: {count}"));
-        })?,
-    )?;
-
-    let c = Rc::clone(shared);
-    console.set(
-        "countReset",
-        Function::new(ctx.clone(), move |label: Opt<Value<'_>>| {
-            let label = label_of(&label);
-            if !c.state.borrow_mut().reset_count(&label) {
-                c.warn(&format!("Count for '{label}' does not exist"));
-            }
-        })?,
-    )?;
-
-    Ok(())
+/// Builds a console method that formats its arguments and prints them at `level`.
+fn print_at(c: Rc<Console>, level: Level) -> impl Fn(Ctx<'_>, Rest<Value<'_>>) {
+    move |ctx, values| c.write(level, &c.format(&ctx, level, &values.0))
 }
 
-fn install_timing<'js>(
-    ctx: &Ctx<'js>,
-    console: &Object<'js>,
-    shared: &Rc<Console>,
-) -> JsResult<()> {
-    let c = Rc::clone(shared);
-    console.set(
-        "time",
-        Function::new(ctx.clone(), move |label: Opt<Value<'_>>| {
-            let label = label_of(&label);
-            if !c.state.borrow_mut().start_timer(&label) {
-                c.warn(&format!("Timer '{label}' already exists"));
-            }
-        })?,
-    )?;
-
-    let c = Rc::clone(shared);
-    console.set(
-        "timeLog",
-        Function::new(
-            ctx.clone(),
-            move |label: Opt<Value<'_>>, data: Rest<Value<'_>>| {
-                c.time_log(&label_of(&label), &data.0, false);
-            },
-        )?,
-    )?;
-
-    let c = Rc::clone(shared);
-    console.set(
-        "timeEnd",
-        Function::new(ctx.clone(), move |label: Opt<Value<'_>>| {
-            c.time_log(&label_of(&label), &[], true);
-        })?,
-    )?;
-
-    Ok(())
+/// `console.trace`: "Trace", the formatted arguments and the caller's frames.
+fn trace(c: Rc<Console>) -> impl Fn(Ctx<'_>, Rest<Value<'_>>) {
+    move |ctx, values| {
+        let mut text = "Trace".to_owned();
+        if !values.0.is_empty() {
+            text.push_str(": ");
+            text.push_str(&c.format(&ctx, Level::Trace, &values.0));
+        }
+        for frame in caller_stack(&ctx) {
+            text.push('\n');
+            text.push_str(&paint(c.color, Style::Grey, &frame));
+        }
+        c.write(Level::Trace, &text);
+    }
 }
 
-fn install_structure<'js>(
-    ctx: &Ctx<'js>,
-    console: &Object<'js>,
-    shared: &Rc<Console>,
-) -> JsResult<()> {
-    let c = Rc::clone(shared);
-    console.set(
-        "group",
-        Function::new(ctx.clone(), move |ctx: Ctx<'_>, label: Rest<Value<'_>>| {
-            c.group(&ctx, "▼", &label.0);
-        })?,
-    )?;
+/// `console.assert`: an error line when the condition is falsy.
+fn assert<'js>(c: Rc<Console>) -> impl Fn(Ctx<'js>, Opt<Value<'js>>, Rest<Value<'js>>) {
+    move |ctx, condition, data| {
+        let holds = condition
+            .0
+            .and_then(|value| value.get::<Coerced<bool>>().ok())
+            .is_some_and(|flag| flag.0);
+        if holds {
+            return;
+        }
+        c.write(Level::Error, &assertion_message(&ctx, data.0, c.color));
+    }
+}
 
-    let c = Rc::clone(shared);
-    console.set(
-        "groupCollapsed",
-        Function::new(ctx.clone(), move |ctx: Ctx<'_>, label: Rest<Value<'_>>| {
-            c.group(&ctx, "▶", &label.0);
-        })?,
-    )?;
+/// `console.count`: increments the label's counter and prints it.
+fn count(c: Rc<Console>) -> impl Fn(Opt<Value<'_>>) {
+    move |label| {
+        let label = label_of(&label);
+        let count = c.state.borrow_mut().count(&label);
+        c.write(Level::Log, &format!("{label}: {count}"));
+    }
+}
 
-    let c = Rc::clone(shared);
-    console.set(
-        "groupEnd",
-        Function::new(ctx.clone(), move || c.state.borrow_mut().close_group())?,
-    )?;
+/// `console.countReset`: zeroes the label's counter, warning when it has none.
+fn count_reset(c: Rc<Console>) -> impl Fn(Opt<Value<'_>>) {
+    move |label| {
+        let label = label_of(&label);
+        if !c.state.borrow_mut().reset_count(&label) {
+            c.warn(&format!("Count for '{label}' does not exist"));
+        }
+    }
+}
 
-    let c = Rc::clone(shared);
-    console.set(
-        "clear",
-        Function::new(ctx.clone(), move || c.state.borrow_mut().close_all_groups())?,
-    )?;
+/// `console.time`: starts the label's timer, warning when it is running.
+fn time(c: Rc<Console>) -> impl Fn(Opt<Value<'_>>) {
+    move |label| {
+        let label = label_of(&label);
+        if !c.state.borrow_mut().start_timer(&label) {
+            c.warn(&format!("Timer '{label}' already exists"));
+        }
+    }
+}
 
-    let c = Rc::clone(shared);
-    console.set(
-        "dir",
-        Function::new(ctx.clone(), move |item: Opt<Value<'_>>| {
-            let text = item.0.as_ref().map_or_else(
+/// `console.timeLog`: prints the label's elapsed time and the extra data.
+fn time_log(c: Rc<Console>) -> impl Fn(Opt<Value<'_>>, Rest<Value<'_>>) {
+    move |label, data| c.time_log(&label_of(&label), &data.0, false)
+}
+
+/// `console.timeEnd`: prints the label's elapsed time and stops the timer.
+fn time_end(c: Rc<Console>) -> impl Fn(Opt<Value<'_>>) {
+    move |label| c.time_log(&label_of(&label), &[], true)
+}
+
+/// `console.group`: prints the label behind an open marker and indents what follows.
+fn group(c: Rc<Console>) -> impl Fn(Ctx<'_>, Rest<Value<'_>>) {
+    move |ctx, label| c.group(&ctx, "▼", &label.0)
+}
+
+/// `console.groupCollapsed`: `group` with the collapsed marker.
+fn group_collapsed(c: Rc<Console>) -> impl Fn(Ctx<'_>, Rest<Value<'_>>) {
+    move |ctx, label| c.group(&ctx, "▶", &label.0)
+}
+
+/// `console.groupEnd`: closes the innermost group.
+fn group_end(c: Rc<Console>) -> impl Fn() {
+    move || c.state.borrow_mut().close_group()
+}
+
+/// `console.clear`: closes every group.
+fn clear(c: Rc<Console>) -> impl Fn() {
+    move || c.state.borrow_mut().close_all_groups()
+}
+
+/// `console.dir`: prints the value with its strings quoted.
+fn dir(c: Rc<Console>) -> impl Fn(Opt<Value<'_>>) {
+    move |item| {
+        let text = item.0.as_ref().map_or_else(
+            || paint(c.color, Style::Grey, "undefined"),
+            |item| inspect::quoted(item, c.color),
+        );
+        c.write(Level::Log, &text);
+    }
+}
+
+/// `console.table`: draws the data as a table, or prints it as `log` does.
+fn table(c: Rc<Console>) -> impl Fn(Opt<Value<'_>>, Opt<Value<'_>>) {
+    move |data, columns| {
+        let drawn = data
+            .0
+            .as_ref()
+            .and_then(|data| table::render(data, columns.0.as_ref(), c.color));
+        let text = drawn.unwrap_or_else(|| {
+            data.0.as_ref().map_or_else(
                 || paint(c.color, Style::Grey, "undefined"),
-                |item| inspect::quoted(item, c.color),
-            );
-            c.write(Level::Log, &text);
-        })?,
-    )?;
-
-    let c = Rc::clone(shared);
-    console.set(
-        "table",
-        Function::new(
-            ctx.clone(),
-            move |data: Opt<Value<'_>>, columns: Opt<Value<'_>>| {
-                let drawn = data
-                    .0
-                    .as_ref()
-                    .and_then(|data| table::render(data, columns.0.as_ref(), c.color));
-                let text = drawn.unwrap_or_else(|| {
-                    data.0.as_ref().map_or_else(
-                        || paint(c.color, Style::Grey, "undefined"),
-                        |v| inspect::line(std::slice::from_ref(v), c.color),
-                    )
-                });
-                c.write(Level::Log, &text);
-            },
-        )?,
-    )?;
-
-    Ok(())
+                |v| inspect::line(std::slice::from_ref(v), c.color),
+            )
+        });
+        c.write(Level::Log, &text);
+    }
 }
 
 #[cfg(test)]
