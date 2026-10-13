@@ -99,7 +99,7 @@ jobs:
         run: pnpm ci
 
       - name: Build
-        run: pnpm -r build
+        run: pnpm -r -F '!docs' build
 
   lint:
     name: "Lint: Node.js 26, ubuntu-latest"
