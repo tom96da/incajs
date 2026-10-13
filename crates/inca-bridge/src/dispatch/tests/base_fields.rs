@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::*;
+use crate::test_support::callback_ids;
 
 #[gpui::test]
 fn base_fields_follow_the_spec_rows_and_prevent_default_needs_cancelable(cx: &mut TestAppContext) {
@@ -390,12 +391,7 @@ fn mouse_events_carry_the_aliases_and_the_pointer_fields_of_their_type(cx: &mut 
     }
     let mut mismatches = Vec::new();
     for (event, payload, fields) in cases {
-        if host
-            .borrow()
-            .listeners
-            .callbacks_for(node, event)
-            .is_empty()
-        {
+        if callback_ids(&host.borrow().listeners, node, event).is_empty() {
             listen(&dispatcher, node, event, "fields");
         }
         cx.update(|window, cx| dispatcher.fire(node, event, &payload, window, cx));

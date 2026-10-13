@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::*;
-use crate::test_support::engine_with_bindings;
+use crate::test_support::{callback_ids, engine_with_bindings};
 
 #[test]
 fn remove_style_unsets_the_key_and_rejects_an_unknown_node() {
@@ -214,7 +214,7 @@ fn destroy_node_frees_the_subtree_and_hands_back_its_callback_ids() {
 
     let host = host.borrow();
     assert!(host.tree.get(host.root).unwrap().children().is_empty());
-    assert!(host.listeners.callbacks_for(1, "click").is_empty());
+    assert!(callback_ids(&host.listeners, 1, "click").is_empty());
 }
 
 #[test]
@@ -422,7 +422,7 @@ fn happy_path_round_trip_through_eval() {
         child.style_props().get("display"),
         Some(&AttributeValue::String("flex".into()))
     );
-    assert_eq!(host.listeners.callbacks_for(child_id, "click"), &[0]);
+    assert_eq!(callback_ids(&host.listeners, child_id, "click"), &[0]);
 }
 
 #[test]

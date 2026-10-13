@@ -31,7 +31,7 @@ pub struct Listener {
 /// dispatcher, can read it.
 ///
 /// Nothing expires on its own: a registration lives until
-/// [`unregister`](Self::unregister) drops it, or [`release`](Self::release)
+/// [`remove`](Self::remove) drops it, or [`release`](Self::release)
 /// does when the node goes away.
 #[derive(Debug, Default)]
 pub struct EventListeners {
@@ -42,12 +42,9 @@ pub struct EventListeners {
 impl EventListeners {
     /// Allocates the next callback id, registers it on `(node_id, event)` with the given
     /// phase and passivity, and returns it. Ids rise from 0 in call order, and each id is
-    /// issued once, also after [`unregister`](Self::unregister) or [`release`](Self::release).
+    /// issued once, also after [`remove`](Self::remove) or [`release`](Self::release).
     /// The last id is `u32::MAX - 1`. After it the call returns `None` and leaves the
     /// registrations unchanged.
-    ///
-    /// Ids from `add` and explicit ids passed to [`register`](Self::register) share one
-    /// space, so a caller uses one or the other.
     pub fn add(
         &mut self,
         node_id: NodeId,
@@ -57,21 +54,13 @@ impl EventListeners {
     ) -> Option<u32> {
         let id = self.next_callback;
         self.next_callback = id.checked_add(1)?;
-        self.register_with(node_id, event, id, capture, passive);
+        self.insert(node_id, event, id, capture, passive);
         Some(id)
     }
 
-    /// Adds `callback_id` to `(node_id, event)` as a bubble-phase, active
-    /// listener. Registering an id already there leaves the registrations
-    /// unchanged.
-    pub fn register(&mut self, node_id: NodeId, event: impl Into<String>, callback_id: u32) {
-        self.register_with(node_id, event, callback_id, false, false);
-    }
-
     /// Adds `callback_id` to `(node_id, event)` with the given phase and
-    /// passivity. Registering an id already there leaves the registrations
-    /// unchanged.
-    pub fn register_with(
+    /// passivity. An id already there leaves the registrations unchanged.
+    fn insert(
         &mut self,
         node_id: NodeId,
         event: impl Into<String>,
@@ -96,7 +85,7 @@ impl EventListeners {
 
     /// Drops `callback_id` from `(node_id, event)`, and reports whether it
     /// was registered.
-    pub fn unregister(&mut self, node_id: NodeId, event: &str, callback_id: u32) -> bool {
+    pub fn remove(&mut self, node_id: NodeId, event: &str, callback_id: u32) -> bool {
         let Some(events) = self.by_node.get_mut(&node_id) else {
             return false;
         };
@@ -129,15 +118,6 @@ impl EventListeners {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.by_node.is_empty()
-    }
-
-    /// The callback ids of `(node_id, event)` in registration order.
-    #[must_use]
-    pub fn callbacks_for(&self, node_id: NodeId, event: &str) -> Vec<u32> {
-        self.listeners_for(node_id, event)
-            .iter()
-            .map(|l| l.callback)
-            .collect()
     }
 
     /// The registrations of `(node_id, event)` in registration order.
@@ -195,7 +175,7 @@ pub(super) fn install_events<'js>(
                 move |JsNodeId(node_id): JsNodeId, event: String, callback_id: u32| -> bool {
                     host.borrow_mut()
                         .listeners
-                        .unregister(node_id, &event, callback_id)
+                        .remove(node_id, &event, callback_id)
                 },
             )?,
         )?;
@@ -240,32 +220,32 @@ pub(super) fn install_events<'js>(
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
-    use crate::test_support::engine_with_bindings;
+    use crate::test_support::{callback_ids, engine_with_bindings};
 
     #[test]
     fn registering_the_same_callback_twice_keeps_one_entry() {
         let mut listeners = EventListeners::default();
-        listeners.register(1, "click", 7);
-        listeners.register(1, "click", 7);
+        listeners.insert(1, "click", 7, false, false);
+        listeners.insert(1, "click", 7, false, false);
 
-        assert_eq!(listeners.callbacks_for(1, "click"), &[7]);
+        assert_eq!(callback_ids(&listeners, 1, "click"), &[7]);
     }
 
     #[test]
     fn distinct_callbacks_on_one_event_stack() {
         let mut listeners = EventListeners::default();
-        listeners.register(1, "click", 7);
-        listeners.register(1, "click", 8);
+        listeners.insert(1, "click", 7, false, false);
+        listeners.insert(1, "click", 8, false, false);
 
-        assert_eq!(listeners.callbacks_for(1, "click"), &[7, 8]);
+        assert_eq!(callback_ids(&listeners, 1, "click"), &[7, 8]);
     }
 
     #[test]
     fn a_registration_keeps_its_phase_and_passivity_and_the_first_one_wins() {
         let mut listeners = EventListeners::default();
-        listeners.register_with(1, "wheel", 7, true, true);
-        listeners.register_with(1, "wheel", 7, false, false);
-        listeners.register(1, "wheel", 8);
+        listeners.insert(1, "wheel", 7, true, true);
+        listeners.insert(1, "wheel", 7, false, false);
+        listeners.insert(1, "wheel", 8, false, false);
 
         assert_eq!(
             listeners.listeners_for(1, "wheel"),
@@ -319,9 +299,9 @@ mod tests {
         assert_eq!(listeners.add(1, "click", false, false), Some(0));
         assert_eq!(listeners.add(2, "click", true, false), Some(1));
         assert_eq!(listeners.add(1, "focus", false, true), Some(2));
-        assert_eq!(listeners.callbacks_for(1, "click"), &[0]);
-        assert_eq!(listeners.callbacks_for(2, "click"), &[1]);
-        assert_eq!(listeners.callbacks_for(1, "focus"), &[2]);
+        assert_eq!(callback_ids(&listeners, 1, "click"), &[0]);
+        assert_eq!(callback_ids(&listeners, 2, "click"), &[1]);
+        assert_eq!(callback_ids(&listeners, 1, "focus"), &[2]);
         assert_eq!(
             listeners.listeners_for(1, "focus"),
             &[Listener {
@@ -333,10 +313,10 @@ mod tests {
     }
 
     #[test]
-    fn add_never_reuses_an_id_after_unregister_or_release() {
+    fn add_never_reuses_an_id_after_remove_or_release() {
         let mut listeners = EventListeners::default();
         let first = listeners.add(1, "click", false, false).unwrap();
-        listeners.unregister(1, "click", first);
+        listeners.remove(1, "click", first);
         let second = listeners.add(1, "click", false, false).unwrap();
         listeners.release(1);
 
@@ -354,7 +334,7 @@ mod tests {
         assert_eq!(listeners.add(1, "click", false, false), Some(u32::MAX - 1));
         assert_eq!(listeners.add(1, "focus", false, false), None);
         assert_eq!(listeners.add(1, "focus", false, false), None);
-        assert!(listeners.callbacks_for(1, "focus").is_empty());
+        assert!(callback_ids(&listeners, 1, "focus").is_empty());
     }
 
     #[test]
@@ -419,30 +399,30 @@ mod tests {
     }
 
     #[test]
-    fn unregister_reports_whether_it_removed_anything() {
+    fn remove_reports_whether_it_removed_anything() {
         let mut listeners = EventListeners::default();
-        listeners.register(1, "click", 7);
+        listeners.insert(1, "click", 7, false, false);
 
-        assert!(listeners.unregister(1, "click", 7));
-        assert!(listeners.callbacks_for(1, "click").is_empty());
-        assert!(!listeners.unregister(1, "click", 7));
-        assert!(!listeners.unregister(99, "click", 7));
+        assert!(listeners.remove(1, "click", 7));
+        assert!(callback_ids(&listeners, 1, "click").is_empty());
+        assert!(!listeners.remove(1, "click", 7));
+        assert!(!listeners.remove(99, "click", 7));
     }
 
     #[test]
     fn release_returns_every_callback_on_a_node() {
         let mut listeners = EventListeners::default();
-        listeners.register(1, "click", 7);
-        listeners.register(1, "focus", 8);
-        listeners.register(2, "click", 9);
+        listeners.insert(1, "click", 7, false, false);
+        listeners.insert(1, "focus", 8, false, false);
+        listeners.insert(2, "click", 9, false, false);
 
         let mut released = listeners.release(1);
         released.sort_unstable();
 
         assert_eq!(released, vec![7, 8]);
-        assert!(listeners.callbacks_for(1, "click").is_empty());
+        assert!(callback_ids(&listeners, 1, "click").is_empty());
         assert_eq!(
-            listeners.callbacks_for(2, "click"),
+            callback_ids(&listeners, 2, "click"),
             &[9],
             "another node's registrations must survive"
         );
@@ -463,7 +443,7 @@ mod tests {
             .unwrap();
 
         assert!(removed);
-        assert!(host.borrow().listeners.callbacks_for(1, "click").is_empty());
+        assert!(callback_ids(&host.borrow().listeners, 1, "click").is_empty());
     }
 
     #[test]

@@ -13,7 +13,7 @@ use inca_gpui::{NodeId, render_tree_with_events};
 use inca_jsenv::{Engine, EngineError, ErrorReporter};
 
 use crate::bindings::install;
-use crate::{EventDispatcher, Host};
+use crate::{EventDispatcher, EventListeners, Host};
 
 /// Defines `__inca_test_listen__(node, type, fn, capture, passive)`, which
 /// registers `fn` through `__inca_native__.addEventListener`.
@@ -24,6 +24,16 @@ pub const LISTEN_JS: &str = r"
         globalThis.__inca_callbacks__[id] = fn;
     };
     ";
+
+/// The callback ids of `(node, event)` in registration order.
+#[must_use]
+pub fn callback_ids(listeners: &EventListeners, node: NodeId, event: &str) -> Vec<u32> {
+    listeners
+        .listeners_for(node, event)
+        .iter()
+        .map(|l| l.callback)
+        .collect()
+}
 
 /// An engine with the bindings installed on a fresh default [`Host`], returned
 /// together with that host.

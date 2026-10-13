@@ -173,7 +173,7 @@ fn deliver<'js>(
                 if flag(record, "immediate") {
                     break;
                 }
-                // The full value is compared. Flags change only through unregister, then register.
+                // The full value is compared. Flags change only through remove, then add.
                 if !host
                     .borrow()
                     .listeners

@@ -191,7 +191,13 @@ fn a_reload_leaves_no_stale_nodes_listeners_or_callbacks() {
         children[0], first_child,
         "ids restart, so the tree is new rather than appended to"
     );
-    assert_eq!(host.listeners.callbacks_for(children[0], "click"), &[0]);
+    let ids: Vec<u32> = host
+        .listeners
+        .listeners_for(children[0], "click")
+        .iter()
+        .map(|l| l.callback)
+        .collect();
+    assert_eq!(ids, &[0]);
     assert!(
         !second
             .engine

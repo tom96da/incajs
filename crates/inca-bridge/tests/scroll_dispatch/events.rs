@@ -82,13 +82,7 @@ fn removing_the_listener_between_frames_fires_nothing(cx: &mut TestAppContext) {
     let mut scene = Scene::new(cx, parented_container(), &record_scroll(1));
     scene.wheel(-50.);
     let id = scene.host.borrow().listeners.listeners_for(1, "scroll")[0].callback;
-    assert!(
-        scene
-            .host
-            .borrow_mut()
-            .listeners
-            .unregister(1, "scroll", id)
-    );
+    assert!(scene.host.borrow_mut().listeners.remove(1, "scroll", id));
     scene.wheel(-20.);
     assert_eq!(scene.ran(), r#"["scroll:1:false"]"#);
 }
