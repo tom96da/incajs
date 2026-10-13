@@ -9,7 +9,7 @@
 mod convert;
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
-mod fixtures;
+pub(crate) mod fixtures;
 mod focus;
 mod host;
 mod listeners;

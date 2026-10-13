@@ -23,18 +23,16 @@ fn hover_dispatches_enter_then_leave(cx: &mut TestAppContext) {
         host.tree.set_style(node, "height", 100.0).unwrap();
         node
     };
-    host.borrow_mut().listeners.register(node, "mouseenter", 0);
-    host.borrow_mut().listeners.register(node, "mouseleave", 0);
-    let engine = Rc::new(Engine::new().unwrap());
+    let engine = common::engine_for(&host);
     engine
-        .eval::<()>(
+        .eval::<()>(&format!(
             r"
             globalThis.seen = [];
-            globalThis.__inca_callbacks__ = {
-               0: (event) => { globalThis.seen.push(event.type); }
-            };
-            ",
-        )
+            const record = (event) => {{ globalThis.seen.push(event.type); }};
+            __inca_test_listen__({node}, 'mouseenter', record);
+            __inca_test_listen__({node}, 'mouseleave', record);
+            "
+        ))
         .unwrap();
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
@@ -97,9 +95,8 @@ fn mouseenter_carries_the_mouse_fields(cx: &mut TestAppContext) {
         host.tree.set_style(node, "height", 100.0).unwrap();
         node
     };
-    host.borrow_mut().listeners.register(node, "mouseenter", 0);
-    let engine = Rc::new(Engine::new().unwrap());
-    install_click_counter(&engine);
+    let engine = common::engine_for(&host);
+    install_click_counter(&engine, node, "mouseenter");
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
     let window = cx.add_window(|_, _| ClickableRoot {
@@ -154,9 +151,9 @@ fn mouseenter_carries_the_mouse_fields(cx: &mut TestAppContext) {
 /// transition, never a leave one, regardless of which names JS registered.
 #[gpui::test]
 fn mounting_already_hovered_does_not_fire_a_spurious_leave(cx: &mut TestAppContext) {
-    let (host, node) = build_tree_listening_for("mouseleave");
-    let engine = Rc::new(Engine::new().unwrap());
-    install_click_counter(&engine);
+    let (host, node) = build_clickable_tree();
+    let engine = common::engine_for(&host);
+    install_click_counter(&engine, node, "mouseleave");
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
     let window = cx.add_window(|_, _| ClickableRoot {
@@ -187,20 +184,18 @@ fn one_move_gives_mousemove_the_delta_and_mouseenter_zero(cx: &mut TestAppContex
         host.tree.set_style(node, "height", 100.0).unwrap();
         node
     };
-    host.borrow_mut().listeners.register(node, "mouseenter", 0);
-    host.borrow_mut().listeners.register(node, "mousemove", 0);
-    let engine = Rc::new(Engine::new().unwrap());
+    let engine = common::engine_for(&host);
     engine
-        .eval::<()>(
+        .eval::<()>(&format!(
             r"
             globalThis.seen = [];
-            globalThis.__inca_callbacks__ = {
-               0: (event) => {
-                   globalThis.seen.push([event.type, event.movementX, event.movementY]);
-               }
-            };
-            ",
-        )
+            const record = (event) => {{
+                globalThis.seen.push([event.type, event.movementX, event.movementY]);
+            }};
+            __inca_test_listen__({node}, 'mouseenter', record);
+            __inca_test_listen__({node}, 'mousemove', record);
+            "
+        ))
         .unwrap();
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
@@ -243,11 +238,11 @@ fn one_move_gives_mousemove_the_delta_and_mouseenter_zero(cx: &mut TestAppContex
 /// only that bit.
 #[gpui::test]
 fn buttons_tracks_every_button_currently_held(cx: &mut TestAppContext) {
-    let (host, node) = build_tree_listening_for("mousedown");
-    host.borrow_mut().listeners.register(node, "mouseup", 0);
-    host.borrow_mut().listeners.register(node, "mousemove", 0);
-    let engine = Rc::new(Engine::new().unwrap());
-    install_click_counter(&engine);
+    let (host, node) = build_clickable_tree();
+    let engine = common::engine_for(&host);
+    for event in ["mousedown", "mouseup", "mousemove"] {
+        install_click_counter(&engine, node, event);
+    }
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
     let window = cx.add_window(|_, _| ClickableRoot {
@@ -291,10 +286,11 @@ fn buttons_tracks_every_button_currently_held(cx: &mut TestAppContext) {
 /// `mousemove` reports nothing held.
 #[gpui::test]
 fn buttons_clears_after_a_release_nobody_listens_to(cx: &mut TestAppContext) {
-    let (host, node) = build_tree_listening_for("mousedown");
-    host.borrow_mut().listeners.register(node, "mousemove", 0);
-    let engine = Rc::new(Engine::new().unwrap());
-    install_click_counter(&engine);
+    let (host, node) = build_clickable_tree();
+    let engine = common::engine_for(&host);
+    for event in ["mousedown", "mousemove"] {
+        install_click_counter(&engine, node, event);
+    }
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
     let window = cx.add_window(|_, _| ClickableRoot {
         host: Rc::clone(&host),
@@ -323,9 +319,9 @@ fn buttons_clears_after_a_release_nobody_listens_to(cx: &mut TestAppContext) {
 /// from the pointer's own previous position.
 #[gpui::test]
 fn movement_tracks_the_delta_from_the_last_pointer_move(cx: &mut TestAppContext) {
-    let (host, node) = build_tree_listening_for("mousemove");
-    let engine = Rc::new(Engine::new().unwrap());
-    install_click_counter(&engine);
+    let (host, node) = build_clickable_tree();
+    let engine = common::engine_for(&host);
+    install_click_counter(&engine, node, "mousemove");
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
     let window = cx.add_window(|_, _| ClickableRoot {
@@ -365,25 +361,27 @@ fn movement_tracks_the_delta_from_the_last_pointer_move(cx: &mut TestAppContext)
 /// the same `movementX`/`movementY` to both.
 #[gpui::test]
 fn bubbled_mousemove_gives_every_listener_the_same_movement(cx: &mut TestAppContext) {
-    let (host, parent) = build_tree_listening_for("mousemove");
+    let (host, parent) = build_clickable_tree();
     let child = {
         let mut host = host.borrow_mut();
         let child = host.tree.create_node("div").unwrap();
         host.tree.set_style(child, "width", 100.0).unwrap();
         host.tree.set_style(child, "height", 100.0).unwrap();
         host.tree.append_child(parent, child).unwrap();
-        host.listeners.register(child, "mousemove", 0);
         child
     };
-    let engine = Rc::new(Engine::new().unwrap());
+    let engine = common::engine_for(&host);
     engine
-        .eval::<()>(
+        .eval::<()>(&format!(
             r"
             globalThis.seen = [];
-            globalThis.__inca_callbacks__ = { 0: (e) => {
-                globalThis.seen.push([e.target, e.movementX, e.movementY]); } };
-            ",
-        )
+            const record = (e) => {{
+                globalThis.seen.push([e.target, e.movementX, e.movementY]);
+            }};
+            __inca_test_listen__({parent}, 'mousemove', record);
+            __inca_test_listen__({child}, 'mousemove', record);
+            "
+        ))
         .unwrap();
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
     let window = cx.add_window(|_, _| ClickableRoot {
@@ -412,25 +410,26 @@ fn bubbled_mousemove_gives_every_listener_the_same_movement(cx: &mut TestAppCont
 /// An inert child never becomes the target, so the listening parent does.
 #[gpui::test]
 fn an_inert_child_is_never_the_event_target(cx: &mut TestAppContext) {
-    let (host, parent) = build_tree_listening_for("mousemove");
-    {
+    let (host, parent) = build_clickable_tree();
+    let child = {
         let mut host = host.borrow_mut();
         let child = host.tree.create_node("div").unwrap();
         host.tree.set_style(child, "width", 100.0).unwrap();
         host.tree.set_style(child, "height", 100.0).unwrap();
         host.tree.set_attribute(child, "inert", true).unwrap();
         host.tree.append_child(parent, child).unwrap();
-        host.listeners.register(child, "mousemove", 0);
-    }
-    let engine = Rc::new(Engine::new().unwrap());
+        child
+    };
+    let engine = common::engine_for(&host);
     engine
-        .eval::<()>(
+        .eval::<()>(&format!(
             r"
             globalThis.seen = [];
-            globalThis.__inca_callbacks__ = { 0: (e) => {
-                globalThis.seen.push(e.target); } };
-            ",
-        )
+            const record = (e) => {{ globalThis.seen.push(e.target); }};
+            __inca_test_listen__({parent}, 'mousemove', record);
+            __inca_test_listen__({child}, 'mousemove', record);
+            "
+        ))
         .unwrap();
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
     let window = cx.add_window(|_, _| ClickableRoot {
@@ -458,9 +457,9 @@ fn an_inert_child_is_never_the_event_target(cx: &mut TestAppContext) {
 /// even though the first one at that position did.
 #[gpui::test]
 fn repeated_mousemove_at_one_position_reports_zero_movement(cx: &mut TestAppContext) {
-    let (host, node) = build_tree_listening_for("mousemove");
-    let engine = Rc::new(Engine::new().unwrap());
-    install_click_counter(&engine);
+    let (host, node) = build_clickable_tree();
+    let engine = common::engine_for(&host);
+    install_click_counter(&engine, node, "mousemove");
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
     let window = cx.add_window(|_, _| ClickableRoot {
         host: Rc::clone(&host),
@@ -494,7 +493,7 @@ fn repeated_mousemove_at_one_position_reports_zero_movement(cx: &mut TestAppCont
 #[gpui::test]
 fn stop_propagation_keeps_an_ancestors_listener_from_firing(cx: &mut TestAppContext) {
     let host = Rc::new(RefCell::new(Host::default()));
-    let parent = {
+    let (parent, child) = {
         let mut host_mut = host.borrow_mut();
         let parent = host_mut.tree.create_node("div").unwrap();
         host_mut.tree.set_style(parent, "width", 100.0).unwrap();
@@ -503,22 +502,23 @@ fn stop_propagation_keeps_an_ancestors_listener_from_firing(cx: &mut TestAppCont
         host_mut.tree.set_style(child, "width", 100.0).unwrap();
         host_mut.tree.set_style(child, "height", 100.0).unwrap();
         host_mut.tree.append_child(parent, child).unwrap();
-        host_mut.listeners.register(parent, "mousedown", 0);
-        host_mut.listeners.register(child, "mousedown", 1);
-        parent
+        (parent, child)
     };
 
-    let engine = Rc::new(Engine::new().unwrap());
+    let engine = common::engine_for(&host);
     engine
-        .eval::<()>(
+        .eval::<()>(&format!(
             r"
             globalThis.ran = [];
-            globalThis.__inca_callbacks__ = {
-               0: () => { globalThis.ran.push('parent'); },
-               1: (event) => { globalThis.ran.push('child'); event.stopPropagation(); }
-            };
-            ",
-        )
+            __inca_test_listen__({parent}, 'mousedown', () => {{
+                globalThis.ran.push('parent');
+            }});
+            __inca_test_listen__({child}, 'mousedown', (event) => {{
+                globalThis.ran.push('child');
+                event.stopPropagation();
+            }});
+            "
+        ))
         .unwrap();
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 

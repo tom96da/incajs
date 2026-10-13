@@ -18,6 +18,8 @@ use inca_bridge::{EventDispatcher, EventListeners, Host};
 use inca_gpui::{NodeId, render_tree_with_events};
 use inca_jsenv::Engine;
 
+mod common;
+
 struct KeyableRoot {
     host: Rc<RefCell<Host>>,
     node: NodeId,
@@ -32,8 +34,7 @@ impl Render for KeyableRoot {
     }
 }
 
-/// A focusable parent wrapping a focusable child, both listening for
-/// `"keydown"`/`"keyup"` via the same callback id.
+/// A focusable parent wrapping a focusable child.
 fn build_key_pair() -> (Rc<RefCell<Host>>, NodeId, NodeId) {
     let host = Rc::new(RefCell::new(Host::default()));
     let mut host_mut = host.borrow_mut();
@@ -41,8 +42,6 @@ fn build_key_pair() -> (Rc<RefCell<Host>>, NodeId, NodeId) {
     let child = host_mut.tree.create_node("div").unwrap();
     host_mut.tree.append_child(parent, child).unwrap();
     for node in [parent, child] {
-        host_mut.listeners.register(node, "keydown", 0);
-        host_mut.listeners.register(node, "keyup", 0);
         host_mut.tree.set_attribute(node, "tabindex", "0").unwrap();
         host_mut.focus.mark_tab_dirty(node);
     }
@@ -50,17 +49,18 @@ fn build_key_pair() -> (Rc<RefCell<Host>>, NodeId, NodeId) {
     (host, parent, child)
 }
 
-fn install_key_recorder(engine: &Engine) {
-    engine
-        .eval::<()>(
-            r"
-            globalThis.seen = [];
-            globalThis.__inca_callbacks__ = {
-               0: (event) => { globalThis.seen.push(`${event.type}:${event.currentTarget}:${event.key}`); }
-            };
-            ",
-        )
-        .unwrap();
+/// Registers `js`, the body of a listener taking `e`, for `"keydown"` and
+/// `"keyup"` on each of `nodes`.
+fn listen_for_keys(engine: &Engine, nodes: [NodeId; 2], js: &str, passive: bool) {
+    for node in nodes {
+        for event in ["keydown", "keyup"] {
+            engine
+                .eval::<()>(&format!(
+                    "__inca_test_listen__({node}, '{event}', (e) => {{ {js} }}, false, {passive});"
+                ))
+                .unwrap();
+        }
+    }
 }
 
 fn a_keystroke() -> Keystroke {
@@ -75,22 +75,30 @@ fn a_keystroke() -> Keystroke {
 /// `target`, and bubbles from there.
 #[gpui::test]
 fn a_key_event_with_nothing_focused_targets_the_root(cx: &mut TestAppContext) {
-    let (host, parent, _child) = build_key_pair();
+    let (host, parent, child) = build_key_pair();
     let root = host.borrow().root;
     host.borrow_mut().tree.append_child(root, parent).unwrap();
+    let engine = common::engine_for(&host);
+    engine.eval::<()>("globalThis.seen = [];").unwrap();
+    listen_for_keys(
+        &engine,
+        [parent, child],
+        "globalThis.seen.push(`${e.type}:${e.currentTarget}:${e.key}`);",
+        false,
+    );
     for event in ["keydown", "keyup"] {
-        host.borrow_mut().listeners.register(root, event, 1);
+        engine
+            .eval::<()>(&format!(
+                r"
+                __inca_test_listen__({root}, '{event}', (e) => {{
+                    const {{ type, currentTarget, target, eventPhase, key }} = e;
+                    globalThis.seen.push(
+                        `${{type}}:${{currentTarget}}:${{target}}:${{eventPhase}}:${{key}}`);
+                }});
+                "
+            ))
+            .unwrap();
     }
-    let engine = Rc::new(Engine::new().unwrap());
-    install_key_recorder(&engine);
-    engine
-        .eval::<()>(
-            r"
-            globalThis.__inca_callbacks__[1] = (e) => { globalThis.seen.push(
-            `${e.type}:${e.currentTarget}:${e.target}:${e.eventPhase}:${e.key}`); };
-            ",
-        )
-        .unwrap();
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
     let window = cx.add_window(|_, _| KeyableRoot {
@@ -125,18 +133,15 @@ fn a_key_event_with_nothing_focused_targets_the_root(cx: &mut TestAppContext) {
 
 gpui::actions!(key_dispatch_tests, [Bound]);
 
-/// A window of the `build_key_pair` tree with its child focused. Callback 0
-/// is `js`; the parent and the child listen for `keydown` and `keyup`.
+/// A window of the `build_key_pair` tree with its child focused. The parent
+/// and the child run `js` for `keydown` and `keyup`.
 type Pair = (AnyWindowHandle, Rc<Engine>, Rc<RefCell<Host>>, [NodeId; 2]);
 
 fn focused_pair(cx: &mut TestAppContext, js: &str) -> Pair {
     let (host, parent, child) = build_key_pair();
-    let engine = Rc::new(Engine::new().unwrap());
-    engine
-        .eval::<()>(&format!(
-            "globalThis.seen = []; globalThis.__inca_callbacks__ = {{ 0: (e) => {{ {js} }} }};"
-        ))
-        .unwrap();
+    let engine = common::engine_for(&host);
+    engine.eval::<()>("globalThis.seen = [];").unwrap();
+    listen_for_keys(&engine, [parent, child], js, false);
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
     let window = cx.add_window(|_, _| KeyableRoot {
         host: Rc::clone(&host),
@@ -225,16 +230,10 @@ fn a_key_event_nobody_listens_for_is_reported_to_the_platform_as_unhandled(
 
 #[gpui::test]
 fn a_passive_key_listener_leaves_the_platform_result_untouched(cx: &mut TestAppContext) {
-    let (window, engine, host, [parent, child]) =
-        focused_pair(cx, "seen.push(e.type); e.preventDefault();");
+    let js = "seen.push(e.type); e.preventDefault();";
+    let (window, engine, host, nodes) = focused_pair(cx, js);
     host.borrow_mut().listeners = EventListeners::default();
-    for node in [parent, child] {
-        for event in ["keydown", "keyup"] {
-            host.borrow_mut()
-                .listeners
-                .register_with(node, event, 0, false, true);
-        }
-    }
+    listen_for_keys(&engine, nodes, js, true);
 
     for up in [false, true] {
         let result = platform_result(cx, window, up, "a");

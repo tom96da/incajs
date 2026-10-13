@@ -16,6 +16,8 @@ use inca_bridge::{EventDispatcher, Host};
 use inca_gpui::{NodeId, render_tree_with_events};
 use inca_jsenv::Engine;
 
+mod common;
+
 struct FocusableRoot {
     host: Rc<RefCell<Host>>,
     node: NodeId,
@@ -30,9 +32,8 @@ impl Render for FocusableRoot {
     }
 }
 
-/// Two sibling nodes, both listening for `"focus"`/`"blur"` via the same
-/// callback id, wrapped in a common parent, the root `FocusableRoot`
-/// renders.
+/// Two focusable sibling nodes wrapped in a common parent, the root
+/// `FocusableRoot` renders.
 fn build_focusable_pair() -> (Rc<RefCell<Host>>, NodeId, NodeId) {
     let host = Rc::new(RefCell::new(Host::default()));
     let mut host_mut = host.borrow_mut();
@@ -42,8 +43,6 @@ fn build_focusable_pair() -> (Rc<RefCell<Host>>, NodeId, NodeId) {
     host_mut.tree.append_child(parent, a).unwrap();
     host_mut.tree.append_child(parent, b).unwrap();
     for node in [a, b] {
-        host_mut.listeners.register(node, "focus", 0);
-        host_mut.listeners.register(node, "blur", 0);
         host_mut.tree.set_attribute(node, "tabindex", "0").unwrap();
         host_mut.focus.mark_tab_dirty(node);
     }
@@ -51,24 +50,31 @@ fn build_focusable_pair() -> (Rc<RefCell<Host>>, NodeId, NodeId) {
     (host, parent, a)
 }
 
-fn install_focus_recorder(engine: &Engine) {
-    engine
-        .eval::<()>(
-            r"
-            globalThis.seen = [];
-            globalThis.__inca_callbacks__ = {
-               0: (event) => { globalThis.seen.push(`${event.type}:${event.target}`); }
-            };
-            ",
-        )
-        .unwrap();
+/// Records `type:target` of `"focus"` and `"blur"` on the children of
+/// `parent`.
+fn install_focus_recorder(engine: &Engine, host: &Rc<RefCell<Host>>, parent: NodeId) {
+    engine.eval::<()>("globalThis.seen = [];").unwrap();
+    let children = host.borrow().tree.get(parent).unwrap().children().to_vec();
+    for node in children {
+        for event in ["focus", "blur"] {
+            engine
+                .eval::<()>(&format!(
+                    r"
+                    __inca_test_listen__({node}, '{event}', (event) => {{
+                        globalThis.seen.push(`${{event.type}}:${{event.target}}`);
+                    }});
+                    "
+                ))
+                .unwrap();
+        }
+    }
 }
 
 #[gpui::test]
 fn focus_node_dispatches_focus_next_frame(cx: &mut TestAppContext) {
     let (host, parent, a) = build_focusable_pair();
-    let engine = Rc::new(Engine::new().unwrap());
-    install_focus_recorder(&engine);
+    let engine = common::engine_for(&host);
+    install_focus_recorder(&engine, &host, parent);
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
     let window = cx.add_window(|_, _| FocusableRoot {
@@ -110,8 +116,8 @@ fn moving_focus_to_another_node_blurs_the_first(cx: &mut TestAppContext) {
         let host = host.borrow();
         host.tree.get(parent).unwrap().children()[1]
     };
-    let engine = Rc::new(Engine::new().unwrap());
-    install_focus_recorder(&engine);
+    let engine = common::engine_for(&host);
+    install_focus_recorder(&engine, &host, parent);
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
     let window = cx.add_window(|_, _| FocusableRoot {
@@ -150,8 +156,8 @@ fn moving_focus_to_another_node_blurs_the_first(cx: &mut TestAppContext) {
 #[gpui::test]
 fn blur_node_blurs_whatever_is_focused(cx: &mut TestAppContext) {
     let (host, parent, a) = build_focusable_pair();
-    let engine = Rc::new(Engine::new().unwrap());
-    install_focus_recorder(&engine);
+    let engine = common::engine_for(&host);
+    install_focus_recorder(&engine, &host, parent);
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
     let window = cx.add_window(|_, _| FocusableRoot {
@@ -191,8 +197,8 @@ fn blur_node_blurs_whatever_is_focused(cx: &mut TestAppContext) {
 #[gpui::test]
 fn blur_node_with_nothing_focused_reports_nothing(cx: &mut TestAppContext) {
     let (host, parent, a) = build_focusable_pair();
-    let engine = Rc::new(Engine::new().unwrap());
-    install_focus_recorder(&engine);
+    let engine = common::engine_for(&host);
+    install_focus_recorder(&engine, &host, parent);
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
     let window = cx.add_window(|_, _| FocusableRoot {
@@ -226,8 +232,8 @@ fn blur_node_with_nothing_focused_reports_nothing(cx: &mut TestAppContext) {
 #[gpui::test]
 fn destroying_a_focused_node_reports_no_blur(cx: &mut TestAppContext) {
     let (host, parent, a) = build_focusable_pair();
-    let engine = Rc::new(Engine::new().unwrap());
-    install_focus_recorder(&engine);
+    let engine = common::engine_for(&host);
+    install_focus_recorder(&engine, &host, parent);
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
     let window = cx.add_window(|_, _| FocusableRoot {
@@ -272,8 +278,8 @@ fn two_focus_node_calls_before_the_next_frame_both_take_effect(cx: &mut TestAppC
         let host = host.borrow();
         host.tree.get(parent).unwrap().children()[1]
     };
-    let engine = Rc::new(Engine::new().unwrap());
-    install_focus_recorder(&engine);
+    let engine = common::engine_for(&host);
+    install_focus_recorder(&engine, &host, parent);
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
     let window = cx.add_window(|_, _| FocusableRoot {
@@ -311,10 +317,7 @@ fn run_then_draw(
     parent: NodeId,
     script: &str,
 ) {
-    engine
-        .with(|ctx| inca_bridge::bindings::install(&ctx, host))
-        .unwrap();
-    let dispatcher = EventDispatcher::new(Rc::new(Engine::new().unwrap()), Rc::clone(host));
+    let dispatcher = EventDispatcher::new(common::engine_for(host), Rc::clone(host));
     let window = cx.add_window(|_, _| FocusableRoot {
         host: Rc::clone(host),
         node: parent,
@@ -331,7 +334,7 @@ fn run_then_draw(
 #[gpui::test]
 fn focus_then_destroy_in_one_tick_leaves_no_handle(cx: &mut TestAppContext) {
     let (host, parent, a) = build_focusable_pair();
-    let engine = Engine::new().unwrap();
+    let engine = common::engine_for(&host);
 
     let script = format!("__inca_native__.focusNode({a}); __inca_native__.destroyNode({a});");
     run_then_draw(cx, &engine, &host, parent, &script);
@@ -342,7 +345,7 @@ fn focus_then_destroy_in_one_tick_leaves_no_handle(cx: &mut TestAppContext) {
 #[gpui::test]
 fn focus_on_an_unknown_node_leaves_no_handle(cx: &mut TestAppContext) {
     let (host, parent, _a) = build_focusable_pair();
-    let engine = Engine::new().unwrap();
+    let engine = common::engine_for(&host);
 
     run_then_draw(
         cx,
@@ -364,8 +367,8 @@ fn blur_node_of_a_node_that_is_not_focused_is_a_no_op(cx: &mut TestAppContext) {
         let other_id = other.map_or(999, |i| {
             host.borrow().tree.get(parent).unwrap().children()[i]
         });
-        let engine = Rc::new(Engine::new().unwrap());
-        install_focus_recorder(&engine);
+        let engine = common::engine_for(&host);
+        install_focus_recorder(&engine, &host, parent);
         let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
         let window = cx.add_window(|_, _| FocusableRoot {
             host: Rc::clone(&host),
@@ -407,17 +410,21 @@ fn blur_node_of_a_node_that_is_not_focused_is_a_no_op(cx: &mut TestAppContext) {
 fn each_focus_transition_gets_its_own_event_id(cx: &mut TestAppContext) {
     let (host, parent, a) = build_focusable_pair();
     let b = host.borrow().tree.get(parent).unwrap().children()[1];
-    let engine = Rc::new(Engine::new().unwrap());
-    engine
-        .eval::<()>(
-            r"
-            globalThis.seen = [];
-            globalThis.__inca_callbacks__ = {
-               0: (event) => { globalThis.seen.push([event.type, event.eventId]); }
-            };
-            ",
-        )
-        .unwrap();
+    let engine = common::engine_for(&host);
+    engine.eval::<()>("globalThis.seen = [];").unwrap();
+    for node in [a, b] {
+        for event in ["focus", "blur"] {
+            engine
+                .eval::<()>(&format!(
+                    r"
+                    __inca_test_listen__({node}, '{event}', (event) => {{
+                        globalThis.seen.push([event.type, event.eventId]);
+                    }});
+                    "
+                ))
+                .unwrap();
+        }
+    }
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
     let window = cx.add_window(|_, _| FocusableRoot {
         host: Rc::clone(&host),
@@ -468,25 +475,29 @@ fn focus_changes_fire_four_events_with_related_targets(cx: &mut TestAppContext) 
     }
     let (host, parent, a) = build_focusable_pair();
     let b = host.borrow().tree.get(parent).unwrap().children()[1];
+    let engine = common::engine_for(&host);
+    engine.eval::<()>("globalThis.seen = [];").unwrap();
     for (node, events) in [
-        (a, &["focusin", "focusout"][..]),
-        (b, &["focusin", "focusout"][..]),
+        (a, &["focus", "blur", "focusin", "focusout"][..]),
+        (b, &["focus", "blur", "focusin", "focusout"][..]),
         (parent, &["focus", "blur", "focusin", "focusout"][..]),
     ] {
         for event in events {
-            host.borrow_mut().listeners.register(node, *event, 0);
+            engine
+                .eval::<()>(&format!(
+                    r"
+                    __inca_test_listen__({node}, '{event}', (e) => {{
+                        const {{ type, target, relatedTarget }} = e;
+                        const {{ eventPhase, bubbles }} = e;
+                        globalThis.seen.push(
+                            `${{type}}:${{target}}:${{relatedTarget}}:${{eventPhase}}:${{bubbles}}`
+                        );
+                    }});
+                    "
+                ))
+                .unwrap();
         }
     }
-    let engine = Rc::new(Engine::new().unwrap());
-    engine
-        .eval::<()>(
-            r"
-            globalThis.seen = [];
-            globalThis.__inca_callbacks__ = { 0: (e) => { globalThis.seen.push(
-            `${e.type}:${e.target}:${e.relatedTarget}:${e.eventPhase}:${e.bubbles}`); } };
-            ",
-        )
-        .unwrap();
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
     let window = cx.add_window(|_, _| FocusableRoot {
         host: Rc::clone(&host),
@@ -558,22 +569,19 @@ fn focus_changes_fire_four_events_with_related_targets(cx: &mut TestAppContext) 
 #[gpui::test]
 fn an_ancestor_becoming_display_none_blurs_the_focused_node(cx: &mut TestAppContext) {
     let (host, parent, a) = build_focusable_pair();
+    let engine = common::engine_for(&host);
+    engine.eval::<()>("globalThis.seen = [];").unwrap();
     for event in ["blur", "focusout"] {
-        host.borrow_mut().listeners.register(a, event, 0);
+        engine
+            .eval::<()>(&format!(
+                r"
+                __inca_test_listen__({a}, '{event}', (e) => {{
+                    globalThis.seen.push(`${{e.type}}:${{e.relatedTarget}}`);
+                }});
+                "
+            ))
+            .unwrap();
     }
-    let engine = Rc::new(Engine::new().unwrap());
-    engine
-        .eval::<()>(
-            r"
-            globalThis.seen = [];
-            globalThis.__inca_callbacks__ = { 0: (e) => { globalThis.seen.push(
-            `${e.type}:${e.relatedTarget}`); } };
-            ",
-        )
-        .unwrap();
-    engine
-        .with(|ctx| inca_bridge::bindings::install(&ctx, &host))
-        .unwrap();
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
     let window = cx.add_window(|_, _| FocusableRoot {
         host: Rc::clone(&host),

@@ -3,35 +3,22 @@
 
 use super::*;
 
-fn build_clickable_tree() -> (Rc<RefCell<Host>>, NodeId) {
-    let host = Rc::new(RefCell::new(Host::default()));
-    let mut host_mut = host.borrow_mut();
-    let node = host_mut.tree.create_node("div").unwrap();
-    host_mut.tree.set_style(node, "width", 100.0).unwrap();
-    host_mut.tree.set_style(node, "height", 100.0).unwrap();
-    host_mut.listeners.register(node, "click", 0);
-    drop(host_mut);
-    (host, node)
-}
-
 /// Unlike `install_click_counter`, defers the actual mutation to a
 /// microtask, the same way a real framework's reactivity scheduler
 /// (batched via `Promise.resolve().then(...)`)
 /// doesn't apply an effect synchronously within the event callback itself.
-fn install_deferred_click_counter(engine: &Engine) {
+fn install_deferred_click_counter(engine: &Engine, node: NodeId) {
     engine
-        .eval::<()>(
+        .eval::<()>(&format!(
             r"
-            globalThis.__inca_callbacks__ = {
-                0: (event) => {
-                    Promise.resolve().then(() => {
-                        globalThis.clicks = (globalThis.clicks || 0) + 1;
-                        globalThis.lastEvent = event;
-                    });
-                }
-            };
-            ",
-        )
+            __inca_test_listen__({node}, 'click', (event) => {{
+                Promise.resolve().then(() => {{
+                    globalThis.clicks = (globalThis.clicks || 0) + 1;
+                    globalThis.lastEvent = event;
+                }});
+            }});
+            "
+        ))
         .unwrap();
 }
 
@@ -41,8 +28,8 @@ fn install_deferred_click_counter(engine: &Engine) {
 #[test]
 fn repeated_builds_with_no_event_never_touch_the_js_engine() {
     let (host, node) = build_clickable_tree();
-    let engine = Rc::new(Engine::new().unwrap());
-    install_click_counter(&engine);
+    let engine = common::engine_for(&host);
+    install_click_counter(&engine, node, "click");
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
     for _ in 0..5 {
@@ -65,8 +52,8 @@ fn repeated_builds_with_no_event_never_touch_the_js_engine() {
 #[gpui::test]
 fn click_dispatches_to_js_exactly_once(cx: &mut TestAppContext) {
     let (host, node) = build_clickable_tree();
-    let engine = Rc::new(Engine::new().unwrap());
-    install_click_counter(&engine);
+    let engine = common::engine_for(&host);
+    install_click_counter(&engine, node, "click");
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
     let window = cx.add_window(|_, _| ClickableRoot {
@@ -123,8 +110,7 @@ fn a_listener_registered_after_the_first_render_still_fires(cx: &mut TestAppCont
         host.tree.set_style(node, "height", 100.0).unwrap();
         node
     };
-    let engine = Rc::new(Engine::new().unwrap());
-    install_click_counter(&engine);
+    let engine = common::engine_for(&host);
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
     let window = cx.add_window(|_, _| ClickableRoot {
@@ -136,7 +122,7 @@ fn a_listener_registered_after_the_first_render_still_fires(cx: &mut TestAppCont
         .unwrap();
 
     // Nothing was listening for that first frame.
-    host.borrow_mut().listeners.register(node, "click", 0);
+    install_click_counter(&engine, node, "click");
 
     let mut cx = VisualTestContext::from_window(window.into(), cx);
     cx.update(|window, _| window.refresh());
@@ -154,18 +140,18 @@ fn a_listener_registered_after_the_first_render_still_fires(cx: &mut TestAppCont
 #[gpui::test]
 fn a_click_reaches_every_callback_registered_for_it(cx: &mut TestAppContext) {
     let (host, node) = build_clickable_tree();
-    host.borrow_mut().listeners.register(node, "click", 1);
-
-    let engine = Rc::new(Engine::new().unwrap());
+    let engine = common::engine_for(&host);
     engine
-        .eval::<()>(
+        .eval::<()>(&format!(
             r"
-            globalThis.__inca_callbacks__ = {
-                0: () => { globalThis.clicks = (globalThis.clicks || 0) + 1; },
-                1: () => { globalThis.clicks = (globalThis.clicks || 0) + 10; }
-            };
-            ",
-        )
+            __inca_test_listen__({node}, 'click', () => {{
+                globalThis.clicks = (globalThis.clicks || 0) + 1;
+            }});
+            __inca_test_listen__({node}, 'click', () => {{
+                globalThis.clicks = (globalThis.clicks || 0) + 10;
+            }});
+            "
+        ))
         .unwrap();
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
@@ -190,8 +176,8 @@ fn a_click_reaches_every_callback_registered_for_it(cx: &mut TestAppContext) {
 #[gpui::test]
 fn click_drains_a_callback_that_defers_its_effect_via_a_microtask(cx: &mut TestAppContext) {
     let (host, node) = build_clickable_tree();
-    let engine = Rc::new(Engine::new().unwrap());
-    install_deferred_click_counter(&engine);
+    let engine = common::engine_for(&host);
+    install_deferred_click_counter(&engine, node);
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
     let window = cx.add_window(|_, _| ClickableRoot {
@@ -217,9 +203,9 @@ fn click_drains_a_callback_that_defers_its_effect_via_a_microtask(cx: &mut TestA
 /// dispatcher reported.
 fn failures_from_click(cx: &mut TestAppContext, body: &str) -> Vec<EngineError> {
     let (host, node) = build_clickable_tree();
-    let engine = Rc::new(Engine::new().unwrap());
+    let engine = common::engine_for(&host);
     engine
-        .eval::<()>(&format!("globalThis.__inca_callbacks__ = {{ 0: {body} }};"))
+        .eval::<()>(&format!("__inca_test_listen__({node}, 'click', {body});"))
         .unwrap();
     let reported = Rc::new(RefCell::new(Vec::new()));
     let sink = Rc::clone(&reported);

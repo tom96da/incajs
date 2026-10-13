@@ -7,9 +7,9 @@ use super::*;
 /// and the buttons held (just the one just pressed).
 #[gpui::test]
 fn mousedown_carries_the_mouse_fields(cx: &mut TestAppContext) {
-    let (host, node) = build_tree_listening_for("mousedown");
-    let engine = Rc::new(Engine::new().unwrap());
-    install_click_counter(&engine);
+    let (host, node) = build_clickable_tree();
+    let engine = common::engine_for(&host);
+    install_click_counter(&engine, node, "mousedown");
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
     let window = cx.add_window(|_, _| ClickableRoot {
@@ -52,9 +52,9 @@ fn mousedown_carries_the_mouse_fields(cx: &mut TestAppContext) {
 /// every field a `mouse` payload carries.
 #[gpui::test]
 fn wheel_carries_the_delta_fields(cx: &mut TestAppContext) {
-    let (host, node) = build_tree_listening_for("wheel");
-    let engine = Rc::new(Engine::new().unwrap());
-    install_click_counter(&engine);
+    let (host, node) = build_clickable_tree();
+    let engine = common::engine_for(&host);
+    install_click_counter(&engine, node, "wheel");
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
     let window = cx.add_window(|_, _| ClickableRoot {
@@ -98,10 +98,10 @@ fn wheel_carries_the_delta_fields(cx: &mut TestAppContext) {
 /// shared with every payload kind, not copied per kind.
 #[gpui::test]
 fn wheel_reports_a_button_held_from_an_earlier_mousedown(cx: &mut TestAppContext) {
-    let (host, node) = build_tree_listening_for("mousedown");
-    host.borrow_mut().listeners.register(node, "wheel", 0);
-    let engine = Rc::new(Engine::new().unwrap());
-    install_click_counter(&engine);
+    let (host, node) = build_clickable_tree();
+    let engine = common::engine_for(&host);
+    install_click_counter(&engine, node, "mousedown");
+    install_click_counter(&engine, node, "wheel");
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
     let window = cx.add_window(|_, _| ClickableRoot {
@@ -141,8 +141,7 @@ fn wheel_with_no_listener_reports_nothing(cx: &mut TestAppContext) {
         host.tree.set_style(node, "height", 100.0).unwrap();
         node
     };
-    let engine = Rc::new(Engine::new().unwrap());
-    install_click_counter(&engine);
+    let engine = common::engine_for(&host);
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
     let window = cx.add_window(|_, _| ClickableRoot {

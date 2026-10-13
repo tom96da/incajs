@@ -6,9 +6,7 @@ use gpui::{AppContext as _, Context};
 
 const SEEN: &str = r"
     globalThis.seen = [];
-    globalThis.__inca_callbacks__ = {
-        0: (e) => { globalThis.seen.push(e.type + ':' + e.target); }
-    };
+    globalThis.mark = (e) => { globalThis.seen.push(e.type + ':' + e.target); };
     ";
 
 fn focusable_node(dispatcher: &EventDispatcher, host: &Rc<RefCell<Host>>) -> NodeId {
@@ -17,11 +15,12 @@ fn focusable_node(dispatcher: &EventDispatcher, host: &Rc<RefCell<Host>>) -> Nod
     host.tree
         .set_attribute(node, "tabindex", inca_gpui::AttributeValue::from("0"))
         .unwrap();
-    for event in ["focus", "blur"] {
-        host.listeners.register(node, event, 0);
-    }
     host.focus.mark_tab_dirty(node);
+    drop(host);
     dispatcher.engine.eval::<()>(SEEN).unwrap();
+    for event in ["focus", "blur"] {
+        listen(dispatcher, node, event, "mark");
+    }
     node
 }
 

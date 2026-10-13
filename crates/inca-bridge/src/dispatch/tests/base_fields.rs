@@ -34,7 +34,7 @@ fn base_fields_follow_the_spec_rows_and_prevent_default_needs_cancelable(cx: &mu
     ];
     assert_eq!(rows.len(), EVENTS.len(), "every EVENTS row has a test row");
     for (event, bubbles, cancelable, composed) in rows {
-        listen(&host, node, event);
+        listen(&dispatcher, node, event, "record");
         cx.update(|window, cx| {
             dispatcher.fire(node, event, &EventPayload::None, window, cx);
         });
@@ -54,7 +54,7 @@ fn an_unlisted_event_name_takes_all_three_flags_false(cx: &mut TestAppContext) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
     dispatcher.engine.eval::<()>(RECORDER).unwrap();
-    listen(&host, node, "menu:1");
+    listen(&dispatcher, node, "menu:1", "record");
     let cx = cx.add_empty_window();
     cx.update(|window, cx| {
         dispatcher.fire(node, "menu:1", &EventPayload::None, window, cx);
@@ -79,28 +79,41 @@ fn fire_walks_up_only_bubbling_events_and_reports_prevention(cx: &mut TestAppCon
         .engine
         .eval::<()>(
             r"
-            globalThis.__inca_callbacks__[1] = (e) => {
-            globalThis.__inca_callbacks__[0](e); e.stopPropagation(); };
+            globalThis.stopper = (e) => { record(e); e.stopPropagation(); };
             ",
         )
         .unwrap();
     let cx = cx.add_empty_window();
-    // (event, start, callback of start, listening nodes, nodes reached, prevented)
+    // (event, start, listener function, listening nodes, nodes reached, prevented)
     #[allow(clippy::type_complexity)]
-    let rows: [(&str, NodeId, u32, &[NodeId], &[NodeId], bool); 8] = [
-        ("click", child, 0, &[], &[], false),
-        ("click", child, 0, &[child, parent], &[child, parent], true),
-        ("click", child, 1, &[child, parent], &[child], true),
-        ("contextmenu", child, 0, &[child], &[child], true),
-        ("keydown", child, 0, &[child], &[child], true),
-        ("mouseenter", child, 0, &[child, parent], &[child], false),
-        ("focusin", child, 0, &[child], &[child], false),
-        ("click", 99, 0, &[99, parent], &[], false),
+    let rows: [(&str, NodeId, &str, &[NodeId], &[NodeId], bool); 8] = [
+        ("click", child, "record", &[], &[], false),
+        (
+            "click",
+            child,
+            "record",
+            &[child, parent],
+            &[child, parent],
+            true,
+        ),
+        ("click", child, "stopper", &[child, parent], &[child], true),
+        ("contextmenu", child, "record", &[child], &[child], true),
+        ("keydown", child, "record", &[child], &[child], true),
+        (
+            "mouseenter",
+            child,
+            "record",
+            &[child, parent],
+            &[child],
+            false,
+        ),
+        ("focusin", child, "record", &[child], &[child], false),
+        ("click", 99, "record", &[parent], &[], false),
     ];
-    for (event, start, callback, listening, reached, prevented) in rows {
+    for (event, start, listener, listening, reached, prevented) in rows {
         host.borrow_mut().listeners = crate::bindings::EventListeners::default();
         for node in listening {
-            host.borrow_mut().listeners.register(*node, event, callback);
+            listen(&dispatcher, *node, event, listener);
         }
         let got =
             cx.update(|window, cx| dispatcher.fire(start, event, &EventPayload::None, window, cx));
@@ -118,7 +131,7 @@ fn time_stamp_counts_milliseconds_from_the_host_start_and_grows(cx: &mut TestApp
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
     dispatcher.engine.eval::<()>(RECORDER).unwrap();
-    listen(&host, node, "click");
+    listen(&dispatcher, node, "click", "record");
     let cx = cx.add_empty_window();
     for _ in 0..3 {
         cx.update(|window, cx| {
@@ -137,7 +150,16 @@ fn time_stamp_counts_milliseconds_from_the_host_start_and_grows(cx: &mut TestApp
 fn the_legacy_members_follow_the_event_state(cx: &mut TestAppContext) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
-    listen(&host, node, "click");
+    dispatcher
+        .engine
+        .eval::<()>("globalThis.probe = () => ''; globalThis.out = '';")
+        .unwrap();
+    listen(
+        &dispatcher,
+        node,
+        "click",
+        "(e) => { globalThis.out = String(globalThis.probe(e)); }",
+    );
     // Each entry runs in its own dispatch and reports one string.
     let probes = [
         (
@@ -178,10 +200,7 @@ fn the_legacy_members_follow_the_event_state(cx: &mut TestAppContext) {
         dispatcher
             .engine
             .eval::<()>(&format!(
-                r"
-                globalThis.out = ''; globalThis.__inca_callbacks__ = {{ 0: (e) => {{
-                globalThis.out = String({expr}); }} }};
-                "
+                "globalThis.out = ''; globalThis.probe = (e) => {expr};"
             ))
             .unwrap();
         cx.update(|window, cx| {
@@ -204,8 +223,8 @@ fn a_keyboard_click_starts_at_the_innermost_node_with_a_listener(cx: &mut TestAp
     host.borrow_mut().tree.append_child(outer, parent).unwrap();
     host.borrow_mut().tree.append_child(parent, button).unwrap();
     dispatcher.engine.eval::<()>(RECORDER).unwrap();
-    listen(&host, parent, "click");
-    listen(&host, outer, "click");
+    listen(&dispatcher, parent, "click", "record");
+    listen(&dispatcher, outer, "click", "record");
     let cx = cx.add_empty_window();
     cx.update(|window, cx| {
         dispatcher.fire(
@@ -234,9 +253,9 @@ fn a_keyboard_click_starts_at_the_innermost_node_with_a_listener(cx: &mut TestAp
 
 const PATHS: &str = r"
     globalThis.seen = [];
-    globalThis.__inca_callbacks__ = { 0: (e) => {
+    globalThis.paths = (e) => {
         globalThis.seen.push([e.target, e.currentTarget, e.eventPhase,
-            e.composedPath()]); globalThis.kept = e; } };
+            e.composedPath()]); globalThis.kept = e; };
     ";
 
 #[gpui::test]
@@ -260,7 +279,7 @@ fn every_event_fired_at_a_node_targets_that_node(cx: &mut TestAppContext) {
         "mouseout",
     ];
     for event in events {
-        listen(&host, child, event);
+        listen(&dispatcher, child, event, "paths");
     }
     let cx = cx.add_empty_window();
     cx.update(|window, cx| {
@@ -286,7 +305,7 @@ fn composed_path_lists_the_target_and_its_ancestors(cx: &mut TestAppContext) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let [outer, parent, child] = tree_of_three(&host);
     dispatcher.engine.eval::<()>(PATHS).unwrap();
-    listen(&host, parent, "click");
+    listen(&dispatcher, parent, "click", "paths");
     let cx = cx.add_empty_window();
     cx.update(|window, cx| {
         dispatcher.fire(parent, "click", &EventPayload::None, window, cx);
@@ -324,10 +343,10 @@ fn mouse_events_carry_the_aliases_and_the_pointer_fields_of_their_type(cx: &mut 
         .engine
         .eval::<()>(
             r"
-            globalThis.seen = []; globalThis.__inca_callbacks__ = { 0: (e) => {
+            globalThis.seen = []; globalThis.fields = (e) => {
             globalThis.seen.push([e.type, e.x === e.clientX && e.y === e.clientY,
             e.relatedTarget === null, e.pointerId, e.pointerType, e.isPrimary,
-            e.width, e.height, e.pressure].join(':')); } };
+            e.width, e.height, e.pressure].join(':')); };
             ",
         )
         .unwrap();
@@ -371,7 +390,14 @@ fn mouse_events_carry_the_aliases_and_the_pointer_fields_of_their_type(cx: &mut 
     }
     let mut mismatches = Vec::new();
     for (event, payload, fields) in cases {
-        listen(&host, node, event);
+        if host
+            .borrow()
+            .listeners
+            .callbacks_for(node, event)
+            .is_empty()
+        {
+            listen(&dispatcher, node, event, "fields");
+        }
         cx.update(|window, cx| dispatcher.fire(node, event, &payload, window, cx));
         let want = format!("{event}:true:true:{fields}");
         let got = seen(&dispatcher);

@@ -28,22 +28,23 @@ fn mouseup_runs_its_whole_path_before_click(cx: &mut TestAppContext) {
     assert_ne!(seen[0].2, seen[2].2);
 }
 
-/// Mounts a parent over a child, both listening for `events`, with callback 0
-/// recording `[type, target, currentTarget, detail, pointerId]`.
+/// Mounts a parent over a child, both listening for `events`, recording
+/// `[type, target, currentTarget, detail, pointerId]` per event.
 fn mount_click_recorder(
     cx: &mut TestAppContext,
     events: &[&str],
 ) -> (VisualTestContext, Rc<Engine>, NodeId, NodeId) {
-    let (cx, engine, parent, child) = mount_recording_pair(cx, events);
-    engine
-        .eval::<()>(
-            r"
-            globalThis.__inca_callbacks__ = { 0: (e) => { globalThis.seen.push([
-            e.type, e.target, e.currentTarget, e.detail, e.pointerId ?? null]); } };
-            ",
-        )
-        .unwrap();
-    (cx, engine, parent, child)
+    mount_recording_pair_with(
+        cx,
+        events,
+        r"
+        (e) => {
+            globalThis.seen.push([
+                e.type, e.target, e.currentTarget, e.detail, e.pointerId ?? null]
+            );
+        }
+        ",
+    )
 }
 
 fn take_clicks(engine: &Engine) -> Vec<(String, NodeId, NodeId, u32, Option<i32>)> {
@@ -199,19 +200,14 @@ fn a_release_with_no_press_fires_no_click(cx: &mut TestAppContext) {
     assert_eq!(types, ["mouseup", "mouseup"]);
 }
 
-/// Panes with `events` listened for on the row, callback 0 recording
+/// Panes with `events` listened for on the row, recording
 /// `[type, target, button]`.
 fn mount_target_recorder(cx: &mut TestAppContext, events: &[&str]) -> (VisualTestContext, Panes) {
-    let panes = build_panes(&[], events);
-    panes
-        .engine
-        .eval::<()>(
-            r"
-            globalThis.__inca_callbacks__ = { 0: (e) => {
-            globalThis.seen.push([e.type, e.target, e.button]); } };
-            ",
-        )
-        .unwrap();
+    let panes = build_panes_recording(
+        &[],
+        events,
+        "(e) => { globalThis.seen.push([e.type, e.target, e.button]); }",
+    );
     (mount_panes(cx, &panes), panes)
 }
 
@@ -264,16 +260,11 @@ fn a_release_beyond_the_tree_clicks_the_common_ancestor_with_the_root(cx: &mut T
 
 #[gpui::test]
 fn a_press_and_release_in_two_panes_clicks_their_common_ancestor(cx: &mut TestAppContext) {
-    let panes = build_panes(&["click"], &["click"]);
-    panes
-        .engine
-        .eval::<()>(
-            r"
-            globalThis.__inca_callbacks__ = { 0: (e) => {
-            globalThis.seen.push([e.type, e.target, e.currentTarget]); } };
-            ",
-        )
-        .unwrap();
+    let panes = build_panes_recording(
+        &["click"],
+        &["click"],
+        "(e) => { globalThis.seen.push([e.type, e.target, e.currentTarget]); }",
+    );
     let mut cx = mount_panes(cx, &panes);
 
     cx.simulate_mouse_down(

@@ -59,9 +59,14 @@ fn no_listener_registered_reports_nothing(cx: &mut TestAppContext) {
 fn a_stale_callback_id_is_skipped_rather_than_reported(cx: &mut TestAppContext) {
     let (dispatcher, host, reported) = dispatcher_with_engine();
     let node_id = host.borrow_mut().tree.create_node("div").unwrap();
-    host.borrow_mut().listeners.register(node_id, "click", 0);
+    dispatcher
+        .engine
+        .eval::<()>(&format!(
+            "__inca_native__.addEventListener({node_id}, 'click');"
+        ))
+        .unwrap();
 
-    // No `__inca_callbacks__` global defined at all.
+    // The listener has no function stored under its id.
     let cx = cx.add_empty_window();
     cx.update(|window, cx| {
         dispatcher.fire(node_id, "click", &EventPayload::None, window, cx);
@@ -115,11 +120,12 @@ fn a_pending_job_waits_when_no_listener_ran(cx: &mut TestAppContext) {
 fn a_throwing_callback_is_reported(cx: &mut TestAppContext) {
     let (dispatcher, host, reported) = dispatcher_with_engine();
     let node_id = host.borrow_mut().tree.create_node("div").unwrap();
-    host.borrow_mut().listeners.register(node_id, "click", 0);
-    dispatcher
-        .engine
-        .eval::<()>("globalThis.__inca_callbacks__ = { 0: () => { throw new Error('boom'); } };")
-        .unwrap();
+    listen(
+        &dispatcher,
+        node_id,
+        "click",
+        "() => { throw new Error('boom'); }",
+    );
 
     let cx = cx.add_empty_window();
     cx.update(|window, cx| {
@@ -136,20 +142,22 @@ fn a_throwing_callback_is_reported(cx: &mut TestAppContext) {
 fn one_throwing_callback_does_not_stop_the_others(cx: &mut TestAppContext) {
     let (dispatcher, host, reported) = dispatcher_with_engine();
     let node_id = host.borrow_mut().tree.create_node("div").unwrap();
-    host.borrow_mut().listeners.register(node_id, "click", 0);
-    host.borrow_mut().listeners.register(node_id, "click", 1);
     dispatcher
         .engine
-        .eval::<()>(
-            r"
-            globalThis.ran = false;
-            globalThis.__inca_callbacks__ = {
-               0: () => { throw new Error('boom'); },
-               1: () => { globalThis.ran = true; }
-            };
-            ",
-        )
+        .eval::<()>("globalThis.ran = false;")
         .unwrap();
+    listen(
+        &dispatcher,
+        node_id,
+        "click",
+        "() => { throw new Error('boom'); }",
+    );
+    listen(
+        &dispatcher,
+        node_id,
+        "click",
+        "() => { globalThis.ran = true; }",
+    );
 
     let cx = cx.add_empty_window();
     cx.update(|window, cx| {
@@ -166,14 +174,19 @@ fn listener_errors_of_a_dispatch_in_a_job_are_reported_when_the_jobs_drain(
 ) {
     let (dispatcher, host, reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
-    listen(&host, node, "ping");
-    callbacks(&dispatcher, "0: () => { throw new Error('boom'); }");
+    listen(
+        &dispatcher,
+        node,
+        "ping",
+        "() => { throw new Error('boom'); }",
+    );
     dispatcher
         .engine
         .eval::<()>(&format!(
             r"
             Promise.resolve().then(() =>
-            __inca_native__.dispatchEvent({node}, new Event('ping')));
+                __inca_native__.dispatchEvent({node}, new Event('ping'))
+            );
             "
         ))
         .unwrap();

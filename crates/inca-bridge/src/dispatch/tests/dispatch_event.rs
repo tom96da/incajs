@@ -123,11 +123,12 @@ fn a_subclass_of_event_keeps_its_own_prototype() {
 fn host_events_are_trusted_instances_of_event_that_share_one_prototype(cx: &mut TestAppContext) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
-    listen(&host, node, "click");
-    callbacks(
+    listen(
         &dispatcher,
+        node,
+        "click",
         r"
-        0: (e) => { (globalThis.events ??= []).push(e);
+        (e) => { (globalThis.events ??= []).push(e);
         out.push([e instanceof Event, e.constructor === Event, e.isTrusted]); }
         ",
     );
@@ -155,18 +156,24 @@ fn host_events_are_trusted_instances_of_event_that_share_one_prototype(cx: &mut 
 fn dispatch_event_walks_capture_target_bubble_and_returns_true_when_not_canceled() {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let [outer, parent, child] = tree_of_three(&host);
-    for (id, node, capture) in [(0, outer, true), (1, child, false), (2, parent, false)] {
-        host.borrow_mut()
-            .listeners
-            .register_with(node, "ping", id, capture, false);
-    }
-    callbacks(
+    listen_with(
         &dispatcher,
-        r"
-        0: (e) => out.push(['cap', e.currentTarget, e.eventPhase, e.target, e.isTrusted]),
-        1: (e) => out.push(['at', e.currentTarget, e.eventPhase]),
-        2: (e) => out.push(['up', e.currentTarget, e.eventPhase])
-        ",
+        outer,
+        "ping",
+        (true, false),
+        "(e) => out.push(['cap', e.currentTarget, e.eventPhase, e.target, e.isTrusted])",
+    );
+    listen(
+        &dispatcher,
+        child,
+        "ping",
+        "(e) => out.push(['at', e.currentTarget, e.eventPhase])",
+    );
+    listen(
+        &dispatcher,
+        parent,
+        "ping",
+        "(e) => out.push(['up', e.currentTarget, e.eventPhase])",
     );
     let got = eval_json(
         &dispatcher,
@@ -199,12 +206,8 @@ fn dispatch_event_walks_capture_target_bubble_and_returns_true_when_not_canceled
 fn dispatch_event_skips_the_ancestors_of_an_event_that_does_not_bubble() {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let [_, parent, child] = tree_of_three(&host);
-    listen(&host, child, "ping");
-    host.borrow_mut().listeners.register(parent, "ping", 1);
-    callbacks(
-        &dispatcher,
-        "0: () => out.push('child'), 1: () => out.push('parent')",
-    );
+    listen(&dispatcher, child, "ping", "() => out.push('child')");
+    listen(&dispatcher, parent, "ping", "() => out.push('parent')");
     let got = eval_json(
         &dispatcher,
         &format!("(__inca_native__.dispatchEvent({child}, new Event('ping')), out)"),
@@ -237,8 +240,7 @@ fn a_dispatched_event_calls_the_function_stored_under_the_returned_id() {
 fn dispatch_event_returns_false_for_a_canceled_cancelable_event_only() {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
-    listen(&host, node, "ping");
-    callbacks(&dispatcher, "0: (e) => e.preventDefault()");
+    listen(&dispatcher, node, "ping", "(e) => e.preventDefault()");
     let got = eval_json(
         &dispatcher,
         &format!(
@@ -255,10 +257,11 @@ fn dispatch_event_returns_false_for_a_canceled_cancelable_event_only() {
 fn a_dispatched_event_stays_canceled_and_can_be_dispatched_again_with_a_new_event_id() {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
-    listen(&host, node, "ping");
-    callbacks(
+    listen(
         &dispatcher,
-        "0: (e) => { out.push(e.eventId); e.preventDefault(); }",
+        node,
+        "ping",
+        "(e) => { out.push(e.eventId); e.preventDefault(); }",
     );
     let got = eval_json(
         &dispatcher,
@@ -295,12 +298,13 @@ fn an_event_nobody_hears_takes_no_event_id_but_gets_its_target() {
 fn dispatch_event_while_dispatching_throws_invalid_state_and_leaves_the_walk_running() {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
-    listen(&host, node, "ping");
-    callbacks(
+    listen(
         &dispatcher,
+        node,
+        "ping",
         &format!(
             r"
-            0: (e) => {{ try {{ __inca_native__.dispatchEvent({node}, e); out.push('ran'); }}
+            (e) => {{ try {{ __inca_native__.dispatchEvent({node}, e); out.push('ran'); }}
             catch (err) {{ out.push([err.name, e.eventPhase]); }} }}
             "
         ),
@@ -316,13 +320,18 @@ fn dispatch_event_while_dispatching_throws_invalid_state_and_leaves_the_walk_run
 fn a_nested_dispatch_throws_an_error_that_is_a_domexception_instance() {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
-    listen(&host, node, "ping");
-    callbacks(
+    listen(
         &dispatcher,
+        node,
+        "ping",
         &format!(
             r"
-            0: (e) => {{ try {{ __inca_native__.dispatchEvent({node}, e); }}
-            catch (err) {{ out.push([typeof DOMException, err instanceof DOMException]); }} }}
+            (e) => {{
+                try {{ __inca_native__.dispatchEvent({node}, e); }}
+                catch (err) {{
+                    out.push([typeof DOMException, err instanceof DOMException]);
+                }}
+            }}
             "
         ),
     );
@@ -344,7 +353,8 @@ fn dispatch_event_rejects_anything_that_is_not_an_event_of_this_host() {
             [undefined, null, 5, 'click', {{ type: 'click' }}, Object.create(new Event('x')),
             Event.prototype].map((v) => {{
               try {{ __inca_native__.dispatchEvent({node}, v); return 'ran'; }}
-              catch (err) {{ return err instanceof TypeError; }} }})
+              catch (err) {{ return err instanceof TypeError; }}
+            }})
             "
         ),
     );
@@ -371,12 +381,13 @@ fn dispatch_event_on_an_unknown_node_throws_a_type_error() {
 fn a_listener_that_throws_during_dispatch_event_is_reported_and_the_others_run() {
     let (dispatcher, host, reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
-    listen(&host, node, "ping");
-    host.borrow_mut().listeners.register(node, "ping", 1);
-    callbacks(
+    listen(
         &dispatcher,
-        "0: () => { throw new Error('boom'); }, 1: () => out.push('second')",
+        node,
+        "ping",
+        "() => { throw new Error('boom'); }",
     );
+    listen(&dispatcher, node, "ping", "() => out.push('second')");
     let got = eval_json(
         &dispatcher,
         &format!("[__inca_native__.dispatchEvent({node}, new Event('ping')), out]"),
@@ -400,17 +411,24 @@ fn errors_are_reported_in_the_order_they_happened_across_nested_dispatches(
 ) {
     let (dispatcher, host, reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
-    listen(&host, node, "click");
-    host.borrow_mut().listeners.register(node, "ping", 1);
-    callbacks(
+    listen(
         &dispatcher,
+        node,
+        "click",
         &format!(
             r"
-            0: () => {{ __inca_native__.dispatchEvent({node}, new Event('ping'));
-               throw new Error('outer'); }},
-            1: () => {{ throw new Error('inner'); }}
+            () => {{
+                __inca_native__.dispatchEvent({node}, new Event('ping'));
+                throw new Error('outer');
+            }}
             "
         ),
+    );
+    listen(
+        &dispatcher,
+        node,
+        "ping",
+        "() => { throw new Error('inner'); }",
     );
     fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
     let messages: Vec<_> = reported
@@ -425,10 +443,11 @@ fn errors_are_reported_in_the_order_they_happened_across_nested_dispatches(
 fn a_listener_that_freezes_the_event_gets_a_type_error_on_redispatch() {
     let (dispatcher, host, reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
-    listen(&host, node, "ping");
-    callbacks(
+    listen(
         &dispatcher,
-        "0: (e) => { e.stopImmediatePropagation(); Object.freeze(e); }",
+        node,
+        "ping",
+        "(e) => { e.stopImmediatePropagation(); Object.freeze(e); }",
     );
     let got = eval_json(
         &dispatcher,
@@ -454,11 +473,12 @@ fn a_listener_that_freezes_the_event_gets_a_type_error_on_redispatch() {
 fn a_listener_that_locks_current_target_does_not_block_the_next_dispatch() {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
-    listen(&host, node, "ping");
-    callbacks(
+    listen(
         &dispatcher,
+        node,
+        "ping",
         r"
-        0: (e) => { out.push(e.currentTarget); e.stopPropagation();
+        (e) => { out.push(e.currentTarget); e.stopPropagation();
         Object.defineProperty(e, 'currentTarget', { writable: false }); }
         ",
     );
@@ -483,10 +503,11 @@ fn a_trusted_host_event_kept_by_a_listener_is_untrusted_when_dispatched_again(
 ) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
-    listen(&host, node, "click");
-    callbacks(
+    listen(
         &dispatcher,
-        "0: (e) => { out.push(e.isTrusted); globalThis.kept ??= e; }",
+        node,
+        "click",
+        "(e) => { out.push(e.isTrusted); globalThis.kept ??= e; }",
     );
     fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
     let got = eval_json(
@@ -500,20 +521,22 @@ fn a_trusted_host_event_kept_by_a_listener_is_untrusted_when_dispatched_again(
 fn the_stop_state_of_an_outer_event_survives_a_nested_dispatch() {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let [_, parent, child] = tree_of_three(&host);
-    listen(&host, child, "ping");
-    host.borrow_mut().listeners.register(parent, "ping", 1);
-    host.borrow_mut().listeners.register(child, "inner", 2);
-    callbacks(
+    listen(
         &dispatcher,
+        child,
+        "ping",
         &format!(
             r"
-            0: (e) => {{ e.stopPropagation();
+            (e) => {{
+                e.stopPropagation();
                __inca_native__.dispatchEvent({child}, new Event('inner'));
-               out.push(['child', e.cancelBubble]); }},
-            1: () => out.push('parent'), 2: () => out.push('inner')
+               out.push(['child', e.cancelBubble]);
+            }}
             "
         ),
     );
+    listen(&dispatcher, parent, "ping", "() => out.push('parent')");
+    listen(&dispatcher, child, "inner", "() => out.push('inner')");
     let got = eval_json(
         &dispatcher,
         &format!(
@@ -527,10 +550,11 @@ fn the_stop_state_of_an_outer_event_survives_a_nested_dispatch() {
 fn a_custom_event_shows_its_detail_to_the_listener_it_is_dispatched_to() {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
-    listen(&host, node, "ping");
-    callbacks(
+    listen(
         &dispatcher,
-        "0: (e) => out.push([e.detail, e instanceof CustomEvent, e.isTrusted])",
+        node,
+        "ping",
+        "(e) => out.push([e.detail, e instanceof CustomEvent, e.isTrusted])",
     );
     let got = eval_json(
         &dispatcher,
@@ -551,15 +575,15 @@ fn dispatch_event_of_a_click_reaches_a_disabled_button_and_its_ancestors() {
         .tree
         .set_attribute(button, "disabled", true)
         .unwrap();
-    listen(&host, button, "click");
-    host.borrow_mut()
-        .listeners
-        .register_with(parent, "click", 1, true, false);
-    host.borrow_mut().listeners.register(parent, "click", 2);
-    callbacks(
+    listen(&dispatcher, button, "click", "() => out.push('button')");
+    listen_with(
         &dispatcher,
-        "0: () => out.push('button'), 1: () => out.push('capture'), 2: () => out.push('bubble')",
+        parent,
+        "click",
+        (true, false),
+        "() => out.push('capture')",
     );
+    listen(&dispatcher, parent, "click", "() => out.push('bubble')");
     let got = eval_json(
         &dispatcher,
         &format!(
@@ -573,10 +597,11 @@ fn dispatch_event_of_a_click_reaches_a_disabled_button_and_its_ancestors() {
 fn a_frozen_event_id_lets_the_first_dispatch_through_then_throws_type_error() {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
-    listen(&host, node, "ping");
-    callbacks(
+    listen(
         &dispatcher,
-        "0: (e) => Object.defineProperty(e, 'eventId', { writable: false })",
+        node,
+        "ping",
+        "(e) => Object.defineProperty(e, 'eventId', { writable: false })",
     );
     let got = eval_json(
         &dispatcher,

@@ -31,7 +31,7 @@ fn a_release_clicks_only_when_both_containers_share_an_ancestor(cx: &mut TestApp
     };
     dispatcher.engine.eval::<()>(RECORDER).unwrap();
     for node in [parent, a, b, apart] {
-        listen(&host, node, "click");
+        listen(&dispatcher, node, "click", "record");
     }
     let release = gpui::MouseUpEvent {
         button: gpui::MouseButton::Left,
@@ -68,14 +68,16 @@ fn a_removed_node_is_no_related_target_and_no_previous_container(cx: &mut TestAp
         .engine
         .eval::<()>(
             r"
-            globalThis.seen = []; globalThis.__inca_callbacks__ = { 0: (e) => {
-            globalThis.seen.push([e.type, e.relatedTarget]); } };
+            globalThis.seen = [];
+            globalThis.related = (e) => {
+                globalThis.seen.push([e.type, e.relatedTarget]);
+            };
             ",
         )
         .unwrap();
-    listen(&host, outer, "mouseover");
-    listen(&host, outer, "mouseout");
-    listen(&host, outer, "focus");
+    for event in ["mouseover", "mouseout", "focus"] {
+        listen(&dispatcher, outer, event, "related");
+    }
     let cx = cx.add_empty_window();
     let at = |related_target| {
         EventPayload::Mouse(MousePayload {
@@ -137,10 +139,11 @@ fn record_box(host: &Rc<RefCell<Host>>, node: NodeId, left: f32, top: f32, borde
 fn offset_falls_back_to_the_client_position_when_unrecorded(cx: &mut TestAppContext) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let [_, parent, child] = tree_of_three(&host);
-    listen(&host, parent, "click");
-    callbacks(
+    listen(
         &dispatcher,
-        "0: (e) => out.push([e.target, e.offsetX, e.offsetY, e.clientX, e.clientY])",
+        parent,
+        "click",
+        "(e) => out.push([e.target, e.offsetX, e.offsetY, e.clientX, e.clientY])",
     );
     let click = EventPayload::Mouse(MousePayload::at(at(60.0, 40.0), gpui::Modifiers::none()));
 
@@ -152,10 +155,11 @@ fn offset_falls_back_to_the_client_position_when_unrecorded(cx: &mut TestAppCont
 fn a_parent_listener_reads_the_targets_offset(cx: &mut TestAppContext) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let [_, parent, child] = tree_of_three(&host);
-    listen(&host, parent, "click");
-    callbacks(
+    listen(
         &dispatcher,
-        "0: (e) => out.push([e.target, e.offsetX, e.offsetY, e.clientX, e.clientY])",
+        parent,
+        "click",
+        "(e) => out.push([e.target, e.offsetX, e.offsetY, e.clientX, e.clientY])",
     );
     let click = EventPayload::Mouse(MousePayload::at(at(60.0, 40.0), gpui::Modifiers::none()));
     record_box(&host, parent, 500.0, 500.0, 9.0);
@@ -168,12 +172,14 @@ fn a_parent_listener_reads_the_targets_offset(cx: &mut TestAppContext) {
 fn hover_events_measure_the_offset_from_the_node_they_fire_at(cx: &mut TestAppContext) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let [_, parent, child] = tree_of_three(&host);
-    listen(&host, parent, "mouseover");
-    listen(&host, parent, "mouseenter");
-    callbacks(
-        &dispatcher,
-        "0: (e) => out.push([e.type, e.target, e.offsetX, e.offsetY, e.clientX, e.clientY])",
-    );
+    for event in ["mouseover", "mouseenter"] {
+        listen(
+            &dispatcher,
+            parent,
+            event,
+            "(e) => out.push([e.type, e.target, e.offsetX, e.offsetY, e.clientX, e.clientY])",
+        );
+    }
     record_box(&host, parent, 10.0, 20.0, 2.0);
     record_box(&host, child, 30.0, 40.0, 0.0);
 
@@ -198,8 +204,12 @@ fn hover_events_measure_the_offset_from_the_node_they_fire_at(cx: &mut TestAppCo
 fn a_wheel_event_carries_the_offset(cx: &mut TestAppContext) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let [_, _, child] = tree_of_three(&host);
-    listen(&host, child, "wheel");
-    callbacks(&dispatcher, "0: (e) => out.push([e.offsetX, e.offsetY])");
+    listen(
+        &dispatcher,
+        child,
+        "wheel",
+        "(e) => out.push([e.offsetX, e.offsetY])",
+    );
     record_box(&host, child, 10.0, 20.0, 0.0);
 
     let out = fire_and_read(cx, &dispatcher, child, "wheel", &wheel_at(60.0, 40.0));

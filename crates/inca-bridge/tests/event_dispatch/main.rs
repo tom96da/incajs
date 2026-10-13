@@ -20,18 +20,21 @@ use inca_bridge::{EventDispatcher, Host};
 use inca_gpui::{NodeId, render_tree_with_events};
 use inca_jsenv::{Engine, EngineError};
 
-fn install_click_counter(engine: &Engine) {
+#[path = "../common/mod.rs"]
+mod common;
+
+/// Counts `event` on `node` into `globalThis.clicks` and keeps the last one
+/// in `globalThis.lastEvent`.
+fn install_click_counter(engine: &Engine, node: NodeId, event: &str) {
     engine
-        .eval::<()>(
+        .eval::<()>(&format!(
             r"
-            globalThis.__inca_callbacks__ = {
-                0: (event) => {
-                    globalThis.clicks = (globalThis.clicks || 0) + 1;
-                    globalThis.lastEvent = event;
-                }
-            };
-            ",
-        )
+            __inca_test_listen__({node}, '{event}', (event) => {{
+                globalThis.clicks = (globalThis.clicks || 0) + 1;
+                globalThis.lastEvent = event;
+            }});
+            "
+        ))
         .unwrap();
 }
 
@@ -52,19 +55,18 @@ impl Render for ClickableRoot {
     }
 }
 
-fn build_tree_listening_for(event: &str) -> (Rc<RefCell<Host>>, NodeId) {
+fn build_clickable_tree() -> (Rc<RefCell<Host>>, NodeId) {
     let host = Rc::new(RefCell::new(Host::default()));
     let mut host_mut = host.borrow_mut();
     let node = host_mut.tree.create_node("div").unwrap();
     host_mut.tree.set_style(node, "width", 100.0).unwrap();
     host_mut.tree.set_style(node, "height", 100.0).unwrap();
-    host_mut.listeners.register(node, event, 0);
     drop(host_mut);
     (host, node)
 }
 
 /// A row 300 wide holding pane A (0..100) and pane B (100..200), each 100x100.
-/// Callback 0 records `[type, movementX, movementY]` into `globalThis.seen`.
+/// The listeners record `[type, movementX, movementY]` into `globalThis.seen`.
 /// `a_events` are registered on A and `root_events` on the row; B has no
 /// listener.
 struct Panes {
@@ -77,6 +79,15 @@ struct Panes {
 }
 
 fn build_panes(a_events: &[&str], root_events: &[&str]) -> Panes {
+    build_panes_recording(
+        a_events,
+        root_events,
+        "(e) => { globalThis.seen.push([e.type, e.movementX, e.movementY]); }",
+    )
+}
+
+/// [`build_panes`] with `record`, a JS function, as every listener.
+fn build_panes_recording(a_events: &[&str], root_events: &[&str], record: &str) -> Panes {
     let host = Rc::new(RefCell::new(Host::default()));
     let (root, a, b) = {
         let mut host = host.borrow_mut();
@@ -93,24 +104,21 @@ fn build_panes(a_events: &[&str], root_events: &[&str]) -> Panes {
             pane
         };
         let (a, b) = (pane(), pane());
-        for event in a_events {
-            host.listeners.register(a, *event, 0);
-        }
-        for event in root_events {
-            host.listeners.register(root, *event, 0);
-        }
         (root, a, b)
     };
-    let engine = Rc::new(Engine::new().unwrap());
-    engine
-        .eval::<()>(
-            r"
-            globalThis.seen = [];
-            globalThis.__inca_callbacks__ = { 0: (e) => {
-                globalThis.seen.push([e.type, e.movementX, e.movementY]); } };
-            ",
-        )
-        .unwrap();
+    let engine = common::engine_for(&host);
+    engine.eval::<()>("globalThis.seen = [];").unwrap();
+    for (node, events) in [(a, a_events), (root, root_events)] {
+        for event in events {
+            engine
+                .eval::<()>(&format!(
+                    r"
+                    __inca_test_listen__({node}, '{event}', {record});
+                    "
+                ))
+                .unwrap();
+        }
+    }
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
     Panes {
         host,
@@ -134,11 +142,24 @@ fn mount_panes(cx: &mut TestAppContext, panes: &Panes) -> VisualTestContext {
     VisualTestContext::from_window(window.into(), cx)
 }
 
-/// A parent over a child, both listening for `events`; callback 0 records
+/// A parent over a child, both listening for `events`; the listeners record
 /// `[type, currentTarget, eventId]` into `globalThis.seen`.
 fn mount_recording_pair(
     cx: &mut TestAppContext,
     events: &[&str],
+) -> (VisualTestContext, Rc<Engine>, NodeId, NodeId) {
+    mount_recording_pair_with(
+        cx,
+        events,
+        "(e) => { globalThis.seen.push([e.type, e.currentTarget, e.eventId]); }",
+    )
+}
+
+/// [`mount_recording_pair`] with `record`, a JS function, as every listener.
+fn mount_recording_pair_with(
+    cx: &mut TestAppContext,
+    events: &[&str],
+    record: &str,
 ) -> (VisualTestContext, Rc<Engine>, NodeId, NodeId) {
     let host = Rc::new(RefCell::new(Host::default()));
     let (parent, child) = {
@@ -150,22 +171,21 @@ fn mount_recording_pair(
         host.tree.set_style(child, "width", 100.0).unwrap();
         host.tree.set_style(child, "height", 100.0).unwrap();
         host.tree.append_child(parent, child).unwrap();
-        for event in events {
-            host.listeners.register(parent, *event, 0);
-            host.listeners.register(child, *event, 0);
-        }
         (parent, child)
     };
-    let engine = Rc::new(Engine::new().unwrap());
-    engine
-        .eval::<()>(
-            r"
-            globalThis.seen = [];
-            globalThis.__inca_callbacks__ = { 0: (e) => {
-                globalThis.seen.push([e.type, e.currentTarget, e.eventId]); } };
-            ",
-        )
-        .unwrap();
+    let engine = common::engine_for(&host);
+    engine.eval::<()>("globalThis.seen = [];").unwrap();
+    for event in events {
+        for node in [parent, child] {
+            engine
+                .eval::<()>(&format!(
+                    r"
+                    __inca_test_listen__({node}, '{event}', {record});
+                    "
+                ))
+                .unwrap();
+        }
+    }
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
     let window = cx.add_window(|_, _| ClickableRoot {
         host,

@@ -7,7 +7,6 @@ use super::*;
 fn only_a_listener_the_event_reaches_enters_the_engine(cx: &mut TestAppContext) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let [_, parent, child] = tree_of_three(&host);
-    callbacks(&dispatcher, "0: () => {}");
     let cx = cx.add_empty_window();
     let mut drained = |dispatcher: &EventDispatcher| {
         dispatcher
@@ -23,13 +22,11 @@ fn only_a_listener_the_event_reaches_enters_the_engine(cx: &mut TestAppContext) 
     };
 
     // A bubble listener on an ancestor of a `focus` event stays out of reach.
-    host.borrow_mut().listeners.register(parent, "focus", 0);
+    listen(&dispatcher, parent, "focus", "() => {}");
     assert!(!drained(&dispatcher), "bubble listener on an ancestor");
 
     host.borrow_mut().listeners.unregister(parent, "focus", 0);
-    host.borrow_mut()
-        .listeners
-        .register_with(parent, "focus", 0, true, false);
+    listen_with(&dispatcher, parent, "focus", (true, false), "() => {}");
     assert!(drained(&dispatcher), "capture listener on an ancestor");
 }
 
@@ -39,11 +36,12 @@ fn an_event_method_throws_a_type_error_for_any_receiver_that_is_not_an_event(
 ) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
-    listen(&host, node, "click");
-    callbacks(
+    listen(
         &dispatcher,
+        node,
+        "click",
         r"
-        0: (e) => {
+        (e) => {
         const proto = Object.getPrototypeOf(e);
         const getter = (name) => Object.getOwnPropertyDescriptor(proto, name).get;
         const setter = (name) => Object.getOwnPropertyDescriptor(proto, name).set;
@@ -77,7 +75,7 @@ fn tracks_pointer_only_with_a_listener_or_a_focusable_node(cx: &mut TestAppConte
     let node = host.borrow_mut().tree.create_node("div").unwrap();
     assert!(!dispatcher.tracks_pointer());
 
-    host.borrow_mut().listeners.register(node, "keydown", 0);
+    listen(&dispatcher, node, "keydown", "() => {}");
     assert!(dispatcher.tracks_pointer());
     host.borrow_mut().listeners.unregister(node, "keydown", 0);
     assert!(!dispatcher.tracks_pointer());
@@ -99,10 +97,11 @@ fn tracks_pointer_only_with_a_listener_or_a_focusable_node(cx: &mut TestAppConte
 fn an_event_nobody_keeps_is_collected_with_its_state(cx: &mut TestAppContext) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
-    listen(&host, node, "click");
-    callbacks(
+    listen(
         &dispatcher,
-        "0: (e) => { globalThis.weak = new WeakRef(e); e.stopPropagation(); }",
+        node,
+        "click",
+        "(e) => { globalThis.weak = new WeakRef(e); e.stopPropagation(); }",
     );
     fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
 
@@ -119,7 +118,7 @@ fn an_event_nobody_keeps_is_collected_with_its_state(cx: &mut TestAppContext) {
 fn an_unlistened_pointer_or_key_input_leaves_the_engine_untouched(cx: &mut TestAppContext) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
-    listen(&host, node, "click");
+    listen(&dispatcher, node, "click", "() => {}");
     dispatcher
         .engine
         .eval::<()>("globalThis.ran = false; Promise.resolve().then(() => globalThis.ran = true);")
@@ -145,7 +144,7 @@ fn an_unlistened_pointer_or_key_input_leaves_the_engine_untouched(cx: &mut TestA
         } else {
             node
         };
-        listen(&host, listener, event);
+        listen(&dispatcher, listener, event, "() => {}");
         dispatcher
             .engine
             .eval::<()>(
@@ -168,12 +167,9 @@ fn an_unlistened_pointer_or_key_input_leaves_the_engine_untouched(cx: &mut TestA
 fn stopping_a_handled_event_changes_nothing(cx: &mut TestAppContext) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let [_, parent, child] = tree_of_three(&host);
-    listen(&host, child, "click");
-    listen(&host, parent, "click");
-    callbacks(
-        &dispatcher,
-        "0: (e) => { out.push(e.type); if (!globalThis.kept) globalThis.kept = e; }",
-    );
+    let record = "(e) => { out.push(e.type); if (!globalThis.kept) globalThis.kept = e; }";
+    listen(&dispatcher, child, "click", record);
+    listen(&dispatcher, parent, "click", record);
     fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
     let state = dispatcher
         .engine
@@ -197,7 +193,6 @@ fn stopping_a_handled_event_changes_nothing(cx: &mut TestAppContext) {
 fn a_script_that_patches_the_builtins_cannot_reach_or_break_event_state(cx: &mut TestAppContext) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
-    listen(&host, node, "click");
     dispatcher
         .engine
         .eval::<()>(
@@ -208,13 +203,17 @@ fn a_script_that_patches_the_builtins_cannot_reach_or_break_event_state(cx: &mut
             ",
         )
         .unwrap();
-    callbacks(
+    listen(
         &dispatcher,
+        node,
+        "click",
         r"
-        0: (e) => {
+        (e) => {
         const proto = Object.getPrototypeOf(e);
-        const names = (o) => [...Object.getOwnPropertyNames(o),
-            ...Object.getOwnPropertySymbols(o).map(String)].sort();
+        const names = (o) => [
+            ...Object.getOwnPropertyNames(o),
+            ...Object.getOwnPropertySymbols(o).map(String)
+        ].sort();
         e.preventDefault();
         out.push(e.defaultPrevented, names(e), names(proto)); }
         ",

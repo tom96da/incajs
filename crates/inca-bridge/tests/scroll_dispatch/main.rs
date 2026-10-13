@@ -18,6 +18,9 @@ use inca_bridge::{EventDispatcher, Host};
 use inca_gpui::{EventSink, NodeId, NodeLayout, render_tree_with_events};
 use inca_jsenv::{Engine, EngineError};
 
+#[path = "../common/mod.rs"]
+mod common;
+
 struct Root {
     host: Rc<RefCell<Host>>,
     dispatcher: EventDispatcher,
@@ -50,24 +53,17 @@ struct Scene {
 }
 
 impl Scene {
-    /// Renders node 0 of `host` with `js` as the `__inca_callbacks__` body.
+    /// Renders node 0 of `host` after running `js`, which registers listeners.
     fn new(cx: &mut TestAppContext, host: Host, js: &str) -> Self {
         Self::with_bindings(cx, host, js, "")
     }
 
-    /// Like [`Self::new`], with the bindings installed and `before_draw` run
-    /// before the first draw.
+    /// Like [`Self::new`], with `before_draw` run before the first draw.
     fn with_bindings(cx: &mut TestAppContext, host: Host, js: &str, before_draw: &str) -> Self {
         let host = Rc::new(RefCell::new(host));
-        let engine = Rc::new(Engine::new().unwrap());
-        engine
-            .eval::<()>(&format!(
-                "globalThis.ran = []; globalThis.__inca_callbacks__ = {{ {js} }};"
-            ))
-            .unwrap();
-        engine
-            .with(|ctx| inca_bridge::bindings::install(&ctx, &host))
-            .unwrap();
+        let engine = common::engine_for(&host);
+        engine.eval::<()>("globalThis.ran = [];").unwrap();
+        engine.eval::<()>(js).unwrap();
         engine.eval::<()>(before_draw).unwrap();
         let reported = Rc::new(RefCell::new(Vec::new()));
         let sink = Rc::clone(&reported);
@@ -137,6 +133,16 @@ impl Scene {
     fn ran(&self) -> String {
         self.engine.eval("JSON.stringify(ran)").unwrap()
     }
+}
+
+/// JS registering `f`, a function source, as a listener of `event` on `node`.
+fn listen(node: NodeId, event: &str, f: &str, capture: bool, passive: bool) -> String {
+    format!("__inca_test_listen__({node}, '{event}', {f}, {capture}, {passive});\n")
+}
+
+/// JS registering `f` as a `wheel` listener of `node`.
+fn on_wheel(node: NodeId, f: &str) -> String {
+    listen(node, "wheel", f, false, false)
 }
 
 /// Adds a sized div under `parent`, or styles the root when there is none.

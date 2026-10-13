@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::*;
-use crate::bindings::install;
+use crate::bindings::fixtures::engine_for;
 use crate::event::Flags;
 use gpui::{TestAppContext, point, px};
 use inca_gpui::event_sink::EVENTS;
@@ -23,9 +23,9 @@ mod walk;
 type Reported = Rc<RefCell<Vec<EngineError>>>;
 
 fn dispatcher_with_engine() -> (EventDispatcher, Rc<RefCell<Host>>, Reported) {
-    let engine = Rc::new(Engine::new().unwrap());
     let host = Rc::new(RefCell::new(Host::default()));
-    engine.with(|ctx| install(&ctx, &host)).unwrap();
+    let engine = engine_for(&host);
+    engine.eval::<()>("globalThis.out = [];").unwrap();
 
     let reported: Reported = Rc::new(RefCell::new(Vec::new()));
     let sink = Rc::clone(&reported);
@@ -59,11 +59,11 @@ fn wheel_at(x: f32, y: f32) -> EventPayload {
 // currentTarget, isTrusted, timeStamp].
 const RECORDER: &str = r"
     globalThis.seen = [];
-    globalThis.__inca_callbacks__ = { 0: (e) => {
+    globalThis.record = (e) => {
         const before = e.defaultPrevented; e.preventDefault();
         globalThis.seen.push([e.type, e.bubbles, e.cancelable, e.composed,
             before, e.defaultPrevented, e.eventPhase, e.currentTarget,
-            e.isTrusted, e.timeStamp]); } };
+            e.isTrusted, e.timeStamp]); };
     ";
 
 fn seen(dispatcher: &EventDispatcher) -> serde_json::Value {
@@ -78,8 +78,25 @@ fn seen_rows(dispatcher: &EventDispatcher) -> Vec<Vec<serde_json::Value>> {
     serde_json::from_value(seen(dispatcher)).unwrap()
 }
 
-fn listen(host: &Rc<RefCell<Host>>, node: NodeId, event: &str) {
-    host.borrow_mut().listeners.register(node, event, 0);
+/// Registers the JS function expression `f` on `node` as a bubble-phase, active listener.
+fn listen(dispatcher: &EventDispatcher, node: NodeId, event: &str, f: &str) {
+    listen_with(dispatcher, node, event, (false, false), f);
+}
+
+/// Registers `f` on `node` with `(capture, passive)`.
+fn listen_with(
+    dispatcher: &EventDispatcher,
+    node: NodeId,
+    event: &str,
+    (capture, passive): (bool, bool),
+    f: &str,
+) {
+    dispatcher
+        .engine
+        .eval::<()>(&format!(
+            "__inca_test_listen__({node}, '{event}', {f}, {capture}, {passive});"
+        ))
+        .unwrap();
 }
 
 fn tree_of_three(host: &Rc<RefCell<Host>>) -> [NodeId; 3] {
@@ -114,15 +131,6 @@ fn fire_and_read(
         dispatcher.fire(start, event, payload, window, cx);
     });
     read_out(dispatcher)
-}
-
-fn callbacks(dispatcher: &EventDispatcher, js: &str) {
-    dispatcher
-        .engine
-        .eval::<()>(&format!(
-            "globalThis.out = []; globalThis.__inca_callbacks__ = {{ {js} }};"
-        ))
-        .unwrap();
 }
 
 fn eval_json(dispatcher: &EventDispatcher, js: &str) -> serde_json::Value {
