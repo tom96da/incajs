@@ -50,32 +50,38 @@ pub struct EventDispatcher {
     engine: Rc<Engine>,
     host: Rc<RefCell<Host>>,
     reporter: ErrorReporter,
+    state: Rc<State>,
+}
+
+/// The mutable state every clone of an [`EventDispatcher`] shares.
+#[derive(Default)]
+struct State {
     /// Every button currently held, as a `mousedown`/`mouseup`/`mousemove`
     /// payload's `buttons` bitmask. GPUI's own mouse events carry only the
     /// one button each is about, not which others are held alongside it.
-    held_buttons: Rc<Cell<u8>>,
+    held_buttons: Cell<u8>,
     // Position of the previous raw pointer move, shared by every window using
     // this dispatcher. `None` before the first move and after a window exit.
-    last_position: Rc<Cell<Option<(f32, f32)>>>,
+    last_position: Cell<Option<(f32, f32)>>,
     // Delta of the raw pointer move being dispatched now, shared by every
     // node and event name that move produces.
-    current_movement: Rc<Cell<Option<(f32, f32)>>>,
+    current_movement: Cell<Option<(f32, f32)>>,
     /// The window's modifier keys as of the last change. `None` until
-    /// [`Self::sync_modifiers`] first reads them.
-    held_modifiers: Rc<Cell<Option<gpui::Modifiers>>>,
+    /// [`EventDispatcher::sync_modifiers`] first reads them.
+    held_modifiers: Cell<Option<gpui::Modifiers>>,
     /// The containers `gpui` reports as hovered.
-    hovered: Rc<RefCell<BTreeSet<NodeId>>>,
+    hovered: RefCell<BTreeSet<NodeId>>,
     /// The deepest hovered container the hover events last reported and its
     /// ancestors, nearest first.
-    hover_prev: Rc<RefCell<Vec<NodeId>>>,
+    hover_prev: RefCell<Vec<NodeId>>,
     /// Whether a hover report is waiting for the end of the update.
-    hover_scheduled: Rc<Cell<bool>>,
+    hover_scheduled: Cell<bool>,
     /// Whether the update being handled already reported its deepest
     /// container.
-    hover_settled: Rc<Cell<bool>>,
+    hover_settled: Cell<bool>,
     /// The Space press waiting for its release: the window and the focused
     /// button. A mouse press or another key press ends it.
-    space_down: Rc<Cell<Option<(gpui::WindowId, NodeId)>>>,
+    space_down: Cell<Option<(gpui::WindowId, NodeId)>>,
 }
 
 impl EventDispatcher {
@@ -86,15 +92,7 @@ impl EventDispatcher {
             engine,
             host,
             reporter: stderr_reporter(),
-            held_buttons: Rc::new(Cell::new(0)),
-            last_position: Rc::new(Cell::new(None)),
-            current_movement: Rc::new(Cell::new(None)),
-            held_modifiers: Rc::new(Cell::new(None)),
-            hovered: Rc::new(RefCell::new(BTreeSet::new())),
-            hover_prev: Rc::new(RefCell::new(Vec::new())),
-            hover_scheduled: Rc::new(Cell::new(false)),
-            hover_settled: Rc::new(Cell::new(false)),
-            space_down: Rc::new(Cell::new(None)),
+            state: Rc::default(),
         }
     }
 
@@ -115,7 +113,7 @@ impl EventDispatcher {
     }
 
     /// Returns `payload` with its `buttons` bitmask corrected against
-    /// [`Self::held_buttons`]. A `mouseup` excludes the button just
+    /// [`State::held_buttons`]. A `mouseup` excludes the button just
     /// released; every other kind includes every button still held.
     fn with_held_buttons(&self, event: &str, mut payload: EventPayload) -> EventPayload {
         if let Some(mouse) = payload.mouse_mut().filter(|_| !spec_of(event).own_buttons) {
@@ -124,7 +122,7 @@ impl EventDispatcher {
         payload
     }
 
-    /// Updates [`Self::held_buttons`] for `"mousedown"`/`"mouseup"` and
+    /// Updates [`State::held_buttons`] for `"mousedown"`/`"mouseup"` and
     /// returns the current value. `"mousemove"`/`"wheel"` only read it.
     /// `button` is `MousePayload`'s own field, a public part of
     /// `inca-gpui`'s API, so an out-of-range value (only 0..=4 are ever
@@ -132,11 +130,17 @@ impl EventDispatcher {
     fn update_held_buttons(&self, event: &str, button: u8) -> u8 {
         let bit = buttons_mask(button);
         match event {
-            "mousedown" => self.held_buttons.set(self.held_buttons.get() | bit),
-            "mouseup" => self.held_buttons.set(self.held_buttons.get() & !bit),
+            "mousedown" => self
+                .state
+                .held_buttons
+                .set(self.state.held_buttons.get() | bit),
+            "mouseup" => self
+                .state
+                .held_buttons
+                .set(self.state.held_buttons.get() & !bit),
             _ => {}
         }
-        self.held_buttons.get()
+        self.state.held_buttons.get()
     }
 
     /// Returns `payload` with `movementX`/`movementY` set to the delta of the
@@ -146,7 +150,7 @@ impl EventDispatcher {
         if spec_of(event).movement
             && let EventPayload::Mouse(mouse) = &mut payload
         {
-            let (movement_x, movement_y) = self.current_movement.get().unwrap_or((0.0, 0.0));
+            let (movement_x, movement_y) = self.state.current_movement.get().unwrap_or((0.0, 0.0));
             mouse.movement_x = movement_x;
             mouse.movement_y = movement_y;
         }
@@ -156,8 +160,8 @@ impl EventDispatcher {
     /// Takes the window's current modifier keys as the baseline for the next
     /// change. With `force` unset, an existing baseline stays.
     pub fn sync_modifiers(&self, window: &Window, force: bool) {
-        if force || self.held_modifiers.get().is_none() {
-            self.held_modifiers.set(Some(window.modifiers()));
+        if force || self.state.held_modifiers.get().is_none() {
+            self.state.held_modifiers.set(Some(window.modifiers()));
         }
     }
 
@@ -357,6 +361,17 @@ impl EventDispatcher {
         if self.host.borrow().tree.get(start).is_none() {
             return false;
         }
+        self.fire_inner(start, event, payload, window, cx)
+    }
+
+    fn fire_inner(
+        &self,
+        start: NodeId,
+        event: &str,
+        payload: &EventPayload,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> bool {
         self.host.borrow_mut().focus.observe(window, cx);
         let payload = &self.prepare(event, start, payload, window);
         let cut = self.cut_by_disabled_button(event, payload, cx);
@@ -365,6 +380,14 @@ impl EventDispatcher {
             self.drain_observed(window);
         }
         canceled
+    }
+
+    fn key_target(&self, window: &mut Window, cx: &mut App) -> NodeId {
+        let (root, focused) = {
+            let host = self.host.borrow();
+            (host.root, host.focus.focused_node(window, cx))
+        };
+        self.resolve(focused, root)
     }
 
     /// Runs the work a window owes before it draws a frame: syncs the
@@ -418,7 +441,7 @@ impl EventDispatcher {
     /// The deepest container `gpui` reports as hovered. Containers that left
     /// the tree drop out of the set.
     fn deepest_hovered(&self) -> Option<NodeId> {
-        let mut set = self.hovered.borrow_mut();
+        let mut set = self.state.hovered.borrow_mut();
         set.retain(|id| self.host.borrow().tree.get(*id).is_some());
         set.iter()
             .copied()
@@ -428,13 +451,13 @@ impl EventDispatcher {
     /// Queues the hover report for the end of the update, once. It reports the
     /// hovered set unless the update already reported its deepest container.
     fn schedule_hover_report(&self, window: &mut Window, cx: &mut App) {
-        if self.hover_scheduled.replace(true) {
+        if self.state.hover_scheduled.replace(true) {
             return;
         }
         let this = self.clone();
         window.defer(cx, move |window, cx| {
-            this.hover_scheduled.set(false);
-            if !this.hover_settled.replace(false) {
+            this.state.hover_scheduled.set(false);
+            if !this.state.hover_settled.replace(false) {
                 this.report_hover(this.deepest_hovered(), window, cx);
             }
         });
@@ -448,7 +471,7 @@ impl EventDispatcher {
     fn report_hover(&self, next: Option<NodeId>, window: &mut Window, cx: &mut App) {
         let next_path = next.map(|id| self.path_from(id)).unwrap_or_default();
         // A removed container is replaced by its nearest live ancestor.
-        let old_path = self.hover_prev.replace(next_path.clone());
+        let old_path = self.state.hover_prev.replace(next_path.clone());
         // A container is live while it still hangs below the old path's top.
         let top = old_path.last().copied();
         let live = |id: &NodeId| self.path_from(*id).last().copied() == top;

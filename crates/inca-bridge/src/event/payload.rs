@@ -3,7 +3,7 @@
 
 use crate::bindings::convert::or_null;
 use inca_gpui::{EventPayload, KeyPayload, MousePayload, PointerSource};
-use rquickjs::{Function, Object, Result as JsResult};
+use rquickjs::{Object, Result as JsResult};
 
 /// Writes `payload`'s fields onto `event_object`.
 pub(super) fn set_payload(event_object: &Object, payload: &EventPayload) -> JsResult<()> {
@@ -86,61 +86,5 @@ fn set_modifier_fields(event_object: &Object, modifiers: gpui::Modifiers) -> JsR
     event_object.set("shiftKey", modifiers.shift)?;
     event_object.set("altKey", modifiers.alt)?;
     event_object.set("metaKey", modifiers.platform)?;
-    event_object.set(
-        "getModifierState",
-        Function::new(event_object.ctx().clone(), move |name: String| {
-            modifier_state(modifiers, &name)
-        })?,
-    )?;
     Ok(())
-}
-
-/// Whether the modifier `name` is held. `Accel` is Meta on macOS and Control
-/// elsewhere. Other names return false.
-fn modifier_state(modifiers: gpui::Modifiers, name: &str) -> bool {
-    match name {
-        "Control" => modifiers.control,
-        "Shift" => modifiers.shift,
-        "Alt" => modifiers.alt,
-        "Meta" => modifiers.platform,
-        "Accel" => {
-            if cfg!(target_os = "macos") {
-                modifiers.platform
-            } else {
-                modifiers.control
-            }
-        }
-        _ => false,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn modifier_state_reports_each_held_modifier_and_no_lock() {
-        let mut mismatches = Vec::new();
-        for (name, held) in [
-            ("Control", gpui::Modifiers::control()),
-            ("Shift", gpui::Modifiers::shift()),
-            ("Alt", gpui::Modifiers::alt()),
-            ("Meta", gpui::Modifiers::command()),
-        ] {
-            for other in ["Control", "Shift", "Alt", "Meta", "CapsLock", "NumLock"] {
-                if modifier_state(held, other) != (other == name) {
-                    mismatches.push(format!("{name} held, {other} queried"));
-                }
-            }
-        }
-        let accel = if cfg!(target_os = "macos") {
-            gpui::Modifiers::command()
-        } else {
-            gpui::Modifiers::control()
-        };
-        if !modifier_state(accel, "Accel") || modifier_state(gpui::Modifiers::default(), "Accel") {
-            mismatches.push("Accel".to_string());
-        }
-        assert!(mismatches.is_empty(), "{mismatches:?}");
-    }
 }

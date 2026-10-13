@@ -53,30 +53,28 @@ impl EventSink for EventDispatcher {
     // The first call of an update computes the delta and defers clearing it,
     // so later calls in that update keep it.
     fn pointer_moved(&self, position: gpui::Point<gpui::Pixels>, cx: &mut App) {
-        if self.current_movement.get().is_some() {
+        if self.state.current_movement.get().is_some() {
             return;
         }
         let here = (f32::from(position.x), f32::from(position.y));
         let movement = self
+            .state
             .last_position
             .replace(Some(here))
             .map_or((0.0, 0.0), |(x, y)| (here.0 - x, here.1 - y));
-        self.current_movement.set(Some(movement));
-        let current = Rc::clone(&self.current_movement);
-        cx.defer(move |_| current.set(None));
+        self.state.current_movement.set(Some(movement));
+        let current = Rc::clone(&self.state);
+        cx.defer(move |_| current.current_movement.set(None));
     }
 
     // Changed flags fire in the order Shift, Control, Alt, Meta.
     fn modifiers_changed(&self, modifiers: gpui::Modifiers, window: &mut Window, cx: &mut App) {
         let before = self
+            .state
             .held_modifiers
             .replace(Some(modifiers))
             .unwrap_or(modifiers);
-        let (root, focused) = {
-            let host = self.host.borrow();
-            (host.root, host.focus.focused_node(window, cx))
-        };
-        let start = self.resolve(focused, root);
+        let start = self.key_target(window, cx);
         for (key, was, is) in [
             ("Shift", before.shift, modifiers.shift),
             ("Control", before.control, modifiers.control),
@@ -96,17 +94,17 @@ impl EventSink for EventDispatcher {
     }
 
     fn pointer_left(&self) {
-        self.last_position.set(None);
+        self.state.last_position.set(None);
     }
 
     fn pointer_over(&self, node_id: NodeId, window: &mut Window, cx: &mut App) {
-        self.hover_settled.set(true);
+        self.state.hover_settled.set(true);
         self.report_hover(Some(node_id), window, cx);
         self.schedule_hover_report(window, cx);
     }
 
     fn pointer_pressed(&self) {
-        self.space_down.set(None);
+        self.state.space_down.set(None);
     }
 
     fn pointer_released(
@@ -146,14 +144,8 @@ impl EventSink for EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) {
-        self.host.borrow_mut().focus.observe(window, cx);
-        let payload = self.prepare(event, target, payload, window);
-        let cut = self.cut_by_disabled_button(event, &payload, cx);
-        let (canceled, entered) = self.walk(target, event, &payload, &cut);
         // The default action reads the tree the listeners' queued jobs leave.
-        if entered {
-            self.drain_observed(window);
-        }
+        let canceled = self.fire_inner(target, event, payload, window, cx);
         match event {
             "mousedown" => self.focus_on_press(target, canceled, window, cx),
             // gpui's scroll rollback reads `Window::default_prevented`.
@@ -164,7 +156,7 @@ impl EventSink for EventDispatcher {
 
     fn hover_changed(&self, node_id: NodeId, hovered: bool, window: &mut Window, cx: &mut App) {
         {
-            let mut set = self.hovered.borrow_mut();
+            let mut set = self.state.hovered.borrow_mut();
             if hovered {
                 set.insert(node_id);
             } else {
@@ -183,11 +175,7 @@ impl EventSink for EventDispatcher {
         cx: &mut App,
     ) {
         self.host.borrow_mut().focus.observe(window, cx);
-        let (root, focused) = {
-            let host = self.host.borrow();
-            (host.root, host.focus.focused_node(window, cx))
-        };
-        let target = self.resolve(focused, root);
+        let target = self.key_target(window, cx);
         let event = if up { "keyup" } else { "keydown" };
         let (canceled, entered) = self.walk(target, event, payload, &[]);
         if entered {
@@ -216,9 +204,11 @@ impl EventDispatcher {
         let modifiers = keystroke.modifiers;
         let window_id = window.window_handle().window_id();
         let pending = if up {
-            (key == "space").then(|| self.space_down.take()).flatten()
+            (key == "space")
+                .then(|| self.state.space_down.take())
+                .flatten()
         } else {
-            self.space_down.set(None);
+            self.state.space_down.set(None);
             None
         };
         if canceled {
@@ -232,8 +222,9 @@ impl EventDispatcher {
                 })
             })
         };
+        let plain = !(modifiers.control || modifiers.alt || modifiers.platform);
         let click = match (key, up) {
-            ("tab", false) if !(modifiers.control || modifiers.alt || modifiers.platform) => {
+            ("tab", false) if plain => {
                 let host = &mut *self.host.borrow_mut();
                 let moved = host
                     .focus
@@ -243,11 +234,10 @@ impl EventDispatcher {
                 }
                 None
             }
-            ("enter", false) if !(modifiers.control || modifiers.alt || modifiers.platform) => {
-                focused_button()
-            }
+            ("enter", false) if plain => focused_button(),
             ("space", false) => {
-                self.space_down
+                self.state
+                    .space_down
                     .set(focused_button().map(|button| (window_id, button)));
                 None
             }

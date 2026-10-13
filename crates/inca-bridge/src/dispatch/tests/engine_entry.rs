@@ -246,6 +246,7 @@ fn a_script_that_patches_the_builtins_cannot_reach_or_break_event_state(cx: &mut
                 "composedPath",
                 "constructor",
                 "defaultPrevented",
+                "getModifierState",
                 "preventDefault",
                 "returnValue",
                 "srcElement",
@@ -254,4 +255,137 @@ fn a_script_that_patches_the_builtins_cannot_reach_or_break_event_state(cx: &mut
             ]
         ])
     );
+}
+
+fn key_payload(modifiers: gpui::Modifiers) -> EventPayload {
+    EventPayload::Key(inca_gpui::KeyPayload {
+        key: "a".into(),
+        repeat: false,
+        modifiers,
+    })
+}
+
+#[gpui::test]
+fn modifier_state_reports_each_held_modifier_and_no_lock(cx: &mut TestAppContext) {
+    let (dispatcher, host, _reported) = dispatcher_with_engine();
+    let node = host.borrow_mut().tree.create_node("div").unwrap();
+    listen(
+        &dispatcher,
+        node,
+        "keydown",
+        r"(e) => out.push(['Control', 'Shift', 'Alt', 'Meta', 'Accel', 'CapsLock', 'NumLock']
+            .map((name) => e.getModifierState(name)))",
+    );
+    let accel = |held: [bool; 4]| {
+        let [control, _, _, meta] = held;
+        if cfg!(target_os = "macos") {
+            meta
+        } else {
+            control
+        }
+    };
+    let mut mismatches = Vec::new();
+    for (index, held) in [
+        gpui::Modifiers::control(),
+        gpui::Modifiers::shift(),
+        gpui::Modifiers::alt(),
+        gpui::Modifiers::command(),
+        gpui::Modifiers::default(),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let flags = [held.control, held.shift, held.alt, held.platform];
+        let out = fire_and_read(cx, &dispatcher, node, "keydown", &key_payload(held));
+        let want = serde_json::json!([[
+            flags[0],
+            flags[1],
+            flags[2],
+            flags[3],
+            accel(flags),
+            false,
+            false
+        ]]);
+        if out != want {
+            mismatches.push(format!("{index}: {out}"));
+        }
+        dispatcher.engine.eval::<()>("out.length = 0;").unwrap();
+    }
+    assert!(mismatches.is_empty(), "{mismatches:?}");
+}
+
+#[gpui::test]
+fn get_modifier_state_lives_on_the_event_prototype(cx: &mut TestAppContext) {
+    let (dispatcher, host, _reported) = dispatcher_with_engine();
+    let node = host.borrow_mut().tree.create_node("div").unwrap();
+    listen(
+        &dispatcher,
+        node,
+        "keydown",
+        r"(e) => out.push(
+            Object.hasOwn(e, 'getModifierState'),
+            Object.hasOwn(Object.getPrototypeOf(e), 'getModifierState'),
+            'getModifierState' in {...e})",
+    );
+
+    let out = fire_and_read(
+        cx,
+        &dispatcher,
+        node,
+        "keydown",
+        &key_payload(gpui::Modifiers::control()),
+    );
+
+    assert_eq!(out, serde_json::json!([false, true, false]));
+}
+
+#[gpui::test]
+fn a_detached_get_modifier_state_throws_type_error(cx: &mut TestAppContext) {
+    let (dispatcher, host, _reported) = dispatcher_with_engine();
+    let node = host.borrow_mut().tree.create_node("div").unwrap();
+    listen(
+        &dispatcher,
+        node,
+        "keydown",
+        r"(e) => { const f = e.getModifierState;
+            for (const receiver of [undefined, {}, Object.create(e)]) {
+                try { f.call(receiver, 'Control'); out.push('ran'); }
+                catch (err) { out.push(err instanceof TypeError); }
+            }
+            try { f('Control'); out.push('ran'); }
+            catch (err) { out.push(err instanceof TypeError); } }",
+    );
+
+    let out = fire_and_read(
+        cx,
+        &dispatcher,
+        node,
+        "keydown",
+        &key_payload(gpui::Modifiers::control()),
+    );
+
+    assert_eq!(out, serde_json::json!([true, true, true, true]));
+}
+
+#[gpui::test]
+fn get_modifier_state_reads_the_event_fields(cx: &mut TestAppContext) {
+    let (dispatcher, host, _reported) = dispatcher_with_engine();
+    let node = host.borrow_mut().tree.create_node("div").unwrap();
+    listen(
+        &dispatcher,
+        node,
+        "keydown",
+        r"(e) => { e.shiftKey = true; e.ctrlKey = false;
+            out.push(e.getModifierState('Shift'), e.getModifierState('Control')); }",
+    );
+
+    let out = fire_and_read(
+        cx,
+        &dispatcher,
+        node,
+        "keydown",
+        &key_payload(gpui::Modifiers::control()),
+    );
+
+    assert_eq!(out, serde_json::json!([true, false]));
 }

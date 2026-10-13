@@ -148,7 +148,7 @@ const PHASES: [(&str, i32); 4] = [
 ];
 
 /// The prototype of event objects: the phase constants, the propagation
-/// methods, `composedPath` and the accessors.
+/// methods, `composedPath`, `getModifierState` and the accessors.
 fn prototype<'js>(ctx: &Ctx<'js>) -> JsResult<Object<'js>> {
     let proto = Object::new(ctx.clone())?;
     for (name, value) in PHASES {
@@ -214,6 +214,28 @@ fn define_methods<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<()> {
                 } else {
                     Ok(Vec::new())
                 }
+            },
+        )?,
+    )?;
+    method(
+        "getModifierState",
+        Function::new(
+            ctx.clone(),
+            |ctx: Ctx<'js>, This(event): This<Object<'js>>, name: String| -> JsResult<bool> {
+                record_of(&ctx, &event)?;
+                let name = match name.as_str() {
+                    "Accel" if cfg!(target_os = "macos") => "Meta",
+                    "Accel" => "Control",
+                    other => other,
+                };
+                let field = match name {
+                    "Control" => "ctrlKey",
+                    "Shift" => "shiftKey",
+                    "Alt" => "altKey",
+                    "Meta" => "metaKey",
+                    _ => return Ok(false),
+                };
+                Ok(flag(&event, field))
             },
         )?,
     )

@@ -20,17 +20,17 @@ fn pointer_moved_reports_zero_first_then_the_delta(cx: &mut TestAppContext) {
 
     let first = cx.update(|_, cx| {
         dispatcher.pointer_moved(at(10.0, 10.0), cx);
-        dispatcher.current_movement.get()
+        dispatcher.state.current_movement.get()
     });
     assert_eq!(first, Some((0.0, 0.0)));
-    assert_eq!(dispatcher.current_movement.get(), None);
+    assert_eq!(dispatcher.state.current_movement.get(), None);
 
     let second = cx.update(|_, cx| {
         dispatcher.pointer_moved(at(30.0, 5.0), cx);
-        dispatcher.current_movement.get()
+        dispatcher.state.current_movement.get()
     });
     assert_eq!(second, Some((20.0, -5.0)));
-    assert_eq!(dispatcher.last_position.get(), Some((30.0, 5.0)));
+    assert_eq!(dispatcher.state.last_position.get(), Some((30.0, 5.0)));
 }
 
 #[gpui::test]
@@ -42,11 +42,11 @@ fn a_second_pointer_moved_in_one_cycle_keeps_the_first_delta(cx: &mut TestAppCon
     let seen = cx.update(|_, cx| {
         dispatcher.pointer_moved(at(30.0, 5.0), cx);
         dispatcher.pointer_moved(at(100.0, 100.0), cx);
-        dispatcher.current_movement.get()
+        dispatcher.state.current_movement.get()
     });
 
     assert_eq!(seen, Some((20.0, -5.0)));
-    assert_eq!(dispatcher.last_position.get(), Some((30.0, 5.0)));
+    assert_eq!(dispatcher.state.last_position.get(), Some((30.0, 5.0)));
 }
 
 #[gpui::test]
@@ -56,11 +56,11 @@ fn pointer_left_makes_the_next_move_report_zero(cx: &mut TestAppContext) {
     cx.update(|_, cx| dispatcher.pointer_moved(at(10.0, 10.0), cx));
 
     dispatcher.pointer_left();
-    assert_eq!(dispatcher.last_position.get(), None);
+    assert_eq!(dispatcher.state.last_position.get(), None);
 
     let seen = cx.update(|_, cx| {
         dispatcher.pointer_moved(at(50.0, 60.0), cx);
-        dispatcher.current_movement.get()
+        dispatcher.state.current_movement.get()
     });
     assert_eq!(seen, Some((0.0, 0.0)));
 }
@@ -103,7 +103,7 @@ fn a_mousemove_with_no_raw_move_reports_zero() {
 #[test]
 fn a_click_or_key_payload_is_left_alone() {
     let (dispatcher, _host, _reported) = dispatcher_with_engine();
-    dispatcher.last_position.set(Some((10.0, 10.0)));
+    dispatcher.state.last_position.set(Some((10.0, 10.0)));
 
     let payload = dispatcher.with_movement(EventPayload::None, "click");
     assert_eq!(payload, EventPayload::None);

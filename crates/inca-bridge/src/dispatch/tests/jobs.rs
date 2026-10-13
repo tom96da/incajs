@@ -27,7 +27,7 @@ fn record_layout_stores_and_clear_layout_empties() {
 fn an_out_of_range_button_does_not_panic() {
     let (dispatcher, _host, _reported) = dispatcher_with_engine();
     assert_eq!(dispatcher.update_held_buttons("mousedown", 200), 0);
-    assert_eq!(dispatcher.held_buttons.get(), 0);
+    assert_eq!(dispatcher.state.held_buttons.get(), 0);
 }
 
 #[test]
