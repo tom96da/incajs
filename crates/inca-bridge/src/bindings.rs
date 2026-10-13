@@ -19,7 +19,8 @@ pub use listeners::{EventListeners, Listener};
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rquickjs::{Ctx, Object, Result as JsResult};
+use rquickjs::function::IntoJsFunc;
+use rquickjs::{Ctx, Function, Object, Result as JsResult};
 
 use focus::install_focus;
 use listeners::install_events;
@@ -34,11 +35,36 @@ use tree::install_tree;
 /// methods on `ctx` fails.
 pub fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
     let native = Object::new(ctx.clone())?;
-    install_tree(ctx, host, &native)?;
-    install_events(ctx, host, &native)?;
-    install_focus(ctx, host, &native)?;
-    install_scroll(ctx, host, &native)?;
+    let natives = Natives {
+        ctx,
+        native: &native,
+        host,
+    };
+    install_tree(&natives)?;
+    install_events(&natives)?;
+    install_focus(&natives)?;
+    install_scroll(&natives)?;
     crate::event::install(ctx)?;
     ctx.globals().set("__inca_native__", native)?;
     Ok(())
+}
+
+/// What every native binding needs while it is registered.
+pub(super) struct Natives<'a, 'js> {
+    ctx: &'a Ctx<'js>,
+    native: &'a Object<'js>,
+    host: &'a Rc<RefCell<Host>>,
+}
+
+impl<'js> Natives<'_, 'js> {
+    /// Sets the native `name`, built by `make` from a clone of the host.
+    fn set<P, F>(&self, name: &str, make: impl FnOnce(Rc<RefCell<Host>>) -> F) -> JsResult<()>
+    where
+        F: IntoJsFunc<'js, P> + 'js,
+    {
+        self.native.set(
+            name,
+            Function::new(self.ctx.clone(), make(Rc::clone(self.host)))?,
+        )
+    }
 }

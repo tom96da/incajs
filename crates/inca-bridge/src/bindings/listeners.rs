@@ -6,10 +6,11 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use rquickjs::function::Opt;
-use rquickjs::{Ctx, Exception, Function, Object, Result as JsResult, Value};
+use rquickjs::{Ctx, Exception, Result as JsResult, Value};
 
 use inca_gpui::{NodeId, TreeError};
 
+use super::Natives;
 use super::convert::{JsNodeId, throw_tree_error};
 use super::host::Host;
 
@@ -132,88 +133,53 @@ impl EventListeners {
 
 /// Registering and dropping input-event callbacks, and dispatching events
 /// from script.
-pub(super) fn install_events<'js>(
-    ctx: &Ctx<'js>,
-    host: &Rc<RefCell<Host>>,
-    native: &Object<'js>,
-) -> JsResult<()> {
-    {
-        let host = Rc::clone(host);
-        native.set(
-            "addEventListener",
-            Function::new(
-                ctx.clone(),
-                move |ctx: Ctx<'js>,
-                      JsNodeId(node_id): JsNodeId,
-                      event: String,
-                      capture: Opt<bool>,
-                      passive: Opt<bool>|
-                      -> JsResult<u32> {
-                    let mut host = host.borrow_mut();
-                    if host.tree.get(node_id).is_none() {
-                        return Err(throw_tree_error(&ctx, TreeError::NodeNotFound(node_id)));
-                    }
-                    host.listeners
-                        .add(
-                            node_id,
-                            event,
-                            capture.0.unwrap_or(false),
-                            passive.0.unwrap_or(false),
-                        )
-                        .ok_or_else(|| Exception::throw_range(&ctx, "callback ids are exhausted"))
-                },
-            )?,
-        )?;
-    }
+pub(super) fn install_events(n: &Natives<'_, '_>) -> JsResult<()> {
+    n.set("addEventListener", add_event_listener)?;
+    n.set("removeEventListener", remove_event_listener)?;
+    n.set("dispatchEvent", dispatch_event)?;
+    n.set("click", click)
+}
 
-    {
-        let host = Rc::clone(host);
-        native.set(
-            "removeEventListener",
-            Function::new(
-                ctx.clone(),
-                move |JsNodeId(node_id): JsNodeId, event: String, callback_id: u32| -> bool {
-                    host.borrow_mut()
-                        .listeners
-                        .remove(node_id, &event, callback_id)
-                },
-            )?,
-        )?;
+fn add_event_listener<'js>(
+    host: Rc<RefCell<Host>>,
+) -> impl Fn(Ctx<'js>, JsNodeId, String, Opt<bool>, Opt<bool>) -> JsResult<u32> {
+    move |ctx, JsNodeId(node_id), event, capture, passive| {
+        let mut host = host.borrow_mut();
+        if host.tree.get(node_id).is_none() {
+            return Err(throw_tree_error(&ctx, TreeError::NodeNotFound(node_id)));
+        }
+        host.listeners
+            .add(
+                node_id,
+                event,
+                capture.0.unwrap_or(false),
+                passive.0.unwrap_or(false),
+            )
+            .ok_or_else(|| Exception::throw_range(&ctx, "callback ids are exhausted"))
     }
+}
 
-    {
-        let host = Rc::clone(host);
-        native.set(
-            "dispatchEvent",
-            Function::new(
-                ctx.clone(),
-                move |ctx: Ctx<'js>,
-                      JsNodeId(node_id): JsNodeId,
-                      event: Value<'js>|
-                      -> JsResult<bool> {
-                    if host.borrow().tree.get(node_id).is_none() {
-                        return Err(throw_tree_error(&ctx, TreeError::NodeNotFound(node_id)));
-                    }
-                    crate::event::dispatch_event(&ctx, &host, node_id, event)
-                },
-            )?,
-        )?;
+fn remove_event_listener(host: Rc<RefCell<Host>>) -> impl Fn(JsNodeId, String, u32) -> bool {
+    move |JsNodeId(node_id), event, callback_id| {
+        host.borrow_mut()
+            .listeners
+            .remove(node_id, &event, callback_id)
     }
+}
 
-    {
-        let host = Rc::clone(host);
-        native.set(
-            "click",
-            Function::new(
-                ctx.clone(),
-                move |ctx: Ctx<'js>, JsNodeId(node_id): JsNodeId| {
-                    crate::event::click(&ctx, &host, node_id);
-                },
-            )?,
-        )?;
+fn dispatch_event<'js>(
+    host: Rc<RefCell<Host>>,
+) -> impl Fn(Ctx<'js>, JsNodeId, Value<'js>) -> JsResult<bool> {
+    move |ctx, JsNodeId(node_id), event| {
+        if host.borrow().tree.get(node_id).is_none() {
+            return Err(throw_tree_error(&ctx, TreeError::NodeNotFound(node_id)));
+        }
+        crate::event::dispatch_event(&ctx, &host, node_id, event)
     }
+}
 
-    Ok(())
+fn click<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) {
+    move |ctx, JsNodeId(node_id)| crate::event::click(&ctx, &host, node_id)
 }
 
 #[cfg(test)]

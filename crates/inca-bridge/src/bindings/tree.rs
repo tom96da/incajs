@@ -4,258 +4,182 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rquickjs::{Ctx, Exception, Function, IntoJs, Object, Result as JsResult, Value};
+use rquickjs::{Ctx, Exception, IntoJs, Result as JsResult, Value};
 
 use inca_gpui::{AttributeValue, NodeId, TreeError, VirtualNode, style_warning};
 
+use super::Natives;
 use super::convert::{JsNodeId, throw_tree_error};
 use super::host::Host;
 
 /// The retained tree itself: allocating, attaching, and describing nodes,
 /// plus `destroyNode`. Freeing a subtree is a tree operation first, even
 /// though it also releases the listener/focus state that named its nodes.
-// Long from repeating one registration block per binding, not from
-// complexity. Splitting it up further would just spread that same list
-// across more functions.
-#[allow(clippy::too_many_lines)]
-pub(super) fn install_tree<'js>(
-    ctx: &Ctx<'js>,
-    host: &Rc<RefCell<Host>>,
-    native: &Object<'js>,
-) -> JsResult<()> {
-    {
-        let host = Rc::clone(host);
-        native.set(
-            "rootNodeId",
-            Function::new(ctx.clone(), move || -> NodeId { host.borrow().root })?,
-        )?;
-    }
+pub(super) fn install_tree(n: &Natives<'_, '_>) -> JsResult<()> {
+    n.set("rootNodeId", root_node_id)?;
+    n.set("createNode", create_node)?;
+    n.set("appendChild", append_child)?;
+    n.set("insertBefore", insert_before)?;
+    n.set("removeChild", remove_child)?;
+    n.set("setAttribute", set_attribute)?;
+    n.set("getAttribute", get_attribute)?;
+    n.set("removeAttribute", remove_attribute)?;
+    n.set("setStyle", set_style)?;
+    n.set("removeStyle", remove_style)?;
+    n.set("destroyNode", destroy_node)
+}
 
-    {
-        let host = Rc::clone(host);
-        native.set(
-            "createNode",
-            Function::new(
-                ctx.clone(),
-                move |ctx: Ctx<'js>, tag_name: String| -> JsResult<NodeId> {
-                    let mut host = host.borrow_mut();
-                    host.tree
-                        .create_node(tag_name)
-                        .map_err(|err| throw_tree_error(&ctx, err))
-                },
-            )?,
-        )?;
-    }
+fn root_node_id(host: Rc<RefCell<Host>>) -> impl Fn() -> NodeId {
+    move || host.borrow().root
+}
 
-    {
-        let host = Rc::clone(host);
-        native.set(
-            "appendChild",
-            Function::new(
-                ctx.clone(),
-                move |ctx: Ctx<'js>,
-                      JsNodeId(parent_id): JsNodeId,
-                      JsNodeId(child_id): JsNodeId|
-                      -> JsResult<()> {
-                    let mut host = host.borrow_mut();
-                    refuse_root(&ctx, &host, child_id, "moved")?;
-                    host.tree
-                        .append_child(parent_id, child_id)
-                        .map_err(|err| throw_tree_error(&ctx, err))?;
-                    mark_focus_dirty(&mut host, child_id);
-                    Ok(())
-                },
-            )?,
-        )?;
+fn create_node<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, String) -> JsResult<NodeId> {
+    move |ctx, tag_name| {
+        let mut host = host.borrow_mut();
+        host.tree
+            .create_node(tag_name)
+            .map_err(|err| throw_tree_error(&ctx, err))
     }
+}
 
-    {
-        let host = Rc::clone(host);
-        native.set(
-            "insertBefore",
-            Function::new(
-                ctx.clone(),
-                move |ctx: Ctx<'js>,
-                      JsNodeId(parent_id): JsNodeId,
-                      JsNodeId(child_id): JsNodeId,
-                      anchor_id: Option<JsNodeId>|
-                      -> JsResult<()> {
-                    let mut host = host.borrow_mut();
-                    refuse_root(&ctx, &host, child_id, "moved")?;
-                    host.tree
-                        .insert_before(parent_id, child_id, anchor_id.map(|JsNodeId(id)| id))
-                        .map_err(|err| throw_tree_error(&ctx, err))?;
-                    mark_focus_dirty(&mut host, child_id);
-                    Ok(())
-                },
-            )?,
-        )?;
+fn append_child<'js>(
+    host: Rc<RefCell<Host>>,
+) -> impl Fn(Ctx<'js>, JsNodeId, JsNodeId) -> JsResult<()> {
+    move |ctx, JsNodeId(parent_id), JsNodeId(child_id)| {
+        let mut host = host.borrow_mut();
+        refuse_root(&ctx, &host, child_id, "moved")?;
+        host.tree
+            .append_child(parent_id, child_id)
+            .map_err(|err| throw_tree_error(&ctx, err))?;
+        mark_focus_dirty(&mut host, child_id);
+        Ok(())
     }
+}
 
-    {
-        let host = Rc::clone(host);
-        native.set(
-            "removeChild",
-            Function::new(
-                ctx.clone(),
-                move |ctx: Ctx<'js>,
-                      JsNodeId(parent_id): JsNodeId,
-                      JsNodeId(child_id): JsNodeId|
-                      -> JsResult<()> {
-                    host.borrow_mut()
-                        .tree
-                        .remove_child(parent_id, child_id)
-                        .map_err(|err| throw_tree_error(&ctx, err))
-                },
-            )?,
-        )?;
+fn insert_before<'js>(
+    host: Rc<RefCell<Host>>,
+) -> impl Fn(Ctx<'js>, JsNodeId, JsNodeId, Option<JsNodeId>) -> JsResult<()> {
+    move |ctx, JsNodeId(parent_id), JsNodeId(child_id), anchor_id| {
+        let mut host = host.borrow_mut();
+        refuse_root(&ctx, &host, child_id, "moved")?;
+        host.tree
+            .insert_before(parent_id, child_id, anchor_id.map(|JsNodeId(id)| id))
+            .map_err(|err| throw_tree_error(&ctx, err))?;
+        mark_focus_dirty(&mut host, child_id);
+        Ok(())
     }
+}
 
-    {
-        let host = Rc::clone(host);
-        native.set(
-            "setAttribute",
-            Function::new(
-                ctx.clone(),
-                move |ctx: Ctx<'js>,
-                      JsNodeId(node_id): JsNodeId,
-                      key: String,
-                      value: Value<'js>|
-                      -> JsResult<()> {
-                    let value = attribute_value_from_js(&ctx, &value)?;
-                    let mut host = host.borrow_mut();
-                    let key = canonical_attribute_key(key);
-                    host.tree
-                        .set_attribute(node_id, key.clone(), value)
-                        .map_err(|err| throw_tree_error(&ctx, err))?;
-                    mark_focus_dirty_for(&mut host, node_id, &key);
-                    Ok(())
-                },
-            )?,
-        )?;
+fn remove_child<'js>(
+    host: Rc<RefCell<Host>>,
+) -> impl Fn(Ctx<'js>, JsNodeId, JsNodeId) -> JsResult<()> {
+    move |ctx, JsNodeId(parent_id), JsNodeId(child_id)| {
+        host.borrow_mut()
+            .tree
+            .remove_child(parent_id, child_id)
+            .map_err(|err| throw_tree_error(&ctx, err))
     }
+}
 
-    {
-        let host = Rc::clone(host);
-        native.set(
-            "getAttribute",
-            Function::new(
-                ctx.clone(),
-                move |ctx: Ctx<'js>,
-                      JsNodeId(node_id): JsNodeId,
-                      key: String|
-                      -> JsResult<Value<'js>> {
-                    let key = canonical_attribute_key(key);
-                    let host = host.borrow();
-                    let node = host
-                        .tree
-                        .get(node_id)
-                        .ok_or_else(|| throw_tree_error(&ctx, TreeError::NodeNotFound(node_id)))?;
-                    attribute_value_to_js(&ctx, node.attributes().get(&key))
-                },
-            )?,
-        )?;
+fn set_attribute<'js>(
+    host: Rc<RefCell<Host>>,
+) -> impl Fn(Ctx<'js>, JsNodeId, String, Value<'js>) -> JsResult<()> {
+    move |ctx, JsNodeId(node_id), key, value| {
+        let value = attribute_value_from_js(&ctx, &value)?;
+        let mut host = host.borrow_mut();
+        let key = canonical_attribute_key(key);
+        host.tree
+            .set_attribute(node_id, key.clone(), value)
+            .map_err(|err| throw_tree_error(&ctx, err))?;
+        mark_focus_dirty_for(&mut host, node_id, &key);
+        Ok(())
     }
+}
 
-    {
-        let host = Rc::clone(host);
-        native.set(
-            "removeAttribute",
-            Function::new(
-                ctx.clone(),
-                move |ctx: Ctx<'js>, JsNodeId(node_id): JsNodeId, key: String| -> JsResult<()> {
-                    let mut host = host.borrow_mut();
-                    let key = canonical_attribute_key(key);
-                    host.tree
-                        .remove_attribute(node_id, &key)
-                        .map_err(|err| throw_tree_error(&ctx, err))?;
-                    mark_focus_dirty_for(&mut host, node_id, &key);
-                    Ok(())
-                },
-            )?,
-        )?;
+fn get_attribute<'js>(
+    host: Rc<RefCell<Host>>,
+) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Value<'js>> {
+    move |ctx, JsNodeId(node_id), key| {
+        let key = canonical_attribute_key(key);
+        let host = host.borrow();
+        let node = host
+            .tree
+            .get(node_id)
+            .ok_or_else(|| throw_tree_error(&ctx, TreeError::NodeNotFound(node_id)))?;
+        attribute_value_to_js(&ctx, node.attributes().get(&key))
     }
+}
 
-    {
-        let host = Rc::clone(host);
-        native.set(
-            "setStyle",
-            Function::new(
-                ctx.clone(),
-                move |ctx: Ctx<'js>,
-                      JsNodeId(node_id): JsNodeId,
-                      key: String,
-                      value: Value<'js>|
-                      -> JsResult<()> {
-                    let value = attribute_value_from_js(&ctx, &value)?;
-                    let mut host = host.borrow_mut();
-                    let warning = style_warning(&key, &value);
-                    let is_display = key == "display";
-                    host.tree
-                        .set_style(node_id, key, value)
-                        .map_err(|err| throw_tree_error(&ctx, err))?;
-                    if is_display {
-                        mark_focus_dirty(&mut host, node_id);
-                    }
-                    if let Some(warning) = warning {
-                        let tag = host.tree.get(node_id).map_or("", VirtualNode::tag_name);
-                        (host.warn)(&format!("node {node_id} ({tag}): {warning}"));
-                    }
-                    Ok(())
-                },
-            )?,
-        )?;
+fn remove_attribute<'js>(
+    host: Rc<RefCell<Host>>,
+) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<()> {
+    move |ctx, JsNodeId(node_id), key| {
+        let mut host = host.borrow_mut();
+        let key = canonical_attribute_key(key);
+        host.tree
+            .remove_attribute(node_id, &key)
+            .map_err(|err| throw_tree_error(&ctx, err))?;
+        mark_focus_dirty_for(&mut host, node_id, &key);
+        Ok(())
     }
+}
 
-    {
-        let host = Rc::clone(host);
-        native.set(
-            "removeStyle",
-            Function::new(
-                ctx.clone(),
-                move |ctx: Ctx<'js>, JsNodeId(node_id): JsNodeId, key: String| -> JsResult<()> {
-                    let mut host = host.borrow_mut();
-                    host.tree
-                        .remove_style(node_id, &key)
-                        .map_err(|err| throw_tree_error(&ctx, err))?;
-                    if key == "display" {
-                        mark_focus_dirty(&mut host, node_id);
-                    }
-                    Ok(())
-                },
-            )?,
-        )?;
+fn set_style<'js>(
+    host: Rc<RefCell<Host>>,
+) -> impl Fn(Ctx<'js>, JsNodeId, String, Value<'js>) -> JsResult<()> {
+    move |ctx, JsNodeId(node_id), key, value| {
+        let value = attribute_value_from_js(&ctx, &value)?;
+        let mut host = host.borrow_mut();
+        let warning = style_warning(&key, &value);
+        let is_display = key == "display";
+        host.tree
+            .set_style(node_id, key, value)
+            .map_err(|err| throw_tree_error(&ctx, err))?;
+        if is_display {
+            mark_focus_dirty(&mut host, node_id);
+        }
+        if let Some(warning) = warning {
+            let tag = host.tree.get(node_id).map_or("", VirtualNode::tag_name);
+            (host.warn)(&format!("node {node_id} ({tag}): {warning}"));
+        }
+        Ok(())
     }
+}
 
-    {
-        let host = Rc::clone(host);
-        native.set(
-            "destroyNode",
-            Function::new(
-                ctx.clone(),
-                move |ctx: Ctx<'js>, JsNodeId(node_id): JsNodeId| -> JsResult<Vec<u32>> {
-                    let mut host = host.borrow_mut();
-                    refuse_root(&ctx, &host, node_id, "destroyed")?;
-                    let freed = host.tree.destroy_node(node_id);
-                    for id in &freed {
-                        host.scroll_handles.get_mut().remove(id);
-                        host.scroll_reported.remove(id);
-                    }
-                    Ok(freed
-                        .into_iter()
-                        .flat_map(|id| {
-                            host.focus.forget(id);
-                            host.scroll_fresh.retain(|&(node, ..)| node != id);
-                            host.scroll_retry.retain(|&(node, ..)| node != id);
-                            host.listeners.release(id)
-                        })
-                        .collect())
-                },
-            )?,
-        )?;
+fn remove_style<'js>(
+    host: Rc<RefCell<Host>>,
+) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<()> {
+    move |ctx, JsNodeId(node_id), key| {
+        let mut host = host.borrow_mut();
+        host.tree
+            .remove_style(node_id, &key)
+            .map_err(|err| throw_tree_error(&ctx, err))?;
+        if key == "display" {
+            mark_focus_dirty(&mut host, node_id);
+        }
+        Ok(())
     }
+}
 
-    Ok(())
+fn destroy_node<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Vec<u32>> {
+    move |ctx, JsNodeId(node_id)| {
+        let mut host = host.borrow_mut();
+        refuse_root(&ctx, &host, node_id, "destroyed")?;
+        let freed = host.tree.destroy_node(node_id);
+        for id in &freed {
+            host.scroll_handles.get_mut().remove(id);
+            host.scroll_reported.remove(id);
+        }
+        Ok(freed
+            .into_iter()
+            .flat_map(|id| {
+                host.focus.forget(id);
+                host.scroll_fresh.retain(|&(node, ..)| node != id);
+                host.scroll_retry.retain(|&(node, ..)| node != id);
+                host.listeners.release(id)
+            })
+            .collect())
+    }
 }
 
 /// Refuses `id` when it is the root node, which belongs to the host. `verb`
