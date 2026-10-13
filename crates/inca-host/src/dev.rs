@@ -24,7 +24,7 @@ use std::time::{Duration, Instant};
 use gpui::{App, FutureExt, WindowHandle};
 use serde_json::Value;
 
-use inca_jsenv::{EngineError, ErrorReporter, report_jobs};
+use inca_jsenv::{Engine, EngineError, ErrorReporter, report_jobs};
 
 use crate::app::{Failure, HostedApp, Loading, Session, maybe_auto_resize_to_content, open};
 use crate::config::is_resizable;
@@ -172,12 +172,17 @@ fn respond(id: Option<&Value>, outcome: &Result<(), Failure>, writer: &SharedWri
         &**writer,
         &match outcome {
             Ok(()) => Outgoing::result(id.clone()),
-            Err(Failure::Message(code, message)) => {
-                Outgoing::error(id.clone(), *code, message.clone())
-            }
-            Err(Failure::Thrown(err)) => Outgoing::thrown(id.clone(), ErrorCode::BundleFailed, err),
+            Err(failure) => outgoing(id.clone(), failure),
         },
     );
+}
+
+/// The error message that reports `failure` for the request `id`.
+fn outgoing(id: Value, failure: &Failure) -> Outgoing {
+    match failure {
+        Failure::Message(code, message) => Outgoing::error(id, *code, message.clone()),
+        Failure::Thrown(err) => Outgoing::thrown(id, ErrorCode::BundleFailed, err),
+    }
 }
 
 /// How long the first load may stay pending with no window before the window
@@ -205,7 +210,7 @@ fn swap_in(
             app.session.dispatcher.drain_jobs_and_refresh(window, cx);
             maybe_auto_resize_to_content(app, window);
         })
-        .map_err(|err| Failure::Message(ErrorCode::BundleFailed, err.to_string()))
+        .map_err(Failure::bundle)
 }
 
 /// `params` as the JSON text `__inca_dev__.receive` takes.
@@ -222,19 +227,23 @@ fn relay_to_js(
     cx: &mut App,
     method: &str,
     params: Option<Value>,
-    writer: &SharedWriter,
+    reporter: &ErrorReporter,
 ) {
     let params_json = params_json(params);
-    let reporter = reporter_for(writer);
 
     let _ = window.update(cx, |app, window, cx| {
         app.session.dispatcher.observe_focus(window, cx);
-        if let Some(err) = call_dev_receive(&app.session.engine, method, &params_json) {
-            reporter(&err);
-        }
+        deliver(&app.session.engine, method, &params_json, reporter);
         app.session.dispatcher.drain_jobs_and_refresh(window, cx);
         maybe_auto_resize_to_content(app, window);
     });
+}
+
+/// Calls `__inca_dev__.receive` on `engine` and reports what it throws.
+fn deliver(engine: &Engine, method: &str, params_json: &str, reporter: &ErrorReporter) {
+    if let Some(err) = call_dev_receive(engine, method, params_json) {
+        reporter(&err);
+    }
 }
 
 /// An entry that is still evaluating, with the `reload` ids waiting on it.
@@ -252,6 +261,7 @@ struct Serve {
     was_held: bool,
     entry_path: String,
     writer: SharedWriter,
+    reporter: ErrorReporter,
 }
 
 impl Serve {
@@ -293,14 +303,16 @@ impl Serve {
         let Some(pending) = &self.pending else { return };
         let Some(result) = pending.loading.poll() else {
             let session = pending.loading.session();
-            report_jobs(&session.engine, &reporter_for(&self.writer));
+            report_jobs(&session.engine, &self.reporter);
             session.dispatcher.report_pending();
             self.track_hold(cx);
             return;
         };
         if result.is_err() {
-            let reporter = reporter_for(&self.writer);
-            pending.loading.session().report_failed_start(&reporter);
+            pending
+                .loading
+                .session()
+                .report_failed_start(&self.reporter);
         } else {
             pending.loading.session().dispatcher.report_pending();
         }
@@ -364,7 +376,7 @@ impl Serve {
                 Session::begin(
                     &self.entry_path,
                     &source,
-                    reporter_for(&self.writer),
+                    Rc::clone(&self.reporter),
                     Some(&self.writer),
                 )
                 .map_err(Failure::Thrown)
@@ -390,12 +402,10 @@ impl Serve {
         if let Some(pending) = &self.pending {
             let params_json = params_json(params);
             let engine = &pending.loading.session().engine;
-            if let Some(err) = call_dev_receive(engine, method, &params_json) {
-                reporter_for(&self.writer)(&err);
-            }
+            deliver(engine, method, &params_json, &self.reporter);
             self.advance(cx);
         } else if let Some(window) = &self.window {
-            relay_to_js(window, cx, method, params, &self.writer);
+            relay_to_js(window, cx, method, params, &self.reporter);
         }
     }
 
@@ -464,6 +474,7 @@ pub(crate) fn serve_dev_protocol(
         deadline: started + LOAD_TIMEOUT,
         was_held: false,
         entry_path,
+        reporter: reporter_for(&writer),
         writer,
     };
     serve.track_hold(cx);
@@ -512,19 +523,8 @@ pub(crate) fn fail_startup(failure: &Failure, writer: Option<&SharedWriter>) -> 
 /// `None` in production, where there is nobody on the other end of stdout.
 pub(crate) fn report_startup_failure(failure: &Failure, writer: Option<&SharedWriter>) {
     match (failure, writer) {
-        (Failure::Thrown(err), Some(writer)) => {
-            send(
-                &**writer,
-                &Outgoing::thrown(Value::Null, ErrorCode::BundleFailed, err),
-            );
-        }
+        (failure, Some(writer)) => send(&**writer, &outgoing(Value::Null, failure)),
         (Failure::Thrown(err), None) => eprintln!("{err}"),
-        (Failure::Message(code, message), Some(writer)) => {
-            send(
-                &**writer,
-                &Outgoing::error(Value::Null, *code, message.clone()),
-            );
-        }
         (Failure::Message(_, message), None) => eprintln!("{message}"),
     }
 }

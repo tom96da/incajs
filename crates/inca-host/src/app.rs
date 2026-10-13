@@ -90,6 +90,13 @@ pub(crate) enum Failure {
     Thrown(EngineError),
 }
 
+impl Failure {
+    /// A failure to report as a bundle failure, with the text of `err`.
+    pub(crate) fn bundle(err: impl std::fmt::Display) -> Self {
+        Self::Message(ErrorCode::BundleFailed, err.to_string())
+    }
+}
+
 /// An engine ready for an entry: its host, the engine, and what
 /// `setLoadFailed` reports.
 struct StartedEngine {
@@ -329,12 +336,14 @@ pub(crate) fn maybe_auto_resize_to_content(app: &HostedApp, window: &mut Window)
     }
     let window_config = app.window_config.as_ref();
     let content = content_window_size(&app.session.host.borrow(), app.session.root());
-    let width_ready = !width_done
-        && (window_config.is_some_and(|w| usable(w.width).is_some())
-            || usable(content.0).is_some());
-    let height_ready = !height_done
-        && (window_config.is_some_and(|w| usable(w.height).is_some())
-            || usable(content.1).is_some());
+    let ready =
+        |done: bool, pick: fn(&config::WindowConfig) -> Option<f32>, content: Option<f32>| {
+            !done
+                && (window_config.is_some_and(|w| usable(pick(w)).is_some())
+                    || usable(content).is_some())
+        };
+    let width_ready = ready(width_done, |w| w.width, content.0);
+    let height_ready = ready(height_done, |w| w.height, content.1);
     if !width_ready && !height_ready {
         return;
     }
@@ -432,7 +441,7 @@ pub(crate) fn open(
                 })
             },
         )
-        .map_err(|err| Failure::Message(ErrorCode::BundleFailed, err.to_string()))?;
+        .map_err(Failure::bundle)?;
     cx.activate(true);
 
     // A reactivity scheduler batches its first effects into a microtask, so
@@ -443,7 +452,7 @@ pub(crate) fn open(
             app.session.dispatcher.drain_jobs_and_refresh(window, cx);
             maybe_auto_resize_to_content(app, window);
         })
-        .map_err(|err| Failure::Message(ErrorCode::BundleFailed, err.to_string()))?;
+        .map_err(Failure::bundle)?;
 
     Ok(window)
 }
@@ -489,27 +498,22 @@ pub fn run_bundle(entry_path: &str, dev: bool) -> ExitCode {
         }
 
         let error_reporter = writer.as_ref().map_or_else(stderr_reporter, reporter_for);
-        let lines = writer.is_some().then(stdin_lines);
-        match (&writer, lines) {
-            (Some(writer), Some(lines)) => {
-                let started = cx.background_executor().now();
-                match Session::begin(&entry_path, &source, error_reporter, Some(writer)) {
-                    Ok(first) => serve_dev_protocol(
-                        cx,
-                        lines,
-                        first,
-                        started,
-                        entry_path.clone(),
-                        Rc::clone(writer),
-                    ),
-                    Err(err) => fail_startup(&Failure::Thrown(err), Some(writer)),
-                }
+        if let Some(writer) = &writer {
+            let lines = stdin_lines();
+            let started = cx.background_executor().now();
+            match Session::begin(&entry_path, &source, error_reporter, Some(writer)) {
+                Ok(first) => serve_dev_protocol(
+                    cx,
+                    lines,
+                    first,
+                    started,
+                    entry_path.clone(),
+                    Rc::clone(writer),
+                ),
+                Err(err) => fail_startup(&Failure::Thrown(err), Some(writer)),
             }
-            _ => {
-                if let Err(failure) = start(cx, &entry_path, &source, error_reporter) {
-                    fail_startup(&failure, None);
-                }
-            }
+        } else if let Err(failure) = start(cx, &entry_path, &source, error_reporter) {
+            fail_startup(&failure, None);
         }
     });
 

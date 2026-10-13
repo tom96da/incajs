@@ -8,7 +8,7 @@ use inca_gpui::EventSink;
 fn scroll_moves_the_container_offset(cx: &mut TestAppContext) {
     let mut h = Harness::load(
         cx,
-        ENTRY,
+        TEST_ENTRY_PATH,
         r"
             const n = __inca_native__;
             const c = n.createNode('div');
@@ -47,7 +47,7 @@ fn scroll_moves_the_container_offset(cx: &mut TestAppContext) {
 fn keystrokes_reach_the_focused_node(cx: &mut TestAppContext) {
     let mut h = Harness::load(
         cx,
-        ENTRY,
+        TEST_ENTRY_PATH,
         r"
             const n = __inca_native__;
             const box = n.createNode('div');
@@ -71,7 +71,7 @@ fn keystrokes_reach_the_focused_node(cx: &mut TestAppContext) {
 fn key_up_reaches_the_focused_node_once_per_key(cx: &mut TestAppContext) {
     let mut h = Harness::load(
         cx,
-        ENTRY,
+        TEST_ENTRY_PATH,
         r"
             const n = __inca_native__;
             const box = n.createNode('div');
@@ -99,7 +99,7 @@ fn key_up_reaches_the_focused_node_once_per_key(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn settle_flushes_a_microtask_mount(cx: &mut TestAppContext) {
-    let mut h = Harness::load(cx, ENTRY, "");
+    let mut h = Harness::load(cx, TEST_ENTRY_PATH, "");
     let before = h.snapshot().children.len();
     h.window
         .read_with(&h.cx, |app, _| {
@@ -155,7 +155,7 @@ fn offset(h: &Harness, id: NodeId) -> Point<Pixels> {
 
 #[gpui::test]
 fn scroll_on_a_text_leaf_scrolls_its_container(cx: &mut TestAppContext) {
-    let mut h = Harness::load(cx, ENTRY, SCROLLER);
+    let mut h = Harness::load(cx, TEST_ENTRY_PATH, SCROLLER);
     let container = id_where(&mut h, |n| n.children.iter().any(|c| c.text.is_some()));
     let leaf = id_where(&mut h, |n| n.text.is_some());
 
@@ -166,7 +166,7 @@ fn scroll_on_a_text_leaf_scrolls_its_container(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn scroll_moves_the_horizontal_offset(cx: &mut TestAppContext) {
-    let mut h = Harness::load(cx, ENTRY, SCROLLER);
+    let mut h = Harness::load(cx, TEST_ENTRY_PATH, SCROLLER);
     let container = id_where(&mut h, |n| n.children.iter().any(|c| c.text.is_some()));
 
     h.scroll(container, -25.0, 0.0);
@@ -178,7 +178,7 @@ fn scroll_moves_the_horizontal_offset(cx: &mut TestAppContext) {
 fn click_aims_at_content_scrolled_out_of_its_viewport(cx: &mut TestAppContext) {
     let mut h = Harness::load(
         cx,
-        ENTRY,
+        TEST_ENTRY_PATH,
         r"
             const n = __inca_native__;
             const c = n.createNode('div');
@@ -219,7 +219,7 @@ fn click_aims_at_content_scrolled_out_of_its_viewport(cx: &mut TestAppContext) {
 fn click_on_a_node_that_was_not_drawn_uses_its_ancestor(cx: &mut TestAppContext) {
     let mut h = Harness::load(
         cx,
-        ENTRY,
+        TEST_ENTRY_PATH,
         r"
             const n = __inca_native__;
             const hidden = n.createNode('div');
@@ -252,19 +252,19 @@ fn click_on_a_node_that_was_not_drawn_uses_its_ancestor(cx: &mut TestAppContext)
 #[gpui::test]
 #[should_panic(expected = "InvalidKeystrokeError")]
 fn keystrokes_panic_on_an_unparseable_key(cx: &mut TestAppContext) {
-    Harness::load(cx, ENTRY, "").keystrokes("a-b");
+    Harness::load(cx, TEST_ENTRY_PATH, "").keystrokes("a-b");
 }
 
 #[gpui::test]
 #[should_panic(expected = "InvalidKeystrokeError")]
 fn key_up_panics_on_an_unparseable_key(cx: &mut TestAppContext) {
-    Harness::load(cx, ENTRY, "").key_up("a-b");
+    Harness::load(cx, TEST_ENTRY_PATH, "").key_up("a-b");
 }
 
 #[gpui::test]
 #[should_panic(expected = "the window is open")]
 fn settle_panics_once_the_window_has_closed(cx: &mut TestAppContext) {
-    let mut h = Harness::load(cx, ENTRY, "");
+    let mut h = Harness::load(cx, TEST_ENTRY_PATH, "");
     h.cx.update(|window, _| window.remove_window());
     h.settle();
 }
@@ -308,7 +308,7 @@ fn scroll_offset(h: &Harness, id: NodeId) -> Pixels {
 fn an_inert_scroll_container_ignores_the_wheel_and_leaves_it_to_its_ancestor(
     cx: &mut TestAppContext,
 ) {
-    let mut h = Harness::load(cx, ENTRY, "");
+    let mut h = Harness::load(cx, TEST_ENTRY_PATH, "");
     let (outer, held) = nested_scrollers(&mut h, true);
 
     h.scroll(held, 0.0, -30.0);
@@ -323,7 +323,7 @@ fn an_inert_scroll_container_ignores_the_wheel_and_leaves_it_to_its_ancestor(
 fn a_scroll_container_that_is_not_inert_takes_the_wheel_before_its_ancestor(
     cx: &mut TestAppContext,
 ) {
-    let mut h = Harness::load(cx, ENTRY, "");
+    let mut h = Harness::load(cx, TEST_ENTRY_PATH, "");
     let (outer, held) = nested_scrollers(&mut h, false);
 
     h.scroll(held, 0.0, -30.0);
@@ -336,7 +336,7 @@ fn a_scroll_container_that_is_not_inert_takes_the_wheel_before_its_ancestor(
 
 #[gpui::test]
 fn a_wheel_listener_keeps_the_scroll_it_writes_to_a_container(cx: &mut TestAppContext) {
-    let mut h = Harness::load(cx, ENTRY, "");
+    let mut h = Harness::load(cx, TEST_ENTRY_PATH, "");
     let (outer, held) = nested_scrollers(&mut h, false);
     run_js(
         &mut h,

@@ -67,7 +67,7 @@ fn node_of(h: &Harness, expression: &str) -> NodeId {
 }
 
 fn revealing(cx: &mut TestAppContext, overflow: &str) -> Harness {
-    Harness::load(cx, ENTRY, &reveal_fixture(overflow, false))
+    Harness::load(cx, TEST_ENTRY_PATH, &reveal_fixture(overflow, false))
 }
 
 fn near(h: &Harness, code: &str) -> bool {
@@ -172,7 +172,7 @@ fn a_node_that_gets_its_box_after_the_retry_frame_keeps_the_offset(cx: &mut Test
 
 #[gpui::test]
 fn focus_scrolls_every_ancestor_container(cx: &mut TestAppContext) {
-    let mut h = Harness::load(cx, ENTRY, &reveal_fixture("scroll", true));
+    let mut h = Harness::load(cx, TEST_ENTRY_PATH, &reveal_fixture("scroll", true));
     run_js(&mut h, "__inca_native__.focusNode(items[6]);");
     assert!(eval_f64(&h, "top(box)") > 0.0);
     assert!(eval_f64(&h, "top(outer)") > 0.0);

@@ -12,7 +12,7 @@ mod mouse;
 mod pointer;
 mod reveal;
 
-const ENTRY: &str = "/test/entry.js";
+const TEST_ENTRY_PATH: &str = "/test/entry.js";
 
 fn eval_f64(h: &Harness, code: &str) -> f64 {
     h.window
@@ -41,7 +41,7 @@ const LISTEN: &str = r"
     ";
 
 fn load_listening(cx: &mut TestAppContext, source: &str) -> Harness {
-    Harness::load(cx, ENTRY, &format!("{LISTEN}{source}"))
+    Harness::load(cx, TEST_ENTRY_PATH, &format!("{LISTEN}{source}"))
 }
 
 fn run_js(h: &mut Harness, code: &str) {

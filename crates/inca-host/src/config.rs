@@ -121,8 +121,7 @@ pub(crate) fn window_size(
     content: (Option<f32>, Option<f32>),
 ) -> (f32, f32) {
     let configured = |pick: fn(&WindowConfig) -> Option<f32>| usable(window.and_then(pick));
-    let at_least =
-        |pick: fn(&WindowConfig) -> Option<f32>| usable(window.and_then(pick)).unwrap_or(0.0);
+    let at_least = |pick: fn(&WindowConfig) -> Option<f32>| configured(pick).unwrap_or(0.0);
     (
         configured(|w| w.width)
             .or(usable(content.0))
