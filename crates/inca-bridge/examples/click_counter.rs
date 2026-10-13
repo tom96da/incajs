@@ -65,17 +65,19 @@ fn build_tree(tree: &mut VirtualTree) -> (NodeId, NodeId) {
 fn install_click_handler(engine: &Engine, outer: NodeId, label: NodeId) {
     engine
         .eval::<()>(&format!(
-            "globalThis.__inca_clicks__ = 0;
-             globalThis.__inca_callbacks__ = {{}};
-             const id = __inca_native__.addEventListener({outer}, 'click');
-             globalThis.__inca_callbacks__[id] = function () {{
-                 globalThis.__inca_clicks__ += 1;
-                 __inca_native__.setAttribute(
-                     {label},
-                     'value',
-                     'Clicked ' + globalThis.__inca_clicks__ + ' time(s)'
-                 );
-             }};"
+            r"
+            globalThis.__inca_clicks__ = 0;
+            globalThis.__inca_callbacks__ = {{}};
+            const id = __inca_native__.addEventListener({outer}, 'click');
+            globalThis.__inca_callbacks__[id] = function () {{
+                globalThis.__inca_clicks__ += 1;
+                __inca_native__.setAttribute(
+                    {label},
+                    'value',
+                    'Clicked ' + globalThis.__inca_clicks__ + ' time(s)'
+                );
+            }};
+            "
         ))
         .unwrap();
 }

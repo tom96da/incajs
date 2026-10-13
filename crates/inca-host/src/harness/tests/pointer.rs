@@ -235,10 +235,12 @@ fn hover_on_a_text_leaf_lands_on_its_container(cx: &mut TestAppContext) {
         cx,
         ENTRY,
         &format!(
-            "{HOVERABLE}
+            r"
+            {HOVERABLE}
             const label = n.createNode('text');
             n.setAttribute(label, 'value', 'hi');
-            n.appendChild(box, label);"
+            n.appendChild(box, label);
+            "
         ),
     );
     let leaf = id_where(&mut h, |n| n.text.is_some());

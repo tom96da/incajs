@@ -120,16 +120,18 @@ const TAKE: &str = "__inca_take_rejections__";
 /// Keeps each promise rejected with no handler yet, mapped to its reason.
 /// The rejection tracker fills it through `TRACK`; [`Engine::run_jobs`]
 /// empties it through `TAKE`.
-const TRACKER_JS: &str = "{
-    const pending = new Map();
-    globalThis.__inca_track_rejection__ = (promise, reason, handled) =>
-        handled ? pending.delete(promise) : pending.set(promise, reason);
-    globalThis.__inca_take_rejections__ = () => {
-        const reasons = [...pending.values()];
-        pending.clear();
-        return reasons;
-    };
-}";
+const TRACKER_JS: &str = r"
+    {
+        const pending = new Map();
+        globalThis.__inca_track_rejection__ = (promise, reason, handled) =>
+            handled ? pending.delete(promise) : pending.set(promise, reason);
+        globalThis.__inca_take_rejections__ = () => {
+            const reasons = [...pending.values()];
+            pending.clear();
+            return reasons;
+        };
+    }
+    ";
 
 /// One `QuickJS` runtime with the single context it runs scripts in.
 ///

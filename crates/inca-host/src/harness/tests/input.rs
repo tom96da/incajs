@@ -340,11 +340,13 @@ fn a_wheel_listener_keeps_the_scroll_it_writes_to_a_container(cx: &mut TestAppCo
     let (outer, held) = nested_scrollers(&mut h, false);
     run_js(
         &mut h,
-        "globalThis.__inca_callbacks__ = { 0: (e) => {
-            e.preventDefault();
-            __inca_native__.scrollNode(outer, null, 20);
-         } };
-         __inca_native__.addEventListener(__inca_native__.rootNodeId(), 'wheel');",
+        r"
+        globalThis.__inca_callbacks__ = { 0: (e) => {
+           e.preventDefault();
+           __inca_native__.scrollNode(outer, null, 20);
+        } };
+        __inca_native__.addEventListener(__inca_native__.rootNodeId(), 'wheel');
+        ",
     );
 
     h.scroll(held, 0.0, -30.0);

@@ -510,25 +510,27 @@ fn node_id_that_is_not_a_whole_u32_raises_type_error() {
 
     for bad in ["NaN", "1.5", "-1", "Infinity", "2 ** 32", "'1'"] {
         let script = format!(
-            "(() => {{ const node = __inca_native__.createNode('div');
-             const rejects = (f) => {{
-                 try {{ f(); return false; }} catch (e) {{ return e instanceof TypeError; }}
-             }};
-             return [
-                 rejects(() => __inca_native__.setStyle({bad}, 'width', 1)),
-                 rejects(() => __inca_native__.removeStyle({bad}, 'width')),
-                 rejects(() => __inca_native__.getAttribute({bad}, 'label')),
-                 rejects(() => __inca_native__.removeAttribute({bad}, 'label')),
-                 rejects(() => __inca_native__.appendChild({bad}, node)),
-                 rejects(() => __inca_native__.appendChild(node, {bad})),
-                 rejects(() => __inca_native__.insertBefore(node, node, {bad})),
-                 rejects(() => __inca_native__.destroyNode({bad})),
-                 rejects(() => __inca_native__.addEventListener({bad}, 'click')),
-                 rejects(() => __inca_native__.removeEventListener({bad}, 'click', 1)),
-                 rejects(() => __inca_native__.focusNode({bad})),
-                 rejects(() => __inca_native__.dispatchEvent({bad}, {{}})),
-                 rejects(() => __inca_native__.click({bad})),
-             ].every(Boolean); }})()"
+            r"
+            (() => {{ const node = __inca_native__.createNode('div');
+            const rejects = (f) => {{
+                try {{ f(); return false; }} catch (e) {{ return e instanceof TypeError; }}
+            }};
+            return [
+                rejects(() => __inca_native__.setStyle({bad}, 'width', 1)),
+                rejects(() => __inca_native__.removeStyle({bad}, 'width')),
+                rejects(() => __inca_native__.getAttribute({bad}, 'label')),
+                rejects(() => __inca_native__.removeAttribute({bad}, 'label')),
+                rejects(() => __inca_native__.appendChild({bad}, node)),
+                rejects(() => __inca_native__.appendChild(node, {bad})),
+                rejects(() => __inca_native__.insertBefore(node, node, {bad})),
+                rejects(() => __inca_native__.destroyNode({bad})),
+                rejects(() => __inca_native__.addEventListener({bad}, 'click')),
+                rejects(() => __inca_native__.removeEventListener({bad}, 'click', 1)),
+                rejects(() => __inca_native__.focusNode({bad})),
+                rejects(() => __inca_native__.dispatchEvent({bad}, {{}})),
+                rejects(() => __inca_native__.click({bad})),
+            ].every(Boolean); }})()
+            "
         );
         assert!(engine.eval::<bool>(&script).unwrap(), "{bad}");
     }

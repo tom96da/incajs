@@ -35,7 +35,8 @@ type Pins<'js> = Vec<Function<'js>>;
 
 fn capture<'js>(ctx: &Ctx<'js>) -> JsResult<Pins<'js>> {
     let pins: Pins<'js> = ctx.eval(
-        "(() => {
+        r"
+        (() => {
             const getter = (key) =>
                 Object.getOwnPropertyDescriptor(RegExp.prototype, key).get;
             return [
@@ -46,7 +47,8 @@ fn capture<'js>(ctx: &Ctx<'js>) -> JsResult<Pins<'js>> {
                 Map.prototype.forEach,
                 Set.prototype.forEach,
             ];
-        })()",
+        })()
+        ",
     )?;
     debug_assert_eq!(pins.len(), SET_EACH + 1);
     Ok(pins)

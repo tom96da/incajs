@@ -55,7 +55,8 @@ pub(crate) fn install(ctx: &Ctx<'_>) -> JsResult<()> {
     }
     let [remember, recall]: [Function; 2] = ctx
         .eval::<Vec<Function>, _>(
-            "(() => {
+            r"
+            (() => {
                 const records = new WeakMap();
                 const { get, set } = WeakMap.prototype;
                 const { apply } = Reflect;
@@ -63,7 +64,8 @@ pub(crate) fn install(ctx: &Ctx<'_>) -> JsResult<()> {
                     (event, record) => { apply(set, records, [event, record]); },
                     (event) => apply(get, records, [event]),
                 ];
-            })()",
+            })()
+            ",
         )?
         .try_into()
         .map_err(|_| rquickjs::Error::Unknown)?;
