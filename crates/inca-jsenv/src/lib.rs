@@ -12,7 +12,7 @@
 //! replaced without reaching the code that draws a UI.
 
 pub mod console;
-pub mod engine;
+mod engine;
 
 mod compile;
 mod inspect;
@@ -23,5 +23,6 @@ mod sourcemap;
 
 pub use compile::compile_async_function;
 pub use engine::{
-    Engine, EngineError, EngineResult, ErrorReporter, PendingModule, report_jobs, stderr_reporter,
+    Engine, EngineBuilder, EngineError, EngineResult, ErrorReporter, PendingModule, report_jobs,
+    stderr_reporter,
 };

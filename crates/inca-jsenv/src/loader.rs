@@ -17,13 +17,13 @@ use rquickjs::{Ctx, Error, Module, Result};
 /// added, and must stay inside it: an absolute path, or a `..` that climbs
 /// above the root, resolves to nothing.
 #[derive(Debug, Default)]
-pub struct DiskResolver {
+pub(crate) struct DiskResolver {
     roots: Vec<PathBuf>,
 }
 
 impl DiskResolver {
     /// A resolver searching bare specifiers under `roots`, in order.
-    pub fn new(roots: impl IntoIterator<Item = PathBuf>) -> Self {
+    pub(crate) fn new(roots: impl IntoIterator<Item = PathBuf>) -> Self {
         Self {
             roots: roots.into_iter().collect(),
         }
@@ -83,7 +83,7 @@ impl Resolver for DiskResolver {
 
 /// Reads and declares the module at the path a [`DiskResolver`] resolved.
 #[derive(Debug, Default)]
-pub struct DiskLoader;
+pub(crate) struct DiskLoader;
 
 impl Loader for DiskLoader {
     fn load<'js>(

@@ -20,7 +20,7 @@ use std::mem::MaybeUninit;
 use rquickjs::{Ctx, Error, IntoJs, JsLifetime, Object, Result, Value, object::PropertyFlags, qjs};
 
 /// Userdata wrapper for a type whose lifetimes are all `'static`.
-pub struct Plain<T>(pub T);
+pub(crate) struct Plain<T>(pub(crate) T);
 
 // SAFETY: `T: 'static` carries no `'js` lifetime, so the lifetime change is the identity.
 unsafe impl<T: 'static> JsLifetime<'_> for Plain<T> {
@@ -40,33 +40,33 @@ impl<T> std::ops::Deref for Plain<T> {
 /// A data property has its content in `value`, and `getter` and `setter` are
 /// `undefined`. An accessor property has `value` `undefined`, and each of
 /// `getter` and `setter` is a function or `undefined`.
-pub struct PropertyDescriptor<'js> {
+pub(crate) struct PropertyDescriptor<'js> {
     /// The `JS_PROP_*` bits of the property. The descriptor of a proxy's
     /// property can carry `JS_PROP_HAS_*` bits besides the attribute bits,
     /// and [`PropertyDescriptor::is_accessor`] reads the right bit in both
     /// cases.
-    pub flags: PropertyFlags,
-    pub value: Value<'js>,
-    pub getter: Value<'js>,
-    pub setter: Value<'js>,
+    pub(crate) flags: PropertyFlags,
+    pub(crate) value: Value<'js>,
+    pub(crate) getter: Value<'js>,
+    pub(crate) setter: Value<'js>,
 }
 
 impl PropertyDescriptor<'_> {
     /// Returns whether the property is an accessor property.
     #[must_use]
-    pub fn is_accessor(&self) -> bool {
+    pub(crate) fn is_accessor(&self) -> bool {
         self.flags & qjs::JS_PROP_GETSET.cast_signed() != 0
     }
 
     /// Returns whether the property is enumerable.
     #[must_use]
-    pub fn is_enumerable(&self) -> bool {
+    pub(crate) fn is_enumerable(&self) -> bool {
         self.flags & qjs::JS_PROP_ENUMERABLE.cast_signed() != 0
     }
 }
 
 /// Property access on [`Object`].
-pub trait ObjectExt<'js> {
+pub(crate) trait ObjectExt<'js> {
     /// Get the descriptor of an own property, or `None` when the object has no
     /// such property. Neither a getter nor a setter runs.
     ///
@@ -132,7 +132,7 @@ impl<'js> ObjectExt<'js> for Object<'js> {
 ///
 /// A class check reads the object's class id and runs no script code. A
 /// proxy has the class Proxy.
-pub trait ValueExt<'js> {
+pub(crate) trait ValueExt<'js> {
     /// Returns whether the value is a `Date`.
     fn is_date(&self) -> bool;
 
