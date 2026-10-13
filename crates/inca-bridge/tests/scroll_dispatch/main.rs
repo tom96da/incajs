@@ -64,10 +64,9 @@ impl Scene {
         engine.eval::<()>("globalThis.ran = [];").unwrap();
         engine.eval::<()>(js).unwrap();
         engine.eval::<()>(before_draw).unwrap();
-        let reported = Rc::new(RefCell::new(Vec::new()));
-        let sink = Rc::clone(&reported);
-        let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host))
-            .with_reporter(Rc::new(move |err| sink.borrow_mut().push(err.clone())));
+        let (report, reported) = test_support::capture_reporter();
+        let dispatcher =
+            EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host)).with_reporter(report);
         let window = cx.add_window(|_, _| Root {
             host: Rc::clone(&host),
             dispatcher: dispatcher.clone(),

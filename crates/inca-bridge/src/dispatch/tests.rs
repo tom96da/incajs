@@ -3,11 +3,10 @@
 
 use super::*;
 use crate::event::Flags;
-use crate::test_support::engine_for;
+use crate::test_support::{Reported, capture_reporter, engine_for};
 use gpui::{TestAppContext, point, px};
 use inca_gpui::event_sink::EVENTS;
 use inca_gpui::{EventSink, WheelPayload};
-use inca_jsenv::EngineError;
 
 mod base_fields;
 mod click;
@@ -19,19 +18,13 @@ mod movement;
 mod targets;
 mod walk;
 
-/// Every failure a test reporter received, in order.
-type Reported = Rc<RefCell<Vec<EngineError>>>;
-
 fn dispatcher_with_engine() -> (EventDispatcher, Rc<RefCell<Host>>, Reported) {
     let host = Rc::new(RefCell::new(Host::default()));
     let engine = engine_for(&host);
     engine.eval::<()>("globalThis.out = [];").unwrap();
 
-    let reported: Reported = Rc::new(RefCell::new(Vec::new()));
-    let sink = Rc::clone(&reported);
-    let dispatcher = EventDispatcher::new(engine, Rc::clone(&host)).with_reporter(Rc::new(
-        move |err: &EngineError| sink.borrow_mut().push(err.clone()),
-    ));
+    let (report, reported) = capture_reporter();
+    let dispatcher = EventDispatcher::new(engine, Rc::clone(&host)).with_reporter(report);
 
     (dispatcher, host, reported)
 }

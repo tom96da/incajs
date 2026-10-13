@@ -64,6 +64,25 @@ fn build_clickable_tree() -> (Rc<RefCell<Host>>, NodeId) {
     (host, node)
 }
 
+/// Mounts `node` of `host`, dispatching into `engine`, and draws the first
+/// frame.
+fn mount_clickable(
+    cx: &mut TestAppContext,
+    host: &Rc<RefCell<Host>>,
+    engine: &Rc<Engine>,
+    node: NodeId,
+) -> VisualTestContext {
+    let dispatcher = EventDispatcher::new(Rc::clone(engine), Rc::clone(host));
+    let window = cx.add_window(|_, _| ClickableRoot {
+        host: Rc::clone(host),
+        node,
+        dispatcher,
+    });
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    VisualTestContext::from_window(window.into(), cx)
+}
+
 /// A row 300 wide holding pane A (0..100) and pane B (100..200), each 100x100.
 /// The listeners record `[type, movementX, movementY]` into `globalThis.seen`.
 /// `a_events` are registered on A and `root_events` on the row; B has no

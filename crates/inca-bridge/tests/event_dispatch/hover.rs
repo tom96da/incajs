@@ -34,16 +34,7 @@ fn hover_dispatches_enter_then_leave(cx: &mut TestAppContext) {
             "
         ))
         .unwrap();
-    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
-
-    let window = cx.add_window(|_, _| ClickableRoot {
-        host: Rc::clone(&host),
-        node,
-        dispatcher,
-    });
-    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-        .unwrap();
-    let mut cx = VisualTestContext::from_window(window.into(), cx);
+    let mut cx = mount_clickable(cx, &host, &engine, node);
 
     // The window starts with the mouse at its default position, which lands
     // inside this 100x100 node, so mounting alone already fired a real
@@ -97,16 +88,7 @@ fn mouseenter_carries_the_mouse_fields(cx: &mut TestAppContext) {
     };
     let engine = test_support::engine_for(&host);
     install_click_counter(&engine, node, "mouseenter");
-    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
-
-    let window = cx.add_window(|_, _| ClickableRoot {
-        host: Rc::clone(&host),
-        node,
-        dispatcher,
-    });
-    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-        .unwrap();
-    let mut cx = VisualTestContext::from_window(window.into(), cx);
+    let mut cx = mount_clickable(cx, &host, &engine, node);
 
     // Settle the implicit initial hover (the window's default mouse
     // position lands inside this 100x100 node) before the transition the
@@ -154,16 +136,7 @@ fn mounting_already_hovered_does_not_fire_a_spurious_leave(cx: &mut TestAppConte
     let (host, node) = build_clickable_tree();
     let engine = test_support::engine_for(&host);
     install_click_counter(&engine, node, "mouseleave");
-    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
-
-    let window = cx.add_window(|_, _| ClickableRoot {
-        host: Rc::clone(&host),
-        node,
-        dispatcher,
-    });
-    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-        .unwrap();
-    let _cx = VisualTestContext::from_window(window.into(), cx);
+    let _cx = mount_clickable(cx, &host, &engine, node);
 
     assert_eq!(
         clicks(&engine),
@@ -197,16 +170,7 @@ fn one_move_gives_mousemove_the_delta_and_mouseenter_zero(cx: &mut TestAppContex
             "
         ))
         .unwrap();
-    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
-
-    let window = cx.add_window(|_, _| ClickableRoot {
-        host: Rc::clone(&host),
-        node,
-        dispatcher,
-    });
-    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-        .unwrap();
-    let mut cx = VisualTestContext::from_window(window.into(), cx);
+    let mut cx = mount_clickable(cx, &host, &engine, node);
 
     cx.simulate_mouse_move(
         point(px(200.0), px(200.0)),
@@ -243,16 +207,7 @@ fn buttons_tracks_every_button_currently_held(cx: &mut TestAppContext) {
     for event in ["mousedown", "mouseup", "mousemove"] {
         install_click_counter(&engine, node, event);
     }
-    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
-
-    let window = cx.add_window(|_, _| ClickableRoot {
-        host: Rc::clone(&host),
-        node,
-        dispatcher,
-    });
-    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-        .unwrap();
-    let mut cx = VisualTestContext::from_window(window.into(), cx);
+    let mut cx = mount_clickable(cx, &host, &engine, node);
 
     let buttons = || -> u8 { engine.eval("globalThis.lastEvent.buttons").unwrap() };
     let point = point(px(10.0), px(10.0));
@@ -291,15 +246,7 @@ fn buttons_clears_after_a_release_nobody_listens_to(cx: &mut TestAppContext) {
     for event in ["mousedown", "mousemove"] {
         install_click_counter(&engine, node, event);
     }
-    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
-    let window = cx.add_window(|_, _| ClickableRoot {
-        host: Rc::clone(&host),
-        node,
-        dispatcher,
-    });
-    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-        .unwrap();
-    let mut cx = VisualTestContext::from_window(window.into(), cx);
+    let mut cx = mount_clickable(cx, &host, &engine, node);
     let point = point(px(10.0), px(10.0));
     let buttons = || -> u8 { engine.eval("globalThis.lastEvent.buttons").unwrap() };
 
@@ -322,16 +269,7 @@ fn movement_tracks_the_delta_from_the_last_pointer_move(cx: &mut TestAppContext)
     let (host, node) = build_clickable_tree();
     let engine = test_support::engine_for(&host);
     install_click_counter(&engine, node, "mousemove");
-    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
-
-    let window = cx.add_window(|_, _| ClickableRoot {
-        host: Rc::clone(&host),
-        node,
-        dispatcher,
-    });
-    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-        .unwrap();
-    let mut cx = VisualTestContext::from_window(window.into(), cx);
+    let mut cx = mount_clickable(cx, &host, &engine, node);
 
     let movement = || -> (f32, f32) {
         (
@@ -383,15 +321,7 @@ fn bubbled_mousemove_gives_every_listener_the_same_movement(cx: &mut TestAppCont
             "
         ))
         .unwrap();
-    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
-    let window = cx.add_window(|_, _| ClickableRoot {
-        host: Rc::clone(&host),
-        node: parent,
-        dispatcher,
-    });
-    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-        .unwrap();
-    let mut cx = VisualTestContext::from_window(window.into(), cx);
+    let mut cx = mount_clickable(cx, &host, &engine, parent);
 
     for (x, y) in [(10.0, 10.0), (30.0, 5.0)] {
         cx.simulate_mouse_move(point(px(x), px(y)), None::<MouseButton>, Modifiers::none());
@@ -431,15 +361,7 @@ fn an_inert_child_is_never_the_event_target(cx: &mut TestAppContext) {
             "
         ))
         .unwrap();
-    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
-    let window = cx.add_window(|_, _| ClickableRoot {
-        host: Rc::clone(&host),
-        node: parent,
-        dispatcher,
-    });
-    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-        .unwrap();
-    let mut cx = VisualTestContext::from_window(window.into(), cx);
+    let mut cx = mount_clickable(cx, &host, &engine, parent);
 
     cx.simulate_mouse_move(
         point(px(10.0), px(10.0)),
@@ -460,15 +382,7 @@ fn repeated_mousemove_at_one_position_reports_zero_movement(cx: &mut TestAppCont
     let (host, node) = build_clickable_tree();
     let engine = test_support::engine_for(&host);
     install_click_counter(&engine, node, "mousemove");
-    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
-    let window = cx.add_window(|_, _| ClickableRoot {
-        host: Rc::clone(&host),
-        node,
-        dispatcher,
-    });
-    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-        .unwrap();
-    let mut cx = VisualTestContext::from_window(window.into(), cx);
+    let mut cx = mount_clickable(cx, &host, &engine, node);
 
     let mut movements = Vec::new();
     for x in [5.0, 10.0, 10.0] {

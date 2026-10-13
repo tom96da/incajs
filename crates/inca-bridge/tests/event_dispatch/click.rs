@@ -207,10 +207,9 @@ fn failures_from_click(cx: &mut TestAppContext, body: &str) -> Vec<EngineError> 
     engine
         .eval::<()>(&format!("__inca_test_listen__({node}, 'click', {body});"))
         .unwrap();
-    let reported = Rc::new(RefCell::new(Vec::new()));
-    let sink = Rc::clone(&reported);
-    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host))
-        .with_reporter(Rc::new(move |err| sink.borrow_mut().push(err.clone())));
+    let (report, reported) = test_support::capture_reporter();
+    let dispatcher =
+        EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host)).with_reporter(report);
 
     let window = cx.add_window(|_, _| ClickableRoot {
         host: Rc::clone(&host),

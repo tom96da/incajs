@@ -102,16 +102,7 @@ fn wheel_reports_a_button_held_from_an_earlier_mousedown(cx: &mut TestAppContext
     let engine = test_support::engine_for(&host);
     install_click_counter(&engine, node, "mousedown");
     install_click_counter(&engine, node, "wheel");
-    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
-
-    let window = cx.add_window(|_, _| ClickableRoot {
-        host: Rc::clone(&host),
-        node,
-        dispatcher,
-    });
-    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-        .unwrap();
-    let mut cx = VisualTestContext::from_window(window.into(), cx);
+    let mut cx = mount_clickable(cx, &host, &engine, node);
 
     cx.simulate_mouse_down(
         point(px(10.0), px(10.0)),
@@ -142,16 +133,7 @@ fn wheel_with_no_listener_reports_nothing(cx: &mut TestAppContext) {
         node
     };
     let engine = test_support::engine_for(&host);
-    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
-
-    let window = cx.add_window(|_, _| ClickableRoot {
-        host: Rc::clone(&host),
-        node,
-        dispatcher,
-    });
-    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-        .unwrap();
-    let mut cx = VisualTestContext::from_window(window.into(), cx);
+    let mut cx = mount_clickable(cx, &host, &engine, node);
 
     cx.simulate_event(ScrollWheelEvent {
         position: point(px(10.0), px(10.0)),

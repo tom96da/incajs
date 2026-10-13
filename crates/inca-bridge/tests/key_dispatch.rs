@@ -3,7 +3,7 @@
 
 //! Integration tests for `"keydown"`/`"keyup"`: routing from GPUI's own key
 //! dispatch, through a real `FocusRegistry`, to the JS callbacks registered
-//! for it; see `KeyableRoot::render` below.
+//! for it; see `test_support::TestRoot`.
 
 #![allow(clippy::unwrap_used)]
 
@@ -11,56 +11,26 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use gpui::{
-    AnyWindowHandle, Context, DispatchEventResult, KeyBinding, KeyDownEvent, KeyUpEvent, Keystroke,
-    PlatformInput, Render, TestAppContext, Window, prelude::*,
+    AnyWindowHandle, DispatchEventResult, KeyBinding, KeyDownEvent, KeyUpEvent, Keystroke,
+    PlatformInput, TestAppContext, prelude::*,
 };
-use inca_bridge::{EventDispatcher, EventListeners, Host};
-use inca_gpui::{NodeId, render_tree_with_events};
+use inca_bridge::{EventListeners, Host};
+use inca_gpui::NodeId;
 use inca_jsenv::Engine;
 
 use inca_bridge::test_support;
 
-struct KeyableRoot {
-    host: Rc<RefCell<Host>>,
-    node: NodeId,
-    dispatcher: EventDispatcher,
-}
-
-impl Render for KeyableRoot {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.dispatcher.begin_frame(window, cx);
-        let host = self.host.borrow();
-        render_tree_with_events(&host.tree, self.node, &self.dispatcher).unwrap()
-    }
-}
-
 /// A focusable parent wrapping a focusable child.
 fn build_key_pair() -> (Rc<RefCell<Host>>, NodeId, NodeId) {
-    let host = Rc::new(RefCell::new(Host::default()));
-    let mut host_mut = host.borrow_mut();
-    let parent = host_mut.tree.create_node("div").unwrap();
-    let child = host_mut.tree.create_node("div").unwrap();
-    host_mut.tree.append_child(parent, child).unwrap();
-    for node in [parent, child] {
-        host_mut.tree.set_attribute(node, "tabindex", "0").unwrap();
-        host_mut.focus.mark_tab_dirty(node);
-    }
-    drop(host_mut);
-    (host, parent, child)
+    let (host, parent, children) = test_support::focusable_tree(1, true);
+    (host, parent, children[0])
 }
 
 /// Registers `js`, the body of a listener taking `e`, for `"keydown"` and
 /// `"keyup"` on each of `nodes`.
 fn listen_for_keys(engine: &Engine, nodes: [NodeId; 2], js: &str, passive: bool) {
-    for node in nodes {
-        for event in ["keydown", "keyup"] {
-            engine
-                .eval::<()>(&format!(
-                    "__inca_test_listen__({node}, '{event}', (e) => {{ {js} }}, false, {passive});"
-                ))
-                .unwrap();
-        }
-    }
+    let callback = format!("(e) => {{ {js} }}");
+    test_support::listen_each(engine, &nodes, &["keydown", "keyup"], &callback, passive);
 }
 
 fn a_keystroke() -> Keystroke {
@@ -99,17 +69,7 @@ fn a_key_event_with_nothing_focused_targets_the_root(cx: &mut TestAppContext) {
             ))
             .unwrap();
     }
-    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
-
-    let window = cx.add_window(|_, _| KeyableRoot {
-        host: Rc::clone(&host),
-        node: root,
-        dispatcher,
-    });
-    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-        .unwrap();
-    cx.update_window(window.into(), |_, window, _cx| window.activate_window())
-        .unwrap();
+    let window = test_support::mount_active(cx, &host, &engine, root);
 
     cx.simulate_keystrokes(window.into(), "a");
     cx.update_window(window.into(), |_root, window, cx| {
@@ -142,16 +102,7 @@ fn focused_pair(cx: &mut TestAppContext, js: &str) -> Pair {
     let engine = test_support::engine_for(&host);
     engine.eval::<()>("globalThis.seen = [];").unwrap();
     listen_for_keys(&engine, [parent, child], js, false);
-    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
-    let window = cx.add_window(|_, _| KeyableRoot {
-        host: Rc::clone(&host),
-        node: parent,
-        dispatcher,
-    });
-    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-        .unwrap();
-    cx.update_window(window.into(), |_, window, _cx| window.activate_window())
-        .unwrap();
+    let window = test_support::mount_active(cx, &host, &engine, parent);
     cx.update_window(window.into(), |_root, window, cx| {
         host.borrow_mut().focus.request_focus(child, true);
         window.draw(cx).clear(cx);
