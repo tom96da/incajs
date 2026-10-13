@@ -3,8 +3,7 @@
 
 use gpui::prelude::*;
 use gpui::{
-    AnyElement, App, Bounds, ElementId, MouseUpEvent, Pixels, Point, ScrollHandle, Window, div,
-    point, px,
+    AnyElement, App, Bounds, ElementId, Pixels, Point, ScrollHandle, Window, div, point, px,
 };
 
 use super::pointer::{
@@ -13,7 +12,7 @@ use super::pointer::{
 use super::scroll::{snapped_extra, wire_scroll};
 use super::spec::{DisplaySpec, ElementSpec, ElementTag, build_spec};
 use super::style::apply_style;
-use crate::event_sink::{EventPayload, EventSink};
+use crate::event_sink::{EventPayload, EventSink, noop_sink_methods};
 use crate::tree::{NodeId, VirtualTree};
 
 /// The selector `build_element` gives the container with this id. A test
@@ -218,44 +217,19 @@ impl EventSink for NoSink {
         None
     }
 
-    fn clear_layout(&self) {}
-
-    fn record_layout(&self, _node_id: NodeId, _layout: NodeLayout) {}
-
-    fn pointer_moved(&self, _position: Point<Pixels>, _cx: &mut App) {}
-
-    fn pointer_left(&self) {}
-
-    fn modifiers_changed(&self, _: gpui::Modifiers, _: &mut Window, _: &mut App) {}
-
-    fn hover_changed(&self, _node_id: NodeId, _hovered: bool, _window: &mut Window, _cx: &mut App) {
-    }
-
-    fn pointer_over(&self, _node_id: NodeId, _window: &mut Window, _cx: &mut App) {}
-
-    fn pointer_pressed(&self) {}
-
-    fn pointer_input(&self, _: &str, _: NodeId, _: &EventPayload, _: &mut Window, _: &mut App) {}
-
-    fn pointer_released(
-        &self,
-        _: &MouseUpEvent,
-        _: Option<NodeId>,
-        _: NodeId,
-        _: &mut Window,
-        _: &mut App,
-    ) {
-    }
-
-    fn key_input(
-        &self,
-        _: &gpui::Keystroke,
-        _: bool,
-        _: &EventPayload,
-        _: &mut Window,
-        _: &mut App,
-    ) {
-    }
+    noop_sink_methods!(
+        clear_layout,
+        record_layout,
+        pointer_moved,
+        pointer_left,
+        modifiers_changed,
+        hover_changed,
+        pointer_over,
+        pointer_pressed,
+        pointer_input,
+        pointer_released,
+        key_input,
+    );
 }
 
 /// Recursively converts an [`ElementSpec`] into a real `gpui` [`AnyElement`],

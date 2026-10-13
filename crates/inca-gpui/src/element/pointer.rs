@@ -3,8 +3,8 @@
 
 use gpui::prelude::*;
 use gpui::{
-    App, DispatchPhase, Global, MouseDownEvent, MouseExitEvent, MouseMoveEvent, MouseUpEvent,
-    ScrollWheelEvent, Window, canvas,
+    App, DispatchPhase, Global, MouseButton, MouseDownEvent, MouseExitEvent, MouseMoveEvent,
+    MouseUpEvent, ScrollWheelEvent, Window, canvas,
 };
 
 use super::scroll::roll_back_extra_steps;
@@ -45,6 +45,11 @@ pub fn clear_presses(cx: &mut App) {
     cx.default_global::<MouseTarget>().pressed = Default::default();
 }
 
+/// The index of `button` in [`MouseTarget::pressed`].
+fn slot(button: MouseButton) -> usize {
+    usize::from(button_index(button))
+}
+
 fn mark_target(cx: &mut App, id: NodeId) {
     let target = cx.default_global::<MouseTarget>();
     target.current.get_or_insert(id);
@@ -59,7 +64,7 @@ pub(super) fn mark_mouse_target<Elem: InteractiveElement + FluentBuilder>(
     let mut element = element
         .on_any_mouse_down(move |event, _, cx| {
             mark_target(cx, id);
-            let slot = usize::from(button_index(event.button));
+            let slot = slot(event.button);
             cx.default_global::<MouseTarget>().pressed[slot].get_or_insert((id, event.click_count));
         })
         .on_mouse_move(move |_, window, cx| {
@@ -120,7 +125,7 @@ where
 
 /// `event` with the click count of its button's recorded press, if any.
 fn with_press_count(event: &MouseUpEvent, cx: &App) -> MouseUpEvent {
-    let slot = usize::from(button_index(event.button));
+    let slot = slot(event.button);
     let mut event = event.clone();
     if let Some((_, count)) = cx.try_global::<MouseTarget>().and_then(|t| t.pressed[slot]) {
         event.click_count = count;
@@ -143,7 +148,7 @@ fn report_release(
     window: &mut Window,
     cx: &mut App,
 ) {
-    let slot = usize::from(button_index(event.button));
+    let slot = slot(event.button);
     let target = cx.default_global::<MouseTarget>();
     let released = target.current.unwrap_or(root);
     let pressed = target.pressed[slot].map(|(id, _)| id);
@@ -181,7 +186,7 @@ pub(super) fn pointer_tracker<E: EventSink + Clone + 'static>(
                 move |event: &MouseDownEvent, phase, window, cx| match phase {
                     DispatchPhase::Capture => {
                         pressed.pointer_pressed();
-                        let slot = usize::from(button_index(event.button));
+                        let slot = slot(event.button);
                         let target = cx.default_global::<MouseTarget>();
                         target.current = None;
                         target.pressed[slot] = None;

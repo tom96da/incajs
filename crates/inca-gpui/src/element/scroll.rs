@@ -17,7 +17,12 @@ struct WheelSnapshots(Vec<Snapshot>);
 /// A container's handle, its offset before the wheel event, whether it is
 /// inert and whether it is the root, whose step runs after the root's bubble
 /// handler.
-type Snapshot = (ScrollHandle, Point<Pixels>, bool, bool);
+struct Snapshot {
+    handle: ScrollHandle,
+    before: Point<Pixels>,
+    inert: bool,
+    root: bool,
+}
 
 impl Global for WheelSnapshots {}
 
@@ -35,7 +40,12 @@ fn scroll_recorder(handle: ScrollHandle, inert: bool, root: bool) -> impl IntoEl
                 }
                 let snapshots = &mut cx.default_global::<WheelSnapshots>().0;
                 let first = snapshots.is_empty();
-                snapshots.push((handle.clone(), handle.offset(), inert, root));
+                snapshots.push(Snapshot {
+                    handle: handle.clone(),
+                    before: handle.offset(),
+                    inert,
+                    root,
+                });
                 if first {
                     window.defer(cx, settle_wheel);
                 }
@@ -48,20 +58,29 @@ fn scroll_recorder(handle: ScrollHandle, inert: bool, root: bool) -> impl IntoEl
 
 /// The container whose wheel step [`roll_back_extra_steps`] kept: its handle,
 /// the offset before the step and the offset after it.
+struct Kept {
+    handle: ScrollHandle,
+    before: Point<Pixels>,
+    after: Point<Pixels>,
+}
+
 #[derive(Default)]
-struct WheelKept(Option<(ScrollHandle, Point<Pixels>, Point<Pixels>)>);
+struct WheelKept(Option<Kept>);
 
 impl Global for WheelKept {}
 
 /// Undoes the wheel steps of every container but the innermost one that can
 /// still move, and returns the kept container. `settled` true restores that
 /// one too.
-fn undo_steps(
-    snapshots: Vec<Snapshot>,
-    mut settled: bool,
-) -> Option<(ScrollHandle, Point<Pixels>, Point<Pixels>)> {
+fn undo_steps(snapshots: Vec<Snapshot>, mut settled: bool) -> Option<Kept> {
     let mut kept = None;
-    for (handle, before, inert, _) in snapshots.into_iter().rev() {
+    for Snapshot {
+        handle,
+        before,
+        inert,
+        ..
+    } in snapshots.into_iter().rev()
+    {
         // An inert container never scrolls and leaves the wheel to the next.
         if inert {
             handle.set_offset(before);
@@ -79,7 +98,11 @@ fn undo_steps(
         if !settled && clamp(handle.offset()) != clamp(before) {
             settled = true;
             let after = handle.offset();
-            kept = Some((handle, before, after));
+            kept = Some(Kept {
+                handle,
+                before,
+                after,
+            });
         } else {
             handle.set_offset(before);
         }
@@ -93,7 +116,7 @@ fn undo_steps(
 pub(super) fn roll_back_extra_steps(cx: &mut App) {
     let all = std::mem::take(&mut cx.default_global::<WheelSnapshots>().0);
     // The root's own step is still to come; `settle_wheel` handles it.
-    let (root, below): (Vec<_>, Vec<_>) = all.into_iter().partition(|s| s.3);
+    let (root, below): (Vec<_>, Vec<_>) = all.into_iter().partition(|s| s.root);
     cx.default_global::<WheelSnapshots>().0 = root;
     cx.default_global::<WheelKept>().0 = undo_steps(below, false);
 }
@@ -109,11 +132,11 @@ fn settle_wheel(window: &mut Window, cx: &mut App) {
     let kept = cx.default_global::<WheelKept>().0.take();
     // The root's snapshot, or all of them when the root's bubble phase did not run.
     undo_steps(snapshots, prevented || kept.is_some());
-    if let Some((handle, before, after)) = kept
+    if let Some(kept) = kept
         && prevented
-        && handle.offset() == after
+        && kept.handle.offset() == kept.after
     {
-        handle.set_offset(before);
+        kept.handle.set_offset(kept.before);
     }
 }
 

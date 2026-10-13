@@ -209,7 +209,6 @@ fn build_spec_inner(tree: &VirtualTree, root: NodeId, inert_above: bool) -> Opti
     let node = tree.get(root)?;
     let inert = inert_above || node.attributes().contains_key("inert");
 
-    let is_text = node.tag_name() == "text";
     let tag = match node.tag_name() {
         "text" => ElementTag::Text(text_content(tree, root)),
         _ => ElementTag::Container,
@@ -219,7 +218,7 @@ fn build_spec_inner(tree: &VirtualTree, root: NodeId, inert_above: bool) -> Opti
     if hidden_by_attribute(node) {
         style.display = Some(DisplaySpec::None);
     }
-    let children = if is_text {
+    let children = if matches!(tag, ElementTag::Text(_)) {
         Vec::new()
     } else {
         node.children()

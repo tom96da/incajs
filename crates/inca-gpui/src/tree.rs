@@ -206,6 +206,10 @@ impl VirtualTree {
         self.nodes.get(&id)
     }
 
+    fn node_mut(&mut self, id: NodeId) -> Result<&mut VirtualNode, TreeError> {
+        self.nodes.get_mut(&id).ok_or(TreeError::NodeNotFound(id))
+    }
+
     /// `id` and its ancestors up to the root, nearest first. An id that names
     /// no node yields only itself.
     pub fn ancestors(&self, id: NodeId) -> impl Iterator<Item = NodeId> + '_ {
@@ -275,9 +279,7 @@ impl VirtualTree {
 
         self.detach(child_id);
 
-        let Some(parent) = self.nodes.get_mut(&parent_id) else {
-            return Err(TreeError::NodeNotFound(parent_id));
-        };
+        let parent = self.node_mut(parent_id)?;
         let index = anchor_id
             .and_then(|anchor_id| parent.children.iter().position(|&id| id == anchor_id))
             .unwrap_or(parent.children.len());
@@ -347,10 +349,7 @@ impl VirtualTree {
     ///
     /// Returns [`TreeError::NodeNotFound`] if `parent_id` names no node.
     pub fn remove_child(&mut self, parent_id: NodeId, child_id: NodeId) -> Result<(), TreeError> {
-        let parent = self
-            .nodes
-            .get_mut(&parent_id)
-            .ok_or(TreeError::NodeNotFound(parent_id))?;
+        let parent = self.node_mut(parent_id)?;
         let before = parent.children.len();
         parent.children.retain(|&id| id != child_id);
         if parent.children.len() == before {
@@ -373,10 +372,7 @@ impl VirtualTree {
         key: impl Into<String>,
         value: impl Into<AttributeValue>,
     ) -> Result<(), TreeError> {
-        let node = self
-            .nodes
-            .get_mut(&node_id)
-            .ok_or(TreeError::NodeNotFound(node_id))?;
+        let node = self.node_mut(node_id)?;
         node.attributes.insert(key.into(), value.into());
         Ok(())
     }
@@ -387,10 +383,7 @@ impl VirtualTree {
     ///
     /// Returns [`TreeError::NodeNotFound`] if `node_id` names no node.
     pub fn remove_attribute(&mut self, node_id: NodeId, key: &str) -> Result<(), TreeError> {
-        let node = self
-            .nodes
-            .get_mut(&node_id)
-            .ok_or(TreeError::NodeNotFound(node_id))?;
+        let node = self.node_mut(node_id)?;
         node.attributes.remove(key);
         Ok(())
     }
@@ -407,10 +400,7 @@ impl VirtualTree {
         key: impl Into<String>,
         value: impl Into<AttributeValue>,
     ) -> Result<(), TreeError> {
-        let node = self
-            .nodes
-            .get_mut(&node_id)
-            .ok_or(TreeError::NodeNotFound(node_id))?;
+        let node = self.node_mut(node_id)?;
         let key = key.into();
         let canonical = match style_key(&key) {
             Cow::Owned(k) => Some(k),
@@ -429,10 +419,7 @@ impl VirtualTree {
     ///
     /// Returns [`TreeError::NodeNotFound`] if `node_id` names no node.
     pub fn remove_style(&mut self, node_id: NodeId, key: &str) -> Result<(), TreeError> {
-        let node = self
-            .nodes
-            .get_mut(&node_id)
-            .ok_or(TreeError::NodeNotFound(node_id))?;
+        let node = self.node_mut(node_id)?;
         node.style_props.remove(&*style_key(key));
         Ok(())
     }

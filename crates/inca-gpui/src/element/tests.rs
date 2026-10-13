@@ -4,7 +4,7 @@
 use super::scroll::{Align, Rect, rect_of, scroll_chain, scroll_delta};
 use super::style::apply_style;
 use super::*;
-use crate::event_sink::{EventPayload, EventSink};
+use crate::event_sink::{EventPayload, EventSink, noop_sink_methods};
 use crate::tree::AttributeValue;
 use crate::tree::{NodeId, VirtualTree};
 use gpui::prelude::*;
@@ -79,18 +79,6 @@ impl EventSink for Probe {
         self.layouts.borrow_mut().insert(id, layout);
     }
 
-    fn pointer_moved(&self, _: Point<Pixels>, _: &mut App) {}
-
-    fn pointer_left(&self) {}
-
-    fn modifiers_changed(&self, _: gpui::Modifiers, _: &mut Window, _: &mut App) {}
-
-    fn hover_changed(&self, _: NodeId, _: bool, _: &mut Window, _: &mut App) {}
-
-    fn pointer_over(&self, _: NodeId, _: &mut Window, _: &mut App) {}
-
-    fn pointer_pressed(&self) {}
-
     fn pointer_input(
         &self,
         event: &str,
@@ -127,15 +115,15 @@ impl EventSink for Probe {
             .push(("release".to_owned(), released, Some(released), pressed));
     }
 
-    fn key_input(
-        &self,
-        _: &gpui::Keystroke,
-        _: bool,
-        _: &EventPayload,
-        _: &mut Window,
-        _: &mut App,
-    ) {
-    }
+    noop_sink_methods!(
+        pointer_moved,
+        pointer_left,
+        modifiers_changed,
+        hover_changed,
+        pointer_over,
+        pointer_pressed,
+        key_input,
+    );
 }
 
 struct ProbeView(VirtualTree, Probe);

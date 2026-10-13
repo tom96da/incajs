@@ -629,3 +629,17 @@ fn a_bool_color_is_ignored_with_a_warning() {
     assert_eq!(style.background, None);
     assert_eq!(warnings.len(), 1);
 }
+
+#[test]
+fn applying_a_style_keeps_the_values_the_spec_leaves_unset() {
+    let mut style = StyleRefinement::default();
+    apply_style(
+        &mut style,
+        &style_of(&[("display", "flex".into()), ("width", num(120.0))]),
+    );
+    apply_style(&mut style, &style_of(&[("height", num(40.0))]));
+
+    assert_eq!(style.display, Some(gpui::Display::Flex));
+    assert_eq!(style.size.width, Some(Length::from(px(120.0))));
+    assert_eq!(style.size.height, Some(Length::from(px(40.0))));
+}

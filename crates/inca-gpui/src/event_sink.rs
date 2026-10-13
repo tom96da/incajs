@@ -160,20 +160,10 @@ impl From<&MouseDownEvent> for EventPayload {
     fn from(event: &MouseDownEvent) -> Self {
         let bit = button_index(event.button);
         Self::Mouse(MousePayload {
-            client_x: f32::from(event.position.x),
-            client_y: f32::from(event.position.y),
-            movement_x: 0.0,
-            movement_y: 0.0,
-            screen_x: 0.0,
-            screen_y: 0.0,
-            offset_x: 0.0,
-            offset_y: 0.0,
             button: bit,
             buttons: buttons_mask(bit),
             detail: u32::try_from(event.click_count).unwrap_or(u32::MAX),
-            modifiers: event.modifiers,
-            pointer: None,
-            related_target: None,
+            ..MousePayload::at(event.position, event.modifiers)
         })
     }
 }
@@ -182,20 +172,9 @@ impl From<&MouseUpEvent> for EventPayload {
     fn from(event: &MouseUpEvent) -> Self {
         let bit = button_index(event.button);
         Self::Mouse(MousePayload {
-            client_x: f32::from(event.position.x),
-            client_y: f32::from(event.position.y),
-            movement_x: 0.0,
-            movement_y: 0.0,
-            screen_x: 0.0,
-            screen_y: 0.0,
-            offset_x: 0.0,
-            offset_y: 0.0,
             button: bit,
-            buttons: 0,
             detail: u32::try_from(event.click_count).unwrap_or(u32::MAX),
-            modifiers: event.modifiers,
-            pointer: None,
-            related_target: None,
+            ..MousePayload::at(event.position, event.modifiers)
         })
     }
 }
@@ -240,22 +219,10 @@ impl EventPayload {
 impl From<&MouseMoveEvent> for EventPayload {
     fn from(event: &MouseMoveEvent) -> Self {
         Self::Mouse(MousePayload {
-            client_x: f32::from(event.position.x),
-            client_y: f32::from(event.position.y),
-            movement_x: 0.0,
-            movement_y: 0.0,
-            screen_x: 0.0,
-            screen_y: 0.0,
-            offset_x: 0.0,
-            offset_y: 0.0,
-            button: 0,
             buttons: event
                 .pressed_button
                 .map_or(0, |button| buttons_mask(button_index(button))),
-            detail: 0,
-            modifiers: event.modifiers,
-            pointer: None,
-            related_target: None,
+            ..MousePayload::at(event.position, event.modifiers)
         })
     }
 }
@@ -269,23 +236,7 @@ impl From<&ScrollWheelEvent> for EventPayload {
             ScrollDelta::Lines(delta) => (0.0 - delta.x, 0.0 - delta.y, 1),
         };
         Self::Wheel(WheelPayload {
-            mouse: MousePayload {
-                client_x: f32::from(event.position.x),
-                client_y: f32::from(event.position.y),
-                movement_x: 0.0,
-                movement_y: 0.0,
-                screen_x: 0.0,
-                screen_y: 0.0,
-                offset_x: 0.0,
-                offset_y: 0.0,
-                // Not about any one button.
-                button: 0,
-                buttons: 0,
-                detail: 0,
-                modifiers: event.modifiers,
-                pointer: None,
-                related_target: None,
-            },
+            mouse: MousePayload::at(event.position, event.modifiers),
             delta_x,
             delta_y,
             delta_z: 0.0,
@@ -484,6 +435,71 @@ pub trait EventSink {
         cx: &mut App,
     );
 }
+
+/// Emits an empty body for each listed void [`EventSink`] method, with the
+/// trait's signature. A method missing from the trait is a compile error.
+macro_rules! noop_sink_methods {
+    ($($name:ident),* $(,)?) => { $(noop_sink_methods!(@one $name);)* };
+    (@one clear_layout) => { fn clear_layout(&self) {} };
+    (@one record_layout) => {
+        fn record_layout(&self, _: $crate::tree::NodeId, _: $crate::element::NodeLayout) {}
+    };
+    (@one pointer_moved) => {
+        fn pointer_moved(&self, _: gpui::Point<gpui::Pixels>, _: &mut gpui::App) {}
+    };
+    (@one pointer_left) => { fn pointer_left(&self) {} };
+    (@one modifiers_changed) => {
+        fn modifiers_changed(&self, _: gpui::Modifiers, _: &mut gpui::Window, _: &mut gpui::App) {}
+    };
+    (@one hover_changed) => {
+        fn hover_changed(
+            &self,
+            _: $crate::tree::NodeId,
+            _: bool,
+            _: &mut gpui::Window,
+            _: &mut gpui::App,
+        ) {
+        }
+    };
+    (@one pointer_over) => {
+        fn pointer_over(&self, _: $crate::tree::NodeId, _: &mut gpui::Window, _: &mut gpui::App) {}
+    };
+    (@one pointer_pressed) => { fn pointer_pressed(&self) {} };
+    (@one pointer_input) => {
+        fn pointer_input(
+            &self,
+            _: &str,
+            _: $crate::tree::NodeId,
+            _: &$crate::event_sink::EventPayload,
+            _: &mut gpui::Window,
+            _: &mut gpui::App,
+        ) {
+        }
+    };
+    (@one pointer_released) => {
+        fn pointer_released(
+            &self,
+            _: &gpui::MouseUpEvent,
+            _: Option<$crate::tree::NodeId>,
+            _: $crate::tree::NodeId,
+            _: &mut gpui::Window,
+            _: &mut gpui::App,
+        ) {
+        }
+    };
+    (@one key_input) => {
+        fn key_input(
+            &self,
+            _: &gpui::Keystroke,
+            _: bool,
+            _: &$crate::event_sink::EventPayload,
+            _: &mut gpui::Window,
+            _: &mut gpui::App,
+        ) {
+        }
+    };
+}
+pub(crate) use noop_sink_methods;
 
 /// `bubbles`, `cancelable` and `composed` of one event.
 #[derive(Clone, Copy)]
