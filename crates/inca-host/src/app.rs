@@ -31,7 +31,7 @@ use gpui::{
 };
 use gpui_platform::application;
 
-use inca_bridge::bindings::install;
+use inca_bridge::install;
 use inca_bridge::{EventDispatcher, Host};
 use inca_gpui::{
     AttributeValue, EventSink, NodeId, NodeLayout, VirtualNode, render_tree_with_events,

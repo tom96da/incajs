@@ -21,7 +21,7 @@ use std::path::Path;
 use std::rc::Rc;
 
 use inca_bridge::Host;
-use inca_bridge::bindings::install;
+use inca_bridge::install;
 use inca_gpui::AttributeValue;
 use inca_jsenv::Engine;
 use rquickjs::{Function, Module};

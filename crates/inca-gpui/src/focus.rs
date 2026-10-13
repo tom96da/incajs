@@ -119,7 +119,9 @@ fn parse_tab_index(value: &str) -> Option<i32> {
         b'+' => (false, &value[1..]),
         _ => (false, value),
     };
-    let digits = rest.len() - rest.trim_start_matches(|c: char| c.is_ascii_digit()).len();
+    let digits = rest
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(rest.len());
     if digits == 0 {
         return None;
     }

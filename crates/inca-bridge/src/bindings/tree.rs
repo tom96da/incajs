@@ -195,12 +195,12 @@ fn refuse_root(ctx: &Ctx<'_>, host: &Host, id: NodeId, verb: &str) -> JsResult<(
     Ok(())
 }
 
-// Queues a focus re-check of the node and its subtree.
+/// Queues a focus re-check of the node and its subtree.
 fn mark_focus_dirty(host: &mut Host, node_id: NodeId) {
     host.focus.mark_subtree_dirty(&host.tree, node_id);
 }
 
-// Queues the focus re-check an attribute change needs.
+/// Queues the focus re-check an attribute change needs.
 fn mark_focus_dirty_for(host: &mut Host, node_id: NodeId, key: &str) {
     match key {
         "tabindex" | "disabled" => host.focus.mark_tab_dirty(node_id),
@@ -209,7 +209,7 @@ fn mark_focus_dirty_for(host: &mut Host, node_id: NodeId, key: &str) {
     }
 }
 
-// Attribute names are case-insensitive, so `tabIndex` is `tabindex`.
+/// Attribute names are case-insensitive, so `tabIndex` is `tabindex`.
 fn canonical_attribute_key(key: String) -> String {
     if key.eq_ignore_ascii_case("tabindex") {
         "tabindex".to_owned()
@@ -234,7 +234,7 @@ fn attribute_value_from_js<'js>(ctx: &Ctx<'js>, value: &Value<'js>) -> JsResult<
     ))
 }
 
-// A missing key converts to `null`.
+/// A missing key converts to `null`.
 fn attribute_value_to_js<'js>(
     ctx: &Ctx<'js>,
     value: Option<&AttributeValue>,

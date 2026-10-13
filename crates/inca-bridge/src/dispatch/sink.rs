@@ -50,8 +50,8 @@ impl EventSink for EventDispatcher {
         Some(self.host.borrow().scroll_handle(node_id))
     }
 
-    // The first call of an update computes the delta and defers clearing it,
-    // so later calls in that update keep it.
+    /// The first call of an update computes the delta and defers clearing it,
+    /// so later calls in that update keep it.
     fn pointer_moved(&self, position: gpui::Point<gpui::Pixels>, cx: &mut App) {
         if self.state.current_movement.get().is_some() {
             return;
@@ -67,7 +67,7 @@ impl EventSink for EventDispatcher {
         cx.defer(move |_| current.current_movement.set(None));
     }
 
-    // Changed flags fire in the order Shift, Control, Alt, Meta.
+    /// Changed flags fire in the order Shift, Control, Alt, Meta.
     fn modifiers_changed(&self, modifiers: gpui::Modifiers, window: &mut Window, cx: &mut App) {
         let before = self
             .state

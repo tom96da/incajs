@@ -5,13 +5,12 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use gpui::px;
-use rquickjs::{Ctx, Exception, Result as JsResult, Value};
+use rquickjs::{Ctx, Result as JsResult, Value};
 
-use inca_gpui::element::scroll::Align;
 use inca_gpui::is_scroll_container;
 
 use super::Natives;
-use super::convert::{JsNodeId, existing_node, or_null};
+use super::convert::{JsAlign, JsNodeId, existing_node, or_null};
 use super::host::{Host, clamped_offset};
 
 pub(super) fn install_scroll(n: &Natives<'_, '_>) -> JsResult<()> {
@@ -76,19 +75,8 @@ fn scroll_node<'js>(
 
 fn scroll_into_view_node<'js>(
     host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, String, String) -> JsResult<()> {
-    move |ctx, JsNodeId(node_id), block, inline| {
-        let align = |name: &str| match name {
-            "start" => Ok(Align::Start),
-            "center" => Ok(Align::Center),
-            "end" => Ok(Align::End),
-            "nearest" => Ok(Align::Nearest),
-            _ => Err(Exception::throw_type(
-                &ctx,
-                &format!("unknown scroll alignment: {name}"),
-            )),
-        };
-        let (block, inline) = (align(&block)?, align(&inline)?);
+) -> impl Fn(Ctx<'js>, JsNodeId, JsAlign, JsAlign) -> JsResult<()> {
+    move |ctx, JsNodeId(node_id), JsAlign(block), JsAlign(inline)| {
         let mut host = host.borrow_mut();
         existing_node(&ctx, &host.tree, node_id)?;
         if !host.reveal(node_id, block, inline) {

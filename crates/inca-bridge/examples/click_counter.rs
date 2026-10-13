@@ -15,7 +15,7 @@ use std::rc::Rc;
 use gpui::{App, Bounds, Context, Window, WindowBounds, WindowOptions, prelude::*, px, size};
 use gpui_platform::application;
 
-use inca_bridge::bindings::install;
+use inca_bridge::install;
 use inca_bridge::{EventDispatcher, Host};
 use inca_gpui::{NodeId, VirtualTree, render_tree_with_events};
 use inca_jsenv::Engine;

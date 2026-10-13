@@ -6,14 +6,14 @@
 //! renderers drive to build and mutate it, and the event dispatch that carries
 //! native input back into JS.
 
-pub mod bindings;
-pub mod dispatch;
+mod bindings;
+mod dispatch;
 mod event;
 #[cfg(any(test, feature = "test-support"))]
 #[allow(clippy::unwrap_used)]
 pub mod test_support;
 
-pub use bindings::{EventListeners, Host, Listener};
+pub use bindings::{EventListeners, Host, Listener, install};
 pub use dispatch::{EventDispatcher, drain_jobs_and_refresh};
 pub use focus::{FocusRegistry, FocusTransition};
 pub use inca_gpui::focus;

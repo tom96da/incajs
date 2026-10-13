@@ -29,19 +29,19 @@ pub struct Host {
     pub focus: FocusRegistry,
     /// Last number handed out as an `eventId`. Each event takes the next one.
     pub last_event_id: u64,
-    // Scroll state of the containers, created on first ask. Its own cell, so
-    // it can be written while a shared borrow of `Host` is held.
+    /// Scroll state of the containers, created on first ask. Its own cell, so
+    /// it can be written while a shared borrow of `Host` is held.
     pub(crate) scroll_handles: RefCell<HashMap<NodeId, ScrollHandle>>,
-    // The offset of each container as of the last `scroll` check.
+    /// The offset of each container as of the last `scroll` check.
     pub(super) scroll_reported: HashMap<NodeId, gpui::Point<gpui::Pixels>>,
-    // Boxes of the last drawn frame. Its own cell, as the draw runs under a shared borrow.
+    /// Boxes of the last drawn frame. Its own cell, as the draw runs under a shared borrow.
     pub(crate) layout: RefCell<HashMap<NodeId, NodeLayout>>,
-    // Errors listeners threw, in order; the dispatcher reports them once the engine is idle.
+    /// Errors listeners threw, in order; the dispatcher reports them once the engine is idle.
     pub(crate) failures: Vec<EngineError>,
-    // The nodes whose `click()` is running.
+    /// The nodes whose `click()` is running.
     pub(crate) clicking: HashSet<NodeId>,
-    // `scrollIntoViewNode` calls whose node had no box yet: awaiting the next
-    // `reveal_focus`, and awaiting the frame after it.
+    /// `scrollIntoViewNode` calls whose node had no box yet: awaiting the next
+    /// `reveal_focus`, and awaiting the frame after it.
     pub(super) scroll_fresh: Vec<(NodeId, Align, Align)>,
     pub(super) scroll_retry: Vec<(NodeId, Align, Align)>,
 }
@@ -87,10 +87,10 @@ pub(super) fn clamped_offset(offset: Pixels, max: Pixels) -> Pixels {
 }
 
 impl Host {
-    // Containers whose clamped offset moved since the last call and whose
-    // `scroll` a listener reaches: one on the container, or a capture one on
-    // an ancestor. Every container's offset is recorded, so a listener added
-    // later sees only later movement.
+    /// Containers whose clamped offset moved since the last call and whose
+    /// `scroll` a listener reaches: one on the container, or a capture one on
+    /// an ancestor. Every container's offset is recorded, so a listener added
+    /// later sees only later movement.
     pub(crate) fn scrolled_nodes(&mut self) -> Vec<NodeId> {
         let mut moved = Vec::new();
         for (&id, handle) in self.scroll_handles.get_mut().iter() {
@@ -137,8 +137,8 @@ impl Host {
         }
     }
 
-    // Runs the queued `scrollIntoViewNode` calls. A call whose node still has
-    // no box waits one more frame. Returns whether one waits.
+    /// Runs the queued `scrollIntoViewNode` calls. A call whose node still has
+    /// no box waits one more frame. Returns whether one waits.
     pub(super) fn reveal_scrolls(&mut self) -> bool {
         for (node, block, inline) in std::mem::take(&mut self.scroll_retry) {
             self.reveal(node, block, inline);
@@ -151,7 +151,7 @@ impl Host {
         !self.scroll_retry.is_empty()
     }
 
-    // Returns a clone of the node's handle, creating it on first ask.
+    /// Returns a clone of the node's handle, creating it on first ask.
     pub(crate) fn scroll_handle(&self, node_id: NodeId) -> ScrollHandle {
         self.scroll_handles
             .borrow_mut()
@@ -206,9 +206,9 @@ impl Host {
         true
     }
 
-    // Moves the recorded boxes below `container` by the scroll just applied, so a
-    // second reveal before the next draw starts from where the content now is. The
-    // direct children also take it into their recorded scroll offset.
+    /// Moves the recorded boxes below `container` by the scroll just applied, so a
+    /// second reveal before the next draw starts from where the content now is. The
+    /// direct children also take it into their recorded scroll offset.
     pub(crate) fn shift_descendants(&self, container: NodeId, dx: f32, dy: f32) {
         let mut layout = self.layout.borrow_mut();
         let mut stack = vec![container];

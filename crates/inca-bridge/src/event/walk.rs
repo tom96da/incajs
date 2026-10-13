@@ -14,25 +14,25 @@ use crate::bindings::{Host, Listener};
 
 /// What one walk needs to know.
 pub(crate) struct Walk<'a> {
-    pub name: &'a str,
-    pub flags: Flags,
-    pub target: NodeId,
+    pub(crate) name: &'a str,
+    pub(crate) flags: Flags,
+    pub(crate) target: NodeId,
     /// `target` and its ancestors, nearest first.
-    pub path: &'a [NodeId],
+    pub(crate) path: &'a [NodeId],
     /// The nodes whose listeners do not run.
-    pub cut: &'a [NodeId],
-    pub payload: &'a EventPayload,
+    pub(crate) cut: &'a [NodeId],
+    pub(crate) payload: &'a EventPayload,
     /// The value of `isTrusted` on the event the walk creates.
-    pub trusted: bool,
+    pub(crate) trusted: bool,
 }
 
 /// What a walk asked of its caller.
 #[derive(Default)]
 pub(crate) struct Outcome {
     /// A listener called `preventDefault()` on a cancelable event.
-    pub canceled: bool,
+    pub(crate) canceled: bool,
     /// The walk entered the engine, so jobs may be queued.
-    pub entered: bool,
+    pub(crate) entered: bool,
 }
 
 /// `target` and its ancestors, nearest first.

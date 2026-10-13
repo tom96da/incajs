@@ -5,7 +5,7 @@
 //! app in the development window uses to trade arbitrary-named messages with whatever is on the
 //! other end of the host's own protocol, a bundler's HMR channel say. The host knows nothing about
 //! that protocol's wire format or any particular bundler; the relay carries a method name and a
-//! parsed `params` value each way, exactly like [`inca_bridge::dispatch`] carries a native input
+//! parsed `params` value each way, exactly like [`inca_bridge::EventDispatcher`] carries a native input
 //! event into JS without knowing what a caller does with it. [`install_dev`] also adds `compile`,
 //! which builds app source into an async function. [`install_load_signal`] adds a flag the app
 //! sets to report that its load failed or recovered.

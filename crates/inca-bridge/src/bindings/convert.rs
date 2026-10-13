@@ -3,6 +3,7 @@
 
 use rquickjs::{Ctx, Exception, FromJs, IntoJs, Result as JsResult, Value};
 
+use inca_gpui::element::scroll::Align;
 use inca_gpui::{NodeId, TreeError, VirtualNode, VirtualTree};
 
 /// A node id argument. Accepts a finite whole number in `u32` range;
@@ -24,6 +25,27 @@ impl<'js> FromJs<'js> for JsNodeId {
             ctx,
             "node id must be a whole number in the range of an unsigned 32-bit integer",
         ))
+    }
+}
+
+/// A scroll alignment argument: `"start"`, `"center"`, `"end"` or `"nearest"`.
+/// Any other string throws a `TypeError`.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct JsAlign(pub(super) Align);
+
+impl<'js> FromJs<'js> for JsAlign {
+    fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> JsResult<Self> {
+        let name = String::from_js(ctx, value)?;
+        match name.as_str() {
+            "start" => Ok(Self(Align::Start)),
+            "center" => Ok(Self(Align::Center)),
+            "end" => Ok(Self(Align::End)),
+            "nearest" => Ok(Self(Align::Nearest)),
+            _ => Err(Exception::throw_type(
+                ctx,
+                &format!("unknown scroll alignment: {name}"),
+            )),
+        }
     }
 }
 
