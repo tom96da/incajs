@@ -628,9 +628,8 @@ pub fn hover_path_difference(
 /// Returns `payload` with `screenX`/`screenY` set to the window's position
 /// on the screen plus the client position.
 #[must_use]
-pub fn with_screen(payload: &EventPayload, window: &Window) -> EventPayload {
+pub fn with_screen(mut payload: EventPayload, window: &Window) -> EventPayload {
     let origin = window.bounds().origin;
-    let mut payload = payload.clone();
     if let Some(mouse) = payload.mouse_mut() {
         mouse.screen_x = f32::from(origin.x) + mouse.client_x;
         mouse.screen_y = f32::from(origin.y) + mouse.client_y;

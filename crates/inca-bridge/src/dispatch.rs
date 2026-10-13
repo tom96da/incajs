@@ -264,7 +264,7 @@ impl EventDispatcher {
         let payload = self.live_related(payload.clone());
         let payload = self.with_held_buttons(event, payload);
         let payload = self.with_movement(payload, event);
-        let payload = with_screen(&payload, window);
+        let payload = with_screen(payload, window);
         self.with_offset(target, payload)
     }
 
