@@ -28,7 +28,7 @@ fn install_deferred_click_counter(engine: &Engine, node: NodeId) {
 #[test]
 fn repeated_builds_with_no_event_never_touch_the_js_engine() {
     let (host, node) = build_clickable_tree();
-    let engine = common::engine_for(&host);
+    let engine = test_support::engine_for(&host);
     install_click_counter(&engine, node, "click");
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
@@ -52,7 +52,7 @@ fn repeated_builds_with_no_event_never_touch_the_js_engine() {
 #[gpui::test]
 fn click_dispatches_to_js_exactly_once(cx: &mut TestAppContext) {
     let (host, node) = build_clickable_tree();
-    let engine = common::engine_for(&host);
+    let engine = test_support::engine_for(&host);
     install_click_counter(&engine, node, "click");
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
@@ -110,7 +110,7 @@ fn a_listener_registered_after_the_first_render_still_fires(cx: &mut TestAppCont
         host.tree.set_style(node, "height", 100.0).unwrap();
         node
     };
-    let engine = common::engine_for(&host);
+    let engine = test_support::engine_for(&host);
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
     let window = cx.add_window(|_, _| ClickableRoot {
@@ -140,7 +140,7 @@ fn a_listener_registered_after_the_first_render_still_fires(cx: &mut TestAppCont
 #[gpui::test]
 fn a_click_reaches_every_callback_registered_for_it(cx: &mut TestAppContext) {
     let (host, node) = build_clickable_tree();
-    let engine = common::engine_for(&host);
+    let engine = test_support::engine_for(&host);
     engine
         .eval::<()>(&format!(
             r"
@@ -176,7 +176,7 @@ fn a_click_reaches_every_callback_registered_for_it(cx: &mut TestAppContext) {
 #[gpui::test]
 fn click_drains_a_callback_that_defers_its_effect_via_a_microtask(cx: &mut TestAppContext) {
     let (host, node) = build_clickable_tree();
-    let engine = common::engine_for(&host);
+    let engine = test_support::engine_for(&host);
     install_deferred_click_counter(&engine, node);
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
@@ -203,7 +203,7 @@ fn click_drains_a_callback_that_defers_its_effect_via_a_microtask(cx: &mut TestA
 /// dispatcher reported.
 fn failures_from_click(cx: &mut TestAppContext, body: &str) -> Vec<EngineError> {
     let (host, node) = build_clickable_tree();
-    let engine = common::engine_for(&host);
+    let engine = test_support::engine_for(&host);
     engine
         .eval::<()>(&format!("__inca_test_listen__({node}, 'click', {body});"))
         .unwrap();

@@ -9,6 +9,9 @@
 pub mod bindings;
 pub mod dispatch;
 mod event;
+#[cfg(any(test, feature = "test-support"))]
+#[allow(clippy::unwrap_used)]
+pub mod test_support;
 
 pub use bindings::{EventListeners, Host, Listener};
 pub use dispatch::{EventDispatcher, drain_jobs_and_refresh};

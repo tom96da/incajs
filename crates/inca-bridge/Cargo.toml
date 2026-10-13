@@ -24,8 +24,14 @@ inca-jsenv = { path = "../inca-jsenv" }
 rquickjs.workspace = true
 serde_json.workspace = true
 
+[features]
+# Exposes `test_support` for tests, and turns on gpui's test platform.
+test-support = ["gpui/test-support"]
+
 [dev-dependencies]
 env_logger.workspace = true
+# Enables this crate's own `test-support` feature for its tests and clippy.
+inca-bridge = { path = ".", features = ["test-support"] }
 # test-support gates gpui's TestPlatform/TestAppContext/#[gpui::test]; see
 # third_party/zed/crates/gpui/src/gpui.rs's `cfg(any(test, feature =
 # "test-support"))` gate.

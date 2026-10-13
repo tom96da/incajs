@@ -99,7 +99,7 @@ pub(super) fn install_focus<'js>(
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
-    use crate::bindings::fixtures::engine_with_bindings;
+    use crate::test_support::engine_with_bindings;
     use inca_gpui::{AttributeValue, NodeLayout};
 
     #[test]

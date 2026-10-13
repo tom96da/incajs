@@ -23,7 +23,7 @@ fn hover_dispatches_enter_then_leave(cx: &mut TestAppContext) {
         host.tree.set_style(node, "height", 100.0).unwrap();
         node
     };
-    let engine = common::engine_for(&host);
+    let engine = test_support::engine_for(&host);
     engine
         .eval::<()>(&format!(
             r"
@@ -95,7 +95,7 @@ fn mouseenter_carries_the_mouse_fields(cx: &mut TestAppContext) {
         host.tree.set_style(node, "height", 100.0).unwrap();
         node
     };
-    let engine = common::engine_for(&host);
+    let engine = test_support::engine_for(&host);
     install_click_counter(&engine, node, "mouseenter");
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
@@ -152,7 +152,7 @@ fn mouseenter_carries_the_mouse_fields(cx: &mut TestAppContext) {
 #[gpui::test]
 fn mounting_already_hovered_does_not_fire_a_spurious_leave(cx: &mut TestAppContext) {
     let (host, node) = build_clickable_tree();
-    let engine = common::engine_for(&host);
+    let engine = test_support::engine_for(&host);
     install_click_counter(&engine, node, "mouseleave");
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
@@ -184,7 +184,7 @@ fn one_move_gives_mousemove_the_delta_and_mouseenter_zero(cx: &mut TestAppContex
         host.tree.set_style(node, "height", 100.0).unwrap();
         node
     };
-    let engine = common::engine_for(&host);
+    let engine = test_support::engine_for(&host);
     engine
         .eval::<()>(&format!(
             r"
@@ -239,7 +239,7 @@ fn one_move_gives_mousemove_the_delta_and_mouseenter_zero(cx: &mut TestAppContex
 #[gpui::test]
 fn buttons_tracks_every_button_currently_held(cx: &mut TestAppContext) {
     let (host, node) = build_clickable_tree();
-    let engine = common::engine_for(&host);
+    let engine = test_support::engine_for(&host);
     for event in ["mousedown", "mouseup", "mousemove"] {
         install_click_counter(&engine, node, event);
     }
@@ -287,7 +287,7 @@ fn buttons_tracks_every_button_currently_held(cx: &mut TestAppContext) {
 #[gpui::test]
 fn buttons_clears_after_a_release_nobody_listens_to(cx: &mut TestAppContext) {
     let (host, node) = build_clickable_tree();
-    let engine = common::engine_for(&host);
+    let engine = test_support::engine_for(&host);
     for event in ["mousedown", "mousemove"] {
         install_click_counter(&engine, node, event);
     }
@@ -320,7 +320,7 @@ fn buttons_clears_after_a_release_nobody_listens_to(cx: &mut TestAppContext) {
 #[gpui::test]
 fn movement_tracks_the_delta_from_the_last_pointer_move(cx: &mut TestAppContext) {
     let (host, node) = build_clickable_tree();
-    let engine = common::engine_for(&host);
+    let engine = test_support::engine_for(&host);
     install_click_counter(&engine, node, "mousemove");
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
@@ -370,7 +370,7 @@ fn bubbled_mousemove_gives_every_listener_the_same_movement(cx: &mut TestAppCont
         host.tree.append_child(parent, child).unwrap();
         child
     };
-    let engine = common::engine_for(&host);
+    let engine = test_support::engine_for(&host);
     engine
         .eval::<()>(&format!(
             r"
@@ -420,7 +420,7 @@ fn an_inert_child_is_never_the_event_target(cx: &mut TestAppContext) {
         host.tree.append_child(parent, child).unwrap();
         child
     };
-    let engine = common::engine_for(&host);
+    let engine = test_support::engine_for(&host);
     engine
         .eval::<()>(&format!(
             r"
@@ -458,7 +458,7 @@ fn an_inert_child_is_never_the_event_target(cx: &mut TestAppContext) {
 #[gpui::test]
 fn repeated_mousemove_at_one_position_reports_zero_movement(cx: &mut TestAppContext) {
     let (host, node) = build_clickable_tree();
-    let engine = common::engine_for(&host);
+    let engine = test_support::engine_for(&host);
     install_click_counter(&engine, node, "mousemove");
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
     let window = cx.add_window(|_, _| ClickableRoot {
@@ -505,7 +505,7 @@ fn stop_propagation_keeps_an_ancestors_listener_from_firing(cx: &mut TestAppCont
         (parent, child)
     };
 
-    let engine = common::engine_for(&host);
+    let engine = test_support::engine_for(&host);
     engine
         .eval::<()>(&format!(
             r"

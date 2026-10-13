@@ -8,7 +8,7 @@ use super::*;
 #[gpui::test]
 fn mousedown_carries_the_mouse_fields(cx: &mut TestAppContext) {
     let (host, node) = build_clickable_tree();
-    let engine = common::engine_for(&host);
+    let engine = test_support::engine_for(&host);
     install_click_counter(&engine, node, "mousedown");
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
@@ -53,7 +53,7 @@ fn mousedown_carries_the_mouse_fields(cx: &mut TestAppContext) {
 #[gpui::test]
 fn wheel_carries_the_delta_fields(cx: &mut TestAppContext) {
     let (host, node) = build_clickable_tree();
-    let engine = common::engine_for(&host);
+    let engine = test_support::engine_for(&host);
     install_click_counter(&engine, node, "wheel");
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
@@ -99,7 +99,7 @@ fn wheel_carries_the_delta_fields(cx: &mut TestAppContext) {
 #[gpui::test]
 fn wheel_reports_a_button_held_from_an_earlier_mousedown(cx: &mut TestAppContext) {
     let (host, node) = build_clickable_tree();
-    let engine = common::engine_for(&host);
+    let engine = test_support::engine_for(&host);
     install_click_counter(&engine, node, "mousedown");
     install_click_counter(&engine, node, "wheel");
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
@@ -141,7 +141,7 @@ fn wheel_with_no_listener_reports_nothing(cx: &mut TestAppContext) {
         host.tree.set_style(node, "height", 100.0).unwrap();
         node
     };
-    let engine = common::engine_for(&host);
+    let engine = test_support::engine_for(&host);
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
     let window = cx.add_window(|_, _| ClickableRoot {

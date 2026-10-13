@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::*;
-use crate::bindings::fixtures::engine_with_bindings;
+use crate::test_support::engine_with_bindings;
 
 #[test]
 fn remove_style_unsets_the_key_and_rejects_an_unknown_node() {

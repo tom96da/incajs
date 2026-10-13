@@ -18,8 +18,7 @@ use inca_bridge::{EventDispatcher, Host};
 use inca_gpui::{EventSink, NodeId, NodeLayout, render_tree_with_events};
 use inca_jsenv::{Engine, EngineError};
 
-#[path = "../common/mod.rs"]
-mod common;
+use inca_bridge::test_support;
 
 struct Root {
     host: Rc<RefCell<Host>>,
@@ -61,7 +60,7 @@ impl Scene {
     /// Like [`Self::new`], with `before_draw` run before the first draw.
     fn with_bindings(cx: &mut TestAppContext, host: Host, js: &str, before_draw: &str) -> Self {
         let host = Rc::new(RefCell::new(host));
-        let engine = common::engine_for(&host);
+        let engine = test_support::engine_for(&host);
         engine.eval::<()>("globalThis.ran = [];").unwrap();
         engine.eval::<()>(js).unwrap();
         engine.eval::<()>(before_draw).unwrap();

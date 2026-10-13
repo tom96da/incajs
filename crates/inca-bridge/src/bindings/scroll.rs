@@ -146,7 +146,7 @@ pub(super) fn install_scroll<'js>(
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
-    use crate::bindings::fixtures::engine_with_bindings;
+    use crate::test_support::engine_with_bindings;
     use gpui::{Bounds, point};
 
     #[test]

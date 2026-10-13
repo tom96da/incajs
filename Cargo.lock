@@ -2814,6 +2814,7 @@ dependencies = [
  "env_logger",
  "gpui",
  "gpui_platform",
+ "inca-bridge",
  "inca-gpui",
  "inca-jsenv",
  "rquickjs",

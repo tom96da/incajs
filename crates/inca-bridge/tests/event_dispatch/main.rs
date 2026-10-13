@@ -20,8 +20,7 @@ use inca_bridge::{EventDispatcher, Host};
 use inca_gpui::{NodeId, render_tree_with_events};
 use inca_jsenv::{Engine, EngineError};
 
-#[path = "../common/mod.rs"]
-mod common;
+use inca_bridge::test_support;
 
 /// Counts `event` on `node` into `globalThis.clicks` and keeps the last one
 /// in `globalThis.lastEvent`.
@@ -106,7 +105,7 @@ fn build_panes_recording(a_events: &[&str], root_events: &[&str], record: &str) 
         let (a, b) = (pane(), pane());
         (root, a, b)
     };
-    let engine = common::engine_for(&host);
+    let engine = test_support::engine_for(&host);
     engine.eval::<()>("globalThis.seen = [];").unwrap();
     for (node, events) in [(a, a_events), (root, root_events)] {
         for event in events {
@@ -173,7 +172,7 @@ fn mount_recording_pair_with(
         host.tree.append_child(parent, child).unwrap();
         (parent, child)
     };
-    let engine = common::engine_for(&host);
+    let engine = test_support::engine_for(&host);
     engine.eval::<()>("globalThis.seen = [];").unwrap();
     for event in events {
         for node in [parent, child] {

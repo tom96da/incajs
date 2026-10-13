@@ -240,7 +240,7 @@ pub(super) fn install_events<'js>(
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
-    use crate::bindings::fixtures::engine_with_bindings;
+    use crate::test_support::engine_with_bindings;
 
     #[test]
     fn registering_the_same_callback_twice_keeps_one_entry() {

@@ -18,7 +18,7 @@ use inca_bridge::{EventDispatcher, EventListeners, Host};
 use inca_gpui::{NodeId, render_tree_with_events};
 use inca_jsenv::Engine;
 
-mod common;
+use inca_bridge::test_support;
 
 struct KeyableRoot {
     host: Rc<RefCell<Host>>,
@@ -78,7 +78,7 @@ fn a_key_event_with_nothing_focused_targets_the_root(cx: &mut TestAppContext) {
     let (host, parent, child) = build_key_pair();
     let root = host.borrow().root;
     host.borrow_mut().tree.append_child(root, parent).unwrap();
-    let engine = common::engine_for(&host);
+    let engine = test_support::engine_for(&host);
     engine.eval::<()>("globalThis.seen = [];").unwrap();
     listen_for_keys(
         &engine,
@@ -139,7 +139,7 @@ type Pair = (AnyWindowHandle, Rc<Engine>, Rc<RefCell<Host>>, [NodeId; 2]);
 
 fn focused_pair(cx: &mut TestAppContext, js: &str) -> Pair {
     let (host, parent, child) = build_key_pair();
-    let engine = common::engine_for(&host);
+    let engine = test_support::engine_for(&host);
     engine.eval::<()>("globalThis.seen = [];").unwrap();
     listen_for_keys(&engine, [parent, child], js, false);
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));

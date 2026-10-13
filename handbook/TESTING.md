@@ -136,6 +136,9 @@ package.
   and enables gpui's test platform. The root `tests/` dev-dependency turns it
   on. Its unit tests are in `crates/inca-host/src/harness/tests/` and
   `snapshot.rs`.
+- The **`test-support` feature** of `inca-bridge` exposes `test_support`, the
+  engine helpers shared by its unit and integration tests. The crate's own
+  dev-dependency turns it on.
 
 ### Node e2e tests (`@incajs/e2e-tests`)
 

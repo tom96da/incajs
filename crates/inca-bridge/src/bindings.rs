@@ -7,9 +7,6 @@
 //! it no longer needs.
 
 mod convert;
-#[cfg(test)]
-#[allow(clippy::unwrap_used)]
-pub(crate) mod fixtures;
 mod focus;
 mod host;
 mod listeners;

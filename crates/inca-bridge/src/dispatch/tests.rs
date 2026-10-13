@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::*;
-use crate::bindings::fixtures::engine_for;
 use crate::event::Flags;
+use crate::test_support::engine_for;
 use gpui::{TestAppContext, point, px};
 use inca_gpui::event_sink::EVENTS;
 use inca_gpui::{EventSink, WheelPayload};
