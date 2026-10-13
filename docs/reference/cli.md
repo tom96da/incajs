@@ -12,6 +12,14 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 Every command reports a failure as `[inca] <command> failed (<code>): …`.
 See [Error Codes](./errors) for what each code means.
 
+| Command                 | Description |
+| ----------------------- | ----------- |
+| `inca --help`           | Lists the commands. |
+| `inca <command> --help` | Lists the options of the command. |
+| `inca --version`        | Prints the version of `@incajs/cli`. |
+
+An unknown command prints the command list and exits with code 1.
+
 ## `inca dev`
 
 Watches your app and opens a live-reloading development window, reloading
@@ -56,7 +64,7 @@ $ inca build
 | `--sourcemap`    | Writes `bundle.js.map` beside the bundle. |
 | `--no-sourcemap` | Turns the map off when the [`sourcemap`](./configuration#sourcemap) key turns it on. |
 
-When both flags are given, the last one wins.
+When both flags are given, `--no-sourcemap` wins.
 
 ## `inca package`
 
@@ -77,7 +85,7 @@ $ inca package
 | `--sourcemap`    | Writes `bundle.js.map` beside the bundle. |
 | `--no-sourcemap` | Turns the map off when the [`sourcemap`](./configuration#sourcemap) key turns it on. |
 
-When both flags are given, the last one wins.
+When both flags are given, `--no-sourcemap` wins.
 
 ## Environment Variables
 

@@ -32,17 +32,32 @@ const mockedPackageApp = vi.mocked(packageApp);
 
 let stdout: MockInstance;
 let stderr: MockInstance;
+let consoleLog: MockInstance;
+let consoleError: MockInstance;
+let exit: MockInstance;
 
 function written(spy: MockInstance): string {
   return spy.mock.calls.map((call) => String(call[0])).join("");
 }
 
+/** What citty printed through `console.log` and `console.error`. */
+function printed(): string {
+  return [consoleLog, consoleError].map(written).join("");
+}
+
 beforeEach(() => {
+  // citty ends a help or usage run with `process.exit`.
+  exit = vi.spyOn(process, "exit").mockImplementation((() => {}) as () => never);
+  consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
+  consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
   stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
   stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
 });
 
 afterEach(() => {
+  exit.mockRestore();
+  consoleLog.mockRestore();
+  consoleError.mockRestore();
   stdout.mockRestore();
   stderr.mockRestore();
   mockedDev.mockClear();
@@ -55,14 +70,41 @@ afterEach(() => {
 });
 
 describe("run", () => {
-  it("prints usage and sets a non-zero exit code for anything but dev/build/package", async () => {
-    await run(["node", "inca"]);
+  it.each([
+    [[], "No command specified."],
+    [["bogus"], "Unknown command"],
+  ] as const)("prints usage and exits with 1 for %j", async (args, message) => {
+    await run(["node", "inca", ...args]);
 
-    expect(process.exitCode).toBe(1);
-    expect(written(stderr)).toContain("Usage: inca <dev|build|package>");
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(printed()).toContain("USAGE");
+    expect(printed()).toContain(message);
     expect(mockedDev).not.toHaveBeenCalled();
     expect(mockedBuild).not.toHaveBeenCalled();
     expect(mockedPackageApp).not.toHaveBeenCalled();
+  });
+
+  it.each(["--help", "-h"])("prints the commands and exits with 0 for %s", async (flag) => {
+    await run(["node", "inca", flag]);
+
+    expect(exit).toHaveBeenCalledWith(0);
+    expect(printed()).toMatch(/dev[\s\S]*build[\s\S]*package/);
+  });
+
+  it.each(["dev", "build", "package"])("prints the usage of %s", async (command) => {
+    await run(["node", "inca", command, "--help"]);
+
+    expect(exit).toHaveBeenCalledWith(0);
+    expect(printed()).toContain(`inca ${command}`);
+    expect(mockedDev).not.toHaveBeenCalled();
+    expect(mockedBuild).not.toHaveBeenCalled();
+    expect(mockedPackageApp).not.toHaveBeenCalled();
+  });
+
+  it("prints the package version for --version", async () => {
+    await run(["node", "inca", "--version"]);
+
+    expect(printed().trim()).toMatch(/^\d+\.\d+\.\d+/);
   });
 
   it("runs build and leaves the exit code untouched on success", async () => {
@@ -114,8 +156,9 @@ describe("run", () => {
 
   it.each(["SIGINT", "SIGTERM"] as const)(
     "aborts dev()'s signal on %s — a script runner may deliver either on Ctrl-C",
-    (signal) => {
+    async (signal) => {
       void run(["node", "inca", "dev"]);
+      await vi.waitFor(() => expect(mockedDev).toHaveBeenCalled());
 
       const options = mockedDev.mock.calls[0]?.[0];
       expect(options?.signal.aborted).toBe(false);
@@ -145,8 +188,9 @@ describe("run", () => {
     }
   });
 
-  it("shuts down once when both signals arrive", () => {
+  it("shuts down once when both signals arrive", async () => {
     void run(["node", "inca", "dev"]);
+    await vi.waitFor(() => expect(mockedDev).toHaveBeenCalled());
 
     process.emit("SIGINT");
     process.emit("SIGTERM");
@@ -169,7 +213,7 @@ describe("run", () => {
     [["--sourcemap"], true],
     [["--no-sourcemap"], false],
     [["--sourcemap", "--no-sourcemap"], false],
-    [["--no-sourcemap", "--sourcemap"], true],
+    [["--no-sourcemap", "--sourcemap"], false],
     [[], undefined],
   ] as const)("passes sourcemap %j to build as %j", async (flags, expected) => {
     mockedBuild.mockResolvedValue({
@@ -194,12 +238,22 @@ describe("run", () => {
     expect(mockedPackageApp.mock.calls[0]?.[0]?.sourcemap).toBe(expected);
   });
 
-  it("ignores the sourcemap flags for dev", async () => {
+  it.each(["--sourcemap", "--no-sourcemap"])("warns that dev ignores %s", async (flag) => {
     mockedDev.mockResolvedValueOnce(undefined);
 
-    await run(["node", "inca", "dev", "--sourcemap", "--no-sourcemap"]);
+    await run(["node", "inca", "dev", flag]);
 
+    expect(written(stderr)).toMatch(/\[inca\] dev ignores --sourcemap and --no-sourcemap\n/);
     expect(mockedDev.mock.calls[0]?.[0]).not.toHaveProperty("sourcemap");
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it("stays silent about the source map flags for dev when none is given", async () => {
+    mockedDev.mockResolvedValueOnce(undefined);
+
+    await run(["node", "inca", "dev"]);
+
+    expect(written(stderr)).not.toContain("ignores");
   });
 
   it("leaves experimentalHmr off and stays silent about it by default", async () => {

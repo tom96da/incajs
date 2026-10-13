@@ -4,31 +4,25 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { defineCommand, runMain } from "citty";
+
+import pkg from "../package.json" with { type: "json" };
 import { build } from "./build.mts";
 import { dev } from "./dev.mts";
-import { log, printFault, toFault } from "./log.mts";
+import { log, printFault, toFault, warn } from "./log.mts";
 import { packageApp } from "./package.mts";
-
-const USAGE = "Usage: inca <dev|build|package> [--sourcemap|--no-sourcemap]";
 
 /** Formats a path relative to the working directory, the way the bundler reports its own. */
 function relative(target: string): string {
   return path.relative(process.cwd(), target);
 }
 
-/**
- * @param argv - the full argv
- * @returns `true` for `--sourcemap`, `false` for `--no-sourcemap`, whichever
- * appears last; `undefined` when neither does
- */
-function sourcemapFlag(argv: readonly string[]): boolean | undefined {
-  let last: boolean | undefined;
-  for (const arg of argv) {
-    if (arg === "--sourcemap") last = true;
-    else if (arg === "--no-sourcemap") last = false;
-  }
-  return last;
-}
+/** `--sourcemap` and `--no-sourcemap`, for the commands that bundle. */
+const sourcemapArg = {
+  type: "boolean",
+  description: "Write a source map",
+  negativeDescription: "Skip the source map",
+} as const;
 
 /**
  * Closes fds 0-2 so Node's exit-time terminal reset hits closed fds. Call it
@@ -42,60 +36,80 @@ function closeStdio(): void {
   }
 }
 
-/** Parses argv and runs the named subcommand: `dev`, `build`, or `package`. */
-export async function run(argv: readonly string[] = process.argv): Promise<void> {
-  const command = argv[2];
-
-  if (command === "build") {
+const buildCommand = defineCommand({
+  meta: { name: "build", description: "Bundle the app into dist" },
+  args: { sourcemap: sourcemapArg },
+  async run({ args }) {
     try {
-      const output = await build({ sourcemap: sourcemapFlag(argv) });
+      const output = await build({ sourcemap: args.sourcemap });
       log(process.stdout, `built ${relative(output.entryFile)}`);
     } catch (error) {
       printFault(process.stderr, "build failed", toFault(error));
       process.exitCode = 1;
     }
-    return;
-  }
+  },
+});
 
-  if (command === "package") {
+const packageCommand = defineCommand({
+  meta: { name: "package", description: "Package the app as an application bundle" },
+  args: { sourcemap: sourcemapArg },
+  async run({ args }) {
     try {
-      const { appPath } = await packageApp({ sourcemap: sourcemapFlag(argv) });
+      const { appPath } = await packageApp({ sourcemap: args.sourcemap });
       log(process.stdout, `packaged ${relative(appPath)}`);
     } catch (error) {
       printFault(process.stderr, "package failed", toFault(error));
       process.exitCode = 1;
     }
-    return;
-  }
+  },
+});
 
-  if (command !== "dev") {
-    process.stderr.write(`${USAGE}\n`);
-    process.exitCode = 1;
-    return;
-  }
+const devCommand = defineCommand({
+  meta: { name: "dev", description: "Run the app in a development window" },
+  args: {
+    "experimental-hmr": {
+      type: "boolean",
+      description: "Apply edits without a reload (or set INCA_EXPERIMENTAL_HMR)",
+    },
+  },
+  async run({ args }) {
+    if ("sourcemap" in args) {
+      warn(process.stderr, "dev ignores --sourcemap and --no-sourcemap", { timestamp: true });
+    }
 
-  const controller = new AbortController();
-  const onSignal = (): void => {
-    if (controller.signal.aborted) return;
-    log(process.stderr, "shutting down", { timestamp: true });
-    controller.abort();
-  };
-  // A wrapper script runner (e.g. `pnpm run`) commonly delivers SIGTERM to
-  // its child directly on Ctrl-C, rather than relying on the terminal to
-  // signal the whole process group — SIGINT alone left the host orphaned.
-  process.on("SIGINT", onSignal);
-  process.on("SIGTERM", onSignal);
+    const controller = new AbortController();
+    const onSignal = (): void => {
+      if (controller.signal.aborted) return;
+      log(process.stderr, "shutting down", { timestamp: true });
+      controller.abort();
+    };
+    // A wrapper script runner (e.g. `pnpm run`) commonly delivers SIGTERM to
+    // its child directly on Ctrl-C, rather than relying on the terminal to
+    // signal the whole process group — SIGINT alone left the host orphaned.
+    process.on("SIGINT", onSignal);
+    process.on("SIGTERM", onSignal);
 
-  const experimentalHmr =
-    argv.includes("--experimental-hmr") ||
-    !["", "0", "false"].includes(process.env.INCA_EXPERIMENTAL_HMR ?? "");
-  if (experimentalHmr) log(process.stdout, "experimental HMR active", { timestamp: true });
+    const experimentalHmr =
+      args["experimental-hmr"] === true ||
+      !["", "0", "false"].includes(process.env.INCA_EXPERIMENTAL_HMR ?? "");
+    if (experimentalHmr) log(process.stdout, "experimental HMR active", { timestamp: true });
 
-  try {
-    await dev({ signal: controller.signal, experimentalHmr });
-    if (controller.signal.aborted) closeStdio();
-  } catch (error) {
-    printFault(process.stderr, "dev failed", toFault(error), { timestamp: true });
-    process.exitCode = 1;
-  }
+    try {
+      await dev({ signal: controller.signal, experimentalHmr });
+      if (controller.signal.aborted) closeStdio();
+    } catch (error) {
+      printFault(process.stderr, "dev failed", toFault(error), { timestamp: true });
+      process.exitCode = 1;
+    }
+  },
+});
+
+const main = defineCommand({
+  meta: { name: "inca", version: pkg.version, description: pkg.description },
+  subCommands: { dev: devCommand, build: buildCommand, package: packageCommand },
+});
+
+/** Parses argv and runs the named subcommand: `dev`, `build`, or `package`. */
+export async function run(argv: readonly string[] = process.argv): Promise<void> {
+  await runMain(main, { rawArgs: argv.slice(2) });
 }

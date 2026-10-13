@@ -5,7 +5,7 @@ import { Writable } from "node:stream";
 
 import { describe, expect, it } from "vitest";
 
-import { log, printFault, toFault } from "./log.mts";
+import { log, printFault, toFault, warn } from "./log.mts";
 
 function sink(): { stream: Writable; text: () => string } {
   const chunks: string[] = [];
@@ -36,6 +36,33 @@ describe("log", () => {
 
     // The clock follows the runner's locale, so only the shape is asserted.
     expect(out.text()).toMatch(/^\d.* \[inca\] ready\n$/);
+  });
+});
+
+describe("warn", () => {
+  it("tags a line like log does", () => {
+    const out = sink();
+
+    warn(out.stream, "dev ignores the flag");
+
+    expect(out.text()).toBe("[inca] dev ignores the flag\n");
+  });
+
+  it("colors the tag yellow on a terminal", () => {
+    const chunks: string[] = [];
+    const stream = Object.assign(
+      new Writable({
+        write(chunk, _encoding, callback) {
+          chunks.push(String(chunk));
+          callback();
+        },
+      }),
+      { isTTY: true, hasColors: () => true },
+    );
+
+    warn(stream, "dev ignores the flag");
+
+    expect(chunks.join("")).toContain("\u001b[33m");
   });
 });
 

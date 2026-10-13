@@ -25,7 +25,11 @@ export interface LogOptions {
 export const STAMPED = { timestamp: true } as const;
 
 /** Builds the line's prefix. `styleText` leaves it unstyled for a stream that can't color. */
-function tag(stream: NodeJS.WritableStream, options: LogOptions, color: "cyan" | "red"): string {
+function tag(
+  stream: NodeJS.WritableStream,
+  options: LogOptions,
+  color: "cyan" | "yellow" | "red",
+): string {
   const label = styleText(["bold", color], TAG, { stream });
   if (!options.timestamp) return label;
   return `${styleText("dim", TIME.format(new Date()), { stream })} ${label}`;
@@ -38,6 +42,15 @@ export function log(
   options: LogOptions = {},
 ): void {
   stream.write(`${tag(stream, options, "cyan")} ${message}\n`);
+}
+
+/** Writes one `[inca] <message>` line to `stream`, with the tag in yellow. */
+export function warn(
+  stream: NodeJS.WritableStream,
+  message: string,
+  options: LogOptions = {},
+): void {
+  stream.write(`${tag(stream, options, "yellow")} ${message}\n`);
 }
 
 /** A failure reduced to the message and stack worth printing. */

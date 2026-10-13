@@ -75,6 +75,7 @@
     "@types/node": "catalog:",
     "@vue/runtime-core": "catalog:",
     "c12": "4.0.0-rc.2",
+    "citty": "0.2.2",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "rolldown": "~1.2.13",
