@@ -12,7 +12,7 @@ use std::{
 };
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use rquickjs::{Ctx, Object};
+use rquickjs::Ctx;
 
 use crate::quickjs::Plain;
 
@@ -172,6 +172,17 @@ struct Parsed {
     sources: Vec<String>,
 }
 
+/// The runtime's maps, created on first use. `None` when the userdata store is borrowed, which
+/// leaves the registration unrecorded.
+fn maps_or_insert<'a>(
+    ctx: &'a Ctx<'_>,
+) -> Option<impl std::ops::Deref<Target = Plain<SourceMaps>> + 'a> {
+    if ctx.userdata::<Plain<SourceMaps>>().is_none() {
+        let _ = ctx.store_userdata(Plain(SourceMaps::default()));
+    }
+    ctx.userdata::<Plain<SourceMaps>>()
+}
+
 /// Registers the generated `source` of `filename`. A recompile of the same
 /// filename replaces its source and map. A sidecar map file is read here and the map
 /// is parsed on the first remap.
@@ -196,10 +207,7 @@ pub(crate) fn register(ctx: &Ctx<'_>, filename: &str, source: &str) {
                 })
             })
     };
-    if ctx.userdata::<Plain<SourceMaps>>().is_none() {
-        let _ = ctx.store_userdata(Plain(SourceMaps::default()));
-    }
-    if let Some(maps) = ctx.userdata::<Plain<SourceMaps>>() {
+    if let Some(maps) = maps_or_insert(ctx) {
         let entry = Entry {
             source: source.to_owned(),
             raw,
@@ -322,15 +330,13 @@ fn parse(ctx: &Ctx<'_>, raw: &RawMap) -> Option<Parsed> {
         .ok()
         .flatten()
         .unwrap_or_default();
-    let sources = sources_of(&map)?
+    let sources = map
+        .get::<_, Vec<Option<String>>>("sources")
+        .ok()?
         .into_iter()
         .map(|name| name.map_or_else(String::new, |name| resolve(&root, &name, sidecar_dir)))
         .collect();
     Some(Parsed { lines, sources })
-}
-
-fn sources_of(map: &Object<'_>) -> Option<Vec<Option<String>>> {
-    map.get::<_, Vec<Option<String>>>("sources").ok()
 }
 
 fn resolve(root: &str, name: &str, sidecar_dir: Option<&Path>) -> String {

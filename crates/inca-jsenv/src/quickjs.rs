@@ -20,7 +20,6 @@ use std::mem::MaybeUninit;
 use rquickjs::{Ctx, Error, IntoJs, JsLifetime, Object, Result, Value, object::PropertyFlags, qjs};
 
 /// Userdata wrapper for a type whose lifetimes are all `'static`.
-#[derive(Default)]
 pub struct Plain<T>(pub T);
 
 // SAFETY: `T: 'static` carries no `'js` lifetime, so the lifetime change is the identity.

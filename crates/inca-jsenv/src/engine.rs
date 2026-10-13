@@ -212,14 +212,14 @@ impl Engine {
     pub fn run_jobs(&self) -> Vec<EngineError> {
         let mut failures = self.startup_failures.take();
         while self.run_job(&mut failures) {}
-        let reasons = self.context.with(|ctx| {
+        let reasons: Vec<EngineError> = self.context.with(|ctx| {
             ctx.globals()
                 .get::<_, Function>(TAKE)
                 .and_then(|take| take.call::<_, Vec<Value>>(()))
                 .map(|values| values.iter().map(EngineError::from_thrown).collect())
                 .unwrap_or_default()
         });
-        failures.extend::<Vec<EngineError>>(reasons);
+        failures.extend(reasons);
         failures
     }
 
