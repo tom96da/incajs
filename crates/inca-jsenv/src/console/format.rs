@@ -13,7 +13,7 @@ use crate::inspect;
 /// `%s`, `%d`/`%i`, `%f`, `%o`/`%O`, `%c` and `%%` are replaced; anything else
 /// stays as written. A conversion that throws prints the argument as
 /// `console.dir` shows it.
-pub(super) fn line(ctx: &Ctx<'_>, values: &[Value<'_>], color: bool) -> String {
+pub(super) fn substitute(ctx: &Ctx<'_>, values: &[Value<'_>], color: bool) -> String {
     let Some((first, rest)) = values.split_first() else {
         return String::new();
     };
@@ -164,7 +164,7 @@ mod tests {
         let context = Context::full(&runtime).unwrap();
         context.with(|ctx| {
             let values: Vec<Value<'_>> = ctx.eval(args).unwrap();
-            let out = line(&ctx, &values, false);
+            let out = substitute(&ctx, &values, false);
             assert!(!ctx.has_exception(), "a conversion left an exception");
             out
         })
@@ -290,7 +290,7 @@ mod tests {
         let context = Context::full(&runtime).unwrap();
         context.with(|ctx| {
             let values: Vec<Value<'_>> = ctx.eval(args).unwrap();
-            let out = line(&ctx, &values, false);
+            let out = substitute(&ctx, &values, false);
             assert!(!ctx.has_exception());
             (out, ctx.eval("calls").unwrap())
         })

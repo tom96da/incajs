@@ -111,7 +111,7 @@ fn entries<'js>(value: &Value<'js>) -> Option<Entries<'js>> {
 
 fn cell(value: &Value<'_>, color: bool) -> Cell {
     if let Some(text) = value.as_string().and_then(|text| text.to_string().ok()) {
-        let plain = format!("'{}'", escape(&text).replace('\'', "\\'"));
+        let plain = inspect::quote(&escape(&text));
         return Cell {
             shown: paint(color, Style::Green, &plain),
             plain,

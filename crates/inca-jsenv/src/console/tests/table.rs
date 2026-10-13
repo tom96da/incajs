@@ -59,6 +59,13 @@ fn table_escapes_control_characters_and_backslashes_in_cells() {
 }
 
 #[test]
+fn table_escapes_a_single_quote_in_a_string_cell() {
+    let drawn = &texts(r#"console.table([{ a: "it's" }]);"#)[0];
+
+    assert!(drawn.contains(r"'it\'s'"), "{drawn}");
+}
+
+#[test]
 fn table_treats_date_map_set_and_error_as_not_tabular() {
     assert_eq!(
         texts(

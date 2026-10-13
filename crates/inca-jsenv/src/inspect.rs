@@ -346,26 +346,29 @@ fn separate(out: &mut String, written: &mut bool) {
 
 fn write_holes(out: &mut String, written: &mut bool, count: f64, mode: Mode) {
     separate(out, written);
-    let count = count.to_string();
-    let plural = if count == "1" { "" } else { "s" };
     put(
         out,
         mode,
         Style::Grey,
-        &format!("<{count} empty item{plural}>"),
+        &format!("<{}>", items(count, "empty")),
     );
 }
 
 /// `... N more items`, closing an array cut at [`MAX_ENTRIES`].
 fn write_more(out: &mut String, written: &mut bool, count: f64, mode: Mode) {
     separate(out, written);
-    let count = count.to_string();
-    let plural = if count == "1" { "" } else { "s" };
-    plain(out, mode, &format!("... {count} more item{plural}"));
+    plain(out, mode, &format!("... {}", items(count, "more")));
+}
+
+/// `N <kind> item` or `N <kind> items`.
+#[allow(clippy::float_cmp)] // JS lengths arrive as f64 and the counts are whole numbers
+fn items(count: f64, kind: &str) -> String {
+    let plural = if count == 1.0 { "" } else { "s" };
+    format!("{count} {kind} item{plural}")
 }
 
 /// `text` in single quotes.
-fn quote(text: &str) -> String {
+pub(crate) fn quote(text: &str) -> String {
     format!("'{}'", text.replace('\'', "\\'"))
 }
 

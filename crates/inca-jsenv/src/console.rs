@@ -73,7 +73,7 @@ struct Console {
 impl Console {
     /// A debug line is dimmed whole, so its values stay uncolored.
     fn format(&self, ctx: &Ctx<'_>, level: Level, values: &[Value<'_>]) -> String {
-        format::line(ctx, values, self.color && level != Level::Debug)
+        format::substitute(ctx, values, self.color && level != Level::Debug)
     }
 
     /// Writes `body` behind the group guides and the level's symbol; later
@@ -184,7 +184,7 @@ fn assertion_message<'js>(ctx: &Ctx<'js>, mut data: Vec<Value<'js>>, color: bool
         Ok(lead) => data.insert(0, lead.into_value()),
         Err(_) => return MESSAGE.to_owned(),
     }
-    format::line(ctx, &data, color)
+    format::substitute(ctx, &data, color)
 }
 
 /// The frames of the stack that called `console.trace`. `QuickJS` lists no
