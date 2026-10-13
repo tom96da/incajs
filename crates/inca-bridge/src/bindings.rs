@@ -7,6 +7,9 @@
 //! it no longer needs.
 
 mod convert;
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod fixtures;
 mod focus;
 mod host;
 mod listeners;
@@ -42,7 +45,3 @@ pub fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
     ctx.globals().set("__inca_native__", native)?;
     Ok(())
 }
-
-#[cfg(test)]
-#[allow(clippy::unwrap_used)]
-mod tests;

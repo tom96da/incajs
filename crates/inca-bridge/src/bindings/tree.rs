@@ -325,3 +325,7 @@ fn attribute_value_to_js<'js>(
         Some(AttributeValue::Bool(b)) => b.into_js(ctx),
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests;
