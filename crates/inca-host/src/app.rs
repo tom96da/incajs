@@ -12,7 +12,7 @@
 //! the pointer once a listener is registered or a node can take focus.
 //!
 //! `--dev` additionally answers messages on stdin and writes them on
-//! stdout, via [`crate::dev`] speaking [`crate::protocol`]'s wire format.
+//! stdout, via [`crate::dev`] speaking the development wire format.
 //! stdout is then the message channel and nothing else may go there, so
 //! every diagnostic, and the app's own `console`, go to stderr.
 //!
@@ -32,10 +32,7 @@ use gpui::{
 use gpui_platform::application;
 
 use inca_bridge::bindings::install;
-use inca_bridge::{
-    ErrorReporter, EventDispatcher, FocusTransition, Host, LoadSignal, install_dev,
-    install_load_signal, stderr_reporter,
-};
+use inca_bridge::{ErrorReporter, EventDispatcher, FocusTransition, Host, stderr_reporter};
 use inca_gpui::{
     AttributeValue, EventSink, NodeId, NodeLayout, VirtualNode, render_tree_with_events,
 };
@@ -43,12 +40,12 @@ use inca_jsenv::{Engine, EngineError, PendingModule, console};
 
 use crate::config;
 
+use crate::dev::{ErrorCode, LoadSignal, install_dev, install_load_signal};
 use crate::dev::{
     Failure, SharedWriter, StdoutWriter, fail_startup, install_panic_hook, reporter_for,
     serve_dev_protocol, stdin_lines,
 };
 use crate::menu;
-use crate::protocol::ErrorCode;
 
 /// What an app is called when nothing named it.
 const DEFAULT_APP_NAME: &str = "Inca";
@@ -180,7 +177,7 @@ impl Session {
     /// finds `console`.
     ///
     /// `__inca_dev__` exists only when `writer` is `Some`; see
-    /// [`inca_bridge::install_dev`] for what it does. The returned `signal`
+    /// [`crate::dev::install_dev`] for what it does. The returned `signal`
     /// records what `setLoadFailed` reports, and stays at its defaults in
     /// production.
     ///

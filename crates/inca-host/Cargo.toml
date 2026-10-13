@@ -25,6 +25,7 @@ inca-bridge = { path = "../inca-bridge" }
 inca-gpui = { path = "../inca-gpui" }
 inca-jsenv = { path = "../inca-jsenv" }
 log.workspace = true
+rquickjs.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 

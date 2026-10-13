@@ -2841,6 +2841,7 @@ dependencies = [
  "inca-gpui",
  "inca-jsenv",
  "log",
+ "rquickjs",
  "serde",
  "serde_json",
 ]

@@ -6,7 +6,7 @@
 //! that swaps into the window when it settles. Any other notification goes
 //! to the loading app while a load is pending, and to the window's app
 //! otherwise, as `__inca_dev__.receive(method, paramsJson)` — see
-//! [`crate::protocol`] for the wire format this speaks.
+//! [`wire`] for the wire format this speaks.
 //!
 //! The first entry starts as a [`Loading`] and the window opens once its
 //! top-level `await` settles. An entry still pending after [`LOAD_TIMEOUT`]
@@ -24,11 +24,18 @@ use std::time::{Duration, Instant};
 use gpui::{App, FutureExt, WindowHandle};
 use serde_json::Value;
 
-use inca_bridge::{ErrorReporter, call_dev_receive, report_jobs};
+use inca_bridge::{ErrorReporter, report_jobs};
+
 use inca_jsenv::EngineError;
 
 use crate::app::{HostedApp, Loading, Session, is_resizable, maybe_auto_resize_to_content, open};
-use crate::protocol::{self, ErrorCode, Incoming, Method, Outgoing};
+pub(crate) use wire::ErrorCode;
+use wire::{Incoming, Method, Outgoing};
+
+mod globals;
+mod wire;
+
+pub(crate) use globals::{DevSend, LoadSignal, call_dev_receive, install_dev, install_load_signal};
 
 /// Why a request could not be answered with a result.
 #[derive(Debug)]
@@ -97,7 +104,7 @@ impl Writer for StdoutWriter {
 /// Encodes and writes one protocol line. A message that fails to encode
 /// never reaches `writer` — there is nothing sound to send instead.
 pub(crate) fn send(writer: &dyn Writer, message: &Outgoing) {
-    match protocol::encode(message) {
+    match wire::encode(message) {
         Ok(line) => writer.write_line(line),
         Err(err) => log::error!("failed to encode {message:?}: {err}"),
     }
@@ -108,7 +115,7 @@ pub(crate) fn send(writer: &dyn Writer, message: &Outgoing) {
 /// inside a platform callback can abort the process before a queued line
 /// would be sent.
 fn write_panic_line(out: &mut impl Write, message: &str) {
-    let Ok(line) = protocol::encode(&Outgoing::error(
+    let Ok(line) = wire::encode(&Outgoing::error(
         Value::Null,
         ErrorCode::InternalError,
         message,
@@ -159,10 +166,10 @@ pub(crate) fn reporter_for(writer: &SharedWriter) -> ErrorReporter {
     Rc::new(move |err: &EngineError| send(&*writer, &Outgoing::app_error(err)))
 }
 
-/// Adapts `writer` into the generic callback [`inca_bridge::install_dev`]
+/// Adapts `writer` into the generic callback [`crate::dev::install_dev`]
 /// takes: a JS `__inca_dev__.send(method, paramsJson)` call becomes a
 /// `method` notification written to `writer`.
-pub(crate) fn dev_send(writer: &SharedWriter) -> inca_bridge::DevSend {
+pub(crate) fn dev_send(writer: &SharedWriter) -> crate::dev::DevSend {
     let writer = Rc::clone(writer);
     Rc::new(move |method: &str, params| send(&*writer, &Outgoing::notification(method, params)))
 }
@@ -217,7 +224,7 @@ fn params_json(params: Option<Value>) -> String {
 }
 
 /// Relays an unrecognized notification (no `id`) into the window's app via
-/// [`inca_bridge::call_dev_receive`], then drains the job queue and
+/// [`crate::dev::call_dev_receive`], then drains the job queue and
 /// refreshes the window as a swap does — a callback may have queued
 /// reactivity work or thrown.
 fn relay_to_js(
@@ -404,7 +411,7 @@ impl Serve {
 
     /// Handles one stdin line.
     fn on_line(&mut self, cx: &mut App, line: &str) -> ControlFlow<()> {
-        match protocol::decode(line) {
+        match wire::decode(line) {
             Ok(Incoming::Call {
                 id,
                 method: Method::Reload,

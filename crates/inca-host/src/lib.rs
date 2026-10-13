@@ -8,7 +8,6 @@ mod app;
 pub mod config;
 mod dev;
 mod menu;
-mod protocol;
 
 #[cfg(any(test, feature = "test-support"))]
 pub mod harness;

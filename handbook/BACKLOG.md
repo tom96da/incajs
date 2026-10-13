@@ -434,16 +434,15 @@ A fixed entry is deleted and its ID is never reused.
 - **B-037 Dev relay hardening (`__inca_dev__`)**
   `Units: bridge,host · Size: S–M · Impact: Low`
 
-  Three related gaps in
-  `crates/inca-bridge/src/dev.rs`. `install_dev`'s `send` accepts any method
-  name, including the host's own reserved ones (`ready`, `appError`), so a
-  running app can spoof a host notification. `call_dev_receive` discards
-  whatever `.ok()?` swallows when reading `__inca_dev__`/`receive` off
-  globals, rather than capturing it as an `EngineError`. `receive` is
+  Three related gaps in `crates/inca-host/src/dev/globals.rs`. `install_dev`'s
+  `send` accepts any method name, including the host's own reserved ones
+  (`ready`, `appError`), so a running app can spoof a host notification.
+  `call_dev_receive` discards whatever `.ok()?` swallows when reading
+  `__inca_dev__`/`receive` off globals, rather than capturing it as an `EngineError`. `receive` is
   invoked via a bare `Function::call`, leaving `this` unbound instead of
   bound to `__inca_dev__` — `handbook/PROTOCOL.md`'s own
   `__inca_dev__.receive?.(...)` implies a method call. Also,
-  `PROTOCOL_VERSION` (`crates/inca-host/src/protocol.rs`) is still `0`
+  `PROTOCOL_VERSION` (`crates/inca-host/src/dev/wire.rs`) is still `0`
   despite this new relay surface landing; bump it or write down that it's
   a backstop that doesn't move on every feature addition.
 

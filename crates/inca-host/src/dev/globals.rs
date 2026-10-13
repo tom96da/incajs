@@ -1,16 +1,14 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Binds `globalThis.__inca_dev__`, the channel a running app in the
-//! development window uses to trade arbitrary-named messages with whatever is
-//! on the other end of the host's own protocol — a bundler's HMR channel, say.
-//! This crate knows nothing about that protocol's wire format or any particular
-//! bundler; the relay carries a method name and a parsed `params` value each
-//! way, exactly like [`crate::dispatch`] carries a native input event into JS
-//! without knowing what a caller does with it. [`install_dev`] also adds
-//! `compile`, which builds app source into an async function.
-//! [`install_load_signal`] adds a flag the app sets to report that its load
-//! failed or recovered.
+//! The JS side of the development protocol. Binds `globalThis.__inca_dev__`, the channel a running
+//! app in the development window uses to trade arbitrary-named messages with whatever is on the
+//! other end of the host's own protocol, a bundler's HMR channel say. The host knows nothing about
+//! that protocol's wire format or any particular bundler; the relay carries a method name and a
+//! parsed `params` value each way, exactly like [`inca_bridge::dispatch`] carries a native input
+//! event into JS without knowing what a caller does with it. [`install_dev`] also adds `compile`,
+//! which builds app source into an async function. [`install_load_signal`] adds a flag the app
+//! sets to report that its load failed or recovered.
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -24,7 +22,7 @@ use inca_jsenv::{Engine, EngineError, compile_async_function};
 /// `__inca_dev__.send(method, paramsJson)` — `params` already parsed out of
 /// `paramsJson`. What happens with it (writing a line to some transport,
 /// say) is entirely up to the caller.
-pub type DevSend = Rc<dyn Fn(&str, Value)>;
+pub(crate) type DevSend = Rc<dyn Fn(&str, Value)>;
 
 /// Installs `globalThis.__inca_dev__`, with the methods
 /// `send(method: string, paramsJson: string)` and
@@ -43,7 +41,7 @@ pub type DevSend = Rc<dyn Fn(&str, Value)>;
 ///
 /// Returns an error if defining `globalThis.__inca_dev__` or its methods on
 /// `ctx` fails.
-pub fn install_dev(ctx: &Ctx<'_>, on_send: DevSend) -> JsResult<()> {
+pub(crate) fn install_dev(ctx: &Ctx<'_>, on_send: DevSend) -> JsResult<()> {
     let dev = Object::new(ctx.clone())?;
     dev.set(
         "send",
@@ -80,7 +78,7 @@ fn compile(
 /// What `setLoadFailed` reports: the latest value, and how many times the app
 /// reported `true`.
 #[derive(Debug, Default)]
-pub struct LoadSignal {
+pub(crate) struct LoadSignal {
     failed: Cell<bool>,
     failures: Cell<u32>,
 }
@@ -88,14 +86,14 @@ pub struct LoadSignal {
 impl LoadSignal {
     /// The value of the latest `setLoadFailed` call, `false` before any.
     #[must_use]
-    pub fn failed(&self) -> bool {
+    pub(crate) fn failed(&self) -> bool {
         self.failed.get()
     }
 
     /// How many `setLoadFailed(true)` calls have happened. Compare two reads
     /// to detect a `true` that a later `false` cleared.
     #[must_use]
-    pub fn failures(&self) -> u32 {
+    pub(crate) fn failures(&self) -> u32 {
         self.failures.get()
     }
 }
@@ -113,7 +111,7 @@ impl LoadSignal {
 /// Returns an error if `globalThis.__inca_dev__` is missing or is not an
 /// object (call [`install_dev`] first), or defining `setLoadFailed` on
 /// it fails.
-pub fn install_load_signal(ctx: &Ctx<'_>, signal: Rc<LoadSignal>) -> JsResult<()> {
+pub(crate) fn install_load_signal(ctx: &Ctx<'_>, signal: Rc<LoadSignal>) -> JsResult<()> {
     let dev: Object = ctx.globals().get("__inca_dev__")?;
     dev.set(
         "setLoadFailed",
@@ -139,7 +137,11 @@ pub fn install_load_signal(ctx: &Ctx<'_>, signal: Rc<LoadSignal>) -> JsResult<()
 /// `__inca_dev__` or `receive` does nothing. A throw from `receive` is
 /// returned as an [`EngineError`], and the caller decides how to report it.
 #[must_use]
-pub fn call_dev_receive(engine: &Engine, method: &str, params_json: &str) -> Option<EngineError> {
+pub(crate) fn call_dev_receive(
+    engine: &Engine,
+    method: &str,
+    params_json: &str,
+) -> Option<EngineError> {
     engine.with(|ctx| {
         let dev = ctx.globals().get::<_, Object>("__inca_dev__").ok()?;
         let receive = dev.get::<_, Function>("receive").ok()?;
