@@ -9,7 +9,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 # Configuration
 
-Configuration is read from `inca.config.ts` in your app's root — other JS
+Configuration is read from `inca.config.ts` in your app's root. Other JS
 and JSON extensions work too. `defineConfig` is a typing helper; it returns
 what you give it.
 
@@ -40,8 +40,8 @@ export default defineConfig({
 - Default: `package.json`'s own `"name"`, with any npm scope (`@org/`)
   stripped
 
-The name the operating system shows for the running app — the Dock and the
-menu bar on macOS, the taskbar on Linux — in the development window as
+The name the operating system shows for the running app (the Dock and the
+menu bar on macOS, the taskbar on Linux) in the development window as
 well as once packaged.
 
 It also names the packaged app's own directory on macOS
@@ -65,7 +65,7 @@ so `inca package` prints a note when it falls back to the generated one.
 
 ### icon
 
-- Type: `string` — a path, resolved from the app's root directory
+- Type: `string`, a path, resolved from the app's root directory
 - Default: none
 
 A `.icns` file that must exist. macOS shows it in the Dock, in the
@@ -85,7 +85,7 @@ Every key here is covered in prose by
 
 ### window.width / window.height
 
-- Type: `number` — pixels
+- Type: `number`, in pixels
 - Default: the `width`/`height` the app's root element declares, then
   800 × 600
 
@@ -107,7 +107,7 @@ Whether a user can resize the window.
 
 ### window.minWidth / window.minHeight
 
-- Type: `number` — pixels
+- Type: `number`, in pixels
 - Default: none
 
 The smallest the window can be. It opens at least this size.
@@ -116,7 +116,7 @@ The smallest the window can be. It opens at least this size.
 
 ### entry
 
-- Type: `string` — a path, resolved from the app's root directory
+- Type: `string`, a path, resolved from the app's root directory
 - Default: the first of `src/main.mts`, `src/main.ts` and `src/main.js` that
   exists, otherwise `src/App.vue` wrapped in a synthesized entry
 
@@ -125,7 +125,7 @@ bootstrapping and wins over `src/App.vue`.
 
 ### outDir
 
-- Type: `string` — a path, resolved from the app's root directory
+- Type: `string`, a path, resolved from the app's root directory
 - Default: `"dist"`
 
 Where a build's output is written. It can't be, or contain, the app's root,

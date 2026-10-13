@@ -10,7 +10,7 @@
 import readline from "node:readline";
 
 process.stdout.write(
-  "not json — noise from some dependency, as the real host's own stdout can carry\n",
+  "not json: noise from some dependency, as the real host's own stdout can carry\n",
 );
 process.stdout.write(
   `${JSON.stringify({ jsonrpc: "2.0", method: "ready", params: { protocol: 0 } })}\n`,

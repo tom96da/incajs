@@ -6,7 +6,7 @@ import { native } from "./native.mts";
 import type { AttributeValue, NodeId, ScrollAlignment, StyleProps, TagName } from "./types.mts";
 
 /**
- * Returns the host-allocated root container's id — the node an app attaches
+ * Returns the host-allocated root container's id, the node an app attaches
  * itself under. The host allocates it with the tree, so this resolves from
  * the first call and names the same node for the engine's lifetime.
  * @returns the root node's id
@@ -17,7 +17,7 @@ export function rootNodeId(): NodeId {
 
 /**
  * Allocates a new node of kind `tag` in the native tree. The node starts out
- * detached — attach it with {@link appendChild}/{@link insertBefore}.
+ * detached. Attach it with {@link appendChild}/{@link insertBefore}.
  * @param tag - the node's element kind
  * @returns the new node's id
  */
@@ -39,7 +39,7 @@ export function appendChild(parentId: NodeId, childId: NodeId): void {
  * Attaches `childId` as a child of `parentId`, positioned before `anchorId`
  * (or at the end, if `anchorId` is `null`). If `anchorId` names a real node
  * that just isn't currently a child of `parentId`, this falls back to
- * appending at the end instead of throwing — only a wholly unknown
+ * appending at the end instead of throwing. Only a wholly unknown
  * `anchorId` raises.
  * @param parentId - the container to attach to
  * @param childId - the node being attached
@@ -50,9 +50,9 @@ export function insertBefore(parentId: NodeId, childId: NodeId, anchorId: NodeId
 }
 
 /**
- * Detaches `childId` from `parentId`. The detached node stays alive (and
- * keeps its own children) — it isn't freed, so it can be re-attached
- * elsewhere. Use {@link destroyNode} for a node that isn't coming back.
+ * Detaches `childId` from `parentId`. The detached node stays alive and keeps
+ * its own children, so it can be re-attached elsewhere. Use
+ * {@link destroyNode} for a node that isn't coming back.
  * @param parentId - the current container
  * @param childId - the node being detached
  */

@@ -31,11 +31,11 @@ export interface DevOptions {
    * committed `src/main.mts`, `src/main.ts` or `src/main.js`, or `src/App.vue` wrapped in a synthesized one.
    */
   entry?: string;
-  /** Overrides the bundler — see {@link defaultBundler} for what's wired in by default. */
+  /** Overrides the bundler. See {@link defaultBundler} for what's wired in by default. */
   bundler?: Bundler;
   /**
    * Delivers module-granular updates instead of a full reload on every
-   * change, over `bundler.hmr` — see `--experimental-hmr`.
+   * change, over `bundler.hmr`. See `--experimental-hmr`.
    */
   experimentalHmr?: boolean;
   /**
@@ -52,10 +52,9 @@ export interface DevOptions {
 }
 
 /**
- * How long `reload` waits for the host before giving up. A wedged app would
- * otherwise hang this call forever, which in turn blocks teardown — an
- * aborted `dev()` waits for the in-flight rebuild's own reload before it can
- * stop the host at all.
+ * How long `reload` waits for the host before giving up. A wedged app never
+ * answers, and an aborted `dev()` waits for the in-flight rebuild's reload
+ * before it can stop the host.
  */
 const RELOAD_TIMEOUT_MS = 10_000;
 
@@ -92,7 +91,7 @@ async function resolveMetadata(
  * launched from.
  *
  * `undefined` on every other platform, and whenever the bundle can't be
- * assembled — reported on `stdout`, and the host is launched unbundled.
+ * assembled. It is reported on `stdout`, and the host is launched unbundled.
  */
 async function bundleExecutable(
   cwd: string,
@@ -117,10 +116,10 @@ async function bundleExecutable(
 }
 
 /**
- * Deletes every file directly under `outDir` that `keep` doesn't name —
+ * Deletes every file directly under `outDir` that `keep` doesn't name.
  * `outDir` isn't emptied between rebuilds (a build in progress may be
- * evaluating there), so a chunk or asset an edit stops producing would
- * otherwise linger indefinitely.
+ * evaluating there), so a chunk or asset an edit stops producing is deleted
+ * here.
  */
 async function pruneStaleFiles(outDir: string, keep: readonly string[]): Promise<void> {
   const wanted = new Set(keep);
@@ -274,7 +273,7 @@ export async function dev(options: DevOptions): Promise<void> {
       }
 
       if (!ready) {
-        // The host hasn't finished its first load yet — its entry path is
+        // The host hasn't finished its first load yet. Its entry path is
         // always the same, so it picks up this build's content on its own
         // once it gets there; a reload now would only race it.
         pendingReload = true;
@@ -300,7 +299,7 @@ export async function dev(options: DevOptions): Promise<void> {
         stderr,
         notify: (payload) => client?.notify("vite", payload),
         // A full reload needs a fresh Engine/Host, which only inca-host's
-        // own `reload` RPC method gives it — a `"vite"` notification can't.
+        // own `reload` RPC method gives it. A `"vite"` notification can't.
         reload: () => {
           if (ready) void reloadHost();
           else pendingReload = true;
@@ -316,7 +315,7 @@ export async function dev(options: DevOptions): Promise<void> {
       await startHost(channel.entryFile, { vite: (params) => channel.dispatch(params) });
       closable = channel;
       // No retry path exists for HMR mode the way a failed non-HMR start is
-      // naturally retried on the next rebuild — stop rather than hang.
+      // naturally retried on the next rebuild.
       if (!client) stop();
     } else {
       closable = await bundler.watch({

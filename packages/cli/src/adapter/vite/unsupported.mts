@@ -15,7 +15,7 @@ export interface UnsupportedFeature {
   name: string;
   /** Whether a module id is a use of the feature. */
   matches: (id: string) => boolean;
-  /** What happens instead, and what to reach for — appended to the error. */
+  /** What happens instead, and what to reach for. Appended to the error. */
   hint: string;
 }
 

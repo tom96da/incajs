@@ -1,5 +1,5 @@
 ---
-description: Reference of the inca CLI commands — dev, build, and package.
+description: Reference of the inca CLI commands dev, build, and package.
 ---
 
 <!--
@@ -91,5 +91,5 @@ When both flags are given, `--no-sourcemap` wins.
 
 | Variable        | Description          |
 | --------------- | -------------------- |
-| `INCA_HOST_BIN` | Path to a specific host binary, used by `dev` and `package` in place of automatic resolution — e.g. on a custom or unpublished build. |
+| `INCA_HOST_BIN` | Path to a specific host binary, used by `dev` and `package` in place of automatic resolution, e.g. on a custom or unpublished build. |
 | `INCA_EXPERIMENTAL_HMR` | Same as `--experimental-hmr`, for `inca dev`. See the [HMR guide](../guide/hmr). |

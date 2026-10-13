@@ -76,7 +76,7 @@ function codeIn(message: string): string | null {
 }
 
 /**
- * Drops the header `Error.stack` repeats — Node writes `Name: message`, a
+ * Drops the header `Error.stack` repeats. Node writes `Name: message`, a
  * bundler's aggregated error the bare message. A stack in any other shape
  * is kept whole.
  */
@@ -90,8 +90,8 @@ function framesOf(error: Error): string | null {
 }
 
 /**
- * Reduces an error a bundler re-wrapped: its text is kept whole — the
- * excerpt a compiler points at is the useful part — while the error class
+ * Reduces an error a bundler re-wrapped: its text is kept whole. The
+ * excerpt a compiler points at is the useful part, while the error class
  * and any `ERR_INCA_*` marker are lifted off the first line, the latter
  * into the fault's code.
  */
@@ -116,7 +116,10 @@ export function toFault(error: unknown): Fault {
   return { message: String(error), stack: null, code: null };
 }
 
-/** Dims only a stack's `at ...` frame lines — a leading header line, when there is one, stays plain. */
+/**
+ * Dims only a stack's `at ...` frame lines. A leading header line, when there is one, stays
+ * plain.
+ */
 function styleStack(stack: string, stream: NodeJS.WritableStream): string {
   return stack
     .split("\n")
@@ -126,7 +129,7 @@ function styleStack(stack: string, stream: NodeJS.WritableStream): string {
 
 /**
  * Writes the stack (when there is one) followed by `[inca] <label>
- * (<code>): <message>` to `stream` — the code only when the failure
+ * (<code>): <message>` to `stream`. The code appears only when the failure
  * carries one. The tagged line goes last so it stays the thing visible
  * without scrolling back through the stack above it.
  */

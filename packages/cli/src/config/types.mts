@@ -4,13 +4,13 @@
 /**
  * An app's own `inca.config.ts` (or `.js`/`.json`), loaded by `@incajs/cli`.
  * `package.json`'s `"inca"` key still works as a fallback, but is
- * deprecated — this file wins where both are present.
+ * deprecated. This file wins where both are present.
  */
 export interface IncaConfig {
   /** Path to an icon file, resolved from the app's root directory. */
   icon?: string;
   /**
-   * A reverse-DNS-style unique id — e.g. macOS's `CFBundleIdentifier`.
+   * A reverse-DNS-style unique id, e.g. macOS's `CFBundleIdentifier`.
    * @default a generated `org.inca.<slug>`
    */
   identifier?: string;
@@ -26,7 +26,7 @@ export interface IncaConfig {
   version?: string;
   /**
    * The app's entry point.
-   * @default resolved automatically — a committed `src/main.mts`,
+   * @default resolved automatically: a committed `src/main.mts`,
    * `src/main.ts` or `src/main.js`, or `src/App.vue` wrapped in a
    * synthesized one
    */
@@ -46,7 +46,7 @@ export interface IncaConfig {
   window?: WindowConfig;
 }
 
-/** What an app declares about its window — see {@link IncaConfig.window}. */
+/** What an app declares about its window. See {@link IncaConfig.window}. */
 export interface WindowConfig {
   /**
    * Initial width, in pixels. Falls back to the width the app's root

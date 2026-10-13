@@ -49,7 +49,7 @@ interface FakeBundler extends Bundler {
   emitError(error: { message: string; stack: string | null }): void;
   closed: boolean;
   /**
-   * Resolves once `watch()` is called — `dev()` now resolves its config
+   * Resolves once `watch()` is called. `dev()` resolves its config
    * (an async step) before reaching `watch()`, so a test firing an event
    * right after calling `dev()` has to wait for this first, or the event
    * lands before any handler is registered to see it.
@@ -77,7 +77,6 @@ function makeFakeBundler(): FakeBundler {
         },
       });
     },
-    // Never exercised here — dev() only ever calls watch().
     build: () => Promise.reject(new Error("not used by dev()")),
     emitBuild(output = FAKE_OUTPUT) {
       handlers?.onBuild(output);
@@ -994,7 +993,7 @@ describe("dev with --experimental-hmr", () => {
       signal: controller.signal,
     });
 
-    // HMR mode has no rebuild loop to retry a failed start on — dev()
+    // HMR mode has no rebuild loop to retry a failed start on, so dev()
     // itself must resolve rather than wait forever for a signal that
     // will never come.
     await running;

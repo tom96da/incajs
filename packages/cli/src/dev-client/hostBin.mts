@@ -6,7 +6,10 @@ import { createRequire } from "node:module";
 
 import { IncaError } from "../error.mts";
 
-/** Overrides host binary resolution — for a stand-in in tests, or a platform with no published binary yet. */
+/**
+ * Overrides host binary resolution, for a stand-in in tests, or a platform with no published
+ * binary yet.
+ */
 const HOST_BIN_ENV_VAR = "INCA_HOST_BIN";
 
 /** The per-platform npm package name for this process, or `undefined` off it. */
@@ -33,7 +36,7 @@ function resolveFromPlatformPackage(): string | undefined {
  * Where `inca-host` itself lives: `INCA_HOST_BIN` if set, otherwise the
  * per-platform npm package for this OS/arch (`@incajs/host-<os>-<arch>`, an
  * `optionalDependency` of this package).
- * @throws if neither resolves — no override is set, and either this
+ * @throws if neither resolves: no override is set, and either this
  * platform has no published binary, or the optional dependency carrying
  * it failed to install.
  */

@@ -5,7 +5,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 # incajs
 
-**Incarnative.js** — a GPU-native, Webview-free desktop application
+**Incarnative.js** is a GPU-native, Webview-free desktop application
 framework. No Chromium, no DOM: UI renders directly on the GPU via
 [GPUI](https://www.gpui.rs/), driven by an embedded QuickJS runtime
 ([`rquickjs`](https://github.com/DelSkayn/rquickjs)).

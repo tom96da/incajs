@@ -8,7 +8,7 @@ export const CONFIG_FILE_NAME = "inca.json";
 
 /**
  * Serializes `config` the way `inca.json` is written: `undefined` for
- * anything that shouldn't produce a file — `undefined` itself, or an
+ * anything that shouldn't produce a file: `undefined` itself, or an
  * object with no keys.
  */
 export function serializeConfig(config: unknown): string | undefined {

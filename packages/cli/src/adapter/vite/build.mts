@@ -10,8 +10,7 @@ import type { BuildOptions, BuildOutput } from "../types.mts";
 
 /**
  * Builds `entry` into a minified, production build under `outDir` once, and
- * rejects on failure rather than reporting it through a callback. Never
- * starts or talks to `inca-host` — that's `dev.mts`'s job.
+ * rejects on failure. Never starts or talks to `inca-host`.
  */
 export async function build(
   core: AdapterCore,

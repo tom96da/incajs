@@ -51,7 +51,7 @@ Scaffold your app in its own directory (e.g. `./my-app`), with a
 ```
 
 The directory containing `package.json` is the app's **project
-root** — every path Incarnative.js resolves, including `src` and the `dist`
+root**. Every path Incarnative.js resolves, including `src` and the `dist`
 it writes, is relative to it.
 
 `package.json` needs `"type": "module"`, satisfying the ESM-only
@@ -72,7 +72,7 @@ requirement above:
 Files under `src` are your app's **source files**. Incarnative.js looks for
 exactly one of two entry points there:
 
-- `src/App.vue` — no entry point or bootstrapping code needed;
+- `src/App.vue`: no entry point or bootstrapping code needed;
   Incarnative.js mounts it as the app itself:
 
   ```vue [src/App.vue]

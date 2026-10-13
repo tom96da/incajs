@@ -20,8 +20,7 @@ afterEach(async () => {
 
 /**
  * A bundler stand-in that writes real content to `outDir`, since packaging
- * copies it onward — an entry plus a chunk, so the copy has to preserve
- * both, not just the entry.
+ * copies it onward: an entry plus a chunk, so the copy has to preserve both.
  */
 function fakeBundler(): Bundler {
   return {
@@ -40,7 +39,7 @@ function fakeBundler(): Bundler {
   };
 }
 
-/** A stand-in host binary — real content and the executable bit, nothing that runs. */
+/** A stand-in host binary: real content and the executable bit, nothing that runs. */
 async function makeHostBin(dir: string): Promise<string> {
   const hostBin = path.join(dir, "inca-host");
   await writeFile(hostBin, "#!/bin/sh\necho stand-in\n");
@@ -51,7 +50,7 @@ async function makeHostBin(dir: string): Promise<string> {
 async function makeApp(pkg: object): Promise<string> {
   cwd = await mkdtemp(path.join(tmpdir(), "inca-package-"));
   // Node needs "type": "module" to load an inca.config.ts without a
-  // reparse-as-ESM warning — every real app already has this.
+  // reparse-as-ESM warning. Every real app already has this.
   await writeFile(path.join(cwd, "package.json"), JSON.stringify({ type: "module", ...pkg }));
   return cwd;
 }

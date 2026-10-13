@@ -19,7 +19,7 @@ export interface ResolveConfigOptions {
   core: AdapterCore;
   /** The module compiled `.vue` templates import their helpers from. */
   runtimeModuleName: string;
-  /** The app's own entry point — may import `.vue` files. */
+  /** The app's own entry point. It may import `.vue` files. */
   entry: string;
   /** Where the build's output is written. */
   outDir: string;
@@ -35,9 +35,9 @@ export interface ResolveConfigOptions {
   stdout: NodeJS.WritableStream;
   /** Where Vite's warnings and errors go. */
   stderr: NodeJS.WritableStream;
-  /** Silences the bundler's progress output — see the `quiet` option in `../types.mts`. */
+  /** Silences the bundler's progress output. See the `quiet` option in `../types.mts`. */
   quiet: boolean;
-  /** Written beside the entry — see the `runtimeConfig` option in `../types.mts`. */
+  /** Written beside the entry. See the `runtimeConfig` option in `../types.mts`. */
   runtimeConfig?: unknown;
 }
 
@@ -46,10 +46,9 @@ export interface ResolveConfigOptions {
  * files via `@vitejs/plugin-vue`. Compiled templates import their helpers
  * from `runtimeModuleName`.
  *
- * An import the entry doesn't inline — a dynamic `import()`, or a `.vue`
- * file's own `<style>` block — lands as its own chunk or asset alongside
- * the entry, named by `chunkFileNames`/`assetFileNames` below, rather than
- * failing the build.
+ * An import the entry doesn't inline (a dynamic `import()`, or a `.vue`
+ * file's own `<style>` block) lands as its own chunk or asset alongside
+ * the entry, named by `chunkFileNames`/`assetFileNames` below.
  */
 export function resolveViteConfig({
   core,
@@ -75,7 +74,7 @@ export function resolveViteConfig({
     // drops the size report.
     logLevel: quiet ? "silent" : "info",
     // Not `quiet`: this path's info() carries the per-build summary quiet
-    // mode is supposed to keep — see `BuildOptions.quiet`.
+    // mode is supposed to keep. See `BuildOptions.quiet`.
     customLogger: streamLogger(stdout, stderr),
     define: {
       "process.env.NODE_ENV": JSON.stringify(mode),

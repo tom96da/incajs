@@ -16,7 +16,7 @@ const PRE_TRANSFORM_ERROR = "Pre-transform error";
 
 /**
  * A Vite {@link Logger} writing to the given streams: `info` to `stdout`,
- * `warn`/`error` to `stderr`, all unfiltered by Vite's own `LogOptions` — a
+ * `warn`/`error` to `stderr`, all unfiltered by Vite's own `LogOptions`. A
  * custom logger bypasses those. `quiet` drops `info` only; `warn`/`error`
  * still write, since they report something broken, not just what changed.
  */

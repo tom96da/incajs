@@ -43,8 +43,8 @@ describe("build", () => {
 
     const bundle = await readFile(output.entryFile, "utf8");
     expect(bundle).toContain("hello");
-    // Vue's own readable helper names survive an unminified (dev) build —
-    // their absence here is what distinguishes a production build from one.
+    // Vue's own readable helper names survive an unminified (dev) build.
+    // Their absence here is what distinguishes a production build from one.
     expect(bundle).not.toContain("createElementBlock");
   }, 20000);
 

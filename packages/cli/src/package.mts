@@ -27,12 +27,12 @@ export interface PackageAppOptions {
    * in a synthesized one.
    */
   entry?: string;
-  /** Overrides the bundler — see {@link build}'s default. */
+  /** Overrides the bundler. See {@link build}'s default. */
   bundler?: Bundler;
   /**
    * Overrides which `inca-host` binary gets embedded in the packaged
    * app, in place of automatic resolution (`INCA_HOST_BIN`, then the
-   * per-platform `@incajs/host-*` package — see {@link resolveHostBin}).
+   * per-platform `@incajs/host-*` package. See {@link resolveHostBin}).
    */
   hostBin?: string;
   /** Writes `bundle.js.map` beside the bundle. Overrides the config's `sourcemap` when set. */
@@ -50,7 +50,7 @@ export interface PackageAppOptions {
 
 /** The result of a successful {@link packageApp} call. */
 export interface PackageResult {
-  /** The packaged app's path — a `.app` directory on macOS, a plain directory on Linux. */
+  /** The packaged app's path: a `.app` directory on macOS, a plain directory on Linux. */
   appPath: string;
 }
 
@@ -76,10 +76,9 @@ interface LayoutArgs {
 }
 
 /**
- * Copies exactly the files `output` reports — never `output.outDir`
- * wholesale, which could otherwise recurse into a previously packaged app
- * sitting alongside it — into `destDir`, preserving each file's own
- * subpath (e.g. a chunk under `chunks/`).
+ * Copies exactly the files `output` reports into `destDir`, preserving each
+ * file's own subpath (e.g. a chunk under `chunks/`). `output.outDir` may hold
+ * a previously packaged app.
  */
 async function copyBuildOutput(output: BuildOutput, destDir: string): Promise<void> {
   await Promise.all(
@@ -142,8 +141,8 @@ async function packageLinux({ metadata, output, hostBin }: LayoutArgs): Promise<
 
 /**
  * Builds the app and pairs it with the prebuilt `inca-host` into a
- * distributable, platform-native application — a `.app` on macOS, a plain
- * directory on Linux — written alongside the build output, under the
+ * distributable, platform-native application: a `.app` on macOS, a plain
+ * directory on Linux, written alongside the build output, under the
  * app's own `dist/`. The app launches with no arguments and no terminal,
  * since `inca-host` finds its own bundle beside its executable.
  *

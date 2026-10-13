@@ -94,7 +94,7 @@ export async function writeMacosApp(options: WriteMacosAppOptions): Promise<Maco
 
   await writeFile(path.join(contentsDir, "Info.plist"), encodePlist(plist));
   // The classic four-byte type/creator marker every .app has carried since
-  // Classic Mac OS — still expected to be there, even though nothing reads it.
+  // Classic Mac OS: still expected to be there, even though nothing reads it.
   await writeFile(path.join(contentsDir, "PkgInfo"), "APPL????");
 
   return { appPath, executablePath, resourcesDir };

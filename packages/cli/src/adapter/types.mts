@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-/** A running build watch — the value {@link Bundler.watch} resolves to. */
+/** A running build watch. {@link Bundler.watch} resolves to this value. */
 export interface Watcher {
   /** Stops watching and releases the underlying build process. */
   close(): Promise<void>;
@@ -9,14 +9,14 @@ export interface Watcher {
 
 /** Options for {@link Bundler.build}. */
 export interface BuildOptions {
-  /** The app's own entry point — may import `.vue` files. */
+  /** The app's own entry point. It may import `.vue` files. */
   entry: string;
   /** Where the build's output is written. */
   outDir: string;
   /** Writes `bundle.js.map` beside the bundle. Defaults to `false`. */
   sourcemap?: boolean;
   /**
-   * Values the built app carries for `inca-host` to read — its name, id
+   * Values the built app carries for `inca-host` to read: its name, id
    * and window. Any JSON-serializable object.
    */
   runtimeConfig?: unknown;
@@ -51,13 +51,19 @@ export interface BuildFailure {
   code?: string | null;
 }
 
-/** What a build wrote — the result of {@link Bundler.build}, and every {@link BundlerOptions.onBuild} call. */
+/**
+ * What a build wrote. It is the result of {@link Bundler.build} and of every
+ * {@link BundlerOptions.onBuild} call.
+ */
 export interface BuildOutput {
   /** Directory holding every file this build emitted. */
   outDir: string;
   /** Absolute path to the entry module `inca-host` evaluates. */
   entryFile: string;
-  /** Every file this build emitted, relative to `outDir` — may include chunks and assets besides the entry itself. */
+  /**
+   * Every file this build emitted, relative to `outDir`. It may include chunks and assets besides
+   * the entry itself.
+   */
   files: readonly string[];
   /** The change that triggered this rebuild. Absent from a one-shot build and a watch's first build. */
   changed?: { file: string; at: number };
@@ -65,12 +71,12 @@ export interface BuildOutput {
 
 /** Options for {@link Bundler.hmr}. */
 export interface HmrOptions {
-  /** The app's own entry point — may import `.vue` files. */
+  /** The app's own entry point. It may import `.vue` files. */
   entry: string;
-  /** The app's root directory — where its dev-only scratch files are written. */
+  /** The app's root directory, where its dev-only scratch files are written. */
   cwd: string;
   /**
-   * Values the built app carries for `inca-host` to read — its name, id
+   * Values the built app carries for `inca-host` to read: its name, id
    * and window. Any JSON-serializable object.
    */
   runtimeConfig?: unknown;
@@ -92,7 +98,7 @@ export interface HmrOptions {
   onUpdate?: (info: { file: string; took: number }) => void;
 }
 
-/** A running HMR session — the value {@link Bundler.hmr} resolves to. */
+/** A running HMR session. {@link Bundler.hmr} resolves to this value. */
 export interface HmrChannel extends Watcher {
   /** The synthesized entry `inca-host` evaluates for this session. */
   entryFile: string;
@@ -102,16 +108,15 @@ export interface HmrChannel extends Watcher {
 
 /**
  * The contract a bundler adapter satisfies. Supporting another bundler
- * means adding a sibling adapter module and injecting its `Bundler` here —
- * never editing this package's own types.
+ * means adding a sibling adapter module and injecting its `Bundler` here.
  */
 export interface Bundler {
   watch(options: BundlerOptions): Promise<Watcher>;
-  /** One-shot production build, used by `inca build` — rejects on failure. */
+  /** One-shot production build, used by `inca build`. Rejects on failure. */
   build(options: BuildOptions): Promise<BuildOutput>;
   /**
    * Module-granular dev updates, used by `inca dev --experimental-hmr`.
-   * Optional — a bundler adapter with no HMR support simply omits it.
+   * Optional: omit it when the adapter has no HMR support.
    */
   hmr?(options: HmrOptions): Promise<HmrChannel>;
 }

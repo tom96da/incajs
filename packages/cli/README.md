@@ -22,14 +22,14 @@ bootstrapping; it wins outright when both exist.
 
 ## Commands
 
-- **`inca dev`** — watches your app and opens a live-reloading window,
+- **`inca dev`**: watches your app and opens a live-reloading window,
   reloading on every change. `--experimental-hmr` (or
   `INCA_EXPERIMENTAL_HMR=1`) opts into experimental, module-granular
-  hot reloading instead — see the
+  hot reloading instead. See the
   [HMR guide](https://incajs.tom96da.com/guide/hmr).
-- **`inca build`** — bundles your app for production, once, with no
+- **`inca build`**: bundles your app for production, once, with no
   window opened.
-- **`inca package`** — builds your app, then packages it with a
+- **`inca package`**: builds your app, then packages it with a
   prebuilt `inca-host` into a distributable application: a `.app` on
   macOS, a plain directory on Linux (other platforms aren't supported
   yet).
@@ -61,7 +61,7 @@ once it is packaged.
 ## Requirements
 
 A prebuilt binary is pulled in automatically as a platform-specific
-optional dependency — neither Cargo nor Rust are needed. See
+optional dependency. Neither Cargo nor Rust are needed. See
 [Host binary](https://incajs.tom96da.com/guide/#host-binary) for
 per-platform support.
 

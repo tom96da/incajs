@@ -1,5 +1,5 @@
 ---
-description: Hot module replacement under inca dev --experimental-hmr — how to enable it and what it does differently.
+description: How to enable hot module replacement under inca dev --experimental-hmr and what it does differently.
 ---
 
 <!--
@@ -32,5 +32,5 @@ scratch. With experimental HMR enabled, `inca dev` instead reloads only
 the changed module:
 
 - A template-only edit preserves the component's state.
-- A script edit resets state — the component remounts.
+- A script edit resets state. The component remounts.
 - A stack frame of a module names the module's source file, line and column.

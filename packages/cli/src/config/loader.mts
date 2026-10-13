@@ -19,8 +19,7 @@ interface AppPackageJson {
 
 /**
  * What a config load looks at: an `inca.config.*` beside the app, and
- * `package.json`'s deprecated `"inca"` key. Nothing else — no rc file, no
- * global config, no remote template.
+ * `package.json`'s deprecated `"inca"` key.
  */
 const CONFIG_LOOKUP = {
   name: "inca",
@@ -31,7 +30,7 @@ const CONFIG_LOOKUP = {
   extend: false,
 } as const;
 
-/** `entry`/`outDir` only — what `build()`/`dev()` need, with no `package.json` requirement. */
+/** `entry`/`outDir` only: what `build()`/`dev()` need, with no `package.json` requirement. */
 export interface ResolvedBuildConfig {
   /** Absolute path, if `inca.config.ts` set one. */
   entry?: string;

@@ -155,7 +155,7 @@ describe("run", () => {
   });
 
   it.each(["SIGINT", "SIGTERM"] as const)(
-    "aborts dev()'s signal on %s — a script runner may deliver either on Ctrl-C",
+    "aborts dev()'s signal on %s: a script runner may deliver either on Ctrl-C",
     async (signal) => {
       void run(["node", "inca", "dev"]);
       await vi.waitFor(() => expect(mockedDev).toHaveBeenCalled());

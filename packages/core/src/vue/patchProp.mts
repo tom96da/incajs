@@ -276,7 +276,7 @@ function patchEvent(
 const BOOLEAN_PRESENCE = new Set(["disabled", "hidden", "inert"]);
 
 /**
- * {@link RendererOptions.patchProp} — applies one changed `v-bind`/
+ * {@link RendererOptions.patchProp} applies one changed `v-bind`/
  * attribute/event prop to a host element.
  *
  * ### `style`

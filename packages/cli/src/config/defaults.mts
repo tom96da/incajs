@@ -5,7 +5,7 @@ import type { IncaConfig } from "./types.mts";
 
 /**
  * The `IncaConfig` fields whose default is a fixed value rather than one
- * derived from `package.json` or the filesystem — importable alongside
+ * derived from `package.json` or the filesystem. Importable alongside
  * `defineConfig` for an app that wants to inherit or reference them.
  *
  * @example
@@ -36,7 +36,7 @@ export function unscopedName(name: string): string {
   return name.startsWith("@") && slash !== -1 ? name.slice(slash + 1) : name;
 }
 
-/** What a name slugs to when it holds nothing `[a-z0-9]` — Japanese, say. */
+/** What a name slugs to when it holds nothing `[a-z0-9]`, Japanese for example. */
 const UNSLUGGABLE = "app";
 
 /**
@@ -57,8 +57,8 @@ export function slugify(name: string): string {
 
 /**
  * @param pkgName - `package.json`'s own `"name"`, if it has one
- * @returns the `productName` a plain `package.json` implies — its name with
- * any scope stripped — or `undefined` if it has none
+ * @returns the `productName` a plain `package.json` implies: its name with
+ * any scope stripped, or `undefined` if it has none
  */
 export function defaultProductName(pkgName: string | undefined): string | undefined {
   return pkgName ? unscopedName(pkgName) : undefined;

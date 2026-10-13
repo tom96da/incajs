@@ -15,7 +15,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 ## Elements are just boxes
 
-Every tag other than `"text"` — `<div>`, `<span>`, `<button>`, anything —
+Every tag other than `"text"` (`<div>`, `<span>`, `<button>`, anything)
 renders as a generic styled container. Elements carry no default styles, so
 a `<button>` starts as the same plain box as a `<div>` and `:style` sets
 everything. Only `"text"` renders differently: its `value` attribute followed
@@ -104,13 +104,13 @@ supported.
 
 ## `class`, and `style` as a string, do nothing
 
-`class="..."` is a valid Vue binding — the compiler accepts it and the
-renderer stores it as a plain attribute — but nothing reads it to draw
+`class="..."` is a valid Vue binding. The compiler accepts it and the
+renderer stores it as a plain attribute, but nothing reads it to draw
 anything.
 
 `style` is different: Vue's compiler routes a static `style="color: red"`
 attribute and a bound `:style="someString"` to the same `style` prop, and
-`patchProp`'s `patchStyle` only accepts that prop as an object — a string
+`patchProp`'s `patchStyle` only accepts that prop as an object. A string
 value is ignored either way. So a plain `style="..."` attribute can
 *never* work, since it's always a string; only `:style` bound to an
 object, with the keys above, has any visible effect.
@@ -161,8 +161,7 @@ have, and using them fails the build:
 - **No timers or `fetch`**: `setTimeout`/`setInterval`/`fetch` aren't
   provided as globals by the JS runtime Incarnative.js embeds.
 - **No text input**: an editable text element is still unimplemented (see
-  the [Roadmap](../roadmap)) — not permanently unsupported, just not built
-  yet.
+  the [Roadmap](../roadmap)).
 - **`ref` lacks other element members**: the attribute, class, style and tree
   members are missing.
 

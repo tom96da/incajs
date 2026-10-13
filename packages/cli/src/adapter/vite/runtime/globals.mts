@@ -14,7 +14,7 @@ declare const globalThis: Record<string, unknown>;
 if (typeof globalThis.TextDecoder === "undefined") {
   globalThis.TextDecoder = class TextDecoder {
     /**
-     * Not a real UTF-8 decode — only `module-runner`'s inline-sourcemap
+     * Not a real UTF-8 decode. Only `module-runner`'s inline-sourcemap
      * decoding calls it, and this runtime never reaches that path.
      */
     decode(bytes: Iterable<number>): string {

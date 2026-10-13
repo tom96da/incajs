@@ -19,8 +19,8 @@ afterEach(async () => {
 async function makeApp(pkg: object): Promise<string> {
   cwd = await mkdtemp(path.join(tmpdir(), "inca-config-"));
   // Node needs "type": "module" to load an inca.config.ts without a
-  // reparse-as-ESM warning — every real app already has this (see
-  // examples/*/package.json), so this just matches that baseline.
+  // reparse-as-ESM warning. Every real app already has this (see
+  // examples/*/package.json).
   await writeFile(path.join(cwd, "package.json"), JSON.stringify({ type: "module", ...pkg }));
   return cwd;
 }

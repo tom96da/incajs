@@ -34,7 +34,7 @@ export type NodeOps = Omit<RendererOptions<IncaNode, IncaElement>, "patchProp">;
 
 /**
  * `@vue/runtime-core`'s {@link RendererOptions}`<IncaNode, IncaElement>`,
- * minus `patchProp` — the host-node lifecycle half of `incajs/vue`'s custom
+ * minus `patchProp`. This is the host-node lifecycle half of `incajs/vue`'s custom
  * renderer.
  * @param core - the incajs bindings to drive the native tree through
  */

@@ -23,7 +23,7 @@ const metadata = {
   version: "1.2.3",
 };
 
-/** A stand-in host binary — real content and the executable bit, nothing that runs. */
+/** A stand-in host binary: real content and the executable bit, nothing that runs. */
 async function makeHostBin(): Promise<{ dir: string; hostBin: string }> {
   dir = await mkdtemp(path.join(tmpdir(), "inca-macos-app-"));
   const hostBin = path.join(dir, "inca-host");

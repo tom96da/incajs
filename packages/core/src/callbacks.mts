@@ -67,7 +67,7 @@ export function releaseCallback(callbackId: CallbackId): void {
 
 /**
  * Drops the JS half of every registration in `callbackIds`. The native half
- * is already gone by the time this runs — `destroyNode` takes both.
+ * is already gone by the time this runs: `destroyNode` takes both.
  * @param callbackIds - ids the host reported as released
  * @internal
  */

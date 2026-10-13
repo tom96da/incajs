@@ -7,8 +7,8 @@ export { defaultConfig } from "./defaults.mts";
 export type { IncaConfig } from "./types.mts";
 
 /**
- * Type-completion helper for `inca.config.ts` — an identity function at
- * runtime, the same way `defineConfig` from `vite` or `vitest/config` works.
+ * Type-completion helper for `inca.config.ts`. An identity function at
+ * runtime.
  *
  * @example
  * ```ts

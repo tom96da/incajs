@@ -25,7 +25,7 @@ import type { AdapterCore } from "../../adapterCore.mts";
 import type { BuildFailure, HmrChannel, HmrOptions } from "../types.mts";
 
 /**
- * A failed update's detail — the same fields a Rollup/Vite plugin
+ * A failed update's detail: the same fields a Rollup/Vite plugin
  * error carries beyond `message`/`stack`, when it has them.
  */
 interface UpdateError {
@@ -55,7 +55,7 @@ function hmrDirOf(cwd: string): string {
 
 /**
  * `dist/hmr-runtime.js`, resolved relative to this package's own root
- * rather than this module's own location — correct whether this file is
+ * rather than this module's own location. This is correct whether this file is
  * running from `src/` (tests, the workspace) or a built `dist/`.
  */
 function resolveHmrRuntimePath(): string {
@@ -108,8 +108,8 @@ function updateErrorOf(payload: HotPayload): UpdateError | undefined {
 }
 
 /**
- * Whether `payload` is a successful `fetchModule` `vite:invoke` response —
- * the module runner's own RPC for pulling an updated module's compiled
+ * Whether `payload` is a successful `fetchModule` `vite:invoke` response.
+ * It is the module runner's own RPC for pulling an updated module's compiled
  * code, and the actual verdict on an HMR update. An `update` payload only
  * announces that a fetch is coming; its own failure is caught separately
  * by {@link updateErrorOf} on this same response.
@@ -126,7 +126,7 @@ function isFetchModuleSuccess(payload: HotPayload): boolean {
  * `Engine`/`Host`, which only `inca-host`'s `reload` RPC gives it.
  * A failed update also calls `onError`; a successful one calls `onUpdate`
  * with how long it took since `changed` last saw a file, when there was
- * one waiting — gated on the module runner's own `fetchModule` response,
+ * one waiting. It is gated on the module runner's own `fetchModule` response,
  * so a broken edit never reports success ahead of its own failure. Either
  * way the payload is still relayed to the app afterward, since its own
  * pending call may be waiting on it. `dispatch` feeds a payload the app
@@ -182,12 +182,12 @@ function createIncaHotChannel(
 
 /**
  * Stubs out `/@vite/client` (the browser HMR client import analysis
- * injects wherever `import.meta.hot` appears) — the module runner's own
+ * injects wherever `import.meta.hot` appears). The module runner's own
  * `hot` getter creates the real context instead.
  *
  * Vite's built-in `resolve.alias` entry for `/@vite/client` runs before any
  * plugin's own `resolveId`, rewriting it to an `/@fs/…/dist/client/client.mjs`
- * absolute id first — so this has to match the resolved path, not the raw
+ * absolute id first. So this has to match the resolved path, not the raw
  * specifier, or the real client (which opens a WebSocket) loads instead.
  */
 function shimViteClient(): Plugin {
@@ -207,7 +207,7 @@ function shimViteClient(): Plugin {
 /**
  * Forwards each changed file to `@vitejs/plugin-vue`'s own HMR support,
  * which only ever sends `file-changed` over the server-wide WebSocket
- * client — one this custom environment doesn't have. Also records when
+ * client, one this custom environment doesn't have. Also records when
  * this happened, for `createIncaHotChannel`'s own `onUpdate` timing.
  */
 function fileChangedPlugin(changed: { current: { file: string; at: number } | undefined }): Plugin {

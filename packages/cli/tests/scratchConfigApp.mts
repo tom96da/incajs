@@ -6,7 +6,7 @@ import path from "node:path";
 
 /**
  * A scratch-app scaffold scoped to its own directory under `tests/tmp/`
- * (gitignored) rather than a real OS tmpdir — mirrors
+ * (gitignored) rather than a real OS tmpdir. It mirrors
  * `tests/adapter/vite/scratchApp.mts`, but for config-loading tests: an app
  * here needs to resolve `@incajs/cli/config` from a real file on disk, which
  * an OS tmpdir can't do. Each caller gets its own `name` so concurrently
@@ -25,7 +25,7 @@ export function scratchConfigApp(name: string): {
     async makeApp(pkg: object): Promise<string> {
       const appDir = await mkdtemp(path.join(scratchRoot, "app-"));
       // Node needs "type": "module" to load an inca.config.ts without a
-      // reparse-as-ESM warning — every real app already has this.
+      // reparse-as-ESM warning. Every real app already has this.
       await writeFile(
         path.join(appDir, "package.json"),
         JSON.stringify({ type: "module", ...pkg }),

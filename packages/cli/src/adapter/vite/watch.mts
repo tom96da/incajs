@@ -12,7 +12,7 @@ import type { BundlerOptions, Watcher } from "../types.mts";
 /**
  * Builds `entry` into a build under `outDir` and rebuilds it on every
  * change, calling `onBuild` with what each rebuild wrote. Never starts,
- * reloads, or talks to `inca-host` — that's `dev.mts`'s job.
+ * reloads, or talks to `inca-host`.
  */
 export async function watch(
   core: AdapterCore,
@@ -45,7 +45,7 @@ export async function watch(
   );
 
   // build() types its return as the non-watch output too, since a single
-  // call signature covers both — watch: {} in the resolved config means
+  // call signature covers both: watch: {} in the resolved config means
   // it's always this.
   const watcher = result as RolldownWatcher;
 

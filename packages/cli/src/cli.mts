@@ -85,7 +85,7 @@ const devCommand = defineCommand({
     };
     // A wrapper script runner (e.g. `pnpm run`) commonly delivers SIGTERM to
     // its child directly on Ctrl-C, rather than relying on the terminal to
-    // signal the whole process group — SIGINT alone left the host orphaned.
+    // signal the whole process group. SIGINT alone left the host orphaned.
     process.on("SIGINT", onSignal);
     process.on("SIGTERM", onSignal);
 

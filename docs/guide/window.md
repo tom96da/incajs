@@ -1,5 +1,5 @@
 ---
-description: The window an inca app opens in — its size, its title, its menu, and how it closes.
+description: The window an inca app opens: its size, its title, its menu, and how it closes.
 ---
 
 <!--
@@ -9,8 +9,8 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 # Application Window
 
-An app opens in one window. Everything around its content — the size it
-starts at, the title it carries, its menu — is set under `window` in
+An app opens in one window. Everything around its content (the size it
+starts at, the title it carries, its menu) is set under `window` in
 `inca.config.ts` (see [Configuration](../reference/configuration#the-window)
 for the full key list and an example), or falls back to a default.
 
@@ -18,7 +18,7 @@ These apply to the development window and to a packaged app alike.
 
 > [!NOTE]
 > `inca dev` reads `inca.config.ts` once, at startup. Reloading it on
-> change isn't supported yet — restart `inca dev` to pick up an edit.
+> change isn't supported yet. Restart `inca dev` to pick up an edit.
 
 ## Size
 
@@ -33,7 +33,7 @@ declares, so a fixed-size app gets a window that fits it:
 </template>
 ```
 
-Each dimension falls through on its own — a config that sets only `width`
+Each dimension falls through on its own: a config that sets only `width`
 still takes its height from the root element. With neither source giving
 one, the window opens at 800 × 600.
 

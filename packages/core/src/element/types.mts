@@ -20,14 +20,14 @@ import type { ScrollIntoViewOptions, ScrollOptions } from "./scroll.mts";
  */
 export interface IncaElement extends IncaEventTarget {
   /**
-   * The underlying native node's id — the only part of this object the native
+   * The underlying native node's id, the only part of this object the native
    * tree itself knows about.
    */
   readonly id: NodeId;
   /**
    * `"comment"` for the hidden stand-in `createCommentNode`
    * makes; `"element"` for every other container. Purely
-   * informational — both render identically once created.
+   * informational: both render identically once created.
    */
   readonly kind: "element" | "comment";
   /** The current parent, or `null` if this node isn't attached to the tree. */

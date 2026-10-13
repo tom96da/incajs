@@ -11,8 +11,7 @@ export type NodeId = number;
 
 /**
  * Id assigned to one registered event listener. Managed internally by
- * `addEventListener`/`removeEventListener`/`destroyNode` — callers never see or
- * pass one directly.
+ * `addEventListener`/`removeEventListener`/`destroyNode`.
  */
 export type CallbackId = number;
 
@@ -24,7 +23,7 @@ export type AttributeValue = string | number | boolean;
 
 /**
  * Element kind passed to `createNode`. `"text"` is the only tag with
- * dedicated rendering behavior — it renders its `"value"` attribute followed
+ * dedicated rendering behavior: it renders its `"value"` attribute followed
  * by its descendants' text. Any other string is a generic styled
  * container; the `string & {}` half of this type keeps `"text"`'s
  * autocomplete while still accepting an arbitrary tag name.
@@ -50,7 +49,7 @@ export interface StyleProps {
   justify_content?: "start" | "end" | "center" | "stretch";
   /** Cross-axis alignment of children within this container. */
   align_items?: "start" | "end" | "center" | "stretch";
-  /** Uniform spacing, in px, between children — applied on both axes. */
+  /** Uniform spacing, in px, between children, applied on both axes. */
   gap?: number;
   /** Fixed width in px, or `"auto"` to size to content. */
   width?: number | "auto";

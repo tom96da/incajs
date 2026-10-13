@@ -25,13 +25,13 @@ interface FakeNode {
   listeners: Record<string, number[]>;
 }
 
-// A minimal, in-memory stand-in for the native host's retained tree — real
+// A minimal, in-memory stand-in for the native host's retained tree, real
 // enough to drive `incajs`'s actual wrapper functions and `incajs/vue`'s
 // actual `nodeOps`/`patchProp` end to end, without a real Rust process.
 //
 // It matches the real host where the difference is observable: one parent per
 // node, several callbacks per (node, event), and `destroyNode` freeing a whole
-// subtree. It does not refuse a cycle the way the host does — `nodeOps` never
+// subtree. It does not refuse a cycle the way the host does. `nodeOps` never
 // builds one.
 function installFakeNative(): Map<NodeId, FakeNode> {
   const nodes = new Map<NodeId, FakeNode>();

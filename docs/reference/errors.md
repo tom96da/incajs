@@ -16,8 +16,8 @@ with the message:
 [inca] build failed (ERR_INCA_ENTRY_NOT_FOUND): no app entry found. check that …
 ```
 
-A failure with no code came from somewhere else — the bundler, the host,
-or Node itself — and its own message is what to search for.
+A failure with no code came from somewhere else (the bundler, the host,
+or Node itself), and its own message is what to search for.
 
 ## `ERR_INCA_ENTRY_NOT_FOUND`
 
@@ -42,8 +42,8 @@ the app's own root, or add the file.
 
 The packaged app has nothing to be called. The name comes from
 `productName` in `inca.config.ts`, and failing that from `package.json`'s
-own top-level `name` — the npm package name, with any scope stripped, so
-`@acme/todo` packages as `todo`. Neither is set.
+own top-level `name`. That is the npm package name with any scope
+stripped, so `@acme/todo` packages as `todo`. Neither is set.
 
 Set [`productName`](./configuration#productname) when the app's display
 name isn't its package name.
@@ -94,12 +94,12 @@ Install the app's dependencies, or set `INCA_HOST_BIN` to a binary you
 built yourself.
 
 > [!NOTE]
-> Windows has no published package yet — see
+> Windows has no published package yet. See
 > [Host binary](../guide/#host-binary) for platform support.
 
 ## `ERR_INCA_DEV_RUNNING`
 
-Another `inca dev` already has this app open — its pid is in the message.
+Another `inca dev` already has this app open, and its pid is in the message.
 Two of them watch the same files and write to the same terminal, so the
 second one refuses to start.
 
@@ -126,7 +126,7 @@ it as a bug if your app didn't cause it.
 
 ## `ERR_INCA_UNSUPPORTED_STYLE`
 
-A `.vue` file has a `<style>` block, which isn't supported yet — the
+A `.vue` file has a `<style>` block, which isn't supported yet. The
 renderer applies no stylesheet, so the block would have no effect at
 runtime, and the build stops rather than shipping it.
 
@@ -151,12 +151,12 @@ Use instead:
 ## `ERR_INCA_UNSUPPORTED_STYLESHEET`
 
 Something imports a `.css` (or `.scss`, `.less`, …) file. Same reason as
-above — see `ERR_INCA_UNSUPPORTED_STYLE`.
+above. See `ERR_INCA_UNSUPPORTED_STYLE`.
 
 ## `ERR_INCA_BUILD_NO_OUTPUT`
 
 The bundler finished without writing anything. This one is a bug in
-Incarnative.js rather than in your app — please
+Incarnative.js rather than in your app. Please
 [open an issue](https://github.com/tom96da/incajs/issues).
 
 ## `ERR_INCA_HMR_UNSUPPORTED`
@@ -168,5 +168,5 @@ this only happens with a custom `bundler` that doesn't implement `hmr`.
 ## `ERR_INCA_BUILD_NO_ENTRY_CHUNK`
 
 The bundler wrote files, but none of them was marked as the entry, so
-there is nothing for the host to evaluate. A bug in Incarnative.js too —
-please [open an issue](https://github.com/tom96da/incajs/issues).
+there is nothing for the host to evaluate. A bug in Incarnative.js too.
+Please [open an issue](https://github.com/tom96da/incajs/issues).

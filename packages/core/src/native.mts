@@ -3,7 +3,10 @@
 
 import type { AttributeValue, CallbackId, EventLike, NodeId, ScrollAlignment } from "./types.mts";
 
-/** The host-injected object every wrapper in this package forwards to. Not part of the public surface — reach it through the wrappers instead. */
+/**
+ * The host-injected object every wrapper in this package forwards to. Not part of the public
+ * surface.
+ */
 interface IncaNative {
   rootNodeId(): NodeId;
   createNode(tag: string): NodeId;

@@ -46,8 +46,8 @@ export interface HostClientOptions {
   onExit?: (code: number | null, signal: NodeJS.Signals | null) => void;
   /**
    * Handlers for notification `method`s this package doesn't implement
-   * itself (e.g. a future Vite integration), keyed by method name —
-   * `params` forwarded untouched.
+   * itself (e.g. a future Vite integration), keyed by method name.
+   * `params` are forwarded untouched.
    */
   integrations?: Record<string, (params: unknown) => void>;
 }
@@ -62,8 +62,7 @@ const BUNDLE_FAILED = -32000;
 /**
  * Spawns `inca-host --dev <entryFile>` and speaks newline-delimited
  * JSON-RPC 2.0 on its stdin/stdout. One instance owns exactly one child
- * process for its whole lifetime — a reload is a `reload` call on the same
- * child, never a respawn.
+ * process for its whole lifetime. A reload is a `reload` call on that child.
  */
 export class HostClient {
   #options: HostClientOptions;
@@ -200,9 +199,9 @@ export class HostClient {
 
   /**
    * Sends a request and resolves with its result once the host answers.
-   * With `timeoutMs`, rejects once that much time passes with no answer —
-   * the host answers on the same thread that runs the app's JS, so a
-   * wedged app leaves a call pending forever otherwise.
+   * With `timeoutMs`, rejects once that much time passes with no answer.
+   * The host answers on the same thread that runs the app's JS, so a
+   * wedged app never answers.
    */
   async call(method: string, params?: unknown, timeoutMs?: number): Promise<unknown> {
     const child = this.#child;
@@ -238,10 +237,9 @@ export class HostClient {
   }
 
   /**
-   * Sends a fire-and-forget notification — no `id`, so no reply is ever
+   * Sends a fire-and-forget notification: no `id`, so no reply is ever
    * awaited. Used for traffic a bundler integration owns (e.g. Vite's HMR
-   * payloads), which answers itself over the same named channel rather than
-   * through this client's request/reply bookkeeping.
+   * payloads).
    */
   notify(method: string, params?: unknown): void {
     const child = this.#child;
@@ -250,9 +248,9 @@ export class HostClient {
   }
 
   /**
-   * Asks the host to `shutdown` and waits for the child to actually exit —
-   * that exit is the real acknowledgement, not the response. Kills it once
-   * `timeoutMs` passes without that, so a wedged app can't block teardown.
+   * Asks the host to `shutdown` and waits for the child to actually exit.
+   * That exit is the acknowledgement. Kills it once `timeoutMs` passes without
+   * that, so a wedged app can't block teardown.
    */
   async stop(timeoutMs = 2000): Promise<void> {
     const child = this.#child;

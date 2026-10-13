@@ -32,7 +32,7 @@ function isServerFailure(error: unknown): boolean {
  * inline source map.
  *
  * `hmr.logger` is fully muted: the development server already reports each
- * update, and a failed one, on its own — see `hmr.mts`'s `onError`.
+ * update, and a failed one, on its own. See `hmr.mts`'s `onError`.
  * @param entryId - the module id the development server serves the entry under
  * @returns the entry's exports, once an import succeeds
  */

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-// The wire shapes this package reads off the host's stdout. Internal only —
+// The wire shapes this package reads off the host's stdout. Internal only.
 // `HostClient` is what a caller talks to; nothing here is re-exported from
 // `index.mts`.
 
@@ -9,7 +9,7 @@ export const JSONRPC = "2.0";
 
 /**
  * The host method-set revision this package expects, checked against
- * `ready`'s `params.protocol` — a mismatch means an incompatible host
+ * `ready`'s `params.protocol`: a mismatch means an incompatible host
  * build.
  */
 export const HOST_PROTOCOL_VERSION = 0;

@@ -106,8 +106,8 @@ describe("HostClient", () => {
     const client = new HostClient({ hostBin: wedgedMockHost, entryFile: "bundle.js" });
     await client.start();
 
-    // A wedged app ignores `shutdown` and never exits on its own —
-    // resolving here is the kill fallback firing.
+    // A wedged app ignores `shutdown` and never exits on its own.
+    // Resolving here is the kill fallback firing.
     await expect(client.stop(50)).resolves.toBeUndefined();
   }, 5000);
 
@@ -130,8 +130,7 @@ describe("HostClient", () => {
     const client = new HostClient({ hostBin: wedgedMockHost, entryFile: "bundle.js" });
     await client.start();
 
-    // The wedged host answers nothing but `shutdown` — `reload` is left
-    // pending forever without the deadline this call passes.
+    // The wedged host answers nothing but `shutdown`.
     await expect(client.call("reload", undefined, 50)).rejects.toThrow(/timed out/);
 
     await client.stop(50);

@@ -22,8 +22,7 @@ import type { HmrChannel, HmrOptions } from "../../../src/adapter/types.mts";
 const { setUp, tearDown, makeApp } = scratchApp("hmr");
 
 // Builds hmr-runtime.js into its own scratch dir, from the package's real
-// vite.config.mts — self-contained, no dependency on (or mutation of)
-// the package's own dist/.
+// vite.config.mts, leaving the package's dist/ untouched.
 const runtimeScratchDir = path.join(import.meta.dirname, "tmp/hmr-runtime-build");
 const builtRuntimePath = path.join(runtimeScratchDir, "hmr-runtime.js");
 
@@ -74,7 +73,7 @@ afterEach(async () => {
 /**
  * Wires a real `vite/module-runner` `ModuleRunner` to an `HmrChannel`, the
  * same round trip `packages/cli/src/adapter/vite/runtime` drives from
- * inside a running app — `notify` plays the server's half, `dispatch` the
+ * inside a running app. `notify` plays the server's half, `dispatch` the
  * client's.
  */
 function connectRunner(dispatch: HmrChannel["dispatch"]): {
@@ -195,7 +194,7 @@ describe("hmr", () => {
     expect(errors[0]!.message).toContain("Interpolation end sign was not found");
     // Still relayed: the app's own pending fetch/HMR call may be waiting on it.
     expect(notified.length).toBeGreaterThan(0);
-    // A broken edit's `update` payload arrives before its failure does — it
+    // A broken edit's `update` payload arrives before its failure does. It
     // must never be reported as a success.
     expect(updates).toEqual([]);
   }, 20000);
@@ -291,7 +290,7 @@ describe("hmr", () => {
     const client = connectRunner(channel.dispatch);
     await client.runner.import(entry);
 
-    // entry.mts itself has no `import.meta.hot.accept` boundary — a real
+    // entry.mts itself has no `import.meta.hot.accept` boundary. A real
     // browser client would fall back to a full page reload here, so this
     // custom channel's `send` must turn that into `reload()` instead of
     // forwarding a `"full-reload"` payload to `notify`.
@@ -409,7 +408,7 @@ describe("hmr", () => {
     });
     await first.close();
 
-    // A second session against the same app must start cleanly — nothing
+    // A second session against the same app must start cleanly. Nothing
     // from the first server (middleware, watcher, port) lingers.
     const second = await hmr({
       entry,

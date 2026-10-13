@@ -32,9 +32,8 @@ export function toBuildOutput(
 
 /**
  * A Vite plugin reporting `sink` the files a build wrote once they land on
- * disk, via `writeBundle` — the one hook that fires uniformly for a
- * one-shot build and every watch rebuild, so both read the bundler's real
- * output instead of assuming a file name or layout.
+ * disk, via `writeBundle`, the one hook that fires uniformly for a
+ * one-shot build and every watch rebuild.
  */
 export function captureOutput(core: AdapterCore, sink: (output: CapturedOutput) => void): Plugin {
   return {

@@ -17,9 +17,9 @@ export interface BuildAppOptions {
    * committed `src/main.mts`, `src/main.ts` or `src/main.js`, or `src/App.vue` wrapped in a synthesized one.
    */
   entry?: string;
-  /** Overrides the bundler — see {@link defaultBundler} for what's wired in by default. */
+  /** Overrides the bundler. See {@link defaultBundler} for what's wired in by default. */
   bundler?: Bundler;
-  /** An already-resolved config — lets `packageApp` avoid loading it twice. */
+  /** An already-resolved config. It lets `packageApp` avoid loading it twice. */
   config?: ResolvedBuildConfig;
   /** Writes `bundle.js.map` beside the bundle. Overrides the config's `sourcemap` when set. */
   sourcemap?: boolean;
@@ -33,8 +33,7 @@ export interface BuildAppOptions {
 
 /**
  * Builds the app once through the same bundler `dev` uses, and returns what
- * it wrote. Rejects on failure — deciding what that means for the process
- * is `cli.mts`'s job.
+ * it wrote. Rejects on failure.
  */
 export async function build(options: BuildAppOptions = {}): Promise<BuildOutput> {
   const cwd = options.cwd ?? process.cwd();
