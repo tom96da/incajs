@@ -4,6 +4,9 @@
 import DefaultTheme from "vitepress/theme";
 import type { Theme } from "vitepress";
 
+import "@fontsource/outfit/latin-400.css";
+import "@fontsource/outfit/latin-500.css";
+import "@fontsource/outfit/latin-700.css";
 import "virtual:group-icons.css";
 import "./styles.css" with { type: "css" };
 import RoadmapPhase from "./RoadmapPhase.vue";

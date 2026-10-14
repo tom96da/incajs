@@ -26,6 +26,26 @@ export default defineConfig({
   description:
     "A GPU-native, Webview-free desktop application framework powered by GPUI and QuickJS.",
   base: "/",
+  head: [
+    [
+      "link",
+      {
+        rel: "icon",
+        type: "image/svg+xml",
+        href: "/favicon.svg",
+        media: "(prefers-color-scheme: light)",
+      },
+    ],
+    [
+      "link",
+      {
+        rel: "icon",
+        type: "image/svg+xml",
+        href: "/favicon-dark.svg",
+        media: "(prefers-color-scheme: dark)",
+      },
+    ],
+  ],
   lastUpdated: true,
   sitemap: {
     hostname: `${siteUrl}/`,
@@ -62,9 +82,11 @@ export default defineConfig({
     return head;
   },
   themeConfig: {
+    logo: { light: "/logo.svg", dark: "/logo-dark.svg", alt: siteName },
+    siteTitle: false,
     nav: [
       { text: "Guide", link: "/guide/", activeMatch: "^/guide/" },
-      { text: "Reference", link: "/reference/configuration", activeMatch: "^/reference/" },
+      { text: "Reference", link: "/reference/cli", activeMatch: "^/reference/" },
       { text: "Roadmap", link: "/roadmap" },
       {
         text: `v${incaVersion}`,

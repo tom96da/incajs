@@ -231,6 +231,9 @@ importers:
 
   docs:
     devDependencies:
+      '@fontsource/outfit':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@mdit/plugin-container':
         specifier: ^2.0.2
         version: 2.0.2
@@ -421,6 +424,9 @@ packages:
 
   '@docsearch/sidepanel-js@4.7.0':
     resolution: {integrity: sha512-A8r34jCU8kcIk2viECEn2msA28ojUF1BLi/3v5OWWc5G2N3jOuuumBXoeYjfr8dA0UxgFSy5R2bt12dnFJQSyA==}
+
+  '@fontsource/outfit@5.3.0':
+    resolution: {integrity: sha512-0AVHzTTVJSxWDOxPKSfMeHhZeBFDU3cmgrcOb76ZEyhGo0+xgyG3GsLF3h9+X8w0IX7G4jzjJgFQEBiWdX6VgA==}
 
   '@iconify-json/logos@1.2.14':
     resolution: {integrity: sha512-O36DicXkgAMT6NAsH7MTWlOql8NktHz9fBCItTjz6L/9gyRXw4vQj6qTeVgww5UZWiVugUV1MhVFA/g9HWIkBw==}
@@ -2137,6 +2143,8 @@ snapshots:
   '@docsearch/js@4.7.0': {}
 
   '@docsearch/sidepanel-js@4.7.0': {}
+
+  '@fontsource/outfit@5.3.0': {}
 
   '@iconify-json/logos@1.2.14':
     dependencies:

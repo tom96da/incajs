@@ -1,0 +1,2 @@
+<!-- Copyright (c) 2026 tom96da, SPDX-License-Identifier: MIT OR Apache-2.0 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-8 -8 80 80"><defs><linearGradient id="c1lfg" gradientUnits="userSpaceOnUse" x1="0" y1="40" x2="64" y2="40"><stop offset="0" stop-color="#6D28D9"/><stop offset="1" stop-color="#0284C7"/></linearGradient></defs><polygon points="0,64 32,0 48,0 48,32 64,32 64,64" fill="url(#c1lfg)"/></svg>

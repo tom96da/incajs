@@ -5,7 +5,7 @@ titleTemplate: ":title | Webview-free desktop apps with Vue 3 and GPUI"
 description: Incarnative.js (inca) is an ultra-lightweight, Webview-free desktop application framework powered by GPUI, QuickJS, and custom renderers.
 
 hero:
-  name: '<span class="hero-muted">GPU</span>Incarnative.js'
+  name: '<span class="hero-muted">GPU</span>Incarnative<span class="hero-js">.js</span>'
   text: Native-Speed Apps, No Webview
   tagline: An ultra-lightweight desktop framework powered by GPUI, QuickJS, and custom renderers.
   actions:
