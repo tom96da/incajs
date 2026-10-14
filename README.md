@@ -1,8 +1,25 @@
-# Incarnative.js
+<p align="center">
+  <br/>
+  <a href="https://incajs.tom96da.com" target="_blank" rel="noopener noreferrer">
+    <picture>
+      <source media="(prefers-color-scheme: light)" srcset="docs/public/logo.svg">
+      <source media="(prefers-color-scheme: dark)" srcset="docs/public/logo-dark.svg">
+      <img src="docs/public/logo.svg" alt="Incarnative.js" height="60">
+    </picture>
+  </a>
+  <br/>
+  <br/>
+</p>
+<div align="center">
 
 [![npm version](https://img.shields.io/npm/v/incajs)](https://npmjs.com/package/incajs)
+[![node version](https://img.shields.io/node/v/incajs)](https://nodejs.org/)
 [![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#scroll-license)
 [![CI](https://github.com/tom96da/incajs/actions/workflows/ci.yml/badge.svg)](https://github.com/tom96da/incajs/actions/workflows/ci.yml)
+
+</div>
+
+# Incarnative.js
 
 **Incarnative.js** (`inca`) is an ultra-lightweight, Webview-free desktop application framework powered by **GPUI**, **QuickJS**, and custom renderers.
 
