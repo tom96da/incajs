@@ -6,7 +6,7 @@ import path from "node:path";
 
 import { defineCommand, runMain } from "citty";
 
-import pkg from "../package.json" with { type: "json" };
+import { description, version } from "../package.json" with { type: "json" };
 import { build } from "./build.mts";
 import { dev } from "./dev.mts";
 import { log, printFault, toFault, warn } from "./log.mts";
@@ -105,7 +105,7 @@ const devCommand = defineCommand({
 });
 
 const main = defineCommand({
-  meta: { name: "inca", version: pkg.version, description: pkg.description },
+  meta: { name: "inca", version, description },
   subCommands: { dev: devCommand, build: buildCommand, package: packageCommand },
 });
 
