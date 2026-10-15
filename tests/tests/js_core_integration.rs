@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Exercises `Engine::eval_module` against `packages/core`'s actual
-//! compiled output, a real Rolldown/Vite bundle. The tests of `bindings.rs`
-//! use hand-written JS strings. A real bundler renames a module's internal
+//! compiled output, a real Rolldown/Vite bundle. The tests of the `bindings`
+//! module use hand-written JS strings. A real bundler renames a module's internal
 //! top-level bindings (e.g. `createNode` becomes some single-letter name),
 //! so its exported functions are reachable only through the module's export
 //! table. This test reads them back via `Module::get` inside the same

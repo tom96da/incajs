@@ -100,6 +100,7 @@ the nearest ancestor container.
 | `click` | `(nodeId: number) => void` | Walk an untrusted `click` at `nodeId`, see [Dispatching from script](#dispatching-from-script). |
 | `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its subtree, and return every `callbackId` registered in it. An unknown id returns `[]`. Destroying the root throws. Also clears the focus state of the destroyed nodes, and `blur` and `focusout` stay unfired. Drops the waiting `scrollIntoViewNode` calls of the destroyed nodes. |
 | `focusNode` | `(nodeId: number, preventScroll?: boolean) => void` | Request focus for `nodeId`. Takes effect next frame. A node with a `tabindex`, and only that node, takes focus. Unless `preventScroll` is `true`, the scroll containers above the node then scroll it into view: a node that shows stays put, a node outside a container's box centres, and a node that shows partly moves the least vertically and stays put horizontally. A node with no recorded box yet is retried on the next frame. |
+| `focusedNode` | `() => number \| null` | The id of the focused node, or `null` when none has focus. |
 | `blurNode` | `(nodeId: number) => void` | Request that `nodeId` lose focus. Takes effect next frame, and does nothing if `nodeId` is not the focused node by then. |
 | `layoutOf` | `(nodeId: number) => [x, y, width, height, border, scrollX, scrollY] \| null` | Read the border box of `nodeId` in window pixels as the last drawn frame placed it, with `border` the uniform border width. `scrollX` and `scrollY` are the positive scroll offset the parent applied to that box. `null` for a node with no recorded box. |
 | `scrollOf` | `(nodeId: number) => [left, top, maxLeft, maxTop] \| null` | Read the scroll offset (positive) and its maximum as of the last drawn frame, with the offset clamped to that maximum. `null` for a node whose `overflow` is `visible` on both axes. |
@@ -332,7 +333,7 @@ and author-facing behaviour are in [events.md](../docs/reference/events.md).
 
 #### Dispatching from script
 
-- `Event` and `CustomEvent` (`event.rs`) share the prototype and `WeakMap`
+- `Event` and `CustomEvent` (`event/construct.rs`) share the prototype and `WeakMap`
   record, with `isTrusted` false and `target` `null`. `Event(type, init)` and
   `CustomEvent(type, init)` need `new`, a type, and an `init` that is an
   object, `null` or `undefined`. Any other call throws a `TypeError`.

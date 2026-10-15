@@ -291,6 +291,15 @@ A fixed entry is deleted and its ID is never reused.
   `Vec<Function>` of built-in functions as userdata of the context
   (`inspect/builtins.rs`). A fix looks the functions up in JS at each use.
 
+- **B-195 `removeEventListener` accepts a malformed `callbackId`**
+  `Units: bridge,docs · Size: S · Impact: Medium`
+
+  `removeEventListener` takes a plain `u32`, and rquickjs converts a number
+  through `f64` with a range check only. `1.5` becomes 1 and `NaN` becomes 0,
+  so the call removes another registration of that node and event instead of
+  throwing the `TypeError` that `FFI.md` promises. Found by reading; not
+  reproduced.
+
 ## P3
 
 - **B-001 Vue template type-checking**
@@ -510,12 +519,6 @@ A fixed entry is deleted and its ID is never reused.
   hover can carry over to a different node. A scroll offset can likewise carry
   over to a new scrolling container that gets the same id. Found by reading;
   not reproduced.
-
-- **B-071 Last protocol lines can be lost when quitting on macOS**
-  `Units: host · Size: S · Impact: Low`
-
-  On macOS quitting ends the process before the stdout writer is closed, so the
-  last queued protocol lines can be lost. Found by reading; not reproduced.
 
 - **B-074 Dev and production differ in `TextDecoder` and `URL`**
   `Units: cli · Size: S · Impact: Low`
@@ -1227,3 +1230,20 @@ A fixed entry is deleted and its ID is never reused.
   `Opt<T>` passes `undefined` and `null` to `T::from_js`, and `Option<T>`
   maps both to `None`. The natives use both. Pick one type for each
   parameter by the handling `null` should get.
+
+- **B-194 Protocol lines produced during quit teardown are dropped**
+  `Units: host · Size: S · Impact: Low`
+
+  `close_writer_on_quit` closes the dev stdout writer in a gpui quit observer,
+  before gpui clears its windows and flushes effects. A line produced in that
+  teardown reaches a closed channel and is logged and dropped. The writer's
+  join has no timeout either, so a parent that stopped reading a full stdout
+  pipe makes the quit hang. `SHUTDOWN_TIMEOUT` bounds only the futures. Found
+  by reading; not reproduced.
+
+- **B-196 `#[gpui_cases]` drops parts of the function signature**
+  `Units: gpui,bridge · Size: S · Impact: Low`
+
+  `expand` rebuilds the case function from its name, parameters, return type
+  and body only. `async`, `unsafe`, generics, lifetimes and a `where` clause
+  are lost, so such a test fails to compile. The README does not say so.
