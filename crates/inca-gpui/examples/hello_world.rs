@@ -4,9 +4,8 @@
 //! Recreates the look of gpui's own `hello_world` example (see
 //! `examples/gpui/hello_world.rs`): a bordered box, a text label, and a row
 //! of six colored squares. It is built through inca-gpui's `element/build.rs`
-//! conversion instead of calling gpui's builder API directly. Builds the
-//! tree via the Rust `VirtualTree` API, not through `QuickJS`, to isolate the
-//! render conversion from the JS bridge.
+//! conversion from a `VirtualTree` made with the Rust API, which exercises the
+//! render conversion without `QuickJS`.
 
 #![allow(clippy::unwrap_used)]
 

@@ -534,5 +534,6 @@ pub fn drain_jobs_and_refresh(engine: &Engine, reporter: &ErrorReporter, window:
     report_jobs(engine, reporter);
     window.refresh();
 }
+
 #[cfg(test)]
 mod tests;

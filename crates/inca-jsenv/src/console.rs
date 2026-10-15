@@ -202,12 +202,11 @@ fn caller_stack(ctx: &Ctx<'_>) -> Vec<String> {
         .collect()
 }
 
-/// Defines `globalThis.console` with the WHATWG Console methods, writing each
-/// formatted line through `output`.
+/// Defines `globalThis.console` and writes each formatted line through `output`.
 ///
-/// With `color` set, the lines passed to `output` carry ANSI color sequences;
-/// The `NO_COLOR` and `FORCE_COLOR` conventions are the usual source of it. Install before evaluating
-/// any script, so top-level logging works.
+/// `output` receives the level and the formatted line. With `color` set, the
+/// lines carry ANSI color sequences. Install before evaluating any script, so
+/// top-level logging works.
 ///
 /// # Errors
 ///

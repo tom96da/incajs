@@ -276,8 +276,8 @@ pub(crate) fn dispatch_event<'js>(
     Ok(!flag(&record, "canceled"))
 }
 
-/// Runs an untrusted `click` at `target`. A disabled button, a node that left the tree and a node whose own click is
-/// still running ignore the call.
+/// Runs an untrusted `click` at `target`. A disabled button, a node that left the tree and a node
+/// whose own click is still running ignore the call.
 pub(crate) fn click(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, target: NodeId) {
     {
         let mut host = host.borrow_mut();

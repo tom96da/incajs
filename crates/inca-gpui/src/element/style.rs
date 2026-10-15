@@ -67,9 +67,9 @@ fn overlay<S, T>(slot: &mut Option<T>, value: Option<S>, make: impl FnOnce(S) ->
 }
 
 /// Applies a [`StyleSpec`] onto a real `gpui` [`StyleRefinement`], by direct
-/// field assignment rather than `gpui`'s named Tailwind-scale builder
-/// methods (`.gap_3()`, `.size_8()`, ...). Those only cover fixed steps,
-/// not the arbitrary numbers this spec carries. A field the spec leaves unset
+/// field assignment, which carries the arbitrary numbers a spec holds.
+/// `gpui`'s named Tailwind-scale builder methods (`.gap_3()`, `.size_8()`)
+/// cover fixed steps only. A field the spec leaves unset
 /// keeps the value `style` already has.
 #[allow(clippy::cast_possible_truncation)]
 pub(super) fn apply_style(style: &mut StyleRefinement, spec: &StyleSpec) {

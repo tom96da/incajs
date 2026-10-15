@@ -6,8 +6,7 @@
 use super::*;
 use rstest::rstest;
 
-/// Captures every line written to it instead of touching real stdout, so
-/// a test can read back what was sent.
+/// Captures every line written to it, so a test can read back what was sent.
 #[derive(Default)]
 struct CapturingWriter(RefCell<Vec<String>>);
 
@@ -181,7 +180,7 @@ fn a_reload_leaves_no_stale_nodes_listeners_or_callbacks() {
     assert_eq!(children.len(), 1, "the reloaded tree must not accumulate");
     assert_eq!(
         children[0], first_child,
-        "ids restart, so the tree is new rather than appended to"
+        "ids restart, so the reloaded tree replaces the first"
     );
     let ids: Vec<u32> = host
         .listeners

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Integration tests for `inca_bridge::focus`: `focusNode`/`blurNode`
+//! Integration tests for `inca_gpui::focus` through the bridge: `focusNode`/`blurNode`
 //! (`crate::bindings`) through to the `"focus"`/`"blur"` dispatched into
 //! JS, via a real `FocusRegistry::apply_pending` running once per frame;
 //! see `test_support::TestRoot`.

@@ -5,7 +5,7 @@ use super::*;
 
 /// A 200x200 frame holding a 100x50 `box` at its top-left corner. `box`
 /// records its `focus` and `blur` events in `globalThis.log`. The frame's
-/// centre lies outside `box`.
+/// center lies outside `box`.
 const FOCUSABLE: &str = r"
         const n = __inca_native__;
         const frame = n.createNode('div');

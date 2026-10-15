@@ -47,7 +47,7 @@ fn reveal_fixture(overflow: &str, nested: bool) -> String {
                 n.setStyle(spacer, 'height', height);
                 n.appendChild(parent, spacer);
             }};
-            // The item centre minus the centre of the box inside the border.
+            // The item center minus the center of the box inside the border.
             globalThis.gap = (item, box) => {{
                 const [, y, , height] = n.layoutOf(item);
                 const [, by, , bh, bb] = n.layoutOf(box);

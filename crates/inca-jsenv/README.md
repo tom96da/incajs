@@ -26,7 +26,7 @@ use inca_jsenv::console;
 let to_stderr: console::Output = Rc::new(|_, line: &str| eprintln!("{line}"));
 console::install(&ctx, &to_stderr, false)?;
 ctx.eval::<(), _>("console.log('ready', { count: 1 })")?;
-// stderr: log: ready { count: 1 }
+// stderr: ready { count: 1 }
 ```
 
 ## Module loading

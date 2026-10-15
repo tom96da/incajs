@@ -179,8 +179,8 @@ fn a_shared_dependency_is_evaluated_once_across_two_entries() {
         .unwrap();
 
     // Both entries import the same `counter.js`. One shared module
-    // instance means its call counter keeps incrementing rather than
-    // restarting, so the second entry sees `2`, not `1`.
+    // instance means its call counter keeps incrementing, so the second entry
+    // sees `2`.
     let first_seen: i32 = engine.eval("globalThis.firstSeen").unwrap();
     let second_seen: i32 = engine.eval("globalThis.secondSeen").unwrap();
     assert_eq!((first_seen, second_seen), (1, 2));

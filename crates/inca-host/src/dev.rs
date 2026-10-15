@@ -199,11 +199,9 @@ fn swap_in(
     window
         .update(cx, |app, window, cx| {
             app.session = session;
-            // A fixed-size window gets a fresh auto-resize chance,
-            // as if it just launched with the reloaded content. A
-            // resizable window may carry a manual resize the user
-            // made since it last auto-resized, which reloading the
-            // bundle must not discard.
+            // A fixed-size window gets a fresh auto-resize chance, as if it just launched
+            // with the reloaded content. A resizable window may carry a manual resize the
+            // user made since it last auto-resized, which reloading the bundle must not discard.
             if !is_resizable(app.window_config.as_ref()) {
                 app.auto_resized.set((false, false));
             }

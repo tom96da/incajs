@@ -74,7 +74,7 @@ pub(crate) trait ObjectExt<'js> {
     ///
     /// Returns [`Error::Exception`] if the key cannot be converted or the
     /// lookup throws, as for a proxy's trap or a module namespace export that
-    /// is not initialised yet. The key is any value: `null`, `undefined`, a
+    /// is not initialized yet. The key is any value: `null`, `undefined`, a
     /// boolean and a bigint name their string form.
     fn get_own_property_descriptor<K: IntoJs<'js>>(
         &self,

@@ -57,7 +57,7 @@ impl EngineError {
 
     /// JS can throw any value. An `Error` gives up a name, a message and its
     /// frames; anything else is coerced to text, so a thrown object reads as
-    /// `[object Object]`. Nothing here walks its shape.
+    /// `[object Object]`.
     fn from_thrown(thrown: &Value<'_>) -> Self {
         let Some(object) = thrown.as_object().filter(|_| thrown.is_error()) else {
             return Self {
@@ -145,9 +145,8 @@ const TRACKER_JS: &str = r"
 /// stays on the thread that created it. Dropping it frees the runtime and
 /// its realm.
 pub struct Engine {
-    // Kept alive for the lifetime of `context`, which internally holds a
-    // reference-counted handle back to it; QuickJS ties runtime-wide state
-    // (the heap, GC) to this handle rather than to the context.
+    // Kept alive for the lifetime of `context`, which holds a reference-counted
+    // handle back to it. QuickJS ties runtime-wide state (the heap, GC) to this handle.
     runtime: Runtime,
     context: Context,
     /// Jobs that threw while [`poll_module`](Self::poll_module) drove a
@@ -433,10 +432,6 @@ impl EngineBuilder {
 pub type ErrorReporter = Rc<dyn Fn(&EngineError)>;
 
 /// The default [`ErrorReporter`]: one line per failure on stderr.
-///
-/// stderr leaves stdout free for an embedder that uses it as a message
-/// channel, and a failure that reaches nobody is the reason a reporter
-/// exists at all.
 #[must_use]
 pub fn stderr_reporter() -> ErrorReporter {
     Rc::new(|err| eprintln!("{err}"))

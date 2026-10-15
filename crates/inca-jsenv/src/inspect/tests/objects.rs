@@ -11,7 +11,7 @@ use rstest::rstest;
 fn a_namespace_with_an_uninitialized_export_prints_and_leaves_nothing_pending() {
     with_realm(|ctx| {
         pin(&ctx).unwrap();
-        // The module throws before `x` is initialised, so reading `x` throws.
+        // The module throws before `x` is initialized, so reading `x` throws.
         drop(rquickjs::Module::evaluate(
             ctx.clone(),
             "m",

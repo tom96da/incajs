@@ -4,12 +4,12 @@
 //! The `QuickJS` runtime bootstrap, and the host objects installed into it.
 //!
 //! `QuickJS` supplies only the language (`Array`, `JSON`, `Promise` and the rest
-//! of the ECMAScript intrinsics). Everything a script
-//! expects the *host* to provide starts here. [`compile_async_function`] builds
-//! source text into an async function whose stack frames name its file.
+//! of the ECMAScript intrinsics). Everything a script expects the *host* to
+//! provide starts here. [`compile_async_function`] builds source text into an
+//! async function whose stack frames name its file.
 //!
-//! Depends on `rquickjs`, `base64` and `unicode-width` only, so what it installs can be
-//! replaced without reaching the code that draws a UI.
+//! Depends on `rquickjs`, `base64` and `unicode-width` only, so what it
+//! installs can be replaced without reaching the code that draws a UI.
 
 pub mod console;
 mod engine;

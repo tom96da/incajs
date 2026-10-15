@@ -17,8 +17,7 @@ mod serve;
 
 const TEST_ENTRY_PATH: &str = "/test/entry.js";
 
-/// Captures every line written to it instead of touching real stdout, so
-/// a test can read back what was sent.
+/// Captures every line written to it, so a test can read back what was sent.
 #[derive(Default)]
 struct CapturingWriter(RefCell<Vec<String>>);
 

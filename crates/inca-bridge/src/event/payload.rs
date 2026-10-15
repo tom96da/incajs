@@ -44,8 +44,7 @@ fn set_mouse_fields(event_object: &Object, mouse: &MousePayload) -> JsResult<()>
         "relatedTarget",
         or_null(event_object.ctx(), mouse.related_target)?,
     )?;
-    // Identical to clientX/clientY today. Nothing here scrolls the page
-    // itself, which is the only thing that would tell them apart.
+    // Equal to clientX/clientY: no host scrolling moves the page itself.
     event_object.set("pageX", mouse.client_x)?;
     event_object.set("pageY", mouse.client_y)?;
     event_object.set("movementX", mouse.movement_x)?;

@@ -5,17 +5,16 @@
 //! don't come from the retained tree, so nothing else keeps them alive)
 //! and turns GPUI's own focus changes into the four focus events.
 //!
-//! A focus or blur request arrives outside any GPUI render or dispatch, with
-//! no `Window`/`App` to act on immediately. The request is recorded here and
-//! applied the next time something holds a live `Window`/`App`: the host's
-//! per-frame render, before it builds the element tree.
+//! A focus or blur request can arrive outside any GPUI render or dispatch,
+//! with no `Window`/`App` to act on immediately. The request is recorded here
+//! and applied by [`FocusRegistry::apply_pending`], which the caller runs
+//! once per frame before it builds the element tree.
 //!
-//! Dispatching is done by comparing which node is focused now against
-//! which was focused last frame, rather than GPUI's own
-//! `Window::on_focus_in`/`on_focus_out`. Those return a `Subscription`
-//! whose activation is deferred (`cx.defer`) to after the current update
-//! finishes, so one registered in the same frame focus moves to it would
-//! miss that very transition. A plain per-frame diff has no such gap.
+//! Transitions come from comparing the node focused now with the node
+//! focused last frame. `Window::on_focus_in`/`on_focus_out` return a
+//! `Subscription` whose activation is deferred (`cx.defer`) to after the
+//! current update finishes, so one registered in the same frame focus moves
+//! to it would miss that very transition. A per-frame diff has no such gap.
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -74,7 +73,7 @@ impl FocusTransition {
     }
 }
 
-/// What a `focusNode`/`blurNode` call left for the next frame to apply.
+/// A focus or blur request left for the next frame to apply.
 #[derive(Debug, Clone, Copy)]
 enum PendingFocus {
     /// Focus the node, and scroll it into view when `scroll` is set.
@@ -86,9 +85,8 @@ enum PendingFocus {
 }
 
 /// `NodeId` → its persistent `FocusHandle`, the node focused as of the last
-/// frame this was checked, and every pending request left by a binding
-/// that had no live `Window`/`App`, oldest first. See the module doc for
-/// why. Two requests queued before the next frame both apply, in order.
+/// frame this was checked, and every pending request left by a caller that
+/// had no live `Window`/`App`, oldest first. See the module doc for why. Two requests queued before the next frame both apply, in order.
 #[derive(Debug, Default)]
 pub struct FocusRegistry {
     handles: HashMap<NodeId, FocusHandle>,
@@ -214,7 +212,7 @@ impl FocusRegistry {
     }
 
     /// The handle to `.track_focus(...)` `node_id` with, if it has one.
-    /// Backs [`EventSink::focus_handle`] for `EventDispatcher`.
+    /// This is the handle an [`EventSink`] returns from [`EventSink::focus_handle`].
     #[must_use]
     pub fn handle(&self, node_id: NodeId) -> Option<FocusHandle> {
         self.handles.get(&node_id).cloned()
@@ -364,12 +362,10 @@ impl FocusRegistry {
     /// it produced. Call once per frame, before the element tree that
     /// needs the resulting `track_focus` wiring is built.
     ///
-    /// Returns the transitions rather than dispatching them directly: the
-    /// caller holds `self` through a borrow of the same `Rc<RefCell<Host>>`
-    /// that `EventSink::fire` re-borrows internally to look up
-    /// callbacks, so dispatching from inside this call would panic with
-    /// "already mutably borrowed". The caller dispatches after this
-    /// returns, once that borrow is released.
+    /// The transitions are returned and not dispatched here, so the caller
+    /// fires them after releasing its borrow of `self`. An [`EventSink`]
+    /// that re-borrows the same `RefCell` while firing would otherwise
+    /// panic with "already mutably borrowed".
     #[must_use]
     pub fn apply_pending(
         &mut self,
@@ -483,8 +479,7 @@ impl FocusRegistry {
     }
 
     /// Drops `node_id`'s handle and any queued request to focus it.
-    /// `destroyNode` calls this for every node a destroyed subtree freed,
-    /// mirroring how it already frees callback ids.
+    /// Call it for every node a destroyed subtree freed.
     pub fn forget(&mut self, node_id: NodeId) {
         self.handles.remove(&node_id);
         self.tab_dirty.remove(&node_id);

@@ -12,10 +12,8 @@ real `gpui` elements needs nothing from a JS engine.
 
 The tree is single-parent and freed explicitly: attaching a node detaches it
 from where it was, and `destroyNode` is what releases one and everything
-below it. Input dispatch (which callback fires for which `(node, event)`) is
-behind this crate's `EventSink` trait rather than a concrete dependency.
-`inca-bridge`'s `EventDispatcher` is what actually implements it, wiring
-input back into JS.
+below it. Input dispatch (which callback fires for which `(node, event)`)
+goes through this crate's `EventSink` trait, which the caller implements.
 
 The crate also holds the logic every host shares: the `focus` module
 (per-node focus handles and the Tab order), the scroll-into-view geometry

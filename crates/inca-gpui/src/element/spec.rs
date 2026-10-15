@@ -8,12 +8,8 @@ use crate::tree::{AttributeValue, NodeId, VirtualNode, VirtualTree};
 ///
 /// Two kinds exist, chosen by the `"text"` tag name.
 ///
-/// Text is deliberately never allowed as a bare string child mixed into a
-/// container's children. It's always its own dedicated node with a
-/// stable id. That keeps every rendered text run addressable by [`NodeId`],
-/// which later work (text selection, hit-testing, per-run event handling)
-/// will need. A container that could also hold ad-hoc string children
-/// would make some rendered text invisible to that addressing.
+/// Text is always its own node with a stable id, never a bare string child
+/// of a container. Every rendered text run is addressable by [`NodeId`].
 #[derive(Debug, Clone, PartialEq)]
 pub enum ElementTag {
     /// Any tag name other than `"text"`: a generic styled box.

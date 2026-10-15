@@ -179,7 +179,7 @@ fn a_prevented_key_up_cancels_the_space_click(cx: &mut TestAppContext) {
     h.keystrokes("space");
     h.key_up("space");
     assert_eq!(log(&h), "");
-    // The cancelled press leaves nothing pending.
+    // The canceled press leaves nothing pending.
     run_js(
         &mut h,
         "__inca_native__.removeEventListener(box, 'keyup', 1);",

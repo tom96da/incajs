@@ -292,9 +292,8 @@ impl Loading {
 
 pub(crate) struct HostedApp {
     pub(crate) session: Session,
-    /// The window section of the app's config as of the last `start`/reload,
-    /// kept so a later content-driven resize can reuse [`window_size`]'s own
-    /// fallback chain.
+    /// The window section of the app's config, read once when the window opens.
+    /// A content-driven resize reuses it through [`window_size`]'s fallback chain.
     pub(crate) window_config: Option<config::WindowConfig>,
     /// Whether [`maybe_auto_resize_to_content`] has already resized the
     /// window's width and its height. Each fires once.

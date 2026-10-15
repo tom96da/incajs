@@ -24,8 +24,8 @@ pub type NodeId = u32;
 ///
 /// Restricted to primitives on purpose: a non-primitive value (an object or
 /// array) can't be represented here, so a caller converting a JS value into
-/// one of these is forced to reject it explicitly instead of coercing or
-/// storing it silently.
+/// one of these must reject it explicitly. Nothing coerces or
+/// stores it silently.
 #[derive(Debug, Clone, PartialEq)]
 pub enum AttributeValue {
     String(String),
@@ -141,8 +141,7 @@ impl VirtualNode {
     }
 }
 
-/// How a [`VirtualTree`] operation fails. Returned as a `Result` rather than
-/// panicking so a caller further up the stack can turn it into whatever
+/// How a [`VirtualTree`] operation fails. Returned as a `Result`, so a caller further up the stack can turn it into whatever
 /// handling it needs (at the JS boundary, a catchable exception).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TreeError {
@@ -187,8 +186,7 @@ impl VirtualTree {
 
     /// Allocates a new node and returns its id. Ids are assigned
     /// sequentially starting at 0 and are never reused, even after the node
-    /// they named is destroyed, so a stale id names nothing rather than
-    /// something else.
+    /// they named is destroyed, so a stale id never names another node.
     ///
     /// # Errors
     ///

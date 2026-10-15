@@ -220,7 +220,7 @@ fn destroyed_ids_are_not_handed_out_again() {
     assert_ne!(
         tree.create_node("div").unwrap(),
         first,
-        "a stale id must name nothing rather than something else"
+        "a stale id never names another node"
     );
 }
 
