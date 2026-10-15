@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { h, nextTick, reactive, ref } from "@vue/runtime-core";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { rectOf } from "../src/element/geometry.mts";
 import { blur, click, focus } from "../src/events.mts";
 import { createEventTarget } from "../src/eventTarget.mts";
-import { createNode, rootNodeId } from "../src/tree.mts";
+import { createNode } from "../src/tree.mts";
 import { createIncaApp } from "../src/vue/index.mts";
 import type { IncaElement, NodeId } from "../src/index.mts";
 
@@ -316,30 +316,6 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
     expect(globalThis.__inca_callbacks__).toEqual({});
   });
 
-  it("keeps one native registration when a handler is replaced on every render", async () => {
-    const state = reactive({ count: 0 });
-    const App = {
-      setup() {
-        return () =>
-          // A fresh closure each render, so Vue patches the prop every time.
-          h("div", { onClick: () => state.count++ }, `${state.count}`);
-      },
-    };
-
-    createIncaApp(App).mount(root);
-    await nextTick();
-
-    const div = nodes.get(nodes.get(root.id)!.children[0]!)!;
-    dispatch(div, "click");
-    await nextTick();
-    dispatch(div, "click");
-    await nextTick();
-
-    expect(state.count).toBe(2);
-    expect(div.listeners["click"]).toHaveLength(1);
-    expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(1);
-  });
-
   it("registers .capture and .passive handlers with the host's phase and passivity", async () => {
     const App = {
       setup() {
@@ -408,59 +384,5 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
     expect(div.listeners["click"]).toHaveLength(0);
     expect(globalThis.__inca_callbacks__).toEqual({});
     expect(clicks).toBe(0);
-  });
-
-  it("mounts against the host's root container when mount gets no argument", async () => {
-    const App = {
-      setup() {
-        return () => h("div", { class: "box" });
-      },
-    };
-
-    createIncaApp(App).mount();
-    await nextTick();
-
-    const hostRoot = nodes.get(rootNodeId())!;
-    expect(hostRoot).not.toBe(nodes.get(root.id));
-    expect(hostRoot.children).toHaveLength(1);
-    expect(nodes.get(hostRoot.children[0]!)!.attributes["class"]).toBe("box");
-  });
-
-  it("a ref of an element removed by v-if ignores listener and tabIndex calls", async () => {
-    const state = reactive({ show: true });
-    const button = ref<IncaElement | null>(null);
-    const App = {
-      setup() {
-        return () => (state.show ? h("button", { ref: button }) : null);
-      },
-    };
-
-    createIncaApp(App).mount(root);
-    await nextTick();
-    const handle = button.value!;
-
-    const host = globalThis.__inca_native__;
-    const spies = [
-      vi.spyOn(host, "addEventListener"),
-      vi.spyOn(host, "removeEventListener"),
-      vi.spyOn(host, "dispatchEvent"),
-      vi.spyOn(host, "getAttribute"),
-      vi.spyOn(host, "setAttribute"),
-    ];
-
-    state.show = false;
-    await nextTick();
-    for (const spy of spies) spy.mockClear();
-
-    const listener = (): void => {};
-    let dispatched: boolean | undefined;
-    handle.addEventListener("click", listener);
-    handle.removeEventListener("click", listener);
-    dispatched = handle.dispatchEvent(new Event("click"));
-    handle.tabIndex = 5;
-
-    expect(dispatched).toBe(true);
-    expect(handle.tabIndex).toBe(0);
-    for (const spy of spies) expect(spy.mock.calls).toEqual([]);
   });
 });

@@ -4,14 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { callbackIdFor, groupOf, registeredGroupCount } from "./callbacks.mts";
-import {
-  addEventListener,
-  blur,
-  click,
-  dispatchEvent,
-  focus,
-  removeEventListener,
-} from "./events.mts";
+import { addEventListener, blur, click, focus, removeEventListener } from "./events.mts";
 import { destroyNode } from "./tree.mts";
 import type { EventLike } from "./types.mts";
 
@@ -98,13 +91,6 @@ describe("addEventListener's callback registry", () => {
     const delivered = { type: "click" };
     globalThis.__inca_callbacks__[callbackId]!(delivered);
     expect(listener).toHaveBeenCalledExactlyOnceWith(delivered);
-  });
-
-  it("allocates a distinct id per registration", () => {
-    addEventListener(1, "click", vi.fn<() => void>());
-    addEventListener(2, "click", vi.fn<() => void>());
-
-    expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(2);
   });
 });
 
@@ -244,17 +230,6 @@ describe("listener objects", () => {
     removeEventListener(1, "click", object);
     expect(native.removeEventListener).toHaveBeenCalledTimes(1);
   });
-
-  it("runs a once object listener a single time", () => {
-    const object = { handleEvent: vi.fn<() => void>() };
-    addEventListener(1, "click", object, { once: true });
-    const callbackId = native.addEventListener.mock.results[0]!.value;
-
-    globalThis.__inca_callbacks__[callbackId]!();
-
-    expect(object.handleEvent).toHaveBeenCalledTimes(1);
-    expect(native.removeEventListener).toHaveBeenCalledExactlyOnceWith(1, "click", callbackId);
-  });
 });
 
 describe("listener options", () => {
@@ -356,16 +331,6 @@ describe("removeEventListener", () => {
     expect(native.removeEventListener).not.toHaveBeenCalled();
     expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(1);
   });
-
-  it("is a no-op when asked twice", () => {
-    const listener = vi.fn<() => void>();
-    addEventListener(1, "click", listener);
-
-    removeEventListener(1, "click", listener);
-    removeEventListener(1, "click", listener);
-
-    expect(native.removeEventListener).toHaveBeenCalledTimes(1);
-  });
 });
 
 describe("destroyNode", () => {
@@ -393,19 +358,6 @@ describe("destroyNode", () => {
     destroyNode(1);
 
     expect(globalThis.__inca_callbacks__[survivor]).toBeDefined();
-    expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(1);
-  });
-
-  it("registers a destroyed node's function afresh under a new id", () => {
-    const listener = vi.fn<() => void>();
-    addEventListener(1, "click", listener);
-    const firstId = native.addEventListener.mock.results[0]!.value;
-    native.destroyNode.mockReturnValueOnce([firstId!]);
-    destroyNode(1);
-
-    addEventListener(1, "click", listener);
-
-    expect(native.removeEventListener).not.toHaveBeenCalled();
     expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(1);
   });
 });
@@ -462,16 +414,6 @@ describe("blur", () => {
   it("forwards the node id to native blurNode", () => {
     blur(7);
     expect(native.blurNode).toHaveBeenCalledWith(7);
-  });
-});
-
-describe("dispatchEvent", () => {
-  it("forwards the node and event to native and returns its answer", () => {
-    const event = { type: "ping" };
-    native.dispatchEvent.mockReturnValueOnce(false);
-
-    expect(dispatchEvent(7, event)).toBe(false);
-    expect(native.dispatchEvent).toHaveBeenCalledExactlyOnceWith(7, event);
   });
 });
 

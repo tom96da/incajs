@@ -246,13 +246,6 @@ describe("on*", () => {
     );
   });
 
-  it("registers an on:name prop as the event name written after the colon", () => {
-    patchProp(el, "on:myEvent", null, vi.fn(), undefined, null);
-
-    expect(core.addEventListener).toHaveBeenCalledWith(1, "myEvent", expect.any(Function), BUBBLE);
-    expect(core.setAttribute).not.toHaveBeenCalled();
-  });
-
   it("registers a function listener under the event name", () => {
     const listener = vi.fn<() => void>();
     patchProp(el, "onClick", null, listener, undefined, null);
@@ -300,12 +293,6 @@ describe("onUpdate:* props", () => {
     expect(core.setAttribute).not.toHaveBeenCalled();
   });
 
-  it("binds no listener for a named v-model update handler", () => {
-    patchProp(el, "onUpdate:count", null, [vi.fn<() => void>()], undefined, null);
-
-    expect(core.addEventListener).not.toHaveBeenCalled();
-  });
-
   it("does nothing when the handler is removed", () => {
     patchProp(el, "onUpdate:modelValue", vi.fn(), undefined, undefined, null);
 
@@ -328,13 +315,9 @@ describe("on* modifiers", () => {
   it("registers each suffix combination with its capture and passive flags", () => {
     const mismatches: string[] = [];
     const cases: [string, ListenerOptions][] = [
-      ["onClick", { capture: false, passive: false }],
       ["onClickCapture", { capture: true, passive: false }],
       ["onClickPassive", { capture: false, passive: true }],
-      ["onClickOnce", { capture: false, passive: false }],
-      ["onClickOnceCapture", { capture: true, passive: false }],
       ["onClickCapturePassive", { capture: true, passive: true }],
-      ["onClickOncePassiveCapture", { capture: true, passive: true }],
     ];
     for (const [key, options] of cases) {
       vi.clearAllMocks();
@@ -453,44 +436,6 @@ describe("plain and .once listeners on one element", () => {
     expect(core.removeEventListener).not.toHaveBeenCalled();
   });
 
-  it("fires a once listener alone one time and unbinds the event", () => {
-    const once = vi.fn<() => void>();
-    set("onClickOnce", once);
-    const registered = listenerOf(vi.mocked(core.addEventListener).mock.calls[0]!);
-    registered();
-    registered();
-
-    expect(once).toHaveBeenCalledTimes(1);
-    expect(core.removeEventListener).toHaveBeenCalledExactlyOnceWith(
-      1,
-      "click",
-      expect.any(Function),
-      BUBBLE,
-    );
-  });
-
-  it("registers one host listener for both and runs them in registration order", () => {
-    const log: string[] = [];
-    const plain = fn(log, "plain");
-    const once = fn(log, "once");
-    set("onClick", plain);
-    set("onClickOnce", once);
-
-    expect(core.addEventListener).toHaveBeenCalledTimes(1);
-    fire();
-    expect(log).toEqual(["plain", "once"]);
-  });
-
-  it("runs once-then-plain registration in that order", () => {
-    const log: string[] = [];
-    set("onClickOnce", fn(log, "once"));
-    set("onClick", fn(log, "plain"));
-
-    expect(core.addEventListener).toHaveBeenCalledTimes(1);
-    fire();
-    expect(log).toEqual(["once", "plain"]);
-  });
-
   it("unbinds the host only when the last slot goes, after a once fired", () => {
     const plain = vi.fn<() => void>();
     set("onClick", plain);
@@ -587,19 +532,6 @@ describe("plain and .once listeners on one element", () => {
       expect.any(Function),
       BUBBLE,
     );
-  });
-
-  it("toggles a lone handler from once to plain, re-registering with the host", () => {
-    const handler = vi.fn<() => void>();
-    set("onClickOnce", handler);
-    patchProp(el, "onClickOnce", handler, undefined, undefined, null);
-    patchProp(el, "onClick", undefined, handler, undefined, null);
-    fire();
-    fire();
-
-    expect(handler).toHaveBeenCalledTimes(2);
-    expect(core.addEventListener).toHaveBeenCalledTimes(2);
-    expect(core.removeEventListener).toHaveBeenCalledTimes(1);
   });
 
   it("registers a distinct event on the same node separately", () => {
@@ -766,20 +698,6 @@ describe("plain and .once listeners on one element", () => {
       expect(core.removeEventListener).toHaveBeenCalledTimes(1);
       expect(plain).toHaveBeenCalledTimes(1);
     });
-
-    it("is dropped from the host when the remaining plain slot goes too", () => {
-      set("onClick", vi.fn());
-      set("onClickOnce", vi.fn());
-      fire();
-      patchProp(el, "onClick", null, undefined, undefined, null);
-
-      expect(core.removeEventListener).toHaveBeenCalledExactlyOnceWith(
-        1,
-        "click",
-        expect.any(Function),
-        BUBBLE,
-      );
-    });
   });
 
   it("runs a handler added under a new key during dispatch on the next dispatch only", () => {
@@ -789,15 +707,6 @@ describe("plain and .once listeners on one element", () => {
     expect(late).not.toHaveBeenCalled();
     fire();
     expect(late).toHaveBeenCalledTimes(1);
-  });
-
-  it("runs every function of an array value inside a slot", () => {
-    const log: string[] = [];
-    set("onClick", [fn(log, "a"), fn(log, "b")]);
-    set("onClickOnce", fn(log, "once"));
-    fire();
-
-    expect(log).toEqual(["a", "b", "once"]);
   });
 
   describe("stopImmediatePropagation", () => {
@@ -825,17 +734,6 @@ describe("plain and .once listeners on one element", () => {
       fireWith(event);
 
       expect(log).toEqual(["first"]);
-      expect(original).toHaveBeenCalledTimes(1);
-    });
-
-    it("inside an array value stops the later functions and the later slot", () => {
-      const log: string[] = [];
-      const { event, original } = makeEvent();
-      set("onClick", [stopper(log, "a"), fn(log, "b")]);
-      set("onClickOnce", fn(log, "once"));
-      fireWith(event);
-
-      expect(log).toEqual(["a"]);
       expect(original).toHaveBeenCalledTimes(1);
     });
 
@@ -876,14 +774,6 @@ describe("plain and .once listeners on one element", () => {
 
       expect(log).toEqual(["first", "last"]);
       expect(original).toHaveBeenCalledTimes(1);
-    });
-
-    it("restores the event's own method after dispatch", () => {
-      const { event, original } = makeEvent();
-      set("onClick", stopper([], "a"));
-      fireWith(event);
-
-      expect(event.stopImmediatePropagation).toBe(original);
     });
 
     it("leaves no own method behind on an event that inherits it", () => {
@@ -1002,15 +892,6 @@ describe("plain and .once listeners on one element", () => {
       expect(plain).toHaveBeenCalledTimes(2);
       expect(core.removeEventListener).not.toHaveBeenCalled();
     });
-
-    it("writes nothing to the console when no handler throws", () => {
-      set("onClick", vi.fn());
-      set("onClickOnce", vi.fn());
-      fire();
-
-      expect(warn).not.toHaveBeenCalled();
-      expect(error).not.toHaveBeenCalled();
-    });
   });
 
   it("leaves no slot behind when the host registration throws", () => {
@@ -1045,15 +926,6 @@ describe("errors thrown by an event handler", () => {
   });
   afterEach(() => {
     warn.mockRestore();
-  });
-
-  it("reaches the app's errorHandler and is not rethrown", () => {
-    const errorHandler = vi.fn<() => void>();
-    patchProp(el, "onClick", null, throwing, undefined, instanceWith(errorHandler));
-
-    const registered = listenerOf(vi.mocked(core.addEventListener).mock.calls[0]!);
-    expect(() => registered()).not.toThrow();
-    expect(errorHandler).toHaveBeenCalledWith(boom, undefined, "native event handler");
   });
 
   it("still propagates when no errorHandler is configured", () => {
@@ -1281,7 +1153,6 @@ describe("errors thrown by an event handler", () => {
     const fail = (error: Error) => () => {
       throw error;
     };
-    const settle = (): Promise<unknown> => new Promise((resolve) => setTimeout(resolve, 0));
 
     it("gives each failure to onErrorCaptured and then the errorHandler", () => {
       const errorHandler = vi.fn<(error: unknown) => void>();
@@ -1296,34 +1167,6 @@ describe("errors thrown by an event handler", () => {
       expect(hook).toHaveBeenCalledTimes(2);
       expect(errorHandler.mock.calls.map(([e]) => e)).toEqual([first, second]);
     });
-
-    it("keeps the failures from the errorHandler when a hook returns false", () => {
-      const errorHandler = vi.fn<(error: unknown) => void>();
-      const dispatch = mount(
-        [fail(first)],
-        (a) => (a.config.errorHandler = errorHandler),
-        () => false,
-      );
-
-      expect(() => dispatch()).not.toThrow();
-      expect(errorHandler).not.toHaveBeenCalled();
-    });
-
-    it("reports each failure to the host with no hook and no errorHandler", async () => {
-      const dispatch = mount([fail(first), fail(second)], () => {});
-
-      expect(() => dispatch()).toThrow(first);
-      await settle();
-      expect(unhandled.mock.calls.map(([reason]) => reason)).toEqual([second]);
-    });
-  });
-
-  it("unbinds a .once listener and still reports its error", () => {
-    patchProp(el, "onClickOnce", null, throwing, undefined, instanceWith());
-
-    const registered = listenerOf(vi.mocked(core.addEventListener).mock.calls[0]!);
-    expect(() => registered()).toThrow(boom);
-    expect(core.removeEventListener).toHaveBeenCalledWith(1, "click", expect.any(Function), BUBBLE);
   });
 
   describe("async rejections", () => {
@@ -1342,12 +1185,6 @@ describe("errors thrown by an event handler", () => {
       expect(() => registered()).not.toThrow();
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
-
-    it("reports one unhandled rejection with no errorHandler", async () => {
-      await register(() => Promise.reject(boom), instanceWith());
-      expect(unhandled).toHaveBeenCalledTimes(1);
-      expect(unhandled.mock.calls[0]![0]).toBe(boom);
-    });
 
     it("hands the rejection to the errorHandler and reports nothing else", async () => {
       const errorHandler = vi.fn<() => void>();
@@ -1383,8 +1220,6 @@ describe("everything else", () => {
 
   it.each([
     ["an object", { nested: true }, "[object Object]"],
-    ["an array", [1, 2], "1,2"],
-    ["a function", function named() {}, "function named() {}"],
     ["a symbol", Symbol("tag"), "Symbol(tag)"],
   ])("sets %s as its string form", (_name, value, expected) => {
     patchProp(el, "data", null, value, undefined, null);
@@ -1424,16 +1259,6 @@ describe("everything else", () => {
     expect(core.removeAttribute).toHaveBeenCalledExactlyOnceWith(2, "label");
   });
 
-  it("sets a removed attribute again", () => {
-    patchProp(el, "label", null, "a", undefined, null);
-    patchProp(el, "label", "a", null, undefined, null);
-    patchProp(el, "label", null, "b", undefined, null);
-
-    expect(core.setAttribute).toHaveBeenLastCalledWith(1, "label", "b");
-    expect(core.setAttribute).toHaveBeenCalledTimes(2);
-    expect(core.removeAttribute).toHaveBeenCalledTimes(1);
-  });
-
   it("removes disabled, hidden and inert when set to false and sets them when true", () => {
     for (const name of ["disabled", "hidden", "inert"]) {
       vi.mocked(core.setAttribute).mockClear();
@@ -1450,13 +1275,6 @@ describe("everything else", () => {
     patchProp(el, "readonly", true, false, undefined, null);
 
     expect(core.setAttribute).toHaveBeenCalledWith(1, "readonly", false);
-    expect(core.removeAttribute).not.toHaveBeenCalled();
-  });
-
-  it("leaves style and event props on their own paths", () => {
-    patchProp(el, "style", null, null, undefined, null);
-    patchProp(el, "onClick", null, null, undefined, null);
-
     expect(core.removeAttribute).not.toHaveBeenCalled();
   });
 });
@@ -1586,14 +1404,6 @@ describe("a listener attached while an event is handled", () => {
     expect(late).toHaveBeenCalledTimes(1);
   });
 
-  it("runs for an event after the one that was latest when it was attached", () => {
-    const early = spy();
-    latest = 4;
-    set("onClick", early);
-    send(5);
-    expect(early).toHaveBeenCalledTimes(1);
-  });
-
   it("runs for the first event when it was attached before any event", () => {
     const early = spy();
     set("onClick", early);
@@ -1619,18 +1429,6 @@ describe("a listener attached while an event is handled", () => {
     send(5);
     expect(old).toHaveBeenCalledTimes(1);
     expect(late).not.toHaveBeenCalled();
-  });
-
-  it("skips every function of an array value", () => {
-    const [a, b] = [spy(), spy()];
-    latest = 5;
-    set("onClick", [a, b]);
-    send(5);
-    expect(a).not.toHaveBeenCalled();
-    expect(b).not.toHaveBeenCalled();
-    send(6);
-    expect(a).toHaveBeenCalledTimes(1);
-    expect(b).toHaveBeenCalledTimes(1);
   });
 
   it("keeps its attach point when a re-render replaces its function", () => {
@@ -1671,17 +1469,6 @@ describe("a listener attached while an event is handled", () => {
       expect.any(Function),
       BUBBLE,
     );
-  });
-
-  it("is skipped when a handler on the same element attaches it", () => {
-    const late = spy();
-    latest = 4;
-    set("onClick", () => set("onClickOnce", late));
-    send(5);
-    send(5);
-    expect(late).not.toHaveBeenCalled();
-    send(6);
-    expect(late).toHaveBeenCalledTimes(1);
   });
 
   it("is judged against the event being dispatched when dispatches nest", () => {

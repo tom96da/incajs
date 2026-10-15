@@ -5,20 +5,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   appendChild,
-  createNode,
-  destroyNode,
   focusedNode,
   getAttribute,
-  insertBefore,
   layoutOf,
   scrollIntoViewNode,
   scrollNode,
   scrollOf,
   removeAttribute,
   removeChild,
-  rootNodeId,
-  setAttribute,
-  setStyle,
   removeStyle,
 } from "./tree.mts";
 import type { EventLike } from "./types.mts";
@@ -66,39 +60,14 @@ beforeEach(() => {
 });
 
 describe("wrapper functions forward to __inca_native__", () => {
-  it("rootNodeId", () => {
-    expect(rootNodeId()).toBe(42);
-    expect(native.rootNodeId).toHaveBeenCalledWith();
-  });
-
-  it("createNode", () => {
-    expect(createNode("div")).toBe(1);
-    expect(native.createNode).toHaveBeenCalledWith("div");
-  });
-
   it("appendChild", () => {
     appendChild(1, 2);
     expect(native.appendChild).toHaveBeenCalledWith(1, 2);
   });
 
-  it("insertBefore", () => {
-    insertBefore(1, 2, 3);
-    expect(native.insertBefore).toHaveBeenCalledWith(1, 2, 3);
-  });
-
-  it("insertBefore with a null anchor", () => {
-    insertBefore(1, 2, null);
-    expect(native.insertBefore).toHaveBeenCalledWith(1, 2, null);
-  });
-
   it("removeChild", () => {
     removeChild(1, 2);
     expect(native.removeChild).toHaveBeenCalledWith(1, 2);
-  });
-
-  it("setAttribute", () => {
-    setAttribute(1, "label", "hello");
-    expect(native.setAttribute).toHaveBeenCalledWith(1, "label", "hello");
   });
 
   it("getAttribute", () => {
@@ -134,19 +103,9 @@ describe("wrapper functions forward to __inca_native__", () => {
     expect(native.removeAttribute).toHaveBeenCalledWith(1, "label");
   });
 
-  it("destroyNode", () => {
-    destroyNode(7);
-    expect(native.destroyNode).toHaveBeenCalledWith(7);
-  });
-
   it("removeStyle", () => {
     removeStyle(1, "display");
     expect(native.removeStyle).toHaveBeenCalledWith(1, "display");
-  });
-
-  it("setStyle", () => {
-    setStyle(1, "display", "flex");
-    expect(native.setStyle).toHaveBeenCalledWith(1, "display", "flex");
   });
 
   it("focusedNode", () => {

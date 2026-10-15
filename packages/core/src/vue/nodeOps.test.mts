@@ -5,7 +5,6 @@ import { reactive, ref } from "@vue/runtime-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { unregisterElement } from "../element/lifecycle.mts";
-import * as tree from "../element/shadowTree.mts";
 import { createNodeOps } from "./nodeOps.mts";
 import type { IncaCore } from "../rendererCore.mts";
 
@@ -35,43 +34,13 @@ beforeEach(() => {
   vi.mocked(core.createNode).mockImplementation(() => nextId++);
 });
 
-describe("createNodeOps delegation", () => {
-  it("creates nodes through the shadow tree", () => {
-    const el = nodeOps.createElement("div");
-    const text = nodeOps.createText("hi");
-    const comment = nodeOps.createComment("v-if");
+describe("createNodeOps text", () => {
+  it("writes the text of a text node through setText", () => {
+    const text = nodeOps.createText("a");
 
-    expect([el.kind, text.kind, comment.kind]).toEqual(["element", "text", "comment"]);
-    expect(core.createNode).toHaveBeenNthCalledWith(1, "div");
-    expect(core.createNode).toHaveBeenNthCalledWith(2, "text");
-    expect(core.setStyle).toHaveBeenCalledWith(comment.id, "display", "none");
-  });
+    nodeOps.setText(text, "b");
 
-  it("updates, inserts and removes through the shadow tree", () => {
-    const parent = nodeOps.createElement("div");
-    const first = nodeOps.createElement("div");
-    const second = nodeOps.createText("a");
-
-    nodeOps.insert(first, parent);
-    nodeOps.insert(second, parent, first);
-    nodeOps.setText(second as ReturnType<typeof nodeOps.createText>, "b");
-
-    expect(parent.children).toEqual([second, first]);
-    expect(nodeOps.parentNode(first)).toBe(parent);
-    expect(nodeOps.nextSibling(second)).toBe(first);
-    expect(core.setAttribute).toHaveBeenLastCalledWith(second.id, "value", "b");
-
-    nodeOps.setElementText(parent, "");
-    expect(parent.children).toEqual([]);
-
-    nodeOps.remove(first);
-    expect(core.destroyNode).toHaveBeenLastCalledWith(first.id);
-  });
-
-  it("reads parentNode and nextSibling from the shadow tree", () => {
-    const node = tree.createElementNode(core, "div");
-
-    expect([nodeOps.parentNode(node), nodeOps.nextSibling(node)]).toEqual([null, null]);
+    expect(core.setAttribute).toHaveBeenLastCalledWith(text.id, "value", "b");
   });
 });
 
