@@ -50,6 +50,20 @@ A test name is a snake_case sentence of the behaviour, with the subject
 first. It has no `test_` prefix and at most 80 characters. It says `throws` for
 a JS exception and uses US spelling (`canceled`, `centers`).
 
+### Table tests
+
+Independent cases of one behaviour are one test per case.
+
+- A `#[test]` uses `rstest`: `#[rstest]` with `#[case::<id>(..)]`.
+- A `#[gpui::test]` uses `#[gpui_cases]` from `inca-test-macros`, above
+  `#[gpui::test]`, with `#[case::<id>(..)]`. `cx: &mut TestAppContext` stays
+  the first parameter and the last parameters take the case values.
+  `rstest` cannot supply `cx`.
+- Both name a test `<fn>::case_<N>_<id>`. `cargo test -p <crate> -- --list`
+  prints the names.
+- A loop whose iterations share state, or whose body only registers
+  listeners for one dispatch, stays a loop.
+
 ### Lint allows
 
 A test module that needs `clippy::unwrap_used` (or `float_cmp` and the like)
