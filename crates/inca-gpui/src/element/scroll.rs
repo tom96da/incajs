@@ -351,7 +351,7 @@ mod tests {
     }
 
     #[test]
-    fn reveal_centres_a_node_outside_the_box() {
+    fn reveal_centers_a_node_outside_the_box() {
         assert_eq!(dy(40.0, 20.0, Align::Reveal), -100.0);
         assert_eq!(dy(260.0, 20.0, Align::Reveal), 120.0);
         assert_eq!(dy(200.0, 20.0, Align::Reveal), 60.0);
@@ -383,13 +383,13 @@ mod tests {
     }
 
     #[test]
-    fn a_zero_size_node_outside_the_box_centres() {
+    fn a_zero_size_node_outside_the_box_centers() {
         assert_eq!(dy(60.0, 0.0, Align::Reveal), -90.0);
         assert_eq!(dy(260.0, 0.0, Align::CenterOutside), 110.0);
     }
 
     #[test]
-    fn a_box_of_zero_height_centres_a_node_outside_it() {
+    fn a_box_of_zero_height_centers_a_node_outside_it() {
         let view = rect(100.0, 100.0, 100.0, 0.0);
         let node = rect(100.0, 140.0, 10.0, 20.0);
         assert_eq!(

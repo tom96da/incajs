@@ -142,7 +142,7 @@ fn draw_and_collect_bounds(
 }
 
 #[gpui::test]
-fn virtual_tree_layout_matches_hand_written_gpui(cx: &mut TestAppContext) {
+fn the_virtual_tree_lays_out_like_hand_written_gpui(cx: &mut TestAppContext) {
     let reference_bounds = draw_and_collect_bounds(cx, build_reference);
 
     let (tree, root) = build_tree();

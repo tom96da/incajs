@@ -25,7 +25,7 @@ fn ids_exhausted_has_a_message() {
 }
 
 #[test]
-fn append_order() {
+fn append_child_keeps_the_call_order() {
     let mut tree = VirtualTree::new();
     let parent = tree.create_node("div").unwrap();
     let a = tree.create_node("span").unwrap();
@@ -40,7 +40,7 @@ fn append_order() {
 }
 
 #[test]
-fn insert_before_at_start_middle_end() {
+fn insert_before_places_a_node_at_the_start_middle_and_end() {
     let mut tree = VirtualTree::new();
     let parent = tree.create_node("div").unwrap();
     let a = tree.create_node("span").unwrap();
@@ -277,7 +277,7 @@ fn remove_of_absent_child_is_a_no_op() {
 }
 
 #[test]
-fn set_attribute_overwrites() {
+fn set_attribute_replaces_an_existing_value() {
     let mut tree = VirtualTree::new();
     let node = tree.create_node("input").unwrap();
 
@@ -439,7 +439,7 @@ fn style_key_borrows_a_snake_case_key() {
 }
 
 #[test]
-fn style_key_edge_cases() {
+fn a_style_key_normalizes_to_snake_case_in_every_edge_case() {
     for (key, want) in [
         ("flexDirection", "flex_direction"),
         ("flex-direction", "flex_direction"),

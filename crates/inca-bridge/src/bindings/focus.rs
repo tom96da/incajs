@@ -187,7 +187,7 @@ mod tests {
     }
 
     #[test]
-    fn layout_of_an_unknown_node_raises_type_error() {
+    fn layout_of_an_unknown_node_throws_type_error() {
         let (engine, _host) = engine_with_bindings();
 
         let caught: bool = engine

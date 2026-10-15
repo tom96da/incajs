@@ -300,7 +300,7 @@ mod tests {
     }
 
     #[test]
-    fn add_event_listener_on_an_unknown_node_raises_type_error_and_takes_no_id() {
+    fn add_event_listener_on_an_unknown_node_throws_type_error_and_takes_no_id() {
         let (engine, _host) = engine_with_bindings();
 
         engine
@@ -324,7 +324,7 @@ mod tests {
     }
 
     #[test]
-    fn add_event_listener_raises_range_error_once_the_ids_run_out() {
+    fn add_event_listener_throws_range_error_once_the_ids_run_out() {
         let (engine, host) = engine_with_bindings();
         host.borrow_mut().listeners.next_callback = u32::MAX;
 

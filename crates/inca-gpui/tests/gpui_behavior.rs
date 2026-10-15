@@ -133,7 +133,7 @@ fn listen_to_mouse(element: gpui::Div, log: &Log, name: &str) -> gpui::Div {
 }
 
 #[gpui::test]
-fn gpui_runs_the_bubble_listener_of_a_first_child_canvas_after_its_siblings_and_before_its_parent(
+fn gpui_runs_a_first_child_canvas_bubble_listener_after_siblings_before_the_parent(
     cx: &mut TestAppContext,
 ) {
     let log = Log::default();
@@ -186,9 +186,7 @@ fn gpui_runs_the_bubble_listener_of_a_first_child_canvas_after_its_siblings_and_
 }
 
 #[gpui::test]
-fn gpui_runs_the_listeners_of_the_containers_under_the_pointer_deepest_first_and_skips_the_others(
-    cx: &mut TestAppContext,
-) {
+fn gpui_runs_only_the_containers_under_the_pointer_deepest_first(cx: &mut TestAppContext) {
     let log = Log::default();
     let l = Rc::clone(&log);
     let mut cx = mount(cx, move |_, _| {
@@ -268,9 +266,7 @@ fn gpui_skips_focus_on_press_when_mousedown_default_is_prevented(cx: &mut TestAp
 }
 
 #[gpui::test]
-fn gpui_lets_a_task_deferred_during_an_event_read_default_prevented_as_the_event_left_it(
-    cx: &mut TestAppContext,
-) {
+fn gpui_lets_a_deferred_task_read_default_prevented_as_the_event_left_it(cx: &mut TestAppContext) {
     let seen = Rc::new(RefCell::new(None));
     let s = Rc::clone(&seen);
     let mut cx = mount(cx, move |_, _| {
@@ -447,7 +443,7 @@ fn gpui_runs_capture_key_listeners_from_the_root_down_before_the_bubble_ones(
 }
 
 #[gpui::test]
-fn gpui_reports_a_key_as_not_propagated_and_stops_later_listeners_when_a_capture_key_listener_stops_propagation(
+fn gpui_stops_later_key_listeners_and_reports_no_propagation_after_a_capture_stop(
     cx: &mut TestAppContext,
 ) {
     let log = Log::default();
@@ -483,7 +479,7 @@ fn gpui_reports_a_key_as_default_prevented_when_a_capture_key_listener_prevents_
 }
 
 #[gpui::test]
-fn gpui_skips_the_key_listeners_of_a_root_tracked_by_its_own_handle_once_nothing_is_focused(
+fn gpui_skips_the_key_listeners_of_a_self_tracked_root_when_nothing_is_focused(
     cx: &mut TestAppContext,
 ) {
     let log = Log::default();
@@ -529,7 +525,7 @@ fn gpui_runs_a_keybinding_and_its_action_before_any_key_listener(cx: &mut TestAp
 }
 
 #[gpui::test]
-fn gpui_runs_an_on_hover_listener_inside_the_mouse_move_dispatch_before_a_first_child_canvas(
+fn gpui_runs_an_on_hover_listener_in_the_mouse_move_dispatch_before_a_child_canvas(
     cx: &mut TestAppContext,
 ) {
     let log = Log::default();

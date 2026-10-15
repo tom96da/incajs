@@ -5,7 +5,7 @@ use super::*;
 use crate::{Engine, compile_async_function};
 
 #[test]
-fn a_module_namespace_with_an_uninitialised_export_prints_and_leaves_nothing_pending() {
+fn a_namespace_with_an_uninitialized_export_prints_and_leaves_nothing_pending() {
     let runtime = Runtime::new().unwrap();
     let context = Context::full(&runtime).unwrap();
     context.with(|ctx| {

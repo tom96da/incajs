@@ -170,7 +170,7 @@ mod tests {
     }
 
     #[test]
-    fn scroll_into_view_node_rejects_an_unknown_node_and_an_unknown_alignment() {
+    fn scroll_into_view_node_throws_for_an_unknown_node_and_an_unknown_alignment() {
         let (engine, _host) = engine_with_bindings();
 
         let caught: Vec<bool> = engine

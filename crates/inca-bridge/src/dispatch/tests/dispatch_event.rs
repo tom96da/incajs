@@ -254,7 +254,7 @@ fn dispatch_event_returns_false_for_a_canceled_cancelable_event_only() {
 }
 
 #[test]
-fn a_dispatched_event_stays_canceled_and_can_be_dispatched_again_with_a_new_event_id() {
+fn a_dispatched_event_stays_canceled_and_gets_a_new_id_when_dispatched_again() {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
     listen(
@@ -295,7 +295,7 @@ fn an_event_nobody_hears_takes_no_event_id_but_gets_its_target() {
 }
 
 #[test]
-fn dispatch_event_while_dispatching_throws_invalid_state_and_leaves_the_walk_running() {
+fn dispatch_event_while_dispatching_throws_invalid_state_and_the_walk_continues() {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
     listen(
@@ -343,7 +343,7 @@ fn a_nested_dispatch_throws_an_error_that_is_a_domexception_instance() {
 }
 
 #[test]
-fn dispatch_event_rejects_anything_that_is_not_an_event_of_this_host() {
+fn dispatch_event_throws_for_anything_that_is_not_an_event_of_this_host() {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
     let got = eval_json(

@@ -93,7 +93,7 @@ fn a_key_event_targets_the_focused_node(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn an_unfocused_key_event_targets_the_root_and_reads_location_composing_and_modifiers(
+fn an_unfocused_key_event_targets_the_root_with_location_composing_and_modifiers(
     cx: &mut TestAppContext,
 ) {
     let mut h = load_listening(cx, TARGETS);

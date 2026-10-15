@@ -289,7 +289,7 @@ mod tests {
     }
 
     #[test]
-    fn decodes_a_request_with_its_id() {
+    fn a_request_with_an_id_decodes_to_a_call_with_that_id() {
         let decoded = call(r#"{"jsonrpc":"2.0","id":1,"method":"reload"}"#);
         assert_eq!(
             decoded,
@@ -396,7 +396,7 @@ mod tests {
     }
 
     #[test]
-    fn encodes_the_documented_shapes() {
+    fn the_documented_messages_encode_to_their_shapes() {
         let result = encode(&Outgoing::result(json!(1))).unwrap();
         assert_eq!(result, r#"{"jsonrpc":"2.0","id":1,"result":null}"#);
 

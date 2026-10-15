@@ -75,7 +75,7 @@ fn near(h: &Harness, code: &str) -> bool {
 }
 
 #[gpui::test]
-fn focus_centres_a_node_outside_the_scroll_container(cx: &mut TestAppContext) {
+fn focus_centers_a_node_outside_the_scroll_container(cx: &mut TestAppContext) {
     let mut h = revealing(cx, "scroll");
     run_js(&mut h, "__inca_native__.focusNode(items[6]);");
     assert!(eval_f64(&h, "top(box)") > 0.0);
@@ -101,7 +101,7 @@ fn a_hidden_container_scrolls_to_the_focused_node(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn tab_centres_the_node_it_focuses(cx: &mut TestAppContext) {
+fn tab_centers_the_node_it_focuses(cx: &mut TestAppContext) {
     let mut h = revealing(cx, "scroll");
     run_js(
         &mut h,

@@ -185,7 +185,7 @@ mod tests {
     }
 
     #[test]
-    fn send_raises_a_type_error_on_invalid_json() {
+    fn send_throws_a_type_error_on_invalid_json() {
         let engine = engine_with_dev(Rc::new(|_, _| {}));
 
         engine
@@ -267,7 +267,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_raises_type_error_for_non_string_array_params() {
+    fn compile_throws_type_error_for_non_string_array_params() {
         let engine = engine_with_dev(Rc::new(|_, _| {}));
         for params in ["'a'", "null", "[1]", "[null]"] {
             let thrown = thrown_by(
@@ -279,7 +279,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_raises_type_error_for_a_nul_byte_in_params_body_or_filename() {
+    fn compile_throws_type_error_for_a_nul_byte_in_params_body_or_filename() {
         let engine = engine_with_dev(Rc::new(|_, _| {}));
         for args in [
             r"['a\u0000b'], 'return 1;', 'f.js'",
@@ -292,7 +292,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_raises_type_error_for_a_non_string_body_or_filename() {
+    fn compile_throws_type_error_for_a_non_string_body_or_filename() {
         let engine = engine_with_dev(Rc::new(|_, _| {}));
         for args in ["[], 1, 'f.js'", "[], 'return 1;', 1"] {
             let thrown = thrown_by(&engine, &format!("__inca_dev__.compile({args})"));
@@ -369,7 +369,7 @@ mod tests {
     }
 
     #[test]
-    fn set_load_failed_rejects_a_non_boolean_and_keeps_the_signal() {
+    fn set_load_failed_throws_for_a_non_boolean_and_keeps_the_signal() {
         for arg in ["'true'", "1", "undefined", "null", ""] {
             let (engine, flag) = flag_engine(true);
             engine

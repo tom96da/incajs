@@ -28,7 +28,7 @@ impl Drop for ScratchDir {
 }
 
 #[test]
-fn syntax_error_propagates_as_err() {
+fn a_syntax_error_is_returned_as_an_err() {
     let engine = Engine::new().unwrap();
     let result: EngineResult<i32> = engine.eval("1 +");
     assert!(result.is_err());

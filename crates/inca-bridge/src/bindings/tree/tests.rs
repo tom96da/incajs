@@ -5,7 +5,7 @@ use super::*;
 use crate::test_support::{callback_ids, engine_with_bindings};
 
 #[test]
-fn remove_style_unsets_the_key_and_rejects_an_unknown_node() {
+fn remove_style_unsets_the_key_and_throws_for_an_unknown_node() {
     let (engine, host) = engine_with_bindings();
 
     let ids: Vec<u32> = engine
@@ -136,7 +136,7 @@ fn a_stored_bad_style_does_not_warn_again_when_the_tree_is_read() {
 }
 
 #[test]
-fn set_style_unknown_node_id_raises_catchable_exception() {
+fn set_style_unknown_node_id_throws_catchable_exception() {
     let (engine, _host) = engine_with_bindings();
 
     let caught: bool = engine
@@ -249,7 +249,7 @@ fn destroy_node_is_idempotent() {
 }
 
 #[test]
-fn destroying_the_root_raises_a_catchable_exception() {
+fn destroying_the_root_throws_a_catchable_exception() {
     let (engine, host) = engine_with_bindings();
 
     let caught: bool = engine
@@ -272,7 +272,7 @@ fn destroying_the_root_raises_a_catchable_exception() {
 }
 
 #[test]
-fn moving_the_root_raises_a_catchable_exception() {
+fn moving_the_root_throws_a_catchable_exception() {
     let (engine, host) = engine_with_bindings();
 
     let caught: u32 = engine
@@ -392,7 +392,7 @@ fn get_attribute_of_a_missing_key_is_null() {
 }
 
 #[test]
-fn get_attribute_on_an_unknown_node_raises_type_error() {
+fn get_attribute_on_an_unknown_node_throws_type_error() {
     let (engine, _host) = engine_with_bindings();
 
     let caught: bool = engine
@@ -413,7 +413,7 @@ fn get_attribute_on_an_unknown_node_raises_type_error() {
 }
 
 #[test]
-fn node_id_that_is_not_a_whole_u32_raises_type_error() {
+fn node_id_that_is_not_a_whole_u32_throws_type_error() {
     let (engine, _host) = engine_with_bindings();
 
     for bad in ["NaN", "1.5", "-1", "Infinity", "2 ** 32", "'1'"] {
@@ -466,7 +466,7 @@ fn a_normal_node_id_and_an_absent_anchor_still_work() {
 }
 
 #[test]
-fn unknown_node_id_raises_catchable_exception() {
+fn unknown_node_id_throws_catchable_exception() {
     let (engine, _host) = engine_with_bindings();
 
     let caught: bool = engine
@@ -490,7 +490,7 @@ fn unknown_node_id_raises_catchable_exception() {
 }
 
 #[test]
-fn non_primitive_attribute_value_raises_catchable_exception() {
+fn non_primitive_attribute_value_throws_catchable_exception() {
     let (engine, _host) = engine_with_bindings();
 
     let caught: bool = engine
@@ -515,7 +515,7 @@ fn non_primitive_attribute_value_raises_catchable_exception() {
 }
 
 #[test]
-fn remove_attribute_unsets_the_key_and_rejects_an_unknown_node() {
+fn remove_attribute_unsets_the_key_and_throws_for_an_unknown_node() {
     let (engine, host) = engine_with_bindings();
 
     let ids: Vec<u32> = engine

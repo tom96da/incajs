@@ -84,7 +84,7 @@ fn the_path_is_fixed_when_dispatch_starts(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn a_listener_added_to_an_ancestor_mid_dispatch_runs_and_one_added_to_the_node_waits(
+fn a_listener_added_mid_dispatch_runs_on_an_ancestor_and_waits_on_the_node(
     cx: &mut TestAppContext,
 ) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
@@ -523,7 +523,7 @@ fn a_listener_re_registered_with_other_flags_in_its_own_pass_skips_that_pass(
 }
 
 #[gpui::test]
-fn a_listener_added_to_the_target_during_its_capture_pass_joins_the_bubble_pass_only(
+fn a_listener_added_to_the_target_in_its_capture_pass_joins_only_the_bubble_pass(
     cx: &mut TestAppContext,
 ) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();

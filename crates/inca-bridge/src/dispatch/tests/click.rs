@@ -4,7 +4,7 @@
 use super::*;
 
 #[test]
-fn click_runs_an_untrusted_click_that_bubbles_with_the_pointer_fields_of_a_key_click() {
+fn click_runs_an_untrusted_bubbling_click_with_the_pointer_fields_of_a_key_click() {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let [_, parent, child] = tree_of_three(&host);
     listen(

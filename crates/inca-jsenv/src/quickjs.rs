@@ -400,7 +400,7 @@ mod tests {
     }
 
     #[test]
-    fn an_uninitialised_module_export_is_an_exception() {
+    fn an_uninitialized_module_export_is_an_exception() {
         with("", |ctx| {
             drop(rquickjs::Module::evaluate(
                 ctx.clone(),

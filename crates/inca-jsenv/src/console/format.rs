@@ -374,7 +374,7 @@ mod tests {
     }
 
     #[test]
-    fn o_and_o_show_a_primitive_and_an_object_the_way_dir_does() {
+    fn lower_o_and_upper_o_show_a_primitive_and_an_object_the_way_dir_does() {
         for spec in ["%o", "%O"] {
             let f = |arg: &str| formatted(&format!("['{spec}', {arg}]"));
             assert_eq!(f("'text'"), "'text'");

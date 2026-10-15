@@ -97,7 +97,7 @@ fn auto_resize_leaves_the_window_alone_until_content_becomes_usable(cx: &mut Tes
 }
 
 #[gpui::test]
-fn auto_resize_keeps_an_explicit_dimension_but_still_picks_up_the_other_from_content(
+fn auto_resize_keeps_an_explicit_dimension_and_fits_the_other_to_the_content(
     cx: &mut TestAppContext,
 ) {
     let window_config = config::WindowConfig {
