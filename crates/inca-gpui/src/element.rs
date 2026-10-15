@@ -34,5 +34,4 @@ pub use spec::{
 };
 
 #[cfg(test)]
-#[allow(clippy::float_cmp, clippy::unwrap_used)]
 mod tests;
