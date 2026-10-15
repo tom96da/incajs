@@ -12,10 +12,19 @@ change is done, for Rust and TypeScript.
 
 ### Test placement
 
-- **Unit tests**: `#[cfg(test)] mod tests;` in the module they test, with the
-  tests in `<module>/tests.rs` (e.g. `crates/inca-gpui/src/tree/tests.rs`). A
-  module with many tests keeps shared helpers in `tests.rs` and the tests in
-  `<module>/tests/<topic>.rs`. A file stays at or below 800 lines.
+- **Unit tests**: an inline `#[cfg(test)] mod tests { .. }` at the end of the
+  module they test. When the module and its tests together exceed 800 lines,
+  the tests move to `<module>/tests.rs` (e.g.
+  `crates/inca-gpui/src/tree/tests.rs`) and the module declares them with
+  `#[cfg(test)] mod tests;`. A `tests.rs` that fits in 800 lines together with
+  its module goes back inline. A module with many tests keeps shared helpers
+  in `tests.rs` and the tests in `<module>/tests/<topic>.rs`. `tests.rs`
+  declares its topic modules before its helpers. A file stays at or below 800
+  lines.
+- **Shared helpers**: a helper used by tests of several modules of one crate
+  lives once in that crate's `src/tests.rs`, declared in `lib.rs` with
+  `#[cfg(test)] mod tests;`. `test_support` is the name of the `inca-bridge`
+  feature and module, so it names nothing else.
 - **Integration tests**: `tests/*.rs` in each crate, one file per
   cross-module concern (e.g. `crates/inca-gpui/tests/layout_parity.rs`).
   Cargo compiles each against the crate's public API only.
@@ -29,6 +38,20 @@ change is done, for Rust and TypeScript.
 - **Console tests**: console behaviour is unit-tested beside the code in
   `crates/inca-jsenv/src`. Timers are checked by the shape of the output.
   Color is checked by exact SGR sequences and by stripping them.
+
+### Test names
+
+A test name is a snake_case sentence of the behaviour, with the subject
+first. It has no `test_` prefix and at most 80 characters. It says `throws` for
+a JS exception and uses US spelling (`canceled`, `centers`).
+
+### Lint allows
+
+A test module that needs `clippy::unwrap_used` (or `float_cmp` and the like)
+carries the allow itself, as an inner `#![allow(..)]` at the top of its inline
+block, its `tests.rs`, its topic file or its integration test file. A
+production file has no `#[allow]` on a `mod tests;` line, and a child module
+does not rely on the allow of its parent.
 
 ### Required checks
 
