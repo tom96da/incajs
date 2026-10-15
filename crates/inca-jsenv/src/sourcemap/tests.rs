@@ -1,7 +1,10 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![allow(clippy::unwrap_used)]
+
 use super::*;
+use crate::tests::{ScratchDir, with_realm};
 use rstest::rstest;
 
 fn sp(source: u32, line: u32, column: u32) -> SourcePos {
@@ -186,8 +189,6 @@ fn sample_lines() -> Vec<Vec<Segment>> {
     ]]
 }
 
-use rquickjs::{Context, Runtime};
-
 fn b64(text: &str) -> String {
     STANDARD.encode(text)
 }
@@ -206,9 +207,7 @@ fn inline(json: &str) -> String {
 
 /// Registers `files` (name, generated source) and remaps `stack`.
 fn remap(files: &[(&str, &str)], stack: &str) -> String {
-    let runtime = Runtime::new().unwrap();
-    let context = Context::full(&runtime).unwrap();
-    context.with(|ctx| {
+    with_realm(|ctx| {
         for (name, source) in files {
             register(&ctx, name, source);
         }
@@ -218,34 +217,6 @@ fn remap(files: &[(&str, &str)], stack: &str) -> String {
 
 fn one(source: &str, stack: &str) -> String {
     remap(&[("a.js", source)], stack)
-}
-
-/// A directory under the OS temp root, unique per test invocation, torn
-/// down on drop.
-struct ScratchDir(std::path::PathBuf);
-
-impl std::ops::Deref for ScratchDir {
-    type Target = Path;
-
-    fn deref(&self) -> &Path {
-        &self.0
-    }
-}
-
-impl Drop for ScratchDir {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
-
-fn temp_dir(name: &str) -> ScratchDir {
-    let dir = std::env::temp_dir().join(format!(
-        "inca-sm-{}-{name}-{:?}",
-        std::process::id(),
-        std::thread::current().id()
-    ));
-    std::fs::create_dir_all(&dir).unwrap();
-    ScratchDir(dir)
 }
 
 #[test]
@@ -324,7 +295,7 @@ fn inline_map_keeps_a_relative_source_as_written() {
 
 #[test]
 fn absolute_and_url_sources_stay_as_they_are() {
-    let dir = temp_dir("abs");
+    let dir = ScratchDir::new("abs");
     let json = map_json(3, ";AAAA;AACA", r#"["/abs/a.ts","https://h/b.ts"]"#, None);
     std::fs::write(dir.join("b.js.map"), json).unwrap();
     let file = format!("{}/b.js", dir.display());
@@ -398,9 +369,7 @@ fn unregistered_file_passes_through() {
 
 #[test]
 fn unregistered_runtime_passes_stack_through() {
-    let runtime = Runtime::new().unwrap();
-    let context = Context::full(&runtime).unwrap();
-    let out = context.with(|ctx| remap_stack(&ctx, "    at f (a.js:2:1)\n"));
+    let out = with_realm(|ctx| remap_stack(&ctx, "    at f (a.js:2:1)\n"));
     assert_eq!(out, "    at f (a.js:2:1)\n");
 }
 
@@ -414,9 +383,7 @@ fn reregistering_replaces_the_map() {
         "h\nabc\n{}",
         inline(&map_json(3, ";AAAA", r#"["two.ts"]"#, None))
     );
-    let runtime = Runtime::new().unwrap();
-    let context = Context::full(&runtime).unwrap();
-    context.with(|ctx| {
+    with_realm(|ctx| {
         register(&ctx, "a.js", &first);
         assert_eq!(
             remap_stack(&ctx, "    at f (a.js:2:1)"),
@@ -497,9 +464,7 @@ fn reregistering_a_marker_less_source_clears_the_map() {
         "h\nabc\n{}",
         inline(&map_json(3, ";AAAA", r#"["one.ts"]"#, None))
     );
-    let runtime = Runtime::new().unwrap();
-    let context = Context::full(&runtime).unwrap();
-    context.with(|ctx| {
+    with_realm(|ctx| {
         register(&ctx, "a.js", &mapped);
         register(&ctx, "a.js", "h\nabc");
         assert_eq!(
@@ -517,13 +482,11 @@ fn sidecar_remap(
     frame_file: &str,
     after: impl Fn(&Path),
 ) -> (String, String) {
-    let dir = temp_dir(name);
+    let dir = ScratchDir::new(name);
     std::fs::create_dir_all(dir.join("dist")).unwrap();
     std::fs::write(dir.join("dist/bundle.js.map"), json).unwrap();
     let file = format!("{}/dist/{frame_file}", dir.display());
-    let runtime = Runtime::new().unwrap();
-    let context = Context::full(&runtime).unwrap();
-    let out = context.with(|ctx| {
+    let out = with_realm(|ctx| {
         register(&ctx, &file, source);
         after(&dir);
         remap_stack(&ctx, &format!("    at f ({file}:2:1)"))

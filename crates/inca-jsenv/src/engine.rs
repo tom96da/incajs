@@ -455,5 +455,4 @@ pub fn report_jobs(engine: &Engine, reporter: &ErrorReporter) {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests;

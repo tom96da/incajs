@@ -1,12 +1,14 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![allow(clippy::unwrap_used)]
+
 use super::*;
 
 #[test]
 fn the_report_of_a_missing_entry_names_it() {
     let dir = ScratchDir::new("print-missing");
-    let entry = dir.0.join("bundle.js").to_string_lossy().into_owned();
+    let entry = dir.join("bundle.js").to_string_lossy().into_owned();
 
     assert_eq!(
         config_report(&entry),
@@ -17,50 +19,28 @@ fn the_report_of_a_missing_entry_names_it() {
 #[test]
 fn the_report_reads_the_config_beside_the_entry() {
     let dir = ScratchDir::new("print-present");
-    let entry = dir.0.join("bundle.js");
+    let entry = dir.join("bundle.js");
     fs::write(&entry, "").unwrap();
-    fs::write(dir.0.join("inca.json"), r#"{"name":"Demo"}"#).unwrap();
+    fs::write(dir.join("inca.json"), r#"{"name":"Demo"}"#).unwrap();
 
     let report: serde_json::Value =
         serde_json::from_str(&config_report(&entry.to_string_lossy()).unwrap()).unwrap();
     assert_eq!(report["name"], "Demo");
 }
 
-/// A directory under the OS temp root, unique per test invocation, torn
-/// down on drop. This crate has no `tempfile` dependency to reach for.
-struct ScratchDir(PathBuf);
-
-impl ScratchDir {
-    fn new(name: &str) -> Self {
-        let path = env::temp_dir().join(format!(
-            "inca-host-test-{name}-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
-        fs::create_dir_all(&path).unwrap();
-        Self(path)
-    }
-}
-
-impl Drop for ScratchDir {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
-    }
-}
-
 #[test]
 fn bundle_beside_finds_a_flat_sibling_bundle() {
     let dir = ScratchDir::new("flat");
-    fs::write(dir.0.join("bundle.js"), "").unwrap();
+    fs::write(dir.join("bundle.js"), "").unwrap();
 
-    assert_eq!(bundle_beside(&dir.0), Some(dir.0.join("bundle.js")));
+    assert_eq!(bundle_beside(&dir), Some(dir.join("bundle.js")));
 }
 
 #[test]
 fn bundle_beside_finds_a_macos_app_bundles_resources() {
     let dir = ScratchDir::new("app-bundle");
-    let macos_dir = dir.0.join("Contents/MacOS");
-    let resources_dir = dir.0.join("Contents/Resources");
+    let macos_dir = dir.join("Contents/MacOS");
+    let resources_dir = dir.join("Contents/Resources");
     fs::create_dir_all(&macos_dir).unwrap();
     fs::create_dir_all(&resources_dir).unwrap();
     fs::write(resources_dir.join("bundle.js"), "").unwrap();
@@ -75,17 +55,17 @@ fn bundle_beside_finds_a_macos_app_bundles_resources() {
 fn bundle_beside_is_none_when_nothing_is_there() {
     let dir = ScratchDir::new("empty");
 
-    assert_eq!(bundle_beside(&dir.0), None);
+    assert_eq!(bundle_beside(&dir), None);
 }
 
 #[test]
 fn a_chunk_importing_the_packaged_entry_back_does_not_evaluate_it_twice() {
     let dir = ScratchDir::new("entry-import-back");
-    let macos_dir = dir.0.join("Contents/MacOS");
-    let assets_dir = dir.0.join("Contents/Resources/assets");
+    let macos_dir = dir.join("Contents/MacOS");
+    let assets_dir = dir.join("Contents/Resources/assets");
     fs::create_dir_all(&macos_dir).unwrap();
     fs::create_dir_all(&assets_dir).unwrap();
-    let entry = dir.0.join("Contents/Resources/bundle.js");
+    let entry = dir.join("Contents/Resources/bundle.js");
     fs::write(
         &entry,
         r"

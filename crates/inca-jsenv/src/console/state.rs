@@ -80,8 +80,8 @@ impl State {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
     use std::time::Duration;
 
     use super::*;

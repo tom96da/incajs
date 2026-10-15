@@ -530,5 +530,4 @@ pub(crate) fn report_startup_failure(failure: &Failure, writer: Option<&SharedWr
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests;

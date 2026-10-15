@@ -584,5 +584,4 @@ fn is_instance<'js>(object: &Object<'js>, constructor: &Object<'js>) -> bool {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests;

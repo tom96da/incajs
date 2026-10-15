@@ -228,18 +228,17 @@ impl Drop for Atom<'_, '_> {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
     use rquickjs::{Context, Persistent, Runtime};
     use rstest::rstest;
 
     use super::*;
+    use crate::tests::with_realm;
 
     /// Runs `body` with `source` evaluated first, in a fresh realm.
     fn with<R>(source: &str, body: impl FnOnce(&Ctx<'_>) -> R) -> R {
-        let runtime = Runtime::new().unwrap();
-        let context = Context::full(&runtime).unwrap();
-        context.with(|ctx| {
+        with_realm(|ctx| {
             ctx.eval::<(), _>(source).unwrap();
             body(&ctx)
         })

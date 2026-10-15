@@ -1,14 +1,14 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![allow(clippy::unwrap_used)]
+
 use super::*;
 use rstest::rstest;
 
 /// Pins the intrinsics, runs `setup`, then renders `expression`.
 fn after(setup: &str, expression: &str, color: bool) -> String {
-    let runtime = Runtime::new().unwrap();
-    let context = Context::full(&runtime).unwrap();
-    context.with(|ctx| {
+    with_realm(|ctx| {
         pin(&ctx).unwrap();
         ctx.eval::<(), _>(setup).unwrap();
         let value: Value<'_> = ctx.eval(expression).unwrap();
@@ -383,7 +383,7 @@ fn the_types_print_the_same_text_with_color_on_or_off() {
     let source =
         "[new Date(0), new Date(NaN), /a\\/b/gi, new Map([['k', new Set([1, 'v'])]]), new Set()]";
 
-    assert_eq!(rendered(source), strip_codes(&colored(source)));
+    assert_eq!(rendered(source), strip(&colored(source)));
     assert!(!rendered(source).contains('\x1b'));
     assert_eq!(after("", source, true), colored(source));
 }
@@ -416,9 +416,7 @@ fn escaped_collections_stay_on_one_line() {
 
 #[test]
 fn quoted_prints_the_four_types_like_line() {
-    let runtime = Runtime::new().unwrap();
-    let context = Context::full(&runtime).unwrap();
-    context.with(|ctx| {
+    with_realm(|ctx| {
         pin(&ctx).unwrap();
         let date: Value<'_> = ctx.eval("new Date(0)").unwrap();
         let map: Value<'_> = ctx.eval("new Map([['a', 1]])").unwrap();
@@ -446,9 +444,7 @@ fn a_regexp_is_read_without_running_any_of_its_accessors(#[case] key: &str) {
         Object.defineProperty(r, '{key}', {{ get() {{ calls++; throw 1; }} }});
         "
     );
-    let runtime = Runtime::new().unwrap();
-    let context = Context::full(&runtime).unwrap();
-    context.with(|ctx| {
+    with_realm(|ctx| {
         pin(&ctx).unwrap();
         ctx.eval::<(), _>(setup.as_str()).unwrap();
         let value: Value<'_> = ctx.eval("r").unwrap();

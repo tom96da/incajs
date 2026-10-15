@@ -35,7 +35,6 @@ pub fn install(cx: &mut App, app_name: &str) {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

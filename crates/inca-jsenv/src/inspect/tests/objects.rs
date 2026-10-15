@@ -1,15 +1,15 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![allow(clippy::unwrap_used)]
+
 use super::*;
 use crate::{Engine, compile_async_function};
 use rstest::rstest;
 
 #[test]
 fn a_namespace_with_an_uninitialized_export_prints_and_leaves_nothing_pending() {
-    let runtime = Runtime::new().unwrap();
-    let context = Context::full(&runtime).unwrap();
-    context.with(|ctx| {
+    with_realm(|ctx| {
         pin(&ctx).unwrap();
         // The module throws before `x` is initialised, so reading `x` throws.
         drop(rquickjs::Module::evaluate(
@@ -118,9 +118,7 @@ fn a_constructor_that_cannot_name_the_object_falls_back_to_object(
     #[case] expression: &str,
     #[case] expected: &str,
 ) {
-    let runtime = Runtime::new().unwrap();
-    let context = Context::full(&runtime).unwrap();
-    context.with(|ctx| {
+    with_realm(|ctx| {
         let value: Value<'_> = ctx.eval(expression).unwrap();
         assert_eq!(line(&[value], false), expected, "{expression}");
         assert!(!ctx.has_exception(), "{expression} left an exception");
@@ -153,9 +151,7 @@ fn an_object_whose_prototypes_name_no_constructor_names_its_prototype(
 
 #[test]
 fn a_module_namespace_is_tagged_as_a_module() {
-    let runtime = Runtime::new().unwrap();
-    let context = Context::full(&runtime).unwrap();
-    context.with(|ctx| {
+    with_realm(|ctx| {
         drop(rquickjs::Module::evaluate(
             ctx.clone(),
             "n",

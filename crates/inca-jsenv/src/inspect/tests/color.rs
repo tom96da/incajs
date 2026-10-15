@@ -1,6 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![allow(clippy::unwrap_used)]
+
 use super::*;
 
 #[test]
@@ -18,9 +20,7 @@ fn accessor_text_is_cyan() {
 
 #[test]
 fn quoted_quotes_a_string_and_leaves_the_rest_alone() {
-    let runtime = Runtime::new().unwrap();
-    let context = Context::full(&runtime).unwrap();
-    context.with(|ctx| {
+    with_realm(|ctx| {
         let text: Value<'_> = ctx.eval("'it\\'s'").unwrap();
         let object: Value<'_> = ctx.eval("({ a: 'b' })").unwrap();
         let number: Value<'_> = ctx.eval("7").unwrap();
@@ -33,9 +33,7 @@ fn quoted_quotes_a_string_and_leaves_the_rest_alone() {
 
 #[test]
 fn several_arguments_are_space_separated() {
-    let runtime = Runtime::new().unwrap();
-    let context = Context::full(&runtime).unwrap();
-    let out = context.with(|ctx| {
+    let out = with_realm(|ctx| {
         let values: Vec<Value<'_>> = ctx.eval("['a', 1, { k: true }]").unwrap();
         line(&values, false)
     });
@@ -155,9 +153,7 @@ fn an_error_without_a_stack_has_nothing_to_dim() {
 
 #[test]
 fn arguments_are_colored_one_by_one_and_joined_plainly() {
-    let runtime = Runtime::new().unwrap();
-    let context = Context::full(&runtime).unwrap();
-    let out = context.with(|ctx| {
+    let out = with_realm(|ctx| {
         let values: Vec<Value<'_>> = ctx.eval("['a', 1, null]").unwrap();
         line(&values, true)
     });
@@ -167,9 +163,7 @@ fn arguments_are_colored_one_by_one_and_joined_plainly() {
 
 #[test]
 fn quoted_colors_a_string_green_and_a_number_yellow() {
-    let runtime = Runtime::new().unwrap();
-    let context = Context::full(&runtime).unwrap();
-    context.with(|ctx| {
+    with_realm(|ctx| {
         let text: Value<'_> = ctx.eval("'s'").unwrap();
         let number: Value<'_> = ctx.eval("7").unwrap();
 

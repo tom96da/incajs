@@ -380,5 +380,4 @@ pub(crate) fn mapped_body(code: &str) -> String {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests;

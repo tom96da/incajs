@@ -250,5 +250,4 @@ fn attribute_value_to_js<'js>(
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests;

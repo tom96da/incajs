@@ -152,18 +152,16 @@ fn parse_float(text: &str) -> f64 {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests {
-    use rquickjs::{Context, Runtime};
+    #![allow(clippy::unwrap_used)]
     use rstest::rstest;
 
     use super::*;
+    use crate::tests::with_realm;
 
     /// Formats the arguments `args` (a JS array literal) with [`line`].
     fn formatted(args: &str) -> String {
-        let runtime = Runtime::new().unwrap();
-        let context = Context::full(&runtime).unwrap();
-        context.with(|ctx| {
+        with_realm(|ctx| {
             let values: Vec<Value<'_>> = ctx.eval(args).unwrap();
             let out = substitute(&ctx, &values, false);
             assert!(!ctx.has_exception(), "a conversion left an exception");
@@ -287,9 +285,7 @@ mod tests {
     }
 
     fn calls_after(args: &str) -> (String, i32) {
-        let runtime = Runtime::new().unwrap();
-        let context = Context::full(&runtime).unwrap();
-        context.with(|ctx| {
+        with_realm(|ctx| {
             let values: Vec<Value<'_>> = ctx.eval(args).unwrap();
             let out = substitute(&ctx, &values, false);
             assert!(!ctx.has_exception());
@@ -536,9 +532,7 @@ mod tests {
 
     #[test]
     fn parse_int_matches_the_engines() {
-        let runtime = Runtime::new().unwrap();
-        let context = Context::full(&runtime).unwrap();
-        context.with(|ctx| {
+        with_realm(|ctx| {
             for input in INPUTS {
                 ctx.globals().set("x", *input).unwrap();
                 let engine: f64 = ctx.eval("parseInt(x, 10)").unwrap();
@@ -549,9 +543,7 @@ mod tests {
 
     #[test]
     fn parse_float_matches_the_engines() {
-        let runtime = Runtime::new().unwrap();
-        let context = Context::full(&runtime).unwrap();
-        context.with(|ctx| {
+        with_realm(|ctx| {
             for input in INPUTS {
                 ctx.globals().set("x", *input).unwrap();
                 let engine: f64 = ctx.eval("parseFloat(x)").unwrap();
@@ -562,9 +554,7 @@ mod tests {
 
     #[test]
     fn white_space_is_the_engines() {
-        let runtime = Runtime::new().unwrap();
-        let context = Context::full(&runtime).unwrap();
-        context.with(|ctx| {
+        with_realm(|ctx| {
             for code in 0..0x3100u32 {
                 let Some(c) = char::from_u32(code) else {
                     continue;

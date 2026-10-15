@@ -1,6 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![allow(clippy::unwrap_used)]
+
 use super::*;
 use crate::event::Flags;
 use crate::test_support::{Reported, capture_reporter, engine_for};

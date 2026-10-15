@@ -279,8 +279,8 @@ pub fn encode(message: &Outgoing) -> serde_json::Result<String> {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
     use super::*;
     use rstest::rstest;
     use serde_json::json;

@@ -1,11 +1,14 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![allow(clippy::unwrap_used)]
+
 use std::cell::RefCell;
 
 use rquickjs::{Context, Runtime};
 
 use super::*;
+use crate::tests::{strip, with_realm};
 
 mod color;
 mod format;
@@ -27,9 +30,7 @@ fn written_by(color: bool, run: impl FnOnce(&Ctx<'_>)) -> Vec<(Level, String)> {
         sink.borrow_mut().push((level, message.to_owned()));
     });
 
-    let runtime = Runtime::new().unwrap();
-    let context = Context::full(&runtime).unwrap();
-    context.with(|ctx| {
+    with_realm(|ctx| {
         install(&ctx, &output, color).unwrap();
         run(&ctx);
         assert!(!ctx.has_exception(), "a call left an exception pending");
@@ -56,22 +57,13 @@ fn without_elapsed(line: &str) -> String {
     format!("{label}: Nms{tail}")
 }
 
-/// `text` without the color sequences this crate paints.
-fn without_known_codes(text: &str) -> String {
-    let mut out = text.to_owned();
-    for code in [31, 32, 33, 34, 35, 36, 1, 90, 39, 22] {
-        out = out.replace(&format!("\x1b[{code}m"), "");
-    }
-    out
-}
-
 /// The colored and the plain drawing of `console.table(args)`, both
 /// checked to be aligned and free of live sequences other than ours.
 fn drawn_both_ways(args: &str) -> (String, String) {
     let source = format!("console.table({args});");
     let plain = texts(&source).remove(0);
     let colored = colored_texts(&source).remove(0);
-    let bare = without_known_codes(&colored);
+    let bare = strip(&colored);
 
     assert!(!bare.contains('\x1b'), "{colored:?}");
     assert_eq!(bare, plain);
@@ -108,17 +100,4 @@ fn balanced(line: &str) -> bool {
         rest = &rest[end + 1..];
     }
     open == close
-}
-
-/// `text` without ANSI color sequences.
-fn strip(text: &str) -> String {
-    let mut out = String::new();
-    let mut rest = text;
-    while let Some(at) = rest.find("\x1b[") {
-        out.push_str(&rest[..at]);
-        let end = rest[at..].find('m').unwrap();
-        rest = &rest[at + end + 1..];
-    }
-    out.push_str(rest);
-    out
 }

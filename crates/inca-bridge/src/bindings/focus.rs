@@ -65,8 +65,8 @@ fn layout_of<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsR
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
     use super::*;
     use crate::test_support::engine_with_bindings;
     use inca_gpui::{AttributeValue, NodeLayout};

@@ -100,8 +100,8 @@ fn json(value: &AttributeValue) -> Value {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::unnecessary_wraps)]
 mod tests {
+    #![allow(clippy::unnecessary_wraps, clippy::unwrap_used)]
     use super::*;
 
     fn no_bounds(_: NodeId) -> Option<Bounds> {

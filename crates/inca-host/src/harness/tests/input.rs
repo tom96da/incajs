@@ -1,6 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![allow(clippy::float_cmp, clippy::unwrap_used)]
+
 use super::*;
 use inca_gpui::EventSink;
 

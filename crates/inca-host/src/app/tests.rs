@@ -5,7 +5,11 @@ use super::*;
 use gpui::TestAppContext;
 use inca_gpui::EventPayload;
 
-use crate::dev::Writer;
+use crate::{dev::Writer, tests::ScratchDir};
+
+mod load;
+mod report;
+mod window;
 
 /// The entry path these tests evaluate `source` under. Never read from
 /// disk in a test that imports nothing else, since [`Session::load`]
@@ -15,10 +19,6 @@ const TEST_ENTRY_PATH: &str = "/test/entry.js";
 fn load(source: &str) -> Result<Session, EngineError> {
     Session::load(TEST_ENTRY_PATH, source, stderr_reporter())
 }
-
-mod load;
-mod report;
-mod window;
 
 const DEFERS_ITS_MOUNT: &str = r"
     globalThis.mounted = false;

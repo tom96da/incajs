@@ -447,5 +447,4 @@ pub(crate) fn style_key(key: &str) -> Cow<'_, str> {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests;

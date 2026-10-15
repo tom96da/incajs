@@ -183,17 +183,15 @@ fn draw(header: &[Cell], body: &[Vec<Cell>]) -> String {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests {
-    use rquickjs::{Context, Runtime};
+    #![allow(clippy::unwrap_used)]
 
     use super::*;
+    use crate::tests::with_realm;
 
     /// Renders `data` (and `columns`, when given) as `console.table` would.
     fn table(data: &str, columns: Option<&str>) -> Option<String> {
-        let runtime = Runtime::new().unwrap();
-        let context = Context::full(&runtime).unwrap();
-        context.with(|ctx| {
+        with_realm(|ctx| {
             let data: Value<'_> = ctx.eval(data).unwrap();
             let columns: Option<Value<'_>> = columns.map(|c| ctx.eval(c).unwrap());
             let drawn = render(&data, columns.as_ref(), false);
@@ -375,9 +373,7 @@ mod tests {
 
     #[test]
     fn a_proxy_row_calls_no_trap() {
-        let runtime = Runtime::new().unwrap();
-        let context = Context::full(&runtime).unwrap();
-        context.with(|ctx| {
+        with_realm(|ctx| {
             ctx.eval::<(), _>(
                 "globalThis.calls = 0; globalThis.spy = (t) => new Proxy(t, new Proxy({}, { get() { calls++; } }));",
             )
@@ -403,9 +399,7 @@ mod tests {
 
     #[test]
     fn a_revoked_proxy_is_not_tabular() {
-        let runtime = Runtime::new().unwrap();
-        let context = Context::full(&runtime).unwrap();
-        context.with(|ctx| {
+        with_realm(|ctx| {
             let data: Value<'_> = ctx
                 .eval("const r = Proxy.revocable([], {}); r.revoke(); r.proxy")
                 .unwrap();

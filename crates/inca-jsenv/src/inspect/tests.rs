@@ -1,7 +1,10 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![allow(clippy::unwrap_used)]
+
 use super::*;
+use crate::tests::{strip, with_realm};
 use rquickjs::{Context, Runtime};
 
 mod arrays;
@@ -13,9 +16,7 @@ mod proxy;
 /// Evaluates `expression` and renders its value the way `console` would
 /// render a single argument.
 fn rendered(expression: &str) -> String {
-    let runtime = Runtime::new().unwrap();
-    let context = Context::full(&runtime).unwrap();
-    context.with(|ctx| {
+    with_realm(|ctx| {
         pin(&ctx).unwrap();
         let value: Value<'_> = ctx.eval(expression).unwrap();
         let out = line(&[value], false);
@@ -27,9 +28,7 @@ fn rendered(expression: &str) -> String {
 /// Renders `expression` with a `calls` counter in scope, and returns the
 /// text and the counter.
 fn counted(expression: &str) -> (String, i32) {
-    let runtime = Runtime::new().unwrap();
-    let context = Context::full(&runtime).unwrap();
-    context.with(|ctx| {
+    with_realm(|ctx| {
         pin(&ctx).unwrap();
         ctx.eval::<(), _>("globalThis.calls = 0;").unwrap();
         let value: Value<'_> = ctx.eval(expression).unwrap();
@@ -41,9 +40,7 @@ fn counted(expression: &str) -> (String, i32) {
 
 /// As [`rendered`], with colors on.
 fn colored(expression: &str) -> String {
-    let runtime = Runtime::new().unwrap();
-    let context = Context::full(&runtime).unwrap();
-    context.with(|ctx| {
+    with_realm(|ctx| {
         pin(&ctx).unwrap();
         let value: Value<'_> = ctx.eval(expression).unwrap();
         let out = line(&[value], true);
@@ -70,22 +67,11 @@ fn grey(text: &str) -> String {
 
 /// Renders `expression` through [`quoted_escaped`].
 fn escaped(expression: &str, color: bool) -> String {
-    let runtime = Runtime::new().unwrap();
-    let context = Context::full(&runtime).unwrap();
-    context.with(|ctx| {
+    with_realm(|ctx| {
         pin(&ctx).unwrap();
         let value: Value<'_> = ctx.eval(expression).unwrap();
         let out = quoted_escaped(&value, color);
         assert!(!ctx.has_exception(), "a read left an exception pending");
         out
     })
-}
-
-/// `text` without the color sequences this module paints.
-fn strip_codes(text: &str) -> String {
-    let mut out = text.to_owned();
-    for code in [31, 32, 33, 34, 35, 36, 1, 90, 39, 22] {
-        out = out.replace(&format!("\x1b[{code}m"), "");
-    }
-    out
 }

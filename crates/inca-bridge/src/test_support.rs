@@ -1,6 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![allow(clippy::unwrap_used)]
+
 //! Shared setup for tests: an engine wired to a [`Host`] through the bindings,
 //! with `__inca_test_listen__` for registering listeners, and a GPUI root that
 //! renders the host's tree.

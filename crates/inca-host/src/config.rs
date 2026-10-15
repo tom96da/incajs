@@ -155,49 +155,37 @@ pub(crate) fn effective_config(config: &AppConfig) -> String {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
     use super::*;
+    use crate::tests::ScratchDir;
     use rstest::rstest;
-    use std::env;
     use std::path::PathBuf;
 
     /// A directory holding an entry file, and whatever config sits beside it.
-    struct AppDir(PathBuf);
-
-    impl AppDir {
-        fn new(name: &str, config: Option<&str>) -> Self {
-            let dir = env::temp_dir().join(format!("inca-config-{name}-{}", std::process::id()));
-            fs::create_dir_all(&dir).unwrap();
-            fs::write(dir.join("bundle.js"), "").unwrap();
-            match config {
-                Some(json) => fs::write(dir.join(CONFIG_FILE_NAME), json).unwrap(),
-                None => drop(fs::remove_file(dir.join(CONFIG_FILE_NAME))),
-            }
-            Self(dir)
+    fn app_dir(name: &str, config: Option<&str>) -> ScratchDir {
+        let dir = ScratchDir::new(name);
+        fs::write(dir.join("bundle.js"), "").unwrap();
+        if let Some(json) = config {
+            fs::write(dir.join(CONFIG_FILE_NAME), json).unwrap();
         }
-
-        fn entry(&self) -> PathBuf {
-            self.0.join("bundle.js")
-        }
+        dir
     }
 
-    impl Drop for AppDir {
-        fn drop(&mut self) {
-            drop(fs::remove_dir_all(&self.0));
-        }
+    fn entry(dir: &ScratchDir) -> PathBuf {
+        dir.join("bundle.js")
     }
 
     #[test]
     fn an_entry_with_no_config_beside_it_reads_as_the_defaults() {
-        let app = AppDir::new("absent", None);
+        let app = app_dir("absent", None);
 
-        assert_eq!(read(&app.entry()), AppConfig::default());
+        assert_eq!(read(&entry(&app)), AppConfig::default());
     }
 
     #[test]
     fn every_field_is_read() {
-        let app = AppDir::new(
+        let app = app_dir(
             "full",
             Some(
                 r#"
@@ -208,7 +196,7 @@ mod tests {
             ),
         );
 
-        let config = read(&app.entry());
+        let config = read(&entry(&app));
 
         assert_eq!(config.name.as_deref(), Some("Demo"));
         assert_eq!(config.identifier.as_deref(), Some("org.inca.demo"));
@@ -223,9 +211,9 @@ mod tests {
 
     #[test]
     fn a_config_that_is_not_a_json_object_reads_as_the_defaults() {
-        let app = AppDir::new("broken", Some("not json"));
+        let app = app_dir("broken", Some("not json"));
 
-        assert_eq!(read(&app.entry()), AppConfig::default());
+        assert_eq!(read(&entry(&app)), AppConfig::default());
     }
 
     #[test]

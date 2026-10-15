@@ -1,6 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![allow(clippy::float_cmp)]
+
 use super::*;
 
 /// Container `box` (100 high, 5 border, 3 padding) with ten 50-high

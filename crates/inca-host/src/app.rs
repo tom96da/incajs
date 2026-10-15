@@ -583,5 +583,4 @@ pub fn bundle_beside_exe() -> Option<PathBuf> {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests;

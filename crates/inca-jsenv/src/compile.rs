@@ -42,8 +42,8 @@ pub fn compile_async_function<'js>(
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
     use crate::{Engine, EngineError, EngineResult};
 
     use super::*;

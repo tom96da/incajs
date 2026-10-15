@@ -410,5 +410,4 @@ fn table(c: Rc<Console>) -> impl Fn(Opt<Value<'_>>, Opt<Value<'_>>) {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests;

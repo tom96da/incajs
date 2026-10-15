@@ -638,5 +638,4 @@ pub fn with_screen(mut payload: EventPayload, window: &Window) -> EventPayload {
 }
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests;

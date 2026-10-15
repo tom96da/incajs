@@ -179,8 +179,8 @@ fn click<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
     use super::*;
     use crate::test_support::{callback_ids, engine_with_bindings};
 

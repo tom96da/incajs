@@ -100,34 +100,10 @@ impl Loader for DiskLoader {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests {
-    use std::env;
-
+    #![allow(clippy::unwrap_used)]
     use super::*;
-    use crate::Engine;
-
-    /// A directory under the OS temp root, unique per test invocation, torn
-    /// down on drop.
-    struct ScratchDir(PathBuf);
-
-    impl ScratchDir {
-        fn new(name: &str) -> Self {
-            let path = env::temp_dir().join(format!(
-                "inca-jsenv-loader-test-{name}-{}-{:?}",
-                std::process::id(),
-                std::thread::current().id()
-            ));
-            fs::create_dir_all(&path).unwrap();
-            Self(path)
-        }
-    }
-
-    impl Drop for ScratchDir {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
-        }
-    }
+    use crate::{Engine, tests::ScratchDir};
 
     /// A root holding `sub/dep.js` (sets `globalThis.seen`), beside a
     /// `outside.js` that is not under the root.

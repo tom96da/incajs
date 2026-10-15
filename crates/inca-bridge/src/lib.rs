@@ -10,7 +10,6 @@ mod bindings;
 mod dispatch;
 mod event;
 #[cfg(any(test, feature = "test-support"))]
-#[allow(clippy::unwrap_used)]
 pub mod test_support;
 
 pub use bindings::{EventListeners, Host, Listener, install};

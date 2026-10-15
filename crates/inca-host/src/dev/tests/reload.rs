@@ -1,6 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![allow(clippy::unwrap_used)]
+
 use super::*;
 
 /// A pending entry that settles on `go`, records every notification in
@@ -23,10 +25,11 @@ fn records_until_go(marker: &str) -> String {
 fn a_pending_reload_is_answered_when_it_settles_and_the_old_app_stays_until_then(
     cx: &mut TestAppContext,
 ) {
-    let entry = ScratchEntry::write("pending-reload", &records_until_go("new"));
+    let dir = ScratchDir::new("pending-reload");
+    let entry = write_entry(&dir, &records_until_go("new"));
     let (capturing, _) = capture();
     let first = format!("globalThis.marker = 'old';\n{}", mounts_a_div(300, 150));
-    let (window, sender) = serve_idle(cx, &first, entry.path(), &capturing);
+    let (window, sender) = serve_idle(cx, &first, &entry, &capturing);
 
     request(&sender, 5, "reload");
     cx.run_until_parked();
@@ -47,9 +50,10 @@ fn a_pending_reload_is_answered_when_it_settles_and_the_old_app_stays_until_then
 
 #[gpui::test]
 fn a_notification_during_a_pending_reload_reaches_the_new_app_only(cx: &mut TestAppContext) {
-    let entry = ScratchEntry::write("relay-pending", &records_until_go("new"));
+    let dir = ScratchDir::new("relay-pending");
+    let entry = write_entry(&dir, &records_until_go("new"));
     let (capturing, _) = capture();
-    let (window, sender) = serve_idle(cx, RECEIVES_DEV_EVENTS, entry.path(), &capturing);
+    let (window, sender) = serve_idle(cx, RECEIVES_DEV_EVENTS, &entry, &capturing);
 
     request(&sender, 1, "reload");
     notify(&sender, "first");
@@ -70,13 +74,14 @@ fn a_notification_during_a_pending_reload_reaches_the_new_app_only(cx: &mut Test
 
 #[gpui::test]
 fn a_later_reload_replaces_a_pending_one_and_both_ids_get_its_outcome(cx: &mut TestAppContext) {
-    let entry = ScratchEntry::write("superseded", NEVER_SETTLES);
+    let dir = ScratchDir::new("superseded");
+    let entry = write_entry(&dir, NEVER_SETTLES);
     let (capturing, _) = capture();
-    let (window, sender) = serve_idle(cx, "", entry.path(), &capturing);
+    let (window, sender) = serve_idle(cx, "", &entry, &capturing);
     request(&sender, 1, "reload");
     cx.run_until_parked();
 
-    std::fs::write(&entry.0, records_until_go("second")).unwrap();
+    std::fs::write(&entry, records_until_go("second")).unwrap();
     request(&sender, 2, "reload");
     notify(&sender, "go");
     cx.run_until_parked();
@@ -93,8 +98,9 @@ fn a_later_reload_replaces_a_pending_one_and_both_ids_get_its_outcome(cx: &mut T
 
 #[gpui::test]
 fn a_pending_reload_that_rejects_is_answered_thrown_and_the_old_app_stays(cx: &mut TestAppContext) {
-    let entry = ScratchEntry::write(
-        "rejected-reload",
+    let dir = ScratchDir::new("rejected-reload");
+    let entry = write_entry(
+        &dir,
         r"
         await new Promise((_, reject) => {
             __inca_dev__.receive = () => reject(new Error('late'));
@@ -103,7 +109,7 @@ fn a_pending_reload_that_rejects_is_answered_thrown_and_the_old_app_stays(cx: &m
     );
     let (capturing, _) = capture();
     let first = format!("globalThis.marker = 'old';\n{}", mounts_a_div(300, 150));
-    let (window, sender) = serve_idle(cx, &first, entry.path(), &capturing);
+    let (window, sender) = serve_idle(cx, &first, &entry, &capturing);
 
     request(&sender, 7, "reload");
     notify(&sender, "go");
@@ -120,8 +126,9 @@ fn a_pending_reload_that_rejects_is_answered_thrown_and_the_old_app_stays(cx: &m
 
 #[gpui::test]
 fn a_job_error_is_reported_once_when_a_pending_reload_rejects_after_it(cx: &mut TestAppContext) {
-    let entry = ScratchEntry::write(
-        "side-then-reject",
+    let dir = ScratchDir::new("side-then-reject");
+    let entry = write_entry(
+        &dir,
         r"
         await new Promise((_, reject) => {
             __inca_dev__.receive = () => {
@@ -132,7 +139,7 @@ fn a_job_error_is_reported_once_when_a_pending_reload_rejects_after_it(cx: &mut 
         ",
     );
     let (capturing, _) = capture();
-    let (_, sender) = serve_idle(cx, "", entry.path(), &capturing);
+    let (_, sender) = serve_idle(cx, "", &entry, &capturing);
 
     request(&sender, 7, "reload");
     notify(&sender, "go");
@@ -150,13 +157,14 @@ fn a_job_error_is_reported_once_when_a_pending_reload_rejects_after_it(cx: &mut 
 fn a_reload_that_throws_at_once_is_answered_while_an_earlier_one_stays_pending(
     cx: &mut TestAppContext,
 ) {
-    let entry = ScratchEntry::write("sync-throw", &records_until_go("second"));
+    let dir = ScratchDir::new("sync-throw");
+    let entry = write_entry(&dir, &records_until_go("second"));
     let (capturing, _) = capture();
-    let (window, sender) = serve_idle(cx, "", entry.path(), &capturing);
+    let (window, sender) = serve_idle(cx, "", &entry, &capturing);
     request(&sender, 1, "reload");
     cx.run_until_parked();
 
-    std::fs::write(&entry.0, "throw new Error('sync');").unwrap();
+    std::fs::write(&entry, "throw new Error('sync');").unwrap();
     request(&sender, 2, "reload");
     cx.run_until_parked();
     let sent = written(&capturing);
@@ -197,12 +205,13 @@ fn a_reload_of_a_missing_file_is_answered_at_once(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn a_reload_replaces_a_held_first_load_with_a_fresh_timeout(cx: &mut TestAppContext) {
-    let entry = ScratchEntry::write("held-reload", NEVER_SETTLES);
+    let dir = ScratchDir::new("held-reload");
+    let entry = write_entry(&dir, NEVER_SETTLES);
     let (capturing, writer) = capture();
     let sender = serve(
         cx,
         "__inca_dev__.setLoadFailed(true); await new Promise(() => {});",
-        entry.path(),
+        &entry,
         &writer,
     );
     cx.run_until_parked();
@@ -230,9 +239,10 @@ fn a_reload_replaces_a_held_first_load_with_a_fresh_timeout(cx: &mut TestAppCont
 
 #[gpui::test]
 fn a_reload_that_replaces_a_load_that_is_not_held_keeps_the_deadline(cx: &mut TestAppContext) {
-    let entry = ScratchEntry::write("keeps-deadline", NEVER_SETTLES);
+    let dir = ScratchDir::new("keeps-deadline");
+    let entry = write_entry(&dir, NEVER_SETTLES);
     let (capturing, writer) = capture();
-    let sender = serve(cx, NEVER_SETTLES, entry.path(), &writer);
+    let sender = serve(cx, NEVER_SETTLES, &entry, &writer);
     cx.run_until_parked();
     cx.executor().advance_clock(Duration::from_millis(1500));
     request(&sender, 1, "reload");
@@ -254,9 +264,10 @@ fn a_reload_that_replaces_a_load_that_is_not_held_keeps_the_deadline(cx: &mut Te
 
 #[gpui::test]
 fn the_timeout_answers_a_queued_reload_once(cx: &mut TestAppContext) {
-    let entry = ScratchEntry::write("timeout-ids", &records_until_go("second"));
+    let dir = ScratchDir::new("timeout-ids");
+    let entry = write_entry(&dir, &records_until_go("second"));
     let (capturing, writer) = capture();
-    let sender = serve(cx, NEVER_SETTLES, entry.path(), &writer);
+    let sender = serve(cx, NEVER_SETTLES, &entry, &writer);
     request(&sender, 3, "reload");
     cx.run_until_parked();
 
@@ -276,9 +287,10 @@ fn the_timeout_answers_a_queued_reload_once(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn shutdown_during_a_pending_reload_answers_only_the_shutdown(cx: &mut TestAppContext) {
-    let entry = ScratchEntry::write("shutdown-b", NEVER_SETTLES);
+    let dir = ScratchDir::new("shutdown-b");
+    let entry = write_entry(&dir, NEVER_SETTLES);
     let (capturing, _) = capture();
-    let (_, sender) = serve_idle(cx, "", entry.path(), &capturing);
+    let (_, sender) = serve_idle(cx, "", &entry, &capturing);
     request(&sender, 1, "reload");
     request(&sender, 2, "shutdown");
     cx.run_until_parked();
@@ -292,9 +304,10 @@ fn shutdown_during_a_pending_reload_answers_only_the_shutdown(cx: &mut TestAppCo
 
 #[gpui::test]
 fn a_queued_reload_is_answered_when_the_first_load_settles_in_time(cx: &mut TestAppContext) {
-    let entry = ScratchEntry::write("queued-settles", &records_until_go("second"));
+    let dir = ScratchDir::new("queued-settles");
+    let entry = write_entry(&dir, &records_until_go("second"));
     let (capturing, writer) = capture();
-    let sender = serve(cx, NEVER_SETTLES, entry.path(), &writer);
+    let sender = serve(cx, NEVER_SETTLES, &entry, &writer);
     request(&sender, 4, "reload");
     notify(&sender, "go");
     cx.run_until_parked();
@@ -308,41 +321,12 @@ fn a_queued_reload_is_answered_when_the_first_load_settles_in_time(cx: &mut Test
     );
 }
 
-/// A directory holding just this test's entry and its own `inca.json`,
-/// unlike [`ScratchEntry`] whose files all share the OS temp root as
-/// their `config::read` parent. That is fine for entries with no config, but
-/// not for a config a test needs isolated to itself.
-struct ScratchApp(std::path::PathBuf);
-
-impl ScratchApp {
-    fn write(name: &str, source: &str, config_json: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!(
-            "inca-host-dev-test-app-{name}-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("bundle.js"), source).unwrap();
-        std::fs::write(dir.join("inca.json"), config_json).unwrap();
-        Self(dir)
-    }
-
-    fn entry(&self) -> String {
-        self.0.join("bundle.js").to_str().unwrap().to_owned()
-    }
-}
-
-impl Drop for ScratchApp {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
-
 #[gpui::test]
 fn a_reload_resets_a_fixed_size_windows_auto_resize_latch(cx: &mut TestAppContext) {
-    let entry = ScratchEntry::write("resize", &mounts_a_div(400, 200));
+    let dir = ScratchDir::new("resize");
+    let entry = write_entry(&dir, &mounts_a_div(400, 200));
     let (capturing, _) = capture();
-    let (window, sender) = serve_idle(cx, &mounts_a_div(300, 150), entry.path(), &capturing);
+    let (window, sender) = serve_idle(cx, &mounts_a_div(300, 150), &entry, &capturing);
     assert_eq!(bounds_of(cx, window), (300.0, 150.0));
 
     // A relay latches auto_resized (same size, so no visible change),
@@ -360,13 +344,11 @@ fn a_reload_resets_a_fixed_size_windows_auto_resize_latch(cx: &mut TestAppContex
 
 #[gpui::test]
 fn a_reload_does_not_reset_a_resizable_windows_manual_resize(cx: &mut TestAppContext) {
-    let app = ScratchApp::write(
-        "resizable",
-        &mounts_a_div(400, 200),
-        r#"{"window":{"resizable":true}}"#,
-    );
+    let dir = ScratchDir::new("app-resizable");
+    let entry = write_entry(&dir, &mounts_a_div(400, 200));
+    std::fs::write(dir.join("inca.json"), r#"{"window":{"resizable":true}}"#).unwrap();
     let (capturing, _) = capture();
-    let (window, sender) = serve_idle(cx, &mounts_a_div(300, 150), &app.entry(), &capturing);
+    let (window, sender) = serve_idle(cx, &mounts_a_div(300, 150), &entry, &capturing);
     assert_eq!(bounds_of(cx, window), (300.0, 150.0));
 
     // The user grabs an edge and resizes it by hand.
@@ -391,9 +373,10 @@ fn a_reload_does_not_reset_a_resizable_windows_manual_resize(cx: &mut TestAppCon
 
 #[gpui::test]
 fn a_reload_line_is_answered_null_and_swaps_the_session_in(cx: &mut TestAppContext) {
-    let entry = ScratchEntry::write("serve-reload", &mounts_a_div(400, 200));
+    let dir = ScratchDir::new("serve-reload");
+    let entry = write_entry(&dir, &mounts_a_div(400, 200));
     let (capturing, _) = capture();
-    let (window, sender) = serve_idle(cx, &mounts_a_div(300, 150), entry.path(), &capturing);
+    let (window, sender) = serve_idle(cx, &mounts_a_div(300, 150), &entry, &capturing);
 
     request(&sender, 7, "reload");
     cx.run_until_parked();

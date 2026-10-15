@@ -17,7 +17,7 @@ pub(crate) enum Style {
 }
 
 impl Style {
-    fn codes(self) -> (u8, u8) {
+    pub(crate) fn codes(self) -> (u8, u8) {
         match self {
             Style::Red => (31, 39),
             Style::Green => (32, 39),

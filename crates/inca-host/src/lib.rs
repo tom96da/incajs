@@ -9,6 +9,8 @@ pub mod config;
 mod console_output;
 mod dev;
 mod menu;
+#[cfg(test)]
+mod tests;
 
 #[cfg(any(test, feature = "test-support"))]
 pub mod harness;

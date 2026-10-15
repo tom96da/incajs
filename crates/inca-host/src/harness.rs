@@ -251,5 +251,4 @@ fn nearest_bounds(node: &Node, id: NodeId, inherited: Option<Bounds>) -> Lookup 
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::float_cmp)]
 mod tests;

@@ -1,11 +1,15 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![allow(clippy::unwrap_used)]
+
 use super::*;
 use std::cell::RefCell;
 
 use gpui::TestAppContext;
 use serde_json::json;
+
+use crate::tests::ScratchDir;
 
 mod loading;
 mod reload;
@@ -31,30 +35,12 @@ const RECEIVES_DEV_EVENTS: &str = r"
     };
 ";
 
-/// A real file on disk, torn down with the test. `reload` (unlike
-/// `start`'s test call sites elsewhere) reads its entry back off disk.
-struct ScratchEntry(std::path::PathBuf);
-
-impl ScratchEntry {
-    fn write(name: &str, source: &str) -> Self {
-        let path = std::env::temp_dir().join(format!(
-            "inca-host-dev-test-{name}-{}-{:?}.js",
-            std::process::id(),
-            std::thread::current().id()
-        ));
-        std::fs::write(&path, source).unwrap();
-        Self(path)
-    }
-
-    fn path(&self) -> &str {
-        self.0.to_str().unwrap()
-    }
-}
-
-impl Drop for ScratchEntry {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.0);
-    }
+/// Writes `source` as the entry of `dir`, which then holds no config of its
+/// own, and returns the entry path.
+fn write_entry(dir: &ScratchDir, source: &str) -> String {
+    let path = dir.join("bundle.js");
+    std::fs::write(&path, source).unwrap();
+    path.to_str().unwrap().to_owned()
 }
 
 fn mounts_a_div(width: u32, height: u32) -> String {

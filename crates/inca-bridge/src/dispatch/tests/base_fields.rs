@@ -1,6 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![allow(clippy::unwrap_used)]
+
 use super::*;
 use crate::test_support::callback_ids;
 /// `inca-gpui` only ever produces a `button` index in `0..=4`, but

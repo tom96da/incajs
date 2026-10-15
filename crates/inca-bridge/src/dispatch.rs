@@ -535,5 +535,4 @@ pub fn drain_jobs_and_refresh(engine: &Engine, reporter: &ErrorReporter, window:
     window.refresh();
 }
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests;

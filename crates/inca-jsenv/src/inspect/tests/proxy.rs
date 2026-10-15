@@ -1,6 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![allow(clippy::unwrap_used)]
+
 use super::*;
 use rstest::rstest;
 
@@ -132,9 +134,7 @@ fn an_object_inheriting_from_a_proxy_runs_no_trap() {
 
 #[test]
 fn the_first_pinning_in_a_runtime_is_kept() {
-    let runtime = Runtime::new().unwrap();
-    let context = Context::full(&runtime).unwrap();
-    context.with(|ctx| {
+    with_realm(|ctx| {
         pin(&ctx).unwrap();
         ctx.eval::<(), _>("Date.prototype.toISOString = () => 'late';")
             .unwrap();
@@ -159,9 +159,7 @@ fn pinning_reports_a_realm_without_the_intrinsics() {
 
 #[test]
 fn an_unpinned_realm_prints_the_four_types_as_objects_and_can_be_pinned_after() {
-    let runtime = Runtime::new().unwrap();
-    let context = Context::full(&runtime).unwrap();
-    context.with(|ctx| {
+    with_realm(|ctx| {
         let values: Vec<Value<'_>> = ctx
             .eval("[new Date(0), /x/g, new Map([[1, 2]]), new Set([1])]")
             .unwrap();

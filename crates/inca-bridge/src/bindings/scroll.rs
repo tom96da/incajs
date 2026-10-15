@@ -87,8 +87,8 @@ fn scroll_into_view_node<'js>(
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
     use super::*;
     use crate::test_support::engine_with_bindings;
     use gpui::{Bounds, point};

@@ -1,31 +1,12 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::{env, fs};
+#![allow(clippy::unwrap_used)]
+
+use std::fs;
 
 use super::*;
-
-/// A directory under the OS temp root, unique per test invocation, torn
-/// down on drop.
-struct ScratchDir(PathBuf);
-
-impl ScratchDir {
-    fn new(name: &str) -> Self {
-        let path = env::temp_dir().join(format!(
-            "inca-jsenv-test-{name}-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
-        fs::create_dir_all(&path).unwrap();
-        Self(path)
-    }
-}
-
-impl Drop for ScratchDir {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
-    }
-}
+use crate::tests::ScratchDir;
 
 #[test]
 fn a_syntax_error_is_returned_as_an_err() {

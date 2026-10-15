@@ -20,6 +20,8 @@ mod loader;
 mod paint;
 mod quickjs;
 mod sourcemap;
+#[cfg(test)]
+mod tests;
 
 pub use compile::compile_async_function;
 pub use engine::{
