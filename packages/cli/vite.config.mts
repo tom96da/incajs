@@ -27,6 +27,7 @@ export default defineConfig({
   plugins: [
     dts({
       tsconfigPath: path.resolve(import.meta.dirname, "tsconfig.node.json"),
+      entryRoot: path.resolve(import.meta.dirname, "src"),
       include: ["src"],
       exclude: ["src/**/*.test.mts", "src/adapter/vite/runtime/**"],
     }),
