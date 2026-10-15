@@ -10,8 +10,13 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Changed
+
+- the error of `CustomEvent(...)` called without `new` names `CustomEvent` ([ea5d186](https://github.com/tom96da/incajs/commit/ea5d186))
+
 ### Fixed
 
+- `inca dev` reports an entry file the host cannot read like any other start failure ([19daf5e](https://github.com/tom96da/incajs/commit/19daf5e))
 - the type declarations of `@incajs/cli` resolve again from the paths `package.json` names ([3a00f91](https://github.com/tom96da/incajs/commit/3a00f91))
 
 ## [0.0.16] - 2026-10-13
