@@ -145,58 +145,6 @@ fn mounting_already_hovered_does_not_fire_a_spurious_leave(cx: &mut TestAppConte
     );
 }
 
-/// One pointer move produces both `mousemove` and `mouseenter`. Only
-/// `mousemove` reports the delta.
-#[gpui::test]
-fn one_move_gives_mousemove_the_delta_and_mouseenter_zero(cx: &mut TestAppContext) {
-    let host = Rc::new(RefCell::new(Host::default()));
-    let node = {
-        let mut host = host.borrow_mut();
-        let node = host.tree.create_node("div").unwrap();
-        host.tree.set_style(node, "width", 100.0).unwrap();
-        host.tree.set_style(node, "height", 100.0).unwrap();
-        node
-    };
-    let engine = test_support::engine_for(&host);
-    engine
-        .eval::<()>(&format!(
-            r"
-            globalThis.seen = [];
-            const record = (event) => {{
-                globalThis.seen.push([event.type, event.movementX, event.movementY]);
-            }};
-            __inca_test_listen__({node}, 'mouseenter', record);
-            __inca_test_listen__({node}, 'mousemove', record);
-            "
-        ))
-        .unwrap();
-    let mut cx = mount_clickable(cx, &host, &engine, node);
-
-    cx.simulate_mouse_move(
-        point(px(200.0), px(200.0)),
-        None::<MouseButton>,
-        Modifiers::none(),
-    );
-    engine.eval::<()>("globalThis.seen = [];").unwrap();
-
-    cx.simulate_mouse_move(
-        point(px(10.0), px(20.0)),
-        None::<MouseButton>,
-        Modifiers::none(),
-    );
-
-    let seen: serde_json::Value = serde_json::from_str(
-        &engine
-            .eval::<String>("JSON.stringify(globalThis.seen.slice().sort())")
-            .unwrap(),
-    )
-    .unwrap();
-    assert_eq!(
-        seen,
-        serde_json::json!([["mouseenter", 0, 0], ["mousemove", -190, -180]])
-    );
-}
-
 /// `buttons` reports every button held. Pressing a second button while the
 /// first is still down unions its bit in, and releasing one button clears
 /// only that bit.

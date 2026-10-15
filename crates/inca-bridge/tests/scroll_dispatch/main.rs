@@ -124,10 +124,6 @@ impl Scene {
         self.cx.update(|window, cx| window.draw(cx).clear(cx));
     }
 
-    fn line_height(&mut self) -> Pixels {
-        self.cx.update(|window, _| window.line_height())
-    }
-
     fn ran(&self) -> String {
         self.engine.eval("JSON.stringify(ran)").unwrap()
     }

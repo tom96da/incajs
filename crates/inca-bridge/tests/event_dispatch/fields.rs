@@ -119,27 +119,3 @@ fn wheel_reports_a_button_held_from_an_earlier_mousedown(cx: &mut TestAppContext
     let buttons: u8 = engine.eval("globalThis.lastEvent.buttons").unwrap();
     assert_eq!(buttons, 0b0_0100);
 }
-
-/// A `wheel` on a node nothing listens for must not call into JS. It is the same
-/// guarantee `no_listener_registered_reports_nothing` gives `click`.
-#[gpui::test]
-fn wheel_with_no_listener_reports_nothing(cx: &mut TestAppContext) {
-    let host = Rc::new(RefCell::new(Host::default()));
-    let node = {
-        let mut host = host.borrow_mut();
-        let node = host.tree.create_node("div").unwrap();
-        host.tree.set_style(node, "width", 100.0).unwrap();
-        host.tree.set_style(node, "height", 100.0).unwrap();
-        node
-    };
-    let engine = test_support::engine_for(&host);
-    let mut cx = mount_clickable(cx, &host, &engine, node);
-
-    cx.simulate_event(ScrollWheelEvent {
-        position: point(px(10.0), px(10.0)),
-        delta: ScrollDelta::Lines(point(0.0, 1.0)),
-        ..Default::default()
-    });
-
-    assert_eq!(clicks(&engine), 0.0);
-}

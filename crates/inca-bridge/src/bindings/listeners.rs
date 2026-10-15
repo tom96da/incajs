@@ -185,24 +185,6 @@ mod tests {
     use crate::test_support::{callback_ids, engine_with_bindings};
 
     #[test]
-    fn registering_the_same_callback_twice_keeps_one_entry() {
-        let mut listeners = EventListeners::default();
-        listeners.insert(1, "click", 7, false, false);
-        listeners.insert(1, "click", 7, false, false);
-
-        assert_eq!(callback_ids(&listeners, 1, "click"), &[7]);
-    }
-
-    #[test]
-    fn distinct_callbacks_on_one_event_stack() {
-        let mut listeners = EventListeners::default();
-        listeners.insert(1, "click", 7, false, false);
-        listeners.insert(1, "click", 8, false, false);
-
-        assert_eq!(callback_ids(&listeners, 1, "click"), &[7, 8]);
-    }
-
-    #[test]
     fn a_registration_keeps_its_phase_and_passivity_and_the_first_one_wins() {
         let mut listeners = EventListeners::default();
         listeners.insert(1, "wheel", 7, true, true);

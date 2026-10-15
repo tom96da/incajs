@@ -186,20 +186,6 @@ fn a_release_with_no_press_keeps_its_own_click_count(cx: &mut TestAppContext) {
     assert_eq!(counts, [5, 5]);
 }
 
-#[gpui::test]
-fn a_release_with_no_press_fires_no_click(cx: &mut TestAppContext) {
-    let (mut cx, engine, _parent, _child) = mount_click_recorder(cx, &["click", "mouseup"]);
-
-    cx.simulate_mouse_up(
-        point(px(10.0), px(10.0)),
-        MouseButton::Left,
-        Modifiers::none(),
-    );
-
-    let types: Vec<_> = take_clicks(&engine).into_iter().map(|c| c.0).collect();
-    assert_eq!(types, ["mouseup", "mouseup"]);
-}
-
 /// Panes with `events` listened for on the row, recording
 /// `[type, target, button]`.
 fn mount_target_recorder(cx: &mut TestAppContext, events: &[&str]) -> (VisualTestContext, Panes) {

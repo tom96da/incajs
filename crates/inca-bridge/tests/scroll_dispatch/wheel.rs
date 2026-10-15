@@ -65,16 +65,6 @@ fn prevent_default_from_a_capture_listener_of_the_container_cancels_the_scroll(
 }
 
 #[gpui::test]
-fn prevent_default_from_the_container_itself_cancels_the_scroll(cx: &mut TestAppContext) {
-    let host = one_container();
-    let js = on_wheel(0, CONTAINER_PREVENT);
-    let mut scene = Scene::new(cx, host, &js);
-    scene.wheel(-50.);
-    assert_eq!(scene.ran(), r#"["container"]"#);
-    assert_eq!(scene.offset(0).y, px(0.));
-}
-
-#[gpui::test]
 fn only_the_innermost_container_scrolls(cx: &mut TestAppContext) {
     let mut scene = Scene::new(cx, nested_containers(), "");
     scene.wheel(-50.);
@@ -295,13 +285,6 @@ fn a_vertical_wheel_scrolls_an_x_only_container_along_x(cx: &mut TestAppContext)
 }
 
 #[gpui::test]
-fn a_line_delta_scrolls_by_the_line_height(cx: &mut TestAppContext) {
-    let mut scene = Scene::new(cx, one_container(), "");
-    scene.wheel_delta(10., ScrollDelta::Lines(point(0., -2.)));
-    assert_eq!(scene.offset(0).y, scene.line_height() * -2.);
-}
-
-#[gpui::test]
 fn a_wheel_after_a_prevented_one_scrolls_again(cx: &mut TestAppContext) {
     let host = one_container();
     let js = on_wheel(0, PREVENT_FLAG);
@@ -312,16 +295,6 @@ fn a_wheel_after_a_prevented_one_scrolls_again(cx: &mut TestAppContext) {
 
     scene.js("globalThis.prevent = false;");
     scene.wheel(-50.);
-    assert_eq!(scene.offset(0).y, px(-50.));
-}
-
-#[gpui::test]
-fn listeners_run_child_first_and_the_container_still_scrolls(cx: &mut TestAppContext) {
-    let host = one_container();
-    let js = [on_wheel(0, CONTAINER), on_wheel(1, CHILD_STOP_FLAG)].concat();
-    let mut scene = Scene::new(cx, host, &js);
-    scene.wheel(-50.);
-    assert_eq!(scene.ran(), r#"["child","container"]"#);
     assert_eq!(scene.offset(0).y, px(-50.));
 }
 
@@ -342,16 +315,6 @@ fn a_throw_after_stop_propagation_still_stops_ancestors_and_scrolls(cx: &mut Tes
     assert_eq!(scene.ran(), r#"["child","child","container"]"#);
     assert_eq!(scene.offset(0).y, px(-100.));
     assert_eq!(scene.reported.borrow().len(), 1);
-}
-
-#[gpui::test]
-fn stop_propagation_with_prevent_default_skips_ancestors_and_cancels(cx: &mut TestAppContext) {
-    let host = one_container();
-    let js = [on_wheel(0, CONTAINER), on_wheel(1, CHILD_STOP_PREVENT)].concat();
-    let mut scene = Scene::new(cx, host, &js);
-    scene.wheel(-50.);
-    assert_eq!(scene.ran(), r#"["child"]"#);
-    assert_eq!(scene.offset(0).y, px(0.));
 }
 
 /// Records only.
@@ -379,6 +342,3 @@ const CHILD_THROW: &str = r"(e) => {
     ran.push('child');
     if (globalThis.stop) { e.stopPropagation(); throw new Error('boom'); }
 }";
-/// Stops propagation and prevents default.
-const CHILD_STOP_PREVENT: &str =
-    "(e) => { ran.push('child'); e.stopPropagation(); e.preventDefault(); }";

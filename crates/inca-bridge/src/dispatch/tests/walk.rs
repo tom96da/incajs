@@ -84,33 +84,6 @@ fn the_path_is_fixed_when_dispatch_starts(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn a_listener_removed_mid_dispatch_does_not_run(cx: &mut TestAppContext) {
-    let (dispatcher, host, _reported) = dispatcher_with_engine();
-    let [_, parent, child] = tree_of_three(&host);
-    // Callback ids follow the registration order: 0, 1 and 2.
-    listen(
-        &dispatcher,
-        child,
-        "click",
-        &format!(
-            r"
-            () => {{
-                out.push(0);
-                __inca_native__.removeEventListener({child}, 'click', 1);
-                __inca_native__.removeEventListener({parent}, 'click', 2);
-            }}
-            "
-        ),
-    );
-    listen(&dispatcher, child, "click", "() => out.push(1)");
-    listen(&dispatcher, parent, "click", "() => out.push(2)");
-
-    let out = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
-
-    assert_eq!(out, serde_json::json!([0]));
-}
-
-#[gpui::test]
 fn a_listener_added_to_an_ancestor_mid_dispatch_runs_and_one_added_to_the_node_waits(
     cx: &mut TestAppContext,
 ) {

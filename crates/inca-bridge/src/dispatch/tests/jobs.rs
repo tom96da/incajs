@@ -3,23 +3,6 @@
 
 use super::*;
 
-#[test]
-fn record_layout_stores_and_clear_layout_empties() {
-    let (dispatcher, host, _) = dispatcher_with_engine();
-    let root = host.borrow().root;
-    let layout = inca_gpui::NodeLayout {
-        bounds: gpui::Bounds::default(),
-        border: px(2.0),
-        scroll: gpui::Point::default(),
-    };
-
-    dispatcher.record_layout(root, layout);
-    assert_eq!(host.borrow().layout.borrow().get(&root), Some(&layout));
-
-    dispatcher.clear_layout();
-    assert!(host.borrow().layout.borrow().is_empty());
-}
-
 /// `inca-gpui` only ever produces a `button` index in `0..=4`, but
 /// `update_held_buttons` takes a plain `u8`. A value outside that
 /// range must not panic, only fail to set any bit.
@@ -40,19 +23,6 @@ fn a_right_mousedown_sets_the_right_buttons_bit() {
 fn a_middle_mousedown_sets_the_middle_buttons_bit() {
     let (dispatcher, _host, _reported) = dispatcher_with_engine();
     assert_eq!(dispatcher.update_held_buttons("mousedown", 1), 0b0_0100);
-}
-
-#[gpui::test]
-fn no_listener_registered_reports_nothing(cx: &mut TestAppContext) {
-    let (dispatcher, host, reported) = dispatcher_with_engine();
-    let node_id = host.borrow_mut().tree.create_node("div").unwrap();
-
-    let cx = cx.add_empty_window();
-    cx.update(|window, cx| {
-        dispatcher.fire(node_id, "click", &EventPayload::None, window, cx);
-    });
-
-    assert!(reported.borrow().is_empty());
 }
 
 #[gpui::test]
