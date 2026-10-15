@@ -387,13 +387,16 @@ describe("latestEventId", () => {
     expect(tracked.latestEventId()).toBe(7);
   });
 
-  it("ignores an argument with no numeric eventId", () => {
-    tracked.addEventListener(1, "click", vi.fn<() => void>());
+  it.each([[undefined], [null], [3], [{}], [{ eventId: "9" }]])(
+    "ignores an argument with no numeric eventId (%o)",
+    (event) => {
+      tracked.addEventListener(1, "click", vi.fn<() => void>());
 
-    for (const event of [undefined, null, 3, {}, { eventId: "9" }]) fire(event);
+      fire(event);
 
-    expect(tracked.latestEventId()).toBe(0);
-  });
+      expect(tracked.latestEventId()).toBe(0);
+    },
+  );
 });
 
 describe("focus", () => {

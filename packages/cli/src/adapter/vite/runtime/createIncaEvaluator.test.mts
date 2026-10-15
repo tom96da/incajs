@@ -107,12 +107,13 @@ describe("createIncaEvaluator", () => {
     expect(Object.isSealed(exports)).toBe(true);
   });
 
-  it("rejects when __inca_dev__ or its compile is missing", async () => {
-    for (const dev of [undefined, { send() {} }]) {
-      globalThis.__inca_dev__ = dev;
-      await expect(
-        createIncaEvaluator().runInlinedModule(contextWith({}), "", module),
-      ).rejects.toThrow("a host that compiles modules for the development protocol");
-    }
+  it.each([
+    ["__inca_dev__ is missing", undefined],
+    ["its compile is missing", { send() {} }],
+  ])("rejects when %s", async (_name, dev) => {
+    globalThis.__inca_dev__ = dev;
+    await expect(
+      createIncaEvaluator().runInlinedModule(contextWith({}), "", module),
+    ).rejects.toThrow("a host that compiles modules for the development protocol");
   });
 });

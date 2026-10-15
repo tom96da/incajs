@@ -312,52 +312,39 @@ describe("onUpdate:* props", () => {
 });
 
 describe("on* modifiers", () => {
-  it("registers each suffix combination with its capture and passive flags", () => {
-    const mismatches: string[] = [];
-    const cases: [string, ListenerOptions][] = [
-      ["onClickCapture", { capture: true, passive: false }],
-      ["onClickPassive", { capture: false, passive: true }],
-      ["onClickCapturePassive", { capture: true, passive: true }],
-    ];
-    for (const [key, options] of cases) {
-      vi.clearAllMocks();
-      el = makeEl();
+  it.each<[string, ListenerOptions]>([
+    ["onClickCapture", { capture: true, passive: false }],
+    ["onClickPassive", { capture: false, passive: true }],
+    ["onClickCapturePassive", { capture: true, passive: true }],
+  ])(
+    "registers each suffix combination with its capture and passive flags (%s)",
+    (key, options) => {
       patchProp(el, key, null, vi.fn(), undefined, null);
-      const calls = vi.mocked(core.addEventListener).mock.calls;
-      if (
-        calls.length !== 1 ||
-        calls[0]![1] !== "click" ||
-        JSON.stringify(calls[0]![3]) !== JSON.stringify(options)
-      ) {
-        mismatches.push(`${key}: ${JSON.stringify(calls.map((call) => call[3]))}`);
-      }
-    }
-    expect(mismatches).toEqual([]);
-  });
 
-  it("binds a prop named after a bare modifier as the event of that name", () => {
-    const mismatches: string[] = [];
-    for (const [key, event] of [
-      ["onOnce", "once"],
-      ["onPassive", "passive"],
-      ["onCapture", "capture"],
-      ["onOnceCapture", "once"],
-      ["on:Once", "Once"],
-    ] as const) {
-      vi.clearAllMocks();
-      el = makeEl();
+      expect(core.addEventListener).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(core.addEventListener).mock.calls[0]![1]).toBe("click");
+      expect(vi.mocked(core.addEventListener).mock.calls[0]![3]).toEqual(options);
+    },
+  );
+
+  it.each([
+    ["onOnce", "once"],
+    ["onPassive", "passive"],
+    ["onCapture", "capture"],
+    ["onOnceCapture", "once"],
+    ["on:Once", "Once"],
+  ] as const)(
+    "binds a prop named after a bare modifier as the event of that name (%s)",
+    (key, event) => {
       patchProp(el, key, null, vi.fn(), undefined, null);
-      const calls = vi.mocked(core.addEventListener).mock.calls;
-      if (
-        calls.length !== 1 ||
-        calls[0]![1] !== event ||
-        calls[0]![3]?.capture !== (key === "onOnceCapture")
-      ) {
-        mismatches.push(`${key}: ${JSON.stringify(calls.map((call) => call.slice(1)))}`);
-      }
-    }
-    expect(mismatches).toEqual([]);
-  });
+
+      expect(core.addEventListener).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(core.addEventListener).mock.calls[0]![1]).toBe(event);
+      expect(vi.mocked(core.addEventListener).mock.calls[0]![3]?.capture).toBe(
+        key === "onOnceCapture",
+      );
+    },
+  );
 
   it("keeps a plain, a capture and a passive listener of one event apart", () => {
     patchProp(el, "onClick", null, vi.fn(), undefined, null);
@@ -1259,17 +1246,16 @@ describe("everything else", () => {
     expect(core.removeAttribute).toHaveBeenCalledExactlyOnceWith(2, "label");
   });
 
-  it("removes disabled, hidden and inert when set to false and sets them when true", () => {
-    for (const name of ["disabled", "hidden", "inert"]) {
-      vi.mocked(core.setAttribute).mockClear();
-      vi.mocked(core.removeAttribute).mockClear();
+  it.each(["disabled", "hidden", "inert"])(
+    "removes disabled, hidden and inert when set to false and sets them when true (%s)",
+    (name) => {
       patchProp(el, name, null, true, undefined, null);
       patchProp(el, name, true, false, undefined, null);
 
       expect(core.setAttribute).toHaveBeenCalledExactlyOnceWith(1, name, true);
       expect(core.removeAttribute).toHaveBeenCalledExactlyOnceWith(1, name);
-    }
-  });
+    },
+  );
 
   it("keeps a false boolean on any other name as an attribute", () => {
     patchProp(el, "readonly", true, false, undefined, null);
