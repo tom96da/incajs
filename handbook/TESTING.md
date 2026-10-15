@@ -21,6 +21,11 @@ change is done, for Rust and TypeScript.
   in `tests.rs` and the tests in `<module>/tests/<topic>.rs`. `tests.rs`
   declares its topic modules before its helpers. A file stays at or below 800
   lines.
+- **Overlapping tests**: the branch is pinned once, where the code lives.
+  When a unit test and an integration test pin the same branch, the unit
+  test stays. An integration test pins one contract, such as what JS observes
+  or how layers connect. A unit test that asserts only a private field gives
+  way to the integration test of the same behaviour.
 - **Shared helpers**: a helper used by tests of several modules of one crate
   lives once in that crate's `src/tests.rs`, declared in `lib.rs` with
   `#[cfg(test)] mod tests;`. `test_support` is the name of the `inca-bridge`
