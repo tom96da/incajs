@@ -8,6 +8,7 @@ import {
   type RendererOptions,
 } from "@vue/runtime-core";
 
+import { isDestroyed } from "../element/lifecycle.mts";
 import type { IncaElement } from "../element/types.mts";
 import type { IncaCore, EventListener, ListenerOptions } from "../rendererCore.mts";
 
@@ -162,7 +163,7 @@ const entryKeyOf = ({ event, capture, passive }: ParsedEventKey): string =>
  */
 function sync(core: IncaCore, el: IncaElement, entryKey: string, entry: Entry): void {
   const live = Array.from(entry.slots.values()).some((slot) => !slot.fired);
-  if (live && !entry.registered) {
+  if (live && !entry.registered && !isDestroyed(el)) {
     core.addEventListener(el.id, entry.event, entry.dispatcher, entry.options);
     entry.registered = true;
   } else if (!live && entry.registered) {

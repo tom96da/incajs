@@ -1222,7 +1222,9 @@ A fixed entry is deleted and its ID is never reused.
 
   `focusNode`, `blurNode`, `removeEventListener` and `click` ignore a node
   that is gone. The other natives throw a `TypeError`. State the rule in
-  `FFI.md`.
+  `FFI.md`. `sync` in `patchProp.mts` checks `isDestroyed` before
+  `addEventListener` for this reason; a rule that ignores a gone node makes
+  that check unnecessary.
 
 - **B-193 Optional native parameters use two types**
   `Units: bridge · Size: S · Impact: Low`
