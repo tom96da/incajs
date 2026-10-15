@@ -156,7 +156,7 @@ The host never exits because of a message it couldn't use.
 | A `method` this host doesn't implement | `-32601` | echoes the request's `id` |
 | A panic in the host | `-32603` | `id` is `null`. The panic message also goes to stderr |
 | A bundle that throws, or whose top-level `await` rejects, while being evaluated | `-32000` | echoes the `id`. The window keeps the tree it already has |
-| A *first* bundle that throws or rejects before the window opens | `-32000` | reported with `id` `null`, then exit 1 |
+| A *first* bundle that throws or rejects before the window opens, or an entry file that can't be read | `-32000` | reported with `id` `null`, then exit 1 |
 | A *first* bundle whose top-level `await` rejects after the window opened | — | an `appError` notification, and the window stays |
 | An exception the running app raised and the host caught | — | an `appError` notification, and the window keeps rendering. See Messages. |
 
