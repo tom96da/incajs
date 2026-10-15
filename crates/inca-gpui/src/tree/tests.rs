@@ -485,3 +485,62 @@ fn is_disabled_button_needs_the_button_tag_and_the_disabled_attribute() {
     assert!(is_disabled_button(tree.get(button).unwrap()));
     assert!(!is_disabled_button(tree.get(div).unwrap()));
 }
+
+#[test]
+fn a_tree_without_a_root_connects_every_id() {
+    let mut tree = VirtualTree::new();
+    let id = tree.create_node("div").unwrap();
+    assert!(tree.is_connected(id));
+    assert!(tree.is_connected(999));
+}
+
+#[test]
+fn a_chain_attached_to_the_root_is_connected() {
+    let mut tree = VirtualTree::new();
+    let root = tree.create_node("div").unwrap();
+    let mid = tree.create_node("div").unwrap();
+    let leaf = tree.create_node("div").unwrap();
+    tree.set_root(root);
+    tree.append_child(root, mid).unwrap();
+    tree.append_child(mid, leaf).unwrap();
+    assert!(tree.is_connected(root));
+    assert!(tree.is_connected(mid));
+    assert!(tree.is_connected(leaf));
+}
+
+#[test]
+fn a_detached_subtree_is_not_connected_until_it_is_attached_again() {
+    let mut tree = VirtualTree::new();
+    let root = tree.create_node("div").unwrap();
+    let mid = tree.create_node("div").unwrap();
+    let leaf = tree.create_node("div").unwrap();
+    tree.set_root(root);
+    tree.append_child(root, mid).unwrap();
+    tree.append_child(mid, leaf).unwrap();
+
+    tree.remove_child(root, mid).unwrap();
+    assert!(!tree.is_connected(mid));
+    assert!(!tree.is_connected(leaf));
+
+    tree.append_child(root, mid).unwrap();
+    assert!(tree.is_connected(leaf));
+}
+
+#[test]
+fn a_destroyed_node_is_not_connected_under_a_root() {
+    let mut tree = VirtualTree::new();
+    let root = tree.create_node("div").unwrap();
+    let child = tree.create_node("div").unwrap();
+    tree.set_root(root);
+    tree.append_child(root, child).unwrap();
+    tree.destroy_node(child);
+    assert!(!tree.is_connected(child));
+}
+
+#[test]
+fn an_unknown_id_is_not_connected_under_a_root() {
+    let mut tree = VirtualTree::new();
+    let root = tree.create_node("div").unwrap();
+    tree.set_root(root);
+    assert!(!tree.is_connected(999));
+}

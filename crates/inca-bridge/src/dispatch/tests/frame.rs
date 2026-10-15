@@ -14,6 +14,8 @@ const SEEN: &str = r"
 fn focusable_node(dispatcher: &EventDispatcher, host: &Rc<RefCell<Host>>) -> NodeId {
     let mut host = host.borrow_mut();
     let node = host.tree.create_node("div").unwrap();
+    let root = host.root;
+    host.tree.append_child(root, node).unwrap();
     host.tree
         .set_attribute(node, "tabindex", inca_gpui::AttributeValue::from("0"))
         .unwrap();
@@ -75,4 +77,40 @@ fn window_activated_fires_blur_when_lost_and_focus_when_regained(cx: &mut TestAp
         seen(&dispatcher),
         format!(r#"["blur:{node}","focus:{node}"]"#)
     );
+}
+
+/// Focuses a node, then drops its focus the way `removeChild` does, with no
+/// frame in between.
+fn focused_then_dropped(
+    cx: &mut TestAppContext,
+) -> (Rc<EventDispatcher>, gpui::WindowHandle<Frame>, NodeId) {
+    let (dispatcher, host, _reported) = dispatcher_with_engine();
+    let node = focusable_node(&dispatcher, &host);
+    let dispatcher = Rc::new(dispatcher);
+    let window = cx.add_window(|_, _| Frame(Rc::clone(&dispatcher)));
+    host.borrow_mut().focus.request_focus(node, true);
+    draw(cx, window);
+    dispatcher
+        .engine
+        .eval::<()>("globalThis.seen = [];")
+        .unwrap();
+    {
+        let host = &mut *host.borrow_mut();
+        host.focus.drop_focus_in(&host.tree, node);
+    }
+    (dispatcher, window, node)
+}
+
+#[gpui::test]
+fn a_window_that_deactivates_and_reactivates_after_a_drop_fires_nothing(cx: &mut TestAppContext) {
+    let (dispatcher, window, _node) = focused_then_dropped(cx);
+
+    for active in [false, true] {
+        cx.update_window(window.into(), |_, window, cx| {
+            dispatcher.window_activated(active, window, cx);
+        })
+        .unwrap();
+    }
+
+    assert_eq!(seen(&dispatcher), "[]");
 }

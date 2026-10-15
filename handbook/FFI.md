@@ -87,8 +87,8 @@ the nearest ancestor container.
 | `rootNodeId` | `() => number` | Return the id of the host-allocated root container, the node a mounting app attaches itself under. |
 | `createNode` | `(tag: string) => number` | Allocate a `VirtualNode`, return its id. Throws once every id has been used. |
 | `appendChild` | `(parentId: number, childId: number) => void` | Attach a child at the end of `parentId`'s children. Same as `insertBefore` with no anchor. |
-| `insertBefore` | `(parentId: number, childId: number, anchorId: number \| null) => void` | Attach a child before `anchorId`, or at the end if `null`. |
-| `removeChild` | `(parentId: number, childId: number) => void` | Detach a child node. |
+| `insertBefore` | `(parentId: number, childId: number, anchorId: number \| null) => void` | Attach a child before `anchorId`, or at the end if `null`. Moving an attached node drops focus like `removeChild`. |
+| `removeChild` | `(parentId: number, childId: number) => void` | Detach a child node. The focused node in its subtree loses focus at the call, with no `blur` or `focusout`. |
 | `setAttribute` | `(nodeId: number, key: string, value: string \| number \| boolean) => void` | Set a non-style attribute prop. |
 | `getAttribute` | `(nodeId: number, key: string) => string \| number \| boolean \| null` | Read a non-style attribute prop as stored, or `null` when the key is unset. |
 | `removeAttribute` | `(nodeId: number, key: string) => void` | Remove a non-style attribute prop. Removing a key that isn't set does nothing. |
@@ -99,7 +99,7 @@ the nearest ancestor container.
 | `dispatchEvent` | `(nodeId: number, event: Event) => boolean` | Walk a script-built event over the path of `nodeId` and return `false` when a listener canceled it, see [Dispatching from script](#dispatching-from-script). |
 | `click` | `(nodeId: number) => void` | Walk an untrusted `click` at `nodeId`, see [Dispatching from script](#dispatching-from-script). |
 | `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its subtree, and return every `callbackId` registered in it. An unknown id returns `[]`. Destroying the root throws. Also clears the focus state of the destroyed nodes, and `blur` and `focusout` stay unfired. Drops the waiting `scrollIntoViewNode` calls of the destroyed nodes. |
-| `focusNode` | `(nodeId: number, preventScroll?: boolean) => void` | Request focus for `nodeId`. Takes effect next frame. A node with a `tabindex`, and only that node, takes focus. Unless `preventScroll` is `true`, the scroll containers above the node then scroll it into view: a node that shows stays put, a node outside a container's box centres, and a node that shows partly moves the least vertically and stays put horizontally. A node with no recorded box yet is retried on the next frame. |
+| `focusNode` | `(nodeId: number, preventScroll?: boolean) => void` | Request focus for `nodeId`. Takes effect next frame. A node with a `tabindex`, and only that node, takes focus. A node that is not connected to the root cannot take focus. Unless `preventScroll` is `true`, the scroll containers above the node then scroll it into view: a node that shows stays put, a node outside a container's box centres, and a node that shows partly moves the least vertically and stays put horizontally. A node with no recorded box yet is retried on the next frame. |
 | `focusedNode` | `() => number \| null` | The id of the focused node, or `null` when none has focus. |
 | `blurNode` | `(nodeId: number) => void` | Request that `nodeId` lose focus. Takes effect next frame, and does nothing if `nodeId` is not the focused node by then. |
 | `layoutOf` | `(nodeId: number) => [x, y, width, height, border, scrollX, scrollY] \| null` | Read the border box of `nodeId` in window pixels as the last drawn frame placed it, with `border` the uniform border width. `scrollX` and `scrollY` are the positive scroll offset the parent applied to that box. `null` for a node with no recorded box. |
@@ -320,8 +320,8 @@ and author-facing behaviour are in [events.md](../docs/reference/events.md).
   change dispatches `blur`, `focusout`, `focus`, `focusin` in that order, and
   the `focusin`/`focusout` walk has `target` the node. Changes to `tabindex`
   (key compared case-insensitively), `disabled` on a button, `hidden`,
-  `inert` and `display`, and moving a node, re-check the node's subtree. This
-  applies before that frame's queued focus requests.
+  `inert` and `display`, and moving or removing a node, re-check the node's
+  subtree before that frame's queued focus requests.
 - An uncanceled `mousedown` focuses the nearest node on the target's path
   that has a `FocusRegistry` handle, and blurs the window when there is none.
   The tracker's capture handler calls `Window::prevent_default` to stop gpui's

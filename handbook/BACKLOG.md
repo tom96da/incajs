@@ -1257,3 +1257,12 @@ A fixed entry is deleted and its ID is never reused.
   thread neither exits nor aborts. The panic message already reached stderr.
   Found by reading; not reproduced.
 
+- **B-198 Chromium fires `blur` and `focusout` when a focused node is removed or moved**
+  `Units: bridge,docs · Size: S · Impact: Low`
+
+  Chromium 153 fires `blur` and `focusout` at the removed or moved node, at the
+  call. Firefox 155 and WebKit 26.6 fire neither. The host drops the focus at
+  the call and fires neither, like Firefox and WebKit. Measured in
+  `tmp/browser-check/focus-detach-results.md`. A fix fires the pair at the call
+  and needs a decision on the engine to follow.
+

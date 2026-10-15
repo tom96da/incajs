@@ -63,6 +63,7 @@ impl Default for Host {
         let root = tree
             .create_node("div")
             .expect("a new tree has free node ids");
+        tree.set_root(root);
         Self {
             tree,
             warn: Rc::new(|line| eprintln!("{line}")),

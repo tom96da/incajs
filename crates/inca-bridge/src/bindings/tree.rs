@@ -48,9 +48,13 @@ fn append_child<'js>(
     move |ctx, JsNodeId(parent_id), JsNodeId(child_id)| {
         let mut host = host.borrow_mut();
         refuse_root(&ctx, &host, child_id, "moved")?;
+        let attached = is_attached(&host, child_id);
         host.tree
             .append_child(parent_id, child_id)
             .map_err(|err| throw_tree_error(&ctx, err))?;
+        if attached {
+            drop_focus(&mut host, child_id);
+        }
         mark_focus_dirty(&mut host, child_id);
         Ok(())
     }
@@ -62,9 +66,13 @@ fn insert_before<'js>(
     move |ctx, JsNodeId(parent_id), JsNodeId(child_id), anchor_id| {
         let mut host = host.borrow_mut();
         refuse_root(&ctx, &host, child_id, "moved")?;
+        let attached = is_attached(&host, child_id);
         host.tree
             .insert_before(parent_id, child_id, anchor_id.map(|JsNodeId(id)| id))
             .map_err(|err| throw_tree_error(&ctx, err))?;
+        if attached {
+            drop_focus(&mut host, child_id);
+        }
         mark_focus_dirty(&mut host, child_id);
         Ok(())
     }
@@ -74,10 +82,19 @@ fn remove_child<'js>(
     host: Rc<RefCell<Host>>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, JsNodeId) -> JsResult<()> {
     move |ctx, JsNodeId(parent_id), JsNodeId(child_id)| {
-        host.borrow_mut()
+        let mut host = host.borrow_mut();
+        let child_of_parent = host
             .tree
+            .get(child_id)
+            .is_some_and(|node| node.parent() == Some(parent_id));
+        host.tree
             .remove_child(parent_id, child_id)
-            .map_err(|err| throw_tree_error(&ctx, err))
+            .map_err(|err| throw_tree_error(&ctx, err))?;
+        if child_of_parent {
+            drop_focus(&mut host, child_id);
+            mark_focus_dirty(&mut host, child_id);
+        }
+        Ok(())
     }
 }
 
@@ -193,6 +210,18 @@ fn refuse_root(ctx: &Ctx<'_>, host: &Host, id: NodeId, verb: &str) -> JsResult<(
         ));
     }
     Ok(())
+}
+
+fn is_attached(host: &Host, node_id: NodeId) -> bool {
+    host.tree
+        .get(node_id)
+        .is_some_and(|node| node.parent().is_some())
+}
+
+/// Called when `removeChild` detaches a node or an insert moves an attached
+/// one. A node that was never attached holds no focus to drop.
+fn drop_focus(host: &mut Host, node_id: NodeId) {
+    host.focus.drop_focus_in(&host.tree, node_id);
 }
 
 /// Queues a focus re-check of the node and its subtree.

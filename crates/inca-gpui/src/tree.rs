@@ -10,6 +10,9 @@
 //! attachment that would make a node its own ancestor is refused, so a walk
 //! down the tree always terminates.
 //!
+//! A root can be declared with [`VirtualTree::set_root`].
+//! [`VirtualTree::is_connected`] then reads the parent chain up to it.
+//!
 //! [`VirtualTree::remove_child`] detaches and keeps the node alive.
 //! [`VirtualTree::destroy_node`] is the only call that frees.
 
@@ -176,12 +179,37 @@ impl std::error::Error for TreeError {}
 pub struct VirtualTree {
     nodes: HashMap<NodeId, VirtualNode>,
     next_id: NodeId,
+    root: Option<NodeId>,
 }
 
 impl VirtualTree {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Declares `id` the root that [`is_connected`](Self::is_connected)
+    /// measures against.
+    pub fn set_root(&mut self, id: NodeId) {
+        self.root = Some(id);
+    }
+
+    /// Whether `id` is the root or its parent chain reaches it. Always true
+    /// while no root is declared. With a root, a destroyed or unknown id is
+    /// not connected.
+    #[must_use]
+    pub fn is_connected(&self, id: NodeId) -> bool {
+        let Some(root) = self.root else {
+            return true;
+        };
+        let mut current = Some(id);
+        while let Some(id) = current {
+            if id == root {
+                return self.nodes.contains_key(&id);
+            }
+            current = self.nodes.get(&id).and_then(|node| node.parent);
+        }
+        false
     }
 
     /// Allocates a new node and returns its id. Ids are assigned

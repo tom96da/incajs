@@ -86,7 +86,12 @@ enum PendingFocus {
 
 /// `NodeId` → its persistent `FocusHandle`, the node focused as of the last
 /// frame this was checked, and every pending request left by a caller that
-/// had no live `Window`/`App`, oldest first. See the module doc for why. Two requests queued before the next frame both apply, in order.
+/// had no live `Window`/`App`, oldest first. See the module doc for why. Two
+/// requests queued before the next frame both apply, in order.
+///
+/// A tree change that takes focus from a node (see
+/// [`FocusRegistry::drop_focus_in`]) owes the window a blur. The next
+/// [`FocusRegistry::apply_pending`] pays it.
 #[derive(Debug, Default)]
 pub struct FocusRegistry {
     handles: HashMap<NodeId, FocusHandle>,
@@ -97,6 +102,9 @@ pub struct FocusRegistry {
     // root container. It maps to no node.
     parked: Option<FocusHandle>,
     pending: VecDeque<PendingFocus>,
+    // The node a tree change took focus from. The next `apply_pending`
+    // releases the window's focus if it still rests on it.
+    blur_owed: Option<NodeId>,
     // The latest focused node waiting to be scrolled into view, and the
     // node found lacking a box that waits for the next frame.
     reveal: Vec<NodeId>,
@@ -224,9 +232,16 @@ impl FocusRegistry {
         !self.handles.is_empty()
     }
 
-    /// The node holding focus in `window` right now.
+    /// The node holding focus in `window` right now. A node whose focus a
+    /// tree change took is not held.
     #[must_use]
     pub fn focused_node(&self, window: &Window, cx: &App) -> Option<NodeId> {
+        self.window_node(window, cx)
+            .filter(|&id| self.blur_owed != Some(id))
+    }
+
+    /// The node whose handle the window focuses, owed blur or not.
+    fn window_node(&self, window: &Window, cx: &App) -> Option<NodeId> {
         window.focused(cx).and_then(|handle| self.node_for(&handle))
     }
 
@@ -273,6 +288,26 @@ impl FocusRegistry {
         }
     }
 
+    /// Takes focus from `node_id` and from every node below it at once. No
+    /// `blur` or `focusout` is reported, and requests to focus those nodes
+    /// are dropped. The window's own focus is released by the next
+    /// [`Self::apply_pending`].
+    pub fn drop_focus_in(&mut self, tree: &VirtualTree, node_id: NodeId) {
+        let inside = |id: NodeId| tree.ancestors(id).any(|ancestor| ancestor == node_id);
+        self.pending.retain(
+            |request| !matches!(request, PendingFocus::Focus { node, .. } if inside(*node)),
+        );
+        self.reveal.retain(|&id| !inside(id));
+        self.retry.retain(|&id| !inside(id));
+        if let Some(held) = self.observed.filter(|&id| inside(id)) {
+            self.observed = None;
+            self.blur_owed = Some(held);
+        }
+        if self.focused.is_some_and(inside) {
+            self.focused = None;
+        }
+    }
+
     /// Records that `node_id`'s `tabindex` may have changed. The next
     /// [`Self::apply_pending`] re-reads it.
     pub fn mark_tab_dirty(&mut self, node_id: NodeId) {
@@ -301,12 +336,15 @@ impl FocusRegistry {
         }
     }
 
-    /// The `tabindex` of `node_id`. A text node, a node that has an ancestor
-    /// (or itself) with `display: none`, `inert` or a hiding `hidden`, and a
-    /// `disabled` button have none. A button whose `tabindex` is missing or
-    /// unparsable has 0.
+    /// The `tabindex` of `node_id`. A node not connected to the tree's root,
+    /// a text node, a node that has an ancestor (or itself) with
+    /// `display: none`, `inert` or a hiding `hidden`, and a `disabled` button
+    /// have none. A button whose `tabindex` is missing or unparsable has 0.
     fn tab_index_of(tree: &VirtualTree, node_id: NodeId) -> Option<i32> {
         let node = tree.get(node_id)?;
+        if !tree.is_connected(node_id) {
+            return None;
+        }
         let hidden = tree
             .ancestors(node_id)
             .filter_map(|id| tree.get(id))
@@ -388,10 +426,26 @@ impl FocusRegistry {
         cx: &mut App,
     ) -> Vec<FocusTransition> {
         let mut transitions = Vec::new();
+        if let Some(owed) = self.blur_owed.take()
+            && self.window_node(window, cx) == Some(owed)
+        {
+            window.blur(cx);
+        }
         for node_id in std::mem::take(&mut self.tab_dirty) {
             match Self::tab_index_of(tree, node_id) {
                 Some(_) => {
                     self.get_or_create(node_id, cx);
+                }
+                None if !tree.is_connected(node_id) => {
+                    // A node that left the tree loses focus without events.
+                    let focused = self
+                        .handles
+                        .get(&node_id)
+                        .is_some_and(|handle| handle.is_focused(window));
+                    if focused {
+                        window.blur(cx);
+                    }
+                    self.forget(node_id);
                 }
                 None => {
                     if let Some(handle) = self.handles.get(&node_id).cloned() {

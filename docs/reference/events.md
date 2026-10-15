@@ -55,7 +55,8 @@ and `returnValue`. The three flags depend on the event:
 - `target` and `currentTarget` are node ids, and `composedPath()` returns node
   ids.
 - `timeStamp` counts milliseconds since the host started.
-- Removing the focused node leaves `blur` and `focusout` unfired.
+- Removing the focused node, or moving it within the tree, leaves `blur` and
+  `focusout` unfired.
 
 ## Mouse
 

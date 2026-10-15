@@ -147,29 +147,23 @@ fn a_node_that_gains_its_box_later_scrolls_on_the_retry_frame(cx: &mut TestAppCo
 }
 
 #[gpui::test]
-fn a_node_that_gets_its_box_after_the_retry_frame_keeps_the_offset(cx: &mut TestAppContext) {
+fn a_scroll_into_view_call_retries_once_and_ignores_a_later_box(cx: &mut TestAppContext) {
     let mut h = revealing(cx, "scroll");
     run_js(
         &mut h,
         r"
         const n = __inca_native__;
-        globalThis.late = n.createNode('div');
-        n.setStyle(late, 'width', 50);
-        n.setStyle(late, 'height', 50);
-        n.setAttribute(late, 'tabindex', '0');
-        n.focusNode(late);
+        globalThis.late = mkItem(box);
+        n.setStyle(late, 'display', 'none');
+        n.scrollIntoViewNode(late, 'start', 'nearest');
         ",
-    );
-    run_js(
-        &mut h,
-        "mkSpacer(box, 300); __inca_native__.appendChild(box, late);",
     );
     h.settle();
     assert_eq!(eval_f64(&h, "top(box)"), 0.0);
-    assert_eq!(
-        eval_f64(&h, "__inca_native__.focusedNode() === late ? 1 : 0"),
-        1.0
-    );
+
+    run_js(&mut h, "__inca_native__.removeStyle(late, 'display');");
+    h.settle();
+    assert_eq!(eval_f64(&h, "top(box)"), 0.0);
 }
 
 #[gpui::test]

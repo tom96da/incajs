@@ -131,6 +131,9 @@ mod tests {
                 const node = n.createNode('div');
                 const other = n.createNode('div');
                 const plain = n.createNode('div');
+                for (const id of [node, other, plain]) {
+                    n.appendChild(n.rootNodeId(), id);
+                }
                 n.setAttribute(node, 'tabindex', 0);
                 n.setAttribute(other, 'tabindex', 0);
                 const before = n.focusedNode() === null;
