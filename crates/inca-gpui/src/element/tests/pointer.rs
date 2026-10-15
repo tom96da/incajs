@@ -253,3 +253,27 @@ fn a_right_press_fires_contextmenu_at_its_target_after_the_mousedown(cx: &mut Te
         ]
     );
 }
+
+/// An inert child never becomes the target, so the listening parent does.
+#[gpui::test]
+fn an_inert_child_is_never_the_event_target(cx: &mut TestAppContext) {
+    let mut tree = VirtualTree::new();
+    let parent = tree.create_node("div").unwrap();
+    let child = tree.create_node("div").unwrap();
+    for (id, side) in [(parent, 200.0), (child, 100.0)] {
+        tree.set_style(id, "width", side).unwrap();
+        tree.set_style(id, "height", side).unwrap();
+    }
+    tree.set_attribute(child, "inert", true).unwrap();
+    tree.append_child(parent, child).unwrap();
+    let probe = probe();
+    let calls = Rc::clone(&probe.calls);
+    let window = cx.add_window(|_, _| ProbeView(tree, probe));
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    let mut cx = VisualTestContext::from_window(window.into(), cx);
+
+    cx.simulate_mouse_move(at(LEAF), None, gpui::Modifiers::none());
+
+    assert_eq!(reports(&calls), [report("mousemove", parent)]);
+}

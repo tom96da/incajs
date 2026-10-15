@@ -495,3 +495,38 @@ fn the_last_focus_request_decides_what_scrolls(cx: &mut TestAppContext) {
         assert_eq!(registry.take_reveals(), (vec![], vec![]));
     });
 }
+
+/// Parking the window focus on the root container reports no transition,
+/// maps to no node and does not flip per frame.
+#[gpui::test]
+fn the_parked_focus_fires_no_focus_event(cx: &mut TestAppContext) {
+    let cx = cx.add_empty_window();
+    let (tree, _root) = tree_with("div", None);
+    let mut registry = FocusRegistry::default();
+    cx.update(|window, cx| {
+        for _ in 0..2 {
+            let transitions = registry.apply_pending(&tree, window, cx);
+            assert!(transitions.is_empty());
+            assert!(window.focused(cx).is_some());
+            assert_eq!(registry.focused_node(window, cx), None);
+        }
+    });
+}
+
+/// A root with `tabindex` takes focus like any node, and the parked focus
+/// leaves it alone.
+#[gpui::test]
+fn a_root_with_tabindex_still_focuses_normally(cx: &mut TestAppContext) {
+    let cx = cx.add_empty_window();
+    let (tree, root) = tree_with("div", Some(AttributeValue::from("0")));
+    let mut registry = FocusRegistry::default();
+    registry.mark_tab_dirty(root);
+    cx.update(|window, cx| {
+        assert!(registry.apply_pending(&tree, window, cx).is_empty());
+        registry.request_focus(root, true);
+        let transitions = registry.apply_pending(&tree, window, cx);
+        assert_eq!(transitions.len(), 1);
+        assert_eq!(registry.focused_node(window, cx), Some(root));
+        assert!(registry.apply_pending(&tree, window, cx).is_empty());
+    });
+}

@@ -1,7 +1,10 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![allow(clippy::unwrap_used)]
+
 use super::*;
+use gpui::AppContext as _;
 
 #[test]
 fn key_name_prefers_a_named_key_over_its_key_char() {
@@ -320,4 +323,35 @@ fn the_hover_path_difference_lists_the_containers_left_and_entered() {
             "{old:?} -> {new:?}"
         );
     }
+}
+
+#[gpui::test]
+fn screen_coordinates_are_the_window_origin_plus_the_client_position(
+    cx: &mut gpui::TestAppContext,
+) {
+    let bounds = gpui::Bounds::new(
+        gpui::point(gpui::px(30.0), gpui::px(40.0)),
+        gpui::size(gpui::px(100.0), gpui::px(100.0)),
+    );
+    let window = cx.update(|cx| {
+        cx.open_window(
+            gpui::WindowOptions {
+                window_bounds: Some(gpui::WindowBounds::Windowed(bounds)),
+                ..Default::default()
+            },
+            |_, cx| cx.new(|_| gpui::Empty),
+        )
+        .unwrap()
+    });
+    let position = gpui::point(gpui::px(12.0), gpui::px(34.0));
+    let payload = EventPayload::Mouse(MousePayload::at(position, gpui::Modifiers::default()));
+
+    let screen = cx
+        .update_window(window.into(), |_, window, _| {
+            mouse_payload(with_screen(payload, window))
+        })
+        .unwrap();
+
+    assert_eq!(screen.screen_x, 42.0);
+    assert_eq!(screen.screen_y, 74.0);
 }

@@ -213,24 +213,3 @@ fn a_stopped_modifier_keydown_skips_the_ancestors(cx: &mut TestAppContext) {
 
     assert_eq!(log(&h), "");
 }
-
-#[gpui::test]
-fn screen_coordinates_are_the_window_origin_plus_the_client_position(cx: &mut TestAppContext) {
-    let mut h = load_listening(cx, TARGETS);
-    run_js(
-        &mut h,
-        r"
-        cb[1] = (e) => {
-        globalThis.log.push(`${e.screenX - e.clientX}:${e.screenY - e.clientY}`); };
-        ",
-    );
-    listen(&mut h, "frame", "click mousemove", 1);
-    let origin = h.cx.update(|window, _| window.bounds().origin);
-    let inner = node(&h, "inner");
-
-    h.click(inner);
-
-    assert!(origin.x > px(0.0) && origin.y > px(0.0), "{origin:?}");
-    let expected = format!("{}:{}", f32::from(origin.x), f32::from(origin.y));
-    assert!(log(&h).ends_with(&expected), "{} vs {expected}", log(&h));
-}

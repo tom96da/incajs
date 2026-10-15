@@ -285,44 +285,6 @@ fn bubbled_mousemove_gives_every_listener_the_same_movement(cx: &mut TestAppCont
     assert_eq!((seen[3].1, seen[3].2), (20.0, -5.0));
 }
 
-/// An inert child never becomes the target, so the listening parent does.
-#[gpui::test]
-fn an_inert_child_is_never_the_event_target(cx: &mut TestAppContext) {
-    let (host, parent) = build_clickable_tree();
-    let child = {
-        let mut host = host.borrow_mut();
-        let child = host.tree.create_node("div").unwrap();
-        host.tree.set_style(child, "width", 100.0).unwrap();
-        host.tree.set_style(child, "height", 100.0).unwrap();
-        host.tree.set_attribute(child, "inert", true).unwrap();
-        host.tree.append_child(parent, child).unwrap();
-        child
-    };
-    let engine = test_support::engine_for(&host);
-    engine
-        .eval::<()>(&format!(
-            r"
-            globalThis.seen = [];
-            const record = (e) => {{ globalThis.seen.push(e.target); }};
-            __inca_test_listen__({parent}, 'mousemove', record);
-            __inca_test_listen__({child}, 'mousemove', record);
-            "
-        ))
-        .unwrap();
-    let mut cx = mount_clickable(cx, &host, &engine, parent);
-
-    cx.simulate_mouse_move(
-        point(px(10.0), px(10.0)),
-        None::<MouseButton>,
-        Modifiers::none(),
-    );
-    cx.run_until_parked();
-
-    let seen: Vec<u32> =
-        serde_json::from_str(&engine.eval::<String>("JSON.stringify(seen)").unwrap()).unwrap();
-    assert_eq!(seen, vec![parent]);
-}
-
 /// A second genuine `mousemove` at the same position reports no movement,
 /// even though the first one at that position did.
 #[gpui::test]

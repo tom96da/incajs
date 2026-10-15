@@ -3,28 +3,6 @@
 
 use super::*;
 
-/// `inca-gpui` only ever produces a `button` index in `0..=4`, but
-/// `update_held_buttons` takes a plain `u8`. A value outside that
-/// range must not panic, only fail to set any bit.
-#[test]
-fn an_out_of_range_button_does_not_panic() {
-    let (dispatcher, _host, _reported) = dispatcher_with_engine();
-    assert_eq!(dispatcher.update_held_buttons("mousedown", 200), 0);
-    assert_eq!(dispatcher.state.held_buttons.get(), 0);
-}
-
-#[test]
-fn a_right_mousedown_sets_the_right_buttons_bit() {
-    let (dispatcher, _host, _reported) = dispatcher_with_engine();
-    assert_eq!(dispatcher.update_held_buttons("mousedown", 2), 0b0_0010);
-}
-
-#[test]
-fn a_middle_mousedown_sets_the_middle_buttons_bit() {
-    let (dispatcher, _host, _reported) = dispatcher_with_engine();
-    assert_eq!(dispatcher.update_held_buttons("mousedown", 1), 0b0_0100);
-}
-
 #[gpui::test]
 fn a_stale_callback_id_is_skipped_rather_than_reported(cx: &mut TestAppContext) {
     let (dispatcher, host, reported) = dispatcher_with_engine();

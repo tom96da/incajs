@@ -192,18 +192,5 @@ fn styled_container(styles: &[(&str, &str)]) -> Host {
     host
 }
 
-/// Three scroll containers, each 100px over 200px of further content: node 0
-/// holds node 1, which holds node 2, which holds node 3 (300px).
-fn triple_containers() -> Host {
-    let mut host = Host::default();
-    let outer = add_div(&mut host, None, 100.0, true);
-    let middle = add_div(&mut host, Some(outer), 100.0, true);
-    let inner = add_div(&mut host, Some(middle), 100.0, true);
-    add_div(&mut host, Some(inner), 300.0, false);
-    add_div(&mut host, Some(middle), 200.0, false);
-    add_div(&mut host, Some(outer), 200.0, false);
-    host
-}
-
 mod events;
 mod wheel;

@@ -19,6 +19,7 @@ use gpui::{Context, Pixels, Point, Render, TestAppContext, VisualTestContext};
 mod layout;
 mod pointer;
 mod records;
+mod scroll;
 mod spec;
 mod style;
 
@@ -173,6 +174,16 @@ fn probe_tree(cx: &mut TestAppContext, tracks: bool) -> Scene {
         calls,
         prevented,
     }
+}
+
+fn boxed(tree: &mut VirtualTree, parent: Option<NodeId>, w: f64, h: f64) -> NodeId {
+    let id = tree.create_node("div").unwrap();
+    tree.set_style(id, "width", w).unwrap();
+    tree.set_style(id, "height", h).unwrap();
+    if let Some(parent) = parent {
+        tree.append_child(parent, id).unwrap();
+    }
+    id
 }
 
 const fn rect(x: f32, y: f32, width: f32, height: f32) -> Rect {

@@ -23,16 +23,6 @@ fn draw(cx: &mut gpui::VisualTestContext, tree: &VirtualTree, probe: &Probe) {
     });
 }
 
-fn boxed(tree: &mut VirtualTree, parent: Option<NodeId>, w: f64, h: f64) -> NodeId {
-    let id = tree.create_node("div").unwrap();
-    tree.set_style(id, "width", w).unwrap();
-    tree.set_style(id, "height", h).unwrap();
-    if let Some(parent) = parent {
-        tree.append_child(parent, id).unwrap();
-    }
-    id
-}
-
 fn rect(x: f32, y: f32, w: f32, h: f32) -> gpui::Bounds<Pixels> {
     gpui::Bounds::new(point(px(x), px(y)), size(px(w), px(h)))
 }
