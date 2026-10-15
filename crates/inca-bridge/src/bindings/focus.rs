@@ -77,8 +77,7 @@ mod tests {
         let node: u32 = engine
             .eval("globalThis.n = __inca_native__.createNode('div')")
             .unwrap();
-        let dirty =
-            |host: &Rc<RefCell<Host>>| std::mem::take(&mut host.borrow_mut().focus.tab_dirty);
+        let dirty = |host: &Rc<RefCell<Host>>| host.borrow_mut().focus.take_tab_dirty();
         assert!(dirty(&host).is_empty());
 
         engine

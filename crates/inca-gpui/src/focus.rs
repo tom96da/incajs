@@ -106,7 +106,7 @@ pub struct FocusRegistry {
     // Set while the window is inactive, after the focused node got its `blur`.
     window_blurred: bool,
     /// Nodes whose `tabindex` changed since the host last took them.
-    pub tab_dirty: HashSet<NodeId>,
+    tab_dirty: HashSet<NodeId>,
 }
 
 /// Parses a `tabindex` value: optional leading ASCII whitespace, an optional
@@ -279,6 +279,12 @@ impl FocusRegistry {
     /// [`Self::apply_pending`] re-reads it.
     pub fn mark_tab_dirty(&mut self, node_id: NodeId) {
         self.tab_dirty.insert(node_id);
+    }
+
+    /// Takes the nodes marked by [`Self::mark_tab_dirty`] and its subtree form.
+    #[cfg(feature = "test-support")]
+    pub fn take_tab_dirty(&mut self) -> HashSet<NodeId> {
+        std::mem::take(&mut self.tab_dirty)
     }
 
     /// Like [`Self::mark_tab_dirty`] for `node_id` and its descendants that
