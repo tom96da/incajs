@@ -10,6 +10,10 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Fixed
+
+- the type declarations of `@incajs/cli` resolve again from the paths `package.json` names ([3a00f91](https://github.com/tom96da/incajs/commit/3a00f91))
+
 ## [0.0.16] - 2026-10-13
 
 ### Added
