@@ -2817,6 +2817,7 @@ dependencies = [
  "inca-bridge",
  "inca-gpui",
  "inca-jsenv",
+ "inca-test-macros",
  "rquickjs",
  "rstest",
  "serde_json",
@@ -2829,6 +2830,7 @@ dependencies = [
  "env_logger",
  "gpui",
  "gpui_platform",
+ "inca-test-macros",
  "rstest",
 ]
 

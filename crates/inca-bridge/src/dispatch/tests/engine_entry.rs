@@ -4,6 +4,7 @@
 #![allow(clippy::unwrap_used)]
 
 use super::*;
+use inca_test_macros::gpui_cases;
 
 #[gpui::test]
 fn only_a_listener_the_event_reaches_enters_the_engine(cx: &mut TestAppContext) {
@@ -267,8 +268,17 @@ fn key_payload(modifiers: gpui::Modifiers) -> EventPayload {
     })
 }
 
+#[gpui_cases]
 #[gpui::test]
-fn modifier_state_reports_each_held_modifier_and_no_lock(cx: &mut TestAppContext) {
+#[case::control_held(gpui::Modifiers::control())]
+#[case::shift_held(gpui::Modifiers::shift())]
+#[case::alt_held(gpui::Modifiers::alt())]
+#[case::command_held(gpui::Modifiers::command())]
+#[case::none_held(gpui::Modifiers::default())]
+fn modifier_state_reports_each_held_modifier_and_no_lock(
+    cx: &mut TestAppContext,
+    held: gpui::Modifiers,
+) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
     listen(
@@ -286,34 +296,18 @@ fn modifier_state_reports_each_held_modifier_and_no_lock(cx: &mut TestAppContext
             control
         }
     };
-    let mut mismatches = Vec::new();
-    for (index, held) in [
-        gpui::Modifiers::control(),
-        gpui::Modifiers::shift(),
-        gpui::Modifiers::alt(),
-        gpui::Modifiers::command(),
-        gpui::Modifiers::default(),
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        let flags = [held.control, held.shift, held.alt, held.platform];
-        let out = fire_and_read(cx, &dispatcher, node, "keydown", &key_payload(held));
-        let want = serde_json::json!([[
-            flags[0],
-            flags[1],
-            flags[2],
-            flags[3],
-            accel(flags),
-            false,
-            false
-        ]]);
-        if out != want {
-            mismatches.push(format!("{index}: {out}"));
-        }
-        dispatcher.engine.eval::<()>("out.length = 0;").unwrap();
-    }
-    assert!(mismatches.is_empty(), "{mismatches:?}");
+    let flags = [held.control, held.shift, held.alt, held.platform];
+    let out = fire_and_read(cx, &dispatcher, node, "keydown", &key_payload(held));
+    let want = serde_json::json!([[
+        flags[0],
+        flags[1],
+        flags[2],
+        flags[3],
+        accel(flags),
+        false,
+        false
+    ]]);
+    assert_eq!(out, want);
 }
 
 #[gpui::test]

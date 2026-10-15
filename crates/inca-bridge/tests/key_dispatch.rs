@@ -17,6 +17,7 @@ use gpui::{
 use inca_bridge::{EventListeners, Host};
 use inca_gpui::NodeId;
 use inca_jsenv::Engine;
+use inca_test_macros::gpui_cases;
 
 use inca_bridge::test_support;
 
@@ -139,31 +140,43 @@ fn seen(engine: &Engine) -> String {
         .unwrap()
 }
 
+#[gpui_cases]
 #[gpui::test]
-fn a_canceled_key_event_is_reported_to_the_platform_as_handled(cx: &mut TestAppContext) {
+#[case::key_down(false, r#"["keydown","keydown"]"#)]
+#[case::key_up(true, r#"["keyup","keyup"]"#)]
+fn a_canceled_key_event_is_reported_to_the_platform_as_handled(
+    cx: &mut TestAppContext,
+    up: bool,
+    expected_seen: &str,
+) {
     let (window, engine, _host, _) = focused_pair(cx, "seen.push(e.type); e.preventDefault();");
 
-    for up in [false, true] {
-        let result = platform_result(cx, window, up, "a");
-        assert!(!result.propagate, "up: {up}");
-        assert!(result.default_prevented, "up: {up}");
-    }
+    let result = platform_result(cx, window, up, "a");
+
+    assert!(!result.propagate);
+    assert!(result.default_prevented);
     assert_eq!(
         seen(&engine),
-        r#"["keydown","keydown","keyup","keyup"]"#,
+        expected_seen,
         "the listeners of both nodes ran before the key was reported handled"
     );
 }
 
+#[gpui_cases]
 #[gpui::test]
-fn a_stopped_key_event_is_reported_to_the_platform_as_unhandled(cx: &mut TestAppContext) {
+#[case::key_down(false, r#"["keydown"]"#)]
+#[case::key_up(true, r#"["keyup"]"#)]
+fn a_stopped_key_event_is_reported_to_the_platform_as_unhandled(
+    cx: &mut TestAppContext,
+    up: bool,
+    expected_seen: &str,
+) {
     let (window, engine, _host, _) = focused_pair(cx, "seen.push(e.type); e.stopPropagation();");
 
-    for up in [false, true] {
-        let result = platform_result(cx, window, up, "a");
-        assert!(result.propagate && !result.default_prevented, "up: {up}");
-    }
-    assert_eq!(seen(&engine), r#"["keydown","keyup"]"#);
+    let result = platform_result(cx, window, up, "a");
+
+    assert!(result.propagate && !result.default_prevented);
+    assert_eq!(seen(&engine), expected_seen);
 }
 
 #[gpui::test]
@@ -179,18 +192,24 @@ fn a_key_event_nobody_listens_for_is_reported_to_the_platform_as_unhandled(
     assert_eq!(seen(&engine), "[]");
 }
 
+#[gpui_cases]
 #[gpui::test]
-fn a_passive_key_listener_leaves_the_platform_result_untouched(cx: &mut TestAppContext) {
+#[case::key_down(false, r#"["keydown","keydown"]"#)]
+#[case::key_up(true, r#"["keyup","keyup"]"#)]
+fn a_passive_key_listener_leaves_the_platform_result_untouched(
+    cx: &mut TestAppContext,
+    up: bool,
+    expected_seen: &str,
+) {
     let js = "seen.push(e.type); e.preventDefault();";
     let (window, engine, host, nodes) = focused_pair(cx, js);
     host.borrow_mut().listeners = EventListeners::default();
     listen_for_keys(&engine, nodes, js, true);
 
-    for up in [false, true] {
-        let result = platform_result(cx, window, up, "a");
-        assert!(result.propagate && !result.default_prevented, "up: {up}");
-    }
-    assert_eq!(seen(&engine), r#"["keydown","keydown","keyup","keyup"]"#);
+    let result = platform_result(cx, window, up, "a");
+
+    assert!(result.propagate && !result.default_prevented);
+    assert_eq!(seen(&engine), expected_seen);
 }
 
 #[gpui::test]

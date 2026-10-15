@@ -4,6 +4,7 @@
 #![allow(clippy::unwrap_used)]
 
 use super::{num as n, text as s, *};
+use inca_test_macros::gpui_cases;
 
 use gpui::{
     Context, Pixels, Point, Render, ScrollDelta, ScrollWheelEvent, TestAppContext,
@@ -348,23 +349,29 @@ fn a_hidden_container_ignores_the_wheel_and_takes_a_script_offset(cx: &mut TestA
     );
 }
 
+#[gpui_cases]
 #[gpui::test]
-fn a_fractional_scroll_offset_is_snapped_to_the_device_pixel(cx: &mut TestAppContext) {
+#[case::below_half(-50.4, -50.5)]
+#[case::quarter(-50.25, -50.)]
+#[case::three_quarters(-50.75, -50.5)]
+fn a_fractional_scroll_offset_is_snapped_to_the_device_pixel(
+    cx: &mut TestAppContext,
+    offset: f32,
+    drawn: f32,
+) {
     let mut tree = VirtualTree::new();
     let root = boxed(&mut tree, None, 100., 100.);
     tree.set_style(root, "overflow_y", "scroll").unwrap();
     let child = boxed(&mut tree, Some(root), 100., 300.);
     let (probe, window) = mounted(cx, tree);
     // The test window has a scale factor of 2, so the grid is 0.5px.
-    for (offset, drawn) in [(-50.4, -50.5), (-50.25, -50.), (-50.75, -50.5)] {
-        frame(cx, window);
-        probe.handles.borrow()[&root].set_offset(point(px(0.), px(offset)));
-        frame(cx, window);
-        assert_eq!(
-            probe.layouts.borrow()[&child].bounds,
-            rect(0., drawn, 100., 300.)
-        );
-    }
+    frame(cx, window);
+    probe.handles.borrow()[&root].set_offset(point(px(0.), px(offset)));
+    frame(cx, window);
+    assert_eq!(
+        probe.layouts.borrow()[&child].bounds,
+        rect(0., drawn, 100., 300.)
+    );
 }
 
 /// Draws an outer and an inner scroll container at `scale`, scrolled
@@ -414,23 +421,28 @@ fn a_record_carries_the_snapped_scroll_its_parent_applied(cx: &mut TestAppContex
     assert_eq!(layouts[&leaf].scroll, point(px(0.), px(10.)));
 }
 
+#[gpui_cases]
 #[gpui::test]
-fn a_fractional_scroll_offset_snaps_to_whole_pixels_at_scale_one(cx: &mut TestAppContext) {
+#[case::rounds_down(-50.4, -50.)]
+#[case::rounds_up(-50.6, -51.)]
+fn a_fractional_scroll_offset_snaps_to_whole_pixels_at_scale_one(
+    cx: &mut TestAppContext,
+    offset: f32,
+    drawn: f32,
+) {
     let mut tree = VirtualTree::new();
     let root = boxed(&mut tree, None, 100., 100.);
     tree.set_style(root, "overflow_y", "scroll").unwrap();
     let child = boxed(&mut tree, Some(root), 100., 300.);
     let (probe, window) = mounted(cx, tree);
     cx.simulate_window_scale_factor_change(window, 1.);
-    for (offset, drawn) in [(-50.4, -50.), (-50.6, -51.)] {
-        frame(cx, window);
-        probe.handles.borrow()[&root].set_offset(point(px(0.), px(offset)));
-        frame(cx, window);
-        assert_eq!(
-            probe.layouts.borrow()[&child].bounds,
-            rect(0., drawn, 100., 300.)
-        );
-    }
+    frame(cx, window);
+    probe.handles.borrow()[&root].set_offset(point(px(0.), px(offset)));
+    frame(cx, window);
+    assert_eq!(
+        probe.layouts.borrow()[&child].bounds,
+        rect(0., drawn, 100., 300.)
+    );
 }
 
 #[gpui::test]

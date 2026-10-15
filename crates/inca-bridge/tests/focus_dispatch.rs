@@ -15,6 +15,7 @@ use gpui::{TestAppContext, prelude::*};
 use inca_bridge::Host;
 use inca_gpui::NodeId;
 use inca_jsenv::Engine;
+use inca_test_macros::gpui_cases;
 
 use inca_bridge::test_support;
 
@@ -198,41 +199,45 @@ fn focus_on_an_unknown_node_leaves_no_handle(cx: &mut TestAppContext) {
 
 /// `blurNode(id)` blurs only when `id` is the focused node: another node's
 /// id, or an unknown one, leaves focus alone.
+#[gpui_cases]
 #[gpui::test]
-fn blur_node_of_a_node_that_is_not_focused_is_a_no_op(cx: &mut TestAppContext) {
-    for other in [Some(1), None] {
-        let (host, parent, a) = build_focusable_pair();
-        let other_id = other.map_or(999, |i| {
-            host.borrow().tree.get(parent).unwrap().children()[i]
-        });
-        let engine = test_support::engine_for(&host);
-        install_focus_recorder(&engine, &host, parent);
-        let window = test_support::mount_active(cx, &host, &engine, parent);
-        cx.update_window(window.into(), |_root, window, cx| {
-            host.borrow_mut().focus.request_focus(a, true);
-            window.draw(cx).clear(cx);
+#[case::another_node(Some(1))]
+#[case::unknown_node(None)]
+fn blur_node_of_a_node_that_is_not_focused_is_a_no_op(
+    cx: &mut TestAppContext,
+    other: Option<usize>,
+) {
+    let (host, parent, a) = build_focusable_pair();
+    let other_id = other.map_or(999, |i| {
+        host.borrow().tree.get(parent).unwrap().children()[i]
+    });
+    let engine = test_support::engine_for(&host);
+    install_focus_recorder(&engine, &host, parent);
+    let window = test_support::mount_active(cx, &host, &engine, parent);
+    cx.update_window(window.into(), |_root, window, cx| {
+        host.borrow_mut().focus.request_focus(a, true);
+        window.draw(cx).clear(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    engine.eval::<()>("globalThis.seen = [];").unwrap();
+
+    cx.update_window(window.into(), |_root, window, cx| {
+        host.borrow_mut().focus.request_blur(other_id);
+        window.draw(cx).clear(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+
+    let seen = engine.eval::<String>("JSON.stringify(seen)").unwrap();
+    assert_eq!(seen, "[]", "blur of {other_id} must not blur {a}");
+    let still_focused = cx
+        .update_window(window.into(), |_, window, cx| {
+            host.borrow().focus.handle(a).unwrap().is_focused(window)
+                && window.focused(cx).is_some()
         })
         .unwrap();
-        cx.run_until_parked();
-        engine.eval::<()>("globalThis.seen = [];").unwrap();
-
-        cx.update_window(window.into(), |_root, window, cx| {
-            host.borrow_mut().focus.request_blur(other_id);
-            window.draw(cx).clear(cx);
-        })
-        .unwrap();
-        cx.run_until_parked();
-
-        let seen = engine.eval::<String>("JSON.stringify(seen)").unwrap();
-        assert_eq!(seen, "[]", "blur of {other_id} must not blur {a}");
-        let still_focused = cx
-            .update_window(window.into(), |_, window, cx| {
-                host.borrow().focus.handle(a).unwrap().is_focused(window)
-                    && window.focused(cx).is_some()
-            })
-            .unwrap();
-        assert!(still_focused);
-    }
+    assert!(still_focused);
 }
 
 #[gpui::test]

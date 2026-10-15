@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::*;
+use inca_test_macros::gpui_cases;
 
 #[gpui::test]
 fn mouseup_runs_its_whole_path_before_click(cx: &mut TestAppContext) {
@@ -76,19 +77,17 @@ fn press_and_release(
     });
 }
 
+#[gpui_cases]
 #[gpui::test]
-fn another_button_releases_as_auxclick_and_not_click(cx: &mut TestAppContext) {
+#[case::right_button(MouseButton::Right)]
+#[case::middle_button(MouseButton::Middle)]
+fn another_button_releases_as_auxclick_and_not_click(cx: &mut TestAppContext, button: MouseButton) {
     let (mut cx, engine, parent, child) = mount_click_recorder(cx, &["click", "auxclick"]);
 
-    for button in [MouseButton::Right, MouseButton::Middle] {
-        press_and_release(&mut cx, (button, 1), (button, 1));
-    }
+    press_and_release(&mut cx, (button, 1), (button, 1));
 
     let aux = |target| ("auxclick".to_owned(), child, target, 1, Some(1));
-    assert_eq!(
-        take_clicks(&engine),
-        [aux(child), aux(parent), aux(child), aux(parent)]
-    );
+    assert_eq!(take_clicks(&engine), [aux(child), aux(parent)]);
 }
 
 #[gpui::test]

@@ -29,6 +29,7 @@ gpui.workspace = true
 
 [dev-dependencies]
 rstest.workspace = true
+inca-test-macros = { path = "../inca-test-macros" }
 env_logger.workspace = true
 # test-support gates gpui's TestPlatform/TestAppContext/#[gpui::test]. See
 # third_party/zed/crates/gpui/src/gpui.rs's `cfg(any(test, feature =

@@ -4,7 +4,7 @@
 #![allow(clippy::unwrap_used)]
 
 use super::*;
-use crate::test_support::callback_ids;
+use inca_test_macros::gpui_cases;
 /// `inca-gpui` only ever produces a `button` index in `0..=4`, but
 /// `update_held_buttons` takes a plain `u8`. A value outside that
 /// range must not panic, only fail to set any bit.
@@ -170,13 +170,47 @@ fn time_stamp_counts_milliseconds_from_the_host_start_and_grows(cx: &mut TestApp
     assert!(stamps.windows(2).all(|w| w[1] >= w[0]), "{stamps:?}");
 }
 
+#[gpui_cases]
 #[gpui::test]
-fn the_legacy_members_follow_the_event_state(cx: &mut TestAppContext) {
+#[case::phase_constants(
+    "[e.NONE, e.CAPTURING_PHASE, e.AT_TARGET, e.BUBBLING_PHASE].join()",
+    "0,1,2,3"
+)]
+#[case::src_element_is_target("e.srcElement === e.target", "true")]
+#[case::cancel_bubble_read_back(
+    "[e.cancelBubble, (e.cancelBubble = true, e.cancelBubble)].join()",
+    "false,true"
+)]
+#[case::cancel_bubble_false("(e.cancelBubble = false, e.cancelBubble)", "false")]
+#[case::cancel_bubble_truthy_number("(e.cancelBubble = 1, e.cancelBubble)", "true")]
+#[case::cancel_bubble_empty_string("(e.cancelBubble = '', e.cancelBubble)", "false")]
+#[case::return_value_false_prevents(
+    "[e.returnValue, (e.returnValue = false, e.returnValue), e.defaultPrevented].join()",
+    "true,false,true"
+)]
+#[case::return_value_true_not_prevented("(e.returnValue = true, e.defaultPrevented)", "false")]
+#[case::return_value_zero_prevents("(e.returnValue = 0, e.defaultPrevented)", "true")]
+#[case::return_value_string_not_prevented("(e.returnValue = 'no', e.defaultPrevented)", "false")]
+#[case::prevent_default_sets_both(
+    "(e.preventDefault(), [e.defaultPrevented, e.returnValue].join())",
+    "true,false"
+)]
+#[case::detached_prevent_default_throws(
+    "(() => { const p = e.preventDefault; try { p(); } catch (err) { return `${err instanceof TypeError}:${e.defaultPrevented}`; } return 'ran'; })()",
+    "true:false"
+)]
+#[case::default_prevented_is_read_only(
+    "(e.preventDefault(), (() => { try { e.defaultPrevented = false; } catch {} return e.defaultPrevented; })())",
+    "true"
+)]
+fn the_legacy_members_follow_the_event_state(cx: &mut TestAppContext, expr: &str, want: &str) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
     dispatcher
         .engine
-        .eval::<()>("globalThis.probe = () => ''; globalThis.out = '';")
+        .eval::<()>(&format!(
+            "globalThis.out = ''; globalThis.probe = (e) => {expr};"
+        ))
         .unwrap();
     listen(
         &dispatcher,
@@ -184,58 +218,12 @@ fn the_legacy_members_follow_the_event_state(cx: &mut TestAppContext) {
         "click",
         "(e) => { globalThis.out = String(globalThis.probe(e)); }",
     );
-    // Each entry runs in its own dispatch and reports one string.
-    let probes = [
-        (
-            "[e.NONE, e.CAPTURING_PHASE, e.AT_TARGET, e.BUBBLING_PHASE].join()",
-            "0,1,2,3",
-        ),
-        ("e.srcElement === e.target", "true"),
-        (
-            "[e.cancelBubble, (e.cancelBubble = true, e.cancelBubble)].join()",
-            "false,true",
-        ),
-        ("(e.cancelBubble = false, e.cancelBubble)", "false"),
-        ("(e.cancelBubble = 1, e.cancelBubble)", "true"),
-        ("(e.cancelBubble = '', e.cancelBubble)", "false"),
-        (
-            "[e.returnValue, (e.returnValue = false, e.returnValue), e.defaultPrevented].join()",
-            "true,false,true",
-        ),
-        ("(e.returnValue = true, e.defaultPrevented)", "false"),
-        ("(e.returnValue = 0, e.defaultPrevented)", "true"),
-        ("(e.returnValue = 'no', e.defaultPrevented)", "false"),
-        (
-            "(e.preventDefault(), [e.defaultPrevented, e.returnValue].join())",
-            "true,false",
-        ),
-        (
-            "(() => { const p = e.preventDefault; try { p(); } catch (err) { return `${err instanceof TypeError}:${e.defaultPrevented}`; } return 'ran'; })()",
-            "true:false",
-        ),
-        (
-            "(e.preventDefault(), (() => { try { e.defaultPrevented = false; } catch {} return e.defaultPrevented; })())",
-            "true",
-        ),
-    ];
     let cx = cx.add_empty_window();
-    let mut mismatches = Vec::new();
-    for (expr, want) in probes {
-        dispatcher
-            .engine
-            .eval::<()>(&format!(
-                "globalThis.out = ''; globalThis.probe = (e) => {expr};"
-            ))
-            .unwrap();
-        cx.update(|window, cx| {
-            dispatcher.fire(node, "click", &EventPayload::None, window, cx);
-        });
-        let got = dispatcher.engine.eval::<String>("globalThis.out").unwrap();
-        if got != want {
-            mismatches.push(format!("{expr}: {got} (want {want})"));
-        }
-    }
-    assert!(mismatches.is_empty(), "{mismatches:#?}");
+    cx.update(|window, cx| {
+        dispatcher.fire(node, "click", &EventPayload::None, window, cx);
+    });
+    let got = dispatcher.engine.eval::<String>("globalThis.out").unwrap();
+    assert_eq!(got, want, "{expr}");
 }
 
 #[gpui::test]
@@ -356,11 +344,59 @@ fn a_target_gone_from_the_tree_falls_back_to_the_current_target() {
     assert_eq!(dispatcher.resolve(None, parent), parent);
 }
 
+fn plain_mouse() -> MousePayload {
+    MousePayload::at(at(7.0, 9.0), gpui::Modifiers::none())
+}
+
+fn pointer_payload(source: PointerSource) -> EventPayload {
+    EventPayload::Mouse(MousePayload {
+        pointer: Some(source),
+        ..plain_mouse()
+    })
+}
+
+fn wheel_payload() -> EventPayload {
+    EventPayload::Wheel(WheelPayload {
+        mouse: plain_mouse(),
+        delta_x: 0.0,
+        delta_y: 0.0,
+        delta_z: 0.0,
+        delta_mode: 0,
+    })
+}
+
 /// Every mouse-shaped event carries the `x`/`y` aliases and a null
 /// `relatedTarget`. A payload with a pointer source adds the pointer
 /// fields.
+#[gpui_cases]
 #[gpui::test]
-fn mouse_events_carry_the_aliases_and_the_pointer_fields_of_their_type(cx: &mut TestAppContext) {
+#[case::click_from_keyboard("click", pointer_payload(PointerSource::Keyboard), "-1::false:1:1:0")]
+#[case::wheel_is_blank("wheel", wheel_payload(), ":::::")]
+#[case::click_from_mouse("click", pointer_payload(PointerSource::Mouse), "1:mouse:true:1:1:0")]
+#[case::auxclick_from_mouse(
+    "auxclick",
+    pointer_payload(PointerSource::Mouse),
+    "1:mouse:true:1:1:0"
+)]
+#[case::contextmenu_from_mouse(
+    "contextmenu",
+    pointer_payload(PointerSource::Mouse),
+    "1:mouse:true:1:1:0"
+)]
+#[case::mousedown_without_a_source("mousedown", EventPayload::Mouse(plain_mouse()), ":::::")]
+#[case::mouseup_without_a_source("mouseup", EventPayload::Mouse(plain_mouse()), ":::::")]
+#[case::mousemove_without_a_source("mousemove", EventPayload::Mouse(plain_mouse()), ":::::")]
+#[case::mouseenter_without_a_source("mouseenter", EventPayload::Mouse(plain_mouse()), ":::::")]
+#[case::mouseleave_without_a_source("mouseleave", EventPayload::Mouse(plain_mouse()), ":::::")]
+#[case::mouseover_without_a_source("mouseover", EventPayload::Mouse(plain_mouse()), ":::::")]
+#[case::mouseout_without_a_source("mouseout", EventPayload::Mouse(plain_mouse()), ":::::")]
+#[case::dblclick_without_a_source("dblclick", EventPayload::Mouse(plain_mouse()), ":::::")]
+fn mouse_events_carry_the_aliases_and_the_pointer_fields_of_their_type(
+    cx: &mut TestAppContext,
+    event: &str,
+    payload: EventPayload,
+    fields: &str,
+) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
     dispatcher
@@ -374,55 +410,11 @@ fn mouse_events_carry_the_aliases_and_the_pointer_fields_of_their_type(cx: &mut 
             ",
         )
         .unwrap();
+    listen(&dispatcher, node, event, "fields");
     let cx = cx.add_empty_window();
-    let plain = || MousePayload::at(at(7.0, 9.0), gpui::Modifiers::none());
-    let pointer = |source| MousePayload {
-        pointer: Some(source),
-        ..plain()
-    };
-    let wheel = WheelPayload {
-        mouse: plain(),
-        delta_x: 0.0,
-        delta_y: 0.0,
-        delta_z: 0.0,
-        delta_mode: 0,
-    };
-    let blank = ":::::";
-    let mut cases = vec![
-        (
-            "click",
-            EventPayload::Mouse(pointer(PointerSource::Keyboard)),
-            "-1::false:1:1:0",
-        ),
-        ("wheel", EventPayload::Wheel(wheel), blank),
-    ];
-    for event in ["click", "auxclick", "contextmenu"] {
-        let payload = EventPayload::Mouse(pointer(PointerSource::Mouse));
-        cases.push((event, payload, "1:mouse:true:1:1:0"));
-    }
-    for event in [
-        "mousedown",
-        "mouseup",
-        "mousemove",
-        "mouseenter",
-        "mouseleave",
-        "mouseover",
-        "mouseout",
-        "dblclick",
-    ] {
-        cases.push((event, EventPayload::Mouse(plain()), blank));
-    }
-    let mut mismatches = Vec::new();
-    for (event, payload, fields) in cases {
-        if callback_ids(&host.borrow().listeners, node, event).is_empty() {
-            listen(&dispatcher, node, event, "fields");
-        }
-        cx.update(|window, cx| dispatcher.fire(node, event, &payload, window, cx));
-        let want = format!("{event}:true:true:{fields}");
-        let got = seen(&dispatcher);
-        if got != serde_json::json!([want]) {
-            mismatches.push(format!("{event}: {got:?} != {want}"));
-        }
-    }
-    assert!(mismatches.is_empty(), "{mismatches:?}");
+
+    cx.update(|window, cx| dispatcher.fire(node, event, &payload, window, cx));
+
+    let want = format!("{event}:true:true:{fields}");
+    assert_eq!(seen(&dispatcher), serde_json::json!([want]));
 }

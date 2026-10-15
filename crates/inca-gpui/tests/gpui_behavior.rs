@@ -17,6 +17,7 @@ use gpui::{
     Point, ScrollDelta, ScrollHandle, ScrollWheelEvent, TestAppContext, VisualTestContext, Window,
     canvas, div, point, px,
 };
+use inca_test_macros::gpui_cases;
 
 type Log = Rc<RefCell<Vec<String>>>;
 
@@ -427,24 +428,30 @@ const KEY_ORDER: [&str; 4] = [
     "bubble root",
 ];
 
+#[gpui_cases]
 #[gpui::test]
+#[case::key_down(false)]
+#[case::key_up(true)]
 fn gpui_runs_capture_key_listeners_from_the_root_down_before_the_bubble_ones(
     cx: &mut TestAppContext,
+    up: bool,
 ) {
     let log = Log::default();
     let mut cx = key_scene(cx, &log, |root| root);
 
-    for up in [false, true] {
-        let result = key_event(&mut cx, up, "x");
+    let result = key_event(&mut cx, up, "x");
 
-        assert_eq!(taken(&log), KEY_ORDER, "up: {up}");
-        assert!(result.propagate && !result.default_prevented, "up: {up}");
-    }
+    assert_eq!(taken(&log), KEY_ORDER);
+    assert!(result.propagate && !result.default_prevented);
 }
 
+#[gpui_cases]
 #[gpui::test]
+#[case::key_down(false)]
+#[case::key_up(true)]
 fn gpui_stops_later_key_listeners_and_reports_no_propagation_after_a_capture_stop(
     cx: &mut TestAppContext,
+    up: bool,
 ) {
     let log = Log::default();
     let mut cx = key_scene(cx, &log, |root| {
@@ -452,17 +459,19 @@ fn gpui_stops_later_key_listeners_and_reports_no_propagation_after_a_capture_sto
             .capture_key_up(|_, _, cx| cx.stop_propagation())
     });
 
-    for up in [false, true] {
-        let result = key_event(&mut cx, up, "x");
+    let result = key_event(&mut cx, up, "x");
 
-        assert_eq!(taken(&log), ["capture root"], "up: {up}");
-        assert!(!result.propagate && !result.default_prevented, "up: {up}");
-    }
+    assert_eq!(taken(&log), ["capture root"]);
+    assert!(!result.propagate && !result.default_prevented);
 }
 
+#[gpui_cases]
 #[gpui::test]
+#[case::key_down(false)]
+#[case::key_up(true)]
 fn gpui_reports_a_key_as_default_prevented_when_a_capture_key_listener_prevents_it(
     cx: &mut TestAppContext,
+    up: bool,
 ) {
     let log = Log::default();
     let mut cx = key_scene(cx, &log, |root| {
@@ -470,12 +479,10 @@ fn gpui_reports_a_key_as_default_prevented_when_a_capture_key_listener_prevents_
             .capture_key_up(|_, window, _| window.prevent_default())
     });
 
-    for up in [false, true] {
-        let result = key_event(&mut cx, up, "x");
+    let result = key_event(&mut cx, up, "x");
 
-        assert_eq!(taken(&log), KEY_ORDER, "up: {up}");
-        assert!(result.propagate && result.default_prevented, "up: {up}");
-    }
+    assert_eq!(taken(&log), KEY_ORDER);
+    assert!(result.propagate && result.default_prevented);
 }
 
 #[gpui::test]

@@ -30,6 +30,7 @@ test-support = ["gpui/test-support"]
 
 [dev-dependencies]
 rstest.workspace = true
+inca-test-macros = { path = "../inca-test-macros" }
 env_logger.workspace = true
 # Enables this crate's own `test-support` feature for its tests and clippy.
 inca-bridge = { path = ".", features = ["test-support"] }
