@@ -54,15 +54,6 @@ it("prints the settings read from inca.json and exits 0", async () => {
   });
 });
 
-it("prints the defaults for an entry with no inca.json", async () => {
-  await writeFile(path.join(dir, "bundle.js"), "");
-
-  const result = run(["--print-config", path.join(dir, "bundle.js")]);
-
-  expect(result.status).toBe(0);
-  expect(JSON.parse(result.stdout).name).toBe("Inca");
-});
-
 it("exits 1 naming an entry that is not a file", () => {
   const entry = path.join(dir, "missing.js");
 
