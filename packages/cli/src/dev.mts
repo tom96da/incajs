@@ -258,7 +258,7 @@ export async function dev(options: DevOptions): Promise<void> {
       try {
         await next.start();
       } catch (error) {
-        printFault(stderr, "failed to start inca-host", toFault(error), STAMPED);
+        printFault(stderr, "failed to start the host", toFault(error), STAMPED);
         return;
       }
       client = next;

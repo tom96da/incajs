@@ -16,8 +16,8 @@ export type NodeId = number;
 export type CallbackId = number;
 
 /**
- * A value `setAttribute`/`setStyle` can take. Anything else raises a catchable
- * exception rather than being silently coerced.
+ * A value `setAttribute`/`setStyle` can take. Any other value raises a catchable
+ * exception.
  */
 export type AttributeValue = string | number | boolean;
 
@@ -38,7 +38,7 @@ export type ScrollAlignment = "start" | "center" | "end" | "nearest";
  * overload checks. A deliberately incomplete, v1 layout/paint vocabulary. The
  * renderer also reads the camelCase and kebab-case spellings. An unrecognized
  * key or a value shape that doesn't parse (e.g. a malformed enum string) is
- * ignored by the renderer rather than applied or thrown.
+ * ignored by the renderer.
  */
 export interface StyleProps {
   /** Layout mode for this node's children. `"none"` skips both layout and rendering for the whole subtree. */

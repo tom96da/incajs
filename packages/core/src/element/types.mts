@@ -8,12 +8,8 @@ import type { ScrollIntoViewOptions, ScrollOptions } from "./scroll.mts";
 /**
  * A container node: either a real element or the hidden stand-in that
  * `createCommentNode` makes. It is the only node type that can act as a
- * parent.
- *
- * `inca`'s native tree has no parent pointers and no way to list a
- * node's children, so `parent`/`children` are maintained here as a
- * JS-side shadow of the tree, kept in sync by `insert` and
- * `remove`.
+ * parent. `parent` and `children` read the node's current position in the
+ * tree.
  *
  * After the node is removed, `addEventListener()` and `removeEventListener()`
  * ignore the call, and `dispatchEvent()` returns `true`.
@@ -25,9 +21,8 @@ export interface IncaElement extends IncaEventTarget {
    */
   readonly id: NodeId;
   /**
-   * `"comment"` for the hidden stand-in `createCommentNode`
-   * makes; `"element"` for every other container. Purely
-   * informational: both render identically once created.
+   * `"comment"` for the hidden stand-in `createCommentNode` makes;
+   * `"element"` for every other container.
    */
   readonly kind: "element" | "comment";
   /** The current parent, or `null` if this node isn't attached to the tree. */

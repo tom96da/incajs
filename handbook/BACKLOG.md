@@ -273,8 +273,8 @@ A fixed entry is deleted and its ID is never reused.
   `PendingModule` in `engine.rs` keeps a `Persistent<Promise>` while the
   top-level `await` of a module is pending. Rust keeps ids and plain data,
   and a handle kept past the call that produced it outlives its context
-  (listener ids are the model, see ARCHITECTURE.md). A fix keeps the promise
-  in JS and gives Rust an id.
+  (listener ids are the model, see FFI.md "JS values stay in JS"). A fix
+  keeps the promise in JS and gives Rust an id.
 
 - **B-189 The event store holds JS values in Rust**
   `Units: bridge · Size: M · Impact: Medium`
@@ -532,7 +532,7 @@ A fixed entry is deleted and its ID is never reused.
 
   `dev()` stops right away when no host binary resolves or the path is not a
   file. `startHost` handles every other start failure. Without HMR it prints
-  "failed to start inca-host", keeps running and retries on the next rebuild.
+  "failed to start the host", keeps running and retries on the next rebuild.
   With HMR it stops.
 
   A file that exists but is not executable passes `assertHostBin` and takes
@@ -1247,3 +1247,13 @@ A fixed entry is deleted and its ID is never reused.
   `expand` rebuilds the case function from its name, parameters, return type
   and body only. `async`, `unsafe`, generics, lifetimes and a `where` clause
   are lost, so such a test fails to compile. The README does not say so.
+
+- **B-197 The panic hook can hang behind a blocked stdout writer**
+  `Units: host · Size: S · Impact: Low`
+
+  The `StdoutWriter` thread holds the stdout lock while it writes a line. A
+  parent that stops reading a full stdout pipe blocks that write, and the
+  panic hook of any other thread then waits for the same lock. The panicking
+  thread neither exits nor aborts. The panic message already reached stderr.
+  Found by reading; not reproduced.
+

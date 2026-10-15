@@ -55,9 +55,9 @@ function hmrDirOf(cwd: string): string {
 }
 
 /**
- * `dist/hmr-runtime.js`, resolved relative to this package's own root
- * rather than this module's own location. This is correct whether this file is
- * running from `src/` (tests, the workspace) or a built `dist/`.
+ * `dist/hmr-runtime.js`, resolved relative to this package's own root. This
+ * is correct whether this file is running from `src/` (tests, the workspace)
+ * or a built `dist/`.
  */
 function resolveHmrRuntimePath(): string {
   let dir = path.dirname(fileURLToPath(import.meta.url));

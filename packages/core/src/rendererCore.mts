@@ -34,8 +34,5 @@ export type * from "./types.mts";
 /**
  * The tree/event primitives a custom renderer (`incajs/vue`) drives the
  * native tree through.
- *
- * Also the seam a renderer's own tests mock against, in place of a real
- * `globalThis.__inca_native__`.
  */
 export type IncaCore = typeof import("./rendererCore.mts");

@@ -39,8 +39,7 @@ export function appendChild(parentId: NodeId, childId: NodeId): void {
  * Attaches `childId` as a child of `parentId`, positioned before `anchorId`
  * (or at the end, if `anchorId` is `null`). If `anchorId` names a real node
  * that just isn't currently a child of `parentId`, this falls back to
- * appending at the end instead of throwing. Only a wholly unknown
- * `anchorId` raises.
+ * appending at the end. Only a wholly unknown `anchorId` raises.
  * @param parentId - the container to attach to
  * @param childId - the node being attached
  * @param anchorId - the sibling to insert before, or `null` to append at the end

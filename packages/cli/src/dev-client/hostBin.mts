@@ -53,7 +53,7 @@ export function resolveHostBin(): string {
     : `this platform (${process.platform}/${process.arch}) has no published package`;
   throw new IncaError(
     "ERR_INCA_HOST_BIN_UNRESOLVED",
-    `no inca-host binary found. ${platformNote}, and ${HOST_BIN_ENV_VAR} isn't set to one`,
+    `no host binary found. ${platformNote}, and ${HOST_BIN_ENV_VAR} isn't set to one`,
   );
 }
 

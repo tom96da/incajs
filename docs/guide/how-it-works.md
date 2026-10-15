@@ -10,8 +10,8 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 # How it Works
 
 **Incarnative.js** renders your app without a browser engine. There's
-no Chromium, no DOM, and no webview anywhere in the picture. You have your
-`.vue` components, a native runtime, and the GPU.
+no Chromium, no DOM, and no webview. The app is `.vue` components, a native
+runtime, and the GPU.
 
 ## The pipeline
 
@@ -44,7 +44,7 @@ side once, and GPUI owns layout and painting from there. Nothing re-runs
 JS every frame the way a browser's render loop would.
 
 Because there's no browser engine, `.vue` authoring uses a native styling
-vocabulary rather than CSS. See
+vocabulary. See
 [Elements & Styles](../reference/elements) for what's supported today.
 
 Ready to build one? See [Getting Started](./).

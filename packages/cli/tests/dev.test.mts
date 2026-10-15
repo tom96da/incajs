@@ -1000,7 +1000,7 @@ describe("dev with --experimental-hmr", () => {
     // itself must resolve rather than wait forever for a signal that
     // will never come.
     await running;
-    expect(stderr.text()).toContain("failed to start inca-host");
+    expect(stderr.text()).toContain("failed to start the host");
 
     expect(stdout.text()).not.toContain("[inca] ready");
   });

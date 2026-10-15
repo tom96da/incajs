@@ -98,7 +98,7 @@ export class HostClient {
     // the resulting EPIPE is an unhandled 'error' event, which ends this
     // process; the child's own exit is what teardown waits on instead.
     child.stdin.on("error", (error: NodeJS.ErrnoException) => {
-      if (error.code !== "EPIPE") onStderr(`inca-host stdin: ${error.message}\n`);
+      if (error.code !== "EPIPE") onStderr(`host stdin: ${error.message}\n`);
     });
 
     readline.createInterface({ input: child.stdout }).on("line", (line) => {
@@ -107,7 +107,7 @@ export class HostClient {
 
     child.on("exit", (code, signal) => {
       const reason = new Error(
-        `inca-host exited (code=${String(code)}, signal=${String(signal)}) before answering`,
+        `the host exited (code=${String(code)}, signal=${String(signal)}) before answering`,
       );
       for (const { reject } of this.#pending.values()) reject(reason);
       this.#pending.clear();
@@ -117,7 +117,7 @@ export class HostClient {
     // A spawn failure rejects start() instead, so report only once spawned.
     let spawned = false;
     child.on("error", (error) => {
-      if (spawned) onStderr(`inca-host: ${error.message}\n`);
+      if (spawned) onStderr(`host: ${error.message}\n`);
     });
 
     await once(child, "spawn");
@@ -170,8 +170,8 @@ export class HostClient {
         const { protocol } = params as ReadyParams;
         if (protocol !== HOST_PROTOCOL_VERSION) {
           onStderr(
-            `inca-host speaks protocol ${String(protocol)}, this package was built for ` +
-              `${String(HOST_PROTOCOL_VERSION)}. stopping it rather than carrying on`,
+            `the host speaks protocol ${String(protocol)}, this package was built for ` +
+              `${String(HOST_PROTOCOL_VERSION)}. stopping it`,
           );
           if (this.#child) void this.#kill(this.#child);
           return;

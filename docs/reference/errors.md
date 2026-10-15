@@ -128,7 +128,7 @@ it as a bug if your app didn't cause it.
 
 A `.vue` file has a `<style>` block, which isn't supported yet. The
 renderer applies no stylesheet, so the block would have no effect at
-runtime, and the build stops rather than shipping it.
+runtime. The build fails with this error.
 
 Use a `:style` binding instead.
 
@@ -156,7 +156,7 @@ above. See `ERR_INCA_UNSUPPORTED_STYLE`.
 ## `ERR_INCA_BUILD_NO_OUTPUT`
 
 The bundler finished without writing anything. This one is a bug in
-Incarnative.js rather than in your app. Please
+Incarnative.js. Please
 [open an issue](https://github.com/tom96da/incajs/issues).
 
 ## `ERR_INCA_HMR_UNSUPPORTED`

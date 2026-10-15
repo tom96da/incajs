@@ -11,20 +11,19 @@ import { createPatchProp } from "./patchProp.mts";
 import type { IncaElement, IncaNode } from "../element/types.mts";
 
 /**
- * `@vue/runtime-core`'s `App`, with `mount` additionally callable with no
- * argument to target the host's own root container. An intersection rather
- * than an `Omit`: `App`'s `this`-returning methods (`use`, `mixin`,
- * `component`, `directive`) have to keep this wider `mount` when chained.
+ * `@vue/runtime-core`'s `App`, with `mount` also callable with no argument
+ * to target the host's own root container. `use`, `mixin`, `component` and
+ * `directive` return an `IncaApp`.
  */
 export type IncaApp = App<IncaElement> & {
   mount: (rootContainer?: IncaElement) => ComponentPublicInstance;
 };
 
 /**
- * Creates a Vue app whose root mounts against a {@link IncaElement} host
- * handle instead of a DOM element. `app.mount()` with no argument targets
- * the host's root container; `app.unmount`, `app.use`, etc. all behave
- * exactly as `@vue/runtime-core` itself documents them.
+ * Creates a Vue app whose root mounts on an {@link IncaElement} host
+ * handle. `app.mount()` with no argument targets the host's root
+ * container and returns the root component instance. `app.unmount`,
+ * `app.use` and the rest behave as `@vue/runtime-core` documents them.
  * @param rootComponent - the component to mount as the app's root
  * @param rootProps - props to pass to that root component
  * @returns the created app
