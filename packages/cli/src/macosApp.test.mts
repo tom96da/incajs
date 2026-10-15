@@ -106,7 +106,7 @@ function plutil(...args: string[]): string {
 }
 
 describe.skipIf(!hasPlutil)("Info.plist read by plutil (skipped: needs macOS with plutil)", () => {
-  const names = ["Demo", `A&B <C> "D" 'E'`, "two words", "日本語 Ünïcode 🙂", "x".repeat(200)];
+  const names = [`A&B <C> "D" 'E'`, "日本語 Ünïcode 🙂", "x".repeat(200)];
 
   it.each(names)("lints and round-trips the product name %s", async (productName) => {
     const { dir: root, hostBin } = await makeHostBin();

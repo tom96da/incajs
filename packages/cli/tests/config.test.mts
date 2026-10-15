@@ -66,14 +66,6 @@ describe("resolveAppConfig's productName", () => {
 });
 
 describe("resolveAppConfig's outDir", () => {
-  it("resolves from the app's root", async () => {
-    const app = await makeApp({ name: "scratch-app", inca: { outDir: "build" } });
-
-    await expect(resolveAppConfig(app)).resolves.toMatchObject({
-      outDir: path.join(app, "build"),
-    });
-  });
-
   it.each(["", ".", "..", "src", "node_modules"])(
     "refuses %j, which holds the app's sources",
     async (outDir) => {

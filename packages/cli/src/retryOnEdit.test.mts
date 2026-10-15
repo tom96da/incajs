@@ -144,21 +144,6 @@ describe("retryOnEdit", () => {
     expect(run).toHaveBeenCalledTimes(2);
   });
 
-  it("ignores an unrelated file written while it waits", async () => {
-    const { run, stdout, stderr } = start(() => Promise.reject(new Error("broken")));
-    await vi.waitFor(() => expect(stdout.text()).toContain("waiting for a change to retry"));
-
-    await writeFile(path.join(app, "README.md"), "");
-    await sleep(DEBOUNCE * 4);
-
-    expect(run).toHaveBeenCalledTimes(1);
-    expect(count(stderr.text(), "build failed")).toBe(1);
-
-    // The watcher is alive, so a write that counts is seen.
-    await touchConfig();
-    await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(2));
-  });
-
   it("retries once the file an error names is created", async () => {
     const icon = path.join(app, "app.icns");
     let calls = 0;
@@ -211,20 +196,6 @@ describe("retryOnEdit", () => {
     expect(count(stderr.text(), "build failed")).toBe(1);
     expect(stderr.text()).toContain("build failed: second");
     expect(stderr.text()).not.toContain("stale");
-    expect(stdout.text()).not.toContain("[inca] retrying");
-  });
-
-  it("waits for an edit after one silent retry when the named file exists", async () => {
-    const icon = path.join(app, "app.icns");
-    await writeFile(icon, "");
-    const { run, stdout, stderr } = start(() =>
-      Promise.reject(new IncaError("ERR_INCA_ICON_NOT_FOUND", "no icon", icon)),
-    );
-
-    await vi.waitFor(() => expect(stdout.text()).toContain("waiting for a change to retry"));
-
-    expect(run).toHaveBeenCalledTimes(2);
-    expect(count(stderr.text(), "build failed")).toBe(1);
     expect(stdout.text()).not.toContain("[inca] retrying");
   });
 

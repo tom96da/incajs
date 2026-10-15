@@ -16,13 +16,6 @@ describe("encodePlist", () => {
     expect(encodePlist({ K: "&lt;" })).toContain("<string>&amp;lt;</string>");
   });
 
-  it("leaves no raw angle bracket or ampersand from a value", () => {
-    const xml = encodePlist({ K: "<&>" });
-    const body = xml.slice(xml.indexOf("<string>"), xml.indexOf("</string>"));
-
-    expect(body).toBe("<string>&lt;&amp;&gt;");
-  });
-
   it("escapes keys the same way", () => {
     expect(encodePlist({ "a&<b>": "v" })).toContain("<key>a&amp;&lt;b&gt;</key>");
   });

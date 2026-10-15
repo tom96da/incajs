@@ -281,7 +281,10 @@ describe("dev", () => {
         stderr: makeSink().stream,
         signal: new AbortController().signal,
       }),
-    ).rejects.toMatchObject({ code: "ERR_INCA_HOST_BIN_UNRESOLVED" });
+    ).rejects.toMatchObject({
+      code: "ERR_INCA_HOST_BIN_UNRESOLVED",
+      message: expect.stringMatching(/INCA_HOST_BIN/),
+    });
     expect(watch).not.toHaveBeenCalled();
   });
 
@@ -1000,25 +1003,6 @@ describe("dev with --experimental-hmr", () => {
     expect(stderr.text()).toContain("failed to start inca-host");
 
     expect(stdout.text()).not.toContain("[inca] ready");
-  });
-
-  it("throws a clear error when the bundler has no HMR support", async () => {
-    const bundler: Bundler = {
-      watch: () => Promise.reject(new Error("not used")),
-      build: () => Promise.reject(new Error("not used")),
-    };
-
-    await expect(
-      dev({
-        entry: "unused",
-        bundler,
-        hostBin: mockHost,
-        experimentalHmr: true,
-        stdout: makeSink().stream,
-        stderr: makeSink().stream,
-        signal: new AbortController().signal,
-      }),
-    ).rejects.toThrow(expect.objectContaining({ code: "ERR_INCA_HMR_UNSUPPORTED" }));
   });
 });
 

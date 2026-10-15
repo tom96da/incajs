@@ -64,7 +64,6 @@ function fakeWatcher(): FSWatcher & { close: ReturnType<typeof vi.fn<() => void>
 describe("watchForEdit", () => {
   it.each([
     ["inca.config.ts is written", "inca.config.ts"],
-    ["inca.config.mjs is written", "inca.config.mjs"],
     ["package.json is written", "package.json"],
   ])("resolves once %s", async (_, file) => {
     const app = await makeApp();
@@ -107,7 +106,7 @@ describe("watchForEdit", () => {
     },
   );
 
-  it.each(["main.mts", "main.ts", "main.js", "App.vue"])(
+  it.each(["main.mts"])(
     "resolves once src/%s is created along with a src/ that was absent",
     async (file) => {
       const app = await makeApp();

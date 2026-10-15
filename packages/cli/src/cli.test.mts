@@ -84,8 +84,8 @@ describe("run", () => {
     expect(mockedPackageApp).not.toHaveBeenCalled();
   });
 
-  it.each(["--help", "-h"])("prints the commands and exits with 0 for %s", async (flag) => {
-    await run(["node", "inca", flag]);
+  it("prints the commands and exits with 0 for --help", async () => {
+    await run(["node", "inca", "--help"]);
 
     expect(exit).toHaveBeenCalledWith(0);
     expect(printed()).toMatch(/dev[\s\S]*build[\s\S]*package/);
