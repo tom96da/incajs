@@ -4,6 +4,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import dedent from "ts-dedent";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createViteBundler } from "../../../src/adapter/vite/index.mts";
@@ -61,8 +62,13 @@ describe("build", () => {
 
   it("imports the modifier helpers from the runtime core module", async () => {
     const { entry, outDir, streams } = await makeApp(
-      `<script setup>\nimport { ref } from "@vue/runtime-core";\nconst n = ref(0);\n</script>\n` +
-        `<template><div @click.stop="n++" @keydown.enter="n++">{{ n }}</div></template>\n`,
+      dedent`
+        <script setup>
+        import { ref } from "@vue/runtime-core";
+        const n = ref(0);
+        </script>
+        <template><div @click.stop="n++" @keydown.enter="n++">{{ n }}</div></template>
+      `,
     );
 
     const output = await build({ entry, outDir, ...streams });
@@ -105,8 +111,15 @@ describe("build", () => {
 
   it("rejects a <style> block, naming the file that used it", async () => {
     const { entry, outDir, streams } = await makeApp(
-      `<script setup>\nconst msg = "hello";\n</script>\n<template><div>{{ msg }}</div></template>\n` +
-        `<style scoped>\ndiv { color: red; }\n</style>\n`,
+      dedent`
+        <script setup>
+        const msg = "hello";
+        </script>
+        <template><div>{{ msg }}</div></template>
+        <style scoped>
+        div { color: red; }
+        </style>
+      `,
     );
 
     await expect(build({ entry, outDir, ...streams })).rejects.toThrow(

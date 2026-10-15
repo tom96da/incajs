@@ -4,6 +4,7 @@
 import { mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import dedent from "ts-dedent";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
@@ -28,8 +29,11 @@ describe("resolveAppConfig against a real inca.config.ts", () => {
       .join("/");
     await writeFile(
       path.join(app, "inca.config.ts"),
-      `import { defineConfig } from "${definePath}";\n\n` +
-        `export default defineConfig({ productName: "Scratch App" });\n`,
+      dedent`
+        import { defineConfig } from "${definePath}";
+
+        export default defineConfig({ productName: "Scratch App" });
+      `,
     );
 
     await expect(resolveAppConfig(app)).resolves.toMatchObject({

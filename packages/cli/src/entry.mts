@@ -5,6 +5,8 @@ import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import dedent from "ts-dedent";
+
 import { IncaError } from "./error.mts";
 
 export const MAIN_FILES = ["main.mts", "main.ts", "main.js"];
@@ -46,9 +48,11 @@ async function synthesizeEntry(appPath: string, cwd: string): Promise<string> {
   const importSpecifier = JSON.stringify(appPath.split(path.sep).join("/"));
   await writeFile(
     entryPath,
-    `import { createIncaApp } from "incajs/vue";\n` +
-      `import App from ${importSpecifier};\n` +
-      `createIncaApp(App).mount();\n`,
+    dedent`
+      import { createIncaApp } from "incajs/vue";
+      import App from ${importSpecifier};
+      createIncaApp(App).mount();
+    `,
   );
   return entryPath;
 }

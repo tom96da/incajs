@@ -79,6 +79,7 @@
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "rolldown": "~1.2.13",
+    "ts-dedent": "2.3.0",
     "vue": "catalog:"
   },
   "peerDependencies": {

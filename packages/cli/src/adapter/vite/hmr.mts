@@ -7,6 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import vue from "@vitejs/plugin-vue";
+import dedent from "ts-dedent";
 import { DevEnvironment, buildErrorMessage, createServer } from "vite";
 import type { RollupError } from "rolldown";
 import type {
@@ -88,8 +89,10 @@ async function writeHmrEntry(cwd: string, entry: string, runtimePath?: string): 
   const entryId = entry.split(path.sep).join("/");
   await writeFile(
     entryPath,
-    `import { start } from ${JSON.stringify(runtimeImport)};\n` +
-      `await start(${JSON.stringify(entryId)});\n`,
+    dedent`
+      import { start } from ${JSON.stringify(runtimeImport)};
+      await start(${JSON.stringify(entryId)});
+    `,
   );
   return entryPath;
 }

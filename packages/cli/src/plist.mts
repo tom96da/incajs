@@ -1,6 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import dedent from "ts-dedent";
+
 /** A macOS `Info.plist`'s value types. These are the only ones `inca package` writes. */
 export type PlistValue = string | boolean;
 
@@ -19,12 +21,13 @@ export function encodePlist(dict: Record<string, PlistValue>): string {
     .map(([key, value]) => `\t<key>${escapeXml(key)}</key>\n\t${encodeValue(value)}`)
     .join("\n");
 
-  return (
-    '<?xml version="1.0" encoding="UTF-8"?>\n' +
-    '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n' +
-    '<plist version="1.0">\n' +
-    "<dict>\n" +
-    `${entries}\n` +
-    "</dict>\n</plist>\n"
-  );
+  return dedent`
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0">
+    <dict>
+    ${entries}
+    </dict>
+    </plist>
+  `;
 }
