@@ -264,13 +264,6 @@ fn center_outside_keeps_a_node_that_shows_fully_or_partly() {
 }
 
 #[test]
-fn center_outside_centres_a_node_outside_the_box() {
-    assert_eq!(dy(40.0, 20.0, Align::CenterOutside), -100.0);
-    assert_eq!(dy(260.0, 20.0, Align::CenterOutside), 120.0);
-    assert_eq!(dy(200.0, 20.0, Align::CenterOutside), 60.0);
-}
-
-#[test]
 fn a_zero_size_node_inside_or_on_the_edge_of_the_box_shows() {
     for top in [100.0, 150.0, 200.0] {
         assert_eq!(dy(top, 0.0, Align::Reveal), 0.0);

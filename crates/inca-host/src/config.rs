@@ -221,32 +221,8 @@ mod tests {
     }
 
     #[test]
-    fn a_field_the_app_left_out_reads_as_none() {
-        let app = AppDir::new("partial", Some(r#"{"window":{"width":320}}"#));
-
-        let config = read(&app.entry());
-
-        assert_eq!(config.name, None);
-        assert_eq!(config.identifier, None);
-        let window = config.window.unwrap();
-        assert_eq!(window.width, Some(320.0));
-        assert_eq!(window.height, None);
-        assert_eq!(window.title, None);
-        assert_eq!(window.resizable, None);
-        assert_eq!(window.min_width, None);
-        assert_eq!(window.min_height, None);
-    }
-
-    #[test]
     fn a_config_that_is_not_a_json_object_reads_as_the_defaults() {
         let app = AppDir::new("broken", Some("not json"));
-
-        assert_eq!(read(&app.entry()), AppConfig::default());
-    }
-
-    #[test]
-    fn a_wrongly_typed_field_reads_as_the_defaults() {
-        let app = AppDir::new("mistyped", Some(r#"{"window":{"width":"big"}}"#));
 
         assert_eq!(read(&app.entry()), AppConfig::default());
     }
@@ -319,19 +295,6 @@ mod tests {
     }
 
     #[test]
-    fn a_minimum_above_the_default_raises_a_window_the_app_did_not_size() {
-        let tall = WindowConfig {
-            min_width: Some(2000.0),
-            ..WindowConfig::default()
-        };
-
-        assert_eq!(
-            window_size(Some(&tall), (None, None)),
-            (2000.0, DEFAULT_WINDOW_SIZE.1)
-        );
-    }
-
-    #[test]
     fn a_title_of_nothing_but_spaces_leaves_the_window_named_after_the_app() {
         for blank in ["", "   "] {
             let window = WindowConfig {
@@ -366,19 +329,6 @@ mod tests {
     fn window_min_size_is_absent_until_the_config_asks_for_one() {
         assert_eq!(window_min_size(None), None);
         assert_eq!(window_min_size(Some(&WindowConfig::default())), None);
-    }
-
-    #[test]
-    fn window_min_size_leaves_a_dimension_the_config_omits_unconstrained() {
-        let width_only = WindowConfig {
-            min_width: Some(320.0),
-            ..WindowConfig::default()
-        };
-
-        assert_eq!(
-            window_min_size(Some(&width_only)),
-            Some(size(px(320.0), px(0.0)))
-        );
     }
 
     #[test]

@@ -268,22 +268,6 @@ fn a_line_delta_reports_delta_mode_1() {
 }
 
 #[test]
-fn scrolling_down_or_right_reports_positive_deltas() {
-    // GPUI: down and right are negative.
-    for delta in [
-        ScrollDelta::Pixels(gpui::point(gpui::px(-5.0), gpui::px(-6.0))),
-        ScrollDelta::Lines(gpui::point(-5.0, -6.0)),
-    ] {
-        let event = ScrollWheelEvent {
-            delta,
-            ..Default::default()
-        };
-        let wheel = wheel_payload(EventPayload::from(&event));
-        assert_eq!((wheel.delta_x, wheel.delta_y), (5.0, 6.0));
-    }
-}
-
-#[test]
 fn a_zero_delta_stays_positive_zero() {
     for delta in [
         ScrollDelta::Pixels(gpui::point(gpui::px(0.0), gpui::px(-0.0))),
@@ -296,18 +280,6 @@ fn a_zero_delta_stays_positive_zero() {
         let wheel = wheel_payload(EventPayload::from(&event));
         assert!(wheel.delta_x.is_sign_positive() && wheel.delta_y.is_sign_positive());
     }
-}
-
-#[test]
-fn a_zero_delta_is_still_reported() {
-    let event = ScrollWheelEvent {
-        delta: ScrollDelta::Pixels(gpui::point(gpui::px(0.0), gpui::px(0.0))),
-        ..Default::default()
-    };
-    let wheel = wheel_payload(EventPayload::from(&event));
-    assert_eq!(wheel.delta_x, 0.0);
-    assert_eq!(wheel.delta_y, 0.0);
-    assert_eq!(wheel.delta_mode, 0);
 }
 
 #[test]

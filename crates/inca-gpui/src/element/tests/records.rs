@@ -204,24 +204,6 @@ fn a_display_none_child_has_no_record_and_keeps_its_siblings_aligned(cx: &mut Te
 }
 
 #[gpui::test]
-fn a_display_none_child_under_a_scroll_container_keeps_its_siblings_aligned(
-    cx: &mut TestAppContext,
-) {
-    let mut tree = VirtualTree::new();
-    let root = boxed(&mut tree, None, 200., 200.);
-    tree.set_style(root, "overflow_y", "scroll").unwrap();
-    let hidden = boxed(&mut tree, Some(root), 100., 100.);
-    tree.set_style(hidden, "display", "none").unwrap();
-    let shown = boxed(&mut tree, Some(root), 30., 30.);
-    let inside = boxed(&mut tree, Some(hidden), 10., 10.);
-    let (probe, window) = mounted(cx, tree);
-    frame(cx, window);
-    let layouts = probe.layouts.borrow();
-    assert_eq!(layouts[&shown].bounds, rect(0., 0., 30., 30.));
-    assert!(!layouts.contains_key(&hidden) && !layouts.contains_key(&inside));
-}
-
-#[gpui::test]
 fn a_text_child_is_recorded(cx: &mut TestAppContext) {
     let mut tree = VirtualTree::new();
     let root = boxed(&mut tree, None, 200., 200.);

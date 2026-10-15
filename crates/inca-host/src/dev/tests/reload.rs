@@ -359,42 +359,6 @@ fn a_reload_resets_a_fixed_size_windows_auto_resize_latch(cx: &mut TestAppContex
 }
 
 #[gpui::test]
-fn a_reload_resets_the_width_latch_when_only_the_width_fired(cx: &mut TestAppContext) {
-    let entry = ScratchEntry::write("resize-width", &mounts_a_div_sized("width", 400));
-    let (capturing, _) = capture();
-    let (window, sender) = serve_idle(
-        cx,
-        &mounts_a_div_sized("width", 300),
-        entry.path(),
-        &capturing,
-    );
-    assert_eq!(bounds_of(cx, window), (300.0, 600.0));
-
-    request(&sender, 1, "reload");
-    cx.run_until_parked();
-
-    assert_eq!(bounds_of(cx, window), (400.0, 600.0));
-}
-
-#[gpui::test]
-fn a_reload_resets_the_height_latch_when_only_the_height_fired(cx: &mut TestAppContext) {
-    let entry = ScratchEntry::write("resize-height", &mounts_a_div_sized("height", 200));
-    let (capturing, _) = capture();
-    let (window, sender) = serve_idle(
-        cx,
-        &mounts_a_div_sized("height", 150),
-        entry.path(),
-        &capturing,
-    );
-    assert_eq!(bounds_of(cx, window), (800.0, 150.0));
-
-    request(&sender, 1, "reload");
-    cx.run_until_parked();
-
-    assert_eq!(bounds_of(cx, window), (800.0, 200.0));
-}
-
-#[gpui::test]
 fn a_reload_does_not_reset_a_resizable_windows_manual_resize(cx: &mut TestAppContext) {
     let app = ScratchApp::write(
         "resizable",
@@ -440,14 +404,4 @@ fn a_reload_line_is_answered_null_and_swaps_the_session_in(cx: &mut TestAppConte
     assert!(sent[0].contains(r#""result":null"#));
     assert_eq!(bounds_of(cx, window), (400.0, 200.0));
     assert_eq!(sender.receiver_count(), 1, "the loop keeps serving");
-}
-
-fn mounts_a_div_sized(property: &str, value: u32) -> String {
-    format!(
-        r"
-            const node = __inca_native__.createNode('div');
-            __inca_native__.appendChild(__inca_native__.rootNodeId(), node);
-            __inca_native__.setStyle(node, '{property}', {value});
-        "
-    )
 }

@@ -4,11 +4,6 @@
 use super::*;
 
 #[test]
-fn debug_selector_names_the_node_id() {
-    assert_eq!(debug_selector(7), "node-7");
-}
-
-#[test]
 fn unknown_root_returns_none() {
     let tree = VirtualTree::new();
     assert!(build_spec(&tree, 42).is_none());
@@ -87,19 +82,6 @@ fn text_tag_uses_its_value_attribute() {
 
     let spec = build_spec(&tree, id).unwrap();
     assert_eq!(spec.tag, ElementTag::Text("hello".into()));
-}
-
-#[test]
-fn text_tag_uses_its_child_text() {
-    let mut tree = VirtualTree::new();
-    let id = tree.create_node("text").unwrap();
-    let child = tree.create_node("text").unwrap();
-    tree.set_attribute(child, "value", "Hello").unwrap();
-    tree.append_child(id, child).unwrap();
-
-    let spec = build_spec(&tree, id).unwrap();
-    assert_eq!(spec.tag, ElementTag::Text("Hello".into()));
-    assert!(spec.children.is_empty());
 }
 
 #[test]

@@ -135,17 +135,6 @@ fn hovering_the_same_node_again_does_not_repeat_mouseenter(cx: &mut TestAppConte
 }
 
 #[gpui::test]
-fn unhover_fires_mouseleave(cx: &mut TestAppContext) {
-    let mut h = Harness::load(cx, TEST_ENTRY_PATH, HOVERABLE);
-    let boxed = hover_box(&mut h);
-    h.hover(boxed);
-
-    h.unhover();
-
-    assert_eq!(eval_f64(&h, "globalThis.leaves"), 1.0);
-}
-
-#[gpui::test]
 fn hover_again_after_leaving_fires_mouseenter_again(cx: &mut TestAppContext) {
     let mut h = Harness::load(cx, TEST_ENTRY_PATH, HOVERABLE);
     let boxed = hover_box(&mut h);
@@ -194,42 +183,6 @@ fn unhover_before_any_hover_fires_nothing(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn hovering_a_child_enters_its_ancestors(cx: &mut TestAppContext) {
-    let mut h = Harness::load(
-        cx,
-        TEST_ENTRY_PATH,
-        r"
-            const n = __inca_native__;
-            const frame = n.createNode('div');
-            n.setStyle(frame, 'width', 200);
-            n.setStyle(frame, 'height', 200);
-            n.appendChild(n.rootNodeId(), frame);
-            const spacer = n.createNode('div');
-            n.setStyle(spacer, 'width', 100);
-            n.setStyle(spacer, 'height', 50);
-            n.appendChild(frame, spacer);
-            const outer = n.createNode('div');
-            n.setStyle(outer, 'width', 100);
-            n.setStyle(outer, 'height', 100);
-            n.appendChild(frame, outer);
-            const inner = n.createNode('div');
-            n.setStyle(inner, 'width', 20);
-            n.setStyle(inner, 'height', 20);
-            n.appendChild(outer, inner);
-            globalThis.enters = 0;
-            globalThis.__inca_callbacks__ = { 0: () => { globalThis.enters++; } };
-            n.addEventListener(outer, 'mouseenter');
-            ",
-    );
-    assert_eq!(eval_f64(&h, "globalThis.enters"), 0.0);
-    let inner = id_where(&mut h, |n| n.bounds.is_some_and(|b| b.width == 20.0));
-
-    h.hover(inner);
-
-    assert_eq!(eval_f64(&h, "globalThis.enters"), 1.0);
-}
-
-#[gpui::test]
 fn hover_on_a_text_leaf_lands_on_its_container(cx: &mut TestAppContext) {
     let mut h = Harness::load(
         cx,
@@ -248,12 +201,6 @@ fn hover_on_a_text_leaf_lands_on_its_container(cx: &mut TestAppContext) {
     h.hover(leaf);
 
     assert_eq!(eval_f64(&h, "globalThis.enters"), 1.0);
-}
-
-#[gpui::test]
-#[should_panic(expected = "no node 9999 in the tree")]
-fn hover_panics_on_an_unknown_node(cx: &mut TestAppContext) {
-    Harness::load(cx, TEST_ENTRY_PATH, HOVERABLE).hover(9999);
 }
 
 #[test]

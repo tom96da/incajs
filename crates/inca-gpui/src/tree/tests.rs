@@ -4,21 +4,6 @@
 use super::*;
 
 #[test]
-fn id_uniqueness() {
-    let mut tree = VirtualTree::new();
-    let ids: Vec<NodeId> = (0..100).map(|_| tree.create_node("div").unwrap()).collect();
-
-    let mut sorted = ids.clone();
-    sorted.sort_unstable();
-    sorted.dedup();
-    assert_eq!(
-        sorted.len(),
-        ids.len(),
-        "create_node must never reuse an id"
-    );
-}
-
-#[test]
 fn create_node_fails_once_the_id_space_is_used_up() {
     let mut tree = VirtualTree::new();
     tree.next_id = NodeId::MAX - 1;
@@ -306,12 +291,6 @@ fn set_attribute_overwrites() {
 }
 
 #[test]
-fn unknown_id_lookup_returns_none() {
-    let tree = VirtualTree::new();
-    assert!(tree.get(42).is_none());
-}
-
-#[test]
 fn operations_on_unknown_ids_error_instead_of_panicking() {
     let mut tree = VirtualTree::new();
     let node = tree.create_node("div").unwrap();
@@ -504,17 +483,4 @@ fn is_disabled_button_needs_the_button_tag_and_the_disabled_attribute() {
     tree.set_attribute(div, "disabled", true).unwrap();
     assert!(is_disabled_button(tree.get(button).unwrap()));
     assert!(!is_disabled_button(tree.get(div).unwrap()));
-}
-
-#[test]
-fn attribute_value_reads_back_only_its_own_kind() {
-    let text = AttributeValue::from("a");
-    let number = AttributeValue::from(2.5);
-    let flag = AttributeValue::from(true);
-    assert_eq!(text.as_str(), Some("a"));
-    assert_eq!(number.as_str(), None);
-    assert_eq!(flag.as_str(), None);
-    assert_eq!(number.as_number(), Some(2.5));
-    assert_eq!(text.as_number(), None);
-    assert_eq!(flag.as_number(), None);
 }

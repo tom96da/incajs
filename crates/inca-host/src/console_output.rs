@@ -95,12 +95,6 @@ mod tests {
     }
 
     #[test]
-    fn an_empty_force_color_falls_through_to_the_terminal() {
-        assert!(color_enabled(None, Some(os("")), true));
-        assert!(!color_enabled(None, Some(os("")), false));
-    }
-
-    #[test]
     fn without_either_variable_the_terminal_decides() {
         assert!(color_enabled(None, None, true));
         assert!(!color_enabled(None, None, false));

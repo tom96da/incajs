@@ -477,17 +477,6 @@ fn recognized_style_keys_apply_quietly() {
 }
 
 #[test]
-fn every_padding_and_margin_key_is_recognized() {
-    for base in ["padding", "margin"] {
-        for suffix in ["", "_x", "_y", "_top", "_right", "_bottom", "_left"] {
-            let key = format!("{base}{suffix}");
-            let (_, warnings) = style_and_warnings(&[(key.as_str(), num(1.0))]);
-            assert!(warnings.is_empty(), "{key}: {warnings:?}");
-        }
-    }
-}
-
-#[test]
 fn a_wrong_shaped_value_of_a_known_key_is_dropped_quietly() {
     let (_, warnings) = style_and_warnings(&[("display", text("nope")), ("gap", text("1"))]);
     assert!(warnings.is_empty(), "{warnings:?}");

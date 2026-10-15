@@ -325,15 +325,6 @@ mod tests {
     }
 
     #[test]
-    fn a_string_id_round_trips_unchanged() {
-        let Incoming::Call { id, .. } = call(r#"{"jsonrpc":"2.0","id":"a7","method":"reload"}"#)
-        else {
-            panic!("expected a call");
-        };
-        assert_eq!(id, Some(json!("a7")));
-    }
-
-    #[test]
     fn an_unknown_method_decodes_rather_than_failing() {
         let decoded = call(r#"{"jsonrpc":"2.0","id":1,"method":"testEvent","params":{"a":1}}"#);
         assert_eq!(

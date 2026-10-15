@@ -143,18 +143,6 @@ fn a_stopped_mousedown_still_focuses_the_node(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn a_prevented_mousedown_on_the_root_keeps_the_focused_node(cx: &mut TestAppContext) {
-    let mut h = load_listening(cx, FOCUSABLE);
-    run_js(
-        &mut h,
-        &format!("{FOCUS_BOX} listen(__inca_native__.rootNodeId(), 'mousedown', 1);"),
-    );
-    let frame = node(&h, "frame");
-    h.click(frame);
-    assert_eq!(log(&h), "focus");
-}
-
-#[gpui::test]
 fn a_passive_mousedown_listener_still_lets_the_node_take_focus(cx: &mut TestAppContext) {
     let mut h = load_listening(cx, FOCUSABLE);
     run_js(

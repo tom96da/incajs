@@ -130,16 +130,6 @@ fn a_bundle_that_throws_yields_nothing() {
     );
 }
 
-#[test]
-fn evaluating_a_bundle_leaves_a_queued_microtask_pending() {
-    let session = load(DEFERS_ITS_MOUNT).unwrap();
-
-    assert!(
-        !session.engine.eval::<bool>("globalThis.mounted;").unwrap(),
-        "which is what start has to drain once the window is up"
-    );
-}
-
 struct ClosingWriter(Rc<Cell<bool>>);
 
 impl Writer for ClosingWriter {

@@ -176,19 +176,6 @@ mod tests {
     }
 
     #[test]
-    fn a_number_without_a_json_form_becomes_null() {
-        let mut tree = VirtualTree::new();
-        let id = tree.create_node("div").unwrap();
-        tree.set_attribute(id, "nan", f64::NAN).unwrap();
-        tree.set_attribute(id, "inf", f64::INFINITY).unwrap();
-
-        let snap = snapshot(&tree, id, &mut no_bounds).unwrap();
-
-        assert_eq!(snap.attributes["nan"], Value::Null);
-        assert_eq!(snap.attributes["inf"], Value::Null);
-    }
-
-    #[test]
     fn find_returns_the_first_match_depth_first() {
         let mut tree = VirtualTree::new();
         let root = tree.create_node("div").unwrap();

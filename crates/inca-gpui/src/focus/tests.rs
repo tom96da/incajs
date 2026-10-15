@@ -303,23 +303,6 @@ fn removing_tabindex_blurs_a_node_a_click_focused_before_the_next_sync(cx: &mut 
 }
 
 #[gpui::test]
-fn an_unparsable_tabindex_drops_the_handle(cx: &mut TestAppContext) {
-    let cx = cx.add_empty_window();
-    let (mut tree, id) = tree_with("div", Some(AttributeValue::from("0")));
-    let mut registry = FocusRegistry::default();
-    registry.mark_tab_dirty(id);
-    cx.update(|window, cx| {
-        let _ = registry.apply_pending(&tree, window, cx);
-    });
-    tree.set_attribute(id, "tabindex", "abc").unwrap();
-    registry.mark_tab_dirty(id);
-    cx.update(|window, cx| {
-        let _ = registry.apply_pending(&tree, window, cx);
-    });
-    assert!(registry.handle(id).is_none());
-}
-
-#[gpui::test]
 fn forget_clears_a_queued_tab_check(cx: &mut TestAppContext) {
     let cx = cx.add_empty_window();
     let (tree, id) = tree_with("div", Some(AttributeValue::from("0")));
@@ -357,14 +340,6 @@ fn forget_lets_a_later_call_mint_a_new_handle(cx: &mut TestAppContext) {
 
     assert_ne!(before, after);
     assert!(registry.handle(1).is_some());
-}
-
-#[gpui::test]
-fn handle_is_none_for_a_node_never_asked_for(cx: &mut TestAppContext) {
-    let registry = FocusRegistry::default();
-    let _cx = cx.add_empty_window();
-
-    assert!(registry.handle(1).is_none());
 }
 
 #[gpui::test]

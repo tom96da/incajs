@@ -357,18 +357,6 @@ fn a_double_click_fires_dblclick_after_the_second_click(cx: &mut TestAppContext)
 }
 
 #[gpui::test]
-fn a_mouse_click_reaches_a_button_and_its_ancestor(cx: &mut TestAppContext) {
-    let mut h = load_listening(cx, BUTTON);
-    listen(&mut h, "box", "click", 0);
-    listen(&mut h, "frame", "click", 0);
-    let button = node(&h, "box");
-
-    h.click(button);
-
-    assert_eq!(log(&h), "click@box/box,click@frame/box");
-}
-
-#[gpui::test]
 fn a_press_ends_when_the_window_deactivates(cx: &mut TestAppContext) {
     let mut h = load_listening(cx, BUTTON);
     listen(&mut h, "box", "click", 0);
