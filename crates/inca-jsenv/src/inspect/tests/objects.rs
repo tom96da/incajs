@@ -3,6 +3,7 @@
 
 use super::*;
 use crate::{Engine, compile_async_function};
+use rstest::rstest;
 
 #[test]
 fn a_namespace_with_an_uninitialized_export_prints_and_leaves_nothing_pending() {
@@ -24,45 +25,38 @@ fn a_namespace_with_an_uninitialized_export_prints_and_leaves_nothing_pending() 
     });
 }
 
-#[test]
-fn an_instance_prints_with_its_class_name() {
-    let cases = [
-        (
-            "class Foo { constructor() { this.a = 1; } }; new Foo()",
-            "Foo { a: 1 }",
-        ),
-        ("class Foo {}; new Foo()", "Foo {}"),
-        (
-            "class A {}; class B extends A { a = 1 }; new B()",
-            "B { a: 1 }",
-        ),
-        ("function F() { this.a = 1; }; new F()", "F { a: 1 }"),
-        (
-            "const f = new (class Foo { a = 1 })(); delete f.constructor; f",
-            "Foo { a: 1 }",
-        ),
-        ("class Foo {}; ({ x: [new Foo()] })", "{ x: [ Foo {} ] }"),
-        (
-            "class Foo { a = 1 }; ({ x: { y: { z: new Foo() } } })",
-            "{ x: { y: { z: [Foo] } } }",
-        ),
-        ("Object.create({ a: 1 })", "{}"),
-        (
-            "class Foo { a = 1 }; Object.setPrototypeOf(Foo.prototype, null); new Foo()",
-            "Foo { a: 1 }",
-        ),
-        (
-            r"
-            class Foo { a = 1 };
-            Foo.prototype.constructor = new Proxy(Foo, { get() { throw 1; } }); new Foo()
-            ",
-            "Foo { a: 1 }",
-        ),
-        ("({ a: 1 })", "{ a: 1 }"),
-    ];
-    for (expression, expected) in cases {
-        assert_eq!(rendered(expression), expected, "{expression}");
-    }
+#[rstest]
+#[case::constructor_assigns_field(
+    "class Foo { constructor() { this.a = 1; } }; new Foo()",
+    "Foo { a: 1 }"
+)]
+#[case::empty_class("class Foo {}; new Foo()", "Foo {}")]
+#[case::subclass("class A {}; class B extends A { a = 1 }; new B()", "B { a: 1 }")]
+#[case::function_constructor("function F() { this.a = 1; }; new F()", "F { a: 1 }")]
+#[case::constructor_deleted(
+    "const f = new (class Foo { a = 1 })(); delete f.constructor; f",
+    "Foo { a: 1 }"
+)]
+#[case::nested_in_array("class Foo {}; ({ x: [new Foo()] })", "{ x: [ Foo {} ] }")]
+#[case::past_nesting_depth(
+    "class Foo { a = 1 }; ({ x: { y: { z: new Foo() } } })",
+    "{ x: { y: { z: [Foo] } } }"
+)]
+#[case::plain_prototype("Object.create({ a: 1 })", "{}")]
+#[case::prototype_cut_off(
+    "class Foo { a = 1 }; Object.setPrototypeOf(Foo.prototype, null); new Foo()",
+    "Foo { a: 1 }"
+)]
+#[case::constructor_proxy_with_throwing_get(
+    r"
+    class Foo { a = 1 };
+    Foo.prototype.constructor = new Proxy(Foo, { get() { throw 1; } }); new Foo()
+    ",
+    "Foo { a: 1 }"
+)]
+#[case::plain_object("({ a: 1 })", "{ a: 1 }")]
+fn an_instance_prints_with_its_class_name(#[case] expression: &str, #[case] expected: &str) {
+    assert_eq!(rendered(expression), expected, "{expression}");
 }
 
 #[test]
@@ -81,83 +75,80 @@ fn a_prototype_less_object_prints_a_tag() {
     );
 }
 
-#[test]
-fn a_constructor_that_cannot_name_the_object_falls_back_to_object() {
-    let cases = [
-        // Anonymous class.
-        ("new (class { a = 1 })()", "{ a: 1 }"),
-        // Foo.prototype has no Foo.prototype on its chain.
-        ("class Foo {}; Foo.prototype", "{}"),
-        (
-            "const o = { a: 1 }; o.constructor = 5; o",
-            "{ a: 1, constructor: 5 }",
-        ),
-        (
-            "class Foo { a = 1 }; delete Foo.prototype.constructor; new Foo()",
-            "{ a: 1 }",
-        ),
-        (
-            "class Foo { a = 1 }; Foo.prototype.constructor = 5; new Foo()",
-            "{ a: 1 }",
-        ),
-        (
-            r"
-            class Foo { a = 1 }; Object.defineProperty(Foo.prototype, 'constructor',
-            { get() { throw 1; } }); new Foo()
-            ",
-            "{ a: 1 }",
-        ),
-        (
-            "class Foo { a = 1; static get name() { throw 1; } }; new Foo()",
-            "{ a: 1 }",
-        ),
-        ("Object.create(new Proxy({}, {}))", "{}"),
-        (
-            r"
-            class Foo { a = 1 };
-            Object.defineProperty(Foo, 'name', { get() { throw 1; } }); new Foo()
-            ",
-            "{ a: 1 }",
-        ),
-        (
-            "class Foo { a = 1 }; Foo.prototype.constructor = (function () {}).bind(); new Foo()",
-            "{ a: 1 }",
-        ),
-    ];
-    for (expression, expected) in cases {
-        let runtime = Runtime::new().unwrap();
-        let context = Context::full(&runtime).unwrap();
-        context.with(|ctx| {
-            let value: Value<'_> = ctx.eval(expression).unwrap();
-            assert_eq!(line(&[value], false), expected, "{expression}");
-            assert!(!ctx.has_exception(), "{expression} left an exception");
-        });
-    }
+#[rstest]
+#[case::anonymous_class("new (class { a = 1 })()", "{ a: 1 }")]
+// Foo.prototype has no Foo.prototype on its chain.
+#[case::prototype_itself("class Foo {}; Foo.prototype", "{}")]
+#[case::constructor_is_a_number(
+    "const o = { a: 1 }; o.constructor = 5; o",
+    "{ a: 1, constructor: 5 }"
+)]
+#[case::constructor_deleted(
+    "class Foo { a = 1 }; delete Foo.prototype.constructor; new Foo()",
+    "{ a: 1 }"
+)]
+#[case::prototype_constructor_is_a_number(
+    "class Foo { a = 1 }; Foo.prototype.constructor = 5; new Foo()",
+    "{ a: 1 }"
+)]
+#[case::constructor_getter_throws(
+    r"
+    class Foo { a = 1 }; Object.defineProperty(Foo.prototype, 'constructor',
+    { get() { throw 1; } }); new Foo()
+    ",
+    "{ a: 1 }"
+)]
+#[case::static_name_getter_throws(
+    "class Foo { a = 1; static get name() { throw 1; } }; new Foo()",
+    "{ a: 1 }"
+)]
+#[case::proxy_prototype("Object.create(new Proxy({}, {}))", "{}")]
+#[case::name_defined_as_throwing_getter(
+    r"
+    class Foo { a = 1 };
+    Object.defineProperty(Foo, 'name', { get() { throw 1; } }); new Foo()
+    ",
+    "{ a: 1 }"
+)]
+#[case::bound_function_constructor(
+    "class Foo { a = 1 }; Foo.prototype.constructor = (function () {}).bind(); new Foo()",
+    "{ a: 1 }"
+)]
+fn a_constructor_that_cannot_name_the_object_falls_back_to_object(
+    #[case] expression: &str,
+    #[case] expected: &str,
+) {
+    let runtime = Runtime::new().unwrap();
+    let context = Context::full(&runtime).unwrap();
+    context.with(|ctx| {
+        let value: Value<'_> = ctx.eval(expression).unwrap();
+        assert_eq!(line(&[value], false), expected, "{expression}");
+        assert!(!ctx.has_exception(), "{expression} left an exception");
+    });
 }
 
-#[test]
-fn an_object_whose_prototypes_name_no_constructor_names_its_prototype() {
-    let cases = [
-        (
-            "Object.create(Object.create(null))",
-            "Object <[Object: null prototype] {}> {}",
-        ),
-        (
-            "Object.assign(Object.create(Object.create(null)), { a: 1 })",
-            "Object <[Object: null prototype] {}> { a: 1 }",
-        ),
-        (
-            "Object.create(Object.create(null, { x: { value: 1, enumerable: true } }))",
-            "Object <[Object: null prototype]> {}",
-        ),
-        (
-            "Object.create(Object.create(Object.create(null)))",
-            "Object <Object <[Object: null prototype] {}>> {}",
-        ),
-    ];
-    for (expression, expected) in cases {
-        assert_eq!(rendered(expression), expected, "{expression}");
-    }
+#[rstest]
+#[case::empty(
+    "Object.create(Object.create(null))",
+    "Object <[Object: null prototype] {}> {}"
+)]
+#[case::own_property(
+    "Object.assign(Object.create(Object.create(null)), { a: 1 })",
+    "Object <[Object: null prototype] {}> { a: 1 }"
+)]
+#[case::prototype_with_property(
+    "Object.create(Object.create(null, { x: { value: 1, enumerable: true } }))",
+    "Object <[Object: null prototype]> {}"
+)]
+#[case::two_levels(
+    "Object.create(Object.create(Object.create(null)))",
+    "Object <Object <[Object: null prototype] {}>> {}"
+)]
+fn an_object_whose_prototypes_name_no_constructor_names_its_prototype(
+    #[case] expression: &str,
+    #[case] expected: &str,
+) {
+    assert_eq!(rendered(expression), expected, "{expression}");
 }
 
 #[test]
@@ -275,26 +266,23 @@ fn values_json_would_drop_are_kept() {
     );
 }
 
-#[test]
-fn an_accessor_is_named_by_its_kind_and_never_called() {
-    for (source, shown) in [
-        ("({ get a() { calls++; return 1; } })", "{ a: [Getter] }"),
-        ("({ set a(v) { calls++; } })", "{ a: [Setter] }"),
-        (
-            "({ get a() { calls++; }, set a(v) { calls++; } })",
-            "{ a: [Getter/Setter] }",
-        ),
-        (
-            "Object.defineProperty({}, 'a', { get() { calls++; }, enumerable: true })",
-            "{ a: [Getter] }",
-        ),
-        (
-            "Object.defineProperty({}, 'a', { set: undefined, get: undefined, enumerable: true })",
-            "{ a: undefined }",
-        ),
-    ] {
-        assert_eq!(counted(source), (shown.to_owned(), 0), "{source}");
-    }
+#[rstest]
+#[case::getter("({ get a() { calls++; return 1; } })", "{ a: [Getter] }")]
+#[case::setter("({ set a(v) { calls++; } })", "{ a: [Setter] }")]
+#[case::getter_and_setter(
+    "({ get a() { calls++; }, set a(v) { calls++; } })",
+    "{ a: [Getter/Setter] }"
+)]
+#[case::defined_getter(
+    "Object.defineProperty({}, 'a', { get() { calls++; }, enumerable: true })",
+    "{ a: [Getter] }"
+)]
+#[case::undefined_accessors(
+    "Object.defineProperty({}, 'a', { set: undefined, get: undefined, enumerable: true })",
+    "{ a: undefined }"
+)]
+fn an_accessor_is_named_by_its_kind_and_never_called(#[case] source: &str, #[case] shown: &str) {
+    assert_eq!(counted(source), (shown.to_owned(), 0), "{source}");
 }
 
 #[test]

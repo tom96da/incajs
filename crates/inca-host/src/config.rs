@@ -158,6 +158,7 @@ pub(crate) fn effective_config(config: &AppConfig) -> String {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+    use rstest::rstest;
     use std::env;
     use std::path::PathBuf;
 
@@ -294,20 +295,20 @@ mod tests {
         );
     }
 
-    #[test]
-    fn a_title_of_nothing_but_spaces_leaves_the_window_named_after_the_app() {
-        for blank in ["", "   "] {
-            let window = WindowConfig {
-                title: Some(blank.to_owned()),
-                ..WindowConfig::default()
-            };
+    #[rstest]
+    #[case::empty("")]
+    #[case::spaces("   ")]
+    fn a_title_of_nothing_but_spaces_leaves_the_window_named_after_the_app(#[case] blank: &str) {
+        let window = WindowConfig {
+            title: Some(blank.to_owned()),
+            ..WindowConfig::default()
+        };
 
-            assert_eq!(
-                window_title(Some(&window), Some("Demo")),
-                Some("Demo".to_owned()),
-                "{blank:?}"
-            );
-        }
+        assert_eq!(
+            window_title(Some(&window), Some("Demo")),
+            Some("Demo".to_owned()),
+            "{blank:?}"
+        );
     }
 
     #[test]

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::*;
+use rstest::rstest;
 
 /// A `Proxy` around `target` whose handler counts every trap lookup in
 /// `calls`.
@@ -9,25 +10,22 @@ fn spied(target: &str) -> String {
     format!("new Proxy({target}, new Proxy({{}}, {{ get() {{ calls++; return undefined; }} }}))")
 }
 
-#[test]
-fn a_proxy_prints_as_its_target() {
-    for (target, shown) in [
-        ("new Map([[1, 2]])", "Map(1) { 1 => 2 }"),
-        ("new Set([1])", "Set(1) { 1 }"),
-        ("new Date(0)", "1970-01-01T00:00:00.000Z"),
-        ("/a/g", "/a/g"),
-        ("[1, 'a']", "[ 1, 'a' ]"),
-        ("[]", "[]"),
-        ("({ a: 1 })", "{ a: 1 }"),
-        ("({})", "{}"),
-        ("function named() {}", "[Function: named]"),
-        (
-            "({ get a() { calls++; }, set b(v) {} })",
-            "{ a: [Getter], b: [Setter] }",
-        ),
-    ] {
-        assert_eq!(counted(&spied(target)), (shown.to_owned(), 0), "{target}");
-    }
+#[rstest]
+#[case::map("new Map([[1, 2]])", "Map(1) { 1 => 2 }")]
+#[case::set("new Set([1])", "Set(1) { 1 }")]
+#[case::date("new Date(0)", "1970-01-01T00:00:00.000Z")]
+#[case::regexp("/a/g", "/a/g")]
+#[case::array("[1, 'a']", "[ 1, 'a' ]")]
+#[case::empty_array("[]", "[]")]
+#[case::object("({ a: 1 })", "{ a: 1 }")]
+#[case::empty_object("({})", "{}")]
+#[case::function("function named() {}", "[Function: named]")]
+#[case::accessors(
+    "({ get a() { calls++; }, set b(v) {} })",
+    "{ a: [Getter], b: [Setter] }"
+)]
+fn a_proxy_prints_as_its_target(#[case] target: &str, #[case] shown: &str) {
+    assert_eq!(counted(&spied(target)), (shown.to_owned(), 0), "{target}");
 }
 
 #[test]
@@ -38,16 +36,15 @@ fn a_proxy_chain_prints_as_its_last_target() {
     );
 }
 
-#[test]
-fn a_revoked_proxy_says_so() {
-    for source in [
-        "const r = Proxy.revocable(new Map(), {}); r.revoke(); r.proxy",
-        "const r = Proxy.revocable({}, {}); r.revoke(); r.proxy",
-        "const r = Proxy.revocable(function () {}, {}); r.revoke(); r.proxy",
-        "const r = Proxy.revocable({}, {}); const p = new Proxy(r.proxy, {}); r.revoke(); p",
-    ] {
-        assert_eq!(rendered(source), "<Revoked Proxy>", "{source}");
-    }
+#[rstest]
+#[case::map("const r = Proxy.revocable(new Map(), {}); r.revoke(); r.proxy")]
+#[case::object("const r = Proxy.revocable({}, {}); r.revoke(); r.proxy")]
+#[case::function("const r = Proxy.revocable(function () {}, {}); r.revoke(); r.proxy")]
+#[case::wrapped(
+    "const r = Proxy.revocable({}, {}); const p = new Proxy(r.proxy, {}); r.revoke(); p"
+)]
+fn a_revoked_proxy_says_so(#[case] source: &str) {
+    assert_eq!(rendered(source), "<Revoked Proxy>", "{source}");
 }
 
 #[test]

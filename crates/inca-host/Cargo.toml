@@ -34,6 +34,7 @@ serde_json.workspace = true
 test-support = ["gpui/test-support"]
 
 [dev-dependencies]
+rstest.workspace = true
 # test-support gates gpui's TestAppContext, which is how the startup drain
 # is checked without a real display.
 gpui = { workspace = true, features = ["test-support"] }

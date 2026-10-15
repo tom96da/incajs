@@ -28,6 +28,7 @@ path = "examples/gpui/hello_world.rs"
 gpui.workspace = true
 
 [dev-dependencies]
+rstest.workspace = true
 env_logger.workspace = true
 # test-support gates gpui's TestPlatform/TestAppContext/#[gpui::test]. See
 # third_party/zed/crates/gpui/src/gpui.rs's `cfg(any(test, feature =

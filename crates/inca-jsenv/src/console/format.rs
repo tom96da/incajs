@@ -155,6 +155,7 @@ fn parse_float(text: &str) -> f64 {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use rquickjs::{Context, Runtime};
+    use rstest::rstest;
 
     use super::*;
 
@@ -234,28 +235,28 @@ mod tests {
         );
     }
 
-    #[test]
-    fn d_and_i_parse_an_integer() {
-        for spec in ["%d", "%i"] {
-            let f = |arg: &str| formatted(&format!("['{spec}', {arg}]"));
-            assert_eq!(f("'  7px'"), "7");
-            assert_eq!(f("-42.9"), "-42");
-            assert_eq!(f("'0x10'"), "0");
-            assert_eq!(f("'abc'"), "NaN");
-            assert_eq!(f("-0"), if spec == "%d" { "-0" } else { "0" });
-            assert_eq!(f("123n"), "123");
-            assert_eq!(f("Symbol('s')"), "NaN");
-            assert_eq!(f("'9'.repeat(30)"), "1e+30");
-            assert_eq!(f("NaN"), "NaN");
-            assert_eq!(f("1 / 0"), "NaN");
-            assert_eq!(f("true"), "NaN");
-            assert_eq!(f("null"), "NaN");
-            assert_eq!(f("undefined"), "NaN");
-            assert_eq!(f("-5n"), "-5");
-            assert_eq!(f("{}"), "NaN");
-            assert_eq!(f("[12, 3]"), "12");
-            assert_eq!(f("{ toString() { return '9 lives'; } }"), "9");
-        }
+    #[rstest]
+    #[case::d("%d")]
+    #[case::i("%i")]
+    fn d_and_i_parse_an_integer(#[case] spec: &str) {
+        let f = |arg: &str| formatted(&format!("['{spec}', {arg}]"));
+        assert_eq!(f("'  7px'"), "7");
+        assert_eq!(f("-42.9"), "-42");
+        assert_eq!(f("'0x10'"), "0");
+        assert_eq!(f("'abc'"), "NaN");
+        assert_eq!(f("-0"), if spec == "%d" { "-0" } else { "0" });
+        assert_eq!(f("123n"), "123");
+        assert_eq!(f("Symbol('s')"), "NaN");
+        assert_eq!(f("'9'.repeat(30)"), "1e+30");
+        assert_eq!(f("NaN"), "NaN");
+        assert_eq!(f("1 / 0"), "NaN");
+        assert_eq!(f("true"), "NaN");
+        assert_eq!(f("null"), "NaN");
+        assert_eq!(f("undefined"), "NaN");
+        assert_eq!(f("-5n"), "-5");
+        assert_eq!(f("{}"), "NaN");
+        assert_eq!(f("[12, 3]"), "12");
+        assert_eq!(f("{ toString() { return '9 lives'; } }"), "9");
     }
 
     #[test]
@@ -329,25 +330,25 @@ mod tests {
         assert_eq!(formatted("['%s', -0, -0]"), "-0 -0");
     }
 
-    #[test]
-    fn a_revoked_proxy_converts_without_leaving_an_exception() {
+    #[rstest]
+    #[case::s("%s", "<Revoked Proxy>")]
+    #[case::lower_o("%o", "<Revoked Proxy>")]
+    #[case::upper_o("%O", "<Revoked Proxy>")]
+    #[case::d("%d", "NaN")]
+    #[case::i("%i", "NaN")]
+    #[case::f("%f", "NaN")]
+    #[case::c("%c", "")]
+    fn a_revoked_proxy_converts_without_leaving_an_exception(
+        #[case] spec: &str,
+        #[case] shown: &str,
+    ) {
         let revoked =
             "(() => { const r = Proxy.revocable({}, {}); r.revoke(); return r.proxy; })()";
-        for (spec, shown) in [
-            ("%s", "<Revoked Proxy>"),
-            ("%o", "<Revoked Proxy>"),
-            ("%O", "<Revoked Proxy>"),
-            ("%d", "NaN"),
-            ("%i", "NaN"),
-            ("%f", "NaN"),
-            ("%c", ""),
-        ] {
-            assert_eq!(
-                formatted(&format!("['{spec}', {revoked}]")),
-                shown,
-                "{spec}"
-            );
-        }
+        assert_eq!(
+            formatted(&format!("['{spec}', {revoked}]")),
+            shown,
+            "{spec}"
+        );
     }
 
     #[test]
@@ -373,71 +374,67 @@ mod tests {
         );
     }
 
-    #[test]
-    fn lower_o_and_upper_o_show_a_primitive_and_an_object_the_way_dir_does() {
-        for spec in ["%o", "%O"] {
-            let f = |arg: &str| formatted(&format!("['{spec}', {arg}]"));
-            assert_eq!(f("'text'"), "'text'");
-            assert_eq!(f("'it\\'s'"), "'it\\'s'");
-            assert_eq!(f("5"), "5");
-            assert_eq!(f("null"), "null");
-            assert_eq!(f("undefined"), "undefined");
-            assert_eq!(f("{ a: 'b', c: 'd' }"), "{ a: 'b', c: 'd' }");
-            assert_eq!(f("Symbol('s')"), "Symbol(s)");
-            assert_eq!(f("7n"), "7n");
-            assert_eq!(f("function named() {}"), "[Function: named]");
-            assert_eq!(
-                f("{ toString() { throw 1; } }"),
-                "{ toString: [Function: toString] }"
-            );
-        }
+    #[rstest]
+    #[case::lower("%o")]
+    #[case::upper("%O")]
+    fn lower_o_and_upper_o_show_a_primitive_and_an_object_the_way_dir_does(#[case] spec: &str) {
+        let f = |arg: &str| formatted(&format!("['{spec}', {arg}]"));
+        assert_eq!(f("'text'"), "'text'");
+        assert_eq!(f("'it\\'s'"), "'it\\'s'");
+        assert_eq!(f("5"), "5");
+        assert_eq!(f("null"), "null");
+        assert_eq!(f("undefined"), "undefined");
+        assert_eq!(f("{ a: 'b', c: 'd' }"), "{ a: 'b', c: 'd' }");
+        assert_eq!(f("Symbol('s')"), "Symbol(s)");
+        assert_eq!(f("7n"), "7n");
+        assert_eq!(f("function named() {}"), "[Function: named]");
+        assert_eq!(
+            f("{ toString() { throw 1; } }"),
+            "{ toString: [Function: toString] }"
+        );
     }
 
-    #[test]
-    fn o_shows_hidden_properties_and_o_leaves_them_out() {
-        let cases = [
-            ("[1, 2, 3]", "[ 1, 2, 3, [length]: 3 ]", "[ 1, 2, 3 ]"),
-            ("[]", "[ [length]: 0 ]", "[]"),
-            (
-                "{ a: { b: [1] } }",
-                "{ a: { b: [ 1, [length]: 1 ] } }",
-                "{ a: { b: [ 1 ] } }",
-            ),
-            (
-                "Object.defineProperty({ a: 1 }, 'h', { value: 'x' })",
-                "{ a: 1, [h]: 'x' }",
-                "{ a: 1 }",
-            ),
-            (
-                "Object.defineProperty({}, 'a b', { value: 1 })",
-                "{ ['a b']: 1 }",
-                "{}",
-            ),
-            (
-                "Object.defineProperty({}, 'g', { get() { throw 1; } })",
-                "{ [g]: [Getter] }",
-                "{}",
-            ),
-        ];
-        for (arg, detailed, plain) in cases {
-            assert_eq!(formatted(&format!("['%o', {arg}]")), detailed, "%o {arg}");
-            assert_eq!(formatted(&format!("['%O', {arg}]")), plain, "%O {arg}");
-        }
+    #[rstest]
+    #[case::array("[1, 2, 3]", "[ 1, 2, 3, [length]: 3 ]", "[ 1, 2, 3 ]")]
+    #[case::empty_array("[]", "[ [length]: 0 ]", "[]")]
+    #[case::nested(
+        "{ a: { b: [1] } }",
+        "{ a: { b: [ 1, [length]: 1 ] } }",
+        "{ a: { b: [ 1 ] } }"
+    )]
+    #[case::hidden_property(
+        "Object.defineProperty({ a: 1 }, 'h', { value: 'x' })",
+        "{ a: 1, [h]: 'x' }",
+        "{ a: 1 }"
+    )]
+    #[case::hidden_key_needing_quotes(
+        "Object.defineProperty({}, 'a b', { value: 1 })",
+        "{ ['a b']: 1 }",
+        "{}"
+    )]
+    #[case::hidden_getter(
+        "Object.defineProperty({}, 'g', { get() { throw 1; } })",
+        "{ [g]: [Getter] }",
+        "{}"
+    )]
+    fn o_shows_hidden_properties_and_o_leaves_them_out(
+        #[case] arg: &str,
+        #[case] detailed: &str,
+        #[case] plain: &str,
+    ) {
+        assert_eq!(formatted(&format!("['%o', {arg}]")), detailed, "%o {arg}");
+        assert_eq!(formatted(&format!("['%O', {arg}]")), plain, "%O {arg}");
     }
 
-    #[test]
-    fn o_shows_the_class_name_and_the_holes_of_a_value() {
-        let cases = [
-            ("new (class Foo { a = 1 })()", "Foo { a: 1 }"),
-            (
-                "Object.assign(Object.create(null), { a: 1 })",
-                "[Object: null prototype] { a: 1 }",
-            ),
-            ("[1, , , 4]", "[ 1, <2 empty items>, 4, [length]: 4 ]"),
-        ];
-        for (arg, expected) in cases {
-            assert_eq!(formatted(&format!("['%o', {arg}]")), expected, "{arg}");
-        }
+    #[rstest]
+    #[case::class_instance("new (class Foo { a = 1 })()", "Foo { a: 1 }")]
+    #[case::null_prototype(
+        "Object.assign(Object.create(null), { a: 1 })",
+        "[Object: null prototype] { a: 1 }"
+    )]
+    #[case::array_holes("[1, , , 4]", "[ 1, <2 empty items>, 4, [length]: 4 ]")]
+    fn o_shows_the_class_name_and_the_holes_of_a_value(#[case] arg: &str, #[case] expected: &str) {
+        assert_eq!(formatted(&format!("['%o', {arg}]")), expected, "{arg}");
     }
 
     #[test]

@@ -285,6 +285,7 @@ mod tests {
     use crate::event_sink::EventSink;
     use crate::tree::{NodeId, VirtualTree};
     use gpui::{Bounds, Pixels, Point, TestAppContext, VisualTestContext, point, px};
+    use rstest::rstest;
 
     const fn rect(x: f32, y: f32, width: f32, height: f32) -> Rect {
         Rect {
@@ -374,12 +375,13 @@ mod tests {
         assert_eq!(center_outside(150.0, 300.0), 0.0);
     }
 
-    #[test]
-    fn a_zero_size_node_inside_or_on_the_edge_of_the_box_shows() {
-        for top in [100.0, 150.0, 200.0] {
-            assert_eq!(dy(top, 0.0, Align::Reveal), 0.0);
-            assert_eq!(dy(top, 0.0, Align::CenterOutside), 0.0);
-        }
+    #[rstest]
+    #[case::top_edge(100.0)]
+    #[case::inside(150.0)]
+    #[case::bottom_edge(200.0)]
+    fn a_zero_size_node_inside_or_on_the_edge_of_the_box_shows(#[case] top: f32) {
+        assert_eq!(dy(top, 0.0, Align::Reveal), 0.0);
+        assert_eq!(dy(top, 0.0, Align::CenterOutside), 0.0);
     }
 
     #[test]

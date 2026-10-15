@@ -29,6 +29,7 @@ serde_json.workspace = true
 test-support = ["gpui/test-support"]
 
 [dev-dependencies]
+rstest.workspace = true
 env_logger.workspace = true
 # Enables this crate's own `test-support` feature for its tests and clippy.
 inca-bridge = { path = ".", features = ["test-support"] }

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::*;
+use rstest::rstest;
 
 fn sp(source: u32, line: u32, column: u32) -> SourcePos {
     SourcePos {
@@ -302,18 +303,13 @@ fn column_inside_a_multibyte_char_walks_back_to_its_start() {
     assert_eq!(one(&src, "    at f (a.js:2:2)"), "    at f (orig.ts:1:1)");
 }
 
-#[test]
-fn source_root_joins_with_one_slash() {
-    let mut mismatches = Vec::new();
-    for root in ["root/", "root"] {
-        let json = map_json(3, ";AAAA", r#"["a.ts"]"#, Some(root));
-        let src = format!("h\nabc\n{}", inline(&json));
-        let out = one(&src, "    at f (a.js:2:1)");
-        if out != "    at f (root/a.ts:1:1)" {
-            mismatches.push((root, out));
-        }
-    }
-    assert_eq!(mismatches, []);
+#[rstest]
+#[case::trailing_slash("root/")]
+#[case::no_slash("root")]
+fn source_root_joins_with_one_slash(#[case] root: &str) {
+    let json = map_json(3, ";AAAA", r#"["a.ts"]"#, Some(root));
+    let src = format!("h\nabc\n{}", inline(&json));
+    assert_eq!(one(&src, "    at f (a.js:2:1)"), "    at f (root/a.ts:1:1)");
 }
 
 #[test]

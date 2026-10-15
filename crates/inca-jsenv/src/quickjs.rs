@@ -231,6 +231,7 @@ impl Drop for Atom<'_, '_> {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use rquickjs::{Context, Persistent, Runtime};
+    use rstest::rstest;
 
     use super::*;
 
@@ -357,16 +358,18 @@ mod tests {
         });
     }
 
-    #[test]
-    fn any_value_is_a_key_by_its_string_form() {
+    #[rstest]
+    #[case::null("null", 1)]
+    #[case::undefined("undefined", 2)]
+    #[case::boolean("true", 3)]
+    #[case::bigint("1n", 4)]
+    fn any_value_is_a_key_by_its_string_form(#[case] key: &str, #[case] expected: i32) {
         with("", |ctx| {
             let object = "({ null: 1, undefined: 2, true: 3, 1: 4 })";
-            for (key, expected) in [("null", 1), ("undefined", 2), ("true", 3), ("1n", 4)] {
-                let key: Value<'_> = ctx.eval(key).unwrap();
-                let d = descriptor(ctx, object, key).unwrap().unwrap();
+            let key: Value<'_> = ctx.eval(key).unwrap();
+            let d = descriptor(ctx, object, key).unwrap().unwrap();
 
-                assert_eq!(d.value.as_int(), Some(expected));
-            }
+            assert_eq!(d.value.as_int(), Some(expected));
             assert!(!ctx.has_exception());
         });
     }
@@ -468,29 +471,26 @@ mod tests {
         });
     }
 
-    #[test]
-    fn a_proxy_gives_its_target_without_a_trap() {
+    #[rstest]
+    #[case::object("spy({ a: 1 })", "t.a === 1")]
+    #[case::function("spy(function f() {})", "typeof t === 'function'")]
+    #[case::array("spy([1, 2])", "Array.isArray(t)")]
+    #[case::map("spy(new Map())", "t instanceof Map")]
+    #[case::class("spy(class C {})", "typeof t === 'function'")]
+    fn a_proxy_gives_its_target_without_a_trap(#[case] source: &str, #[case] check: &str) {
         with(
             "globalThis.calls = 0; globalThis.spy = (t) => new Proxy(t, new Proxy({}, { get() { calls++; } }));",
             |ctx| {
-                for (source, check) in [
-                    ("spy({ a: 1 })", "t.a === 1"),
-                    ("spy(function f() {})", "typeof t === 'function'"),
-                    ("spy([1, 2])", "Array.isArray(t)"),
-                    ("spy(new Map())", "t instanceof Map"),
-                    ("spy(class C {})", "typeof t === 'function'"),
-                ] {
-                    ctx.eval::<(), _>(format!(
-                        "globalThis.p = {source}; globalThis.t = undefined;"
-                    ))
-                    .unwrap();
-                    let proxy: Value<'_> = ctx.globals().get("p").unwrap();
-                    assert!(proxy.is_proxy(), "{source}");
-                    let target = proxy.proxy_target().unwrap();
-                    ctx.globals().set("t", target).unwrap();
+                ctx.eval::<(), _>(format!(
+                    "globalThis.p = {source}; globalThis.t = undefined;"
+                ))
+                .unwrap();
+                let proxy: Value<'_> = ctx.globals().get("p").unwrap();
+                assert!(proxy.is_proxy(), "{source}");
+                let target = proxy.proxy_target().unwrap();
+                ctx.globals().set("t", target).unwrap();
 
-                    assert!(ctx.eval::<bool, _>(check).unwrap(), "{source}");
-                }
+                assert!(ctx.eval::<bool, _>(check).unwrap(), "{source}");
                 assert_eq!(calls(ctx), 0);
             },
         );
@@ -600,22 +600,22 @@ mod tests {
         }
     }
 
-    #[test]
-    fn every_outcome_of_the_descriptor_read_releases_what_it_takes() {
-        for (name, key) in [
-            ("data", "a"),
-            ("get", "a"),
-            ("set", "a"),
-            ("both", "a"),
-            ("none", "a"),
-            ("data", "missing"),
-            ("proxy", "a"),
-            ("data", "\u{e9}"),
-        ] {
-            let (before, after) = around(|ctx| read(ctx, name, key));
+    #[rstest]
+    #[case::data("data", "a")]
+    #[case::getter("get", "a")]
+    #[case::setter("set", "a")]
+    #[case::getter_and_setter("both", "a")]
+    #[case::undefined_accessors("none", "a")]
+    #[case::missing_key("data", "missing")]
+    #[case::throwing_proxy_trap("proxy", "a")]
+    #[case::non_ascii_key("data", "\u{e9}")]
+    fn every_outcome_of_the_descriptor_read_releases_what_it_takes(
+        #[case] name: &str,
+        #[case] key: &str,
+    ) {
+        let (before, after) = around(|ctx| read(ctx, name, key));
 
-            assert_eq!(before, after, "{name} {key}");
-        }
+        assert_eq!(before, after, "{name} {key}");
     }
 
     #[test]

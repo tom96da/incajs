@@ -5,6 +5,7 @@
 
 use super::*;
 use gpui::AppContext as _;
+use rstest::rstest;
 
 #[test]
 fn key_name_prefers_a_named_key_over_its_key_char() {
@@ -201,35 +202,37 @@ fn field_mismatches(
     }
 }
 
-#[test]
-fn a_click_payload_carries_the_release_point_count_and_button() {
+#[rstest]
+#[case::left_single(MouseButton::Left, 1, 0)]
+#[case::left_double(MouseButton::Left, 2, 0)]
+#[case::middle(MouseButton::Middle, 1, 1)]
+#[case::right(MouseButton::Right, 1, 2)]
+fn a_click_payload_carries_the_release_point_count_and_button(
+    #[case] button: MouseButton,
+    #[case] count: usize,
+    #[case] want_button: u8,
+) {
     let shift = gpui::Modifiers {
         shift: true,
         ..Default::default()
     };
-    let release = |button, count| MouseUpEvent {
+    let event = MouseUpEvent {
         button,
         position: gpui::point(gpui::px(3.0), gpui::px(4.0)),
         modifiers: shift,
         click_count: count,
     };
-    let mouse = Some(PointerSource::Mouse);
-    // (event, expected fields)
-    let cases = [
-        (release(MouseButton::Left, 1), (3.0, 4.0, 0, 0, 1, mouse)),
-        (release(MouseButton::Left, 2), (3.0, 4.0, 0, 0, 2, mouse)),
-        (release(MouseButton::Middle, 1), (3.0, 4.0, 1, 0, 1, mouse)),
-        (release(MouseButton::Right, 1), (3.0, 4.0, 2, 0, 1, mouse)),
-    ];
-    let mut mismatches = Vec::new();
-    for (event, want) in cases {
-        let payload = mouse_payload(EventPayload::click(&event));
-        mismatches.extend(field_mismatches(&payload, want));
-        if payload.modifiers != shift {
-            mismatches.push(format!("modifiers {:?}", payload.modifiers));
-        }
-    }
-    assert!(mismatches.is_empty(), "{mismatches:?}");
+    let want = (
+        3.0,
+        4.0,
+        want_button,
+        0,
+        u32::try_from(count).unwrap(),
+        Some(PointerSource::Mouse),
+    );
+    let payload = mouse_payload(EventPayload::click(&event));
+    assert_eq!(field_mismatches(&payload, want), Vec::<String>::new());
+    assert_eq!(payload.modifiers, shift);
 }
 
 #[test]
@@ -270,19 +273,16 @@ fn a_line_delta_reports_delta_mode_1() {
     assert_eq!(wheel.delta_mode, 1);
 }
 
-#[test]
-fn a_zero_delta_stays_positive_zero() {
-    for delta in [
-        ScrollDelta::Pixels(gpui::point(gpui::px(0.0), gpui::px(-0.0))),
-        ScrollDelta::Lines(gpui::point(0.0, -0.0)),
-    ] {
-        let event = ScrollWheelEvent {
-            delta,
-            ..Default::default()
-        };
-        let wheel = wheel_payload(EventPayload::from(&event));
-        assert!(wheel.delta_x.is_sign_positive() && wheel.delta_y.is_sign_positive());
-    }
+#[rstest]
+#[case::pixels(ScrollDelta::Pixels(gpui::point(gpui::px(0.0), gpui::px(-0.0))))]
+#[case::lines(ScrollDelta::Lines(gpui::point(0.0, -0.0)))]
+fn a_zero_delta_stays_positive_zero(#[case] delta: ScrollDelta) {
+    let event = ScrollWheelEvent {
+        delta,
+        ..Default::default()
+    };
+    let wheel = wheel_payload(EventPayload::from(&event));
+    assert!(wheel.delta_x.is_sign_positive() && wheel.delta_y.is_sign_positive());
 }
 
 #[test]

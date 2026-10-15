@@ -282,6 +282,7 @@ pub fn encode(message: &Outgoing) -> serde_json::Result<String> {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+    use rstest::rstest;
     use serde_json::json;
 
     fn call(line: &str) -> Incoming {
@@ -369,30 +370,28 @@ mod tests {
         assert_eq!(call("   \t "), Incoming::Empty);
     }
 
-    #[test]
-    fn only_broken_json_syntax_is_a_parse_error() {
-        for line in [r"{", r#"{"jsonrpc":}"#, "{,}"] {
-            let (code, _) = decode(line).unwrap_err();
-            assert_eq!(code, ErrorCode::ParseError, "{line}");
-        }
+    #[rstest]
+    #[case::unclosed_object(r"{")]
+    #[case::missing_value(r#"{"jsonrpc":}"#)]
+    #[case::stray_comma("{,}")]
+    fn only_broken_json_syntax_is_a_parse_error(#[case] line: &str) {
+        let (code, _) = decode(line).unwrap_err();
+        assert_eq!(code, ErrorCode::ParseError, "{line}");
     }
 
-    #[test]
-    fn json_that_parses_but_is_no_request_is_an_invalid_request() {
-        for line in [
-            r#"["2.0",1,"reload"]"#,
-            r#""reload""#,
-            "7",
-            "null",
-            r#"{"id":1,"method":"reload"}"#,
-            r#"{"jsonrpc":"1.0","id":1,"method":"reload"}"#,
-            r#"{"jsonrpc":"2.0","id":1}"#,
-            r#"{"jsonrpc":"2.0","id":{"n":1},"method":"reload"}"#,
-            r#"{"jsonrpc":"2.0","id":[1],"method":"reload"}"#,
-        ] {
-            let (code, _) = decode(line).unwrap_err();
-            assert_eq!(code, ErrorCode::InvalidRequest, "{line}");
-        }
+    #[rstest]
+    #[case::array(r#"["2.0",1,"reload"]"#)]
+    #[case::string(r#""reload""#)]
+    #[case::number("7")]
+    #[case::null("null")]
+    #[case::no_version(r#"{"id":1,"method":"reload"}"#)]
+    #[case::wrong_version(r#"{"jsonrpc":"1.0","id":1,"method":"reload"}"#)]
+    #[case::no_method(r#"{"jsonrpc":"2.0","id":1}"#)]
+    #[case::object_id(r#"{"jsonrpc":"2.0","id":{"n":1},"method":"reload"}"#)]
+    #[case::array_id(r#"{"jsonrpc":"2.0","id":[1],"method":"reload"}"#)]
+    fn json_that_parses_but_is_no_request_is_an_invalid_request(#[case] line: &str) {
+        let (code, _) = decode(line).unwrap_err();
+        assert_eq!(code, ErrorCode::InvalidRequest, "{line}");
     }
 
     #[test]

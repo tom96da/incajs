@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::*;
+use rstest::rstest;
 
 /// Captures every line written to it instead of touching real stdout, so
 /// a test can read back what was sent.
@@ -92,16 +93,15 @@ fn reported_failure_is_true_once_per_report_even_when_cleared() {
     assert!(loading.reported_failure());
 }
 
-#[test]
-fn begin_returns_the_error_of_an_entry_that_throws_or_rejects_before_it_waits() {
-    for source in [
-        "throw new Error('sync');",
-        "await Promise.resolve(); throw new Error('async');",
-    ] {
-        let err = begin(source).err().unwrap();
-        assert!(err.message().starts_with("Error: "), "{source}");
-        assert!(err.stack().is_some(), "{source}");
-    }
+#[rstest]
+#[case::throws_synchronously("throw new Error('sync');")]
+#[case::throws_after_an_await("await Promise.resolve(); throw new Error('async');")]
+fn begin_returns_the_error_of_an_entry_that_throws_or_rejects_before_it_waits(
+    #[case] source: &str,
+) {
+    let err = begin(source).err().unwrap();
+    assert!(err.message().starts_with("Error: "), "{source}");
+    assert!(err.stack().is_some(), "{source}");
 }
 
 #[test]

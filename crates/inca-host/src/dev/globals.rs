@@ -156,6 +156,7 @@ pub(crate) fn call_dev_receive(
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+    use rstest::rstest;
     use std::cell::RefCell;
 
     fn engine_with_dev(on_send: DevSend) -> Engine {
@@ -266,38 +267,37 @@ mod tests {
         assert!(settle(&engine, "").contains("app/counter.ts:3:"));
     }
 
-    #[test]
-    fn compile_throws_type_error_for_non_string_array_params() {
+    #[rstest]
+    #[case::string("'a'")]
+    #[case::null("null")]
+    #[case::number_item("[1]")]
+    #[case::null_item("[null]")]
+    fn compile_throws_type_error_for_non_string_array_params(#[case] params: &str) {
         let engine = engine_with_dev(Rc::new(|_, _| {}));
-        for params in ["'a'", "null", "[1]", "[null]"] {
-            let thrown = thrown_by(
-                &engine,
-                &format!("__inca_dev__.compile({params}, 'return 1;', 'f.js')"),
-            );
-            assert!(thrown.starts_with("TypeError"), "{params}: {thrown}");
-        }
+        let thrown = thrown_by(
+            &engine,
+            &format!("__inca_dev__.compile({params}, 'return 1;', 'f.js')"),
+        );
+        assert!(thrown.starts_with("TypeError"), "{params}: {thrown}");
     }
 
-    #[test]
-    fn compile_throws_type_error_for_a_nul_byte_in_params_body_or_filename() {
+    #[rstest]
+    #[case::in_params(r"['a\u0000b'], 'return 1;', 'f.js'")]
+    #[case::in_body(r"[], 'return\u00001;', 'f.js'")]
+    #[case::in_filename(r"[], 'return 1;', 'f\u0000.js'")]
+    fn compile_throws_type_error_for_a_nul_byte_in_params_body_or_filename(#[case] args: &str) {
         let engine = engine_with_dev(Rc::new(|_, _| {}));
-        for args in [
-            r"['a\u0000b'], 'return 1;', 'f.js'",
-            r"[], 'return\u00001;', 'f.js'",
-            r"[], 'return 1;', 'f\u0000.js'",
-        ] {
-            let thrown = thrown_by(&engine, &format!("__inca_dev__.compile({args})"));
-            assert!(thrown.starts_with("TypeError"), "{args}: {thrown}");
-        }
+        let thrown = thrown_by(&engine, &format!("__inca_dev__.compile({args})"));
+        assert!(thrown.starts_with("TypeError"), "{args}: {thrown}");
     }
 
-    #[test]
-    fn compile_throws_type_error_for_a_non_string_body_or_filename() {
+    #[rstest]
+    #[case::body("[], 1, 'f.js'")]
+    #[case::filename("[], 'return 1;', 1")]
+    fn compile_throws_type_error_for_a_non_string_body_or_filename(#[case] args: &str) {
         let engine = engine_with_dev(Rc::new(|_, _| {}));
-        for args in ["[], 1, 'f.js'", "[], 'return 1;', 1"] {
-            let thrown = thrown_by(&engine, &format!("__inca_dev__.compile({args})"));
-            assert!(thrown.starts_with("TypeError"), "{args}: {thrown}");
-        }
+        let thrown = thrown_by(&engine, &format!("__inca_dev__.compile({args})"));
+        assert!(thrown.starts_with("TypeError"), "{args}: {thrown}");
     }
 
     #[test]
@@ -368,23 +368,26 @@ mod tests {
         assert!(flag.failed());
     }
 
-    #[test]
-    fn set_load_failed_throws_for_a_non_boolean_and_keeps_the_signal() {
-        for arg in ["'true'", "1", "undefined", "null", ""] {
-            let (engine, flag) = flag_engine(true);
-            engine
-                .eval::<()>(&format!(
-                    r"
-                    globalThis.threw = false;
-                    try {{ __inca_dev__.setLoadFailed({arg}); }}
-                    catch (e) {{ globalThis.threw = e instanceof TypeError; }}
-                    "
-                ))
-                .unwrap();
-            assert!(engine.eval::<bool>("globalThis.threw;").unwrap(), "{arg:?}");
-            assert!(flag.failed(), "{arg:?}");
-            assert_eq!(flag.failures(), 0, "{arg:?}");
-        }
+    #[rstest]
+    #[case::string("'true'")]
+    #[case::number("1")]
+    #[case::undefined("undefined")]
+    #[case::null("null")]
+    #[case::no_argument("")]
+    fn set_load_failed_throws_for_a_non_boolean_and_keeps_the_signal(#[case] arg: &str) {
+        let (engine, flag) = flag_engine(true);
+        engine
+            .eval::<()>(&format!(
+                r"
+                globalThis.threw = false;
+                try {{ __inca_dev__.setLoadFailed({arg}); }}
+                catch (e) {{ globalThis.threw = e instanceof TypeError; }}
+                "
+            ))
+            .unwrap();
+        assert!(engine.eval::<bool>("globalThis.threw;").unwrap(), "{arg:?}");
+        assert!(flag.failed(), "{arg:?}");
+        assert_eq!(flag.failures(), 0, "{arg:?}");
     }
 
     #[test]

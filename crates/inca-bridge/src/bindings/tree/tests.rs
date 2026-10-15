@@ -3,6 +3,7 @@
 
 use super::*;
 use crate::test_support::{callback_ids, engine_with_bindings};
+use rstest::rstest;
 
 #[test]
 fn remove_style_unsets_the_key_and_throws_for_an_unknown_node() {
@@ -412,36 +413,40 @@ fn get_attribute_on_an_unknown_node_throws_type_error() {
     assert!(caught, "an unknown node id must raise a TypeError");
 }
 
-#[test]
-fn node_id_that_is_not_a_whole_u32_throws_type_error() {
+#[rstest]
+#[case::nan("NaN")]
+#[case::fractional("1.5")]
+#[case::negative("-1")]
+#[case::infinity("Infinity")]
+#[case::above_u32("2 ** 32")]
+#[case::numeric_string("'1'")]
+fn node_id_that_is_not_a_whole_u32_throws_type_error(#[case] bad: &str) {
     let (engine, _host) = engine_with_bindings();
 
-    for bad in ["NaN", "1.5", "-1", "Infinity", "2 ** 32", "'1'"] {
-        let script = format!(
-            r"
-            (() => {{ const node = __inca_native__.createNode('div');
-            const rejects = (f) => {{
-                try {{ f(); return false; }} catch (e) {{ return e instanceof TypeError; }}
-            }};
-            return [
-                rejects(() => __inca_native__.setStyle({bad}, 'width', 1)),
-                rejects(() => __inca_native__.removeStyle({bad}, 'width')),
-                rejects(() => __inca_native__.getAttribute({bad}, 'label')),
-                rejects(() => __inca_native__.removeAttribute({bad}, 'label')),
-                rejects(() => __inca_native__.appendChild({bad}, node)),
-                rejects(() => __inca_native__.appendChild(node, {bad})),
-                rejects(() => __inca_native__.insertBefore(node, node, {bad})),
-                rejects(() => __inca_native__.destroyNode({bad})),
-                rejects(() => __inca_native__.addEventListener({bad}, 'click')),
-                rejects(() => __inca_native__.removeEventListener({bad}, 'click', 1)),
-                rejects(() => __inca_native__.focusNode({bad})),
-                rejects(() => __inca_native__.dispatchEvent({bad}, {{}})),
-                rejects(() => __inca_native__.click({bad})),
-            ].every(Boolean); }})()
-            "
-        );
-        assert!(engine.eval::<bool>(&script).unwrap(), "{bad}");
-    }
+    let script = format!(
+        r"
+        (() => {{ const node = __inca_native__.createNode('div');
+        const rejects = (f) => {{
+            try {{ f(); return false; }} catch (e) {{ return e instanceof TypeError; }}
+        }};
+        return [
+            rejects(() => __inca_native__.setStyle({bad}, 'width', 1)),
+            rejects(() => __inca_native__.removeStyle({bad}, 'width')),
+            rejects(() => __inca_native__.getAttribute({bad}, 'label')),
+            rejects(() => __inca_native__.removeAttribute({bad}, 'label')),
+            rejects(() => __inca_native__.appendChild({bad}, node)),
+            rejects(() => __inca_native__.appendChild(node, {bad})),
+            rejects(() => __inca_native__.insertBefore(node, node, {bad})),
+            rejects(() => __inca_native__.destroyNode({bad})),
+            rejects(() => __inca_native__.addEventListener({bad}, 'click')),
+            rejects(() => __inca_native__.removeEventListener({bad}, 'click', 1)),
+            rejects(() => __inca_native__.focusNode({bad})),
+            rejects(() => __inca_native__.dispatchEvent({bad}, {{}})),
+            rejects(() => __inca_native__.click({bad})),
+        ].every(Boolean); }})()
+        "
+    );
+    assert!(engine.eval::<bool>(&script).unwrap(), "{bad}");
 }
 
 #[test]

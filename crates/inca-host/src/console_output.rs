@@ -50,6 +50,7 @@ pub(crate) fn color_from_env() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
 
     fn os(text: &str) -> &OsStr {
         OsStr::new(text)
@@ -86,12 +87,17 @@ mod tests {
         assert!(!color_enabled(None, Some(os("false")), false));
     }
 
-    #[test]
-    fn any_other_non_empty_force_color_turns_color_on_without_a_terminal() {
-        for value in ["1", "2", "3", "true", "yes", "FALSE", "00"] {
-            assert!(color_enabled(None, Some(os(value)), false), "{value}");
-            assert!(color_enabled(None, Some(os(value)), true), "{value}");
-        }
+    #[rstest]
+    #[case::one("1")]
+    #[case::two("2")]
+    #[case::three("3")]
+    #[case::true_word("true")]
+    #[case::yes("yes")]
+    #[case::upper_case_false("FALSE")]
+    #[case::double_zero("00")]
+    fn any_other_non_empty_force_color_turns_color_on_without_a_terminal(#[case] value: &str) {
+        assert!(color_enabled(None, Some(os(value)), false), "{value}");
+        assert!(color_enabled(None, Some(os(value)), true), "{value}");
     }
 
     #[test]

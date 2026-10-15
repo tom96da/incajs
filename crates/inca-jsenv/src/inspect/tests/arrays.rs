@@ -2,25 +2,21 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::*;
+use rstest::rstest;
+
+#[rstest]
+#[case::middle("[1, , 3]", "[ 1, <1 empty item>, 3 ]")]
+#[case::leading("[, 1]", "[ <1 empty item>, 1 ]")]
+#[case::trailing("[1, , ]", "[ 1, <1 empty item> ]")]
+#[case::several_runs("[1, , , 4, , 6]", "[ 1, <2 empty items>, 4, <1 empty item>, 6 ]")]
+#[case::only_holes("new Array(3)", "[ <3 empty items> ]")]
+#[case::around_undefined("[undefined, , undefined]", "[ undefined, <1 empty item>, undefined ]")]
+fn array_holes_print_as_counted_empty_items(#[case] source: &str, #[case] shown: &str) {
+    assert_eq!(rendered(source), shown, "{source}");
+}
 
 #[test]
-fn array_holes_print_as_counted_empty_items() {
-    for (source, shown) in [
-        ("[1, , 3]", "[ 1, <1 empty item>, 3 ]"),
-        ("[, 1]", "[ <1 empty item>, 1 ]"),
-        ("[1, , ]", "[ 1, <1 empty item> ]"),
-        (
-            "[1, , , 4, , 6]",
-            "[ 1, <2 empty items>, 4, <1 empty item>, 6 ]",
-        ),
-        ("new Array(3)", "[ <3 empty items> ]"),
-        (
-            "[undefined, , undefined]",
-            "[ undefined, <1 empty item>, undefined ]",
-        ),
-    ] {
-        assert_eq!(rendered(source), shown, "{source}");
-    }
+fn array_holes_print_grey_when_colored() {
     assert_eq!(
         colored("[1, , 3]"),
         format!(
@@ -38,29 +34,26 @@ fn numbers(count: usize, tail: &str) -> String {
     format!("[ {}{tail} ]", items.join(", "))
 }
 
-#[test]
-fn an_array_prints_up_to_100_entries() {
-    for length in [99, 100] {
-        assert_eq!(
-            rendered(&format!("Array.from({{ length: {length} }}, (_, i) => i)")),
-            numbers(length, "")
-        );
-    }
+#[rstest]
+#[case::below_cap(99)]
+#[case::at_cap(100)]
+fn an_array_prints_up_to_100_entries(#[case] length: usize) {
+    assert_eq!(
+        rendered(&format!("Array.from({{ length: {length} }}, (_, i) => i)")),
+        numbers(length, "")
+    );
 }
 
-#[test]
-fn an_array_past_100_entries_counts_the_rest() {
-    for (length, tail) in [
-        (101, ", ... 1 more item"),
-        (102, ", ... 2 more items"),
-        (1000, ", ... 900 more items"),
-    ] {
-        assert_eq!(
-            rendered(&format!("Array.from({{ length: {length} }}, (_, i) => i)")),
-            numbers(100, tail),
-            "{length}"
-        );
-    }
+#[rstest]
+#[case::one_more(101, ", ... 1 more item")]
+#[case::two_more(102, ", ... 2 more items")]
+#[case::many_more(1000, ", ... 900 more items")]
+fn an_array_past_100_entries_counts_the_rest(#[case] length: usize, #[case] tail: &str) {
+    assert_eq!(
+        rendered(&format!("Array.from({{ length: {length} }}, (_, i) => i)")),
+        numbers(100, tail),
+        "{length}"
+    );
 }
 
 #[test]
@@ -151,46 +144,40 @@ fn a_huge_array_is_cut_and_its_tail_counted() {
     );
 }
 
-#[test]
-fn a_sparse_array_costs_its_present_elements_and_not_its_length() {
+#[rstest]
+#[case::hole_run_then_element("const a = []; a[1e9] = 1; a", "[ <1000000000 empty items>, 1 ]")]
+#[case::max_length("new Array(4294967295)", "[ <4294967295 empty items> ]")]
+#[case::length_assigned("const a = []; a.length = 2 ** 31; a", "[ <2147483648 empty items> ]")]
+#[case::highest_index(
+    "const a = []; a[4294967294] = 1; a",
+    "[ <4294967294 empty items>, 1 ]"
+)]
+#[case::elements_set_out_of_order(
+    "const a = []; a[2e9] = 'y'; a[5e8] = 'x'; a",
+    "[ <500000000 empty items>, 'x', <1499999999 empty items>, 'y' ]"
+)]
+#[case::small_indexes_out_of_order(
+    "const a = []; a[5] = 1; a[2] = 2; a",
+    "[ <2 empty items>, 2, <2 empty items>, 1 ]"
+)]
+#[case::length_past_elements(
+    "const a = [1, 2, 3]; a.length = 2 ** 32 - 1; a",
+    "[ 1, 2, 3, <4294967292 empty items> ]"
+)]
+#[case::getter_among_holes(
+    "const a = []; Object.defineProperty(a, 1, { get() { calls++; } }); a[4] = 1; a",
+    "[ <1 empty item>, [Getter], <2 empty items>, 1 ]"
+)]
+#[case::past_nesting_depth(
+    "({ a: { b: { c: (() => { const a = []; a[1e9] = 1; return a; })() } } })",
+    "{ a: { b: { c: [Array] } } }"
+)]
+fn a_sparse_array_costs_its_present_elements_and_not_its_length(
+    #[case] source: &str,
+    #[case] shown: &str,
+) {
     let started = std::time::Instant::now();
-    for (source, shown) in [
-        (
-            "const a = []; a[1e9] = 1; a",
-            "[ <1000000000 empty items>, 1 ]",
-        ),
-        ("new Array(4294967295)", "[ <4294967295 empty items> ]"),
-        (
-            "const a = []; a.length = 2 ** 31; a",
-            "[ <2147483648 empty items> ]",
-        ),
-        (
-            "const a = []; a[4294967294] = 1; a",
-            "[ <4294967294 empty items>, 1 ]",
-        ),
-        (
-            "const a = []; a[2e9] = 'y'; a[5e8] = 'x'; a",
-            "[ <500000000 empty items>, 'x', <1499999999 empty items>, 'y' ]",
-        ),
-        (
-            "const a = []; a[5] = 1; a[2] = 2; a",
-            "[ <2 empty items>, 2, <2 empty items>, 1 ]",
-        ),
-        (
-            "const a = [1, 2, 3]; a.length = 2 ** 32 - 1; a",
-            "[ 1, 2, 3, <4294967292 empty items> ]",
-        ),
-        (
-            "const a = []; Object.defineProperty(a, 1, { get() { calls++; } }); a[4] = 1; a",
-            "[ <1 empty item>, [Getter], <2 empty items>, 1 ]",
-        ),
-        (
-            "({ a: { b: { c: (() => { const a = []; a[1e9] = 1; return a; })() } } })",
-            "{ a: { b: { c: [Array] } } }",
-        ),
-    ] {
-        assert_eq!(counted(source), (shown.to_owned(), 0), "{source}");
-    }
+    assert_eq!(counted(source), (shown.to_owned(), 0), "{source}");
     assert!(
         started.elapsed() < std::time::Duration::from_secs(2),
         "{:?}",

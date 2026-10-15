@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::*;
+use rstest::rstest;
 
 #[test]
 fn create_node_fails_once_the_id_space_is_used_up() {
@@ -407,16 +408,17 @@ fn set_style_is_independent_of_attributes() {
     assert!(got.attributes().get("color").is_none());
 }
 
-#[test]
-fn a_style_key_reads_back_in_snake_case_whatever_its_spelling() {
-    for key in ["flexDirection", "flex-direction", "flex_direction"] {
-        let mut tree = VirtualTree::new();
-        let id = tree.create_node("div").unwrap();
-        tree.set_style(id, key, "column").unwrap();
-        let props = tree.get(id).unwrap().style_props();
-        assert_eq!(props.len(), 1, "{key}");
-        assert_eq!(props.get("flex_direction"), Some(&"column".into()), "{key}");
-    }
+#[rstest]
+#[case::camel("flexDirection")]
+#[case::kebab("flex-direction")]
+#[case::snake("flex_direction")]
+fn a_style_key_reads_back_in_snake_case_whatever_its_spelling(#[case] key: &str) {
+    let mut tree = VirtualTree::new();
+    let id = tree.create_node("div").unwrap();
+    tree.set_style(id, key, "column").unwrap();
+    let props = tree.get(id).unwrap().style_props();
+    assert_eq!(props.len(), 1, "{key}");
+    assert_eq!(props.get("flex_direction"), Some(&"column".into()), "{key}");
 }
 
 #[test]
@@ -438,20 +440,17 @@ fn style_key_borrows_a_snake_case_key() {
     assert!(matches!(style_key("flex_direction"), Cow::Borrowed(_)));
 }
 
-#[test]
-fn a_style_key_normalizes_to_snake_case_in_every_edge_case() {
-    for (key, want) in [
-        ("flexDirection", "flex_direction"),
-        ("flex-direction", "flex_direction"),
-        ("FlexDirection", "_flex_direction"),
-        ("--x", "__x"),
-        ("flex-Direction", "flex__direction"),
-        ("", ""),
-        ("é-Z", "é__z"),
-        ("幅", "幅"),
-    ] {
-        assert_eq!(style_key(key), want, "{key}");
-    }
+#[rstest]
+#[case::camel("flexDirection", "flex_direction")]
+#[case::kebab("flex-direction", "flex_direction")]
+#[case::leading_capital("FlexDirection", "_flex_direction")]
+#[case::double_dash("--x", "__x")]
+#[case::dash_before_capital("flex-Direction", "flex__direction")]
+#[case::empty("", "")]
+#[case::multibyte_before_capital("é-Z", "é__z")]
+#[case::multibyte_only("幅", "幅")]
+fn a_style_key_normalizes_to_snake_case_in_every_edge_case(#[case] key: &str, #[case] want: &str) {
+    assert_eq!(style_key(key), want, "{key}");
 }
 
 #[test]

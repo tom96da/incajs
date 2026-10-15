@@ -4,6 +4,7 @@
 #![allow(clippy::unwrap_used)]
 
 use super::*;
+use rstest::rstest;
 
 #[test]
 fn a_removed_style_key_renders_as_the_default() {
@@ -351,18 +352,20 @@ fn overflow_keys_are_mapped_and_auto_scrolls() {
     assert_eq!(overflow_of(&[("overflow_y", "auto")]), (None, Some(Scroll)));
 }
 
-#[test]
-fn an_overflow_axis_key_beats_the_shorthand_in_any_order() {
+#[rstest]
+#[case::shorthand_first([0, 1, 2])]
+#[case::axes_then_shorthand([2, 1, 0])]
+#[case::x_shorthand_y([1, 0, 2])]
+#[case::x_y_shorthand([1, 2, 0])]
+fn an_overflow_axis_key_beats_the_shorthand_in_any_order(#[case] order: [usize; 3]) {
     use OverflowSpec::{Hidden, Scroll};
     let keys = [
         ("overflow", "hidden"),
         ("overflow_x", "scroll"),
         ("overflow_y", "scroll"),
     ];
-    for order in [[0, 1, 2], [2, 1, 0], [1, 0, 2], [1, 2, 0]] {
-        let props: Vec<_> = order.iter().map(|&i| keys[i]).collect();
-        assert_eq!(overflow_of(&props), (Some(Scroll), Some(Scroll)));
-    }
+    let props: Vec<_> = order.iter().map(|&i| keys[i]).collect();
+    assert_eq!(overflow_of(&props), (Some(Scroll), Some(Scroll)));
     assert_eq!(
         overflow_of(&[("overflow_y", "scroll"), ("overflow", "hidden")]),
         (Some(Hidden), Some(Scroll))
@@ -521,16 +524,23 @@ fn malformed_color_string_is_ignored_with_a_warning() {
     );
 }
 
-#[test]
-fn a_color_string_with_a_sign_or_non_hex_digit_is_ignored() {
-    for bad in [
-        "#+abcde", "#-abcde", "#+ab", "#+abcd", "#12345g", "#gg0", "#12", "#1234", "#1234567",
-        "ffffff", "#", "#ééé",
-    ] {
-        let (style, warnings) = style_and_warnings(&[("text_color", text(bad))]);
-        assert_eq!(style.text_color, None, "{bad}");
-        assert_eq!(warnings.len(), 1, "{bad}");
-    }
+#[rstest]
+#[case::plus_six_digits("#+abcde")]
+#[case::minus_six_digits("#-abcde")]
+#[case::plus_three_digits("#+ab")]
+#[case::plus_four_digits("#+abcd")]
+#[case::non_hex_digit("#12345g")]
+#[case::non_hex_short("#gg0")]
+#[case::two_digits("#12")]
+#[case::four_digits("#1234")]
+#[case::seven_digits("#1234567")]
+#[case::no_hash("ffffff")]
+#[case::hash_only("#")]
+#[case::multibyte("#ééé")]
+fn a_color_string_with_a_sign_or_non_hex_digit_is_ignored(#[case] bad: &str) {
+    let (style, warnings) = style_and_warnings(&[("text_color", text(bad))]);
+    assert_eq!(style.text_color, None, "{bad}");
+    assert_eq!(warnings.len(), 1, "{bad}");
 }
 
 #[test]
@@ -544,22 +554,24 @@ fn color_strings_accept_either_hex_case() {
     assert!(warnings.is_empty());
 }
 
-#[test]
-fn numeric_colors_cover_exactly_zero_to_ffffff() {
-    for (n, expected) in [(0.0, 0), (f64::from(0xFF_FFFF), 0xFF_FFFF), (255.0, 255)] {
-        let (style, warnings) = style_and_warnings(&[("background", num(n))]);
-        assert_eq!(style.background, Some(expected), "{n}");
-        assert!(warnings.is_empty(), "{n}");
-    }
+#[rstest]
+#[case::zero(0.0, 0)]
+#[case::max(f64::from(0xFF_FFFF), 0xFF_FFFF)]
+#[case::byte_max(255.0, 255)]
+fn numeric_colors_cover_exactly_zero_to_ffffff(#[case] n: f64, #[case] expected: u32) {
+    let (style, warnings) = style_and_warnings(&[("background", num(n))]);
+    assert_eq!(style.background, Some(expected), "{n}");
+    assert!(warnings.is_empty(), "{n}");
 }
 
-#[test]
-fn a_fractional_numeric_color_rounds_toward_zero() {
-    for (n, expected) in [(0.5, 0), (1.5, 1), (16_777_214.5, 0xFF_FFFE)] {
-        let (style, warnings) = style_and_warnings(&[("background", num(n))]);
-        assert_eq!(style.background, Some(expected), "{n}");
-        assert!(warnings.is_empty(), "{n}");
-    }
+#[rstest]
+#[case::half(0.5, 0)]
+#[case::one_and_half(1.5, 1)]
+#[case::near_max(16_777_214.5, 0xFF_FFFE)]
+fn a_fractional_numeric_color_rounds_toward_zero(#[case] n: f64, #[case] expected: u32) {
+    let (style, warnings) = style_and_warnings(&[("background", num(n))]);
+    assert_eq!(style.background, Some(expected), "{n}");
+    assert!(warnings.is_empty(), "{n}");
 }
 
 #[test]
@@ -569,29 +581,26 @@ fn a_negative_fractional_numeric_color_is_ignored_with_a_warning() {
     assert_eq!(warnings.len(), 1);
 }
 
-#[test]
-fn an_out_of_range_numeric_color_is_ignored_with_a_warning() {
-    for bad in [
-        -1.0,
-        f64::from(0x0100_0000),
-        f64::from(u32::MAX),
-        1e20,
-        f64::NAN,
-        f64::INFINITY,
-        f64::NEG_INFINITY,
-    ] {
-        let (style, warnings) = style_and_warnings(&[
-            ("background", num(bad)),
-            ("border_color", num(bad)),
-            ("text_color", num(bad)),
-        ]);
-        assert_eq!(
-            (style.background, style.border_color, style.text_color),
-            (None, None, None),
-            "{bad}"
-        );
-        assert_eq!(warnings.len(), 3, "{bad}");
-    }
+#[rstest]
+#[case::negative(-1.0)]
+#[case::just_above_ffffff(f64::from(0x0100_0000))]
+#[case::u32_max(f64::from(u32::MAX))]
+#[case::huge(1e20)]
+#[case::nan(f64::NAN)]
+#[case::infinity(f64::INFINITY)]
+#[case::negative_infinity(f64::NEG_INFINITY)]
+fn an_out_of_range_numeric_color_is_ignored_with_a_warning(#[case] bad: f64) {
+    let (style, warnings) = style_and_warnings(&[
+        ("background", num(bad)),
+        ("border_color", num(bad)),
+        ("text_color", num(bad)),
+    ]);
+    assert_eq!(
+        (style.background, style.border_color, style.text_color),
+        (None, None, None),
+        "{bad}"
+    );
+    assert_eq!(warnings.len(), 3, "{bad}");
 }
 
 #[test]

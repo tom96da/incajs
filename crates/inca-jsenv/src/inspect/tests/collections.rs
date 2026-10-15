@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::*;
+use rstest::rstest;
 
 /// Pins the intrinsics, runs `setup`, then renders `expression`.
 fn after(setup: &str, expression: &str, color: bool) -> String {
@@ -165,46 +166,43 @@ fn map_text(total: usize, shown: usize, tail: &str) -> String {
     format!("Map({total}) {{ {}{tail} }}", items.join(", "))
 }
 
-#[test]
-fn a_collection_prints_up_to_100_entries() {
-    for total in [99, 100] {
-        assert_eq!(
-            rendered(&format!(
-                "new Set(Array.from({{ length: {total} }}, (_, i) => i))"
-            )),
-            set_text(total, total, "")
-        );
-        assert_eq!(
-            rendered(&format!(
-                "new Map(Array.from({{ length: {total} }}, (_, i) => [i, i]))"
-            )),
-            map_text(total, total, "")
-        );
-    }
+#[rstest]
+#[case::below_cap(99)]
+#[case::at_cap(100)]
+fn a_collection_prints_up_to_100_entries(#[case] total: usize) {
+    assert_eq!(
+        rendered(&format!(
+            "new Set(Array.from({{ length: {total} }}, (_, i) => i))"
+        )),
+        set_text(total, total, "")
+    );
+    assert_eq!(
+        rendered(&format!(
+            "new Map(Array.from({{ length: {total} }}, (_, i) => [i, i]))"
+        )),
+        map_text(total, total, "")
+    );
 }
 
-#[test]
-fn a_collection_past_100_entries_counts_the_rest() {
-    for (total, tail) in [
-        (101, ", ... 1 more item"),
-        (102, ", ... 2 more items"),
-        (100_000, ", ... 99900 more items"),
-    ] {
-        assert_eq!(
-            rendered(&format!(
-                "new Set(Array.from({{ length: {total} }}, (_, i) => i))"
-            )),
-            set_text(total, 100, tail),
-            "{total}"
-        );
-        assert_eq!(
-            rendered(&format!(
-                "new Map(Array.from({{ length: {total} }}, (_, i) => [i, i]))"
-            )),
-            map_text(total, 100, tail),
-            "{total}"
-        );
-    }
+#[rstest]
+#[case::one_more(101, ", ... 1 more item")]
+#[case::two_more(102, ", ... 2 more items")]
+#[case::many_more(100_000, ", ... 99900 more items")]
+fn a_collection_past_100_entries_counts_the_rest(#[case] total: usize, #[case] tail: &str) {
+    assert_eq!(
+        rendered(&format!(
+            "new Set(Array.from({{ length: {total} }}, (_, i) => i))"
+        )),
+        set_text(total, 100, tail),
+        "{total}"
+    );
+    assert_eq!(
+        rendered(&format!(
+            "new Map(Array.from({{ length: {total} }}, (_, i) => [i, i]))"
+        )),
+        map_text(total, 100, tail),
+        "{total}"
+    );
 }
 
 #[test]
@@ -228,23 +226,22 @@ fn the_collection_count_is_uncolored() {
     );
 }
 
-#[test]
-fn replacing_the_date_machinery_does_not_change_a_date() {
-    for tamper in [
-        "Date.prototype.toISOString = () => 'hijacked';",
-        "Date.prototype.getTime = () => { throw new Error('no'); };",
-        "Date.prototype.valueOf = () => { throw new Error('no'); };",
-        "Object.defineProperty(Date.prototype, Symbol.toPrimitive, { value() { throw 1; } });",
-        "globalThis.Date = function () {};",
-        "Object.defineProperty(globalThis, 'Date', { get() { throw 1; } });",
-    ] {
-        let setup = format!("globalThis.d = new Date(0); globalThis.bad = new Date(NaN); {tamper}");
-        assert_eq!(
-            after(&setup, "[d, bad]", false),
-            "[ 1970-01-01T00:00:00.000Z, Invalid Date ]",
-            "{tamper}"
-        );
-    }
+#[rstest]
+#[case::to_iso_string("Date.prototype.toISOString = () => 'hijacked';")]
+#[case::get_time("Date.prototype.getTime = () => { throw new Error('no'); };")]
+#[case::value_of("Date.prototype.valueOf = () => { throw new Error('no'); };")]
+#[case::to_primitive(
+    "Object.defineProperty(Date.prototype, Symbol.toPrimitive, { value() { throw 1; } });"
+)]
+#[case::global_replaced("globalThis.Date = function () {};")]
+#[case::global_getter("Object.defineProperty(globalThis, 'Date', { get() { throw 1; } });")]
+fn replacing_the_date_machinery_does_not_change_a_date(#[case] tamper: &str) {
+    let setup = format!("globalThis.d = new Date(0); globalThis.bad = new Date(NaN); {tamper}");
+    assert_eq!(
+        after(&setup, "[d, bad]", false),
+        "[ 1970-01-01T00:00:00.000Z, Invalid Date ]",
+        "{tamper}"
+    );
 }
 
 #[test]
@@ -432,36 +429,33 @@ fn quoted_prints_the_four_types_like_line() {
     });
 }
 
-#[test]
-fn a_regexp_is_read_without_running_any_of_its_accessors() {
-    for key in [
-        "global",
-        "ignoreCase",
-        "multiline",
-        "dotAll",
-        "unicode",
-        "unicodeSets",
-        "sticky",
-        "hasIndices",
-        "source",
-    ] {
-        let setup = format!(
-            r"
-            globalThis.calls = 0; globalThis.r = /a/gy;
-            Object.defineProperty(r, '{key}', {{ get() {{ calls++; throw 1; }} }});
-            "
-        );
-        let runtime = Runtime::new().unwrap();
-        let context = Context::full(&runtime).unwrap();
-        context.with(|ctx| {
-            pin(&ctx).unwrap();
-            ctx.eval::<(), _>(setup.as_str()).unwrap();
-            let value: Value<'_> = ctx.eval("r").unwrap();
+#[rstest]
+#[case::global("global")]
+#[case::ignore_case("ignoreCase")]
+#[case::multiline("multiline")]
+#[case::dot_all("dotAll")]
+#[case::unicode("unicode")]
+#[case::unicode_sets("unicodeSets")]
+#[case::sticky("sticky")]
+#[case::has_indices("hasIndices")]
+#[case::source("source")]
+fn a_regexp_is_read_without_running_any_of_its_accessors(#[case] key: &str) {
+    let setup = format!(
+        r"
+        globalThis.calls = 0; globalThis.r = /a/gy;
+        Object.defineProperty(r, '{key}', {{ get() {{ calls++; throw 1; }} }});
+        "
+    );
+    let runtime = Runtime::new().unwrap();
+    let context = Context::full(&runtime).unwrap();
+    context.with(|ctx| {
+        pin(&ctx).unwrap();
+        ctx.eval::<(), _>(setup.as_str()).unwrap();
+        let value: Value<'_> = ctx.eval("r").unwrap();
 
-            assert_eq!(line(&[value], false), "/a/gy", "{key}");
-            assert_eq!(ctx.eval::<i32, _>("calls").unwrap(), 0, "{key}");
-        });
-    }
+        assert_eq!(line(&[value], false), "/a/gy", "{key}");
+        assert_eq!(ctx.eval::<i32, _>("calls").unwrap(), 0, "{key}");
+    });
 }
 
 #[test]

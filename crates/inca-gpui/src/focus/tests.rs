@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use gpui::TestAppContext;
+use rstest::rstest;
 
 use super::*;
 
@@ -72,30 +73,31 @@ fn a_text_node_and_a_display_none_node_have_no_tab_index() {
     assert_eq!(FocusRegistry::tab_index_of(&tree, id), Some(0));
 }
 
-#[test]
-fn a_node_under_display_none_hidden_or_inert_has_no_tab_index() {
+#[rstest]
+#[case::display("display")]
+#[case::hidden("hidden")]
+#[case::inert("inert")]
+fn a_node_under_display_none_hidden_or_inert_has_no_tab_index(#[case] hide: &str) {
     let mut mismatches = Vec::new();
-    for hide in ["display", "hidden", "inert"] {
-        let (mut tree, child) = tree_with("div", Some(AttributeValue::from("0")));
-        let parent = tree.create_node("div").unwrap();
-        tree.append_child(parent, child).unwrap();
-        for (target, name) in [(child, "self"), (parent, "ancestor")] {
-            if hide == "display" {
-                tree.set_style(target, "display", "none").unwrap();
-            } else {
-                tree.set_attribute(target, hide, true).unwrap();
-            }
-            if FocusRegistry::tab_index_of(&tree, child).is_some() {
-                mismatches.push(format!("{hide} on {name} keeps the tab index"));
-            }
-            if hide == "display" {
-                tree.remove_style(target, "display").unwrap();
-            } else {
-                tree.remove_attribute(target, hide).unwrap();
-            }
-            if FocusRegistry::tab_index_of(&tree, child) != Some(0) {
-                mismatches.push(format!("removing {hide} on {name} loses the tab index"));
-            }
+    let (mut tree, child) = tree_with("div", Some(AttributeValue::from("0")));
+    let parent = tree.create_node("div").unwrap();
+    tree.append_child(parent, child).unwrap();
+    for (target, name) in [(child, "self"), (parent, "ancestor")] {
+        if hide == "display" {
+            tree.set_style(target, "display", "none").unwrap();
+        } else {
+            tree.set_attribute(target, hide, true).unwrap();
+        }
+        if FocusRegistry::tab_index_of(&tree, child).is_some() {
+            mismatches.push(format!("{hide} on {name} keeps the tab index"));
+        }
+        if hide == "display" {
+            tree.remove_style(target, "display").unwrap();
+        } else {
+            tree.remove_attribute(target, hide).unwrap();
+        }
+        if FocusRegistry::tab_index_of(&tree, child) != Some(0) {
+            mismatches.push(format!("removing {hide} on {name} loses the tab index"));
         }
     }
     assert!(mismatches.is_empty(), "{mismatches:#?}");
@@ -130,30 +132,32 @@ fn mark_subtree_dirty_queues_nodes_that_can_hold_focus(cx: &mut TestAppContext) 
     assert_eq!(registry.tab_dirty, HashSet::from([focusable, button, held]));
 }
 
-#[test]
-fn a_button_has_tab_index_0_unless_told_otherwise() {
-    let cases = [
-        (None, Some(0)),
-        (Some(AttributeValue::from("3")), Some(3)),
-        (Some(AttributeValue::from("-1")), Some(-1)),
-        (Some(AttributeValue::from("abc")), Some(0)),
-        (Some(AttributeValue::Bool(true)), Some(0)),
-    ];
-    for (value, want) in cases {
-        let (tree, id) = tree_with("button", value.clone());
-        assert_eq!(FocusRegistry::tab_index_of(&tree, id), want, "{value:?}");
-    }
+#[rstest]
+#[case::absent(None, Some(0))]
+#[case::positive(Some(AttributeValue::from("3")), Some(3))]
+#[case::negative(Some(AttributeValue::from("-1")), Some(-1))]
+#[case::not_a_number(Some(AttributeValue::from("abc")), Some(0))]
+#[case::boolean(Some(AttributeValue::Bool(true)), Some(0))]
+fn a_button_has_tab_index_0_unless_told_otherwise(
+    #[case] value: Option<AttributeValue>,
+    #[case] want: Option<i32>,
+) {
+    let (tree, id) = tree_with("button", value.clone());
+    assert_eq!(FocusRegistry::tab_index_of(&tree, id), want, "{value:?}");
 }
 
-#[test]
-fn a_disabled_button_has_no_tab_index_but_a_disabled_div_keeps_it() {
-    for (tag, want) in [("button", None), ("div", Some(2))] {
-        let (mut tree, id) = tree_with(tag, Some(AttributeValue::from("2")));
-        tree.set_attribute(id, "disabled", true).unwrap();
-        assert_eq!(FocusRegistry::tab_index_of(&tree, id), want, "{tag}");
-        tree.remove_attribute(id, "disabled").unwrap();
-        assert_eq!(FocusRegistry::tab_index_of(&tree, id), Some(2), "{tag}");
-    }
+#[rstest]
+#[case::button("button", None)]
+#[case::div("div", Some(2))]
+fn a_disabled_button_has_no_tab_index_but_a_disabled_div_keeps_it(
+    #[case] tag: &str,
+    #[case] want: Option<i32>,
+) {
+    let (mut tree, id) = tree_with(tag, Some(AttributeValue::from("2")));
+    tree.set_attribute(id, "disabled", true).unwrap();
+    assert_eq!(FocusRegistry::tab_index_of(&tree, id), want, "{tag}");
+    tree.remove_attribute(id, "disabled").unwrap();
+    assert_eq!(FocusRegistry::tab_index_of(&tree, id), Some(2), "{tag}");
 }
 
 // Nodes 1 to 6 have tabindex 3, 1, 0, 0, -1 and 2.

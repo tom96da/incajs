@@ -53,24 +53,26 @@ pub(crate) fn paint(on: bool, style: Style, text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
 
-    #[test]
-    fn each_style_opens_and_closes_with_its_own_codes() {
-        for (style, open, close) in [
-            (Style::Red, 31, 39),
-            (Style::Green, 32, 39),
-            (Style::Yellow, 33, 39),
-            (Style::Blue, 34, 39),
-            (Style::Magenta, 35, 39),
-            (Style::Cyan, 36, 39),
-            (Style::Bold, 1, 22),
-            (Style::Grey, 90, 39),
-        ] {
-            assert_eq!(
-                paint(true, style, "x"),
-                format!("\x1b[{open}mx\x1b[{close}m")
-            );
-        }
+    #[rstest]
+    #[case::red(Style::Red, 31, 39)]
+    #[case::green(Style::Green, 32, 39)]
+    #[case::yellow(Style::Yellow, 33, 39)]
+    #[case::blue(Style::Blue, 34, 39)]
+    #[case::magenta(Style::Magenta, 35, 39)]
+    #[case::cyan(Style::Cyan, 36, 39)]
+    #[case::bold(Style::Bold, 1, 22)]
+    #[case::grey(Style::Grey, 90, 39)]
+    fn each_style_opens_and_closes_with_its_own_codes(
+        #[case] style: Style,
+        #[case] open: u8,
+        #[case] close: u8,
+    ) {
+        assert_eq!(
+            paint(true, style, "x"),
+            format!("\x1b[{open}mx\x1b[{close}m")
+        );
     }
 
     #[test]
