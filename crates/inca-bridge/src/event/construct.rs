@@ -123,9 +123,9 @@ impl<'js> IntoJsFunc<'js, ()> for Construct {
             Exception::throw_type(ctx, &format!("cannot construct {name}: {message}"))
         };
         if !params.is_constructor() {
-            return Err(type_error(
-                "the event constructor needs new, so write new Event(type)",
-            ));
+            return Err(type_error(&format!(
+                "the event constructor needs new, so write new {name}(type)"
+            )));
         }
         let Some(kind) = params.arg(0) else {
             return Err(type_error(concat!(
