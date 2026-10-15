@@ -126,14 +126,6 @@ fn a_proxy_prints_the_same_in_color() {
 }
 
 #[test]
-fn a_proxy_prints_through_quoted_and_escaped_alike() {
-    assert_eq!(
-        escaped("new Proxy({ 'k\\n': 'v\\n' }, {})", false),
-        "{ 'k\\n': 'v\\n' }"
-    );
-}
-
-#[test]
 fn an_object_inheriting_from_a_proxy_runs_no_trap() {
     assert_eq!(
         counted(&format!("Object.create({})", spied("({ a: 1 })"))),

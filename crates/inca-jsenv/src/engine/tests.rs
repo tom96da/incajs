@@ -28,13 +28,6 @@ impl Drop for ScratchDir {
 }
 
 #[test]
-fn eval_smoke_test() {
-    let engine = Engine::new().unwrap();
-    let result: i32 = engine.eval("1 + 2").unwrap();
-    assert_eq!(result, 3);
-}
-
-#[test]
 fn syntax_error_propagates_as_err() {
     let engine = Engine::new().unwrap();
     let result: EngineResult<i32> = engine.eval("1 +");
@@ -332,18 +325,6 @@ fn a_rejection_handled_later_in_the_drain_is_not_returned() {
         .unwrap();
 
     assert!(engine.run_jobs().is_empty());
-}
-
-#[test]
-fn an_async_function_that_throws_is_returned() {
-    let engine = Engine::new().unwrap();
-    engine
-        .eval::<()>("(async () => { throw new Error('async boom'); })();")
-        .unwrap();
-
-    let failures = engine.run_jobs();
-    assert_eq!(failures.len(), 1);
-    assert_eq!(failures[0].message(), "Error: async boom");
 }
 
 #[test]

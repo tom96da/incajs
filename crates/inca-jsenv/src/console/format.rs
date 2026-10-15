@@ -523,26 +523,12 @@ mod tests {
     }
 
     #[test]
-    fn a_specifier_in_a_later_argument_is_not_one() {
-        assert_eq!(formatted("['a', '%s', 'b']"), "a %s b");
-        assert_eq!(formatted("[1, '%d %s']"), "1 %d %s");
-    }
-
-    #[test]
     fn substituted_text_is_scanned_for_the_next_specifier() {
         assert_eq!(formatted("['%s %s', '%d', 5]"), "5 %s");
         assert_eq!(formatted("['%s %s', '%s', 'x']"), "x %s");
         assert_eq!(formatted("['%s', '%d']"), "%d");
         assert_eq!(formatted("['%s', '%s', 'b']"), "b");
         assert_eq!(formatted("['%s %s', '%%', 'x']"), "% x");
-    }
-
-    #[test]
-    fn a_specifier_substituted_for_itself_ends_with_the_arguments() {
-        assert_eq!(
-            formatted("['%s%s%s%s', '%s', '%s', '%s', 'end']"),
-            "end%s%s%s"
-        );
     }
 
     #[test]

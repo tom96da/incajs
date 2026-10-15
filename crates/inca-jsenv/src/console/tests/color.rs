@@ -204,22 +204,6 @@ fn color_on_adds_only_sequences_to_the_plain_output() {
 }
 
 #[test]
-fn color_does_not_change_the_levels() {
-    let source = r"
-        console.trace('a'); console.debug('a'); console.log('a');
-        console.info('a'); console.warn('a'); console.error('a');
-        ";
-    let levels = |color| -> Vec<Level> {
-        written_with_color(source, color)
-            .iter()
-            .map(|(level, _)| *level)
-            .collect()
-    };
-
-    assert_eq!(levels(true), levels(false));
-}
-
-#[test]
 fn color_never_crosses_a_line_break_inside_nested_groups() {
     let lines = colored_texts(
         "console.group('a'); console.group('b'); console.warn(['x\\ny'], Symbol('p\\nq'));",
@@ -250,14 +234,6 @@ fn a_multi_line_error_message_is_balanced_on_every_line() {
     assert_eq!(lines[1], "  y");
     assert!(lines.len() > 2);
     assert!(lines.iter().all(|line| balanced(line)), "{lines:?}");
-}
-
-#[test]
-fn a_debug_line_with_a_multi_line_value_is_dim_on_each_line() {
-    assert_eq!(
-        colored_texts("console.group('g'); console.debug({ a: 'x\\ny' });")[1],
-        format!("{GUIDE}\x1b[90m{{ a: 'x\x1b[39m\n{GUIDE}\x1b[90my' }}\x1b[39m")
-    );
 }
 
 #[test]

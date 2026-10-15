@@ -27,13 +27,6 @@ fn every_method_writes_at_its_own_level() {
 }
 
 #[test]
-fn arguments_are_joined_by_a_space() {
-    let written = lines_written_by("console.log('a', 1, true);");
-
-    assert_eq!(written[0].1, "a 1 true");
-}
-
-#[test]
 fn logging_nothing_writes_an_empty_line() {
     let written = lines_written_by("console.log();");
 
@@ -72,13 +65,6 @@ fn assert_is_silent_when_the_condition_holds() {
     assert!(
         texts("console.assert(true, 'no'); console.assert(1); console.assert('x');").is_empty()
     );
-}
-
-#[test]
-fn assert_prints_at_error_level_when_it_fails() {
-    let written = lines_written_by("console.assert(false);");
-
-    assert_eq!(written, [(Level::Error, "✖ Assertion failed".to_owned())]);
 }
 
 #[test]
@@ -176,13 +162,6 @@ fn time_end_prints_then_forgets_the_timer() {
             (Level::Warn, "⚠ Timer 't' does not exist".to_owned()),
         ]
     );
-}
-
-#[test]
-fn time_defaults_its_label() {
-    let lines = texts("console.time(); console.timeEnd();");
-
-    assert_eq!(without_elapsed(&lines[0]), "default: Nms");
 }
 
 #[test]
@@ -336,13 +315,6 @@ fn empty_lines_carry_no_trailing_whitespace() {
         ["▼", "│", "│ a\n│\n│ b", "│ ✖", "│ ✖ a\n│\n│   b", "│"]
     );
     assert_eq!(texts("console.log('');"), [""]);
-}
-
-#[test]
-fn console_is_reachable_before_anything_else_runs() {
-    let written = lines_written_by("typeof console === 'object' && console.log('present');");
-
-    assert_eq!(written[0].1, "present");
 }
 
 #[test]

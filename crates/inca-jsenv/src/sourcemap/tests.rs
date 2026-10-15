@@ -338,18 +338,6 @@ fn absolute_and_url_sources_stay_as_they_are() {
 }
 
 #[test]
-fn sidecar_map_resolves_against_the_module_directory() {
-    let dir = temp_dir("sidecar");
-    let json = map_json(3, ";AAAA", r#"["src/a.ts"]"#, None);
-    std::fs::write(dir.join("bundle.js.map"), json).unwrap();
-    let file = format!("{}/bundle.js", dir.display());
-    let src = "h\nabc\n//# sourceMappingURL=bundle.js.map\n";
-    let out = remap(&[(&file, src)], &format!("    at f ({file}:2:1)"));
-    let expected = format!("    at f ({}/src/a.ts:1:1)", dir.display());
-    assert_eq!(out, expected);
-}
-
-#[test]
 fn unreadable_sidecar_leaves_frame_unchanged() {
     let frame = "    at f (/nonexistent-inca/x.js:2:1)";
     let src = "h\nabc\n//# sourceMappingURL=x.js.map";

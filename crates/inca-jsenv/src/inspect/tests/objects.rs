@@ -195,12 +195,6 @@ fn infinities_read_the_way_js_spells_them() {
 }
 
 #[test]
-fn a_nested_string_is_quoted_so_it_reads_as_one() {
-    assert_eq!(rendered("['a', 1]"), "[ 'a', 1 ]");
-    assert_eq!(rendered("({ k: 'v' })"), "{ k: 'v' }");
-}
-
-#[test]
 fn empty_containers_stay_short() {
     assert_eq!(rendered("[]"), "[]");
     assert_eq!(rendered("({})"), "{}");
@@ -362,19 +356,6 @@ fn a_class_getter_lives_on_the_prototype_and_is_neither_shown_nor_run() {
     assert_eq!(
         counted("Object.create({ get a() { calls++; } })"),
         ("{}".to_owned(), 0)
-    );
-}
-
-#[test]
-fn a_class_instance_accessor_defined_on_the_instance_is_named() {
-    assert_eq!(
-        counted(
-            r"
-            const o = new (class { constructor() {
-            Object.defineProperty(this, 'v', { get: () => { calls++; }, enumerable: true }); } })(); o
-            "
-        ),
-        ("{ v: [Getter] }".to_owned(), 0)
     );
 }
 

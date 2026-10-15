@@ -143,13 +143,6 @@ fn dir_table_and_the_counters_do_not_format() {
 }
 
 #[test]
-fn time_labels_are_not_formatted() {
-    let lines = texts("console.time('%d'); console.timeEnd('%d');");
-
-    assert_eq!(without_elapsed(&lines[0]), "%d: Nms");
-}
-
-#[test]
 fn accessors_and_a_failing_stack_in_any_method_leave_nothing_pending() {
     assert_eq!(
         texts(

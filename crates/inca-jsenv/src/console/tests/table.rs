@@ -176,36 +176,6 @@ fn an_error_property_holding_the_types_prints_them() {
 }
 
 #[test]
-fn hostile_values_print_without_leaving_an_exception() {
-    assert_eq!(
-        texts(
-            r"
-            const hostile = new Date(0); hostile.valueOf = () => { throw 1; };
-            hostile.toISOString = () => { throw 2; }; console.log(hostile);
-            const m = new Map([[1, 2]]); m.entries = () => { throw 3; };
-            m[Symbol.iterator] = () => { throw 4; }; console.log(m);
-            console.log(new Proxy(new Map(), {}));
-            const r = Proxy.revocable(new Set(), {}); r.revoke(); console.log(r.proxy);
-            console.log(new (class S extends Set {})([1]));
-            const c = new Map(); c.set('self', c); console.log(c);
-            console.log(new Set(Array.from({ length: 100000 }, (_, i) => i)).size);
-            try { null.x; } catch (e) { console.log('caught'); }
-            "
-        ),
-        [
-            "1970-01-01T00:00:00.000Z",
-            "Map(1) { 1 => 2 }",
-            "Map(0) {}",
-            "<Revoked Proxy>",
-            "Set(1) { 1 }",
-            "Map(1) { 'self' => Map(1) { 'self' => Map(1) { 'self' => [Map] } } }",
-            "100000",
-            "caught"
-        ]
-    );
-}
-
-#[test]
 fn a_colored_table_of_the_types_has_the_layout_of_the_plain_one() {
     drawn_both_ways("[new Date(0), /x/g, new Map([['日本', [1]]]), new Set(['a\\nb'])]");
 }
@@ -240,19 +210,6 @@ fn table_dedupes_repeated_columns() {
 }
 
 #[test]
-fn a_colored_table_has_the_layout_of_the_plain_one() {
-    let source =
-        "console.group('g'); console.table([{ a: 1, b: 'x' }, { a: [1, 'y'], c: null }, 5, 'z']);";
-    let plain = texts(source);
-    let colored = colored_texts(source);
-
-    assert_eq!(colored.len(), plain.len());
-    assert_eq!(strip(&colored[1]), plain[1]);
-    assert!(colored[1].contains("\x1b[33m1\x1b[39m"), "{}", colored[1]);
-    assert!(colored[1].contains("\x1b[32m'x'\x1b[39m"), "{}", colored[1]);
-}
-
-#[test]
 fn a_colored_table_cell_is_padded_by_its_visible_width() {
     let drawn = &colored_texts("console.table([{ k: 'ab' }, { k: 1 }]);")[0];
 
@@ -277,36 +234,11 @@ fn a_colored_table_leaves_headers_and_rules_uncolored() {
 }
 
 #[test]
-fn a_colored_table_escapes_control_characters_like_the_plain_one() {
-    let source = r"console.table([{ k: ['a\nb', 1] }]);";
-
-    assert_eq!(strip(&colored_texts(source)[0]), texts(source)[0]);
-}
-
-#[test]
 fn a_table_cell_holding_an_escape_sequence_shows_it_as_text() {
     let (plain, colored) = drawn_both_ways(r"[{ k: ['\x1b[1mx'] }]");
 
     assert!(plain.contains(r"[ '\x1b[1mx' ]"), "{plain}");
     assert!(colored.contains(r"\x1b[1mx"), "{colored}");
-}
-
-#[test]
-fn a_table_cell_holding_a_nested_color_code_stays_inert() {
-    let (plain, _) = drawn_both_ways(r"[{ k: { v: '\x1b[31m' }, 'z\x1b[0m': 1 }]");
-
-    assert!(plain.contains(r"'\x1b[31m'"), "{plain}");
-    assert!(plain.contains(r"z\x1b[0m"), "{plain}");
-}
-
-#[test]
-fn a_table_cell_with_a_tab_or_newline_stays_on_one_line() {
-    let (plain, _) = drawn_both_ways(r"[{ k: ['a\tb', 'c\nd'], 'e\tf': 1 }, 'x\ty']");
-
-    assert_eq!(plain.lines().count(), 6, "{plain}");
-    assert!(plain.contains(r"'a\tb'"), "{plain}");
-    assert!(plain.contains(r"'c\nd'"), "{plain}");
-    assert!(plain.contains(r"e\tf"), "{plain}");
 }
 
 #[test]

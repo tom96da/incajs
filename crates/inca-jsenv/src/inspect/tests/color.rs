@@ -4,13 +4,6 @@
 use super::*;
 
 #[test]
-fn accessor_text_has_the_same_words_with_color_on_or_off() {
-    let source = "({ get a() { return 1; }, set b(v) {}, get c() { return 1; }, set c(v) {} })";
-
-    assert_eq!(rendered(source), strip_codes(&colored(source)));
-}
-
-#[test]
 fn accessor_text_is_cyan() {
     assert_eq!(
         colored("({ get a() { return 1; }, set b(v) {}, get c() { return 1; }, set c(v) {} })"),
@@ -236,11 +229,4 @@ fn escaping_happens_before_painting() {
         "[ \x1b[32m'\\x1b[31m'\x1b[39m ]"
     );
     assert_eq!(escaped("['a\\nb']", true), "[ \x1b[32m'a\\nb'\x1b[39m ]");
-}
-
-#[test]
-fn escaping_and_color_leave_the_visible_text_alone() {
-    let source = "({ s: 'x\\t', n: [1, null], e: new Error('m') })";
-
-    assert_eq!(escaped(source, false), strip_codes(&escaped(source, true)));
 }

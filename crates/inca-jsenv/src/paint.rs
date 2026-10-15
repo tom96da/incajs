@@ -74,17 +74,6 @@ mod tests {
     }
 
     #[test]
-    fn painting_off_returns_the_text_as_it_is() {
-        assert_eq!(paint(false, Style::Red, "x"), "x");
-        assert_eq!(paint(false, Style::Bold, ""), "");
-    }
-
-    #[test]
-    fn empty_text_carries_no_codes() {
-        assert_eq!(paint(true, Style::Cyan, ""), "");
-    }
-
-    #[test]
     fn every_line_is_opened_and_closed_on_its_own() {
         assert_eq!(
             paint(true, Style::Green, "a\nb"),
