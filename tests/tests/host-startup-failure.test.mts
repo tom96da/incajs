@@ -62,3 +62,49 @@ it("a first bundle whose top-level await rejects is reported with a null id and 
     await rm(dir, { recursive: true, force: true });
   }
 }, 15_000);
+
+/** Runs the host with `args` and collects its exit code and output. */
+async function runHost(args: string[]) {
+  const child = spawn(resolveTestHostBin(), args, { stdio: ["pipe", "pipe", "pipe"] });
+  child.stdin.on("error", () => {});
+  try {
+    const out: string[] = [];
+    let stderr = "";
+    createInterface({ input: child.stdout }).on("line", (line) => out.push(line));
+    child.stderr.on("data", (chunk) => (stderr += chunk));
+    const code = await new Promise<number | null>((resolve) => child.on("close", resolve));
+    return { code, out, stderr };
+  } finally {
+    child.kill();
+  }
+}
+
+it("--dev without a path reports the missing bundle beside the executable", async () => {
+  const { code, out, stderr } = await runHost(["--dev"]);
+
+  expect(code).toBe(1);
+  expect(out).toEqual([]);
+  expect(stderr).toContain("no bundle.js found beside the executable");
+  expect(stderr).not.toContain("failed to read");
+}, 15_000);
+
+it("an unreadable entry in development is reported with a null id and the host exits 1", async () => {
+  const missing = path.join(tmpdir(), "inca-host-no-such-dir", "bundle.js");
+  const { code, out } = await runHost(["--dev", missing]);
+
+  expect(code).toBe(1);
+  expect(out).toHaveLength(1);
+  const reply = JSON.parse(out[0] ?? "null");
+  expect(reply.id).toBeNull();
+  expect(reply.error.code).toBe(-32000);
+  expect(reply.error.message).toContain(`failed to read ${missing}`);
+}, 15_000);
+
+it("an unreadable entry in production prints to stderr and the host exits 1", async () => {
+  const missing = path.join(tmpdir(), "inca-host-no-such-dir", "bundle.js");
+  const { code, out, stderr } = await runHost([missing]);
+
+  expect(code).toBe(1);
+  expect(out).toEqual([]);
+  expect(stderr).toContain(`failed to read ${missing}`);
+}, 15_000);
