@@ -6,7 +6,7 @@ import type { App, Component, ComponentPublicInstance } from "@vue/runtime-core"
 
 import { createIncaElement } from "../element/handle.mts";
 import * as core from "../rendererCore.mts";
-import { createNodeOps, skipReactive } from "./nodeOps.mts";
+import { createHeldNodeOps, createNodeOps, skipReactive } from "./nodeOps.mts";
 import { createPatchProp } from "./patchProp.mts";
 import type { IncaElement, IncaNode } from "../element/types.mts";
 
@@ -32,10 +32,13 @@ export function createIncaApp(
   rootComponent: Component,
   rootProps?: Record<string, unknown> | null,
 ): IncaApp {
-  const renderer = createRenderer<IncaNode, IncaElement>({
+  const options = {
     ...createNodeOps(core),
     patchProp: createPatchProp(core),
-  });
+  };
+  const renderer = createRenderer<IncaNode, IncaElement>(options);
+  // After `createRenderer`, which copies the creators that Vue's own paths use unheld.
+  Object.assign(options, createHeldNodeOps(core, options));
   const app = renderer.createApp(rootComponent, rootProps);
   // Captured before the override, or the replacement would call itself.
   const mountAt = app.mount.bind(app);

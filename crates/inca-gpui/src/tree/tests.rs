@@ -544,3 +544,152 @@ fn an_unknown_id_is_not_connected_under_a_root() {
     tree.set_root(root);
     assert!(!tree.is_connected(999));
 }
+
+fn orphan_pair(tree: &mut VirtualTree) -> (NodeId, NodeId) {
+    let parent = tree.create_node("div").unwrap();
+    let child = tree.create_node("span").unwrap();
+    tree.append_child(parent, child).unwrap();
+    (parent, child)
+}
+
+#[test]
+fn sweep_frees_an_orphan_and_its_subtree() {
+    let mut tree = VirtualTree::new();
+    let (parent, child) = orphan_pair(&mut tree);
+
+    assert_eq!(tree.sweep(), [parent, child]);
+    assert!(tree.get(parent).is_none());
+    assert!(tree.get(child).is_none());
+    assert!(!tree.has_orphans());
+}
+
+#[test]
+fn an_insert_before_the_sweep_saves_the_node() {
+    let mut tree = VirtualTree::new();
+    let root = tree.create_node("div").unwrap();
+    tree.set_root(root);
+    let (parent, child) = orphan_pair(&mut tree);
+    tree.append_child(root, parent).unwrap();
+
+    assert!(tree.sweep().is_empty());
+    assert!(tree.get(parent).is_some());
+    assert!(tree.get(child).is_some());
+}
+
+#[test]
+fn a_held_parentless_node_survives_until_it_is_released() {
+    let mut tree = VirtualTree::new();
+    let (parent, child) = orphan_pair(&mut tree);
+    tree.hold(parent).unwrap();
+
+    assert!(tree.sweep().is_empty());
+    assert!(tree.get(child).is_some());
+
+    tree.release(parent);
+    assert!(tree.has_orphans());
+    assert_eq!(tree.sweep(), [parent, child]);
+}
+
+#[test]
+fn a_held_attached_node_stays_after_it_is_detached() {
+    let mut tree = VirtualTree::new();
+    let root = tree.create_node("div").unwrap();
+    tree.set_root(root);
+    let node = tree.create_node("div").unwrap();
+    tree.append_child(root, node).unwrap();
+    tree.hold(node).unwrap();
+    tree.remove_child(root, node).unwrap();
+
+    assert!(tree.sweep().is_empty());
+    assert!(tree.get(node).is_some());
+}
+
+#[test]
+fn destroy_node_clears_the_hold_and_the_orphan_entry() {
+    let mut tree = VirtualTree::new();
+    let held = tree.create_node("div").unwrap();
+    let loose = tree.create_node("div").unwrap();
+    tree.hold(held).unwrap();
+
+    assert_eq!(tree.destroy_node(held), [held]);
+    assert_eq!(tree.destroy_node(loose), [loose]);
+
+    assert!(!tree.has_orphans());
+    assert!(tree.sweep().is_empty());
+    assert!(!tree.held.contains(&held));
+}
+
+#[test]
+fn an_empty_orphan_set_sweeps_nothing() {
+    let mut tree = VirtualTree::new();
+    assert!(!tree.has_orphans());
+    assert!(tree.sweep().is_empty());
+}
+
+#[test]
+fn a_node_created_and_never_inserted_is_an_orphan() {
+    let mut tree = VirtualTree::new();
+    tree.create_node("div").unwrap();
+    assert!(tree.has_orphans());
+}
+
+#[test]
+fn release_of_an_attached_node_makes_no_orphan() {
+    let mut tree = VirtualTree::new();
+    let root = tree.create_node("div").unwrap();
+    tree.set_root(root);
+    let node = tree.create_node("div").unwrap();
+    tree.append_child(root, node).unwrap();
+    tree.hold(node).unwrap();
+
+    tree.release(node);
+
+    assert!(!tree.has_orphans());
+}
+
+#[test]
+fn the_root_is_never_an_orphan() {
+    let mut tree = VirtualTree::new();
+    let root = tree.create_node("div").unwrap();
+    tree.set_root(root);
+    tree.hold(root).unwrap();
+    tree.release(root);
+
+    assert!(!tree.has_orphans());
+    assert!(tree.sweep().is_empty());
+    assert_eq!(tree.root(), Some(root));
+}
+
+#[test]
+fn hold_of_an_unknown_id_errors() {
+    let mut tree = VirtualTree::new();
+    assert_eq!(tree.hold(7), Err(TreeError::NodeNotFound(7)));
+}
+
+#[test]
+fn a_detached_node_is_an_orphan_until_it_is_inserted() {
+    let mut tree = VirtualTree::new();
+    let root = tree.create_node("div").unwrap();
+    tree.set_root(root);
+    let node = tree.create_node("div").unwrap();
+    tree.append_child(root, node).unwrap();
+    assert!(!tree.has_orphans());
+
+    tree.remove_child(root, node).unwrap();
+
+    assert!(tree.has_orphans());
+    assert_eq!(tree.sweep(), [node]);
+}
+
+#[test]
+fn a_held_node_under_a_swept_orphan_is_freed_with_it() {
+    let mut tree = VirtualTree::new();
+    let (parent, child) = orphan_pair(&mut tree);
+    tree.hold(child).unwrap();
+
+    assert_eq!(tree.sweep(), [parent, child]);
+    assert!(tree.held.is_empty());
+
+    tree.release(child);
+    assert!(!tree.has_orphans());
+}

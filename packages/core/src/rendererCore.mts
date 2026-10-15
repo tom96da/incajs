@@ -16,6 +16,8 @@ export {
   appendChild,
   createNode,
   destroyNode,
+  holdNode,
+  releaseNode,
   insertBefore,
   removeChild,
   rootNodeId,

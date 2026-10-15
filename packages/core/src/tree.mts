@@ -17,7 +17,9 @@ export function rootNodeId(): NodeId {
 
 /**
  * Allocates a new node of kind `tag` in the native tree. The node starts out
- * detached. Attach it with {@link appendChild}/{@link insertBefore}.
+ * detached. Attach it with {@link appendChild}/{@link insertBefore}. The host
+ * frees the node at the start of the next frame unless it is inserted or held
+ * with {@link holdNode} by then.
  * @param tag - the node's element kind
  * @returns the new node's id
  */
@@ -49,9 +51,9 @@ export function insertBefore(parentId: NodeId, childId: NodeId, anchorId: NodeId
 }
 
 /**
- * Detaches `childId` from `parentId`. The detached node stays alive and keeps
- * its own children, so it can be re-attached elsewhere. Use
- * {@link destroyNode} for a node that isn't coming back.
+ * Detaches `childId` from `parentId`. The detached node keeps its own children
+ * and is freed at the start of the next frame unless it is inserted or held
+ * with {@link holdNode} by then. Use {@link destroyNode} to free it at once.
  * @param parentId - the current container
  * @param childId - the node being detached
  */
@@ -64,12 +66,31 @@ export function removeChild(parentId: NodeId, childId: NodeId): void {
  * event listener registered anywhere in it. Destroying an already-destroyed
  * node does nothing. The host's own root cannot be destroyed and raises.
  *
- * Nothing else frees a node: a subtree dropped with {@link removeChild}
- * alone stays allocated for the life of the engine.
+ * Also drops the hold of {@link holdNode}.
  * @param nodeId - the node that isn't coming back
  */
 export function destroyNode(nodeId: NodeId): void {
   releaseCallbacks(native().destroyNode(nodeId));
+}
+
+/**
+ * Keeps `nodeId` and its subtree alive while it has no parent. The host frees
+ * a parentless node that is neither held nor inserted by the start of the next
+ * frame. Holding a held or attached node changes nothing visible.
+ * @param nodeId - the node to keep
+ * @throws {TypeError} when `nodeId` names no node
+ */
+export function holdNode(nodeId: NodeId): void {
+  native().holdNode(nodeId);
+}
+
+/**
+ * Ends the hold of {@link holdNode}. A node with no parent is freed at the
+ * start of the next frame. An unknown id does nothing.
+ * @param nodeId - the node to let go
+ */
+export function releaseNode(nodeId: NodeId): void {
+  native().releaseNode(nodeId);
 }
 
 /**

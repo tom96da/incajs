@@ -30,6 +30,8 @@ const core: IncaCore = {
   insertBefore: vi.fn<(parentId: number, childId: number, anchorId: number | null) => void>(),
   removeChild: vi.fn<(parentId: number, childId: number) => void>(),
   destroyNode: vi.fn<(nodeId: number) => void>(),
+  holdNode: vi.fn<(nodeId: number) => void>(),
+  releaseNode: vi.fn<(nodeId: number) => void>(),
   addEventListener: vi.fn<IncaCore["addEventListener"]>(),
   removeEventListener: vi.fn<IncaCore["removeEventListener"]>(),
   createEventTarget: vi.fn<() => IncaEventTarget>(() => makeTarget()),

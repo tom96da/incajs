@@ -191,7 +191,7 @@ fn destroy_node_frees_the_subtree_and_hands_back_its_callback_ids() {
     );
 
     let host = host.borrow();
-    assert!(host.tree.get(host.root).unwrap().children().is_empty());
+    assert!(host.tree.get(host.root()).unwrap().children().is_empty());
     assert!(callback_ids(&host.listeners, 1, "click").is_empty());
 }
 
@@ -271,7 +271,7 @@ fn destroying_the_root_throws_a_catchable_exception() {
 
     assert!(caught, "the root belongs to the host, not to the app");
     let host = host.borrow();
-    assert!(host.tree.get(host.root).is_some());
+    assert!(host.tree.get(host.root()).is_some());
 }
 
 #[test]
@@ -302,7 +302,7 @@ fn moving_the_root_throws_a_catchable_exception() {
 
     assert_eq!(caught, 2, "the root belongs to the host, not to the app");
     let host = host.borrow();
-    let root = host.tree.get(host.root).unwrap();
+    let root = host.tree.get(host.root()).unwrap();
     assert_eq!(root.parent(), None);
 }
 
@@ -312,7 +312,7 @@ fn root_node_id_returns_the_host_root() {
 
     let root_id: NodeId = engine.eval("__inca_native__.rootNodeId();").unwrap();
 
-    assert_eq!(root_id, host.borrow().root);
+    assert_eq!(root_id, host.borrow().root());
     assert_eq!(host.borrow().tree.get(root_id).unwrap().tag_name(), "div");
 }
 
@@ -440,6 +440,8 @@ fn node_id_that_is_not_a_whole_u32_throws_type_error(#[case] bad: &str) {
             rejects(() => __inca_native__.appendChild(node, {bad})),
             rejects(() => __inca_native__.insertBefore(node, node, {bad})),
             rejects(() => __inca_native__.destroyNode({bad})),
+            rejects(() => __inca_native__.holdNode({bad})),
+            rejects(() => __inca_native__.releaseNode({bad})),
             rejects(() => __inca_native__.addEventListener({bad}, 'click')),
             rejects(() => __inca_native__.removeEventListener({bad}, 'click', 1)),
             rejects(() => __inca_native__.focusNode({bad})),
@@ -575,4 +577,86 @@ fn insert_before_unknown_ids_raise_catchable_exception() {
         caught,
         "an unknown anchor id must raise a catchable exception"
     );
+}
+
+#[test]
+fn hold_node_throws_for_an_unknown_id_and_release_node_does_not() {
+    let (engine, _host) = engine_with_bindings();
+
+    let outcome: Vec<bool> = engine
+        .eval(
+            r"
+            const n = __inca_native__;
+            let held = false;
+            try { n.holdNode(999); } catch (e) { held = e instanceof TypeError; }
+            let released = true;
+            try { n.releaseNode(999); } catch (e) { released = false; }
+            [held, released];
+            ",
+        )
+        .unwrap();
+
+    assert_eq!(outcome, [true, true]);
+}
+
+#[test]
+fn a_held_node_survives_a_sweep_until_it_is_released() {
+    let (engine, host) = engine_with_bindings();
+    let node: NodeId = engine
+        .eval("const n = __inca_native__.createNode('div'); __inca_native__.holdNode(n); n;")
+        .unwrap();
+
+    assert!(host.borrow_mut().sweep_orphans().is_none());
+    assert!(host.borrow().tree.get(node).is_some());
+
+    engine
+        .eval::<()>(&format!("__inca_native__.releaseNode({node})"))
+        .unwrap();
+    let (nodes, _) = host.borrow_mut().sweep_orphans().unwrap();
+    assert_eq!(nodes, [node]);
+}
+
+#[test]
+fn sweep_orphans_releases_the_listeners_of_the_swept_subtree() {
+    let (engine, host) = engine_with_bindings();
+    let ids: Vec<u32> = engine
+        .eval(
+            r"
+            const n = __inca_native__;
+            const root = n.rootNodeId();
+            const kept = n.createNode('div');
+            n.appendChild(root, kept);
+            n.addEventListener(kept, 'click');
+            const branch = n.createNode('div');
+            const leaf = n.createNode('div');
+            n.appendChild(branch, leaf);
+            n.addEventListener(branch, 'click');
+            n.addEventListener(leaf, 'click');
+            [kept, branch, leaf];
+            ",
+        )
+        .unwrap();
+    let (kept, branch, leaf) = (ids[0], ids[1], ids[2]);
+
+    let (mut nodes, mut callbacks) = host.borrow_mut().sweep_orphans().unwrap();
+    nodes.sort_unstable();
+    callbacks.sort_unstable();
+
+    assert_eq!(nodes, [branch, leaf]);
+    assert_eq!(callbacks, [1, 2]);
+    let host = host.borrow();
+    assert!(callback_ids(&host.listeners, branch, "click").is_empty());
+    assert!(callback_ids(&host.listeners, leaf, "click").is_empty());
+    assert_eq!(callback_ids(&host.listeners, kept, "click"), [0]);
+}
+
+#[test]
+fn sweep_orphans_forgets_the_queued_focus_work_of_a_swept_node() {
+    let (engine, host) = engine_with_bindings();
+    let node: NodeId = engine.eval("__inca_native__.createNode('div')").unwrap();
+    host.borrow_mut().focus.mark_tab_dirty(node);
+
+    host.borrow_mut().sweep_orphans().unwrap();
+
+    assert!(host.borrow_mut().focus.take_tab_dirty().is_empty());
 }

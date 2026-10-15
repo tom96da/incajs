@@ -3,6 +3,7 @@
 
 import type { RendererOptions } from "@vue/runtime-core";
 
+import { releaseWhenCollected } from "../element/lifecycle.mts";
 import {
   createCommentNode,
   createElementNode,
@@ -92,5 +93,28 @@ export function createNodeOps(core: IncaCore): NodeOps {
 
     parentNode,
     nextSibling,
+  };
+}
+
+type Creators = Pick<NodeOps, "createElement" | "createText">;
+
+/**
+ * The creators of `ops` that hold the node they create and release the hold
+ * once the returned handle is collected.
+ * @param core - the incajs bindings the holds go through
+ * @param ops - the creators to wrap
+ * @returns held versions of `createElement` and `createText`
+ */
+export function createHeldNodeOps(core: IncaCore, ops: Creators): Creators {
+  const hold = <N extends IncaNode>(node: N): N => {
+    core.holdNode(node.id);
+    releaseWhenCollected(node);
+    return node;
+  };
+  // Read now: the caller may assign the result over `ops`.
+  const { createElement, createText } = ops;
+  return {
+    createElement: (tag) => hold(createElement(tag)),
+    createText: (text) => hold(createText(text)),
   };
 }

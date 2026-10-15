@@ -144,7 +144,7 @@ fn add_div(host: &mut Host, parent: Option<NodeId>, height: f64, scrolls: bool) 
     let node = if parent.is_some() {
         host.tree.create_node("div").unwrap()
     } else {
-        host.root
+        host.root()
     };
     host.tree.set_style(node, "width", 100.0).unwrap();
     host.tree.set_style(node, "height", height).unwrap();
@@ -179,7 +179,7 @@ fn nested_containers() -> Host {
 /// A container of 100x100 with `styles` over a 300x300 child.
 fn styled_container(styles: &[(&str, &str)]) -> Host {
     let mut host = Host::default();
-    let root = host.root;
+    let root = host.root();
     host.tree.set_style(root, "width", 100.0).unwrap();
     host.tree.set_style(root, "height", 100.0).unwrap();
     for (key, value) in styles {

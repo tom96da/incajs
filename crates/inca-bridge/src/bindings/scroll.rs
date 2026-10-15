@@ -195,7 +195,7 @@ mod tests {
     #[test]
     fn a_scroll_moves_the_recorded_boxes_below_the_container() {
         let mut host = Host::default();
-        let container = host.root;
+        let container = host.root();
         let child = host.tree.create_node("div").unwrap();
         let grandchild = host.tree.create_node("div").unwrap();
         host.tree.append_child(container, child).unwrap();

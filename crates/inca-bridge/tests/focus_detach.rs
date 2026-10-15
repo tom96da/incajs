@@ -37,7 +37,7 @@ fn focus_then_run(
 ) -> Outcome {
     let (host, parent, children) = test_support::focusable_tree(2, false);
     let (leaf, sibling) = (children[0], children[1]);
-    let root = host.borrow().root;
+    let root = host.borrow().root();
     let mut top = leaf;
     if nested {
         let mut host_mut = host.borrow_mut();

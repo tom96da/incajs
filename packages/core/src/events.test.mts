@@ -31,6 +31,8 @@ const native = {
     () => true,
   ),
   destroyNode: vi.fn<(nodeId: number) => number[]>(() => []),
+  holdNode: vi.fn<(nodeId: number) => void>(),
+  releaseNode: vi.fn<(nodeId: number) => void>(),
   focusNode: vi.fn<(nodeId: number) => void>(),
   blurNode: vi.fn<(nodeId: number) => void>(),
   focusedNode: vi.fn<() => number | null>(() => null),

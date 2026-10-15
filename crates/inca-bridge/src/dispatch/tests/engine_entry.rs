@@ -76,7 +76,7 @@ fn an_event_method_throws_a_type_error_for_any_receiver_that_is_not_an_event(
 fn tracks_pointer_only_with_a_listener_or_a_focusable_node(cx: &mut TestAppContext) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
-    let root = host.borrow().root;
+    let root = host.borrow().root();
     host.borrow_mut().tree.append_child(root, node).unwrap();
     assert!(!dispatcher.tracks_pointer());
 
@@ -145,7 +145,7 @@ fn an_unlistened_pointer_or_key_input_leaves_the_engine_untouched(cx: &mut TestA
     for event in ["mousemove", "wheel", "keydown"] {
         // A key goes to the root when nothing is focused.
         let listener = if event == "keydown" {
-            host.borrow().root
+            host.borrow().root()
         } else {
             node
         };

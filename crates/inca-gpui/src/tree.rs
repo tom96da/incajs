@@ -13,11 +13,17 @@
 //! A root can be declared with [`VirtualTree::set_root`].
 //! [`VirtualTree::is_connected`] then reads the parent chain up to it.
 //!
-//! [`VirtualTree::remove_child`] detaches and keeps the node alive.
-//! [`VirtualTree::destroy_node`] is the only call that frees.
+//! [`VirtualTree::remove_child`] detaches a node and keeps it with its
+//! children.
+//! [`VirtualTree::destroy_node`] frees a subtree on request.
+//!
+//! An orphan is a node with no parent that is neither the root nor held with
+//! [`VirtualTree::hold`]. [`VirtualTree::sweep`] frees every orphan with its
+//! subtree. A node that is created, detached or released is an orphan until
+//! it is inserted, held or destroyed.
 
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 /// Stable handle returned to JS, used in every subsequent host-bridge call.
@@ -180,6 +186,8 @@ pub struct VirtualTree {
     nodes: HashMap<NodeId, VirtualNode>,
     next_id: NodeId,
     root: Option<NodeId>,
+    held: HashSet<NodeId>,
+    orphans: HashSet<NodeId>,
 }
 
 impl VirtualTree {
@@ -192,6 +200,65 @@ impl VirtualTree {
     /// measures against.
     pub fn set_root(&mut self, id: NodeId) {
         self.root = Some(id);
+        self.orphans.remove(&id);
+    }
+
+    /// The root declared with [`set_root`](Self::set_root), if any.
+    #[must_use]
+    pub fn root(&self) -> Option<NodeId> {
+        self.root
+    }
+
+    /// Keeps `id` and its subtree out of [`sweep`](Self::sweep) while it has
+    /// no parent. Holding a held, attached or root node changes nothing
+    /// visible. [`destroy_node`](Self::destroy_node) ends the hold.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TreeError::NodeNotFound`] if `id` names no node.
+    pub fn hold(&mut self, id: NodeId) -> Result<(), TreeError> {
+        if !self.nodes.contains_key(&id) {
+            return Err(TreeError::NodeNotFound(id));
+        }
+        self.held.insert(id);
+        self.orphans.remove(&id);
+        Ok(())
+    }
+
+    /// Ends the hold of `id`. A parentless node that is not the root becomes
+    /// an orphan. An unknown or unheld `id` changes nothing.
+    pub fn release(&mut self, id: NodeId) {
+        if self.held.remove(&id) {
+            self.orphan_if_free(id);
+        }
+    }
+
+    /// Whether a [`sweep`](Self::sweep) would free a node.
+    #[must_use]
+    pub fn has_orphans(&self) -> bool {
+        !self.orphans.is_empty()
+    }
+
+    /// Frees every orphan with its subtree, as
+    /// [`destroy_node`](Self::destroy_node) does, and returns every freed id.
+    pub fn sweep(&mut self) -> Vec<NodeId> {
+        let mut orphans: Vec<NodeId> = self.orphans.drain().collect();
+        orphans.sort_unstable();
+        orphans
+            .into_iter()
+            .flat_map(|id| self.destroy_node(id))
+            .collect()
+    }
+
+    /// Marks `id` an orphan when it is a parentless node, not the root and
+    /// not held.
+    fn orphan_if_free(&mut self, id: NodeId) {
+        let free = self.nodes.get(&id).is_some_and(|n| n.parent.is_none())
+            && self.root != Some(id)
+            && !self.held.contains(&id);
+        if free {
+            self.orphans.insert(id);
+        }
     }
 
     /// Whether `id` is the root or its parent chain reaches it. Always true
@@ -224,6 +291,7 @@ impl VirtualTree {
         let id = self.next_id;
         self.next_id = id.checked_add(1).ok_or(TreeError::IdsExhausted)?;
         self.nodes.insert(id, VirtualNode::new(id, tag_name.into()));
+        self.orphans.insert(id);
         Ok(id)
     }
 
@@ -313,6 +381,7 @@ impl VirtualTree {
         if let Some(child) = self.nodes.get_mut(&child_id) {
             child.parent = Some(parent_id);
         }
+        self.orphans.remove(&child_id);
         Ok(())
     }
 
@@ -346,8 +415,9 @@ impl VirtualTree {
     /// and returns every freed id, `id` among them.
     ///
     /// The subtree goes too because a caller removing a node holds that
-    /// node's id and nothing below it. An unknown `id` frees nothing and
-    /// returns an empty `Vec`: destroying twice is a no-op, not an error.
+    /// node's id and nothing below it. Also ends the hold of every freed id.
+    /// An unknown `id` frees nothing and returns an empty `Vec`: destroying
+    /// twice is a no-op, not an error.
     pub fn destroy_node(&mut self, id: NodeId) -> Vec<NodeId> {
         if !self.nodes.contains_key(&id) {
             return Vec::new();
@@ -359,6 +429,8 @@ impl VirtualTree {
         while let Some(current) = pending.pop() {
             if let Some(node) = self.nodes.remove(&current) {
                 pending.extend(node.children.iter().copied());
+                self.held.remove(&current);
+                self.orphans.remove(&current);
                 freed.push(current);
             }
         }
@@ -367,9 +439,8 @@ impl VirtualTree {
 
     /// Unlinks `child_id` from `parent_id`'s children, if present. `child_id`
     /// not being (or no longer being) a child of `parent_id` is a no-op, not
-    /// an error. Only an unknown `parent_id` is. The child node stays alive
-    /// and keeps its own children; [`destroy_node`](Self::destroy_node) is
-    /// what frees.
+    /// an error. Only an unknown `parent_id` is. The child node keeps its own
+    /// children and, unless held, is an orphan until it is inserted again.
     ///
     /// # Errors
     ///
@@ -384,6 +455,7 @@ impl VirtualTree {
         if let Some(child) = self.nodes.get_mut(&child_id) {
             child.parent = None;
         }
+        self.orphan_if_free(child_id);
         Ok(())
     }
 

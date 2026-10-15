@@ -42,7 +42,7 @@ fn open_hosted(
 /// becoming available after the window already opened.
 fn mount_content(app: &HostedApp, width: f32, height: f32) {
     let mut host = app.session.host.borrow_mut();
-    let root = host.root;
+    let root = host.root();
     let existing = host.tree.get(root).unwrap().children().first().copied();
     let content = if let Some(id) = existing {
         id
@@ -209,7 +209,7 @@ fn auto_resize_only_ever_fires_once(cx: &mut TestAppContext) {
 /// given dimension on it.
 fn mount_partial(app: &HostedApp, width: Option<f64>, height: Option<f64>) {
     let mut host = app.session.host.borrow_mut();
-    let root = host.root;
+    let root = host.root();
     let content = host.tree.create_node("div").unwrap();
     host.tree.append_child(root, content).unwrap();
     if let Some(width) = width {
@@ -340,7 +340,7 @@ fn auto_resize_treats_an_unusable_configured_dimension_as_not_ready(cx: &mut Tes
 #[test]
 fn content_window_size_reads_the_mounted_root_childs_style() {
     let mut host = Host::default();
-    let root = host.root;
+    let root = host.root();
     let content = host.tree.create_node("div").unwrap();
     host.tree.set_style(content, "width", 300.0).unwrap();
     host.tree.set_style(content, "height", 150.0).unwrap();
@@ -352,7 +352,7 @@ fn content_window_size_reads_the_mounted_root_childs_style() {
 #[test]
 fn content_window_size_is_none_when_unset() {
     let mut host = Host::default();
-    let root = host.root;
+    let root = host.root();
     let content = host.tree.create_node("div").unwrap();
     host.tree.append_child(root, content).unwrap();
 
@@ -363,7 +363,7 @@ fn content_window_size_is_none_when_unset() {
 fn content_window_size_is_none_when_nothing_mounted() {
     let host = Host::default();
 
-    assert_eq!(content_window_size(&host, host.root), (None, None));
+    assert_eq!(content_window_size(&host, host.root()), (None, None));
 }
 
 #[gpui::test]

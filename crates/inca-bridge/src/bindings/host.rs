@@ -23,8 +23,6 @@ pub struct Host {
     /// Receives one line for each style a `setStyle` call stores with an
     /// unknown key or an invalid color. Writes to stderr by default.
     pub warn: Rc<dyn Fn(&str)>,
-    /// Allocated with the tree, so `rootNodeId` always resolves.
-    pub root: NodeId,
     pub listeners: EventListeners,
     pub focus: FocusRegistry,
     /// Last number handed out as an `eventId`. Each event takes the next one.
@@ -50,7 +48,6 @@ impl std::fmt::Debug for Host {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Host")
             .field("tree", &self.tree)
-            .field("root", &self.root)
             .field("listeners", &self.listeners)
             .field("focus", &self.focus)
             .finish_non_exhaustive()
@@ -67,7 +64,6 @@ impl Default for Host {
         Self {
             tree,
             warn: Rc::new(|line| eprintln!("{line}")),
-            root,
             listeners: EventListeners::default(),
             focus: FocusRegistry::default(),
             last_event_id: 0,
@@ -88,6 +84,46 @@ pub(super) fn clamped_offset(offset: Pixels, max: Pixels) -> Pixels {
 }
 
 impl Host {
+    /// The node a mounting app attaches under. Allocated with the tree, so
+    /// `rootNodeId` always resolves.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the tree has no root. [`Host::default`] always declares one.
+    #[must_use]
+    pub fn root(&self) -> NodeId {
+        self.tree.root().expect("the host declares a root")
+    }
+
+    /// Drops the per-node state of freed nodes and returns the callback ids
+    /// their listeners held.
+    pub(crate) fn free_ids(&mut self, ids: &[NodeId]) -> Vec<u32> {
+        for id in ids {
+            self.scroll_handles.get_mut().remove(id);
+            self.scroll_reported.remove(id);
+        }
+        ids.iter()
+            .flat_map(|&id| {
+                self.focus.forget(id);
+                self.scroll_fresh.retain(|&(node, ..)| node != id);
+                self.scroll_retry.retain(|&(node, ..)| node != id);
+                self.listeners.release(id)
+            })
+            .collect()
+    }
+
+    /// Frees every orphan of the tree with its subtree and drops their
+    /// per-node state. Returns the freed node ids and the callback ids their
+    /// listeners held, or `None` when nothing was freed.
+    pub(crate) fn sweep_orphans(&mut self) -> Option<(Vec<NodeId>, Vec<u32>)> {
+        let nodes = self.tree.sweep();
+        if nodes.is_empty() {
+            return None;
+        }
+        let callbacks = self.free_ids(&nodes);
+        Some((nodes, callbacks))
+    }
+
     /// Containers whose clamped offset moved since the last call and whose
     /// `scroll` a listener reaches: one on the container, or a capture one on
     /// an ancestor. Every container's offset is recorded, so a listener added

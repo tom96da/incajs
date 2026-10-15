@@ -66,7 +66,8 @@ impl Harness {
     pub fn snapshot(&mut self) -> Node {
         let host = Rc::clone(&self.host);
         let host = host.borrow();
-        snapshot(&host.tree, host.root, &mut |id| self.bounds_of(id)).expect("the root node exists")
+        snapshot(&host.tree, host.root(), &mut |id| self.bounds_of(id))
+            .expect("the root node exists")
     }
 
     /// Clicks the center of node `id`'s painted bounds. A node without

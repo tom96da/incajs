@@ -21,6 +21,8 @@ interface IncaNative {
   addEventListener(nodeId: NodeId, event: string, capture?: boolean, passive?: boolean): CallbackId;
   removeEventListener(nodeId: NodeId, event: string, callbackId: CallbackId): boolean;
   destroyNode(nodeId: NodeId): CallbackId[];
+  holdNode(nodeId: NodeId): void;
+  releaseNode(nodeId: NodeId): void;
   focusNode(nodeId: NodeId, preventScroll?: boolean): void;
   blurNode(nodeId: NodeId): void;
   focusedNode(): NodeId | null;
@@ -42,6 +44,8 @@ declare global {
   var __inca_native__: IncaNative;
   // eslint-disable-next-line no-var
   var __inca_callbacks__: Record<CallbackId, HostCallback>;
+  // eslint-disable-next-line no-var
+  var __inca_released__: (nodeIds: NodeId[], callbackIds: CallbackId[]) => void;
 }
 
 export function native(): IncaNative {

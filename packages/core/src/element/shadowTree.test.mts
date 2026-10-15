@@ -39,6 +39,8 @@ const core: IncaCore = {
   createEventTarget: vi.fn<IncaCore["createEventTarget"]>(() => target),
   latestEventId: vi.fn<() => number>(() => 0),
   destroyNode: vi.fn<(nodeId: number) => void>(),
+  holdNode: vi.fn<(nodeId: number) => void>(),
+  releaseNode: vi.fn<(nodeId: number) => void>(),
   focus: vi.fn<(nodeId: number) => void>(),
   blur: vi.fn<(nodeId: number) => void>(),
   focusedNode: vi.fn<() => number | null>(() => null),

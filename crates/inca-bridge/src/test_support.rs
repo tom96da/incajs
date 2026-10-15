@@ -137,7 +137,7 @@ pub fn focusable_tree(
     let host = Rc::new(RefCell::new(Host::default()));
     let mut host_mut = host.borrow_mut();
     let parent = host_mut.tree.create_node("div").unwrap();
-    let root = host_mut.root;
+    let root = host_mut.root();
     host_mut.tree.append_child(root, parent).unwrap();
     let nodes: Vec<NodeId> = (0..children)
         .map(|_| {

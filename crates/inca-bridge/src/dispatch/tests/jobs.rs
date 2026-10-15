@@ -152,7 +152,7 @@ fn listener_errors_of_a_dispatch_in_a_job_are_reported_when_the_jobs_drain(
 fn drain_jobs_and_refresh_shows_js_the_focus_the_window_applied(cx: &mut TestAppContext) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
-    let root = host.borrow().root;
+    let root = host.borrow().root();
     host.borrow_mut().tree.append_child(root, node).unwrap();
     host.borrow_mut()
         .tree

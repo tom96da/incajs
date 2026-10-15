@@ -47,7 +47,7 @@ fn a_keystroke() -> Keystroke {
 #[gpui::test]
 fn a_key_event_with_nothing_focused_targets_the_root(cx: &mut TestAppContext) {
     let (host, parent, child) = build_key_pair();
-    let root = host.borrow().root;
+    let root = host.borrow().root();
     host.borrow_mut().tree.append_child(root, parent).unwrap();
     let engine = test_support::engine_for(&host);
     engine.eval::<()>("globalThis.seen = [];").unwrap();

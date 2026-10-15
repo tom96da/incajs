@@ -40,7 +40,7 @@ impl EventSink for EventDispatcher {
     fn focus_handle(&self, node_id: NodeId) -> Option<gpui::FocusHandle> {
         let host = self.host.borrow();
         host.focus.handle(node_id).or_else(|| {
-            (node_id == host.root)
+            (node_id == host.root())
                 .then(|| host.focus.parked_handle())
                 .flatten()
         })
@@ -226,9 +226,9 @@ impl EventDispatcher {
         let click = match (key, up) {
             ("tab", false) if plain => {
                 let host = &mut *self.host.borrow_mut();
-                let moved = host
-                    .focus
-                    .tab_move(&host.tree, host.root, window, cx, modifiers.shift);
+                let moved =
+                    host.focus
+                        .tab_move(&host.tree, host.root(), window, cx, modifiers.shift);
                 if let Some(node) = moved {
                     host.reveal(node, Align::Reveal, Align::CenterOutside);
                 }

@@ -1,6 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import { native } from "../native.mts";
 import type { NodeId } from "../rendererCore.mts";
 import type { IncaElement, IncaNode } from "./types.mts";
 
@@ -76,4 +77,32 @@ export function markDestroyed(node: IncaNode): void {
   if (node.kind === "text") return;
   unregisterElement(node.id);
   for (const child of node.children) markDestroyed(child);
+}
+
+/**
+ * Marks the handle of each freed node destroyed. An id with no live handle is
+ * skipped.
+ * @param nodeIds - ids of nodes the host freed, subtrees included
+ * @internal
+ */
+export function markFreed(nodeIds: readonly NodeId[]): void {
+  for (const id of nodeIds) {
+    const element = elementOf(id);
+    if (element) markDestroyed(element);
+  }
+}
+
+/**
+ * Releases the hold of a node whose handle was collected. A node destroyed
+ * already is unknown to the host and the call does nothing.
+ */
+const released = new FinalizationRegistry<NodeId>((id) => native().releaseNode(id));
+
+/**
+ * Releases the hold of `handle`'s node once the handle is collected.
+ * @param handle - the handle of a node held with `holdNode`
+ * @internal
+ */
+export function releaseWhenCollected(handle: IncaNode): void {
+  released.register(handle, handle.id);
 }

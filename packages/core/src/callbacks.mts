@@ -1,6 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import { markFreed } from "./element/lifecycle.mts";
 import type { HostCallback } from "./native.mts";
 import type { CallbackId, EventListenerOrObject, NodeId } from "./types.mts";
 
@@ -93,3 +94,23 @@ export const groupOf = (nodeId: NodeId, event: string, capture: boolean | undefi
 export function registeredGroupCount(): number {
   return idsByGroup.size;
 }
+
+/**
+ * The host calls this at the start of a frame, after it freed nodes that had
+ * no parent. Each callback is released on its own, so one that throws does not
+ * skip the rest. The first error is thrown after the rest is done.
+ */
+globalThis.__inca_released__ ??= (nodeIds, callbackIds) => {
+  let failure: unknown;
+  let failed = false;
+  for (const callbackId of callbackIds) {
+    try {
+      releaseCallbacks([callbackId]);
+    } catch (error) {
+      if (!failed) failure = error;
+      failed = true;
+    }
+  }
+  markFreed(nodeIds);
+  if (failed) throw failure;
+};

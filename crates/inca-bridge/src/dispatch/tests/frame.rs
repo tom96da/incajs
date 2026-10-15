@@ -14,7 +14,7 @@ const SEEN: &str = r"
 fn focusable_node(dispatcher: &EventDispatcher, host: &Rc<RefCell<Host>>) -> NodeId {
     let mut host = host.borrow_mut();
     let node = host.tree.create_node("div").unwrap();
-    let root = host.root;
+    let root = host.root();
     host.tree.append_child(root, node).unwrap();
     host.tree
         .set_attribute(node, "tabindex", inca_gpui::AttributeValue::from("0"))
@@ -113,4 +113,173 @@ fn a_window_that_deactivates_and_reactivates_after_a_drop_fires_nothing(cx: &mut
     }
 
     assert_eq!(seen(&dispatcher), "[]");
+}
+
+const RELEASED: &str = r"
+    globalThis.released = [];
+    globalThis.__inca_released__ = (nodes, callbacks) => {
+        globalThis.released.push([nodes, callbacks]);
+    };
+    ";
+
+struct Scene {
+    dispatcher: Rc<EventDispatcher>,
+    host: Rc<RefCell<Host>>,
+    reported: Reported,
+    window: gpui::WindowHandle<Frame>,
+}
+
+/// A window over a fresh host whose engine runs `hook_js` first.
+fn scene(cx: &mut TestAppContext, hook_js: &str) -> Scene {
+    let (dispatcher, host, reported) = dispatcher_with_engine();
+    dispatcher.engine.eval::<()>(hook_js).unwrap();
+    let dispatcher = Rc::new(dispatcher);
+    let window = cx.add_window(|_, _| Frame(Rc::clone(&dispatcher)));
+    Scene {
+        dispatcher,
+        host,
+        reported,
+        window,
+    }
+}
+
+impl Scene {
+    fn js(&self, source: &str) {
+        self.dispatcher.engine.eval::<()>(source).unwrap();
+    }
+
+    fn json(&self, js: &str) -> serde_json::Value {
+        eval_json(&self.dispatcher, js)
+    }
+
+    /// Frame callbacks the last draw asked for.
+    fn requested_frames(&self, cx: &mut TestAppContext) -> usize {
+        cx.update_window(self.window.into(), |_, window, cx| {
+            window.simulate_next_frame(cx)
+        })
+        .unwrap()
+    }
+}
+
+#[gpui::test]
+fn the_hook_receives_the_freed_ids_once(cx: &mut TestAppContext) {
+    let scene = scene(cx, RELEASED);
+    scene.js(r"
+        const n = __inca_native__;
+        globalThis.top = n.createNode('div');
+        globalThis.leaf = n.createNode('div');
+        n.appendChild(top, leaf);
+        globalThis.cb = n.addEventListener(leaf, 'click', false, false);
+        ");
+
+    draw(cx, scene.window);
+    draw(cx, scene.window);
+
+    assert_eq!(
+        scene.json("[globalThis.released, [top, leaf, cb]]"),
+        serde_json::json!([[[[1, 2], [0]]], [1, 2, 0]])
+    );
+    assert!(scene.host.borrow().tree.get(1).is_none());
+}
+
+#[gpui::test]
+fn a_hook_that_throws_is_reported_and_the_frame_completes(cx: &mut TestAppContext) {
+    let scene = scene(
+        cx,
+        "globalThis.__inca_released__ = () => { throw new Error('boom'); };",
+    );
+    scene.js("__inca_native__.createNode('div');");
+    let node = focusable_node(&scene.dispatcher, &scene.host);
+    scene.host.borrow_mut().focus.request_focus(node, true);
+
+    draw(cx, scene.window);
+
+    let reported = scene.reported.borrow();
+    assert_eq!(reported.len(), 1);
+    assert!(reported[0].message().contains("boom"));
+    drop(reported);
+    assert_eq!(
+        scene.json("globalThis.seen"),
+        serde_json::json!([format!("focus:{node}")])
+    );
+    assert!(!scene.host.borrow().tree.has_orphans());
+}
+
+#[gpui::test]
+fn a_hook_that_creates_nodes_and_fires_events_leaves_the_next_frame_to_free_them(
+    cx: &mut TestAppContext,
+) {
+    let scene = scene(
+        cx,
+        r"
+        globalThis.released = [];
+        globalThis.__inca_released__ = (nodes) => {
+            globalThis.released.push(nodes);
+            if (globalThis.released.length > 1) return;
+            __inca_native__.createNode('div');
+            __inca_native__.click(__inca_native__.rootNodeId());
+        };
+        ",
+    );
+    scene.js("__inca_native__.createNode('div');");
+
+    draw(cx, scene.window);
+    assert_eq!(scene.json("globalThis.released"), serde_json::json!([[1]]));
+    assert!(scene.requested_frames(cx) > 0);
+    assert!(scene.reported.borrow().is_empty());
+
+    draw(cx, scene.window);
+    assert_eq!(
+        scene.json("globalThis.released"),
+        serde_json::json!([[1], [2]])
+    );
+    assert_eq!(scene.requested_frames(cx), 0);
+}
+
+#[gpui::test]
+fn without_a_hook_the_ids_are_dropped_and_nothing_is_reported(cx: &mut TestAppContext) {
+    let scene = scene(cx, "");
+    scene.js(r"
+        globalThis.node = __inca_native__.createNode('div');
+        __inca_native__.addEventListener(node, 'click', false, false);
+        ");
+
+    draw(cx, scene.window);
+
+    assert!(scene.host.borrow().tree.get(1).is_none());
+    assert!(scene.host.borrow().listeners.is_empty());
+    assert!(scene.reported.borrow().is_empty());
+}
+
+#[gpui::test]
+fn a_removed_focused_node_is_swept_without_a_blur(cx: &mut TestAppContext) {
+    let scene = scene(cx, RELEASED);
+    let node = focusable_node(&scene.dispatcher, &scene.host);
+    scene.host.borrow_mut().focus.request_focus(node, true);
+    draw(cx, scene.window);
+    scene.js("globalThis.seen = [];");
+
+    scene.js(&format!(
+        "__inca_native__.removeChild(__inca_native__.rootNodeId(), {node});"
+    ));
+    draw(cx, scene.window);
+
+    assert_eq!(scene.json("globalThis.seen"), serde_json::json!([]));
+    assert_eq!(
+        scene.json("globalThis.released.map(([n]) => n)"),
+        serde_json::json!([[node]])
+    );
+    assert!(scene.host.borrow().tree.get(node).is_none());
+}
+
+#[gpui::test]
+fn a_frame_without_orphans_does_not_call_the_hook(cx: &mut TestAppContext) {
+    let scene = scene(cx, RELEASED);
+    scene.js(
+        "__inca_native__.appendChild(__inca_native__.rootNodeId(), __inca_native__.createNode('div'));",
+    );
+
+    draw(cx, scene.window);
+
+    assert_eq!(scene.json("globalThis.released"), serde_json::json!([]));
 }

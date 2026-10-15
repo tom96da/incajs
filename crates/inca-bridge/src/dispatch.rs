@@ -32,7 +32,8 @@ use inca_gpui::event_sink::{hover_path_difference, with_screen};
 use inca_gpui::{
     EventPayload, MousePayload, NodeId, PointerSource, buttons_mask, is_disabled_button,
 };
-use inca_jsenv::{Engine, ErrorReporter, report_jobs, stderr_reporter};
+use inca_jsenv::{Engine, EngineError, ErrorReporter, report_jobs, stderr_reporter};
+use rquickjs::Function;
 
 use crate::bindings::Host;
 use crate::event::{self, Walk};
@@ -385,15 +386,16 @@ impl EventDispatcher {
     fn key_target(&self, window: &mut Window, cx: &mut App) -> NodeId {
         let (root, focused) = {
             let host = self.host.borrow();
-            (host.root, host.focus.focused_node(window, cx))
+            (host.root(), host.focus.focused_node(window, cx))
         };
         self.resolve(focused, root)
     }
 
     /// Runs the work a window owes before it draws a frame: syncs the
     /// modifier keys, applies a requested focus and fires the resulting
-    /// `focus`/`blur` events, reveals the focused node and fires pending
-    /// `scroll` events. Call it first in the window's render.
+    /// `focus`/`blur` events, frees the nodes nothing reaches, reveals the
+    /// focused node and fires pending `scroll` events. Call it first in the
+    /// window's render.
     pub fn begin_frame(&self, window: &mut Window, cx: &mut App) {
         self.sync_modifiers(window, false);
         let transitions = {
@@ -403,8 +405,41 @@ impl EventDispatcher {
         for transition in &transitions {
             transition.dispatch(self, window, cx);
         }
+        self.release_orphans(window, cx);
         self.host.borrow_mut().reveal_focus(window);
         self.fire_scrolls(window, cx);
+    }
+
+    /// Frees the orphans of the tree and tells the script through the global
+    /// `__inca_released__(nodeIds, callbackIds)`. The global is looked up per
+    /// call and skipped when it is not a function. A thrown error is
+    /// reported and the frame goes on. Nodes the hook leaves orphaned wait
+    /// for the next frame, which this requests.
+    fn release_orphans(&self, window: &mut Window, cx: &mut App) {
+        let swept = self.host.borrow_mut().sweep_orphans();
+        let Some((nodes, callbacks)) = swept else {
+            return;
+        };
+        self.host.borrow_mut().focus.observe(window, cx);
+        let host = &self.host;
+        let entered = self.engine.with(|ctx| {
+            let Ok(hook) = ctx.globals().get::<_, Function>("__inca_released__") else {
+                return false;
+            };
+            if let Err(err) = hook.call::<_, ()>((nodes, callbacks)) {
+                host.borrow_mut()
+                    .failures
+                    .push(EngineError::capture(&ctx, &err));
+            }
+            true
+        });
+        if entered {
+            self.drain_observed(window);
+        }
+        // The requests end when a frame leaves no orphan.
+        if self.host.borrow().tree.has_orphans() {
+            window.request_animation_frame();
+        }
     }
 
     /// Handles the window gaining (`active` true) or losing focus. The

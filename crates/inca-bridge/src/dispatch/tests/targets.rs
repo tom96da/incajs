@@ -63,7 +63,7 @@ fn a_removed_node_is_no_related_target_and_no_previous_container(cx: &mut TestAp
     let [outer, parent, child] = tree_of_three(&host);
     {
         let mut host = host.borrow_mut();
-        let root = host.root;
+        let root = host.root();
         host.tree.append_child(root, outer).unwrap();
     }
     dispatcher

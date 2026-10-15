@@ -124,8 +124,8 @@ export function insert(
  * Removes `child` for good: the native node, its whole subtree, and every
  * event listener registered in it.
  *
- * A caller that removes a subtree calls this on its root alone, so a node's
- * descendants are freed here or nowhere.
+ * A caller that removes a subtree calls this on its root alone, and the host
+ * frees the descendants with it.
  * @param core - the incajs bindings to drive the native tree through
  * @param child - the node being removed
  */

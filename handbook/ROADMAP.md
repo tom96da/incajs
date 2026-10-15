@@ -111,7 +111,7 @@ lands after 3.3, when there is something to release.
    `__INCA_ROOT_ID__` source substitution, so an app's entry point is
    plain code (`createIncaApp(App).mount()`) with no host-injected token
    in it.
-6. **Core corrections**: node lifetime (nothing frees a detached node),
+6. **Core corrections**: node lifetime (the host frees a detached node that nothing holds),
    error visibility (a listener's exception reaches nobody, and QuickJS has
    no `console`), and the per-frame cost of wiring every node for input.
    All three are `crates/inca-gpui` gaps that a dev loop running a real app

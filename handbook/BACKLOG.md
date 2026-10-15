@@ -230,20 +230,6 @@ A fixed entry is deleted and its ID is never reused.
   scratch app and resolves `incajs/vue/runtime` through the published
   `exports`. The UI tests cover the workspace link.
 
-- **B-181 A node Vue creates and never inserts stays in the host tree**
-  `Units: core,bridge · Size: M · Impact: Medium`
-
-  Vue's `mountElement` creates the element, mounts its children under it and
-  inserts it last. A development build rethrows an exception of a child
-  `setup` when the app sets no `errorHandler`, and the exception leaves the
-  element and its subtree in the host tree, never inserted and never
-  destroyed. Each such error keeps the nodes for the life of the app. A
-  production build logs the exception and inserts the element.
-
-  Fix: free the nodes of an element that the renderer created and never
-  inserted, for example through a pending-node list that the next insert or a
-  frame boundary checks.
-
 - **B-184 `getModifierState` exists on every event**
   `Units: bridge · Size: M · Impact: Low`
 
@@ -258,14 +244,15 @@ A fixed entry is deleted and its ID is never reused.
   `Units: bridge,jsenv,host,core · Size: M · Impact: Medium`
 
   `__inca_native__`, `__inca_dev__`, `__inca_callbacks__`,
-  `__inca_track_rejection__` and `__inca_take_rejections__` are plain
-  globals. A script can assign to or delete them, which breaks the host
-  channel or the report of unhandled rejections.
+  `__inca_released__`, `__inca_track_rejection__` and
+  `__inca_take_rejections__` are plain globals. A script can assign to or
+  delete them, which breaks the host channel or the report of unhandled
+  rejections.
 
   Fix: define them with `Object::prop(key, value)` of rquickjs, which creates
   a read-only property that stays in place. The JS side creates
-  `__inca_callbacks__` (`??=` in `callbacks.mts`), so the host creates and
-  protects it first.
+  `__inca_callbacks__` and `__inca_released__` (`??=` in `callbacks.mts`, so
+  the first copy of core wins), so the host creates and protects them first.
 
 - **B-188 The pending module holds a promise handle**
   `Units: jsenv · Size: M · Impact: Medium`
@@ -1054,7 +1041,8 @@ A fixed entry is deleted and its ID is never reused.
 - **B-170 The handles of a removed element are inert**
   `Units: core · Size: S · Impact: Low`
 
-  Vue destroys a node on unmount. Listeners registered before are released,
+  Vue destroys a node on unmount, and the host frees a detached node that
+  nothing holds. Listeners registered before are released,
   `addEventListener()` afterwards ignores the listener, `dispatchEvent()`
   returns `true` and skips the argument check, and `tabIndex` reads the
   default. A browser keeps the listeners and the attribute of a detached

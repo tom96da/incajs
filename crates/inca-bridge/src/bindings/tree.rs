@@ -13,8 +13,9 @@ use super::convert::{JsNodeId, existing_node, or_null, throw_tree_error};
 use super::host::Host;
 
 /// The retained tree itself: allocating, attaching, and describing nodes,
-/// plus `destroyNode`. Freeing a subtree is a tree operation first, even
-/// though it also releases the listener/focus state that named its nodes.
+/// plus `destroyNode`, `holdNode` and `releaseNode`. Freeing a subtree is a
+/// tree operation first, even though it also releases the listener/focus
+/// state that named its nodes.
 pub(super) fn install_tree(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("rootNodeId", root_node_id)?;
     n.set("createNode", create_node)?;
@@ -26,11 +27,13 @@ pub(super) fn install_tree(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("removeAttribute", remove_attribute)?;
     n.set("setStyle", set_style)?;
     n.set("removeStyle", remove_style)?;
-    n.set("destroyNode", destroy_node)
+    n.set("destroyNode", destroy_node)?;
+    n.set("holdNode", hold_node)?;
+    n.set("releaseNode", release_node)
 }
 
 fn root_node_id(host: Rc<RefCell<Host>>) -> impl Fn() -> NodeId {
-    move || host.borrow().root
+    move || host.borrow().root()
 }
 
 fn create_node<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, String) -> JsResult<NodeId> {
@@ -180,20 +183,21 @@ fn destroy_node<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> 
         let mut host = host.borrow_mut();
         refuse_root(&ctx, &host, node_id, "destroyed")?;
         let freed = host.tree.destroy_node(node_id);
-        for id in &freed {
-            host.scroll_handles.get_mut().remove(id);
-            host.scroll_reported.remove(id);
-        }
-        Ok(freed
-            .into_iter()
-            .flat_map(|id| {
-                host.focus.forget(id);
-                host.scroll_fresh.retain(|&(node, ..)| node != id);
-                host.scroll_retry.retain(|&(node, ..)| node != id);
-                host.listeners.release(id)
-            })
-            .collect())
+        Ok(host.free_ids(&freed))
     }
+}
+
+fn hold_node<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<()> {
+    move |ctx, JsNodeId(node_id)| {
+        host.borrow_mut()
+            .tree
+            .hold(node_id)
+            .map_err(|err| throw_tree_error(&ctx, err))
+    }
+}
+
+fn release_node(host: Rc<RefCell<Host>>) -> impl Fn(JsNodeId) {
+    move |JsNodeId(node_id)| host.borrow_mut().tree.release(node_id)
 }
 
 /// Refuses `id` when it is the root node, which belongs to the host. `verb`
@@ -203,7 +207,7 @@ fn destroy_node<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> 
 ///
 /// Throws a `TypeError` when `id` is the root.
 fn refuse_root(ctx: &Ctx<'_>, host: &Host, id: NodeId, verb: &str) -> JsResult<()> {
-    if id == host.root {
+    if id == host.root() {
         return Err(Exception::throw_type(
             ctx,
             &format!("the root node belongs to the host and cannot be {verb}"),

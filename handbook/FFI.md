@@ -38,8 +38,9 @@ the custom renderer's output. Each node has:
   belongs to the host, throws too.
 - A `nodeId` that is not a finite whole number in the `u32` range throws a
   `TypeError`.
-- Only `destroyNode` frees nodes, and it frees the whole subtree.
-  `removeChild` keeps the node alive for re-attachment.
+- `destroyNode` frees a node and its subtree at once. At the start of each
+  frame the host also frees every node that has no parent and is neither
+  the root nor held with `holdNode`, with its subtree.
 
 ### Tag vocabulary
 
@@ -85,10 +86,12 @@ the nearest ancestor container.
 | Function | Signature | Purpose |
 | --- | --- | --- |
 | `rootNodeId` | `() => number` | Return the id of the host-allocated root container, the node a mounting app attaches itself under. |
-| `createNode` | `(tag: string) => number` | Allocate a `VirtualNode`, return its id. Throws once every id has been used. |
+| `createNode` | `(tag: string) => number` | Allocate a `VirtualNode`, return its id. Throws once every id has been used. Freed at the next frame unless inserted or held, see Tree rules. |
 | `appendChild` | `(parentId: number, childId: number) => void` | Attach a child at the end of `parentId`'s children. Same as `insertBefore` with no anchor. |
 | `insertBefore` | `(parentId: number, childId: number, anchorId: number \| null) => void` | Attach a child before `anchorId`, or at the end if `null`. Moving an attached node drops focus like `removeChild`. |
-| `removeChild` | `(parentId: number, childId: number) => void` | Detach a child node. The focused node in its subtree loses focus at the call, with no `blur` or `focusout`. |
+| `removeChild` | `(parentId: number, childId: number) => void` | Detach a child node. The focused node in its subtree loses focus at the call, with no `blur` or `focusout`. Freed at the next frame unless re-inserted or held, see Tree rules. |
+| `holdNode` | `(nodeId: number) => void` | Keep `nodeId` and its subtree alive while it has no parent. An unknown id throws a `TypeError`. |
+| `releaseNode` | `(nodeId: number) => void` | End the hold. An unknown id does nothing. |
 | `setAttribute` | `(nodeId: number, key: string, value: string \| number \| boolean) => void` | Set a non-style attribute prop. |
 | `getAttribute` | `(nodeId: number, key: string) => string \| number \| boolean \| null` | Read a non-style attribute prop as stored, or `null` when the key is unset. |
 | `removeAttribute` | `(nodeId: number, key: string) => void` | Remove a non-style attribute prop. Removing a key that isn't set does nothing. |
@@ -98,7 +101,7 @@ the nearest ancestor container.
 | `removeEventListener` | `(nodeId: number, event: string, callbackId: number) => boolean` | Drop one registration and return whether it was there. An unknown node returns `false`. |
 | `dispatchEvent` | `(nodeId: number, event: Event) => boolean` | Walk a script-built event over the path of `nodeId` and return `false` when a listener canceled it, see [Dispatching from script](#dispatching-from-script). |
 | `click` | `(nodeId: number) => void` | Walk an untrusted `click` at `nodeId`, see [Dispatching from script](#dispatching-from-script). |
-| `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its subtree, and return every `callbackId` registered in it. An unknown id returns `[]`. Destroying the root throws. Also clears the focus state of the destroyed nodes, and `blur` and `focusout` stay unfired. Drops the waiting `scrollIntoViewNode` calls of the destroyed nodes. |
+| `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its subtree, and return every `callbackId` registered in it. An unknown id returns `[]`. Destroying the root throws. Also drops the hold and clears the focus state of the destroyed nodes, and `blur` and `focusout` stay unfired. Drops the waiting `scrollIntoViewNode` calls of the destroyed nodes. |
 | `focusNode` | `(nodeId: number, preventScroll?: boolean) => void` | Request focus for `nodeId`. Takes effect next frame. A node with a `tabindex`, and only that node, takes focus. A node that is not connected to the root cannot take focus. Unless `preventScroll` is `true`, the scroll containers above the node then scroll it into view: a node that shows stays put, a node outside a container's box centres, and a node that shows partly moves the least vertically and stays put horizontally. A node with no recorded box yet is retried on the next frame. |
 | `focusedNode` | `() => number \| null` | The id of the focused node, or `null` when none has focus. |
 | `blurNode` | `(nodeId: number) => void` | Request that `nodeId` lose focus. Takes effect next frame, and does nothing if `nodeId` is not the focused node by then. |
@@ -166,6 +169,19 @@ and author-facing behaviour are in [events.md](../docs/reference/events.md).
   `Host::failures`. Failures are reported in order after each walk, after
   `drain_jobs_and_refresh` and by the development window's load poll
   (`EventDispatcher::report_pending`).
+
+#### Released nodes
+
+`__inca_released__(nodeIds: number[], callbackIds: number[]) => void` is a
+global that core defines with `??=`, like `__inca_callbacks__`. Rust looks it
+up by name on each call and keeps nothing. A missing global is skipped.
+
+- Rust calls it at most once per frame, after the focus pass, and only when
+  the sweep of that frame freed a node.
+- `nodeIds` holds every freed node, subtrees included, and `callbackIds`
+  every registration on them. Each id arrives once. Ids freed by
+  `destroyNode` never pass through it.
+- A throw is reported to `Host::failures` and the frame goes on.
 
 #### Event object
 

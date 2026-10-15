@@ -62,6 +62,13 @@ browser dev server.
 └──────────────────────────────────────────────────────────────────┘
 ```
 
+## Node lifetime
+
+At the start of each frame the host runs, in order, the focus requests and
+their transitions, the sweep of nodes with no parent that are neither the root
+nor held, the `__inca_released__` call and the focus reveal.
+[FFI.md](./FFI.md#released-nodes) defines the rule and the hook.
+
 ## Development window
 
 The development window draws the application you wrote. `inca dev` opens it

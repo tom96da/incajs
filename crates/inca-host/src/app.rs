@@ -118,10 +118,9 @@ pub(crate) struct Session {
 }
 
 impl Session {
-    /// The empty container the entry mounts against: [`Host::root`]'s own
-    /// value, fixed once allocated.
+    /// The root node of the host's tree.
     fn root(&self) -> NodeId {
-        self.host.borrow().root
+        self.host.borrow().root()
     }
 
     /// Starts an engine rooted at `entry_path`'s directory and gives it
@@ -305,11 +304,11 @@ impl Render for HostedApp {
         let session = &self.session;
         session.dispatcher.begin_frame(window, cx);
         let host = session.host.borrow();
-        let element = render_tree_with_events(&host.tree, host.root, &session.dispatcher)
+        let element = render_tree_with_events(&host.tree, host.root(), &session.dispatcher)
             .unwrap_or_else(|| div().into_any_element());
         // The root fills the window; the walk records only its children.
         session.dispatcher.record_layout(
-            host.root,
+            host.root(),
             NodeLayout {
                 bounds: Bounds::new(Point::default(), window.viewport_size()),
                 border: px(0.0),
