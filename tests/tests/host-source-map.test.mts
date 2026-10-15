@@ -32,7 +32,7 @@ afterAll(async () => {
   if (scratch) await rm(scratch, { recursive: true, force: true });
 });
 
-/** A writable that discards everything — silences the bundler's own output. */
+/** A writable that discards everything and silences the bundler's own output. */
 function discard(): Writable {
   return new Writable({
     write(_chunk, _encoding, callback) {

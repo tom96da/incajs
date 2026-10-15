@@ -4,9 +4,9 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 -->
 
 <!--
-  click_counter, driven by a `tick` dev notification instead of a real
-  pointer click — see hmr-quickjs-state.test.mts for why. The style block
-  and label suffix below are substituted at test time.
+  click_counter, driven by a `tick` dev notification. A real pointer click
+  cannot be synthesized here; see hmr-quickjs-state.test.mts for why. The
+  style block and label suffix below are substituted at test time.
 -->
 <script setup>
 import { computed, ref, watch } from "@vue/runtime-core";

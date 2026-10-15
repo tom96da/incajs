@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 // Drives the real `inca-host` binary and a real Vite dev server through an
-// HMR update — the one piece of experimental HMR that genuinely spans Rust
-// and TypeScript.
+// HMR update. This is the one piece of experimental HMR that spans Rust and
+// TypeScript.
 //
-// Checks state through QuickJS console output only. Whether an update
-// actually reaches the screen is outside this test's reach.
+// It checks state through QuickJS console output only. Whether an update
+// reaches the screen is outside this test's reach.
 
 import { existsSync, readFileSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -31,7 +31,7 @@ function mountedCount(text: string): number {
   return text.match(/\[e2e\] mounted/g)?.length ?? 0;
 }
 
-/** A writable that discards everything — silences the dev server's own logging. */
+/** A writable that discards everything and silences the dev server's own logging. */
 function discard(): Writable {
   return new Writable({
     write(_chunk, _encoding, callback) {
@@ -41,8 +41,9 @@ function discard(): Writable {
 }
 
 /**
- * `incajs`'s and `@incajs/cli`'s built `dist/` — the fixture's entry
- * imports both. Never built here — fails with a message instead.
+ * `incajs`'s and `@incajs/cli`'s built `dist/`. The fixture's entry
+ * imports both. This test never builds them and fails with a message when
+ * they are missing.
  */
 function checkJsPackagesAreBuilt(): void {
   const repoRoot = path.resolve(import.meta.dirname, "../..");
@@ -70,11 +71,10 @@ createIncaApp(App).mount();
 
 /**
  * A click-counter-shaped app (ported from examples/click_counter/src/App.vue),
- * driven by a `tick` dev notification instead of a real pointer click — there
- * is no way to synthesize one against a running `inca-host` process from
- * outside. `receive` is chained rather than replaced: `vite/module-runner`'s
- * own transport already claimed `__inca_dev__.receive` for its own traffic
- * before this script runs.
+ * driven by a `tick` dev notification, because a real pointer click cannot be
+ * synthesized against a running `inca-host` process from outside. `receive`
+ * is chained: `vite/module-runner`'s own transport already claimed
+ * `__inca_dev__.receive` for its own traffic before this script runs.
  */
 const APP_VUE_TEMPLATE = readFileSync(
   path.join(import.meta.dirname, "fixtures/click-counter.vue"),
@@ -136,8 +136,8 @@ beforeAll(async () => {
       hostClient?.notify("vite", payload);
     },
     // A full reload needs a fresh Session, which only inca-host's own
-    // `reload` RPC gives it — not expected to fire for a Vue SFC edit
-    // that always has an HMR boundary, but wired for real just in case.
+    // `reload` RPC gives it. A Vue SFC edit always has an HMR boundary, so it
+    // is not expected to fire here. It is wired for real just in case.
     reload: () => void hostClient?.call("reload", undefined, RELOAD_TIMEOUT_MS),
     onError: (error) => buildErrors.push(error),
   });
@@ -208,8 +208,8 @@ it(
     });
 
     // Script edit: a fresh setup() call resets `clicks` back to 0. Wait on
-    // the mount marker, not `notify` — `notify` also fires on the earlier
-    // `file-changed` event, before the module actually re-evaluates.
+    // the mount marker. `notify` also fires on the earlier `file-changed`
+    // event, before the module re-evaluates.
     const beforeScriptEdit = mountedCount(stderrText);
     await writeFile(vuePath, appVue(STYLE_V2, "!"));
     await vi.waitFor(() => expect(mountedCount(stderrText)).toBeGreaterThan(beforeScriptEdit), {
@@ -217,9 +217,9 @@ it(
     });
 
     client.notify("tick", {});
-    // Not a leftover from the pre-edit run of clicks=1 — that assertion above
-    // already consumed it; a second, later occurrence proves the reset. A
-    // trailing-boundary match so a future clicks=10+ can't inflate the count.
+    // The assertion above already consumed the pre-edit run of clicks=1, so a
+    // second, later occurrence proves the reset. The trailing-boundary match
+    // keeps a future clicks=10+ from inflating the count.
     await vi.waitFor(() => expect(stderrText.match(/\[e2e\] clicks=1(?!\d)/g)?.length).toBe(2), {
       timeout: WAIT_TIMEOUT_MS,
     });
@@ -234,8 +234,8 @@ it(
     await vi.waitFor(() => expect(buildErrors).toHaveLength(1), { timeout: WAIT_TIMEOUT_MS });
     expect(buildErrors[0]?.message).toContain("Unexpected token");
 
-    // Fixing it remounts cleanly and the host keeps responding — same race
-    // as the script edit above.
+    // Fixing it remounts cleanly and the host keeps responding. The wait has
+    // the same race as the script edit above.
     const beforeRecoveryEdit = mountedCount(stderrText);
     await writeFile(vuePath, appVue(STYLE_V2, "!"));
     await vi.waitFor(() => expect(mountedCount(stderrText)).toBeGreaterThan(beforeRecoveryEdit), {

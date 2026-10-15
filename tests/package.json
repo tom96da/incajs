@@ -2,7 +2,7 @@
   "name": "@incajs/e2e-tests",
   "version": "0.0.0-0",
   "private": true,
-  "description": "Tests that span Rust and TypeScript — see Cargo.toml beside this file for its Rust half.",
+  "description": "Tests that span Rust and TypeScript. The Cargo.toml beside this file holds its Rust half.",
   "license": "(MIT OR Apache-2.0)",
   "repository": {
     "type": "git",

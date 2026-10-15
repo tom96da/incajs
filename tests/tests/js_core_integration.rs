@@ -2,16 +2,16 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Exercises `Engine::eval_module` against `packages/core`'s actual
-//! compiled output (a real Rolldown/Vite bundle), not hand-written JS strings
-//! like `bindings.rs`'s own tests use. A real bundler renames a module's
-//! internal top-level bindings (e.g. `createNode` becomes some single-letter
-//! name), so its exported functions are only reachable through the module's
-//! export table — this test reads them back via `Module::get` inside the
-//! same `Engine::with` call that evaluates the module, then invokes them and
+//! compiled output, a real Rolldown/Vite bundle. The tests of `bindings.rs`
+//! use hand-written JS strings. A real bundler renames a module's internal
+//! top-level bindings (e.g. `createNode` becomes some single-letter name),
+//! so its exported functions are reachable only through the module's export
+//! table. This test reads them back via `Module::get` inside the same
+//! `Engine::with` call that evaluates the module, then invokes them and
 //! asserts on the resulting `VirtualTree` state.
 //!
-//! Built from `rendererCore.mts` directly — `index.mts` carries no runtime
-//! code.
+//! It builds from `rendererCore.mts` directly because `index.mts` carries no
+//! runtime code.
 
 #![allow(clippy::unwrap_used)]
 
