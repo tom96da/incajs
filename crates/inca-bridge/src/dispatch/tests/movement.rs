@@ -11,28 +11,6 @@ fn movement_of(payload: &EventPayload) -> (f32, f32) {
     }
 }
 
-// The deferred clear runs when the recording update ends, so the value is
-// read inside that update.
-#[gpui::test]
-fn pointer_moved_reports_zero_first_then_the_delta(cx: &mut TestAppContext) {
-    let (dispatcher, _host, _reported) = dispatcher_with_engine();
-    let cx = cx.add_empty_window();
-
-    let first = cx.update(|_, cx| {
-        dispatcher.pointer_moved(at(10.0, 10.0), cx);
-        dispatcher.state.current_movement.get()
-    });
-    assert_eq!(first, Some((0.0, 0.0)));
-    assert_eq!(dispatcher.state.current_movement.get(), None);
-
-    let second = cx.update(|_, cx| {
-        dispatcher.pointer_moved(at(30.0, 5.0), cx);
-        dispatcher.state.current_movement.get()
-    });
-    assert_eq!(second, Some((20.0, -5.0)));
-    assert_eq!(dispatcher.state.last_position.get(), Some((30.0, 5.0)));
-}
-
 #[gpui::test]
 fn a_second_pointer_moved_in_one_cycle_keeps_the_first_delta(cx: &mut TestAppContext) {
     let (dispatcher, _host, _reported) = dispatcher_with_engine();

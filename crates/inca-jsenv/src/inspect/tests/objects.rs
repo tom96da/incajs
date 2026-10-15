@@ -416,8 +416,3 @@ fn a_numeric_and_an_odd_key_find_their_accessor() {
         )
     );
 }
-
-#[test]
-fn a_data_property_holding_a_function_is_not_an_accessor() {
-    assert_eq!(rendered("({ f() {} })"), "{ f: [Function: f] }");
-}

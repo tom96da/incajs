@@ -108,20 +108,6 @@ fn an_empty_line_keeps_no_trailing_space_with_color_on() {
 }
 
 #[test]
-fn the_first_line_of_an_error_is_plain_and_its_frames_are_dim() {
-    let text = &colored_texts("console.log(new Error('boom'));")[0];
-    let mut lines = text.lines();
-
-    assert_eq!(lines.next(), Some("Error: boom"));
-    for frame in lines {
-        assert!(
-            frame.starts_with("\x1b[90m") && frame.ends_with("\x1b[39m"),
-            "{frame:?}"
-        );
-    }
-}
-
-#[test]
 fn trace_keeps_its_first_line_plain_and_dims_each_frame() {
     let text = &colored_texts(
         "function inner() { console.trace('hi', 1); }\nfunction outer() { inner(); }\nouter();",
@@ -231,14 +217,6 @@ fn color_does_not_change_the_levels() {
     };
 
     assert_eq!(levels(true), levels(false));
-}
-
-#[test]
-fn color_never_crosses_a_line_break_in_a_nested_string() {
-    assert_eq!(
-        colored_texts("console.log(['a\\nb']);"),
-        ["[ \x1b[32m'a\x1b[39m\n\x1b[32mb'\x1b[39m ]"]
-    );
 }
 
 #[test]

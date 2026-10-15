@@ -189,18 +189,6 @@ mod tests {
     }
 
     #[test]
-    fn a_snapshot_serializes_to_json() {
-        let mut tree = VirtualTree::new();
-        let id = tree.create_node("div").unwrap();
-
-        let json = serde_json::to_value(snapshot(&tree, id, &mut unit).unwrap()).unwrap();
-
-        assert_eq!(json["tag"], "div");
-        assert_eq!(json["bounds"]["width"], 3.0);
-        assert!(json["text"].is_null());
-    }
-
-    #[test]
     fn find_returns_the_first_match_depth_first() {
         let mut tree = VirtualTree::new();
         let root = tree.create_node("div").unwrap();

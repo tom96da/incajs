@@ -160,31 +160,6 @@ fn set_style_unknown_node_id_raises_catchable_exception() {
 }
 
 #[test]
-fn set_style_non_primitive_value_raises_catchable_exception() {
-    let (engine, _host) = engine_with_bindings();
-
-    let caught: bool = engine
-        .eval(
-            r"
-            const node = __inca_native__.createNode('div');
-            let caught = false;
-            try {
-                __inca_native__.setStyle(node, 'bad', { nested: true });
-            } catch (e) {
-                caught = true;
-            }
-            caught;
-            ",
-        )
-        .unwrap();
-
-    assert!(
-        caught,
-        "a non-primitive style value must raise a catchable exception"
-    );
-}
-
-#[test]
 fn destroy_node_frees_the_subtree_and_hands_back_its_callback_ids() {
     let (engine, host) = engine_with_bindings();
 

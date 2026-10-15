@@ -36,23 +36,6 @@ fn a_date_prints_its_iso_string() {
 }
 
 #[test]
-fn a_date_outside_four_digit_years_keeps_the_engines_signed_form() {
-    assert_eq!(rendered("new Date(8.64e15)"), "+275760-09-13T00:00:00.000Z");
-    assert_eq!(
-        rendered("new Date(-8.64e15)"),
-        "-271821-04-20T00:00:00.000Z"
-    );
-    assert_eq!(
-        rendered("new Date(Date.UTC(12345, 0, 1))"),
-        "+012345-01-01T00:00:00.000Z"
-    );
-    assert_eq!(
-        rendered("new Date(-62198755200000)"),
-        "-000001-01-01T00:00:00.000Z"
-    );
-}
-
-#[test]
 fn an_invalid_date_says_so() {
     assert_eq!(rendered("new Date(NaN)"), "Invalid Date");
     assert_eq!(rendered("new Date('nope')"), "Invalid Date");

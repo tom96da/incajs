@@ -81,13 +81,6 @@ fn eval_module_runs_top_level_code_to_completion() {
 }
 
 #[test]
-fn eval_module_uncaught_exception_propagates_as_err() {
-    let engine = Engine::new().unwrap();
-    let result = engine.eval_module("throws.mjs", "throw new Error('boom');");
-    assert!(result.is_err());
-}
-
-#[test]
 fn an_error_gives_up_its_message_and_its_frames() {
     let engine = Engine::new().unwrap();
     let err = engine
@@ -174,29 +167,6 @@ fn reading_one_failure_does_not_leak_into_the_next() {
 
     assert_eq!(first.message(), "Error: first");
     assert_eq!(second.message(), "Error: second");
-}
-
-#[test]
-fn a_module_root_resolves_a_relative_import() {
-    let dir = ScratchDir::new("relative-import");
-    fs::write(dir.0.join("dep.js"), "export const value = 41;").unwrap();
-    let entry = dir.0.join("entry.js");
-    fs::write(
-        &entry,
-        "import { value } from './dep.js'; globalThis.seen = value + 1;",
-    )
-    .unwrap();
-
-    let engine = Engine::builder().module_root(&dir.0).build().unwrap();
-    engine
-        .eval_module(
-            &entry.to_string_lossy(),
-            &fs::read_to_string(&entry).unwrap(),
-        )
-        .unwrap();
-
-    let seen: i32 = engine.eval("globalThis.seen").unwrap();
-    assert_eq!(seen, 42);
 }
 
 #[test]

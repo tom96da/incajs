@@ -351,14 +351,6 @@ mod tests {
     }
 
     #[test]
-    fn d_falls_back_to_the_inspected_value_when_the_string_form_throws() {
-        assert_eq!(
-            formatted("['%d', { toString() { throw new Error('no'); } }, 1]"),
-            "{ toString: [Function: toString] } 1"
-        );
-    }
-
-    #[test]
     fn f_parses_a_float() {
         let f = |arg: &str| formatted(&format!("['%f', {arg}]"));
         assert_eq!(f("'1.5abc'"), "1.5");

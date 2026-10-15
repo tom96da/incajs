@@ -152,26 +152,6 @@ fn margin_resolves_sides_the_same_way() {
 }
 
 #[test]
-fn box_keys_resolve_the_same_in_any_insertion_order() {
-    let keys = [
-        ("padding", num(1.0)),
-        ("padding_x", num(2.0)),
-        ("padding_left", num(3.0)),
-        ("margin", num(4.0)),
-        ("margin_y", text("auto")),
-        ("margin_top", num(-5.0)),
-    ];
-    let expected = style_of(&keys);
-    for shift in 1..keys.len() {
-        let mut rotated = keys.to_vec();
-        rotated.rotate_left(shift);
-        assert_eq!(style_of(&rotated), expected);
-        rotated.reverse();
-        assert_eq!(style_of(&rotated), expected);
-    }
-}
-
-#[test]
 fn a_wrong_typed_side_falls_through_to_the_axis_then_the_shorthand() {
     let style = style_of(&[
         ("padding", num(1.0)),

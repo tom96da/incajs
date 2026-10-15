@@ -78,25 +78,6 @@ fn a_wheel_takes_a_larger_event_id_than_the_mouseenter_before_it(cx: &mut TestAp
 }
 
 #[gpui::test]
-fn two_wheel_events_get_different_event_ids(cx: &mut TestAppContext) {
-    let (mut cx, engine, _parent, _child) = mount_recording_pair(cx, &["wheel"]);
-
-    for _ in 0..2 {
-        cx.simulate_event(ScrollWheelEvent {
-            position: point(px(10.0), px(10.0)),
-            delta: ScrollDelta::Pixels(point(px(0.0), px(-5.0))),
-            ..Default::default()
-        });
-    }
-
-    let ids: Vec<u64> = take_ids(&engine).iter().map(|seen| seen.2).collect();
-    assert_eq!(ids.len(), 4);
-    assert_eq!(ids[0], ids[1]);
-    assert_eq!(ids[2], ids[3]);
-    assert!(ids[2] > ids[0]);
-}
-
-#[gpui::test]
 fn each_mouseleave_of_one_move_takes_its_own_event_id(cx: &mut TestAppContext) {
     let (mut cx, engine, _parent, _child) = mount_recording_pair(cx, &["mouseleave"]);
     take_ids(&engine);

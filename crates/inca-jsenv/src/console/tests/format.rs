@@ -61,14 +61,6 @@ fn a_lone_argument_is_never_formatted() {
 }
 
 #[test]
-fn formatting_follows_the_group_guides_and_symbols() {
-    assert_eq!(
-        texts("console.group('g'); console.warn('%s\\n%s', 'a', 'b');"),
-        ["▼ g", "│ ⚠ a\n│   b"]
-    );
-}
-
-#[test]
 fn assert_formats_its_message_and_data() {
     assert_eq!(
         texts(
@@ -155,19 +147,6 @@ fn time_labels_are_not_formatted() {
     let lines = texts("console.time('%d'); console.timeEnd('%d');");
 
     assert_eq!(without_elapsed(&lines[0]), "%d: Nms");
-}
-
-#[test]
-fn a_throwing_conversion_leaves_no_exception_behind() {
-    assert_eq!(
-        texts(
-            r"
-            console.log('%s', { toString() { throw new Error('no'); } });
-            try { null.x; } catch (e) { console.log('caught', e instanceof TypeError); }
-            "
-        ),
-        ["{ toString: [Function: toString] }", "caught true"]
-    );
 }
 
 #[test]

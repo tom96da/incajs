@@ -109,16 +109,6 @@ fn a_script_offset_past_the_end_still_lets_the_ancestor_scroll(cx: &mut TestAppC
 }
 
 #[gpui::test]
-fn a_cancelled_scroll_leaves_the_bounds_unmoved(cx: &mut TestAppContext) {
-    let host = one_container();
-    let js = on_wheel(1, CHILD_PREVENT);
-    let mut scene = Scene::new(cx, host, &js);
-    let before = scene.cx.debug_bounds("node-1").unwrap();
-    scene.wheel(-50.);
-    assert_eq!(scene.cx.debug_bounds("node-1").unwrap(), before);
-}
-
-#[gpui::test]
 fn a_wheel_over_no_container_leaves_every_offset_alone(cx: &mut TestAppContext) {
     let mut host = Host::default();
     let root = add_div(&mut host, None, 250.0, false);

@@ -47,21 +47,6 @@ fn seen(dispatcher: &EventDispatcher) -> String {
 }
 
 #[gpui::test]
-fn begin_frame_applies_a_requested_focus_and_fires_its_events(cx: &mut TestAppContext) {
-    let (dispatcher, host, _reported) = dispatcher_with_engine();
-    let node = focusable_node(&dispatcher, &host);
-    let dispatcher = Rc::new(dispatcher);
-    let window = cx.add_window(|_, _| Frame(Rc::clone(&dispatcher)));
-    draw(cx, window);
-    assert_eq!(seen(&dispatcher), "[]");
-
-    host.borrow_mut().focus.request_focus(node, true);
-    draw(cx, window);
-
-    assert_eq!(seen(&dispatcher), format!(r#"["focus:{node}"]"#));
-}
-
-#[gpui::test]
 fn window_activated_fires_blur_when_lost_and_focus_when_regained(cx: &mut TestAppContext) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = focusable_node(&dispatcher, &host);

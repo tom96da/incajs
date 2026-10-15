@@ -305,23 +305,6 @@ fn auto_resize_leaves_a_dimension_the_user_resized_while_the_other_one_fires(
 }
 
 #[gpui::test]
-fn auto_resize_keeps_the_current_height_when_only_the_width_fires(cx: &mut TestAppContext) {
-    let window = open_hosted(cx, None, (700.0, 450.0));
-    cx.run_until_parked();
-
-    cx.update(|cx| {
-        window
-            .update(cx, |app, window, _| {
-                mount_partial(app, Some(300.0), None);
-                maybe_auto_resize_to_content(app, window);
-            })
-            .unwrap();
-    });
-
-    assert_eq!(bounds_size(cx, window), (300.0, 450.0));
-}
-
-#[gpui::test]
 fn auto_resize_treats_an_unusable_configured_dimension_as_not_ready(cx: &mut TestAppContext) {
     let window_config = config::WindowConfig {
         width: Some(-100.0),

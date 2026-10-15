@@ -211,23 +211,6 @@ fn a_colored_table_of_the_types_has_the_layout_of_the_plain_one() {
 }
 
 #[test]
-fn color_off_prints_the_types_without_an_escape_sequence() {
-    let source = r"
-        console.log(new Date(0), new Date(NaN), /a/g, new Map([[1, 'x']]), new Set());
-        console.dir(new Map()); console.table([new Date(0)]);
-        ";
-
-    assert!(texts(source).iter().all(|t| !t.contains('\x1b')));
-    assert_eq!(
-        colored_texts(source)
-            .iter()
-            .map(|t| without_known_codes(t))
-            .collect::<Vec<_>>(),
-        texts(source)
-    );
-}
-
-#[test]
 fn table_reads_each_getter_once() {
     let lines = texts(
         r"

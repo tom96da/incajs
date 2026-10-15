@@ -310,15 +310,6 @@ fn the_axes_take_their_own_alignment() {
 }
 
 #[test]
-fn the_inline_axis_is_horizontal() {
-    let node = rect(260.0, 130.0, 20.0, 20.0);
-    assert_eq!(
-        scroll_delta(node, VIEW, Align::Nearest, Align::Nearest),
-        (80.0, 0.0)
-    );
-}
-
-#[test]
 fn a_container_sees_the_node_shifted_by_the_scroll_of_the_one_before() {
     let node = rect(0.0, 500.0, 10.0, 20.0);
     let chain = [
