@@ -5,7 +5,7 @@
 
 #![allow(clippy::unwrap_used)]
 
-use super::common::{by_id, click, load, near, text, text_of};
+use super::common::{by_id, click, has_id, load, near, text, text_of};
 use gpui::TestAppContext;
 
 #[gpui::test]
@@ -47,4 +47,20 @@ fn an_emit_after_a_click_updates_the_parent_state(cx: &mut TestAppContext) {
     click(&mut h, "bump");
 
     assert_eq!(text_of(&mut h, "total"), "10");
+}
+
+#[gpui::test]
+fn a_kept_alive_component_keeps_its_state_and_its_click_after_reactivation(
+    cx: &mut TestAppContext,
+) {
+    let mut h = load(cx, "keepalive");
+    click(&mut h, "tally");
+    click(&mut h, "switch");
+    assert!(!has_id(&h.snapshot(), "tally"));
+
+    click(&mut h, "switch");
+
+    assert_eq!(text_of(&mut h, "tally"), "Tally: 1");
+    click(&mut h, "tally");
+    assert_eq!(text_of(&mut h, "tally"), "Tally: 2");
 }
