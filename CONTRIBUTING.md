@@ -28,6 +28,8 @@ approach can be agreed before you write code.
 - **Error codes**: document a new `ERR_INCA_*` code in
   `docs/reference/errors.md` in the change that adds it.
 - **Commits**: follow [GIT.md](./handbook/GIT.md) for the message format.
+- **Style**: follow [STYLE.md](./handbook/STYLE.md) for how code, comments and
+  documentation are written.
 - **Checks**: run the lint, format, type-check and test commands in
   [TESTING.md](./handbook/TESTING.md) before opening a pull request.
 

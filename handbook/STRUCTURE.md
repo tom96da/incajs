@@ -26,7 +26,7 @@ incajs/
 ├── handbook/
 │   ├── STRUCTURE.md         # this file
 │   ├── DEVELOPMENT.md       # project status, architecture links, guiding principles
-│   ├── ARCHITECTURE.md      # tech stack, system diagram, HMR delivery design
+│   ├── ARCHITECTURE.md      # tech stack, system diagram, development window, HMR delivery design
 │   ├── ROADMAP.md           # planned phased implementation (Vue 3 first, React later)
 │   ├── FFI.md               # JS↔Rust host bridge function surface
 │   ├── PROTOCOL.md          # dev protocol between the host binary and the Node process spawning it
@@ -34,6 +34,7 @@ incajs/
 │   ├── BACKLOG.md           # unscheduled desktop-app gaps and QoL fixes, outside ROADMAP.md's phased plan
 │   ├── GIT.md               # commit message format and the commit-review policy
 │   ├── TESTING.md           # test placement and required checks, Rust + TypeScript
+│   ├── STYLE.md             # how code, comments and documentation are written, and what oxlint and oxfmt enforce
 │   ├── FAILURES.md          # what gets refused, what falls back, and where each is reported
 │   └── MANUAL_GUI_CHECK.md  # how to visually verify a GPUI window/example yourself
 ├── .devcontainer/

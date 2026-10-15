@@ -62,6 +62,16 @@ browser dev server.
 └──────────────────────────────────────────────────────────────────┘
 ```
 
+## Development window
+
+The development window draws the application you wrote. `inca dev` opens it
+with the prebuilt host.
+
+- **Automatic reload**: the window reloads the application by itself each
+  time a source file changes.
+- **Output**: what the application prints reaches the terminal that ran
+  `inca dev`.
+
 ## HMR delivery
 
 HMR uses Vite's Runtime API (`vite/module-runner`) instead of Vite's browser
