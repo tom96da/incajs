@@ -184,6 +184,22 @@ up by name on each call and keeps nothing. A missing global is skipped.
   `destroyNode` never pass through it.
 - A throw is reported to `Host::failures` and the frame goes on.
 
+#### Event targets
+
+`__inca_targets__(nodeIds: number[]) => unknown[]` is a global that core
+defines, like `__inca_released__`. Rust looks it up by name on each
+walk and keeps nothing.
+
+- A walk that reaches a listener calls it once with the path, target first.
+  Entry `i` of the result stands for `nodeIds[i]` in `target`,
+  `currentTarget` and `composedPath()`.
+- An event whose payload names a related node calls it once more with that
+  node, for `relatedTarget`.
+- `dispatchEvent` calls it whether or not a listener hears the event.
+- When the global is not a function, these fields carry the node ids.
+- A throw, or a result that is not an array, goes to `Host::failures` and the
+  walk runs no listener. `dispatchEvent` throws it.
+
 #### Event object
 
 - A walk passes one object to every listener on the path. The host creates
@@ -192,7 +208,9 @@ up by name on each call and keeps nothing. A missing global is skipped.
   A property one listener sets is visible to later listeners.
 - `target` is the node the event is fired at, except where Pointer events and
   Keyboard and focus say otherwise. `currentTarget` is the node whose
-  listeners run. After the walk it is `null`, `eventPhase` is 0,
+  listeners run. `target`, `currentTarget`, the entries of `composedPath()`
+  and `relatedTarget` carry what [Event targets](#event-targets) gives for
+  those nodes. After the walk `currentTarget` is `null`, `eventPhase` is 0,
   `composedPath()` is empty and the stop flags are clear. `defaultPrevented`
   keeps its value.
 - `eventId` grows with each event and is shared by all listeners of a walk.

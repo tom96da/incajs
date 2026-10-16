@@ -12,6 +12,9 @@
 //! `WeakMap` keeps, so no script can reach it. The global constructors `Event`
 //! and `CustomEvent` file their events in the same store, so a script can
 //! build an event and dispatch it.
+//!
+//! The global `__inca_targets__` gives the objects that stand for the nodes of a
+//! walk.
 
 use std::sync::OnceLock;
 use std::time::Instant;
@@ -21,7 +24,7 @@ pub(crate) use inca_gpui::event_sink::Flags;
 use rquickjs::convert::Coerced;
 use rquickjs::function::This;
 use rquickjs::object::{Accessor, Property};
-use rquickjs::{Ctx, Exception, Function, Object, Result as JsResult, Value};
+use rquickjs::{Array, Ctx, Exception, Function, IntoJs, Object, Result as JsResult, Value};
 
 mod construct;
 mod payload;
@@ -91,6 +94,29 @@ pub(crate) fn install(ctx: &Ctx<'_>) -> JsResult<()> {
 pub(crate) fn time_stamp() -> f64 {
     static ORIGIN: OnceLock<Instant> = OnceLock::new();
     ORIGIN.get_or_init(Instant::now).elapsed().as_secs_f64() * 1000.0
+}
+
+/// The objects that the global `__inca_targets__` gives for `ids`, entry `i`
+/// standing for `ids[i]`. `None` when the global is not a function, and the
+/// event fields then carry the node ids.
+fn targets_of<'js>(ctx: &Ctx<'js>, ids: &[NodeId]) -> JsResult<Option<Array<'js>>> {
+    let Ok(hook) = ctx.globals().get::<_, Function>("__inca_targets__") else {
+        return Ok(None);
+    };
+    hook.call((ids,)).map(Some)
+}
+
+/// What stands for `path[index]`: the entry of `targets`, or `node` itself.
+fn target_at<'js>(
+    ctx: &Ctx<'js>,
+    targets: Option<&Array<'js>>,
+    index: usize,
+    node: NodeId,
+) -> JsResult<Value<'js>> {
+    match targets {
+        Some(targets) => targets.get(index),
+        None => node.into_js(ctx),
+    }
 }
 
 fn slot<'js>(ctx: &Ctx<'js>, index: usize) -> JsResult<Value<'js>> {
@@ -208,7 +234,7 @@ fn define_methods<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<()> {
         "composedPath",
         Function::new(
             ctx.clone(),
-            |ctx: Ctx<'js>, This(event): This<Object<'js>>| -> JsResult<Vec<NodeId>> {
+            |ctx: Ctx<'js>, This(event): This<Object<'js>>| -> JsResult<Vec<Value<'js>>> {
                 let record = record_of(&ctx, &event)?;
                 if flag(&record, "dispatching") {
                     record.get("path")

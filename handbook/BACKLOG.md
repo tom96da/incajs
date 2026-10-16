@@ -1200,10 +1200,10 @@ A fixed entry is deleted and its ID is never reused.
 - **B-191 The event walk allocates on every event**
   `Units: bridge · Size: M · Impact: Low`
 
-  `event/walk.rs` builds the `down` list with `collect` for each event, and
-  `path_from` returns a `Vec`. Borrowing the tree path instead would hold a
-  `RefCell` borrow across the engine call, which can panic. A fix has to end
-  the borrow before the call.
+  `path_from` in `event/walk.rs` returns a `Vec` for each event, and a walk
+  that reaches a listener builds one array of target objects in JS. Borrowing
+  the tree path instead would hold a `RefCell` borrow across the engine call,
+  which can panic. A fix has to end the borrow before the call.
 
 - **B-192 Natives treat a missing node in two ways**
   `Units: bridge,docs · Size: S · Impact: Low`

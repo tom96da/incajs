@@ -1,15 +1,17 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use inca_gpui::NodeId;
+use inca_gpui::{EventPayload, NodeId};
 use rquickjs::convert::Coerced;
 use rquickjs::function::{Constructor, IntoJsFunc, ParamRequirement, Params};
 use rquickjs::object::Property;
-use rquickjs::{Ctx, Exception, Null, Object, Result as JsResult, Value};
+use rquickjs::{Array, Ctx, Exception, IntoJs, Null, Object, Result as JsResult, Value};
 
 use super::payload::set_payload;
 use super::walk::Walk;
-use super::{Flags, PHASES, PROTOTYPE, REMEMBER, function_slot, slot, time_stamp};
+use super::{
+    Flags, PHASES, PROTOTYPE, REMEMBER, function_slot, slot, target_at, targets_of, time_stamp,
+};
 use crate::bindings::convert::or_null;
 
 /// A new idle event object and its record, filed in the runtime's record
@@ -59,19 +61,37 @@ fn new_event<'js>(
     Ok((event, record))
 }
 
-/// A new event object for a walk, ready to deliver.
+/// A new event object for a walk, ready to deliver. `targets` holds what
+/// stands for each node of the path.
 pub(super) fn create<'js>(
     ctx: &Ctx<'js>,
     walk: &Walk<'_>,
     id: u64,
+    targets: Option<&Array<'js>>,
 ) -> JsResult<(Object<'js>, Object<'js>)> {
     let (event, record) = new_event(ctx, walk.name, walk.flags, walk.trusted)?;
     record.set("dispatching", true)?;
-    record.set("path", walk.path)?;
-    event.set("target", walk.target)?;
+    let listed = targets.map_or_else(|| walk.path.into_js(ctx), |t| Ok(t.clone().into_value()))?;
+    record.set("path", listed)?;
+    event.set("target", target_at(ctx, targets, 0, walk.target)?)?;
     set_payload(&event, walk.payload)?;
+    if let Some(related) = related_of(walk.payload)
+        && let Some(found) = targets_of(ctx, &[related])?
+    {
+        event.set("relatedTarget", found.get::<Value>(0)?)?;
+    }
     event.set("eventId", id)?;
     Ok((event, record))
+}
+
+/// The other node `payload` names, if any.
+fn related_of(payload: &EventPayload) -> Option<NodeId> {
+    match payload {
+        EventPayload::Mouse(mouse) => mouse.related_target,
+        EventPayload::Wheel(wheel) => wheel.mouse.related_target,
+        EventPayload::Focus { related_target } => *related_target,
+        EventPayload::None | EventPayload::Key(_) => None,
+    }
 }
 
 /// Installs the global constructors `Event` and `CustomEvent`.

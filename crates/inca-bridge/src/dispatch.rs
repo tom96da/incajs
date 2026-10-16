@@ -347,10 +347,12 @@ impl EventDispatcher {
     ///
     /// While the listeners run, `eventPhase` is 1 on the ancestors of `target`
     /// during the capture pass, 2 where `currentTarget` is `target` and 3 on
-    /// the ancestors during the bubble pass, and `composedPath()` lists the
-    /// node ids from `target` up to the root. Afterwards `currentTarget` is
-    /// `null`, `eventPhase` is 0 and `composedPath()` is empty. A listener
-    /// that throws is reported, and the remaining listeners run.
+    /// the ancestors during the bubble pass, and `composedPath()` lists the path,
+    /// from `target` up to the root, as the objects that `__inca_targets__`
+    /// gives, or as node ids when no such global exists. Afterwards
+    /// `currentTarget` is `null`, `eventPhase` is 0 and `composedPath()` is
+    /// empty. A listener that throws is reported, and the remaining listeners
+    /// run. A throw of `__inca_targets__` is reported and no listener runs.
     pub fn fire(
         &self,
         start: NodeId,

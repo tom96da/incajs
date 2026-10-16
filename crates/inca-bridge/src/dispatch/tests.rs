@@ -17,6 +17,7 @@ mod engine_entry;
 mod frame;
 mod jobs;
 mod movement;
+mod target_objects;
 mod targets;
 mod walk;
 

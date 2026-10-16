@@ -6,10 +6,10 @@ use std::rc::Rc;
 
 use inca_gpui::{EventPayload, MousePayload, NodeId};
 use inca_jsenv::{Engine, EngineError};
-use rquickjs::{Ctx, Exception, Function, Null, Object, Result as JsResult, Value};
+use rquickjs::{Array, Ctx, Exception, Function, IntoJs, Null, Object, Result as JsResult, Value};
 
 use super::construct::create;
-use super::{Flags, find_record, flag};
+use super::{Flags, find_record, flag, target_at, targets_of};
 use crate::bindings::{Host, Listener};
 
 /// What one walk needs to know.
@@ -118,14 +118,26 @@ fn run(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, walk: &Walk<'_>, id: u64) -> Out
     let Ok(callbacks) = ctx.globals().get::<_, Object>("__inca_callbacks__") else {
         return Outcome::default();
     };
-    let (event, record) = match create(ctx, walk, id) {
-        Ok(pair) => pair,
+    let created = targets_of(ctx, walk.path).and_then(|targets| {
+        let (event, record) = create(ctx, walk, id, targets.as_ref())?;
+        Ok((event, record, targets))
+    });
+    let (event, record, targets) = match created {
+        Ok(created) => created,
         Err(err) => {
             note(ctx, host, Err(err));
             return Outcome::default();
         }
     };
-    let canceled = deliver(ctx, host, walk, &callbacks, &event, &record);
+    let canceled = deliver(
+        ctx,
+        host,
+        walk,
+        &callbacks,
+        &event,
+        &record,
+        targets.as_ref(),
+    );
     Outcome {
         canceled,
         entered: false,
@@ -133,7 +145,8 @@ fn run(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, walk: &Walk<'_>, id: u64) -> Out
 }
 
 /// Calls the listeners along the path with `event`, then leaves the event
-/// idle. Returns whether it ended canceled.
+/// idle. `targets` holds what stands for each node as `currentTarget`.
+/// Returns whether it ended canceled.
 fn deliver<'js>(
     ctx: &Ctx<'js>,
     host: &Rc<RefCell<Host>>,
@@ -141,58 +154,58 @@ fn deliver<'js>(
     callbacks: &Object<'js>,
     event: &Object<'js>,
     record: &Object<'js>,
+    targets: Option<&Array<'js>>,
 ) -> bool {
-    let down: Vec<NodeId> = walk.path.iter().rev().copied().collect();
-    let bubble = bubble_nodes(walk.flags, walk.path);
-    'phases: for (capture, nodes) in [(true, &down[..]), (false, bubble)] {
-        for &node in nodes {
-            if walk.cut.contains(&node) {
-                continue;
+    let down = (0..walk.path.len()).rev().map(|index| (true, index));
+    let up = (0..bubble_nodes(walk.flags, walk.path).len()).map(|index| (false, index));
+    for (capture, index) in down.chain(up) {
+        let node = walk.path[index];
+        if walk.cut.contains(&node) {
+            continue;
+        }
+        let listeners: Vec<Listener> = host
+            .borrow()
+            .listeners
+            .listeners_for(node, walk.name)
+            .iter()
+            .filter(|l| l.capture == capture)
+            .copied()
+            .collect();
+        if listeners.is_empty() {
+            continue;
+        }
+        let phase = match (node == walk.target, capture) {
+            (true, _) => 2,
+            (false, true) => 1,
+            (false, false) => 3,
+        };
+        let entered = target_at(ctx, targets, index, node)
+            .and_then(|current| event.set("currentTarget", current))
+            .and_then(|()| event.set("eventPhase", phase));
+        note(ctx, host, entered);
+        for listener in listeners {
+            if flag(record, "immediate") {
+                break;
             }
-            let listeners: Vec<Listener> = host
+            // The full value is compared. Flags change only through remove, then add.
+            if !host
                 .borrow()
                 .listeners
                 .listeners_for(node, walk.name)
-                .iter()
-                .filter(|l| l.capture == capture)
-                .copied()
-                .collect();
-            if listeners.is_empty() {
+                .contains(&listener)
+            {
                 continue;
             }
-            let phase = match (node == walk.target, capture) {
-                (true, _) => 2,
-                (false, true) => 1,
-                (false, false) => 3,
+            let Ok(callback) = callbacks.get::<_, Function>(listener.callback) else {
+                continue;
             };
-            let entered = event
-                .set("currentTarget", node)
-                .and_then(|()| event.set("eventPhase", phase));
-            note(ctx, host, entered);
-            for listener in listeners {
-                if flag(record, "immediate") {
-                    break;
-                }
-                // The full value is compared. Flags change only through remove, then add.
-                if !host
-                    .borrow()
-                    .listeners
-                    .listeners_for(node, walk.name)
-                    .contains(&listener)
-                {
-                    continue;
-                }
-                let Ok(callback) = callbacks.get::<_, Function>(listener.callback) else {
-                    continue;
-                };
-                let armed = record.set("passive", listener.passive);
-                note(ctx, host, armed);
-                let called = callback.call::<_, ()>((event.clone(),));
-                note(ctx, host, called);
-            }
-            if flag(record, "stop") {
-                break 'phases;
-            }
+            let armed = record.set("passive", listener.passive);
+            note(ctx, host, armed);
+            let called = callback.call::<_, ()>((event.clone(),));
+            note(ctx, host, called);
+        }
+        if flag(record, "stop") {
+            break;
         }
     }
     let canceled = flag(record, "canceled");
@@ -201,6 +214,8 @@ fn deliver<'js>(
     for key in ["dispatching", "passive", "stop", "immediate"] {
         let _ = record.set(key, false);
     }
+    // A kept event keeps only target and relatedTarget alive.
+    let _ = record.set("path", Vec::<NodeId>::new());
     let left = event
         .set("currentTarget", Null)
         .and_then(|()| event.set("eventPhase", 0));
@@ -225,6 +240,7 @@ fn note(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, result: JsResult<()>) {
 ///
 /// Throws a `TypeError` when `event` is not an event object of this host, and
 /// an `InvalidStateError` while `event` is being dispatched.
+/// Throws what `__inca_targets__` throws.
 pub(crate) fn dispatch_event<'js>(
     ctx: &Ctx<'js>,
     host: &Rc<RefCell<Host>>,
@@ -260,7 +276,8 @@ pub(crate) fn dispatch_event<'js>(
         composed: flag(&record, "composed"),
     };
     let walk = script_walk(&name, flags, target, &path, &EventPayload::None);
-    event.set("target", target)?;
+    let targets = targets_of(ctx, walk.path)?;
+    event.set("target", target_at(ctx, targets.as_ref(), 0, target)?)?;
     event.set("isTrusted", false)?;
     if listened(&host.borrow(), walk.name, walk.flags, walk.path, walk.cut) {
         let callbacks = ctx
@@ -268,10 +285,21 @@ pub(crate) fn dispatch_event<'js>(
             .get::<_, Object>("__inca_callbacks__")
             .or_else(|_| Object::new(ctx.clone()))?;
         event.set("eventId", next_event_id(host))?;
-        record.set("path", walk.path)?;
+        let listed = targets
+            .as_ref()
+            .map_or_else(|| walk.path.into_js(ctx), |t| Ok(t.clone().into_value()))?;
+        record.set("path", listed)?;
         // Last, so a failure above leaves the event free to dispatch again.
         record.set("dispatching", true)?;
-        deliver(ctx, host, &walk, &callbacks, &event, &record);
+        deliver(
+            ctx,
+            host,
+            &walk,
+            &callbacks,
+            &event,
+            &record,
+            targets.as_ref(),
+        );
     }
     Ok(!flag(&record, "canceled"))
 }
