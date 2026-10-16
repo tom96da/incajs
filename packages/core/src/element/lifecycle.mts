@@ -6,6 +6,21 @@ import type { NodeId } from "../rendererCore.mts";
 import type { IncaElement, IncaNode } from "./types.mts";
 
 /**
+ * Gives `handle` a read-only, non-enumerable `__node_id`.
+ * @param handle - the new handle
+ * @param id - the native node's id
+ * @returns `handle`
+ */
+export function withNodeId<T extends object>(
+  handle: T,
+  id: NodeId,
+): T & { readonly __node_id: NodeId } {
+  return Object.defineProperty(handle, "__node_id", { value: id }) as T & {
+    readonly __node_id: NodeId;
+  };
+}
+
+/**
  * Weak references to the element handles, keyed by native node id. A handle
  * that nothing references can be collected, and its record stays until
  * `collected` drops it. A record leaves at once when the node is removed or
@@ -26,8 +41,8 @@ const collected = new FinalizationRegistry<NodeId>((id) => {
  * @param element - the handle to record
  */
 export function registerElement(element: IncaElement): void {
-  elements.set(element.id, new WeakRef(element));
-  collected.register(element, element.id);
+  elements.set(element.__node_id, new WeakRef(element));
+  collected.register(element, element.__node_id);
 }
 
 /**
@@ -75,7 +90,7 @@ export function isDestroyed(node: IncaNode): boolean {
 export function markDestroyed(node: IncaNode): void {
   destroyed.add(node);
   if (node.kind === "text") return;
-  unregisterElement(node.id);
+  unregisterElement(node.__node_id);
   for (const child of node.children) markDestroyed(child);
 }
 
@@ -104,5 +119,5 @@ const released = new FinalizationRegistry<NodeId>((id) => native().releaseNode(i
  * @internal
  */
 export function releaseWhenCollected(handle: IncaNode): void {
-  released.register(handle, handle.id);
+  released.register(handle, handle.__node_id);
 }

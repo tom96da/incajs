@@ -199,7 +199,8 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
     delete (globalThis as { __inca_callbacks__?: unknown }).__inca_callbacks__;
     const rootId = createNode("root");
     root = {
-      id: rootId,
+      __node_id: rootId,
+      id: "",
       kind: "element",
       parent: null,
       children: [],
@@ -248,7 +249,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
     createIncaApp(App).mount(root);
     await nextTick();
 
-    const rootNode = nodes.get(root.id)!;
+    const rootNode = nodes.get(root.__node_id)!;
     expect(rootNode.children).toHaveLength(1);
     const div = nodes.get(rootNode.children[0]!)!;
     expect(div.style).toEqual({ background: "#000" });
@@ -279,7 +280,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
     createIncaApp(App).mount(root);
     await nextTick();
 
-    const containerId = nodes.get(root.id)!.children[0]!;
+    const containerId = nodes.get(root.__node_id)!.children[0]!;
     const originalOrder = nodes.get(containerId)!.children.slice();
     expect(originalOrder).toHaveLength(3);
 
@@ -302,7 +303,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
     createIncaApp(App).mount(root);
     await nextTick();
 
-    const containerId = nodes.get(root.id)!.children[0]!;
+    const containerId = nodes.get(root.__node_id)!.children[0]!;
     const branchId = nodes.get(containerId)!.children[0]!;
     const leafId = nodes.get(branchId)!.children[0]!;
     expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(1);
@@ -334,7 +335,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
     createIncaApp(App).mount(root);
     await nextTick();
 
-    const parent = nodes.get(nodes.get(root.id)!.children[0]!)!;
+    const parent = nodes.get(nodes.get(root.__node_id)!.children[0]!)!;
     const child = nodes.get(parent.children[0]!)!;
     expect(walk([parent, child], "click")).toEqual([
       { capture: true, passive: false }, // parent's onClickCapture
@@ -355,7 +356,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
 
     createIncaApp(App).mount(root);
     await nextTick();
-    const div = nodes.get(nodes.get(root.id)!.children[0]!)!;
+    const div = nodes.get(nodes.get(root.__node_id)!.children[0]!)!;
 
     box.value!.addEventListener("click", onRef);
     box.value!.addEventListener("click", onRef);
@@ -379,7 +380,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
     createIncaApp(App).mount(root);
     await nextTick();
 
-    const div = nodes.get(nodes.get(root.id)!.children[0]!)!;
+    const div = nodes.get(nodes.get(root.__node_id)!.children[0]!)!;
     state.armed = false;
     await nextTick();
 

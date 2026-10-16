@@ -40,7 +40,7 @@ describe("createNodeOps text", () => {
 
     nodeOps.setText(text, "b");
 
-    expect(core.setAttribute).toHaveBeenLastCalledWith(text.id, "value", "b");
+    expect(core.setAttribute).toHaveBeenLastCalledWith(text.__node_id, "value", "b");
   });
 });
 

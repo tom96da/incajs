@@ -78,7 +78,7 @@ function patchStyle(core: IncaCore, el: IncaElement, nextValue: unknown): void {
   let removed = false;
   for (const key of sent.keys()) {
     if (!isSendable(next[key])) {
-      core.removeStyle(el.id, key);
+      core.removeStyle(el.__node_id, key);
       sent.delete(key);
       removed = true;
     }
@@ -86,7 +86,7 @@ function patchStyle(core: IncaCore, el: IncaElement, nextValue: unknown): void {
   // A removal can clear a property that another spelling of the key still sets.
   for (const [key, value] of Object.entries(next)) {
     if (isSendable(value) && (removed || sent.get(key) !== value)) {
-      core.setStyle(el.id, key, value);
+      core.setStyle(el.__node_id, key, value);
       sent.set(key, value);
     }
   }
@@ -164,11 +164,11 @@ const entryKeyOf = ({ event, capture, passive }: ParsedEventKey): string =>
 function sync(core: IncaCore, el: IncaElement, entryKey: string, entry: Entry): void {
   const live = Array.from(entry.slots.values()).some((slot) => !slot.fired);
   if (live && !entry.registered && !isDestroyed(el)) {
-    core.addEventListener(el.id, entry.event, entry.dispatcher, entry.options);
+    core.addEventListener(el.__node_id, entry.event, entry.dispatcher, entry.options);
     entry.registered = true;
   } else if (!live && entry.registered) {
     entry.registered = false;
-    core.removeEventListener(el.id, entry.event, entry.dispatcher, entry.options);
+    core.removeEventListener(el.__node_id, entry.event, entry.dispatcher, entry.options);
   }
   if (entry.slots.size === 0) entriesByEl.get(el)?.delete(entryKey);
 }
@@ -356,19 +356,19 @@ export function createPatchProp(
     } else if (isOn(key)) {
       patchEvent(core, el, key, nextValue, parentComponent ?? null);
     } else if (BOOLEAN_PRESENCE.has(key) && nextValue === false) {
-      core.removeAttribute(el.id, key);
+      core.removeAttribute(el.__node_id, key);
     } else if (
       typeof nextValue === "string" ||
       typeof nextValue === "number" ||
       typeof nextValue === "boolean"
     ) {
-      core.setAttribute(el.id, key, nextValue);
+      core.setAttribute(el.__node_id, key, nextValue);
     } else if (nextValue === null || nextValue === undefined) {
-      core.removeAttribute(el.id, key);
+      core.removeAttribute(el.__node_id, key);
     } else if (!key.startsWith("onUpdate:")) {
       // objects stringify as in a browser attribute
       // oxlint-disable-next-line typescript/no-base-to-string
-      core.setAttribute(el.id, key, String(nextValue));
+      core.setAttribute(el.__node_id, key, String(nextValue));
     }
   };
 }

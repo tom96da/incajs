@@ -371,3 +371,44 @@ describe("activeElement", () => {
     expect(activeElement()).toBeNull();
   });
 });
+
+describe("createIncaElement id", () => {
+  it.each([
+    [null, ""],
+    ["a", "a"],
+    [5, "5"],
+  ] as const)("reads a stored %j as %j", (stored, expected) => {
+    const core = makeCore(stored);
+    expect(createIncaElement(core, 1, "element", "div").id).toBe(expected);
+    expect(core.getAttribute).toHaveBeenCalledWith(1, "id");
+  });
+
+  it.each([
+    [7, "7"],
+    [null, "null"],
+  ] as const)("writes %j as the attribute %j", (value, expected) => {
+    const core = makeCore();
+    const el = createIncaElement(core, 1, "element", "div");
+    el.id = value as unknown as string;
+    expect(core.setAttribute).toHaveBeenLastCalledWith(1, "id", expected);
+  });
+
+  it("reads an empty string and ignores writes after the node is destroyed", () => {
+    const core = makeCore("a");
+    const el = createIncaElement(core, 1, "element", "div");
+    markDestroyed(el);
+    el.id = "b";
+    expect(el.id).toBe("");
+    expect(core.getAttribute).not.toHaveBeenCalled();
+    expect(core.setAttribute).not.toHaveBeenCalled();
+  });
+
+  it("keeps the node id in a read-only, non-enumerable __node_id", () => {
+    const el = createIncaElement(makeCore(), 9, "element", "div");
+    expect(el.__node_id).toBe(9);
+    expect(Object.keys(el)).not.toContain("__node_id");
+    expect(() => {
+      (el as { __node_id: number }).__node_id = 1;
+    }).toThrow(TypeError);
+  });
+});

@@ -3,7 +3,7 @@
 
 import * as nativeCore from "../rendererCore.mts";
 import { layoutBox, offsetOf, offsetParentOf, rectOf, tabIndexOf } from "./geometry.mts";
-import { elementOf, isDestroyed, registerElement } from "./lifecycle.mts";
+import { elementOf, isDestroyed, registerElement, withNodeId } from "./lifecycle.mts";
 import { scrollIntoViewArgs, scrollPosition } from "./scroll.mts";
 import type { IncaCore, NodeId, TagName } from "../rendererCore.mts";
 import type { ScrollArgs, ScrollIntoViewOptions } from "./scroll.mts";
@@ -11,8 +11,9 @@ import type { IncaElement } from "./types.mts";
 
 /**
  * Builds the {@link IncaElement} handle for a native node: parentless,
- * childless, with `focus()`, `blur()`, `click()`, the listener methods of an
- * event target, `tabIndex` and the layout members, all driven through `core`.
+ * childless, with `id`, `focus()`, `blur()`, `click()`, the listener methods
+ * of an event target, `tabIndex` and the layout members, all driven through
+ * `core`.
  * @param core - the incajs bindings the handle drives
  * @param id - the native node's id
  * @param kind - whether the node is an element or a comment stand-in
@@ -27,8 +28,13 @@ export function createIncaElement(
 ): IncaElement {
   const target = core.createEventTarget(() => id);
   const scroll = () => (isDestroyed(element) ? null : core.scrollOf(id));
-  const element: IncaElement = {
-    id,
+  const fields: Omit<IncaElement, "__node_id"> = {
+    get id() {
+      return isDestroyed(element) ? "" : String(core.getAttribute(id, "id") ?? "");
+    },
+    set id(value: string) {
+      if (!isDestroyed(element)) core.setAttribute(id, "id", String(value));
+    },
     kind,
     parent: null,
     children: [],
@@ -109,6 +115,7 @@ export function createIncaElement(
       core.scrollIntoViewNode(id, block, inline);
     },
   };
+  const element: IncaElement = withNodeId(fields, id);
   if (kind === "element") registerElement(element);
   return element;
 }

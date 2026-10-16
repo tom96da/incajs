@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { createIncaElement } from "./handle.mts";
-import { markDestroyed } from "./lifecycle.mts";
+import { markDestroyed, withNodeId } from "./lifecycle.mts";
 import type { IncaCore, TagName } from "../rendererCore.mts";
 import type { IncaElement, IncaNode, IncaText } from "./types.mts";
 
@@ -26,7 +26,8 @@ export function createElementNode(core: IncaCore, tag: TagName): IncaElement {
 export function createTextNode(core: IncaCore, text: string): IncaText {
   const id = core.createNode("text");
   core.setAttribute(id, "value", text);
-  return { id, kind: "text", parent: null, text };
+  const node: Omit<IncaText, "__node_id"> = { kind: "text", parent: null, text };
+  return withNodeId(node, id);
 }
 
 // inca has no comment concept. A hidden, childless container stands in for one.
@@ -49,7 +50,7 @@ export function createCommentNode(core: IncaCore): IncaElement {
  * @param text - the new text content
  */
 export function setText(core: IncaCore, node: IncaText, text: string): void {
-  core.setAttribute(node.id, "value", text);
+  core.setAttribute(node.__node_id, "value", text);
   node.text = text;
 }
 
@@ -62,14 +63,14 @@ export function setText(core: IncaCore, node: IncaText, text: string): void {
  */
 export function setElementText(core: IncaCore, el: IncaElement, text: string): void {
   for (const child of el.children.splice(0)) {
-    core.destroyNode(child.id);
+    core.destroyNode(child.__node_id);
     markDestroyed(child);
     child.parent = null;
   }
   if (!text) return;
 
   const textNode = createTextNode(core, text);
-  core.appendChild(el.id, textNode.id);
+  core.appendChild(el.__node_id, textNode.__node_id);
   textNode.parent = el;
   el.children.push(textNode);
 }
@@ -86,7 +87,7 @@ function unlink(child: IncaNode): void {
 
 // `destroyNode` detaches on its own, so the removal path calls `unlink` alone.
 function detach(core: IncaCore, child: IncaNode): void {
-  if (child.parent) core.removeChild(child.parent.id, child.id);
+  if (child.parent) core.removeChild(child.parent.__node_id, child.__node_id);
   unlink(child);
 }
 
@@ -111,7 +112,11 @@ export function insert(
   detach(core, child);
 
   const anchorIndex = anchor ? parent.children.indexOf(anchor) : -1;
-  core.insertBefore(parent.id, child.id, anchor && anchorIndex !== -1 ? anchor.id : null);
+  core.insertBefore(
+    parent.__node_id,
+    child.__node_id,
+    anchor && anchorIndex !== -1 ? anchor.__node_id : null,
+  );
   if (anchorIndex === -1) {
     parent.children.push(child);
   } else {
@@ -131,7 +136,7 @@ export function insert(
  */
 export function remove(core: IncaCore, child: IncaNode): void {
   unlink(child);
-  core.destroyNode(child.id);
+  core.destroyNode(child.__node_id);
   markDestroyed(child);
 }
 

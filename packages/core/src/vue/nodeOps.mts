@@ -107,7 +107,7 @@ type Creators = Pick<NodeOps, "createElement" | "createText">;
  */
 export function createHeldNodeOps(core: IncaCore, ops: Creators): Creators {
   const hold = <N extends IncaNode>(node: N): N => {
-    core.holdNode(node.id);
+    core.holdNode(node.__node_id);
     releaseWhenCollected(node);
     return node;
   };

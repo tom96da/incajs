@@ -240,7 +240,7 @@ describe("a host that frees orphans, driven by the Inca renderer", () => {
     target.value = box.value;
     await settle();
 
-    const tags = nodeOf(box.value!.id).children.map((id) => nodes.get(id)!.tag);
+    const tags = nodeOf(box.value!.__node_id).children.map((id) => nodes.get(id)!.tag);
     expect(tags).toEqual(["text"]);
   });
 
@@ -316,9 +316,9 @@ describe("__inca_released__", () => {
     const el = createElementNode(core, "div");
     const listener = () => {};
     el.addEventListener("click", listener);
-    const callbackId = nodeOf(el.id).listeners[0]!;
+    const callbackId = nodeOf(el.__node_id).listeners[0]!;
 
-    globalThis.__inca_released__([el.id, 9999], [callbackId]);
+    globalThis.__inca_released__([el.__node_id, 9999], [callbackId]);
 
     expect(globalThis.__inca_callbacks__[callbackId]).toBeUndefined();
     expect(isDestroyed(el)).toBe(true);
@@ -329,11 +329,13 @@ describe("__inca_released__", () => {
     const b = createElementNode(core, "div");
     a.addEventListener("click", () => {});
     b.addEventListener("click", () => {});
-    const first = nodeOf(a.id).listeners[0]!;
-    const second = nodeOf(b.id).listeners[0]!;
+    const first = nodeOf(a.__node_id).listeners[0]!;
+    const second = nodeOf(b.__node_id).listeners[0]!;
     Object.defineProperty(globalThis.__inca_callbacks__, first, { configurable: false });
 
-    expect(() => globalThis.__inca_released__([a.id, b.id], [first, second])).toThrow(TypeError);
+    expect(() => globalThis.__inca_released__([a.__node_id, b.__node_id], [first, second])).toThrow(
+      TypeError,
+    );
 
     expect(globalThis.__inca_callbacks__[second]).toBeUndefined();
     expect(isDestroyed(b)).toBe(true);
@@ -364,12 +366,14 @@ describe("the hold registry", () => {
     const handle = ops.createElement("div");
 
     const registering = FakeRegistry.instances.filter((r) =>
-      r.register.mock.calls.some(([target, held]) => target === handle && held === handle.id),
+      r.register.mock.calls.some(
+        ([target, held]) => target === handle && held === handle.__node_id,
+      ),
     );
-    expect(typeof handle.id).toBe("number");
+    expect(typeof handle.__node_id).toBe("number");
     expect(registering.length).toBeGreaterThan(0);
-    for (const registry of registering) registry.cleanup(handle.id);
-    expect(releaseNode).toHaveBeenCalledWith(handle.id);
-    expect(held.has(handle.id)).toBe(false);
+    for (const registry of registering) registry.cleanup(handle.__node_id);
+    expect(releaseNode).toHaveBeenCalledWith(handle.__node_id);
+    expect(held.has(handle.__node_id)).toBe(false);
   });
 });

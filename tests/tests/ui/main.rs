@@ -11,6 +11,7 @@ mod components;
 mod focus_scroll;
 mod geometry;
 mod handlers;
+mod id_attribute;
 mod keyboard;
 mod layout;
 mod lists;

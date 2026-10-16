@@ -16,7 +16,7 @@ export type LayoutBox = readonly [number, number, number, number, number, number
  * @returns the box, or `null`
  */
 export function layoutBox(core: IncaCore, el: IncaElement): LayoutBox | null {
-  return isDestroyed(el) ? null : core.layoutOf(el.id);
+  return isDestroyed(el) ? null : core.layoutOf(el.__node_id);
 }
 
 /**

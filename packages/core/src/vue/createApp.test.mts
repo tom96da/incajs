@@ -23,7 +23,7 @@ describe("createIncaApp", () => {
     app.mount();
     const root = (app as unknown as { _container: IncaElement })._container;
 
-    expect(root.id).toBe(1);
+    expect(root.__node_id).toBe(1);
     expect(reactive(root)).toBe(root);
   });
 });

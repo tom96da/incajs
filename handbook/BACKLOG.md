@@ -117,17 +117,16 @@ A fixed entry is deleted and its ID is never reused.
   - the attribute members (`getAttribute()`, `setAttribute()`,
     `hasAttribute()`, `removeAttribute()`, `attributes`);
   - `classList`, `className`, `dataset`, `style`, `tagName`;
-  - the tree members (`parentElement`, `children`, `firstChild`,
-    `nextSibling`, `contains()`, `closest()`).
+  - the tree members (`parentElement`, `firstChild`, `nextSibling`,
+    `contains()`, `closest()`).
 
   The members it has differ from a browser in the box reads (B-160), the
   `offsetParent` chain (B-161), the scroll members (B-172, B-173, B-174) and
-  `scroll-margin` (B-176).
+  `scroll-margin` (B-176). Its own `children` field lists text nodes too, and
+  the DOM `children` lists elements only.
 
-  The wrapper's own `id`, `children` and `parent` fields use DOM names with
-  other meanings, so `el.id` needs those fields renamed first. Fix: build the
-  attribute members on the `getAttribute` binding, and the tree members on the
-  JS shadow tree.
+  Fix: build the attribute members on the `getAttribute` binding, and the tree
+  members on the JS shadow tree.
 
 - **B-036 Reverting a script edit under `--experimental-hmr` sometimes applies nothing**
   `Units: cli · Size: M · Impact: Medium · Status: needs repro`
@@ -1044,9 +1043,10 @@ A fixed entry is deleted and its ID is never reused.
   Vue destroys a node on unmount, and the host frees a detached node that
   nothing holds. Listeners registered before are released,
   `addEventListener()` afterwards ignores the listener, `dispatchEvent()`
-  returns `true` and skips the argument check, and `tabIndex` reads the
-  default. A browser keeps the listeners and the attribute of a detached
-  element. Fix: keep a destroyed node as a detached element in the host tree.
+  returns `true` and skips the argument check, `tabIndex` reads the default and
+  `id` reads an empty string. A browser keeps the listeners and the attribute
+  of a detached element. Fix: keep a destroyed node as a detached element in
+  the host tree.
 
 - **B-171 A frozen event cannot be dispatched again**
   `Units: bridge,docs · Size: S · Impact: Low`

@@ -61,7 +61,8 @@ const patchProp = createPatchProp(core);
 const BUBBLE = { capture: false, passive: false };
 
 const makeEl = (): IncaElement => ({
-  id: 1,
+  __node_id: 1,
+  id: "",
   kind: "element",
   parent: null,
   children: [],
@@ -178,7 +179,7 @@ describe("style", () => {
   });
 
   it("removes every sent key when the style becomes a string", () => {
-    const other = { ...el, id: 2 };
+    const other = { ...el, __node_id: 2 };
     patchProp(other, "style", null, { gap: 8 }, undefined, null);
     patchProp(other, "style", { gap: 8 }, "color: red", undefined, null);
 
@@ -187,7 +188,7 @@ describe("style", () => {
   });
 
   it("applies an in-place change when prev and next are the same object", () => {
-    const other = { ...el, id: 3 };
+    const other = { ...el, __node_id: 3 };
     const style: Record<string, unknown> = { gap: 8, width: 1 };
     patchProp(other, "style", null, style, undefined, null);
     vi.clearAllMocks();
@@ -200,7 +201,7 @@ describe("style", () => {
   });
 
   it("removes a key deleted in place", () => {
-    const other = { ...el, id: 4 };
+    const other = { ...el, __node_id: 4 };
     const style: Record<string, unknown> = { gap: 8, width: 1 };
     patchProp(other, "style", null, style, undefined, null);
     vi.clearAllMocks();
@@ -553,7 +554,7 @@ describe("plain and .once listeners on one element", () => {
   });
 
   it("keeps slots of different nodes apart", () => {
-    const second = { ...makeEl(), id: 2 };
+    const second = { ...makeEl(), __node_id: 2 };
     const a = vi.fn<() => void>();
     const b = vi.fn<() => void>();
     set("onClick", a);
@@ -728,7 +729,7 @@ describe("plain and .once listeners on one element", () => {
 
     it("does not stop slots of other events or nodes", () => {
       const log: string[] = [];
-      const second = { ...makeEl(), id: 2 };
+      const second = { ...makeEl(), __node_id: 2 };
       set("onClick", stopper(log, "click"));
       set("onKeydown", fn(log, "keydown"));
       set("onClick", fn(log, "other-node"), second);
@@ -1515,7 +1516,7 @@ describe("with the event tracker of the events layer", () => {
     removeEventListener: events.removeEventListener,
     latestEventId: events.latestEventId,
   });
-  const other = { ...makeEl(), id: 2 };
+  const other = { ...makeEl(), __node_id: 2 };
 
   beforeEach(() => {
     addEventListener.mockClear();

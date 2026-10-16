@@ -15,11 +15,14 @@ import type { ScrollIntoViewOptions, ScrollOptions } from "./scroll.mts";
  * ignore the call, and `dispatchEvent()` returns `true`.
  */
 export interface IncaElement extends IncaEventTarget {
+  /** The node id the host knows this node by. Internal to the renderer. */
+  readonly __node_id: NodeId;
   /**
-   * The underlying native node's id, the only part of this object the native
-   * tree itself knows about.
+   * The `id` attribute, or an empty string when it is unset. Assigning sets
+   * the attribute to the value as a string. After the node is removed,
+   * reading gives an empty string and assigning does nothing.
    */
-  readonly id: NodeId;
+  id: string;
   /**
    * `"comment"` for the hidden stand-in `createCommentNode` makes;
    * `"element"` for every other container.
@@ -102,8 +105,8 @@ export interface IncaElement extends IncaEventTarget {
 
 /** A text leaf node. */
 export interface IncaText {
-  /** The underlying native node's id. */
-  readonly id: NodeId;
+  /** The node id the host knows this node by. Internal to the renderer. */
+  readonly __node_id: NodeId;
   /** Discriminates this node within the {@link IncaNode} union. */
   readonly kind: "text";
   /** The current parent, or `null` if this node isn't attached to the tree. */

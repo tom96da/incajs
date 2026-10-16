@@ -37,14 +37,14 @@ export function scrollPosition(
 
   const [first, second] = args;
   const [x, y] = typeof first === "object" ? [first?.left, first?.top] : [first, second];
-  const [left, top] = relative ? (core.scrollOf(el.id) ?? [0, 0]) : [0, 0];
+  const [left, top] = relative ? (core.scrollOf(el.__node_id) ?? [0, 0]) : [0, 0];
   const target = (value: number | undefined, from: number): number | null => {
     if (value === undefined) return null;
     const amount = Number(value);
     return (relative ? from : 0) + (Number.isFinite(amount) ? amount : 0);
   };
 
-  core.scrollNode(el.id, target(x, left), target(y, top));
+  core.scrollNode(el.__node_id, target(x, left), target(y, top));
 }
 
 /** The options form of `scrollIntoView()`. `behavior` is accepted and ignored. */
