@@ -37,3 +37,12 @@ fn stop_immediate_propagation_skips_the_later_handlers_and_the_parent(cx: &mut T
 
     assert_eq!(text_of(&mut h, "log"), "a halt");
 }
+
+#[gpui::test]
+fn a_ref_click_runs_the_click_listener_of_that_node(cx: &mut TestAppContext) {
+    let mut h = load(cx, "ref-click");
+
+    click(&mut h, "go");
+
+    assert_eq!(text_of(&mut h, "log"), "clicked");
+}
