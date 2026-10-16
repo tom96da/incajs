@@ -13,7 +13,12 @@ const target = ref(null);
 <template>
   <div :style="{ width: 300, height: 300 }">
     <div id="go" :style="{ width: 100, height: 40 }" @click="target.click()" />
-    <div id="target" ref="target" :style="{ width: 100, height: 40 }" @click="log += 'clicked '" />
+    <div
+      id="target"
+      ref="target"
+      :style="{ width: 100, height: 40 }"
+      @click="log += `clicked:${$event.target === target} `"
+    />
     <div id="log">{{ log }}</div>
   </div>
 </template>

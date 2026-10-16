@@ -189,13 +189,15 @@ export interface IncaEventTarget {
  *
  * The native host calls it with one argument, an object with:
  * - `type`: the event's name.
- * - `target`: the {@link NodeId} the event is about. It is the deepest node
- *   under the pointer for pointer events, the nearest common ancestor of the
- *   press and the release for `click`, `dblclick` and `auxclick`, and the
- *   focused node (the root when nothing is focused) for key events.
- * - `currentTarget`: the {@link NodeId} whose listener is running, and
+ * - `target`: the element the event is about, or `window`. It is the deepest
+ *   element under the pointer for pointer events, the nearest common ancestor
+ *   of the press and the release for `click`, `dblclick` and `auxclick`, and
+ *   the focused element for key events. With no such element it is `window`.
+ * - `currentTarget`: the element or `window` whose listener is running, and
  *   `null` once the event has been handled. A listener function runs with it
  *   as `this`.
+ * - `composedPath()`: `target` and its ancestors, ending with `window`, and an
+ *   empty array once the event has been handled.
  * - `bubbles`, `cancelable` and `composed`: fixed per event name.
  * - `defaultPrevented`: `true` once a listener called `preventDefault()` on a
  *   cancelable event.

@@ -243,15 +243,16 @@ A fixed entry is deleted and its ID is never reused.
   `Units: bridge,jsenv,host,core · Size: M · Impact: Medium`
 
   `__inca_native__`, `__inca_dev__`, `__inca_callbacks__`,
-  `__inca_released__`, `__inca_track_rejection__` and
+  `__inca_released__`, `__inca_targets__`, `__inca_track_rejection__` and
   `__inca_take_rejections__` are plain globals. A script can assign to or
   delete them, which breaks the host channel or the report of unhandled
   rejections.
 
   Fix: define them with `Object::prop(key, value)` of rquickjs, which creates
   a read-only property that stays in place. The JS side creates
-  `__inca_callbacks__` and `__inca_released__` (`??=` in `callbacks.mts`, so
-  the first copy of core wins), so the host creates and protects them first.
+  `__inca_callbacks__`, `__inca_released__` and `__inca_targets__` (`??=` in
+  `callbacks.mts` and `eventTarget.mts`, so the first copy of core wins), so
+  the host creates and protects them first.
 
 - **B-188 The pending module holds a promise handle**
   `Units: jsenv · Size: M · Impact: Medium`
@@ -1023,11 +1024,12 @@ A fixed entry is deleted and its ID is never reused.
   `window` is a named export of `incajs` with `addEventListener()`,
   `removeEventListener()` and `dispatchEvent()` as its only members. The
   globals `window` and `document` are undefined, and the `signal` option of
-  `addEventListener()` is unsupported. Activating or leaving the window fires
-  `focus` and `blur` at the focused node only, where browsers also fire them at
-  `window`. Fix: install a global `document` and decide how a global `window`
-  coexists with the `typeof window` checks of libraries. The `signal` option
-  needs an `AbortController` in the runtime first.
+  `addEventListener()` is unsupported. `composedPath()` ends at `window` and
+  has no `document`. Activating or leaving the window fires `focus` and `blur`
+  at the focused node only, where browsers also fire them at `window`. Fix:
+  install a global `document` and decide how a global `window` coexists with
+  the `typeof window` checks of libraries. The `signal` option needs an
+  `AbortController` in the runtime first.
 
 - **B-169 `console` prints a stack written in a string as plain text**
   `Units: jsenv · Size: S · Impact: Low`
@@ -1049,11 +1051,12 @@ A fixed entry is deleted and its ID is never reused.
   the host tree.
 
 - **B-171 A frozen event cannot be dispatched again**
-  `Units: bridge,docs · Size: S · Impact: Low`
+  `Units: bridge,docs · Size: M · Impact: Low`
 
-  Dispatching sets `target` on the event first, which throws a `TypeError` on a
-  frozen object. Browsers dispatch a frozen event. Fix: keep the dispatch state
-  outside the event object.
+  Dispatching sets `target`, `isTrusted` and `eventId` on the event object,
+  which throws a `TypeError` on a frozen object. Browsers dispatch a frozen
+  event. Fix: keep `target`, `currentTarget`, `eventPhase`, `isTrusted` and
+  `eventId` in the event record behind accessors on the prototype.
 
 - **B-172 Scroll members of a template `ref` read the last drawn layout**
   `Units: gpui,bridge,core · Size: M · Impact: Low`
@@ -1256,3 +1259,30 @@ A fixed entry is deleted and its ID is never reused.
   `tmp/browser-check/focus-detach-results.md`. A fix fires the pair at the call
   and needs a decision on the engine to follow.
 
+- **B-199 `target` is `window` where browsers report `body`**
+  `Units: gpui,bridge,core,docs · Size: M–L · Impact: Low`
+
+  A key event while nothing is focused has `window` as `target`, and its
+  `composedPath()` is `[window]`. Browsers report `body` as `target`, with
+  `html`, `document` and `window` above it. A `window` listener there reads
+  `eventPhase` 1 in capture and 3 in bubble, and the host gives 2.
+
+  A mouse press or click outside every element has `window` as `target`.
+  Chromium and WebKit report `body`, and Firefox reports `html`. Moving the
+  pointer from an element to an empty area fires `mouseout` and `mouseleave`
+  with `window` as `relatedTarget`, and `mouseover` at `window`. Chromium and
+  WebKit give `body` in both places, and Firefox gives `html`.
+
+  The host root is the only node above the app. Fix: a host-owned body node
+  under the root that the app mounts into and that takes these events. The
+  same node fixes B-200.
+
+- **B-200 The host root has two objects, `window` and the mount container**
+  `Units: core,bridge · Size: M · Impact: Low`
+
+  `app.mount()` mounts on the host root, and both the mount container handle
+  and `window` stand for that node. Events carry `window` for it, so a
+  listener added through the container handle reads `window` as
+  `currentTarget`, and the `parent` of the app's top element is a handle
+  that `composedPath()` never lists. Fix: the body node of B-199, so the
+  container is a node of its own.

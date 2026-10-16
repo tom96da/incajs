@@ -20,7 +20,12 @@ export default defineConfig({
     },
     rolldownOptions: {
       external: ["@vue/runtime-core", "@vue/runtime-dom"],
-      output: { chunkFileNames: "chunks/[name]-[hash].js" },
+      output: {
+        chunkFileNames: "chunks/[name]-[hash].js",
+        advancedChunks: {
+          groups: [{ name: "hooks", test: /packages\/core\/src\/(callbacks|targets)\.mts$/ }],
+        },
+      },
     },
   },
   plugins: [

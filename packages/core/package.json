@@ -30,7 +30,11 @@
     "dist"
   ],
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "src/callbacks.mts",
+    "src/targets.mts",
+    "dist/chunks/hooks-*.js"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.mts",
   "exports": {

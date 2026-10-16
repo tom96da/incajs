@@ -10,7 +10,7 @@ const log = ref("");
 const off = ref(true);
 const go = ref(null);
 const note = (e, name) => {
-  log.value += `${name}:${e.type}:${e.target === go.value.__node_id ? "go" : "other"} `;
+  log.value += `${name}:${e.type}:${e.target === go.value ? "go" : "other"} `;
 };
 onMounted(() => go.value.focus());
 </script>

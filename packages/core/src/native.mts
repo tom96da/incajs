@@ -46,6 +46,8 @@ declare global {
   var __inca_callbacks__: Record<CallbackId, HostCallback>;
   // eslint-disable-next-line no-var
   var __inca_released__: (nodeIds: NodeId[], callbackIds: CallbackId[]) => void;
+  // eslint-disable-next-line no-var
+  var __inca_targets__: (nodeIds: NodeId[]) => unknown[];
 }
 
 export function native(): IncaNative {

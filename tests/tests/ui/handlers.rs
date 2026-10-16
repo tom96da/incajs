@@ -44,5 +44,5 @@ fn a_ref_click_runs_the_click_listener_of_that_node(cx: &mut TestAppContext) {
 
     click(&mut h, "go");
 
-    assert_eq!(text_of(&mut h, "log"), "clicked");
+    assert_eq!(text_of(&mut h, "log"), "clicked:true");
 }

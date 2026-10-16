@@ -1,6 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import "./targets.mts";
+
 export { createEventTarget } from "./eventTarget.mts";
 export {
   addEventListener,

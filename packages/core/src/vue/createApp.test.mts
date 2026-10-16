@@ -7,6 +7,7 @@ import { runInNewContext } from "node:vm";
 import { h, reactive } from "@vue/runtime-core";
 import { describe, expect, it, vi } from "vitest";
 
+import { window } from "../window.mts";
 import { createIncaApp } from "./createApp.mts";
 import type { IncaElement } from "../element/types.mts";
 
@@ -29,6 +30,12 @@ describe("createIncaApp", () => {
 
     expect(root.__node_id).toBe(1);
     expect(reactive(root)).toBe(root);
+  });
+});
+
+describe("window under reactive()", () => {
+  it("stays itself inside reactive()", () => {
+    expect(reactive({ w: window }).w).toBe(window);
   });
 });
 

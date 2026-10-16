@@ -24,7 +24,8 @@ methods of the DOM `Event` interface (see Base fields).
 `window` from `incajs` (`import { window } from "incajs"`) and a template `ref`
 have `addEventListener()`, `removeEventListener()` and `dispatchEvent()`.
 
-- A listener on `window` runs on the root node. `document` is unsupported.
+- `composedPath()` lists the app's elements, then `window`, with no `body`,
+  `html` or `document`. `document` is unsupported.
 - The `signal` option of `addEventListener()` is unsupported.
 - The ref of an unmounted element ignores `addEventListener()`, and
   `dispatchEvent()` returns `true`.
@@ -52,8 +53,6 @@ and `returnValue`. The three flags depend on the event:
 | `focus`, `blur`                  | no      | no         | yes      |
 | `focusin`, `focusout`            | yes     | no         | yes      |
 
-- `target` and `currentTarget` are node ids, and `composedPath()` returns node
-  ids.
 - `timeStamp` counts milliseconds since the host started.
 - Removing the focused node, or moving it within the tree, leaves `blur` and
   `focusout` unfired.
@@ -88,14 +87,19 @@ events yet. `pointerType` is `"mouse"`, or `""` for the click of a key.
   client position.
 - Pointer events (`pointerdown` and the rest) are unsupported.
 - `scrollend` is unsupported.
+- A mouse event outside every element has `window` as `target`, where browsers
+  report `body` (Firefox reports `html`). Moving the pointer between an element
+  and an empty area gives `window` as `relatedTarget`.
 
 ## Keyboard
 
 Keyboard events carry the fields of
 [`KeyboardEvent`](https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent)
 from [UI Events](https://www.w3.org/TR/2026/WD-uievents-20260221/#events-keyboard-types).
-`keydown` and `keyup` go to the focused node, or to the root when nothing is
-focused. `target` is that node.
+`keydown` and `keyup` go to the focused node, or to `window` when nothing is
+focused. `target` is that node or `window`, where browsers report `body`. A
+`window` listener reads `eventPhase` 2 for a key event while nothing is
+focused.
 
 | Field         | Value                                           |
 | ------------- | ----------------------------------------------- |

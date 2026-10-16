@@ -199,6 +199,8 @@ walk and keeps nothing.
 - When the global is not a function, these fields carry the node ids.
 - A throw, or a result that is not an array, goes to `Host::failures` and the
   walk runs no listener. `dispatchEvent` throws it.
+- Core gives `window` for the root, the element handle of a node that has
+  one, and `null` for any other node.
 
 #### Event object
 
