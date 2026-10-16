@@ -11,6 +11,13 @@ import { createPatchProp } from "./patchProp.mts";
 import type { IncaElement, IncaNode } from "../element/types.mts";
 
 /**
+ * The mounted apps. The host keeps their nodes and this set keeps their
+ * containers and handles, so events and `activeElement()` find the elements
+ * of an app that nothing else references.
+ */
+const mounted = new Set<App<IncaElement>>();
+
+/**
  * `@vue/runtime-core`'s `App`, with `mount` also callable with no argument
  * to target the host's own root container. `use`, `mixin`, `component` and
  * `directive` return an `IncaApp`.
@@ -42,9 +49,19 @@ export function createIncaApp(
   const app = renderer.createApp(rootComponent, rootProps);
   // Captured before the override, or the replacement would call itself.
   const mountAt = app.mount.bind(app);
+  const unmountAt = app.unmount.bind(app);
 
   return Object.assign(app, {
-    mount: (rootContainer?: IncaElement) =>
-      mountAt(rootContainer ?? skipReactive(createIncaElement(core, core.rootNodeId(), "element"))),
+    mount: (rootContainer?: IncaElement) => {
+      const instance = mountAt(
+        rootContainer ?? skipReactive(createIncaElement(core, core.rootNodeId(), "element")),
+      );
+      mounted.add(app);
+      return instance;
+    },
+    unmount: () => {
+      unmountAt();
+      mounted.delete(app);
+    },
   });
 }
