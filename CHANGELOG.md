@@ -10,13 +10,22 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- `contains()` on template refs ([0724fd1](https://github.com/tom96da/incajs/commit/0724fd1))
+
 ### Changed
 
+- the `id` of a template ref is its `id` attribute ([8b639b5](https://github.com/tom96da/incajs/commit/8b639b5))
+- event `target`, `currentTarget`, `relatedTarget` and `composedPath()` hold the elements and `window` ([4b3f82a](https://github.com/tom96da/incajs/commit/4b3f82a)) ([57ccbad](https://github.com/tom96da/incajs/commit/57ccbad))
+- a listener function runs with the current target as `this` ([5518650](https://github.com/tom96da/incajs/commit/5518650))
 - the error of `CustomEvent(...)` called without `new` names `CustomEvent` ([ea5d186](https://github.com/tom96da/incajs/commit/ea5d186))
 - the host frees a detached node that nothing holds at the next frame ([37c45fa](https://github.com/tom96da/incajs/commit/37c45fa))
 
 ### Fixed
 
+- events and `activeElement()` find the elements of a mounted app that nothing else references ([86c7421](https://github.com/tom96da/incajs/commit/86c7421))
+- `reactive()` keeps `window` from `incajs` as it is ([57ccbad](https://github.com/tom96da/incajs/commit/57ccbad))
 - a removed or moved node loses focus at once, and a detached node cannot take it ([ef08420](https://github.com/tom96da/incajs/commit/ef08420))
 - the host frees the nodes of a component whose setup threw ([37c45fa](https://github.com/tom96da/incajs/commit/37c45fa))
 - a listener prop on a removed element is ignored ([89e61dc](https://github.com/tom96da/incajs/commit/89e61dc))
