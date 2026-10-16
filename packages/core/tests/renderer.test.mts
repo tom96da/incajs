@@ -206,6 +206,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       children: [],
       focus: () => focus(rootId),
       blur: () => blur(rootId),
+      contains: () => false,
       click: () => click(rootId),
       ...createEventTarget(() => rootId),
       tabIndex: -1,

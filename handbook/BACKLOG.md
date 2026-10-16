@@ -118,7 +118,7 @@ A fixed entry is deleted and its ID is never reused.
     `hasAttribute()`, `removeAttribute()`, `attributes`);
   - `classList`, `className`, `dataset`, `style`, `tagName`;
   - the tree members (`parentElement`, `firstChild`, `nextSibling`,
-    `contains()`, `closest()`).
+    `closest()`).
 
   The members it has differ from a browser in the box reads (B-160), the
   `offsetParent` chain (B-161), the scroll members (B-172, B-173, B-174) and

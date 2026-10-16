@@ -8,8 +8,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { activeElement, createIncaElement } from "./handle.mts";
 import { elementOf, markDestroyed, recordedCount, unregisterElement } from "./lifecycle.mts";
+import { createTextNode, remove } from "./shadowTree.mts";
 import type { IncaCore } from "../rendererCore.mts";
 import type { ScrollOptions } from "./scroll.mts";
+import type { IncaElement } from "./types.mts";
 
 function makeCore(
   stored: string | number | boolean | null = null,
@@ -410,5 +412,63 @@ describe("createIncaElement id", () => {
     expect(() => {
       (el as { __node_id: number }).__node_id = 1;
     }).toThrow(TypeError);
+  });
+});
+
+describe("createIncaElement contains", () => {
+  const core = {
+    ...makeCore(),
+    createNode: vi.fn<() => number>(() => 60),
+    destroyNode: vi.fn<() => void>(),
+  } as unknown as IncaCore;
+  const tree = (): IncaElement[] => {
+    const [root, child, grandchild] = [41, 42, 43].map((id) =>
+      createIncaElement(core, id, "element", "div"),
+    );
+    child!.parent = root!;
+    root!.children.push(child!);
+    grandchild!.parent = child!;
+    child!.children.push(grandchild!);
+    return [root!, child!, grandchild!];
+  };
+
+  it("is true for the element itself", () => {
+    const [root] = tree();
+    expect(root!.contains(root!)).toBe(true);
+  });
+
+  it("is true for a descendant element and a descendant text node", () => {
+    const [root, child, grandchild] = tree();
+    const text = createTextNode(core, "x");
+    text.parent = child!;
+    expect([root!.contains(grandchild!), root!.contains(text)]).toEqual([true, true]);
+  });
+
+  it("is false for an ancestor and an unrelated element", () => {
+    const [root, child] = tree();
+    const [other] = tree();
+    expect([child!.contains(root!), root!.contains(other!)]).toEqual([false, false]);
+  });
+
+  it("follows a removal: the old parent loses the subtree, which keeps its own", () => {
+    const [root, child, grandchild] = tree();
+    remove(core, child!);
+    expect([root!.contains(child!), child!.contains(grandchild!)]).toEqual([false, true]);
+  });
+
+  it("is false for null and undefined", () => {
+    const [root] = tree();
+    expect([root!.contains(null), root!.contains(undefined as unknown as null)]).toEqual([
+      false,
+      false,
+    ]);
+  });
+
+  it.each([
+    ["a number", 5],
+    ["a plain object with a parent", { parent: null }],
+  ])("throws a TypeError for %s", (_name, value) => {
+    const [root] = tree();
+    expect(() => root!.contains(value as unknown as null)).toThrow(TypeError);
   });
 });

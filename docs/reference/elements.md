@@ -162,8 +162,9 @@ have, and using them fails the build:
   provided as globals by the JS runtime Incarnative.js embeds.
 - **No text input**: an editable text element is still unimplemented (see
   the [Roadmap](../roadmap)).
-- **`ref` lacks other element members**: the attribute, class, style and tree
-  members are missing.
+- **`ref` lacks other element members**: the attribute methods, `classList`,
+  `className`, `dataset`, `style`, `tagName` and the tree members other than
+  `contains()` are missing.
 
 Event modifiers such as `.stop`, `.once` and `@keydown.enter` are documented
 in [Events: Event modifiers](./events#event-modifiers).

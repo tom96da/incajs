@@ -3,17 +3,17 @@
 
 import * as nativeCore from "../rendererCore.mts";
 import { layoutBox, offsetOf, offsetParentOf, rectOf, tabIndexOf } from "./geometry.mts";
-import { elementOf, isDestroyed, registerElement, withNodeId } from "./lifecycle.mts";
+import { elementOf, isDestroyed, isNode, registerElement, withNodeId } from "./lifecycle.mts";
 import { scrollIntoViewArgs, scrollPosition } from "./scroll.mts";
 import type { IncaCore, NodeId, TagName } from "../rendererCore.mts";
 import type { ScrollArgs, ScrollIntoViewOptions } from "./scroll.mts";
-import type { IncaElement } from "./types.mts";
+import type { IncaElement, IncaNode } from "./types.mts";
 
 /**
  * Builds the {@link IncaElement} handle for a native node: parentless,
- * childless, with `id`, `focus()`, `blur()`, `click()`, the listener methods
- * of an event target, `tabIndex` and the layout members, all driven through
- * `core`.
+ * childless, with `id`, `focus()`, `blur()`, `click()`, `contains()`, the
+ * listener methods of an event target, `tabIndex` and the layout members, all
+ * driven through `core`.
  * @param core - the incajs bindings the handle drives
  * @param id - the native node's id
  * @param kind - whether the node is an element or a comment stand-in
@@ -46,6 +46,16 @@ export function createIncaElement(
     },
     blur: () => core.blur(id),
     click: () => core.click(id),
+    contains: (other: unknown) => {
+      if (other === null || other === undefined) return false;
+      if (!isNode(other)) {
+        throw new TypeError("the value is not a node. pass an element, a text node or null");
+      }
+      for (let node: IncaNode | null = other; node !== null; node = node.parent) {
+        if (node === element) return true;
+      }
+      return false;
+    },
     addEventListener: (...args) => {
       if (!isDestroyed(element)) target.addEventListener(...args);
     },

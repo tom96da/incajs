@@ -69,6 +69,7 @@ const makeEl = (): IncaElement => ({
   focus: vi.fn<() => void>(),
   blur: vi.fn<() => void>(),
   click: vi.fn<() => void>(),
+  contains: () => false,
   ...makeTarget(),
   tabIndex: -1,
   getBoundingClientRect: () => rectOf(null),

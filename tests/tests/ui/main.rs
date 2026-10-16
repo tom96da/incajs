@@ -8,6 +8,7 @@ mod active;
 mod button;
 mod common;
 mod components;
+mod contains;
 mod event_target;
 mod focus_scroll;
 mod geometry;

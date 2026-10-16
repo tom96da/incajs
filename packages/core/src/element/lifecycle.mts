@@ -5,6 +5,9 @@ import { native } from "../native.mts";
 import type { NodeId } from "../rendererCore.mts";
 import type { IncaElement, IncaNode } from "./types.mts";
 
+/** Every handle that `withNodeId` gave a node id. */
+const nodes = new WeakSet<object>();
+
 /**
  * Gives `handle` a read-only, non-enumerable `__node_id`.
  * @param handle - the new handle
@@ -15,9 +18,19 @@ export function withNodeId<T extends object>(
   handle: T,
   id: NodeId,
 ): T & { readonly __node_id: NodeId } {
+  nodes.add(handle);
   return Object.defineProperty(handle, "__node_id", { value: id }) as T & {
     readonly __node_id: NodeId;
   };
+}
+
+/**
+ * Whether `value` is a node handle.
+ * @param value - the value to check
+ * @returns `true` for an element, a comment stand-in or a text handle
+ */
+export function isNode(value: unknown): value is IncaNode {
+  return typeof value === "object" && value !== null && nodes.has(value);
 }
 
 /**

@@ -46,6 +46,13 @@ export interface IncaElement extends IncaEventTarget {
    */
   click(): void;
   /**
+   * Whether `other` is this node or one of its descendants in the tree as
+   * rendered. `null` and `undefined` give `false`, and any other value that is
+   * not a node throws a `TypeError`. After the node is removed, it still answers
+   * for the subtree it keeps.
+   */
+  contains(other: IncaNode | null): boolean;
+  /**
    * Assigning sets the `tabindex` attribute to the value's integer part,
    * wrapped to 32 bits. Reading returns the `tabindex` attribute as an
    * integer, or `-1` (`0` for a `button`) when it is unset or invalid.
