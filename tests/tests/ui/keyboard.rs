@@ -58,3 +58,12 @@ fn blur_leaves_no_node_to_receive_keys(cx: &mut TestAppContext) {
     assert!(before.ends_with("b:blur"), "{before}");
     assert_eq!(text_of(&mut h, "log"), before);
 }
+
+#[gpui::test]
+fn a_window_keydown_listener_hears_keys_with_nothing_focused(cx: &mut TestAppContext) {
+    let mut h = load(cx, "window-keys");
+
+    h.keystrokes("x");
+
+    assert_eq!(text_of(&mut h, "log"), "window:keydown:x");
+}
