@@ -34,8 +34,9 @@ function tracking(listener: HostCallback): HostCallback {
  * See the `EventListener` type for the fields an event carries.
  * @param nodeId - the node to listen on
  * @param event - the event name (e.g. `"click"`)
- * @param listener - a function, or an object whose `handleEvent` method is
- * called with the object as `this` when the event fires
+ * @param listener - a function, called with the event's `currentTarget` as
+ * `this`, or an object whose `handleEvent` method is called with the object
+ * as `this` when the event fires
  * @param options - `capture` listens while the event travels down to the
  * target, `passive` ignores `preventDefault()` calls in `listener`, and
  * `once` removes the listener before it first runs
@@ -55,7 +56,10 @@ export function addEventListener(
 
   const call: HostCallback = (...args) =>
     typeof listener === "function"
-      ? (listener as HostCallback)(...args)
+      ? (listener as HostCallback).apply(
+          (args[0] as { currentTarget?: unknown } | null | undefined)?.currentTarget,
+          args,
+        )
       : (listener.handleEvent as HostCallback).apply(listener, args);
   const run: HostCallback = options.once
     ? (...args) => {

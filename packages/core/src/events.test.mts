@@ -204,6 +204,35 @@ describe("listener objects", () => {
     expect(seen).toEqual([object, { type: "click" }]);
   });
 
+  it("calls a listener function with the current target as this", () => {
+    const seen: unknown[] = [];
+    addEventListener(1, "click", function (this: unknown) {
+      seen.push(this);
+    });
+    const currentTarget = { node: 1 };
+
+    globalThis.__inca_callbacks__[native.addEventListener.mock.results[0]!.value]!({
+      type: "click",
+      currentTarget,
+    });
+
+    expect(seen[0]).toBe(currentTarget);
+  });
+
+  it("calls a listener function with this undefined when the event has no current target", () => {
+    const seen: unknown[] = [];
+    addEventListener(1, "click", function (this: unknown) {
+      seen.push(this);
+    });
+    const call = globalThis.__inca_callbacks__[native.addEventListener.mock.results[0]!.value]!;
+
+    call();
+    call(null);
+    call({ type: "click" });
+
+    expect(seen).toEqual([undefined, undefined, undefined]);
+  });
+
   it("calls the handleEvent present at dispatch, not the one present at registration", () => {
     const original = vi.fn<() => void>();
     const object = { handleEvent: original };

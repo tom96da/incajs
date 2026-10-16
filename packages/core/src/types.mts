@@ -149,8 +149,9 @@ export interface IncaEventTarget {
    * same `type` and `capture` again changes nothing. A `null` listener is
    * ignored.
    * @param type - the event name (e.g. `"keydown"`)
-   * @param listener - a function, or an object whose `handleEvent` method is
-   * called when the event fires
+   * @param listener - a function, called with the event's `currentTarget` as
+   * `this`, or an object whose `handleEvent` method is called with the object
+   * as `this` when the event fires
    * @param options - a {@link ListenerOptions}, or a boolean for `capture`
    */
   addEventListener(
@@ -193,7 +194,8 @@ export interface IncaEventTarget {
  *   press and the release for `click`, `dblclick` and `auxclick`, and the
  *   focused node (the root when nothing is focused) for key events.
  * - `currentTarget`: the {@link NodeId} whose listener is running, and
- *   `null` once the event has been handled.
+ *   `null` once the event has been handled. A listener function runs with it
+ *   as `this`.
  * - `bubbles`, `cancelable` and `composed`: fixed per event name.
  * - `defaultPrevented`: `true` once a listener called `preventDefault()` on a
  *   cancelable event.

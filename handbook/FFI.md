@@ -157,9 +157,10 @@ and author-facing behaviour are in [events.md](../docs/reference/events.md).
 - `packages/core` keys a registration by node, event, capture and listener, so
   `removeEventListener(type, listener, options)` finds it by identity and
   adding the same listener again changes nothing. A listener object keeps its
-  identity and receives `handleEvent` calls. `once` removes the registration
-  before the listener runs. `createEventTarget` builds the listener methods
-  for one node, and `window` resolves `rootNodeId()` per call.
+  identity and receives `handleEvent` calls. A listener function runs with the
+  event's `currentTarget` as `this`. `once` removes the registration before
+  the listener runs. `createEventTarget` builds the listener methods for one
+  node, and `window` resolves `rootNodeId()` per call.
 - The caller stores the function at `globalThis.__inca_callbacks__[id]` after
   `addEventListener` returns `id`. A listener runs only after the call returns.
   A missing or non-function entry is skipped.
