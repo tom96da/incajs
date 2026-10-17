@@ -191,6 +191,16 @@ jobs:
       NODE_VERSION: "26"
     steps: *test_node_steps
 
+  test-macos:
+    name: "Test: Node.js 26, macos-latest"
+    needs: [changed, build]
+    if: needs.changed.outputs.js == 'true'
+    timeout-minutes: 15
+    runs-on: macos-latest
+    env:
+      NODE_VERSION: "26"
+    steps: *test_node_steps
+
   # gpui_platform's features differ per platform, so each one needs checking.
   rust-ubuntu:
     name: "Rust: ubuntu:22.04"
@@ -305,6 +315,7 @@ jobs:
       - test-node-22
       - test-node-24
       - test-node-26
+      - test-macos
       - rust-ubuntu
       - rust-ubuntu-arm
       - rust-macos
@@ -424,6 +435,7 @@ jobs:
         test-node-22,
         test-node-24,
         test-node-26,
+        test-macos,
         rust-ubuntu,
         rust-ubuntu-arm,
         rust-macos,
