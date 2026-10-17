@@ -9,7 +9,6 @@ mod disabled;
 mod events;
 mod focus;
 mod input;
-mod key_click;
 mod mouse;
 mod pointer;
 mod reveal;

@@ -170,6 +170,32 @@ fn key_up_panics_on_an_unparseable_key(cx: &mut TestAppContext) {
     Harness::load(cx, TEST_ENTRY_PATH, "").key_up("a-b");
 }
 
+const KEY_LOG: &str = r"
+        globalThis.cb[6] = (e) => {
+            globalThis.log.push(`${e.type}:${e.key}:${e.metaKey}`);
+        };
+        listen(box, 'keydown', 6);
+        listen(box, 'keyup', 6);
+    ";
+
+#[gpui::test]
+fn keystrokes_press_each_key_in_order_and_release_none(cx: &mut TestAppContext) {
+    let mut h = load_listening(cx, &format!("{BUTTON}{KEY_LOG}"));
+
+    h.keystrokes("a cmd-b x");
+
+    assert_eq!(log(&h), "keydown:a:false,keydown:b:true,keydown:x:false");
+}
+
+#[gpui::test]
+fn key_up_releases_each_key_in_order(cx: &mut TestAppContext) {
+    let mut h = load_listening(cx, &format!("{BUTTON}{KEY_LOG}"));
+
+    h.key_up("a cmd-b x");
+
+    assert_eq!(log(&h), "keyup:a:false,keyup:b:true,keyup:x:false");
+}
+
 #[gpui::test]
 #[should_panic(expected = "the window is open")]
 fn settle_panics_once_the_window_has_closed(cx: &mut TestAppContext) {

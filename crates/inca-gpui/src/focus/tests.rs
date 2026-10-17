@@ -4,6 +4,7 @@
 #![allow(clippy::unwrap_used)]
 
 use gpui::TestAppContext;
+use inca_test_macros::gpui_cases;
 use rstest::rstest;
 
 use super::*;
@@ -743,4 +744,46 @@ fn after_a_drop_no_node_is_focused_and_tab_starts_at_the_first_stop(cx: &mut Tes
     let moved = cx.update(|window, cx| registry.tab_move(&tree, ROOT, window, cx, false));
 
     assert_eq!(moved, Some(ids[0]));
+}
+
+#[gpui_cases]
+#[gpui::test]
+#[case::forward(false, 2)]
+#[case::backward(true, 0)]
+fn a_tab_move_from_a_negative_stop_continues_in_tree_order(
+    cx: &mut TestAppContext,
+    backward: bool,
+    want: usize,
+) {
+    let cx = cx.add_empty_window();
+    let (mut tree, ids) = rooted_tree(3);
+    tree.set_attribute(ids[1], "tabindex", "-1").unwrap();
+    let mut registry = FocusRegistry::default();
+    focus_all(cx, &mut registry, &tree, &ids, ids[1]);
+
+    let moved = cx.update(|window, cx| registry.tab_move(&tree, ROOT, window, cx, backward));
+
+    assert_eq!(moved, Some(ids[want]));
+}
+
+#[gpui_cases]
+#[gpui::test]
+#[case::forward(false, 1)]
+#[case::backward(true, 0)]
+fn a_tab_move_past_the_last_stop_leaves_no_node_focused(
+    cx: &mut TestAppContext,
+    backward: bool,
+    from: usize,
+) {
+    let cx = cx.add_empty_window();
+    let (tree, ids) = rooted_tree(2);
+    let mut registry = FocusRegistry::default();
+    focus_all(cx, &mut registry, &tree, &ids, ids[from]);
+
+    let focused = cx.update(|window, cx| {
+        let _ = registry.tab_move(&tree, ROOT, window, cx, backward);
+        registry.focused_node(window, cx)
+    });
+
+    assert_eq!(focused, None);
 }

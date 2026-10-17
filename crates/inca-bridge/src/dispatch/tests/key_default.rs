@@ -11,12 +11,14 @@ use inca_test_macros::gpui_cases;
 
 /// Two buttons, a focusable div and a div without a tab index under one parent. The buttons and
 /// the focusable div have a `click` listener. All but the plain div have `keydown` and `keyup`
-/// listeners that call `preventDefault` while `globalThis.cancel` is set.
+/// listeners that call `preventDefault` while `globalThis.cancel` is set. The parent has the same
+/// listeners, controlled by `globalThis.cancelParent`.
 struct Scene {
     window: WindowHandle<TestRoot>,
     dispatcher: EventDispatcher,
     host: Rc<RefCell<Host>>,
     engine: Rc<inca_jsenv::Engine>,
+    parent: NodeId,
     first: NodeId,
     second: NodeId,
     field: NodeId,
@@ -66,6 +68,19 @@ fn scene(cx: &mut TestAppContext) -> Scene {
                 .unwrap();
         }
     }
+    for event in ["keydown", "keyup"] {
+        engine
+            .eval::<()>(&format!(
+                r"
+                __inca_test_listen__({parent}, '{event}', (e) => {{
+                    if (globalThis.cancelParent) {{
+                        e.preventDefault();
+                    }}
+                }});
+                "
+            ))
+            .unwrap();
+    }
     let window = mount_active(cx, &host, &engine, parent);
     let dispatcher = window
         .read_with(cx, |root, _| root.dispatcher.clone())
@@ -75,6 +90,7 @@ fn scene(cx: &mut TestAppContext) -> Scene {
         dispatcher,
         host,
         engine,
+        parent,
         first,
         second,
         field,
@@ -117,6 +133,12 @@ impl Scene {
                 .key_input(&keystroke, up, &payload, window, cx);
         });
         cx.run_until_parked();
+    }
+
+    fn cancel_at_parent(&self, on: bool) {
+        self.engine
+            .eval::<()>(&format!("globalThis.cancelParent = {on};"))
+            .unwrap();
     }
 
     fn mouse_down(&self, cx: &mut TestAppContext, node: NodeId) {
@@ -665,4 +687,149 @@ fn a_key_with_nothing_focused_clicks_nothing(cx: &mut TestAppContext, key: &str)
     s.key(cx, key, false, false);
     s.key(cx, key, true, false);
     assert_eq!(s.clicks(), "[]");
+}
+
+#[gpui_cases]
+#[gpui::test]
+#[case::enter_click("enter", 0, "disabled", "true", None)]
+#[case::tab_move("tab", 1, "tabindex", "'-1'", Some(2))]
+fn a_job_queued_by_a_key_down_listener_lands_before_the_default_action(
+    cx: &mut TestAppContext,
+    key: &str,
+    changed: usize,
+    attribute: &str,
+    value: &str,
+    focused: Option<usize>,
+) {
+    let s = scene(cx);
+    let nodes = [s.first, s.second, s.field];
+    s.engine
+        .eval::<()>(&format!(
+            r"
+            __inca_test_listen__({}, 'keydown', () => {{
+                Promise.resolve().then(() => {{
+                    __inca_native__.setAttribute({}, '{attribute}', {value});
+                }});
+            }});
+            ",
+            s.first, nodes[changed]
+        ))
+        .unwrap();
+    s.focus(cx, s.first);
+    s.key(cx, key, false, false);
+    assert_eq!(
+        (s.clicks().as_str(), s.focused(cx)),
+        ("[]", focused.map(|index| nodes[index]))
+    );
+}
+
+#[gpui_cases]
+#[gpui::test]
+#[case::enter("enter")]
+#[case::space("space")]
+fn an_ancestors_canceled_key_down_clicks_nothing(cx: &mut TestAppContext, key: &str) {
+    let s = scene(cx);
+    s.focus(cx, s.first);
+    s.cancel_at_parent(true);
+    s.key(cx, key, false, false);
+    s.cancel_at_parent(false);
+    s.key(cx, key, true, false);
+    assert_eq!(s.clicks(), "[]");
+}
+
+#[gpui::test]
+fn space_up_with_a_pending_press_of_another_button_clicks_nothing(cx: &mut TestAppContext) {
+    let s = scene(cx);
+    let window_id = s.window_id(cx);
+    s.focus(cx, s.first);
+    s.set_pending(Some((window_id, s.second)));
+    s.key(cx, "space", true, false);
+    assert_eq!(s.clicks(), "[]");
+}
+
+#[gpui_cases]
+#[gpui::test]
+#[case::shift_enter("shift-enter", false, "true,false,false,false")]
+#[case::control_space_up("ctrl-space", true, "false,true,false,false")]
+#[case::alt_space_up("alt-space", true, "false,false,true,false")]
+#[case::meta_space_up("cmd-space", true, "false,false,false,true")]
+fn a_key_click_carries_the_modifiers_of_its_key(
+    cx: &mut TestAppContext,
+    key: &str,
+    up: bool,
+    want: &str,
+) {
+    let s = scene(cx);
+    s.engine
+        .eval::<()>(&format!(
+            r"
+            __inca_test_listen__({}, 'click', (e) => {{
+                globalThis.modifiers = [e.shiftKey, e.ctrlKey, e.altKey, e.metaKey].join();
+            }});
+            ",
+            s.first
+        ))
+        .unwrap();
+    s.focus(cx, s.first);
+    if up {
+        s.key(cx, "space", false, false);
+    }
+    s.key(cx, key, up, false);
+    let got = s.engine.eval::<String>("globalThis.modifiers").unwrap();
+    assert_eq!(got, want);
+}
+
+#[gpui::test]
+fn a_tab_move_reports_blur_and_focus_on_the_next_frame(cx: &mut TestAppContext) {
+    let s = scene(cx);
+    s.focus(cx, s.first);
+    s.engine.eval::<()>("globalThis.moves = [];").unwrap();
+    for node in [s.first, s.second] {
+        for event in ["blur", "focus"] {
+            s.engine
+                .eval::<()>(&format!(
+                    r"
+                    __inca_test_listen__({node}, '{event}', (e) => {{
+                        moves.push(`${{e.type}}:${{e.target}}:${{e.relatedTarget}}`);
+                    }});
+                    "
+                ))
+                .unwrap();
+        }
+    }
+    s.key(cx, "tab", false, false);
+    s.in_window(cx, |_, window, cx| window.draw(cx).clear(cx));
+    let got = s.engine.eval::<String>("moves.join()").unwrap();
+    let (first, second) = (s.first, s.second);
+    assert_eq!(got, format!("blur:{first}:{second},focus:{second}:{first}"));
+}
+
+#[gpui::test]
+fn a_key_click_reaches_the_ancestors_while_a_disabled_button_is_hovered(cx: &mut TestAppContext) {
+    let s = scene(cx);
+    {
+        let mut host = s.host.borrow_mut();
+        host.tree.set_style(s.first, "width", 100.0).unwrap();
+        host.tree.set_style(s.first, "height", 50.0).unwrap();
+    }
+    s.disable(s.first);
+    s.engine
+        .eval::<()>(&format!(
+            r"
+            __inca_test_listen__({}, 'click', () => {{
+                out.push('parent');
+            }});
+            ",
+            s.parent
+        ))
+        .unwrap();
+    s.focus(cx, s.second);
+    s.in_window(cx, |_, window, cx| window.draw(cx).clear(cx));
+    let mut visual = gpui::VisualTestContext::from_window(s.window.into(), cx);
+    visual.simulate_mouse_move(at(10.0, 10.0), None, gpui::Modifiers::none());
+    s.key(cx, "enter", false, false);
+    assert_eq!(
+        s.clicks(),
+        format!(r#"["click:{}:true","parent"]"#, s.second)
+    );
 }
