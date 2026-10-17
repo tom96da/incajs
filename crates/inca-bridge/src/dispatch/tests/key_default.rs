@@ -833,3 +833,39 @@ fn a_key_click_reaches_the_ancestors_while_a_disabled_button_is_hovered(cx: &mut
         format!(r#"["click:{}:true","parent"]"#, s.second)
     );
 }
+
+#[gpui_cases]
+#[gpui::test]
+#[case::enter("enter")]
+#[case::space("space")]
+fn a_focused_descendant_of_a_button_does_not_click_it(cx: &mut TestAppContext, key: &str) {
+    let s = scene(cx);
+    let inner = {
+        let mut host = s.host.borrow_mut();
+        let inner = host.tree.create_node("div").unwrap();
+        host.tree.set_attribute(inner, "tabindex", "-1").unwrap();
+        host.tree.append_child(s.first, inner).unwrap();
+        host.focus.mark_tab_dirty(inner);
+        inner
+    };
+    s.focus(cx, inner);
+    assert_eq!(s.focused(cx), Some(inner));
+    s.key(cx, key, false, false);
+    s.key(cx, key, true, false);
+    assert_eq!(s.clicks(), "[]");
+}
+
+#[gpui::test]
+fn a_press_on_a_disabled_button_focuses_its_focusable_ancestor(cx: &mut TestAppContext) {
+    let s = scene(cx);
+    {
+        let mut host = s.host.borrow_mut();
+        host.tree.set_attribute(s.parent, "tabindex", "0").unwrap();
+        host.focus.mark_tab_dirty(s.parent);
+    }
+    s.disable(s.first);
+    s.host.borrow_mut().focus.mark_tab_dirty(s.first);
+    s.focus(cx, s.second);
+    s.mouse_down(cx, s.first);
+    assert_eq!(s.focused(cx), Some(s.parent));
+}

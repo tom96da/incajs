@@ -787,3 +787,65 @@ fn a_tab_move_past_the_last_stop_leaves_no_node_focused(
 
     assert_eq!(focused, None);
 }
+
+/// A rooted tree with one `button`, disabled when `disabled`.
+fn rooted_button(disabled: bool) -> (VirtualTree, NodeId) {
+    let (mut tree, _) = rooted_tree(0);
+    let id = tree.create_node("button").unwrap();
+    tree.append_child(ROOT, id).unwrap();
+    if disabled {
+        tree.set_attribute(id, "disabled", true).unwrap();
+    }
+    (tree, id)
+}
+
+#[gpui::test]
+fn focus_on_a_disabled_button_is_ignored(cx: &mut TestAppContext) {
+    let cx = cx.add_empty_window();
+    let (tree, id) = rooted_button(true);
+    let mut registry = FocusRegistry::default();
+    registry.mark_tab_dirty(id);
+    registry.request_focus(id, false);
+
+    let transitions = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+
+    assert!(transitions.is_empty());
+    assert_eq!(
+        cx.update(|window, cx| registry.focused_node(window, cx)),
+        None
+    );
+}
+
+#[gpui::test]
+fn disabling_a_focused_button_reports_its_blur(cx: &mut TestAppContext) {
+    let cx = cx.add_empty_window();
+    let (mut tree, id) = rooted_button(false);
+    let mut registry = FocusRegistry::default();
+    focus_all(cx, &mut registry, &tree, &[id], id);
+
+    tree.set_attribute(id, "disabled", true).unwrap();
+    registry.mark_tab_dirty(id);
+    let transitions = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+
+    let events: Vec<_> = transitions.iter().map(|t| (t.blurred, t.focused)).collect();
+    assert_eq!(events, [(Some(id), None)]);
+}
+
+#[gpui::test]
+fn an_enabled_button_takes_focus_again(cx: &mut TestAppContext) {
+    let cx = cx.add_empty_window();
+    let (mut tree, id) = rooted_button(false);
+    let mut registry = FocusRegistry::default();
+    focus_all(cx, &mut registry, &tree, &[id], id);
+    tree.set_attribute(id, "disabled", true).unwrap();
+    registry.mark_tab_dirty(id);
+    cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+
+    tree.remove_attribute(id, "disabled").unwrap();
+    registry.mark_tab_dirty(id);
+    registry.request_focus(id, false);
+    let transitions = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+
+    let events: Vec<_> = transitions.iter().map(|t| (t.blurred, t.focused)).collect();
+    assert_eq!(events, [(None, Some(id))]);
+}

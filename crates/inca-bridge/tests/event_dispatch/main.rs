@@ -228,6 +228,7 @@ fn take_ids(engine: &Engine) -> Vec<(String, NodeId, u64)> {
 }
 
 mod click;
+mod disabled;
 mod fields;
 mod hover;
 mod ids;
