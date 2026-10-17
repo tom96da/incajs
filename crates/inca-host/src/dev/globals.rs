@@ -132,9 +132,10 @@ pub(crate) fn install_load_signal(ctx: &Ctx<'_>, signal: Rc<LoadSignal>) -> JsRe
 
 /// Calls `globalThis.__inca_dev__.receive?.(method, paramsJson)` inside
 /// `engine`, so a message the host's own protocol doesn't recognize as one
-/// of its own methods still reaches the running app. A missing
-/// `__inca_dev__` or `receive` does nothing. A throw from `receive` is
-/// returned as an [`EngineError`], and the caller decides how to report it.
+/// of its own methods still reaches the running app. An undefined or null
+/// `__inca_dev__` or `receive` does nothing. Any other failure, a throw from
+/// `receive` or from a getter on the way to it included, is returned as an
+/// [`EngineError`], and the caller decides how to report it.
 #[must_use]
 pub(crate) fn call_dev_receive(
     engine: &Engine,
@@ -142,12 +143,16 @@ pub(crate) fn call_dev_receive(
     params_json: &str,
 ) -> Option<EngineError> {
     engine.with(|ctx| {
-        let dev = ctx.globals().get::<_, Object>("__inca_dev__").ok()?;
-        let receive = dev.get::<_, Function>("receive").ok()?;
-        receive
-            .call::<_, ()>((method, params_json))
-            .err()
-            .map(|err| EngineError::capture(&ctx, &err))
+        let call = || -> rquickjs::Result<()> {
+            let Some(dev) = ctx.globals().get::<_, Option<Object>>("__inca_dev__")? else {
+                return Ok(());
+            };
+            let Some(receive) = dev.get::<_, Option<Function>>("receive")? else {
+                return Ok(());
+            };
+            receive.call((method, params_json))
+        };
+        call().err().map(|err| EngineError::capture(&ctx, &err))
     })
 }
 
@@ -436,5 +441,60 @@ mod tests {
 
         let err = call_dev_receive(&engine, "testEvent", "null").unwrap();
         assert_eq!(err.message(), "Error: boom");
+    }
+
+    #[rstest]
+    #[case::receive_getter(
+        r"
+        globalThis.__inca_dev__ = {
+            get receive() {
+                throw new Error('boom');
+            },
+        };
+        "
+    )]
+    #[case::dev_getter(
+        r"
+        Object.defineProperty(globalThis, '__inca_dev__', {
+            get() {
+                throw new Error('boom');
+            },
+        });
+        "
+    )]
+    fn call_dev_receive_returns_a_throwing_getter_as_an_engine_error(#[case] setup: &str) {
+        let engine = Engine::new().unwrap();
+        engine.eval::<()>(setup).unwrap();
+
+        let err = call_dev_receive(&engine, "testEvent", "null").unwrap();
+
+        assert_eq!(err.message(), "Error: boom");
+        assert_eq!(engine.eval::<String>("'ok'").unwrap(), "ok");
+    }
+
+    #[rstest]
+    #[case::receive_undefined("globalThis.__inca_dev__ = { receive: undefined };")]
+    #[case::receive_null("globalThis.__inca_dev__ = { receive: null };")]
+    #[case::dev_null("globalThis.__inca_dev__ = null;")]
+    fn call_dev_receive_does_nothing_for_a_null_or_undefined_target(#[case] setup: &str) {
+        let engine = Engine::new().unwrap();
+        engine.eval::<()>(setup).unwrap();
+
+        assert!(call_dev_receive(&engine, "testEvent", "null").is_none());
+    }
+
+    #[rstest]
+    #[case::receive("globalThis.__inca_dev__ = { receive: 5 };", "function")]
+    #[case::dev("globalThis.__inca_dev__ = 5;", "object")]
+    fn call_dev_receive_returns_a_non_function_or_non_object_as_an_engine_error(
+        #[case] setup: &str,
+        #[case] type_name: &str,
+    ) {
+        let engine = Engine::new().unwrap();
+        engine.eval::<()>(setup).unwrap();
+
+        let err = call_dev_receive(&engine, "testEvent", "null").unwrap();
+
+        assert!(err.message().contains(type_name));
     }
 }
