@@ -185,7 +185,6 @@ pub(super) fn pointer_tracker<E: EventSink + Clone + 'static>(
             window.on_mouse_event(
                 move |event: &MouseDownEvent, phase, window, cx| match phase {
                     DispatchPhase::Capture => {
-                        pressed.pointer_pressed();
                         let slot = slot(event.button);
                         let target = cx.default_global::<MouseTarget>();
                         target.current = None;

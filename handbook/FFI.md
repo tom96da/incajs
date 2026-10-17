@@ -345,8 +345,10 @@ walk and keeps nothing.
   `FocusRegistry::tab_move` collects the handled nodes in tree order and
   focuses the target, or blurs at the end of the order.
 - Enter clicks a focused enabled button on key down. Space clicks it on key
-  up with any modifier. Another key down, a mouse press
-  (`EventSink::pointer_pressed`) or a Space key up clears the pending Space.
+  up with any modifier. An Enter click, a Space key down, a Space key up or
+  the button losing focus clears the pending Space. A button under a held
+  mouse press also takes one Space click on key up. A click, the mouse
+  release or the button losing focus ends the hold.
   A key click uses `MousePayload::keyboard_click`, and `preventDefault()` in
   `keydown` or `keyup` of the `button` ends it.
 - A canceled `keydown` or `keyup` calls `Window::prevent_default` and

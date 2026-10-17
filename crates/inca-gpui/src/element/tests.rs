@@ -119,7 +119,6 @@ impl EventSink for Probe {
         modifiers_changed,
         hover_changed,
         pointer_over,
-        pointer_pressed,
         key_input,
     );
 }

@@ -225,7 +225,6 @@ impl EventSink for NoSink {
         modifiers_changed,
         hover_changed,
         pointer_over,
-        pointer_pressed,
         pointer_input,
         pointer_released,
         key_input,

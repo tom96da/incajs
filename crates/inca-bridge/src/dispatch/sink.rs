@@ -34,6 +34,14 @@ impl EventSink for EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) -> bool {
+        let pressed = (window.window_handle().window_id(), start);
+        if event == "blur" {
+            for slot in [&self.state.space_down, &self.state.mouse_held] {
+                if slot.get() == Some(pressed) {
+                    slot.set(None);
+                }
+            }
+        }
         self.fire(start, event, payload, window, cx)
     }
 
@@ -103,10 +111,6 @@ impl EventSink for EventDispatcher {
         self.schedule_hover_report(window, cx);
     }
 
-    fn pointer_pressed(&self) {
-        self.state.space_down.set(None);
-    }
-
     fn pointer_released(
         &self,
         event: &MouseUpEvent,
@@ -147,7 +151,11 @@ impl EventSink for EventDispatcher {
         // The default action reads the tree the listeners' queued jobs leave.
         let canceled = self.fire_inner(target, event, payload, window, cx);
         match event {
-            "mousedown" => self.focus_on_press(target, canceled, window, cx),
+            "mousedown" => {
+                self.focus_on_press(target, canceled, window, cx);
+                self.hold_button(target, window, cx);
+            }
+            "mouseup" => self.state.mouse_held.set(None),
             // gpui's scroll rollback reads `Window::default_prevented`.
             "wheel" if canceled => window.prevent_default(),
             _ => {}
@@ -191,6 +199,26 @@ impl EventSink for EventDispatcher {
 }
 
 impl EventDispatcher {
+    fn focused_enabled_button(&self, window: &Window, cx: &App) -> Option<NodeId> {
+        let host = self.host.borrow();
+        host.focus.focused_node(window, cx).filter(|id| {
+            host.tree.get(*id).is_some_and(|node| {
+                node.tag_name() == "button" && !inca_gpui::is_disabled_button(node)
+            })
+        })
+    }
+
+    /// Records the focused enabled button a mouse press landed on.
+    fn hold_button(&self, target: NodeId, window: &Window, cx: &App) {
+        let window_id = window.window_handle().window_id();
+        let held = self
+            .focused_enabled_button(window, cx)
+            .filter(|button| self.path_from(target).contains(button));
+        self.state
+            .mouse_held
+            .set(held.map(|button| (window_id, button)));
+    }
+
     // Tab moves focus and dispatches nothing here. The next frame reports it.
     fn key_default(
         &self,
@@ -208,20 +236,15 @@ impl EventDispatcher {
                 .then(|| self.state.space_down.take())
                 .flatten()
         } else {
-            self.state.space_down.set(None);
+            if key == "space" {
+                self.state.space_down.set(None);
+            }
             None
         };
         if canceled {
             return;
         }
-        let focused_button = || {
-            let host = self.host.borrow();
-            host.focus.focused_node(window, cx).filter(|id| {
-                host.tree.get(*id).is_some_and(|node| {
-                    node.tag_name() == "button" && !inca_gpui::is_disabled_button(node)
-                })
-            })
-        };
+        let focused_button = || self.focused_enabled_button(window, cx);
         let plain = !(modifiers.control || modifiers.alt || modifiers.platform);
         let click = match (key, up) {
             ("tab", false) if plain => {
@@ -234,17 +257,27 @@ impl EventDispatcher {
                 }
                 None
             }
-            ("enter", false) if plain => focused_button(),
+            ("enter", false) if plain => {
+                let button = focused_button();
+                if button.is_some() {
+                    self.state.space_down.set(None);
+                }
+                button
+            }
             ("space", false) => {
                 self.state
                     .space_down
                     .set(focused_button().map(|button| (window_id, button)));
                 None
             }
-            ("space", true) => focused_button().filter(|b| pending == Some((window_id, *b))),
+            ("space", true) => focused_button().filter(|b| {
+                let held = self.state.mouse_held.get();
+                pending == Some((window_id, *b)) || held == Some((window_id, *b))
+            }),
             _ => None,
         };
         if let Some(button) = click {
+            self.state.mouse_held.set(None);
             let payload = EventPayload::Mouse(MousePayload::keyboard_click(modifiers));
             self.fire(button, "click", &payload, window, cx);
         }

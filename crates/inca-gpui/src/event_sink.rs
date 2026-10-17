@@ -380,10 +380,6 @@ pub trait EventSink {
     /// sink fires the hover events for it at once.
     fn pointer_over(&self, node_id: NodeId, window: &mut Window, cx: &mut App);
 
-    /// Reports that a mouse button was pressed, before the press itself is
-    /// reported. Ends a pending Space press.
-    fn pointer_pressed(&self);
-
     /// Reports one `mousedown`, `mouseup`, `mousemove` or `wheel` (`event`)
     /// once every container has reported itself. `target` is the deepest
     /// container under the pointer, or the root when none is. The sink
@@ -423,7 +419,10 @@ pub trait EventSink {
     /// the default action unless a listener prevented it. Tab and Shift+Tab
     /// move focus; Control, Alt or Meta cancel the move. On a focused enabled
     /// button, Enter clicks it on press and Space clicks it on release. A
-    /// pending Space press ends at the next key press or mouse press. When a
+    /// pending Space press ends at an Enter click, a Space key down, a Space
+    /// key up or when the button loses focus. While a mouse press on the
+    /// focused button is held, Space up also clicks it, once. A click, the
+    /// mouse release or the button losing focus ends the hold. When a
     /// listener prevented the default, the sink calls `Window::prevent_default`
     /// and `App::stop_propagation`.
     fn key_input(
@@ -464,7 +463,6 @@ macro_rules! noop_sink_methods {
     (@one pointer_over) => {
         fn pointer_over(&self, _: $crate::tree::NodeId, _: &mut gpui::Window, _: &mut gpui::App) {}
     };
-    (@one pointer_pressed) => { fn pointer_pressed(&self) {} };
     (@one pointer_input) => {
         fn pointer_input(
             &self,

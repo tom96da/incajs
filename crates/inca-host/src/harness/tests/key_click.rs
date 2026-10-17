@@ -84,27 +84,6 @@ fn enter_clicks_with_shift_and_not_with_control_alt_or_meta(cx: &mut TestAppCont
 }
 
 #[gpui::test]
-fn a_pending_space_press_ends_at_the_next_key_press_or_mouse_press(cx: &mut TestAppContext) {
-    let mut h = load_listening(cx, BUTTON);
-    listen(&mut h, "box", "click", 0);
-
-    h.keystrokes("space a");
-    h.key_up("space");
-    assert_eq!(log(&h), "");
-
-    h.keystrokes("space");
-    let frame = node(&h, "frame");
-    h.click(frame);
-    run_js(&mut h, "__inca_native__.focusNode(box);");
-    h.key_up("space");
-    assert_eq!(log(&h), "");
-
-    h.keystrokes("space");
-    h.key_up("space");
-    assert_eq!(log(&h), "click@box/box");
-}
-
-#[gpui::test]
 fn a_pending_space_press_does_not_click_another_button(cx: &mut TestAppContext) {
     let mut h = load_listening(cx, BUTTON);
     run_js(

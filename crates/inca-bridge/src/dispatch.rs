@@ -81,8 +81,13 @@ struct State {
     /// container.
     hover_settled: Cell<bool>,
     /// The Space press waiting for its release: the window and the focused
-    /// button. A mouse press or another key press ends it.
+    /// button. An Enter click, a Space key down, a Space key up or the button
+    /// losing focus ends it.
     space_down: Cell<Option<(gpui::WindowId, NodeId)>>,
+    /// The focused enabled button under a held mouse press: the window and
+    /// the button. A Space key up clicks it. A click, the mouse release or the
+    /// button losing focus ends it, and the next mouse press replaces it.
+    mouse_held: Cell<Option<(gpui::WindowId, NodeId)>>,
 }
 
 impl EventDispatcher {
