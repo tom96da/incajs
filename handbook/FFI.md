@@ -225,7 +225,7 @@ walk and keeps nothing.
   process-wide `Instant` fixed when the first dispatcher is created.
 - The object inherits from a per-engine prototype holding `stopPropagation`,
   `stopImmediatePropagation`, `preventDefault`, `composedPath`, the phase
-  constants (non-enumerable, also on `Event`) and the accessors
+  constants (also on `Event`) and the accessors
   `defaultPrevented`, `returnValue` and `cancelBubble` (settable, ToBoolean)
   and `srcElement` (reads `target`). Members read a host-private `WeakMap`
   record in the engine's userdata (`crates/inca-bridge/src/event.rs`), and a

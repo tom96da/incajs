@@ -24,7 +24,7 @@ use inca_gpui::NodeId;
 pub(crate) use inca_gpui::event_sink::Flags;
 use rquickjs::convert::Coerced;
 use rquickjs::function::This;
-use rquickjs::object::{Accessor, Property};
+use rquickjs::object::Property;
 use rquickjs::{Array, Ctx, Exception, Function, IntoJs, Object, Result as JsResult, Value};
 
 mod construct;
@@ -189,16 +189,22 @@ const PHASES: [(&str, i32); 4] = [
 fn prototype<'js>(ctx: &Ctx<'js>) -> JsResult<Object<'js>> {
     let proto = Object::new(ctx.clone())?;
     for (name, value) in PHASES {
-        proto.prop(name, Property::from(value))?;
+        proto.prop(name, Property::from(value).enumerable())?;
     }
     define_methods(ctx, &proto)?;
-    define_accessors(&proto)?;
+    define_accessors(ctx, &proto)?;
     Ok(proto)
 }
 
 fn define_methods<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<()> {
     let method = |name: &str, function: Function<'js>| {
-        proto.prop(name, Property::from(function).writable().configurable())
+        proto.prop(
+            name,
+            Property::from(function.with_name(name)?)
+                .writable()
+                .enumerable()
+                .configurable(),
+        )
     };
     method(
         "stopPropagation",
@@ -299,38 +305,53 @@ fn modifier_prototype<'js>(
     )?;
     proto.prop(
         "getModifierState",
-        Property::from(get_modifier_state).writable().configurable(),
+        Property::from(get_modifier_state.with_name("getModifierState")?)
+            .writable()
+            .enumerable()
+            .configurable(),
     )?;
     Ok(proto)
 }
 
-fn define_accessors<'js>(proto: &Object<'js>) -> JsResult<()> {
-    proto.prop(
+fn define_accessors<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<()> {
+    let define_property: Function = ctx
+        .globals()
+        .get::<_, Object>("Object")?
+        .get("defineProperty")?;
+    let accessor = |key: &str, get: Function<'js>, set: Option<Function<'js>>| {
+        define_accessor(&define_property, proto, key, get, set)
+    };
+    accessor(
         "srcElement",
-        Accessor::new_get(
+        Function::new(
+            ctx.clone(),
             |ctx: Ctx<'js>, This(event): This<Object<'js>>| -> JsResult<Value<'js>> {
                 record_of(&ctx, &event)?;
                 event.get("target")
             },
-        ),
+        )?,
+        None,
     )?;
-    proto.prop(
+    accessor(
         "defaultPrevented",
-        Accessor::new_get(
+        Function::new(
+            ctx.clone(),
             |ctx: Ctx<'js>, This(event): This<Object<'js>>| -> JsResult<bool> {
                 Ok(flag(&record_of(&ctx, &event)?, "canceled"))
             },
-        )
-        .enumerable(),
+        )?,
+        None,
     )?;
-    proto.prop(
+    accessor(
         "returnValue",
-        Accessor::new_get(
+        Function::new(
+            ctx.clone(),
             |ctx: Ctx<'js>, This(event): This<Object<'js>>| -> JsResult<bool> {
                 Ok(!flag(&record_of(&ctx, &event)?, "canceled"))
             },
-        )
-        .set(
+        )?,
+        Some(Function::new(
+            ctx.clone(),
             |ctx: Ctx<'js>, This(event): This<Object<'js>>, value: Coerced<bool>| -> JsResult<()> {
                 let record = record_of(&ctx, &event)?;
                 if !value.0 && cancels(&record) {
@@ -338,16 +359,18 @@ fn define_accessors<'js>(proto: &Object<'js>) -> JsResult<()> {
                 }
                 Ok(())
             },
-        ),
+        )?),
     )?;
-    proto.prop(
+    accessor(
         "cancelBubble",
-        Accessor::new_get(
+        Function::new(
+            ctx.clone(),
             |ctx: Ctx<'js>, This(event): This<Object<'js>>| -> JsResult<bool> {
                 Ok(flag(&record_of(&ctx, &event)?, "stop"))
             },
-        )
-        .set(
+        )?,
+        Some(Function::new(
+            ctx.clone(),
             |ctx: Ctx<'js>, This(event): This<Object<'js>>, value: Coerced<bool>| -> JsResult<()> {
                 let record = record_of(&ctx, &event)?;
                 if value.0 && flag(&record, "dispatching") {
@@ -355,6 +378,28 @@ fn define_accessors<'js>(proto: &Object<'js>) -> JsResult<()> {
                 }
                 Ok(())
             },
-        ),
+        )?),
     )
+}
+
+/// Defines the enumerable, configurable accessor `key` on `proto` through
+/// `define_property`, the realm's `Object.defineProperty`. The getter is named
+/// `get <key>` and the setter `set <key>`.
+fn define_accessor<'js>(
+    define_property: &Function<'js>,
+    proto: &Object<'js>,
+    key: &str,
+    get: Function<'js>,
+    set: Option<Function<'js>>,
+) -> JsResult<()> {
+    // rquickjs's `Accessor` takes only closures, so it cannot carry a named function.
+    let descriptor = Object::new(proto.ctx().clone())?;
+    descriptor.set_prototype(None)?;
+    descriptor.set("get", get.with_name(format!("get {key}"))?)?;
+    if let Some(set) = set {
+        descriptor.set("set", set.with_name(format!("set {key}"))?)?;
+    }
+    descriptor.set("enumerable", true)?;
+    descriptor.set("configurable", true)?;
+    define_property.call((proto.clone(), key, descriptor))
 }

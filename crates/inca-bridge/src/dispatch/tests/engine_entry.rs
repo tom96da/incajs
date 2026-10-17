@@ -544,3 +544,76 @@ fn get_modifier_state_throws_type_error_for_a_missing_or_symbol_argument(
 
     assert_eq!(out, serde_json::json!([true]));
 }
+
+#[gpui_cases]
+#[gpui::test]
+#[case::shared_method("Event.prototype", "preventDefault")]
+#[case::modifier_lookup("Object.getPrototypeOf(e)", "getModifierState")]
+fn an_event_method_descriptor_reads_writable_enumerable_configurable(
+    cx: &mut TestAppContext,
+    owner: &str,
+    key: &str,
+) {
+    let (dispatcher, host, _reported) = dispatcher_with_engine();
+    let node = host.borrow_mut().tree.create_node("div").unwrap();
+    listen(
+        &dispatcher,
+        node,
+        "keydown",
+        &r"
+        (e) => {
+            const d = Object.getOwnPropertyDescriptor(OWNER, 'KEY');
+            out.push([d.writable, d.enumerable, d.configurable].join());
+        }
+        "
+        .replace("OWNER", owner)
+        .replace("KEY", key),
+    );
+
+    let out = fire_and_read(
+        cx,
+        &dispatcher,
+        node,
+        "keydown",
+        &key_payload(gpui::Modifiers::default()),
+    );
+
+    assert_eq!(out, serde_json::json!(["true,true,true"]));
+}
+
+#[gpui_cases]
+#[gpui::test]
+#[case::method("Event.prototype.preventDefault", "preventDefault")]
+#[case::modifier_lookup("Object.getPrototypeOf(e).getModifierState", "getModifierState")]
+#[case::getter(
+    "Object.getOwnPropertyDescriptor(Event.prototype, 'srcElement').get",
+    "get srcElement"
+)]
+#[case::setter(
+    "Object.getOwnPropertyDescriptor(Event.prototype, 'returnValue').set",
+    "set returnValue"
+)]
+fn an_event_function_carries_the_name_of_its_member(
+    cx: &mut TestAppContext,
+    function: &str,
+    want: &str,
+) {
+    let (dispatcher, host, _reported) = dispatcher_with_engine();
+    let node = host.borrow_mut().tree.create_node("div").unwrap();
+    listen(
+        &dispatcher,
+        node,
+        "keydown",
+        &"(e) => out.push(FUNCTION.name)".replace("FUNCTION", function),
+    );
+
+    let out = fire_and_read(
+        cx,
+        &dispatcher,
+        node,
+        "keydown",
+        &key_payload(gpui::Modifiers::default()),
+    );
+
+    assert_eq!(out, serde_json::json!([want]));
+}

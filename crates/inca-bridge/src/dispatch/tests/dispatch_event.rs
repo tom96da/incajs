@@ -4,6 +4,7 @@
 #![allow(clippy::unwrap_used)]
 
 use super::*;
+use rstest::rstest;
 
 #[test]
 fn a_new_event_starts_idle_and_untrusted_with_every_flag_false() {
@@ -619,4 +620,60 @@ fn a_frozen_event_id_lets_the_first_dispatch_through_then_throws_type_error() {
         ),
     );
     assert_eq!(got, serde_json::json!(["ok", "TypeError", "TypeError"]));
+}
+
+#[rstest]
+#[case::src_element("srcElement")]
+#[case::default_prevented("defaultPrevented")]
+#[case::return_value("returnValue")]
+#[case::cancel_bubble("cancelBubble")]
+fn an_event_accessor_descriptor_reads_enumerable_configurable(#[case] key: &str) {
+    let (dispatcher, _host, _reported) = dispatcher_with_engine();
+
+    let got = eval_json(
+        &dispatcher,
+        &r"
+        (() => {
+            const d = Object.getOwnPropertyDescriptor(Event.prototype, 'KEY');
+            return [d.writable, d.enumerable, d.configurable].join();
+        })()
+        "
+        .replace("KEY", key),
+    );
+
+    assert_eq!(got, serde_json::json!(",true,true"));
+}
+
+#[rstest]
+#[case::on_the_prototype("Event.prototype")]
+#[case::on_the_constructor("Event")]
+fn a_phase_constant_descriptor_reads_enumerable_only(#[case] owner: &str) {
+    let (dispatcher, _host, _reported) = dispatcher_with_engine();
+
+    let got = eval_json(
+        &dispatcher,
+        &r"
+        (() => {
+            const d = Object.getOwnPropertyDescriptor(OWNER, 'AT_TARGET');
+            return [d.writable, d.enumerable, d.configurable].join();
+        })()
+        "
+        .replace("OWNER", owner),
+    );
+
+    assert_eq!(got, serde_json::json!("false,true,false"));
+}
+
+#[rstest]
+#[case::event("Event")]
+#[case::custom_event("CustomEvent")]
+fn an_event_constructor_length_reads_one(#[case] constructor: &str) {
+    let (dispatcher, _host, _reported) = dispatcher_with_engine();
+
+    let got = eval_json(
+        &dispatcher,
+        &format!("Object.getOwnPropertyDescriptor({constructor}, 'length').value"),
+    );
+
+    assert_eq!(got, serde_json::json!(1));
 }

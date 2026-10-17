@@ -1048,7 +1048,9 @@ A fixed entry is deleted and its ID is never reused.
   Dispatching sets `target`, `isTrusted` and `eventId` on the event object,
   which throws a `TypeError` on a frozen object. Browsers dispatch a frozen
   event. Fix: keep `target`, `currentTarget`, `eventPhase`, `isTrusted` and
-  `eventId` in the event record behind accessors on the prototype.
+  `eventId` in the event record behind accessors on the prototype. Browsers
+  define `isTrusted` as an own getter of each event, enumerable and not
+  configurable, so its accessor goes on the event object.
 
 - **B-172 Scroll members of a template `ref` read the last drawn layout**
   `Units: gpui,bridge,core · Size: M · Impact: Low`
@@ -1167,8 +1169,9 @@ A fixed entry is deleted and its ID is never reused.
   `Units: bridge · Size: M · Impact: Low`
 
   Fields such as `ctrlKey`, `key` and `clientX` are writable data properties
-  of the event object. `Object::prop(key, value)` of rquickjs defines a
-  read-only property.
+  of the event object. `getModifierState()` reads the modifier fields, so a
+  reassigned field changes its result. `Object::prop(key, value)` of rquickjs
+  defines a read-only property.
 
 - **B-185 The event store keeps its pieces by index**
   `Units: bridge · Size: S · Impact: Low`

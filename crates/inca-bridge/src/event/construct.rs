@@ -124,6 +124,7 @@ pub(super) fn constructors<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult
         },
     )?;
     event.set_name("Event")?;
+    event.set_length(1)?;
     let custom_proto = Object::new(ctx.clone())?;
     custom_proto.set_prototype(Some(proto))?;
     let custom = Constructor::new_prototype(
@@ -135,9 +136,10 @@ pub(super) fn constructors<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult
         },
     )?;
     custom.set_name("CustomEvent")?;
+    custom.set_length(1)?;
     custom.set_prototype(Some(&event))?;
     for (name, value) in PHASES {
-        event.prop(name, Property::from(value))?;
+        event.prop(name, Property::from(value).enumerable())?;
     }
     let globals = ctx.globals();
     globals.set("Event", event)?;
