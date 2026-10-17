@@ -311,3 +311,90 @@ fn repeated_mousemove_at_one_position_reports_zero_movement(cx: &mut TestAppCont
 
     assert_eq!(movements, [0.0, 5.0, 0.0]);
 }
+
+#[gpui::test]
+fn the_hover_events_of_a_move_precede_its_mousemove(cx: &mut TestAppContext) {
+    let panes = build_panes(&["mouseenter", "mousemove"], &[]);
+    let mut cx = mount_panes(cx, &panes);
+    cx.simulate_mouse_move(
+        point(px(250.0), px(50.0)),
+        None::<MouseButton>,
+        Modifiers::none(),
+    );
+    panes.engine.eval::<()>("globalThis.seen = [];").unwrap();
+
+    cx.simulate_mouse_move(
+        point(px(50.0), px(50.0)),
+        None::<MouseButton>,
+        Modifiers::none(),
+    );
+
+    let seen = panes
+        .engine
+        .eval::<String>("globalThis.seen.map((s) => s[0]).join()")
+        .unwrap();
+    assert_eq!(seen, "mouseenter,mousemove");
+}
+
+#[gpui::test]
+fn a_node_replacing_the_hovered_one_gets_enter_events_under_a_resting_pointer(
+    cx: &mut TestAppContext,
+) {
+    let host = Rc::new(RefCell::new(Host::default()));
+    let (parent, old) = {
+        let mut host = host.borrow_mut();
+        let parent = host.tree.create_node("div").unwrap();
+        host.tree.set_style(parent, "width", 100.0).unwrap();
+        host.tree.set_style(parent, "height", 100.0).unwrap();
+        let old = host.tree.create_node("div").unwrap();
+        host.tree.set_style(old, "width", 100.0).unwrap();
+        host.tree.set_style(old, "height", 100.0).unwrap();
+        host.tree.append_child(parent, old).unwrap();
+        (parent, old)
+    };
+    let engine = test_support::engine_for(&host);
+    engine.eval::<()>("globalThis.seen = [];").unwrap();
+    let listen = |node: NodeId, event: &str| {
+        engine
+            .eval::<()>(&format!(
+                r"
+                __inca_test_listen__({node}, '{event}', (e) => {{
+                    seen.push(`${{e.type}}@${{e.currentTarget}}/${{e.relatedTarget}}`);
+                }});
+                "
+            ))
+            .unwrap();
+    };
+    for event in ["mouseover", "mouseout", "mouseenter", "mouseleave"] {
+        listen(parent, event);
+        listen(old, event);
+    }
+    let mut cx = mount_clickable(cx, &host, &engine, parent);
+    cx.simulate_mouse_move(
+        point(px(10.0), px(10.0)),
+        None::<MouseButton>,
+        Modifiers::none(),
+    );
+    let new = {
+        let mut host = host.borrow_mut();
+        host.tree.remove_child(parent, old).unwrap();
+        let new = host.tree.create_node("div").unwrap();
+        host.tree.set_style(new, "width", 100.0).unwrap();
+        host.tree.set_style(new, "height", 100.0).unwrap();
+        host.tree.append_child(parent, new).unwrap();
+        new
+    };
+    for event in ["mouseover", "mouseout", "mouseenter", "mouseleave"] {
+        listen(new, event);
+    }
+    engine.eval::<()>("globalThis.seen = [];").unwrap();
+
+    cx.update(|window, cx| window.draw(cx).clear(cx));
+    cx.run_until_parked();
+
+    let seen = engine.eval::<String>("seen.join()").unwrap();
+    assert_eq!(
+        seen,
+        format!("mouseover@{new}/{parent},mouseover@{parent}/{parent},mouseenter@{new}/{parent}")
+    );
+}

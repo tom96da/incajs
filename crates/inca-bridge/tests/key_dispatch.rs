@@ -12,7 +12,7 @@ use std::rc::Rc;
 
 use gpui::{
     AnyWindowHandle, DispatchEventResult, KeyBinding, KeyDownEvent, KeyUpEvent, Keystroke,
-    PlatformInput, TestAppContext, prelude::*,
+    PlatformInput, TestAppContext, VisualTestContext, prelude::*,
 };
 use inca_bridge::{EventListeners, Host};
 use inca_gpui::NodeId;
@@ -257,4 +257,103 @@ fn each_key_event_takes_its_own_event_id_shared_along_its_bubble(cx: &mut TestAp
         assert_eq!(pair[0], pair[1]);
     }
     assert!(ids[0] >= 1 && ids[2] > ids[0] && ids[4] > ids[2], "{ids:?}");
+}
+
+/// Where `target` is `currentTarget`, records `type:key:` and the shift, control, alt and meta
+/// flags as 0 or 1.
+const MODIFIER_JS: &str = r"
+    if (e.target === e.currentTarget) {
+        seen.push(`${e.type}:${e.key}:${+e.shiftKey}${+e.ctrlKey}${+e.altKey}${+e.metaKey}`);
+    }
+    ";
+
+#[gpui::test]
+fn a_modifier_alone_fires_its_key_events_in_flag_order(cx: &mut TestAppContext) {
+    let (window, engine, _host, _) = focused_pair(cx, MODIFIER_JS);
+    let mut visual = VisualTestContext::from_window(window, cx);
+    let shift_control = gpui::Modifiers {
+        shift: true,
+        control: true,
+        ..gpui::Modifiers::none()
+    };
+
+    for modifiers in [
+        gpui::Modifiers::none(),
+        gpui::Modifiers::shift(),
+        gpui::Modifiers::shift(),
+        shift_control,
+        gpui::Modifiers::alt(),
+        gpui::Modifiers::command(),
+        gpui::Modifiers::none(),
+    ] {
+        visual.simulate_modifiers_change(modifiers);
+    }
+
+    assert_eq!(
+        seen(&engine),
+        concat!(
+            r#"["keydown:Shift:1000","keydown:Control:1100","keyup:Shift:0010","#,
+            r#""keyup:Control:0010","keydown:Alt:0010","keyup:Alt:0001","#,
+            r#""keydown:Meta:0001","keyup:Meta:0000"]"#
+        )
+    );
+}
+
+#[gpui::test]
+fn a_modifier_alone_with_nothing_focused_targets_the_root(cx: &mut TestAppContext) {
+    let (host, parent, child) = build_key_pair();
+    let root = host.borrow().root();
+    host.borrow_mut().tree.append_child(root, parent).unwrap();
+    let engine = test_support::engine_for(&host);
+    engine.eval::<()>("globalThis.seen = [];").unwrap();
+    listen_for_keys(&engine, [parent, child], "seen.push('below');", false);
+    engine
+        .eval::<()>(&format!(
+            r"
+            __inca_test_listen__({root}, 'keydown', (e) => {{
+                seen.push(`${{e.currentTarget === {root}}}:${{e.target === {root}}}`);
+            }});
+            "
+        ))
+        .unwrap();
+    let window = test_support::mount_active(cx, &host, &engine, root);
+    let mut visual = VisualTestContext::from_window(window.into(), cx);
+
+    visual.simulate_modifiers_change(gpui::Modifiers::shift());
+
+    assert_eq!(seen(&engine), r#"["true:true"]"#);
+}
+
+#[gpui_cases]
+#[gpui::test]
+#[case::pressed(false)]
+#[case::held(true)]
+fn a_key_event_reports_its_key_fields(cx: &mut TestAppContext, held: bool) {
+    let (window, engine, _host, _) = focused_pair(
+        cx,
+        r"
+        if (e.target === e.currentTarget) {
+            seen.push([e.type, e.key, e.location, e.isComposing, e.repeat, +e.shiftKey, +e.ctrlKey,
+                +e.altKey, +e.metaKey].join(':'));
+        }
+        ",
+    );
+
+    cx.update_window(window, |_, window, cx| {
+        window.dispatch_event(
+            PlatformInput::KeyDown(KeyDownEvent {
+                keystroke: Keystroke::parse("shift-a").unwrap(),
+                is_held: held,
+                prefer_character_input: false,
+            }),
+            cx,
+        )
+    })
+    .unwrap();
+    platform_result(cx, window, true, "ctrl-b");
+
+    assert_eq!(
+        seen(&engine),
+        format!(r#"["keydown:A:0:false:{held}:1:0:0:0","keyup:b:0:false:false:0:1:0:0"]"#)
+    );
 }

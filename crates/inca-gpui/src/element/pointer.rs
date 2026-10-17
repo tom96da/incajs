@@ -255,6 +255,7 @@ mod tests {
     use crate::element::tests::*;
     use crate::tree::VirtualTree;
     use gpui::{Pixels, Point, px};
+    use inca_test_macros::gpui_cases;
     use std::rc::Rc;
 
     use gpui::{
@@ -490,24 +491,24 @@ mod tests {
         );
     }
 
+    #[gpui_cases]
     #[gpui::test]
-    fn a_right_press_fires_contextmenu_at_its_target_after_the_mousedown(cx: &mut TestAppContext) {
+    #[case::right(MouseButton::Right, true)]
+    #[case::middle(MouseButton::Middle, false)]
+    fn a_press_fires_contextmenu_only_for_the_right_button(
+        cx: &mut TestAppContext,
+        button: MouseButton,
+        contextmenu: bool,
+    ) {
         let mut scene = probe_tree(cx, true);
-        let none = gpui::Modifiers::none();
         scene
             .cx
-            .simulate_mouse_down(at(LEAF), MouseButton::Right, none);
-        scene
-            .cx
-            .simulate_mouse_down(at(LEAF), MouseButton::Left, none);
-        assert_eq!(
-            reports(&scene.calls),
-            [
-                report("mousedown", 2),
-                report("fire contextmenu", 2),
-                report("mousedown", 2)
-            ]
-        );
+            .simulate_mouse_down(at(LEAF), button, gpui::Modifiers::none());
+        let mut want = vec![report("mousedown", 2)];
+        if contextmenu {
+            want.push(report("fire contextmenu", 2));
+        }
+        assert_eq!(reports(&scene.calls), want);
     }
 
     /// An inert child never becomes the target, so the listening parent does.

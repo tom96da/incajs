@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::*;
+use inca_test_macros::gpui_cases;
 
 #[gpui::test]
 fn stop_propagation_skips_ancestors_but_not_the_scroll(cx: &mut TestAppContext) {
@@ -191,3 +192,44 @@ const CHILD_THROW: &str = r"(e) => {
     ran.push('child');
     if (globalThis.stop) { e.stopPropagation(); throw new Error('boom'); }
 }";
+
+/// Node 0 holds node 1, which scrolls 200px over node 2, which scrolls 200px over node 3. Node
+/// 4 fills the rest of node 1.
+fn scrollers_below_a_plain_root() -> Host {
+    let mut host = Host::default();
+    let root = add_div(&mut host, None, 100.0, false);
+    let outer = add_div(&mut host, Some(root), 100.0, true);
+    let inner = add_div(&mut host, Some(outer), 100.0, true);
+    add_div(&mut host, Some(inner), 300.0, false);
+    add_div(&mut host, Some(outer), 200.0, false);
+    host
+}
+
+#[gpui_cases]
+#[gpui::test]
+#[case::outer_container(1, -20.0, 0.0)]
+#[case::inner_container(2, 0.0, -20.0)]
+fn a_prevented_listeners_scroll_write_to_a_container_stays(
+    cx: &mut TestAppContext,
+    written: NodeId,
+    outer: f32,
+    inner: f32,
+) {
+    let js = on_wheel(
+        0,
+        &format!(
+            r"
+            (e) => {{
+                e.preventDefault();
+                __inca_native__.scrollNode({written}, null, 20);
+            }}
+            "
+        ),
+    );
+    let mut scene = Scene::new(cx, scrollers_below_a_plain_root(), &js);
+
+    scene.wheel(-30.);
+
+    assert_eq!(scene.offset(1).y, px(outer));
+    assert_eq!(scene.offset(2).y, px(inner));
+}

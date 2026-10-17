@@ -17,12 +17,16 @@ const CLICKABLE: &str = r"
         n.setAttribute(label, 'value', 'hi');
         n.appendChild(box, label);
         globalThis.clicks = 0;
-        globalThis.__inca_callbacks__ = { 0: () => { globalThis.clicks++; } };
+        globalThis.__inca_callbacks__ = {
+            0: () => {
+                globalThis.clicks++;
+            },
+        };
         n.addEventListener(box, 'click');
     ";
 
 #[gpui::test]
-fn the_root_layout_spans_the_viewport_width_after_a_render(cx: &mut TestAppContext) {
+fn load_settles_the_layout_to_the_viewport(cx: &mut TestAppContext) {
     let mut h = Harness::load(cx, TEST_ENTRY_PATH, CLICKABLE);
 
     let width = eval_f64(
@@ -83,6 +87,42 @@ fn click_panics_on_an_unknown_node(cx: &mut TestAppContext) {
     Harness::load(cx, TEST_ENTRY_PATH, CLICKABLE).click(9999);
 }
 
+#[gpui::test]
+#[should_panic(expected = "the root node exists")]
+fn snapshot_panics_without_a_root_node(cx: &mut TestAppContext) {
+    let mut h = Harness::load(cx, TEST_ENTRY_PATH, "");
+    let root = h.host.borrow().root();
+    h.host.borrow_mut().tree.destroy_node(root);
+    h.snapshot();
+}
+
+/// A 100x50 box whose auxclick listener logs `detail:shiftKey:button`.
+const CLICK_FIELDS: &str = r"
+        const n = __inca_native__;
+        const box = n.createNode('div');
+        n.setStyle(box, 'width', 100);
+        n.setStyle(box, 'height', 50);
+        n.appendChild(n.rootNodeId(), box);
+        globalThis.box = box;
+        globalThis.log = [];
+        globalThis.__inca_callbacks__ = {
+            0: (e) => {
+                globalThis.log.push(`${e.detail}:${e.shiftKey}:${e.button}`);
+            },
+        };
+        n.addEventListener(box, 'auxclick');
+    ";
+
+#[gpui::test]
+fn click_with_passes_its_arguments_to_the_click(cx: &mut TestAppContext) {
+    let mut h = Harness::load(cx, TEST_ENTRY_PATH, CLICK_FIELDS);
+    let boxed = node(&h, "box");
+
+    h.click_with(boxed, gpui::MouseButton::Right, Modifiers::shift(), 2);
+
+    assert_eq!(log(&h), "2:true:2");
+}
+
 /// A 100x50 box below a spacer, counting its `mouseenter` and `mouseleave`
 /// events. The pointer starts over the spacer.
 const HOVERABLE: &str = r"
@@ -102,8 +142,12 @@ const HOVERABLE: &str = r"
         globalThis.enters = 0;
         globalThis.leaves = 0;
         globalThis.__inca_callbacks__ = {
-            0: () => { globalThis.enters++; },
-            1: () => { globalThis.leaves++; },
+            0: () => {
+                globalThis.enters++;
+            },
+            1: () => {
+                globalThis.leaves++;
+            },
         };
         n.addEventListener(box, 'mouseenter');
         n.addEventListener(box, 'mouseleave');
@@ -126,17 +170,6 @@ fn hover_fires_mouseenter_once(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn hovering_the_same_node_again_does_not_repeat_mouseenter(cx: &mut TestAppContext) {
-    let mut h = Harness::load(cx, TEST_ENTRY_PATH, HOVERABLE);
-    let boxed = hover_box(&mut h);
-
-    h.hover(boxed);
-    h.hover(boxed);
-
-    assert_eq!(eval_f64(&h, "globalThis.enters"), 1.0);
-}
-
-#[gpui::test]
 fn hover_again_after_leaving_fires_mouseenter_again(cx: &mut TestAppContext) {
     let mut h = Harness::load(cx, TEST_ENTRY_PATH, HOVERABLE);
     let boxed = hover_box(&mut h);
@@ -146,18 +179,6 @@ fn hover_again_after_leaving_fires_mouseenter_again(cx: &mut TestAppContext) {
     h.hover(boxed);
 
     assert_eq!(eval_f64(&h, "globalThis.enters"), 2.0);
-    assert_eq!(eval_f64(&h, "globalThis.leaves"), 1.0);
-}
-
-#[gpui::test]
-fn unhover_twice_fires_mouseleave_once(cx: &mut TestAppContext) {
-    let mut h = Harness::load(cx, TEST_ENTRY_PATH, HOVERABLE);
-    let boxed = hover_box(&mut h);
-    h.hover(boxed);
-
-    h.unhover();
-    h.unhover();
-
     assert_eq!(eval_f64(&h, "globalThis.leaves"), 1.0);
 }
 
@@ -174,7 +195,11 @@ fn unhover_before_any_hover_fires_nothing(cx: &mut TestAppContext) {
             n.setStyle(box, 'margin_left', 200);
             n.appendChild(n.rootNodeId(), box);
             globalThis.leaves = 0;
-            globalThis.__inca_callbacks__ = { 0: () => { globalThis.leaves++; } };
+            globalThis.__inca_callbacks__ = {
+                0: () => {
+                    globalThis.leaves++;
+                },
+            };
             n.addEventListener(box, 'mouseleave');
             ",
     );

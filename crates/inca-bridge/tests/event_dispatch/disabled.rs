@@ -133,19 +133,8 @@ fn a_press_on_a_disabled_button_released_on_an_ancestor_is_dropped(cx: &mut Test
     let mut d = mount_disabled(cx, &[("button", events), ("root", events)]);
     let position = |x, y| point(px(x), px(y));
 
-    d.cx.simulate_event(MouseDownEvent {
-        position: position(10.0, 10.0),
-        button: MouseButton::Left,
-        modifiers: Modifiers::none(),
-        click_count: 1,
-        first_mouse: false,
-    });
-    d.cx.simulate_event(MouseUpEvent {
-        position: position(150.0, 150.0),
-        button: MouseButton::Left,
-        modifiers: Modifiers::none(),
-        click_count: 1,
-    });
+    d.cx.simulate_mouse_down(position(10.0, 10.0), MouseButton::Left, Modifiers::none());
+    d.cx.simulate_mouse_up(position(150.0, 150.0), MouseButton::Left, Modifiers::none());
 
     assert_eq!(d.seen(), []);
 }
@@ -156,21 +145,24 @@ fn a_press_elsewhere_released_on_a_disabled_button_is_dropped(cx: &mut TestAppCo
     let mut d = mount_disabled(cx, &[("button", events), ("root", events)]);
     let position = |x, y| point(px(x), px(y));
 
-    d.cx.simulate_event(MouseDownEvent {
-        position: position(150.0, 150.0),
-        button: MouseButton::Left,
-        modifiers: Modifiers::none(),
-        click_count: 1,
-        first_mouse: false,
-    });
-    d.cx.simulate_event(MouseUpEvent {
-        position: position(10.0, 10.0),
-        button: MouseButton::Left,
-        modifiers: Modifiers::none(),
-        click_count: 1,
-    });
+    d.cx.simulate_mouse_down(position(150.0, 150.0), MouseButton::Left, Modifiers::none());
+    d.cx.simulate_mouse_up(position(10.0, 10.0), MouseButton::Left, Modifiers::none());
 
     assert_eq!(d.seen(), []);
+}
+
+#[gpui_cases]
+#[gpui::test]
+#[case::contextmenu("contextmenu")]
+#[case::auxclick("auxclick")]
+fn a_right_press_reaches_the_ancestors_of_a_disabled_button(cx: &mut TestAppContext, event: &str) {
+    let mut d = mount_disabled(cx, &[("root", &[event])]);
+    let position = point(px(10.0), px(10.0));
+
+    d.cx.simulate_mouse_down(position, MouseButton::Right, Modifiers::none());
+    d.cx.simulate_mouse_up(position, MouseButton::Right, Modifiers::none());
+
+    assert_eq!(d.seen(), [(event.to_owned(), d.root)]);
 }
 
 #[gpui::test]

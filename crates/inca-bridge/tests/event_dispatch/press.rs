@@ -270,3 +270,59 @@ fn a_press_and_release_in_two_panes_clicks_their_common_ancestor(cx: &mut TestAp
     let seen: Vec<(String, NodeId, NodeId)> = serde_json::from_str(&seen).unwrap();
     assert_eq!(seen, [("click".to_owned(), panes.root, panes.root)]);
 }
+
+#[gpui::test]
+fn a_third_click_fires_no_dblclick(cx: &mut TestAppContext) {
+    let (mut cx, engine, parent, child) = mount_click_recorder(cx, &["click", "dblclick"]);
+
+    press_and_release(&mut cx, (MouseButton::Left, 3), (MouseButton::Left, 3));
+
+    let click = |target| ("click".to_owned(), child, target, 3, Some(1));
+    assert_eq!(take_clicks(&engine), [click(child), click(parent)]);
+}
+
+#[gpui::test]
+fn a_press_ends_when_the_window_deactivates(cx: &mut TestAppContext) {
+    let panes = build_panes(&["click"], &[]);
+    let mut cx = mount_panes(cx, &panes);
+    let position = point(px(50.0), px(50.0));
+    panes.engine.eval::<()>("globalThis.seen = [];").unwrap();
+
+    cx.simulate_mouse_down(position, MouseButton::Left, Modifiers::none());
+    cx.update(|window, cx| panes.dispatcher.window_activated(false, window, cx));
+    cx.simulate_mouse_up(position, MouseButton::Left, Modifiers::none());
+
+    assert_eq!(panes.engine.eval::<u32>("seen.length").unwrap(), 0);
+}
+
+#[gpui_cases]
+#[gpui::test]
+#[case::stopped("e.stopPropagation();")]
+#[case::prevented("e.preventDefault();")]
+fn a_right_press_fires_contextmenu_after_a_handled_mousedown(
+    cx: &mut TestAppContext,
+    handle: &str,
+) {
+    let (host, node) = build_clickable_tree();
+    let engine = test_support::engine_for(&host);
+    engine
+        .eval::<()>(&format!(
+            r"
+            globalThis.seen = [];
+            __inca_test_listen__({node}, 'mousedown', (e) => {{
+                {handle}
+            }});
+            __inca_test_listen__({node}, 'contextmenu', (e) => {{
+                seen.push(e.type);
+            }});
+            "
+        ))
+        .unwrap();
+    let mut cx = mount_clickable(cx, &host, &engine, node);
+    let position = point(px(10.0), px(10.0));
+
+    cx.simulate_mouse_down(position, MouseButton::Right, Modifiers::none());
+    cx.simulate_mouse_up(position, MouseButton::Right, Modifiers::none());
+
+    assert_eq!(engine.eval::<String>("seen.join()").unwrap(), "contextmenu");
+}

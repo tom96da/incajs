@@ -170,17 +170,28 @@ fn key_up_panics_on_an_unparseable_key(cx: &mut TestAppContext) {
     Harness::load(cx, TEST_ENTRY_PATH, "").key_up("a-b");
 }
 
-const KEY_LOG: &str = r"
-        globalThis.cb[6] = (e) => {
-            globalThis.log.push(`${e.type}:${e.key}:${e.metaKey}`);
+/// A focused 100x50 `box` whose `keydown` and `keyup` listeners log `type:key:metaKey`.
+const KEYED: &str = r"
+        const n = __inca_native__;
+        const box = n.createNode('div');
+        n.setStyle(box, 'width', 100);
+        n.setStyle(box, 'height', 50);
+        n.setAttribute(box, 'tabindex', '0');
+        n.appendChild(n.rootNodeId(), box);
+        globalThis.log = [];
+        globalThis.cb = {
+            0: (e) => {
+                globalThis.log.push(`${e.type}:${e.key}:${e.metaKey}`);
+            },
         };
-        listen(box, 'keydown', 6);
-        listen(box, 'keyup', 6);
+        listen(box, 'keydown', 0);
+        listen(box, 'keyup', 0);
+        n.focusNode(box);
     ";
 
 #[gpui::test]
 fn keystrokes_press_each_key_in_order_and_release_none(cx: &mut TestAppContext) {
-    let mut h = load_listening(cx, &format!("{BUTTON}{KEY_LOG}"));
+    let mut h = load_listening(cx, KEYED);
 
     h.keystrokes("a cmd-b x");
 
@@ -189,7 +200,7 @@ fn keystrokes_press_each_key_in_order_and_release_none(cx: &mut TestAppContext) 
 
 #[gpui::test]
 fn key_up_releases_each_key_in_order(cx: &mut TestAppContext) {
-    let mut h = load_listening(cx, &format!("{BUTTON}{KEY_LOG}"));
+    let mut h = load_listening(cx, KEYED);
 
     h.key_up("a cmd-b x");
 
@@ -202,109 +213,4 @@ fn settle_panics_once_the_window_has_closed(cx: &mut TestAppContext) {
     let mut h = Harness::load(cx, TEST_ENTRY_PATH, "");
     h.cx.update(|window, _| window.remove_window());
     h.settle();
-}
-
-/// `outer` scrolls 50 of 350 and holds `held` (50 high, tall content) and a
-/// 300 high spacer.
-fn nested_scrollers(h: &mut Harness, held_inert: bool) -> (NodeId, NodeId) {
-    run_js(
-        h,
-        &format!(
-            r"
-                const n = __inca_native__;
-                const box = (parent, h, scroll) => {{
-                    const id = n.createNode('div');
-                    n.setStyle(id, 'width', 100);
-                    n.setStyle(id, 'height', h);
-                    if (scroll) n.setStyle(id, 'overflow_y', 'scroll');
-                    n.appendChild(parent, id);
-                    return id;
-                }};
-                globalThis.outer = box(n.rootNodeId(), 50, true);
-                globalThis.held = box(outer, 50, true);
-                box(held, 300, false);
-                box(outer, 300, false);
-                if ({held_inert}) n.setAttribute(held, 'inert', true);
-                "
-        ),
-    );
-    (node(h, "outer"), node(h, "held"))
-}
-
-fn scroll_offset(h: &Harness, id: NodeId) -> Pixels {
-    h.window
-        .read_with(&h.cx, |app, _| {
-            app.session.dispatcher.scroll_handle(id).unwrap().offset().y
-        })
-        .unwrap()
-}
-
-#[gpui::test]
-fn an_inert_scroll_container_ignores_the_wheel_and_leaves_it_to_its_ancestor(
-    cx: &mut TestAppContext,
-) {
-    let mut h = Harness::load(cx, TEST_ENTRY_PATH, "");
-    let (outer, held) = nested_scrollers(&mut h, true);
-
-    h.scroll(held, 0.0, -30.0);
-
-    assert_eq!(
-        (scroll_offset(&h, held), scroll_offset(&h, outer)),
-        (px(0.0), px(-30.0))
-    );
-}
-
-#[gpui::test]
-fn a_scroll_container_that_is_not_inert_takes_the_wheel_before_its_ancestor(
-    cx: &mut TestAppContext,
-) {
-    let mut h = Harness::load(cx, TEST_ENTRY_PATH, "");
-    let (outer, held) = nested_scrollers(&mut h, false);
-
-    h.scroll(held, 0.0, -30.0);
-
-    assert_eq!(
-        (scroll_offset(&h, held), scroll_offset(&h, outer)),
-        (px(-30.0), px(0.0))
-    );
-}
-
-#[gpui::test]
-fn a_wheel_listener_keeps_the_scroll_it_writes_to_a_container(cx: &mut TestAppContext) {
-    let mut h = Harness::load(cx, TEST_ENTRY_PATH, "");
-    let (outer, held) = nested_scrollers(&mut h, false);
-    run_js(
-        &mut h,
-        r"
-        globalThis.__inca_callbacks__ = { 0: (e) => {
-           e.preventDefault();
-           __inca_native__.scrollNode(outer, null, 20);
-        } };
-        __inca_native__.addEventListener(__inca_native__.rootNodeId(), 'wheel');
-        ",
-    );
-
-    h.scroll(held, 0.0, -30.0);
-
-    assert_eq!(
-        (scroll_offset(&h, held), scroll_offset(&h, outer)),
-        (px(0.0), px(-20.0))
-    );
-}
-
-#[gpui::test]
-fn wheel_scrolls_the_container(cx: &mut TestAppContext) {
-    let mut h = load_listening(cx, TARGETS);
-    listen(&mut h, "frame", "wheel", 0);
-    let (inner, mid) = (node(&h, "inner"), node(&h, "mid"));
-
-    h.scroll(inner, 0.0, -30.0);
-    let offset = h
-        .window
-        .read_with(&h.cx, |app, _| {
-            app.session.dispatcher.scroll_handle(mid).unwrap().offset()
-        })
-        .unwrap();
-    assert_eq!(offset.y, px(-30.0));
-    assert!(targets_log(&mut h).starts_with("wheel@frame/inner/3"));
 }

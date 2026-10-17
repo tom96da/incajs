@@ -1,9 +1,9 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Integration tests for wheel scrolling of scroll containers: a real
-//! `VirtualTree` rendered through `render_tree_with_events`, scrolled by
-//! `ScrollWheelEvent`s.
+//! Integration tests for scrolling of scroll containers: a real `VirtualTree` rendered through
+//! `render_tree_with_events`, scrolled by `ScrollWheelEvent`s, by script offsets and by the
+//! reveal of focused or scrolled-to nodes.
 
 #![allow(clippy::unwrap_used)]
 
@@ -193,4 +193,5 @@ fn styled_container(styles: &[(&str, &str)]) -> Host {
 }
 
 mod events;
+mod reveal;
 mod wheel;

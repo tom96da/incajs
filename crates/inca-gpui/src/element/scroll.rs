@@ -539,6 +539,16 @@ mod tests {
     }
 
     #[gpui::test]
+    fn an_inert_container_leaves_the_wheel_to_its_ancestor(cx: &mut TestAppContext) {
+        let mut tree = nested_containers();
+        tree.set_attribute(1, "inert", true).unwrap();
+        let mut scene = Wheels::new(cx, tree);
+        scene.wheel(-30.);
+        assert_eq!(scene.offset(1).y, px(0.));
+        assert_eq!(scene.offset(0).y, px(-30.));
+    }
+
+    #[gpui::test]
     fn a_wheel_over_no_container_leaves_every_offset_alone(cx: &mut TestAppContext) {
         let mut tree = VirtualTree::new();
         let root = div(&mut tree, None, 250., false);
