@@ -15,6 +15,7 @@ import { afterAll, beforeAll, expect, it, onTestFailed, vi } from "vitest";
 import { defaultBundler } from "../../packages/cli/src/defaultBundler.mts";
 import { HostClient } from "../../packages/cli/src/dev-client/hostClient.mts";
 import { resolveTestHostBin } from "../support/hostBin.mts";
+import { reloadHost, settleReloads } from "../support/reloads.mts";
 import type { BuildFailure, HmrChannel } from "../../packages/cli/src/adapter/types.mts";
 
 const RELOAD_TIMEOUT_MS = 10_000;
@@ -101,7 +102,7 @@ beforeAll(async () => {
     stderr: discard(),
     quiet: true,
     notify: (payload) => hostClient?.notify("vite", payload),
-    reload: () => void hostClient?.call("reload", undefined, RELOAD_TIMEOUT_MS),
+    reload: () => reloadHost(hostClient, RELOAD_TIMEOUT_MS),
     onError: (error) => buildErrors.push(error),
   });
 
@@ -117,9 +118,13 @@ beforeAll(async () => {
 }, WAIT_TIMEOUT_MS + 10_000);
 
 afterAll(async () => {
-  await hostClient?.stop();
-  await channel?.close();
-  await rm(scratchRoot, { recursive: true, force: true });
+  try {
+    await settleReloads();
+  } finally {
+    await hostClient?.stop();
+    await channel?.close();
+    await rm(scratchRoot, { recursive: true, force: true });
+  }
 });
 
 it(

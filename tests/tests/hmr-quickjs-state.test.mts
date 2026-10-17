@@ -18,6 +18,7 @@ import { afterAll, beforeAll, describe, expect, it, onTestFailed, vi } from "vit
 import { defaultBundler } from "../../packages/cli/src/defaultBundler.mts";
 import { HostClient } from "../../packages/cli/src/dev-client/hostClient.mts";
 import { resolveTestHostBin } from "../support/hostBin.mts";
+import { reloadHost, settleReloads } from "../support/reloads.mts";
 import type { BuildFailure, HmrChannel } from "../../packages/cli/src/adapter/types.mts";
 import type { AppErrorParams } from "../../packages/cli/src/dev-client/protocol.mts";
 
@@ -138,7 +139,7 @@ beforeAll(async () => {
     // A full reload needs a fresh Session, which only inca-host's own
     // `reload` RPC gives it. A Vue SFC edit always has an HMR boundary, so it
     // is not expected to fire here. It is wired for real just in case.
-    reload: () => void hostClient?.call("reload", undefined, RELOAD_TIMEOUT_MS),
+    reload: () => reloadHost(hostClient, RELOAD_TIMEOUT_MS),
     onError: (error) => buildErrors.push(error),
   });
 
@@ -164,9 +165,13 @@ beforeAll(async () => {
 }, WAIT_TIMEOUT_MS + 10_000);
 
 afterAll(async () => {
-  await hostClient?.stop();
-  await channel?.close();
-  await rm(scratchRoot, { recursive: true, force: true });
+  try {
+    await settleReloads();
+  } finally {
+    await hostClient?.stop();
+    await channel?.close();
+    await rm(scratchRoot, { recursive: true, force: true });
+  }
 });
 
 it(
@@ -323,7 +328,7 @@ describe("a session that starts on a broken source", () => {
       stderr: discard(),
       quiet: true,
       notify: (payload) => session.client?.notify("vite", payload),
-      reload: () => void session.client?.call("reload", undefined, RELOAD_TIMEOUT_MS),
+      reload: () => reloadHost(session.client, RELOAD_TIMEOUT_MS),
       onError: (error) => session.buildErrors.push(error),
     });
     const client = new HostClient({
@@ -351,11 +356,15 @@ describe("a session that starts on a broken source", () => {
   }
 
   afterAll(async () => {
-    for (const { client, channel } of sessions) {
-      try {
-        await client.stop();
-      } finally {
-        await channel.close();
+    try {
+      await settleReloads();
+    } finally {
+      for (const { client, channel } of sessions) {
+        try {
+          await client.stop();
+        } finally {
+          await channel.close();
+        }
       }
     }
   });
