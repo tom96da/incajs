@@ -175,6 +175,7 @@ beforeEach(() => {
   installNative();
   delete (globalThis as { __inca_callbacks__?: unknown }).__inca_callbacks__;
   vi.spyOn(console, "warn").mockImplementation(() => {});
+  vi.spyOn(console, "info").mockImplementation(() => {});
 });
 
 afterEach(() => {
