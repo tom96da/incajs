@@ -1008,6 +1008,38 @@ describe("dev with --experimental-hmr", () => {
     expect(stderr.text()).not.toContain("reload failed");
   });
 
+  it("folds the full reloads that arrive before ready into one", async () => {
+    const bundler = makeFakeHmrBundler("/unused/entry.js");
+    const hmr = vi.spyOn(bundler, "hmr");
+    const stdout = makeSink();
+    const stderr = makeSink();
+    const controller = new AbortController();
+
+    const running = dev({
+      cwd: await scratch.makeApp({}),
+      entry: "unused",
+      bundler,
+      hostBin: slowReadyMockHost,
+      experimentalHmr: true,
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      signal: controller.signal,
+    });
+
+    await waitFor(() => expect(hmr).toHaveBeenCalled());
+    bundler.emitFullReload();
+    bundler.emitFullReload();
+    await waitFor(() => expect(stderr.text()).toContain("reload #1"));
+
+    bundler.emitFullReload();
+    await waitFor(() => expect(stderr.text()).toContain("reload #2"));
+
+    controller.abort();
+    await running;
+
+    expect(stderr.text()).not.toContain("reload #3");
+  });
+
   it("stops instead of hanging when the host fails to start", async () => {
     const hostBin = await makeUnspawnableHost(await scratch.makeApp({}));
     const bundler = makeFakeHmrBundler("/unused/entry.js");
