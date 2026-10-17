@@ -122,7 +122,9 @@ fn a_subclass_of_event_keeps_its_own_prototype() {
 }
 
 #[gpui::test]
-fn host_events_are_trusted_instances_of_event_that_share_one_prototype(cx: &mut TestAppContext) {
+fn host_events_of_one_kind_are_trusted_instances_of_event_sharing_a_prototype(
+    cx: &mut TestAppContext,
+) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
     listen(

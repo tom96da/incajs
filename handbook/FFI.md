@@ -230,8 +230,14 @@ walk and keeps nothing.
   and `srcElement` (reads `target`). Members read a host-private `WeakMap`
   record in the engine's userdata (`crates/inca-bridge/src/event.rs`), and a
   call on any other receiver throws a `TypeError`.
+- Mouse and wheel events inherit from a mouse prototype and key events from a
+  keyboard prototype. Both inherit from the prototype above and hold their own
+  `getModifierState`, which throws a `TypeError` on an event of the other kind.
+  Focus and scroll events and events built with `new Event` inherit from the
+  prototype above directly.
 - GPUI's `platform` modifier becomes `metaKey` and `function` is dropped.
-  `getModifierState` exists on key and mouse events and reads those four.
+  `getModifierState` converts its argument to a string and reads those four
+  fields.
 
 #### Propagation and cancellation
 
@@ -370,10 +376,11 @@ walk and keeps nothing.
 
 #### Dispatching from script
 
-- `Event` and `CustomEvent` (`event/construct.rs`) share the prototype and `WeakMap`
-  record, with `isTrusted` false and `target` `null`. `Event(type, init)` and
-  `CustomEvent(type, init)` need `new`, a type, and an `init` that is an
-  object, `null` or `undefined`. Any other call throws a `TypeError`.
+- `Event` and `CustomEvent` (`event/construct.rs`) file their events in the
+  host's `WeakMap` record store, with `isTrusted` false and `target` `null`.
+  `Event(type, init)` and `CustomEvent(type, init)` need `new`, a type, and an
+  `init` that is an object, `null` or `undefined`. Any other call throws a
+  `TypeError`.
   `CustomEvent.prototype` inherits from `Event.prototype`.
 - `dispatchEvent` runs the walk in the caller's context, so a listener can
   call it. It sets `target` and `isTrusted`, reads `type` and the flags
@@ -403,7 +410,7 @@ walk and keeps nothing.
 | `wheel` | mouse + `deltaX`, `deltaY`, `deltaZ`, `deltaMode` |
 | `scroll` | none; every flag is false |
 | `focus`, `blur`, `focusin`, `focusout` | `relatedTarget` |
-| `keydown`, `keyup` | `key`, `repeat`, modifier flags, `getModifierState` |
+| `keydown`, `keyup` | `key`, `repeat`, modifier flags |
 
 `wheel` negates GPUI's `deltaX` and `deltaY`, `deltaZ` is 0 and `deltaMode` is
 0 or 1.

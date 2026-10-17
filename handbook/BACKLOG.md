@@ -229,16 +229,6 @@ A fixed entry is deleted and its ID is never reused.
   scratch app and resolves `incajs/vue/runtime` through the published
   `exports`. The UI tests cover the workspace link.
 
-- **B-184 `getModifierState` exists on every event**
-  `Units: bridge · Size: M · Impact: Low`
-
-  Every event has `getModifierState`, including focus events and plain
-  `Event` objects. Browsers define it on mouse and keyboard events only. One
-  event prototype serves every kind.
-
-  Fix: split the event prototype into mouse and keyboard kinds, so the method
-  sits where browsers put it.
-
 - **B-187 The bridge globals can be overwritten by the app**
   `Units: bridge,jsenv,host,core · Size: M · Impact: Medium`
 
@@ -266,10 +256,12 @@ A fixed entry is deleted and its ID is never reused.
 - **B-189 The event store holds JS values in Rust**
   `Units: bridge · Size: M · Impact: Medium`
 
-  The event store of `event.rs` keeps the record `WeakMap`, the prototype and
-  two functions as userdata of the context. They are JS values held by Rust.
-  A fix keeps them in JS and lets Rust refer to them by id. B-185 covers the
-  shape of the same store.
+  The event store of `event.rs` keeps the record `WeakMap`, the three
+  prototypes and two functions as userdata of the context. They are JS values
+  held by Rust. A fix keeps them in JS and lets Rust refer to them by id. The
+  mouse and keyboard prototypes move with the rest, and the `kind` of each
+  event record, a slot index, becomes the id of its prototype. B-185
+  covers the shape of the same store.
 
 - **B-190 The inspector keeps function handles in Rust**
   `Units: jsenv · Size: S–M · Impact: Medium`
@@ -1181,9 +1173,10 @@ A fixed entry is deleted and its ID is never reused.
 - **B-185 The event store keeps its pieces by index**
   `Units: bridge · Size: S · Impact: Low`
 
-  `event.rs` keeps the `WeakMap` record store, the prototype and two
-  functions in a `Vec<Value>` addressed by index constants. A struct with
-  named fields needs `JsLifetime`. The `macro` feature of rquickjs provides
+  `event.rs` keeps the `WeakMap` record store, the three prototypes and two
+  functions in a `Vec<Value>` addressed by index constants. The `kind` of an
+  event record holds one of these indexes. A struct with named fields needs
+  `JsLifetime`. The `macro` feature of rquickjs provides
   `#[derive(JsLifetime)]`, which generates the `unsafe impl` and checks at
   compile time that every field type is valid, so the bridge keeps no
   hand-written `unsafe`. With `"macro"` in the workspace rquickjs features,

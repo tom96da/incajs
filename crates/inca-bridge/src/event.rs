@@ -9,9 +9,10 @@
 //! target up, all with that same object, then resets its `currentTarget` and
 //! `eventPhase`. The object's methods and accessors live on a prototype built
 //! once per runtime. What they read and write sits in a record that a
-//! `WeakMap` keeps, so no script can reach it. The global constructors `Event`
-//! and `CustomEvent` file their events in the same store, so a script can
-//! build an event and dispatch it.
+//! `WeakMap` keeps, so no script can reach it. Mouse and key events inherit
+//! from a prototype of their kind, which adds `getModifierState`. The global
+//! constructors `Event` and `CustomEvent` file their events in the same store,
+//! so a script can build an event and dispatch it.
 //!
 //! The global `__inca_targets__` gives the objects that stand for the nodes of a
 //! walk.
@@ -34,19 +35,24 @@ use construct::constructors;
 pub(crate) use walk::{Walk, click, dispatch_event, listened, path_from, walk};
 
 /// What the event machinery keeps in the runtime's userdata, in the order of
-/// [`PROTOTYPE`], [`REMEMBER`] and [`RECALL`].
+/// [`PROTOTYPE`], [`REMEMBER`], [`RECALL`], [`MOUSE_PROTOTYPE`] and
+/// [`KEYBOARD_PROTOTYPE`].
 // A `Vec<Value>` stays distinct from console's `Vec<Function>` userdata. The values belong to one
 // context.
 type Slots<'js> = Vec<Value<'js>>;
 
-/// The prototype of every event object.
+/// `Event.prototype`, which every event object inherits from.
 const PROTOTYPE: usize = 0;
 /// `(event, record)`: files the record of a new event.
 const REMEMBER: usize = 1;
 /// `(event)`: the record of an event, `undefined` for any other value.
 const RECALL: usize = 2;
+/// The prototype of mouse and wheel events. It inherits from [`PROTOTYPE`].
+const MOUSE_PROTOTYPE: usize = 3;
+/// The prototype of key events. It inherits from [`PROTOTYPE`].
+const KEYBOARD_PROTOTYPE: usize = 4;
 
-/// Creates the prototype and the record store of `ctx`'s runtime. The first
+/// Creates the prototypes and the record store of `ctx`'s runtime. The first
 /// call wins, and later calls on the same runtime leave it as it is.
 ///
 /// # Errors
@@ -74,10 +80,14 @@ pub(crate) fn install(ctx: &Ctx<'_>) -> JsResult<()> {
         .try_into()
         .map_err(|_| rquickjs::Error::Unknown)?;
     let proto = prototype(ctx)?;
+    let mouse = modifier_prototype(ctx, &proto, MOUSE_PROTOTYPE)?;
+    let keyboard = modifier_prototype(ctx, &proto, KEYBOARD_PROTOTYPE)?;
     let slots: Slots = vec![
         proto.clone().into_value(),
         remember.into_value(),
         recall.into_value(),
+        mouse.into_value(),
+        keyboard.into_value(),
     ];
     ctx.store_userdata(slots).map_err(|_| {
         rquickjs::Error::new_from_js_message(
@@ -175,7 +185,7 @@ const PHASES: [(&str, i32); 4] = [
 ];
 
 /// The prototype of event objects: the phase constants, the propagation
-/// methods, `composedPath`, `getModifierState` and the accessors.
+/// methods, `composedPath` and the accessors.
 fn prototype<'js>(ctx: &Ctx<'js>) -> JsResult<Object<'js>> {
     let proto = Object::new(ctx.clone())?;
     for (name, value) in PHASES {
@@ -243,29 +253,55 @@ fn define_methods<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<()> {
                 }
             },
         )?,
-    )?;
-    method(
-        "getModifierState",
-        Function::new(
-            ctx.clone(),
-            |ctx: Ctx<'js>, This(event): This<Object<'js>>, name: String| -> JsResult<bool> {
-                record_of(&ctx, &event)?;
-                let name = match name.as_str() {
-                    "Accel" if cfg!(target_os = "macos") => "Meta",
-                    "Accel" => "Control",
-                    other => other,
-                };
-                let field = match name {
-                    "Control" => "ctrlKey",
-                    "Shift" => "shiftKey",
-                    "Alt" => "altKey",
-                    "Meta" => "metaKey",
-                    _ => return Ok(false),
-                };
-                Ok(flag(&event, field))
-            },
-        )?,
     )
+}
+
+/// A prototype that inherits from `base` and holds `getModifierState`. The method reads only an
+/// event whose record holds `slot` as its `kind`, and throws a `TypeError` for any other
+/// receiver. Accel reads Meta on macOS and Control elsewhere.
+fn modifier_prototype<'js>(
+    ctx: &Ctx<'js>,
+    base: &Object<'js>,
+    slot: usize,
+) -> JsResult<Object<'js>> {
+    let proto = Object::new(ctx.clone())?;
+    proto.set_prototype(Some(base))?;
+    let get_modifier_state = Function::new(
+        ctx.clone(),
+        move |ctx: Ctx<'js>,
+              This(event): This<Object<'js>>,
+              name: Coerced<String>|
+              -> JsResult<bool> {
+            let record = record_of(&ctx, &event)?;
+            if record.get::<_, usize>("kind")? != slot {
+                return Err(Exception::throw_type(
+                    &ctx,
+                    concat!(
+                        "getModifierState belongs to another kind of event, ",
+                        "so call it on the event as event.getModifierState(key)"
+                    ),
+                ));
+            }
+            let name = match name.0.as_str() {
+                "Accel" if cfg!(target_os = "macos") => "Meta",
+                "Accel" => "Control",
+                other => other,
+            };
+            let field = match name {
+                "Control" => "ctrlKey",
+                "Shift" => "shiftKey",
+                "Alt" => "altKey",
+                "Meta" => "metaKey",
+                _ => return Ok(false),
+            };
+            Ok(flag(&event, field))
+        },
+    )?;
+    proto.prop(
+        "getModifierState",
+        Property::from(get_modifier_state).writable().configurable(),
+    )?;
+    Ok(proto)
 }
 
 fn define_accessors<'js>(proto: &Object<'js>) -> JsResult<()> {
