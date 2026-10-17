@@ -11,6 +11,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MockInstance } from "vitest";
 
+import { fsLag } from "../tests/support/fsLag.mts";
 import { IncaError } from "./error.mts";
 import { retryOnEdit } from "./retryOnEdit.mts";
 import type { RetryOnEditOptions } from "./retryOnEdit.mts";
@@ -136,6 +137,7 @@ describe("retryOnEdit", () => {
     const { running, run } = start(async () => {
       calls++;
       if (calls > 1) return "done";
+      await fsLag();
       await touchConfig();
       throw new Error("failed after the save");
     });

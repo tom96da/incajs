@@ -11,6 +11,7 @@ import type { FSWatcher } from "node:fs";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { fsLag } from "../tests/support/fsLag.mts";
 import { watchForEdit } from "./watchForEdit.mts";
 import type { EditWatch } from "./watchForEdit.mts";
 
@@ -41,9 +42,11 @@ async function makeApp(): Promise<string> {
 }
 
 /** Arms a watch that the test closes on its way out. */
-function arm(cwd: string): EditWatch {
+async function arm(cwd: string): Promise<EditWatch> {
+  await fsLag();
   const watcher = watchForEdit(cwd, { debounceMs: DEBOUNCE });
   open.push(watcher);
+  await fsLag();
   return watcher;
 }
 
@@ -67,7 +70,7 @@ describe("watchForEdit", () => {
     ["package.json is written", "package.json"],
   ])("resolves once %s", async (_, file) => {
     const app = await makeApp();
-    const watcher = arm(app);
+    const watcher = await arm(app);
 
     await writeFile(path.join(app, file), "{}");
 
@@ -77,7 +80,7 @@ describe("watchForEdit", () => {
   it("resolves once a config is renamed into place", async () => {
     const app = await makeApp();
     await writeFile(path.join(app, "draft"), "export default {};");
-    const watcher = arm(app);
+    const watcher = await arm(app);
 
     await rename(path.join(app, "draft"), path.join(app, "inca.config.ts"));
 
@@ -87,7 +90,7 @@ describe("watchForEdit", () => {
   it("resolves once a config is deleted", async () => {
     const app = await makeApp();
     await writeFile(path.join(app, "inca.config.ts"), "export default {};");
-    const watcher = arm(app);
+    const watcher = await arm(app);
 
     await rm(path.join(app, "inca.config.ts"));
 
@@ -98,7 +101,7 @@ describe("watchForEdit", () => {
     "resolves once src/%s exists",
     async (file) => {
       const app = await makeApp();
-      const watcher = arm(app);
+      const watcher = await arm(app);
 
       await writeFile(path.join(app, "src", file), "");
 
@@ -111,7 +114,7 @@ describe("watchForEdit", () => {
     async (file) => {
       const app = await makeApp();
       await rm(path.join(app, "src"), { recursive: true });
-      const watcher = arm(app);
+      const watcher = await arm(app);
 
       await mkdir(path.join(app, "src"));
       await writeFile(path.join(app, "src", file), "");
@@ -123,7 +126,7 @@ describe("watchForEdit", () => {
   it("ignores every other file", async () => {
     const app = await makeApp();
     await mkdir(path.join(app, "node_modules/.inca"));
-    const watcher = arm(app);
+    const watcher = await arm(app);
 
     await writeFile(path.join(app, "README.md"), "");
     await writeFile(path.join(app, "src", "util.mts"), "");
@@ -140,7 +143,7 @@ describe("watchForEdit", () => {
 
   it("resolves once src/ is deleted and created again", async () => {
     const app = await makeApp();
-    const watcher = arm(app);
+    const watcher = await arm(app);
 
     await rm(path.join(app, "src"), { recursive: true });
     await mkdir(path.join(app, "src"));
@@ -150,7 +153,7 @@ describe("watchForEdit", () => {
 
   it("watches a missing directory through its nearest existing ancestor", async () => {
     const app = await makeApp();
-    const watcher = arm(path.join(app, "nested", "deep"));
+    const watcher = await arm(path.join(app, "nested", "deep"));
 
     await writeFile(path.join(app, "unrelated.txt"), "");
     expect(await settled(watcher.edited, DEBOUNCE * 3)).toBe(false);
@@ -161,7 +164,7 @@ describe("watchForEdit", () => {
 
   it("keeps an edit made before the caller awaits", async () => {
     const app = await makeApp();
-    const watcher = arm(app);
+    const watcher = await arm(app);
 
     await writeFile(path.join(app, "inca.config.ts"), "");
     await sleep(DEBOUNCE * 4);
@@ -175,7 +178,7 @@ describe("watchForEdit", () => {
     vi.mocked(watch)
       .mockImplementationOnce(() => root)
       .mockImplementationOnce(() => fakeWatcher());
-    const watcher = arm(await makeApp());
+    const watcher = await arm(await makeApp());
     let resolved = false;
     void watcher.edited.then(() => {
       resolved = true;
@@ -198,8 +201,9 @@ describe("watchForEdit", () => {
     it("watches a file that exists, and nothing else beside it", async () => {
       const app = await makeApp();
       await writeFile(path.join(app, "icon.icns"), "");
-      const watcher = arm(app);
+      const watcher = await arm(app);
       watcher.add(path.join(app, "icon.icns"));
+      await fsLag();
 
       await writeFile(path.join(app, "sibling.txt"), "");
       expect(await settled(watcher.edited, DEBOUNCE * 3)).toBe(false);
@@ -210,8 +214,9 @@ describe("watchForEdit", () => {
 
     it("watches a file in a directory that does not exist yet", async () => {
       const app = await makeApp();
-      const watcher = arm(app);
+      const watcher = await arm(app);
       watcher.add(path.join(app, "assets", "icons", "app.icns"));
+      await fsLag();
 
       await mkdir(path.join(app, "assets", "icons"), { recursive: true });
       expect(await settled(watcher.edited, SETTLE_MS)).toBe(true);
@@ -219,8 +224,9 @@ describe("watchForEdit", () => {
 
     it("watches a file that does not exist yet", async () => {
       const app = await makeApp();
-      const watcher = arm(app);
+      const watcher = await arm(app);
       watcher.add(path.join(app, "app.icns"));
+      await fsLag();
 
       await writeFile(path.join(app, "app.icns"), "");
 
@@ -228,11 +234,13 @@ describe("watchForEdit", () => {
     });
 
     it("does nothing after close", async () => {
-      const watcher = arm(await makeApp());
+      const watcher = await arm(await makeApp());
       watcher.close();
       const calls = vi.mocked(watch).mock.calls.length;
 
       watcher.add("/tmp/app.icns");
+
+      await fsLag();
 
       expect(vi.mocked(watch).mock.calls.length).toBe(calls);
     });
@@ -241,7 +249,7 @@ describe("watchForEdit", () => {
   describe("close", () => {
     it("leaves `edited` pending and ignores later writes", async () => {
       const app = await makeApp();
-      const watcher = arm(app);
+      const watcher = await arm(app);
 
       watcher.close();
       await writeFile(path.join(app, "inca.config.ts"), "");
@@ -255,7 +263,7 @@ describe("watchForEdit", () => {
       vi.mocked(watch)
         .mockImplementationOnce(() => root)
         .mockImplementationOnce(() => fakeWatcher());
-      const watcher = arm(await makeApp());
+      const watcher = await arm(await makeApp());
       let resolved = false;
       void watcher.edited.then(() => {
         resolved = true;
@@ -274,7 +282,7 @@ describe("watchForEdit", () => {
 
     it("is safe to call twice", async () => {
       const app = await makeApp();
-      const watcher = arm(app);
+      const watcher = await arm(app);
 
       watcher.close();
 
@@ -302,7 +310,7 @@ describe("watchForEdit", () => {
       vi.mocked(watch)
         .mockImplementationOnce(() => root)
         .mockImplementationOnce(() => fakeWatcher());
-      const watcher = arm(app);
+      const watcher = await arm(app);
 
       root.emit("change", "rename", null);
 
@@ -315,7 +323,7 @@ describe("watchForEdit", () => {
       vi.mocked(watch)
         .mockImplementationOnce(() => root)
         .mockImplementationOnce(() => fakeWatcher());
-      const watcher = arm(app);
+      const watcher = await arm(app);
 
       root.emit("change", "rename", "src");
 
@@ -329,7 +337,7 @@ describe("watchForEdit", () => {
       vi.mocked(watch)
         .mockImplementationOnce(() => rootWatcher)
         .mockImplementationOnce(() => srcWatcher);
-      arm(app);
+      await arm(app);
 
       srcWatcher.emit("error", new Error("ENOSPC"));
 
@@ -343,7 +351,7 @@ describe("watchForEdit", () => {
       vi.mocked(watch)
         .mockImplementationOnce(() => fakeWatcher())
         .mockImplementationOnce(() => srcWatcher);
-      const watcher = arm(app);
+      const watcher = await arm(app);
 
       srcWatcher.emit("error", new Error("ENOSPC"));
 

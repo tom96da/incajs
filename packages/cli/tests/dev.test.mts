@@ -392,7 +392,7 @@ describe("dev", () => {
   });
 
   it("refuses to start while another dev is running for the same app", async () => {
-    const cwd = await scratch.makeApp({ name: "locked" });
+    const cwd = await scratch.makeApp({});
     const bundler = makeFakeBundler();
     const stdout = makeSink();
     const controller = new AbortController();

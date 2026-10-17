@@ -9,7 +9,8 @@ import { afterAll, beforeAll, describe, expect, it, onTestFinished, vi } from "v
 import { dev } from "../src/dev.mts";
 import { acquireDevLock } from "../src/devLock.mts";
 import { scratchConfigApp } from "./scratchConfigApp.mts";
-import { waitFor, mockHost, makeFakeBundler, makeSink } from "./support/dev.mts";
+import { makeFakeBundler, makeSink, mockHost, waitFor } from "./support/dev.mts";
+import { fsLag } from "./support/fsLag.mts";
 import type { Bundler } from "../src/adapter/types.mts";
 
 describe("a failure before the first build", () => {
@@ -154,6 +155,7 @@ describe("a failure before the first build", () => {
   it("does not print the fault again for an unrelated edit", async () => {
     const cwd = await scratch.makeApp({ name: "unrelated" });
     await mkdir(path.join(cwd, "src"));
+    await fsLag();
     const { bundler, stdout, stderr, watch } = startDev(cwd);
     await waitFor(() => expect(stdout.text()).toContain("waiting for a change to retry"));
 
