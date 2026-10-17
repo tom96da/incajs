@@ -34,7 +34,7 @@
     "lint:fix": "oxlint --type-aware --fix",
     "format": "oxfmt --check --disable-nested-config .",
     "format:write": "oxfmt --write --disable-nested-config .",
-    "check": "oxlint && oxfmt --check --disable-nested-config .",
+    "check": "oxlint --type-aware && oxfmt --check --disable-nested-config .",
     "typecheck": "oxlint -A all --type-aware --type-check"
   },
   "devDependencies": {
