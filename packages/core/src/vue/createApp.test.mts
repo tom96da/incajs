@@ -5,22 +5,19 @@ import { setFlagsFromString } from "node:v8";
 import { runInNewContext } from "node:vm";
 
 import { h, reactive } from "@vue/runtime-core";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { window } from "../window.mts";
+import { window } from "../rendererCore.mts";
 import { createIncaApp } from "./createApp.mts";
-import type { IncaElement } from "../element/types.mts";
+import type { IncaElement } from "../rendererCore.mts";
 
-vi.mock("../rendererCore.mts", () => {
-  let nextId = 2;
-  return {
-    rootNodeId: () => 1,
-    createNode: () => nextId++,
-    insertBefore: () => {},
-    createEventTarget: () => ({}),
-    destroyNode: () => {},
-  };
-});
+let nextId = 2;
+globalThis.__inca_native__ = {
+  rootNodeId: () => 1,
+  createNode: () => nextId++,
+  insertBefore: () => {},
+  destroyNode: () => [],
+} as never;
 
 describe("createIncaApp", () => {
   it("keeps the same root handle inside reactive()", () => {

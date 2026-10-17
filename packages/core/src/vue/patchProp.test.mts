@@ -5,13 +5,16 @@ import { createRenderer, h, nextTick, onErrorCaptured, ref } from "@vue/runtime-
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import type { ComponentInternalInstance } from "@vue/runtime-core";
 
-import { rectOf } from "../element/geometry.mts";
-import * as events from "../events.mts";
+import * as rendererCore from "../rendererCore.mts";
 import { createNodeOps } from "./nodeOps.mts";
 import { createPatchProp } from "./patchProp.mts";
-import type { IncaElement } from "../element/types.mts";
-import type { IncaCore } from "../rendererCore.mts";
-import type { EventLike, IncaEventTarget, ListenerOptions } from "../types.mts";
+import type {
+  EventLike,
+  IncaCore,
+  IncaElement,
+  IncaEventTarget,
+  ListenerOptions,
+} from "../rendererCore.mts";
 
 /** The function a registration call received, callable with any event. */
 const listenerOf = (call: readonly unknown[]): ((...args: unknown[]) => void) =>
@@ -24,36 +27,14 @@ const makeTarget = (): IncaEventTarget => ({
 });
 
 const core: IncaCore = {
-  rootNodeId: vi.fn<() => number>(),
-  createNode: vi.fn<(tag: string) => number>(),
-  appendChild: vi.fn<(parentId: number, childId: number) => void>(),
-  insertBefore: vi.fn<(parentId: number, childId: number, anchorId: number | null) => void>(),
-  removeChild: vi.fn<(parentId: number, childId: number) => void>(),
-  destroyNode: vi.fn<(nodeId: number) => void>(),
-  holdNode: vi.fn<(nodeId: number) => void>(),
-  releaseNode: vi.fn<(nodeId: number) => void>(),
+  ...rendererCore,
   addEventListener: vi.fn<IncaCore["addEventListener"]>(),
   removeEventListener: vi.fn<IncaCore["removeEventListener"]>(),
-  createEventTarget: vi.fn<() => IncaEventTarget>(() => makeTarget()),
   latestEventId: vi.fn<() => number>(() => 0),
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
-  getAttribute: vi.fn<(nodeId: number, key: string) => string | number | boolean | null>(
-    () => null,
-  ),
   removeAttribute: vi.fn<(nodeId: number, key: string) => void>(),
   setStyle: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   removeStyle: vi.fn<(nodeId: number, key: string) => void>(),
-  focus: vi.fn<(nodeId: number) => void>(),
-  blur: vi.fn<(nodeId: number) => void>(),
-  focusedNode: vi.fn<() => number | null>(() => null),
-  layoutOf: vi.fn<
-    (nodeId: number) => readonly [number, number, number, number, number, number, number] | null
-  >(() => null),
-  scrollOf: vi.fn<(nodeId: number) => readonly [number, number, number, number] | null>(() => null),
-  scrollNode: vi.fn<(nodeId: number, left: number | null, top: number | null) => void>(),
-  scrollIntoViewNode: vi.fn<(nodeId: number, block: string, inline: string) => void>(),
-  click: vi.fn<(nodeId: number) => void>(),
-  dispatchEvent: vi.fn<(nodeId: number, event: EventLike) => boolean>(() => true),
 };
 
 const patchProp = createPatchProp(core);
@@ -72,7 +53,7 @@ const makeEl = (): IncaElement => ({
   contains: () => false,
   ...makeTarget(),
   tabIndex: -1,
-  getBoundingClientRect: () => rectOf(null),
+  getBoundingClientRect: vi.fn<IncaElement["getBoundingClientRect"]>(),
   offsetWidth: 0,
   offsetHeight: 0,
   offsetLeft: 0,
@@ -97,6 +78,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   el = makeEl();
 });
+
+afterEach(() => vi.unstubAllGlobals());
 
 // Mounts `prev` as the element's style, then forgets those calls.
 function mountStyle(prev: unknown): void {
@@ -1124,7 +1107,7 @@ describe("errors thrown by an event handler", () => {
       hook?: () => boolean | void,
     ): () => void {
       let id = 1;
-      vi.mocked(core.createNode).mockImplementation(() => ++id);
+      vi.stubGlobal("__inca_native__", { createNode: () => ++id, insertBefore: () => {} });
       const renderer = createRenderer({ ...createNodeOps(core), patchProp });
       const Child = { render: () => h("view", { onClick }) };
       const Parent = {
@@ -1236,7 +1219,7 @@ describe("everything else", () => {
 
   it("removes an attribute that is absent from the new vnode props", async () => {
     let id = 1;
-    vi.mocked(core.createNode).mockImplementation(() => ++id);
+    vi.stubGlobal("__inca_native__", { createNode: () => ++id, insertBefore: () => {} });
     const renderer = createRenderer({ ...createNodeOps(core), patchProp });
     const shown = ref(true);
     renderer
@@ -1481,7 +1464,7 @@ describe("a listener attached while an event is handled", () => {
 
   it("is skipped by the ancestor dispatch of the event whose handler caused the re-render", async () => {
     let id = 1;
-    vi.mocked(core.createNode).mockImplementation(() => ++id);
+    vi.stubGlobal("__inca_native__", { createNode: () => ++id, insertBefore: () => {} });
     const renderer = createRenderer({ ...createNodeOps(core), patchProp });
     const armed = ref(false);
     const onAncestor = spy();
@@ -1513,9 +1496,9 @@ describe("with the event tracker of the events layer", () => {
   const addEventListener = vi.fn<(nodeId: number, event: string) => number>(() => nextCallbackId++);
   const real = createPatchProp({
     ...core,
-    addEventListener: events.addEventListener,
-    removeEventListener: events.removeEventListener,
-    latestEventId: events.latestEventId,
+    addEventListener: rendererCore.addEventListener,
+    removeEventListener: rendererCore.removeEventListener,
+    latestEventId: rendererCore.latestEventId,
   });
   const other = { ...makeEl(), __node_id: 2 };
 
@@ -1539,7 +1522,7 @@ describe("with the event tracker of the events layer", () => {
 
   it("skips a listener attached by an earlier node's handler until the next event", () => {
     const late = vi.fn<() => void>();
-    const event = events.latestEventId() + 1;
+    const event = rendererCore.latestEventId() + 1;
     real(
       el,
       "onClick",

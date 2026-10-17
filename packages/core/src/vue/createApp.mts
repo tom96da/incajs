@@ -4,11 +4,10 @@
 import { createRenderer } from "@vue/runtime-core";
 import type { App, Component, ComponentPublicInstance } from "@vue/runtime-core";
 
-import { createIncaElement } from "../element/handle.mts";
 import * as core from "../rendererCore.mts";
 import { createHeldNodeOps, createNodeOps, skipReactive } from "./nodeOps.mts";
 import { createPatchProp } from "./patchProp.mts";
-import type { IncaElement, IncaNode } from "../element/types.mts";
+import type { IncaElement, IncaNode } from "../rendererCore.mts";
 
 /**
  * The mounted apps. The host keeps their nodes and this set keeps their
@@ -54,7 +53,7 @@ export function createIncaApp(
   return Object.assign(app, {
     mount: (rootContainer?: IncaElement) => {
       const instance = mountAt(
-        rootContainer ?? skipReactive(createIncaElement(core, core.rootNodeId(), "element")),
+        rootContainer ?? skipReactive(core.createIncaElement(core.rootNodeId(), "element")),
       );
       mounted.add(app);
       return instance;

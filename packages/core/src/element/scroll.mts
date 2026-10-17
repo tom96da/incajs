@@ -1,8 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import { scrollNode, scrollOf } from "../tree.mts";
 import { isDestroyed } from "./lifecycle.mts";
-import type { IncaCore } from "../rendererCore.mts";
 import type { ScrollAlignment } from "../types.mts";
 import type { IncaElement } from "./types.mts";
 
@@ -22,29 +22,23 @@ export type ScrollArgs = [left?: number, top?: number] | [options?: ScrollOption
 /**
  * Moves a node's scroll offset. An omitted axis keeps its offset, and a
  * non-finite value counts as `0`. A destroyed node ignores the call.
- * @param core - the incajs bindings to write through
  * @param el - the node to scroll
  * @param args - `(left, top)` or `{ left, top }`
  * @param relative - `true` adds the values to the current offset
  */
-export function scrollPosition(
-  core: IncaCore,
-  el: IncaElement,
-  args: ScrollArgs,
-  relative: boolean,
-): void {
+export function scrollPosition(el: IncaElement, args: ScrollArgs, relative: boolean): void {
   if (isDestroyed(el)) return;
 
   const [first, second] = args;
   const [x, y] = typeof first === "object" ? [first?.left, first?.top] : [first, second];
-  const [left, top] = relative ? (core.scrollOf(el.__node_id) ?? [0, 0]) : [0, 0];
+  const [left, top] = relative ? (scrollOf(el.__node_id) ?? [0, 0]) : [0, 0];
   const target = (value: number | undefined, from: number): number | null => {
     if (value === undefined) return null;
     const amount = Number(value);
     return (relative ? from : 0) + (Number.isFinite(amount) ? amount : 0);
   };
 
-  core.scrollNode(el.__node_id, target(x, left), target(y, top));
+  scrollNode(el.__node_id, target(x, left), target(y, top));
 }
 
 /** The options form of `scrollIntoView()`. `behavior` is accepted and ignored. */

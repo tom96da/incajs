@@ -3,25 +3,32 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createEventTarget } from "../eventTarget.mts";
 import { rectOf } from "./geometry.mts";
 import { elementOf, unregisterElement } from "./lifecycle.mts";
 import * as tree from "./shadowTree.mts";
-import type { IncaCore } from "../rendererCore.mts";
 import type { EventLike, IncaEventTarget } from "../types.mts";
 import type { IncaElement, IncaText } from "./types.mts";
 
 let nextId = 1;
 
-const add = vi.fn<IncaEventTarget["addEventListener"]>();
-const remove = vi.fn<IncaEventTarget["removeEventListener"]>();
-const dispatch = vi.fn<(event: EventLike) => boolean>(() => true);
-const target: IncaEventTarget = {
-  addEventListener: add,
-  removeEventListener: remove,
-  dispatchEvent: dispatch,
-};
+const { add, remove, dispatch, target } = vi.hoisted(() => {
+  const add = vi.fn<IncaEventTarget["addEventListener"]>();
+  const remove = vi.fn<IncaEventTarget["removeEventListener"]>();
+  const dispatch = vi.fn<(event: EventLike) => boolean>(() => true);
+  const target: IncaEventTarget = {
+    addEventListener: add,
+    removeEventListener: remove,
+    dispatchEvent: dispatch,
+  };
+  return { add, remove, dispatch, target };
+});
 
-const core: IncaCore = {
+vi.mock("../eventTarget.mts", () => ({
+  createEventTarget: vi.fn<() => IncaEventTarget>(() => target),
+}));
+
+const host = {
   rootNodeId: vi.fn<() => number>(),
   createNode: vi.fn<(tag: string) => number>(),
   appendChild: vi.fn<(parentId: number, childId: number) => void>(),
@@ -34,15 +41,11 @@ const core: IncaCore = {
   removeAttribute: vi.fn<(nodeId: number, key: string) => void>(),
   setStyle: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   removeStyle: vi.fn<(nodeId: number, key: string) => void>(),
-  addEventListener: vi.fn<IncaCore["addEventListener"]>(),
-  removeEventListener: vi.fn<IncaCore["removeEventListener"]>(),
-  createEventTarget: vi.fn<IncaCore["createEventTarget"]>(() => target),
-  latestEventId: vi.fn<() => number>(() => 0),
-  destroyNode: vi.fn<(nodeId: number) => void>(),
+  destroyNode: vi.fn<(nodeId: number) => number[]>(() => []),
   holdNode: vi.fn<(nodeId: number) => void>(),
   releaseNode: vi.fn<(nodeId: number) => void>(),
-  focus: vi.fn<(nodeId: number) => void>(),
-  blur: vi.fn<(nodeId: number) => void>(),
+  focusNode: vi.fn<(nodeId: number) => void>(),
+  blurNode: vi.fn<(nodeId: number) => void>(),
   focusedNode: vi.fn<() => number | null>(() => null),
   layoutOf: vi.fn<
     (nodeId: number) => readonly [number, number, number, number, number, number, number] | null
@@ -76,9 +79,10 @@ const noLayout = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  globalThis.__inca_native__ = host as never;
   for (let id = 1; id < nextId; id++) unregisterElement(id);
   nextId = 1;
-  vi.mocked(core.createNode).mockImplementation(() => nextId++);
+  vi.mocked(host.createNode).mockImplementation(() => nextId++);
 });
 
 function element(): IncaElement {
@@ -100,8 +104,8 @@ function element(): IncaElement {
 
 describe("createElement", () => {
   it("allocates a native node for the tag and returns a parentless, childless element", () => {
-    const el = tree.createElementNode(core, "div");
-    expect(core.createNode).toHaveBeenCalledWith("div");
+    const el = tree.createElementNode("div");
+    expect(host.createNode).toHaveBeenCalledWith("div");
     expect(el).toEqual({
       id: "",
       kind: "element",
@@ -139,9 +143,9 @@ describe("createElement", () => {
 
 describe("createText", () => {
   it("creates a text node and forwards the initial value", () => {
-    const node = tree.createTextNode(core, "hello");
-    expect(core.createNode).toHaveBeenCalledWith("text");
-    expect(core.setAttribute).toHaveBeenCalledWith(1, "value", "hello");
+    const node = tree.createTextNode("hello");
+    expect(host.createNode).toHaveBeenCalledWith("text");
+    expect(host.setAttribute).toHaveBeenCalledWith(1, "value", "hello");
     expect(node).toEqual({ kind: "text", parent: null, text: "hello" });
     expect(node.__node_id).toBe(1);
     expect("id" in node).toBe(false);
@@ -150,19 +154,19 @@ describe("createText", () => {
 
 describe("createComment", () => {
   it("creates a hidden container in place of a comment", () => {
-    const node = tree.createCommentNode(core);
-    expect(core.createNode).toHaveBeenCalledWith("div");
-    expect(core.setStyle).toHaveBeenCalledWith(1, "display", "none");
+    const node = tree.createCommentNode();
+    expect(host.createNode).toHaveBeenCalledWith("div");
+    expect(host.setStyle).toHaveBeenCalledWith(1, "display", "none");
     expect(node.kind).toBe("comment");
   });
 });
 
 describe("event target methods", () => {
-  it("come from core.createEventTarget, resolving the element's own node id", () => {
-    const el = tree.createElementNode(core, "div");
-    const comment = tree.createCommentNode(core);
+  it("come from createEventTarget, resolving the element's own node id", () => {
+    const el = tree.createElementNode("div");
+    const comment = tree.createCommentNode();
 
-    const resolvers = vi.mocked(core.createEventTarget).mock.calls.map(([resolve]) => resolve());
+    const resolvers = vi.mocked(createEventTarget).mock.calls.map(([resolve]) => resolve());
     expect(resolvers).toEqual([el.__node_id, comment.__node_id]);
     const listener = vi.fn<() => void>();
     const event = { type: "ping" };
@@ -178,9 +182,9 @@ describe("event target methods", () => {
 
 describe("setText", () => {
   it("forwards the new value and updates the node", () => {
-    const node = tree.createTextNode(core, "old") as IncaText;
-    tree.setText(core, node, "new");
-    expect(core.setAttribute).toHaveBeenCalledWith(1, "value", "new");
+    const node = tree.createTextNode("old") as IncaText;
+    tree.setText(node, "new");
+    expect(host.setAttribute).toHaveBeenCalledWith(1, "value", "new");
     expect(node.text).toBe("new");
   });
 });
@@ -192,9 +196,9 @@ describe("setElementText", () => {
     el.children.push(oldChild);
     oldChild.parent = el;
 
-    tree.setElementText(core, el, "hello");
+    tree.setElementText(el, "hello");
 
-    expect(core.destroyNode).toHaveBeenCalledWith(oldChild.__node_id);
+    expect(host.destroyNode).toHaveBeenCalledWith(oldChild.__node_id);
     expect(oldChild.parent).toBeNull();
     expect(el.children).toHaveLength(1);
     expect(el.children[0]).toMatchObject({ kind: "text", text: "hello" });
@@ -206,7 +210,7 @@ describe("setElementText", () => {
     el.children.push(oldChild);
     oldChild.parent = el;
 
-    tree.setElementText(core, el, "");
+    tree.setElementText(el, "");
 
     expect(el.children).toHaveLength(0);
   });
@@ -217,9 +221,9 @@ describe("insert", () => {
     const parent = element();
     const child = element();
 
-    tree.insert(core, child, parent);
+    tree.insert(child, parent);
 
-    expect(core.insertBefore).toHaveBeenCalledWith(parent.__node_id, child.__node_id, null);
+    expect(host.insertBefore).toHaveBeenCalledWith(parent.__node_id, child.__node_id, null);
     expect(parent.children).toEqual([child]);
     expect(child.parent).toBe(parent);
   });
@@ -228,14 +232,14 @@ describe("insert", () => {
     const parent = element();
     const first = element();
     const anchor = element();
-    tree.insert(core, first, parent);
-    tree.insert(core, anchor, parent);
-    vi.mocked(core.insertBefore).mockClear();
+    tree.insert(first, parent);
+    tree.insert(anchor, parent);
+    vi.mocked(host.insertBefore).mockClear();
 
     const inserted = element();
-    tree.insert(core, inserted, parent, anchor);
+    tree.insert(inserted, parent, anchor);
 
-    expect(core.insertBefore).toHaveBeenCalledWith(
+    expect(host.insertBefore).toHaveBeenCalledWith(
       parent.__node_id,
       inserted.__node_id,
       anchor.__node_id,
@@ -247,14 +251,14 @@ describe("insert", () => {
     const parent = element();
     const first = element();
     const second = element();
-    tree.insert(core, first, parent);
-    tree.insert(core, second, parent);
+    tree.insert(first, parent);
+    tree.insert(second, parent);
     vi.clearAllMocks();
 
-    tree.insert(core, first, parent, first);
+    tree.insert(first, parent, first);
 
-    expect(core.removeChild).not.toHaveBeenCalled();
-    expect(core.insertBefore).not.toHaveBeenCalled();
+    expect(host.removeChild).not.toHaveBeenCalled();
+    expect(host.insertBefore).not.toHaveBeenCalled();
     expect(parent.children).toEqual([first, second]);
   });
 
@@ -263,9 +267,9 @@ describe("insert", () => {
     const strayAnchor = element();
     const child = element();
 
-    tree.insert(core, child, parent, strayAnchor);
+    tree.insert(child, parent, strayAnchor);
 
-    expect(core.insertBefore).toHaveBeenCalledWith(parent.__node_id, child.__node_id, null);
+    expect(host.insertBefore).toHaveBeenCalledWith(parent.__node_id, child.__node_id, null);
     expect(parent.children).toEqual([child]);
   });
 
@@ -273,12 +277,12 @@ describe("insert", () => {
     const oldParent = element();
     const newParent = element();
     const child = element();
-    tree.insert(core, child, oldParent);
+    tree.insert(child, oldParent);
 
-    tree.insert(core, child, newParent);
+    tree.insert(child, newParent);
 
-    expect(core.removeChild).toHaveBeenCalledWith(oldParent.__node_id, child.__node_id);
-    expect(core.destroyNode).not.toHaveBeenCalled();
+    expect(host.removeChild).toHaveBeenCalledWith(oldParent.__node_id, child.__node_id);
+    expect(host.destroyNode).not.toHaveBeenCalled();
     expect(oldParent.children).toHaveLength(0);
     expect(newParent.children).toEqual([child]);
     expect(child.parent).toBe(newParent);
@@ -289,14 +293,14 @@ describe("remove", () => {
   it("frees the node and unlinks it from its parent", () => {
     const parent = element();
     const child = element();
-    tree.insert(core, child, parent);
-    vi.mocked(core.removeChild).mockClear();
+    tree.insert(child, parent);
+    vi.mocked(host.removeChild).mockClear();
 
-    tree.remove(core, child);
+    tree.remove(child);
 
-    expect(core.destroyNode).toHaveBeenCalledWith(child.__node_id);
+    expect(host.destroyNode).toHaveBeenCalledWith(child.__node_id);
     expect(
-      core.removeChild,
+      host.removeChild,
       "destroyNode detaches natively, so a second call would be redundant",
     ).not.toHaveBeenCalled();
     expect(parent.children).toHaveLength(0);
@@ -304,15 +308,15 @@ describe("remove", () => {
   });
 
   it("turns the handles of the removed subtree into inert targets", () => {
-    const root = tree.createElementNode(core, "div");
-    const mid = tree.createElementNode(core, "div");
-    const leaf = tree.createElementNode(core, "button");
-    tree.insert(core, tree.createTextNode(core, "t"), mid);
-    tree.insert(core, leaf, mid);
-    tree.insert(core, mid, root);
-    vi.mocked(core.setAttribute).mockClear();
+    const root = tree.createElementNode("div");
+    const mid = tree.createElementNode("div");
+    const leaf = tree.createElementNode("button");
+    tree.insert(tree.createTextNode("t"), mid);
+    tree.insert(leaf, mid);
+    tree.insert(mid, root);
+    vi.mocked(host.setAttribute).mockClear();
 
-    tree.remove(core, root);
+    tree.remove(root);
 
     for (const el of [root, leaf]) {
       el.addEventListener("click", vi.fn<() => void>());
@@ -324,16 +328,16 @@ describe("remove", () => {
     expect(add).not.toHaveBeenCalled();
     expect(remove).not.toHaveBeenCalled();
     expect(dispatch).not.toHaveBeenCalled();
-    expect(core.getAttribute).not.toHaveBeenCalled();
-    expect(core.setAttribute).not.toHaveBeenCalled();
+    expect(host.getAttribute).not.toHaveBeenCalled();
+    expect(host.setAttribute).not.toHaveBeenCalled();
   });
 
   it("turns the children setElementText frees into inert targets", () => {
-    const root = tree.createElementNode(core, "div");
-    const child = tree.createElementNode(core, "div");
-    tree.insert(core, child, root);
+    const root = tree.createElementNode("div");
+    const child = tree.createElementNode("div");
+    tree.insert(child, root);
 
-    tree.setElementText(core, root, "");
+    tree.setElementText(root, "");
     child.addEventListener("click", vi.fn<() => void>());
 
     expect(add).not.toHaveBeenCalled();
@@ -343,23 +347,23 @@ describe("remove", () => {
   it("frees a node that was never attached", () => {
     const child = element();
 
-    tree.remove(core, child);
+    tree.remove(child);
 
-    expect(core.destroyNode).toHaveBeenCalledWith(child.__node_id);
-    expect(core.removeChild).not.toHaveBeenCalled();
+    expect(host.destroyNode).toHaveBeenCalledWith(child.__node_id);
+    expect(host.removeChild).not.toHaveBeenCalled();
   });
 });
 
 describe("element registry", () => {
   it("drops the whole removed subtree", () => {
-    const root = tree.createElementNode(core, "div");
-    const mid = tree.createElementNode(core, "div");
-    const leaf = tree.createElementNode(core, "button");
-    tree.insert(core, leaf, mid);
-    tree.insert(core, mid, root);
+    const root = tree.createElementNode("div");
+    const mid = tree.createElementNode("div");
+    const leaf = tree.createElementNode("button");
+    tree.insert(leaf, mid);
+    tree.insert(mid, root);
     expect([root, mid, leaf].map((el) => elementOf(el.__node_id))).toEqual([root, mid, leaf]);
 
-    tree.remove(core, root);
+    tree.remove(root);
 
     expect([root, mid, leaf].map((el) => elementOf(el.__node_id) !== undefined)).toEqual([
       false,
@@ -369,13 +373,13 @@ describe("element registry", () => {
   });
 
   it("drops the children setElementText replaces, and their descendants", () => {
-    const root = tree.createElementNode(core, "div");
-    const child = tree.createElementNode(core, "div");
-    const grandchild = tree.createElementNode(core, "div");
-    tree.insert(core, grandchild, child);
-    tree.insert(core, child, root);
+    const root = tree.createElementNode("div");
+    const child = tree.createElementNode("div");
+    const grandchild = tree.createElementNode("div");
+    tree.insert(grandchild, child);
+    tree.insert(child, root);
 
-    tree.setElementText(core, root, "hello");
+    tree.setElementText(root, "hello");
 
     expect(elementOf(child.__node_id) !== undefined).toBe(false);
     expect(elementOf(grandchild.__node_id) !== undefined).toBe(false);
@@ -388,8 +392,8 @@ describe("parentNode / nextSibling", () => {
     const parent = element();
     const first = element();
     const second = element();
-    tree.insert(core, first, parent);
-    tree.insert(core, second, parent);
+    tree.insert(first, parent);
+    tree.insert(second, parent);
 
     expect(tree.parentNode(first)).toBe(parent);
     expect(tree.nextSibling(first)).toBe(second);

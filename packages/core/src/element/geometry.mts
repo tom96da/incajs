@@ -1,8 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import { layoutOf } from "../tree.mts";
 import { isDestroyed } from "./lifecycle.mts";
-import type { IncaCore } from "../rendererCore.mts";
 import type { IncaElement } from "./types.mts";
 
 /** `[x, y, width, height, border, scrollX, scrollY]` of a node's last drawn frame. */
@@ -11,24 +11,22 @@ export type LayoutBox = readonly [number, number, number, number, number, number
 /**
  * Reads the box a node was last drawn at. A destroyed node, or one with no
  * recorded box, yields `null`.
- * @param core - the incajs bindings to read through
  * @param el - the node to read
  * @returns the box, or `null`
  */
-export function layoutBox(core: IncaCore, el: IncaElement): LayoutBox | null {
-  return isDestroyed(el) ? null : core.layoutOf(el.__node_id);
+export function layoutBox(el: IncaElement): LayoutBox | null {
+  return isDestroyed(el) ? null : layoutOf(el.__node_id);
 }
 
 /**
  * The parent a node's offsets are measured from. It is the parent when both
  * the node and the parent have a recorded box.
- * @param core - the incajs bindings to read through
  * @param el - the node to query
  * @returns the parent, or `null`
  */
-export function offsetParentOf(core: IncaCore, el: IncaElement): IncaElement | null {
+export function offsetParentOf(el: IncaElement): IncaElement | null {
   const parent = el.parent;
-  if (!layoutBox(core, el) || !parent || !layoutBox(core, parent)) return null;
+  if (!layoutBox(el) || !parent || !layoutBox(parent)) return null;
   return parent;
 }
 
@@ -36,16 +34,15 @@ export function offsetParentOf(core: IncaCore, el: IncaElement): IncaElement | n
  * Where a node sits inside the padding edge of its offset parent, rounded to
  * whole pixels. A node with no offset parent is measured from the window
  * origin.
- * @param core - the incajs bindings to read through
  * @param el - the node to measure
  * @returns `left` and `top`; both `0` when the node has no recorded box
  */
-export function offsetOf(core: IncaCore, el: IncaElement): { left: number; top: number } {
-  const box = layoutBox(core, el);
+export function offsetOf(el: IncaElement): { left: number; top: number } {
+  const box = layoutBox(el);
   if (!box) return { left: 0, top: 0 };
 
-  const parent = offsetParentOf(core, el);
-  const origin = parent ? layoutBox(core, parent) : null;
+  const parent = offsetParentOf(el);
+  const origin = parent ? layoutBox(parent) : null;
   // The box moved with the scroll its parent applied when it was recorded.
   return {
     left: Math.round(box[0] - (origin ? origin[0] + origin[4] : 0) + box[5]) || 0,

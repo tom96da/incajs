@@ -3,20 +3,7 @@
 
 import type { RendererOptions } from "@vue/runtime-core";
 
-import { releaseWhenCollected } from "../element/lifecycle.mts";
-import {
-  createCommentNode,
-  createElementNode,
-  createTextNode,
-  insert,
-  nextSibling,
-  parentNode,
-  remove,
-  setElementText,
-  setText,
-} from "../element/shadowTree.mts";
-import type { IncaElement, IncaNode, IncaText } from "../element/types.mts";
-import type { IncaCore, TagName } from "../rendererCore.mts";
+import type { IncaCore, IncaElement, IncaNode, IncaText, TagName } from "../rendererCore.mts";
 
 /**
  * Marks `handle` so that Vue's `reactive()` and `ref()` keep the object itself.
@@ -47,14 +34,14 @@ export function createNodeOps(core: IncaCore): NodeOps {
      * @param tag - the node's element kind
      * @returns the new, parentless, childless element
      */
-    createElement: (tag: TagName): IncaElement => skipReactive(createElementNode(core, tag)),
+    createElement: (tag: TagName): IncaElement => skipReactive(core.createElementNode(tag)),
 
     /**
      * Creates a text leaf.
      * @param text - the initial text content
      * @returns the new text leaf
      */
-    createText: (text: string): IncaText => skipReactive(createTextNode(core, text)),
+    createText: (text: string): IncaText => skipReactive(core.createTextNode(text)),
 
     /**
      * Creates the hidden container that stands in for a Vue comment node
@@ -62,9 +49,9 @@ export function createNodeOps(core: IncaCore): NodeOps {
      * @param _text - the comment's text
      * @returns the new hidden element
      */
-    createComment: (_text: string): IncaElement => skipReactive(createCommentNode(core)),
+    createComment: (_text: string): IncaElement => skipReactive(core.createCommentNode()),
 
-    setText: (node: IncaText, text: string): void => setText(core, node, text),
+    setText: (node: IncaText, text: string): void => core.setText(node, text),
 
     /**
      * Replaces all of `el`'s children with at most a single text child. Vue
@@ -72,7 +59,7 @@ export function createNodeOps(core: IncaCore): NodeOps {
      * @param el - the container whose children are replaced
      * @param text - the new text content
      */
-    setElementText: (el: IncaElement, text: string): void => setElementText(core, el, text),
+    setElementText: (el: IncaElement, text: string): void => core.setElementText(el, text),
 
     /**
      * Attaches `child` to `parent`, before `anchor` or at the end. Vue moves a
@@ -82,17 +69,17 @@ export function createNodeOps(core: IncaCore): NodeOps {
      * @param anchor - the sibling to insert before, or omitted/`null` to append at the end
      */
     insert: (child: IncaNode, parent: IncaElement, anchor?: IncaNode | null): void =>
-      insert(core, child, parent, anchor),
+      core.insert(child, parent, anchor),
 
     /**
      * Removes `child` with its subtree. Vue unmounts a subtree by calling this
      * on its root alone.
      * @param child - the node being removed
      */
-    remove: (child: IncaNode): void => remove(core, child),
+    remove: (child: IncaNode): void => core.remove(child),
 
-    parentNode,
-    nextSibling,
+    parentNode: core.parentNode,
+    nextSibling: core.nextSibling,
   };
 }
 
@@ -108,7 +95,7 @@ type Creators = Pick<NodeOps, "createElement" | "createText">;
 export function createHeldNodeOps(core: IncaCore, ops: Creators): Creators {
   const hold = <N extends IncaNode>(node: N): N => {
     core.holdNode(node.__node_id);
-    releaseWhenCollected(node);
+    core.releaseWhenCollected(node);
     return node;
   };
   // Read now: the caller may assign the result over `ops`.

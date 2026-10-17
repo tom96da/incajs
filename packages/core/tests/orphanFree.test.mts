@@ -15,7 +15,6 @@ import type { Component } from "@vue/runtime-core";
 
 import { elementOf, isDestroyed } from "../src/element/lifecycle.mts";
 import { createElementNode } from "../src/element/shadowTree.mts";
-import * as core from "../src/rendererCore.mts";
 import { createIncaApp } from "../src/vue/index.mts";
 import type { IncaElement } from "../src/index.mts";
 
@@ -313,7 +312,7 @@ describe("a host that frees orphans, driven by the Inca renderer", () => {
 
 describe("__inca_released__", () => {
   it("releases the callbacks and marks the handles destroyed", () => {
-    const el = createElementNode(core, "div");
+    const el = createElementNode("div");
     const listener = () => {};
     el.addEventListener("click", listener);
     const callbackId = nodeOf(el.__node_id).listeners[0]!;
@@ -325,8 +324,8 @@ describe("__inca_released__", () => {
   });
 
   it("releases the rest when one release throws", () => {
-    const a = createElementNode(core, "div");
-    const b = createElementNode(core, "div");
+    const a = createElementNode("div");
+    const b = createElementNode("div");
     a.addEventListener("click", () => {});
     b.addEventListener("click", () => {});
     const first = nodeOf(a.__node_id).listeners[0]!;

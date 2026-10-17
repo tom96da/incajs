@@ -8,9 +8,7 @@ import {
   type RendererOptions,
 } from "@vue/runtime-core";
 
-import { isDestroyed } from "../element/lifecycle.mts";
-import type { IncaElement } from "../element/types.mts";
-import type { IncaCore, EventListener, ListenerOptions } from "../rendererCore.mts";
+import type { EventListener, IncaCore, IncaElement, ListenerOptions } from "../rendererCore.mts";
 
 /**
  * Whether a prop is a native event. `onUpdate:modelValue` and the like are
@@ -163,7 +161,7 @@ const entryKeyOf = ({ event, capture, passive }: ParsedEventKey): string =>
  */
 function sync(core: IncaCore, el: IncaElement, entryKey: string, entry: Entry): void {
   const live = Array.from(entry.slots.values()).some((slot) => !slot.fired);
-  if (live && !entry.registered && !isDestroyed(el)) {
+  if (live && !entry.registered && !core.isDestroyed(el)) {
     core.addEventListener(el.__node_id, entry.event, entry.dispatcher, entry.options);
     entry.registered = true;
   } else if (!live && entry.registered) {

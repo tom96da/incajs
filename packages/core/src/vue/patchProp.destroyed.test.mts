@@ -3,29 +3,26 @@
 
 import { describe, expect, it, vi } from "vitest";
 
+import * as core from "../rendererCore.mts";
 import { createNodeOps } from "./nodeOps.mts";
 import { createPatchProp } from "./patchProp.mts";
-import type { IncaElement } from "../element/types.mts";
-import type { IncaCore } from "../rendererCore.mts";
-import type { IncaEventTarget } from "../types.mts";
+import type { IncaElement } from "../rendererCore.mts";
 
 describe("patchProp on a destroyed element", () => {
   it("adds a listener slot without reaching the host", () => {
     const freed = new Set<number>();
-    const core = {
+    globalThis.__inca_native__ = {
       createNode: vi.fn<() => number>(() => 2),
-      destroyNode: vi.fn<(id: number) => void>((id) => void freed.add(id)),
-      createEventTarget: vi.fn<() => IncaEventTarget>(() => ({
-        addEventListener: vi.fn<IncaEventTarget["addEventListener"]>(),
-        removeEventListener: vi.fn<IncaEventTarget["removeEventListener"]>(),
-        dispatchEvent: vi.fn<IncaEventTarget["dispatchEvent"]>(() => true),
-      })),
-      addEventListener: vi.fn<(id: number) => void>((id) => {
-        if (freed.has(id)) throw new TypeError(`node ${id} is not live`);
+      destroyNode: vi.fn<(id: number) => number[]>((id) => {
+        freed.add(id);
+        return [];
       }),
-      removeEventListener: vi.fn<(id: number) => void>(),
-      latestEventId: vi.fn<() => number>(() => 0),
-    } as unknown as IncaCore;
+      addEventListener: vi.fn<(id: number) => number>((id) => {
+        if (freed.has(id)) throw new TypeError(`node ${id} is not live`);
+        return 0;
+      }),
+      removeEventListener: vi.fn<() => boolean>(() => true),
+    } as never;
     const ops = createNodeOps(core);
     const el = ops.createElement("view") as IncaElement;
     ops.remove(el);

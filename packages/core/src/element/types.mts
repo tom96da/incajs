@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import type { IncaEventTarget, NodeId } from "../rendererCore.mts";
+import type { IncaEventTarget, NodeId } from "../types.mts";
 import type { RectLike } from "./geometry.mts";
 import type { ScrollIntoViewOptions, ScrollOptions } from "./scroll.mts";
 

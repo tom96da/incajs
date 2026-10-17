@@ -4,34 +4,27 @@
 import { reactive, ref } from "@vue/runtime-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { unregisterElement } from "../element/lifecycle.mts";
+import * as core from "../rendererCore.mts";
 import { createNodeOps } from "./nodeOps.mts";
-import type { IncaCore } from "../rendererCore.mts";
 
 let nextId = 1;
 
-const core = {
-  createNode: vi.fn<(tag: string) => number>(),
+/** The host bindings the element handles call. */
+const native = {
+  createNode: vi.fn<(tag: string) => number>(() => nextId++),
   appendChild: vi.fn<(parentId: number, childId: number) => void>(),
   insertBefore: vi.fn<(parentId: number, childId: number, anchorId: number | null) => void>(),
   removeChild: vi.fn<(parentId: number, childId: number) => void>(),
-  destroyNode: vi.fn<(nodeId: number) => void>(),
+  destroyNode: vi.fn<(nodeId: number) => number[]>(() => []),
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   setStyle: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
-  createEventTarget: vi.fn<IncaCore["createEventTarget"]>(() => ({
-    addEventListener: () => {},
-    removeEventListener: () => {},
-    dispatchEvent: () => true,
-  })),
-} as unknown as IncaCore;
+};
 
 const nodeOps = createNodeOps(core);
 
 beforeEach(() => {
   vi.clearAllMocks();
-  for (let id = 1; id < nextId; id++) unregisterElement(id);
-  nextId = 1;
-  vi.mocked(core.createNode).mockImplementation(() => nextId++);
+  globalThis.__inca_native__ = native as never;
 });
 
 describe("createNodeOps text", () => {
@@ -40,7 +33,7 @@ describe("createNodeOps text", () => {
 
     nodeOps.setText(text, "b");
 
-    expect(core.setAttribute).toHaveBeenLastCalledWith(text.__node_id, "value", "b");
+    expect(native.setAttribute).toHaveBeenLastCalledWith(text.__node_id, "value", "b");
   });
 });
 

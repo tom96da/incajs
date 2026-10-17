@@ -4,6 +4,7 @@
 import "./targets.mts";
 
 export { createEventTarget } from "./eventTarget.mts";
+export { window } from "./window.mts";
 export {
   addEventListener,
   removeEventListener,
@@ -33,10 +34,24 @@ export {
   setStyle,
   removeStyle,
 } from "./tree.mts";
+export { createIncaElement } from "./element/handle.mts";
+export { isDestroyed, releaseWhenCollected } from "./element/lifecycle.mts";
+export {
+  createCommentNode,
+  createElementNode,
+  createTextNode,
+  insert,
+  nextSibling,
+  parentNode,
+  remove,
+  setElementText,
+  setText,
+} from "./element/shadowTree.mts";
 export type * from "./types.mts";
+export type * from "./element/types.mts";
 
 /**
- * The tree/event primitives a custom renderer (`incajs/vue`) drives the
- * native tree through.
+ * What a custom renderer (`incajs/vue`) drives the host through: the tree and
+ * event calls, the element handles and the shadow tree.
  */
 export type IncaCore = typeof import("./rendererCore.mts");

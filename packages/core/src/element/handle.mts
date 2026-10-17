@@ -1,11 +1,13 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import * as nativeCore from "../rendererCore.mts";
+import { blur, click, focus } from "../events.mts";
+import { createEventTarget } from "../eventTarget.mts";
+import { focusedNode, getAttribute, scrollIntoViewNode, scrollOf, setAttribute } from "../tree.mts";
 import { layoutBox, offsetOf, offsetParentOf, rectOf, tabIndexOf } from "./geometry.mts";
 import { elementOf, isDestroyed, isNode, registerElement, withNodeId } from "./lifecycle.mts";
 import { scrollIntoViewArgs, scrollPosition } from "./scroll.mts";
-import type { IncaCore, NodeId, TagName } from "../rendererCore.mts";
+import type { NodeId, TagName } from "../types.mts";
 import type { ScrollArgs, ScrollIntoViewOptions } from "./scroll.mts";
 import type { IncaElement, IncaNode } from "./types.mts";
 
@@ -13,27 +15,25 @@ import type { IncaElement, IncaNode } from "./types.mts";
  * Builds the {@link IncaElement} handle for a native node: parentless,
  * childless, with `id`, `focus()`, `blur()`, `click()`, `contains()`, the
  * listener methods of an event target, `tabIndex` and the layout members, all
- * driven through `core`.
- * @param core - the incajs bindings the handle drives
+ * driven through the host.
  * @param id - the native node's id
  * @param kind - whether the node is an element or a comment stand-in
  * @param tag - the node's element kind, if it has one; a `button` defaults to tab index `0`
  * @returns the new handle
  */
 export function createIncaElement(
-  core: IncaCore,
   id: NodeId,
   kind: IncaElement["kind"],
   tag?: TagName,
 ): IncaElement {
-  const target = core.createEventTarget(() => id);
-  const scroll = () => (isDestroyed(element) ? null : core.scrollOf(id));
+  const target = createEventTarget(() => id);
+  const scroll = () => (isDestroyed(element) ? null : scrollOf(id));
   const fields: Omit<IncaElement, "__node_id"> = {
     get id() {
-      return isDestroyed(element) ? "" : String(core.getAttribute(id, "id") ?? "");
+      return isDestroyed(element) ? "" : String(getAttribute(id, "id") ?? "");
     },
     set id(value: string) {
-      if (!isDestroyed(element)) core.setAttribute(id, "id", String(value));
+      if (!isDestroyed(element)) setAttribute(id, "id", String(value));
     },
     kind,
     parent: null,
@@ -41,11 +41,11 @@ export function createIncaElement(
     focus: (options?: { preventScroll?: boolean }) => {
       if (isDestroyed(element)) return;
       const preventScroll = options?.preventScroll;
-      if (preventScroll === undefined) core.focus(id);
-      else core.focus(id, Boolean(preventScroll));
+      if (preventScroll === undefined) focus(id);
+      else focus(id, Boolean(preventScroll));
     },
-    blur: () => core.blur(id),
-    click: () => core.click(id),
+    blur: () => blur(id),
+    click: () => click(id),
     contains: (other: unknown) => {
       if (other === null || other === undefined) return false;
       if (!isNode(other)) {
@@ -64,52 +64,52 @@ export function createIncaElement(
     },
     dispatchEvent: (event) => isDestroyed(element) || target.dispatchEvent(event),
     get tabIndex() {
-      return tabIndexOf(isDestroyed(element) ? null : core.getAttribute(id, "tabindex"), tag ?? "");
+      return tabIndexOf(isDestroyed(element) ? null : getAttribute(id, "tabindex"), tag ?? "");
     },
     set tabIndex(value: number) {
-      if (!isDestroyed(element)) core.setAttribute(id, "tabindex", value | 0);
+      if (!isDestroyed(element)) setAttribute(id, "tabindex", value | 0);
     },
-    getBoundingClientRect: () => rectOf(layoutBox(core, element)),
+    getBoundingClientRect: () => rectOf(layoutBox(element)),
     get offsetWidth() {
-      return Math.round(layoutBox(core, element)?.[2] ?? 0);
+      return Math.round(layoutBox(element)?.[2] ?? 0);
     },
     get offsetHeight() {
-      return Math.round(layoutBox(core, element)?.[3] ?? 0);
+      return Math.round(layoutBox(element)?.[3] ?? 0);
     },
     get offsetLeft() {
-      return offsetOf(core, element).left;
+      return offsetOf(element).left;
     },
     get offsetTop() {
-      return offsetOf(core, element).top;
+      return offsetOf(element).top;
     },
     get offsetParent() {
-      return offsetParentOf(core, element);
+      return offsetParentOf(element);
     },
     get clientWidth() {
-      const box = layoutBox(core, element);
+      const box = layoutBox(element);
       return box ? Math.max(0, Math.round(box[2] - 2 * box[4])) : 0;
     },
     get clientHeight() {
-      const box = layoutBox(core, element);
+      const box = layoutBox(element);
       return box ? Math.max(0, Math.round(box[3] - 2 * box[4])) : 0;
     },
     get clientLeft() {
-      return Math.round(layoutBox(core, element)?.[4] ?? 0);
+      return Math.round(layoutBox(element)?.[4] ?? 0);
     },
     get clientTop() {
-      return Math.round(layoutBox(core, element)?.[4] ?? 0);
+      return Math.round(layoutBox(element)?.[4] ?? 0);
     },
     get scrollLeft() {
       return scroll()?.[0] ?? 0;
     },
     set scrollLeft(value: number) {
-      scrollPosition(core, element, [value], false);
+      scrollPosition(element, [value], false);
     },
     get scrollTop() {
       return scroll()?.[1] ?? 0;
     },
     set scrollTop(value: number) {
-      scrollPosition(core, element, [undefined, value], false);
+      scrollPosition(element, [undefined, value], false);
     },
     get scrollWidth() {
       return element.clientWidth + Math.round(scroll()?.[2] ?? 0);
@@ -117,12 +117,12 @@ export function createIncaElement(
     get scrollHeight() {
       return element.clientHeight + Math.round(scroll()?.[3] ?? 0);
     },
-    scrollTo: (...args: ScrollArgs) => scrollPosition(core, element, args, false),
-    scrollBy: (...args: ScrollArgs) => scrollPosition(core, element, args, true),
+    scrollTo: (...args: ScrollArgs) => scrollPosition(element, args, false),
+    scrollBy: (...args: ScrollArgs) => scrollPosition(element, args, true),
     scrollIntoView: (arg?: boolean | ScrollIntoViewOptions) => {
       if (isDestroyed(element)) return;
       const { block, inline } = scrollIntoViewArgs(arg);
-      core.scrollIntoViewNode(id, block, inline);
+      scrollIntoViewNode(id, block, inline);
     },
   };
   const element: IncaElement = withNodeId(fields, id);
@@ -136,6 +136,6 @@ export function createIncaElement(
  * @returns the focused element, or `null` when no element has focus
  */
 export function activeElement(): IncaElement | null {
-  const id = nativeCore.focusedNode();
+  const id = focusedNode();
   return id === null ? null : (elementOf(id) ?? null);
 }

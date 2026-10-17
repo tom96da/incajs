@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { native } from "../native.mts";
-import type { NodeId } from "../rendererCore.mts";
+import type { NodeId } from "../types.mts";
 import type { IncaElement, IncaNode } from "./types.mts";
 
 /** Every handle that `withNodeId` gave a node id. */
