@@ -19,8 +19,8 @@ import { defaultBundler } from "../../packages/cli/src/defaultBundler.mts";
 import { HostClient } from "../../packages/cli/src/dev-client/hostClient.mts";
 import { resolveTestHostBin } from "../support/hostBin.mts";
 import { reloadHost, settleReloads } from "../support/reloads.mts";
-import type { BuildFailure, HmrChannel } from "../../packages/cli/src/types.mts";
 import type { AppErrorParams } from "../../packages/cli/src/dev-client/protocol.mts";
+import type { BuildFailure, HmrChannel } from "../../packages/cli/src/types.mts";
 
 /** How long the host is given to reload/relay before this test gives up on it. */
 const RELOAD_TIMEOUT_MS = 10_000;
