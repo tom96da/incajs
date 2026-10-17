@@ -119,10 +119,10 @@ beforeAll(async () => {
 
 afterAll(async () => {
   try {
+    await channel?.close();
     await settleReloads();
   } finally {
     await hostClient?.stop();
-    await channel?.close();
     await rm(scratchRoot, { recursive: true, force: true });
   }
 });

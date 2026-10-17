@@ -25,7 +25,11 @@ export function reloadHost(client: HostClient | undefined, timeoutMs: number): v
   void call.finally(() => inFlight.delete(call));
 }
 
-/** Waits for every `reload` reply, then fails when a call was rejected. Run it before stopping the host. */
+/**
+ * Waits for every `reload` reply, then fails when a call was rejected.
+ * Close the dev server first, then call it, then stop the host: a watcher event that lands later
+ * reloads a host that is stopping.
+ */
 export async function settleReloads(): Promise<void> {
   await Promise.all(inFlight);
   expect(failures).toEqual([]);

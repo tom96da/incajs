@@ -166,10 +166,10 @@ beforeAll(async () => {
 
 afterAll(async () => {
   try {
+    await channel?.close();
     await settleReloads();
   } finally {
     await hostClient?.stop();
-    await channel?.close();
     await rm(scratchRoot, { recursive: true, force: true });
   }
 });
@@ -357,15 +357,10 @@ describe("a session that starts on a broken source", () => {
 
   afterAll(async () => {
     try {
+      for (const { channel } of sessions) await channel.close();
       await settleReloads();
     } finally {
-      for (const { client, channel } of sessions) {
-        try {
-          await client.stop();
-        } finally {
-          await channel.close();
-        }
-      }
+      for (const { client } of sessions) await client.stop();
     }
   });
 
