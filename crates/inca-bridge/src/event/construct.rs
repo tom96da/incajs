@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use inca_gpui::{EventPayload, NodeId};
+use rquickjs::atom::PredefinedAtom;
 use rquickjs::convert::Coerced;
 use rquickjs::function::{Constructor, IntoJsFunc, ParamRequirement, Params};
 use rquickjs::object::Property;
@@ -127,6 +128,10 @@ pub(super) fn constructors<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult
     event.set_length(1)?;
     let custom_proto = Object::new(ctx.clone())?;
     custom_proto.set_prototype(Some(proto))?;
+    custom_proto.prop(
+        PredefinedAtom::SymbolToStringTag,
+        Property::from("CustomEvent").configurable(),
+    )?;
     let custom = Constructor::new_prototype(
         ctx,
         custom_proto,

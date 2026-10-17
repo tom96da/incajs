@@ -1007,8 +1007,13 @@ A fixed entry is deleted and its ID is never reused.
   `Units: bridge,core,docs · Size: M · Impact: Low`
 
   A script cannot build a `MouseEvent`, `KeyboardEvent`, `FocusEvent`,
-  `WheelEvent`, `UIEvent` or `PointerEvent`, and `Event` has no `initEvent()`.
-  Fix: add the subclasses with their init dictionaries and `initEvent()`.
+  `WheelEvent`, `UIEvent` or `PointerEvent`. `Event` has no `initEvent()` and
+  `CustomEvent` no `initCustomEvent()`. Mouse, wheel, key and focus events
+  report `Event` as their `constructor` and `[object Event]` as their string
+  tag, where browsers report their subclass. One mouse prototype serves mouse
+  and wheel events, so it carries no tag of its own. Fix: add the subclasses
+  with their init dictionaries, `initEvent()`, `initCustomEvent()` and string
+  tags, and have the host's events inherit from them.
 
 - **B-168 `window` has the listener methods only and `document` is undefined**
   `Units: core,bridge,docs · Size: M · Impact: Low`

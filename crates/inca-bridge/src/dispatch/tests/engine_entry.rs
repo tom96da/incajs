@@ -247,6 +247,7 @@ fn a_script_that_patches_the_builtins_cannot_reach_or_break_event_state(cx: &mut
                 "BUBBLING_PHASE",
                 "CAPTURING_PHASE",
                 "NONE",
+                "Symbol(Symbol.toStringTag)",
                 "cancelBubble",
                 "composedPath",
                 "constructor",
@@ -346,6 +347,31 @@ fn get_modifier_state_lives_on_the_prototype_of_its_kind(
     let out = fire_and_read(cx, &dispatcher, node, event, &payload);
 
     assert_eq!(out, serde_json::json!(want));
+}
+
+#[gpui_cases]
+#[gpui::test]
+#[case::mouse("click", mouse_at(1.0, 1.0))]
+#[case::wheel("wheel", wheel_at(1.0, 1.0))]
+#[case::key("keydown", key_payload(gpui::Modifiers::default()))]
+#[case::focus("focus", EventPayload::Focus { related_target: None })]
+fn a_host_event_reads_event_as_its_string_tag(
+    cx: &mut TestAppContext,
+    event: &str,
+    payload: EventPayload,
+) {
+    let (dispatcher, host, _reported) = dispatcher_with_engine();
+    let node = host.borrow_mut().tree.create_node("div").unwrap();
+    listen(
+        &dispatcher,
+        node,
+        event,
+        "(e) => out.push(Object.prototype.toString.call(e))",
+    );
+
+    let out = fire_and_read(cx, &dispatcher, node, event, &payload);
+
+    assert_eq!(out, serde_json::json!(["[object Event]"]));
 }
 
 #[gpui::test]

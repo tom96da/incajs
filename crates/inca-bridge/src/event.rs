@@ -22,6 +22,7 @@ use std::time::Instant;
 
 use inca_gpui::NodeId;
 pub(crate) use inca_gpui::event_sink::Flags;
+use rquickjs::atom::PredefinedAtom;
 use rquickjs::convert::Coerced;
 use rquickjs::function::This;
 use rquickjs::object::Property;
@@ -185,7 +186,7 @@ const PHASES: [(&str, i32); 4] = [
 ];
 
 /// The prototype of event objects: the phase constants, the propagation
-/// methods, `composedPath` and the accessors.
+/// methods, `composedPath`, the accessors and the string tag `Event`.
 fn prototype<'js>(ctx: &Ctx<'js>) -> JsResult<Object<'js>> {
     let proto = Object::new(ctx.clone())?;
     for (name, value) in PHASES {
@@ -193,6 +194,10 @@ fn prototype<'js>(ctx: &Ctx<'js>) -> JsResult<Object<'js>> {
     }
     define_methods(ctx, &proto)?;
     define_accessors(ctx, &proto)?;
+    proto.prop(
+        PredefinedAtom::SymbolToStringTag,
+        Property::from("Event").configurable(),
+    )?;
     Ok(proto)
 }
 

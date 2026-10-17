@@ -677,3 +677,37 @@ fn an_event_constructor_length_reads_one(#[case] constructor: &str) {
 
     assert_eq!(got, serde_json::json!(1));
 }
+
+#[rstest]
+#[case::event("new Event('x')", "[object Event]")]
+#[case::custom_event("new CustomEvent('x')", "[object CustomEvent]")]
+fn an_event_string_tag_names_its_class(#[case] value: &str, #[case] want: &str) {
+    let (dispatcher, _host, _reported) = dispatcher_with_engine();
+
+    let got = eval_json(
+        &dispatcher,
+        &"Object.prototype.toString.call(VALUE)".replace("VALUE", value),
+    );
+
+    assert_eq!(got, serde_json::json!(want));
+}
+
+#[rstest]
+#[case::event("Event.prototype", "Event")]
+#[case::custom_event("CustomEvent.prototype", "CustomEvent")]
+fn a_string_tag_descriptor_reads_configurable_only(#[case] owner: &str, #[case] tag: &str) {
+    let (dispatcher, _host, _reported) = dispatcher_with_engine();
+
+    let got = eval_json(
+        &dispatcher,
+        &r"
+        (() => {
+            const d = Object.getOwnPropertyDescriptor(OWNER, Symbol.toStringTag);
+            return [d.value, d.writable, d.enumerable, d.configurable].join();
+        })()
+        "
+        .replace("OWNER", owner),
+    );
+
+    assert_eq!(got, serde_json::json!(format!("{tag},false,false,true")));
+}
