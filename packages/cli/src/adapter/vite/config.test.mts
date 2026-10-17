@@ -4,6 +4,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { Writable } from "node:stream";
 
 import { build } from "vite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -12,6 +13,11 @@ import * as core from "../../adapterCore.mts";
 import { resolveViteConfig } from "./config.mts";
 import type { CapturedOutput } from "./captureOutput.mts";
 import type { ResolveConfigOptions } from "./config.mts";
+
+/** Takes what the bundler writes, so it stays out of the test run's output. */
+function sink(): Writable {
+  return new Writable({ write: (_chunk, _encoding, callback) => callback() });
+}
 
 function optionsFor(mode: ResolveConfigOptions["mode"]): ResolveConfigOptions {
   return {
@@ -22,8 +28,8 @@ function optionsFor(mode: ResolveConfigOptions["mode"]): ResolveConfigOptions {
     mode,
     watch: false,
     onOutput: () => {},
-    stdout: process.stdout,
-    stderr: process.stderr,
+    stdout: sink(),
+    stderr: sink(),
     quiet: true,
   };
 }

@@ -18,6 +18,13 @@ import type {
   Watcher,
 } from "../src/adapter/types.mts";
 
+/** A spawned mock host reports late while the whole suite runs in parallel. */
+const WAIT_TIMEOUT_MS = 10_000;
+vi.setConfig({ testTimeout: 2 * WAIT_TIMEOUT_MS });
+
+const waitFor = <T,>(callback: () => T | Promise<T>): Promise<T> =>
+  vi.waitFor(callback, WAIT_TIMEOUT_MS);
+
 const mockHost = path.join(import.meta.dirname, "fixtures/mock-host.mts");
 const envMockHost = path.join(import.meta.dirname, "fixtures/mock-host-env.mts");
 const reloadFailsMockHost = path.join(import.meta.dirname, "fixtures/mock-host-reload-fails.mts");
@@ -128,6 +135,7 @@ describe("dev", () => {
     const controller = new AbortController();
 
     const running = dev({
+      cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler,
       hostBin: mockHost,
@@ -138,7 +146,7 @@ describe("dev", () => {
 
     await bundler.watching;
     bundler.emitBuild();
-    await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
+    await waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
 
     controller.abort();
     await running;
@@ -154,6 +162,7 @@ describe("dev", () => {
       const controller = new AbortController();
 
       const running = dev({
+        cwd: await scratch.makeApp({}),
         entry: "unused",
         bundler,
         hostBin: envMockHost,
@@ -164,7 +173,7 @@ describe("dev", () => {
 
       await bundler.watching;
       bundler.emitBuild();
-      await vi.waitFor(() => expect(stderr.text()).toContain("env NO_COLOR="));
+      await waitFor(() => expect(stderr.text()).toContain("env NO_COLOR="));
       controller.abort();
       await running;
 
@@ -199,6 +208,7 @@ describe("dev", () => {
     const controller = new AbortController();
 
     const running = dev({
+      cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler,
       hostBin: mockHost,
@@ -209,7 +219,7 @@ describe("dev", () => {
 
     await bundler.watching;
     bundler.emitBuild();
-    await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
+    await waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
     bundler.emitBuild();
 
     controller.abort();
@@ -223,7 +233,9 @@ describe("dev", () => {
     const stdout = makeSink();
     const controller = new AbortController();
 
+    const cwd = await scratch.makeApp({});
     const running = dev({
+      cwd,
       entry: "unused",
       bundler,
       hostBin: mockHost,
@@ -234,12 +246,12 @@ describe("dev", () => {
 
     await bundler.watching;
     bundler.emitBuild();
-    await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
+    await waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
     expect(stdout.text()).not.toContain("reload");
 
-    const vuePath = path.join(process.cwd(), "src/App.vue");
+    const vuePath = path.join(cwd, "src/App.vue");
     bundler.emitBuild({ ...FAKE_OUTPUT, changed: { file: vuePath, at: Date.now() } });
-    await vi.waitFor(() => expect(stdout.text()).toContain("reload src/App.vue"));
+    await waitFor(() => expect(stdout.text()).toContain("reload src/App.vue"));
 
     controller.abort();
     await running;
@@ -251,6 +263,7 @@ describe("dev", () => {
     const bundler = makeFakeBundler();
     const watch = vi.spyOn(bundler, "watch");
     const options = {
+      cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler,
       stdout: makeSink().stream,
@@ -275,6 +288,7 @@ describe("dev", () => {
 
     await expect(
       dev({
+        cwd: await scratch.makeApp({}),
         entry: "unused",
         bundler,
         stdout: makeSink().stream,
@@ -295,6 +309,7 @@ describe("dev", () => {
     const controller = new AbortController();
 
     const running = dev({
+      cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler,
       // A start attempt would print "failed to start".
@@ -306,7 +321,7 @@ describe("dev", () => {
 
     await bundler.watching;
     bundler.emitError({ message: "syntax error", stack: "at somewhere" });
-    await vi.waitFor(() => expect(stderr.text()).toContain("[inca] build failed"));
+    await waitFor(() => expect(stderr.text()).toContain("[inca] build failed"));
 
     controller.abort();
     await running;
@@ -323,6 +338,7 @@ describe("dev", () => {
     const controller = new AbortController();
 
     const running = dev({
+      cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler,
       hostBin: reloadFailsMockHost,
@@ -333,9 +349,9 @@ describe("dev", () => {
 
     await bundler.watching;
     bundler.emitBuild();
-    await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
+    await waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
     bundler.emitBuild();
-    await vi.waitFor(() => expect(stderr.text()).toContain("[inca] reload failed"));
+    await waitFor(() => expect(stderr.text()).toContain("[inca] reload failed"));
 
     controller.abort();
     await running;
@@ -351,6 +367,7 @@ describe("dev", () => {
     const controller = new AbortController();
 
     const running = dev({
+      cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler,
       hostBin: appErrorMockHost,
@@ -361,7 +378,7 @@ describe("dev", () => {
 
     await bundler.watching;
     bundler.emitBuild();
-    await vi.waitFor(() => expect(stderr.text()).toContain("[inca] app error"));
+    await waitFor(() => expect(stderr.text()).toContain("[inca] app error"));
 
     controller.abort();
     await running;
@@ -376,6 +393,7 @@ describe("dev", () => {
     const controller = new AbortController();
 
     const running = dev({
+      cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler,
       hostBin: mockHost,
@@ -386,7 +404,7 @@ describe("dev", () => {
 
     await bundler.watching;
     bundler.emitBuild();
-    await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
+    await waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
 
     controller.abort();
     await running;
@@ -401,6 +419,7 @@ describe("dev", () => {
     const controller = new AbortController();
 
     const running = dev({
+      cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler,
       hostBin: slowReadyMockHost,
@@ -413,8 +432,8 @@ describe("dev", () => {
     bundler.emitBuild();
     bundler.emitBuild();
 
-    await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
-    await vi.waitFor(() => expect(stderr.text()).toContain("reload #1"));
+    await waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
+    await waitFor(() => expect(stderr.text()).toContain("reload #1"));
 
     controller.abort();
     await running;
@@ -428,6 +447,7 @@ describe("dev", () => {
     const stdout = makeSink();
 
     const running = dev({
+      cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler,
       hostBin: exitingMockHost,
@@ -455,6 +475,7 @@ describe("dev", () => {
       const bundler = makeFakeBundler();
 
       const running = dev({
+        cwd: await scratch.makeApp({}),
         entry: "unused",
         bundler,
         hostBin: exitingMockHost,
@@ -479,6 +500,7 @@ describe("dev", () => {
     const bundler = makeFakeBundler();
 
     const running = dev({
+      cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler,
       hostBin: exitingMockHost,
@@ -500,6 +522,7 @@ describe("dev", () => {
     const stderr = makeSink();
 
     const running = dev({
+      cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler,
       hostBin,
@@ -563,7 +586,7 @@ describe("dev", () => {
       const cwd = await scratch.makeApp({ name: "no-entry" });
       const first = startDev(cwd);
 
-      await vi.waitFor(() =>
+      await waitFor(() =>
         expect(first.stderr.text()).toContain("[inca] build failed (ERR_INCA_ENTRY_NOT_FOUND)"),
       );
       expect(first.stdout.text()).toContain("[inca] waiting for a change to retry");
@@ -638,7 +661,7 @@ describe("dev", () => {
       await testCase.break(cwd);
       const { bundler, watch, stdout, stderr, controller, running } = startDev(cwd);
 
-      await vi.waitFor(() => expect(stderr.text()).toContain(testCase.said));
+      await waitFor(() => expect(stderr.text()).toContain(testCase.said));
       expect(stderr.text()).toContain("[inca] build failed");
       expect(stdout.text()).toContain("[inca] waiting for a change to retry");
       expect(watch).not.toHaveBeenCalled();
@@ -655,7 +678,7 @@ describe("dev", () => {
       const cwd = await scratch.makeApp({ name: "unrelated" });
       await mkdir(path.join(cwd, "src"));
       const { bundler, stdout, stderr, watch } = startDev(cwd);
-      await vi.waitFor(() => expect(stdout.text()).toContain("waiting for a change to retry"));
+      await waitFor(() => expect(stdout.text()).toContain("waiting for a change to retry"));
 
       await writeFile(path.join(cwd, "src/util.mts"), "");
       await writeFile(path.join(cwd, "README.md"), "");
@@ -672,7 +695,7 @@ describe("dev", () => {
     it("resolves on abort while waiting, frees the lock and prints nothing more", async () => {
       const cwd = await scratch.makeApp({ name: "abort-wait" });
       const { stdout, stderr, controller, running, watch } = startDev(cwd);
-      await vi.waitFor(() => expect(stdout.text()).toContain("waiting for a change to retry"));
+      await waitFor(() => expect(stdout.text()).toContain("waiting for a change to retry"));
 
       controller.abort();
       await expect(running).resolves.toBeUndefined();
@@ -734,7 +757,7 @@ describe("dev", () => {
         entry: path.join(cwd, "dist", "main.mts"),
       });
 
-      await vi.waitFor(() => expect(stderr.text()).toContain("ERR_INCA_OUT_DIR_INVALID"));
+      await waitFor(() => expect(stderr.text()).toContain("ERR_INCA_OUT_DIR_INVALID"));
       expect(watch).not.toHaveBeenCalled();
 
       await writeFile(path.join(cwd, "inca.config.ts"), 'export default { outDir: "out" };\n');
@@ -763,7 +786,7 @@ describe("dev", () => {
 
     await bundler.watching;
     bundler.emitBuild();
-    await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
+    await waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
 
     await expect(
       dev({
@@ -843,6 +866,7 @@ describe("dev with --experimental-hmr", () => {
     const controller = new AbortController();
 
     const running = dev({
+      cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler,
       hostBin: hmrMockHost,
@@ -852,10 +876,10 @@ describe("dev with --experimental-hmr", () => {
       signal: controller.signal,
     });
 
-    await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
+    await waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
 
     bundler.emitVite({ type: "custom", event: "greet", data: { hi: 1 } });
-    await vi.waitFor(() =>
+    await waitFor(() =>
       expect(bundler.dispatched).toEqual([{ type: "custom", event: "greet", data: { hi: 1 } }]),
     );
 
@@ -870,6 +894,7 @@ describe("dev with --experimental-hmr", () => {
     const controller = new AbortController();
 
     const running = dev({
+      cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler,
       hostBin: slowReadyMockHost,
@@ -879,10 +904,10 @@ describe("dev with --experimental-hmr", () => {
       signal: controller.signal,
     });
 
-    await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
+    await waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
 
     bundler.emitFullReload();
-    await vi.waitFor(() => expect(stderr.text()).toContain("reload #1"));
+    await waitFor(() => expect(stderr.text()).toContain("reload #1"));
 
     expect(bundler.dispatched).toEqual([]);
 
@@ -897,6 +922,7 @@ describe("dev with --experimental-hmr", () => {
     const controller = new AbortController();
 
     const running = dev({
+      cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler,
       hostBin: mockHost,
@@ -906,10 +932,10 @@ describe("dev with --experimental-hmr", () => {
       signal: controller.signal,
     });
 
-    await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
+    await waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
 
     bundler.emitError({ message: "bad template", stack: "at somewhere" });
-    await vi.waitFor(() => expect(stderr.text()).toContain("[inca] build failed"));
+    await waitFor(() => expect(stderr.text()).toContain("[inca] build failed"));
 
     controller.abort();
     await running;
@@ -924,7 +950,9 @@ describe("dev with --experimental-hmr", () => {
     const stdout = makeSink();
     const controller = new AbortController();
 
+    const cwd = await scratch.makeApp({});
     const running = dev({
+      cwd,
       entry: "unused",
       bundler,
       hostBin: slowReadyMockHost,
@@ -935,12 +963,12 @@ describe("dev with --experimental-hmr", () => {
     });
 
     // The mock host sends `ready` 200 ms after it starts.
-    await vi.waitFor(() => expect(hmr).toHaveBeenCalled());
-    bundler.emitUpdate({ file: path.join(process.cwd(), "src/early.vue"), took: 1 });
+    await waitFor(() => expect(hmr).toHaveBeenCalled());
+    bundler.emitUpdate({ file: path.join(cwd, "src/early.vue"), took: 1 });
     expect(stdout.text()).not.toContain("update");
 
-    await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
-    bundler.emitUpdate({ file: path.join(process.cwd(), "src/late.vue"), took: 2 });
+    await waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
+    bundler.emitUpdate({ file: path.join(cwd, "src/late.vue"), took: 2 });
 
     controller.abort();
     await running;
@@ -957,6 +985,7 @@ describe("dev with --experimental-hmr", () => {
     const controller = new AbortController();
 
     const running = dev({
+      cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler,
       hostBin: slowReadyMockHost,
@@ -967,9 +996,9 @@ describe("dev with --experimental-hmr", () => {
     });
 
     // The mock host sends `ready` 200 ms after it starts.
-    await vi.waitFor(() => expect(hmr).toHaveBeenCalled());
+    await waitFor(() => expect(hmr).toHaveBeenCalled());
     bundler.emitFullReload();
-    await vi.waitFor(() => expect(stderr.text()).toContain("reload #1"));
+    await waitFor(() => expect(stderr.text()).toContain("reload #1"));
     expect(stdout.text()).toContain("[inca] ready");
 
     controller.abort();
@@ -987,6 +1016,7 @@ describe("dev with --experimental-hmr", () => {
     const controller = new AbortController();
 
     const running = dev({
+      cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler,
       hostBin,
@@ -1087,7 +1117,7 @@ describe("dev on macOS", () => {
 
     await bundler.watching;
     bundler.emitBuild();
-    await vi.waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
+    await waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
 
     controller.abort();
     await running;
