@@ -331,8 +331,9 @@ does around its content lives in this phase.
 
 Not started. It waits on Vue 3 support (Phases 1–3) being stable. It adds
 `incajs/react` as a subpath alongside `incajs/vue`, in the same `incajs`
-package. The renderer uses `react-reconciler` and is built on the same core
-(see Phase 2). `@vitejs/plugin-react` compiles JSX and TSX and handles HMR.
+package. The renderer uses `react-reconciler` and gets the element handles
+and the shadow tree through the injected core, as `incajs/vue` does (see
+Phase 2). `@vitejs/plugin-react` compiles JSX and TSX and handles HMR.
 
 ## Phase 11: Cross-platform support (future)
 

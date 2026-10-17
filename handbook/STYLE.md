@@ -81,6 +81,20 @@ string with `\` at the end of a line.
 | Text | `concat!` | join the parts with `+` |
 | Code held in a string | raw string, `r#"..."#` | template literal |
 
+## Dependencies
+
+Code reaches another layer through what that layer injects.
+
+- **Core features** (the element handles, the shadow tree and the host calls)
+  import no framework and not the injected core.
+- **Frontend renderers** reach the core features only through the injected
+  core. Only the composition root imports it as a value. The other files
+  import its types and take it as a parameter.
+- **Bundler adapters** reach the CLI only through the injected `adapterCore`.
+  Only the Vite adapter imports Vite, and only the default bundler imports the
+  adapter. The adapter builds with Vite's library mode and runs the dev flow
+  through its middleware mode and Runtime API. It starts no listening server.
+
 ## Names in packages
 
 - **Packages**: kebab-case.

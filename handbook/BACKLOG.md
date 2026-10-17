@@ -857,7 +857,7 @@ A fixed entry is deleted and its ID is never reused.
 - **B-131 `document.activeElement` and `:focus` are unsupported**
   `Units: core · Size: S · Impact: Low`
 
-  `activeElement()` from `incajs/vue` returns the focused element. Fix:
+  `activeElement()` from `incajs` returns the focused element. Fix:
   expose it as `document.activeElement` once the `document` of the event plan
   exists, and add `:focus` with the interactive visual state.
 

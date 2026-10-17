@@ -10,8 +10,8 @@
 //! `Engine::with` call that evaluates the module, then invokes them and
 //! asserts on the resulting `VirtualTree` state.
 //!
-//! It builds from `rendererCore.mts` directly because `index.mts` carries no
-//! runtime code.
+//! It loads the `rendererCore` entry, the bundle entry that exports the tree
+//! calls by name.
 
 #![allow(clippy::unwrap_used)]
 

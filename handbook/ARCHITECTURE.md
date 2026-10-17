@@ -26,8 +26,6 @@ the JS↔Rust binding surface and [PROTOCOL.md](./PROTOCOL.md) the dev protocol.
 logic the CLI injects into an adapter: `IncaError` and `bundlerFault`.
 
 Vite supplies the Vue SFC compiler through `@vitejs/plugin-vue`.
-Incarnative.js uses its library/build mode and its Runtime API, never its
-browser dev server.
 
 ## System architecture
 
@@ -48,7 +46,7 @@ browser dev server.
 │  │ JS Runtime (QuickJS via `rquickjs`)                        │  │
 │  │   - Vue 3 application (React: future)                      │  │
 │  │   - Custom renderer (`createRenderer` / `react-reconciler`)│  │
-│  │   - `incajs` core (typed `__inca_native__` wrapper)        │  │
+│  │   - `incajs` core (`__inca_native__` wrapper, elements)    │  │
 │  │   - Vite `ModuleRunner` + custom Transport                 │  │
 │  │     (dev only; transformed modules run here, not in Node)  │  │
 │  └──────────────────────────┬─────────────────────────────────┘  │
