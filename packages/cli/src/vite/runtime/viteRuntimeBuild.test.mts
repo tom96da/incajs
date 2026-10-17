@@ -8,7 +8,7 @@ import path from "node:path";
 import { build, mergeConfig } from "vite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import viteConfig from "../../../../vite.config.mts";
+import viteConfig from "../../../vite.config.mts";
 
 const BARE_IMPORT_RE = /^\s*import\s+(?:type\s+)?[^"'()]*from\s*["']([^"']+)["']/gm;
 
@@ -47,11 +47,11 @@ async function readTransitiveImports(entryFile: string): Promise<Map<string, str
   return visited;
 }
 
-describe("hmr-runtime build output", () => {
+describe("vite-runtime build output", () => {
   let outDir: string;
 
   beforeAll(async () => {
-    outDir = await mkdtemp(path.join(tmpdir(), "inca-hmr-runtime-"));
+    outDir = await mkdtemp(path.join(tmpdir(), "inca-vite-runtime-"));
     await build(
       mergeConfig(viteConfig, {
         build: { outDir, emptyOutDir: true },
@@ -66,7 +66,7 @@ describe("hmr-runtime build output", () => {
   });
 
   it("bundles vite/module-runner in, leaving no bare or node: import behind", async () => {
-    const files = await readTransitiveImports(path.join(outDir, "hmr-runtime.js"));
+    const files = await readTransitiveImports(path.join(outDir, "vite-runtime.js"));
 
     expect(files.size).toBeGreaterThan(0);
     for (const [file, source] of files) {

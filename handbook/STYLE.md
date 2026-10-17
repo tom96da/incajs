@@ -90,7 +90,8 @@ Code reaches another layer through what that layer injects.
 - **Frontend renderers** reach the core features only through the injected
   core. Only the composition root imports it as a value. The other files
   import its types and take it as a parameter.
-- **Bundler adapters** reach the CLI only through the injected `adapterCore`.
+- **Bundler adapters** reach the CLI only through the injected `adapterCore`,
+  its types included.
   Only the Vite adapter imports Vite, and only the default bundler imports the
   adapter. The adapter builds with Vite's library mode and runs the dev flow
   through its middleware mode and Runtime API. It starts no listening server.

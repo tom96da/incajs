@@ -18,12 +18,13 @@ the JS↔Rust binding surface and [PROTOCOL.md](./PROTOCOL.md) the dev protocol.
 | **Frontend framework** | `incajs/vue`, a subpath of the `incajs` package | Custom renderer mapping Vue's virtual component trees to `incajs` calls. |
 | **Bundler & dev tooling** | Vite, in library/build mode | Compiles `.vue` through `@vitejs/plugin-vue`. HMR is delivered through Vite's Runtime API (see [HMR delivery](#hmr-delivery)). |
 | **Dev CLI** | `@incajs/cli` (Node) | Parent process during development. Owns the commands and wires its bundler adapter to its dev-protocol client. |
-| **Bundler adapter** | `@incajs/cli`'s `adapter/vite` (Node) | Runs Vite in library/watch mode and announces each rebuild. The only part of the CLI that imports `vite`. It gets the CLI logic it needs from the injected `adapterCore`. |
+| **Bundler adapter** | `@incajs/cli`'s `vite` (Node) | Runs Vite in library/watch mode and announces each rebuild. The only part of the CLI that imports `vite`. It gets the CLI logic it needs from the injected `adapterCore`. |
 | **Host client** | `@incajs/cli`'s `dev-client` (Node) | Launches and supervises the Rust host as a child and carries messages over its stdio. Depends on no bundler. |
 | **Host bridge** | In-process Rust functions bound into the QuickJS context via `rquickjs` | Carries mutation operations (`createNode`, `setAttribute`, `appendChild`, ...) from JS to the Rust host. No C ABI or IPC is involved, since everything runs in one process. |
 
 `Bundler` is the contract an adapter implements. `adapterCore` holds the CLI
-logic the CLI injects into an adapter: `IncaError` and `bundlerFault`.
+logic the CLI injects into an adapter, `IncaError` and `bundlerFault`, and
+re-exports the contract's types.
 
 Vite supplies the Vue SFC compiler through `@vitejs/plugin-vue`.
 
@@ -32,7 +33,7 @@ Vite supplies the Vue SFC compiler through `@vitejs/plugin-vue`.
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │        [ @incajs/cli — Node process (dev only, parent) ]         │
-│  [ .vue / .tsx ] ──▶ [ adapter/vite ──▶ Vite (watch) ]           │
+│  [ .vue / .tsx ] ──▶ [ vite ──▶ Vite (watch) ]                   │
 │                             │                                    │
 │                       [ dev-client ]                             │
 │                             │ fetchModule / HMR payloads         │

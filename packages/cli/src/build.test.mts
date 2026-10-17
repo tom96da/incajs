@@ -6,7 +6,7 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import { build } from "./build.mts";
-import type { Bundler, BuildOptions, BuildOutput } from "./adapter/types.mts";
+import type { Bundler, BuildOptions, BuildOutput } from "./types.mts";
 
 type RecordingBundler = Bundler & { seen: BuildOptions | undefined };
 

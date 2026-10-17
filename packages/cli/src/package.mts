@@ -11,7 +11,7 @@ import { assertHostBin, resolveHostBin } from "./dev-client/index.mts";
 import { IncaError } from "./error.mts";
 import { log } from "./log.mts";
 import { writeMacosApp } from "./macosApp.mts";
-import type { Bundler, BuildOutput } from "./adapter/types.mts";
+import type { Bundler, BuildOutput } from "./types.mts";
 import type { ResolvedAppConfig } from "./config/loader.mts";
 
 /** A platform `inca package` can emit a distributable application for. */

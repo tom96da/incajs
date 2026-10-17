@@ -11,7 +11,7 @@ import { acquireDevLock } from "../src/devLock.mts";
 import { scratchConfigApp } from "./scratchConfigApp.mts";
 import { makeFakeBundler, makeSink, mockHost, waitFor } from "./support/dev.mts";
 import { fsLag } from "./support/fsLag.mts";
-import type { Bundler } from "../src/adapter/types.mts";
+import type { Bundler } from "../src/types.mts";
 
 describe("a failure before the first build", () => {
   const scratch = scratchConfigApp("dev-retry");

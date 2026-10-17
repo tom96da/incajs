@@ -13,7 +13,7 @@ import type {
   BuildOutput,
   HmrOptions,
   Watcher,
-} from "../../src/adapter/types.mts";
+} from "../../src/types.mts";
 
 const tests = path.join(import.meta.dirname, "..");
 

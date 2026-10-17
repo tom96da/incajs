@@ -80,7 +80,7 @@ export interface HmrOptions {
    * and window. Any JSON-serializable object.
    */
   runtimeConfig?: unknown;
-  /** Overrides where the synthesized entry imports `hmr-runtime.js` from. Test-only. */
+  /** Overrides where the synthesized entry imports `vite-runtime.js` from. Test-only. */
   runtimePath?: string;
   /** Where the bundler's own output goes. Defaults to `process.stdout`. */
   stdout?: NodeJS.WritableStream;

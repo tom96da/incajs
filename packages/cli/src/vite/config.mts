@@ -10,7 +10,7 @@ import { captureOutput } from "./captureOutput.mts";
 import { emitConfig } from "./emitConfig.mts";
 import { streamLogger } from "./logger.mts";
 import { rejectUnsupported } from "./unsupported.mts";
-import type { AdapterCore } from "../../adapterCore.mts";
+import type { AdapterCore } from "../adapterCore.mts";
 import type { CapturedOutput } from "./captureOutput.mts";
 
 export const BUNDLE_FILE_NAME = "bundle.js";

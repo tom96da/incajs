@@ -9,7 +9,7 @@ import root from "../../oxlint.config.ts";
 const overrides: OxlintOverride[] = [
   {
     files: ["src/**/*.mts"],
-    excludeFiles: ["src/adapter/**", "src/defaultBundler.mts", "src/**/*.test.mts"],
+    excludeFiles: ["src/vite/**", "src/defaultBundler.mts", "src/**/*.test.mts"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -20,7 +20,7 @@ const overrides: OxlintOverride[] = [
               message: "CLI features are bundler-agnostic. Keep Vite code in the Vite adapter.",
             },
             {
-              group: ["**/adapter/vite/**"],
+              group: ["**/vite/**"],
               message: "CLI features do not use the Vite adapter. Use the Bundler contract.",
             },
           ],
@@ -30,7 +30,7 @@ const overrides: OxlintOverride[] = [
   },
   {
     files: ["src/defaultBundler.mts", "src/**/*.test.mts"],
-    excludeFiles: ["src/adapter/**"],
+    excludeFiles: ["src/vite/**"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -46,24 +46,41 @@ const overrides: OxlintOverride[] = [
     },
   },
   {
-    files: ["src/adapter/**/*.mts"],
-    excludeFiles: ["src/adapter/**/*.test.mts"],
+    files: ["src/vite/*.mts"],
+    excludeFiles: ["src/vite/*.test.mts"],
     rules: {
       "no-restricted-imports": [
         "error",
         {
           patterns: [
             {
-              group: ["../../**", "!../../adapterCore.mts"],
+              group: ["../**", "!../adapterCore.mts"],
               message: "The adapter uses CLI features only through the injected adapter core.",
             },
           ],
           paths: [
             {
-              name: "../../adapterCore.mts",
+              name: "../adapterCore.mts",
               allowTypeImports: true,
               message:
                 "Only the composition root imports the adapter core as a value. Others take it as a parameter.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/vite/runtime/**/*.mts"],
+    excludeFiles: ["src/vite/runtime/**/*.test.mts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["../../**"],
+              message: "The runtime bundle imports no CLI code.",
             },
           ],
         },

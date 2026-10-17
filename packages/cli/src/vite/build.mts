@@ -5,8 +5,7 @@ import { build as buildOnce } from "vite";
 
 import { toBuildOutput } from "./captureOutput.mts";
 import { resolveViteConfig } from "./config.mts";
-import type { AdapterCore } from "../../adapterCore.mts";
-import type { BuildOptions, BuildOutput } from "../types.mts";
+import type { AdapterCore, BuildOptions, BuildOutput } from "../adapterCore.mts";
 
 /**
  * Builds `entry` into a minified, production build under `outDir` once, and

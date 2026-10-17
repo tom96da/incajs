@@ -6,8 +6,7 @@ import type { RolldownWatcher } from "rolldown";
 
 import { toBuildOutput } from "./captureOutput.mts";
 import { resolveViteConfig } from "./config.mts";
-import type { AdapterCore } from "../../adapterCore.mts";
-import type { BundlerOptions, Watcher } from "../types.mts";
+import type { AdapterCore, BundlerOptions, Watcher } from "../adapterCore.mts";
 
 /**
  * Builds `entry` into a build under `outDir` and rebuilds it on every

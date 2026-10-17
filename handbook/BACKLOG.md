@@ -80,7 +80,7 @@ A fixed entry is deleted and its ID is never reused.
   Scoped/global
   `<style>` blocks in `.vue` SFCs have no effect through the custom
   renderer. A build now fails on one rather than shipping it
-  (`ERR_INCA_UNSUPPORTED_STYLE`, raised by `adapter/vite/unsupported.mts`);
+  (`ERR_INCA_UNSUPPORTED_STYLE`, raised by `vite/unsupported.mts`);
   rendering them is Phase 7's work.
 
 - **B-012 The window and the app control each other only at start**

@@ -9,7 +9,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { CONFIG_FILE_NAME } from "../packages/cli/src/adapter/vite/emitConfig.mts";
+import { CONFIG_FILE_NAME } from "../packages/cli/src/vite/emitConfig.mts";
 import type { RuntimeConfig } from "../packages/cli/src/config/loader.mts";
 import type { WindowConfig } from "../packages/cli/src/config/types.mts";
 

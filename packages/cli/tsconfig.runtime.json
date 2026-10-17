@@ -1,6 +1,6 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": { "types": [] },
-  "include": ["src/adapter/*/runtime/**/*.mts", "src/adapter/env.d.mts"],
+  "include": ["src/vite/runtime/**/*.mts"],
   "exclude": ["src/**/*.test.mts"]
 }

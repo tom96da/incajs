@@ -13,18 +13,18 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import type { HotPayload } from "vite";
 import type { ModuleRunnerTransport } from "vite/module-runner";
 
-import { createViteBundler } from "../../../src/adapter/vite/index.mts";
 import * as adapterCore from "../../../src/adapterCore.mts";
+import { createViteBundler } from "../../../src/vite/index.mts";
 import packageViteConfig from "../../../vite.config.mts";
 import { scratchApp, TEST_RUNTIME_MODULE } from "./scratchApp.mts";
-import type { HmrChannel, HmrOptions } from "../../../src/adapter/types.mts";
+import type { HmrChannel, HmrOptions } from "../../../src/types.mts";
 
 const { setUp, tearDown, makeApp } = scratchApp("hmr");
 
-// Builds hmr-runtime.js into its own scratch dir, from the package's real
+// Builds vite-runtime.js into its own scratch dir, from the package's real
 // vite.config.mts, leaving the package's dist/ untouched.
-const runtimeScratchDir = path.join(import.meta.dirname, "tmp/hmr-runtime-build");
-const builtRuntimePath = path.join(runtimeScratchDir, "hmr-runtime.js");
+const runtimeScratchDir = path.join(import.meta.dirname, "tmp/vite-runtime-build");
+const builtRuntimePath = path.join(runtimeScratchDir, "vite-runtime.js");
 
 /** Wraps the real `hmr()`, defaulting `runtimePath` to this test's own scratch build. */
 function hmr(options: HmrOptions): Promise<HmrChannel> {
@@ -34,10 +34,10 @@ function hmr(options: HmrOptions): Promise<HmrChannel> {
   });
 }
 
-// The real vite.config.mts's own "hmr-runtime" entry, reused here rather
+// The real vite.config.mts's own "vite-runtime" entry, reused here rather
 // than re-typed so this can never silently drift from the real build.
 const runtimeEntry = (packageViteConfig.build!.lib as { entry: Record<string, string> }).entry[
-  "hmr-runtime"
+  "vite-runtime"
 ]!;
 
 beforeAll(async () => {
@@ -53,7 +53,7 @@ beforeAll(async () => {
     plugins: [],
     build: {
       ...packageViteConfig.build,
-      lib: { ...(packageViteConfig.build!.lib as object), entry: { "hmr-runtime": runtimeEntry } },
+      lib: { ...(packageViteConfig.build!.lib as object), entry: { "vite-runtime": runtimeEntry } },
       outDir: runtimeScratchDir,
       emptyOutDir: true,
     },
@@ -72,7 +72,7 @@ afterEach(async () => {
 
 /**
  * Wires a real `vite/module-runner` `ModuleRunner` to an `HmrChannel`, the
- * same round trip `packages/cli/src/adapter/vite/runtime` drives from
+ * same round trip `packages/cli/src/vite/runtime` drives from
  * inside a running app. `notify` plays the server's half, `dispatch` the
  * client's.
  */
@@ -348,7 +348,7 @@ describe("hmr", () => {
     expect(chunks.join("")).toContain("hmr update");
   }, 20000);
 
-  it("writes an entry importing the real built hmr-runtime.js", async () => {
+  it("writes an entry importing the real built vite-runtime.js", async () => {
     const { entry, streams } = await makeApp(
       `<script setup>\nconst msg = "hello";\n</script>\n<template><div>{{ msg }}</div></template>\n`,
     );

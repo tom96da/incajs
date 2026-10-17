@@ -6,11 +6,8 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-const adapterDir = path.join(import.meta.dirname, "../../../src/adapter/vite");
-const CONTRACT = [
-  path.resolve(adapterDir, "../../adapterCore.mts"),
-  path.resolve(adapterDir, "../types.mts"),
-];
+const adapterDir = path.join(import.meta.dirname, "../../../src/vite");
+const CONTRACT = [path.resolve(adapterDir, "../adapterCore.mts")];
 const SOURCE = /\.(?:mts|ts|mjs|js)$/;
 const IS_TEST = /\.test\.[^.]+$/;
 /** Every relative specifier: `from "x"`, `import "x"`, `import("x")` and `require("x")`. */

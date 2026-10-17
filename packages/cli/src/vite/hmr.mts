@@ -22,8 +22,7 @@ import type {
 import { CONFIG_FILE_NAME, serializeConfig } from "./emitConfig.mts";
 import { streamLogger } from "./logger.mts";
 import { rejectUnsupported } from "./unsupported.mts";
-import type { AdapterCore } from "../../adapterCore.mts";
-import type { BuildFailure, HmrChannel, HmrOptions } from "../types.mts";
+import type { AdapterCore, BuildFailure, HmrChannel, HmrOptions } from "../adapterCore.mts";
 
 /**
  * A failed update's detail: the same fields a Rollup/Vite plugin
@@ -55,7 +54,7 @@ function hmrDirOf(cwd: string): string {
 }
 
 /**
- * `dist/hmr-runtime.js`, resolved relative to this package's own root. This
+ * `dist/vite-runtime.js`, resolved relative to this package's own root. This
  * is correct whether this file is running from `src/` (tests, the workspace)
  * or a built `dist/`.
  */
@@ -66,7 +65,7 @@ function resolveHmrRuntimePath(): string {
     if (parent === dir) throw new Error("could not locate @incajs/cli's own package.json");
     dir = parent;
   }
-  return path.join(dir, "dist/hmr-runtime.js");
+  return path.join(dir, "dist/vite-runtime.js");
 }
 
 /** A relative ES module specifier from `fromDir` to `target`, forward-slashed. */

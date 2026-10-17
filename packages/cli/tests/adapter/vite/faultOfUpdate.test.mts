@@ -5,9 +5,9 @@ import { stripVTControlCharacters } from "node:util";
 
 import { describe, expect, it } from "vitest";
 
-import { faultOfUpdate } from "../../../src/adapter/vite/hmr.mts";
-import { UNSUPPORTED } from "../../../src/adapter/vite/unsupported.mts";
 import * as adapterCore from "../../../src/adapterCore.mts";
+import { faultOfUpdate } from "../../../src/vite/hmr.mts";
+import { UNSUPPORTED } from "../../../src/vite/unsupported.mts";
 
 /** The fault with color removed from its stack. */
 function plain(error: Parameters<typeof faultOfUpdate>[1]) {

@@ -7,10 +7,10 @@ import path from "node:path";
 import dedent from "ts-dedent";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { createViteBundler } from "../../../src/adapter/vite/index.mts";
 import * as adapterCore from "../../../src/adapterCore.mts";
+import { createViteBundler } from "../../../src/vite/index.mts";
 import { scratchApp, TEST_RUNTIME_MODULE } from "./scratchApp.mts";
-import type { Bundler } from "../../../src/adapter/types.mts";
+import type { Bundler } from "../../../src/types.mts";
 
 const vite = createViteBundler(adapterCore, TEST_RUNTIME_MODULE);
 const build: Bundler["build"] = (options) => vite.build(options);

@@ -9,7 +9,7 @@ import { Writable } from "node:stream";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { packageApp } from "./package.mts";
-import type { Bundler, BuildOutput, Watcher } from "./adapter/types.mts";
+import type { Bundler, BuildOutput, Watcher } from "./types.mts";
 
 let cwd: string | undefined;
 

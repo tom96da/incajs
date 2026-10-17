@@ -20,7 +20,7 @@ import { IncaError } from "./error.mts";
 import { STAMPED, log, printFault, toFault } from "./log.mts";
 import { writeMacosApp } from "./macosApp.mts";
 import { retryOnEdit } from "./retryOnEdit.mts";
-import type { Bundler, BuildOutput, HmrChannel } from "./adapter/types.mts";
+import type { Bundler, BuildOutput, HmrChannel } from "./types.mts";
 import type { ResolvedAppConfig } from "./config/loader.mts";
 
 export interface DevOptions {

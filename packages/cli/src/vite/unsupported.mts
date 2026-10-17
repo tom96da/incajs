@@ -5,7 +5,7 @@ import path from "node:path";
 
 import type { Plugin } from "vite";
 
-import type { AdapterCore } from "../../adapterCore.mts";
+import type { AdapterCore } from "../adapterCore.mts";
 
 /** Something an app can write that the engine can't run yet. */
 export interface UnsupportedFeature {

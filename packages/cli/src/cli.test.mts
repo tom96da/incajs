@@ -21,8 +21,8 @@ import { build } from "./build.mts";
 import { run } from "./cli.mts";
 import { dev } from "./dev.mts";
 import { packageApp } from "./package.mts";
-import type { BuildOutput } from "./adapter/types.mts";
 import type { BuildAppOptions } from "./build.mts";
+import type { BuildOutput } from "./types.mts";
 import type { DevOptions } from "./dev.mts";
 import type { PackageAppOptions, PackageResult } from "./package.mts";
 

@@ -4,8 +4,7 @@
 import { build } from "./build.mts";
 import { hmr } from "./hmr.mts";
 import { watch } from "./watch.mts";
-import type { AdapterCore } from "../../adapterCore.mts";
-import type { Bundler } from "../types.mts";
+import type { AdapterCore, Bundler } from "../adapterCore.mts";
 
 /**
  * The Vite adapter.

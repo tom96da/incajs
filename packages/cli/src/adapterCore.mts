@@ -3,6 +3,7 @@
 
 export { IncaError } from "./error.mts";
 export { bundlerFault } from "./log.mts";
+export type * from "./types.mts";
 
 /**
  * The CLI logic the CLI injects into a bundler adapter: the `IncaError`

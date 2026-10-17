@@ -9,7 +9,7 @@ import { Writable } from "node:stream";
 import { build } from "vite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import * as core from "../../adapterCore.mts";
+import * as core from "../adapterCore.mts";
 import { resolveViteConfig } from "./config.mts";
 import type { CapturedOutput } from "./captureOutput.mts";
 import type { ResolveConfigOptions } from "./config.mts";

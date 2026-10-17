@@ -19,7 +19,7 @@ import { defaultBundler } from "../../packages/cli/src/defaultBundler.mts";
 import { HostClient } from "../../packages/cli/src/dev-client/hostClient.mts";
 import { resolveTestHostBin } from "../support/hostBin.mts";
 import { reloadHost, settleReloads } from "../support/reloads.mts";
-import type { BuildFailure, HmrChannel } from "../../packages/cli/src/adapter/types.mts";
+import type { BuildFailure, HmrChannel } from "../../packages/cli/src/types.mts";
 import type { AppErrorParams } from "../../packages/cli/src/dev-client/protocol.mts";
 
 /** How long the host is given to reload/relay before this test gives up on it. */
@@ -50,7 +50,7 @@ function checkJsPackagesAreBuilt(): void {
   const repoRoot = path.resolve(import.meta.dirname, "../..");
   const missing = [
     path.join(repoRoot, "packages/core/dist"),
-    path.join(repoRoot, "packages/cli/dist/hmr-runtime.js"),
+    path.join(repoRoot, "packages/cli/dist/vite-runtime.js"),
   ].filter((p) => !existsSync(p));
   if (missing.length > 0) {
     throw new Error(

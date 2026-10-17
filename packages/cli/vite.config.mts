@@ -13,7 +13,7 @@ export default defineConfig({
         index: path.resolve(import.meta.dirname, "src/index.mts"),
         cli: path.resolve(import.meta.dirname, "src/cli.mts"),
         config: path.resolve(import.meta.dirname, "src/config/index.mts"),
-        "hmr-runtime": path.resolve(import.meta.dirname, "src/adapter/vite/runtime/index.mts"),
+        "vite-runtime": path.resolve(import.meta.dirname, "src/vite/runtime/index.mts"),
       },
       formats: ["es"],
       fileName: (_format, entryName) => `${entryName}.js`,
@@ -29,7 +29,7 @@ export default defineConfig({
       tsconfigPath: path.resolve(import.meta.dirname, "tsconfig.node.json"),
       entryRoot: path.resolve(import.meta.dirname, "src"),
       include: ["src"],
-      exclude: ["src/**/*.test.mts", "src/adapter/vite/runtime/**"],
+      exclude: ["src/**/*.test.mts", "src/vite/runtime/!(env.d).mts"],
     }),
   ],
 });

@@ -14,7 +14,7 @@ import { afterAll, expect, it } from "vitest";
 
 import { defaultBundler } from "../../packages/cli/src/defaultBundler.mts";
 import { resolveTestHostBin } from "../support/hostBin.mts";
-import type { BuildOutput, Watcher } from "../../packages/cli/src/adapter/types.mts";
+import type { BuildOutput, Watcher } from "../../packages/cli/src/types.mts";
 
 /** The throw sits on line 5, after an interface that the generated code drops. */
 const SOURCE = [

@@ -20,7 +20,7 @@ For example, a `width` nobody set falls through to the app's root element
 and then to 800 × 600.
 
 A feature the engine cannot run yet fails the build. A `<style>` block is one
-(the list is `packages/cli/src/adapter/vite/unsupported.mts`).
+(the list is `packages/cli/src/vite/unsupported.mts`).
 
 ## Where a failure is reported
 

@@ -5,8 +5,7 @@ import path from "node:path";
 
 import type { Plugin } from "vite";
 
-import type { AdapterCore } from "../../adapterCore.mts";
-import type { BuildOutput } from "../types.mts";
+import type { AdapterCore, BuildOutput } from "../adapterCore.mts";
 
 /** What one (re)build actually wrote, relative to its own `outDir`. */
 export interface CapturedOutput {

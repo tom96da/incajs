@@ -31,7 +31,7 @@
   ],
   "type": "module",
   "sideEffects": [
-    "src/adapter/vite/runtime/globals.mts"
+    "src/vite/runtime/globals.mts"
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.mts",
