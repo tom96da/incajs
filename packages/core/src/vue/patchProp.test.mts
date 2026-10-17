@@ -320,6 +320,8 @@ describe("on* modifiers", () => {
     ["onCapture", "capture"],
     ["onOnceCapture", "once"],
     ["on:Once", "Once"],
+    ["on:Passive", "Passive"],
+    ["on:Capture", "Capture"],
   ] as const)(
     "binds a prop named after a bare modifier as the event of that name (%s)",
     (key, event) => {

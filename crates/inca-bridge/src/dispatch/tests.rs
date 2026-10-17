@@ -16,6 +16,7 @@ mod dispatch_event;
 mod engine_entry;
 mod frame;
 mod jobs;
+mod key_default;
 mod movement;
 mod target_objects;
 mod targets;

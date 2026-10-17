@@ -21,6 +21,44 @@ fn a_relayed_notification_reaches_the_app_in_the_window(cx: &mut TestAppContext)
     assert_eq!(received, r#"[["testEvent","{\"a\":1}"]]"#);
 }
 
+const THROWS_AFTER_QUEUEING_A_JOB: &str = r"
+    globalThis.drained = false;
+    __inca_dev__.receive = () => {
+        Promise.resolve().then(() => {
+            globalThis.drained = true;
+        });
+        throw new Error('rx');
+    };
+";
+
+#[gpui::test]
+fn a_receive_that_throws_in_the_window_is_reported(cx: &mut TestAppContext) {
+    let (capturing, _) = capture();
+    let (_, sender) = serve_idle(cx, THROWS_AFTER_QUEUEING_A_JOB, TEST_ENTRY_PATH, &capturing);
+
+    notify(&sender, "probe");
+    cx.run_until_parked();
+
+    let sent = written(&capturing);
+    assert_eq!(sent.len(), 1);
+    assert_eq!(sent[0]["method"], "appError");
+    assert_eq!(sent[0]["params"]["message"], "Error: rx");
+}
+
+#[gpui::test]
+fn a_receive_that_throws_in_the_window_still_drains_the_job_queue(cx: &mut TestAppContext) {
+    let (capturing, _) = capture();
+    let (window, sender) = serve_idle(cx, THROWS_AFTER_QUEUEING_A_JOB, TEST_ENTRY_PATH, &capturing);
+
+    notify(&sender, "probe");
+    cx.run_until_parked();
+
+    assert_eq!(
+        eval_in_window(cx, window, "String(globalThis.drained);"),
+        "true"
+    );
+}
+
 #[gpui::test]
 fn shutdown_is_answered_and_later_lines_are_ignored(cx: &mut TestAppContext) {
     let (capturing, _) = capture();

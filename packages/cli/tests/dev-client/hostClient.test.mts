@@ -7,6 +7,7 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import { HostClient, HostError } from "../../src/dev-client/index.mts";
+import { waitFor } from "../support/dev.mts";
 import type { AppErrorParams } from "../../src/dev-client/protocol.mts";
 
 const mockHost = path.join(import.meta.dirname, "fixtures/mock-host.mts");
@@ -49,7 +50,7 @@ describe("HostClient", () => {
     });
 
     await client.start();
-    await vi.waitFor(() => expect(exited).toBe(true));
+    await waitFor(() => expect(exited).toBe(true));
 
     // EPIPE when the write races the exit, a destroyed stream once it lands after.
     await expect(client.call("reload")).rejects.toThrow(/EPIPE|destroyed/);
@@ -192,7 +193,7 @@ describe("HostClient", () => {
     });
 
     await client.start();
-    await vi.waitFor(() => expect(errors).toHaveLength(1));
+    await waitFor(() => expect(errors).toHaveLength(1));
     await client.stop();
 
     expect(errors[0]).toEqual({ message: "boom", stack: "Error: boom\n    at somewhere" });
@@ -209,7 +210,7 @@ describe("HostClient", () => {
     });
 
     await client.start();
-    await vi.waitFor(() => expect(lines).toContain("[host error -32700] boom\n"));
+    await waitFor(() => expect(lines).toContain("[host error -32700] boom\n"));
 
     expect(errors).toEqual([]);
   });
@@ -225,7 +226,7 @@ describe("HostClient", () => {
 
     await client.start();
 
-    await vi.waitFor(() => expect(onExit).toHaveBeenCalledOnce());
+    await waitFor(() => expect(onExit).toHaveBeenCalledOnce());
   });
 
   it("stops the host when ready reports a protocol this package wasn't built for, leaving no child behind", async () => {

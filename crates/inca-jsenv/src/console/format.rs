@@ -233,6 +233,14 @@ mod tests {
         );
     }
 
+    #[test]
+    fn d_falls_back_to_the_inspected_value_when_the_string_form_throws() {
+        assert_eq!(
+            formatted("['%d', { toString() { throw new Error('no'); } }, 1]"),
+            "{ toString: [Function: toString] } 1"
+        );
+    }
+
     #[rstest]
     #[case::d("%d")]
     #[case::i("%i")]
