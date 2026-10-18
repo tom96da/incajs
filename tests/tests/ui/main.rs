@@ -12,6 +12,7 @@ mod contains;
 mod event_target;
 mod focus_scroll;
 mod geometry;
+mod handler_property;
 mod handlers;
 mod id_attribute;
 mod keyboard;
