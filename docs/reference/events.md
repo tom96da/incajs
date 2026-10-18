@@ -56,6 +56,9 @@ and `returnValue`. The three flags depend on the event:
 | `focusin`, `focusout`            | yes     | no         | yes      |
 
 - `timeStamp` counts milliseconds since the host started.
+- `incajs` exports the type `IncaEvent` for these fields. The fields of a
+  mouse, wheel or keyboard event are not in it: a listener declares them, such
+  as `(event: IncaEvent & { key: string }) => void`.
 - Removing the focused node, or moving it within the tree, leaves `blur` and
   `focusout` unfired.
 

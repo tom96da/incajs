@@ -15,6 +15,7 @@ export type {
   EventListener,
   EventListenerObject,
   EventListenerOrObject,
+  IncaEvent,
   IncaEventTarget,
   ListenerOptions,
   NodeId,

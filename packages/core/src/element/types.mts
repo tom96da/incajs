@@ -1,13 +1,13 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import type { IncaEventTarget, NodeId } from "../types.mts";
+import type { IncaEvent, IncaEventTarget, NodeId } from "../types.mts";
 import type { HANDLER_EVENTS } from "./eventHandlers.mts";
 import type { RectLike } from "./geometry.mts";
 import type { ScrollIntoViewOptions, ScrollOptions } from "./scroll.mts";
 
 /** A function an event handler property holds, called with the element as `this` and the event. */
-export type EventHandler = (...args: never[]) => unknown;
+export type EventHandler = (this: IncaElement, event: IncaEvent) => unknown;
 
 /**
  * The event handler properties, such as `onclick`, of the events the host dispatches, `focusin` and

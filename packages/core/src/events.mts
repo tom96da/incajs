@@ -31,7 +31,7 @@ function tracking(listener: HostCallback): HostCallback {
  * registration keeps its other options. A `null` listener is ignored.
  *
  * Any event name is accepted, and it fires when the host dispatches that name.
- * See the `EventListener` type for the fields an event carries.
+ * See the `IncaEvent` type for the fields an event carries.
  * @param nodeId - the node to listen on
  * @param event - the event name (e.g. `"click"`)
  * @param listener - a function, called with the event's `currentTarget` as
@@ -47,7 +47,7 @@ function tracking(listener: HostCallback): HostCallback {
 export function addEventListener(
   nodeId: NodeId,
   event: string,
-  listener: EventListenerOrObject | null,
+  listener: EventListenerOrObject<never> | null,
   options: ListenerOptions = {},
 ): void {
   if (listener === null || listener === undefined) return;
@@ -87,7 +87,7 @@ export function addEventListener(
 export function removeEventListener(
   nodeId: NodeId,
   event: string,
-  listener: EventListenerOrObject | null,
+  listener: EventListenerOrObject<never> | null,
   options: Pick<ListenerOptions, "capture"> = {},
 ): void {
   if (listener === null || listener === undefined) return;

@@ -1297,3 +1297,33 @@ A fixed entry is deleted and its ID is never reused.
   An attribute that holds code, such as `onclick="count++"`, stays a plain
   attribute and runs nothing, where a browser compiles it into the element's
   handler. Fix: needs a decision on running code from strings.
+
+- **B-208 Event listeners are typed to the base fields only**
+  `Units: core,docs · Size: M · Impact: Low`
+
+  `IncaEvent` declares the fields every event carries. A listener reads the
+  fields of a mouse, wheel, keyboard or focus event, such as `clientX` or
+  `key`, only after the parameter declares them. Fix: an `IncaEventMap` from
+  each event name the host dispatches to its interface, each extending
+  `IncaEvent`; an `addEventListener` overload and the `on<event>` properties
+  of `EventHandlers` take the type of their event name, before the generic
+  `string` overload that stays for any other name. A Vue template handler
+  such as `@click="(e) => ..."` needs element type declarations for vue-tsc,
+  which the repository lacks. Types generated into `.inca/`, like Nuxt's
+  `.nuxt/`, would give every listener its event type and make a wrong
+  annotation an error; that needs a stricter `E` constraint than the
+  unconstrained one of `EventListener`. Add the phase constants of `Event` (`NONE`,
+  `CAPTURING_PHASE`, `AT_TARGET`, `BUBBLING_PHASE`) to `IncaEvent` if
+  needed. Derive the `IncaEventMap` keys and `HANDLER_EVENTS` from one list of
+  event names, so they cannot drift apart: the host dispatches 19 names, and
+  the handler properties cover 17 of them. Delete the `IncaEvent` bullet under
+  Base fields in `docs/reference/events.md` when per-kind types land.
+
+- **B-209 Event listeners type `this` and `target` as the base target**
+  `Units: core · Size: M · Impact: Low`
+
+  `this`, `target` and `currentTarget` are `IncaEventTarget`, so a listener
+  that uses an element member such as `focus`, `click` or a rect read needs a
+  cast. Browsers type `this` as the element and `target` as `EventTarget`.
+  Fix: a target type parameter on `IncaEvent` and a polymorphic `this`
+  on `addEventListener`.

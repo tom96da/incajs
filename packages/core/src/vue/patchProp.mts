@@ -332,8 +332,8 @@ const BOOLEAN_PRESENCE = new Set(["disabled", "hidden", "inert"]);
  * - Event names: `onXxx` listens for the hyphenated name (`onMyEvent` listens
  *   for `my-event`), and `on:xxx` listens for the name after the colon as
  *   written (`on:myEvent` listens for `myEvent`). The listener runs when the
- *   host dispatches that name. See {@link EventListener} for the fields an
- *   event carries.
+ *   host dispatches that name. See `IncaEvent` for the fields an event
+ *   carries.
  * - Errors: an error a handler throws, or a rejection of an async handler,
  *   goes to the `onErrorCaptured` hooks and the app's `errorHandler`. Every
  *   handler of an event runs even when an earlier one fails, until one calls

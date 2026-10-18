@@ -157,9 +157,9 @@ export interface IncaEventTarget {
    * as `this` when the event fires
    * @param options - a {@link ListenerOptions}, or a boolean for `capture`
    */
-  addEventListener(
+  addEventListener<E = IncaEvent>(
     type: string,
-    listener: EventListenerOrObject | null,
+    listener: EventListenerOrObject<E> | null,
     options?: boolean | ListenerOptions,
   ): void;
 
@@ -170,9 +170,9 @@ export interface IncaEventTarget {
    * @param listener - the listener that was registered
    * @param options - an object with `capture`, or a boolean for `capture`
    */
-  removeEventListener(
+  removeEventListener<E = IncaEvent>(
     type: string,
-    listener: EventListenerOrObject | null,
+    listener: EventListenerOrObject<E> | null,
     options?: boolean | Pick<ListenerOptions, "capture">,
   ): void;
 
@@ -187,49 +187,87 @@ export interface IncaEventTarget {
 }
 
 /**
- * Signature of a callback registered via `addEventListener`. Declare its
- * parameter as the event object, such as `(event: { key: string }) => void`.
- *
- * The native host calls it with one argument, an object with:
- * - `type`: the event's name.
- * - `target`: the element the event is about, or `window`. It is the deepest
- *   element under the pointer for pointer events, the nearest common ancestor
- *   of the press and the release for `click`, `dblclick` and `auxclick`, and
- *   the focused element for key events. With no such element it is `window`.
- * - `currentTarget`: the element or `window` whose listener is running, and
- *   `null` once the event has been handled. A listener function runs with it
- *   as `this`.
- * - `composedPath()`: `target` and its ancestors, ending with `window`, and an
- *   empty array once the event has been handled.
- * - `bubbles`, `cancelable` and `composed`: fixed per event name.
- * - `defaultPrevented`: `true` once a listener called `preventDefault()` on a
- *   cancelable event.
- * - `eventPhase`: 1 on the ancestors of `target` while the event travels
- *   down, 2 where `currentTarget` is `target`, 3 on the ancestors while it
- *   travels up, and 0 once the event has been handled.
- * - `isTrusted`: `true` for events the host dispatches and `false` for events a
- *   script dispatches.
- * - `timeStamp`: milliseconds since the host started, as a number.
- * - `eventId`: a number that grows with each event and is the same on every
- *   node that event reaches.
- * - `stopPropagation()`, `stopImmediatePropagation()` and `preventDefault()`.
- * - the fields that event kind carries.
+ * The event object a listener receives. It carries these fields and the
+ * fields of its event kind, which this type leaves out. A listener that reads
+ * them declares its parameter with them, such as
+ * `(event: IncaEvent & { key: string }) => void`.
  *
  * See https://incajs.tom96da.com/reference/events for the event names the
  * host dispatches and their fields.
  */
-export type EventListener = (...args: never[]) => void;
+export interface IncaEvent {
+  /** The event's name. */
+  readonly type: string;
+  /**
+   * The element the event is about, or `window`. It is the deepest element
+   * under the pointer for pointer events, the nearest common ancestor of the
+   * press and the release for `click`, `dblclick` and `auxclick`, and the
+   * focused element for key events. With no such element it is `window`.
+   */
+  // At run time it is null only for a node with no live handle: one made by createNode directly,
+  // or a collected handle. An event from a Vue element always has a handle.
+  readonly target: IncaEventTarget;
+  /** The same object as {@link IncaEvent.target}. */
+  readonly srcElement: IncaEventTarget;
+  /**
+   * The element or `window` whose listener is running, and `null` once the
+   * event has been handled. A listener function runs with it as `this`.
+   */
+  readonly currentTarget: IncaEventTarget | null;
+  /** Whether the event travels up from `target`. Fixed per event name. */
+  readonly bubbles: boolean;
+  /** Whether `preventDefault()` can cancel the event. Fixed per event name. */
+  readonly cancelable: boolean;
+  /** Fixed per event name. */
+  readonly composed: boolean;
+  /**
+   * 1 on the ancestors of `target` while the event travels down, 2 where
+   * `currentTarget` is `target`, 3 on the ancestors while it travels up, and 0
+   * once the event has been handled.
+   */
+  readonly eventPhase: 0 | 1 | 2 | 3;
+  /** `true` once a listener called `preventDefault()` on a cancelable event. */
+  readonly defaultPrevented: boolean;
+  /** `true` for events the host dispatches and `false` for events a script dispatches. */
+  readonly isTrusted: boolean;
+  /** Milliseconds since the host started. */
+  readonly timeStamp: number;
+  /** A number that grows with each event and is the same on every node that event reaches. */
+  readonly eventId: number;
+  /** Assigning `true` while the event is dispatched stops it like `stopPropagation()`. */
+  cancelBubble: boolean;
+  /** The opposite of `defaultPrevented`. Assigning `false` cancels a cancelable event like `preventDefault()`. */
+  returnValue: boolean;
+  /** Stops the event from reaching the listeners of later nodes on its path. */
+  stopPropagation(): void;
+  /** Stops the event from reaching any later listener. */
+  stopImmediatePropagation(): void;
+  /** Cancels the event when it is cancelable and the listener is not passive. */
+  preventDefault(): void;
+  /**
+   * `target` and its ancestors, ending with `window`, and an empty array once
+   * the event has been handled.
+   */
+  composedPath(): IncaEventTarget[];
+}
+
+/**
+ * Signature of a callback registered via `addEventListener`. It receives the
+ * event, an {@link IncaEvent} unless the parameter declares another type, and
+ * runs with the event's `currentTarget` as `this`.
+ */
+export type EventListener<E = IncaEvent> = (this: IncaEventTarget, event: E) => void;
 
 /**
  * An object whose `handleEvent` method receives the events, called with the
- * object as `this`. It takes the arguments of an {@link EventListener}.
+ * object as `this`. It takes the event an {@link EventListener} takes.
  */
-export interface EventListenerObject {
-  handleEvent: EventListener;
+export interface EventListenerObject<E = IncaEvent> {
+  handleEvent(event: E): void;
 }
 
 /**
  * What `addEventListener` accepts as a listener: an {@link EventListener} or
  * an {@link EventListenerObject}.
  */
-export type EventListenerOrObject = EventListener | EventListenerObject;
+export type EventListenerOrObject<E = IncaEvent> = EventListener<E> | EventListenerObject<E>;
