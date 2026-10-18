@@ -61,6 +61,13 @@ Vite supplies the Vue SFC compiler through `@vitejs/plugin-vue`.
 └──────────────────────────────────────────────────────────────────┘
 ```
 
+## Threads
+
+The JS runtime, the bridge and `gpui`'s `App` run on the main thread. `gpui`
+builds the `App` there and holds it in an `Rc`. Code on the event path may keep
+state in a `thread_local!` because every native call and every event handler
+runs on that thread.
+
 ## Node lifetime
 
 At the start of each frame the host runs, in order, the focus requests and

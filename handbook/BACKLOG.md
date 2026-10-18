@@ -1151,17 +1151,6 @@ A fixed entry is deleted and its ID is never reused.
   Fix: key each entry by a per-compile generation in the filename the engine
   sees, and print the original filename.
 
-- **B-180 A wheel listener's write equal to the wheel step is undone**
-  `Units: gpui,bridge · Size: S–M · Impact: Low`
-
-  When a `wheel` listener calls `preventDefault()` and sets the held container
-  to exactly the offset the wheel step produced, `settle_wheel` reads that
-  write as the step and restores the container. A browser keeps the write.
-
-  Fix: have `scrollNode` and the reveal record the handles they wrote, and
-  have `settle_wheel` leave those handles alone. B-083 describes the same
-  rollback.
-
 - **B-182 The event store helper lives in the bridge**
   `Units: bridge,jsenv · Size: S · Impact: Low`
 
@@ -1287,3 +1276,15 @@ A fixed entry is deleted and its ID is never reused.
   `currentTarget`, and the `parent` of the app's top element is a handle
   that `composedPath()` never lists. Fix: the body node of B-199, so the
   container is a node of its own.
+
+- **B-201 Freed nodes leave their script scroll write in `WRITTEN`**
+  `Units: gpui,bridge · Size: S · Impact: Low`
+
+  `WRITTEN` in `crates/inca-gpui/src/element/scroll.rs` holds the last script
+  write of each container until the next wheel event starts, so a script that
+  writes offsets on nodes it creates and removes, with no wheel event between,
+  grows the map. A stale entry has no other effect, because every read follows
+  the clear at the first capture of a wheel event. Fix: `Host::free_ids`, the
+  one path for both the orphan sweep and `destroyNode`, drops the entry of
+  each freed id with a `gpui` function beside `write_scroll_offset`, as it
+  already does for `scroll_handles` and `scroll_reported`.

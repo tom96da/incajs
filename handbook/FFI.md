@@ -270,8 +270,10 @@ walk and keeps nothing.
   hovered set. An inert node and its subtree stay outside hit testing and
   hover.
 - An inert scroll container records its offset in `scroll_recorder` like any
-  other, and `settle_wheel` always restores it and leaves the wheel to the
-  next container. A canceled `wheel` rolls the scroll back.
+  other. A wheel restores it, or sets it back to a script's write, and goes to
+  the next container.
+- A canceled `wheel` restores the container that took the step, unless a
+  script wrote its offset. An uncanceled one adds the step to that write.
 - The mouse target slot is a gpui global in `inca-gpui`. The root's tracker
   clears it in the capture phase of each mouse event, and the first marker to
   run, the deepest container, keeps it. The tracker is the root's first child,

@@ -7,6 +7,7 @@ use std::rc::Rc;
 use gpui::px;
 use rquickjs::{Ctx, Result as JsResult, Value};
 
+use inca_gpui::element::scroll::write_scroll_offset;
 use inca_gpui::is_scroll_container;
 
 use super::Natives;
@@ -48,6 +49,9 @@ fn scroll_node<'js>(
         if !is_scroll_container(node) {
             return Ok(());
         }
+        if left.is_none() && top.is_none() {
+            return Ok(());
+        }
         let handle = host.scroll_handle(node_id);
         let mut offset = handle.offset();
         // Narrowing is fine for pixel offsets; the upper clamp is gpui's.
@@ -61,7 +65,7 @@ fn scroll_node<'js>(
         }
         let (before, max) = (handle.offset(), handle.max_offset());
         let clamped = |v, max| -f32::from(clamped_offset(v, max));
-        handle.set_offset(offset);
+        write_scroll_offset(node_id, &handle, offset);
         // Recorded boxes follow the new offset, so a reveal in the same tick
         // starts from where the content now is.
         host.shift_descendants(

@@ -1,6 +1,9 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::cell::RefCell;
+use std::collections::HashMap;
+
 use gpui::prelude::*;
 use gpui::{
     App, Bounds, DispatchPhase, Global, Pixels, Point, ScrollHandle, ScrollWheelEvent, Window,
@@ -8,16 +11,43 @@ use gpui::{
 };
 
 use super::spec::ElementSpec;
+use crate::NodeId;
+
+thread_local! {
+    // gpui runs on one thread: the App is built on the main thread and held in an Rc.
+    /// The last offset a script set on each container. Cleared when the first
+    /// capture of a wheel event is recorded, so it holds the writes made since
+    /// the last wheel event started.
+    static WRITTEN: RefCell<HashMap<NodeId, Point<Pixels>>> = RefCell::default();
+}
+
+/// Sets a container's offset from a script. A wheel event in flight never
+/// undoes the write, whether or not a listener prevented the default.
+pub fn write_scroll_offset(node: NodeId, handle: &ScrollHandle, offset: Point<Pixels>) {
+    handle.set_offset(offset);
+    record_scroll_write(node, offset);
+}
+
+/// Records `offset` as a script's write to the container. The caller has
+/// already set it.
+pub fn record_scroll_write(node: NodeId, offset: Point<Pixels>) {
+    WRITTEN.with_borrow_mut(|map| map.insert(node, offset));
+}
+
+fn written(node: NodeId) -> Option<Point<Pixels>> {
+    WRITTEN.with_borrow(|written| written.get(&node).copied())
+}
 
 /// Every scroll container's offset before the wheel event being dispatched,
 /// outermost first, and whether the container is inert.
 #[derive(Default)]
 struct WheelSnapshots(Vec<Snapshot>);
 
-/// A container's handle, its offset before the wheel event, whether it is
-/// inert and whether it is the root, whose step runs after the root's bubble
-/// handler.
+/// A container's node and handle, its offset before the wheel event, whether
+/// it is inert and whether it is the root, whose step runs after the root's
+/// bubble handler.
 struct Snapshot {
+    node: NodeId,
     handle: ScrollHandle,
     before: Point<Pixels>,
     inert: bool,
@@ -30,7 +60,12 @@ impl Global for WheelSnapshots {}
 /// capture phase, which runs before any bubble-phase scroll step. Children
 /// paint after their parent, and a container adds this before its own
 /// children, so containers record outermost first.
-fn scroll_recorder(handle: ScrollHandle, inert: bool, root: bool) -> impl IntoElement {
+fn scroll_recorder(
+    node: NodeId,
+    handle: ScrollHandle,
+    inert: bool,
+    root: bool,
+) -> impl IntoElement {
     canvas(
         |_, _, _| (),
         move |_, (), window, _| {
@@ -41,12 +76,14 @@ fn scroll_recorder(handle: ScrollHandle, inert: bool, root: bool) -> impl IntoEl
                 let snapshots = &mut cx.default_global::<WheelSnapshots>().0;
                 let first = snapshots.is_empty();
                 snapshots.push(Snapshot {
+                    node,
                     handle: handle.clone(),
                     before: handle.offset(),
                     inert,
                     root,
                 });
                 if first {
+                    WRITTEN.with_borrow_mut(HashMap::clear);
                     window.defer(cx, settle_wheel);
                 }
             });
@@ -56,9 +93,10 @@ fn scroll_recorder(handle: ScrollHandle, inert: bool, root: bool) -> impl IntoEl
     .size_0()
 }
 
-/// The container whose wheel step [`roll_back_extra_steps`] kept: its handle,
-/// the offset before the step and the offset after it.
+/// The container whose wheel step [`roll_back_extra_steps`] kept: its node,
+/// its handle and the offset before and after the step.
 struct Kept {
+    node: NodeId,
     handle: ScrollHandle,
     before: Point<Pixels>,
     after: Point<Pixels>,
@@ -71,16 +109,25 @@ impl Global for WheelKept {}
 
 /// Undoes the wheel steps of every container but the innermost one that can
 /// still move, and returns the kept container. `settled` true restores that
-/// one too.
+/// one too. A container a script wrote keeps its offset.
 fn undo_steps(snapshots: Vec<Snapshot>, mut settled: bool) -> Option<Kept> {
     let mut kept = None;
     for Snapshot {
+        node,
         handle,
         before,
         inert,
         ..
     } in snapshots.into_iter().rev()
     {
+        // The root's step runs after the script, so an undone step sets the
+        // offset back to the write.
+        if let Some(at) = written(node) {
+            if settled || inert {
+                handle.set_offset(at);
+            }
+            continue;
+        }
         // An inert container never scrolls and leaves the wheel to the next.
         if inert {
             handle.set_offset(before);
@@ -99,6 +146,7 @@ fn undo_steps(snapshots: Vec<Snapshot>, mut settled: bool) -> Option<Kept> {
             settled = true;
             let after = handle.offset();
             kept = Some(Kept {
+                node,
                 handle,
                 before,
                 after,
@@ -121,9 +169,10 @@ pub(super) fn roll_back_extra_steps(cx: &mut App) {
     cx.default_global::<WheelKept>().0 = undo_steps(below, false);
 }
 
-/// Runs before the next draw, after the JS listeners. Restores the kept
-/// container when a listener prevented the default and left its offset at
-/// the wheel step's result.
+/// Runs before the next draw, after the JS listeners. A listener that
+/// prevented the default leaves the kept container where it was. A container
+/// a listener wrote keeps the write, plus the wheel step when the default was
+/// not prevented, and `gpui` clamps it on the next draw.
 ///
 /// A `gpui` that applies the wheel step later than the event breaks this.
 fn settle_wheel(window: &mut Window, cx: &mut App) {
@@ -132,17 +181,18 @@ fn settle_wheel(window: &mut Window, cx: &mut App) {
     let kept = cx.default_global::<WheelKept>().0.take();
     // The root's snapshot, or all of them when the root's bubble phase did not run.
     undo_steps(snapshots, prevented || kept.is_some());
-    if let Some(kept) = kept
-        && prevented
-        && kept.handle.offset() == kept.after
-    {
-        kept.handle.set_offset(kept.before);
+    if let Some(kept) = kept {
+        match (written(kept.node), prevented) {
+            (None, true) => kept.handle.set_offset(kept.before),
+            (Some(at), false) => kept.handle.set_offset(at + (kept.after - kept.before)),
+            _ => {}
+        }
     }
 }
 
 /// Tracks a scroll container's [`ScrollHandle`] and records its offset for
-/// [`settle_wheel`], which keeps an inert container at that offset. Without a
-/// handle `gpui` scrolls it on its own.
+/// [`settle_wheel`], which sets an inert container back to it, or to a
+/// script's write. Without a handle `gpui` scrolls it on its own.
 pub(super) fn wire_scroll<Elem>(
     element: Elem,
     handle: Option<ScrollHandle>,
@@ -154,7 +204,7 @@ where
 {
     element.when_some(handle, |el, handle| {
         el.track_scroll(&handle)
-            .child(scroll_recorder(handle, spec.inert, root))
+            .child(scroll_recorder(spec.id, handle, spec.inert, root))
     })
 }
 
