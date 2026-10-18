@@ -10,6 +10,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.0.17] - 2026-10-18
+
 ### Added
 
 - `contains()` on template refs ([0724fd1](https://github.com/tom96da/incajs/commit/0724fd1))
@@ -348,7 +350,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - prebuilt `inca-host` binaries for linux-x64, linux-arm64, and darwin-arm64, resolved automatically per platform
 - click event dispatch from the native tree back into JS
 
-[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.16...HEAD
+[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.17...HEAD
+[0.0.17]: https://github.com/tom96da/incajs/releases/tag/v0.0.17
 [0.0.16]: https://github.com/tom96da/incajs/releases/tag/v0.0.16
 [0.0.15]: https://github.com/tom96da/incajs/releases/tag/v0.0.15
 [0.0.14]: https://github.com/tom96da/incajs/releases/tag/v0.0.14
