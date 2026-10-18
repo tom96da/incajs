@@ -1261,6 +1261,36 @@ A fixed entry is deleted and its ID is never reused.
   step to the inner container. Fix: none until Chromium's rule is specified;
   it varies with the listener position and layout.
 
+- **B-205 `hmr update` prints the Vite module url as an absolute /@fs/ path**
+  `Units: cli · Size: S · Impact: Low`
+
+  Under `inca dev --experimental-hmr`, Vite's own line for an edit of
+  `examples/click_counter/src/App.vue` reads
+  `hmr update /@fs/<absolute path>/examples/click_counter/src/App.vue`.
+  For a file inside `root` Vite prints a root-relative url such as
+  `/App.vue`: `normalizeResolvedIdToUrl` in Vite's `importAnalysis.ts` makes
+  the url root-relative when the resolved id starts with the server root.
+  Here the entry module `App.vue`, the only file in the example's `src/`, is
+  requested by an absolute path and its module node url stays `/@fs/...`.
+  Suspected cause: the resolved id lies outside the root the server holds.
+  The CLI's own `update` line prints the cwd-relative path `src/App.vue` and
+  is right.
+
+  Fix: reproduce with `server.config.root` and the resolved id of `App.vue`
+  logged, find why the id lies outside the root, then resolve the root the
+  same way as the ids so the url is root-relative.
+
+- **B-206 `inca.config.ts` cannot configure Vue's compiler features**
+  `Units: cli,docs · Size: M · Impact: Low`
+
+  `@vitejs/plugin-vue` takes `features` options such as `optionsAPI`,
+  `prodDevtools` and `prodHydrationMismatchDetails`, and Vite takes
+  `define`. The CLI runs Vite with `configFile: false`, and `IncaConfig` has
+  no field for either, so an app cannot turn the Options API off or set its
+  own compile-time flags. B-104 covers choosing a bundler adapter. Fix: an
+  `inca.config.ts` field that the Vite adapter passes to `vue()` and
+  `define`.
+
 - **B-207 An event handler attribute runs nothing**
   `Units: core · Size: L · Impact: Low`
 
