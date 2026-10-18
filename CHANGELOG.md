@@ -32,6 +32,7 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - `inca dev` reports an entry file the host cannot read like any other start failure ([19daf5e](https://github.com/tom96da/incajs/commit/19daf5e))
 - the type declarations of `@incajs/cli` resolve again from the paths `package.json` names ([3a00f91](https://github.com/tom96da/incajs/commit/3a00f91))
 - space release clicks a button under a held mouse press, and other keys keep a pending Space press ([bc31fb4](https://github.com/tom96da/incajs/commit/bc31fb4))
+- a script's scroll write stays through a wheel event ([85541ec](https://github.com/tom96da/incajs/commit/85541ec))
 
 ## [0.0.16] - 2026-10-13
 
