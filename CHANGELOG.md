@@ -10,6 +10,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.0.18] - 2026-10-18
+
 ### Added
 
 - `overflow` takes `clip` and a two-value form such as `hidden scroll` ([2df75fd](https://github.com/tom96da/incajs/commit/2df75fd))
@@ -365,7 +367,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - prebuilt `inca-host` binaries for linux-x64, linux-arm64, and darwin-arm64, resolved automatically per platform
 - click event dispatch from the native tree back into JS
 
-[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.17...HEAD
+[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.18...HEAD
+[0.0.18]: https://github.com/tom96da/incajs/releases/tag/v0.0.18
 [0.0.17]: https://github.com/tom96da/incajs/releases/tag/v0.0.17
 [0.0.16]: https://github.com/tom96da/incajs/releases/tag/v0.0.16
 [0.0.15]: https://github.com/tom96da/incajs/releases/tag/v0.0.15
