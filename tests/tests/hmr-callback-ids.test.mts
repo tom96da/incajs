@@ -3,7 +3,9 @@
 
 // Drives the real host binary through a failed first load that the
 // dev server retries in the same engine. Listeners registered before and
-// after the retry keep their own handlers. Console output is the signal.
+// after the retry keep their own handlers, and an event's `currentTarget` is
+// the window of the copy of core that loaded last. Console output is the
+// signal.
 
 import { existsSync, readFileSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -75,7 +77,7 @@ const LATE_MTS = `
 import "./broken.mts";
 import { window } from "incajs";
 
-window.addEventListener("pong", () => console.log("[e2e] late ran"));
+window.addEventListener("pong", (e) => console.log("[e2e] late ran " + (e.currentTarget === window)));
 `;
 
 const scratchRoot = path.join(import.meta.dirname, "tmp", "hmr-callback-ids");
@@ -128,7 +130,7 @@ afterAll(async () => {
 });
 
 it(
-  "keeps each listener on its own handler after a failed first load is retried",
+  "a retried load delivers each event to its own listener on the current window",
   async () => {
     const client = hostClient!;
     onTestFailed(() => console.error(`--- host stderr ---\n${stderrText}`));
@@ -153,7 +155,7 @@ it(
     });
 
     client.notify("tick", {});
-    await vi.waitFor(() => expect(stderrText).toContain("[e2e] late ran"), {
+    await vi.waitFor(() => expect(stderrText).toContain("[e2e] late ran true"), {
       timeout: WAIT_TIMEOUT_MS,
     });
   },
