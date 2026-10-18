@@ -10,6 +10,21 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- `overflow` takes `clip` and a two-value form such as `hidden scroll` ([2df75fd](https://github.com/tom96da/incajs/commit/2df75fd))
+- `onclick` and the other event handler properties on elements ([7c56342](https://github.com/tom96da/incajs/commit/7c56342))
+- listener and handler parameters are typed `IncaEvent`, which is exported ([6e8c142](https://github.com/tom96da/incajs/commit/6e8c142))
+
+### Changed
+
+- beside a scrolling axis, `overflow` computes `clip` as `hidden` and an unset axis as `scroll` ([2df75fd](https://github.com/tom96da/incajs/commit/2df75fd))
+
+### Fixed
+
+- an event prop keeps a listener for any value Vue keeps, and `onUpdate:` binds nothing ([cee23c5](https://github.com/tom96da/incajs/commit/cee23c5))
+- `inca dev --experimental-hmr` gives the app its `define` values and drops Vue's flag warning ([be6477b](https://github.com/tom96da/incajs/commit/be6477b))
+
 ## [0.0.17] - 2026-10-18
 
 ### Added
