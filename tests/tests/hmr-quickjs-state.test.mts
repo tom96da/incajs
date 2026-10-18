@@ -175,6 +175,19 @@ afterAll(async () => {
 });
 
 it(
+  "mounts without Vue's feature flag warning on the host stderr",
+  async () => {
+    onTestFailed(() => console.error(`--- host stderr ---\n${stderrText}`));
+
+    await vi.waitFor(() => expect(stderrText).toContain("[e2e] mounted"), {
+      timeout: WAIT_TIMEOUT_MS,
+    });
+    expect(stderrText).not.toContain("Feature flag");
+  },
+  WAIT_TIMEOUT_MS + 10_000,
+);
+
+it(
   "keeps component state across a template edit, resets it across a script edit",
   async () => {
     const client = hostClient!;
