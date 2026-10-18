@@ -170,12 +170,14 @@ fn an_ancestor_bubble_listener_sees_nothing_of_a_listenerless_container_scroll(
 #[gpui::test]
 fn a_scroll_no_listener_reaches_runs_no_js(cx: &mut TestAppContext) {
     let mut scene = Scene::new(cx, one_container(), "");
-    // Counts each read of the callback table, which only a walk that
-    // reaches a listener makes.
+    // Counts each call of the targets hook, which only a walk that reaches
+    // a listener makes.
     scene.js(r"
-        globalThis.reads = 0; const table = globalThis.__inca_callbacks__ ??= {};
-        Object.defineProperty(globalThis, '__inca_callbacks__', { configurable: true,
-        get() { globalThis.reads++; return table; } });
+        globalThis.reads = 0;
+        globalThis.__inca_targets__ = (ids) => {
+            globalThis.reads++;
+            return ids;
+        };
         ");
     scene.wheel(-50.);
     assert_eq!(scene.offset(0).y, px(-50.));

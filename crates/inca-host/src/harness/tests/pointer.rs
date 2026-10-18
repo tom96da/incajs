@@ -17,10 +17,8 @@ const CLICKABLE: &str = r"
         n.setAttribute(label, 'value', 'hi');
         n.appendChild(box, label);
         globalThis.clicks = 0;
-        globalThis.__inca_callbacks__ = {
-            0: () => {
-                globalThis.clicks++;
-            },
+        globalThis.__inca_callbacks__[0] = () => {
+            globalThis.clicks++;
         };
         n.addEventListener(box, 'click');
     ";
@@ -105,10 +103,8 @@ const CLICK_FIELDS: &str = r"
         n.appendChild(n.rootNodeId(), box);
         globalThis.box = box;
         globalThis.log = [];
-        globalThis.__inca_callbacks__ = {
-            0: (e) => {
-                globalThis.log.push(`${e.detail}:${e.shiftKey}:${e.button}`);
-            },
+        globalThis.__inca_callbacks__[0] = (e) => {
+            globalThis.log.push(`${e.detail}:${e.shiftKey}:${e.button}`);
         };
         n.addEventListener(box, 'auxclick');
     ";
@@ -141,13 +137,11 @@ const HOVERABLE: &str = r"
         n.appendChild(frame, box);
         globalThis.enters = 0;
         globalThis.leaves = 0;
-        globalThis.__inca_callbacks__ = {
-            0: () => {
-                globalThis.enters++;
-            },
-            1: () => {
-                globalThis.leaves++;
-            },
+        globalThis.__inca_callbacks__[0] = () => {
+            globalThis.enters++;
+        };
+        globalThis.__inca_callbacks__[1] = () => {
+            globalThis.leaves++;
         };
         n.addEventListener(box, 'mouseenter');
         n.addEventListener(box, 'mouseleave');
@@ -195,10 +189,8 @@ fn unhover_before_any_hover_fires_nothing(cx: &mut TestAppContext) {
             n.setStyle(box, 'margin_left', 200);
             n.appendChild(n.rootNodeId(), box);
             globalThis.leaves = 0;
-            globalThis.__inca_callbacks__ = {
-                0: () => {
-                    globalThis.leaves++;
-                },
+            globalThis.__inca_callbacks__[0] = () => {
+                globalThis.leaves++;
             };
             n.addEventListener(box, 'mouseleave');
             ",

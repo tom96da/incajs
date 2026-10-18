@@ -237,7 +237,7 @@ fn a_dispatched_event_calls_the_function_stored_under_the_returned_id() {
         &dispatcher,
         &format!(
             r"
-            (() => {{ const out = []; globalThis.__inca_callbacks__ = {{}};
+            (() => {{ const out = [];
             const first = __inca_native__.addEventListener({node}, 'ping');
             const second = __inca_native__.addEventListener({node}, 'ping');
             __inca_callbacks__[first] = () => out.push('first');

@@ -229,21 +229,6 @@ A fixed entry is deleted and its ID is never reused.
   scratch app and resolves `incajs/vue/runtime` through the published
   `exports`. The UI tests cover the workspace link.
 
-- **B-187 The bridge globals can be overwritten by the app**
-  `Units: bridge,jsenv,host,core · Size: M · Impact: Medium`
-
-  `__inca_native__`, `__inca_dev__`, `__inca_callbacks__`,
-  `__inca_released__`, `__inca_targets__`, `__inca_track_rejection__` and
-  `__inca_take_rejections__` are plain globals. A script can assign to or
-  delete them, which breaks the host channel or the report of unhandled
-  rejections.
-
-  Fix: define them with `Object::prop(key, value)` of rquickjs, which creates
-  a read-only property that stays in place. The JS side creates
-  `__inca_callbacks__`, `__inca_released__` and `__inca_targets__` (`??=` in
-  `callbacks.mts` and `eventTarget.mts`, so the first copy of core wins), so
-  the host creates and protects them first.
-
 - **B-189 The event store holds JS values in Rust**
   `Units: bridge · Size: M · Impact: Medium`
 

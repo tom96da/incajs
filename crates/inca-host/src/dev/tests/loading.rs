@@ -97,7 +97,9 @@ fn a_listener_error_of_a_dispatch_while_pending_is_one_app_error_before_the_wind
     let source = r"
         const n = __inca_native__.createNode('div');
         __inca_native__.addEventListener(n, 'ping');
-        globalThis.__inca_callbacks__ = { 0() { throw new Error('x'); } };
+        globalThis.__inca_callbacks__[0] = () => {
+            throw new Error('x');
+        };
         __inca_native__.dispatchEvent(n, new Event('ping'));
         await new Promise(() => {});
         ";

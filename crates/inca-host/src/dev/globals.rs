@@ -36,10 +36,13 @@ pub(crate) type DevSend = Rc<dyn Fn(&str, Value)>;
 /// syntax error raises a JS `SyntaxError` whose stack names `filename` and the
 /// line.
 ///
+/// The global is read-only and non-configurable; its methods stay assignable,
+/// so an app sets `receive` on it.
+///
 /// # Errors
 ///
 /// Returns an error if defining `globalThis.__inca_dev__` or its methods on
-/// `ctx` fails.
+/// `ctx` fails, which includes a second call on the same `ctx`.
 pub(crate) fn install_dev(ctx: &Ctx<'_>, on_send: DevSend) -> JsResult<()> {
     let dev = Object::new(ctx.clone())?;
     dev.set(
@@ -56,7 +59,7 @@ pub(crate) fn install_dev(ctx: &Ctx<'_>, on_send: DevSend) -> JsResult<()> {
         )?,
     )?;
     dev.set("compile", Function::new(ctx.clone(), compile)?)?;
-    ctx.globals().set("__inca_dev__", dev)?;
+    ctx.globals().prop("__inca_dev__", dev)?;
     Ok(())
 }
 
@@ -207,6 +210,27 @@ mod tests {
             .unwrap();
 
         assert!(engine.eval::<bool>("globalThis.threw;").unwrap());
+    }
+
+    #[rstest]
+    #[case::assigned("globalThis.__inca_dev__ = null;")]
+    #[case::deleted("delete globalThis.__inca_dev__;")]
+    fn a_script_cannot_replace_the_dev_global(#[case] change: &str) {
+        let engine = engine_with_dev(Rc::new(|_, _| {}));
+
+        let kept: bool = engine
+            .eval(&format!(
+                r"
+                const before = globalThis.__inca_dev__;
+                try {{
+                    {change}
+                }} catch {{}}
+                globalThis.__inca_dev__ === before;
+                "
+            ))
+            .unwrap();
+
+        assert!(kept, "{change}");
     }
 
     /// Calls `f(args)` and returns what its promise settled with: the value as

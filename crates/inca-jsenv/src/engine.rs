@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use rquickjs::function::Rest;
 use rquickjs::{Coerced, Context, Ctx, FromJs, Function, Module, Object, Promise, Runtime, Value};
 
 use crate::loader::{DiskLoader, DiskResolver, canonical_name};
@@ -114,21 +115,31 @@ impl fmt::Display for EngineError {
 
 impl std::error::Error for EngineError {}
 
-const TRACK: &str = "__inca_track_rejection__";
-const TAKE: &str = "__inca_take_rejections__";
+/// The vault key of the function that fills the rejection tracker's map.
+const TRACK: &str = "trackRejection";
+/// The vault key of the function [`Engine::run_jobs`] empties the map with.
+const TAKE: &str = "takeRejections";
 
-/// Keeps each promise rejected with no handler yet, mapped to its reason.
-/// The rejection tracker fills it through `TRACK`; [`Engine::run_jobs`]
-/// empties it through `TAKE`.
+/// Puts the rejection tracker's functions into the vault it is called with.
+/// They keep each promise rejected with no handler yet, mapped to its reason,
+/// and read the `Map` methods they were made with, so a script that replaces
+/// `Map.prototype` members changes nothing. `takeRejections(each)` calls
+/// `each(reason)` per entry, then empties the map.
 const TRACKER_JS: &str = r"
-    {
+    (vault) => {
+        const { apply } = Reflect;
+        const { delete: remove, set, forEach, clear } = Map.prototype;
         const pending = new Map();
-        globalThis.__inca_track_rejection__ = (promise, reason, handled) =>
-            handled ? pending.delete(promise) : pending.set(promise, reason);
-        globalThis.__inca_take_rejections__ = () => {
-            const reasons = [...pending.values()];
-            pending.clear();
-            return reasons;
+        vault.trackRejection = (promise, reason, handled) => {
+            if (handled) {
+                apply(remove, pending, [promise]);
+            } else {
+                apply(set, pending, [promise, reason]);
+            }
+        };
+        vault.takeRejections = (each) => {
+            apply(forEach, pending, [each]);
+            apply(clear, pending, []);
         };
     }
     ";
@@ -196,15 +207,17 @@ impl Engine {
                 create_vault(&ctx)?;
                 let modules = Object::new(ctx.clone())?;
                 modules.set_prototype(None)?;
-                vault(&ctx)?.set(MODULES, modules)?;
-                ctx.eval::<(), _>(TRACKER_JS)
+                let vault = vault(&ctx)?;
+                vault.set(MODULES, modules)?;
+                ctx.eval::<Function, _>(TRACKER_JS)?.call::<_, ()>((vault,))
             })
             .map_err(|err| EngineError::plain(&err))?;
         engine
             .runtime
             .set_host_promise_rejection_tracker(Some(Box::new(
                 |ctx, promise, reason, is_handled| {
-                    if let Ok(track) = ctx.globals().get::<_, Function>(TRACK) {
+                    if let Ok(track) = vault(&ctx).and_then(|vault| vault.get::<_, Function>(TRACK))
+                    {
                         let _ = track.call::<_, ()>((promise, reason, is_handled));
                     }
                 },
@@ -225,14 +238,7 @@ impl Engine {
     pub fn run_jobs(&self) -> Vec<EngineError> {
         let mut failures = self.startup_failures.take();
         while self.run_job(&mut failures) {}
-        let reasons: Vec<EngineError> = self.context.with(|ctx| {
-            ctx.globals()
-                .get::<_, Function>(TAKE)
-                .and_then(|take| take.call::<_, Vec<Value>>(()))
-                .map(|values| values.iter().map(EngineError::from_thrown).collect())
-                .unwrap_or_default()
-        });
-        failures.extend(reasons);
+        failures.extend(self.context.with(|ctx| take_rejections(&ctx)));
         failures
     }
 
@@ -398,6 +404,24 @@ impl Engine {
             }
         })
     }
+}
+
+/// The reasons of the promises still rejected with no handler, which this
+/// forgets. A failed take reports what it collected.
+fn take_rejections<'js>(ctx: &Ctx<'js>) -> Vec<EngineError> {
+    let reasons = Rc::new(RefCell::new(Vec::new()));
+    let sink = Rc::clone(&reasons);
+    let _ = Function::new(ctx.clone(), move |args: Rest<Value<'js>>| {
+        if let Some(reason) = args.0.into_iter().next() {
+            sink.borrow_mut().push(reason);
+        }
+    })
+    .and_then(|each| vault(ctx)?.get::<_, Function>(TAKE)?.call::<_, ()>((each,)));
+    reasons
+        .take()
+        .iter()
+        .map(EngineError::from_thrown)
+        .collect()
 }
 
 /// A module started by [`Engine::start_module`] and polled with

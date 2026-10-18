@@ -103,7 +103,8 @@ is `params` as a JSON string. A relay that throws, or finds no
 The app sends a notification back with `__inca_dev__.send(method,
 paramsJson)`. It parses `paramsJson` as JSON and writes it out as a
 notification named `method`. Invalid JSON raises a `TypeError`.
-`__inca_dev__` exists only under `--dev`.
+`__inca_dev__` exists only under `--dev`, as a global that a script
+cannot replace or delete.
 
 The app reports a failed first load with `__inca_dev__.setLoadFailed(failed)`.
 `true` says the load failed and a retry may follow. `false` says a new

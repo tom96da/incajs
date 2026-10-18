@@ -89,6 +89,9 @@ the nearest ancestor container.
 
 ## Binding functions
 
+The functions live on `globalThis.__inca_native__`, a read-only,
+non-configurable global.
+
 | Function | Signature | Purpose |
 | --- | --- | --- |
 | `rootNodeId` | `() => number` | Return the id of the host-allocated root container, the node a mounting app attaches itself under. |
@@ -167,9 +170,11 @@ and author-facing behaviour are in [events.md](../docs/reference/events.md).
   event's `currentTarget` as `this`. `once` removes the registration before
   the listener runs. `createEventTarget` builds the listener methods for one
   node, and `window` resolves `rootNodeId()` per call.
-- The caller stores the function at `globalThis.__inca_callbacks__[id]` after
-  `addEventListener` returns `id`. A listener runs only after the call returns.
-  A missing or non-function entry is skipped.
+- `install` creates `globalThis.__inca_callbacks__` as an empty
+  null-prototype object on a read-only, non-configurable global. The caller
+  stores the function at `globalThis.__inca_callbacks__[id]` after
+  `addEventListener` returns `id`. A listener runs only after the call
+  returns. A missing or non-function entry is skipped.
 - A throwing callback goes to `Host::failures`, and sibling callbacks still
   run. Unhandled promise rejections and failed jobs are reported through the
   job drain before listener errors, and only listener errors go to
@@ -180,8 +185,9 @@ and author-facing behaviour are in [events.md](../docs/reference/events.md).
 #### Released nodes
 
 `__inca_released__(nodeIds: number[], callbackIds: number[]) => void` is a
-global that core defines with `??=`, like `__inca_callbacks__`. Rust looks it
-up by name on each call and keeps nothing. A missing global is skipped.
+global that core defines read-only on each load, so the latest copy of core
+answers. Rust looks it up by name on each call and keeps nothing. A missing
+global is skipped.
 
 - Rust calls it at most once per frame, after the focus pass, and only when
   the sweep of that frame freed a node.
@@ -193,8 +199,8 @@ up by name on each call and keeps nothing. A missing global is skipped.
 #### Event targets
 
 `__inca_targets__(nodeIds: number[]) => unknown[]` is a global that core
-defines, like `__inca_released__`. Rust looks it up by name on each
-walk and keeps nothing.
+defines read-only on each load, like `__inca_released__`, so the latest copy
+of core answers. Rust looks it up by name on each walk and keeps nothing.
 
 - A walk that reaches a listener calls it once with the path, target first.
   Entry `i` of the result stands for `nodeIds[i]` in `target`,

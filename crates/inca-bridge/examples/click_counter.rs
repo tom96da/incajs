@@ -67,7 +67,6 @@ fn install_click_handler(engine: &Engine, outer: NodeId, label: NodeId) {
         .eval::<()>(&format!(
             r"
             globalThis.__inca_clicks__ = 0;
-            globalThis.__inca_callbacks__ = {{}};
             const id = __inca_native__.addEventListener({outer}, 'click');
             globalThis.__inca_callbacks__[id] = function () {{
                 globalThis.__inca_clicks__ += 1;

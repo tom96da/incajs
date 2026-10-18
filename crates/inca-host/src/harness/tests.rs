@@ -26,7 +26,6 @@ fn id_where(h: &mut Harness, f: impl Fn(&Node) -> bool) -> NodeId {
 /// id the host returns.
 const LISTEN: &str = r"
         globalThis.cb = {};
-        globalThis.__inca_callbacks__ = {};
         globalThis.listen = (node, type, key) => {
             if (typeof globalThis.cb[key] !== 'function') {
                 throw new Error('cb[' + key + '] is not a function');

@@ -351,6 +351,24 @@ describe("__inca_released__", () => {
     expect(isDestroyed(b)).toBe(true);
     expect(isDestroyed(a)).toBe(true);
   });
+
+  it("stays in place when a script assigns to it", () => {
+    const hook = globalThis.__inca_released__;
+
+    expect(() => {
+      globalThis.__inca_released__ = () => {};
+    }).toThrow(TypeError);
+    expect(globalThis.__inca_released__).toBe(hook);
+  });
+
+  it("is the latest copy's once core loads again", async () => {
+    const hook = globalThis.__inca_released__;
+    vi.resetModules();
+
+    await import("../src/callbacks.mts");
+
+    expect(globalThis.__inca_released__).not.toBe(hook);
+  });
 });
 
 describe("the hold registry", () => {

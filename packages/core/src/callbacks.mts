@@ -16,7 +16,7 @@ const idsByGroup = new Map<string, Map<EventListenerOrObject<never>, CallbackId>
  */
 const ownerById = new Map<CallbackId, { group: string; listener: EventListenerOrObject<never> }>();
 
-// Lazily, because the host defines nothing until the first registration.
+/** The table the host creates at install; a realm without the host gets a plain one. */
 const callables = (): Record<CallbackId, HostCallback> => (globalThis.__inca_callbacks__ ??= {});
 
 /**
@@ -98,9 +98,10 @@ export function registeredGroupCount(): number {
 /**
  * The host calls this at the start of a frame, after it freed nodes that had
  * no parent. Each callback is released on its own, so one that throws does not
- * skip the rest. The first error is thrown after the rest is done.
+ * skip the rest. The first error is thrown after the rest is done. Core
+ * defines it read-only on each load, so the latest copy of core answers.
  */
-globalThis.__inca_released__ ??= (nodeIds, callbackIds) => {
+const released: typeof globalThis.__inca_released__ = (nodeIds, callbackIds) => {
   let failure: unknown;
   let failed = false;
   for (const callbackId of callbackIds) {
@@ -114,3 +115,5 @@ globalThis.__inca_released__ ??= (nodeIds, callbackIds) => {
   markFreed(nodeIds);
   if (failed) throw failure;
 };
+
+Object.defineProperty(globalThis, "__inca_released__", { value: released, configurable: true });

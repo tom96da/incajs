@@ -10,8 +10,11 @@ import { window } from "./window.mts";
  * root, the element of a node that has one, and `null` for any other node.
  * The host calls it at the start of each walk that reaches a listener and on
  * every `dispatchEvent()`, and once more for an event's `relatedTarget` node.
+ * Core defines it read-only on each load, so the latest copy of core answers.
  */
-globalThis.__inca_targets__ ??= (nodeIds) => {
+const targets: typeof globalThis.__inca_targets__ = (nodeIds) => {
   const root = rootNodeId();
   return nodeIds.map((id) => (id === root ? window : (elementOf(id) ?? null)));
 };
+
+Object.defineProperty(globalThis, "__inca_targets__", { value: targets, configurable: true });

@@ -30,4 +30,22 @@ describe("__inca_targets__", () => {
     expect(found).toBe(handle);
     expect(missing).toBeNull();
   });
+
+  it("stays in place when a script assigns to it", () => {
+    const hook = globalThis.__inca_targets__;
+
+    expect(() => {
+      globalThis.__inca_targets__ = () => [];
+    }).toThrow(TypeError);
+    expect(globalThis.__inca_targets__).toBe(hook);
+  });
+
+  it("is the latest copy's once core loads again", async () => {
+    const hook = globalThis.__inca_targets__;
+    vi.resetModules();
+
+    await import("./targets.mts");
+
+    expect(globalThis.__inca_targets__).not.toBe(hook);
+  });
 });

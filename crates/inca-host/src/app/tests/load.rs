@@ -164,6 +164,10 @@ const MOUNTING_BUNDLE: &str = r"
 #[test]
 fn a_reload_leaves_no_stale_nodes_listeners_or_callbacks() {
     let first = load(MOUNTING_BUNDLE).unwrap();
+    first
+        .engine
+        .eval::<()>("__inca_callbacks__[0] = () => {};")
+        .unwrap();
     let first_child = first
         .host
         .borrow()
@@ -189,11 +193,12 @@ fn a_reload_leaves_no_stale_nodes_listeners_or_callbacks() {
         .map(|l| l.callback)
         .collect();
     assert_eq!(ids, &[0]);
-    assert!(
-        !second
+    assert_eq!(
+        second
             .engine
-            .eval::<bool>("typeof globalThis.__inca_callbacks__ !== 'undefined';")
+            .eval::<i32>("Object.keys(globalThis.__inca_callbacks__).length;")
             .unwrap(),
+        0,
         "the fresh engine must not carry the previous callback registry"
     );
 }
@@ -202,8 +207,8 @@ const THROWING_LISTENER_BUNDLE: &str = r"
     const node = __inca_native__.createNode('div');
     __inca_native__.appendChild(__inca_native__.rootNodeId(), node);
     __inca_native__.addEventListener(node, 'click');
-    globalThis.__inca_callbacks__ = {
-        0: () => { throw new Error('boom'); },
+    globalThis.__inca_callbacks__[0] = () => {
+        throw new Error('boom');
     };
 ";
 

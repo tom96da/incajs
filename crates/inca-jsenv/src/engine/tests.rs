@@ -5,6 +5,8 @@
 
 use std::fs;
 
+use rstest::rstest;
+
 use super::*;
 use crate::tests::ScratchDir;
 
@@ -295,6 +297,34 @@ fn a_rejection_handled_later_in_the_drain_is_not_returned() {
         .unwrap();
 
     assert!(engine.run_jobs().is_empty());
+}
+
+#[rstest]
+#[case::map_set(
+    r"
+    Map.prototype.set = function () {
+        return this;
+    };
+    "
+)]
+#[case::map_iterator(
+    r"
+    Object.getPrototypeOf(new Map().values()).next = () => ({ done: true });
+    "
+)]
+#[case::map_for_each(
+    r"
+    Map.prototype.forEach = function () {};
+    "
+)]
+fn a_script_cannot_silence_an_unhandled_rejection(#[case] tamper: &str) {
+    let engine = Engine::new().unwrap();
+    engine.eval::<()>(tamper).unwrap();
+    engine
+        .eval::<()>("Promise.reject(new Error('lost'));")
+        .unwrap();
+
+    assert_eq!(engine.run_jobs().len(), 1);
 }
 
 #[test]
