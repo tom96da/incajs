@@ -10,6 +10,10 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Fixed
+
+- `inca dev` with the experimental HMR prints a `reload` line when an edit reloads the app ([8c2e32e](https://github.com/tom96da/incajs/commit/8c2e32e))
+
 ## [0.0.18] - 2026-10-18
 
 ### Added

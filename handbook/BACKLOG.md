@@ -451,14 +451,6 @@ A fixed entry is deleted and its ID is never reused.
   once an update is actually applied, which no dev-protocol message
   does today.
 
-- **B-035 A `full-reload` HMR payload logs nothing on success**
-  `Units: cli · Size: S · Impact: Low`
-
-  `dev.mts`'s `reload: () => void reloadHost()` (passed to `bundler.hmr`)
-  logs no line on success, so a full reload under `--experimental-hmr` is
-  invisible to the user. `onBuild` logs a `reload ... (Nms)` line for the
-  same step.
-
 - **B-037 Dev relay hardening (`__inca_dev__`)**
   `Units: bridge,host · Size: S–M · Impact: Low`
 
@@ -1327,3 +1319,16 @@ A fixed entry is deleted and its ID is never reused.
   cast. Browsers type `this` as the element and `target` as `EventTarget`.
   Fix: a target type parameter on `IncaEvent` and a polymorphic `this`
   on `addEventListener`.
+
+- **B-210 Deleting or adding `src/main.ts` during `inca dev` keeps the old entry**
+  `Units: cli · Size: M · Impact: Low`
+
+  `resolveEntry` runs once at start. After `src/main.ts` is deleted, every
+  edit fetches the old entry and prints `build failed: Failed to load url
+  .../src/main.ts`. A `src/main.ts` added to an app that runs from
+  `src/App.vue` is not picked up either. Restarting `inca dev` resolves the
+  entry again.
+
+  Fix: watch `src/main.*`, resolve the entry again when one appears or
+  disappears, and restart the host against it. In HMR mode the entry is
+  written into the session's `entry.js` as well.
