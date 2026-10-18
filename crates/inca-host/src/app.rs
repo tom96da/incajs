@@ -464,10 +464,10 @@ pub(crate) fn open(
 /// host serves those messages, and the window opens once the entry's
 /// top-level `await` settles or two seconds pass. While the app reports a
 /// failed load, the window stays closed. Returns `ExitCode::SUCCESS`
-/// after a normal quit. A bundle that fails to start exits the process with
-/// status 1. In production an unreadable entry prints to stderr and returns
-/// `ExitCode::FAILURE`. With `dev` set it is reported like a throwing first
-/// bundle.
+/// after a normal quit. A bundle that fails to start and an entry that
+/// cannot be read both exit the process with status 1. In production the
+/// failure prints to stderr; with `dev` set it is reported like a throwing
+/// first bundle.
 #[must_use]
 pub fn run_bundle(entry_path: &str, dev: bool) -> ExitCode {
     let writer: Option<SharedWriter> = dev.then(|| Rc::new(StdoutWriter::spawn()) as SharedWriter);
@@ -476,14 +476,10 @@ pub fn run_bundle(entry_path: &str, dev: bool) -> ExitCode {
     }
     let source = match fs::read_to_string(entry_path) {
         Ok(source) => source,
-        Err(err) => {
-            let message = format!("failed to read {entry_path}: {err}");
-            if writer.is_some() {
-                fail_startup(&Failure::bundle(message), writer.as_ref());
-            }
-            eprintln!("{message}");
-            return ExitCode::FAILURE;
-        }
+        Err(err) => fail_startup(
+            &Failure::bundle(format!("failed to read {entry_path}: {err}")),
+            writer.as_ref(),
+        ),
     };
     let entry_path = entry_path.to_owned();
 
