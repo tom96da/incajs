@@ -48,16 +48,15 @@ A fixed entry is deleted and its ID is never reused.
 
   An app writes `:style` with the host's names and values, such as
   `textColor`, `background`, `cornerRadius`, `textSize` and
-  `justifyContent: "start"`, with sizes as numbers of px. A Vue developer
-  knows `color`, `backgroundColor`, `borderRadius`, `fontSize`,
-  `justifyContent: "flex-start"` and `"10px"`. Goal: an app writes standard
-  CSS in `:style` and meets no host vocabulary. The host maps each CSS
-  property and value form to its own style, the reference lists the CSS
-  names, and the host's own names stay accepted as aliases. A warning names
-  the key as written. CSS accepts key spellings that the host warns about:
-  uppercase or mixed-case kebab keys such as `Flex-Direction`, vendor
-  prefixes and `--custom` properties. B-085 (percentages, shorthands) and
-  B-117 (wrong-shaped values) belong to the same change. B-123 generates the
+  `justifyContent: "start"`, with sizes as numbers of px. A Vue developer knows
+  `color`, `backgroundColor`, `borderRadius`, `fontSize`,
+  `justifyContent: "flex-start"` and `"10px"`. Goal: an app writes standard CSS in `:style` and
+  meets no host vocabulary. The host maps each CSS property and value form to
+  its own style, the reference lists the CSS names, and the host's own names
+  stay accepted as aliases. A warning names the key as written. CSS accepts
+  key spellings that the host warns about: uppercase or mixed-case kebab keys
+  such as `Flex-Direction`, vendor prefixes and `--custom` properties. B-085
+  (percentages, shorthands) belongs to the same change. B-123 generates the
   types from the same mapping.
 
 - **B-123 The style vocabulary has no machine-readable definition**
@@ -726,14 +725,6 @@ A fixed entry is deleted and its ID is never reused.
   Linux package holds the host binary and the bundle, so a launcher or a task
   bar shows no icon. Linux needs an icon format such as PNG or SVG and a
   `.desktop` file that matches the window's `identifier`.
-
-- **B-117 A known style key with a wrong-shaped value is dropped quietly**
-  `Units: gpui · Size: S–M · Impact: Low`
-
-  An unknown key and an invalid color print a warning when the style is
-  set. A known key whose value has the wrong type or range, such as
-  `display: "nope"`, `gap: "1"`, a negative `padding` or a string `opacity`,
-  is dropped and prints nothing.
 
 - **B-118 A style warning prints again on every `setStyle` call**
   `Units: bridge · Size: S · Impact: Low`

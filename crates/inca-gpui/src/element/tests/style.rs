@@ -488,6 +488,13 @@ fn a_warning_names_the_key_as_written() {
             [format!("ignoring invalid color for style key `{key}`")]
         );
     }
+    for key in ["flexGrow", "flex-grow", "flex_grow"] {
+        let (_, warnings) = style_and_warnings(&[(key, num(-1.0))]);
+        assert_eq!(
+            warnings,
+            [format!("ignoring unsupported value for style key `{key}`")]
+        );
+    }
 }
 
 #[test]
@@ -498,14 +505,59 @@ fn recognized_style_keys_apply_quietly() {
         ("background", num(1.0)),
         ("overflow", text("scroll")),
         ("opacity", num(2.0)),
+        ("margin_left", num(-8.0)),
+        ("width", text("auto")),
     ]);
     assert!(warnings.is_empty(), "{warnings:?}");
 }
 
+#[rstest]
+#[case::display("display", text("nope"))]
+#[case::flex_direction("flex_direction", text("nope"))]
+#[case::justify_content("justify_content", text("nope"))]
+#[case::align_items("align_items", num(1.0))]
+#[case::gap_negative("gap", num(-1.0))]
+#[case::width_negative("width", num(-1.0))]
+#[case::height_negative("height", num(-1.0))]
+#[case::border_width_negative("border_width", num(-1.0))]
+#[case::corner_radius_negative("corner_radius", num(-1.0))]
+#[case::text_size_negative("text_size", num(-1.0))]
+#[case::overflow("overflow", text("nope"))]
+#[case::overflow_x("overflow_x", num(1.0))]
+#[case::overflow_y("overflow_y", text("hidden scroll"))]
+#[case::flex_grow("flex_grow", num(-1.0))]
+#[case::flex_shrink("flex_shrink", text("nope"))]
+#[case::opacity("opacity", text("half"))]
+#[case::min_width_negative("min_width", num(-1.0))]
+#[case::min_height_negative("min_height", num(-1.0))]
+#[case::max_width_negative("max_width", num(-1.0))]
+#[case::max_height_negative("max_height", num(-1.0))]
+#[case::padding("padding", num(-1.0))]
+#[case::margin("margin_top", num(f64::NAN))]
+fn a_known_key_with_an_unsupported_value_warns(#[case] key: &str, #[case] value: AttributeValue) {
+    let (_, warnings) = style_and_warnings(&[(key, value)]);
+
+    assert_eq!(
+        warnings,
+        [format!("ignoring unsupported value for style key `{key}`")]
+    );
+}
+
+#[rstest]
+#[case::display("display", text("flex"))]
+#[case::background("background", text("#fff"))]
+fn an_empty_string_on_a_known_key_is_quiet(#[case] key: &str, #[case] set: AttributeValue) {
+    let (style, warnings) = style_and_warnings(&[(key, set), (key, text(""))]);
+
+    assert!(warnings.is_empty(), "{key}: {warnings:?}");
+    assert_eq!((style.display, style.background), (None, None), "{key}");
+}
+
 #[test]
-fn a_wrong_shaped_value_of_a_known_key_is_dropped_quietly() {
-    let (_, warnings) = style_and_warnings(&[("display", text("nope")), ("gap", text("1"))]);
-    assert!(warnings.is_empty(), "{warnings:?}");
+fn an_empty_string_on_an_unknown_key_warns() {
+    let (_, warnings) = style_and_warnings(&[("not_a_real_prop", text(""))]);
+
+    assert_eq!(warnings, ["ignoring unknown style key `not_a_real_prop`"]);
 }
 
 #[test]

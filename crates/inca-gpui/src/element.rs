@@ -12,8 +12,8 @@
 //! Unrecognized `style_props` keys, malformed values and unrecognized
 //! `attributes` keys are ignored. This runs on the render path, where nothing
 //! can raise a catchable exception. [`style_warning`] lets the caller that
-//! stores a style report an unknown key or an invalid color once, when it is
-//! set.
+//! stores a style report an unknown key, an invalid color or a value of a
+//! shape the host does not support once, when it is set.
 
 mod build;
 mod parse;

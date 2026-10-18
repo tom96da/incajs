@@ -21,7 +21,8 @@ use super::listeners::EventListeners;
 pub struct Host {
     pub tree: VirtualTree,
     /// Receives one line for each style a `setStyle` call stores with an
-    /// unknown key or an invalid color. Writes to stderr by default.
+    /// unknown key, an invalid color or a value of a shape the host does not
+    /// support. Writes to stderr by default.
     pub warn: Rc<dyn Fn(&str)>,
     pub listeners: EventListeners,
     pub focus: FocusRegistry,

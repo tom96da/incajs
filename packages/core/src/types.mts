@@ -41,7 +41,8 @@ export type Overflow = "visible" | "hidden" | "clip" | "scroll" | "auto";
  * overload checks. A deliberately incomplete, v1 layout/paint vocabulary. The
  * renderer also reads the camelCase and kebab-case spellings. An unrecognized
  * key or a value shape that doesn't parse (e.g. a malformed enum string) is
- * ignored by the renderer.
+ * ignored by the renderer, and the host prints a warning line on stderr for
+ * it (an empty string `''` prints none).
  */
 export interface StyleProps {
   /** Layout mode for this node's children. `"none"` skips both layout and rendering for the whole subtree. */
@@ -52,13 +53,13 @@ export interface StyleProps {
   justify_content?: "start" | "end" | "center" | "stretch";
   /** Cross-axis alignment of children within this container. */
   align_items?: "start" | "end" | "center" | "stretch";
-  /** Uniform spacing, in px, between children, applied on both axes. */
+  /** Uniform spacing, in px (`>= 0`), between children, applied on both axes. */
   gap?: number;
-  /** Fixed width in px, or `"auto"` to size to content. */
+  /** Fixed width in px (`>= 0`), or `"auto"` to size to content. */
   width?: number | "auto";
-  /** Fixed height in px, or `"auto"` to size to content. */
+  /** Fixed height in px (`>= 0`), or `"auto"` to size to content. */
   height?: number | "auto";
-  /** Uniform border width in px, applied to all four sides. */
+  /** Uniform border width in px (`>= 0`), applied to all four sides. */
   border_width?: number;
   /** Fill color, as a hex number (`0xRRGGBB`) or a CSS-style string (`"#rrggbb"`/`"#rgb"`). */
   background?: number | string;
@@ -66,9 +67,9 @@ export interface StyleProps {
   border_color?: number | string;
   /** Color for this container's own text. Cascades to descendant text leaves, same as {@link StyleProps.text_size}; there's no separate per-leaf text styling. */
   text_color?: number | string;
-  /** Uniform corner radius in px, applied to all four corners. */
+  /** Uniform corner radius in px (`>= 0`), applied to all four corners. */
   corner_radius?: number;
-  /** Font size in px for this container's own text. Cascades to descendant text leaves, same as {@link StyleProps.text_color}. */
+  /** Font size in px (`>= 0`) for this container's own text. Cascades to descendant text leaves, same as {@link StyleProps.text_color}. */
   text_size?: number;
   /** Overflow on both axes, or `"<x> <y>"` per axis; `"scroll"` (alias `"auto"`) makes the container scroll with the wheel. Overridden per axis by {@link StyleProps.overflow_x}/{@link StyleProps.overflow_y}. */
   overflow?: Overflow | `${Overflow} ${Overflow}`;
@@ -110,13 +111,13 @@ export interface StyleProps {
   flex_shrink?: number;
   /** Opacity from `0` to `1`, applied to this node and its descendants; values outside are clamped. */
   opacity?: number;
-  /** Minimum width in px, or `"auto"` for the default minimum. */
+  /** Minimum width in px (`>= 0`), or `"auto"` for the default minimum. */
   min_width?: number | "auto";
-  /** Minimum height in px, or `"auto"` for the default minimum. */
+  /** Minimum height in px (`>= 0`), or `"auto"` for the default minimum. */
   min_height?: number | "auto";
-  /** Maximum width in px, or `"auto"` for no limit. */
+  /** Maximum width in px (`>= 0`), or `"auto"` for no limit. */
   max_width?: number | "auto";
-  /** Maximum height in px, or `"auto"` for no limit. */
+  /** Maximum height in px (`>= 0`), or `"auto"` for no limit. */
   max_height?: number | "auto";
 }
 

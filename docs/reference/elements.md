@@ -50,7 +50,8 @@ default, even when the key held a valid value before. An unrecognized key,
 such as a misspelled one, has no effect.
 
 The host prints one warning line on stderr each time a style sets an
-unrecognized key or an invalid color.
+unrecognized key or a value of a shape the host does not support. An
+empty string `''` on a known key prints no warning.
 
 Removing a key from the object, or setting it to `null` or `undefined`,
 restores that property to its default. Setting `style` to a string or `null`
@@ -62,21 +63,21 @@ clears every key set before.
 | `flexDirection` | `"row"` \| `"column"` \| `"row_reverse"` \| `"column_reverse"` | |
 | `justifyContent` | `"start"` \| `"end"` \| `"center"` \| `"stretch"` | main-axis alignment |
 | `alignItems` | `"start"` \| `"end"` \| `"center"` \| `"stretch"` | cross-axis alignment |
-| `gap` | `number` (px) | applied on both axes |
-| `width` | `number` (px) \| `"auto"` | |
-| `height` | `number` (px) \| `"auto"` | |
-| `borderWidth` | `number` (px) | applied to all four sides |
+| `gap` | `number` (px, `>= 0`) | applied on both axes |
+| `width` | `number` (px, `>= 0`) \| `"auto"` | |
+| `height` | `number` (px, `>= 0`) \| `"auto"` | |
+| `borderWidth` | `number` (px, `>= 0`) | applied to all four sides |
 | `background` | color (below) | fill |
 | `borderColor` | color (below) | |
-| `cornerRadius` | `number` (px) | applied to all four corners |
+| `cornerRadius` | `number` (px, `>= 0`) | applied to all four corners |
 | `textColor` | color (below) | cascades to descendant text leaves |
-| `textSize` | `number` (px) | cascades to descendant text leaves |
+| `textSize` | `number` (px, `>= 0`) | cascades to descendant text leaves |
 | `overflow` / `overflowX` / `overflowY` | `"visible"` \| `"hidden"` \| `"clip"` \| `"scroll"` \| `"auto"`; `overflow` also takes two of them, x then y | `"hidden"` clips and script can scroll it; `"scroll"` (and its alias `"auto"`) also scrolls with the wheel; `overflowX`/`overflowY` win over `overflow` |
 | `padding` / `paddingX` / `paddingY` / `paddingTop` / `paddingRight` / `paddingBottom` / `paddingLeft` | `number` (px, `>= 0`) | a negative, `NaN` or infinite value is ignored |
 | `margin` / `marginX` / `marginY` / `marginTop` / `marginRight` / `marginBottom` / `marginLeft` | `number` (px, negative allowed) \| `"auto"` | |
 | `flexGrow` / `flexShrink` | `number` (`>= 0`) | |
 | `opacity` | `number` (`0` to `1`) | clamped; applies to descendants too |
-| `minWidth` / `minHeight` / `maxWidth` / `maxHeight` | `number` (px) \| `"auto"` | `"auto"` is the default limit: none for the `max` keys, the content size for a flex item's `min` keys |
+| `minWidth` / `minHeight` / `maxWidth` / `maxHeight` | `number` (px, `>= 0`) \| `"auto"` | `"auto"` is the default limit: none for the `max` keys, the content size for a flex item's `min` keys |
 
 Content taller than the window is cut off at the window edge; see
 [Why doesn't my content scroll](../guide/troubleshooting#why-doesn-t-my-content-scroll-when-it-is-taller-than-the-window).
@@ -99,8 +100,8 @@ Scrollbars are not supported.
 
 A number must lie from `0` to `0xffffff`. A string must be `#` followed by 3 or
 6 hex digits. Any other number or string sets the property to its default and
-prints a warning. Alpha channels and color names such as `"red"` are not
-supported.
+prints a warning, except `''`, which prints none. Alpha channels and color
+names such as `"red"` are not supported.
 
 ## `class`, and `style` as a string, do nothing
 

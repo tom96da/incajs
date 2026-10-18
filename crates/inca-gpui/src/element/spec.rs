@@ -91,28 +91,31 @@ impl<T> Default for EdgesSpec<T> {
 
 /// A plain-data, `gpui`-independent style description, built from a
 /// [`VirtualNode`](crate::tree::VirtualNode)'s `style_props`. See
-/// `style_spec_from_props`'s match arms for the exact recognized keys.
+/// `read_prop`'s match arms for the exact recognized keys.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct StyleSpec {
     pub display: Option<DisplaySpec>,
     pub flex_direction: Option<FlexDirectionSpec>,
     pub justify_content: Option<AlignSpec>,
     pub align_items: Option<AlignSpec>,
-    /// Uniform gap (px) applied to both rows and columns.
+    /// Uniform gap (px, `>= 0`) applied to both rows and columns.
     pub gap: Option<f64>,
+    /// Px `>= 0`, or auto.
     pub width: Option<LengthSpec>,
+    /// Px `>= 0`, or auto.
     pub height: Option<LengthSpec>,
-    /// Uniform border width (px) applied to all four sides.
+    /// Uniform border width (px, `>= 0`) applied to all four sides.
     pub border_width: Option<f64>,
     /// `0xRRGGBB`.
     pub background: Option<u32>,
     /// `0xRRGGBB`.
     pub border_color: Option<u32>,
-    /// Uniform corner radius (px) applied to all four corners.
+    /// Uniform corner radius (px, `>= 0`) applied to all four corners.
     pub corner_radius: Option<f64>,
     /// `0xRRGGBB`. Cascades to descendant text, like `gpui`'s own
     /// `.text_color()`. Text leaves carry no style of their own.
     pub text_color: Option<u32>,
+    /// Font size (px, `>= 0`). Cascades to descendant text.
     pub text_size: Option<f64>,
     pub overflow_x: Option<OverflowSpec>,
     pub overflow_y: Option<OverflowSpec>,
@@ -126,9 +129,13 @@ pub struct StyleSpec {
     pub flex_shrink: Option<f64>,
     /// `0.0..=1.0`; multiplies into descendants.
     pub opacity: Option<f64>,
+    /// Px `>= 0`, or auto.
     pub min_width: Option<LengthSpec>,
+    /// Px `>= 0`, or auto.
     pub min_height: Option<LengthSpec>,
+    /// Px `>= 0`, or auto.
     pub max_width: Option<LengthSpec>,
+    /// Px `>= 0`, or auto.
     pub max_height: Option<LengthSpec>,
 }
 

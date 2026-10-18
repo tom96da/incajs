@@ -95,6 +95,14 @@ fn margin_length_from(value: &AttributeValue) -> Option<LengthSpec> {
     length_spec_from(value).filter(|l| !matches!(l, LengthSpec::Px(n) if !n.is_finite()))
 }
 
+/// `"auto"` or a finite px number `>= 0`; negatives, `NaN` and infinities are unset.
+fn size_spec_from(value: &AttributeValue) -> Option<LengthSpec> {
+    match value {
+        AttributeValue::String(s) if s == "auto" => Some(LengthSpec::Auto),
+        _ => non_negative(value).map(LengthSpec::Px),
+    }
+}
+
 /// Keys of one box property, most general first: the shorthand, the two
 /// axes, then the four sides.
 struct EdgeKeys {
@@ -197,6 +205,8 @@ fn align_spec_from_str(s: &str) -> Option<AlignSpec> {
 enum StyleFault {
     UnknownKey,
     InvalidColor,
+    /// A value of a shape the host does not support for its known key.
+    UnsupportedValue,
 }
 
 /// The three overflow keys, resolved once every prop has been read.
@@ -208,58 +218,118 @@ struct Overflows {
     y: Option<OverflowSpec>,
 }
 
-/// Reads the color `value` into `slot`.
-fn read_color(slot: &mut Option<u32>, value: &AttributeValue) -> Option<StyleFault> {
-    *slot = as_color(value);
-    slot.is_none().then_some(StyleFault::InvalidColor)
+/// Stores `parsed` in `slot`, and returns `fault` when it is `None`.
+fn store<T>(slot: &mut Option<T>, parsed: Option<T>, fault: StyleFault) -> Option<StyleFault> {
+    *slot = parsed;
+    slot.is_none().then_some(fault)
 }
 
 /// Reads one style prop into `style` (and `overflow`), returning the fault
-/// when the key is unknown or a color is invalid. Box keys are resolved by
-/// `edges_from` afterwards.
+/// when the key is unknown or its value is dropped. A box key is only checked
+/// here: `edges_from` resolves the box keys afterwards.
 fn read_prop(
     style: &mut StyleSpec,
     overflow: &mut Overflows,
     key: &str,
     value: &AttributeValue,
 ) -> Option<StyleFault> {
+    use StyleFault::{InvalidColor, UnsupportedValue};
+    let text = value.as_str();
     match key {
-        "display" => style.display = value.as_str().and_then(display_spec_from_str),
-        "flex_direction" => {
-            style.flex_direction = value.as_str().and_then(flex_direction_spec_from_str);
-        }
-        "justify_content" => {
-            style.justify_content = value.as_str().and_then(align_spec_from_str);
-        }
-        "align_items" => style.align_items = value.as_str().and_then(align_spec_from_str),
-        "gap" => style.gap = value.as_number(),
-        "width" => style.width = length_spec_from(value),
-        "height" => style.height = length_spec_from(value),
-        "border_width" => style.border_width = value.as_number(),
-        "background" => return read_color(&mut style.background, value),
-        "border_color" => return read_color(&mut style.border_color, value),
-        "corner_radius" => style.corner_radius = value.as_number(),
-        "text_color" => return read_color(&mut style.text_color, value),
-        "text_size" => style.text_size = value.as_number(),
-        "overflow" => overflow.all = value.as_str().and_then(overflow_pair_from_str),
-        "overflow_x" => overflow.x = value.as_str().and_then(overflow_spec_from_str),
-        "overflow_y" => overflow.y = value.as_str().and_then(overflow_spec_from_str),
-        "flex_grow" => style.flex_grow = non_negative(value),
-        "flex_shrink" => style.flex_shrink = non_negative(value),
-        "opacity" => {
-            style.opacity = value
+        "display" => store(
+            &mut style.display,
+            text.and_then(display_spec_from_str),
+            UnsupportedValue,
+        ),
+        "flex_direction" => store(
+            &mut style.flex_direction,
+            text.and_then(flex_direction_spec_from_str),
+            UnsupportedValue,
+        ),
+        "justify_content" => store(
+            &mut style.justify_content,
+            text.and_then(align_spec_from_str),
+            UnsupportedValue,
+        ),
+        "align_items" => store(
+            &mut style.align_items,
+            text.and_then(align_spec_from_str),
+            UnsupportedValue,
+        ),
+        "gap" => store(&mut style.gap, non_negative(value), UnsupportedValue),
+        "width" => store(&mut style.width, size_spec_from(value), UnsupportedValue),
+        "height" => store(&mut style.height, size_spec_from(value), UnsupportedValue),
+        "border_width" => store(
+            &mut style.border_width,
+            non_negative(value),
+            UnsupportedValue,
+        ),
+        "background" => store(&mut style.background, as_color(value), InvalidColor),
+        "border_color" => store(&mut style.border_color, as_color(value), InvalidColor),
+        "corner_radius" => store(
+            &mut style.corner_radius,
+            non_negative(value),
+            UnsupportedValue,
+        ),
+        "text_color" => store(&mut style.text_color, as_color(value), InvalidColor),
+        "text_size" => store(&mut style.text_size, non_negative(value), UnsupportedValue),
+        "overflow" => store(
+            &mut overflow.all,
+            text.and_then(overflow_pair_from_str),
+            UnsupportedValue,
+        ),
+        "overflow_x" => store(
+            &mut overflow.x,
+            text.and_then(overflow_spec_from_str),
+            UnsupportedValue,
+        ),
+        "overflow_y" => store(
+            &mut overflow.y,
+            text.and_then(overflow_spec_from_str),
+            UnsupportedValue,
+        ),
+        "flex_grow" => store(&mut style.flex_grow, non_negative(value), UnsupportedValue),
+        "flex_shrink" => store(
+            &mut style.flex_shrink,
+            non_negative(value),
+            UnsupportedValue,
+        ),
+        "opacity" => store(
+            &mut style.opacity,
+            value
                 .as_number()
                 .filter(|n| !n.is_nan())
-                .map(|n| n.clamp(0.0, 1.0));
+                .map(|n| n.clamp(0.0, 1.0)),
+            UnsupportedValue,
+        ),
+        "min_width" => store(
+            &mut style.min_width,
+            size_spec_from(value),
+            UnsupportedValue,
+        ),
+        "min_height" => store(
+            &mut style.min_height,
+            size_spec_from(value),
+            UnsupportedValue,
+        ),
+        "max_width" => store(
+            &mut style.max_width,
+            size_spec_from(value),
+            UnsupportedValue,
+        ),
+        "max_height" => store(
+            &mut style.max_height,
+            size_spec_from(value),
+            UnsupportedValue,
+        ),
+        _ if PADDING_KEYS.contains(key) => {
+            non_negative(value).is_none().then_some(UnsupportedValue)
         }
-        "min_width" => style.min_width = length_spec_from(value),
-        "min_height" => style.min_height = length_spec_from(value),
-        "max_width" => style.max_width = length_spec_from(value),
-        "max_height" => style.max_height = length_spec_from(value),
-        _ if PADDING_KEYS.contains(key) || MARGIN_KEYS.contains(key) => {}
-        _ => return Some(StyleFault::UnknownKey),
+        _ if MARGIN_KEYS.contains(key) => margin_length_from(value)
+            .is_none()
+            .then_some(UnsupportedValue),
+        _ => Some(StyleFault::UnknownKey),
     }
-    None
 }
 
 /// Builds a [`StyleSpec`] from a node's raw `style_props`, ignoring any key
@@ -281,9 +351,10 @@ pub(super) fn style_spec_from_props(props: &HashMap<String, AttributeValue>) -> 
 }
 
 /// The message for the style prop `key` set to `value` when the key is
-/// unknown or a color value is invalid. `key` may be `camelCase`,
-/// `kebab-case` or `snake_case`, and the message names it as written. `None`
-/// when the prop applies or is ignored quietly.
+/// unknown, a color is invalid, or the value has a shape the host does not
+/// support. `key` may be `camelCase`, `kebab-case` or `snake_case`, and the
+/// message names it as written. `None` when the prop applies, and for an empty
+/// string on a known key.
 #[must_use]
 pub fn style_warning(key: &str, value: &AttributeValue) -> Option<String> {
     // A caller checks each prop as it stores it, so a bad value that stays
@@ -294,8 +365,13 @@ pub fn style_warning(key: &str, value: &AttributeValue) -> Option<String> {
         &style_key(key),
         value,
     )?;
+    // Vue resets a property with '', as in `shown ? '' : 'none'`.
+    if !matches!(fault, StyleFault::UnknownKey) && value.as_str() == Some("") {
+        return None;
+    }
     Some(match fault {
         StyleFault::UnknownKey => format!("ignoring unknown style key `{key}`"),
         StyleFault::InvalidColor => format!("ignoring invalid color for style key `{key}`"),
+        StyleFault::UnsupportedValue => format!("ignoring unsupported value for style key `{key}`"),
     })
 }

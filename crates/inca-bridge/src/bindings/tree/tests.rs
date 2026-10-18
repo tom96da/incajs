@@ -105,8 +105,10 @@ fn set_style_is_quiet_for_known_keys_and_box_keys() {
     let (warnings, _) = warnings_from(
         r"
         const n = __inca_native__.createNode('div');
-        for (const k of ['display', 'padding', 'padding_x', 'margin_left', 'gap'])
-          __inca_native__.setStyle(n, k, 'flex');
+        __inca_native__.setStyle(n, 'display', 'flex');
+        for (const k of ['padding', 'padding_x', 'margin_left', 'gap']) {
+            __inca_native__.setStyle(n, k, 4);
+        }
         __inca_native__.setStyle(n, 'text_color', '#fff');
         ",
     );
