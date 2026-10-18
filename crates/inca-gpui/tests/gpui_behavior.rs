@@ -364,6 +364,47 @@ fn gpui_applies_the_wheel_scroll_step_in_the_bubble_phase_and_keeps_propagating(
     assert_eq!(f32::from(handle.offset().y), -20.);
 }
 
+/// Mounts a 100px tracked container with hidden y overflow over 300px of
+/// content.
+fn mount_hidden_scroller(cx: &mut TestAppContext, handle: &ScrollHandle) -> VisualTestContext {
+    let h = handle.clone();
+    mount(cx, move |_, _| {
+        div()
+            .id("scroller")
+            .size(px(100.))
+            .overflow_y_hidden()
+            .track_scroll(&h)
+            .child(div().w(px(100.)).h(px(300.)))
+            .into_any_element()
+    })
+}
+
+#[gpui::test]
+fn gpui_never_scrolls_a_tracked_container_with_hidden_overflow(cx: &mut TestAppContext) {
+    let handle = ScrollHandle::new();
+    let mut cx = mount_hidden_scroller(cx, &handle);
+
+    cx.simulate_event(ScrollWheelEvent {
+        position: at(10., 10.),
+        delta: ScrollDelta::Pixels(point(px(0.), px(-20.))),
+        ..Default::default()
+    });
+
+    assert_eq!(f32::from(handle.offset().y), 0.);
+}
+
+#[gpui::test]
+fn gpui_clamps_a_tracked_container_with_hidden_overflow_to_its_content(cx: &mut TestAppContext) {
+    let handle = ScrollHandle::new();
+    let mut cx = mount_hidden_scroller(cx, &handle);
+    handle.set_offset(point(px(0.), px(-1000.)));
+
+    cx.update(|window, cx| window.draw(cx).clear(cx));
+
+    assert_eq!(f32::from(handle.offset().y), -200.);
+    assert_eq!(f32::from(handle.max_offset().y), 200.);
+}
+
 /// Mounts a window whose root and a focused child both log their capture
 /// and bubble key listeners, then returns it with `root`'s extra builder
 /// applied.
