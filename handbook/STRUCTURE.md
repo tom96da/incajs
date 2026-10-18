@@ -95,7 +95,7 @@ build does not use them: it resolves `gpui` from the git tag in the root
 
 | Path | Upstream | Pinned at | Why it's here |
 |---|---|---|---|
-| `third_party/zed` | [zed-industries/zed](https://github.com/zed-industries/zed) | `v1.22.0` | Source of `gpui`. |
+| `third_party/zed` | [zed-industries/zed](https://github.com/zed-industries/zed) | `v1.24.3` | Source of `gpui`. |
 | `third_party/rquickjs` | [DelSkayn/rquickjs](https://github.com/DelSkayn/rquickjs) | `v0.14.0` | Rust bindings to QuickJS. |
 | `third_party/rquickjs/sys/quickjs` | [quickjs-ng/quickjs](https://github.com/quickjs-ng/quickjs) | commit pinned by rquickjs `v0.14.0` | The QuickJS engine, rquickjs's nested submodule. |
 | `third_party/vue` | [vuejs/core](https://github.com/vuejs/core) | `v3.5.43` | Reference for `createRenderer` and `RendererOptions`, which `incajs/vue` implements. |

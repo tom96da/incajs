@@ -43,7 +43,7 @@ History is in [PLAN.md](./PLAN.md) and [CHANGELOG.md](../CHANGELOG.md).
 
 - **Release**: `v0.0.18`.
 - **Node.js**: 22.18 or newer.
-- **Toolchain**: zed `v1.22.0` for `gpui`, rquickjs `0.14.0`.
+- **Toolchain**: zed `v1.24.3` for `gpui`, rquickjs `0.14.0`.
 - **Linux binaries**: built in an `ubuntu:22.04` container by both workflows,
   for a glibc 2.35 floor.
 - **macOS**: host packages for arm64 and x64 (Intel).
