@@ -71,7 +71,7 @@ clears every key set before.
 | `cornerRadius` | `number` (px) | applied to all four corners |
 | `textColor` | color (below) | cascades to descendant text leaves |
 | `textSize` | `number` (px) | cascades to descendant text leaves |
-| `overflow` / `overflowX` / `overflowY` | `"visible"` \| `"hidden"` \| `"scroll"` \| `"auto"` | `"hidden"` clips and script can scroll it; `"scroll"` (and its alias `"auto"`) also scrolls with the wheel; `overflowX`/`overflowY` win over `overflow` |
+| `overflow` / `overflowX` / `overflowY` | `"visible"` \| `"hidden"` \| `"clip"` \| `"scroll"` \| `"auto"`; `overflow` also takes two of them, x then y | `"hidden"` clips and script can scroll it; `"scroll"` (and its alias `"auto"`) also scrolls with the wheel; `overflowX`/`overflowY` win over `overflow` |
 | `padding` / `paddingX` / `paddingY` / `paddingTop` / `paddingRight` / `paddingBottom` / `paddingLeft` | `number` (px, `>= 0`) | a negative, `NaN` or infinite value is ignored |
 | `margin` / `marginX` / `marginY` / `marginTop` / `marginRight` / `marginBottom` / `marginLeft` | `number` (px, negative allowed) \| `"auto"` | |
 | `flexGrow` / `flexShrink` | `number` (`>= 0`) | |
@@ -140,8 +140,8 @@ with the differences below. The listener methods are described in
 - A scroll write is stored at once. A read clamps it to the maximum of the
   last drawn frame, so a write beyond that maximum, or one made before the
   first draw, reads smaller until the next frame.
-- `scrollWidth` and `scrollHeight` of a `"visible"` element equal its
-  client size.
+- `scrollWidth` and `scrollHeight` of a `"visible"` or `"clip"` element equal
+  its client size.
 - Every scroll applies at once, whatever `behavior` says.
 - `focus()` and `scrollIntoView()` on a node that has no box yet scroll when
   the next frame draws it.

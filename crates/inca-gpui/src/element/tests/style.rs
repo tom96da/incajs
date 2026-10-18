@@ -330,26 +330,22 @@ fn overflow_of(props: &[(&str, &str)]) -> (Option<OverflowSpec>, Option<Overflow
     (style.overflow_x, style.overflow_y)
 }
 
-#[test]
-fn overflow_keys_are_mapped_and_auto_scrolls() {
-    use OverflowSpec::{Hidden, Scroll, Visible};
-    assert_eq!(
-        overflow_of(&[("overflow", "hidden")]),
-        (Some(Hidden), Some(Hidden))
-    );
-    assert_eq!(
-        overflow_of(&[("overflow", "visible")]),
-        (Some(Visible), Some(Visible))
-    );
-    assert_eq!(
-        overflow_of(&[("overflow", "auto")]),
-        (Some(Scroll), Some(Scroll))
-    );
-    assert_eq!(
-        overflow_of(&[("overflow_x", "scroll")]),
-        (Some(Scroll), None)
-    );
-    assert_eq!(overflow_of(&[("overflow_y", "auto")]), (None, Some(Scroll)));
+#[rstest]
+#[case::hidden(&[("overflow", "hidden")], (Some(OverflowSpec::Hidden), Some(OverflowSpec::Hidden)))]
+#[case::visible(&[("overflow", "visible")], (Some(OverflowSpec::Visible), Some(OverflowSpec::Visible)))]
+#[case::auto(&[("overflow", "auto")], (Some(OverflowSpec::Scroll), Some(OverflowSpec::Scroll)))]
+#[case::clip(&[("overflow", "clip")], (Some(OverflowSpec::Clip), Some(OverflowSpec::Clip)))]
+#[case::clip_axis_key(&[("overflow_x", "clip")], (Some(OverflowSpec::Clip), None))]
+#[case::two_values(&[("overflow", "hidden scroll")], (Some(OverflowSpec::Hidden), Some(OverflowSpec::Scroll)))]
+#[case::two_non_scrollable_values(&[("overflow", "clip visible")], (Some(OverflowSpec::Clip), Some(OverflowSpec::Visible)))]
+#[case::visible_beside_hidden(&[("overflow", "visible hidden")], (Some(OverflowSpec::Scroll), Some(OverflowSpec::Hidden)))]
+#[case::clip_beside_auto(&[("overflow", "clip auto")], (Some(OverflowSpec::Hidden), Some(OverflowSpec::Scroll)))]
+#[case::unset_beside_scroll(&[("overflow_x", "scroll")], (Some(OverflowSpec::Scroll), Some(OverflowSpec::Scroll)))]
+fn overflow_props_compute_to_these_axes(
+    #[case] props: &[(&str, &str)],
+    #[case] want: (Option<OverflowSpec>, Option<OverflowSpec>),
+) {
+    assert_eq!(overflow_of(props), want);
 }
 
 #[rstest]
@@ -372,10 +368,18 @@ fn an_overflow_axis_key_beats_the_shorthand_in_any_order(#[case] order: [usize; 
     );
 }
 
+#[rstest]
+#[case::unknown("overflow", "nope")]
+#[case::unknown_axis("overflow_x", "nope")]
+#[case::empty("overflow", "")]
+#[case::unknown_second("overflow", "hidden nope")]
+#[case::three_values("overflow", "hidden scroll auto")]
+fn a_bad_overflow_value_is_ignored(#[case] key: &str, #[case] value: &str) {
+    assert_eq!(overflow_of(&[(key, value)]), (None, None));
+}
+
 #[test]
-fn a_bad_overflow_value_is_ignored() {
-    assert_eq!(overflow_of(&[("overflow", "clip")]), (None, None));
-    assert_eq!(overflow_of(&[("overflow_x", "nope")]), (None, None));
+fn an_overflow_number_is_ignored() {
     let mut tree = VirtualTree::new();
     let id = tree.create_node("div").unwrap();
     tree.set_style(id, "overflow", 1.0).unwrap();
@@ -391,26 +395,36 @@ fn a_removed_overflow_key_renders_as_the_default() {
     assert_eq!(build_spec(&tree, id).unwrap().style, StyleSpec::default());
 }
 
+#[rstest]
+#[case::x_scroll(&[("overflow_x", "scroll")], true)]
+#[case::y_auto(&[("overflow_y", "auto")], true)]
+#[case::scroll(&[("overflow", "scroll")], true)]
+#[case::hidden(&[("overflow", "hidden")], true)]
+#[case::visible_beside_hidden(&[("overflow_x", "visible"), ("overflow_y", "hidden")], true)]
+#[case::visible(&[("overflow", "visible")], false)]
+#[case::none(&[], false)]
+#[case::clip(&[("overflow", "clip")], false)]
+fn a_hidden_or_scrolling_axis_makes_a_scroll_container(
+    #[case] props: &[(&str, &str)],
+    #[case] want: bool,
+) {
+    let mut tree = VirtualTree::new();
+    let id = tree.create_node("div").unwrap();
+    for (key, value) in props {
+        tree.set_style(id, *key, *value).unwrap();
+    }
+    assert_eq!(
+        build_spec(&tree, id).unwrap().style.is_scroll_container(),
+        want
+    );
+}
+
 #[test]
-fn either_clipping_axis_makes_a_container_scrollable() {
-    let scrolls = |props: &[(&str, &str)]| {
-        let mut tree = VirtualTree::new();
-        let id = tree.create_node("div").unwrap();
-        for (key, value) in props {
-            tree.set_style(id, *key, *value).unwrap();
-        }
-        build_spec(&tree, id).unwrap().style.clips()
-    };
-    assert!(scrolls(&[("overflow_x", "scroll")]));
-    assert!(scrolls(&[("overflow_y", "auto")]));
-    assert!(scrolls(&[("overflow", "scroll")]));
-    assert!(scrolls(&[("overflow", "hidden")]));
-    assert!(scrolls(&[
-        ("overflow_x", "visible"),
-        ("overflow_y", "hidden")
-    ]));
-    assert!(!scrolls(&[("overflow", "visible")]));
-    assert!(!scrolls(&[]));
+fn clip_overflow_reaches_the_gpui_refinement_as_clip() {
+    let mut refinement = StyleRefinement::default();
+    apply_style(&mut refinement, &style_of(&[("overflow", text("clip"))]));
+    assert_eq!(refinement.overflow.x, Some(gpui::Overflow::Clip));
+    assert_eq!(refinement.overflow.y, Some(gpui::Overflow::Clip));
 }
 
 /// The style a node gets from `props`, and what [`style_warning`] says

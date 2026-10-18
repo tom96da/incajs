@@ -63,6 +63,8 @@ pub enum AlignSpec {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum OverflowSpec {
     Visible,
+    /// Clips without making a scroll container.
+    Clip,
     Hidden,
     Scroll,
 }
@@ -131,10 +133,10 @@ pub struct StyleSpec {
 }
 
 impl StyleSpec {
-    /// Whether either axis clips (`hidden`) or scrolls.
-    pub(super) fn clips(&self) -> bool {
-        let clips = |axis| matches!(axis, Some(OverflowSpec::Hidden | OverflowSpec::Scroll));
-        clips(self.overflow_x) || clips(self.overflow_y)
+    /// Whether either axis is `hidden` or scrolls, which makes the node a scroll container.
+    pub(super) fn is_scroll_container(&self) -> bool {
+        let scrollable = |axis| matches!(axis, Some(OverflowSpec::Hidden | OverflowSpec::Scroll));
+        scrollable(self.overflow_x) || scrollable(self.overflow_y)
     }
 }
 
@@ -187,7 +189,7 @@ pub fn build_spec(tree: &VirtualTree, root: NodeId) -> Option<ElementSpec> {
 /// `scroll` or `auto`.
 #[must_use]
 pub fn is_scroll_container(node: &VirtualNode) -> bool {
-    style_spec_from_props(node.style_props()).clips()
+    style_spec_from_props(node.style_props()).is_scroll_container()
 }
 
 /// Whether the `hidden` attribute hides `node`: it is present in the Hidden
@@ -360,8 +362,8 @@ mod tests {
     }
 
     #[rstest]
-    #[case::scroll_y(None, Some("scroll"), (false, true))]
-    #[case::scroll_x(Some("scroll"), None, (true, false))]
+    #[case::scroll_y(Some("hidden"), Some("scroll"), (false, true))]
+    #[case::scroll_x(Some("scroll"), Some("hidden"), (true, false))]
     #[case::hidden(Some("hidden"), Some("hidden"), (false, false))]
     fn wheel_axes_follow_the_scroll_overflow_of_each_axis(
         #[case] overflow_x: Option<&str>,
@@ -429,6 +431,7 @@ mod tests {
     #[test]
     fn a_hidden_attribute_does_not_hide_a_node_whose_display_is_set() {
         let (mut tree, [_, parent, node]) = chain();
+        tree.set_style(node, "overflow_x", "hidden").unwrap();
         tree.set_style(node, "overflow_y", "scroll").unwrap();
         tree.set_attribute(parent, "hidden", true).unwrap();
         tree.set_style(parent, "display", "flex").unwrap();

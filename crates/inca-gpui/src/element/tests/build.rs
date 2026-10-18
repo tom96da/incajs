@@ -251,7 +251,11 @@ fn content_shift(
 
 #[gpui::test]
 fn an_x_only_container_scrolls_along_x_without_a_dispatcher(cx: &mut TestAppContext) {
-    let shift = content_shift(cx, &[("overflow_x", "scroll")], point(px(-50.), px(0.)));
+    let shift = content_shift(
+        cx,
+        &[("overflow_x", "scroll"), ("overflow_y", "hidden")],
+        point(px(-50.), px(0.)),
+    );
     assert_eq!(shift, point(px(-50.), px(0.)));
 }
 
@@ -327,6 +331,7 @@ fn the_parents_scroll_offset_moves_the_children(cx: &mut TestAppContext) {
 fn a_hidden_container_ignores_the_wheel_and_takes_a_script_offset(cx: &mut TestAppContext) {
     let mut tree = VirtualTree::new();
     let root = boxed(&mut tree, None, 100., 100.);
+    tree.set_style(root, "overflow_x", "hidden").unwrap();
     tree.set_style(root, "overflow_y", "hidden").unwrap();
     let child = boxed(&mut tree, Some(root), 100., 300.);
     let (probe, window) = mounted(cx, tree);

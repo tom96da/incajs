@@ -48,9 +48,33 @@ fn overflow_spec_from_str(s: &str) -> Option<OverflowSpec> {
     match s {
         "visible" => Some(OverflowSpec::Visible),
         "hidden" => Some(OverflowSpec::Hidden),
+        "clip" => Some(OverflowSpec::Clip),
         "scroll" | "auto" => Some(OverflowSpec::Scroll),
         _ => None,
     }
+}
+
+/// One or two overflow values, x first; a single value applies to both axes.
+fn overflow_pair_from_str(s: &str) -> Option<(OverflowSpec, OverflowSpec)> {
+    let mut values = s.split_ascii_whitespace().map(overflow_spec_from_str);
+    let x = values.next()??;
+    let y = values.next().unwrap_or(Some(x))?;
+    values.next().is_none().then_some((x, y))
+}
+
+/// The computed axes: beside an axis that is `hidden` or scrolls, an unset or `visible` axis
+/// scrolls and a `clip` axis is `hidden`.
+fn computed_axes(
+    x: Option<OverflowSpec>,
+    y: Option<OverflowSpec>,
+) -> (Option<OverflowSpec>, Option<OverflowSpec>) {
+    let scrollable = |axis| matches!(axis, Some(OverflowSpec::Hidden | OverflowSpec::Scroll));
+    let computed = |axis, other| match axis {
+        None | Some(OverflowSpec::Visible) if scrollable(other) => Some(OverflowSpec::Scroll),
+        Some(OverflowSpec::Clip) if scrollable(other) => Some(OverflowSpec::Hidden),
+        axis => axis,
+    };
+    (computed(x, y), computed(y, x))
 }
 
 fn length_spec_from(value: &AttributeValue) -> Option<LengthSpec> {
@@ -178,7 +202,8 @@ enum StyleFault {
 /// The three overflow keys, resolved once every prop has been read.
 #[derive(Default)]
 struct Overflows {
-    all: Option<OverflowSpec>,
+    /// `overflow`, as its x and y values.
+    all: Option<(OverflowSpec, OverflowSpec)>,
     x: Option<OverflowSpec>,
     y: Option<OverflowSpec>,
 }
@@ -216,7 +241,7 @@ fn read_prop(
         "corner_radius" => style.corner_radius = value.as_number(),
         "text_color" => return read_color(&mut style.text_color, value),
         "text_size" => style.text_size = value.as_number(),
-        "overflow" => overflow.all = value.as_str().and_then(overflow_spec_from_str),
+        "overflow" => overflow.all = value.as_str().and_then(overflow_pair_from_str),
         "overflow_x" => overflow.x = value.as_str().and_then(overflow_spec_from_str),
         "overflow_y" => overflow.y = value.as_str().and_then(overflow_spec_from_str),
         "flex_grow" => style.flex_grow = non_negative(value),
@@ -246,8 +271,10 @@ pub(super) fn style_spec_from_props(props: &HashMap<String, AttributeValue>) -> 
         read_prop(&mut style, &mut overflow, key, value);
     }
     // `props` iterates in arbitrary order, so precedence is resolved here.
-    style.overflow_x = overflow.x.or(overflow.all);
-    style.overflow_y = overflow.y.or(overflow.all);
+    (style.overflow_x, style.overflow_y) = computed_axes(
+        overflow.x.or(overflow.all.map(|(x, _)| x)),
+        overflow.y.or(overflow.all.map(|(_, y)| y)),
+    );
     style.padding = edges_from(props, &PADDING_KEYS, non_negative);
     style.margin = edges_from(props, &MARGIN_KEYS, margin_length_from);
     style

@@ -71,7 +71,7 @@ camelCase and kebab-case spellings of a key to its snake_case form.
 | `background` / `border_color` / `text_color` | number from `0` to `0xffffff`, or string (`"#rrggbb"`/`"#rgb"`); any other value warns | `Fill`/`Hsla` |
 | `corner_radius` | number (px) | all four `corner_radii.*` (uniform) |
 | `text_size` | number (px) | `text.font_size` |
-| `overflow` / `overflow_x` / `overflow_y` | `"visible"`\|`"hidden"`\|`"scroll"`\|`"auto"` (= `"scroll"`) | `overflow.x` / `overflow.y`; an axis key beats `overflow`; `hidden` clips and takes script scrolling, only `scroll` takes the wheel |
+| `overflow` / `overflow_x` / `overflow_y` | `"visible"`\|`"hidden"`\|`"clip"`\|`"scroll"`\|`"auto"` (= `"scroll"`); `overflow` also takes `"<x> <y>"` | `overflow.x` / `overflow.y`; an axis key beats `overflow`; beside a `hidden` or `scroll` axis an unset or `visible` axis becomes `scroll` and `clip` becomes `hidden`; `hidden` clips and takes script scrolling, `clip` clips without scrolling, only `scroll` takes the wheel |
 | `padding` (+ `_x`/`_y`/`_top`/`_right`/`_bottom`/`_left`) | number (px, `>= 0`) | `padding.*`; side beats axis beats shorthand, a wrong-typed value falls through |
 | `margin` (+ the same suffixes) | number (px, negatives allowed) or `"auto"` | `margin.*`, same precedence |
 | `flex_grow` / `flex_shrink` | number `>= 0` | `flex_grow` / `flex_shrink` |
@@ -106,9 +106,9 @@ the nearest ancestor container.
 | `focusedNode` | `() => number \| null` | The id of the focused node, or `null` when none has focus. |
 | `blurNode` | `(nodeId: number) => void` | Request that `nodeId` lose focus. Takes effect next frame, and does nothing if `nodeId` is not the focused node by then. |
 | `layoutOf` | `(nodeId: number) => [x, y, width, height, border, scrollX, scrollY] \| null` | Read the border box of `nodeId` in window pixels as the last drawn frame placed it, with `border` the uniform border width. `scrollX` and `scrollY` are the positive scroll offset the parent applied to that box. `null` for a node with no recorded box. |
-| `scrollOf` | `(nodeId: number) => [left, top, maxLeft, maxTop] \| null` | Read the scroll offset (positive) and its maximum as of the last drawn frame, with the offset clamped to that maximum. `null` for a node whose `overflow` is `visible` on both axes. |
+| `scrollOf` | `(nodeId: number) => [left, top, maxLeft, maxTop] \| null` | Read the scroll offset (positive) and its maximum as of the last drawn frame, with the offset clamped to that maximum. `null` for a node whose `overflow` is `visible` or `clip` on both axes. |
 | `scrollIntoViewNode` | `(nodeId: number, block: string, inline: string) => void` | Scroll every scroll container above `nodeId` until the node shows, innermost first. `block` is the vertical and `inline` the horizontal alignment: `"start"`, `"center"`, `"end"` or `"nearest"`. `"nearest"` keeps a node that shows in place. A node shorter than the box aligns the edge that lies outside it, and a longer node aligns its end when its start lies before the box, and its start when its end lies after the box. Uses the boxes of the last drawn frame. A node with no recorded box is retried once on the next frame. |
-| `scrollNode` | `(nodeId: number, left: number \| null, top: number \| null) => void` | Set the scroll offset of the axes given, a `null` axis keeps its value. Values below 0 become 0, and the host clamps the upper end at the next frame. A node whose `overflow` is `visible` on both axes ignores the call. |
+| `scrollNode` | `(nodeId: number, left: number \| null, top: number \| null) => void` | Set the scroll offset of the axes given, a `null` axis keeps its value. Values below 0 become 0, and the host clamps the upper end at the next frame. A node whose `overflow` is `visible` or `clip` on both axes ignores the call. |
 
 Shared throw rules, all as a `TypeError` except where noted:
 

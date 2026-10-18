@@ -26,9 +26,8 @@ pub fn debug_selector(id: NodeId) -> String {
 ///
 /// With `track`, every non-inert container reports itself as the mouse target,
 /// which gives it a hitbox, and reports its hover state through `on_hover`,
-/// which needs a `gpui` `ElementId` (`.id()`). A container that clips or
-/// scrolls on either axis gets an id too, since `gpui` keeps its scroll offset
-/// in element state.
+/// which needs a `gpui` `ElementId` (`.id()`). A scroll container gets an id too, since
+/// `gpui` keeps its scroll offset in element state.
 ///
 /// Every container carries the selector [`debug_selector`] names, a no-op
 /// outside test builds, so a test can look its computed bounds up by
@@ -47,7 +46,7 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
         ElementTag::Container => {
             let id = spec.id;
             let handle = dispatch
-                .filter(|_| spec.style.clips())
+                .filter(|_| spec.style.is_scroll_container())
                 .and_then(|d| d.scroll_handle(id));
             let element = div().debug_selector(move || debug_selector(id));
             // Before `.id()`: only `Div` has the listener.
@@ -60,7 +59,7 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
             });
 
             let hover = track && !spec.inert;
-            if spec.style.clips() || (dispatch.is_some() && hover) {
+            if spec.style.is_scroll_container() || (dispatch.is_some() && hover) {
                 let element = element.id(ElementId::Integer(u64::from(id)));
                 let element = wire_focus(element, dispatch, id);
                 let element = wire_scroll(element, handle.clone(), spec, root, dispatch);

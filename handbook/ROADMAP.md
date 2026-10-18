@@ -254,8 +254,8 @@ cleanly onto GPUI's native styling model:
    [FFI.md](./FFI.md#style-prop-vocabulary) are the ones the host reads
    today. The gaps are percentage lengths, flex-basis, per-side border width
    and radius, basic box-shadow, font-weight and family, line-height and
-   letter-spacing, the `clip` overflow value, `border_style`, further
-   align and justify values, and `position` with `z-index`.
+   letter-spacing, `border_style`, further align and justify values, and
+   `position` with `z-index`.
    - `position` (`relative`/`absolute`, with `top`/`right`/`bottom`/`left`)
      maps directly onto `gpui`'s own positioning. Small.
    - `gpui` has no z-index: paint order and hit-testing follow tree order,

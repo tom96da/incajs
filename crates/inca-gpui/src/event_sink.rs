@@ -341,10 +341,10 @@ pub trait EventSink {
     /// The handle to track this node's focus with, if it's focusable.
     fn focus_handle(&self, node_id: NodeId) -> Option<gpui::FocusHandle>;
 
-    /// Tracks this node's scroll offset. A container that clips or scrolls
-    /// gets one. After the `wheel` listeners ran, the wheel step goes to the
-    /// innermost container under the pointer that can move, and is not applied
-    /// after `preventDefault()`.
+    /// Tracks this node's scroll offset. A scroll container (`hidden` or
+    /// `scroll` on either axis) gets one. After the `wheel` listeners ran, the
+    /// wheel step goes to the innermost container under the pointer that can
+    /// move, and is not applied after `preventDefault()`.
     fn scroll_handle(&self, node_id: NodeId) -> Option<gpui::ScrollHandle>;
 
     /// The axes along which a wheel step can scroll `node_id` now, read from

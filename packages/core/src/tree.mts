@@ -136,7 +136,7 @@ export function layoutOf(
  * frame.
  * @param nodeId - the node to read
  * @returns `[left, top, maxLeft, maxTop]`, or `null` for a node whose `overflow` is
- *   `visible` on both axes. The maxima are the largest offsets the node can take, as
+ *   `visible` or `clip` on both axes. The maxima are the largest offsets the node can take, as
  *   of the last drawn frame.
  * @throws {TypeError} when `nodeId` names no node
  */
@@ -147,7 +147,7 @@ export function scrollOf(nodeId: NodeId): readonly [number, number, number, numb
 /**
  * Sets the scroll offset of `nodeId` on one or both axes. A `null` axis keeps
  * its current offset. The host clamps each value to the scrollable range on
- * the next frame. A node with `overflow: visible` on both axes ignores the call.
+ * the next frame. A node whose `overflow` is `visible` or `clip` on both axes ignores the call.
  * @param nodeId - the node to scroll
  * @param left - the horizontal offset, or `null` to keep it
  * @param top - the vertical offset, or `null` to keep it

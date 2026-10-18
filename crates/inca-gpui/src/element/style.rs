@@ -64,6 +64,7 @@ pub(super) fn clip_scroll_axes(style: &mut StyleRefinement) {
 fn overflow_from_spec(spec: OverflowSpec) -> Overflow {
     match spec {
         OverflowSpec::Visible => Overflow::Visible,
+        OverflowSpec::Clip => Overflow::Clip,
         OverflowSpec::Hidden => Overflow::Hidden,
         OverflowSpec::Scroll => Overflow::Scroll,
     }

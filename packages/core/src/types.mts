@@ -33,6 +33,9 @@ export type TagName = "text" | (string & {});
 /** Where `scrollIntoView` aligns a node on one axis. */
 export type ScrollAlignment = "start" | "center" | "end" | "nearest";
 
+/** One overflow value; `"auto"` is an alias of `"scroll"`. */
+export type Overflow = "visible" | "hidden" | "clip" | "scroll" | "auto";
+
 /**
  * Style properties, in their snake_case spelling, that `setStyle`'s typed
  * overload checks. A deliberately incomplete, v1 layout/paint vocabulary. The
@@ -67,12 +70,12 @@ export interface StyleProps {
   corner_radius?: number;
   /** Font size in px for this container's own text. Cascades to descendant text leaves, same as {@link StyleProps.text_color}. */
   text_size?: number;
-  /** Overflow on both axes; `"scroll"` (alias `"auto"`) makes the container scroll with the wheel. Overridden per axis by {@link StyleProps.overflow_x}/{@link StyleProps.overflow_y}. */
-  overflow?: "visible" | "hidden" | "scroll" | "auto";
+  /** Overflow on both axes, or `"<x> <y>"` per axis; `"scroll"` (alias `"auto"`) makes the container scroll with the wheel. Overridden per axis by {@link StyleProps.overflow_x}/{@link StyleProps.overflow_y}. */
+  overflow?: Overflow | `${Overflow} ${Overflow}`;
   /** Horizontal overflow; wins over {@link StyleProps.overflow}. */
-  overflow_x?: "visible" | "hidden" | "scroll" | "auto";
+  overflow_x?: Overflow;
   /** Vertical overflow; wins over {@link StyleProps.overflow}. */
-  overflow_y?: "visible" | "hidden" | "scroll" | "auto";
+  overflow_y?: Overflow;
   /** Inner spacing in px (`>= 0`) on all four sides. Overridden per axis by {@link StyleProps.padding_x}/{@link StyleProps.padding_y} and per side by the `padding_*` side keys. */
   padding?: number;
   /** Horizontal inner spacing in px (`>= 0`); wins over {@link StyleProps.padding}. */

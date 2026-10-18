@@ -546,14 +546,6 @@ A fixed entry is deleted and its ID is never reused.
   The DOM shows a scrollbar for `overflow: scroll`. Here `gpui`'s scrollbar
   width stays 0, so the wheel is the only way to scroll.
 
-- **B-080 Some `overflow` values are not accepted**
-  `Units: gpui · Size: S · Impact: Low`
-
-  `overflow: clip` clips like `hidden` without creating a scroll container.
-  `overflow` accepts `visible`, `hidden`, `scroll` and `auto` only, and
-  `clip` is ignored like any other unknown value. The two-value form such as
-  `hidden scroll` is ignored the same way, since only a single string is read.
-
 - **B-082 Wheel scrolling has `gpui`'s axis rules and no gesture latching**
   `Units: gpui · Size: M · Impact: Low`
 
@@ -1058,8 +1050,9 @@ A fixed entry is deleted and its ID is never reused.
   - An offset set beyond the end, or before the first draw, is clamped at the
     next frame, so a read right after the set returns a smaller offset. A
     browser clamps at once.
-  - For a `visible` element, `scrollWidth` and `scrollHeight` equal the client
-    size. A browser reports the size of the content, overflow included.
+  - For a `visible` or `clip` element, `scrollWidth` and `scrollHeight` equal
+    the client size. A browser reports the size of the content, overflow
+    included.
 
   Fix: a layout pass the bindings can call, as in B-160. Both need the layout
   of the current tree.

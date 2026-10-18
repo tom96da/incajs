@@ -446,7 +446,9 @@ fn an_inner_container_a_listener_moves_off_its_end_takes_the_step(
 #[case::display_none("__inca_native__.setStyle(2, 'display', 'none');")]
 #[case::hidden_attribute("__inca_native__.setAttribute(2, 'hidden', true);")]
 #[case::inert("__inca_native__.setAttribute(2, 'inert', true);")]
-#[case::overflow_hidden("__inca_native__.setStyle(2, 'overflow_y', 'hidden');")]
+#[case::overflow_hidden(
+    "__inca_native__.setStyle(2, 'overflow_x', 'hidden'); __inca_native__.setStyle(2, 'overflow_y', 'hidden');"
+)]
 fn a_listener_that_drops_the_inner_container_sends_the_step_to_the_outer(
     cx: &mut TestAppContext,
     drop: &str,

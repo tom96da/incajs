@@ -637,7 +637,10 @@ mod tests {
 
     #[gpui::test]
     fn a_vertical_wheel_scrolls_an_x_only_container_along_x(cx: &mut TestAppContext) {
-        let mut scene = Wheels::new(cx, styled_container(&[("overflow_x", "scroll")]));
+        let mut scene = Wheels::new(
+            cx,
+            styled_container(&[("overflow_x", "scroll"), ("overflow_y", "hidden")]),
+        );
         scene.wheel(-50.);
         assert_eq!(scene.offset(0), point(px(-50.), px(0.)));
     }
