@@ -10,6 +10,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.0.19] - 2026-10-18
+
 ### Added
 
 - the host prints a warning for a style value it does not support ([d04964f](https://github.com/tom96da/incajs/commit/d04964f))
@@ -381,7 +383,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - prebuilt `inca-host` binaries for linux-x64, linux-arm64, and darwin-arm64, resolved automatically per platform
 - click event dispatch from the native tree back into JS
 
-[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.18...HEAD
+[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.19...HEAD
+[0.0.19]: https://github.com/tom96da/incajs/releases/tag/v0.0.19
 [0.0.18]: https://github.com/tom96da/incajs/releases/tag/v0.0.18
 [0.0.17]: https://github.com/tom96da/incajs/releases/tag/v0.0.17
 [0.0.16]: https://github.com/tom96da/incajs/releases/tag/v0.0.16
