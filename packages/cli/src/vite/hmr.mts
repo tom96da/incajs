@@ -171,7 +171,7 @@ function isFetchModuleSuccess(payload: HotPayload): boolean {
  */
 function createIncaHotChannel(
   notify: (payload: unknown) => void,
-  reload: () => void,
+  reload: (changed?: { file: string; at: number }) => void,
   onError: (error: UpdateError) => void,
   onUpdate: (info: { file: string; took: number }) => void,
   changed: { current: { file: string; at: number } | undefined },
@@ -181,7 +181,10 @@ function createIncaHotChannel(
 
   function outbound(payload: HotPayload): void {
     if (payload.type === "full-reload") {
-      reload();
+      // The fetch of the restarted app must not report this edit as an update.
+      const edit = changed.current;
+      changed.current = undefined;
+      reload(edit);
       return;
     }
     const error = updateErrorOf(payload);

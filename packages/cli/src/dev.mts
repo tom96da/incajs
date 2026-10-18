@@ -227,6 +227,13 @@ export async function dev(options: DevOptions): Promise<void> {
       }
     }
 
+    function logReload(changed: { file: string; at: number } | undefined): void {
+      if (!changed) return;
+      const file = styleText("dim", path.relative(cwd, changed.file), { stream: stdout });
+      const took = Date.now() - changed.at;
+      log(stdout, `${styleText("green", "reload")} ${file} (${took}ms)`, STAMPED);
+    }
+
     /** Starts the host against `entryFile` and keeps it in `client` once it's up. */
     async function startHost(
       entryFile: string,
@@ -281,11 +288,7 @@ export async function dev(options: DevOptions): Promise<void> {
       }
 
       if (!(await reloadHost())) return;
-      if (output.changed) {
-        const file = styleText("dim", path.relative(cwd, output.changed.file), { stream: stdout });
-        const took = Date.now() - output.changed.at;
-        log(stdout, `${styleText("green", "reload")} ${file} (${took}ms)`, STAMPED);
-      }
+      logReload(output.changed);
     }
 
     let closable: { close(): Promise<void> };
@@ -300,9 +303,14 @@ export async function dev(options: DevOptions): Promise<void> {
         notify: (payload) => client?.notify("vite", payload),
         // A full reload needs a fresh Engine/Host, which only inca-host's
         // own `reload` RPC method gives it. A `"vite"` notification can't.
-        reload: () => {
-          if (ready) void reloadHost();
-          else pendingReload = true;
+        reload: (changed) => {
+          if (ready) {
+            void reloadHost().then((ok) => {
+              if (ok) logReload(changed);
+            });
+          } else {
+            pendingReload = true;
+          }
         },
         onError: (error) => printFault(stderr, "build failed", error, STAMPED),
         onUpdate: ({ file, took }) => {

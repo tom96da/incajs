@@ -90,8 +90,11 @@ export interface HmrOptions {
   quiet?: boolean;
   /** Delivers a bundler payload to the running app over the dev channel. */
   notify: (payload: unknown) => void;
-  /** Called in place of forwarding a whole-app reload payload to the app. */
-  reload: () => void;
+  /**
+   * Called in place of forwarding a whole-app reload payload to the app, with
+   * the edit that caused it when one was waiting.
+   */
+  reload: (changed?: { file: string; at: number }) => void;
   /** Called when an update the app fetched failed to compile. */
   onError: (error: BuildFailure) => void;
   /** Called after a successful update, with the file that changed and how long it took. */

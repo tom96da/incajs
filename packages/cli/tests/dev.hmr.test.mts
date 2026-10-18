@@ -77,6 +77,63 @@ describe("dev with --experimental-hmr", () => {
     await running;
   });
 
+  it("prints a reload line for the edit behind a full-reload payload", async () => {
+    const bundler = makeFakeHmrBundler("/unused/entry.js");
+    const stdout = makeSink();
+    const stderr = makeSink();
+    const controller = new AbortController();
+    const cwd = await scratch.makeApp({});
+
+    const running = dev({
+      cwd,
+      entry: "unused",
+      bundler,
+      hostBin: slowReadyMockHost,
+      experimentalHmr: true,
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      signal: controller.signal,
+    });
+
+    await waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
+
+    bundler.emitFullReload({ file: path.join(cwd, "src/main.ts"), at: Date.now() });
+    await waitFor(() => expect(stderr.text()).toContain("reload #1"));
+
+    await waitFor(() => expect(stdout.text()).toMatch(/\[inca\] reload src\/main\.ts \(\d+ms\)/));
+
+    controller.abort();
+    await running;
+  });
+
+  it("prints no reload line for a full-reload payload without an edit", async () => {
+    const bundler = makeFakeHmrBundler("/unused/entry.js");
+    const stdout = makeSink();
+    const stderr = makeSink();
+    const controller = new AbortController();
+
+    const running = dev({
+      cwd: await scratch.makeApp({}),
+      entry: "unused",
+      bundler,
+      hostBin: slowReadyMockHost,
+      experimentalHmr: true,
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      signal: controller.signal,
+    });
+
+    await waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
+
+    bundler.emitFullReload();
+    await waitFor(() => expect(stderr.text()).toContain("reload #1"));
+
+    expect(stdout.text()).not.toContain("reload src");
+
+    controller.abort();
+    await running;
+  });
+
   it("prints a failed update the way a failed build is printed", async () => {
     const bundler = makeFakeHmrBundler("/unused/entry.js");
     const stdout = makeSink();

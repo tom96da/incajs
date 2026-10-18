@@ -127,7 +127,7 @@ export interface FakeHmrBundler extends Bundler {
   /** Simulates the running app pushing a `"vite"` payload out to the dev server. */
   emitVite(payload: unknown): void;
   /** Simulates the environment's `HotChannel` seeing a `full-reload` payload. */
-  emitFullReload(): void;
+  emitFullReload(changed?: { file: string; at: number }): void;
   /** Simulates a failed update the bundler reports. */
   emitError(error: { message: string; stack: string | null }): void;
   /** Simulates a successful update the bundler reports. */
@@ -154,8 +154,8 @@ export function makeFakeHmrBundler(entryFile: string): FakeHmrBundler {
     emitVite(payload) {
       options?.notify(payload);
     },
-    emitFullReload() {
-      options?.reload();
+    emitFullReload(changed) {
+      options?.reload(changed);
     },
     emitError(error) {
       options?.onError(error);

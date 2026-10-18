@@ -98,7 +98,7 @@ describe("hmr", () => {
     );
 
     const notified: unknown[] = [];
-    const reloads: number[] = [];
+    const reloads: ({ file: string; at: number } | undefined)[] = [];
 
     const channel = await hmr({
       entry,
@@ -108,7 +108,7 @@ describe("hmr", () => {
         notified.push(payload);
         client.notify(payload as HotPayload);
       },
-      reload: () => reloads.push(Date.now()),
+      reload: (changed) => reloads.push(changed),
       onError: () => {},
     });
     channels.push(channel);
@@ -272,7 +272,7 @@ describe("hmr", () => {
     );
 
     const notified: unknown[] = [];
-    const reloads: number[] = [];
+    const reloads: ({ file: string; at: number } | undefined)[] = [];
 
     const channel = await hmr({
       entry,
@@ -282,7 +282,7 @@ describe("hmr", () => {
         notified.push(payload);
         client.notify(payload as HotPayload);
       },
-      reload: () => reloads.push(Date.now()),
+      reload: (changed) => reloads.push(changed),
       onError: () => {},
     });
     channels.push(channel);
@@ -300,6 +300,67 @@ describe("hmr", () => {
 
     expect(notified.some((p) => (p as { type?: string }).type === "update")).toBe(false);
     expect(logs()).toBe("");
+  }, 20000);
+
+  it("hands the edited file to reload", async () => {
+    const { entry, streams } = await makeApp(
+      `<script setup>\nconst msg = "hello";\n</script>\n<template><div>{{ msg }}</div></template>\n`,
+    );
+
+    const reloads: ({ file: string; at: number } | undefined)[] = [];
+
+    const channel = await hmr({
+      entry,
+      cwd: path.dirname(entry),
+      ...streams,
+      notify: (payload) => client.notify(payload as HotPayload),
+      reload: (changed) => reloads.push(changed),
+      onError: () => {},
+    });
+    channels.push(channel);
+
+    const client = connectRunner(channel.dispatch);
+    await client.runner.import(entry);
+
+    await writeFile(entry, `import App from "./App.vue";\nexport default App;\n// touched\n`);
+
+    await vi.waitFor(() => expect(reloads.length).toBeGreaterThan(0), { timeout: 15000 });
+
+    expect(reloads[0]?.file).toBe(entry);
+  }, 20000);
+
+  it("reports no update for the fetch that follows a full-reload", async () => {
+    const { entry, streams } = await makeApp(
+      `<script setup>\nconst msg = "hello";\n</script>\n<template><div>{{ msg }}</div></template>\n`,
+    );
+
+    const updates: unknown[] = [];
+    let reloaded = false;
+
+    const channel = await hmr({
+      entry,
+      cwd: path.dirname(entry),
+      ...streams,
+      notify: (payload) => client.notify(payload as HotPayload),
+      reload: () => {
+        reloaded = true;
+      },
+      onError: () => {},
+      onUpdate: (info) => updates.push(info),
+    });
+    channels.push(channel);
+
+    // A reload restarts the app, which connects with a runner of its own.
+    let client = connectRunner(channel.dispatch);
+    await client.runner.import(entry);
+
+    await writeFile(entry, `import App from "./App.vue";\nexport default App;\n// touched\n`);
+    await vi.waitFor(() => expect(reloaded).toBe(true), { timeout: 15000 });
+
+    client = connectRunner(channel.dispatch);
+    await client.runner.import(entry);
+
+    expect(updates).toEqual([]);
   }, 20000);
 
   it("routes a non-quiet session's HMR/reload logging into the given streams", async () => {
