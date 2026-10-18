@@ -424,7 +424,7 @@ fn a_style_key_reads_back_in_snake_case_whatever_its_spelling(#[case] key: &str)
 }
 
 #[test]
-fn a_style_key_in_another_spelling_overwrites_and_removes() {
+fn a_style_key_in_another_spelling_overwrites_the_value() {
     let mut tree = VirtualTree::new();
     let id = tree.create_node("div").unwrap();
     tree.set_style(id, "flexDirection", "row").unwrap();
@@ -432,6 +432,13 @@ fn a_style_key_in_another_spelling_overwrites_and_removes() {
     let props = tree.get(id).unwrap().style_props();
     assert_eq!(props.len(), 1);
     assert_eq!(props.get("flex_direction"), Some(&"column".into()));
+}
+
+#[test]
+fn a_style_key_in_another_spelling_removes_the_value() {
+    let mut tree = VirtualTree::new();
+    let id = tree.create_node("div").unwrap();
+    tree.set_style(id, "flex-direction", "column").unwrap();
 
     tree.remove_style(id, "flexDirection").unwrap();
     assert!(tree.get(id).unwrap().style_props().is_empty());

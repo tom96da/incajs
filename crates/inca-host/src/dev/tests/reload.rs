@@ -97,7 +97,34 @@ fn a_later_reload_replaces_a_pending_one_and_both_ids_get_its_outcome(cx: &mut T
 }
 
 #[gpui::test]
-fn a_pending_reload_that_rejects_is_answered_thrown_and_the_old_app_stays(cx: &mut TestAppContext) {
+fn a_rejected_pending_reload_is_answered_with_its_error(cx: &mut TestAppContext) {
+    let dir = ScratchDir::new("rejected-reload");
+    let entry = write_entry(
+        &dir,
+        r"
+        await new Promise((_, reject) => {
+            __inca_dev__.receive = () => reject(new Error('late'));
+        });
+        ",
+    );
+    let (capturing, _) = capture();
+    let first = format!("globalThis.marker = 'old';\n{}", mounts_a_div(300, 150));
+    let (_, sender) = serve_idle(cx, &first, &entry, &capturing);
+
+    request(&sender, 7, "reload");
+    notify(&sender, "go");
+    cx.run_until_parked();
+
+    let sent = written(&capturing);
+    assert_eq!(sent.len(), 1);
+    assert_eq!(sent[0]["id"], 7);
+    assert_eq!(sent[0]["error"]["code"], -32000);
+    assert_eq!(sent[0]["error"]["message"], "Error: late");
+    assert!(sent[0]["error"]["data"]["stack"].is_string());
+}
+
+#[gpui::test]
+fn a_rejected_pending_reload_keeps_the_old_app(cx: &mut TestAppContext) {
     let dir = ScratchDir::new("rejected-reload");
     let entry = write_entry(
         &dir,
@@ -115,12 +142,6 @@ fn a_pending_reload_that_rejects_is_answered_thrown_and_the_old_app_stays(cx: &m
     notify(&sender, "go");
     cx.run_until_parked();
 
-    let sent = written(&capturing);
-    assert_eq!(sent.len(), 1);
-    assert_eq!(sent[0]["id"], 7);
-    assert_eq!(sent[0]["error"]["code"], -32000);
-    assert_eq!(sent[0]["error"]["message"], "Error: late");
-    assert!(sent[0]["error"]["data"]["stack"].is_string());
     assert_eq!(eval_in_window(cx, window, "globalThis.marker;"), "old");
 }
 
@@ -372,11 +393,11 @@ fn a_reload_does_not_reset_a_resizable_windows_manual_resize(cx: &mut TestAppCon
 }
 
 #[gpui::test]
-fn a_reload_line_is_answered_null_and_swaps_the_session_in(cx: &mut TestAppContext) {
+fn a_reload_line_is_answered_null(cx: &mut TestAppContext) {
     let dir = ScratchDir::new("serve-reload");
     let entry = write_entry(&dir, &mounts_a_div(400, 200));
     let (capturing, _) = capture();
-    let (window, sender) = serve_idle(cx, &mounts_a_div(300, 150), &entry, &capturing);
+    let (_, sender) = serve_idle(cx, &mounts_a_div(300, 150), &entry, &capturing);
 
     request(&sender, 7, "reload");
     cx.run_until_parked();
@@ -385,6 +406,18 @@ fn a_reload_line_is_answered_null_and_swaps_the_session_in(cx: &mut TestAppConte
     assert_eq!(sent.len(), 1);
     assert!(sent[0].contains(r#""id":7"#));
     assert!(sent[0].contains(r#""result":null"#));
-    assert_eq!(bounds_of(cx, window), (400.0, 200.0));
     assert_eq!(sender.receiver_count(), 1, "the loop keeps serving");
+}
+
+#[gpui::test]
+fn a_reload_line_swaps_the_session_in(cx: &mut TestAppContext) {
+    let dir = ScratchDir::new("serve-reload");
+    let entry = write_entry(&dir, &mounts_a_div(400, 200));
+    let (capturing, _) = capture();
+    let (window, sender) = serve_idle(cx, &mounts_a_div(300, 150), &entry, &capturing);
+
+    request(&sender, 7, "reload");
+    cx.run_until_parked();
+
+    assert_eq!(bounds_of(cx, window), (400.0, 200.0));
 }

@@ -328,12 +328,12 @@ fn the_parents_scroll_offset_moves_the_children(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn a_hidden_container_ignores_the_wheel_and_takes_a_script_offset(cx: &mut TestAppContext) {
+fn a_hidden_container_ignores_the_wheel(cx: &mut TestAppContext) {
     let mut tree = VirtualTree::new();
     let root = boxed(&mut tree, None, 100., 100.);
     tree.set_style(root, "overflow_x", "hidden").unwrap();
     tree.set_style(root, "overflow_y", "hidden").unwrap();
-    let child = boxed(&mut tree, Some(root), 100., 300.);
+    let _child = boxed(&mut tree, Some(root), 100., 300.);
     let (probe, window) = mounted(cx, tree);
     frame(cx, window);
     let mut vcx = VisualTestContext::from_window(window, cx);
@@ -345,6 +345,19 @@ fn a_hidden_container_ignores_the_wheel_and_takes_a_script_offset(cx: &mut TestA
     vcx.update(|window, cx| window.draw(cx).clear(cx));
     let handle = probe.handles.borrow()[&root].clone();
     assert_eq!(handle.offset(), point(px(0.), px(0.)));
+}
+
+#[gpui::test]
+fn a_hidden_container_moves_its_content_by_a_script_offset(cx: &mut TestAppContext) {
+    let mut tree = VirtualTree::new();
+    let root = boxed(&mut tree, None, 100., 100.);
+    tree.set_style(root, "overflow_x", "hidden").unwrap();
+    tree.set_style(root, "overflow_y", "hidden").unwrap();
+    let child = boxed(&mut tree, Some(root), 100., 300.);
+    let (probe, window) = mounted(cx, tree);
+    frame(cx, window);
+    let mut vcx = VisualTestContext::from_window(window, cx);
+    let handle = probe.handles.borrow()[&root].clone();
     handle.set_offset(point(px(0.), px(-50.)));
     vcx.update(|window, cx| window.draw(cx).clear(cx));
     assert_eq!(handle.max_offset().y, px(200.));
@@ -451,18 +464,31 @@ fn a_fractional_scroll_offset_snaps_to_whole_pixels_at_scale_one(
 }
 
 #[gpui::test]
-fn a_display_none_child_has_no_record_and_keeps_its_siblings_aligned(cx: &mut TestAppContext) {
+fn a_display_none_subtree_has_no_layout_record(cx: &mut TestAppContext) {
+    let mut tree = VirtualTree::new();
+    let root = boxed(&mut tree, None, 200., 200.);
+    let hidden = boxed(&mut tree, Some(root), 100., 100.);
+    tree.set_style(hidden, "display", "none").unwrap();
+    let _shown = boxed(&mut tree, Some(root), 30., 30.);
+    let inside = boxed(&mut tree, Some(hidden), 10., 10.);
+    let probe = probe();
+    draw(cx.add_empty_window(), &tree, &probe);
+    let layouts = probe.layouts.borrow();
+    assert!(!layouts.contains_key(&hidden) && !layouts.contains_key(&inside));
+}
+
+#[gpui::test]
+fn a_display_none_child_leaves_its_sibling_at_the_start(cx: &mut TestAppContext) {
     let mut tree = VirtualTree::new();
     let root = boxed(&mut tree, None, 200., 200.);
     let hidden = boxed(&mut tree, Some(root), 100., 100.);
     tree.set_style(hidden, "display", "none").unwrap();
     let shown = boxed(&mut tree, Some(root), 30., 30.);
-    let inside = boxed(&mut tree, Some(hidden), 10., 10.);
+    boxed(&mut tree, Some(hidden), 10., 10.);
     let probe = probe();
     draw(cx.add_empty_window(), &tree, &probe);
     let layouts = probe.layouts.borrow();
     assert_eq!(layouts[&shown].bounds, rect(0., 0., 30., 30.));
-    assert!(!layouts.contains_key(&hidden) && !layouts.contains_key(&inside));
 }
 
 #[gpui::test]

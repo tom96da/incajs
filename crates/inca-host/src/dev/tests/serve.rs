@@ -60,7 +60,21 @@ fn a_receive_that_throws_in_the_window_still_drains_the_job_queue(cx: &mut TestA
 }
 
 #[gpui::test]
-fn shutdown_is_answered_and_later_lines_are_ignored(cx: &mut TestAppContext) {
+fn shutdown_is_answered_with_null(cx: &mut TestAppContext) {
+    let (capturing, _) = capture();
+    let (_, sender) = serve_idle(cx, "", TEST_ENTRY_PATH, &capturing);
+
+    request(&sender, 1, "shutdown");
+    cx.run_until_parked();
+
+    let sent = capturing.0.borrow();
+    assert_eq!(sent.len(), 1);
+    assert!(sent[0].contains(r#""id":1"#));
+    assert!(sent[0].contains(r#""result":null"#));
+}
+
+#[gpui::test]
+fn lines_after_shutdown_are_ignored(cx: &mut TestAppContext) {
     let (capturing, _) = capture();
     let (_, sender) = serve_idle(cx, "", TEST_ENTRY_PATH, &capturing);
 
@@ -68,10 +82,7 @@ fn shutdown_is_answered_and_later_lines_are_ignored(cx: &mut TestAppContext) {
     request(&sender, 2, "nope");
     cx.run_until_parked();
 
-    let sent = capturing.0.borrow();
-    assert_eq!(sent.len(), 1);
-    assert!(sent[0].contains(r#""id":1"#));
-    assert!(sent[0].contains(r#""result":null"#));
+    assert_eq!(capturing.0.borrow().len(), 1);
     assert_eq!(sender.receiver_count(), 0, "the loop ended");
 }
 
@@ -89,7 +100,7 @@ fn a_closed_channel_ends_the_loop(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn an_unusable_line_is_answered_and_the_loop_keeps_serving(cx: &mut TestAppContext) {
+fn an_unusable_line_gets_an_error_reply(cx: &mut TestAppContext) {
     let (capturing, _) = capture();
     let (_, sender) = serve_idle(cx, "", TEST_ENTRY_PATH, &capturing);
 
@@ -102,12 +113,30 @@ fn an_unusable_line_is_answered_and_the_loop_keeps_serving(cx: &mut TestAppConte
         assert_eq!(sent.len(), 1, "{line}");
         assert!(sent[0].contains(&format!(r#""code":{code}"#)), "{line}");
         assert!(sent[0].contains(r#""id":null"#), "{line}");
+    }
+}
+
+#[gpui::test]
+fn an_unusable_line_keeps_the_loop_serving(cx: &mut TestAppContext) {
+    let (capturing, _) = capture();
+    let (_, sender) = serve_idle(cx, "", TEST_ENTRY_PATH, &capturing);
+
+    for line in ["not json", "[1]"] {
+        sender.send_blocking(line.to_owned()).unwrap();
+        cx.run_until_parked();
+
         assert_eq!(sender.receiver_count(), 1, "{line}");
     }
+}
 
-    capturing.0.borrow_mut().clear();
+#[gpui::test]
+fn a_blank_line_gets_no_reply(cx: &mut TestAppContext) {
+    let (capturing, _) = capture();
+    let (_, sender) = serve_idle(cx, "", TEST_ENTRY_PATH, &capturing);
+
     sender.send_blocking("  ".to_owned()).unwrap();
     cx.run_until_parked();
+
     assert!(capturing.0.borrow().is_empty());
     assert_eq!(sender.receiver_count(), 1);
 }

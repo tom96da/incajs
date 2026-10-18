@@ -106,12 +106,21 @@ mod tests {
     }
 
     #[test]
-    fn a_second_start_is_refused_and_keeps_the_first() {
+    fn a_second_timer_start_is_refused() {
         let mut state = State::default();
         let long_ago = Instant::now().checked_sub(Duration::from_secs(10)).unwrap();
 
         assert!(state.start_timer_at("t", long_ago));
         assert!(!state.start_timer("t"));
+    }
+
+    #[test]
+    fn a_second_timer_start_keeps_the_first_elapsed() {
+        let mut state = State::default();
+        let long_ago = Instant::now().checked_sub(Duration::from_secs(10)).unwrap();
+
+        assert!(state.start_timer_at("t", long_ago));
+        let _ = state.start_timer("t");
         assert!(state.elapsed_ms("t").unwrap() >= 10_000.0);
     }
 
@@ -132,11 +141,17 @@ mod tests {
     }
 
     #[test]
-    fn groups_nest_and_underflow_stays_at_zero() {
+    fn closing_a_group_at_depth_zero_keeps_depth_zero() {
         let mut state = State::default();
 
         state.close_group();
         assert_eq!(state.depth(), 0);
+    }
+
+    #[test]
+    fn group_depth_counts_the_open_groups() {
+        let mut state = State::default();
+
         state.open_group();
         state.open_group();
         assert_eq!(state.depth(), 2);

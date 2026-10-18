@@ -144,7 +144,7 @@ mod tests {
     }
 
     #[test]
-    fn a_text_node_renders_its_content_and_has_no_bounds() {
+    fn a_text_node_snapshot_joins_its_text() {
         let mut tree = VirtualTree::new();
         let text = tree.create_node("text").unwrap();
         tree.set_attribute(text, "value", "hi").unwrap();
@@ -155,8 +155,21 @@ mod tests {
         let snap = snapshot(&tree, text, &mut unit).unwrap();
 
         assert_eq!(snap.text.as_deref(), Some("hi there"));
-        assert_eq!(snap.bounds, None);
         assert!(snap.children.is_empty());
+    }
+
+    #[test]
+    fn a_text_node_snapshot_has_no_bounds() {
+        let mut tree = VirtualTree::new();
+        let text = tree.create_node("text").unwrap();
+        tree.set_attribute(text, "value", "hi").unwrap();
+        let inner = tree.create_node("text").unwrap();
+        tree.set_attribute(inner, "value", " there").unwrap();
+        tree.append_child(text, inner).unwrap();
+
+        let snap = snapshot(&tree, text, &mut unit).unwrap();
+
+        assert_eq!(snap.bounds, None);
     }
 
     #[test]

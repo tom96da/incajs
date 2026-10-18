@@ -4,6 +4,7 @@
 #![allow(clippy::unwrap_used)]
 
 use super::*;
+use rstest::rstest;
 
 #[test]
 fn accessor_text_is_cyan() {
@@ -53,10 +54,11 @@ fn numbers_bigints_and_booleans_are_yellow() {
     assert_eq!(colored("false"), yellow("false"));
 }
 
-#[test]
-fn null_is_bold_and_undefined_is_grey() {
-    assert_eq!(colored("null"), "\x1b[1mnull\x1b[22m");
-    assert_eq!(colored("undefined"), grey("undefined"));
+#[rstest]
+#[case::null("null", "\x1b[1mnull\x1b[22m")]
+#[case::undefined("undefined", "\x1b[90mundefined\x1b[39m")]
+fn a_nullish_value_takes_its_own_style(#[case] source: &str, #[case] want: &str) {
+    assert_eq!(colored(source), want);
 }
 
 #[test]

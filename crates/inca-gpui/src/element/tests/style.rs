@@ -172,29 +172,31 @@ fn a_wrong_typed_side_falls_through_to_the_axis_then_the_shorthand() {
 }
 
 #[test]
-fn margin_takes_negatives_and_auto_but_padding_does_not() {
+fn margin_takes_a_negative_px_and_auto() {
     let margin = style_of(&[("margin_left", num(-8.0)), ("margin_right", text("auto"))]).margin;
     assert_eq!(margin.left, Some(LengthSpec::Px(-8.0)));
     assert_eq!(margin.right, Some(LengthSpec::Auto));
-    for bad in [
-        num(-1.0),
-        num(f64::NAN),
-        num(f64::INFINITY),
-        text("auto"),
-        text("1 2"),
-    ] {
-        let padding = style_of(&[("padding", bad)]).padding;
-        assert_eq!(padding, EdgesSpec::default());
-    }
-    for bad in [
-        num(f64::NAN),
-        num(f64::INFINITY),
-        num(f64::NEG_INFINITY),
-        text("1 2"),
-    ] {
-        let margin = style_of(&[("margin", bad)]).margin;
-        assert_eq!(margin, EdgesSpec::default());
-    }
+}
+
+#[rstest]
+#[case::negative(num(-1.0))]
+#[case::nan(num(f64::NAN))]
+#[case::infinity(num(f64::INFINITY))]
+#[case::auto(text("auto"))]
+#[case::two_values(text("1 2"))]
+fn padding_ignores_a_value_that_is_not_a_finite_px_at_least_zero(#[case] bad: AttributeValue) {
+    let padding = style_of(&[("padding", bad)]).padding;
+    assert_eq!(padding, EdgesSpec::default());
+}
+
+#[rstest]
+#[case::nan(num(f64::NAN))]
+#[case::infinity(num(f64::INFINITY))]
+#[case::negative_infinity(num(f64::NEG_INFINITY))]
+#[case::two_values(text("1 2"))]
+fn margin_ignores_a_value_that_is_not_a_finite_px_or_auto(#[case] bad: AttributeValue) {
+    let margin = style_of(&[("margin", bad)]).margin;
+    assert_eq!(margin, EdgesSpec::default());
 }
 
 #[test]
@@ -208,7 +210,7 @@ fn flex_factors_reject_negatives_and_nan() {
 }
 
 #[test]
-fn opacity_is_clamped_and_nan_is_unset() {
+fn opacity_is_clamped_to_zero_through_one() {
     let opacity = |value| style_of(&[("opacity", value)]).opacity;
     assert_eq!(opacity(num(2.0)), Some(1.0));
     assert_eq!(opacity(num(-1.0)), Some(0.0));
@@ -219,6 +221,11 @@ fn opacity_is_clamped_and_nan_is_unset() {
     );
     assert_eq!(opacity(num(f64::INFINITY)), Some(1.0));
     assert_eq!(opacity(num(f64::NEG_INFINITY)), Some(0.0));
+}
+
+#[test]
+fn opacity_of_nan_or_a_string_is_unset() {
+    let opacity = |value| style_of(&[("opacity", value)]).opacity;
     assert_eq!(opacity(num(f64::NAN)), None);
     assert_eq!(opacity(text("0.5")), None);
 }

@@ -137,9 +137,7 @@ fn each_dispatch_takes_the_next_event_id_and_an_unheard_one_takes_none(cx: &mut 
 }
 
 #[gpui::test]
-fn stop_propagation_keeps_the_nodes_other_listeners_and_stop_immediate_does_not(
-    cx: &mut TestAppContext,
-) {
+fn stop_propagation_keeps_the_nodes_other_listeners(cx: &mut TestAppContext) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let [_, parent, child] = tree_of_three(&host);
     listen(
@@ -157,10 +155,28 @@ fn stop_propagation_keeps_the_nodes_other_listeners_and_stop_immediate_does_not(
     listen(&dispatcher, parent, "click", "() => out.push(2)");
     let stopped = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
     assert_eq!(stopped, serde_json::json!([0, 1]));
+}
 
+#[gpui::test]
+fn stop_immediate_propagation_skips_the_nodes_other_listeners(cx: &mut TestAppContext) {
+    let (dispatcher, host, _reported) = dispatcher_with_engine();
+    let [_, parent, child] = tree_of_three(&host);
+    listen(
+        &dispatcher,
+        child,
+        "click",
+        r"
+        (e) => {
+            out.push(0);
+            globalThis.immediate ? e.stopImmediatePropagation() : e.stopPropagation();
+        }
+        ",
+    );
+    listen(&dispatcher, child, "click", "() => out.push(1)");
+    listen(&dispatcher, parent, "click", "() => out.push(2)");
     dispatcher
         .engine
-        .eval::<()>("out.length = 0; globalThis.immediate = true;")
+        .eval::<()>("globalThis.immediate = true;")
         .unwrap();
     let immediate = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
     assert_eq!(immediate, serde_json::json!([0]));

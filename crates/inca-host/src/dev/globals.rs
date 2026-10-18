@@ -378,8 +378,8 @@ mod tests {
     #[case::undefined("undefined")]
     #[case::null("null")]
     #[case::no_argument("")]
-    fn set_load_failed_throws_for_a_non_boolean_and_keeps_the_signal(#[case] arg: &str) {
-        let (engine, flag) = flag_engine(true);
+    fn set_load_failed_throws_for_a_non_boolean(#[case] arg: &str) {
+        let (engine, _flag) = flag_engine(true);
         engine
             .eval::<()>(&format!(
                 r"
@@ -390,6 +390,25 @@ mod tests {
             ))
             .unwrap();
         assert!(engine.eval::<bool>("globalThis.threw;").unwrap(), "{arg:?}");
+    }
+
+    #[rstest]
+    #[case::string("'true'")]
+    #[case::number("1")]
+    #[case::undefined("undefined")]
+    #[case::null("null")]
+    #[case::no_argument("")]
+    fn set_load_failed_with_a_non_boolean_keeps_the_signal(#[case] arg: &str) {
+        let (engine, flag) = flag_engine(true);
+        engine
+            .eval::<()>(&format!(
+                r"
+                globalThis.threw = false;
+                try {{ __inca_dev__.setLoadFailed({arg}); }}
+                catch (e) {{ globalThis.threw = e instanceof TypeError; }}
+                "
+            ))
+            .unwrap();
         assert!(flag.failed(), "{arg:?}");
         assert_eq!(flag.failures(), 0, "{arg:?}");
     }

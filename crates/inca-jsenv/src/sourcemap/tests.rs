@@ -75,12 +75,17 @@ fn four_and_five_field_segments_carry_a_source() {
 }
 
 #[test]
-fn source_deltas_carry_across_lines_and_generated_column_resets() {
+fn source_deltas_carry_across_lines() {
+    let lines = decode("CAIE;AAAA");
+    assert_eq!(lines[0][0].source, Some(sp(0, 4, 2)));
+    assert_eq!(lines[1][0].source, Some(sp(0, 4, 2)));
+}
+
+#[test]
+fn the_generated_column_resets_on_each_line() {
     let lines = decode("CAIE;AAAA");
     assert_eq!(lines[0][0].column, 1);
-    assert_eq!(lines[0][0].source, Some(sp(0, 4, 2)));
     assert_eq!(lines[1][0].column, 0);
-    assert_eq!(lines[1][0].source, Some(sp(0, 4, 2)));
 }
 
 #[test]

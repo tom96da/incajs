@@ -158,7 +158,7 @@ fn pinning_reports_a_realm_without_the_intrinsics() {
 }
 
 #[test]
-fn an_unpinned_realm_prints_the_four_types_as_objects_and_can_be_pinned_after() {
+fn an_unpinned_realm_prints_the_four_types_as_objects() {
     with_realm(|ctx| {
         let values: Vec<Value<'_>> = ctx
             .eval("[new Date(0), /x/g, new Map([[1, 2]]), new Set([1])]")
@@ -166,6 +166,16 @@ fn an_unpinned_realm_prints_the_four_types_as_objects_and_can_be_pinned_after() 
 
         assert_eq!(line(&values, false), "Date {} RegExp {} Map {} Set {}");
         assert!(!ctx.has_exception());
+    });
+}
+
+#[test]
+fn values_made_before_pin_print_after_it() {
+    with_realm(|ctx| {
+        let values: Vec<Value<'_>> = ctx
+            .eval("[new Date(0), /x/g, new Map([[1, 2]]), new Set([1])]")
+            .unwrap();
+
         pin(&ctx).unwrap();
         assert_eq!(
             line(&values, false),

@@ -116,8 +116,8 @@ fn dispatch_event_gives_an_unheard_event_its_target_object() {
 }
 
 #[gpui::test]
-fn a_throwing_hook_is_reported_and_no_listener_runs(cx: &mut TestAppContext) {
-    let (dispatcher, host, reported) = dispatcher_with_engine();
+fn a_throwing_hook_runs_no_listener(cx: &mut TestAppContext) {
+    let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
     dispatcher.engine.eval::<()>(THROWS).unwrap();
     listen(&dispatcher, node, "click", "() => out.push('ran')");
@@ -125,13 +125,24 @@ fn a_throwing_hook_is_reported_and_no_listener_runs(cx: &mut TestAppContext) {
     let out = fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
 
     assert_eq!(out, serde_json::json!([]));
+}
+
+#[gpui::test]
+fn a_throwing_hook_is_reported(cx: &mut TestAppContext) {
+    let (dispatcher, host, reported) = dispatcher_with_engine();
+    let node = host.borrow_mut().tree.create_node("div").unwrap();
+    dispatcher.engine.eval::<()>(THROWS).unwrap();
+    listen(&dispatcher, node, "click", "() => out.push('ran')");
+
+    let _ = fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
+
     assert_eq!(reported.borrow().len(), 1);
     assert_eq!(reported.borrow()[0].message(), "Error: no targets");
 }
 
 #[gpui::test]
-fn a_hook_that_returns_no_array_is_reported_and_no_listener_runs(cx: &mut TestAppContext) {
-    let (dispatcher, host, reported) = dispatcher_with_engine();
+fn a_hook_that_returns_no_array_runs_no_listener(cx: &mut TestAppContext) {
+    let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
     dispatcher
         .engine
@@ -142,6 +153,20 @@ fn a_hook_that_returns_no_array_is_reported_and_no_listener_runs(cx: &mut TestAp
     let out = fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
 
     assert_eq!(out, serde_json::json!([]));
+}
+
+#[gpui::test]
+fn a_hook_that_returns_no_array_is_reported(cx: &mut TestAppContext) {
+    let (dispatcher, host, reported) = dispatcher_with_engine();
+    let node = host.borrow_mut().tree.create_node("div").unwrap();
+    dispatcher
+        .engine
+        .eval::<()>("globalThis.__inca_targets__ = () => 5;")
+        .unwrap();
+    listen(&dispatcher, node, "click", "() => out.push('ran')");
+
+    let _ = fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
+
     assert_eq!(reported.borrow().len(), 1);
 }
 

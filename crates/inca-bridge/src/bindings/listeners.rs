@@ -185,10 +185,9 @@ mod tests {
     use crate::test_support::{callback_ids, engine_with_bindings};
 
     #[test]
-    fn a_registration_keeps_its_phase_and_passivity_and_the_first_one_wins() {
+    fn a_registration_keeps_its_phase_and_passivity() {
         let mut listeners = EventListeners::default();
         listeners.insert(1, "wheel", 7, true, true);
-        listeners.insert(1, "wheel", 7, false, false);
         listeners.insert(1, "wheel", 8, false, false);
 
         assert_eq!(
@@ -205,6 +204,22 @@ mod tests {
                     passive: false
                 },
             ]
+        );
+    }
+
+    #[test]
+    fn a_repeated_registration_keeps_the_first() {
+        let mut listeners = EventListeners::default();
+        listeners.insert(1, "wheel", 7, true, true);
+        listeners.insert(1, "wheel", 7, false, false);
+
+        assert_eq!(
+            listeners.listeners_for(1, "wheel"),
+            &[Listener {
+                callback: 7,
+                capture: true,
+                passive: true
+            }]
         );
     }
 
@@ -269,7 +284,7 @@ mod tests {
     }
 
     #[test]
-    fn add_returns_none_and_registers_nothing_once_the_ids_run_out() {
+    fn add_returns_none_once_the_ids_run_out() {
         let mut listeners = EventListeners {
             next_callback: u32::MAX - 1,
             ..EventListeners::default()
@@ -278,6 +293,19 @@ mod tests {
         assert_eq!(listeners.add(1, "click", false, false), Some(u32::MAX - 1));
         assert_eq!(listeners.add(1, "focus", false, false), None);
         assert_eq!(listeners.add(1, "focus", false, false), None);
+    }
+
+    #[test]
+    fn add_registers_nothing_once_the_ids_run_out() {
+        let mut listeners = EventListeners {
+            next_callback: u32::MAX - 1,
+            ..EventListeners::default()
+        };
+
+        let _ = listeners.add(1, "click", false, false);
+        let _ = listeners.add(1, "focus", false, false);
+        let _ = listeners.add(1, "focus", false, false);
+
         assert!(callback_ids(&listeners, 1, "focus").is_empty());
     }
 
@@ -300,13 +328,12 @@ mod tests {
     }
 
     #[test]
-    fn add_event_listener_on_an_unknown_node_throws_type_error_and_takes_no_id() {
+    fn add_event_listener_on_an_unknown_node_throws_type_error() {
         let (engine, _host) = engine_with_bindings();
 
         engine
             .eval::<()>(
                 r"
-                globalThis.n = __inca_native__.createNode('div');
                 globalThis.typeError = false;
                 try { __inca_native__.addEventListener(9999, 'click'); }
                 catch (e) { globalThis.typeError = e instanceof TypeError; }
@@ -315,6 +342,22 @@ mod tests {
             .unwrap();
 
         assert!(engine.eval::<bool>("typeError").unwrap());
+    }
+
+    #[test]
+    fn a_failed_add_event_listener_takes_no_callback_id() {
+        let (engine, _host) = engine_with_bindings();
+
+        engine
+            .eval::<()>(
+                r"
+                globalThis.n = __inca_native__.createNode('div');
+                try { __inca_native__.addEventListener(9999, 'click'); }
+                catch (e) {}
+                ",
+            )
+            .unwrap();
+
         assert_eq!(
             engine
                 .eval::<u32>("__inca_native__.addEventListener(n, 'click')")

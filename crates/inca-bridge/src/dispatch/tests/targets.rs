@@ -58,9 +58,9 @@ fn a_release_clicks_only_when_both_containers_share_an_ancestor(cx: &mut TestApp
 }
 
 #[gpui::test]
-fn a_removed_node_is_no_related_target_and_no_previous_container(cx: &mut TestAppContext) {
+fn a_removed_node_is_no_related_target(cx: &mut TestAppContext) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
-    let [outer, parent, child] = tree_of_three(&host);
+    let [outer, parent, _] = tree_of_three(&host);
     {
         let mut host = host.borrow_mut();
         let root = host.root();
@@ -77,7 +77,7 @@ fn a_removed_node_is_no_related_target_and_no_previous_container(cx: &mut TestAp
             ",
         )
         .unwrap();
-    for event in ["mouseover", "mouseout", "focus"] {
+    for event in ["mouseover", "focus"] {
         listen(&dispatcher, outer, event, "related");
     }
     let cx = cx.add_empty_window();
@@ -106,7 +106,32 @@ fn a_removed_node_is_no_related_target_and_no_previous_container(cx: &mut TestAp
             ["focus", null]
         ])
     );
+}
 
+#[gpui::test]
+fn a_removed_node_is_no_previous_hover_container(cx: &mut TestAppContext) {
+    let (dispatcher, host, _reported) = dispatcher_with_engine();
+    let [outer, parent, child] = tree_of_three(&host);
+    {
+        let mut host = host.borrow_mut();
+        let root = host.root();
+        host.tree.append_child(root, outer).unwrap();
+    }
+    dispatcher
+        .engine
+        .eval::<()>(
+            r"
+            globalThis.seen = [];
+            globalThis.related = (e) => {
+                globalThis.seen.push([e.type, e.relatedTarget]);
+            };
+            ",
+        )
+        .unwrap();
+    for event in ["mouseover", "mouseout"] {
+        listen(&dispatcher, outer, event, "related");
+    }
+    let cx = cx.add_empty_window();
     cx.update(|window, cx| dispatcher.report_hover(Some(child), window, cx));
     seen(&dispatcher);
     host.borrow_mut().tree.destroy_node(child);

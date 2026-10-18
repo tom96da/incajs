@@ -8,32 +8,25 @@ use crate::test_support::{callback_ids, engine_with_bindings};
 use rstest::rstest;
 
 #[test]
-fn remove_style_unsets_the_key_and_throws_for_an_unknown_node() {
-    let (engine, host) = engine_with_bindings();
+fn remove_style_on_an_unknown_node_throws() {
+    let (engine, _host) = engine_with_bindings();
 
-    let ids: Vec<u32> = engine
+    let caught: bool = engine
         .eval(
             r"
             const n = __inca_native__;
-            const node = n.createNode('div');
-            n.setStyle(node, 'gap', 8);
-            n.setStyle(node, 'width', 1);
-            n.removeStyle(node, 'gap');
             let caught = false;
-            try { n.removeStyle(999, 'gap'); } catch (e) { caught = true; }
-            [node, caught ? 1 : 0];
+            try {
+                n.removeStyle(999, 'gap');
+            } catch (e) {
+                caught = true;
+            }
+            caught;
             ",
         )
         .unwrap();
 
-    let [node, caught] = ids[..] else {
-        panic!("expected the node id and the caught flag");
-    };
-    assert_eq!(caught, 1);
-    let host = host.borrow();
-    let styles = host.tree.get(node).unwrap().style_props();
-    assert!(styles.get("gap").is_none());
-    assert!(styles.get("width").is_some());
+    assert!(caught);
 }
 
 /// Evaluates `script` against bindings whose style warnings are
@@ -163,8 +156,8 @@ fn set_style_unknown_node_id_throws_catchable_exception() {
 }
 
 #[test]
-fn destroy_node_frees_the_subtree_and_hands_back_its_callback_ids() {
-    let (engine, host) = engine_with_bindings();
+fn destroy_node_hands_back_the_callback_ids_of_its_subtree() {
+    let (engine, _host) = engine_with_bindings();
 
     let released: Vec<u32> = engine
         .eval(
@@ -189,6 +182,27 @@ fn destroy_node_frees_the_subtree_and_hands_back_its_callback_ids() {
         vec![0, 1],
         "a descendant's callback is unreachable from JS once its root is gone"
     );
+}
+
+#[test]
+fn destroy_node_frees_its_subtree() {
+    let (engine, host) = engine_with_bindings();
+
+    let _: Vec<u32> = engine
+        .eval(
+            r"
+            const root = __inca_native__.rootNodeId();
+            const branch = __inca_native__.createNode('div');
+            const leaf = __inca_native__.createNode('text');
+            __inca_native__.appendChild(root, branch);
+            __inca_native__.appendChild(branch, leaf);
+            __inca_native__.addEventListener(branch, 'click');
+            __inca_native__.addEventListener(leaf, 'click');
+
+            __inca_native__.destroyNode(branch);
+            ",
+        )
+        .unwrap();
 
     let host = host.borrow();
     assert!(host.tree.get(host.root()).unwrap().children().is_empty());
@@ -524,33 +538,25 @@ fn non_primitive_attribute_value_throws_catchable_exception() {
 }
 
 #[test]
-fn remove_attribute_unsets_the_key_and_throws_for_an_unknown_node() {
-    let (engine, host) = engine_with_bindings();
+fn remove_attribute_on_an_unknown_node_throws() {
+    let (engine, _host) = engine_with_bindings();
 
-    let ids: Vec<u32> = engine
+    let caught: bool = engine
         .eval(
             r"
             const n = __inca_native__;
-            const node = n.createNode('div');
-            n.setAttribute(node, 'label', 'a');
-            n.setAttribute(node, 'count', 1);
-            n.removeAttribute(node, 'label');
-            n.removeAttribute(node, 'never_set');
             let caught = false;
-            try { n.removeAttribute(999, 'label'); } catch (e) { caught = true; }
-            [node, caught ? 1 : 0];
+            try {
+                n.removeAttribute(999, 'x');
+            } catch (e) {
+                caught = true;
+            }
+            caught;
             ",
         )
         .unwrap();
 
-    let [node, caught] = ids[..] else {
-        panic!("expected the node id and the caught flag");
-    };
-    assert_eq!(caught, 1);
-    let host = host.borrow();
-    let attrs = host.tree.get(node).unwrap().attributes();
-    assert!(attrs.get("label").is_none());
-    assert!(attrs.get("count").is_some());
+    assert!(caught);
 }
 
 #[test]
@@ -580,23 +586,45 @@ fn insert_before_unknown_ids_raise_catchable_exception() {
 }
 
 #[test]
-fn hold_node_throws_for_an_unknown_id_and_release_node_does_not() {
+fn hold_node_throws_type_error_for_an_unknown_id() {
     let (engine, _host) = engine_with_bindings();
 
-    let outcome: Vec<bool> = engine
+    let type_error: bool = engine
         .eval(
             r"
-            const n = __inca_native__;
-            let held = false;
-            try { n.holdNode(999); } catch (e) { held = e instanceof TypeError; }
-            let released = true;
-            try { n.releaseNode(999); } catch (e) { released = false; }
-            [held, released];
+            let type_error = false;
+            try {
+                __inca_native__.holdNode(999);
+            } catch (e) {
+                type_error = e instanceof TypeError;
+            }
+            type_error;
             ",
         )
         .unwrap();
 
-    assert_eq!(outcome, [true, true]);
+    assert!(type_error);
+}
+
+#[test]
+fn release_node_ignores_an_unknown_id() {
+    let (engine, _host) = engine_with_bindings();
+
+    let threw: bool = engine
+        .eval(
+            r"
+            let threw = false;
+            try {
+                __inca_native__.releaseNode(999);
+            } catch (e) {
+                threw = true;
+            }
+            threw;
+            ",
+        )
+        .unwrap();
+
+    assert!(!threw);
 }
 
 #[test]

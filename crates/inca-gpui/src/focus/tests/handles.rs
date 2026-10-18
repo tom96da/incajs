@@ -28,7 +28,7 @@ fn changing_tabindex_keeps_the_focused_handle(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn removing_tabindex_blurs_the_focused_node_and_drops_the_handle(cx: &mut TestAppContext) {
+fn removing_tabindex_blurs_the_focused_node(cx: &mut TestAppContext) {
     let cx = cx.add_empty_window();
     let (mut tree, id) = tree_with("div", Some(AttributeValue::from("0")));
     let mut registry = FocusRegistry::default();
@@ -44,11 +44,30 @@ fn removing_tabindex_blurs_the_focused_node_and_drops_the_handle(cx: &mut TestAp
     registry.mark_tab_dirty(id);
     let transitions = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
 
-    assert!(registry.handle(id).is_none());
     assert!(!cx.update(|window, _| held.is_focused(window)));
     assert_eq!(transitions.len(), 1);
     assert_eq!(transitions[0].blurred, Some(id));
     assert_eq!(transitions[0].focused, None);
+}
+
+#[gpui::test]
+fn removing_tabindex_drops_the_focus_handle(cx: &mut TestAppContext) {
+    let cx = cx.add_empty_window();
+    let (mut tree, id) = tree_with("div", Some(AttributeValue::from("0")));
+    let mut registry = FocusRegistry::default();
+    registry.mark_tab_dirty(id);
+    registry.request_focus(id, true);
+    cx.update(|window, cx| {
+        let _ = registry.apply_pending(&tree, window, cx);
+    });
+    let held = registry.handle(id).unwrap();
+    assert!(cx.update(|window, _| held.is_focused(window)));
+
+    tree.remove_attribute(id, "tabindex").unwrap();
+    registry.mark_tab_dirty(id);
+    let _ = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+
+    assert!(registry.handle(id).is_none());
 }
 
 #[gpui::test]
@@ -318,7 +337,24 @@ fn a_pending_focus_takes_effect_after_a_silent_drop(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn dropping_focus_is_silent_and_releases_the_window_at_the_next_apply(cx: &mut TestAppContext) {
+fn dropping_focus_is_silent(cx: &mut TestAppContext) {
+    let cx = cx.add_empty_window();
+    let (tree, ids) = rooted_tree(2);
+    let gone = ids[0];
+    let mut registry = FocusRegistry::default();
+    focus_all(cx, &mut registry, &tree, &ids, gone);
+    cx.update(|window, cx| registry.observe(window, cx));
+    registry.request_focus(gone, false);
+
+    registry.drop_focus_in(&tree, gone);
+
+    assert_eq!(registry.active_node(&tree), None);
+    let transitions = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+    assert!(transitions.is_empty());
+}
+
+#[gpui::test]
+fn dropping_focus_releases_the_window_at_the_next_apply(cx: &mut TestAppContext) {
     let cx = cx.add_empty_window();
     let (tree, ids) = rooted_tree(2);
     let (gone, other) = (ids[0], ids[1]);
@@ -329,10 +365,8 @@ fn dropping_focus_is_silent_and_releases_the_window_at_the_next_apply(cx: &mut T
 
     registry.drop_focus_in(&tree, gone);
 
-    assert_eq!(registry.active_node(&tree), None);
     let held = registry.handle(gone).unwrap();
-    let transitions = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
-    assert!(transitions.is_empty());
+    let _ = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
     assert!(!cx.update(|window, _| held.is_focused(window)));
     assert!(registry.handle(other).is_some());
 }

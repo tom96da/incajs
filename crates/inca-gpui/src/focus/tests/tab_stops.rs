@@ -49,13 +49,17 @@ fn next_stop_from_a_negative_stop_continues_in_tree_order() {
 }
 
 #[test]
-fn next_stop_starts_at_an_end_from_an_unknown_node_and_ignores_empty_lists() {
+fn next_stop_from_an_unknown_node_starts_at_an_end() {
     assert_eq!(next_stop(&STOPS, Some(99), false), Some(2));
     assert_eq!(next_stop(&STOPS, Some(99), true), Some(4));
-    for backward in [false, true] {
-        assert_eq!(next_stop(&[], None, backward), None);
-        assert_eq!(next_stop(&[(1, -1)], None, backward), None);
-    }
+}
+
+#[rstest]
+#[case::forward(false)]
+#[case::backward(true)]
+fn next_stop_is_none_without_a_reachable_stop(#[case] backward: bool) {
+    assert_eq!(next_stop(&[], None, backward), None);
+    assert_eq!(next_stop(&[(1, -1)], None, backward), None);
 }
 
 #[gpui::test]
@@ -115,7 +119,7 @@ fn the_last_focus_request_decides_what_scrolls(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn after_a_drop_no_node_is_focused_and_tab_starts_at_the_first_stop(cx: &mut TestAppContext) {
+fn after_a_drop_no_node_is_focused(cx: &mut TestAppContext) {
     let cx = cx.add_empty_window();
     let (tree, ids) = rooted_tree(2);
     let mut registry = FocusRegistry::default();
@@ -127,6 +131,17 @@ fn after_a_drop_no_node_is_focused_and_tab_starts_at_the_first_stop(cx: &mut Tes
         cx.update(|window, cx| registry.focused_node(window, cx)),
         None
     );
+}
+
+#[gpui::test]
+fn after_a_drop_tab_starts_at_the_first_stop(cx: &mut TestAppContext) {
+    let cx = cx.add_empty_window();
+    let (tree, ids) = rooted_tree(2);
+    let mut registry = FocusRegistry::default();
+    focus_all(cx, &mut registry, &tree, &ids, ids[1]);
+    cx.update(|window, cx| registry.observe(window, cx));
+    registry.drop_focus_in(&tree, ids[1]);
+
     let moved = cx.update(|window, cx| registry.tab_move(&tree, ROOT, window, cx, false));
 
     assert_eq!(moved, Some(ids[0]));

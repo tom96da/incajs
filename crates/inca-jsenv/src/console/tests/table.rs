@@ -6,12 +6,15 @@
 use super::*;
 
 #[test]
-fn dir_quotes_a_string_and_ignores_options_and_extras() {
+fn dir_quotes_a_string() {
+    assert_eq!(texts("console.dir('s');"), ["'s'"]);
+}
+
+#[test]
+fn dir_prints_only_its_first_argument() {
     assert_eq!(
-        texts(
-            "console.dir('s'); console.dir({ a: 'b' }, { depth: 0 }); console.dir(1, 2, 3); console.dir();"
-        ),
-        ["'s'", "{ a: 'b' }", "1", "undefined"]
+        texts("console.dir({ a: 'b' }, { depth: 0 }); console.dir(1, 2, 3); console.dir();"),
+        ["{ a: 'b' }", "1", "undefined"]
     );
 }
 

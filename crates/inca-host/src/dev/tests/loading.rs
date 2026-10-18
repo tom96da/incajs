@@ -127,7 +127,7 @@ fn a_job_failure_while_pending_is_one_app_error_before_the_window(cx: &mut TestA
 }
 
 #[gpui::test]
-fn a_rejection_after_the_timeout_is_one_app_error_and_the_window_stays(cx: &mut TestAppContext) {
+fn a_rejection_after_the_timeout_is_one_app_error(cx: &mut TestAppContext) {
     let (capturing, writer) = capture();
     let sender = serve(
         cx,
@@ -148,11 +148,34 @@ fn a_rejection_after_the_timeout_is_one_app_error_and_the_window_stays(cx: &mut 
     cx.run_until_parked();
 
     assert_eq!(methods(&capturing), ["ready", "appError"]);
+}
+
+#[gpui::test]
+fn a_rejection_after_the_timeout_keeps_the_window(cx: &mut TestAppContext) {
+    let (capturing, writer) = capture();
+    let sender = serve(
+        cx,
+        r"
+        await new Promise((_, reject) => {
+            __inca_dev__.receive = () => reject(new Error('late'));
+        });
+        ",
+        TEST_ENTRY_PATH,
+        &writer,
+    );
+    cx.run_until_parked();
+    cx.executor().advance_clock(LOAD_TIMEOUT);
+    cx.run_until_parked();
+    assert_eq!(methods(&capturing), ["ready"]);
+
+    notify(&sender, "go");
+    cx.run_until_parked();
+
     assert!(the_window(cx).is_some());
 }
 
 #[gpui::test]
-fn shutdown_while_loading_is_answered_and_no_window_opens(cx: &mut TestAppContext) {
+fn shutdown_while_loading_is_answered(cx: &mut TestAppContext) {
     let (capturing, writer) = capture();
     let sender = serve(cx, NEVER_SETTLES, TEST_ENTRY_PATH, &writer);
 
@@ -164,8 +187,19 @@ fn shutdown_while_loading_is_answered_and_no_window_opens(cx: &mut TestAppContex
         written(&capturing),
         [json!({ "jsonrpc": "2.0", "id": 1, "result": null })]
     );
-    assert!(the_window(cx).is_none());
     assert_eq!(sender.receiver_count(), 0, "the loop ended");
+}
+
+#[gpui::test]
+fn shutdown_while_loading_opens_no_window(cx: &mut TestAppContext) {
+    let (_capturing, writer) = capture();
+    let sender = serve(cx, NEVER_SETTLES, TEST_ENTRY_PATH, &writer);
+
+    request(&sender, 1, "shutdown");
+    request(&sender, 2, "nope");
+    cx.run_until_parked();
+
+    assert!(the_window(cx).is_none());
 }
 
 #[gpui::test]

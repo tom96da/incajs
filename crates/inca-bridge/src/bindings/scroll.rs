@@ -94,7 +94,7 @@ mod tests {
     use gpui::{Bounds, point};
 
     #[test]
-    fn scroll_node_writes_the_given_axes_negated_and_clamps_below_zero() {
+    fn scroll_node_writes_only_the_given_axes_negated() {
         let (engine, host) = engine_with_bindings();
         let node: u32 = engine
             .eval("globalThis.n = __inca_native__.createNode('div')")
@@ -119,6 +119,22 @@ mod tests {
             .eval::<()>("__inca_native__.scrollNode(n, 3, undefined)")
             .unwrap();
         assert_eq!(offset(&host), (-3., -9.));
+    }
+
+    #[test]
+    fn scroll_node_clamps_a_negative_value_to_zero() {
+        let (engine, host) = engine_with_bindings();
+        let node: u32 = engine
+            .eval("globalThis.n = __inca_native__.createNode('div')")
+            .unwrap();
+        engine
+            .eval::<()>("__inca_native__.setStyle(n, 'overflow', 'scroll')")
+            .unwrap();
+        let offset = |host: &Rc<RefCell<Host>>| {
+            let offset = host.borrow().scroll_handle(node).offset();
+            (f32::from(offset.x), f32::from(offset.y))
+        };
+
         engine
             .eval::<()>("__inca_native__.scrollNode(n, -4, -1)")
             .unwrap();

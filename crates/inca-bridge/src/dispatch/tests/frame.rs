@@ -280,7 +280,7 @@ fn the_hook_receives_the_freed_ids_once(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn a_hook_that_throws_is_reported_and_the_frame_completes(cx: &mut TestAppContext) {
+fn a_hook_that_throws_is_reported(cx: &mut TestAppContext) {
     let scene = scene(
         cx,
         "globalThis.__inca_released__ = () => { throw new Error('boom'); };",
@@ -294,7 +294,20 @@ fn a_hook_that_throws_is_reported_and_the_frame_completes(cx: &mut TestAppContex
     let reported = scene.reported.borrow();
     assert_eq!(reported.len(), 1);
     assert!(reported[0].message().contains("boom"));
-    drop(reported);
+}
+
+#[gpui::test]
+fn a_hook_that_throws_lets_the_frame_finish(cx: &mut TestAppContext) {
+    let scene = scene(
+        cx,
+        "globalThis.__inca_released__ = () => { throw new Error('boom'); };",
+    );
+    scene.js("__inca_native__.createNode('div');");
+    let node = focusable_node(&scene.dispatcher, &scene.host);
+    scene.host.borrow_mut().focus.request_focus(node, true);
+
+    draw(cx, scene.window);
+
     assert_eq!(
         scene.json("globalThis.seen"),
         serde_json::json!([format!("focus:{node}")])
@@ -334,7 +347,7 @@ fn a_hook_that_creates_nodes_and_fires_events_leaves_the_next_frame_to_free_them
 }
 
 #[gpui::test]
-fn without_a_hook_the_ids_are_dropped_and_nothing_is_reported(cx: &mut TestAppContext) {
+fn without_a_hook_a_frame_still_frees_the_orphans(cx: &mut TestAppContext) {
     let scene = scene(cx, "");
     scene.js(r"
         globalThis.node = __inca_native__.createNode('div');
@@ -345,6 +358,18 @@ fn without_a_hook_the_ids_are_dropped_and_nothing_is_reported(cx: &mut TestAppCo
 
     assert!(scene.host.borrow().tree.get(1).is_none());
     assert!(scene.host.borrow().listeners.is_empty());
+}
+
+#[gpui::test]
+fn without_a_hook_a_frame_reports_nothing(cx: &mut TestAppContext) {
+    let scene = scene(cx, "");
+    scene.js(r"
+        globalThis.node = __inca_native__.createNode('div');
+        __inca_native__.addEventListener(node, 'click', false, false);
+        ");
+
+    draw(cx, scene.window);
+
     assert!(scene.reported.borrow().is_empty());
 }
 

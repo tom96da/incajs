@@ -72,38 +72,47 @@ fn the_constructors_refuse_a_plain_call_a_missing_type_and_a_primitive_init() {
 }
 
 #[test]
-fn a_custom_event_carries_detail_and_inherits_from_event() {
+fn a_custom_event_carries_its_detail() {
     let (dispatcher, _host, _reported) = dispatcher_with_engine();
     let got = eval_json(
         &dispatcher,
         r"
-        (() => { const d = { n: 1 };
-        const a = new CustomEvent('a', { detail: d, bubbles: true });
-        const b = new CustomEvent('b');
-        const c = new CustomEvent('c', { detail: undefined });
-        return [a.detail === d, a.bubbles, b.detail, c.detail,
-            a instanceof CustomEvent, a instanceof Event,
-            Object.getPrototypeOf(CustomEvent) === Event,
-            a.preventDefault === new Event('x').preventDefault,
-            CustomEvent.name, Event.name, Event.AT_TARGET, CustomEvent.BUBBLING_PHASE]; })()
+        (() => {
+            const d = { n: 1 };
+            const a = new CustomEvent('a', { detail: d, bubbles: true });
+            const b = new CustomEvent('b');
+            const c = new CustomEvent('c', { detail: undefined });
+            return [a.detail === d, a.bubbles, b.detail, c.detail];
+        })()
+        ",
+    );
+    assert_eq!(got, serde_json::json!([true, true, null, null]));
+}
+
+#[test]
+fn a_custom_event_inherits_from_event() {
+    let (dispatcher, _host, _reported) = dispatcher_with_engine();
+    let got = eval_json(
+        &dispatcher,
+        r"
+        (() => {
+            const a = new CustomEvent('a');
+            return [
+                a instanceof CustomEvent,
+                a instanceof Event,
+                Object.getPrototypeOf(CustomEvent) === Event,
+                a.preventDefault === new Event('x').preventDefault,
+                CustomEvent.name,
+                Event.name,
+                Event.AT_TARGET,
+                CustomEvent.BUBBLING_PHASE,
+            ];
+        })()
         ",
     );
     assert_eq!(
         got,
-        serde_json::json!([
-            true,
-            true,
-            null,
-            null,
-            true,
-            true,
-            true,
-            true,
-            "CustomEvent",
-            "Event",
-            2,
-            3
-        ])
+        serde_json::json!([true, true, true, true, "CustomEvent", "Event", 2, 3])
     );
 }
 
@@ -259,7 +268,7 @@ fn dispatch_event_returns_false_for_a_canceled_cancelable_event_only() {
 }
 
 #[test]
-fn a_dispatched_event_stays_canceled_and_gets_a_new_id_when_dispatched_again() {
+fn a_canceled_event_stays_canceled_when_dispatched_again() {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
     listen(
@@ -279,7 +288,31 @@ fn a_dispatched_event_stays_canceled_and_gets_a_new_id_when_dispatched_again() {
             "
         ),
     );
-    assert_eq!(got, serde_json::json!([[false, false], [1, 2]]));
+    assert_eq!(got[0], serde_json::json!([false, false]));
+}
+
+#[test]
+fn a_redispatched_event_gets_a_new_event_id() {
+    let (dispatcher, host, _reported) = dispatcher_with_engine();
+    let node = host.borrow_mut().tree.create_node("div").unwrap();
+    listen(
+        &dispatcher,
+        node,
+        "ping",
+        "(e) => { out.push(e.eventId); e.preventDefault(); }",
+    );
+    let got = eval_json(
+        &dispatcher,
+        &format!(
+            r"
+            (() => {{ const e = new Event('ping', {{ cancelable: true }});
+            const r = [__inca_native__.dispatchEvent({node}, e),
+                __inca_native__.dispatchEvent({node}, e)];
+            return [r, out]; }})()
+            "
+        ),
+    );
+    assert_eq!(got[1], serde_json::json!([1, 2]));
 }
 
 #[test]
@@ -383,8 +416,8 @@ fn dispatch_event_on_an_unknown_node_throws_a_type_error() {
 }
 
 #[test]
-fn a_listener_that_throws_during_dispatch_event_is_reported_and_the_others_run() {
-    let (dispatcher, host, reported) = dispatcher_with_engine();
+fn a_listener_that_throws_during_dispatch_event_lets_the_others_run() {
+    let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
     listen(
         &dispatcher,
@@ -398,6 +431,23 @@ fn a_listener_that_throws_during_dispatch_event_is_reported_and_the_others_run()
         &format!("[__inca_native__.dispatchEvent({node}, new Event('ping')), out]"),
     );
     assert_eq!(got, serde_json::json!([true, ["second"]]));
+}
+
+#[test]
+fn a_listener_that_throws_during_dispatch_event_is_reported_once_idle() {
+    let (dispatcher, host, reported) = dispatcher_with_engine();
+    let node = host.borrow_mut().tree.create_node("div").unwrap();
+    listen(
+        &dispatcher,
+        node,
+        "ping",
+        "() => { throw new Error('boom'); }",
+    );
+    listen(&dispatcher, node, "ping", "() => out.push('second')");
+    let _ = eval_json(
+        &dispatcher,
+        &format!("[__inca_native__.dispatchEvent({node}, new Event('ping')), out]"),
+    );
     assert!(
         reported.borrow().is_empty(),
         "reported once the engine is idle"

@@ -92,10 +92,9 @@ fn a_drag_move_reports_the_delta(cx: &mut TestAppContext) {
     );
 }
 
-/// A window exit's `mouseleave` reports 0, and so does the first move after
-/// the pointer comes back.
+/// A window exit's `mouseleave` reports 0.
 #[gpui::test]
-fn a_window_exit_gives_mouseleave_zero_and_resets_the_next_move(cx: &mut TestAppContext) {
+fn a_window_exit_gives_mouseleave_zero_movement(cx: &mut TestAppContext) {
     let panes = build_panes(&["mouseleave"], &["mousemove"]);
     let mut cx = mount_panes(cx, &panes);
     move_to(&mut cx, 10.0, 10.0);
@@ -109,6 +108,21 @@ fn a_window_exit_gives_mouseleave_zero_and_resets_the_next_move(cx: &mut TestApp
         take_seen(&panes.engine),
         [seen_event("mouseleave", 0.0, 0.0)]
     );
+}
+
+/// The first move after the pointer comes back reports 0.
+#[gpui::test]
+fn the_first_move_after_a_window_exit_reports_zero_movement(cx: &mut TestAppContext) {
+    let panes = build_panes(&["mouseleave"], &["mousemove"]);
+    let mut cx = mount_panes(cx, &panes);
+    move_to(&mut cx, 10.0, 10.0);
+    take_seen(&panes.engine);
+
+    cx.simulate_event(MouseExitEvent {
+        position: point(px(10.0), px(10.0)),
+        ..Default::default()
+    });
+    take_seen(&panes.engine);
 
     move_to(&mut cx, 50.0, 80.0);
     assert_eq!(
@@ -117,10 +131,9 @@ fn a_window_exit_gives_mouseleave_zero_and_resets_the_next_move(cx: &mut TestApp
     );
 }
 
-/// `mousedown`, `mouseup` and `wheel` report 0 and leave the baseline where
-/// the last move put it, so the move that follows reports the full distance.
+/// A button or wheel event reports 0 movement.
 #[gpui::test]
-fn button_and_wheel_events_report_zero_and_keep_the_baseline(cx: &mut TestAppContext) {
+fn button_and_wheel_events_report_zero_movement(cx: &mut TestAppContext) {
     let panes = build_panes(&[], &["mousedown", "mouseup", "wheel", "mousemove"]);
     let mut cx = mount_panes(cx, &panes);
     move_to(&mut cx, 10.0, 10.0);
@@ -132,15 +145,34 @@ fn button_and_wheel_events_report_zero_and_keep_the_baseline(cx: &mut TestAppCon
     wheel_at(&mut cx, 30.0, 40.0);
     move_to(&mut cx, 30.0, 40.0);
 
+    let seen = take_seen(&panes.engine);
     assert_eq!(
-        take_seen(&panes.engine),
+        seen[..3],
         [
             seen_event("mousedown", 0.0, 0.0),
             seen_event("mouseup", 0.0, 0.0),
             seen_event("wheel", 0.0, 0.0),
-            seen_event("mousemove", 20.0, 30.0),
         ]
     );
+}
+
+/// A button or wheel event keeps the movement baseline, so the move that
+/// follows reports the full distance.
+#[gpui::test]
+fn button_and_wheel_events_keep_the_movement_baseline(cx: &mut TestAppContext) {
+    let panes = build_panes(&[], &["mousedown", "mouseup", "wheel", "mousemove"]);
+    let mut cx = mount_panes(cx, &panes);
+    move_to(&mut cx, 10.0, 10.0);
+    take_seen(&panes.engine);
+    let at = point(px(30.0), px(40.0));
+
+    cx.simulate_mouse_down(at, MouseButton::Left, Modifiers::none());
+    cx.simulate_mouse_up(at, MouseButton::Left, Modifiers::none());
+    wheel_at(&mut cx, 30.0, 40.0);
+    move_to(&mut cx, 30.0, 40.0);
+
+    let seen = take_seen(&panes.engine);
+    assert_eq!(seen[3], seen_event("mousemove", 20.0, 30.0));
 }
 
 /// The pointer tracker is a zero-size child: the root and its panes keep
