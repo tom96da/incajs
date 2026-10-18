@@ -1,6 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use gpui::Point;
+
 use super::parse::style_spec_from_props;
 use crate::tree::{AttributeValue, NodeId, VirtualNode, VirtualTree};
 
@@ -201,6 +203,36 @@ pub fn hidden_by_attribute(node: &VirtualNode) -> bool {
         && !node.style_props().contains_key("display")
 }
 
+/// The axes along which a wheel step can scroll `id` now. `None` when the node
+/// is unknown or not connected, or it or an ancestor has `display: none`, a hiding
+/// `hidden` attribute or `inert`. Otherwise an axis is `true` when its
+/// overflow is `scroll` or `auto`; a container with any other overflow gives
+/// `Some((false, false))`.
+#[must_use]
+pub fn wheel_axes(tree: &VirtualTree, id: NodeId) -> Option<Point<bool>> {
+    let node = tree.get(id)?;
+    if !tree.is_connected(id) {
+        return None;
+    }
+    let out = tree
+        .ancestors(id)
+        .filter_map(|id| tree.get(id))
+        .any(|node| {
+            hidden_by_attribute(node)
+                || node.attributes().contains_key("inert")
+                || style_spec_from_props(node.style_props()).display == Some(DisplaySpec::None)
+        });
+    if out {
+        return None;
+    }
+    let style = style_spec_from_props(node.style_props());
+    let scrolls = |axis| axis == Some(OverflowSpec::Scroll);
+    Some(Point {
+        x: scrolls(style.overflow_x),
+        y: scrolls(style.overflow_y),
+    })
+}
+
 fn build_spec_inner(tree: &VirtualTree, root: NodeId, inert_above: bool) -> Option<ElementSpec> {
     let node = tree.get(root)?;
     let inert = inert_above || node.attributes().contains_key("inert");
@@ -236,8 +268,25 @@ fn build_spec_inner(tree: &VirtualTree, root: NodeId, inert_above: bool) -> Opti
 mod tests {
     #![allow(clippy::unwrap_used)]
 
+    use rstest::rstest;
+
     use super::*;
     use crate::tree::VirtualTree;
+
+    /// A chain `[grandparent, parent, node]` rooted at the grandparent.
+    fn chain() -> (VirtualTree, [NodeId; 3]) {
+        let mut tree = VirtualTree::new();
+        let ids = ["div"; 3].map(|tag| tree.create_node(tag).unwrap());
+        tree.set_root(ids[0]);
+        tree.append_child(ids[0], ids[1]).unwrap();
+        tree.append_child(ids[1], ids[2]).unwrap();
+        (tree, ids)
+    }
+
+    /// `wheel_axes` with the axes as a tuple.
+    fn wheel(tree: &VirtualTree, id: NodeId) -> Option<(bool, bool)> {
+        wheel_axes(tree, id).map(|axes| (axes.x, axes.y))
+    }
 
     #[test]
     fn unknown_root_returns_none() {
@@ -308,6 +357,82 @@ mod tests {
         );
         // A subtree built from the child alone still sees the inert ancestor.
         assert_eq!(inerts(child), [(child, true)]);
+    }
+
+    #[rstest]
+    #[case::scroll_y(None, Some("scroll"), (false, true))]
+    #[case::scroll_x(Some("scroll"), None, (true, false))]
+    #[case::hidden(Some("hidden"), Some("hidden"), (false, false))]
+    fn wheel_axes_follow_the_scroll_overflow_of_each_axis(
+        #[case] overflow_x: Option<&str>,
+        #[case] overflow_y: Option<&str>,
+        #[case] want: (bool, bool),
+    ) {
+        let (mut tree, [_, _, node]) = chain();
+        for (key, value) in [("overflow_x", overflow_x), ("overflow_y", overflow_y)] {
+            if let Some(value) = value {
+                tree.set_style(node, key, value).unwrap();
+            }
+        }
+        assert_eq!(wheel(&tree, node), Some(want));
+    }
+
+    enum Where {
+        Own,
+        Parent,
+        Grandparent,
+    }
+
+    enum Hide {
+        DisplayNone,
+        HiddenAttribute,
+        Inert,
+    }
+
+    #[rstest]
+    #[case::own_display_none(Where::Own, Hide::DisplayNone)]
+    #[case::own_hidden_attribute(Where::Own, Hide::HiddenAttribute)]
+    #[case::own_inert(Where::Own, Hide::Inert)]
+    #[case::parent_display_none(Where::Parent, Hide::DisplayNone)]
+    #[case::parent_hidden_attribute(Where::Parent, Hide::HiddenAttribute)]
+    #[case::parent_inert(Where::Parent, Hide::Inert)]
+    #[case::grandparent_display_none(Where::Grandparent, Hide::DisplayNone)]
+    fn wheel_axes_is_none_for_a_hidden_or_inert_node(#[case] at: Where, #[case] hide: Hide) {
+        let (mut tree, [grandparent, parent, node]) = chain();
+        tree.set_style(node, "overflow", "scroll").unwrap();
+        let target = match at {
+            Where::Own => node,
+            Where::Parent => parent,
+            Where::Grandparent => grandparent,
+        };
+        match hide {
+            Hide::DisplayNone => tree.set_style(target, "display", "none").unwrap(),
+            Hide::HiddenAttribute => tree.set_attribute(target, "hidden", true).unwrap(),
+            Hide::Inert => tree.set_attribute(target, "inert", true).unwrap(),
+        }
+        assert_eq!(wheel(&tree, node), None);
+    }
+
+    #[test]
+    fn wheel_axes_is_none_for_an_unknown_node() {
+        assert_eq!(wheel(&VirtualTree::new(), 42), None);
+    }
+
+    #[test]
+    fn wheel_axes_is_none_for_a_detached_node() {
+        let (mut tree, [_, parent, node]) = chain();
+        tree.set_style(node, "overflow", "scroll").unwrap();
+        tree.remove_child(parent, node).unwrap();
+        assert_eq!(wheel(&tree, node), None);
+    }
+
+    #[test]
+    fn a_hidden_attribute_does_not_hide_a_node_whose_display_is_set() {
+        let (mut tree, [_, parent, node]) = chain();
+        tree.set_style(node, "overflow_y", "scroll").unwrap();
+        tree.set_attribute(parent, "hidden", true).unwrap();
+        tree.set_style(parent, "display", "flex").unwrap();
+        assert_eq!(wheel(&tree, node), Some((false, true)));
     }
 
     #[test]
