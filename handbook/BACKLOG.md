@@ -1312,9 +1312,9 @@ A fixed entry is deleted and its ID is never reused.
   which the repository lacks. Types generated into `.inca/`, like Nuxt's
   `.nuxt/`, would give every listener its event type and make a wrong
   annotation an error; that needs a stricter `E` constraint than the
-  unconstrained one of `EventListener`. Add the phase constants of `Event` (`NONE`,
-  `CAPTURING_PHASE`, `AT_TARGET`, `BUBBLING_PHASE`) to `IncaEvent` if
-  needed. Derive the `IncaEventMap` keys and `HANDLER_EVENTS` from one list of
+  unconstrained one of `EventListener`. `IncaEvent` lacks the phase constants
+  of `Event` (`NONE`, `CAPTURING_PHASE`, `AT_TARGET`, `BUBBLING_PHASE`).
+  Derive the `IncaEventMap` keys and `HANDLER_EVENTS` from one list of
   event names, so they cannot drift apart: the host dispatches 19 names, and
   the handler properties cover 17 of them. Delete the `IncaEvent` bullet under
   Base fields in `docs/reference/events.md` when per-kind types land.

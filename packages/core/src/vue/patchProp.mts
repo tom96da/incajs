@@ -311,8 +311,9 @@ const BOOLEAN_PRESENCE = new Set(["disabled", "hidden", "inert"]);
  * or an array of them. A falsy `nextValue` unbinds that key's listener. Any
  * other value keeps a listener that runs nothing, and a development build
  * warns about it. A nested array runs its functions. Any other entry that is
- * not a function runs nothing, and a development build warns about a truthy
- * one when the event fires.
+ * not a function runs nothing, and a development build warns about it when
+ * the event fires. A falsy entry of the array itself is skipped without a
+ * warning.
  * - Order: each distinct key (`onClick`, `onClickOnce`) is its own listener.
  *   Keys that share the event, phase and passivity run in the order first
  *   registered, a re-patch keeps its place, and the host sees one registration
