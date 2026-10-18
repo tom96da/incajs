@@ -1,6 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use rstest::rstest;
+
 use super::*;
 
 const GUIDE: &str = "\x1b[90m│ \x1b[39m";
@@ -250,4 +252,238 @@ fn every_color_in_every_method_is_closed_on_its_own_line() {
             assert!(balanced(line), "{line:?}");
         }
     }
+}
+
+fn styled(open: u8, text: &str) -> String {
+    format!("\x1b[{open}m{text}\x1b[39m")
+}
+
+#[rstest]
+#[case::red("red", 31)]
+#[case::green("green", 32)]
+#[case::yellow("yellow", 33)]
+#[case::blue("blue", 34)]
+#[case::magenta("magenta", 35)]
+#[case::cyan("cyan", 36)]
+#[case::black("black", 30)]
+#[case::white("white", 37)]
+#[case::gray("gray", 90)]
+#[case::grey("grey", 90)]
+fn a_named_color_applies_to_the_text_that_follows(#[case] name: &str, #[case] open: u8) {
+    assert_eq!(
+        colored_texts(&format!("console.log('%chi', 'color: {name}');")),
+        [styled(open, "hi")]
+    );
+}
+
+#[test]
+fn text_before_the_style_stays_plain() {
+    assert_eq!(
+        colored_texts("console.log('a%cb', 'color: red');"),
+        [format!("a{}", styled(31, "b"))]
+    );
+}
+
+#[rstest]
+#[case::two_colors("color: red; color: blue", 34)]
+#[case::other_property_between("color: red; margin: 0; color: green", 32)]
+#[case::unusable_last_value("color: red; color: #fff", 31)]
+#[case::invalid_flag_last("color: red; color: blue !importantx", 31)]
+fn the_last_usable_color_declaration_wins(#[case] css: &str, #[case] open: u8) {
+    assert_eq!(
+        colored_texts(&format!("console.log('%ca', {css:?});")),
+        [styled(open, "a")]
+    );
+}
+
+#[rstest]
+#[case::flag("color: red !important")]
+#[case::flag_without_space("color: red!important")]
+#[case::upper_case_flag("color: red !IMPORTANT")]
+#[case::spaced_flag("color: red ! important ;")]
+fn an_important_flag_after_the_value_is_accepted(#[case] css: &str) {
+    assert_eq!(
+        colored_texts(&format!("console.log('%ca', {css:?});")),
+        [styled(31, "a")]
+    );
+}
+
+#[rstest]
+#[case::padding("  color :  red  ;")]
+#[case::upper_case("COLOR: RED")]
+fn a_color_declaration_ignores_case_and_whitespace(#[case] css: &str) {
+    assert_eq!(
+        colored_texts(&format!("console.log('%ca', {css:?});")),
+        [styled(31, "a")]
+    );
+}
+
+#[test]
+fn a_style_covers_the_text_of_the_specifiers_after_it() {
+    assert_eq!(
+        colored_texts("console.log('%c%s!', 'color: red', 'x');"),
+        [styled(31, "x!")]
+    );
+}
+
+#[test]
+fn two_styles_make_two_spans() {
+    assert_eq!(
+        colored_texts("console.log('%ca%cb', 'color: red', 'color: blue');"),
+        [format!("{}{}", styled(31, "a"), styled(34, "b"))]
+    );
+}
+
+#[rstest]
+#[case::lower_o("%o")]
+#[case::upper_o("%O")]
+fn an_inspected_argument_inside_a_span_keeps_its_own_color(#[case] spec: &str) {
+    let lines = colored_texts(&format!("console.log('%cx{spec}y', 'color: red', 'q');"));
+
+    assert_eq!(
+        lines,
+        [format!(
+            "{}\x1b[32m'q'\x1b[39m{}",
+            styled(31, "x"),
+            styled(31, "y")
+        )]
+    );
+    assert!(balanced(&lines[0]));
+}
+
+#[test]
+fn a_style_is_closed_and_reopened_around_a_line_break() {
+    assert_eq!(
+        colored_texts("console.log('%ca\\nb', 'color: red');"),
+        [format!("{}\n{}", styled(31, "a"), styled(31, "b"))]
+    );
+}
+
+#[test]
+fn a_style_without_an_argument_stays_as_written() {
+    assert_eq!(
+        colored_texts("console.log('%cx %c', 'color: red');"),
+        [styled(31, "x %c")]
+    );
+}
+
+#[test]
+fn arguments_after_the_format_stay_outside_the_span() {
+    assert_eq!(
+        colored_texts("console.log('%cx', 'color: red', 1);"),
+        [format!("{} \x1b[33m1\x1b[39m", styled(31, "x"))]
+    );
+}
+
+#[test]
+fn a_debug_line_ignores_the_style() {
+    assert_eq!(
+        colored_texts("console.debug('%cx', 'color: red');"),
+        ["\x1b[90mx\x1b[39m"]
+    );
+}
+
+#[rstest]
+#[case::unknown_name("color: nope")]
+#[case::unknown_property("background: red")]
+#[case::no_colon("red")]
+#[case::empty_value("color:")]
+#[case::important_without_bang("color: red important")]
+#[case::flag_alone("color: !important")]
+#[case::double_bang("color: red !!important")]
+fn an_unusable_style_resets_the_color(#[case] css: &str) {
+    assert_eq!(
+        colored_texts(&format!("console.log('%ca%cb', 'color: red', {css:?});")),
+        [format!("{}b", styled(31, "a"))]
+    );
+}
+
+#[test]
+fn a_non_string_style_resets_the_color() {
+    assert_eq!(
+        colored_texts("console.log('%ca%cb', 'color: red', 5);"),
+        [format!("{}b", styled(31, "a"))]
+    );
+}
+
+#[test]
+fn a_style_stays_out_of_the_group_guides() {
+    assert_eq!(
+        colored_texts(
+            r"
+            console.group('g');
+            console.log('%ca\nb', 'color: red');
+            "
+        ),
+        [
+            "▼ g".to_owned(),
+            format!("{GUIDE}{}\n{GUIDE}{}", styled(31, "a"), styled(31, "b")),
+        ]
+    );
+}
+
+#[rstest]
+#[case::error("error", "\x1b[31m✖\x1b[39m ")]
+#[case::warn("warn", "\x1b[33m⚠\x1b[39m ")]
+#[case::info("info", "\x1b[34mℹ\x1b[39m ")]
+fn a_style_stays_out_of_the_level_symbol(#[case] method: &str, #[case] lead: &str) {
+    assert_eq!(
+        colored_texts(&format!("console.{method}('%ca', 'color: red');")),
+        [format!("{lead}{}", styled(31, "a"))]
+    );
+}
+
+#[test]
+fn a_style_stays_out_of_the_assertion_lead() {
+    assert_eq!(
+        colored_texts("console.assert(false, '%ca', 'color: red');"),
+        [format!(
+            "\x1b[31m✖\x1b[39m Assertion failed: {}",
+            styled(31, "a")
+        )]
+    );
+}
+
+#[test]
+fn a_style_stays_out_of_the_trace_lead() {
+    let text = &colored_texts("console.trace('%ca', 'color: red');")[0];
+
+    assert_eq!(
+        text.lines().next().unwrap(),
+        format!("Trace: {}", styled(31, "a"))
+    );
+}
+
+#[test]
+fn a_multi_byte_text_around_a_span_stays_whole() {
+    assert_eq!(
+        colored_texts("console.log('日本%c語%cx', 'color: red', '');"),
+        [format!("日本{}x", styled(31, "語"))]
+    );
+}
+
+#[test]
+fn a_double_percent_inside_a_span_is_painted() {
+    assert_eq!(
+        colored_texts("console.log('%cx%%y', 'color: red');"),
+        [styled(31, "x%y")]
+    );
+}
+
+#[test]
+fn a_style_at_the_end_opens_nothing() {
+    assert_eq!(colored_texts("console.log('a%c', 'color: red');"), ["a"]);
+}
+
+#[test]
+fn a_lone_style_prints_an_empty_line() {
+    assert_eq!(colored_texts("console.log('%c', 'color: red');"), [""]);
+}
+
+#[test]
+fn a_colored_conversion_keeps_its_color_inside_a_span() {
+    assert_eq!(
+        colored_texts("console.log('%c%s tail', 'color: red', Symbol('a'));"),
+        [format!("\x1b[32mSymbol(a)\x1b[39m{}", styled(31, " tail"))]
+    );
 }

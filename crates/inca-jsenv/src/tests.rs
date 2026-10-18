@@ -57,12 +57,14 @@ impl Drop for ScratchDir {
 pub(crate) fn strip(text: &str) -> String {
     let mut out = text.to_owned();
     for style in [
+        Style::Black,
         Style::Red,
         Style::Green,
         Style::Yellow,
         Style::Blue,
         Style::Magenta,
         Style::Cyan,
+        Style::White,
         Style::Bold,
         Style::Grey,
     ] {

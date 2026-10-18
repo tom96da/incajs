@@ -596,19 +596,19 @@ A fixed entry is deleted and its ID is never reused.
   `%o` follows Node with `showProxy` off, but leaves out the hidden
   properties of a function and of an `Error`, such as `[stack]` and
   `[message]`. Fix: list the non-enumerable own properties of a function and
-  of an `Error`. `%c` takes its argument and applies
-  no styling, and the Console Standard leaves `%c` undefined. Fix: map the CSS
-  properties `color`, `background-color`, `font-weight`, `font-style` and
-  `text-decoration` to terminal styles. A conversion that throws prints the
-  value as `dir` does, where the standard throws. A `Symbol` or a label whose
-  `toString` throws becomes the default label where the standard throws.
-  `time`, `timeLog` and `timeEnd` always print milliseconds. `dir` ignores its
-  `options`. `dirxml` formats like `log`. `clear` closes the open groups and
-  leaves the terminal as it is. `groupCollapsed` prints its lines like
-  `group`, since a terminal cannot fold them. `table` ignores a `columns`
-  argument that is not an array, and drops properties keyed by a `Symbol` and
-  a `Symbol` column name. `trace` reads its stack through the global `Error`,
-  which a script can replace.
+  of an `Error`. `%c` applies the `color` declaration only, with the basic
+  color names, and the Console Standard leaves `%c` undefined. Fix: map the
+  CSS properties `background-color`, `font-weight`, `font-style` and
+  `text-decoration` to terminal styles, and accept hex, `rgb()` and `hsl()`
+  values of `color`. A conversion that throws prints the value as `dir` does,
+  where the standard throws. A `Symbol` or a label whose `toString` throws
+  becomes the default label where the standard throws. `time`, `timeLog` and
+  `timeEnd` always print milliseconds. `dir` ignores its `options`. `dirxml`
+  formats like `log`. `clear` closes the open groups and leaves the terminal
+  as it is. `groupCollapsed` prints its lines like `group`, since a terminal
+  cannot fold them. `table` ignores a `columns` argument that is not an array,
+  and drops properties keyed by a `Symbol` and a `Symbol` column name. `trace`
+  reads its stack through the global `Error`, which a script can replace.
 
   Printed values differ from the standard in these ways:
 
@@ -1028,13 +1028,16 @@ A fixed entry is deleted and its ID is never reused.
   the `typeof window` checks of libraries. The `signal` option needs an
   `AbortController` in the runtime first.
 
-- **B-169 `console` prints a stack written in a string as plain text**
-  `Units: jsenv · Size: S · Impact: Low`
+- **B-169 The Vue warning trace prints in the text color**
+  `Units: core · Size: S · Impact: Low`
 
-  The frames of an `Error` value print dimmed. A stack that an app writes
-  into a string prints in the text color, such as the component trace of a
-  Vue warning (`at <App>`). Fix: dim a line of a string that starts with
-  `at `.
+  The frames of an `Error` value print dimmed. Vue writes the component trace
+  of a warning (`at <App>`) as plain string arguments of `console.warn`, so
+  the host cannot tell it from other text, and `inca-jsenv` must not know
+  Vue. Fix: the Vue adapter sets a default `app.config.warnHandler` that
+  receives the message and the trace as separate values and prints the trace
+  through `%c` with a gray `color`. The handler an app sets itself takes
+  precedence.
 
 - **B-170 The handles of a removed element are inert**
   `Units: core · Size: S · Impact: Low`

@@ -6,18 +6,21 @@
 use rquickjs::{Coerced, Ctx, Type, Value};
 
 use crate::inspect;
+use crate::paint::{Style, paint};
 
 /// Formats a call's arguments into the line it prints, applying the format
 /// specifiers of the first argument when it is a string.
 ///
 /// `%s`, `%d`/`%i`, `%f`, `%o`/`%O`, `%c` and `%%` are replaced; anything else
-/// stays as written. A conversion that throws prints the argument as
+/// stays as written. Substituted text is not scanned again. With `color` on,
+/// `%c` sets the color of the text after it from the `color` declaration of
+/// its argument. A conversion that throws prints the argument as
 /// `console.dir` shows it.
 pub(super) fn substitute(ctx: &Ctx<'_>, values: &[Value<'_>], color: bool) -> String {
     let Some((first, rest)) = values.split_first() else {
         return String::new();
     };
-    let Some(mut target) = first.as_string().and_then(|text| text.to_string().ok()) else {
+    let Some(target) = first.as_string().and_then(|text| text.to_string().ok()) else {
         return inspect::line(values, color);
     };
     if rest.is_empty() {
@@ -25,27 +28,126 @@ pub(super) fn substitute(ctx: &Ctx<'_>, values: &[Value<'_>], color: bool) -> St
     }
 
     let mut args = rest.iter();
+    let mut spans = Spans::new(target.len());
     let mut at = 0;
     while let Some((pos, spec)) = next_specifier(&target, at) {
+        spans.text(&target[at..pos]);
+        at = pos + 2;
         if spec == b'%' {
-            target.replace_range(pos..pos + 2, "%");
-            at = pos + 1;
-            continue;
+            spans.text("%");
+        } else if let Some(arg) = args.next() {
+            if spec == b'c' {
+                if color {
+                    spans.restyle(
+                        arg.as_string()
+                            .and_then(|css| css_color(&css.to_string().ok()?)),
+                    );
+                }
+            } else {
+                let (text, colored) = convert(ctx, spec, arg, color);
+                spans.value(&text, colored);
+            }
+        } else {
+            spans.text(&target[pos..at]);
         }
-        let Some(arg) = args.next() else {
-            at = pos + 2;
-            continue;
-        };
-        target.replace_range(pos..pos + 2, &convert(ctx, spec, arg, color));
-        at = pos;
     }
+    spans.text(&target[at..]);
+    let formatted = spans.finish();
 
     let rest = args.as_slice();
     if rest.is_empty() {
-        target
+        formatted
     } else {
-        format!("{target} {}", inspect::line(rest, color))
+        format!("{formatted} {}", inspect::line(rest, color))
     }
+}
+
+/// The output of a format string, with the text of the active `%c` color
+/// painted.
+struct Spans {
+    out: String,
+    pending: String,
+    style: Option<Style>,
+}
+
+impl Spans {
+    /// An empty output with room for `capacity` bytes.
+    fn new(capacity: usize) -> Self {
+        Self {
+            out: String::with_capacity(capacity),
+            pending: String::new(),
+            style: None,
+        }
+    }
+
+    /// Plain text, painted when a color is active.
+    fn text(&mut self, text: &str) {
+        match self.style {
+            Some(_) => self.pending.push_str(text),
+            None => self.out.push_str(text),
+        }
+    }
+
+    /// A converted value. Colored text keeps its own colors, so the span is
+    /// closed around it.
+    fn value(&mut self, text: &str, colored: bool) {
+        if colored {
+            self.flush();
+            self.out.push_str(text);
+        } else {
+            self.text(text);
+        }
+    }
+
+    /// Ends the current span and starts one in `style`, or none.
+    fn restyle(&mut self, style: Option<Style>) {
+        self.flush();
+        self.style = style;
+    }
+
+    /// Paints the pending text of the active span into the output.
+    fn flush(&mut self) {
+        if let Some(style) = self.style {
+            self.out.push_str(&paint(true, style, &self.pending));
+            self.pending.clear();
+        }
+    }
+
+    /// Closes the open span and returns the output.
+    fn finish(mut self) -> String {
+        self.flush();
+        self.out
+    }
+}
+
+/// The color of the last `color` declaration in `css` that names a basic
+/// color. Hex, `rgb()` and `hsl()` values are ignored.
+fn css_color(css: &str) -> Option<Style> {
+    css.split(';')
+        .filter_map(|declaration| {
+            let (name, value) = declaration.split_once(':')?;
+            if !name.trim().eq_ignore_ascii_case("color") {
+                return None;
+            }
+            let value = value.trim().to_ascii_lowercase();
+            let name = value
+                .strip_suffix("important")
+                .and_then(|rest| rest.trim_end().strip_suffix('!'))
+                .map_or(value.as_str(), str::trim_end);
+            match name {
+                "black" => Some(Style::Black),
+                "red" => Some(Style::Red),
+                "green" => Some(Style::Green),
+                "yellow" => Some(Style::Yellow),
+                "blue" => Some(Style::Blue),
+                "magenta" => Some(Style::Magenta),
+                "cyan" => Some(Style::Cyan),
+                "white" => Some(Style::White),
+                "gray" | "grey" => Some(Style::Grey),
+                _ => None,
+            }
+        })
+        .next_back()
 }
 
 fn next_specifier(target: &str, from: usize) -> Option<(usize, u8)> {
@@ -61,7 +163,8 @@ fn next_specifier(target: &str, from: usize) -> Option<(usize, u8)> {
     None
 }
 
-fn convert(ctx: &Ctx<'_>, spec: u8, arg: &Value<'_>, color: bool) -> String {
+/// The text of `arg` under `spec`, and whether it carries color sequences.
+fn convert(ctx: &Ctx<'_>, spec: u8, arg: &Value<'_>, color: bool) -> (String, bool) {
     // A proxy converts as its target. A revoked one has none and converts as
     // a symbol does, which has no string form either.
     let target = inspect::unproxied(arg);
@@ -70,18 +173,22 @@ fn convert(ctx: &Ctx<'_>, spec: u8, arg: &Value<'_>, color: bool) -> String {
     let negative_zero = arg
         .as_number()
         .is_some_and(|number| number.to_bits() == (-0.0_f64).to_bits());
-    let converted = match spec {
-        b'c' => Some(String::new()),
-        b's' | b'd' if negative_zero => Some("-0".to_owned()),
+    let inspected = match spec {
         b'o' => Some(inspect::detailed(arg, color)),
         b'O' => Some(inspect::quoted(arg, color)),
-        b's' if symbol => Some(inspect::quoted(arg, color)),
+        _ => None,
+    };
+    if let Some(text) = inspected {
+        return (text, true);
+    }
+    let converted = match spec {
+        b's' | b'd' if negative_zero => Some("-0".to_owned()),
         b's' => string_of(ctx, arg),
         _ if symbol => Some("NaN".to_owned()),
         b'f' => string_of(ctx, arg).map(|text| number_text(ctx, parse_float(&text))),
         _ => string_of(ctx, arg).map(|text| number_text(ctx, parse_int(&text))),
     };
-    converted.unwrap_or_else(|| inspect::quoted(arg, color))
+    converted.map_or_else(|| (inspect::quoted(arg, color), true), |text| (text, false))
 }
 
 fn string_of(ctx: &Ctx<'_>, arg: &Value<'_>) -> Option<String> {
@@ -463,14 +570,12 @@ mod tests {
         );
     }
 
-    #[test]
-    fn c_takes_its_argument_and_prints_nothing() {
-        assert_eq!(formatted("['a%cb', 'color: red']"), "ab");
-        assert_eq!(
-            formatted("['%cstyled%c', 'color: red', '', 'tail']"),
-            "styled tail"
-        );
-        assert_eq!(formatted("['%c', 'color: red']"), "");
+    #[rstest]
+    #[case::between_text("['a%cb', 'color: red']", "ab")]
+    #[case::reset("['%cstyled%c', 'color: red', '', 'tail']", "styled tail")]
+    #[case::alone("['%c', 'color: red']", "")]
+    fn c_prints_nothing_with_color_off(#[case] args: &str, #[case] shown: &str) {
+        assert_eq!(formatted(args), shown);
     }
 
     #[test]
@@ -523,13 +628,12 @@ mod tests {
         assert_eq!(formatted("['%d%%, %s', 50, 'ok']"), "50%, ok");
     }
 
-    #[test]
-    fn substituted_text_is_scanned_for_the_next_specifier() {
-        assert_eq!(formatted("['%s %s', '%d', 5]"), "5 %s");
-        assert_eq!(formatted("['%s %s', '%s', 'x']"), "x %s");
-        assert_eq!(formatted("['%s', '%d']"), "%d");
-        assert_eq!(formatted("['%s', '%s', 'b']"), "b");
-        assert_eq!(formatted("['%s %s', '%%', 'x']"), "% x");
+    #[rstest]
+    #[case::s("['%s %s', '%s', 'x']", "%s x")]
+    #[case::percent("['%s %s', '%%', 'x']", "%% x")]
+    #[case::inspected("['%o %s', '%s', 'x']", "'%s' x")]
+    fn substituted_text_is_not_scanned_again(#[case] args: &str, #[case] shown: &str) {
+        assert_eq!(formatted(args), shown);
     }
 
     #[test]

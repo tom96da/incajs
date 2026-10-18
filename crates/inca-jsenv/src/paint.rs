@@ -6,12 +6,14 @@
 /// A color or weight, with the codes that open and close it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Style {
+    Black,
     Red,
     Green,
     Yellow,
     Blue,
     Magenta,
     Cyan,
+    White,
     Bold,
     Grey,
 }
@@ -19,12 +21,14 @@ pub(crate) enum Style {
 impl Style {
     pub(crate) fn codes(self) -> (u8, u8) {
         match self {
+            Style::Black => (30, 39),
             Style::Red => (31, 39),
             Style::Green => (32, 39),
             Style::Yellow => (33, 39),
             Style::Blue => (34, 39),
             Style::Magenta => (35, 39),
             Style::Cyan => (36, 39),
+            Style::White => (37, 39),
             Style::Bold => (1, 22),
             Style::Grey => (90, 39),
         }
@@ -56,12 +60,14 @@ mod tests {
     use rstest::rstest;
 
     #[rstest]
+    #[case::black(Style::Black, 30, 39)]
     #[case::red(Style::Red, 31, 39)]
     #[case::green(Style::Green, 32, 39)]
     #[case::yellow(Style::Yellow, 33, 39)]
     #[case::blue(Style::Blue, 34, 39)]
     #[case::magenta(Style::Magenta, 35, 39)]
     #[case::cyan(Style::Cyan, 36, 39)]
+    #[case::white(Style::White, 37, 39)]
     #[case::bold(Style::Bold, 1, 22)]
     #[case::grey(Style::Grey, 90, 39)]
     fn each_style_opens_and_closes_with_its_own_codes(

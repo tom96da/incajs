@@ -46,7 +46,7 @@ specifiers take the next argument:
 | `%f` | The decimal number at the start of the argument, or `NaN` |
 | `%o` | The argument nested up to four levels, with non-enumerable own properties in square brackets, as `[length]: 3` |
 | `%O` | The argument as `console.dir` prints it |
-| `%c` | Nothing. Takes its argument |
+| `%c` | Takes its argument. Colors the text after it, see [Differences from Node](#differences-from-node) |
 | `%%` | A `%` |
 
 ```js
@@ -105,6 +105,14 @@ type as in Node. These environment variables override the terminal check:
 
 - `%d` and `%i` parse an integer where Node converts the whole value to a
   number. `%s` prints an object's string form where Node inspects it.
+- `%c` applies the `color` declaration of its argument to the text after it,
+  up to the next `%c`, when color is on. With color off it prints nothing.
+  The values are `black`, `red`, `green`, `yellow`, `blue`, `magenta`,
+  `cyan`, `white`, `gray` and `grey`, optionally followed by `!important`.
+  Hex, `rgb()`, `hsl()` and every other property are ignored, and an argument
+  with no usable color ends the span. Arguments after the format string keep
+  their own colors, as do `%o`, `%O`, a Symbol under `%s` and a conversion
+  that throws, which print as `console.dir` does. `console.debug` ignores it.
 
 ## Known issues
 
@@ -116,5 +124,4 @@ type as in Node. These environment variables override the terminal check:
 - A `Date`, `RegExp`, `Map` or `Set` prints like Node, but properties
   added to it and the name of a subclass are left out.
 - A string inside an array or object is always single-quoted.
-- `%c` drops its styling.
 - Timers always print milliseconds.
