@@ -979,8 +979,9 @@ A fixed entry is deleted and its ID is never reused.
   `Units: core,bridge,docs · Size: M · Impact: Low`
 
   `window` is a named export of `incajs` with `addEventListener()`,
-  `removeEventListener()` and `dispatchEvent()` as its only members. The
-  globals `window` and `document` are undefined, and the `signal` option of
+  `removeEventListener()` and `dispatchEvent()` as its only members, so it
+  lacks the handler properties such as `onkeydown`. The globals
+  `window` and `document` are undefined, and the `signal` option of
   `addEventListener()` is unsupported. `composedPath()` ends at `window` and
   has no `document`. Activating or leaving the window fires `focus` and `blur`
   at the focused node only, where browsers also fire them at `window`. Fix:
@@ -1004,11 +1005,11 @@ A fixed entry is deleted and its ID is never reused.
 
   Vue destroys a node on unmount, and the host frees a detached node that
   nothing holds. Listeners registered before are released,
-  `addEventListener()` afterwards ignores the listener, `dispatchEvent()`
-  returns `true` and skips the argument check, `tabIndex` reads the default and
-  `id` reads an empty string. A browser keeps the listeners and the attribute
-  of a detached element. Fix: keep a destroyed node as a detached element in
-  the host tree.
+  `addEventListener()` afterwards ignores the listener, an assignment to a
+  handler property does nothing, `dispatchEvent()` returns `true` and skips
+  the argument check, `tabIndex` reads the default and `id` reads an empty
+  string. A browser keeps the listeners and the attribute of a detached
+  element. Fix: keep a destroyed node as a detached element in the host tree.
 
 - **B-171 A frozen event cannot be dispatched again**
   `Units: bridge,docs · Size: M · Impact: Low`
@@ -1259,3 +1260,10 @@ A fixed entry is deleted and its ID is never reused.
   and WebKit do. With a listener on the document all three engines give the
   step to the inner container. Fix: none until Chromium's rule is specified;
   it varies with the listener position and layout.
+
+- **B-207 An event handler attribute runs nothing**
+  `Units: core · Size: L · Impact: Low`
+
+  An attribute that holds code, such as `onclick="count++"`, stays a plain
+  attribute and runs nothing, where a browser compiles it into the element's
+  handler. Fix: needs a decision on running code from strings.

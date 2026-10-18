@@ -9,6 +9,7 @@ import * as rendererCore from "../rendererCore.mts";
 import { createNodeOps } from "./nodeOps.mts";
 import { createPatchProp } from "./patchProp.mts";
 import type {
+  EventHandlers,
   EventLike,
   IncaCore,
   IncaElement,
@@ -41,7 +42,11 @@ const patchProp = createPatchProp(core);
 
 const BUBBLE = { capture: false, passive: false };
 
+/** The handler properties, absent: nothing here reads them. */
+const noHandlers = {} as EventHandlers;
+
 const makeEl = (): IncaElement => ({
+  ...noHandlers,
   __node_id: 1,
   id: "",
   kind: "element",

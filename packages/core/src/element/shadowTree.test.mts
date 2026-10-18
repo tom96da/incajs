@@ -8,7 +8,7 @@ import { rectOf } from "./geometry.mts";
 import { elementOf, unregisterElement } from "./lifecycle.mts";
 import * as tree from "./shadowTree.mts";
 import type { EventLike, IncaEventTarget } from "../types.mts";
-import type { IncaElement, IncaText } from "./types.mts";
+import type { EventHandlers, IncaElement, IncaText } from "./types.mts";
 
 let nextId = 1;
 
@@ -85,8 +85,12 @@ beforeEach(() => {
   vi.mocked(host.createNode).mockImplementation(() => nextId++);
 });
 
+/** The handler properties, absent: nothing here reads them. */
+const noHandlers = {} as EventHandlers;
+
 function element(): IncaElement {
   return {
+    ...noHandlers,
     __node_id: nextId++,
     id: "",
     kind: "element",

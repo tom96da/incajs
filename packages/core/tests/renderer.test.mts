@@ -9,7 +9,11 @@ import { blur, click, focus } from "../src/events.mts";
 import { createEventTarget } from "../src/eventTarget.mts";
 import { createNode } from "../src/tree.mts";
 import { createIncaApp } from "../src/vue/index.mts";
+import type { EventHandlers } from "../src/element/types.mts";
 import type { IncaElement, NodeId } from "../src/index.mts";
+
+/** The handler properties, absent: nothing here reads them. */
+const noHandlers = {} as EventHandlers;
 
 /**
  * What the fake host knows of each registration beyond its node and event.
@@ -199,6 +203,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
     delete (globalThis as { __inca_callbacks__?: unknown }).__inca_callbacks__;
     const rootId = createNode("root");
     root = {
+      ...noHandlers,
       __node_id: rootId,
       id: "",
       kind: "element",

@@ -27,8 +27,10 @@ have `addEventListener()`, `removeEventListener()` and `dispatchEvent()`.
 - `composedPath()` lists the app's elements, then `window`, with no `body`,
   `html` or `document`. `document` is unsupported.
 - The `signal` option of `addEventListener()` is unsupported.
-- The ref of an unmounted element ignores `addEventListener()`, and
-  `dispatchEvent()` returns `true`.
+- The ref of an unmounted element ignores `addEventListener()` and an
+  assignment to a handler property, and `dispatchEvent()` returns `true`.
+- An attribute that holds code, such as `onclick="count++"`, runs nothing.
+- `window` has no handler properties such as `onkeydown`.
 
 ## Event modifiers
 

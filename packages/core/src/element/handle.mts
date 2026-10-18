@@ -4,18 +4,19 @@
 import { blur, click, focus } from "../events.mts";
 import { createEventTarget } from "../eventTarget.mts";
 import { focusedNode, getAttribute, scrollIntoViewNode, scrollOf, setAttribute } from "../tree.mts";
+import { withEventHandlers } from "./eventHandlers.mts";
 import { layoutBox, offsetOf, offsetParentOf, rectOf, tabIndexOf } from "./geometry.mts";
 import { elementOf, isDestroyed, isNode, registerElement, withNodeId } from "./lifecycle.mts";
 import { scrollIntoViewArgs, scrollPosition } from "./scroll.mts";
 import type { NodeId, TagName } from "../types.mts";
 import type { ScrollArgs, ScrollIntoViewOptions } from "./scroll.mts";
-import type { IncaElement, IncaNode } from "./types.mts";
+import type { EventHandlers, IncaElement, IncaNode } from "./types.mts";
 
 /**
  * Builds the {@link IncaElement} handle for a native node: parentless,
  * childless, with `id`, `focus()`, `blur()`, `click()`, `contains()`, the
- * listener methods of an event target, `tabIndex` and the layout members, all
- * driven through the host.
+ * listener methods of an event target, `tabIndex`, the layout members and the
+ * event handler properties, all driven through the host.
  * @param id - the native node's id
  * @param kind - whether the node is an element or a comment stand-in
  * @param tag - the node's element kind, if it has one; a `button` defaults to tab index `0`
@@ -28,7 +29,7 @@ export function createIncaElement(
 ): IncaElement {
   const target = createEventTarget(() => id);
   const scroll = () => (isDestroyed(element) ? null : scrollOf(id));
-  const fields: Omit<IncaElement, "__node_id"> = {
+  const fields: Omit<IncaElement, "__node_id" | keyof EventHandlers> = {
     get id() {
       return isDestroyed(element) ? "" : String(getAttribute(id, "id") ?? "");
     },
@@ -125,7 +126,9 @@ export function createIncaElement(
       scrollIntoViewNode(id, block, inline);
     },
   };
-  const element: IncaElement = withNodeId(fields, id);
+  const element: IncaElement = withEventHandlers(withNodeId(fields, id), () =>
+    isDestroyed(element),
+  );
   if (kind === "element") registerElement(element);
   return element;
 }

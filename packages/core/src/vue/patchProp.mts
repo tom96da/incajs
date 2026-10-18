@@ -14,6 +14,9 @@ import type { EventListener, IncaCore, IncaElement, ListenerOptions } from "../r
 /** Whether a prop names an event listener (Vue's `isOn`). */
 const isOn = (key: string): boolean => /^on[^a-z]/.test(key);
 
+/** Whether a prop could be an element's handler property, such as `onclick`. */
+const isNativeOn = (key: string): boolean => /^on[a-z]/.test(key);
+
 /**
  * The suffix Vue's SFC compiler appends per event modifier: `@click.once`
  * becomes `onClickOnce`, `@click.once.capture` becomes `onClickOnceCapture`.
@@ -340,6 +343,12 @@ const BOOLEAN_PRESENCE = new Set(["disabled", "hidden", "inert"]);
  *   development build warns and raises it to the host's error report, once
  *   per failing handler.
  *
+ * ### `onxxx`
+ *
+ * A lowercase key that names a handler property of the element, such as
+ * `onclick`, assigns `nextValue` to that property. A string `nextValue`
+ * clears the property and goes to `core.setAttribute` like other props.
+ *
  * ### Other props
  *
  * A string, number or boolean `nextValue` goes to `core.setAttribute` as it
@@ -369,6 +378,13 @@ export function createPatchProp(
       patchStyle(core, el, nextValue);
     } else if (isOn(key)) {
       patchEvent(core, el, key, nextValue, parentComponent ?? null);
+    } else if (isNativeOn(key) && key in el) {
+      if (typeof nextValue === "string") {
+        Reflect.set(el, key, null);
+        core.setAttribute(el.__node_id, key, nextValue);
+      } else {
+        Reflect.set(el, key, nextValue);
+      }
     } else if (BOOLEAN_PRESENCE.has(key) && nextValue === false) {
       core.removeAttribute(el.__node_id, key);
     } else if (
