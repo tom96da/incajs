@@ -49,17 +49,7 @@ fn append_child<'js>(
     host: Rc<RefCell<Host>>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, JsNodeId) -> JsResult<()> {
     move |ctx, JsNodeId(parent_id), JsNodeId(child_id)| {
-        let mut host = host.borrow_mut();
-        refuse_root(&ctx, &host, child_id, "moved")?;
-        let attached = is_attached(&host, child_id);
-        host.tree
-            .append_child(parent_id, child_id)
-            .map_err(|err| throw_tree_error(&ctx, err))?;
-        if attached {
-            drop_focus(&mut host, child_id);
-        }
-        mark_focus_dirty(&mut host, child_id);
-        Ok(())
+        insert_child(&ctx, &mut host.borrow_mut(), parent_id, child_id, None)
     }
 }
 
@@ -67,18 +57,30 @@ fn insert_before<'js>(
     host: Rc<RefCell<Host>>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, JsNodeId, Option<JsNodeId>) -> JsResult<()> {
     move |ctx, JsNodeId(parent_id), JsNodeId(child_id), anchor_id| {
-        let mut host = host.borrow_mut();
-        refuse_root(&ctx, &host, child_id, "moved")?;
-        let attached = is_attached(&host, child_id);
-        host.tree
-            .insert_before(parent_id, child_id, anchor_id.map(|JsNodeId(id)| id))
-            .map_err(|err| throw_tree_error(&ctx, err))?;
-        if attached {
-            drop_focus(&mut host, child_id);
-        }
-        mark_focus_dirty(&mut host, child_id);
-        Ok(())
+        let anchor_id = anchor_id.map(|JsNodeId(id)| id);
+        insert_child(&ctx, &mut host.borrow_mut(), parent_id, child_id, anchor_id)
     }
+}
+
+/// Inserts `child_id` under `parent_id` before `anchor_id`, or last without one, and queues
+/// its focus re-check. A moved attached node drops the focus it held.
+fn insert_child(
+    ctx: &Ctx<'_>,
+    host: &mut Host,
+    parent_id: NodeId,
+    child_id: NodeId,
+    anchor_id: Option<NodeId>,
+) -> JsResult<()> {
+    refuse_root(ctx, host, child_id, "moved")?;
+    let attached = is_attached(host, child_id);
+    host.tree
+        .insert_before(parent_id, child_id, anchor_id)
+        .map_err(|err| throw_tree_error(ctx, err))?;
+    if attached {
+        drop_focus(host, child_id);
+    }
+    mark_focus_dirty(host, child_id);
+    Ok(())
 }
 
 fn remove_child<'js>(

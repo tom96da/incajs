@@ -6,13 +6,13 @@ use rquickjs::atom::PredefinedAtom;
 use rquickjs::convert::Coerced;
 use rquickjs::function::{Constructor, IntoJsFunc, ParamRequirement, Params};
 use rquickjs::object::Property;
-use rquickjs::{Array, Ctx, Exception, IntoJs, Null, Object, Result as JsResult, Value};
+use rquickjs::{Array, Ctx, Exception, Null, Object, Result as JsResult, Value};
 
 use super::payload::set_payload;
 use super::walk::Walk;
 use super::{
-    Flags, KEYBOARD_PROTOTYPE, MOUSE_PROTOTYPE, PHASES, PROTOTYPE, REMEMBER, function_slot, slot,
-    target_at, targets_of, time_stamp,
+    Flags, KEYBOARD_PROTOTYPE, MOUSE_PROTOTYPE, PHASES, PROTOTYPE, REMEMBER, function_slot,
+    path_value, slot, target_at, targets_of, time_stamp,
 };
 use crate::bindings::convert::or_null;
 
@@ -82,8 +82,7 @@ pub(super) fn create<'js>(
         prototype_slot(walk.payload),
     )?;
     record.set("dispatching", true)?;
-    let listed = targets.map_or_else(|| walk.path.into_js(ctx), |t| Ok(t.clone().into_value()))?;
-    record.set("path", listed)?;
+    record.set("path", path_value(ctx, targets, walk.path)?)?;
     event.set("target", target_at(ctx, targets, 0, walk.target)?)?;
     set_payload(&event, walk.payload)?;
     if let Some(related) = related_of(walk.payload)

@@ -130,6 +130,18 @@ fn target_at<'js>(
     }
 }
 
+/// What stands for the whole of `path`: `targets`, or the node ids.
+fn path_value<'js>(
+    ctx: &Ctx<'js>,
+    targets: Option<&Array<'js>>,
+    path: &[NodeId],
+) -> JsResult<Value<'js>> {
+    match targets {
+        Some(targets) => Ok(targets.clone().into_value()),
+        None => path.into_js(ctx),
+    }
+}
+
 fn slot<'js>(ctx: &Ctx<'js>, index: usize) -> JsResult<Value<'js>> {
     install(ctx)?;
     ctx.userdata::<Slots>()

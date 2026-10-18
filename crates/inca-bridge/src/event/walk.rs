@@ -6,10 +6,10 @@ use std::rc::Rc;
 
 use inca_gpui::{EventPayload, MousePayload, NodeId};
 use inca_jsenv::{Engine, EngineError};
-use rquickjs::{Array, Ctx, Exception, Function, IntoJs, Null, Object, Result as JsResult, Value};
+use rquickjs::{Array, Ctx, Exception, Function, Null, Object, Result as JsResult, Value};
 
 use super::construct::create;
-use super::{Flags, find_record, flag, target_at, targets_of};
+use super::{Flags, find_record, flag, path_value, target_at, targets_of};
 use crate::bindings::{Host, Listener};
 
 /// What one walk needs to know.
@@ -285,10 +285,7 @@ pub(crate) fn dispatch_event<'js>(
             .get::<_, Object>("__inca_callbacks__")
             .or_else(|_| Object::new(ctx.clone()))?;
         event.set("eventId", next_event_id(host))?;
-        let listed = targets
-            .as_ref()
-            .map_or_else(|| walk.path.into_js(ctx), |t| Ok(t.clone().into_value()))?;
-        record.set("path", listed)?;
+        record.set("path", path_value(ctx, targets.as_ref(), walk.path)?)?;
         // Last, so a failure above leaves the event free to dispatch again.
         record.set("dispatching", true)?;
         deliver(
