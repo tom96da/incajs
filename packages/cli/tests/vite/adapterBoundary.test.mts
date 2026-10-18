@@ -6,7 +6,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-const adapterDir = path.join(import.meta.dirname, "../../../src/vite");
+const adapterDir = path.join(import.meta.dirname, "../../src/vite");
 const CONTRACT = [path.resolve(adapterDir, "../adapterCore.mts")];
 const SOURCE = /\.(?:mts|ts|mjs|js)$/;
 const IS_TEST = /\.test\.[^.]+$/;

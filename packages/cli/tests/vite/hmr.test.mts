@@ -13,11 +13,11 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import type { HotPayload } from "vite";
 import type { ModuleRunnerTransport } from "vite/module-runner";
 
-import * as adapterCore from "../../../src/adapterCore.mts";
-import { createViteBundler } from "../../../src/vite/index.mts";
-import packageViteConfig from "../../../vite.config.mts";
+import * as adapterCore from "../../src/adapterCore.mts";
+import { createViteBundler } from "../../src/vite/index.mts";
+import packageViteConfig from "../../vite.config.mts";
 import { scratchApp, TEST_RUNTIME_MODULE } from "./scratchApp.mts";
-import type { HmrChannel, HmrOptions } from "../../../src/types.mts";
+import type { HmrChannel, HmrOptions } from "../../src/types.mts";
 
 const { setUp, tearDown, makeApp } = scratchApp("hmr");
 

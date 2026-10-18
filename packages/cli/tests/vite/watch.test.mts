@@ -6,10 +6,10 @@ import path from "node:path";
 
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import * as adapterCore from "../../../src/adapterCore.mts";
-import { createViteBundler } from "../../../src/vite/index.mts";
+import * as adapterCore from "../../src/adapterCore.mts";
+import { createViteBundler } from "../../src/vite/index.mts";
 import { scratchApp, TEST_RUNTIME_MODULE } from "./scratchApp.mts";
-import type { BuildOutput, Bundler, Watcher } from "../../../src/types.mts";
+import type { BuildOutput, Bundler, Watcher } from "../../src/types.mts";
 
 const vite = createViteBundler(adapterCore, TEST_RUNTIME_MODULE);
 const watch: Bundler["watch"] = (options) => vite.watch(options);

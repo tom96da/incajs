@@ -7,7 +7,7 @@ import path from "node:path";
 /**
  * A scratch-app scaffold scoped to its own directory under `tests/tmp/`
  * (gitignored) rather than a real OS tmpdir. It mirrors
- * `tests/adapter/vite/scratchApp.mts`, but for config-loading tests: an app
+ * `tests/vite/scratchApp.mts`, but for config-loading tests: an app
  * here needs to resolve `@incajs/cli/config` from a real file on disk, which
  * an OS tmpdir can't do. Each caller gets its own `name` so concurrently
  * running test files never race on the same directory.
