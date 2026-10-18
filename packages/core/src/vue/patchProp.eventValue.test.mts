@@ -51,7 +51,7 @@ describe("onXxx values", () => {
   });
 
   it("keeps a no-op listener when a function turns into a string", () => {
-    const fn = vi.fn();
+    const fn = vi.fn<() => void>();
     patchProp(el, "onClick", null, fn, undefined, null);
     patchProp(el, "onClick", fn, "count++", undefined, null);
     registered()();
@@ -76,7 +76,7 @@ describe("onXxx values", () => {
   });
 
   it("skips a null array entry without a warning", () => {
-    const handler = vi.fn();
+    const handler = vi.fn<() => void>();
     patchProp(el, "onClick", null, [null, handler], undefined, null);
     registered()();
 
@@ -85,7 +85,7 @@ describe("onXxx values", () => {
   });
 
   it("runs the functions of a nested array", () => {
-    const handler = vi.fn();
+    const handler = vi.fn<() => void>();
     patchProp(el, "onClick", null, [[handler]], undefined, null);
     registered()();
 
@@ -93,7 +93,7 @@ describe("onXxx values", () => {
   });
 
   it("warns at dispatch about an array entry that is not a function", () => {
-    const handler = vi.fn();
+    const handler = vi.fn<() => void>();
     patchProp(el, "onClick", null, ["x", handler], undefined, null);
     registered()();
 
