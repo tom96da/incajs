@@ -4,17 +4,15 @@
 import {
   callWithAsyncErrorHandling,
   ErrorCodes,
+  warn,
   type ComponentInternalInstance,
   type RendererOptions,
 } from "@vue/runtime-core";
 
 import type { EventListener, IncaCore, IncaElement, ListenerOptions } from "../rendererCore.mts";
 
-/**
- * Whether a prop is a native event. `onUpdate:modelValue` and the like are
- * component events, never native ones.
- */
-const isOn = (key: string): boolean => /^on[^a-z]/.test(key) && !key.startsWith("onUpdate:");
+/** Whether a prop names an event listener (Vue's `isOn`). */
+const isOn = (key: string): boolean => /^on[^a-z]/.test(key);
 
 /**
  * The suffix Vue's SFC compiler appends per event modifier: `@click.once`
@@ -90,13 +88,23 @@ function patchStyle(core: IncaCore, el: IncaElement, nextValue: unknown): void {
   }
 }
 
-// `@vue/runtime-core` types an `onXxx` prop as `Function | Function[]`, so
-// several handlers can arrive for one event.
-function asHandlers(value: unknown): EventListener[] | null {
-  const handlers = (Array.isArray(value) ? value : [value]).filter(
-    (entry): entry is EventListener => typeof entry === "function",
+/**
+ * The handlers an `onXxx` value holds, or `null` for a falsy value, which unbinds the key. Any
+ * other value that is neither a function nor an array holds none, and a development build warns.
+ * @param value - the value of the prop
+ * @param rawKey - the prop name, for the warning
+ * @returns the handlers, or `null` to unbind
+ */
+function asHandlers(value: unknown, rawKey: string): unknown[] | null {
+  if (!value) return null;
+  if (typeof value === "function") return [value];
+  if (Array.isArray(value)) return value.slice();
+  warn(
+    `Wrong type passed as event handler to ${rawKey} - did you forget @ or : ` +
+      "in front of your prop?\n" +
+      `Expected function or array of functions, received type ${typeof value}.`,
   );
-  return handlers.length === 0 ? null : handlers;
+  return [];
 }
 
 // Runs `body` with the event's `stopImmediatePropagation` wrapped to raise a
@@ -131,7 +139,7 @@ function guardStop(args: unknown[], body: (stopped: () => boolean) => void): voi
 // slot skips that event and every older one.
 interface Slot {
   attachedAt: number;
-  handlers: EventListener[];
+  handlers: unknown[];
   instance: ComponentInternalInstance | null;
   once: boolean;
   fired: boolean;
@@ -200,9 +208,11 @@ function createEntry(
           }
           for (const handler of slot.handlers) {
             if (stopped()) break;
+            // A falsy entry is skipped; Vue warns about any other entry that is not a function.
+            if (!handler) continue;
             try {
               callWithAsyncErrorHandling(
-                handler,
+                handler as EventListener,
                 slot.instance,
                 ErrorCodes.NATIVE_EVENT_HANDLER,
                 args,
@@ -236,7 +246,7 @@ function patchEvent(
   instance: ComponentInternalInstance | null,
 ): void {
   const parsed = parseEventKey(rawKey);
-  const handlers = asHandlers(nextValue);
+  const handlers = asHandlers(nextValue, rawKey);
   if (!handlers) {
     removeSlot(core, el, parsed, rawKey);
     return;
@@ -295,7 +305,11 @@ const BOOLEAN_PRESENCE = new Set(["disabled", "hidden", "inert"]);
  * ### `onXxx`
  *
  * The key registers `nextValue` as a listener for `xxx`, taking a function
- * or an array of them, and unbinds that key's listener for anything else.
+ * or an array of them. A falsy `nextValue` unbinds that key's listener. Any
+ * other value keeps a listener that runs nothing, and a development build
+ * warns about it. A nested array runs its functions. Any other entry that is
+ * not a function runs nothing, and a development build warns about a truthy
+ * one when the event fires.
  * - Order: each distinct key (`onClick`, `onClickOnce`) is its own listener.
  *   Keys that share the event, phase and passivity run in the order first
  *   registered, a re-patch keeps its place, and the host sees one registration
@@ -349,6 +363,8 @@ export function createPatchProp(
     _namespace?: unknown,
     parentComponent?: ComponentInternalInstance | null,
   ): void => {
+    // A component's `v-model` update event; Vue binds nothing for it on an element.
+    if (key.startsWith("onUpdate:")) return;
     if (key === "style") {
       patchStyle(core, el, nextValue);
     } else if (isOn(key)) {
@@ -363,7 +379,7 @@ export function createPatchProp(
       core.setAttribute(el.__node_id, key, nextValue);
     } else if (nextValue === null || nextValue === undefined) {
       core.removeAttribute(el.__node_id, key);
-    } else if (!key.startsWith("onUpdate:")) {
+    } else {
       // objects stringify as in a browser attribute
       // oxlint-disable-next-line typescript/no-base-to-string
       core.setAttribute(el.__node_id, key, String(nextValue));

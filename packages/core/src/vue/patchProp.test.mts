@@ -255,7 +255,7 @@ describe("on*", () => {
     expect(second).toHaveBeenCalledTimes(1);
   });
 
-  it("unbinds the event when the value is no longer a function", () => {
+  it("unbinds the event when the value turns undefined", () => {
     patchProp(el, "onClick", null, vi.fn(), undefined, null);
     patchProp(el, "onClick", vi.fn(), undefined, undefined, null);
 
@@ -284,6 +284,7 @@ describe("onUpdate:* props", () => {
     patchProp(el, "onUpdate:modelValue", vi.fn(), undefined, undefined, null);
 
     expect(core.removeEventListener).not.toHaveBeenCalled();
+    expect(core.removeAttribute).not.toHaveBeenCalled();
   });
 
   it("still binds an on* prop that merely starts with Update", () => {

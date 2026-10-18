@@ -603,15 +603,6 @@ A fixed entry is deleted and its ID is never reused.
   - `%s`, `%d`, `%i` and `%f` convert an array that holds a `Proxy` through
     the array's own string form, which runs the `Proxy`'s traps.
 
-- **B-092 Event props differ from Vue's in name and value handling**
-  `Units: core · Size: S · Impact: Low`
-
-  `onFooBar` binds `foobar` where Vue binds `foo-bar`. The `on:foo` form is
-  not recognized, and any key whose third character is not a lower-case
-  letter is an event in Vue but only `on` plus an upper-case letter is one
-  here. A non-function value unbinds silently, where Vue warns and keeps a
-  no-op listener. An empty array unbinds, where Vue keeps the listener.
-
 - **B-093 A control character in a `productName` writes an invalid `Info.plist`**
   `Units: cli · Size: S · Impact: Low`
 
