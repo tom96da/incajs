@@ -15,7 +15,11 @@ No C ABI or IPC is involved.
 Rust keeps ids and plain data. A handle kept past the call that produced it
 outlives the context it belongs to, so every function and object lives on the
 JS side. [Registering](#registering) is the implementation example: listener
-functions stay in JS and Rust holds only the callback ids.
+functions stay in JS and Rust holds only the callback ids. Values the host
+keeps for itself, such as the promise of a pending module, sit in a per-realm
+vault (`inca_jsenv::vault`), a null-prototype object. A read-only global
+function returns it only while Rust calls it through a native gate, so no
+script reaches it, and Rust holds only the keys.
 
 ## Retained virtual tree
 

@@ -244,15 +244,6 @@ A fixed entry is deleted and its ID is never reused.
   `callbacks.mts` and `eventTarget.mts`, so the first copy of core wins), so
   the host creates and protects them first.
 
-- **B-188 The pending module holds a promise handle**
-  `Units: jsenv · Size: M · Impact: Medium`
-
-  `PendingModule` in `engine.rs` keeps a `Persistent<Promise>` while the
-  top-level `await` of a module is pending. Rust keeps ids and plain data,
-  and a handle kept past the call that produced it outlives its context
-  (listener ids are the model, see FFI.md "JS values stay in JS"). A fix
-  keeps the promise in JS and gives Rust an id.
-
 - **B-189 The event store holds JS values in Rust**
   `Units: bridge · Size: M · Impact: Medium`
 

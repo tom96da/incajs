@@ -29,6 +29,13 @@ ctx.eval::<(), _>("console.log('ready', { count: 1 })")?;
 // stderr: ready { count: 1 }
 ```
 
+## Host values
+
+`vault(&ctx)` returns a null-prototype object of the realm that host code
+keeps JS values in between calls, under plain keys. An `Engine` creates it
+before any script runs. A script that calls the global holding it gets
+`undefined`, and cannot replace or delete that global.
+
 ## Module loading
 
 `Engine::builder().module_root(dir)` adds a directory `import`s resolve

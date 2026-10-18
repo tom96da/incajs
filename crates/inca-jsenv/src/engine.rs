@@ -11,13 +11,13 @@ use std::cell::RefCell;
 use std::fmt;
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicU32, Ordering};
 
-use rquickjs::{
-    Coerced, Context, Ctx, FromJs, Function, Module, Persistent, Promise, Runtime, Value,
-};
+use rquickjs::{Coerced, Context, Ctx, FromJs, Function, Module, Object, Promise, Runtime, Value};
 
 use crate::loader::{DiskLoader, DiskResolver, canonical_name};
 use crate::sourcemap::remap_stack;
+use crate::vault::{create_vault, vault};
 
 /// `Result<T, EngineError>`, what every fallible [`Engine`] method returns.
 pub type EngineResult<T> = Result<T, EngineError>;
@@ -133,6 +133,14 @@ const TRACKER_JS: &str = r"
     }
     ";
 
+/// The vault key of the null-prototype object that keeps the promise of each
+/// started module under its id.
+const MODULES: &str = "modules";
+
+/// The id of the next started module. One counter serves every engine, so an
+/// id names one module in the process.
+static NEXT_MODULE: AtomicU32 = AtomicU32::new(0);
+
 /// One `QuickJS` runtime with the single context it runs scripts in.
 ///
 /// Build one with [`Engine::new`] or [`Engine::builder`]. Run a script with
@@ -184,7 +192,13 @@ impl Engine {
         };
         engine
             .context
-            .with(|ctx| ctx.eval::<(), _>(TRACKER_JS))
+            .with(|ctx| {
+                create_vault(&ctx)?;
+                let modules = Object::new(ctx.clone())?;
+                modules.set_prototype(None)?;
+                vault(&ctx)?.set(MODULES, modules)?;
+                ctx.eval::<(), _>(TRACKER_JS)
+            })
             .map_err(|err| EngineError::plain(&err))?;
         engine
             .runtime
@@ -325,14 +339,15 @@ impl Engine {
     /// throws while evaluating comes from [`poll_module`](Self::poll_module).
     pub fn start_module(&self, name: &str, source: &str) -> EngineResult<PendingModule> {
         let name = canonical_name(name);
+        let id = NEXT_MODULE.fetch_add(1, Ordering::Relaxed);
         self.context.with(|ctx| {
             crate::sourcemap::register(&ctx, &name, source);
             Module::declare(ctx.clone(), name, source)
                 .and_then(rquickjs::Module::eval)
-                .map(|(_module, promise)| PendingModule {
-                    promise: Persistent::save(&ctx, promise),
-                    _runtime: self.runtime.clone(),
+                .and_then(|(_module, promise)| {
+                    vault(&ctx)?.get::<_, Object>(MODULES)?.set(id, promise)
                 })
+                .map(|()| PendingModule { id })
                 .map_err(|err| EngineError::capture(&ctx, &err))
         })
     }
@@ -372,23 +387,26 @@ impl Engine {
     /// The module's result, or `None` while its promise is pending.
     fn settled(&self, module: &PendingModule) -> Option<EngineResult<()>> {
         self.context.with(|ctx| {
-            let promise = match module.promise.clone().restore(&ctx) {
-                Ok(promise) => promise,
-                Err(err) => return Some(Err(EngineError::plain(&err))),
-            };
-            promise
-                .result::<()>()
-                .map(|result| result.map_err(|err| EngineError::capture(&ctx, &err)))
+            let promise = vault(&ctx)
+                .and_then(|vault| vault.get::<_, Object>(MODULES))
+                .and_then(|modules| modules.get::<_, Promise>(module.id));
+            match promise {
+                Ok(promise) => promise
+                    .result::<()>()
+                    .map(|result| result.map_err(|err| EngineError::capture(&ctx, &err))),
+                Err(err) => Some(Err(EngineError::capture(&ctx, &err))),
+            }
         })
     }
 }
 
 /// A module started by [`Engine::start_module`] and polled with
-/// [`Engine::poll_module`].
+/// [`Engine::poll_module`]. The engine that started it keeps its promise until
+/// the engine drops.
 pub struct PendingModule {
-    // Declared first, so the promise drops before the runtime handle.
-    promise: Persistent<Promise<'static>>,
-    _runtime: Runtime,
+    /// The key of the module's promise in the engine's module table. Another
+    /// engine holds no promise under it.
+    id: u32,
 }
 
 /// Builds an [`Engine`], configuring where its `import`s resolve against.

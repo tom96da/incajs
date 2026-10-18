@@ -6,7 +6,8 @@
 //! `QuickJS` supplies only the language (`Array`, `JSON`, `Promise` and the rest
 //! of the ECMAScript intrinsics). Everything a script expects the *host* to
 //! provide starts here. [`compile_async_function`] builds source text into an
-//! async function whose stack frames name its file.
+//! async function whose stack frames name its file. [`vault`] keeps the JS
+//! values host code needs in a later call out of reach of scripts.
 //!
 //! Depends on `rquickjs`, `base64` and `unicode-width` only, so what it
 //! installs can be replaced without reaching the code that draws a UI.
@@ -22,9 +23,11 @@ mod quickjs;
 mod sourcemap;
 #[cfg(test)]
 mod tests;
+mod vault;
 
 pub use compile::compile_async_function;
 pub use engine::{
     Engine, EngineBuilder, EngineError, EngineResult, ErrorReporter, PendingModule, report_jobs,
     stderr_reporter,
 };
+pub use vault::vault;

@@ -30,17 +30,6 @@ fn two_engines_do_not_share_globals() {
 }
 
 #[test]
-fn a_pending_module_can_outlive_its_engine() {
-    let engine = Engine::new().unwrap();
-    let module = engine
-        .start_module("probe.mjs", "await new Promise(() => {});")
-        .unwrap();
-
-    drop(engine);
-    drop(module);
-}
-
-#[test]
 fn eval_module_runs_top_level_code_to_completion() {
     let engine = Engine::new().unwrap();
     engine
@@ -395,6 +384,33 @@ fn a_pending_module_settles_once_a_later_eval_resolves_it() {
 }
 
 #[test]
+fn a_module_cannot_replace_its_own_promise() {
+    let engine = Engine::new().unwrap();
+    let module = engine
+        .start_module(
+            "steals.mjs",
+            r"
+            for (let key = 0; key < 65536; key++) {
+                Object.defineProperty(Object.prototype, key, {
+                    get() {
+                        return Promise.resolve();
+                    },
+                    set(promise) {
+                        globalThis.stolen = promise;
+                    },
+                });
+            }
+            await new Promise(() => {});
+            ",
+        )
+        .unwrap();
+
+    assert!(engine.poll_module(&module).is_none());
+    let stolen: String = engine.eval("typeof globalThis.stolen").unwrap();
+    assert_eq!(stolen, "undefined");
+}
+
+#[test]
 fn a_pending_module_returns_a_later_rejection_as_its_own_error() {
     let engine = Engine::new().unwrap();
     let module = engine
@@ -467,6 +483,9 @@ fn a_module_from_another_engine_is_an_error() {
         .start_module("foreign.mjs", "await new Promise(() => {});")
         .unwrap();
     let engine = Engine::new().unwrap();
+    let _own = engine
+        .start_module("own.mjs", "await new Promise(() => {});")
+        .unwrap();
 
     let err = engine.poll_module(&module).unwrap().unwrap_err();
     assert!(!err.message().is_empty());
