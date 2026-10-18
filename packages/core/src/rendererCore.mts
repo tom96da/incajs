@@ -35,7 +35,9 @@ export {
   removeStyle,
 } from "./tree.mts";
 export { createIncaElement } from "./element/handle.mts";
-export { isDestroyed, releaseWhenCollected } from "./element/lifecycle.mts";
+export { isDestroyed } from "./element/lifecycle.mts";
+/** @internal */
+export { releaseWhenCollected } from "./element/lifecycle.mts";
 export {
   createCommentNode,
   createElementNode,

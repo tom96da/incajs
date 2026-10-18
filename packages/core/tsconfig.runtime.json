@@ -1,6 +1,9 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "types": [] },
+  "compilerOptions": {
+    "types": [],
+    "stripInternal": true
+  },
   "include": ["src/**/*"],
   "exclude": ["src/**/*.test.mts"]
 }

@@ -15,7 +15,10 @@ import type { ScrollIntoViewOptions, ScrollOptions } from "./scroll.mts";
  * ignore the call, and `dispatchEvent()` returns `true`.
  */
 export interface IncaElement extends IncaEventTarget {
-  /** The node id the host knows this node by. Internal to the renderer. */
+  /**
+   * The node id the host knows this node by. Internal to the renderer.
+   * @internal
+   */
   readonly __node_id: NodeId;
   /**
    * The `id` attribute, or an empty string when it is unset. Assigning sets
@@ -112,7 +115,10 @@ export interface IncaElement extends IncaEventTarget {
 
 /** A text leaf node. */
 export interface IncaText {
-  /** The node id the host knows this node by. Internal to the renderer. */
+  /**
+   * The node id the host knows this node by. Internal to the renderer.
+   * @internal
+   */
   readonly __node_id: NodeId;
   /** Discriminates this node within the {@link IncaNode} union. */
   readonly kind: "text";
