@@ -24,7 +24,7 @@ incajs and incajs/vue, a custom Vue 3 renderer.
 ::::
 
 :::: shipped Phase 3.1–3.3: Developer tooling & packaging
-inca dev, inca build, and inca package, with per-platform prebuilt host binaries. This is the v0.0.1 release milestone. The current bundler adapter is Vite; a future adapter/rspack would sit alongside it as a sibling module.
+inca dev, inca build, and inca package, with per-platform prebuilt host binaries. This is the v0.0.1 release milestone. The current bundler adapter is Vite; a future rspack bundler would sit alongside it as a sibling module.
 ::::
 
 :::: in-progress Phase 3.4: HMR

@@ -91,11 +91,11 @@ lands after 3.3, when there is something to release.
    an app's entry point, and wires the two modules below together
    internally. It holds the `Bundler` contract and injects an
    implementation. Swapping bundlers is a dependency change here.
-2. **`adapter/vite`** (`packages/cli/src/adapter/vite`): runs Vite in
+2. **`vite`** (`packages/cli/src/vite`): runs Vite in
    library/watch mode, using `@vitejs/plugin-vue` to compile `.vue` SFCs, and
    announces each rebuild. It never starts Vite's browser dev server. It is
    the only part of the CLI that imports `vite`, and it depends on no
-   first-party package. A future `adapter/rspack` would be a sibling module
+   first-party package. A future `rspack` would be a sibling module
    in the same package, since neither is ever imported on its own.
 3. **`dev-client`** (`packages/cli/src/dev-client`): the Node end of
    [PROTOCOL.md](./PROTOCOL.md) — resolves and launches the host
@@ -143,14 +143,14 @@ per-platform host packages). The Rust crates stay
 
 ### Phase 3.4: HMR
 
-**HMR bridge** (`@incajs/cli`'s `adapter/vite`, beside its Node-side dev
+**HMR bridge** (`@incajs/cli`'s `vite`, beside its Node-side dev
 server): a custom `ModuleRunnerTransport` and evaluator against Vite's
 Runtime API (`vite/module-runner`). Updated modules are evaluated inside
 QuickJS and trigger a GPUI redraw. Component state survives where
 Vue's own HMR can: a template-only edit keeps it, and a script edit still
 remounts the component. The runner itself runs inside QuickJS. See
 [ARCHITECTURE.md](./ARCHITECTURE.md#hmr-delivery) for why, and for why this
-is preferred over a hand-rolled HMR protocol. A future `adapter/rspack` would
+is preferred over a hand-rolled HMR protocol. A future `rspack` would
 hold its own Node/QuickJS halves the same way.
 
 Ships **experimental and opt-in**: without the flag, `inca dev` keeps this

@@ -145,6 +145,9 @@ with the differences below. The listener methods are described in
 - Every scroll applies at once, whatever `behavior` says.
 - `focus()` and `scrollIntoView()` on a node that has no box yet scroll when
   the next frame draws it.
+- The tree members are `parent`, `children` and `contains()`. `parent` is the
+  parent element, and `children` lists the child nodes, text nodes included.
+  `parentElement`, `childNodes` and the other tree members are missing.
 
 ## Vue features that don't work yet
 
@@ -163,8 +166,7 @@ have, and using them fails the build:
 - **No text input**: an editable text element is still unimplemented (see
   the [Roadmap](../roadmap)).
 - **`ref` lacks other element members**: the attribute methods, `classList`,
-  `className`, `dataset`, `style`, `tagName` and the tree members other than
-  `contains()` are missing.
+  `className`, `dataset`, `style` and `tagName` are missing.
 
 Event modifiers such as `.stop`, `.once` and `@keydown.enter` are documented
 in [Events: Event modifiers](./events#event-modifiers).
