@@ -158,12 +158,18 @@ describe("createIncaElement layout", () => {
 });
 
 describe("createIncaElement registration", () => {
-  it("registers an element and leaves a comment stand-in out", () => {
+  it("registers an element handle", () => {
     installHost();
     const el = createIncaElement(7, "element", "div");
+
+    expect(elementOf(7)).toBe(el);
+  });
+
+  it("leaves a comment stand-in unregistered", () => {
+    installHost();
     createIncaElement(8, "comment");
 
-    expect([elementOf(7), elementOf(8) !== undefined]).toEqual([el, false]);
+    expect(elementOf(8)).toBeUndefined();
   });
 });
 
@@ -308,7 +314,7 @@ describe("createIncaElement registry", () => {
     expect(recordedCount()).toBe(before);
   });
 
-  it("keeps the entry of a newer handle when an older one with the same id is collected", async () => {
+  it("keeps a newer handle's entry when an older one with its id is collected", async () => {
     installHost();
     const first = (() => new WeakRef(createIncaElement(33, "element", "div")))();
     const el = createIncaElement(33, "element", "div");
@@ -380,13 +386,19 @@ describe("createIncaElement id", () => {
     expect(host.setAttribute).toHaveBeenLastCalledWith(1, "id", expected);
   });
 
-  it("reads an empty string and ignores writes after the node is destroyed", () => {
+  it("reads an empty string after the node is destroyed", () => {
     const host = installHost("a");
     const el = createIncaElement(1, "element", "div");
     markDestroyed(el);
-    el.id = "b";
     expect(el.id).toBe("");
     expect(host.getAttribute).not.toHaveBeenCalled();
+  });
+
+  it("ignores an id write after the node is destroyed", () => {
+    const host = installHost();
+    const el = createIncaElement(1, "element", "div");
+    markDestroyed(el);
+    el.id = "b";
     expect(host.setAttribute).not.toHaveBeenCalled();
   });
 

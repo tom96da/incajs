@@ -99,7 +99,7 @@ describe("addEventListener", () => {
 });
 
 describe("removeEventListener", () => {
-  it("drops the registration of the function, matching capture as a boolean or an object", () => {
+  it("drops the registration of the function, matching capture in either form", () => {
     const target = createEventTarget(() => 1);
     const listener = vi.fn<() => void>();
     target.addEventListener("click", listener);

@@ -35,7 +35,7 @@ it("a throwing first bundle is reported on stdout and the host exits 1", async (
   }
 }, 15_000);
 
-it("a first bundle whose top-level await rejects is reported with a null id and the host exits 1", async () => {
+it("a rejecting top-level await exits 1 after a report with a null id", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "inca-host-startup-"));
   await writeFile(
     path.join(dir, "bundle.js"),
@@ -88,7 +88,7 @@ it("--dev without a path reports the missing bundle beside the executable", asyn
   expect(stderr).not.toContain("failed to read");
 }, 15_000);
 
-it("an unreadable entry in development is reported with a null id and the host exits 1", async () => {
+it("an unreadable entry in development exits 1 after a report with a null id", async () => {
   const missing = path.join(tmpdir(), "inca-host-no-such-dir", "bundle.js");
   const { code, out } = await runHost(["--dev", missing]);
 

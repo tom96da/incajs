@@ -53,7 +53,7 @@ describe("resolveAppConfig", () => {
     });
   });
 
-  it('lets a package.json "inca" key override productName and identifier, and flags it as deprecated', async () => {
+  it('lets a package.json "inca" key override productName and identifier', async () => {
     const app = await makeApp({
       name: "click_counter",
       version: "0.0.0-0",
@@ -64,8 +64,17 @@ describe("resolveAppConfig", () => {
       productName: "Click Counter",
       identifier: "com.example.click-counter",
       identifierIsDefault: false,
-      usedPackageJsonKey: true,
     });
+  });
+
+  it('flags a package.json "inca" key as deprecated', async () => {
+    const app = await makeApp({
+      name: "click_counter",
+      version: "0.0.0-0",
+      inca: { productName: "Click Counter", identifier: "com.example.click-counter" },
+    });
+
+    await expect(resolveAppConfig(app)).resolves.toMatchObject({ usedPackageJsonKey: true });
   });
 
   it("lets inca.config.ts override productName and identifier", async () => {

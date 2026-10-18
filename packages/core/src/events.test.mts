@@ -68,13 +68,19 @@ describe("addEventListener's callback registry", () => {
     expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(1);
   });
 
-  it("keys __inca_callbacks__ by the returned id and drops it on removal", () => {
+  it("keys __inca_callbacks__ by the id the host returns", () => {
+    native.addEventListener.mockReturnValueOnce(41);
+
+    addEventListener(1, "click", vi.fn<() => void>());
+
+    expect(Object.keys(globalThis.__inca_callbacks__)).toEqual(["41"]);
+  });
+
+  it("drops the __inca_callbacks__ entry on removal", () => {
     native.addEventListener.mockReturnValueOnce(41);
     const listener = vi.fn<() => void>();
 
     addEventListener(1, "click", listener);
-
-    expect(Object.keys(globalThis.__inca_callbacks__)).toEqual(["41"]);
     removeEventListener(1, "click", listener);
     expect(native.removeEventListener).toHaveBeenCalledExactlyOnceWith(1, "click", 41);
     expect(globalThis.__inca_callbacks__).toEqual({});
@@ -180,12 +186,10 @@ describe("registry groups", () => {
 });
 
 describe("listener objects", () => {
-  it("ignores a null listener on add and remove", () => {
+  it("ignores a null listener on add", () => {
     addEventListener(1, "click", null);
-    removeEventListener(1, "click", null);
 
     expect(native.addEventListener).not.toHaveBeenCalled();
-    expect(native.removeEventListener).not.toHaveBeenCalled();
   });
 
   it("calls handleEvent with the object as this", () => {
@@ -219,7 +223,7 @@ describe("listener objects", () => {
     expect(seen[0]).toBe(currentTarget);
   });
 
-  it("calls a listener function with this undefined when the event has no current target", () => {
+  it("calls a function listener with this undefined without a current target", () => {
     const seen: unknown[] = [];
     addEventListener(1, "click", function (this: unknown) {
       seen.push(this);

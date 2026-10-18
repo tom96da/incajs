@@ -312,7 +312,7 @@ describe("a host that frees orphans, driven by the Inca renderer", () => {
 });
 
 describe("__inca_released__", () => {
-  it("releases the callbacks and marks the handles destroyed", () => {
+  it("releases the callbacks it is given", () => {
     const el = createElementNode("div");
     const listener = () => {};
     el.addEventListener("click", listener);
@@ -321,6 +321,16 @@ describe("__inca_released__", () => {
     globalThis.__inca_released__([el.__node_id, 9999], [callbackId]);
 
     expect(globalThis.__inca_callbacks__[callbackId]).toBeUndefined();
+  });
+
+  it("marks the handles of the freed ids destroyed", () => {
+    const el = createElementNode("div");
+    const listener = () => {};
+    el.addEventListener("click", listener);
+    const callbackId = nodeOf(el.__node_id).listeners[0]!;
+
+    globalThis.__inca_released__([el.__node_id, 9999], [callbackId]);
+
     expect(isDestroyed(el)).toBe(true);
   });
 

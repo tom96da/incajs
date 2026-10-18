@@ -199,7 +199,7 @@ describe("hmr", () => {
     expect(updates).toEqual([]);
   }, 20000);
 
-  it("calls onUpdate with the changed file and how long it took, on a successful update", async () => {
+  it("calls onUpdate with the changed file and how long a successful update took", async () => {
     const { entry, vuePath, streams } = await makeApp(
       `<script setup>\nconst msg = "first";\n</script>\n<template><div>{{ msg }}</div></template>\n`,
     );

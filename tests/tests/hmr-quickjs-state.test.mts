@@ -175,7 +175,7 @@ afterAll(async () => {
 });
 
 it(
-  "keeps Vue component state across a template-only HMR edit, resets it across a script edit",
+  "keeps component state across a template edit, resets it across a script edit",
   async () => {
     const client = hostClient!;
     onTestFailed(() => console.error(`--- host stderr ---\n${stderrText}`));

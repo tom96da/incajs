@@ -229,7 +229,7 @@ describe("HostClient", () => {
     await waitFor(() => expect(onExit).toHaveBeenCalledOnce());
   });
 
-  it("stops the host when ready reports a protocol this package wasn't built for, leaving no child behind", async () => {
+  it("stops the host when ready reports a protocol it was not built for", async () => {
     const client = new HostClient({
       hostBin: protocolMismatchMockHost,
       entryFile: "bundle.js",

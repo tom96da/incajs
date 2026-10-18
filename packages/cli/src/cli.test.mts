@@ -170,13 +170,20 @@ describe("run", () => {
     },
   );
 
-  it("closes fds 0-2 once dev() returns after a signal, and not after a normal return", async () => {
+  it("leaves fds 0-2 open when dev() returns normally", async () => {
     const close = vi.spyOn(fs, "closeSync").mockImplementation(() => {});
     try {
       mockedDev.mockResolvedValueOnce(undefined);
       await run(["node", "inca", "dev"]);
       expect(close).not.toHaveBeenCalled();
+    } finally {
+      close.mockRestore();
+    }
+  });
 
+  it("closes fds 0-2 once dev() returns after a signal", async () => {
+    const close = vi.spyOn(fs, "closeSync").mockImplementation(() => {});
+    try {
       mockedDev.mockImplementationOnce(async ({ signal }) => {
         process.emit("SIGINT");
         expect(signal.aborted).toBe(true);

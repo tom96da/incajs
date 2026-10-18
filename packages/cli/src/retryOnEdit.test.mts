@@ -259,7 +259,7 @@ describe("retryOnEdit", () => {
     expect(stderr.text()).toContain("build failed (ERR_INCA_ICON_NOT_FOUND): no icon");
   });
 
-  it("prints the failure and returns when the signal is aborted and the named file exists", async () => {
+  it("returns after printing the failure when aborted with the named file present", async () => {
     const icon = path.join(app, "app.icns");
     await writeFile(icon, "");
     const { running, run, stdout, stderr } = start(() => {

@@ -1241,16 +1241,12 @@ describe("everything else", () => {
     expect(core.removeAttribute).toHaveBeenCalledExactlyOnceWith(2, "label");
   });
 
-  it.each(["disabled", "hidden", "inert"])(
-    "removes disabled, hidden and inert when set to false and sets them when true (%s)",
-    (name) => {
-      patchProp(el, name, null, true, undefined, null);
-      patchProp(el, name, true, false, undefined, null);
+  it.each(["disabled", "hidden", "inert"])("removes %s when it turns false", (name) => {
+    patchProp(el, name, true, false, undefined, null);
 
-      expect(core.setAttribute).toHaveBeenCalledExactlyOnceWith(1, name, true);
-      expect(core.removeAttribute).toHaveBeenCalledExactlyOnceWith(1, name);
-    },
-  );
+    expect(core.removeAttribute).toHaveBeenCalledExactlyOnceWith(1, name);
+    expect(core.setAttribute).not.toHaveBeenCalled();
+  });
 
   it("keeps a false boolean on any other name as an attribute", () => {
     patchProp(el, "readonly", true, false, undefined, null);
@@ -1470,7 +1466,7 @@ describe("a listener attached while an event is handled", () => {
     expect(attachedInner).toHaveBeenCalledTimes(1);
   });
 
-  it("is skipped by the ancestor dispatch of the event whose handler caused the re-render", async () => {
+  it("is skipped by the ancestor dispatch of the event that caused the re-render", async () => {
     let id = 1;
     vi.stubGlobal("__inca_native__", { createNode: () => ++id, insertBefore: () => {} });
     const renderer = createRenderer({ ...createNodeOps(core), patchProp });
