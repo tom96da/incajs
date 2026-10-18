@@ -263,13 +263,6 @@ A fixed entry is deleted and its ID is never reused.
   event record, a slot index, becomes the id of its prototype. B-185
   covers the shape of the same store.
 
-- **B-190 The inspector keeps function handles in Rust**
-  `Units: jsenv · Size: S–M · Impact: Medium`
-
-  The `console` printing of dates, regular expressions, maps and sets keeps a
-  `Vec<Function>` of built-in functions as userdata of the context
-  (`inspect/builtins.rs`). A fix looks the functions up in JS at each use.
-
 - **B-195 `removeEventListener` accepts a malformed `callbackId`**
   `Units: bridge,docs · Size: S · Impact: Medium`
 

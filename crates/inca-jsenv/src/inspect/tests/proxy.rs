@@ -133,7 +133,7 @@ fn an_object_inheriting_from_a_proxy_runs_no_trap() {
 }
 
 #[test]
-fn the_first_pinning_in_a_runtime_is_kept() {
+fn a_second_pinning_keeps_the_first_intrinsics() {
     with_realm(|ctx| {
         pin(&ctx).unwrap();
         ctx.eval::<(), _>("Date.prototype.toISOString = () => 'late';")

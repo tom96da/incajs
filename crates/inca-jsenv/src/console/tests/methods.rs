@@ -334,7 +334,7 @@ fn install_fails_in_a_realm_without_the_intrinsics_and_leaves_nothing_pending() 
 }
 
 #[test]
-fn contexts_in_one_runtime_share_the_pins_after_the_first_is_dropped() {
+fn a_context_keeps_printing_after_another_context_is_dropped() {
     let written = Rc::new(RefCell::new(Vec::new()));
     let output: Output = {
         let sink = Rc::clone(&written);

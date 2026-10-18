@@ -38,8 +38,7 @@ pub(crate) use walk::{Walk, click, dispatch_event, listened, path_from, walk};
 /// What the event machinery keeps in the runtime's userdata, in the order of
 /// [`PROTOTYPE`], [`REMEMBER`], [`RECALL`], [`MOUSE_PROTOTYPE`] and
 /// [`KEYBOARD_PROTOTYPE`].
-// A `Vec<Value>` stays distinct from console's `Vec<Function>` userdata. The values belong to one
-// context.
+// The values belong to one context.
 type Slots<'js> = Vec<Value<'js>>;
 
 /// `Event.prototype`, which every event object inherits from.

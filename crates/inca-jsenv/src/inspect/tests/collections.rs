@@ -235,6 +235,11 @@ fn the_collection_count_is_uncolored() {
 )]
 #[case::global_replaced("globalThis.Date = function () {};")]
 #[case::global_getter("Object.defineProperty(globalThis, 'Date', { get() { throw 1; } });")]
+#[case::pins_assigned("try { globalThis.__inca_intrinsics__ = []; } catch {}")]
+#[case::pins_deleted("try { delete globalThis.__inca_intrinsics__; } catch {}")]
+#[case::pin_entry_replaced(
+    "try { globalThis.__inca_intrinsics__[0] = () => 'hijacked'; } catch {}"
+)]
 fn replacing_the_date_machinery_does_not_change_a_date(#[case] tamper: &str) {
     let setup = format!("globalThis.d = new Date(0); globalThis.bad = new Date(NaN); {tamper}");
     assert_eq!(

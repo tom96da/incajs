@@ -13,8 +13,9 @@ use std::fmt::Write;
 use std::rc::Rc;
 
 use rquickjs::{
-    Ctx, Error, Function, Result as JsResult, Value,
+    Array, Ctx, Function, Result as JsResult, Value,
     function::{Rest, This},
+    object::Property,
 };
 
 use super::{MAX_ENTRIES, Mode, put, settled, write_more, write_value};
@@ -33,48 +34,40 @@ const SET_EACH: usize = MAP_EACH + 1;
 
 type Pins<'js> = Vec<Function<'js>>;
 
-fn capture<'js>(ctx: &Ctx<'js>) -> JsResult<Pins<'js>> {
-    let pins: Pins<'js> = ctx.eval(
+/// The global holding the pinned functions as a frozen array. [`pin`] defines it read-only
+/// and non-configurable and freezes the array.
+const PINS: &str = "__inca_intrinsics__";
+
+/// Stores the intrinsics `console` uses to print a `Date`, `RegExp`, `Map` or `Set` in the
+/// global [`PINS`]. The first pinning in a realm wins.
+///
+/// # Errors
+///
+/// Returns an error if an intrinsic is missing from the realm or the global cannot be
+/// defined.
+pub(crate) fn pin(ctx: &Ctx<'_>) -> JsResult<()> {
+    let globals = ctx.globals();
+    if globals.contains_key(PINS)? {
+        return Ok(());
+    }
+    let pins: Array = ctx.eval(
         r"
         (() => {
             const getter = (key) =>
                 Object.getOwnPropertyDescriptor(RegExp.prototype, key).get;
-            return [
+            return Object.freeze([
                 Date.prototype.toISOString,
                 getter('source'),
                 ...['hasIndices', 'global', 'ignoreCase', 'multiline', 'dotAll',
                     'unicode', 'unicodeSets', 'sticky'].map(getter),
                 Map.prototype.forEach,
                 Set.prototype.forEach,
-            ];
+            ]);
         })()
         ",
     )?;
     debug_assert_eq!(pins.len(), SET_EACH + 1);
-    Ok(pins)
-}
-
-/// Reads the intrinsics `console` prints a `Date`, `RegExp`, `Map` or `Set`
-/// with. The first pinning in a runtime wins, and a second context in the
-/// same runtime reuses it, so the first context's realm stays alive until the
-/// runtime is dropped.
-///
-/// # Errors
-///
-/// Returns an error if an intrinsic is missing from the realm or cannot be
-/// stored.
-pub(crate) fn pin(ctx: &Ctx<'_>) -> JsResult<()> {
-    if ctx.userdata::<Pins>().is_some() {
-        return Ok(());
-    }
-    let pins = capture(ctx)?;
-    ctx.store_userdata(pins).map(drop).map_err(|_| {
-        Error::new_from_js_message(
-            "intrinsics",
-            "userdata",
-            "the runtime's userdata is borrowed",
-        )
-    })
+    globals.prop(PINS, Property::from(pins))
 }
 
 enum Kind {
@@ -105,7 +98,7 @@ pub(super) fn write(out: &mut String, value: &Value<'_>, depth: usize, mode: Mod
         return false;
     };
     let ctx = value.ctx();
-    let Some(pins) = ctx.userdata::<Pins>().map(|pins| pins.clone()) else {
+    let Ok(pins) = ctx.globals().get::<_, Pins>(PINS) else {
         return false;
     };
     match kind {
