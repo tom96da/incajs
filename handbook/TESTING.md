@@ -35,7 +35,7 @@ change is done, for Rust and TypeScript.
   Cargo compiles each against the crate's public API only.
 - **gpui behavior pins**: `crates/inca-gpui/tests/gpui_behavior.rs` checks the
   facts the event dispatch assumes about gpui (listener order, hit testing,
-  focus on press, scroll step, key propagation) on gpui's test platform. A
+  focus on press, the wheel step on a hidden container, key propagation) on gpui's test platform. A
   gpui upgrade that changes one fails there first.
 - **Window checks**: see [MANUAL_GUI_CHECK.md](./MANUAL_GUI_CHECK.md).
 - **Tests that need both languages**: the root `tests/` package, see

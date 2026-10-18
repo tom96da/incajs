@@ -262,9 +262,9 @@ fn a_scroll_container_scrolls_without_a_dispatcher(cx: &mut TestAppContext) {
 }
 
 fn mounted(cx: &mut TestAppContext, tree: VirtualTree) -> (Probe, gpui::AnyWindowHandle) {
-    let probe = probe();
+    let probe = probe_of(tree);
     let view = probe.clone();
-    let window = cx.add_window(|_, _| ProbeView(tree, view));
+    let window = cx.add_window(|_, _| ProbeView(view));
     (probe, window.into())
 }
 

@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use gpui::{Pixels, ScrollHandle, point, px};
 
-use inca_gpui::element::scroll::{Align, record_scroll_write, rect_of, scroll_chain};
+use inca_gpui::element::scroll::{Align, rect_of, scroll_chain};
 use inca_gpui::{NodeId, NodeLayout, VirtualTree, is_scroll_container};
 use inca_jsenv::EngineError;
 
@@ -237,9 +237,6 @@ impl Host {
                 (y, applied_y) = (px(-to), applied);
             }
             handle.set_offset(point(x, y));
-            if applied_x != 0.0 || applied_y != 0.0 {
-                record_scroll_write(id, point(x, y));
-            }
             self.shift_descendants(id, applied_x, applied_y);
             (applied_x, applied_y)
         });

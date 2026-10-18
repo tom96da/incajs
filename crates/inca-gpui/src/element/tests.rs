@@ -40,6 +40,8 @@ pub(super) struct Probe {
     pub(super) prevented: Rc<RefCell<Vec<(String, bool)>>>,
     pub(super) layouts: Rc<RefCell<HashMap<NodeId, NodeLayout>>>,
     pub(super) handles: Rc<RefCell<HashMap<NodeId, ScrollHandle>>>,
+    /// The tree the view renders, read for `wheel_axes`.
+    pub(super) tree: Rc<RefCell<VirtualTree>>,
 }
 
 impl EventSink for Probe {
@@ -67,6 +69,10 @@ impl EventSink for Probe {
 
     fn scroll_handle(&self, id: NodeId) -> Option<ScrollHandle> {
         Some(self.handles.borrow_mut().entry(id).or_default().clone())
+    }
+
+    fn wheel_axes(&self, id: NodeId) -> Option<gpui::Point<bool>> {
+        wheel_axes(&self.tree.borrow(), id)
     }
 
     fn clear_layout(&self) {
@@ -123,11 +129,11 @@ impl EventSink for Probe {
     );
 }
 
-pub(super) struct ProbeView(pub(super) VirtualTree, pub(super) Probe);
+pub(super) struct ProbeView(pub(super) Probe);
 
 impl Render for ProbeView {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        render_tree_with_events(&self.0, 0, &self.1).unwrap()
+        render_tree_with_events(&self.0.tree.borrow(), 0, &self.0).unwrap()
     }
 }
 
@@ -144,6 +150,15 @@ pub(super) fn probe() -> Probe {
         prevented: Rc::default(),
         layouts: Rc::default(),
         handles: Rc::default(),
+        tree: Rc::default(),
+    }
+}
+
+/// A probe whose view renders `tree`.
+pub(super) fn probe_of(tree: VirtualTree) -> Probe {
+    Probe {
+        tree: Rc::new(RefCell::new(tree)),
+        ..probe()
     }
 }
 
@@ -158,11 +173,11 @@ pub(super) fn probe_tree(cx: &mut TestAppContext, tracks: bool) -> Scene {
     }
     tree.append_child(ids[0], ids[1]).unwrap();
     tree.append_child(ids[1], ids[2]).unwrap();
-    let mut probe = probe();
+    let mut probe = probe_of(tree);
     probe.tracks = tracks;
     let calls = Rc::clone(&probe.calls);
     let prevented = Rc::clone(&probe.prevented);
-    let window = cx.add_window(|_, _| ProbeView(tree, probe));
+    let window = cx.add_window(|_, _| ProbeView(probe));
     cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
         .unwrap();
     Scene {

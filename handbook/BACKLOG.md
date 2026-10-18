@@ -554,24 +554,14 @@ A fixed entry is deleted and its ID is never reused.
   `clip` is ignored like any other unknown value. The two-value form such as
   `hidden scroll` is ignored the same way, since only a single string is read.
 
-- **B-082 Wheel scrolling keeps `gpui`'s axis rules and has no gesture latching**
+- **B-082 Wheel scrolling has `gpui`'s axis rules and no gesture latching**
   `Units: gpui · Size: M · Impact: Low`
 
   A vertical wheel scrolls a container that scrolls only on x, and only the
-  dominant axis of a diagonal delta moves. Both are `gpui`'s rules. The DOM
-  latches a continuing gesture to the container it started on. Here a
-  gesture moves to the parent as soon as the inner container reaches its
-  limit.
-
-- **B-083 Wheel rollback depends on `gpui` applying the scroll step in the event**
-  `Units: gpui,bridge · Size: M · Impact: Low`
-
-  A scroll container's `preventDefault()` and nested chaining undo `gpui`'s
-  scroll step after the fact. This needs `gpui` to apply the step
-  synchronously in the event. A `gpui` with smooth or deferred scrolling
-  breaks it. `a_cancelled_scroll_leaves_the_bounds_unmoved` in
-  `crates/inca-bridge/tests/scroll_dispatch/wheel.rs` checks the bounds after a
-  cancel. Each scroll container adds one zero-size element.
+  dominant axis of a diagonal delta moves. The rules are `axis_step` in
+  `crates/inca-gpui/src/element/scroll.rs`. The DOM latches a continuing
+  gesture to the container it started on. Here a gesture moves to the parent
+  as soon as the inner container reaches its limit.
 
 - **B-084 Wheel scrolling differs from the DOM at the edges**
   `Units: gpui,bridge · Size: M · Impact: Low`
@@ -1280,14 +1270,21 @@ A fixed entry is deleted and its ID is never reused.
   that `composedPath()` never lists. Fix: the body node of B-199, so the
   container is a node of its own.
 
-- **B-201 Freed nodes leave their script scroll write in `WRITTEN`**
+- **B-202 Chromium drops a wheel step the host passes on**
   `Units: gpui,bridge · Size: S · Impact: Low`
 
-  `WRITTEN` in `crates/inca-gpui/src/element/scroll.rs` holds the last script
-  write of each container until the next wheel event starts, so a script that
-  writes offsets on nodes it creates and removes, with no wheel event between,
-  grows the map. A stale entry has no other effect, because every read follows
-  the clear at the first capture of a wheel event. Fix: `Host::free_ids`, the
-  one path for both the orphan sweep and `destroyNode`, drops the entry of
-  each freed id with a `gpui` function beside `write_scroll_offset`, as it
-  already does for `scroll_handles` and `scroll_reported`.
+  Chromium sometimes drops the wheel step when a listener moves an inner
+  container to its end: with a listener on the outer element, a passive
+  document listener, or a document listener in some layouts. The host passes
+  the step to the outer container, as Firefox and WebKit do. Fix: none until
+  Chromium's rule is specified; it varies with the listener position and
+  layout.
+
+- **B-203 Chromium and the host give the step to different containers**
+  `Units: gpui,bridge · Size: S · Impact: Low`
+
+  When a listener moves an inner container off its end, Chromium gives the step
+  to the outer container. The host gives it to the inner container, as Firefox
+  and WebKit do. With a listener on the document all three engines give the
+  step to the inner container. Fix: none until Chromium's rule is specified;
+  it varies with the listener position and layout.

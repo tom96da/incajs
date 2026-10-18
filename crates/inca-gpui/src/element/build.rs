@@ -11,7 +11,7 @@ use super::pointer::{
 };
 use super::scroll::{snapped_extra, wire_scroll};
 use super::spec::{DisplaySpec, ElementSpec, ElementTag, build_spec};
-use super::style::apply_style;
+use super::style::{apply_style, clip_scroll_axes};
 use crate::event_sink::{EventPayload, EventSink, noop_sink_methods};
 use crate::tree::{NodeId, VirtualTree};
 
@@ -63,11 +63,11 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
             if spec.style.clips() || (dispatch.is_some() && hover) {
                 let element = element.id(ElementId::Integer(u64::from(id)));
                 let element = wire_focus(element, dispatch, id);
-                let element = wire_scroll(element, handle, spec, root);
+                let element = wire_scroll(element, handle.clone(), spec, root, dispatch);
                 let element = wire_hover(element, dispatch.filter(|_| hover), id);
                 let element =
                     element.when(hover, |el| mark_mouse_target(el, id, dispatch.cloned()));
-                finish_container(element, spec, dispatch, root, track)
+                finish_container(element, spec, dispatch, root, track, handle.is_some())
             } else {
                 finish_container(
                     wire_focus(element, dispatch, id),
@@ -75,6 +75,7 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
                     dispatch,
                     root,
                     track,
+                    false,
                 )
             }
         }
@@ -90,11 +91,16 @@ fn finish_container<E>(
     dispatch: Option<&(impl EventSink + Clone + 'static)>,
     root: bool,
     track: bool,
+    scrolls: bool,
 ) -> AnyElement
 where
     E: Styled + ParentElement + IntoElement + 'static,
 {
     apply_style(element.style(), &spec.style);
+    // The pointer tracker and the root's listener apply the wheel step of a tracked container.
+    if scrolls {
+        clip_scroll_axes(element.style());
+    }
     if let Some(dispatch) = dispatch.filter(|_| root) {
         element = element.child(pointer_tracker(spec.id, dispatch.clone()));
     }
@@ -166,7 +172,7 @@ where
             // already hold the snapped offset of the ancestors.
             let outer = window.element_offset();
             let offset = snapped_extra(window, outer + offset, outer);
-            // The tracker and the scroll recorder come before the children.
+            // The tracker comes before the children.
             let first = raw.len().saturating_sub(children.len());
             for (&(id, border), bounds) in children.iter().zip(&raw[first..]) {
                 if let Some(border) = border {
@@ -214,6 +220,10 @@ impl EventSink for NoSink {
     }
 
     fn scroll_handle(&self, _node_id: NodeId) -> Option<ScrollHandle> {
+        None
+    }
+
+    fn wheel_axes(&self, _node_id: NodeId) -> Option<Point<bool>> {
         None
     }
 

@@ -307,63 +307,6 @@ fn gpui_clears_default_prevented_when_the_next_event_starts(cx: &mut TestAppCont
     assert!(!cx.update(|window, _| window.default_prevented()));
 }
 
-#[gpui::test]
-fn gpui_applies_the_wheel_scroll_step_in_the_bubble_phase_and_keeps_propagating(
-    cx: &mut TestAppContext,
-) {
-    let log = Log::default();
-    let handle = ScrollHandle::new();
-    let (l, h) = (Rc::clone(&log), handle.clone());
-    let mut cx = mount(cx, move |_, _| {
-        let (root_log, root_handle) = (Rc::clone(&l), h.clone());
-        let (tap_log, tap_handle) = (Rc::clone(&l), h.clone());
-        div()
-            .size(px(100.))
-            .on_scroll_wheel(move |_, _, _| {
-                let offset = f32::from(root_handle.offset().y);
-                root_log.borrow_mut().push(format!("root {offset}"));
-            })
-            .child(
-                canvas(
-                    |_, _, _| (),
-                    move |_, (), window, _| {
-                        window.on_mouse_event(move |_: &ScrollWheelEvent, phase, _, _| {
-                            let name = match phase {
-                                DispatchPhase::Capture => "tracker capture",
-                                DispatchPhase::Bubble => "tracker bubble",
-                            };
-                            let offset = f32::from(tap_handle.offset().y);
-                            tap_log.borrow_mut().push(format!("{name} {offset}"));
-                        });
-                    },
-                )
-                .absolute()
-                .size_0(),
-            )
-            .child(
-                div()
-                    .id("scroller")
-                    .size(px(100.))
-                    .overflow_y_scroll()
-                    .track_scroll(&h)
-                    .child(div().w(px(100.)).h(px(300.))),
-            )
-            .into_any_element()
-    });
-
-    cx.simulate_event(ScrollWheelEvent {
-        position: at(10., 10.),
-        delta: ScrollDelta::Pixels(point(px(0.), px(-20.))),
-        ..Default::default()
-    });
-
-    assert_eq!(
-        taken(&log),
-        ["tracker capture 0", "tracker bubble -20", "root -20"]
-    );
-    assert_eq!(f32::from(handle.offset().y), -20.);
-}
-
 /// Mounts a 100px tracked container with hidden y overflow over 300px of
 /// content.
 fn mount_hidden_scroller(cx: &mut TestAppContext, handle: &ScrollHandle) -> VisualTestContext {

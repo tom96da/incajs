@@ -4,10 +4,10 @@
 use gpui::prelude::*;
 use gpui::{
     App, DispatchPhase, Global, MouseButton, MouseDownEvent, MouseExitEvent, MouseMoveEvent,
-    MouseUpEvent, ScrollWheelEvent, Window, canvas,
+    MouseUpEvent, ScrollHandle, ScrollWheelEvent, Window, canvas,
 };
 
-use super::scroll::roll_back_extra_steps;
+use super::scroll::{RootStep, WheelChain, next_offset};
 use crate::event_sink::{EventPayload, EventSink, button_index};
 use crate::tree::NodeId;
 
@@ -210,11 +210,36 @@ pub(super) fn pointer_tracker<E: EventSink + Clone + 'static>(
             let scrolled = dispatch.clone();
             window.on_mouse_event(
                 move |event: &ScrollWheelEvent, phase, window, cx| match phase {
-                    DispatchPhase::Capture => cx.default_global::<MouseTarget>().current = None,
+                    DispatchPhase::Capture => {
+                        cx.default_global::<MouseTarget>().current = None;
+                        cx.default_global::<WheelChain>().0.clear();
+                    }
                     DispatchPhase::Bubble => {
-                        roll_back_extra_steps(cx);
+                        let mut chain = std::mem::take(&mut cx.default_global::<WheelChain>().0);
+                        let delta = event.delta.pixel_delta(window.line_height());
+                        let could_move = |(id, handle): &(NodeId, ScrollHandle)| {
+                            scrolled
+                                .wheel_axes(*id)
+                                .and_then(|axes| next_offset(axes, handle, delta))
+                        };
+                        let below_could_move = chain.iter().any(|link| could_move(link).is_some());
                         let target = target_or(cx, root);
                         scrolled.pointer_input("wheel", target, &event.into(), window, cx);
+                        let mut step_taken = window.default_prevented();
+                        if !step_taken
+                            && let Some(((_, handle), next)) = chain
+                                .iter()
+                                .find_map(|link| could_move(link).map(|next| (link, next)))
+                        {
+                            handle.set_offset(next);
+                            window.refresh();
+                            step_taken = true;
+                        }
+                        // The root's own listener takes the step when it is under the pointer.
+                        cx.default_global::<RootStep>().0 =
+                            (!step_taken && !below_could_move).then_some(delta);
+                        chain.clear();
+                        cx.default_global::<WheelChain>().0 = chain;
                     }
                 },
             );
@@ -523,9 +548,9 @@ mod tests {
         }
         tree.set_attribute(child, "inert", true).unwrap();
         tree.append_child(parent, child).unwrap();
-        let probe = probe();
+        let probe = probe_of(tree);
         let calls = Rc::clone(&probe.calls);
-        let window = cx.add_window(|_, _| ProbeView(tree, probe));
+        let window = cx.add_window(|_, _| ProbeView(probe));
         cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
             .unwrap();
         let mut cx = VisualTestContext::from_window(window.into(), cx);

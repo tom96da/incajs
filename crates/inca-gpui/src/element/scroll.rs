@@ -1,210 +1,109 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::cell::RefCell;
-use std::collections::HashMap;
-
 use gpui::prelude::*;
-use gpui::{
-    App, Bounds, DispatchPhase, Global, Pixels, Point, ScrollHandle, ScrollWheelEvent, Window,
-    canvas, point, px,
-};
+use gpui::{Bounds, Global, Pixels, Point, ScrollHandle, Window, point, px};
 
 use super::spec::ElementSpec;
 use crate::NodeId;
+use crate::event_sink::EventSink;
 
-thread_local! {
-    // gpui runs on one thread: the App is built on the main thread and held in an Rc.
-    /// The last offset a script set on each container. Cleared when the first
-    /// capture of a wheel event is recorded, so it holds the writes made since
-    /// the last wheel event started.
-    static WRITTEN: RefCell<HashMap<NodeId, Point<Pixels>>> = RefCell::default();
-}
-
-/// Sets a container's offset from a script. A wheel event in flight never
-/// undoes the write, whether or not a listener prevented the default.
-pub fn write_scroll_offset(node: NodeId, handle: &ScrollHandle, offset: Point<Pixels>) {
-    handle.set_offset(offset);
-    record_scroll_write(node, offset);
-}
-
-/// Records `offset` as a script's write to the container. The caller has
-/// already set it.
-pub fn record_scroll_write(node: NodeId, offset: Point<Pixels>) {
-    WRITTEN.with_borrow_mut(|map| map.insert(node, offset));
-}
-
-fn written(node: NodeId) -> Option<Point<Pixels>> {
-    WRITTEN.with_borrow(|written| written.get(&node).copied())
-}
-
-/// Every scroll container's offset before the wheel event being dispatched,
-/// outermost first, and whether the container is inert.
+/// The tracked scroll containers under the pointer for the wheel event being
+/// dispatched, innermost first, without the root.
 #[derive(Default)]
-struct WheelSnapshots(Vec<Snapshot>);
+pub(super) struct WheelChain(pub(super) Vec<(NodeId, ScrollHandle)>);
 
-/// A container's node and handle, its offset before the wheel event, whether
-/// it is inert and whether it is the root, whose step runs after the root's
-/// bubble handler.
-struct Snapshot {
-    node: NodeId,
-    handle: ScrollHandle,
-    before: Point<Pixels>,
-    inert: bool,
-    root: bool,
-}
+impl Global for WheelChain {}
 
-impl Global for WheelSnapshots {}
-
-/// A zero-size child whose paint records its container's offset in the
-/// capture phase, which runs before any bubble-phase scroll step. Children
-/// paint after their parent, and a container adds this before its own
-/// children, so containers record outermost first.
-fn scroll_recorder(
-    node: NodeId,
-    handle: ScrollHandle,
-    inert: bool,
-    root: bool,
-) -> impl IntoElement {
-    canvas(
-        |_, _, _| (),
-        move |_, (), window, _| {
-            window.on_mouse_event(move |_: &ScrollWheelEvent, phase, window, cx| {
-                if phase != DispatchPhase::Capture {
-                    return;
-                }
-                let snapshots = &mut cx.default_global::<WheelSnapshots>().0;
-                let first = snapshots.is_empty();
-                snapshots.push(Snapshot {
-                    node,
-                    handle: handle.clone(),
-                    before: handle.offset(),
-                    inert,
-                    root,
-                });
-                if first {
-                    WRITTEN.with_borrow_mut(HashMap::clear);
-                    window.defer(cx, settle_wheel);
-                }
-            });
-        },
-    )
-    .absolute()
-    .size_0()
-}
-
-/// The container whose wheel step [`roll_back_extra_steps`] kept: its node,
-/// its handle and the offset before and after the step.
-struct Kept {
-    node: NodeId,
-    handle: ScrollHandle,
-    before: Point<Pixels>,
-    after: Point<Pixels>,
-}
-
+/// The wheel delta the root container may still apply. The pointer tracker
+/// sets it after the listeners ran, and the root's own listener, which runs
+/// last in the bubble phase and only when the pointer is over the root, takes it.
 #[derive(Default)]
-struct WheelKept(Option<Kept>);
+pub(super) struct RootStep(pub(super) Option<Point<Pixels>>);
 
-impl Global for WheelKept {}
+impl Global for RootStep {}
 
-/// Undoes the wheel steps of every container but the innermost one that can
-/// still move, and returns the kept container. `settled` true restores that
-/// one too. A container a script wrote keeps its offset.
-fn undo_steps(snapshots: Vec<Snapshot>, mut settled: bool) -> Option<Kept> {
-    let mut kept = None;
-    for Snapshot {
-        node,
-        handle,
-        before,
-        inert,
-        ..
-    } in snapshots.into_iter().rev()
-    {
-        // The root's step runs after the script, so an undone step sets the
-        // offset back to the write.
-        if let Some(at) = written(node) {
-            if settled || inert {
-                handle.set_offset(at);
-            }
-            continue;
-        }
-        // An inert container never scrolls and leaves the wheel to the next.
-        if inert {
-            handle.set_offset(before);
-            continue;
-        }
-        // `gpui` clamps the offset on the next draw; compare as it will.
-        let max = handle.max_offset();
-        let clamp = |offset: Point<Pixels>| {
-            point(
-                offset.x.clamp(-max.x, px(0.)),
-                offset.y.clamp(-max.y, px(0.)),
-            )
-        };
-        // An unclamped `before` past the end would always differ from `moved`.
-        if !settled && clamp(handle.offset()) != clamp(before) {
-            settled = true;
-            let after = handle.offset();
-            kept = Some(Kept {
-                node,
-                handle,
-                before,
-                after,
-            });
+/// The scroll change a wheel `delta` makes along the scrolling `axes`. A
+/// delta on both axes moves along y when the magnitudes tie.
+pub(super) fn axis_step(axes: Point<bool>, delta: Point<Pixels>) -> Point<Pixels> {
+    let along = |own: bool, main: Pixels, cross: Pixels, cross_scrolls: bool| {
+        if !own {
+            Pixels::ZERO
+        } else if main != Pixels::ZERO {
+            main
+        } else if !cross_scrolls {
+            cross
         } else {
-            handle.set_offset(before);
+            Pixels::ZERO
+        }
+    };
+    let mut x = along(axes.x, delta.x, delta.y, axes.y);
+    let mut y = along(axes.y, delta.y, delta.x, axes.x);
+    if x != Pixels::ZERO && y != Pixels::ZERO {
+        if x.abs() > y.abs() {
+            y = Pixels::ZERO;
+        } else {
+            x = Pixels::ZERO;
         }
     }
-    kept
+    point(x, y)
 }
 
-/// Runs in the root's bubble phase, once `gpui`'s scroll steps have run and
-/// before the JS listeners. Restores every container but the innermost one
-/// that can still move, so a listener's own scroll writes stay.
-pub(super) fn roll_back_extra_steps(cx: &mut App) {
-    let all = std::mem::take(&mut cx.default_global::<WheelSnapshots>().0);
-    // The root's own step is still to come; `settle_wheel` handles it.
-    let (root, below): (Vec<_>, Vec<_>) = all.into_iter().partition(|s| s.root);
-    cx.default_global::<WheelSnapshots>().0 = root;
-    cx.default_global::<WheelKept>().0 = undo_steps(below, false);
+/// The offset a wheel `delta` moves `handle` to, clamped to the content of the
+/// last layout. `None` when the clamped offset stays where it is.
+pub(super) fn next_offset(
+    axes: Point<bool>,
+    handle: &ScrollHandle,
+    delta: Point<Pixels>,
+) -> Option<Point<Pixels>> {
+    let max = handle.max_offset();
+    let clamp = |offset: Point<Pixels>| {
+        point(
+            offset.x.clamp(-max.x, px(0.)),
+            offset.y.clamp(-max.y, px(0.)),
+        )
+    };
+    let offset = handle.offset();
+    let next = clamp(offset + axis_step(axes, delta));
+    (next != clamp(offset)).then_some(next)
 }
 
-/// Runs before the next draw, after the JS listeners. A listener that
-/// prevented the default leaves the kept container where it was. A container
-/// a listener wrote keeps the write, plus the wheel step when the default was
-/// not prevented, and `gpui` clamps it on the next draw.
-///
-/// A `gpui` that applies the wheel step later than the event breaks this.
-fn settle_wheel(window: &mut Window, cx: &mut App) {
-    let snapshots = std::mem::take(&mut cx.default_global::<WheelSnapshots>().0);
-    let prevented = window.default_prevented();
-    let kept = cx.default_global::<WheelKept>().0.take();
-    // The root's snapshot, or all of them when the root's bubble phase did not run.
-    undo_steps(snapshots, prevented || kept.is_some());
-    if let Some(kept) = kept {
-        match (written(kept.node), prevented) {
-            (None, true) => kept.handle.set_offset(kept.before),
-            (Some(at), false) => kept.handle.set_offset(at + (kept.after - kept.before)),
-            _ => {}
-        }
-    }
-}
-
-/// Tracks a scroll container's [`ScrollHandle`] and records its offset for
-/// [`settle_wheel`], which sets an inert container back to it, or to a
-/// script's write. Without a handle `gpui` scrolls it on its own.
-pub(super) fn wire_scroll<Elem>(
+/// Tracks a scroll container's [`ScrollHandle`]. A container below the root
+/// adds itself to the [`WheelChain`] in the bubble phase, which runs innermost
+/// first. The root applies its [`RootStep`] in its own listener.
+pub(super) fn wire_scroll<Elem, E>(
     element: Elem,
     handle: Option<ScrollHandle>,
     spec: &ElementSpec,
     root: bool,
+    dispatch: Option<&E>,
 ) -> Elem
 where
     Elem: StatefulInteractiveElement + ParentElement + FluentBuilder,
+    E: EventSink + Clone + 'static,
 {
+    let id = spec.id;
     element.when_some(handle, |el, handle| {
-        el.track_scroll(&handle)
-            .child(scroll_recorder(spec.id, handle, spec.inert, root))
+        let el = el.track_scroll(&handle);
+        if !root {
+            return el.on_scroll_wheel(move |_, _, cx| {
+                cx.default_global::<WheelChain>()
+                    .0
+                    .push((id, handle.clone()));
+            });
+        }
+        el.when_some(dispatch.cloned(), |el, sink| {
+            el.on_scroll_wheel(move |_, window, cx| {
+                if let Some(delta) = cx.default_global::<RootStep>().0.take()
+                    && let Some(next) = sink
+                        .wheel_axes(id)
+                        .and_then(|axes| next_offset(axes, &handle, delta))
+                {
+                    handle.set_offset(next);
+                    window.refresh();
+                }
+            })
+        })
     })
 }
 
@@ -335,6 +234,7 @@ mod tests {
     use crate::event_sink::EventSink;
     use crate::tree::{NodeId, VirtualTree};
     use gpui::{Bounds, Pixels, Point, TestAppContext, VisualTestContext, point, px};
+    use inca_test_macros::gpui_cases;
     use rstest::rstest;
 
     const fn rect(x: f32, y: f32, width: f32, height: f32) -> Rect {
@@ -481,24 +381,62 @@ mod tests {
         assert_eq!(seen, [(1, 0.0, 500.0), (2, 0.0, 250.0)]);
     }
 
-    use gpui::{ScrollDelta, ScrollWheelEvent};
+    use gpui::{Context, Render, ScrollDelta, ScrollWheelEvent, StyleRefinement, Window};
 
     struct Wheels {
         probe: Probe,
         cx: VisualTestContext,
     }
 
+    /// Draws `ProbeView` through a cached view, which a draw reuses until the
+    /// window refreshes.
+    struct CachedShell(gpui::Entity<ProbeView>);
+
+    impl Render for CachedShell {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            gpui::AnyView::from(self.0.clone()).cached(StyleRefinement::default().size_full())
+        }
+    }
+
     impl Wheels {
         /// Mounts and draws `tree`, rooted at node 0.
         fn new(cx: &mut TestAppContext, tree: VirtualTree) -> Self {
-            let probe = probe();
+            Self::with_probe(cx, probe_of(tree))
+        }
+
+        /// Like [`Self::new`], with a probe that tracks no pointer.
+        fn untracked(cx: &mut TestAppContext, tree: VirtualTree) -> Self {
+            let probe = Probe {
+                tracks: false,
+                ..probe_of(tree)
+            };
+            Self::with_probe(cx, probe)
+        }
+
+        /// Like [`Self::new`], with the tree drawn through a cached view.
+        fn cached(cx: &mut TestAppContext, tree: VirtualTree) -> Self {
+            let probe = probe_of(tree);
             let view = probe.clone();
-            let window = cx.add_window(|_, _| ProbeView(tree, view));
-            cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+            let window = cx.add_window(|_, cx| CachedShell(cx.new(|_| ProbeView(view))));
+            Self::draw_window(cx, probe, window.into())
+        }
+
+        fn with_probe(cx: &mut TestAppContext, probe: Probe) -> Self {
+            let view = probe.clone();
+            let window = cx.add_window(|_, _| ProbeView(view));
+            Self::draw_window(cx, probe, window.into())
+        }
+
+        fn draw_window(
+            cx: &mut TestAppContext,
+            probe: Probe,
+            window: gpui::AnyWindowHandle,
+        ) -> Self {
+            cx.update_window(window, |_, window, cx| window.draw(cx).clear(cx))
                 .unwrap();
             Self {
                 probe,
-                cx: VisualTestContext::from_window(window.into(), cx),
+                cx: VisualTestContext::from_window(window, cx),
             }
         }
 
@@ -690,16 +628,6 @@ mod tests {
     }
 
     #[gpui::test]
-    fn a_diagonal_wheel_scrolls_only_the_scrolling_axis(cx: &mut TestAppContext) {
-        let tree = styled_container(&[("overflow_x", "hidden"), ("overflow_y", "scroll")]);
-        let mut scene = Wheels::new(cx, tree);
-        scene.wheel_delta(10., ScrollDelta::Pixels(point(px(-10.), px(-50.))));
-        assert_eq!(scene.offset(0), point(px(0.), px(-50.)));
-    }
-
-    // Pins gpui's axis rule: the y delta moves the container even when the x
-    // delta is larger.
-    #[gpui::test]
     fn an_x_dominant_wheel_moves_a_y_only_container_by_its_y_delta(cx: &mut TestAppContext) {
         let tree = styled_container(&[("overflow_x", "hidden"), ("overflow_y", "scroll")]);
         let mut scene = Wheels::new(cx, tree);
@@ -707,11 +635,93 @@ mod tests {
         assert_eq!(scene.offset(0), point(px(0.), px(-10.)));
     }
 
-    // Pins gpui's axis rule.
     #[gpui::test]
     fn a_vertical_wheel_scrolls_an_x_only_container_along_x(cx: &mut TestAppContext) {
         let mut scene = Wheels::new(cx, styled_container(&[("overflow_x", "scroll")]));
         scene.wheel(-50.);
         assert_eq!(scene.offset(0), point(px(-50.), px(0.)));
+    }
+
+    #[gpui::test]
+    fn a_step_past_the_inner_end_leaves_the_outer_unmoved(cx: &mut TestAppContext) {
+        let mut scene = Wheels::new(cx, nested_containers());
+        scene.wheel(-150.);
+        scene.wheel(-100.);
+        assert_eq!(scene.offset(1).y, px(-200.));
+        assert_eq!(scene.offset(0).y, px(0.));
+    }
+
+    #[gpui::test]
+    fn a_wheel_scrolls_nested_containers_without_pointer_tracking(cx: &mut TestAppContext) {
+        let mut scene = Wheels::untracked(cx, nested_containers());
+        scene.wheel(-200.);
+        scene.wheel(-50.);
+        assert_eq!(scene.offset(1).y, px(-200.));
+        assert_eq!(scene.offset(0).y, px(-50.));
+    }
+
+    #[gpui::test]
+    fn a_line_wheel_moves_by_the_window_line_height(cx: &mut TestAppContext) {
+        let mut scene = Wheels::new(cx, one_container());
+        let line = scene.cx.update(|window, _| window.line_height());
+        scene.wheel_delta(10., ScrollDelta::Lines(point(0., -2.)));
+        assert_eq!(scene.offset(0).y, line * -2.);
+    }
+
+    #[gpui::test]
+    fn a_diagonal_wheel_of_equal_axes_moves_along_y(cx: &mut TestAppContext) {
+        let tree = styled_container(&[("overflow_x", "scroll"), ("overflow_y", "scroll")]);
+        let mut scene = Wheels::new(cx, tree);
+        scene.wheel_delta(10., ScrollDelta::Pixels(point(px(-10.), px(-10.))));
+        assert_eq!(scene.offset(0), point(px(0.), px(-10.)));
+    }
+
+    #[gpui::test]
+    fn a_diagonal_wheel_moves_a_both_axes_container_along_the_larger_delta(
+        cx: &mut TestAppContext,
+    ) {
+        let tree = styled_container(&[("overflow_x", "scroll"), ("overflow_y", "scroll")]);
+        let mut scene = Wheels::new(cx, tree);
+        scene.wheel_delta(10., ScrollDelta::Pixels(point(px(-20.), px(-10.))));
+        assert_eq!(scene.offset(0), point(px(-20.), px(0.)));
+    }
+
+    #[gpui::test]
+    fn a_wheel_outside_the_root_container_leaves_it_alone(cx: &mut TestAppContext) {
+        let mut scene = Wheels::new(cx, one_container());
+        scene.wheel_at(150., -50.);
+        assert_eq!(scene.offset(0).y, px(0.));
+    }
+
+    #[gpui::test]
+    fn a_container_left_in_the_chain_does_not_take_the_next_wheel(cx: &mut TestAppContext) {
+        let mut tree = VirtualTree::new();
+        let root = div(&mut tree, None, 200., false);
+        for _ in 0..2 {
+            let sibling = div(&mut tree, Some(root), 100., true);
+            div(&mut tree, Some(sibling), 300., false);
+        }
+        let mut scene = Wheels::new(cx, tree);
+        let first = scene.probe.scroll_handle(1).unwrap();
+        scene
+            .cx
+            .update(|_, cx| cx.default_global::<WheelChain>().0.push((1, first)));
+        scene.wheel_at(110., -30.);
+        assert_eq!(scene.offset(1).y, px(0.));
+        assert_eq!(scene.offset(3).y, px(-30.));
+    }
+
+    #[gpui_cases]
+    #[gpui::test]
+    #[case::root_container(one_container(), 1)]
+    #[case::inner_container(nested_containers(), 2)]
+    fn a_wheel_step_redraws_a_cached_view(
+        cx: &mut TestAppContext,
+        tree: VirtualTree,
+        child: NodeId,
+    ) {
+        let mut scene = Wheels::cached(cx, tree);
+        scene.wheel(-30.);
+        assert_eq!(scene.probe.layouts.borrow()[&child].scroll.y, px(30.));
     }
 }

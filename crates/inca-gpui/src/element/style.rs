@@ -51,6 +51,16 @@ fn align_from_spec(spec: AlignSpec) -> gpui::AlignItems {
     }
 }
 
+/// Maps a `Scroll` axis to `Hidden`. `gpui` then leaves the wheel step to the
+/// caller and still keeps the tracked offset, its clamp and its maximum.
+pub(super) fn clip_scroll_axes(style: &mut StyleRefinement) {
+    for axis in [&mut style.overflow.x, &mut style.overflow.y] {
+        if *axis == Some(Overflow::Scroll) {
+            *axis = Some(Overflow::Hidden);
+        }
+    }
+}
+
 fn overflow_from_spec(spec: OverflowSpec) -> Overflow {
     match spec {
         OverflowSpec::Visible => Overflow::Visible,

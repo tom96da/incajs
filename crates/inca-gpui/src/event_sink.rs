@@ -342,9 +342,16 @@ pub trait EventSink {
     fn focus_handle(&self, node_id: NodeId) -> Option<gpui::FocusHandle>;
 
     /// Tracks this node's scroll offset. A container that clips or scrolls
-    /// gets one. Wheel scrolling applies to the innermost container whose overflow
-    /// is `scroll` or `auto` that can still move, and stays put after `preventDefault()`.
+    /// gets one. After the `wheel` listeners ran, the wheel step goes to the
+    /// innermost container under the pointer that can move, and is not applied
+    /// after `preventDefault()`.
     fn scroll_handle(&self, node_id: NodeId) -> Option<gpui::ScrollHandle>;
+
+    /// The axes along which a wheel step can scroll `node_id` now, read from
+    /// the live tree (see [`crate::wheel_axes`]). `None` when the node is unknown,
+    /// detached, hidden or inert. A shown container without `scroll` overflow
+    /// gives `false` on both axes.
+    fn wheel_axes(&self, node_id: NodeId) -> Option<gpui::Point<bool>>;
 
     /// Forgets every recorded layout. Called before each frame's tree is
     /// built, so only nodes laid out in the new frame have a record.

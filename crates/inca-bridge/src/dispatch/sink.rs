@@ -58,6 +58,10 @@ impl EventSink for EventDispatcher {
         Some(self.host.borrow().scroll_handle(node_id))
     }
 
+    fn wheel_axes(&self, node_id: NodeId) -> Option<gpui::Point<bool>> {
+        inca_gpui::wheel_axes(&self.host.borrow().tree, node_id)
+    }
+
     /// The first call of an update computes the delta and defers clearing it,
     /// so later calls in that update keep it.
     fn pointer_moved(&self, position: gpui::Point<gpui::Pixels>, cx: &mut App) {
@@ -156,7 +160,7 @@ impl EventSink for EventDispatcher {
                 self.hold_button(target, window, cx);
             }
             "mouseup" => self.state.mouse_held.set(None),
-            // gpui's scroll rollback reads `Window::default_prevented`.
+            // The wheel step reads `Window::default_prevented`.
             "wheel" if canceled => window.prevent_default(),
             _ => {}
         }
