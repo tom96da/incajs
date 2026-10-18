@@ -10,9 +10,19 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- the host prints a warning for a style value it does not support ([d04964f](https://github.com/tom96da/incajs/commit/d04964f))
+
+### Changed
+
+- a negative size, `gap`, `borderWidth`, `cornerRadius` or `textSize` is ignored ([d04964f](https://github.com/tom96da/incajs/commit/d04964f))
+
 ### Fixed
 
 - `inca dev` with the experimental HMR prints a `reload` line when an edit reloads the app ([8c2e32e](https://github.com/tom96da/incajs/commit/8c2e32e))
+- assigning to a host global leaves events, the development window and rejection reports working ([44acb24](https://github.com/tom96da/incajs/commit/44acb24))
+- after `inca dev` retries a failed load, event targets name the app's current elements ([44acb24](https://github.com/tom96da/incajs/commit/44acb24))
 
 ## [0.0.18] - 2026-10-18
 
