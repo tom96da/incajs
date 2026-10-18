@@ -34,6 +34,8 @@ the custom renderer's output. Each node has:
 - A node has at most one parent.
 - `appendChild` and `insertBefore` detach the child first, so they also move
   a node.
+- Detaching, moving or destroying a node drops the focus its subtree holds
+  at the call, with no `blur` or `focusout`.
 - Making a node its own ancestor throws. A `childId` naming the root, which
   belongs to the host, throws too.
 - A `nodeId` that is not a finite whole number in the `u32` range throws a
@@ -88,8 +90,8 @@ the nearest ancestor container.
 | `rootNodeId` | `() => number` | Return the id of the host-allocated root container, the node a mounting app attaches itself under. |
 | `createNode` | `(tag: string) => number` | Allocate a `VirtualNode`, return its id. Throws once every id has been used. Freed at the next frame unless inserted or held, see Tree rules. |
 | `appendChild` | `(parentId: number, childId: number) => void` | Attach a child at the end of `parentId`'s children. Same as `insertBefore` with no anchor. |
-| `insertBefore` | `(parentId: number, childId: number, anchorId: number \| null) => void` | Attach a child before `anchorId`, or at the end if `null`. Moving an attached node drops focus like `removeChild`. |
-| `removeChild` | `(parentId: number, childId: number) => void` | Detach a child node. The focused node in its subtree loses focus at the call, with no `blur` or `focusout`. Freed at the next frame unless re-inserted or held, see Tree rules. |
+| `insertBefore` | `(parentId: number, childId: number, anchorId: number \| null) => void` | Attach a child before `anchorId`, or at the end if `null`. |
+| `removeChild` | `(parentId: number, childId: number) => void` | Detach a child node. Freed at the next frame unless re-inserted or held, see Tree rules. |
 | `holdNode` | `(nodeId: number) => void` | Keep `nodeId` and its subtree alive while it has no parent. An unknown id throws a `TypeError`. |
 | `releaseNode` | `(nodeId: number) => void` | End the hold. An unknown id does nothing. |
 | `setAttribute` | `(nodeId: number, key: string, value: string \| number \| boolean) => void` | Set a non-style attribute prop. |
@@ -101,8 +103,8 @@ the nearest ancestor container.
 | `removeEventListener` | `(nodeId: number, event: string, callbackId: number) => boolean` | Drop one registration and return whether it was there. An unknown node returns `false`. |
 | `dispatchEvent` | `(nodeId: number, event: Event) => boolean` | Walk a script-built event over the path of `nodeId` and return `false` when a listener canceled it, see [Dispatching from script](#dispatching-from-script). |
 | `click` | `(nodeId: number) => void` | Walk an untrusted `click` at `nodeId`, see [Dispatching from script](#dispatching-from-script). |
-| `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its subtree, and return every `callbackId` registered in it. An unknown id returns `[]`. Destroying the root throws. Also drops the hold and clears the focus state of the destroyed nodes, and `blur` and `focusout` stay unfired. Drops the waiting `scrollIntoViewNode` calls of the destroyed nodes. |
-| `focusNode` | `(nodeId: number, preventScroll?: boolean) => void` | Request focus for `nodeId`. Takes effect next frame. A node with a `tabindex`, and only that node, takes focus. A node that is not connected to the root cannot take focus. Unless `preventScroll` is `true`, the scroll containers above the node then scroll it into view: a node that shows stays put, a node outside a container's box centres, and a node that shows partly moves the least vertically and stays put horizontally. A node with no recorded box yet is retried on the next frame. |
+| `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its subtree, and return every `callbackId` registered in it. An unknown id returns `[]`. Destroying the root throws. Also drops the hold and the waiting `scrollIntoViewNode` calls of the destroyed nodes. |
+| `focusNode` | `(nodeId: number, preventScroll?: boolean) => void` | Request focus for `nodeId`, next frame. Only a connected node with a `tabindex` that is not hidden takes it, and a `button` defaults to `0`. Unless `preventScroll` is `true`, the scroll containers above the node then scroll it into view: a node that shows stays put, a node outside a container's box centres, and a node that shows partly moves the least vertically and stays put horizontally. A node with no box yet is retried next frame. |
 | `focusedNode` | `() => number \| null` | The id of the focused node, or `null` when none has focus. |
 | `blurNode` | `(nodeId: number) => void` | Request that `nodeId` lose focus. Takes effect next frame, and does nothing if `nodeId` is not the focused node by then. |
 | `layoutOf` | `(nodeId: number) => [x, y, width, height, border, scrollX, scrollY] \| null` | Read the border box of `nodeId` in window pixels as the last drawn frame placed it, with `border` the uniform border width. `scrollX` and `scrollY` are the positive scroll offset the parent applied to that box. `null` for a node with no recorded box. |
