@@ -13,6 +13,7 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 ### Added
 
 - `contains()` on template refs ([0724fd1](https://github.com/tom96da/incajs/commit/0724fd1))
+- `%c` in `console` colors the text after it with a basic `color` ([492ec04](https://github.com/tom96da/incajs/commit/492ec04))
 
 ### Changed
 
@@ -21,6 +22,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - a listener function runs with the current target as `this` ([5518650](https://github.com/tom96da/incajs/commit/5518650))
 - the error of `CustomEvent(...)` called without `new` names `CustomEvent` ([ea5d186](https://github.com/tom96da/incajs/commit/ea5d186))
 - the host frees a detached node that nothing holds at the next frame ([37c45fa](https://github.com/tom96da/incajs/commit/37c45fa))
+- `console` format specifiers are not read again from a substituted value ([492ec04](https://github.com/tom96da/incajs/commit/492ec04))
+- the wheel step goes to the first container under the pointer that can move after the `wheel` listeners ran ([b57a90d](https://github.com/tom96da/incajs/commit/b57a90d))
 
 ### Fixed
 
