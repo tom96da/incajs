@@ -93,11 +93,11 @@ a newer `rustc`.
 ### macOS coverage
 
 The `rust-macos` and `rust-macos-intel` jobs run the same Rust steps as the
-Linux jobs, with `inca-tests` excluded. `rust-node-macos` runs
-`cargo test -p inca-tests` on macOS arm64. The Node unit suites and the
-`@incajs/e2e-tests` suite run on Linux only. The `plutil` tests in
-`packages/cli/src/macosApp.test.mts` run only on macOS and are skipped
-elsewhere.
+Linux jobs, with `inca-tests` excluded. `test-macos` runs the Node unit suites.
+`rust-node-macos` runs the same steps as `rust-node-ubuntu`, including
+`cargo test -p inca-tests` and the `@incajs/e2e-tests` suite. The `plutil`
+tests in `packages/cli/src/macosApp.test.mts` run only on macOS and are
+skipped elsewhere.
 
 ## TypeScript (`packages/*`)
 

@@ -17,13 +17,14 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Changed
 
-- the `id` of a template ref is its `id` attribute ([8b639b5](https://github.com/tom96da/incajs/commit/8b639b5))
-- event `target`, `currentTarget`, `relatedTarget` and `composedPath()` hold the elements and `window` ([4b3f82a](https://github.com/tom96da/incajs/commit/4b3f82a)) ([57ccbad](https://github.com/tom96da/incajs/commit/57ccbad))
+- the `id` of a template ref is its `id` attribute, and a text node has no `id` ([8b639b5](https://github.com/tom96da/incajs/commit/8b639b5))
+- event `target`, `currentTarget`, `relatedTarget` and `composedPath()` are elements or `window` ([4b3f82a](https://github.com/tom96da/incajs/commit/4b3f82a)) ([57ccbad](https://github.com/tom96da/incajs/commit/57ccbad))
 - a listener function runs with the current target as `this` ([5518650](https://github.com/tom96da/incajs/commit/5518650))
 - the error of `CustomEvent(...)` called without `new` names `CustomEvent` ([ea5d186](https://github.com/tom96da/incajs/commit/ea5d186))
 - the host frees a detached node that nothing holds at the next frame ([37c45fa](https://github.com/tom96da/incajs/commit/37c45fa))
+- `inca dev` error messages call the program "the host" ([8ad701b](https://github.com/tom96da/incajs/commit/8ad701b))
 - `console` format specifiers are not read again from a substituted value ([492ec04](https://github.com/tom96da/incajs/commit/492ec04))
-- the wheel step goes to the first container under the pointer that can move after the `wheel` listeners ran ([b57a90d](https://github.com/tom96da/incajs/commit/b57a90d))
+- the wheel step goes to the first container that can move after the `wheel` listeners ran ([b57a90d](https://github.com/tom96da/incajs/commit/b57a90d))
 
 ### Fixed
 
@@ -35,6 +36,7 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - `inca dev` reports an entry file the host cannot read like any other start failure ([19daf5e](https://github.com/tom96da/incajs/commit/19daf5e))
 - the type declarations of `@incajs/cli` resolve again from the paths `package.json` names ([3a00f91](https://github.com/tom96da/incajs/commit/3a00f91))
 - space release clicks a button under a held mouse press, and other keys keep a pending Space press ([bc31fb4](https://github.com/tom96da/incajs/commit/bc31fb4))
+- the app hears about a dev message receiver that throws ([b8fa5d0](https://github.com/tom96da/incajs/commit/b8fa5d0))
 - a script's scroll write stays through a wheel event ([85541ec](https://github.com/tom96da/incajs/commit/85541ec))
 
 ## [0.0.16] - 2026-10-13
