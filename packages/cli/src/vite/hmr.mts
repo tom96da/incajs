@@ -74,14 +74,49 @@ function importSpecifierTo(fromDir: string, target: string): string {
   return rel.startsWith(".") ? rel : `./${rel}`;
 }
 
+/** A `define` key that names a global; a dotted key such as `process.env.NODE_ENV` does not. */
+const identifierRE = /^[A-Za-z_$][\w$]*$/;
+
+/**
+ * The `define` entries set on `globalThis` in the development window, as values: those whose
+ * key is a plain identifier and whose code is a JSON literal. A string value is code, and any
+ * other value is read as its JSON form.
+ * @param define - the development server's resolved `define`
+ * @returns the values by key
+ */
+export function globalsOfDefine(
+  define: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  const globals: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(define ?? {})) {
+    if (!identifierRE.test(key)) continue;
+    try {
+      globals[key] = JSON.parse(typeof value === "string" ? value : JSON.stringify(value));
+    } catch {
+      // Code that is no JSON literal has no value before the app runs.
+    }
+  }
+  return globals;
+}
+
 /**
  * Writes the entry the host evaluates for an HMR session. The entry awaits
  * the bundled module runner's import of the app, so the host opens the
- * development window once the app has mounted.
+ * development window once the app has mounted. `start` sets `globals` on
+ * `globalThis` before the app loads.
+ * @param cwd - the directory whose `node_modules/.inca/hmr` holds the entry
+ * @param entry - the app's entry file
+ * @param globals - the values the entry passes to `start`
+ * @param runtimePath - the built `vite-runtime.js`, by default the package's own
+ * @returns the path of the written entry
  */
-async function writeHmrEntry(cwd: string, entry: string, runtimePath?: string): Promise<string> {
+async function writeHmrEntry(
+  cwd: string,
+  entry: string,
+  globals: Record<string, unknown>,
+  runtimePath?: string,
+): Promise<string> {
   const dir = hmrDirOf(cwd);
-  await mkdir(dir, { recursive: true });
 
   const entryPath = path.join(dir, "entry.js");
   const runtimeImport = importSpecifierTo(dir, runtimePath ?? resolveHmrRuntimePath());
@@ -90,7 +125,7 @@ async function writeHmrEntry(cwd: string, entry: string, runtimePath?: string): 
     entryPath,
     dedent`
       import { start } from ${JSON.stringify(runtimeImport)};
-      await start(${JSON.stringify(entryId)});
+      await start(${JSON.stringify(entryId)}, ${JSON.stringify(globals)});
     `,
   );
   return entryPath;
@@ -248,7 +283,7 @@ export async function hmr(
     onUpdate = () => {},
   }: HmrOptions,
 ): Promise<HmrChannel> {
-  const entryFile = await writeHmrEntry(cwd, entry, runtimePath);
+  await mkdir(hmrDirOf(cwd), { recursive: true });
 
   const configContent = serializeConfig(runtimeConfig);
   const configPath = path.join(hmrDirOf(cwd), CONFIG_FILE_NAME);
@@ -301,6 +336,19 @@ export async function hmr(
       fileChangedPlugin(changed),
     ],
   });
+
+  let entryFile: string;
+  try {
+    entryFile = await writeHmrEntry(
+      cwd,
+      entry,
+      globalsOfDefine(server.environments.client.config.define),
+      runtimePath,
+    );
+  } catch (error) {
+    await server.close();
+    throw error;
+  }
 
   return {
     entryFile,

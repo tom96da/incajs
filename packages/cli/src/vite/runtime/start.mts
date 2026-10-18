@@ -17,6 +17,9 @@ function isServerFailure(error: unknown): boolean {
  * Builds a `ModuleRunner` wired to the app's `__inca_dev__` channel and
  * imports `entryId` through it.
  *
+ * Sets each of `globals` on `globalThis` before the first import, so the app
+ * reads them while it loads.
+ *
  * A failed import is retried after the next `file-changed` payload, until
  * one succeeds. A failure the development server reported stays silent. Any
  * other failure is rethrown as an unhandled rejection.
@@ -34,9 +37,14 @@ function isServerFailure(error: unknown): boolean {
  * `hmr.logger` is fully muted: the development server already reports each
  * update, and a failed one, on its own. See `hmr.mts`'s `onError`.
  * @param entryId - the module id the development server serves the entry under
+ * @param globals - the values to set on `globalThis` before the first import
  * @returns the entry's exports, once an import succeeds
  */
-export async function start(entryId: string): Promise<unknown> {
+export async function start(
+  entryId: string,
+  globals: Record<string, unknown> = {},
+): Promise<unknown> {
+  Object.assign(globalThis, globals);
   let edited = (): void => {};
   const runner = new ModuleRunner(
     {

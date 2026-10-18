@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { existsSync } from "node:fs";
-import { readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Writable } from "node:stream";
 import { setTimeout } from "node:timers/promises";
@@ -366,10 +366,42 @@ describe("hmr", () => {
     const content = await readFile(channel.entryFile, "utf8");
     const specifier = content.match(/from\s+"([^"]+)"/)?.[1];
     expect(specifier).toBeTruthy();
-    expect(content).toMatch(/^await start\("[^"]+"\);$/m);
+    expect(content).toMatch(/^await start\("[^"]+", \{.*\}\);$/m);
 
     const resolved = path.resolve(path.dirname(channel.entryFile), specifier!);
     expect(existsSync(resolved)).toBe(true);
+  }, 20000);
+
+  it("passes the dev server's define globals to start", async () => {
+    const { entry, streams } = await makeApp(
+      `<script setup>\nconst msg = "hello";\n</script>\n<template><div>{{ msg }}</div></template>\n`,
+    );
+
+    const channel = await hmr({
+      entry,
+      cwd: path.dirname(entry),
+      ...streams,
+      notify: () => {},
+      reload: () => {},
+      onError: () => {},
+    });
+    channels.push(channel);
+
+    const content = await readFile(channel.entryFile, "utf8");
+    const globals = JSON.parse(content.match(/^await start\("[^"]+", (.*)\);$/m)![1]!) as object;
+    expect(globals).toMatchObject({ __VUE_OPTIONS_API__: true });
+  }, 20000);
+
+  it("rejects when the entry cannot be written", async () => {
+    const { entry, streams } = await makeApp(
+      `<script setup>\nconst msg = "hello";\n</script>\n<template><div>{{ msg }}</div></template>\n`,
+    );
+    const cwd = path.dirname(entry);
+    await mkdir(path.join(cwd, "node_modules/.inca/hmr/entry.js"), { recursive: true });
+
+    await expect(
+      hmr({ entry, cwd, ...streams, notify: () => {}, reload: () => {}, onError: () => {} }),
+    ).rejects.toMatchObject({ code: "EISDIR" });
   }, 20000);
 
   it("removes a stale inca.json when the session's config produces none", async () => {

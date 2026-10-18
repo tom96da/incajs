@@ -492,12 +492,14 @@ A fixed entry is deleted and its ID is never reused.
   over to a new scrolling container that gets the same id. Found by reading;
   not reproduced.
 
-- **B-074 Dev and production differ in `TextDecoder` and `URL`**
+- **B-074 Dev and production differ in `TextDecoder`, `URL` and the `define` globals**
   `Units: cli · Size: S · Impact: Low`
 
-  With `--experimental-hmr` the runtime installs a Latin-1 `TextDecoder` and a
-  minimal `URL` on the app's `globalThis`. A production build has neither, so
-  dev and production differ.
+  With `--experimental-hmr` the runtime installs a Latin-1 `TextDecoder`, a
+  minimal `URL` and, on the app's `globalThis`, each `define` value whose key
+  is a plain identifier and whose code is a JSON literal. A production build
+  inlines the `define` values and has none of these globals, so dev and
+  production differ.
 
 - **B-075 A failed host start in inca dev is handled differently per mode, and the checks overlap**
   `Units: cli · Size: S–M · Impact: Low`
@@ -898,14 +900,6 @@ A fixed entry is deleted and its ID is never reused.
   effect, and a touch tap produces the mouse events and a `click`. A long
   press fires nothing. Fix: dispatch the touch sequence from `gpui` touch
   input with `touches` and `changedTouches`.
-
-- **B-159 `inca dev --experimental-hmr` prints Vue's feature flag warning**
-  `Units: cli · Size: S · Impact: Low`
-
-  The development server prints a warning that `__VUE_OPTIONS_API__`,
-  `__VUE_PROD_DEVTOOLS__` and `__VUE_PROD_HYDRATION_MISMATCH_DETAILS__` are not
-  defined. Fix: define the three flags in the Vite configurations of the
-  development server and the build.
 
 - **B-160 Element reads see the last drawn frame**
   `Units: gpui,bridge,core · Size: L · Impact: Medium`

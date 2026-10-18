@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { start } from "./start.mts";
 
@@ -195,5 +195,16 @@ describe("start", () => {
 
     await expect(started).resolves.toMatchObject({ answer: 42 });
     expect(rejected).toEqual([]);
+  });
+
+  it("sets the globals before the entry evaluates", async () => {
+    installDev([() => module("__vite_ssr_exports__.seen = globalThis.__APP_CONFIG__;")]);
+    onTestFinished(() => {
+      delete (globalThis as { __APP_CONFIG__?: unknown }).__APP_CONFIG__;
+    });
+
+    await expect(start("/entry.js", { __APP_CONFIG__: true })).resolves.toMatchObject({
+      seen: true,
+    });
   });
 });
