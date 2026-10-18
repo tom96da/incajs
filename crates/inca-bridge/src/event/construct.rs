@@ -6,35 +6,33 @@ use rquickjs::atom::PredefinedAtom;
 use rquickjs::convert::Coerced;
 use rquickjs::function::{Constructor, IntoJsFunc, ParamRequirement, Params};
 use rquickjs::object::Property;
-use rquickjs::{Array, Ctx, Exception, Null, Object, Result as JsResult, Value};
+use rquickjs::{Array, Ctx, Exception, Function, Null, Object, Result as JsResult, Value};
 
 use super::payload::set_payload;
 use super::walk::Walk;
 use super::{
-    Flags, KEYBOARD_PROTOTYPE, MOUSE_PROTOTYPE, PHASES, PROTOTYPE, REMEMBER, function_slot,
-    path_value, slot, target_at, targets_of, time_stamp,
+    EVENT, Flags, KEYBOARD, MOUSE, PHASES, REMEMBER, path_value, piece, target_at, targets_of,
+    time_stamp,
 };
 use crate::bindings::convert::or_null;
 
-/// A new idle event object and its record, filed in the runtime's record
-/// store. The event inherits from the prototype in the slot `prototype`, and
-/// the record keeps that slot as `kind`.
+/// A new idle event object and its record, filed in the realm's record
+/// store. The event inherits from the prototype of kind `prototype`, and the
+/// record keeps that kind as `kind`.
 fn new_event<'js>(
     ctx: &Ctx<'js>,
     kind: &str,
     flags: Flags,
     trusted: bool,
-    prototype: usize,
+    prototype: &'static str,
 ) -> JsResult<(Object<'js>, Object<'js>)> {
     let Flags {
         bubbles,
         cancelable,
         composed,
     } = flags;
-    let proto = slot(ctx, prototype)?
-        .into_object()
-        .ok_or_else(|| Exception::throw_type(ctx, "events are not installed"))?;
-    let remember = function_slot(ctx, REMEMBER)?;
+    let proto: Object = piece(ctx, prototype)?;
+    let remember: Function = piece(ctx, REMEMBER)?;
 
     let record = Object::new(ctx.clone())?;
     record.set_prototype(None)?;
@@ -79,7 +77,7 @@ pub(super) fn create<'js>(
         walk.name,
         walk.flags,
         walk.trusted,
-        prototype_slot(walk.payload),
+        prototype_kind(walk.payload),
     )?;
     record.set("dispatching", true)?;
     record.set("path", path_value(ctx, targets, walk.path)?)?;
@@ -94,12 +92,12 @@ pub(super) fn create<'js>(
     Ok((event, record))
 }
 
-/// The slot of the prototype that an event carrying `payload` inherits from.
-fn prototype_slot(payload: &EventPayload) -> usize {
+/// The kind of the prototype that an event carrying `payload` inherits from.
+fn prototype_kind(payload: &EventPayload) -> &'static str {
     match payload {
-        EventPayload::Mouse(_) | EventPayload::Wheel(_) => MOUSE_PROTOTYPE,
-        EventPayload::Key(_) => KEYBOARD_PROTOTYPE,
-        EventPayload::None | EventPayload::Focus { .. } => PROTOTYPE,
+        EventPayload::Mouse(_) | EventPayload::Wheel(_) => MOUSE,
+        EventPayload::Key(_) => KEYBOARD,
+        EventPayload::None | EventPayload::Focus { .. } => EVENT,
     }
 }
 
@@ -200,7 +198,7 @@ impl<'js> IntoJsFunc<'js, ()> for Construct {
             cancelable: read("cancelable")?,
             composed: read("composed")?,
         };
-        let (event, _) = new_event(ctx, &kind, flags, false, PROTOTYPE)?;
+        let (event, _) = new_event(ctx, &kind, flags, false, EVENT)?;
         if self.custom {
             let detail = init
                 .as_ref()

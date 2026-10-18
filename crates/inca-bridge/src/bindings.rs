@@ -35,8 +35,9 @@ use tree::install_tree;
 ///
 /// # Errors
 ///
-/// Returns an error if defining a global or a method on `ctx` fails. A
-/// second call on the same `ctx` fails, as the globals are already defined.
+/// Returns an error if defining a global or a method on `ctx` fails, or the
+/// realm has no vault (a context no `Engine` made). A second call on the same
+/// `ctx` fails, as the globals are already defined.
 pub fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
     let native = Object::new(ctx.clone())?;
     let natives = Natives {

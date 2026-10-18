@@ -16,10 +16,10 @@ Rust keeps ids and plain data. A handle kept past the call that produced it
 outlives the context it belongs to, so every function and object lives on the
 JS side. [Registering](#registering) is the implementation example: listener
 functions stay in JS and Rust holds only the callback ids. Values the host
-keeps for itself, such as the promise of a pending module, sit in a per-realm
-vault (`inca_jsenv::vault`), a null-prototype object. A read-only global
-function returns it only while Rust calls it through a native gate, so no
-script reaches it, and Rust holds only the keys.
+keeps for itself, such as the promise of a pending module and the event store,
+sit in a per-realm vault (`inca_jsenv::vault`), a null-prototype object. A
+read-only global function returns it only while Rust calls it through a native
+gate, so no script reaches it, and Rust holds only the keys.
 
 ## Retained virtual tree
 
@@ -240,8 +240,8 @@ of core answers. Rust looks it up by name on each walk and keeps nothing.
   constants (also on `Event`) and the accessors
   `defaultPrevented`, `returnValue` and `cancelBubble` (settable, ToBoolean)
   and `srcElement` (reads `target`). Members read a host-private `WeakMap`
-  record in the engine's userdata (`crates/inca-bridge/src/event.rs`), and a
-  call on any other receiver throws a `TypeError`.
+  record that the realm's vault keeps (`crates/inca-bridge/src/event.rs`),
+  and a call on any other receiver throws a `TypeError`.
 - Mouse and wheel events inherit from a mouse prototype and key events from a
   keyboard prototype. Both inherit from the prototype above and hold their own
   `getModifierState`, which throws a `TypeError` on an event of the other kind.

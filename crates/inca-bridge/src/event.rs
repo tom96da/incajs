@@ -8,25 +8,30 @@
 //! from the root down to the target and then the bubble listeners from the
 //! target up, all with that same object, then resets its `currentTarget` and
 //! `eventPhase`. The object's methods and accessors live on a prototype built
-//! once per runtime. What they read and write sits in a record that a
-//! `WeakMap` keeps, so no script can reach it. Mouse and key events inherit
-//! from a prototype of their kind, which adds `getModifierState`. The global
-//! constructors `Event` and `CustomEvent` file their events in the same store,
-//! so a script can build an event and dispatch it.
+//! once per realm. What they read and write sits in a record that a `WeakMap`
+//! keeps, so no script can reach it. The prototypes and the two record
+//! functions sit in the realm's vault, and Rust keeps only their keys. Mouse
+//! and key events inherit from a prototype of their kind, which adds
+//! `getModifierState`. The global constructors `Event` and `CustomEvent` file
+//! their events in the same store, so a script can build an event and
+//! dispatch it.
 //!
-//! The global `__inca_targets__` gives the objects that stand for the nodes of a
-//! walk.
+//! The global `__inca_targets__` gives the objects that stand for the nodes of
+//! a walk.
 
 use std::sync::OnceLock;
 use std::time::Instant;
 
 use inca_gpui::NodeId;
 pub(crate) use inca_gpui::event_sink::Flags;
+use inca_jsenv::vault;
 use rquickjs::atom::PredefinedAtom;
 use rquickjs::convert::Coerced;
 use rquickjs::function::This;
 use rquickjs::object::Property;
-use rquickjs::{Array, Ctx, Exception, Function, IntoJs, Object, Result as JsResult, Value};
+use rquickjs::{
+    Array, Ctx, Exception, FromJs, Function, IntoJs, Object, Result as JsResult, Value,
+};
 
 mod construct;
 mod payload;
@@ -35,67 +40,54 @@ mod walk;
 use construct::constructors;
 pub(crate) use walk::{Walk, click, dispatch_event, listened, path_from, walk};
 
-/// What the event machinery keeps in the runtime's userdata, in the order of
-/// [`PROTOTYPE`], [`REMEMBER`], [`RECALL`], [`MOUSE_PROTOTYPE`] and
-/// [`KEYBOARD_PROTOTYPE`].
-// The values belong to one context.
-type Slots<'js> = Vec<Value<'js>>;
-
-/// `Event.prototype`, which every event object inherits from.
-const PROTOTYPE: usize = 0;
+/// The vault key of the event store: the three prototypes under the kind of
+/// event they serve, and the two record functions.
+const STORE: &str = "events";
+/// The kind of events that inherit from `Event.prototype` directly. A kind is
+/// the store key of its prototype and the `kind` of its records.
+const EVENT: &str = "event";
+/// The kind of mouse and wheel events. Their prototype inherits from the
+/// [`EVENT`] one.
+const MOUSE: &str = "mouse";
+/// The kind of key events. Their prototype inherits from the [`EVENT`] one.
+const KEYBOARD: &str = "keyboard";
 /// `(event, record)`: files the record of a new event.
-const REMEMBER: usize = 1;
+const REMEMBER: &str = "remember";
 /// `(event)`: the record of an event, `undefined` for any other value.
-const RECALL: usize = 2;
-/// The prototype of mouse and wheel events. It inherits from [`PROTOTYPE`].
-const MOUSE_PROTOTYPE: usize = 3;
-/// The prototype of key events. It inherits from [`PROTOTYPE`].
-const KEYBOARD_PROTOTYPE: usize = 4;
+const RECALL: &str = "recall";
 
-/// Creates the prototypes and the record store of `ctx`'s runtime. The first
-/// call wins, and later calls on the same runtime leave it as it is.
+/// Creates the prototypes and the record store of `ctx`'s realm in its vault.
+/// The first call wins, and later calls in the same realm leave it as it is.
 ///
 /// # Errors
 ///
-/// Returns an error if the realm lacks an intrinsic or the runtime's
-/// userdata is borrowed.
+/// Returns an error if the realm lacks an intrinsic or has no vault.
 pub(crate) fn install(ctx: &Ctx<'_>) -> JsResult<()> {
-    if ctx.userdata::<Slots>().is_some() {
+    let vault = vault(ctx)?;
+    if vault.contains_key(STORE)? {
         return Ok(());
     }
-    let [remember, recall]: [Function; 2] = ctx
-        .eval::<Vec<Function>, _>(
-            r"
-            (() => {
-                const records = new WeakMap();
-                const { get, set } = WeakMap.prototype;
-                const { apply } = Reflect;
-                return [
-                    (event, record) => { apply(set, records, [event, record]); },
-                    (event) => apply(get, records, [event]),
-                ];
-            })()
-            ",
-        )?
-        .try_into()
-        .map_err(|_| rquickjs::Error::Unknown)?;
+    let store: Object = ctx.eval(
+        r"
+        (() => {
+            const records = new WeakMap();
+            const { get, set } = WeakMap.prototype;
+            const { apply } = Reflect;
+            return {
+                __proto__: null,
+                remember: (event, record) => {
+                    apply(set, records, [event, record]);
+                },
+                recall: (event) => apply(get, records, [event]),
+            };
+        })()
+        ",
+    )?;
     let proto = prototype(ctx)?;
-    let mouse = modifier_prototype(ctx, &proto, MOUSE_PROTOTYPE)?;
-    let keyboard = modifier_prototype(ctx, &proto, KEYBOARD_PROTOTYPE)?;
-    let slots: Slots = vec![
-        proto.clone().into_value(),
-        remember.into_value(),
-        recall.into_value(),
-        mouse.into_value(),
-        keyboard.into_value(),
-    ];
-    ctx.store_userdata(slots).map_err(|_| {
-        rquickjs::Error::new_from_js_message(
-            "events",
-            "userdata",
-            "the runtime's userdata is borrowed",
-        )
-    })?;
+    store.set(MOUSE, modifier_prototype(ctx, &proto, MOUSE)?)?;
+    store.set(KEYBOARD, modifier_prototype(ctx, &proto, KEYBOARD)?)?;
+    store.set(EVENT, proto.clone())?;
+    vault.set(STORE, store)?;
     constructors(ctx, &proto)
 }
 
@@ -141,22 +133,14 @@ fn path_value<'js>(
     }
 }
 
-fn slot<'js>(ctx: &Ctx<'js>, index: usize) -> JsResult<Value<'js>> {
-    install(ctx)?;
-    ctx.userdata::<Slots>()
-        .map(|slots| slots[index].clone())
-        .ok_or_else(|| Exception::throw_type(ctx, "events are not installed"))
-}
-
-fn function_slot<'js>(ctx: &Ctx<'js>, index: usize) -> JsResult<Function<'js>> {
-    slot(ctx, index)?
-        .into_function()
-        .ok_or_else(|| Exception::throw_type(ctx, "events are not installed"))
+/// The entry `key` of the event store.
+fn piece<'js, T: FromJs<'js>>(ctx: &Ctx<'js>, key: &str) -> JsResult<T> {
+    vault(ctx)?.get::<_, Object>(STORE)?.get(key)
 }
 
 /// The record of `event`, `None` for any object the host did not file.
 fn find_record<'js>(ctx: &Ctx<'js>, event: &Object<'js>) -> JsResult<Option<Object<'js>>> {
-    let recall = function_slot(ctx, RECALL)?;
+    let recall: Function = piece(ctx, RECALL)?;
     let record: Value = recall.call((event.clone(),))?;
     Ok(record.into_object())
 }
@@ -279,12 +263,12 @@ fn define_methods<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<()> {
 }
 
 /// A prototype that inherits from `base` and holds `getModifierState`. The method reads only an
-/// event whose record holds `slot` as its `kind`, and throws a `TypeError` for any other
+/// event whose record holds `kind` as its `kind`, and throws a `TypeError` for any other
 /// receiver. Accel reads Meta on macOS and Control elsewhere.
 fn modifier_prototype<'js>(
     ctx: &Ctx<'js>,
     base: &Object<'js>,
-    slot: usize,
+    kind: &'static str,
 ) -> JsResult<Object<'js>> {
     let proto = Object::new(ctx.clone())?;
     proto.set_prototype(Some(base))?;
@@ -295,7 +279,7 @@ fn modifier_prototype<'js>(
               name: Coerced<String>|
               -> JsResult<bool> {
             let record = record_of(&ctx, &event)?;
-            if record.get::<_, usize>("kind")? != slot {
+            if record.get::<_, String>("kind")? != kind {
                 return Err(Exception::throw_type(
                     &ctx,
                     concat!(

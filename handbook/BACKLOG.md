@@ -229,16 +229,6 @@ A fixed entry is deleted and its ID is never reused.
   scratch app and resolves `incajs/vue/runtime` through the published
   `exports`. The UI tests cover the workspace link.
 
-- **B-189 The event store holds JS values in Rust**
-  `Units: bridge · Size: M · Impact: Medium`
-
-  The event store of `event.rs` keeps the record `WeakMap`, the three
-  prototypes and two functions as userdata of the context. They are JS values
-  held by Rust. A fix keeps them in JS and lets Rust refer to them by id. The
-  mouse and keyboard prototypes move with the rest, and the `kind` of each
-  event record, a slot index, becomes the id of its prototype. B-185
-  covers the shape of the same store.
-
 - **B-195 `removeEventListener` accepts a malformed `callbackId`**
   `Units: bridge,docs · Size: S · Impact: Medium`
 
@@ -1100,28 +1090,15 @@ A fixed entry is deleted and its ID is never reused.
   reassigned field changes its result. `Object::prop(key, value)` of rquickjs
   defines a read-only property.
 
-- **B-185 The event store keeps its pieces by index**
-  `Units: bridge · Size: S · Impact: Low`
-
-  `event.rs` keeps the `WeakMap` record store, the three prototypes and two
-  functions in a `Vec<Value>` addressed by index constants. The `kind` of an
-  event record holds one of these indexes. A struct with named fields needs
-  `JsLifetime`. The `macro` feature of rquickjs provides
-  `#[derive(JsLifetime)]`, which generates the `unsafe impl` and checks at
-  compile time that every field type is valid, so the bridge keeps no
-  hand-written `unsafe`. With `"macro"` in the workspace rquickjs features,
-  `cargo check -p inca-bridge` compiles and `Cargo.lock` gains
-  `rquickjs-macro` and its dependencies. `clippy -D warnings` is unchecked.
-  The workspace sets `unsafe_code = "deny"` and keeps all `unsafe` in
-  `inca-jsenv/src/quickjs.rs`, so the policy for macro-generated `unsafe` is
-  decided first.
-
 - **B-186 `Plain` implements `JsLifetime` by hand**
   `Units: jsenv · Size: S · Impact: Low`
 
   `quickjs.rs` holds the one hand-written `unsafe impl JsLifetime`, for
-  `Plain<T>`. Check whether `#[derive(JsLifetime)]` (see B-185) can replace
-  it and shrink the hand-written `unsafe` surface.
+  `Plain<T>`. Check whether `#[derive(JsLifetime)]` of the `macro` feature
+  of rquickjs can replace it and shrink the hand-written `unsafe` surface.
+  The derive generates an `unsafe impl`, and the workspace sets
+  `unsafe_code = "deny"` with all `unsafe` in `inca-jsenv/src/quickjs.rs`,
+  so the policy for macro-generated `unsafe` is decided first.
 
 - **B-191 The event walk allocates on every event**
   `Units: bridge · Size: M · Impact: Low`
