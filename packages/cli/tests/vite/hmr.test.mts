@@ -16,6 +16,7 @@ import type { ModuleRunnerTransport } from "vite/module-runner";
 import * as adapterCore from "../../src/adapterCore.mts";
 import { createViteBundler } from "../../src/vite/index.mts";
 import packageViteConfig from "../../vite.config.mts";
+import { fsLag } from "../support/fsLag.mts";
 import { scratchApp, TEST_RUNTIME_MODULE } from "./scratchApp.mts";
 import type { HmrChannel, HmrOptions } from "../../src/types.mts";
 
@@ -100,6 +101,7 @@ describe("hmr", () => {
     const notified: unknown[] = [];
     const reloads: ({ file: string; at: number } | undefined)[] = [];
 
+    await fsLag();
     const channel = await hmr({
       entry,
       cwd: path.dirname(entry),
@@ -112,6 +114,7 @@ describe("hmr", () => {
       onError: () => {},
     });
     channels.push(channel);
+    await fsLag();
 
     const client = connectRunner(channel.dispatch);
     await client.runner.import(entry);
@@ -165,6 +168,7 @@ describe("hmr", () => {
     const errors: { message: string }[] = [];
     const updates: { file: string; took: number }[] = [];
 
+    await fsLag();
     const channel = await hmr({
       entry,
       cwd: path.dirname(entry),
@@ -178,6 +182,7 @@ describe("hmr", () => {
       onUpdate: (info) => updates.push(info),
     });
     channels.push(channel);
+    await fsLag();
 
     const client = connectRunner(channel.dispatch);
     await client.runner.import(entry);
@@ -206,6 +211,7 @@ describe("hmr", () => {
 
     const updates: { file: string; took: number }[] = [];
 
+    await fsLag();
     const channel = await hmr({
       entry,
       cwd: path.dirname(entry),
@@ -216,6 +222,7 @@ describe("hmr", () => {
       onUpdate: (info) => updates.push(info),
     });
     channels.push(channel);
+    await fsLag();
 
     const client = connectRunner(channel.dispatch);
     await client.runner.import(entry);
@@ -239,6 +246,7 @@ describe("hmr", () => {
     const errors: unknown[] = [];
     const updates: { file: string; took: number }[] = [];
 
+    await fsLag();
     const channel = await hmr({
       entry,
       cwd: path.dirname(entry),
@@ -249,6 +257,7 @@ describe("hmr", () => {
       onUpdate: (info) => updates.push(info),
     });
     channels.push(channel);
+    await fsLag();
 
     const client = connectRunner(channel.dispatch);
     await client.runner.import(entry);
@@ -274,6 +283,7 @@ describe("hmr", () => {
     const notified: unknown[] = [];
     const reloads: ({ file: string; at: number } | undefined)[] = [];
 
+    await fsLag();
     const channel = await hmr({
       entry,
       cwd: path.dirname(entry),
@@ -286,6 +296,7 @@ describe("hmr", () => {
       onError: () => {},
     });
     channels.push(channel);
+    await fsLag();
 
     const client = connectRunner(channel.dispatch);
     await client.runner.import(entry);
@@ -309,6 +320,7 @@ describe("hmr", () => {
 
     const reloads: ({ file: string; at: number } | undefined)[] = [];
 
+    await fsLag();
     const channel = await hmr({
       entry,
       cwd: path.dirname(entry),
@@ -318,6 +330,7 @@ describe("hmr", () => {
       onError: () => {},
     });
     channels.push(channel);
+    await fsLag();
 
     const client = connectRunner(channel.dispatch);
     await client.runner.import(entry);
@@ -337,6 +350,7 @@ describe("hmr", () => {
     const updates: unknown[] = [];
     let reloaded = false;
 
+    await fsLag();
     const channel = await hmr({
       entry,
       cwd: path.dirname(entry),
@@ -349,6 +363,7 @@ describe("hmr", () => {
       onUpdate: (info) => updates.push(info),
     });
     channels.push(channel);
+    await fsLag();
 
     // A reload restarts the app, which connects with a runner of its own.
     let client = connectRunner(channel.dispatch);
@@ -377,6 +392,7 @@ describe("hmr", () => {
     });
 
     const notified: unknown[] = [];
+    await fsLag();
     const channel = await hmr({
       entry,
       cwd: path.dirname(entry),
@@ -391,6 +407,7 @@ describe("hmr", () => {
       onError: () => {},
     });
     channels.push(channel);
+    await fsLag();
 
     const client = connectRunner(channel.dispatch);
     await client.runner.import(entry);
