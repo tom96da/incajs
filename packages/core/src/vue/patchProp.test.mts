@@ -1241,17 +1241,42 @@ describe("everything else", () => {
     expect(core.removeAttribute).toHaveBeenCalledExactlyOnceWith(2, "label");
   });
 
-  it.each(["disabled", "hidden", "inert"])("removes %s when it turns false", (name) => {
+  it.each([
+    "disabled",
+    "hidden",
+    "inert",
+    "allowfullscreen",
+    "formnovalidate",
+    "ismap",
+    "itemscope",
+    "nomodule",
+    "novalidate",
+    "readonly",
+  ])("removes %s when it turns false", (name) => {
     patchProp(el, name, true, false, undefined, null);
 
     expect(core.removeAttribute).toHaveBeenCalledExactlyOnceWith(1, name);
     expect(core.setAttribute).not.toHaveBeenCalled();
   });
 
-  it("keeps a false boolean on any other name as an attribute", () => {
-    patchProp(el, "readonly", true, false, undefined, null);
+  it("removes a boolean attribute that turns 0", () => {
+    patchProp(el, "hidden", true, 0, undefined, null);
 
-    expect(core.setAttribute).toHaveBeenCalledWith(1, "readonly", false);
+    expect(core.removeAttribute).toHaveBeenCalledExactlyOnceWith(1, "hidden");
+    expect(core.setAttribute).not.toHaveBeenCalled();
+  });
+
+  it("keeps a boolean attribute set to an empty string", () => {
+    patchProp(el, "hidden", null, "", undefined, null);
+
+    expect(core.setAttribute).toHaveBeenCalledExactlyOnceWith(1, "hidden", "");
+    expect(core.removeAttribute).not.toHaveBeenCalled();
+  });
+
+  it("keeps a false boolean on any other name as an attribute", () => {
+    patchProp(el, "aria-hidden", true, false, undefined, null);
+
+    expect(core.setAttribute).toHaveBeenCalledWith(1, "aria-hidden", false);
     expect(core.removeAttribute).not.toHaveBeenCalled();
   });
 });

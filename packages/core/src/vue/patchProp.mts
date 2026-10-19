@@ -284,8 +284,23 @@ function patchEvent(
   }
 }
 
-// Props the host reads by presence.
-const BOOLEAN_PRESENCE = new Set(["disabled", "hidden", "inert"]);
+/**
+ * Attributes removed by a value Vue counts as false: any falsy value except
+ * `""`. The host reads `disabled`, `hidden` and `inert` by presence; the rest
+ * are Vue's special boolean attributes.
+ */
+const BOOLEAN_ATTRIBUTES = new Set([
+  "disabled",
+  "hidden",
+  "inert",
+  "allowfullscreen",
+  "formnovalidate",
+  "ismap",
+  "itemscope",
+  "nomodule",
+  "novalidate",
+  "readonly",
+]);
 
 /**
  * {@link RendererOptions.patchProp} applies one changed `v-bind`/
@@ -353,12 +368,13 @@ const BOOLEAN_PRESENCE = new Set(["disabled", "hidden", "inert"]);
  * ### Other props
  *
  * A string, number or boolean `nextValue` goes to `core.setAttribute` as it
- * is. A `disabled`, `hidden` or `inert` set to `false` goes to
- * `core.removeAttribute`, as does a `null` or `undefined` `nextValue`, which
- * includes a prop that is absent from the new vnode. Any other value (an
- * object, array, function or symbol) goes to `core.setAttribute` as
- * `String(nextValue)`. An `onUpdate:` key is a component event and sets
- * nothing.
+ * is. A `null` or `undefined` `nextValue` goes to `core.removeAttribute`,
+ * which includes a prop that is absent from the new vnode. So does any falsy
+ * value other than `""` for a boolean attribute: `disabled`, `hidden`,
+ * `inert`, and the names Vue treats as boolean attributes, such as
+ * `readonly`. Any other value (an object, array, function or symbol) goes to
+ * `core.setAttribute` as `String(nextValue)`. An `onUpdate:` key is a
+ * component event and sets nothing.
  *
  * @param core - the incajs bindings to drive the native tree through
  */
@@ -386,7 +402,7 @@ export function createPatchProp(
       } else {
         Reflect.set(el, key, nextValue);
       }
-    } else if (BOOLEAN_PRESENCE.has(key) && nextValue === false) {
+    } else if (BOOLEAN_ATTRIBUTES.has(key) && !nextValue && nextValue !== "") {
       core.removeAttribute(el.__node_id, key);
     } else if (
       typeof nextValue === "string" ||

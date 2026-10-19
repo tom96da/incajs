@@ -726,16 +726,6 @@ A fixed entry is deleted and its ID is never reused.
   key warns again. Remembering the keys already reported per node would
   print each once.
 
-- **B-127 A boolean attribute set to `false` stays set**
-  `Units: core · Size: S · Impact: Low`
-
-  `patchProp` stores `false` as a boolean attribute for every name except
-  `disabled`, `hidden` and `inert`, which it removes. Vue removes an
-  attribute set to `false` for the names it lists as special boolean
-  attributes, such as `readonly` and `novalidate`, sets `checked` as an
-  element property, and keeps `false` as the text `"false"` for any other
-  attribute. The input element decides which other names need this.
-
 - **B-129 A focused node looks like an unfocused one**
   `Units: gpui,core · Size: L · Impact: Low`
 
@@ -754,8 +744,8 @@ A fixed entry is deleted and its ID is never reused.
 - **B-143 `disabled` has no handling for the input element**
   `Units: bridge · Size: S · Impact: Low`
 
-  The input element (B-127) needs `disabled` handling when it lands. The fix
-  adds the tag to the `disabled` check in `tab_index_of`.
+  The input element needs `disabled` handling when it lands. The fix adds the
+  tag to the `disabled` check in `tab_index_of`.
 
 - **B-141 `hidden="until-found"` renders and focuses as an unhidden node**
   `Units: gpui,bridge · Size: M · Impact: Low`
