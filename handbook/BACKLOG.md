@@ -735,16 +735,6 @@ A fixed entry is deleted and its ID is never reused.
   key warns again. Remembering the keys already reported per node would
   print each once.
 
-- **B-119 `--print-config` prints the defaults for a malformed `inca.json`**
-  `Units: host · Size: S · Impact: Low`
-
-  The host reads `inca.json` through the same function as a normal start,
-  which writes one `ignoring ...` line to stderr and continues with the
-  defaults. A wrongly typed field, such as a string `width`, drops the whole
-  file. `--print-config` then prints those defaults and exits 0. A
-  diagnostic for "why is my window that size" could exit 1 and name the
-  field or the syntax error.
-
 - **B-127 A boolean attribute set to `false` stays set**
   `Units: core · Size: S · Impact: Low`
 

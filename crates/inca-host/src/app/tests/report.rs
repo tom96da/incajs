@@ -29,6 +29,25 @@ fn the_report_reads_the_config_beside_the_entry() {
 }
 
 #[test]
+fn the_report_of_a_config_it_cannot_parse_names_the_field() {
+    let dir = ScratchDir::new("print-malformed");
+    let entry = dir.join("bundle.js");
+    fs::write(&entry, "").unwrap();
+    fs::write(dir.join("inca.json"), r#"{"window":{"width":"wide"}}"#).unwrap();
+
+    let message = config_report(&entry.to_string_lossy()).unwrap_err();
+
+    let config = dir.join("inca.json");
+    assert!(
+        message.starts_with(&format!(
+            r#"failed to read {}: ["window","width"]: "#,
+            config.display()
+        )),
+        "{message}"
+    );
+}
+
+#[test]
 fn bundle_beside_finds_a_flat_sibling_bundle() {
     let dir = ScratchDir::new("flat");
     fs::write(dir.join("bundle.js"), "").unwrap();

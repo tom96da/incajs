@@ -46,7 +46,12 @@ window's app after the load settles.
 the host applies as JSON, and returns after printing. A `null` marks a value
 the app leaves open: its root element sizes the window, and an unset limit
 stays open. Given no path, it prints the config of the `bundle.js` found by
-that search. It exits 0 after printing and 1 when the path is not a file.
+that search. It exits 0 after printing. When the path is not a file, or the
+`inca.json` beside it cannot be read or parsed, it prints nothing on
+stdout, writes one line to stderr and exits 1. For a value of the wrong
+type or broken JSON the line is `failed to read <file>: <path>: <reason>`,
+where `<path>` is a JSON array of the keys and indices that lead to the
+value, `["window","width"]`, and `[]` for the whole file.
 
 ```sh
 cargo run -p inca-host -- --print-config path/to/bundle.js

@@ -5,10 +5,11 @@
 
 use std::fs;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use gpui::{Pixels, Size, px, size};
 use serde::{Deserialize, Serialize};
+use serde_path_to_error::Segment;
 
 /// The file an app's build writes its config to, beside the entry.
 const CONFIG_FILE_NAME: &str = "inca.json";
@@ -45,28 +46,99 @@ pub struct WindowConfig {
     pub min_height: Option<f32>,
 }
 
+/// Why the config beside an entry cannot be used.
+#[derive(Debug)]
+pub enum ReadError {
+    /// The file exists and cannot be read.
+    Io(PathBuf, io::Error),
+    /// The file is not JSON, or a value in it has a type the host does not
+    /// take.
+    Parse(PathBuf, serde_path_to_error::Error<serde_json::Error>),
+}
+
+impl ReadError {
+    /// `<file>: <cause>`.
+    fn summary(&self) -> String {
+        match self {
+            Self::Io(file, err) => format!("{}: {err}", file.display()),
+            Self::Parse(file, err) => format!("{}: {}", file.display(), err.inner()),
+        }
+    }
+
+    /// `<file>: <cause>`, with the path to the value before the cause of a
+    /// parse error: `<file>: <path>: <cause>`. The path is a JSON array of
+    /// the keys and indices from the top of the file, `null` for a step the
+    /// parser could not name.
+    pub(crate) fn report(&self) -> String {
+        match self {
+            Self::Io(..) => self.summary(),
+            Self::Parse(file, err) => {
+                format!(
+                    "{}: {}: {}",
+                    file.display(),
+                    json_path(err.path()),
+                    err.inner()
+                )
+            }
+        }
+    }
+}
+
+/// `path` as a compact JSON array: a key is a string, an index a number,
+/// a step without a name `null`.
+fn json_path(path: &serde_path_to_error::Path) -> String {
+    let segments: Vec<serde_json::Value> = path
+        .iter()
+        .map(|segment| match segment {
+            Segment::Seq { index } => (*index).into(),
+            Segment::Map { key } | Segment::Enum { variant: key } => key.as_str().into(),
+            Segment::Unknown => serde_json::Value::Null,
+        })
+        .collect();
+    serde_json::Value::from(segments).to_string()
+}
+
 /// Reads the config beside `entry_path`, the app's entry file.
 ///
 /// An app that declares nothing has no config file, and reads as
-/// [`AppConfig::default`]. One that cannot be read or parsed is named on
-/// stderr, and reads as [`AppConfig::default`] too.
-#[must_use]
-pub fn read(entry_path: &Path) -> AppConfig {
+/// [`AppConfig::default`].
+///
+/// # Errors
+///
+/// Returns a [`ReadError`] when the file exists and cannot be read or
+/// parsed.
+pub fn try_read(entry_path: &Path) -> Result<AppConfig, ReadError> {
     let Some(path) = entry_path.parent().map(|dir| dir.join(CONFIG_FILE_NAME)) else {
-        return AppConfig::default();
+        return Ok(AppConfig::default());
     };
 
     let json = match fs::read_to_string(&path) {
         Ok(json) => json,
-        Err(err) if err.kind() == io::ErrorKind::NotFound => return AppConfig::default(),
-        Err(err) => {
-            eprintln!("ignoring {}: {err}", path.display());
-            return AppConfig::default();
-        }
+        Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(AppConfig::default()),
+        Err(err) => return Err(ReadError::Io(path, err)),
     };
 
-    serde_json::from_str(&json).unwrap_or_else(|err| {
-        eprintln!("ignoring {}: {err}", path.display());
+    parse(&json).map_err(|err| ReadError::Parse(path, err))
+}
+
+/// Parses `json` as [`serde_json::from_str`] does, keeping the path to the
+/// value an error stops at. Text after the config fails with an empty path.
+fn parse(json: &str) -> Result<AppConfig, serde_path_to_error::Error<serde_json::Error>> {
+    let mut de = serde_json::Deserializer::from_str(json);
+    let config = serde_path_to_error::deserialize(&mut de)?;
+    de.end().map_err(|err| {
+        serde_path_to_error::Error::new(serde_path_to_error::Track::new().path(), err)
+    })?;
+    Ok(config)
+}
+
+/// Reads the config beside `entry_path` as [`try_read`] does. One that
+/// cannot be read or parsed is named on stderr, and reads as
+/// [`AppConfig::default`].
+#[must_use]
+pub fn read(entry_path: &Path) -> AppConfig {
+    try_read(entry_path).unwrap_or_else(|err| {
+        eprintln!("ignoring {}", err.summary());
         AppConfig::default()
     })
 }
@@ -180,7 +252,7 @@ mod tests {
     fn an_entry_with_no_config_beside_it_reads_as_the_defaults() {
         let app = app_dir("absent", None);
 
-        assert_eq!(read(&entry(&app)), AppConfig::default());
+        assert!(matches!(try_read(&entry(&app)), Ok(config) if config == AppConfig::default()));
     }
 
     #[test]
@@ -214,6 +286,52 @@ mod tests {
         let app = app_dir("broken", Some("not json"));
 
         assert_eq!(read(&entry(&app)), AppConfig::default());
+    }
+
+    #[test]
+    fn a_config_that_is_a_directory_is_an_error_naming_it() {
+        let app = app_dir("unusable", None);
+        fs::create_dir(app.join(CONFIG_FILE_NAME)).unwrap();
+
+        let report = try_read(&entry(&app)).unwrap_err().report();
+
+        let file = app.join(CONFIG_FILE_NAME);
+        assert!(
+            report.starts_with(&format!("{}: ", file.display())),
+            "{report}"
+        );
+    }
+
+    #[rstest]
+    #[case::whole_file("not json", "[]")]
+    #[case::key(r#"{"window":{"minWidth":"x"}}"#, r#"["window","minWidth"]"#)]
+    #[case::index(r#"{"window":[1,"x"]}"#, r#"["window",1]"#)]
+    #[case::unnamed(r#"{"window":{"width":1"#, r#"["window",null]"#)]
+    #[case::trailing(r#"{"name":"Demo"} x"#, "[]")]
+    fn a_parse_error_reports_the_path_to_the_value(#[case] json: &str, #[case] path: &str) {
+        let app = app_dir("path", Some(json));
+
+        let report = try_read(&entry(&app)).unwrap_err().report();
+
+        let file = app.join(CONFIG_FILE_NAME);
+        assert!(
+            report.starts_with(&format!("{}: {path}: ", file.display())),
+            "{report}"
+        );
+    }
+
+    #[test]
+    fn the_summary_of_a_parse_error_leaves_the_path_out() {
+        let app = app_dir("summary", Some(r#"{"window":{"width":"wide"}}"#));
+
+        let summary = try_read(&entry(&app)).unwrap_err().summary();
+
+        let file = app.join(CONFIG_FILE_NAME);
+        assert!(
+            summary.starts_with(&format!("{}: ", file.display())),
+            "{summary}"
+        );
+        assert!(!summary.contains(r#"["window""#), "{summary}");
     }
 
     #[test]

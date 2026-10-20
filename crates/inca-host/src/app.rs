@@ -534,18 +534,22 @@ fn close_writer_on_quit(cx: &mut App, writer: SharedWriter) {
 
 /// The settings the host applies to the app whose entry is `entry_path`,
 /// read from the `inca.json` beside it, or the message to report when
-/// `entry_path` names no file.
+/// `entry_path` names no file or that `inca.json` cannot be read or parsed.
 fn config_report(entry_path: &str) -> Result<String, String> {
     if !Path::new(entry_path).is_file() {
         return Err(format!("failed to read {entry_path}: not a file"));
     }
-    Ok(effective_config(&config::read(Path::new(entry_path))))
+    config::try_read(Path::new(entry_path))
+        .map(|config| effective_config(&config))
+        .map_err(|err| format!("failed to read {}", err.report()))
 }
 
 /// Prints the settings the host applies to the app whose entry is
 /// `entry_path`, read from the `inca.json` beside it, and returns after
-/// printing them. Returns `ExitCode::FAILURE` when `entry_path` names no
-/// file.
+/// printing them. Returns `ExitCode::FAILURE` and prints nothing on stdout
+/// when `entry_path` names no file or that `inca.json` cannot be read or
+/// parsed; the line on stderr then names the file, and for a value of the
+/// wrong type or broken JSON the path to it.
 #[must_use]
 pub fn print_config(entry_path: &str) -> ExitCode {
     match config_report(entry_path) {

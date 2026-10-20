@@ -37,7 +37,7 @@ impl EmittedConfig {
             .expect("node is needed to run emit-config.mts");
         assert!(status.success(), "{EMIT_SCRIPT} failed");
 
-        // `config::read` looks beside the app's entry file.
+        // The host looks for the config beside the app's entry file.
         fs::write(dir.join("bundle.js"), "").unwrap();
         Self(dir)
     }
@@ -97,7 +97,7 @@ fn nulls_in(value: &Value) -> Vec<String> {
 fn both_sides_know_the_same_members() {
     let emitted = EmittedConfig::new("members");
 
-    let host = serde_json::to_value(config::read(&emitted.entry())).unwrap();
+    let host = serde_json::to_value(config::try_read(&emitted.entry()).unwrap()).unwrap();
 
     assert_eq!(keys_of(&host), keys_of(&emitted.json()));
 }
@@ -106,7 +106,7 @@ fn both_sides_know_the_same_members() {
 fn the_host_binds_every_member_the_emitted_config_carries() {
     let emitted = EmittedConfig::new("binding");
 
-    let host = serde_json::to_value(config::read(&emitted.entry())).unwrap();
+    let host = serde_json::to_value(config::try_read(&emitted.entry()).unwrap()).unwrap();
 
     assert_eq!(nulls_in(&host), Vec::<String>::new());
 }

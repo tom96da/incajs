@@ -192,4 +192,7 @@ The host reads it once, at startup, before opening the window. It reaches
 the file the same way whether a client spawned it or a person double-clicked
 a packaged app. A missing file reads as the defaults in silence. A file that
 cannot be read or parsed is named on the host's stderr and reads as the
-defaults too.
+defaults too. `--print-config` refuses such a file with exit 1 and one stderr
+line, `failed to read <file>: <path>: <reason>`, where `<path>` is a JSON
+array of keys and indices (`[]` for the whole file); a client reads that
+line. An I/O failure has no path.
