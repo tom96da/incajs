@@ -68,7 +68,7 @@ incajs/
 ├── oxlint.config.ts / oxfmt.config.ts  # shared lint/format config for all TS packages
 ├── packages/
 │   ├── core/                # `incajs`: the host bridge wrapper, and `incajs/vue`, the Vue 3 custom renderer
-│   └── cli/                 # `@incajs/cli`: the `inca` dev, build and package CLI, with the dev-protocol client and the Vite adapter
+│   └── cli/                 # `@incajs/cli`: the `inca` CLI, with the dev-protocol client and the Vite adapter
 ├── npm/                     # per-platform npm packages, each carrying a prebuilt `inca-host`
 │   ├── darwin-arm64/
 │   ├── darwin-x64/

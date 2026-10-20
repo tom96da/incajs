@@ -16,19 +16,25 @@ vi.mock("./build.mts", () => ({
 vi.mock("./package.mts", () => ({
   packageApp: vi.fn<(options?: PackageAppOptions) => Promise<PackageResult>>(),
 }));
+vi.mock("./printConfig.mts", () => ({
+  printConfig: vi.fn<(options?: PrintConfigOptions) => Promise<number>>(),
+}));
 
 import { build } from "./build.mts";
 import { run } from "./cli.mts";
 import { dev } from "./dev.mts";
 import { packageApp } from "./package.mts";
+import { printConfig } from "./printConfig.mts";
 import type { BuildAppOptions } from "./build.mts";
 import type { DevOptions } from "./dev.mts";
 import type { PackageAppOptions, PackageResult } from "./package.mts";
+import type { PrintConfigOptions } from "./printConfig.mts";
 import type { BuildOutput } from "./types.mts";
 
 const mockedDev = vi.mocked(dev);
 const mockedBuild = vi.mocked(build);
 const mockedPackageApp = vi.mocked(packageApp);
+const mockedPrintConfig = vi.mocked(printConfig);
 
 let stdout: MockInstance;
 let stderr: MockInstance;
@@ -63,6 +69,7 @@ afterEach(() => {
   mockedDev.mockClear();
   mockedBuild.mockClear();
   mockedPackageApp.mockClear();
+  mockedPrintConfig.mockClear();
   process.removeAllListeners("SIGINT");
   process.removeAllListeners("SIGTERM");
   process.exitCode = undefined;
@@ -91,7 +98,7 @@ describe("run", () => {
     expect(printed()).toMatch(/dev[\s\S]*build[\s\S]*package/);
   });
 
-  it.each(["dev", "build", "package"])("prints the usage of %s", async (command) => {
+  it.each(["dev", "build", "package", "config"])("prints the usage of %s", async (command) => {
     await run(["node", "inca", command, "--help"]);
 
     expect(exit).toHaveBeenCalledWith(0);
@@ -99,6 +106,7 @@ describe("run", () => {
     expect(mockedDev).not.toHaveBeenCalled();
     expect(mockedBuild).not.toHaveBeenCalled();
     expect(mockedPackageApp).not.toHaveBeenCalled();
+    expect(mockedPrintConfig).not.toHaveBeenCalled();
   });
 
   it("prints the package version for --version", async () => {
@@ -152,6 +160,24 @@ describe("run", () => {
 
     expect(process.exitCode).toBe(1);
     expect(written(stderr)).toContain("[inca] package failed: no host binary");
+  });
+
+  it("sets the exit code to the one config returns", async () => {
+    mockedPrintConfig.mockResolvedValue(3);
+
+    await run(["node", "inca", "config"]);
+
+    expect(mockedPrintConfig).toHaveBeenCalled();
+    expect(process.exitCode).toBe(3);
+  });
+
+  it("sets a non-zero exit code and prints a readable error when config fails", async () => {
+    mockedPrintConfig.mockRejectedValue(new Error("no host binary"));
+
+    await run(["node", "inca", "config"]);
+
+    expect(process.exitCode).toBe(1);
+    expect(written(stderr)).toContain("[inca] config failed: no host binary");
   });
 
   it.each(["SIGINT", "SIGTERM"] as const)(

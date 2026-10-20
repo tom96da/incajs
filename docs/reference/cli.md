@@ -1,5 +1,5 @@
 ---
-description: Reference of the inca CLI commands dev, build, and package.
+description: Reference of the inca CLI commands and their options.
 ---
 
 <!--
@@ -87,9 +87,27 @@ $ inca package
 
 When both flags are given, `--no-sourcemap` wins.
 
+## `inca config`
+
+Prints the settings the host applies to your app as JSON: its name, its
+identifier and its window. A `null` marks a value left to the host: the
+root element sizes the window, and an unset limit stays open. It reads the
+config as `inca build` does, builds nothing and opens no window.
+
+A setting whose value the host cannot use fails with
+[`ERR_INCA_CONFIG_INVALID`](./errors#err-inca-config-invalid), naming the
+setting, its value and the kind of value it must be. The other commands
+don't check the values, so the host opens with the defaults.
+
+### Usage
+
+```sh
+$ inca config
+```
+
 ## Environment Variables
 
 | Variable        | Description          |
 | --------------- | -------------------- |
-| `INCA_HOST_BIN` | Path to a specific host binary, used by `dev` and `package` in place of automatic resolution, e.g. on a custom or unpublished build. |
+| `INCA_HOST_BIN` | Path to a specific host binary, used by `dev`, `package` and `config` in place of automatic resolution, e.g. on a custom or unpublished build. |
 | `INCA_EXPERIMENTAL_HMR` | Same as `--experimental-hmr`, for `inca dev`. See the [HMR guide](../guide/hmr). |

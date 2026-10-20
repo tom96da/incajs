@@ -73,13 +73,25 @@ directory, its `src/` or `node_modules/`, or its configured
 and `inca build` delete every file under `outDir` that the build didn't
 write. Set it to a directory the build owns, such as `"dist"`.
 
+## `ERR_INCA_CONFIG_INVALID`
+
+The host cannot use the value of one setting in the app's config. The
+message names the setting, its value and the kind of value it must be:
+
+```
+[inca] config failed (ERR_INCA_CONFIG_INVALID): window.width in inca.config.ts is "wide". it must be a number
+```
+
+When the value already has that kind, the message ends in "the host can't
+use it". Fix the value in `inca.config.ts` and run the command again.
+
 ## `ERR_INCA_PLATFORM_UNSUPPORTED`
 
 `inca package` runs on macOS and Linux. Windows isn't supported yet.
 
 ## `ERR_INCA_HOST_BIN_NOT_FOUND`
 
-`inca dev` or `inca package` found no file at the host binary's path.
+A command that starts the host found no file at the host binary's path.
 `inca dev` stops before it builds anything.
 
 Check the path `INCA_HOST_BIN` points at.
@@ -88,7 +100,7 @@ Check the path `INCA_HOST_BIN` points at.
 
 No host binary could be found at all: the `@incajs/host-*` package for
 this platform isn't installed, and `INCA_HOST_BIN` isn't set.
-`inca dev` stops here too.
+Every command that starts the host stops here too.
 
 Install the app's dependencies, or set `INCA_HOST_BIN` to a binary you
 built yourself.

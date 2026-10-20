@@ -11,6 +11,7 @@ import { build } from "./build.mts";
 import { dev } from "./dev.mts";
 import { log, printFault, toFault, warn } from "./log.mts";
 import { packageApp } from "./package.mts";
+import { printConfig } from "./printConfig.mts";
 
 /** Formats a path relative to the working directory, the way the bundler reports its own. */
 function relative(target: string): string {
@@ -64,6 +65,18 @@ const packageCommand = defineCommand({
   },
 });
 
+const configCommand = defineCommand({
+  meta: { name: "config", description: "Print the settings the host applies to the app" },
+  async run() {
+    try {
+      process.exitCode = await printConfig();
+    } catch (error) {
+      printFault(process.stderr, "config failed", toFault(error));
+      process.exitCode = 1;
+    }
+  },
+});
+
 const devCommand = defineCommand({
   meta: { name: "dev", description: "Run the app in a development window" },
   args: {
@@ -105,10 +118,15 @@ const devCommand = defineCommand({
 
 const main = defineCommand({
   meta: { name: "inca", version, description },
-  subCommands: { dev: devCommand, build: buildCommand, package: packageCommand },
+  subCommands: {
+    dev: devCommand,
+    build: buildCommand,
+    package: packageCommand,
+    config: configCommand,
+  },
 });
 
-/** Parses argv and runs the named subcommand: `dev`, `build`, or `package`. */
+/** Parses argv and runs the named subcommand: `dev`, `build`, `package` or `config`. */
 export async function run(argv: readonly string[] = process.argv): Promise<void> {
   await runMain(main, { rawArgs: argv.slice(2) });
 }

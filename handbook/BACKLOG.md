@@ -152,15 +152,18 @@ A fixed entry is deleted and its ID is never reused.
   never auto-resizes. Those text nodes are also real flex children, so
   `gap` adds space around every `v-for`.
 
-- **B-050 `FAILURES.md` promises a window-size check that doesn't exist**
-  `Units: cli,docs · Size: S–M · Impact: Medium`
+- **B-050 Only `inca config` reports a config value the host cannot use**
+  `Units: cli,host · Size: M · Impact: Medium`
 
-  `handbook/FAILURES.md` says a `width` of `-100` "is refused, and the message
-  says which value and which file". The CLI checks nothing, and the host's
-  `usable()` quietly falls back to the default. One wrongly typed field
-  (`width: "800"`) makes the host ignore the whole `inca.json` (name,
-  identifier and title too), with only a stderr line. Either validate in
-  the CLI or change what `FAILURES.md` claims.
+  A wrongly typed field (`width: "800"`) makes the host print one
+  `ignoring <file>: <cause>` line and open with the defaults for the whole
+  file (name, identifier and title too). A value of the right type that no
+  window can use (`width: -100`) is dropped quietly by `usable()`.
+
+  Fix: have the other commands report what `--print-config` reports: under
+  `inca dev` a dev protocol message or the stderr line in the
+  `--print-config` form; for `inca build` and `inca package` a run of
+  `--print-config` on the output.
 
 - **B-053 `focus`/`blur` listeners that call `focusNode` may not take effect**
   `Units: bridge,host · Size: S–M · Impact: Medium`
@@ -203,18 +206,6 @@ A fixed entry is deleted and its ID is never reused.
   check before use. Only `background`, `border_color` and `text_color` take a
   color. `outline-color`, per-side border colors, `box-shadow` and
   `text-decoration-color` come with the properties they belong to.
-
-- **B-124 `inca` has no command that reports the host's settings**
-  `Units: cli · Size: M · Impact: Medium`
-
-  The host prints the settings it applies with `--print-config`, and only
-  the host binary takes that flag. `inca config` could resolve the app's
-  config as `inca dev` does, write it with an empty entry under
-  `node_modules/.inca/config/`, run the host with `--print-config` and print
-  the JSON with the host's exit code. The host comes from `resolveHostBin`,
-  so `INCA_HOST_BIN` and the cache of a compressed host both apply. A
-  follow-up, `inca info`, prints the Node version, the platform, the host
-  package, the host binary's path and the `INCA_*` overrides.
 
 - **B-126 A missing `@vue/runtime-dom` fails the build with the bundler's own error**
   `Units: cli,core,docs · Size: S–M · Impact: Medium`
@@ -1280,3 +1271,36 @@ A fixed entry is deleted and its ID is never reused.
   Fix: `gpui` measures the direct children only. The range needs the overflow
   of the descendants, computed in the host from the recorded boxes or in
   `gpui`.
+
+- **B-218 The commands resolve the app config through two paths that check different things**
+  `Units: cli · Size: M · Impact: Low`
+
+  `inca package` calls `resolveAppConfig`
+  (`packages/cli/src/package.mts`). It requires `package.json`, requires a
+  usable product name, refuses an `icon` that does not exist and refuses a
+  bad `outDir`. `inca build` and `inca config` call `resolveRuntimeConfig`,
+  which reads `package.json` only if it is there, checks the product name
+  only when one is set and checks neither the icon nor `outDir`; `inca build`
+  checks `outDir` through `resolveBuildConfig` and `assertOutDir`. `inca dev`
+  runs `resolveBuildConfig` and `assertOutDir`, then `resolveAppConfig`, and
+  on a missing `package.json` or name prints `running unnamed. …` to stdout
+  and falls back to `resolveRuntimeConfig`. Any other failure there, such as
+  a missing icon, stops `inca dev` where `inca build` succeeds. Each
+  resolver loads the config file again, up to three loads per `inca dev`
+  attempt.
+
+  Fix: one resolver that loads the config once and runs the checks as
+  separate steps, each command choosing the steps it needs.
+
+- **B-219 `inca` has no command that reports its environment**
+  `Units: cli · Size: S · Impact: Low`
+
+  Fix: add `inca info`, which prints the Node version, the platform, the host
+  package, the host binary's path and the `INCA_*` overrides.
+
+- **B-220 The CLI spells the config file name twice**
+  `Units: cli · Size: S · Impact: Low`
+
+  The Vite adapter and `inca config` each write `inca.json` by name.
+
+  Fix: inject the name through the adapter core, which leaves one spelling.

@@ -28,8 +28,8 @@ natively. See [ARCHITECTURE.md](./handbook/ARCHITECTURE.md) for the details.
 
 ## Status
 
-Early stage. Vue 3 is the only supported frontend. The CLI (`inca dev`,
-`inca build`, `inca package`), HMR, pointer, keyboard and scroll input work.
+Early stage. Vue 3 is the only supported frontend. The CLI, HMR, pointer,
+keyboard and scroll input work.
 Text editing and IME are not built yet.
 
 ## Links

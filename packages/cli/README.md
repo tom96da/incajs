@@ -6,7 +6,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 # @incajs/cli
 
 The `inca` command for building and running [Incarnative.js](https://github.com/tom96da/incajs)
-apps: `inca dev`, `inca build`, and `inca package`.
+apps.
 
 ## Install
 
@@ -33,6 +33,8 @@ bootstrapping; it wins outright when both exist.
   prebuilt `inca-host` into a distributable application: a `.app` on
   macOS, a plain directory on Linux (other platforms aren't supported
   yet).
+- **`inca config`**: prints the settings the host applies to your app,
+  such as its window size, as JSON.
 
 When running `inca`, it will automatically try to resolve a config file
 named `inca.config.ts` inside your app's root (other JS/JSON extensions
