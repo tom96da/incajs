@@ -181,22 +181,6 @@ fn focus_then_destroy_in_one_tick_leaves_no_handle(cx: &mut TestAppContext) {
     assert!(host.borrow().focus.handle(a).is_none());
 }
 
-#[gpui::test]
-fn focus_on_an_unknown_node_leaves_no_handle(cx: &mut TestAppContext) {
-    let (host, parent, _a) = build_focusable_pair();
-    let engine = test_support::engine_for(&host);
-
-    run_then_draw(
-        cx,
-        &engine,
-        &host,
-        parent,
-        "__inca_native__.focusNode(999);",
-    );
-
-    assert!(host.borrow().focus.handle(999).is_none());
-}
-
 /// `blurNode(id)` blurs only when `id` is the focused node: another node's
 /// id, or an unknown one, leaves focus alone.
 #[gpui_cases]

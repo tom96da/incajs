@@ -1059,15 +1059,6 @@ A fixed entry is deleted and its ID is never reused.
   compile is alive) or JS-side ownership (the vault keeps each map with its
   module, and Rust keeps the key).
 
-- **B-192 Natives treat a missing node in two ways**
-  `Units: bridge,docs · Size: S · Impact: Low`
-
-  `focusNode`, `blurNode`, `removeEventListener` and `click` ignore a node
-  that is gone. The other natives throw a `TypeError`. State the rule in
-  `FFI.md`. `sync` in `patchProp.mts` checks `isDestroyed` before
-  `addEventListener` for this reason; a rule that ignores a gone node makes
-  that check unnecessary.
-
 - **B-193 Optional native parameters use two types**
   `Units: bridge · Size: S · Impact: Low`
 

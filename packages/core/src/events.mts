@@ -113,10 +113,11 @@ export function dispatchEvent(nodeId: NodeId, event: EventLike): boolean {
 }
 
 /**
- * Fires an untrusted `click` at `nodeId`. A disabled `button`, a node whose
- * own click is still running and an unknown node ignore the call.
+ * Fires an untrusted `click` at `nodeId`. A disabled `button` and a node whose
+ * own click is still running ignore the call.
  * @param nodeId - the node to click
  * @throws TypeError when `nodeId` is malformed
+ * @throws TypeError when `nodeId` names no node
  */
 export function click(nodeId: NodeId): void {
   native().click(nodeId);
@@ -129,6 +130,8 @@ export function click(nodeId: NodeId): void {
  * is optional. The scroll containers around the node scroll it into view.
  * @param nodeId - the node to focus
  * @param preventScroll - `true` to leave the scroll containers in place; omitted or `false` scrolls the node into view
+ * @throws TypeError when `nodeId` is malformed
+ * @throws TypeError when `nodeId` names no node
  */
 export function focus(nodeId: NodeId, preventScroll?: boolean): void {
   if (preventScroll === undefined) native().focusNode(nodeId);

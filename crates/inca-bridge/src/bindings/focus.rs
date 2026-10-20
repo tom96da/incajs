@@ -20,14 +20,15 @@ pub(super) fn install_focus(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("layoutOf", layout_of)
 }
 
-fn focus_node(host: Rc<RefCell<Host>>) -> impl Fn(JsNodeId, Opt<bool>) {
-    move |JsNodeId(node_id), prevent_scroll| {
+fn focus_node<'js>(
+    host: Rc<RefCell<Host>>,
+) -> impl Fn(Ctx<'js>, JsNodeId, Opt<bool>) -> JsResult<()> {
+    move |ctx, JsNodeId(node_id), prevent_scroll| {
         let mut host = host.borrow_mut();
-        // Focusing a node that is gone is a no-op.
-        if host.tree.get(node_id).is_some() {
-            host.focus
-                .request_focus(node_id, prevent_scroll.0 != Some(true));
-        }
+        existing_node(&ctx, &host.tree, node_id)?;
+        host.focus
+            .request_focus(node_id, prevent_scroll.0 != Some(true));
+        Ok(())
     }
 }
 
@@ -203,5 +204,33 @@ mod tests {
             .unwrap();
 
         assert!(caught);
+    }
+
+    #[test]
+    fn focus_node_on_an_unknown_node_throws_type_error() {
+        let (engine, _host) = engine_with_bindings();
+
+        let caught: bool = engine
+            .eval(
+                r"
+                let caught = false;
+                try {
+                    __inca_native__.focusNode(999);
+                } catch (e) {
+                    caught = e instanceof TypeError;
+                }
+                caught;
+                ",
+            )
+            .unwrap();
+
+        assert!(caught);
+    }
+
+    #[test]
+    fn blur_node_ignores_an_unknown_node() {
+        let (engine, _host) = engine_with_bindings();
+
+        engine.eval::<()>("__inca_native__.blurNode(999);").unwrap();
     }
 }

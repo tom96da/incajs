@@ -114,8 +114,8 @@ non-configurable global.
 | `appendChild` | `(parentId: number, childId: number) => void` | Attach a child at the end of `parentId`'s children. Same as `insertBefore` with no anchor. |
 | `insertBefore` | `(parentId: number, childId: number, anchorId: number \| null) => void` | Attach a child before `anchorId`, or at the end if `null`. |
 | `removeChild` | `(parentId: number, childId: number) => void` | Detach a child node. Freed at the next frame unless re-inserted or held, see Tree rules. |
-| `holdNode` | `(nodeId: number) => void` | Keep `nodeId` and its subtree alive while it has no parent. An unknown id throws a `TypeError`. |
-| `releaseNode` | `(nodeId: number) => void` | End the hold. An unknown id does nothing. |
+| `holdNode` | `(nodeId: number) => void` | Keep `nodeId` and its subtree alive while it has no parent. |
+| `releaseNode` | `(nodeId: number) => void` | End the hold. |
 | `setAttribute` | `(nodeId: number, key: string, value: string \| number \| boolean) => void` | Set a non-style attribute prop. |
 | `getAttribute` | `(nodeId: number, key: string) => string \| number \| boolean \| null` | Read a non-style attribute prop as stored, or `null` when the key is unset. |
 | `removeAttribute` | `(nodeId: number, key: string) => void` | Remove a non-style attribute prop. Removing a key that isn't set does nothing. |
@@ -141,14 +141,14 @@ Shared throw rules, all as a `TypeError` except where noted:
 - `setAttribute` and `setStyle` throw for a `value` that is not a string, number or boolean.
 - `dispatchEvent` throws for an argument that is not an `Event` or
   `CustomEvent` of the host.
-- `addEventListener`, `dispatchEvent`, `getAttribute`, `layoutOf`, `scrollOf`,
-  `scrollNode`, `scrollIntoViewNode`, `setAttribute`, `removeAttribute`,
-  `setStyle`, `removeStyle` and `appendChild` throw for an unknown node.
-  `insertBefore` throws for an unknown parent, child or anchor.
+- A `nodeId`, `parentId`, `childId` or `anchorId` that names no node
+  throws, except in the calls that let go of something: `releaseNode`,
+  `destroyNode`, `removeEventListener`, `blurNode` and the `childId` of
+  `removeChild` ignore it. The host can free a node before the caller lets
+  go of it.
 - `scrollIntoViewNode` throws for a `block` or `inline` outside the four
   alignment names.
-- `removeChild` throws for an unknown `parentId` and ignores an unknown or
-  unattached `childId`.
+- `removeChild` ignores a `childId` that is not a child of `parentId`.
 
 `dispatchEvent` also throws a `DOMException` named `InvalidStateError` for an
 event that is being dispatched.
@@ -436,7 +436,7 @@ of core answers. Rust looks it up by name on each walk and keeps nothing.
   again.
 - `click()` walks a `click` event with `MousePayload::keyboard_click`.
   `Host::clicking` holds the nodes whose click is running, as a re-entrancy
-  guard. A disabled `button` and an unknown node return at once.
+  guard. A disabled `button` returns at once.
 
 - `HostedApp::render` fires `scroll` after the focus transitions and before
   building the tree. `Host::scrolled_nodes` compares each handle's clamped

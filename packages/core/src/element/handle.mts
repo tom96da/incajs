@@ -46,7 +46,9 @@ export function createIncaElement(
       else focus(id, Boolean(preventScroll));
     },
     blur: () => blur(id),
-    click: () => click(id),
+    click: () => {
+      if (!isDestroyed(element)) click(id);
+    },
     contains: (other: unknown) => {
       if (other === null || other === undefined) return false;
       if (!isNode(other)) {

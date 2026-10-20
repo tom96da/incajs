@@ -278,15 +278,22 @@ describe("createIncaElement scroll setters and methods", () => {
 });
 
 describe("createIncaElement blur and click", () => {
-  it("forwards blur and click of a destroyed element to the host", () => {
+  it("forwards blur of a destroyed element to the host", () => {
     const host = installHost();
     const el = createIncaElement(4, "element", "button");
     markDestroyed(el);
 
     el.blur();
-    el.click();
     expect(host.blurNode).toHaveBeenCalledWith(4);
-    expect(host.click).toHaveBeenCalledWith(4);
+  });
+
+  it("ignores click once destroyed", () => {
+    const host = installHost();
+    const el = createIncaElement(4, "element", "button");
+    markDestroyed(el);
+
+    el.click();
+    expect(host.click).not.toHaveBeenCalled();
   });
 });
 

@@ -174,8 +174,12 @@ fn dispatch_event<'js>(
     }
 }
 
-fn click<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) {
-    move |ctx, JsNodeId(node_id)| crate::event::click(&ctx, &host, node_id)
+fn click<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<()> {
+    move |ctx, JsNodeId(node_id)| {
+        existing_node(&ctx, &host.borrow().tree, node_id)?;
+        crate::event::click(&ctx, &host, node_id);
+        Ok(())
+    }
 }
 
 #[cfg(test)]

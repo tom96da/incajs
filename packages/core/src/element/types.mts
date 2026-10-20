@@ -64,8 +64,9 @@ export interface IncaElement extends IncaEventTarget, EventHandlers {
   /** Unfocuses this node next frame, if it is the focused one. */
   blur(): void;
   /**
-   * Fires an untrusted `click` at this node. A disabled `button`, a node whose
-   * own click is still running and an unknown node ignore the call.
+   * Fires an untrusted `click` at this node. A disabled `button` and a node
+   * whose own click is still running ignore the call. After the node is
+   * removed, the call does nothing.
    */
   click(): void;
   /**

@@ -113,16 +113,34 @@ fn click_on_one_node_inside_the_click_of_another_runs() {
 }
 
 #[test]
-fn click_on_an_unheard_or_unknown_node_takes_no_event_id_and_throws_nothing() {
+fn click_on_an_unheard_node_takes_no_event_id() {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
     dispatcher
         .engine
-        .eval::<()>(&format!(
-            "__inca_native__.click({node}); __inca_native__.click(99);"
-        ))
+        .eval::<()>(&format!("__inca_native__.click({node});"))
         .unwrap();
     assert_eq!(host.borrow().last_event_id, 0);
+}
+
+#[test]
+fn click_on_an_unknown_node_throws_a_type_error() {
+    let (dispatcher, _host, _reported) = dispatcher_with_engine();
+    let caught: bool = dispatcher
+        .engine
+        .eval(
+            r"
+            let caught = false;
+            try {
+                __inca_native__.click(99);
+            } catch (e) {
+                caught = e instanceof TypeError;
+            }
+            caught;
+            ",
+        )
+        .unwrap();
+    assert!(caught);
 }
 
 #[test]
