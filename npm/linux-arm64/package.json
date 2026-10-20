@@ -1,6 +1,6 @@
 {
   "name": "@incajs/host-linux-arm64",
-  "version": "0.0.19",
+  "version": "0.0.20",
   "description": "Prebuilt native runtime for Incarnative.js on Linux (arm64).",
   "keywords": [
     "desktop-app",
