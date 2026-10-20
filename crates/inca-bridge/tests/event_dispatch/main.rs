@@ -227,6 +227,19 @@ fn take_ids(engine: &Engine) -> Vec<(String, NodeId, u64)> {
     serde_json::from_str(&seen).unwrap()
 }
 
+/// The fields of `globalThis.lastEvent` that `want` names, as the listener
+/// read them.
+fn event_fields(engine: &Engine, want: &serde_json::Value) -> serde_json::Value {
+    let keys =
+        serde_json::to_string(&want.as_object().unwrap().keys().collect::<Vec<_>>()).unwrap();
+    let json = engine
+        .eval::<String>(&format!(
+            "JSON.stringify(Object.fromEntries({keys}.map((k) => [k, globalThis.lastEvent[k]])))"
+        ))
+        .unwrap();
+    serde_json::from_str(&json).unwrap()
+}
+
 mod click;
 mod disabled;
 mod fields;

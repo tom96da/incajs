@@ -108,22 +108,19 @@ fn mouseenter_carries_the_mouse_fields(cx: &mut TestAppContext) {
     );
 
     assert_eq!(clicks(&engine), 1.0);
-    assert_eq!(
-        engine
-            .eval::<String>("JSON.stringify({ ...globalThis.lastEvent, eventId: undefined, timeStamp: undefined })")
-            .unwrap(),
-        format!(
-            concat!(
-                r#"{{"type":"mouseenter","target":{node},"currentTarget":null,"#,
-                r#""bubbles":false,"cancelable":false,"composed":false,"#,
-                r#""eventPhase":0,"isTrusted":true,"#,
-                r#""clientX":10,"clientY":20,"screenX":10,"screenY":20,"offsetX":10,"offsetY":20,"x":10,"y":20,"relatedTarget":null,"pageX":10,"pageY":20,"#,
-                r#""movementX":0,"movementY":0,"button":0,"buttons":0,"detail":0,"#,
-                r#""ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false}}"#
-            ),
-            node = node
-        )
-    );
+    let want: serde_json::Value = serde_json::from_str(&format!(
+        concat!(
+            r#"{{"type":"mouseenter","target":{node},"currentTarget":null,"#,
+            r#""bubbles":false,"cancelable":false,"composed":false,"#,
+            r#""eventPhase":0,"isTrusted":true,"#,
+            r#""clientX":10,"clientY":20,"screenX":10,"screenY":20,"offsetX":10,"offsetY":20,"x":10,"y":20,"relatedTarget":null,"pageX":10,"pageY":20,"#,
+            r#""movementX":0,"movementY":0,"button":0,"buttons":0,"detail":0,"#,
+            r#""ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false}}"#
+        ),
+        node = node
+    ))
+    .unwrap();
+    assert_eq!(event_fields(&engine, &want), want);
     assert!(last_event_id(&engine) > previous);
 }
 

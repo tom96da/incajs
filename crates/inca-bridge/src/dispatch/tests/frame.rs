@@ -280,6 +280,32 @@ fn the_hook_receives_the_freed_ids_once(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn the_released_hook_receives_its_ids_past_an_inherited_index_setter(cx: &mut TestAppContext) {
+    let scene = scene(
+        cx,
+        "globalThis.__inca_released__ = (nodes, callbacks) => (globalThis.last = [nodes, callbacks]);",
+    );
+    scene.js(r"
+        Object.defineProperty(Array.prototype, 0, {
+            set(value) {
+                globalThis.caught = value;
+            },
+            configurable: true,
+        });
+        const n = __inca_native__;
+        globalThis.top = n.createNode('div');
+        globalThis.cb = n.addEventListener(top, 'click', false, false);
+        ");
+
+    draw(cx, scene.window);
+
+    assert_eq!(
+        scene.json("[globalThis.last, [top, cb], globalThis.caught === undefined]"),
+        serde_json::json!([[[1], [0]], [1, 0], true])
+    );
+}
+
+#[gpui::test]
 fn a_hook_that_throws_is_reported(cx: &mut TestAppContext) {
     let scene = scene(
         cx,

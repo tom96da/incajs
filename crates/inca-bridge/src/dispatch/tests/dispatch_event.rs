@@ -323,12 +323,15 @@ fn an_event_nobody_hears_takes_no_event_id_but_gets_its_target() {
         &dispatcher,
         &format!(
             r"
-            (() => {{ const e = new Event('ping');
-            return [__inca_native__.dispatchEvent({node}, e), e.target, 'eventId' in e]; }})()
+            (() => {{
+                const e = new Event('ping');
+                const handled = __inca_native__.dispatchEvent({node}, e);
+                return [handled, e.target, e.eventId === undefined];
+            }})()
             "
         ),
     );
-    assert_eq!(got, serde_json::json!([true, node, false]));
+    assert_eq!(got, serde_json::json!([true, node, true]));
     assert_eq!(host.borrow().last_event_id, 0);
 }
 
@@ -495,37 +498,7 @@ fn errors_are_reported_in_the_order_they_happened_across_nested_dispatches(
 }
 
 #[test]
-fn a_listener_that_freezes_the_event_gets_a_type_error_on_redispatch() {
-    let (dispatcher, host, reported) = dispatcher_with_engine();
-    let node = host.borrow_mut().tree.create_node("div").unwrap();
-    listen(
-        &dispatcher,
-        node,
-        "ping",
-        "(e) => { e.stopImmediatePropagation(); Object.freeze(e); }",
-    );
-    let got = eval_json(
-        &dispatcher,
-        &format!(
-            r"
-            (() => {{ const e = new Event('ping');
-            __inca_native__.dispatchEvent({node}, e);
-            const stop = e.cancelBubble;
-            try {{ __inca_native__.dispatchEvent({node}, e); }}
-            catch (err) {{ return [stop, err.name]; }} return [stop, 'ran']; }})()
-            "
-        ),
-    );
-    assert_eq!(got, serde_json::json!([false, "TypeError"]));
-    dispatcher.report_pending();
-    assert!(
-        !reported.borrow().is_empty(),
-        "the failed reset is reported"
-    );
-}
-
-#[test]
-fn a_listener_that_locks_current_target_does_not_block_the_next_dispatch() {
+fn a_frozen_event_dispatches_again() {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
     listen(
@@ -533,23 +506,28 @@ fn a_listener_that_locks_current_target_does_not_block_the_next_dispatch() {
         node,
         "ping",
         r"
-        (e) => { out.push(e.currentTarget); e.stopPropagation();
-        Object.defineProperty(e, 'currentTarget', { writable: false }); }
+        (e) => {
+            Object.freeze(e);
+            out.push(e.eventPhase);
+        }
         ",
     );
+
     let got = eval_json(
         &dispatcher,
         &format!(
             r"
-            (() => {{ const e = new Event('ping');
-            __inca_native__.dispatchEvent({node}, e);
-            const stop = e.cancelBubble;
-            __inca_native__.dispatchEvent({node}, e);
-            return [stop, out]; }})()
+            (() => {{
+                const e = new Event('ping');
+                __inca_native__.dispatchEvent({node}, e);
+                __inca_native__.dispatchEvent({node}, e);
+                return out;
+            }})()
             "
         ),
     );
-    assert_eq!(got, serde_json::json!([false, [node, node]]));
+
+    assert_eq!(got, serde_json::json!([2, 2]));
 }
 
 #[gpui::test]
@@ -646,30 +624,6 @@ fn dispatch_event_of_a_click_reaches_a_disabled_button_and_its_ancestors() {
         ),
     );
     assert_eq!(got, serde_json::json!(["capture", "button", "bubble"]));
-}
-
-#[test]
-fn a_frozen_event_id_lets_the_first_dispatch_through_then_throws_type_error() {
-    let (dispatcher, host, _reported) = dispatcher_with_engine();
-    let node = host.borrow_mut().tree.create_node("div").unwrap();
-    listen(
-        &dispatcher,
-        node,
-        "ping",
-        "(e) => Object.defineProperty(e, 'eventId', { writable: false })",
-    );
-    let got = eval_json(
-        &dispatcher,
-        &format!(
-            r"
-            (() => {{ const e = new Event('ping');
-            return [1, 2, 3].map(() => {{
-                try {{ __inca_native__.dispatchEvent({node}, e); return 'ok'; }}
-                catch (err) {{ return err.name; }} }}); }})()
-            "
-        ),
-    );
-    assert_eq!(got, serde_json::json!(["ok", "TypeError", "TypeError"]));
 }
 
 #[rstest]

@@ -6,10 +6,10 @@ use std::rc::Rc;
 
 use inca_gpui::{EventPayload, MousePayload, NodeId};
 use inca_jsenv::{Engine, EngineError};
-use rquickjs::{Array, Ctx, Exception, Function, Null, Object, Result as JsResult, Value};
+use rquickjs::{Class, Ctx, Exception, Function, Object, Result as JsResult, Value};
 
 use super::construct::create;
-use super::{Flags, find_record, flag, path_value, target_at, targets_of};
+use super::{Flags, IncaEvent, targets_of};
 use crate::bindings::{Host, Listener};
 
 /// What one walk needs to know.
@@ -17,8 +17,6 @@ pub(crate) struct Walk<'a> {
     pub(crate) name: &'a str,
     pub(crate) flags: Flags,
     pub(crate) target: NodeId,
-    /// `target` and its ancestors, nearest first.
-    pub(crate) path: &'a [NodeId],
     /// The nodes whose listeners do not run.
     pub(crate) cut: &'a [NodeId],
     pub(crate) payload: &'a EventPayload,
@@ -49,26 +47,26 @@ fn bubble_nodes(flags: Flags, path: &[NodeId]) -> &[NodeId] {
     }
 }
 
-/// Whether a listener of `name` exists that an event with `flags` on `path`
-/// reaches. Nodes in `cut` stay silent.
+/// Whether a listener of `name` exists that an event with `flags` fired at
+/// `target` reaches. Nodes in `cut` stay silent.
 pub(crate) fn listened(
     host: &Host,
     name: &str,
     flags: Flags,
-    path: &[NodeId],
+    target: NodeId,
     cut: &[NodeId],
 ) -> bool {
-    let hears = |capture: bool, nodes: &[NodeId]| {
-        nodes.iter().any(|node| {
-            !cut.contains(node)
+    host.tree
+        .ancestors(target)
+        .enumerate()
+        .any(|(depth, node)| {
+            !cut.contains(&node)
                 && host
                     .listeners
-                    .listeners_for(*node, name)
+                    .listeners_for(node, name)
                     .iter()
-                    .any(|l| l.capture == capture)
+                    .any(|l| l.capture || flags.bubbles || depth == 0)
         })
-    };
-    hears(true, path) || hears(false, bubble_nodes(flags, path))
 }
 
 fn next_event_id(host: &Rc<RefCell<Host>>) -> u64 {
@@ -77,15 +75,15 @@ fn next_event_id(host: &Rc<RefCell<Host>>) -> u64 {
     host.last_event_id
 }
 
-/// Runs the listeners of `walk.name` along `walk.path` with one event object.
-/// Capture listeners run from the root down to the target, then bubble
-/// listeners from the target up, the latter only while the event bubbles.
-/// At the target, capture listeners run before bubble listeners. A node's
-/// listeners are those registered when the walk reaches it, minus any removed
-/// while an earlier listener ran. The engine is entered only when the event
-/// reaches a listener.
+/// Runs the listeners of `walk.name` along the path of `walk.target` with one
+/// event object. Capture listeners run from the root down to the target, then
+/// bubble listeners from the target up, the latter only while the event
+/// bubbles. At the target, capture listeners run before bubble listeners. A
+/// node's listeners are those registered when the walk reaches it, minus any
+/// removed while an earlier listener ran. The engine is entered only when the
+/// event reaches a listener.
 pub(crate) fn walk(engine: &Engine, host: &Rc<RefCell<Host>>, walk: &Walk<'_>) -> Outcome {
-    if !listened(&host.borrow(), walk.name, walk.flags, walk.path, walk.cut) {
+    if !listened(&host.borrow(), walk.name, walk.flags, walk.target, walk.cut) {
         return Outcome::default();
     }
     let id = next_event_id(host);
@@ -100,14 +98,12 @@ fn script_walk<'a>(
     name: &'a str,
     flags: Flags,
     target: NodeId,
-    path: &'a [NodeId],
     payload: &'a EventPayload,
 ) -> Walk<'a> {
     Walk {
         name,
         flags,
         target,
-        path,
         cut: &[],
         payload,
         trusted: false,
@@ -118,48 +114,38 @@ fn run(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, walk: &Walk<'_>, id: u64) -> Out
     let Ok(callbacks) = ctx.globals().get::<_, Object>("__inca_callbacks__") else {
         return Outcome::default();
     };
-    let created = targets_of(ctx, walk.path).and_then(|targets| {
-        let (event, record) = create(ctx, walk, id, targets.as_ref())?;
-        Ok((event, record, targets))
-    });
-    let (event, record, targets) = match created {
-        Ok(created) => created,
+    let path = path_from(&host.borrow(), walk.target);
+    let created = targets_of(ctx, &path).and_then(|targets| create(ctx, walk, id, targets));
+    let event = match created {
+        Ok(event) => event,
         Err(err) => {
             note(ctx, host, Err(err));
             return Outcome::default();
         }
     };
-    let canceled = deliver(
-        ctx,
-        host,
-        walk,
-        &callbacks,
-        &event,
-        &record,
-        targets.as_ref(),
-    );
+    let canceled = deliver(ctx, host, walk, &path, &callbacks, &event);
     Outcome {
         canceled,
         entered: false,
     }
 }
 
-/// Calls the listeners along the path with `event`, then leaves the event
-/// idle. `targets` holds what stands for each node as `currentTarget`.
-/// Returns whether it ended canceled.
+/// Calls the listeners along `path` with `event`, then leaves the event
+/// idle. Returns whether it ended canceled.
 fn deliver<'js>(
     ctx: &Ctx<'js>,
     host: &Rc<RefCell<Host>>,
     walk: &Walk<'_>,
+    path: &[NodeId],
     callbacks: &Object<'js>,
-    event: &Object<'js>,
-    record: &Object<'js>,
-    targets: Option<&Array<'js>>,
+    event: &Class<'js, IncaEvent<'js>>,
 ) -> bool {
-    let down = (0..walk.path.len()).rev().map(|index| (true, index));
-    let up = (0..bubble_nodes(walk.flags, walk.path).len()).map(|index| (false, index));
+    let record = event.borrow();
+    let state = &record.state;
+    let down = (0..path.len()).rev().map(|index| (true, index));
+    let up = (0..bubble_nodes(walk.flags, path).len()).map(|index| (false, index));
     for (capture, index) in down.chain(up) {
-        let node = walk.path[index];
+        let node = path[index];
         if walk.cut.contains(&node) {
             continue;
         }
@@ -179,12 +165,10 @@ fn deliver<'js>(
             (false, true) => 1,
             (false, false) => 3,
         };
-        let entered = target_at(ctx, targets, index, node)
-            .and_then(|current| event.set("currentTarget", current))
-            .and_then(|()| event.set("eventPhase", phase));
-        note(ctx, host, entered);
+        state.current.set(Some(index));
+        state.phase.set(phase);
         for listener in listeners {
-            if flag(record, "immediate") {
+            if state.immediate.get() {
                 break;
             }
             // The full value is compared. Flags change only through remove, then add.
@@ -199,28 +183,35 @@ fn deliver<'js>(
             let Ok(callback) = callbacks.get::<_, Function>(listener.callback) else {
                 continue;
             };
-            let armed = record.set("passive", listener.passive);
-            note(ctx, host, armed);
+            state.passive.set(listener.passive);
             let called = callback.call::<_, ()>((event.clone(),));
             note(ctx, host, called);
         }
-        if flag(record, "stop") {
+        if state.stop.get() {
             break;
         }
     }
-    let canceled = flag(record, "canceled");
-    // The record is ours and cannot fail; clearing it first keeps the guard
-    // free when a listener froze the event.
-    for key in ["dispatching", "passive", "stop", "immediate"] {
-        let _ = record.set(key, false);
-    }
-    // A kept event keeps only target and relatedTarget alive.
-    let _ = record.set("path", Vec::<NodeId>::new());
-    let left = event
-        .set("currentTarget", Null)
-        .and_then(|()| event.set("eventPhase", 0));
-    note(ctx, host, left);
+    let canceled = state.canceled.get();
+    end_dispatch(&record);
     canceled
+}
+
+/// Leaves `event` as a dispatch leaves it: no walk state, no stop flags,
+/// no path.
+fn end_dispatch(event: &IncaEvent<'_>) {
+    let state = &event.state;
+    for flag in [
+        &state.dispatching,
+        &state.passive,
+        &state.stop,
+        &state.immediate,
+    ] {
+        flag.set(false);
+    }
+    state.current.set(None);
+    state.phase.set(0);
+    // A kept event keeps only target, relatedTarget and detail alive.
+    drop(event.held.path.take());
 }
 
 /// Files a thrown error of `result` in `Host::failures`, where the dispatcher
@@ -245,9 +236,9 @@ pub(crate) fn dispatch_event<'js>(
     ctx: &Ctx<'js>,
     host: &Rc<RefCell<Host>>,
     target: NodeId,
-    event: Value<'js>,
+    event: &Value<'js>,
 ) -> JsResult<bool> {
-    let not_event = || {
+    let event = Class::<IncaEvent>::from_value(event).map_err(|_| {
         Exception::throw_type(
             ctx,
             concat!(
@@ -255,10 +246,10 @@ pub(crate) fn dispatch_event<'js>(
                 "so pass one made with new Event(type)"
             ),
         )
-    };
-    let event = event.into_object().ok_or_else(not_event)?;
-    let record = find_record(ctx, &event)?.ok_or_else(not_event)?;
-    if flag(&record, "dispatching") {
+    })?;
+    let record = event.borrow();
+    let state = &record.state;
+    if state.dispatching.get() {
         return Err(Exception::throw_dom(
             ctx,
             "InvalidStateError",
@@ -268,37 +259,23 @@ pub(crate) fn dispatch_event<'js>(
             ),
         ));
     }
-    let name: String = record.get("type")?;
     let path = path_from(&host.borrow(), target);
-    let flags = Flags {
-        bubbles: flag(&record, "bubbles"),
-        cancelable: flag(&record, "cancelable"),
-        composed: flag(&record, "composed"),
-    };
-    let walk = script_walk(&name, flags, target, &path, &EventPayload::None);
-    let targets = targets_of(ctx, walk.path)?;
-    event.set("target", target_at(ctx, targets.as_ref(), 0, target)?)?;
-    event.set("isTrusted", false)?;
-    if listened(&host.borrow(), walk.name, walk.flags, walk.path, walk.cut) {
+    let walk = script_walk(&state.name, state.flags, target, &EventPayload::None);
+    let targets = targets_of(ctx, &path)?;
+    drop(record.held.target.replace(targets.first().cloned()));
+    state.trusted.set(false);
+    if listened(&host.borrow(), walk.name, walk.flags, target, walk.cut) {
         let callbacks = ctx
             .globals()
             .get::<_, Object>("__inca_callbacks__")
             .or_else(|_| Object::new(ctx.clone()))?;
-        event.set("eventId", next_event_id(host))?;
-        record.set("path", path_value(ctx, targets.as_ref(), walk.path)?)?;
+        state.event_id.set(Some(next_event_id(host)));
+        drop(record.held.path.replace(targets));
         // Last, so a failure above leaves the event free to dispatch again.
-        record.set("dispatching", true)?;
-        deliver(
-            ctx,
-            host,
-            &walk,
-            &callbacks,
-            &event,
-            &record,
-            targets.as_ref(),
-        );
+        state.dispatching.set(true);
+        deliver(ctx, host, &walk, &path, &callbacks, &event);
     }
-    Ok(!flag(&record, "canceled"))
+    Ok(!state.canceled.get())
 }
 
 /// Runs an untrusted `click` at `target`. A disabled button, a node that left the tree and a node
@@ -313,16 +290,14 @@ pub(crate) fn click(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, target: NodeId) {
             return;
         }
     }
-    let path = path_from(&host.borrow(), target);
     let payload = EventPayload::Mouse(MousePayload::keyboard_click(gpui::Modifiers::none()));
     let walk = script_walk(
         "click",
         crate::dispatch::spec_of("click").flags,
         target,
-        &path,
         &payload,
     );
-    if listened(&host.borrow(), walk.name, walk.flags, walk.path, walk.cut) {
+    if listened(&host.borrow(), walk.name, walk.flags, target, walk.cut) {
         run(ctx, host, &walk, next_event_id(host));
     }
     host.borrow_mut().clicking.remove(&target);

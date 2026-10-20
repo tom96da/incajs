@@ -4,60 +4,101 @@
 //! The event object a listener receives and the walk of one event over its
 //! path.
 //!
-//! One event is one object. The walk creates it, runs the capture listeners
-//! from the root down to the target and then the bubble listeners from the
-//! target up, all with that same object, then resets its `currentTarget` and
-//! `eventPhase`. The object's methods and accessors live on a prototype built
-//! once per realm. What they read and write sits in a record that a `WeakMap`
-//! keeps, so no script can reach it. The prototypes and the two record
-//! functions sit in the realm's vault, and Rust keeps only their keys. Mouse
-//! and key events inherit from a prototype of their kind, which adds
-//! `getModifierState`. The global constructors `Event` and `CustomEvent` file
-//! their events in the same store, so a script can build an event and
-//! dispatch it.
+//! One event is one object of the native class [`IncaEvent`]. Its fields live
+//! in Rust, and the getters and methods that read them sit on a prototype of
+//! the event's kind, built once per realm. `isTrusted` is the one own property
+//! of an event. The walk creates the event, runs the capture listeners from
+//! the root down to the target and then the bubble listeners from the target
+//! up, all with that same object, then resets its `currentTarget` and
+//! `eventPhase`. The global constructors `Event` and `CustomEvent` build events
+//! of the same class, so a script can build an event and dispatch it. The
+//! prototypes sit in the realm's vault, and Rust keeps only their keys.
 //!
 //! The global `__inca_targets__` gives the objects that stand for the nodes of
 //! a walk.
 
+use std::cell::Cell;
 use std::sync::OnceLock;
 use std::time::Instant;
 
-use inca_gpui::NodeId;
 pub(crate) use inca_gpui::event_sink::Flags;
-use inca_jsenv::vault;
-use rquickjs::atom::PredefinedAtom;
-use rquickjs::convert::Coerced;
+use inca_gpui::{EventPayload, NodeId};
+use inca_jsenv::{FunctionAccessor, vault};
 use rquickjs::function::This;
 use rquickjs::object::Property;
-use rquickjs::{
-    Array, Ctx, Exception, FromJs, Function, IntoJs, Object, Result as JsResult, Value,
-};
+use rquickjs::{Array, Class, Ctx, Exception, Function, IntoJs, Object, Result as JsResult, Value};
 
 mod construct;
+mod members;
 mod payload;
+mod record;
 mod walk;
 
-use construct::constructors;
+use record::{Held, IncaEvent, State};
 pub(crate) use walk::{Walk, click, dispatch_event, listened, path_from, walk};
 
-/// The vault key of the event store: the three prototypes under the kind of
-/// event they serve, and the two record functions.
+/// The vault key of the event store: the prototype of each kind of event
+/// under the kind, and the `isTrusted` getter.
 const STORE: &str = "events";
-/// The kind of events that inherit from `Event.prototype` directly. A kind is
-/// the store key of its prototype and the `kind` of its records.
+/// The store key of the getter every event owns as `isTrusted`.
+const IS_TRUSTED: &str = "isTrusted";
+/// The kind of scroll events and of events built with `new Event`. A kind is
+/// the store key of its prototype, `Event.prototype` for this one.
 const EVENT: &str = "event";
-/// The kind of mouse and wheel events. Their prototype inherits from the
-/// [`EVENT`] one.
+/// The kind of events built with `new CustomEvent`. Its prototype inherits
+/// from the [`EVENT`] one.
+const CUSTOM: &str = "custom";
+/// The kind of focus events. Its prototype inherits from the [`EVENT`] one.
+const FOCUS: &str = "focus";
+/// The kind of mouse events with no pointer source. Its prototype inherits
+/// from the [`EVENT`] one.
 const MOUSE: &str = "mouse";
-/// The kind of key events. Their prototype inherits from the [`EVENT`] one.
+/// The kind of mouse events with a pointer source: `click`, `auxclick` and
+/// `contextmenu`. Its prototype inherits from the [`MOUSE`] one.
+const POINTER: &str = "pointer";
+/// The kind of wheel events. Its prototype inherits from the [`MOUSE`] one.
+const WHEEL: &str = "wheel";
+/// The kind of key events. Its prototype inherits from the [`EVENT`] one.
 const KEYBOARD: &str = "keyboard";
-/// `(event, record)`: files the record of a new event.
-const REMEMBER: &str = "remember";
-/// `(event)`: the record of an event, `undefined` for any other value.
-const RECALL: &str = "recall";
 
-/// Creates the prototypes and the record store of `ctx`'s realm in its vault.
-/// The first call wins, and later calls in the same realm leave it as it is.
+impl State {
+    /// The state of an idle event.
+    fn new(name: String, flags: Flags, payload: EventPayload, trusted: bool) -> Self {
+        Self {
+            name,
+            flags,
+            payload,
+            time_stamp: time_stamp(),
+            trusted: Cell::new(trusted),
+            event_id: Cell::new(None),
+            dispatching: Cell::new(false),
+            stop: Cell::new(false),
+            immediate: Cell::new(false),
+            canceled: Cell::new(false),
+            passive: Cell::new(false),
+            phase: Cell::new(0),
+            current: Cell::new(None),
+        }
+    }
+}
+
+impl<'js> IncaEvent<'js> {
+    /// What stands for the node whose listeners run, `None` outside a walk.
+    fn current_target(&self) -> Option<Value<'js>> {
+        let index = self.state.current.get()?;
+        self.held.path.borrow().get(index).cloned()
+    }
+
+    /// Whether a cancel request takes effect now: the event is cancelable and
+    /// the running listener is active.
+    fn cancels(&self) -> bool {
+        self.state.flags.cancelable && !self.state.passive.get()
+    }
+}
+
+/// Creates the prototypes of `ctx`'s realm in its vault and the global
+/// constructors. The first call wins, and later calls in the same realm leave
+/// it as it is.
 ///
 /// # Errors
 ///
@@ -67,28 +108,19 @@ pub(crate) fn install(ctx: &Ctx<'_>) -> JsResult<()> {
     if vault.contains_key(STORE)? {
         return Ok(());
     }
-    let store: Object = ctx.eval(
-        r"
-        (() => {
-            const records = new WeakMap();
-            const { get, set } = WeakMap.prototype;
-            const { apply } = Reflect;
-            return {
-                __proto__: null,
-                remember: (event, record) => {
-                    apply(set, records, [event, record]);
-                },
-                recall: (event) => apply(get, records, [event]),
-            };
-        })()
-        ",
-    )?;
-    let proto = prototype(ctx)?;
-    store.set(MOUSE, modifier_prototype(ctx, &proto, MOUSE)?)?;
-    store.set(KEYBOARD, modifier_prototype(ctx, &proto, KEYBOARD)?)?;
-    store.set(EVENT, proto.clone())?;
-    vault.set(STORE, store)?;
-    constructors(ctx, &proto)
+    let store = Object::new(ctx.clone())?;
+    store.set_prototype(None)?;
+    let event = members::event_prototype(ctx)?;
+    let mouse = payload::mouse_prototype(ctx, &event)?;
+    store.set(POINTER, payload::pointer_prototype(ctx, &mouse)?)?;
+    store.set(WHEEL, payload::wheel_prototype(ctx, &mouse)?)?;
+    store.set(MOUSE, mouse)?;
+    store.set(KEYBOARD, payload::keyboard_prototype(ctx, &event)?)?;
+    store.set(FOCUS, payload::focus_prototype(ctx, &event)?)?;
+    store.set(CUSTOM, construct::constructors(ctx, &event)?)?;
+    store.set(EVENT, event)?;
+    store.set(IS_TRUSTED, members::is_trusted(ctx)?)?;
+    vault.set(STORE, store)
 }
 
 /// Milliseconds since the first call. The dispatcher makes the first call
@@ -98,60 +130,34 @@ pub(crate) fn time_stamp() -> f64 {
     ORIGIN.get_or_init(Instant::now).elapsed().as_secs_f64() * 1000.0
 }
 
-/// The objects that the global `__inca_targets__` gives for `ids`, entry `i`
-/// standing for `ids[i]`. `None` when the global is not a function, and the
-/// event fields then carry the node ids.
-fn targets_of<'js>(ctx: &Ctx<'js>, ids: &[NodeId]) -> JsResult<Option<Array<'js>>> {
-    let Ok(hook) = ctx.globals().get::<_, Function>("__inca_targets__") else {
-        return Ok(None);
-    };
-    hook.call((ids,)).map(Some)
-}
-
-/// What stands for `path[index]`: the entry of `targets`, or `node` itself.
-fn target_at<'js>(
+/// `event` as an object of the prototype of `kind`, with the shared
+/// `isTrusted` getter as its own property.
+fn new_event<'js>(
     ctx: &Ctx<'js>,
-    targets: Option<&Array<'js>>,
-    index: usize,
-    node: NodeId,
-) -> JsResult<Value<'js>> {
-    match targets {
-        Some(targets) => targets.get(index),
-        None => node.into_js(ctx),
-    }
+    kind: &str,
+    event: IncaEvent<'js>,
+) -> JsResult<Class<'js, IncaEvent<'js>>> {
+    let store: Object = vault(ctx)?.get(STORE)?;
+    let event = Class::instance_proto(event, store.get(kind)?)?;
+    event.prop(
+        IS_TRUSTED,
+        FunctionAccessor::new_get(store.get(IS_TRUSTED)?).enumerable(),
+    )?;
+    Ok(event)
 }
 
-/// What stands for the whole of `path`: `targets`, or the node ids.
-fn path_value<'js>(
-    ctx: &Ctx<'js>,
-    targets: Option<&Array<'js>>,
-    path: &[NodeId],
-) -> JsResult<Value<'js>> {
-    match targets {
-        Some(targets) => Ok(targets.clone().into_value()),
-        None => path.into_js(ctx),
-    }
-}
-
-/// The entry `key` of the event store.
-fn piece<'js, T: FromJs<'js>>(ctx: &Ctx<'js>, key: &str) -> JsResult<T> {
-    vault(ctx)?.get::<_, Object>(STORE)?.get(key)
-}
-
-/// The record of `event`, `None` for any object the host did not file.
-fn find_record<'js>(ctx: &Ctx<'js>, event: &Object<'js>) -> JsResult<Option<Object<'js>>> {
-    let recall: Function = piece(ctx, RECALL)?;
-    let record: Value = recall.call((event.clone(),))?;
-    Ok(record.into_object())
-}
-
-/// The record of `event`.
+/// Runs `run` on the event `this` names.
 ///
 /// # Errors
 ///
-/// Throws a `TypeError` when `event` is not an event object of this host.
-fn record_of<'js>(ctx: &Ctx<'js>, event: &Object<'js>) -> JsResult<Object<'js>> {
-    find_record(ctx, event)?.ok_or_else(|| {
+/// Throws a `TypeError` when `this` is not an event, and passes on what `run`
+/// returns.
+fn with_event<'js, T>(
+    ctx: &Ctx<'js>,
+    this: &Value<'js>,
+    run: impl FnOnce(&IncaEvent<'js>) -> JsResult<T>,
+) -> JsResult<T> {
+    let event = Class::<IncaEvent>::from_value(this).map_err(|_| {
         Exception::throw_type(
             ctx,
             concat!(
@@ -159,247 +165,116 @@ fn record_of<'js>(ctx: &Ctx<'js>, event: &Object<'js>) -> JsResult<Object<'js>> 
                 "such as the one a listener receives"
             ),
         )
-    })
+    })?;
+    run(&event.borrow())
 }
 
-fn flag(record: &Object<'_>, key: &str) -> bool {
-    record.get::<_, bool>(key).unwrap_or(false)
+/// The getter `get <key>`, which runs `read` on the event `this` names.
+fn getter<'js>(
+    ctx: &Ctx<'js>,
+    key: &str,
+    read: impl Fn(&Ctx<'js>, &IncaEvent<'js>) -> JsResult<Value<'js>> + 'js,
+) -> JsResult<Function<'js>> {
+    Function::new(
+        ctx.clone(),
+        move |ctx: Ctx<'js>, This(this): This<Value<'js>>| {
+            with_event(&ctx, &this, |event| read(&ctx, event))
+        },
+    )?
+    .with_name(format!("get {key}"))
 }
 
-/// Whether a cancel request takes effect now: the event is cancelable and the
-/// running listener is active.
-fn cancels(record: &Object<'_>) -> bool {
-    flag(record, "cancelable") && !flag(record, "passive")
-}
-
-/// The phase constants on `Event`, its prototype and `CustomEvent`.
-const PHASES: [(&str, i32); 4] = [
-    ("NONE", 0),
-    ("CAPTURING_PHASE", 1),
-    ("AT_TARGET", 2),
-    ("BUBBLING_PHASE", 3),
-];
-
-/// The prototype of event objects: the phase constants, the propagation
-/// methods, `composedPath`, the accessors and the string tag `Event`.
-fn prototype<'js>(ctx: &Ctx<'js>) -> JsResult<Object<'js>> {
-    let proto = Object::new(ctx.clone())?;
-    for (name, value) in PHASES {
-        proto.prop(name, Property::from(value).enumerable())?;
-    }
-    define_methods(ctx, &proto)?;
-    define_accessors(ctx, &proto)?;
+/// Defines on `proto` the enumerable, configurable getter `key`, which runs
+/// `read` on the event `this` names.
+fn field<'js>(
+    ctx: &Ctx<'js>,
+    proto: &Object<'js>,
+    key: &str,
+    read: impl Fn(&Ctx<'js>, &IncaEvent<'js>) -> JsResult<Value<'js>> + 'js,
+) -> JsResult<()> {
+    let get = getter(ctx, key, read)?;
     proto.prop(
-        PredefinedAtom::SymbolToStringTag,
-        Property::from("Event").configurable(),
-    )?;
-    Ok(proto)
-}
-
-fn define_methods<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<()> {
-    let method = |name: &str, function: Function<'js>| {
-        proto.prop(
-            name,
-            Property::from(function.with_name(name)?)
-                .writable()
-                .enumerable()
-                .configurable(),
-        )
-    };
-    method(
-        "stopPropagation",
-        Function::new(
-            ctx.clone(),
-            |ctx: Ctx<'js>, This(event): This<Object<'js>>| -> JsResult<()> {
-                let record = record_of(&ctx, &event)?;
-                if flag(&record, "dispatching") {
-                    record.set("stop", true)?;
-                }
-                Ok(())
-            },
-        )?,
-    )?;
-    method(
-        "stopImmediatePropagation",
-        Function::new(
-            ctx.clone(),
-            |ctx: Ctx<'js>, This(event): This<Object<'js>>| -> JsResult<()> {
-                let record = record_of(&ctx, &event)?;
-                if flag(&record, "dispatching") {
-                    record.set("stop", true)?;
-                    record.set("immediate", true)?;
-                }
-                Ok(())
-            },
-        )?,
-    )?;
-    method(
-        "preventDefault",
-        Function::new(
-            ctx.clone(),
-            |ctx: Ctx<'js>, This(event): This<Object<'js>>| -> JsResult<()> {
-                let record = record_of(&ctx, &event)?;
-                if cancels(&record) {
-                    record.set("canceled", true)?;
-                }
-                Ok(())
-            },
-        )?,
-    )?;
-    method(
-        "composedPath",
-        Function::new(
-            ctx.clone(),
-            |ctx: Ctx<'js>, This(event): This<Object<'js>>| -> JsResult<Vec<Value<'js>>> {
-                let record = record_of(&ctx, &event)?;
-                if flag(&record, "dispatching") {
-                    record.get("path")
-                } else {
-                    Ok(Vec::new())
-                }
-            },
-        )?,
+        key,
+        FunctionAccessor::new_get(get).enumerable().configurable(),
     )
 }
 
-/// A prototype that inherits from `base` and holds `getModifierState`. The method reads only an
-/// event whose record holds `kind` as its `kind`, and throws a `TypeError` for any other
-/// receiver. Accel reads Meta on macOS and Control elsewhere.
-fn modifier_prototype<'js>(
-    ctx: &Ctx<'js>,
-    base: &Object<'js>,
-    kind: &'static str,
-) -> JsResult<Object<'js>> {
-    let proto = Object::new(ctx.clone())?;
-    proto.set_prototype(Some(base))?;
-    let get_modifier_state = Function::new(
-        ctx.clone(),
-        move |ctx: Ctx<'js>,
-              This(event): This<Object<'js>>,
-              name: Coerced<String>|
-              -> JsResult<bool> {
-            let record = record_of(&ctx, &event)?;
-            if record.get::<_, String>("kind")? != kind {
-                return Err(Exception::throw_type(
-                    &ctx,
-                    concat!(
-                        "getModifierState belongs to another kind of event, ",
-                        "so call it on the event as event.getModifierState(key)"
-                    ),
-                ));
-            }
-            let name = match name.0.as_str() {
-                "Accel" if cfg!(target_os = "macos") => "Meta",
-                "Accel" => "Control",
-                other => other,
-            };
-            let field = match name {
-                "Control" => "ctrlKey",
-                "Shift" => "shiftKey",
-                "Alt" => "altKey",
-                "Meta" => "metaKey",
-                _ => return Ok(false),
-            };
-            Ok(flag(&event, field))
-        },
-    )?;
+/// Defines `function` as the writable, enumerable, configurable method `name`
+/// of `proto`.
+fn method<'js>(proto: &Object<'js>, name: &str, function: Function<'js>) -> JsResult<()> {
     proto.prop(
-        "getModifierState",
-        Property::from(get_modifier_state.with_name("getModifierState")?)
+        name,
+        Property::from(function.with_name(name)?)
             .writable()
             .enumerable()
             .configurable(),
-    )?;
-    Ok(proto)
-}
-
-fn define_accessors<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<()> {
-    let define_property: Function = ctx
-        .globals()
-        .get::<_, Object>("Object")?
-        .get("defineProperty")?;
-    let accessor = |key: &str, get: Function<'js>, set: Option<Function<'js>>| {
-        define_accessor(&define_property, proto, key, get, set)
-    };
-    accessor(
-        "srcElement",
-        Function::new(
-            ctx.clone(),
-            |ctx: Ctx<'js>, This(event): This<Object<'js>>| -> JsResult<Value<'js>> {
-                record_of(&ctx, &event)?;
-                event.get("target")
-            },
-        )?,
-        None,
-    )?;
-    accessor(
-        "defaultPrevented",
-        Function::new(
-            ctx.clone(),
-            |ctx: Ctx<'js>, This(event): This<Object<'js>>| -> JsResult<bool> {
-                Ok(flag(&record_of(&ctx, &event)?, "canceled"))
-            },
-        )?,
-        None,
-    )?;
-    accessor(
-        "returnValue",
-        Function::new(
-            ctx.clone(),
-            |ctx: Ctx<'js>, This(event): This<Object<'js>>| -> JsResult<bool> {
-                Ok(!flag(&record_of(&ctx, &event)?, "canceled"))
-            },
-        )?,
-        Some(Function::new(
-            ctx.clone(),
-            |ctx: Ctx<'js>, This(event): This<Object<'js>>, value: Coerced<bool>| -> JsResult<()> {
-                let record = record_of(&ctx, &event)?;
-                if !value.0 && cancels(&record) {
-                    record.set("canceled", true)?;
-                }
-                Ok(())
-            },
-        )?),
-    )?;
-    accessor(
-        "cancelBubble",
-        Function::new(
-            ctx.clone(),
-            |ctx: Ctx<'js>, This(event): This<Object<'js>>| -> JsResult<bool> {
-                Ok(flag(&record_of(&ctx, &event)?, "stop"))
-            },
-        )?,
-        Some(Function::new(
-            ctx.clone(),
-            |ctx: Ctx<'js>, This(event): This<Object<'js>>, value: Coerced<bool>| -> JsResult<()> {
-                let record = record_of(&ctx, &event)?;
-                if value.0 && flag(&record, "dispatching") {
-                    record.set("stop", true)?;
-                }
-                Ok(())
-            },
-        )?),
     )
 }
 
-/// Defines the enumerable, configurable accessor `key` on `proto` through
-/// `define_property`, the realm's `Object.defineProperty`. The getter is named
-/// `get <key>` and the setter `set <key>`.
-fn define_accessor<'js>(
-    define_property: &Function<'js>,
+/// Defines on `proto` the method `name`, which runs `act` on the event `this`
+/// names.
+fn action<'js>(
+    ctx: &Ctx<'js>,
     proto: &Object<'js>,
-    key: &str,
-    get: Function<'js>,
-    set: Option<Function<'js>>,
+    name: &str,
+    act: fn(&IncaEvent<'_>),
 ) -> JsResult<()> {
-    // rquickjs's `Accessor` takes only closures, so it cannot carry a named function.
-    let descriptor = Object::new(proto.ctx().clone())?;
-    descriptor.set_prototype(None)?;
-    descriptor.set("get", get.with_name(format!("get {key}"))?)?;
-    if let Some(set) = set {
-        descriptor.set("set", set.with_name(format!("set {key}"))?)?;
+    let function = Function::new(
+        ctx.clone(),
+        move |ctx: Ctx<'js>, This(this): This<Value<'js>>| {
+            with_event(&ctx, &this, |event| {
+                act(event);
+                Ok(())
+            })
+        },
+    )?;
+    method(proto, name, function)
+}
+
+/// A new object that inherits from `parent`.
+fn child_of<'js>(ctx: &Ctx<'js>, parent: &Object<'js>) -> JsResult<Object<'js>> {
+    let child = Object::new(ctx.clone())?;
+    child.set_prototype(Some(parent))?;
+    Ok(child)
+}
+
+/// The `TypeError` that `member` of one kind of event throws for an event of
+/// another kind.
+fn other_kind(ctx: &Ctx<'_>, member: &str) -> rquickjs::Error {
+    Exception::throw_type(
+        ctx,
+        &format!("{member} belongs to another kind of event, so use it on an event of that kind"),
+    )
+}
+
+/// What stands for each of `ids`: the entries of the array that the global
+/// `__inca_targets__` returns for them, or the ids themselves when the global
+/// is not a function.
+///
+/// # Errors
+///
+/// Throws what the global throws, and a `TypeError` when it returns no array.
+fn targets_of<'js>(ctx: &Ctx<'js>, ids: &[NodeId]) -> JsResult<Vec<Value<'js>>> {
+    let Ok(hook) = ctx.globals().get::<_, Function>("__inca_targets__") else {
+        return ids.iter().map(|id| id.into_js(ctx)).collect();
+    };
+    let found: Array = hook.call((array_of(ctx, ids.iter().copied())?,))?;
+    (0..ids.len()).map(|index| found.get(index)).collect()
+}
+
+/// A new array of `items`. Each entry is defined, so no index setter on
+/// `Array.prototype` or `Object.prototype` runs.
+pub(crate) fn array_of<'js, T: IntoJs<'js>>(
+    ctx: &Ctx<'js>,
+    items: impl IntoIterator<Item = T>,
+) -> JsResult<Array<'js>> {
+    let array = Array::new(ctx.clone())?;
+    for (index, item) in (0u32..).zip(items) {
+        let value = item.into_js(ctx)?;
+        array.as_object().prop(
+            index,
+            Property::from(value).writable().enumerable().configurable(),
+        )?;
     }
-    descriptor.set("enumerable", true)?;
-    descriptor.set("configurable", true)?;
-    define_property.call((proto.clone(), key, descriptor))
+    Ok(array)
 }

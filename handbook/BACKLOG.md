@@ -826,8 +826,8 @@ A fixed entry is deleted and its ID is never reused.
   `Units: bridge · Size: S-M · Impact: Medium`
 
   `keydown` and `keyup` carry `key` and no legacy code fields. Fix: a table
-  from `key` to `keyCode` in `set_key_fields`, with `which` equal to
-  `keyCode`.
+  from `key` to `keyCode` beside the key fields of `event/payload.rs`, with
+  `which` equal to `keyCode`.
 
 - **B-154 `input` and `change` are unsupported**
   `Units: gpui,bridge,docs · Size: L · Impact: High`
@@ -919,10 +919,11 @@ A fixed entry is deleted and its ID is never reused.
   `WheelEvent`, `UIEvent` or `PointerEvent`. `Event` has no `initEvent()` and
   `CustomEvent` no `initCustomEvent()`. Mouse, wheel, key and focus events
   report `Event` as their `constructor` and `[object Event]` as their string
-  tag, where browsers report their subclass. One mouse prototype serves mouse
-  and wheel events, so it carries no tag of its own. Fix: add the subclasses
-  with their init dictionaries, `initEvent()`, `initCustomEvent()` and string
-  tags, and have the host's events inherit from them.
+  tag, where browsers report their subclass. Each kind of host event has a
+  prototype of its own, with no constructor and no string tag of its own.
+  Fix: add the subclasses with their init dictionaries, `initEvent()`,
+  `initCustomEvent()` and string tags, on the prototypes the host's events
+  inherit from.
 
 - **B-168 `window` has the listener methods only and `document` is undefined**
   `Units: core,bridge,docs · Size: M · Impact: Low`
@@ -959,16 +960,6 @@ A fixed entry is deleted and its ID is never reused.
   the argument check, `tabIndex` reads the default and `id` reads an empty
   string. A browser keeps the listeners and the attribute of a detached
   element. Fix: keep a destroyed node as a detached element in the host tree.
-
-- **B-171 A frozen event cannot be dispatched again**
-  `Units: bridge,docs · Size: M · Impact: Low`
-
-  Dispatching sets `target`, `isTrusted` and `eventId` on the event object,
-  which throws a `TypeError` on a frozen object. Browsers dispatch a frozen
-  event. Fix: keep `target`, `currentTarget`, `eventPhase`, `isTrusted` and
-  `eventId` in the event record behind accessors on the prototype. Browsers
-  define `isTrusted` as an own getter of each event, enumerable and not
-  configurable, so its accessor goes on the event object.
 
 - **B-172 Scroll members of a template `ref` read the last drawn layout**
   `Units: gpui,bridge,core · Size: M · Impact: Low`
@@ -1067,30 +1058,6 @@ A fixed entry is deleted and its ID is never reused.
   also needs a retention policy (drop an entry once no function of its
   compile is alive) or JS-side ownership (the vault keeps each map with its
   module, and Rust keeps the key).
-
-- **B-182 The event store helper lives in the bridge**
-  `Units: bridge,jsenv · Size: S · Impact: Low`
-
-  `event.rs` builds a private `WeakMap` store by evaluating a script. The
-  store needs only QuickJS, so it fits jsenv beside the other realm helpers.
-  The planned native event record replaces the store, so the move applies
-  only if that record is dropped.
-
-- **B-183 Event fields can be reassigned**
-  `Units: bridge · Size: M · Impact: Low`
-
-  Fields such as `ctrlKey`, `key` and `clientX` are writable data properties
-  of the event object. `getModifierState()` reads the modifier fields, so a
-  reassigned field changes its result. `Object::prop(key, value)` of rquickjs
-  defines a read-only property.
-
-- **B-191 The event walk allocates on every event**
-  `Units: bridge · Size: M · Impact: Low`
-
-  `path_from` in `event/walk.rs` returns a `Vec` for each event, and a walk
-  that reaches a listener builds one array of target objects in JS. Borrowing
-  the tree path instead would hold a `RefCell` borrow across the engine call,
-  which can panic. A fix has to end the borrow before the call.
 
 - **B-192 Natives treat a missing node in two ways**
   `Units: bridge,docs · Size: S · Impact: Low`
@@ -1300,3 +1267,13 @@ A fixed entry is deleted and its ID is never reused.
 
   Fix: resolve an inline map's sources against the generated file's directory.
   The printed paths of bundled apps change, so decide first.
+
+- **B-214 `console.log` of an event shows only `isTrusted`**
+  `Units: jsenv,bridge · Size: M · Impact: Low`
+
+  The console prints own properties and calls no getter, and an event owns
+  only `isTrusted`, so `console.log(event)` prints
+  `Event { isTrusted: [Getter] }`. Node prints `type`, `defaultPrevented`,
+  `cancelable` and `timeStamp`, and browser consoles list the getters. Fix:
+  let the host name, per prototype, the getters the console reads, and have
+  the event prototypes name their base fields.

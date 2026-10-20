@@ -19,6 +19,7 @@ mod hover_order;
 mod jobs;
 mod key_default;
 mod movement;
+mod record;
 mod target_objects;
 mod targets;
 mod walk;
@@ -49,6 +50,14 @@ fn wheel_at(x: f32, y: f32) -> EventPayload {
         delta_y: 1.0,
         delta_z: 0.0,
         delta_mode: 0,
+    })
+}
+
+fn key_payload(modifiers: gpui::Modifiers) -> EventPayload {
+    EventPayload::Key(inca_gpui::KeyPayload {
+        key: "a".into(),
+        repeat: false,
+        modifiers,
     })
 }
 

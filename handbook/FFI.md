@@ -19,14 +19,20 @@ functions stay in JS and Rust holds only the callback ids. Values the host
 keeps for itself, such as the promise of a pending module and the event store,
 sit in a per-realm vault (`inca_jsenv::vault`), a null-prototype object. A
 read-only global function returns it only while Rust calls it through a native
-gate, so no script reaches it, and Rust holds only the keys.
+gate, so no script reaches it, and Rust holds only the keys. The data of a
+native class instance is the exception. An event object is an instance of a
+native class. The JS values its fields hold, such as `target` and `detail`,
+belong to that instance. The garbage collector traces them, and they go when
+the event goes. They sit in one struct whose trace names every field. A value
+left untraced makes the engine's drop abort the process.
 
 All `unsafe` code of the Rust crates lives in `inca-jsenv/src/quickjs.rs`.
 The one exception is the `unsafe impl` that rquickjs's `JsLifetime` derive
 expands to, which gives a Rust value on a JS object its lifetime marker.
 `clippy.toml` restricts that derive to the files that allow it:
-`inca-jsenv/src/sourcemap/store.rs`. It restricts `rquickjs::Persistent` too,
-since one kept past its runtime aborts the process when the runtime drops.
+`inca-jsenv/src/sourcemap/store.rs` and `inca-bridge/src/event/record.rs`. It
+restricts `rquickjs::Persistent` too, since one kept past its runtime aborts
+the process when the runtime drops.
 
 ## Retained virtual tree
 
@@ -227,8 +233,8 @@ of core answers. Rust looks it up by name on each walk and keeps nothing.
 
 - A walk passes one object to every listener on the path. The host creates
   it for its own events and a script builds it for the events it dispatches.
-  Own fields: `type`, `target`, `currentTarget`, `eventId` and the payload.
-  A property one listener sets is visible to later listeners.
+  Its fields are getters on the prototype of its kind, and its one own
+  property is the getter `isTrusted`, shared by every event.
 - `target` is the node the event is fired at, except where Pointer events and
   Keyboard and focus say otherwise. `currentTarget` is the node whose
   listeners run. `target`, `currentTarget`, the entries of `composedPath()`
@@ -244,18 +250,25 @@ of core answers. Rust looks it up by name on each walk and keeps nothing.
   `event_sink` module of `inca-gpui`) that also holds each event's movement rule and
   own-buttons rule. Other names get every rule `false`. The `timeStamp` origin is a
   process-wide `Instant` fixed when the first dispatcher is created.
-- The object inherits from a per-engine prototype holding `stopPropagation`,
-  `stopImmediatePropagation`, `preventDefault`, `composedPath`, the phase
-  constants (also on `Event`) and the accessors
-  `defaultPrevented`, `returnValue` and `cancelBubble` (settable, ToBoolean)
-  and `srcElement` (reads `target`). Members read a host-private `WeakMap`
-  record that the realm's vault keeps (`crates/inca-bridge/src/event.rs`),
-  and a call on any other receiver throws a `TypeError`.
-- Mouse and wheel events inherit from a mouse prototype and key events from a
-  keyboard prototype. Both inherit from the prototype above and hold their own
-  `getModifierState`, which throws a `TypeError` on an event of the other kind.
-  Focus and scroll events and events built with `new Event` inherit from the
-  prototype above directly.
+- The object is an instance of the native class `IncaEvent`
+  (`crates/inca-bridge/src/event/record.rs`), and its fields live in Rust.
+  Events of every kind inherit from `Event.prototype`, which holds
+  `stopPropagation`, `stopImmediatePropagation`, `preventDefault`,
+  `composedPath`, the phase constants (also on `Event`), the getters of the
+  base fields, `returnValue` and `cancelBubble` (settable, ToBoolean),
+  `srcElement` (reads `target`) and the non-enumerable `eventId`. A getter or
+  a method called on any other receiver throws a `TypeError`. The prototypes
+  sit in the realm's vault.
+- Each kind of event inherits from a prototype of its kind that holds the
+  getters of its payload fields: mouse events from a mouse prototype,
+  `click`, `auxclick` and `contextmenu` from a pointer prototype and `wheel`
+  from a wheel prototype (both inherit from the mouse one), key events from a
+  keyboard prototype and focus events from a focus prototype. The mouse and
+  keyboard prototypes hold their own `getModifierState`. A field getter or
+  `getModifierState` throws a `TypeError` on an event of another kind. Scroll
+  events and events built with `new Event` inherit from `Event.prototype`, and
+  events built with `new CustomEvent` from `CustomEvent.prototype`, which holds
+  the `detail` getter.
 - GPUI's `platform` modifier becomes `metaKey` and `function` is dropped.
   `getModifierState` converts its argument to a string and reads those four
   fields.
@@ -406,20 +419,18 @@ of core answers. Rust looks it up by name on each walk and keeps nothing.
 
 #### Dispatching from script
 
-- `Event` and `CustomEvent` (`event/construct.rs`) file their events in the
-  host's `WeakMap` record store, with `isTrusted` false and `target` `null`.
+- `Event` and `CustomEvent` (`event/construct.rs`) build instances of the same
+  class, with `isTrusted` false and `target` `null`.
   `Event(type, init)` and `CustomEvent(type, init)` need `new`, a type, and an
   `init` that is an object, `null` or `undefined`. Any other call throws a
   `TypeError`.
   `CustomEvent.prototype` inherits from `Event.prototype`.
 - `dispatchEvent` runs the walk in the caller's context, so a listener can
   call it. It sets `target` and `isTrusted`, reads `type` and the flags
-  (`bubbles`, `cancelable`, `composed`) from the event's record and returns
-  the negated canceled flag. Default actions and the job queue belong to the
-  caller. The `dispatching` flag is set last and cleared before the event
-  object is touched. A listener that freezes the event therefore clears the
-  flag, and dispatching that frozen event again throws a `TypeError` when it
-  sets `target`.
+  (`bubbles`, `cancelable`, `composed`) from the event and returns the negated
+  canceled flag. Default actions and the job queue belong to the caller. The
+  walk writes no property of the event object, so a frozen event dispatches
+  again.
 - `click()` walks a `click` event with `MousePayload::keyboard_click`.
   `Host::clicking` holds the nodes whose click is running, as a re-entrancy
   guard. A disabled `button` and an unknown node return at once.

@@ -144,10 +144,7 @@ impl Host {
         }
         let flags = crate::dispatch::spec_of("scroll").flags;
         let host: &Host = self;
-        moved.retain(|&id| {
-            let path = crate::event::path_from(host, id);
-            crate::event::listened(host, "scroll", flags, &path, &[])
-        });
+        moved.retain(|&id| crate::event::listened(host, "scroll", flags, id, &[]));
         moved.sort_unstable();
         moved
     }

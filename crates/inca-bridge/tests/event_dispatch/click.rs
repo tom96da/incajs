@@ -79,22 +79,19 @@ fn click_dispatches_to_js_exactly_once(cx: &mut TestAppContext) {
         1.0,
         "exactly one click must dispatch exactly one JS call"
     );
-    assert_eq!(
-        engine
-            .eval::<String>("JSON.stringify({ ...globalThis.lastEvent, timeStamp: undefined })")
-            .unwrap(),
-        format!(
-            concat!(
-                r#"{{"type":"click","target":{node},"currentTarget":null,"#,
-                r#""bubbles":true,"cancelable":true,"composed":true,"eventPhase":0,"isTrusted":true,"#,
-                r#""clientX":10,"clientY":10,"screenX":10,"screenY":10,"offsetX":10,"offsetY":10,"x":10,"y":10,"relatedTarget":null,"pageX":10,"pageY":10,"#,
-                r#""movementX":0,"movementY":0,"button":0,"buttons":0,"detail":1,"#,
-                r#""pointerId":1,"pointerType":"mouse","isPrimary":true,"width":1,"height":1,"pressure":0,"#,
-                r#""ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false,"eventId":1}}"#
-            ),
-            node = node
-        )
-    );
+    let want: serde_json::Value = serde_json::from_str(&format!(
+        concat!(
+            r#"{{"type":"click","target":{node},"currentTarget":null,"#,
+            r#""bubbles":true,"cancelable":true,"composed":true,"eventPhase":0,"isTrusted":true,"#,
+            r#""clientX":10,"clientY":10,"screenX":10,"screenY":10,"offsetX":10,"offsetY":10,"x":10,"y":10,"relatedTarget":null,"pageX":10,"pageY":10,"#,
+            r#""movementX":0,"movementY":0,"button":0,"buttons":0,"detail":1,"#,
+            r#""pointerId":1,"pointerType":"mouse","isPrimary":true,"width":1,"height":1,"pressure":0,"#,
+            r#""ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false,"eventId":1}}"#
+        ),
+        node = node
+    ))
+    .unwrap();
+    assert_eq!(event_fields(&engine, &want), want);
 }
 
 /// The containers track the pointer only while something listens or can take

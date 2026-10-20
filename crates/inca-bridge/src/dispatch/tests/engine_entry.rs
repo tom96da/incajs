@@ -202,9 +202,21 @@ fn a_script_that_patches_the_builtins_cannot_reach_or_break_event_state(cx: &mut
         .engine
         .eval::<()>(
             r"
-            WeakMap.prototype.get = () => { throw new Error('get'); };
-            WeakMap.prototype.set = () => { throw new Error('set'); };
-            Reflect.apply = () => { throw new Error('apply'); };
+            Object.defineProperty(Object.prototype, 'isTrusted', {
+                get() {
+                    return 'inherited';
+                },
+                set(value) {
+                    globalThis.caught = value;
+                },
+                configurable: true,
+            });
+            Object.defineProperty = () => {
+                throw new Error('defineProperty');
+            };
+            Reflect.apply = () => {
+                throw new Error('apply');
+            };
             ",
         )
         .unwrap();
@@ -214,60 +226,15 @@ fn a_script_that_patches_the_builtins_cannot_reach_or_break_event_state(cx: &mut
         "click",
         r"
         (e) => {
-        const proto = Object.getPrototypeOf(e);
-        const names = (o) => [
-            ...Object.getOwnPropertyNames(o),
-            ...Object.getOwnPropertySymbols(o).map(String)
-        ].sort();
-        e.preventDefault();
-        out.push(e.defaultPrevented, names(e), names(proto)); }
+            e.preventDefault();
+            out.push(e.defaultPrevented, e.isTrusted, globalThis.caught === undefined);
+        }
         ",
     );
 
     let out = fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
 
-    assert_eq!(
-        out,
-        serde_json::json!([
-            true,
-            [
-                "bubbles",
-                "cancelable",
-                "composed",
-                "currentTarget",
-                "eventId",
-                "eventPhase",
-                "isTrusted",
-                "target",
-                "timeStamp",
-                "type"
-            ],
-            [
-                "AT_TARGET",
-                "BUBBLING_PHASE",
-                "CAPTURING_PHASE",
-                "NONE",
-                "Symbol(Symbol.toStringTag)",
-                "cancelBubble",
-                "composedPath",
-                "constructor",
-                "defaultPrevented",
-                "preventDefault",
-                "returnValue",
-                "srcElement",
-                "stopImmediatePropagation",
-                "stopPropagation"
-            ]
-        ])
-    );
-}
-
-fn key_payload(modifiers: gpui::Modifiers) -> EventPayload {
-    EventPayload::Key(inca_gpui::KeyPayload {
-        key: "a".into(),
-        repeat: false,
-        modifiers,
-    })
+    assert_eq!(out, serde_json::json!([true, true, true]));
 }
 
 #[gpui_cases]
@@ -315,9 +282,9 @@ fn modifier_state_reports_each_held_modifier_and_no_lock(
 #[gpui_cases]
 #[gpui::test]
 #[case::mouse("click", mouse_at(1.0, 1.0), [false, true, false, true])]
-#[case::wheel("wheel", wheel_at(1.0, 1.0), [false, true, false, true])]
+#[case::wheel("wheel", wheel_at(1.0, 1.0), [false, false, false, true])]
 #[case::key("keydown", key_payload(gpui::Modifiers::default()), [false, true, false, true])]
-#[case::focus("focus", EventPayload::Focus { related_target: None }, [false, false, true, true])]
+#[case::focus("focus", EventPayload::Focus { related_target: None }, [false, false, false, true])]
 #[case::none("scroll", EventPayload::None, [false, false, true, true])]
 fn get_modifier_state_lives_on_the_prototype_of_its_kind(
     cx: &mut TestAppContext,
@@ -375,38 +342,6 @@ fn a_host_event_reads_event_as_its_string_tag(
 }
 
 #[gpui::test]
-fn mouse_and_key_events_each_share_a_prototype_of_their_kind(cx: &mut TestAppContext) {
-    let (dispatcher, host, _reported) = dispatcher_with_engine();
-    let node = host.borrow_mut().tree.create_node("div").unwrap();
-    for event in ["click", "wheel", "keydown", "keyup"] {
-        listen(
-            &dispatcher,
-            node,
-            event,
-            "(e) => (globalThis.kept ??= []).push(e)",
-        );
-    }
-    let key = key_payload(gpui::Modifiers::default());
-    fire_and_read(cx, &dispatcher, node, "click", &mouse_at(1.0, 1.0));
-    fire_and_read(cx, &dispatcher, node, "wheel", &wheel_at(1.0, 1.0));
-    fire_and_read(cx, &dispatcher, node, "keydown", &key);
-    fire_and_read(cx, &dispatcher, node, "keyup", &key);
-
-    let got = eval_json(
-        &dispatcher,
-        r"
-        (() => {
-            const [click, wheel, down, up] = kept;
-            const p = Object.getPrototypeOf;
-            return [p(click) === p(wheel), p(down) === p(up), p(click) !== p(down)];
-        })()
-        ",
-    );
-
-    assert_eq!(got, serde_json::json!([true, true, true]));
-}
-
-#[gpui::test]
 fn a_detached_get_modifier_state_throws_type_error(cx: &mut TestAppContext) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
@@ -432,29 +367,6 @@ fn a_detached_get_modifier_state_throws_type_error(cx: &mut TestAppContext) {
     );
 
     assert_eq!(out, serde_json::json!([true, true, true, true]));
-}
-
-#[gpui::test]
-fn get_modifier_state_reads_the_event_fields(cx: &mut TestAppContext) {
-    let (dispatcher, host, _reported) = dispatcher_with_engine();
-    let node = host.borrow_mut().tree.create_node("div").unwrap();
-    listen(
-        &dispatcher,
-        node,
-        "keydown",
-        r"(e) => { e.shiftKey = true; e.ctrlKey = false;
-            out.push(e.getModifierState('Shift'), e.getModifierState('Control')); }",
-    );
-
-    let out = fire_and_read(
-        cx,
-        &dispatcher,
-        node,
-        "keydown",
-        &key_payload(gpui::Modifiers::control()),
-    );
-
-    assert_eq!(out, serde_json::json!([true, false]));
 }
 
 #[gpui::test]

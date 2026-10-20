@@ -582,7 +582,6 @@ fn the_cut_nodes_are_skipped_in_both_passes(cx: &mut TestAppContext) {
         listen_with(&dispatcher, node, "click", (capture, false), &tagged(name));
     }
     let cx = cx.add_empty_window();
-    let path = dispatcher.path_from(child);
 
     cx.update(|_, _| {
         event::walk(
@@ -592,7 +591,6 @@ fn the_cut_nodes_are_skipped_in_both_passes(cx: &mut TestAppContext) {
                 name: "click",
                 flags: Flags::ALL,
                 target: child,
-                path: &path,
                 cut: &[parent, outer],
                 payload: &EventPayload::None,
                 trusted: true,

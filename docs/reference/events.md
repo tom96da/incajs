@@ -150,7 +150,6 @@ rules, with the differences below.
 
 - `MouseEvent`, `KeyboardEvent`, `FocusEvent`, `WheelEvent`, `UIEvent` and
   `PointerEvent` are unsupported, as is `initEvent()`.
-- Dispatching an event again after a listener froze it throws a `TypeError`.
 
 ## Errors in handlers
 

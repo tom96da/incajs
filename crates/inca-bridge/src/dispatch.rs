@@ -182,7 +182,6 @@ impl EventDispatcher {
         payload: &EventPayload,
         cut: &[NodeId],
     ) -> (bool, bool) {
-        let path = self.path_from(target);
         let outcome = event::walk(
             &self.engine,
             &self.host,
@@ -190,7 +189,6 @@ impl EventDispatcher {
                 name: event,
                 flags: spec_of(event).flags,
                 target,
-                path: &path,
                 cut,
                 payload,
                 trusted: true,
@@ -433,7 +431,11 @@ impl EventDispatcher {
             let Ok(hook) = ctx.globals().get::<_, Function>("__inca_released__") else {
                 return false;
             };
-            if let Err(err) = hook.call::<_, ()>((nodes, callbacks)) {
+            let called = event::array_of(&ctx, nodes).and_then(|nodes| {
+                let callbacks = event::array_of(&ctx, callbacks)?;
+                hook.call::<_, ()>((nodes, callbacks))
+            });
+            if let Err(err) = called {
                 host.borrow_mut()
                     .failures
                     .push(EngineError::capture(&ctx, &err));

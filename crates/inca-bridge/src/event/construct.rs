@@ -1,103 +1,64 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::cell::RefCell;
+
 use inca_gpui::{EventPayload, NodeId};
 use rquickjs::atom::PredefinedAtom;
 use rquickjs::convert::Coerced;
-use rquickjs::function::{Constructor, IntoJsFunc, ParamRequirement, Params};
+use rquickjs::function::{IntoJsFunc, ParamRequirement, Params};
 use rquickjs::object::Property;
-use rquickjs::{Array, Ctx, Exception, Function, Null, Object, Result as JsResult, Value};
+use rquickjs::{Class, Ctx, Exception, Function, Object, Result as JsResult, Value};
 
-use super::payload::set_payload;
+use super::members::PHASES;
 use super::walk::Walk;
 use super::{
-    EVENT, Flags, KEYBOARD, MOUSE, PHASES, REMEMBER, path_value, piece, target_at, targets_of,
-    time_stamp,
+    CUSTOM, EVENT, FOCUS, Flags, Held, IncaEvent, KEYBOARD, MOUSE, POINTER, State, WHEEL, child_of,
+    field, new_event, other_kind, targets_of,
 };
 use crate::bindings::convert::or_null;
 
-/// A new idle event object and its record, filed in the realm's record
-/// store. The event inherits from the prototype of kind `prototype`, and the
-/// record keeps that kind as `kind`.
-fn new_event<'js>(
-    ctx: &Ctx<'js>,
-    kind: &str,
-    flags: Flags,
-    trusted: bool,
-    prototype: &'static str,
-) -> JsResult<(Object<'js>, Object<'js>)> {
-    let Flags {
-        bubbles,
-        cancelable,
-        composed,
-    } = flags;
-    let proto: Object = piece(ctx, prototype)?;
-    let remember: Function = piece(ctx, REMEMBER)?;
-
-    let record = Object::new(ctx.clone())?;
-    record.set_prototype(None)?;
-    record.set("type", kind)?;
-    record.set("stop", false)?;
-    record.set("immediate", false)?;
-    record.set("canceled", false)?;
-    record.set("passive", false)?;
-    record.set("bubbles", bubbles)?;
-    record.set("cancelable", cancelable)?;
-    record.set("composed", composed)?;
-    record.set("dispatching", false)?;
-    record.set("path", Vec::<NodeId>::new())?;
-    record.set("kind", prototype)?;
-
-    let event = Object::new(ctx.clone())?;
-    event.set_prototype(Some(&proto))?;
-    event.set("type", kind)?;
-    event.set("target", Null)?;
-    event.set("currentTarget", Null)?;
-    event.set("bubbles", bubbles)?;
-    event.set("cancelable", cancelable)?;
-    event.set("composed", composed)?;
-    event.set("eventPhase", 0)?;
-    event.set("isTrusted", trusted)?;
-    event.set("timeStamp", time_stamp())?;
-
-    remember.call::<_, ()>((event.clone(), record.clone()))?;
-    Ok((event, record))
-}
-
-/// A new event object for a walk, ready to deliver. `targets` holds what
-/// stands for each node of the path.
+/// A new event for a walk, ready to deliver. `targets` holds what stands for
+/// each node of the path, target first.
 pub(super) fn create<'js>(
     ctx: &Ctx<'js>,
     walk: &Walk<'_>,
     id: u64,
-    targets: Option<&Array<'js>>,
-) -> JsResult<(Object<'js>, Object<'js>)> {
-    let (event, record) = new_event(
-        ctx,
-        walk.name,
+    targets: Vec<Value<'js>>,
+) -> JsResult<Class<'js, IncaEvent<'js>>> {
+    let related = match related_of(walk.payload) {
+        Some(node) => targets_of(ctx, &[node])?.pop(),
+        None => None,
+    };
+    let state = State::new(
+        walk.name.to_owned(),
         walk.flags,
+        walk.payload.clone(),
         walk.trusted,
-        prototype_kind(walk.payload),
-    )?;
-    record.set("dispatching", true)?;
-    record.set("path", path_value(ctx, targets, walk.path)?)?;
-    event.set("target", target_at(ctx, targets, 0, walk.target)?)?;
-    set_payload(&event, walk.payload)?;
-    if let Some(related) = related_of(walk.payload)
-        && let Some(found) = targets_of(ctx, &[related])?
-    {
-        event.set("relatedTarget", found.get::<Value>(0)?)?;
-    }
-    event.set("eventId", id)?;
-    Ok((event, record))
+    );
+    state.event_id.set(Some(id));
+    state.dispatching.set(true);
+    let event = IncaEvent {
+        state,
+        held: Held {
+            target: RefCell::new(targets.first().cloned()),
+            path: RefCell::new(targets),
+            related,
+            detail: None,
+        },
+    };
+    new_event(ctx, kind_of(walk.payload), event)
 }
 
-/// The kind of the prototype that an event carrying `payload` inherits from.
-fn prototype_kind(payload: &EventPayload) -> &'static str {
+/// The kind of a host event that carries `payload`.
+fn kind_of(payload: &EventPayload) -> &'static str {
     match payload {
-        EventPayload::Mouse(_) | EventPayload::Wheel(_) => MOUSE,
+        EventPayload::None => EVENT,
+        EventPayload::Focus { .. } => FOCUS,
+        EventPayload::Mouse(mouse) if mouse.pointer.is_some() => POINTER,
+        EventPayload::Mouse(_) => MOUSE,
+        EventPayload::Wheel(_) => WHEEL,
         EventPayload::Key(_) => KEYBOARD,
-        EventPayload::None | EventPayload::Focus { .. } => EVENT,
     }
 }
 
@@ -111,41 +72,52 @@ fn related_of(payload: &EventPayload) -> Option<NodeId> {
     }
 }
 
-/// Installs the global constructors `Event` and `CustomEvent`.
-pub(super) fn constructors<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<()> {
-    let event = Constructor::new_prototype(
-        ctx,
-        proto.clone(),
-        Construct {
-            name: "Event",
-            custom: false,
-        },
-    )?;
-    event.set_name("Event")?;
-    event.set_length(1)?;
-    let custom_proto = Object::new(ctx.clone())?;
-    custom_proto.set_prototype(Some(proto))?;
+/// Installs the global constructors `Event` and `CustomEvent`, and returns
+/// `CustomEvent.prototype`, which inherits from `proto`.
+pub(super) fn constructors<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<Object<'js>> {
+    let event = constructor(ctx, proto, "Event", false)?;
+    let custom_proto = child_of(ctx, proto)?;
+    field(ctx, &custom_proto, "detail", |ctx, event| {
+        event
+            .held
+            .detail
+            .clone()
+            .ok_or_else(|| other_kind(ctx, "detail"))
+    })?;
     custom_proto.prop(
         PredefinedAtom::SymbolToStringTag,
         Property::from("CustomEvent").configurable(),
     )?;
-    let custom = Constructor::new_prototype(
-        ctx,
-        custom_proto,
-        Construct {
-            name: "CustomEvent",
-            custom: true,
-        },
-    )?;
-    custom.set_name("CustomEvent")?;
-    custom.set_length(1)?;
+    let custom = constructor(ctx, &custom_proto, "CustomEvent", true)?;
     custom.set_prototype(Some(&event))?;
     for (name, value) in PHASES {
         event.prop(name, Property::from(value).enumerable())?;
     }
     let globals = ctx.globals();
     globals.set("Event", event)?;
-    globals.set("CustomEvent", custom)
+    globals.set("CustomEvent", custom)?;
+    Ok(custom_proto)
+}
+
+/// The constructor `name` of length 1, linked with `proto` as
+/// `JS_SetConstructor` links a built-in: `name.prototype` is read-only and
+/// `proto.constructor` is writable and configurable.
+fn constructor<'js>(
+    ctx: &Ctx<'js>,
+    proto: &Object<'js>,
+    name: &'static str,
+    custom: bool,
+) -> JsResult<Function<'js>> {
+    let function = Function::new(ctx.clone(), Construct { name, custom })?
+        .with_name(name)?
+        .with_constructor(true);
+    function.set_length(1)?;
+    function.prop("prototype", Property::from(proto.clone()))?;
+    proto.prop(
+        "constructor",
+        Property::from(function.clone()).writable().configurable(),
+    )?;
+    Ok(function)
 }
 
 /// The body of `Event` and `CustomEvent`.
@@ -170,13 +142,13 @@ impl<'js> IntoJsFunc<'js, ()> for Construct {
                 "the event constructor needs new, so write new {name}(type)"
             )));
         }
-        let Some(kind) = params.arg(0) else {
+        let Some(event_type) = params.arg(0) else {
             return Err(type_error(concat!(
                 "the event type is missing, so pass a type string such as \"click\" ",
                 "as the first argument"
             )));
         };
-        let kind = kind.get::<Coerced<String>>()?.0;
+        let event_type = event_type.get::<Coerced<String>>()?.0;
         let init = match params.arg(1) {
             Some(value) if !value.is_undefined() && !value.is_null() => {
                 Some(value.into_object().ok_or_else(|| {
@@ -198,14 +170,37 @@ impl<'js> IntoJsFunc<'js, ()> for Construct {
             cancelable: read("cancelable")?,
             composed: read("composed")?,
         };
-        let (event, _) = new_event(ctx, &kind, flags, false, EVENT)?;
-        if self.custom {
+        let state = State::new(event_type, flags, EventPayload::None, false);
+        let (kind, detail) = if self.custom {
             let detail = init
                 .as_ref()
                 .map(|init| init.get::<_, Value>("detail"))
                 .transpose()?
                 .filter(|detail| !detail.is_undefined());
-            event.set("detail", or_null(ctx, detail)?)?;
+            (CUSTOM, Some(or_null(ctx, detail)?))
+        } else {
+            (EVENT, None)
+        };
+        let event = IncaEvent {
+            state,
+            held: Held {
+                target: RefCell::new(None),
+                path: RefCell::new(Vec::new()),
+                related: None,
+                detail,
+            },
+        };
+        let event = new_event(ctx, kind, event)?;
+        // `new.target`'s prototype when it is an object, as for a subclass;
+        // the prototype of the kind otherwise.
+        let target_proto = params
+            .this()
+            .as_object()
+            .map(|target| target.get::<_, Value>("prototype"))
+            .transpose()?
+            .and_then(Value::into_object);
+        if let Some(proto) = target_proto {
+            event.set_prototype(Some(&proto))?;
         }
         Ok(event.into_value())
     }

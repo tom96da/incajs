@@ -170,7 +170,7 @@ fn dispatch_event<'js>(
 ) -> impl Fn(Ctx<'js>, JsNodeId, Value<'js>) -> JsResult<bool> {
     move |ctx, JsNodeId(node_id), event| {
         existing_node(&ctx, &host.borrow().tree, node_id)?;
-        crate::event::dispatch_event(&ctx, &host, node_id, event)
+        crate::event::dispatch_event(&ctx, &host, node_id, &event)
     }
 }
 

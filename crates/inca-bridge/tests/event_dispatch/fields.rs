@@ -29,23 +29,20 @@ fn mousedown_carries_the_mouse_fields(cx: &mut TestAppContext) {
     cx.run_until_parked();
 
     assert_eq!(clicks(&engine), 1.0);
-    assert_eq!(
-        engine
-            .eval::<String>("JSON.stringify({ ...globalThis.lastEvent, timeStamp: undefined })")
-            .unwrap(),
-        format!(
-            concat!(
-                r#"{{"type":"mousedown","target":{node},"currentTarget":null,"#,
-                r#""bubbles":true,"cancelable":true,"composed":true,"#,
-                r#""eventPhase":0,"isTrusted":true,"#,
-                r#""clientX":10,"clientY":20,"screenX":10,"screenY":20,"offsetX":10,"offsetY":20,"x":10,"y":20,"relatedTarget":null,"pageX":10,"pageY":20,"#,
-                r#""movementX":0,"movementY":0,"button":0,"buttons":1,"detail":1,"#,
-                r#""ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false,"#,
-                r#""eventId":1}}"#
-            ),
-            node = node
-        )
-    );
+    let want: serde_json::Value = serde_json::from_str(&format!(
+        concat!(
+            r#"{{"type":"mousedown","target":{node},"currentTarget":null,"#,
+            r#""bubbles":true,"cancelable":true,"composed":true,"#,
+            r#""eventPhase":0,"isTrusted":true,"#,
+            r#""clientX":10,"clientY":20,"screenX":10,"screenY":20,"offsetX":10,"offsetY":20,"x":10,"y":20,"relatedTarget":null,"pageX":10,"pageY":20,"#,
+            r#""movementX":0,"movementY":0,"button":0,"buttons":1,"detail":1,"#,
+            r#""ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false,"#,
+            r#""eventId":1}}"#
+        ),
+        node = node
+    ))
+    .unwrap();
+    assert_eq!(event_fields(&engine, &want), want);
 }
 
 /// A `wheel`'s payload carries the delta fields plus
@@ -73,24 +70,21 @@ fn wheel_carries_the_delta_fields(cx: &mut TestAppContext) {
     });
 
     assert_eq!(clicks(&engine), 1.0);
-    assert_eq!(
-        engine
-            .eval::<String>("JSON.stringify({ ...globalThis.lastEvent, timeStamp: undefined })")
-            .unwrap(),
-        format!(
-            concat!(
-                r#"{{"type":"wheel","target":{node},"currentTarget":null,"#,
-                r#""bubbles":true,"cancelable":true,"composed":true,"#,
-                r#""eventPhase":0,"isTrusted":true,"#,
-                r#""clientX":10,"clientY":10,"screenX":10,"screenY":10,"offsetX":10,"offsetY":10,"x":10,"y":10,"relatedTarget":null,"pageX":10,"pageY":10,"#,
-                r#""movementX":0,"movementY":0,"button":0,"buttons":0,"detail":0,"#,
-                r#""ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false,"#,
-                r#""deltaX":0,"deltaY":5,"deltaZ":0,"deltaMode":0,"#,
-                r#""eventId":1}}"#
-            ),
-            node = node
-        )
-    );
+    let want: serde_json::Value = serde_json::from_str(&format!(
+        concat!(
+            r#"{{"type":"wheel","target":{node},"currentTarget":null,"#,
+            r#""bubbles":true,"cancelable":true,"composed":true,"#,
+            r#""eventPhase":0,"isTrusted":true,"#,
+            r#""clientX":10,"clientY":10,"screenX":10,"screenY":10,"offsetX":10,"offsetY":10,"x":10,"y":10,"relatedTarget":null,"pageX":10,"pageY":10,"#,
+            r#""movementX":0,"movementY":0,"button":0,"buttons":0,"detail":0,"#,
+            r#""ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false,"#,
+            r#""deltaX":0,"deltaY":5,"deltaZ":0,"deltaMode":0,"#,
+            r#""eventId":1}}"#
+        ),
+        node = node
+    ))
+    .unwrap();
+    assert_eq!(event_fields(&engine, &want), want);
 }
 
 /// A mouse button held while scrolling still shows up in a `wheel`'s
