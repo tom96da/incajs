@@ -23,6 +23,8 @@ name = "inca_jsenv"
 [dependencies]
 base64.workspace = true
 rquickjs.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 unicode-width.workspace = true
 
 [dev-dependencies]

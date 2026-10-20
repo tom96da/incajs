@@ -5,6 +5,7 @@
 
 use std::{
     cell::OnceCell,
+    ops::Range,
     path::{Component, Path, PathBuf},
     rc::Rc,
 };
@@ -140,14 +141,14 @@ const MARKER: &str = "//# sourceMappingURL=";
 
 struct Entry {
     source: String,
-    raw: Option<RawMap>,
+    raw: RawMap,
     parsed: OnceCell<Option<Parsed>>,
 }
 
 /// The map text captured at registration.
 enum RawMap {
-    /// The `data:` URL of the marker line.
-    Inline(String),
+    /// The byte range of the marker line's `data:` URL in the entry's `source`.
+    Inline(Range<usize>),
     /// The sidecar file's text and the directory it was read from.
     Sidecar { json: String, dir: Option<PathBuf> },
 }
@@ -172,7 +173,19 @@ fn maps_or_insert<'a>(ctx: &'a Ctx<'_>) -> Option<impl std::ops::Deref<Target = 
     if ctx.userdata::<SourceMaps>().is_none() {
         let _ = ctx.store_userdata(SourceMaps::default());
     }
-    ctx.userdata::<SourceMaps>()
+    let maps = ctx.userdata::<SourceMaps>();
+    debug_assert!(
+        maps.is_some(),
+        "the userdata store is borrowed, so a source map registration is lost"
+    );
+    maps
+}
+
+/// Drops the map of `filename`, if any.
+fn forget(ctx: &Ctx<'_>, filename: &str) {
+    if let Some(maps) = ctx.userdata::<SourceMaps>() {
+        maps.0.borrow_mut().remove(filename);
+    }
 }
 
 /// Registers the generated `source` of `filename`. A recompile of the same
@@ -180,13 +193,11 @@ fn maps_or_insert<'a>(ctx: &'a Ctx<'_>) -> Option<impl std::ops::Deref<Target = 
 /// is parsed on the first remap.
 pub(crate) fn register(ctx: &Ctx<'_>, filename: &str, source: &str) {
     let Some(url) = marker_url(source) else {
-        if let Some(maps) = ctx.userdata::<SourceMaps>() {
-            maps.0.borrow_mut().remove(filename);
-        }
-        return;
+        return forget(ctx, filename);
     };
     let raw = if url.starts_with("data:") {
-        Some(RawMap::Inline(url.to_owned()))
+        let start = url.as_ptr().addr() - source.as_ptr().addr();
+        Some(RawMap::Inline(start..start + url.len()))
     } else {
         Path::new(filename)
             .parent()
@@ -198,6 +209,9 @@ pub(crate) fn register(ctx: &Ctx<'_>, filename: &str, source: &str) {
                     dir: path.parent().map(Path::to_path_buf),
                 })
             })
+    };
+    let Some(raw) = raw else {
+        return forget(ctx, filename);
     };
     if let Some(maps) = maps_or_insert(ctx) {
         let entry = Entry {
@@ -224,13 +238,13 @@ pub(crate) fn remap_stack(ctx: &Ctx<'_>, stack: &str) -> String {
             let (text, cr) = line
                 .strip_suffix('\r')
                 .map_or((line, ""), |text| (text, "\r"));
-            remap_frame(ctx, &maps, text).map_or_else(|| line.to_owned(), |new| new + cr)
+            remap_frame(&maps, text).map_or_else(|| line.to_owned(), |new| new + cr)
         })
         .collect::<Vec<_>>()
         .join("\n")
 }
 
-fn remap_frame(ctx: &Ctx<'_>, maps: &SourceMaps, line: &str) -> Option<String> {
+fn remap_frame(maps: &SourceMaps, line: &str) -> Option<String> {
     if !line.trim_start().starts_with("at ") {
         return None;
     }
@@ -251,10 +265,7 @@ fn remap_frame(ctx: &Ctx<'_>, maps: &SourceMaps, line: &str) -> Option<String> {
             let entry = maps.0.borrow().get(file).map(Rc::clone)?;
             Some((prefix, entry))
         })?;
-    let parsed = entry
-        .parsed
-        .get_or_init(|| parse(ctx, entry.raw.as_ref()?))
-        .as_ref()?;
+    let parsed = entry.parsed.get_or_init(|| parse(&entry)).as_ref()?;
     let text = nth_line(&entry.source, row.checked_sub(1)?)?;
     let mut end = column.saturating_sub(1).min(text.len());
     while !text.is_char_boundary(end) {
@@ -295,37 +306,39 @@ fn number(text: &str) -> Option<usize> {
     text.parse().ok()
 }
 
-/// Decodes the captured map text. `None` for an invalid map.
-fn parse(ctx: &Ctx<'_>, raw: &RawMap) -> Option<Parsed> {
-    let (json, sidecar_dir) = match raw {
+/// The fields of a source map this module reads. Other fields are ignored.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MapJson {
+    version: u32,
+    mappings: String,
+    sources: Vec<Option<String>>,
+    /// A root that is not a string counts as none.
+    #[serde(default)]
+    source_root: serde_json::Value,
+}
+
+/// Decodes the map `entry` captured. `None` for an invalid map.
+fn parse(entry: &Entry) -> Option<Parsed> {
+    let (map, sidecar_dir): (MapJson, _) = match &entry.raw {
         RawMap::Inline(url) => {
-            let (_, payload) = url.split_once("base64,")?;
+            let (_, payload) = entry.source[url.clone()].split_once("base64,")?;
             (
-                String::from_utf8(STANDARD.decode(payload).ok()?).ok()?,
+                serde_json::from_slice(&STANDARD.decode(payload).ok()?).ok()?,
                 None,
             )
         }
-        RawMap::Sidecar { json, dir } => (json.clone(), dir.as_deref()),
+        RawMap::Sidecar { json, dir } => (serde_json::from_str(json).ok()?, dir.as_deref()),
     };
-    let Ok(value) = ctx.json_parse(json) else {
-        let _ = ctx.catch();
-        return None;
-    };
-    let map = value.into_object()?;
-    if map.get::<_, i32>("version").ok()? != 3 {
+    if map.version != 3 {
         return None;
     }
-    let lines = decode_mappings(&map.get::<_, String>("mappings").ok()?)?;
-    let root = map
-        .get::<_, Option<String>>("sourceRoot")
-        .ok()
-        .flatten()
-        .unwrap_or_default();
+    let lines = decode_mappings(&map.mappings)?;
+    let root = map.source_root.as_str().unwrap_or_default();
     let sources = map
-        .get::<_, Vec<Option<String>>>("sources")
-        .ok()?
+        .sources
         .into_iter()
-        .map(|name| name.map_or_else(String::new, |name| resolve(&root, &name, sidecar_dir)))
+        .map(|name| name.map_or_else(String::new, |name| resolve(root, &name, sidecar_dir)))
         .collect();
     Some(Parsed { lines, sources })
 }

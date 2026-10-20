@@ -141,3 +141,7 @@ Writes a source map, `bundle.js.map`, beside the bundle in `inca build` and
 `inca package`. With the map, an error in the built app names the `.vue` or
 `.ts` file, line and column. The `--sourcemap` and `--no-sourcemap` flags
 override this key for one run. `inca dev` always writes the map.
+
+An error's stack frames follow the map, with one difference. A block comment
+that holds a lone carriage return (`\r` without `\n`) shifts the reported
+line of every frame below it by one.

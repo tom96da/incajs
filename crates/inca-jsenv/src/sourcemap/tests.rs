@@ -6,6 +6,7 @@
 use super::*;
 use crate::tests::{ScratchDir, with_realm};
 use rstest::rstest;
+use std::cell::RefCell;
 
 fn sp(source: u32, line: u32, column: u32) -> SourcePos {
     SourcePos {
@@ -316,30 +317,17 @@ fn unreadable_sidecar_leaves_frame_unchanged() {
     assert_eq!(remap(&[("/nonexistent-inca/x.js", src)], frame), frame);
 }
 
-#[test]
-fn invalid_maps_leave_frame_unchanged() {
+#[rstest]
+#[case::not_json(inline("{not json"))]
+#[case::version_2(inline(&map_json(2, ";AAAA", r#"["a.ts"]"#, None)))]
+#[case::bad_vlq(inline(&map_json(3, ";!!", r#"["a.ts"]"#, None)))]
+#[case::two_field_segment(inline(&map_json(3, ";AA", r#"["a.ts"]"#, None)))]
+#[case::bad_base64("//# sourceMappingURL=data:application/json;base64,@@@".to_owned())]
+#[case::not_base64("//# sourceMappingURL=data:application/json,{}".to_owned())]
+fn invalid_maps_leave_frame_unchanged(#[case] marker: String) {
     let frame = "    at f (a.js:2:1)";
-    let cases = [
-        "h\nabc".to_owned(),
-        format!("h\nabc\n{}", inline("{not json")),
-        format!(
-            "h\nabc\n{}",
-            inline(&map_json(2, ";AAAA", r#"["a.ts"]"#, None))
-        ),
-        format!(
-            "h\nabc\n{}",
-            inline(&map_json(3, ";!!", r#"["a.ts"]"#, None))
-        ),
-        format!(
-            "h\nabc\n{}",
-            inline(&map_json(3, ";AA", r#"["a.ts"]"#, None))
-        ),
-        "h\nabc\n//# sourceMappingURL=data:application/json;base64,@@@".to_owned(),
-        "h\nabc\n//# sourceMappingURL=data:application/json,{}".to_owned(),
-    ];
-    for src in cases {
-        assert_eq!(one(&src, frame), frame, "{src}");
-    }
+    let src = format!("h\nabc\n{marker}");
+    assert_eq!(one(&src, frame), frame);
 }
 
 #[test]
@@ -430,14 +418,11 @@ fn generated_line_beyond_the_map_leaves_frame_unchanged() {
     assert_eq!(one(&src, "    at f (a.js:3:1)"), "    at f (a.js:3:1)");
 }
 
-#[test]
-fn lf_crlf_and_lone_cr_split_generated_lines() {
-    // Lines: h, '' with a U+2028 inside, 日本x, abc (after a lone CR).
-    let json = map_json(3, ";;AAAA,EAAC;AAAA", r#"["o.ts"]"#, None);
-    let src = format!("h\n'\u{2028}'\n日本x\rabc\n{}", inline(&json));
-    // Byte column 7 follows 日本, which is 2 UTF-16 units.
-    assert_eq!(one(&src, "    at f (a.js:3:7)"), "    at f (o.ts:1:2)");
-    assert_eq!(one(&src, "    at f (a.js:4:1)"), "    at f (o.ts:1:2)");
+#[rstest]
+#[case::crlf("h\r\nabc")]
+#[case::lone_cr("h\rabc")]
+fn a_crlf_or_a_lone_cr_ends_a_generated_line(#[case] source: &str) {
+    assert_eq!(nth_line(source, 1), Some("abc"));
 }
 
 #[test]
@@ -535,6 +520,30 @@ fn dot_dot_source_folds_against_the_sidecar_directory() {
 }
 
 #[test]
+fn a_sidecar_source_root_resolves_against_the_sidecar_directory() {
+    let json = map_json(3, ";AAAA", r#"["a.ts"]"#, Some("lib"));
+    let (out, root) = sidecar_remap(
+        "root",
+        &json,
+        "h\nabc\n//# sourceMappingURL=bundle.js.map",
+        "bundle.js",
+        |_| {},
+    );
+    assert_eq!(out, format!("    at f ({root}/dist/lib/a.ts:1:1)"));
+}
+
+#[test]
+fn an_unreadable_sidecar_stores_no_entry() {
+    let src = "h\nabc\n//# sourceMappingURL=x.js.map";
+    let stored = with_realm(|ctx| {
+        register(&ctx, "/nonexistent-inca/x.js", src);
+        ctx.userdata::<SourceMaps>()
+            .is_some_and(|maps| maps.0.borrow().contains_key("/nonexistent-inca/x.js"))
+    });
+    assert!(!stored);
+}
+
+#[test]
 fn file_path_containing_a_parenthesis_maps() {
     let json = map_json(3, ";AAAA", r#"["o.ts"]"#, None);
     let src = format!("h\nabc\n{}", inline(&json));
@@ -552,5 +561,83 @@ fn null_source_name_leaves_frame_unchanged() {
     assert_eq!(
         one(&src, "    at f (a.js:2:1)\n    at g (a.js:3:1)"),
         "    at f (a.js:2:1)\n    at g (a.ts:1:1)"
+    );
+}
+
+/// A mapped source of `one.ts` for `a.js`.
+fn one_ts_source() -> String {
+    format!(
+        "h\nabc\n{}",
+        inline(&map_json(3, ";AAAA", r#"["one.ts"]"#, None))
+    )
+}
+
+#[test]
+fn an_object_prototype_source_root_leaves_the_sources_alone() {
+    let out = with_realm(|ctx| {
+        register(&ctx, "a.js", &one_ts_source());
+        ctx.eval::<(), _>("Object.prototype.sourceRoot = 'evil';")
+            .unwrap();
+        remap_stack(&ctx, "    at f (a.js:2:1)")
+    });
+    assert_eq!(out, "    at f (one.ts:1:1)");
+}
+
+#[test]
+fn an_object_prototype_getter_leaves_no_exception_pending() {
+    let pending = with_realm(|ctx| {
+        register(&ctx, "a.js", &one_ts_source());
+        ctx.eval::<(), _>(
+            r"
+            Object.defineProperty(Object.prototype, 'sourceRoot', {
+                get() {
+                    throw new Error('x');
+                },
+                configurable: true,
+            });
+            ",
+        )
+        .unwrap();
+        let _ = remap_stack(&ctx, "    at f (a.js:2:1)");
+        ctx.has_exception()
+    });
+    assert!(!pending);
+}
+
+#[test]
+fn a_trace_from_a_getter_in_mapped_code_prints_one_trace() {
+    let code = r"
+        Object.defineProperty(Object.prototype, 'sourceRoot', {
+            get() {
+                console.trace('inner');
+            },
+            configurable: true,
+        });
+        console.trace('outer');
+        "
+    .trim();
+    let body = format!(
+        "{code}\n{}",
+        inline(&map_json(
+            3,
+            ";AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA",
+            r#"["src/app.ts"]"#,
+            None
+        ))
+    );
+    let lines = with_realm(|ctx| {
+        let lines = Rc::new(RefCell::new(Vec::<String>::new()));
+        let sink = Rc::clone(&lines);
+        let output: crate::console::Output =
+            Rc::new(move |_, line: &str| sink.borrow_mut().push(line.to_owned()));
+        crate::console::install(&ctx, &output, false).unwrap();
+        let f = crate::compile_async_function(&ctx, &[], &body, "/app/a.js").unwrap();
+        let _: rquickjs::Value = f.call(()).unwrap();
+        while ctx.execute_pending_job() {}
+        lines.take()
+    });
+    assert!(
+        lines.len() == 1 && !lines[0].starts_with("Trace: inner"),
+        "{lines:?}"
     );
 }

@@ -1054,7 +1054,7 @@ A fixed entry is deleted and its ID is never reused.
   binding the window handle it needs for that.
 
 - **B-179 A recompile of a module name replaces its source map**
-  `Units: jsenv · Size: M · Impact: Low`
+  `Units: jsenv · Size: M-L · Impact: Low`
 
   The source map registry keys each entry by filename. Under
   `--experimental-hmr`, a recompile of the same module replaces its source and
@@ -1062,8 +1062,11 @@ A fixed entry is deleted and its ID is never reused.
   such as an old listener or timer, maps through the new map and names a wrong
   line and column. A browser maps a frame through the map of its own script.
 
-  Fix: key each entry by a per-compile generation in the filename the engine
-  sees, and print the original filename.
+  Fix: give each compile its own entry and print the original filename. An
+  entry per compile turns the registry into a log that only grows, so the fix
+  also needs a retention policy (drop an entry once no function of its
+  compile is alive) or JS-side ownership (the vault keeps each map with its
+  module, and Rust keeps the key).
 
 - **B-182 The event store helper lives in the bridge**
   `Units: bridge,jsenv · Size: S · Impact: Low`
@@ -1266,3 +1269,34 @@ A fixed entry is deleted and its ID is never reused.
   Fix: watch `src/main.*`, resolve the entry again when one appears or
   disappears, and restart the host against it. In HMR mode the entry is
   written into the session's `entry.js` as well.
+
+- **B-211 A lone CR inside a block comment shifts mapped lines**
+  `Units: jsenv · Size: M · Impact: Low`
+
+  `QuickJS` counts `\n` and `\r\n` inside a block comment as a new line, and a
+  lone `\r` there as none (`quickjs.c:23133-23143`), while the remap counts a
+  lone `\r` everywhere, as source map generators do. A frame below such a
+  comment maps one line too far.
+
+  Fix: count lines as `QuickJS` does, which needs the remap to track block
+  comments in the generated source.
+
+- **B-212 Some `sourceMappingURL` forms are not decoded**
+  `Units: jsenv · Size: S · Impact: Low`
+
+  A `data:` URL without `;base64` (percent-encoded JSON) and a sidecar name with
+  `%`-escapes are read as written, so their maps are not found. Browsers decode
+  both.
+
+  Fix: percent-decode the URL, and accept a `data:` URL without `;base64`.
+
+- **B-213 An inline map keeps relative sources as written**
+  `Units: jsenv · Size: S · Impact: Low`
+
+  A sidecar map's sources resolve against the sidecar's directory, and an
+  inline map's sources stay as written
+  (`inline_map_keeps_a_relative_source_as_written`). Browsers resolve both
+  against the map's URL, which for an inline map is the script's.
+
+  Fix: resolve an inline map's sources against the generated file's directory.
+  The printed paths of bundled apps change, so decide first.

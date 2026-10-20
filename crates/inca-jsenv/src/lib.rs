@@ -9,8 +9,8 @@
 //! async function whose stack frames name its file. [`vault`] keeps the JS
 //! values host code needs in a later call out of reach of scripts.
 //!
-//! Depends on `rquickjs`, `base64` and `unicode-width` only, so what it
-//! installs can be replaced without reaching the code that draws a UI.
+//! The renderer, windows and processes are outside it, so what it installs can
+//! be replaced without reaching the code that draws a UI.
 
 pub mod console;
 mod engine;

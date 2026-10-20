@@ -2755,6 +2755,8 @@ dependencies = [
  "base64",
  "rquickjs",
  "rstest",
+ "serde",
+ "serde_json",
  "unicode-width",
 ]
 

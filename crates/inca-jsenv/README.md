@@ -98,7 +98,6 @@ pending on `ctx`, where `EngineError::capture` reads it.
 
 ## Scope
 
-This crate depends on `rquickjs`, `base64` and `unicode-width`. The renderer,
-windows and processes are outside it. That is deliberate: the runtime and what
-it installs are replaceable, either by a third-party implementation or by an
+The renderer, windows and processes are outside it. The runtime and what it
+installs are replaceable, either by a third-party implementation or by an
 application's own, without any of that reaching the code that draws a UI.
