@@ -120,9 +120,9 @@ A fixed entry is deleted and its ID is never reused.
     `closest()`).
 
   The members it has differ from a browser in the box reads (B-160), the
-  `offsetParent` chain (B-161), the scroll members (B-172, B-173, B-174) and
-  `scroll-margin` (B-176). Its own `children` field lists text nodes too, and
-  the DOM `children` lists elements only.
+  `offsetParent` chain (B-161), the scroll members (B-172, B-174, B-216 and
+  B-217) and `scroll-margin` (B-176). Its own `children` field lists text nodes
+  too, and the DOM `children` lists elements only.
 
   Fix: build the attribute members on the `getAttribute` binding, and the tree
   members on the JS shadow tree.
@@ -976,17 +976,6 @@ A fixed entry is deleted and its ID is never reused.
   Fix: a layout pass the bindings can call, as in B-160. Both need the layout
   of the current tree.
 
-- **B-173 The scroll range of a container ends before its bottom padding**
-  `Units: gpui · Size: M · Impact: Low`
-
-  At the maximum offset the last child stops short of the client bottom by the
-  `padding-bottom` of the container, and `scrollHeight` leaves that padding
-  out. A browser includes `padding-bottom` in the scroll range.
-
-  Fix: `gpui` derives the content height from the children. The range needs
-  the trailing padding added, for example through a spacer child of that
-  height.
-
 - **B-174 `behavior: "smooth"` scrolls jump**
   `Units: gpui,bridge,core · Size: M · Impact: Low`
 
@@ -1261,3 +1250,43 @@ A fixed entry is deleted and its ID is never reused.
   `cancelable` and `timeStamp`, and browser consoles list the getters. Fix:
   let the host name, per prototype, the getters the console reads, and have
   the event prototypes name their base fields.
+
+- **B-215 The scroll range relies on an anchor child**
+  `Units: gpui · Size: S · Impact: Low`
+
+  Every scroll container carries a zero-size, absolutely placed child before
+  its children, so that the `gpui` scroll range covers the padding box. `gpui`
+  subtracts the border box where the client size is the padding box, and
+  measures from the first child box where the range starts at the content
+  box. The anchor costs one `gpui` element and one layout node per scroll
+  container, and `record_children` skips it by counting the children from the
+  end. It has no hitbox and no listener, and the virtual tree, the snapshot
+  and the `children` of a template `ref` do not list it.
+
+  Fix: change the range computation in `gpui` (`div.rs`,
+  `clamp_scroll_position` and the content size of the children) and drop the
+  anchor once the host can patch `gpui` or an upstream release carries the
+  change.
+
+- **B-216 A child's end margin is outside the scroll range**
+  `Units: gpui · Size: M · Impact: Low`
+
+  At the maximum offset the child of a scroll container that ends farthest
+  meets the end padding with its border box, and `scrollHeight` and
+  `scrollWidth` leave its `margin-bottom` and `margin-right` out. Browsers
+  include the margin.
+
+  Fix: `gpui` measures the range over the border boxes of the children. The
+  range needs the end margins added, for example through a `gpui` change that
+  measures margin boxes.
+
+- **B-217 Content that overflows a child is outside the scroll range**
+  `Units: gpui · Size: L · Impact: Low`
+
+  A child of a scroll container that is smaller than its own content, with
+  `overflow` `visible`, adds only its own box to the range. Browsers add the
+  overflowing content.
+
+  Fix: `gpui` measures the direct children only. The range needs the overflow
+  of the descendants, computed in the host from the recorded boxes or in
+  `gpui`.

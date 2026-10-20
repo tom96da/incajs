@@ -74,8 +74,9 @@ fn scroll_height_after_an_append_reaches_the_bottom(cx: &mut TestAppContext) {
     click(&mut h, "append");
     click(&mut h, "bottom");
 
-    // The offset clamps to scrollHeight - clientHeight: 254 - 94 = 160.
-    assert_eq!(text_of(&mut h, "result"), "160,254,94");
-    // The last of four 60px items ends 160px into the content.
-    near(y(&mut h, "fourth") + 60.0, 103.0);
+    // The offset clamps to scrollHeight - clientHeight: 260 - 94 = 166.
+    assert_eq!(text_of(&mut h, "result"), "166,260,94");
+    // The last of four 60px items ends at 97, 10px of padding above the client
+    // bottom at 107.
+    near(y(&mut h, "fourth") + 60.0, 97.0);
 }

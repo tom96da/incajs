@@ -367,6 +367,40 @@ fn a_hidden_container_moves_its_content_by_a_script_offset(cx: &mut TestAppConte
     );
 }
 
+#[gpui::test]
+fn a_bordered_scroll_range_ends_at_the_padding(cx: &mut TestAppContext) {
+    let mut tree = VirtualTree::new();
+    let root = boxed(&mut tree, None, 400., 400.);
+    let scroller = boxed(&mut tree, Some(root), 120., 100.);
+    tree.set_style(scroller, "padding", 10.0).unwrap();
+    tree.set_style(scroller, "border_width", 3.0).unwrap();
+    tree.set_style(scroller, "overflow", "scroll").unwrap();
+    for _ in 0..2 {
+        let child = boxed(&mut tree, Some(scroller), 300., 120.);
+        tree.set_style(child, "flex_shrink", 0.0).unwrap();
+    }
+    let (probe, window) = mounted(cx, tree);
+    frame(cx, window);
+    let handle = probe.handles.borrow()[&scroller].clone();
+    assert_eq!(handle.max_offset(), point(px(206.), px(166.)));
+}
+
+#[gpui::test]
+fn the_scroll_range_holds_the_start_margins_of_the_first_child(cx: &mut TestAppContext) {
+    let mut tree = VirtualTree::new();
+    let root = boxed(&mut tree, None, 400., 400.);
+    let scroller = boxed(&mut tree, Some(root), 120., 100.);
+    tree.set_style(scroller, "padding", 10.0).unwrap();
+    tree.set_style(scroller, "overflow", "scroll").unwrap();
+    let child = boxed(&mut tree, Some(scroller), 300., 240.);
+    tree.set_style(child, "margin_top", 7.0).unwrap();
+    tree.set_style(child, "margin_left", 7.0).unwrap();
+    let (probe, window) = mounted(cx, tree);
+    frame(cx, window);
+    let handle = probe.handles.borrow()[&scroller].clone();
+    assert_eq!(handle.max_offset(), point(px(207.), px(167.)));
+}
+
 #[gpui_cases]
 #[gpui::test]
 #[case::below_half(-50.4, -50.5)]

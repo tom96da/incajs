@@ -143,6 +143,8 @@ with the differences below. The listener methods are described in
   first draw, reads smaller until the next frame.
 - `scrollWidth` and `scrollHeight` of a `"visible"` or `"clip"` element equal
   its client size.
+- The scroll range of a `"hidden"` or `"scroll"` element leaves out the end
+  margins of its children and content that overflows a child.
 - Every scroll applies at once, whatever `behavior` says.
 - `focus()` and `scrollIntoView()` on a node that has no box yet scroll when
   the next frame draws it.

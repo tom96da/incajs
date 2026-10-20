@@ -9,7 +9,7 @@ use gpui::{
 use super::pointer::{
     mark_mouse_target, pointer_tracker, root_keys, wire_focus, wire_hover, wire_modifier_keys,
 };
-use super::scroll::{snapped_extra, wire_scroll};
+use super::scroll::{scroll_anchor, snapped_extra, wire_scroll};
 use super::spec::{DisplaySpec, ElementSpec, ElementTag, build_spec};
 use super::style::{apply_style, clip_scroll_axes};
 use crate::event_sink::{EventPayload, EventSink, noop_sink_methods};
@@ -83,7 +83,9 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
 
 /// Applies `spec`'s style and children to a container, whichever kind of
 /// element it turned out to be. The root container (`root`) also carries the
-/// pointer tracker, as its first child, when there is a dispatcher.
+/// pointer tracker, as its first child, when there is a dispatcher. A scroll
+/// container carries its scroll anchor after the tracker and before the
+/// children.
 fn finish_container<E>(
     mut element: E,
     spec: &ElementSpec,
@@ -102,6 +104,9 @@ where
     }
     if let Some(dispatch) = dispatch.filter(|_| root) {
         element = element.child(pointer_tracker(spec.id, dispatch.clone()));
+    }
+    if spec.style.is_scroll_container() {
+        element = element.child(scroll_anchor(&spec.style));
     }
     for child in rendered_children(spec) {
         element = element.child(build_element_inner(child, dispatch, false, track));
@@ -171,7 +176,7 @@ where
             // already hold the snapped offset of the ancestors.
             let outer = window.element_offset();
             let offset = snapped_extra(window, outer + offset, outer);
-            // The tracker comes before the children.
+            // The tracker and the scroll anchor come before the children.
             let first = raw.len().saturating_sub(children.len());
             for (&(id, border), bounds) in children.iter().zip(&raw[first..]) {
                 if let Some(border) = border {

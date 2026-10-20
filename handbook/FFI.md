@@ -102,6 +102,10 @@ snake_case form.
 `text_color` and `text_size` apply to containers. A text leaf takes them from
 the nearest ancestor container.
 
+A scroll container (`overflow` `hidden` or `scroll` on an axis) carries a
+zero-size, absolutely placed child before its children, after the root's
+pointer tracker.
+
 ## Binding functions
 
 The functions live on `globalThis.__inca_native__`, a read-only,

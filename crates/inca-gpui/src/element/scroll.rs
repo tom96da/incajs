@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use gpui::prelude::*;
-use gpui::{Bounds, Global, Pixels, Point, ScrollHandle, Window, point, px};
+use gpui::{Bounds, Global, Pixels, Point, ScrollHandle, Window, div, point, px};
 
-use super::spec::ElementSpec;
+use super::spec::{ElementSpec, StyleSpec};
 use crate::NodeId;
 use crate::event_sink::EventSink;
 
@@ -66,6 +66,22 @@ pub(super) fn next_offset(
     let offset = handle.offset();
     let next = clamp(offset + axis_step(axes, delta));
     (next != clamp(offset)).then_some(next)
+}
+
+/// A zero-size child that starts the scroll range of a container with `style`
+/// at the edge of its padding box. `gpui` measures the range from the smallest
+/// origin of all child boxes to the farthest end of any child box, adds the
+/// padding and subtracts the border box, so the anchor sits twice the border
+/// width before the content box on each axis.
+#[allow(clippy::cast_possible_truncation)]
+pub(super) fn scroll_anchor(style: &StyleSpec) -> impl IntoElement {
+    let border = style.border_width.unwrap_or(0.0) * 2.0;
+    let inset = |padding: Option<f64>| px((padding.unwrap_or(0.0) - border) as f32);
+    div()
+        .absolute()
+        .top(inset(style.padding.top))
+        .left(inset(style.padding.left))
+        .size_0()
 }
 
 /// Tracks a scroll container's [`ScrollHandle`]. A container below the root
