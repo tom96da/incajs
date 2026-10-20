@@ -10,6 +10,22 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- `inca config` prints the settings the host applies to your app ([466594b](https://github.com/tom96da/incajs/commit/466594b))
+
+### Changed
+
+- an event's fields are getters on its prototype, so `Object.keys(event)` lists only `isTrusted` ([e9ff4dc](https://github.com/tom96da/incajs/commit/e9ff4dc))
+
+### Fixed
+
+- event fields are read-only, and a frozen event can be dispatched again ([e9ff4dc](https://github.com/tom96da/incajs/commit/e9ff4dc))
+- `Reflect.construct` with a non-object prototype builds an event that inherits from `Event` ([e9ff4dc](https://github.com/tom96da/incajs/commit/e9ff4dc))
+- `stopPropagation()` before `dispatchEvent()` keeps every listener from running ([138a56a](https://github.com/tom96da/incajs/commit/138a56a))
+- a boolean attribute bound to `0` or `NaN` is removed, like `false` ([373f34e](https://github.com/tom96da/incajs/commit/373f34e))
+- a bordered scroll container scrolls to the end of its padding ([74fd986](https://github.com/tom96da/incajs/commit/74fd986))
+
 ## [0.0.19] - 2026-10-18
 
 ### Added
