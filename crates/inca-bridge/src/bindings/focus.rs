@@ -5,11 +5,10 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use gpui::Bounds;
-use rquickjs::function::Opt;
 use rquickjs::{Ctx, Result as JsResult, Value};
 
 use super::Natives;
-use super::convert::{JsNodeId, existing_node, or_null};
+use super::convert::{Flag, JsNodeId, existing_node, or_null};
 use super::host::Host;
 
 /// Requesting and releasing focus.
@@ -20,14 +19,12 @@ pub(super) fn install_focus(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("layoutOf", layout_of)
 }
 
-fn focus_node<'js>(
-    host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, Opt<bool>) -> JsResult<()> {
+fn focus_node<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId, Flag) -> JsResult<()> {
     move |ctx, JsNodeId(node_id), prevent_scroll| {
         let mut host = host.borrow_mut();
         existing_node(&ctx, &host.tree, node_id)?;
         host.focus
-            .request_focus(node_id, prevent_scroll.0 != Some(true));
+            .request_focus(node_id, prevent_scroll.0.flatten() != Some(true));
         Ok(())
     }
 }

@@ -435,11 +435,6 @@ describe("latestEventId", () => {
 });
 
 describe("focus", () => {
-  it("passes no second argument when preventScroll is omitted", () => {
-    focus(7);
-    expect(native.focusNode).toHaveBeenCalledExactlyOnceWith(7);
-  });
-
   it("passes the preventScroll flag through", () => {
     focus(7, true);
     focus(7, false);

@@ -40,10 +40,7 @@ export function createIncaElement(
     parent: null,
     children: [],
     focus: (options?: { preventScroll?: boolean }) => {
-      if (isDestroyed(element)) return;
-      const preventScroll = options?.preventScroll;
-      if (preventScroll === undefined) focus(id);
-      else focus(id, Boolean(preventScroll));
+      if (!isDestroyed(element)) focus(id, Boolean(options?.preventScroll));
     },
     blur: () => blur(id),
     click: () => {

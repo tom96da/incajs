@@ -174,21 +174,15 @@ describe("createIncaElement registration", () => {
 });
 
 describe("createIncaElement focus and scrollIntoView", () => {
-  it("forwards preventScroll only when the option holds it", () => {
+  it.each([
+    ["no options", undefined, false],
+    ["a truthy preventScroll", { preventScroll: 1 }, true],
+  ])("passes preventScroll as a boolean for %s", (_name, options, expected) => {
     const host = installHost();
     const el = createIncaElement(3, "element", "div");
 
-    el.focus();
-    expect(host.focusNode).toHaveBeenLastCalledWith(3);
-
-    el.focus({});
-    expect(host.focusNode).toHaveBeenLastCalledWith(3);
-
-    el.focus({ preventScroll: false });
-    expect(host.focusNode).toHaveBeenLastCalledWith(3, false);
-
-    el.focus({ preventScroll: true });
-    expect(host.focusNode).toHaveBeenLastCalledWith(3, true);
+    el.focus(options as { preventScroll?: boolean } | undefined);
+    expect(host.focusNode).toHaveBeenLastCalledWith(3, expected);
   });
 
   it("forwards the normalised alignments of scrollIntoView to the host", () => {

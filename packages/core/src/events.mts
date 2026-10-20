@@ -134,8 +134,7 @@ export function click(nodeId: NodeId): void {
  * @throws TypeError when `nodeId` names no node
  */
 export function focus(nodeId: NodeId, preventScroll?: boolean): void {
-  if (preventScroll === undefined) native().focusNode(nodeId);
-  else native().focusNode(nodeId, preventScroll);
+  native().focusNode(nodeId, preventScroll);
 }
 
 /**

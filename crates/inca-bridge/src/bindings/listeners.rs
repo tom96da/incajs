@@ -5,13 +5,12 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use rquickjs::function::Opt;
 use rquickjs::{Ctx, Exception, Result as JsResult, Value};
 
 use inca_gpui::NodeId;
 
 use super::Natives;
-use super::convert::{JsNodeId, existing_node};
+use super::convert::{Flag, JsNodeId, existing_node};
 use super::host::Host;
 
 /// One registration: the callback id, the phase it listens in and whether it
@@ -142,7 +141,7 @@ pub(super) fn install_events(n: &Natives<'_, '_>) -> JsResult<()> {
 
 fn add_event_listener<'js>(
     host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, String, Opt<bool>, Opt<bool>) -> JsResult<u32> {
+) -> impl Fn(Ctx<'js>, JsNodeId, String, Flag, Flag) -> JsResult<u32> {
     move |ctx, JsNodeId(node_id), event, capture, passive| {
         let mut host = host.borrow_mut();
         existing_node(&ctx, &host.tree, node_id)?;
@@ -150,8 +149,8 @@ fn add_event_listener<'js>(
             .add(
                 node_id,
                 event,
-                capture.0.unwrap_or(false),
-                passive.0.unwrap_or(false),
+                capture.0.flatten().unwrap_or(false),
+                passive.0.flatten().unwrap_or(false),
             )
             .ok_or_else(|| Exception::throw_range(&ctx, "callback ids are exhausted"))
     }
@@ -253,6 +252,27 @@ mod tests {
             flags,
             [(0, false, false), (1, true, false), (2, false, true)]
         );
+    }
+
+    #[test]
+    fn add_event_listener_reads_undefined_flags_as_false() {
+        let (engine, host) = engine_with_bindings();
+        engine
+            .eval::<()>(
+                r"
+                const n = __inca_native__.createNode('div');
+                __inca_native__.addEventListener(n, 'a', undefined, undefined);
+                ",
+            )
+            .unwrap();
+        let host = host.borrow();
+        let flags: Vec<_> = host
+            .listeners
+            .listeners_for(1, "a")
+            .iter()
+            .map(|l| (l.capture, l.passive))
+            .collect();
+        assert_eq!(flags, [(false, false)]);
     }
 
     #[test]

@@ -1,10 +1,15 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use rquickjs::function::Opt;
 use rquickjs::{Ctx, Exception, FromJs, IntoJs, Result as JsResult, Value};
 
 use inca_gpui::element::scroll::Align;
 use inca_gpui::{NodeId, TreeError, VirtualNode, VirtualTree};
+
+/// An optional boolean argument: omitted, `undefined` and `null` give the
+/// default.
+pub(super) type Flag = Opt<Option<bool>>;
 
 /// A node id argument. Accepts a finite whole number in `u32` range;
 /// anything else (`NaN`, `1.5`, `-1`, `Infinity`, `2**32`, a non-number)

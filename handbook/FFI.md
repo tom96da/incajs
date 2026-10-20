@@ -105,7 +105,9 @@ the nearest ancestor container.
 ## Binding functions
 
 The functions live on `globalThis.__inca_native__`, a read-only,
-non-configurable global.
+non-configurable global. A parameter marked `?` may be left out, and
+`undefined` or `null` there means its default. A parameter typed `| null` must
+be passed, and `undefined` there counts as `null`.
 
 | Function | Signature | Purpose |
 | --- | --- | --- |
@@ -137,6 +139,8 @@ non-configurable global.
 Shared throw rules, all as a `TypeError` except where noted:
 
 - A malformed `nodeId` or `callbackId` throws.
+- A `capture`, `passive` or `preventScroll` that is not a boolean,
+  `undefined` or `null` throws.
 - `addEventListener` throws a `RangeError` after the last id.
 - `setAttribute` and `setStyle` throw for a `value` that is not a string, number or boolean.
 - `dispatchEvent` throws for an argument that is not an `Event` or

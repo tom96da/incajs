@@ -94,10 +94,13 @@ fn run(scene: &mut Scene, code: &str) {
     scene.draw();
 }
 
+#[gpui_cases]
 #[gpui::test]
-fn focus_centers_a_node_outside_the_scroll_container(cx: &mut TestAppContext) {
+#[case::omitted("__inca_native__.focusNode(items[6]);")]
+#[case::undefined("__inca_native__.focusNode(items[6], undefined);")]
+fn focus_centers_a_node_outside_the_scroll_container(cx: &mut TestAppContext, focus: &str) {
     let mut h = mount(cx, "scroll", false);
-    run(&mut h, "__inca_native__.focusNode(items[6]);");
+    run(&mut h, focus);
     assert!(num(&h, "top(box)") > 0.0);
     assert!(near(&h, "gap(items[6], box)"));
 }

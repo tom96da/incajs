@@ -1059,13 +1059,6 @@ A fixed entry is deleted and its ID is never reused.
   compile is alive) or JS-side ownership (the vault keeps each map with its
   module, and Rust keeps the key).
 
-- **B-193 Optional native parameters use two types**
-  `Units: bridge · Size: S · Impact: Low`
-
-  `Opt<T>` passes `undefined` and `null` to `T::from_js`, and `Option<T>`
-  maps both to `None`. The natives use both. Pick one type for each
-  parameter by the handling `null` should get.
-
 - **B-194 Protocol lines produced during quit teardown are dropped**
   `Units: host · Size: S · Impact: Low`
 
