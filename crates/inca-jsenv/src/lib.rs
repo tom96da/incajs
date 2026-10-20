@@ -30,4 +30,5 @@ pub use engine::{
     Engine, EngineBuilder, EngineError, EngineResult, ErrorReporter, PendingModule, report_jobs,
     stderr_reporter,
 };
+pub use quickjs::FunctionAccessor;
 pub use vault::vault;

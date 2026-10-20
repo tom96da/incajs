@@ -5,8 +5,6 @@
 
 use std::{
     cell::OnceCell,
-    cell::RefCell,
-    collections::HashMap,
     path::{Component, Path, PathBuf},
     rc::Rc,
 };
@@ -14,7 +12,7 @@ use std::{
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use rquickjs::Ctx;
 
-use crate::quickjs::Plain;
+use store::SourceMaps;
 
 /// A generated position and the source position it maps to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -140,10 +138,6 @@ fn base64_digit(byte: u8) -> Option<u8> {
 
 const MARKER: &str = "//# sourceMappingURL=";
 
-/// The source maps of one runtime, keyed by the filename `QuickJS` reports.
-#[derive(Default)]
-struct SourceMaps(RefCell<HashMap<String, Rc<Entry>>>);
-
 struct Entry {
     source: String,
     raw: Option<RawMap>,
@@ -174,13 +168,11 @@ struct Parsed {
 
 /// The runtime's maps, created on first use. `None` when the userdata store is borrowed, which
 /// leaves the registration unrecorded.
-fn maps_or_insert<'a>(
-    ctx: &'a Ctx<'_>,
-) -> Option<impl std::ops::Deref<Target = Plain<SourceMaps>> + 'a> {
-    if ctx.userdata::<Plain<SourceMaps>>().is_none() {
-        let _ = ctx.store_userdata(Plain(SourceMaps::default()));
+fn maps_or_insert<'a>(ctx: &'a Ctx<'_>) -> Option<impl std::ops::Deref<Target = SourceMaps> + 'a> {
+    if ctx.userdata::<SourceMaps>().is_none() {
+        let _ = ctx.store_userdata(SourceMaps::default());
     }
-    ctx.userdata::<Plain<SourceMaps>>()
+    ctx.userdata::<SourceMaps>()
 }
 
 /// Registers the generated `source` of `filename`. A recompile of the same
@@ -188,8 +180,8 @@ fn maps_or_insert<'a>(
 /// is parsed on the first remap.
 pub(crate) fn register(ctx: &Ctx<'_>, filename: &str, source: &str) {
     let Some(url) = marker_url(source) else {
-        if let Some(maps) = ctx.userdata::<Plain<SourceMaps>>() {
-            maps.0.0.borrow_mut().remove(filename);
+        if let Some(maps) = ctx.userdata::<SourceMaps>() {
+            maps.0.borrow_mut().remove(filename);
         }
         return;
     };
@@ -214,7 +206,6 @@ pub(crate) fn register(ctx: &Ctx<'_>, filename: &str, source: &str) {
             parsed: OnceCell::new(),
         };
         maps.0
-            .0
             .borrow_mut()
             .insert(filename.to_owned(), Rc::new(entry));
     }
@@ -224,7 +215,7 @@ pub(crate) fn register(ctx: &Ctx<'_>, filename: &str, source: &str) {
 /// frame of `stack` whose FILE has a registered map to the original file,
 /// line and column. Every other line is returned unchanged.
 pub(crate) fn remap_stack(ctx: &Ctx<'_>, stack: &str) -> String {
-    let Some(maps) = ctx.userdata::<Plain<SourceMaps>>() else {
+    let Some(maps) = ctx.userdata::<SourceMaps>() else {
         return stack.to_owned();
     };
     stack
@@ -379,5 +370,6 @@ pub(crate) fn mapped_body(code: &str) -> String {
     )
 }
 
+mod store;
 #[cfg(test)]
 mod tests;

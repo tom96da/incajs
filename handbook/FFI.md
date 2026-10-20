@@ -21,6 +21,13 @@ sit in a per-realm vault (`inca_jsenv::vault`), a null-prototype object. A
 read-only global function returns it only while Rust calls it through a native
 gate, so no script reaches it, and Rust holds only the keys.
 
+All `unsafe` code of the Rust crates lives in `inca-jsenv/src/quickjs.rs`.
+The one exception is the `unsafe impl` that rquickjs's `JsLifetime` derive
+expands to, which gives a Rust value on a JS object its lifetime marker.
+`clippy.toml` restricts that derive to the files that allow it:
+`inca-jsenv/src/sourcemap/store.rs`. It restricts `rquickjs::Persistent` too,
+since one kept past its runtime aborts the process when the runtime drops.
+
 ## Retained virtual tree
 
 The Rust host keeps an in-memory node structure (`VirtualNode`) that mirrors

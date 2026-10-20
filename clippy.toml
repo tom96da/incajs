@@ -1,0 +1,8 @@
+# Copyright (c) 2026 tom96da
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+disallowed-macros = [{ path = "rquickjs::JsLifetime", reason = "use of JsLifetime is restricted" }]
+disallowed-types = [
+  { path = "rquickjs::JsLifetime", reason = "use of JsLifetime is restricted" },
+  { path = "rquickjs::Persistent", reason = "use of Persistent is restricted, since one kept past its runtime aborts the process" },
+]

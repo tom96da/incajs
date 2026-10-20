@@ -36,6 +36,11 @@ keeps JS values in between calls, under plain keys. An `Engine` creates it
 before any script runs. A script that calls the global holding it gets
 `undefined`, and cannot replace or delete that global.
 
+## Accessors from functions
+
+`FunctionAccessor` defines an accessor property whose getter and setter are
+existing functions, so one named getter can serve many objects.
+
 ## Module loading
 
 `Engine::builder().module_root(dir)` adds a directory `import`s resolve

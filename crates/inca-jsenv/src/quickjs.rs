@@ -4,10 +4,10 @@
 //! Safe wrappers over `QuickJS` calls.
 //!
 //! This is the only module of the crate that imports `rquickjs::qjs` or
-//! contains `unsafe`. The wrappers take and return owned `rquickjs` types and
-//! report failure as [`rquickjs::Error::Exception`] with the exception left
-//! pending. They run the script code that the underlying `QuickJS` call runs
-//! and no more. They use no type of this crate.
+//! writes `unsafe` code. The wrappers take and return owned `rquickjs` types
+//! and report failure as [`rquickjs::Error::Exception`] with the exception
+//! left pending. They run the script code that the underlying `QuickJS` call
+//! runs and no more. They use no type of this crate.
 //!
 //! A panic that a Rust callback stored during a call stays with the runtime
 //! until `rquickjs` next resumes it.
@@ -17,23 +17,8 @@
 
 use std::mem::MaybeUninit;
 
-use rquickjs::{Ctx, Error, IntoJs, JsLifetime, Object, Result, Value, object::PropertyFlags, qjs};
-
-/// Userdata wrapper for a type whose lifetimes are all `'static`.
-pub(crate) struct Plain<T>(pub(crate) T);
-
-// SAFETY: `T: 'static` carries no `'js` lifetime, so the lifetime change is the identity.
-unsafe impl<T: 'static> JsLifetime<'_> for Plain<T> {
-    type Changed<'to> = Plain<T>;
-}
-
-impl<T> std::ops::Deref for Plain<T> {
-    type Target = T;
-
-    fn deref(&self) -> &T {
-        &self.0
-    }
-}
+use rquickjs::object::{AsProperty, PropertyFlags};
+use rquickjs::{Ctx, Error, Function, IntoJs, Object, Result, Value, qjs};
 
 /// What `Object.getOwnPropertyDescriptor` describes.
 ///
@@ -227,10 +212,72 @@ impl Drop for Atom<'_, '_> {
     }
 }
 
+/// An accessor property whose getter and, optionally, setter are the given
+/// functions, for [`Object::prop`]. It is neither enumerable nor configurable
+/// unless [`enumerable`](Self::enumerable) or
+/// [`configurable`](Self::configurable) says so.
+pub struct FunctionAccessor<'js> {
+    get: Function<'js>,
+    set: Option<Function<'js>>,
+    flags: PropertyFlags,
+}
+
+impl<'js> FunctionAccessor<'js> {
+    /// An accessor with the getter `get` and no setter.
+    #[must_use]
+    pub fn new_get(get: Function<'js>) -> Self {
+        Self {
+            get,
+            set: None,
+            flags: qjs::JS_PROP_HAS_GET.cast_signed(),
+        }
+    }
+
+    /// Gives the accessor the setter `set`.
+    #[must_use]
+    pub fn set(mut self, set: Function<'js>) -> Self {
+        self.set = Some(set);
+        self.flags |= qjs::JS_PROP_HAS_SET.cast_signed();
+        self
+    }
+
+    /// Makes the property enumerable.
+    #[must_use]
+    pub fn enumerable(mut self) -> Self {
+        self.flags |= (qjs::JS_PROP_ENUMERABLE | qjs::JS_PROP_HAS_ENUMERABLE).cast_signed();
+        self
+    }
+
+    /// Makes the property configurable.
+    #[must_use]
+    pub fn configurable(mut self) -> Self {
+        self.flags |= (qjs::JS_PROP_CONFIGURABLE | qjs::JS_PROP_HAS_CONFIGURABLE).cast_signed();
+        self
+    }
+}
+
+impl<'js> AsProperty<'js, ()> for FunctionAccessor<'js> {
+    fn config(self, ctx: &Ctx<'js>) -> Result<(PropertyFlags, Value<'js>, Value<'js>, Value<'js>)> {
+        let set = match self.set {
+            Some(set) => set.into_value(),
+            None => Value::new_undefined(ctx.clone()),
+        };
+        Ok((
+            self.flags,
+            Value::new_undefined(ctx.clone()),
+            self.get.into_value(),
+            set,
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
-    use rquickjs::{Context, Persistent, Runtime};
+    // The one test that keeps JS values alive on purpose frees them before the runtime.
+    #[allow(clippy::disallowed_types)]
+    use rquickjs::Persistent;
+    use rquickjs::{Context, Runtime};
     use rstest::rstest;
 
     use super::*;
@@ -534,6 +581,75 @@ mod tests {
         );
     }
 
+    /// Runs `body` with the functions `get` and `put` defined.
+    fn with_functions<R>(
+        body: impl for<'js> FnOnce(&Ctx<'js>, Function<'js>, Function<'js>) -> R,
+    ) -> R {
+        with(
+            r"
+            globalThis.get = function getIt() {
+                return 1;
+            };
+            globalThis.put = function putIt(value) {};
+            ",
+            |ctx| {
+                let get = ctx.globals().get("get").unwrap();
+                let put = ctx.globals().get("put").unwrap();
+                body(ctx, get, put)
+            },
+        )
+    }
+
+    #[test]
+    fn an_accessor_from_functions_keeps_them() {
+        with_functions(|ctx, get, put| {
+            let object = Object::new(ctx.clone()).unwrap();
+            object
+                .prop("a", FunctionAccessor::new_get(get).set(put))
+                .unwrap();
+            ctx.globals().set("o", object).unwrap();
+
+            let kept: bool = ctx
+                .eval(
+                    r"
+                    const d = Object.getOwnPropertyDescriptor(o, 'a');
+                    d.get === get && d.set === put;
+                    ",
+                )
+                .unwrap();
+            assert!(kept);
+        });
+    }
+
+    #[rstest]
+    #[case::getter_only(false, false)]
+    #[case::enumerable(true, false)]
+    #[case::configurable(false, true)]
+    fn an_accessor_from_functions_has_the_attributes_it_was_given(
+        #[case] enumerable: bool,
+        #[case] configurable: bool,
+    ) {
+        with_functions(|ctx, get, _| {
+            let mut accessor = FunctionAccessor::new_get(get);
+            if enumerable {
+                accessor = accessor.enumerable();
+            }
+            if configurable {
+                accessor = accessor.configurable();
+            }
+            let object = Object::new(ctx.clone()).unwrap();
+            object.prop("a", accessor).unwrap();
+            let d = object.get_own_property_descriptor("a").unwrap().unwrap();
+
+            assert!(d.is_accessor() && d.setter.is_undefined());
+            assert_eq!(d.is_enumerable(), enumerable);
+            assert_eq!(
+                (d.flags & qjs::JS_PROP_CONFIGURABLE.cast_signed()) != 0,
+                configurable
+            );
+        });
+    }
+
     #[test]
     fn the_proxy_target_read_releases_what_it_takes() {
         let (before, after) = around(|ctx| {
@@ -642,6 +758,7 @@ mod tests {
         assert_eq!(before, after);
     }
 
+    #[allow(clippy::disallowed_types)]
     #[test]
     fn a_value_that_is_kept_alive_moves_a_counter() {
         let runtime = Runtime::new().unwrap();

@@ -1081,16 +1081,6 @@ A fixed entry is deleted and its ID is never reused.
   reassigned field changes its result. `Object::prop(key, value)` of rquickjs
   defines a read-only property.
 
-- **B-186 `Plain` implements `JsLifetime` by hand**
-  `Units: jsenv · Size: S · Impact: Low`
-
-  `quickjs.rs` holds the one hand-written `unsafe impl JsLifetime`, for
-  `Plain<T>`. Check whether `#[derive(JsLifetime)]` of the `macro` feature
-  of rquickjs can replace it and shrink the hand-written `unsafe` surface.
-  The derive generates an `unsafe impl`, and the workspace sets
-  `unsafe_code = "deny"` with all `unsafe` in `inca-jsenv/src/quickjs.rs`,
-  so the policy for macro-generated `unsafe` is decided first.
-
 - **B-191 The event walk allocates on every event**
   `Units: bridge · Size: M · Impact: Low`
 
