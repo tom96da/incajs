@@ -169,29 +169,24 @@ fn an_unlistened_pointer_or_key_input_leaves_the_engine_untouched(cx: &mut TestA
 }
 
 #[gpui::test]
-fn stopping_a_handled_event_changes_nothing(cx: &mut TestAppContext) {
+fn cancel_bubble_reads_a_stop_requested_after_the_walk(cx: &mut TestAppContext) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
-    let [_, parent, child] = tree_of_three(&host);
-    let record = "(e) => { out.push(e.type); if (!globalThis.kept) globalThis.kept = e; }";
+    let [_, _, child] = tree_of_three(&host);
+    let record = "(e) => { out.push(e.type); globalThis.kept = e; }";
     listen(&dispatcher, child, "click", record);
-    listen(&dispatcher, parent, "click", record);
     fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
+
     let state = dispatcher
         .engine
         .eval::<String>(
             r"
-            kept.stopPropagation(); kept.stopImmediatePropagation(); kept.cancelBubble = true;
+            kept.stopPropagation();
             String(kept.cancelBubble)
             ",
         )
         .unwrap();
-    assert_eq!(state, "false");
 
-    let again = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
-    assert_eq!(
-        again,
-        serde_json::json!(["click", "click", "click", "click"])
-    );
+    assert_eq!(state, "true");
 }
 
 #[gpui::test]

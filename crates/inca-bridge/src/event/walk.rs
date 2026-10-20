@@ -145,6 +145,9 @@ fn deliver<'js>(
     let down = (0..path.len()).rev().map(|index| (true, index));
     let up = (0..bubble_nodes(walk.flags, path).len()).map(|index| (false, index));
     for (capture, index) in down.chain(up) {
+        if state.stop.get() {
+            break;
+        }
         let node = path[index];
         if walk.cut.contains(&node) {
             continue;
@@ -186,9 +189,6 @@ fn deliver<'js>(
             state.passive.set(listener.passive);
             let called = callback.call::<_, ()>((event.clone(),));
             note(ctx, host, called);
-        }
-        if state.stop.get() {
-            break;
         }
     }
     let canceled = state.canceled.get();
@@ -274,6 +274,8 @@ pub(crate) fn dispatch_event<'js>(
         // Last, so a failure above leaves the event free to dispatch again.
         state.dispatching.set(true);
         deliver(ctx, host, &walk, &path, &callbacks, &event);
+    } else {
+        end_dispatch(&record);
     }
     Ok(!state.canceled.get())
 }

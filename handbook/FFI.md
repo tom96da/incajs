@@ -289,6 +289,9 @@ of core answers. Rust looks it up by name on each walk and keeps nothing.
   capture and bubble callbacks are separate passes, so a stop in the first
   skips the second. `stopImmediatePropagation()` also stops the remaining
   callbacks of that node. Both leave gpui's own propagation running.
+- A stop requested before a walk, through `stopPropagation()`,
+  `stopImmediatePropagation()` or `cancelBubble = true`, gives that walk no
+  callback. A dispatch that no listener hears clears it too.
 - `preventDefault()` in a non-passive callback marks a cancelable event, and
   later listeners read `defaultPrevented` as `true`. `stopPropagation()` works
   in passive callbacks too.

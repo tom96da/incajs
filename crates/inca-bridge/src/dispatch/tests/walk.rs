@@ -4,6 +4,7 @@
 #![allow(clippy::unwrap_used)]
 
 use super::*;
+use rstest::rstest;
 
 #[gpui::test]
 fn one_event_object_reaches_every_node(cx: &mut TestAppContext) {
@@ -606,4 +607,52 @@ fn the_cut_nodes_are_skipped_in_both_passes(cx: &mut TestAppContext) {
         out,
         serde_json::json!([["child-capture", child, 2], ["child", child, 2]]).to_string()
     );
+}
+
+#[rstest]
+#[case::stop_propagation("e.stopPropagation();")]
+#[case::stop_immediate_propagation("e.stopImmediatePropagation();")]
+#[case::cancel_bubble("e.cancelBubble = true;")]
+fn a_stop_requested_before_dispatch_runs_no_listener(#[case] stop: &str) {
+    let (dispatcher, host, _reported) = dispatcher_with_engine();
+    let node = host.borrow_mut().tree.create_node("div").unwrap();
+    listen(&dispatcher, node, "ping", "() => out.push('ran')");
+
+    let got = eval_json(
+        &dispatcher,
+        &format!(
+            r"
+            (() => {{
+                const e = new Event('ping');
+                {stop}
+                const returned = __inca_native__.dispatchEvent({node}, e);
+                return [returned, out];
+            }})()
+            "
+        ),
+    );
+
+    assert_eq!(got, serde_json::json!([true, []]));
+}
+
+#[test]
+fn a_dispatch_no_listener_hears_clears_the_stop_flags() {
+    let (dispatcher, host, _reported) = dispatcher_with_engine();
+    let node = host.borrow_mut().tree.create_node("div").unwrap();
+
+    let got = eval_json(
+        &dispatcher,
+        &format!(
+            r"
+            (() => {{
+                const e = new Event('ping');
+                e.stopPropagation();
+                __inca_native__.dispatchEvent({node}, e);
+                return e.cancelBubble;
+            }})()
+            "
+        ),
+    );
+
+    assert_eq!(got, serde_json::json!(false));
 }

@@ -44,15 +44,11 @@ pub(super) fn is_trusted<'js>(ctx: &Ctx<'js>) -> JsResult<Function<'js>> {
 
 fn define_methods<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<()> {
     action(ctx, proto, "stopPropagation", |event| {
-        if event.state.dispatching.get() {
-            event.state.stop.set(true);
-        }
+        event.state.stop.set(true);
     })?;
     action(ctx, proto, "stopImmediatePropagation", |event| {
-        if event.state.dispatching.get() {
-            event.state.stop.set(true);
-            event.state.immediate.set(true);
-        }
+        event.state.stop.set(true);
+        event.state.immediate.set(true);
     })?;
     action(ctx, proto, "preventDefault", |event| {
         if event.cancels() {
@@ -127,7 +123,7 @@ fn define_fields<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<()> {
         event.state.stop.get().into_js(ctx)
     })?;
     let set_cancel_bubble = setter(ctx, "cancelBubble", |event, value| {
-        if value && event.state.dispatching.get() {
+        if value {
             event.state.stop.set(true);
         }
     })?;
