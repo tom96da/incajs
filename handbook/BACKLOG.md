@@ -184,13 +184,12 @@ A fixed entry is deleted and its ID is never reused.
 - **B-097 `console` prints some classes and built-ins unlike Node**
   `Units: jsenv · Size: M · Impact: Medium`
 
-  Properties keyed by a `Symbol` and extra properties on an array or an
-  `Error` are dropped. A `Promise`, a typed array, a `WeakMap` and a boxed
-  primitive print as a plain object: `{}` for most, `{ '0': 0, '1': 0,
-  '2': 0 }` for `new Uint8Array(3)`, where Node prints `Promise { 1 }` and
-  `Uint8Array(3) [ 0, 0, 0 ]`. A nested string, and an object key that is
-  not an identifier, is always single-quoted, where Node picks the quote
-  that avoids escaping.
+  Properties keyed by a `Symbol` and extra properties on an array, a typed
+  array or an `Error` are dropped. A `WeakMap` and a boxed primitive print
+  as a plain object, `{}`, where Node prints `WeakMap { <items unknown> }`
+  and `[Number: 1]`. `%o` leaves out the hidden fields of a typed array. A
+  nested string, and an object key that is not an identifier, is always
+  single-quoted, where Node picks the quote that avoids escaping.
 
 - **B-122 Colors take fewer notations than CSS**
   `Units: gpui,docs · Size: M–L · Impact: Medium`

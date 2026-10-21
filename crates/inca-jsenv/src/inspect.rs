@@ -9,7 +9,8 @@
 
 use std::fmt::Write;
 
-use rquickjs::{Coerced, Ctx, Object, Result as JsResult, Type, Value, object::Filter};
+use rquickjs::promise::PromiseState;
+use rquickjs::{Coerced, Ctx, Object, Promise, Result as JsResult, Type, Value, object::Filter};
 
 use crate::paint::{Style, paint};
 use crate::quickjs::{ObjectExt, ValueExt};
@@ -25,8 +26,8 @@ const MAX_DEPTH: usize = 3;
 /// The depth cap of `%o`, which matches Node's depth 4.
 const DETAILED_DEPTH: usize = 5;
 
-/// Entries of one array, `Map` or `Set` printed before `... N more items`. A
-/// run of array holes is one entry.
+/// Entries of one array, typed array, `Map` or `Set` printed before
+/// `... N more items`. A run of array holes is one entry.
 const MAX_ENTRIES: usize = 100;
 
 /// The value of a read, or `None` after clearing the exception it threw.
@@ -429,18 +430,21 @@ fn write_slot(out: &mut String, slot: Slot<'_>, depth: usize, mode: Mode) {
 }
 
 fn write_object(out: &mut String, value: &Value<'_>, depth: usize, mode: Mode) {
-    if builtins::write(out, value, depth, mode) {
-        return;
-    }
     let Some(object) = value.as_object() else {
         put(out, mode, Style::Cyan, "[Object]");
         return;
     };
+    if builtins::write(out, object, depth, mode) {
+        return;
+    }
+    let promise = value.as_promise();
     // The label of a prototype-less object is a tag in brackets.
-    let (label, tag) = match constructor_name(object) {
-        None if is_module_namespace(object) => ("Module: null prototype".to_owned(), true),
-        None => ("Object: null prototype".to_owned(), true),
-        Some(name) => (name, false),
+    let (label, tag) = match (constructor_name(object), promise.is_some()) {
+        (None, true) => ("Promise: null prototype".to_owned(), true),
+        (None, false) if is_module_namespace(object) => ("Module: null prototype".to_owned(), true),
+        (None, false) => ("Object: null prototype".to_owned(), true),
+        (Some(name), true) if name != "Promise" => (format!("{name} [Promise]"), false),
+        (Some(name), _) => (name, false),
     };
     if depth >= mode.max_depth {
         put(out, mode, Style::Cyan, &format!("[{label}]"));
@@ -454,6 +458,10 @@ fn write_object(out: &mut String, value: &Value<'_>, depth: usize, mode: Mode) {
 
     let mut entries = 0;
     let mut body = String::new();
+    if let Some(promise) = promise {
+        write_promise_state(&mut body, promise, depth, mode);
+        entries += 1;
+    }
     let keys = if mode.hidden {
         object.own_keys::<String>(Filter::new().string())
     } else {
@@ -480,6 +488,25 @@ fn write_object(out: &mut String, value: &Value<'_>, depth: usize, mode: Mode) {
         let _ = write!(out, "{prefix}{{}}");
     } else {
         let _ = write!(out, "{prefix}{{ {body} }}");
+    }
+}
+
+/// Appends the state of `promise`: `<pending>`, its value, or `<rejected>` and its reason.
+fn write_promise_state(out: &mut String, promise: &Promise<'_>, depth: usize, mode: Mode) {
+    match promise.state() {
+        PromiseState::Pending => put(out, mode, Style::Cyan, "<pending>"),
+        PromiseState::Resolved => {
+            for value in promise.result::<Value>().into_iter().flatten() {
+                write_value(out, &value, depth + 1, mode);
+            }
+        }
+        PromiseState::Rejected => {
+            put(out, mode, Style::Cyan, "<rejected>");
+            out.push(' ');
+            // `result` throws the reason, so `catch` takes it back.
+            drop(promise.result::<Value>());
+            write_value(out, &promise.ctx().catch(), depth + 1, mode);
+        }
     }
 }
 

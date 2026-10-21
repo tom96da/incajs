@@ -11,7 +11,9 @@ mod arrays;
 mod collections;
 mod color;
 mod objects;
+mod promises;
 mod proxy;
+mod typed_arrays;
 
 /// Evaluates `expression` and renders its value the way `console` would
 /// render a single argument.

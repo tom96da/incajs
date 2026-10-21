@@ -82,7 +82,7 @@ A line starts with a marker:
 - A `Proxy` prints as its target. A revoked `Proxy` prints `<Revoked Proxy>`.
 - An array hole prints as `<1 empty item>`. A run of holes counts as one
   entry.
-- An array, `Map` or `Set` prints its first 100 entries, then
+- An array, typed array, `Map` or `Set` prints its first 100 entries, then
   `... N more items`.
 - A key that is not a plain identifier is quoted.
 
@@ -120,10 +120,10 @@ type as in Node. These environment variables override the terminal check:
 - An event prints as its class with only `isTrusted`, such as
   `PointerEvent { isTrusted: [Getter] }` for a click. Its other fields are
   getters on its prototype.
-- Symbol-keyed properties and extra properties on arrays and errors are
-  dropped. A `Promise`, a typed array and a `WeakMap` print as plain
-  objects. A circular reference prints `[Object]` at the depth limit, with
-  no marker.
+- Symbol-keyed properties and extra properties on arrays, typed arrays and
+  errors are dropped. A `WeakMap` prints as a plain object. A circular
+  reference prints `[Object]` at the depth limit, with no marker.
+- `%o` prints no hidden fields of a typed array, such as `[buffer]`.
 - A `Date`, `RegExp`, `Map` or `Set` prints like Node, but properties
   added to it and the name of a subclass are left out.
 - A string inside an array or object is always single-quoted.
