@@ -297,6 +297,8 @@ export async function dev(options: DevOptions): Promise<void> {
       const channel: HmrChannel = await hmr({
         entry,
         root: entryRoot(cwd, entry),
+        envDir: cwd,
+        publicDir: path.join(cwd, "public"),
         cwd,
         runtimeConfig,
         stdout,
@@ -330,6 +332,8 @@ export async function dev(options: DevOptions): Promise<void> {
       closable = await bundler.watch({
         entry,
         root: entryRoot(cwd, entry),
+        envDir: cwd,
+        publicDir: path.join(cwd, "public"),
         outDir,
         runtimeConfig,
         mode: "development",

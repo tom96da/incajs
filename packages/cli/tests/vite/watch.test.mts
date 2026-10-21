@@ -49,18 +49,20 @@ describe("watch", () => {
     expect(bundle).not.toMatch(/from\s+["']vue["']/);
   }, 20000);
 
-  it("reads .env from the given root", async () => {
+  it("reads .env from the given envDir", async () => {
     const { entry, outDir, streams } = await makeApp(
       `<script setup>\nconst msg = import.meta.env.VITE_FROM_ROOT;\n</script>\n<template><div>{{ msg }}</div></template>\n`,
     );
-    const root = path.join(path.dirname(entry), "src");
+    const envDir = path.dirname(entry);
+    const root = path.join(envDir, "src");
     await mkdir(root);
-    await writeFile(path.join(root, ".env"), "VITE_FROM_ROOT=env-in-root\n");
+    await writeFile(path.join(envDir, ".env"), "VITE_FROM_ROOT=env-in-app\n");
 
     const output = await new Promise<BuildOutput>((resolve, reject) => {
       watch({
         entry,
         root,
+        envDir,
         outDir,
         mode: "development",
         ...streams,
@@ -71,7 +73,7 @@ describe("watch", () => {
         .catch(reject);
     });
 
-    expect(await readFile(output.entryFile, "utf8")).toContain("env-in-root");
+    expect(await readFile(output.entryFile, "utf8")).toContain("env-in-app");
   }, 20000);
 
   it("rebuilds when the .vue file changes", async () => {

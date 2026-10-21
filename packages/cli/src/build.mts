@@ -48,6 +48,8 @@ export async function build(options: BuildAppOptions = {}): Promise<BuildOutput>
   return bundler.build({
     entry,
     root: entryRoot(cwd, entry),
+    envDir: cwd,
+    publicDir: path.join(cwd, "public"),
     outDir,
     sourcemap: options.sourcemap ?? config.sourcemap,
     runtimeConfig,

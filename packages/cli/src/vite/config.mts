@@ -23,6 +23,10 @@ export interface ResolveConfigOptions {
   entry: string;
   /** See the `root` option in `../types.mts`. Defaults to the entry's directory. */
   root?: string;
+  /** See the `envDir` option in `../types.mts`. Defaults to `root`. */
+  envDir?: string;
+  /** See the `publicDir` option in `../types.mts`. Defaults to `public` under `root`. */
+  publicDir?: string;
   /** Where the build's output is written. */
   outDir: string;
   /** `"development"` keeps `@vue/runtime-core`'s own warnings; `"production"` strips them. */
@@ -57,6 +61,8 @@ export function resolveViteConfig({
   runtimeModuleName,
   entry,
   root = path.dirname(entry),
+  envDir,
+  publicDir,
   outDir,
   mode,
   sourcemap = false,
@@ -71,6 +77,8 @@ export function resolveViteConfig({
   return {
     configFile: false,
     root,
+    envDir,
+    publicDir,
     mode,
     clearScreen: false,
     // The only knob rolldown's native reporter reads. Silencing it also

@@ -1,6 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -109,17 +110,32 @@ describe("build", () => {
     await expect(readFile(stalePath, "utf8")).rejects.toThrow(/ENOENT/);
   }, 20000);
 
-  it("reads .env from the given root", async () => {
+  it("reads .env from the given envDir", async () => {
     const { entry, outDir, streams } = await makeApp(
       `<script setup>\nconst msg = import.meta.env.VITE_FROM_ROOT;\n</script>\n<template><div>{{ msg }}</div></template>\n`,
     );
-    const root = path.join(path.dirname(entry), "src");
+    const envDir = path.dirname(entry);
+    const root = path.join(envDir, "src");
     await mkdir(root);
-    await writeFile(path.join(root, ".env"), "VITE_FROM_ROOT=env-in-root\n");
+    await writeFile(path.join(envDir, ".env"), "VITE_FROM_ROOT=env-in-app\n");
 
-    const output = await build({ entry, root, outDir, ...streams });
+    const output = await build({ entry, root, envDir, outDir, ...streams });
 
-    expect(await readFile(output.entryFile, "utf8")).toContain("env-in-root");
+    expect(await readFile(output.entryFile, "utf8")).toContain("env-in-app");
+  }, 20000);
+
+  it("copies public from the given publicDir", async () => {
+    const { entry, outDir, streams } = await makeApp(`<template><div /></template>\n`);
+    const appDir = path.dirname(entry);
+    const root = path.join(appDir, "src");
+    const publicDir = path.join(appDir, "public");
+    await mkdir(root);
+    await mkdir(publicDir);
+    await writeFile(path.join(publicDir, "x.txt"), "x");
+
+    await build({ entry, root, publicDir, outDir, ...streams });
+
+    expect(existsSync(path.join(outDir, "x.txt"))).toBe(true);
   }, 20000);
 
   it("rejects a <style> block, naming the file that used it", async () => {

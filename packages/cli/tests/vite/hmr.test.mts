@@ -66,6 +66,11 @@ afterAll(async () => {
   await rm(runtimeScratchDir, { recursive: true, force: true });
 });
 
+/** A stream that drops what it is given. */
+function discard(): Writable {
+  return new Writable({ write: (_chunk, _encoding, callback) => callback() });
+}
+
 let channels: HmrChannel[] = [];
 afterEach(async () => {
   await Promise.all(channels.map((channel) => channel.close()));
@@ -532,6 +537,67 @@ describe("hmr", () => {
     channels.push(second);
 
     expect(existsSync(second.entryFile)).toBe(true);
+  }, 20000);
+
+  it("reads .env from the given envDir", async () => {
+    const { entry } = await makeApp(`<template><div /></template>\n`);
+    const envDir = path.dirname(entry);
+    const root = path.join(envDir, "src");
+    await mkdir(root);
+    await writeFile(path.join(envDir, ".env"), "VITE_FROM_ROOT=env-in-app\n");
+    const envEntry = path.join(envDir, "env-entry.mts");
+    await writeFile(envEntry, `export default import.meta.env.VITE_FROM_ROOT;\n`);
+
+    await fsLag();
+    const channel = await hmr({
+      entry: envEntry,
+      root,
+      envDir,
+      cwd: envDir,
+      stdout: discard(),
+      stderr: discard(),
+      quiet: true,
+      notify: (payload) => client.notify(payload as HotPayload),
+      reload: () => {},
+      onError: () => {},
+    });
+    channels.push(channel);
+
+    const client = connectRunner(channel.dispatch);
+    const module = await client.runner.import<{ default: string }>(envEntry);
+
+    expect(module.default).toBe("env-in-app");
+  }, 20000);
+
+  it("serves public from the given publicDir", async () => {
+    const { entry } = await makeApp(`<template><div /></template>\n`);
+    const appDir = path.dirname(entry);
+    const root = path.join(appDir, "src");
+    const publicDir = path.join(appDir, "public");
+    await mkdir(root);
+    await mkdir(publicDir);
+    await writeFile(path.join(publicDir, "x.txt"), "x");
+    const publicEntry = path.join(appDir, "public-entry.mts");
+    await writeFile(publicEntry, `import x from "/x.txt";\nexport default x;\n`);
+
+    const channel = await hmr({
+      entry: publicEntry,
+      root,
+      publicDir,
+      cwd: appDir,
+      stdout: discard(),
+      stderr: discard(),
+      quiet: true,
+      notify: (payload) => client.notify(payload as HotPayload),
+      reload: () => {},
+      onError: () => {},
+    });
+    channels.push(channel);
+
+    const client = connectRunner(channel.dispatch);
+    const module = await client.runner.import<{ default: string }>(publicEntry);
+
+    expect(module.default).toBe("/x.txt");
   }, 20000);
 
   it("names an edited file by its url under the given root", async () => {

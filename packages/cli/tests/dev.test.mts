@@ -76,6 +76,32 @@ describe("dev", () => {
     expect(watch.mock.calls[0]![0].root).toBe(path.join(cwd, "src"));
   });
 
+  it("passes the app directory for .env and public to the bundler", async () => {
+    const bundler = makeFakeBundler();
+    const watch = vi.spyOn(bundler, "watch");
+    const controller = new AbortController();
+    const cwd = await scratch.makeApp({});
+
+    const running = dev({
+      cwd,
+      entry: path.join(cwd, "node_modules/.inca/entry.mts"),
+      bundler,
+      hostBin: mockHost,
+      stdout: makeSink().stream,
+      stderr: makeSink().stream,
+      signal: controller.signal,
+    });
+
+    await bundler.watching;
+    controller.abort();
+    await running;
+
+    expect(watch.mock.calls[0]![0]).toMatchObject({
+      envDir: cwd,
+      publicDir: path.join(cwd, "public"),
+    });
+  });
+
   it("reloads the host on a later build without restarting it", async () => {
     const bundler = makeFakeBundler();
     const stdout = makeSink();

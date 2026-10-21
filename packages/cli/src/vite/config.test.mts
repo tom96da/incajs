@@ -46,6 +46,26 @@ describe("resolveViteConfig root", () => {
   });
 });
 
+describe("resolveViteConfig envDir and publicDir", () => {
+  it("leaves both to Vite's defaults when not given", () => {
+    const config = resolveViteConfig(optionsFor("production"));
+
+    expect(config.envDir).toBeUndefined();
+    expect(config.publicDir).toBeUndefined();
+  });
+
+  it("takes the directories it is given", () => {
+    const config = resolveViteConfig({
+      ...optionsFor("production"),
+      envDir: "/app",
+      publicDir: "/app/public",
+    });
+
+    expect(config.envDir).toBe("/app");
+    expect(config.publicDir).toBe("/app/public");
+  });
+});
+
 describe("resolveViteConfig source maps", () => {
   it("emits a sidecar map with paths only in development", () => {
     const config = resolveViteConfig(optionsFor("development"));

@@ -11,8 +11,12 @@ export interface Watcher {
 export interface BuildOptions {
   /** The app's own entry point. It may import `.vue` files. */
   entry: string;
-  /** The directory Vite reads `.env*` files and `public` from. Defaults to the entry's directory. */
+  /** The app's root directory for Vite. `envDir` and `publicDir` default to locations under it. Defaults to the entry's directory. */
   root?: string;
+  /** The directory Vite reads `.env*` files from. Defaults to `root`. */
+  envDir?: string;
+  /** The directory of static files Vite serves and copies. Defaults to `public` under `root`. */
+  publicDir?: string;
   /** Where the build's output is written. */
   outDir: string;
   /** Writes `bundle.js.map` beside the bundle. Defaults to `false`. */
@@ -75,8 +79,12 @@ export interface BuildOutput {
 export interface HmrOptions {
   /** The app's own entry point. It may import `.vue` files. */
   entry: string;
-  /** The directory the app's module urls, `.env*` files and `public` are relative to. Defaults to the entry's directory. */
+  /** The directory the app's module urls are relative to. Defaults to the entry's directory. */
   root?: string;
+  /** The directory Vite reads `.env*` files from. Defaults to `root`. */
+  envDir?: string;
+  /** The directory of static files Vite serves. Defaults to `public` under `root`. */
+  publicDir?: string;
   /** The app's root directory, where its dev-only scratch files are written. */
   cwd: string;
   /**

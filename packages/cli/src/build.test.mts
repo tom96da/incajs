@@ -42,6 +42,8 @@ describe("build", () => {
     expect(bundler.seen).toEqual({
       entry: "unused",
       root: ".",
+      envDir: "/app",
+      publicDir: "/app/public",
       outDir: "/app/dist",
       sourcemap: false,
     });

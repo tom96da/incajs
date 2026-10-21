@@ -1245,3 +1245,10 @@ A fixed entry is deleted and its ID is never reused.
   of its character. `code` is an empty string, because the physical key
   position is unsupported. Fix: carry gpui's `Keystroke::key`, the ASCII
   character printed on the key, in the key payload and map that.
+
+- **B-224 Files in `public/` are not part of a packaged app**
+  `Units: cli · Size: S · Impact: Low`
+
+  `inca build` copies the files of `public/` into the output directory, and
+  `inca package` copies only the files the build emitted, so they are not in
+  the packaged app.

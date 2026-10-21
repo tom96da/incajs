@@ -17,6 +17,8 @@ export async function build(
   {
     entry,
     root,
+    envDir,
+    publicDir,
     outDir,
     sourcemap,
     runtimeConfig,
@@ -32,6 +34,8 @@ export async function build(
       runtimeModuleName,
       entry,
       root,
+      envDir,
+      publicDir,
       outDir,
       runtimeConfig,
       mode: "production",
