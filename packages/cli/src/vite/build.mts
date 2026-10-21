@@ -16,6 +16,7 @@ export async function build(
   runtimeModuleName: string,
   {
     entry,
+    root,
     outDir,
     sourcemap,
     runtimeConfig,
@@ -30,6 +31,7 @@ export async function build(
       core,
       runtimeModuleName,
       entry,
+      root,
       outDir,
       runtimeConfig,
       mode: "production",

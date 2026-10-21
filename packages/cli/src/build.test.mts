@@ -39,8 +39,26 @@ describe("build", () => {
 
     const output = await build({ cwd: "/app", entry: "unused", bundler });
 
-    expect(bundler.seen).toEqual({ entry: "unused", outDir: "/app/dist", sourcemap: false });
+    expect(bundler.seen).toEqual({
+      entry: "unused",
+      root: ".",
+      outDir: "/app/dist",
+      sourcemap: false,
+    });
     expect(output.entryFile).toBe("/app/dist/bundle.js");
+  });
+
+  it("builds the entry synthesized for src/App.vue with src as the root", async () => {
+    const bundler = makeFakeBundler(writeNothing);
+
+    await build({
+      cwd: "/app",
+      entry: "/app/node_modules/.inca/entry.mts",
+      bundler,
+      config: { outDir: "/app/dist", entry: undefined, sourcemap: false },
+    });
+
+    expect(bundler.seen?.root).toBe("/app/src");
   });
 
   it("refuses a supplied config whose outDir holds the app, without building", async () => {

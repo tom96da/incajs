@@ -7,7 +7,7 @@ import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { resolveEntry } from "./entry.mts";
+import { entryRoot, resolveEntry } from "./entry.mts";
 
 let cwd: string | undefined;
 
@@ -73,5 +73,21 @@ describe("resolveEntry", () => {
     await expect(resolveEntry(app)).rejects.toThrow(
       `no app entry found. check that ${path.join(app, "src/main.ts")} or ${path.join(app, "src/App.vue")} exists`,
     );
+  });
+});
+
+describe("entryRoot", () => {
+  it("gives src for the entry synthesized for App.vue", () => {
+    const app = path.join(tmpdir(), "inca-app");
+
+    expect(entryRoot(app, path.join(app, "node_modules/.inca/entry.mts"))).toBe(
+      path.join(app, "src"),
+    );
+  });
+
+  it("gives the directory of any other entry", () => {
+    const app = path.join(tmpdir(), "inca-app");
+
+    expect(entryRoot(app, path.join(app, "app/main.ts"))).toBe(path.join(app, "app"));
   });
 });

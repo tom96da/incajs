@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { assertOutDir, resolveBuildConfig, resolveRuntimeConfig } from "./config/loader.mts";
 import { defaultBundler } from "./defaultBundler.mts";
-import { resolveEntry } from "./entry.mts";
+import { entryRoot, resolveEntry } from "./entry.mts";
 import type { ResolvedBuildConfig, RuntimeConfig } from "./config/loader.mts";
 import type { Bundler, BuildOutput } from "./types.mts";
 
@@ -47,6 +47,7 @@ export async function build(options: BuildAppOptions = {}): Promise<BuildOutput>
 
   return bundler.build({
     entry,
+    root: entryRoot(cwd, entry),
     outDir,
     sourcemap: options.sourcemap ?? config.sourcemap,
     runtimeConfig,

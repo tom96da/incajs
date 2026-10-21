@@ -21,6 +21,8 @@ export interface ResolveConfigOptions {
   runtimeModuleName: string;
   /** The app's own entry point. It may import `.vue` files. */
   entry: string;
+  /** See the `root` option in `../types.mts`. Defaults to the entry's directory. */
+  root?: string;
   /** Where the build's output is written. */
   outDir: string;
   /** `"development"` keeps `@vue/runtime-core`'s own warnings; `"production"` strips them. */
@@ -54,6 +56,7 @@ export function resolveViteConfig({
   core,
   runtimeModuleName,
   entry,
+  root = path.dirname(entry),
   outDir,
   mode,
   sourcemap = false,
@@ -67,7 +70,7 @@ export function resolveViteConfig({
   const emitMap = mode === "development" || sourcemap;
   return {
     configFile: false,
-    root: path.dirname(entry),
+    root,
     mode,
     clearScreen: false,
     // The only knob rolldown's native reporter reads. Silencing it also

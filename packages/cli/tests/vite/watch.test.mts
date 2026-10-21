@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -47,6 +47,31 @@ describe("watch", () => {
     expect(output.outDir).toBe(outDir);
     const bundle = await readFile(output.entryFile, "utf8");
     expect(bundle).not.toMatch(/from\s+["']vue["']/);
+  }, 20000);
+
+  it("reads .env from the given root", async () => {
+    const { entry, outDir, streams } = await makeApp(
+      `<script setup>\nconst msg = import.meta.env.VITE_FROM_ROOT;\n</script>\n<template><div>{{ msg }}</div></template>\n`,
+    );
+    const root = path.join(path.dirname(entry), "src");
+    await mkdir(root);
+    await writeFile(path.join(root, ".env"), "VITE_FROM_ROOT=env-in-root\n");
+
+    const output = await new Promise<BuildOutput>((resolve, reject) => {
+      watch({
+        entry,
+        root,
+        outDir,
+        mode: "development",
+        ...streams,
+        onBuild: resolve,
+        onError: (error) => reject(new Error(error.message)),
+      })
+        .then((w) => watchers.push(w))
+        .catch(reject);
+    });
+
+    expect(await readFile(output.entryFile, "utf8")).toContain("env-in-root");
   }, 20000);
 
   it("rebuilds when the .vue file changes", async () => {

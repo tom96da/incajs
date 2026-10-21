@@ -109,6 +109,19 @@ describe("build", () => {
     await expect(readFile(stalePath, "utf8")).rejects.toThrow(/ENOENT/);
   }, 20000);
 
+  it("reads .env from the given root", async () => {
+    const { entry, outDir, streams } = await makeApp(
+      `<script setup>\nconst msg = import.meta.env.VITE_FROM_ROOT;\n</script>\n<template><div>{{ msg }}</div></template>\n`,
+    );
+    const root = path.join(path.dirname(entry), "src");
+    await mkdir(root);
+    await writeFile(path.join(root, ".env"), "VITE_FROM_ROOT=env-in-root\n");
+
+    const output = await build({ entry, root, outDir, ...streams });
+
+    expect(await readFile(output.entryFile, "utf8")).toContain("env-in-root");
+  }, 20000);
+
   it("rejects a <style> block, naming the file that used it", async () => {
     const { entry, outDir, streams } = await makeApp(
       dedent`

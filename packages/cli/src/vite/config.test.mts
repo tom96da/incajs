@@ -34,6 +34,18 @@ function optionsFor(mode: ResolveConfigOptions["mode"]): ResolveConfigOptions {
   };
 }
 
+describe("resolveViteConfig root", () => {
+  it("defaults to the entry's directory", () => {
+    expect(resolveViteConfig(optionsFor("production")).root).toBe("/unused/src");
+  });
+
+  it("takes the root it is given", () => {
+    expect(resolveViteConfig({ ...optionsFor("production"), root: "/unused" }).root).toBe(
+      "/unused",
+    );
+  });
+});
+
 describe("resolveViteConfig source maps", () => {
   it("emits a sidecar map with paths only in development", () => {
     const config = resolveViteConfig(optionsFor("development"));

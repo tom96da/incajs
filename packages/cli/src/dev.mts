@@ -15,7 +15,7 @@ import {
 import { defaultBundler } from "./defaultBundler.mts";
 import { HostClient, assertHostBin, resolveHostBin } from "./dev-client/index.mts";
 import { acquireDevLock } from "./devLock.mts";
-import { resolveEntry } from "./entry.mts";
+import { entryRoot, resolveEntry } from "./entry.mts";
 import { IncaError } from "./error.mts";
 import { STAMPED, log, printFault, toFault } from "./log.mts";
 import { writeMacosApp } from "./macosApp.mts";
@@ -296,6 +296,7 @@ export async function dev(options: DevOptions): Promise<void> {
     if (hmr) {
       const channel: HmrChannel = await hmr({
         entry,
+        root: entryRoot(cwd, entry),
         cwd,
         runtimeConfig,
         stdout,
@@ -328,6 +329,7 @@ export async function dev(options: DevOptions): Promise<void> {
     } else {
       closable = await bundler.watch({
         entry,
+        root: entryRoot(cwd, entry),
         outDir,
         runtimeConfig,
         mode: "development",

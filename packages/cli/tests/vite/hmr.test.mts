@@ -6,6 +6,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Writable } from "node:stream";
 import { setTimeout } from "node:timers/promises";
+import { stripVTControlCharacters } from "node:util";
 
 import { build } from "vite";
 import { ESModulesEvaluator, ModuleRunner } from "vite/module-runner";
@@ -531,5 +532,56 @@ describe("hmr", () => {
     channels.push(second);
 
     expect(existsSync(second.entryFile)).toBe(true);
+  }, 20000);
+
+  it("names an edited file by its url under the given root", async () => {
+    const { entry, vuePath } = await makeApp(
+      `<script setup>\nconst msg = "first";\n</script>\n<template><div>{{ msg }}</div></template>\n`,
+    );
+    const inner = path.join(path.dirname(entry), "inner", "entry.mts");
+    await mkdir(path.dirname(inner), { recursive: true });
+    await writeFile(inner, `import App from ${JSON.stringify(vuePath)};\nexport default App;\n`);
+
+    const chunks: string[] = [];
+    const sink = new Writable({
+      write(chunk, _encoding, callback) {
+        chunks.push(String(chunk));
+        callback();
+      },
+    });
+
+    const notified: unknown[] = [];
+    await fsLag();
+    const channel = await hmr({
+      entry: inner,
+      root: path.dirname(vuePath),
+      cwd: path.dirname(entry),
+      stdout: sink,
+      stderr: sink,
+      quiet: false,
+      notify: (payload) => {
+        notified.push(payload);
+        client.notify(payload as HotPayload);
+      },
+      reload: () => {},
+      onError: () => {},
+    });
+    channels.push(channel);
+    await fsLag();
+
+    const client = connectRunner(channel.dispatch);
+    await client.runner.import(inner);
+
+    await writeFile(
+      vuePath,
+      `<script setup>\nconst msg = "first";\n</script>\n<template><div>changed {{ msg }}</div></template>\n`,
+    );
+
+    await vi.waitFor(
+      () => expect(notified.some((p) => (p as { type?: string }).type === "update")).toBe(true),
+      { timeout: 15000 },
+    );
+
+    expect(stripVTControlCharacters(chunks.join(""))).toContain("hmr update /App.vue");
   }, 20000);
 });

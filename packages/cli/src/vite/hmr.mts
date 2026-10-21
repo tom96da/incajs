@@ -274,6 +274,7 @@ export async function hmr(
   runtimeModuleName: string,
   {
     entry,
+    root = path.dirname(entry),
     cwd,
     runtimeConfig,
     runtimePath,
@@ -304,7 +305,7 @@ export async function hmr(
 
   const server: ViteDevServer = await createServer({
     configFile: false,
-    root: path.dirname(entry),
+    root,
     mode: "development",
     clearScreen: false,
     logLevel: quiet ? "silent" : "info",

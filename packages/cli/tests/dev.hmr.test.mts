@@ -285,4 +285,28 @@ describe("dev with --experimental-hmr", () => {
 
     expect(stdout.text()).not.toContain("[inca] ready");
   });
+
+  it("passes src as the root of the entry synthesized for App.vue", async () => {
+    const bundler = makeFakeHmrBundler("/unused/entry.js");
+    const hmr = vi.spyOn(bundler, "hmr");
+    const controller = new AbortController();
+    const cwd = await scratch.makeApp({});
+
+    const running = dev({
+      cwd,
+      entry: path.join(cwd, "node_modules/.inca/entry.mts"),
+      bundler,
+      hostBin: hmrMockHost,
+      experimentalHmr: true,
+      stdout: makeSink().stream,
+      stderr: makeSink().stream,
+      signal: controller.signal,
+    });
+
+    await waitFor(() => expect(hmr).toHaveBeenCalled());
+    controller.abort();
+    await running;
+
+    expect(hmr.mock.calls[0]![0].root).toBe(path.join(cwd, "src"));
+  });
 });

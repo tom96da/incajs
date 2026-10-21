@@ -12,6 +12,27 @@ import { IncaError } from "./error.mts";
 export const MAIN_FILES = ["main.mts", "main.ts", "main.js"];
 
 /**
+ * The entry {@link resolveEntry} writes for an app that has only `src/App.vue`.
+ * @param cwd - the app's root directory
+ * @returns the path of the entry file
+ */
+function synthesizedEntryPath(cwd: string): string {
+  return path.join(cwd, "node_modules/.inca/entry.mts");
+}
+
+/**
+ * The directory Vite takes as the app's root: `src` for the entry
+ * {@link resolveEntry} writes for `src/App.vue`, and the entry's own
+ * directory for any other entry.
+ * @param cwd - the app's root directory
+ * @param entry - the app's entry file
+ * @returns the directory
+ */
+export function entryRoot(cwd: string, entry: string): string {
+  return entry === synthesizedEntryPath(cwd) ? path.join(cwd, "src") : path.dirname(entry);
+}
+
+/**
  * Resolves an app's entry point. A `src/main.mts`, `src/main.ts` or
  * `src/main.js` committed by the app wins outright, in that order, and is
  * used verbatim for full control over bootstrapping. Otherwise
@@ -41,10 +62,9 @@ async function synthesizeEntry(appPath: string, cwd: string): Promise<string> {
   // Not under `outDir`: Vite refuses an entry whose directory is `outDir`
   // itself or a descendant of it, since a build's own root normally holds
   // its source rather than sitting inside what it writes.
-  const dir = path.join(cwd, "node_modules/.inca");
-  await mkdir(dir, { recursive: true });
+  const entryPath = synthesizedEntryPath(cwd);
+  await mkdir(path.dirname(entryPath), { recursive: true });
 
-  const entryPath = path.join(dir, "entry.mts");
   const importSpecifier = JSON.stringify(appPath.split(path.sep).join("/"));
   await writeFile(
     entryPath,
