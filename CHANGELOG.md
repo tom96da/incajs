@@ -10,6 +10,20 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- `MouseEvent`, `KeyboardEvent` and the other event classes can be built and dispatched ([2f531d5](https://github.com/tom96da/incajs/commit/2f531d5))
+- key events carry `keyCode`, `which` and `charCode`, and UI events `detail` and `view` ([aa0d2ea](https://github.com/tom96da/incajs/commit/aa0d2ea))
+- listener and handler parameters are typed by the event name, and `this` by the target ([630382d](https://github.com/tom96da/incajs/commit/630382d))
+- `console` prints the state of a promise and the elements of a typed array ([5f2745c](https://github.com/tom96da/incajs/commit/5f2745c))
+
+### Fixed
+
+- Tab after a click or a blur continues from that element, also after it leaves the tree ([4648d47](https://github.com/tom96da/incajs/commit/4648d47))
+- the host exits 1 with a message when `DISPLAY` or `WAYLAND_DISPLAY` names no running server ([04b8c8c](https://github.com/tom96da/incajs/commit/04b8c8c))
+- the experimental HMR update line names an edited file relative to `src` without a main file ([b6030c0](https://github.com/tom96da/incajs/commit/b6030c0))
+- `.env` and `public` are read from the app's root directory ([e157133](https://github.com/tom96da/incajs/commit/e157133))
+
 ## [0.0.20] - 2026-10-20
 
 ### Added
