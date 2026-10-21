@@ -63,9 +63,9 @@ it("a rejecting top-level await exits 1 after a report with a null id", async ()
   }
 }, 15_000);
 
-/** Runs the host with `args` and collects its exit code and output. */
-async function runHost(args: string[]) {
-  const child = spawn(resolveTestHostBin(), args, { stdio: ["pipe", "pipe", "pipe"] });
+/** Runs the host with `args` and `env` and collects its exit code and output. */
+async function runHost(args: string[], env: NodeJS.ProcessEnv = process.env) {
+  const child = spawn(resolveTestHostBin(), args, { stdio: ["pipe", "pipe", "pipe"], env });
   child.stdin.on("error", () => {});
   try {
     const out: string[] = [];
@@ -108,3 +108,28 @@ it("an unreadable entry in production prints to stderr and the host exits 1", as
   expect(out).toEqual([]);
   expect(stderr).toContain(`failed to read ${missing}`);
 }, 15_000);
+
+it.skipIf(process.platform !== "linux").each([
+  ["WAYLAND_DISPLAY", "/nonexistent/inca-e2e-wayland.sock"],
+  ["DISPLAY", ":4093"],
+])(
+  "a %s that names no running server exits 1 with one line",
+  async (variable, value) => {
+    const dir = await mkdtemp(path.join(tmpdir(), "inca-host-display-"));
+    try {
+      await writeFile(path.join(dir, "bundle.js"), "");
+      const { code, stderr } = await runHost([path.join(dir, "bundle.js")], {
+        ...process.env,
+        [variable]: value,
+      });
+
+      expect(code).toBe(1);
+      expect(stderr.trimEnd().split("\n")).toHaveLength(1);
+      expect(stderr).toContain(`cannot reach the display server that ${variable} names: `);
+      expect(stderr).not.toContain("panicked");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  },
+  15_000,
+);
