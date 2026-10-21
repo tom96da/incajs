@@ -351,8 +351,8 @@ A fixed entry is deleted and its ID is never reused.
     (`third_party/zed/crates/gpui/src/platform/keystroke.rs`) carries
     only `{ modifiers, key, key_char }`, with no layout-independent
     scancode and no left/right or numpad distinction to recover either
-    from. `location` is 0 for every key and `code` is absent. The fix
-    direction is a `gpui` platform change that reports the scancode and
+    from. `location` is 0 for every key and `code` is an empty string. The
+    fix direction is a `gpui` platform change that reports the scancode and
     the key location, then `code` and `location` read them.
   - `getModifierState` supports Control, Shift, Alt, Meta and Accel.
     `gpui`'s `Modifiers` holds four flags (plus `function`), so the lock
@@ -792,13 +792,6 @@ A fixed entry is deleted and its ID is never reused.
   `contextmenu` fires only from a secondary-button press. The Menu key and
   Shift+F10 have no effect. Fix: the key hook dispatches it at the focused
   node with the keyboard pointer source.
-
-- **B-153 `KeyboardEvent` has no `keyCode`, `which` or `charCode`**
-  `Units: bridge · Size: S-M · Impact: Medium`
-
-  `keydown` and `keyup` carry `key` and no legacy code fields. Fix: a table
-  from `key` to `keyCode` beside the key fields of `event/payload.rs`, with
-  `which` equal to `keyCode`.
 
 - **B-154 `input` and `change` are unsupported**
   `Units: gpui,bridge,docs · Size: L · Impact: High`
@@ -1294,3 +1287,12 @@ A fixed entry is deleted and its ID is never reused.
   The Vite adapter and `inca config` each write `inca.json` by name.
 
   Fix: inject the name through the adapter core, which leaves one spelling.
+
+- **B-223 `keyCode` follows a US keyboard layout**
+  `Units: gpui,bridge · Size: S–M · Impact: Low`
+
+  `keyCode` and `which` of a key event come from `key` through a US-layout
+  table, so `é` gives 0 and a key typed on another layout gives the US code
+  of its character. `code` is an empty string, because the physical key
+  position is unsupported. Fix: carry gpui's `Keystroke::key`, the ASCII
+  character printed on the key, in the key payload and map that.

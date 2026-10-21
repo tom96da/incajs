@@ -11,10 +11,11 @@ use rquickjs::object::Property;
 use rquickjs::{Class, Ctx, Exception, Function, Object, Result as JsResult, Value};
 
 use super::members::PHASES;
+use super::payload::Payload;
 use super::walk::Walk;
 use super::{
-    CUSTOM, EVENT, FOCUS, Flags, Held, IncaEvent, KEYBOARD, MOUSE, POINTER, State, WHEEL, child_of,
-    field, new_event, other_kind, targets_of,
+    CUSTOM, EVENT, Flags, Held, IncaEvent, State, child_of, field, new_event, other_kind,
+    targets_of,
 };
 use crate::bindings::convert::or_null;
 
@@ -30,12 +31,9 @@ pub(super) fn create<'js>(
         Some(node) => targets_of(ctx, &[node])?.pop(),
         None => None,
     };
-    let state = State::new(
-        walk.name.to_owned(),
-        walk.flags,
-        walk.payload.clone(),
-        walk.trusted,
-    );
+    let payload = Payload::from_host(walk.name, walk.payload);
+    let kind = payload.kind();
+    let state = State::new(walk.name.to_owned(), walk.flags, payload, walk.trusted);
     state.event_id.set(Some(id));
     state.dispatching.set(true);
     let event = IncaEvent {
@@ -47,19 +45,7 @@ pub(super) fn create<'js>(
             detail: None,
         },
     };
-    new_event(ctx, kind_of(walk.payload), event)
-}
-
-/// The kind of a host event that carries `payload`.
-fn kind_of(payload: &EventPayload) -> &'static str {
-    match payload {
-        EventPayload::None => EVENT,
-        EventPayload::Focus { .. } => FOCUS,
-        EventPayload::Mouse(mouse) if mouse.pointer.is_some() => POINTER,
-        EventPayload::Mouse(_) => MOUSE,
-        EventPayload::Wheel(_) => WHEEL,
-        EventPayload::Key(_) => KEYBOARD,
-    }
+    new_event(ctx, kind, event)
 }
 
 /// The other node `payload` names, if any.
@@ -170,7 +156,7 @@ impl<'js> IntoJsFunc<'js, ()> for Construct {
             cancelable: read("cancelable")?,
             composed: read("composed")?,
         };
-        let state = State::new(event_type, flags, EventPayload::None, false);
+        let state = State::new(event_type, flags, Payload::None, false);
         let (kind, detail) = if self.custom {
             let detail = init
                 .as_ref()

@@ -21,14 +21,15 @@ use std::cell::Cell;
 use std::sync::OnceLock;
 use std::time::Instant;
 
+use inca_gpui::NodeId;
 pub(crate) use inca_gpui::event_sink::Flags;
-use inca_gpui::{EventPayload, NodeId};
 use inca_jsenv::{FunctionAccessor, vault};
 use rquickjs::function::This;
 use rquickjs::object::Property;
 use rquickjs::{Array, Class, Ctx, Exception, Function, IntoJs, Object, Result as JsResult, Value};
 
 mod construct;
+mod key_code;
 mod members;
 mod payload;
 mod record;
@@ -45,25 +46,28 @@ const IS_TRUSTED: &str = "isTrusted";
 /// The kind of scroll events and of events built with `new Event`. A kind is
 /// the store key of its prototype, `Event.prototype` for this one.
 const EVENT: &str = "event";
+/// The kind of the prototype that the focus, mouse and keyboard prototypes inherit from. Its
+/// prototype inherits from the [`EVENT`] one.
+const UI: &str = "ui";
 /// The kind of events built with `new CustomEvent`. Its prototype inherits
 /// from the [`EVENT`] one.
 const CUSTOM: &str = "custom";
-/// The kind of focus events. Its prototype inherits from the [`EVENT`] one.
+/// The kind of focus events. Its prototype inherits from the [`UI`] one.
 const FOCUS: &str = "focus";
 /// The kind of mouse events with no pointer source. Its prototype inherits
-/// from the [`EVENT`] one.
+/// from the [`UI`] one.
 const MOUSE: &str = "mouse";
 /// The kind of mouse events with a pointer source: `click`, `auxclick` and
 /// `contextmenu`. Its prototype inherits from the [`MOUSE`] one.
 const POINTER: &str = "pointer";
 /// The kind of wheel events. Its prototype inherits from the [`MOUSE`] one.
 const WHEEL: &str = "wheel";
-/// The kind of key events. Its prototype inherits from the [`EVENT`] one.
+/// The kind of key events. Its prototype inherits from the [`UI`] one.
 const KEYBOARD: &str = "keyboard";
 
 impl State {
     /// The state of an idle event.
-    fn new(name: String, flags: Flags, payload: EventPayload, trusted: bool) -> Self {
+    fn new(name: String, flags: Flags, payload: payload::Payload, trusted: bool) -> Self {
         Self {
             name,
             flags,
@@ -111,12 +115,14 @@ pub(crate) fn install(ctx: &Ctx<'_>) -> JsResult<()> {
     let store = Object::new(ctx.clone())?;
     store.set_prototype(None)?;
     let event = members::event_prototype(ctx)?;
-    let mouse = payload::mouse_prototype(ctx, &event)?;
+    let ui = payload::ui_prototype(ctx, &event)?;
+    let mouse = payload::mouse_prototype(ctx, &ui)?;
     store.set(POINTER, payload::pointer_prototype(ctx, &mouse)?)?;
     store.set(WHEEL, payload::wheel_prototype(ctx, &mouse)?)?;
     store.set(MOUSE, mouse)?;
-    store.set(KEYBOARD, payload::keyboard_prototype(ctx, &event)?)?;
-    store.set(FOCUS, payload::focus_prototype(ctx, &event)?)?;
+    store.set(KEYBOARD, payload::keyboard_prototype(ctx, &ui)?)?;
+    store.set(FOCUS, payload::focus_prototype(ctx, &ui)?)?;
+    store.set(UI, ui)?;
     store.set(CUSTOM, construct::constructors(ctx, &event)?)?;
     store.set(EVENT, event)?;
     store.set(IS_TRUSTED, members::is_trusted(ctx)?)?;

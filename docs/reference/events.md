@@ -56,6 +56,7 @@ and `returnValue`. The three flags depend on the event:
 | `focusin`, `focusout`            | yes     | no         | yes      |
 
 - `timeStamp` counts milliseconds since the host started.
+- The `view` of a mouse, keyboard or focus event is `null`.
 - `incajs` exports the type `IncaEvent` for these fields. The fields of a
   mouse, wheel or keyboard event are not in it: a listener declares them, such
   as `(event: IncaEvent & { key: string }) => void`.
@@ -113,7 +114,9 @@ focused.
 | `location`    | 0                                               |
 | `isComposing` | `false`                                         |
 
-- `code` is not set. `key` identifies the key.
+- `code` is an empty string. `key` identifies the key.
+- `keyCode` and `which` give the code of `key` on a US keyboard layout, and 0
+  for a key outside it, such as `é`.
 - `getModifierState()` accepts Control, Shift, Alt, Meta and Accel. Accel is
   Meta on macOS and Control elsewhere.
 - Pressing a modifier alone fires `keydown` and `keyup` with its name as

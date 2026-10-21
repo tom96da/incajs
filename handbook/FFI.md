@@ -268,15 +268,22 @@ of core answers. Rust looks it up by name on each walk and keeps nothing.
   a method called on any other receiver throws a `TypeError`. The prototypes
   sit in the realm's vault.
 - Each kind of event inherits from a prototype of its kind that holds the
-  getters of its payload fields: mouse events from a mouse prototype,
-  `click`, `auxclick` and `contextmenu` from a pointer prototype and `wheel`
-  from a wheel prototype (both inherit from the mouse one), key events from a
-  keyboard prototype and focus events from a focus prototype. The mouse and
-  keyboard prototypes hold their own `getModifierState`. A field getter or
-  `getModifierState` throws a `TypeError` on an event of another kind. Scroll
-  events and events built with `new Event` inherit from `Event.prototype`, and
-  events built with `new CustomEvent` from `CustomEvent.prototype`, which holds
-  the `detail` getter.
+  getters of its payload fields. A UI prototype holds `view`, `detail` and
+  `which`, and the focus, mouse and keyboard prototypes inherit from it.
+  `click`, `auxclick` and `contextmenu` inherit from a pointer prototype and
+  `wheel` from a wheel prototype, both children of the mouse one. The mouse
+  and keyboard prototypes hold their own `getModifierState`. A field getter
+  or `getModifierState` throws a `TypeError` on an event of another kind.
+  Scroll events and events built with `new Event` inherit from
+  `Event.prototype`, and events built with `new CustomEvent` from
+  `CustomEvent.prototype`, which holds the `detail` getter.
+  - The walk turns the gpui payload into the payload of the event once, when
+    it creates the event (`Payload::from_host`). `which` is `button + 1` on
+    `mousedown`, `mouseup`, `click`, `dblclick`, `auxclick` and
+    `contextmenu`, the lowest held button index + 1 on the other mouse events
+    and 0 with none held, 0 on `wheel`, `keyCode` on key events and 0 on
+    focus events. `view` is `null` and `detail` is 0 on key and focus events.
+    `keyCode` comes from `key` on a US layout (`event/key_code.rs`).
 - GPUI's `platform` modifier becomes `metaKey` and `function` is dropped.
   `getModifierState` converts its argument to a string and reads those four
   fields.

@@ -14,6 +14,21 @@ fn pointer_click() -> EventPayload {
     })
 }
 
+fn mouse_with_button(button: u8) -> EventPayload {
+    EventPayload::Mouse(MousePayload {
+        button,
+        ..MousePayload::at(at(1.0, 1.0), gpui::Modifiers::none())
+    })
+}
+
+fn mouse_button(button: u8) -> EventPayload {
+    EventPayload::Mouse(MousePayload {
+        button,
+        buttons: inca_gpui::buttons_mask(button),
+        ..MousePayload::at(at(1.0, 1.0), gpui::Modifiers::none())
+    })
+}
+
 #[gpui::test]
 fn a_host_event_owns_only_is_trusted(cx: &mut TestAppContext) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
@@ -121,18 +136,22 @@ fn a_field_is_a_getter_on_the_prototype_of_its_kind(
 
 #[gpui_cases]
 #[gpui::test]
-#[case::mouse("mousedown", mouse_at(1.0, 1.0), "parent === Event.prototype")]
+#[case::mouse(
+    "mousedown",
+    mouse_at(1.0, 1.0),
+    "Object.hasOwn(parent, 'which') && Object.getPrototypeOf(parent) === Event.prototype"
+)]
 #[case::pointer("click", pointer_click(), "Object.hasOwn(parent, 'clientX')")]
 #[case::wheel("wheel", wheel_at(1.0, 1.0), "Object.hasOwn(parent, 'clientX')")]
 #[case::keyboard(
     "keydown",
     key_payload(gpui::Modifiers::none()),
-    "parent === Event.prototype"
+    "Object.hasOwn(parent, 'which') && Object.getPrototypeOf(parent) === Event.prototype"
 )]
 #[case::focus(
     "focus",
     EventPayload::Focus { related_target: None },
-    "parent === Event.prototype"
+    "Object.hasOwn(parent, 'which') && Object.getPrototypeOf(parent) === Event.prototype"
 )]
 fn the_prototype_of_a_kind_inherits_from_its_parent(
     cx: &mut TestAppContext,
@@ -213,6 +232,7 @@ fn a_field_getter_throws_type_error_for_an_event_of_another_kind(cx: &mut TestAp
                 read(kept.keydown, 'key', kept.mousedown),
                 read(kept.focus, 'relatedTarget', kept.mousedown),
                 read(kept.mousedown, 'relatedTarget', kept.focus),
+                read(kept.keydown, 'which', new Event('x')),
                 read(new CustomEvent('x'), 'detail', new Event('x'))
             ];
         })()
@@ -221,7 +241,7 @@ fn a_field_getter_throws_type_error_for_an_event_of_another_kind(cx: &mut TestAp
 
     assert_eq!(
         got,
-        serde_json::json!([true, true, true, true, true, true, true])
+        serde_json::json!([true, true, true, true, true, true, true, true])
     );
 }
 
@@ -360,5 +380,148 @@ fn the_event_id_descriptor_reads_configurable_only() {
     assert_eq!(
         got,
         serde_json::json!(["function", "undefined", false, true])
+    );
+}
+
+#[gpui_cases]
+#[gpui::test]
+#[case::key_code("keyCode", serde_json::json!(65))]
+#[case::which("which", serde_json::json!(65))]
+#[case::char_code("charCode", serde_json::json!(0))]
+#[case::code("code", serde_json::json!(""))]
+fn a_host_key_event_reads_each_legacy_field(
+    cx: &mut TestAppContext,
+    key: &str,
+    want: serde_json::Value,
+) {
+    let (dispatcher, host, _reported) = dispatcher_with_engine();
+    let node = host.borrow_mut().tree.create_node("div").unwrap();
+    listen(
+        &dispatcher,
+        node,
+        "keydown",
+        &format!("(e) => out.push(e.{key})"),
+    );
+
+    let out = fire_and_read(
+        cx,
+        &dispatcher,
+        node,
+        "keydown",
+        &key_payload(gpui::Modifiers::none()),
+    );
+
+    assert_eq!(out, serde_json::json!([want]));
+}
+
+#[gpui::test]
+fn the_view_of_a_host_event_reads_null(cx: &mut TestAppContext) {
+    let (dispatcher, host, _reported) = dispatcher_with_engine();
+    let node = host.borrow_mut().tree.create_node("div").unwrap();
+    listen(
+        &dispatcher,
+        node,
+        "mousedown",
+        "(e) => out.push(e.view === null)",
+    );
+
+    let out = fire_and_read(cx, &dispatcher, node, "mousedown", &mouse_at(1.0, 1.0));
+
+    assert_eq!(out, serde_json::json!([true]));
+}
+
+#[gpui_cases]
+#[gpui::test]
+#[case::button_event("mouseup", mouse_button(2), 3)]
+#[case::pointer_click("click", pointer_click(), 1)]
+#[case::dblclick("dblclick", mouse_with_button(2), 3)]
+#[case::auxclick("auxclick", mouse_with_button(2), 3)]
+#[case::contextmenu("contextmenu", mouse_with_button(2), 3)]
+#[case::focus("focus", EventPayload::Focus { related_target: None }, 0)]
+fn the_which_of_a_host_event_reads_its_button_or_zero(
+    cx: &mut TestAppContext,
+    event: &str,
+    payload: EventPayload,
+    want: u32,
+) {
+    let (dispatcher, host, _reported) = dispatcher_with_engine();
+    let node = host.borrow_mut().tree.create_node("div").unwrap();
+    listen(&dispatcher, node, event, "(e) => out.push(e.which)");
+
+    let out = fire_and_read(cx, &dispatcher, node, event, &payload);
+
+    assert_eq!(out, serde_json::json!([want]));
+}
+
+/// One body: the presses set the held-button tracker that the move reads.
+#[gpui_cases]
+#[gpui::test]
+#[case::right(&[2], 3)]
+#[case::middle_before_right(&[2, 1], 2)]
+fn a_move_names_its_lowest_held_button_in_which(
+    cx: &mut TestAppContext,
+    pressed: &[u8],
+    want: u32,
+) {
+    let (dispatcher, host, _reported) = dispatcher_with_engine();
+    let node = host.borrow_mut().tree.create_node("div").unwrap();
+    listen(&dispatcher, node, "mousemove", "(e) => out.push(e.which)");
+    let cx = cx.add_empty_window();
+    cx.update(|window, cx| {
+        for &button in pressed {
+            dispatcher.fire(node, "mousedown", &mouse_button(button), window, cx);
+        }
+        dispatcher.fire(node, "mousemove", &mouse_at(1.0, 1.0), window, cx);
+    });
+
+    assert_eq!(read_out(&dispatcher), serde_json::json!([want]));
+}
+
+#[gpui_cases]
+#[gpui::test]
+#[case::keyboard("keydown", key_payload(gpui::Modifiers::none()))]
+#[case::focus("focus", EventPayload::Focus { related_target: None })]
+fn the_detail_of_a_host_key_or_focus_event_reads_zero(
+    cx: &mut TestAppContext,
+    event: &str,
+    payload: EventPayload,
+) {
+    let (dispatcher, host, _reported) = dispatcher_with_engine();
+    let node = host.borrow_mut().tree.create_node("div").unwrap();
+    listen(&dispatcher, node, event, "(e) => out.push(e.detail)");
+
+    let out = fire_and_read(cx, &dispatcher, node, event, &payload);
+
+    assert_eq!(out, serde_json::json!([0]));
+}
+
+/// One body: the presses set the held-button tracker that the next press and the wheel read.
+#[gpui_cases]
+#[gpui::test]
+#[case::mousedown("mousedown", &[1], mouse_button(2), 3)]
+#[case::wheel("wheel", &[2], wheel_at(1.0, 1.0), 0)]
+fn which_of_a_press_or_a_wheel_skips_the_held_buttons(
+    cx: &mut TestAppContext,
+    event: &str,
+    pressed: &[u8],
+    payload: EventPayload,
+    want: u32,
+) {
+    let (dispatcher, host, _reported) = dispatcher_with_engine();
+    let node = host.borrow_mut().tree.create_node("div").unwrap();
+    listen(&dispatcher, node, event, "(e) => out.push(e.which)");
+    let cx = cx.add_empty_window();
+    cx.update(|window, cx| {
+        for &button in pressed {
+            dispatcher.fire(node, "mousedown", &mouse_button(button), window, cx);
+        }
+        dispatcher.fire(node, event, &payload, window, cx);
+    });
+
+    let out = read_out(&dispatcher);
+
+    assert_eq!(
+        out.as_array().unwrap().last().unwrap(),
+        &serde_json::json!(want)
     );
 }

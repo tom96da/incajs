@@ -10,12 +10,12 @@
 
 use std::cell::{Cell, RefCell};
 
-use inca_gpui::EventPayload;
 use rquickjs::class::{JsClass, Readable, Trace, Tracer};
 use rquickjs::function::Constructor;
 use rquickjs::{Ctx, JsLifetime, Object, Result as JsResult, Value};
 
 use super::Flags;
+use super::payload::Payload;
 
 /// An event: the object every listener of one walk receives, and the state
 /// its getters and methods read.
@@ -49,7 +49,7 @@ pub(super) struct Held<'js> {
 pub(super) struct State {
     pub(super) name: String,
     pub(super) flags: Flags,
-    pub(super) payload: EventPayload,
+    pub(super) payload: Payload,
     pub(super) time_stamp: f64,
     pub(super) trusted: Cell<bool>,
     /// The number of the last walk that reached a listener.
