@@ -56,10 +56,10 @@ export function createIncaElement(
       }
       return false;
     },
-    addEventListener: (...args) => {
+    addEventListener: (...args: Parameters<typeof target.addEventListener>) => {
       if (!isDestroyed(element)) target.addEventListener(...args);
     },
-    removeEventListener: (...args) => {
+    removeEventListener: (...args: Parameters<typeof target.removeEventListener>) => {
       if (!isDestroyed(element)) target.removeEventListener(...args);
     },
     dispatchEvent: (event) => isDestroyed(element) || target.dispatchEvent(event),

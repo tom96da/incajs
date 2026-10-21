@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { addEventListener, dispatchEvent, removeEventListener } from "./events.mts";
-import type { IncaEventTarget, ListenerOptions, NodeId } from "./types.mts";
+import type { EventListenerOrObject, IncaEventTarget, ListenerOptions, NodeId } from "./types.mts";
 
 /**
  * Builds the listener methods of an event target that stands for one node.
@@ -17,7 +17,11 @@ export function createEventTarget(
   passiveByDefault: readonly string[] = [],
 ): IncaEventTarget {
   return {
-    addEventListener(type, listener, options) {
+    addEventListener(
+      type: string,
+      listener: EventListenerOrObject<never, never> | null,
+      options?: boolean | ListenerOptions,
+    ) {
       const given: ListenerOptions =
         typeof options === "boolean" ? { capture: options } : (options ?? {});
       addEventListener(nodeId(), type, listener, {
@@ -26,7 +30,11 @@ export function createEventTarget(
       });
     },
 
-    removeEventListener(type, listener, options) {
+    removeEventListener(
+      type: string,
+      listener: EventListenerOrObject<never, never> | null,
+      options?: boolean | Pick<ListenerOptions, "capture">,
+    ) {
       const capture = typeof options === "boolean" ? options : options?.capture;
       removeEventListener(nodeId(), type, listener, { capture });
     },

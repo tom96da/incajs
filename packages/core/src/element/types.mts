@@ -1,13 +1,13 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import type { IncaEvent, IncaEventTarget, NodeId } from "../types.mts";
+import type { IncaEvent, IncaEventMap, IncaEventTarget, NodeId } from "../types.mts";
 import type { HANDLER_EVENTS } from "./eventHandlers.mts";
 import type { RectLike } from "./geometry.mts";
 import type { ScrollIntoViewOptions, ScrollOptions } from "./scroll.mts";
 
 /** A function an event handler property holds, called with the element as `this` and the event. */
-export type EventHandler = (this: IncaElement, event: IncaEvent) => unknown;
+export type EventHandler<E = IncaEvent> = (this: IncaElement, event: E) => unknown;
 
 /**
  * The event handler properties, such as `onclick`, of the events the host dispatches, `focusin` and
@@ -21,7 +21,7 @@ export type EventHandlers = {
    * keeps that place, and `null` removes it. An object runs nothing. A handler that returns `false`
    * cancels the event. After the node is removed, assigning does nothing.
    */
-  [K in (typeof HANDLER_EVENTS)[number] as `on${K}`]: EventHandler | object | null;
+  [K in (typeof HANDLER_EVENTS)[number] as `on${K}`]: EventHandler<IncaEventMap[K]> | object | null;
 };
 
 /**

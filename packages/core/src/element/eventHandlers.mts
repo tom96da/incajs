@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import type { IncaEventTarget } from "../types.mts";
+import type { IncaEventMap, IncaEventTarget } from "../types.mts";
 import type { EventHandlers } from "./types.mts";
 
 /** The events whose handler property every element has. */
@@ -23,7 +23,7 @@ export const HANDLER_EVENTS = [
   "mouseup",
   "scroll",
   "wheel",
-] as const;
+] as const satisfies readonly (keyof IncaEventMap)[];
 
 /**
  * Defines the event handler properties on `handle`. A value assigned while a property holds `null`

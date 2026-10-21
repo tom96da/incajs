@@ -122,8 +122,8 @@ export interface StyleProps {
 }
 
 /**
- * An `Event` or `CustomEvent` built in this runtime. The host throws a
- * `TypeError` for any other value.
+ * An event built in this runtime with `Event`, `CustomEvent` or another
+ * event constructor. The host throws a `TypeError` for any other value.
  */
 export interface EventLike {
   readonly type: string;
@@ -158,9 +158,14 @@ export interface IncaEventTarget {
    * as `this` when the event fires
    * @param options - a {@link ListenerOptions}, or a boolean for `capture`
    */
+  addEventListener<K extends keyof IncaEventMap>(
+    type: K,
+    listener: EventListenerOrObject<IncaEventMap[K], this> | null,
+    options?: boolean | ListenerOptions,
+  ): void;
   addEventListener<E = IncaEvent>(
     type: string,
-    listener: EventListenerOrObject<E> | null,
+    listener: EventListenerOrObject<E, this> | null,
     options?: boolean | ListenerOptions,
   ): void;
 
@@ -171,27 +176,31 @@ export interface IncaEventTarget {
    * @param listener - the listener that was registered
    * @param options - an object with `capture`, or a boolean for `capture`
    */
+  removeEventListener<K extends keyof IncaEventMap>(
+    type: K,
+    listener: EventListenerOrObject<IncaEventMap[K], this> | null,
+    options?: boolean | Pick<ListenerOptions, "capture">,
+  ): void;
   removeEventListener<E = IncaEvent>(
     type: string,
-    listener: EventListenerOrObject<E> | null,
+    listener: EventListenerOrObject<E, this> | null,
     options?: boolean | Pick<ListenerOptions, "capture">,
   ): void;
 
   /**
-   * Dispatches an `Event` or `CustomEvent` at the target.
+   * Dispatches an event built with an event constructor at the target.
    * @param event - the event to dispatch
    * @returns `false` when a listener canceled a cancelable event, else `true`
-   * @throws TypeError when `event` is not an `Event` or `CustomEvent`
+   * @throws TypeError when `event` is not an event built with an event constructor
    * @throws DOMException named `InvalidStateError` when `event` is being dispatched
    */
   dispatchEvent(event: EventLike): boolean;
 }
 
 /**
- * The event object a listener receives. It carries these fields and the
- * fields of its event kind, which this type leaves out. A listener that reads
- * them declares its parameter with them, such as
- * `(event: IncaEvent & { key: string }) => void`.
+ * The fields every event carries. {@link IncaEventMap} gives the event type of
+ * each name the host dispatches, and a listener for any other name receives
+ * this type.
  *
  * See https://incajs.tom96da.com/reference/events for the event names the
  * host dispatches and their fields.
@@ -199,6 +208,14 @@ export interface IncaEventTarget {
 export interface IncaEvent {
   /** The event's name. */
   readonly type: string;
+  /** `0`, the {@link IncaEvent.eventPhase} outside a dispatch. */
+  readonly NONE: 0;
+  /** `1`, the {@link IncaEvent.eventPhase} on an ancestor while the event travels down. */
+  readonly CAPTURING_PHASE: 1;
+  /** `2`, the {@link IncaEvent.eventPhase} on the target. */
+  readonly AT_TARGET: 2;
+  /** `3`, the {@link IncaEvent.eventPhase} on an ancestor while the event travels up. */
+  readonly BUBBLING_PHASE: 3;
   /**
    * The element the event is about, or `window`. It is the deepest element
    * under the pointer for pointer events, the nearest common ancestor of the
@@ -215,11 +232,17 @@ export interface IncaEvent {
    * event has been handled. A listener function runs with it as `this`.
    */
   readonly currentTarget: IncaEventTarget | null;
-  /** Whether the event travels up from `target`. Fixed per event name. */
+  /**
+   * Whether the event travels up from `target`. Fixed per event name for the
+   * events the host dispatches.
+   */
   readonly bubbles: boolean;
-  /** Whether `preventDefault()` can cancel the event. Fixed per event name. */
+  /**
+   * Whether `preventDefault()` can cancel the event. Fixed per event name for
+   * the events the host dispatches.
+   */
   readonly cancelable: boolean;
-  /** Fixed per event name. */
+  /** Fixed per event name for the events the host dispatches. */
   readonly composed: boolean;
   /**
    * 1 on the ancestors of `target` while the event travels down, 2 where
@@ -250,14 +273,177 @@ export interface IncaEvent {
    * the event has been handled.
    */
   composedPath(): IncaEventTarget[];
+  /**
+   * Sets the type, `bubbles` and `cancelable` of an event that is not being
+   * dispatched, clears its stop and cancel flags and makes it untrusted. While
+   * the event is dispatched it does nothing.
+   */
+  initEvent(type: string, bubbles?: boolean, cancelable?: boolean): void;
+}
+
+/**
+ * The event object of a mouse, wheel, keyboard or focus event.
+ */
+export interface IncaUIEvent extends IncaEvent {
+  /**
+   * On the events the host dispatches, the click count of `mousedown`,
+   * `mouseup`, `click`, `dblclick` and `auxclick`, and `0` on the others.
+   */
+  readonly detail: number;
+  /** Always `null`. */
+  readonly view: null;
+  /**
+   * On the events the host dispatches: for `mousedown`, `mouseup`, `click`,
+   * `dblclick`, `auxclick` and `contextmenu`, `button + 1`. For `wheel`, `0`.
+   * For the other mouse events, the lowest held button plus 1, or `0` with no
+   * button held. For a keyboard event, `keyCode`. For a focus event, `0`.
+   */
+  readonly which: number;
+}
+
+/** The event object of `focus`, `blur`, `focusin` and `focusout`. */
+export interface IncaFocusEvent extends IncaUIEvent {
+  /**
+   * The element gaining focus for `blur` and `focusout`, the element losing
+   * it for `focus` and `focusin`, or `null`.
+   */
+  readonly relatedTarget: IncaEventTarget | null;
+}
+
+/** The event object of the mouse events. */
+export interface IncaMouseEvent extends IncaUIEvent {
+  readonly screenX: number;
+  readonly screenY: number;
+  /** The pointer's position in the window. */
+  readonly clientX: number;
+  /** The pointer's position in the window. */
+  readonly clientY: number;
+  /** The same as {@link IncaMouseEvent.clientX}. */
+  readonly pageX: number;
+  /** The same as {@link IncaMouseEvent.clientY}. */
+  readonly pageY: number;
+  /** The same as {@link IncaMouseEvent.clientX}. */
+  readonly x: number;
+  /** The same as {@link IncaMouseEvent.clientY}. */
+  readonly y: number;
+  /** On the events the host dispatches, the pointer's position from the padding edge of `target`. */
+  readonly offsetX: number;
+  /** On the events the host dispatches, the pointer's position from the padding edge of `target`. */
+  readonly offsetY: number;
+  /** On the events the host dispatches, the pointer's travel since the previous `mousemove`, and `0` on other events. */
+  readonly movementX: number;
+  /** On the events the host dispatches, the pointer's travel since the previous `mousemove`, and `0` on other events. */
+  readonly movementY: number;
+  /** The button the event is about: `0` left, `1` middle, `2` right, `3` back, `4` forward. */
+  readonly button: number;
+  /** Every button held, as a bitmask: `1` left, `2` right, `4` middle, `8` back, `16` forward. */
+  readonly buttons: number;
+  readonly ctrlKey: boolean;
+  readonly shiftKey: boolean;
+  readonly altKey: boolean;
+  readonly metaKey: boolean;
+  /**
+   * The element the pointer came from for `mouseover` and `mouseenter`, the
+   * element it went to for `mouseout` and `mouseleave`, or `null`.
+   */
+  readonly relatedTarget: IncaEventTarget | null;
+  /**
+   * Whether the modifier `key` is held: `"Control"`, `"Shift"`, `"Alt"`,
+   * `"Meta"`, or `"Accel"` (Meta on macOS, Control elsewhere). Any other name
+   * gives `false`.
+   */
+  getModifierState(key: string): boolean;
+}
+
+/** The event object of `click`, `auxclick` and `contextmenu`. */
+export interface IncaPointerEvent extends IncaMouseEvent {
+  /** On the events the host dispatches, `1` for the mouse and `-1` for the click of a key. */
+  readonly pointerId: number;
+  readonly width: number;
+  readonly height: number;
+  /** On the events the host dispatches, `0.5` while a button is held, else `0`. */
+  readonly pressure: number;
+  /** On the events the host dispatches, `"mouse"`, or `""` for the click of a key. */
+  readonly pointerType: string;
+  /** On the events the host dispatches, `true` for the mouse and `false` for the click of a key. */
+  readonly isPrimary: boolean;
+}
+
+/** The event object of `wheel`. */
+export interface IncaWheelEvent extends IncaMouseEvent {
+  readonly deltaX: number;
+  readonly deltaY: number;
+  /** `0` on the events the host dispatches. */
+  readonly deltaZ: number;
+  /** `0` for pixels, `1` for lines. */
+  readonly deltaMode: number;
+  readonly DOM_DELTA_PIXEL: 0;
+  readonly DOM_DELTA_LINE: 1;
+  readonly DOM_DELTA_PAGE: 2;
+}
+
+/** The event object of `keydown` and `keyup`. */
+export interface IncaKeyboardEvent extends IncaUIEvent {
+  /** The key's name, such as `"Enter"`, `"F5"` or the typed character. */
+  readonly key: string;
+  /** `""` on the events the host dispatches. */
+  readonly code: string;
+  /** `0` on the events the host dispatches. */
+  readonly location: number;
+  /** Whether the key press is an auto-repeat. */
+  readonly repeat: boolean;
+  /** `false` on the events the host dispatches. */
+  readonly isComposing: boolean;
+  /** The key's code on a US keyboard layout, and `0` for a key outside it. */
+  readonly keyCode: number;
+  /** `0` on the events the host dispatches. */
+  readonly charCode: number;
+  readonly ctrlKey: boolean;
+  readonly shiftKey: boolean;
+  readonly altKey: boolean;
+  readonly metaKey: boolean;
+  readonly DOM_KEY_LOCATION_STANDARD: 0;
+  readonly DOM_KEY_LOCATION_LEFT: 1;
+  readonly DOM_KEY_LOCATION_RIGHT: 2;
+  readonly DOM_KEY_LOCATION_NUMPAD: 3;
+  /**
+   * Whether the modifier `key` is held: `"Control"`, `"Shift"`, `"Alt"`,
+   * `"Meta"`, or `"Accel"` (Meta on macOS, Control elsewhere). Any other name
+   * gives `false`.
+   */
+  getModifierState(key: string): boolean;
+}
+
+/** The event object of each event name the host dispatches. */
+export interface IncaEventMap {
+  auxclick: IncaPointerEvent;
+  blur: IncaFocusEvent;
+  click: IncaPointerEvent;
+  contextmenu: IncaPointerEvent;
+  dblclick: IncaMouseEvent;
+  focus: IncaFocusEvent;
+  focusin: IncaFocusEvent;
+  focusout: IncaFocusEvent;
+  keydown: IncaKeyboardEvent;
+  keyup: IncaKeyboardEvent;
+  mousedown: IncaMouseEvent;
+  mouseenter: IncaMouseEvent;
+  mouseleave: IncaMouseEvent;
+  mousemove: IncaMouseEvent;
+  mouseout: IncaMouseEvent;
+  mouseover: IncaMouseEvent;
+  mouseup: IncaMouseEvent;
+  scroll: IncaEvent;
+  wheel: IncaWheelEvent;
 }
 
 /**
  * Signature of a callback registered via `addEventListener`. It receives the
  * event, an {@link IncaEvent} unless the parameter declares another type, and
- * runs with the event's `currentTarget` as `this`.
+ * runs with the event's `currentTarget`, the target it was registered on, as
+ * `this`.
  */
-export type EventListener<E = IncaEvent> = (this: IncaEventTarget, event: E) => void;
+export type EventListener<E = IncaEvent, T = IncaEventTarget> = (this: T, event: E) => void;
 
 /**
  * An object whose `handleEvent` method receives the events, called with the
@@ -271,4 +457,6 @@ export interface EventListenerObject<E = IncaEvent> {
  * What `addEventListener` accepts as a listener: an {@link EventListener} or
  * an {@link EventListenerObject}.
  */
-export type EventListenerOrObject<E = IncaEvent> = EventListener<E> | EventListenerObject<E>;
+export type EventListenerOrObject<E = IncaEvent, T = IncaEventTarget> =
+  | EventListener<E, T>
+  | EventListenerObject<E>;

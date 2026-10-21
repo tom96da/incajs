@@ -31,7 +31,7 @@ function tracking(listener: HostCallback): HostCallback {
  * registration keeps its other options. A `null` listener is ignored.
  *
  * Any event name is accepted, and it fires when the host dispatches that name.
- * See the `IncaEvent` type for the fields an event carries.
+ * `IncaEventMap` gives the event type of each name the host dispatches.
  * @param nodeId - the node to listen on
  * @param event - the event name (e.g. `"click"`)
  * @param listener - a function, called with the event's `currentTarget` as
@@ -47,7 +47,7 @@ function tracking(listener: HostCallback): HostCallback {
 export function addEventListener(
   nodeId: NodeId,
   event: string,
-  listener: EventListenerOrObject<never> | null,
+  listener: EventListenerOrObject<never, never> | null,
   options: ListenerOptions = {},
 ): void {
   if (listener === null || listener === undefined) return;
@@ -87,7 +87,7 @@ export function addEventListener(
 export function removeEventListener(
   nodeId: NodeId,
   event: string,
-  listener: EventListenerOrObject<never> | null,
+  listener: EventListenerOrObject<never, never> | null,
   options: Pick<ListenerOptions, "capture"> = {},
 ): void {
   if (listener === null || listener === undefined) return;
@@ -105,7 +105,7 @@ export function removeEventListener(
  * @returns `false` when a listener canceled a cancelable event, else `true`
  * @throws TypeError when `nodeId` is malformed
  * @throws TypeError when `nodeId` names no node
- * @throws TypeError when `event` is not an `Event` or `CustomEvent`
+ * @throws TypeError when `event` is not an event built with an event constructor
  * @throws DOMException named `InvalidStateError` when `event` is being dispatched
  */
 export function dispatchEvent(nodeId: NodeId, event: EventLike): boolean {

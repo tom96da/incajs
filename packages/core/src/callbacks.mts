@@ -9,12 +9,15 @@ import type { CallbackId, EventListenerOrObject, NodeId } from "./types.mts";
  * Finds the id of a registration from its group and listener, when a listener
  * is added or removed.
  */
-const idsByGroup = new Map<string, Map<EventListenerOrObject<never>, CallbackId>>();
+const idsByGroup = new Map<string, Map<EventListenerOrObject<never, never>, CallbackId>>();
 /**
  * Finds the group and listener of a registration from its id, when the host
  * reports the id released.
  */
-const ownerById = new Map<CallbackId, { group: string; listener: EventListenerOrObject<never> }>();
+const ownerById = new Map<
+  CallbackId,
+  { group: string; listener: EventListenerOrObject<never, never> }
+>();
 
 /** The table the host creates at install; a realm without the host gets a plain one. */
 const callables = (): Record<CallbackId, HostCallback> => (globalThis.__inca_callbacks__ ??= {});
@@ -28,7 +31,7 @@ const callables = (): Record<CallbackId, HostCallback> => (globalThis.__inca_cal
  */
 export function addCallback(
   group: string,
-  listener: EventListenerOrObject<never>,
+  listener: EventListenerOrObject<never, never>,
   callbackId: CallbackId,
   callable: HostCallback,
 ): void {
@@ -46,7 +49,7 @@ export function addCallback(
  */
 export function callbackIdFor(
   group: string,
-  listener: EventListenerOrObject<never>,
+  listener: EventListenerOrObject<never, never>,
 ): CallbackId | undefined {
   return idsByGroup.get(group)?.get(listener);
 }
