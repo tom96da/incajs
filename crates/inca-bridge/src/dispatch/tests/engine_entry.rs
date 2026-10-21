@@ -313,14 +313,19 @@ fn get_modifier_state_lives_on_the_prototype_of_its_kind(
 
 #[gpui_cases]
 #[gpui::test]
-#[case::mouse("click", mouse_at(1.0, 1.0))]
-#[case::wheel("wheel", wheel_at(1.0, 1.0))]
-#[case::key("keydown", key_payload(gpui::Modifiers::default()))]
-#[case::focus("focus", EventPayload::Focus { related_target: None })]
-fn a_host_event_reads_event_as_its_string_tag(
+#[case::mouse("click", mouse_at(1.0, 1.0), "[object MouseEvent]")]
+#[case::wheel("wheel", wheel_at(1.0, 1.0), "[object WheelEvent]")]
+#[case::key(
+    "keydown",
+    key_payload(gpui::Modifiers::default()),
+    "[object KeyboardEvent]"
+)]
+#[case::focus("focus", EventPayload::Focus { related_target: None }, "[object FocusEvent]")]
+fn a_host_event_reads_its_class_as_its_string_tag(
     cx: &mut TestAppContext,
     event: &str,
     payload: EventPayload,
+    want: &str,
 ) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
     let node = host.borrow_mut().tree.create_node("div").unwrap();
@@ -333,7 +338,7 @@ fn a_host_event_reads_event_as_its_string_tag(
 
     let out = fire_and_read(cx, &dispatcher, node, event, &payload);
 
-    assert_eq!(out, serde_json::json!(["[object Event]"]));
+    assert_eq!(out, serde_json::json!([want]));
 }
 
 #[gpui::test]

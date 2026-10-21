@@ -7,13 +7,6 @@ use super::*;
 use inca_test_macros::gpui_cases;
 use rstest::rstest;
 
-fn pointer_click() -> EventPayload {
-    EventPayload::Mouse(MousePayload {
-        pointer: Some(PointerSource::Mouse),
-        ..MousePayload::at(at(1.0, 1.0), gpui::Modifiers::none())
-    })
-}
-
 fn mouse_with_button(button: u8) -> EventPayload {
     EventPayload::Mouse(MousePayload {
         button,
@@ -233,6 +226,7 @@ fn a_field_getter_throws_type_error_for_an_event_of_another_kind(cx: &mut TestAp
                 read(kept.focus, 'relatedTarget', kept.mousedown),
                 read(kept.mousedown, 'relatedTarget', kept.focus),
                 read(kept.keydown, 'which', new Event('x')),
+                read(kept.focus, 'relatedTarget', new UIEvent('x')),
                 read(new CustomEvent('x'), 'detail', new Event('x'))
             ];
         })()
@@ -241,7 +235,7 @@ fn a_field_getter_throws_type_error_for_an_event_of_another_kind(cx: &mut TestAp
 
     assert_eq!(
         got,
-        serde_json::json!([true, true, true, true, true, true, true, true])
+        serde_json::json!([true, true, true, true, true, true, true, true, true])
     );
 }
 

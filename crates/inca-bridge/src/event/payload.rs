@@ -9,7 +9,8 @@ use rquickjs::{Ctx, Function, IntoJs, Object, Result as JsResult, Value};
 
 use super::key_code::key_code;
 use super::{
-    EVENT, FOCUS, KEYBOARD, MOUSE, POINTER, WHEEL, child_of, field, method, other_kind, with_event,
+    EVENT, FOCUS, KEYBOARD, MOUSE, POINTER, WHEEL, child_of, constants, field, method, other_kind,
+    with_event,
 };
 use crate::bindings::convert::or_null;
 
@@ -18,6 +19,8 @@ pub(super) enum Payload {
     /// An event built with `new Event` or `new CustomEvent`, a scroll event and any event the
     /// host dispatches without data.
     None,
+    /// An event built with `new UIEvent`.
+    Ui(Ui),
     Focus(Ui),
     Mouse(Mouse),
     /// A mouse event with a pointer source: `click`, `auxclick` and `contextmenu`.
@@ -45,6 +48,7 @@ pub(super) struct Mouse {
     pub(super) offset_y: f64,
     pub(super) movement_x: f64,
     pub(super) movement_y: f64,
+    /// `-1` reads as 0.
     pub(super) button: i16,
     pub(super) buttons: u16,
     pub(super) modifiers: Modifiers,
@@ -90,6 +94,21 @@ const BUTTON_EVENTS: [&str; 6] = [
     "dblclick",
     "auxclick",
     "contextmenu",
+];
+
+/// The `deltaMode` constants on `WheelEvent` and its prototype.
+pub(super) const DELTA_MODES: [(&str, i32); 3] = [
+    ("DOM_DELTA_PIXEL", 0),
+    ("DOM_DELTA_LINE", 1),
+    ("DOM_DELTA_PAGE", 2),
+];
+
+/// The `location` constants on `KeyboardEvent` and its prototype.
+pub(super) const KEY_LOCATIONS: [(&str, i32); 4] = [
+    ("DOM_KEY_LOCATION_STANDARD", 0),
+    ("DOM_KEY_LOCATION_LEFT", 1),
+    ("DOM_KEY_LOCATION_RIGHT", 2),
+    ("DOM_KEY_LOCATION_NUMPAD", 3),
 ];
 
 impl Payload {
@@ -139,15 +158,15 @@ impl Payload {
         }
     }
 
-    /// The kind of event this payload belongs to: the store key of its prototype.
-    pub(super) fn kind(&self) -> &'static str {
-        match self {
-            Self::None => EVENT,
-            Self::Focus(_) => FOCUS,
-            Self::Mouse(_) => MOUSE,
-            Self::Pointer(..) => POINTER,
-            Self::Wheel(..) => WHEEL,
-            Self::Keyboard(..) => KEYBOARD,
+    /// The kind of a host event that carries `payload`: the store key of its prototype.
+    pub(super) fn host_kind(payload: &EventPayload) -> &'static str {
+        match payload {
+            EventPayload::None => EVENT,
+            EventPayload::Focus { .. } => FOCUS,
+            EventPayload::Mouse(mouse) if mouse.pointer.is_some() => POINTER,
+            EventPayload::Mouse(_) => MOUSE,
+            EventPayload::Wheel(_) => WHEEL,
+            EventPayload::Key(_) => KEYBOARD,
         }
     }
 }
@@ -245,7 +264,13 @@ const MOUSE_FIELDS: &[(&str, Read<Mouse>)] = &[
     ("shiftKey", |mouse| Field::Bool(mouse.modifiers.shift)),
     ("altKey", |mouse| Field::Bool(mouse.modifiers.alt)),
     ("metaKey", |mouse| Field::Bool(mouse.modifiers.platform)),
-    ("button", |mouse| Field::Number(mouse.button.into())),
+    ("button", |mouse| {
+        Field::Number(if mouse.button == -1 {
+            0.0
+        } else {
+            mouse.button.into()
+        })
+    }),
     ("buttons", |mouse| Field::Number(mouse.buttons.into())),
     // Equal to clientX/clientY: no host scrolling moves the page itself.
     ("pageX", |mouse| Field::Number(mouse.client_x)),
@@ -294,7 +319,7 @@ const KEY_FIELDS: &[(&str, Read<Keyboard>)] = &[
 /// The UI fields of `payload`.
 fn ui_of(payload: &Payload) -> Option<&Ui> {
     match payload {
-        Payload::Focus(ui) | Payload::Keyboard(ui, _) => Some(ui),
+        Payload::Ui(ui) | Payload::Focus(ui) | Payload::Keyboard(ui, _) => Some(ui),
         Payload::Mouse(mouse) | Payload::Pointer(mouse, _) | Payload::Wheel(mouse, _) => {
             Some(&mouse.ui)
         }
@@ -364,6 +389,7 @@ pub(super) fn pointer_prototype<'js>(ctx: &Ctx<'js>, mouse: &Object<'js>) -> JsR
 pub(super) fn wheel_prototype<'js>(ctx: &Ctx<'js>, mouse: &Object<'js>) -> JsResult<Object<'js>> {
     let proto = child_of(ctx, mouse)?;
     define_fields(ctx, &proto, wheel_of, WHEEL_FIELDS)?;
+    constants(&proto, &DELTA_MODES)?;
     Ok(proto)
 }
 
@@ -371,6 +397,7 @@ pub(super) fn wheel_prototype<'js>(ctx: &Ctx<'js>, mouse: &Object<'js>) -> JsRes
 pub(super) fn keyboard_prototype<'js>(ctx: &Ctx<'js>, ui: &Object<'js>) -> JsResult<Object<'js>> {
     let proto = child_of(ctx, ui)?;
     define_fields(ctx, &proto, key_of, KEY_FIELDS)?;
+    constants(&proto, &KEY_LOCATIONS)?;
     modifier_state(ctx, &proto, |payload| {
         key_of(payload).map(|key| key.modifiers)
     })?;

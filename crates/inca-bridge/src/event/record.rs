@@ -39,16 +39,17 @@ pub(super) struct Held<'js> {
     /// What stands for the other node of a mouse or focus event.
     pub(super) related: Option<Value<'js>>,
     /// The `detail` of a `CustomEvent`, `None` for any other event.
-    pub(super) detail: Option<Value<'js>>,
+    pub(super) detail: RefCell<Option<Value<'js>>>,
 }
 
 /// The fields of an [`IncaEvent`] that hold no JS value. It has no lifetime
 /// parameter, so a JS value cannot be added here. A walk sets the cells
-/// between listener calls.
+/// between listener calls. `initEvent` sets the type and the flags of an idle
+/// event.
 #[derive(JsLifetime)]
 pub(super) struct State {
-    pub(super) name: String,
-    pub(super) flags: Flags,
+    pub(super) name: RefCell<String>,
+    pub(super) flags: Cell<Flags>,
     pub(super) payload: Payload,
     pub(super) time_stamp: f64,
     pub(super) trusted: Cell<bool>,
@@ -84,13 +85,15 @@ impl<'js> Trace<'js> for Held<'js> {
             detail,
         } = self;
         related.trace(tracer);
-        detail.trace(tracer);
         // rquickjs traces a `Readable` class even mid-walk, so each cell guards itself.
         if let Ok(target) = target.try_borrow() {
             target.trace(tracer);
         }
         if let Ok(path) = path.try_borrow() {
             path.trace(tracer);
+        }
+        if let Ok(detail) = detail.try_borrow() {
+            detail.trace(tracer);
         }
     }
 }
@@ -107,5 +110,40 @@ impl<'js> JsClass<'js> for IncaEvent<'js> {
 
     fn constructor(_ctx: &Ctx<'js>) -> JsResult<Option<Constructor<'js>>> {
         Ok(None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+
+    use rquickjs::Class;
+
+    use super::*;
+    use crate::test_support::engine_with_bindings;
+
+    #[test]
+    fn a_collection_with_the_cells_borrowed_does_not_abort() {
+        let (engine, _host) = engine_with_bindings();
+        engine
+            .eval::<()>(
+                r"
+                globalThis.detail = {};
+                globalThis.kept = new CustomEvent('x', { detail });
+                ",
+            )
+            .unwrap();
+
+        engine.with(|ctx| {
+            let this: Value = ctx.globals().get("kept").unwrap();
+            let event = Class::<IncaEvent>::from_value(&this).unwrap();
+            let event = event.borrow();
+            let _target = event.held.target.borrow_mut();
+            let _path = event.held.path.borrow_mut();
+            let _detail = event.held.detail.borrow_mut();
+            ctx.run_gc();
+        });
+
+        assert!(engine.eval::<bool>("kept.detail === detail").unwrap());
     }
 }

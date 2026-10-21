@@ -147,8 +147,7 @@ Shared throw rules, all as a `TypeError` except where noted:
   `undefined` or `null` throws.
 - `addEventListener` throws a `RangeError` after the last id.
 - `setAttribute` and `setStyle` throw for a `value` that is not a string, number or boolean.
-- `dispatchEvent` throws for an argument that is not an `Event` or
-  `CustomEvent` of the host.
+- `dispatchEvent` throws for an argument that is not an event of the host.
 - A `nodeId`, `parentId`, `childId` or `anchorId` that names no node
   throws, except in the calls that let go of something: `releaseNode`,
   `destroyNode`, `removeEventListener`, `blurNode` and the `childId` of
@@ -262,11 +261,11 @@ of core answers. Rust looks it up by name on each walk and keeps nothing.
   (`crates/inca-bridge/src/event/record.rs`), and its fields live in Rust.
   Events of every kind inherit from `Event.prototype`, which holds
   `stopPropagation`, `stopImmediatePropagation`, `preventDefault`,
-  `composedPath`, the phase constants (also on `Event`), the getters of the
-  base fields, `returnValue` and `cancelBubble` (settable, ToBoolean),
-  `srcElement` (reads `target`) and the non-enumerable `eventId`. A getter or
-  a method called on any other receiver throws a `TypeError`. The prototypes
-  sit in the realm's vault.
+  `composedPath`, `initEvent`, the phase constants (also on `Event`), the
+  getters of the base fields, `returnValue` and `cancelBubble` (settable,
+  ToBoolean), `srcElement` (reads `target`) and the non-enumerable `eventId`.
+  A getter or a method called on any other receiver throws a `TypeError`. The
+  prototypes sit in the realm's vault.
 - Each kind of event inherits from a prototype of its kind that holds the
   getters of its payload fields. A UI prototype holds `view`, `detail` and
   `which`, and the focus, mouse and keyboard prototypes inherit from it.
@@ -275,8 +274,9 @@ of core answers. Rust looks it up by name on each walk and keeps nothing.
   and keyboard prototypes hold their own `getModifierState`. A field getter
   or `getModifierState` throws a `TypeError` on an event of another kind.
   Scroll events and events built with `new Event` inherit from
-  `Event.prototype`, and events built with `new CustomEvent` from
-  `CustomEvent.prototype`, which holds the `detail` getter.
+  `Event.prototype`, events built with `new CustomEvent` from
+  `CustomEvent.prototype`, which holds the `detail` getter, and events built
+  with another constructor from the prototype of that class.
   - The walk turns the gpui payload into the payload of the event once, when
     it creates the event (`Payload::from_host`). `which` is `button + 1` on
     `mousedown`, `mouseup`, `click`, `dblclick`, `auxclick` and
@@ -437,12 +437,18 @@ of core answers. Rust looks it up by name on each walk and keeps nothing.
 
 #### Dispatching from script
 
-- `Event` and `CustomEvent` (`event/construct.rs`) build instances of the same
-  class, with `isTrusted` false and `target` `null`.
-  `Event(type, init)` and `CustomEvent(type, init)` need `new`, a type, and an
-  `init` that is an object, `null` or `undefined`. Any other call throws a
-  `TypeError`.
-  `CustomEvent.prototype` inherits from `Event.prototype`.
+- The global constructors `Event`, `CustomEvent`, `UIEvent`, `FocusEvent`,
+  `MouseEvent`, `PointerEvent`, `WheelEvent` and `KeyboardEvent`
+  (`event/construct.rs`, `CLASSES`) build instances of the same class with
+  the prototype of their kind, `isTrusted` false and `target` `null`. Each
+  needs `new`, a type, and an `init` that is an object, `null` or `undefined`.
+  Any other call throws a `TypeError`. Each constructor inherits from the
+  constructor of the parent prototype, and `CustomEvent.prototype` from
+  `Event.prototype`. The init members convert by their WebIDL type, and a
+  non-finite coordinate, delta or size throws a `TypeError`.
+- `initEvent()` and `initCustomEvent()` do nothing while the event is
+  dispatched. Otherwise they set the type and the two flags, clear the stop
+  and cancel flags and `isTrusted`, and keep `composed` and `target`.
 - `dispatchEvent` runs the walk in the caller's context, so a listener can
   call it. It sets `target` and `isTrusted`, reads `type` and the flags
   (`bubbles`, `cancelable`, `composed`) from the event and returns the negated

@@ -12,6 +12,7 @@ use inca_gpui::{EventSink, WheelPayload};
 
 mod base_fields;
 mod click;
+mod constructors;
 mod dispatch_event;
 mod engine_entry;
 mod frame;
@@ -41,6 +42,14 @@ fn at(x: f32, y: f32) -> gpui::Point<gpui::Pixels> {
 
 fn mouse_at(x: f32, y: f32) -> EventPayload {
     EventPayload::Mouse(MousePayload::at(at(x, y), gpui::Modifiers::none()))
+}
+
+/// A `click` from the mouse pointer.
+fn pointer_click() -> EventPayload {
+    EventPayload::Mouse(MousePayload {
+        pointer: Some(PointerSource::Mouse),
+        ..MousePayload::at(at(1.0, 1.0), gpui::Modifiers::none())
+    })
 }
 
 fn wheel_at(x: f32, y: f32) -> EventPayload {

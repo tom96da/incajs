@@ -117,7 +117,8 @@ type as in Node. These environment variables override the terminal check:
 ## Known issues
 
 - Output is not wrapped across lines.
-- An event prints as `Event { isTrusted: [Getter] }`. Its other fields are
+- An event prints as its class with only `isTrusted`, such as
+  `PointerEvent { isTrusted: [Getter] }` for a click. Its other fields are
   getters on its prototype.
 - Symbol-keyed properties and extra properties on arrays and errors are
   dropped. A `Promise`, a typed array and a `WeakMap` print as plain

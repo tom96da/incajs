@@ -10,21 +10,23 @@
 //! of an event. The walk creates the event, runs the capture listeners from
 //! the root down to the target and then the bubble listeners from the target
 //! up, all with that same object, then resets its `currentTarget` and
-//! `eventPhase`. The global constructors `Event` and `CustomEvent` build events
-//! of the same class, so a script can build an event and dispatch it. The
-//! prototypes sit in the realm's vault, and Rust keeps only their keys.
+//! `eventPhase`. The global constructors, `Event`, `MouseEvent` and the other
+//! kinds, build events of the same class, so a script can build an event and
+//! dispatch it. The prototypes sit in the realm's vault, and Rust keeps only
+//! their keys.
 //!
 //! The global `__inca_targets__` gives the objects that stand for the nodes of
 //! a walk.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::sync::OnceLock;
 use std::time::Instant;
 
 use inca_gpui::NodeId;
 pub(crate) use inca_gpui::event_sink::Flags;
 use inca_jsenv::{FunctionAccessor, vault};
-use rquickjs::function::This;
+use rquickjs::convert::Coerced;
+use rquickjs::function::{Opt, This};
 use rquickjs::object::Property;
 use rquickjs::{Array, Class, Ctx, Exception, Function, IntoJs, Object, Result as JsResult, Value};
 
@@ -46,8 +48,8 @@ const IS_TRUSTED: &str = "isTrusted";
 /// The kind of scroll events and of events built with `new Event`. A kind is
 /// the store key of its prototype, `Event.prototype` for this one.
 const EVENT: &str = "event";
-/// The kind of the prototype that the focus, mouse and keyboard prototypes inherit from. Its
-/// prototype inherits from the [`EVENT`] one.
+/// The kind of events built with `new UIEvent` and of the prototype that the focus, mouse and
+/// keyboard prototypes inherit from. Its prototype inherits from the [`EVENT`] one.
 const UI: &str = "ui";
 /// The kind of events built with `new CustomEvent`. Its prototype inherits
 /// from the [`EVENT`] one.
@@ -69,8 +71,8 @@ impl State {
     /// The state of an idle event.
     fn new(name: String, flags: Flags, payload: payload::Payload, trusted: bool) -> Self {
         Self {
-            name,
-            flags,
+            name: RefCell::new(name),
+            flags: Cell::new(flags),
             payload,
             time_stamp: time_stamp(),
             trusted: Cell::new(trusted),
@@ -96,7 +98,7 @@ impl<'js> IncaEvent<'js> {
     /// Whether a cancel request takes effect now: the event is cancelable and
     /// the running listener is active.
     fn cancels(&self) -> bool {
-        self.state.flags.cancelable && !self.state.passive.get()
+        self.state.flags.get().cancelable && !self.state.passive.get()
     }
 }
 
@@ -117,14 +119,21 @@ pub(crate) fn install(ctx: &Ctx<'_>) -> JsResult<()> {
     let event = members::event_prototype(ctx)?;
     let ui = payload::ui_prototype(ctx, &event)?;
     let mouse = payload::mouse_prototype(ctx, &ui)?;
-    store.set(POINTER, payload::pointer_prototype(ctx, &mouse)?)?;
-    store.set(WHEEL, payload::wheel_prototype(ctx, &mouse)?)?;
-    store.set(MOUSE, mouse)?;
-    store.set(KEYBOARD, payload::keyboard_prototype(ctx, &ui)?)?;
-    store.set(FOCUS, payload::focus_prototype(ctx, &ui)?)?;
-    store.set(UI, ui)?;
-    store.set(CUSTOM, construct::constructors(ctx, &event)?)?;
-    store.set(EVENT, event)?;
+    // In the order of `construct::CLASSES`.
+    let prototypes = [
+        event.clone(),
+        construct::custom_prototype(ctx, &event)?,
+        ui.clone(),
+        payload::focus_prototype(ctx, &ui)?,
+        mouse.clone(),
+        payload::pointer_prototype(ctx, &mouse)?,
+        payload::wheel_prototype(ctx, &mouse)?,
+        payload::keyboard_prototype(ctx, &ui)?,
+    ];
+    construct::constructors(ctx, &prototypes)?;
+    for ((kind, ..), proto) in construct::CLASSES.iter().zip(prototypes) {
+        store.set(*kind, proto)?;
+    }
     store.set(IS_TRUSTED, members::is_trusted(ctx)?)?;
     vault.set(STORE, store)
 }
@@ -242,6 +251,41 @@ fn child_of<'js>(ctx: &Ctx<'js>, parent: &Object<'js>) -> JsResult<Object<'js>> 
     let child = Object::new(ctx.clone())?;
     child.set_prototype(Some(parent))?;
     Ok(child)
+}
+
+/// Defines each of `list` on `object` as an enumerable, read-only, non-configurable constant.
+fn constants(object: &Object<'_>, list: &[(&str, i32)]) -> JsResult<()> {
+    for &(name, value) in list {
+        object.prop(name, Property::from(value).enumerable())?;
+    }
+    Ok(())
+}
+
+/// An optional boolean argument: absent reads as `false`.
+fn given(flag: &Opt<Coerced<bool>>) -> bool {
+    flag.0.as_ref().is_some_and(|flag| flag.0)
+}
+
+/// Re-initializes `event` with `event_type` and the two flags, as `initEvent` does: no stop and
+/// no cancel, untrusted, the same `composed`. Returns `false` and changes nothing while the
+/// event is dispatched.
+fn initialize(event: &IncaEvent<'_>, event_type: String, bubbles: bool, cancelable: bool) -> bool {
+    let state = &event.state;
+    if state.dispatching.get() {
+        return false;
+    }
+    *state.name.borrow_mut() = event_type;
+    let composed = state.flags.get().composed;
+    state.flags.set(Flags {
+        bubbles,
+        cancelable,
+        composed,
+    });
+    for flag in [&state.stop, &state.immediate, &state.canceled] {
+        flag.set(false);
+    }
+    state.trusted.set(false);
+    true
 }
 
 /// The `TypeError` that `member` of one kind of event throws for an event of

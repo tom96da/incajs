@@ -56,7 +56,7 @@ and `returnValue`. The three flags depend on the event:
 | `focusin`, `focusout`            | yes     | no         | yes      |
 
 - `timeStamp` counts milliseconds since the host started.
-- The `view` of a mouse, keyboard or focus event is `null`.
+- The `view` of a UI event is `null`.
 - `incajs` exports the type `IncaEvent` for these fields. The fields of a
   mouse, wheel or keyboard event are not in it: a listener declares them, such
   as `(event: IncaEvent & { key: string }) => void`.
@@ -92,6 +92,9 @@ events yet. `pointerType` is `"mouse"`, or `""` for the click of a key.
 - `screenX` and `screenY` add the window position. On Wayland they equal the
   client position.
 - Pointer events (`pointerdown` and the rest) are unsupported.
+- `tiltX`, `tiltY`, `twist`, `tangentialPressure`, `altitudeAngle`,
+  `azimuthAngle`, `persistentDeviceId`, `getCoalescedEvents()` and
+  `getPredictedEvents()` of `PointerEvent` are unsupported.
 - `scrollend` is unsupported.
 - A mouse event outside every element has `window` as `target`, where browsers
   report `body` (Firefox reports `html`). Moving the pointer between an element
@@ -148,11 +151,17 @@ rules, with the differences below.
 
 ## Dispatching events
 
-`dispatchEvent()` sends an event that a script builds with `Event` or
-`CustomEvent`.
+`dispatchEvent()` sends an event that a script builds with an
+event constructor.
 
-- `MouseEvent`, `KeyboardEvent`, `FocusEvent`, `WheelEvent`, `UIEvent` and
-  `PointerEvent` are unsupported, as is `initEvent()`.
+- `initUIEvent()`, `initMouseEvent()` and `initKeyboardEvent()` are
+  unsupported methods.
+- The `view` member of an init dictionary is ignored, and `relatedTarget`
+  takes any object.
+- The `modifierAltGraph`, `modifierCapsLock` and the other `modifier` members
+  of an init dictionary are ignored.
+- `offsetX` and `offsetY` of a mouse event a script builds equal `clientX` and
+  `clientY`, also while it is dispatched.
 
 ## Errors in handlers
 

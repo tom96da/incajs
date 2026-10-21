@@ -876,19 +876,6 @@ A fixed entry is deleted and its ID is never reused.
   window opens and exit 1 with a message that names the variable and tells
   the user to unset it.
 
-- **B-167 Only `Event` and `CustomEvent` can be constructed**
-  `Units: bridge,core,docs · Size: M · Impact: Low`
-
-  A script cannot build a `MouseEvent`, `KeyboardEvent`, `FocusEvent`,
-  `WheelEvent`, `UIEvent` or `PointerEvent`. `Event` has no `initEvent()` and
-  `CustomEvent` no `initCustomEvent()`. Mouse, wheel, key and focus events
-  report `Event` as their `constructor` and `[object Event]` as their string
-  tag, where browsers report their subclass. Each kind of host event has a
-  prototype of its own, with no constructor and no string tag of its own.
-  Fix: add the subclasses with their init dictionaries, `initEvent()`,
-  `initCustomEvent()` and string tags, on the prototypes the host's events
-  inherit from.
-
 - **B-168 `window` has the listener methods only and `document` is undefined**
   `Units: core,bridge,docs · Size: M · Impact: Low`
 
@@ -1210,10 +1197,10 @@ A fixed entry is deleted and its ID is never reused.
 
   The console prints own properties and calls no getter, and an event owns
   only `isTrusted`, so `console.log(event)` prints
-  `Event { isTrusted: [Getter] }`. Node prints `type`, `defaultPrevented`,
-  `cancelable` and `timeStamp`, and browser consoles list the getters. Fix:
-  let the host name, per prototype, the getters the console reads, and have
-  the event prototypes name their base fields.
+  `PointerEvent { isTrusted: [Getter] }` for a click. Node prints `type`,
+  `defaultPrevented`, `cancelable` and `timeStamp`, and browser consoles list
+  the getters. Fix: let the host name, per prototype, the getters the console
+  reads, and have the event prototypes name their base fields.
 
 - **B-215 The scroll range relies on an anchor child**
   `Units: gpui · Size: S · Impact: Low`
@@ -1287,6 +1274,26 @@ A fixed entry is deleted and its ID is never reused.
   The Vite adapter and `inca config` each write `inca.json` by name.
 
   Fix: inject the name through the adapter core, which leaves one spelling.
+
+- **B-221 Events built from script miss some members of their class**
+  `Units: bridge,host,core,docs · Size: M · Impact: Low`
+
+  `initUIEvent()`, `initMouseEvent()` and `initKeyboardEvent()` are missing.
+  An init dictionary's `view` is not read, `relatedTarget` takes any object,
+  and `modifierAltGraph`, `modifierCapsLock` and the other `modifier`
+  members are ignored. A built mouse event keeps `offsetX` and `offsetY`
+  equal to its client position while it is dispatched; browsers measure
+  them from the target's padding edge. `PointerEvent` has no `tiltX`,
+  `tiltY`, `twist`, `tangentialPressure`, `altitudeAngle`, `azimuthAngle`,
+  `persistentDeviceId`, `getCoalescedEvents()` or `getPredictedEvents()`.
+  Every UI event reads `view` as `null`, where browsers give `window`.
+
+  Fix: add the legacy init methods, keep the modifier states in the
+  payload and set the offsets from the target's box in `dispatchEvent`. The
+  host should provide `window` and `body` objects and core should export
+  wrappers of them, so that `view` can name the window. A brand check on
+  `relatedTarget`, so that only elements and the window are accepted as
+  browsers do, is the stricter option.
 
 - **B-223 `keyCode` follows a US keyboard layout**
   `Units: gpui,bridge · Size: S–M · Impact: Low`

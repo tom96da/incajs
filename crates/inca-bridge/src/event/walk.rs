@@ -260,7 +260,8 @@ pub(crate) fn dispatch_event<'js>(
         ));
     }
     let path = path_from(&host.borrow(), target);
-    let walk = script_walk(&state.name, state.flags, target, &EventPayload::None);
+    let name = state.name.borrow().clone();
+    let walk = script_walk(&name, state.flags.get(), target, &EventPayload::None);
     let targets = targets_of(ctx, &path)?;
     drop(record.held.target.replace(targets.first().cloned()));
     state.trusted.set(false);

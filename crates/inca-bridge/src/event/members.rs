@@ -2,16 +2,16 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use inca_jsenv::FunctionAccessor;
-use rquickjs::atom::PredefinedAtom;
 use rquickjs::convert::Coerced;
-use rquickjs::function::This;
-use rquickjs::object::Property;
+use rquickjs::function::{Opt, This};
 use rquickjs::{Ctx, Function, IntoJs, Object, Result as JsResult, Value};
 
-use super::{IncaEvent, action, array_of, field, getter, method, with_event};
+use super::{
+    IncaEvent, action, array_of, constants, field, getter, given, initialize, method, with_event,
+};
 use crate::bindings::convert::or_null;
 
-/// The phase constants on `Event`, its prototype and `CustomEvent`.
+/// The phase constants on `Event` and its prototype.
 pub(super) const PHASES: [(&str, i32); 4] = [
     ("NONE", 0),
     ("CAPTURING_PHASE", 1),
@@ -20,18 +20,12 @@ pub(super) const PHASES: [(&str, i32); 4] = [
 ];
 
 /// `Event.prototype`: the phase constants, the propagation methods,
-/// `composedPath`, the getters of the base fields and the string tag `Event`.
+/// `composedPath`, `initEvent` and the getters of the base fields.
 pub(super) fn event_prototype<'js>(ctx: &Ctx<'js>) -> JsResult<Object<'js>> {
     let proto = Object::new(ctx.clone())?;
-    for (name, value) in PHASES {
-        proto.prop(name, Property::from(value).enumerable())?;
-    }
+    constants(&proto, &PHASES)?;
     define_methods(ctx, &proto)?;
     define_fields(ctx, &proto)?;
-    proto.prop(
-        PredefinedAtom::SymbolToStringTag,
-        Property::from("Event").configurable(),
-    )?;
     Ok(proto)
 }
 
@@ -68,12 +62,26 @@ fn define_methods<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<()> {
             })
         },
     )?;
+    let init_event = Function::new(
+        ctx.clone(),
+        |ctx: Ctx<'js>,
+         This(this): This<Value<'js>>,
+         event_type: Coerced<String>,
+         bubbles: Opt<Coerced<bool>>,
+         cancelable: Opt<Coerced<bool>>| {
+            with_event(&ctx, &this, |event| {
+                initialize(event, event_type.0, given(&bubbles), given(&cancelable));
+                Ok(())
+            })
+        },
+    )?;
+    method(proto, "initEvent", init_event)?;
     method(proto, "composedPath", composed_path)
 }
 
 fn define_fields<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<()> {
     field(ctx, proto, "type", |ctx, event| {
-        event.state.name.as_str().into_js(ctx)
+        event.state.name.borrow().as_str().into_js(ctx)
     })?;
     field(ctx, proto, "target", |ctx, event| {
         let target = event.held.target.borrow().clone();
@@ -86,16 +94,16 @@ fn define_fields<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<()> {
         event.state.phase.get().into_js(ctx)
     })?;
     field(ctx, proto, "bubbles", |ctx, event| {
-        event.state.flags.bubbles.into_js(ctx)
+        event.state.flags.get().bubbles.into_js(ctx)
     })?;
     field(ctx, proto, "cancelable", |ctx, event| {
-        event.state.flags.cancelable.into_js(ctx)
+        event.state.flags.get().cancelable.into_js(ctx)
     })?;
     field(ctx, proto, "defaultPrevented", |ctx, event| {
         event.state.canceled.get().into_js(ctx)
     })?;
     field(ctx, proto, "composed", |ctx, event| {
-        event.state.flags.composed.into_js(ctx)
+        event.state.flags.get().composed.into_js(ctx)
     })?;
     field(ctx, proto, "timeStamp", |ctx, event| {
         event.state.time_stamp.into_js(ctx)
