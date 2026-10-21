@@ -10,6 +10,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.0.21] - 2026-10-21
+
 ### Added
 
 - `MouseEvent`, `KeyboardEvent` and the other event classes can be built and dispatched ([2f531d5](https://github.com/tom96da/incajs/commit/2f531d5))
@@ -415,7 +417,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - prebuilt `inca-host` binaries for linux-x64, linux-arm64, and darwin-arm64, resolved automatically per platform
 - click event dispatch from the native tree back into JS
 
-[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.20...HEAD
+[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.21...HEAD
+[0.0.21]: https://github.com/tom96da/incajs/releases/tag/v0.0.21
 [0.0.20]: https://github.com/tom96da/incajs/releases/tag/v0.0.20
 [0.0.19]: https://github.com/tom96da/incajs/releases/tag/v0.0.19
 [0.0.18]: https://github.com/tom96da/incajs/releases/tag/v0.0.18
