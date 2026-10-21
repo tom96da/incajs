@@ -467,10 +467,14 @@ pub(crate) fn open(
 /// after a normal quit. A bundle that fails to start and an entry that
 /// cannot be read both exit the process with status 1. In production the
 /// failure prints to stderr; with `dev` set it is reported like a throwing
-/// first bundle.
+/// first bundle. On Linux, a `DISPLAY` or `WAYLAND_DISPLAY` that names a
+/// server the host cannot reach exits the process with status 1 and one
+/// line on stderr that names the variable.
 #[must_use]
 pub fn run_bundle(entry_path: &str, dev: bool) -> ExitCode {
     let writer: Option<SharedWriter> = dev.then(|| Rc::new(StdoutWriter::spawn()) as SharedWriter);
+    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    crate::display::exit_on_unreachable_display();
     if dev {
         install_panic_hook();
     }
@@ -485,6 +489,8 @@ pub fn run_bundle(entry_path: &str, dev: bool) -> ExitCode {
 
     let closing = writer.clone();
     application().run(move |cx: &mut App| {
+        #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+        crate::display::launched();
         // macOS keeps an app alive with no windows left; this framework's
         // apps are single-window, so closing the window is quitting.
         cx.on_window_closed(|cx, _window_id| {

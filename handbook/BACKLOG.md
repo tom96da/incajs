@@ -856,17 +856,6 @@ A fixed entry is deleted and its ID is never reused.
   first entry rejects while no window exists, the host exits right after it
   reports the rejection, so the job failures of the final poll are dropped.
 
-- **B-165 A stale `DISPLAY` makes the host panic on Linux**
-  `Units: host · Size: S · Impact: Low`
-
-  The host connects to X11 when `DISPLAY` is set and to Wayland when
-  `WAYLAND_DISPLAY` is set. A variable that points to no running server ends
-  the host with a panic and exit code 101, and the message names only
-  `Failed to initialize X11 client`. A shell left over from an SSH session
-  or a closed X server shows this. Fix: check the connection before the
-  window opens and exit 1 with a message that names the variable and tells
-  the user to unset it.
-
 - **B-168 `window` has the listener methods only and `document` is undefined**
   `Units: core,bridge,docs · Size: M · Impact: Low`
 

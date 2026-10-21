@@ -18,6 +18,11 @@ Beside that entry it reads `inca.json`, if one is there: the name the
 platform calls the app, its reverse-DNS identifier, and the size and title
 its window opens at. Anything missing falls back to a default.
 
+On Linux the host connects to the display server that `WAYLAND_DISPLAY`,
+else `DISPLAY`, names. When that server cannot be reached it writes one line
+naming the variable to stderr and exits 1. With neither set it runs without
+a window.
+
 The window carries an application menu with a `Quit` item, bound to `cmd-q`
 on macOS and `ctrl-q` elsewhere. Only macOS draws a menu bar for it.
 

@@ -8,6 +8,8 @@ mod app;
 pub mod config;
 mod console_output;
 mod dev;
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+mod display;
 mod menu;
 #[cfg(test)]
 mod tests;
