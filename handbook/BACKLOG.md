@@ -769,14 +769,6 @@ A fixed entry is deleted and its ID is never reused.
   skips its target marker and its hitbox, so the next container below reports
   itself.
 
-- **B-149 Tab after a click starts at the first stop**
-  `Units: gpui,bridge · Size: M · Impact: Low`
-
-  A click on an empty area leaves nothing focused, so the next Tab goes to the
-  first stop. Browsers continue from the clicked position. The fix keeps a
-  starting-point node set by the mouse target and clears it when focus moves
-  by another route. `tab_move` starts from it when nothing is focused.
-
 - **B-151 `beforeinput` is unsupported**
   `Units: gpui,bridge,docs · Size: L · Impact: Low`
 

@@ -700,3 +700,37 @@ fn a_held_node_under_a_swept_orphan_is_freed_with_it() {
     tree.release(child);
     assert!(!tree.has_orphans());
 }
+
+#[test]
+fn preceding_is_none_without_a_parent() {
+    let mut tree = VirtualTree::new();
+    let id = tree.create_node("div").unwrap();
+
+    assert_eq!(tree.preceding(id), None);
+}
+
+#[test]
+fn preceding_of_a_first_child_is_its_parent() {
+    let mut tree = VirtualTree::new();
+    let parent = tree.create_node("div").unwrap();
+    let child = tree.create_node("div").unwrap();
+    tree.append_child(parent, child).unwrap();
+
+    assert_eq!(tree.preceding(child), Some(parent));
+}
+
+#[test]
+fn preceding_is_the_last_node_before_the_subtree() {
+    let mut tree = VirtualTree::new();
+    let parent = tree.create_node("div").unwrap();
+    let first = tree.create_node("div").unwrap();
+    let inner = tree.create_node("div").unwrap();
+    let deepest = tree.create_node("div").unwrap();
+    let second = tree.create_node("div").unwrap();
+    tree.append_child(parent, first).unwrap();
+    tree.append_child(first, inner).unwrap();
+    tree.append_child(inner, deepest).unwrap();
+    tree.append_child(parent, second).unwrap();
+
+    assert_eq!(tree.preceding(second), Some(deepest));
+}

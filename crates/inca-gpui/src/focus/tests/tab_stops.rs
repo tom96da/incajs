@@ -43,7 +43,7 @@ fn next_stop_from_a_negative_stop_continues_in_tree_order() {
     assert_eq!(next_stop(&stops, Some(2), false), Some(3));
     assert_eq!(next_stop(&stops, Some(2), true), Some(1));
     let stops = [(1, 1), (2, 0), (3, -1)];
-    assert_eq!(next_stop(&stops, Some(3), false), None);
+    assert_eq!(next_stop(&stops, Some(3), false), Some(1));
     let stops = [(1, -1), (2, 1)];
     assert_eq!(next_stop(&stops, Some(1), true), None);
 }
@@ -134,9 +134,9 @@ fn after_a_drop_no_node_is_focused(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn after_a_drop_tab_starts_at_the_first_stop(cx: &mut TestAppContext) {
+fn after_a_drop_tab_continues_after_the_dropped_node(cx: &mut TestAppContext) {
     let cx = cx.add_empty_window();
-    let (tree, ids) = rooted_tree(2);
+    let (tree, ids) = rooted_tree(3);
     let mut registry = FocusRegistry::default();
     focus_all(cx, &mut registry, &tree, &ids, ids[1]);
     cx.update(|window, cx| registry.observe(window, cx));
@@ -144,7 +144,7 @@ fn after_a_drop_tab_starts_at_the_first_stop(cx: &mut TestAppContext) {
 
     let moved = cx.update(|window, cx| registry.tab_move(&tree, ROOT, window, cx, false));
 
-    assert_eq!(moved, Some(ids[0]));
+    assert_eq!(moved, Some(ids[2]));
 }
 
 #[gpui_cases]

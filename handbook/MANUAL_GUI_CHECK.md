@@ -63,7 +63,6 @@ In the development window of an app whose nodes carry `tabindex` 3, 1, 0, 0,
 6. `preventDefault()` in `keydown` cancels the move.
 7. In a window with no focusable node, `Tab` does nothing and fires `keydown`
    on the root.
-8. After a click on an empty area, `Tab` focuses the first node.
 
 ### A packaged app
 

@@ -310,6 +310,24 @@ impl VirtualTree {
         std::iter::successors(Some(id), |&id| self.get(id).and_then(VirtualNode::parent))
     }
 
+    /// The node right before `id`'s subtree in tree order: the last node of
+    /// its previous sibling's subtree, or its parent when it is the first
+    /// child. `None` for a node without a parent.
+    #[must_use]
+    pub fn preceding(&self, id: NodeId) -> Option<NodeId> {
+        let parent = self.get(id)?.parent()?;
+        let siblings = self.get(parent)?.children();
+        let index = siblings.iter().position(|&child| child == id)?;
+        let Some(&previous) = index.checked_sub(1).and_then(|i| siblings.get(i)) else {
+            return Some(parent);
+        };
+        let mut last = previous;
+        while let Some(&child) = self.get(last).and_then(|node| node.children().last()) {
+            last = child;
+        }
+        Some(last)
+    }
+
     /// Appends `child_id` to `parent_id`'s children. Thin wrapper over
     /// [`insert_before`](Self::insert_before) with no anchor.
     ///

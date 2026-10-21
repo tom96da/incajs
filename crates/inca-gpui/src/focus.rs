@@ -84,6 +84,27 @@ enum PendingFocus {
     Blur(NodeId),
 }
 
+/// Where Tab starts while no node is focused.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Start {
+    /// A mouse press on `node`. `focusing` is the node the press focuses, until the registry
+    /// sees that focus.
+    Press {
+        node: NodeId,
+        focusing: Option<NodeId>,
+    },
+    /// The node that took focus last.
+    Focus(NodeId),
+}
+
+impl Start {
+    fn node(self) -> NodeId {
+        match self {
+            Self::Press { node, .. } | Self::Focus(node) => node,
+        }
+    }
+}
+
 /// `NodeId` → its persistent `FocusHandle`, the node focused as of the last
 /// frame this was checked, and every pending request left by a caller that
 /// had no live `Window`/`App`, oldest first. See the module doc for why. Two
@@ -113,6 +134,8 @@ pub struct FocusRegistry {
     window_blurred: bool,
     /// Nodes whose `tabindex` changed since the host last took them.
     tab_dirty: HashSet<NodeId>,
+    /// Where the next Tab starts while no node is focused.
+    start: Option<Start>,
 }
 
 /// Parses a `tabindex` value: optional leading ASCII whitespace, an optional
@@ -150,8 +173,9 @@ fn number_text(value: f64) -> String {
 /// `tabindex` in tree order. Positive values come first in ascending order,
 /// then 0 in tree order, and negative values are outside the order. Past either
 /// end the result is `None`. From a node outside the order the result is the
-/// nearest stop after it (before it when `backward`) in tree order. `current`
-/// `None` starts at the first (or, `backward`, last) stop.
+/// nearest stop after it (before it when `backward`) in tree order, or forward
+/// with no stop after it the first stop. `current` `None` starts at the first
+/// (or, `backward`, last) stop.
 fn next_stop(stops: &[(NodeId, i32)], current: Option<NodeId>, backward: bool) -> Option<NodeId> {
     // (sort key, tree position, node)
     let mut ordered: Vec<(i32, usize, NodeId)> = stops
@@ -172,7 +196,11 @@ fn next_stop(stops: &[(NodeId, i32)], current: Option<NodeId>, backward: bool) -
         }
         (Some(id), None) => match stops.iter().position(|&(node, _)| node == id) {
             Some(here) if backward => ordered.iter().filter(|s| s.1 < here).max_by_key(|s| s.1),
-            Some(here) => ordered.iter().filter(|s| s.1 > here).min_by_key(|s| s.1),
+            Some(here) => ordered
+                .iter()
+                .filter(|s| s.1 > here)
+                .min_by_key(|s| s.1)
+                .or_else(|| ordered.first()),
             None if backward => ordered.last(),
             None => ordered.first(),
         },
@@ -182,12 +210,36 @@ fn next_stop(stops: &[(NodeId, i32)], current: Option<NodeId>, backward: bool) -
     found.map(|&(_, _, id)| id)
 }
 
+/// The target of a Tab press while no node is focused, from a press on `node`, which sits at
+/// `at` among `stops` in tree order. Forward, it is the first stop after `node`, or with none
+/// after it the first stop of the order when `node` is outside the order. Backward, it is the
+/// last stop up to `node` itself.
+fn after_press(stops: &[(NodeId, i32)], node: NodeId, at: usize, backward: bool) -> Option<NodeId> {
+    let own = stops.get(at).filter(|&&(id, _)| id == node);
+    let split = at + usize::from(own.is_some());
+    let in_order = |stop: &&(NodeId, i32)| stop.1 >= 0;
+    if backward {
+        return stops[..split]
+            .iter()
+            .rev()
+            .find(in_order)
+            .map(|&(id, _)| id);
+    }
+    match stops[split..].iter().find(in_order) {
+        Some(&(id, _)) => Some(id),
+        None if own.is_some_and(|&(_, index)| index >= 0) => None,
+        None => next_stop(stops, None, false),
+    }
+}
+
 impl FocusRegistry {
-    /// Moves focus one tab stop forward, or `backward`. Past the last stop
-    /// nothing holds focus, and the next press starts over at the first. The
-    /// transition is reported by the next [`Self::apply_pending`]. Returns
-    /// the node that took focus. The move also drops the scroll requests of
-    /// earlier focus calls.
+    /// Moves focus one tab stop forward, or `backward`. With no node focused,
+    /// the move starts from the last press or focus (see
+    /// [`Self::press_start`]). Past the last stop nothing holds focus, and the
+    /// next Tab starts over at the first. A move that finds no stop forgets
+    /// where it started. The transition is reported by the next
+    /// [`Self::apply_pending`]. Returns the node that took focus. The move
+    /// also drops the scroll requests of earlier focus calls.
     pub fn tab_move(
         &mut self,
         tree: &VirtualTree,
@@ -196,10 +248,16 @@ impl FocusRegistry {
         cx: &mut App,
         backward: bool,
     ) -> Option<NodeId> {
+        let focused = self.focused_node(window, cx);
+        let start = if focused.is_none() { self.start } else { None };
         let mut stops = Vec::new();
+        let mut start_at = None;
         let mut stack = vec![root];
         while let Some(id) = stack.pop() {
             let Some(node) = tree.get(id) else { continue };
+            if start.is_some_and(|start| start.node() == id) {
+                start_at = Some(stops.len());
+            }
             if self.handles.contains_key(&id)
                 && let Some(index) = Self::tab_index_of(tree, id)
             {
@@ -207,7 +265,14 @@ impl FocusRegistry {
             }
             stack.extend(node.children().iter().rev());
         }
-        let target = next_stop(&stops, self.focused_node(window, cx), backward);
+        let target = match (start, start_at) {
+            (Some(Start::Press { node, .. }), Some(at)) => after_press(&stops, node, at, backward),
+            (Some(Start::Focus(node)), _) => next_stop(&stops, Some(node), backward),
+            _ => next_stop(&stops, focused, backward),
+        };
+        if target.is_none() {
+            self.start = None;
+        }
         self.reveal.clear();
         self.retry.clear();
         if let Some((id, handle)) = target.and_then(|id| Some((id, self.handles.get(&id)?))) {
@@ -216,6 +281,37 @@ impl FocusRegistry {
         } else {
             window.blur(cx);
             None
+        }
+    }
+
+    /// Records a mouse press on `node_id` as where Tab starts while no node is
+    /// focused. `focusing` is the node the press focuses, `None` when it
+    /// focuses none or that node already holds focus. A press on `root`
+    /// clears the start.
+    pub fn press_start(&mut self, node_id: NodeId, root: NodeId, focusing: Option<NodeId>) {
+        self.start = (node_id != root).then_some(Start::Press {
+            node: node_id,
+            focusing,
+        });
+    }
+
+    /// Moves where Tab starts off `node_id`'s subtree, which leaves its
+    /// place in the tree, to `before`, the node right before that place
+    /// ([`VirtualTree::preceding`] taken before the change). A start that
+    /// lies outside the subtree stays. `before` being the root, or `None`,
+    /// clears the start.
+    pub fn start_leaves(&mut self, tree: &VirtualTree, node_id: NodeId, before: Option<NodeId>) {
+        let Some(start) = self.start else { return };
+        if tree
+            .ancestors(start.node())
+            .any(|ancestor| ancestor == node_id)
+        {
+            self.start = before
+                .filter(|&before| Some(before) != tree.root())
+                .map(|node| Start::Press {
+                    node,
+                    focusing: None,
+                });
         }
     }
 
@@ -512,7 +608,9 @@ impl FocusRegistry {
 
     /// Reports a transition if which node is focused changed since the
     /// last call, including a change from GPUI's own click-to-focus, not
-    /// only one made through [`Self::request_focus`].
+    /// only one made through [`Self::request_focus`]. A node that takes focus
+    /// becomes where Tab starts, except the one the last press focused (see
+    /// [`Self::press_start`]).
     fn sync(&mut self, window: &mut Window, cx: &mut App) -> Option<FocusTransition> {
         let focused_now = window.focused(cx).and_then(|handle| self.node_for(&handle));
         self.observed = focused_now;
@@ -521,6 +619,18 @@ impl FocusRegistry {
         }
         let blurred = self.focused;
         self.focused = focused_now;
+        if let Some(node) = focused_now {
+            self.start = match self.start {
+                Some(Start::Press {
+                    node: pressed,
+                    focusing: Some(focusing),
+                }) if focusing == node => Some(Start::Press {
+                    node: pressed,
+                    focusing: None,
+                }),
+                _ => Some(Start::Focus(node)),
+            };
+        }
         // An inactive window holds the events. Its deactivation already
         // blurred the old node and its activation focuses the new one.
         if self.window_blurred || (blurred.is_none() && focused_now.is_none()) {

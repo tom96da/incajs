@@ -243,16 +243,28 @@ impl EventDispatcher {
 
     /// The default action of a `mousedown` that reached `target`: the nearest
     /// node on its path that can take focus takes it, else the window blurs.
-    /// A prevented `mousedown` leaves the focus alone.
+    /// A prevented `mousedown` leaves the focus alone. Every press records
+    /// `target` as where Tab starts while no node is focused.
     fn focus_on_press(&self, target: NodeId, prevented: bool, window: &mut Window, cx: &mut App) {
+        let path = self.path_from(target);
+        let handle = {
+            let mut host = self.host.borrow_mut();
+            let focusing = if prevented {
+                None
+            } else {
+                path.iter()
+                    .copied()
+                    .find(|&id| host.focus.handle(id).is_some())
+            };
+            let focused = host.focus.focused_node(window, cx);
+            let root = host.root();
+            host.focus
+                .press_start(target, root, focusing.filter(|&node| Some(node) != focused));
+            focusing.and_then(|node| host.focus.handle(node))
+        };
         if prevented {
             return;
         }
-        let path = self.path_from(target);
-        let handle = {
-            let host = self.host.borrow();
-            path.iter().find_map(|id| host.focus.handle(*id))
-        };
         match handle {
             Some(handle) => handle.focus(window, cx),
             None => window.blur(cx),

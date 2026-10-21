@@ -402,7 +402,10 @@ of core answers. Rust looks it up by name on each walk and keeps nothing.
   case when `key_char` is absent.
 - `Tab` and `Shift+Tab` move focus, and Control, Alt and Meta cancel the move.
   `FocusRegistry::tab_move` collects the handled nodes in tree order and
-  focuses the target, or blurs at the end of the order.
+  focuses the target, or blurs at the end of the order. While no node is
+  focused, the move starts from the node of the last mouse press or the last
+  focus (`FocusRegistry::press_start`). When that node leaves the tree the
+  start moves to the node before its place.
 - Enter clicks a focused enabled button on key down. Space clicks it on key
   up with any modifier. An Enter click, a Space key down, a Space key up or
   the button losing focus clears the pending Space. A button under a held

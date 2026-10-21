@@ -11,6 +11,7 @@ use super::*;
 
 mod disabled;
 mod handles;
+mod start;
 mod tab_index;
 mod tab_stops;
 

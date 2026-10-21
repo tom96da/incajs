@@ -73,11 +73,13 @@ fn insert_child(
 ) -> JsResult<()> {
     refuse_root(ctx, host, child_id, "moved")?;
     let attached = is_attached(host, child_id);
+    let before = host.tree.preceding(child_id);
     host.tree
         .insert_before(parent_id, child_id, anchor_id)
         .map_err(|err| throw_tree_error(ctx, err))?;
     if attached {
         drop_focus(host, child_id);
+        move_tab_start(host, child_id, before);
     }
     mark_focus_dirty(host, child_id);
     Ok(())
@@ -92,11 +94,13 @@ fn remove_child<'js>(
             .tree
             .get(child_id)
             .is_some_and(|node| node.parent() == Some(parent_id));
+        let before = host.tree.preceding(child_id);
         host.tree
             .remove_child(parent_id, child_id)
             .map_err(|err| throw_tree_error(&ctx, err))?;
         if child_of_parent {
             drop_focus(&mut host, child_id);
+            move_tab_start(&mut host, child_id, before);
             mark_focus_dirty(&mut host, child_id);
         }
         Ok(())
@@ -184,6 +188,8 @@ fn destroy_node<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> 
     move |ctx, JsNodeId(node_id)| {
         let mut host = host.borrow_mut();
         refuse_root(&ctx, &host, node_id, "destroyed")?;
+        let before = host.tree.preceding(node_id);
+        move_tab_start(&mut host, node_id, before);
         let freed = host.tree.destroy_node(node_id);
         Ok(host.free_ids(&freed))
     }
@@ -228,6 +234,11 @@ fn is_attached(host: &Host, node_id: NodeId) -> bool {
 /// one. A node that was never attached holds no focus to drop.
 fn drop_focus(host: &mut Host, node_id: NodeId) {
     host.focus.drop_focus_in(&host.tree, node_id);
+}
+
+/// Moves where Tab starts off `node_id`'s subtree to `before`, the node right before its place.
+fn move_tab_start(host: &mut Host, node_id: NodeId, before: Option<NodeId>) {
+    host.focus.start_leaves(&host.tree, node_id, before);
 }
 
 /// Queues a focus re-check of the node and its subtree.

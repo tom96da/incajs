@@ -143,8 +143,6 @@ rules, with the differences below.
   unsupported.
 - After the last node, Tab leaves nothing focused and the next Tab starts at
   the first node, as in Chromium and WebKit. Focus stays in the window.
-- Tab after a click starts at the first node, where browsers continue from the
-  click position.
 
 ## Dispatching events
 
