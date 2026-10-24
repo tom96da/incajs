@@ -1028,19 +1028,6 @@ A fixed entry is deleted and its ID is never reused.
   attribute and runs nothing, where a browser compiles it into the element's
   handler. Fix: needs a decision on running code from strings.
 
-- **B-210 Deleting or adding `src/main.ts` during `inca dev` keeps the old entry**
-  `Units: cli · Size: M · Impact: Low`
-
-  `resolveEntry` runs once at start. After `src/main.ts` is deleted, every
-  edit fetches the old entry and prints `build failed: Failed to load url
-  .../src/main.ts`. A `src/main.ts` added to an app that runs from
-  `src/App.vue` is not picked up either. Restarting `inca dev` resolves the
-  entry again.
-
-  Fix: watch `src/main.*`, resolve the entry again when one appears or
-  disappears, and restart the host against it. In HMR mode the entry is
-  written into the session's `entry.js` as well.
-
 - **B-211 A lone CR inside a block comment shifts mapped lines**
   `Units: jsenv · Size: M · Impact: Low`
 

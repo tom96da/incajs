@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { chmod, writeFile } from "node:fs/promises";
+import { chmod, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Writable } from "node:stream";
 
@@ -39,6 +39,26 @@ export const startupFailureMockHost = path.join(
 export const slowReadyMockHost = path.join(tests, "fixtures/mock-host-slow-ready.mts");
 export const exitingMockHost = path.join(tests, "fixtures/mock-host-exits.mts");
 export const hmrMockHost = path.join(tests, "fixtures/mock-host-hmr.mts");
+export const logMockHost = path.join(tests, "fixtures/mock-host-log.mts");
+
+/**
+ * Points `logMockHost` at a new log file in `dir` for one test.
+ * @returns `lines()`, what the hosts have logged so far, in order, and `pid()`, the process id
+ * of the host that started last
+ */
+export async function useHostLog(dir: string): Promise<{
+  lines: () => Promise<string[]>;
+  pid: () => Promise<number>;
+}> {
+  const file = path.join(dir, "host.log");
+  await writeFile(file, "");
+  vi.stubEnv("MOCK_HOST_LOG", file);
+  onTestFinished(() => void vi.unstubAllEnvs());
+  return {
+    lines: async () => (await readFile(file, "utf8")).split("\n").filter(Boolean),
+    pid: async () => Number(await readFile(`${file}.pid`, "utf8")),
+  };
+}
 
 // A nonexistent directory: pruneStaleFiles() treats a missing outDir as
 // nothing to prune, so these tests need no real files on disk.
@@ -48,12 +68,25 @@ export const FAKE_OUTPUT: BuildOutput = {
   files: ["bundle.js"],
 };
 
-export interface FakeBundler extends Bundler {
-  /** Simulates a successful (re)build. */
-  emitBuild(output?: BuildOutput): void;
-  /** Simulates a build failure. */
-  emitError(error: { message: string; stack: string | null }): void;
+/** One `watch()` call of a {@link FakeBundler}. */
+export interface FakeWatch {
+  options: BundlerOptions;
   closed: boolean;
+  /** How many earlier watchers were still open when this one opened. */
+  openBefore: number;
+}
+
+export interface FakeBundler extends Bundler {
+  /** Simulates a successful (re)build of the newest watcher. */
+  emitBuild(output?: BuildOutput): void;
+  /** Simulates a build failure of the newest watcher. */
+  emitError(error: { message: string; stack: string | null }): void;
+  /** Whether the newest watcher is closed. */
+  readonly closed: boolean;
+  /** Every `watch()` call, in order. */
+  watches: FakeWatch[];
+  /** Makes the next `watch()` reject. */
+  refuseNextWatch: boolean;
   /**
    * Resolves once `watch()` is called. `dev()` resolves its config
    * (an async step) before reaching `watch()`, so a test firing an event
@@ -71,14 +104,28 @@ export function makeFakeBundler(): FakeBundler {
   });
 
   const fake: FakeBundler = {
-    closed: false,
+    get closed() {
+      return fake.watches.at(-1)?.closed ?? false;
+    },
+    watches: [],
+    refuseNextWatch: false,
     watching,
     watch(options): Promise<Watcher> {
+      if (fake.refuseNextWatch) {
+        fake.refuseNextWatch = false;
+        return Promise.reject(new Error("watch refused"));
+      }
+      const opened: FakeWatch = {
+        options,
+        closed: false,
+        openBefore: fake.watches.filter((other) => !other.closed).length,
+      };
+      fake.watches.push(opened);
       handlers = options;
       markWatching();
       return Promise.resolve({
         close: () => {
-          fake.closed = true;
+          opened.closed = true;
           return Promise.resolve();
         },
       });
@@ -123,7 +170,19 @@ export function makeSink(tty = false): { stream: NodeJS.WritableStream; text: ()
   return { stream, text: () => data };
 }
 
+/** One `hmr()` call of a {@link FakeHmrBundler}. */
+export interface FakeChannel {
+  options: HmrOptions;
+  closed: boolean;
+  /** How many earlier channels were still open when this one opened. */
+  openBefore: number;
+  /** The payloads this channel was asked to `dispatch`. */
+  dispatched: unknown[];
+}
+
 export interface FakeHmrBundler extends Bundler {
+  /** Every `hmr()` call, in order. */
+  channels: FakeChannel[];
   /** Simulates the running app pushing a `"vite"` payload out to the dev server. */
   emitVite(payload: unknown): void;
   /** Simulates the environment's `HotChannel` seeing a `full-reload` payload. */
@@ -141,14 +200,28 @@ export function makeFakeHmrBundler(entryFile: string): FakeHmrBundler {
   const dispatched: unknown[] = [];
 
   const fake: FakeHmrBundler = {
+    channels: [],
     watch: () => Promise.reject(new Error("not used by HMR mode")),
     build: () => Promise.reject(new Error("not used by HMR mode")),
     hmr(opts) {
       options = opts;
+      const opened: FakeChannel = {
+        options: opts,
+        closed: false,
+        openBefore: fake.channels.filter((other) => !other.closed).length,
+        dispatched: [],
+      };
+      fake.channels.push(opened);
       return Promise.resolve({
         entryFile,
-        dispatch: (payload) => dispatched.push(payload),
-        close: () => Promise.resolve(),
+        dispatch: (payload) => {
+          dispatched.push(payload);
+          opened.dispatched.push(payload);
+        },
+        close: () => {
+          opened.closed = true;
+          return Promise.resolve();
+        },
       });
     },
     emitVite(payload) {
