@@ -313,25 +313,40 @@ describe("createIncaElement pointer capture", () => {
     expect(createIncaElement(4, "element", "div").hasPointerCapture(1)).toBe(true);
   });
 
-  it.each(methods)("forwards %s of a destroyed element and keeps its outcome", (method) => {
-    const host = installHost();
-    host.hasPointerCapture.mockReturnValue(false);
-    host.setPointerCapture.mockImplementation(() => {
-      throw new DOMException("gone", "InvalidStateError");
-    });
-    const el = createIncaElement(4, "element", "div");
-    markDestroyed(el);
-
-    const call = () => el[method](1);
-
-    if (method === "setPointerCapture") {
-      expect(call).toThrow(expect.objectContaining({ name: "InvalidStateError" }));
-    } else if (method === "hasPointerCapture") {
-      expect(call()).toBe(false);
-    } else {
-      expect(call).not.toThrow();
+  describe("after the element is destroyed", () => {
+    function destroyed() {
+      const host = installHost();
+      const el = createIncaElement(4, "element", "div");
+      markDestroyed(el);
+      return { host, el };
     }
-    expect(host[method]).toHaveBeenCalledWith(4, 1);
+
+    it("still throws the host's error from setPointerCapture", () => {
+      const { host, el } = destroyed();
+      host.setPointerCapture.mockImplementation(() => {
+        throw new DOMException("gone", "InvalidStateError");
+      });
+
+      expect(() => el.setPointerCapture(1)).toThrow(
+        expect.objectContaining({ name: "InvalidStateError" }),
+      );
+      expect(host.setPointerCapture).toHaveBeenCalledWith(4, 1);
+    });
+
+    it("answers hasPointerCapture with the host's answer", () => {
+      const { host, el } = destroyed();
+      host.hasPointerCapture.mockReturnValue(false);
+
+      expect(el.hasPointerCapture(1)).toBe(false);
+      expect(host.hasPointerCapture).toHaveBeenCalledWith(4, 1);
+    });
+
+    it("still forwards releasePointerCapture without throwing", () => {
+      const { host, el } = destroyed();
+
+      expect(() => el.releasePointerCapture(1)).not.toThrow();
+      expect(host.releasePointerCapture).toHaveBeenCalledWith(4, 1);
+    });
   });
 });
 
