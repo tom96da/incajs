@@ -61,6 +61,14 @@ describe("the event types", () => {
     expectTypeOf(assign).returns.toBeVoid();
   });
 
+  it("types pointer handler properties as IncaPointerEvent", () => {
+    const assign = (el: IncaElement) => {
+      el.onpointerdown = (event) => expectTypeOf(event).toEqualTypeOf<IncaPointerEvent>();
+      el.ongotpointercapture = (event) => expectTypeOf(event).toEqualTypeOf<IncaPointerEvent>();
+    };
+    expectTypeOf(assign).returns.toBeVoid();
+  });
+
   it("type this as the target a listener is registered on", () => {
     const listen = (target: IncaEventTarget, el: IncaElement) => {
       target.addEventListener("click", function () {

@@ -370,21 +370,22 @@ A fixed entry is deleted and its ID is never reused.
   Windows host ships, the root tracker in `inca-gpui` dispatches it from the
   secondary button's release on that platform.
 
-- **B-146 Pointer-field values differ between engines**
+- **B-146 Pointer fields of `click` follow Chromium only**
   `Units: bridge,docs · Size: S · Impact: Low`
 
-  `click`, `auxclick` and `contextmenu` report `pointerId` 1, `isPrimary` true
-  and, for `contextmenu`, `detail` 0. Firefox reports `pointerId` 0 and
-  `contextmenu` `detail` 1, and Chromium reports `isPrimary` false. Fix:
-  revisit the values when the `pointer*` events (B-148) land.
+  `click`, `auxclick` and `contextmenu` report `isPrimary` false, as Chromium
+  does. WebKit and Firefox report `true`, Firefox reports `pointerId` 0 and
+  WebKit puts the click of a key at the center of the element and `pressure`
+  0.5 on `contextmenu`. Fix: switch `isPrimary` to `true` and add the
+  keyboard-click center once Chromium does.
 
-- **B-148 The `pointer*` events are unsupported**
-  `Units: gpui,bridge,docs · Size: L · Impact: Medium`
+- **B-148 `pointercancel` is never dispatched**
+  `Units: gpui,bridge,docs · Size: S · Impact: Low`
 
-  `pointerdown`, `pointerup`, `pointermove`, `pointerover`, `pointerout`,
-  `pointerenter`, `pointerleave`, `pointercancel`, `gotpointercapture` and
-  `lostpointercapture` have no effect. Fix: dispatch them from the same mouse input
-  with the `PointerEvent` fields `click` carries, then add pointer capture.
+  The host dispatches no `pointercancel`. Browsers fire it when a drag starts
+  (Pointer Events, "suppress a pointer event stream"). The window losing focus
+  during a press is a second trigger. Fix: dispatch it when B-155 starts a
+  drag and when a press is reset.
 
 - **B-027 No input-synthesis/state-introspection channel on the dev protocol**
   `Units: host,cli · Size: L · Impact: Low`
@@ -774,13 +775,6 @@ A fixed entry is deleted and its ID is never reused.
   lands, dispatch it before each edit as a cancelable event with `data`,
   `inputType` and `isComposing`, and apply the edit when no listener calls
   `preventDefault()`.
-
-- **B-152 `contextmenu` has no keyboard trigger**
-  `Units: gpui,bridge · Size: S-M · Impact: Medium`
-
-  `contextmenu` fires only from a secondary-button press. The Menu key and
-  Shift+F10 have no effect. Fix: the key hook dispatches it at the focused
-  node with the keyboard pointer source.
 
 - **B-154 `input` and `change` are unsupported**
   `Units: gpui,bridge,docs · Size: L · Impact: High`

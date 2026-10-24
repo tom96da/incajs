@@ -73,6 +73,23 @@ export interface IncaElement extends IncaEventTarget, EventHandlers {
    */
   click(): void;
   /**
+   * Captures the mouse pointer for this node while a button is held. Only `pointerId` 1 exists.
+   * @throws DOMException named `NotFoundError` for another `pointerId`
+   * @throws DOMException named `InvalidStateError` when the node is outside the mounted tree,
+   * also after it is removed
+   */
+  setPointerCapture(pointerId: number): void;
+  /**
+   * Releases the capture this node requested. Does nothing when the node holds none.
+   * @throws DOMException named `NotFoundError` for a `pointerId` other than 1
+   */
+  releasePointerCapture(pointerId: number): void;
+  /**
+   * Whether this node requested the capture and has not released it. `false` after the node is
+   * removed.
+   */
+  hasPointerCapture(pointerId: number): boolean;
+  /**
    * Whether `other` is this node or one of its descendants in the tree as
    * rendered. `null` and `undefined` give `false`, and any other value that is
    * not a node throws a `TypeError`. After the node is removed, it still answers

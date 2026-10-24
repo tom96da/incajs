@@ -326,3 +326,31 @@ fn a_right_press_fires_contextmenu_after_a_handled_mousedown(
 
     assert_eq!(engine.eval::<String>("seen.join()").unwrap(), "contextmenu");
 }
+
+#[gpui::test]
+fn a_right_press_fires_the_pointer_mouse_and_contextmenu_fields(cx: &mut TestAppContext) {
+    let (mut cx, engine, _parent, _child) = mount_recording_pair_with(
+        cx,
+        &["pointerdown", "mousedown", "contextmenu"],
+        r"
+        (e) => {
+            if (e.target !== e.currentTarget) return;
+            globalThis.seen.push([
+                e.type, e.pointerId, e.pointerType, e.button, e.buttons, e.which, e.detail
+            ].join());
+        }
+        ",
+    );
+
+    cx.simulate_mouse_down(
+        point(px(10.0), px(10.0)),
+        MouseButton::Right,
+        Modifiers::none(),
+    );
+
+    let seen: String = engine.eval("JSON.stringify(globalThis.seen)").unwrap();
+    assert_eq!(
+        seen,
+        r#"["pointerdown,1,mouse,2,2,3,0","mousedown,,,2,2,3,1","contextmenu,1,mouse,2,2,3,0"]"#
+    );
+}

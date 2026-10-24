@@ -159,6 +159,9 @@ function installFakeNative(): Map<NodeId, FakeNode> {
       return true;
     },
     click(): void {},
+    setPointerCapture(): void {},
+    releasePointerCapture(): void {},
+    hasPointerCapture: () => false,
   };
 
   return nodes;
@@ -213,6 +216,9 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       blur: () => blur(rootId),
       contains: () => false,
       click: () => click(rootId),
+      setPointerCapture: () => {},
+      releasePointerCapture: () => {},
+      hasPointerCapture: () => false,
       ...createEventTarget(() => rootId),
       tabIndex: -1,
       getBoundingClientRect: () => rectOf(null),

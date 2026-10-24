@@ -149,3 +149,40 @@ export function focus(nodeId: NodeId, preventScroll?: boolean): void {
 export function blur(nodeId: NodeId): void {
   native().blurNode(nodeId);
 }
+
+/**
+ * Captures the mouse pointer for `nodeId` while a button is held. The pointer events and the
+ * mouse events that follow go to the node until the last button is released, and
+ * `gotpointercapture` fires before the next pointer event. With no button held the call does
+ * nothing.
+ * @param nodeId - the node to capture the pointer for
+ * @param pointerId - the pointer to capture; only `1`, the mouse, exists
+ * @throws DOMException named `NotFoundError` when `pointerId` is not `1`
+ * @throws DOMException named `InvalidStateError` when `nodeId` names no node or a node outside
+ * the mounted tree
+ */
+export function setPointerCapture(nodeId: NodeId, pointerId: number): void {
+  native().setPointerCapture(nodeId, pointerId);
+}
+
+/**
+ * Releases the pointer capture `nodeId` requested. `lostpointercapture` fires before the next
+ * pointer event. The call does nothing for a node that has no capture.
+ * @param nodeId - the node that holds the capture
+ * @param pointerId - the pointer to release; only `1`, the mouse, exists
+ * @throws DOMException named `NotFoundError` when `pointerId` is not `1`
+ */
+export function releasePointerCapture(nodeId: NodeId, pointerId: number): void {
+  native().releasePointerCapture(nodeId, pointerId);
+}
+
+/**
+ * Whether `nodeId` requested the pointer capture and has not released it.
+ * @param nodeId - the node to ask about
+ * @param pointerId - the pointer to ask about
+ * @returns `false` for a pointer other than `1`, for a node outside the mounted tree and for a
+ * node that holds no capture
+ */
+export function hasPointerCapture(nodeId: NodeId, pointerId: number): boolean {
+  return native().hasPointerCapture(nodeId, pointerId);
+}

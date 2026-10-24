@@ -148,6 +148,8 @@ with the differences below. The listener methods are described in
 - Every scroll applies at once, whatever `behavior` says.
 - `focus()` and `scrollIntoView()` on a node that has no box yet scroll when
   the next frame draws it.
+- Only `pointerId` 1 is accepted by `setPointerCapture()`,
+  `releasePointerCapture()` and `hasPointerCapture()`.
 - The tree members are `parent`, `children` and `contains()`. `parent` is the
   parent element, and `children` lists the child nodes, text nodes included.
   `parentElement`, `childNodes` and the other tree members are missing.

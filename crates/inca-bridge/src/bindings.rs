@@ -7,6 +7,7 @@
 //! it no longer needs. It also creates the empty `globalThis.__inca_callbacks__`,
 //! where JS stores each listener under its callback id.
 
+mod capture;
 pub(crate) mod convert;
 mod focus;
 mod host;
@@ -23,6 +24,7 @@ use std::rc::Rc;
 use rquickjs::function::IntoJsFunc;
 use rquickjs::{Ctx, Function, Object, Result as JsResult};
 
+use capture::install_capture;
 use focus::install_focus;
 use listeners::install_events;
 use scroll::install_scroll;
@@ -48,6 +50,7 @@ pub fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
     install_tree(&natives)?;
     install_events(&natives)?;
     install_focus(&natives)?;
+    install_capture(&natives)?;
     install_scroll(&natives)?;
     crate::event::install(ctx)?;
     let globals = ctx.globals();

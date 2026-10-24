@@ -131,6 +131,9 @@ be passed, and `undefined` there counts as `null`.
 | `removeEventListener` | `(target: number \| "$document" \| "$window", event: string, callbackId: number) => boolean` | Drop one registration and return whether it was there. An unknown node returns `false`. |
 | `dispatchEvent` | `(target: number \| "$document" \| "$window", event: Event) => boolean` | Walk a script-built event over the path of `target` and return `false` when a listener canceled it, see [Dispatching from script](#dispatching-from-script) and [Tagged targets](#tagged-targets). |
 | `click` | `(nodeId: number) => void` | Walk an untrusted `click` at `nodeId`, see [Dispatching from script](#dispatching-from-script). |
+| `setPointerCapture` | `(nodeId: number, pointerId: number) => void` | Make `nodeId` the pending pointer capture while a button is held, see [Pointer events](#pointer-events). Throws `NotFoundError` for a `pointerId` other than 1 and `InvalidStateError` for a node outside the mounted tree or that names no node. |
+| `releasePointerCapture` | `(nodeId: number, pointerId: number) => void` | Clear the pending capture when `nodeId` holds it. Throws `NotFoundError` for a `pointerId` other than 1. |
+| `hasPointerCapture` | `(nodeId: number, pointerId: number) => boolean` | Whether `nodeId` is the pending capture and still mounted. `false` for a `pointerId` other than 1. |
 | `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its subtree, and return every `callbackId` registered in it. An unknown id returns `[]`. Destroying the root throws. Also drops the hold and the waiting `scrollIntoViewNode` calls of the destroyed nodes. |
 | `focusNode` | `(nodeId: number, preventScroll?: boolean) => void` | Request focus for `nodeId`, next frame. Only a connected node with a `tabindex` that is not hidden takes it, and a `button` defaults to `0`. Unless `preventScroll` is `true`, the scroll containers above the node then scroll it into view: a node that shows stays put, a node outside a container's box centres, and a node that shows partly moves the least vertically and stays put horizontally. A node with no box yet is retried next frame. |
 | `focusedNode` | `() => number \| null` | The id of the focused node, or `null` when none has focus. |
@@ -293,10 +296,11 @@ with the node ids.
 - Each kind of event inherits from a prototype of its kind that holds the
   getters of its payload fields. A UI prototype holds `view`, `detail` and
   `which`, and the focus, mouse and keyboard prototypes inherit from it.
-  `click`, `auxclick` and `contextmenu` inherit from a pointer prototype and
-  `wheel` from a wheel prototype, both children of the mouse one. The mouse
-  and keyboard prototypes hold their own `getModifierState`. A field getter
-  or `getModifierState` throws a `TypeError` on an event of another kind.
+  The pointer events, `click`, `auxclick` and `contextmenu` inherit from a
+  pointer prototype and `wheel` from a wheel prototype, both children of the
+  mouse one. The mouse and keyboard prototypes hold their own
+  `getModifierState`. A field getter or `getModifierState` throws a
+  `TypeError` on an event of another kind.
   Scroll events and events built with `new Event` inherit from
   `Event.prototype`, events built with `new CustomEvent` from
   `CustomEvent.prototype`, which holds the `detail` getter, and events built
@@ -304,8 +308,9 @@ with the node ids.
   - The walk turns the gpui payload into the payload of the event once, when
     it creates the event (`Payload::from_host`). `which` is `button + 1` on
     `mousedown`, `mouseup`, `click`, `dblclick`, `auxclick` and
-    `contextmenu`, the lowest held button index + 1 on the other mouse events
-    and 0 with none held, 0 on `wheel`, `keyCode` on key events and 0 on
+    `contextmenu`, the `button` + 1 on every pointer event (0 for a `button`
+    of -1), the lowest held button index + 1 on the other mouse events and 0
+    with none held, 0 on `wheel`, `keyCode` on key events and 0 on
     focus events. `view` is `null` and `detail` is 0 on key and focus events.
     `keyCode` comes from `key` on a US layout (`event/key_code.rs`).
 - GPUI's `platform` modifier becomes `metaKey` and `function` is dropped.
@@ -339,7 +344,8 @@ with the node ids.
 
 - The target of `mousedown`, `mouseup`, `mousemove`, `wheel` and
   `contextmenu` is the deepest container under the pointer, or the root when
-  there is none.
+  there is none. While a pointer capture is active, the pointer events and
+  `mousedown`, `mouseup`, `mousemove` go to the capturing node.
 - While any listener is registered or any node can take focus, every non-inert
   container reports the pointer (`EventSink::tracks_pointer`) through a marker
   listener and one `on_hover` (`EventSink::hover_changed`), which keeps the
@@ -379,7 +385,8 @@ with the node ids.
   release of any non-left button, with the `click` payload. The root tracker
   fires `contextmenu` at the target of a right `MouseDownEvent` right after
   the `mousedown` input, with `EventPayload::context_menu`: `button` 2,
-  `buttons` 2, `detail` 0, pointer source mouse.
+  `buttons` 2, `detail` 0, pointer source mouse. It goes to the target of the
+  press's `pointerdown`.
 - The first container to report in a pointer move calls
   `EventSink::pointer_over` with itself as the deepest and reports at once.
   Any other change reports once at the end of the update from the deepest
@@ -391,7 +398,28 @@ with the node ids.
   container. `relatedTarget` is the new container for `mouseout` and
   `mouseleave` and the old one for `mouseover` and `mouseenter`. A removed old
   container is skipped and its nearest remaining ancestor counts as the old
-  one. Position and modifiers are read at the report.
+  one. Position and modifiers are read at the report. The pointer events
+  `pointerout`, `pointerleave`, `pointerover` and `pointerenter` fire first, in
+  the same order, and the mouse ones follow. While a capture is active the report
+  takes the capturing node as the deepest container, and a gpui hover change
+  only updates the hovered set.
+- `EventSink::pointer_input` turns each raw mouse input into pointer events
+  (`dispatch/pointer.rs`). The held-button mask in `Host::held_buttons` changes
+  once per raw `mousedown` or `mouseup`. The first button down fires
+  `pointerdown`, the last button up fires `pointerup`, and any other change
+  fires `pointermove` with the changed `button`. Each fires before the mouse
+  event of the input. `pointermove` fires before `mousemove` and shares its
+  movement. A canceled `pointerdown` suppresses `mousedown`, `mousemove` and
+  `mouseup` until the `pointerup`, and the press does not focus.
+- Pointer capture keeps a pending target (`Host::capture_pending`) and an active
+  one (`Host::capture_active`). The bindings change the pending target. The
+  next pointer input, hover report or release makes it active: it fires
+  `lostpointercapture` at the old target, `document` when that node left the
+  tree, then `gotpointercapture` at the new one. Both copy the event that
+  caused them. The final button release fires `pointerup`, `mouseup`,
+  `lostpointercapture`, `click` or `auxclick` (at the `pointerup` target), then
+  the boundary events back to the node under the pointer. Deactivating the
+  window clears the held buttons and the capture without firing events.
 
 #### Mouse payload
 
@@ -405,11 +433,14 @@ with the node ids.
   the client position minus the box origin and border. A target with no
   record gets `clientX`/`clientY`.
 - `MousePayload::pointer` adds `pointerId`, `pointerType`, `isPrimary`,
-  `width`, `height` and `pressure`: mouse is 1, `"mouse"`, true, 1, 1 and
-  keyboard is -1, `""`, false, 1, 1. `pressure` is 0.5 when `buttons` is
-  non-zero, else 0.
+  `width`, `height` and `pressure`: a pointer event is 1, `"mouse"`, true, 1, 1,
+  a mouse `click`, `auxclick` and `contextmenu` is 1, `"mouse"`, false, 1, 1,
+  and the click of a key is -1, `""`, false, 1, 1. `pressure` is 0.5 on a
+  pointer event when `buttons` is non-zero, else 0. `MousePayload::button` is
+  `NO_BUTTON` for a pointer event about no button, which reads -1, and `detail`
+  is 0 on every pointer event.
 - `click`, `dblclick`, `auxclick` and `contextmenu` keep the `buttons` of
-  their own payload. Other mouse events take it from the held-button tracker,
+  their own payload. Other mouse events take it from `Host::held_buttons`,
   which every raw `mousedown` and `mouseup` updates.
 - `movementX`/`movementY` come from raw pointer moves, recorded once per
   window. Only `mousemove` takes them, and every other event holds 0.
@@ -437,6 +468,12 @@ with the node ids.
   release or the button losing focus ends the hold.
   A key click uses `MousePayload::keyboard_click`, and `preventDefault()` in
   `keydown` or `keyup` of the `button` ends it.
+- The Menu key (`key_name` maps gpui's `"menu"` to `"ContextMenu"`) and
+  Shift+F10 (not on macOS, as in Chromium) fire `contextmenu` from `key_default` on `keydown`, unless a
+  listener canceled it. It targets the focused node with `clientX`/`clientY` at
+  the center of its recorded box, or the deepest recorded box at (1, 1) when
+  nothing is focused. Its payload is mouse pointer source, `button` `NO_BUTTON` and
+  `buttons` 0.
 - A canceled `keydown` or `keyup` calls `Window::prevent_default` and
   `App::stop_propagation` after its walk. The platform then treats the key as
   handled, so later gpui key listeners stay idle. A stopped or unlistened key
@@ -501,6 +538,8 @@ with the node ids.
 | `click`, `auxclick`, `contextmenu` | mouse + pointer |
 | `dblclick`, `mousedown`, `mouseup`, `mousemove` | mouse |
 | `mouseenter`, `mouseleave`, `mouseover`, `mouseout` | mouse + `relatedTarget` |
+| `pointerdown`, `pointerup`, `pointermove`, `gotpointercapture`, `lostpointercapture` | mouse + pointer |
+| `pointerover`, `pointerout`, `pointerenter`, `pointerleave` | mouse + pointer + `relatedTarget` |
 | `wheel` | mouse + `deltaX`, `deltaY`, `deltaZ`, `deltaMode` |
 | `scroll` | none; every flag is false |
 | `focus`, `blur`, `focusin`, `focusout` | `relatedTarget` |

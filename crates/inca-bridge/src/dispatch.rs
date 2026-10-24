@@ -30,7 +30,7 @@ use std::rc::Rc;
 use gpui::{App, Window};
 use inca_gpui::event_sink::{hover_path_difference, with_screen};
 use inca_gpui::{
-    EventPayload, MousePayload, NodeId, PointerSource, buttons_mask, is_disabled_button,
+    EventPayload, MousePayload, NO_BUTTON, NodeId, PointerSource, buttons_mask, is_disabled_button,
 };
 use inca_jsenv::{Engine, EngineError, ErrorReporter, report_jobs, stderr_reporter};
 use rquickjs::Function;
@@ -40,7 +40,13 @@ use crate::bindings::Host;
 use crate::event::{self, Walk};
 use crate::focus::FocusTransition;
 
+mod pointer;
 mod sink;
+
+/// The payload of the window's `focus` and `blur`.
+const FOCUS_PAYLOAD: EventPayload = EventPayload::Focus {
+    related_target: None,
+};
 
 pub(crate) use inca_gpui::event_sink::spec_of;
 
@@ -58,10 +64,14 @@ pub struct EventDispatcher {
 /// The mutable state every clone of an [`EventDispatcher`] shares.
 #[derive(Default)]
 struct State {
-    /// Every button currently held, as a `mousedown`/`mouseup`/`mousemove`
-    /// payload's `buttons` bitmask. GPUI's own mouse events carry only the
-    /// one button each is about, not which others are held alongside it.
-    held_buttons: Cell<u8>,
+    /// Whether the `pointerdown` of the press now held was canceled. It suppresses `mousedown`,
+    /// `mousemove` and `mouseup` until the `pointerup`.
+    pointerdown_canceled: Cell<bool>,
+    /// The target of the last `pointerdown`, which the `contextmenu` of that press goes to.
+    press_target: Cell<Option<NodeId>>,
+    /// The target and button of the release that ended a capture, until its clicks and boundary
+    /// events fire.
+    captured_release: Cell<Option<(NodeId, u8)>>,
     // Position of the previous raw pointer move, shared by every window using
     // this dispatcher. `None` before the first move and after a window exit.
     last_position: Cell<Option<(f32, f32)>>,
@@ -119,35 +129,29 @@ impl EventDispatcher {
         !host.listeners.is_empty() || host.focus.has_handles()
     }
 
-    /// Returns `payload` with its `buttons` bitmask corrected against
-    /// [`State::held_buttons`]. A `mouseup` excludes the button just
-    /// released; every other kind includes every button still held.
+    /// Returns `payload` with its `buttons` bitmask set to [`Host::held_buttons`] unless the
+    /// event carries the buttons of its own press or release.
     fn with_held_buttons(&self, event: &str, mut payload: EventPayload) -> EventPayload {
+        let held = self.host.borrow().held_buttons;
         if let Some(mouse) = payload.mouse_mut().filter(|_| !spec_of(event).own_buttons) {
-            mouse.buttons = self.update_held_buttons(event, mouse.button);
+            mouse.buttons = held;
         }
         payload
     }
 
-    /// Updates [`State::held_buttons`] for `"mousedown"`/`"mouseup"` and
-    /// returns the current value. `"mousemove"`/`"wheel"` only read it.
-    /// `button` is `MousePayload`'s own field, a public part of
-    /// `inca-gpui`'s API, so an out-of-range value (only 0..=4 are ever
-    /// produced by this crate) is handled: [`buttons_mask`] maps it to 0.
+    /// Updates [`Host::held_buttons`] for a raw `"mousedown"` or `"mouseup"` of `button` and
+    /// returns the new value. `button` is `MousePayload`'s own field, a public part of
+    /// `inca-gpui`'s API, so an out-of-range value (only 0..=4 are ever produced by this crate)
+    /// is handled: [`buttons_mask`] maps it to 0.
     fn update_held_buttons(&self, event: &str, button: u8) -> u8 {
         let bit = buttons_mask(button);
+        let mut host = self.host.borrow_mut();
         match event {
-            "mousedown" => self
-                .state
-                .held_buttons
-                .set(self.state.held_buttons.get() | bit),
-            "mouseup" => self
-                .state
-                .held_buttons
-                .set(self.state.held_buttons.get() & !bit),
+            "mousedown" => host.held_buttons |= bit,
+            "mouseup" => host.held_buttons &= !bit,
             _ => {}
         }
-        self.state.held_buttons.get()
+        host.held_buttons
     }
 
     /// Returns `payload` with `movementX`/`movementY` set to the delta of the
@@ -473,27 +477,48 @@ impl EventDispatcher {
         self.sync_modifiers(window, true);
         if !active {
             inca_gpui::clear_presses(cx);
+            self.reset_pointer(window, cx);
         }
         self.host.borrow_mut().focus.set_window_blurred(!active);
         let focused = self.host.borrow().focus.focused_node(window, cx);
         if active {
-            self.fire_at_window("focus", window, cx);
+            self.fire_at_global(EventTargetId::Window, "focus", &FOCUS_PAYLOAD, window, cx);
         }
         if let Some(node) = focused {
             FocusTransition::window_activation(node, active).dispatch(self, window, cx);
         }
         if !active {
-            self.fire_at_window("blur", window, cx);
+            self.fire_at_global(EventTargetId::Window, "blur", &FOCUS_PAYLOAD, window, cx);
         }
     }
 
-    /// Fires `event` at `window` alone, with no node on its path.
-    fn fire_at_window(&self, event: &str, window: &mut Window, cx: &mut App) {
+    /// Ends the pointer capture with `lostpointercapture`, then forgets the held buttons and a
+    /// canceled `pointerdown`. The release of a button the window never sees would leave them set.
+    fn reset_pointer(&self, window: &mut Window, cx: &mut App) {
+        self.host.borrow_mut().capture_pending = None;
+        let payload =
+            EventPayload::Mouse(MousePayload::at(gpui::Point::default(), window.modifiers()));
+        self.process_capture(&payload, NO_BUTTON, window, cx);
+        self.state.pointerdown_canceled.set(false);
+        let mut host = self.host.borrow_mut();
+        host.held_buttons = 0;
+        host.capture_pending = None;
+        host.capture_active = None;
+    }
+
+    /// Fires `event` at `document` or `window` alone, with no node on its path.
+    fn fire_at_global(
+        &self,
+        target: EventTargetId,
+        event: &str,
+        payload: &EventPayload,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
         self.host.borrow_mut().focus.observe(window, cx);
-        let payload = EventPayload::Focus {
-            related_target: None,
-        };
-        let (_, entered) = self.walk(EventTargetId::Window, event, &payload, &[]);
+        let payload = self.with_held_buttons(event, payload.clone());
+        let payload = with_screen(payload, window);
+        let (_, entered) = self.walk(target, event, &payload, &[]);
         if entered {
             self.drain_observed(window);
         }
@@ -540,12 +565,28 @@ impl EventDispatcher {
         });
     }
 
-    /// Fires the hover events for the pointer moving from the deepest
-    /// container reported last time to the deepest one hovered now: `mouseout`
-    /// at the old one, `mouseleave` at each container left (innermost first),
-    /// `mouseover` at the new one and `mouseenter` at each container entered
-    /// (outermost first).
+    /// [`Self::report_hover_with`] for a move, which is about no button.
     fn report_hover(&self, next: Option<NodeId>, window: &mut Window, cx: &mut App) {
+        self.report_hover_with(next, NO_BUTTON, window, cx);
+    }
+
+    /// Fires the hover events for the pointer moving from the deepest
+    /// container reported last time to the one under it now, or to the capturing
+    /// node while a capture is active. The pointer events come first, then the
+    /// mouse ones. Each group is `out` at the old container, `leave` at each
+    /// container left (innermost first), `over` at the new one and `enter` at
+    /// each container entered (outermost first). The pointer events are about
+    /// `button`.
+    fn report_hover_with(
+        &self,
+        physical: Option<NodeId>,
+        button: u8,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let mouse = MousePayload::at(window.mouse_position(), window.modifiers());
+        self.process_capture(&EventPayload::Mouse(mouse), button, window, cx);
+        let next = self.hover_target(physical);
         let next_path = next.map(|id| self.path_from(id)).unwrap_or_default();
         // A removed container is replaced by its nearest live ancestor.
         let old_path = self.state.hover_prev.replace(next_path.clone());
@@ -559,15 +600,28 @@ impl EventDispatcher {
             return;
         }
         let (leave, enter) = hover_path_difference(&old_path, &next_path);
-        let mouse = MousePayload::at(window.mouse_position(), window.modifiers());
         let with = |related_target| {
             EventPayload::Mouse(MousePayload {
                 related_target,
                 ..mouse
             })
         };
-        // A removed container receives no `mouseout`.
-        if let Some(old) = prev.filter(|_| !removed) {
+        let pointer = |related| pointer::pointer_payload(&with(related), button);
+        // A removed container receives no `out`.
+        let old = prev.filter(|_| !removed);
+        if let Some(old) = old {
+            self.fire(old, "pointerout", &pointer(next), window, cx);
+        }
+        for &id in &leave {
+            self.fire(id, "pointerleave", &pointer(next), window, cx);
+        }
+        if let Some(new) = next {
+            self.fire(new, "pointerover", &pointer(prev), window, cx);
+        }
+        for &id in &enter {
+            self.fire(id, "pointerenter", &pointer(prev), window, cx);
+        }
+        if let Some(old) = old {
             self.fire(old, "mouseout", &with(next), window, cx);
         }
         for id in leave {

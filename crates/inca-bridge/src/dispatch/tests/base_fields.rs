@@ -12,7 +12,7 @@ use inca_test_macros::gpui_cases;
 fn an_out_of_range_button_does_not_panic() {
     let (dispatcher, _host, _reported) = dispatcher_with_engine();
     assert_eq!(dispatcher.update_held_buttons("mousedown", 200), 0);
-    assert_eq!(dispatcher.state.held_buttons.get(), 0);
+    assert_eq!(dispatcher.host.borrow().held_buttons, 0);
 }
 
 #[test]
@@ -47,6 +47,15 @@ fn base_fields_follow_the_spec_rows_and_prevent_default_needs_cancelable(cx: &mu
         ("mousedown", true, true, true),
         ("mouseup", true, true, true),
         ("mousemove", true, true, true),
+        ("pointerdown", true, true, true),
+        ("pointerup", true, true, true),
+        ("pointermove", true, true, true),
+        ("pointerover", true, true, true),
+        ("pointerout", true, true, true),
+        ("pointerenter", false, false, false),
+        ("pointerleave", false, false, false),
+        ("gotpointercapture", true, false, true),
+        ("lostpointercapture", true, false, true),
         ("wheel", true, true, true),
         ("scroll", false, false, false),
         ("keydown", true, true, true),
@@ -372,16 +381,16 @@ fn wheel_payload() -> EventPayload {
 #[gpui::test]
 #[case::click_from_keyboard("click", pointer_payload(PointerSource::Keyboard), "-1::false:1:1:0")]
 #[case::wheel_is_blank("wheel", wheel_payload(), ":::::")]
-#[case::click_from_mouse("click", pointer_payload(PointerSource::Mouse), "1:mouse:true:1:1:0")]
+#[case::click_from_mouse("click", pointer_payload(PointerSource::Mouse), "1:mouse:false:1:1:0")]
 #[case::auxclick_from_mouse(
     "auxclick",
     pointer_payload(PointerSource::Mouse),
-    "1:mouse:true:1:1:0"
+    "1:mouse:false:1:1:0"
 )]
 #[case::contextmenu_from_mouse(
     "contextmenu",
     pointer_payload(PointerSource::Mouse),
-    "1:mouse:true:1:1:0"
+    "1:mouse:false:1:1:0"
 )]
 #[case::mousedown_without_a_source("mousedown", EventPayload::Mouse(plain_mouse()), ":::::")]
 #[case::mouseup_without_a_source("mouseup", EventPayload::Mouse(plain_mouse()), ":::::")]

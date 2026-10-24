@@ -145,6 +145,9 @@ function installNative(): void {
     scrollIntoViewNode() {},
     dispatchEvent: () => true,
     click() {},
+    setPointerCapture() {},
+    releasePointerCapture() {},
+    hasPointerCapture: () => false,
   };
 }
 
