@@ -27,6 +27,17 @@ describe("createIncaApp", () => {
 
     expect(root.__node_id).toBe(1);
     expect(reactive(root)).toBe(root);
+    app.unmount();
+  });
+
+  it("mounts into the element that events already carry for the host root", () => {
+    const [resolved] = globalThis.__inca_targets__([1]);
+    const app = createIncaApp({ render: () => h("div") });
+
+    app.mount();
+
+    expect((app as unknown as { _container: IncaElement })._container).toBe(resolved);
+    app.unmount();
   });
 });
 

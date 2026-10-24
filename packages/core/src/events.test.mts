@@ -103,7 +103,7 @@ describe("addEventListener's callback registry", () => {
 });
 
 describe("identity of a registration", () => {
-  it("is node, event, capture and function", () => {
+  it("is target, event, capture and function", () => {
     const listener = vi.fn<() => void>();
 
     addEventListener(1, "click", listener);
@@ -114,6 +114,19 @@ describe("identity of a registration", () => {
 
     expect(native.addEventListener).toHaveBeenCalledTimes(5);
     expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(5);
+  });
+
+  it("keeps the registrations of document and window apart", () => {
+    const listener = vi.fn<() => void>();
+
+    addEventListener("$document", "click", listener);
+    addEventListener("$window", "click", listener);
+
+    expect(native.addEventListener.mock.calls.map((call) => call[0])).toEqual([
+      "$document",
+      "$window",
+    ]);
+    expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(2);
   });
 
   it("ignores a second registration of the same function, node, event and capture", () => {

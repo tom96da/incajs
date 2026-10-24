@@ -11,7 +11,7 @@ import type { IncaElement, IncaNode } from "../rendererCore.mts";
 
 /**
  * The mounted apps. The host keeps their nodes and this set keeps their
- * containers and handles, so events and `activeElement()` find the elements
+ * containers and handles, so events and `document.activeElement` find the elements
  * of an app that nothing else references.
  */
 const mounted = new Set<App<IncaElement>>();
@@ -52,9 +52,7 @@ export function createIncaApp(
 
   return Object.assign(app, {
     mount: (rootContainer?: IncaElement) => {
-      const instance = mountAt(
-        rootContainer ?? skipReactive(core.createIncaElement(core.rootNodeId(), "element")),
-      );
+      const instance = mountAt(rootContainer ?? skipReactive(core.rootElement()));
       mounted.add(app);
       return instance;
     },

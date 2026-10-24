@@ -108,11 +108,11 @@ function installNative(): void {
     removeStyle: (id) => void nodeOf(id),
     addEventListener(id) {
       const callbackId = nextCallbackId++;
-      nodeOf(id).listeners.push(callbackId);
+      nodeOf(id as number).listeners.push(callbackId);
       return callbackId;
     },
     removeEventListener(id, _event, callbackId) {
-      const listeners = nodeOf(id).listeners;
+      const listeners = nodeOf(id as number).listeners;
       const at = listeners.indexOf(callbackId);
       if (at !== -1) listeners.splice(at, 1);
       return at !== -1;

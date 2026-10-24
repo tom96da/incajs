@@ -12,7 +12,7 @@ framework. No Chromium, no DOM: UI renders directly on the GPU via
 
 ## How it works
 
-- The root `incajs` export is the `window` event target, `activeElement` and
+- The root `incajs` export is the `window` and `document` event targets and
   the public types.
 - `incajs/vue` is a custom renderer mapping Vue 3's `createRenderer`
   lifecycle onto the native host bridge. `createIncaApp(rootComponent,

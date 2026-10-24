@@ -6,7 +6,7 @@ import { runInNewContext } from "node:vm";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { activeElement, createIncaElement } from "./handle.mts";
+import { activeElement, createIncaElement, rootElement } from "./handle.mts";
 import { elementOf, markDestroyed, recordedCount, unregisterElement } from "./lifecycle.mts";
 import { createTextNode, remove } from "./shadowTree.mts";
 import type { ScrollOptions } from "./scroll.mts";
@@ -465,5 +465,32 @@ describe("createIncaElement contains", () => {
   ])("throws a TypeError for %s", (_name, value) => {
     const [root] = tree();
     expect(() => root!.contains(value as unknown as null)).toThrow(TypeError);
+  });
+});
+
+describe("rootElement wheel listeners", () => {
+  /** The `passive` argument that `element` registers a `wheel` listener with. */
+  function registeredPassive(element: IncaElement, options?: { passive: boolean }) {
+    const addEventListener = vi.fn<(...args: unknown[]) => number>(() => 0);
+    globalThis.__inca_native__ = { addEventListener } as never;
+    element.addEventListener("wheel", () => {}, options);
+    return addEventListener.mock.calls[0]![3];
+  }
+
+  function root(id: number): IncaElement {
+    globalThis.__inca_native__ = { rootNodeId: () => id } as never;
+    return rootElement();
+  }
+
+  it("are passive by default", () => {
+    expect(registeredPassive(root(70))).toBe(true);
+  });
+
+  it("are not passive when the options say so", () => {
+    expect(registeredPassive(root(71), { passive: false })).toBe(false);
+  });
+
+  it("are not passive on an inner element", () => {
+    expect(registeredPassive(createIncaElement(72, "element", "div"))).toBe(false);
   });
 });

@@ -591,7 +591,7 @@ fn the_cut_nodes_are_skipped_in_both_passes(cx: &mut TestAppContext) {
             &Walk {
                 name: "click",
                 flags: Flags::ALL,
-                target: child,
+                target: EventTargetId::Node(child),
                 cut: &[parent, outer],
                 payload: &EventPayload::None,
                 trusted: true,
@@ -607,6 +607,46 @@ fn the_cut_nodes_are_skipped_in_both_passes(cx: &mut TestAppContext) {
         out,
         serde_json::json!([["child-capture", child, 2], ["child", child, 2]]).to_string()
     );
+}
+
+#[gpui::test]
+fn a_cut_silences_document_and_window(cx: &mut TestAppContext) {
+    let (dispatcher, host, _reported) = dispatcher_with_engine();
+    let outer = node_under_root(&host);
+    let child = host.borrow_mut().tree.create_node("div").unwrap();
+    host.borrow_mut().tree.append_child(outer, child).unwrap();
+    listen(&dispatcher, child, "click", "() => out.push('child')");
+    for (tag, capture) in [
+        ("$document", true),
+        ("$document", false),
+        ("$window", false),
+    ] {
+        listen_global(
+            &dispatcher,
+            tag,
+            "click",
+            capture,
+            "() => out.push('global')",
+        );
+    }
+    let cx = cx.add_empty_window();
+
+    cx.update(|_, _| {
+        event::walk(
+            &dispatcher.engine,
+            &dispatcher.host,
+            &Walk {
+                name: "click",
+                flags: Flags::ALL,
+                target: EventTargetId::Node(child),
+                cut: &[outer],
+                payload: &EventPayload::None,
+                trusted: true,
+            },
+        );
+    });
+
+    assert_eq!(read_out(&dispatcher), serde_json::json!(["child"]));
 }
 
 #[rstest]

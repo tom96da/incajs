@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { markFreed } from "./element/lifecycle.mts";
-import type { HostCallback } from "./native.mts";
-import type { CallbackId, EventListenerOrObject, NodeId } from "./types.mts";
+import type { EventTargetId, HostCallback } from "./native.mts";
+import type { CallbackId, EventListenerOrObject } from "./types.mts";
 
 /**
  * Finds the id of a registration from its group and listener, when a listener
@@ -80,18 +80,21 @@ export function releaseCallbacks(callbackIds: readonly CallbackId[]): void {
 }
 
 /**
- * The capture flag is part of the identity: the same node, event and function
- * can listen in both phases side by side.
- * @param nodeId - the node listened on
+ * The capture flag is part of the identity: the same target, event and
+ * function can listen in both phases side by side.
+ * @param target - the event target (node id, "$document" or "$window")
  * @param event - the event name
  * @param capture - the capture flag of the registration
- * @returns the node, event and capture flag as one string
+ * @returns the target, event and capture flag as one string
  */
-export const groupOf = (nodeId: NodeId, event: string, capture: boolean | undefined): string =>
-  `${nodeId}:${event}:${capture === true}`;
+export const groupOf = (
+  target: EventTargetId,
+  event: string,
+  capture: boolean | undefined,
+): string => `${target}:${event}:${capture === true}`;
 
 /**
- * @returns how many `(nodeId, event, capture)` groups hold a registration
+ * @returns how many `(target, event, capture)` groups hold a registration
  * @internal
  */
 export function registeredGroupCount(): number {

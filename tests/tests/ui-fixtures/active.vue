@@ -6,7 +6,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 <script setup>
 import { ref } from "@vue/runtime-core";
 
-import { activeElement } from "incajs";
+import { document } from "incajs";
 
 const a = ref(null);
 const b = ref(null);
@@ -24,30 +24,30 @@ function record(value) {
 
 function focusA() {
   a.value.focus();
-  record(activeElement() === a.value);
+  record(document.activeElement === a.value);
 }
 
 function focusB() {
   b.value.focus();
-  record(activeElement() === b.value);
+  record(document.activeElement === b.value);
 }
 
 function blurA() {
   a.value.blur();
-  record(activeElement() === null);
+  record(document.activeElement === null);
 }
 
 function focusN() {
   n.value.focus();
-  record(activeElement() === null);
+  record(document.activeElement === null);
 }
 
 function onFocusB() {
-  focusResult.value = String(activeElement() === b.value);
+  focusResult.value = String(document.activeElement === b.value);
 }
 
 function onClickTarget() {
-  record(activeElement() === clickTarget.value);
+  record(document.activeElement === clickTarget.value);
 }
 
 function kill() {
@@ -55,11 +55,11 @@ function kill() {
 }
 
 function probeDoomed() {
-  result2.value = String(activeElement() === null);
+  result2.value = String(document.activeElement === null);
 }
 
 function probeDoomedFocused() {
-  record(activeElement() === doomed.value);
+  record(document.activeElement === doomed.value);
 }
 </script>
 

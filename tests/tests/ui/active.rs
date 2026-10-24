@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! `activeElement()` reads the focused node from a real `.vue` app.
+//! `document.activeElement` reads the focused node from a real `.vue` app.
 
 use super::common::{click, load, text_of};
 use gpui::TestAppContext;

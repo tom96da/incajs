@@ -179,6 +179,61 @@ fn window_activation_reports_the_four_focus_events_without_a_related_target(
     );
 }
 
+/// Marks every `focus` and `blur` that reaches `window`, as `type:target` in `seen`.
+fn listen_at_window(dispatcher: &EventDispatcher) {
+    for event in ["focus", "blur"] {
+        listen_global(dispatcher, "$window", event, false, "mark");
+    }
+}
+
+#[gpui::test]
+fn activating_the_window_fires_focus_at_window_before_the_focused_node(cx: &mut TestAppContext) {
+    let (dispatcher, host, window, node) = inactive_scene(cx);
+    listen_at_window(&dispatcher);
+    host.borrow_mut().focus.request_focus(node, true);
+    draw(cx, window);
+
+    set_active(cx, window, &dispatcher, true);
+
+    assert_eq!(
+        seen(&dispatcher),
+        format!(r#"["focus:$window","focus:{node}"]"#)
+    );
+}
+
+#[gpui::test]
+fn deactivating_the_window_fires_blur_at_window_after_the_focused_node(cx: &mut TestAppContext) {
+    let (dispatcher, host, window, node) = inactive_scene(cx);
+    set_active(cx, window, &dispatcher, true);
+    host.borrow_mut().focus.request_focus(node, true);
+    draw(cx, window);
+    listen_at_window(&dispatcher);
+    dispatcher
+        .engine
+        .eval::<()>("globalThis.seen = [];")
+        .unwrap();
+
+    set_active(cx, window, &dispatcher, false);
+
+    assert_eq!(
+        seen(&dispatcher),
+        format!(r#"["blur:{node}","blur:$window"]"#)
+    );
+}
+
+#[gpui::test]
+fn toggling_the_activation_with_nothing_focused_fires_focus_and_blur_at_window(
+    cx: &mut TestAppContext,
+) {
+    let (dispatcher, _host, window, _node) = inactive_scene(cx);
+    listen_at_window(&dispatcher);
+
+    set_active(cx, window, &dispatcher, true);
+    set_active(cx, window, &dispatcher, false);
+
+    assert_eq!(seen(&dispatcher), r#"["focus:$window","blur:$window"]"#);
+}
+
 /// Focuses a node, then drops its focus the way `removeChild` does, with no
 /// frame in between.
 fn focused_then_dropped(

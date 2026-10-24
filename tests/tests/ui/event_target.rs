@@ -1,14 +1,16 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! `target`, `currentTarget` and `composedPath()` are elements and `window`.
+//! `target`, `currentTarget` and `composedPath()` are elements, `document` and `window`.
 
 use super::common::{click, load, text_of};
 use gpui::TestAppContext;
 
-const CLICK: &str = "click:inner>outer[inner,outer,app,window] this:true ref:true reactive:true";
+const CLICK: &str =
+    "click:inner>outer[inner,outer,app,root,document,window] this:true ref:true reactive:true";
 
-// Chromium, Firefox and WebKit: the path lists the elements (plus body, html, document).
+// Chromium, Firefox and WebKit: the path lists the elements, body, html, document and window. The
+// host lists its root container where browsers list body and html.
 #[gpui::test]
 fn a_script_click_carries_the_ref_objects_and_this(cx: &mut TestAppContext) {
     let mut h = load(cx, "event-target");
@@ -35,16 +37,20 @@ fn a_dispatched_event_targets_its_element(cx: &mut TestAppContext) {
     click(&mut h, "ping");
     assert_eq!(
         text_of(&mut h, "log"),
-        "ping:inner>inner[inner,outer,app,window]"
+        "ping:inner>inner[inner,outer,app,root,document,window]"
     );
 }
 
-// Browsers report body as the target of a key with nothing focused; the host reports window.
+// Browsers report body as the target of a key with nothing focused; the host reports its root
+// container.
 #[gpui::test]
-fn a_key_with_nothing_focused_targets_window(cx: &mut TestAppContext) {
+fn a_key_with_nothing_focused_targets_the_root_container(cx: &mut TestAppContext) {
     let mut h = load(cx, "event-target");
     h.keystrokes("x");
-    assert_eq!(text_of(&mut h, "log"), "key:window>window[window]");
+    assert_eq!(
+        text_of(&mut h, "log"),
+        "key:root>window[root,document,window]"
+    );
 }
 
 // Chromium, Firefox and WebKit: a window key listener gets the focused element as target.
@@ -55,7 +61,7 @@ fn a_key_on_a_focused_node_reaches_window_with_that_target(cx: &mut TestAppConte
     h.keystrokes("x");
     assert_eq!(
         text_of(&mut h, "log"),
-        "key:inner>window[inner,outer,app,window]"
+        "key:inner>window[inner,outer,app,root,document,window]"
     );
 }
 

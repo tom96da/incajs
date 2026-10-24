@@ -8,21 +8,20 @@
 //! in Rust, and the getters and methods that read them sit on a prototype of
 //! the event's kind, built once per realm. `isTrusted` is the one own property
 //! of an event. The walk creates the event, runs the capture listeners from
-//! the root down to the target and then the bubble listeners from the target
+//! `window` down to the target and then the bubble listeners from the target
 //! up, all with that same object, then resets its `currentTarget` and
 //! `eventPhase`. The global constructors, `Event`, `MouseEvent` and the other
 //! kinds, build events of the same class, so a script can build an event and
 //! dispatch it. The prototypes sit in the realm's vault, and Rust keeps only
 //! their keys.
 //!
-//! The global `__inca_targets__` gives the objects that stand for the nodes of
-//! a walk.
+//! The global `__inca_targets__` gives the objects that stand for the targets
+//! of a walk: the nodes, then `document` and `window`.
 
 use std::cell::{Cell, RefCell};
 use std::sync::OnceLock;
 use std::time::Instant;
 
-use inca_gpui::NodeId;
 pub(crate) use inca_gpui::event_sink::Flags;
 use inca_jsenv::{FunctionAccessor, vault};
 use rquickjs::convert::Coerced;
@@ -38,7 +37,9 @@ mod record;
 mod walk;
 
 use record::{Held, IncaEvent, State};
-pub(crate) use walk::{Walk, click, dispatch_event, listened, path_from, walk};
+pub(crate) use walk::{Walk, click, dispatch_event, listened, walk};
+
+use crate::EventTargetId;
 
 /// The vault key of the event store: the prototype of each kind of event
 /// under the kind, and the `isTrusted` getter.
@@ -297,19 +298,20 @@ fn other_kind(ctx: &Ctx<'_>, member: &str) -> rquickjs::Error {
     )
 }
 
-/// What stands for each of `ids`: the entries of the array that the global
-/// `__inca_targets__` returns for them, or the ids themselves when the global
-/// is not a function.
+/// What stands for each of `targets`: the entries of the array that the
+/// global `__inca_targets__` returns for them, or the targets themselves when
+/// the global is not a function.
 ///
 /// # Errors
 ///
 /// Throws what the global throws, and a `TypeError` when it returns no array.
-fn targets_of<'js>(ctx: &Ctx<'js>, ids: &[NodeId]) -> JsResult<Vec<Value<'js>>> {
+fn targets_of<'js>(ctx: &Ctx<'js>, targets: &[EventTargetId]) -> JsResult<Vec<Value<'js>>> {
+    let given = array_of(ctx, targets.iter().copied())?;
     let Ok(hook) = ctx.globals().get::<_, Function>("__inca_targets__") else {
-        return ids.iter().map(|id| id.into_js(ctx)).collect();
+        return (0..targets.len()).map(|index| given.get(index)).collect();
     };
-    let found: Array = hook.call((array_of(ctx, ids.iter().copied())?,))?;
-    (0..ids.len()).map(|index| found.get(index)).collect()
+    let found: Array = hook.call((given,))?;
+    (0..targets.len()).map(|index| found.get(index)).collect()
 }
 
 /// A new array of `items`. Each entry is defined, so no index setter on

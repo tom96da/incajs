@@ -3,6 +3,8 @@
 
 // The package's public type surface.
 
+import type { EventHandlers, IncaElement } from "./element/types.mts";
+
 /**
  * Stable handle to a node in the native retained tree, returned by `createNode`
  * and used in every later call that touches that node.
@@ -133,7 +135,10 @@ export interface EventLike {
  * How a listener registered via `addEventListener` takes part in an event.
  */
 export interface ListenerOptions {
-  /** Listen while the event travels from the root down to the target. The default listens while it travels back up. */
+  /**
+   * Listen while the event travels from `window` down to the target. The default listens while it
+   * travels back up.
+   */
   capture?: boolean;
   /** `preventDefault()` calls inside the listener are ignored. */
   passive?: boolean;
@@ -143,7 +148,7 @@ export interface ListenerOptions {
 
 /**
  * The listener methods of an object that receives events, such as the
- * `window` export and a template `ref`. A registration is identified by the
+ * `window` and `document` exports and a template `ref`. A registration is identified by the
  * event name, the listener and `capture`. `removeEventListener` takes the
  * same listener that `addEventListener` received.
  */
@@ -198,6 +203,19 @@ export interface IncaEventTarget {
 }
 
 /**
+ * The event target between the elements and `window`.
+ */
+export interface IncaDocument extends IncaEventTarget, EventHandlers<IncaDocument> {
+  /** The element that has focus, or `null` when no element has focus. */
+  readonly activeElement: IncaElement | null;
+}
+
+/**
+ * The event target at the top of every event path.
+ */
+export interface IncaWindow extends IncaEventTarget, EventHandlers<IncaWindow> {}
+
+/**
  * The fields every event carries. {@link IncaEventMap} gives the event type of
  * each name the host dispatches, and a listener for any other name receives
  * this type.
@@ -217,10 +235,10 @@ export interface IncaEvent {
   /** `3`, the {@link IncaEvent.eventPhase} on an ancestor while the event travels up. */
   readonly BUBBLING_PHASE: 3;
   /**
-   * The element the event is about, or `window`. It is the deepest element
-   * under the pointer for pointer events, the nearest common ancestor of the
-   * press and the release for `click`, `dblclick` and `auxclick`, and the
-   * focused element for key events. With no such element it is `window`.
+   * The element the event is about. It is the deepest element under the pointer for pointer
+   * events, the nearest common ancestor of the press and the release for `click`, `dblclick` and
+   * `auxclick`, and the focused element for key events. With no such element it is the mount
+   * container's element. A script dispatch at `document` or `window` gives that object.
    */
   // At run time it is null only for a node with no live handle: one made by createNode directly,
   // or a collected handle. An event from a Vue element always has a handle.
@@ -228,7 +246,7 @@ export interface IncaEvent {
   /** The same object as {@link IncaEvent.target}. */
   readonly srcElement: IncaEventTarget;
   /**
-   * The element or `window` whose listener is running, and `null` once the
+   * The element, `document` or `window` whose listener is running, and `null` once the
    * event has been handled. A listener function runs with it as `this`.
    */
   readonly currentTarget: IncaEventTarget | null;
@@ -269,8 +287,8 @@ export interface IncaEvent {
   /** Cancels the event when it is cancelable and the listener is not passive. */
   preventDefault(): void;
   /**
-   * `target` and its ancestors, ending with `window`, and an empty array once
-   * the event has been handled.
+   * `target` and its ancestors, then `document` and `window`, and an empty
+   * array once the event has been handled.
    */
   composedPath(): IncaEventTarget[];
   /**

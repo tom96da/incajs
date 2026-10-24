@@ -28,7 +28,9 @@ fn only_a_listener_the_event_reaches_enters_the_engine(cx: &mut TestAppContext) 
     listen(&dispatcher, parent, "focus", "() => {}");
     assert!(!drained(&dispatcher), "bubble listener on an ancestor");
 
-    host.borrow_mut().listeners.remove(parent, "focus", 0);
+    host.borrow_mut()
+        .listeners
+        .remove(crate::EventTargetId::Node(parent), "focus", 0);
     listen_with(&dispatcher, parent, "focus", (true, false), "() => {}");
     assert!(drained(&dispatcher), "capture listener on an ancestor");
 }
@@ -82,7 +84,9 @@ fn tracks_pointer_only_with_a_listener_or_a_focusable_node(cx: &mut TestAppConte
 
     listen(&dispatcher, node, "keydown", "() => {}");
     assert!(dispatcher.tracks_pointer());
-    host.borrow_mut().listeners.remove(node, "keydown", 0);
+    host.borrow_mut()
+        .listeners
+        .remove(crate::EventTargetId::Node(node), "keydown", 0);
     assert!(!dispatcher.tracks_pointer());
 
     host.borrow_mut()

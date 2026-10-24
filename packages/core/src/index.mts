@@ -3,7 +3,7 @@
 
 // The renderer's value exports live in `rendererCore.mts`.
 
-export { activeElement } from "./element/handle.mts";
+export { document } from "./document.mts";
 export { window } from "./window.mts";
 export type { RectLike, RectValues } from "./element/geometry.mts";
 export type { ScrollIntoViewOptions, ScrollOptions } from "./element/scroll.mts";
@@ -15,6 +15,7 @@ export type {
   EventListener,
   EventListenerObject,
   EventListenerOrObject,
+  IncaDocument,
   IncaEvent,
   IncaEventMap,
   IncaEventTarget,
@@ -24,6 +25,7 @@ export type {
   IncaPointerEvent,
   IncaUIEvent,
   IncaWheelEvent,
+  IncaWindow,
   ListenerOptions,
   NodeId,
   StyleProps,

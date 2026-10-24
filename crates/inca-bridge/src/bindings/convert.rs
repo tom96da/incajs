@@ -7,6 +7,9 @@ use rquickjs::{Ctx, Exception, FromJs, IntoJs, Result as JsResult, Value};
 use inca_gpui::element::scroll::Align;
 use inca_gpui::{NodeId, TreeError, VirtualNode, VirtualTree};
 
+use crate::EventTargetId;
+use crate::event_target::{DOCUMENT_TAG, WINDOW_TAG};
+
 /// An optional boolean argument: omitted, `undefined` and `null` give the
 /// default.
 pub(super) type Flag = Opt<Option<bool>>;
@@ -49,6 +52,35 @@ impl<'js> FromJs<'js> for JsAlign {
             _ => Err(Exception::throw_type(
                 ctx,
                 &format!("unknown scroll alignment: {name}"),
+            )),
+        }
+    }
+}
+
+/// An event target argument: a node id as [`JsNodeId`] takes it, or the tag
+/// `"$document"` or `"$window"`. Any other string throws a `TypeError`.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct JsEventTargetId(pub(super) EventTargetId);
+
+impl<'js> FromJs<'js> for JsEventTargetId {
+    fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> JsResult<Self> {
+        let Some(tag) = value.as_string() else {
+            return JsNodeId::from_js(ctx, value).map(|JsNodeId(id)| Self(EventTargetId::Node(id)));
+        };
+        match tag.to_string()?.as_str() {
+            DOCUMENT_TAG => Ok(Self(EventTargetId::Document)),
+            WINDOW_TAG => Ok(Self(EventTargetId::Window)),
+            other => Err(Exception::throw_type(
+                ctx,
+                &format!(
+                    concat!(
+                        "unknown event target tag: {other}. ",
+                        "pass a node id, \"{document}\" or \"{window}\""
+                    ),
+                    other = other,
+                    document = DOCUMENT_TAG,
+                    window = WINDOW_TAG,
+                ),
             )),
         }
     }

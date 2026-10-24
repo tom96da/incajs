@@ -3,7 +3,14 @@
 
 import { blur, click, focus } from "../events.mts";
 import { createEventTarget } from "../eventTarget.mts";
-import { focusedNode, getAttribute, scrollIntoViewNode, scrollOf, setAttribute } from "../tree.mts";
+import {
+  focusedNode,
+  getAttribute,
+  rootNodeId,
+  scrollIntoViewNode,
+  scrollOf,
+  setAttribute,
+} from "../tree.mts";
 import { withEventHandlers } from "./eventHandlers.mts";
 import { layoutBox, offsetOf, offsetParentOf, rectOf, tabIndexOf } from "./geometry.mts";
 import { elementOf, isDestroyed, isNode, registerElement, withNodeId } from "./lifecycle.mts";
@@ -20,14 +27,17 @@ import type { EventHandlers, IncaElement, IncaNode } from "./types.mts";
  * @param id - the native node's id
  * @param kind - whether the node is an element or a comment stand-in
  * @param tag - the node's element kind, if it has one; a `button` defaults to tab index `0`
+ * @param passiveByDefault - event names whose listeners are passive unless their options say
+ *   `passive: false`
  * @returns the new handle
  */
 export function createIncaElement(
   id: NodeId,
   kind: IncaElement["kind"],
   tag?: TagName,
+  passiveByDefault: readonly string[] = [],
 ): IncaElement {
-  const target = createEventTarget(() => id);
+  const target = createEventTarget(() => id, passiveByDefault);
   const scroll = () => (isDestroyed(element) ? null : scrollOf(id));
   const fields: Omit<IncaElement, "__node_id" | keyof EventHandlers> = {
     get id() {
@@ -140,4 +150,15 @@ export function createIncaElement(
 export function activeElement(): IncaElement | null {
   const id = focusedNode();
   return id === null ? null : (elementOf(id) ?? null);
+}
+
+/**
+ * Returns the handle of the host's mount container, which stands between the app's elements and
+ * `document` in an event path. A live handle is reused, so a mount and an event see one object.
+ * A `wheel` listener on it is passive unless its options say `passive: false`.
+ * @returns the mount container's handle
+ */
+export function rootElement(): IncaElement {
+  const id = rootNodeId();
+  return elementOf(id) ?? createIncaElement(id, "element", undefined, ["wheel"]);
 }

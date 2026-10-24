@@ -81,8 +81,17 @@ fn a_script_offset_before_the_first_draw_fires_once_after_it(cx: &mut TestAppCon
 fn removing_the_listener_between_frames_fires_nothing(cx: &mut TestAppContext) {
     let mut scene = Scene::new(cx, parented_container(), &record_scroll(1));
     scene.wheel(-50.);
-    let id = scene.host.borrow().listeners.listeners_for(1, "scroll")[0].callback;
-    assert!(scene.host.borrow_mut().listeners.remove(1, "scroll", id));
+    let id = scene
+        .host
+        .borrow()
+        .listeners
+        .listeners_for(inca_bridge::EventTargetId::Node(1), "scroll")[0]
+        .callback;
+    assert!(scene.host.borrow_mut().listeners.remove(
+        inca_bridge::EventTargetId::Node(1),
+        "scroll",
+        id
+    ));
     scene.wheel(-20.);
     assert_eq!(scene.ran(), r#"["scroll:1:false"]"#);
 }
