@@ -71,7 +71,7 @@ fn contextmenu_key_dispatches_to_focused_node(cx: &mut TestAppContext) {
 
 #[gpui_cases]
 #[gpui::test]
-#[case::shift_f10("shift-f10", false, 1)]
+#[case::shift_f10("shift-f10", false, usize::from(!cfg!(target_os = "macos")))]
 #[case::f10("f10", false, 0)]
 #[case::shift_menu("shift-menu", false, 0)]
 #[case::keyup("shift-f10", true, 0)]
