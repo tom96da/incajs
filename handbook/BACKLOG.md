@@ -35,11 +35,9 @@ A fixed entry is deleted and its ID is never reused.
   stdout client and its stderr goes nowhere, so a panic there leaves nothing
   behind. It needs a log file or a dialog. In `inca dev` a panic shows twice:
   once from the default hook on stderr, and once as the `-32603` line the CLI
-  prints. A host thread blocked writing to a stalled stdout pipe holds the
-  hook, though the panic text has already reached stderr. In a production
-  build an error an event handler throws is logged to the console only, so the
-  destination also decides whether it carries those. It is the first half of
-  the crash reporting in
+  prints. In a production build an error an event handler throws is logged to
+  the console only, so the destination also decides whether it carries those.
+  It is the first half of the crash reporting in
   [ROADMAP.md](./ROADMAP.md#known-gaps-not-yet-scheduled); the destination is
   undecided.
 
@@ -965,15 +963,6 @@ A fixed entry is deleted and its ID is never reused.
   `expand` rebuilds the case function from its name, parameters, return type
   and body only. `async`, `unsafe`, generics, lifetimes and a `where` clause
   are lost, so such a test fails to compile. The README does not say so.
-
-- **B-197 The panic hook can hang behind a blocked stdout writer**
-  `Units: host · Size: S · Impact: Low`
-
-  The `StdoutWriter` thread holds the stdout lock while it writes a line. A
-  parent that stops reading a full stdout pipe blocks that write, and the
-  panic hook of any other thread then waits for the same lock. The panicking
-  thread neither exits nor aborts. The panic message already reached stderr.
-  Found by reading; not reproduced.
 
 - **B-198 Chromium fires `blur` and `focusout` when a focused node is removed or moved**
   `Units: bridge,docs · Size: S · Impact: Low`

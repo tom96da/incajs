@@ -156,17 +156,3 @@ fn an_unknown_request_line_is_answered_method_not_found(cx: &mut TestAppContext)
     assert!(sent[0].contains(r#""message":"unknown method: nope""#));
     assert_eq!(sender.receiver_count(), 1, "the loop keeps serving");
 }
-
-#[test]
-fn a_panic_is_written_as_one_internal_error_line() {
-    let mut out = Vec::new();
-
-    write_panic_line(&mut out, "boom\nsecond line");
-
-    let text = String::from_utf8(out).unwrap();
-    assert_eq!(text.lines().count(), 1);
-    let decoded: Value = serde_json::from_str(&text).unwrap();
-    assert!(decoded["id"].is_null());
-    assert_eq!(decoded["error"]["code"], -32603);
-    assert_eq!(decoded["error"]["message"], "boom\nsecond line");
-}

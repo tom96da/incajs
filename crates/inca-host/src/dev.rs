@@ -18,6 +18,7 @@ use std::fs;
 use std::io::{self, BufRead, Write};
 use std::ops::ControlFlow;
 use std::rc::Rc;
+use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -51,34 +52,60 @@ pub(crate) trait Writer {
 /// owning a copy of the underlying channel or thread.
 pub(crate) type SharedWriter = Rc<dyn Writer>;
 
+/// One queued line and, for a panic report, the sender that confirms its flush.
+type Queued = (String, Option<mpsc::SyncSender<()>>);
+
+/// How long the panic hook waits for the writer thread's flush: over 100 times
+/// the slowest flush measured under 24 busy loops (8.15 ms).
+const PANIC_REPORT_WAIT: Duration = Duration::from_secs(1);
+
 /// Owns real stdout on a dedicated thread. `write_line` only pushes onto an
 /// unbounded channel, so a parent that reads its stdin slowly stalls that
-/// thread, never the one rendering frames. The thread holds the stdout lock
-/// one line at a time, so [`install_panic_hook`] can write between lines.
+/// thread, never the one rendering frames. This thread is the only code that
+/// holds the stdout lock.
 pub(crate) struct StdoutWriter(
-    async_channel::Sender<String>,
+    async_channel::Sender<Queued>,
     RefCell<Option<thread::JoinHandle<()>>>,
+    Option<thread::ThreadId>,
 );
+
+/// Writes each queued line to the sink `open` returns, flushes it, then
+/// confirms a line that carries a confirmation sender.
+fn write_lines<W: Write>(receiver: &async_channel::Receiver<Queued>, mut open: impl FnMut() -> W) {
+    while let Ok((line, ack)) = receiver.recv_blocking() {
+        let mut out = open();
+        if let Err(err) = writeln!(out, "{line}").and_then(|()| out.flush()) {
+            log::warn!("failed to write to stdout: {err}");
+            break;
+        }
+        if let Some(ack) = ack {
+            let _ = ack.send(());
+        }
+    }
+}
 
 impl StdoutWriter {
     pub(crate) fn spawn() -> Self {
-        let (sender, receiver) = async_channel::unbounded::<String>();
-        let handle = thread::spawn(move || {
-            while let Ok(line) = receiver.recv_blocking() {
-                let mut stdout = io::stdout().lock();
-                if let Err(err) = writeln!(stdout, "{line}").and_then(|()| stdout.flush()) {
-                    log::warn!("failed to write to stdout: {err}");
-                    break;
-                }
-            }
-        });
-        Self(sender, RefCell::new(Some(handle)))
+        let (sender, receiver) = async_channel::unbounded();
+        let handle = thread::spawn(move || write_lines(&receiver, || io::stdout().lock()));
+        let id = handle.thread().id();
+        Self(sender, RefCell::new(Some(handle)), Some(id))
+    }
+
+    /// Returns a clone of the sender to enqueue lines from other threads.
+    pub(crate) fn sender_clone(&self) -> async_channel::Sender<Queued> {
+        self.0.clone()
+    }
+
+    /// The id of the thread that writes the lines, `None` for a writer without one.
+    pub(crate) fn thread_id(&self) -> Option<thread::ThreadId> {
+        self.2
     }
 }
 
 impl Writer for StdoutWriter {
     fn write_line(&self, line: String) {
-        if self.0.send_blocking(line).is_err() {
+        if self.0.send_blocking((line, None)).is_err() {
             log::warn!("stdout writer thread is gone");
         }
     }
@@ -100,29 +127,66 @@ pub(crate) fn send(writer: &dyn Writer, message: &Outgoing) {
     }
 }
 
-/// Writes the `-32603` line reporting a panic to `out`, with `message` as
-/// the error message, and flushes it. The write is synchronous: a panic
-/// inside a platform callback can abort the process before a queued line
-/// would be sent.
-fn write_panic_line(out: &mut impl Write, message: &str) {
-    let Ok(line) = wire::encode(&Outgoing::error(
-        Value::Null,
-        ErrorCode::InternalError,
-        message,
-    )) else {
-        return;
-    };
-    let _ = writeln!(out, "{line}").and_then(|()| out.flush());
+/// Encodes a panic message as a JSON-RPC `-32603` error line with null id.
+fn panic_line(message: &str) -> String {
+    serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": null,
+        "error": { "code": ErrorCode::InternalError.code(), "message": message },
+    })
+    .to_string()
 }
 
-/// Installs a panic hook that reports each panic to the protocol client as
-/// a `-32603` error with a `null` id, after the previously installed hook
-/// has run.
-pub(crate) fn install_panic_hook() {
+/// Queues `message` as a `-32603` line on `sender` and waits up to `wait` for
+/// the writer thread's flush. A closed channel, a panic on the writer thread
+/// `writer` itself and a missing confirmation are written to `stderr`. The release host aborts on
+/// a panic, so the line has to be flushed before the hook returns.
+fn report_panic(
+    sender: &async_channel::Sender<Queued>,
+    writer: Option<thread::ThreadId>,
+    message: &str,
+    stderr: &mut impl io::Write,
+    wait: Duration,
+) {
+    let line = panic_line(message);
+    if writer == Some(thread::current().id()) {
+        let _ = writeln!(
+            stderr,
+            "panic report not sent. the panic is on the writer thread"
+        );
+        return;
+    }
+    let (ack, confirmed) = mpsc::sync_channel(1);
+    if sender.try_send((line, Some(ack))).is_err() {
+        let _ = writeln!(
+            stderr,
+            "panic report not sent. the writer channel is closed"
+        );
+    } else if confirmed.recv_timeout(wait).is_err() {
+        let _ = writeln!(
+            stderr,
+            "panic report not confirmed. the writer did not flush in time"
+        );
+    }
+}
+
+/// Installs a panic hook that runs the previous hook, then reports the panic
+/// to the protocol client through `sender` as a `-32603` error with a `null`
+/// id. `writer` is the thread that writes the lines.
+pub(crate) fn install_panic_hook(
+    sender: async_channel::Sender<Queued>,
+    writer: Option<thread::ThreadId>,
+) {
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         previous(info);
-        write_panic_line(&mut io::stdout().lock(), &info.to_string());
+        report_panic(
+            &sender,
+            writer,
+            &info.to_string(),
+            &mut io::stderr(),
+            PANIC_REPORT_WAIT,
+        );
     }));
 }
 

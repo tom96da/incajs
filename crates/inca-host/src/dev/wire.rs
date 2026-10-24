@@ -68,7 +68,7 @@ pub enum ErrorCode {
 }
 
 impl ErrorCode {
-    fn code(self) -> i32 {
+    pub(super) fn code(self) -> i32 {
         match self {
             ErrorCode::ParseError => -32700,
             ErrorCode::InvalidRequest => -32600,
