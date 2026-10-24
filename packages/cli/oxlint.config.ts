@@ -4,7 +4,7 @@
 import { defineConfig } from "oxlint";
 import type { OxlintOverride } from "oxlint";
 
-import root from "../../oxlint.config.ts";
+import rootConfig from "../../oxlint.config.ts";
 
 const overrides: OxlintOverride[] = [
   {
@@ -85,11 +85,12 @@ const overrides: OxlintOverride[] = [
           ],
         },
       ],
+      "import/no-nodejs-modules": "error",
     },
   },
 ];
 
 export default defineConfig({
-  ...root,
+  extends: [rootConfig],
   overrides,
 });
