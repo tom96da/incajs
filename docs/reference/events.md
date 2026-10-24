@@ -26,8 +26,6 @@ methods of the DOM `Event` interface (see Base fields).
 `removeEventListener()` and `dispatchEvent()`.
 
 - The mount container (the container `mount()` targets, see [Elements](./elements.md)) stands in for `html` and `body` in `composedPath()`.
-- A `wheel` listener on the mount container is passive unless its options say
-  `passive: false`, as on `body`.
 - The `signal` option of `addEventListener()` is unsupported.
 - The ref of an unmounted element ignores `addEventListener()` and an
   assignment to a handler property, and `dispatchEvent()` returns `true`.
@@ -51,13 +49,13 @@ Every event object carries the fields of the DOM
 interface. This includes the legacy aliases `srcElement`, `cancelBubble`
 and `returnValue`. The three flags depend on the event:
 
-| Events                                                           | bubbles | cancelable | composed |
-| ---------------------------------------------------------------- | ------- | ---------- | -------- |
-| mouse, pointer, wheel and keyboard events                        | yes     | yes        | yes      |
-| `mouseenter`, `mouseleave`, `pointerenter`, `pointerleave`       | no      | no         | no       |
-| `scroll`                                                         | no      | no         | no       |
-| `focus`, `blur`                                                  | no      | no         | yes      |
-| `focusin`, `focusout`, `gotpointercapture`, `lostpointercapture` | yes     | no         | yes      |
+| Events                           | bubbles | cancelable | composed |
+| -------------------------------- | ------- | ---------- | -------- |
+| mouse, wheel and keyboard events | yes     | yes        | yes      |
+| `mouseenter`, `mouseleave`       | no      | no         | no       |
+| `scroll`                         | no      | no         | no       |
+| `focus`, `blur`                  | no      | no         | yes      |
+| `focusin`, `focusout`            | yes     | no         | yes      |
 
 - `timeStamp` counts milliseconds since the host started.
 - The `view` of a UI event is `null`.
@@ -76,8 +74,6 @@ from [Pointer Events](https://www.w3.org/TR/2026/WD-pointerevents4-20261005/#whe
 
 `click`, `auxclick` and `contextmenu` carry the fields of
 [`PointerEvent`](https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent).
-The click of a key has `pointerId` -1, an empty `pointerType` and 0 for every
-coordinate.
 
 | Event         | button | buttons | detail      |
 | ------------- | ------ | ------- | ----------- |
@@ -91,12 +87,10 @@ coordinate.
 - `preventDefault()` in a `contextmenu` listener only sets `defaultPrevented`.
 - `screenX` and `screenY` add the window position. On Wayland they equal the
   client position.
-- `isPrimary` is `false`. WebKit and Firefox report `true`.
 - `scrollend` is unsupported.
-- A mouse event outside every element has the mount container as `target`,
-  where browsers report `body` (Firefox reports `html`). Moving the pointer
-  between an element and an empty area gives the mount container as
-  `relatedTarget`.
+- A mouse event outside every element has the mount container as `target`.
+  Moving the pointer between an element and an empty area gives the mount
+  container as `relatedTarget`.
 
 ## Pointer
 
@@ -112,23 +106,13 @@ never dispatched. The capture methods are in [Elements](./elements.md).
 - `tiltX`, `tiltY`, `twist`, `tangentialPressure`, `altitudeAngle`,
   `azimuthAngle`, `persistentDeviceId`, `getCoalescedEvents()` and
   `getPredictedEvents()` of `PointerEvent` are unsupported.
-- The pointer boundary events (`pointerout`, `pointerleave`, `pointerover`,
-  `pointerenter`) precede the mouse ones, then `pointermove` and `mousemove`
-  follow. WebKit interleaves each pointer event with its mouse counterpart.
-- After a captured final release the order is `pointerup`, `mouseup`,
-  `lostpointercapture`, `click`, then the boundary events. WebKit fires
-  `lostpointercapture` before `mouseup`.
-- The boundary events that follow a captured release carry the `button` and
-  `which` of the `pointerup`. WebKit and Firefox report -1 and 0.
 
 ## Keyboard
 
 Keyboard events carry the fields of
 [`KeyboardEvent`](https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent)
 from [UI Events](https://www.w3.org/TR/2026/WD-uievents-20260221/#events-keyboard-types).
-`keydown` and `keyup` go to the focused node, or to the mount container when
-nothing is focused. `target` is that node or the mount container, where
-browsers report `body`.
+With nothing focused, `keydown` and `keyup` go to the mount container.
 
 | Field         | Value                                           |
 | ------------- | ----------------------------------------------- |
@@ -144,11 +128,7 @@ browsers report `body`.
   Meta on macOS and Control elsewhere.
 - Pressing a modifier alone fires `keydown` and `keyup` with its name as
   `key`.
-- The Menu key and Shift+F10 fire `contextmenu` on `keydown`, after the
-  `keydown` listeners and unless one canceled the `keydown`. Shift+F10 fires it
-  on Linux and Windows only. It targets the focused element, with `clientX` and
-  `clientY` at the center of its box. With nothing focused it targets the element at (1, 1).
-  It has `pointerId` 1, `pointerType` `"mouse"`, `button` -1 and no buttons.
+- Shift+F10 fires `contextmenu` on Linux and Windows only.
 - The quit shortcut (Cmd+Q on macOS, Ctrl+Q elsewhere) goes to the host only.
 
 ## Focus
@@ -167,7 +147,7 @@ rules, with the differences below.
 - `hidden="until-found"` counts as shown.
 - A focus ring is unsupported.
 - After the last node, Tab leaves nothing focused and the next Tab starts at
-  the first node, as in Chromium and WebKit. Focus stays in the window.
+  the first node. Focus stays in the window.
 
 ## Dispatching events
 
