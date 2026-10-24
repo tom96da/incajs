@@ -7,7 +7,7 @@ import type { FSWatcher } from "node:fs";
 
 import { MAIN_FILES } from "./entry.mts";
 
-/** A watch that resolves once, when a file that could fix a failed start is saved. */
+/** A watch that resolves once, when a file that decides the app's config or entry changes. */
 export interface EditWatch {
   /** Resolves once, after a relevant change has been quiet for the debounce. */
   readonly edited: Promise<void>;
@@ -24,10 +24,10 @@ const CONFIG_FILE = /^(?:inca\.config\.[a-z0-9]+|package\.json)$/;
 const ENTRY_FILES: readonly string[] = [...MAIN_FILES, "App.vue"];
 
 /**
- * Watches the files that decide whether an app can start: `inca.config.*`
- * and `package.json` in `cwd`, `src/main.mts`, `src/main.ts`, `src/main.js` and `src/App.vue`, and every
- * file passed to {@link EditWatch.add}. Creating, deleting, changing or
- * renaming one of them counts as an edit. Edits to other files are ignored.
+ * Watches the files that decide how an app starts: `inca.config.*` and `package.json` in `cwd`,
+ * `src/main.mts`, `src/main.ts`, `src/main.js` and `src/App.vue`, and every file passed to
+ * {@link EditWatch.add}. Creating, deleting, changing or renaming one of them counts as an edit.
+ * Edits to other files are ignored.
  *
  * The watchers are live when this returns, so a save made while the caller
  * is working counts. An edit made before the caller awaits

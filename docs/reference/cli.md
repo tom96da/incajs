@@ -30,6 +30,11 @@ When the config or the entry cannot be used before the first build, it
 prints the error and retries when you save the config or the entry. It
 stops before building when no host binary can be found.
 
+When no `entry` is set, it selects the entry again after a `src/main` file or
+`src/App.vue` is created or deleted, and reloads the development window if the
+selection changed. While no entry exists, it prints the error and keeps the
+window open until one appears.
+
 ### Usage
 
 ```sh

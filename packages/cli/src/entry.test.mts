@@ -1,13 +1,14 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { entryRoot, resolveEntry } from "./entry.mts";
+import { entryRoot, resolveEntry, selectEntry } from "./entry.mts";
 
 let cwd: string | undefined;
 
@@ -73,6 +74,16 @@ describe("resolveEntry", () => {
     await expect(resolveEntry(app)).rejects.toThrow(
       `no app entry found. check that ${path.join(app, "src/main.ts")} or ${path.join(app, "src/App.vue")} exists`,
     );
+  });
+});
+
+describe("selectEntry", () => {
+  it("gives the synthesized entry for src/App.vue without writing it", async () => {
+    const app = await makeApp();
+    await writeFile(path.join(app, "src/App.vue"), "<template><div/></template>\n");
+
+    expect(selectEntry(app)).toBe(path.join(app, "node_modules/.inca/entry.mts"));
+    expect(existsSync(path.join(app, "node_modules/.inca/entry.mts"))).toBe(false);
   });
 });
 

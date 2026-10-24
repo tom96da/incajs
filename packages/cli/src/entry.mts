@@ -33,6 +33,19 @@ export function entryRoot(cwd: string, entry: string): string {
 }
 
 /**
+ * The path {@link resolveEntry} would return, without writing the synthesized entry.
+ * @param cwd - the app's root directory
+ * @returns the path of the entry file, or `undefined` when no entry exists
+ */
+export function selectEntry(cwd: string): string | undefined {
+  const mainPaths = MAIN_FILES.map((file) => path.join(cwd, "src", file));
+  const mainPath = mainPaths.find((candidate) => existsSync(candidate));
+  if (mainPath) return mainPath;
+
+  return existsSync(path.join(cwd, "src/App.vue")) ? synthesizedEntryPath(cwd) : undefined;
+}
+
+/**
  * Resolves an app's entry point. A `src/main.mts`, `src/main.ts` or
  * `src/main.js` committed by the app wins outright, in that order, and is
  * used verbatim for full control over bootstrapping. Otherwise
@@ -45,12 +58,10 @@ export function entryRoot(cwd: string, entry: string): string {
  * @throws if none of the main files and no `src/App.vue` exists
  */
 export async function resolveEntry(cwd: string): Promise<string> {
-  const mainPaths = MAIN_FILES.map((file) => path.join(cwd, "src", file));
-  const mainPath = mainPaths.find((candidate) => existsSync(candidate));
-  if (mainPath) return mainPath;
-
   const appPath = path.join(cwd, "src/App.vue");
-  if (existsSync(appPath)) return synthesizeEntry(appPath, cwd);
+  const selected = selectEntry(cwd);
+  if (selected === synthesizedEntryPath(cwd)) return synthesizeEntry(appPath, cwd);
+  if (selected) return selected;
 
   throw new IncaError(
     "ERR_INCA_ENTRY_NOT_FOUND",

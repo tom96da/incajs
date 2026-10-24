@@ -15,20 +15,24 @@ import {
 import { defaultBundler } from "./defaultBundler.mts";
 import { HostClient, assertHostBin, resolveHostBin } from "./dev-client/index.mts";
 import { acquireDevLock } from "./devLock.mts";
-import { entryRoot, resolveEntry } from "./entry.mts";
+import { entryRoot, resolveEntry, selectEntry } from "./entry.mts";
 import { IncaError } from "./error.mts";
 import { STAMPED, log, printFault, toFault } from "./log.mts";
 import { writeMacosApp } from "./macosApp.mts";
 import { retryOnEdit } from "./retryOnEdit.mts";
+import { watchForEdit } from "./watchForEdit.mts";
 import type { ResolvedAppConfig } from "./config/loader.mts";
 import type { Bundler, BuildOutput, HmrChannel } from "./types.mts";
+import type { EditWatch } from "./watchForEdit.mts";
 
 export interface DevOptions {
   /** The app's root directory. Defaults to `process.cwd()`. */
   cwd?: string;
   /**
-   * The app's entry point. Defaults to resolving it automatically: a
-   * committed `src/main.mts`, `src/main.ts` or `src/main.js`, or `src/App.vue` wrapped in a synthesized one.
+   * The app's entry point. Defaults to the first of `src/main.mts`, `src/main.ts` and
+   * `src/main.js` that exists, otherwise `src/App.vue` wrapped in a synthesized entry. An entry
+   * selected this way is selected again while the app runs, and the host reloads when the
+   * selection changes.
    */
   entry?: string;
   /** Overrides the bundler. See {@link defaultBundler} for what's wired in by default. */
@@ -150,6 +154,13 @@ function hostEnv(stderr: NodeJS.WritableStream): NodeJS.ProcessEnv | undefined {
   return { ...process.env, FORCE_COLOR: "1" };
 }
 
+/** A bundler watcher or HMR channel serving one entry. */
+interface Session {
+  entry: string;
+  /** Ignores the session's later callbacks and closes its watcher or channel. */
+  close(): Promise<void>;
+}
+
 /**
  * Builds the app, starts the host once the first build lands (at once under
  * `experimentalHmr`), and reloads it on every rebuild until `options.signal`
@@ -158,6 +169,10 @@ function hostEnv(stderr: NodeJS.WritableStream): NodeJS.ProcessEnv | undefined {
  * A config or entry that can't be used before the first build is printed as
  * `build failed`. `dev` then retries after the next edit to the config or the
  * entry.
+ *
+ * When the entry is selected automatically, `dev` selects it again after every change to a main
+ * file or `src/App.vue` and reloads the development window if the selection changed. A missing
+ * entry prints `build failed` and keeps the running host until one exists.
  *
  * @throws if another `inca dev` is already running for this app.
  * @throws if the host binary can't be resolved or isn't a file.
@@ -169,6 +184,16 @@ function hostEnv(stderr: NodeJS.WritableStream): NodeJS.ProcessEnv | undefined {
 export async function dev(options: DevOptions): Promise<void> {
   const cwd = options.cwd ?? process.cwd();
   const releaseLock = await acquireDevLock(cwd);
+  let stop = (): void => {};
+  let stopping = false;
+  const stopped = new Promise<void>((resolve) => {
+    stop = () => {
+      stopping = true;
+      resolve();
+    };
+  });
+  let entryWatch: EditWatch | undefined;
+  let monitoring: Promise<{ error: unknown } | undefined> | undefined;
   try {
     const bin = options.hostBin ?? resolveHostBin();
     assertHostBin(bin);
@@ -192,17 +217,18 @@ export async function dev(options: DevOptions): Promise<void> {
       async attempt() {
         const config = await resolveBuildConfig(cwd);
         const outDir = path.resolve(cwd, config.outDir);
+        const automaticEntry = options.entry === undefined && config.entry === undefined;
         const entry = options.entry ?? config.entry ?? (await resolveEntry(cwd));
         assertOutDir(cwd, outDir, entry);
         const metadata = await resolveMetadata(cwd, stdout);
         const runtimeConfig = metadata
           ? runtimeConfigOf(metadata)
           : await resolveRuntimeConfig(cwd);
-        return { outDir, entry, metadata, runtimeConfig };
+        return { outDir, entry, automaticEntry, metadata, runtimeConfig };
       },
     });
     if (!resolved) return;
-    const { outDir, entry, metadata, runtimeConfig } = resolved;
+    const { outDir, entry, automaticEntry, metadata, runtimeConfig } = resolved;
     const hostBin = (await bundleExecutable(cwd, metadata, bin, stdout)) ?? bin;
 
     let client: HostClient | undefined;
@@ -211,11 +237,13 @@ export async function dev(options: DevOptions): Promise<void> {
     let exitedEarly = false;
     let hostExit: { code: number | null; signal: NodeJS.Signals | null } | undefined;
     let queue = Promise.resolve();
-
-    let stop = (): void => {};
-    const stopped = new Promise<void>((resolve) => {
-      stop = resolve;
-    });
+    let session: Session | undefined;
+    // A session's callbacks run only while this still holds the value its start gave it.
+    let generation = 0;
+    // True from the report of a missing entry until an entry is selected again.
+    let missing = false;
+    // The open HMR channel's dispatch, which the host's `vite` integration calls.
+    let dispatchVite: ((params: unknown) => void) | undefined;
 
     async function reloadHost(): Promise<boolean> {
       try {
@@ -291,73 +319,172 @@ export async function dev(options: DevOptions): Promise<void> {
       logReload(output.changed);
     }
 
-    let closable: { close(): Promise<void> };
+    /**
+     * Opens the watcher or HMR channel for `entry`. The host starts with its first bundle, or at
+     * once under HMR. A host that is already running reloads with the new entry's bundle.
+     */
+    async function openSession(entry: string): Promise<Session> {
+      assertOutDir(cwd, outDir, entry);
+      const mine = ++generation;
+      const current = (): boolean => mine === generation;
+      const live =
+        <Args extends unknown[]>(callback: (...args: Args) => void) =>
+        (...args: Args): void => {
+          if (current()) callback(...args);
+        };
+      let closable: { close(): Promise<void> };
 
-    if (hmr) {
-      const channel: HmrChannel = await hmr({
+      if (hmr) {
+        const channel: HmrChannel = await hmr({
+          entry,
+          root: entryRoot(cwd, entry),
+          envDir: cwd,
+          publicDir: path.join(cwd, "public"),
+          cwd,
+          runtimeConfig,
+          stdout,
+          stderr,
+          notify: live((payload) => client?.notify("vite", payload)),
+          // A full reload needs a fresh Engine/Host, which only inca-host's
+          // own `reload` RPC method gives it. A `"vite"` notification can't.
+          reload: live((changed) => {
+            if (ready) {
+              void reloadHost().then((ok) => {
+                if (ok) logReload(changed);
+              });
+            } else {
+              pendingReload = true;
+            }
+          }),
+          onError: live((error) => printFault(stderr, "build failed", error, STAMPED)),
+          onUpdate: live(({ file, took }) => {
+            // Before `ready`, a start that recovers after an edit is reported as `ready`.
+            if (!ready) return;
+            const rel = styleText("dim", path.relative(cwd, file), { stream: stdout });
+            log(stdout, `${styleText("green", "update")} ${rel} (${took}ms)`, STAMPED);
+          }),
+        });
+        dispatchVite = (params) => channel.dispatch(params);
+        closable = {
+          close: () => {
+            dispatchVite = undefined;
+            return channel.close();
+          },
+        };
+        if (!client) {
+          await startHost(channel.entryFile, { vite: (params) => dispatchVite?.(params) });
+          // No retry path exists for HMR mode the way a failed non-HMR start is
+          // naturally retried on the next rebuild.
+          if (!client) stop();
+        } else if (ready) {
+          await reloadHost();
+        } else {
+          pendingReload = true;
+        }
+      } else {
+        closable = await bundler.watch({
+          entry,
+          root: entryRoot(cwd, entry),
+          envDir: cwd,
+          publicDir: path.join(cwd, "public"),
+          outDir,
+          runtimeConfig,
+          mode: "development",
+          stdout,
+          stderr,
+          onBuild: (output) => {
+            // Chained rather than fired independently: two rebuilds landing
+            // before the host finishes starting would otherwise both see no
+            // client yet and each start their own. A session closed while
+            // its build waits here must not reach the host.
+            queue = queue.then(() => (current() ? onBuild(output) : undefined));
+          },
+          onError: live((error) => {
+            printFault(stderr, "build failed", error, STAMPED);
+          }),
+        });
+      }
+
+      return {
         entry,
-        root: entryRoot(cwd, entry),
-        envDir: cwd,
-        publicDir: path.join(cwd, "public"),
-        cwd,
-        runtimeConfig,
-        stdout,
-        stderr,
-        notify: (payload) => client?.notify("vite", payload),
-        // A full reload needs a fresh Engine/Host, which only inca-host's
-        // own `reload` RPC method gives it. A `"vite"` notification can't.
-        reload: (changed) => {
-          if (ready) {
-            void reloadHost().then((ok) => {
-              if (ok) logReload(changed);
-            });
-          } else {
-            pendingReload = true;
-          }
+        async close() {
+          generation++;
+          await closable.close();
         },
-        onError: (error) => printFault(stderr, "build failed", error, STAMPED),
-        onUpdate: ({ file, took }) => {
-          // Before `ready`, a start that recovers after an edit is reported as `ready`.
-          if (!ready) return;
-          const rel = styleText("dim", path.relative(cwd, file), { stream: stdout });
-          log(stdout, `${styleText("green", "update")} ${rel} (${took}ms)`, STAMPED);
+      };
+    }
+
+    async function closeSession(): Promise<void> {
+      const closing = session;
+      session = undefined;
+      await closing?.close();
+    }
+
+    /**
+     * Moves to the entry that is selected now. Runs in `queue`, so it never overlaps a build
+     * callback and never rejects.
+     */
+    async function reselect(): Promise<void> {
+      if (stopping) return;
+      const selected = selectEntry(cwd);
+      if (selected !== undefined && selected === session?.entry) return;
+      try {
+        // Closing the session stops repeat build errors. The host stays.
+        if (selected === undefined) await closeSession();
+        const next = await resolveEntry(cwd);
+        missing = false;
+        await closeSession();
+        session = await openSession(next);
+      } catch (error) {
+        if (!missing) printFault(stderr, "build failed", toFault(error), STAMPED);
+        missing = selected === undefined;
+      }
+    }
+
+    /** Selects the entry again after every change to a file that decides it. */
+    async function monitorEntry(first: EditWatch): Promise<void> {
+      let watch = first;
+      // `stopped` comes first so that it wins over an edit that lands with it.
+      while (await Promise.race([stopped.then(() => false), watch.edited.then(() => true)])) {
+        watch.close();
+        watch = entryWatch = watchForEdit(cwd);
+        queue = queue.then(reselect);
+        await queue;
+      }
+    }
+
+    let initial: string | undefined = entry;
+    if (automaticEntry) {
+      // Armed before the recheck, so a change made after it is not lost.
+      entryWatch = watchForEdit(cwd);
+      try {
+        initial = await resolveEntry(cwd);
+      } catch (error) {
+        initial = undefined;
+        missing = true;
+        printFault(stderr, "build failed", toFault(error), STAMPED);
+      }
+    }
+    if (initial !== undefined) session = await openSession(initial);
+    if (entryWatch) {
+      monitoring = monitorEntry(entryWatch).then(
+        () => undefined,
+        (error: unknown) => {
+          stop();
+          return { error };
         },
-      });
-      await startHost(channel.entryFile, { vite: (params) => channel.dispatch(params) });
-      closable = channel;
-      // No retry path exists for HMR mode the way a failed non-HMR start is
-      // naturally retried on the next rebuild.
-      if (!client) stop();
-    } else {
-      closable = await bundler.watch({
-        entry,
-        root: entryRoot(cwd, entry),
-        envDir: cwd,
-        publicDir: path.join(cwd, "public"),
-        outDir,
-        runtimeConfig,
-        mode: "development",
-        stdout,
-        stderr,
-        onBuild: (output) => {
-          // Chained rather than fired independently: two rebuilds landing
-          // before the host finishes starting would otherwise both see no
-          // client yet and each start their own.
-          queue = queue.then(() => onBuild(output));
-        },
-        onError: (error) => {
-          printFault(stderr, "build failed", error, STAMPED);
-        },
-      });
+      );
     }
 
     if (options.signal.aborted) stop();
     else options.signal.addEventListener("abort", () => stop(), { once: true });
     await stopped;
 
+    const monitorFailure = await monitoring;
+    await session?.close();
     await queue;
     await client?.stop();
-    await closable.close();
+    if (monitorFailure) throw monitorFailure.error;
     if (exitedEarly) {
       throw new IncaError("ERR_INCA_HOST_EXITED_EARLY", "the host exited before it was ready");
     }
@@ -375,6 +502,10 @@ export async function dev(options: DevOptions): Promise<void> {
       );
     }
   } finally {
+    // Ends the entry monitor and waits for it, so it arms no watch after this.
+    stop();
+    await monitoring;
+    entryWatch?.close();
     await releaseLock();
   }
 }

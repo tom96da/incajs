@@ -121,7 +121,8 @@ The smallest the window can be. It opens at least this size.
   exists, otherwise `src/App.vue` wrapped in a synthesized entry
 
 The app's entry point. A `src/main` file gives full control over
-bootstrapping and wins over `src/App.vue`.
+bootstrapping and wins over `src/App.vue`. Without `entry`,
+[inca dev](./cli#inca-dev) selects the entry again while the app runs.
 
 ### outDir
 
