@@ -4,11 +4,11 @@
 
 // A stand-in for `inca-host --dev` that appends `start <entryFile>`, `reload` and
 // `stop <entryFile>` to the file named by `MOCK_HOST_LOG`, so a test sees the order of the hosts.
-// With `MOCK_HOST_RELOAD_MS` set, a reload answers after that many milliseconds and logs
-// `reloaded` first. A `vite` notification is echoed back. Its process id goes to
+// With `MOCK_HOST_RELOAD_GATE` set, a reload answers once the file `<MOCK_HOST_LOG>.release`
+// exists and logs `reloaded` first. A `vite` notification is echoed back. Its process id goes to
 // `<MOCK_HOST_LOG>.pid`.
 
-import { appendFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, writeFileSync } from "node:fs";
 import readline from "node:readline";
 
 const note = (line: string): void => appendFileSync(process.env.MOCK_HOST_LOG!, `${line}\n`);
@@ -32,12 +32,13 @@ readline.createInterface({ input: process.stdin }).on("line", (line) => {
     return;
   }
   if (method === "reload") note("reload");
-  const delay = Number(process.env.MOCK_HOST_RELOAD_MS ?? 0);
-  if (method === "reload" && delay > 0) {
-    setTimeout(() => {
+  if (method === "reload" && process.env.MOCK_HOST_RELOAD_GATE) {
+    const poll = setInterval(() => {
+      if (!existsSync(`${process.env.MOCK_HOST_LOG}.release`)) return;
+      clearInterval(poll);
       note("reloaded");
       reply();
-    }, delay);
+    }, 10);
     return;
   }
   reply();

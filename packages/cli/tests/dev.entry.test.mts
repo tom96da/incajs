@@ -94,13 +94,15 @@ describe("dev entry selection", () => {
   const hostEvents = (run: { hostLog: { lines: () => Promise<string[]> } }, expected: string[]) =>
     waitFor(async () => expect(await run.hostLog.lines()).toEqual(expected));
 
-  /** Leaves a reload in flight on the first host, which answers it after a second. */
+  /**
+   * Leaves a reload in flight on the first host, which answers it once `release()` is called.
+   */
   async function startSlowReload(cwd: string) {
-    vi.stubEnv("MOCK_HOST_RELOAD_MS", "1000");
+    vi.stubEnv("MOCK_HOST_RELOAD_GATE", "1");
     const run = await startReady(cwd);
     run.bundler.emitBuild({ ...BUILD_A, changed: { file: path.join(cwd, "src/main.js"), at: 0 } });
     await hostEvents(run, ["start /unused/a.js", "reload"]);
-    return run;
+    return { ...run, release: () => writeFile(`${path.join(cwd, "host.log")}.release`, "") };
   }
 
   it("reloads the host when a higher-priority entry appears", async () => {
@@ -291,6 +293,7 @@ describe("dev entry selection", () => {
     expect(run.bundler.watches).toHaveLength(1);
     expect(run.bundler.watches[0]!.closed).toBe(false);
 
+    await run.release();
     await hostEvents(run, ["start /unused/a.js", "reload", "reloaded"]);
     await waitFor(() => expect(run.bundler.watches).toHaveLength(2));
     expect(run.bundler.watches[0]!.closed).toBe(true);
@@ -305,6 +308,7 @@ describe("dev entry selection", () => {
 
     run.bundler.emitBuild(BUILD_A);
     run.abort();
+    await run.release();
     await run.running;
 
     expect((await run.hostLog.lines()).filter((line) => line === "reload")).toHaveLength(1);
@@ -319,6 +323,22 @@ describe("dev entry selection", () => {
     await signalled;
     // The selection waits behind the reload, so it runs after the abort.
     run.abort();
+    await run.release();
+    await run.running;
+
+    expect(run.bundler.watches).toHaveLength(1);
+  });
+
+  it("opens no session when shutdown starts while the old one closes", async () => {
+    const cwd = await makeSourceApp("main.js");
+    const run = await startReady(cwd);
+    let release!: () => void;
+    run.bundler.holdClose = new Promise((resolve) => (release = resolve));
+
+    await writeFile(path.join(cwd, "src/main.mts"), "");
+    await waitFor(() => expect(run.bundler.closeCalls).toBe(1));
+    run.abort();
+    release();
     await run.running;
 
     expect(run.bundler.watches).toHaveLength(1);
