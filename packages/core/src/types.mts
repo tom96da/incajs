@@ -236,9 +236,10 @@ export interface IncaEvent {
   readonly BUBBLING_PHASE: 3;
   /**
    * The element the event is about. It is the deepest element under the pointer for pointer
-   * events, the nearest common ancestor of the press and the release for `click`, `dblclick` and
-   * `auxclick`, and the focused element for key events. With no such element it is the mount
-   * container's element. A script dispatch at `document` or `window` gives that object.
+   * events (the capturing element while the pointer is captured), the nearest common ancestor of
+   * the press and the release for `click`, `dblclick` and `auxclick`, and the focused element for
+   * key events. With no such element it is the mount container's element. A script dispatch at
+   * `document` or `window` gives that object.
    */
   // At run time it is null only for a node with no live handle: one made by createNode directly,
   // or a collected handle. An event from a Vue element always has a handle.
@@ -314,7 +315,8 @@ export interface IncaUIEvent extends IncaEvent {
    * On the events the host dispatches: for `mousedown`, `mouseup`, `click`,
    * `dblclick`, `auxclick` and `contextmenu`, `button + 1`. For `wheel`, `0`.
    * For the other mouse events, the lowest held button plus 1, or `0` with no
-   * button held. For a keyboard event, `keyCode`. For a focus event, `0`.
+   * button held. For the pointer events, `button + 1`, so `0` when `button` is `-1`. For a
+   * keyboard event, `keyCode`. For a focus event, `0`.
    */
   readonly which: number;
 }
@@ -352,7 +354,10 @@ export interface IncaMouseEvent extends IncaUIEvent {
   readonly movementX: number;
   /** On the events the host dispatches, the pointer's travel since the previous `mousemove`, and `0` on other events. */
   readonly movementY: number;
-  /** The button the event is about: `0` left, `1` middle, `2` right, `3` back, `4` forward. */
+  /**
+   * The button the event is about: `0` left, `1` middle, `2` right, `3` back, `4` forward. `-1` on
+   * a pointer event that is about no button.
+   */
   readonly button: number;
   /** Every button held, as a bitmask: `1` left, `2` right, `4` middle, `8` back, `16` forward. */
   readonly buttons: number;
@@ -373,17 +378,26 @@ export interface IncaMouseEvent extends IncaUIEvent {
   getModifierState(key: string): boolean;
 }
 
-/** The event object of `click`, `auxclick` and `contextmenu`. */
+/**
+ * The event object of the `pointer*` events, `gotpointercapture`, `lostpointercapture`, `click`,
+ * `auxclick` and `contextmenu`.
+ */
 export interface IncaPointerEvent extends IncaMouseEvent {
-  /** On the events the host dispatches, `1` for the mouse and `-1` for the click of a key. */
+  /**
+   * On the events the host dispatches, `1` for the mouse and for the `contextmenu` of a key, and
+   * `-1` for the click of a key.
+   */
   readonly pointerId: number;
   readonly width: number;
   readonly height: number;
-  /** On the events the host dispatches, `0.5` while a button is held, else `0`. */
+  /** On the pointer events the host dispatches, `0.5` while a button is held, else `0`. */
   readonly pressure: number;
   /** On the events the host dispatches, `"mouse"`, or `""` for the click of a key. */
   readonly pointerType: string;
-  /** On the events the host dispatches, `true` for the mouse and `false` for the click of a key. */
+  /**
+   * On the events the host dispatches, `true` on the pointer events and `false` on `click`,
+   * `auxclick` and `contextmenu`.
+   */
   readonly isPrimary: boolean;
 }
 
@@ -442,8 +456,10 @@ export interface IncaEventMap {
   focus: IncaFocusEvent;
   focusin: IncaFocusEvent;
   focusout: IncaFocusEvent;
+  gotpointercapture: IncaPointerEvent;
   keydown: IncaKeyboardEvent;
   keyup: IncaKeyboardEvent;
+  lostpointercapture: IncaPointerEvent;
   mousedown: IncaMouseEvent;
   mouseenter: IncaMouseEvent;
   mouseleave: IncaMouseEvent;
@@ -451,6 +467,13 @@ export interface IncaEventMap {
   mouseout: IncaMouseEvent;
   mouseover: IncaMouseEvent;
   mouseup: IncaMouseEvent;
+  pointerdown: IncaPointerEvent;
+  pointerenter: IncaPointerEvent;
+  pointerleave: IncaPointerEvent;
+  pointermove: IncaPointerEvent;
+  pointerout: IncaPointerEvent;
+  pointerover: IncaPointerEvent;
+  pointerup: IncaPointerEvent;
   scroll: IncaEvent;
   wheel: IncaWheelEvent;
 }

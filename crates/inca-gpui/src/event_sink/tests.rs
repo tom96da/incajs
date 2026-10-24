@@ -30,6 +30,46 @@ fn key_name_names_every_function_key() {
 }
 
 #[test]
+fn key_name_names_the_menu_key_context_menu() {
+    let menu = Keystroke {
+        key: "menu".to_string(),
+        key_char: None,
+        modifiers: gpui::Modifiers::default(),
+    };
+    assert_eq!(key_name(&menu), "ContextMenu");
+}
+
+#[rstest]
+#[case::down("pointerdown", true, true, true, false)]
+#[case::up("pointerup", true, true, true, false)]
+#[case::moved("pointermove", true, true, true, true)]
+#[case::over("pointerover", true, true, true, false)]
+#[case::out("pointerout", true, true, true, false)]
+#[case::enter("pointerenter", false, false, false, false)]
+#[case::leave("pointerleave", false, false, false, false)]
+#[case::got("gotpointercapture", true, false, true, false)]
+#[case::lost("lostpointercapture", true, false, true, false)]
+fn pointer_event_specs_match_the_standard_flags(
+    #[case] name: &str,
+    #[case] bubbles: bool,
+    #[case] cancelable: bool,
+    #[case] composed: bool,
+    #[case] movement: bool,
+) {
+    let spec = spec_of(name);
+    assert_eq!(spec.name, name);
+    assert_eq!(
+        (
+            spec.flags.bubbles,
+            spec.flags.cancelable,
+            spec.flags.composed,
+            spec.movement
+        ),
+        (bubbles, cancelable, composed, movement)
+    );
+}
+
+#[test]
 fn key_name_falls_back_to_key_char_for_an_unnamed_key() {
     let shifted_s = Keystroke {
         key: "s".to_string(),

@@ -4,7 +4,9 @@
 use std::rc::Rc;
 
 use gpui::{App, MouseButton, MouseUpEvent, ScrollHandle, Window};
-use inca_gpui::{EventPayload, EventSink, KeyPayload, MousePayload, NodeId};
+use inca_gpui::{
+    EventPayload, EventSink, KeyPayload, MousePayload, NO_BUTTON, NodeId, PointerSource,
+};
 
 use super::EventDispatcher;
 use crate::EventTargetId;
@@ -43,6 +45,13 @@ impl EventSink for EventDispatcher {
                 }
             }
         }
+        // The `contextmenu` of a press goes to the target of its `pointerdown`.
+        let start = self
+            .state
+            .press_target
+            .get()
+            .filter(|_| event == "contextmenu")
+            .unwrap_or(start);
         self.fire(start, event, payload, window, cx)
     }
 
@@ -124,24 +133,11 @@ impl EventSink for EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) {
-        let Some(pressed) = pressed else {
-            return;
-        };
-        let Some(start) = self.common_ancestor(pressed, released) else {
-            return;
-        };
-        let mut payload = EventPayload::click(event);
-        if event.button != MouseButton::Left {
-            self.fire(start, "auxclick", &payload, window, cx);
-            return;
-        }
-        self.fire(start, "click", &payload, window, cx);
-        if event.click_count == 2 {
-            // `dblclick` carries the mouse fields only.
-            if let Some(mouse) = payload.mouse_mut() {
-                mouse.pointer = None;
-            }
-            self.fire(start, "dblclick", &payload, window, cx);
+        let captured = self.state.captured_release.take();
+        let target = captured.map(|(target, _)| target);
+        self.fire_clicks(event, pressed, released, target, window, cx);
+        if let Some((_, button)) = captured {
+            self.report_hover_with(self.deepest_hovered(), button, window, cx);
         }
     }
 
@@ -153,17 +149,20 @@ impl EventSink for EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) {
-        // The default action reads the tree the listeners' queued jobs leave.
-        let canceled = self.fire_inner(target, event, payload, window, cx);
-        match event {
-            "mousedown" => {
-                self.focus_on_press(target, canceled, window, cx);
-                self.hold_button(target, window, cx);
+        match (event, payload) {
+            ("mousemove", _) => self.pointer_move(target, payload, window, cx),
+            ("mousedown", EventPayload::Mouse(mouse)) => {
+                self.pointer_down(target, mouse.button, payload, window, cx);
             }
-            "mouseup" => self.state.mouse_held.set(None),
+            ("mouseup", EventPayload::Mouse(mouse)) => {
+                self.pointer_up(target, mouse.button, payload, window, cx);
+            }
             // The wheel step reads `Window::default_prevented`.
-            "wheel" if canceled => window.prevent_default(),
-            _ => {}
+            _ => {
+                if self.fire_inner(target, event, payload, window, cx) && event == "wheel" {
+                    window.prevent_default();
+                }
+            }
         }
     }
 
@@ -214,8 +213,41 @@ impl EventDispatcher {
         })
     }
 
+    /// Fires the `click`, `auxclick` and `dblclick` the release of `event` completes, at the
+    /// nearest common ancestor of `pressed` and `released`, or at `captured` when a capture ended.
+    fn fire_clicks(
+        &self,
+        event: &MouseUpEvent,
+        pressed: Option<NodeId>,
+        released: NodeId,
+        captured: Option<NodeId>,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let Some(pressed) = pressed else {
+            return;
+        };
+        let Some(start) = captured.or_else(|| self.common_ancestor(pressed, released)) else {
+            return;
+        };
+        let mut payload = EventPayload::click(event);
+        if event.button != MouseButton::Left {
+            self.fire(start, "auxclick", &payload, window, cx);
+            return;
+        }
+        self.fire(start, "click", &payload, window, cx);
+        if event.click_count == 2 {
+            // `dblclick` carries the mouse fields only.
+            payload
+                .mouse_mut()
+                .into_iter()
+                .for_each(|mouse| mouse.pointer = None);
+            self.fire(start, "dblclick", &payload, window, cx);
+        }
+    }
+
     /// Records the focused enabled button a mouse press landed on.
-    fn hold_button(&self, target: NodeId, window: &Window, cx: &App) {
+    pub(super) fn hold_button(&self, target: NodeId, window: &Window, cx: &App) {
         let window_id = window.window_handle().window_id();
         let held = self
             .focused_enabled_button(window, cx)
@@ -223,6 +255,27 @@ impl EventDispatcher {
         self.state
             .mouse_held
             .set(held.map(|button| (window_id, button)));
+    }
+
+    /// Fires the `contextmenu` of the Menu key at the focused node, with the pointer at the center
+    /// of its box. Without a focused node that has a box, it targets the container at (1, 1).
+    fn fire_key_context_menu(&self, modifiers: gpui::Modifiers, window: &mut Window, cx: &mut App) {
+        let (target, x, y) = {
+            let host = self.host.borrow();
+            let boxed = host.focus.focused_node(window, cx).and_then(|node| {
+                let center = host.layout.borrow().get(&node)?.bounds.center();
+                Some((node, f32::from(center.x), f32::from(center.y)))
+            });
+            boxed.unwrap_or_else(|| (host.container_at(1.0, 1.0), 1.0, 1.0))
+        };
+        let payload = EventPayload::Mouse(MousePayload {
+            client_x: x,
+            client_y: y,
+            button: NO_BUTTON,
+            pointer: Some(PointerSource::Mouse),
+            ..MousePayload::keyboard_click(modifiers)
+        });
+        self.fire(target, "contextmenu", &payload, window, cx);
     }
 
     // Tab moves focus and dispatches nothing here. The next frame reports it.
@@ -276,6 +329,15 @@ impl EventDispatcher {
                     .set(focused_button().map(|button| (window_id, button)));
                 None
             }
+            // Menu fires alone and F10 with Shift.
+            ("menu" | "f10", false)
+                if (key == "f10") == modifiers.shift
+                    && (key == "menu"
+                        || shift_f10_opens_context_menu(cfg!(target_os = "macos"))) =>
+            {
+                self.fire_key_context_menu(modifiers, window, cx);
+                None
+            }
             ("space", true) => focused_button().filter(|b| {
                 let held = self.state.mouse_held.get();
                 pending == Some((window_id, *b)) || held == Some((window_id, *b))
@@ -288,4 +350,9 @@ impl EventDispatcher {
             self.fire(button, "click", &payload, window, cx);
         }
     }
+}
+
+/// Whether Shift+F10 opens the context menu on the platform, as in Chromium: everywhere but macOS.
+pub(super) fn shift_f10_opens_context_menu(macos: bool) -> bool {
+    !macos
 }

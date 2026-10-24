@@ -51,13 +51,13 @@ Every event object carries the fields of the DOM
 interface. This includes the legacy aliases `srcElement`, `cancelBubble`
 and `returnValue`. The three flags depend on the event:
 
-| Events                           | bubbles | cancelable | composed |
-| -------------------------------- | ------- | ---------- | -------- |
-| mouse, wheel and keyboard events | yes     | yes        | yes      |
-| `mouseenter`, `mouseleave`       | no      | no         | no       |
-| `scroll`                         | no      | no         | no       |
-| `focus`, `blur`                  | no      | no         | yes      |
-| `focusin`, `focusout`            | yes     | no         | yes      |
+| Events                                                           | bubbles | cancelable | composed |
+| ---------------------------------------------------------------- | ------- | ---------- | -------- |
+| mouse, pointer, wheel and keyboard events                        | yes     | yes        | yes      |
+| `mouseenter`, `mouseleave`, `pointerenter`, `pointerleave`       | no      | no         | no       |
+| `scroll`                                                         | no      | no         | no       |
+| `focus`, `blur`                                                  | no      | no         | yes      |
+| `focusin`, `focusout`, `gotpointercapture`, `lostpointercapture` | yes     | no         | yes      |
 
 - `timeStamp` counts milliseconds since the host started.
 - The `view` of a UI event is `null`.
@@ -70,15 +70,14 @@ Mouse events carry the fields of
 [`MouseEvent`](https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent)
 from
 [Pointer Events](https://www.w3.org/TR/2026/WD-pointerevents4-20261005/#mouse-event-types).
-Every mouse event type of that standard fires, except the pointer events (see
-Host differences). `wheel` carries the fields of
+`wheel` carries the fields of
 [`WheelEvent`](https://developer.mozilla.org/en-US/docs/Web/API/WheelEvent)
 from [Pointer Events](https://www.w3.org/TR/2026/WD-pointerevents4-20261005/#wheel-event-types).
 
 `click`, `auxclick` and `contextmenu` carry the fields of
-[`PointerEvent`](https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent)
-with fixed values, since the host has a single mouse pointer and no pointer
-events yet. `pointerType` is `"mouse"`, or `""` for the click of a key.
+[`PointerEvent`](https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent).
+The click of a key has `pointerId` -1, an empty `pointerType` and 0 for every
+coordinate.
 
 | Event         | button | buttons | detail      |
 | ------------- | ------ | ------- | ----------- |
@@ -92,15 +91,37 @@ events yet. `pointerType` is `"mouse"`, or `""` for the click of a key.
 - `preventDefault()` in a `contextmenu` listener only sets `defaultPrevented`.
 - `screenX` and `screenY` add the window position. On Wayland they equal the
   client position.
-- Pointer events (`pointerdown` and the rest) are unsupported.
-- `tiltX`, `tiltY`, `twist`, `tangentialPressure`, `altitudeAngle`,
-  `azimuthAngle`, `persistentDeviceId`, `getCoalescedEvents()` and
-  `getPredictedEvents()` of `PointerEvent` are unsupported.
+- `isPrimary` is `false`, as in Chromium. WebKit and Firefox report `true`.
 - `scrollend` is unsupported.
 - A mouse event outside every element has the mount container as `target`,
   where browsers report `body` (Firefox reports `html`). Moving the pointer
   between an element and an empty area gives the mount container as
   `relatedTarget`.
+
+## Pointer
+
+Pointer events carry the fields of
+[`PointerEvent`](https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent)
+and follow
+[Pointer Events](https://www.w3.org/TR/2026/WD-pointerevents4-20261005/).
+Pointer events come from the mouse only, with `pointerId` 1. `pointercancel` is
+never dispatched. The capture methods are in [Elements](./elements.md).
+
+### Host differences
+
+- `tiltX`, `tiltY`, `twist`, `tangentialPressure`, `altitudeAngle`,
+  `azimuthAngle`, `persistentDeviceId`, `getCoalescedEvents()` and
+  `getPredictedEvents()` of `PointerEvent` are unsupported.
+- The pointer boundary events (`pointerout`, `pointerleave`, `pointerover`,
+  `pointerenter`) precede the mouse ones, then `pointermove` and `mousemove`
+  follow, as in Chromium. WebKit interleaves each pointer event with its mouse
+  counterpart.
+- After a captured final release the order is `pointerup`, `mouseup`,
+  `lostpointercapture`, `click`, then the boundary events, as in Chromium.
+  WebKit fires `lostpointercapture` before `mouseup`.
+- The boundary events that follow a captured release carry the `button` and
+  `which` of the `pointerup`, as in Chromium. WebKit and Firefox report -1 and
+  0.
 
 ## Keyboard
 
@@ -125,6 +146,11 @@ browsers report `body`.
   Meta on macOS and Control elsewhere.
 - Pressing a modifier alone fires `keydown` and `keyup` with its name as
   `key`.
+- The Menu key and Shift+F10 fire `contextmenu` on `keydown`, after the
+  `keydown` listeners and unless one canceled the `keydown`, as in Chromium.
+  Shift+F10 fires it on Linux and Windows only. It targets the focused element, with `clientX` and `clientY` at the
+  center of its box. With nothing focused it targets the element at (1, 1).
+  It has `pointerId` 1, `pointerType` `"mouse"`, `button` -1 and no buttons.
 - The quit shortcut (Cmd+Q on macOS, Ctrl+Q elsewhere) goes to the host only.
 
 ## Focus

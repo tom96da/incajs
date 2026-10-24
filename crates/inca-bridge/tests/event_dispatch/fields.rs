@@ -87,9 +87,7 @@ fn wheel_carries_the_delta_fields(cx: &mut TestAppContext) {
     assert_eq!(event_fields(&engine, &want), want);
 }
 
-/// A mouse button held while scrolling still shows up in a `wheel`'s
-/// `buttons`. The `held_buttons` tracking `mousedown`/`mouseup` update is
-/// shared with every payload kind, not copied per kind.
+/// A mouse button held while scrolling still shows up in a `wheel`'s `buttons`.
 #[gpui::test]
 fn wheel_reports_a_button_held_from_an_earlier_mousedown(cx: &mut TestAppContext) {
     let (host, node) = build_clickable_tree();

@@ -83,9 +83,11 @@ fn click_dispatches_to_js_exactly_once(cx: &mut TestAppContext) {
         concat!(
             r#"{{"type":"click","target":{node},"currentTarget":null,"#,
             r#""bubbles":true,"cancelable":true,"composed":true,"eventPhase":0,"isTrusted":true,"#,
-            r#""clientX":10,"clientY":10,"screenX":10,"screenY":10,"offsetX":10,"offsetY":10,"x":10,"y":10,"relatedTarget":null,"pageX":10,"pageY":10,"#,
+            r#""clientX":10,"clientY":10,"screenX":10,"screenY":10,"offsetX":10,"offsetY":10,"#,
+            r#""x":10,"y":10,"relatedTarget":null,"pageX":10,"pageY":10,"#,
             r#""movementX":0,"movementY":0,"button":0,"buttons":0,"detail":1,"#,
-            r#""pointerId":1,"pointerType":"mouse","isPrimary":true,"width":1,"height":1,"pressure":0,"#,
+            r#""pointerId":1,"pointerType":"mouse","isPrimary":false,"width":1,"height":1,"#,
+            r#""pressure":0,"#,
             r#""ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false,"eventId":1}}"#
         ),
         node = node

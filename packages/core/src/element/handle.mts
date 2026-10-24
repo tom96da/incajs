@@ -1,7 +1,14 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { blur, click, focus } from "../events.mts";
+import {
+  blur,
+  click,
+  focus,
+  hasPointerCapture,
+  releasePointerCapture,
+  setPointerCapture,
+} from "../events.mts";
 import { createEventTarget } from "../eventTarget.mts";
 import {
   focusedNode,
@@ -21,9 +28,10 @@ import type { EventHandlers, IncaElement, IncaNode } from "./types.mts";
 
 /**
  * Builds the {@link IncaElement} handle for a native node: parentless,
- * childless, with `id`, `focus()`, `blur()`, `click()`, `contains()`, the
- * listener methods of an event target, `tabIndex`, the layout members and the
- * event handler properties, all driven through the host.
+ * childless, with `id`, `focus()`, `blur()`, `click()`, the pointer capture
+ * methods, `contains()`, the listener methods of an event target, `tabIndex`,
+ * the layout members and the event handler properties, all driven through the
+ * host.
  * @param id - the native node's id
  * @param kind - whether the node is an element or a comment stand-in
  * @param tag - the node's element kind, if it has one; a `button` defaults to tab index `0`
@@ -56,6 +64,9 @@ export function createIncaElement(
     click: () => {
       if (!isDestroyed(element)) click(id);
     },
+    setPointerCapture: (pointerId: number) => setPointerCapture(id, pointerId),
+    releasePointerCapture: (pointerId: number) => releasePointerCapture(id, pointerId),
+    hasPointerCapture: (pointerId: number) => hasPointerCapture(id, pointerId),
     contains: (other: unknown) => {
       if (other === null || other === undefined) return false;
       if (!isNode(other)) {

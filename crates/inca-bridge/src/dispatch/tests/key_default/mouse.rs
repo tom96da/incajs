@@ -223,3 +223,19 @@ fn a_press_on_a_disabled_button_focuses_its_focusable_ancestor(cx: &mut TestAppC
     s.mouse_down(cx, s.first);
     assert_eq!(s.focused(cx), Some(s.parent));
 }
+
+#[gpui_cases]
+#[gpui::test]
+#[case::pointerdown("pointerdown")]
+#[case::mousedown("mousedown")]
+fn a_canceled_press_does_not_focus(cx: &mut TestAppContext, event: &str) {
+    let s = scene(cx);
+    s.engine
+        .eval::<()>(&format!(
+            "__inca_test_listen__({}, '{event}', (e) => e.preventDefault());",
+            s.field
+        ))
+        .unwrap();
+    s.mouse_down(cx, s.field);
+    assert_eq!(s.focused(cx), None);
+}

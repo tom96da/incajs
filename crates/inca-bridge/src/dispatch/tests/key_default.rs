@@ -11,6 +11,7 @@ use inca_test_macros::gpui_cases;
 
 mod canceled;
 mod click;
+mod contextmenu;
 mod modifiers;
 mod mouse;
 mod tab;

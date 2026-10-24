@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use gpui::Modifiers;
-use inca_gpui::{EventPayload, MousePayload, PointerSource, buttons_mask};
+use inca_gpui::{EventPayload, MousePayload, NO_BUTTON, PointerSource, buttons_mask};
 use rquickjs::convert::Coerced;
 use rquickjs::function::This;
 use rquickjs::{Ctx, Function, IntoJs, Object, Result as JsResult, Value};
@@ -48,7 +48,6 @@ pub(super) struct Mouse {
     pub(super) offset_y: f64,
     pub(super) movement_x: f64,
     pub(super) movement_y: f64,
-    /// `-1` reads as 0.
     pub(super) button: i16,
     pub(super) buttons: u16,
     pub(super) modifiers: Modifiers,
@@ -96,6 +95,20 @@ const BUTTON_EVENTS: [&str; 6] = [
     "contextmenu",
 ];
 
+/// The pointer events the host dispatches. Their `which` is the `button` + 1, so 0 for a `button`
+/// of -1.
+const POINTER_EVENTS: [&str; 9] = [
+    "pointerdown",
+    "pointerup",
+    "pointermove",
+    "pointerover",
+    "pointerout",
+    "pointerenter",
+    "pointerleave",
+    "gotpointercapture",
+    "lostpointercapture",
+];
+
 /// The `deltaMode` constants on `WheelEvent` and its prototype.
 pub(super) const DELTA_MODES: [(&str, i32); 3] = [
     ("DOM_DELTA_PIXEL", 0),
@@ -121,7 +134,7 @@ impl Payload {
                 let fields = Mouse::from_host(name, mouse);
                 match mouse.pointer {
                     Some(source) => {
-                        Self::Pointer(fields, Pointer::from_host(source, mouse.buttons))
+                        Self::Pointer(fields, Pointer::from_host(name, source, mouse.buttons))
                     }
                     None => Self::Mouse(fields),
                 }
@@ -174,8 +187,12 @@ impl Payload {
 impl Mouse {
     /// The fields of a host mouse event named `name`.
     fn from_host(name: &str, mouse: &MousePayload) -> Self {
-        let which = if BUTTON_EVENTS.contains(&name) {
-            u32::from(mouse.button) + 1
+        let button = match mouse.button {
+            NO_BUTTON => -1,
+            button => i16::from(button),
+        };
+        let which = if BUTTON_EVENTS.contains(&name) || POINTER_EVENTS.contains(&name) {
+            u32::from((button + 1).unsigned_abs())
         } else if name == "wheel" {
             0
         } else {
@@ -194,7 +211,7 @@ impl Mouse {
             offset_y: f64::from(mouse.offset_y),
             movement_x: f64::from(mouse.movement_x),
             movement_y: f64::from(mouse.movement_y),
-            button: i16::from(mouse.button),
+            button,
             buttons: u16::from(mouse.buttons),
             modifiers: mouse.modifiers,
         }
@@ -202,18 +219,23 @@ impl Mouse {
 }
 
 impl Pointer {
-    /// The pointer fields of a host event from `source` while `buttons` are held. The host has
-    /// one mouse pointer, and the click of a key has no pointer.
-    fn from_host(source: PointerSource, buttons: u8) -> Self {
+    /// The pointer fields of the host event `name` from `source` while `buttons` are held. The
+    /// host has one mouse pointer, and the click of a key has no pointer. Only the pointer events
+    /// report a pressure and a primary pointer.
+    fn from_host(name: &str, source: PointerSource, buttons: u8) -> Self {
         let mouse = source == PointerSource::Mouse;
+        let pointer_event = POINTER_EVENTS.contains(&name);
         Self {
             id: if mouse { 1 } else { -1 },
             width: 1.0,
             height: 1.0,
-            // Pointer events report 0.5 while a button is held.
-            pressure: if buttons == 0 { 0.0 } else { 0.5 },
+            pressure: if pointer_event && buttons != 0 {
+                0.5
+            } else {
+                0.0
+            },
             kind: if mouse { "mouse" } else { "" }.to_owned(),
-            is_primary: mouse,
+            is_primary: pointer_event,
         }
     }
 }
@@ -264,13 +286,7 @@ const MOUSE_FIELDS: &[(&str, Read<Mouse>)] = &[
     ("shiftKey", |mouse| Field::Bool(mouse.modifiers.shift)),
     ("altKey", |mouse| Field::Bool(mouse.modifiers.alt)),
     ("metaKey", |mouse| Field::Bool(mouse.modifiers.platform)),
-    ("button", |mouse| {
-        Field::Number(if mouse.button == -1 {
-            0.0
-        } else {
-            mouse.button.into()
-        })
-    }),
+    ("button", |mouse| Field::Number(mouse.button.into())),
     ("buttons", |mouse| Field::Number(mouse.buttons.into())),
     // Equal to clientX/clientY: no host scrolling moves the page itself.
     ("pageX", |mouse| Field::Number(mouse.client_x)),

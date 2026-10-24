@@ -48,25 +48,30 @@ pub struct MousePayload {
     /// implementor supplies the real value.
     pub offset_x: f32,
     pub offset_y: f32,
-    /// The button this event is about. 0 for a move, which isn't about any
-    /// one button.
+    /// The button this event is about. 0 for a mouse move, which isn't about any
+    /// one button. [`NO_BUTTON`] for a pointer event about no button.
     pub button: u8,
     /// Every button held during this event, as a bitmask.
     pub buttons: u8,
     /// How many clicks this is part of. 0 for a move.
     pub detail: u32,
     pub modifiers: gpui::Modifiers,
-    /// Set for `click`, `auxclick` and `contextmenu`, which carry the pointer fields.
+    /// Set for the pointer events, `click`, `auxclick` and `contextmenu`, which carry the pointer
+    /// fields.
     pub pointer: Option<PointerSource>,
     /// `relatedTarget`: the node the pointer came from for `mouseover`
     /// and `mouseenter`, the node it went to for `mouseout` and `mouseleave`.
     pub related_target: Option<NodeId>,
 }
 
+/// The `button` of a pointer event that is about no button: it reads -1.
+pub const NO_BUTTON: u8 = u8::MAX;
+
 /// What produced a `PointerEvent`-typed event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PointerSource {
-    /// The mouse: `pointerId` 1, `pointerType` `"mouse"`, `isPrimary` true.
+    /// The mouse: `pointerId` 1 and `pointerType` `"mouse"`. `isPrimary` is true on the pointer
+    /// events and false on `click`, `auxclick` and `contextmenu`.
     Mouse,
     /// The keyboard: `pointerId` -1, `pointerType` `""`, `isPrimary` false.
     Keyboard,
@@ -289,6 +294,7 @@ fn key_name(keystroke: &Keystroke) -> String {
         "back" => Some("BrowserBack"),
         "forward" => Some("BrowserForward"),
         "escape" => Some("Escape"),
+        "menu" => Some("ContextMenu"),
         _ => None,
     };
     if let Some(named) = named {
@@ -377,9 +383,9 @@ pub trait EventSink {
     fn modifiers_changed(&self, modifiers: gpui::Modifiers, window: &mut Window, cx: &mut App);
 
     /// Reports that `node_id` became hovered or stopped being hovered, as
-    /// `gpui` decides it. The sink fires `mouseover`, `mouseout`,
-    /// `mouseenter` and `mouseleave` for the net change once the current
-    /// update ends.
+    /// `gpui` decides it. The sink fires the pointer and mouse `over`, `out`,
+    /// `enter` and `leave` events for the net change once the current update
+    /// ends.
     fn hover_changed(&self, node_id: NodeId, hovered: bool, window: &mut Window, cx: &mut App);
 
     /// Reports `node_id` as the deepest container under the pointer for the
@@ -391,8 +397,11 @@ pub trait EventSink {
     /// once every container has reported itself. `target` is the deepest
     /// container under the pointer, or the root when none is. The sink
     /// dispatches the event along the path of `target` and runs its default
-    /// action. A `mousedown` focuses the nearest focusable node on the path
-    /// and leaves the focus alone when a listener prevented the default.
+    /// action. A `mousedown`, `mouseup` or `mousemove` is preceded by the
+    /// pointer event of the input. Both go to the node holding a pointer
+    /// capture, else to `target`. A `mousedown` focuses the nearest
+    /// focusable node on the path and leaves the focus alone when a listener
+    /// prevented the default or the `pointerdown` was canceled.
     fn pointer_input(
         &self,
         event: &str,
@@ -525,7 +534,7 @@ impl Flags {
         cancelable: false,
         composed: false,
     };
-    /// Focus events: composed and not cancelable.
+    /// Focus and capture events: composed and not cancelable.
     pub const FOCUS: Self = Self {
         composed: true,
         ..Self::NONE
@@ -559,7 +568,7 @@ const fn own_buttons(mut event: EventSpec) -> EventSpec {
 }
 
 /// Every event the host dispatches.
-pub const EVENTS: [EventSpec; 19] = [
+pub const EVENTS: [EventSpec; 28] = [
     own_buttons(spec("click", Flags::ALL)),
     own_buttons(spec("dblclick", Flags::ALL)),
     own_buttons(spec("auxclick", Flags::ALL)),
@@ -574,6 +583,30 @@ pub const EVENTS: [EventSpec; 19] = [
     spec("mouseleave", Flags::NONE),
     spec("mouseover", Flags::ALL),
     spec("mouseout", Flags::ALL),
+    spec("pointerdown", Flags::ALL),
+    spec("pointerup", Flags::ALL),
+    EventSpec {
+        movement: true,
+        ..spec("pointermove", Flags::ALL)
+    },
+    spec("pointerover", Flags::ALL),
+    spec("pointerout", Flags::ALL),
+    spec("pointerenter", Flags::NONE),
+    spec("pointerleave", Flags::NONE),
+    spec(
+        "gotpointercapture",
+        Flags {
+            bubbles: true,
+            ..Flags::FOCUS
+        },
+    ),
+    spec(
+        "lostpointercapture",
+        Flags {
+            bubbles: true,
+            ..Flags::FOCUS
+        },
+    ),
     spec("wheel", Flags::ALL),
     spec("scroll", Flags::NONE),
     spec("keydown", Flags::ALL),

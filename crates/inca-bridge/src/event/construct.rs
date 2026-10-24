@@ -311,7 +311,8 @@ fn mouse<'js>(init: &Init<'_, 'js>, ui: Ui) -> JsResult<(Mouse, Option<Value<'js
         offset_y: client_y,
         movement_x,
         movement_y,
-        button,
+        // A script-built event takes -1 as 0.
+        button: if button == -1 { 0 } else { button },
         buttons,
         modifiers,
     };

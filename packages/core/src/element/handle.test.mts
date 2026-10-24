@@ -33,6 +33,9 @@ function installHost(
     focusNode: vi.fn<() => void>(),
     blurNode: vi.fn<() => void>(),
     click: vi.fn<() => void>(),
+    setPointerCapture: vi.fn<(nodeId: number, pointerId: number) => void>(),
+    releasePointerCapture: vi.fn<(nodeId: number, pointerId: number) => void>(),
+    hasPointerCapture: vi.fn<(nodeId: number, pointerId: number) => boolean>(() => true),
     scrollIntoViewNode: vi.fn<(nodeId: number, block: string, inline: string) => void>(),
     createNode: vi.fn<() => number>(() => 60),
     destroyNode: vi.fn<() => number[]>(() => []),
@@ -288,6 +291,47 @@ describe("createIncaElement blur and click", () => {
 
     el.click();
     expect(host.click).not.toHaveBeenCalled();
+  });
+});
+
+describe("createIncaElement pointer capture", () => {
+  const methods = ["setPointerCapture", "releasePointerCapture", "hasPointerCapture"] as const;
+
+  it.each(methods)("forwards %s to native with the node id and the pointer id", (method) => {
+    const host = installHost();
+    const el = createIncaElement(4, "element", "div");
+
+    el[method](1);
+
+    expect(host[method]).toHaveBeenCalledWith(4, 1);
+  });
+
+  it("returns what the host answers to hasPointerCapture", () => {
+    const host = installHost();
+    host.hasPointerCapture.mockReturnValue(true);
+
+    expect(createIncaElement(4, "element", "div").hasPointerCapture(1)).toBe(true);
+  });
+
+  it.each(methods)("forwards %s of a destroyed element and keeps its outcome", (method) => {
+    const host = installHost();
+    host.hasPointerCapture.mockReturnValue(false);
+    host.setPointerCapture.mockImplementation(() => {
+      throw new DOMException("gone", "InvalidStateError");
+    });
+    const el = createIncaElement(4, "element", "div");
+    markDestroyed(el);
+
+    const call = () => el[method](1);
+
+    if (method === "setPointerCapture") {
+      expect(call).toThrow(expect.objectContaining({ name: "InvalidStateError" }));
+    } else if (method === "hasPointerCapture") {
+      expect(call()).toBe(false);
+    } else {
+      expect(call).not.toThrow();
+    }
+    expect(host[method]).toHaveBeenCalledWith(4, 1);
   });
 });
 

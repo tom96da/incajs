@@ -463,7 +463,7 @@ fn a_move_names_its_lowest_held_button_in_which(
     let cx = cx.add_empty_window();
     cx.update(|window, cx| {
         for &button in pressed {
-            dispatcher.fire(node, "mousedown", &mouse_button(button), window, cx);
+            dispatcher.update_held_buttons("mousedown", button);
         }
         dispatcher.fire(node, "mousemove", &mouse_at(1.0, 1.0), window, cx);
     });
@@ -507,7 +507,7 @@ fn which_of_a_press_or_a_wheel_skips_the_held_buttons(
     let cx = cx.add_empty_window();
     cx.update(|window, cx| {
         for &button in pressed {
-            dispatcher.fire(node, "mousedown", &mouse_button(button), window, cx);
+            dispatcher.update_held_buttons("mousedown", button);
         }
         dispatcher.fire(node, event, &payload, window, cx);
     });

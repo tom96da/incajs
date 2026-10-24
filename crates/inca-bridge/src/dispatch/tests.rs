@@ -20,6 +20,7 @@ mod hover_order;
 mod jobs;
 mod key_default;
 mod movement;
+mod pointer;
 mod record;
 mod target_objects;
 mod targets;

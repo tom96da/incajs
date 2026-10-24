@@ -37,6 +37,15 @@ pub struct Host {
     pub(crate) layout: RefCell<HashMap<NodeId, NodeLayout>>,
     /// Errors listeners threw, in order; the dispatcher reports them once the engine is idle.
     pub(crate) failures: Vec<EngineError>,
+    /// Every mouse button currently held, as the `buttons` bitmask of the events. GPUI's own mouse
+    /// events carry only the one button each is about, not which others are held alongside it.
+    pub(crate) held_buttons: u8,
+    /// The node a script asked to capture the mouse pointer. Its `gotpointercapture` fires before
+    /// the next pointer event.
+    pub(crate) capture_pending: Option<NodeId>,
+    /// The node the pointer events go to while a capture is active. A node that left the tree
+    /// loses the capture at the next pointer event.
+    pub(crate) capture_active: Option<NodeId>,
     /// The nodes whose `click()` is running.
     pub(crate) clicking: HashSet<NodeId>,
     /// `scrollIntoViewNode` calls whose node had no box yet: awaiting the next
@@ -72,6 +81,9 @@ impl Default for Host {
             scroll_reported: HashMap::new(),
             layout: RefCell::new(HashMap::new()),
             failures: Vec::new(),
+            held_buttons: 0,
+            capture_pending: None,
+            capture_active: None,
             clicking: HashSet::new(),
             scroll_fresh: Vec::new(),
             scroll_retry: Vec::new(),
@@ -94,6 +106,18 @@ impl Host {
     #[must_use]
     pub fn root(&self) -> NodeId {
         self.tree.root().expect("the host declares a root")
+    }
+
+    /// The deepest container whose last drawn box holds the point, else the root.
+    pub(crate) fn container_at(&self, x: f32, y: f32) -> NodeId {
+        let point = point(px(x), px(y));
+        self.layout
+            .borrow()
+            .iter()
+            .filter(|(_, layout)| layout.bounds.contains(&point))
+            .map(|(&id, _)| id)
+            .max_by_key(|&id| (self.tree.ancestors(id).count(), id))
+            .unwrap_or_else(|| self.root())
     }
 
     /// Drops the per-node state of freed nodes and returns the callback ids

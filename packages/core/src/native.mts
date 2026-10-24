@@ -42,6 +42,9 @@ interface IncaNative {
   scrollIntoViewNode(nodeId: NodeId, block: ScrollAlignment, inline: ScrollAlignment): void;
   dispatchEvent(target: EventTargetId, event: EventLike): boolean;
   click(nodeId: NodeId): void;
+  setPointerCapture(nodeId: NodeId, pointerId: number): void;
+  releasePointerCapture(nodeId: NodeId, pointerId: number): void;
+  hasPointerCapture(nodeId: NodeId, pointerId: number): boolean;
 }
 
 /** What the host calls: it passes the event object as the first argument. */

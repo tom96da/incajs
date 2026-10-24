@@ -44,6 +44,9 @@ const native = {
   scrollNode: vi.fn<(nodeId: number, left: number | null, top: number | null) => void>(),
   scrollIntoViewNode: vi.fn<(nodeId: number, block: string, inline: string) => void>(),
   click: vi.fn<(nodeId: number) => void>(),
+  setPointerCapture: vi.fn<(nodeId: number, pointerId: number) => void>(),
+  releasePointerCapture: vi.fn<(nodeId: number, pointerId: number) => void>(),
+  hasPointerCapture: vi.fn<(nodeId: number, pointerId: number) => boolean>(),
 };
 
 beforeEach(() => {
