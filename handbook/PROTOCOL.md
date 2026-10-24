@@ -144,7 +144,9 @@ The stack of an error the host reports (`appError`, a `-32000` error and the
 console output of an `Error`) names the original file, line and column for
 every frame of such a module. A module whose map is missing or unreadable
 keeps the generated positions. The `stack` property a script reads from an
-`Error` itself holds the generated positions.
+`Error` itself holds the generated positions and names the file `filename` for
+its first compile and `filename?t=N` for a later one, where `N` is unique to
+each compile.
 
 ## Failure handling
 

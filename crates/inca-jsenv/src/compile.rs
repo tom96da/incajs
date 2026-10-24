@@ -15,9 +15,14 @@ use rquickjs::{Ctx, Function, Result};
 /// `N + 1` of `filename`, and columns on every line of `body` are exact.
 /// Lines are counted as `QuickJS` counts them, and each `params` entry must
 /// fit on one line. A `//` comment on the last line of `body` is allowed.
-/// An inline `data:` source map in `body` maps its frames to the original
-/// file, line and column. A syntax error is mapped too. A recompile of the
-/// same `filename` replaces its source and map.
+/// An inline `data:` source map in `body`, or a sidecar map file next to `filename`, maps its
+/// frames to the original file, line and column. A syntax error is mapped too. A frame the map
+/// does not cover names `filename`.
+///
+/// Each compile keeps its own map for the life of the context, so a function from an earlier
+/// compile of the same `filename` keeps its source locations after a recompile. A frame of the
+/// `stack` that a script reads names `filename` for its first compile and `filename` with a
+/// unique `?t=N` query for a later one.
 ///
 /// `params` and `body` run as code, so pass only trusted source.
 ///
@@ -26,7 +31,8 @@ use rquickjs::{Ctx, Function, Result};
 /// Returns [`rquickjs::Error::Exception`] for a syntax error in `params` or
 /// `body`. The thrown `SyntaxError`, whose stack names `filename` and the
 /// line, is pending on `ctx`. Returns other errors if `filename`, `params` or
-/// `body` contains a NUL byte, or if the source evaluates to a non-function.
+/// `body` contains a NUL byte, if the source evaluates to a non-function, or once the process has
+/// compiled `u64::MAX` times.
 pub fn compile_async_function<'js>(
     ctx: &Ctx<'js>,
     params: &[&str],
@@ -35,9 +41,9 @@ pub fn compile_async_function<'js>(
 ) -> Result<Function<'js>> {
     let source = format!("(async function ({}) {{\n{body}\n}})", params.join(", "));
     // Registered before the eval so a syntax error's frame is remapped too.
-    crate::sourcemap::register(ctx, filename, &source);
+    let key = crate::sourcemap::register_compile(ctx, filename, &source)?;
     let mut options = EvalOptions::default();
-    options.filename = Some(filename.to_owned());
+    options.filename = Some(key);
     ctx.eval_with_options(source, options)
 }
 
@@ -59,7 +65,7 @@ mod tests {
     }
 
     /// Calls `f(args)` and returns what its promise settled with: the value
-    /// as text, or the name and stack of a rejection.
+    /// as text, or the name and stack of a rejection, remapped as the host reports it.
     fn settle(engine: &Engine, args: &str) -> String {
         engine
             .eval::<()>(&format!(
@@ -71,7 +77,8 @@ mod tests {
             ))
             .unwrap();
         assert!(engine.run_jobs().is_empty());
-        engine.eval("globalThis.out").unwrap()
+        let out: String = engine.eval("globalThis.out").unwrap();
+        engine.with(|ctx| crate::sourcemap::remap_stack(&ctx, &out))
     }
 
     #[test]
@@ -151,6 +158,16 @@ mod tests {
         let err = compile(&engine, &[], &body, "virtual.js").unwrap_err();
 
         assert!(err.to_string().contains("src/app.ts:12:5"), "{err}");
+    }
+
+    #[test]
+    fn a_failed_compile_leaves_an_earlier_compile_mapped() {
+        let engine = Engine::new().unwrap();
+        let older = crate::sourcemap::mapped_body("throw new Error('x');");
+        compile(&engine, &[], &older, "virtual.js").unwrap();
+        compile(&engine, &[], "const = ;", "virtual.js").unwrap_err();
+
+        assert!(settle(&engine, "").contains("src/app.ts:12:"));
     }
 
     #[test]

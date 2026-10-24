@@ -949,21 +949,6 @@ A fixed entry is deleted and its ID is never reused.
   Fix: request an animation frame when the call is queued, and give the host
   binding the window handle it needs for that.
 
-- **B-179 A recompile of a module name replaces its source map**
-  `Units: jsenv · Size: M-L · Impact: Low`
-
-  The source map registry keys each entry by filename. Under
-  `--experimental-hmr`, a recompile of the same module replaces its source and
-  map. A frame of a function from the previous compile that is still alive,
-  such as an old listener or timer, maps through the new map and names a wrong
-  line and column. A browser maps a frame through the map of its own script.
-
-  Fix: give each compile its own entry and print the original filename. An
-  entry per compile turns the registry into a log that only grows, so the fix
-  also needs a retention policy (drop an entry once no function of its
-  compile is alive) or JS-side ownership (the vault keeps each map with its
-  module, and Rust keeps the key).
-
 - **B-194 Protocol lines produced during quit teardown are dropped**
   `Units: host · Size: S · Impact: Low`
 
@@ -1226,6 +1211,18 @@ A fixed entry is deleted and its ID is never reused.
   `inca build` copies the files of `public/` into the output directory, and
   `inca package` copies only the files the build emitted, so they are not in
   the packaged app.
+
+- **B-225 Source maps of old compiles are never dropped**
+  `Units: jsenv · Size: M · Impact: Low`
+
+  Each compile keeps its generated source and map for the life of the
+  context. A long `inca dev` session that edits a module many times keeps every
+  version. A function of an old module can outlive the function that compiled
+  it, so the host cannot tell when a version is unreachable.
+
+  Fix: keep the newest versions of each file name and drop older ones, or have
+  the evaluator hold each module's compiled function for as long as the module
+  stays cached, then drop the entry with the function.
 
 - **B-226 `window` and `document` need an import**
   `Units: cli,core,docs · Size: M · Impact: Low`

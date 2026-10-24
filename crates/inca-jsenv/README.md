@@ -89,12 +89,16 @@ use inca_jsenv::compile_async_function;
 let f = compile_async_function(&ctx, &["a", "b"], body, "app/widget.js")?;
 ```
 
-The stack frames of `f` name `app/widget.js`, and a frame on line `N` of
-`body` reports line `N + 1`. When `body` ends with an inline
-`//# sourceMappingURL=data:` source map, the frames that `EngineError` and
-`console` report name the original file, line and column, and the `stack`
-property a script reads keeps the generated positions. A syntax error is left
-pending on `ctx`, where `EngineError::capture` reads it.
+The stack frames that `EngineError` and `console` report name `app/widget.js`,
+and a frame on line `N` of `body` reports line `N + 1`. When `body` ends with
+an inline `//# sourceMappingURL=data:` source map, those frames name the
+original file, line and column. Each compile keeps its own map for the life of
+the context, so a function from an earlier compile of the same file name keeps
+its source locations after a recompile. The `stack` property a script reads
+keeps the generated positions. It names the file `app/widget.js` for the first
+compile and `app/widget.js?t=N` for a later one, where `N` is unique to the
+compile. A syntax error is left pending on `ctx`, where
+`EngineError::capture` reads it.
 
 ## Scope
 

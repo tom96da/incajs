@@ -11,8 +11,8 @@ interface IncaDev {
   setLoadFailed?: (failed: boolean) => void;
   /**
    * Builds an async function from `body` that takes `params` in order. Its
-   * stack frames name `filename`, and a frame on line N of `body` reports
-   * line N + 1.
+   * stack frames name `filename`, with a unique `?t=` query on every call after the first for
+   * that `filename`. The host reports `filename`. A frame on line N of `body` reports line N + 1.
    * @param params - the parameter names, in order
    * @param body - the function body source
    * @param filename - the file name that stack frames report

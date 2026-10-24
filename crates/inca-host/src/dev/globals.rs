@@ -30,11 +30,12 @@ pub(crate) type DevSend = Rc<dyn Fn(&str, Value)>;
 /// `paramsJson` is parsed as JSON before `on_send` is called; invalid JSON
 /// raises a JS `TypeError`. `compile` returns an async function whose body is
 /// `body` and whose parameters are named by `params`, built by
-/// [`inca_jsenv::compile_async_function`]. Its stack frames name `filename`,
-/// and a frame on line N of `body` reports line N + 1. An inline source map
-/// in `body` points the frames the host reports at the original source. A
-/// syntax error raises a JS `SyntaxError` whose stack names `filename` and the
-/// line.
+/// [`inca_jsenv::compile_async_function`]. The stack frames the host reports name `filename`, and
+/// a frame on line N of `body` reports line N + 1. An inline source map in `body` points those
+/// frames at the original source, and an older function keeps its own map after a recompile. The
+/// `stack` property a script reads names `filename` for its first compile and `filename?t=N` with
+/// a unique number for a later one. A syntax error raises a JS `SyntaxError` whose stack names
+/// `filename` and the line.
 ///
 /// The global is read-only and non-configurable; its methods stay assignable,
 /// so an app sets `receive` on it.
