@@ -76,7 +76,8 @@
     "test": "vitest run",
     "lint": "oxlint --type-aware",
     "format": "oxfmt --check .",
-    "typecheck": "oxlint -A all --type-aware --type-check"
+    "typecheck": "oxlint -A all --type-aware --type-check",
+    "prepack": "clear-package-json package.json -o package.json"
   },
   "devDependencies": {
     "@vue/runtime-core": "catalog:",

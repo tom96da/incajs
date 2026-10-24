@@ -31,5 +31,8 @@
     "executableFiles": [
       "bin/inca-host"
     ]
+  },
+  "scripts": {
+    "prepack": "clear-package-json package.json -o package.json"
   }
 }
