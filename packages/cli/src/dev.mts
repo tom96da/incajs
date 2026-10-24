@@ -434,6 +434,7 @@ export async function dev(options: DevOptions): Promise<void> {
         const next = await resolveEntry(cwd);
         missing = false;
         await closeSession();
+        if (stopping) return;
         session = await openSession(next);
       } catch (error) {
         if (!missing) printFault(stderr, "build failed", toFault(error), STAMPED);

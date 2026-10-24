@@ -87,6 +87,10 @@ export interface FakeBundler extends Bundler {
   watches: FakeWatch[];
   /** Makes the next `watch()` reject. */
   refuseNextWatch: boolean;
+  /** Keeps every `close()` pending until this promise settles. */
+  holdClose?: Promise<void>;
+  /** How many `close()` calls have been made. */
+  closeCalls: number;
   /**
    * Resolves once `watch()` is called. `dev()` resolves its config
    * (an async step) before reaching `watch()`, so a test firing an event
@@ -109,6 +113,7 @@ export function makeFakeBundler(): FakeBundler {
     },
     watches: [],
     refuseNextWatch: false,
+    closeCalls: 0,
     watching,
     watch(options): Promise<Watcher> {
       if (fake.refuseNextWatch) {
@@ -124,9 +129,10 @@ export function makeFakeBundler(): FakeBundler {
       handlers = options;
       markWatching();
       return Promise.resolve({
-        close: () => {
+        close: async () => {
+          fake.closeCalls++;
+          await fake.holdClose;
           opened.closed = true;
-          return Promise.resolve();
         },
       });
     },
