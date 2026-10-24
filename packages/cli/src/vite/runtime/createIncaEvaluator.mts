@@ -58,9 +58,9 @@ class IncaEvaluator extends (ESModulesEvaluator as new () => ModuleEvaluator) {
 
 /**
  * Builds a `ModuleEvaluator` that runs each HMR module through the host's
- * `__inca_dev__.compile`. A stack frame of a module names the module's id,
- * with each NUL byte written as `\u0000`. The host maps a reported frame to
- * the original source through the inline source map Vite appends.
+ * `__inca_dev__.compile`. A stack frame of a module names the module's id with each NUL byte
+ * written as `\u0000`, plus a `?t=` query on each recompile. The host reports the id and maps a
+ * reported frame to the original source through the inline source map Vite appends.
  * Running a module rejects when `globalThis.__inca_dev__` or its `compile`
  * is missing.
  * @returns the evaluator for a `ModuleRunner`

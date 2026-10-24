@@ -5,6 +5,7 @@
 
 use super::*;
 use crate::tests::{ScratchDir, with_realm};
+use rquickjs::{Function, Promise};
 use rstest::rstest;
 use std::cell::RefCell;
 
@@ -544,6 +545,20 @@ fn an_unreadable_sidecar_stores_no_entry() {
 }
 
 #[test]
+fn a_sidecar_for_a_filename_without_a_directory_stores_no_entry() {
+    let dir = ScratchDir::new("rootless");
+    let json = map_json(3, ";AAAA", r#"["o.ts"]"#, None);
+    std::fs::write(dir.join("b.js.map"), json).unwrap();
+    let src = format!("h\nabc\n//# sourceMappingURL={}/b.js.map", dir.display());
+    let stored = with_realm(|ctx| {
+        register(&ctx, "/", &src);
+        ctx.userdata::<SourceMaps>()
+            .is_some_and(|maps| maps.0.borrow().contains_key("/"))
+    });
+    assert!(!stored);
+}
+
+#[test]
 fn file_path_containing_a_parenthesis_maps() {
     let json = map_json(3, ";AAAA", r#"["o.ts"]"#, None);
     let src = format!("h\nabc\n{}", inline(&json));
@@ -640,4 +655,82 @@ fn a_trace_from_a_getter_in_mapped_code_prints_one_trace() {
         lines.len() == 1 && !lines[0].starts_with("Trace: inner"),
         "{lines:?}"
     );
+}
+
+/// Compiles a function that returns its own stack, under `filename`. A `map` is the inline map
+/// of its source.
+fn compile_stack<'js>(ctx: &Ctx<'js>, filename: &str, map: Option<&str>) -> Function<'js> {
+    let marker = map.map_or_else(String::new, |json| format!("\n{}", inline(json)));
+    let body = format!("return new Error('x').stack;{marker}");
+    crate::compile_async_function(ctx, &[], &body, filename).unwrap()
+}
+
+/// The stack `function` returns, as `QuickJS` prints it.
+fn stack_of(function: &Function<'_>) -> String {
+    function.call::<_, Promise>(()).unwrap().finish().unwrap()
+}
+
+#[test]
+fn a_recompiled_function_keeps_its_original_map() {
+    let first_map = map_json(3, ";AAAA", r#"["first.ts"]"#, None);
+    let second_map = map_json(3, ";AAEA", r#"["second.ts"]"#, None);
+    with_realm(|ctx| {
+        let first = compile_stack(&ctx, "app.js", Some(&first_map));
+        let second = compile_stack(&ctx, "app.js", Some(&second_map));
+
+        assert!(remap_stack(&ctx, &stack_of(&first)).contains("(first.ts:1:1)"));
+        assert!(remap_stack(&ctx, &stack_of(&second)).contains("(second.ts:3:1)"));
+    });
+}
+
+#[test]
+fn a_compile_without_a_map_keeps_its_requested_filename() {
+    let map = map_json(3, ";AAAA", r#"["orig.ts"]"#, None);
+    with_realm(|ctx| {
+        let mapped = compile_stack(&ctx, "app.js", Some(&map));
+        let unmapped = compile_stack(&ctx, "app.js", None);
+
+        assert!(remap_stack(&ctx, &stack_of(&mapped)).contains("(orig.ts:1:1)"));
+        assert!(remap_stack(&ctx, &stack_of(&unmapped)).contains("(app.js:2:12)"));
+    });
+}
+
+#[test]
+fn a_filename_with_colons_comes_out_unchanged() {
+    with_realm(|ctx| {
+        let function = compile_stack(&ctx, "/a:2:3/b.js", None);
+
+        let out = remap_stack(&ctx, &stack_of(&function));
+
+        assert!(out.contains("(/a:2:3/b.js:2:12)"), "{out}");
+    });
+}
+
+#[test]
+fn the_second_compile_of_a_file_evaluates_with_a_t_query() {
+    with_realm(|ctx| {
+        let first = stack_of(&compile_stack(&ctx, "app.js", None));
+        let second = stack_of(&compile_stack(&ctx, "app.js", None));
+
+        assert!(first.contains("(app.js:2:12)"), "{first}");
+        assert!(second.contains("(app.js?t="), "{second}");
+        assert!(remap_stack(&ctx, &second).contains("(app.js:2:12)"));
+    });
+}
+
+#[test]
+fn an_hmr_style_query_keeps_its_query() {
+    with_realm(|ctx| {
+        compile_stack(&ctx, "app.js?vue&type=style", None);
+        let second = stack_of(&compile_stack(&ctx, "app.js?vue&type=style", None));
+
+        assert!(second.contains("(app.js?t="), "{second}");
+        assert!(second.contains("&vue&type=style:2:12)"), "{second}");
+        assert!(remap_stack(&ctx, &second).contains("(app.js?vue&type=style:2:12)"));
+    });
+}
+
+#[test]
+fn compile_ids_run_out_with_an_error() {
+    assert!(next_compile_id(&AtomicU64::new(u64::MAX)).is_err());
 }

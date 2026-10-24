@@ -8,10 +8,11 @@ use std::{
     ops::Range,
     path::{Component, Path, PathBuf},
     rc::Rc,
+    sync::atomic::{AtomicU64, Ordering},
 };
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use rquickjs::Ctx;
+use rquickjs::{Ctx, Error, Result as JsResult};
 
 use store::SourceMaps;
 
@@ -139,9 +140,16 @@ fn base64_digit(byte: u8) -> Option<u8> {
 
 const MARKER: &str = "//# sourceMappingURL=";
 
+/// The next unique id of a compiled function's filename query.
+static NEXT_COMPILE_ID: AtomicU64 = AtomicU64::new(0);
+
 struct Entry {
+    /// The filename the caller asked for. A compile prints it for a frame its map
+    /// does not cover. `None` for a loader or engine module, whose key is its filename.
+    display: Option<String>,
+    /// The generated source. Empty when the entry has no map.
     source: String,
-    raw: RawMap,
+    raw: Option<RawMap>,
     parsed: OnceCell<Option<Parsed>>,
 }
 
@@ -188,46 +196,81 @@ fn forget(ctx: &Ctx<'_>, filename: &str) {
     }
 }
 
-/// Registers the generated `source` of `filename`. A recompile of the same
-/// filename replaces its source and map. A sidecar map file is read here and the map
-/// is parsed on the first remap.
-pub(crate) fn register(ctx: &Ctx<'_>, filename: &str, source: &str) {
-    let Some(url) = marker_url(source) else {
-        return forget(ctx, filename);
-    };
-    let raw = if url.starts_with("data:") {
+/// Captures the map that the marker `url` of `source` names. A sidecar map file is read here,
+/// next to `filename`. `None` for an unreadable map file.
+fn capture(filename: &str, source: &str, url: &str) -> Option<RawMap> {
+    if url.starts_with("data:") {
         let start = url.as_ptr().addr() - source.as_ptr().addr();
-        Some(RawMap::Inline(start..start + url.len()))
-    } else {
-        Path::new(filename)
-            .parent()
-            .map(|dir| dir.join(url))
-            .and_then(|path| {
-                let json = std::fs::read_to_string(&path).ok()?;
-                Some(RawMap::Sidecar {
-                    json,
-                    dir: path.parent().map(Path::to_path_buf),
-                })
-            })
-    };
-    let Some(raw) = raw else {
+        return Some(RawMap::Inline(start..start + url.len()));
+    }
+    let path = Path::new(filename).parent()?.join(url);
+    let json = std::fs::read_to_string(&path).ok()?;
+    Some(RawMap::Sidecar {
+        json,
+        dir: path.parent().map(Path::to_path_buf),
+    })
+}
+
+/// Registers the generated `source` of a loader or engine module under `filename`. Registering the
+/// same filename again replaces its source and map. A sidecar map file is read here and the map is
+/// parsed on the first remap.
+pub(crate) fn register(ctx: &Ctx<'_>, filename: &str, source: &str) {
+    let Some(raw) = marker_url(source).and_then(|url| capture(filename, source, url)) else {
         return forget(ctx, filename);
     };
+    insert(ctx, filename.to_owned(), None, source, Some(raw));
+}
+
+fn insert(ctx: &Ctx<'_>, key: String, display: Option<String>, source: &str, raw: Option<RawMap>) {
     if let Some(maps) = maps_or_insert(ctx) {
         let entry = Entry {
-            source: source.to_owned(),
+            display,
+            source: raw.as_ref().map_or_else(String::new, |_| source.to_owned()),
             raw,
             parsed: OnceCell::new(),
         };
-        maps.0
-            .borrow_mut()
-            .insert(filename.to_owned(), Rc::new(entry));
+        maps.0.borrow_mut().insert(key, Rc::new(entry));
     }
 }
 
+/// Takes the next id from `counter`.
+fn next_compile_id(counter: &AtomicU64) -> JsResult<u64> {
+    counter
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+        .map_err(|_| Error::Unknown)
+}
+
+/// Registers the generated `source` that [`compile_async_function`](crate::compile_async_function)
+/// compiles for `filename` and returns the key to eval it as. The first compile of a `filename`
+/// keeps it as the key. A later compile gets a unique `?t=N` query before any original query, as a
+/// browser names an HMR update. A frame of the key prints `filename`, or the position its own map
+/// gives.
+///
+/// # Errors
+///
+/// Returns an error once the process has taken `u64::MAX` ids.
+pub(crate) fn register_compile(ctx: &Ctx<'_>, filename: &str, source: &str) -> JsResult<String> {
+    let taken = ctx
+        .userdata::<SourceMaps>()
+        .is_some_and(|maps| maps.0.borrow().contains_key(filename));
+    let key = if taken {
+        let id = next_compile_id(&NEXT_COMPILE_ID)?;
+        match filename.split_once('?') {
+            Some((path, query)) => format!("{path}?t={id}&{query}"),
+            None => format!("{filename}?t={id}"),
+        }
+    } else {
+        filename.to_owned()
+    };
+    let raw = marker_url(source).and_then(|url| capture(filename, source, url));
+    insert(ctx, key.clone(), Some(filename.to_owned()), source, raw);
+    Ok(key)
+}
+
 /// Rewrites every `at NAME (FILE:LINE:COLUMN)` and `at FILE:LINE:COLUMN`
-/// frame of `stack` whose FILE has a registered map to the original file,
-/// line and column. Every other line is returned unchanged.
+/// frame of `stack` whose FILE is registered. A frame that its map covers names the original
+/// file, line and column. A frame of a compile that its map does not cover names the requested
+/// file with the generated line and column. Every other line is returned unchanged.
 pub(crate) fn remap_stack(ctx: &Ctx<'_>, stack: &str) -> String {
     let Some(maps) = ctx.userdata::<SourceMaps>() else {
         return stack.to_owned();
@@ -265,7 +308,18 @@ fn remap_frame(maps: &SourceMaps, line: &str) -> Option<String> {
             let entry = maps.0.borrow().get(file).map(Rc::clone)?;
             Some((prefix, entry))
         })?;
-    let parsed = entry.parsed.get_or_init(|| parse(&entry)).as_ref()?;
+
+    let Some((file, line, col)) = original_position(&entry, row, column) else {
+        let display = entry.display.as_ref()?;
+        return Some(format!("{prefix}{display}:{row}:{column}{close}"));
+    };
+    Some(format!("{prefix}{file}:{line}:{col}{close}"))
+}
+
+/// The original file, line and column of generated `row` and byte `column` (both 1-based) of
+/// `entry`. `None` when the entry has no valid map or the map has no segment for the position.
+fn original_position(entry: &Entry, row: usize, column: usize) -> Option<(&str, u64, u64)> {
+    let parsed = entry.parsed.get_or_init(|| parse(entry)).as_ref()?;
     let text = nth_line(&entry.source, row.checked_sub(1)?)?;
     let mut end = column.saturating_sub(1).min(text.len());
     while !text.is_char_boundary(end) {
@@ -277,11 +331,7 @@ fn remap_frame(maps: &SourceMaps, line: &str) -> Option<String> {
     if original.is_empty() {
         return None;
     }
-    Some(format!(
-        "{prefix}{original}:{}:{}{close}",
-        u64::from(pos.line) + 1,
-        u64::from(pos.column) + 1
-    ))
+    Some((original, u64::from(pos.line) + 1, u64::from(pos.column) + 1))
 }
 
 /// The `index`th line of `source`, split at `\n`, `\r\n` and `\r`.
@@ -318,9 +368,10 @@ struct MapJson {
     source_root: serde_json::Value,
 }
 
-/// Decodes the map `entry` captured. `None` for an invalid map.
+/// Decodes the map `entry` captured. `None` for an invalid map or no map.
 fn parse(entry: &Entry) -> Option<Parsed> {
-    let (map, sidecar_dir): (MapJson, _) = match &entry.raw {
+    let raw = entry.raw.as_ref()?;
+    let (map, sidecar_dir): (MapJson, _) = match raw {
         RawMap::Inline(url) => {
             let (_, payload) = entry.source[url.clone()].split_once("base64,")?;
             (
