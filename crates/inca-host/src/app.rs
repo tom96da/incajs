@@ -472,12 +472,16 @@ pub(crate) fn open(
 /// line on stderr that names the variable.
 #[must_use]
 pub fn run_bundle(entry_path: &str, dev: bool) -> ExitCode {
-    let writer: Option<SharedWriter> = dev.then(|| Rc::new(StdoutWriter::spawn()) as SharedWriter);
+    let writer: Option<SharedWriter> = if dev {
+        let stdout_writer = StdoutWriter::spawn();
+        let sender = stdout_writer.sender_clone();
+        install_panic_hook(sender, stdout_writer.thread_id());
+        Some(Rc::new(stdout_writer) as SharedWriter)
+    } else {
+        None
+    };
     #[cfg(any(target_os = "linux", target_os = "freebsd"))]
     crate::display::exit_on_unreachable_display();
-    if dev {
-        install_panic_hook();
-    }
     let source = match fs::read_to_string(entry_path) {
         Ok(source) => source,
         Err(err) => fail_startup(
