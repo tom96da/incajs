@@ -1,6 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
@@ -318,9 +319,12 @@ describe("dev", () => {
     const stdout = makeSink();
     const stderr = makeSink();
     const controller = new AbortController();
+    const cwd = await scratch.makeApp({});
+    vi.stubEnv("MOCK_HOST_READY_GATE", path.join(cwd, "ready.release"));
+    onTestFinished(() => void vi.unstubAllEnvs());
 
     const running = dev({
-      cwd: await scratch.makeApp({}),
+      cwd,
       entry: "unused",
       bundler,
       hostBin: slowReadyMockHost,
@@ -332,6 +336,10 @@ describe("dev", () => {
     await bundler.watching;
     bundler.emitBuild();
     bundler.emitBuild();
+    // A build that reached the host before `ready` would already have been reloaded.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(stderr.text()).not.toContain("reload #");
+    await writeFile(path.join(cwd, "ready.release"), "");
 
     await waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
     await waitFor(() => expect(stderr.text()).toContain("reload #1"));

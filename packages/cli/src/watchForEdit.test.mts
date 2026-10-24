@@ -169,7 +169,7 @@ describe("watchForEdit", () => {
     await writeFile(path.join(app, "inca.config.ts"), "");
     await sleep(DEBOUNCE * 4);
 
-    expect(await settled(watcher.edited, 50)).toBe(true);
+    expect(await settled(watcher.edited, SETTLE_MS)).toBe(true);
   });
 
   it("waits for a burst of edits to go quiet", async () => {
