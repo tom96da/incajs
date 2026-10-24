@@ -136,10 +136,9 @@ them. A package's own `format` can pass on imports the root one rejects.
 
 ### Build-tooling gotchas
 
-- Each package's `vite.config.mts` excludes test files from `unplugin-dts`'s
-  declaration scan (`dts({ include: ["src"], exclude: ["src/**/*.test.mts"] })`).
-  The exclusion keeps test files out of `dist`, so no `dist/*.test.d.mts`
-  is published.
+- Each package's `tsdown.config.mts` bundles the declarations from the entry
+  files, so test files stay out of `dist` and no `dist/*.test.d.ts` is
+  published.
 - Type-checking resolves workspace imports from source through the `"source"`
   export condition and `customConditions` in `tsconfig.base.json`. Vitest
   does not read `customConditions`. A package that tests against another
@@ -155,9 +154,9 @@ them. A package's own `format` can pass on imports the root one rejects.
 - A test fixture spawned as a process (`packages/cli`'s
   `tests/dev-client/fixtures/*.mts`) needs its executable bit set.
 - A test that needs its own package's build output produces it itself on
-  every run. `hmr.test.mts` calls Vite's `build()` in `beforeAll` with the
-  package's `vite.config.mts`. It overrides only `outDir`, `lib.entry` and
-  `emptyOutDir`, and writes to a scratch directory.
+  every run. `hmr.test.mts` calls tsdown's `build()` in `beforeAll` with the
+  package's `tsdown.config.mts`. It overrides only `entry`, `outDir` and
+  `dts`, and writes to a scratch directory.
 
 ## Root tests (`tests/`)
 

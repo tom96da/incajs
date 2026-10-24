@@ -36,43 +36,43 @@
     "dist/chunks/hooks-*.js"
   ],
   "main": "./dist/index.js",
-  "types": "./dist/index.d.mts",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "source": "./src/index.mts",
-      "types": "./dist/index.d.mts",
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
     "./vue": {
       "source": "./src/vue/index.mts",
-      "types": "./dist/vue/index.d.mts",
+      "types": "./dist/vue.d.ts",
       "import": "./dist/vue.js"
     },
     "./vue/runtime": {
       "source": "./src/vue/runtime.mts",
-      "types": "./dist/vue/runtime.d.mts",
+      "types": "./dist/vue-runtime.d.ts",
       "import": "./dist/vue-runtime.js"
     }
   },
   "publishConfig": {
     "exports": {
       ".": {
-        "types": "./dist/index.d.mts",
+        "types": "./dist/index.d.ts",
         "import": "./dist/index.js"
       },
       "./vue": {
-        "types": "./dist/vue/index.d.mts",
+        "types": "./dist/vue.d.ts",
         "import": "./dist/vue.js"
       },
       "./vue/runtime": {
-        "types": "./dist/vue/runtime.d.mts",
+        "types": "./dist/vue-runtime.d.ts",
         "import": "./dist/vue-runtime.js"
       }
     },
     "access": "public"
   },
   "scripts": {
-    "build": "vite build",
+    "build": "tsdown",
     "test": "vitest run",
     "lint": "oxlint --type-aware",
     "format": "oxfmt --check .",

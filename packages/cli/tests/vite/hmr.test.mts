@@ -8,7 +8,7 @@ import { Writable } from "node:stream";
 import { setTimeout } from "node:timers/promises";
 import { stripVTControlCharacters } from "node:util";
 
-import { build } from "vite";
+import { build } from "tsdown";
 import { ESModulesEvaluator, ModuleRunner } from "vite/module-runner";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { HotPayload } from "vite";
@@ -16,7 +16,7 @@ import type { ModuleRunnerTransport } from "vite/module-runner";
 
 import * as adapterCore from "../../src/adapterCore.mts";
 import { createViteBundler } from "../../src/vite/index.mts";
-import packageViteConfig from "../../vite.config.mts";
+import tsdownConfig from "../../tsdown.config.mts";
 import { fsLag } from "../support/fsLag.mts";
 import { scratchApp, TEST_RUNTIME_MODULE } from "./scratchApp.mts";
 import type { HmrChannel, HmrOptions } from "../../src/types.mts";
@@ -24,7 +24,7 @@ import type { HmrChannel, HmrOptions } from "../../src/types.mts";
 const { setUp, tearDown, makeApp } = scratchApp("hmr");
 
 // Builds vite-runtime.js into its own scratch dir, from the package's real
-// vite.config.mts, leaving the package's dist/ untouched.
+// tsdown.config.mts, leaving the package's dist/ untouched.
 const runtimeScratchDir = path.join(import.meta.dirname, "tmp/vite-runtime-build");
 const builtRuntimePath = path.join(runtimeScratchDir, "vite-runtime.js");
 
@@ -36,29 +36,21 @@ function hmr(options: HmrOptions): Promise<HmrChannel> {
   });
 }
 
-// The real vite.config.mts's own "vite-runtime" entry, reused here rather
+// The real tsdown.config.mts's own "vite-runtime" entry, reused here rather
 // than re-typed so this can never silently drift from the real build.
-const runtimeEntry = (packageViteConfig.build!.lib as { entry: Record<string, string> }).entry[
-  "vite-runtime"
-]!;
+const runtimeEntry = (tsdownConfig.entry as Record<string, string>)["vite-runtime"]!;
 
 beforeAll(async () => {
   await setUp();
   await build({
-    ...packageViteConfig,
-    configFile: false,
-    // packageViteConfig sets no logLevel/customLogger of its own (that's
-    // only in the user-app-facing config).
+    ...tsdownConfig,
+    config: false,
+    cwd: path.resolve(import.meta.dirname, "../.."),
+    entry: { "vite-runtime": runtimeEntry },
+    outDir: runtimeScratchDir,
+    // A .js runtime entry needs no declarations, and they would re-typecheck the package.
+    dts: false,
     logLevel: "silent",
-    // Skips the real config's dts plugin: irrelevant to a .js runtime entry
-    // and it would otherwise re-typecheck the whole package on every run.
-    plugins: [],
-    build: {
-      ...packageViteConfig.build,
-      lib: { ...(packageViteConfig.build!.lib as object), entry: { "vite-runtime": runtimeEntry } },
-      outDir: runtimeScratchDir,
-      emptyOutDir: true,
-    },
   });
 }, 120000);
 afterAll(async () => {

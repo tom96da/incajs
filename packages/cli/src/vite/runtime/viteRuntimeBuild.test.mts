@@ -5,12 +5,12 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { build, mergeConfig } from "vite";
+import { build } from "tsdown";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import viteConfig from "../../../vite.config.mts";
+import tsdownConfig from "../../../tsdown.config.mts";
 
-const BARE_IMPORT_RE = /^\s*import\s+(?:type\s+)?[^"'()]*from\s*["']([^"']+)["']/gm;
+const BARE_IMPORT_RE = /^\s*import\s*(?:type\s+)?[^"'()]*from\s*["']([^"']+)["']/gm;
 
 function isRelative(specifier: string): boolean {
   return specifier.startsWith("./") || specifier.startsWith("../");
@@ -52,13 +52,14 @@ describe("vite-runtime build output", () => {
 
   beforeAll(async () => {
     outDir = await mkdtemp(path.join(tmpdir(), "inca-vite-runtime-"));
-    await build(
-      mergeConfig(viteConfig, {
-        build: { outDir, emptyOutDir: true },
-        plugins: [],
-        logLevel: "silent",
-      }),
-    );
+    await build({
+      ...tsdownConfig,
+      config: false,
+      cwd: path.resolve(import.meta.dirname, "../../.."),
+      outDir,
+      dts: false,
+      logLevel: "silent",
+    });
   }, 30000);
 
   afterAll(async () => {

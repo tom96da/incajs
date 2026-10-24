@@ -34,34 +34,34 @@
     "src/vite/runtime/globals.mts"
   ],
   "main": "./dist/index.js",
-  "types": "./dist/index.d.mts",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "source": "./src/index.mts",
-      "types": "./dist/index.d.mts",
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
     "./config": {
       "source": "./src/config/index.mts",
-      "types": "./dist/config/index.d.mts",
+      "types": "./dist/config.d.ts",
       "import": "./dist/config.js"
     }
   },
   "publishConfig": {
     "exports": {
       ".": {
-        "types": "./dist/index.d.mts",
+        "types": "./dist/index.d.ts",
         "import": "./dist/index.js"
       },
       "./config": {
-        "types": "./dist/config/index.d.mts",
+        "types": "./dist/config.d.ts",
         "import": "./dist/config.js"
       }
     },
     "access": "public"
   },
   "scripts": {
-    "build": "vite build",
+    "build": "tsdown",
     "test": "vitest run",
     "lint": "oxlint --type-aware",
     "format": "oxfmt --check .",
@@ -79,7 +79,7 @@
     "citty": "0.2.2",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
-    "rolldown": "~1.2.13",
+    "rolldown": "~1.2.15",
     "ts-dedent": "2.3.0",
     "vue": "catalog:"
   },
