@@ -326,7 +326,8 @@ export async function dev(options: DevOptions): Promise<void> {
     async function openSession(entry: string): Promise<Session> {
       assertOutDir(cwd, outDir, entry);
       const mine = ++generation;
-      const current = (): boolean => mine === generation;
+      // `stopping` is set the moment shutdown starts, before the session closes.
+      const current = (): boolean => mine === generation && !stopping;
       const live =
         <Args extends unknown[]>(callback: (...args: Args) => void) =>
         (...args: Args): void => {

@@ -81,6 +81,8 @@ describe("dev entry selection", () => {
     await run.bundler.watching;
     run.bundler.emitBuild(BUILD_A);
     await waitFor(() => expect(run.readyCount()).toBe(1));
+    // File events of the files just created can still reach the new watch, which re-arms it.
+    await fsLag();
     return run;
   }
 
@@ -306,6 +308,23 @@ describe("dev entry selection", () => {
     const cwd = await makeSourceApp("main.js");
     const run = await startSlowReload(cwd);
 
+    run.bundler.emitBuild(BUILD_A);
+    run.abort();
+    await run.release();
+    await run.running;
+
+    expect((await run.hostLog.lines()).filter((line) => line === "reload")).toHaveLength(1);
+  });
+
+  it("skips a build queued behind a selection when shutdown starts", async () => {
+    const cwd = await makeSourceApp("main.js");
+    const run = await startSlowReload(cwd);
+
+    // A change that selects the same entry holds the monitor behind the reload, as a replayed
+    // file event does.
+    const signalled = waitForSignal();
+    await writeFile(path.join(cwd, "package.json"), JSON.stringify({ type: "module" }));
+    await signalled;
     run.bundler.emitBuild(BUILD_A);
     run.abort();
     await run.release();
