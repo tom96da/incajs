@@ -352,7 +352,7 @@ impl EventDispatcher {
     }
 }
 
-/// Whether Shift+F10 opens the context menu on the platform, as in Chromium: everywhere but macOS.
+/// Whether Shift+F10 opens the context menu on the platform: everywhere but macOS.
 pub(super) fn shift_f10_opens_context_menu(macos: bool) -> bool {
     !macos
 }

@@ -371,8 +371,8 @@ A fixed entry is deleted and its ID is never reused.
 - **B-146 Pointer fields of `click` follow Chromium only**
   `Units: bridge,docs · Size: S · Impact: Low`
 
-  `click`, `auxclick` and `contextmenu` report `isPrimary` false, as Chromium
-  does. WebKit and Firefox report `true`, Firefox reports `pointerId` 0 and
+  `click`, `auxclick` and `contextmenu` report `isPrimary` false. WebKit and
+  Firefox report `true`, Firefox reports `pointerId` 0 and
   WebKit puts the click of a key at the center of the element and `pressure`
   0.5 on `contextmenu`. Fix: switch `isPrimary` to `true` and add the
   keyboard-click center once Chromium does.
@@ -1159,7 +1159,7 @@ A fixed entry is deleted and its ID is never reused.
   payload and set the offsets from the target's box in `dispatchEvent`. The
   host already exposes `window` and `document`, so `view` can name the
   window. A brand check on `relatedTarget`, so that only elements, `document`
-  and the window are accepted as browsers do, is the stricter option.
+  and the window are accepted, is the stricter option.
 
 - **B-222 A template handler has no event type**
   `Units: core,cli,docs · Size: M · Impact: Low`

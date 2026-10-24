@@ -394,10 +394,8 @@ export async function dev(options: DevOptions): Promise<void> {
           stdout,
           stderr,
           onBuild: (output) => {
-            // Chained rather than fired independently: two rebuilds landing
-            // before the host finishes starting would otherwise both see no
-            // client yet and each start their own. A session closed while
-            // its build waits here must not reach the host.
+            // Builds run one after another, so a second rebuild sees the client the first
+            // one started. A session closed while its build waits here must not reach the host.
             queue = queue.then(() => (current() ? onBuild(output) : undefined));
           },
           onError: live((error) => {

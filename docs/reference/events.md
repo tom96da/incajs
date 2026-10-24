@@ -91,7 +91,7 @@ coordinate.
 - `preventDefault()` in a `contextmenu` listener only sets `defaultPrevented`.
 - `screenX` and `screenY` add the window position. On Wayland they equal the
   client position.
-- `isPrimary` is `false`, as in Chromium. WebKit and Firefox report `true`.
+- `isPrimary` is `false`. WebKit and Firefox report `true`.
 - `scrollend` is unsupported.
 - A mouse event outside every element has the mount container as `target`,
   where browsers report `body` (Firefox reports `html`). Moving the pointer
@@ -114,14 +114,12 @@ never dispatched. The capture methods are in [Elements](./elements.md).
   `getPredictedEvents()` of `PointerEvent` are unsupported.
 - The pointer boundary events (`pointerout`, `pointerleave`, `pointerover`,
   `pointerenter`) precede the mouse ones, then `pointermove` and `mousemove`
-  follow, as in Chromium. WebKit interleaves each pointer event with its mouse
-  counterpart.
+  follow. WebKit interleaves each pointer event with its mouse counterpart.
 - After a captured final release the order is `pointerup`, `mouseup`,
-  `lostpointercapture`, `click`, then the boundary events, as in Chromium.
-  WebKit fires `lostpointercapture` before `mouseup`.
+  `lostpointercapture`, `click`, then the boundary events. WebKit fires
+  `lostpointercapture` before `mouseup`.
 - The boundary events that follow a captured release carry the `button` and
-  `which` of the `pointerup`, as in Chromium. WebKit and Firefox report -1 and
-  0.
+  `which` of the `pointerup`. WebKit and Firefox report -1 and 0.
 
 ## Keyboard
 
@@ -147,9 +145,9 @@ browsers report `body`.
 - Pressing a modifier alone fires `keydown` and `keyup` with its name as
   `key`.
 - The Menu key and Shift+F10 fire `contextmenu` on `keydown`, after the
-  `keydown` listeners and unless one canceled the `keydown`, as in Chromium.
-  Shift+F10 fires it on Linux and Windows only. It targets the focused element, with `clientX` and `clientY` at the
-  center of its box. With nothing focused it targets the element at (1, 1).
+  `keydown` listeners and unless one canceled the `keydown`. Shift+F10 fires it
+  on Linux and Windows only. It targets the focused element, with `clientX` and
+  `clientY` at the center of its box. With nothing focused it targets the element at (1, 1).
   It has `pointerId` 1, `pointerType` `"mouse"`, `button` -1 and no buttons.
 - The quit shortcut (Cmd+Q on macOS, Ctrl+Q elsewhere) goes to the host only.
 

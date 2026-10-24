@@ -470,8 +470,8 @@ with the node ids.
   A key click uses `MousePayload::keyboard_click`, and `preventDefault()` in
   `keydown` or `keyup` of the `button` ends it.
 - The Menu key (`key_name` maps gpui's `"menu"` to `"ContextMenu"`) and
-  Shift+F10 (not on macOS, as in Chromium) fire `contextmenu` from `key_default` on `keydown`, unless a
-  listener canceled it. It targets the focused node with `clientX`/`clientY` at
+  Shift+F10 (not on macOS) fire `contextmenu` from `key_default` on `keydown`,
+  unless a listener canceled it. It targets the focused node with `clientX`/`clientY` at
   the center of its recorded box, or the deepest recorded box at (1, 1) when
   nothing is focused. Its payload is mouse pointer source, `button` `NO_BUTTON` and
   `buttons` 0.
