@@ -419,7 +419,8 @@ with the node ids.
   caused them. The final button release fires `pointerup`, `mouseup`,
   `lostpointercapture`, `click` or `auxclick` (at the `pointerup` target), then
   the boundary events back to the node under the pointer. Deactivating the
-  window clears the held buttons and the capture without firing events.
+  window fires `lostpointercapture` at the active capture target, then clears
+  the held buttons, the capture and a canceled `pointerdown`.
 
 #### Mouse payload
 
