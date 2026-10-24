@@ -10,6 +10,27 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- pointer events and `setPointerCapture()` on elements ([404158a](https://github.com/tom96da/incajs/commit/404158a))
+- `document` between the elements and `window` in every event path, imported from `incajs` ([c1f21f6](https://github.com/tom96da/incajs/commit/c1f21f6))
+- `window` and `document` have handler properties such as `onkeydown` ([c1f21f6](https://github.com/tom96da/incajs/commit/c1f21f6))
+- `window` receives `focus` and `blur` when the window is activated or deactivated ([c1f21f6](https://github.com/tom96da/incajs/commit/c1f21f6))
+- `contextmenu` from the Menu key, and from Shift+F10 outside macOS ([404158a](https://github.com/tom96da/incajs/commit/404158a))
+
+### Changed
+
+- the mount container is an event target, and `composedPath()` ends with `document` and `window` ([c1f21f6](https://github.com/tom96da/incajs/commit/c1f21f6))
+- a `wheel` listener on the mount container is passive unless `passive: false` is given ([c1f21f6](https://github.com/tom96da/incajs/commit/c1f21f6))
+- `click`, `auxclick` and `contextmenu` report `isPrimary` false and `pressure` 0 ([404158a](https://github.com/tom96da/incajs/commit/404158a))
+- the `stack` an error carries names a recompiled module with a `?t=` query ([04fe222](https://github.com/tom96da/incajs/commit/04fe222))
+
+### Fixed
+
+- a function of an earlier compile keeps its source locations after a recompile ([04fe222](https://github.com/tom96da/incajs/commit/04fe222))
+- `inca dev` reloads the window when its automatically selected entry is added or deleted ([e224a27](https://github.com/tom96da/incajs/commit/e224a27), [04ec539](https://github.com/tom96da/incajs/commit/04ec539), [addf498](https://github.com/tom96da/incajs/commit/addf498))
+- a panic no longer hangs the host while `inca dev` stops reading its output ([465a02d](https://github.com/tom96da/incajs/commit/465a02d))
+
 ## [0.0.21] - 2026-10-21
 
 ### Added
