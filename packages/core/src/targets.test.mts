@@ -3,32 +3,67 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { registerElement, unregisterElement } from "./element/lifecycle.mts";
+import { document } from "./document.mts";
 import "./targets.mts";
+import { elementOf, registerElement, unregisterElement } from "./element/lifecycle.mts";
 import { window } from "./window.mts";
 import type { IncaElement } from "./element/types.mts";
 
+const ROOT = 77;
+
 beforeEach(() => {
-  globalThis.__inca_native__ = { rootNodeId: vi.fn<() => number>(() => 77) } as never;
+  globalThis.__inca_native__ = { rootNodeId: vi.fn<() => number>(() => ROOT) } as never;
+});
+
+describe("globals", () => {
+  it("leaves globalThis.document and globalThis.window undefined", () => {
+    expect([
+      (globalThis as { document?: unknown }).document,
+      (globalThis as { window?: unknown }).window,
+    ]).toEqual([undefined, undefined]);
+  });
 });
 
 describe("__inca_targets__", () => {
   afterEach(() => {
     unregisterElement(5);
-    unregisterElement(77);
+    unregisterElement(ROOT);
   });
 
-  it("gives window for the root, a registered node's handle, else null", () => {
+  it("resolves the document and window tags to their objects", () => {
+    const [doc, win] = globalThis.__inca_targets__(["$document", "$window"]);
+
+    expect(doc).toBe(document);
+    expect(win).toBe(window);
+  });
+
+  it("resolves registered element nodes to their handles", () => {
     const handle = { __node_id: 5 } as unknown as IncaElement;
-    const atRoot = { __node_id: 77 } as unknown as IncaElement;
     registerElement(handle);
-    registerElement(atRoot);
 
-    const [root, found, missing] = globalThis.__inca_targets__([77, 5, 6]);
+    const [found] = globalThis.__inca_targets__([5]);
 
-    expect(root).toBe(window);
     expect(found).toBe(handle);
+  });
+
+  it("returns null for unknown nodes", () => {
+    const [missing] = globalThis.__inca_targets__([6]);
+
     expect(missing).toBeNull();
+  });
+
+  it("creates the element of the host root on first use", () => {
+    const [root] = globalThis.__inca_targets__([ROOT]) as [IncaElement];
+
+    expect(root.__node_id).toBe(ROOT);
+    expect(elementOf(ROOT)).toBe(root);
+  });
+
+  it("gives the live element of the host root again", () => {
+    const [first] = globalThis.__inca_targets__([ROOT]);
+    const [second] = globalThis.__inca_targets__([ROOT]);
+
+    expect(second).toBe(first);
   });
 
   it("stays in place when a script assigns to it", () => {

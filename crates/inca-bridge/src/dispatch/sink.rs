@@ -7,6 +7,7 @@ use gpui::{App, MouseButton, MouseUpEvent, ScrollHandle, Window};
 use inca_gpui::{EventPayload, EventSink, KeyPayload, MousePayload, NodeId};
 
 use super::EventDispatcher;
+use crate::EventTargetId;
 use inca_gpui::element::scroll::Align;
 
 impl EventSink for EventDispatcher {
@@ -189,6 +190,7 @@ impl EventSink for EventDispatcher {
         self.host.borrow_mut().focus.observe(window, cx);
         let target = self.key_target(window, cx);
         let event = if up { "keyup" } else { "keydown" };
+        let target = EventTargetId::Node(target);
         let (canceled, entered) = self.walk(target, event, payload, &[]);
         if entered {
             self.drain_observed(window);

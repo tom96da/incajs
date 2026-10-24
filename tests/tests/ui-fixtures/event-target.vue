@@ -6,7 +6,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 <script setup>
 import { onMounted, reactive, ref } from "@vue/runtime-core";
 
-import { window } from "incajs";
+import { document, window } from "incajs";
 
 const log = ref("");
 const outer = ref(null);
@@ -14,7 +14,12 @@ const inner = ref(null);
 const holder = reactive({ el: null });
 let kept = null;
 
-const name = (node) => (node === window ? "window" : node === null ? "null" : node.id);
+const name = (node) => {
+  if (node === window) return "window";
+  if (node === document) return "document";
+  if (node === null) return "null";
+  return node.id || "root";
+};
 const note = (key, e) => {
   const path = e.composedPath().map(name).join(",");
   log.value += `${key}:${name(e.target)}>${name(e.currentTarget)}[${path}] `;

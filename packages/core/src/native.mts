@@ -3,6 +3,9 @@
 
 import type { AttributeValue, CallbackId, EventLike, NodeId, ScrollAlignment } from "./types.mts";
 
+/** What a listener or a dispatch names: a node id, or the tag of `document` or `window`. */
+export type EventTargetId = NodeId | "$document" | "$window";
+
 /**
  * The host-injected object every wrapper in this package forwards to. Not part of the public
  * surface.
@@ -18,8 +21,13 @@ interface IncaNative {
   removeAttribute(nodeId: NodeId, key: string): void;
   setStyle(nodeId: NodeId, key: string, value: AttributeValue): void;
   removeStyle(nodeId: NodeId, key: string): void;
-  addEventListener(nodeId: NodeId, event: string, capture?: boolean, passive?: boolean): CallbackId;
-  removeEventListener(nodeId: NodeId, event: string, callbackId: CallbackId): boolean;
+  addEventListener(
+    target: EventTargetId,
+    event: string,
+    capture?: boolean,
+    passive?: boolean,
+  ): CallbackId;
+  removeEventListener(target: EventTargetId, event: string, callbackId: CallbackId): boolean;
   destroyNode(nodeId: NodeId): CallbackId[];
   holdNode(nodeId: NodeId): void;
   releaseNode(nodeId: NodeId): void;
@@ -32,7 +40,7 @@ interface IncaNative {
   scrollOf(nodeId: NodeId): readonly [number, number, number, number] | null;
   scrollNode(nodeId: NodeId, left: number | null, top: number | null): void;
   scrollIntoViewNode(nodeId: NodeId, block: ScrollAlignment, inline: ScrollAlignment): void;
-  dispatchEvent(nodeId: NodeId, event: EventLike): boolean;
+  dispatchEvent(target: EventTargetId, event: EventLike): boolean;
   click(nodeId: NodeId): void;
 }
 
@@ -47,7 +55,7 @@ declare global {
   // eslint-disable-next-line no-var
   var __inca_released__: (nodeIds: NodeId[], callbackIds: CallbackId[]) => void;
   // eslint-disable-next-line no-var
-  var __inca_targets__: (nodeIds: NodeId[]) => unknown[];
+  var __inca_targets__: (targets: EventTargetId[]) => unknown[];
 }
 
 export function native(): IncaNative {

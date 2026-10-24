@@ -208,7 +208,7 @@ fn destroy_node_frees_its_subtree() {
 
     let host = host.borrow();
     assert!(host.tree.get(host.root()).unwrap().children().is_empty());
-    assert!(callback_ids(&host.listeners, 1, "click").is_empty());
+    assert!(callback_ids(&host.listeners, crate::EventTargetId::Node(1), "click").is_empty());
 }
 
 #[test]
@@ -675,9 +675,12 @@ fn sweep_orphans_releases_the_listeners_of_the_swept_subtree() {
     assert_eq!(nodes, [branch, leaf]);
     assert_eq!(callbacks, [1, 2]);
     let host = host.borrow();
-    assert!(callback_ids(&host.listeners, branch, "click").is_empty());
-    assert!(callback_ids(&host.listeners, leaf, "click").is_empty());
-    assert_eq!(callback_ids(&host.listeners, kept, "click"), [0]);
+    assert!(callback_ids(&host.listeners, crate::EventTargetId::Node(branch), "click").is_empty());
+    assert!(callback_ids(&host.listeners, crate::EventTargetId::Node(leaf), "click").is_empty());
+    assert_eq!(
+        callback_ids(&host.listeners, crate::EventTargetId::Node(kept), "click"),
+        [0]
+    );
 }
 
 #[test]

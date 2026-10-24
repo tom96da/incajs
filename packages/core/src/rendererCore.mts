@@ -34,7 +34,7 @@ export {
   setStyle,
   removeStyle,
 } from "./tree.mts";
-export { createIncaElement } from "./element/handle.mts";
+export { createIncaElement, rootElement } from "./element/handle.mts";
 export { isDestroyed } from "./element/lifecycle.mts";
 /** @internal */
 export { releaseWhenCollected } from "./element/lifecycle.mts";

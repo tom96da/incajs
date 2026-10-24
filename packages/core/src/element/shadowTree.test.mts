@@ -170,7 +170,9 @@ describe("event target methods", () => {
     const el = tree.createElementNode("div");
     const comment = tree.createCommentNode();
 
-    const resolvers = vi.mocked(createEventTarget).mock.calls.map(([resolve]) => resolve());
+    const resolvers = vi
+      .mocked(createEventTarget)
+      .mock.calls.map(([resolve]) => (resolve as () => number)());
     expect(resolvers).toEqual([el.__node_id, comment.__node_id]);
     const listener = vi.fn<() => void>();
     const event = { type: "ping" };

@@ -6,22 +6,25 @@ import type { HANDLER_EVENTS } from "./eventHandlers.mts";
 import type { RectLike } from "./geometry.mts";
 import type { ScrollIntoViewOptions, ScrollOptions } from "./scroll.mts";
 
-/** A function an event handler property holds, called with the element as `this` and the event. */
-export type EventHandler<E = IncaEvent> = (this: IncaElement, event: E) => unknown;
+/** A function an event handler property holds, called with its target as `this` and the event. */
+export type EventHandler<E = IncaEvent, T = IncaElement> = (this: T, event: E) => unknown;
 
 /**
  * The event handler properties, such as `onclick`, of the events the host dispatches, `focusin` and
  * `focusout` excepted.
  */
-export type EventHandlers = {
+export type EventHandlers<T = IncaElement> = {
   /**
    * The handler of the event: a function, an object kept as assigned, or `null`. Assigning a
    * function or an object sets it, and any other value sets `null`. A value assigned while the
-   * property holds `null` registers a listener after the element's other listeners. A later value
+   * property holds `null` registers a listener after the target's other listeners. A later value
    * keeps that place, and `null` removes it. An object runs nothing. A handler that returns `false`
-   * cancels the event. After the node is removed, assigning does nothing.
+   * cancels the event. On an element, assigning does nothing after the node is removed.
    */
-  [K in (typeof HANDLER_EVENTS)[number] as `on${K}`]: EventHandler<IncaEventMap[K]> | object | null;
+  [K in (typeof HANDLER_EVENTS)[number] as `on${K}`]:
+    | EventHandler<IncaEventMap[K], T>
+    | object
+    | null;
 };
 
 /**

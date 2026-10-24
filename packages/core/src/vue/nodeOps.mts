@@ -8,7 +8,7 @@ import type { IncaCore, IncaElement, IncaNode, IncaText, TagName } from "../rend
 /**
  * Marks `handle` so that Vue's `reactive()` and `ref()` keep the object itself.
  * A template ref then holds the same object the application receives from
- * `activeElement()`.
+ * `document.activeElement`.
  * @param handle - the node handle to mark
  * @returns `handle`
  */

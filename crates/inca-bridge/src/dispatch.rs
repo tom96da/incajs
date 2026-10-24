@@ -35,6 +35,7 @@ use inca_gpui::{
 use inca_jsenv::{Engine, EngineError, ErrorReporter, report_jobs, stderr_reporter};
 use rquickjs::Function;
 
+use crate::EventTargetId;
 use crate::bindings::Host;
 use crate::event::{self, Walk};
 use crate::focus::FocusTransition;
@@ -45,7 +46,7 @@ pub(crate) use inca_gpui::event_sink::spec_of;
 
 /// Everything needed to dispatch a native event into JS: the engine to call
 /// into, and the registry of which JS callback ids are listening for which
-/// `(node id, event name)`.
+/// `(event target, event name)`.
 #[derive(Clone)]
 pub struct EventDispatcher {
     engine: Rc<Engine>,
@@ -177,7 +178,7 @@ impl EventDispatcher {
     /// engine. `cut` lists the nodes whose listeners stay silent.
     fn walk(
         &self,
-        target: NodeId,
+        target: EventTargetId,
         event: &str,
         payload: &EventPayload,
         cut: &[NodeId],
@@ -336,9 +337,9 @@ impl EventDispatcher {
             .unwrap_or(node_id)
     }
 
-    /// `target` and its ancestors, nearest first.
+    /// `target` and its ancestors up to the host root, nearest first.
     fn path_from(&self, target: NodeId) -> Vec<NodeId> {
-        event::path_from(&self.host.borrow(), target)
+        self.host.borrow().tree.ancestors(target).collect()
     }
 
     /// The nearest node that is `a`, `b` or an ancestor of both.
@@ -348,7 +349,7 @@ impl EventDispatcher {
     }
 
     /// Fires `event` at `start` with `start` as the `target`. The capture
-    /// listeners of the root down to `start` run first, then the bubble
+    /// listeners from `window` down to `start` run first, then the bubble
     /// listeners of `start` and, while the event bubbles, of each ancestor,
     /// until one calls `stopPropagation()`. Every listener receives the same
     /// event object, whose `eventId` is larger than the one of the event
@@ -363,8 +364,9 @@ impl EventDispatcher {
     /// While the listeners run, `eventPhase` is 1 on the ancestors of `target`
     /// during the capture pass, 2 where `currentTarget` is `target` and 3 on
     /// the ancestors during the bubble pass, and `composedPath()` lists the path,
-    /// from `target` up to the root, as the objects that `__inca_targets__`
-    /// gives, or as node ids when no such global exists. Afterwards
+    /// from `target` up through its element ancestors, document and window, as the
+    /// objects that `__inca_targets__` gives, or as node ids and the tags
+    /// `"$document"` and `"$window"` when no such global exists. Afterwards
     /// `currentTarget` is `null`, `eventPhase` is 0 and `composedPath()` is
     /// empty. A listener that throws is reported, and the remaining listeners
     /// run. A throw of `__inca_targets__` is reported and no listener runs.
@@ -393,7 +395,7 @@ impl EventDispatcher {
         self.host.borrow_mut().focus.observe(window, cx);
         let payload = &self.prepare(event, start, payload, window);
         let cut = self.cut_by_disabled_button(event, payload, cx);
-        let (canceled, entered) = self.walk(start, event, payload, &cut);
+        let (canceled, entered) = self.walk(EventTargetId::Node(start), event, payload, &cut);
         if entered {
             self.drain_observed(window);
         }
@@ -466,6 +468,7 @@ impl EventDispatcher {
     /// Handles the window gaining (`active` true) or losing focus. The
     /// modifier keys are re-read, a lost window clears the held presses, and
     /// the focused node receives `focus` or `blur` while keeping its focus.
+    /// `window` receives `focus` before the node and `blur` after it.
     pub fn window_activated(&self, active: bool, window: &mut Window, cx: &mut App) {
         self.sync_modifiers(window, true);
         if !active {
@@ -473,8 +476,26 @@ impl EventDispatcher {
         }
         self.host.borrow_mut().focus.set_window_blurred(!active);
         let focused = self.host.borrow().focus.focused_node(window, cx);
+        if active {
+            self.fire_at_window("focus", window, cx);
+        }
         if let Some(node) = focused {
             FocusTransition::window_activation(node, active).dispatch(self, window, cx);
+        }
+        if !active {
+            self.fire_at_window("blur", window, cx);
+        }
+    }
+
+    /// Fires `event` at `window` alone, with no node on its path.
+    fn fire_at_window(&self, event: &str, window: &mut Window, cx: &mut App) {
+        self.host.borrow_mut().focus.observe(window, cx);
+        let payload = EventPayload::Focus {
+            related_target: None,
+        };
+        let (_, entered) = self.walk(EventTargetId::Window, event, &payload, &[]);
+        if entered {
+            self.drain_observed(window);
         }
     }
 

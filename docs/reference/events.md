@@ -21,16 +21,20 @@ methods of the DOM `Event` interface (see Base fields).
 
 ## Event targets
 
-`window` from `incajs` (`import { window } from "incajs"`) and a template `ref`
-have `addEventListener()`, `removeEventListener()` and `dispatchEvent()`.
+`document` and `window` from `incajs` (`import { document, window } from
+"incajs"`) and a template `ref` have `addEventListener()`,
+`removeEventListener()` and `dispatchEvent()`.
 
-- `composedPath()` lists the app's elements, then `window`, with no `body`,
-  `html` or `document`. `document` is unsupported.
+- The mount container (the container `mount()` targets, see [Elements](./elements.md)) stands in for `html` and `body` in `composedPath()`.
+- A `wheel` listener on the mount container is passive unless its options say
+  `passive: false`, as on `body`.
 - The `signal` option of `addEventListener()` is unsupported.
 - The ref of an unmounted element ignores `addEventListener()` and an
   assignment to a handler property, and `dispatchEvent()` returns `true`.
 - An attribute that holds code, such as `onclick="count++"`, runs nothing.
-- `window` has no handler properties such as `onkeydown`.
+- `document` and `window` have no `body`, `documentElement` or query methods.
+- `window` and `document` are imports. `globalThis.window` and
+  `globalThis.document` stay undefined.
 
 ## Event modifiers
 
@@ -93,19 +97,19 @@ events yet. `pointerType` is `"mouse"`, or `""` for the click of a key.
   `azimuthAngle`, `persistentDeviceId`, `getCoalescedEvents()` and
   `getPredictedEvents()` of `PointerEvent` are unsupported.
 - `scrollend` is unsupported.
-- A mouse event outside every element has `window` as `target`, where browsers
-  report `body` (Firefox reports `html`). Moving the pointer between an element
-  and an empty area gives `window` as `relatedTarget`.
+- A mouse event outside every element has the mount container as `target`,
+  where browsers report `body` (Firefox reports `html`). Moving the pointer
+  between an element and an empty area gives the mount container as
+  `relatedTarget`.
 
 ## Keyboard
 
 Keyboard events carry the fields of
 [`KeyboardEvent`](https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent)
 from [UI Events](https://www.w3.org/TR/2026/WD-uievents-20260221/#events-keyboard-types).
-`keydown` and `keyup` go to the focused node, or to `window` when nothing is
-focused. `target` is that node or `window`, where browsers report `body`. A
-`window` listener reads `eventPhase` 2 for a key event while nothing is
-focused.
+`keydown` and `keyup` go to the focused node, or to the mount container when
+nothing is focused. `target` is that node or the mount container, where
+browsers report `body`.
 
 | Field         | Value                                           |
 | ------------- | ----------------------------------------------- |
@@ -138,9 +142,6 @@ rules, with the differences below.
   focusable by default. `.focus()` on other nodes is ignored.
 - `hidden="until-found"` counts as shown.
 - A focus ring is unsupported.
-- `activeElement()` (`import { activeElement } from "incajs"`) returns the
-  focused element or `null`. It replaces `document.activeElement`, which is
-  unsupported.
 - After the last node, Tab leaves nothing focused and the next Tab starts at
   the first node, as in Chromium and WebKit. Focus stays in the window.
 

@@ -9,14 +9,13 @@ import { window } from "./window.mts";
 let nextCallbackId = 0;
 
 const native = {
-  rootNodeId: vi.fn<() => number>(() => 77),
   addEventListener: vi.fn<
-    (nodeId: number, event: string, capture?: boolean, passive?: boolean) => number
+    (target: number | string, event: string, capture?: boolean, passive?: boolean) => number
   >(() => nextCallbackId++),
-  removeEventListener: vi.fn<(nodeId: number, event: string, callbackId: number) => boolean>(
-    () => true,
-  ),
-  dispatchEvent: vi.fn<(nodeId: number, event: unknown) => boolean>(() => true),
+  removeEventListener: vi.fn<
+    (target: number | string, event: string, callbackId: number) => boolean
+  >(() => true),
+  dispatchEvent: vi.fn<(target: number | string, event: unknown) => boolean>(() => true),
 };
 
 beforeEach(() => {
@@ -27,31 +26,27 @@ beforeEach(() => {
 });
 
 describe("window", () => {
-  it("listens on the root node", () => {
+  it("listens on the window target", () => {
     const listener = vi.fn<() => void>();
 
     window.addEventListener("keydown", listener);
     const callbackId = native.addEventListener.mock.results[0]!.value;
     window.removeEventListener("keydown", listener);
 
-    expect(native.addEventListener).toHaveBeenCalledWith(77, "keydown", false, false);
-    expect(native.removeEventListener).toHaveBeenCalledExactlyOnceWith(77, "keydown", callbackId);
+    expect(native.addEventListener).toHaveBeenCalledWith("$window", "keydown", false, false);
+    expect(native.removeEventListener).toHaveBeenCalledExactlyOnceWith(
+      "$window",
+      "keydown",
+      callbackId,
+    );
   });
 
-  it("dispatches at the root node", () => {
+  it("dispatches at the window target", () => {
     const event = { type: "ping" };
 
     window.dispatchEvent(event);
 
-    expect(native.dispatchEvent).toHaveBeenCalledExactlyOnceWith(77, event);
-  });
-
-  it("looks the root up each time a method runs", () => {
-    window.addEventListener("keydown", vi.fn<() => void>());
-    native.rootNodeId.mockReturnValueOnce(78);
-    window.addEventListener("keyup", vi.fn<() => void>());
-
-    expect(native.addEventListener.mock.calls.map((call) => call[0])).toEqual([77, 78]);
+    expect(native.dispatchEvent).toHaveBeenCalledExactlyOnceWith("$window", event);
   });
 
   it("takes a listener that declares the event fields it reads", () => {
@@ -70,5 +65,23 @@ describe("window", () => {
     window.addEventListener("scroll", vi.fn<() => void>());
 
     expect(native.addEventListener.mock.calls.map((call) => call[3])).toEqual([true, false, false]);
+  });
+
+  it("runs an onfocus handler as a listener of the window", () => {
+    const seen: unknown[] = [];
+
+    window.onfocus = function (this: unknown) {
+      seen.push(this);
+    };
+    const callbackId = native.addEventListener.mock.results[0]!.value;
+    globalThis.__inca_callbacks__[callbackId]!({ currentTarget: window });
+
+    expect(native.addEventListener).toHaveBeenCalledExactlyOnceWith(
+      "$window",
+      "focus",
+      false,
+      false,
+    );
+    expect(seen).toEqual([window]);
   });
 });

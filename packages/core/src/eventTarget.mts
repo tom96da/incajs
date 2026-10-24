@@ -2,20 +2,22 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { addEventListener, dispatchEvent, removeEventListener } from "./events.mts";
-import type { EventListenerOrObject, IncaEventTarget, ListenerOptions, NodeId } from "./types.mts";
+import type { EventTargetId } from "./native.mts";
+import type { EventListenerOrObject, IncaEventTarget, ListenerOptions } from "./types.mts";
 
 /**
- * Builds the listener methods of an event target that stands for one node.
- * @param nodeId - resolves the node when a method runs
+ * Builds the listener methods of an event target: a node, document or window.
+ * @param target - the target id, or a function that resolves it each time a method runs
  * @param passiveByDefault - event names whose listeners are passive unless
  * their options say `passive: false`
  * @returns the target's `addEventListener`, `removeEventListener` and
  * `dispatchEvent`
  */
 export function createEventTarget(
-  nodeId: () => NodeId,
+  target: EventTargetId | (() => EventTargetId),
   passiveByDefault: readonly string[] = [],
 ): IncaEventTarget {
+  const getTarget = typeof target === "function" ? target : () => target;
   return {
     addEventListener(
       type: string,
@@ -24,7 +26,7 @@ export function createEventTarget(
     ) {
       const given: ListenerOptions =
         typeof options === "boolean" ? { capture: options } : (options ?? {});
-      addEventListener(nodeId(), type, listener, {
+      addEventListener(getTarget(), type, listener, {
         ...given,
         passive: given.passive ?? passiveByDefault.includes(type),
       });
@@ -36,9 +38,9 @@ export function createEventTarget(
       options?: boolean | Pick<ListenerOptions, "capture">,
     ) {
       const capture = typeof options === "boolean" ? options : options?.capture;
-      removeEventListener(nodeId(), type, listener, { capture });
+      removeEventListener(getTarget(), type, listener, { capture });
     },
 
-    dispatchEvent: (event) => dispatchEvent(nodeId(), event),
+    dispatchEvent: (event) => dispatchEvent(getTarget(), event),
   };
 }

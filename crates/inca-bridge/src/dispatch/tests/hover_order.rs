@@ -115,3 +115,58 @@ fn reporting_the_same_hover_again_fires_nothing(cx: &mut TestAppContext) {
 
     assert_eq!(got, Vec::<String>::new());
 }
+
+#[gpui::test]
+fn entering_a_node_under_the_host_root_fires_mouseenter_at_the_root_and_not_at_document(
+    cx: &mut TestAppContext,
+) {
+    let (dispatcher, host, _reported) = dispatcher_with_engine();
+    let node = node_under_root(&host);
+    let root = host.borrow().root();
+    dispatcher
+        .engine
+        .eval::<()>("globalThis.seen = [];")
+        .unwrap();
+    let record = "(e) => seen.push(`${e.type}@${e.currentTarget}/${e.target}`)";
+    listen(&dispatcher, root, "mouseenter", record);
+    listen_global(&dispatcher, "$document", "mouseenter", false, record);
+
+    let got = hover(cx, &dispatcher, Some(node));
+
+    assert_eq!(got, [format!("mouseenter@{root}/{root}")]);
+}
+
+#[gpui::test]
+fn leaving_a_node_under_the_host_root_gives_the_root_as_the_related_target(
+    cx: &mut TestAppContext,
+) {
+    let (dispatcher, host, _reported) = dispatcher_with_engine();
+    let node = node_under_root(&host);
+    let root = host.borrow().root();
+    dispatcher
+        .engine
+        .eval::<()>("globalThis.seen = [];")
+        .unwrap();
+    let record = "(e) => seen.push(`${e.type}@${e.currentTarget}/${e.target}/${e.relatedTarget}`)";
+    for target in [node, root] {
+        for event in ["mouseout", "mouseleave"] {
+            listen(&dispatcher, target, event, record);
+        }
+    }
+    hover(cx, &dispatcher, Some(node));
+    dispatcher
+        .engine
+        .eval::<()>("globalThis.seen = [];")
+        .unwrap();
+
+    let got = hover(cx, &dispatcher, Some(root));
+
+    assert_eq!(
+        got,
+        [
+            format!("mouseout@{node}/{node}/{root}"),
+            format!("mouseout@{root}/{node}/{root}"),
+            format!("mouseleave@{node}/{node}/{root}"),
+        ]
+    );
+}

@@ -15,22 +15,22 @@ use inca_gpui::{NodeId, render_tree_with_events};
 use inca_jsenv::{Engine, EngineError, ErrorReporter};
 
 use crate::bindings::install;
-use crate::{EventDispatcher, EventListeners, Host};
+use crate::{EventDispatcher, EventListeners, EventTargetId, Host};
 
-/// Defines `__inca_test_listen__(node, type, fn, capture, passive)`, which
+/// Defines `__inca_test_listen__(target, type, fn, capture, passive)`, which
 /// registers `fn` through `__inca_native__.addEventListener`.
 pub const LISTEN_JS: &str = r"
-    globalThis.__inca_test_listen__ = (node, type, fn, capture = false, passive = false) => {
-        const id = __inca_native__.addEventListener(node, type, capture, passive);
+    globalThis.__inca_test_listen__ = (target, type, fn, capture = false, passive = false) => {
+        const id = __inca_native__.addEventListener(target, type, capture, passive);
         globalThis.__inca_callbacks__[id] = fn;
     };
     ";
 
-/// The callback ids of `(node, event)` in registration order.
+/// The callback ids of `(target, event)` in registration order.
 #[must_use]
-pub fn callback_ids(listeners: &EventListeners, node: NodeId, event: &str) -> Vec<u32> {
+pub fn callback_ids(listeners: &EventListeners, target: EventTargetId, event: &str) -> Vec<u32> {
     listeners
-        .listeners_for(node, event)
+        .listeners_for(target, event)
         .iter()
         .map(|l| l.callback)
         .collect()

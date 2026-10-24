@@ -6,7 +6,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 <script setup>
 import { KeepAlive, onMounted, ref } from "@vue/runtime-core";
 
-import { window } from "incajs";
+import { document, window } from "incajs";
 
 import Tally from "./parts/tally.vue";
 
@@ -20,10 +20,11 @@ const guard = (e) => {
   const chain = [];
   for (let n = e.target; n !== null; n = n.parent) chain.push(n);
   const held =
-    chain.length === path.length &&
-    chain.slice(0, -1).every((n, i) => n === path[i]) &&
+    path.length === chain.length + 2 &&
+    chain.every((n, i) => n === path[i]) &&
+    path.at(-2) === document &&
     path.at(-1) === window &&
-    path.every((n) => n === window || n.contains(e.target));
+    chain.every((n) => n.contains(e.target));
   log.value += `${e.target.id}:${held} `;
 };
 onMounted(() => window.addEventListener("click", guard, true));

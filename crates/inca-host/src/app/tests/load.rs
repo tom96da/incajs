@@ -188,7 +188,7 @@ fn a_reload_leaves_no_stale_nodes_listeners_or_callbacks() {
     );
     let ids: Vec<u32> = host
         .listeners
-        .listeners_for(children[0], "click")
+        .listeners_for(inca_bridge::EventTargetId::Node(children[0]), "click")
         .iter()
         .map(|l| l.callback)
         .collect();

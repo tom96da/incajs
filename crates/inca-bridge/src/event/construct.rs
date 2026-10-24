@@ -19,6 +19,7 @@ use super::{
     child_of, constants, field, given, initialize, method, new_event, other_kind, targets_of,
     with_event,
 };
+use crate::EventTargetId;
 use crate::bindings::convert::or_null;
 
 /// Each class of event: the kind it builds, its name, and the kind whose constructor its
@@ -34,7 +35,7 @@ pub(super) const CLASSES: [(&str, &str, Option<&str>); 8] = [
     (KEYBOARD, "KeyboardEvent", Some(UI)),
 ];
 
-/// A new event for a walk, ready to deliver. `targets` holds what stands for each node of the
+/// A new event for a walk, ready to deliver. `targets` holds what stands for each target of the
 /// path, target first.
 pub(super) fn create<'js>(
     ctx: &Ctx<'js>,
@@ -43,7 +44,7 @@ pub(super) fn create<'js>(
     targets: Vec<Value<'js>>,
 ) -> JsResult<Class<'js, IncaEvent<'js>>> {
     let related = match related_of(walk.payload) {
-        Some(node) => targets_of(ctx, &[node])?.pop(),
+        Some(node) => targets_of(ctx, &[EventTargetId::Node(node)])?.pop(),
         None => None,
     };
     let payload = Payload::from_host(walk.name, walk.payload);
@@ -472,7 +473,7 @@ impl<'js> Init<'_, 'js> {
         match self.member(key)? {
             Some(value) if value.is_object() => Ok(Some(value)),
             Some(value) if !value.is_null() => Err(self.error(&format!(
-                "the {key} member is not an object, so pass an element, window or null"
+                "the {key} member is not an object, so pass an element, document, window or null"
             ))),
             _ => Ok(None),
         }

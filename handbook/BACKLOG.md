@@ -603,7 +603,7 @@ A fixed entry is deleted and its ID is never reused.
 
   Nothing tells an app that a reload is about to discard its session or
   that the host is shutting down. The intended design adds no binding. The
-  host dispatches a named event on `rootNodeId()` through the existing
+  host dispatches a named event at `window` through the existing
   `addEventListener` path. The hook is observe-only: when a reload's hook
   would fire, the new bundle has already loaded, so there is nothing left to
   veto. A handler can await only microtasks that have already settled,
@@ -733,12 +733,10 @@ A fixed entry is deleted and its ID is never reused.
   the node holds focus, set from the same focus transitions that dispatch
   `focus` and `blur`.
 
-- **B-131 `document.activeElement` and `:focus` are unsupported**
-  `Units: core · Size: S · Impact: Low`
+- **B-131 `:focus` is unsupported**
+  `Units: gpui,core · Size: S · Impact: Low`
 
-  `activeElement()` from `incajs` returns the focused element. Fix:
-  expose it as `document.activeElement` once the `document` of the event plan
-  exists, and add `:focus` with the interactive visual state.
+  Fix: add `:focus` with the interactive visual state.
 
 - **B-143 `disabled` has no handling for the input element**
   `Units: bridge · Size: S · Impact: Low`
@@ -856,19 +854,12 @@ A fixed entry is deleted and its ID is never reused.
   first entry rejects while no window exists, the host exits right after it
   reports the rejection, so the job failures of the final poll are dropped.
 
-- **B-168 `window` has the listener methods only and `document` is undefined**
-  `Units: core,bridge,docs · Size: M · Impact: Low`
+- **B-168 The `signal` option of `addEventListener()` is unsupported**
+  `Units: core,bridge · Size: M · Impact: Low`
 
-  `window` is a named export of `incajs` with `addEventListener()`,
-  `removeEventListener()` and `dispatchEvent()` as its only members, so it
-  lacks the handler properties such as `onkeydown`. The globals
-  `window` and `document` are undefined, and the `signal` option of
-  `addEventListener()` is unsupported. `composedPath()` ends at `window` and
-  has no `document`. Activating or leaving the window fires `focus` and `blur`
-  at the focused node only, where browsers also fire them at `window`. Fix:
-  install a global `document` and decide how a global `window` coexists with
-  the `typeof window` checks of libraries. The `signal` option needs an
-  `AbortController` in the runtime first.
+  A `signal` option is ignored, so an aborted signal leaves the listener
+  registered. Fix: add `AbortController` to the
+  runtime, then drop the registration when the signal aborts.
 
 - **B-169 The Vue warning trace prints in the text color**
   `Units: core · Size: S · Impact: Low`
@@ -1014,33 +1005,23 @@ A fixed entry is deleted and its ID is never reused.
   `tmp/browser-check/focus-detach-results.md`. A fix fires the pair at the call
   and needs a decision on the engine to follow.
 
-- **B-199 `target` is `window` where browsers report `body`**
+- **B-199 `target` is the mount container where browsers report `body`**
   `Units: gpui,bridge,core,docs · Size: M–L · Impact: Low`
 
-  A key event while nothing is focused has `window` as `target`, and its
-  `composedPath()` is `[window]`. Browsers report `body` as `target`, with
-  `html`, `document` and `window` above it. A `window` listener there reads
-  `eventPhase` 1 in capture and 3 in bubble, and the host gives 2.
+  A key event while nothing is focused has the mount container as `target`,
+  and its `composedPath()` is `[container, document, window]`. Browsers
+  report `body` as `target`, with `html`, `document` and `window` above it.
 
-  A mouse press or click outside every element has `window` as `target`.
-  Chromium and WebKit report `body`, and Firefox reports `html`. Moving the
-  pointer from an element to an empty area fires `mouseout` and `mouseleave`
-  with `window` as `relatedTarget`, and `mouseover` at `window`. Chromium and
-  WebKit give `body` in both places, and Firefox gives `html`.
+  A mouse press or click outside every element has the container as
+  `target`. Chromium and WebKit report `body`, and Firefox reports `html`.
+  Moving the pointer from an element to an empty area fires `mouseout` and
+  `mouseleave` with the container as `relatedTarget`, and `mouseover` at the
+  container. Chromium and WebKit give `body` in both places, and Firefox
+  gives `html`.
 
-  The host root is the only node above the app. Fix: a host-owned body node
-  under the root that the app mounts into and that takes these events. The
-  same node fixes B-200.
-
-- **B-200 The host root has two objects, `window` and the mount container**
-  `Units: core,bridge · Size: M · Impact: Low`
-
-  `app.mount()` mounts on the host root, and both the mount container handle
-  and `window` stand for that node. Events carry `window` for it, so a
-  listener added through the container handle reads `window` as
-  `currentTarget`, and the `parent` of the app's top element is a handle
-  that `composedPath()` never lists. Fix: the body node of B-199, so the
-  container is a node of its own.
+  The container stands in for `html` and `body`, and is the only node above
+  the app. Fix: a host-owned body node under the root that the app mounts
+  into and that takes these events.
 
 - **B-202 Chromium drops a wheel step the host passes on**
   `Units: gpui,bridge · Size: S · Impact: Low`
@@ -1221,10 +1202,9 @@ A fixed entry is deleted and its ID is never reused.
 
   Fix: add the legacy init methods, keep the modifier states in the
   payload and set the offsets from the target's box in `dispatchEvent`. The
-  host should provide `window` and `body` objects and core should export
-  wrappers of them, so that `view` can name the window. A brand check on
-  `relatedTarget`, so that only elements and the window are accepted as
-  browsers do, is the stricter option.
+  host already exposes `window` and `document`, so `view` can name the
+  window. A brand check on `relatedTarget`, so that only elements, `document`
+  and the window are accepted as browsers do, is the stricter option.
 
 - **B-222 A template handler has no event type**
   `Units: core,cli,docs · Size: M · Impact: Low`
@@ -1252,3 +1232,13 @@ A fixed entry is deleted and its ID is never reused.
   `inca build` copies the files of `public/` into the output directory, and
   `inca package` copies only the files the build emitted, so they are not in
   the packaged app.
+
+- **B-226 `window` and `document` need an import**
+  `Units: cli,core,docs · Size: M · Impact: Low`
+
+  `window` and `document` are exports of `incajs`, and `globalThis.window` and
+  `globalThis.document` are undefined. Defining them breaks `vue`'s runtime
+  DOM, which calls `document.createElement` at load when `document` exists.
+  Fix: a Vite plugin injects `import { document, window } from "incajs"` into
+  the app's own source, not into `node_modules`, and generates their types
+  into `.inca/`.

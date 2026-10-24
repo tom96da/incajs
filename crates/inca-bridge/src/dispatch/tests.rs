@@ -115,6 +115,17 @@ fn listen_with(
         .unwrap();
 }
 
+/// Registers `f` on the global target `tag`, `"$document"` or `"$window"`, in the capture phase
+/// when `capture` is set.
+fn listen_global(dispatcher: &EventDispatcher, tag: &str, event: &str, capture: bool, f: &str) {
+    dispatcher
+        .engine
+        .eval::<()>(&format!(
+            "__inca_test_listen__('{tag}', '{event}', {f}, {capture}, false);"
+        ))
+        .unwrap();
+}
+
 fn tree_of_three(host: &Rc<RefCell<Host>>) -> [NodeId; 3] {
     let mut h = host.borrow_mut();
     let outer = h.tree.create_node("div").unwrap();
@@ -123,6 +134,15 @@ fn tree_of_three(host: &Rc<RefCell<Host>>) -> [NodeId; 3] {
     h.tree.append_child(outer, parent).unwrap();
     h.tree.append_child(parent, child).unwrap();
     [outer, parent, child]
+}
+
+/// A new node under the host root, so an event at it also reaches document and window.
+fn node_under_root(host: &Rc<RefCell<Host>>) -> NodeId {
+    let mut h = host.borrow_mut();
+    let node = h.tree.create_node("div").unwrap();
+    let root = h.root();
+    h.tree.append_child(root, node).unwrap();
+    node
 }
 
 /// Returns `globalThis.out` as JSON.

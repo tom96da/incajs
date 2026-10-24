@@ -127,9 +127,9 @@ be passed, and `undefined` there counts as `null`.
 | `removeAttribute` | `(nodeId: number, key: string) => void` | Remove a non-style attribute prop. Removing a key that isn't set does nothing. |
 | `setStyle` | `(nodeId: number, key: string, value: string \| number \| boolean) => void` | Set a style prop. |
 | `removeStyle` | `(nodeId: number, key: string) => void` | Remove a style prop so it renders as if never set. Removing a key that isn't set does nothing. |
-| `addEventListener` | `(nodeId: number, event: string, capture?: boolean, passive?: boolean) => number` | Register a callback for an event and return its id, see [Registering](#registering). `capture` and `passive` default to `false`. |
-| `removeEventListener` | `(nodeId: number, event: string, callbackId: number) => boolean` | Drop one registration and return whether it was there. An unknown node returns `false`. |
-| `dispatchEvent` | `(nodeId: number, event: Event) => boolean` | Walk a script-built event over the path of `nodeId` and return `false` when a listener canceled it, see [Dispatching from script](#dispatching-from-script). |
+| `addEventListener` | `(target: number \| "$document" \| "$window", event: string, capture?: boolean, passive?: boolean) => number` | Register a callback for an event and return its id, see [Registering](#registering) and [Tagged targets](#tagged-targets). `capture` and `passive` default to `false`. |
+| `removeEventListener` | `(target: number \| "$document" \| "$window", event: string, callbackId: number) => boolean` | Drop one registration and return whether it was there. An unknown node returns `false`. |
+| `dispatchEvent` | `(target: number \| "$document" \| "$window", event: Event) => boolean` | Walk a script-built event over the path of `target` and return `false` when a listener canceled it, see [Dispatching from script](#dispatching-from-script) and [Tagged targets](#tagged-targets). |
 | `click` | `(nodeId: number) => void` | Walk an untrusted `click` at `nodeId`, see [Dispatching from script](#dispatching-from-script). |
 | `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its subtree, and return every `callbackId` registered in it. An unknown id returns `[]`. Destroying the root throws. Also drops the hold and the waiting `scrollIntoViewNode` calls of the destroyed nodes. |
 | `focusNode` | `(nodeId: number, preventScroll?: boolean) => void` | Request focus for `nodeId`, next frame. Only a connected node with a `tabindex` that is not hidden takes it, and a `button` defaults to `0`. Unless `preventScroll` is `true`, the scroll containers above the node then scroll it into view: a node that shows stays put, a node outside a container's box centres, and a node that shows partly moves the least vertically and stays put horizontally. A node with no box yet is retried next frame. |
@@ -142,7 +142,8 @@ be passed, and `undefined` there counts as `null`.
 
 Shared throw rules, all as a `TypeError` except where noted:
 
-- A malformed `nodeId` or `callbackId` throws.
+- A malformed `nodeId` or `callbackId` throws, and so does a `target` string
+  other than the two tags in [Tagged targets](#tagged-targets).
 - A `capture`, `passive` or `preventScroll` that is not a boolean,
   `undefined` or `null` throws.
 - `addEventListener` throws a `RangeError` after the last id.
@@ -173,25 +174,26 @@ The host converts the `VirtualNode` tree into GPUI elements on each frame.
 
 ### Event dispatch
 
-The host dispatches native input to the JS callbacks registered for a node
-and event name. A walk is one dispatch of an event along its path. Payloads
-and author-facing behaviour are in [events.md](../docs/reference/events.md).
+The host dispatches native input to the JS callbacks registered for an event
+target and event name. A walk is one dispatch of an event along its path.
+Payloads and author-facing behaviour are in
+[events.md](../docs/reference/events.md).
 
 #### Registering
 
 - `addEventListener` allocates the id and returns it. Each id is issued once.
   The ids run from 0 to `u32::MAX - 1`, and the call after the last one
-  throws a `RangeError`. Distinct ids stack on one `(nodeId, event)`, and
+  throws a `RangeError`. Distinct ids stack on one `(target, event)`, and
   `capture` and `passive` belong to the registration. An id belongs to one
   registration, so `removeEventListener` takes the id only. `destroyNode`
   returns the dropped ids because only the caller can free the JS half.
-- `packages/core` keys a registration by node, event, capture and listener, so
+- `packages/core` keys a registration by target, event, capture and listener, so
   `removeEventListener(type, listener, options)` finds it by identity and
   adding the same listener again changes nothing. A listener object keeps its
   identity and receives `handleEvent` calls. A listener function runs with the
   event's `currentTarget` as `this`. `once` removes the registration before
   the listener runs. `createEventTarget` builds the listener methods for one
-  node, and `window` resolves `rootNodeId()` per call.
+  target, a node or a tag.
 - `install` creates `globalThis.__inca_callbacks__` as an empty
   null-prototype object on a read-only, non-configurable global. The caller
   stores the function at `globalThis.__inca_callbacks__[id]` after
@@ -220,21 +222,43 @@ global is skipped.
 
 #### Event targets
 
-`__inca_targets__(nodeIds: number[]) => unknown[]` is a global that core
-defines read-only on each load, like `__inca_released__`, so the latest copy
-of core answers. Rust looks it up by name on each walk and keeps nothing.
+`__inca_targets__(ids: (number | "$document" | "$window")[]) => unknown[]` is a
+global that core defines read-only on each load, like `__inca_released__`, so
+the latest copy of core answers. Rust looks it up by name on each walk and
+keeps nothing.
 
 - A walk that reaches a listener calls it once with the path, target first.
-  Entry `i` of the result stands for `nodeIds[i]` in `target`,
+  Entry `i` of the result stands for `ids[i]` in `target`,
   `currentTarget` and `composedPath()`.
 - An event whose payload names a related node calls it once more with that
   node, for `relatedTarget`.
 - `dispatchEvent` calls it whether or not a listener hears the event.
-- When the global is not a function, these fields carry the node ids.
+- When the global is not a function, these fields carry the ids.
 - A throw, or a result that is not an array, goes to `Host::failures` and the
   walk runs no listener. `dispatchEvent` throws it.
-- Core gives `window` for the root, the element handle of a node that has
-  one, and `null` for any other node.
+- Core gives the element handle of a node that has one, the `document` export
+  for the `"$document"` tag, the `window` export for the `"$window"` tag, the
+  element of the host root, which it creates on first use and `mount()`
+  reuses, and `null` for any other node.
+
+#### Tagged targets
+
+The strings `"$document"` and `"$window"` name the `document` and
+`window` exports in place of a node id in `addEventListener`, `removeEventListener`,
+`dispatchEvent` and `__inca_targets__`. Rust holds them as `EventTargetId`
+with the node ids.
+
+- Any other string throws a `TypeError`.
+- A registration on a tag takes `capture` and `passive` like one on a node,
+  and `document` and `window` keep separate registrations of one event name.
+- A path runs from the target node through its ancestors, the host root
+  included, to `"$document"`, then `"$window"`. A node outside the root
+  reaches neither global. A script dispatch at `"$document"` reaches
+  `"$window"`, and one at `"$window"` stays there.
+- A cut node silences both tags for that walk.
+- Tags never reach `destroyNode`, the sweep or `__inca_released__`. The
+  registrations live in the host and end with it, and the callbacks of the
+  tags end with the JS realm.
 
 #### Event object
 
@@ -242,8 +266,8 @@ of core answers. Rust looks it up by name on each walk and keeps nothing.
   it for its own events and a script builds it for the events it dispatches.
   Its fields are getters on the prototype of its kind, and its one own
   property is the getter `isTrusted`, shared by every event.
-- `target` is the node the event is fired at, except where Pointer events and
-  Keyboard and focus say otherwise. `currentTarget` is the node whose
+- `target` is the target the event is fired at, except where Pointer events and
+  Keyboard and focus say otherwise. `currentTarget` is the target whose
   listeners run. `target`, `currentTarget`, the entries of `composedPath()`
   and `relatedTarget` carry what [Event targets](#event-targets) gives for
   those nodes. After the walk `currentTarget` is `null`, `eventPhase` is 0,
@@ -290,7 +314,7 @@ of core answers. Rust looks it up by name on each walk and keeps nothing.
 
 #### Propagation and cancellation
 
-- The capture pass runs the `capture` callbacks from the root down to the
+- The capture pass runs the `capture` callbacks from `window` down to the
   target, with `eventPhase` 1 on ancestors and 2 on the target. The bubble
   pass runs the other callbacks from the target up while the event bubbles,
   with `eventPhase` 2 on the target and 3 on ancestors. A non-bubbling event
@@ -436,7 +460,9 @@ of core answers. Rust looks it up by name on each walk and keeps nothing.
 - A window activation change dispatches `blur` and `focusout`, or `focus` and
   `focusin`, to the focused node. While the window is inactive a later `blur`
   of that node is held back, and a node focused meanwhile receives `focus` and
-  `focusin` on activation.
+  `focusin` on activation. `focus` also fires at `"$window"` before the
+  focused node on activation, and `blur` after it on deactivation, whether or
+  not a node is focused.
 
 #### Dispatching from script
 
@@ -490,6 +516,6 @@ menu, titled after the app, with one item, `Quit`, bound to `secondary-q`
 (`cmd-q` on macOS, `ctrl-q` elsewhere). `Quit` belongs to the host, so every
 app has a way to quit. Only macOS draws a menu bar today.
 
-An item an app defines is dispatched on `rootNodeId()` as the event
+An item an app defines is dispatched at `window` as the event
 `menu:<id>`, through `addEventListener` and the same registry. An item
 `save` arrives as `menu:save`.

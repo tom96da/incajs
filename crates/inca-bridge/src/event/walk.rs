@@ -10,14 +10,15 @@ use rquickjs::{Class, Ctx, Exception, Function, Object, Result as JsResult, Valu
 
 use super::construct::create;
 use super::{Flags, IncaEvent, targets_of};
+use crate::EventTargetId;
 use crate::bindings::{Host, Listener};
 
 /// What one walk needs to know.
 pub(crate) struct Walk<'a> {
     pub(crate) name: &'a str,
     pub(crate) flags: Flags,
-    pub(crate) target: NodeId,
-    /// The nodes whose listeners do not run.
+    pub(crate) target: EventTargetId,
+    /// The nodes whose listeners do not run. A cut silences document and window too.
     pub(crate) cut: &'a [NodeId],
     pub(crate) payload: &'a EventPayload,
     /// The value of `isTrusted` on the event the walk creates.
@@ -33,17 +34,41 @@ pub(crate) struct Outcome {
     pub(crate) entered: bool,
 }
 
-/// `target` and its ancestors, nearest first.
-pub(crate) fn path_from(host: &Host, target: NodeId) -> Vec<NodeId> {
-    host.tree.ancestors(target).collect()
+/// The targets an event fired at `target` travels through, nearest first: the
+/// nodes from `target` up to the host root, then document, then window. A node
+/// that is not under the root never reaches document or window.
+pub(crate) fn path_from(host: &Host, target: EventTargetId) -> Vec<EventTargetId> {
+    let mut path = Vec::new();
+    let mut connected = true;
+    if let EventTargetId::Node(node) = target {
+        let ancestors: Vec<_> = host.tree.ancestors(node).collect();
+        connected = ancestors.last().copied() == host.tree.root();
+        path.extend(ancestors.into_iter().map(EventTargetId::Node));
+    }
+    if connected {
+        if target != EventTargetId::Window {
+            path.push(EventTargetId::Document);
+        }
+        path.push(EventTargetId::Window);
+    }
+    path
 }
 
-/// The nodes whose bubble listeners the event reaches.
-fn bubble_nodes(flags: Flags, path: &[NodeId]) -> &[NodeId] {
+/// The targets whose bubble listeners the event reaches.
+fn bubble_targets(flags: Flags, path: &[EventTargetId]) -> &[EventTargetId] {
     if flags.bubbles {
         path
     } else {
         &path[..path.len().min(1)]
+    }
+}
+
+/// Whether `target` stays silent: a cut node, or document and window while any
+/// node is cut.
+fn is_cut(target: EventTargetId, cut: &[NodeId]) -> bool {
+    match target {
+        EventTargetId::Node(node) => cut.contains(&node),
+        EventTargetId::Document | EventTargetId::Window => !cut.is_empty(),
     }
 }
 
@@ -53,17 +78,17 @@ pub(crate) fn listened(
     host: &Host,
     name: &str,
     flags: Flags,
-    target: NodeId,
+    target: EventTargetId,
     cut: &[NodeId],
 ) -> bool {
-    host.tree
-        .ancestors(target)
+    path_from(host, target)
+        .into_iter()
         .enumerate()
-        .any(|(depth, node)| {
-            !cut.contains(&node)
+        .any(|(depth, on_path)| {
+            !is_cut(on_path, cut)
                 && host
                     .listeners
-                    .listeners_for(node, name)
+                    .listeners_for(on_path, name)
                     .iter()
                     .any(|l| l.capture || flags.bubbles || depth == 0)
         })
@@ -76,7 +101,7 @@ fn next_event_id(host: &Rc<RefCell<Host>>) -> u64 {
 }
 
 /// Runs the listeners of `walk.name` along the path of `walk.target` with one
-/// event object. Capture listeners run from the root down to the target, then
+/// event object. Capture listeners run from `window` down to the target, then
 /// bubble listeners from the target up, the latter only while the event
 /// bubbles. At the target, capture listeners run before bubble listeners. A
 /// node's listeners are those registered when the walk reaches it, minus any
@@ -97,7 +122,7 @@ pub(crate) fn walk(engine: &Engine, host: &Rc<RefCell<Host>>, walk: &Walk<'_>) -
 fn script_walk<'a>(
     name: &'a str,
     flags: Flags,
-    target: NodeId,
+    target: EventTargetId,
     payload: &'a EventPayload,
 ) -> Walk<'a> {
     Walk {
@@ -136,26 +161,26 @@ fn deliver<'js>(
     ctx: &Ctx<'js>,
     host: &Rc<RefCell<Host>>,
     walk: &Walk<'_>,
-    path: &[NodeId],
+    path: &[EventTargetId],
     callbacks: &Object<'js>,
     event: &Class<'js, IncaEvent<'js>>,
 ) -> bool {
     let record = event.borrow();
     let state = &record.state;
     let down = (0..path.len()).rev().map(|index| (true, index));
-    let up = (0..bubble_nodes(walk.flags, path).len()).map(|index| (false, index));
+    let up = (0..bubble_targets(walk.flags, path).len()).map(|index| (false, index));
     for (capture, index) in down.chain(up) {
         if state.stop.get() {
             break;
         }
-        let node = path[index];
-        if walk.cut.contains(&node) {
+        let target = path[index];
+        if is_cut(target, walk.cut) {
             continue;
         }
         let listeners: Vec<Listener> = host
             .borrow()
             .listeners
-            .listeners_for(node, walk.name)
+            .listeners_for(target, walk.name)
             .iter()
             .filter(|l| l.capture == capture)
             .copied()
@@ -163,7 +188,7 @@ fn deliver<'js>(
         if listeners.is_empty() {
             continue;
         }
-        let phase = match (node == walk.target, capture) {
+        let phase = match (index == 0, capture) {
             (true, _) => 2,
             (false, true) => 1,
             (false, false) => 3,
@@ -178,7 +203,7 @@ fn deliver<'js>(
             if !host
                 .borrow()
                 .listeners
-                .listeners_for(node, walk.name)
+                .listeners_for(target, walk.name)
                 .contains(&listener)
             {
                 continue;
@@ -235,7 +260,7 @@ fn note(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, result: JsResult<()>) {
 pub(crate) fn dispatch_event<'js>(
     ctx: &Ctx<'js>,
     host: &Rc<RefCell<Host>>,
-    target: NodeId,
+    target: EventTargetId,
     event: &Value<'js>,
 ) -> JsResult<bool> {
     let event = Class::<IncaEvent>::from_value(event).map_err(|_| {
@@ -297,10 +322,10 @@ pub(crate) fn click(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, target: NodeId) {
     let walk = script_walk(
         "click",
         crate::dispatch::spec_of("click").flags,
-        target,
+        EventTargetId::Node(target),
         &payload,
     );
-    if listened(&host.borrow(), walk.name, walk.flags, target, walk.cut) {
+    if listened(&host.borrow(), walk.name, walk.flags, walk.target, walk.cut) {
         run(ctx, host, &walk, next_event_id(host));
     }
     host.borrow_mut().clicking.remove(&target);

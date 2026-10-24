@@ -10,8 +10,9 @@ use rquickjs::{Ctx, Exception, Result as JsResult, Value};
 use inca_gpui::NodeId;
 
 use super::Natives;
-use super::convert::{Flag, JsNodeId, existing_node};
+use super::convert::{Flag, JsEventTargetId, JsNodeId, existing_node};
 use super::host::Host;
+use crate::EventTargetId;
 
 /// One registration: the callback id, the phase it listens in and whether it
 /// is passive.
@@ -25,52 +26,53 @@ pub struct Listener {
     pub passive: bool,
 }
 
-/// Every `(node id, event name)` a JS caller has registered through
+/// Every `(target id, event name)` a JS caller has registered through
 /// `addEventListener`, mapped to the [`Listener`]s it gave us. Holds owned
 /// Rust data only, so Rust code outside any JS call, such as the input-event
-/// dispatcher, can read it.
+/// dispatcher, can read it. Targets include element nodes, the global
+/// document and the global window.
 ///
 /// Nothing expires on its own: a registration lives until
 /// [`remove`](Self::remove) drops it, or [`release`](Self::release)
 /// does when the node goes away.
 #[derive(Debug, Default)]
 pub struct EventListeners {
-    pub(super) by_node: HashMap<NodeId, HashMap<String, Vec<Listener>>>,
+    pub(super) by_target: HashMap<EventTargetId, HashMap<String, Vec<Listener>>>,
     pub(super) next_callback: u32,
 }
 
 impl EventListeners {
-    /// Allocates the next callback id, registers it on `(node_id, event)` with the given
-    /// phase and passivity, and returns it. Ids rise from 0 in call order, and each id is
-    /// issued once, also after [`remove`](Self::remove) or [`release`](Self::release).
-    /// The last id is `u32::MAX - 1`. After it the call returns `None` and leaves the
-    /// registrations unchanged.
+    /// Allocates the next callback id, registers it on `(target, event)` with
+    /// the given phase and passivity, and returns it. Ids rise from 0 in call
+    /// order, and each id is issued once, also after [`remove`](Self::remove)
+    /// or [`release`](Self::release). The last id is `u32::MAX - 1`. After it
+    /// the call returns `None` and leaves the registrations unchanged.
     pub fn add(
         &mut self,
-        node_id: NodeId,
+        target: EventTargetId,
         event: impl Into<String>,
         capture: bool,
         passive: bool,
     ) -> Option<u32> {
         let id = self.next_callback;
         self.next_callback = id.checked_add(1)?;
-        self.insert(node_id, event, id, capture, passive);
+        self.insert(target, event, id, capture, passive);
         Some(id)
     }
 
-    /// Adds `callback_id` to `(node_id, event)` with the given phase and
+    /// Adds `callback_id` to `(target, event)` with the given phase and
     /// passivity. An id already there leaves the registrations unchanged.
     fn insert(
         &mut self,
-        node_id: NodeId,
+        target: EventTargetId,
         event: impl Into<String>,
         callback_id: u32,
         capture: bool,
         passive: bool,
     ) {
         let listeners = self
-            .by_node
-            .entry(node_id)
+            .by_target
+            .entry(target)
             .or_default()
             .entry(event.into())
             .or_default();
@@ -83,10 +85,10 @@ impl EventListeners {
         }
     }
 
-    /// Drops `callback_id` from `(node_id, event)`, and reports whether it
+    /// Drops `callback_id` from `(target, event)`, and reports whether it
     /// was registered.
-    pub fn remove(&mut self, node_id: NodeId, event: &str, callback_id: u32) -> bool {
-        let Some(events) = self.by_node.get_mut(&node_id) else {
+    pub fn remove(&mut self, target: EventTargetId, event: &str, callback_id: u32) -> bool {
+        let Some(events) = self.by_target.get_mut(&target) else {
             return false;
         };
         let Some(listeners) = events.get_mut(event) else {
@@ -99,7 +101,7 @@ impl EventListeners {
             events.remove(event);
         }
         if events.is_empty() {
-            self.by_node.remove(&node_id);
+            self.by_target.remove(&target);
         }
         removed
     }
@@ -108,8 +110,8 @@ impl EventListeners {
     /// that were there, in no particular order. The JS side needs them to
     /// drop the functions they name.
     pub fn release(&mut self, node_id: NodeId) -> Vec<u32> {
-        self.by_node
-            .remove(&node_id)
+        self.by_target
+            .remove(&EventTargetId::Node(node_id))
             .map(|events| events.into_values().flatten().map(|l| l.callback).collect())
             .unwrap_or_default()
     }
@@ -117,14 +119,14 @@ impl EventListeners {
     /// Whether nothing is registered anywhere.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.by_node.is_empty()
+        self.by_target.is_empty()
     }
 
-    /// The registrations of `(node_id, event)` in registration order.
+    /// The registrations of `(target, event)` in registration order.
     #[must_use]
-    pub fn listeners_for(&self, node_id: NodeId, event: &str) -> &[Listener] {
-        self.by_node
-            .get(&node_id)
+    pub fn listeners_for(&self, target: EventTargetId, event: &str) -> &[Listener] {
+        self.by_target
+            .get(&target)
             .and_then(|events| events.get(event))
             .map_or(&[], Vec::as_slice)
     }
@@ -141,13 +143,15 @@ pub(super) fn install_events(n: &Natives<'_, '_>) -> JsResult<()> {
 
 fn add_event_listener<'js>(
     host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, String, Flag, Flag) -> JsResult<u32> {
-    move |ctx, JsNodeId(node_id), event, capture, passive| {
+) -> impl Fn(Ctx<'js>, JsEventTargetId, String, Flag, Flag) -> JsResult<u32> {
+    move |ctx, JsEventTargetId(target), event, capture, passive| {
         let mut host = host.borrow_mut();
-        existing_node(&ctx, &host.tree, node_id)?;
+        if let EventTargetId::Node(node_id) = target {
+            existing_node(&ctx, &host.tree, node_id)?;
+        }
         host.listeners
             .add(
-                node_id,
+                target,
                 event,
                 capture.0.flatten().unwrap_or(false),
                 passive.0.flatten().unwrap_or(false),
@@ -156,20 +160,22 @@ fn add_event_listener<'js>(
     }
 }
 
-fn remove_event_listener(host: Rc<RefCell<Host>>) -> impl Fn(JsNodeId, String, u32) -> bool {
-    move |JsNodeId(node_id), event, callback_id| {
+fn remove_event_listener(host: Rc<RefCell<Host>>) -> impl Fn(JsEventTargetId, String, u32) -> bool {
+    move |JsEventTargetId(target), event, callback_id| {
         host.borrow_mut()
             .listeners
-            .remove(node_id, &event, callback_id)
+            .remove(target, &event, callback_id)
     }
 }
 
 fn dispatch_event<'js>(
     host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, Value<'js>) -> JsResult<bool> {
-    move |ctx, JsNodeId(node_id), event| {
-        existing_node(&ctx, &host.borrow().tree, node_id)?;
-        crate::event::dispatch_event(&ctx, &host, node_id, &event)
+) -> impl Fn(Ctx<'js>, JsEventTargetId, Value<'js>) -> JsResult<bool> {
+    move |ctx, JsEventTargetId(target), event| {
+        if let EventTargetId::Node(node_id) = target {
+            existing_node(&ctx, &host.borrow().tree, node_id)?;
+        }
+        crate::event::dispatch_event(&ctx, &host, target, &event)
     }
 }
 
@@ -190,11 +196,11 @@ mod tests {
     #[test]
     fn a_registration_keeps_its_phase_and_passivity() {
         let mut listeners = EventListeners::default();
-        listeners.insert(1, "wheel", 7, true, true);
-        listeners.insert(1, "wheel", 8, false, false);
+        listeners.insert(EventTargetId::Node(1), "wheel", 7, true, true);
+        listeners.insert(EventTargetId::Node(1), "wheel", 8, false, false);
 
         assert_eq!(
-            listeners.listeners_for(1, "wheel"),
+            listeners.listeners_for(EventTargetId::Node(1), "wheel"),
             &[
                 Listener {
                     callback: 7,
@@ -213,11 +219,11 @@ mod tests {
     #[test]
     fn a_repeated_registration_keeps_the_first() {
         let mut listeners = EventListeners::default();
-        listeners.insert(1, "wheel", 7, true, true);
-        listeners.insert(1, "wheel", 7, false, false);
+        listeners.insert(EventTargetId::Node(1), "wheel", 7, true, true);
+        listeners.insert(EventTargetId::Node(1), "wheel", 7, false, false);
 
         assert_eq!(
-            listeners.listeners_for(1, "wheel"),
+            listeners.listeners_for(EventTargetId::Node(1), "wheel"),
             &[Listener {
                 callback: 7,
                 capture: true,
@@ -244,7 +250,7 @@ mod tests {
         let host = host.borrow();
         let flags: Vec<_> = host
             .listeners
-            .listeners_for(1, "a")
+            .listeners_for(EventTargetId::Node(1), "a")
             .iter()
             .map(|l| (l.callback, l.capture, l.passive))
             .collect();
@@ -268,7 +274,7 @@ mod tests {
         let host = host.borrow();
         let flags: Vec<_> = host
             .listeners
-            .listeners_for(1, "a")
+            .listeners_for(EventTargetId::Node(1), "a")
             .iter()
             .map(|l| (l.capture, l.passive))
             .collect();
@@ -279,14 +285,32 @@ mod tests {
     fn add_hands_out_ids_from_zero_in_call_order_across_nodes_and_events() {
         let mut listeners = EventListeners::default();
 
-        assert_eq!(listeners.add(1, "click", false, false), Some(0));
-        assert_eq!(listeners.add(2, "click", true, false), Some(1));
-        assert_eq!(listeners.add(1, "focus", false, true), Some(2));
-        assert_eq!(callback_ids(&listeners, 1, "click"), &[0]);
-        assert_eq!(callback_ids(&listeners, 2, "click"), &[1]);
-        assert_eq!(callback_ids(&listeners, 1, "focus"), &[2]);
         assert_eq!(
-            listeners.listeners_for(1, "focus"),
+            listeners.add(EventTargetId::Node(1), "click", false, false),
+            Some(0)
+        );
+        assert_eq!(
+            listeners.add(EventTargetId::Node(2), "click", true, false),
+            Some(1)
+        );
+        assert_eq!(
+            listeners.add(EventTargetId::Node(1), "focus", false, true),
+            Some(2)
+        );
+        assert_eq!(
+            callback_ids(&listeners, EventTargetId::Node(1), "click"),
+            &[0]
+        );
+        assert_eq!(
+            callback_ids(&listeners, EventTargetId::Node(2), "click"),
+            &[1]
+        );
+        assert_eq!(
+            callback_ids(&listeners, EventTargetId::Node(1), "focus"),
+            &[2]
+        );
+        assert_eq!(
+            listeners.listeners_for(EventTargetId::Node(1), "focus"),
             &[Listener {
                 callback: 2,
                 capture: false,
@@ -298,13 +322,20 @@ mod tests {
     #[test]
     fn add_never_reuses_an_id_after_remove_or_release() {
         let mut listeners = EventListeners::default();
-        let first = listeners.add(1, "click", false, false).unwrap();
-        listeners.remove(1, "click", first);
-        let second = listeners.add(1, "click", false, false).unwrap();
+        let first = listeners
+            .add(EventTargetId::Node(1), "click", false, false)
+            .unwrap();
+        listeners.remove(EventTargetId::Node(1), "click", first);
+        let second = listeners
+            .add(EventTargetId::Node(1), "click", false, false)
+            .unwrap();
         listeners.release(1);
 
         assert_eq!((first, second), (0, 1));
-        assert_eq!(listeners.add(1, "click", false, false), Some(2));
+        assert_eq!(
+            listeners.add(EventTargetId::Node(1), "click", false, false),
+            Some(2)
+        );
     }
 
     #[test]
@@ -314,9 +345,18 @@ mod tests {
             ..EventListeners::default()
         };
 
-        assert_eq!(listeners.add(1, "click", false, false), Some(u32::MAX - 1));
-        assert_eq!(listeners.add(1, "focus", false, false), None);
-        assert_eq!(listeners.add(1, "focus", false, false), None);
+        assert_eq!(
+            listeners.add(EventTargetId::Node(1), "click", false, false),
+            Some(u32::MAX - 1)
+        );
+        assert_eq!(
+            listeners.add(EventTargetId::Node(1), "focus", false, false),
+            None
+        );
+        assert_eq!(
+            listeners.add(EventTargetId::Node(1), "focus", false, false),
+            None
+        );
     }
 
     #[test]
@@ -326,11 +366,11 @@ mod tests {
             ..EventListeners::default()
         };
 
-        let _ = listeners.add(1, "click", false, false);
-        let _ = listeners.add(1, "focus", false, false);
-        let _ = listeners.add(1, "focus", false, false);
+        let _ = listeners.add(EventTargetId::Node(1), "click", false, false);
+        let _ = listeners.add(EventTargetId::Node(1), "focus", false, false);
+        let _ = listeners.add(EventTargetId::Node(1), "focus", false, false);
 
-        assert!(callback_ids(&listeners, 1, "focus").is_empty());
+        assert!(callback_ids(&listeners, EventTargetId::Node(1), "focus").is_empty());
     }
 
     #[test]
@@ -412,30 +452,61 @@ mod tests {
     #[test]
     fn remove_reports_whether_it_removed_anything() {
         let mut listeners = EventListeners::default();
-        listeners.insert(1, "click", 7, false, false);
+        listeners.insert(EventTargetId::Node(1), "click", 7, false, false);
 
-        assert!(listeners.remove(1, "click", 7));
-        assert!(callback_ids(&listeners, 1, "click").is_empty());
-        assert!(!listeners.remove(1, "click", 7));
-        assert!(!listeners.remove(99, "click", 7));
+        assert!(listeners.remove(EventTargetId::Node(1), "click", 7));
+        assert!(callback_ids(&listeners, EventTargetId::Node(1), "click").is_empty());
+        assert!(!listeners.remove(EventTargetId::Node(1), "click", 7));
+        assert!(!listeners.remove(EventTargetId::Node(99), "click", 7));
     }
 
     #[test]
     fn release_returns_every_callback_on_a_node() {
         let mut listeners = EventListeners::default();
-        listeners.insert(1, "click", 7, false, false);
-        listeners.insert(1, "focus", 8, false, false);
-        listeners.insert(2, "click", 9, false, false);
+        listeners.insert(EventTargetId::Node(1), "click", 7, false, false);
+        listeners.insert(EventTargetId::Node(1), "focus", 8, false, false);
+        listeners.insert(EventTargetId::Node(2), "click", 9, false, false);
 
         let mut released = listeners.release(1);
         released.sort_unstable();
 
         assert_eq!(released, vec![7, 8]);
-        assert!(callback_ids(&listeners, 1, "click").is_empty());
+        assert!(callback_ids(&listeners, EventTargetId::Node(1), "click").is_empty());
         assert_eq!(
-            callback_ids(&listeners, 2, "click"),
+            callback_ids(&listeners, EventTargetId::Node(2), "click"),
             &[9],
             "another node's registrations must survive"
+        );
+    }
+
+    #[test]
+    fn destroying_a_node_leaves_the_global_target_registrations() {
+        let (engine, host) = engine_with_bindings();
+        let node_callbacks: Vec<u32> = engine
+            .eval(
+                r"
+                const n = __inca_native__.createNode('div');
+                __inca_native__.addEventListener('$document', 'click');
+                __inca_native__.addEventListener('$window', 'click');
+                __inca_native__.addEventListener(n, 'click');
+                __inca_native__.destroyNode(n)
+                ",
+            )
+            .unwrap();
+        let host = host.borrow();
+
+        assert_eq!(
+            node_callbacks,
+            [2],
+            "freeing a node frees only its own callbacks"
+        );
+        assert_eq!(
+            callback_ids(&host.listeners, EventTargetId::Document, "click"),
+            [0]
+        );
+        assert_eq!(
+            callback_ids(&host.listeners, EventTargetId::Window, "click"),
+            [1]
         );
     }
 
@@ -454,7 +525,7 @@ mod tests {
             .unwrap();
 
         assert!(removed);
-        assert!(callback_ids(&host.borrow().listeners, 1, "click").is_empty());
+        assert!(callback_ids(&host.borrow().listeners, EventTargetId::Node(1), "click").is_empty());
     }
 
     #[test]

@@ -715,3 +715,67 @@ fn a_string_tag_descriptor_reads_configurable_only(#[case] owner: &str, #[case] 
 
     assert_eq!(got, serde_json::json!(format!("{tag},false,false,true")));
 }
+
+/// Dispatches a bubbling `ping` at `target`, a JS expression, with a listener on the node, document
+/// and window, and returns what each heard as `[label, target, currentTarget, eventPhase]`.
+fn ping_from(dispatcher: &EventDispatcher, node: NodeId, target: &str) -> serde_json::Value {
+    let record = |label: &str| {
+        format!("(e) => out.push(['{label}', e.target, e.currentTarget, e.eventPhase])")
+    };
+    listen(dispatcher, node, "ping", &record("node"));
+    listen_global(dispatcher, "$document", "ping", false, &record("document"));
+    listen_global(dispatcher, "$window", "ping", false, &record("window"));
+    dispatcher
+        .engine
+        .eval::<()>(&format!(
+            "__inca_native__.dispatchEvent({target}, new Event('ping', {{ bubbles: true }}));"
+        ))
+        .unwrap();
+    read_out(dispatcher)
+}
+
+#[test]
+fn element_dispatch_bubbles_through_document_and_window() {
+    let (dispatcher, host, _reported) = dispatcher_with_engine();
+    let node = node_under_root(&host);
+
+    let out = ping_from(&dispatcher, node, &node.to_string());
+
+    assert_eq!(
+        out,
+        serde_json::json!([
+            ["node", node, node, 2],
+            ["document", node, "$document", 3],
+            ["window", node, "$window", 3],
+        ])
+    );
+}
+
+#[test]
+fn document_dispatch_bubbles_to_window() {
+    let (dispatcher, host, _reported) = dispatcher_with_engine();
+    let node = node_under_root(&host);
+
+    let out = ping_from(&dispatcher, node, "'$document'");
+
+    assert_eq!(
+        out,
+        serde_json::json!([
+            ["document", "$document", "$document", 2],
+            ["window", "$document", "$window", 3],
+        ])
+    );
+}
+
+#[test]
+fn window_dispatch_stays_at_window() {
+    let (dispatcher, host, _reported) = dispatcher_with_engine();
+    let node = node_under_root(&host);
+
+    let out = ping_from(&dispatcher, node, "'$window'");
+
+    assert_eq!(
+        out,
+        serde_json::json!([["window", "$window", "$window", 2]])
+    );
+}

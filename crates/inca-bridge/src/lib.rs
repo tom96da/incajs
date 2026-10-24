@@ -9,10 +9,12 @@
 mod bindings;
 mod dispatch;
 mod event;
+mod event_target;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
 
 pub use bindings::{EventListeners, Host, Listener, install};
 pub use dispatch::{EventDispatcher, drain_jobs_and_refresh};
+pub use event_target::EventTargetId;
 pub use focus::{FocusRegistry, FocusTransition};
 pub use inca_gpui::focus;

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { addCallback, callbackIdFor, groupOf, releaseCallback } from "./callbacks.mts";
-import { native, type HostCallback } from "./native.mts";
+import { native, type EventTargetId, type HostCallback } from "./native.mts";
 import type { EventLike, EventListenerOrObject, ListenerOptions, NodeId } from "./types.mts";
 
 let latestId = 0;
@@ -26,13 +26,14 @@ function tracking(listener: HostCallback): HostCallback {
 }
 
 /**
- * Registers `listener` for `event` on `nodeId`. Registering the same listener
- * for the same node, event and `capture` again changes nothing, and the first
- * registration keeps its other options. A `null` listener is ignored.
+ * Registers `listener` for `event` on the target (node, document or window).
+ * Registering the same listener for the same target, event and `capture`
+ * again changes nothing, and the first registration keeps its other options.
+ * A `null` listener is ignored.
  *
  * Any event name is accepted, and it fires when the host dispatches that name.
  * `IncaEventMap` gives the event type of each name the host dispatches.
- * @param nodeId - the node to listen on
+ * @param target - the event target (node id, "$document" or "$window")
  * @param event - the event name (e.g. `"click"`)
  * @param listener - a function, called with the event's `currentTarget` as
  * `this`, or an object whose `handleEvent` method is called with the object
@@ -40,18 +41,18 @@ function tracking(listener: HostCallback): HostCallback {
  * @param options - `capture` listens while the event travels down to the
  * target, `passive` ignores `preventDefault()` calls in `listener`, and
  * `once` removes the listener before it first runs
- * @throws TypeError when `nodeId` is malformed
- * @throws TypeError when `nodeId` names no node
+ * @throws TypeError when `target` is malformed or is an unknown target tag
+ * @throws TypeError when a node target names no node
  * @throws RangeError when the host has issued its last callback id
  */
 export function addEventListener(
-  nodeId: NodeId,
+  target: EventTargetId,
   event: string,
   listener: EventListenerOrObject<never, never> | null,
   options: ListenerOptions = {},
 ): void {
   if (listener === null || listener === undefined) return;
-  const group = groupOf(nodeId, event, options.capture);
+  const group = groupOf(target, event, options.capture);
   if (callbackIdFor(group, listener) !== undefined) return;
 
   const call: HostCallback = (...args) =>
@@ -63,12 +64,12 @@ export function addEventListener(
       : (listener.handleEvent as HostCallback).apply(listener, args);
   const run: HostCallback = options.once
     ? (...args) => {
-        removeEventListener(nodeId, event, listener, options);
+        removeEventListener(target, event, listener, options);
         return call(...args);
       }
     : call;
   const callbackId = native().addEventListener(
-    nodeId,
+    target,
     event,
     options.capture === true,
     options.passive === true,
@@ -78,38 +79,40 @@ export function addEventListener(
 
 /**
  * Drops the registration {@link addEventListener} made for `listener` on
- * `nodeId` with the same `event` and `capture`. A no-op if there is none.
- * @param nodeId - the node to stop listening on
+ * the target with the same `event` and `capture`. A no-op if there is none.
+ * @param target - the event target (node, document or window)
  * @param event - the event name
  * @param listener - the listener that was registered
  * @param options - `capture` of the registration to drop
  */
 export function removeEventListener(
-  nodeId: NodeId,
+  target: EventTargetId,
   event: string,
   listener: EventListenerOrObject<never, never> | null,
   options: Pick<ListenerOptions, "capture"> = {},
 ): void {
   if (listener === null || listener === undefined) return;
-  const callbackId = callbackIdFor(groupOf(nodeId, event, options.capture), listener);
+  const callbackId = callbackIdFor(groupOf(target, event, options.capture), listener);
   if (callbackId === undefined) return;
 
-  native().removeEventListener(nodeId, event, callbackId);
+  native().removeEventListener(target, event, callbackId);
   releaseCallback(callbackId);
 }
 
 /**
- * Dispatches `event` at `nodeId` along the path to the root.
- * @param nodeId - the node to dispatch at
+ * Dispatches `event` at a target along its path. Dispatching at an element
+ * reaches its ancestors, `document` and `window`. Dispatching at `document`
+ * reaches `window`, and dispatching at `window` reaches only `window`.
+ * @param target - the target to dispatch at (node id, "$document" or "$window")
  * @param event - the event to dispatch
  * @returns `false` when a listener canceled a cancelable event, else `true`
- * @throws TypeError when `nodeId` is malformed
- * @throws TypeError when `nodeId` names no node
+ * @throws TypeError when `target` is malformed or is an unknown target tag
+ * @throws TypeError when `target` is a node id that names no node
  * @throws TypeError when `event` is not an event built with an event constructor
  * @throws DOMException named `InvalidStateError` when `event` is being dispatched
  */
-export function dispatchEvent(nodeId: NodeId, event: EventLike): boolean {
-  return native().dispatchEvent(nodeId, event);
+export function dispatchEvent(target: EventTargetId, event: EventLike): boolean {
+  return native().dispatchEvent(target, event);
 }
 
 /**
