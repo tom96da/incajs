@@ -3,9 +3,6 @@
 
 import {
   ESModulesEvaluator,
-  type EvaluatedModuleNode,
-  type ModuleEvaluator,
-  type ModuleRunnerContext,
   ssrDynamicImportKey,
   ssrExportAllKey,
   ssrExportNameKey,
@@ -13,6 +10,7 @@ import {
   ssrImportMetaKey,
   ssrModuleExportsKey,
 } from "vite/module-runner";
+import type { EvaluatedModuleNode, ModuleEvaluator, ModuleRunnerContext } from "vite/module-runner";
 
 // The cast gives the base class the `ModuleEvaluator` signature, which carries the module.
 /** Runs each module through `__inca_dev__.compile`. */

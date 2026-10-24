@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import {
-  type EvaluatedModuleNode,
-  type ModuleRunnerContext,
   ssrDynamicImportKey,
   ssrExportAllKey,
   ssrExportNameKey,
@@ -12,6 +10,7 @@ import {
   ssrModuleExportsKey,
 } from "vite/module-runner";
 import { afterEach, describe, expect, it } from "vitest";
+import type { EvaluatedModuleNode, ModuleRunnerContext } from "vite/module-runner";
 
 import { createIncaEvaluator } from "./createIncaEvaluator.mts";
 

@@ -1,13 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import {
-  callWithAsyncErrorHandling,
-  ErrorCodes,
-  warn,
-  type ComponentInternalInstance,
-  type RendererOptions,
-} from "@vue/runtime-core";
+import { callWithAsyncErrorHandling, ErrorCodes, warn } from "@vue/runtime-core";
+import type { ComponentInternalInstance, RendererOptions } from "@vue/runtime-core";
 
 import type { EventListener, IncaCore, IncaElement, ListenerOptions } from "../rendererCore.mts";
 

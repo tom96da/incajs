@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { createRenderer, h, nextTick, onErrorCaptured, ref } from "@vue/runtime-core";
-import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ComponentInternalInstance } from "@vue/runtime-core";
+import type { MockInstance } from "vitest";
 
 import * as rendererCore from "../rendererCore.mts";
 import { createNodeOps } from "./nodeOps.mts";

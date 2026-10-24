@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { addCallback, callbackIdFor, groupOf, releaseCallback } from "./callbacks.mts";
-import { native, type EventTargetId, type HostCallback } from "./native.mts";
+import { native } from "./native.mts";
+import type { EventTargetId, HostCallback } from "./native.mts";
 import type { EventLike, EventListenerOrObject, ListenerOptions, NodeId } from "./types.mts";
 
 let latestId = 0;
