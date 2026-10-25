@@ -10,9 +10,28 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- `<input>` edits one line of text with a caret, a selection, the clipboard and an input method ([32db192](https://github.com/tom96da/incajs/commit/32db192))
+- `value` on the ref of an `<input>`, and `:value` on the element ([d25d8e5](https://github.com/tom96da/incajs/commit/d25d8e5))
+- `beforeinput`, `input`, `change` and the composition events, with their constructors ([cb4ef05](https://github.com/tom96da/incajs/commit/cb4ef05))
+- `isComposing` on key events while an input method composes ([cb4ef05](https://github.com/tom96da/incajs/commit/cb4ef05))
+- `v-model` on an `<input>` ([6a00d25](https://github.com/tom96da/incajs/commit/6a00d25))
+- `getRootNode()` on element refs, and the `Document` and `ShadowRoot` globals ([6a00d25](https://github.com/tom96da/incajs/commit/6a00d25))
+- `dev.stackPaths` picks root-relative or full file names in stacks during development ([148c950](https://github.com/tom96da/incajs/commit/148c950))
+
+### Changed
+
+- stacks name source files from the app's root by default ([9ffcebd](https://github.com/tom96da/incajs/commit/9ffcebd), [148c950](https://github.com/tom96da/incajs/commit/148c950))
+
 ### Fixed
 
-- a host ended by a signal during the config check is reported as a host start failure
+- Ctrl+click on macOS fires `contextmenu` with `button` 0 and `ctrlKey` ([2846d35](https://github.com/tom96da/incajs/commit/2846d35))
+- the Menu key of a Mac keyboard reports `ContextMenu` and fires `contextmenu` ([2846d35](https://github.com/tom96da/incajs/commit/2846d35))
+- a stack under experimental HMR names a module's file by its path ([065897c](https://github.com/tom96da/incajs/commit/065897c))
+- `inca dev`, `inca build` and `inca package` refuse a setting the host cannot use ([b40db10](https://github.com/tom96da/incajs/commit/b40db10))
+- `inca config` refuses a blank name, identifier or title and a size no window can use ([3b1db0d](https://github.com/tom96da/incajs/commit/3b1db0d))
+- the development window opens after a broken config is fixed under Bun ([19914bf](https://github.com/tom96da/incajs/commit/19914bf))
 
 ## [0.0.22] - 2026-10-24
 
