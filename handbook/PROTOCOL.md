@@ -200,4 +200,6 @@ reads as the defaults in silence. A file that cannot be read or parsed is named
 on the host's stderr and reads as the defaults too. `--print-config` refuses
 such a file with exit 1 and one stderr line, `failed to read <file>: <path>:
 <reason>`, where `<path>` is a JSON array of keys and indices (`[]` for the
-whole file); a client reads that line. An I/O failure has no path.
+whole file); a client reads that line. An I/O failure has no path. It refuses a
+value no window can use the same way: a blank `name`, `identifier` or `title`,
+and a size that is not a finite number above zero.
