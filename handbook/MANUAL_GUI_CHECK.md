@@ -6,11 +6,11 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 # Manually verifying a GPUI window opens
 
 How to run this repo's examples and look at the window. The devcontainer
-mounts no X11 or Wayland socket, so window checks run on a host with a
+mounts no X11 or Wayland socket, so a window opens on a host with a
 display. Under a headless `Xvfb` the window gets its size (`xwininfo` shows
 it), but nothing renders into it.
 
-Option A is enough for most checks. Option B exercises the Linux backend.
+Option A is enough on a Mac. Option B exercises the Linux backend.
 
 ## Option A — natively on macOS (recommended)
 
@@ -34,35 +34,6 @@ INCA_HOST_BIN="$(pwd)/target/debug/inca-host" pnpm --filter hello_world dev
 
 Same look as above. `click_counter` shows a clickable box that
 counts up.
-
-### The app's name, icon, window and menu (macOS)
-
-Same dev run. `inca dev` assembles `node_modules/.inca/<productName>.app`
-and launches the host from inside it.
-
-1. The Dock tile and the menu bar carry the app's `productName`, and the
-   Dock its `icon` where the config declares one.
-2. The window opens at the `window.width`/`window.height` the config
-   declares, and its title bar carries `window.title`.
-3. The application menu has a `Quit` item with `⌘Q` beside it.
-4. `⌘Q` quits, and `inca dev` stops with it.
-
-### Tab key
-
-In the development window of an app whose nodes carry `tabindex` 3, 1, 0, 0,
--1 and 2 in tree order, with focus and blur listeners that log:
-
-1. `Tab` and `Shift+Tab` arrive, and macOS full keyboard access leaves them
-   to the window.
-2. Focus visits the nodes in the order 1, 2, 3, then the two 0 nodes.
-3. `Tab` on the last node leaves nothing focused. The next `Tab` focuses the
-   first node.
-4. Holding `Tab` moves focus on every repeat.
-5. `Cmd-Tab` and `Ctrl-Tab` keep their system meaning and cancel no focus
-   move.
-6. `preventDefault()` in `keydown` cancels the move.
-7. In a window with no focusable node, `Tab` does nothing and fires `keydown`
-   on the root.
 
 ### A packaged app
 

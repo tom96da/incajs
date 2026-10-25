@@ -37,7 +37,7 @@ change is done, for Rust and TypeScript.
   facts the event dispatch assumes about gpui (listener order, hit testing,
   focus on press, the wheel step on a hidden container, key propagation) on gpui's test platform. A
   gpui upgrade that changes one fails there first.
-- **Window checks**: see [MANUAL_GUI_CHECK.md](./MANUAL_GUI_CHECK.md).
+- **Opening a window**: see [MANUAL_GUI_CHECK.md](./MANUAL_GUI_CHECK.md).
 - **Tests that need both languages**: the root `tests/` package, see
   [Root tests](#root-tests-tests).
 - **Console tests**: console behaviour is unit-tested beside the code in

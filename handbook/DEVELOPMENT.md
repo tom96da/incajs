@@ -103,5 +103,6 @@ over the child's stdio.
 ## Quality
 
 - [TESTING.md](./TESTING.md): where tests live and the checks that must pass.
-- [MANUAL_GUI_CHECK.md](./MANUAL_GUI_CHECK.md): the checks that need a window.
+- [MANUAL_GUI_CHECK.md](./MANUAL_GUI_CHECK.md): opening a window and fixing
+  its start-up.
 - [GIT.md](./GIT.md): commit format and the review policy.
