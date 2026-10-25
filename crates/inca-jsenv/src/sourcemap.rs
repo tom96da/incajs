@@ -144,9 +144,9 @@ const MARKER: &str = "//# sourceMappingURL=";
 static NEXT_COMPILE_ID: AtomicU64 = AtomicU64::new(0);
 
 struct Entry {
-    /// The filename the caller asked for. A compile prints it for a frame its map
-    /// does not cover. `None` for a loader or engine module, whose key is its filename.
-    display: Option<String>,
+    /// The filename the caller asked for: the key of a loader or engine module, the filename of a
+    /// compile without its `?t=` query. A frame its map does not cover prints it.
+    display: String,
     /// The generated source. Empty when the entry has no map.
     source: String,
     raw: Option<RawMap>,
@@ -156,6 +156,7 @@ struct Entry {
 /// The map text captured at registration.
 enum RawMap {
     /// The byte range of the marker line's `data:` URL in the entry's `source`.
+    /// Its relative sources resolve against the directory of the entry's file.
     Inline(Range<usize>),
     /// The sidecar file's text and the directory it was read from.
     Sidecar { json: String, dir: Option<PathBuf> },
@@ -218,10 +219,16 @@ pub(crate) fn register(ctx: &Ctx<'_>, filename: &str, source: &str) {
     let Some(raw) = marker_url(source).and_then(|url| capture(filename, source, url)) else {
         return forget(ctx, filename);
     };
-    insert(ctx, filename.to_owned(), None, source, Some(raw));
+    insert(
+        ctx,
+        filename.to_owned(),
+        filename.to_owned(),
+        source,
+        Some(raw),
+    );
 }
 
-fn insert(ctx: &Ctx<'_>, key: String, display: Option<String>, source: &str, raw: Option<RawMap>) {
+fn insert(ctx: &Ctx<'_>, key: String, display: String, source: &str, raw: Option<RawMap>) {
     if let Some(maps) = maps_or_insert(ctx) {
         let entry = Entry {
             display,
@@ -263,7 +270,7 @@ pub(crate) fn register_compile(ctx: &Ctx<'_>, filename: &str, source: &str) -> J
         filename.to_owned()
     };
     let raw = marker_url(source).and_then(|url| capture(filename, source, url));
-    insert(ctx, key.clone(), Some(filename.to_owned()), source, raw);
+    insert(ctx, key.clone(), filename.to_owned(), source, raw);
     Ok(key)
 }
 
@@ -310,7 +317,7 @@ fn remap_frame(maps: &SourceMaps, line: &str) -> Option<String> {
         })?;
 
     let Some((file, line, col)) = original_position(&entry, row, column) else {
-        let display = entry.display.as_ref()?;
+        let display = &entry.display;
         return Some(format!("{prefix}{display}:{row}:{column}{close}"));
     };
     Some(format!("{prefix}{file}:{line}:{col}{close}"))
@@ -371,15 +378,15 @@ struct MapJson {
 /// Decodes the map `entry` captured. `None` for an invalid map or no map.
 fn parse(entry: &Entry) -> Option<Parsed> {
     let raw = entry.raw.as_ref()?;
-    let (map, sidecar_dir): (MapJson, _) = match raw {
+    let (map, base): (MapJson, Option<PathBuf>) = match raw {
         RawMap::Inline(url) => {
             let (_, payload) = entry.source[url.clone()].split_once("base64,")?;
             (
                 serde_json::from_slice(&STANDARD.decode(payload).ok()?).ok()?,
-                None,
+                inline_base(&entry.display),
             )
         }
-        RawMap::Sidecar { json, dir } => (serde_json::from_str(json).ok()?, dir.as_deref()),
+        RawMap::Sidecar { json, dir } => (serde_json::from_str(json).ok()?, dir.clone()),
     };
     if map.version != 3 {
         return None;
@@ -389,12 +396,24 @@ fn parse(entry: &Entry) -> Option<Parsed> {
     let sources = map
         .sources
         .into_iter()
-        .map(|name| name.map_or_else(String::new, |name| resolve(root, &name, sidecar_dir)))
+        .map(|name| name.map_or_else(String::new, |name| resolve(root, &name, base.as_deref())))
         .collect();
     Some(Parsed { lines, sources })
 }
 
-fn resolve(root: &str, name: &str, sidecar_dir: Option<&Path>) -> String {
+/// The directory an inline map's relative sources resolve against: the parent of `display` without
+/// its query, when that path is absolute. `None` for a relative filename.
+fn inline_base(display: &str) -> Option<PathBuf> {
+    let file = Path::new(display.split_once('?').map_or(display, |(path, _)| path));
+    if file.is_absolute() {
+        file.parent().map(Path::to_path_buf)
+    } else {
+        None
+    }
+}
+
+/// Joins `name` under `root`. A relative result is folded against `base`, when there is one.
+fn resolve(root: &str, name: &str, base: Option<&Path>) -> String {
     let joined = if root.is_empty() {
         name.to_owned()
     } else {
@@ -402,7 +421,7 @@ fn resolve(root: &str, name: &str, sidecar_dir: Option<&Path>) -> String {
     };
     let absolute =
         joined.starts_with('/') || joined.contains("://") || Path::new(&joined).is_absolute();
-    match sidecar_dir {
+    match base {
         Some(dir) if !absolute => fold(&dir.join(joined)).to_string_lossy().into_owned(),
         _ => joined,
     }

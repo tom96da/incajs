@@ -1048,17 +1048,6 @@ A fixed entry is deleted and its ID is never reused.
 
   Fix: percent-decode the URL, and accept a `data:` URL without `;base64`.
 
-- **B-213 An inline map keeps relative sources as written**
-  `Units: jsenv · Size: S · Impact: Low`
-
-  A sidecar map's sources resolve against the sidecar's directory, and an
-  inline map's sources stay as written
-  (`inline_map_keeps_a_relative_source_as_written`). Browsers resolve both
-  against the map's URL, which for an inline map is the script's.
-
-  Fix: resolve an inline map's sources against the generated file's directory.
-  The printed paths of bundled apps change, so decide first.
-
 - **B-214 `console.log` of an event shows only `isTrusted`**
   `Units: jsenv,bridge · Size: M · Impact: Low`
 
@@ -1221,4 +1210,4 @@ A fixed entry is deleted and its ID is never reused.
   paths of every stack, with and without HMR. The host learns the app's root,
   `inca config` prints the setting and `docs/reference/configuration.md`
   lists it. Decide the default, whether `inca build` and `inca package` follow
-  it, and B-213 with it, since both change the printed paths.
+  it, since that changes the printed paths.
