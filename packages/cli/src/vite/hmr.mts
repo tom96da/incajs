@@ -160,7 +160,7 @@ function isFetchModuleSuccess(payload: HotPayload): boolean {
 /**
  * A minimal server-side {@link HotChannel}. `send` relays to `notify`.
  * A `full-reload` payload calls `reload` instead: that needs a fresh
- * `Engine`/`Host`, which only `inca-host`'s `reload` RPC gives it.
+ * `Engine`/`Host`, which only the host's `reload` RPC gives it.
  * A failed update also calls `onError`; a successful one calls `onUpdate`
  * with how long it took since `changed` last saw a file, when there was
  * one waiting. It is gated on the module runner's own `fetchModule` response,

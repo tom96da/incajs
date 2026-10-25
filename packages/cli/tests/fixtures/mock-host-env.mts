@@ -2,7 +2,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-// A stand-in for `inca-host --dev` that reports the color variables it was
+// A stand-in for the host under `--dev` that reports the color variables it was
 // started with on stderr, as `env NO_COLOR=<json> FORCE_COLOR=<json>` (`null` when unset).
 
 import "./answerPrintConfig.mts";

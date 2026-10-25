@@ -31,7 +31,7 @@ export interface PackageAppOptions {
   /** Overrides the bundler. See {@link build}'s default. */
   bundler?: Bundler;
   /**
-   * Overrides which `inca-host` binary gets embedded in the packaged
+   * Overrides which host binary gets embedded in the packaged
    * app, in place of automatic resolution (`INCA_HOST_BIN`, then the
    * per-platform `@incajs/host-*` package. See {@link resolveHostBin}).
    */
@@ -141,14 +141,14 @@ async function packageLinux({ metadata, output, hostBin }: LayoutArgs): Promise<
 }
 
 /**
- * Builds the app and pairs it with the prebuilt `inca-host` into a
+ * Builds the app and pairs it with the prebuilt host into a
  * distributable, platform-native application: a `.app` on macOS, a plain
  * directory on Linux, written alongside the build output, under the
  * app's own `dist/`. The app launches with no arguments and no terminal,
- * since `inca-host` finds its own bundle beside its executable.
+ * since the host finds its own bundle beside its executable.
  *
  * @throws if the app's metadata can't be read, the build fails, no
- * `inca-host` binary can be resolved for the target platform, or no file
+ * host binary can be resolved for the target platform, or no file
  * exists at the resolved path.
  */
 export async function packageApp(options: PackageAppOptions = {}): Promise<PackageResult> {

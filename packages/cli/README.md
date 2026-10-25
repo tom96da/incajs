@@ -29,10 +29,9 @@ bootstrapping; it wins outright when both exist.
   [HMR guide](https://incajs.tom96da.com/guide/hmr).
 - **`inca build`**: bundles your app for production, once, with no
   window opened.
-- **`inca package`**: builds your app, then packages it with a
-  prebuilt `inca-host` into a distributable application: a `.app` on
-  macOS, a plain directory on Linux (other platforms aren't supported
-  yet).
+- **`inca package`**: builds your app, then packages it with the
+  prebuilt host into a distributable application: a `.app` on macOS, a
+  plain directory on Linux (other platforms aren't supported yet).
 - **`inca config`**: prints the settings the host applies to your app,
   such as its window size, as JSON.
 
@@ -73,5 +72,5 @@ platform with no published one yet, or a custom build.
 ## How it works
 
 `inca dev`/`build`/`package` bundle your app with Vite, then (for `dev`
-and `package`) launch and supervise `inca-host`, the native runtime
-that renders it, as a child process.
+and `package`) launch and supervise the host, the native runtime that
+renders it, as a child process.

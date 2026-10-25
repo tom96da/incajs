@@ -25,7 +25,7 @@ export interface WriteMacosAppOptions {
   appPath: string;
   /** What the bundle's `Info.plist` describes. */
   metadata: MacosAppMetadata;
-  /** The `inca-host` binary the bundle's executable is made from. */
+  /** The host binary the bundle's executable is made from. */
   hostBin: string;
   /**
    * Hard-links the executable to `hostBin` rather than copying it, and
@@ -46,7 +46,7 @@ export interface MacosApp {
 }
 
 /**
- * Writes a macOS `.app` bundle around the `inca-host` binary:
+ * Writes a macOS `.app` bundle around the host binary:
  * `Contents/MacOS` holding the executable, `Contents/Resources` left empty
  * apart from the icon, and `Info.plist`/`PkgInfo` beside them. macOS reads
  * the app's name, icon and identifier from the bundle, so an executable

@@ -9,7 +9,7 @@ import type { AdapterCore, BuildOptions, BuildOutput } from "../adapterCore.mts"
 
 /**
  * Builds `entry` into a minified, production build under `outDir` once, and
- * rejects on failure. Never starts or talks to `inca-host`.
+ * rejects on failure. Never starts or talks to the host.
  */
 export async function build(
   core: AdapterCore,

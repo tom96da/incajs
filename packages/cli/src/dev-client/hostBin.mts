@@ -33,7 +33,7 @@ function resolveFromPlatformPackage(): string | undefined {
 }
 
 /**
- * Where `inca-host` itself lives: `INCA_HOST_BIN` if set, otherwise the
+ * Where the host binary lives: `INCA_HOST_BIN` if set, otherwise the
  * per-platform npm package for this OS/arch (`@incajs/host-<os>-<arch>`, an
  * `optionalDependency` of this package).
  * @throws if neither resolves: no override is set, and either this

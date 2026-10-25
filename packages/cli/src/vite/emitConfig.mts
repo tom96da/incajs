@@ -7,7 +7,7 @@ import type { Plugin } from "vite";
 export const CONFIG_FILE_NAME = "inca.json";
 
 /**
- * Writes `config` to `inca.json` beside the entry, for `inca-host` to read
+ * Writes `config` to `inca.json` beside the entry, for the host to read
  * when it starts the app.
  *
  * @param config - any JSON-serializable value; no file is written for

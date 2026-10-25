@@ -361,7 +361,7 @@ export async function dev(options: DevOptions): Promise<void> {
           stdout,
           stderr,
           notify: live((payload) => client?.notify("vite", payload)),
-          // A full reload needs a fresh Engine/Host, which only inca-host's
+          // A full reload needs a fresh Engine/Host, which only the host's
           // own `reload` RPC method gives it. A `"vite"` notification can't.
           reload: live((changed) => {
             if (ready) {
