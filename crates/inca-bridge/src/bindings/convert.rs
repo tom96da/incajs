@@ -14,6 +14,23 @@ use crate::event_target::{DOCUMENT_TAG, WINDOW_TAG};
 /// default.
 pub(super) type Flag = Opt<Option<bool>>;
 
+/// A whole number in `u32` range. `noun` names the argument in the message.
+/// `NaN`, `1.5`, `-1`, `Infinity`, `2**32` and a non-number throw a
+/// `TypeError`.
+fn whole_u32(ctx: &Ctx<'_>, value: &Value<'_>, noun: &str) -> JsResult<u32> {
+    let number = value
+        .as_number()
+        .ok_or_else(|| Exception::throw_type(ctx, &format!("{noun} must be a number")))?;
+    if number.fract() == 0.0 && (0.0..=f64::from(u32::MAX)).contains(&number) {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        return Ok(number as u32);
+    }
+    Err(Exception::throw_type(
+        ctx,
+        &format!("{noun} must be a whole number in the range of an unsigned 32-bit integer"),
+    ))
+}
+
 /// A node id argument. Accepts a finite whole number in `u32` range;
 /// anything else (`NaN`, `1.5`, `-1`, `Infinity`, `2**32`, a non-number)
 /// throws a `TypeError`.
@@ -22,17 +39,17 @@ pub(super) struct JsNodeId(pub(super) NodeId);
 
 impl<'js> FromJs<'js> for JsNodeId {
     fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> JsResult<Self> {
-        let number = value
-            .as_number()
-            .ok_or_else(|| Exception::throw_type(ctx, "node id must be a number"))?;
-        if number.fract() == 0.0 && (0.0..=f64::from(NodeId::MAX)).contains(&number) {
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            return Ok(Self(number as NodeId));
-        }
-        Err(Exception::throw_type(
-            ctx,
-            "node id must be a whole number in the range of an unsigned 32-bit integer",
-        ))
+        whole_u32(ctx, &value, "node id").map(Self)
+    }
+}
+
+/// A callback id argument, checked like [`JsNodeId`].
+#[derive(Debug, Clone, Copy)]
+pub(super) struct JsCallbackId(pub(super) u32);
+
+impl<'js> FromJs<'js> for JsCallbackId {
+    fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> JsResult<Self> {
+        whole_u32(ctx, &value, "callback id").map(Self)
     }
 }
 

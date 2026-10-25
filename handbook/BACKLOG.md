@@ -203,15 +203,6 @@ A fixed entry is deleted and its ID is never reused.
   scratch app and resolves `incajs/vue/runtime` through the published
   `exports`. The UI tests cover the workspace link.
 
-- **B-195 `removeEventListener` accepts a malformed `callbackId`**
-  `Units: bridge,docs · Size: S · Impact: Medium`
-
-  `removeEventListener` takes a plain `u32`, and rquickjs converts a number
-  through `f64` with a range check only. `1.5` becomes 1 and `NaN` becomes 0,
-  so the call removes another registration of that node and event instead of
-  throwing the `TypeError` that `FFI.md` promises. Found by reading; not
-  reproduced.
-
 ## P3
 
 - **B-001 Vue template type-checking**
