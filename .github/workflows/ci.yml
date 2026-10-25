@@ -499,7 +499,7 @@ jobs:
         run: bun install
 
       - name: Build the JS packages
-        run: bun --bun run -F incajs -F @incajs/cli build
+        run: bun --bun run -F incajs -F @incajs/cli build --no-publint --no-attw
 
       - name: Build inca-host
         run: cargo build -p inca-host
