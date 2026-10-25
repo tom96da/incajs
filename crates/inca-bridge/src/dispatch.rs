@@ -104,6 +104,20 @@ struct State {
     input_drag: Cell<Option<NodeId>>,
 }
 
+/// Records the node the window focuses in `host`.
+pub(crate) fn observe_focus(host: &RefCell<Host>, window: &Window, cx: &App) {
+    host.borrow_mut().focus.observe(window, cx);
+}
+
+/// Sends the listener errors `host` collected to `reporter`, in order. Call it
+/// outside any [`Engine::with`].
+pub(crate) fn report_failures(host: &RefCell<Host>, reporter: &ErrorReporter) {
+    let pending = std::mem::take(&mut host.borrow_mut().failures);
+    for failure in &pending {
+        reporter(failure);
+    }
+}
+
 impl EventDispatcher {
     /// Reports failures through [`stderr_reporter`].
     pub fn new(engine: Rc<Engine>, host: Rc<RefCell<Host>>) -> Self {
@@ -211,10 +225,7 @@ impl EventDispatcher {
     /// Reports listener errors, in the order they happened. Call it outside any
     /// [`Engine::with`].
     pub fn report_pending(&self) {
-        let pending = std::mem::take(&mut self.host.borrow_mut().failures);
-        for failure in &pending {
-            (self.reporter)(failure);
-        }
+        report_failures(&self.host, &self.reporter);
     }
 
     /// The nodes that receive no pointer `mousedown`, `mouseup`, `click` or
@@ -653,7 +664,7 @@ impl EventDispatcher {
     /// next sees focus the window applied itself. Call it before running JS
     /// from outside an event.
     pub fn observe_focus(&self, window: &Window, cx: &App) {
-        self.host.borrow_mut().focus.observe(window, cx);
+        observe_focus(&self.host, window, cx);
     }
 
     /// [`Self::observe_focus`], then [`drain_jobs_and_refresh`] with this
