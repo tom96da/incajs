@@ -3,12 +3,15 @@
 
 import { h, nextTick, reactive, ref } from "@vue/runtime-core";
 import { beforeEach, describe, expect, it } from "vitest";
+import type { Ref } from "@vue/runtime-core";
 
 import { rectOf } from "../src/element/geometry.mts";
+import { createIncaElement } from "../src/element/handle.mts";
 import { blur, click, focus } from "../src/events.mts";
 import { createEventTarget } from "../src/eventTarget.mts";
-import { createNode } from "../src/tree.mts";
+import { createNode, rootNodeId } from "../src/tree.mts";
 import { createIncaApp } from "../src/vue/index.mts";
+import { vModelText, withDirectives } from "../src/vue/runtime.mts";
 import type { EventHandlers } from "../src/element/types.mts";
 import type { IncaElement, NodeId } from "../src/index.mts";
 
@@ -19,6 +22,12 @@ const noHandlers = {} as EventHandlers;
  * What the fake host knows of each registration beyond its node and event.
  */
 const phases = new Map<number, { capture: boolean; passive: boolean }>();
+
+/** The text of each input node in the fake host. */
+const inputValues = new Map<NodeId, string>();
+
+/** The node the fake host reports as focused. */
+let focused: NodeId | null = null;
 
 interface FakeNode {
   tag: string;
@@ -119,10 +128,11 @@ function installFakeNative(): Map<NodeId, FakeNode> {
     },
     inputValue(nodeId: NodeId): string {
       requireNode(nodeId);
-      return "";
+      return inputValues.get(nodeId) ?? "";
     },
-    setInputValue(nodeId: NodeId): void {
+    setInputValue(nodeId: NodeId, value: string): void {
       requireNode(nodeId);
+      inputValues.set(nodeId, value);
     },
     addEventListener(nodeId: NodeId, event: string, capture = false, passive = false): number {
       const callbacks = (requireNode(nodeId).listeners[event] ??= []);
@@ -160,7 +170,7 @@ function installFakeNative(): Map<NodeId, FakeNode> {
     focusNode(): void {},
     blurNode(_nodeId: number): void {},
     focusedNode(): NodeId | null {
-      return null;
+      return focused;
     },
     dispatchEvent(): boolean {
       return true;
@@ -194,13 +204,13 @@ function walk(chain: FakeNode[], event: string): { capture: boolean; passive: bo
   return ran;
 }
 
-function dispatch(node: FakeNode, event: string): void {
+function dispatch(node: FakeNode, event: string, payload?: unknown): void {
   const callbackIds = node.listeners[event] ?? [];
   if (callbackIds.length === 0) throw new Error(`no ${event} listener registered`);
   for (const callbackId of callbackIds) {
     const callback = globalThis.__inca_callbacks__[callbackId];
     if (callback === undefined) throw new Error(`no callback registered as ${callbackId}`);
-    callback();
+    callback(payload);
   }
 }
 
@@ -210,6 +220,8 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
 
   beforeEach(() => {
     nodes = installFakeNative();
+    inputValues.clear();
+    focused = null;
     delete (globalThis as { __inca_callbacks__?: unknown }).__inca_callbacks__;
     const rootId = createNode("root");
     root = {
@@ -245,6 +257,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       scrollTo: () => {},
       scrollBy: () => {},
       scrollIntoView: () => {},
+      getRootNode: () => root,
     };
   });
 
@@ -406,5 +419,65 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
     expect(div.listeners["click"]).toHaveLength(0);
     expect(globalThis.__inca_callbacks__).toEqual({});
     expect(clicks).toBe(0);
+  });
+});
+
+describe("v-model on an input", () => {
+  let nodes: Map<NodeId, FakeNode>;
+  let mountRoot: IncaElement;
+
+  beforeEach(() => {
+    nodes = installFakeNative();
+    inputValues.clear();
+    focused = null;
+    delete (globalThis as { __inca_callbacks__?: unknown }).__inca_callbacks__;
+    mountRoot = createIncaElement(rootNodeId(), "element");
+  });
+
+  /** Mounts an `input` bound to `model` with `modifiers`, and returns its node id and handle. */
+  async function mountInput(model: Ref<string>, modifiers: Record<string, boolean> = {}) {
+    const box = ref<IncaElement | null>(null);
+    const App = {
+      setup() {
+        return () =>
+          withDirectives(
+            h("input", {
+              ref: box,
+              "onUpdate:modelValue": (value: string) => (model.value = value),
+            }),
+            [[vModelText, model.value, "", modifiers]],
+          );
+      },
+    };
+    createIncaApp(App).mount(mountRoot);
+    await nextTick();
+    return { id: nodes.get(rootNodeId())!.children[0]!, element: box.value! };
+  }
+
+  it("writes the model into the input on mount", async () => {
+    const { id } = await mountInput(ref("hello"));
+
+    expect(inputValues.get(id)).toBe("hello");
+  });
+
+  it("assigns the input's value to the model on input", async () => {
+    const model = ref("");
+    const { id, element } = await mountInput(model);
+    inputValues.set(id, "typed");
+
+    dispatch(nodes.get(id)!, "input", { target: element });
+
+    expect(model.value).toBe("typed");
+  });
+
+  it("keeps the focused input's text when the trimmed model matches it", async () => {
+    const model = ref("a ");
+    const { id } = await mountInput(model, { trim: true });
+    focused = id;
+
+    model.value = "a";
+    await nextTick();
+
+    expect(inputValues.get(id)).toBe("a ");
   });
 });

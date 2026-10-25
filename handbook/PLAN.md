@@ -1053,7 +1053,7 @@ runs alongside Phase 3.4.
 See Phase 4 items 3 and 5 in
 [ROADMAP.md](./ROADMAP.md#phase-4-input--text-editing-in-progress).
 
-- [ ] Text input with selection, caret and IME composition
+- [x] Text input with selection, caret and IME composition
 - [ ] Interactive visual state (hover, active and focus styling)
 
 ## Evergreen checklists

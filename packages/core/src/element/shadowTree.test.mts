@@ -75,6 +75,7 @@ const noLayout = {
   scrollTo: () => {},
   scrollBy: () => {},
   scrollIntoView: () => {},
+  getRootNode: vi.fn<IncaElement["getRootNode"]>(),
 };
 
 beforeEach(() => {
@@ -146,6 +147,7 @@ describe("createElement", () => {
       scrollTo: expect.any(Function),
       scrollBy: expect.any(Function),
       scrollIntoView: expect.any(Function),
+      getRootNode: expect.any(Function),
     });
     expect(el.__node_id).toBe(1);
   });

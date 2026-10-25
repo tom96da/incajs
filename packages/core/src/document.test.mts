@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { document } from "./document.mts";
 import { HANDLER_EVENTS } from "./element/eventHandlers.mts";
 import { registerElement, unregisterElement } from "./element/lifecycle.mts";
+import { Document } from "./interfaces.mts";
 import "./targets.mts";
 import type { IncaElement } from "./element/types.mts";
 
@@ -36,6 +37,10 @@ afterEach(() => {
 });
 
 describe("document", () => {
+  it("is an instance of Document", () => {
+    expect(document).toBeInstanceOf(Document);
+  });
+
   it("has the Document string tag", () => {
     expect(Object.prototype.toString.call(document)).toBe("[object Document]");
   });

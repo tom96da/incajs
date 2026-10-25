@@ -79,6 +79,7 @@ const makeEl = (): IncaElement => ({
   scrollTo: () => {},
   scrollBy: () => {},
   scrollIntoView: () => {},
+  getRootNode: vi.fn<IncaElement["getRootNode"]>(),
 });
 
 let el = makeEl();

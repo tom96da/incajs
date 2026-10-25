@@ -30,7 +30,7 @@ natively. See [ARCHITECTURE.md](./handbook/ARCHITECTURE.md) for the details.
 
 Early stage. Vue 3 is the only supported frontend. The CLI, HMR, pointer,
 keyboard and scroll input work.
-Text editing and IME are not built yet.
+A single-line text input with IME composition works.
 
 ## Links
 

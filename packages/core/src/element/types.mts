@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import type { IncaEvent, IncaEventMap, IncaEventTarget, NodeId } from "../types.mts";
+import type { IncaDocument, IncaEvent, IncaEventMap, IncaEventTarget, NodeId } from "../types.mts";
 import type { HANDLER_EVENTS } from "./eventHandlers.mts";
 import type { RectLike } from "./geometry.mts";
 import type { ScrollIntoViewOptions, ScrollOptions } from "./scroll.mts";
@@ -152,6 +152,11 @@ export interface IncaElement extends IncaEventTarget, EventHandlers {
    * does nothing.
    */
   scrollIntoView(arg?: boolean | ScrollIntoViewOptions): void;
+  /**
+   * The `document` export while the node hangs under the mount container,
+   * else the topmost node of its subtree, the node itself without a parent.
+   */
+  getRootNode(): IncaElement | IncaDocument;
 }
 
 /** The handle of an `<input>`. */

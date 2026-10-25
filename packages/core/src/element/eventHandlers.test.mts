@@ -54,12 +54,15 @@ describe("createIncaElement handler properties", () => {
       .sort();
     expect(names).toEqual([
       "onauxclick",
+      "onbeforeinput",
       "onblur",
+      "onchange",
       "onclick",
       "oncontextmenu",
       "ondblclick",
       "onfocus",
       "ongotpointercapture",
+      "oninput",
       "onkeydown",
       "onkeyup",
       "onlostpointercapture",

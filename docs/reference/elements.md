@@ -178,13 +178,13 @@ with the differences below. The listener methods are described in
 A few common Vue features depend on DOM concepts this renderer doesn't
 have, and using them fails the build:
 
-- **`v-show`**, **`v-model`** on a native element, and **`<Transition>`**
-  all fail to build with a Rollup `MISSING_EXPORT` error (`"vShow"`/
-  `"vModelText"`/`"Transition"` is not exported by the runtime).
-  `v-model` on a non-`<input>`/`<textarea>`/`<select>` element (which is
-  every inca element, since there's no native input yet) additionally
-  fails at the template-compiler stage with its own error, independent of
-  the missing export.
+- **`v-show`** and **`<Transition>`** fail to build with a Rollup
+  `MISSING_EXPORT` error (`"vShow"`/`"Transition"` is not exported by the
+  runtime). So does **`v-model`** on a `<select>`, a checkbox, a radio button
+  or an `<input>` with a bound `:type` (`"vModelSelect"`, `"vModelCheckbox"`,
+  `"vModelRadio"`, `"vModelDynamic"`). `v-model` on a `<textarea>` builds,
+  and the `<textarea>` stays a plain box. On any other element `v-model`
+  fails at the template-compiler stage.
 - **No timers or `fetch`**: `setTimeout`/`setInterval`/`fetch` aren't
   provided as globals by the JS runtime Incarnative.js embeds.
 - **`ref` lacks other element members**: the attribute methods, `classList`,

@@ -6,8 +6,15 @@ import { runInNewContext } from "node:vm";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { activeElement, createIncaElement, rootElement } from "./handle.mts";
-import { elementOf, markDestroyed, recordedCount, unregisterElement } from "./lifecycle.mts";
+import { document } from "../document.mts";
+import { createIncaElement, rootElement } from "./handle.mts";
+import {
+  activeElement,
+  elementOf,
+  markDestroyed,
+  recordedCount,
+  unregisterElement,
+} from "./lifecycle.mts";
 import { createTextNode, remove } from "./shadowTree.mts";
 import type { ScrollOptions } from "./scroll.mts";
 import type { IncaElement, IncaInputElement } from "./types.mts";
@@ -600,5 +607,30 @@ describe("rootElement wheel listeners", () => {
 
   it("are not passive on an inner element", () => {
     expect(registeredPassive(createIncaElement(72, "element", "div"))).toBe(false);
+  });
+});
+
+describe("createIncaElement getRootNode", () => {
+  function nested(topId: number) {
+    globalThis.__inca_native__ = { rootNodeId: () => 80 } as never;
+    const top = createIncaElement(topId, "element", "div");
+    const element = createIncaElement(83, "element", "div");
+    element.parent = top;
+    return { top, element };
+  }
+
+  it("gives document under the mount container", () => {
+    expect(nested(80).element.getRootNode()).toBe(document);
+  });
+
+  it("gives the top element of a detached subtree", () => {
+    const { top, element } = nested(81);
+    expect(element.getRootNode()).toBe(top);
+  });
+
+  it("gives the node itself when alone", () => {
+    globalThis.__inca_native__ = { rootNodeId: () => 80 } as never;
+    const element = createIncaElement(83, "element", "div");
+    expect(element.getRootNode()).toBe(element);
   });
 });

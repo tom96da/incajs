@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { native } from "../native.mts";
+import { focusedNode } from "../tree.mts";
 import type { NodeId } from "../types.mts";
 import type { IncaElement, IncaNode } from "./types.mts";
 
@@ -133,4 +134,14 @@ const released = new FinalizationRegistry<NodeId>((id) => native().releaseNode(i
  */
 export function releaseWhenCollected(handle: IncaNode): void {
   released.register(handle, handle.__node_id);
+}
+
+/**
+ * Returns the element that currently has focus. A `focus()` or `blur()` call
+ * takes effect for this function at once.
+ * @returns the focused element, or `null` when no element has focus
+ */
+export function activeElement(): IncaElement | null {
+  const id = focusedNode();
+  return id === null ? null : (elementOf(id) ?? null);
 }

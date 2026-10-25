@@ -1,6 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import { document } from "../document.mts";
 import {
   blur,
   click,
@@ -11,7 +12,6 @@ import {
 } from "../events.mts";
 import { createEventTarget } from "../eventTarget.mts";
 import {
-  focusedNode,
   getAttribute,
   inputValue,
   rootNodeId,
@@ -32,8 +32,8 @@ import type { EventHandlers, IncaElement, IncaNode } from "./types.mts";
  * Builds the {@link IncaElement} handle for a native node: parentless,
  * childless, with `id`, `focus()`, `blur()`, `click()`, the pointer capture
  * methods, `contains()`, the listener methods of an event target, `tabIndex`,
- * the `value` of an `input`, the layout members and the event handler properties, all driven
- * through the host.
+ * the `value` of an `input`, `getRootNode()`, the layout members and the event handler properties,
+ * all driven through the host.
  * @param id - the native node's id
  * @param kind - whether the node is an element or a comment stand-in
  * @param tag - the node's element kind, if it has one; a `button` or `input` defaults to tab
@@ -148,6 +148,11 @@ export function createIncaElement(
       const { block, inline } = scrollIntoViewArgs(arg);
       scrollIntoViewNode(id, block, inline);
     },
+    getRootNode: () => {
+      let top = element;
+      while (top.parent !== null) top = top.parent;
+      return top.__node_id === rootNodeId() ? document : top;
+    },
   };
   if (tag === "input") {
     Object.defineProperty(fields, "value", {
@@ -166,16 +171,6 @@ export function createIncaElement(
   );
   if (kind === "element") registerElement(element);
   return element;
-}
-
-/**
- * Returns the element that currently has focus. A `focus()` or `blur()` call
- * takes effect for this function at once.
- * @returns the focused element, or `null` when no element has focus
- */
-export function activeElement(): IncaElement | null {
-  const id = focusedNode();
-  return id === null ? null : (elementOf(id) ?? null);
 }
 
 /**
