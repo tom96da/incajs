@@ -9,6 +9,7 @@ import type { InlineConfig } from "vite";
 import { captureOutput } from "./captureOutput.mts";
 import { emitConfig } from "./emitConfig.mts";
 import { streamLogger } from "./logger.mts";
+import { requirePeers } from "./requirePeers.mts";
 import { rejectUnsupported } from "./unsupported.mts";
 import type { AdapterCore } from "../adapterCore.mts";
 import type { CapturedOutput } from "./captureOutput.mts";
@@ -97,6 +98,7 @@ export function resolveViteConfig({
           compilerOptions: { runtimeModuleName, hoistStatic: false },
         },
       }),
+      requirePeers(core),
       rejectUnsupported(core),
       emitConfig(runtimeConfig),
       captureOutput(core, onOutput),

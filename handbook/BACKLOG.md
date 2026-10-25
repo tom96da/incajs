@@ -190,17 +190,14 @@ A fixed entry is deleted and its ID is never reused.
   color. `outline-color`, per-side border colors, `box-shadow` and
   `text-decoration-color` come with the properties they belong to.
 
-- **B-126 A missing `@vue/runtime-dom` fails the build with the bundler's own error**
-  `Units: cli,core,docs · Size: S–M · Impact: Medium`
+- **B-126 No test resolves `incajs/vue/runtime` through the published
+  `exports`**
+  `Units: cli,core · Size: S · Impact: Low`
 
   Compiled templates import `incajs/vue/runtime`, which re-exports from
-  `@vue/runtime-dom`, an optional peer of `incajs`. When the app lacks the
-  package, `inca build` and `inca dev` fail with the bundler's unresolved
-  import message. It names the package and gives no install hint. A check in
-  the Vite adapter could print the install command, as the adapter does for
-  unsupported style blocks. No test installs the packed `incajs` into a
-  scratch app and resolves `incajs/vue/runtime` through the published
-  `exports`. The UI tests cover the workspace link.
+  `@vue/runtime-dom`, an optional peer of `incajs` like `@vue/runtime-core`. No test installs the packed
+  `incajs` into a scratch app and resolves `incajs/vue/runtime` through the
+  published `exports`. The UI tests cover the workspace link.
 
 ## P3
 
