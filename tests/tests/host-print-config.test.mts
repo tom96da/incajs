@@ -51,6 +51,7 @@ it("prints the settings read from inca.json and exits 0", async () => {
       minWidth: null,
       minHeight: null,
     },
+    dev: { stackPaths: "relative" },
   });
 });
 

@@ -31,4 +31,5 @@ pub use engine::{
     stderr_reporter,
 };
 pub use quickjs::FunctionAccessor;
+pub use sourcemap::StackPaths;
 pub use vault::vault;
