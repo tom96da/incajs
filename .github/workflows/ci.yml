@@ -199,6 +199,30 @@ jobs:
       NODE_VERSION: "26"
     steps: *test_node_steps
 
+  # The Bun runtime runs the unit tests of the packages, installed by Bun itself.
+  test-bun:
+    name: "Test: Bun, ubuntu-latest"
+    needs: [changed, build]
+    if: needs.changed.outputs.js == 'true'
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install deps
+        run: bun install
+
+      - name: Test
+        run: bun --bun vitest run
+
   # gpui_platform's features differ per platform, so each one needs checking.
   rust-ubuntu:
     name: "Rust: ubuntu:22.04"
@@ -417,6 +441,77 @@ jobs:
     runs-on: macos-latest
     steps: *rust_node_steps
 
+  # The end-to-end suite under Bun, with the real host. The Rust tests run in
+  # the Rust & Node jobs.
+  rust-bun-ubuntu:
+    name: "Rust & Bun: ubuntu:22.04"
+    needs: [changed, test-bun]
+    if: *rust_node_if
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    container: ubuntu:22.04
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Install gpui's native build dependencies
+        # Ahead of the checkout: a bare image lacks git, curl and a compiler.
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates \
+            curl \
+            git \
+            unzip \
+            xz-utils \
+            build-essential \
+            cmake \
+            clang \
+            lld \
+            llvm \
+            pkg-config \
+            libfontconfig-dev \
+            libwayland-dev \
+            libx11-xcb-dev \
+            libxkbcommon-x11-dev \
+            libssl-dev
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # The runner's own toolchain lives outside the container.
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --no-modify-path --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: workspace
+          save-if: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install deps
+        run: bun install
+
+      - name: Build the JS packages
+        run: bun --bun run -F incajs -F @incajs/cli build
+
+      - name: Build inca-host
+        run: cargo build -p inca-host
+
+      - name: Test (real inca-host + real Vite dev server)
+        run: bun --bun vitest run --root ./tests
+
   # One status check whose name survives changes to the jobs above.
   passed:
     name: CI Passed
@@ -430,12 +525,14 @@ jobs:
         test-node-24,
         test-node-26,
         test-macos,
+        test-bun,
         rust-ubuntu,
         rust-ubuntu-arm,
         rust-macos,
         rust-macos-intel,
         rust-node-ubuntu,
         rust-node-macos,
+        rust-bun-ubuntu,
       ]
     runs-on: ubuntu-latest
     steps:
