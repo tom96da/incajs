@@ -553,17 +553,25 @@ fn config_report(entry_path: &str) -> Result<String, String> {
     if !Path::new(entry_path).is_file() {
         return Err(format!("failed to read {entry_path}: not a file"));
     }
-    config::try_read(Path::new(entry_path))
-        .map(|config| effective_config(&config))
-        .map_err(|err| format!("failed to read {}", err.report()))
+    let config = config::try_read(Path::new(entry_path))
+        .map_err(|err| format!("failed to read {}", err.report()))?;
+    if let Some((path, reason)) = config::unusable(&config) {
+        let file = config::config_path(Path::new(entry_path)).unwrap_or_default();
+        return Err(format!(
+            "failed to read {}: {path}: {reason}",
+            file.display()
+        ));
+    }
+    Ok(effective_config(&config))
 }
 
 /// Prints the settings the host applies to the app whose entry is
 /// `entry_path`, read from the `inca.json` beside it, and returns after
 /// printing them. Returns `ExitCode::FAILURE` and prints nothing on stdout
 /// when `entry_path` names no file or that `inca.json` cannot be read or
-/// parsed; the line on stderr then names the file, and for a value of the
-/// wrong type or broken JSON the path to it.
+/// parsed, or a value in it that no window can use; the line on stderr then
+/// names the file, and for a value of the wrong type, broken JSON or an
+/// unusable value the path to it.
 #[must_use]
 pub fn print_config(entry_path: &str) -> ExitCode {
     match config_report(entry_path) {

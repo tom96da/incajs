@@ -121,6 +121,11 @@ fn json_path(path: &serde_path_to_error::Path) -> String {
     serde_json::Value::from(segments).to_string()
 }
 
+/// The `inca.json` beside `entry_path`.
+pub(crate) fn config_path(entry_path: &Path) -> Option<PathBuf> {
+    entry_path.parent().map(|dir| dir.join(CONFIG_FILE_NAME))
+}
+
 /// Reads the config beside `entry_path`, the app's entry file.
 ///
 /// An app that declares nothing has no config file, and reads as
@@ -131,7 +136,7 @@ fn json_path(path: &serde_path_to_error::Path) -> String {
 /// Returns a [`ReadError`] when the file exists and cannot be read or
 /// parsed.
 pub fn try_read(entry_path: &Path) -> Result<AppConfig, ReadError> {
-    let Some(path) = entry_path.parent().map(|dir| dir.join(CONFIG_FILE_NAME)) else {
+    let Some(path) = config_path(entry_path) else {
         return Ok(AppConfig::default());
     };
 
@@ -177,6 +182,49 @@ pub(crate) const DEFAULT_WINDOW_SIZE: (f32, f32) = (800.0, 600.0);
 /// as absent.
 pub(crate) fn usable(dimension: Option<f32>) -> Option<f32> {
     dimension.filter(|value| value.is_finite() && *value > 0.0)
+}
+
+fn blank(text: Option<&str>) -> bool {
+    text.is_some_and(|text| text.trim().is_empty())
+}
+
+/// The path and the reason of the first value in `config` no window can use (name, identifier,
+/// title, then the sizes), as `--print-config` reports them.
+pub(crate) fn unusable(config: &AppConfig) -> Option<(serde_json::Value, String)> {
+    const STRING: &str = "a string with a visible character";
+    const SIZE: &str = "a finite number above zero";
+    let window = config.window.as_ref();
+    let strings = [
+        (serde_json::json!(["name"]), config.name.as_deref()),
+        (
+            serde_json::json!(["identifier"]),
+            config.identifier.as_deref(),
+        ),
+        (
+            serde_json::json!(["window", "title"]),
+            window.and_then(|w| w.title.as_deref()),
+        ),
+    ];
+    for (path, text) in strings {
+        if blank(text) {
+            let reason = format!(
+                "invalid value: {:?}, expected {STRING}",
+                text.unwrap_or_default()
+            );
+            return Some((path, reason));
+        }
+    }
+    let sizes = [
+        ("width", window.and_then(|w| w.width)),
+        ("height", window.and_then(|w| w.height)),
+        ("minWidth", window.and_then(|w| w.min_width)),
+        ("minHeight", window.and_then(|w| w.min_height)),
+    ];
+    sizes.into_iter().find_map(|(key, value)| {
+        let value = value.filter(|v| usable(Some(*v)).is_none())?;
+        let reason = format!("invalid value: {value}, expected {SIZE}");
+        Some((serde_json::json!(["window", key]), reason))
+    })
 }
 
 /// The smallest size the window can be resized to, where the app's config
@@ -614,6 +662,81 @@ mod tests {
 
         assert_eq!(printed["window"]["title"], "Demo");
         assert_eq!(effective(r#"{"name":"Demo"}"#)["window"]["title"], "Demo");
+    }
+
+    #[rstest]
+    #[case::width_negative(
+        r#"{"window":{"width":-100}}"#,
+        r#"["window","width"]"#,
+        "invalid value: -100, expected a finite number above zero"
+    )]
+    #[case::width_zero(
+        r#"{"window":{"width":0}}"#,
+        r#"["window","width"]"#,
+        "invalid value: 0, expected a finite number above zero"
+    )]
+    #[case::height_infinite(
+        r#"{"window":{"height":1e39}}"#,
+        r#"["window","height"]"#,
+        "invalid value: inf, expected a finite number above zero"
+    )]
+    #[case::min_width_negative(
+        r#"{"window":{"minWidth":-1}}"#,
+        r#"["window","minWidth"]"#,
+        "invalid value: -1, expected a finite number above zero"
+    )]
+    #[case::min_height_zero(
+        r#"{"window":{"minHeight":0}}"#,
+        r#"["window","minHeight"]"#,
+        "invalid value: 0, expected a finite number above zero"
+    )]
+    #[case::title_blank(
+        r#"{"window":{"title":"  "}}"#,
+        r#"["window","title"]"#,
+        r#"invalid value: "  ", expected a string with a visible character"#
+    )]
+    #[case::name_empty(
+        r#"{"name":""}"#,
+        r#"["name"]"#,
+        r#"invalid value: "", expected a string with a visible character"#
+    )]
+    #[case::identifier_blank(
+        r#"{"identifier":" "}"#,
+        r#"["identifier"]"#,
+        r#"invalid value: " ", expected a string with a visible character"#
+    )]
+    fn unusable_names_a_value_no_window_can_use(
+        #[case] json: &str,
+        #[case] path: &str,
+        #[case] reason: &str,
+    ) {
+        let config: AppConfig = serde_json::from_str(json).unwrap();
+
+        let (found, found_reason) = unusable(&config).unwrap();
+
+        assert_eq!(found.to_string(), path);
+        assert_eq!(found_reason, reason);
+    }
+
+    #[test]
+    fn a_usable_config_has_nothing_unusable() {
+        let config: AppConfig = serde_json::from_str(
+            r#"{"name":"Demo","identifier":"org.inca.demo",
+            "window":{"width":1024,"height":768,"title":"Demo","resizable":false,
+                      "minWidth":320,"minHeight":240},
+            "dev":{"stackPaths":"absolute"},"root":".."}"#,
+        )
+        .unwrap();
+
+        assert_eq!(unusable(&config), None);
+    }
+
+    #[test]
+    fn unusable_names_the_first_value_in_order() {
+        let config: AppConfig =
+            serde_json::from_str(r#"{"name":"","window":{"width":-1}}"#).unwrap();
+
+        assert_eq!(unusable(&config).unwrap().0.to_string(), r#"["name"]"#);
     }
 
     #[test]

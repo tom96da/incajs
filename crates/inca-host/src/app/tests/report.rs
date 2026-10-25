@@ -48,6 +48,25 @@ fn the_report_of_a_config_it_cannot_parse_names_the_field() {
 }
 
 #[test]
+fn config_report_refuses_an_unusable_value_with_its_path() {
+    let dir = ScratchDir::new("print-unusable");
+    let entry = dir.join("bundle.js");
+    fs::write(&entry, "").unwrap();
+    fs::write(dir.join("inca.json"), r#"{"window":{"width":-100}}"#).unwrap();
+
+    assert_eq!(
+        config_report(&entry.to_string_lossy()),
+        Err(format!(
+            concat!(
+                r#"failed to read {}: ["window","width"]: "#,
+                "invalid value: -100, expected a finite number above zero"
+            ),
+            dir.join("inca.json").display()
+        ))
+    );
+}
+
+#[test]
 fn bundle_beside_finds_a_flat_sibling_bundle() {
     let dir = ScratchDir::new("flat");
     fs::write(dir.join("bundle.js"), "").unwrap();
