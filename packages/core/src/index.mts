@@ -7,7 +7,7 @@ export { document } from "./document.mts";
 export { window } from "./window.mts";
 export type { RectLike, RectValues } from "./element/geometry.mts";
 export type { ScrollIntoViewOptions, ScrollOptions } from "./element/scroll.mts";
-export type { IncaElement, IncaNode } from "./element/types.mts";
+export type { IncaElement, IncaInputElement, IncaNode } from "./element/types.mts";
 export type {
   AttributeValue,
   CallbackId,

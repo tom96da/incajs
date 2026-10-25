@@ -95,11 +95,12 @@ export function rectOf(layout: LayoutBox | null): RectLike {
  * is missing, not a string or number, has no leading integer, or falls outside
  * the 32-bit signed range yields the default.
  * @param value - the stored `tabindex` attribute, or `null` if unset
- * @param kind - the element kind; `"button"` defaults to `0`, any other kind to `-1`
+ * @param kind - the element kind; `"button"` and `"input"` default to `0`, any other kind to
+ *   `-1`
  * @returns the parsed tab index, or the default
  */
 export function tabIndexOf(value: string | number | boolean | null, kind: string): number {
-  const fallback = kind === "button" ? 0 : -1;
+  const fallback = kind === "button" || kind === "input" ? 0 : -1;
   if (typeof value !== "string" && typeof value !== "number") return fallback;
 
   const match = /^[\t\n\f\r ]*([+-]?\d+)/.exec(String(value));

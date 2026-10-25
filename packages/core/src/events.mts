@@ -117,7 +117,7 @@ export function dispatchEvent(target: EventTargetId, event: EventLike): boolean 
 }
 
 /**
- * Fires an untrusted `click` at `nodeId`. A disabled `button` and a node whose
+ * Fires an untrusted `click` at `nodeId`. A disabled `button` or `input` and a node whose
  * own click is still running ignore the call.
  * @param nodeId - the node to click
  * @throws TypeError when `nodeId` is malformed

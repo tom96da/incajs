@@ -360,6 +360,11 @@ const BOOLEAN_ATTRIBUTES = new Set([
  * `onclick`, assigns `nextValue` to that property. A string `nextValue`
  * clears the property and goes to `core.setAttribute` like other props.
  *
+ * ### `value`
+ *
+ * The key assigns the `value` property of an element that has one (an `<input>`). `null` and
+ * `undefined` give `""`, and any other value gives its string.
+ *
  * ### Other props
  *
  * A string, number or boolean `nextValue` goes to `core.setAttribute` as it
@@ -397,6 +402,8 @@ export function createPatchProp(
       } else {
         Reflect.set(el, key, nextValue);
       }
+    } else if (key === "value" && "value" in el) {
+      Reflect.set(el, key, nextValue ?? "");
     } else if (BOOLEAN_ATTRIBUTES.has(key) && !nextValue && nextValue !== "") {
       core.removeAttribute(el.__node_id, key);
     } else if (

@@ -13,10 +13,12 @@ import { createEventTarget } from "../eventTarget.mts";
 import {
   focusedNode,
   getAttribute,
+  inputValue,
   rootNodeId,
   scrollIntoViewNode,
   scrollOf,
   setAttribute,
+  setInputValue,
 } from "../tree.mts";
 import { withEventHandlers } from "./eventHandlers.mts";
 import { layoutBox, offsetOf, offsetParentOf, rectOf, tabIndexOf } from "./geometry.mts";
@@ -30,11 +32,12 @@ import type { EventHandlers, IncaElement, IncaNode } from "./types.mts";
  * Builds the {@link IncaElement} handle for a native node: parentless,
  * childless, with `id`, `focus()`, `blur()`, `click()`, the pointer capture
  * methods, `contains()`, the listener methods of an event target, `tabIndex`,
- * the layout members and the event handler properties, all driven through the
- * host.
+ * the `value` of an `input`, the layout members and the event handler properties, all driven
+ * through the host.
  * @param id - the native node's id
  * @param kind - whether the node is an element or a comment stand-in
- * @param tag - the node's element kind, if it has one; a `button` defaults to tab index `0`
+ * @param tag - the node's element kind, if it has one; a `button` or `input` defaults to tab
+ *   index `0`, and an `input` has `value`
  * @param passiveByDefault - event names whose listeners are passive unless their options say
  *   `passive: false`
  * @returns the new handle
@@ -146,6 +149,18 @@ export function createIncaElement(
       scrollIntoViewNode(id, block, inline);
     },
   };
+  if (tag === "input") {
+    Object.defineProperty(fields, "value", {
+      get: () => (isDestroyed(element) ? "" : inputValue(id)),
+      set: (value: unknown) => {
+        if (isDestroyed(element)) return;
+        // oxlint-disable-next-line typescript/no-base-to-string
+        setInputValue(id, value === null ? "" : String(value));
+      },
+      enumerable: true,
+      configurable: true,
+    });
+  }
   const element: IncaElement = withEventHandlers(withNodeId(fields, id), () =>
     isDestroyed(element),
   );

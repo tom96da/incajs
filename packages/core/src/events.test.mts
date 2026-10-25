@@ -24,6 +24,8 @@ const native = {
   removeAttribute: vi.fn<(nodeId: number, key: string) => void>(),
   setStyle: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   removeStyle: vi.fn<(nodeId: number, key: string) => void>(),
+  inputValue: vi.fn<(nodeId: number) => string>(() => ""),
+  setInputValue: vi.fn<(nodeId: number, value: string) => void>(),
   addEventListener: vi.fn<
     (nodeId: number, event: string, capture?: boolean, passive?: boolean) => number
   >(() => nextCallbackId++),

@@ -219,6 +219,27 @@ export function removeStyle(nodeId: NodeId, key: string): void {
 }
 
 /**
+ * Returns the text of the `input` node `nodeId`.
+ * @param nodeId - the `input` node to read
+ * @returns the text of the input
+ * @throws TypeError for a node that is not an input
+ */
+export function inputValue(nodeId: NodeId): string {
+  return native().inputValue(nodeId);
+}
+
+/**
+ * Replaces the text of the `input` node `nodeId`. Line breaks are dropped, and a changed text
+ * puts the caret at its end.
+ * @param nodeId - the `input` node to update
+ * @param value - the new text
+ * @throws TypeError for a node that is not an input
+ */
+export function setInputValue(nodeId: NodeId, value: string): void {
+  native().setInputValue(nodeId, value);
+}
+
+/**
  * Returns the id of the focused node.
  * @returns the focused node's id, or `null` when no node has focus
  */

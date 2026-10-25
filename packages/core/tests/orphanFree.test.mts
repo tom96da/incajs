@@ -106,6 +106,8 @@ function installNative(): void {
     removeAttribute: (id) => void nodeOf(id),
     setStyle: (id) => void nodeOf(id),
     removeStyle: (id) => void nodeOf(id),
+    inputValue: (id) => (nodeOf(id), ""),
+    setInputValue: (id) => void nodeOf(id),
     addEventListener(id) {
       const callbackId = nextCallbackId++;
       nodeOf(id as number).listeners.push(callbackId);

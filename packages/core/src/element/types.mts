@@ -67,9 +67,9 @@ export interface IncaElement extends IncaEventTarget, EventHandlers {
   /** Unfocuses this node next frame, if it is the focused one. */
   blur(): void;
   /**
-   * Fires an untrusted `click` at this node. A disabled `button` and a node
-   * whose own click is still running ignore the call. After the node is
-   * removed, the call does nothing.
+   * Fires an untrusted `click` at this node. A disabled `button` or `input` and a node
+   * whose own click is still running ignore the call. After the node is removed, the call
+   * does nothing.
    */
   click(): void;
   /**
@@ -99,7 +99,7 @@ export interface IncaElement extends IncaEventTarget, EventHandlers {
   /**
    * Assigning sets the `tabindex` attribute to the value's integer part,
    * wrapped to 32 bits. Reading returns the `tabindex` attribute as an
-   * integer, or `-1` (`0` for a `button`) when it is unset or invalid.
+   * integer, or `-1` (`0` for a `button` or an `input`) when it is unset or invalid.
    * After the node is removed, reading gives that default and assigning does
    * nothing.
    */
@@ -152,6 +152,16 @@ export interface IncaElement extends IncaEventTarget, EventHandlers {
    * does nothing.
    */
   scrollIntoView(arg?: boolean | ScrollIntoViewOptions): void;
+}
+
+/** The handle of an `<input>`. */
+export interface IncaInputElement extends IncaElement {
+  /**
+   * The text of the input. Assigning sets the value as a string, and `null` as `""`; line breaks
+   * are dropped and a changed text puts the caret at its end. After the node is removed, reading
+   * gives `""` and assigning does nothing.
+   */
+  value: string;
 }
 
 /** A text leaf node. */

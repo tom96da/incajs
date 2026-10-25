@@ -117,6 +117,13 @@ function installFakeNative(): Map<NodeId, FakeNode> {
     removeStyle(nodeId: NodeId, key: string): void {
       delete requireNode(nodeId).style[key];
     },
+    inputValue(nodeId: NodeId): string {
+      requireNode(nodeId);
+      return "";
+    },
+    setInputValue(nodeId: NodeId): void {
+      requireNode(nodeId);
+    },
     addEventListener(nodeId: NodeId, event: string, capture = false, passive = false): number {
       const callbacks = (requireNode(nodeId).listeners[event] ??= []);
       const callbackId = nextCallbackId++;

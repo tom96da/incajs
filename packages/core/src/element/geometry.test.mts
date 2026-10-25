@@ -104,6 +104,7 @@ describe("tabIndexOf", () => {
     [true, "div", -1],
     [false, "div", -1],
     [null, "button", 0],
+    [null, "input", 0],
     [true, "button", 0],
     ["x", "button", 0],
     ["3", "button", 3],
