@@ -133,3 +133,12 @@ describe("development library build", () => {
     expect(js.trimEnd().endsWith("//# sourceMappingURL=bundle.js.map")).toBe(true);
   });
 });
+
+describe("resolveViteConfig plugins", () => {
+  it("checks for the Vue peers", () => {
+    const plugins = (resolveViteConfig(optionsFor("production")).plugins ?? []).flat();
+    const names = plugins.map((plugin) => (plugin as { name?: string }).name);
+
+    expect(names).toContain("inca:require-peers");
+  });
+});

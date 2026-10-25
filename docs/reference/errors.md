@@ -168,6 +168,16 @@ Use instead:
 Something imports a `.css` (or `.scss`, `.less`, …) file. Same reason as
 above. See `ERR_INCA_UNSUPPORTED_STYLE`.
 
+## `ERR_INCA_PEER_NOT_FOUND`
+
+The app's build imports a Vue package that `incajs` lists as an optional peer, and it isn't installed. The message names the package and the command that installs it.
+
+Install it in the app:
+
+```sh
+pnpm add @vue/runtime-dom
+```
+
 ## `ERR_INCA_BUILD_NO_OUTPUT`
 
 The bundler finished without writing anything. This one is a bug in

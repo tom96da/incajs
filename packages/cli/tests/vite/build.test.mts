@@ -156,6 +156,21 @@ describe("build", () => {
     );
   }, 20000);
 
+  it("rejects a missing @vue/runtime-dom with the install command", async () => {
+    const { entry, outDir, streams } = await makeApp(
+      dedent`
+        <script setup>
+        import "@vue/runtime-dom";
+        </script>
+        <template><div /></template>
+      `,
+    );
+
+    await expect(build({ entry, outDir, ...streams })).rejects.toThrow(
+      "ERR_INCA_PEER_NOT_FOUND: @vue/runtime-dom is not installed. add it to the app: pnpm add @vue/runtime-dom",
+    );
+  }, 20000);
+
   it("rejects with a readable error on a syntax error", async () => {
     const { entry, outDir, streams } = await makeApp(
       `<script setup>\nconst broken = ;\n</script>\n<template><div/></template>\n`,
