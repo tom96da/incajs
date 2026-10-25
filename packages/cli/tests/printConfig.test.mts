@@ -202,6 +202,24 @@ it("checkConfig passes an entry the host accepts", async () => {
   expect(() => checkConfig(hostBin, entry)).not.toThrow();
 });
 
+it("checkConfig reports a host ended by a signal as a start failure", async () => {
+  hostAnswers("SIGTERM");
+  const { entry } = await appWithEntry({});
+
+  expect(() => checkConfig(hostBin, entry)).toThrow(
+    new Error("the host failed to start (signal=SIGTERM)"),
+  );
+});
+
+it("checkConfig propagates the spawn error of a host that cannot be started", async () => {
+  const { app, entry } = await appWithEntry({});
+  const unspawnableHost = await makeUnspawnableHost(app);
+
+  expect(() => checkConfig(unspawnableHost, entry)).toThrow(
+    expect.objectContaining({ code: "EACCES" }),
+  );
+});
+
 it("checkConfig throws the setting the host cannot use", async () => {
   hostAnswers("1", WIDTH_FAULT);
   const { entry } = await appWithEntry({ window: { width: -100 } });

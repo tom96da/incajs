@@ -152,6 +152,9 @@ export function checkConfig(hostBin: string, entry: string): void {
     config = JSON.parse(readFileSync(file, "utf8"));
   } catch {}
   const result = runPrintConfig(hostBin, entry, file, config);
+  if (result.status === null) {
+    throw new Error(`the host failed to start (signal=${String(result.signal)})`);
+  }
   if (result.status !== 0) {
     const line = result.stderr.split("\n")[0] ?? "";
     throw new IncaError(
