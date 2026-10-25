@@ -3,6 +3,7 @@
 
 import { existsSync, lstatSync, realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import path from "node:path";
 
 import { loadConfig } from "c12";
@@ -29,6 +30,9 @@ const CONFIG_LOOKUP = {
   giget: false,
   extend: false,
 } as const;
+
+/** The script extensions c12 imports for `inca.config`. */
+const CONFIG_EXTENSIONS = [".js", ".ts", ".mjs", ".cjs", ".mts", ".cts"];
 
 /** `entry`/`outDir` only: what `build()`/`dev()` need, with no `package.json` requirement. */
 export interface ResolvedBuildConfig {
@@ -201,6 +205,10 @@ function parsePackageJson(raw: string, pkgPath: string): AppPackageJson {
 async function loadIncaConfig(
   cwd: string,
 ): Promise<{ config: IncaConfig; usedPackageJsonKey: boolean }> {
+  // Bun ignores the query c12 adds to re-import a changed config.
+  const moduleCache = createRequire(import.meta.url).cache;
+  // Bun lists no key of the cache, so each name is deleted directly.
+  for (const ext of CONFIG_EXTENSIONS) delete moduleCache[path.join(cwd, "inca.config" + ext)];
   const { config, layers } = await loadConfig<IncaConfig>({ cwd, ...CONFIG_LOOKUP });
   const pkgJsonLayer = layers?.find((layer) => layer.configFile === "package.json");
   return { config, usedPackageJsonKey: Object.keys(pkgJsonLayer?.config ?? {}).length > 0 };

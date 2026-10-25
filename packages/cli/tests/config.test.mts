@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import path from "node:path";
 
 import dedent from "ts-dedent";
@@ -276,4 +277,20 @@ describe("resolveRuntimeConfig", () => {
 
     expect(await resolveRuntimeConfig(app)).not.toHaveProperty("dev");
   });
+});
+
+describe("the config module cache", () => {
+  it.each([".js", ".ts", ".mjs", ".cjs", ".mts", ".cts"])(
+    "drops a cached inca.config%s before a load",
+    async (ext) => {
+      const app = await makeApp({ name: "scratch-app" });
+      const key = path.join(app, "inca.config" + ext);
+      const cache = createRequire(import.meta.url).cache;
+      cache[key] = {} as NodeJS.Module;
+
+      await resolveBuildConfig(app);
+
+      expect(key in cache).toBe(false);
+    },
+  );
 });
