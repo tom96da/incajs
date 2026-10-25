@@ -291,13 +291,40 @@ fn source_root_joins_with_one_slash(#[case] root: &str) {
 }
 
 #[test]
-fn inline_map_keeps_a_relative_source_as_written() {
+fn inline_map_of_a_relative_filename_keeps_its_source_as_written() {
     let json = map_json(3, ";AAAA", r#"["../src/a.ts"]"#, None);
     let src = format!("h\nabc\n{}", inline(&json));
     assert_eq!(
-        one(&src, "    at f (a.js:2:1)"),
+        remap(&[("dist/a.js", &src)], "    at f (dist/a.js:2:1)"),
         "    at f (../src/a.ts:1:1)"
     );
+}
+
+#[test]
+fn inline_map_resolves_a_relative_source_against_its_file() {
+    let json = map_json(3, ";AAAA", r#"["../src/a.ts"]"#, None);
+    let src = format!("h\nabc\n{}", inline(&json));
+    assert_eq!(
+        remap(&[("/app/dist/a.js", &src)], "    at f (/app/dist/a.js:2:1)"),
+        "    at f (/app/src/a.ts:1:1)"
+    );
+}
+
+#[test]
+fn a_compile_resolves_its_inline_sources_against_the_requested_file() {
+    let json = map_json(3, ";AAAA", r#"["main.ts"]"#, None);
+    let src = format!("h\nabc\n{}", inline(&json));
+    with_realm(|ctx| {
+        let first = register_compile(&ctx, "/app/src/main.js?x=/y", &src).unwrap();
+        let second = register_compile(&ctx, "/app/src/main.js?x=/y", &src).unwrap();
+        assert!(second.contains("?t="), "{second}");
+        for key in [first, second] {
+            assert_eq!(
+                remap_stack(&ctx, &format!("    at f ({key}:2:1)")),
+                "    at f (/app/src/main.ts:1:1)"
+            );
+        }
+    });
 }
 
 #[test]
@@ -566,7 +593,7 @@ fn file_path_containing_a_parenthesis_maps() {
         &[("/My App (1)/bundle.js", &src)],
         "    at f (/My App (1)/bundle.js:2:1)",
     );
-    assert_eq!(out, "    at f (o.ts:1:1)");
+    assert_eq!(out, "    at f (/My App (1)/o.ts:1:1)");
 }
 
 #[test]
