@@ -8,6 +8,7 @@
 // exists and logs `reloaded` first. A `vite` notification is echoed back. Its process id goes to
 // `<MOCK_HOST_LOG>.pid`.
 
+import "./answerPrintConfig.mts";
 import { appendFileSync, existsSync, writeFileSync } from "node:fs";
 import readline from "node:readline";
 

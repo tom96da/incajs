@@ -11,6 +11,7 @@ import { assertHostBin, resolveHostBin } from "./dev-client/index.mts";
 import { IncaError } from "./error.mts";
 import { log } from "./log.mts";
 import { writeMacosApp } from "./macosApp.mts";
+import { checkConfig } from "./printConfig.mts";
 import type { ResolvedAppConfig } from "./config/loader.mts";
 import type { Bundler, BuildOutput } from "./types.mts";
 
@@ -182,6 +183,7 @@ export async function packageApp(options: PackageAppOptions = {}): Promise<Packa
 
   const hostBin = options.hostBin ?? resolveHostBin();
   assertHostBin(hostBin);
+  checkConfig(hostBin, output.entryFile);
 
   const layoutArgs: LayoutArgs = { metadata, output, hostBin };
   const appPath =

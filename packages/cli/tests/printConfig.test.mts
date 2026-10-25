@@ -6,9 +6,18 @@ import path from "node:path";
 
 import { afterAll, beforeAll, expect, it, onTestFinished, vi } from "vitest";
 
-import { printConfig } from "../src/printConfig.mts";
+vi.mock("../src/dev-client/index.mts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/dev-client/index.mts")>();
+  return { ...actual, resolveHostBin: vi.fn<typeof actual.resolveHostBin>(actual.resolveHostBin) };
+});
+
+import { resolveHostBin } from "../src/dev-client/index.mts";
+import { IncaError } from "../src/error.mts";
+import { checkBuiltConfig, checkConfig, printConfig } from "../src/printConfig.mts";
 import { scratchConfigApp } from "./scratchConfigApp.mts";
 import { makeSink, makeUnspawnableHost } from "./support/dev.mts";
+
+const mockedResolveHostBin = vi.mocked(resolveHostBin);
 
 const hostBin = path.join(import.meta.dirname, "fixtures/mock-host-print-config.mts");
 
@@ -172,4 +181,96 @@ it("says a number for a text setting must be a string", async () => {
       message: "window.title in inca.config.ts is 5. it must be a string",
     }),
   );
+});
+
+/** Makes an app directory that holds an entry, and `inca.json` when `config` is given. */
+async function appWithEntry(config?: object): Promise<{ app: string; entry: string }> {
+  const app = await scratch.makeApp({});
+  const entry = path.join(app, "bundle.js");
+  await writeFile(entry, "");
+  if (config) await writeFile(path.join(app, "inca.json"), JSON.stringify(config));
+  return { app, entry };
+}
+
+const WIDTH_FAULT =
+  'failed to read {file}: ["window","width"]: ' +
+  "invalid value: -100, expected a finite number above zero\n";
+
+it("checkConfig passes an entry the host accepts", async () => {
+  const { entry } = await appWithEntry({});
+
+  expect(() => checkConfig(hostBin, entry)).not.toThrow();
+});
+
+it("checkConfig throws the setting the host cannot use", async () => {
+  hostAnswers("1", WIDTH_FAULT);
+  const { entry } = await appWithEntry({ window: { width: -100 } });
+
+  expect(() => checkConfig(hostBin, entry)).toThrow(
+    expect.objectContaining({
+      code: "ERR_INCA_CONFIG_INVALID",
+      message: "window.width in inca.config.ts is -100. the host can't use it",
+    }),
+  );
+});
+
+it("checkConfig reads an empty config when no inca.json is beside the entry", async () => {
+  const { entry } = await appWithEntry();
+
+  expect(() => checkConfig(hostBin, entry)).not.toThrow();
+});
+
+it("checkConfig reports a corrupt inca.json as the host's report", async () => {
+  hostAnswers("1", "failed to read {file}: []: expected ident at line 1 column 2\n");
+  const { app, entry } = await appWithEntry();
+  const file = path.join(app, "inca.json");
+  await writeFile(file, "not json");
+
+  expect(() => checkConfig(hostBin, entry)).toThrow(
+    expect.objectContaining({
+      code: "ERR_INCA_CONFIG_INVALID",
+      message:
+        `the host can't read ${file}. ` +
+        `it reported "failed to read ${file}: []: expected ident at line 1 column 2"`,
+    }),
+  );
+});
+
+it.each([
+  ["not_found", () => vi.stubEnv("INCA_HOST_BIN", "/nonexistent/inca-host")],
+  [
+    "unresolved",
+    () =>
+      mockedResolveHostBin.mockImplementationOnce(() => {
+        throw new IncaError("ERR_INCA_HOST_BIN_UNRESOLVED", "no host binary found");
+      }),
+  ],
+])("lets checkBuiltConfig skip the check without a host binary (%s)", async (_, arrange) => {
+  arrange();
+  onTestFinished(() => void vi.unstubAllEnvs());
+  const { entry } = await appWithEntry({});
+  const stderr = makeSink();
+
+  checkBuiltConfig(entry, stderr.stream);
+
+  expect(stderr.text()).toContain("no host binary found, so the config was not checked");
+});
+
+it("checkBuiltConfig checks with the host it finds", async () => {
+  vi.stubEnv("INCA_HOST_BIN", hostBin);
+  hostAnswers("1", WIDTH_FAULT);
+  const { entry } = await appWithEntry({ window: { width: -100 } });
+
+  expect(() => checkBuiltConfig(entry, makeSink().stream)).toThrow(
+    expect.objectContaining({ code: "ERR_INCA_CONFIG_INVALID" }),
+  );
+});
+
+it("checkBuiltConfig rethrows another error", async () => {
+  mockedResolveHostBin.mockImplementationOnce(() => {
+    throw new Error("unexpected");
+  });
+  const { entry } = await appWithEntry({});
+
+  expect(() => checkBuiltConfig(entry, makeSink().stream)).toThrow("unexpected");
 });

@@ -18,13 +18,15 @@ vi.mock("./package.mts", () => ({
 }));
 vi.mock("./printConfig.mts", () => ({
   printConfig: vi.fn<(options?: PrintConfigOptions) => Promise<number>>(),
+  checkBuiltConfig: vi.fn<(entry: string, stderr: NodeJS.WritableStream) => void>(),
 }));
 
 import { build } from "./build.mts";
 import { run } from "./cli.mts";
 import { dev } from "./dev.mts";
+import { IncaError } from "./error.mts";
 import { packageApp } from "./package.mts";
-import { printConfig } from "./printConfig.mts";
+import { checkBuiltConfig, printConfig } from "./printConfig.mts";
 import type { BuildAppOptions } from "./build.mts";
 import type { DevOptions } from "./dev.mts";
 import type { PackageAppOptions, PackageResult } from "./package.mts";
@@ -35,6 +37,7 @@ const mockedDev = vi.mocked(dev);
 const mockedBuild = vi.mocked(build);
 const mockedPackageApp = vi.mocked(packageApp);
 const mockedPrintConfig = vi.mocked(printConfig);
+const mockedCheckBuiltConfig = vi.mocked(checkBuiltConfig);
 
 let stdout: MockInstance;
 let stderr: MockInstance;
@@ -70,6 +73,7 @@ afterEach(() => {
   mockedBuild.mockClear();
   mockedPackageApp.mockClear();
   mockedPrintConfig.mockClear();
+  mockedCheckBuiltConfig.mockReset();
   process.removeAllListeners("SIGINT");
   process.removeAllListeners("SIGTERM");
   process.exitCode = undefined;
@@ -139,6 +143,34 @@ describe("run", () => {
 
     expect(process.exitCode).toBe(1);
     expect(written(stderr)).toContain("[inca] build failed: syntax error");
+  });
+
+  it("checks the config of the built entry", async () => {
+    mockedBuild.mockResolvedValue({
+      outDir: "/app/dist",
+      entryFile: "/app/dist/bundle.js",
+      files: ["bundle.js"],
+    });
+
+    await run(["node", "inca", "build"]);
+
+    expect(mockedCheckBuiltConfig).toHaveBeenCalledWith("/app/dist/bundle.js", process.stderr);
+  });
+
+  it("fails build when the config check throws", async () => {
+    mockedBuild.mockResolvedValue({
+      outDir: "/app/dist",
+      entryFile: "/app/dist/bundle.js",
+      files: ["bundle.js"],
+    });
+    mockedCheckBuiltConfig.mockImplementation(() => {
+      throw new IncaError("ERR_INCA_CONFIG_INVALID", "window.width in inca.config.ts is -100");
+    });
+
+    await run(["node", "inca", "build"]);
+
+    expect(process.exitCode).toBe(1);
+    expect(written(stderr)).toContain("build failed (ERR_INCA_CONFIG_INVALID)");
   });
 
   it("runs package and leaves the exit code untouched on success", async () => {

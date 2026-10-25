@@ -7,6 +7,7 @@
 // so a test can confirm a payload sent to the app makes it back through
 // `HostClient`'s `integrations`.
 
+import "./answerPrintConfig.mts";
 import readline from "node:readline";
 
 process.stdout.write(

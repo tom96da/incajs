@@ -6,6 +6,7 @@
 // finishes before it can be tested without a real slow-starting host.
 // With `MOCK_HOST_READY_GATE` set to a file path, `ready` lands once that file exists.
 
+import "./answerPrintConfig.mts";
 import { existsSync } from "node:fs";
 import readline from "node:readline";
 

@@ -54,6 +54,35 @@ describe("dev", () => {
     expect(stdout.text()).toContain("[inca] ready");
   });
 
+  it("fails before the host starts when the host cannot use a setting", async () => {
+    vi.stubEnv(
+      "MOCK_HOST_CONFIG_FAULT",
+      'failed to read {file}: ["window","width"]: ' +
+        "invalid value: -100, expected a finite number above zero\n",
+    );
+    onTestFinished(() => void vi.unstubAllEnvs());
+    const bundler = makeFakeBundler();
+    const stdout = makeSink();
+
+    const running = dev({
+      cwd: await scratch.makeApp({}),
+      entry: "unused",
+      bundler,
+      hostBin: mockHost,
+      stdout: stdout.stream,
+      stderr: makeSink().stream,
+      signal: new AbortController().signal,
+    });
+    await bundler.watching;
+    bundler.emitBuild();
+
+    await expect(running).rejects.toThrow(
+      expect.objectContaining({ code: "ERR_INCA_CONFIG_INVALID" }),
+    );
+    expect(stdout.text()).not.toContain("ready");
+    expect(bundler.closed).toBe(true);
+  });
+
   it("passes src as the root of the entry synthesized for App.vue to the bundler", async () => {
     const bundler = makeFakeBundler();
     const watch = vi.spyOn(bundler, "watch");

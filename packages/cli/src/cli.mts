@@ -11,7 +11,7 @@ import { build } from "./build.mts";
 import { dev } from "./dev.mts";
 import { log, printFault, toFault, warn } from "./log.mts";
 import { packageApp } from "./package.mts";
-import { printConfig } from "./printConfig.mts";
+import { checkBuiltConfig, printConfig } from "./printConfig.mts";
 
 /** Formats a path relative to the working directory, the way the bundler reports its own. */
 function relative(target: string): string {
@@ -43,6 +43,7 @@ const buildCommand = defineCommand({
   async run({ args }) {
     try {
       const output = await build({ sourcemap: args.sourcemap });
+      checkBuiltConfig(output.entryFile, process.stderr);
       log(process.stdout, `built ${relative(output.entryFile)}`);
     } catch (error) {
       printFault(process.stderr, "build failed", toFault(error));

@@ -5,6 +5,7 @@
 // A stand-in for `inca-host --dev` that reports the color variables it was
 // started with on stderr, as `env NO_COLOR=<json> FORCE_COLOR=<json>` (`null` when unset).
 
+import "./answerPrintConfig.mts";
 import readline from "node:readline";
 
 process.stdout.write(

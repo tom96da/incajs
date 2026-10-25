@@ -20,6 +20,7 @@ import { entryRoot, resolveEntry, selectEntry } from "./entry.mts";
 import { IncaError } from "./error.mts";
 import { STAMPED, log, printFault, toFault } from "./log.mts";
 import { writeMacosApp } from "./macosApp.mts";
+import { checkConfig } from "./printConfig.mts";
 import { retryOnEdit } from "./retryOnEdit.mts";
 import { watchForEdit } from "./watchForEdit.mts";
 import type { ResolvedAppConfig } from "./config/loader.mts";
@@ -233,6 +234,8 @@ export async function dev(options: DevOptions): Promise<void> {
     const hostBin = (await bundleExecutable(cwd, metadata, bin, stdout)) ?? bin;
 
     let client: HostClient | undefined;
+    // The config the host refused, thrown once the session has closed.
+    let configFault: unknown;
     let ready = false;
     let pendingReload = false;
     let exitedEarly = false;
@@ -268,6 +271,17 @@ export async function dev(options: DevOptions): Promise<void> {
       entryFile: string,
       integrations?: Record<string, (params: unknown) => void>,
     ): Promise<void> {
+      try {
+        checkConfig(hostBin, entryFile);
+      } catch (error) {
+        if (error instanceof IncaError && error.code === "ERR_INCA_CONFIG_INVALID") {
+          configFault = error;
+          stop();
+        } else {
+          printFault(stderr, "failed to start the host", toFault(error), STAMPED);
+        }
+        return;
+      }
       const next = new HostClient({
         entryFile,
         hostBin,
@@ -486,6 +500,7 @@ export async function dev(options: DevOptions): Promise<void> {
     await queue;
     await client?.stop();
     if (monitorFailure) throw monitorFailure.error;
+    if (configFault) throw configFault;
     if (exitedEarly) {
       throw new IncaError("ERR_INCA_HOST_EXITED_EARLY", "the host exited before it was ready");
     }

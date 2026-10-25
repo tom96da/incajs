@@ -1,6 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import { existsSync } from "node:fs";
 import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -91,6 +92,25 @@ describe("packageApp", () => {
     });
 
     expect(seen?.runtimeConfig).not.toHaveProperty("dev");
+  });
+
+  it("refuses a config the host cannot read before laying out the app", async () => {
+    const app = await makeApp({ name: "click_counter" });
+    const hostBin = path.join(app, "inca-host");
+    await writeFile(hostBin, "#!/bin/sh\necho 'failed to read x: permission denied' >&2\nexit 1\n");
+    await chmod(hostBin, 0o755);
+
+    await expect(
+      packageApp({
+        cwd: app,
+        entry: "unused",
+        bundler: fakeBundler(),
+        hostBin,
+        target: "linux",
+        stdout: makeSink().stream,
+      }),
+    ).rejects.toThrow(expect.objectContaining({ code: "ERR_INCA_CONFIG_INVALID" }));
+    expect(existsSync(path.join(app, "dist/click_counter"))).toBe(false);
   });
 
   it("lays out a macOS .app with the host, bundle and Info.plist", async () => {

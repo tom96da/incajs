@@ -150,19 +150,6 @@ A fixed entry is deleted and its ID is never reused.
   never auto-resizes. Those text nodes are also real flex children, so
   `gap` adds space around every `v-for`.
 
-- **B-050 Only `inca config` reports a config value the host cannot use**
-  `Units: cli,host · Size: M · Impact: Medium`
-
-  A wrongly typed field (`width: "800"`) makes the host print one
-  `ignoring <file>: <cause>` line and open with the defaults for the whole
-  file (name, identifier and title too). A value of the right type that no
-  window can use (`width: -100`) is dropped quietly by `usable()`.
-
-  Fix: have the other commands report what `--print-config` reports: under
-  `inca dev` a dev protocol message or the stderr line in the
-  `--print-config` form; for `inca build` and `inca package` a run of
-  `--print-config` on the output.
-
 - **B-053 `focus`/`blur` listeners that call `focusNode` may not take effect**
   `Units: bridge,host · Size: S–M · Impact: Medium`
 

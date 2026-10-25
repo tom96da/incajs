@@ -6,6 +6,8 @@
 // host does when its window is closed or it crashes. `MOCK_HOST_EXIT` picks
 // the exit code, or a signal name to die from.
 
+import "./answerPrintConfig.mts";
+
 process.stdout.write(
   `${JSON.stringify({ jsonrpc: "2.0", method: "ready", params: { protocol: 0 } })}\n`,
 );
