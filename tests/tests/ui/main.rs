@@ -15,6 +15,7 @@ mod geometry;
 mod handler_property;
 mod handlers;
 mod id_attribute;
+mod input;
 mod keyboard;
 mod layout;
 mod lists;
