@@ -39,30 +39,46 @@ export type ScrollAlignment = "start" | "center" | "end" | "nearest";
 export type Overflow = "visible" | "hidden" | "clip" | "scroll" | "auto";
 
 /**
- * Style properties, in their snake_case spelling, that `setStyle`'s typed
- * overload checks. A deliberately incomplete, v1 layout/paint vocabulary. The
- * renderer also reads the camelCase and kebab-case spellings. An unrecognized
- * key or a value shape that doesn't parse (e.g. a malformed enum string) is
- * ignored by the renderer, and the host prints a warning line on stderr for
- * it (an empty string `''` prints none).
+ * A size in px: a number, `"0"` or a string such as `"10px"`. A string that reads as zero
+ * (`"0.0"`, `"-0"`) is also valid, and the unit is case-insensitive. The host warns on a space
+ * before `px`, a trailing `.` and hexadecimal, binary and octal, which the type admits.
+ */
+export type Px = number | "0" | `${number}px`;
+
+/**
+ * Style properties that `setStyle`'s typed overload checks. A deliberately
+ * incomplete, v1 layout/paint vocabulary. Keys are written in the host's
+ * snake_case spelling; `color`, `backgroundColor`, `borderRadius` and
+ * `fontSize` are the CSS names of `text_color`, `background`, `corner_radius`
+ * and `text_size`. The renderer also reads the camelCase and kebab-case
+ * spellings of each key. An unrecognized key or a value shape that doesn't
+ * parse (e.g. a malformed enum string) is ignored by the renderer, and the
+ * host prints a warning line on stderr for it (an empty string `''` prints
+ * none).
  */
 export interface StyleProps {
   /** Layout mode for this node's children. `"none"` skips both layout and rendering for the whole subtree. */
   display?: "flex" | "block" | "grid" | "none";
   /** Main-axis direction for a `"flex"` container. */
-  flex_direction?: "row" | "column" | "row_reverse" | "column_reverse";
+  flex_direction?:
+    | "row"
+    | "column"
+    | "row_reverse"
+    | "column_reverse"
+    | "row-reverse"
+    | "column-reverse";
   /** Main-axis alignment of children within this container. */
-  justify_content?: "start" | "end" | "center" | "stretch";
+  justify_content?: "start" | "end" | "flex-start" | "flex-end" | "center" | "stretch";
   /** Cross-axis alignment of children within this container. */
-  align_items?: "start" | "end" | "center" | "stretch";
+  align_items?: "start" | "end" | "flex-start" | "flex-end" | "center" | "stretch";
   /** Uniform spacing, in px (`>= 0`), between children, applied on both axes. */
-  gap?: number;
+  gap?: Px;
   /** Fixed width in px (`>= 0`), or `"auto"` to size to content. */
-  width?: number | "auto";
+  width?: Px | "auto";
   /** Fixed height in px (`>= 0`), or `"auto"` to size to content. */
-  height?: number | "auto";
+  height?: Px | "auto";
   /** Uniform border width in px (`>= 0`), applied to all four sides. */
-  border_width?: number;
+  border_width?: Px;
   /** Fill color, as a hex number (`0xRRGGBB`) or a CSS-style string (`"#rrggbb"`/`"#rgb"`). */
   background?: number | string;
   /** Border color. Accepts the same formats as {@link StyleProps.background}. */
@@ -70,9 +86,17 @@ export interface StyleProps {
   /** Color for this container's own text. Cascades to descendant text leaves, same as {@link StyleProps.text_size}; there's no separate per-leaf text styling. */
   text_color?: number | string;
   /** Uniform corner radius in px (`>= 0`), applied to all four corners. */
-  corner_radius?: number;
+  corner_radius?: Px;
   /** Font size in px (`>= 0`) for this container's own text. Cascades to descendant text leaves, same as {@link StyleProps.text_color}. */
-  text_size?: number;
+  text_size?: Px;
+  /** Same as {@link StyleProps.background}. */
+  backgroundColor?: number | string;
+  /** Same as {@link StyleProps.corner_radius}. */
+  borderRadius?: Px;
+  /** Same as {@link StyleProps.text_color}. */
+  color?: number | string;
+  /** Same as {@link StyleProps.text_size}. */
+  fontSize?: Px;
   /** Overflow on both axes, or `"<x> <y>"` per axis; `"scroll"` (alias `"auto"`) makes the container scroll with the wheel. Overridden per axis by {@link StyleProps.overflow_x}/{@link StyleProps.overflow_y}. */
   overflow?: Overflow | `${Overflow} ${Overflow}`;
   /** Horizontal overflow; wins over {@link StyleProps.overflow}. */
@@ -80,47 +104,56 @@ export interface StyleProps {
   /** Vertical overflow; wins over {@link StyleProps.overflow}. */
   overflow_y?: Overflow;
   /** Inner spacing in px (`>= 0`) on all four sides. Overridden per axis by {@link StyleProps.padding_x}/{@link StyleProps.padding_y} and per side by the `padding_*` side keys. */
-  padding?: number;
+  padding?: Px;
   /** Horizontal inner spacing in px (`>= 0`); wins over {@link StyleProps.padding}. */
-  padding_x?: number;
+  padding_x?: Px;
   /** Vertical inner spacing in px (`>= 0`); wins over {@link StyleProps.padding}. */
-  padding_y?: number;
+  padding_y?: Px;
   /** Top inner spacing in px (`>= 0`); wins over {@link StyleProps.padding_y}. */
-  padding_top?: number;
+  padding_top?: Px;
   /** Right inner spacing in px (`>= 0`); wins over {@link StyleProps.padding_x}. */
-  padding_right?: number;
+  padding_right?: Px;
   /** Bottom inner spacing in px (`>= 0`); wins over {@link StyleProps.padding_y}. */
-  padding_bottom?: number;
+  padding_bottom?: Px;
   /** Left inner spacing in px (`>= 0`); wins over {@link StyleProps.padding_x}. */
-  padding_left?: number;
+  padding_left?: Px;
   /** Outer spacing in px (negative allowed) or `"auto"` on all four sides. Overridden per axis by {@link StyleProps.margin_x}/{@link StyleProps.margin_y} and per side by the `margin_*` side keys. */
-  margin?: number | "auto";
+  margin?: Px | "auto";
   /** Horizontal outer spacing; wins over {@link StyleProps.margin}. */
-  margin_x?: number | "auto";
+  margin_x?: Px | "auto";
   /** Vertical outer spacing; wins over {@link StyleProps.margin}. */
-  margin_y?: number | "auto";
+  margin_y?: Px | "auto";
   /** Top outer spacing; wins over {@link StyleProps.margin_y}. */
-  margin_top?: number | "auto";
+  margin_top?: Px | "auto";
   /** Right outer spacing; wins over {@link StyleProps.margin_x}. */
-  margin_right?: number | "auto";
+  margin_right?: Px | "auto";
   /** Bottom outer spacing; wins over {@link StyleProps.margin_y}. */
-  margin_bottom?: number | "auto";
+  margin_bottom?: Px | "auto";
   /** Left outer spacing; wins over {@link StyleProps.margin_x}. */
-  margin_left?: number | "auto";
-  /** Share (`>= 0`) of the free space in the parent's main axis this node takes. */
-  flex_grow?: number;
-  /** Share (`>= 0`) of the overflow in the parent's main axis this node gives up. */
-  flex_shrink?: number;
-  /** Opacity from `0` to `1`, applied to this node and its descendants; values outside are clamped. */
-  opacity?: number;
+  margin_left?: Px | "auto";
+  /**
+   * Share (`>= 0`) of the free space in the parent's main axis this node takes.
+   * The host warns on a trailing `.`, hexadecimal, binary and octal, which the type admits.
+   */
+  flex_grow?: number | `${number}`;
+  /**
+   * Share (`>= 0`) of the overflow in the parent's main axis this node gives up.
+   * The host warns on a trailing `.`, hexadecimal, binary and octal, which the type admits.
+   */
+  flex_shrink?: number | `${number}`;
+  /**
+   * Opacity from `0` to `1`, applied to this node and its descendants; values outside are clamped.
+   * The host warns on a trailing `.`, hexadecimal, binary and octal, which the type admits.
+   */
+  opacity?: number | `${number}`;
   /** Minimum width in px (`>= 0`), or `"auto"` for the default minimum. */
-  min_width?: number | "auto";
+  min_width?: Px | "auto";
   /** Minimum height in px (`>= 0`), or `"auto"` for the default minimum. */
-  min_height?: number | "auto";
+  min_height?: Px | "auto";
   /** Maximum width in px (`>= 0`), or `"auto"` for no limit. */
-  max_width?: number | "auto";
+  max_width?: Px | "auto";
   /** Maximum height in px (`>= 0`), or `"auto"` for no limit. */
-  max_height?: number | "auto";
+  max_height?: Px | "auto";
 }
 
 /**

@@ -311,9 +311,11 @@ const BOOLEAN_ATTRIBUTES = new Set([
  *   every remaining string/number entry.
  * - A string or `null` `style` removes every entry.
  * - A key takes any of three spellings: kebab-case (`flex-direction`),
- *   camelCase (`flexDirection`) or snake_case (`flex_direction`). If an
- *   object names one property in two spellings, the value set most recently
- *   applies.
+ *   camelCase (`flexDirection`) or snake_case (`flex_direction`). The CSS names
+ *   `color`, `backgroundColor`, `borderRadius` and `fontSize` are further
+ *   spellings of `text_color`, `background`, `corner_radius` and `text_size`.
+ *   If an object names one property more than once, the value set most
+ *   recently applies.
  *
  * ### `onXxx`
  *

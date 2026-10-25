@@ -184,16 +184,19 @@ export function removeAttribute(nodeId: NodeId, key: string): void {
 }
 
 /**
- * Sets a style property on `nodeId`. A snake_case key from {@link StyleProps}
- * gets compile-time checking on its value's shape. Any other string key, such
- * as a camelCase or kebab-case spelling or a property the types do not list,
+ * Sets a style property on `nodeId`. A key from {@link StyleProps} gets
+ * compile-time checking on its value's shape. Any other string key, such as a
+ * camelCase or kebab-case spelling or a property the types do not list,
  * forwards as a raw {@link AttributeValue}.
  *
  * A key takes any of three spellings: kebab-case (`flex-direction`),
- * camelCase (`flexDirection`) or snake_case (`flex_direction`). All three
- * name the same property, and the value set most recently applies.
+ * camelCase (`flexDirection`) or snake_case (`flex_direction`). The CSS names
+ * `color`, `backgroundColor`, `borderRadius` and `fontSize` name the same
+ * properties as `text_color`, `background`, `corner_radius` and `text_size`.
+ * All of these share one slot per property, and the value set most recently
+ * applies.
  * @param nodeId - the node to update
- * @param key - the style property name in any of the three spellings
+ * @param key - the style property name in any of the three spellings, or a CSS name
  * @param value - the style property value
  */
 export function setStyle<K extends keyof StyleProps>(
@@ -208,11 +211,11 @@ export function setStyle(nodeId: NodeId, key: string, value: AttributeValue): vo
 
 /**
  * Removes a style property from `nodeId`, so it renders as if never set.
- * Removing a property that isn't set does nothing. The key takes any of the
- * three spellings {@link setStyle} accepts, and removes the property whichever
- * spelling set it.
+ * Removing a property that isn't set does nothing. The key takes any spelling
+ * or CSS name {@link setStyle} accepts, and removes the property whichever
+ * one set it.
  * @param nodeId - the node to update
- * @param key - the style property name in any of the three spellings
+ * @param key - the style property name in any of the three spellings, or a CSS name
  */
 export function removeStyle(nodeId: NodeId, key: string): void {
   native().removeStyle(nodeId, key);

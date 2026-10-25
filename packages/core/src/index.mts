@@ -30,6 +30,7 @@ export type {
   IncaWindow,
   ListenerOptions,
   NodeId,
+  Px,
   StyleProps,
   TagName,
 } from "./types.mts";
