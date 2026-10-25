@@ -181,20 +181,23 @@ A build writes `inca.json` beside the entry:
 {
   "name": "Demo",
   "identifier": "org.inca.demo",
-  "window": { "width": 1024, "height": 768, "title": "Demo" }
+  "window": { "width": 1024, "height": 768, "title": "Demo" },
+  "root": ".."
 }
 ```
 
 Every member is optional, and a build that has none of them writes no file.
 `name` is what the platform calls the running app, `identifier` its
 reverse-DNS id, and `window` the size, title, resizability and minimum size
-it opens at.
+it opens at. `root` is the app's root relative to the file's directory, and
+`dev.stackPaths` is how a stack names a file, `relative` from the root (the
+default) or `absolute`; only `inca dev` writes `dev`.
 
-The host reads it once, at startup, before opening the window. It reaches
-the file the same way whether a client spawned it or a person double-clicked
-a packaged app. A missing file reads as the defaults in silence. A file that
-cannot be read or parsed is named on the host's stderr and reads as the
-defaults too. `--print-config` refuses such a file with exit 1 and one stderr
-line, `failed to read <file>: <path>: <reason>`, where `<path>` is a JSON
-array of keys and indices (`[]` for the whole file); a client reads that
-line. An I/O failure has no path.
+The host reads it at startup, before opening the window, and `dev` and `root`
+again at each load of the bundle. It reaches the file the same way whether a
+client spawned it or a person double-clicked a packaged app. A missing file
+reads as the defaults in silence. A file that cannot be read or parsed is named
+on the host's stderr and reads as the defaults too. `--print-config` refuses
+such a file with exit 1 and one stderr line, `failed to read <file>: <path>:
+<reason>`, where `<path>` is a JSON array of keys and indices (`[]` for the
+whole file); a client reads that line. An I/O failure has no path.

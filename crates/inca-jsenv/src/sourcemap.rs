@@ -4,7 +4,9 @@
 //! Decodes source maps and rewrites the frames of a JS stack through them.
 
 use std::{
+    borrow::Cow,
     cell::OnceCell,
+    iter,
     ops::Range,
     path::{Component, Path, PathBuf},
     rc::Rc,
@@ -138,6 +140,53 @@ fn base64_digit(byte: u8) -> Option<u8> {
     }
 }
 
+/// How a stack names a file.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum StackPaths {
+    /// As the map or the engine gives it.
+    #[default]
+    Absolute,
+    /// From the root when the file lies under it, in full otherwise. `lexical` is the root as
+    /// written with `.` and `..` folded; `real` its canonical path, when it exists.
+    Relative {
+        lexical: PathBuf,
+        real: Option<PathBuf>,
+    },
+}
+
+impl StackPaths {
+    /// Names files from `root`.
+    #[must_use]
+    pub fn relative(root: &Path) -> Self {
+        Self::Relative {
+            lexical: fold(root),
+            real: root.canonicalize().ok(),
+        }
+    }
+
+    /// The name `path` takes in a stack. A path equal to the root shows as `.`. A `?query` rides
+    /// on the last component and stays.
+    fn show<'a>(&self, path: &'a str) -> Cow<'a, str> {
+        let Self::Relative { lexical, real } = self else {
+            return Cow::Borrowed(path);
+        };
+        let file = Path::new(path);
+        if !file.is_absolute() {
+            return Cow::Borrowed(path);
+        }
+        iter::once(lexical)
+            .chain(real)
+            .find_map(|root| file.strip_prefix(root).ok())
+            .map_or(Cow::Borrowed(path), |rest| {
+                if rest.as_os_str().is_empty() {
+                    Cow::Borrowed(".")
+                } else {
+                    rest.to_string_lossy()
+                }
+            })
+    }
+}
+
 const MARKER: &str = "//# sourceMappingURL=";
 
 /// The next unique id of a compiled function's filename query.
@@ -190,11 +239,14 @@ fn maps_or_insert<'a>(ctx: &'a Ctx<'_>) -> Option<impl std::ops::Deref<Target = 
     maps
 }
 
-/// Drops the map of `filename`, if any.
-fn forget(ctx: &Ctx<'_>, filename: &str) {
-    if let Some(maps) = ctx.userdata::<SourceMaps>() {
-        maps.0.borrow_mut().remove(filename);
-    }
+/// Sets how the runtime's stacks name a file. Call it before any registration.
+pub(crate) fn set_paths(ctx: &Ctx<'_>, paths: StackPaths) -> JsResult<()> {
+    ctx.store_userdata(SourceMaps {
+        paths,
+        ..SourceMaps::default()
+    })
+    .map(drop)
+    .map_err(|_| Error::Unknown)
 }
 
 /// Captures the map that the marker `url` of `source` names. A sidecar map file is read here,
@@ -212,20 +264,12 @@ fn capture(filename: &str, source: &str, url: &str) -> Option<RawMap> {
     })
 }
 
-/// Registers the generated `source` of a loader or engine module under `filename`. Registering the
-/// same filename again replaces its source and map. A sidecar map file is read here and the map is
-/// parsed on the first remap.
+/// Registers the generated `source` of a loader or engine module under `filename`, with or without
+/// a map. Registering the same filename again replaces its source and map. A sidecar map file is
+/// read here and the map is parsed on the first remap.
 pub(crate) fn register(ctx: &Ctx<'_>, filename: &str, source: &str) {
-    let Some(raw) = marker_url(source).and_then(|url| capture(filename, source, url)) else {
-        return forget(ctx, filename);
-    };
-    insert(
-        ctx,
-        filename.to_owned(),
-        filename.to_owned(),
-        source,
-        Some(raw),
-    );
+    let raw = marker_url(source).and_then(|url| capture(filename, source, url));
+    insert(ctx, filename.to_owned(), filename.to_owned(), source, raw);
 }
 
 fn insert(ctx: &Ctx<'_>, key: String, display: String, source: &str, raw: Option<RawMap>) {
@@ -236,7 +280,7 @@ fn insert(ctx: &Ctx<'_>, key: String, display: String, source: &str, raw: Option
             raw,
             parsed: OnceCell::new(),
         };
-        maps.0.borrow_mut().insert(key, Rc::new(entry));
+        maps.entries.borrow_mut().insert(key, Rc::new(entry));
     }
 }
 
@@ -259,7 +303,7 @@ fn next_compile_id(counter: &AtomicU64) -> JsResult<u64> {
 pub(crate) fn register_compile(ctx: &Ctx<'_>, filename: &str, source: &str) -> JsResult<String> {
     let taken = ctx
         .userdata::<SourceMaps>()
-        .is_some_and(|maps| maps.0.borrow().contains_key(filename));
+        .is_some_and(|maps| maps.entries.borrow().contains_key(filename));
     let key = if taken {
         let id = next_compile_id(&NEXT_COMPILE_ID)?;
         match filename.split_once('?') {
@@ -276,8 +320,9 @@ pub(crate) fn register_compile(ctx: &Ctx<'_>, filename: &str, source: &str) -> J
 
 /// Rewrites every `at NAME (FILE:LINE:COLUMN)` and `at FILE:LINE:COLUMN`
 /// frame of `stack` whose FILE is registered. A frame that its map covers names the original
-/// file, line and column. A frame of a compile that its map does not cover names the requested
-/// file with the generated line and column. Every other line is returned unchanged.
+/// file, line and column. A frame that its map does not cover names the registered
+/// file with the generated line and column. A frame names its file as the engine's [`StackPaths`]
+/// says. Every other line is returned unchanged.
 pub(crate) fn remap_stack(ctx: &Ctx<'_>, stack: &str) -> String {
     let Some(maps) = ctx.userdata::<SourceMaps>() else {
         return stack.to_owned();
@@ -312,14 +357,15 @@ fn remap_frame(maps: &SourceMaps, line: &str) -> Option<String> {
         .chain([start])
         .find_map(|split| {
             let (prefix, file) = head.split_at(split);
-            let entry = maps.0.borrow().get(file).map(Rc::clone)?;
+            let entry = maps.entries.borrow().get(file).map(Rc::clone)?;
             Some((prefix, entry))
         })?;
 
     let Some((file, line, col)) = original_position(&entry, row, column) else {
-        let display = &entry.display;
+        let display = maps.paths.show(&entry.display);
         return Some(format!("{prefix}{display}:{row}:{column}{close}"));
     };
+    let file = maps.paths.show(file);
     Some(format!("{prefix}{file}:{line}:{col}{close}"))
 }
 

@@ -9,6 +9,8 @@ use rquickjs::{Function, Promise};
 use rstest::rstest;
 use std::cell::RefCell;
 
+mod paths;
+
 fn sp(source: u32, line: u32, column: u32) -> SourcePos {
     SourcePos {
         source,
@@ -561,28 +563,32 @@ fn a_sidecar_source_root_resolves_against_the_sidecar_directory() {
 }
 
 #[test]
-fn an_unreadable_sidecar_stores_no_entry() {
+fn an_unreadable_sidecar_stores_an_entry_without_a_map() {
     let src = "h\nabc\n//# sourceMappingURL=x.js.map";
-    let stored = with_realm(|ctx| {
+    let entry = with_realm(|ctx| {
         register(&ctx, "/nonexistent-inca/x.js", src);
-        ctx.userdata::<SourceMaps>()
-            .is_some_and(|maps| maps.0.borrow().contains_key("/nonexistent-inca/x.js"))
+        ctx.userdata::<SourceMaps>().and_then(|maps| {
+            maps.entries
+                .borrow()
+                .get("/nonexistent-inca/x.js")
+                .map(Rc::clone)
+        })
     });
-    assert!(!stored);
+    assert!(entry.is_some_and(|entry| entry.raw.is_none()));
 }
 
 #[test]
-fn a_sidecar_for_a_filename_without_a_directory_stores_no_entry() {
+fn a_sidecar_for_a_filename_without_a_directory_stores_no_map() {
     let dir = ScratchDir::new("rootless");
     let json = map_json(3, ";AAAA", r#"["o.ts"]"#, None);
     std::fs::write(dir.join("b.js.map"), json).unwrap();
     let src = format!("h\nabc\n//# sourceMappingURL={}/b.js.map", dir.display());
-    let stored = with_realm(|ctx| {
+    let entry = with_realm(|ctx| {
         register(&ctx, "/", &src);
         ctx.userdata::<SourceMaps>()
-            .is_some_and(|maps| maps.0.borrow().contains_key("/"))
+            .and_then(|maps| maps.entries.borrow().get("/").map(Rc::clone))
     });
-    assert!(!stored);
+    assert!(entry.is_some_and(|entry| entry.raw.is_none()));
 }
 
 #[test]

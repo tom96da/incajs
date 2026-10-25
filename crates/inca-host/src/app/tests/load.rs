@@ -131,6 +131,22 @@ fn a_bundle_that_throws_yields_nothing() {
     );
 }
 
+#[test]
+fn a_thrown_error_names_the_bundle_from_the_app_root() {
+    let dir = crate::tests::ScratchDir::new("root-relative");
+    std::fs::create_dir_all(dir.join("app/dist")).unwrap();
+    std::fs::write(dir.join("app/dist/inca.json"), r#"{"root":".."}"#).unwrap();
+    let entry = dir.join("app/dist/bundle.js");
+    let entry_path = entry.to_str().unwrap();
+
+    let err = Session::load(entry_path, "throw new Error('boom');", stderr_reporter())
+        .err()
+        .unwrap();
+
+    let stack = err.stack().unwrap();
+    assert!(stack.contains("(dist/bundle.js:"), "{stack}");
+}
+
 struct ClosingWriter(Rc<Cell<bool>>);
 
 impl Writer for ClosingWriter {

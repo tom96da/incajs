@@ -147,7 +147,11 @@ impl Session {
         let signal = Rc::new(LoadSignal::default());
 
         let module_root = Path::new(entry_path).parent().unwrap_or(Path::new("."));
-        let engine = Engine::builder().module_root(module_root).build()?;
+        let config = config::try_read(Path::new(entry_path)).unwrap_or_default();
+        let engine = Engine::builder()
+            .module_root(module_root)
+            .stack_paths(config::stack_paths(&config, Path::new(entry_path)))
+            .build()?;
         engine.with(|ctx| {
             console::install(&ctx, &to_stderr(), color_from_env())
                 .and_then(|()| install(&ctx, &host))

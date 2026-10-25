@@ -8,6 +8,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use gpui::{Pixels, Size, px, size};
+use inca_jsenv::StackPaths;
 use serde::{Deserialize, Serialize};
 use serde_path_to_error::Segment;
 
@@ -26,6 +27,10 @@ pub struct AppConfig {
     pub identifier: Option<String>,
     /// The window the app opens in.
     pub window: Option<WindowConfig>,
+    /// What only the development window applies.
+    pub dev: Option<DevConfig>,
+    /// The app's root, relative to the directory of this file.
+    pub root: Option<String>,
 }
 
 /// What an app declares about its window.
@@ -44,6 +49,24 @@ pub struct WindowConfig {
     pub min_width: Option<f32>,
     /// Smallest height the window can be, in pixels. It opens at least this tall.
     pub min_height: Option<f32>,
+}
+
+/// What an app declares for the development window.
+#[derive(Debug, Default, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct DevConfig {
+    /// How a stack names a file.
+    pub stack_paths: Option<StackPathStyle>,
+}
+
+/// How a stack names a file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum StackPathStyle {
+    /// From the app's root when the file lies under it.
+    Relative,
+    /// In full.
+    Absolute,
 }
 
 /// Why the config beside an entry cannot be used.
@@ -206,6 +229,17 @@ pub(crate) fn window_size(
     )
 }
 
+/// How the engine of the app at `entry_path` names the files of a stack. Without a root, or when
+/// the config asks for it, a file is named in full.
+pub(crate) fn stack_paths(config: &AppConfig, entry_path: &Path) -> StackPaths {
+    let style = config.dev.as_ref().and_then(|dev| dev.stack_paths);
+    let (Some(root), Some(StackPathStyle::Relative) | None) = (&config.root, style) else {
+        return StackPaths::Absolute;
+    };
+    let dir = entry_path.parent().unwrap_or(Path::new("."));
+    StackPaths::relative(&dir.join(root))
+}
+
 /// The settings the host applies for `config`, as pretty-printed JSON. A
 /// `null` marks a value the config leaves to the host's own choice: the
 /// app's root element sizes the window, and an unset limit stays open.
@@ -221,6 +255,12 @@ pub(crate) fn effective_config(config: &AppConfig) -> String {
             "resizable": is_resizable(window),
             "minWidth": usable(window.and_then(|w| w.min_width)),
             "minHeight": usable(window.and_then(|w| w.min_height)),
+        },
+        "dev": {
+            "stackPaths": match config.dev.as_ref().and_then(|dev| dev.stack_paths) {
+                Some(StackPathStyle::Absolute) => "absolute",
+                _ => "relative",
+            },
         },
     });
     format!("{effective:#}")
@@ -263,7 +303,8 @@ mod tests {
                 r#"
                 {"name":"Demo","identifier":"org.inca.demo",
                 "window":{"width":1024,"height":768,"title":"Demo Window",
-                          "resizable":true,"minWidth":320,"minHeight":240}}
+                          "resizable":true,"minWidth":320,"minHeight":240},
+                "dev":{"stackPaths":"absolute"},"root":".."}
                 "#,
             ),
         );
@@ -279,6 +320,11 @@ mod tests {
         assert_eq!(window.resizable, Some(true));
         assert_eq!(window.min_width, Some(320.0));
         assert_eq!(window.min_height, Some(240.0));
+        assert_eq!(
+            config.dev.unwrap().stack_paths,
+            Some(StackPathStyle::Absolute)
+        );
+        assert_eq!(config.root.as_deref(), Some(".."));
     }
 
     #[test]
@@ -490,6 +536,7 @@ mod tests {
                     "minWidth": null,
                     "minHeight": null,
                 },
+                "dev": { "stackPaths": "relative" },
             })
         );
     }
@@ -501,7 +548,8 @@ mod tests {
                 r#"
                 {"name":"Demo","identifier":"org.inca.demo",
                 "window":{"width":1024,"height":768,"title":"Window",
-                          "resizable":true,"minWidth":320,"minHeight":240}}
+                          "resizable":true,"minWidth":320,"minHeight":240},
+                "dev":{"stackPaths":"absolute"}}
                 "#
             ),
             serde_json::json!({
@@ -515,8 +563,49 @@ mod tests {
                     "minWidth": 320.0,
                     "minHeight": 240.0,
                 },
+                "dev": { "stackPaths": "absolute" },
             })
         );
+    }
+
+    #[rstest]
+    #[case::relative_with_root(
+        r#"{"dev":{"stackPaths":"relative"},"root":".."}"#,
+        StackPaths::relative(&Path::new("/app/dist").join(".."))
+    )]
+    #[case::absolute_with_root(
+        r#"{"dev":{"stackPaths":"absolute"},"root":".."}"#,
+        StackPaths::Absolute
+    )]
+    #[case::unset_style_with_root(
+        r#"{"dev":{},"root":".."}"#,
+        StackPaths::relative(&Path::new("/app/dist").join(".."))
+    )]
+    #[case::no_dev_member_with_root(
+        r#"{"root":".."}"#,
+        StackPaths::relative(&Path::new("/app/dist").join(".."))
+    )]
+    #[case::no_root(r#"{"dev":{"stackPaths":"relative"}}"#, StackPaths::Absolute)]
+    #[case::missing_root_dir(
+        r#"{"root":"../gone"}"#,
+        StackPaths::Relative { lexical: PathBuf::from("/app/gone"), real: None }
+    )]
+    fn stack_paths_follows_the_config(#[case] json: &str, #[case] expected: StackPaths) {
+        let config: AppConfig = serde_json::from_str(json).unwrap();
+
+        assert_eq!(
+            stack_paths(&config, Path::new("/app/dist/bundle.js")),
+            expected
+        );
+    }
+
+    #[test]
+    fn a_stack_path_style_other_than_the_two_fails_to_parse() {
+        let app = app_dir("style", Some(r#"{"dev":{"stackPaths":"rel"}}"#));
+
+        let report = try_read(&entry(&app)).unwrap_err().report();
+
+        assert!(report.contains(r#"["dev","stackPaths"]"#), "{report}");
     }
 
     #[test]

@@ -17,7 +17,7 @@ use rquickjs::function::Rest;
 use rquickjs::{Coerced, Context, Ctx, FromJs, Function, Module, Object, Promise, Runtime, Value};
 
 use crate::loader::{DiskLoader, DiskResolver, canonical_name};
-use crate::sourcemap::remap_stack;
+use crate::sourcemap::{StackPaths, remap_stack};
 use crate::vault::{create_vault, vault};
 
 /// `Result<T, EngineError>`, what every fallible [`Engine`] method returns.
@@ -440,6 +440,7 @@ pub struct PendingModule {
 #[derive(Default)]
 pub struct EngineBuilder {
     module_roots: Vec<PathBuf>,
+    paths: StackPaths,
 }
 
 impl EngineBuilder {
@@ -454,6 +455,13 @@ impl EngineBuilder {
         self
     }
 
+    /// Sets how a stack names a file. Defaults to [`StackPaths::Absolute`].
+    #[must_use]
+    pub fn stack_paths(mut self, paths: StackPaths) -> Self {
+        self.paths = paths;
+        self
+    }
+
     /// Builds the configured [`Engine`].
     ///
     /// # Errors
@@ -465,7 +473,11 @@ impl EngineBuilder {
         if !self.module_roots.is_empty() {
             runtime.set_loader(DiskResolver::new(self.module_roots), DiskLoader);
         }
-        Engine::from_runtime(runtime)
+        let engine = Engine::from_runtime(runtime)?;
+        engine
+            .with(|ctx| crate::sourcemap::set_paths(&ctx, self.paths))
+            .map_err(|err| EngineError::plain(&err))?;
+        Ok(engine)
     }
 }
 

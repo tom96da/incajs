@@ -77,6 +77,17 @@ fn a_frame_of_a_compiled_function_reads_at_its_source() {
 }
 
 #[test]
+fn an_engine_without_stack_paths_names_files_in_full() {
+    let engine = Engine::new().unwrap();
+    let err = engine
+        .eval_module("/app/dist/probe.mjs", "throw new Error('x');")
+        .unwrap_err();
+
+    let stack = err.stack().unwrap();
+    assert!(stack.contains("/app/dist/probe.mjs:1:"), "{stack}");
+}
+
+#[test]
 fn a_frame_of_a_module_reads_through_its_sidecar_map() {
     let dir = ScratchDir::new("module-sidecar-map");
     fs::write(
