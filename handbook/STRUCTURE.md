@@ -36,7 +36,7 @@ incajs/
 │   ├── TESTING.md           # test placement and required checks, Rust + TypeScript
 │   ├── STYLE.md             # how code, comments and documentation are written, and what oxlint and oxfmt enforce
 │   ├── FAILURES.md          # what gets refused, what falls back, and where each is reported
-│   └── MANUAL_GUI_CHECK.md  # how to visually verify a GPUI window/example yourself
+│   └── MANUAL_GUI_CHECK.md  # how to open a GPUI window yourself and fix its start-up
 ├── .devcontainer/
 │   ├── devcontainer.json    # builds from ./Dockerfile, adds the `node` and `claude-code` features
 │   ├── Dockerfile           # extends the Rust devcontainer image with gpui's native build deps
