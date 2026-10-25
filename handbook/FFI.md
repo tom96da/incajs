@@ -301,9 +301,11 @@ with the node ids.
   `which`, and the focus, mouse and keyboard prototypes inherit from it.
   The pointer events, `click`, `auxclick` and `contextmenu` inherit from a
   pointer prototype and `wheel` from a wheel prototype, both children of the
-  mouse one. The mouse and keyboard prototypes hold their own
-  `getModifierState`. A field getter or `getModifierState` throws a
-  `TypeError` on an event of another kind.
+  mouse one. `beforeinput` and `input` inherit from an input prototype and the
+  composition events from a composition prototype, both children of the UI
+  one. The mouse and keyboard prototypes hold their own `getModifierState`.
+  A field getter or `getModifierState` throws a `TypeError` on an event of
+  another kind.
   Scroll events and events built with `new Event` inherit from
   `Event.prototype`, events built with `new CustomEvent` from
   `CustomEvent.prototype`, which holds the `detail` getter, and events built
@@ -529,17 +531,37 @@ with the node ids.
   stop, and Shift extends the selection. A move with the left button held
   extends it until the release. Tab into an input selects its text.
 - `readonly` and `disabled` stop edits. A `readonly` input still moves its
-  selection and copies.
+  selection and copies. With a running composition it applies a selection
+  only and leaves the composition open. A script that disables a composing
+  input ends it with `compositionend`, then `blur`.
+- An edit fires `beforeinput`, applies when no listener canceled it and the
+  listeners left the value and the node, then fires `input`. A `beforeinput`
+  of `insertCompositionText` is not cancelable (`flags_of`). Backspace or
+  Delete with nothing to delete, typing into a `readonly` input and Enter
+  fire `beforeinput` only. A paste's `beforeinput` carries the clipboard text
+  as read and its `input` the inserted text.
+- The first mark of a composition fires `compositionstart` with the selected
+  text. Each mark fires `compositionupdate`, `beforeinput` and `input`. A
+  commit fires the same, then `compositionend`. An empty mark or an unmark
+  ends the composition with `compositionend`. Key events carry `isComposing`
+  while the focused input composes.
+- `begin_frame` hands each focus transition to the inputs before its events.
+  A blurred input ends its composition, then fires `change` when the user
+  edited it since its focus or its last `change` and its value differs from
+  the value then. A focused input records its value. Enter and window
+  deactivation fire `change` the same way and move the recorded value; on
+  deactivation `change` comes before the node's `blur`. A script write is no
+  edit and leaves the recorded value.
 
 #### Dispatching from script
 
 - The global constructors `Event`, `CustomEvent`, `UIEvent`, `FocusEvent`,
-  `MouseEvent`, `PointerEvent`, `WheelEvent` and `KeyboardEvent`
-  (`event/construct.rs`, `CLASSES`) build instances of the same class with
-  the prototype of their kind, `isTrusted` false and `target` `null`. Each
-  needs `new`, a type, and an `init` that is an object, `null` or `undefined`.
-  Any other call throws a `TypeError`. Each constructor inherits from the
-  constructor of the parent prototype, and `CustomEvent.prototype` from
+  `MouseEvent`, `PointerEvent`, `WheelEvent`, `KeyboardEvent`, `InputEvent` and
+  `CompositionEvent` (`event/construct.rs`, `CLASSES`) build instances of the
+  same class with the prototype of their kind, `isTrusted` false and `target`
+  `null`. Each needs `new`, a type, and an `init` that is an object, `null` or
+  `undefined`. Any other call throws a `TypeError`. Each constructor inherits
+  from the constructor of the parent prototype, and `CustomEvent.prototype` from
   `Event.prototype`. The init members convert by their WebIDL type, and a
   non-finite coordinate, delta or size throws a `TypeError`.
 - `initEvent()` and `initCustomEvent()` do nothing while the event is
@@ -573,7 +595,10 @@ with the node ids.
 | `wheel` | mouse + `deltaX`, `deltaY`, `deltaZ`, `deltaMode` |
 | `scroll` | none; every flag is false |
 | `focus`, `blur`, `focusin`, `focusout` | `relatedTarget` |
-| `keydown`, `keyup` | `key`, `repeat`, modifier flags |
+| `keydown`, `keyup` | `key`, `repeat`, `isComposing`, modifier flags |
+| `beforeinput`, `input` | `data`, `inputType`, `isComposing` |
+| `change` | none |
+| `compositionstart`, `compositionupdate`, `compositionend` | `data` |
 
 `wheel` negates GPUI's `deltaX` and `deltaY`, `deltaZ` is 0 and `deltaMode` is
 0 or 1.

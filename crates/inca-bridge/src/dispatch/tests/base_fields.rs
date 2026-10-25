@@ -64,6 +64,12 @@ fn base_fields_follow_the_spec_rows_and_prevent_default_needs_cancelable(cx: &mu
         ("blur", false, false, true),
         ("focusin", true, false, true),
         ("focusout", true, false, true),
+        ("beforeinput", true, true, true),
+        ("input", true, false, true),
+        ("change", true, false, false),
+        ("compositionstart", true, true, true),
+        ("compositionupdate", true, true, true),
+        ("compositionend", true, true, true),
     ];
     assert_eq!(rows.len(), EVENTS.len(), "every EVENTS row has a test row");
     for (event, bubbles, cancelable, composed) in rows {

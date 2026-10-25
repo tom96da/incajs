@@ -67,6 +67,10 @@ const POINTER: &str = "pointer";
 const WHEEL: &str = "wheel";
 /// The kind of key events. Its prototype inherits from the [`UI`] one.
 const KEYBOARD: &str = "keyboard";
+/// The kind of `beforeinput` and `input`. Its prototype inherits from the [`UI`] one.
+const INPUT: &str = "input";
+/// The kind of the composition events. Its prototype inherits from the [`UI`] one.
+const COMPOSITION: &str = "composition";
 
 impl State {
     /// The state of an idle event.
@@ -130,6 +134,8 @@ pub(crate) fn install(ctx: &Ctx<'_>) -> JsResult<()> {
         payload::pointer_prototype(ctx, &mouse)?,
         payload::wheel_prototype(ctx, &mouse)?,
         payload::keyboard_prototype(ctx, &ui)?,
+        payload::input_prototype(ctx, &ui)?,
+        payload::composition_prototype(ctx, &ui)?,
     ];
     construct::constructors(ctx, &prototypes)?;
     for ((kind, ..), proto) in construct::CLASSES.iter().zip(prototypes) {

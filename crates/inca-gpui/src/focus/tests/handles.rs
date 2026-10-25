@@ -444,3 +444,11 @@ fn a_drop_on_an_inactive_window_leaves_nothing_owed_after_the_frame(cx: &mut Tes
     assert_eq!(events, [(None, Some(id))]);
     assert!(cx.update(|window, _| held.is_focused(window)));
 }
+
+#[test]
+fn a_transition_names_its_nodes() {
+    let lost = FocusTransition::window_activation(3, false);
+    assert_eq!((lost.blurred(), lost.focused()), (Some(3), None));
+    let regained = FocusTransition::window_activation(3, true);
+    assert_eq!((regained.blurred(), regained.focused()), (None, Some(3)));
+}

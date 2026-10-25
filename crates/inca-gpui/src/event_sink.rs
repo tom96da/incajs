@@ -7,7 +7,7 @@ use gpui::{
 };
 
 use crate::element::NodeLayout;
-use crate::input::{InputLayout, InputRequest, InputState};
+use crate::input::{InputLayout, InputPayload, InputRequest, InputState, InputType};
 use crate::tree::NodeId;
 
 /// What a dispatch carries beyond the node it fired on.
@@ -27,6 +27,11 @@ pub enum EventPayload {
     /// the node losing it for `focus` and `focusin`, and `None` when there
     /// is no such node.
     Focus { related_target: Option<NodeId> },
+    /// The data, `inputType` and composition flag of `beforeinput` and
+    /// `input`.
+    Input(InputPayload),
+    /// The text of a composition event.
+    Composition { data: String },
 }
 
 /// [`EventPayload::Mouse`]'s fields.
@@ -133,6 +138,8 @@ pub struct KeyPayload {
     /// Whether the key press is an auto-repeat.
     pub repeat: bool,
     pub modifiers: gpui::Modifiers,
+    /// An input method composes in the focused `input`.
+    pub is_composing: bool,
 }
 
 /// The `button` index of a [`MouseButton`]: the position of that button's bit
@@ -257,6 +264,7 @@ impl From<&KeyDownEvent> for EventPayload {
             key: key_name(&event.keystroke),
             repeat: event.is_held,
             modifiers: event.keystroke.modifiers,
+            is_composing: false,
         })
     }
 }
@@ -268,6 +276,7 @@ impl From<&KeyUpEvent> for EventPayload {
             // A key release is never a repeat.
             repeat: false,
             modifiers: event.keystroke.modifiers,
+            is_composing: false,
         })
     }
 }
@@ -461,7 +470,8 @@ pub trait EventSink {
 
     /// Carries a call of the platform's text input for the focused `input`
     /// `node_id`: an insertion, a composition, the end of a composition or a
-    /// selection. A `readonly` or `disabled` input applies a selection only.
+    /// selection. A `disabled` input applies a selection only. A `readonly` one
+    /// also reports typed text as `beforeinput` while no composition runs.
     fn input_request(
         &self,
         node_id: NodeId,
@@ -607,7 +617,7 @@ const fn own_buttons(mut event: EventSpec) -> EventSpec {
 }
 
 /// Every event the host dispatches.
-pub const EVENTS: [EventSpec; 28] = [
+pub const EVENTS: [EventSpec; 34] = [
     own_buttons(spec("click", Flags::ALL)),
     own_buttons(spec("dblclick", Flags::ALL)),
     own_buttons(spec("auxclick", Flags::ALL)),
@@ -666,6 +676,24 @@ pub const EVENTS: [EventSpec; 28] = [
             ..Flags::FOCUS
         },
     ),
+    spec("beforeinput", Flags::ALL),
+    spec(
+        "input",
+        Flags {
+            bubbles: true,
+            ..Flags::FOCUS
+        },
+    ),
+    spec(
+        "change",
+        Flags {
+            bubbles: true,
+            ..Flags::NONE
+        },
+    ),
+    spec("compositionstart", Flags::ALL),
+    spec("compositionupdate", Flags::ALL),
+    spec("compositionend", Flags::ALL),
 ];
 
 /// The rules of `event`. Any other name takes all three flags as false.
@@ -676,6 +704,25 @@ pub fn spec_of(event: &str) -> EventSpec {
         .find(|spec| spec.name == event)
         .copied()
         .unwrap_or(spec("", Flags::NONE))
+}
+
+/// The flags of `event` carrying `payload`: those of [`spec_of`], with a
+/// `beforeinput` of `insertCompositionText` not cancelable.
+#[must_use]
+pub fn flags_of(event: &str, payload: &EventPayload) -> Flags {
+    let mut flags = spec_of(event).flags;
+    if event == "beforeinput"
+        && matches!(
+            payload,
+            EventPayload::Input(InputPayload {
+                input_type: InputType::InsertCompositionText,
+                ..
+            })
+        )
+    {
+        flags.cancelable = false;
+    }
+    flags
 }
 
 /// The containers a pointer leaves and enters when its deepest container

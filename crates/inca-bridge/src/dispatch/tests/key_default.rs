@@ -130,6 +130,7 @@ impl Scene {
             key: keystroke.key.clone(),
             repeat: false,
             modifiers: keystroke.modifiers,
+            is_composing: false,
         });
         self.engine
             .eval::<()>(&format!("globalThis.cancel = {canceled};"))

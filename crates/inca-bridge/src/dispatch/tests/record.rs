@@ -519,3 +519,38 @@ fn which_of_a_press_or_a_wheel_skips_the_held_buttons(
         &serde_json::json!(want)
     );
 }
+
+#[rstest]
+#[case::input_data("new InputEvent('x')", "data", "new MouseEvent('x')")]
+#[case::composition_data("new CompositionEvent('x')", "data", "new KeyboardEvent('x')")]
+#[case::get_target_ranges("new InputEvent('x')", "getTargetRanges", "new MouseEvent('x')")]
+fn an_input_or_composition_field_throws_on_another_kind(
+    #[case] owner: &str,
+    #[case] key: &str,
+    #[case] receiver: &str,
+) {
+    let (dispatcher, _host, _reported) = dispatcher_with_engine();
+
+    let got = eval_json(
+        &dispatcher,
+        &format!(
+            r"
+            (() => {{
+                let proto = {owner};
+                while (!Object.hasOwn(proto, '{key}')) {{
+                    proto = Object.getPrototypeOf(proto);
+                }}
+                const descriptor = Object.getOwnPropertyDescriptor(proto, '{key}');
+                const getter = descriptor.get ?? descriptor.value;
+                try {{
+                    return 'ran ' + getter.call({receiver});
+                }} catch (err) {{
+                    return err instanceof TypeError;
+                }}
+            }})()
+            "
+        ),
+    );
+
+    assert_eq!(got, serde_json::json!(true));
+}

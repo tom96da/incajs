@@ -49,14 +49,18 @@ Every event object carries the fields of the DOM
 interface. This includes the legacy aliases `srcElement`, `cancelBubble`
 and `returnValue`. The three flags depend on the event:
 
-| Events                           | bubbles | cancelable | composed |
-| -------------------------------- | ------- | ---------- | -------- |
-| mouse, wheel and keyboard events | yes     | yes        | yes      |
-| `mouseenter`, `mouseleave`       | no      | no         | no       |
-| `scroll`                         | no      | no         | no       |
-| `focus`, `blur`                  | no      | no         | yes      |
-| `focusin`, `focusout`            | yes     | no         | yes      |
+| Events                            | bubbles | cancelable | composed |
+| --------------------------------- | ------- | ---------- | -------- |
+| mouse, wheel and keyboard events  | yes     | yes        | yes      |
+| `mouseenter`, `mouseleave`        | no      | no         | no       |
+| `scroll`                          | no      | no         | no       |
+| `focus`, `blur`                   | no      | no         | yes      |
+| `focusin`, `focusout`             | yes     | no         | yes      |
+| `beforeinput`, composition events | yes     | yes        | yes      |
+| `input`                           | yes     | no         | yes      |
+| `change`                          | yes     | no         | no       |
 
+- A `beforeinput` of `insertCompositionText` is not cancelable.
 - `timeStamp` counts milliseconds since the host started.
 - The `view` of a UI event is `null`.
 - Removing the focused node, or moving it within the tree, leaves `blur` and
@@ -119,17 +123,35 @@ With nothing focused, `keydown` and `keyup` go to the mount container.
 | `key`         | `"Unidentified"` when the platform reports none |
 | `repeat`      | `false` on `keyup`                              |
 | `location`    | 0                                               |
-| `isComposing` | `false`                                         |
 
 - `code` is an empty string. `key` identifies the key.
 - `keyCode` and `which` give the code of `key` on a US keyboard layout, and 0
   for a key outside it, such as `é`.
+- A key the input method takes during a composition fires no `keydown` or
+  `keyup`.
 - `getModifierState()` accepts Control, Shift, Alt, Meta and Accel. Accel is
   Meta on macOS and Control elsewhere.
 - Pressing a modifier alone fires `keydown` and `keyup` with its name as
   `key`.
 - Shift+F10 fires `contextmenu` on Linux and Windows only.
 - The quit shortcut (Cmd+Q on macOS, Ctrl+Q elsewhere) goes to the host only.
+
+## Input
+
+`beforeinput` and `input` carry the fields of
+[`InputEvent`](https://developer.mozilla.org/en-US/docs/Web/API/InputEvent)
+from [Input Events](https://www.w3.org/TR/input-events-2/), and the
+composition events carry the fields of
+[`CompositionEvent`](https://developer.mozilla.org/en-US/docs/Web/API/CompositionEvent)
+from [UI Events](https://www.w3.org/TR/2026/WD-uievents-20260221/#events-compositionevents).
+
+### Host differences
+
+- `keypress`, `copy`, `cut` and `paste` are never dispatched. The clipboard
+  shortcuts of an `input` read and write the clipboard directly.
+- `select` and `selectionchange` are never dispatched.
+- `inputType` is limited to the values for typing, a paste, a composition,
+  Enter, Backspace, Delete and a cut.
 
 ## Focus
 
@@ -154,14 +176,16 @@ rules, with the differences below.
 `dispatchEvent()` sends an event that a script builds with an
 event constructor.
 
-- `initUIEvent()`, `initMouseEvent()` and `initKeyboardEvent()` are
-  unsupported methods.
+- `initUIEvent()`, `initMouseEvent()`, `initKeyboardEvent()` and
+  `initCompositionEvent()` are unsupported methods.
 - The `view` member of an init dictionary is ignored, and `relatedTarget`
   takes any object.
 - The `modifierAltGraph`, `modifierCapsLock` and the other `modifier` members
   of an init dictionary are ignored.
 - `offsetX` and `offsetY` of a mouse event a script builds equal `clientX` and
   `clientY`, also while it is dispatched.
+- The `dataTransfer` and `targetRanges` members of an `InputEventInit` are
+  ignored.
 
 ## Errors in handlers
 

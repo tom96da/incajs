@@ -12,19 +12,21 @@ use rquickjs::object::Property;
 use rquickjs::{Class, Ctx, Exception, Function, Object, Result as JsResult, Value};
 
 use super::members::PHASES;
-use super::payload::{DELTA_MODES, KEY_LOCATIONS, Keyboard, Mouse, Payload, Pointer, Ui, Wheel};
+use super::payload::{
+    DELTA_MODES, Input, KEY_LOCATIONS, Keyboard, Mouse, Payload, Pointer, Ui, Wheel,
+};
 use super::walk::Walk;
 use super::{
-    CUSTOM, EVENT, FOCUS, Flags, Held, IncaEvent, KEYBOARD, MOUSE, POINTER, State, UI, WHEEL,
-    child_of, constants, field, given, initialize, method, new_event, other_kind, targets_of,
-    with_event,
+    COMPOSITION, CUSTOM, EVENT, FOCUS, Flags, Held, INPUT, IncaEvent, KEYBOARD, MOUSE, POINTER,
+    State, UI, WHEEL, child_of, constants, field, given, initialize, method, new_event, other_kind,
+    targets_of, with_event,
 };
 use crate::EventTargetId;
 use crate::bindings::convert::or_null;
 
 /// Each class of event: the kind it builds, its name, and the kind whose constructor its
 /// constructor inherits from.
-pub(super) const CLASSES: [(&str, &str, Option<&str>); 8] = [
+pub(super) const CLASSES: [(&str, &str, Option<&str>); 10] = [
     (EVENT, "Event", None),
     (CUSTOM, "CustomEvent", Some(EVENT)),
     (UI, "UIEvent", Some(EVENT)),
@@ -33,6 +35,8 @@ pub(super) const CLASSES: [(&str, &str, Option<&str>); 8] = [
     (POINTER, "PointerEvent", Some(MOUSE)),
     (WHEEL, "WheelEvent", Some(MOUSE)),
     (KEYBOARD, "KeyboardEvent", Some(UI)),
+    (INPUT, "InputEvent", Some(UI)),
+    (COMPOSITION, "CompositionEvent", Some(UI)),
 ];
 
 /// A new event for a walk, ready to deliver. `targets` holds what stands for each target of the
@@ -70,7 +74,10 @@ fn related_of(payload: &EventPayload) -> Option<NodeId> {
         EventPayload::Mouse(mouse) => mouse.related_target,
         EventPayload::Wheel(wheel) => wheel.mouse.related_target,
         EventPayload::Focus { related_target } => *related_target,
-        EventPayload::None | EventPayload::Key(_) => None,
+        EventPayload::None
+        | EventPayload::Key(_)
+        | EventPayload::Input(_)
+        | EventPayload::Composition { .. } => None,
     }
 }
 
@@ -112,7 +119,7 @@ pub(super) fn custom_prototype<'js>(ctx: &Ctx<'js>, event: &Object<'js>) -> JsRe
 
 /// Installs a global constructor for each of [`CLASSES`], linked with the prototype of the same
 /// index in `prototypes`, and the constants of `Event`, `WheelEvent` and `KeyboardEvent`.
-pub(super) fn constructors<'js>(ctx: &Ctx<'js>, prototypes: &[Object<'js>; 8]) -> JsResult<()> {
+pub(super) fn constructors<'js>(ctx: &Ctx<'js>, prototypes: &[Object<'js>; 10]) -> JsResult<()> {
     let globals = ctx.globals();
     let mut made: Vec<(&str, Function<'js>)> = Vec::new();
     for (&(kind, name, parent), proto) in CLASSES.iter().zip(prototypes) {
@@ -256,6 +263,8 @@ impl Construct {
                         Ok((Payload::Focus(ui), related, None))
                     }
                     KEYBOARD => Ok((keyboard(init, ui)?, None, None)),
+                    INPUT => Ok((input(init, ui)?, None, None)),
+                    COMPOSITION => Ok((Payload::Composition(ui, init.string("data")?), None, None)),
                     _ => {
                         let (mouse, related) = mouse(init, ui)?;
                         let payload = match kind {
@@ -370,6 +379,25 @@ fn keyboard(init: &Init<'_, '_>, ui: Ui) -> JsResult<Payload> {
             modifiers,
             key_code,
             char_code,
+        },
+    ))
+}
+
+/// The payload of an `InputEvent` built from `init`. The `dataTransfer` and `targetRanges` members
+/// are not read.
+fn input(init: &Init<'_, '_>, ui: Ui) -> JsResult<Payload> {
+    let data = match init.member("data")? {
+        Some(value) if !value.is_null() => Some(value.get::<Coerced<String>>()?.0),
+        _ => None,
+    };
+    let input_type = init.string("inputType")?;
+    let is_composing = init.boolean("isComposing")?;
+    Ok(Payload::Input(
+        ui,
+        Input {
+            data,
+            kind: input_type,
+            is_composing,
         },
     ))
 }

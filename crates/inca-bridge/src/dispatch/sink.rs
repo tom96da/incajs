@@ -98,6 +98,7 @@ impl EventSink for EventDispatcher {
             .replace(Some(modifiers))
             .unwrap_or(modifiers);
         let start = self.key_target(window, cx);
+        let is_composing = self.composing_at_focus(window, cx);
         for (key, was, is) in [
             ("Shift", before.shift, modifiers.shift),
             ("Control", before.control, modifiers.control),
@@ -109,6 +110,7 @@ impl EventSink for EventDispatcher {
                     key: key.to_owned(),
                     repeat: false,
                     modifiers,
+                    is_composing,
                 });
                 let event = if is { "keydown" } else { "keyup" };
                 self.fire(start, event, &payload, window, cx);
@@ -191,7 +193,11 @@ impl EventSink for EventDispatcher {
         let target = self.key_target(window, cx);
         let event = if up { "keyup" } else { "keydown" };
         let target = EventTargetId::Node(target);
-        let (canceled, entered) = self.walk(target, event, payload, &[]);
+        let mut payload = payload.clone();
+        if let EventPayload::Key(key) = &mut payload {
+            key.is_composing = self.composing_at_focus(window, cx);
+        }
+        let (canceled, entered) = self.walk(target, event, &payload, &[]);
         if entered {
             self.drain_observed(window);
         }
@@ -221,9 +227,9 @@ impl EventSink for EventDispatcher {
         node_id: NodeId,
         request: InputRequest,
         window: &mut Window,
-        _cx: &mut App,
+        cx: &mut App,
     ) {
-        self.apply_input_request(node_id, request, window);
+        self.apply_input_request(node_id, request, window, cx);
     }
 }
 

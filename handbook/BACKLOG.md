@@ -330,7 +330,10 @@ A fixed entry is deleted and its ID is never reused.
     `clientX`/`clientY` there, and X11 may report an origin that leaves out
     the window decorations. The fix direction is a platform query in `gpui` for the
     client area's screen position.
-  - `isComposing` needs the text-editing/IME unit, which hasn't started.
+  - A key the input method takes during a composition fires no `keydown` or
+    `keyup`, where browsers fire `keydown` with `keyCode` 229. The fix
+    direction is a flag from `gpui` that marks a key the input method
+    consumed, so the host fires the events with `isComposing` and 229.
   - Blocked on `gpui` itself: `code` and `location` — `Keystroke`
     (`third_party/zed/crates/gpui/src/platform/keystroke.rs`) carries
     only `{ modifiers, key, key_char }`, with no layout-independent
@@ -747,20 +750,6 @@ A fixed entry is deleted and its ID is never reused.
   skips its target marker and its hitbox, so the next container below reports
   itself.
 
-- **B-151 `beforeinput` is unsupported**
-  `Units: gpui,bridge,docs · Size: L · Impact: Low`
-
-  A `beforeinput` listener has no effect. Fix: after the text-editing unit
-  lands, dispatch it before each edit as a cancelable event with `data`,
-  `inputType` and `isComposing`, and apply the edit when no listener calls
-  `preventDefault()`.
-
-- **B-154 `input` and `change` are unsupported**
-  `Units: gpui,bridge,docs · Size: L · Impact: High`
-
-  `input` and `change` listeners have no effect. Fix: dispatch them from the
-  text-editing unit together with `beforeinput` (B-151).
-
 - **B-155 Drag-and-drop events are unsupported**
   `Units: gpui,bridge,docs · Size: L · Impact: Medium`
 
@@ -1115,15 +1104,17 @@ A fixed entry is deleted and its ID is never reused.
 - **B-221 Events built from script miss some members of their class**
   `Units: bridge,host,core,docs · Size: M · Impact: Low`
 
-  `initUIEvent()`, `initMouseEvent()` and `initKeyboardEvent()` are missing.
-  An init dictionary's `view` is not read, `relatedTarget` takes any object,
-  and `modifierAltGraph`, `modifierCapsLock` and the other `modifier`
-  members are ignored. A built mouse event keeps `offsetX` and `offsetY`
-  equal to its client position while it is dispatched; browsers measure
-  them from the target's padding edge. `PointerEvent` has no `tiltX`,
-  `tiltY`, `twist`, `tangentialPressure`, `altitudeAngle`, `azimuthAngle`,
-  `persistentDeviceId`, `getCoalescedEvents()` or `getPredictedEvents()`.
-  Every UI event reads `view` as `null`, where browsers give `window`.
+  `initUIEvent()`, `initMouseEvent()`, `initKeyboardEvent()` and
+  `initCompositionEvent()` are missing. An init dictionary's `view` is not read,
+  `relatedTarget` takes any object, and `modifierAltGraph`, `modifierCapsLock`
+  and the other `modifier` members are ignored. A built mouse event keeps
+  `offsetX` and `offsetY` equal to its client position while it is dispatched;
+  browsers measure them from the target's padding edge. `PointerEvent` has no
+  `tiltX`, `tiltY`, `twist`, `tangentialPressure`, `altitudeAngle`,
+  `azimuthAngle`, `persistentDeviceId`, `getCoalescedEvents()` or
+  `getPredictedEvents()`. Every UI event reads `view` as `null`, where browsers
+  give `window`. The `dataTransfer` and `targetRanges` members of an
+  `InputEventInit` are not read.
 
   Fix: add the legacy init methods, keep the modifier states in the
   payload and set the offsets from the target's box in `dispatchEvent`. The
@@ -1195,3 +1186,19 @@ A fixed entry is deleted and its ID is never reused.
   boundaries from `unicode-segmentation`, an edit history with `historyUndo`
   and `historyRedo`, the selection members over the host's selection, and a
   masked display for `type="password"`.
+
+- **B-229 `copy`, `cut` and `paste` are never dispatched**
+  `Units: gpui,bridge,core,docs · Size: M · Impact: Low`
+
+  The clipboard shortcuts of an `input` read and write the clipboard
+  directly, so a `copy`, `cut` or `paste` listener has no effect and cannot
+  change or cancel the transfer. Fix: fire a `ClipboardEvent` whose
+  `clipboardData` holds the text before the transfer, and skip the transfer
+  when a listener calls `preventDefault()`.
+
+- **B-230 `keypress` is never dispatched**
+  `Units: bridge,docs · Size: S · Impact: Low`
+
+  A key that produces a character fires `keydown` and then `beforeinput`.
+  Fix: fire `keypress` between them from the key path when the key has a
+  character and `keydown` was not canceled, with `charCode` set.
