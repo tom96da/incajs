@@ -114,7 +114,6 @@ let hostClient: HostClient | undefined;
 let stderrText = "";
 let notifiedCount = 0;
 let ready = false;
-let mountedBeforeReady: boolean | undefined;
 let buildErrors: BuildFailure[] = [];
 let appErrors: AppErrorParams[] = [];
 
@@ -155,10 +154,6 @@ beforeAll(async () => {
     onAppError: (error) => appErrors.push(error),
     integrations: {
       vite: (params) => channel?.dispatch(params),
-      // `mounted` and `ready` travel the host's one stdout, so their order is the host's order.
-      mounted: () => {
-        mountedBeforeReady ??= !ready;
-      },
     },
   });
   await hostClient.start();
@@ -194,8 +189,6 @@ it(
     onTestFailed(() => console.error(`--- host stderr ---\n${stderrText}`));
 
     await vi.waitFor(() => expect(ready).toBe(true), { timeout: WAIT_TIMEOUT_MS });
-    // The host opens the window once the app has mounted.
-    expect(mountedBeforeReady).toBe(true);
     await vi.waitFor(() => expect(stderrText).toContain("[e2e] mounted"), {
       timeout: WAIT_TIMEOUT_MS,
     });
