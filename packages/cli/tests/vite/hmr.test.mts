@@ -480,25 +480,26 @@ describe("hmr", () => {
     ).rejects.toMatchObject({ code: "EISDIR" });
   }, 20000);
 
-  it("removes a stale inca.json when the session's config produces none", async () => {
+  it("writes the app's root relative to its own directory into inca.json", async () => {
     const { entry, streams } = await makeApp(
       `<script setup>\nconst msg = "hello";\n</script>\n<template><div>{{ msg }}</div></template>\n`,
     );
-    const options = {
-      entry,
-      cwd: path.dirname(entry),
-      ...streams,
-      notify: () => {},
-      reload: () => {},
-      onError: () => {},
-    };
-    const configPath = path.join(options.cwd, "node_modules/.inca/hmr/inca.json");
+    const cwd = path.dirname(entry);
 
-    await (await hmr({ ...options, runtimeConfig: { name: "Demo" } })).close();
-    expect(existsSync(configPath)).toBe(true);
+    channels.push(
+      await hmr({
+        entry,
+        cwd,
+        ...streams,
+        notify: () => {},
+        reload: () => {},
+        onError: () => {},
+        runtimeConfig: { name: "Demo" },
+      }),
+    );
 
-    channels.push(await hmr(options));
-    expect(existsSync(configPath)).toBe(false);
+    const written = await readFile(path.join(cwd, "node_modules/.inca/hmr/inca.json"), "utf8");
+    expect(JSON.parse(written)).toEqual({ name: "Demo", root: "../../.." });
   }, 20000);
 
   it("tears the dev server down on close, freeing it to start again", async () => {

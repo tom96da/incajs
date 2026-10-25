@@ -146,3 +146,14 @@ override this key for one run. `inca dev` always writes the map.
 An error's stack frames follow the map, with one difference. A block comment
 that holds a lone carriage return (`\r` without `\n`) shifts the reported
 line of every frame below it by one.
+
+## Development
+
+### dev.stackPaths
+
+- Type: `"relative" | "absolute"`
+- Default: `"relative"`
+
+How an error's stack names a source file. `"relative"` gives the path from
+the app's root, `"absolute"` the full path. Only `inca dev` applies it. Built
+and packaged apps always use `"relative"`.

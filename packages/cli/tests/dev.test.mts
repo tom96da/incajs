@@ -103,6 +103,34 @@ describe("dev", () => {
     });
   });
 
+  it.each([
+    ["an unnamed app", {}],
+    ["a named app", { name: "scratch-app" }],
+  ])("hands the watch the dev and root members for %s", async (_, pkg) => {
+    const bundler = makeFakeBundler();
+    const watch = vi.spyOn(bundler, "watch");
+    const controller = new AbortController();
+
+    const running = dev({
+      cwd: await scratch.makeApp(pkg),
+      entry: "unused",
+      bundler,
+      hostBin: mockHost,
+      stdout: makeSink().stream,
+      stderr: makeSink().stream,
+      signal: controller.signal,
+    });
+
+    await bundler.watching;
+    controller.abort();
+    await running;
+
+    expect(watch.mock.calls[0]![0].runtimeConfig).toMatchObject({
+      dev: { stackPaths: "relative" },
+      root: "..",
+    });
+  });
+
   it("reloads the host on a later build without restarting it", async () => {
     const bundler = makeFakeBundler();
     const stdout = makeSink();

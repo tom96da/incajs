@@ -22,8 +22,7 @@ export interface BuildOptions {
   /** Writes `bundle.js.map` beside the bundle. Defaults to `false`. */
   sourcemap?: boolean;
   /**
-   * Values the built app carries for `inca-host` to read: its name, id
-   * and window. Any JSON-serializable object.
+   * Values the built app carries for the host to read. Any JSON-serializable object.
    */
   runtimeConfig?: unknown;
   /** Where the bundler's own output goes. Defaults to `process.stdout`. */
@@ -88,8 +87,7 @@ export interface HmrOptions {
   /** The app's root directory, where its dev-only scratch files are written. */
   cwd: string;
   /**
-   * Values the built app carries for `inca-host` to read: its name, id
-   * and window. Any JSON-serializable object.
+   * Values the built app carries for the host to read. Any JSON-serializable object.
    */
   runtimeConfig?: unknown;
   /** Overrides where the synthesized entry imports `vite-runtime.js` from. Test-only. */

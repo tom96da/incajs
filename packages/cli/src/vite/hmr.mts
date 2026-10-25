@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { existsSync } from "node:fs";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -19,7 +19,7 @@ import type {
   ViteDevServer,
 } from "vite";
 
-import { CONFIG_FILE_NAME, serializeConfig } from "./emitConfig.mts";
+import { CONFIG_FILE_NAME } from "./emitConfig.mts";
 import { streamLogger } from "./logger.mts";
 import { rejectUnsupported } from "./unsupported.mts";
 import type { AdapterCore, BuildFailure, HmrChannel, HmrOptions } from "../adapterCore.mts";
@@ -291,10 +291,11 @@ export async function hmr(
 ): Promise<HmrChannel> {
   await mkdir(hmrDirOf(cwd), { recursive: true });
 
-  const configContent = serializeConfig(runtimeConfig);
-  const configPath = path.join(hmrDirOf(cwd), CONFIG_FILE_NAME);
-  if (configContent) await writeFile(configPath, configContent);
-  else await rm(configPath, { force: true });
+  const config = core.withAppRoot(runtimeConfig, cwd, hmrDirOf(cwd));
+  await writeFile(
+    path.join(hmrDirOf(cwd), CONFIG_FILE_NAME),
+    `${JSON.stringify(config, undefined, 2)}\n`,
+  );
 
   const changed: { current: { file: string; at: number } | undefined } = { current: undefined };
   const { channel, dispatch } = createIncaHotChannel(

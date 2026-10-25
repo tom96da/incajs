@@ -5,6 +5,7 @@ import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { styleText } from "node:util";
 
+import { withAppRoot } from "./config/appRoot.mts";
 import {
   assertOutDir,
   resolveAppConfig,
@@ -222,8 +223,8 @@ export async function dev(options: DevOptions): Promise<void> {
         assertOutDir(cwd, outDir, entry);
         const metadata = await resolveMetadata(cwd, stdout);
         const runtimeConfig = metadata
-          ? runtimeConfigOf(metadata)
-          : await resolveRuntimeConfig(cwd);
+          ? runtimeConfigOf(metadata, { dev: true })
+          : await resolveRuntimeConfig(cwd, { dev: true });
         return { outDir, entry, automaticEntry, metadata, runtimeConfig };
       },
     });
@@ -389,7 +390,7 @@ export async function dev(options: DevOptions): Promise<void> {
           envDir: cwd,
           publicDir: path.join(cwd, "public"),
           outDir,
-          runtimeConfig,
+          runtimeConfig: withAppRoot(runtimeConfig, cwd, outDir),
           mode: "development",
           stdout,
           stderr,

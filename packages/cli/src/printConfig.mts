@@ -5,11 +5,12 @@ import { spawnSync } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { withAppRoot } from "./config/appRoot.mts";
 import { resolveRuntimeConfig } from "./config/loader.mts";
 import { assertHostBin, resolveHostBin } from "./dev-client/index.mts";
 import { IncaError } from "./error.mts";
 import type { RuntimeConfig } from "./config/loader.mts";
-import type { WindowConfig } from "./config/types.mts";
+import type { DevConfig, WindowConfig } from "./config/types.mts";
 
 export interface PrintConfigOptions {
   /** The app's root directory. Defaults to `process.cwd()`. */
@@ -33,11 +34,13 @@ type Kind<T> = T extends number
 
 /** The kind of each setting, keyed as `inca.config.ts` spells it. */
 type Kinds = {
-  [K in keyof RuntimeConfig as K extends "name" ? "productName" : K]-?: Kind<
+  [K in keyof RuntimeConfig as K extends "name" ? "productName" : Exclude<K, "root">]-?: Kind<
     NonNullable<RuntimeConfig[K]>
   >;
 } & {
   [K in keyof WindowConfig as `window.${K}`]-?: Kind<NonNullable<WindowConfig[K]>>;
+} & {
+  [K in keyof DevConfig as `dev.${K}`]-?: Kind<NonNullable<DevConfig[K]>>;
 };
 
 /** The kind each setting must have. The type checker holds each word to the setting's type. */
@@ -45,12 +48,14 @@ const KIND_OF: Kinds = {
   productName: "a string",
   identifier: "a string",
   window: "an object",
+  dev: "an object",
   "window.width": "a number",
   "window.height": "a number",
   "window.title": "a string",
   "window.resizable": "true or false",
   "window.minWidth": "a number",
   "window.minHeight": "a number",
+  "dev.stackPaths": "a string",
 };
 
 /** The kind of `value`, in the words of {@link KIND_OF}. */
@@ -115,15 +120,14 @@ export async function printConfig(options: PrintConfigOptions = {}): Promise<num
   const cwd = options.cwd ?? process.cwd();
   const hostBin = options.hostBin ?? resolveHostBin();
   assertHostBin(hostBin);
-  const config = (await resolveRuntimeConfig(cwd)) ?? {};
+  const config = await resolveRuntimeConfig(cwd, { dev: true });
 
   const dir = path.join(cwd, "node_modules/.inca/config");
   const entry = path.join(dir, "bundle.js");
   const file = path.join(dir, "inca.json");
   await mkdir(dir, { recursive: true });
   await writeFile(entry, "");
-  // Written for an empty config too, so no earlier run's file stays.
-  await writeFile(file, JSON.stringify(config, undefined, 2));
+  await writeFile(file, JSON.stringify(withAppRoot(config, cwd, dir), undefined, 2));
 
   const result = spawnSync(hostBin, ["--print-config", entry], { encoding: "utf8" });
   if (result.error) throw result.error;

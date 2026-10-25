@@ -13,7 +13,12 @@ describe("defineConfig", () => {
 });
 
 describe("defaultConfig", () => {
-  it("defaults to dist, no source map and version 0.0.0", () => {
-    expect(defaultConfig).toEqual({ outDir: "dist", sourcemap: false, version: "0.0.0" });
+  it("defaults to dist, no source map, version 0.0.0 and relative stack paths", () => {
+    expect(defaultConfig).toEqual({
+      dev: { stackPaths: "relative" },
+      outDir: "dist",
+      sourcemap: false,
+      version: "0.0.0",
+    });
   });
 });

@@ -94,10 +94,10 @@ When both flags are given, `--no-sourcemap` wins.
 
 ## `inca config`
 
-Prints the settings the host applies to your app as JSON: its name, its
-identifier and its window. A `null` marks a value left to the host: the
-root element sizes the window, and an unset limit stays open. It reads the
-config as `inca build` does, builds nothing and opens no window.
+Prints the settings the host applies to your app as JSON. A `null` marks a
+value left to the host: the root element sizes the window, and an unset
+limit stays open. It reads the config as `inca build` does, builds nothing
+and opens no window.
 
 A setting whose value the host cannot use fails with
 [`ERR_INCA_CONFIG_INVALID`](./errors#err-inca-config-invalid), naming the

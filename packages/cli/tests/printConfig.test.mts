@@ -51,7 +51,7 @@ it("hands the host the config the app resolves to", async () => {
   expect(config).toMatchObject({ name: "scratch-app", window: { width: 640 } });
 });
 
-it("hands the host an empty config for an app that declares nothing", async () => {
+it("hands the host an app that declares nothing with dev.stackPaths and root", async () => {
   const app = await scratch.makeApp({});
   const dir = path.join(app, "node_modules/.inca/config");
   await mkdir(dir, { recursive: true });
@@ -59,7 +59,7 @@ it("hands the host an empty config for an app that declares nothing", async () =
 
   const { config } = JSON.parse((await run(app)).stdout);
 
-  expect(config).toEqual({});
+  expect(config).toEqual({ dev: { stackPaths: "relative" }, root: "../../.." });
 });
 
 it.each([
@@ -133,6 +133,21 @@ it("names productName for the name the host cannot use", async () => {
   await expect(run(app)).rejects.toThrow(
     expect.objectContaining({
       message: expect.stringMatching(/^productName in inca\.config\.ts is /),
+    }),
+  );
+});
+
+it("names dev.stackPaths for a value the host cannot use", async () => {
+  hostAnswers("1", 'failed to read {file}: ["dev","stackPaths"]: unknown variant\n');
+  const app = await scratch.makeApp({});
+  await writeFile(
+    path.join(app, "inca.config.ts"),
+    'export default { dev: { stackPaths: "rel" } };\n',
+  );
+
+  await expect(run(app)).rejects.toThrow(
+    expect.objectContaining({
+      message: 'dev.stackPaths in inca.config.ts is "rel". the host can\'t use it',
     }),
   );
 });
