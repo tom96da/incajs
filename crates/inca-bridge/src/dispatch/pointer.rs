@@ -71,7 +71,7 @@ impl EventDispatcher {
         self.focus_on_press(target, prevented, window, cx);
         self.hold_button(target, window, cx);
         if let (false, EventPayload::Mouse(mouse)) = (prevented, payload) {
-            self.input_press(target, mouse, window);
+            self.input_press(target, mouse, cfg!(target_os = "macos"), window);
         }
     }
 

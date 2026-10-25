@@ -265,6 +265,15 @@ fn paste_takes_the_clipboard_text_into_an_editable_input(
 }
 
 #[gpui::test]
+fn paste_of_an_empty_clipboard_changes_nothing(cx: &mut TestAppContext) {
+    let s = input_scene(cx, "abcd");
+    s.focus(cx, s.input);
+    s.select(1, 3);
+    s.key(cx, "secondary-v");
+    assert_eq!(s.state().value(), "abcd");
+}
+
+#[gpui::test]
 fn a_press_places_the_caret_at_the_nearest_stop(cx: &mut TestAppContext) {
     let s = input_scene(cx, "abcd");
     s.press(cx, 13.0, false);
@@ -277,6 +286,52 @@ fn a_shift_press_extends_the_selection(cx: &mut TestAppContext) {
     s.select(1, 1);
     s.press(cx, 19.0, true);
     assert_eq!(s.state().selection(), 1..3);
+}
+
+/// Presses the left button with Control held at x 13 on the input, which holds `selection`.
+fn control_press(s: &InputScene, cx: &mut TestAppContext, macos: bool, selection: (usize, usize)) {
+    s.select(selection.0, selection.1);
+    let mut mouse = mouse_of(13.0, 0, false);
+    mouse.modifiers.control = true;
+    s.in_window(cx, |scene, window, _| {
+        scene
+            .dispatcher
+            .input_press(scene.input, &mouse, macos, window);
+    });
+}
+
+#[gpui_cases]
+#[gpui::test]
+#[case::mac_outside(true, (0, 1), (2, 2))]
+#[case::mac_inside(true, (0, 3), (0, 3))]
+#[case::mac_empty(true, (1, 1), (2, 2))]
+#[case::linux(false, (0, 3), (2, 2))]
+fn a_control_press_follows_the_platform(
+    cx: &mut TestAppContext,
+    macos: bool,
+    selection: (usize, usize),
+    want: (usize, usize),
+) {
+    let s = input_scene(cx, "abcd");
+    control_press(&s, cx, macos, selection);
+    assert_eq!(s.state().selection(), want.0..want.1);
+}
+
+#[gpui_cases]
+#[gpui::test]
+#[case::mac(true, (0, 1), false)]
+#[case::linux(false, (0, 3), true)]
+fn a_control_press_starts_a_drag_off_macos_only(
+    cx: &mut TestAppContext,
+    macos: bool,
+    selection: (usize, usize),
+    dragged: bool,
+) {
+    let s = input_scene(cx, "abcd");
+    control_press(&s, cx, macos, selection);
+    let pressed = s.state().selection();
+    s.move_to(cx, 25.0);
+    assert_eq!(s.state().selection() != pressed, dragged);
 }
 
 #[gpui::test]

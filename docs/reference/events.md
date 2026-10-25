@@ -88,6 +88,7 @@ from [Pointer Events](https://www.w3.org/TR/2026/WD-pointerevents4-20261005/#whe
 
 ### Host differences
 
+- On macOS a Ctrl+click fires `contextmenu` with `button` 0 and `buttons` 1.
 - `preventDefault()` in a `contextmenu` listener only sets `defaultPrevented`.
 - `screenX` and `screenY` add the window position. On Wayland they equal the
   client position.

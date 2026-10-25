@@ -69,6 +69,32 @@ fn contextmenu_key_dispatches_to_focused_node(cx: &mut TestAppContext) {
     );
 }
 
+#[gpui::test]
+fn a_mac_menu_key_dispatches_contextmenu(cx: &mut TestAppContext) {
+    let s = scene(cx);
+    record(&s, s.field);
+    s.focus(cx, s.field);
+    let keystroke = Keystroke {
+        key: "\u{10}".to_string(),
+        key_char: None,
+        modifiers: gpui::Modifiers::none(),
+    };
+    let payload = EventPayload::Key(KeyPayload {
+        key: "ContextMenu".to_string(),
+        repeat: false,
+        modifiers: keystroke.modifiers,
+        is_composing: false,
+    });
+    s.in_window(cx, |scene, window, cx| {
+        scene
+            .dispatcher
+            .key_input(&keystroke, false, &payload, window, cx);
+    });
+    let log = log(&s);
+    assert_eq!(log[0], "keydown");
+    assert_eq!(log[1][0], "contextmenu");
+}
+
 #[gpui_cases]
 #[gpui::test]
 #[case::shift_f10("shift-f10", false, usize::from(!cfg!(target_os = "macos")))]
