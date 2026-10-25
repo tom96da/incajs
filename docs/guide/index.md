@@ -89,7 +89,7 @@ exactly one of two entry points there:
   </script>
 
   <template>
-    <div :style="{ textColor: 0xffffff }" @click="clicks++">
+    <div :style="{ color: '#ffffff' }" @click="clicks++">
       Clicked {{ clicks }} time(s)
     </div>
   </template>

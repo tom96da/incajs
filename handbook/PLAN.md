@@ -1025,6 +1025,11 @@ runs alongside Phase 3.4.
 - [x] A `<text>` element renders its `value` followed by its descendants'
       text
 - [x] The root node cannot be moved or destroyed from JS
+- [x] `:style` takes the CSS names `color`, `backgroundColor`,
+      `borderRadius` and `fontSize`, the values `"flex-start"`,
+      `"flex-end"`, `"row-reverse"` and `"column-reverse"`, px strings such as
+      `"10px"`, and decimal strings for `opacity`, `flexGrow` and
+      `flexShrink`; the host's own names stay accepted
 
 ### Console and event slots
 

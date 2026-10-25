@@ -29,12 +29,12 @@ function onClick() {
       alignItems: 'center',
       width: 300,
       height: 150,
-      background: 0x505050,
+      backgroundColor: '#505050',
       borderWidth: 1,
-      borderColor: 0x0000ff,
-      cornerRadius: 8,
-      textColor: 0xffffff,
-      textSize: 20,
+      borderColor: '#0000ff',
+      borderRadius: 8,
+      color: '#ffffff',
+      fontSize: 20,
     }"
     @click="onClick"
   >
