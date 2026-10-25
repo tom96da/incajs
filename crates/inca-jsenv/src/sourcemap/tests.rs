@@ -754,12 +754,12 @@ fn the_second_compile_of_a_file_evaluates_with_a_t_query() {
 #[test]
 fn an_hmr_style_query_keeps_its_query() {
     with_realm(|ctx| {
-        compile_stack(&ctx, "app.js?vue&type=style", None);
-        let second = stack_of(&compile_stack(&ctx, "app.js?vue&type=style", None));
+        compile_stack(&ctx, "app.js?a=1&b=2", None);
+        let second = stack_of(&compile_stack(&ctx, "app.js?a=1&b=2", None));
 
         assert!(second.contains("(app.js?t="), "{second}");
-        assert!(second.contains("&vue&type=style:2:12)"), "{second}");
-        assert!(remap_stack(&ctx, &second).contains("(app.js?vue&type=style:2:12)"));
+        assert!(second.contains("&a=1&b=2:2:12)"), "{second}");
+        assert!(remap_stack(&ctx, &second).contains("(app.js?a=1&b=2:2:12)"));
     });
 }
 
