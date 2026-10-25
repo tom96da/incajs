@@ -383,15 +383,21 @@ with the node ids.
   button and the release container, so a press must be recorded. A release
   over no container uses the root. The payload is `EventPayload::click`: the
   release position and modifiers, `button` the released button, `buttons` 0,
-  `detail` the click count of the press, pointer source mouse.
+  `detail` the click count of the press, pointer source mouse. On macOS a left
+  release with Control held completes no `click`.
 - `dblclick`, `auxclick` and `contextmenu` fire through `EventSink::fire`.
   `dblclick` fires at the `click` ancestor right after the `click` whose press
   counts 2, with the pointer source cleared. `auxclick` fires there for the
   release of any non-left button, with the `click` payload. The root tracker
-  fires `contextmenu` at the target of a right `MouseDownEvent` right after
-  the `mousedown` input, with `EventPayload::context_menu`: `button` 2,
-  `buttons` 2, `detail` 0, pointer source mouse. It goes to the target of the
-  press's `pointerdown`.
+  fires `contextmenu` at the target of a right press, or on macOS a left press
+  with Control, right after the `mousedown` input, with
+  `EventPayload::context_menu`: `button` 2 and `buttons` 2 (`button` 0 and
+  `buttons` 1 for Control), `detail` 0, pointer source mouse. It goes to the
+  target of the press's `pointerdown`. On macOS gpui reports a Control+left
+  press and its release as right ones without Control. While Control is held
+  (`ModifiersChangedEvent` and pointer moves, the `ControlClick` global) the
+  tracker turns them back into a left press and release with Control, and a
+  left press with Control fires `contextmenu`.
 - The first container to report in a pointer move calls
   `EventSink::pointer_over` with itself as the deepest and reports at once.
   Any other change reports once at the end of the update from the deepest
@@ -474,11 +480,12 @@ with the node ids.
   release or the button losing focus ends the hold.
   A key click uses `MousePayload::keyboard_click`, and `preventDefault()` in
   `keydown` or `keyup` of the `button` ends it.
-- The Menu key (`key_name` maps gpui's `"menu"` to `"ContextMenu"`) and
-  Shift+F10 (not on macOS) fire `contextmenu` from `key_default` on `keydown`,
-  unless a listener canceled it. It targets the focused node with `clientX`/`clientY` at
-  the center of its recorded box, or the deepest recorded box at (1, 1) when
-  nothing is focused. Its payload is mouse pointer source, `button` `NO_BUTTON` and
+- The Menu key (`key_name` maps gpui's `"menu"` and the U+0010 of a Mac
+  keyboard to `"ContextMenu"`) and Shift+F10 (not on macOS) fire
+  `contextmenu` from `key_default` on `keydown`, unless a listener canceled
+  it. It targets the focused node with `clientX`/`clientY` at the center of
+  its recorded box, or the deepest recorded box at (1, 1) when nothing is
+  focused. Its payload is mouse pointer source, `button` `NO_BUTTON` and
   `buttons` 0.
 - A canceled `keydown` or `keyup` calls `Window::prevent_default` and
   `App::stop_propagation` after its walk. The platform then treats the key as
@@ -528,7 +535,8 @@ with the node ids.
   Typed characters arrive through the handler after the walk, without
   control characters.
 - An uncanceled left `mousedown` on an input puts the caret at the nearest
-  stop, and Shift extends the selection. A move with the left button held
+  stop, and Shift extends the selection. On macOS a Ctrl+click keeps a
+  selection it lands in and starts no drag. A move with the left button held
   extends it until the release. Tab into an input selects its text.
 - `readonly` and `disabled` stop edits. A `readonly` input still moves its
   selection and copies. With a running composition it applies a selection

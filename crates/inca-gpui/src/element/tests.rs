@@ -40,6 +40,8 @@ pub(super) struct Probe {
     pub(super) calls: Calls,
     /// `(event, Window::default_prevented)` at each `pointer_input`.
     pub(super) prevented: Rc<RefCell<Vec<(String, bool)>>>,
+    /// `(event, payload)` of each `pointer_input` and `fire`.
+    pub(super) payloads: Rc<RefCell<Vec<(String, EventPayload)>>>,
     pub(super) layouts: Rc<RefCell<HashMap<NodeId, NodeLayout>>>,
     pub(super) handles: Rc<RefCell<HashMap<NodeId, ScrollHandle>>>,
     /// The tree the view renders, read for `wheel_axes`.
@@ -61,10 +63,13 @@ impl EventSink for Probe {
         &self,
         start: NodeId,
         event: &str,
-        _: &EventPayload,
+        payload: &EventPayload,
         _: &mut Window,
         cx: &mut App,
     ) -> bool {
+        self.payloads
+            .borrow_mut()
+            .push((event.to_owned(), payload.clone()));
         self.calls
             .borrow_mut()
             .push((format!("fire {event}"), start, mouse_target(cx), None));
@@ -114,6 +119,9 @@ impl EventSink for Probe {
         self.prevented
             .borrow_mut()
             .push((event.to_owned(), window.default_prevented()));
+        self.payloads
+            .borrow_mut()
+            .push((event.to_owned(), payload.clone()));
     }
 
     fn pointer_released(
@@ -167,6 +175,8 @@ pub(super) struct Scene {
     pub(super) cx: VisualTestContext,
     pub(super) calls: Calls,
     pub(super) prevented: Rc<RefCell<Vec<(String, bool)>>>,
+    pub(super) payloads: Rc<RefCell<Vec<(String, EventPayload)>>>,
+    pub(super) focus: Rc<RefCell<Option<(NodeId, gpui::FocusHandle)>>>,
 }
 
 pub(super) fn probe() -> Probe {
@@ -174,6 +184,7 @@ pub(super) fn probe() -> Probe {
         tracks: true,
         calls: Calls::default(),
         prevented: Rc::default(),
+        payloads: Rc::default(),
         layouts: Rc::default(),
         handles: Rc::default(),
         tree: Rc::default(),
@@ -206,6 +217,8 @@ pub(super) fn probe_tree(cx: &mut TestAppContext, tracks: bool) -> Scene {
     probe.tracks = tracks;
     let calls = Rc::clone(&probe.calls);
     let prevented = Rc::clone(&probe.prevented);
+    let payloads = Rc::clone(&probe.payloads);
+    let focus = Rc::clone(&probe.focus);
     let window = cx.add_window(|_, _| ProbeView(probe));
     cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
         .unwrap();
@@ -213,6 +226,8 @@ pub(super) fn probe_tree(cx: &mut TestAppContext, tracks: bool) -> Scene {
         cx: VisualTestContext::from_window(window.into(), cx),
         calls,
         prevented,
+        payloads,
+        focus,
     }
 }
 

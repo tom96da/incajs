@@ -339,6 +339,7 @@ impl EventDispatcher {
             return;
         }
         let focused_button = || self.focused_enabled_button(window, cx);
+        let menu = inca_gpui::is_menu_key(key);
         let plain = !(modifiers.control || modifiers.alt || modifiers.platform);
         let click = match (key, up) {
             ("tab", false) if plain => {
@@ -371,10 +372,11 @@ impl EventDispatcher {
                 None
             }
             // Menu fires alone and F10 with Shift.
-            ("menu" | "f10", false)
-                if (key == "f10") == modifiers.shift
-                    && (key == "menu"
-                        || shift_f10_opens_context_menu(cfg!(target_os = "macos"))) =>
+            (_, false)
+                if (menu && !modifiers.shift)
+                    || (key == "f10"
+                        && modifiers.shift
+                        && shift_f10_opens_context_menu(cfg!(target_os = "macos"))) =>
             {
                 self.fire_key_context_menu(modifiers, window, cx);
                 None

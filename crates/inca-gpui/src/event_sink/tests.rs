@@ -30,10 +30,12 @@ fn key_name_names_every_function_key() {
     }
 }
 
-#[test]
-fn key_name_names_the_menu_key_context_menu() {
+#[rstest]
+#[case::linux_and_windows("menu")]
+#[case::macos("\u{10}")]
+fn key_name_names_the_menu_key_context_menu(#[case] key: &str) {
     let menu = Keystroke {
-        key: "menu".to_string(),
+        key: key.to_string(),
         key_char: None,
         modifiers: gpui::Modifiers::default(),
     };

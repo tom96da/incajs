@@ -3,8 +3,8 @@
 
 use gpui::prelude::*;
 use gpui::{
-    App, DispatchPhase, Global, MouseButton, MouseDownEvent, MouseExitEvent, MouseMoveEvent,
-    MouseUpEvent, ScrollHandle, ScrollWheelEvent, Window, canvas,
+    App, DispatchPhase, Global, Modifiers, MouseButton, MouseDownEvent, MouseExitEvent,
+    MouseMoveEvent, MouseUpEvent, ScrollHandle, ScrollWheelEvent, Window, canvas,
 };
 
 use super::scroll::{RootStep, WheelChain, next_offset};
@@ -21,6 +21,82 @@ struct MouseTarget {
 }
 
 impl Global for MouseTarget {}
+
+const MACOS: bool = cfg!(target_os = "macos");
+
+/// Whether Control is held, and whether the platform reports a Control+click
+/// as a right press.
+#[derive(Clone, Copy)]
+struct ControlClick {
+    held: bool,
+    macos: bool,
+}
+
+impl Default for ControlClick {
+    fn default() -> Self {
+        Self {
+            held: false,
+            macos: MACOS,
+        }
+    }
+}
+
+impl Global for ControlClick {}
+
+fn control_click(cx: &App) -> ControlClick {
+    cx.try_global::<ControlClick>().copied().unwrap_or_default()
+}
+
+/// The button and modifiers of a press the platform reported as a right press
+/// without Control while Control is held: a left press with Control.
+fn restore_control_click(
+    button: MouseButton,
+    modifiers: Modifiers,
+    click: ControlClick,
+) -> (MouseButton, Modifiers) {
+    if click.macos && button == MouseButton::Right && !modifiers.control && click.held {
+        return (
+            MouseButton::Left,
+            Modifiers {
+                control: true,
+                ..modifiers
+            },
+        );
+    }
+    (button, modifiers)
+}
+
+/// Whether a press of `button` with `modifiers` opens the context menu.
+#[must_use]
+pub fn opens_context_menu(button: MouseButton, modifiers: Modifiers, macos: bool) -> bool {
+    button == MouseButton::Right || (macos && button == MouseButton::Left && modifiers.control)
+}
+
+/// Whether a release completes a `click`: on macOS a left release with
+/// Control held completes none.
+fn completes_click(button: MouseButton, modifiers: Modifiers, macos: bool) -> bool {
+    !(macos && button == MouseButton::Left && modifiers.control)
+}
+
+fn restored_down(event: &MouseDownEvent, cx: &App) -> MouseDownEvent {
+    let (button, modifiers) =
+        restore_control_click(event.button, event.modifiers, control_click(cx));
+    MouseDownEvent {
+        button,
+        modifiers,
+        ..event.clone()
+    }
+}
+
+fn restored_up(event: &MouseUpEvent, cx: &App) -> MouseUpEvent {
+    let (button, modifiers) =
+        restore_control_click(event.button, event.modifiers, control_click(cx));
+    MouseUpEvent {
+        button,
+        modifiers,
+        ..event.clone()
+    }
+}
 
 /// The deepest container under the pointer for the mouse event being
 /// handled, and after it until the next mouse event starts. `None` when no
@@ -63,6 +139,7 @@ pub(super) fn mark_mouse_target<Elem: InteractiveElement + FluentBuilder>(
 ) -> Elem {
     let mut element = element
         .on_any_mouse_down(move |event, _, cx| {
+            let event = restored_down(event, cx);
             mark_target(cx, id);
             let slot = slot(event.button);
             cx.default_global::<MouseTarget>().pressed[slot].get_or_insert((id, event.click_count));
@@ -105,6 +182,7 @@ where
 {
     let sink = dispatch.clone();
     element.on_modifiers_changed(move |event, window, cx| {
+        cx.default_global::<ControlClick>().held = event.modifiers.control;
         sink.modifiers_changed(event.modifiers, window, cx);
     })
 }
@@ -152,6 +230,8 @@ fn report_release(
     let target = cx.default_global::<MouseTarget>();
     let released = target.current.unwrap_or(root);
     let pressed = target.pressed[slot].map(|(id, _)| id);
+    let completes = completes_click(event.button, event.modifiers, control_click(cx).macos);
+    let pressed = pressed.filter(|_| completes);
     let event = with_press_count(event, cx);
     sink.pointer_input("mouseup", released, &(&event).into(), window, cx);
     sink.pointer_released(&event, pressed, released, window, cx);
@@ -173,6 +253,7 @@ pub(super) fn pointer_tracker<E: EventSink + Clone + 'static>(
                 move |event: &MouseMoveEvent, phase, window, cx| match phase {
                     DispatchPhase::Capture => {
                         cx.default_global::<MouseTarget>().current = None;
+                        cx.default_global::<ControlClick>().held = event.modifiers.control;
                         moved.pointer_moved(event.position, cx);
                     }
                     DispatchPhase::Bubble => {
@@ -182,8 +263,9 @@ pub(super) fn pointer_tracker<E: EventSink + Clone + 'static>(
                 },
             );
             let pressed = dispatch.clone();
-            window.on_mouse_event(
-                move |event: &MouseDownEvent, phase, window, cx| match phase {
+            window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
+                let event = &restored_down(event, cx);
+                match phase {
                     DispatchPhase::Capture => {
                         let slot = slot(event.button);
                         let target = cx.default_global::<MouseTarget>();
@@ -195,17 +277,24 @@ pub(super) fn pointer_tracker<E: EventSink + Clone + 'static>(
                     DispatchPhase::Bubble => {
                         let target = target_or(cx, root);
                         pressed.pointer_input("mousedown", target, &event.into(), window, cx);
-                        if event.button == gpui::MouseButton::Right {
+                        if opens_context_menu(
+                            event.button,
+                            event.modifiers,
+                            control_click(cx).macos,
+                        ) {
                             let payload = EventPayload::context_menu(event);
                             pressed.fire(target, "contextmenu", &payload, window, cx);
                         }
                     }
-                },
-            );
+                }
+            });
             let released = dispatch.clone();
             window.on_mouse_event(move |event: &MouseUpEvent, phase, window, cx| match phase {
                 DispatchPhase::Capture => cx.default_global::<MouseTarget>().current = None,
-                DispatchPhase::Bubble => report_release(&released, root, event, window, cx),
+                DispatchPhase::Bubble => {
+                    let event = restored_up(event, cx);
+                    report_release(&released, root, &event, window, cx);
+                }
             });
             let scrolled = dispatch.clone();
             window.on_mouse_event(
@@ -273,290 +362,4 @@ where
 }
 
 #[cfg(test)]
-mod tests {
-    #![allow(clippy::unwrap_used)]
-
-    use super::*;
-    use crate::element::tests::*;
-    use crate::tree::VirtualTree;
-    use gpui::{Pixels, Point, px};
-    use inca_test_macros::gpui_cases;
-    use std::rc::Rc;
-
-    use gpui::{
-        MouseButton, ScrollDelta, ScrollWheelEvent, TestAppContext, VisualTestContext, point,
-    };
-
-    const LEAF: (f32, f32) = (10., 10.);
-    const MID: (f32, f32) = (80., 80.);
-    const ROOT_ONLY: (f32, f32) = (150., 150.);
-    const OUTSIDE: (f32, f32) = (300., 300.);
-
-    fn at((x, y): (f32, f32)) -> Point<Pixels> {
-        point(px(x), px(y))
-    }
-
-    /// Runs one of each mouse event at `pos`.
-    fn mouse_events(cx: &mut VisualTestContext, pos: (f32, f32)) {
-        cx.simulate_mouse_move(at(pos), None, gpui::Modifiers::none());
-        cx.simulate_event(ScrollWheelEvent {
-            position: at(pos),
-            delta: ScrollDelta::Pixels(point(px(0.), px(-5.))),
-            ..Default::default()
-        });
-        cx.simulate_click(at(pos), gpui::Modifiers::none());
-    }
-
-    /// `(event, target)` of each report, in order.
-    fn reports(calls: &Calls) -> Vec<(String, NodeId)> {
-        calls.borrow().iter().map(|c| (c.0.clone(), c.1)).collect()
-    }
-
-    fn report(event: &str, target: NodeId) -> (String, NodeId) {
-        (event.to_owned(), target)
-    }
-
-    #[gpui::test]
-    fn every_input_is_reported_once_with_the_deepest_container_as_target(cx: &mut TestAppContext) {
-        let mut scene = probe_tree(cx, true);
-        mouse_events(&mut scene.cx, LEAF);
-        assert_eq!(
-            reports(&scene.calls),
-            [
-                report("mousemove", 2),
-                report("wheel", 2),
-                report("mousedown", 2),
-                report("mouseup", 2),
-                report("release", 2),
-            ]
-        );
-        assert!(
-            scene.calls.borrow()[..4].iter().all(|c| c.2 == Some(2)),
-            "every container below the root reported before the sink"
-        );
-    }
-
-    #[gpui::test]
-    fn the_target_is_cleared_for_each_event(cx: &mut TestAppContext) {
-        let mut scene = probe_tree(cx, true);
-        mouse_events(&mut scene.cx, LEAF);
-        scene.calls.borrow_mut().clear();
-        mouse_events(&mut scene.cx, MID);
-        let targets: Vec<_> = scene.calls.borrow().iter().map(|c| c.1).collect();
-        assert_eq!(targets, [1; 5]);
-    }
-
-    #[gpui::test]
-    fn the_root_is_the_target_when_only_the_root_is_under_the_pointer(cx: &mut TestAppContext) {
-        let mut scene = probe_tree(cx, true);
-        mouse_events(&mut scene.cx, ROOT_ONLY);
-        let calls = scene.calls.borrow();
-        assert!(calls.iter().all(|c| c.1 == 0), "{calls:?}");
-        assert!(
-            calls[..4].iter().all(|c| c.2.is_none()),
-            "the root marks itself after the tracker reports"
-        );
-    }
-
-    #[gpui::test]
-    fn a_sink_that_tracks_no_pointer_gets_the_root_as_every_target(cx: &mut TestAppContext) {
-        let mut scene = probe_tree(cx, false);
-        mouse_events(&mut scene.cx, LEAF);
-        let calls = scene.calls.borrow();
-        assert_eq!(calls.len(), 5);
-        assert!(
-            calls[..4].iter().all(|c| c.1 == 0 && c.2.is_none()),
-            "{calls:?}"
-        );
-        assert_eq!(calls[4].1, 0);
-    }
-
-    #[gpui::test]
-    fn a_release_outside_every_container_reports_the_root(cx: &mut TestAppContext) {
-        let mut scene = probe_tree(cx, true);
-        scene
-            .cx
-            .simulate_mouse_down(at(LEAF), MouseButton::Left, gpui::Modifiers::none());
-        scene
-            .cx
-            .simulate_mouse_up(at(OUTSIDE), MouseButton::Left, gpui::Modifiers::none());
-        assert_eq!(
-            reports(&scene.calls)[1..],
-            [report("mouseup", 0), report("release", 0)]
-        );
-    }
-
-    /// Every `(event, target, pressed)` after the last `mousedown`.
-    fn since_press(calls: &Calls) -> Vec<(String, NodeId, Option<NodeId>)> {
-        let calls = calls.borrow();
-        let last = calls.iter().rposition(|c| c.0 == "mousedown").unwrap();
-        calls[last..]
-            .iter()
-            .map(|c| (c.0.clone(), c.1, c.3))
-            .collect()
-    }
-
-    #[gpui::test]
-    fn the_pressed_target_is_the_press_container_while_the_release_runs(cx: &mut TestAppContext) {
-        let none = gpui::Modifiers::none();
-        let mut scene = probe_tree(cx, true);
-        scene
-            .cx
-            .simulate_mouse_down(at(LEAF), MouseButton::Left, none);
-        scene.cx.simulate_mouse_up(at(MID), MouseButton::Left, none);
-        let ev = |name: &str, target, pressed| (name.to_owned(), target, pressed);
-        assert_eq!(
-            since_press(&scene.calls)[1..],
-            [ev("mouseup", 1, Some(2)), ev("release", 1, Some(2))]
-        );
-        assert_eq!(scene.cx.update(|_, cx| pressed_target(cx, 0)), None);
-        scene
-            .cx
-            .simulate_mouse_down(at(MID), MouseButton::Left, none);
-        let down = scene
-            .calls
-            .borrow()
-            .iter()
-            .rfind(|c| c.0 == "mousedown")
-            .cloned();
-        assert_eq!(down.map(|c| c.3), Some(Some(1)));
-    }
-
-    #[gpui::test]
-    fn a_mouseup_is_followed_by_one_release_report_naming_its_press(cx: &mut TestAppContext) {
-        let none = gpui::Modifiers::none();
-        let mut scene = probe_tree(cx, true);
-        let ev = |name: &str, target, pressed| (name.to_owned(), target, pressed);
-
-        // A release after a completed click has no press to report.
-        scene.cx.simulate_click(at(LEAF), none);
-        scene
-            .cx
-            .simulate_mouse_up(at(LEAF), MouseButton::Left, none);
-        assert_eq!(scene.calls.borrow().last().unwrap().3, None);
-
-        // A press by another button is not the release's press.
-        scene
-            .cx
-            .simulate_mouse_down(at(LEAF), MouseButton::Left, none);
-        scene
-            .cx
-            .simulate_mouse_up(at(LEAF), MouseButton::Right, none);
-        assert_eq!(
-            since_press(&scene.calls)[1..],
-            [ev("mouseup", 2, None), ev("release", 2, None)]
-        );
-
-        // Every release reports, whichever button.
-        let releases = |calls: &Calls| calls.borrow().iter().filter(|c| c.0 == "release").count();
-        let before = releases(&scene.calls);
-        for button in [MouseButton::Right, MouseButton::Middle] {
-            scene.cx.simulate_mouse_down(at(LEAF), button, none);
-            scene.cx.simulate_mouse_up(at(LEAF), button, none);
-        }
-        assert_eq!(releases(&scene.calls) - before, 2);
-    }
-
-    #[gpui::test]
-    fn each_button_keeps_its_own_press_until_its_release(cx: &mut TestAppContext) {
-        let none = gpui::Modifiers::none();
-        let mut scene = probe_tree(cx, true);
-        let release = |calls: &Calls| {
-            let calls = calls.borrow();
-            let last = calls.iter().rfind(|c| c.0 == "release").unwrap();
-            (last.1, last.3)
-        };
-
-        scene
-            .cx
-            .simulate_mouse_down(at(LEAF), MouseButton::Left, none);
-        scene
-            .cx
-            .simulate_mouse_down(at(MID), MouseButton::Right, none);
-        scene
-            .cx
-            .simulate_mouse_up(at(LEAF), MouseButton::Left, none);
-        assert_eq!(release(&scene.calls), (2, Some(2)));
-        scene
-            .cx
-            .simulate_mouse_up(at(LEAF), MouseButton::Right, none);
-        assert_eq!(release(&scene.calls), (2, Some(1)));
-    }
-
-    #[gpui::test]
-    fn after_clearing_the_presses_a_release_reports_no_press(cx: &mut TestAppContext) {
-        let mut scene = probe_tree(cx, true);
-        let none = gpui::Modifiers::none();
-
-        scene
-            .cx
-            .simulate_mouse_down(at(LEAF), MouseButton::Left, none);
-        scene.cx.update(|_, cx| clear_presses(cx));
-        scene
-            .cx
-            .simulate_mouse_up(at(LEAF), MouseButton::Left, none);
-
-        assert_eq!(since_press(&scene.calls).last().unwrap().2, None);
-    }
-
-    #[gpui::test]
-    fn only_a_press_prevents_the_default_before_it_is_reported(cx: &mut TestAppContext) {
-        let mut scene = probe_tree(cx, true);
-        mouse_events(&mut scene.cx, LEAF);
-        let prevented: Vec<_> = scene.prevented.borrow().clone();
-        let want = |event: &str, prevented| (event.to_owned(), prevented);
-        assert_eq!(
-            prevented,
-            [
-                want("mousemove", false),
-                want("wheel", false),
-                want("mousedown", true),
-                want("mouseup", false),
-            ]
-        );
-    }
-
-    #[gpui_cases]
-    #[gpui::test]
-    #[case::right(MouseButton::Right, true)]
-    #[case::middle(MouseButton::Middle, false)]
-    fn a_press_fires_contextmenu_only_for_the_right_button(
-        cx: &mut TestAppContext,
-        button: MouseButton,
-        contextmenu: bool,
-    ) {
-        let mut scene = probe_tree(cx, true);
-        scene
-            .cx
-            .simulate_mouse_down(at(LEAF), button, gpui::Modifiers::none());
-        let mut want = vec![report("mousedown", 2)];
-        if contextmenu {
-            want.push(report("fire contextmenu", 2));
-        }
-        assert_eq!(reports(&scene.calls), want);
-    }
-
-    /// An inert child never becomes the target, so the listening parent does.
-    #[gpui::test]
-    fn an_inert_child_is_never_the_event_target(cx: &mut TestAppContext) {
-        let mut tree = VirtualTree::new();
-        let parent = tree.create_node("div").unwrap();
-        let child = tree.create_node("div").unwrap();
-        for (id, side) in [(parent, 200.0), (child, 100.0)] {
-            tree.set_style(id, "width", side).unwrap();
-            tree.set_style(id, "height", side).unwrap();
-        }
-        tree.set_attribute(child, "inert", true).unwrap();
-        tree.append_child(parent, child).unwrap();
-        let probe = probe_of(tree);
-        let calls = Rc::clone(&probe.calls);
-        let window = cx.add_window(|_, _| ProbeView(probe));
-        cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-            .unwrap();
-        let mut cx = VisualTestContext::from_window(window.into(), cx);
-
-        cx.simulate_mouse_move(at(LEAF), None, gpui::Modifiers::none());
-
-        assert_eq!(reports(&calls), [report("mousemove", parent)]);
-    }
-}
+mod tests;

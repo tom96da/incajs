@@ -29,7 +29,7 @@ pub use build::{
 };
 pub use input::TextInputHandler;
 pub use parse::style_warning;
-pub use pointer::{clear_presses, mouse_target, pressed_target};
+pub use pointer::{clear_presses, mouse_target, opens_context_menu, pressed_target};
 pub use spec::{
     AlignSpec, DisplaySpec, EdgesSpec, ElementSpec, ElementTag, FlexDirectionSpec, LengthSpec,
     OverflowSpec, StyleSpec, build_spec, hidden_by_attribute, is_scroll_container, wheel_axes,

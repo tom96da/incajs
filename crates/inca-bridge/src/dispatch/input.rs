@@ -4,11 +4,11 @@
 //! The editing of an `input` node: the requests of the platform's text
 //! input, the editing keys and the mouse selection.
 
-use gpui::{App, ClipboardItem, Keystroke, Window};
+use gpui::{App, ClipboardItem, Keystroke, MouseButton, Window};
 use inca_gpui::input::{pasted, sanitized, typed};
 use inca_gpui::{
     Edit, EventPayload, InputPayload, InputRequest, InputState, InputType, Motion, MousePayload,
-    NodeId, is_disabled_control,
+    NodeId, is_disabled_control, opens_context_menu,
 };
 
 use crate::focus::FocusTransition;
@@ -336,14 +336,34 @@ impl EventDispatcher {
 
     /// Puts the caret of the `input` `target` under the mouse press `mouse`, extends the
     /// selection with Shift and starts a drag. Only the left button does.
-    pub(super) fn input_press(&self, target: NodeId, mouse: &MousePayload, window: &mut Window) {
-        if mouse.button != 0 || !self.is_input(target) || self.is_disabled(target) {
+    /// A press that opens the context menu on `macos` keeps a selection it lands in or on
+    /// its edge and starts no drag.
+    pub(super) fn input_press(
+        &self,
+        target: NodeId,
+        mouse: &MousePayload,
+        macos: bool,
+        window: &mut Window,
+    ) {
+        let enabled_input = matches!(self.input_flags(target), Some((true, _, false)));
+        if mouse.button != 0 || !enabled_input {
             return;
         }
+        let menu = opens_context_menu(MouseButton::Left, mouse.modifiers, macos);
         self.with_input(target, |state| {
-            state.place(state.offset_at(mouse.client_x), mouse.modifiers.shift);
+            let offset = state.offset_at(mouse.client_x);
+            if menu {
+                let selection = state.selection();
+                if !(selection.start..=selection.end).contains(&offset) {
+                    state.place(offset, false);
+                }
+            } else {
+                state.place(offset, mouse.modifiers.shift);
+            }
         });
-        self.state.input_drag.set(Some(target));
+        if !menu {
+            self.state.input_drag.set(Some(target));
+        }
         Self::input_changed(window);
     }
 

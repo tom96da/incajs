@@ -281,11 +281,20 @@ impl From<&KeyUpEvent> for EventPayload {
     }
 }
 
+/// Whether gpui's `key` names the Menu key: `"menu"`, or U+0010 from a Mac keyboard.
+#[must_use]
+pub fn is_menu_key(key: &str) -> bool {
+    matches!(key, "menu" | "\u{10}")
+}
+
 /// GPUI's `Keystroke::key` to the key name, covering GPUI's
 /// special key names, grown as real usage needs more of them. Falls
 /// through to `key_char` (the character actually typed, when the platform
 /// reports one) and then to `key` itself for anything not in the table.
 fn key_name(keystroke: &Keystroke) -> String {
+    if is_menu_key(&keystroke.key) {
+        return "ContextMenu".to_string();
+    }
     let named = match keystroke.key.as_str() {
         "space" => Some(" "),
         "tab" => Some("Tab"),
@@ -304,7 +313,6 @@ fn key_name(keystroke: &Keystroke) -> String {
         "back" => Some("BrowserBack"),
         "forward" => Some("BrowserForward"),
         "escape" => Some("Escape"),
-        "menu" => Some("ContextMenu"),
         _ => None,
     };
     if let Some(named) = named {
