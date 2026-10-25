@@ -10,7 +10,7 @@ use rquickjs::{Ctx, Exception, Result as JsResult, Value};
 use inca_gpui::NodeId;
 
 use super::Natives;
-use super::convert::{Flag, JsEventTargetId, JsNodeId, existing_node};
+use super::convert::{Flag, JsCallbackId, JsEventTargetId, JsNodeId, existing_node};
 use super::host::Host;
 use crate::EventTargetId;
 
@@ -160,8 +160,10 @@ fn add_event_listener<'js>(
     }
 }
 
-fn remove_event_listener(host: Rc<RefCell<Host>>) -> impl Fn(JsEventTargetId, String, u32) -> bool {
-    move |JsEventTargetId(target), event, callback_id| {
+fn remove_event_listener(
+    host: Rc<RefCell<Host>>,
+) -> impl Fn(JsEventTargetId, String, JsCallbackId) -> bool {
+    move |JsEventTargetId(target), event, JsCallbackId(callback_id)| {
         host.borrow_mut()
             .listeners
             .remove(target, &event, callback_id)
@@ -192,6 +194,7 @@ mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
     use crate::test_support::{callback_ids, engine_with_bindings};
+    use rstest::rstest;
 
     #[test]
     fn a_registration_keeps_its_phase_and_passivity() {
@@ -546,5 +549,56 @@ mod tests {
             !removed,
             "removing after a destroy races normal teardown and must not throw"
         );
+    }
+
+    #[rstest]
+    #[case::nan("NaN")]
+    #[case::fractional("1.5")]
+    #[case::negative("-1")]
+    #[case::infinity("Infinity")]
+    #[case::above_u32("2 ** 32")]
+    #[case::numeric_string("'1'")]
+    fn a_callback_id_that_is_not_a_whole_u32_throws_type_error_and_removes_nothing(
+        #[case] bad: &str,
+    ) {
+        let (engine, host) = engine_with_bindings();
+
+        let script = format!(
+            r"
+            const node = __inca_native__.createNode('div');
+            __inca_native__.addEventListener(node, 'click');
+            __inca_native__.addEventListener(node, 'click');
+            let caught = false;
+            try {{
+                __inca_native__.removeEventListener(node, 'click', {bad});
+            }} catch (e) {{
+                caught = e instanceof TypeError;
+            }}
+            caught;
+            "
+        );
+
+        assert!(engine.eval::<bool>(&script).unwrap(), "{bad}");
+        assert_eq!(
+            callback_ids(&host.borrow().listeners, EventTargetId::Node(1), "click"),
+            [0, 1],
+            "{bad}"
+        );
+    }
+
+    #[test]
+    fn the_largest_u32_callback_id_is_accepted() {
+        let (engine, _host) = engine_with_bindings();
+
+        let removed: bool = engine
+            .eval(
+                r"
+                const node = __inca_native__.createNode('div');
+                __inca_native__.removeEventListener(node, 'click', 4294967295);
+                ",
+            )
+            .unwrap();
+
+        assert!(!removed);
     }
 }
