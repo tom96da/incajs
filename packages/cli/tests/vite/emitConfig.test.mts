@@ -45,12 +45,4 @@ describe("emitConfig", () => {
 
     expect(output.files).not.toContain("inca.json");
   }, 20000);
-
-  it("writes nothing for a config with no keys", async () => {
-    const { entry, outDir, streams } = await makeApp(APP);
-
-    const output = await build({ entry, outDir, runtimeConfig: {}, ...streams });
-
-    expect(output.files).not.toContain("inca.json");
-  }, 20000);
 });

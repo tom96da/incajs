@@ -1198,16 +1198,3 @@ A fixed entry is deleted and its ID is never reused.
   Fix: a Vite plugin injects `import { document, window } from "incajs"` into
   the app's own source, not into `node_modules`, and generates their types
   into `.inca/`.
-
-- **B-227 Stack paths differ between HMR and a plain reload**
-  `Units: jsenv,cli,docs · Size: M · Impact: Low`
-
-  Under `--experimental-hmr` a frame names its module by the id Vite gives it,
-  such as `/src/App.vue`. Without it the host resolves the source map's
-  `sources` against the map's directory, so a frame shows an absolute path.
-
-  Fix: a setting picks `relative` (from the app's root) or `absolute` for the
-  paths of every stack, with and without HMR. The host learns the app's root,
-  `inca config` prints the setting and `docs/reference/configuration.md`
-  lists it. Decide the default, whether `inca build` and `inca package` follow
-  it, since that changes the printed paths.

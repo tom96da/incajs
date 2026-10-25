@@ -69,6 +69,24 @@ describe("resolveAppConfig's productName", () => {
   });
 });
 
+describe("resolveAppConfig's dev", () => {
+  it("resolves the default stack path style for an app that declares none", async () => {
+    const app = await makeApp({ name: "scratch-app" });
+
+    await expect(resolveAppConfig(app)).resolves.toMatchObject({
+      dev: { stackPaths: "relative" },
+    });
+  });
+
+  it("resolves the stack path style an app declared", async () => {
+    const app = await makeApp({ name: "scratch-app", inca: { dev: { stackPaths: "absolute" } } });
+
+    await expect(resolveAppConfig(app)).resolves.toMatchObject({
+      dev: { stackPaths: "absolute" },
+    });
+  });
+});
+
 describe("resolveAppConfig's outDir", () => {
   it.each(["", ".", "..", "src", "node_modules"])(
     "refuses %j, which holds the app's sources",
@@ -231,9 +249,31 @@ describe("resolveRuntimeConfig", () => {
     });
   });
 
-  it("resolves to nothing for an app that declares none of it", async () => {
+  it("resolves to an empty config for an app that declares nothing", async () => {
     const app = await makeApp({});
 
-    await expect(resolveRuntimeConfig(app)).resolves.toBeUndefined();
+    await expect(resolveRuntimeConfig(app)).resolves.toEqual({});
+  });
+
+  it("carries the default stack path style with dev", async () => {
+    const app = await makeApp({});
+
+    await expect(resolveRuntimeConfig(app, { dev: true })).resolves.toEqual({
+      dev: { stackPaths: "relative" },
+    });
+  });
+
+  it("carries the stack path style an app declared with dev", async () => {
+    const app = await makeApp({ inca: { dev: { stackPaths: "absolute" } } });
+
+    await expect(resolveRuntimeConfig(app, { dev: true })).resolves.toMatchObject({
+      dev: { stackPaths: "absolute" },
+    });
+  });
+
+  it("leaves dev out without dev", async () => {
+    const app = await makeApp({ inca: { dev: { stackPaths: "absolute" } } });
+
+    expect(await resolveRuntimeConfig(app)).not.toHaveProperty("dev");
   });
 });

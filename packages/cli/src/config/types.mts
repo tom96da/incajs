@@ -44,6 +44,17 @@ export interface IncaConfig {
   sourcemap?: boolean;
   /** The window the app opens in. */
   window?: WindowConfig;
+  /** What only `inca dev` applies. */
+  dev?: DevConfig;
+}
+
+/** What only `inca dev` applies. See {@link IncaConfig.dev}. */
+export interface DevConfig {
+  /**
+   * How an error's stack names a source file: from the app's root, or by its full path.
+   * @default "relative"
+   */
+  stackPaths?: "relative" | "absolute";
 }
 
 /** What an app declares about its window. See {@link IncaConfig.window}. */

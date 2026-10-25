@@ -9,7 +9,7 @@ import { Writable } from "node:stream";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { packageApp } from "./package.mts";
-import type { Bundler, BuildOutput, Watcher } from "./types.mts";
+import type { Bundler, BuildOptions, BuildOutput, Watcher } from "./types.mts";
 
 let cwd: string | undefined;
 
@@ -67,6 +67,32 @@ function makeSink(): { stream: Writable; text: () => string } {
 }
 
 describe("packageApp", () => {
+  it("hands the bundler no dev member when packaging", async () => {
+    const app = await makeApp({
+      name: "click_counter",
+      inca: { dev: { stackPaths: "absolute" } },
+    });
+    const hostBin = await makeHostBin(app);
+    const bundler = fakeBundler();
+    let seen: BuildOptions | undefined;
+    const build = bundler.build.bind(bundler);
+    bundler.build = (options) => {
+      seen = options;
+      return build(options);
+    };
+
+    await packageApp({
+      cwd: app,
+      entry: "unused",
+      bundler,
+      hostBin,
+      target: "linux",
+      stdout: makeSink().stream,
+    });
+
+    expect(seen?.runtimeConfig).not.toHaveProperty("dev");
+  });
+
   it("lays out a macOS .app with the host, bundle and Info.plist", async () => {
     const app = await makeApp({ name: "click_counter", version: "1.2.3" });
     const hostBin = await makeHostBin(app);

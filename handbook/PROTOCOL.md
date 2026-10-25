@@ -186,12 +186,12 @@ A build writes `inca.json` beside the entry:
 }
 ```
 
-Every member is optional, and a build that has none of them writes no file.
-`name` is what the platform calls the running app, `identifier` its
-reverse-DNS id, and `window` the size, title, resizability and minimum size
-it opens at. `root` is the app's root relative to the file's directory, and
-`dev.stackPaths` is how a stack names a file, `relative` from the root (the
-default) or `absolute`; only `inca dev` writes `dev`.
+Every member is optional. The CLI writes `root` into every build, so every
+build has the file. `name` is what the platform calls the running app,
+`identifier` its reverse-DNS id, and `window` the size, title, resizability
+and minimum size it opens at. `root` is the app's root relative to the file's
+directory, and `dev.stackPaths` is how a stack names a file, `relative` from
+the root (the default) or `absolute`; only `inca dev` writes `dev`.
 
 The host reads it at startup, before opening the window, and `dev` and `root`
 again at each load of the bundle. It reaches the file the same way whether a

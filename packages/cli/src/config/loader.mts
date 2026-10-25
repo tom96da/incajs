@@ -9,7 +9,7 @@ import { loadConfig } from "c12";
 
 import { IncaError } from "../error.mts";
 import { defaultConfig, defaultIdentifier, defaultProductName } from "./defaults.mts";
-import type { IncaConfig, WindowConfig } from "./types.mts";
+import type { DevConfig, IncaConfig, WindowConfig } from "./types.mts";
 
 /** The parts of an app's `package.json` this loader reads itself. */
 interface AppPackageJson {
@@ -51,6 +51,8 @@ export interface ResolvedAppConfig extends ResolvedBuildConfig {
   icon?: string;
   /** What the app declared about its window, if anything. */
   window?: WindowConfig;
+  /** What only `inca dev` applies, with each member resolved. */
+  dev: Required<DevConfig>;
   /** package.json's `"inca"` key is deprecated; callers warn when this is true. */
   usedPackageJsonKey: boolean;
 }
@@ -64,6 +66,10 @@ export interface RuntimeConfig {
   name?: string;
   identifier?: string;
   window?: WindowConfig;
+  /** What only `inca dev` writes. */
+  dev?: DevConfig;
+  /** The app's root, relative to the directory of the `inca.json` it is written to. */
+  root?: string;
 }
 
 /** Characters no directory name may hold, on any platform this runs on. */
@@ -218,6 +224,11 @@ export async function resolveBuildConfig(cwd: string): Promise<ResolvedBuildConf
   };
 }
 
+/** The `dev.stackPaths` setting of `config`, resolved. */
+function stackPathsOf(config: IncaConfig): Required<DevConfig>["stackPaths"] {
+  return config.dev?.stackPaths ?? defaultConfig.dev.stackPaths;
+}
+
 /**
  * Loads an app's full config for `inca package`: `inca.config.ts` over
  * `package.json`'s `"inca"` key over derived defaults.
@@ -274,6 +285,7 @@ export async function resolveAppConfig(cwd: string): Promise<ResolvedAppConfig> 
     version,
     icon,
     window: config.window,
+    dev: { stackPaths: stackPathsOf(config) },
     entry,
     outDir,
     sourcemap: config.sourcemap ?? defaultConfig.sourcemap,
@@ -285,13 +297,18 @@ export async function resolveAppConfig(cwd: string): Promise<ResolvedAppConfig> 
  * Narrows a full config down to what a build carries for the host.
  *
  * @param config - a config {@link resolveAppConfig} returned
- * @returns its name, id and window
+ * @param options - `dev` adds the members only `inca dev` writes
+ * @returns its name, id and window, and its `dev` members when `options.dev` is true
  */
-export function runtimeConfigOf(config: ResolvedAppConfig): RuntimeConfig {
+export function runtimeConfigOf(
+  config: ResolvedAppConfig,
+  { dev = false }: { dev?: boolean } = {},
+): RuntimeConfig {
   return {
     name: config.productName,
     identifier: config.identifier,
     window: config.window,
+    ...(dev && { dev: { stackPaths: config.dev.stackPaths } }),
   };
 }
 
@@ -301,10 +318,14 @@ export function runtimeConfigOf(config: ResolvedAppConfig): RuntimeConfig {
  * whatever window settings it declared.
  *
  * @param cwd - the app's root directory
- * @returns the config, or `undefined` when the app declares none of it
+ * @param options - `dev` adds the members only `inca dev` writes
+ * @returns the config, empty when the app declares none of it
  * @throws if `package.json` exists and holds malformed JSON
  */
-export async function resolveRuntimeConfig(cwd: string): Promise<RuntimeConfig | undefined> {
+export async function resolveRuntimeConfig(
+  cwd: string,
+  { dev = false }: { dev?: boolean } = {},
+): Promise<RuntimeConfig> {
   const { config } = await loadIncaConfig(cwd);
 
   const pkgPath = path.join(cwd, "package.json");
@@ -316,7 +337,10 @@ export async function resolveRuntimeConfig(cwd: string): Promise<RuntimeConfig |
   const name = config.productName ?? defaultProductName(pkg.name);
   if (name) assertUsableProductName(name);
   const identifier = config.identifier ?? (name ? defaultIdentifier(name) : undefined);
-  const runtime: RuntimeConfig = { name, identifier, window: config.window };
-
-  return Object.values(runtime).some((value) => value !== undefined) ? runtime : undefined;
+  return {
+    name,
+    identifier,
+    window: config.window,
+    ...(dev && { dev: { stackPaths: stackPathsOf(config) } }),
+  };
 }

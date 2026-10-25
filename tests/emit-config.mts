@@ -26,6 +26,8 @@ const config: Required<RuntimeConfig> = {
   name: "Demo",
   identifier: "org.inca.demo",
   window,
+  dev: { stackPaths: "absolute" },
+  root: "..",
 };
 
 const outDir = process.argv[2];

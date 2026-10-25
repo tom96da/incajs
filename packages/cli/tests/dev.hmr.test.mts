@@ -53,6 +53,31 @@ describe("dev with --experimental-hmr", () => {
     await running;
   });
 
+  it("hands the HMR session dev.stackPaths", async () => {
+    const bundler = makeFakeHmrBundler("/unused/entry.js");
+    const stdout = makeSink();
+    const controller = new AbortController();
+
+    const running = dev({
+      cwd: await scratch.makeApp({}),
+      entry: "unused",
+      bundler,
+      hostBin: hmrMockHost,
+      experimentalHmr: true,
+      stdout: stdout.stream,
+      stderr: makeSink().stream,
+      signal: controller.signal,
+    });
+
+    await waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
+    controller.abort();
+    await running;
+
+    expect(bundler.channels[0]!.options.runtimeConfig).toMatchObject({
+      dev: { stackPaths: "relative" },
+    });
+  });
+
   it("turns a full-reload payload into the reload RPC, not a vite notification", async () => {
     const bundler = makeFakeHmrBundler("/unused/entry.js");
     const stdout = makeSink();

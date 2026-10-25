@@ -4,7 +4,7 @@
 import type { IncaConfig } from "./types.mts";
 
 export { defaultConfig } from "./defaults.mts";
-export type { IncaConfig } from "./types.mts";
+export type { DevConfig, IncaConfig } from "./types.mts";
 
 /**
  * Type-completion helper for `inca.config.ts`. An identity function at

@@ -3,6 +3,7 @@
 
 import path from "node:path";
 
+import { withAppRoot } from "./config/appRoot.mts";
 import { assertOutDir, resolveBuildConfig, resolveRuntimeConfig } from "./config/loader.mts";
 import { defaultBundler } from "./defaultBundler.mts";
 import { entryRoot, resolveEntry } from "./entry.mts";
@@ -52,7 +53,7 @@ export async function build(options: BuildAppOptions = {}): Promise<BuildOutput>
     publicDir: path.join(cwd, "public"),
     outDir,
     sourcemap: options.sourcemap ?? config.sourcemap,
-    runtimeConfig,
+    runtimeConfig: withAppRoot(runtimeConfig, cwd, outDir),
     stdout: options.stdout,
     stderr: options.stderr,
   });

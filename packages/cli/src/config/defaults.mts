@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import type { IncaConfig } from "./types.mts";
+import type { DevConfig, IncaConfig } from "./types.mts";
 
 /**
  * The `IncaConfig` fields whose default is a fixed value rather than one
@@ -18,7 +18,10 @@ import type { IncaConfig } from "./types.mts";
  * });
  * ```
  */
-export const defaultConfig: Required<Pick<IncaConfig, "outDir" | "sourcemap" | "version">> = {
+export const defaultConfig: Required<Pick<IncaConfig, "outDir" | "sourcemap" | "version">> & {
+  dev: Required<DevConfig>;
+} = {
+  dev: { stackPaths: "relative" },
   outDir: "dist",
   sourcemap: false,
   version: "0.0.0",

@@ -1,9 +1,11 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { build } from "./build.mts";
 import type { Bundler, BuildOptions, BuildOutput } from "./types.mts";
@@ -46,8 +48,37 @@ describe("build", () => {
       publicDir: "/app/public",
       outDir: "/app/dist",
       sourcemap: false,
+      runtimeConfig: { root: ".." },
     });
     expect(output.entryFile).toBe("/app/dist/bundle.js");
+  });
+
+  it("hands the bundler the root relative to outDir", async () => {
+    const bundler = makeFakeBundler(writeNothing);
+
+    await build({
+      cwd: "/app",
+      entry: "unused",
+      bundler,
+      config: { outDir: "/app/out/nested", entry: undefined, sourcemap: false },
+      runtimeConfig: { name: "Demo" },
+    });
+
+    expect(bundler.seen?.runtimeConfig).toEqual({ name: "Demo", root: "../.." });
+  });
+
+  it("hands the bundler no dev member, also for an app that sets dev.stackPaths", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "inca-build-"));
+    onTestFinished(() => rm(cwd, { recursive: true, force: true }));
+    await writeFile(
+      path.join(cwd, "package.json"),
+      JSON.stringify({ type: "module", inca: { dev: { stackPaths: "absolute" } } }),
+    );
+    const bundler = makeFakeBundler(writeNothing);
+
+    await build({ cwd, entry: "unused", bundler });
+
+    expect(bundler.seen?.runtimeConfig).not.toHaveProperty("dev");
   });
 
   it("builds the entry synthesized for src/App.vue with src as the root", async () => {
