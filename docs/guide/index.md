@@ -14,6 +14,7 @@ For how the pieces fit together, see [How it Works](./how-it-works).
 ## Installation
 
 [Node.js](https://nodejs.org/) v22.18 or higher.
+Bun works too.
 
 ::: code-group
 
@@ -30,6 +31,11 @@ $ pnpm add -D @incajs/cli
 ```sh [yarn]
 $ yarn add vue incajs
 $ yarn add -D @incajs/cli
+```
+
+```sh [bun]
+$ bun add vue incajs
+$ bun add -D @incajs/cli
 ```
 
 :::
@@ -126,6 +132,10 @@ $ pnpm run dev
 
 ```sh [yarn]
 $ yarn run dev
+```
+
+```sh [bun]
+$ bun --bun run dev
 ```
 
 :::
