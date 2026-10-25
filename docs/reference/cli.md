@@ -101,8 +101,7 @@ and opens no window.
 
 A setting whose value the host cannot use fails with
 [`ERR_INCA_CONFIG_INVALID`](./errors#err-inca-config-invalid), naming the
-setting, its value and the kind of value it must be. The other commands
-don't check the values, so the host opens with the defaults.
+setting, its value and the kind of value it must be.
 
 ### Usage
 
@@ -114,5 +113,5 @@ $ inca config
 
 | Variable        | Description          |
 | --------------- | -------------------- |
-| `INCA_HOST_BIN` | Path to a specific host binary, used by `dev`, `package` and `config` in place of automatic resolution, e.g. on a custom or unpublished build. |
+| `INCA_HOST_BIN` | Path to a specific host binary, used by `dev`, `build`, `package` and `config` in place of automatic resolution, e.g. on a custom or unpublished build. |
 | `INCA_EXPERIMENTAL_HMR` | Same as `--experimental-hmr`, for `inca dev`. See the [HMR guide](../guide/hmr). |

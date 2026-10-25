@@ -27,6 +27,7 @@ A feature the engine cannot run yet fails the build. A `<style>` block is one
 | Raised by | Carried as |
 | --- | --- |
 | `@incajs/cli` | an `IncaError` with an `ERR_INCA_*` code, printed by `printFault` |
+| the host's `--print-config` | `ERR_INCA_CONFIG_INVALID`, and the command exits 1 |
 | `inca-host`, answering a protocol message | a JSON-RPC error (see [PROTOCOL.md](./PROTOCOL.md#failure-handling)) |
 | `inca-host`, otherwise | its stderr |
 | a panic in `inca-host` under `--dev` | a `-32603` error, printed by `inca dev` as `[host error -32603]` |

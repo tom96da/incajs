@@ -2,13 +2,16 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import type { SpawnSyncReturns } from "node:child_process";
 
 import { withAppRoot } from "./config/appRoot.mts";
 import { resolveRuntimeConfig } from "./config/loader.mts";
 import { assertHostBin, resolveHostBin } from "./dev-client/index.mts";
 import { IncaError } from "./error.mts";
+import { warn } from "./log.mts";
 import type { RuntimeConfig } from "./config/loader.mts";
 import type { DevConfig, WindowConfig } from "./config/types.mts";
 
@@ -108,6 +111,84 @@ function settingFault(stderr: string, file: string, config: object): IncaError |
 }
 
 /**
+ * Starts the host with `--print-config` on `entry`.
+ *
+ * @param hostBin - the host binary
+ * @param entry - the entry the host reads its config beside
+ * @param file - the `inca.json` beside `entry`
+ * @param config - what `file` holds
+ * @returns the host's answer
+ * @throws if the host can't be started, or reports a setting it can't use
+ */
+function runPrintConfig(
+  hostBin: string,
+  entry: string,
+  file: string,
+  config: object,
+): SpawnSyncReturns<string> {
+  const result = spawnSync(hostBin, ["--print-config", entry], { encoding: "utf8" });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    const fault = settingFault(result.stderr, file, config);
+    if (fault) throw fault;
+  }
+  return result;
+}
+
+/**
+ * Asks the host whether it can use the config beside `entry`. The host reads the `inca.json` the
+ * bundler wrote there. A file that is missing or not JSON reads as an empty config, and the
+ * host's own report reaches the user.
+ *
+ * @param hostBin - the host binary
+ * @param entry - the entry the host is about to load
+ * @throws if the host can't be started, or reports a setting it can't use, or a config file it
+ * can't read
+ */
+export function checkConfig(hostBin: string, entry: string): void {
+  const file = path.join(path.dirname(entry), "inca.json");
+  let config: object = {};
+  try {
+    config = JSON.parse(readFileSync(file, "utf8"));
+  } catch {}
+  const result = runPrintConfig(hostBin, entry, file, config);
+  if (result.status !== 0) {
+    const line = result.stderr.split("\n")[0] ?? "";
+    throw new IncaError(
+      "ERR_INCA_CONFIG_INVALID",
+      `the host can't read ${file}. it reported "${line}"`,
+    );
+  }
+}
+
+/**
+ * Runs {@link checkConfig} on a build's `entry` with the host binary that resolves. Without one
+ * the check is skipped with a warning, because a build needs no host.
+ *
+ * @param entry - the entry the build wrote
+ * @param stderr - receives the warning
+ * @throws if the check fails, or the host binary can't be resolved for another reason
+ */
+export function checkBuiltConfig(entry: string, stderr: NodeJS.WritableStream): void {
+  let hostBin: string;
+  try {
+    hostBin = resolveHostBin();
+    assertHostBin(hostBin);
+  } catch (error) {
+    if (
+      error instanceof IncaError &&
+      (error.code === "ERR_INCA_HOST_BIN_UNRESOLVED" ||
+        error.code === "ERR_INCA_HOST_BIN_NOT_FOUND")
+    ) {
+      warn(stderr, "no host binary found, so the config was not checked");
+      return;
+    }
+    throw error;
+  }
+  checkConfig(hostBin, entry);
+}
+
+/**
  * Prints the settings the host applies to the app as JSON. The host reads the app's config from
  * `node_modules/.inca/config/inca.json`, written as a build writes it beside the bundle.
  *
@@ -129,12 +210,7 @@ export async function printConfig(options: PrintConfigOptions = {}): Promise<num
   await writeFile(entry, "");
   await writeFile(file, JSON.stringify(withAppRoot(config, cwd, dir), undefined, 2));
 
-  const result = spawnSync(hostBin, ["--print-config", entry], { encoding: "utf8" });
-  if (result.error) throw result.error;
-  if (result.status !== 0) {
-    const fault = settingFault(result.stderr, file, config);
-    if (fault) throw fault;
-  }
+  const result = runPrintConfig(hostBin, entry, file, config);
   (options.stdout ?? process.stdout).write(result.stdout);
   (options.stderr ?? process.stderr).write(result.stderr);
   return result.status ?? 1;

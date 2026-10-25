@@ -5,6 +5,7 @@
 // A stand-in for `inca-host --dev`: answers `reload`/`shutdown`
 // successfully, so `dev()` can be tested without a real engine or window.
 
+import "./answerPrintConfig.mts";
 import readline from "node:readline";
 
 process.stdout.write(

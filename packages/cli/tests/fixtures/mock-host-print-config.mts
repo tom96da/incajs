@@ -5,15 +5,19 @@
 // A stand-in for `--print-config`: prints its arguments and the `inca.json`
 // beside the entry it was given. `MOCK_HOST_STDERR` is written to stderr with
 // `{file}` replaced by that `inca.json`'s path and `{other}` by a path of the
-// same length that names another file. `MOCK_HOST_EXIT` picks the
-// exit code, or a signal name to die from.
+// same length that names another file. `MOCK_HOST_EXIT` picks the exit code,
+// or a signal name to die from. It reads `{}` for an `inca.json` that is
+// missing or not JSON.
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
 const [flag, entry = ""] = process.argv.slice(2);
 const file = path.join(path.dirname(entry), "inca.json");
-const config = JSON.parse(readFileSync(file, "utf8"));
+let config = {};
+try {
+  config = JSON.parse(readFileSync(file, "utf8"));
+} catch {}
 process.stdout.write(JSON.stringify({ flag, entry, config }));
 const other = file.replace(/json$/, "jsom");
 process.stderr.write(

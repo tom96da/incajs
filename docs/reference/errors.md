@@ -85,6 +85,9 @@ message names the setting, its value and the kind of value it must be:
 When the value already has that kind, the message ends in "the host can't
 use it". Fix the value in `inca.config.ts` and run the command again.
 
+For a config file the host cannot read, the message names the file and quotes
+the host's report.
+
 ## `ERR_INCA_PLATFORM_UNSUPPORTED`
 
 `inca package` runs on macOS and Linux. Windows isn't supported yet.

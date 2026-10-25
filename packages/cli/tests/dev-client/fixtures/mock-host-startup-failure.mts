@@ -6,6 +6,8 @@
 // host does: an error response with a null id, then exit 1. An entry
 // argument of `parse` makes it a -32700 reply instead.
 
+import "../../fixtures/answerPrintConfig.mts";
+
 const code = process.argv[3] === "parse" ? -32700 : -32000;
 
 process.stdout.write(

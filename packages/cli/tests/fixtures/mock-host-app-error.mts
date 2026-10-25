@@ -5,6 +5,7 @@
 // A stand-in that reports an app fault right after booting, so dev()'s
 // appError display can be tested without a real app that throws.
 
+import "./answerPrintConfig.mts";
 import readline from "node:readline";
 
 process.stdout.write(

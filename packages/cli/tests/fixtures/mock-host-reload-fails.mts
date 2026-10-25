@@ -6,6 +6,7 @@
 // a bundle that throws while being evaluated does, so dev()'s failed-reload
 // display can be tested without a real broken bundle.
 
+import "./answerPrintConfig.mts";
 import readline from "node:readline";
 
 process.stdout.write(

@@ -6,6 +6,7 @@
 // recognize, so its mismatch handling can be tested without a second host
 // binary.
 
+import "../../fixtures/answerPrintConfig.mts";
 import readline from "node:readline";
 
 process.stdout.write(
