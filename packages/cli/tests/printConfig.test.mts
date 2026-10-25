@@ -207,7 +207,10 @@ it("checkConfig reports a host ended by a signal as a start failure", async () =
   const { entry } = await appWithEntry({});
 
   expect(() => checkConfig(hostBin, entry)).toThrow(
-    new Error("the host failed to start (signal=SIGTERM)"),
+    expect.objectContaining({
+      code: "ERR_INCA_HOST_EXITED_EARLY",
+      message: "the host exited with signal SIGTERM before it read the config",
+    }),
   );
 });
 

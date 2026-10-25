@@ -142,8 +142,8 @@ function runPrintConfig(
  *
  * @param hostBin - the host binary
  * @param entry - the entry the host is about to load
- * @throws if the host can't be started, or reports a setting it can't use, or a config file it
- * can't read
+ * @throws if the host can't be started or a signal ends it, or it reports a setting it can't use,
+ * or a config file it can't read
  */
 export function checkConfig(hostBin: string, entry: string): void {
   const file = path.join(path.dirname(entry), "inca.json");
@@ -153,7 +153,10 @@ export function checkConfig(hostBin: string, entry: string): void {
   } catch {}
   const result = runPrintConfig(hostBin, entry, file, config);
   if (result.status === null) {
-    throw new Error(`the host failed to start (signal=${String(result.signal)})`);
+    throw new IncaError(
+      "ERR_INCA_HOST_EXITED_EARLY",
+      `the host exited with signal ${String(result.signal)} before it read the config`,
+    );
   }
   if (result.status !== 0) {
     const line = result.stderr.split("\n")[0] ?? "";
