@@ -14,6 +14,8 @@ import {
   removeAttribute,
   removeChild,
   removeStyle,
+  inputValue,
+  setInputValue,
 } from "./tree.mts";
 import type { EventLike } from "./types.mts";
 
@@ -33,6 +35,8 @@ const native = {
   removeAttribute: vi.fn<(nodeId: number, key: string) => void>(),
   setStyle: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   removeStyle: vi.fn<(nodeId: number, key: string) => void>(),
+  inputValue: vi.fn<(nodeId: number) => string>(),
+  setInputValue: vi.fn<(nodeId: number, value: string) => void>(),
   addEventListener: vi.fn<
     (nodeId: number, event: string, capture?: boolean, passive?: boolean) => number
   >(() => nextCallbackId++),
@@ -111,6 +115,17 @@ describe("wrapper functions forward to __inca_native__", () => {
   it("removeStyle", () => {
     removeStyle(1, "display");
     expect(native.removeStyle).toHaveBeenCalledWith(1, "display");
+  });
+
+  it("inputValue", () => {
+    native.inputValue.mockReturnValueOnce("abc");
+    expect(inputValue(1)).toBe("abc");
+    expect(native.inputValue).toHaveBeenCalledWith(1);
+  });
+
+  it("setInputValue", () => {
+    setInputValue(1, "abc");
+    expect(native.setInputValue).toHaveBeenCalledWith(1, "abc");
   });
 
   it("focusedNode", () => {

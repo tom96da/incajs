@@ -10,7 +10,7 @@ import { activeElement, createIncaElement, rootElement } from "./handle.mts";
 import { elementOf, markDestroyed, recordedCount, unregisterElement } from "./lifecycle.mts";
 import { createTextNode, remove } from "./shadowTree.mts";
 import type { ScrollOptions } from "./scroll.mts";
-import type { IncaElement } from "./types.mts";
+import type { IncaElement, IncaInputElement } from "./types.mts";
 
 /** Installs a fake host whose reads give `stored`, `boxes` and `scroll`, and returns it. */
 function installHost(
@@ -62,6 +62,54 @@ describe("createIncaElement tabIndex", () => {
 
     el.tabIndex = -1.5;
     expect(host.setAttribute).toHaveBeenLastCalledWith(1, "tabindex", -1);
+  });
+});
+
+describe("createIncaElement value", () => {
+  /** Installs a fake host whose `inputValue` gives `text`, and returns it. */
+  function installInput(text = "") {
+    const host = {
+      inputValue: vi.fn<(nodeId: number) => string>(() => text),
+      setInputValue: vi.fn<(nodeId: number, value: string) => void>(),
+    };
+    globalThis.__inca_native__ = host as never;
+    return host;
+  }
+
+  it("reads the text of an input", () => {
+    const host = installInput("abc");
+    expect((createIncaElement(1, "element", "input") as IncaInputElement).value).toBe("abc");
+    expect(host.inputValue).toHaveBeenCalledWith(1);
+  });
+
+  it.each<[unknown, string]>([
+    [5, "5"],
+    [null, ""],
+  ])("assigns the value of an input as a string (%o)", (value, expected) => {
+    const host = installInput();
+    (createIncaElement(1, "element", "input") as IncaInputElement).value = value as string;
+    expect(host.setInputValue).toHaveBeenCalledWith(1, expected);
+  });
+
+  it("reads an empty text after the node is removed", () => {
+    const host = installInput("abc");
+    const el = createIncaElement(1, "element", "input");
+    markDestroyed(el);
+    expect((el as IncaInputElement).value).toBe("");
+    expect(host.inputValue).not.toHaveBeenCalled();
+  });
+
+  it("ignores an assignment after the node is removed", () => {
+    const host = installInput();
+    const el = createIncaElement(1, "element", "input");
+    markDestroyed(el);
+    (el as IncaInputElement).value = "a";
+    expect(host.setInputValue).not.toHaveBeenCalled();
+  });
+
+  it("gives other elements no value property", () => {
+    installInput();
+    expect("value" in createIncaElement(1, "element", "div")).toBe(false);
   });
 });
 

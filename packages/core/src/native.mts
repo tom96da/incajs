@@ -21,6 +21,8 @@ interface IncaNative {
   removeAttribute(nodeId: NodeId, key: string): void;
   setStyle(nodeId: NodeId, key: string, value: AttributeValue): void;
   removeStyle(nodeId: NodeId, key: string): void;
+  inputValue(nodeId: NodeId): string;
+  setInputValue(nodeId: NodeId, value: string): void;
   addEventListener(
     target: EventTargetId,
     event: string,
