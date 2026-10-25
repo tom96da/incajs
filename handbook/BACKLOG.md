@@ -41,21 +41,14 @@ A fixed entry is deleted and its ID is never reused.
   [ROADMAP.md](./ROADMAP.md#known-gaps-not-yet-scheduled); the destination is
   undecided.
 
-- **B-121 Style keys and values use the host's vocabulary**
-  `Units: gpui,core,docs · Size: L · Impact: High`
+- **B-121 `:style` leaves out some CSS value and key forms**
+  `Units: gpui · Size: S · Impact: Low`
 
-  An app writes `:style` with the host's names and values, such as
-  `textColor`, `background`, `cornerRadius`, `textSize` and
-  `justifyContent: "start"`, with sizes as numbers of px. A Vue developer knows
-  `color`, `backgroundColor`, `borderRadius`, `fontSize`,
-  `justifyContent: "flex-start"` and `"10px"`. Goal: an app writes standard CSS in `:style` and
-  meets no host vocabulary. The host maps each CSS property and value form to
-  its own style, the reference lists the CSS names, and the host's own names
-  stay accepted as aliases. A warning names the key as written. CSS accepts
-  key spellings that the host warns about: uppercase or mixed-case kebab keys
-  such as `Flex-Direction`, vendor prefixes and `--custom` properties. B-085
-  (percentages, shorthands) belongs to the same change. B-123 generates the
-  types from the same mapping.
+  `:style` takes `px` as the only unit, so `"1em"`, `"10pt"` and `"50%"` for
+  a size warn. `opacity` takes a decimal string but not `"50%"`. `"1e999px"`
+  warns, and CSS accepts it. A key that starts with `-` is unknown, so vendor
+  prefixes (`-webkit-flex`) and custom properties (`--gap`) warn, and CSS
+  accepts both. Percentages for sizes and shorthands are B-085.
 
 - **B-123 The style vocabulary is not emitted as JSON and TypeScript types**
   `Units: gpui,core,cli · Size: L · Impact: Medium`
@@ -73,7 +66,7 @@ A fixed entry is deleted and its ID is never reused.
   time. The types let an editor check `:style` keys, and a Vite plugin
   can warn about static keys with file and line during the build. The
   Tailwind class resolver of Phase 7 reads the same data, and B-001 builds on
-  the types. It follows B-121 and generates from its CSS mapping.
+  the types. It follows B-121, which leaves out some CSS value and key forms.
 
 ## P2
 
@@ -492,12 +485,12 @@ A fixed entry is deleted and its ID is never reused.
 - **B-085 Some box style values are not accepted**
   `Units: gpui · Size: M · Impact: Low`
 
-  `width`, `height`, `min_*` and `max_*` take px numbers (or `"auto"`) only,
-  and `padding` and `margin` take px numbers (`margin` also `"auto"`), so
-  percentages are ignored, and `flex_basis` is not a key. `padding` and
-  `margin` read one value per key, so the CSS shorthand `"1 2 3 4"` is
-  ignored. The length keys `width`, `height`, `min_*` and `max_*` accept
-  `NaN` and infinity.
+  `width`, `height`, `min_*` and `max_*` take px numbers or px strings (or
+  `"auto"`) only, and `padding` and `margin` take px numbers or px strings
+  (`margin` also `"auto"`), so percentages are ignored, and `flex_basis` is not
+  a key. `padding` and `margin` read one value per key, so the CSS shorthand
+  `"1 2 3 4"` is ignored. The length keys `width`, `height`, `min_*` and
+  `max_*` accept `NaN` and infinity.
 
 - **B-086 Some `console` methods only approximate the standard**
   `Units: jsenv · Size: M · Impact: Low`

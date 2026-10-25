@@ -19,7 +19,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
   hidden/empty) node to the rendered tree.
 -->
 <script setup>
-const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0x000000, 0xffffff];
+const colors = ["#ff0000", "#00ff00", "#0000ff", "#ffff00", "#000000", "#ffffff"];
 </script>
 
 <template>
@@ -32,11 +32,11 @@ const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0x000000, 0xffffff];
       height: 500,
       justifyContent: 'center',
       alignItems: 'center',
-      background: 0x505050,
+      backgroundColor: '#505050',
       borderWidth: 1,
-      borderColor: 0x0000ff,
-      textColor: 0xffffff,
-      textSize: 20,
+      borderColor: '#0000ff',
+      color: '#ffffff',
+      fontSize: 20,
     }"
   >
     {{ "Hello, Incarnative.js!" }}
@@ -47,10 +47,10 @@ const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0x000000, 0xffffff];
         :style="{
           width: 32,
           height: 32,
-          background: color,
+          backgroundColor: color,
           borderWidth: 1,
-          borderColor: 0xffffff,
-          cornerRadius: 4,
+          borderColor: '#ffffff',
+          borderRadius: 4,
         }"
       />
     </div>

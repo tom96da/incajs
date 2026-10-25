@@ -33,7 +33,7 @@ A `button` is a box that also takes keyboard focus.
 ```vue
 <template>
   <button
-    :style="{ width: 80, height: 32, background: 0x2266ff }"
+    :style="{ width: 80, height: 32, backgroundColor: '#2266ff' }"
     :disabled="saving"
     @click="save"
   >
@@ -49,7 +49,7 @@ An `input` is a one-line text field.
 - Every `type` renders as a text field, so `type="password"` shows the
   characters.
 - It has no default size. Without a height in `:style` it is one line of its
-  `textSize` tall, and its width comes from `:style`. The text line sits at
+  `fontSize` tall, and its width comes from `:style`. The text line sits at
   the top of the box.
 - The caret is a 1px bar in the text color and does not blink. The selection
   is a fixed light blue, and the `placeholder` shows in the text color at half
@@ -76,27 +76,32 @@ Removing a key from the object, or setting it to `null` or `undefined`,
 restores that property to its default. Setting `style` to a string or `null`
 clears every key set before.
 
+A px size is a number or a string such as `"10px"`. A string that reads as
+zero, such as `"0"` or `"0.0"`, also works. Other units are not supported.
+`opacity`, `flexGrow` and `flexShrink` also take a decimal string such as
+`"0.5"`, without `%`. A key that starts with `-` is unknown.
+
 | Key | Value | Notes |
 | --- | --- | --- |
 | `display` | `"flex"` \| `"block"` \| `"grid"` \| `"none"` | |
-| `flexDirection` | `"row"` \| `"column"` \| `"row_reverse"` \| `"column_reverse"` | |
-| `justifyContent` | `"start"` \| `"end"` \| `"center"` \| `"stretch"` | main-axis alignment |
-| `alignItems` | `"start"` \| `"end"` \| `"center"` \| `"stretch"` | cross-axis alignment |
-| `gap` | `number` (px, `>= 0`) | applied on both axes |
-| `width` | `number` (px, `>= 0`) \| `"auto"` | |
-| `height` | `number` (px, `>= 0`) \| `"auto"` | |
-| `borderWidth` | `number` (px, `>= 0`) | applied to all four sides |
-| `background` | color (below) | fill |
+| `flexDirection` | `"row"` \| `"column"` \| `"row-reverse"` \| `"column-reverse"` | |
+| `justifyContent` | `"start"` \| `"end"` \| `"flex-start"` \| `"flex-end"` \| `"center"` \| `"stretch"` | main-axis alignment |
+| `alignItems` | `"start"` \| `"end"` \| `"flex-start"` \| `"flex-end"` \| `"center"` \| `"stretch"` | cross-axis alignment |
+| `gap` | px size (`>= 0`) | applied on both axes |
+| `width` | px size (`>= 0`) \| `"auto"` | |
+| `height` | px size (`>= 0`) \| `"auto"` | |
+| `borderWidth` | px size (`>= 0`) | applied to all four sides |
+| `backgroundColor` | color (below) | fill |
 | `borderColor` | color (below) | |
-| `cornerRadius` | `number` (px, `>= 0`) | applied to all four corners |
-| `textColor` | color (below) | cascades to descendant text leaves |
-| `textSize` | `number` (px, `>= 0`) | cascades to descendant text leaves |
+| `borderRadius` | px size (`>= 0`) | applied to all four corners |
+| `color` | color (below) | cascades to descendant text leaves |
+| `fontSize` | px size (`>= 0`) | cascades to descendant text leaves |
 | `overflow` / `overflowX` / `overflowY` | `"visible"` \| `"hidden"` \| `"clip"` \| `"scroll"` \| `"auto"`; `overflow` also takes two of them, x then y | `"hidden"` clips and script can scroll it; `"scroll"` (and its alias `"auto"`) also scrolls with the wheel; `overflowX`/`overflowY` win over `overflow` |
-| `padding` / `paddingX` / `paddingY` / `paddingTop` / `paddingRight` / `paddingBottom` / `paddingLeft` | `number` (px, `>= 0`) | a negative, `NaN` or infinite value is ignored |
-| `margin` / `marginX` / `marginY` / `marginTop` / `marginRight` / `marginBottom` / `marginLeft` | `number` (px, negative allowed) \| `"auto"` | |
-| `flexGrow` / `flexShrink` | `number` (`>= 0`) | |
-| `opacity` | `number` (`0` to `1`) | clamped; applies to descendants too |
-| `minWidth` / `minHeight` / `maxWidth` / `maxHeight` | `number` (px, `>= 0`) \| `"auto"` | `"auto"` is the default limit: none for the `max` keys, the content size for a flex item's `min` keys |
+| `padding` / `paddingX` / `paddingY` / `paddingTop` / `paddingRight` / `paddingBottom` / `paddingLeft` | px size (`>= 0`) | a negative, `NaN` or infinite value is ignored |
+| `margin` / `marginX` / `marginY` / `marginTop` / `marginRight` / `marginBottom` / `marginLeft` | px size (negative allowed) \| `"auto"` | |
+| `flexGrow` / `flexShrink` | number or decimal string (`>= 0`) | |
+| `opacity` | number or decimal string (`0` to `1`) | clamped; applies to descendants too |
+| `minWidth` / `minHeight` / `maxWidth` / `maxHeight` | px size (`>= 0`) \| `"auto"` | `"auto"` is the default limit: none for the `max` keys, the content size for a flex item's `min` keys |
 
 Content taller than the window is cut off at the window edge; see
 [Why doesn't my content scroll](../guide/troubleshooting#why-doesn-t-my-content-scroll-when-it-is-taller-than-the-window).
@@ -112,7 +117,7 @@ Scrollbars are not supported.
 
 ### Color format
 
-`background`, `borderColor`, and `textColor` each accept:
+`backgroundColor`, `borderColor`, and `color` each accept:
 
 - a numeric `0xRRGGBB` literal, e.g. `0xff0000`
 - a `"#rrggbb"` or `"#rgb"` string, e.g. `"#ff0000"` or `"#f00"`
@@ -141,7 +146,7 @@ object, with the keys above, has any visible effect.
   <div class="card" style="color: red">…</div>
   <div :style="'color: red'">…</div>
   <!-- works -->
-  <div :style="{ textColor: 0xff0000 }">…</div>
+  <div :style="{ color: '#ff0000' }">…</div>
 </template>
 ```
 
