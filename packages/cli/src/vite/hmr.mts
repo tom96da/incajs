@@ -110,7 +110,7 @@ export function globalsOfDefine(
  * @param runtimePath - the built `vite-runtime.js`, by default the package's own
  * @returns the path of the written entry
  */
-async function writeHmrEntry(
+export async function writeHmrEntry(
   cwd: string,
   entry: string,
   globals: Record<string, unknown>,
