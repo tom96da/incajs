@@ -365,7 +365,7 @@ pub fn style_warning(key: &str, value: &AttributeValue) -> Option<String> {
         &style_key(key),
         value,
     )?;
-    // Vue resets a property with '', as in `shown ? '' : 'none'`.
+    // A script resets a property with '' (`shown ? '' : 'none'`).
     if !matches!(fault, StyleFault::UnknownKey) && value.as_str() == Some("") {
         return None;
     }
