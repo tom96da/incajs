@@ -4,6 +4,7 @@
 #![allow(clippy::float_cmp, clippy::unwrap_used)]
 
 use super::*;
+use crate::input::InputPayload;
 use gpui::AppContext as _;
 use rstest::rstest;
 
@@ -394,4 +395,25 @@ fn screen_coordinates_are_the_window_origin_plus_the_client_position(
 
     assert_eq!(screen.screen_x, 42.0);
     assert_eq!(screen.screen_y, 74.0);
+}
+
+fn input_payload(input_type: InputType) -> EventPayload {
+    EventPayload::Input(InputPayload {
+        data: None,
+        input_type,
+        is_composing: false,
+    })
+}
+
+#[rstest]
+#[case::composition("beforeinput", input_payload(InputType::InsertCompositionText), false)]
+#[case::insert_text("beforeinput", input_payload(InputType::InsertText), true)]
+#[case::none_payload("beforeinput", EventPayload::None, true)]
+#[case::other_event("keydown", input_payload(InputType::InsertCompositionText), true)]
+fn flags_of_drops_cancelable_for_a_composition_beforeinput(
+    #[case] event: &str,
+    #[case] payload: EventPayload,
+    #[case] cancelable: bool,
+) {
+    assert_eq!(flags_of(event, &payload).cancelable, cancelable);
 }

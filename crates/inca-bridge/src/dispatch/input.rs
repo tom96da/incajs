@@ -7,8 +7,11 @@
 use gpui::{App, ClipboardItem, Keystroke, Window};
 use inca_gpui::input::{pasted, sanitized, typed};
 use inca_gpui::{
-    Edit, InputRequest, InputState, InputType, Motion, MousePayload, NodeId, is_disabled_control,
+    Edit, EventPayload, InputPayload, InputRequest, InputState, InputType, Motion, MousePayload,
+    NodeId, is_disabled_control,
 };
+
+use crate::focus::FocusTransition;
 
 use super::EventDispatcher;
 
@@ -21,20 +24,52 @@ impl EventDispatcher {
             .is_some_and(|node| node.tag_name() == "input")
     }
 
-    /// Whether `node` is a disabled button or input.
-    fn is_disabled(&self, node: NodeId) -> bool {
+    /// Reads `node` once: whether it is an `input`, has `readonly`, and is a disabled control.
+    fn input_flags(&self, node: NodeId) -> Option<(bool, bool, bool)> {
         let host = self.host.borrow();
-        host.tree.get(node).is_some_and(is_disabled_control)
+        host.tree.get(node).map(|node| {
+            let attributes = node.attributes();
+            (
+                node.tag_name() == "input",
+                attributes.contains_key("readonly"),
+                is_disabled_control(node),
+            )
+        })
+    }
+
+    /// Whether `node` is a `readonly` input, not disabled and with no composition.
+    fn readonly_idle(&self, node: NodeId) -> bool {
+        let readonly = matches!(self.input_flags(node), Some((true, true, false)));
+        readonly && !self.composing(node)
+    }
+
+    /// Fires the composition event `event` at `node` with `data`.
+    fn fire_composition(
+        &self,
+        node: NodeId,
+        event: &str,
+        data: &str,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let payload = EventPayload::Composition {
+            data: data.to_owned(),
+        };
+        self.fire(node, event, &payload, window, cx);
     }
 
     /// Whether `node` is an `input` that takes edits: neither `readonly` nor disabled.
     fn editable(&self, node: NodeId) -> bool {
+        matches!(self.input_flags(node), Some((true, false, false)))
+    }
+
+    /// Whether the text state of `node` has a composition.
+    fn composing(&self, node: NodeId) -> bool {
         let host = self.host.borrow();
-        host.tree.get(node).is_some_and(|node| {
-            node.tag_name() == "input"
-                && !node.attributes().contains_key("readonly")
-                && !is_disabled_control(node)
-        })
+        let inputs = host.inputs.borrow();
+        inputs
+            .get(&node)
+            .is_some_and(|state| state.composition().is_some())
     }
 
     /// A copy of the text state of `node`, the default state without one.
@@ -58,19 +93,78 @@ impl EventDispatcher {
         window.refresh();
     }
 
-    /// Writes `edit` into the text state of `node`.
-    fn run_edit(&self, node: NodeId, edit: &Edit, window: &mut Window) {
-        self.with_input(node, |state| state.apply(edit));
-        Self::input_changed(window);
+    /// Fires `change` at `node`.
+    fn fire_change(&self, node: NodeId, window: &mut Window, cx: &mut App) {
+        self.fire(node, "change", &EventPayload::None, window, cx);
     }
 
-    /// Applies a call of the platform's text input at `node`. A `readonly` or disabled input
-    /// takes a selection and nothing else.
+    /// Whether the focused node is an `input` with a composition.
+    pub(super) fn composing_at_focus(&self, window: &Window, cx: &App) -> bool {
+        let focused = self.host.borrow().focus.focused_node(window, cx);
+        focused.is_some_and(|node| self.composing(node))
+    }
+
+    /// Fires `change` for an `input` the window leaves while it keeps its focus.
+    pub(super) fn input_window_blur(&self, node: NodeId, window: &mut Window, cx: &mut App) {
+        if self.is_input(node) && self.with_input(node, InputState::commit) {
+            self.fire_change(node, window, cx);
+        }
+    }
+
+    /// Ends the composition and fires `change` of an `input` that loses focus, and records the
+    /// text of one that takes it.
+    pub(super) fn input_focus_moved(
+        &self,
+        transition: &FocusTransition,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        if let Some(node) = transition.blurred().filter(|&node| self.is_input(node)) {
+            let state = self.input_state(node);
+            if let Some(range) = state.composition() {
+                self.with_input(node, InputState::unmark);
+                let composed = state.value()[range].to_owned();
+                self.fire_composition(node, "compositionend", &composed, window, cx);
+            }
+            if self.with_input(node, InputState::end_focus) {
+                self.fire_change(node, window, cx);
+            }
+        }
+        if let Some(node) = transition.focused().filter(|&node| self.is_input(node)) {
+            self.with_input(node, InputState::begin_focus);
+        }
+    }
+
+    /// Fires `beforeinput`, writes `edit` into the text state of `node` unless a listener
+    /// canceled it or changed the value or the node, and fires `input`.
+    fn run_edit(&self, node: NodeId, edit: &Edit, window: &mut Window, cx: &mut App) {
+        let before = self.input_state(node).value().to_owned();
+        let payload = EventPayload::Input(edit.payload(true));
+        if self.fire(node, "beforeinput", &payload, window, cx) {
+            return;
+        }
+        if edit.range.is_empty() && edit.text.is_empty() {
+            return;
+        }
+        let connected = self.host.borrow().tree.is_connected(node);
+        if !connected || self.input_state(node).value() != before {
+            return;
+        }
+        self.with_input(node, |state| state.apply(edit));
+        Self::input_changed(window);
+        let payload = EventPayload::Input(edit.payload(false));
+        self.fire(node, "input", &payload, window, cx);
+    }
+
+    /// Applies a call of the platform's text input at `node`. A disabled input, and a `readonly`
+    /// one with a running composition, take a selection only. An idle `readonly` one also fires
+    /// `beforeinput` for typed text.
     pub(super) fn apply_input_request(
         &self,
         node: NodeId,
         request: InputRequest,
         window: &mut Window,
+        cx: &mut App,
     ) {
         match request {
             InputRequest::Select(range) => {
@@ -80,21 +174,36 @@ impl EventDispatcher {
                 });
                 Self::input_changed(window);
             }
+            InputRequest::Replace { text, .. } if self.readonly_idle(node) => {
+                let text = typed(&text);
+                if !text.is_empty() {
+                    let payload = EventPayload::Input(InputPayload {
+                        data: Some(text),
+                        input_type: InputType::InsertText,
+                        is_composing: false,
+                    });
+                    self.fire(node, "beforeinput", &payload, window, cx);
+                }
+            }
             _ if !self.editable(node) => {}
             InputRequest::Replace { range, text } => {
-                let state = self.input_state(node);
-                let composing = state.composition().is_some();
+                let composing = self.composing(node);
                 // The Tab and Enter the platform passes as text leave a selection in place.
                 let text = if composing {
                     sanitized(&text)
                 } else {
                     typed(&text)
                 };
-                if text.is_empty() && !composing {
+                if composing {
+                    self.fire_composition(node, "compositionupdate", &text, window, cx);
+                } else if text.is_empty() {
                     return;
                 }
-                if let Some(edit) = state.replace(range, &text) {
-                    self.run_edit(node, &edit, window);
+                if let Some(edit) = self.input_state(node).replace(range, &text) {
+                    self.run_edit(node, &edit, window, cx);
+                }
+                if composing {
+                    self.fire_composition(node, "compositionend", &text, window, cx);
                 }
             }
             InputRequest::Mark {
@@ -105,15 +214,29 @@ impl EventDispatcher {
                 // `shape_line` takes one line.
                 let text = sanitized(&text);
                 let state = self.input_state(node);
-                if text.is_empty() && state.composition().is_none() {
+                let composing = state.composition().is_some();
+                if text.is_empty() && !composing {
                     return;
                 }
-                let edit = state.compose(range, &text, selected);
-                self.run_edit(node, &edit, window);
+                if !composing {
+                    let selected_text = state.selected_text().to_owned();
+                    self.fire_composition(node, "compositionstart", &selected_text, window, cx);
+                }
+                self.fire_composition(node, "compositionupdate", &text, window, cx);
+                let edit = self.input_state(node).compose(range, &text, selected);
+                self.run_edit(node, &edit, window, cx);
+                if text.is_empty() {
+                    self.fire_composition(node, "compositionend", "", window, cx);
+                }
             }
             InputRequest::Unmark => {
+                let state = self.input_state(node);
                 self.with_input(node, InputState::unmark);
                 Self::input_changed(window);
+                if let Some(range) = state.composition() {
+                    let composed = &state.value()[range];
+                    self.fire_composition(node, "compositionend", composed, window, cx);
+                }
             }
         }
     }
@@ -127,8 +250,7 @@ impl EventDispatcher {
         cx: &mut App,
     ) -> bool {
         let focused = self.host.borrow().focus.focused_node(window, cx);
-        let Some(node) = focused
-            .filter(|&node| self.is_input(node) && self.input_state(node).composition().is_none())
+        let Some(node) = focused.filter(|&node| self.is_input(node) && !self.composing(node))
         else {
             return false;
         };
@@ -152,7 +274,7 @@ impl EventDispatcher {
             key @ ("backspace" | "delete") if plain => {
                 if editable {
                     let edit = self.input_state(node).delete(key == "delete");
-                    self.run_edit(node, &edit, window);
+                    self.run_edit(node, &edit, window, cx);
                 }
             }
             "a" if secondary => {
@@ -164,7 +286,7 @@ impl EventDispatcher {
                 if editable {
                     self.copy(node, cx);
                     if let Some(edit) = self.input_state(node).cut() {
-                        self.run_edit(node, &edit, window);
+                        self.run_edit(node, &edit, window, cx);
                     }
                 }
             }
@@ -172,6 +294,18 @@ impl EventDispatcher {
                 if editable {
                     self.paste(node, window, cx);
                 }
+            }
+            "enter" if plain => {
+                let payload = EventPayload::Input(InputPayload {
+                    data: None,
+                    input_type: InputType::InsertLineBreak,
+                    is_composing: false,
+                });
+                self.fire(node, "beforeinput", &payload, window, cx);
+                if self.is_input(node) && self.with_input(node, InputState::commit) {
+                    self.fire_change(node, window, cx);
+                }
+                return false;
             }
             _ => return false,
         }
@@ -194,8 +328,9 @@ impl EventDispatcher {
         let edit = self
             .input_state(node)
             .insert(&pasted(&text), InputType::InsertFromPaste);
-        if let Some(edit) = edit {
-            self.run_edit(node, &edit, window);
+        if let Some(mut edit) = edit {
+            edit.data = Some(text);
+            self.run_edit(node, &edit, window, cx);
         }
     }
 

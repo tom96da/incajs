@@ -262,6 +262,7 @@ fn insert_replaces_the_selection() {
         text: "x".to_owned(),
         selection: 2..2,
         composition: None,
+        data: Some("x".to_owned()),
     };
     assert_eq!(edit, want);
 }
@@ -371,6 +372,7 @@ fn apply_writes_the_edit() {
         text: "xy".to_owned(),
         selection: 3..3,
         composition: Some(1..3),
+        data: None,
     });
     assert_eq!(state.value(), "axyd");
     assert_eq!(state.selection(), 3..3);
@@ -410,4 +412,102 @@ fn bounds_of_reads_the_recorded_layout(
 #[case(InputType::DeleteByCut, "deleteByCut")]
 fn input_type_names_follow_input_events(#[case] input_type: InputType, #[case] want: &str) {
     assert_eq!(input_type.as_str(), want);
+}
+
+/// A focused state holding `value`.
+fn focused(value: &str) -> InputState {
+    let mut state = caret_at(value, value.len());
+    state.begin_focus();
+    state
+}
+
+#[test]
+fn end_focus_reports_an_edited_changed_value() {
+    let mut state = focused("ab");
+    state.apply(&state.insert("x", InputType::InsertText).unwrap());
+    assert!(state.end_focus());
+}
+
+#[test]
+fn end_focus_reports_nothing_for_a_value_edited_back() {
+    let mut state = focused("ab");
+    state.apply(&state.insert("x", InputType::InsertText).unwrap());
+    state.apply(&state.delete(false));
+    assert!(!state.end_focus());
+}
+
+#[test]
+fn end_focus_reports_nothing_without_an_edit() {
+    assert!(!focused("ab").end_focus());
+}
+
+#[test]
+fn end_focus_of_an_unfocused_state_reports_nothing() {
+    let mut state = caret_at("ab", 2);
+    state.apply(&state.insert("x", InputType::InsertText).unwrap());
+    assert!(!state.end_focus());
+}
+
+#[test]
+fn commit_moves_the_change_baseline() {
+    let mut state = focused("ab");
+    state.apply(&state.insert("x", InputType::InsertText).unwrap());
+    assert!(state.commit());
+    assert!(!state.commit());
+}
+
+#[test]
+fn commit_of_an_unfocused_state_keeps_no_baseline() {
+    let mut state = caret_at("ab", 2);
+    state.apply(&state.insert("x", InputType::InsertText).unwrap());
+    assert!(!state.commit());
+    assert_eq!(state.committed, None);
+}
+
+#[test]
+fn set_value_after_an_edit_leaves_a_change() {
+    let mut state = focused("ab");
+    state.apply(&state.insert("x", InputType::InsertText).unwrap());
+    state.set_value("z");
+    assert!(state.end_focus());
+}
+
+#[test]
+fn set_value_alone_leaves_no_change() {
+    let mut state = focused("ab");
+    state.set_value("z");
+    assert!(!state.end_focus());
+}
+
+#[rstest]
+#[case::insert_before(InputType::InsertText, "x", Some("x"), true, Some("x"))]
+#[case::insert_after(InputType::InsertText, "x", Some("x"), false, Some("x"))]
+#[case::paste_before(InputType::InsertFromPaste, "x y", Some("x\ny"), true, Some("x\ny"))]
+#[case::paste_after(InputType::InsertFromPaste, "x y", Some("x\ny"), false, Some("x y"))]
+#[case::delete_before(InputType::DeleteContentBackward, "", None, true, None)]
+#[case::delete_after(InputType::DeleteContentBackward, "", None, false, None)]
+#[case::empty_composition_before(InputType::InsertCompositionText, "", Some(""), true, Some(""))]
+#[case::empty_composition_after(InputType::InsertCompositionText, "", Some(""), false, None)]
+fn an_edit_payload_reads_data_per_event(
+    #[case] input_type: InputType,
+    #[case] text: &str,
+    #[case] data: Option<&str>,
+    #[case] before: bool,
+    #[case] want: Option<&str>,
+) {
+    let edit = Edit {
+        input_type,
+        range: 0..0,
+        text: text.to_owned(),
+        selection: 0..0,
+        composition: None,
+        data: data.map(str::to_owned),
+    };
+    let payload = edit.payload(before);
+    assert_eq!(payload.data.as_deref(), want);
+    assert_eq!(payload.input_type, input_type);
+    assert_eq!(
+        payload.is_composing,
+        input_type == InputType::InsertCompositionText
+    );
 }

@@ -28,7 +28,7 @@ use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use gpui::{App, Window};
-use inca_gpui::event_sink::{hover_path_difference, with_screen};
+use inca_gpui::event_sink::{flags_of, hover_path_difference, with_screen};
 use inca_gpui::{
     EventPayload, MousePayload, NO_BUTTON, NodeId, PointerSource, buttons_mask, is_disabled_control,
 };
@@ -195,7 +195,7 @@ impl EventDispatcher {
             &self.host,
             &Walk {
                 name: event,
-                flags: spec_of(event).flags,
+                flags: flags_of(event, payload),
                 target,
                 cut,
                 payload,
@@ -434,6 +434,7 @@ impl EventDispatcher {
             host.focus.apply_pending(&host.tree, window, cx)
         };
         for transition in &transitions {
+            self.input_focus_moved(transition, window, cx);
             transition.dispatch(self, window, cx);
         }
         self.release_orphans(window, cx);
@@ -479,7 +480,8 @@ impl EventDispatcher {
 
     /// Handles the window gaining (`active` true) or losing focus. The
     /// modifier keys are re-read, a lost window clears the held presses, and
-    /// the focused node receives `focus` or `blur` while keeping its focus.
+    /// the focused node receives `focus` or `blur` while keeping its focus,
+    /// and an edited focused `input` fires `change` before its `blur`.
     /// `window` receives `focus` before the node and `blur` after it.
     pub fn window_activated(&self, active: bool, window: &mut Window, cx: &mut App) {
         self.sync_modifiers(window, true);
@@ -493,6 +495,9 @@ impl EventDispatcher {
             self.fire_at_global(EventTargetId::Window, "focus", &FOCUS_PAYLOAD, window, cx);
         }
         if let Some(node) = focused {
+            if !active {
+                self.input_window_blur(node, window, cx);
+            }
             FocusTransition::window_activation(node, active).dispatch(self, window, cx);
         }
         if !active {

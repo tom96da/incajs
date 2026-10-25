@@ -101,6 +101,20 @@ pub struct Edit {
     pub selection: Range<usize>,
     /// The composition after the edit.
     pub composition: Option<Range<usize>>,
+    /// The `data` of the `beforeinput` of this edit.
+    pub data: Option<String>,
+}
+
+/// The fields of `beforeinput` and `input`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InputPayload {
+    /// The inserted text, `None` for a deletion and a line break, and on `input` for an
+    /// empty composition text.
+    pub data: Option<String>,
+    /// The kind of edit.
+    pub input_type: InputType,
+    /// A composition is active.
+    pub is_composing: bool,
 }
 
 /// What a frame paints over the text: x positions from the text start.
@@ -118,6 +132,11 @@ pub struct InputState {
     reversed: bool,
     composition: Option<Range<usize>>,
     layout: InputLayout,
+    /// The value the field had when it took focus or at its last `change`;
+    /// `None` while unfocused.
+    committed: Option<String>,
+    /// An edit changed the field since `committed` was set.
+    edited: bool,
 }
 
 /// `text` without the chars for which [`char::is_control`] holds.
@@ -223,6 +242,31 @@ fn removal(range: Range<usize>, input_type: InputType) -> Edit {
         range,
         text: String::new(),
         composition: None,
+        data: None,
+    }
+}
+
+impl Edit {
+    /// The fields of the `beforeinput` of this edit when `before` is true, else
+    /// of its `input`.
+    #[must_use]
+    pub fn payload(&self, before: bool) -> InputPayload {
+        let data = if before {
+            self.data.clone()
+        } else {
+            match self.input_type {
+                InputType::InsertText | InputType::InsertFromPaste => Some(self.text.clone()),
+                InputType::InsertCompositionText if !self.text.is_empty() => {
+                    Some(self.text.clone())
+                }
+                _ => None,
+            }
+        };
+        InputPayload {
+            data,
+            input_type: self.input_type,
+            is_composing: self.input_type == InputType::InsertCompositionText,
+        }
     }
 }
 
@@ -451,6 +495,7 @@ impl InputState {
             text: text.to_owned(),
             selection: end..end,
             composition: None,
+            data: Some(text.to_owned()),
         })
     }
 
@@ -498,6 +543,7 @@ impl InputState {
             text: text.to_owned(),
             selection,
             composition: (!text.is_empty()).then_some(start..end),
+            data: Some(text.to_owned()),
         }
     }
 
@@ -535,6 +581,38 @@ impl InputState {
         self.selection = edit.selection.clone();
         self.reversed = false;
         self.composition.clone_from(&edit.composition);
+        self.edited = true;
+    }
+
+    /// Whether an edit changed the text since the baseline was set.
+    fn changed(&self) -> bool {
+        self.edited && self.committed.as_deref().is_some_and(|c| c != self.value)
+    }
+
+    /// Records the text as the baseline of the next `change`.
+    pub fn begin_focus(&mut self) {
+        self.committed = Some(self.value.clone());
+        self.edited = false;
+    }
+
+    /// Drops the baseline. Returns whether a `change` is due: an edit since
+    /// the baseline left a different text.
+    pub fn end_focus(&mut self) -> bool {
+        let changed = self.changed();
+        self.committed = None;
+        self.edited = false;
+        changed
+    }
+
+    /// Returns whether a `change` is due, as [`end_focus`](Self::end_focus)
+    /// does, and moves a set baseline to the text.
+    pub fn commit(&mut self) -> bool {
+        let changed = self.changed();
+        if self.committed.is_some() {
+            self.committed = Some(self.value.clone());
+            self.edited = false;
+        }
+        changed
     }
 
     /// Ends the composition and keeps its text.

@@ -18,6 +18,7 @@ mod engine_entry;
 mod frame;
 mod hover_order;
 mod input;
+mod input_events;
 mod jobs;
 mod key_default;
 mod movement;
@@ -216,6 +217,7 @@ fn key_payload(modifiers: gpui::Modifiers) -> EventPayload {
         key: "a".into(),
         repeat: false,
         modifiers,
+        is_composing: false,
     })
 }
 

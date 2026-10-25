@@ -14,6 +14,8 @@ use rstest::rstest;
 #[case::pointer_event("PointerEvent", "MouseEvent")]
 #[case::wheel_event("WheelEvent", "MouseEvent")]
 #[case::keyboard_event("KeyboardEvent", "UIEvent")]
+#[case::input_event("InputEvent", "UIEvent")]
+#[case::composition_event("CompositionEvent", "UIEvent")]
 fn an_event_constructor_inherits_from_its_parent(#[case] name: &str, #[case] parent: &str) {
     let (dispatcher, _host, _reported) = dispatcher_with_engine();
 
@@ -32,6 +34,20 @@ fn an_event_constructor_inherits_from_its_parent(#[case] name: &str, #[case] par
     assert_eq!(got, serde_json::json!([true, true]));
 }
 
+fn input_payload() -> EventPayload {
+    EventPayload::Input(inca_gpui::InputPayload {
+        data: None,
+        input_type: inca_gpui::InputType::InsertText,
+        is_composing: false,
+    })
+}
+
+fn composition_payload() -> EventPayload {
+    EventPayload::Composition {
+        data: String::new(),
+    }
+}
+
 #[gpui_cases]
 #[gpui::test]
 #[case::mouse("mousedown", mouse_at(1.0, 1.0), "MouseEvent")]
@@ -39,6 +55,8 @@ fn an_event_constructor_inherits_from_its_parent(#[case] name: &str, #[case] par
 #[case::wheel("wheel", wheel_at(1.0, 1.0), "WheelEvent")]
 #[case::keyboard("keydown", key_payload(gpui::Modifiers::none()), "KeyboardEvent")]
 #[case::focus("focus", EventPayload::Focus { related_target: None }, "FocusEvent")]
+#[case::input("input", input_payload(), "InputEvent")]
+#[case::composition("compositionend", composition_payload(), "CompositionEvent")]
 fn a_host_event_reports_its_class_as_constructor(
     cx: &mut TestAppContext,
     event: &str,
@@ -336,6 +354,54 @@ fn a_keyboard_event_reads_its_init() {
         got,
         serde_json::json!(["Enter", "NumpadEnter", 3, true, false, 13, 65, 13, true])
     );
+}
+
+#[rstest]
+#[case::defaults("'x'", serde_json::json!([null, "", false, null, 0]))]
+#[case::given(
+    "'x', { data: 5, inputType: 'insertText', isComposing: 1 }",
+    serde_json::json!(["5", "insertText", true, null, 0])
+)]
+#[case::null_data("'x', { data: null }", serde_json::json!([null, "", false, null, 0]))]
+fn new_input_event_reads_its_init(#[case] args: &str, #[case] want: serde_json::Value) {
+    let (dispatcher, _host, _reported) = dispatcher_with_engine();
+    let js = r"
+        (() => {
+            const e = new InputEvent(ARGS);
+            return [e.data, e.inputType, e.isComposing, e.dataTransfer, e.getTargetRanges().length];
+        })()
+        "
+    .replace("ARGS", args);
+
+    assert_eq!(eval_json(&dispatcher, &js), want);
+}
+
+#[rstest]
+#[case::defaults("new CompositionEvent('x').data", serde_json::json!(""))]
+#[case::given("new CompositionEvent('x', { data: 7 }).data", serde_json::json!("7"))]
+fn new_composition_event_reads_its_data(#[case] expression: &str, #[case] want: serde_json::Value) {
+    let (dispatcher, _host, _reported) = dispatcher_with_engine();
+
+    assert_eq!(eval_json(&dispatcher, expression), want);
+}
+
+#[test]
+fn get_target_ranges_returns_a_new_empty_array() {
+    let (dispatcher, _host, _reported) = dispatcher_with_engine();
+
+    let got = eval_json(
+        &dispatcher,
+        r"
+        (() => {
+            const e = new InputEvent('x');
+            const first = e.getTargetRanges();
+            const second = e.getTargetRanges();
+            return [Array.isArray(first), first.length, first === second];
+        })()
+        ",
+    );
+
+    assert_eq!(got, serde_json::json!([true, 0, false]));
 }
 
 #[test]

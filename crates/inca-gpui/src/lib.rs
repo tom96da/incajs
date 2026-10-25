@@ -18,7 +18,7 @@ pub use event_sink::{
     EventPayload, EventSink, KeyPayload, MousePayload, NO_BUTTON, PointerSource, WheelPayload,
     buttons_mask,
 };
-pub use input::{Edit, InputLayout, InputRequest, InputState, InputType, Motion};
+pub use input::{Edit, InputLayout, InputPayload, InputRequest, InputState, InputType, Motion};
 pub use tree::{
     AttributeValue, NodeId, TreeError, VirtualNode, VirtualTree, focusable_by_default,
     is_disabled_control,

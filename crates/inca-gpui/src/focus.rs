@@ -43,6 +43,18 @@ impl FocusTransition {
         }
     }
 
+    /// The node that lost focus.
+    #[must_use]
+    pub fn blurred(&self) -> Option<NodeId> {
+        self.blurred
+    }
+
+    /// The node that took focus.
+    #[must_use]
+    pub fn focused(&self) -> Option<NodeId> {
+        self.focused
+    }
+
     /// Dispatches `blur`, `focusout`, `focus` and `focusin`, in that order,
     /// for whichever of `blurred`/`focused` this transition carries. Each
     /// carries the other node as `relatedTarget`. Call after releasing

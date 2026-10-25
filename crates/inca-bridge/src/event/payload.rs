@@ -5,12 +5,12 @@ use gpui::Modifiers;
 use inca_gpui::{EventPayload, MousePayload, NO_BUTTON, PointerSource, buttons_mask};
 use rquickjs::convert::Coerced;
 use rquickjs::function::This;
-use rquickjs::{Ctx, Function, IntoJs, Object, Result as JsResult, Value};
+use rquickjs::{Array, Ctx, Function, IntoJs, Object, Result as JsResult, Value};
 
 use super::key_code::key_code;
 use super::{
-    EVENT, FOCUS, KEYBOARD, MOUSE, POINTER, WHEEL, child_of, constants, field, method, other_kind,
-    with_event,
+    COMPOSITION, EVENT, FOCUS, INPUT, KEYBOARD, MOUSE, POINTER, WHEEL, child_of, constants, field,
+    method, other_kind, with_event,
 };
 use crate::bindings::convert::or_null;
 
@@ -27,6 +27,10 @@ pub(super) enum Payload {
     Pointer(Mouse, Pointer),
     Wheel(Mouse, Wheel),
     Keyboard(Ui, Keyboard),
+    /// `beforeinput` and `input`.
+    Input(Ui, Input),
+    /// The composition events, with their `data`.
+    Composition(Ui, String),
 }
 
 /// The fields every UI event carries.
@@ -82,6 +86,14 @@ pub(super) struct Keyboard {
     pub(super) modifiers: Modifiers,
     pub(super) key_code: u32,
     pub(super) char_code: u32,
+}
+
+/// The fields of `beforeinput` and `input`.
+pub(super) struct Input {
+    pub(super) data: Option<String>,
+    /// `inputType`.
+    pub(super) kind: String,
+    pub(super) is_composing: bool,
 }
 
 /// The mouse events about one button, whose `which` is that button + 1. A `wheel` reads 0 and
@@ -158,16 +170,25 @@ impl Payload {
                     Keyboard {
                         key: key.key.clone(),
                         code: String::new(),
-                        // gpui reports no key location or composition state.
+                        // gpui reports no key location.
                         location: 0,
                         repeat: key.repeat,
-                        is_composing: false,
+                        is_composing: key.is_composing,
                         modifiers: key.modifiers,
                         key_code: code,
                         char_code: 0,
                     },
                 )
             }
+            EventPayload::Input(input) => Self::Input(
+                Ui::default(),
+                Input {
+                    data: input.data.clone(),
+                    kind: input.input_type.as_str().to_owned(),
+                    is_composing: input.is_composing,
+                },
+            ),
+            EventPayload::Composition { data } => Self::Composition(Ui::default(), data.clone()),
         }
     }
 
@@ -180,6 +201,8 @@ impl Payload {
             EventPayload::Mouse(_) => MOUSE,
             EventPayload::Wheel(_) => WHEEL,
             EventPayload::Key(_) => KEYBOARD,
+            EventPayload::Input(_) => INPUT,
+            EventPayload::Composition { .. } => COMPOSITION,
         }
     }
 }
@@ -332,10 +355,28 @@ const KEY_FIELDS: &[(&str, Read<Keyboard>)] = &[
     ("keyCode", |key| Field::Number(key.key_code.into())),
 ];
 
+/// The fields of `beforeinput` and `input`.
+const INPUT_FIELDS: &[(&str, Read<Input>)] = &[
+    ("data", |input| {
+        input.data.as_deref().map_or(Field::Null, Field::Text)
+    }),
+    ("inputType", |input| Field::Text(&input.kind)),
+    ("isComposing", |input| Field::Bool(input.is_composing)),
+    // The host has no `DataTransfer`.
+    ("dataTransfer", |_| Field::Null),
+];
+
+/// The fields of the composition events.
+const COMPOSITION_FIELDS: &[(&str, Read<String>)] = &[("data", |data| Field::Text(data))];
+
 /// The UI fields of `payload`.
 fn ui_of(payload: &Payload) -> Option<&Ui> {
     match payload {
-        Payload::Ui(ui) | Payload::Focus(ui) | Payload::Keyboard(ui, _) => Some(ui),
+        Payload::Ui(ui)
+        | Payload::Focus(ui)
+        | Payload::Keyboard(ui, _)
+        | Payload::Input(ui, _)
+        | Payload::Composition(ui, _) => Some(ui),
         Payload::Mouse(mouse) | Payload::Pointer(mouse, _) | Payload::Wheel(mouse, _) => {
             Some(&mouse.ui)
         }
@@ -370,6 +411,20 @@ fn wheel_of(payload: &Payload) -> Option<&Wheel> {
 fn key_of(payload: &Payload) -> Option<&Keyboard> {
     match payload {
         Payload::Keyboard(_, key) => Some(key),
+        _ => None,
+    }
+}
+
+fn input_of(payload: &Payload) -> Option<&Input> {
+    match payload {
+        Payload::Input(_, input) => Some(input),
+        _ => None,
+    }
+}
+
+fn composition_of(payload: &Payload) -> Option<&String> {
+    match payload {
+        Payload::Composition(_, data) => Some(data),
         _ => None,
     }
 }
@@ -417,6 +472,36 @@ pub(super) fn keyboard_prototype<'js>(ctx: &Ctx<'js>, ui: &Object<'js>) -> JsRes
     modifier_state(ctx, &proto, |payload| {
         key_of(payload).map(|key| key.modifiers)
     })?;
+    Ok(proto)
+}
+
+/// The prototype of `beforeinput` and `input`: the input fields and `getTargetRanges`. It
+/// inherits from `ui`.
+pub(super) fn input_prototype<'js>(ctx: &Ctx<'js>, ui: &Object<'js>) -> JsResult<Object<'js>> {
+    let proto = child_of(ctx, ui)?;
+    define_fields(ctx, &proto, input_of, INPUT_FIELDS)?;
+    let ranges = Function::new(
+        ctx.clone(),
+        |ctx: Ctx<'js>, This(this): This<Value<'js>>| {
+            with_event(&ctx, &this, |event| {
+                input_of(&event.state.payload)
+                    .map(|_| ())
+                    .ok_or_else(|| other_kind(&ctx, "getTargetRanges"))
+            })?;
+            Array::new(ctx)
+        },
+    )?;
+    method(&proto, "getTargetRanges", ranges)?;
+    Ok(proto)
+}
+
+/// The prototype of the composition events: `data`. It inherits from `ui`.
+pub(super) fn composition_prototype<'js>(
+    ctx: &Ctx<'js>,
+    ui: &Object<'js>,
+) -> JsResult<Object<'js>> {
+    let proto = child_of(ctx, ui)?;
+    define_fields(ctx, &proto, composition_of, COMPOSITION_FIELDS)?;
     Ok(proto)
 }
 
