@@ -16,6 +16,7 @@
 //! shape the host does not support once, when it is set.
 
 mod build;
+mod input;
 mod parse;
 mod pointer;
 pub mod scroll;
@@ -26,6 +27,7 @@ pub use build::{
     NodeLayout, build_element, build_element_with_events, debug_selector, render_tree,
     render_tree_with_events,
 };
+pub use input::TextInputHandler;
 pub use parse::style_warning;
 pub use pointer::{clear_presses, mouse_target, pressed_target};
 pub use spec::{

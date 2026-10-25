@@ -15,12 +15,12 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 ## Elements are just boxes
 
-Every tag other than `"text"` (`<div>`, `<span>`, `<button>`, anything)
-renders as a generic styled container. Elements carry no default styles, so
-a `<button>` starts as the same plain box as a `<div>` and `:style` sets
-everything. Only `"text"` renders differently: its `value` attribute followed
-by its descendants' text in child order. Descendants are not rendered as
-separate elements.
+Every tag other than `"text"` and `"input"` (`<div>`, `<span>`, `<button>`,
+anything) renders as a generic styled container. Elements carry no default
+styles, so a `<button>` starts as the same plain box as a `<div>` and
+`:style` sets everything. `"text"` renders its `value` attribute followed by
+its descendants' text in child order, and its descendants are not rendered as
+separate elements. `"input"` is a text field, described below.
 
 ### `button`
 
@@ -41,6 +41,25 @@ A `button` is a box that also takes keyboard focus.
   </button>
 </template>
 ```
+
+### `input`
+
+An `input` is a one-line text field.
+
+- Every `type` renders as a text field, so `type="password"` shows the
+  characters.
+- It has no default size. Without a height in `:style` it is one line of its
+  `textSize` tall, and its width comes from `:style`. The text line sits at
+  the top of the box.
+- The caret is a 1px bar in the text color and does not blink. The selection
+  is a fixed light blue, and the `placeholder` shows in the text color at half
+  opacity.
+- Word-wise moves and deletes, Cmd+Left, Cmd+Right, Cmd+Backspace, Ctrl+A,
+  Ctrl+E and Option with an arrow on macOS, undo, and a double-click word
+  selection are unsupported.
+- `selectionStart`, `selectionEnd`, `selectionDirection`,
+  `setSelectionRange()`, `select()`, `defaultValue`, `maxLength` and `size`
+  are missing.
 
 ## Recognized style keys
 
@@ -168,8 +187,6 @@ have, and using them fails the build:
   the missing export.
 - **No timers or `fetch`**: `setTimeout`/`setInterval`/`fetch` aren't
   provided as globals by the JS runtime Incarnative.js embeds.
-- **No text input**: an editable text element is still unimplemented (see
-  the [Roadmap](../roadmap)).
 - **`ref` lacks other element members**: the attribute methods, `classList`,
   `className`, `dataset`, `style` and `tagName` are missing.
 

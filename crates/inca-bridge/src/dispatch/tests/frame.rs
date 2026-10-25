@@ -4,7 +4,7 @@
 #![allow(clippy::unwrap_used)]
 
 use super::*;
-use gpui::{AppContext as _, Context};
+use gpui::Context;
 
 const SEEN: &str = r"
     globalThis.seen = [];

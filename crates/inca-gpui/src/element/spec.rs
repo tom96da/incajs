@@ -4,22 +4,29 @@
 use gpui::Point;
 
 use super::parse::style_spec_from_props;
+use crate::input::sanitized;
 use crate::tree::{AttributeValue, NodeId, VirtualNode, VirtualTree};
 
 /// What kind of element a [`VirtualNode`](crate::tree::VirtualNode) maps to.
 ///
-/// Two kinds exist, chosen by the `"text"` tag name.
+/// Three kinds exist, chosen by the `"text"` and `"input"` tag names.
 ///
 /// Text is always its own node with a stable id, never a bare string child
 /// of a container. Every rendered text run is addressable by [`NodeId`].
 #[derive(Debug, Clone, PartialEq)]
 pub enum ElementTag {
-    /// Any tag name other than `"text"`: a generic styled box.
+    /// Any tag name other than `"text"` and `"input"`: a generic styled box.
     Container,
     /// A `"text"` tag: its `"value"` attribute (missing or non-string →
     /// empty) followed by its descendants' text in child order. Descendants
     /// are not rendered as separate elements.
     Text(String),
+    /// An `"input"` tag: one line of text the host holds per node, drawn
+    /// over the box. `placeholder` is its `placeholder` attribute without CR
+    /// and LF ([`crate::input::sanitized`]; missing or non-string → empty).
+    /// `editable` is false with a `readonly` or `disabled` attribute. Its
+    /// children are not rendered.
+    Input { placeholder: String, editable: bool },
 }
 
 /// A length in pixels, or `"auto"`. `gpui`-independent mirror of the subset
@@ -248,6 +255,19 @@ fn build_spec_inner(tree: &VirtualTree, root: NodeId, inert_above: bool) -> Opti
 
     let tag = match node.tag_name() {
         "text" => ElementTag::Text(text_content(tree, root)),
+        "input" => {
+            let attributes = node.attributes();
+            ElementTag::Input {
+                placeholder: attributes
+                    .get("placeholder")
+                    .and_then(AttributeValue::as_str)
+                    // `shape_line` takes one line.
+                    .map(sanitized)
+                    .unwrap_or_default(),
+                editable: !attributes.contains_key("readonly")
+                    && !attributes.contains_key("disabled"),
+            }
+        }
         _ => ElementTag::Container,
     };
 
@@ -255,7 +275,7 @@ fn build_spec_inner(tree: &VirtualTree, root: NodeId, inert_above: bool) -> Opti
     if hidden_by_attribute(node) {
         style.display = Some(DisplaySpec::None);
     }
-    let children = if matches!(tag, ElementTag::Text(_)) {
+    let children = if matches!(tag, ElementTag::Text(_) | ElementTag::Input { .. }) {
         Vec::new()
     } else {
         node.children()
@@ -310,6 +330,56 @@ mod tests {
 
         let spec = build_spec(&tree, id).unwrap();
         assert_eq!(spec.tag, ElementTag::Container);
+    }
+
+    #[rstest]
+    #[case::plain(vec![], "")]
+    #[case::placeholder(vec![AttributeValue::from("hi")], "hi")]
+    #[case::placeholder_with_newline(vec![AttributeValue::from("a\nb")], "ab")]
+    #[case::number_placeholder(vec![AttributeValue::from(3.0)], "")]
+    fn an_input_spec_reads_its_placeholder(
+        #[case] placeholder: Vec<AttributeValue>,
+        #[case] want: &str,
+    ) {
+        let mut tree = VirtualTree::new();
+        let id = tree.create_node("input").unwrap();
+        for value in placeholder {
+            tree.set_attribute(id, "placeholder", value).unwrap();
+        }
+        let want = ElementTag::Input {
+            placeholder: want.to_owned(),
+            editable: true,
+        };
+        assert_eq!(build_spec(&tree, id).unwrap().tag, want);
+    }
+
+    #[rstest]
+    #[case::plain(&[], true)]
+    #[case::readonly(&["readonly"], false)]
+    #[case::disabled(&["disabled"], false)]
+    fn an_input_spec_is_editable_without_readonly_or_disabled(
+        #[case] flags: &[&str],
+        #[case] want: bool,
+    ) {
+        let mut tree = VirtualTree::new();
+        let id = tree.create_node("input").unwrap();
+        for flag in flags {
+            tree.set_attribute(id, *flag, true).unwrap();
+        }
+        let want = ElementTag::Input {
+            placeholder: String::new(),
+            editable: want,
+        };
+        assert_eq!(build_spec(&tree, id).unwrap().tag, want);
+    }
+
+    #[test]
+    fn an_input_spec_has_no_children() {
+        let mut tree = VirtualTree::new();
+        let id = tree.create_node("input").unwrap();
+        let child = tree.create_node("div").unwrap();
+        tree.append_child(id, child).unwrap();
+        assert!(build_spec(&tree, id).unwrap().children.is_empty());
     }
 
     #[test]

@@ -481,16 +481,22 @@ fn ancestors_of_an_unknown_id_yields_only_that_id() {
     assert_eq!(tree.ancestors(7).collect::<Vec<_>>(), [7]);
 }
 
-#[test]
-fn is_disabled_button_needs_the_button_tag_and_the_disabled_attribute() {
+#[rstest]
+#[case::button("button", &["disabled"], true)]
+#[case::input("input", &["disabled"], true)]
+#[case::div("div", &["disabled"], false)]
+#[case::enabled_button("button", &[], false)]
+fn is_disabled_control_needs_a_control_tag_and_the_disabled_attribute(
+    #[case] tag: &str,
+    #[case] attributes: &[&str],
+    #[case] want: bool,
+) {
     let mut tree = VirtualTree::new();
-    let button = tree.create_node("button").unwrap();
-    let div = tree.create_node("div").unwrap();
-    assert!(!is_disabled_button(tree.get(button).unwrap()));
-    tree.set_attribute(button, "disabled", true).unwrap();
-    tree.set_attribute(div, "disabled", true).unwrap();
-    assert!(is_disabled_button(tree.get(button).unwrap()));
-    assert!(!is_disabled_button(tree.get(div).unwrap()));
+    let node = tree.create_node(tag).unwrap();
+    for attribute in attributes {
+        tree.set_attribute(node, *attribute, true).unwrap();
+    }
+    assert_eq!(is_disabled_control(tree.get(node).unwrap()), want, "{tag}");
 }
 
 #[test]

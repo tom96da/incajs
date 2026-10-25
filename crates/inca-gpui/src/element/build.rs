@@ -6,6 +6,7 @@ use gpui::{
     AnyElement, App, Bounds, ElementId, Pixels, Point, ScrollHandle, Window, div, point, px,
 };
 
+use super::input::InputElement;
 use super::pointer::{
     mark_mouse_target, pointer_tracker, root_keys, wire_focus, wire_hover, wire_modifier_keys,
 };
@@ -43,7 +44,7 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
 ) -> AnyElement {
     match &spec.tag {
         ElementTag::Text(content) => content.clone().into_any_element(),
-        ElementTag::Container => {
+        ElementTag::Container | ElementTag::Input { .. } => {
             let id = spec.id;
             let handle = dispatch
                 .filter(|_| spec.style.is_scroll_container())
@@ -107,6 +108,18 @@ where
     }
     if spec.style.is_scroll_container() {
         element = element.child(scroll_anchor(&spec.style));
+    }
+    if let ElementTag::Input {
+        placeholder,
+        editable,
+    } = &spec.tag
+    {
+        element = element.child(InputElement::new(
+            spec.id,
+            placeholder.clone().into(),
+            *editable,
+            dispatch.cloned(),
+        ));
     }
     for child in rendered_children(spec) {
         element = element.child(build_element_inner(child, dispatch, false, track));
@@ -242,6 +255,9 @@ impl EventSink for NoSink {
         pointer_input,
         pointer_released,
         key_input,
+        input,
+        record_input,
+        input_request,
     );
 }
 

@@ -37,6 +37,9 @@ impl EventDispatcher {
         if !self.state.pointerdown_canceled.get() {
             self.fire_inner(target, "mousemove", payload, window, cx);
         }
+        if let EventPayload::Mouse(mouse) = payload {
+            self.input_drag_to(mouse, window);
+        }
     }
 
     /// Fires `pointerdown` for the first button pressed and `pointermove` for another one, then
@@ -67,6 +70,9 @@ impl EventDispatcher {
         }
         self.focus_on_press(target, prevented, window, cx);
         self.hold_button(target, window, cx);
+        if let (false, EventPayload::Mouse(mouse)) = (prevented, payload) {
+            self.input_press(target, mouse, window);
+        }
     }
 
     /// Fires `pointerup` for the last button released and `pointermove` for another one, then
@@ -89,6 +95,9 @@ impl EventDispatcher {
             self.fire_inner(target, "mouseup", payload, window, cx);
         }
         self.state.mouse_held.set(None);
+        if button == 0 {
+            self.state.input_drag.set(None);
+        }
         if last {
             self.state.pointerdown_canceled.set(false);
             if self.host.borrow().capture_active.is_some() {

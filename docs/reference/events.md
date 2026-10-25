@@ -142,8 +142,8 @@ rules, with the differences below.
 
 ### Host differences
 
-- A node takes focus through its `tabindex` attribute, and a `button` is
-  focusable by default. `.focus()` on other nodes is ignored.
+- A node takes focus through its `tabindex` attribute, and a `button` and an
+  `input` are focusable by default. `.focus()` on other nodes is ignored.
 - `hidden="until-found"` counts as shown.
 - A focus ring is unsupported.
 - After the last node, Tab leaves nothing focused and the next Tab starts at

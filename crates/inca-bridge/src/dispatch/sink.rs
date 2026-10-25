@@ -5,7 +5,8 @@ use std::rc::Rc;
 
 use gpui::{App, MouseButton, MouseUpEvent, ScrollHandle, Window};
 use inca_gpui::{
-    EventPayload, EventSink, KeyPayload, MousePayload, NO_BUTTON, NodeId, PointerSource,
+    EventPayload, EventSink, InputLayout, InputRequest, InputState, KeyPayload, MousePayload,
+    NO_BUTTON, NodeId, PointerSource,
 };
 
 use super::EventDispatcher;
@@ -201,6 +202,29 @@ impl EventSink for EventDispatcher {
         }
         self.key_default(keystroke, up, canceled, window, cx);
     }
+
+    fn input(&self, node_id: NodeId) -> Option<InputState> {
+        self.is_input(node_id).then(|| self.input_state(node_id))
+    }
+
+    fn record_input(&self, node_id: NodeId, layout: InputLayout) {
+        let host = self.host.borrow();
+        host.inputs
+            .borrow_mut()
+            .entry(node_id)
+            .or_default()
+            .record(layout);
+    }
+
+    fn input_request(
+        &self,
+        node_id: NodeId,
+        request: InputRequest,
+        window: &mut Window,
+        _cx: &mut App,
+    ) {
+        self.apply_input_request(node_id, request, window);
+    }
 }
 
 impl EventDispatcher {
@@ -208,7 +232,7 @@ impl EventDispatcher {
         let host = self.host.borrow();
         host.focus.focused_node(window, cx).filter(|id| {
             host.tree.get(*id).is_some_and(|node| {
-                node.tag_name() == "button" && !inca_gpui::is_disabled_button(node)
+                node.tag_name() == "button" && !inca_gpui::is_disabled_control(node)
             })
         })
     }
@@ -303,16 +327,27 @@ impl EventDispatcher {
         if canceled {
             return;
         }
+        if !up && self.input_key(keystroke, window, cx) {
+            window.prevent_default();
+            cx.stop_propagation();
+            return;
+        }
         let focused_button = || self.focused_enabled_button(window, cx);
         let plain = !(modifiers.control || modifiers.alt || modifiers.platform);
         let click = match (key, up) {
             ("tab", false) if plain => {
-                let host = &mut *self.host.borrow_mut();
-                let moved =
-                    host.focus
-                        .tab_move(&host.tree, host.root(), window, cx, modifiers.shift);
+                let moved = {
+                    let host = &mut *self.host.borrow_mut();
+                    let moved =
+                        host.focus
+                            .tab_move(&host.tree, host.root(), window, cx, modifiers.shift);
+                    if let Some(node) = moved {
+                        host.reveal(node, Align::Reveal, Align::CenterOutside);
+                    }
+                    moved
+                };
                 if let Some(node) = moved {
-                    host.reveal(node, Align::Reveal, Align::CenterOutside);
+                    self.select_input(node);
                 }
                 None
             }

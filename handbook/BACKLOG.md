@@ -724,12 +724,6 @@ A fixed entry is deleted and its ID is never reused.
 
   Fix: add `:focus` with the interactive visual state.
 
-- **B-143 `disabled` has no handling for the input element**
-  `Units: bridge · Size: S · Impact: Low`
-
-  The input element needs `disabled` handling when it lands. The fix adds the
-  tag to the `disabled` check in `tab_index_of`.
-
 - **B-141 `hidden="until-found"` renders and focuses as an unhidden node**
   `Units: gpui,bridge · Size: M · Impact: Low`
 
@@ -1185,3 +1179,19 @@ A fixed entry is deleted and its ID is never reused.
   Fix: a Vite plugin injects `import { document, window } from "incajs"` into
   the app's own source, not into `node_modules`, and generates their types
   into `.inca/`.
+
+- **B-228 The text input lacks commands and members of a browser text field**
+  `Units: gpui,bridge,core,docs · Size: L · Impact: Low`
+
+  An `input` moves its caret by grapheme and by the whole line only.
+  Word-wise moves and deletes (Control or Alt with an arrow or Backspace),
+  the macOS shortcuts (Cmd+Left, Cmd+Right, Cmd+Backspace, Option with an
+  arrow, Ctrl+A and Ctrl+E), undo and redo, double- and triple-click
+  selection, text drag and drop and a blinking caret are missing. Every
+  `type` renders as plain text, so a password shows its characters. `select`
+  and `selectionchange` are never dispatched. `selectionStart`,
+  `selectionEnd`, `selectionDirection`, `setSelectionRange()`, `select()`,
+  `defaultValue`, `maxLength`, `size` and `textarea` are missing. Fix: word
+  boundaries from `unicode-segmentation`, an edit history with `historyUndo`
+  and `historyRedo`, the selection members over the host's selection, and a
+  masked display for `type="password"`.

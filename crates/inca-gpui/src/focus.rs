@@ -21,8 +21,8 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use gpui::{App, FocusHandle, Window};
 
 use crate::{
-    AttributeValue, EventPayload, EventSink, NodeId, VirtualTree, hidden_by_attribute,
-    is_disabled_button,
+    AttributeValue, EventPayload, EventSink, NodeId, VirtualTree, focusable_by_default,
+    hidden_by_attribute, is_disabled_control,
 };
 
 /// What changed since [`FocusRegistry::apply_pending`] was last called.
@@ -423,7 +423,7 @@ impl FocusRegistry {
         while let Some(id) = stack.pop() {
             let Some(node) = tree.get(id) else { continue };
             if self.handles.contains_key(&id)
-                || node.tag_name() == "button"
+                || focusable_by_default(node.tag_name())
                 || node.attributes().contains_key("tabindex")
             {
                 self.tab_dirty.insert(id);
@@ -435,7 +435,8 @@ impl FocusRegistry {
     /// The `tabindex` of `node_id`. A node not connected to the tree's root,
     /// a text node, a node that has an ancestor (or itself) with
     /// `display: none`, `inert` or a hiding `hidden`, and a `disabled` button
-    /// have none. A button whose `tabindex` is missing or unparsable has 0.
+    /// or input have none. A button or input whose `tabindex` is missing or
+    /// unparsable has 0.
     fn tab_index_of(tree: &VirtualTree, node_id: NodeId) -> Option<i32> {
         let node = tree.get(node_id)?;
         if !tree.is_connected(node_id) {
@@ -452,8 +453,8 @@ impl FocusRegistry {
                         Some(AttributeValue::String(value)) if value == "none"
                     )
             });
-        let button = node.tag_name() == "button";
-        if node.tag_name() == "text" || hidden || is_disabled_button(node) {
+        let by_default = focusable_by_default(node.tag_name());
+        if node.tag_name() == "text" || hidden || is_disabled_control(node) {
             return None;
         }
         let explicit = match node.attributes().get("tabindex") {
@@ -461,7 +462,7 @@ impl FocusRegistry {
             Some(AttributeValue::Number(value)) => parse_tab_index(&number_text(*value)),
             Some(AttributeValue::Bool(_)) | None => None,
         };
-        explicit.or(button.then_some(0))
+        explicit.or(by_default.then_some(0))
     }
 
     /// The handle the root container tracks, once [`Self::apply_pending`]

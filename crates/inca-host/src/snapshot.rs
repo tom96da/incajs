@@ -71,7 +71,7 @@ fn node(
     let source = tree.get(spec.id)?;
     let (text, layout) = match &spec.tag {
         ElementTag::Text(content) => (Some(content.clone()), None),
-        ElementTag::Container => (None, bounds(spec.id)),
+        ElementTag::Container | ElementTag::Input { .. } => (None, bounds(spec.id)),
     };
     Some(Node {
         id: spec.id,
@@ -170,6 +170,17 @@ mod tests {
         let snap = snapshot(&tree, text, &mut unit).unwrap();
 
         assert_eq!(snap.bounds, None);
+    }
+
+    #[test]
+    fn an_input_snapshots_as_a_box() {
+        let mut tree = VirtualTree::new();
+        let input = tree.create_node("input").unwrap();
+
+        let snap = snapshot(&tree, input, &mut unit).unwrap();
+
+        assert_eq!(snap.bounds, unit(input));
+        assert_eq!(snap.text, None);
     }
 
     #[test]

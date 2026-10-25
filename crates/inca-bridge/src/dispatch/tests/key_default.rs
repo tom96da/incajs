@@ -5,7 +5,7 @@
 
 use super::*;
 use crate::test_support::{TestRoot, focusable_tree, mount_active};
-use gpui::{App, AppContext as _, Keystroke, Window, WindowHandle, WindowId};
+use gpui::{App, Keystroke, Window, WindowHandle, WindowId};
 use inca_gpui::KeyPayload;
 use inca_test_macros::gpui_cases;
 

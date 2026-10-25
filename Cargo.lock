@@ -2728,6 +2728,7 @@ dependencies = [
  "gpui_platform",
  "inca-test-macros",
  "rstest",
+ "unicode-segmentation",
 ]
 
 [[package]]
