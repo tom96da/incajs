@@ -63,7 +63,7 @@ export interface BuildFailure {
 export interface BuildOutput {
   /** Directory holding every file this build emitted. */
   outDir: string;
-  /** Absolute path to the entry module `inca-host` evaluates. */
+  /** Absolute path to the entry module the host evaluates. */
   entryFile: string;
   /**
    * Every file this build emitted, relative to `outDir`. It may include chunks and assets besides
@@ -113,7 +113,7 @@ export interface HmrOptions {
 
 /** A running HMR session. {@link Bundler.hmr} resolves to this value. */
 export interface HmrChannel extends Watcher {
-  /** The synthesized entry `inca-host` evaluates for this session. */
+  /** The synthesized entry the host evaluates for this session. */
   entryFile: string;
   /** Feeds a payload the running app sent back into the bundler's dev server. */
   dispatch: (payload: unknown) => void;

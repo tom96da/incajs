@@ -11,7 +11,7 @@ import type { AdapterCore, BundlerOptions, Watcher } from "../adapterCore.mts";
 /**
  * Builds `entry` into a build under `outDir` and rebuilds it on every
  * change, calling `onBuild` with what each rebuild wrote. Never starts,
- * reloads, or talks to `inca-host`.
+ * reloads, or talks to the host.
  */
 export async function watch(
   core: AdapterCore,

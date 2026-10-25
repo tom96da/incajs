@@ -24,7 +24,7 @@ export interface BuildAppOptions {
   config?: ResolvedBuildConfig;
   /** Writes `bundle.js.map` beside the bundle. Overrides the config's `sourcemap` when set. */
   sourcemap?: boolean;
-  /** What the build carries for `inca-host` to read. Resolved from the app's config when absent. */
+  /** What the build carries for the host to read. Resolved from the app's config when absent. */
   runtimeConfig?: RuntimeConfig;
   /** Where the bundler's own output goes. Defaults to `process.stdout`. */
   stdout?: NodeJS.WritableStream;

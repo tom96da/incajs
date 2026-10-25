@@ -2,7 +2,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-// A stand-in for `inca-host --dev` in HMR mode: answers `reload`/`shutdown`
+// A stand-in for the host under `--dev` in HMR mode: answers `reload`/`shutdown`
 // like `mock-host.mts`, and echoes any `vite` notification straight back,
 // so a test can confirm a payload sent to the app makes it back through
 // `HostClient`'s `integrations`.

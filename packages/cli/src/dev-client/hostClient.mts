@@ -20,7 +20,7 @@ interface PendingCall {
 export interface HostClientOptions {
   /** The entry module passed to the host as `--dev <entryFile>`. */
   entryFile: string;
-  /** Overrides which `inca-host` binary gets spawned, in place of automatic resolution. */
+  /** Overrides which host binary gets spawned, in place of automatic resolution. */
   hostBin?: string;
   /** The environment the host starts with. Defaults to this process's own. */
   env?: NodeJS.ProcessEnv;
@@ -60,7 +60,7 @@ const defaultOnStderr = (line: string): void => {
 const BUNDLE_FAILED = -32000;
 
 /**
- * Spawns `inca-host --dev <entryFile>` and speaks newline-delimited
+ * Spawns the host with `--dev <entryFile>` and speaks newline-delimited
  * JSON-RPC 2.0 on its stdin/stdout. One instance owns exactly one child
  * process for its whole lifetime. A reload is a `reload` call on that child.
  */

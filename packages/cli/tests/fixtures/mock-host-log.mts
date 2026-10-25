@@ -2,7 +2,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-// A stand-in for `inca-host --dev` that appends `start <entryFile>`, `reload` and
+// A stand-in for the host under `--dev` that appends `start <entryFile>`, `reload` and
 // `stop <entryFile>` to the file named by `MOCK_HOST_LOG`, so a test sees the order of the hosts.
 // With `MOCK_HOST_RELOAD_GATE` set, a reload answers once the file `<MOCK_HOST_LOG>.release`
 // exists and logs `reloaded` first. A `vite` notification is echoed back. Its process id goes to
