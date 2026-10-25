@@ -20,6 +20,8 @@ export default defineConfig({
   },
   dts: { generator: "tsgo", tsgo: { moduleUrl: import.meta.resolve("@typescript/native") } },
   clean: true,
+  publint: true,
+  attw: { level: "error" },
   minify: true,
   outputOptions: { chunkFileNames: "chunks/[name]-[hash].js" },
 });

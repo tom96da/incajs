@@ -99,11 +99,6 @@ jobs:
       - name: Build
         run: pnpm -r -F '!docs' build
 
-      - name: Lint the packages' exports
-        run: |
-          pnpm exec publint packages/cli
-          pnpm exec publint packages/core
-
   lint:
     name: "Lint: Node.js 26, ubuntu-latest"
     needs: [changed, build]
