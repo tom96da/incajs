@@ -33,9 +33,7 @@ use gpui_platform::application;
 
 use inca_bridge::install;
 use inca_bridge::{EventDispatcher, Host};
-use inca_gpui::{
-    AttributeValue, EventSink, NodeId, NodeLayout, VirtualNode, render_tree_with_events,
-};
+use inca_gpui::{EventSink, NodeId, NodeLayout, declared_window_size, render_tree_with_events};
 use inca_jsenv::{Engine, EngineError, ErrorReporter, PendingModule, console, stderr_reporter};
 
 use crate::config::{
@@ -59,26 +57,23 @@ use crate::menu;
 /// child, never `root` itself, so `width`/`height` are read from that
 /// child's style, not `root`'s.
 ///
-/// A dimension the app's root doesn't declare comes back as `None`.
+/// A dimension the app's root doesn't declare, or declares as a negative or
+/// infinite size, comes back as `None`.
 pub(crate) fn content_window_size(host: &Host, root: NodeId) -> (Option<f32>, Option<f32>) {
-    let style = host
+    let Some(content) = host
         .tree
         .get(root)
         .and_then(|node| node.children().first())
         .and_then(|&content_id| host.tree.get(content_id))
-        .map(VirtualNode::style_props);
+    else {
+        return (None, None);
+    };
+    let (width, height) = declared_window_size(content);
 
     // A window dimension in px is always far within f32's
     // precision range. No meaningful truncation risk here.
     #[allow(clippy::cast_possible_truncation)]
-    let dimension = |key: &str| {
-        style
-            .and_then(|props| props.get(key))
-            .and_then(AttributeValue::as_number)
-            .map(|n| n as f32)
-    };
-
-    (dimension("width"), dimension("height"))
+    (width.map(|n| n as f32), height.map(|n| n as f32))
 }
 
 /// Why a request could not be answered with a result.
