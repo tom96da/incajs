@@ -17,6 +17,8 @@ import type {
   IncaPointerEvent,
   IncaUIEvent,
   IncaWheelEvent,
+  Px,
+  StyleProps,
 } from "./types.mts";
 
 // These tests pin types. A function under test is never called, so the compiler checks it, and
@@ -185,5 +187,55 @@ describe("the event types", () => {
         "focusin" | "focusout" | "compositionstart" | "compositionupdate" | "compositionend"
       >
     >();
+  });
+});
+
+describe("the style types", () => {
+  it("accept the CSS names of the four host keys", () => {
+    expectTypeOf<StyleProps["color"]>().toEqualTypeOf<number | string | undefined>();
+    expectTypeOf<StyleProps["backgroundColor"]>().toEqualTypeOf<number | string | undefined>();
+    expectTypeOf<StyleProps["borderRadius"]>().toEqualTypeOf<Px | undefined>();
+    expectTypeOf<StyleProps["fontSize"]>().toEqualTypeOf<Px | undefined>();
+  });
+
+  it("accept a px string on a px key", () => {
+    expectTypeOf<"10px">().toExtend<Px>();
+    expectTypeOf<"0">().toExtend<Px>();
+    expectTypeOf<StyleProps["width"]>().toEqualTypeOf<Px | "auto" | undefined>();
+    expectTypeOf<StyleProps["gap"]>().toEqualTypeOf<Px | undefined>();
+    expectTypeOf<StyleProps["padding_top"]>().toEqualTypeOf<Px | undefined>();
+    expectTypeOf<StyleProps["margin"]>().toEqualTypeOf<Px | "auto" | undefined>();
+  });
+
+  it("reject a px string with another unit", () => {
+    expectTypeOf<{ width: "10em" }>().not.toExtend<StyleProps>();
+  });
+
+  it("reject a px string without a unit", () => {
+    expectTypeOf<{ gap: "10" }>().not.toExtend<StyleProps>();
+  });
+
+  it("accept the flex keyword forms", () => {
+    expectTypeOf<"flex-start" | "flex-end">().toExtend<
+      NonNullable<StyleProps["justify_content"]>
+    >();
+    expectTypeOf<"flex-start" | "flex-end">().toExtend<NonNullable<StyleProps["align_items"]>>();
+    expectTypeOf<"row-reverse" | "column-reverse">().toExtend<
+      NonNullable<StyleProps["flex_direction"]>
+    >();
+  });
+
+  it("reject an unknown flex keyword", () => {
+    expectTypeOf<{ justify_content: "flex-middle" }>().not.toExtend<StyleProps>();
+  });
+
+  it("accept a decimal string on opacity, flex_grow and flex_shrink", () => {
+    expectTypeOf<StyleProps["opacity"]>().toEqualTypeOf<number | `${number}` | undefined>();
+    expectTypeOf<StyleProps["flex_grow"]>().toEqualTypeOf<number | `${number}` | undefined>();
+    expectTypeOf<StyleProps["flex_shrink"]>().toEqualTypeOf<number | `${number}` | undefined>();
+  });
+
+  it("reject a percentage on opacity", () => {
+    expectTypeOf<{ opacity: "50%" }>().not.toExtend<StyleProps>();
   });
 });
