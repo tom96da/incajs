@@ -48,12 +48,13 @@ describe("window under reactive()", () => {
 });
 
 describe("createIncaApp mounted containers", () => {
-  setFlagsFromString("--expose-gc");
-  const gc = runInNewContext("gc") as () => void;
+  const bun = (globalThis as { Bun?: { gc(sync: boolean): void } }).Bun;
+  if (!bun) setFlagsFromString("--expose-gc");
+  const gc = bun ? () => bun.gc(true) : (runInNewContext("gc") as () => void);
 
   /** Each round runs in its own timer tick, since a deref keeps its target alive until the job ends. */
   async function collectGarbage(): Promise<void> {
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < (bun ? 50 : 10); i++) {
       gc();
       await new Promise((resolve) => setTimeout(resolve, 5));
     }

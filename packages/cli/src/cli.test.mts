@@ -77,6 +77,8 @@ afterEach(() => {
   process.removeAllListeners("SIGINT");
   process.removeAllListeners("SIGTERM");
   process.exitCode = undefined;
+  // Bun ignores `undefined` here.
+  if (process.exitCode !== undefined) process.exitCode = 0;
   vi.unstubAllEnvs();
 });
 
@@ -130,7 +132,7 @@ describe("run", () => {
 
     expect(mockedBuild).toHaveBeenCalled();
     expect(mockedDev).not.toHaveBeenCalled();
-    expect(process.exitCode).toBeUndefined();
+    expect(process.exitCode ?? 0).toBe(0);
     expect(written(stdout)).toContain(
       `[inca] built ${path.relative(process.cwd(), "/app/dist/bundle.js")}`,
     );
@@ -179,7 +181,7 @@ describe("run", () => {
     await run(["node", "inca", "package"]);
 
     expect(mockedPackageApp).toHaveBeenCalled();
-    expect(process.exitCode).toBeUndefined();
+    expect(process.exitCode ?? 0).toBe(0);
     expect(written(stdout)).toContain(
       `[inca] packaged ${path.relative(process.cwd(), "/app/dist/click_counter.app")}`,
     );
@@ -310,7 +312,7 @@ describe("run", () => {
 
     expect(written(stderr)).toMatch(/\[inca\] dev ignores --sourcemap and --no-sourcemap\n/);
     expect(mockedDev.mock.calls[0]?.[0]).not.toHaveProperty("sourcemap");
-    expect(process.exitCode).toBeUndefined();
+    expect(process.exitCode ?? 0).toBe(0);
   });
 
   it("stays silent about the source map flags for dev when none is given", async () => {
