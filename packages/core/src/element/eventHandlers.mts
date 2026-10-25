@@ -7,12 +7,15 @@ import type { EventHandlers } from "./types.mts";
 /** The events whose handler property every element has. */
 export const HANDLER_EVENTS = [
   "auxclick",
+  "beforeinput",
   "blur",
+  "change",
   "click",
   "contextmenu",
   "dblclick",
   "focus",
   "gotpointercapture",
+  "input",
   "keydown",
   "keyup",
   "lostpointercapture",

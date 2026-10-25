@@ -34,7 +34,8 @@ Functional behind an opt-in flag (--experimental-hmr / INCA_EXPERIMENTAL_HMR). P
 ::::
 
 :::: in-progress Phase 4: Input & text editing
-Pointer and keyboard input are done. Scrolling is done. Text editing (selection, caret, IME composition) is not built yet.
+Pointer and keyboard input, scrolling and a single-line text input with IME
+composition are done. Interactive visual state is not built yet.
 
 [Elements & Styles](/reference/elements)
 ::::

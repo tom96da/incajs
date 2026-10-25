@@ -301,7 +301,7 @@ export interface IncaEvent {
 }
 
 /**
- * The event object of a mouse, wheel, keyboard or focus event.
+ * The event object of a mouse, wheel, keyboard, focus, input or composition event.
  */
 export interface IncaUIEvent extends IncaEvent {
   /**
@@ -424,7 +424,7 @@ export interface IncaKeyboardEvent extends IncaUIEvent {
   readonly location: number;
   /** Whether the key press is an auto-repeat. */
   readonly repeat: boolean;
-  /** `false` on the events the host dispatches. */
+  /** Whether an input method composes in the focused `<input>`. */
   readonly isComposing: boolean;
   /** The key's code on a US keyboard layout, and `0` for a key outside it. */
   readonly keyCode: number;
@@ -446,17 +446,50 @@ export interface IncaKeyboardEvent extends IncaUIEvent {
   getModifierState(key: string): boolean;
 }
 
+/** The event object of `beforeinput` and `input`. */
+export interface IncaInputEvent extends IncaUIEvent {
+  /**
+   * The inserted text, or `null` for a deletion and a line break. On `input`, `null` for an empty
+   * composition text too.
+   */
+  readonly data: string | null;
+  /**
+   * On the events the host dispatches, one of `insertText`, `insertFromPaste`,
+   * `insertCompositionText`, `insertLineBreak`, `deleteContentBackward`, `deleteContentForward`
+   * and `deleteByCut`.
+   */
+  readonly inputType: string;
+  /** Whether the edit belongs to a composition. */
+  readonly isComposing: boolean;
+  /** Always `null`. */
+  readonly dataTransfer: null;
+  /** Returns a new empty array. */
+  getTargetRanges(): [];
+}
+
+/** The event object of `compositionstart`, `compositionupdate` and `compositionend`. */
+export interface IncaCompositionEvent extends IncaUIEvent {
+  /** The composed text. For `compositionstart`, the text the composition replaces. */
+  readonly data: string;
+}
+
 /** The event object of each event name the host dispatches. */
 export interface IncaEventMap {
   auxclick: IncaPointerEvent;
+  beforeinput: IncaInputEvent;
   blur: IncaFocusEvent;
+  change: IncaEvent;
   click: IncaPointerEvent;
+  compositionend: IncaCompositionEvent;
+  compositionstart: IncaCompositionEvent;
+  compositionupdate: IncaCompositionEvent;
   contextmenu: IncaPointerEvent;
   dblclick: IncaMouseEvent;
   focus: IncaFocusEvent;
   focusin: IncaFocusEvent;
   focusout: IncaFocusEvent;
   gotpointercapture: IncaPointerEvent;
+  input: IncaInputEvent;
   keydown: IncaKeyboardEvent;
   keyup: IncaKeyboardEvent;
   lostpointercapture: IncaPointerEvent;

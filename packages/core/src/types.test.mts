@@ -4,12 +4,14 @@
 import { describe, expectTypeOf, it } from "vitest";
 
 import type { HANDLER_EVENTS } from "./element/eventHandlers.mts";
-import type { EventHandler, IncaElement } from "./element/types.mts";
+import type { EventHandler, IncaElement, IncaInputElement } from "./element/types.mts";
 import type {
+  IncaCompositionEvent,
   IncaEvent,
   IncaEventMap,
   IncaEventTarget,
   IncaFocusEvent,
+  IncaInputEvent,
   IncaKeyboardEvent,
   IncaMouseEvent,
   IncaPointerEvent,
@@ -42,6 +44,37 @@ describe("the event types", () => {
         expectTypeOf(event).toEqualTypeOf<IncaEvent>(),
       );
     expectTypeOf(listen).returns.toBeVoid();
+  });
+
+  it.each(["beforeinput", "input"] as const)("infer the input event of %s", (name) => {
+    const listen = (target: IncaEventTarget) =>
+      target.addEventListener(name, (event) => expectTypeOf(event).toEqualTypeOf<IncaInputEvent>());
+    expectTypeOf(listen).returns.toBeVoid();
+  });
+
+  it("infer the composition event of the composition events", () => {
+    const listen = (target: IncaEventTarget) => {
+      target.addEventListener("compositionstart", (event) =>
+        expectTypeOf(event).toEqualTypeOf<IncaCompositionEvent>(),
+      );
+      target.addEventListener("compositionupdate", (event) =>
+        expectTypeOf(event).toEqualTypeOf<IncaCompositionEvent>(),
+      );
+      target.addEventListener("compositionend", (event) =>
+        expectTypeOf(event).toEqualTypeOf<IncaCompositionEvent>(),
+      );
+    };
+    expectTypeOf(listen).returns.toBeVoid();
+  });
+
+  it("infer the base event of change", () => {
+    const listen = (target: IncaEventTarget) =>
+      target.addEventListener("change", (event) => expectTypeOf(event).toEqualTypeOf<IncaEvent>());
+    expectTypeOf(listen).returns.toBeVoid();
+  });
+
+  it("type the value of an input element as a string", () => {
+    expectTypeOf<IncaInputElement["value"]>().toEqualTypeOf<string>();
   });
 
   it("infer the event of a removed listener from the event name", () => {
@@ -138,14 +171,19 @@ describe("the event types", () => {
     expectTypeOf<IncaUIEvent>().toExtend<IncaEvent>();
     expectTypeOf<IncaFocusEvent>().toExtend<IncaUIEvent>();
     expectTypeOf<IncaKeyboardEvent>().toExtend<IncaUIEvent>();
+    expectTypeOf<IncaInputEvent>().toExtend<IncaUIEvent>();
+    expectTypeOf<IncaCompositionEvent>().toExtend<IncaUIEvent>();
     expectTypeOf<IncaMouseEvent>().toExtend<IncaUIEvent>();
     expectTypeOf<IncaPointerEvent>().toExtend<IncaMouseEvent>();
     expectTypeOf<IncaWheelEvent>().toExtend<IncaMouseEvent>();
   });
 
-  it("list a handler property for every event name but focusin and focusout", () => {
+  it("list a handler for every event but focusin, focusout and the composition events", () => {
     expectTypeOf<(typeof HANDLER_EVENTS)[number]>().toEqualTypeOf<
-      Exclude<keyof IncaEventMap, "focusin" | "focusout">
+      Exclude<
+        keyof IncaEventMap,
+        "focusin" | "focusout" | "compositionstart" | "compositionupdate" | "compositionend"
+      >
     >();
   });
 });

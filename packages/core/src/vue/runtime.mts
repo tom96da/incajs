@@ -3,4 +3,4 @@
 
 // The module compiled `.vue` templates import their helpers from.
 export * from "@vue/runtime-core";
-export { withKeys, withModifiers } from "@vue/runtime-dom";
+export { vModelText, withKeys, withModifiers } from "@vue/runtime-dom";

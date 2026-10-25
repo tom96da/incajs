@@ -31,10 +31,12 @@ History is in [PLAN.md](./PLAN.md) and [CHANGELOG.md](../CHANGELOG.md).
   A template edit keeps component state and a script edit resets it.
 - **Input**: pointer, focus, keyboard and scrolling (`overflow`, wheel), and
   events fired from a script. Template refs read their box and scroll.
+- **Text input**: a single-line `<input>` with selection, the clipboard,
+  IME composition, the input events and `v-model`.
 
 ### Not started
 
-- Text editing and IME.
+- `textarea`, word-wise editing, undo and redo, and the selection API.
 - Interactive visual state.
 - `position` and `z-index`.
 - React and other frontends. Vue 3 has to be stable first.

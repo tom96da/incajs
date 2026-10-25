@@ -170,9 +170,9 @@ send.
    model that decides which node receives them: `focusNode` and `blurNode`,
    a click on a focusable node, and the `focus` and `blur` events.
 3. **Text editing**: an editable text element, with selection, caret and IME
-   composition. This is the largest item. It has no partial version worth
-   shipping, since a text field that drops IME composition is unusable in
-   Japanese, Chinese and Korean.
+   composition. This is the largest item. A single-line `<input>` with
+   selection, the clipboard, IME composition and `v-model` is done. `textarea`,
+   word-wise editing, undo and redo, and the selection API are not started.
 4. **Scrolling**: `overflow`, `overflow_x` and `overflow_y` (`visible`,
    `hidden`, `scroll`, `auto`) and wheel scrolling. Nested containers scroll
    innermost first.
