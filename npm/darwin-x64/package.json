@@ -1,6 +1,6 @@
 {
   "name": "@incajs/host-darwin-x64",
-  "version": "0.0.22",
+  "version": "0.0.23",
   "description": "Prebuilt native runtime for Incarnative.js on macOS (Intel, x64).",
   "keywords": [
     "desktop-app",

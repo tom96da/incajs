@@ -1,6 +1,6 @@
 {
   "name": "@incajs/cli",
-  "version": "0.0.22",
+  "version": "0.0.23",
   "description": "Commands to develop, bundle, and package Incarnative.js apps.",
   "keywords": [
     "bundler",
