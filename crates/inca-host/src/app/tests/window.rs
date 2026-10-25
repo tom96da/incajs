@@ -5,6 +5,8 @@
 
 use super::*;
 use crate::config::DEFAULT_WINDOW_SIZE;
+use inca_gpui::AttributeValue;
+use rstest::rstest;
 
 /// Opens a window directly (bypassing [`open`]'s disk-backed config
 /// read) so a test can hand it a chosen `window_config` and starting
@@ -347,6 +349,32 @@ fn content_window_size_reads_the_mounted_root_childs_style() {
     host.tree.append_child(root, content).unwrap();
 
     assert_eq!(content_window_size(&host, root), (Some(300.0), Some(150.0)));
+}
+
+#[test]
+fn content_window_size_reads_a_px_string() {
+    let mut host = Host::default();
+    let root = host.root();
+    let content = host.tree.create_node("div").unwrap();
+    host.tree.set_style(content, "width", "800px").unwrap();
+    host.tree.set_style(content, "height", "150px").unwrap();
+    host.tree.append_child(root, content).unwrap();
+
+    assert_eq!(content_window_size(&host, root), (Some(800.0), Some(150.0)));
+}
+
+#[rstest]
+#[case::negative_number(AttributeValue::Number(-5.0))]
+#[case::negative_px(AttributeValue::String("-5px".into()))]
+#[case::infinite_px(AttributeValue::String("1e999px".into()))]
+fn content_window_size_drops_a_negative_or_infinite_dimension(#[case] value: AttributeValue) {
+    let mut host = Host::default();
+    let root = host.root();
+    let content = host.tree.create_node("div").unwrap();
+    host.tree.set_style(content, "width", value).unwrap();
+    host.tree.append_child(root, content).unwrap();
+
+    assert_eq!(content_window_size(&host, root), (None, None));
 }
 
 #[test]
