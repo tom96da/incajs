@@ -78,6 +78,21 @@ it("exits 1 naming the field of inca.json it cannot use", async () => {
   expect(result.stderr.split("\n")).toHaveLength(2);
 });
 
+it("exits 1 naming a width no window can use", async () => {
+  await writeFile(path.join(dir, "bundle.js"), "");
+  await writeFile(path.join(dir, "inca.json"), JSON.stringify({ window: { width: -100 } }));
+
+  const result = run(["--print-config", path.join(dir, "bundle.js")]);
+
+  expect(result.status).toBe(1);
+  expect(result.stdout).toBe("");
+  const file = path.join(dir, "inca.json");
+  expect(result.stderr).toBe(
+    `failed to read ${file}: ["window","width"]: ` +
+      "invalid value: -100, expected a finite number above zero\n",
+  );
+});
+
 it("exits 1 with the usage when --print-config comes with --dev", async () => {
   await writeFile(path.join(dir, "bundle.js"), "");
 
