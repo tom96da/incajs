@@ -3,14 +3,16 @@
 
 //! Binds `globalThis.__inca_native__`: the small set of native functions
 //! JS calls to read the root handle, mutate the retained virtual tree,
-//! register input-event callbacks, dispatch events from script, and free what
-//! it no longer needs. It also creates the empty `globalThis.__inca_callbacks__`,
-//! where JS stores each listener under its callback id.
+//! register input-event callbacks, dispatch events from script, read and
+//! write the text of an input, and free what it no longer needs. It also
+//! creates the empty `globalThis.__inca_callbacks__`, where JS stores each
+//! listener under its callback id.
 
 mod capture;
 pub(crate) mod convert;
 mod focus;
 mod host;
+mod input;
 mod listeners;
 mod scroll;
 mod tree;
@@ -26,6 +28,7 @@ use rquickjs::{Ctx, Function, Object, Result as JsResult};
 
 use capture::install_capture;
 use focus::install_focus;
+use input::install_input;
 use listeners::install_events;
 use scroll::install_scroll;
 use tree::install_tree;
@@ -52,6 +55,7 @@ pub fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
     install_focus(&natives)?;
     install_capture(&natives)?;
     install_scroll(&natives)?;
+    install_input(&natives)?;
     crate::event::install(ctx)?;
     let globals = ctx.globals();
     globals.prop("__inca_native__", native)?;

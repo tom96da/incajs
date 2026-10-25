@@ -112,14 +112,18 @@ fn mark_subtree_dirty_queues_nodes_that_can_hold_focus(cx: &mut TestAppContext) 
     let parent = tree.create_node("div").unwrap();
     let plain = tree.create_node("div").unwrap();
     let button = tree.create_node("button").unwrap();
+    let input = tree.create_node("input").unwrap();
     let held = tree.create_node("div").unwrap();
-    for child in [focusable, plain, button, held] {
+    for child in [focusable, plain, button, input, held] {
         tree.append_child(parent, child).unwrap();
     }
     let mut registry = FocusRegistry::default();
     cx.update(|_, cx| registry.get_or_create(held, cx));
     registry.mark_subtree_dirty(&tree, parent);
-    assert_eq!(registry.tab_dirty, HashSet::from([focusable, button, held]));
+    assert_eq!(
+        registry.tab_dirty,
+        HashSet::from([focusable, button, input, held])
+    );
 }
 
 #[rstest]
@@ -136,10 +140,17 @@ fn a_button_has_tab_index_0_unless_told_otherwise(
     assert_eq!(FocusRegistry::tab_index_of(&tree, id), want, "{value:?}");
 }
 
+#[test]
+fn an_input_has_tab_index_0_without_a_tabindex() {
+    let (tree, id) = tree_with("input", None);
+    assert_eq!(FocusRegistry::tab_index_of(&tree, id), Some(0));
+}
+
 #[rstest]
 #[case::button("button", None)]
+#[case::input("input", None)]
 #[case::div("div", Some(2))]
-fn a_disabled_button_has_no_tab_index_but_a_disabled_div_keeps_it(
+fn a_disabled_attribute_drops_the_tab_index_of_a_control_only(
     #[case] tag: &str,
     #[case] want: Option<i32>,
 ) {

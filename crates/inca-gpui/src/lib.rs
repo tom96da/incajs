@@ -4,16 +4,22 @@
 pub mod element;
 pub mod event_sink;
 pub mod focus;
+pub mod input;
 pub mod tree;
 
 pub use element::{
     AlignSpec, DisplaySpec, EdgesSpec, ElementSpec, ElementTag, FlexDirectionSpec, LengthSpec,
-    NodeLayout, OverflowSpec, StyleSpec, build_element, build_element_with_events, build_spec,
-    clear_presses, debug_selector, hidden_by_attribute, is_scroll_container, mouse_target,
-    pressed_target, render_tree, render_tree_with_events, style_warning, wheel_axes,
+    NodeLayout, OverflowSpec, StyleSpec, TextInputHandler, build_element,
+    build_element_with_events, build_spec, clear_presses, debug_selector, hidden_by_attribute,
+    is_scroll_container, mouse_target, pressed_target, render_tree, render_tree_with_events,
+    style_warning, wheel_axes,
 };
 pub use event_sink::{
     EventPayload, EventSink, KeyPayload, MousePayload, NO_BUTTON, PointerSource, WheelPayload,
     buttons_mask,
 };
-pub use tree::{AttributeValue, NodeId, TreeError, VirtualNode, VirtualTree, is_disabled_button};
+pub use input::{Edit, InputLayout, InputRequest, InputState, InputType, Motion};
+pub use tree::{
+    AttributeValue, NodeId, TreeError, VirtualNode, VirtualTree, focusable_by_default,
+    is_disabled_control,
+};

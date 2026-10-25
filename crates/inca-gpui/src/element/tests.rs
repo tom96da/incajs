@@ -6,6 +6,7 @@
 use super::style::apply_style;
 use super::*;
 use crate::event_sink::{EventPayload, EventSink, noop_sink_methods};
+use crate::input::{InputLayout, InputRequest, InputState};
 use crate::tree::AttributeValue;
 use crate::tree::{NodeId, VirtualTree};
 use gpui::prelude::*;
@@ -18,6 +19,7 @@ use std::rc::Rc;
 use gpui::{Context, Render, TestAppContext, VisualTestContext};
 
 mod build;
+mod input;
 mod style;
 
 pub(super) fn num(n: f64) -> AttributeValue {
@@ -42,6 +44,12 @@ pub(super) struct Probe {
     pub(super) handles: Rc<RefCell<HashMap<NodeId, ScrollHandle>>>,
     /// The tree the view renders, read for `wheel_axes`.
     pub(super) tree: Rc<RefCell<VirtualTree>>,
+    /// The text state of each `input` node.
+    pub(super) inputs: Rc<RefCell<HashMap<NodeId, InputState>>>,
+    /// The requests the platform's text input sent.
+    pub(super) requests: Rc<RefCell<Vec<(NodeId, InputRequest)>>>,
+    /// The node whose focus handle `focus_handle` gives.
+    pub(super) focus: Rc<RefCell<Option<(NodeId, gpui::FocusHandle)>>>,
 }
 
 impl EventSink for Probe {
@@ -63,8 +71,10 @@ impl EventSink for Probe {
         false
     }
 
-    fn focus_handle(&self, _: NodeId) -> Option<gpui::FocusHandle> {
-        None
+    fn focus_handle(&self, id: NodeId) -> Option<gpui::FocusHandle> {
+        let focus = self.focus.borrow();
+        let (node, handle) = focus.as_ref()?;
+        (*node == id).then(|| handle.clone())
     }
 
     fn scroll_handle(&self, id: NodeId) -> Option<ScrollHandle> {
@@ -119,6 +129,22 @@ impl EventSink for Probe {
             .push(("release".to_owned(), released, Some(released), pressed));
     }
 
+    fn input(&self, id: NodeId) -> Option<InputState> {
+        self.inputs.borrow().get(&id).cloned()
+    }
+
+    fn record_input(&self, id: NodeId, layout: InputLayout) {
+        self.inputs
+            .borrow_mut()
+            .entry(id)
+            .or_default()
+            .record(layout);
+    }
+
+    fn input_request(&self, id: NodeId, request: InputRequest, _: &mut Window, _: &mut App) {
+        self.requests.borrow_mut().push((id, request));
+    }
+
     noop_sink_methods!(
         pointer_moved,
         pointer_left,
@@ -151,6 +177,9 @@ pub(super) fn probe() -> Probe {
         layouts: Rc::default(),
         handles: Rc::default(),
         tree: Rc::default(),
+        inputs: Rc::default(),
+        requests: Rc::default(),
+        focus: Rc::default(),
     }
 }
 

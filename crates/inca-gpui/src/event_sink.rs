@@ -7,6 +7,7 @@ use gpui::{
 };
 
 use crate::element::NodeLayout;
+use crate::input::{InputLayout, InputRequest, InputState};
 use crate::tree::NodeId;
 
 /// What a dispatch carries beyond the node it fired on.
@@ -440,7 +441,8 @@ pub trait EventSink {
     /// focused button is held, Space up also clicks it, once. A click, the
     /// mouse release or the button losing focus ends the hold. When a
     /// listener prevented the default, the sink calls `Window::prevent_default`
-    /// and `App::stop_propagation`.
+    /// and `App::stop_propagation`. At a focused `input` the default action
+    /// edits it, and an edit key counts as handled.
     fn key_input(
         &self,
         keystroke: &gpui::Keystroke,
@@ -449,10 +451,29 @@ pub trait EventSink {
         window: &mut Window,
         cx: &mut App,
     );
+
+    /// The text state of the `input` node `node_id`, `None` for any other
+    /// node.
+    fn input(&self, node_id: NodeId) -> Option<InputState>;
+
+    /// Stores where the frame being drawn put the text of `node_id`.
+    fn record_input(&self, node_id: NodeId, layout: InputLayout);
+
+    /// Carries a call of the platform's text input for the focused `input`
+    /// `node_id`: an insertion, a composition, the end of a composition or a
+    /// selection. A `readonly` or `disabled` input applies a selection only.
+    fn input_request(
+        &self,
+        node_id: NodeId,
+        request: InputRequest,
+        window: &mut Window,
+        cx: &mut App,
+    );
 }
 
-/// Emits an empty body for each listed void [`EventSink`] method, with the
-/// trait's signature. A method missing from the trait is a compile error.
+/// Emits a body for each listed [`EventSink`] method, with the trait's
+/// signature: empty, or `None` for `input`. A method missing from the trait
+/// is a compile error.
 macro_rules! noop_sink_methods {
     ($($name:ident),* $(,)?) => { $(noop_sink_methods!(@one $name);)* };
     (@one clear_layout) => { fn clear_layout(&self) {} };
@@ -507,6 +528,24 @@ macro_rules! noop_sink_methods {
             _: &gpui::Keystroke,
             _: bool,
             _: &$crate::event_sink::EventPayload,
+            _: &mut gpui::Window,
+            _: &mut gpui::App,
+        ) {
+        }
+    };
+    (@one input) => {
+        fn input(&self, _: $crate::tree::NodeId) -> Option<$crate::input::InputState> {
+            None
+        }
+    };
+    (@one record_input) => {
+        fn record_input(&self, _: $crate::tree::NodeId, _: $crate::input::InputLayout) {}
+    };
+    (@one input_request) => {
+        fn input_request(
+            &self,
+            _: $crate::tree::NodeId,
+            _: $crate::input::InputRequest,
             _: &mut gpui::Window,
             _: &mut gpui::App,
         ) {

@@ -306,15 +306,15 @@ pub(crate) fn dispatch_event<'js>(
     Ok(!state.canceled.get())
 }
 
-/// Runs an untrusted `click` at `target`. A disabled button, a node that left the tree and a node
-/// whose own click is still running ignore the call.
+/// Runs an untrusted `click` at `target`. A disabled button or input, a node that left the tree
+/// and a node whose own click is still running ignore the call.
 pub(crate) fn click(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, target: NodeId) {
     {
         let mut host = host.borrow_mut();
         let Some(node) = host.tree.get(target) else {
             return;
         };
-        if inca_gpui::is_disabled_button(node) || !host.clicking.insert(target) {
+        if inca_gpui::is_disabled_control(node) || !host.clicking.insert(target) {
             return;
         }
     }

@@ -30,7 +30,7 @@ use std::rc::Rc;
 use gpui::{App, Window};
 use inca_gpui::event_sink::{hover_path_difference, with_screen};
 use inca_gpui::{
-    EventPayload, MousePayload, NO_BUTTON, NodeId, PointerSource, buttons_mask, is_disabled_button,
+    EventPayload, MousePayload, NO_BUTTON, NodeId, PointerSource, buttons_mask, is_disabled_control,
 };
 use inca_jsenv::{Engine, EngineError, ErrorReporter, report_jobs, stderr_reporter};
 use rquickjs::Function;
@@ -40,6 +40,7 @@ use crate::bindings::Host;
 use crate::event::{self, Walk};
 use crate::focus::FocusTransition;
 
+mod input;
 mod pointer;
 mod sink;
 
@@ -99,6 +100,8 @@ struct State {
     /// the button. A Space key up clicks it. A click, the mouse release or the
     /// button losing focus ends it, and the next mouse press replaces it.
     mouse_held: Cell<Option<(gpui::WindowId, NodeId)>>,
+    /// The `input` a held left press selects in, until its release.
+    input_drag: Cell<Option<NodeId>>,
 }
 
 impl EventDispatcher {
@@ -215,10 +218,15 @@ impl EventDispatcher {
     }
 
     /// The nodes that receive no pointer `mousedown`, `mouseup`, `click` or
-    /// `dblclick`: a disabled button on the path from the mouse target or the
-    /// pressed target of the event, and the ancestors of that button. Listeners
-    /// below the button run. A keyboard click always runs.
-    fn cut_by_disabled_button(&self, event: &str, payload: &EventPayload, cx: &App) -> Vec<NodeId> {
+    /// `dblclick`: a disabled button or input on the path from the mouse target
+    /// or the pressed target of the event, and the ancestors of that control.
+    /// Listeners below the control run. A keyboard click always runs.
+    fn cut_by_disabled_control(
+        &self,
+        event: &str,
+        payload: &EventPayload,
+        cx: &App,
+    ) -> Vec<NodeId> {
         let keyboard = matches!(
             payload,
             EventPayload::Mouse(MousePayload {
@@ -230,7 +238,7 @@ impl EventDispatcher {
             return Vec::new();
         }
         let host = self.host.borrow();
-        let disabled = |id: &NodeId| host.tree.get(*id).is_some_and(is_disabled_button);
+        let disabled = |id: &NodeId| host.tree.get(*id).is_some_and(is_disabled_control);
         let button = match payload {
             EventPayload::Mouse(mouse) => Some(mouse.button),
             _ => None,
@@ -359,7 +367,7 @@ impl EventDispatcher {
     /// event object, whose `eventId` is larger than the one of the event
     /// fired before. Returns whether a listener prevented the default
     /// action. `preventDefault()` calls from a passive listener are ignored.
-    /// A pointer `click` or `dblclick` skips a disabled button and its
+    /// A pointer `click` or `dblclick` skips a disabled button or input and its
     /// ancestors, as `mousedown` and `mouseup` do. A `start` that left the
     /// tree fires nothing. When a listener ran, the job queue drains after
     /// the walk and the window refreshes. A call made while the window draws
@@ -398,7 +406,7 @@ impl EventDispatcher {
     ) -> bool {
         self.host.borrow_mut().focus.observe(window, cx);
         let payload = &self.prepare(event, start, payload, window);
-        let cut = self.cut_by_disabled_button(event, payload, cx);
+        let cut = self.cut_by_disabled_control(event, payload, cx);
         let (canceled, entered) = self.walk(EventTargetId::Node(start), event, payload, &cut);
         if entered {
             self.drain_observed(window);
@@ -500,6 +508,7 @@ impl EventDispatcher {
             EventPayload::Mouse(MousePayload::at(gpui::Point::default(), window.modifiers()));
         self.process_capture(&payload, NO_BUTTON, window, cx);
         self.state.pointerdown_canceled.set(false);
+        self.state.input_drag.set(None);
         let mut host = self.host.borrow_mut();
         host.held_buttons = 0;
         host.capture_pending = None;

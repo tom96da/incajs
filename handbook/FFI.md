@@ -63,12 +63,13 @@ the custom renderer's output. Each node has:
 
 ### Tag vocabulary
 
-Implemented in `crates/inca-gpui/src/element/`. There are three kinds:
+Implemented in `crates/inca-gpui/src/element/`. There are four kinds:
 
 | `tag_name` | Maps to |
 | --- | --- |
 | `"text"` | Content is its `"value"` string attribute (missing/non-string → empty, never a panic) followed by its descendants' text in child order. Descendants are not rendered as separate elements. |
 | `"button"` | A styled container. The host reads its `tabindex` with a default of 0. [Elements](../docs/reference/elements.md#button) covers its key clicks. |
+| `"input"` | One line of editable text in a styled container. The host keeps its text; `inputValue` and `setInputValue` read and write it. Its children are not rendered. [Elements](../docs/reference/elements.md#input) covers the rest. |
 | anything else | A generic styled container (a GPUI `div()`). |
 
 ### Style prop vocabulary
@@ -127,6 +128,8 @@ be passed, and `undefined` there counts as `null`.
 | `removeAttribute` | `(nodeId: number, key: string) => void` | Remove a non-style attribute prop. Removing a key that isn't set does nothing. |
 | `setStyle` | `(nodeId: number, key: string, value: string \| number \| boolean) => void` | Set a style prop. |
 | `removeStyle` | `(nodeId: number, key: string) => void` | Remove a style prop so it renders as if never set. Removing a key that isn't set does nothing. |
+| `inputValue` | `(nodeId: number) => string` | The text of the input node `nodeId`. Throws a `TypeError` for a node of another tag. |
+| `setInputValue` | `(nodeId: number, value: string) => void` | Replace the text of the input node `nodeId`, without CR and LF. A changed text puts the caret at its end and ends a composition. Throws a `TypeError` for a node of another tag. |
 | `addEventListener` | `(target: number \| "$document" \| "$window", event: string, capture?: boolean, passive?: boolean) => number` | Register a callback for an event and return its id, see [Registering](#registering) and [Tagged targets](#tagged-targets). `capture` and `passive` default to `false`. |
 | `removeEventListener` | `(target: number \| "$document" \| "$window", event: string, callbackId: number) => boolean` | Drop one registration and return whether it was there. An unknown node returns `false`. |
 | `dispatchEvent` | `(target: number \| "$document" \| "$window", event: Event) => boolean` | Walk a script-built event over the path of `target` and return `false` when a listener canceled it, see [Dispatching from script](#dispatching-from-script) and [Tagged targets](#tagged-targets). |
@@ -135,7 +138,7 @@ be passed, and `undefined` there counts as `null`.
 | `releasePointerCapture` | `(nodeId: number, pointerId: number) => void` | Clear the pending capture when `nodeId` holds it. Throws `NotFoundError` for a `pointerId` other than 1. |
 | `hasPointerCapture` | `(nodeId: number, pointerId: number) => boolean` | Whether `nodeId` is the pending capture and still mounted. `false` for a `pointerId` other than 1. |
 | `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its subtree, and return every `callbackId` registered in it. An unknown id returns `[]`. Destroying the root throws. Also drops the hold and the waiting `scrollIntoViewNode` calls of the destroyed nodes. |
-| `focusNode` | `(nodeId: number, preventScroll?: boolean) => void` | Request focus for `nodeId`, next frame. Only a connected node with a `tabindex` that is not hidden takes it, and a `button` defaults to `0`. Unless `preventScroll` is `true`, the scroll containers above the node then scroll it into view: a node that shows stays put, a node outside a container's box centres, and a node that shows partly moves the least vertically and stays put horizontally. A node with no box yet is retried next frame. |
+| `focusNode` | `(nodeId: number, preventScroll?: boolean) => void` | Request focus for `nodeId`, next frame. Only a connected node with a `tabindex` that is not hidden takes it, and a `button` or `input` defaults to `0`. Unless `preventScroll` is `true`, the scroll containers above the node then scroll it into view: a node that shows stays put, a node outside a container's box centres, and a node that shows partly moves the least vertically and stays put horizontally. A node with no box yet is retried next frame. |
 | `focusedNode` | `() => number \| null` | The id of the focused node, or `null` when none has focus. |
 | `blurNode` | `(nodeId: number) => void` | Request that `nodeId` lose focus. Takes effect next frame, and does nothing if `nodeId` is not the focused node by then. |
 | `layoutOf` | `(nodeId: number) => [x, y, width, height, border, scrollX, scrollY] \| null` | Read the border box of `nodeId` in window pixels as the last drawn frame placed it, with `border` the uniform border width. `scrollX` and `scrollY` are the positive scroll offset the parent applied to that box. `null` for a node with no recorded box. |
@@ -369,7 +372,7 @@ with the node ids.
   `mouseup` input.
 - `EventDispatcher::fire` and the pointer walks skip the callbacks of
   `mousedown`, `mouseup`, a mouse `click` and `dblclick` for a disabled
-  button and its ancestors. Listeners below the button run, and a key click
+  button or input and its ancestors. Listeners below it run, and a key click
   always runs.
 - A press record keeps the press container per button until a release of that
   button is reported. A press of another button leaves the record. Window
@@ -488,9 +491,9 @@ with the node ids.
 - `focusNode`/`blurNode` queue and apply in order on the next frame. A focus
   change dispatches `blur`, `focusout`, `focus`, `focusin` in that order, and
   the `focusin`/`focusout` walk has `target` the node. Changes to `tabindex`
-  (key compared case-insensitively), `disabled` on a button, `hidden`,
-  `inert` and `display`, and moving or removing a node, re-check the node's
-  subtree before that frame's queued focus requests.
+  (key compared case-insensitively), `disabled` on a button or input,
+  `hidden`, `inert` and `display`, and moving or removing a node, re-check
+  the node's subtree before that frame's queued focus requests.
 - An uncanceled `mousedown` focuses the nearest node on the target's path
   that has a `FocusRegistry` handle, and blurs the window when there is none.
   The tracker's capture handler calls `Window::prevent_default` to stop gpui's
@@ -501,6 +504,32 @@ with the node ids.
   `focusin` on activation. `focus` also fires at `"$window"` before the
   focused node on activation, and `blur` after it on deactivation, whether or
   not a node is focused.
+
+#### Text input
+
+- The input element draws the text line inside the container. While the node
+  is focused, each paint registers `TextInputHandler` with
+  `Window::handle_input`, and the platform's text input and input method call
+  it in UTF-16 code units. Reads answer from `Host::inputs`, writes go to
+  `EventSink::input_request`.
+- `inca_gpui::InputState` holds byte offsets on char boundaries. Each paint
+  records the caret stops, the text origin and the sideways scroll
+  (`EventSink::record_input`). Mouse hits, `bounds_for_range` and
+  `character_index_for_point` read them. After each edit and selection change
+  the host calls `Window::invalidate_character_coordinates`, so the platform
+  moves the candidate window.
+- The default action of an uncanceled `keydown` at a focused input with no
+  composition edits it: the arrows, Home and End (Shift extends), Backspace
+  by char and Delete by grapheme, and Secondary+A, C, X and V
+  (`Modifiers::secondary`). ArrowUp and ArrowDown go to the start and the
+  end. Such a key calls `Window::prevent_default` and `App::stop_propagation`.
+  Typed characters arrive through the handler after the walk, without
+  control characters.
+- An uncanceled left `mousedown` on an input puts the caret at the nearest
+  stop, and Shift extends the selection. A move with the left button held
+  extends it until the release. Tab into an input selects its text.
+- `readonly` and `disabled` stop edits. A `readonly` input still moves its
+  selection and copies.
 
 #### Dispatching from script
 
@@ -524,7 +553,7 @@ with the node ids.
   again.
 - `click()` walks a `click` event with `MousePayload::keyboard_click`.
   `Host::clicking` holds the nodes whose click is running, as a re-entrancy
-  guard. A disabled `button` returns at once.
+  guard. A disabled `button` or `input` returns at once.
 
 - `HostedApp::render` fires `scroll` after the focus transitions and before
   building the tree. `Host::scrolled_nodes` compares each handle's clamped

@@ -86,10 +86,18 @@ impl From<bool> for AttributeValue {
     }
 }
 
-/// Whether `node` is a `button` carrying the `disabled` attribute.
+/// Whether a node of `tag` takes focus without a `tabindex`: a `button` or an
+/// `input`.
 #[must_use]
-pub fn is_disabled_button(node: &VirtualNode) -> bool {
-    node.tag_name() == "button" && node.attributes().contains_key("disabled")
+pub fn focusable_by_default(tag: &str) -> bool {
+    matches!(tag, "button" | "input")
+}
+
+/// Whether `node` is a `button` or an `input` carrying the `disabled`
+/// attribute.
+#[must_use]
+pub fn is_disabled_control(node: &VirtualNode) -> bool {
+    focusable_by_default(node.tag_name()) && node.attributes().contains_key("disabled")
 }
 
 /// A single retained node. Always accessed through a [`VirtualTree`]. There

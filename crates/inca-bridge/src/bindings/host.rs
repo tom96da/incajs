@@ -8,7 +8,7 @@ use std::rc::Rc;
 use gpui::{Pixels, ScrollHandle, point, px};
 
 use inca_gpui::element::scroll::{Align, rect_of, scroll_chain};
-use inca_gpui::{NodeId, NodeLayout, VirtualTree, is_scroll_container};
+use inca_gpui::{InputState, NodeId, NodeLayout, VirtualTree, is_scroll_container};
 use inca_jsenv::EngineError;
 
 use crate::focus::FocusRegistry;
@@ -35,6 +35,9 @@ pub struct Host {
     pub(super) scroll_reported: HashMap<NodeId, gpui::Point<gpui::Pixels>>,
     /// Boxes of the last drawn frame. Its own cell, as the draw runs under a shared borrow.
     pub(crate) layout: RefCell<HashMap<NodeId, NodeLayout>>,
+    /// The text states of the `input` nodes, created on first use. Its own cell, as the draw runs
+    /// under a shared borrow.
+    pub(crate) inputs: RefCell<HashMap<NodeId, InputState>>,
     /// Errors listeners threw, in order; the dispatcher reports them once the engine is idle.
     pub(crate) failures: Vec<EngineError>,
     /// Every mouse button currently held, as the `buttons` bitmask of the events. GPUI's own mouse
@@ -80,6 +83,7 @@ impl Default for Host {
             scroll_handles: RefCell::new(HashMap::new()),
             scroll_reported: HashMap::new(),
             layout: RefCell::new(HashMap::new()),
+            inputs: RefCell::new(HashMap::new()),
             failures: Vec::new(),
             held_buttons: 0,
             capture_pending: None,
@@ -126,6 +130,7 @@ impl Host {
         for id in ids {
             self.scroll_handles.get_mut().remove(id);
             self.scroll_reported.remove(id);
+            self.inputs.get_mut().remove(id);
         }
         ids.iter()
             .flat_map(|&id| {

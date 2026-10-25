@@ -30,6 +30,7 @@ test-support = []
 
 [dependencies]
 gpui.workspace = true
+unicode-segmentation.workspace = true
 
 [dev-dependencies]
 rstest.workspace = true
