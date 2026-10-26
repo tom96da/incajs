@@ -186,7 +186,8 @@ package.
 The Node files in `tests/tests/` belong to `@incajs/e2e-tests`, which
 `pnpm test` does not run: `hmr-quickjs-state`, `host-startup-failure`,
 `host-startup-wait`, `host-shutdown`, `host-packaged-launch`,
-`host-print-config`, `host-source-map`, `hmr-callback-ids` and `inca-config`.
+`host-print-config`, `host-source-map`, `host-timers`, `hmr-callback-ids` and
+`inca-config`.
 They spawn the real `inca-host` binary, and `hmr-quickjs-state` and
 `hmr-callback-ids` also start a real Vite dev server.
 
@@ -205,6 +206,8 @@ They spawn the real `inca-host` binary, and `hmr-quickjs-state` and
   use gpui's fake clock in `inca-host`.
 - `host-print-config` runs `--print-config` and compares the printed JSON and
   the exit code.
+- `host-timers` runs an interval and a timeout of the built `incajs` on the
+  real clock.
 - `host-packaged-launch` starts the host with no argv, from an unrelated
   working directory, with the bundle beside the executable. Its bundles open
   no window, so it needs no display.
