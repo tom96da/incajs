@@ -34,6 +34,7 @@
     "src/callbacks.mts",
     "src/targets.mts",
     "src/interfaces.mts",
+    "src/timers.mts",
     "dist/chunks/hooks-*.js"
   ],
   "main": "./dist/index.js",

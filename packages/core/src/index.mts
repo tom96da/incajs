@@ -3,6 +3,9 @@
 
 // The renderer's value exports live in `rendererCore.mts`.
 
+import "./timerGlobals.mts";
+import "./timers.mts";
+
 export { document } from "./document.mts";
 export { window } from "./window.mts";
 export type { RectLike, RectValues } from "./element/geometry.mts";

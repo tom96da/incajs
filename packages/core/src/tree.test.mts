@@ -60,6 +60,8 @@ const native = {
   setPointerCapture: vi.fn<(nodeId: number, pointerId: number) => void>(),
   releasePointerCapture: vi.fn<(nodeId: number, pointerId: number) => void>(),
   hasPointerCapture: vi.fn<(nodeId: number, pointerId: number) => boolean>(),
+  startTimer: vi.fn<(delay: number, repeat: boolean) => number | undefined>(),
+  stopTimer: vi.fn<(id: number) => void>(),
 };
 
 beforeEach(() => {
