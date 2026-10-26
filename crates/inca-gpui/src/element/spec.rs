@@ -37,43 +37,79 @@ pub enum LengthSpec {
     Auto,
 }
 
-/// `gpui`-independent mirror of [`gpui::Display`]'s supported variants.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum DisplaySpec {
-    Flex,
-    Block,
-    Grid,
-    None,
+/// Defines a keyword enum: its variants, `NAMES` and `from_name`. A variant
+/// lists every name it takes, separated by `|`.
+macro_rules! keywords {
+    (
+        $(#[$meta:meta])*
+        pub enum $name:ident {
+            $($(#[$vmeta:meta])* $variant:ident = $first:literal $(| $more:literal)*,)*
+        }
+    ) => {
+        $(#[$meta])*
+        #[derive(Debug, Clone, Copy, PartialEq)]
+        pub enum $name {
+            $($(#[$vmeta])* $variant,)*
+        }
+
+        impl $name {
+            /// Every name a style value of this kind takes, in declaration order.
+            pub const NAMES: &[&str] = &[$($first, $($more,)*)*];
+
+            /// The variant `name` stands for. Names are exact lowercase.
+            #[must_use]
+            pub fn from_name(name: &str) -> Option<Self> {
+                match name {
+                    $($first $(| $more)* => Some(Self::$variant),)*
+                    _ => None,
+                }
+            }
+        }
+    };
 }
 
-/// `gpui`-independent mirror of [`gpui::FlexDirection`].
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum FlexDirectionSpec {
-    Row,
-    Column,
-    RowReverse,
-    ColumnReverse,
+keywords! {
+    /// `gpui`-independent mirror of [`gpui::Display`]'s supported variants.
+    pub enum DisplaySpec {
+        Flex = "flex",
+        Block = "block",
+        Grid = "grid",
+        None = "none",
+    }
 }
 
-/// `gpui`-independent mirror of the common subset of `gpui`'s `AlignItems`
-/// and `JustifyContent` (`= AlignContent`) enums: the variants both share
-/// and that this layer supports.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum AlignSpec {
-    Start,
-    End,
-    Center,
-    Stretch,
+keywords! {
+    /// `gpui`-independent mirror of [`gpui::FlexDirection`].
+    pub enum FlexDirectionSpec {
+        Row = "row",
+        Column = "column",
+        RowReverse = "row_reverse",
+        ColumnReverse = "column_reverse",
+    }
 }
 
-/// `gpui`-independent mirror of [`gpui::Overflow`]'s supported variants.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum OverflowSpec {
-    Visible,
-    /// Clips without making a scroll container.
-    Clip,
-    Hidden,
-    Scroll,
+keywords! {
+    /// `gpui`-independent mirror of the common subset of `gpui`'s `AlignItems`
+    /// and `JustifyContent` (`= AlignContent`) enums: the variants both share
+    /// and that this layer supports.
+    pub enum AlignSpec {
+        Start = "start",
+        End = "end",
+        Center = "center",
+        Stretch = "stretch",
+    }
+}
+
+keywords! {
+    /// `gpui`-independent mirror of [`gpui::Overflow`]'s supported variants.
+    /// `"auto"` names [`OverflowSpec::Scroll`].
+    pub enum OverflowSpec {
+        Visible = "visible",
+        /// Clips without making a scroll container.
+        Clip = "clip",
+        Hidden = "hidden",
+        Scroll = "scroll" | "auto",
+    }
 }
 
 /// One value per side of a box. `None` leaves that side at its default.
@@ -97,8 +133,8 @@ impl<T> Default for EdgesSpec<T> {
 }
 
 /// A plain-data, `gpui`-independent style description, built from a
-/// [`VirtualNode`](crate::tree::VirtualNode)'s `style_props`. See
-/// `read_prop`'s match arms for the exact recognized keys.
+/// [`VirtualNode`](crate::tree::VirtualNode)'s `style_props`.
+/// [`STYLE_KEYS`](crate::STYLE_KEYS) lists the keys it is read from.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct StyleSpec {
     pub display: Option<DisplaySpec>,

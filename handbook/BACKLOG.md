@@ -57,14 +57,20 @@ A fixed entry is deleted and its ID is never reused.
   (percentages, shorthands) belongs to the same change. B-123 generates the
   types from the same mapping.
 
-- **B-123 The style vocabulary has no machine-readable definition**
+- **B-123 The style vocabulary is not emitted as JSON and TypeScript types**
   `Units: gpui,core,cli · Size: L · Impact: Medium`
 
   `StyleProps` (`packages/core/src/types.mts`) copies the host's vocabulary
-  by hand and lists snake_case keys. Vue's `CSSProperties` type lists only CSS
-  properties, so an editor that checks `:style` flags the host's own keys. A
-  definition in the host that generates JSON and TypeScript types gives tools
-  one source. The types let an editor check `:style` keys, and a Vite plugin
+  by hand. Vue's `CSSProperties` type lists only CSS properties, so an
+  editor that checks `:style` flags the host's own keys.
+  `inca_gpui::STYLE_KEYS` lists the keys, their CSS names, value kinds and
+  keyword names, but no description, and the padding and margin keys carry
+  no precedence. A generator that writes JSON and TypeScript types from it,
+  with descriptions added to the declaration, gives tools one source. It
+  also needs the range of each kind as data, the synonyms inside a keyword
+  list (`auto` and `scroll`), and a choice of the spellings the types
+  expose: the host takes camelCase, kebab-case and snake_case keys at run
+  time. The types let an editor check `:style` keys, and a Vite plugin
   can warn about static keys with file and line during the build. The
   Tailwind class resolver of Phase 7 reads the same data, and B-001 builds on
   the types. It follows B-121 and generates from its CSS mapping.

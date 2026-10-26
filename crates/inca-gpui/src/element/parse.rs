@@ -1,12 +1,13 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use super::spec::{
     AlignSpec, DisplaySpec, EdgesSpec, FlexDirectionSpec, LengthSpec, OverflowSpec, StyleSpec,
 };
-use crate::tree::{AttributeValue, style_key};
+use crate::tree::AttributeValue;
 
 /// Parses a `0x000000..=0xFFFFFF` number or a `"#rrggbb"`/`"#rgb"` string into
 /// a `0xRRGGBB` color. Any other value (a number outside that range, `NaN`,
@@ -43,20 +44,9 @@ fn parse_hex_color(s: &str) -> Option<u32> {
     }
 }
 
-/// `"auto"` is an alias of `"scroll"`.
-fn overflow_spec_from_str(s: &str) -> Option<OverflowSpec> {
-    match s {
-        "visible" => Some(OverflowSpec::Visible),
-        "hidden" => Some(OverflowSpec::Hidden),
-        "clip" => Some(OverflowSpec::Clip),
-        "scroll" | "auto" => Some(OverflowSpec::Scroll),
-        _ => None,
-    }
-}
-
 /// One or two overflow values, x first; a single value applies to both axes.
 fn overflow_pair_from_str(s: &str) -> Option<(OverflowSpec, OverflowSpec)> {
-    let mut values = s.split_ascii_whitespace().map(overflow_spec_from_str);
+    let mut values = s.split_ascii_whitespace().map(OverflowSpec::from_name);
     let x = values.next()??;
     let y = values.next().unwrap_or(Some(x))?;
     values.next().is_none().then_some((x, y))
@@ -103,6 +93,14 @@ fn size_spec_from(value: &AttributeValue) -> Option<LengthSpec> {
     }
 }
 
+/// A number clamped to `0..=1`; `NaN` is unset.
+fn opacity(value: &AttributeValue) -> Option<f64> {
+    value
+        .as_number()
+        .filter(|n| !n.is_nan())
+        .map(|n| n.clamp(0.0, 1.0))
+}
+
 /// Keys of one box property, most general first: the shorthand, the two
 /// axes, then the four sides.
 struct EdgeKeys {
@@ -114,41 +112,6 @@ struct EdgeKeys {
     bottom: &'static str,
     left: &'static str,
 }
-
-impl EdgeKeys {
-    fn contains(&self, key: &str) -> bool {
-        [
-            self.all,
-            self.x,
-            self.y,
-            self.top,
-            self.right,
-            self.bottom,
-            self.left,
-        ]
-        .contains(&key)
-    }
-}
-
-const PADDING_KEYS: EdgeKeys = EdgeKeys {
-    all: "padding",
-    x: "padding_x",
-    y: "padding_y",
-    top: "padding_top",
-    right: "padding_right",
-    bottom: "padding_bottom",
-    left: "padding_left",
-};
-
-const MARGIN_KEYS: EdgeKeys = EdgeKeys {
-    all: "margin",
-    x: "margin_x",
-    y: "margin_y",
-    top: "margin_top",
-    right: "margin_right",
-    bottom: "margin_bottom",
-    left: "margin_left",
-};
 
 /// Resolves each side from the side key, else the axis key, else the
 /// shorthand. A value `parse` rejects counts as unset and falls through to
@@ -168,36 +131,6 @@ fn edges_from<T>(
         right: pick(keys.right, keys.x),
         bottom: pick(keys.bottom, keys.y),
         left: pick(keys.left, keys.x),
-    }
-}
-
-fn display_spec_from_str(s: &str) -> Option<DisplaySpec> {
-    match s {
-        "flex" => Some(DisplaySpec::Flex),
-        "block" => Some(DisplaySpec::Block),
-        "grid" => Some(DisplaySpec::Grid),
-        "none" => Some(DisplaySpec::None),
-        _ => None,
-    }
-}
-
-fn flex_direction_spec_from_str(s: &str) -> Option<FlexDirectionSpec> {
-    match s {
-        "row" => Some(FlexDirectionSpec::Row),
-        "column" => Some(FlexDirectionSpec::Column),
-        "row_reverse" => Some(FlexDirectionSpec::RowReverse),
-        "column_reverse" => Some(FlexDirectionSpec::ColumnReverse),
-        _ => None,
-    }
-}
-
-fn align_spec_from_str(s: &str) -> Option<AlignSpec> {
-    match s {
-        "start" => Some(AlignSpec::Start),
-        "end" => Some(AlignSpec::End),
-        "center" => Some(AlignSpec::Center),
-        "stretch" => Some(AlignSpec::Stretch),
-        _ => None,
     }
 }
 
@@ -224,111 +157,224 @@ fn store<T>(slot: &mut Option<T>, parsed: Option<T>, fault: StyleFault) -> Optio
     slot.is_none().then_some(fault)
 }
 
-/// Reads one style prop into `style` (and `overflow`), returning the fault
-/// when the key is unknown or its value is dropped. A box key is only checked
-/// here: `edges_from` resolves the box keys afterwards.
-fn read_prop(
-    style: &mut StyleSpec,
-    overflow: &mut Overflows,
-    key: &str,
-    value: &AttributeValue,
-) -> Option<StyleFault> {
-    use StyleFault::{InvalidColor, UnsupportedValue};
-    let text = value.as_str();
-    match key {
-        "display" => store(
-            &mut style.display,
-            text.and_then(display_spec_from_str),
-            UnsupportedValue,
-        ),
-        "flex_direction" => store(
-            &mut style.flex_direction,
-            text.and_then(flex_direction_spec_from_str),
-            UnsupportedValue,
-        ),
-        "justify_content" => store(
-            &mut style.justify_content,
-            text.and_then(align_spec_from_str),
-            UnsupportedValue,
-        ),
-        "align_items" => store(
-            &mut style.align_items,
-            text.and_then(align_spec_from_str),
-            UnsupportedValue,
-        ),
-        "gap" => store(&mut style.gap, non_negative(value), UnsupportedValue),
-        "width" => store(&mut style.width, size_spec_from(value), UnsupportedValue),
-        "height" => store(&mut style.height, size_spec_from(value), UnsupportedValue),
-        "border_width" => store(
-            &mut style.border_width,
-            non_negative(value),
-            UnsupportedValue,
-        ),
-        "background" => store(&mut style.background, as_color(value), InvalidColor),
-        "border_color" => store(&mut style.border_color, as_color(value), InvalidColor),
-        "corner_radius" => store(
-            &mut style.corner_radius,
-            non_negative(value),
-            UnsupportedValue,
-        ),
-        "text_color" => store(&mut style.text_color, as_color(value), InvalidColor),
-        "text_size" => store(&mut style.text_size, non_negative(value), UnsupportedValue),
-        "overflow" => store(
-            &mut overflow.all,
-            text.and_then(overflow_pair_from_str),
-            UnsupportedValue,
-        ),
-        "overflow_x" => store(
-            &mut overflow.x,
-            text.and_then(overflow_spec_from_str),
-            UnsupportedValue,
-        ),
-        "overflow_y" => store(
-            &mut overflow.y,
-            text.and_then(overflow_spec_from_str),
-            UnsupportedValue,
-        ),
-        "flex_grow" => store(&mut style.flex_grow, non_negative(value), UnsupportedValue),
-        "flex_shrink" => store(
-            &mut style.flex_shrink,
-            non_negative(value),
-            UnsupportedValue,
-        ),
-        "opacity" => store(
-            &mut style.opacity,
-            value
-                .as_number()
-                .filter(|n| !n.is_nan())
-                .map(|n| n.clamp(0.0, 1.0)),
-            UnsupportedValue,
-        ),
-        "min_width" => store(
-            &mut style.min_width,
-            size_spec_from(value),
-            UnsupportedValue,
-        ),
-        "min_height" => store(
-            &mut style.min_height,
-            size_spec_from(value),
-            UnsupportedValue,
-        ),
-        "max_width" => store(
-            &mut style.max_width,
-            size_spec_from(value),
-            UnsupportedValue,
-        ),
-        "max_height" => store(
-            &mut style.max_height,
-            size_spec_from(value),
-            UnsupportedValue,
-        ),
-        _ if PADDING_KEYS.contains(key) => {
-            non_negative(value).is_none().then_some(UnsupportedValue)
+/// The value a style key takes. A value the kind does not accept is dropped
+/// with a warning.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ValueKind {
+    /// A finite px value `>= 0`.
+    NonNegativePx,
+    /// A finite px value `>= 0`, or `"auto"`.
+    NonNegativePxOrAuto,
+    /// A finite px value, or `"auto"`.
+    PxOrAuto,
+    /// A finite number `>= 0`.
+    NonNegativeNumber,
+    /// A number, clamped to `0..=1`.
+    Opacity,
+    /// A number from `0` to `0xffffff`, or a `"#rrggbb"` or `"#rgb"` string.
+    Color,
+    /// One of the names.
+    Keyword(&'static [&'static str]),
+    /// One or two of the names separated by whitespace: x, then y.
+    KeywordPair(&'static [&'static str]),
+}
+
+/// A style key the host reads.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct StyleKey {
+    /// The host key, in `snake_case`.
+    pub key: &'static str,
+    /// The CSS names of the same prop, in `snake_case`.
+    pub aliases: &'static [&'static str],
+    /// The value the key takes.
+    pub kind: ValueKind,
+}
+
+/// Expands the style declaration below into [`STYLE_KEYS`], `read_prop`,
+/// `alias_target` and one [`EdgeKeys`] const per box-edge family.
+macro_rules! style_props {
+    (@kind Keyword($ty:ident)) => { ValueKind::Keyword($ty::NAMES) };
+    (@kind KeywordPair($ty:ident)) => { ValueKind::KeywordPair($ty::NAMES) };
+    (@kind $kind:ident) => { ValueKind::$kind };
+    (@read NonNegativePx, $value:ident) => { non_negative($value) };
+    (@read NonNegativePxOrAuto, $value:ident) => { size_spec_from($value) };
+    (@read PxOrAuto, $value:ident) => { margin_length_from($value) };
+    (@read NonNegativeNumber, $value:ident) => { non_negative($value) };
+    (@read Opacity, $value:ident) => { opacity($value) };
+    (@read Color, $value:ident) => { as_color($value) };
+    (@read Keyword($ty:ident), $value:ident) => { $value.as_str().and_then($ty::from_name) };
+    (@read KeywordPair(OverflowSpec), $value:ident) => {
+        $value.as_str().and_then(overflow_pair_from_str)
+    };
+    (@fault Color) => { StyleFault::InvalidColor };
+    (@fault $($kind:tt)*) => { StyleFault::UnsupportedValue };
+    // `read_prop`'s parameters come in as arguments: this arm is another expansion.
+    (@slot style . $field:ident, $style:ident, $overflow:ident) => { &mut $style.$field };
+    (@slot overflow . $field:ident, $style:ident, $overflow:ident) => { &mut $overflow.$field };
+    (
+        props {
+            $(
+                $key:literal [$($alias:literal),*]: $kind:ident $(($arg:ident))?
+                    => $target:ident . $field:ident;
+            )*
         }
-        _ if MARGIN_KEYS.contains(key) => margin_length_from(value)
-            .is_none()
-            .then_some(UnsupportedValue),
-        _ => Some(StyleFault::UnknownKey),
+        edges {
+            $(
+                $edges:ident: $edge_kind:ident {
+                    all: $all:literal,
+                    x: $x:literal,
+                    y: $y:literal,
+                    top: $top:literal,
+                    right: $right:literal,
+                    bottom: $bottom:literal,
+                    left: $left:literal $(,)?
+                }
+            )*
+        }
+    ) => {
+        /// Every style key the host reads, in `snake_case`, with its CSS names and
+        /// the value it takes.
+        pub const STYLE_KEYS: &[StyleKey] = &[
+            $(
+                StyleKey {
+                    key: $key,
+                    aliases: &[$($alias),*],
+                    kind: style_props!(@kind $kind $(($arg))?),
+                },
+            )*
+            $(
+                StyleKey { key: $all, aliases: &[], kind: ValueKind::$edge_kind },
+                StyleKey { key: $x, aliases: &[], kind: ValueKind::$edge_kind },
+                StyleKey { key: $y, aliases: &[], kind: ValueKind::$edge_kind },
+                StyleKey { key: $top, aliases: &[], kind: ValueKind::$edge_kind },
+                StyleKey { key: $right, aliases: &[], kind: ValueKind::$edge_kind },
+                StyleKey { key: $bottom, aliases: &[], kind: ValueKind::$edge_kind },
+                StyleKey { key: $left, aliases: &[], kind: ValueKind::$edge_kind },
+            )*
+        ];
+
+        $(
+            const $edges: EdgeKeys = EdgeKeys {
+                all: $all,
+                x: $x,
+                y: $y,
+                top: $top,
+                right: $right,
+                bottom: $bottom,
+                left: $left,
+            };
+        )*
+
+        /// Reads one style prop into `style` (and `overflow`), returning the fault
+        /// when the key is unknown or its value is dropped. `key` is a host key. A
+        /// box key is only checked here: `edges_from` resolves the box keys
+        /// afterwards.
+        fn read_prop(
+            style: &mut StyleSpec,
+            overflow: &mut Overflows,
+            key: &str,
+            value: &AttributeValue,
+        ) -> Option<StyleFault> {
+            match key {
+                $(
+                    $key => store(
+                        style_props!(@slot $target . $field, style, overflow),
+                        style_props!(@read $kind $(($arg))?, value),
+                        style_props!(@fault $kind),
+                    ),
+                )*
+                $(
+                    $all | $x | $y | $top | $right | $bottom | $left => {
+                        style_props!(@read $edge_kind, value)
+                            .is_none()
+                            .then_some(StyleFault::UnsupportedValue)
+                    }
+                )*
+                _ => Some(StyleFault::UnknownKey),
+            }
+        }
+
+        /// The host key that `key`, a CSS name in `snake_case`, stands for.
+        fn alias_target(key: &str) -> Option<&'static str> {
+            match key {
+                $($($alias => Some($key),)*)*
+                _ => None,
+            }
+        }
+    };
+}
+
+style_props! {
+    props {
+        "display" []: Keyword(DisplaySpec) => style.display;
+        "flex_direction" []: Keyword(FlexDirectionSpec) => style.flex_direction;
+        "justify_content" []: Keyword(AlignSpec) => style.justify_content;
+        "align_items" []: Keyword(AlignSpec) => style.align_items;
+        "gap" []: NonNegativePx => style.gap;
+        "width" []: NonNegativePxOrAuto => style.width;
+        "height" []: NonNegativePxOrAuto => style.height;
+        "border_width" []: NonNegativePx => style.border_width;
+        "background" []: Color => style.background;
+        "border_color" []: Color => style.border_color;
+        "corner_radius" []: NonNegativePx => style.corner_radius;
+        "text_color" []: Color => style.text_color;
+        "text_size" []: NonNegativePx => style.text_size;
+        "overflow" []: KeywordPair(OverflowSpec) => overflow.all;
+        "overflow_x" []: Keyword(OverflowSpec) => overflow.x;
+        "overflow_y" []: Keyword(OverflowSpec) => overflow.y;
+        "flex_grow" []: NonNegativeNumber => style.flex_grow;
+        "flex_shrink" []: NonNegativeNumber => style.flex_shrink;
+        "opacity" []: Opacity => style.opacity;
+        "min_width" []: NonNegativePxOrAuto => style.min_width;
+        "min_height" []: NonNegativePxOrAuto => style.min_height;
+        "max_width" []: NonNegativePxOrAuto => style.max_width;
+        "max_height" []: NonNegativePxOrAuto => style.max_height;
+    }
+    edges {
+        PADDING_KEYS: NonNegativePx {
+            all: "padding",
+            x: "padding_x",
+            y: "padding_y",
+            top: "padding_top",
+            right: "padding_right",
+            bottom: "padding_bottom",
+            left: "padding_left",
+        }
+        MARGIN_KEYS: PxOrAuto {
+            all: "margin",
+            x: "margin_x",
+            y: "margin_y",
+            top: "margin_top",
+            right: "margin_right",
+            bottom: "margin_bottom",
+            left: "margin_left",
+        }
+    }
+}
+
+/// The `snake_case` spelling of a style key: each ASCII uppercase letter
+/// becomes `_` and its lowercase form, and each `-` becomes `_`. A key that
+/// is already `snake_case` is returned borrowed.
+pub(crate) fn style_key(key: &str) -> Cow<'_, str> {
+    let snake = if key.bytes().any(|b| b.is_ascii_uppercase() || b == b'-') {
+        let mut out = String::with_capacity(key.len() + 2);
+        for c in key.chars() {
+            match c {
+                '-' => out.push('_'),
+                c if c.is_ascii_uppercase() => {
+                    out.push('_');
+                    out.push(c.to_ascii_lowercase());
+                }
+                c => out.push(c),
+            }
+        }
+        Cow::Owned(out)
+    } else {
+        Cow::Borrowed(key)
+    };
+    match alias_target(&snake) {
+        Some(key) => Cow::Borrowed(key),
+        None => snake,
     }
 }
 

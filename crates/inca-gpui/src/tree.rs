@@ -26,6 +26,8 @@ use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
+use crate::element::style_key;
+
 /// Stable handle returned to JS, used in every subsequent host-bridge call.
 pub type NodeId = u32;
 
@@ -547,27 +549,6 @@ impl VirtualTree {
         node.style_props.remove(&*style_key(key));
         Ok(())
     }
-}
-
-/// The `snake_case` spelling of a style key: each ASCII uppercase letter
-/// becomes `_` and its lowercase form, and each `-` becomes `_`. A key that
-/// is already `snake_case` is returned borrowed.
-pub(crate) fn style_key(key: &str) -> Cow<'_, str> {
-    if !key.bytes().any(|b| b.is_ascii_uppercase() || b == b'-') {
-        return Cow::Borrowed(key);
-    }
-    let mut out = String::with_capacity(key.len() + 2);
-    for c in key.chars() {
-        match c {
-            '-' => out.push('_'),
-            c if c.is_ascii_uppercase() => {
-                out.push('_');
-                out.push(c.to_ascii_lowercase());
-            }
-            c => out.push(c),
-        }
-    }
-    Cow::Owned(out)
 }
 
 #[cfg(test)]

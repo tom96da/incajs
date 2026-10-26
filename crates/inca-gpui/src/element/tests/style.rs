@@ -4,6 +4,7 @@
 #![allow(clippy::unwrap_used)]
 
 use super::*;
+use crate::element::{STYLE_KEYS, ValueKind, style_key};
 use rstest::rstest;
 
 #[test]
@@ -695,4 +696,51 @@ fn applying_a_style_keeps_the_values_the_spec_leaves_unset() {
     assert_eq!(style.display, Some(gpui::Display::Flex));
     assert_eq!(style.size.width, Some(Length::from(px(120.0))));
     assert_eq!(style.size.height, Some(Length::from(px(40.0))));
+}
+
+/// Values `kind` accepts, chosen so that a reader of another kind with the
+/// same result type rejects at least one of them.
+fn sample_values(kind: ValueKind) -> Vec<AttributeValue> {
+    match kind {
+        ValueKind::NonNegativePx => vec![num(1.0)],
+        ValueKind::NonNegativePxOrAuto => vec![text("auto")],
+        ValueKind::PxOrAuto | ValueKind::Opacity => vec![num(-1.0)],
+        ValueKind::NonNegativeNumber => vec![num(2.0)],
+        ValueKind::Color => vec![text("#fff")],
+        ValueKind::Keyword(names) => names.iter().map(|name| text(name)).collect(),
+        ValueKind::KeywordPair(names) => vec![text(&format!("{} {}", names[0], names[1]))],
+    }
+}
+
+#[test]
+fn every_listed_alias_maps_to_its_key() {
+    for entry in STYLE_KEYS {
+        for alias in entry.aliases {
+            assert!(
+                STYLE_KEYS.iter().all(|k| k.key != *alias),
+                "{alias} is also a key"
+            );
+            assert_eq!(style_key(alias), entry.key, "{alias}");
+        }
+    }
+}
+
+#[test]
+fn every_listed_name_reads_a_value_of_its_kind() {
+    for entry in STYLE_KEYS {
+        let samples = sample_values(entry.kind);
+        for name in std::iter::once(entry.key).chain(entry.aliases.iter().copied()) {
+            for value in &samples {
+                assert_eq!(style_warning(name, value), None, "{name} {value:?}");
+            }
+        }
+    }
+}
+
+#[test]
+fn a_keyword_list_names_every_spelling() {
+    assert_eq!(
+        FlexDirectionSpec::NAMES,
+        ["row", "column", "row_reverse", "column_reverse"]
+    );
 }
