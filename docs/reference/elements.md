@@ -190,8 +190,8 @@ have, and using them fails the build:
   `"vModelRadio"`, `"vModelDynamic"`). `v-model` on a `<textarea>` builds,
   and the `<textarea>` stays a plain box. On any other element `v-model`
   fails at the template-compiler stage.
-- **No timers or `fetch`**: `setTimeout`/`setInterval`/`fetch` aren't
-  provided as globals by the JS runtime Incarnative.js embeds.
+- **No `fetch`**: `fetch` isn't provided as a global by the JS runtime
+  Incarnative.js embeds.
 - **`ref` lacks other element members**: the attribute methods, `classList`,
   `className`, `dataset`, `style` and `tagName` are missing.
 

@@ -208,27 +208,26 @@ node vocabulary that grew without one means rewriting that vocabulary.
 4. **The author-facing surface**: `role`/`aria-*` on a `.vue` template maps
    onto the above, so an author writes what they already write for the web.
 
-## Phase 6: Runtime standard library (future)
+## Phase 6: Runtime standard library (in progress)
 
-Not started. QuickJS provides the language only. Phase 3.1 adds `console`.
-Timers, network and filesystem are absent, so an app cannot poll, fetch or
-read a file.
+In progress. QuickJS provides the language only. Phase 3.1 adds `console`.
+Network and filesystem are absent, so an app cannot fetch or read a file.
 
 Each item is a host binding plus its typed wrapper in `packages/core`,
 and each hands a new capability to app code — the FFI safety checklist in
-[PLAN.md](./PLAN.md) applies to all of them. They belong in
-`crates/inca-jsenv`, which depends on `rquickjs` alone so an
-implementation can be swapped for a third-party one.
+[PLAN.md](./PLAN.md) applies to all of them. The engine-level
+parts belong in `crates/inca-jsenv`, the natives in `crates/inca-bridge` and
+the typed wrapper in `packages/core`, so an implementation can be swapped for
+a third-party one.
 
 Check for one before writing any of these. `rquickjs-extra-*` (the rquickjs
 org's own: timers, url, os, sqlite) and `llrt_modules` (AWS) both cover part
 of this list, and both were pinned to `rquickjs` releases older than this
 workspace's when `console` landed, which is why `console` is ours.
 
-1. **Timers**: `setTimeout`/`setInterval` and their `clear` counterparts,
-   driven by GPUI's own event loop rather than a second one. This is also
-   what pumps the JS job queue between input events, which today is drained
-   only when the host has a reason to run JS.
+1. **Timers** (done): the Web timer functions, run by `gpui`'s executor.
+   `packages/core` keeps the handlers, `crates/inca-jsenv` the queue, and
+   `crates/inca-bridge` the natives and the pump.
 2. **Network**: `fetch` over a Rust HTTP client, and a WebSocket client.
    Both are asynchronous, so promise integration has to cover them.
 3. **Filesystem and paths**: reading and writing app data. A desktop app has

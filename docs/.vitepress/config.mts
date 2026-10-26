@@ -126,6 +126,7 @@ export default defineConfig({
             { text: "Elements & Styles", link: "/reference/elements" },
             { text: "Events", link: "/reference/events" },
             { text: "Console", link: "/reference/console" },
+            { text: "Timers", link: "/reference/timers" },
             { text: "Error Codes", link: "/reference/errors" },
           ],
         },

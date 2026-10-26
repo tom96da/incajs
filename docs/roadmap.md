@@ -44,8 +44,11 @@ composition are done. Interactive visual state is not built yet.
 A semantics layer, platform accessibility APIs, and keyboard reachability. Waits on the input/focus model above being stable.
 ::::
 
-:::: not-started Phase 6: Runtime standard library
-Timers, fetch/WebSocket, filesystem access, and engine resource limits.
+:::: in-progress Phase 6: Runtime standard library
+Timers are done. Fetch/WebSocket, filesystem access and engine resource
+limits are not built yet.
+
+[Timers](/reference/timers)
 ::::
 
 :::: not-started Phase 7: Majority style & Tailwind coverage
