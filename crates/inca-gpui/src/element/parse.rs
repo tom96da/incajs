@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use super::spec::{
     AlignSpec, DisplaySpec, EdgesSpec, FlexDirectionSpec, LengthSpec, OverflowSpec, StyleSpec,
 };
-use crate::tree::AttributeValue;
+use crate::tree::{AttributeValue, VirtualNode};
 
 /// Parses a `0x000000..=0xFFFFFF` number or a `"#rrggbb"`/`"#rgb"` string into
 /// a `0xRRGGBB` color. Any other value (a number outside that range, `NaN`,
@@ -67,36 +67,79 @@ fn computed_axes(
     (computed(x, y), computed(y, x))
 }
 
-fn length_spec_from(value: &AttributeValue) -> Option<LengthSpec> {
+/// A decimal number: the syntax of `f64` ending in an ASCII digit. `5.`,
+/// `inf`, `infinity` and `nan` are not decimals.
+fn decimal(s: &str) -> Option<f64> {
+    if !s.as_bytes().last()?.is_ascii_digit() {
+        return None;
+    }
+    s.parse().ok()
+}
+
+/// A number, or a string holding one decimal with optional surrounding
+/// ASCII whitespace. The result can be negative or infinite; each key filters
+/// its range.
+fn number(value: &AttributeValue) -> Option<f64> {
     match value {
-        AttributeValue::Number(n) => Some(LengthSpec::Px(*n)),
-        AttributeValue::String(s) if s == "auto" => Some(LengthSpec::Auto),
-        _ => None,
+        AttributeValue::Number(n) => Some(*n),
+        AttributeValue::String(s) => decimal(s.trim_ascii()),
+        AttributeValue::Bool(_) => None,
     }
 }
 
-/// A finite px number `>= 0`; negatives, `NaN` and infinities are unset.
-fn non_negative(value: &AttributeValue) -> Option<f64> {
-    value.as_number().filter(|n| n.is_finite() && *n >= 0.0)
+/// A px value: a number, or a string holding one decimal followed by `px`
+/// (any case), with optional surrounding ASCII whitespace. A string without a
+/// unit counts when it reads as zero (`"0"`). The result can be negative or
+/// infinite (`"1e999px"`); each caller filters its range.
+fn style_px(value: &AttributeValue) -> Option<f64> {
+    match value {
+        AttributeValue::Number(n) => Some(*n),
+        AttributeValue::String(s) => {
+            let s = s.trim_ascii();
+            match s.len().checked_sub(2).and_then(|at| s.get(at..)) {
+                Some(unit) if unit.eq_ignore_ascii_case("px") => decimal(&s[..s.len() - 2]),
+                _ => decimal(s).filter(|n| *n == 0.0),
+            }
+        }
+        AttributeValue::Bool(_) => None,
+    }
 }
 
-/// A finite px number or `"auto"`; `NaN` and infinities are unset.
+/// A finite number `>= 0`; negatives, `NaN` and infinities are unset.
+fn non_negative(value: &AttributeValue) -> Option<f64> {
+    number(value).filter(|n| n.is_finite() && *n >= 0.0)
+}
+
+/// A finite px value `>= 0`; negatives, `NaN` and infinities are unset.
+fn non_negative_px(value: &AttributeValue) -> Option<f64> {
+    style_px(value).filter(|n| n.is_finite() && *n >= 0.0)
+}
+
+/// `"auto"` or a px value.
+fn length_spec_from(value: &AttributeValue) -> Option<LengthSpec> {
+    match value {
+        AttributeValue::String(s) if s == "auto" => Some(LengthSpec::Auto),
+        _ => style_px(value).map(LengthSpec::Px),
+    }
+}
+
+/// A finite px value or `"auto"`; `NaN` and infinities are unset.
 fn margin_length_from(value: &AttributeValue) -> Option<LengthSpec> {
     length_spec_from(value).filter(|l| !matches!(l, LengthSpec::Px(n) if !n.is_finite()))
 }
 
-/// `"auto"` or a finite px number `>= 0`; negatives, `NaN` and infinities are unset.
+/// `"auto"` or a finite px value `>= 0`; negatives, `NaN` and infinities are
+/// unset.
 fn size_spec_from(value: &AttributeValue) -> Option<LengthSpec> {
     match value {
         AttributeValue::String(s) if s == "auto" => Some(LengthSpec::Auto),
-        _ => non_negative(value).map(LengthSpec::Px),
+        _ => non_negative_px(value).map(LengthSpec::Px),
     }
 }
 
-/// A number clamped to `0..=1`; `NaN` is unset.
+/// A decimal value clamped to `0..=1`; `NaN` is unset.
 fn opacity(value: &AttributeValue) -> Option<f64> {
-    value
-        .as_number()
+    number(value)
         .filter(|n| !n.is_nan())
         .map(|n| n.clamp(0.0, 1.0))
 }
@@ -167,9 +210,9 @@ pub enum ValueKind {
     NonNegativePxOrAuto,
     /// A finite px value, or `"auto"`.
     PxOrAuto,
-    /// A finite number `>= 0`.
+    /// A finite decimal value `>= 0`.
     NonNegativeNumber,
-    /// A number, clamped to `0..=1`.
+    /// A decimal value, clamped to `0..=1`.
     Opacity,
     /// A number from `0` to `0xffffff`, or a `"#rrggbb"` or `"#rgb"` string.
     Color,
@@ -191,12 +234,12 @@ pub struct StyleKey {
 }
 
 /// Expands the style declaration below into [`STYLE_KEYS`], `read_prop`,
-/// `alias_target` and one [`EdgeKeys`] const per box-edge family.
+/// `alias_target`, `read_edges` and one [`EdgeKeys`] const per box-edge family.
 macro_rules! style_props {
     (@kind Keyword($ty:ident)) => { ValueKind::Keyword($ty::NAMES) };
     (@kind KeywordPair($ty:ident)) => { ValueKind::KeywordPair($ty::NAMES) };
     (@kind $kind:ident) => { ValueKind::$kind };
-    (@read NonNegativePx, $value:ident) => { non_negative($value) };
+    (@read NonNegativePx, $value:ident) => { non_negative_px($value) };
     (@read NonNegativePxOrAuto, $value:ident) => { size_spec_from($value) };
     (@read PxOrAuto, $value:ident) => { margin_length_from($value) };
     (@read NonNegativeNumber, $value:ident) => { non_negative($value) };
@@ -220,7 +263,7 @@ macro_rules! style_props {
         }
         edges {
             $(
-                $edges:ident: $edge_kind:ident {
+                $edges:ident: $edge_kind:ident => $edge_field:ident {
                     all: $all:literal,
                     x: $x:literal,
                     y: $y:literal,
@@ -294,6 +337,14 @@ macro_rules! style_props {
             }
         }
 
+        /// Resolves every box-edge family of `props` into `style`.
+        fn read_edges(props: &HashMap<String, AttributeValue>, style: &mut StyleSpec) {
+            $(
+                style.$edge_field =
+                    edges_from(props, &$edges, |value| style_props!(@read $edge_kind, value));
+            )*
+        }
+
         /// The host key that `key`, a CSS name in `snake_case`, stands for.
         fn alias_target(key: &str) -> Option<&'static str> {
             match key {
@@ -314,11 +365,11 @@ style_props! {
         "width" []: NonNegativePxOrAuto => style.width;
         "height" []: NonNegativePxOrAuto => style.height;
         "border_width" []: NonNegativePx => style.border_width;
-        "background" []: Color => style.background;
+        "background" ["background_color"]: Color => style.background;
         "border_color" []: Color => style.border_color;
-        "corner_radius" []: NonNegativePx => style.corner_radius;
-        "text_color" []: Color => style.text_color;
-        "text_size" []: NonNegativePx => style.text_size;
+        "corner_radius" ["border_radius"]: NonNegativePx => style.corner_radius;
+        "text_color" ["color"]: Color => style.text_color;
+        "text_size" ["font_size"]: NonNegativePx => style.text_size;
         "overflow" []: KeywordPair(OverflowSpec) => overflow.all;
         "overflow_x" []: Keyword(OverflowSpec) => overflow.x;
         "overflow_y" []: Keyword(OverflowSpec) => overflow.y;
@@ -331,7 +382,7 @@ style_props! {
         "max_height" []: NonNegativePxOrAuto => style.max_height;
     }
     edges {
-        PADDING_KEYS: NonNegativePx {
+        PADDING_KEYS: NonNegativePx => padding {
             all: "padding",
             x: "padding_x",
             y: "padding_y",
@@ -340,7 +391,7 @@ style_props! {
             bottom: "padding_bottom",
             left: "padding_left",
         }
-        MARGIN_KEYS: PxOrAuto {
+        MARGIN_KEYS: PxOrAuto => margin {
             all: "margin",
             x: "margin_x",
             y: "margin_y",
@@ -352,9 +403,9 @@ style_props! {
     }
 }
 
-/// The `snake_case` spelling of a style key: each ASCII uppercase letter
-/// becomes `_` and its lowercase form, and each `-` becomes `_`. A key that
-/// is already `snake_case` is returned borrowed.
+/// The host key of a style key. `key` may be `camelCase`, `kebab-case` or
+/// `snake_case`, and a CSS name listed in [`STYLE_KEYS`] names its host key.
+/// A key that is already a host key in `snake_case` comes back borrowed.
 pub(crate) fn style_key(key: &str) -> Cow<'_, str> {
     let snake = if key.bytes().any(|b| b.is_ascii_uppercase() || b == b'-') {
         let mut out = String::with_capacity(key.len() + 2);
@@ -391,16 +442,28 @@ pub(super) fn style_spec_from_props(props: &HashMap<String, AttributeValue>) -> 
         overflow.x.or(overflow.all.map(|(x, _)| x)),
         overflow.y.or(overflow.all.map(|(_, y)| y)),
     );
-    style.padding = edges_from(props, &PADDING_KEYS, non_negative);
-    style.margin = edges_from(props, &MARGIN_KEYS, margin_length_from);
+    read_edges(props, &mut style);
     style
+}
+
+/// The window size an element's style declares, in px: `(width, height)`.
+/// A dimension that is unset, `"auto"`, a percentage or not a finite size
+/// `>= 0` is `None`.
+#[must_use]
+pub fn declared_window_size(node: &VirtualNode) -> (Option<f64>, Option<f64>) {
+    let style = style_spec_from_props(node.style_props());
+    let px = |length| match length {
+        Some(LengthSpec::Px(n)) => Some(n),
+        _ => None,
+    };
+    (px(style.width), px(style.height))
 }
 
 /// The message for the style prop `key` set to `value` when the key is
 /// unknown, a color is invalid, or the value has a shape the host does not
-/// support. `key` may be `camelCase`, `kebab-case` or `snake_case`, and the
-/// message names it as written. `None` when the prop applies, and for an empty
-/// string on a known key.
+/// support. `key` may be `camelCase`, `kebab-case` or `snake_case`, a host name
+/// or its CSS name, and the message names it as written. `None` when the prop
+/// applies, and for an empty string on a known key.
 #[must_use]
 pub fn style_warning(key: &str, value: &AttributeValue) -> Option<String> {
     // A caller checks each prop as it stores it, so a bad value that stays

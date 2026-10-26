@@ -63,15 +63,6 @@ fn recognized_style_keys_are_mapped() {
     );
 }
 
-fn style_of(props: &[(&str, AttributeValue)]) -> StyleSpec {
-    let mut tree = VirtualTree::new();
-    let id = tree.create_node("div").unwrap();
-    for (key, value) in props {
-        tree.set_style(id, *key, value.clone()).unwrap();
-    }
-    build_spec(&tree, id).unwrap().style
-}
-
 fn sides<T: Copy>(edges: EdgesSpec<T>) -> [Option<T>; 4] {
     [edges.top, edges.right, edges.bottom, edges.left]
 }
@@ -202,7 +193,7 @@ fn margin_ignores_a_value_that_is_not_a_finite_px_or_auto(#[case] bad: Attribute
 
 #[test]
 fn flex_factors_reject_negatives_and_nan() {
-    for bad in [num(-1.0), num(f64::NAN), num(f64::INFINITY), text("1")] {
+    for bad in [num(-1.0), num(f64::NAN), num(f64::INFINITY), text("1px")] {
         let style = style_of(&[("flex_grow", bad.clone()), ("flex_shrink", bad)]);
         assert_eq!((style.flex_grow, style.flex_shrink), (None, None));
     }
@@ -225,10 +216,10 @@ fn opacity_is_clamped_to_zero_through_one() {
 }
 
 #[test]
-fn opacity_of_nan_or_a_string_is_unset() {
+fn opacity_of_nan_or_a_non_numeric_string_is_unset() {
     let opacity = |value| style_of(&[("opacity", value)]).opacity;
     assert_eq!(opacity(num(f64::NAN)), None);
-    assert_eq!(opacity(text("0.5")), None);
+    assert_eq!(opacity(text("half")), None);
 }
 
 #[test]
@@ -435,21 +426,6 @@ fn clip_overflow_reaches_the_gpui_refinement_as_clip() {
     assert_eq!(refinement.overflow.y, Some(gpui::Overflow::Clip));
 }
 
-/// The style a node gets from `props`, and what [`style_warning`] says
-/// about each prop, in order.
-fn style_and_warnings(props: &[(&str, AttributeValue)]) -> (StyleSpec, Vec<String>) {
-    let mut tree = VirtualTree::new();
-    let id = tree.create_node("div").unwrap();
-    for (key, value) in props {
-        tree.set_style(id, *key, value.clone()).unwrap();
-    }
-    let warnings = props
-        .iter()
-        .filter_map(|(key, value)| style_warning(key, value))
-        .collect();
-    (build_spec(&tree, id).unwrap().style, warnings)
-}
-
 #[test]
 fn unrecognized_style_key_is_ignored_with_a_warning() {
     let (style, warnings) = style_and_warnings(&[("not_a_real_prop", num(1.0))]);
@@ -496,6 +472,20 @@ fn a_warning_names_the_key_as_written() {
             [format!("ignoring unsupported value for style key `{key}`")]
         );
     }
+}
+
+#[rstest]
+#[case::color("color", text("nope"), "invalid color")]
+#[case::font_size("fontSize", text("big"), "unsupported value")]
+#[case::border_radius("border-radius", num(-1.0), "unsupported value")]
+fn a_warning_names_an_alias_as_written(
+    #[case] key: &str,
+    #[case] value: AttributeValue,
+    #[case] what: &str,
+) {
+    let (_, warnings) = style_and_warnings(&[(key, value)]);
+
+    assert_eq!(warnings, [format!("ignoring {what} for style key `{key}`")]);
 }
 
 #[test]
@@ -741,6 +731,41 @@ fn every_listed_name_reads_a_value_of_its_kind() {
 fn a_keyword_list_names_every_spelling() {
     assert_eq!(
         FlexDirectionSpec::NAMES,
-        ["row", "column", "row_reverse", "column_reverse"]
+        [
+            "row",
+            "column",
+            "row-reverse",
+            "row_reverse",
+            "column-reverse",
+            "column_reverse",
+        ]
     );
+}
+
+#[rstest]
+#[case::px_number(AttributeValue::Number(800.0), AttributeValue::Number(600.0), (Some(800.0), Some(600.0)))]
+#[case::px_string("800px".into(), " 600PX ".into(), (Some(800.0), Some(600.0)))]
+#[case::auto("auto".into(), "auto".into(), (None, None))]
+#[case::percent("50%".into(), "50%".into(), (None, None))]
+#[case::negative(AttributeValue::Number(-1.0), "-1px".into(), (None, None))]
+#[case::infinite("1e999px".into(), AttributeValue::Number(f64::INFINITY), (None, None))]
+fn window_size_reads_width_and_height_through_the_declaration(
+    #[case] width: AttributeValue,
+    #[case] height: AttributeValue,
+    #[case] expected: (Option<f64>, Option<f64>),
+) {
+    let mut tree = VirtualTree::new();
+    let id = tree.create_node("div").unwrap();
+    tree.set_style(id, "width", width).unwrap();
+    tree.set_style(id, "height", height).unwrap();
+
+    assert_eq!(declared_window_size(tree.get(id).unwrap()), expected);
+}
+
+#[test]
+fn window_size_is_none_when_unset() {
+    let mut tree = VirtualTree::new();
+    let id = tree.create_node("div").unwrap();
+
+    assert_eq!(declared_window_size(tree.get(id).unwrap()), (None, None));
 }

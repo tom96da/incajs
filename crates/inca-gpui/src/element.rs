@@ -29,7 +29,7 @@ pub use build::{
 };
 pub use input::TextInputHandler;
 pub(crate) use parse::style_key;
-pub use parse::{STYLE_KEYS, StyleKey, ValueKind, style_warning};
+pub use parse::{STYLE_KEYS, StyleKey, ValueKind, declared_window_size, style_warning};
 pub use pointer::{clear_presses, mouse_target, opens_context_menu, pressed_target};
 pub use spec::{
     AlignSpec, DisplaySpec, EdgesSpec, ElementSpec, ElementTag, FlexDirectionSpec, LengthSpec,

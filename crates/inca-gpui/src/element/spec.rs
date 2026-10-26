@@ -83,8 +83,8 @@ keywords! {
     pub enum FlexDirectionSpec {
         Row = "row",
         Column = "column",
-        RowReverse = "row_reverse",
-        ColumnReverse = "column_reverse",
+        RowReverse = "row-reverse" | "row_reverse",
+        ColumnReverse = "column-reverse" | "column_reverse",
     }
 }
 
@@ -93,8 +93,8 @@ keywords! {
     /// and `JustifyContent` (`= AlignContent`) enums: the variants both share
     /// and that this layer supports.
     pub enum AlignSpec {
-        Start = "start",
-        End = "end",
+        Start = "start" | "flex-start",
+        End = "end" | "flex-end",
         Center = "center",
         Stretch = "stretch",
     }
@@ -164,7 +164,7 @@ pub struct StyleSpec {
     pub overflow_y: Option<OverflowSpec>,
     /// Inner spacing (px), each side `>= 0`.
     pub padding: EdgesSpec<f64>,
-    /// Outer spacing; each side a px number (negative allowed) or `"auto"`.
+    /// Outer spacing; each side a px value (negative allowed) or `"auto"`.
     pub margin: EdgesSpec<LengthSpec>,
     /// `>= 0`.
     pub flex_grow: Option<f64>,

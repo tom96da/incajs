@@ -81,25 +81,33 @@ support each print one warning line on stderr every time a style sets them, and
 the value reads as unset. An empty string `''` on a known key prints no
 warning. The table lists every key the host reads. `set_style` and
 `remove_style` map the camelCase and kebab-case spellings of a key to its
-snake_case form.
+snake_case form, and a CSS name to its host key, as `inca_gpui::STYLE_KEYS`
+lists. All spellings of one prop share one slot. A key with an uppercase initial, a mixed-case kebab key and a key
+that starts with `-` are unknown.
+
+A px value is a number or a string: a decimal with optional sign and exponent,
+then `px` in any case (`"10px"`), or a string that reads as zero (`"0"`).
+Surrounding whitespace is ignored. A decimal value is a number or a string
+holding one decimal (`"0.5"`). Neither takes `%`. Each key keeps its range;
+`opacity` clamps, any other value outside its range warns.
 
 | Key | Value | Maps to |
 | --- | --- | --- |
 | `display` | `"flex"`\|`"block"`\|`"grid"`\|`"none"` | `Style::display` |
-| `flex_direction` | `"row"`\|`"column"`\|`"row_reverse"`\|`"column_reverse"` | `flex_direction` |
-| `justify_content` / `align_items` | `"start"`\|`"end"`\|`"center"`\|`"stretch"` | resp. fields |
-| `gap` | number (px, `>= 0`) | `gap.width` & `gap.height` (uniform) |
-| `width` / `height` | number (px, `>= 0`) or `"auto"` | `size.width` / `size.height` |
-| `border_width` | number (px, `>= 0`) | all four `border_widths.*` (uniform) |
+| `flex_direction` | `"row"`\|`"column"`\|`"row-reverse"`\|`"column-reverse"`\|`"row_reverse"`\|`"column_reverse"` | `flex_direction` |
+| `justify_content` / `align_items` | `"start"`\|`"end"`\|`"flex-start"`\|`"flex-end"`\|`"center"`\|`"stretch"` | resp. fields |
+| `gap` | px value (`>= 0`) | `gap.width` & `gap.height` (uniform) |
+| `width` / `height` | px value (`>= 0`) or `"auto"` | `size.width` / `size.height` |
+| `border_width` | px value (`>= 0`) | all four `border_widths.*` (uniform) |
 | `background` / `border_color` / `text_color` | number from `0` to `0xffffff`, or string (`"#rrggbb"`/`"#rgb"`); any other value except `''` warns | `Fill`/`Hsla` |
-| `corner_radius` | number (px, `>= 0`) | all four `corner_radii.*` (uniform) |
-| `text_size` | number (px, `>= 0`) | `text.font_size` |
+| `corner_radius` | px value (`>= 0`) | all four `corner_radii.*` (uniform) |
+| `text_size` | px value (`>= 0`) | `text.font_size` |
 | `overflow` / `overflow_x` / `overflow_y` | `"visible"`\|`"hidden"`\|`"clip"`\|`"scroll"`\|`"auto"` (= `"scroll"`); `overflow` also takes `"<x> <y>"` | `overflow.x` / `overflow.y`; an axis key beats `overflow`; beside a `hidden` or `scroll` axis an unset or `visible` axis becomes `scroll` and `clip` becomes `hidden`; `hidden` clips and takes script scrolling, `clip` clips without scrolling, only `scroll` takes the wheel |
-| `padding` (+ `_x`/`_y`/`_top`/`_right`/`_bottom`/`_left`) | number (px, `>= 0`) | `padding.*`; side beats axis beats shorthand, a wrong-typed value falls through |
-| `margin` (+ the same suffixes) | number (px, negatives allowed) or `"auto"` | `margin.*`, same precedence |
-| `flex_grow` / `flex_shrink` | number `>= 0` | `flex_grow` / `flex_shrink` |
-| `opacity` | number, clamped to `0..=1` (`NaN` ignored) | `opacity` |
-| `min_width` / `min_height` / `max_width` / `max_height` | number (px, `>= 0`) or `"auto"` | `min_size.*` / `max_size.*` |
+| `padding` (+ `_x`/`_y`/`_top`/`_right`/`_bottom`/`_left`) | px value (`>= 0`) | `padding.*`; side beats axis beats shorthand, a wrong-typed value falls through |
+| `margin` (+ the same suffixes) | px value (negatives allowed) or `"auto"` | `margin.*`, same precedence |
+| `flex_grow` / `flex_shrink` | decimal value `>= 0` | `flex_grow` / `flex_shrink` |
+| `opacity` | decimal value, clamped to `0..=1` (`NaN` ignored) | `opacity` |
+| `min_width` / `min_height` / `max_width` / `max_height` | px value (`>= 0`) or `"auto"` | `min_size.*` / `max_size.*` |
 
 `text_color` and `text_size` apply to containers. A text leaf takes them from
 the nearest ancestor container.

@@ -6,6 +6,7 @@
 use super::*;
 use crate::element::style_key;
 use rstest::rstest;
+use std::borrow::Cow;
 
 #[test]
 fn create_node_fails_once_the_id_space_is_used_up() {
@@ -401,14 +402,14 @@ fn set_style_is_independent_of_attributes() {
     let mut tree = VirtualTree::new();
     let node = tree.create_node("div").unwrap();
 
-    tree.set_style(node, "color", "red").unwrap();
+    tree.set_style(node, "gap", "red").unwrap();
 
     let got = tree.get(node).unwrap();
     assert_eq!(
-        got.style_props().get("color"),
+        got.style_props().get("gap"),
         Some(&AttributeValue::String("red".into()))
     );
-    assert!(got.attributes().get("color").is_none());
+    assert!(got.attributes().get("gap").is_none());
 }
 
 #[rstest]
@@ -445,9 +446,13 @@ fn a_style_key_in_another_spelling_removes_the_value() {
     assert!(tree.get(id).unwrap().style_props().is_empty());
 }
 
-#[test]
-fn style_key_borrows_a_snake_case_key() {
-    assert!(matches!(style_key("flex_direction"), Cow::Borrowed(_)));
+#[rstest]
+#[case::host_key("flex_direction")]
+#[case::css_name("color")]
+#[case::css_name_snake("font_size")]
+#[case::css_name_camel("backgroundColor")]
+fn style_key_borrows_a_key_that_needs_no_new_text(#[case] key: &str) {
+    assert!(matches!(style_key(key), Cow::Borrowed(_)), "{key}");
 }
 
 #[rstest]
@@ -459,6 +464,11 @@ fn style_key_borrows_a_snake_case_key() {
 #[case::empty("", "")]
 #[case::multibyte_before_capital("é-Z", "é__z")]
 #[case::multibyte_only("幅", "幅")]
+#[case::css_color("color", "text_color")]
+#[case::css_background_color("backgroundColor", "background")]
+#[case::css_kebab("border-radius", "corner_radius")]
+#[case::css_snake("font_size", "text_size")]
+#[case::vendor_prefix("-webkit-x", "_webkit_x")]
 fn a_style_key_normalizes_to_snake_case_in_every_edge_case(#[case] key: &str, #[case] want: &str) {
     assert_eq!(style_key(key), want, "{key}");
 }
