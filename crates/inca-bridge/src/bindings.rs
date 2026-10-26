@@ -4,9 +4,9 @@
 //! Binds `globalThis.__inca_native__`: the small set of native functions
 //! JS calls to read the root handle, mutate the retained virtual tree,
 //! register input-event callbacks, dispatch events from script, read and
-//! write the text of an input, and free what it no longer needs. It also
-//! creates the empty `globalThis.__inca_callbacks__`, where JS stores each
-//! listener under its callback id.
+//! write the text of an input, queue timers, and free what it no longer
+//! needs. It also creates the empty `globalThis.__inca_callbacks__`, where
+//! JS stores each listener under its callback id.
 
 mod capture;
 pub(crate) mod convert;
@@ -15,6 +15,7 @@ mod host;
 mod input;
 mod listeners;
 mod scroll;
+mod timers;
 mod tree;
 
 pub use host::Host;
@@ -31,12 +32,16 @@ use focus::install_focus;
 use input::install_input;
 use listeners::install_events;
 use scroll::install_scroll;
+use timers::install_timers;
 use tree::install_tree;
 
 /// Installs `globalThis.__inca_native__` into `ctx`, wired to `host`, and an
 /// empty null-prototype `globalThis.__inca_callbacks__`. Both globals are
 /// read-only and non-configurable, so a script can neither replace nor delete
-/// them.
+/// them. A timer that `startTimer` queues runs only after
+/// [`crate::EventDispatcher::start_timers`] or
+/// [`crate::EventDispatcher::run_timers_idle`] runs; without one the timer
+/// stays queued.
 ///
 /// # Errors
 ///
@@ -56,6 +61,7 @@ pub fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
     install_capture(&natives)?;
     install_scroll(&natives)?;
     install_input(&natives)?;
+    install_timers(&natives)?;
     crate::event::install(ctx)?;
     let globals = ctx.globals();
     globals.prop("__inca_native__", native)?;

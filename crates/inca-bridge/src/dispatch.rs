@@ -8,8 +8,8 @@
 //! An event only enters the JS engine when it reaches a listener: a capture
 //! listener on its path, or a bubble listener on the nodes the event bubbles
 //! to.
-//! Only an event that entered the engine drains the job queue and requests a
-//! redraw. Rendering runs JS only when input arrives.
+//! An event that entered the engine and a turn that ran a due timer each
+//! drain the job queue and request a redraw. Rendering runs no JS of its own.
 //!
 //! ## Where the real JS function lives
 //!
@@ -43,6 +43,7 @@ use crate::focus::FocusTransition;
 mod input;
 mod pointer;
 mod sink;
+mod timers;
 
 /// The payload of the window's `focus` and `blur`.
 const FOCUS_PAYLOAD: EventPayload = EventPayload::Focus {
@@ -102,6 +103,9 @@ struct State {
     mouse_held: Cell<Option<(gpui::WindowId, NodeId)>>,
     /// The `input` a held left press selects in, until its release.
     input_drag: Cell<Option<NodeId>>,
+    /// The task that sleeps until the next timer is due, or `None` before
+    /// [`EventDispatcher::start_timers`] and after [`EventDispatcher::stop_timers`].
+    timer_pump: RefCell<Option<gpui::Task<()>>>,
 }
 
 /// Records the node the window focuses in `host`.

@@ -7,6 +7,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::time::Duration;
 
 use gpui::{
     KeyUpEvent, Keystroke, Modifiers, MouseButton, MouseDownEvent, MouseUpEvent, Pixels, Point,
@@ -194,6 +195,13 @@ impl Harness {
             .expect("the window is open");
         self.cx.run_until_parked();
         self.cx.update(|window, cx| window.draw(cx).clear(cx));
+    }
+
+    /// Moves the fake clock forward by `by`, runs the timers that fall due, then
+    /// settles. A repeating timer runs once per call, whatever `by` is.
+    pub fn advance_clock(&mut self, by: Duration) {
+        self.cx.executor().advance_clock(by);
+        self.settle();
     }
 
     fn move_pointer(&mut self, at: Point<Pixels>) {

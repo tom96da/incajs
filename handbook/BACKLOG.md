@@ -1192,3 +1192,16 @@ A fixed entry is deleted and its ID is never reused.
   A key that produces a character fires `keydown` and then `beforeinput`.
   Fix: fire `keypress` between them from the key path when the key has a
   character and `keydown` was not canceled, with `charCode` set.
+
+- **B-231 A built app fails to load an entry whose top-level `await` is still pending**
+  `Units: host · Size: M · Impact: Low`
+
+  `Session::load_with` (`crates/inca-host/src/app.rs`) evaluates the entry with
+  `eval_module` before the window opens, and `eval_module` fails with an
+  unsettled-promise error when a top-level `await` is still pending once the
+  queued jobs have run. `inca dev` runs the same entry, because the serve loop
+  keeps advancing a loading session. An entry that awaits a promise settled
+  later, such as a timer, loads in development and fails in a built app.
+  Found by reading; not reproduced. Fix: start a built app through
+  `Session::begin_with` and the serve loop, which also gives it the load wait of
+  `inca dev`.

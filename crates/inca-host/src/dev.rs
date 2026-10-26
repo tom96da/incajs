@@ -25,9 +25,11 @@ use std::time::{Duration, Instant};
 use gpui::{App, FutureExt, WindowHandle};
 use serde_json::Value;
 
-use inca_jsenv::{Engine, EngineError, ErrorReporter, report_jobs};
+use inca_jsenv::{Clock, Engine, EngineError, ErrorReporter, report_jobs};
 
-use crate::app::{Failure, HostedApp, Loading, Session, maybe_auto_resize_to_content, open};
+use crate::app::{
+    Failure, HostedApp, Loading, Session, clock_of, maybe_auto_resize_to_content, open,
+};
 use crate::config::is_resizable;
 pub(crate) use wire::ErrorCode;
 use wire::{Incoming, Method, Outgoing};
@@ -262,7 +264,11 @@ fn swap_in(
 ) -> Result<(), Failure> {
     window
         .update(cx, |app, window, cx| {
+            app.session.dispatcher.stop_timers();
             app.session = session;
+            app.session
+                .dispatcher
+                .start_timers(window.window_handle(), cx);
             // A fixed-size window gets a fresh auto-resize chance, as if it just launched
             // with the reloaded content. A resizable window may carry a manual resize the
             // user made since it last auto-resized, which reloading the bundle must not discard.
@@ -324,6 +330,7 @@ struct Serve {
     entry_path: String,
     writer: SharedWriter,
     reporter: ErrorReporter,
+    clock: Clock,
 }
 
 impl Serve {
@@ -351,18 +358,28 @@ impl Serve {
         self.was_held = held;
     }
 
-    /// How long to wait for a line before the window opens. `None` waits for
+    /// How long to wait for a line: until the load deadline while no window is
+    /// open, and until the next timer of the load in flight. `None` waits for
     /// the next line.
     fn wait(&self, cx: &gpui::AsyncApp) -> Option<Duration> {
-        (self.window.is_none() && !self.held()).then(|| {
+        let load = (self.window.is_none() && !self.held()).then(|| {
             self.deadline
                 .saturating_duration_since(cx.background_executor().now())
-        })
+        });
+        let timer = self
+            .pending
+            .as_ref()
+            .and_then(|pending| pending.loading.session().dispatcher.next_timer_wait());
+        match (load, timer) {
+            (Some(load), Some(timer)) => Some(load.min(timer)),
+            (load, timer) => load.or(timer),
+        }
     }
 
     /// Polls the pending load and acts on its outcome.
     fn advance(&mut self, cx: &mut App) {
         let Some(pending) = &self.pending else { return };
+        pending.loading.session().dispatcher.run_timers_idle();
         let Some(result) = pending.loading.poll() else {
             let session = pending.loading.session();
             report_jobs(&session.engine, &self.reporter);
@@ -435,11 +452,12 @@ impl Serve {
                 )
             })
             .and_then(|source| {
-                Session::begin(
+                Session::begin_with(
                     &self.entry_path,
                     &source,
                     Rc::clone(&self.reporter),
                     Some(&self.writer),
+                    self.clock.clone(),
                 )
                 .map_err(Failure::Thrown)
             });
@@ -538,6 +556,7 @@ pub(crate) fn serve_dev_protocol(
         entry_path,
         reporter: reporter_for(&writer),
         writer,
+        clock: clock_of(cx.background_executor()),
     };
     serve.track_hold(cx);
     serve.advance(cx);

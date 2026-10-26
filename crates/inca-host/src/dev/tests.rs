@@ -15,6 +15,7 @@ use crate::tests::ScratchDir;
 mod loading;
 mod reload;
 mod serve;
+mod timers;
 
 const TEST_ENTRY_PATH: &str = "/test/entry.js";
 
@@ -155,6 +156,42 @@ fn serve(
     let started = cx.executor().now();
     let first = Session::begin(entry_path, source, reporter_for(writer), Some(writer)).unwrap();
     serve_started(cx, first, started, entry_path, writer)
+}
+
+/// [`serve`] over the executor clock, so the timers of the first session follow
+/// `advance_clock`.
+fn serve_on_executor_clock(
+    cx: &mut TestAppContext,
+    source: &str,
+    entry_path: &str,
+    writer: &SharedWriter,
+) -> async_channel::Sender<String> {
+    let started = cx.executor().now();
+    let clock = crate::app::clock_of(&cx.executor());
+    let first = Session::begin_with(
+        entry_path,
+        source,
+        reporter_for(writer),
+        Some(writer),
+        clock,
+    )
+    .unwrap();
+    serve_started(cx, first, started, entry_path, writer)
+}
+
+/// [`serve_idle`] over the executor clock.
+fn serve_idle_on_executor_clock(
+    cx: &mut TestAppContext,
+    source: &str,
+    entry_path: &str,
+    capturing: &Rc<CapturingWriter>,
+) -> (WindowHandle<HostedApp>, async_channel::Sender<String>) {
+    let writer: SharedWriter = Rc::clone(capturing) as SharedWriter;
+    let sender = serve_on_executor_clock(cx, source, entry_path, &writer);
+    cx.run_until_parked();
+    assert_eq!(methods(capturing), ["ready"]);
+    capturing.0.borrow_mut().clear();
+    (the_window(cx).unwrap(), sender)
 }
 
 /// Serves an entry that settles at once, and forgets the `ready` line.
