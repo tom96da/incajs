@@ -33,6 +33,7 @@ History is in [PLAN.md](./PLAN.md) and [CHANGELOG.md](../CHANGELOG.md).
   events fired from a script. Template refs read their box and scroll.
 - **Text input**: a single-line `<input>` with selection, the clipboard,
   IME composition, the input events and `v-model`.
+- **Timers**: the Web timer functions, run by the executor of the window.
 
 ### Not started
 
@@ -58,7 +59,8 @@ An app is a Vue 3 project. Vite compiles it in library mode, and a QuickJS
 runtime inside a Rust host runs the bundle. A custom renderer turns Vue's
 reactive updates into calls over an in-process bridge. The host keeps a
 retained tree, lays it out and draws it on the GPU through `gpui`. JS runs
-only when reactive state changes and when a frame frees a node.
+when reactive state changes, when a frame frees a node and when a
+timer is due.
 
 During development, the `inca` CLI runs as a Node parent process. It bundles
 with Vite, launches the host as a child and sends rebuilds and HMR updates
@@ -83,9 +85,9 @@ over the child's stdio.
   objects live on the JS side and Rust refers to them by id. Listener
   callbacks are the model, see [FFI.md](./FFI.md#js-values-stay-in-js).
 - **Zero-overhead render loop**: don't run JS on every frame. JS executes
-  on reactivity updates and when a frame frees a node. It pushes snapshot
-  mutations to Rust. Rust owns the retained tree and does layout and drawing
-  natively.
+  on reactivity updates, when a frame frees a node and when a timer is due.
+  It pushes snapshot mutations to Rust. Rust owns the retained tree and does
+  layout and drawing natively.
 - **Developer ergonomics**: frontend code stays strictly standard. `.vue`
   and `.tsx` code should feel identical to ordinary web development.
 

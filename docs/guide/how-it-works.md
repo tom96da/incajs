@@ -39,9 +39,9 @@ which runs it and renders it:
 ## Why this shape
 
 Your app's JS only runs when something actually changes: a reactive
-update, an event handler. It pushes the resulting mutations to the native
-side once, and GPUI owns layout and painting from there. Nothing re-runs
-JS every frame the way a browser's render loop would.
+update, an event handler or a due timer. It pushes the resulting mutations to
+the native side once, and GPUI owns layout and painting from there. Nothing
+re-runs JS every frame the way a browser's render loop would.
 
 Because there's no browser engine, `.vue` authoring uses a native styling
 vocabulary. See

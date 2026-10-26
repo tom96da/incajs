@@ -586,9 +586,10 @@ A fixed entry is deleted and its ID is never reused.
   `addEventListener` path. The hook is observe-only: when a reload's hook
   would fire, the new bundle has already loaded, so there is nothing left to
   veto. A handler can await only microtasks that have already settled,
-  because the job queue drains once after the hook and QuickJS has no timer
-  or I/O to resume it. `packages/core` wraps the event names in helpers, so
-  the strings never become app-facing API.
+  because the job queue drains once after the hook and the reload stops the
+  timers of the old session, and QuickJS has no I/O to resume it.
+  `packages/core` wraps the event names in helpers, so the strings never
+  become app-facing API.
 
 - **B-101 `rust-version` has no floor check of its own**
   `Units: ci · Size: S · Impact: Low`
@@ -764,7 +765,7 @@ A fixed entry is deleted and its ID is never reused.
   change, or as zeros. A read in `onMounted` gets zeros. A keyboard click has
   the client position `(0, 0)`, so its offsets count from there. Fix: a layout
   pass the bindings can call, or a notification after each frame, which fits
-  the rule that JS runs only on change.
+  the rule that JS does not run per frame.
 
 - **B-161 Offsets of a template `ref` differ from the browser**
   `Units: core · Size: S · Impact: Low`
@@ -856,8 +857,8 @@ A fixed entry is deleted and its ID is never reused.
   `scrollTo`, `scrollBy` and `scrollIntoView` apply every scroll at once. A
   browser animates a `smooth` scroll.
 
-  Fix: an animation the host drives per frame, because the JS runtime runs
-  only when reactive state changes.
+  Fix: an animation the host drives per frame, because the JS runtime does not
+  run per frame.
 
 - **B-175 The `scrollend` event is missing**
   `Units: gpui,bridge · Size: M · Impact: Low`

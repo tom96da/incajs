@@ -1061,6 +1061,16 @@ See Phase 4 items 3 and 5 in
 - [x] Text input with selection, caret and IME composition
 - [ ] Interactive visual state (hover, active and focus styling)
 
+### Timers
+
+- [x] `crates/inca-jsenv` allocates timer ids and queues them behind an
+      injected clock.
+- [x] `crates/inca-bridge` builds the natives, calls the timer hook and runs a
+      timer pump per window.
+- [x] `crates/inca-host` starts the pump when a window shows a session and stops
+      it on a reload.
+- [x] `packages/core` defines the timer globals and keeps their handlers.
+
 ## Evergreen checklists
 
 Re-apply these on every relevant future PR — they are not phase-scoped and

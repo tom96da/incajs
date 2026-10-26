@@ -22,9 +22,10 @@ bundle ─ QuickJS ─ custom Vue renderer ─ FFI ─▶ Rust retained tree
 Rust retained tree ─ layout + paint ─▶ GPUI ─▶ GPU
 ```
 
-JS never runs per frame. It runs only when reactive state changes and pushes
-the mutations to Rust, which owns the tree and does layout and drawing
-natively. See [ARCHITECTURE.md](./handbook/ARCHITECTURE.md) for the details.
+JS never runs per frame. It runs when reactive state changes, on input and when
+a timer is due, and pushes the mutations to Rust, which owns the tree and does
+layout and drawing natively. See [ARCHITECTURE.md](./handbook/ARCHITECTURE.md)
+for the details.
 
 ## Status
 

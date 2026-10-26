@@ -66,7 +66,9 @@ Vite supplies the Vue SFC compiler through `@vitejs/plugin-vue`.
 The JS runtime, the bridge and `gpui`'s `App` run on the main thread. `gpui`
 builds the `App` there and holds it in an `Rc`. Code on the event path may keep
 state in a `thread_local!` because every native call and every event handler
-runs on that thread.
+runs on that thread. The timer pump is a foreground task on the main thread.
+It sleeps on the wake channel and one executor timer until the earliest timer
+is due.
 
 ## Node lifetime
 
