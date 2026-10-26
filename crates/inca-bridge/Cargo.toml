@@ -18,6 +18,7 @@ keywords.workspace = true
 publish = false
 
 [dependencies]
+async-channel.workspace = true
 gpui.workspace = true
 inca-gpui = { path = "../inca-gpui" }
 inca-jsenv = { path = "../inca-jsenv" }

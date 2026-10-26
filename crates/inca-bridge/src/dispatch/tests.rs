@@ -26,6 +26,7 @@ mod pointer;
 mod record;
 mod target_objects;
 mod targets;
+mod timers;
 mod walk;
 
 /// An `input` holding a value (100 px wide, 6 px per char, from x 0) and a `button`, under a `div`

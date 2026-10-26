@@ -53,6 +53,26 @@ impl<'js> FromJs<'js> for JsCallbackId {
     }
 }
 
+/// A timer id argument, checked like [`JsNodeId`].
+#[derive(Debug, Clone, Copy)]
+pub(super) struct JsTimerId(pub(super) u32);
+
+impl<'js> FromJs<'js> for JsTimerId {
+    fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> JsResult<Self> {
+        whole_u32(ctx, &value, "timer id").map(Self)
+    }
+}
+
+/// A delay argument in milliseconds, checked like [`JsNodeId`].
+#[derive(Debug, Clone, Copy)]
+pub(super) struct JsDelay(pub(super) u32);
+
+impl<'js> FromJs<'js> for JsDelay {
+    fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> JsResult<Self> {
+        whole_u32(ctx, &value, "delay").map(Self)
+    }
+}
+
 /// A scroll alignment argument: `"start"`, `"center"`, `"end"` or `"nearest"`.
 /// Any other string throws a `TypeError`.
 #[derive(Debug, Clone, Copy)]

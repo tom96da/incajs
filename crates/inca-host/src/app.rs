@@ -26,15 +26,17 @@ use std::process::ExitCode;
 use std::rc::Rc;
 
 use gpui::{
-    App, Bounds, Context, Point, SharedString, Size, TitlebarOptions, Window, WindowBounds,
-    WindowHandle, WindowOptions, div, prelude::*, px, size,
+    App, BackgroundExecutor, Bounds, Context, Point, SharedString, Size, TitlebarOptions, Window,
+    WindowBounds, WindowHandle, WindowOptions, div, prelude::*, px, size,
 };
 use gpui_platform::application;
 
 use inca_bridge::install;
 use inca_bridge::{EventDispatcher, Host};
 use inca_gpui::{EventSink, NodeId, NodeLayout, declared_window_size, render_tree_with_events};
-use inca_jsenv::{Engine, EngineError, ErrorReporter, PendingModule, console, stderr_reporter};
+use inca_jsenv::{
+    Clock, Engine, EngineError, ErrorReporter, PendingModule, console, stderr_reporter,
+};
 
 use crate::config::{
     self, DEFAULT_APP_NAME, effective_config, is_resizable, usable, window_min_size, window_size,
@@ -112,6 +114,12 @@ pub(crate) struct Session {
     pub(crate) dispatcher: EventDispatcher,
 }
 
+/// The clock of `executor`, so a test that moves the executor's clock moves the timers.
+pub(crate) fn clock_of(executor: &BackgroundExecutor) -> Clock {
+    let executor = executor.clone();
+    Rc::new(move || executor.now())
+}
+
 impl Session {
     /// The root node of the host's tree.
     fn root(&self) -> NodeId {
@@ -137,8 +145,9 @@ impl Session {
     fn start_engine(
         entry_path: &str,
         writer: Option<&SharedWriter>,
+        clock: Clock,
     ) -> Result<StartedEngine, EngineError> {
-        let host = Rc::new(RefCell::new(Host::default()));
+        let host = Rc::new(RefCell::new(Host::with_clock(clock)));
         let signal = Rc::new(LoadSignal::default());
 
         let module_root = Path::new(entry_path).parent().unwrap_or(Path::new("."));
@@ -176,6 +185,15 @@ impl Session {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn load(
+        entry_path: &str,
+        source: &str,
+        reporter: ErrorReporter,
+    ) -> Result<Self, EngineError> {
+        Self::load_with(entry_path, source, reporter, inca_jsenv::system_clock())
+    }
+
     /// Evaluates `source` (the entry's own already-read content) into a
     /// fresh engine, then wires up event dispatch. An `import` in `source`
     /// resolves against a sibling file next to `entry_path`.
@@ -187,12 +205,13 @@ impl Session {
     /// including an unresolved `import` for a sibling file that isn't there,
     /// and a top-level `await` that is still pending once the queued jobs
     /// have run.
-    pub(crate) fn load(
+    pub(crate) fn load_with(
         entry_path: &str,
         source: &str,
         reporter: ErrorReporter,
+        clock: Clock,
     ) -> Result<Self, EngineError> {
-        let StartedEngine { host, engine, .. } = Self::start_engine(entry_path, None)?;
+        let StartedEngine { host, engine, .. } = Self::start_engine(entry_path, None, clock)?;
         let failed = Rc::clone(&reporter);
         let session = Self::from_parts(host, engine, reporter);
         session
@@ -211,7 +230,23 @@ impl Session {
         self.dispatcher.report_pending();
     }
 
-    /// Starts evaluating `source` as [`Self::load`] does, and returns once
+    #[cfg(test)]
+    pub(crate) fn begin(
+        entry_path: &str,
+        source: &str,
+        reporter: ErrorReporter,
+        writer: Option<&SharedWriter>,
+    ) -> Result<Loading, EngineError> {
+        Self::begin_with(
+            entry_path,
+            source,
+            reporter,
+            writer,
+            inca_jsenv::system_clock(),
+        )
+    }
+
+    /// Starts evaluating `source` as [`Self::load_with`] does, and returns once
     /// the entry waits on something unsettled, or has completed.
     /// [`Loading::poll`] drives the rest.
     ///
@@ -220,17 +255,18 @@ impl Session {
     /// Returns the thrown value if the engine fails to start, the bindings
     /// or `console` fail to install, or `source` fails to link, throws, or
     /// rejects before it waits.
-    pub(crate) fn begin(
+    pub(crate) fn begin_with(
         entry_path: &str,
         source: &str,
         reporter: ErrorReporter,
         writer: Option<&SharedWriter>,
+        clock: Clock,
     ) -> Result<Loading, EngineError> {
         let StartedEngine {
             host,
             engine,
             signal,
-        } = Self::start_engine(entry_path, writer)?;
+        } = Self::start_engine(entry_path, writer, clock)?;
         let failed = Rc::clone(&reporter);
         let session = Self::from_parts(host, engine, reporter);
         let module = session.engine.start_module(entry_path, source)?;
@@ -378,7 +414,13 @@ pub(crate) fn start(
     source: &str,
     reporter: ErrorReporter,
 ) -> Result<WindowHandle<HostedApp>, Failure> {
-    let session = Session::load(entry_path, source, reporter).map_err(Failure::Thrown)?;
+    let session = Session::load_with(
+        entry_path,
+        source,
+        reporter,
+        clock_of(cx.background_executor()),
+    )
+    .map_err(Failure::Thrown)?;
     open(cx, session, entry_path)
 }
 
@@ -441,11 +483,14 @@ pub(crate) fn open(
         .map_err(Failure::bundle)?;
     cx.activate(true);
 
-    // A reactivity scheduler batches its first effects into a microtask, so
-    // mounting leaves work queued that nothing else would come back for
-    // until the first input event, or never, in an app that takes none.
     window
         .update(cx, |app, window, cx| {
+            app.session
+                .dispatcher
+                .start_timers(window.window_handle(), cx);
+            // A reactivity scheduler batches its first effects into a microtask, so
+            // mounting leaves work queued that nothing else would come back for
+            // until the first input event or timer, in an app that takes none.
             app.session.dispatcher.drain_jobs_and_refresh(window, cx);
             maybe_auto_resize_to_content(app, window);
         })
@@ -510,7 +555,13 @@ pub fn run_bundle(entry_path: &str, dev: bool) -> ExitCode {
         if let Some(writer) = &writer {
             let lines = stdin_lines();
             let started = cx.background_executor().now();
-            match Session::begin(&entry_path, &source, error_reporter, Some(writer)) {
+            match Session::begin_with(
+                &entry_path,
+                &source,
+                error_reporter,
+                Some(writer),
+                clock_of(cx.background_executor()),
+            ) {
                 Ok(first) => serve_dev_protocol(
                     cx,
                     lines,

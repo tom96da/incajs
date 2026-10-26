@@ -9,7 +9,7 @@ use gpui::{Pixels, ScrollHandle, point, px};
 
 use inca_gpui::element::scroll::{Align, rect_of, scroll_chain};
 use inca_gpui::{InputState, NodeId, NodeLayout, VirtualTree, is_scroll_container};
-use inca_jsenv::EngineError;
+use inca_jsenv::{Clock, EngineError, Timers, system_clock};
 
 use crate::focus::FocusRegistry;
 
@@ -55,6 +55,10 @@ pub struct Host {
     /// `reveal_focus`, and awaiting the frame after it.
     pub(super) scroll_fresh: Vec<(NodeId, Align, Align)>,
     pub(super) scroll_retry: Vec<(NodeId, Align, Align)>,
+    /// The timers the script started. Plain data: ids, due times and periods.
+    pub timers: Rc<Timers>,
+    /// Receives one message each time `timers` starts a timer.
+    pub(crate) timer_wake: async_channel::Receiver<()>,
 }
 
 impl std::fmt::Debug for Host {
@@ -69,11 +73,30 @@ impl std::fmt::Debug for Host {
 
 impl Default for Host {
     fn default() -> Self {
+        Self::with_clock(system_clock())
+    }
+}
+
+impl Host {
+    /// A host whose timers read `clock`. [`Host::default`] reads the system clock.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a new tree has no free node id.
+    #[must_use]
+    pub fn with_clock(clock: Clock) -> Self {
         let mut tree = VirtualTree::new();
         let root = tree
             .create_node("div")
             .expect("a new tree has free node ids");
         tree.set_root(root);
+        let (sender, timer_wake) = async_channel::bounded(1);
+        let timers = Timers::new(
+            clock,
+            Rc::new(move || {
+                let _ = sender.try_send(());
+            }),
+        );
         Self {
             tree,
             warn: Rc::new(|line| eprintln!("{line}")),
@@ -91,6 +114,8 @@ impl Default for Host {
             clicking: HashSet::new(),
             scroll_fresh: Vec::new(),
             scroll_retry: Vec::new(),
+            timers,
+            timer_wake,
         }
     }
 }

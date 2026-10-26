@@ -26,6 +26,30 @@ pub const LISTEN_JS: &str = r"
     };
     ";
 
+/// Defines `setTimeout(handler, delay)`, `clearTimeout(id)` and the hook
+/// `__inca_timer__` over the timer natives, for a script that runs without
+/// the timer globals of an app.
+pub const TIMERS_JS: &str = r"
+    {
+        const handlers = new Map();
+        globalThis.setTimeout = (handler, delay = 0) => {
+            const id = __inca_native__.startTimer(delay, false);
+            handlers.set(id, handler);
+            return id;
+        };
+        globalThis.clearTimeout = (id) => {
+            if (handlers.delete(id)) {
+                __inca_native__.stopTimer(id);
+            }
+        };
+        globalThis.__inca_timer__ = (id) => {
+            const handler = handlers.get(id);
+            handlers.delete(id);
+            handler();
+        };
+    }
+    ";
+
 /// The callback ids of `(target, event)` in registration order.
 #[must_use]
 pub fn callback_ids(listeners: &EventListeners, target: EventTargetId, event: &str) -> Vec<u32> {
@@ -117,6 +141,45 @@ pub fn mount_active(
 ) -> WindowHandle<TestRoot> {
     let window = mount_root(cx, host, engine, node);
     cx.update_window(window.into(), |_, window, _cx| window.activate_window())
+        .unwrap();
+    window
+}
+
+/// A host whose timers read the executor clock of `cx`, so
+/// `cx.executor().advance_clock(..)` moves them.
+#[must_use]
+pub fn host_on_executor_clock(cx: &TestAppContext) -> Rc<RefCell<Host>> {
+    let executor = cx.executor();
+    Rc::new(RefCell::new(Host::with_clock(Rc::new(move || {
+        executor.now()
+    }))))
+}
+
+/// [`mount_root`] over the root of `host`, with `reporter` and a running timer pump.
+///
+/// # Panics
+///
+/// Panics when the window cannot be updated.
+pub fn mount_with_timers(
+    cx: &mut TestAppContext,
+    host: &Rc<RefCell<Host>>,
+    engine: &Rc<Engine>,
+    reporter: ErrorReporter,
+) -> WindowHandle<TestRoot> {
+    let node = host.borrow().root();
+    let dispatcher =
+        EventDispatcher::new(Rc::clone(engine), Rc::clone(host)).with_reporter(reporter);
+    let window = cx.add_window(|_, _| TestRoot {
+        host: Rc::clone(host),
+        node,
+        dispatcher,
+    });
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    window
+        .update(cx, |root, window, cx| {
+            root.dispatcher.start_timers(window.window_handle(), cx);
+        })
         .unwrap();
     window
 }

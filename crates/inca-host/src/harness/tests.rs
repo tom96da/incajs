@@ -7,6 +7,7 @@ use super::*;
 
 mod input;
 mod pointer;
+mod timers;
 
 const TEST_ENTRY_PATH: &str = "/test/entry.js";
 
