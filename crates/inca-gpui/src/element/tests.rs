@@ -21,6 +21,7 @@ use gpui::{Context, Render, TestAppContext, VisualTestContext};
 mod build;
 mod input;
 mod style;
+mod values;
 
 pub(super) fn num(n: f64) -> AttributeValue {
     AttributeValue::Number(n)
@@ -28,6 +29,30 @@ pub(super) fn num(n: f64) -> AttributeValue {
 
 pub(super) fn text(s: &str) -> AttributeValue {
     AttributeValue::String(s.to_owned())
+}
+
+pub(super) fn style_of(props: &[(&str, AttributeValue)]) -> StyleSpec {
+    let mut tree = VirtualTree::new();
+    let id = tree.create_node("div").unwrap();
+    for (key, value) in props {
+        tree.set_style(id, *key, value.clone()).unwrap();
+    }
+    build_spec(&tree, id).unwrap().style
+}
+
+/// The style a node gets from `props`, and what [`style_warning`] says
+/// about each prop, in order.
+pub(super) fn style_and_warnings(props: &[(&str, AttributeValue)]) -> (StyleSpec, Vec<String>) {
+    let mut tree = VirtualTree::new();
+    let id = tree.create_node("div").unwrap();
+    for (key, value) in props {
+        tree.set_style(id, *key, value.clone()).unwrap();
+    }
+    let warnings = props
+        .iter()
+        .filter_map(|(key, value)| style_warning(key, value))
+        .collect();
+    (build_spec(&tree, id).unwrap().style, warnings)
 }
 
 /// `(event, target, mouse_target, pressed_target)` of each report.

@@ -22,7 +22,6 @@
 //! subtree. A node that is created, detached or released is an orphan until
 //! it is inserted, held or destroyed.
 
-use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
@@ -515,7 +514,8 @@ impl VirtualTree {
     }
 
     /// Sets (inserting or overwriting) one style prop. `key` may be
-    /// `camelCase`, `kebab-case` or `snake_case`, and all three name one prop.
+    /// `camelCase`, `kebab-case` or `snake_case`, a host name or its CSS name,
+    /// and all spellings of one prop share one slot.
     ///
     /// # Errors
     ///
@@ -527,19 +527,15 @@ impl VirtualTree {
         value: impl Into<AttributeValue>,
     ) -> Result<(), TreeError> {
         let node = self.node_mut(node_id)?;
-        let key = key.into();
-        let canonical = match style_key(&key) {
-            Cow::Owned(k) => Some(k),
-            Cow::Borrowed(_) => None,
-        };
-        node.style_props
-            .insert(canonical.unwrap_or(key), value.into());
+        let key: String = key.into();
+        let stored = style_key(&key).into_owned();
+        node.style_props.insert(stored, value.into());
         Ok(())
     }
 
     /// Removes one style prop, so the property renders as if never set.
-    /// `key` may be `camelCase`, `kebab-case` or `snake_case`. Removing a key
-    /// that isn't set is a no-op.
+    /// `key` may be `camelCase`, `kebab-case` or `snake_case`, a host name or
+    /// its CSS name. Removing a key that isn't set is a no-op.
     ///
     /// # Errors
     ///
