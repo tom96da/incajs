@@ -47,6 +47,8 @@ interface IncaNative {
   setPointerCapture(nodeId: NodeId, pointerId: number): void;
   releasePointerCapture(nodeId: NodeId, pointerId: number): void;
   hasPointerCapture(nodeId: NodeId, pointerId: number): boolean;
+  startTimer(delay: number, repeat: boolean): number | undefined;
+  stopTimer(id: number): void;
 }
 
 /** What the host calls: it passes the event object as the first argument. */
@@ -61,6 +63,8 @@ declare global {
   var __inca_released__: (nodeIds: NodeId[], callbackIds: CallbackId[]) => void;
   // eslint-disable-next-line no-var
   var __inca_targets__: (targets: EventTargetId[]) => unknown[];
+  // eslint-disable-next-line no-var
+  var __inca_timer__: (id: number) => void;
 }
 
 export function native(): IncaNative {

@@ -179,6 +179,8 @@ function installFakeNative(): Map<NodeId, FakeNode> {
     setPointerCapture(): void {},
     releasePointerCapture(): void {},
     hasPointerCapture: () => false,
+    startTimer: () => undefined,
+    stopTimer(): void {},
   };
 
   return nodes;

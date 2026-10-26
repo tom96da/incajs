@@ -18,6 +18,9 @@ import { createElementNode } from "../src/element/shadowTree.mts";
 import { createIncaApp } from "../src/vue/index.mts";
 import type { IncaElement } from "../src/index.mts";
 
+/** Node's timers, put back after a test loads core over the fake host. */
+const nodeTimers = { setTimeout, setInterval, clearTimeout, clearInterval };
+
 interface FakeNode {
   tag: string;
   parent: number | null;
@@ -150,6 +153,8 @@ function installNative(): void {
     setPointerCapture() {},
     releasePointerCapture() {},
     hasPointerCapture: () => false,
+    startTimer: () => undefined,
+    stopTimer() {},
   };
 }
 
@@ -380,6 +385,7 @@ describe("the hold registry", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.resetModules();
+    Object.assign(globalThis, nodeTimers);
   });
 
   it("registers the handle of a held node by id and releases the id on cleanup", async () => {

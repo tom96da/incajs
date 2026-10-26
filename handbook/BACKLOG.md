@@ -1205,3 +1205,25 @@ A fixed entry is deleted and its ID is never reused.
   Found by reading; not reproduced. Fix: start a built app through
   `Session::begin_with` and the serve loop, which also gives it the load wait of
   `inca dev`.
+
+- **B-232 `setTimeout` and `setInterval` refuse a string handler**
+  `Units: core,docs · Size: S–M · Impact: Low`
+
+  A handler that is not a function throws a `TypeError`. Browsers convert it
+  to a string and run it as global code when the timer fires, unless a content
+  security policy forbids it. Choices: accept every string as global indirect
+  `eval`, accept only a `TrustedScript`, or keep the `TypeError`. Accepting a
+  string opens a path that runs text as code, and the host has no policy to
+  limit it, so the choice waits for a decision on Trusted Types and `eval`.
+
+- **B-233 A global that `incajs` defines is missing until `incajs` loads**
+  `Units: core,cli,docs · Size: S–M · Impact: Low`
+
+  Core defines the timer functions when the `incajs` or `incajs/vue` module
+  loads. A module that runs earlier and calls one of them at its top level
+  fails with `ReferenceError`. The entry that `inca` generates imports
+  `incajs/vue` before `App`, so a `.vue` file is safe there. A hand-written
+  entry that imports `App` first is not. Fix: the injection of B-226 adds the
+  import for the identifiers that core defines. A bare `import "incajs"`
+  does not do it: the bundler drops `incajs` when the app uses no export of
+  it.
