@@ -9,6 +9,8 @@
 //! async function whose stack frames name its file. [`vault`] keeps the JS
 //! values host code needs in a later call out of reach of scripts.
 //!
+//! [`Timers`] queues the timers a script starts.
+//!
 //! The renderer, windows and processes are outside it, so what it installs can
 //! be replaced without reaching the code that draws a UI.
 
@@ -23,6 +25,7 @@ mod quickjs;
 mod sourcemap;
 #[cfg(test)]
 mod tests;
+mod timers;
 mod vault;
 
 pub use compile::compile_async_function;
@@ -32,4 +35,5 @@ pub use engine::{
 };
 pub use quickjs::FunctionAccessor;
 pub use sourcemap::StackPaths;
+pub use timers::{Clock, Timers, run_timers, system_clock};
 pub use vault::vault;
