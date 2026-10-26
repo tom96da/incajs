@@ -74,10 +74,11 @@ Implemented in `crates/inca-gpui/src/element/`. There are four kinds:
 
 ### Style prop vocabulary
 
-Implemented in `element/parse.rs` and `element/style.rs`. An unrecognized
-key, an invalid color and a value of a shape the host does not support each
-print one warning line on stderr every time a style sets them, and the
-value reads as unset. An empty string `''` on a known key prints no
+Implemented in `element/parse.rs` and `element/style.rs`.
+`inca_gpui::STYLE_KEYS` lists every key, its CSS names and the value it takes.
+An unrecognized key, an invalid color and a value of a shape the host does not
+support each print one warning line on stderr every time a style sets them, and
+the value reads as unset. An empty string `''` on a known key prints no
 warning. The table lists every key the host reads. `set_style` and
 `remove_style` map the camelCase and kebab-case spellings of a key to its
 snake_case form.

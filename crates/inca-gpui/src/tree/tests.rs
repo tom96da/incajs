@@ -4,6 +4,7 @@
 #![allow(clippy::unwrap_used)]
 
 use super::*;
+use crate::element::style_key;
 use rstest::rstest;
 
 #[test]
