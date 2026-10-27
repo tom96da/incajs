@@ -191,11 +191,20 @@ describe("the event types", () => {
 });
 
 describe("the style types", () => {
-  it("accept the CSS names of the four host keys", () => {
+  it("accept the CSS names of the colour and text keys", () => {
     expectTypeOf<StyleProps["color"]>().toEqualTypeOf<number | string | undefined>();
     expectTypeOf<StyleProps["backgroundColor"]>().toEqualTypeOf<number | string | undefined>();
     expectTypeOf<StyleProps["borderRadius"]>().toEqualTypeOf<Px | undefined>();
     expectTypeOf<StyleProps["fontSize"]>().toEqualTypeOf<Px | undefined>();
+  });
+
+  it("list CSS names only", () => {
+    expectTypeOf<
+      Extract<
+        keyof StyleProps,
+        "flex_direction" | "padding_x" | "margin_y" | "background" | "text_color"
+      >
+    >().toBeNever();
   });
 
   it("accept a px string on a px key", () => {
@@ -203,7 +212,7 @@ describe("the style types", () => {
     expectTypeOf<"0">().toExtend<Px>();
     expectTypeOf<StyleProps["width"]>().toEqualTypeOf<Px | "auto" | undefined>();
     expectTypeOf<StyleProps["gap"]>().toEqualTypeOf<Px | undefined>();
-    expectTypeOf<StyleProps["padding_top"]>().toEqualTypeOf<Px | undefined>();
+    expectTypeOf<StyleProps["paddingTop"]>().toEqualTypeOf<Px | undefined>();
     expectTypeOf<StyleProps["margin"]>().toEqualTypeOf<Px | "auto" | undefined>();
   });
 
@@ -216,23 +225,21 @@ describe("the style types", () => {
   });
 
   it("accept the flex keyword forms", () => {
-    expectTypeOf<"flex-start" | "flex-end">().toExtend<
-      NonNullable<StyleProps["justify_content"]>
-    >();
-    expectTypeOf<"flex-start" | "flex-end">().toExtend<NonNullable<StyleProps["align_items"]>>();
+    expectTypeOf<"flex-start" | "flex-end">().toExtend<NonNullable<StyleProps["justifyContent"]>>();
+    expectTypeOf<"flex-start" | "flex-end">().toExtend<NonNullable<StyleProps["alignItems"]>>();
     expectTypeOf<"row-reverse" | "column-reverse">().toExtend<
-      NonNullable<StyleProps["flex_direction"]>
+      NonNullable<StyleProps["flexDirection"]>
     >();
   });
 
   it("reject an unknown flex keyword", () => {
-    expectTypeOf<{ justify_content: "flex-middle" }>().not.toExtend<StyleProps>();
+    expectTypeOf<{ justifyContent: "flex-middle" }>().not.toExtend<StyleProps>();
   });
 
-  it("accept a decimal string on opacity, flex_grow and flex_shrink", () => {
+  it("accept a decimal string on opacity, flexGrow and flexShrink", () => {
     expectTypeOf<StyleProps["opacity"]>().toEqualTypeOf<number | `${number}` | undefined>();
-    expectTypeOf<StyleProps["flex_grow"]>().toEqualTypeOf<number | `${number}` | undefined>();
-    expectTypeOf<StyleProps["flex_shrink"]>().toEqualTypeOf<number | `${number}` | undefined>();
+    expectTypeOf<StyleProps["flexGrow"]>().toEqualTypeOf<number | `${number}` | undefined>();
+    expectTypeOf<StyleProps["flexShrink"]>().toEqualTypeOf<number | `${number}` | undefined>();
   });
 
   it("reject a percentage on opacity", () => {

@@ -189,14 +189,11 @@ export function removeAttribute(nodeId: NodeId, key: string): void {
  * camelCase or kebab-case spelling or a property the types do not list,
  * forwards as a raw {@link AttributeValue}.
  *
- * A key takes any of three spellings: kebab-case (`flex-direction`),
- * camelCase (`flexDirection`) or snake_case (`flex_direction`). The CSS names
- * `color`, `backgroundColor`, `borderRadius` and `fontSize` name the same
- * properties as `text_color`, `background`, `corner_radius` and `text_size`.
- * All of these share one slot per property, and the value set most recently
+ * A key takes kebab-case (`flex-direction`) or camelCase (`flexDirection`).
+ * Both spellings share one slot per property, and the value set most recently
  * applies.
  * @param nodeId - the node to update
- * @param key - the style property name in any of the three spellings, or a CSS name
+ * @param key - the style property name
  * @param value - the style property value
  */
 export function setStyle<K extends keyof StyleProps>(
@@ -215,7 +212,7 @@ export function setStyle(nodeId: NodeId, key: string, value: AttributeValue): vo
  * or CSS name {@link setStyle} accepts, and removes the property whichever
  * one set it.
  * @param nodeId - the node to update
- * @param key - the style property name in any of the three spellings, or a CSS name
+ * @param key - the style property name
  */
 export function removeStyle(nodeId: NodeId, key: string): void {
   native().removeStyle(nodeId, key);
