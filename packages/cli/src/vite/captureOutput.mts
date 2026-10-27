@@ -41,7 +41,8 @@ export function captureOutput(core: AdapterCore, sink: (output: CapturedOutput) 
       const files = Object.keys(bundle);
       const entry = Object.values(bundle).find((file) => file.type === "chunk" && file.isEntry);
       if (!entry) {
-        throw new core.IncaError("ERR_INCA_BUILD_NO_ENTRY_CHUNK", "build produced no entry chunk");
+        const code = "ERR_INCA_BUILD_NO_ENTRY_CHUNK";
+        throw new core.IncaError(code, `${code}: build produced no entry chunk`);
       }
       sink({ entryFile: entry.fileName, files });
     },
