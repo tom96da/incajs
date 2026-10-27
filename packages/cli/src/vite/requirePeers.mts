@@ -63,7 +63,7 @@ async function markedPeers(
  */
 export function requirePeers(core: AdapterCore, frontend: FrontendId): Plugin {
   let root = process.cwd();
-  let peers: Promise<string[]> | undefined;
+  let peers: string[] | undefined;
   return {
     name: "inca:require-peers",
     enforce: "pre",
@@ -71,8 +71,8 @@ export function requirePeers(core: AdapterCore, frontend: FrontendId): Plugin {
       root = config.root;
     },
     async resolveId(id, importer, options) {
-      peers ??= markedPeers(core, root, frontend);
-      if (!(await peers).includes(id)) return null;
+      peers ??= await markedPeers(core, root, frontend);
+      if (!peers.includes(id)) return null;
       const resolved = await this.resolve(id, importer, { ...options, skipSelf: true });
       if (resolved && !resolved.id.startsWith(OPTIONAL_PEER_PREFIX)) return null;
       throw unresolvable(core, id);
