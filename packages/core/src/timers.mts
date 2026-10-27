@@ -3,6 +3,21 @@
 
 import { native } from "./native.mts";
 
+declare global {
+  function setTimeout<A extends unknown[]>(
+    handler: (...args: A) => void,
+    delay?: number,
+    ...args: A
+  ): number;
+  function setInterval<A extends unknown[]>(
+    handler: (...args: A) => void,
+    delay?: number,
+    ...args: A
+  ): number;
+  function clearTimeout(id?: number): void;
+  function clearInterval(id?: number): void;
+}
+
 /** What a queued timer runs. */
 interface Entry {
   handler: (...args: unknown[]) => unknown;
@@ -79,9 +94,6 @@ const timers = {
   },
 };
 
-const host = (globalThis as { __inca_native__?: { startTimer?: unknown } }).__inca_native__;
+Object.defineProperty(globalThis, "__inca_timer__", { value: due, configurable: true });
 // Outside the host, Node's and the test runner's timers stay in place.
-if (typeof host?.startTimer === "function") {
-  Object.assign(globalThis, timers);
-  Object.defineProperty(globalThis, "__inca_timer__", { value: due, configurable: true });
-}
+if (typeof globalThis.__inca_native__?.startTimer === "function") Object.assign(globalThis, timers);
