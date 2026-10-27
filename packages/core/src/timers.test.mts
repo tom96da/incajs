@@ -209,12 +209,21 @@ it("is the latest copy's hook once core loads again", async () => {
   expect(g.__inca_timer__).not.toBe(hook);
 });
 
-it("leaves the globals alone without the host's timer natives", async () => {
+it("leaves Node's four timer functions alone without the host's timer natives", async () => {
   Object.assign(globalThis, nodeTimers);
-  delete (globalThis as { __inca_timer__?: unknown }).__inca_timer__;
 
   await load({});
 
   expect(globalThis.setTimeout).toBe(nodeTimers.setTimeout);
-  expect(globalThis).not.toHaveProperty("__inca_timer__");
+  expect(globalThis.setInterval).toBe(nodeTimers.setInterval);
+  expect(globalThis.clearTimeout).toBe(nodeTimers.clearTimeout);
+  expect(globalThis.clearInterval).toBe(nodeTimers.clearInterval);
+});
+
+it("defines the hook without the host's timer natives", async () => {
+  delete (globalThis as { __inca_timer__?: unknown }).__inca_timer__;
+
+  await load({});
+
+  expect(g.__inca_timer__).toBeTypeOf("function");
 });

@@ -3,7 +3,6 @@
 
 // The renderer's value exports live in `rendererCore.mts`.
 
-import "./timerGlobals.mts";
 import "./timers.mts";
 
 export { document } from "./document.mts";
