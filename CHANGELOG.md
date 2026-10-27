@@ -10,6 +10,19 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- `:style` takes the CSS names, `"flex-start"`, `"10px"` and `"0.5"` ([b449c99](https://github.com/tom96da/incajs/commit/b449c99), [b02879b](https://github.com/tom96da/incajs/commit/b02879b))
+- the timer functions are available, with their types ([ccf370c](https://github.com/tom96da/incajs/commit/ccf370c))
+
+### Changed
+
+- the CLI reports a missing peer dependency by name ([c26694f](https://github.com/tom96da/incajs/commit/c26694f))
+
+### Fixed
+
+- the style types list only the CSS names ([2790d19](https://github.com/tom96da/incajs/commit/2790d19))
+
 ## [0.0.23] - 2026-10-25
 
 ### Added
