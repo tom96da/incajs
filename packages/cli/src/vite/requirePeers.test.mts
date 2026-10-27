@@ -185,6 +185,23 @@ describe("requirePeers", () => {
     await expect(resolveId.call(unresolved, PEERS[0]!, undefined, {})).resolves.toBeNull();
   });
 
+  it("reads package.json again after a failed read", async () => {
+    const resolveId = await pluginFor();
+    await expect(resolveId.call(unresolved, PEERS[0]!, undefined, {})).rejects.toThrow(
+      `${PKG} can't be resolved`,
+    );
+    const packageDir = path.join(dir!, "node_modules", PKG);
+    await mkdir(packageDir, { recursive: true });
+    await writeFile(
+      path.join(packageDir, "package.json"),
+      JSON.stringify({ incajs: { frontends: { [FRONTEND[1]]: { peers: PEERS } } } }),
+    );
+
+    await expect(resolveId.call(unresolved, PEERS[0]!, undefined, {})).rejects.toThrow(
+      `${PEERS[0]} can't be resolved`,
+    );
+  });
+
   it("reads package.json once for several ids", async () => {
     const resolveId = await pluginFor(marked);
     const context: Context = { resolve: async () => ({ id: "x" }) };
