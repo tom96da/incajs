@@ -196,10 +196,6 @@ jobs:
           fi
           xcrun -sdk macosx metal --version
 
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-        with:
-          key: cd-${{ matrix.pkg }}
-
       - name: Build inca-host
         run: cargo build --release --locked -p inca-host
 
