@@ -4,6 +4,7 @@
 import path from "node:path";
 
 import vue from "@vitejs/plugin-vue";
+import type { Options as VueOptions } from "@vitejs/plugin-vue";
 import type { InlineConfig } from "vite";
 
 import { captureOutput } from "./captureOutput.mts";
@@ -16,10 +17,22 @@ import type { CapturedOutput } from "./captureOutput.mts";
 
 export const BUNDLE_FILE_NAME = "bundle.js";
 
+/** A frontend: the package that lists its peers, and its name there. */
+export type FrontendId = readonly [pkg: string, frontend: string];
+
+/** The options of the `vue` plugin's template compiler. */
+type VueTemplateCompilerOptions = NonNullable<
+  NonNullable<VueOptions["template"]>["compilerOptions"]
+>;
+
+export type FrontendOptions = VueTemplateCompilerOptions;
+
 export interface ResolveConfigOptions {
   core: AdapterCore;
-  /** The module compiled `.vue` templates import their helpers from. */
-  runtimeModuleName: string;
+  /** The frontend to bundle. Its package lists the peers the app must install. */
+  frontend: FrontendId;
+  /** The frontend's own settings. */
+  frontendOptions: FrontendOptions;
   /** The app's own entry point. It may import `.vue` files. */
   entry: string;
   /** See the `root` option in `../types.mts`. Defaults to the entry's directory. */
@@ -51,7 +64,7 @@ export interface ResolveConfigOptions {
 /**
  * Builds the Vite config shared by `watch` and `build`, compiling `.vue`
  * files via `@vitejs/plugin-vue`. Compiled templates import their helpers
- * from `runtimeModuleName`.
+ * from `options.runtimeModuleName`.
  *
  * An import the entry doesn't inline (a dynamic `import()`, or a `.vue`
  * file's own `<style>` block) lands as its own chunk or asset alongside
@@ -59,7 +72,8 @@ export interface ResolveConfigOptions {
  */
 export function resolveViteConfig({
   core,
-  runtimeModuleName,
+  frontend,
+  frontendOptions,
   entry,
   root = path.dirname(entry),
   envDir,
@@ -95,10 +109,10 @@ export function resolveViteConfig({
       vue({
         template: {
           // Hoisted static content is stringified into createStaticVNode, which needs insertStaticContent.
-          compilerOptions: { runtimeModuleName, hoistStatic: false },
+          compilerOptions: { ...frontendOptions, hoistStatic: false },
         },
       }),
-      requirePeers(core),
+      requirePeers(core, frontend),
       rejectUnsupported(core),
       emitConfig(runtimeConfig),
       captureOutput(core, onOutput),

@@ -10,4 +10,6 @@ import type { Bundler } from "./types.mts";
  * default: a single place to swap bundlers. Compiled `.vue` templates import
  * their helpers from `incajs/vue/runtime`.
  */
-export const defaultBundler: Bundler = createViteBundler(adapterCore, "incajs/vue/runtime");
+export const defaultBundler: Bundler = createViteBundler(adapterCore, ["incajs", "vue"], {
+  runtimeModuleName: "incajs/vue/runtime",
+});

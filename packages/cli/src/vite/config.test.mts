@@ -22,7 +22,8 @@ function sink(): Writable {
 function optionsFor(mode: ResolveConfigOptions["mode"]): ResolveConfigOptions {
   return {
     core,
-    runtimeModuleName: "runtime",
+    frontend: ["alpha-pkg", "alpha"],
+    frontendOptions: { runtimeModuleName: "runtime" },
     entry: "/unused/src/main.ts",
     outDir: "/unused/dist",
     mode,
@@ -102,7 +103,8 @@ describe("development library build", () => {
 
   it("writes a linked bundle.js.map with source paths only", async () => {
     const srcDir = path.join(scratch, "app");
-    await mkdir(srcDir);
+    await mkdir(path.join(srcDir, "node_modules/alpha-pkg"), { recursive: true });
+    await writeFile(path.join(srcDir, "node_modules/alpha-pkg/package.json"), "{}");
     const entry = path.join(srcDir, "main.ts");
     await writeFile(
       entry,

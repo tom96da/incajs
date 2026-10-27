@@ -47,6 +47,9 @@ it("reports a thrown entry at its source file, line and column", async () => {
   const outDir = path.join(scratch, "dist");
   await mkdir(path.dirname(entry), { recursive: true });
   await writeFile(entry, SOURCE);
+  // The bundler reads the peers an app needs from the `package.json` of `incajs`.
+  await mkdir(path.join(scratch, "app/node_modules/incajs"), { recursive: true });
+  await writeFile(path.join(scratch, "app/node_modules/incajs/package.json"), "{}");
 
   let resolveBuild!: (output: BuildOutput) => void;
   let rejectBuild!: (error: Error) => void;

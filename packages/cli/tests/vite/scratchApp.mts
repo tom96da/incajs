@@ -28,6 +28,30 @@ function sink(): { stream: Writable; text: () => string } {
   };
 }
 
+/**
+ * Writes the fake frontend package under `appDir/node_modules`, listing the peers
+ * each frontend in `frontends` needs. Every scratch app gets one without peers.
+ */
+export async function writeIncajs(
+  appDir: string,
+  frontends: Record<string, string[]> = {},
+  pkg = "incajs",
+): Promise<void> {
+  const dir = path.join(appDir, "node_modules", pkg);
+  await mkdir(dir, { recursive: true });
+  await writeFile(
+    path.join(dir, "package.json"),
+    JSON.stringify({
+      name: pkg,
+      incajs: {
+        frontends: Object.fromEntries(
+          Object.entries(frontends).map(([name, peers]) => [name, { peers }]),
+        ),
+      },
+    }),
+  );
+}
+
 const RUNTIME_PACKAGE = "scratch-runtime";
 
 /** The module name the scratch apps' templates import their helpers from. */
@@ -83,6 +107,7 @@ export function scratchApp(name: string): {
       const entry = path.join(appDir, "entry.mts");
       await writeFile(vuePath, vueSource);
       await writeFile(entry, `import App from "./App.vue";\nexport default App;\n`);
+      await writeIncajs(appDir);
       const out = sink();
       const err = sink();
       return {
