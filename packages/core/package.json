@@ -101,5 +101,15 @@
   },
   "engines": {
     "node": ">=22.18"
+  },
+  "incajs": {
+    "frontends": {
+      "vue": {
+        "peers": [
+          "@vue/runtime-core",
+          "@vue/runtime-dom"
+        ]
+      }
+    }
   }
 }

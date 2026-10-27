@@ -10,16 +10,20 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import * as adapterCore from "../../src/adapterCore.mts";
 import { createViteBundler } from "../../src/vite/index.mts";
-import { scratchApp, TEST_RUNTIME_MODULE } from "./scratchApp.mts";
+import { scratchApp, TEST_RUNTIME_MODULE, writeIncajs } from "./scratchApp.mts";
 import type { Bundler } from "../../src/types.mts";
 
-const vite = createViteBundler(adapterCore, TEST_RUNTIME_MODULE);
+const vite = createViteBundler(adapterCore, ["incajs", "vue"], {
+  runtimeModuleName: TEST_RUNTIME_MODULE,
+});
 const build: Bundler["build"] = (options) => vite.build(options);
 
 const { setUp, tearDown, makeApp } = scratchApp("build");
 
 beforeAll(setUp);
 afterAll(tearDown);
+
+const domPeer = { vue: ["@vue/runtime-dom"] };
 
 describe("build", () => {
   it("writes Vite's own build log to the stream it was given", async () => {
@@ -165,9 +169,65 @@ describe("build", () => {
         <template><div /></template>
       `,
     );
+    await writeIncajs(path.dirname(entry), domPeer);
 
     await expect(build({ entry, outDir, ...streams })).rejects.toThrow(
-      "ERR_INCA_PEER_NOT_FOUND: @vue/runtime-dom is not installed. add it to the app: pnpm add @vue/runtime-dom",
+      "ERR_INCA_PEER_NOT_FOUND: @vue/runtime-dom can't be resolved. add it to the app's dependencies",
+    );
+  }, 20000);
+
+  it("rejects a missing optional peer that a package of the app imports", async () => {
+    const { entry, outDir, streams } = await makeApp(
+      `<script setup>\nimport "incajs";\n</script>\n<template><div /></template>\n`,
+    );
+    const app = path.dirname(entry);
+    await writeIncajs(app, domPeer);
+    const packageDir = path.join(app, "node_modules/incajs");
+    const manifest = JSON.parse(await readFile(path.join(packageDir, "package.json"), "utf8"));
+    await writeFile(
+      path.join(packageDir, "package.json"),
+      JSON.stringify({
+        ...manifest,
+        type: "module",
+        main: "index.js",
+        peerDependencies: { "@vue/runtime-dom": "*" },
+        peerDependenciesMeta: { "@vue/runtime-dom": { optional: true } },
+      }),
+    );
+    await writeFile(path.join(packageDir, "index.js"), 'import "@vue/runtime-dom";\n');
+
+    await expect(build({ entry, outDir, ...streams })).rejects.toThrow(
+      "ERR_INCA_PEER_NOT_FOUND: @vue/runtime-dom can't be resolved. add it to the app's dependencies",
+    );
+  }, 20000);
+
+  it("leaves a peer only another frontend lists", async () => {
+    const { entry, outDir, streams } = await makeApp(
+      `<script setup>\nimport "@vue/runtime-dom";\n</script>\n<template><div /></template>\n`,
+    );
+    await writeIncajs(path.dirname(entry), domPeer);
+    const react = createViteBundler(adapterCore, ["incajs", "react" as "vue"], {
+      runtimeModuleName: TEST_RUNTIME_MODULE,
+    });
+
+    const result = await react
+      .build({ entry, outDir, ...streams })
+      .catch((error: unknown) => error);
+
+    expect(String(result)).not.toContain("ERR_INCA_PEER_NOT_FOUND");
+  }, 20000);
+
+  it("reads the peer list from the package the bundler names", async () => {
+    const { entry, outDir, streams } = await makeApp(
+      `<script setup>\nimport "@vue/runtime-dom";\n</script>\n<template><div /></template>\n`,
+    );
+    await writeIncajs(path.dirname(entry), domPeer, "other-pkg");
+    const named = createViteBundler(adapterCore, ["other-pkg", "vue"], {
+      runtimeModuleName: TEST_RUNTIME_MODULE,
+    });
+
+    await expect(named.build({ entry, outDir, ...streams })).rejects.toThrow(
+      "ERR_INCA_PEER_NOT_FOUND",
     );
   }, 20000);
 

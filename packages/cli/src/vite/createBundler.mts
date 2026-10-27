@@ -5,16 +5,22 @@ import { build } from "./build.mts";
 import { hmr } from "./hmr.mts";
 import { watch } from "./watch.mts";
 import type { AdapterCore, Bundler } from "../adapterCore.mts";
+import type { FrontendOptions, FrontendId } from "./config.mts";
 
 /**
  * The Vite adapter.
  * @param core - the CLI logic the adapter uses
- * @param runtimeModuleName - the module compiled `.vue` templates import their helpers from
+ * @param frontend - the frontend to bundle: its package and its name there
+ * @param frontendOptions - the frontend's own settings
  */
-export function createViteBundler(core: AdapterCore, runtimeModuleName: string): Bundler {
+export function createViteBundler(
+  core: AdapterCore,
+  frontend: FrontendId,
+  frontendOptions: FrontendOptions,
+): Bundler {
   return {
-    watch: (options) => watch(core, runtimeModuleName, options),
-    build: (options) => build(core, runtimeModuleName, options),
-    hmr: (options) => hmr(core, runtimeModuleName, options),
+    watch: (options) => watch(core, frontend, frontendOptions, options),
+    build: (options) => build(core, frontend, frontendOptions, options),
+    hmr: (options) => hmr(core, frontend, frontendOptions, options),
   };
 }

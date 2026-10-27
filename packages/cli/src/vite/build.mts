@@ -6,6 +6,7 @@ import { build as buildOnce } from "vite";
 import { toBuildOutput } from "./captureOutput.mts";
 import { resolveViteConfig } from "./config.mts";
 import type { AdapterCore, BuildOptions, BuildOutput } from "../adapterCore.mts";
+import type { FrontendId, FrontendOptions } from "./config.mts";
 
 /**
  * Builds `entry` into a minified, production build under `outDir` once, and
@@ -13,7 +14,8 @@ import type { AdapterCore, BuildOptions, BuildOutput } from "../adapterCore.mts"
  */
 export async function build(
   core: AdapterCore,
-  runtimeModuleName: string,
+  frontend: FrontendId,
+  frontendOptions: FrontendOptions,
   {
     entry,
     root,
@@ -31,7 +33,8 @@ export async function build(
   await buildOnce(
     resolveViteConfig({
       core,
-      runtimeModuleName,
+      frontend,
+      frontendOptions,
       entry,
       root,
       envDir,

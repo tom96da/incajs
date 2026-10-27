@@ -18,7 +18,7 @@ import * as adapterCore from "../../src/adapterCore.mts";
 import { createViteBundler } from "../../src/vite/index.mts";
 import tsdownConfig from "../../tsdown.config.mts";
 import { fsLag } from "../support/fsLag.mts";
-import { scratchApp, TEST_RUNTIME_MODULE } from "./scratchApp.mts";
+import { scratchApp, TEST_RUNTIME_MODULE, writeIncajs } from "./scratchApp.mts";
 import type { HmrChannel, HmrOptions } from "../../src/types.mts";
 
 const { setUp, tearDown, makeApp } = scratchApp("hmr");
@@ -30,7 +30,9 @@ const builtRuntimePath = path.join(runtimeScratchDir, "vite-runtime.js");
 
 /** Wraps the real `hmr()`, defaulting `runtimePath` to this test's own scratch build. */
 function hmr(options: HmrOptions): Promise<HmrChannel> {
-  return createViteBundler(adapterCore, TEST_RUNTIME_MODULE).hmr!({
+  return createViteBundler(adapterCore, ["incajs", "vue"], {
+    runtimeModuleName: TEST_RUNTIME_MODULE,
+  }).hmr!({
     runtimePath: builtRuntimePath,
     ...options,
   });
@@ -155,6 +157,27 @@ describe("hmr", () => {
     expect(runtimeId).toBeDefined();
     const exports = modules.getModuleById(runtimeId!)?.exports as { withModifiers: () => unknown };
     expect(String(exports.withModifiers)).toContain("STUB_WITH_MODIFIERS");
+  }, 20000);
+
+  it("rejects an import of a peer the app's incajs marks and the app lacks", async () => {
+    const { entry, streams } = await makeApp(
+      `<script setup>\nimport "@vue/runtime-dom";\n</script>\n<template><div /></template>\n`,
+    );
+    await writeIncajs(path.dirname(entry), { vue: ["@vue/runtime-dom"] });
+    const channel = await hmr({
+      entry,
+      cwd: path.dirname(entry),
+      ...streams,
+      notify: (payload) => client.notify(payload as HotPayload),
+      reload: () => {},
+      onError: () => {},
+    });
+    channels.push(channel);
+    const client = connectRunner(channel.dispatch);
+
+    await expect(client.runner.import(entry)).rejects.toThrow(
+      "ERR_INCA_PEER_NOT_FOUND: @vue/runtime-dom can't be resolved. add it to the app's dependencies",
+    );
   }, 20000);
 
   it("calls onError with a failed update's detail, still relays it to the app", async () => {

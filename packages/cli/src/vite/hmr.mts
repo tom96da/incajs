@@ -21,8 +21,10 @@ import type {
 
 import { CONFIG_FILE_NAME } from "./emitConfig.mts";
 import { streamLogger } from "./logger.mts";
+import { requirePeers } from "./requirePeers.mts";
 import { rejectUnsupported } from "./unsupported.mts";
 import type { AdapterCore, BuildFailure, HmrChannel, HmrOptions } from "../adapterCore.mts";
+import type { FrontendId, FrontendOptions } from "./config.mts";
 
 /**
  * A failed update's detail: the same fields a Rollup/Vite plugin
@@ -271,7 +273,8 @@ function fileChangedPlugin(changed: { current: { file: string; at: number } | un
  */
 export async function hmr(
   core: AdapterCore,
-  runtimeModuleName: string,
+  frontend: FrontendId,
+  frontendOptions: FrontendOptions,
   {
     entry,
     root = path.dirname(entry),
@@ -337,9 +340,10 @@ export async function hmr(
       vue({
         template: {
           // Hoisted static content is stringified into createStaticVNode, which needs insertStaticContent.
-          compilerOptions: { runtimeModuleName, hoistStatic: false },
+          compilerOptions: { ...frontendOptions, hoistStatic: false },
         },
       }),
+      requirePeers(core, frontend),
       rejectUnsupported(core),
       shimViteClient(),
       fileChangedPlugin(changed),

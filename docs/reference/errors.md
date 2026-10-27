@@ -170,13 +170,9 @@ above. See `ERR_INCA_UNSUPPORTED_STYLE`.
 
 ## `ERR_INCA_PEER_NOT_FOUND`
 
-The app's build imports a Vue package that `incajs` lists as an optional peer, and it isn't installed. The message names the package and the command that installs it.
-
-Install it in the app:
-
-```sh
-pnpm add @vue/runtime-dom
-```
+The app needs a package that `incajs` lists as a peer of its frontend,
+and it can't be resolved. The message names the package and asks to add it to
+the app's dependencies.
 
 ## `ERR_INCA_BUILD_NO_OUTPUT`
 
