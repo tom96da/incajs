@@ -187,7 +187,7 @@ The Node files in `tests/tests/` belong to `@incajs/e2e-tests`, which
 `pnpm test` does not run: `hmr-quickjs-state`, `hmr-timers`,
 `host-startup-failure`, `host-startup-wait`, `host-shutdown`,
 `host-packaged-launch`, `host-print-config`, `host-source-map`, `host-timers`,
-`hmr-callback-ids` and `inca-config`.
+`hmr-callback-ids`, `host-stack-limit` and `inca-config`.
 They spawn the real `inca-host` binary, and `hmr-quickjs-state`, `hmr-timers`
 and `hmr-callback-ids` also start a real Vite dev server.
 
@@ -208,6 +208,8 @@ and `hmr-callback-ids` also start a real Vite dev server.
   the exit code.
 - `host-timers` runs an interval and a timeout of the built `incajs` on the
   real clock.
+- `host-stack-limit` runs a script that recurses until the stack limit throws
+  and checks that the host exits with 1 and no signal.
 - `hmr-timers` edits a script under experimental HMR and checks that a timer
   the old module started keeps ticking.
 - `host-packaged-launch` starts the host with no argv, from an unrelated

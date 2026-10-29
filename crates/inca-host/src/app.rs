@@ -24,6 +24,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::rc::Rc;
+use std::time::Duration;
 
 use gpui::{
     App, BackgroundExecutor, Bounds, Context, Point, SharedString, Size, TitlebarOptions, Window,
@@ -35,7 +36,7 @@ use inca_bridge::install;
 use inca_bridge::{EventDispatcher, Host};
 use inca_gpui::{EventSink, NodeId, NodeLayout, declared_window_size, render_tree_with_events};
 use inca_jsenv::{
-    Clock, Engine, EngineError, ErrorReporter, PendingModule, console, stderr_reporter,
+    Clock, Engine, EngineError, ErrorReporter, Limits, PendingModule, console, stderr_reporter,
 };
 
 use crate::config::{
@@ -77,6 +78,17 @@ pub(crate) fn content_window_size(host: &Host, root: NodeId) -> (Option<f32>, Op
     #[allow(clippy::cast_possible_truncation)]
     (width.map(|n| n as f32), height.map(|n| n as f32))
 }
+
+/// One mebibyte, in bytes.
+const MIB: usize = 1024 * 1024;
+
+/// The limits of the script engine. `memory` is the heap in bytes (1 GiB), `stack` is the native
+/// stack in bytes (6 MiB), and a zero `time` sets no limit on how long a call runs.
+const ENGINE_LIMITS: Limits = Limits {
+    memory: 1024 * MIB,
+    stack: 6 * MIB,
+    time: Duration::ZERO,
+};
 
 /// Why a request could not be answered with a result.
 #[derive(Debug)]
@@ -155,6 +167,7 @@ impl Session {
         let engine = Engine::builder()
             .module_root(module_root)
             .stack_paths(config::stack_paths(&config, Path::new(entry_path)))
+            .limits(ENGINE_LIMITS)
             .build()?;
         engine.with(|ctx| {
             console::install(&ctx, &to_stderr(), color_from_env())

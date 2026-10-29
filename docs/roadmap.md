@@ -45,8 +45,8 @@ A semantics layer, platform accessibility APIs, and keyboard reachability. Waits
 ::::
 
 :::: in-progress Phase 6: Runtime standard library
-Timers are done. Fetch/WebSocket, filesystem access and engine resource
-limits are not built yet.
+Timers are done, and the host limits memory and stack. Fetch/WebSocket and
+filesystem access are not built yet.
 
 [Timers](/reference/timers)
 ::::

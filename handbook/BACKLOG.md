@@ -156,14 +156,17 @@ A fixed entry is deleted and its ID is never reused.
   `window.refresh()` (`third_party/zed/crates/gpui/src/window.rs:2178`), so
   the request may wait for an unrelated redraw. Unconfirmed.
 
-- **B-059 No engine limits or interrupt handler**
+- **B-059 The host sets no time limit, and nothing follows a stop by an engine limit**
   `Units: jsenv,host · Size: M · Impact: Medium`
 
-  `EngineBuilder`
-  (`crates/inca-jsenv/src/engine.rs`) sets no memory limit, stack size, or
-  interrupt handler, so a runaway app can't be stopped. rquickjs offers
-  `Runtime::set_memory_limit`/`set_max_stack_size`. Defaults and how the
-  host reports a timeout are undecided.
+  The engine can stop a call after the time of `Limits::time`, and the host
+  sets none. That stop skips `catch` and `finally`: a stop inside an update of
+  the window's content leaves the update queue of Vue unfinished and the
+  window never updates again, with the error reported only. A memory or
+  stack error is catchable and reaches the reporter, and nothing else
+  happens. Fix: decide a default time, a setting that turns the limit on,
+  and what the host does after a stop: show the error in the window, ask to
+  restart, or quit with a status.
 
 - **B-097 `console` prints some classes and built-ins unlike Node**
   `Units: jsenv · Size: M · Impact: Medium`
@@ -1225,3 +1228,13 @@ A fixed entry is deleted and its ID is never reused.
   import for the identifiers that core defines. A bare `import "incajs"`
   does not do it: the bundler drops `incajs` when the app uses no export of
   it.
+
+- **B-236 Nested components hit the stack limit at a smaller depth than in browsers**
+  `Units: jsenv,host · Size: L · Impact: Low`
+
+  At the 6 MiB stack limit a tree of nested components reaches 493 levels,
+  349 for a component in a `div`, and 215 for slot wrappers. Chromium reaches
+  750, 562 and 466, Firefox 1498, 1094 and 701, and WebKit 3001, 1716 and
+  1164. Matching Chromium needs about 13 MiB, and the main thread of Linux
+  has 8 MiB by default. Fix: run the engine on a thread with a larger stack,
+  or cut the native frames per call.
