@@ -396,3 +396,31 @@ fn a_listener_that_throws_during_load_is_reported_when_the_window_opens(cx: &mut
     assert!(sent[0].contains(r#""method":"appError""#));
     assert!(sent[0].contains("boom"));
 }
+
+/// Recurses until the stack limit throws, and records how deep it got.
+const RECURSES_UNTIL_IT_THROWS: &str = r"
+    globalThis.depth = 0;
+    function recurse() {
+        globalThis.depth += 1;
+        recurse();
+    }
+    try {
+        recurse();
+    } catch {}
+";
+
+#[test]
+fn the_engine_runs_a_script_on_a_stack_deeper_than_the_default() {
+    // A test thread has 2 MiB, less than the stack limit of the engine.
+    let depth = std::thread::Builder::new()
+        .stack_size(16 * 1024 * 1024)
+        .spawn(|| {
+            let session = load(RECURSES_UNTIL_IT_THROWS).unwrap();
+            session.engine.eval::<u32>("globalThis.depth;").unwrap()
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+
+    assert!(depth > 1000, "{depth}");
+}

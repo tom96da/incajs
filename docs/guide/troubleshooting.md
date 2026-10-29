@@ -22,6 +22,14 @@ app fails to start rather than falling back to a software renderer. See
 [Linux runtime requirements](./#linux-runtime-requirements) for the
 libraries and driver package it needs, and how to check for them.
 
+## Why does my script throw an out-of-memory or a stack error? <Badge type="warning" text="unreleased"/>
+
+The host limits a script to 1 GiB of heap and 6 MiB of stack. An allocation
+past the heap limit throws `InternalError: out of memory`, and recursion past
+the stack limit throws `RangeError: Maximum call stack size exceeded`. The
+engine can throw `null` where it cannot allocate an error object, and the host
+reports that as `null. the engine also throws null when it runs out of memory`.
+
 ## Why doesn't my content scroll when it is taller than the window?
 
 Content taller than the window is cut off at the window edge. Put the content

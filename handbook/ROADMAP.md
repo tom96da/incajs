@@ -236,9 +236,9 @@ workspace's when `console` landed, which is why `console` is ours.
 4. **Encoding and crypto**: `TextEncoder`/`TextDecoder`, `crypto`'s random
    sources, `structuredClone`, `URL` — small, standard, and assumed present
    by ordinary npm dependencies.
-5. **Engine limits**: a memory ceiling, a stack ceiling, and an interrupt
-   handler, so a runaway app stays recoverable and does not freeze the window (see
-   [PROTOCOL.md](./PROTOCOL.md#failure-handling)).
+5. **Engine limits** (memory and stack done): the engine has a time limit and
+   the host sets none. The recovery after a stop is in
+   [BACKLOG.md](./BACKLOG.md).
 
 ## Phase 7: Majority style & Tailwind coverage (future)
 
