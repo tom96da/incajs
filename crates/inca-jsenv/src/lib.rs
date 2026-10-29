@@ -11,6 +11,8 @@
 //!
 //! [`Timers`] queues the timers a script starts.
 //!
+//! [`Limits`] bounds the memory, the stack and the time a script may use.
+//!
 //! The renderer, windows and processes are outside it, so what it installs can
 //! be replaced without reaching the code that draws a UI.
 
@@ -19,6 +21,7 @@ mod engine;
 
 mod compile;
 mod inspect;
+mod limits;
 mod loader;
 mod paint;
 mod quickjs;
@@ -33,6 +36,7 @@ pub use engine::{
     Engine, EngineBuilder, EngineError, EngineResult, ErrorReporter, PendingModule, report_jobs,
     stderr_reporter,
 };
+pub use limits::Limits;
 pub use quickjs::FunctionAccessor;
 pub use sourcemap::StackPaths;
 pub use timers::{Clock, Timers, run_timers, system_clock};

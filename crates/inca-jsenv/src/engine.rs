@@ -16,6 +16,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use rquickjs::function::Rest;
 use rquickjs::{Coerced, Context, Ctx, FromJs, Function, Module, Object, Promise, Runtime, Value};
 
+use crate::limits::{Limits, Watchdog, interrupted, null_under_memory_limit, record_limits};
 use crate::loader::{DiskLoader, DiskResolver, canonical_name};
 use crate::sourcemap::{StackPaths, remap_stack};
 use crate::vault::{create_vault, vault};
@@ -58,13 +59,20 @@ impl EngineError {
 
     /// JS can throw any value. An `Error` gives up a name, a message and its
     /// frames; anything else is coerced to text, so a thrown object reads as
-    /// `[object Object]`.
+    /// `[object Object]`. A stop by the time limit and a `null` thrown under a
+    /// memory limit read with the limit named.
     fn from_thrown(thrown: &Value<'_>) -> Self {
         let Some(object) = thrown.as_object().filter(|_| thrown.is_error()) else {
+            let named = thrown
+                .is_null()
+                .then(|| null_under_memory_limit(thrown.ctx()))
+                .flatten();
             return Self {
-                message: thrown
-                    .get::<Coerced<String>>()
-                    .map_or_else(|_| "uncaught, unreadable value".to_owned(), |text| text.0),
+                message: named.unwrap_or_else(|| {
+                    thrown
+                        .get::<Coerced<String>>()
+                        .map_or_else(|_| "uncaught, unreadable value".to_owned(), |text| text.0)
+                }),
                 stack: None,
             };
         };
@@ -75,7 +83,8 @@ impl EngineError {
             .flatten()
             .unwrap_or_else(|| "Error".to_owned());
         let message = match object.get::<_, Option<String>>("message").ok().flatten() {
-            Some(message) if !message.is_empty() => format!("{name}: {message}"),
+            Some(message) if !message.is_empty() => interrupted(thrown.ctx(), &name, &message)
+                .unwrap_or_else(|| format!("{name}: {message}")),
             _ => name,
         };
         let stack = object
@@ -163,6 +172,10 @@ static NEXT_MODULE: AtomicU32 = AtomicU32::new(0);
 /// [`with`](Self::with). An `Engine` is neither `Send` nor `Sync`, so it
 /// stays on the thread that created it. Dropping it frees the runtime and
 /// its realm.
+///
+/// [`EngineBuilder::limits`] bounds what a script may use. `eval`, `with`,
+/// `start_module`, `poll_module` and `run_jobs` are each one call with its own
+/// time limit.
 pub struct Engine {
     // Kept alive for the lifetime of `context`, which holds a reference-counted
     // handle back to it. QuickJS ties runtime-wide state (the heap, GC) to this handle.
@@ -172,6 +185,8 @@ pub struct Engine {
     /// module's top-level `await`. The next [`run_jobs`](Self::run_jobs)
     /// returns them first.
     startup_failures: RefCell<Vec<EngineError>>,
+    /// Stops the call that outlives the time limit.
+    watchdog: Rc<Watchdog>,
 }
 
 impl Engine {
@@ -194,12 +209,13 @@ impl Engine {
         EngineBuilder::default()
     }
 
-    fn from_runtime(runtime: Runtime) -> EngineResult<Self> {
+    fn from_runtime(runtime: Runtime, limits: Limits) -> EngineResult<Self> {
         let context = Context::full(&runtime).map_err(|err| EngineError::plain(&err))?;
         let engine = Self {
             runtime,
             context,
             startup_failures: RefCell::new(Vec::new()),
+            watchdog: Rc::new(Watchdog::new(limits.time)),
         };
         engine
             .context
@@ -209,7 +225,9 @@ impl Engine {
                 modules.set_prototype(None)?;
                 let vault = vault(&ctx)?;
                 vault.set(MODULES, modules)?;
-                ctx.eval::<Function, _>(TRACKER_JS)?.call::<_, ()>((vault,))
+                ctx.eval::<Function, _>(TRACKER_JS)?
+                    .call::<_, ()>((vault,))?;
+                record_limits(&ctx, limits)
             })
             .map_err(|err| EngineError::plain(&err))?;
         engine
@@ -222,6 +240,19 @@ impl Engine {
                     }
                 },
             )));
+        // Set after the bootstrap, so a small limit cannot make `build` fail.
+        if let Some(stack) = limits.stack_limit() {
+            engine.runtime.set_max_stack_size(stack);
+        }
+        if limits.memory != 0 {
+            engine.runtime.set_memory_limit(limits.memory);
+        }
+        if !limits.time.is_zero() {
+            let watchdog = Rc::clone(&engine.watchdog);
+            engine
+                .runtime
+                .set_interrupt_handler(Some(Box::new(move || watchdog.expired())));
+        }
         Ok(engine)
     }
 
@@ -232,12 +263,16 @@ impl Engine {
     /// [`eval_module`](Self::eval_module) or [`poll_module`](Self::poll_module)
     /// ran comes first.
     ///
+    /// The drain is one call with one time limit. A job that outlives it fails,
+    /// and the jobs that are left wait for the next call.
+    ///
     /// Call it outside [`with`](Self::with), and handle the result outside
     /// it too: the handling code may re-enter the engine.
     #[must_use]
     pub fn run_jobs(&self) -> Vec<EngineError> {
+        self.watchdog.arm();
         let mut failures = self.startup_failures.take();
-        while self.run_job(&mut failures) {}
+        while self.run_job(&mut failures) && !self.watchdog.tripped() {}
         failures.extend(self.context.with(|ctx| take_rejections(&ctx)));
         failures
     }
@@ -281,6 +316,7 @@ impl Engine {
     where
         V: for<'js> FromJs<'js>,
     {
+        self.watchdog.arm();
         self.context.with(|ctx| {
             ctx.eval(source)
                 .map_err(|err| EngineError::capture(&ctx, &err))
@@ -289,11 +325,12 @@ impl Engine {
 
     /// Runs `f` with access to this engine's [`Ctx`], for operations `eval`
     /// doesn't cover, such as registering native functions on the global
-    /// object.
+    /// object. The JS that `f` runs shares one time limit.
     pub fn with<F, R>(&self, f: F) -> R
     where
         F: FnOnce(Ctx<'_>) -> R,
     {
+        self.watchdog.arm();
         self.context.with(f)
     }
 
@@ -344,6 +381,7 @@ impl Engine {
     /// Returns an error for a syntax or link error. An exception the module
     /// throws while evaluating comes from [`poll_module`](Self::poll_module).
     pub fn start_module(&self, name: &str, source: &str) -> EngineResult<PendingModule> {
+        self.watchdog.arm();
         let name = canonical_name(name);
         let id = NEXT_MODULE.fetch_add(1, Ordering::Relaxed);
         self.context.with(|ctx| {
@@ -370,6 +408,9 @@ impl Engine {
     /// and the error of a module that settled with `Some(Err(_))`. The
     /// module's result is unaffected.
     ///
+    /// The poll is one call with one time limit, and a job that outlives it ends
+    /// the poll with `None`.
+    ///
     /// Call it outside [`with`](Self::with).
     ///
     /// # Errors
@@ -377,6 +418,11 @@ impl Engine {
     /// Returns `Some(Err(_))` for an exception the module threw while
     /// evaluating, or for a module that another engine started.
     pub fn poll_module(&self, module: &PendingModule) -> Option<EngineResult<()>> {
+        // A module that start_module stopped reads its error before the arm forgets the stop.
+        if let Some(result) = self.settled(module) {
+            return Some(result);
+        }
+        self.watchdog.arm();
         loop {
             if let Some(result) = self.settled(module) {
                 return Some(result);
@@ -384,7 +430,7 @@ impl Engine {
             let mut failures = Vec::new();
             let ran = self.run_job(&mut failures);
             self.startup_failures.borrow_mut().extend(failures);
-            if !ran {
+            if !ran || self.watchdog.tripped() {
                 return None;
             }
         }
@@ -437,10 +483,12 @@ pub struct PendingModule {
 ///
 /// [`Engine::new`] is [`Engine::builder().build()`](Self::build) with no
 /// module root. Every `import` in evaluated source is then unresolved.
+/// [`limits`](Self::limits) bounds memory, stack and time.
 #[derive(Default)]
 pub struct EngineBuilder {
     module_roots: Vec<PathBuf>,
     paths: StackPaths,
+    limits: Limits,
 }
 
 impl EngineBuilder {
@@ -462,6 +510,14 @@ impl EngineBuilder {
         self
     }
 
+    /// Sets what a script may use. Defaults to [`Limits::default`], which sets
+    /// none.
+    #[must_use]
+    pub fn limits(mut self, limits: Limits) -> Self {
+        self.limits = limits;
+        self
+    }
+
     /// Builds the configured [`Engine`].
     ///
     /// # Errors
@@ -473,7 +529,7 @@ impl EngineBuilder {
         if !self.module_roots.is_empty() {
             runtime.set_loader(DiskResolver::new(self.module_roots), DiskLoader);
         }
-        let engine = Engine::from_runtime(runtime)?;
+        let engine = Engine::from_runtime(runtime, self.limits)?;
         engine
             .with(|ctx| crate::sourcemap::set_paths(&ctx, self.paths))
             .map_err(|err| EngineError::plain(&err))?;
