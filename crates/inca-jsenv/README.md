@@ -78,6 +78,30 @@ let result = loop {
 result?;
 ```
 
+## Limits
+
+`Engine::builder().limits(Limits { .. })` bounds what a script may use.
+`memory` is bytes of heap, `stack` is bytes of native stack (at most 16 MiB,
+and smaller than the stack of the thread that runs the engine) and `time` is
+how long one call into the engine may run. A field left at zero sets no limit,
+and for `stack` keeps the engine's default of 1 MiB.
+
+```rust
+use std::time::Duration;
+use inca_jsenv::{Engine, Limits};
+
+let engine = Engine::builder()
+    .limits(Limits { time: Duration::from_secs(10), ..Limits::default() })
+    .build()?;
+```
+
+`eval`, `with`, `start_module`, `poll_module` and `run_jobs` are each one call.
+A call that outlives `time` stops with
+`InternalError: interrupted. the script ran longer than 10000 ms`, and the
+`catch` and `finally` blocks of the stopped frames do not run. An allocation
+past `memory` throws `InternalError: out of memory`, and recursion past
+`stack` throws a `RangeError`.
+
 ## Compiling a function
 
 `compile_async_function` takes parameter names, a body, and the file name

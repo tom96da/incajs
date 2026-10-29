@@ -10,6 +10,8 @@ use rstest::rstest;
 use super::*;
 use crate::tests::ScratchDir;
 
+mod limits;
+
 #[test]
 fn a_syntax_error_is_returned_as_an_err() {
     let engine = Engine::new().unwrap();
