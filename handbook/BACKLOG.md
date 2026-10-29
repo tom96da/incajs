@@ -28,8 +28,8 @@ A fixed entry is deleted and its ID is never reused.
 
 ## P1
 
-- **B-060 A packaged app keeps no record of an error it raised, and `inca dev` prints a panic twice**
-  `Units: host,cli · Size: S · Impact: Medium`
+- **B-060 A packaged app keeps no record of an error it raised**
+  `Units: host · Size: S · Impact: Medium`
 
   An error a listener throws, an unhandled rejection, a failed first load and
   a stop by an engine limit go to stderr, which a packaged app does not show.
@@ -39,9 +39,6 @@ A fixed entry is deleted and its ID is never reused.
   `panic.log` keeps the last panic only, and the next panic replaces it. Fix:
   keep the earlier panics too, for example one file per panic named by its date
   and time.
-
-  In `inca dev` a panic shows twice: the default hook prints it on stderr and
-  the CLI prints the `-32603` line. Fix: the CLI drops that line.
 
 - **B-121 `:style` leaves out some CSS value and key forms**
   `Units: gpui · Size: S · Impact: Low`

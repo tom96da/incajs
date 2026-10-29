@@ -4,18 +4,22 @@
 
 // A stand-in that reports an app that threw while loading, the way the real
 // host does: an error response with a null id, then exit 1. An entry
-// argument of `parse` makes it a -32700 reply instead.
+// argument of `parse` makes it a -32700 reply instead. An entry argument of
+// `panic` sends a -32603 reply and then a -32700 one.
 
 import "../../fixtures/answerPrintConfig.mts";
 
-const code = process.argv[3] === "parse" ? -32700 : -32000;
+const mode = process.argv[3];
+const codes = mode === "panic" ? [-32603, -32700] : [mode === "parse" ? -32700 : -32000];
 
-process.stdout.write(
-  `${JSON.stringify({
-    jsonrpc: "2.0",
-    id: null,
-    error: { code, message: "boom", data: { stack: "Error: boom\n    at somewhere" } },
-  })}\n`,
-);
+for (const code of codes) {
+  process.stdout.write(
+    `${JSON.stringify({
+      jsonrpc: "2.0",
+      id: null,
+      error: { code, message: "boom", data: { stack: "Error: boom\n    at somewhere" } },
+    })}\n`,
+  );
+}
 
 setTimeout(() => process.exit(1), 50);

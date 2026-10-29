@@ -59,6 +59,9 @@ const defaultOnStderr = (line: string): void => {
 /** The code the host reports an app that threw while loading with. */
 const BUNDLE_FAILED = -32000;
 
+/** The code the host uses for a panic, and for nothing else. */
+const HOST_PANIC = -32603;
+
 /**
  * Spawns the host with `--dev <entryFile>` and speaks newline-delimited
  * JSON-RPC 2.0 on its stdin/stdout. One instance owns exactly one child
@@ -147,7 +150,8 @@ export class HostClient {
       const { code, message: text, data } = message.error;
       if (code === BUNDLE_FAILED)
         this.#options.onAppError?.({ message: text, stack: data?.stack ?? null });
-      else onStderr(`[host error ${String(code)}] ${text}\n`);
+      // The stderr of the host carries the same panic.
+      else if (code !== HOST_PANIC) onStderr(`[host error ${String(code)}] ${text}\n`);
       return;
     }
 
