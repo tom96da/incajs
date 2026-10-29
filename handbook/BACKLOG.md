@@ -1240,3 +1240,13 @@ A fixed entry is deleted and its ID is never reused.
   `´` as `key`. Chrome fires `keydown` with `key` `Dead` and `keyCode` 229 and
   no `keypress`. Fix: report a dead key as `Dead` from the platform layer, or
   skip `keypress` for a key that starts a composition.
+
+- **B-240 A module the time limit stops loses the limit in its error**
+  `Units: jsenv · Size: S–M · Impact: Low`
+
+  A module that the time limit stops in `start_module` reads as
+  `InternalError: interrupted`, without the limit, when another call into the
+  engine runs before `poll_module` reads it. The engine remembers a stop for
+  one call, and each call forgets the stop of the call before. The host polls
+  right after it starts the entry, and its time limit is off, so it does not
+  reach this. Fix: record the stop with the module.
