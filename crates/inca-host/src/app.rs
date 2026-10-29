@@ -51,6 +51,7 @@ use crate::dev::{
     stdin_lines,
 };
 use crate::menu;
+use crate::panic_log;
 
 /// Reads the window size straight from the app the bundle mounted, so the
 /// window fits its content.
@@ -513,20 +514,25 @@ pub(crate) fn open(
 }
 
 /// Runs the bundle at `entry_path` in a GPUI window and blocks until the
-/// app quits.
+/// app quits. Returns `ExitCode::SUCCESS` after a normal quit.
 ///
 /// In production the entry evaluates to completion before the window opens.
 /// With `dev` set, the host also reads rebuild and HMR messages from stdin
 /// and reports errors to the parent process. The entry then runs while the
 /// host serves those messages, and the window opens once the entry's
 /// top-level `await` settles or two seconds pass. While the app reports a
-/// failed load, the window stays closed. Returns `ExitCode::SUCCESS`
-/// after a normal quit. A bundle that fails to start and an entry that
-/// cannot be read both exit the process with status 1. In production the
-/// failure prints to stderr; with `dev` set it is reported like a throwing
-/// first bundle. On Linux, a `DISPLAY` or `WAYLAND_DISPLAY` that names a
-/// server the host cannot reach exits the process with status 1 and one
-/// line on stderr that names the variable.
+/// failed load, the window stays closed.
+///
+/// A bundle that fails to start and an entry that cannot be read both exit
+/// the process with status 1. In production the failure prints to stderr;
+/// with `dev` set it is reported like a throwing first bundle. On Linux, a
+/// `DISPLAY` or `WAYLAND_DISPLAY` that names a server the host cannot reach
+/// exits the process with status 1 and one line on stderr that names the
+/// variable.
+///
+/// A panic of a packaged app is written to `panic.log` in the log directory
+/// of the app. With `dev` set, a panic goes to the parent process as a
+/// `-32603` error.
 #[must_use]
 pub fn run_bundle(entry_path: &str, dev: bool) -> ExitCode {
     let writer: Option<SharedWriter> = if dev {
@@ -535,6 +541,10 @@ pub fn run_bundle(entry_path: &str, dev: bool) -> ExitCode {
         install_panic_hook(sender, stdout_writer.thread_id());
         Some(Rc::new(stdout_writer) as SharedWriter)
     } else {
+        let identifier = config::try_read(Path::new(entry_path))
+            .ok()
+            .and_then(|config| config.identifier);
+        panic_log::install(panic_log::log_path(identifier.as_deref()));
         None
     };
     #[cfg(any(target_os = "linux", target_os = "freebsd"))]

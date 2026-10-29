@@ -11,6 +11,7 @@ mod dev;
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 mod display;
 mod menu;
+mod panic_log;
 #[cfg(test)]
 mod tests;
 
