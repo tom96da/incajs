@@ -16,13 +16,16 @@ fn a_node_focused_in_on_mounted_fires_focus(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn the_focused_node_receives_keydown_and_keyup(cx: &mut TestAppContext) {
+fn the_focused_node_receives_keydown_keypress_and_keyup(cx: &mut TestAppContext) {
     let mut h = load(cx, "keys");
 
     h.keystrokes("x");
     h.key_up("x");
 
-    assert_eq!(text_of(&mut h, "log"), "a:focus a:keydown:x a:keyup:x");
+    assert_eq!(
+        text_of(&mut h, "log"),
+        "a:focus a:keydown:x a:keypress:x a:keyup:x"
+    );
 }
 
 #[gpui::test]
