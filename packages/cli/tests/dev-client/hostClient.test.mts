@@ -215,6 +215,21 @@ describe("HostClient", () => {
     expect(errors).toEqual([]);
   });
 
+  it("prints no line for a host panic, which the host's stderr already carries", async () => {
+    const lines: string[] = [];
+    const client = new HostClient({
+      hostBin: startupFailureMockHost,
+      entryFile: "panic",
+      onStderr: (line) => lines.push(line),
+      onAppError: () => {},
+    });
+
+    await client.start();
+    await waitFor(() => expect(lines).toContain("[host error -32700] boom\n"));
+
+    expect(lines).toEqual(["[host error -32700] boom\n"]);
+  });
+
   it("calls onExit once it has stopped the host over a protocol mismatch", async () => {
     const onExit = vi.fn<() => void>();
     const client = new HostClient({
