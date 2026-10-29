@@ -28,18 +28,20 @@ A fixed entry is deleted and its ID is never reused.
 
 ## P1
 
-- **B-060 A panic in a packaged app is reported nowhere**
-  `Units: host,core · Size: S · Impact: Medium`
+- **B-060 A packaged app keeps no record of an error it raised, and `inca dev` prints a panic twice**
+  `Units: host,cli · Size: S · Impact: Medium`
 
-  `inca dev` reports a host panic as a `-32603` error. A packaged app has no
-  stdout client and its stderr goes nowhere, so a panic there leaves nothing
-  behind. It needs a log file or a dialog. In `inca dev` a panic shows twice:
-  once from the default hook on stderr, and once as the `-32603` line the CLI
-  prints. In a production build an error an event handler throws is logged to
-  the console only, so the destination also decides whether it carries those.
-  It is the first half of the crash reporting in
-  [ROADMAP.md](./ROADMAP.md#known-gaps-not-yet-scheduled); the destination is
-  undecided.
+  An error a listener throws, an unhandled rejection, a failed first load and
+  a stop by an engine limit go to stderr, which a packaged app does not show.
+  Under `inca dev` they are reported as `appError`. Fix: write them to a
+  second file next to `panic.log`, from the reporter of the production host.
+
+  `panic.log` keeps the last panic only, and the next panic replaces it. Fix:
+  keep the earlier panics too, for example one file per panic named by its date
+  and time.
+
+  In `inca dev` a panic shows twice: the default hook prints it on stderr and
+  the CLI prints the `-32603` line. Fix: the CLI drops that line.
 
 - **B-121 `:style` leaves out some CSS value and key forms**
   `Units: gpui · Size: S · Impact: Low`
