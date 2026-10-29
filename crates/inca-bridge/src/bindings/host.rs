@@ -22,8 +22,10 @@ pub struct Host {
     pub tree: VirtualTree,
     /// Receives one line for each style a `setStyle` call stores with an
     /// unknown key, an invalid color or a value of a shape the host does not
-    /// support. Writes to stderr by default.
+    /// support. A node prints each line once. Writes to stderr by default.
     pub warn: Rc<dyn Fn(&str)>,
+    /// The warnings printed for each node, as the text of the line without the node prefix.
+    pub(crate) style_warned: HashMap<NodeId, HashSet<String>>,
     pub listeners: EventListeners,
     pub focus: FocusRegistry,
     /// Last number handed out as an `eventId`. Each event takes the next one.
@@ -100,6 +102,7 @@ impl Host {
         Self {
             tree,
             warn: Rc::new(|line| eprintln!("{line}")),
+            style_warned: HashMap::new(),
             listeners: EventListeners::default(),
             focus: FocusRegistry::default(),
             last_event_id: 0,
@@ -155,6 +158,7 @@ impl Host {
         for id in ids {
             self.scroll_handles.get_mut().remove(id);
             self.scroll_reported.remove(id);
+            self.style_warned.remove(id);
             self.inputs.get_mut().remove(id);
         }
         ids.iter()

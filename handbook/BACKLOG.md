@@ -695,15 +695,6 @@ A fixed entry is deleted and its ID is never reused.
   bar shows no icon. Linux needs an icon format such as PNG or SVG and a
   `.desktop` file that matches the window's `identifier`.
 
-- **B-118 A style warning prints again on every `setStyle` call**
-  `Units: bridge · Size: S · Impact: Low`
-
-  The warning is printed once per `setStyle` call. A reactive `:style` that
-  sets a bad key on each patch prints a line each time, and a remount prints
-  it again. A removal in a patch resends every remaining entry, so each bad
-  key warns again. Remembering the keys already reported per node would
-  print each once.
-
 - **B-129 A focused node looks like an unfocused one**
   `Units: gpui,core · Size: L · Impact: Low`
 

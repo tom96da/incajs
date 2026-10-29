@@ -56,33 +56,129 @@ fn set_style_warns_once_per_unknown_key() {
 }
 
 #[test]
-fn set_style_warns_for_each_set_of_a_bad_value() {
+fn a_bad_value_warns_once_for_a_node_and_key() {
     let (warnings, _) = warnings_from(
         r"
         const n = __inca_native__.createNode('div');
         __inca_native__.setStyle(n, 'background', -1);
         __inca_native__.setStyle(n, 'background', -1);
         __inca_native__.setStyle(n, 'background', 0xff0000);
+        __inca_native__.setStyle(n, 'background', -1);
         ",
     );
 
     assert_eq!(
         *warnings.borrow(),
-        ["node 1 (div): ignoring invalid color for style key `background`"; 2]
+        ["node 1 (div): ignoring invalid color for style key `background`"]
     );
 }
 
 #[test]
-fn a_failed_set_style_emits_no_warning() {
+fn remove_style_does_not_make_a_key_warn_again() {
     let (warnings, _) = warnings_from(
         r"
-        try { __inca_native__.setStyle(999, 'bogus', 1); } catch (e) {}
         const n = __inca_native__.createNode('div');
-        try { __inca_native__.setStyle(n, 'bogus', { nested: true }); } catch (e) {}
+        __inca_native__.setStyle(n, 'bogus', 1);
+        __inca_native__.removeStyle(n, 'bogus');
+        __inca_native__.setStyle(n, 'bogus', 1);
+        ",
+    );
+
+    assert_eq!(warnings.borrow().len(), 1, "{:?}", warnings.borrow());
+}
+
+#[test]
+fn each_node_warns_for_the_same_bad_key() {
+    let (warnings, _) = warnings_from(
+        r"
+        const a = __inca_native__.createNode('div');
+        const b = __inca_native__.createNode('div');
+        __inca_native__.setStyle(a, 'bogus', 1);
+        __inca_native__.setStyle(b, 'bogus', 1);
+        __inca_native__.setStyle(a, 'bogus', 1);
+        ",
+    );
+
+    assert_eq!(
+        *warnings.borrow(),
+        [
+            "node 1 (div): ignoring unknown style key `bogus`",
+            "node 2 (div): ignoring unknown style key `bogus`",
+        ]
+    );
+}
+
+#[test]
+fn each_spelling_of_a_bad_key_warns() {
+    let (warnings, _) = warnings_from(
+        r"
+        const n = __inca_native__.createNode('div');
+        __inca_native__.setStyle(n, 'bogus-key', 1);
+        __inca_native__.setStyle(n, 'bogusKey', 1);
+        __inca_native__.setStyle(n, 'bogus-key', 1);
+        __inca_native__.setStyle(n, 'bogusKey', 1);
+        ",
+    );
+
+    assert_eq!(
+        *warnings.borrow(),
+        [
+            "node 1 (div): ignoring unknown style key `bogus-key`",
+            "node 1 (div): ignoring unknown style key `bogusKey`",
+        ]
+    );
+}
+
+#[test]
+fn each_bad_key_of_a_node_warns_once() {
+    let (warnings, _) = warnings_from(
+        r"
+        const n = __inca_native__.createNode('div');
+        __inca_native__.setStyle(n, 'bogus', 1);
+        __inca_native__.setStyle(n, 'width', '50%');
+        __inca_native__.setStyle(n, 'bogus', 1);
+        __inca_native__.setStyle(n, 'width', '50%');
+        ",
+    );
+
+    assert_eq!(
+        *warnings.borrow(),
+        [
+            "node 1 (div): ignoring unknown style key `bogus`",
+            "node 1 (div): ignoring unsupported value for style key `width`",
+        ]
+    );
+}
+
+#[test]
+fn a_destroyed_node_forgets_its_style_warnings() {
+    let (_, host) = warnings_from(
+        r"
+        const n = __inca_native__.createNode('div');
+        __inca_native__.setStyle(n, 'bogus', 1);
+        __inca_native__.destroyNode(n);
+        ",
+    );
+
+    assert!(host.borrow().style_warned.is_empty());
+}
+
+#[test]
+fn a_failed_set_style_emits_no_warning() {
+    let (warnings, host) = warnings_from(
+        r"
+        try {
+            __inca_native__.setStyle(999, 'bogus', 1);
+        } catch (e) {}
+        const n = __inca_native__.createNode('div');
+        try {
+            __inca_native__.setStyle(n, 'bogus', { nested: true });
+        } catch (e) {}
         ",
     );
 
     assert!(warnings.borrow().is_empty(), "{:?}", warnings.borrow());
+    assert!(host.borrow().style_warned.is_empty());
 }
 
 #[test]

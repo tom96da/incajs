@@ -68,9 +68,9 @@ accepted value shapes. A value of the wrong shape sets the property to its
 default, even when the key held a valid value before. An unrecognized key,
 such as a misspelled one, has no effect.
 
-The host prints one warning line on stderr each time a style sets an
-unrecognized key or a value of a shape the host does not support. An
-empty string `''` on a known key prints no warning.
+The host prints a warning line on stderr the first time an element sets an
+unrecognized key or a value of a shape the host does not support. An empty
+string `''` on a known key prints no warning.
 
 Removing a key from the object, or setting it to `null` or `undefined`,
 restores that property to its default. Setting `style` to a string or `null`

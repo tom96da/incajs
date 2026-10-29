@@ -77,9 +77,9 @@ Implemented in `crates/inca-gpui/src/element/`. There are four kinds:
 Implemented in `element/parse.rs` and `element/style.rs`.
 `inca_gpui::STYLE_KEYS` lists every key, its CSS names and the value it takes.
 An unrecognized key, an invalid color and a value of a shape the host does not
-support each print one warning line on stderr every time a style sets them, and
-the value reads as unset. An empty string `''` on a known key prints no
-warning. The table lists every key the host reads. `set_style` and
+support each print one warning line on stderr, once for each node and warning
+line, and the value reads as unset. An empty string `''` on a known key
+prints no warning. The table lists every key the host reads. `set_style` and
 `remove_style` map the camelCase and kebab-case spellings of a key to its
 snake_case form, and a CSS name to its host key, as `inca_gpui::STYLE_KEYS`
 lists. All spellings of one prop share one slot. A key with an uppercase initial, a mixed-case kebab key and a key

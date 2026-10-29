@@ -1032,6 +1032,7 @@ runs alongside Phase 3.4.
       `flexShrink`; the host's own names stay accepted
 - [x] `:style` colors take `transparent`, `rgb()`, `rgba()`, `#rgba` and
       `#rrggbbaa`, and ignore surrounding whitespace
+- [x] A style warning prints once for each element and message
 
 ### Console and event slots
 
