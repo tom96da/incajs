@@ -53,10 +53,10 @@ fn recognized_style_keys_are_mapped() {
             width: Some(LengthSpec::Px(120.0)),
             height: Some(LengthSpec::Auto),
             border_width: Some(1.0),
-            background: Some(0x505050),
-            border_color: Some(0x0000ff),
+            background: Some(ColorSpec::opaque(0x505050)),
+            border_color: Some(ColorSpec::opaque(0x0000ff)),
             corner_radius: Some(4.0),
-            text_color: Some(0xffffff),
+            text_color: Some(ColorSpec::opaque(0xffffff)),
             text_size: Some(20.0),
             ..StyleSpec::default()
         }
@@ -563,118 +563,6 @@ fn malformed_enum_value_is_ignored_not_a_panic() {
 }
 
 #[test]
-fn color_accepts_hex_strings_as_well_as_numbers() {
-    let mut tree = VirtualTree::new();
-    let id = tree.create_node("div").unwrap();
-    tree.set_style(id, "background", "#505050").unwrap();
-    tree.set_style(id, "border_color", "#00f").unwrap();
-
-    let spec = build_spec(&tree, id).unwrap();
-    assert_eq!(spec.style.background, Some(0x505050));
-    assert_eq!(
-        spec.style.border_color,
-        Some(0x0000ff),
-        "a 3-digit hex string must expand each digit, not zero-pad it"
-    );
-}
-
-#[test]
-fn malformed_color_string_is_ignored_with_a_warning() {
-    let (style, warnings) = style_and_warnings(&[("background", text("not-a-color"))]);
-    assert_eq!(style.background, None);
-    assert_eq!(
-        warnings,
-        ["ignoring invalid color for style key `background`"]
-    );
-}
-
-#[rstest]
-#[case::plus_six_digits("#+abcde")]
-#[case::minus_six_digits("#-abcde")]
-#[case::plus_three_digits("#+ab")]
-#[case::plus_four_digits("#+abcd")]
-#[case::non_hex_digit("#12345g")]
-#[case::non_hex_short("#gg0")]
-#[case::two_digits("#12")]
-#[case::four_digits("#1234")]
-#[case::seven_digits("#1234567")]
-#[case::no_hash("ffffff")]
-#[case::hash_only("#")]
-#[case::multibyte("#ééé")]
-fn a_color_string_with_a_sign_or_non_hex_digit_is_ignored(#[case] bad: &str) {
-    let (style, warnings) = style_and_warnings(&[("text_color", text(bad))]);
-    assert_eq!(style.text_color, None, "{bad}");
-    assert_eq!(warnings.len(), 1, "{bad}");
-}
-
-#[test]
-fn color_strings_accept_either_hex_case() {
-    let (style, warnings) = style_and_warnings(&[
-        ("background", text("#AbCdEf")),
-        ("border_color", text("#FfF")),
-    ]);
-    assert_eq!(style.background, Some(0x00ab_cdef));
-    assert_eq!(style.border_color, Some(0x00ff_ffff));
-    assert!(warnings.is_empty());
-}
-
-#[rstest]
-#[case::zero(0.0, 0)]
-#[case::max(f64::from(0xFF_FFFF), 0xFF_FFFF)]
-#[case::byte_max(255.0, 255)]
-fn numeric_colors_cover_exactly_zero_to_ffffff(#[case] n: f64, #[case] expected: u32) {
-    let (style, warnings) = style_and_warnings(&[("background", num(n))]);
-    assert_eq!(style.background, Some(expected), "{n}");
-    assert!(warnings.is_empty(), "{n}");
-}
-
-#[rstest]
-#[case::half(0.5, 0)]
-#[case::one_and_half(1.5, 1)]
-#[case::near_max(16_777_214.5, 0xFF_FFFE)]
-fn a_fractional_numeric_color_rounds_toward_zero(#[case] n: f64, #[case] expected: u32) {
-    let (style, warnings) = style_and_warnings(&[("background", num(n))]);
-    assert_eq!(style.background, Some(expected), "{n}");
-    assert!(warnings.is_empty(), "{n}");
-}
-
-#[test]
-fn a_negative_fractional_numeric_color_is_ignored_with_a_warning() {
-    let (style, warnings) = style_and_warnings(&[("background", num(-0.5))]);
-    assert_eq!(style.background, None);
-    assert_eq!(warnings.len(), 1);
-}
-
-#[rstest]
-#[case::negative(-1.0)]
-#[case::just_above_ffffff(f64::from(0x0100_0000))]
-#[case::u32_max(f64::from(u32::MAX))]
-#[case::huge(1e20)]
-#[case::nan(f64::NAN)]
-#[case::infinity(f64::INFINITY)]
-#[case::negative_infinity(f64::NEG_INFINITY)]
-fn an_out_of_range_numeric_color_is_ignored_with_a_warning(#[case] bad: f64) {
-    let (style, warnings) = style_and_warnings(&[
-        ("background", num(bad)),
-        ("border_color", num(bad)),
-        ("text_color", num(bad)),
-    ]);
-    assert_eq!(
-        (style.background, style.border_color, style.text_color),
-        (None, None, None),
-        "{bad}"
-    );
-    assert_eq!(warnings.len(), 3, "{bad}");
-}
-
-#[test]
-fn a_bool_color_is_ignored_with_a_warning() {
-    let (style, warnings) = style_and_warnings(&[("background", AttributeValue::Bool(true))]);
-    assert_eq!(style.background, None);
-    assert_eq!(warnings.len(), 1);
-}
-
-#[test]
 fn applying_a_style_keeps_the_values_the_spec_leaves_unset() {
     let mut style = StyleRefinement::default();
     apply_style(
@@ -768,4 +656,24 @@ fn window_size_is_none_when_unset() {
     let id = tree.create_node("div").unwrap();
 
     assert_eq!(declared_window_size(tree.get(id).unwrap()), (None, None));
+}
+
+#[test]
+fn color_keys_reach_the_gpui_refinement() {
+    let mut style = StyleRefinement::default();
+    apply_style(
+        &mut style,
+        &style_of(&[
+            ("background", text("#33669980")),
+            ("border_color", num(f64::from(0x0033_6699))),
+            ("text_color", text("rgb(51 102 153 / 50%)")),
+        ]),
+    );
+
+    assert_eq!(
+        style.background,
+        Some(gpui::Fill::from(gpui::Hsla::from(gpui::rgba(0x3366_9980))))
+    );
+    assert_eq!(style.border_color, Some(gpui::rgba(0x3366_99ff).into()));
+    assert_eq!(style.text.color, Some(gpui::rgba(0x3366_9980).into()));
 }
