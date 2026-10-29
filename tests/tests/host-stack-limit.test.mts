@@ -45,7 +45,7 @@ it("the host survives recursion to the stack limit", async () => {
     expect(code).toBe(1);
     const reply = JSON.parse(lines[0] ?? "null");
     expect(reply.id).toBeNull();
-    expect(reply.error.message).toMatch(/\d+/);
+    expect(reply.error.message).toMatch(/^Error: \d+$/);
   } finally {
     child.kill();
     await rm(dir, { recursive: true, force: true });
