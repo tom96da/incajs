@@ -117,15 +117,13 @@ Scrollbars are not supported.
 
 ### Color format
 
-`backgroundColor`, `borderColor`, and `color` each accept:
+`backgroundColor`, `borderColor` and `color` each take a numeric `0xRRGGBB`
+literal, e.g. `0xff0000`, or a string of the CSS
+[`<color>`](https://developer.mozilla.org/en-US/docs/Web/CSS/color_value) type.
 
-- a numeric `0xRRGGBB` literal, e.g. `0xff0000`
-- a `"#rrggbb"` or `"#rgb"` string, e.g. `"#ff0000"` or `"#f00"`
-
-A number must lie from `0` to `0xffffff`. A string must be `#` followed by 3 or
-6 hex digits. Any other number or string sets the property to its default and
-prints a warning, except `''`, which prints none. Alpha channels and color
-names such as `"red"` are not supported.
+A number must lie from `0` to `0xffffff`. Other notations, such as color names,
+`hsl()` and `currentcolor`, are not supported. `rgb()` does not take `none`,
+`calc()` or `var()`, and percentage channels need whitespace between them.
 
 ## `class`, and `style` as a string, do nothing
 

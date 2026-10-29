@@ -69,11 +69,18 @@ export interface StyleProps {
   height?: Px | "auto";
   /** Uniform border width in px (`>= 0`), applied to all four sides. */
   borderWidth?: Px;
-  /** Fill color, as a hex number (`0xRRGGBB`) or a CSS-style string (`"#rrggbb"`/`"#rgb"`). */
+  /**
+   * Fill color, as a hex number (`0xRRGGBB`) or a color string: `"#rgb"`, `"#rgba"`, `"#rrggbb"`,
+   * `"#rrggbbaa"`, `"transparent"`, `"rgb()"` or `"rgba()"`.
+   */
   backgroundColor?: number | string;
   /** Border color. Accepts the same formats as {@link StyleProps.backgroundColor}. */
   borderColor?: number | string;
-  /** Color for this container's own text. Cascades to descendant text leaves, same as {@link StyleProps.fontSize}; there's no separate per-leaf text styling. */
+  /**
+   * Color for this container's own text. Accepts the same formats as
+   * {@link StyleProps.backgroundColor}. Cascades to descendant text leaves, same as
+   * {@link StyleProps.fontSize}; there's no separate per-leaf text styling.
+   */
   color?: number | string;
   /** Uniform corner radius in px (`>= 0`), applied to all four corners. */
   borderRadius?: Px;

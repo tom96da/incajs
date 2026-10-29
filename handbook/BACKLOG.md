@@ -178,18 +178,18 @@ A fixed entry is deleted and its ID is never reused.
   single-quoted, where Node picks the quote that avoids escaping.
 
 - **B-122 Colors take fewer notations than CSS**
-  `Units: gpui,docs · Size: M–L · Impact: Medium`
+  `Units: gpui,docs · Size: M · Impact: Medium`
 
-  A color is a `0xRRGGBB` number or a `#rgb` or `#rrggbb` string. CSS adds,
-  from small to large: `#rgba` and `#rrggbbaa`, `transparent` and
-  `currentcolor`, `rgb()`, `rgba()`, `hsl()` and `hsla()` in the comma and
-  the space syntax with an alpha, the 148 color names, `hwb()`, `lab()`,
-  `lch()`, `oklab()`, `oklch()`, `color()`, `color-mix()`, relative colors,
-  `light-dark()` and system colors. `var(--x)` waits for CSS variables.
-  gpui colors carry an alpha, so the parser sets the limit. A parsing crate
-  such as `csscolorparser` covers part of the list, and its range needs a
-  check before use. Only `background`, `border_color` and `text_color` take a
-  color. `outline-color`, per-side border colors, `box-shadow` and
+  A color is a `0xRRGGBB` number, a hex string of 3, 4, 6 or 8 digits,
+  `transparent`, `rgb()` or `rgba()`. CSS adds, from small to large:
+  `currentcolor`, `hsl()` and `hsla()` in the comma and the space syntax with
+  an alpha, the 148 color names, `hwb()`, `lab()`, `lch()`, `oklab()`,
+  `oklch()`, `color()`, `color-mix()`, relative colors, `light-dark()`, system
+  colors, `none` and `calc()` inside `rgb()`, and `rgb(10%20%30%)` without
+  spaces. `var(--x)` waits for CSS variables. A parsing crate such as
+  `csscolorparser` covers part of the list, and its range needs a check before
+  use. Only `background`, `border_color` and `text_color` take a color.
+  `outline-color`, per-side border colors, `box-shadow` and
   `text-decoration-color` come with the properties they belong to.
 
 - **B-126 No test resolves `incajs/vue/runtime` through the published
@@ -1237,3 +1237,12 @@ A fixed entry is deleted and its ID is never reused.
   1164. Matching Chromium needs about 13 MiB, and the main thread of Linux
   has 8 MiB by default. Fix: run the engine on a thread with a larger stack,
   or cut the native frames per call.
+
+- **B-237 Keywords in `:style` are lowercase only**
+  `Units: gpui,docs · Size: S · Impact: Low`
+
+  CSS keywords are ASCII case-insensitive, and browsers accept `ROW-REVERSE`.
+  The host reads a color keyword in any case and ignores any other keyword
+  that is not lowercase, with a warning. Fix: compare those keywords
+  case-insensitively in the style parser (`keywords!` in
+  `crates/inca-gpui/src/element/spec.rs`) and document the rule.
