@@ -410,17 +410,25 @@ const RECURSES_UNTIL_IT_THROWS: &str = r"
 ";
 
 #[test]
-fn the_engine_runs_a_script_on_a_stack_deeper_than_the_default() {
+fn the_host_engine_runs_a_script_on_a_deeper_stack_than_the_engine_default() {
     // A test thread has 2 MiB, less than the stack limit of the engine.
-    let depth = std::thread::Builder::new()
+    let (baseline, depth) = std::thread::Builder::new()
         .stack_size(16 * 1024 * 1024)
         .spawn(|| {
+            let plain = Engine::builder().build().unwrap();
+            plain.eval::<()>(RECURSES_UNTIL_IT_THROWS).unwrap();
             let session = load(RECURSES_UNTIL_IT_THROWS).unwrap();
-            session.engine.eval::<u32>("globalThis.depth;").unwrap()
+            (
+                plain.eval::<u32>("globalThis.depth;").unwrap(),
+                session.engine.eval::<u32>("globalThis.depth;").unwrap(),
+            )
         })
         .unwrap()
         .join()
         .unwrap();
 
-    assert!(depth > 1000, "{depth}");
+    assert!(
+        depth > 3 * baseline,
+        "session depth {depth}, default depth {baseline}"
+    );
 }
