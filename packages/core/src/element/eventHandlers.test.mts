@@ -64,6 +64,7 @@ describe("createIncaElement handler properties", () => {
       "ongotpointercapture",
       "oninput",
       "onkeydown",
+      "onkeypress",
       "onkeyup",
       "onlostpointercapture",
       "onmousedown",

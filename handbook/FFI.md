@@ -481,8 +481,8 @@ with the node ids.
 
 #### Keyboard and focus
 
-- The target of `keydown` and `keyup` is the focused node, or the root when
-  nothing is focused. The window focus then rests on
+- The target of `keydown`, `keypress` and `keyup` is the focused node, or the
+  root when nothing is focused. The window focus then rests on
   `FocusRegistry::parked_handle`, which maps to no node.
 - The root wires capture-phase `keydown` and `keyup` listeners whether or not
   a script listens. They call `EventSink::key_input`, which walks the event
@@ -501,7 +501,7 @@ with the node ids.
   mouse press also takes one Space click on key up. A click, the mouse
   release or the button losing focus ends the hold.
   A key click uses `MousePayload::keyboard_click`, and `preventDefault()` in
-  `keydown` or `keyup` of the `button` ends it.
+  `keydown`, the `keypress` of Enter, or `keyup` of the `button` ends it.
 - The Menu key (`key_name` maps gpui's `"menu"` and the U+0010 of a Mac
   keyboard to `"ContextMenu"`) and Shift+F10 (not on macOS) fire
   `contextmenu` from `key_default` on `keydown`, unless a listener canceled
@@ -509,11 +509,16 @@ with the node ids.
   its recorded box, or the deepest recorded box at (1, 1) when nothing is
   focused. Its payload is mouse pointer source, `button` `NO_BUTTON` and
   `buttons` 0.
-- A canceled `keydown` or `keyup` calls `Window::prevent_default` and
-  `App::stop_propagation` after its walk. The platform then treats the key as
-  handled, so later gpui key listeners stay idle. A stopped or unlistened key
+- A canceled `keydown`, `keypress` or `keyup` calls `Window::prevent_default`
+  and `App::stop_propagation` after its walk. The platform then treats the key
+  as handled, so later gpui key listeners stay idle. A stopped or unlistened key
   stays unhandled, so gpui key listeners still run. Keybindings run before key
   listeners, so a bound action consumes its key before any walk.
+- `key_input` fires `keypress` after an uncanceled `keydown`, at the same
+  target, when no Control or Meta is held, no composition runs, and the key is
+  Enter without Alt or has a printable `key_char`. Alt may be held on macOS
+  only, where Option composes a character. A canceled `keypress` cancels
+  the key's default action, except for Space.
 - The root wires `on_modifiers_changed` into `EventSink::modifiers_changed`.
   A modifier change bubbles `keydown` or `keyup` named `Shift`, `Control`,
   `Alt` or `Meta`, in that order, from the focused node or the root. It is
@@ -625,7 +630,7 @@ with the node ids.
 | `wheel` | mouse + `deltaX`, `deltaY`, `deltaZ`, `deltaMode` |
 | `scroll` | none; every flag is false |
 | `focus`, `blur`, `focusin`, `focusout` | `relatedTarget` |
-| `keydown`, `keyup` | `key`, `repeat`, `isComposing`, modifier flags |
+| `keydown`, `keypress`, `keyup` | `key`, `repeat`, `isComposing`, modifier flags; `keypress` also `charCode`, `keyCode` and `which` of the typed character |
 | `beforeinput`, `input` | `data`, `inputType`, `isComposing` |
 | `change` | none |
 | `compositionstart`, `compositionupdate`, `compositionend` | `data` |

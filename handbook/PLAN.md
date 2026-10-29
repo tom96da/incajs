@@ -1008,6 +1008,8 @@ runs alongside Phase 3.4.
 - [x] `focusNode`/`blurNode` and `"focus"`/`"blur"`, with a template `ref`'s
       `.focus()`/`.blur()`
 - [x] `"keydown"`/`"keyup"` on the focused node, bubbling to its ancestors
+- [x] `"keypress"` after an uncanceled `"keydown"` of a key that types a
+      character, with `charCode` set
 
 ### Scrolling
 

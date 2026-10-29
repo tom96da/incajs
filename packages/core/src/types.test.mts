@@ -32,6 +32,14 @@ describe("the event types", () => {
     expectTypeOf(listen).returns.toBeVoid();
   });
 
+  it("infer the keyboard event of a keypress listener", () => {
+    const listen = (target: IncaEventTarget) =>
+      target.addEventListener("keypress", (event) =>
+        expectTypeOf(event).toEqualTypeOf<IncaKeyboardEvent>(),
+      );
+    expectTypeOf(listen).returns.toBeVoid();
+  });
+
   it("infer the event of an object listener from the event name", () => {
     const listen = (target: IncaEventTarget) =>
       target.addEventListener("wheel", {

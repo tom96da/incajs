@@ -59,6 +59,7 @@ fn base_fields_follow_the_spec_rows_and_prevent_default_needs_cancelable(cx: &mu
         ("wheel", true, true, true),
         ("scroll", false, false, false),
         ("keydown", true, true, true),
+        ("keypress", true, true, true),
         ("keyup", true, true, true),
         ("focus", false, false, true),
         ("blur", false, false, true),

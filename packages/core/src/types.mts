@@ -428,7 +428,7 @@ export interface IncaWheelEvent extends IncaMouseEvent {
   readonly DOM_DELTA_PAGE: 2;
 }
 
-/** The event object of `keydown` and `keyup`. */
+/** The event object of `keydown`, `keypress` and `keyup`. */
 export interface IncaKeyboardEvent extends IncaUIEvent {
   /** The key's name, such as `"Enter"`, `"F5"` or the typed character. */
   readonly key: string;
@@ -440,9 +440,12 @@ export interface IncaKeyboardEvent extends IncaUIEvent {
   readonly repeat: boolean;
   /** Whether an input method composes in the focused `<input>`. */
   readonly isComposing: boolean;
-  /** The key's code on a US keyboard layout, and `0` for a key outside it. */
+  /**
+   * The key's code on a US keyboard layout, and `0` for a key outside it. On `keypress` it is the
+   * `charCode`.
+   */
   readonly keyCode: number;
-  /** `0` on the events the host dispatches. */
+  /** The code of the typed character on `keypress`, and `0` on `keydown` and `keyup`. */
   readonly charCode: number;
   readonly ctrlKey: boolean;
   readonly shiftKey: boolean;
@@ -505,6 +508,7 @@ export interface IncaEventMap {
   gotpointercapture: IncaPointerEvent;
   input: IncaInputEvent;
   keydown: IncaKeyboardEvent;
+  keypress: IncaKeyboardEvent;
   keyup: IncaKeyboardEvent;
   lostpointercapture: IncaPointerEvent;
   mousedown: IncaMouseEvent;
