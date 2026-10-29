@@ -99,7 +99,7 @@ holding one decimal (`"0.5"`). Neither takes `%`. Each key keeps its range;
 | `gap` | px value (`>= 0`) | `gap.width` & `gap.height` (uniform) |
 | `width` / `height` | px value (`>= 0`) or `"auto"` | `size.width` / `size.height` |
 | `border_width` | px value (`>= 0`) | all four `border_widths.*` (uniform) |
-| `background` / `border_color` / `text_color` | number from `0` to `0xffffff`, or string (`"#rrggbb"`/`"#rgb"`); any other value except `''` warns | `Fill`/`Hsla` |
+| `background` / `border_color` / `text_color` | number from `0` to `0xffffff`, or string (`"#rgb"`, `"#rgba"`, `"#rrggbb"`, `"#rrggbbaa"`, `"transparent"`, `rgb()`, `rgba()`); any other value except `''` warns | `Fill`/`Hsla` |
 | `corner_radius` | px value (`>= 0`) | all four `corner_radii.*` (uniform) |
 | `text_size` | px value (`>= 0`) | `text.font_size` |
 | `overflow` / `overflow_x` / `overflow_y` | `"visible"`\|`"hidden"`\|`"clip"`\|`"scroll"`\|`"auto"` (= `"scroll"`); `overflow` also takes `"<x> <y>"` | `overflow.x` / `overflow.y`; an axis key beats `overflow`; beside a `hidden` or `scroll` axis an unset or `visible` axis becomes `scroll` and `clip` becomes `hidden`; `hidden` clips and takes script scrolling, `clip` clips without scrolling, only `scroll` takes the wheel |
@@ -108,6 +108,12 @@ holding one decimal (`"0.5"`). Neither takes `%`. Each key keeps its range;
 | `flex_grow` / `flex_shrink` | decimal value `>= 0` | `flex_grow` / `flex_shrink` |
 | `opacity` | decimal value, clamped to `0..=1` (`NaN` ignored) | `opacity` |
 | `min_width` / `min_height` / `max_width` / `max_height` | px value (`>= 0`) or `"auto"` | `min_size.*` / `max_size.*` |
+
+A color string ignores surrounding ASCII whitespace. `rgb()` and `rgba()` take
+three channels and an optional alpha, in the comma syntax (all numbers or all
+percentages) or the space syntax (`rgb(1 2 3 / 0.5)`, numbers and percentages
+may mix). A channel and the alpha saturate at their limits and round half up.
+The alpha has 256 steps.
 
 `text_color` and `text_size` apply to containers. A text leaf takes them from
 the nearest ancestor container.

@@ -16,6 +16,7 @@
 //! shape the host does not support once, when it is set.
 
 mod build;
+mod color;
 mod input;
 mod parse;
 mod pointer;
@@ -32,8 +33,9 @@ pub(crate) use parse::style_key;
 pub use parse::{STYLE_KEYS, StyleKey, ValueKind, declared_window_size, style_warning};
 pub use pointer::{clear_presses, mouse_target, opens_context_menu, pressed_target};
 pub use spec::{
-    AlignSpec, DisplaySpec, EdgesSpec, ElementSpec, ElementTag, FlexDirectionSpec, LengthSpec,
-    OverflowSpec, StyleSpec, build_spec, hidden_by_attribute, is_scroll_container, wheel_axes,
+    AlignSpec, ColorSpec, DisplaySpec, EdgesSpec, ElementSpec, ElementTag, FlexDirectionSpec,
+    LengthSpec, OverflowSpec, StyleSpec, build_spec, hidden_by_attribute, is_scroll_container,
+    wheel_axes,
 };
 
 #[cfg(test)]

@@ -1030,6 +1030,8 @@ runs alongside Phase 3.4.
       `"flex-end"`, `"row-reverse"` and `"column-reverse"`, px strings such as
       `"10px"`, and decimal strings for `opacity`, `flexGrow` and
       `flexShrink`; the host's own names stay accepted
+- [x] `:style` colors take `transparent`, `rgb()`, `rgba()`, `#rgba` and
+      `#rrggbbaa`, and ignore surrounding whitespace
 
 ### Console and event slots
 

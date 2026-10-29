@@ -4,45 +4,11 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 
+use super::color::as_color;
 use super::spec::{
     AlignSpec, DisplaySpec, EdgesSpec, FlexDirectionSpec, LengthSpec, OverflowSpec, StyleSpec,
 };
 use crate::tree::{AttributeValue, VirtualNode};
-
-/// Parses a `0x000000..=0xFFFFFF` number or a `"#rrggbb"`/`"#rgb"` string into
-/// a `0xRRGGBB` color. Any other value (a number outside that range, `NaN`,
-/// wrong hex digit count, missing `#`, non-hex characters, a bool, ...) is
-/// ignored.
-fn as_color(value: &AttributeValue) -> Option<u32> {
-    match value {
-        AttributeValue::Number(n) if (0.0..=f64::from(0x00FF_FFFF_u32)).contains(n) => {
-            // The range check above keeps the cast inside `u32`.
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            Some(*n as u32)
-        }
-        AttributeValue::String(s) => parse_hex_color(s),
-        _ => None,
-    }
-}
-
-fn parse_hex_color(s: &str) -> Option<u32> {
-    let hex = s.strip_prefix('#')?;
-    if !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
-        return None;
-    }
-    match hex.len() {
-        6 => u32::from_str_radix(hex, 16).ok(),
-        3 => {
-            let mut expanded = String::with_capacity(6);
-            for c in hex.chars() {
-                expanded.push(c);
-                expanded.push(c);
-            }
-            u32::from_str_radix(&expanded, 16).ok()
-        }
-        _ => None,
-    }
-}
 
 /// One or two overflow values, x first; a single value applies to both axes.
 fn overflow_pair_from_str(s: &str) -> Option<(OverflowSpec, OverflowSpec)> {
@@ -69,7 +35,7 @@ fn computed_axes(
 
 /// A decimal number: the syntax of `f64` ending in an ASCII digit. `5.`,
 /// `inf`, `infinity` and `nan` are not decimals.
-fn decimal(s: &str) -> Option<f64> {
+pub(super) fn decimal(s: &str) -> Option<f64> {
     if !s.as_bytes().last()?.is_ascii_digit() {
         return None;
     }
@@ -214,7 +180,8 @@ pub enum ValueKind {
     NonNegativeNumber,
     /// A decimal value, clamped to `0..=1`.
     Opacity,
-    /// A number from `0` to `0xffffff`, or a `"#rrggbb"` or `"#rgb"` string.
+    /// A number from `0` to `0xffffff`, or a string: `#rgb`, `#rgba`, `#rrggbb`,
+    /// `#rrggbbaa`, `transparent`, `rgb()` or `rgba()`.
     Color,
     /// One of the names.
     Keyword(&'static [&'static str]),

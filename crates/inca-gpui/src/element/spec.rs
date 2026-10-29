@@ -37,6 +37,22 @@ pub enum LengthSpec {
     Auto,
 }
 
+/// A color: `0xRRGGBB` and an alpha from `0` (transparent) to `255` (opaque).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ColorSpec {
+    /// `0xRRGGBB`.
+    pub rgb: u32,
+    pub alpha: u8,
+}
+
+impl ColorSpec {
+    /// An opaque color of `rgb`.
+    #[must_use]
+    pub const fn opaque(rgb: u32) -> Self {
+        Self { rgb, alpha: 255 }
+    }
+}
+
 /// Defines a keyword enum: its variants, `NAMES` and `from_name`. A variant
 /// lists every name it takes, separated by `|`.
 macro_rules! keywords {
@@ -149,15 +165,12 @@ pub struct StyleSpec {
     pub height: Option<LengthSpec>,
     /// Uniform border width (px, `>= 0`) applied to all four sides.
     pub border_width: Option<f64>,
-    /// `0xRRGGBB`.
-    pub background: Option<u32>,
-    /// `0xRRGGBB`.
-    pub border_color: Option<u32>,
+    pub background: Option<ColorSpec>,
+    pub border_color: Option<ColorSpec>,
     /// Uniform corner radius (px, `>= 0`) applied to all four corners.
     pub corner_radius: Option<f64>,
-    /// `0xRRGGBB`. Cascades to descendant text, like `gpui`'s own
-    /// `.text_color()`. Text leaves carry no style of their own.
-    pub text_color: Option<u32>,
+    /// Cascades to descendant text. Text leaves carry no style of their own.
+    pub text_color: Option<ColorSpec>,
     /// Font size (px, `>= 0`). Cascades to descendant text.
     pub text_size: Option<f64>,
     pub overflow_x: Option<OverflowSpec>,

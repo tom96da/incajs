@@ -1,9 +1,11 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use gpui::{Display, Fill, FlexDirection, Hsla, Length, Overflow, StyleRefinement, px, rgb};
+use gpui::{Display, Fill, FlexDirection, Hsla, Length, Overflow, StyleRefinement, px, rgba};
 
-use super::spec::{AlignSpec, DisplaySpec, FlexDirectionSpec, LengthSpec, OverflowSpec, StyleSpec};
+use super::spec::{
+    AlignSpec, ColorSpec, DisplaySpec, FlexDirectionSpec, LengthSpec, OverflowSpec, StyleSpec,
+};
 
 // f64 -> f32 for `gpui`'s `Pixels` type: real UI dimensions never carry
 // enough precision or magnitude for this narrowing to matter.
@@ -70,6 +72,10 @@ fn overflow_from_spec(spec: OverflowSpec) -> Overflow {
     }
 }
 
+fn color_from_spec(color: ColorSpec) -> Hsla {
+    Hsla::from(rgba((color.rgb << 8) | u32::from(color.alpha)))
+}
+
 /// Sets `slot` from `value` when the spec carries one. An absent value leaves `slot` as it is.
 fn overlay<S, T>(slot: &mut Option<T>, value: Option<S>, make: impl FnOnce(S) -> T) {
     if let Some(value) = value {
@@ -107,19 +113,15 @@ pub(super) fn apply_style(style: &mut StyleRefinement, spec: &StyleSpec) {
     overlay(&mut style.border_widths.bottom, border_width, Into::into);
     overlay(&mut style.border_widths.left, border_width, Into::into);
     overlay(&mut style.background, spec.background, |color| {
-        Fill::from(Hsla::from(rgb(color)))
+        Fill::from(color_from_spec(color))
     });
-    overlay(&mut style.border_color, spec.border_color, |color| {
-        rgb(color).into()
-    });
+    overlay(&mut style.border_color, spec.border_color, color_from_spec);
     let radius = spec.corner_radius.map(|n| px(n as f32));
     overlay(&mut style.corner_radii.top_left, radius, Into::into);
     overlay(&mut style.corner_radii.top_right, radius, Into::into);
     overlay(&mut style.corner_radii.bottom_right, radius, Into::into);
     overlay(&mut style.corner_radii.bottom_left, radius, Into::into);
-    overlay(&mut style.text.color, spec.text_color, |color| {
-        rgb(color).into()
-    });
+    overlay(&mut style.text.color, spec.text_color, color_from_spec);
     overlay(&mut style.text.font_size, spec.text_size, |size| {
         px(size as f32).into()
     });
