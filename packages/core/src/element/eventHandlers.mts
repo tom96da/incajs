@@ -17,6 +17,7 @@ export const HANDLER_EVENTS = [
   "gotpointercapture",
   "input",
   "keydown",
+  "keypress",
   "keyup",
   "lostpointercapture",
   "mousedown",

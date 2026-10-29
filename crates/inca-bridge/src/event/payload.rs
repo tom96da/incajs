@@ -7,7 +7,7 @@ use rquickjs::convert::Coerced;
 use rquickjs::function::This;
 use rquickjs::{Array, Ctx, Function, IntoJs, Object, Result as JsResult, Value};
 
-use super::key_code::key_code;
+use super::key_code::{key_code, keypress_code};
 use super::{
     COMPOSITION, EVENT, FOCUS, INPUT, KEYBOARD, MOUSE, POINTER, WHEEL, child_of, constants, field,
     method, other_kind, with_event,
@@ -161,7 +161,12 @@ impl Payload {
                 },
             ),
             EventPayload::Key(key) => {
-                let code = key_code(&key.key);
+                let (code, char_code) = if name == "keypress" {
+                    let typed = keypress_code(&key.key);
+                    (typed, typed)
+                } else {
+                    (key_code(&key.key), 0)
+                };
                 Self::Keyboard(
                     Ui {
                         detail: 0,
@@ -176,7 +181,7 @@ impl Payload {
                         is_composing: key.is_composing,
                         modifiers: key.modifiers,
                         key_code: code,
-                        char_code: 0,
+                        char_code,
                     },
                 )
             }

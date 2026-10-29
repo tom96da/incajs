@@ -120,7 +120,7 @@ fn platform_result(
     up: bool,
     key: &str,
 ) -> DispatchEventResult {
-    let keystroke = Keystroke::parse(key).unwrap();
+    let keystroke = Keystroke::parse(key).unwrap().with_simulated_ime();
     let event = if up {
         PlatformInput::KeyUp(KeyUpEvent { keystroke })
     } else {
@@ -160,6 +160,49 @@ fn a_canceled_key_event_is_reported_to_the_platform_as_handled(
         expected_seen,
         "the listeners of both nodes ran before the key was reported handled"
     );
+}
+
+#[gpui::test]
+fn a_canceled_keypress_is_reported_to_the_platform_as_handled(cx: &mut TestAppContext) {
+    let (window, engine, _host, [_, child]) = focused_pair(cx, "");
+    test_support::listen_each(
+        &engine,
+        &[child],
+        &["keypress"],
+        "(e) => e.preventDefault()",
+        false,
+    );
+
+    let result = platform_result(cx, window, false, "a");
+
+    assert!(!result.propagate);
+    assert!(result.default_prevented);
+}
+
+#[gpui::test]
+fn a_keypress_of_a_held_key_reports_repeat(cx: &mut TestAppContext) {
+    let (window, engine, _host, [_, child]) = focused_pair(cx, "");
+    test_support::listen_each(
+        &engine,
+        &[child],
+        &["keypress"],
+        "(e) => seen.push(e.repeat)",
+        false,
+    );
+
+    cx.update_window(window, |_, window, cx| {
+        window.dispatch_event(
+            PlatformInput::KeyDown(KeyDownEvent {
+                keystroke: Keystroke::parse("a").unwrap().with_simulated_ime(),
+                is_held: true,
+                prefer_character_input: false,
+            }),
+            cx,
+        )
+    })
+    .unwrap();
+
+    assert_eq!(seen(&engine), "[true]");
 }
 
 #[gpui_cases]

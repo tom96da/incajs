@@ -8,52 +8,6 @@ use gpui::ClipboardItem;
 use inca_test_macros::gpui_cases;
 use serde_json::{Value, json};
 
-/// Logs `[type, inputType, data, isComposing, cancelable, value]` of each event at the input,
-/// the fields an event has not read as `null`.
-const LOG: &str = r"
-    globalThis.log = [];
-    globalThis.rec = (e) => {
-        const edit = e.type === 'beforeinput' || e.type === 'input';
-        const composition = e.type.startsWith('composition');
-        const key = e.type === 'keydown' || e.type === 'keyup';
-        globalThis.log.push([
-            e.type,
-            edit ? e.inputType : null,
-            edit || composition ? e.data : null,
-            edit || key ? e.isComposing : null,
-            e.cancelable,
-            __inca_native__.inputValue(INPUT),
-        ]);
-    };
-    ";
-
-/// Starts the log and records `events` at the input.
-fn record(s: &InputScene, events: &[&str]) {
-    s.engine
-        .eval::<()>(&LOG.replace("INPUT", &s.input.to_string()))
-        .unwrap();
-    for event in events {
-        listen(&s.dispatcher, s.input, event, "rec");
-    }
-}
-
-/// Takes the rows logged so far.
-fn log(s: &InputScene) -> Vec<Value> {
-    let json = s
-        .engine
-        .eval::<String>("JSON.stringify(globalThis.log.splice(0))")
-        .unwrap();
-    serde_json::from_str(&json).unwrap()
-}
-
-/// Takes the types of the rows logged so far.
-fn types(s: &InputScene) -> Vec<String> {
-    log(s)
-        .iter()
-        .map(|row| row[0].as_str().unwrap().to_owned())
-        .collect()
-}
-
 fn row(
     kind: &str,
     input_type: Option<&str>,
@@ -117,7 +71,7 @@ fn script_blur(s: &InputScene, cx: &mut TestAppContext) {
 #[gpui::test]
 fn typing_fires_beforeinput_then_input(cx: &mut TestAppContext) {
     let s = input_scene(cx, "");
-    record(&s, &["keydown", "beforeinput", "input"]);
+    record(&s, s.input, &["keydown", "beforeinput", "input"]);
     s.focus(cx, s.input);
     s.key(cx, "x");
     assert_eq!(
@@ -147,7 +101,7 @@ fn typing_fires_beforeinput_then_input(cx: &mut TestAppContext) {
 #[gpui::test]
 fn a_canceled_beforeinput_drops_the_edit(cx: &mut TestAppContext) {
     let s = input_scene(cx, "");
-    record(&s, &["beforeinput", "input"]);
+    record(&s, s.input, &["beforeinput", "input"]);
     cancel_beforeinput(&s);
     s.focus(cx, s.input);
     s.key(cx, "x");
@@ -172,7 +126,7 @@ fn a_key_edit_names_its_input_type(
 ) {
     let s = input_scene(cx, "abcd");
     cx.write_to_clipboard(ClipboardItem::new_string("x\ny".to_owned()));
-    record(&s, &["beforeinput", "input"]);
+    record(&s, s.input, &["beforeinput", "input"]);
     s.focus(cx, s.input);
     s.select(anchor, focus);
     s.key(cx, keys);
@@ -203,7 +157,7 @@ fn a_delete_with_nothing_to_delete_fires_only_beforeinput(
     input_type: &str,
 ) {
     let s = input_scene(cx, "abcd");
-    record(&s, &["keydown", "beforeinput", "input"]);
+    record(&s, s.input, &["keydown", "beforeinput", "input"]);
     s.focus(cx, s.input);
     s.select(caret, caret);
     s.key(cx, keys);
@@ -227,7 +181,7 @@ fn a_delete_with_nothing_to_delete_fires_only_beforeinput(
 #[gpui::test]
 fn a_beforeinput_listener_that_changes_the_value_drops_the_edit(cx: &mut TestAppContext) {
     let s = input_scene(cx, "");
-    record(&s, &["input"]);
+    record(&s, s.input, &["input"]);
     listen(
         &s.dispatcher,
         s.input,
@@ -243,7 +197,7 @@ fn a_beforeinput_listener_that_changes_the_value_drops_the_edit(cx: &mut TestApp
 #[gpui::test]
 fn a_beforeinput_listener_that_removes_the_input_drops_the_edit(cx: &mut TestAppContext) {
     let s = input_scene(cx, "ab");
-    record(&s, &["input"]);
+    record(&s, s.input, &["input"]);
     listen(
         &s.dispatcher,
         s.input,
@@ -260,7 +214,7 @@ fn a_beforeinput_listener_that_removes_the_input_drops_the_edit(cx: &mut TestApp
 #[gpui::test]
 fn enter_after_a_beforeinput_that_destroys_the_input_leaves_no_state(cx: &mut TestAppContext) {
     let s = input_scene(cx, "ab");
-    record(&s, &["change"]);
+    record(&s, s.input, &["change"]);
     s.focus(cx, s.input);
     s.key(cx, "x");
     listen(
@@ -279,6 +233,7 @@ fn a_composition_fires_start_update_and_input_pairs(cx: &mut TestAppContext) {
     let s = input_scene(cx, "ab");
     record(
         &s,
+        s.input,
         &[
             "compositionstart",
             "compositionupdate",
@@ -319,6 +274,7 @@ fn a_commit_ends_the_composition(cx: &mut TestAppContext) {
     s.request(cx, mark("k"));
     record(
         &s,
+        s.input,
         &[
             "compositionupdate",
             "beforeinput",
@@ -351,7 +307,7 @@ fn a_commit_ends_the_composition(cx: &mut TestAppContext) {
 #[gpui::test]
 fn compositionstart_carries_the_selected_text(cx: &mut TestAppContext) {
     let s = input_scene(cx, "abcd");
-    record(&s, &["compositionstart"]);
+    record(&s, s.input, &["compositionstart"]);
     s.select(1, 3);
     s.request(cx, mark("x"));
     assert_eq!(
@@ -373,6 +329,7 @@ fn an_empty_mark_ends_the_composition_with_no_text(cx: &mut TestAppContext) {
     s.request(cx, mark("k"));
     record(
         &s,
+        s.input,
         &[
             "compositionupdate",
             "beforeinput",
@@ -412,6 +369,7 @@ fn an_unmark_fires_only_compositionend(cx: &mut TestAppContext) {
     s.request(cx, mark("k"));
     record(
         &s,
+        s.input,
         &[
             "compositionupdate",
             "beforeinput",
@@ -473,6 +431,7 @@ fn a_request_to_a_readonly_input_with_a_composition_changes_nothing(
     s.request(cx, mark("k"));
     record(
         &s,
+        s.input,
         &[
             "compositionstart",
             "compositionupdate",
@@ -490,7 +449,7 @@ fn a_request_to_a_readonly_input_with_a_composition_changes_nothing(
 #[gpui::test]
 fn a_script_that_disables_a_composing_input_ends_the_composition(cx: &mut TestAppContext) {
     let s = input_scene(cx, "ab");
-    record(&s, &["compositionend", "blur"]);
+    record(&s, s.input, &["compositionend", "blur"]);
     s.focus(cx, s.input);
     s.request(cx, mark("k"));
     eval_input(&s, "__inca_native__.setAttribute(INPUT, 'disabled', true);");
@@ -514,7 +473,7 @@ fn press_shift(s: &InputScene, cx: &mut TestAppContext) {
 #[gpui::test]
 fn a_key_event_reports_an_active_composition(cx: &mut TestAppContext) {
     let s = input_scene(cx, "ab");
-    record(&s, &["keydown"]);
+    record(&s, s.input, &["keydown"]);
     s.focus(cx, s.input);
     s.request(cx, mark("k"));
     s.key(cx, "f5");
@@ -524,7 +483,7 @@ fn a_key_event_reports_an_active_composition(cx: &mut TestAppContext) {
 #[gpui::test]
 fn a_key_event_reports_no_composition_when_idle(cx: &mut TestAppContext) {
     let s = input_scene(cx, "ab");
-    record(&s, &["keydown"]);
+    record(&s, s.input, &["keydown"]);
     s.focus(cx, s.input);
     s.key(cx, "f5");
     assert_eq!(log(&s)[0][3], json!(false));
@@ -533,7 +492,7 @@ fn a_key_event_reports_no_composition_when_idle(cx: &mut TestAppContext) {
 #[gpui::test]
 fn a_modifier_key_event_reports_an_active_composition(cx: &mut TestAppContext) {
     let s = input_scene(cx, "ab");
-    record(&s, &["keydown"]);
+    record(&s, s.input, &["keydown"]);
     s.focus(cx, s.input);
     s.request(cx, mark("k"));
     press_shift(&s, cx);
@@ -543,7 +502,7 @@ fn a_modifier_key_event_reports_an_active_composition(cx: &mut TestAppContext) {
 #[gpui::test]
 fn change_fires_before_blur_when_focus_moves(cx: &mut TestAppContext) {
     let s = input_scene(cx, "");
-    record(&s, &["change", "blur", "focusout"]);
+    record(&s, s.input, &["change", "blur", "focusout"]);
     s.focus(cx, s.input);
     s.key(cx, "x");
     s.focus(cx, s.button);
@@ -553,7 +512,7 @@ fn change_fires_before_blur_when_focus_moves(cx: &mut TestAppContext) {
 #[gpui::test]
 fn change_fires_before_blur_on_a_script_blur(cx: &mut TestAppContext) {
     let s = input_scene(cx, "");
-    record(&s, &["change", "blur", "focusout"]);
+    record(&s, s.input, &["change", "blur", "focusout"]);
     s.focus(cx, s.input);
     s.key(cx, "x");
     script_blur(&s, cx);
@@ -563,7 +522,7 @@ fn change_fires_before_blur_on_a_script_blur(cx: &mut TestAppContext) {
 #[gpui::test]
 fn no_change_fires_for_a_value_back_at_its_focus_value(cx: &mut TestAppContext) {
     let s = input_scene(cx, "");
-    record(&s, &["change"]);
+    record(&s, s.input, &["change"]);
     s.focus(cx, s.input);
     s.key(cx, "x backspace");
     s.focus(cx, s.button);
@@ -573,7 +532,7 @@ fn no_change_fires_for_a_value_back_at_its_focus_value(cx: &mut TestAppContext) 
 #[gpui::test]
 fn enter_fires_change_once(cx: &mut TestAppContext) {
     let s = input_scene(cx, "");
-    record(&s, &["change"]);
+    record(&s, s.input, &["change"]);
     s.focus(cx, s.input);
     s.key(cx, "x enter");
     s.focus(cx, s.button);
@@ -583,7 +542,7 @@ fn enter_fires_change_once(cx: &mut TestAppContext) {
 #[gpui::test]
 fn enter_without_an_edit_fires_no_change(cx: &mut TestAppContext) {
     let s = input_scene(cx, "ab");
-    record(&s, &["change"]);
+    record(&s, s.input, &["change"]);
     s.focus(cx, s.input);
     s.key(cx, "enter");
     assert_eq!(types(&s), Vec::<String>::new());
@@ -592,7 +551,7 @@ fn enter_without_an_edit_fires_no_change(cx: &mut TestAppContext) {
 #[gpui::test]
 fn a_script_write_after_an_edit_fires_one_change(cx: &mut TestAppContext) {
     let s = input_scene(cx, "");
-    record(&s, &["change"]);
+    record(&s, s.input, &["change"]);
     s.focus(cx, s.input);
     s.key(cx, "x");
     eval_input(&s, "__inca_native__.setInputValue(INPUT, 'z');");
@@ -603,7 +562,7 @@ fn a_script_write_after_an_edit_fires_one_change(cx: &mut TestAppContext) {
 #[gpui::test]
 fn a_script_write_alone_fires_no_change(cx: &mut TestAppContext) {
     let s = input_scene(cx, "");
-    record(&s, &["change"]);
+    record(&s, s.input, &["change"]);
     s.focus(cx, s.input);
     eval_input(&s, "__inca_native__.setInputValue(INPUT, 'z');");
     s.focus(cx, s.button);
@@ -614,7 +573,7 @@ fn a_script_write_alone_fires_no_change(cx: &mut TestAppContext) {
 fn typing_into_a_readonly_input_fires_only_beforeinput(cx: &mut TestAppContext) {
     let s = input_scene(cx, "");
     s.set_attribute("readonly");
-    record(&s, &["keydown", "beforeinput", "input"]);
+    record(&s, s.input, &["keydown", "beforeinput", "input"]);
     s.focus(cx, s.input);
     s.key(cx, "x");
     assert_eq!(
@@ -638,7 +597,7 @@ fn typing_into_a_readonly_input_fires_only_beforeinput(cx: &mut TestAppContext) 
 fn a_typed_control_character_into_a_readonly_input_fires_nothing(cx: &mut TestAppContext) {
     let s = input_scene(cx, "");
     s.set_attribute("readonly");
-    record(&s, &["beforeinput"]);
+    record(&s, s.input, &["beforeinput"]);
     s.request(cx, replace("\n"));
     assert_eq!(types(&s), Vec::<String>::new());
 }
@@ -647,7 +606,7 @@ fn a_typed_control_character_into_a_readonly_input_fires_nothing(cx: &mut TestAp
 fn enter_in_a_readonly_input_fires_beforeinput_for_a_line_break(cx: &mut TestAppContext) {
     let s = input_scene(cx, "ab");
     s.set_attribute("readonly");
-    record(&s, &["beforeinput", "change"]);
+    record(&s, s.input, &["beforeinput", "change"]);
     s.focus(cx, s.input);
     s.key(cx, "enter");
     assert_eq!(
@@ -683,7 +642,7 @@ fn enter_fires_beforeinput_for_a_line_break(cx: &mut TestAppContext) {
     let s = input_scene(cx, "");
     s.focus(cx, s.input);
     s.key(cx, "x");
-    record(&s, &["beforeinput", "change"]);
+    record(&s, s.input, &["beforeinput", "change"]);
     s.key(cx, "enter");
     assert_eq!(log(&s), line_break_rows());
 }
@@ -693,7 +652,7 @@ fn enter_fires_change_after_a_canceled_line_break(cx: &mut TestAppContext) {
     let s = input_scene(cx, "");
     s.focus(cx, s.input);
     s.key(cx, "x");
-    record(&s, &["beforeinput", "change"]);
+    record(&s, s.input, &["beforeinput", "change"]);
     cancel_beforeinput(&s);
     s.key(cx, "enter");
     assert_eq!(log(&s), line_break_rows());
@@ -702,7 +661,7 @@ fn enter_fires_change_after_a_canceled_line_break(cx: &mut TestAppContext) {
 #[gpui::test]
 fn a_composition_ends_before_change_on_blur(cx: &mut TestAppContext) {
     let s = input_scene(cx, "ab");
-    record(&s, &["compositionend", "change", "blur"]);
+    record(&s, s.input, &["compositionend", "change", "blur"]);
     s.focus(cx, s.input);
     s.request(cx, mark("k"));
     log(&s);
@@ -714,7 +673,7 @@ fn a_composition_ends_before_change_on_blur(cx: &mut TestAppContext) {
 /// window's `blur`.
 fn typed_then_deactivated(cx: &mut TestAppContext) -> InputScene {
     let s = input_scene(cx, "");
-    record(&s, &["change", "blur", "focusout"]);
+    record(&s, s.input, &["change", "blur", "focusout"]);
     listen_global(
         &s.dispatcher,
         "$window",

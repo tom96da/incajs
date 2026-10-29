@@ -448,18 +448,20 @@ pub trait EventSink {
     );
 
     /// Reports a key press (`up` false) or release before any other key
-    /// listener of the window runs. The sink dispatches `keydown` or `keyup`
-    /// to the focused node, or to the root when none is focused, then runs
-    /// the default action unless a listener prevented it. Tab and Shift+Tab
-    /// move focus; Control, Alt or Meta cancel the move. On a focused enabled
-    /// button, Enter clicks it on press and Space clicks it on release. A
-    /// pending Space press ends at an Enter click, a Space key down, a Space
-    /// key up or when the button loses focus. While a mouse press on the
-    /// focused button is held, Space up also clicks it, once. A click, the
-    /// mouse release or the button losing focus ends the hold. When a
-    /// listener prevented the default, the sink calls `Window::prevent_default`
-    /// and `App::stop_propagation`. At a focused `input` the default action
-    /// edits it, and an edit key counts as handled.
+    /// listener of the window runs. The sink dispatches `keydown` or `keyup`,
+    /// and `keypress` after an uncanceled `keydown` of a key that types a
+    /// character, to the focused node, or to the root when none is focused,
+    /// then runs the default action unless a listener prevented it. Tab and
+    /// Shift+Tab move focus; Control, Alt or Meta cancel the move. On a
+    /// focused enabled button, Enter clicks it on press and Space clicks it
+    /// on release. A pending Space press ends at an Enter click, a Space key
+    /// down, a Space key up or when the button loses focus. While a mouse
+    /// press on the focused button is held, Space up also clicks it, once. A
+    /// click, the mouse release or the button losing focus ends the hold.
+    /// When a listener prevented the default, the sink calls
+    /// `Window::prevent_default` and `App::stop_propagation`. At a focused
+    /// `input` the default action edits it, and an edit key counts as
+    /// handled.
     fn key_input(
         &self,
         keystroke: &gpui::Keystroke,
@@ -625,7 +627,7 @@ const fn own_buttons(mut event: EventSpec) -> EventSpec {
 }
 
 /// Every event the host dispatches.
-pub const EVENTS: [EventSpec; 34] = [
+pub const EVENTS: [EventSpec; 35] = [
     own_buttons(spec("click", Flags::ALL)),
     own_buttons(spec("dblclick", Flags::ALL)),
     own_buttons(spec("auxclick", Flags::ALL)),
@@ -667,6 +669,7 @@ pub const EVENTS: [EventSpec; 34] = [
     spec("wheel", Flags::ALL),
     spec("scroll", Flags::NONE),
     spec("keydown", Flags::ALL),
+    spec("keypress", Flags::ALL),
     spec("keyup", Flags::ALL),
     spec("focus", Flags::FOCUS),
     spec("blur", Flags::FOCUS),

@@ -9,6 +9,7 @@ use crate::test_support::{Reported, TestRoot, capture_reporter, engine_for, moun
 use gpui::{App, AppContext as _, Keystroke, TestAppContext, WindowHandle, point, px};
 use inca_gpui::event_sink::EVENTS;
 use inca_gpui::{EventSink, InputRequest, InputState, WheelPayload};
+use serde_json::Value;
 
 mod base_fields;
 mod click;
@@ -21,6 +22,7 @@ mod input;
 mod input_events;
 mod jobs;
 mod key_default;
+mod keypress;
 mod movement;
 mod pointer;
 mod record;
@@ -162,6 +164,52 @@ impl InputScene {
         let mut host = self.host.borrow_mut();
         host.tree.set_attribute(self.input, name, true).unwrap();
     }
+}
+
+/// Logs `[type, inputType, data, isComposing, cancelable, value]` of each event at the input,
+/// the fields an event has not read as `null`.
+const LOG: &str = r"
+    globalThis.log = [];
+    globalThis.rec = (e) => {
+        const edit = e.type === 'beforeinput' || e.type === 'input';
+        const composition = e.type.startsWith('composition');
+        const key = e.type.startsWith('key');
+        globalThis.log.push([
+            e.type,
+            edit ? e.inputType : null,
+            edit || composition ? e.data : null,
+            edit || key ? e.isComposing : null,
+            e.cancelable,
+            __inca_native__.inputValue(INPUT),
+        ]);
+    };
+    ";
+
+/// Starts the log and records `events` at `node`.
+fn record(s: &InputScene, node: NodeId, events: &[&str]) {
+    s.engine
+        .eval::<()>(&LOG.replace("INPUT", &s.input.to_string()))
+        .unwrap();
+    for event in events {
+        listen(&s.dispatcher, node, event, "rec");
+    }
+}
+
+/// Takes the rows logged so far.
+fn log(s: &InputScene) -> Vec<Value> {
+    let json = s
+        .engine
+        .eval::<String>("JSON.stringify(globalThis.log.splice(0))")
+        .unwrap();
+    serde_json::from_str(&json).unwrap()
+}
+
+/// Takes the types of the rows logged so far.
+fn types(s: &InputScene) -> Vec<String> {
+    log(s)
+        .iter()
+        .map(|row| row[0].as_str().unwrap().to_owned())
+        .collect()
 }
 
 /// A mouse payload of `button` at window x `x` and y 5.

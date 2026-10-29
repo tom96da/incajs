@@ -6,7 +6,7 @@
 pub(super) fn key_code(key: &str) -> u32 {
     let mut chars = key.chars();
     if let (Some(c), None) = (chars.next(), chars.next()) {
-        return char_code(c);
+        return key_code_of_char(c);
     }
     match key {
         "Backspace" => 8,
@@ -40,7 +40,7 @@ fn function_key(key: &str) -> Option<u32> {
 }
 
 /// The `keyCode` of the key that types `c`.
-fn char_code(c: char) -> u32 {
+fn key_code_of_char(c: char) -> u32 {
     match c {
         'a'..='z' => u32::from(c.to_ascii_uppercase()),
         'A'..='Z' | '0'..='9' => u32::from(c),
@@ -68,6 +68,14 @@ fn char_code(c: char) -> u32 {
         '\'' | '"' => 222,
         _ => 0,
     }
+}
+
+/// The `charCode` of a `keypress` of `key`: 13 for `Enter`, else its first UTF-16 code unit.
+pub(super) fn keypress_code(key: &str) -> u32 {
+    if key == "Enter" {
+        return 13;
+    }
+    key.encode_utf16().next().map_or(0, u32::from)
 }
 
 #[cfg(test)]

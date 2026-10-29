@@ -117,7 +117,8 @@ never dispatched. The capture methods are in [Elements](./elements.md).
 Keyboard events carry the fields of
 [`KeyboardEvent`](https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent)
 from [UI Events](https://www.w3.org/TR/2026/WD-uievents-20260221/#events-keyboard-types).
-With nothing focused, `keydown` and `keyup` go to the mount container.
+With nothing focused, `keydown`, `keypress` and `keyup` go to the
+mount container.
 
 | Field         | Value                                           |
 | ------------- | ----------------------------------------------- |
@@ -126,10 +127,10 @@ With nothing focused, `keydown` and `keyup` go to the mount container.
 | `location`    | 0                                               |
 
 - `code` is an empty string. `key` identifies the key.
-- `keyCode` and `which` give the code of `key` on a US keyboard layout, and 0
-  for a key outside it, such as `é`.
-- A key the input method takes during a composition fires no `keydown` or
-  `keyup`.
+- `keyCode` and `which` of `keydown` and `keyup` give the code of `key` on a
+  US keyboard layout, and 0 for a key outside it, such as `é`.
+- A key the input method takes during a composition fires no `keydown`,
+  `keypress` or `keyup`.
 - `getModifierState()` accepts Control, Shift, Alt, Meta and Accel. Accel is
   Meta on macOS and Control elsewhere.
 - Pressing a modifier alone fires `keydown` and `keyup` with its name as
@@ -148,7 +149,7 @@ from [UI Events](https://www.w3.org/TR/2026/WD-uievents-20260221/#events-composi
 
 ### Host differences
 
-- `keypress`, `copy`, `cut` and `paste` are never dispatched. The clipboard
+- `copy`, `cut` and `paste` are never dispatched. The clipboard
   shortcuts of an `input` read and write the clipboard directly.
 - `select` and `selectionchange` are never dispatched.
 - `inputType` is limited to the values for typing, a paste, a composition,

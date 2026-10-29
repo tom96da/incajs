@@ -1167,13 +1167,6 @@ A fixed entry is deleted and its ID is never reused.
   `clipboardData` holds the text before the transfer, and skip the transfer
   when a listener calls `preventDefault()`.
 
-- **B-230 `keypress` is never dispatched**
-  `Units: bridge,docs · Size: S · Impact: Low`
-
-  A key that produces a character fires `keydown` and then `beforeinput`.
-  Fix: fire `keypress` between them from the key path when the key has a
-  character and `keydown` was not canceled, with `charCode` set.
-
 - **B-231 A built app fails to load an entry whose top-level `await` is still pending**
   `Units: host · Size: M · Impact: Low`
 
@@ -1227,3 +1220,23 @@ A fixed entry is deleted and its ID is never reused.
   that is not lowercase, with a warning. Fix: compare those keywords
   case-insensitively in the style parser (`keywords!` in
   `crates/inca-gpui/src/element/spec.rs`) and document the rule.
+
+- **B-238 `keypress` goes to the node its `keydown` went to**
+  `Units: bridge · Size: M · Impact: Low`
+
+  A `keydown` listener that moves the focus or removes the focused node sends
+  the `keypress` of the same press, and the typed text, to the node the focus
+  left. Chromium, Firefox and WebKit send them to the new focus, or to `body`
+  when the node is gone. The host applies a focus request at the next frame,
+  and a node that Vue removes stays detached until a frame frees it, so the
+  detached node still hears the `keypress`. Fix: apply the focus inside the
+  key path before `keypress` fires, then recheck the target.
+
+- **B-239 `keypress` fires for a dead key on macOS**
+  `Units: gpui,bridge · Size: S–M · Impact: Low`
+
+  Option+E on a US Mac layout is a dead key. gpui reports the accent as
+  `key_char`, so the host fires `keypress` with `key` `´`, and `keydown` reads
+  `´` as `key`. Chrome fires `keydown` with `key` `Dead` and `keyCode` 229 and
+  no `keypress`. Fix: report a dead key as `Dead` from the platform layer, or
+  skip `keypress` for a key that starts a composition.

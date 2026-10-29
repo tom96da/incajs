@@ -408,6 +408,35 @@ fn a_host_key_event_reads_each_legacy_field(
     assert_eq!(out, serde_json::json!([want]));
 }
 
+#[gpui_cases]
+#[gpui::test]
+#[case::letter("a", 97)]
+#[case::above_the_bmp("😀", 55_357)]
+fn a_host_keypress_reads_the_character_in_each_legacy_field(
+    cx: &mut TestAppContext,
+    key: &str,
+    want: u32,
+) {
+    let (dispatcher, host, _reported) = dispatcher_with_engine();
+    let node = host.borrow_mut().tree.create_node("div").unwrap();
+    listen(
+        &dispatcher,
+        node,
+        "keypress",
+        "(e) => out.push([e.charCode, e.keyCode, e.which])",
+    );
+    let payload = EventPayload::Key(inca_gpui::KeyPayload {
+        key: key.into(),
+        repeat: false,
+        modifiers: gpui::Modifiers::none(),
+        is_composing: false,
+    });
+
+    let out = fire_and_read(cx, &dispatcher, node, "keypress", &payload);
+
+    assert_eq!(out, serde_json::json!([[want, want, want]]), "{key}");
+}
+
 #[gpui::test]
 fn the_view_of_a_host_event_reads_null(cx: &mut TestAppContext) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();

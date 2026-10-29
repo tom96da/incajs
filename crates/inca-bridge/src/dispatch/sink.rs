@@ -197,16 +197,18 @@ impl EventSink for EventDispatcher {
         if let EventPayload::Key(key) = &mut payload {
             key.is_composing = self.composing_at_focus(window, cx);
         }
-        let (canceled, entered) = self.walk(target, event, &payload, &[]);
-        if entered {
-            self.drain_observed(window);
-        }
+        let canceled = self.walk_key(target, event, &payload, window);
         if canceled {
             // Handled for the platform: a shortcut or an input method sees nothing.
             window.prevent_default();
             cx.stop_propagation();
         }
-        self.key_default(keystroke, up, canceled, window, cx);
+        // A canceled keypress keeps the default of Space, which runs on key up.
+        let typed_canceled = !up
+            && !canceled
+            && self.keypress_canceled(keystroke, target, &payload, window, cx)
+            && keystroke.key != "space";
+        self.key_default(keystroke, up, canceled || typed_canceled, window, cx);
     }
 
     fn input(&self, node_id: NodeId) -> Option<InputState> {
@@ -241,6 +243,44 @@ impl EventDispatcher {
                 node.tag_name() == "button" && !inca_gpui::is_disabled_control(node)
             })
         })
+    }
+
+    /// Walks the key event `event` at `target` and returns whether a listener canceled it.
+    fn walk_key(
+        &self,
+        target: EventTargetId,
+        event: &str,
+        payload: &EventPayload,
+        window: &mut Window,
+    ) -> bool {
+        let (canceled, entered) = self.walk(target, event, payload, &[]);
+        if entered {
+            self.drain_observed(window);
+        }
+        canceled
+    }
+
+    /// Fires `keypress` after an uncanceled `keydown` of a key that types a character, outside a
+    /// composition, and returns whether a listener canceled it. A canceled one also hands the key
+    /// to the platform as handled, so no text is inserted.
+    fn keypress_canceled(
+        &self,
+        keystroke: &gpui::Keystroke,
+        target: EventTargetId,
+        payload: &EventPayload,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> bool {
+        let composing = matches!(payload, EventPayload::Key(key) if key.is_composing);
+        if composing || !types_character(keystroke, cfg!(target_os = "macos")) {
+            return false;
+        }
+        let canceled = self.walk_key(target, "keypress", payload, window);
+        if canceled {
+            window.prevent_default();
+            cx.stop_propagation();
+        }
+        canceled
     }
 
     /// Fires the `click`, `auxclick` and `dblclick` the release of `event` completes, at the
@@ -398,4 +438,23 @@ impl EventDispatcher {
 /// Whether Shift+F10 opens the context menu on the platform: everywhere but macOS.
 pub(super) fn shift_f10_opens_context_menu(macos: bool) -> bool {
     !macos
+}
+
+/// Whether the key press types a character: no Control or Meta held, and the key is Enter without
+/// Alt or `key_char` starts with a printable character. Alt may be held on macOS only.
+pub(super) fn types_character(keystroke: &gpui::Keystroke, macos: bool) -> bool {
+    let modifiers = keystroke.modifiers;
+    if modifiers.control || modifiers.platform {
+        return false;
+    }
+    if keystroke.key == "enter" {
+        return !modifiers.alt;
+    }
+    // Alt+letter fires no keypress outside macOS, where Option composes a character.
+    (macos || !modifiers.alt)
+        && keystroke
+            .key_char
+            .as_deref()
+            .and_then(|text| text.chars().next())
+            .is_some_and(|c| !c.is_control())
 }
