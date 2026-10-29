@@ -5,8 +5,9 @@
 
 use std::backtrace::{Backtrace, BacktraceStatus};
 use std::ffi::OsStr;
-use std::fs;
+use std::fs::{DirBuilder, OpenOptions};
 use std::io::{self, Write};
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 
 /// The file a panic is written to, inside the directory of the app.
@@ -66,12 +67,19 @@ fn report(version: &str, thread: &str, info: &str, backtrace: Option<&str>) -> S
     text
 }
 
-/// Replaces the file at `path` with `text`, creating its directories.
+/// Replaces the file at `path` with `text`, creating its directories. A directory it
+/// creates has mode 0700 and a file it creates has mode 0600.
 fn write(path: &Path, text: &str) -> io::Result<()> {
     if let Some(dir) = path.parent() {
-        fs::create_dir_all(dir)?;
+        DirBuilder::new().recursive(true).mode(0o700).create(dir)?;
     }
-    fs::write(path, text)
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(path)?;
+    file.write_all(text.as_bytes())
 }
 
 /// The backtrace of the panic that runs the hook, or `None` when the
@@ -109,6 +117,9 @@ pub(crate) fn install(path: PathBuf) {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::unnecessary_wraps)]
+
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
 
     use rstest::rstest;
 
@@ -200,6 +211,43 @@ mod tests {
         write(&path, "boom").unwrap();
 
         assert_eq!(fs::read_to_string(path).unwrap(), "boom");
+    }
+
+    fn mode(path: &Path) -> u32 {
+        fs::metadata(path).unwrap().permissions().mode() & 0o777
+    }
+
+    #[test]
+    fn a_panic_log_file_is_created_with_mode_0600() {
+        let dir = ScratchDir::new("panic-log-file-mode");
+        let path = dir.join("panic.log");
+
+        write(&path, "boom").unwrap();
+
+        assert_eq!(mode(&path), 0o600);
+    }
+
+    #[test]
+    fn every_directory_of_a_panic_log_is_created_with_mode_0700() {
+        let dir = ScratchDir::new("panic-log-dir-mode");
+        let outer = dir.join("a");
+        let inner = outer.join("b");
+
+        write(&inner.join("panic.log"), "boom").unwrap();
+
+        assert_eq!((mode(&outer), mode(&inner)), (0o700, 0o700));
+    }
+
+    #[test]
+    fn an_existing_directory_of_a_panic_log_keeps_its_mode() {
+        let dir = ScratchDir::new("panic-log-dir-existing");
+        let existing = dir.join("a");
+        DirBuilder::new().mode(0o755).create(&existing).unwrap();
+        fs::set_permissions(&existing, fs::Permissions::from_mode(0o755)).unwrap();
+
+        write(&existing.join("panic.log"), "boom").unwrap();
+
+        assert_eq!(mode(&existing), 0o755);
     }
 
     #[test]
