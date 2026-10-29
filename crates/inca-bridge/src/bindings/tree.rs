@@ -161,7 +161,13 @@ fn set_style<'js>(
         if is_display {
             mark_focus_dirty(&mut host, node_id);
         }
-        if let Some(warning) = warning {
+        if let Some(warning) = warning
+            && host
+                .style_warned
+                .entry(node_id)
+                .or_default()
+                .insert(warning.clone())
+        {
             let tag = host.tree.get(node_id).map_or("", VirtualNode::tag_name);
             (host.warn)(&format!("node {node_id} ({tag}): {warning}"));
         }

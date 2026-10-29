@@ -433,8 +433,6 @@ pub fn declared_window_size(node: &VirtualNode) -> (Option<f64>, Option<f64>) {
 /// applies, and for an empty string on a known key.
 #[must_use]
 pub fn style_warning(key: &str, value: &AttributeValue) -> Option<String> {
-    // A caller checks each prop as it stores it, so a bad value that stays
-    // in place is reported once and setting it again reports it again.
     let fault = read_prop(
         &mut StyleSpec::default(),
         &mut Overflows::default(),
