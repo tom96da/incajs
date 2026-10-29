@@ -36,10 +36,6 @@ A fixed entry is deleted and its ID is never reused.
   Under `inca dev` they are reported as `appError`. Fix: write them to a
   second file next to `panic.log`, from the reporter of the production host.
 
-  `panic.log` keeps the last panic only, and the next panic replaces it. Fix:
-  keep the earlier panics too, for example one file per panic named by its date
-  and time.
-
 - **B-121 `:style` leaves out some CSS value and key forms**
   `Units: gpui · Size: S · Impact: Low`
 
@@ -1250,3 +1246,13 @@ A fixed entry is deleted and its ID is never reused.
   one call, and each call forgets the stop of the call before. The host polls
   right after it starts the entry, and its time limit is off, so it does not
   reach this. Fix: record the stop with the module.
+
+- **B-241 `panic.log` loses earlier panics and can be written through a link**
+  `Units: host · Size: S–M · Impact: Low`
+
+  The next panic replaces `panic.log`. When the host finds no home directory,
+  it writes below the temporary directory, where another user can place a link
+  named `panic.log` before the first panic. Fix: keep each panic in a new file
+  that is created exclusively, in a private directory owned by the user.
+  Another option is to let the person choose the save location in an OS dialog
+  when the app crashes.
