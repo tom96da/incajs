@@ -186,6 +186,9 @@ Shared throw rules, all as a `TypeError` except where noted:
 `dispatchEvent` also throws a `DOMException` named `InvalidStateError` for an
 event that is being dispatched.
 
+`insertBefore` and `appendChild` also throw a `DOMException` named
+`HierarchyRequestError` when the attachment would make a node its own ancestor.
+
 `insertBefore` and `appendChild`:
 
 - If `anchorId` equals `childId` and the child is already under `parentId`,

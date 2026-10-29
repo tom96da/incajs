@@ -85,7 +85,7 @@ mod tests {
     use rstest::rstest;
 
     use super::Host;
-    use crate::test_support::engine_with_bindings;
+    use crate::test_support::{engine_with_bindings, error_name};
 
     /// A mounted node, and the engine and host it lives in.
     fn mounted(held: u8) -> (inca_jsenv::Engine, Rc<RefCell<Host>>, u32) {
@@ -101,20 +101,6 @@ mod tests {
             )
             .unwrap();
         (engine, host, node)
-    }
-
-    fn error_name(engine: &inca_jsenv::Engine, call: &str) -> String {
-        let js = r"
-            (() => {
-                try {
-                    CALL;
-                    return 'none';
-                } catch (e) {
-                    return e.name;
-                }
-            })()
-            ";
-        engine.eval(&js.replace("CALL", call)).unwrap()
     }
 
     #[rstest]

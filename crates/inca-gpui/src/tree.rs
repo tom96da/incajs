@@ -178,7 +178,7 @@ impl fmt::Display for TreeError {
             TreeError::WouldCycle(id) => {
                 write!(
                     f,
-                    "attaching node {id} there would make it its own ancestor"
+                    "node {id} cannot be attached there. it would become its own ancestor"
                 )
             }
             TreeError::IdsExhausted => write!(f, "node id space exhausted"),

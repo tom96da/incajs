@@ -4,7 +4,7 @@
 #![allow(clippy::unwrap_used)]
 
 use super::*;
-use crate::test_support::{callback_ids, engine_with_bindings};
+use crate::test_support::{callback_ids, engine_with_bindings, error_name};
 use rstest::rstest;
 
 #[test]
@@ -416,6 +416,25 @@ fn moving_the_root_throws_a_catchable_exception() {
     let host = host.borrow();
     let root = host.tree.get(host.root()).unwrap();
     assert_eq!(root.parent(), None);
+}
+
+#[test]
+fn a_cycle_throws_hierarchy_request_error() {
+    let (engine, _host) = engine_with_bindings();
+    engine
+        .eval::<()>(
+            r"
+            globalThis.a = __inca_native__.createNode('div');
+            globalThis.c = __inca_native__.createNode('div');
+            __inca_native__.appendChild(a, c);
+            ",
+        )
+        .unwrap();
+
+    assert_eq!(
+        error_name(&engine, "__inca_native__.appendChild(c, a)"),
+        "HierarchyRequestError"
+    );
 }
 
 #[test]
