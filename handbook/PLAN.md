@@ -1033,6 +1033,7 @@ runs alongside Phase 3.4.
 - [x] `:style` colors take `transparent`, `rgb()`, `rgba()`, `#rgba` and
       `#rrggbbaa`, and ignore surrounding whitespace
 - [x] A style warning prints once for each element and message
+- [x] A tree cycle throws a `DOMException` named `HierarchyRequestError`
 
 ### Console and event slots
 

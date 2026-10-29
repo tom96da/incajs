@@ -74,6 +74,26 @@ pub fn engine_with_bindings() -> (Engine, Rc<RefCell<Host>>) {
     (engine, host)
 }
 
+/// The `name` of what `call` throws, or `'none'`.
+///
+/// # Panics
+///
+/// Panics when the engine fails to evaluate the call.
+#[must_use]
+pub fn error_name(engine: &Engine, call: &str) -> String {
+    let js = r"
+        (() => {
+            try {
+                CALL;
+                return 'none';
+            } catch (e) {
+                return e.name;
+            }
+        })()
+        ";
+    engine.eval(&js.replace("CALL", call)).unwrap()
+}
+
 /// An engine with the bindings installed on `host` and [`LISTEN_JS`] evaluated.
 ///
 /// # Panics

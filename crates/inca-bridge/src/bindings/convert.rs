@@ -145,5 +145,10 @@ pub(super) fn existing_node<'a>(
 }
 
 pub(super) fn throw_tree_error(ctx: &Ctx<'_>, err: TreeError) -> rquickjs::Error {
-    Exception::throw_type(ctx, &err.to_string())
+    match err {
+        TreeError::WouldCycle(_) => {
+            Exception::throw_dom(ctx, "HierarchyRequestError", &err.to_string())
+        }
+        _ => Exception::throw_type(ctx, &err.to_string()),
+    }
 }
