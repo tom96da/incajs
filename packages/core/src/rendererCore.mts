@@ -19,7 +19,6 @@ export {
   focusedNode,
   appendChild,
   createNode,
-  destroyNode,
   holdNode,
   releaseNode,
   insertBefore,
@@ -36,7 +35,7 @@ export {
   removeStyle,
 } from "./tree.mts";
 export { createIncaElement, rootElement } from "./element/handle.mts";
-export { isDestroyed } from "./element/lifecycle.mts";
+export { isRemoved } from "./element/lifecycle.mts";
 /** @internal */
 export { releaseWhenCollected } from "./element/lifecycle.mts";
 export {

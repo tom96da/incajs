@@ -1,14 +1,11 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { setFlagsFromString } from "node:v8";
-import { runInNewContext } from "node:vm";
-
 import { describe, expect, it, vi } from "vitest";
 
 import { document } from "../document.mts";
 import { createIncaElement, rootElement } from "./handle.mts";
-import { elementOf, markDestroyed, recordedCount } from "./lifecycle.mts";
+import { elementOf, markDestroyed, markRemoved } from "./lifecycle.mts";
 import { createTextNode, remove } from "./shadowTree.mts";
 import type { ScrollOptions } from "./scroll.mts";
 import type { IncaElement, IncaInputElement } from "./types.mts";
@@ -39,7 +36,13 @@ function installHost(
     hasPointerCapture: vi.fn<(nodeId: number, pointerId: number) => boolean>(() => true),
     scrollIntoViewNode: vi.fn<(nodeId: number, block: string, inline: string) => void>(),
     createNode: vi.fn<() => number>(() => 60),
-    destroyNode: vi.fn<() => number[]>(() => []),
+    removeChild: vi.fn<(parentId: number, childId: number) => void>(),
+    releaseListeners: vi.fn<() => number[]>(() => []),
+    holdNode: vi.fn<(nodeId: number) => void>(),
+    releaseNode: vi.fn<(nodeId: number) => void>(),
+    addEventListener: vi.fn<() => number>(() => 0),
+    removeEventListener: vi.fn<() => boolean>(() => true),
+    dispatchEvent: vi.fn<(nodeId: number, event: unknown) => boolean>(() => true),
   };
   globalThis.__inca_native__ = host as never;
   return host;
@@ -111,6 +114,119 @@ describe("createIncaElement value", () => {
   it("gives other elements no value property", () => {
     installInput();
     expect("value" in createIncaElement(1, "element", "div")).toBe(false);
+  });
+});
+
+describe("createIncaElement after the node is removed", () => {
+  /** A handle that left the tree, over a host whose attribute reads give `stored`. */
+  function removed(stored: string | number | boolean | null = null, tag: "div" | "input" = "div") {
+    const host = installHost(stored);
+    const el = createIncaElement(1, "element", tag);
+    markRemoved(el);
+    return { host, el };
+  }
+
+  it("reads its id from the host", () => {
+    const { host, el } = removed("a");
+
+    expect(el.id).toBe("a");
+    expect(host.getAttribute).toHaveBeenCalledWith(1, "id");
+  });
+
+  it("reads its tabindex from the host", () => {
+    expect(removed("4").el.tabIndex).toBe(4);
+  });
+
+  it("reads the text of an input from the host", () => {
+    const host = {
+      inputValue: vi.fn<(nodeId: number) => string>(() => "abc"),
+      setInputValue: vi.fn<(nodeId: number, value: string) => void>(),
+    };
+    globalThis.__inca_native__ = host as never;
+    const el = createIncaElement(1, "element", "input");
+    markRemoved(el);
+
+    expect((el as IncaInputElement).value).toBe("abc");
+  });
+
+  it.each<["id" | "tabIndex", unknown, [number, string, unknown]]>([
+    ["id", "b", [1, "id", "b"]],
+    ["tabIndex", 3, [1, "tabindex", 3]],
+  ])("writes %s through the host", (member, value, call) => {
+    const { host, el } = removed();
+
+    (el as unknown as Record<string, unknown>)[member] = value;
+
+    expect(host.setAttribute).toHaveBeenCalledExactlyOnceWith(...call);
+  });
+
+  it("writes the text of an input through the host", () => {
+    const host = { setInputValue: vi.fn<(nodeId: number, value: string) => void>() };
+    globalThis.__inca_native__ = host as never;
+    const el = createIncaElement(1, "element", "input");
+    markRemoved(el);
+
+    (el as IncaInputElement).value = "t";
+
+    expect(host.setInputValue).toHaveBeenCalledWith(1, "t");
+  });
+
+  it.each(["addEventListener", "removeEventListener"] as const)("ignores %s", (method) => {
+    const { host, el } = removed();
+
+    (el[method] as (type: string, listener: () => void) => void)("click", () => {});
+
+    expect(host[method]).not.toHaveBeenCalled();
+  });
+
+  it("passes dispatchEvent to the host, which checks the argument", () => {
+    const { host, el } = removed();
+    host.dispatchEvent.mockImplementation(() => {
+      throw new TypeError("not an event");
+    });
+
+    expect(() => el.dispatchEvent({} as never)).toThrow(TypeError);
+    expect(host.dispatchEvent).toHaveBeenCalledWith(1, {});
+  });
+
+  it.each([
+    ["focus", "focusNode"],
+    ["click", "click"],
+    ["scrollIntoView", "scrollIntoViewNode"],
+  ] as const)("ignores %s", (method, call) => {
+    const { host, el } = removed();
+
+    el[method]();
+
+    expect(host[call]).not.toHaveBeenCalled();
+  });
+
+  it("reads zero box members without asking the host", () => {
+    const host = installHost(null, { 1: [10, 20, 30, 40, 2, 0, 0] });
+    const el = createIncaElement(1, "element", "div");
+    markRemoved(el);
+
+    expect([el.offsetWidth, el.clientHeight, el.offsetLeft]).toEqual([0, 0, 0]);
+    expect(host.layoutOf).not.toHaveBeenCalled();
+  });
+
+  it("reads zero scroll members without asking the host", () => {
+    const host = installHost(null, {}, [5, 6, 7, 8]);
+    const el = createIncaElement(1, "element", "div");
+    markRemoved(el);
+
+    expect([el.scrollTop, el.scrollWidth]).toEqual([0, 0]);
+    expect(host.scrollOf).not.toHaveBeenCalled();
+  });
+
+  it("ignores scrollTo", () => {
+    const host = installHost(null, {}, [5, 6, 7, 8]);
+    const el = createIncaElement(1, "element", "div");
+    markRemoved(el);
+
+    el.scrollTo(1, 2);
+
+    expect(host.scrollNode).not.toHaveBeenCalled();
   });
 });
 
@@ -195,7 +311,7 @@ describe("createIncaElement layout", () => {
     expect([el.offsetLeft, el.offsetTop]).toEqual([5, 6]);
   });
 
-  it("reads zeros for a destroyed element", () => {
+  it("reads zeros for a freed element", () => {
     installHost(null, { 1: [10, 20, 30, 40, 2, 0, 0] });
     const el = createIncaElement(1, "element", "div");
     markDestroyed(el);
@@ -245,7 +361,7 @@ describe("createIncaElement focus and scrollIntoView", () => {
     expect(host.scrollIntoViewNode).toHaveBeenLastCalledWith(3, "center", "end");
   });
 
-  it("ignores focus and scrollIntoView once destroyed", () => {
+  it("ignores focus and scrollIntoView once freed", () => {
     const host = installHost();
     const el = createIncaElement(3, "element", "div");
     markDestroyed(el);
@@ -324,7 +440,7 @@ describe("createIncaElement scroll setters and methods", () => {
 });
 
 describe("createIncaElement blur and click", () => {
-  it("forwards blur of a destroyed element to the host", () => {
+  it("forwards blur of a freed element to the host", () => {
     const host = installHost();
     const el = createIncaElement(4, "element", "button");
     markDestroyed(el);
@@ -333,7 +449,7 @@ describe("createIncaElement blur and click", () => {
     expect(host.blurNode).toHaveBeenCalledWith(4);
   });
 
-  it("ignores click once destroyed", () => {
+  it("ignores click once freed", () => {
     const host = installHost();
     const el = createIncaElement(4, "element", "button");
     markDestroyed(el);
@@ -362,8 +478,8 @@ describe("createIncaElement pointer capture", () => {
     expect(createIncaElement(4, "element", "div").hasPointerCapture(1)).toBe(true);
   });
 
-  describe("after the element is destroyed", () => {
-    function destroyed() {
+  describe("after the element is freed", () => {
+    function freed() {
       const host = installHost();
       const el = createIncaElement(4, "element", "div");
       markDestroyed(el);
@@ -371,7 +487,7 @@ describe("createIncaElement pointer capture", () => {
     }
 
     it("still throws the host's error from setPointerCapture", () => {
-      const { host, el } = destroyed();
+      const { host, el } = freed();
       host.setPointerCapture.mockImplementation(() => {
         throw new DOMException("gone", "InvalidStateError");
       });
@@ -383,7 +499,7 @@ describe("createIncaElement pointer capture", () => {
     });
 
     it("answers hasPointerCapture with the host's answer", () => {
-      const { host, el } = destroyed();
+      const { host, el } = freed();
       host.hasPointerCapture.mockReturnValue(false);
 
       expect(el.hasPointerCapture(1)).toBe(false);
@@ -391,57 +507,11 @@ describe("createIncaElement pointer capture", () => {
     });
 
     it("still forwards releasePointerCapture without throwing", () => {
-      const { host, el } = destroyed();
+      const { host, el } = freed();
 
       expect(() => el.releasePointerCapture(1)).not.toThrow();
       expect(host.releasePointerCapture).toHaveBeenCalledWith(4, 1);
     });
-  });
-});
-
-describe("createIncaElement registry", () => {
-  const bun = (globalThis as { Bun?: { gc(sync: boolean): void } }).Bun;
-  if (!bun) setFlagsFromString("--expose-gc");
-  const gc = bun ? () => bun.gc(true) : (runInNewContext("gc") as () => void);
-
-  /** Each round runs in its own timer tick, since a deref keeps its target alive until the job ends. */
-  async function collectGarbage(): Promise<void> {
-    for (let i = 0; i < (bun ? 50 : 10); i++) {
-      gc();
-      await new Promise((resolve) => setTimeout(resolve, 5));
-    }
-  }
-
-  it("releases the entry of an element nothing references", async () => {
-    installHost();
-    await collectGarbage();
-    const before = recordedCount();
-    (() => createIncaElement(31, "element", "div"))();
-    expect(recordedCount()).toBe(before + 1);
-
-    await collectGarbage();
-
-    expect(recordedCount()).toBe(before);
-  });
-
-  it("keeps a newer handle's entry when an older one with its id is collected", async () => {
-    installHost();
-    const first = (() => new WeakRef(createIncaElement(33, "element", "div")))();
-    const el = createIncaElement(33, "element", "div");
-    const tick = (): Promise<unknown> => new Promise((resolve) => setTimeout(resolve, 5));
-
-    // deref() keeps its target alive until the job ends, so each check gets its own job.
-    for (let i = 0; i < 40; i++) {
-      await tick();
-      if (!first.deref()) break;
-      await tick();
-      gc();
-    }
-    await tick();
-    await tick();
-
-    expect(first.deref()).toBeUndefined();
-    expect(elementOf(33)).toBe(el);
   });
 });
 
@@ -466,7 +536,7 @@ describe("createIncaElement id", () => {
     expect(host.setAttribute).toHaveBeenLastCalledWith(1, "id", expected);
   });
 
-  it("reads an empty string after the node is destroyed", () => {
+  it("reads an empty string after the node is freed", () => {
     const host = installHost("a");
     const el = createIncaElement(1, "element", "div");
     markDestroyed(el);
@@ -474,7 +544,7 @@ describe("createIncaElement id", () => {
     expect(host.getAttribute).not.toHaveBeenCalled();
   });
 
-  it("ignores an id write after the node is destroyed", () => {
+  it("ignores an id write after the node is freed", () => {
     const host = installHost();
     const el = createIncaElement(1, "element", "div");
     markDestroyed(el);
@@ -494,6 +564,7 @@ describe("createIncaElement id", () => {
 });
 
 describe("createIncaElement contains", () => {
+  const kept: IncaElement[] = [];
   const tree = (): IncaElement[] => {
     installHost();
     const [root, child, grandchild] = [41, 42, 43].map((id) =>
@@ -527,6 +598,8 @@ describe("createIncaElement contains", () => {
   it("follows a removal: the old parent loses the subtree, which keeps its own", () => {
     const [root, child, grandchild] = tree();
     remove(child!);
+    // A collected removed handle releases its hold through whichever host is installed then.
+    kept.push(child!);
     expect([root!.contains(child!), child!.contains(grandchild!)]).toEqual([false, true]);
   });
 

@@ -4,14 +4,21 @@
 import {
   appendChild,
   createNode,
-  destroyNode,
+  holdNode,
   insertBefore,
+  releaseListeners,
   removeChild,
   setAttribute,
   setStyle,
 } from "../tree.mts";
 import { createIncaElement } from "./handle.mts";
-import { markDestroyed, withNodeId } from "./lifecycle.mts";
+import {
+  isDestroyed,
+  isHeld,
+  markRemoved,
+  releaseWhenCollected,
+  withNodeId,
+} from "./lifecycle.mts";
 import type { TagName } from "../types.mts";
 import type { IncaElement, IncaNode, IncaText } from "./types.mts";
 
@@ -66,11 +73,7 @@ export function setText(node: IncaText, text: string): void {
  * @param text - the new text content
  */
 export function setElementText(el: IncaElement, text: string): void {
-  for (const child of el.children.splice(0)) {
-    destroyNode(child.__node_id);
-    markDestroyed(child);
-    child.parent = null;
-  }
+  for (const child of el.children.slice()) remove(child);
   if (!text) return;
 
   const textNode = createTextNode(text);
@@ -89,7 +92,6 @@ function unlink(child: IncaNode): void {
   child.parent = null;
 }
 
-// `destroyNode` detaches on its own, so the removal path calls `unlink` alone.
 function detach(child: IncaNode): void {
   if (child.parent) removeChild(child.parent.__node_id, child.__node_id);
   unlink(child);
@@ -124,17 +126,24 @@ export function insert(child: IncaNode, parent: IncaElement, anchor?: IncaNode |
 }
 
 /**
- * Removes `child` for good: the native node, its whole subtree, and every
- * event listener registered in it.
+ * Removes `child` for good: the native node leaves its parent and keeps its
+ * subtree, and every event listener registered in the subtree is released. The
+ * handles stay readable: the root is held until its handle is collected.
  *
- * A caller that removes a subtree calls this on its root alone, and the host
- * frees the descendants with it.
+ * A caller that removes a subtree calls this on its root alone.
  * @param child - the node being removed
  */
 export function remove(child: IncaNode): void {
-  unlink(child);
-  destroyNode(child.__node_id);
-  markDestroyed(child);
+  // A parent the host freed takes its children with it, and `removeChild` rejects its id.
+  if (child.parent && isDestroyed(child.parent)) unlink(child);
+  else detach(child);
+  releaseListeners(child.__node_id);
+  markRemoved(child);
+  // The host frees an unheld parentless node at the next frame, and the handle stays readable.
+  if (child.kind === "element" && !isDestroyed(child) && !isHeld(child)) {
+    holdNode(child.__node_id);
+    releaseWhenCollected(child);
+  }
 }
 
 /**

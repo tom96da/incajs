@@ -15,7 +15,6 @@ const native = {
   appendChild: vi.fn<(parentId: number, childId: number) => void>(),
   insertBefore: vi.fn<(parentId: number, childId: number, anchorId: number | null) => void>(),
   removeChild: vi.fn<(parentId: number, childId: number) => void>(),
-  destroyNode: vi.fn<(nodeId: number) => number[]>(() => []),
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   setStyle: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
 };

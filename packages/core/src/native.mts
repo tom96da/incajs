@@ -30,7 +30,7 @@ interface IncaNative {
     passive?: boolean,
   ): CallbackId;
   removeEventListener(target: EventTargetId, event: string, callbackId: CallbackId): boolean;
-  destroyNode(nodeId: NodeId): CallbackId[];
+  releaseListeners(nodeId: NodeId): CallbackId[];
   holdNode(nodeId: NodeId): void;
   releaseNode(nodeId: NodeId): void;
   focusNode(nodeId: NodeId, preventScroll?: boolean): void;

@@ -793,17 +793,6 @@ A fixed entry is deleted and its ID is never reused.
   through `%c` with a gray `color`. The handler an app sets itself takes
   precedence.
 
-- **B-170 The handles of a removed element are inert**
-  `Units: core · Size: S · Impact: Low`
-
-  Vue destroys a node on unmount, and the host frees a detached node that
-  nothing holds. Listeners registered before are released,
-  `addEventListener()` afterwards ignores the listener, an assignment to a
-  handler property does nothing, `dispatchEvent()` returns `true` and skips
-  the argument check, `tabIndex` reads the default and `id` reads an empty
-  string. A browser keeps the listeners and the attribute of a detached
-  element. Fix: keep a destroyed node as a detached element in the host tree.
-
 - **B-172 Scroll members of a template `ref` read the last drawn layout**
   `Units: gpui,bridge,core · Size: M · Impact: Low`
 
@@ -1257,3 +1246,14 @@ A fixed entry is deleted and its ID is never reused.
   passes. A reload that starts from the ready notification is not awaited, and
   can print `reload failed` after the host has stopped. Fix: skip a reload once
   the session is stopping, and wait for the one from the ready notification.
+
+- **B-246 A removed element drops its listeners**
+  `Units: core,bridge · Size: M · Impact: Low`
+
+  A browser keeps the listeners of a detached element, and `dispatchEvent()` on
+  it runs them. Removing an element releases its listeners, because the
+  callback table holds each listener strongly and a kept listener would pin the
+  element. Fix: keep the element and its listeners alive while JS holds a
+  reference to it. The callback table holds its listeners weakly, so a
+  detached element with a listener is collected once JS drops it, and
+  `remove()` stops releasing listeners.

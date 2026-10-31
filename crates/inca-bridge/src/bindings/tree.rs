@@ -12,10 +12,9 @@ use super::Natives;
 use super::convert::{JsNodeId, existing_node, or_null, throw_tree_error};
 use super::host::Host;
 
-/// The retained tree itself: allocating, attaching, and describing nodes,
-/// plus `destroyNode`, `holdNode` and `releaseNode`. Freeing a subtree is a
-/// tree operation first, even though it also releases the listener/focus
-/// state that named its nodes.
+/// The retained tree itself: allocating, attaching, and describing nodes, plus `destroyNode`,
+/// `releaseListeners`, `holdNode` and `releaseNode`. Freeing a subtree is a tree operation first,
+/// even though it also releases the listener/focus state that named its nodes.
 pub(super) fn install_tree(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("rootNodeId", root_node_id)?;
     n.set("createNode", create_node)?;
@@ -28,6 +27,7 @@ pub(super) fn install_tree(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("setStyle", set_style)?;
     n.set("removeStyle", remove_style)?;
     n.set("destroyNode", destroy_node)?;
+    n.set("releaseListeners", release_listeners)?;
     n.set("holdNode", hold_node)?;
     n.set("releaseNode", release_node)
 }
@@ -198,6 +198,23 @@ fn destroy_node<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> 
         move_tab_start(&mut host, node_id, before);
         let freed = host.tree.destroy_node(node_id);
         Ok(host.free_ids(&freed))
+    }
+}
+
+/// Drops the listeners of `node_id` and of every node below it and returns their callback ids.
+/// The nodes stay in the tree. An unknown id returns no ids.
+fn release_listeners(host: Rc<RefCell<Host>>) -> impl Fn(JsNodeId) -> Vec<u32> {
+    move |JsNodeId(node_id)| {
+        let mut host = host.borrow_mut();
+        let mut callbacks = Vec::new();
+        let mut pending = vec![node_id];
+        while let Some(current) = pending.pop() {
+            if let Some(node) = host.tree.get(current) {
+                pending.extend(node.children().iter().copied());
+                callbacks.extend(host.listeners.release(current));
+            }
+        }
+        callbacks
     }
 }
 

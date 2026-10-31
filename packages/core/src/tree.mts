@@ -53,7 +53,7 @@ export function insertBefore(parentId: NodeId, childId: NodeId, anchorId: NodeId
 /**
  * Detaches `childId` from `parentId`. The detached node keeps its own children
  * and is freed at the start of the next frame unless it is inserted or held
- * with {@link holdNode} by then. Use {@link destroyNode} to free it at once.
+ * with {@link holdNode} by then.
  * @param parentId - the current container
  * @param childId - the node being detached
  */
@@ -62,15 +62,12 @@ export function removeChild(parentId: NodeId, childId: NodeId): void {
 }
 
 /**
- * Frees `nodeId` and its whole subtree, detaching it first, and drops every
- * event listener registered anywhere in it. Destroying an already-destroyed
- * node does nothing. The host's own root cannot be destroyed and raises.
- *
- * Also drops the hold of {@link holdNode}.
- * @param nodeId - the node that isn't coming back
+ * Drops every event listener registered on `nodeId` and on the nodes below it. The nodes stay in
+ * the tree. An unknown id does nothing.
+ * @param nodeId - the root of the subtree
  */
-export function destroyNode(nodeId: NodeId): void {
-  releaseCallbacks(native().destroyNode(nodeId));
+export function releaseListeners(nodeId: NodeId): void {
+  releaseCallbacks(native().releaseListeners(nodeId));
 }
 
 /**

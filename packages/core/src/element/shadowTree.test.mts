@@ -1,11 +1,14 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import { setFlagsFromString } from "node:v8";
+import { runInNewContext } from "node:vm";
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createEventTarget } from "../eventTarget.mts";
 import { rectOf } from "./geometry.mts";
-import { elementOf, unregisterElement } from "./lifecycle.mts";
+import { elementOf, markDestroyed, releaseWhenCollected, unregisterElement } from "./lifecycle.mts";
 import * as tree from "./shadowTree.mts";
 import type { EventLike, IncaEventTarget } from "../types.mts";
 import type { EventHandlers, IncaElement, IncaText } from "./types.mts";
@@ -41,7 +44,7 @@ const host = {
   removeAttribute: vi.fn<(nodeId: number, key: string) => void>(),
   setStyle: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   removeStyle: vi.fn<(nodeId: number, key: string) => void>(),
-  destroyNode: vi.fn<(nodeId: number) => number[]>(() => []),
+  releaseListeners: vi.fn<(nodeId: number) => number[]>(() => []),
   holdNode: vi.fn<(nodeId: number) => void>(),
   releaseNode: vi.fn<(nodeId: number) => void>(),
   focusNode: vi.fn<(nodeId: number) => void>(),
@@ -80,6 +83,7 @@ const noLayout = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(host.getAttribute).mockImplementation(() => null);
   globalThis.__inca_native__ = host as never;
   for (let id = 1; id < nextId; id++) unregisterElement(id);
   nextId = 1;
@@ -212,7 +216,8 @@ describe("setElementText", () => {
 
     tree.setElementText(el, "hello");
 
-    expect(host.destroyNode).toHaveBeenCalledWith(oldChild.__node_id);
+    expect(host.removeChild).toHaveBeenCalledWith(el.__node_id, oldChild.__node_id);
+    expect(host.releaseListeners).toHaveBeenCalledWith(oldChild.__node_id);
     expect(oldChild.parent).toBeNull();
     expect(el.children).toHaveLength(1);
     expect(el.children[0]).toMatchObject({ kind: "text", text: "hello" });
@@ -296,7 +301,6 @@ describe("insert", () => {
     tree.insert(child, newParent);
 
     expect(host.removeChild).toHaveBeenCalledWith(oldParent.__node_id, child.__node_id);
-    expect(host.destroyNode).not.toHaveBeenCalled();
     expect(oldParent.children).toHaveLength(0);
     expect(newParent.children).toEqual([child]);
     expect(child.parent).toBe(newParent);
@@ -304,7 +308,7 @@ describe("insert", () => {
 });
 
 describe("remove", () => {
-  it("frees the node and unlinks it from its parent", () => {
+  it("detaches the node and keeps it in the host", () => {
     const parent = element();
     const child = element();
     tree.insert(child, parent);
@@ -312,81 +316,190 @@ describe("remove", () => {
 
     tree.remove(child);
 
-    expect(host.destroyNode).toHaveBeenCalledWith(child.__node_id);
-    expect(
-      host.removeChild,
-      "destroyNode detaches natively, so a second call would be redundant",
-    ).not.toHaveBeenCalled();
+    expect(host.removeChild).toHaveBeenCalledWith(parent.__node_id, child.__node_id);
     expect(parent.children).toHaveLength(0);
     expect(child.parent).toBeNull();
   });
 
-  it("turns the handles of the removed subtree into inert targets", () => {
+  it("releases the listeners of the subtree through its root", () => {
+    const child = element();
+
+    tree.remove(child);
+
+    expect(host.releaseListeners).toHaveBeenCalledWith(child.__node_id);
+    expect(host.removeChild).not.toHaveBeenCalled();
+  });
+
+  it("holds the removed element until its handle is collected", () => {
+    const child = tree.createElementNode("div");
+    vi.mocked(host.holdNode).mockClear();
+
+    tree.remove(child);
+
+    expect(host.holdNode).toHaveBeenCalledWith(child.__node_id);
+  });
+
+  it("holds only the root of a removed subtree", () => {
+    const root = tree.createElementNode("div");
+    const leaf = tree.createElementNode("div");
+    tree.insert(leaf, root);
+    vi.mocked(host.holdNode).mockClear();
+
+    tree.remove(root);
+
+    expect(vi.mocked(host.holdNode).mock.calls).toEqual([[root.__node_id]]);
+  });
+
+  it("does not hold a removed element a held path already holds", () => {
+    const child = tree.createElementNode("div");
+    releaseWhenCollected(child);
+    vi.mocked(host.holdNode).mockClear();
+
+    tree.remove(child);
+
+    expect(host.holdNode).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["a text leaf", () => tree.createTextNode("t")],
+    ["a comment stand-in", () => tree.createCommentNode()],
+  ])("holds no %s", (_name, create) => {
+    const node = create();
+    vi.mocked(host.holdNode).mockClear();
+
+    tree.remove(node);
+
+    expect(host.holdNode).not.toHaveBeenCalled();
+  });
+
+  it("unlinks a child of a freed parent without a host call", () => {
+    const parent = tree.createElementNode("div");
+    const child = tree.createElementNode("div");
+    tree.insert(child, parent);
+    markDestroyed(parent);
+    vi.mocked(host.removeChild).mockClear();
+    vi.mocked(host.holdNode).mockClear();
+
+    tree.remove(child);
+
+    expect(host.removeChild).not.toHaveBeenCalled();
+    expect(parent.children).toHaveLength(0);
+    expect(host.holdNode).not.toHaveBeenCalled();
+  });
+
+  it("holds no element the host freed", () => {
+    const child = tree.createElementNode("div");
+    markDestroyed(child);
+    vi.mocked(host.holdNode).mockClear();
+
+    tree.remove(child);
+
+    expect(host.holdNode).not.toHaveBeenCalled();
+  });
+
+  it("drops the callbacks the host reports released", () => {
+    const child = element();
+    globalThis.__inca_callbacks__ = { 5: () => {} };
+    vi.mocked(host.releaseListeners).mockReturnValueOnce([5]);
+
+    tree.remove(child);
+
+    expect(globalThis.__inca_callbacks__[5]).toBeUndefined();
+  });
+
+  it("makes the removed subtree ignore listener calls", () => {
     const root = tree.createElementNode("div");
     const mid = tree.createElementNode("div");
     const leaf = tree.createElementNode("button");
     tree.insert(tree.createTextNode("t"), mid);
     tree.insert(leaf, mid);
     tree.insert(mid, root);
-    vi.mocked(host.setAttribute).mockClear();
 
     tree.remove(root);
 
     for (const el of [root, leaf]) {
       el.addEventListener("click", vi.fn<() => void>());
       el.removeEventListener("click", vi.fn<() => void>());
-      el.tabIndex = 5;
     }
-    expect(root.dispatchEvent({ type: "ping" })).toBe(true);
-    expect([root.tabIndex, leaf.tabIndex]).toEqual([-1, 0]);
     expect(add).not.toHaveBeenCalled();
     expect(remove).not.toHaveBeenCalled();
-    expect(dispatch).not.toHaveBeenCalled();
-    expect(host.getAttribute).not.toHaveBeenCalled();
-    expect(host.setAttribute).not.toHaveBeenCalled();
   });
 
-  it("turns the children setElementText frees into inert targets", () => {
+  it("keeps the attributes of a descendant readable", () => {
+    const root = tree.createElementNode("div");
+    const leaf = tree.createElementNode("button");
+    tree.insert(leaf, root);
+    vi.mocked(host.getAttribute).mockReturnValue("7");
+
+    tree.remove(root);
+
+    expect([root.id, leaf.id, leaf.tabIndex]).toEqual(["7", "7", 7]);
+  });
+
+  it("keeps the children setElementText replaces readable", () => {
     const root = tree.createElementNode("div");
     const child = tree.createElementNode("div");
     tree.insert(child, root);
+    vi.mocked(host.getAttribute).mockReturnValue("c");
 
     tree.setElementText(root, "");
-    child.addEventListener("click", vi.fn<() => void>());
 
-    expect(add).not.toHaveBeenCalled();
-    expect(child.dispatchEvent({ type: "ping" })).toBe(true);
+    expect(child.id).toBe("c");
   });
+});
 
-  it("frees a node that was never attached", () => {
-    const child = element();
+describe("a removed element once its handle is collected", () => {
+  const bun = (globalThis as { Bun?: { gc(sync: boolean): void } }).Bun;
+  if (!bun) setFlagsFromString("--expose-gc");
+  const gc = bun ? () => bun.gc(true) : (runInNewContext("gc") as () => void);
 
-    tree.remove(child);
+  /**
+   * Each round runs in its own timer tick, because a deref keeps its target alive until the job
+   * ends.
+   */
+  async function collectGarbage(id: number): Promise<void> {
+    for (
+      let i = 0;
+      i < 200 && !vi.mocked(host.releaseNode).mock.calls.some(([n]) => n === id);
+      i++
+    ) {
+      gc();
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+  }
 
-    expect(host.destroyNode).toHaveBeenCalledWith(child.__node_id);
-    expect(host.removeChild).not.toHaveBeenCalled();
+  it("releases the hold of its node", async () => {
+    // Handles of earlier tests may be collected here, so this node gets an id none of them had.
+    nextId = 9000;
+    const id = (() => {
+      const child = tree.createElementNode("div");
+      tree.remove(child);
+      return child.__node_id;
+    })();
+    expect(host.releaseNode).not.toHaveBeenCalledWith(id);
+    // The recorded arguments of `createEventTarget` hold a closure that keeps the handle alive.
+    vi.clearAllMocks();
+
+    await collectGarbage(id);
+
+    expect(host.releaseNode).toHaveBeenCalledWith(id);
   });
 });
 
 describe("element registry", () => {
-  it("drops the whole removed subtree", () => {
+  it("keeps the record of the removed subtree", () => {
     const root = tree.createElementNode("div");
     const mid = tree.createElementNode("div");
     const leaf = tree.createElementNode("button");
     tree.insert(leaf, mid);
     tree.insert(mid, root);
-    expect([root, mid, leaf].map((el) => elementOf(el.__node_id))).toEqual([root, mid, leaf]);
 
     tree.remove(root);
 
-    expect([root, mid, leaf].map((el) => elementOf(el.__node_id) !== undefined)).toEqual([
-      false,
-      false,
-      false,
-    ]);
+    expect([root, mid, leaf].map((el) => elementOf(el.__node_id))).toEqual([root, mid, leaf]);
   });
 
-  it("drops the children setElementText replaces, and their descendants", () => {
+  it("keeps the record of the children setElementText replaces", () => {
     const root = tree.createElementNode("div");
     const child = tree.createElementNode("div");
     const grandchild = tree.createElementNode("div");
@@ -395,9 +508,7 @@ describe("element registry", () => {
 
     tree.setElementText(root, "hello");
 
-    expect(elementOf(child.__node_id) !== undefined).toBe(false);
-    expect(elementOf(grandchild.__node_id) !== undefined).toBe(false);
-    expect(elementOf(root.__node_id)).toBe(root);
+    expect([child, grandchild].map((el) => elementOf(el.__node_id))).toEqual([child, grandchild]);
   });
 });
 

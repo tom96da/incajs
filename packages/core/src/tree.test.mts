@@ -43,7 +43,7 @@ const native = {
   removeEventListener: vi.fn<(nodeId: number, event: string, callbackId: number) => boolean>(
     () => true,
   ),
-  destroyNode: vi.fn<(nodeId: number) => number[]>(() => []),
+  releaseListeners: vi.fn<(nodeId: number) => number[]>(() => []),
   holdNode: vi.fn<(nodeId: number) => void>(),
   releaseNode: vi.fn<(nodeId: number) => void>(),
   focusNode: vi.fn<(nodeId: number) => void>(),

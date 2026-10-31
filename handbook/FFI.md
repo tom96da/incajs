@@ -60,6 +60,9 @@ the custom renderer's output. Each node has:
 - `destroyNode` frees a node and its subtree at once. At the start of each
   frame the host also frees every node that has no parent and is neither
   the root nor held with `holdNode`, with its subtree.
+- `releaseListeners` drops the listeners of a node and its subtree and leaves
+  the nodes in the tree. A detached node stays readable until the host frees
+  it.
 
 ### Tag vocabulary
 
@@ -153,6 +156,7 @@ be passed, and `undefined` there counts as `null`.
 | `releasePointerCapture` | `(nodeId: number, pointerId: number) => void` | Clear the pending capture when `nodeId` holds it. Throws `NotFoundError` for a `pointerId` other than 1. |
 | `hasPointerCapture` | `(nodeId: number, pointerId: number) => boolean` | Whether `nodeId` is the pending capture and still mounted. `false` for a `pointerId` other than 1. |
 | `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its subtree, and return every `callbackId` registered in it. An unknown id returns `[]`. Destroying the root throws. Also drops the hold and the waiting `scrollIntoViewNode` calls of the destroyed nodes. |
+| `releaseListeners` | `(nodeId: number) => number[]` | Drop every listener registered on `nodeId` and on the nodes below it, and return their `callbackId`s. The nodes, their attributes and their children stay. An unknown id returns `[]`. |
 | `focusNode` | `(nodeId: number, preventScroll?: boolean) => void` | Request focus for `nodeId`, next frame. Only a connected node with a `tabindex` that is not hidden takes it, and a `button` or `input` defaults to `0`. Unless `preventScroll` is `true`, the scroll containers above the node then scroll it into view: a node that shows stays put, a node outside a container's box centres, and a node that shows partly moves the least vertically and stays put horizontally. A node with no box yet is retried next frame. |
 | `focusedNode` | `() => number \| null` | The id of the focused node, or `null` when none has focus. |
 | `blurNode` | `(nodeId: number) => void` | Request that `nodeId` lose focus. Takes effect next frame, and does nothing if `nodeId` is not the focused node by then. |
@@ -176,9 +180,9 @@ Shared throw rules, all as a `TypeError` except where noted:
 - `dispatchEvent` throws for an argument that is not an event of the host.
 - A `nodeId`, `parentId`, `childId` or `anchorId` that names no node
   throws, except in the calls that let go of something: `releaseNode`,
-  `destroyNode`, `removeEventListener`, `blurNode` and the `childId` of
-  `removeChild` ignore it. The host can free a node before the caller lets
-  go of it.
+  `destroyNode`, `releaseListeners`, `removeEventListener`, `blurNode` and
+  the `childId` of `removeChild` ignore it. The host can free a node before
+  the caller lets go of it.
 - `scrollIntoViewNode` throws for a `block` or `inline` outside the four
   alignment names.
 - `removeChild` ignores a `childId` that is not a child of `parentId`.
@@ -214,7 +218,8 @@ Payloads and author-facing behaviour are in
   throws a `RangeError`. Distinct ids stack on one `(target, event)`, and
   `capture` and `passive` belong to the registration. An id belongs to one
   registration, so `removeEventListener` takes the id only. `destroyNode`
-  returns the dropped ids because only the caller can free the JS half.
+  and `releaseListeners` return the dropped ids because only the caller can
+  free the JS half.
 - `packages/core` keys a registration by target, event, capture and listener, so
   `removeEventListener(type, listener, options)` finds it by identity and
   adding the same listener again changes nothing. A listener object keeps its
@@ -245,7 +250,7 @@ global is skipped.
   the sweep of that frame freed a node.
 - `nodeIds` holds every freed node, subtrees included, and `callbackIds`
   every registration on them. Each id arrives once. Ids freed by
-  `destroyNode` never pass through it.
+  `destroyNode` or dropped by `releaseListeners` never pass through it.
 - A throw is reported to `Host::failures` and the frame goes on.
 
 #### Event targets

@@ -22,7 +22,14 @@ import {
 } from "../tree.mts";
 import { withEventHandlers } from "./eventHandlers.mts";
 import { layoutBox, offsetOf, offsetParentOf, rectOf, tabIndexOf } from "./geometry.mts";
-import { elementOf, isDestroyed, isNode, registerElement, withNodeId } from "./lifecycle.mts";
+import {
+  elementOf,
+  isDestroyed,
+  isNode,
+  isRemoved,
+  registerElement,
+  withNodeId,
+} from "./lifecycle.mts";
 import { scrollIntoViewArgs, scrollPosition } from "./scroll.mts";
 import type { NodeId, TagName } from "../types.mts";
 import type { ScrollArgs, ScrollIntoViewOptions } from "./scroll.mts";
@@ -49,7 +56,7 @@ export function createIncaElement(
   passiveByDefault: readonly string[] = [],
 ): IncaElement {
   const target = createEventTarget(() => id, passiveByDefault);
-  const scroll = () => (isDestroyed(element) ? null : scrollOf(id));
+  const scroll = () => (isRemoved(element) ? null : scrollOf(id));
   const fields: Omit<IncaElement, "__node_id" | keyof EventHandlers> = {
     get id() {
       return isDestroyed(element) ? "" : String(getAttribute(id, "id") ?? "");
@@ -61,11 +68,11 @@ export function createIncaElement(
     parent: null,
     children: [],
     focus: (options?: { preventScroll?: boolean }) => {
-      if (!isDestroyed(element)) focus(id, Boolean(options?.preventScroll));
+      if (!isRemoved(element)) focus(id, Boolean(options?.preventScroll));
     },
     blur: () => blur(id),
     click: () => {
-      if (!isDestroyed(element)) click(id);
+      if (!isRemoved(element)) click(id);
     },
     setPointerCapture: (pointerId: number) => setPointerCapture(id, pointerId),
     releasePointerCapture: (pointerId: number) => releasePointerCapture(id, pointerId),
@@ -81,10 +88,10 @@ export function createIncaElement(
       return false;
     },
     addEventListener: (...args: Parameters<typeof target.addEventListener>) => {
-      if (!isDestroyed(element)) target.addEventListener(...args);
+      if (!isRemoved(element)) target.addEventListener(...args);
     },
     removeEventListener: (...args: Parameters<typeof target.removeEventListener>) => {
-      if (!isDestroyed(element)) target.removeEventListener(...args);
+      if (!isRemoved(element)) target.removeEventListener(...args);
     },
     dispatchEvent: (event) => isDestroyed(element) || target.dispatchEvent(event),
     get tabIndex() {
@@ -144,7 +151,7 @@ export function createIncaElement(
     scrollTo: (...args: ScrollArgs) => scrollPosition(element, args, false),
     scrollBy: (...args: ScrollArgs) => scrollPosition(element, args, true),
     scrollIntoView: (arg?: boolean | ScrollIntoViewOptions) => {
-      if (isDestroyed(element)) return;
+      if (isRemoved(element)) return;
       const { block, inline } = scrollIntoViewArgs(arg);
       scrollIntoViewNode(id, block, inline);
     },
@@ -166,9 +173,7 @@ export function createIncaElement(
       configurable: true,
     });
   }
-  const element: IncaElement = withEventHandlers(withNodeId(fields, id), () =>
-    isDestroyed(element),
-  );
+  const element: IncaElement = withEventHandlers(withNodeId(fields, id), () => isRemoved(element));
   if (kind === "element") registerElement(element);
   return element;
 }

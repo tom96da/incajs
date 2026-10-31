@@ -16,7 +16,10 @@ globalThis.__inca_native__ = {
   rootNodeId: () => 1,
   createNode: () => nextId++,
   insertBefore: () => {},
-  destroyNode: () => [],
+  removeChild: () => {},
+  releaseListeners: () => [],
+  holdNode: () => {},
+  releaseNode: () => {},
 } as never;
 
 describe("createIncaApp", () => {

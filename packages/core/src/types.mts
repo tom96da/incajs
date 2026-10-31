@@ -13,7 +13,7 @@ export type NodeId = number;
 
 /**
  * Id assigned to one registered event listener. Managed internally by
- * `addEventListener`/`removeEventListener`/`destroyNode`.
+ * `addEventListener`/`removeEventListener`/`releaseListeners`.
  */
 export type CallbackId = number;
 
