@@ -16,6 +16,9 @@ vi.mock("./build.mts", () => ({
 vi.mock("./package.mts", () => ({
   packageApp: vi.fn<(options?: PackageAppOptions) => Promise<PackageResult>>(),
 }));
+vi.mock("./info.mts", () => ({
+  info: vi.fn<(stdout?: NodeJS.WritableStream) => Promise<void>>(),
+}));
 vi.mock("./printConfig.mts", () => ({
   printConfig: vi.fn<(options?: PrintConfigOptions) => Promise<number>>(),
   checkBuiltConfig: vi.fn<(entry: string, stderr: NodeJS.WritableStream) => Promise<void>>(),
@@ -25,6 +28,7 @@ import { build } from "./build.mts";
 import { run } from "./cli.mts";
 import { dev } from "./dev.mts";
 import { IncaError } from "./error.mts";
+import { info } from "./info.mts";
 import { packageApp } from "./package.mts";
 import { checkBuiltConfig, printConfig } from "./printConfig.mts";
 import type { BuildAppOptions } from "./build.mts";
@@ -37,6 +41,7 @@ const mockedDev = vi.mocked(dev);
 const mockedBuild = vi.mocked(build);
 const mockedPackageApp = vi.mocked(packageApp);
 const mockedPrintConfig = vi.mocked(printConfig);
+const mockedInfo = vi.mocked(info);
 const mockedCheckBuiltConfig = vi.mocked(checkBuiltConfig);
 
 let stdout: MockInstance;
@@ -74,6 +79,7 @@ afterEach(() => {
   mockedPackageApp.mockClear();
   mockedPrintConfig.mockClear();
   mockedCheckBuiltConfig.mockReset();
+  mockedInfo.mockReset();
   process.removeAllListeners("SIGINT");
   process.removeAllListeners("SIGTERM");
   process.exitCode = undefined;
@@ -104,16 +110,20 @@ describe("run", () => {
     expect(printed()).toMatch(/dev[\s\S]*build[\s\S]*package/);
   });
 
-  it.each(["dev", "build", "package", "config"])("prints the usage of %s", async (command) => {
-    await run(["node", "inca", command, "--help"]);
+  it.each(["dev", "build", "package", "config", "info"])(
+    "prints the usage of %s",
+    async (command) => {
+      await run(["node", "inca", command, "--help"]);
 
-    expect(exit).toHaveBeenCalledWith(0);
-    expect(printed()).toContain(`inca ${command}`);
-    expect(mockedDev).not.toHaveBeenCalled();
-    expect(mockedBuild).not.toHaveBeenCalled();
-    expect(mockedPackageApp).not.toHaveBeenCalled();
-    expect(mockedPrintConfig).not.toHaveBeenCalled();
-  });
+      expect(exit).toHaveBeenCalledWith(0);
+      expect(printed()).toContain(`inca ${command}`);
+      expect(mockedDev).not.toHaveBeenCalled();
+      expect(mockedBuild).not.toHaveBeenCalled();
+      expect(mockedPackageApp).not.toHaveBeenCalled();
+      expect(mockedPrintConfig).not.toHaveBeenCalled();
+      expect(mockedInfo).not.toHaveBeenCalled();
+    },
+  );
 
   it("prints the package version for --version", async () => {
     await run(["node", "inca", "--version"]);
@@ -212,6 +222,22 @@ describe("run", () => {
 
     expect(process.exitCode).toBe(1);
     expect(written(stderr)).toContain("[inca] config failed: no host binary");
+  });
+
+  it("runs info and leaves the exit code untouched on success", async () => {
+    await run(["node", "inca", "info"]);
+
+    expect(mockedInfo).toHaveBeenCalledOnce();
+    expect(process.exitCode ?? 0).toBe(0);
+  });
+
+  it("sets a non-zero exit code and prints a readable error when info fails", async () => {
+    mockedInfo.mockRejectedValue(new Error("m"));
+
+    await run(["node", "inca", "info"]);
+
+    expect(process.exitCode).toBe(1);
+    expect(written(stderr)).toContain("[inca] info failed: m");
   });
 
   it.each(["SIGINT", "SIGTERM"] as const)(

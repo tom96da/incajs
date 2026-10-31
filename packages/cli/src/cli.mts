@@ -9,6 +9,7 @@ import { defineCommand, runMain } from "citty";
 import { description, version } from "../package.json" with { type: "json" };
 import { build } from "./build.mts";
 import { dev } from "./dev.mts";
+import { info } from "./info.mts";
 import { log, printFault, toFault, warn } from "./log.mts";
 import { packageApp } from "./package.mts";
 import { checkBuiltConfig, printConfig } from "./printConfig.mts";
@@ -78,6 +79,18 @@ const configCommand = defineCommand({
   },
 });
 
+const infoCommand = defineCommand({
+  meta: { name: "info", description: "Print the versions and the host binary in use" },
+  async run() {
+    try {
+      await info();
+    } catch (error) {
+      printFault(process.stderr, "info failed", toFault(error));
+      process.exitCode = 1;
+    }
+  },
+});
+
 const devCommand = defineCommand({
   meta: { name: "dev", description: "Run the app in a development window" },
   args: {
@@ -124,10 +137,11 @@ const main = defineCommand({
     build: buildCommand,
     package: packageCommand,
     config: configCommand,
+    info: infoCommand,
   },
 });
 
-/** Parses argv and runs the named subcommand: `dev`, `build`, `package` or `config`. */
+/** Parses argv and runs the named subcommand: `dev`, `build`, `package`, `config` or `info`. */
 export async function run(argv: readonly string[] = process.argv): Promise<void> {
   await runMain(main, { rawArgs: argv.slice(2) });
 }

@@ -109,10 +109,27 @@ setting, its value and the kind of value it must be.
 $ inca config
 ```
 
+## `inca info`
+
+Prints the version of Incarnative.js, the host package and the path of the
+host binary. A line the CLI can't fill gives the reason in parentheses.
+
+### Usage
+
+```sh
+$ inca info
+```
+
+```
+Incarnative.js: 0.0.25
+host package:   @incajs/host-linux-x64@0.0.25
+host binary:    /home/user/.cache/incajs/host/linux-x64@0.0.25/inca-host
+```
+
 ## Environment Variables
 
 | Variable        | Description          |
 | --------------- | -------------------- |
-| `INCA_HOST_BIN` | Path to a specific host binary, used by `dev`, `build`, `package` and `config` in place of automatic resolution, e.g. on a custom or unpublished build. |
+| `INCA_HOST_BIN` | Path to a specific host binary, used in place of automatic resolution, e.g. on a custom or unpublished build. |
 | `INCA_CACHE_DIR` | The directory the CLI unpacks the host binary into. |
 | `INCA_EXPERIMENTAL_HMR` | Same as `--experimental-hmr`, for `inca dev`. See the [HMR guide](../guide/hmr). |
