@@ -20,6 +20,7 @@
     "incajs": "workspace:*"
   },
   "devDependencies": {
+    "ts-dedent": "2.3.0",
     "vite": "catalog:",
     "vitest": "catalog:"
   },

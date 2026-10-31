@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
 
+import { dedent } from "ts-dedent";
 import { expect, it } from "vitest";
 
 import { resolveTestHostBin } from "../support/hostBin.mts";
@@ -57,6 +58,48 @@ it("a rejecting top-level await exits 1 after a report with a null id", async ()
     expect(reply.error.code).toBe(-32000);
     expect(reply.error.message).toContain("late");
     expect(lines.some((line) => line.includes('"ready"'))).toBe(false);
+  } finally {
+    child.kill();
+    await rm(dir, { recursive: true, force: true });
+  }
+}, 15_000);
+
+it("a job behind a rejected first load is reported before the host exits", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "inca-host-startup-"));
+  // The entry settles after two jobs, so the throw runs behind the settlement.
+  await writeFile(
+    path.join(dir, "bundle.js"),
+    dedent`
+      await new Promise((_, reject) => {
+        __inca_dev__.receive = () => {
+          reject(new Error('late'));
+          queueMicrotask(() => {
+            queueMicrotask(() => {
+              throw new Error('behind');
+            });
+          });
+        };
+      });
+    `,
+  );
+  const child = spawn(resolveTestHostBin(), ["--dev", path.join(dir, "bundle.js")], {
+    stdio: ["pipe", "pipe", "inherit"],
+  });
+  child.stdin.on("error", () => {});
+  try {
+    const lines: string[] = [];
+    createInterface({ input: child.stdout }).on("line", (line) => lines.push(line));
+    child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "probe" })}\n`);
+    const code = await new Promise<number | null>((resolve) => child.on("close", resolve));
+
+    expect(code).toBe(1);
+    expect(lines).toHaveLength(2);
+    const behind = JSON.parse(lines[0] ?? "null");
+    expect(behind.method).toBe("appError");
+    expect(behind.params.message).toContain("behind");
+    const reply = JSON.parse(lines[1] ?? "null");
+    expect(reply.id).toBeNull();
+    expect(reply.error.message).toContain("late");
   } finally {
     child.kill();
     await rm(dir, { recursive: true, force: true });
