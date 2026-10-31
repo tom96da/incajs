@@ -24,6 +24,7 @@ pub(super) fn install_tree(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("setAttribute", set_attribute)?;
     n.set("getAttribute", get_attribute)?;
     n.set("removeAttribute", remove_attribute)?;
+    n.set("attributeNames", attribute_names)?;
     n.set("setStyle", set_style)?;
     n.set("removeStyle", remove_style)?;
     n.set("destroyNode", destroy_node)?;
@@ -113,7 +114,7 @@ fn set_attribute<'js>(
     move |ctx, JsNodeId(node_id), key, value| {
         let value = attribute_value_from_js(&ctx, &value)?;
         let mut host = host.borrow_mut();
-        let key = canonical_attribute_key(key);
+        let key = key.to_ascii_lowercase();
         host.tree
             .set_attribute(node_id, key.clone(), value)
             .map_err(|err| throw_tree_error(&ctx, err))?;
@@ -126,7 +127,7 @@ fn get_attribute<'js>(
     host: Rc<RefCell<Host>>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Value<'js>> {
     move |ctx, JsNodeId(node_id), key| {
-        let key = canonical_attribute_key(key);
+        let key = key.to_ascii_lowercase();
         let host = host.borrow();
         let node = existing_node(&ctx, &host.tree, node_id)?;
         attribute_value_to_js(&ctx, node.attributes().get(&key))
@@ -138,12 +139,24 @@ fn remove_attribute<'js>(
 ) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<()> {
     move |ctx, JsNodeId(node_id), key| {
         let mut host = host.borrow_mut();
-        let key = canonical_attribute_key(key);
+        let key = key.to_ascii_lowercase();
         host.tree
             .remove_attribute(node_id, &key)
             .map_err(|err| throw_tree_error(&ctx, err))?;
         mark_focus_dirty_for(&mut host, node_id, &key);
         Ok(())
+    }
+}
+
+fn attribute_names<'js>(
+    host: Rc<RefCell<Host>>,
+) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Vec<String>> {
+    move |ctx, JsNodeId(node_id)| {
+        let host = host.borrow();
+        let node = existing_node(&ctx, &host.tree, node_id)?;
+        let mut names: Vec<String> = node.attributes().keys().cloned().collect();
+        names.sort_unstable();
+        Ok(names)
     }
 }
 
@@ -275,15 +288,6 @@ fn mark_focus_dirty_for(host: &mut Host, node_id: NodeId, key: &str) {
         "tabindex" | "disabled" => host.focus.mark_tab_dirty(node_id),
         "hidden" | "inert" => mark_focus_dirty(host, node_id),
         _ => {}
-    }
-}
-
-/// Attribute names are case-insensitive, so `tabIndex` is `tabindex`.
-fn canonical_attribute_key(key: String) -> String {
-    if key.eq_ignore_ascii_case("tabindex") {
-        "tabindex".to_owned()
-    } else {
-        key
     }
 }
 

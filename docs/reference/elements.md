@@ -175,6 +175,9 @@ with the differences below. The listener methods are described in
 - The tree members are `parent`, `children` and `contains()`. `parent` is the
   parent element, and `children` lists the child nodes, text nodes included.
   `parentElement`, `childNodes` and the other tree members are missing.
+- `attributes` and `getAttributeNames()` list the names in alphabetical order,
+  and `attributes` is a snapshot array of `{ name, value }` objects without
+  `NamedNodeMap` methods.
 
 ## Vue features that don't work yet
 
@@ -190,8 +193,8 @@ have, and using them fails the build:
   fails at the template-compiler stage.
 - **No `fetch`**: `fetch` isn't provided as a global by the JS runtime
   Incarnative.js embeds.
-- **`ref` lacks other element members**: the attribute methods, `classList`,
-  `className`, `dataset`, `style` and `tagName` are missing.
+- **`ref` lacks other element members**: `classList`, `className`, `dataset`,
+  `style` and `tagName` are missing.
 
 Event modifiers such as `.stop`, `.once` and `@keydown.enter` are documented
 in [Events: Event modifiers](./events#event-modifiers).

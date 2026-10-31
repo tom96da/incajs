@@ -280,9 +280,9 @@ function patchEvent(
 }
 
 /**
- * Attributes removed by a value Vue counts as false: any falsy value except
- * `""`. The host reads `disabled`, `hidden` and `inert` by presence; the rest
- * are Vue's special boolean attributes.
+ * Boolean attributes: a truthy value or `""` sets the attribute to `""`, and any other falsy value
+ * removes it. The host reads `disabled`, `hidden` and `inert` by presence; the rest are Vue's
+ * special boolean attributes.
  */
 const BOOLEAN_ATTRIBUTES = new Set([
   "disabled",
@@ -366,14 +366,13 @@ const BOOLEAN_ATTRIBUTES = new Set([
  *
  * ### Other props
  *
- * A string, number or boolean `nextValue` goes to `core.setAttribute` as it
- * is. A `null` or `undefined` `nextValue` goes to `core.removeAttribute`,
- * which includes a prop that is absent from the new vnode. So does any falsy
- * value other than `""` for a boolean attribute: `disabled`, `hidden`,
- * `inert`, and the names Vue treats as boolean attributes, such as
- * `readonly`. Any other value (an object, array, function or symbol) goes to
- * `core.setAttribute` as `String(nextValue)`. An `onUpdate:` key is a
- * component event and sets nothing.
+ * A truthy value or `""` for a boolean attribute (`disabled`, `hidden`, `inert` and the names Vue
+ * treats as boolean) goes to `core.setAttribute` as `""`. A falsy value other than `""` goes to
+ * `core.removeAttribute`. Any other string, number or boolean goes to `core.setAttribute` as it
+ * is. A `null` or `undefined` `nextValue` goes to `core.removeAttribute`, which includes a prop
+ * that is absent from the new vnode. Any other value (an object, array, function or symbol) goes
+ * to `core.setAttribute` as `String(nextValue)`. An `onUpdate:` key is a component event and sets
+ * nothing.
  *
  * @param core - the incajs bindings to drive the native tree through
  */
@@ -403,8 +402,9 @@ export function createPatchProp(
       }
     } else if (key === "value" && "value" in el) {
       Reflect.set(el, key, nextValue ?? "");
-    } else if (BOOLEAN_ATTRIBUTES.has(key) && !nextValue && nextValue !== "") {
-      core.removeAttribute(el.__node_id, key);
+    } else if (BOOLEAN_ATTRIBUTES.has(key)) {
+      if (nextValue || nextValue === "") core.setAttribute(el.__node_id, key, "");
+      else core.removeAttribute(el.__node_id, key);
     } else if (
       typeof nextValue === "string" ||
       typeof nextValue === "number" ||

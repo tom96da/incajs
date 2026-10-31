@@ -19,6 +19,7 @@ interface IncaNative {
   setAttribute(nodeId: NodeId, key: string, value: AttributeValue): void;
   getAttribute(nodeId: NodeId, key: string): AttributeValue | null;
   removeAttribute(nodeId: NodeId, key: string): void;
+  attributeNames(nodeId: NodeId): string[];
   setStyle(nodeId: NodeId, key: string, value: AttributeValue): void;
   removeStyle(nodeId: NodeId, key: string): void;
   inputValue(nodeId: NodeId): string;

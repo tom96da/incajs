@@ -122,6 +122,7 @@ function installNative(): void {
       if (at !== -1) listeners.splice(at, 1);
       return at !== -1;
     },
+    attributeNames: (id) => (nodeOf(id), []),
     releaseListeners(id) {
       const callbacks: number[] = [];
       const pending = [id];

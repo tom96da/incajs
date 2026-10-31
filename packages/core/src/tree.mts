@@ -113,6 +113,17 @@ export function getAttribute(nodeId: NodeId, key: string): AttributeValue | null
 }
 
 /**
+ * Returns the names of the attributes stored on `nodeId`, sorted, in the lower case the host
+ * keeps them in.
+ * @param nodeId - the node to read
+ * @returns the attribute names
+ * @throws {TypeError} when `nodeId` names no node
+ */
+export function attributeNames(nodeId: NodeId): string[] {
+  return native().attributeNames(nodeId);
+}
+
+/**
  * Returns the box `nodeId` was drawn at in the last frame, in window logical
  * pixels, or `null` if the node has no recorded box.
  * @param nodeId - the node to read
