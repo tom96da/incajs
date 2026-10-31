@@ -10,6 +10,21 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- style colors accept `transparent`, `rgb()`, `rgba()`, `#rgba` and `#rrggbbaa` ([acae8e3](https://github.com/tom96da/incajs/commit/acae8e3))
+- `keypress` fires between `keydown` and `beforeinput` for a key that types a character ([bdc5417](https://github.com/tom96da/incajs/commit/bdc5417))
+- the host limits a script to 1 GiB of heap and 6 MiB of stack ([9e6e8e2](https://github.com/tom96da/incajs/commit/9e6e8e2), [38ca355](https://github.com/tom96da/incajs/commit/38ca355))
+- a packaged app writes the panic of the host to `panic.log` in the log directory ([7648a32](https://github.com/tom96da/incajs/commit/7648a32))
+- the CLI unpacks the compressed host binary on first use, and `INCA_CACHE_DIR` sets the directory ([e110a1a](https://github.com/tom96da/incajs/commit/e110a1a), [bfb8af9](https://github.com/tom96da/incajs/commit/bfb8af9))
+- `inca info` prints the version, the host package and the host binary ([d623749](https://github.com/tom96da/incajs/commit/d623749))
+
+### Fixed
+
+- a style warning prints once for each element and message ([80778f8](https://github.com/tom96da/incajs/commit/80778f8))
+- a tree cycle throws a `DOMException` named `HierarchyRequestError` ([d990690](https://github.com/tom96da/incajs/commit/d990690))
+- `inca dev` prints a host panic once ([3aef079](https://github.com/tom96da/incajs/commit/3aef079))
+
 ## [0.0.24] - 2026-10-27
 
 ### Added
