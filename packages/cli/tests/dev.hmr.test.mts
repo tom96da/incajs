@@ -53,6 +53,31 @@ describe("dev with --experimental-hmr", () => {
     await running;
   });
 
+  it("starts no host when the signal fires while the HMR session sets up", async () => {
+    const cwd = await scratch.makeApp({});
+    const hostLog = await useHostLog(cwd);
+    const controller = new AbortController();
+    const bundler = makeFakeHmrBundler("/unused/entry.js");
+    const hmr = bundler.hmr!.bind(bundler);
+    bundler.hmr = (options) => {
+      controller.abort();
+      return hmr(options);
+    };
+
+    await dev({
+      cwd,
+      entry: "unused",
+      bundler,
+      hostBin: logMockHost,
+      experimentalHmr: true,
+      stdout: makeSink().stream,
+      stderr: makeSink().stream,
+      signal: controller.signal,
+    });
+
+    expect(await hostLog.lines()).toEqual([]);
+  });
+
   it("hands the HMR session dev.stackPaths", async () => {
     const bundler = makeFakeHmrBundler("/unused/entry.js");
     const stdout = makeSink();
