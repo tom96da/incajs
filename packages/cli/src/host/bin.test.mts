@@ -59,6 +59,7 @@ async function thrown(cwd?: string): Promise<IncaError> {
 }
 
 beforeEach(() => {
+  vi.stubEnv(ENV_VAR, undefined);
   binary = Buffer.from(`#!/bin/sh\nexit 0\n${Math.random()}`);
   cacheDir = temp();
   home = temp();
@@ -72,7 +73,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  delete process.env[ENV_VAR];
 });
 
 describe("resolveHostBin", () => {
