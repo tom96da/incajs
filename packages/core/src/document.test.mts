@@ -59,6 +59,12 @@ describe("document", () => {
     expect(states).toEqual([null, handle, null]);
   });
 
+  it("reads null as activeElement for a focused id with no registered element", () => {
+    focused = 999;
+
+    expect(document.activeElement).toBeNull();
+  });
+
   it("registers a listener on the document target", () => {
     document.addEventListener("keydown", vi.fn<() => void>());
 
