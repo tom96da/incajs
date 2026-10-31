@@ -172,6 +172,13 @@ jobs:
             libxkbcommon-x11-dev \
             libssl-dev
 
+      - name: Install build dependencies
+        run: |
+          case "$RUNNER_OS" in
+            Linux) apt-get install -y --no-install-recommends brotli ;;
+            macOS) brew install brotli ;;
+          esac
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -214,14 +221,19 @@ jobs:
             exit 1
           fi
 
-      - name: Pack the binary
-        run: tar -C target/release -czf inca-host-${{ matrix.pkg }}.tar.gz inca-host
+      # The SHA-256 of the binary goes into the file name, and the publish job records it.
+      - name: Compress the binary
+        run: |
+          hash=$(shasum -a 256 target/release/inca-host | cut -d' ' -f1)
+          file="inca-host-${{ matrix.pkg }}.$hash.br"
+          brotli -q 11 -w 24 -o "$file" target/release/inca-host
+          echo "HOST_FILE=$file" >> "$GITHUB_ENV"
 
       - name: Upload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: inca-host-${{ matrix.pkg }}
-          path: inca-host-${{ matrix.pkg }}.tar.gz
+          path: ${{ env.HOST_FILE }}
+          archive: false
           if-no-files-found: error
           retention-days: 7
 
@@ -260,25 +272,43 @@ jobs:
       - name: Download host binaries
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
+          pattern: inca-host-*
           path: artifacts
 
       - name: Place host binaries
         run: |
           set -euo pipefail
           for pkg in linux-x64 linux-arm64 darwin-arm64 darwin-x64; do
+            file=$(find artifacts -type f -name "inca-host-$pkg.*.br")
+            [ -n "$file" ] || { echo "::error::$pkg: no host binary was uploaded"; exit 1; }
+            hash=$(basename "$file" .br | cut -d. -f2)
             mkdir -p "npm/$pkg/bin"
-            tar -xzf "artifacts/inca-host-$pkg/inca-host-$pkg.tar.gz" -C "npm/$pkg/bin"
-            chmod 0755 "npm/$pkg/bin/inca-host"
+            cp "$file" "npm/$pkg/bin/inca-host.br"
+            jq --arg sha256 "$hash" '.incajs.host.sha256 = $sha256' "npm/$pkg/package.json" \
+              > "$RUNNER_TEMP/package.json"
+            mv "$RUNNER_TEMP/package.json" "npm/$pkg/package.json"
           done
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends brotli
 
       - name: Verify the packed host tarballs
         run: |
           set -euo pipefail
           for pkg in linux-x64 linux-arm64 darwin-arm64 darwin-x64; do
             tarball=$(pnpm --dir "npm/$pkg" pack --pack-destination "$RUNNER_TEMP" | tail -1)
-            tar -tvzf "$tarball" | tee /dev/stderr | \
-              grep -Eq '^-rwxr-xr-x.* package/bin/inca-host$' \
-              || { echo "::error::$pkg: bin/inca-host is not 0755 in the tarball"; exit 1; }
+            files=$(tar -tzf "$tarball")
+            echo "$files"
+            grep -qx 'package/bin/inca-host.br' <<<"$files" \
+              || { echo "::error::$pkg: bin/inca-host.br is missing"; exit 1; }
+            ! grep -qx 'package/bin/inca-host' <<<"$files" \
+              || { echo "::error::$pkg: the uncompressed binary is in the tarball"; exit 1; }
+            expected=$(tar -xzOf "$tarball" package/package.json | jq -r '.incajs.host.sha256')
+            actual=$(tar -xzOf "$tarball" package/bin/inca-host.br | brotli -d | sha256sum | cut -d' ' -f1)
+            [ "$expected" = "$actual" ] \
+              || { echo "::error::$pkg: incajs.host.sha256 is $expected, the unpacked binary hashes to $actual"; exit 1; }
           done
 
       - name: Publish the host packages
@@ -309,6 +339,7 @@ jobs:
       - name: Download host binaries
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
+          pattern: inca-host-*
           path: artifacts
 
       - name: Write release notes
@@ -344,4 +375,8 @@ jobs:
           TAG: v${{ needs.gate.outputs.version }}
         run: |
           set -euo pipefail
-          gh release create "$TAG" --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md" artifacts/*/inca-host-*.tar.gz
+          mkdir "$RUNNER_TEMP/assets"
+          for pkg in linux-x64 linux-arm64 darwin-arm64 darwin-x64; do
+            cp "$(find artifacts -type f -name "inca-host-$pkg.*.br")" "$RUNNER_TEMP/assets/inca-host-$pkg.br"
+          done
+          gh release create "$TAG" --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md" "$RUNNER_TEMP"/assets/*.br

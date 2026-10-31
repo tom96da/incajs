@@ -541,14 +541,14 @@ A fixed entry is deleted and its ID is never reused.
 
   The set of published host platforms is written in `npm/*/package.json`, the
   CLI's `optionalDependencies`, `host/package.mts`, `cd.yml` (the matrix, the
-  manifest list in `verify`, and two `for pkg in` loops), the README and guide
+  manifest list in `verify`, and three `for pkg in` loops), the README and guide
   tables, and the Makefile's `LICENSE_PACKAGES`. A platform missing from the
   `Place host binaries` loop publishes a package with no binary, and an npm
   publish cannot be undone. A test could read all of them and compare against
   the non-private `npm/*` manifests, since a platform is published when its
   manifest is not private. A `publish` step could check that every non-private
-  host package has an executable `bin/inca-host` before `pnpm publish`. This
-  is needed before the Windows hosts are added.
+  host package has `bin/inca-host.br` and `incajs.host.sha256` before
+  `pnpm publish`. This is needed before the Windows hosts are added.
 
 - **B-096 `missing_docs` is not enforced**
   `Units: gpui,bridge,ci · Size: M · Impact: Low`
