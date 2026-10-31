@@ -14,6 +14,7 @@ use std::{
 };
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
+use percent_encoding::percent_decode_str;
 use rquickjs::{Ctx, Error, Result as JsResult};
 
 use store::SourceMaps;
@@ -204,7 +205,8 @@ struct Entry {
 
 /// The map text captured at registration.
 enum RawMap {
-    /// The byte range of the marker line's `data:` URL in the entry's `source`.
+    /// The byte range of the marker line's `data:` URL in the entry's `source`. The body after
+    /// the first comma is percent-decoded, then base64-decoded when the head ends with `;base64`.
     /// Its relative sources resolve against the directory of the entry's file.
     Inline(Range<usize>),
     /// The sidecar file's text and the directory it was read from.
@@ -249,14 +251,17 @@ pub(crate) fn set_paths(ctx: &Ctx<'_>, paths: StackPaths) -> JsResult<()> {
     .map_err(|_| Error::Unknown)
 }
 
-/// Captures the map that the marker `url` of `source` names. A sidecar map file is read here,
-/// next to `filename`. `None` for an unreadable map file.
+/// Captures the map that the marker `url` of `source` names. A sidecar name is percent-decoded and
+/// its file is read here, next to `filename`. `None` for an unreadable map file.
 fn capture(filename: &str, source: &str, url: &str) -> Option<RawMap> {
     if url.starts_with("data:") {
         let start = url.as_ptr().addr() - source.as_ptr().addr();
         return Some(RawMap::Inline(start..start + url.len()));
     }
-    let path = Path::new(filename).parent()?.join(url);
+    let name = percent_decode_str(url)
+        .decode_utf8()
+        .unwrap_or(Cow::Borrowed(url));
+    let path = Path::new(filename).parent()?.join(name.as_ref());
     let json = std::fs::read_to_string(&path).ok()?;
     Some(RawMap::Sidecar {
         json,
@@ -421,17 +426,28 @@ struct MapJson {
     source_root: serde_json::Value,
 }
 
+/// The bytes of the map that the `data:` URL `url` carries. `None` for no comma or invalid base64.
+fn data_url_body(url: &str) -> Option<Vec<u8>> {
+    let (head, body) = url.split_once(',')?;
+    let bytes: Vec<u8> = percent_decode_str(body).collect();
+    let base64 = head
+        .rsplit_once(';')
+        .is_some_and(|(_, last)| last.eq_ignore_ascii_case("base64"));
+    if base64 {
+        STANDARD.decode(bytes).ok()
+    } else {
+        Some(bytes)
+    }
+}
+
 /// Decodes the map `entry` captured. `None` for an invalid map or no map.
 fn parse(entry: &Entry) -> Option<Parsed> {
     let raw = entry.raw.as_ref()?;
     let (map, base): (MapJson, Option<PathBuf>) = match raw {
-        RawMap::Inline(url) => {
-            let (_, payload) = entry.source[url.clone()].split_once("base64,")?;
-            (
-                serde_json::from_slice(&STANDARD.decode(payload).ok()?).ok()?,
-                inline_base(&entry.display),
-            )
-        }
+        RawMap::Inline(url) => (
+            serde_json::from_slice(&data_url_body(&entry.source[url.clone()])?).ok()?,
+            inline_base(&entry.display),
+        ),
         RawMap::Sidecar { json, dir } => (serde_json::from_str(json).ok()?, dir.clone()),
     };
     if map.version != 3 {

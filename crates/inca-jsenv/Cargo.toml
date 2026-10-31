@@ -22,6 +22,7 @@ name = "inca_jsenv"
 
 [dependencies]
 base64.workspace = true
+percent-encoding.workspace = true
 rquickjs.workspace = true
 serde.workspace = true
 serde_json.workspace = true

@@ -976,15 +976,6 @@ A fixed entry is deleted and its ID is never reused.
   Fix: count lines as `QuickJS` does, which needs the remap to track block
   comments in the generated source.
 
-- **B-212 Some `sourceMappingURL` forms are not decoded**
-  `Units: jsenv · Size: S · Impact: Low`
-
-  A `data:` URL without `;base64` (percent-encoded JSON) and a sidecar name with
-  `%`-escapes are read as written, so their maps are not found. Browsers decode
-  both.
-
-  Fix: percent-decode the URL, and accept a `data:` URL without `;base64`.
-
 - **B-214 `console.log` of an event shows only `isTrusted`**
   `Units: jsenv,bridge · Size: M · Impact: Low`
 
