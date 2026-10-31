@@ -135,10 +135,10 @@ argument raises an error, and an argument of the wrong type raises a
 
 The host reads the last `//# sourceMappingURL=` line of each module it loads:
 the body that `compile` receives, the entry bundle and each chunk. A `data:`
-URL carries the map inline. Any other value is a path beside the module, such
-as `bundle.js.map`, and the map's `sources` are relative to the map. The first
-line of a `compile` body is line 2 of `filename`, so a map for it starts with
-one empty line (Vite's `startOffset = 1`).
+URL carries the map inline. Any other value is a percent-decoded path beside
+the module, such as `bundle.js.map`, and the map's `sources` are relative to
+the map. The first line of a `compile` body is line 2 of `filename`, so a map
+for it starts with one empty line.
 
 The stack of an error the host reports (`appError`, a `-32000` error and the
 console output of an `Error`) names the original file, line and column for

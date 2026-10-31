@@ -10,6 +10,7 @@ use rstest::rstest;
 use std::cell::RefCell;
 
 mod paths;
+mod references;
 
 fn sp(source: u32, line: u32, column: u32) -> SourcePos {
     SourcePos {
@@ -353,7 +354,6 @@ fn unreadable_sidecar_leaves_frame_unchanged() {
 #[case::bad_vlq(inline(&map_json(3, ";!!", r#"["a.ts"]"#, None)))]
 #[case::two_field_segment(inline(&map_json(3, ";AA", r#"["a.ts"]"#, None)))]
 #[case::bad_base64("//# sourceMappingURL=data:application/json;base64,@@@".to_owned())]
-#[case::not_base64("//# sourceMappingURL=data:application/json,{}".to_owned())]
 fn invalid_maps_leave_frame_unchanged(#[case] marker: String) {
     let frame = "    at f (a.js:2:1)";
     let src = format!("h\nabc\n{marker}");

@@ -2756,6 +2756,7 @@ name = "inca-jsenv"
 version = "0.0.25"
 dependencies = [
  "base64",
+ "percent-encoding",
  "rquickjs",
  "rstest",
  "serde",
