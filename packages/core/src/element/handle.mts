@@ -21,6 +21,7 @@ import {
   setInputValue,
 } from "../tree.mts";
 import { attributeMembers } from "./attributes.mts";
+import { elementTreeMembers } from "./elementTree.mts";
 import { withEventHandlers } from "./eventHandlers.mts";
 import { layoutBox, offsetOf, offsetParentOf, rectOf, tabIndexOf } from "./geometry.mts";
 import {
@@ -34,6 +35,7 @@ import {
 import { scrollIntoViewArgs, scrollPosition } from "./scroll.mts";
 import type { NodeId, TagName } from "../types.mts";
 import type { AttributeMembers } from "./attributes.mts";
+import type { ElementTreeMembers } from "./elementTree.mts";
 import type { ScrollArgs, ScrollIntoViewOptions } from "./scroll.mts";
 import type { EventHandlers, IncaElement, IncaNode } from "./types.mts";
 
@@ -59,7 +61,10 @@ export function createIncaElement(
 ): IncaElement {
   const target = createEventTarget(() => id, passiveByDefault);
   const scroll = () => (isRemoved(element) ? null : scrollOf(id));
-  const fields: Omit<IncaElement, "__node_id" | keyof EventHandlers | keyof AttributeMembers> = {
+  const fields: Omit<
+    IncaElement,
+    "__node_id" | keyof EventHandlers | keyof AttributeMembers | keyof ElementTreeMembers | "__tag"
+  > = {
     get id() {
       return isDestroyed(element) ? "" : String(getAttribute(id, "id") ?? "");
     },
@@ -180,6 +185,8 @@ export function createIncaElement(
     isRemoved(element),
   );
   Object.defineProperties(element, Object.getOwnPropertyDescriptors(attributeMembers(id, element)));
+  Object.defineProperties(element, Object.getOwnPropertyDescriptors(elementTreeMembers(element)));
+  Object.defineProperty(element, "__tag", { value: tag });
   if (kind === "element") registerElement(element);
   return element;
 }

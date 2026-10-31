@@ -172,9 +172,9 @@ with the differences below. The listener methods are described in
   the next frame draws it.
 - Only `pointerId` 1 is accepted by `setPointerCapture()`,
   `releasePointerCapture()` and `hasPointerCapture()`.
-- The tree members are `parent`, `children` and `contains()`. `parent` is the
-  parent element, and `children` lists the child nodes, text nodes included.
-  `parentElement`, `childNodes` and the other tree members are missing.
+- `children` lists the child nodes, text nodes included. `parent` is the
+  parent element. `childNodes`, `firstChild`, `lastChild`, `previousSibling`
+  and `nextSibling` are missing.
 - `attributes` and `getAttributeNames()` list the names in alphabetical order,
   and `attributes` is a snapshot array of `{ name, value }` objects without
   `NamedNodeMap` methods.
