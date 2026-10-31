@@ -10,6 +10,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.0.25] - 2026-10-31
+
 ### Added
 
 - style colors accept `transparent`, `rgb()`, `rgba()`, `#rgba` and `#rrggbbaa` ([acae8e3](https://github.com/tom96da/incajs/commit/acae8e3))
@@ -495,7 +497,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - prebuilt `inca-host` binaries for linux-x64, linux-arm64, and darwin-arm64, resolved automatically per platform
 - click event dispatch from the native tree back into JS
 
-[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.24...HEAD
+[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.25...HEAD
+[0.0.25]: https://github.com/tom96da/incajs/releases/tag/v0.0.25
 [0.0.24]: https://github.com/tom96da/incajs/releases/tag/v0.0.24
 [0.0.23]: https://github.com/tom96da/incajs/releases/tag/v0.0.23
 [0.0.22]: https://github.com/tom96da/incajs/releases/tag/v0.0.22
