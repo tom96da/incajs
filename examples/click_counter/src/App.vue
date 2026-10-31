@@ -9,7 +9,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
   counterpart to hello_world's purely static tree.
 -->
 <script setup>
-import { computed, ref } from "@vue/runtime-core";
+import { computed, ref } from "vue";
 
 const clicks = ref(0);
 const label = computed(() =>

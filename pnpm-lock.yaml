@@ -264,15 +264,12 @@ importers:
 
   examples/click_counter:
     dependencies:
-      '@vue/runtime-core':
-        specifier: 'catalog:'
-        version: 3.5.43
-      '@vue/runtime-dom':
-        specifier: 'catalog:'
-        version: 3.5.43
       incajs:
         specifier: workspace:*
         version: link:../../packages/core
+      vue:
+        specifier: 'catalog:'
+        version: 3.5.43(@typescript/typescript6@6.0.2)
     devDependencies:
       '@incajs/cli':
         specifier: workspace:*
@@ -286,15 +283,12 @@ importers:
 
   examples/hello_world:
     dependencies:
-      '@vue/runtime-core':
-        specifier: 'catalog:'
-        version: 3.5.43
-      '@vue/runtime-dom':
-        specifier: 'catalog:'
-        version: 3.5.43
       incajs:
         specifier: workspace:*
         version: link:../../packages/core
+      vue:
+        specifier: 'catalog:'
+        version: 3.5.43(@typescript/typescript6@6.0.2)
     devDependencies:
       '@incajs/cli':
         specifier: workspace:*
@@ -3940,6 +3934,16 @@ snapshots:
 
   vscode-uri@3.2.0:
     optional: true
+
+  vue@3.5.43(@typescript/typescript6@6.0.2):
+    dependencies:
+      '@vue/compiler-dom': 3.5.43
+      '@vue/compiler-sfc': 3.5.43
+      '@vue/runtime-dom': 3.5.43
+      '@vue/server-renderer': 3.5.43
+      '@vue/shared': 3.5.43
+    optionalDependencies:
+      typescript: '@typescript/typescript6@6.0.2'
 
   vue@3.5.43(typescript@6.0.3):
     dependencies:

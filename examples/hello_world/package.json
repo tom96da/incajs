@@ -19,9 +19,8 @@
     "typecheck": "oxlint -A all --type-aware --type-check"
   },
   "dependencies": {
-    "@vue/runtime-core": "catalog:",
-    "@vue/runtime-dom": "catalog:",
-    "incajs": "workspace:*"
+    "incajs": "workspace:*",
+    "vue": "catalog:"
   },
   "devDependencies": {
     "@incajs/cli": "workspace:*",
