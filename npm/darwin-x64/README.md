@@ -6,11 +6,12 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 # @incajs/host-darwin-x64
 
 Prebuilt `inca-host` binary for macOS on Intel (x64). Not meant to be
-depended on directly. `@incajs/cli`'s dev-client installs whichever of
-these matches the current OS/arch as an `optionalDependency` and resolves
-the binary inside it.
+depended on directly. `@incajs/cli` installs whichever of these matches
+the current OS/arch as an `optionalDependency` and unpacks the binary
+inside it.
 
-This package carries no JS: `bin/inca-host` is the whole of it.
+This package carries no JS: `bin/inca-host.br`, the brotli-compressed
+binary, is the whole of it.
 
 Part of [tom96da/incajs](https://github.com/tom96da/incajs), the
 Incarnative.js framework.

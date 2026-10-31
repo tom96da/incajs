@@ -127,7 +127,10 @@ describe("info", () => {
 
   it("reports a damaged package on the package line", async () => {
     const dir = temp();
-    writeFileSync(path.join(dir, "package.json"), JSON.stringify({ incaHost: { sha256: "x" } }));
+    writeFileSync(
+      path.join(dir, "package.json"),
+      JSON.stringify({ incajs: { host: { sha256: "x" } } }),
+    );
     mockedLocate.mockReturnValue(dir);
 
     expect((await output())[1]).toBe("host package:   @incajs/host-linux-x64 (corrupt)");

@@ -18,7 +18,7 @@
     "directory": "npm/linux-arm64"
   },
   "files": [
-    "bin"
+    "bin/inca-host.br"
   ],
   "os": [
     "linux"
@@ -27,10 +27,7 @@
     "arm64"
   ],
   "publishConfig": {
-    "access": "public",
-    "executableFiles": [
-      "bin/inca-host"
-    ]
+    "access": "public"
   },
   "scripts": {
     "prepack": "clear-package-json package.json -o package.json"

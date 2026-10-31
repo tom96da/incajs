@@ -176,7 +176,7 @@ describe("resolveHostBin", () => {
     const dir = temp();
     writeFileSync(
       path.join(dir, "package.json"),
-      JSON.stringify({ version: "1.2.3", incaHost: { sha256: "x" } }),
+      JSON.stringify({ version: "1.2.3", incajs: { host: { sha256: "x" } } }),
     );
     mockedLocate.mockReturnValue(dir);
 
