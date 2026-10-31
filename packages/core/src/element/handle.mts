@@ -45,7 +45,7 @@ import type { EventHandlers, IncaElement, IncaNode } from "./types.mts";
  * all driven through the host.
  * @param id - the native node's id
  * @param kind - whether the node is an element or a comment stand-in
- * @param tag - the node's element kind, if it has one; a `button` or `input` defaults to tab
+ * @param tag - the node's element kind, `div` when omitted; a `button` or `input` defaults to tab
  *   index `0`, and an `input` has `value`
  * @param passiveByDefault - event names whose listeners are passive unless their options say
  *   `passive: false`
@@ -54,7 +54,7 @@ import type { EventHandlers, IncaElement, IncaNode } from "./types.mts";
 export function createIncaElement(
   id: NodeId,
   kind: IncaElement["kind"],
-  tag?: TagName,
+  tag: TagName = "div",
   passiveByDefault: readonly string[] = [],
 ): IncaElement {
   const target = createEventTarget(() => id, passiveByDefault);
@@ -67,6 +67,7 @@ export function createIncaElement(
       if (!isDestroyed(element)) setAttribute(id, "id", String(value));
     },
     kind,
+    tagName: tag.replace(/[a-z]/g, (letter) => letter.toUpperCase()),
     parent: null,
     children: [],
     focus: (options?: { preventScroll?: boolean }) => {
@@ -97,7 +98,7 @@ export function createIncaElement(
     },
     dispatchEvent: (event) => isDestroyed(element) || target.dispatchEvent(event),
     get tabIndex() {
-      return tabIndexOf(isDestroyed(element) ? null : getAttribute(id, "tabindex"), tag ?? "");
+      return tabIndexOf(isDestroyed(element) ? null : getAttribute(id, "tabindex"), tag);
     },
     set tabIndex(value: number) {
       if (!isDestroyed(element)) setAttribute(id, "tabindex", value | 0);

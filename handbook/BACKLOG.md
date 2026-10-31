@@ -105,7 +105,7 @@ A fixed entry is deleted and its ID is never reused.
   `Units: core,bridge · Size: L · Impact: Medium`
 
   The element handle lacks:
-  - `classList`, `className`, `dataset`, `style`, `tagName`;
+  - `classList`, `className`, `dataset`, `style`;
   - the tree members (`parentElement`, `firstChild`, `nextSibling`,
     `closest()`).
 
