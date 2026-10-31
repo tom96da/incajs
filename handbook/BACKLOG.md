@@ -106,8 +106,8 @@ A fixed entry is deleted and its ID is never reused.
 
   The element handle lacks:
   - `classList`, `className`, `dataset`, `style`;
-  - the tree members (`parentElement`, `firstChild`, `nextSibling`,
-    `closest()`).
+  - the tree members (`firstChild`, `lastChild`, `previousSibling`,
+    `nextSibling`, `childNodes`, the members of text nodes, `closest()`).
 
   The members it has differ from a browser in the box reads (B-160), the
   `offsetParent` chain (B-161), the scroll members (B-172, B-174, B-216 and

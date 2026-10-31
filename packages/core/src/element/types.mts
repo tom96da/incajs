@@ -45,6 +45,11 @@ export interface IncaElement extends IncaEventTarget, EventHandlers {
    */
   readonly __node_id: NodeId;
   /**
+   * The host tag. Internal to the renderer.
+   * @internal
+   */
+  readonly __tag: string;
+  /**
    * The `id` attribute, or an empty string when it is unset. Assigning sets
    * the attribute to the value as a string.
    */
@@ -63,6 +68,18 @@ export interface IncaElement extends IncaEventTarget, EventHandlers {
   parent: IncaElement | null;
   /** This node's children, in render order. */
   children: IncaNode[];
+  /** The parent element, or `null` for a detached node and for the mount container. */
+  readonly parentElement: IncaElement | null;
+  /** The first child that is an element, or `null`. */
+  readonly firstElementChild: IncaElement | null;
+  /** The last child that is an element, or `null`. */
+  readonly lastElementChild: IncaElement | null;
+  /** The number of children that are elements. */
+  readonly childElementCount: number;
+  /** The closest earlier sibling that is an element, or `null`. */
+  readonly previousElementSibling: IncaElement | null;
+  /** The closest later sibling that is an element, or `null`. */
+  readonly nextElementSibling: IncaElement | null;
   /**
    * Focuses this node next frame. The node needs a `tabindex` attribute. A
    * `true` `preventScroll` keeps every scroll container where it is. After
