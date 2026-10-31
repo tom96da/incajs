@@ -7,7 +7,8 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 Prebuilt `inca-host` binary for Linux on x64. Not meant to be depended
 on directly. `@incajs/cli` installs whichever of these matches the current
-OS/arch as an `optionalDependency` and unpacks the binary inside it.
+OS/arch as an `optionalDependency` and unpacks the binary into a cache
+directory.
 
 This package carries no JS: `bin/inca-host.br`, the brotli-compressed
 binary, is the whole of it.
