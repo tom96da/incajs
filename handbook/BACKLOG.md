@@ -1055,12 +1055,6 @@ A fixed entry is deleted and its ID is never reused.
   Fix: one resolver that loads the config once and runs the checks as
   separate steps, each command choosing the steps it needs.
 
-- **B-219 `inca` has no command that reports its environment**
-  `Units: cli · Size: S · Impact: Low`
-
-  Fix: add `inca info`, which prints the Node version, the platform, the host
-  package, the host binary's path and the `INCA_*` overrides.
-
 - **B-220 The CLI spells the config file name twice**
   `Units: cli · Size: S · Impact: Low`
 
