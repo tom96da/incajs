@@ -277,16 +277,6 @@ impl Engine {
         failures
     }
 
-    /// Takes the failures of jobs that threw while
-    /// [`eval_module`](Self::eval_module) or [`poll_module`](Self::poll_module)
-    /// ran, oldest first. The next [`run_jobs`](Self::run_jobs) starts from an
-    /// empty list. Call it to report the failures when the module's own error
-    /// is reported separately.
-    #[must_use]
-    pub fn take_startup_failures(&self) -> Vec<EngineError> {
-        self.startup_failures.take()
-    }
-
     /// Runs one pending promise job. A job that threw is appended to
     /// `failures`. Returns whether a job was pending.
     ///
