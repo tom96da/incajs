@@ -182,11 +182,9 @@ fn a_reverse_direction_value_applies_in_both_spellings(
     assert!(warnings.is_empty(), "{written}: {warnings:?}");
 }
 
-#[rstest]
-#[case::underscore_start("justify_content", "flex_start")]
-#[case::capitalized_start("align_items", "Flex-Start")]
-#[case::upper_case_direction("flex_direction", "ROW-REVERSE")]
-fn a_keyword_in_another_spelling_warns(#[case] key: &str, #[case] written: &str) {
+#[test]
+fn a_keyword_in_another_spelling_warns() {
+    let (key, written) = ("justify_content", "flex_start");
     let (style, warnings) = style_and_warnings(&[(key, text(written))]);
 
     assert_eq!(style, StyleSpec::default(), "{key} {written}");
@@ -195,6 +193,36 @@ fn a_keyword_in_another_spelling_warns(#[case] key: &str, #[case] written: &str)
         [format!("ignoring unsupported value for style key `{key}`")],
         "{key} {written}"
     );
+}
+
+#[rstest]
+#[case::hyphen_spelling("align_items", "Flex-Start", "flex-start")]
+#[case::all_capitals("flex_direction", "ROW-REVERSE", "row-reverse")]
+#[case::display("display", "Flex", "flex")]
+#[case::underscore_spelling("flex_direction", "Column_Reverse", "column_reverse")]
+fn a_keyword_in_another_letter_case_applies(
+    #[case] key: &str,
+    #[case] written: &str,
+    #[case] lower: &str,
+) {
+    let (style, warnings) = style_and_warnings(&[(key, text(written))]);
+    let (want, _) = style_and_warnings(&[(key, text(lower))]);
+
+    assert_ne!(style, StyleSpec::default(), "{key} {written}");
+    assert_eq!(style, want, "{key} {written}");
+    assert!(warnings.is_empty(), "{key} {written}: {warnings:?}");
+}
+
+#[rstest]
+#[case::size("width", "AUTO")]
+#[case::margin("margin", "Auto")]
+fn auto_in_any_letter_case_reads_as_auto(#[case] key: &str, #[case] written: &str) {
+    let (style, warnings) = style_and_warnings(&[(key, text(written))]);
+    let (want, _) = style_and_warnings(&[(key, text("auto"))]);
+
+    assert_ne!(style, StyleSpec::default(), "{key}");
+    assert_eq!(style, want, "{key}");
+    assert!(warnings.is_empty(), "{key}: {warnings:?}");
 }
 
 #[test]

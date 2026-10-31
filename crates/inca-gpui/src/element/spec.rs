@@ -72,13 +72,15 @@ macro_rules! keywords {
             /// Every name a style value of this kind takes, in declaration order.
             pub const NAMES: &[&str] = &[$($first, $($more,)*)*];
 
-            /// The variant `name` stands for. Names are exact lowercase.
+            /// The variant `name` stands for. Names compare without ASCII case.
             #[must_use]
             pub fn from_name(name: &str) -> Option<Self> {
-                match name {
-                    $($first $(| $more)* => Some(Self::$variant),)*
-                    _ => None,
-                }
+                $(
+                    if name.eq_ignore_ascii_case($first) $(|| name.eq_ignore_ascii_case($more))* {
+                        return Some(Self::$variant);
+                    }
+                )*
+                None
             }
         }
     };

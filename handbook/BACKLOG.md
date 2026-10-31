@@ -1202,15 +1202,6 @@ A fixed entry is deleted and its ID is never reused.
   has 8 MiB by default. Fix: run the engine on a thread with a larger stack,
   or cut the native frames per call.
 
-- **B-237 Keywords in `:style` are lowercase only**
-  `Units: gpui,docs · Size: S · Impact: Low`
-
-  CSS keywords are ASCII case-insensitive, and browsers accept `ROW-REVERSE`.
-  The host reads a color keyword in any case and ignores any other keyword
-  that is not lowercase, with a warning. Fix: compare those keywords
-  case-insensitively in the style parser (`keywords!` in
-  `crates/inca-gpui/src/element/spec.rs`) and document the rule.
-
 - **B-238 `keypress` goes to the node its `keydown` went to**
   `Units: bridge · Size: M · Impact: Low`
 

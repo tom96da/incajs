@@ -84,7 +84,7 @@ fn non_negative_px(value: &AttributeValue) -> Option<f64> {
 /// `"auto"` or a px value.
 fn length_spec_from(value: &AttributeValue) -> Option<LengthSpec> {
     match value {
-        AttributeValue::String(s) if s == "auto" => Some(LengthSpec::Auto),
+        AttributeValue::String(s) if s.eq_ignore_ascii_case("auto") => Some(LengthSpec::Auto),
         _ => style_px(value).map(LengthSpec::Px),
     }
 }
@@ -98,7 +98,7 @@ fn margin_length_from(value: &AttributeValue) -> Option<LengthSpec> {
 /// unset.
 fn size_spec_from(value: &AttributeValue) -> Option<LengthSpec> {
     match value {
-        AttributeValue::String(s) if s == "auto" => Some(LengthSpec::Auto),
+        AttributeValue::String(s) if s.eq_ignore_ascii_case("auto") => Some(LengthSpec::Auto),
         _ => non_negative_px(value).map(LengthSpec::Px),
     }
 }
