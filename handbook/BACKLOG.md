@@ -775,14 +775,6 @@ A fixed entry is deleted and its ID is never reused.
   first build without HMR. Evaluation and mount errors still need the host's
   wait.
 
-- **B-164 Gaps in the host's wait for the first load**
-  `Units: host · Size: S · Impact: Low`
-
-  Two gaps remain in `crates/inca-host/src/dev.rs`. While a reload is pending,
-  relayed notifications go to the pending session until it settles. When the
-  first entry rejects while no window exists, the host exits right after it
-  reports the rejection, so the job failures of the final poll are dropped.
-
 - **B-168 The `signal` option of `addEventListener()` is unsupported**
   `Units: core,bridge · Size: M · Impact: Low`
 

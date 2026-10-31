@@ -231,15 +231,20 @@ impl Session {
         session
             .engine
             .eval_module(entry_path, source)
-            .inspect_err(|_| session.report_failed_start(&failed))?;
+            .inspect_err(|err| session.report_failed_start(&failed, err))?;
         Ok(session)
     }
 
-    /// Reports what the app failed on before its entry failed: the jobs that
-    /// threw and the listener errors. The entry's own error is the caller's.
-    pub(crate) fn report_failed_start(&self, reporter: &ErrorReporter) {
-        for failure in self.engine.take_startup_failures() {
-            reporter(&failure);
+    /// Reports what the app failed on besides its entry: the jobs that threw, the jobs left
+    /// behind, the unhandled rejections and the listener errors. `entry` is the caller's to
+    /// report, so one failure equal to it is left out.
+    pub(crate) fn report_failed_start(&self, reporter: &ErrorReporter, entry: &EngineError) {
+        let mut failures = self.engine.run_jobs();
+        if let Some(at) = failures.iter().position(|failure| failure == entry) {
+            failures.remove(at);
+        }
+        for failure in &failures {
+            reporter(failure);
         }
         self.dispatcher.report_pending();
     }
@@ -292,7 +297,7 @@ impl Session {
         };
         match loading.poll() {
             Some(Err(err)) => {
-                loading.session.report_failed_start(&failed);
+                loading.session.report_failed_start(&failed, &err);
                 Err(err)
             }
             _ => Ok(loading),

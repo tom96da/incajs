@@ -387,13 +387,12 @@ impl Serve {
             self.track_hold(cx);
             return;
         };
-        if result.is_err() {
-            pending
+        match &result {
+            Err(err) => pending
                 .loading
                 .session()
-                .report_failed_start(&self.reporter);
-        } else {
-            pending.loading.session().dispatcher.report_pending();
+                .report_failed_start(&self.reporter, err),
+            Ok(()) => pending.loading.session().dispatcher.report_pending(),
         }
         let Some(Pending { loading, ids }) = self.pending.take() else {
             return;
