@@ -43,7 +43,7 @@ const buildCommand = defineCommand({
   async run({ args }) {
     try {
       const output = await build({ sourcemap: args.sourcemap });
-      checkBuiltConfig(output.entryFile, process.stderr);
+      await checkBuiltConfig(output.entryFile, process.stderr);
       log(process.stdout, `built ${relative(output.entryFile)}`);
     } catch (error) {
       printFault(process.stderr, "build failed", toFault(error));

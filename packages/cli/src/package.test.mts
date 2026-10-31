@@ -7,10 +7,19 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { Writable } from "node:stream";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("./host/index.mts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./host/index.mts")>();
+  return { ...actual, resolveHostBin: vi.fn<typeof actual.resolveHostBin>(actual.resolveHostBin) };
+});
+
+import { IncaError } from "./error.mts";
+import { resolveHostBin } from "./host/index.mts";
 import { packageApp } from "./package.mts";
 import type { Bundler, BuildOptions, BuildOutput, Watcher } from "./types.mts";
+
+const mockedResolveHostBin = vi.mocked(resolveHostBin);
 
 let cwd: string | undefined;
 
@@ -68,6 +77,25 @@ function makeSink(): { stream: Writable; text: () => string } {
 }
 
 describe("packageApp", () => {
+  it("resolves the host for the app with its own stderr", async () => {
+    const app = await makeApp({ name: "click_counter" });
+    const stderr = makeSink();
+    mockedResolveHostBin.mockRejectedValueOnce(new IncaError("ERR_INCA_HOST_BIN_UNRESOLVED", "m"));
+
+    await expect(
+      packageApp({
+        cwd: app,
+        entry: "unused",
+        bundler: fakeBundler(),
+        target: "linux",
+        stdout: makeSink().stream,
+        stderr: stderr.stream,
+      }),
+    ).rejects.toThrow(expect.objectContaining({ code: "ERR_INCA_HOST_BIN_UNRESOLVED" }));
+
+    expect(mockedResolveHostBin).toHaveBeenCalledWith(app, stderr.stream);
+  });
+
   it("hands the bundler no dev member when packaging", async () => {
     const app = await makeApp({
       name: "click_counter",

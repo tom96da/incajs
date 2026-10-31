@@ -7,8 +7,8 @@ import path from "node:path";
 import { build } from "./build.mts";
 import { slugify } from "./config/defaults.mts";
 import { resolveAppConfig, runtimeConfigOf } from "./config/loader.mts";
-import { assertHostBin, resolveHostBin } from "./dev-client/index.mts";
 import { IncaError } from "./error.mts";
+import { assertHostBin, resolveHostBin } from "./host/index.mts";
 import { log } from "./log.mts";
 import { writeMacosApp } from "./macosApp.mts";
 import { checkConfig } from "./printConfig.mts";
@@ -24,16 +24,17 @@ export interface PackageAppOptions {
   cwd?: string;
   /**
    * The app's entry point. Defaults to resolving it the same way `inca
-   * dev`/`build` do: a committed `src/main.mts`, `src/main.ts` or `src/main.js`, or `src/App.vue` wrapped
-   * in a synthesized one.
+   * dev`/`build` do: a committed `src/main.mts`, `src/main.ts` or `src/main.js`,
+   * or `src/App.vue` wrapped in a synthesized one.
    */
   entry?: string;
   /** Overrides the bundler. See {@link build}'s default. */
   bundler?: Bundler;
   /**
    * Overrides which host binary gets embedded in the packaged
-   * app, in place of automatic resolution (`INCA_HOST_BIN`, then the
-   * per-platform `@incajs/host-*` package. See {@link resolveHostBin}).
+   * app, in place of automatic resolution (`INCA_HOST_BIN`, then the binary
+   * unpacked from the per-platform `@incajs/host-*` package. See
+   * {@link resolveHostBin}).
    */
   hostBin?: string;
   /** Writes `bundle.js.map` beside the bundle. Overrides the config's `sourcemap` when set. */
@@ -181,8 +182,8 @@ export async function packageApp(options: PackageAppOptions = {}): Promise<Packa
     stderr: options.stderr,
   });
 
-  const hostBin = options.hostBin ?? resolveHostBin();
-  assertHostBin(hostBin);
+  const hostBin = options.hostBin ?? (await resolveHostBin(cwd, options.stderr));
+  await assertHostBin(hostBin);
   checkConfig(hostBin, output.entryFile);
 
   const layoutArgs: LayoutArgs = { metadata, output, hostBin };

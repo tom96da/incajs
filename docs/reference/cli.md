@@ -114,4 +114,5 @@ $ inca config
 | Variable        | Description          |
 | --------------- | -------------------- |
 | `INCA_HOST_BIN` | Path to a specific host binary, used by `dev`, `build`, `package` and `config` in place of automatic resolution, e.g. on a custom or unpublished build. |
+| `INCA_CACHE_DIR` | The directory the CLI unpacks the host binary into. |
 | `INCA_EXPERIMENTAL_HMR` | Same as `--experimental-hmr`, for `inca dev`. See the [HMR guide](../guide/hmr). |

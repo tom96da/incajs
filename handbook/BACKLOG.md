@@ -540,7 +540,7 @@ A fixed entry is deleted and its ID is never reused.
   `Units: ci,cli,docs · Size: S · Impact: Low`
 
   The set of published host platforms is written in `npm/*/package.json`, the
-  CLI's `optionalDependencies`, `hostBin.mts`, `cd.yml` (the matrix, the
+  CLI's `optionalDependencies`, `host/package.mts`, `cd.yml` (the matrix, the
   manifest list in `verify`, and two `for pkg in` loops), the README and guide
   tables, and the Makefile's `LICENSE_PACKAGES`. A platform missing from the
   `Place host binaries` loop publishes a package with no binary, and an npm
@@ -1256,3 +1256,25 @@ A fixed entry is deleted and its ID is never reused.
   that is created exclusively, in a private directory owned by the user.
   Another option is to let the person choose the save location in an OS dialog
   when the app crashes.
+
+- **B-242 The host binary can't unpack itself**
+  `Units: host,ci,cli · Size: L · Impact: Low`
+
+  The host binary ships compressed in its npm package and the CLI unpacks it.
+  An app that `inca package` builds holds the unpacked binary, so the app is as
+  large as the binary. Fix: make `inca-host` a small launcher that holds the
+  compressed binary, unpacks it into a cache directory on the first start,
+  checks it and replaces itself with it. On Linux, an anonymous in-memory file
+  could skip the cache at the cost of unpacking on every start. On macOS the
+  unpacked binary needs its own signature and lives outside the `.app`, so it
+  needs a way to find the bundle.
+
+- **B-243 The CLI has no rule for which stream a line goes to**
+  `Units: cli · Size: S · Impact: Low`
+
+  `build`, `package` and `dev` write their progress and result lines to
+  stdout, while a warning and the shutdown line go to stderr. The line that
+  names the directory of a first unpack goes to stderr, because `inca config`
+  prints JSON on stdout. Nothing records which kind of line uses which stream.
+  Fix: decide one rule, apply it to every `log` and `warn` call and write it in
+  `handbook/STYLE.md`.

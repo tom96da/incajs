@@ -3,7 +3,7 @@
 
 import { expect } from "vitest";
 
-import type { HostClient } from "../../packages/cli/src/dev-client/hostClient.mts";
+import type { HostClient } from "../../packages/cli/src/dev-client/client.mts";
 
 const inFlight = new Set<Promise<void>>();
 const failures: unknown[] = [];

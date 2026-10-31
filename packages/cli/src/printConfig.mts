@@ -9,8 +9,8 @@ import type { SpawnSyncReturns } from "node:child_process";
 
 import { withAppRoot } from "./config/appRoot.mts";
 import { resolveRuntimeConfig } from "./config/loader.mts";
-import { assertHostBin, resolveHostBin } from "./dev-client/index.mts";
 import { IncaError } from "./error.mts";
+import { assertHostBin, resolveHostBin } from "./host/index.mts";
 import { warn } from "./log.mts";
 import type { RuntimeConfig } from "./config/loader.mts";
 import type { DevConfig, WindowConfig } from "./config/types.mts";
@@ -168,18 +168,21 @@ export function checkConfig(hostBin: string, entry: string): void {
 }
 
 /**
- * Runs {@link checkConfig} on a build's `entry` with the host binary that resolves. Without one
- * the check is skipped with a warning, because a build needs no host.
+ * Runs {@link checkConfig} on a build's `entry` with the host binary that resolves. Without one,
+ * or when it can't be unpacked, the check is skipped with a warning, because a build needs no host.
  *
  * @param entry - the entry the build wrote
  * @param stderr - receives the warning
  * @throws if the check fails, or the host binary can't be resolved for another reason
  */
-export function checkBuiltConfig(entry: string, stderr: NodeJS.WritableStream): void {
+export async function checkBuiltConfig(
+  entry: string,
+  stderr: NodeJS.WritableStream,
+): Promise<void> {
   let hostBin: string;
   try {
-    hostBin = resolveHostBin();
-    assertHostBin(hostBin);
+    hostBin = await resolveHostBin(process.cwd(), stderr);
+    await assertHostBin(hostBin);
   } catch (error) {
     if (
       error instanceof IncaError &&
@@ -187,6 +190,10 @@ export function checkBuiltConfig(entry: string, stderr: NodeJS.WritableStream): 
         error.code === "ERR_INCA_HOST_BIN_NOT_FOUND")
     ) {
       warn(stderr, "no host binary found, so the config was not checked");
+      return;
+    }
+    if (error instanceof IncaError && error.code === "ERR_INCA_HOST_UNPACK_FAILED") {
+      warn(stderr, "failed to unpack the host binary, so the config was not checked");
       return;
     }
     throw error;
@@ -205,8 +212,8 @@ export function checkBuiltConfig(entry: string, stderr: NodeJS.WritableStream): 
  */
 export async function printConfig(options: PrintConfigOptions = {}): Promise<number> {
   const cwd = options.cwd ?? process.cwd();
-  const hostBin = options.hostBin ?? resolveHostBin();
-  assertHostBin(hostBin);
+  const hostBin = options.hostBin ?? (await resolveHostBin(cwd, options.stderr));
+  await assertHostBin(hostBin);
   const config = await resolveRuntimeConfig(cwd, { dev: true });
 
   const dir = path.join(cwd, "node_modules/.inca/config");

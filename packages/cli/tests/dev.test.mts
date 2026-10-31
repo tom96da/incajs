@@ -6,7 +6,14 @@ import path from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
 
+vi.mock("../src/host/index.mts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/host/index.mts")>();
+  return { ...actual, resolveHostBin: vi.fn<typeof actual.resolveHostBin>(actual.resolveHostBin) };
+});
+
 import { dev } from "../src/dev.mts";
+import { IncaError } from "../src/error.mts";
+import { resolveHostBin } from "../src/host/index.mts";
 import { scratchConfigApp } from "./scratchConfigApp.mts";
 import {
   waitFor,
@@ -24,10 +31,29 @@ import {
   makeSink,
 } from "./support/dev.mts";
 
+const mockedResolveHostBin = vi.mocked(resolveHostBin);
+
 describe("dev", () => {
   const scratch = scratchConfigApp("dev");
   beforeAll(scratch.setUp);
   afterAll(scratch.tearDown);
+
+  it("resolves the host for the app with its own stderr", async () => {
+    const cwd = await scratch.makeApp({});
+    const stderr = makeSink();
+    mockedResolveHostBin.mockRejectedValueOnce(new IncaError("ERR_INCA_HOST_BIN_UNRESOLVED", "m"));
+
+    await dev({
+      cwd,
+      entry: "unused",
+      bundler: makeFakeBundler(),
+      stdout: makeSink().stream,
+      stderr: stderr.stream,
+      signal: new AbortController().signal,
+    }).catch(() => undefined);
+
+    expect(mockedResolveHostBin).toHaveBeenCalledWith(cwd, stderr.stream);
+  });
 
   it("starts the host and prints ready once the first build lands", async () => {
     const bundler = makeFakeBundler();

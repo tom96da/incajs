@@ -15,6 +15,13 @@ The development window shows your app's `console` output in the terminal
 that ran `inca dev`. See the [Console reference](../reference/console)
 for where each kind of app writes it.
 
+## The CLI can't unpack the host binary
+
+The command stops with
+[`ERR_INCA_HOST_UNPACK_FAILED`](../reference/errors#err-inca-host-unpack-failed)
+because no directory it tried could take the host binary. Set `INCA_CACHE_DIR`
+to a writable directory on a filesystem that allows running programs.
+
 ## The app won't start on Linux
 
 If the machine is missing a required library or a Vulkan driver, the

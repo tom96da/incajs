@@ -18,7 +18,7 @@ vi.mock("./package.mts", () => ({
 }));
 vi.mock("./printConfig.mts", () => ({
   printConfig: vi.fn<(options?: PrintConfigOptions) => Promise<number>>(),
-  checkBuiltConfig: vi.fn<(entry: string, stderr: NodeJS.WritableStream) => void>(),
+  checkBuiltConfig: vi.fn<(entry: string, stderr: NodeJS.WritableStream) => Promise<void>>(),
 }));
 
 import { build } from "./build.mts";
@@ -165,9 +165,9 @@ describe("run", () => {
       entryFile: "/app/dist/bundle.js",
       files: ["bundle.js"],
     });
-    mockedCheckBuiltConfig.mockImplementation(() => {
-      throw new IncaError("ERR_INCA_CONFIG_INVALID", "window.width in inca.config.ts is -100");
-    });
+    mockedCheckBuiltConfig.mockRejectedValue(
+      new IncaError("ERR_INCA_CONFIG_INVALID", "window.width in inca.config.ts is -100"),
+    );
 
     await run(["node", "inca", "build"]);
 
