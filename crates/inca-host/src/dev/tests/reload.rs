@@ -175,6 +175,40 @@ fn a_job_error_is_reported_once_when_a_pending_reload_rejects_after_it(cx: &mut 
 }
 
 #[gpui::test]
+fn a_job_behind_a_rejecting_reload_is_reported_before_its_answer(cx: &mut TestAppContext) {
+    let dir = ScratchDir::new("behind-reject");
+    // The entry settles after two jobs, so the throw runs behind the settlement.
+    let entry = write_entry(
+        &dir,
+        r"
+        await new Promise((_, reject) => {
+            __inca_dev__.receive = () => {
+                reject(new Error('late'));
+                queueMicrotask(() => {
+                    queueMicrotask(() => {
+                        throw new Error('behind');
+                    });
+                });
+            };
+        });
+        ",
+    );
+    let (capturing, _) = capture();
+    let (_, sender) = serve_idle(cx, "", &entry, &capturing);
+
+    request(&sender, 7, "reload");
+    notify(&sender, "go");
+    cx.run_until_parked();
+
+    let sent = written(&capturing);
+    assert_eq!(sent.len(), 2);
+    assert_eq!(sent[0]["method"], "appError");
+    assert_eq!(sent[0]["params"]["message"], "Error: behind");
+    assert_eq!(sent[1]["id"], 7);
+    assert_eq!(sent[1]["error"]["message"], "Error: late");
+}
+
+#[gpui::test]
 fn a_reload_that_throws_at_once_is_answered_while_an_earlier_one_stays_pending(
     cx: &mut TestAppContext,
 ) {

@@ -432,3 +432,75 @@ fn the_host_engine_runs_a_script_on_a_deeper_stack_than_the_engine_default() {
         "session depth {depth}, default depth {baseline}"
     );
 }
+
+#[test]
+fn an_unhandled_rejection_is_reported_when_begin_rejects() {
+    let capturing = Rc::new(CapturingWriter::default());
+    let writer: SharedWriter = Rc::clone(&capturing) as SharedWriter;
+
+    let err = Session::begin(
+        TEST_ENTRY_PATH,
+        r"
+        Promise.reject(new Error('lost'));
+        throw new Error('entry');
+        ",
+        reporter_for(&writer),
+        Some(&writer),
+    )
+    .err()
+    .unwrap();
+
+    assert_eq!(err.message(), "Error: entry");
+    let sent = capturing.0.borrow();
+    assert_eq!(sent.len(), 1);
+    assert!(sent[0].contains("lost"));
+}
+
+#[test]
+fn a_job_behind_the_throw_is_reported_when_begin_rejects() {
+    let capturing = Rc::new(CapturingWriter::default());
+    let writer: SharedWriter = Rc::clone(&capturing) as SharedWriter;
+
+    let err = Session::begin(
+        TEST_ENTRY_PATH,
+        r"
+        queueMicrotask(() => {
+            throw new Error('behind');
+        });
+        throw new Error('entry');
+        ",
+        reporter_for(&writer),
+        Some(&writer),
+    )
+    .err()
+    .unwrap();
+
+    assert_eq!(err.message(), "Error: entry");
+    let sent = capturing.0.borrow();
+    assert_eq!(sent.len(), 1);
+    assert!(sent[0].contains("behind"));
+}
+
+#[test]
+fn a_job_behind_the_throw_is_reported_when_load_rejects() {
+    let capturing = Rc::new(CapturingWriter::default());
+    let writer: SharedWriter = Rc::clone(&capturing) as SharedWriter;
+
+    let err = Session::load(
+        TEST_ENTRY_PATH,
+        r"
+        queueMicrotask(() => {
+            throw new Error('behind');
+        });
+        throw new Error('entry');
+        ",
+        reporter_for(&writer),
+    )
+    .err()
+    .unwrap();
+
+    assert_eq!(err.message(), "Error: entry");
+    let sent = capturing.0.borrow();
+    assert_eq!(sent.len(), 1);
+    assert!(sent[0].contains("behind"));
+}
