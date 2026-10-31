@@ -54,6 +54,11 @@ export interface IncaElement extends IncaEventTarget, EventHandlers {
    * `"element"` for every other container.
    */
   readonly kind: "element" | "comment";
+  /**
+   * The tag of the element in ASCII upper case, such as `"BUTTON"`. The mount container reads
+   * `"DIV"`.
+   */
+  readonly tagName: string;
   /** The current parent, or `null` if this node isn't attached to the tree. */
   parent: IncaElement | null;
   /** This node's children, in render order. */

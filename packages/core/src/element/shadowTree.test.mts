@@ -106,6 +106,7 @@ function element(): IncaElement {
     __node_id: nextId++,
     id: "",
     kind: "element",
+    tagName: "DIV",
     parent: null,
     children: [],
     focus: vi.fn<() => void>(),
@@ -128,6 +129,7 @@ describe("createElement", () => {
     expect(el).toEqual({
       id: "",
       kind: "element",
+      tagName: "DIV",
       parent: null,
       children: [],
       focus: expect.any(Function),

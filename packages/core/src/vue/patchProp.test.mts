@@ -57,6 +57,7 @@ const makeEl = (): IncaElement => ({
   __node_id: 1,
   id: "",
   kind: "element",
+  tagName: "DIV",
   parent: null,
   children: [],
   focus: vi.fn<() => void>(),

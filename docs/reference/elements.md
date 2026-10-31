@@ -193,8 +193,8 @@ have, and using them fails the build:
   fails at the template-compiler stage.
 - **No `fetch`**: `fetch` isn't provided as a global by the JS runtime
   Incarnative.js embeds.
-- **`ref` lacks other element members**: `classList`, `className`, `dataset`,
-  `style` and `tagName` are missing.
+- **`ref` lacks other element members**: `classList`, `className`, `dataset`
+  and `style` are missing.
 
 Event modifiers such as `.stop`, `.once` and `@keydown.enter` are documented
 in [Events: Event modifiers](./events#event-modifiers).

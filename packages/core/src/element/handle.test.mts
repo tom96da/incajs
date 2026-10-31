@@ -48,6 +48,46 @@ function installHost(
   return host;
 }
 
+describe("createIncaElement tagName", () => {
+  it.each([
+    ["button", "BUTTON"],
+    ["text", "TEXT"],
+    ["straße", "STRAßE"],
+  ])("reads the tag %s in ASCII upper case", (tag, expected) => {
+    installHost();
+
+    expect(createIncaElement(1, "element", tag).tagName).toBe(expected);
+  });
+
+  it("reads DIV for a comment stand-in", () => {
+    installHost();
+
+    expect(createIncaElement(3, "comment").tagName).toBe("DIV");
+  });
+
+  it("reads DIV for the mount container", () => {
+    globalThis.__inca_native__ = { rootNodeId: () => 90 } as never;
+
+    expect(rootElement().tagName).toBe("DIV");
+  });
+
+  it("reads the tag of a removed element", () => {
+    installHost();
+    const el = createIncaElement(1, "element", "input");
+    markRemoved(el);
+
+    expect(el.tagName).toBe("INPUT");
+  });
+
+  it("reads the tag of a freed element", () => {
+    installHost();
+    const el = createIncaElement(1, "element", "input");
+    markDestroyed(el);
+
+    expect(el.tagName).toBe("INPUT");
+  });
+});
+
 describe("createIncaElement tabIndex", () => {
   it("reads -1 for a comment stand-in", () => {
     installHost();

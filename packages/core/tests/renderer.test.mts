@@ -236,6 +236,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       __node_id: rootId,
       id: "",
       kind: "element",
+      tagName: "DIV",
       parent: null,
       children: [],
       focus: () => focus(rootId),
