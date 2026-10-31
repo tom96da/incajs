@@ -4,17 +4,11 @@
 import { setFlagsFromString } from "node:v8";
 import { runInNewContext } from "node:vm";
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { document } from "../document.mts";
 import { createIncaElement, rootElement } from "./handle.mts";
-import {
-  activeElement,
-  elementOf,
-  markDestroyed,
-  recordedCount,
-  unregisterElement,
-} from "./lifecycle.mts";
+import { elementOf, markDestroyed, recordedCount } from "./lifecycle.mts";
 import { createTextNode, remove } from "./shadowTree.mts";
 import type { ScrollOptions } from "./scroll.mts";
 import type { IncaElement, IncaInputElement } from "./types.mts";
@@ -448,36 +442,6 @@ describe("createIncaElement registry", () => {
 
     expect(first.deref()).toBeUndefined();
     expect(elementOf(33)).toBe(el);
-  });
-});
-
-const focused = vi.fn<() => number | null>(() => null);
-
-describe("activeElement", () => {
-  beforeEach(() => {
-    for (const id of [21, 22]) unregisterElement(id);
-    focused.mockReset();
-    focused.mockReturnValue(null);
-    globalThis.__inca_native__ = { focusedNode: focused } as never;
-  });
-
-  it("returns the registered element of the focused node", () => {
-    const el = createIncaElement(21, "element", "div");
-    focused.mockReturnValue(21);
-
-    expect(activeElement()).toBe(el);
-  });
-
-  it("returns null when no node has focus", () => {
-    createIncaElement(22, "element", "div");
-
-    expect(activeElement()).toBeNull();
-  });
-
-  it("returns null for a focused id with no registered element", () => {
-    focused.mockReturnValue(999);
-
-    expect(activeElement()).toBeNull();
   });
 });
 

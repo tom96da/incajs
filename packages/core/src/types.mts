@@ -220,7 +220,10 @@ export interface IncaEventTarget {
  * The event target between the elements and `window`.
  */
 export interface IncaDocument extends IncaEventTarget, EventHandlers<IncaDocument> {
-  /** The element that has focus, or `null` when no element has focus. */
+  /**
+   * The element that has focus, or `null` when no element has focus. A `focus()` or `blur()` call
+   * takes effect for this property at once.
+   */
   readonly activeElement: IncaElement | null;
 }
 
