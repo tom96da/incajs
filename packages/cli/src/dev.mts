@@ -201,6 +201,7 @@ export async function dev(options: DevOptions): Promise<void> {
     const stdout = options.stdout ?? process.stdout;
     const stderr = options.stderr ?? process.stderr;
     const bin = options.hostBin ?? (await resolveHostBin(cwd, stderr));
+    if (options.signal.aborted) return;
     await assertHostBin(bin);
     const bundler: Bundler = options.bundler ?? defaultBundler;
 
