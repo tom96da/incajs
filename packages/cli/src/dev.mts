@@ -195,7 +195,7 @@ export async function dev(options: DevOptions): Promise<void> {
       resolve();
     };
   });
-  // Observed from the start, so that `stopping` covers every step below.
+  // Observed from the start, so a step that awaits sees the cancel.
   if (options.signal.aborted) stop();
   else options.signal.addEventListener("abort", () => stop(), { once: true });
   let entryWatch: EditWatch | undefined;
@@ -275,6 +275,7 @@ export async function dev(options: DevOptions): Promise<void> {
       entryFile: string,
       integrations?: Record<string, (params: unknown) => void>,
     ): Promise<void> {
+      if (stopping) return;
       try {
         checkConfig(hostBin, entryFile);
       } catch (error) {
