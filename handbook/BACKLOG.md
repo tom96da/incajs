@@ -1028,12 +1028,11 @@ A fixed entry is deleted and its ID is never reused.
   which reads `package.json` only if it is there, checks the product name
   only when one is set and checks neither the icon nor `outDir`; `inca build`
   checks `outDir` through `resolveBuildConfig` and `assertOutDir`. `inca dev`
-  runs `resolveBuildConfig` and `assertOutDir`, then `resolveAppConfig`, and
-  on a missing `package.json` or name prints `running unnamed. …` to stdout
-  and falls back to `resolveRuntimeConfig`. Any other failure there, such as
-  a missing icon, stops `inca dev` where `inca build` succeeds. Each
-  resolver loads the config file again, up to three loads per `inca dev`
-  attempt.
+  runs `resolveBuildConfig`, then `resolveAppConfig`, and on a missing
+  `package.json` or name prints `running unnamed. …` to stdout and falls back
+  to `resolveRuntimeConfig`. Any other failure there, such as a missing icon,
+  stops `inca dev` where `inca build` succeeds. Each resolver loads the config
+  file again, up to three loads per `inca dev` attempt.
 
   Fix: one resolver that loads the config once and runs the checks as
   separate steps, each command choosing the steps it needs.

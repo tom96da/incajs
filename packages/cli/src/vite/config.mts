@@ -124,9 +124,7 @@ export function resolveViteConfig({
         fileName: () => BUNDLE_FILE_NAME,
       },
       outDir,
-      // Explicit either way: silences Vite's own notice about defaulting to
-      // false here, since outDir sits outside root in this project's layout
-      // regardless of mode.
+      // Explicit either way: silences Vite's notice about defaulting to false here.
       emptyOutDir: mode === "production",
       minify: mode === "production",
       sourcemap: emitMap,

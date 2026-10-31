@@ -129,7 +129,8 @@ bootstrapping and wins over `src/App.vue`. Without `entry`,
 - Type: `string`, a path, resolved from the app's root directory
 - Default: `"dist"`
 
-Where a build's output is written. It can't be, or contain, the app's root,
+Where a build's output is written. `inca dev` writes to a directory of its
+own and leaves `outDir` alone. `outDir` can't be, or contain, the app's root,
 `src/`, `node_modules/` or `entry`, and the check follows symlinks. See
 [Error Codes](./errors#err-inca-out-dir-invalid).
 

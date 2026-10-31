@@ -7,7 +7,6 @@ import { styleText } from "node:util";
 
 import { withAppRoot } from "./config/appRoot.mts";
 import {
-  assertOutDir,
   resolveAppConfig,
   resolveBuildConfig,
   resolveRuntimeConfig,
@@ -123,7 +122,17 @@ async function bundleExecutable(
 }
 
 /**
- * Deletes every file directly under `outDir` that `keep` doesn't name.
+ * The directory `inca dev` builds into.
+ *
+ * @param cwd - the app's root directory
+ * @returns the absolute path under `node_modules/.inca`
+ */
+function devDirOf(cwd: string): string {
+  return path.join(cwd, "node_modules/.inca/dev");
+}
+
+/**
+ * Deletes every file under `outDir`, at any depth, that `keep` doesn't name.
  * `outDir` isn't emptied between rebuilds (a build in progress may be
  * evaluating there), so a chunk or asset an edit stops producing is deleted
  * here.
@@ -222,19 +231,18 @@ export async function dev(options: DevOptions): Promise<void> {
       stderr,
       async attempt() {
         const config = await resolveBuildConfig(cwd);
-        const outDir = path.resolve(cwd, config.outDir);
         const automaticEntry = options.entry === undefined && config.entry === undefined;
         const entry = options.entry ?? config.entry ?? (await resolveEntry(cwd));
-        assertOutDir(cwd, outDir, entry);
         const metadata = await resolveMetadata(cwd, stdout);
         const runtimeConfig = metadata
           ? runtimeConfigOf(metadata, { dev: true })
           : await resolveRuntimeConfig(cwd, { dev: true });
-        return { outDir, entry, automaticEntry, metadata, runtimeConfig };
+        return { entry, automaticEntry, metadata, runtimeConfig };
       },
     });
     if (!resolved) return;
-    const { outDir, entry, automaticEntry, metadata, runtimeConfig } = resolved;
+    const { entry, automaticEntry, metadata, runtimeConfig } = resolved;
+    const devDir = devDirOf(cwd);
     const hostBin = (await bundleExecutable(cwd, metadata, bin, stdout)) ?? bin;
 
     let client: HostClient | undefined;
@@ -345,7 +353,6 @@ export async function dev(options: DevOptions): Promise<void> {
      * once under HMR. A host that is already running reloads with the new entry's bundle.
      */
     async function openSession(entry: string): Promise<Session> {
-      assertOutDir(cwd, outDir, entry);
       const mine = ++generation;
       // `stopping` is set the moment shutdown starts, before the session closes.
       const current = (): boolean => mine === generation && !stopping;
@@ -409,8 +416,8 @@ export async function dev(options: DevOptions): Promise<void> {
           root: entryRoot(cwd, entry),
           envDir: cwd,
           publicDir: path.join(cwd, "public"),
-          outDir,
-          runtimeConfig: withAppRoot(runtimeConfig, cwd, outDir),
+          outDir: devDir,
+          runtimeConfig: withAppRoot(runtimeConfig, cwd, devDir),
           mode: "development",
           stdout,
           stderr,

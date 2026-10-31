@@ -50,8 +50,7 @@ name isn't its package name.
 
 ## `ERR_INCA_PRODUCT_NAME_INVALID`
 
-The app's name becomes a directory name: `<productName>.app` on macOS, and
-a scratch bundle under `node_modules/.inca` while `inca dev` runs. See
+The app's name becomes a directory name: `<productName>.app` on macOS. See
 [`productName`](./configuration#productname) for the naming rule this
 enforces.
 
@@ -69,8 +68,8 @@ file is created.
 
 [`outDir`](./configuration#outdir) is, or contains, the app's root
 directory, its `src/` or `node_modules/`, or its configured
-[`entry`](./configuration#entry), including through a symlink. `inca dev`
-and `inca build` delete every file under `outDir` that the build didn't
+[`entry`](./configuration#entry), including through a symlink. `inca build`
+and `inca package` delete every file under `outDir` that the build didn't
 write. Set it to a directory the build owns, such as `"dist"`.
 
 ## `ERR_INCA_CONFIG_INVALID`

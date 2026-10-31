@@ -230,19 +230,16 @@ describe("a failure before the first build", () => {
     await expectLockFree(cwd);
   });
 
-  it("reports an entry override inside outDir and starts once outDir moves", async () => {
+  it("starts with an entry override inside outDir", async () => {
     const cwd = await scratch.makeApp({ name: "entry-in-out-dir" });
-    const { bundler, watch, stderr, controller, running } = startDev(cwd, {
+    const { watch, stderr, controller, running } = startDev(cwd, {
       entry: path.join(cwd, "dist", "main.mts"),
     });
 
-    await waitFor(() => expect(stderr.text()).toContain("ERR_INCA_OUT_DIR_INVALID"));
-    expect(watch).not.toHaveBeenCalled();
-
-    await writeFile(path.join(cwd, "inca.config.ts"), 'export default { outDir: "out" };\n');
-    await bundler.watching;
-
+    await waitFor(() => expect(watch).toHaveBeenCalled());
     controller.abort();
     await running;
+
+    expect(stderr.text()).not.toContain("ERR_INCA_OUT_DIR_INVALID");
   });
 });
