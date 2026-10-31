@@ -69,7 +69,7 @@ incajs/
 ├── packages/
 │   ├── core/                # `incajs`: the host bridge wrapper, and `incajs/vue`, the Vue 3 custom renderer
 │   └── cli/                 # `@incajs/cli`: the `inca` CLI, with the dev-protocol client and the Vite adapter
-├── npm/                     # per-platform npm packages, each carrying a prebuilt `inca-host`
+├── npm/                     # per-platform npm packages, each carrying the brotli-compressed `inca-host`
 │   ├── darwin-arm64/
 │   ├── darwin-x64/
 │   ├── linux-arm64/

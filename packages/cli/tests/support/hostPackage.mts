@@ -12,7 +12,7 @@ import { onTestFinished } from "vitest";
 import type { HostPackage } from "../../src/host/package.mts";
 
 /**
- * Writes a host package into `dir`: the brotli file and the `incaHost` field. Quality 1 keeps
+ * Writes a host package into `dir`: the brotli file and the `incajs.host` field. Quality 1 keeps
  * tests fast, and the decoder reads any quality.
  * @param dir - the package directory, created if missing
  * @param binary - the bytes of the unpacked binary
@@ -31,7 +31,7 @@ export function writeHostPackage(dir: string, binary: Buffer, sha256?: string): 
     JSON.stringify({
       name: "@incajs/host-linux-x64",
       version: "1.2.3",
-      incaHost: { sha256: hash },
+      incajs: { host: { sha256: hash } },
     }),
   );
   return { name: "@incajs/host-linux-x64", dir, version: "1.2.3", sha256: hash };

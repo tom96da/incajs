@@ -86,20 +86,23 @@ export function hostPackageCorrupt(name: string, reason: string): IncaError {
  * Reads what the `package.json` of a host package says about its binary.
  * @param name - the package's name
  * @param dir - the package's directory
- * @returns `undefined` when `package.json` has no `incaHost` field (a workspace checkout)
- * @throws `ERR_INCA_HOST_PACKAGE_CORRUPT` when `package.json` can't be read, `incaHost.sha256` is
- * not 64 lowercase hex digits or `version` is not a semantic version
+ * @returns `undefined` when `package.json` has no `incajs.host` field (a workspace checkout)
+ * @throws `ERR_INCA_HOST_PACKAGE_CORRUPT` when `package.json` can't be read,
+ * `incajs.host.sha256` is not 64 lowercase hex digits or `version` is not a semantic version
  */
 export async function readHostPackage(name: string, dir: string): Promise<HostPackage | undefined> {
-  let packageJson: { version?: unknown; incaHost?: { sha256?: unknown } | null } | null;
+  let packageJson: {
+    version?: unknown;
+    incajs?: { host?: { sha256?: unknown } | null } | null;
+  } | null;
   try {
     packageJson = JSON.parse(await readFile(path.join(dir, "package.json"), "utf8"));
   } catch (cause) {
     throw hostPackageCorrupt(name, `package.json can't be read (${(cause as Error).message})`);
   }
-  const incaHost = packageJson?.incaHost;
-  if (incaHost === undefined) return undefined;
-  const sha256 = incaHost?.sha256;
+  const host = packageJson?.incajs?.host;
+  if (host === undefined) return undefined;
+  const sha256 = host?.sha256;
   if (typeof sha256 !== "string" || !/^[0-9a-f]{64}$/.test(sha256)) {
     throw hostPackageCorrupt(name, "verification failed");
   }

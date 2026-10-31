@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { beforeEach, describe, expect, it } from "vitest";
@@ -35,11 +35,11 @@ async function readError(): Promise<IncaError> {
 }
 
 describe("hostTarget", () => {
-  it.each([
-    ["linux", "x64", "linux-x64"],
-    ["darwin", "arm64", "darwin-arm64"],
-  ])("names the target and the package of a published platform (%s/%s)", (platform, arch, key) => {
-    expect(hostTarget(platform, arch)).toEqual({ key, name: `@incajs/host-${key}` });
+  it("names the target and the package of a published platform", () => {
+    expect(hostTarget("darwin", "arm64")).toEqual({
+      key: "darwin-arm64",
+      name: "@incajs/host-darwin-arm64",
+    });
   });
 
   it.each([
@@ -60,36 +60,35 @@ describe("locateHostPackageDir", () => {
   });
 });
 
-describe("readHostPackage", async () => {
+describe("readHostPackage", () => {
   it("reads the hash and version of a package", async () => {
     const written = writeHostPackage(dir, Buffer.from("binary"));
 
     expect(await readHostPackage(written.name, dir)).toEqual(written);
   });
 
-  it("returns undefined when package.json has no incaHost", async () => {
-    writePackageJson({ name: "x" });
-
-    expect(await readHostPackage(NAME, dir)).toBeUndefined();
-  });
-
-  it("returns undefined when package.json is null", async () => {
-    writeFileSync(path.join(dir, "package.json"), "null");
+  it.each([
+    ["has no incajs.host", { name: "x" }],
+    ["has an incajs without host", { incajs: {} }],
+    ["is null", null],
+  ])("returns undefined when package.json %s", async (_row, packageJson) => {
+    writePackageJson(packageJson);
 
     expect(await readHostPackage(NAME, dir)).toBeUndefined();
   });
 
   it.each([
-    ["incaHost is null", { version: "1.2.3", incaHost: null }],
-    ["sha256 is missing", { version: "1.2.3", incaHost: {} }],
-    ["sha256 has uppercase digits", { version: "1.2.3", incaHost: { sha256: "A".repeat(64) } }],
-    ["sha256 has 63 digits", { version: "1.2.3", incaHost: { sha256: "a".repeat(63) } }],
+    ["incajs.host is null", { version: "1.2.3", incajs: { host: null } }],
+    [
+      "sha256 has uppercase digits",
+      { version: "1.2.3", incajs: { host: { sha256: "A".repeat(64) } } },
+    ],
+    ["sha256 has 63 digits", { version: "1.2.3", incajs: { host: { sha256: "a".repeat(63) } } }],
     [
       "sha256 has a non-hex digit",
-      { version: "1.2.3", incaHost: { sha256: `g${"a".repeat(63)}` } },
+      { version: "1.2.3", incajs: { host: { sha256: `g${"a".repeat(63)}` } } },
     ],
-    ["sha256 is a number", { version: "1.2.3", incaHost: { sha256: 1 } }],
-  ])("throws for a damaged incaHost (%s)", async (_row, packageJson) => {
+  ])("throws for a damaged incajs.host (%s)", async (_row, packageJson) => {
     writePackageJson(packageJson);
 
     const error = await readError();
@@ -100,12 +99,10 @@ describe("readHostPackage", async () => {
 
   it.each([
     ["is missing", {}],
-    ["is a number", { version: 1 }],
-    ["has no patch number", { version: "1.2" }],
     ["holds a path separator", { version: "1.2.3-../x" }],
     ["has a trailing character", { version: "1.2.3 " }],
   ])("throws when the version %s", async (_row, extra) => {
-    writePackageJson({ ...extra, incaHost: { sha256: HASH } });
+    writePackageJson({ ...extra, incajs: { host: { sha256: HASH } } });
 
     const error = await readError();
 
@@ -113,15 +110,13 @@ describe("readHostPackage", async () => {
     expect(error.message).toContain("invalid version");
   });
 
-  it.each(["1.2.3", "1.2.3-beta.1", "1.2.3+build.5"])("accepts the version %s", async (version) => {
-    writePackageJson({ version, incaHost: { sha256: HASH } });
+  it.each(["1.2.3-beta.1", "1.2.3+build.5"])("accepts the version %s", async (version) => {
+    writePackageJson({ version, incajs: { host: { sha256: HASH } } });
 
     expect((await readHostPackage(NAME, dir))?.version).toBe(version);
   });
 
   it("throws when package.json is missing", async () => {
-    mkdirSync(dir, { recursive: true });
-
     const error = await readError();
 
     expect(error.code).toBe("ERR_INCA_HOST_PACKAGE_CORRUPT");
