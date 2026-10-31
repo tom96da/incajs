@@ -3,7 +3,7 @@
 
 import { styleText } from "node:util";
 
-import { HostError } from "./dev-client/index.mts";
+import { HostError } from "./error.mts";
 
 /** The prefix on every line the CLI prints. */
 const TAG = "[inca]";

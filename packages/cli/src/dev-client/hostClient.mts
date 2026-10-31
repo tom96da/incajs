@@ -7,8 +7,8 @@ import readline from "node:readline";
 import { setTimeout as delay } from "node:timers/promises";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 
+import { HostError } from "../error.mts";
 import { assertHostBin, resolveHostBin } from "./hostBin.mts";
-import { HostError } from "./hostError.mts";
 import { HOST_PROTOCOL_VERSION, JSONRPC, isRpcMessage } from "./protocol.mts";
 import type { AppErrorParams, ReadyParams } from "./protocol.mts";
 

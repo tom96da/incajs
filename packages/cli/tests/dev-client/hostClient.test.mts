@@ -6,7 +6,8 @@ import path from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
-import { HostClient, HostError } from "../../src/dev-client/index.mts";
+import { HostClient } from "../../src/dev-client/index.mts";
+import { HostError } from "../../src/error.mts";
 import { waitFor } from "../support/dev.mts";
 import type { AppErrorParams } from "../../src/dev-client/protocol.mts";
 
