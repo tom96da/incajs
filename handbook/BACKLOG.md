@@ -1272,3 +1272,22 @@ A fixed entry is deleted and its ID is never reused.
   prints JSON on stdout. Nothing records which kind of line uses which stream.
   Fix: decide one rule, apply it to every `log` and `warn` call and write it in
   `handbook/STYLE.md`.
+
+- **B-244 A cancel during startup waits for the startup steps**
+  `Units: cli · Size: S · Impact: Low`
+
+  `inca dev` observes a cancel from its first step, but the startup steps do
+  not check it. A cancel during the unpack, the config load, the macOS app
+  bundle or the opening of the build watcher lets those steps finish before the
+  session closes. No host starts. Fix: check the cancel between the steps and
+  return at once. The test that expects the watcher to open when the signal is
+  already aborted changes with it.
+
+- **B-245 A reload runs after a cancel**
+  `Units: cli · Size: S · Impact: Low`
+
+  A reload that starts after a cancel, or is in flight when it arrives, keeps
+  the shutdown waiting until the host answers or the 10 second reload timeout
+  passes. A reload that starts from the ready notification is not awaited, and
+  can print `reload failed` after the host has stopped. Fix: skip a reload once
+  the session is stopping, and wait for the one from the ready notification.
