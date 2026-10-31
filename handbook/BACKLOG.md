@@ -1287,7 +1287,7 @@ A fixed entry is deleted and its ID is never reused.
   `Units: cli · Size: S · Impact: Low`
 
   A reload that starts after a cancel, or is in flight when it arrives, keeps
-  the shutdown waiting until the host answers or the 10 second reload timeout
+  the shutdown waiting until the host answers or the 10-second reload timeout
   passes. A reload that starts from the ready notification is not awaited, and
   can print `reload failed` after the host has stopped. Fix: skip a reload once
   the session is stopping, and wait for the one from the ready notification.

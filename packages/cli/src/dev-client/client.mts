@@ -22,6 +22,8 @@ export interface HostClientOptions {
   entryFile: string;
   /** The host binary to spawn. */
   hostBin: string;
+  /** Cancels the startup before the child spawns. */
+  signal?: AbortSignal;
   /** The environment the host starts with. Defaults to this process's own. */
   env?: NodeJS.ProcessEnv;
   /**
@@ -82,11 +84,13 @@ export class HostClient {
    * Starts the child and wires up its streams. Resolves once the process
    * has spawned. Rejects with `ERR_INCA_HOST_BIN_NOT_FOUND` if no file
    * exists at the host binary's path, or with the spawn error if the
-   * process can't start.
+   * process can't start. Resolves without a child when `signal` is aborted
+   * before the spawn.
    */
   async start(): Promise<void> {
     const { hostBin } = this.#options;
     await assertHostBin(hostBin);
+    if (this.#options.signal?.aborted) return;
     const child = spawn(hostBin, ["--dev", this.#options.entryFile], {
       stdio: ["pipe", "pipe", "pipe"],
       env: this.#options.env,
