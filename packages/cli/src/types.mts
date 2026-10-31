@@ -66,8 +66,8 @@ export interface BuildOutput {
   /** Absolute path to the entry module the host evaluates. */
   entryFile: string;
   /**
-   * Every file this build emitted, relative to `outDir`. It may include chunks and assets besides
-   * the entry itself.
+   * Every file this build emitted, including the files copied from `public/`, relative to `outDir`.
+   * It may include chunks and assets besides the entry itself.
    */
   files: readonly string[];
   /** The change that triggered this rebuild. Absent from a one-shot build and a watch's first build. */

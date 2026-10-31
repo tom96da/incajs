@@ -137,9 +137,10 @@ describe("build", () => {
     await mkdir(publicDir);
     await writeFile(path.join(publicDir, "x.txt"), "x");
 
-    await build({ entry, root, publicDir, outDir, ...streams });
+    const output = await build({ entry, root, publicDir, outDir, ...streams });
 
     expect(existsSync(path.join(outDir, "x.txt"))).toBe(true);
+    expect(output.files).toContain("x.txt");
   }, 20000);
 
   it("rejects a <style> block, naming the file that used it", async () => {
