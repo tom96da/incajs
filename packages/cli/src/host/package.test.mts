@@ -110,11 +110,14 @@ describe("readHostPackage", () => {
     expect(error.message).toContain("invalid version");
   });
 
-  it.each(["1.2.3-beta.1", "1.2.3+build.5"])("accepts the version %s", async (version) => {
-    writePackageJson({ version, incajs: { host: { sha256: HASH } } });
+  it.each(["1.2.3-beta.1", "1.2.3+build.5", "1.2.3-rc.1+build.5"])(
+    "accepts the version %s",
+    async (version) => {
+      writePackageJson({ version, incajs: { host: { sha256: HASH } } });
 
-    expect((await readHostPackage(NAME, dir))?.version).toBe(version);
-  });
+      expect((await readHostPackage(NAME, dir))?.version).toBe(version);
+    },
+  );
 
   it("throws when package.json is missing", async () => {
     const error = await readError();

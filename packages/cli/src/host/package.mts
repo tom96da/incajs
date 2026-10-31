@@ -11,7 +11,7 @@ import { IncaError } from "../error.mts";
 export const PACKED_HOST_FILE = "bin/inca-host.br";
 
 /** The versions a host package may have. The version becomes part of a directory name. */
-export const HOST_VERSION = /^\d+\.\d+\.\d+([-+][0-9A-Za-z.-]+)?$/;
+export const HOST_VERSION = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/;
 
 /** What the `package.json` of a host package says about its binary. */
 export interface HostPackage {
