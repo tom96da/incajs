@@ -120,6 +120,9 @@ function installFakeNative(): Map<NodeId, FakeNode> {
     removeAttribute(nodeId: NodeId, key: string): void {
       delete requireNode(nodeId).attributes[key];
     },
+    attributeNames(nodeId: NodeId): string[] {
+      return Object.keys(requireNode(nodeId).attributes).sort();
+    },
     setStyle(nodeId: NodeId, key: string, value: unknown): void {
       requireNode(nodeId).style[key] = value;
     },
@@ -224,6 +227,12 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
     const rootId = createNode("root");
     root = {
       ...noHandlers,
+      getAttribute: () => null,
+      setAttribute: () => {},
+      hasAttribute: () => false,
+      removeAttribute: () => {},
+      getAttributeNames: () => [],
+      attributes: [],
       __node_id: rootId,
       id: "",
       kind: "element",

@@ -45,6 +45,7 @@ const host = {
   setStyle: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   removeStyle: vi.fn<(nodeId: number, key: string) => void>(),
   releaseListeners: vi.fn<(nodeId: number) => number[]>(() => []),
+  attributeNames: vi.fn<(nodeId: number) => string[]>(() => []),
   holdNode: vi.fn<(nodeId: number) => void>(),
   releaseNode: vi.fn<(nodeId: number) => void>(),
   focusNode: vi.fn<(nodeId: number) => void>(),
@@ -61,6 +62,12 @@ const host = {
 };
 
 const noLayout = {
+  getAttribute: () => null,
+  setAttribute: () => {},
+  hasAttribute: () => false,
+  removeAttribute: () => {},
+  getAttributeNames: () => [],
+  attributes: [],
   getBoundingClientRect: () => rectOf(null),
   offsetWidth: 0,
   offsetHeight: 0,
@@ -134,6 +141,12 @@ describe("createElement", () => {
       removeEventListener: expect.any(Function),
       dispatchEvent: expect.any(Function),
       tabIndex: -1,
+      getAttribute: expect.any(Function),
+      setAttribute: expect.any(Function),
+      hasAttribute: expect.any(Function),
+      removeAttribute: expect.any(Function),
+      getAttributeNames: expect.any(Function),
+      attributes: [],
       getBoundingClientRect: expect.any(Function),
       offsetWidth: 0,
       offsetHeight: 0,

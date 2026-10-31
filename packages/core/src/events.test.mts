@@ -33,6 +33,7 @@ const native = {
     () => true,
   ),
   releaseListeners: vi.fn<(nodeId: number) => number[]>(() => []),
+  attributeNames: vi.fn<(nodeId: number) => string[]>(() => []),
   holdNode: vi.fn<(nodeId: number) => void>(),
   releaseNode: vi.fn<(nodeId: number) => void>(),
   focusNode: vi.fn<(nodeId: number) => void>(),

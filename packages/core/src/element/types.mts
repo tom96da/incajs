@@ -103,6 +103,40 @@ export interface IncaElement extends IncaEventTarget, EventHandlers {
    */
   tabIndex: number;
   /**
+   * The value of the attribute `name` as a string, or `null` when it is unset. Names are
+   * ASCII-case-insensitive.
+   * @param name - The attribute name.
+   * @returns The attribute value, or `null` when the attribute is unset.
+   */
+  getAttribute(name: string): string | null;
+  /**
+   * Sets the attribute `name` to `String(value)`. Names are ASCII-case-insensitive.
+   * `disabled`, `hidden`, `inert` and `readonly` take effect by presence.
+   * @throws DOMException named `InvalidCharacterError` for an empty name, or one that holds ASCII
+   * whitespace, NUL, `/`, `=` or `>`
+   * @param name - The attribute name.
+   * @param value - The new value, converted with `String`.
+   */
+  setAttribute(name: string, value: string): void;
+  /**
+   * Whether the attribute `name` is set, an empty value included.
+   * @param name - The attribute name.
+   * @returns `true` when the attribute is set.
+   */
+  hasAttribute(name: string): boolean;
+  /**
+   * Removes the attribute `name`. An unset name changes nothing.
+   * @param name - The attribute name.
+   */
+  removeAttribute(name: string): void;
+  /** The names of the set attributes in alphabetical order. */
+  getAttributeNames(): string[];
+  /**
+   * The set attributes as `{ name, value }` objects in alphabetical order of the name. Each read
+   * builds a new array, so a later change does not reach an earlier one.
+   */
+  readonly attributes: readonly { name: string; value: string }[];
+  /**
    * The box this node was drawn at in the last frame, in window logical
    * pixels. A node created in the same task reads all zeros.
    */

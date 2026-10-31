@@ -58,7 +58,7 @@ fn get_attribute_returns_the_stored_value_in_its_own_type() {
 }
 
 #[test]
-fn get_attribute_reads_the_canonical_key() {
+fn an_attribute_name_is_case_insensitive_on_set_and_get() {
     let (engine, _host) = engine_with_bindings();
 
     let same: bool = engine
@@ -66,14 +66,73 @@ fn get_attribute_reads_the_canonical_key() {
             r"
             const n = __inca_native__;
             const node = n.createNode('div');
-            n.setAttribute(node, 'tabIndex', 2);
-            n.getAttribute(node, 'tabindex') === 2 &&
-                n.getAttribute(node, 'TABINDEX') === 2;
+            n.setAttribute(node, 'ID', 'x');
+            n.getAttribute(node, 'id') === 'x' && n.getAttribute(node, 'Id') === 'x';
             ",
         )
         .unwrap();
 
-    assert!(same, "attribute names are case-insensitive for tabindex");
+    assert!(same);
+}
+
+#[test]
+fn remove_attribute_folds_the_name_to_ascii_lower_case() {
+    let (engine, _host) = engine_with_bindings();
+
+    let gone: bool = engine
+        .eval(
+            r"
+            const n = __inca_native__;
+            const node = n.createNode('div');
+            n.setAttribute(node, 'id', 'x');
+            n.removeAttribute(node, 'ID');
+            n.getAttribute(node, 'id') === null;
+            ",
+        )
+        .unwrap();
+
+    assert!(gone);
+}
+
+#[test]
+fn attribute_names_returns_the_sorted_keys() {
+    let (engine, _host) = engine_with_bindings();
+
+    let names: Vec<String> = engine
+        .eval(
+            r"
+            const n = __inca_native__;
+            const node = n.createNode('div');
+            n.setAttribute(node, 'id', 'x');
+            n.setAttribute(node, 'Title', 't');
+            n.setAttribute(node, 'a', 1);
+            n.attributeNames(node);
+            ",
+        )
+        .unwrap();
+
+    assert_eq!(names, ["a", "id", "title"]);
+}
+
+#[test]
+fn attribute_names_of_a_node_without_attributes_is_empty() {
+    let (engine, _host) = engine_with_bindings();
+
+    let names: Vec<String> = engine
+        .eval("__inca_native__.attributeNames(__inca_native__.createNode('div'));")
+        .unwrap();
+
+    assert!(names.is_empty());
+}
+
+#[test]
+fn attribute_names_on_an_unknown_node_throws_type_error() {
+    let (engine, _host) = engine_with_bindings();
+
+    assert_eq!(
+        crate::test_support::error_name(&engine, "__inca_native__.attributeNames(999)"),
+        "TypeError"
+    );
 }
 
 #[test]

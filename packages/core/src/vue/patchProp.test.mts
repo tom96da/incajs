@@ -48,6 +48,12 @@ const noHandlers = {} as EventHandlers;
 
 const makeEl = (): IncaElement => ({
   ...noHandlers,
+  getAttribute: () => null,
+  setAttribute: () => {},
+  hasAttribute: () => false,
+  removeAttribute: () => {},
+  getAttributeNames: () => [],
+  attributes: [],
   __node_id: 1,
   id: "",
   kind: "element",
@@ -1198,11 +1204,23 @@ describe("everything else", () => {
   it.each([
     ["label", "hello"],
     ["count", 3],
-    ["disabled", true],
+    ["foo", true],
   ])("forwards %s=%p to setAttribute", (key, value) => {
     patchProp(el, key, null, value, undefined, null);
 
     expect(core.setAttribute).toHaveBeenCalledWith(1, key, value);
+  });
+
+  it("sets a true boolean attribute as an empty string", () => {
+    patchProp(el, "disabled", null, true, undefined, null);
+
+    expect(core.setAttribute).toHaveBeenCalledExactlyOnceWith(1, "disabled", "");
+  });
+
+  it("sets a boolean attribute that holds a non-empty string as an empty string", () => {
+    patchProp(el, "hidden", null, "yes", undefined, null);
+
+    expect(core.setAttribute).toHaveBeenCalledExactlyOnceWith(1, "hidden", "");
   });
 
   it.each([

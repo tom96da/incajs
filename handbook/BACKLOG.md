@@ -105,8 +105,6 @@ A fixed entry is deleted and its ID is never reused.
   `Units: core,bridge · Size: L · Impact: Medium`
 
   The element handle lacks:
-  - the attribute members (`getAttribute()`, `setAttribute()`,
-    `hasAttribute()`, `removeAttribute()`, `attributes`);
   - `classList`, `className`, `dataset`, `style`, `tagName`;
   - the tree members (`parentElement`, `firstChild`, `nextSibling`,
     `closest()`).
@@ -116,8 +114,7 @@ A fixed entry is deleted and its ID is never reused.
   B-217) and `scroll-margin` (B-176). Its own `children` field lists text nodes
   too, and the DOM `children` lists elements only.
 
-  Fix: build the attribute members on the `getAttribute` binding, and the tree
-  members on the JS shadow tree.
+  Fix: build the tree members on the JS shadow tree.
 
 - **B-036 Reverting a script edit under `--experimental-hmr` sometimes applies nothing**
   `Units: cli · Size: M · Impact: Medium · Status: needs repro`
@@ -1257,3 +1254,12 @@ A fixed entry is deleted and its ID is never reused.
   reference to it. The callback table holds its listeners weakly, so a
   detached element with a listener is collected once JS drops it, and
   `remove()` stops releasing listeners.
+
+- **B-247 `attributes` lists the names alphabetically**
+  `Units: gpui,bridge,core · Size: S · Impact: Low`
+
+  `attributes` and `getAttributeNames()` list the attributes in alphabetical
+  order, and a browser lists them in insertion order. The host keeps its
+  attributes in a `HashMap`. Fix: an ordered attribute store in `VirtualNode`
+  (`IndexMap`, already in `Cargo.lock`) and an `attributeNames` binding that
+  returns its order.
