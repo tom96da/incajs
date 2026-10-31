@@ -388,6 +388,9 @@ importers:
         specifier: workspace:*
         version: link:../packages/core
     devDependencies:
+      ts-dedent:
+        specifier: 2.3.0
+        version: 2.3.0
       vite:
         specifier: 'catalog:'
         version: 8.3.4(@types/node@26.6.4)
