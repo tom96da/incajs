@@ -165,9 +165,11 @@ fn polling_a_module_stops_at_the_time_limit() {
 
     assert!(engine.poll_module(&module).is_none());
 
-    let failures = engine.take_startup_failures();
-    assert_eq!(failures.len(), 1);
+    let failures = engine.run_jobs();
+    // The stop of the poll comes first, and the drain stops again on the jobs that are left.
+    assert_eq!(failures.len(), 2);
     assert_eq!(failures[0].message(), stopped());
+    assert_eq!(failures[1].message(), stopped());
 }
 
 #[test]

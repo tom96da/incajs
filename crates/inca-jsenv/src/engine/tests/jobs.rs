@@ -274,7 +274,7 @@ fn a_settled_rejection_is_also_returned_by_run_jobs() {
 }
 
 #[test]
-fn take_startup_failures_returns_the_jobs_that_threw_before_the_module_rejected() {
+fn run_jobs_returns_the_jobs_that_threw_during_the_poll_before_the_entry_error() {
     let engine = Engine::new().unwrap();
     let module = engine
         .start_module(
@@ -286,13 +286,13 @@ fn take_startup_failures_returns_the_jobs_that_threw_before_the_module_rejected(
         )
         .unwrap();
 
-    let err = engine.poll_module(&module).unwrap().unwrap_err();
-    let taken = engine.take_startup_failures();
-    assert_eq!(taken.len(), 1);
-    assert_eq!(taken[0].message(), "Error: side");
-    assert_eq!(err.message(), "Error: entry");
-    assert!(engine.take_startup_failures().is_empty());
-    assert_eq!(engine.run_jobs(), vec![err]);
+    let entry = engine.poll_module(&module).unwrap().unwrap_err();
+    assert_eq!(entry.message(), "Error: entry");
+    let failures = engine.run_jobs();
+    assert_eq!(failures.len(), 2);
+    assert_eq!(failures[0].message(), "Error: side");
+    assert_eq!(failures[1], entry);
+    assert!(engine.run_jobs().is_empty());
 }
 
 #[test]
