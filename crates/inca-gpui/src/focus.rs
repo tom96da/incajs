@@ -462,7 +462,7 @@ impl FocusRegistry {
                     || ancestor.attributes().contains_key("inert")
                     || matches!(
                         ancestor.style_props().get("display"),
-                        Some(AttributeValue::String(value)) if value == "none"
+                        Some(AttributeValue::String(value)) if value.eq_ignore_ascii_case("none")
                     )
             });
         let by_default = focusable_by_default(node.tag_name());

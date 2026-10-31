@@ -63,6 +63,13 @@ fn a_text_node_and_a_display_none_node_have_no_tab_index() {
     assert_eq!(FocusRegistry::tab_index_of(&tree, id), Some(0));
 }
 
+#[test]
+fn a_display_none_in_capitals_leaves_no_tab_index() {
+    let (mut tree, id) = tree_with("div", Some(AttributeValue::from("0")));
+    tree.set_style(id, "display", "NONE").unwrap();
+    assert_eq!(FocusRegistry::tab_index_of(&tree, id), None);
+}
+
 #[rstest]
 #[case::display("display")]
 #[case::hidden("hidden")]
