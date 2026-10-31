@@ -8,7 +8,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 
 import { HostError } from "../error.mts";
-import { assertHostBin, resolveHostBin } from "./hostBin.mts";
+import { assertHostBin } from "../host/index.mts";
 import { HOST_PROTOCOL_VERSION, JSONRPC, isRpcMessage } from "./protocol.mts";
 import type { AppErrorParams, ReadyParams } from "./protocol.mts";
 
@@ -20,8 +20,8 @@ interface PendingCall {
 export interface HostClientOptions {
   /** The entry module passed to the host as `--dev <entryFile>`. */
   entryFile: string;
-  /** Overrides which host binary gets spawned, in place of automatic resolution. */
-  hostBin?: string;
+  /** The host binary to spawn. */
+  hostBin: string;
   /** The environment the host starts with. Defaults to this process's own. */
   env?: NodeJS.ProcessEnv;
   /**
@@ -85,8 +85,8 @@ export class HostClient {
    * process can't start.
    */
   async start(): Promise<void> {
-    const hostBin = this.#options.hostBin ?? resolveHostBin();
-    assertHostBin(hostBin);
+    const { hostBin } = this.#options;
+    await assertHostBin(hostBin);
     const child = spawn(hostBin, ["--dev", this.#options.entryFile], {
       stdio: ["pipe", "pipe", "pipe"],
       env: this.#options.env,

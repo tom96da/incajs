@@ -14,10 +14,11 @@ import {
   runtimeConfigOf,
 } from "./config/loader.mts";
 import { defaultBundler } from "./defaultBundler.mts";
-import { HostClient, assertHostBin, resolveHostBin } from "./dev-client/index.mts";
+import { HostClient } from "./dev-client/index.mts";
 import { acquireDevLock } from "./devLock.mts";
 import { entryRoot, resolveEntry, selectEntry } from "./entry.mts";
 import { IncaError } from "./error.mts";
+import { assertHostBin, resolveHostBin } from "./host/index.mts";
 import { STAMPED, log, printFault, toFault } from "./log.mts";
 import { writeMacosApp } from "./macosApp.mts";
 import { checkConfig } from "./printConfig.mts";
@@ -197,11 +198,11 @@ export async function dev(options: DevOptions): Promise<void> {
   let entryWatch: EditWatch | undefined;
   let monitoring: Promise<{ error: unknown } | undefined> | undefined;
   try {
-    const bin = options.hostBin ?? resolveHostBin();
-    assertHostBin(bin);
-    const bundler: Bundler = options.bundler ?? defaultBundler;
     const stdout = options.stdout ?? process.stdout;
     const stderr = options.stderr ?? process.stderr;
+    const bin = options.hostBin ?? (await resolveHostBin(cwd, stderr));
+    await assertHostBin(bin);
+    const bundler: Bundler = options.bundler ?? defaultBundler;
 
     const hmr = options.experimentalHmr ? bundler.hmr?.bind(bundler) : undefined;
     if (options.experimentalHmr && !hmr) {

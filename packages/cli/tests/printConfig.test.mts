@@ -6,13 +6,13 @@ import path from "node:path";
 
 import { afterAll, beforeAll, expect, it, onTestFinished, vi } from "vitest";
 
-vi.mock("../src/dev-client/index.mts", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../src/dev-client/index.mts")>();
+vi.mock("../src/host/index.mts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/host/index.mts")>();
   return { ...actual, resolveHostBin: vi.fn<typeof actual.resolveHostBin>(actual.resolveHostBin) };
 });
 
-import { resolveHostBin } from "../src/dev-client/index.mts";
 import { IncaError } from "../src/error.mts";
+import { resolveHostBin } from "../src/host/index.mts";
 import { checkBuiltConfig, checkConfig, printConfig } from "../src/printConfig.mts";
 import { scratchConfigApp } from "./scratchConfigApp.mts";
 import { makeSink, makeUnspawnableHost } from "./support/dev.mts";
@@ -262,9 +262,9 @@ it.each([
   [
     "unresolved",
     () =>
-      mockedResolveHostBin.mockImplementationOnce(() => {
-        throw new IncaError("ERR_INCA_HOST_BIN_UNRESOLVED", "no host binary found");
-      }),
+      mockedResolveHostBin.mockRejectedValueOnce(
+        new IncaError("ERR_INCA_HOST_BIN_UNRESOLVED", "no host binary found"),
+      ),
   ],
 ])("lets checkBuiltConfig skip the check without a host binary (%s)", async (_, arrange) => {
   arrange();
@@ -272,9 +272,30 @@ it.each([
   const { entry } = await appWithEntry({});
   const stderr = makeSink();
 
-  checkBuiltConfig(entry, stderr.stream);
+  await checkBuiltConfig(entry, stderr.stream);
 
   expect(stderr.text()).toContain("no host binary found, so the config was not checked");
+});
+
+it("lets checkBuiltConfig skip the check when the host binary can't be unpacked", async () => {
+  mockedResolveHostBin.mockRejectedValueOnce(new IncaError("ERR_INCA_HOST_UNPACK_FAILED", "m"));
+  const { entry } = await appWithEntry({});
+  const stderr = makeSink();
+
+  await checkBuiltConfig(entry, stderr.stream);
+
+  expect(stderr.text()).toContain(
+    "failed to unpack the host binary, so the config was not checked",
+  );
+});
+
+it("checkBuiltConfig rethrows a damaged host package", async () => {
+  mockedResolveHostBin.mockRejectedValueOnce(new IncaError("ERR_INCA_HOST_PACKAGE_CORRUPT", "m"));
+  const { entry } = await appWithEntry({});
+
+  await expect(checkBuiltConfig(entry, makeSink().stream)).rejects.toThrow(
+    expect.objectContaining({ code: "ERR_INCA_HOST_PACKAGE_CORRUPT" }),
+  );
 });
 
 it("checkBuiltConfig checks with the host it finds", async () => {
@@ -282,16 +303,36 @@ it("checkBuiltConfig checks with the host it finds", async () => {
   hostAnswers("1", WIDTH_FAULT);
   const { entry } = await appWithEntry({ window: { width: -100 } });
 
-  expect(() => checkBuiltConfig(entry, makeSink().stream)).toThrow(
+  await expect(checkBuiltConfig(entry, makeSink().stream)).rejects.toThrow(
     expect.objectContaining({ code: "ERR_INCA_CONFIG_INVALID" }),
   );
 });
 
-it("checkBuiltConfig rethrows another error", async () => {
-  mockedResolveHostBin.mockImplementationOnce(() => {
-    throw new Error("unexpected");
-  });
+it("printConfig resolves the host for the app with its own stderr", async () => {
+  const app = await scratch.makeApp({});
+  const stdout = makeSink();
+  const stderr = makeSink();
+  mockedResolveHostBin.mockResolvedValueOnce(hostBin);
+
+  await printConfig({ cwd: app, stdout: stdout.stream, stderr: stderr.stream });
+
+  expect(mockedResolveHostBin).toHaveBeenCalledWith(app, stderr.stream);
+});
+
+it("checkBuiltConfig resolves the host with its own stderr", async () => {
+  const stderr = makeSink();
+  mockedResolveHostBin.mockResolvedValueOnce(hostBin);
+  hostAnswers("0");
   const { entry } = await appWithEntry({});
 
-  expect(() => checkBuiltConfig(entry, makeSink().stream)).toThrow("unexpected");
+  await checkBuiltConfig(entry, stderr.stream);
+
+  expect(mockedResolveHostBin).toHaveBeenCalledWith(process.cwd(), stderr.stream);
+});
+
+it("checkBuiltConfig rethrows another error", async () => {
+  mockedResolveHostBin.mockRejectedValueOnce(new Error("unexpected"));
+  const { entry } = await appWithEntry({});
+
+  await expect(checkBuiltConfig(entry, makeSink().stream)).rejects.toThrow("unexpected");
 });

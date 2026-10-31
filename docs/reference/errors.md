@@ -102,7 +102,8 @@ Check the path `INCA_HOST_BIN` points at.
 ## `ERR_INCA_HOST_BIN_UNRESOLVED`
 
 No host binary could be found at all: the `@incajs/host-*` package for
-this platform isn't installed, and `INCA_HOST_BIN` isn't set.
+this platform isn't installed or carries no binary, and `INCA_HOST_BIN`
+isn't set.
 Every command that starts the host stops here too.
 
 Install the app's dependencies, or set `INCA_HOST_BIN` to a binary you
@@ -111,6 +112,19 @@ built yourself.
 > [!NOTE]
 > Windows has no published package yet. See
 > [Host binary](../guide/#host-binary) for platform support.
+
+## `ERR_INCA_HOST_PACKAGE_CORRUPT`
+
+The `@incajs/host-*` package for this platform is installed and its binary
+is damaged. The message names the package and the reason.
+
+Install the app's dependencies again.
+
+## `ERR_INCA_HOST_UNPACK_FAILED`
+
+The CLI couldn't write the host binary to any directory it tried.
+
+See [The CLI can't unpack the host binary](../guide/troubleshooting#the-cli-can-t-unpack-the-host-binary).
 
 ## `ERR_INCA_DEV_RUNNING`
 

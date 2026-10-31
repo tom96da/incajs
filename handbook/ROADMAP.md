@@ -98,10 +98,11 @@ lands after 3.3, when there is something to release.
    first-party package. A future `rspack` would be a sibling module
    in the same package, since neither is ever imported on its own.
 3. **`dev-client`** (`packages/cli/src/dev-client`): the Node end of
-   [PROTOCOL.md](./PROTOCOL.md) — resolves and launches the host
-   binary, supervises the child, and carries messages both ways. It depends
-   on no bundler and never parses a routed payload, so Vite's HMR traffic
-   (Phase 3.4) rides the same channel as a registered `method` name.
+   [PROTOCOL.md](./PROTOCOL.md). It launches the host binary that
+   `packages/cli/src/host` resolves, supervises the child and carries messages
+   both ways. It depends on no bundler and never parses a routed payload, so
+   Vite's HMR traffic (Phase 3.4) rides the same channel as a registered
+   `method` name.
 4. **`crates/inca-host`**: the runtime binary. It opens the GPUI window
    and evaluates a bundle in QuickJS. Under `--dev` it reads newline-delimited
    JSON messages on stdin and re-evaluates the bundle in a fresh engine

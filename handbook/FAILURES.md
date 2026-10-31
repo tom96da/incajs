@@ -15,6 +15,8 @@ and where each is reported.
 | said nothing | the documented default, in silence |
 | said something unusable | a failure, named |
 | shipped a source map the host cannot read | the frames keep the generated positions, in silence |
+| ran where the cached host binary is missing, truncated or not executable | the CLI unpacks it again and prints the directory |
+| ran where the user cache can't take the host binary | the CLI unpacks it into `node_modules/.inca/host` of the app and prints the directory |
 
 For example, a `width` nobody set falls through to the app's root element
 and then to 800 × 600.
