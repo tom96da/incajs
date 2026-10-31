@@ -43,7 +43,7 @@ interface FakeNode {
 // actual `nodeOps`/`patchProp` end to end, without a real Rust process.
 //
 // It matches the real host where the difference is observable: one parent per
-// node, several callbacks per (node, event), and `destroyNode` freeing a whole
+// node, several callbacks per (node, event), and `releaseListeners` dropping a whole
 // subtree. It does not refuse a cycle the way the host does. `nodeOps` never
 // builds one.
 function installFakeNative(): Map<NodeId, FakeNode> {
@@ -149,19 +149,15 @@ function installFakeNative(): Map<NodeId, FakeNode> {
       callbacks.splice(index, 1);
       return true;
     },
-    destroyNode(nodeId: NodeId): number[] {
-      if (!nodes.has(nodeId)) return [];
-      detach(nodeId);
-
+    releaseListeners(nodeId: NodeId): number[] {
       const released: number[] = [];
       const pending = [nodeId];
       while (pending.length > 0) {
-        const current = pending.pop()!;
-        const node = nodes.get(current);
+        const node = nodes.get(pending.pop()!);
         if (!node) continue;
-        nodes.delete(current);
         pending.push(...node.children);
         released.push(...Object.values(node.listeners).flat());
+        node.listeners = {};
       }
       return released;
     },
@@ -325,7 +321,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
     expect(reordered).toEqual([originalOrder[2], originalOrder[0], originalOrder[1]]);
   });
 
-  it("frees a removed subtree's nodes and every callback inside it", async () => {
+  it("releases every callback inside a removed subtree and keeps its nodes", async () => {
     const state = reactive({ shown: true });
     const App = {
       setup() {
@@ -345,11 +341,11 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
     state.shown = false;
     await nextTick();
 
-    expect(nodes.has(branchId)).toBe(false);
+    expect(nodes.get(branchId)?.parent).toBeNull();
     expect(
       nodes.has(leafId),
-      "Vue removes only the subtree's root, so the descendant is freed here or nowhere",
-    ).toBe(false);
+      "Vue removes only the subtree's root, so the descendant leaves with it",
+    ).toBe(true);
     expect(globalThis.__inca_callbacks__).toEqual({});
   });
 

@@ -8,17 +8,20 @@ import { createNodeOps } from "./nodeOps.mts";
 import { createPatchProp } from "./patchProp.mts";
 import type { IncaElement } from "../rendererCore.mts";
 
-describe("patchProp on a destroyed element", () => {
+describe("patchProp on a removed element", () => {
   it("adds a listener slot without reaching the host", () => {
-    const freed = new Set<number>();
+    const released = new Set<number>();
     globalThis.__inca_native__ = {
       createNode: vi.fn<() => number>(() => 2),
-      destroyNode: vi.fn<(id: number) => number[]>((id) => {
-        freed.add(id);
+      removeChild: vi.fn<() => void>(),
+      holdNode: vi.fn<() => void>(),
+      releaseNode: vi.fn<() => void>(),
+      releaseListeners: vi.fn<(id: number) => number[]>((id) => {
+        released.add(id);
         return [];
       }),
       addEventListener: vi.fn<(id: number) => number>((id) => {
-        if (freed.has(id)) throw new TypeError(`node ${id} is not live`);
+        if (released.has(id)) throw new TypeError(`node ${id} is not live`);
         return 0;
       }),
       removeEventListener: vi.fn<() => boolean>(() => true),

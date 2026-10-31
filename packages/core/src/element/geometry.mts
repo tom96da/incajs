@@ -2,20 +2,20 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { layoutOf } from "../tree.mts";
-import { isDestroyed } from "./lifecycle.mts";
+import { isRemoved } from "./lifecycle.mts";
 import type { IncaElement } from "./types.mts";
 
 /** `[x, y, width, height, border, scrollX, scrollY]` of a node's last drawn frame. */
 export type LayoutBox = readonly [number, number, number, number, number, number, number];
 
 /**
- * Reads the box a node was last drawn at. A destroyed node, or one with no
+ * Reads the box a node was last drawn at. A removed node, or one with no
  * recorded box, yields `null`.
  * @param el - the node to read
  * @returns the box, or `null`
  */
 export function layoutBox(el: IncaElement): LayoutBox | null {
-  return isDestroyed(el) ? null : layoutOf(el.__node_id);
+  return isRemoved(el) ? null : layoutOf(el.__node_id);
 }
 
 /**

@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { callbackIdFor, groupOf, registeredGroupCount } from "./callbacks.mts";
 import { addEventListener, blur, click, focus, removeEventListener } from "./events.mts";
-import { destroyNode } from "./tree.mts";
+import { releaseListeners } from "./tree.mts";
 import type { EventLike } from "./types.mts";
 
 // Ids come from the host, which numbers them in order.
@@ -32,7 +32,7 @@ const native = {
   removeEventListener: vi.fn<(nodeId: number, event: string, callbackId: number) => boolean>(
     () => true,
   ),
-  destroyNode: vi.fn<(nodeId: number) => number[]>(() => []),
+  releaseListeners: vi.fn<(nodeId: number) => number[]>(() => []),
   holdNode: vi.fn<(nodeId: number) => void>(),
   releaseNode: vi.fn<(nodeId: number) => void>(),
   focusNode: vi.fn<(nodeId: number) => void>(),
@@ -182,14 +182,14 @@ describe("registry groups", () => {
     expect(registeredGroupCount() - base).toBe(0);
   });
 
-  it("empties when the host reports destroyed nodes' registrations", () => {
+  it("empties when the host reports released registrations", () => {
     addEventListener(9001, "click", vi.fn<() => void>());
     addEventListener(9002, "keydown", vi.fn<() => void>());
-    native.destroyNode.mockReturnValueOnce(
+    native.releaseListeners.mockReturnValueOnce(
       native.addEventListener.mock.results.map((result) => result.value),
     );
 
-    destroyNode(9001);
+    releaseListeners(9001);
 
     expect(registeredGroupCount() - base).toBe(0);
   });
@@ -388,32 +388,18 @@ describe("removeEventListener", () => {
   });
 });
 
-describe("destroyNode", () => {
-  it("frees the callback ids the host reports, including a descendant's", () => {
+describe("releaseListeners", () => {
+  it("frees the callback ids the host reports", () => {
     addEventListener(1, "click", vi.fn<() => void>());
     addEventListener(2, "click", vi.fn<() => void>());
-    const [parentCallback, childCallback] = native.addEventListener.mock.results.map(
-      (result) => result.value,
-    );
-    // The host frees the whole subtree, so node 2's id comes back from
-    // destroying node 1.
-    native.destroyNode.mockReturnValueOnce([parentCallback!, childCallback!]);
+    const [first, second] = native.addEventListener.mock.results.map((result) => result.value);
+    native.releaseListeners.mockReturnValueOnce([first!]);
 
-    destroyNode(1);
+    releaseListeners(1);
 
-    expect(globalThis.__inca_callbacks__).toEqual({});
-  });
-
-  it("leaves another node's registration alone", () => {
-    addEventListener(1, "click", vi.fn<() => void>());
-    addEventListener(2, "click", vi.fn<() => void>());
-    const survivor = native.addEventListener.mock.results[1]!.value;
-    native.destroyNode.mockReturnValueOnce([native.addEventListener.mock.results[0]!.value!]);
-
-    destroyNode(1);
-
-    expect(globalThis.__inca_callbacks__[survivor]).toBeDefined();
-    expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(1);
+    expect(native.releaseListeners).toHaveBeenCalledWith(1);
+    expect(globalThis.__inca_callbacks__[first!]).toBeUndefined();
+    expect(globalThis.__inca_callbacks__[second!]).toBeDefined();
   });
 });
 

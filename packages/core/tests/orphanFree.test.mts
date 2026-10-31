@@ -122,12 +122,16 @@ function installNative(): void {
       if (at !== -1) listeners.splice(at, 1);
       return at !== -1;
     },
-    destroyNode(id) {
-      if (!nodes.has(id)) return [];
-      detach(id);
-      const freed: number[] = [];
+    releaseListeners(id) {
       const callbacks: number[] = [];
-      freeSubtree(id, freed, callbacks);
+      const pending = [id];
+      while (pending.length > 0) {
+        const node = nodes.get(pending.pop()!);
+        if (!node) continue;
+        pending.push(...node.children);
+        callbacks.push(...node.listeners);
+        node.listeners = [];
+      }
       return callbacks;
     },
     holdNode(id) {
@@ -181,6 +185,15 @@ function idsOf(tag: string): number[] {
   return [...nodes].filter(([, node]) => node.tag === tag).map(([id]) => id);
 }
 
+const mountedApps: { unmount(): void }[] = [];
+
+/** Mounts `App` on the fake host and unmounts it after the test, while its nodes still exist. */
+function mountApp(App: Component): void {
+  const app = createIncaApp(App);
+  mountedApps.push(app);
+  app.mount();
+}
+
 beforeEach(() => {
   installNative();
   delete (globalThis as { __inca_callbacks__?: unknown }).__inca_callbacks__;
@@ -189,6 +202,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  for (const app of mountedApps.splice(0)) app.unmount();
   vi.restoreAllMocks();
 });
 
@@ -209,7 +223,7 @@ describe("a host that frees orphans, driven by the Inca renderer", () => {
     const which = ref<Component>(A);
     const App = { render: () => h(KeepAlive, null, [h(which.value)]) };
 
-    createIncaApp(App).mount();
+    mountApp(App);
     await settle();
     const buttonId = idsOf("button")[0]!;
     click(buttonId);
@@ -236,6 +250,26 @@ describe("a host that frees orphans, driven by the Inca renderer", () => {
     expect([...held].some((id) => nodes.get(id)!.parent === null)).toBe(true);
   });
 
+  it("keeps a removed element in the host across frames while its handle lives", async () => {
+    const show = ref(true);
+    const button = ref<IncaElement | null>(null);
+    let kept: IncaElement | null = null;
+    const App = {
+      render: () => h("div", [show.value ? h("button", { ref: button }) : null]),
+    };
+    mountApp(App);
+    await settle();
+    kept = button.value;
+    const id = kept!.__node_id;
+
+    show.value = false;
+    await settle();
+    await settle();
+
+    expect(nodes.get(id)?.parent).toBeNull();
+    expect(isDestroyed(kept!)).toBe(false);
+  });
+
   it("keeps the Teleport anchors of a null target until the target is set", async () => {
     // The children are empty because Vue cannot patch the children of a Teleport mounted with a null target.
     const target = ref<IncaElement | null>(null);
@@ -244,7 +278,7 @@ describe("a host that frees orphans, driven by the Inca renderer", () => {
       render: () => h("div", [h("div", { ref: box }), h(Teleport, { to: target.value }, [])]),
     };
 
-    createIncaApp(App).mount();
+    mountApp(App);
     await settle();
     await settle();
     target.value = box.value;
@@ -276,7 +310,7 @@ describe("a host that frees orphans, driven by the Inca renderer", () => {
         }),
     };
 
-    createIncaApp(App).mount();
+    mountApp(App);
     await settle();
     await settle();
     expect(idsOf("strong")).toHaveLength(1);
@@ -284,7 +318,7 @@ describe("a host that frees orphans, driven by the Inca renderer", () => {
     await settle();
 
     expect(idsOf("em")).toHaveLength(1);
-    expect(idsOf("p")).toHaveLength(0);
+    expect(idsOf("p").every((id) => nodes.get(id)!.parent === null)).toBe(true);
     const strong = idsOf("strong")[0]!;
     let at: number | null = strong;
     while (at !== null && at !== ROOT) at = nodes.get(at)!.parent;
@@ -301,7 +335,7 @@ describe("a host that frees orphans, driven by the Inca renderer", () => {
     const App = { render: () => h("div", [h("span", { onClick: () => {} }), h(Bad)]) };
 
     try {
-      createIncaApp(App).mount();
+      mountApp(App);
     } catch {
       // The failure is the case under test.
     }

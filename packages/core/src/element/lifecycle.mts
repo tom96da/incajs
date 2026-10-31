@@ -36,8 +36,7 @@ export function isNode(value: unknown): value is IncaNode {
 /**
  * Weak references to the element handles, keyed by native node id. A handle
  * that nothing references can be collected, and its record stays until
- * `collected` drops it. A record leaves at once when the node is removed or
- * the text of its parent is replaced.
+ * `collected` drops it. A record leaves at once when the host frees the node.
  */
 const elements = new Map<NodeId, WeakRef<IncaElement>>();
 
@@ -84,6 +83,28 @@ export function elementOf(id: NodeId): IncaElement | undefined {
   return elements.get(id)?.deref();
 }
 
+const removed = new WeakSet<IncaNode>();
+
+/**
+ * Whether `node` left the tree for good, removed or freed. A removed node stays in the host and
+ * its members read real values. Its listeners are gone.
+ * @param node - the handle to check
+ * @returns `true` after {@link markRemoved} or {@link markDestroyed} reached `node`
+ */
+export function isRemoved(node: IncaNode): boolean {
+  return removed.has(node) || destroyed.has(node);
+}
+
+/**
+ * Records that `node` and every descendant of it were removed from the tree.
+ * @param node - the root of the removed subtree
+ */
+export function markRemoved(node: IncaNode): void {
+  removed.add(node);
+  if (node.kind === "text") return;
+  for (const child of node.children) markRemoved(child);
+}
+
 const destroyed = new WeakSet<IncaNode>();
 
 /**
@@ -126,11 +147,24 @@ export function markFreed(nodeIds: readonly NodeId[]): void {
  */
 const released = new FinalizationRegistry<NodeId>((id) => native().releaseNode(id));
 
+const held = new WeakSet<IncaNode>();
+
+/**
+ * Whether {@link releaseWhenCollected} already covers `handle`.
+ * @param handle - the handle to check
+ * @returns `true` after `releaseWhenCollected(handle)`
+ * @internal
+ */
+export function isHeld(handle: IncaNode): boolean {
+  return held.has(handle);
+}
+
 /**
  * Releases the hold of `handle`'s node once the handle is collected.
  * @param handle - the handle of a node held with `holdNode`
  * @internal
  */
 export function releaseWhenCollected(handle: IncaNode): void {
+  held.add(handle);
   released.register(handle, handle.__node_id);
 }

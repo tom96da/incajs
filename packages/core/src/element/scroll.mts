@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { scrollNode, scrollOf } from "../tree.mts";
-import { isDestroyed } from "./lifecycle.mts";
+import { isRemoved } from "./lifecycle.mts";
 import type { ScrollAlignment } from "../types.mts";
 import type { IncaElement } from "./types.mts";
 
@@ -21,13 +21,13 @@ export type ScrollArgs = [left?: number, top?: number] | [options?: ScrollOption
 
 /**
  * Moves a node's scroll offset. An omitted axis keeps its offset, and a
- * non-finite value counts as `0`. A destroyed node ignores the call.
+ * non-finite value counts as `0`. A removed node ignores the call.
  * @param el - the node to scroll
  * @param args - `(left, top)` or `{ left, top }`
  * @param relative - `true` adds the values to the current offset
  */
 export function scrollPosition(el: IncaElement, args: ScrollArgs, relative: boolean): void {
-  if (isDestroyed(el)) return;
+  if (isRemoved(el)) return;
 
   const [first, second] = args;
   const [x, y] = typeof first === "object" ? [first?.left, first?.top] : [first, second];

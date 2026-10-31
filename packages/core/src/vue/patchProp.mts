@@ -167,7 +167,7 @@ const entryKeyOf = ({ event, capture, passive }: ParsedEventKey): string =>
  */
 function sync(core: IncaCore, el: IncaElement, entryKey: string, entry: Entry): void {
   const live = Array.from(entry.slots.values()).some((slot) => !slot.fired);
-  if (live && !entry.registered && !core.isDestroyed(el)) {
+  if (live && !entry.registered && !core.isRemoved(el)) {
     core.addEventListener(el.__node_id, entry.event, entry.dispatcher, entry.options);
     entry.registered = true;
   } else if (!live && entry.registered) {

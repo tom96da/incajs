@@ -33,9 +33,10 @@ export type EventHandlers<T = IncaElement> = {
  * parent. `parent` and `children` read the node's current position in the
  * tree.
  *
- * After the node is removed, `addEventListener()` and `removeEventListener()`
- * ignore the call, an assignment to a handler property does nothing, and
- * `dispatchEvent()` returns `true`.
+ * A removed node keeps its attributes and its position in its own subtree, and its members read
+ * them. Its listeners are dropped. `addEventListener()` and `removeEventListener()` ignore the
+ * call, an assignment to a handler property does nothing, and `dispatchEvent()` runs no listener
+ * on it.
  */
 export interface IncaElement extends IncaEventTarget, EventHandlers {
   /**
@@ -45,8 +46,7 @@ export interface IncaElement extends IncaEventTarget, EventHandlers {
   readonly __node_id: NodeId;
   /**
    * The `id` attribute, or an empty string when it is unset. Assigning sets
-   * the attribute to the value as a string. After the node is removed,
-   * reading gives an empty string and assigning does nothing.
+   * the attribute to the value as a string.
    */
   id: string;
   /**
@@ -100,8 +100,6 @@ export interface IncaElement extends IncaEventTarget, EventHandlers {
    * Assigning sets the `tabindex` attribute to the value's integer part,
    * wrapped to 32 bits. Reading returns the `tabindex` attribute as an
    * integer, or `-1` (`0` for a `button` or an `input`) when it is unset or invalid.
-   * After the node is removed, reading gives that default and assigning does
-   * nothing.
    */
   tabIndex: number;
   /**
@@ -163,8 +161,7 @@ export interface IncaElement extends IncaEventTarget, EventHandlers {
 export interface IncaInputElement extends IncaElement {
   /**
    * The text of the input. Assigning sets the value as a string, and `null` as `""`; line breaks
-   * are dropped and a changed text puts the caret at its end. After the node is removed, reading
-   * gives `""` and assigning does nothing.
+   * are dropped and a changed text puts the caret at its end.
    */
   value: string;
 }
