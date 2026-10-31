@@ -1,6 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import { mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -8,7 +9,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { HostClient } from "../../src/dev-client/index.mts";
 import { HostError } from "../../src/error.mts";
-import { waitFor } from "../support/dev.mts";
+import { logMockHost, useHostLog, waitFor } from "../support/dev.mts";
 import type { AppErrorParams } from "../../src/dev-client/protocol.mts";
 
 const mockHost = path.join(import.meta.dirname, "fixtures/mock-host.mts");
@@ -37,6 +38,21 @@ describe("HostClient", () => {
     const client = new HostClient({ hostBin, entryFile: "bundle.js", onStderr: () => {} });
 
     await expect(client.start()).rejects.toMatchObject({ code: "ERR_INCA_HOST_BIN_NOT_FOUND" });
+  });
+
+  it("spawns no host when the signal is aborted before the spawn", async () => {
+    const hostLog = await useHostLog(await mkdtemp(path.join(os.tmpdir(), "inca-client-")));
+    const client = new HostClient({
+      hostBin: logMockHost,
+      entryFile: "bundle.js",
+      onStderr: () => {},
+      signal: AbortSignal.abort(),
+    });
+
+    await client.start();
+    await client.stop();
+
+    expect(await hostLog.lines()).toEqual([]);
   });
 
   it("rejects a call written after the host has exited, rather than crashing", async () => {

@@ -290,6 +290,7 @@ export async function dev(options: DevOptions): Promise<void> {
       const next = new HostClient({
         entryFile,
         hostBin,
+        signal: options.signal,
         env: hostEnv(stderr),
         onStderr: (line) => stderr.write(line),
         onReady: () => {
