@@ -135,8 +135,8 @@ function realpathThroughAncestor(target: string): string {
 }
 
 /**
- * Refuses an `outDir` that would hold the app's own sources. `inca dev` and
- * `inca build` delete whatever a build didn't write under `outDir`. Symlinks
+ * Refuses an `outDir` that would hold the app's own sources. `inca build` and
+ * `inca package` delete whatever a build didn't write under `outDir`. Symlinks
  * are followed on both sides of the comparison.
  *
  * @param cwd - the app's root directory

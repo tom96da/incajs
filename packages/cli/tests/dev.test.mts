@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { writeFile } from "node:fs/promises";
+import { access, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
@@ -30,6 +30,12 @@ import {
   makeUnspawnableHost,
   makeSink,
 } from "./support/dev.mts";
+
+const exists = (file: string) =>
+  access(file).then(
+    () => true,
+    () => false,
+  );
 
 const mockedResolveHostBin = vi.mocked(resolveHostBin);
 
@@ -182,7 +188,95 @@ describe("dev", () => {
 
     expect(watch.mock.calls[0]![0].runtimeConfig).toMatchObject({
       dev: { stackPaths: "relative" },
-      root: "..",
+      root: "../../..",
+    });
+  });
+
+  describe("development directory", () => {
+    const devDirOf = (cwd: string): string => path.join(cwd, "node_modules/.inca/dev");
+
+    /** Starts `dev()` and returns the watch it opened, with a way to build and stop. */
+    async function startWatch(cwd: string): Promise<{
+      outDir: string;
+      build: (files: string[]) => Promise<void>;
+      stop: () => Promise<void>;
+    }> {
+      const bundler = makeFakeBundler();
+      const watch = vi.spyOn(bundler, "watch");
+      const stdout = makeSink();
+      const controller = new AbortController();
+      const running = dev({
+        cwd,
+        entry: "unused",
+        bundler,
+        hostBin: mockHost,
+        stdout: stdout.stream,
+        stderr: makeSink().stream,
+        signal: controller.signal,
+      });
+      let stopping: Promise<void> | undefined;
+      const stop = (): Promise<void> => {
+        stopping ??= (async () => {
+          controller.abort();
+          await running;
+        })();
+        return stopping;
+      };
+      onTestFinished(stop);
+      await bundler.watching;
+      const { outDir } = watch.mock.calls[0]![0];
+      return {
+        outDir,
+        async build(files) {
+          bundler.emitBuild({ outDir, entryFile: path.join(outDir, "bundle.js"), files });
+          await waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
+        },
+        stop,
+      };
+    }
+
+    it.each([
+      ["no outDir", undefined],
+      ["an outDir", 'export default { outDir: "out" };\n'],
+    ])("hands the watch the dev directory for a config with %s", async (_, config) => {
+      const cwd = await scratch.makeApp({});
+      if (config) await writeFile(path.join(cwd, "inca.config.ts"), config);
+
+      const { outDir, stop } = await startWatch(cwd);
+      await stop();
+
+      expect(outDir).toBe(devDirOf(cwd));
+    });
+
+    it("leaves a file under outDir alone through a build", async () => {
+      const cwd = await scratch.makeApp({});
+      await mkdir(path.join(cwd, "dist"));
+      await writeFile(path.join(cwd, "dist/app.txt"), "x");
+
+      const { build, stop } = await startWatch(cwd);
+      await build(["bundle.js"]);
+      await stop();
+
+      expect(await exists(path.join(cwd, "dist/app.txt"))).toBe(true);
+    });
+
+    it("prunes unlisted files of the dev directory at any depth", async () => {
+      const cwd = await scratch.makeApp({});
+      const dir = devDirOf(cwd);
+      await mkdir(path.join(dir, "chunks"), { recursive: true });
+      await Promise.all(
+        ["keep.js", "old.js", "chunks/old.js"].map((file) => writeFile(path.join(dir, file), "x")),
+      );
+
+      const { build, stop } = await startWatch(cwd);
+      await build(["keep.js"]);
+      await stop();
+
+      expect(
+        await Promise.all(
+          ["keep.js", "old.js", "chunks/old.js"].map((f) => exists(path.join(dir, f))),
+        ),
+      ).toEqual([true, false, false]);
     });
   });
 
