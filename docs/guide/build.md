@@ -25,7 +25,8 @@ example, is listed in [Configuration](../reference/configuration).
 A build writes `bundle.js` and its chunks to `outDir`. With the
 [`sourcemap`](../reference/configuration#sourcemap) key or the `--sourcemap`
 flag it also writes `bundle.js.map`, and the host reads the map to name the
-`.vue` or `.ts` file, line and column in an error.
+`.vue` or `.ts` file, line and column in an error. A build copies the files of
+`public/` into `outDir`, and `inca package` copies them into the packaged app.
 
 `inca package` writes the packaged app under `outDir` (`dist` by
 default), alongside the plain build output:
