@@ -449,6 +449,24 @@ describe("dev entry selection", () => {
     expect(run.bundler.closed).toBe(true);
   });
 
+  it("starts no host when the signal fires before the session is set up", async () => {
+    const cwd = await makeSourceApp("main.js");
+    const controller = new AbortController();
+    const bundler = makeFakeBundler();
+    const watch = bundler.watch.bind(bundler);
+    bundler.watch = (options) => {
+      controller.abort();
+      options.onBuild(BUILD_A);
+      return watch(options);
+    };
+    const run = await startDev(cwd, { bundler, signal: controller.signal });
+
+    await run.running;
+
+    expect(await run.hostLog.lines()).toEqual([]);
+    expect(run.readyCount()).toBe(0);
+  });
+
   it("closes the entry monitor when the signal is already aborted", async () => {
     const cwd = await makeSourceApp("App.vue");
     const controller = new AbortController();

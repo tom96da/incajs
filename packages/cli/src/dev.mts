@@ -195,13 +195,15 @@ export async function dev(options: DevOptions): Promise<void> {
       resolve();
     };
   });
+  // Observed from the start, so that `stopping` covers every step below.
+  if (options.signal.aborted) stop();
+  else options.signal.addEventListener("abort", () => stop(), { once: true });
   let entryWatch: EditWatch | undefined;
   let monitoring: Promise<{ error: unknown } | undefined> | undefined;
   try {
     const stdout = options.stdout ?? process.stdout;
     const stderr = options.stderr ?? process.stderr;
     const bin = options.hostBin ?? (await resolveHostBin(cwd, stderr));
-    if (options.signal.aborted) return;
     await assertHostBin(bin);
     const bundler: Bundler = options.bundler ?? defaultBundler;
 
@@ -493,8 +495,6 @@ export async function dev(options: DevOptions): Promise<void> {
       );
     }
 
-    if (options.signal.aborted) stop();
-    else options.signal.addEventListener("abort", () => stop(), { once: true });
     await stopped;
 
     const monitorFailure = await monitoring;

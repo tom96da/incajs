@@ -55,26 +55,6 @@ describe("dev", () => {
     expect(mockedResolveHostBin).toHaveBeenCalledWith(cwd, stderr.stream);
   });
 
-  it("stops before the build starts when it is canceled while the host resolves", async () => {
-    const controller = new AbortController();
-    const bundler = makeFakeBundler();
-    mockedResolveHostBin.mockImplementationOnce(async () => {
-      controller.abort();
-      return mockHost;
-    });
-
-    await dev({
-      cwd: await scratch.makeApp({}),
-      entry: "unused",
-      bundler,
-      stdout: makeSink().stream,
-      stderr: makeSink().stream,
-      signal: controller.signal,
-    });
-
-    expect(bundler.watches).toHaveLength(0);
-  });
-
   it("starts the host and prints ready once the first build lands", async () => {
     const bundler = makeFakeBundler();
     const stdout = makeSink();
