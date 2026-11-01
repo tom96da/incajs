@@ -2823,6 +2823,7 @@ dependencies = [
  "inca-gpui",
  "inca-host",
  "inca-jsenv",
+ "inca-test-macros",
  "rquickjs",
  "serde_json",
 ]
