@@ -58,6 +58,17 @@ enforces.
 with a top-level file or folder of the build output, such as `assets` or
 `chunks`. Pick a different `productName`.
 
+## `ERR_INCA_PUBLIC_FILE_RESERVED`
+
+`inca package` adds license files to the packaged app. It raises this error
+when `public/` or the build writes a top-level file with the name of one of
+them, such as `public/NOTICE`. Names compare without regard to case. Rename the
+file. The names are:
+
+- `NOTICE`
+- `LICENSE-MIT`
+- `LICENSE-APACHE`
+
 ## `ERR_INCA_ICON_NOT_FOUND`
 
 `icon` in `inca.config.ts` points at a `.icns` file that doesn't exist. The

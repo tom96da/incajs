@@ -37,5 +37,8 @@ default), alongside the plain build output:
   `productName` (lowercased, non-alphanumeric runs collapsed to `-`),
   holding an executable of the same name.
 
+`inca package` also copies the license files of the runtime into the app, unless
+`INCA_HOST_BIN` names your own binary. Keep them in the app you distribute.
+
 `inca package` doesn't sign the app yet. macOS Gatekeeper will warn
 before it opens.

@@ -7,23 +7,30 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { Writable } from "node:stream";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 vi.mock("./host/index.mts", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./host/index.mts")>();
-  return { ...actual, resolveHostBin: vi.fn<typeof actual.resolveHostBin>(actual.resolveHostBin) };
+  return {
+    ...actual,
+    resolveHostBin: vi.fn<typeof actual.resolveHostBin>(actual.resolveHostBin),
+    hostLicenseFiles: vi.fn<typeof actual.hostLicenseFiles>(() => Promise.resolve([])),
+  };
 });
 
 import { IncaError } from "./error.mts";
-import { resolveHostBin } from "./host/index.mts";
+import { hostLicenseFiles, resolveHostBin } from "./host/index.mts";
 import { packageApp } from "./package.mts";
+import type { PackageTarget } from "./package.mts";
 import type { Bundler, BuildOptions, BuildOutput, Watcher } from "./types.mts";
 
 const mockedResolveHostBin = vi.mocked(resolveHostBin);
+const mockedLicenseFiles = vi.mocked(hostLicenseFiles);
 
 let cwd: string | undefined;
 
 afterEach(async () => {
+  mockedLicenseFiles.mockClear();
   if (cwd) await rm(cwd, { recursive: true, force: true });
   cwd = undefined;
 });
@@ -348,5 +355,121 @@ describe("packageApp", () => {
   it("allows a productName that only resembles a build output entry", async () => {
     const { appPath } = await packageWithOutputFile("assets-x", "assets/a.png");
     expect(await readFile(path.join(appPath, "assets/a.png"), "utf8")).toBe("x");
+  });
+
+  async function exists(file: string): Promise<boolean> {
+    return (await stat(file).catch(() => undefined)) !== undefined;
+  }
+
+  const LICENSE_NAMES = ["NOTICE", "LICENSE-MIT", "LICENSE-APACHE"];
+
+  /** Writes the named files with their name as content, returning their paths. */
+  async function makeLicenseFiles(names: string[]): Promise<string[]> {
+    const dir = await mkdtemp(path.join(tmpdir(), "inca-license-"));
+    onTestFinished(() => rm(dir, { recursive: true, force: true }));
+    return Promise.all(
+      names.map(async (name) => {
+        await writeFile(path.join(dir, name), `text of ${name}`);
+        return path.join(dir, name);
+      }),
+    );
+  }
+
+  /** Packages with the host package resolved (no `hostBin` option), as installed. */
+  async function packageWithPackagedHost(
+    target: PackageTarget,
+    licenseFiles: string[],
+    extraFile?: string,
+    stdout: Writable = makeSink().stream,
+  ) {
+    const app = await makeApp({ name: "click_counter", version: "1.0.0" });
+    mockedResolveHostBin.mockResolvedValueOnce(await makeHostBin(app));
+    mockedLicenseFiles.mockResolvedValueOnce(licenseFiles);
+    const inner = fakeBundler();
+    const bundler: Bundler = {
+      ...inner,
+      build: async (args) => {
+        const out = await inner.build(args);
+        if (extraFile === undefined) return out;
+        await writeFile(path.join(args.outDir, extraFile), "mine");
+        return { ...out, files: [...out.files, extraFile] };
+      },
+    };
+    return packageApp({
+      cwd: app,
+      entry: "unused",
+      bundler,
+      target,
+      stdout,
+    });
+  }
+
+  it("copies the license files into Contents/Resources of the macOS app", async () => {
+    const { appPath } = await packageWithPackagedHost(
+      "macos",
+      await makeLicenseFiles(LICENSE_NAMES),
+    );
+
+    for (const name of LICENSE_NAMES) {
+      expect(await readFile(path.join(appPath, "Contents/Resources", name), "utf8")).toBe(
+        `text of ${name}`,
+      );
+    }
+  });
+
+  it("copies the license files into the Linux directory", async () => {
+    const { appPath } = await packageWithPackagedHost(
+      "linux",
+      await makeLicenseFiles(LICENSE_NAMES),
+    );
+
+    for (const name of LICENSE_NAMES) {
+      expect(await readFile(path.join(appPath, name), "utf8")).toBe(`text of ${name}`);
+    }
+  });
+
+  it("packages without license files when the host package has none", async () => {
+    const stdout = makeSink();
+    const { appPath } = await packageWithPackagedHost("linux", [], undefined, stdout.stream);
+
+    for (const name of LICENSE_NAMES) expect(await exists(path.join(appPath, name))).toBe(false);
+    expect(stdout.text()).not.toMatch(/license|notice/i);
+  });
+
+  it("hands hostLicenseFiles the hostBin option", async () => {
+    const app = await makeApp({ name: "click_counter", version: "1.0.0" });
+    const hostBin = await makeHostBin(app);
+    await packageApp({
+      cwd: app,
+      entry: "unused",
+      bundler: fakeBundler(),
+      hostBin,
+      target: "linux",
+      stdout: makeSink().stream,
+    });
+
+    expect(mockedLicenseFiles).toHaveBeenCalledWith(hostBin);
+  });
+
+  it.each([
+    ["exact", (name: string) => name],
+    ["lower case", (name: string) => name.toLowerCase()],
+  ])("refuses a package whose build output holds NOTICE in %s", async (_form, spell) => {
+    const licenseFiles = await makeLicenseFiles(LICENSE_NAMES);
+
+    await expect(
+      packageWithPackagedHost("linux", licenseFiles, spell("NOTICE")),
+    ).rejects.toMatchObject({ code: "ERR_INCA_PUBLIC_FILE_RESERVED" });
+    expect(await exists(path.join(cwd ?? "", "dist/click-counter"))).toBe(false);
+  });
+
+  it("keeps a reserved name in the build output when the host package has no such file", async () => {
+    const { appPath } = await packageWithPackagedHost(
+      "linux",
+      await makeLicenseFiles(["LICENSE-MIT"]),
+      "NOTICE",
+    );
+
+    expect(await readFile(path.join(appPath, "NOTICE"), "utf8")).toBe("mine");
   });
 });

@@ -12,7 +12,7 @@ import { inspectHostPackage } from "./inspect.mts";
  * Overrides host binary resolution, for a stand-in in tests, or a platform with no published
  * binary yet.
  */
-const HOST_BIN_ENV_VAR = "INCA_HOST_BIN";
+export const HOST_BIN_ENV_VAR = "INCA_HOST_BIN";
 
 /** The user's home directory, or `undefined` when the system reports none. */
 function homeDirectory(): string | undefined {

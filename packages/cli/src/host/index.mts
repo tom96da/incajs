@@ -3,3 +3,4 @@
 
 export { assertHostBin, resolveHostBin } from "./bin.mts";
 export { inspectHostPackage } from "./inspect.mts";
+export { hostLicenseFiles } from "./notice.mts";
