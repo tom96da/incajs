@@ -26,7 +26,8 @@ approach can be agreed before you write code.
   SPDX-License-Identifier: MIT OR Apache-2.0
   ```
 - **Notices**: a commit that adds a dependency under a license other than MIT or
-  Apache-2.0 lists it in the root [NOTICE](./NOTICE).
+  Apache-2.0 lists it in the root [NOTICE](./NOTICE). Run `make notice` and commit the
+  updated NOTICE in the same change.
 - **Error codes**: document a new `ERR_INCA_*` code in
   `docs/reference/errors.md` in the change that adds it.
 - **Commits**: follow [GIT.md](./handbook/GIT.md) for the message format.
