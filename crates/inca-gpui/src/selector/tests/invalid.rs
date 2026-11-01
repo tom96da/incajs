@@ -7,6 +7,16 @@ use rstest::rstest;
 
 use super::*;
 
+fn check_matches(selector: &str) -> Result<(), SelectorError> {
+    let p = page();
+    matches_selector(&p.f.tree, p.p1, selector).map(drop)
+}
+
+#[test]
+fn check_selector_accepts_a_valid_selector_list() {
+    assert_eq!(check_selector("div > p, span"), Ok(()));
+}
+
 #[rstest]
 #[case::empty("", "it has an empty part")]
 #[case::trailing_combinator("div >", "it has a combinator without an operand")]
@@ -148,10 +158,12 @@ use super::*;
     "::before:first-child",
     "it does not follow the selector grammar"
 )]
-fn an_invalid_selector_returns_the_parse_error(#[case] selector: &str, #[case] reason: &str) {
-    let p = page();
-
-    let error = matches_selector(&p.f.tree, p.p1, selector).unwrap_err();
+fn an_invalid_selector_returns_the_parse_error(
+    #[case] selector: &str,
+    #[case] reason: &str,
+    #[values(check_matches, check_selector)] run: fn(&str) -> Result<(), SelectorError>,
+) {
+    let error = run(selector).unwrap_err();
 
     assert_eq!(
         error.to_string(),

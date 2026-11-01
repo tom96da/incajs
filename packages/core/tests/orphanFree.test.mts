@@ -125,6 +125,7 @@ function installNative(): void {
     attributeNames: (id) => (nodeOf(id), []),
     matches: (id) => (nodeOf(id), false),
     closest: (id) => (nodeOf(id), null),
+    checkSelector: () => {},
     releaseListeners(id) {
       const callbacks: number[] = [];
       const pending = [id];

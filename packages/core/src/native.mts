@@ -22,6 +22,7 @@ interface IncaNative {
   attributeNames(nodeId: NodeId): string[];
   matches(nodeId: NodeId, selector: string): boolean;
   closest(nodeId: NodeId, selector: string): NodeId | null;
+  checkSelector(selector: string): void;
   setStyle(nodeId: NodeId, key: string, value: AttributeValue): void;
   removeStyle(nodeId: NodeId, key: string): void;
   inputValue(nodeId: NodeId): string;

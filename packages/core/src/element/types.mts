@@ -156,14 +156,16 @@ export interface IncaElement extends IncaEventTarget, EventHandlers {
   /**
    * Whether this element matches the selector list. `:hover`, `:focus` and the other interactive
    * and form-state pseudo-classes never match.
-   * @throws DOMException named `SyntaxError` for an invalid selector
+   * @throws DOMException named `SyntaxError` for an invalid selector, also after this element is
+   * removed
    * @param selectors - A selector list.
    * @returns `true` when this element matches the selector list.
    */
   matches(selectors: string): boolean;
   /**
    * The nearest element at or above this one that matches the selector list, or `null`.
-   * @throws DOMException named `SyntaxError` for an invalid selector
+   * @throws DOMException named `SyntaxError` for an invalid selector, also after this element is
+   * removed
    * @param selectors - A selector list.
    * @returns The matching element, or `null` when none matches.
    */

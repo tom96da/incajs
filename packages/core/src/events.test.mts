@@ -36,6 +36,7 @@ const native = {
   attributeNames: vi.fn<(nodeId: number) => string[]>(() => []),
   matches: vi.fn<(nodeId: number, selector: string) => boolean>(() => false),
   closest: vi.fn<(nodeId: number, selector: string) => number | null>(() => null),
+  checkSelector: vi.fn<(selector: string) => void>(),
   holdNode: vi.fn<(nodeId: number) => void>(),
   releaseNode: vi.fn<(nodeId: number) => void>(),
   focusNode: vi.fn<(nodeId: number) => void>(),

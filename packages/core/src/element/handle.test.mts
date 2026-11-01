@@ -54,6 +54,7 @@ describe("createIncaElement selectors", () => {
     const host = {
       matches: vi.fn<(nodeId: number, selector: string) => boolean>(() => matched),
       closest: vi.fn<(nodeId: number, selector: string) => number | null>(() => found),
+      checkSelector: vi.fn<(selector: string) => void>(),
     };
     globalThis.__inca_native__ = host as never;
     return host;
@@ -125,6 +126,54 @@ describe("createIncaElement selectors", () => {
     expect(leaf[method]("div")).toBe(expected);
     expect(host[method]).not.toHaveBeenCalled();
   });
+
+  it.each(["matches", "closest"] as const)("%s throws SyntaxError on a freed element", (method) => {
+    const host = installSelectors();
+    host.checkSelector.mockImplementation(() => {
+      throw new DOMException("the selector is not valid", "SyntaxError");
+    });
+    const { leaf } = chain();
+    markDestroyed(leaf);
+
+    expect(() => leaf[method]("div >")).toThrow(expect.objectContaining({ name: "SyntaxError" }));
+  });
+
+  it.each(["matches", "closest"] as const)(
+    "%s throws TypeError for a missing argument on a freed element",
+    (method) => {
+      const host = installSelectors();
+      const { leaf } = chain();
+      markDestroyed(leaf);
+
+      expect(() => (leaf[method] as () => unknown)()).toThrow(TypeError);
+      expect(host.checkSelector).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["matches", "closest"] as const)(
+    "%s throws TypeError for a Symbol on a freed element",
+    (method) => {
+      const host = installSelectors();
+      const { leaf } = chain();
+      markDestroyed(leaf);
+
+      expect(() => leaf[method](Symbol("s") as unknown as string)).toThrow(TypeError);
+      expect(host.checkSelector).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["matches", "closest"] as const)(
+    "%s sends the converted selector text to checkSelector",
+    (method) => {
+      const host = installSelectors();
+      const { leaf } = chain();
+      markDestroyed(leaf);
+
+      leaf[method](1 as unknown as string);
+
+      expect(host.checkSelector).toHaveBeenCalledWith("1");
+    },
+  );
 
   it("still asks the host for a removed handle", () => {
     const host = installSelectors(null, true);

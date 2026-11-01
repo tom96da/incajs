@@ -682,6 +682,15 @@ pub fn matches_selector(
     }))
 }
 
+/// Parses `selector` as a selector list.
+///
+/// # Errors
+///
+/// Returns a [`SelectorError`] when `selector` is not a valid selector list.
+pub fn check_selector(selector: &str) -> Result<(), SelectorError> {
+    parse(selector).map(drop)
+}
+
 /// The nearest element at or above `node` that matches `selector`. A `#text` node starts at its
 /// nearest element ancestor, and a node tagged `#comment` and an unknown id find nothing.
 ///
