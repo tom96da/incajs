@@ -49,6 +49,37 @@ export interface HTMLCollectionOf<T extends IncaElement> {
   [Symbol.iterator](): IterableIterator<T>;
 }
 
+/** A read-only list of elements that a query returned. It keeps the elements it found. */
+export interface NodeListOf<T extends IncaElement> {
+  readonly [index: number]: T;
+  /** The number of elements in the list. */
+  readonly length: number;
+  /**
+   * The element at `index`, or `null` beyond the list. The index converts to an unsigned 32-bit
+   * integer.
+   * @param index - The position in the list.
+   * @returns The element at `index`, or `null`.
+   */
+  item(index: number): T | null;
+  /**
+   * Calls `callback` with the element, its index and the list for each element in order.
+   * @throws TypeError when `callback` is not a function
+   * @param callback - The function to call for each element.
+   * @param thisArg - The value of `this` inside `callback`.
+   */
+  forEach(
+    callback: (value: T, index: number, list: NodeListOf<T>) => void,
+    thisArg?: unknown,
+  ): void;
+  /** The pairs of index and element in order. */
+  entries(): IterableIterator<[number, T]>;
+  /** The indices in order. */
+  keys(): IterableIterator<number>;
+  /** The elements in order. */
+  values(): IterableIterator<T>;
+  [Symbol.iterator](): IterableIterator<T>;
+}
+
 /** An attribute of an element. It has no `Node` members. */
 export interface Attr {
   /** The attribute name in lower case. */
@@ -243,6 +274,26 @@ export interface IncaElement extends IncaEventTarget, EventHandlers {
    * @returns The matching element, or `null` when none matches.
    */
   closest(selectors: string): IncaElement | null;
+  /**
+   * The first descendant element that matches the selector list, or `null`. This element is never
+   * in the result. `:scope` and a leading `&` select this element. A removed element searches the
+   * subtree it kept.
+   * @throws DOMException named `SyntaxError` for an invalid selector, also after this element is
+   * removed
+   * @param selectors - A selector list.
+   * @returns The first matching descendant in document order, or `null`.
+   */
+  querySelector(selectors: string): IncaElement | null;
+  /**
+   * The descendant elements that match the selector list, in document order, as a list that later
+   * changes do not reach. Every call returns a new list. A removed element searches the subtree it
+   * kept.
+   * @throws DOMException named `SyntaxError` for an invalid selector, also after this element is
+   * removed
+   * @param selectors - A selector list.
+   * @returns The matching descendants.
+   */
+  querySelectorAll(selectors: string): NodeListOf<IncaElement>;
   /**
    * The box this node was drawn at in the last frame, in window logical
    * pixels. A node created in the same task reads all zeros.

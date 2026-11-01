@@ -16,6 +16,7 @@ export type {
   IncaInputElement,
   IncaNode,
   NamedNodeMap,
+  NodeListOf,
 } from "./element/types.mts";
 export type {
   AttributeValue,

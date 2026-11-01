@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import type { Attr, HTMLCollectionOf, IncaElement, NamedNodeMap } from "./types.mts";
+import type { Attr, HTMLCollectionOf, IncaElement, NamedNodeMap, NodeListOf } from "./types.mts";
 
 const ARRAY_INDEX = /^(?:0|[1-9]\d*)$/;
 
@@ -38,8 +38,10 @@ function supportedNames(elements: readonly IncaElement[]): string[] {
 interface Kind<T extends object> {
   /** The `Symbol.toStringTag` value. */
   tag: string;
-  /** The name of the lookup method, `namedItem` or `getNamedItem`. */
-  method: string;
+  /** The name of the lookup method, `namedItem` or `getNamedItem`; a list has none. */
+  method?: string;
+  /** Whether the object also has forEach, entries, keys and values. */
+  arrayMembers?: boolean;
   /** Lists the current items in order. */
   source: () => readonly T[];
   /** The result of the lookup method for `name`. */
@@ -50,7 +52,7 @@ interface Kind<T extends object> {
   names: (items: readonly T[]) => string[];
 }
 
-/** Builds a live, read-only indexed object with named properties. */
+/** Builds a read-only indexed object. A kind with no named items has no named properties. */
 function indexedCollection<T extends object>(kind: Kind<T>): object {
   const { source, named } = kind;
   /** Throws unless `self` is the collection. */
@@ -69,20 +71,32 @@ function indexedCollection<T extends object>(kind: Kind<T>): object {
     },
     item: {
       ...data,
-      value(this: unknown, ...args: [index: unknown]) {
-        brand(this);
-        if (args.length < 1) throw new TypeError("item() needs 1 argument");
-        return source()[(args[0] as number) >>> 0] ?? null;
-      },
+      value: Object.defineProperty(
+        function (this: unknown, ...args: [index: unknown]) {
+          brand(this);
+          if (args.length < 1) throw new TypeError("item() needs 1 argument");
+          return source()[(args[0] as number) >>> 0] ?? null;
+        },
+        "length",
+        { value: 1 },
+      ),
     },
-    [kind.method]: {
-      ...data,
-      value(this: unknown, ...args: [name: unknown]) {
-        brand(this);
-        if (args.length < 1) throw new TypeError(`${kind.method}() needs 1 argument`);
-        return kind.find(`${args[0] as string}`);
+    ...(kind.method && {
+      [kind.method]: {
+        ...data,
+        value(this: unknown, ...args: [name: unknown]) {
+          brand(this);
+          if (args.length < 1) throw new TypeError(`${kind.method}() needs 1 argument`);
+          return kind.find(`${args[0] as string}`);
+        },
       },
-    },
+    }),
+    ...(kind.arrayMembers && {
+      forEach: { ...data, value: Array.prototype.forEach },
+      entries: { ...data, value: Array.prototype.entries },
+      keys: { ...data, value: Array.prototype.keys },
+      values: { ...data, value: Array.prototype.values },
+    }),
     [Symbol.iterator]: {
       ...data,
       enumerable: false,
@@ -186,4 +200,21 @@ export function namedNodeMapOf(
     named,
     names: (items) => items.map((attr) => attr.name),
   }) as NamedNodeMap;
+}
+
+/**
+ * Builds a read-only `NodeList` over a fixed list of elements.
+ * @param items - the elements in order; the list keeps its own copy
+ * @returns the list
+ */
+export function nodeListOf<T extends IncaElement>(items: readonly T[]): NodeListOf<T> {
+  const fixed = [...items];
+  return indexedCollection({
+    tag: "NodeList",
+    arrayMembers: true,
+    source: () => fixed,
+    find: () => null,
+    named: () => null,
+    names: () => [],
+  }) as NodeListOf<T>;
 }

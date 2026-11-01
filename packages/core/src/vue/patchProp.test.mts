@@ -60,6 +60,8 @@ const makeEl = (): IncaElement => ({
   tagName: "DIV",
   matches: () => false,
   closest: () => null,
+  querySelector: () => null,
+  querySelectorAll: () => ({}) as ReturnType<IncaElement["querySelectorAll"]>,
   parentElement: null,
   firstElementChild: null,
   lastElementChild: null,
