@@ -33,6 +33,12 @@ fn probe(cx: &mut TestAppContext) -> Value {
 #[case::matches("matches", json!(true))]
 #[case::hover_never_matches("hover", json!(false))]
 #[case::invalid_selector("syntaxError", json!("SyntaxError"))]
+#[case::query_selector_returns_the_ref("querySelector", json!(true))]
+#[case::query_selector_all_keeps_document_order("querySelectorAllIds", json!(["first", "second"]))]
+#[case::query_selector_skips_the_start_node("querySelectorSelf", json!(null))]
+#[case::query_selector_invalid_selector("querySelectorSyntaxError", json!("SyntaxError"))]
+#[case::children_skip_text_nodes("childrenLength", json!(0))]
+#[case::named_item_value("namedItemValue", json!("card"))]
 fn the_element_members_answer_on_the_real_host(
     cx: &mut TestAppContext,
     #[case] key: &str,
