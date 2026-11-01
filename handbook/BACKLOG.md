@@ -1278,16 +1278,20 @@ A fixed entry is deleted and its ID is never reused.
   evaluate them. Fix: evaluate them in the selector adapter once interactive
   visual state exists.
 
-- **B-251 The code that runs in QuickJS is tested only under Node and Bun**
+- **B-251 Most of the code that runs in QuickJS is still tested only under Node and Bun**
   `Units: core,ci · Size: L · Impact: Medium`
 
   The unit tests of `packages/core` run under Node and Bun with the native
-  functions mocked, and the host runs the same code in QuickJS. Behavior that
-  depends on the engine is not tested there, such as the timing of
-  `FinalizationRegistry` callbacks. Fix: run the core tests against the
-  quickjs-ng build that npm publishes (`quickjs-emscripten` with
-  `@jitl/quickjs-ng-wasmfile-release-sync`), starting with the tests
-  that wait for a garbage collection.
+  functions mocked, and the host runs the same code in QuickJS. A runner
+  (`pnpm --filter incajs test:quickjs <file>`) runs one test file in the
+  quickjs-ng build that npm publishes, and runs `interfaces.test.mts`, which
+  needs no mock. Behavior that depends on the engine is not tested elsewhere,
+  such as the timing of `FinalizationRegistry` callbacks. Fix, stage 2: give the
+  shim `vi.resetModules`, async test bodies and `it.skip`, then move
+  the tests that wait for a garbage collection. Stage 3: run the rest of the
+  suite and add a CI step. The direction is to move the whole core suite to
+  QuickJS once the shim covers what the tests need; the Node and Bun runs stay
+  until then.
 
 - **B-252 The element types carry an `Inca` prefix that the standard types do not**
   `Units: core,cli · Size: L · Impact: Medium`
