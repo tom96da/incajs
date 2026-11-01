@@ -7,6 +7,7 @@ import { runInNewContext } from "node:vm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createEventTarget } from "../eventTarget.mts";
+import { htmlCollectionOf } from "./collections.mts";
 import { rectOf } from "./geometry.mts";
 import { elementOf, markDestroyed, releaseWhenCollected, unregisterElement } from "./lifecycle.mts";
 import * as tree from "./shadowTree.mts";
@@ -116,7 +117,8 @@ function element(): IncaElement {
     previousElementSibling: null,
     nextElementSibling: null,
     parent: null,
-    children: [],
+    __children: [],
+    children: htmlCollectionOf(() => []),
     focus: vi.fn<() => void>(),
     blur: vi.fn<() => void>(),
     click: vi.fn<() => void>(),
@@ -145,7 +147,8 @@ describe("createElement", () => {
       previousElementSibling: null,
       nextElementSibling: null,
       parent: null,
-      children: [],
+      __children: [],
+      children: expect.any(Object),
       focus: expect.any(Function),
       blur: expect.any(Function),
       click: expect.any(Function),
@@ -243,7 +246,7 @@ describe("setElementText", () => {
   it("replaces existing children with one text child", () => {
     const el = element();
     const oldChild = element();
-    el.children.push(oldChild);
+    el.__children.push(oldChild);
     oldChild.parent = el;
 
     tree.setElementText(el, "hello");
@@ -251,19 +254,19 @@ describe("setElementText", () => {
     expect(host.removeChild).toHaveBeenCalledWith(el.__node_id, oldChild.__node_id);
     expect(host.releaseListeners).toHaveBeenCalledWith(oldChild.__node_id);
     expect(oldChild.parent).toBeNull();
-    expect(el.children).toHaveLength(1);
-    expect(el.children[0]).toMatchObject({ kind: "text", text: "hello" });
+    expect(el.__children).toHaveLength(1);
+    expect(el.__children[0]).toMatchObject({ kind: "text", text: "hello" });
   });
 
   it("leaves no children behind for an empty string", () => {
     const el = element();
     const oldChild = element();
-    el.children.push(oldChild);
+    el.__children.push(oldChild);
     oldChild.parent = el;
 
     tree.setElementText(el, "");
 
-    expect(el.children).toHaveLength(0);
+    expect(el.__children).toHaveLength(0);
   });
 });
 
@@ -275,7 +278,7 @@ describe("insert", () => {
     tree.insert(child, parent);
 
     expect(host.insertBefore).toHaveBeenCalledWith(parent.__node_id, child.__node_id, null);
-    expect(parent.children).toEqual([child]);
+    expect(parent.__children).toEqual([child]);
     expect(child.parent).toBe(parent);
   });
 
@@ -295,7 +298,7 @@ describe("insert", () => {
       inserted.__node_id,
       anchor.__node_id,
     );
-    expect(parent.children).toEqual([first, inserted, anchor]);
+    expect(parent.__children).toEqual([first, inserted, anchor]);
   });
 
   it("leaves a child alone when it is its own anchor", () => {
@@ -310,7 +313,7 @@ describe("insert", () => {
 
     expect(host.removeChild).not.toHaveBeenCalled();
     expect(host.insertBefore).not.toHaveBeenCalled();
-    expect(parent.children).toEqual([first, second]);
+    expect(parent.__children).toEqual([first, second]);
   });
 
   it("falls back to appending when the anchor isn't currently a child", () => {
@@ -321,7 +324,7 @@ describe("insert", () => {
     tree.insert(child, parent, strayAnchor);
 
     expect(host.insertBefore).toHaveBeenCalledWith(parent.__node_id, child.__node_id, null);
-    expect(parent.children).toEqual([child]);
+    expect(parent.__children).toEqual([child]);
   });
 
   it("moves a child already attached elsewhere, detaching it from its old parent first", () => {
@@ -333,8 +336,8 @@ describe("insert", () => {
     tree.insert(child, newParent);
 
     expect(host.removeChild).toHaveBeenCalledWith(oldParent.__node_id, child.__node_id);
-    expect(oldParent.children).toHaveLength(0);
-    expect(newParent.children).toEqual([child]);
+    expect(oldParent.__children).toHaveLength(0);
+    expect(newParent.__children).toEqual([child]);
     expect(child.parent).toBe(newParent);
   });
 });
@@ -349,7 +352,7 @@ describe("remove", () => {
     tree.remove(child);
 
     expect(host.removeChild).toHaveBeenCalledWith(parent.__node_id, child.__node_id);
-    expect(parent.children).toHaveLength(0);
+    expect(parent.__children).toHaveLength(0);
     expect(child.parent).toBeNull();
   });
 
@@ -415,7 +418,7 @@ describe("remove", () => {
     tree.remove(child);
 
     expect(host.removeChild).not.toHaveBeenCalled();
-    expect(parent.children).toHaveLength(0);
+    expect(parent.__children).toHaveLength(0);
     expect(host.holdNode).not.toHaveBeenCalled();
   });
 

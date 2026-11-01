@@ -27,11 +27,32 @@ export type EventHandlers<T = IncaElement> = {
     | null;
 };
 
+/** A live, read-only list of elements. */
+export interface HTMLCollectionOf<T extends IncaElement> {
+  readonly [index: number]: T;
+  /** The number of elements in the list. */
+  readonly length: number;
+  /**
+   * The element at `index`, or `null` beyond the list. The index converts to an unsigned 32-bit
+   * integer.
+   * @param index - The position in the list.
+   * @returns The element at `index`, or `null`.
+   */
+  item(index: number): T | null;
+  /**
+   * The first element whose `id` is `name`, else the first whose `name` attribute is `name`, or
+   * `null`. The empty string finds none.
+   * @param name - An `id` or `name` attribute value.
+   * @returns The matching element, or `null`.
+   */
+  namedItem(name: string): T | null;
+  [Symbol.iterator](): IterableIterator<T>;
+}
+
 /**
  * A container node: either a real element or the hidden stand-in that
  * `createCommentNode` makes. It is the only node type that can act as a
- * parent. `parent` and `children` read the node's current position in the
- * tree.
+ * parent. `parent` reads the node's current position in the tree.
  *
  * A removed node keeps its attributes and its position in its own subtree, and its members read
  * them. Its listeners are dropped. `addEventListener()` and `removeEventListener()` ignore the
@@ -61,8 +82,16 @@ export interface IncaElement extends IncaEventTarget, EventHandlers {
   readonly tagName: string;
   /** The current parent, or `null` if this node isn't attached to the tree. */
   parent: IncaElement | null;
-  /** This node's children, in render order. */
-  children: IncaNode[];
+  /**
+   * The children of this node in render order, text leaves included.
+   * @internal
+   */
+  __children: IncaNode[];
+  /**
+   * The child elements in order, as a live collection. Every read returns the same object, which
+   * follows later changes. A removed element lists the element children it kept.
+   */
+  readonly children: HTMLCollectionOf<IncaElement>;
   /** The parent element, or `null` for a detached node and for the mount container. */
   readonly parentElement: IncaElement | null;
   /** The first child that is an element, or `null`. */

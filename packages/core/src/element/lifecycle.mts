@@ -102,7 +102,7 @@ export function isRemoved(node: IncaNode): boolean {
 export function markRemoved(node: IncaNode): void {
   removed.add(node);
   if (node.kind === "text") return;
-  for (const child of node.children) markRemoved(child);
+  for (const child of node.__children) markRemoved(child);
 }
 
 const destroyed = new WeakSet<IncaNode>();
@@ -125,7 +125,7 @@ export function markDestroyed(node: IncaNode): void {
   destroyed.add(node);
   if (node.kind === "text") return;
   unregisterElement(node.__node_id);
-  for (const child of node.children) markDestroyed(child);
+  for (const child of node.__children) markDestroyed(child);
 }
 
 /**

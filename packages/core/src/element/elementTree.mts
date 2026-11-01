@@ -1,11 +1,13 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import { htmlCollectionOf } from "./collections.mts";
 import type { IncaElement, IncaNode } from "./types.mts";
 
 /** The element members of the tree: text leaves and comment stand-ins count as none. */
 export type ElementTreeMembers = Pick<
   IncaElement,
+  | "children"
   | "parentElement"
   | "firstElementChild"
   | "lastElementChild"
@@ -19,16 +21,16 @@ function isElementNode(node: IncaNode): node is IncaElement {
 }
 
 /**
- * Lists the children of `element` that are elements.
+ * Lists the entries of `element.__children` that are elements.
  * @param element - the parent
  * @returns the element children in order
  */
 function elementChildren(element: IncaElement): IncaElement[] {
-  return element.children.filter(isElementNode);
+  return element.__children.filter(isElementNode);
 }
 
 function siblingElement(element: IncaElement, step: 1 | -1): IncaElement | null {
-  const siblings = element.parent?.children ?? [];
+  const siblings = element.parent?.__children ?? [];
   for (let at = siblings.indexOf(element) + step; at >= 0 && at < siblings.length; at += step) {
     const sibling = siblings[at]!;
     if (isElementNode(sibling)) return sibling;
@@ -42,7 +44,11 @@ function siblingElement(element: IncaElement, step: 1 | -1): IncaElement | null 
  * @returns the members, as getters
  */
 export function elementTreeMembers(element: IncaElement): ElementTreeMembers {
+  let children: IncaElement["children"] | undefined;
   return {
+    get children() {
+      return (children ??= htmlCollectionOf(() => elementChildren(element)));
+    },
     get parentElement() {
       return element.parent;
     },
