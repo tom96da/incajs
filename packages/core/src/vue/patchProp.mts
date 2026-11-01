@@ -367,7 +367,8 @@ const BOOLEAN_ATTRIBUTES = new Set([
  * ### Other props
  *
  * A truthy value or `""` for a boolean attribute (`disabled`, `hidden`, `inert` and the names Vue
- * treats as boolean) goes to `core.setAttribute` as `""`. A falsy value other than `""` goes to
+ * treats as boolean) goes to `core.setAttribute` as `""`, except `hidden="until-found"` in any
+ * letter case, which goes as it is. A falsy value other than `""` goes to
  * `core.removeAttribute`. Any other string, number or boolean goes to `core.setAttribute` as it
  * is. A `null` or `undefined` `nextValue` goes to `core.removeAttribute`, which includes a prop
  * that is absent from the new vnode. Any other value (an object, array, function or symbol) goes
@@ -403,7 +404,9 @@ export function createPatchProp(
     } else if (key === "value" && "value" in el) {
       Reflect.set(el, key, nextValue ?? "");
     } else if (BOOLEAN_ATTRIBUTES.has(key)) {
-      if (nextValue || nextValue === "") core.setAttribute(el.__node_id, key, "");
+      if (key === "hidden" && typeof nextValue === "string" && /^until-found$/i.test(nextValue)) {
+        core.setAttribute(el.__node_id, key, nextValue);
+      } else if (nextValue || nextValue === "") core.setAttribute(el.__node_id, key, "");
       else core.removeAttribute(el.__node_id, key);
     } else if (
       typeof nextValue === "string" ||
