@@ -12,6 +12,26 @@ fn check_matches(selector: &str) -> Result<(), SelectorError> {
     matches_selector(&p.f.tree, p.p1, selector).map(drop)
 }
 
+fn check_query(selector: &str) -> Result<(), SelectorError> {
+    let p = page();
+    query_selector(&p.f.tree, p.main, selector).map(drop)
+}
+
+fn check_query_all(selector: &str) -> Result<(), SelectorError> {
+    let p = page();
+    query_selector_all(&p.f.tree, p.main, selector).map(drop)
+}
+
+fn check_query_on_a_comment(selector: &str) -> Result<(), SelectorError> {
+    let m = mixed();
+    query_selector(&m.f.tree, m.comment, selector).map(drop)
+}
+
+fn check_query_all_on_a_comment(selector: &str) -> Result<(), SelectorError> {
+    let m = mixed();
+    query_selector_all(&m.f.tree, m.comment, selector).map(drop)
+}
+
 #[test]
 fn check_selector_accepts_a_valid_selector_list() {
     assert_eq!(check_selector("div > p, span"), Ok(()));
@@ -161,7 +181,15 @@ fn check_selector_accepts_a_valid_selector_list() {
 fn an_invalid_selector_returns_the_parse_error(
     #[case] selector: &str,
     #[case] reason: &str,
-    #[values(check_matches, check_selector)] run: fn(&str) -> Result<(), SelectorError>,
+    #[values(
+        check_matches,
+        check_selector,
+        check_query,
+        check_query_all,
+        check_query_on_a_comment,
+        check_query_all_on_a_comment
+    )]
+    run: fn(&str) -> Result<(), SelectorError>,
 ) {
     let error = run(selector).unwrap_err();
 

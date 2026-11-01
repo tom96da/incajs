@@ -23,6 +23,8 @@ interface IncaNative {
   matches(nodeId: NodeId, selector: string): boolean;
   closest(nodeId: NodeId, selector: string): NodeId | null;
   checkSelector(selector: string): void;
+  querySelector(nodeId: NodeId, selector: string): NodeId | null;
+  querySelectorAll(nodeId: NodeId, selector: string): NodeId[];
   setStyle(nodeId: NodeId, key: string, value: AttributeValue): void;
   removeStyle(nodeId: NodeId, key: string): void;
   inputValue(nodeId: NodeId): string;

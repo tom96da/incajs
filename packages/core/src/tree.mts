@@ -148,6 +148,30 @@ export function closestNode(nodeId: NodeId, selector: string): NodeId | null {
 }
 
 /**
+ * Finds the first descendant of `nodeId` that matches `selector`, in document order.
+ * @param nodeId - the node to search below
+ * @param selector - the selector list
+ * @returns the id of the match, or `null`
+ * @throws {DOMException} named `SyntaxError` for an invalid selector
+ * @throws {TypeError} when `nodeId` names no node
+ */
+export function queryNode(nodeId: NodeId, selector: string): NodeId | null {
+  return native().querySelector(nodeId, selector);
+}
+
+/**
+ * Finds every descendant of `nodeId` that matches `selector`, in document order.
+ * @param nodeId - the node to search below
+ * @param selector - the selector list
+ * @returns the ids of the matches
+ * @throws {DOMException} named `SyntaxError` for an invalid selector
+ * @throws {TypeError} when `nodeId` names no node
+ */
+export function queryNodes(nodeId: NodeId, selector: string): NodeId[] {
+  return native().querySelectorAll(nodeId, selector);
+}
+
+/**
  * Checks that `selector` is a valid selector list, without a node.
  * @param selector - the selector list
  * @throws {DOMException} named `SyntaxError` for an invalid selector
