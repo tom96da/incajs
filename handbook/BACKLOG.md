@@ -1282,3 +1282,14 @@ A fixed entry is deleted and its ID is never reused.
   `closest()` and `matches()` accept `:hover`, `:focus` and `:checked` and
   match nothing, where browsers evaluate them. Fix: evaluate them in the
   selector adapter once interactive visual state exists.
+
+- **B-251 The code that runs in QuickJS is tested only under Node and Bun**
+  `Units: core,ci · Size: L · Impact: Medium`
+
+  The unit tests of `packages/core` run under Node and Bun with the native
+  functions mocked, and the host runs the same code in QuickJS. Behavior that
+  depends on the engine is not tested there, such as the timing of
+  `FinalizationRegistry` callbacks. Fix: run the core tests against the
+  quickjs-ng build that npm publishes (`quickjs-emscripten` with
+  `@jitl/quickjs-ng-wasmfile-release-sync`), starting with the tests
+  that wait for a garbage collection.
