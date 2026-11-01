@@ -53,7 +53,7 @@ const makeEl = (): IncaElement => ({
   hasAttribute: () => false,
   removeAttribute: () => {},
   getAttributeNames: () => [],
-  attributes: [],
+  attributes: {} as IncaElement["attributes"],
   __node_id: 1,
   id: "",
   kind: "element",

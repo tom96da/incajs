@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import type { HTMLCollectionOf, IncaElement } from "./types.mts";
+import type { Attr, HTMLCollectionOf, IncaElement, NamedNodeMap } from "./types.mts";
 
 const ARRAY_INDEX = /^(?:0|[1-9]\d*)$/;
 
@@ -34,16 +34,26 @@ function supportedNames(elements: readonly IncaElement[]): string[] {
   return [...names];
 }
 
-/**
- * Builds a live, read-only `HTMLCollection` over the elements `source` returns. Every read asks
- * `source` again.
- * @param source - lists the current elements in order
- * @returns the collection
- */
-export function htmlCollectionOf<T extends IncaElement>(
-  source: () => readonly T[],
-): HTMLCollectionOf<T> {
-  /** Throws unless `self` is the collection, like the brand check of a DOM method. */
+/** What distinguishes one kind of collection from another. */
+interface Kind<T extends object> {
+  /** The `Symbol.toStringTag` value. */
+  tag: string;
+  /** The name of the lookup method, `namedItem` or `getNamedItem`. */
+  method: string;
+  /** Lists the current items in order. */
+  source: () => readonly T[];
+  /** The result of the lookup method for `name`. */
+  find: (name: string) => T | null;
+  /** The item a named property `key` reads, or `null`. */
+  named: (key: string) => T | null;
+  /** The supported property names of `items`. */
+  names: (items: readonly T[]) => string[];
+}
+
+/** Builds a live, read-only indexed object with named properties. */
+function indexedCollection<T extends object>(kind: Kind<T>): object {
+  const { source, named } = kind;
+  /** Throws unless `self` is the collection. */
   const brand = (self: unknown): void => {
     if (self !== proxy) throw new TypeError("the receiver is not a collection. call it on one");
   };
@@ -65,12 +75,12 @@ export function htmlCollectionOf<T extends IncaElement>(
         return source()[(args[0] as number) >>> 0] ?? null;
       },
     },
-    namedItem: {
+    [kind.method]: {
       ...data,
       value(this: unknown, ...args: [name: unknown]) {
         brand(this);
-        if (args.length < 1) throw new TypeError("namedItem() needs 1 argument");
-        return namedElement(source(), `${args[0] as string}`);
+        if (args.length < 1) throw new TypeError(`${kind.method}() needs 1 argument`);
+        return kind.find(`${args[0] as string}`);
       },
     },
     [Symbol.iterator]: {
@@ -78,14 +88,13 @@ export function htmlCollectionOf<T extends IncaElement>(
       enumerable: false,
       value: Array.prototype.values,
     },
-    [Symbol.toStringTag]: { value: "HTMLCollection", configurable: true },
+    [Symbol.toStringTag]: { value: kind.tag, configurable: true },
   }) as object;
   const target = Object.create(members) as object;
-  const named = (key: string): T | null => namedElement(source(), key);
   const own = (key: PropertyKey): boolean => Object.hasOwn(target, key);
-  /** Whether a write to `key` is refused: an index, `length` or a name no expando hides. */
+  /** Whether a write to `key` is refused: an index or a name no expando hides. */
   const blocked = (key: string): boolean =>
-    isIndex(key) || key === "length" || (!own(key) && !(key in members) && named(key) !== null);
+    isIndex(key) || (!own(key) && !(key in members) && named(key) !== null);
   const proxy = new Proxy(target, {
     get(_, key, receiver) {
       if (typeof key === "symbol") return Reflect.get(target, key, receiver);
@@ -104,7 +113,6 @@ export function htmlCollectionOf<T extends IncaElement>(
     deleteProperty(_, key) {
       if (typeof key === "string") {
         if (isIndex(key)) return Number(key) >= source().length;
-        if (key === "length") return true;
         if (blocked(key)) return false;
       }
       return Reflect.deleteProperty(target, key);
@@ -117,28 +125,65 @@ export function htmlCollectionOf<T extends IncaElement>(
     },
     ownKeys() {
       const items = source();
-      return [
-        ...Array.from(items, (_, at) => String(at)),
-        ...supportedNames(items).filter(
-          (name) => !isIndex(name) && !(name in members) && !own(name),
-        ),
-        ...Reflect.ownKeys(target),
-        "length",
-      ];
+      const indices = Array.from(items, (_, at) => String(at));
+      const names = kind
+        .names(items)
+        .filter((name) => !isIndex(name) && !(name in members) && !own(name));
+      const expandos = Reflect.ownKeys(target);
+      return [...indices, ...expandos, ...names];
     },
     getOwnPropertyDescriptor(_, key) {
       if (typeof key === "symbol" || own(key)) return Reflect.getOwnPropertyDescriptor(target, key);
-      const items = source();
-      if (key === "length") {
-        return { value: items.length, writable: false, enumerable: false, configurable: true };
-      }
       if (isIndex(key)) {
-        const value = items[Number(key)];
+        const value = source()[Number(key)];
         return value ? { value, writable: false, enumerable: true, configurable: true } : undefined;
       }
-      const value = key in members ? undefined : namedElement(items, key);
+      const value = key in members ? undefined : named(key);
       return value ? { value, writable: false, enumerable: false, configurable: true } : undefined;
     },
-  }) as HTMLCollectionOf<T>;
+  });
   return proxy;
+}
+
+/**
+ * Builds a live, read-only `HTMLCollection` over the elements `source` returns. Every read asks
+ * `source` again.
+ * @param source - lists the current elements in order
+ * @returns the collection
+ */
+export function htmlCollectionOf<T extends IncaElement>(
+  source: () => readonly T[],
+): HTMLCollectionOf<T> {
+  const find = (name: string): T | null => namedElement(source(), name);
+  return indexedCollection({
+    tag: "HTMLCollection",
+    method: "namedItem",
+    source,
+    find,
+    named: find,
+    names: supportedNames,
+  }) as HTMLCollectionOf<T>;
+}
+
+/**
+ * Builds a live, read-only `NamedNodeMap` over the attributes `source` returns. Every read asks
+ * `source` again.
+ * @param source - lists the current attributes in order
+ * @param find - answers `getNamedItem()` for a name
+ * @param named - answers a named property: the attribute whose name is `key`, or `null`
+ * @returns the map
+ */
+export function namedNodeMapOf(
+  source: () => readonly Attr[],
+  find: (name: string) => Attr | null,
+  named: (key: string) => Attr | null,
+): NamedNodeMap {
+  return indexedCollection({
+    tag: "NamedNodeMap",
+    method: "getNamedItem",
+    source,
+    find,
+    named,
+    names: (items) => items.map((attr) => attr.name),
+  }) as NamedNodeMap;
 }

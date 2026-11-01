@@ -187,13 +187,8 @@ describe("a collection", () => {
     });
   });
 
-  it("has an unwritable, hidden descriptor for length", () => {
-    expect(Object.getOwnPropertyDescriptor(make(fake()).c, "length")).toEqual({
-      value: 1,
-      writable: false,
-      enumerable: false,
-      configurable: true,
-    });
+  it("has no own descriptor for length", () => {
+    expect(Object.getOwnPropertyDescriptor(make(fake()).c, "length")).toBeUndefined();
   });
 
   it("has no own descriptor for a member that an id names", () => {
@@ -273,12 +268,12 @@ describe("a collection as a prototype", () => {
     expect(() => method.call({}, "0")).toThrow(TypeError);
   });
 
-  it("lists methods and indices, not names, in for...in", () => {
+  it("lists indices, length and methods, not names, in for...in", () => {
     const { loose } = make(fake({ id: "box" }), fake());
     const keys: string[] = [];
     for (const key in loose) keys.push(key);
 
-    expect(keys.toSorted()).toEqual(["0", "1", "item", "namedItem"]);
+    expect(keys.toSorted()).toEqual(["0", "1", "item", "length", "namedItem"]);
   });
 });
 
@@ -288,7 +283,7 @@ describe("a collection expando", () => {
     loose["box"] = 1;
     source.push(fake({ id: "box" }));
 
-    expect(Object.getOwnPropertyNames(loose)).toEqual(["0", "box", "length"]);
+    expect(Object.getOwnPropertyNames(loose)).toEqual(["0", "box"]);
   });
 
   it("lists before the supported names in getOwnPropertyNames", () => {
@@ -316,12 +311,12 @@ describe("a collection expando", () => {
     expect(Object.keys(loose)).toEqual(["0", "1", "foo"]);
   });
 
-  it("shows in getOwnPropertyNames before length", () => {
+  it("shows in getOwnPropertyNames", () => {
     const { loose } = make(fake());
 
     loose["foo"] = 1;
 
-    expect(Object.getOwnPropertyNames(loose)).toEqual(["0", "foo", "length"]);
+    expect(Object.getOwnPropertyNames(loose)).toEqual(["0", "foo"]);
   });
 
   it("shows in JSON.stringify", () => {
@@ -427,10 +422,7 @@ describe("a named property", () => {
   it("lists an element id that is an index only as an index", () => {
     const { loose } = make(fake({ id: "0" }));
 
-    expect([Object.keys(loose), Object.getOwnPropertyNames(loose)]).toEqual([
-      ["0"],
-      ["0", "length"],
-    ]);
+    expect([Object.keys(loose), Object.getOwnPropertyNames(loose)]).toEqual([["0"], ["0"]]);
   });
 
   it("reads the element with the id", () => {
@@ -452,13 +444,13 @@ describe("a named property", () => {
   it("lists a repeated id once", () => {
     const { loose } = make(fake({ id: "a" }), fake({ id: "a" }));
 
-    expect(Object.getOwnPropertyNames(loose)).toEqual(["0", "1", "a", "length"]);
+    expect(Object.getOwnPropertyNames(loose)).toEqual(["0", "1", "a"]);
   });
 
   it("skips an empty id and an empty name", () => {
     const { loose } = make(fake(), fake({ name: "" }));
 
-    expect(Object.getOwnPropertyNames(loose)).toEqual(["0", "1", "length"]);
+    expect(Object.getOwnPropertyNames(loose)).toEqual(["0", "1"]);
   });
 
   it("reads undefined for the empty string", () => {
@@ -486,19 +478,17 @@ describe("a named property", () => {
   it.each(["item", "length", "toString", "constructor"])("does not list the member %s", (name) => {
     const { loose } = make(fake({ id: name }));
 
-    expect(Object.getOwnPropertyNames(loose).filter((key) => key === name)).toEqual(
-      name === "length" ? ["length"] : [],
-    );
+    expect(Object.getOwnPropertyNames(loose).filter((key) => key === name)).toEqual([]);
   });
 
   it("reports a supported name through in", () => {
     expect("box" in make(fake({ id: "box" })).c).toBe(true);
   });
 
-  it("lists indices, names, then length", () => {
+  it("lists indices, then names", () => {
     const { loose } = make(fake({ id: "box" }), fake({ name: "nm" }));
 
-    expect(Object.getOwnPropertyNames(loose)).toEqual(["0", "1", "box", "nm", "length"]);
+    expect(Object.getOwnPropertyNames(loose)).toEqual(["0", "1", "box", "nm"]);
   });
 
   it.each([

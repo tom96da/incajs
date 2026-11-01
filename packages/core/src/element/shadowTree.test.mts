@@ -7,7 +7,7 @@ import { runInNewContext } from "node:vm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createEventTarget } from "../eventTarget.mts";
-import { htmlCollectionOf } from "./collections.mts";
+import { htmlCollectionOf, namedNodeMapOf } from "./collections.mts";
 import { rectOf } from "./geometry.mts";
 import { elementOf, markDestroyed, releaseWhenCollected, unregisterElement } from "./lifecycle.mts";
 import * as tree from "./shadowTree.mts";
@@ -68,7 +68,11 @@ const noLayout = {
   hasAttribute: () => false,
   removeAttribute: () => {},
   getAttributeNames: () => [],
-  attributes: [],
+  attributes: namedNodeMapOf(
+    () => [],
+    () => null,
+    () => null,
+  ),
   getBoundingClientRect: () => rectOf(null),
   offsetWidth: 0,
   offsetHeight: 0,
@@ -167,7 +171,7 @@ describe("createElement", () => {
       hasAttribute: expect.any(Function),
       removeAttribute: expect.any(Function),
       getAttributeNames: expect.any(Function),
-      attributes: [],
+      attributes: expect.anything(),
       getBoundingClientRect: expect.any(Function),
       offsetWidth: 0,
       offsetHeight: 0,
