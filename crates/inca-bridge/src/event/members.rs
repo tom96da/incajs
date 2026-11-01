@@ -2,13 +2,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use inca_jsenv::FunctionAccessor;
+use inca_jsenv::class::define_method;
 use rquickjs::convert::Coerced;
 use rquickjs::function::{Opt, This};
 use rquickjs::{Ctx, Function, IntoJs, Object, Result as JsResult, Value};
 
-use super::{
-    IncaEvent, action, array_of, constants, field, getter, given, initialize, method, with_event,
-};
+use super::{IncaEvent, action, array_of, constants, field, getter, given, initialize, with_event};
 use crate::bindings::convert::or_null;
 
 /// The phase constants on `Event` and its prototype.
@@ -75,8 +74,8 @@ fn define_methods<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<()> {
             })
         },
     )?;
-    method(proto, "initEvent", init_event)?;
-    method(proto, "composedPath", composed_path)
+    define_method(proto, "initEvent", init_event)?;
+    define_method(proto, "composedPath", composed_path)
 }
 
 fn define_fields<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<()> {

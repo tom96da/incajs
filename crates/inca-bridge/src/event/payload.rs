@@ -3,6 +3,7 @@
 
 use gpui::Modifiers;
 use inca_gpui::{EventPayload, MousePayload, NO_BUTTON, PointerSource, buttons_mask};
+use inca_jsenv::class::define_method;
 use rquickjs::convert::Coerced;
 use rquickjs::function::This;
 use rquickjs::{Array, Ctx, Function, IntoJs, Object, Result as JsResult, Value};
@@ -10,7 +11,7 @@ use rquickjs::{Array, Ctx, Function, IntoJs, Object, Result as JsResult, Value};
 use super::key_code::{key_code, keypress_code};
 use super::{
     COMPOSITION, EVENT, FOCUS, INPUT, KEYBOARD, MOUSE, POINTER, WHEEL, child_of, constants, field,
-    method, other_kind, with_event,
+    other_kind, with_event,
 };
 use crate::bindings::convert::or_null;
 
@@ -496,7 +497,7 @@ pub(super) fn input_prototype<'js>(ctx: &Ctx<'js>, ui: &Object<'js>) -> JsResult
             Array::new(ctx)
         },
     )?;
-    method(&proto, "getTargetRanges", ranges)?;
+    define_method(&proto, "getTargetRanges", ranges)?;
     Ok(proto)
 }
 
@@ -574,5 +575,5 @@ fn modifier_state<'js>(
             })
         },
     )?;
-    method(proto, "getModifierState", function)
+    define_method(proto, "getModifierState", function)
 }

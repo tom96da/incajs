@@ -11,11 +11,15 @@
 //!
 //! [`Timers`] queues the timers a script starts.
 //!
+//! The public [`class`] module holds the steps that define a native class: its
+//! constructor, methods, getters and global.
+//!
 //! [`Limits`] bounds the memory, the stack and the time a script may use.
 //!
 //! The renderer, windows and processes are outside it, so what it installs can
 //! be replaced without reaching the code that draws a UI.
 
+pub mod class;
 pub mod console;
 mod engine;
 
