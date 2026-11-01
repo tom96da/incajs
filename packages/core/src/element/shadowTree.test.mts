@@ -7,7 +7,7 @@ import { runInNewContext } from "node:vm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createEventTarget } from "../eventTarget.mts";
-import { htmlCollectionOf, namedNodeMapOf } from "./collections.mts";
+import { htmlCollectionOf, namedNodeMapOf, nodeListOf } from "./collections.mts";
 import { rectOf } from "./geometry.mts";
 import { elementOf, markDestroyed, releaseWhenCollected, unregisterElement } from "./lifecycle.mts";
 import * as tree from "./shadowTree.mts";
@@ -114,6 +114,8 @@ function element(): IncaElement {
     tagName: "DIV",
     matches: () => false,
     closest: () => null,
+    querySelector: () => null,
+    querySelectorAll: () => nodeListOf([]),
     parentElement: null,
     firstElementChild: null,
     lastElementChild: null,
@@ -164,6 +166,8 @@ describe("createElement", () => {
       removeEventListener: expect.any(Function),
       dispatchEvent: expect.any(Function),
       tabIndex: -1,
+      querySelector: expect.any(Function),
+      querySelectorAll: expect.any(Function),
       matches: expect.any(Function),
       closest: expect.any(Function),
       getAttribute: expect.any(Function),

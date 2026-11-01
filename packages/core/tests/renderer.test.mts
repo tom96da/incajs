@@ -5,7 +5,7 @@ import { h, nextTick, reactive, ref } from "@vue/runtime-core";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Ref } from "@vue/runtime-core";
 
-import { htmlCollectionOf, namedNodeMapOf } from "../src/element/collections.mts";
+import { htmlCollectionOf, namedNodeMapOf, nodeListOf } from "../src/element/collections.mts";
 import { rectOf } from "../src/element/geometry.mts";
 import { createIncaElement } from "../src/element/handle.mts";
 import { blur, click, focus } from "../src/events.mts";
@@ -249,6 +249,8 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       tagName: "DIV",
       matches: () => false,
       closest: () => null,
+      querySelector: () => null,
+      querySelectorAll: () => nodeListOf([]),
       parentElement: null,
       firstElementChild: null,
       lastElementChild: null,

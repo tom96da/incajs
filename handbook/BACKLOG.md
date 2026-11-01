@@ -1264,18 +1264,19 @@ A fixed entry is deleted and its ID is never reused.
 - **B-249 `:lang()`, `:dir(rtl)` and `:state()` never match**
   `Units: gpui · Size: S · Impact: Low`
 
-  `closest()` and `matches()` accept the three names and match nothing for
-  them, and browsers evaluate them. Fix: `:lang()` inherits the `lang`
-  attribute up the ancestors, `:dir()` reads the `dir` attribute (`:dir(ltr)`
-  matches every element today), and `dir="auto"` needs text direction.
-  `:state()` waits for custom elements.
+  `closest()`, `matches()`, `querySelector()` and `querySelectorAll()` accept
+  the three names and match nothing for them, and browsers evaluate them.
+  Fix: `:lang()` inherits the `lang` attribute up the ancestors, `:dir()`
+  reads the `dir` attribute (`:dir(ltr)` matches every element today), and
+  `dir="auto"` needs text direction. `:state()` waits for custom elements.
 
 - **B-250 Form-state and interactive pseudo-classes never match**
   `Units: gpui,bridge · Size: M · Impact: Low`
 
-  `closest()` and `matches()` accept `:hover`, `:focus` and `:checked` and
-  match nothing, where browsers evaluate them. Fix: evaluate them in the
-  selector adapter once interactive visual state exists.
+  `closest()`, `matches()`, `querySelector()` and `querySelectorAll()` accept
+  `:hover`, `:focus` and `:checked` and match nothing, where browsers
+  evaluate them. Fix: evaluate them in the selector adapter once interactive
+  visual state exists.
 
 - **B-251 The code that runs in QuickJS is tested only under Node and Bun**
   `Units: core,ci · Size: L · Impact: Medium`

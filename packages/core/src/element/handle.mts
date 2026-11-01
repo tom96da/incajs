@@ -17,6 +17,8 @@ import {
   getAttribute,
   inputValue,
   matchesNode,
+  queryNode,
+  queryNodes,
   rootNodeId,
   scrollIntoViewNode,
   scrollOf,
@@ -24,6 +26,7 @@ import {
   setInputValue,
 } from "../tree.mts";
 import { attributeMembers, attributeText, requireArguments } from "./attributes.mts";
+import { nodeListOf } from "./collections.mts";
 import { elementTreeMembers } from "./elementTree.mts";
 import { withEventHandlers } from "./eventHandlers.mts";
 import { layoutBox, offsetOf, offsetParentOf, rectOf, tabIndexOf } from "./geometry.mts";
@@ -196,6 +199,23 @@ export function createIncaElement(
       let at: IncaElement | null = element;
       while (at !== null && at.__node_id !== found) at = at.parent;
       return at;
+    },
+    querySelector: (...args: [selectors: string]) => {
+      const text = selectorText(args, "querySelector");
+      if (isDestroyed(element)) {
+        checkSelector(text);
+        return null;
+      }
+      const found = queryNode(id, text);
+      return found === null ? null : elementOf(found)!;
+    },
+    querySelectorAll: (...args: [selectors: string]) => {
+      const text = selectorText(args, "querySelectorAll");
+      if (isDestroyed(element)) {
+        checkSelector(text);
+        return nodeListOf([]);
+      }
+      return nodeListOf(queryNodes(id, text).map((found) => elementOf(found)!));
     },
     getRootNode: () => {
       let top = element;

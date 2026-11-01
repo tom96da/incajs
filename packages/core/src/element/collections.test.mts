@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { htmlCollectionOf } from "./collections.mts";
+import { htmlCollectionOf, namedNodeMapOf, nodeListOf } from "./collections.mts";
 import type { IncaElement } from "./types.mts";
 
 type Loose = Record<PropertyKey, unknown>;
@@ -507,5 +507,157 @@ describe("a named property", () => {
     loose["foo"] = 1;
 
     expect([loose["foo"], delete loose["foo"], loose["foo"]]).toEqual([1, true, undefined]);
+  });
+});
+
+describe("a NodeList", () => {
+  /** A list over `items` with a loosely typed view of the same object. */
+  type List = ReturnType<typeof nodeListOf>;
+
+  function list(...items: IncaElement[]) {
+    const l = nodeListOf(items);
+    return { l, loose: l as unknown as Loose };
+  }
+
+  it("reads an element id as undefined", () => {
+    expect(list(fake({ id: "box" })).loose["box"]).toBeUndefined();
+  });
+
+  it("reports its class in toString", () => {
+    expect(Object.prototype.toString.call(list().l)).toBe("[object NodeList]");
+  });
+
+  it("keeps its length after the source array changes", () => {
+    const items = [fake()];
+    const l = nodeListOf(items);
+
+    items.push(fake());
+
+    expect(l.length).toBe(1);
+  });
+
+  it.each([
+    [0, 0],
+    [1, 1],
+    [2, null],
+    [-1, null],
+  ])("item(%s) reads the entry or null", (index, at) => {
+    const items = [fake(), fake()];
+    const l = nodeListOf(items);
+
+    expect(l.item(index)).toBe(at === null ? null : items[at]);
+  });
+
+  it("forEach passes value, index, list and thisArg", () => {
+    const [a, b] = [fake(), fake()];
+    const { l } = list(a!, b!);
+    const calls: unknown[][] = [];
+    const that = {};
+
+    l.forEach(function (this: unknown, ...args) {
+      calls.push([this, ...args]);
+    }, that);
+
+    expect(calls[0]?.[0]).toBe(that);
+    expect(calls.map(([, value, index]) => [value, index])).toEqual([
+      [a, 0],
+      [b, 1],
+    ]);
+    expect(calls[1]?.[3]).toBe(l);
+  });
+
+  it.each([
+    ["the indices from keys", (l: List) => [...l.keys()], () => [0, 1]],
+    ["the items from values", (l: List) => [...l.values()], (e: IncaElement[]) => e],
+    [
+      "the pairs from entries",
+      (l: List) => [...l.entries()],
+      (e: IncaElement[]) => e.map((el, i) => [i, el]),
+    ],
+  ])("lists %s", (_, read, expected) => {
+    const items = [fake(), fake()];
+    const { l } = list(...items);
+
+    expect(read(l)).toEqual(expected(items));
+  });
+
+  it("uses values as its iterator", () => {
+    const { loose } = list(fake());
+
+    expect(loose[Symbol.iterator]).toBe(loose["values"]);
+  });
+
+  it("visits every element of a loop that removes elements from its source", () => {
+    const items = [fake(), fake(), fake()];
+    const l = nodeListOf(items);
+    const visited: unknown[] = [];
+
+    for (const el of l) {
+      visited.push(el);
+      items.length = 0;
+    }
+
+    expect([visited.length, l.length]).toEqual([3, 3]);
+  });
+
+  it.each(["forEach", "entries", "keys", "values"])("takes %s from Array.prototype", (name) => {
+    expect(list().loose[name]).toBe((Array.prototype as unknown as Loose)[name]);
+  });
+
+  it("throws TypeError for item on another receiver", () => {
+    const item = list().loose["item"] as (this: unknown, index: number) => unknown;
+
+    expect(() => item.call({}, 0)).toThrow(TypeError);
+  });
+
+  it("throws TypeError for the length getter on another receiver", () => {
+    const heir = Object.create(list(fake()).loose) as Loose;
+
+    expect(() => heir["length"]).toThrow(TypeError);
+  });
+
+  it("reports the length of item", () => {
+    expect((list().loose["item"] as () => void).length).toBe(1);
+  });
+
+  it.each(["item", "box"])("stores %s as an own property", (name) => {
+    const { loose } = list(fake({ id: "box" }));
+
+    loose[name] = 1;
+
+    expect([loose[name], Object.hasOwn(loose, name)]).toEqual([1, true]);
+  });
+
+  it.each([
+    ["an index assignment", (l: Loose) => (l[0] = 1)],
+    ["a length assignment", (l: Loose) => (l["length"] = 0)],
+    ["an index delete", (l: Loose) => delete l[0]],
+  ])("throws TypeError in strict code for %s", (_, write) => {
+    const { loose } = list(fake());
+
+    expect(() => write(loose)).toThrow(TypeError);
+    expect(loose["length"]).toBe(1);
+  });
+
+  it("lists the indices and an expando, not length", () => {
+    const { loose } = list(fake(), fake());
+
+    loose["foo"] = 1;
+
+    expect([Object.getOwnPropertyNames(loose), Object.keys(loose)]).toEqual([
+      ["0", "1", "foo"],
+      ["0", "1", "foo"],
+    ]);
+  });
+
+  it.each(["forEach", "entries", "keys", "values"])("gives %s to a NodeList only", (name) => {
+    const { c } = make();
+    const map = namedNodeMapOf(
+      () => [],
+      () => null,
+      () => null,
+    );
+
+    expect([name in c, name in map, name in nodeListOf([])]).toEqual([false, false, true]);
   });
 });
