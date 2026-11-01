@@ -48,6 +48,101 @@ function installHost(
   return host;
 }
 
+describe("createIncaElement selectors", () => {
+  /** A fake host whose `matches` and `closest` answer `found`. */
+  function installSelectors(found: number | null = null, matched = false) {
+    const host = {
+      matches: vi.fn<(nodeId: number, selector: string) => boolean>(() => matched),
+      closest: vi.fn<(nodeId: number, selector: string) => number | null>(() => found),
+    };
+    globalThis.__inca_native__ = host as never;
+    return host;
+  }
+
+  /** `outer > inner > leaf` with ids 1, 2 and 3. */
+  function chain() {
+    const [outer, inner, leaf] = [1, 2, 3].map((id) => createIncaElement(id, "element", "div"));
+    inner!.parent = outer!;
+    outer!.children.push(inner!);
+    leaf!.parent = inner!;
+    inner!.children.push(leaf!);
+    return { outer: outer!, inner: inner!, leaf: leaf! };
+  }
+
+  it("calls matches with the node id and the selector", () => {
+    const host = installSelectors(null, true);
+    const { leaf } = chain();
+
+    expect(leaf.matches(".a")).toBe(true);
+    expect(host.matches).toHaveBeenCalledWith(3, ".a");
+  });
+
+  it.each(["matches", "closest"] as const)("%s converts a number to text", (method) => {
+    const host = installSelectors();
+    const { leaf } = chain();
+
+    leaf[method](1 as unknown as string);
+
+    expect(host[method]).toHaveBeenCalledWith(3, "1");
+  });
+
+  it.each(["matches", "closest"] as const)("%s throws a TypeError for a Symbol", (method) => {
+    installSelectors();
+    const { leaf } = chain();
+
+    expect(() => leaf[method](Symbol("s") as unknown as string)).toThrow(TypeError);
+  });
+
+  it("calls closest with the node id and resolves the id to the ancestor handle", () => {
+    const host = installSelectors(1);
+    const { outer, leaf } = chain();
+
+    expect(leaf.closest("div")).toBe(outer);
+    expect(host.closest).toHaveBeenCalledWith(3, "div");
+  });
+
+  it("closest resolves to the element itself when the host names it", () => {
+    installSelectors(3);
+    const { leaf } = chain();
+
+    expect(leaf.closest("div")).toBe(leaf);
+  });
+
+  it("closest is null when nothing matches", () => {
+    installSelectors(null);
+
+    expect(chain().leaf.closest("p")).toBeNull();
+  });
+
+  it.each([
+    ["matches", false],
+    ["closest", null],
+  ] as const)("%s answers %s for a freed handle without a host call", (method, expected) => {
+    const host = installSelectors(1, true);
+    const { leaf } = chain();
+    markDestroyed(leaf);
+
+    expect(leaf[method]("div")).toBe(expected);
+    expect(host[method]).not.toHaveBeenCalled();
+  });
+
+  it("still asks the host for a removed handle", () => {
+    const host = installSelectors(null, true);
+    const { leaf } = chain();
+    markRemoved(leaf);
+
+    expect(leaf.matches("div")).toBe(true);
+    expect(host.matches).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["matches", "closest"] as const)("%s throws a TypeError for no argument", (method) => {
+    installSelectors();
+    const { leaf } = chain();
+
+    expect(() => (leaf[method] as () => unknown)()).toThrow(TypeError);
+  });
+});
+
 describe("createIncaElement tagName", () => {
   it.each([
     ["button", "BUTTON"],

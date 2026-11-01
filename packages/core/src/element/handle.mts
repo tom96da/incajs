@@ -12,15 +12,17 @@ import {
 } from "../events.mts";
 import { createEventTarget } from "../eventTarget.mts";
 import {
+  closestNode,
   getAttribute,
   inputValue,
+  matchesNode,
   rootNodeId,
   scrollIntoViewNode,
   scrollOf,
   setAttribute,
   setInputValue,
 } from "../tree.mts";
-import { attributeMembers } from "./attributes.mts";
+import { attributeMembers, attributeText, requireArguments } from "./attributes.mts";
 import { elementTreeMembers } from "./elementTree.mts";
 import { withEventHandlers } from "./eventHandlers.mts";
 import { layoutBox, offsetOf, offsetParentOf, rectOf, tabIndexOf } from "./geometry.mts";
@@ -162,6 +164,19 @@ export function createIncaElement(
       if (isRemoved(element)) return;
       const { block, inline } = scrollIntoViewArgs(arg);
       scrollIntoViewNode(id, block, inline);
+    },
+    matches: (...args: [selectors: string]) => {
+      requireArguments(args, 1, "matches");
+      return !isDestroyed(element) && matchesNode(id, attributeText(args[0]));
+    },
+    closest: (...args: [selectors: string]) => {
+      requireArguments(args, 1, "closest");
+      if (isDestroyed(element)) return null;
+      const found = closestNode(id, attributeText(args[0]));
+      if (found === null) return null;
+      let at: IncaElement | null = element;
+      while (at !== null && at.__node_id !== found) at = at.parent;
+      return at;
     },
     getRootNode: () => {
       let top = element;

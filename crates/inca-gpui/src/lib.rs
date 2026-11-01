@@ -5,6 +5,7 @@ pub mod element;
 pub mod event_sink;
 pub mod focus;
 pub mod input;
+pub mod selector;
 pub mod tree;
 
 pub use element::{
@@ -20,6 +21,7 @@ pub use event_sink::{
     buttons_mask, is_menu_key,
 };
 pub use input::{Edit, InputLayout, InputPayload, InputRequest, InputState, InputType, Motion};
+pub use selector::{SelectorError, closest_selector, matches_selector};
 pub use tree::{
     AttributeValue, NodeId, TreeError, VirtualNode, VirtualTree, focusable_by_default,
     is_disabled_control,

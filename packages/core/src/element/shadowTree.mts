@@ -51,7 +51,7 @@ export function createTextNode(text: string): IncaText {
  * @returns the new hidden element
  */
 export function createCommentNode(): IncaElement {
-  const id = createNode("div");
+  const id = createNode("#comment");
   setStyle(id, "display", "none");
   return createIncaElement(id, "comment");
 }

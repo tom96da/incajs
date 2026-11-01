@@ -159,6 +159,21 @@ export interface IncaElement extends IncaEventTarget, EventHandlers {
    */
   readonly attributes: readonly { name: string; value: string }[];
   /**
+   * Whether this element matches the selector list. `:hover`, `:focus` and the other interactive
+   * and form-state pseudo-classes never match.
+   * @throws DOMException named `SyntaxError` for an invalid selector
+   * @param selectors - A selector list.
+   * @returns `true` when this element matches the selector list.
+   */
+  matches(selectors: string): boolean;
+  /**
+   * The nearest element at or above this one that matches the selector list, or `null`.
+   * @throws DOMException named `SyntaxError` for an invalid selector
+   * @param selectors - A selector list.
+   * @returns The matching element, or `null` when none matches.
+   */
+  closest(selectors: string): IncaElement | null;
+  /**
    * The box this node was drawn at in the last frame, in window logical
    * pixels. A node created in the same task reads all zeros.
    */

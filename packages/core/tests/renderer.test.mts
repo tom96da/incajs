@@ -120,6 +120,8 @@ function installFakeNative(): Map<NodeId, FakeNode> {
     removeAttribute(nodeId: NodeId, key: string): void {
       delete requireNode(nodeId).attributes[key];
     },
+    matches: () => false,
+    closest: () => null,
     attributeNames(nodeId: NodeId): string[] {
       return Object.keys(requireNode(nodeId).attributes).sort();
     },
@@ -237,6 +239,8 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       id: "",
       kind: "element",
       tagName: "DIV",
+      matches: () => false,
+      closest: () => null,
       parentElement: null,
       firstElementChild: null,
       lastElementChild: null,
