@@ -1252,14 +1252,14 @@ A fixed entry is deleted and its ID is never reused.
   (`IndexMap`, already in `Cargo.lock`) and an `attributeNames` binding that
   returns its order.
 
-- **B-248 The platform packages ship no notice for their permissively licensed dependencies**
+- **B-248 The platform packages ship no notice for their MIT and Apache-2.0 dependencies**
   `Units: cli,host · Size: M · Impact: Low`
 
-  The root `NOTICE` lists every MPL-2.0 crate of the published host binaries
-  and none of the MIT, Apache-2.0, BSD, ISC and Unicode-3.0 ones, whose licenses
-  also ask for their notice in a binary distribution. Fix: generate a `NOTICE`
-  that covers every crate in the host binary, for example with `cargo about`,
-  and extend the root `NOTICE`.
+  The root `NOTICE` lists every crate of the published host binaries whose
+  license has no MIT or Apache-2.0 option. It lists none of the 460 crates
+  licensed under MIT, Apache-2.0 or an `OR` choice of the two, whose licenses
+  also ask for their notice in a binary distribution. Fix: widen the generator
+  behind `make notice` to those crates.
 
 - **B-249 `:lang()`, `:dir(rtl)` and `:state()` never match**
   `Units: gpui · Size: S · Impact: Low`
@@ -1287,3 +1287,31 @@ A fixed entry is deleted and its ID is never reused.
   quickjs-ng build that npm publishes (`quickjs-emscripten` with
   `@jitl/quickjs-ng-wasmfile-release-sync`), starting with the tests
   that wait for a garbage collection.
+
+- **B-252 The element types carry an `Inca` prefix that the standard types do not**
+  `Units: core,cli · Size: L · Impact: Medium`
+
+  A project that targets the browser and the desktop app types a template ref as
+  `HTMLInputElement` in shared code, while incajs exports `IncaInputElement`,
+  `IncaNode`, the `Inca*Event` types and other `Inca*` names. Fix: decide one
+  naming rule for the exported types and apply it to all of them, for example
+  the standard names from a dedicated type setup that replaces `lib.dom` for the
+  desktop target.
+
+- **B-253 `document` has no `querySelector()` and `querySelectorAll()`**
+  `Units: core,gpui · Size: S · Impact: Low`
+
+  An element handle gets both methods in v0.0.27, and `document` has no query
+  members yet. Fix: add them to `document` with the same selector adapter and
+  the same return types as the element methods.
+
+- **B-255 The packaged app carries no license notice for its bundled JavaScript dependencies**
+  `Units: cli · Size: M · Impact: Medium`
+
+  A production build minifies the bundle and drops the `@license` comments of
+  Vue and of the other npm packages, and `inca package` adds only the license
+  files of the runtime. The app then ships Vue, `incajs` and the developer's own
+  dependencies without their copyright notices and license texts. Fix: keep the
+  legal comments in the production bundle, or write a notice file from the
+  dependencies that end up in the bundle, and copy it into the app next to the
+  license files of the runtime.
