@@ -1232,6 +1232,12 @@ describe("everything else", () => {
     expect(core.setAttribute).toHaveBeenCalledExactlyOnceWith(1, "hidden", "");
   });
 
+  it.each(["until-found", "Until-Found"])("keeps hidden=%s as the string", (value) => {
+    patchProp(el, "hidden", null, value, undefined, null);
+
+    expect(core.setAttribute).toHaveBeenCalledExactlyOnceWith(1, "hidden", value);
+  });
+
   it.each([
     ["an object", { nested: true }, "[object Object]"],
     ["a symbol", Symbol("tag"), "Symbol(tag)"],
