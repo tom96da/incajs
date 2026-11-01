@@ -550,4 +550,4 @@ pub fn report_jobs(engine: &Engine, reporter: &ErrorReporter) {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
