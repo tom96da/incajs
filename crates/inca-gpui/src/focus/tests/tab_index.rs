@@ -54,7 +54,7 @@ fn tab_index_of_reads_strings_numbers_and_booleans() {
 
 #[test]
 fn a_text_node_and_a_display_none_node_have_no_tab_index() {
-    let (tree, id) = tree_with("text", Some(AttributeValue::from("0")));
+    let (tree, id) = tree_with("#text", Some(AttributeValue::from("0")));
     assert_eq!(FocusRegistry::tab_index_of(&tree, id), None);
     let (mut tree, id) = tree_with("div", Some(AttributeValue::from("0")));
     tree.set_style(id, "display", "none").unwrap();

@@ -115,7 +115,6 @@ function element(): IncaElement {
     childElementCount: 0,
     previousElementSibling: null,
     nextElementSibling: null,
-    __tag: "div",
     parent: null,
     children: [],
     focus: vi.fn<() => void>(),
@@ -192,7 +191,7 @@ describe("createElement", () => {
 describe("createText", () => {
   it("creates a text node and forwards the initial value", () => {
     const node = tree.createTextNode("hello");
-    expect(host.createNode).toHaveBeenCalledWith("text");
+    expect(host.createNode).toHaveBeenCalledWith("#text");
     expect(host.setAttribute).toHaveBeenCalledWith(1, "value", "hello");
     expect(node).toEqual({ kind: "text", parent: null, text: "hello" });
     expect(node.__node_id).toBe(1);

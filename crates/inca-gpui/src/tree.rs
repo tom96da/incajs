@@ -27,6 +27,12 @@ use std::fmt;
 
 use crate::element::style_key;
 
+/// The tag of a node that stands in for a comment.
+pub(crate) const COMMENT_TAG: &str = "#comment";
+
+/// The tag of a text content node.
+pub(crate) const TEXT_TAG: &str = "#text";
+
 /// Stable handle returned to JS, used in every subsequent host-bridge call.
 pub type NodeId = u32;
 

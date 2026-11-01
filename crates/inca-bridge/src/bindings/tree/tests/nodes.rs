@@ -182,14 +182,14 @@ fn a_failed_set_style_emits_no_warning() {
 fn set_style_names_the_tag_of_the_node() {
     let (warnings, _) = warnings_from(
         r"
-        const n = __inca_native__.createNode('text');
+        const n = __inca_native__.createNode('#text');
         __inca_native__.setStyle(n, 'bogus', 1);
         ",
     );
 
     assert_eq!(
         *warnings.borrow(),
-        ["node 1 (text): ignoring unknown style key `bogus`"]
+        ["node 1 (#text): ignoring unknown style key `bogus`"]
     );
 }
 
@@ -259,7 +259,7 @@ fn destroy_node_hands_back_the_callback_ids_of_its_subtree() {
             r"
             const root = __inca_native__.rootNodeId();
             const branch = __inca_native__.createNode('div');
-            const leaf = __inca_native__.createNode('text');
+            const leaf = __inca_native__.createNode('#text');
             __inca_native__.appendChild(root, branch);
             __inca_native__.appendChild(branch, leaf);
             __inca_native__.addEventListener(branch, 'click');
@@ -288,7 +288,7 @@ fn destroy_node_frees_its_subtree() {
             r"
             const root = __inca_native__.rootNodeId();
             const branch = __inca_native__.createNode('div');
-            const leaf = __inca_native__.createNode('text');
+            const leaf = __inca_native__.createNode('#text');
             __inca_native__.appendChild(root, branch);
             __inca_native__.appendChild(branch, leaf);
             __inca_native__.addEventListener(branch, 'click');

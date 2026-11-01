@@ -288,7 +288,7 @@ describe("a host that frees orphans, driven by the Inca renderer", () => {
     await settle();
 
     const tags = nodeOf(box.value!.__node_id).children.map((id) => nodes.get(id)!.tag);
-    expect(tags).toEqual(["text"]);
+    expect(tags).toEqual(["#text"]);
   });
 
   it("keeps the resolved branch of a pending Suspense across frames", async () => {

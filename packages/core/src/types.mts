@@ -23,14 +23,8 @@ export type CallbackId = number;
  */
 export type AttributeValue = string | number | boolean;
 
-/**
- * Element kind passed to `createNode`. `"text"` is the only tag with
- * dedicated rendering behavior: it renders its `"value"` attribute followed
- * by its descendants' text. Any other string is a generic styled
- * container; the `string & {}` half of this type keeps `"text"`'s
- * autocomplete while still accepting an arbitrary tag name.
- */
-export type TagName = "text" | (string & {});
+/** Element kind passed to `createNode`. */
+export type TagName = string;
 
 /** Where `scrollIntoView` aligns a node on one axis. */
 export type ScrollAlignment = "start" | "center" | "end" | "nearest";

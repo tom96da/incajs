@@ -29,7 +29,7 @@ pub struct Node {
     pub id: NodeId,
     /// The tag the app created the node with.
     pub tag: String,
-    /// The text a `"text"` node renders. `None` for every other tag.
+    /// The `"value"` a `"#text"` node renders. `None` for every other tag.
     pub text: Option<String>,
     /// The attributes the app set, keyed by name.
     pub attributes: BTreeMap<String, Value>,
@@ -144,28 +144,21 @@ mod tests {
     }
 
     #[test]
-    fn a_text_node_snapshot_joins_its_text() {
+    fn a_text_node_snapshot_carries_its_value() {
         let mut tree = VirtualTree::new();
-        let text = tree.create_node("text").unwrap();
+        let text = tree.create_node("#text").unwrap();
         tree.set_attribute(text, "value", "hi").unwrap();
-        let inner = tree.create_node("text").unwrap();
-        tree.set_attribute(inner, "value", " there").unwrap();
-        tree.append_child(text, inner).unwrap();
 
         let snap = snapshot(&tree, text, &mut unit).unwrap();
 
-        assert_eq!(snap.text.as_deref(), Some("hi there"));
-        assert!(snap.children.is_empty());
+        assert_eq!(snap.text.as_deref(), Some("hi"));
     }
 
     #[test]
     fn a_text_node_snapshot_has_no_bounds() {
         let mut tree = VirtualTree::new();
-        let text = tree.create_node("text").unwrap();
+        let text = tree.create_node("#text").unwrap();
         tree.set_attribute(text, "value", "hi").unwrap();
-        let inner = tree.create_node("text").unwrap();
-        tree.set_attribute(inner, "value", " there").unwrap();
-        tree.append_child(text, inner).unwrap();
 
         let snap = snapshot(&tree, text, &mut unit).unwrap();
 

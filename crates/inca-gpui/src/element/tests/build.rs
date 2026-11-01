@@ -33,7 +33,7 @@ fn container_with_fixed_size_lays_out_at_that_size(cx: &mut TestAppContext) {
 #[gpui::test]
 fn text_leaf_renders_without_panicking(cx: &mut TestAppContext) {
     let mut tree = VirtualTree::new();
-    let root = tree.create_node("text").unwrap();
+    let root = tree.create_node("#text").unwrap();
     tree.set_attribute(root, "value", "hello").unwrap();
 
     let cx = cx.add_empty_window();
@@ -529,7 +529,7 @@ fn a_display_none_child_leaves_its_sibling_at_the_start(cx: &mut TestAppContext)
 fn a_text_child_is_recorded(cx: &mut TestAppContext) {
     let mut tree = VirtualTree::new();
     let root = boxed(&mut tree, None, 200., 200.);
-    let label = tree.create_node("text").unwrap();
+    let label = tree.create_node("#text").unwrap();
     tree.set_attribute(label, "value", "hello").unwrap();
     tree.append_child(root, label).unwrap();
     let probe = probe();

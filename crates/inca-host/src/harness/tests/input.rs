@@ -45,7 +45,7 @@ const SCROLLER: &str = r"
         n.setStyle(c, 'overflow_y', 'scroll');
         n.setStyle(c, 'overflow_x', 'scroll');
         n.appendChild(n.rootNodeId(), c);
-        const label = n.createNode('text');
+        const label = n.createNode('#text');
         n.setAttribute(label, 'value', 'hi');
         n.appendChild(c, label);
         const inner = n.createNode('div');

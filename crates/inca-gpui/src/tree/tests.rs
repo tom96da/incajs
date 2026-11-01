@@ -186,7 +186,7 @@ fn destroy_frees_the_whole_subtree() {
     let mut tree = VirtualTree::new();
     let root = tree.create_node("div").unwrap();
     let branch = tree.create_node("div").unwrap();
-    let leaf = tree.create_node("text").unwrap();
+    let leaf = tree.create_node("#text").unwrap();
     tree.append_child(root, branch).unwrap();
     tree.append_child(branch, leaf).unwrap();
 

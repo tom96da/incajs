@@ -436,13 +436,6 @@ A fixed entry is deleted and its ID is never reused.
   removes the retry path. Keep one check, and decide whether it should verify
   the execute permission.
 
-- **B-077 An element nested in `<text>` renders only its text**
-  `Units: gpui · Size: M · Impact: Low`
-
-  A `<text>` element renders its `value` and its descendants' text as one
-  string. An element nested in it contributes only its text and loses its
-  style and listeners. The DOM renders inline children.
-
 - **B-079 Scrollbars are not supported**
   `Units: gpui · Size: M · Impact: Low`
 

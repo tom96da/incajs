@@ -52,7 +52,7 @@ fn build_tree() -> (VirtualTree, NodeId) {
     tree.set_style(outer, "align_items", "center").unwrap();
     tree.set_style(outer, "border_width", 2.0).unwrap();
 
-    let label = tree.create_node("text").unwrap(); // node-1
+    let label = tree.create_node("#text").unwrap(); // node-1
     tree.set_attribute(label, "value", "Hello, World!").unwrap();
     tree.append_child(outer, label).unwrap();
 
@@ -167,7 +167,7 @@ fn y_of_boxes_after_empty_text(cx: &mut TestAppContext, gap: Option<f64>) -> (f3
         tree.set_style(root, "gap", gap).unwrap();
     }
     for _ in 0..2 {
-        let empty = tree.create_node("text").unwrap();
+        let empty = tree.create_node("#text").unwrap();
         tree.set_attribute(empty, "value", "").unwrap();
         tree.append_child(root, empty).unwrap();
         let boxed = tree.create_node("div").unwrap();

@@ -247,7 +247,6 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       childElementCount: 0,
       previousElementSibling: null,
       nextElementSibling: null,
-      __tag: "div",
       parent: null,
       children: [],
       focus: () => focus(rootId),

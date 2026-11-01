@@ -146,7 +146,6 @@ describe("createIncaElement selectors", () => {
 describe("createIncaElement tagName", () => {
   it.each([
     ["button", "BUTTON"],
-    ["text", "TEXT"],
     ["straße", "STRAßE"],
   ])("reads the tag %s in ASCII upper case", (tag, expected) => {
     installHost();

@@ -45,7 +45,7 @@ fn build_tree() -> (VirtualTree, NodeId) {
         .unwrap();
     tree.set_style(outer, "text_size", 20.0).unwrap();
 
-    let label = tree.create_node("text").unwrap();
+    let label = tree.create_node("#text").unwrap();
     tree.set_attribute(label, "value", "Hello, inca!").unwrap();
     tree.append_child(outer, label).unwrap();
 
