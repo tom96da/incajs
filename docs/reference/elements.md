@@ -179,15 +179,19 @@ with the differences below. The listener methods are described in
 - These members return objects that are no instance of a global class, so
   `instanceof` with the standard class name fails:
   - `children` (`HTMLCollection`)
+  - `attributes` (`NamedNodeMap`)
+  - the items of `attributes` (`Attr`)
 - `closest()` and `matches()` accept `:hover`, `:focus` and the other
   interactive and form-state pseudo-classes and never match them, so
   `:not(:hover)` matches every element. `:lang()` and `:state()` never match.
   `:dir(ltr)` matches every element and any other `:dir()` value never
   matches. `:disabled` and `:enabled` apply to `button` and `input` only.
 - `querySelector()` and `querySelectorAll()` are missing.
-- `attributes` and `getAttributeNames()` list the names in alphabetical order,
-  and `attributes` is a snapshot array of `{ name, value }` objects without
-  `NamedNodeMap` methods.
+- `attributes` and `getAttributeNames()` list the names in alphabetical
+  order. These members of `attributes` are missing:
+  - `setNamedItem()` and `removeNamedItem()`
+  - `getNamedItemNS()`, `setNamedItemNS()` and `removeNamedItemNS()`
+- An `Attr` has no `Node` members.
 
 ## Vue features that don't work yet
 

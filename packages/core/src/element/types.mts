@@ -49,6 +49,50 @@ export interface HTMLCollectionOf<T extends IncaElement> {
   [Symbol.iterator](): IterableIterator<T>;
 }
 
+/** An attribute of an element. It has no `Node` members. */
+export interface Attr {
+  /** The attribute name in lower case. */
+  readonly name: string;
+  /** The same as `name`. */
+  readonly localName: string;
+  /**
+   * The value. While the element holds the attribute, a read gives its current value and an
+   * assignment sets it as a string. After the attribute is removed, the `Attr` keeps the last
+   * value it read, and an assignment changes the `Attr` only.
+   */
+  value: string;
+  /** Always `null`. */
+  readonly namespaceURI: null;
+  /** Always `null`. */
+  readonly prefix: null;
+  /** Always `true`. */
+  readonly specified: true;
+  /** The element that holds the attribute, or `null` once the attribute is removed. */
+  readonly ownerElement: IncaElement | null;
+}
+
+/** A live, read-only list of the attributes of an element in alphabetical order of the name. */
+export interface NamedNodeMap {
+  readonly [index: number]: Attr;
+  /** The number of attributes. */
+  readonly length: number;
+  /**
+   * The attribute at `index`, or `null` beyond the list. The index converts to an unsigned 32-bit
+   * integer.
+   * @param index - The position in the list.
+   * @returns The attribute at `index`, or `null`.
+   */
+  item(index: number): Attr | null;
+  /**
+   * The attribute named `qualifiedName`, or `null`. The letters `A` to `Z` of the name match their
+   * lower case. Reading the same attribute twice gives the same object while it stays set.
+   * @param qualifiedName - The attribute name.
+   * @returns The attribute, or `null`.
+   */
+  getNamedItem(qualifiedName: string): Attr | null;
+  [Symbol.iterator](): IterableIterator<Attr>;
+}
+
 /**
  * A container node: either a real element or the hidden stand-in that
  * `createCommentNode` makes. It is the only node type that can act as a
@@ -178,10 +222,10 @@ export interface IncaElement extends IncaEventTarget, EventHandlers {
   /** The names of the set attributes in alphabetical order. */
   getAttributeNames(): string[];
   /**
-   * The set attributes as `{ name, value }` objects in alphabetical order of the name. Each read
-   * builds a new array, so a later change does not reach an earlier one.
+   * The set attributes as a live map. Every read returns the same object, which follows later
+   * changes. A key that equals the name of a set attribute reads its `Attr`.
    */
-  readonly attributes: readonly { name: string; value: string }[];
+  readonly attributes: NamedNodeMap;
   /**
    * Whether this element matches the selector list. `:hover`, `:focus` and the other interactive
    * and form-state pseudo-classes never match.
