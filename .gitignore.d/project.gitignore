@@ -15,3 +15,10 @@ temp/
 
 # Prebuilt host binaries a CD workflow drops into npm/<os>-<arch>/ before publish
 /npm/*/bin/
+
+# License files a CD workflow copies into the packages before publish
+/packages/*/LICENSE-MIT
+/packages/*/LICENSE-APACHE
+/npm/*/LICENSE-MIT
+/npm/*/LICENSE-APACHE
+/npm/*/NOTICE

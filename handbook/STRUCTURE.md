@@ -44,7 +44,6 @@ incajs/
 │   └── post-create.sh       # post-create ownership fixes (non-image-layer setup only)
 ├── .github/
 │   ├── dependabot.yml       # auto-updates the devcontainer image/features only, for now
-│   ├── license.tpl          # LICENSE text template for the published packages
 │   └── workflows/
 │       ├── ci.yml           # build, lint, test, Rust and e2e checks on push and PR
 │       ├── cd.yml           # tags/publishes to npm and GitHub Releases once CI passes on main
