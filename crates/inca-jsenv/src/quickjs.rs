@@ -15,7 +15,12 @@
 // The workspace denies `unsafe_code`, and this module is its one exception.
 #![allow(unsafe_code)]
 
+mod buffer;
 mod value;
 
+pub(crate) use buffer::{
+    UINT8, copy_range, is_array_buffer, is_data_view, is_immutable_array_buffer, string_wtf8,
+    typed_array_kind, typed_array_range, write_uint8_array,
+};
 pub use value::FunctionAccessor;
 pub(crate) use value::{ObjectExt, ValueExt};
