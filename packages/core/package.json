@@ -27,7 +27,9 @@
     "directory": "packages/core"
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE-MIT",
+    "LICENSE-APACHE"
   ],
   "type": "module",
   "sideEffects": [

@@ -27,7 +27,9 @@
   },
   "files": [
     "dist",
-    "bin"
+    "bin",
+    "LICENSE-MIT",
+    "LICENSE-APACHE"
   ],
   "type": "module",
   "sideEffects": [

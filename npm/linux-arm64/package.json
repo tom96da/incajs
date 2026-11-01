@@ -11,14 +11,17 @@
     "quickjs"
   ],
   "homepage": "https://incajs.tom96da.com/",
-  "license": "(MIT OR Apache-2.0)",
+  "license": "(MIT OR Apache-2.0) AND MPL-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tom96da/incajs.git",
     "directory": "npm/linux-arm64"
   },
   "files": [
-    "bin/inca-host.br"
+    "bin/inca-host.br",
+    "LICENSE-MIT",
+    "LICENSE-APACHE",
+    "NOTICE"
   ],
   "os": [
     "linux"
