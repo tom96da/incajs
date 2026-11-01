@@ -10,6 +10,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.0.26] - 2026-11-01
+
 ### Added
 
 - the npm packages ship the license texts, the runtime ones a `NOTICE` and MPL-2.0 in `license` ([5588db5](https://github.com/tom96da/incajs/commit/5588db5))
@@ -515,7 +517,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - prebuilt `inca-host` binaries for linux-x64, linux-arm64, and darwin-arm64, resolved automatically per platform
 - click event dispatch from the native tree back into JS
 
-[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.25...HEAD
+[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.26...HEAD
+[0.0.26]: https://github.com/tom96da/incajs/releases/tag/v0.0.26
 [0.0.25]: https://github.com/tom96da/incajs/releases/tag/v0.0.25
 [0.0.24]: https://github.com/tom96da/incajs/releases/tag/v0.0.24
 [0.0.23]: https://github.com/tom96da/incajs/releases/tag/v0.0.23
