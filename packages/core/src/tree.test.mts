@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   appendChild,
+  checkSelector,
   focusedNode,
   getAttribute,
   layoutOf,
@@ -47,6 +48,7 @@ const native = {
   attributeNames: vi.fn<(nodeId: number) => string[]>(() => []),
   matches: vi.fn<(nodeId: number, selector: string) => boolean>(() => false),
   closest: vi.fn<(nodeId: number, selector: string) => number | null>(() => null),
+  checkSelector: vi.fn<(selector: string) => void>(),
   holdNode: vi.fn<(nodeId: number) => void>(),
   releaseNode: vi.fn<(nodeId: number) => void>(),
   focusNode: vi.fn<(nodeId: number) => void>(),
@@ -88,6 +90,11 @@ describe("wrapper functions forward to __inca_native__", () => {
     native.getAttribute.mockReturnValueOnce("hello");
     expect(getAttribute(1, "label")).toBe("hello");
     expect(native.getAttribute).toHaveBeenCalledWith(1, "label");
+  });
+
+  it("the checkSelector wrapper forwards the selector", () => {
+    checkSelector("div > p");
+    expect(native.checkSelector).toHaveBeenCalledWith("div > p");
   });
 
   it("layoutOf", () => {

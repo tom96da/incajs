@@ -12,6 +12,7 @@ import {
 } from "../events.mts";
 import { createEventTarget } from "../eventTarget.mts";
 import {
+  checkSelector,
   closestNode,
   getAttribute,
   inputValue,
@@ -40,6 +41,17 @@ import type { AttributeMembers } from "./attributes.mts";
 import type { ElementTreeMembers } from "./elementTree.mts";
 import type { ScrollArgs, ScrollIntoViewOptions } from "./scroll.mts";
 import type { EventHandlers, IncaElement, IncaNode } from "./types.mts";
+
+/**
+ * Checks the argument count of a selector method and converts the selector to text.
+ * @param args - the arguments the call received
+ * @param method - the method name for the message
+ * @returns the selector text
+ */
+function selectorText(args: readonly unknown[], method: string): string {
+  requireArguments(args, 1, method);
+  return attributeText(args[0]);
+}
 
 /**
  * Builds the {@link IncaElement} handle for a native node: parentless,
@@ -166,13 +178,20 @@ export function createIncaElement(
       scrollIntoViewNode(id, block, inline);
     },
     matches: (...args: [selectors: string]) => {
-      requireArguments(args, 1, "matches");
-      return !isDestroyed(element) && matchesNode(id, attributeText(args[0]));
+      const text = selectorText(args, "matches");
+      if (isDestroyed(element)) {
+        checkSelector(text);
+        return false;
+      }
+      return matchesNode(id, text);
     },
     closest: (...args: [selectors: string]) => {
-      requireArguments(args, 1, "closest");
-      if (isDestroyed(element)) return null;
-      const found = closestNode(id, attributeText(args[0]));
+      const text = selectorText(args, "closest");
+      if (isDestroyed(element)) {
+        checkSelector(text);
+        return null;
+      }
+      const found = closestNode(id, text);
       if (found === null) return null;
       let at: IncaElement | null = element;
       while (at !== null && at.__node_id !== found) at = at.parent;

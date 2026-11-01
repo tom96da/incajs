@@ -6,16 +6,24 @@ use std::rc::Rc;
 
 use rquickjs::{Ctx, Exception, Result as JsResult};
 
-use inca_gpui::{NodeId, closest_selector, matches_selector};
+use inca_gpui::{NodeId, check_selector, closest_selector, matches_selector};
 
 use super::Natives;
 use super::convert::{JsNodeId, existing_node};
 use super::host::Host;
 
-/// `matches` and `closest`: selector matching over the retained tree.
+/// `matches`, `closest` and `checkSelector`: selector matching over the retained tree.
 pub(super) fn install_selector(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("matches", matches)?;
-    n.set("closest", closest)
+    n.set("closest", closest)?;
+    n.set("checkSelector", check)
+}
+
+fn check<'js>(_host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, String) -> JsResult<()> {
+    move |ctx, selector| {
+        check_selector(&selector)
+            .map_err(|err| Exception::throw_dom(&ctx, "SyntaxError", &err.to_string()))
+    }
 }
 
 fn matches<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<bool> {

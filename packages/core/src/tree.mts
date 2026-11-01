@@ -148,6 +148,15 @@ export function closestNode(nodeId: NodeId, selector: string): NodeId | null {
 }
 
 /**
+ * Checks that `selector` is a valid selector list, without a node.
+ * @param selector - the selector list
+ * @throws {DOMException} named `SyntaxError` for an invalid selector
+ */
+export function checkSelector(selector: string): void {
+  native().checkSelector(selector);
+}
+
+/**
  * Returns the box `nodeId` was drawn at in the last frame, in window logical
  * pixels, or `null` if the node has no recorded box.
  * @param nodeId - the node to read

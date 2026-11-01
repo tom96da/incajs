@@ -55,6 +55,7 @@ fn closest_returns_a_node_id_or_null(#[case] selector: &str, #[case] found: bool
 #[rstest]
 #[case::matches("matches(inner, 'div >')")]
 #[case::closest("closest(inner, '')")]
+#[case::check_selector("checkSelector('div >')")]
 fn a_parse_error_throws_a_syntax_error(#[case] call: &str) {
     let (engine, _host) = engine_with_bindings();
     engine.eval::<()>(TREE).unwrap();
@@ -75,6 +76,17 @@ fn an_unknown_node_throws_a_type_error(#[case] binding: &str) {
         error_name(&engine, &format!("__inca_native__.{binding}(999, 'div')")),
         "TypeError"
     );
+}
+
+#[test]
+fn check_selector_returns_for_a_valid_selector() {
+    let (engine, _host) = engine_with_bindings();
+
+    let got: bool = engine
+        .eval("__inca_native__.checkSelector('p') === undefined")
+        .unwrap();
+
+    assert!(got);
 }
 
 #[test]
