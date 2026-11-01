@@ -124,6 +124,8 @@ function installFakeNative(): Map<NodeId, FakeNode> {
     matches: () => false,
     closest: () => null,
     checkSelector: () => {},
+    querySelector: () => null,
+    querySelectorAll: () => [],
     attributeNames(nodeId: NodeId): string[] {
       return Object.keys(requireNode(nodeId).attributes).sort();
     },

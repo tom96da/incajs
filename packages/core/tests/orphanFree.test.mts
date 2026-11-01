@@ -126,6 +126,8 @@ function installNative(): void {
     matches: (id) => (nodeOf(id), false),
     closest: (id) => (nodeOf(id), null),
     checkSelector: () => {},
+    querySelector: (id) => (nodeOf(id), null),
+    querySelectorAll: (id) => (nodeOf(id), []),
     releaseListeners(id) {
       const callbacks: number[] = [];
       const pending = [id];

@@ -1,7 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! CSS selector matching over the retained tree, for `matches()` and `closest()`.
+//! CSS selector matching over the retained tree, for `matches()`, `closest()` and the two query
+//! methods.
 
 use std::fmt;
 
@@ -109,7 +110,7 @@ impl PrecomputedHash for Atom {
     }
 }
 
-/// The names `closest()` and `matches()` accept without a way to evaluate them.
+/// The names a selector accepts without a way to evaluate them.
 const NEVER_MATCHING_PSEUDO_CLASSES: &[&str] = &[
     "hover",
     "active",
@@ -650,18 +651,25 @@ fn parse(selector: &str) -> Result<SelectorList<Impl>, SelectorError> {
     })
 }
 
-fn matches_with(list: &SelectorList<Impl>, element: &Node<'_>, scope: OpaqueElement) -> bool {
-    let mut caches = SelectorCaches::default();
+fn matching_context(
+    caches: &mut SelectorCaches,
+    scope: OpaqueElement,
+) -> MatchingContext<'_, Impl> {
     let mut context = MatchingContext::new(
         MatchingMode::Normal,
         None,
-        &mut caches,
+        caches,
         QuirksMode::NoQuirks,
         NeedsSelectorFlags::No,
         MatchingForInvalidation::No,
     );
     context.scope_element = Some(scope);
-    matches_selector_list(list, element, &mut context)
+    context
+}
+
+fn matches_with(list: &SelectorList<Impl>, element: &Node<'_>, scope: OpaqueElement) -> bool {
+    let mut caches = SelectorCaches::default();
+    matches_selector_list(list, element, &mut matching_context(&mut caches, scope))
 }
 
 /// Whether the element `node` matches `selector`. A node that is not an element, such as a text
@@ -718,6 +726,66 @@ pub fn closest_selector(
         current = element.parent_element();
     }
     Ok(None)
+}
+
+/// The descendants of `start` that match `selector`, in document order. The walk stops at the
+/// first match when `first_only` is set.
+fn search(
+    tree: &VirtualTree,
+    start: NodeId,
+    selector: &str,
+    first_only: bool,
+) -> Result<Vec<NodeId>, SelectorError> {
+    let list = parse(selector)?;
+    let mut found = Vec::new();
+    let Some(root) = Node::of(tree, start) else {
+        return Ok(found);
+    };
+    let mut caches = SelectorCaches::default();
+    let mut context = matching_context(&mut caches, root.opaque());
+    let mut pending: Vec<NodeId> = root.node.children().iter().rev().copied().collect();
+    while let Some(id) = pending.pop() {
+        let Some(element) = Node::of(tree, id) else {
+            continue;
+        };
+        if matches_selector_list(&list, &element, &mut context) {
+            found.push(id);
+            if first_only {
+                break;
+            }
+        }
+        pending.extend(element.node.children().iter().rev().copied());
+    }
+    Ok(found)
+}
+
+/// The first descendant of `node` that matches `selector` in document order. `:scope` and a
+/// top-level `&` are `node`. A node that is not an element, such as a text leaf or a node tagged
+/// `#comment`, and an unknown id find nothing.
+///
+/// # Errors
+///
+/// Returns a [`SelectorError`] when `selector` is not a valid selector list.
+pub fn query_selector(
+    tree: &VirtualTree,
+    node: NodeId,
+    selector: &str,
+) -> Result<Option<NodeId>, SelectorError> {
+    Ok(search(tree, node, selector, true)?.first().copied())
+}
+
+/// Every descendant of `node` that matches `selector`, each once, in document order. The other
+/// rules are those of [`query_selector`].
+///
+/// # Errors
+///
+/// Returns a [`SelectorError`] when `selector` is not a valid selector list.
+pub fn query_selector_all(
+    tree: &VirtualTree,
+    node: NodeId,
+    selector: &str,
+) -> Result<Vec<NodeId>, SelectorError> {
+    search(tree, node, selector, false)
 }
 
 #[cfg(test)]

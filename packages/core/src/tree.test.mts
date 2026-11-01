@@ -15,6 +15,8 @@ import {
   removeAttribute,
   removeChild,
   removeStyle,
+  queryNode,
+  queryNodes,
   inputValue,
   setInputValue,
 } from "./tree.mts";
@@ -49,6 +51,8 @@ const native = {
   matches: vi.fn<(nodeId: number, selector: string) => boolean>(() => false),
   closest: vi.fn<(nodeId: number, selector: string) => number | null>(() => null),
   checkSelector: vi.fn<(selector: string) => void>(),
+  querySelector: vi.fn<(nodeId: number, selector: string) => number | null>(() => null),
+  querySelectorAll: vi.fn<(nodeId: number, selector: string) => number[]>(() => []),
   holdNode: vi.fn<(nodeId: number) => void>(),
   releaseNode: vi.fn<(nodeId: number) => void>(),
   focusNode: vi.fn<(nodeId: number) => void>(),
@@ -95,6 +99,20 @@ describe("wrapper functions forward to __inca_native__", () => {
   it("the checkSelector wrapper forwards the selector", () => {
     checkSelector("div > p");
     expect(native.checkSelector).toHaveBeenCalledWith("div > p");
+  });
+
+  it("the queryNode wrapper forwards the id and the selector", () => {
+    native.querySelector.mockReturnValueOnce(7);
+
+    expect(queryNode(1, "p")).toBe(7);
+    expect(native.querySelector).toHaveBeenCalledWith(1, "p");
+  });
+
+  it("the queryNodes wrapper forwards the id and the selector", () => {
+    native.querySelectorAll.mockReturnValueOnce([7, 8]);
+
+    expect(queryNodes(2, "span")).toEqual([7, 8]);
+    expect(native.querySelectorAll).toHaveBeenCalledWith(2, "span");
   });
 
   it("layoutOf", () => {
