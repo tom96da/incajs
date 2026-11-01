@@ -5,10 +5,9 @@ use std::cell::RefCell;
 
 use gpui::Modifiers;
 use inca_gpui::{EventPayload, NodeId};
-use rquickjs::atom::PredefinedAtom;
+use inca_jsenv::class;
 use rquickjs::convert::Coerced;
 use rquickjs::function::{IntoJsFunc, Opt, ParamRequirement, Params, This};
-use rquickjs::object::Property;
 use rquickjs::{Class, Ctx, Exception, Function, Object, Result as JsResult, Value};
 
 use super::members::PHASES;
@@ -18,7 +17,7 @@ use super::payload::{
 use super::walk::Walk;
 use super::{
     COMPOSITION, CUSTOM, EVENT, FOCUS, Flags, Held, INPUT, IncaEvent, KEYBOARD, MOUSE, POINTER,
-    State, UI, WHEEL, child_of, constants, field, given, initialize, method, new_event, other_kind,
+    State, UI, WHEEL, child_of, constants, field, given, initialize, new_event, other_kind,
     targets_of, with_event,
 };
 use crate::EventTargetId;
@@ -113,7 +112,7 @@ pub(super) fn custom_prototype<'js>(ctx: &Ctx<'js>, event: &Object<'js>) -> JsRe
             })
         },
     )?;
-    method(&proto, "initCustomEvent", init)?;
+    class::define_method(&proto, "initCustomEvent", init)?;
     Ok(proto)
 }
 
@@ -123,7 +122,7 @@ pub(super) fn constructors<'js>(ctx: &Ctx<'js>, prototypes: &[Object<'js>; 10]) 
     let globals = ctx.globals();
     let mut made: Vec<(&str, Function<'js>)> = Vec::new();
     for (&(kind, name, parent), proto) in CLASSES.iter().zip(prototypes) {
-        let function = constructor(ctx, proto, name, kind)?;
+        let function = class::define_class(ctx, proto, name, 1, Construct { name, kind })?;
         if let Some((_, parent)) = made.iter().find(|(made, _)| Some(*made) == parent) {
             function.set_prototype(Some(parent))?;
         }
@@ -139,31 +138,6 @@ pub(super) fn constructors<'js>(ctx: &Ctx<'js>, prototypes: &[Object<'js>; 10]) 
         }
     }
     Ok(())
-}
-
-/// The constructor `name` of length 1 for events of `kind`, linked with `proto` as
-/// `JS_SetConstructor` links a built-in: `name.prototype` is read-only and `proto.constructor`
-/// is writable and configurable. `proto` gets the string tag `name`.
-fn constructor<'js>(
-    ctx: &Ctx<'js>,
-    proto: &Object<'js>,
-    name: &'static str,
-    kind: &'static str,
-) -> JsResult<Function<'js>> {
-    let function = Function::new(ctx.clone(), Construct { name, kind })?
-        .with_name(name)?
-        .with_constructor(true);
-    function.set_length(1)?;
-    function.prop("prototype", Property::from(proto.clone()))?;
-    proto.prop(
-        "constructor",
-        Property::from(function.clone()).writable().configurable(),
-    )?;
-    proto.prop(
-        PredefinedAtom::SymbolToStringTag,
-        Property::from(name).configurable(),
-    )?;
-    Ok(function)
 }
 
 /// The body of each event constructor.
@@ -224,16 +198,8 @@ impl<'js> IntoJsFunc<'js, ()> for Construct {
             },
         };
         let event = new_event(ctx, self.kind, event)?;
-        // `new.target`'s prototype when it is an object, as for a subclass;
-        // the prototype of the kind otherwise.
-        let target_proto = params
-            .this()
-            .as_object()
-            .map(|target| target.get::<_, Value>("prototype"))
-            .transpose()?
-            .and_then(Value::into_object);
-        if let Some(proto) = target_proto {
-            event.set_prototype(Some(&proto))?;
+        if let Some(default) = event.get_prototype() {
+            event.set_prototype(Some(&class::new_target_prototype(&params, default)?))?;
         }
         Ok(event.into_value())
     }

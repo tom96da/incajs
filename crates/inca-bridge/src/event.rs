@@ -23,6 +23,7 @@ use std::sync::OnceLock;
 use std::time::Instant;
 
 pub(crate) use inca_gpui::event_sink::Flags;
+use inca_jsenv::class::{define_getter, define_method};
 use inca_jsenv::{FunctionAccessor, vault};
 use rquickjs::convert::Coerced;
 use rquickjs::function::{Opt, This};
@@ -214,23 +215,7 @@ fn field<'js>(
     key: &str,
     read: impl Fn(&Ctx<'js>, &IncaEvent<'js>) -> JsResult<Value<'js>> + 'js,
 ) -> JsResult<()> {
-    let get = getter(ctx, key, read)?;
-    proto.prop(
-        key,
-        FunctionAccessor::new_get(get).enumerable().configurable(),
-    )
-}
-
-/// Defines `function` as the writable, enumerable, configurable method `name`
-/// of `proto`.
-fn method<'js>(proto: &Object<'js>, name: &str, function: Function<'js>) -> JsResult<()> {
-    proto.prop(
-        name,
-        Property::from(function.with_name(name)?)
-            .writable()
-            .enumerable()
-            .configurable(),
-    )
+    define_getter(proto, key, getter(ctx, key, read)?)
 }
 
 /// Defines on `proto` the method `name`, which runs `act` on the event `this`
@@ -250,7 +235,7 @@ fn action<'js>(
             })
         },
     )?;
-    method(proto, name, function)
+    define_method(proto, name, function)
 }
 
 /// A new object that inherits from `parent`.
