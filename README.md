@@ -110,4 +110,4 @@ them. The app still needs them to render.
 ## :scroll: License
 
 Dual-licensed under [MIT](./LICENSE-MIT) or [Apache 2.0](./LICENSE-APACHE).
-The native runtime contains MPL-2.0 libraries, listed in [NOTICE](./NOTICE).
+The native runtime contains libraries under other licenses, listed in [NOTICE](./NOTICE).
