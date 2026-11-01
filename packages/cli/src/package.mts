@@ -8,7 +8,7 @@ import { build } from "./build.mts";
 import { slugify } from "./config/defaults.mts";
 import { resolveAppConfig, runtimeConfigOf } from "./config/loader.mts";
 import { IncaError } from "./error.mts";
-import { assertHostBin, resolveHostBin } from "./host/index.mts";
+import { assertHostBin, hostLicenseFiles, resolveHostBin } from "./host/index.mts";
 import { log } from "./log.mts";
 import { writeMacosApp } from "./macosApp.mts";
 import { checkConfig } from "./printConfig.mts";
@@ -75,6 +75,8 @@ interface LayoutArgs {
   metadata: ResolvedAppConfig;
   output: BuildOutput;
   hostBin: string;
+  /** Absolute paths of the notice and license files to copy beside the executable. */
+  licenseFiles: string[];
 }
 
 /**
@@ -111,8 +113,34 @@ function assertNoOutputCollision(output: BuildOutput, dirName: string): void {
   );
 }
 
+/**
+ * Refuses a build output whose top-level file has the name of a license file the app receives.
+ * Names compare without regard to case.
+ *
+ * @throws if a file collides
+ */
+function assertNoReservedFile(output: BuildOutput, licenseFiles: string[]): void {
+  const reserved = licenseFiles.map((file) => path.basename(file).toLowerCase());
+  const clash = output.files.find((relPath) => reserved.includes(relPath.toLowerCase()));
+  if (clash === undefined) return;
+  throw new IncaError(
+    "ERR_INCA_PUBLIC_FILE_RESERVED",
+    `"${clash}" collides with a file the packaged app reserves. rename the file in public/`,
+  );
+}
+
+/** Copies the license files into `destDir`, keeping their names. */
+async function copyLicenseFiles(licenseFiles: string[], destDir: string): Promise<void> {
+  await Promise.all(licenseFiles.map((file) => cp(file, path.join(destDir, path.basename(file)))));
+}
+
 /** Writes a macOS `.app` bundle with the build output under `Contents/Resources`. */
-async function packageMacos({ metadata, output, hostBin }: LayoutArgs): Promise<string> {
+async function packageMacos({
+  metadata,
+  output,
+  hostBin,
+  licenseFiles,
+}: LayoutArgs): Promise<string> {
   const { appPath, resourcesDir } = await writeMacosApp({
     appPath: path.join(output.outDir, `${metadata.productName}.app`),
     metadata,
@@ -120,12 +148,18 @@ async function packageMacos({ metadata, output, hostBin }: LayoutArgs): Promise<
   });
 
   await copyBuildOutput(output, resourcesDir);
+  await copyLicenseFiles(licenseFiles, resourcesDir);
 
   return appPath;
 }
 
 /** Writes a plain directory holding the host executable and the build output beside it. */
-async function packageLinux({ metadata, output, hostBin }: LayoutArgs): Promise<string> {
+async function packageLinux({
+  metadata,
+  output,
+  hostBin,
+  licenseFiles,
+}: LayoutArgs): Promise<string> {
   const dirName = slugify(metadata.productName);
   assertNoOutputCollision(output, dirName);
   const appDir = path.join(output.outDir, dirName);
@@ -137,6 +171,7 @@ async function packageLinux({ metadata, output, hostBin }: LayoutArgs): Promise<
   await chmod(executablePath, 0o755);
 
   await copyBuildOutput(output, appDir);
+  await copyLicenseFiles(licenseFiles, appDir);
 
   return appDir;
 }
@@ -186,7 +221,10 @@ export async function packageApp(options: PackageAppOptions = {}): Promise<Packa
   await assertHostBin(hostBin);
   checkConfig(hostBin, output.entryFile);
 
-  const layoutArgs: LayoutArgs = { metadata, output, hostBin };
+  const licenseFiles = await hostLicenseFiles(options.hostBin);
+  assertNoReservedFile(output, licenseFiles);
+
+  const layoutArgs: LayoutArgs = { metadata, output, hostBin, licenseFiles };
   const appPath =
     target === "macos" ? await packageMacos(layoutArgs) : await packageLinux(layoutArgs);
 
