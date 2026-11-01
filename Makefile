@@ -14,14 +14,19 @@ licenses:
 	@set -e; for dir in $(NOTICE_PACKAGES); do cp NOTICE "$$dir/"; done
 
 # Packs every package that carries license files. Fails when a tarball lacks one of them, or
-# declares another license than its files imply: a package with a NOTICE contains MPL-2.0 libraries.
+# declares another license than its files imply: a package with a NOTICE lists the licenses
+# of its libraries.
 check-licenses:
 	@set -eu; tmp=$$(mktemp -d); \
 	for dir in $(LICENSE_PACKAGES); do \
 		tarball=$$(pnpm --dir "$$dir" pack --pack-destination "$$tmp" | tail -1); \
 		files=$$(tar -tzf "$$tarball"); \
 		required='LICENSE-MIT LICENSE-APACHE'; expected='(MIT OR Apache-2.0)'; \
-		case " $(NOTICE_PACKAGES) " in *" $$dir "*) required="$$required NOTICE"; expected='(MIT OR Apache-2.0) AND MPL-2.0' ;; esac; \
+		case " $(NOTICE_PACKAGES) " in *" $$dir "*) required="$$required NOTICE" ;; esac; \
+		case "$$dir" in \
+			npm/darwin-arm64|npm/darwin-x64) expected='(MIT OR Apache-2.0) AND BSD-2-Clause AND BSD-3-Clause AND MPL-2.0 AND Unicode-3.0 AND Zlib' ;; \
+			npm/linux-arm64|npm/linux-x64) expected='(MIT OR Apache-2.0) AND BSD-2-Clause AND BSD-3-Clause AND CC0-1.0 AND ISC AND MPL-2.0 AND Unicode-3.0 AND Zlib' ;; \
+		esac; \
 		for file in $$required; do \
 			echo "$$files" | grep -qx "package/$$file" || { echo "::error::$$dir: $$file is missing from the tarball"; exit 1; }; \
 		done; \
