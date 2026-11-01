@@ -10,6 +10,24 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- the npm packages ship the license texts, the runtime ones a `NOTICE` and MPL-2.0 in `license` ([5588db5](https://github.com/tom96da/incajs/commit/5588db5))
+- `inca package` copies the license files into the app ([025de79](https://github.com/tom96da/incajs/commit/025de79))
+- the attribute methods and `attributes` on a ref ([5be7d74](https://github.com/tom96da/incajs/commit/5be7d74))
+- `tagName` on a ref ([ed2126c](https://github.com/tom96da/incajs/commit/ed2126c))
+- `parentElement`, the element sibling members and the element child members on a ref ([2786a6e](https://github.com/tom96da/incajs/commit/2786a6e))
+- `closest()` and `matches()` on a ref ([a11e2f5](https://github.com/tom96da/incajs/commit/a11e2f5))
+
+### Fixed
+
+- a removed element keeps its `id`, `tabIndex` and `value` readable ([f24fb79](https://github.com/tom96da/incajs/commit/f24fb79))
+- `inca dev` builds in its own directory and leaves a packaged app under `outDir` alone ([423e853](https://github.com/tom96da/incajs/commit/423e853))
+- a packaged app contains the files of `public/` ([4c2e9ee](https://github.com/tom96da/incajs/commit/4c2e9ee))
+- style keyword values accept any letter case ([90cabda](https://github.com/tom96da/incajs/commit/90cabda))
+- a stack names the source of a map whose reference is percent-encoded ([a8201ab](https://github.com/tom96da/incajs/commit/a8201ab))
+- a failed first load reports the errors of the jobs behind it ([e20266b](https://github.com/tom96da/incajs/commit/e20266b))
+
 ## [0.0.25] - 2026-10-31
 
 ### Added
