@@ -99,9 +99,10 @@ build does not use them: it resolves `gpui` from the git tag in the root
 | `third_party/rquickjs` | [DelSkayn/rquickjs](https://github.com/DelSkayn/rquickjs) | `v0.14.0` | Rust bindings to QuickJS. |
 | `third_party/rquickjs/sys/quickjs` | [quickjs-ng/quickjs](https://github.com/quickjs-ng/quickjs) | commit pinned by rquickjs `v0.14.0` | The QuickJS engine, rquickjs's nested submodule. |
 | `third_party/vue` | [vuejs/core](https://github.com/vuejs/core) | `v3.5.43` | Reference for `createRenderer` and `RendererOptions`, which `incajs/vue` implements. |
+| `third_party/vapor` | [vuejs/core](https://github.com/vuejs/core) | `v3.6.0-rc.14` | Reference for Vue Vapor Mode (`runtime-vapor`, `compiler-vapor`). |
 | `third_party/vite` | [vitejs/vite](https://github.com/vitejs/vite) | `v8.3.4` | Reference for Vite's Runtime API (`vite/module-runner`). |
 
-The four top-level submodules are registered shallow
+The five top-level submodules are registered shallow
 (`submodule.<name>.shallow = true` in `.gitmodules`), since the full history
 is large and not needed. The nested `third_party/rquickjs/sys/quickjs` is not.
 
@@ -137,4 +138,5 @@ Policy: the standard decides. Where it is silent, two of the three engines
 | `specs/w3c/uievents-code` | [w3c/uievents-code](https://github.com/w3c/uievents-code) | `b201684` (2023-08-18) | The values of `code`. |
 | `specs/w3c/uievents-key` | [w3c/uievents-key](https://github.com/w3c/uievents-key) | `140cae8` (2024-09-28) | The values of `key`. |
 | `specs/whatwg/dom` | [whatwg/dom](https://github.com/whatwg/dom) | `b76da7a` (2026-10-05) | Event dispatch, propagation, `preventDefault`. The text is `dom.bs`. |
+| `specs/whatwg/encoding` | [whatwg/encoding](https://github.com/whatwg/encoding) | `be17ac5` (2026-10-19) | `TextEncoder`, `TextDecoder` and the encoding labels. The text is `encoding.bs`. |
 | `specs/whatwg/html` | [whatwg/html](https://github.com/whatwg/html) | `ba3400b` (2026-10-06) | Focus, `tabindex`, Tab order, the focus fixup rules. The text is `source`. |

@@ -58,3 +58,11 @@
 	path = specs/whatwg/console
 	url = https://github.com/whatwg/console.git
 	shallow = true
+[submodule "third_party/vapor"]
+	path = third_party/vapor
+	url = https://github.com/vuejs/core.git
+	shallow = true
+[submodule "specs/whatwg/encoding"]
+	path = specs/whatwg/encoding
+	url = https://github.com/whatwg/encoding.git
+	shallow = true
