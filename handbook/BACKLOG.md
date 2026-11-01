@@ -107,7 +107,7 @@ A fixed entry is deleted and its ID is never reused.
   The element handle lacks:
   - `classList`, `className`, `dataset`, `style`;
   - the tree members (`firstChild`, `lastChild`, `previousSibling`,
-    `nextSibling`, `childNodes`, the members of text nodes, `closest()`).
+    `nextSibling`, `childNodes`, the members of text nodes).
 
   The members it has differ from a browser in the box reads (B-160), the
   `offsetParent` chain (B-161), the scroll members (B-172, B-174, B-216 and
@@ -1263,3 +1263,28 @@ A fixed entry is deleted and its ID is never reused.
   attributes in a `HashMap`. Fix: an ordered attribute store in `VirtualNode`
   (`IndexMap`, already in `Cargo.lock`) and an `attributeNames` binding that
   returns its order.
+
+- **B-248 The platform packages ship no notice for their permissively licensed dependencies**
+  `Units: cli,host · Size: M · Impact: Low`
+
+  The root `NOTICE` lists every MPL-2.0 crate of the published host binaries
+  and none of the MIT, Apache-2.0, BSD, ISC and Unicode-3.0 ones, whose licenses
+  also ask for their notice in a binary distribution. Fix: generate a `NOTICE`
+  that covers every crate in the host binary, for example with `cargo about`,
+  and extend the root `NOTICE`.
+
+- **B-249 `:lang()`, `:dir(rtl)` and `:state()` never match**
+  `Units: gpui · Size: S · Impact: Low`
+
+  `closest()` and `matches()` accept the three names and match nothing for
+  them, and browsers evaluate them. Fix: `:lang()` inherits the `lang`
+  attribute up the ancestors, `:dir()` reads the `dir` attribute (`:dir(ltr)`
+  matches every element today), and `dir="auto"` needs text direction.
+  `:state()` waits for custom elements.
+
+- **B-250 Form-state and interactive pseudo-classes never match**
+  `Units: gpui,bridge · Size: M · Impact: Low`
+
+  `closest()` and `matches()` accept `:hover`, `:focus` and `:checked` and
+  match nothing, where browsers evaluate them. Fix: evaluate them in the
+  selector adapter once interactive visual state exists.

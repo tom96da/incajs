@@ -34,6 +34,8 @@ const native = {
   ),
   releaseListeners: vi.fn<(nodeId: number) => number[]>(() => []),
   attributeNames: vi.fn<(nodeId: number) => string[]>(() => []),
+  matches: vi.fn<(nodeId: number, selector: string) => boolean>(() => false),
+  closest: vi.fn<(nodeId: number, selector: string) => number | null>(() => null),
   holdNode: vi.fn<(nodeId: number) => void>(),
   releaseNode: vi.fn<(nodeId: number) => void>(),
   focusNode: vi.fn<(nodeId: number) => void>(),

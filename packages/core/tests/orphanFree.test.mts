@@ -123,6 +123,8 @@ function installNative(): void {
       return at !== -1;
     },
     attributeNames: (id) => (nodeOf(id), []),
+    matches: (id) => (nodeOf(id), false),
+    closest: (id) => (nodeOf(id), null),
     releaseListeners(id) {
       const callbacks: number[] = [];
       const pending = [id];

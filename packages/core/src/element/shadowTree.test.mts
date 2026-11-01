@@ -107,6 +107,8 @@ function element(): IncaElement {
     id: "",
     kind: "element",
     tagName: "DIV",
+    matches: () => false,
+    closest: () => null,
     parentElement: null,
     firstElementChild: null,
     lastElementChild: null,
@@ -156,6 +158,8 @@ describe("createElement", () => {
       removeEventListener: expect.any(Function),
       dispatchEvent: expect.any(Function),
       tabIndex: -1,
+      matches: expect.any(Function),
+      closest: expect.any(Function),
       getAttribute: expect.any(Function),
       setAttribute: expect.any(Function),
       hasAttribute: expect.any(Function),
@@ -199,9 +203,10 @@ describe("createText", () => {
 describe("createComment", () => {
   it("creates a hidden container in place of a comment", () => {
     const node = tree.createCommentNode();
-    expect(host.createNode).toHaveBeenCalledWith("div");
+    expect(host.createNode).toHaveBeenCalledWith("#comment");
     expect(host.setStyle).toHaveBeenCalledWith(1, "display", "none");
     expect(node.kind).toBe("comment");
+    expect(node.tagName).toBe("DIV");
   });
 });
 

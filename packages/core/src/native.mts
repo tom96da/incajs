@@ -20,6 +20,8 @@ interface IncaNative {
   getAttribute(nodeId: NodeId, key: string): AttributeValue | null;
   removeAttribute(nodeId: NodeId, key: string): void;
   attributeNames(nodeId: NodeId): string[];
+  matches(nodeId: NodeId, selector: string): boolean;
+  closest(nodeId: NodeId, selector: string): NodeId | null;
   setStyle(nodeId: NodeId, key: string, value: AttributeValue): void;
   removeStyle(nodeId: NodeId, key: string): void;
   inputValue(nodeId: NodeId): string;

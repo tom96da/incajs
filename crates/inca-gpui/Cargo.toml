@@ -29,7 +29,10 @@ path = "examples/gpui/hello_world.rs"
 test-support = []
 
 [dependencies]
+cssparser.workspace = true
 gpui.workspace = true
+precomputed-hash.workspace = true
+selectors.workspace = true
 unicode-segmentation.workspace = true
 
 [dev-dependencies]

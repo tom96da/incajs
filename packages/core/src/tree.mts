@@ -124,6 +124,30 @@ export function attributeNames(nodeId: NodeId): string[] {
 }
 
 /**
+ * Whether the element `nodeId` matches the selector list `selector`.
+ * @param nodeId - the node to test
+ * @param selector - the selector list
+ * @returns `true` for a match
+ * @throws {DOMException} named `SyntaxError` for an invalid selector
+ * @throws {TypeError} when `nodeId` names no node
+ */
+export function matchesNode(nodeId: NodeId, selector: string): boolean {
+  return native().matches(nodeId, selector);
+}
+
+/**
+ * Finds the nearest element at or above `nodeId` that matches `selector`.
+ * @param nodeId - the node to start at
+ * @param selector - the selector list
+ * @returns the id of the match, or `null`
+ * @throws {DOMException} named `SyntaxError` for an invalid selector
+ * @throws {TypeError} when `nodeId` names no node
+ */
+export function closestNode(nodeId: NodeId, selector: string): NodeId | null {
+  return native().closest(nodeId, selector);
+}
+
+/**
  * Returns the box `nodeId` was drawn at in the last frame, in window logical
  * pixels, or `null` if the node has no recorded box.
  * @param nodeId - the node to read

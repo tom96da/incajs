@@ -58,6 +58,8 @@ const makeEl = (): IncaElement => ({
   id: "",
   kind: "element",
   tagName: "DIV",
+  matches: () => false,
+  closest: () => null,
   parentElement: null,
   firstElementChild: null,
   lastElementChild: null,

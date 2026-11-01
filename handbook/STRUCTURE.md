@@ -13,6 +13,7 @@ incajs/
 ├── .gitmodules              # registers the `third_party/` submodules
 ├── LICENSE-MIT
 ├── LICENSE-APACHE           # dual-licensed MIT OR Apache-2.0
+├── NOTICE                   # the MPL-2.0 libraries inside the host binary
 ├── AGENTS.md                # public project summary
 ├── CONTRIBUTING.md          # contributor entry point: setup, rules, pull requests
 ├── CHANGELOG.md             # user-visible changes per release

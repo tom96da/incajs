@@ -15,6 +15,7 @@ mod host;
 mod input;
 mod listeners;
 mod scroll;
+mod selector;
 mod timers;
 mod tree;
 
@@ -32,6 +33,7 @@ use focus::install_focus;
 use input::install_input;
 use listeners::install_events;
 use scroll::install_scroll;
+use selector::install_selector;
 use timers::install_timers;
 use tree::install_tree;
 
@@ -60,6 +62,7 @@ pub fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
     install_focus(&natives)?;
     install_capture(&natives)?;
     install_scroll(&natives)?;
+    install_selector(&natives)?;
     install_input(&natives)?;
     install_timers(&natives)?;
     crate::event::install(ctx)?;

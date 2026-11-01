@@ -20,6 +20,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use gpui::{App, FocusHandle, Window};
 
+use crate::selector::js_number_text;
 use crate::{
     AttributeValue, EventPayload, EventSink, NodeId, VirtualTree, focusable_by_default,
     hidden_by_attribute, is_disabled_control,
@@ -168,17 +169,6 @@ fn parse_tab_index(value: &str) -> Option<i32> {
     }
     let magnitude: i64 = rest[..digits].parse().ok()?;
     i32::try_from(if negative { -magnitude } else { magnitude }).ok()
-}
-
-// The text JavaScript makes of a number. Only the leading digits matter, and
-// Rust's `{:e}` and JavaScript's exponent form share them.
-fn number_text(value: f64) -> String {
-    let magnitude = value.abs();
-    if magnitude >= 1e21 || (magnitude != 0.0 && magnitude < 1e-6) {
-        format!("{value:e}")
-    } else {
-        value.to_string()
-    }
 }
 
 /// The target of a Tab press. `stops` lists every focusable node with its
@@ -471,7 +461,7 @@ impl FocusRegistry {
         }
         let explicit = match node.attributes().get("tabindex") {
             Some(AttributeValue::String(value)) => parse_tab_index(value),
-            Some(AttributeValue::Number(value)) => parse_tab_index(&number_text(*value)),
+            Some(AttributeValue::Number(value)) => parse_tab_index(&js_number_text(*value)),
             Some(AttributeValue::Bool(_)) | None => None,
         };
         explicit.or(by_default.then_some(0))
