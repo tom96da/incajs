@@ -88,7 +88,7 @@ export function createIncaElement(
     kind,
     tagName: tag.replace(/[a-z]/g, (letter) => letter.toUpperCase()),
     parent: null,
-    children: [],
+    __children: [],
     focus: (options?: { preventScroll?: boolean }) => {
       if (!isRemoved(element)) focus(id, Boolean(options?.preventScroll));
     },

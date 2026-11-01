@@ -5,6 +5,7 @@ import { h, nextTick, reactive, ref } from "@vue/runtime-core";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Ref } from "@vue/runtime-core";
 
+import { htmlCollectionOf } from "../src/element/collections.mts";
 import { rectOf } from "../src/element/geometry.mts";
 import { createIncaElement } from "../src/element/handle.mts";
 import { blur, click, focus } from "../src/events.mts";
@@ -249,7 +250,8 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       previousElementSibling: null,
       nextElementSibling: null,
       parent: null,
-      children: [],
+      __children: [],
+      children: htmlCollectionOf(() => []),
       focus: () => focus(rootId),
       blur: () => blur(rootId),
       contains: () => false,

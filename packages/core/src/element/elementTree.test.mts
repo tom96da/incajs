@@ -71,7 +71,7 @@ describe("element siblings", () => {
   it("nextElementSibling skips a text leaf and a comment stand-in", () => {
     const { parent, first, second } = mixed();
     const lead = createElementNode("div");
-    insert(lead, parent, parent.children[0]);
+    insert(lead, parent, parent.__children[0]);
 
     expect(lead.nextElementSibling).toBe(first);
     expect(first.nextElementSibling).toBe(second);
@@ -89,6 +89,59 @@ describe("element siblings", () => {
     const lone = createElementNode("div");
 
     expect([lone.previousElementSibling, lone.nextElementSibling]).toEqual([null, null]);
+  });
+});
+
+describe("children", () => {
+  it("lists the elements in tree order", () => {
+    const { parent, first, second } = mixed();
+
+    expect(Array.from(parent.children)).toEqual([first, second]);
+  });
+
+  it("skips a text leaf and a comment stand-in", () => {
+    const { parent } = mixed();
+
+    expect(parent.children.length).toBe(2);
+  });
+
+  it("has an empty collection on a comment stand-in", () => {
+    expect(createCommentNode().children.length).toBe(0);
+  });
+
+  it("returns the same object on every read", () => {
+    const { parent } = mixed();
+
+    expect(parent.children).toBe(parent.children);
+  });
+
+  it("follows an append", () => {
+    const { parent, first, second } = mixed();
+    const earlier = parent.children;
+    const added = createElementNode("div");
+
+    insert(added, parent);
+
+    expect(Array.from(earlier)).toEqual([first, second, added]);
+  });
+
+  it("follows a removal", () => {
+    const { parent, first, second } = mixed();
+    const earlier = parent.children;
+
+    remove(first);
+
+    expect(Array.from(earlier)).toEqual([second]);
+  });
+
+  it("keeps listing the element children of a removed element", () => {
+    const { parent, first, second } = mixed();
+    const holder = createElementNode("div");
+    insert(parent, holder);
+
+    remove(parent);
+
+    expect(Array.from(parent.children)).toEqual([first, second]);
   });
 });
 

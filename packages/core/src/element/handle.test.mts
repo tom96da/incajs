@@ -64,9 +64,9 @@ describe("createIncaElement selectors", () => {
   function chain() {
     const [outer, inner, leaf] = [1, 2, 3].map((id) => createIncaElement(id, "element", "div"));
     inner!.parent = outer!;
-    outer!.children.push(inner!);
+    outer!.__children.push(inner!);
     leaf!.parent = inner!;
-    inner!.children.push(leaf!);
+    inner!.__children.push(leaf!);
     return { outer: outer!, inner: inner!, leaf: leaf! };
   }
 
@@ -754,9 +754,9 @@ describe("createIncaElement contains", () => {
       createIncaElement(id, "element", "div"),
     );
     child!.parent = root!;
-    root!.children.push(child!);
+    root!.__children.push(child!);
     grandchild!.parent = child!;
-    child!.children.push(grandchild!);
+    child!.__children.push(grandchild!);
     return [root!, child!, grandchild!];
   };
 

@@ -73,13 +73,13 @@ export function setText(node: IncaText, text: string): void {
  * @param text - the new text content
  */
 export function setElementText(el: IncaElement, text: string): void {
-  for (const child of el.children.slice()) remove(child);
+  for (const child of el.__children.slice()) remove(child);
   if (!text) return;
 
   const textNode = createTextNode(text);
   appendChild(el.__node_id, textNode.__node_id);
   textNode.parent = el;
-  el.children.push(textNode);
+  el.__children.push(textNode);
 }
 
 // Drops `child` from its parent in this module's shadow of the native tree.
@@ -87,8 +87,8 @@ function unlink(child: IncaNode): void {
   const parent = child.parent;
   if (!parent) return;
 
-  const index = parent.children.indexOf(child);
-  if (index !== -1) parent.children.splice(index, 1);
+  const index = parent.__children.indexOf(child);
+  if (index !== -1) parent.__children.splice(index, 1);
   child.parent = null;
 }
 
@@ -111,16 +111,16 @@ export function insert(child: IncaNode, parent: IncaElement, anchor?: IncaNode |
   if (anchor === child && child.parent === parent) return;
   detach(child);
 
-  const anchorIndex = anchor ? parent.children.indexOf(anchor) : -1;
+  const anchorIndex = anchor ? parent.__children.indexOf(anchor) : -1;
   insertBefore(
     parent.__node_id,
     child.__node_id,
     anchor && anchorIndex !== -1 ? anchor.__node_id : null,
   );
   if (anchorIndex === -1) {
-    parent.children.push(child);
+    parent.__children.push(child);
   } else {
-    parent.children.splice(anchorIndex, 0, child);
+    parent.__children.splice(anchorIndex, 0, child);
   }
   child.parent = parent;
 }
@@ -164,6 +164,6 @@ export function nextSibling(node: IncaNode): IncaNode | null {
   const parent = node.parent;
   if (!parent) return null;
 
-  const index = parent.children.indexOf(node);
-  return parent.children[index + 1] ?? null;
+  const index = parent.__children.indexOf(node);
+  return parent.__children[index + 1] ?? null;
 }

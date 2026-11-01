@@ -111,8 +111,7 @@ A fixed entry is deleted and its ID is never reused.
 
   The members it has differ from a browser in the box reads (B-160), the
   `offsetParent` chain (B-161), the scroll members (B-172, B-174, B-216 and
-  B-217) and `scroll-margin` (B-176). Its own `children` field lists text nodes
-  too, and the DOM `children` lists elements only.
+  B-217) and `scroll-margin` (B-176).
 
   Fix: build the tree members on the JS shadow tree.
 

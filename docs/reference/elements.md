@@ -170,9 +170,15 @@ with the differences below. The listener methods are described in
   the next frame draws it.
 - Only `pointerId` 1 is accepted by `setPointerCapture()`,
   `releasePointerCapture()` and `hasPointerCapture()`.
-- `children` lists the child nodes, text nodes included. `parent` is the
-  parent element. `childNodes`, `firstChild`, `lastChild`, `previousSibling`
-  and `nextSibling` are missing.
+- `parent` is the parent element. These tree members are missing:
+  - `childNodes`
+  - `firstChild`
+  - `lastChild`
+  - `previousSibling`
+  - `nextSibling`
+- These members return objects that are no instance of a global class, so
+  `instanceof` with the standard class name fails:
+  - `children` (`HTMLCollection`)
 - `closest()` and `matches()` accept `:hover`, `:focus` and the other
   interactive and form-state pseudo-classes and never match them, so
   `:not(:hover)` matches every element. `:lang()` and `:state()` never match.
