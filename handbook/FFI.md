@@ -26,7 +26,8 @@ belong to that instance. The garbage collector traces them, and they go when
 the event goes. They sit in one struct whose trace names every field. A value
 left untraced makes the engine's drop abort the process.
 
-All `unsafe` code of the Rust crates lives in `inca-jsenv/src/quickjs.rs`.
+All `unsafe` code of the Rust crates lives in the quickjs module of `inca-jsenv`
+(`quickjs.rs` and `quickjs/`).
 The one exception is the `unsafe impl` that rquickjs's `JsLifetime` derive
 expands to, which gives a Rust value on a JS object its lifetime marker.
 `clippy.toml` restricts that derive to the files that allow it:
