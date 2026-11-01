@@ -21,6 +21,12 @@ function probe() {
   } catch (error) {
     bad = error.name;
   }
+  let badQuery = "none";
+  try {
+    list.value.querySelector("div >");
+  } catch (error) {
+    badQuery = error.name;
+  }
   result.value = JSON.stringify({
     tagName: list.value.tagName,
     attributeNames: list.value.getAttributeNames(),
@@ -36,6 +42,12 @@ function probe() {
     matches: second.value.matches(".card > li"),
     hover: second.value.matches(":hover"),
     syntaxError: bad,
+    querySelector: list.value.querySelector("li + li") === second.value,
+    querySelectorAllIds: Array.from(list.value.querySelectorAll("li"), (item) => item.id),
+    querySelectorSelf: list.value.querySelector(".card"),
+    querySelectorSyntaxError: badQuery,
+    childrenLength: second.value.children.length,
+    namedItemValue: list.value.attributes.getNamedItem("class").value,
   });
 }
 </script>
@@ -43,8 +55,8 @@ function probe() {
 <template>
   <div :style="{ width: 300, height: 400 }">
     <ul ref="list" class="card" data-kind="people">
-      <li :style="{ width: 50, height: 10 }">one</li>
-      <li ref="second" :style="{ width: 50, height: 10 }">two</li>
+      <li id="first" :style="{ width: 50, height: 10 }">one</li>
+      <li ref="second" id="second" :style="{ width: 50, height: 10 }">two</li>
     </ul>
     <button ref="field" id="field" :disabled="off" :style="{ width: 50, height: 20 }" />
     <div id="probe" :style="{ width: 50, height: 20 }" @mousedown.prevent @click="probe" />
