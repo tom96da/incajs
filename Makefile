@@ -3,7 +3,7 @@ GITIGNORE_PARTS := $(sort $(wildcard .gitignore.d/*.gitignore))
 LICENSE_PACKAGES := packages/core packages/cli npm/darwin-arm64 npm/darwin-x64 npm/linux-arm64 npm/linux-x64
 NOTICE_PACKAGES := npm/darwin-arm64 npm/darwin-x64 npm/linux-arm64 npm/linux-x64
 
-.PHONY: check-gitignore check-licenses clean-dist licenses FORCE
+.PHONY: check-gitignore check-licenses check-notice clean-dist licenses notice FORCE
 
 FORCE:
 
@@ -28,6 +28,14 @@ check-licenses:
 		actual=$$(tar -xzOf "$$tarball" package/package.json | jq -r '.license'); \
 		[ "$$actual" = "$$expected" ] || { echo "::error::$$dir: license is $$actual, expected $$expected"; exit 1; }; \
 	done
+
+# Rewrites the generated entries and license texts of NOTICE. Needs cargo and the crate sources.
+notice:
+	@node scripts/generate-notice.mts
+
+# Fails when NOTICE, or the license of a platform package, is out of date.
+check-notice:
+	@node scripts/generate-notice.mts --check
 
 clean-dist:
 	@find packages examples docs -type d -name dist -not -path '*/node_modules/*' -printf 'remove %p\n' -exec rm -rf {} +
