@@ -644,12 +644,6 @@ A fixed entry is deleted and its ID is never reused.
 
   Text leaves carry no selector, so a snapshot gives them no bounds.
 
-- **B-113 A failed rebuild in `inca dev` prints the same error twice**
-  `Units: cli · Size: S · Impact: Low`
-
-  Renaming a source file during `inca dev` prints the same build failure
-  twice, once for each rebuild the rename starts.
-
 - **B-114 `inca dev` mixes the bundler's output with its own lines**
   `Units: cli · Size: S · Impact: Low`
 
