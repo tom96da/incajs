@@ -391,6 +391,7 @@ describe("packageApp", () => {
       build: async (args) => {
         const out = await inner.build(args);
         if (extraFile === undefined) return out;
+        await mkdir(path.dirname(path.join(args.outDir, extraFile)), { recursive: true });
         await writeFile(path.join(args.outDir, extraFile), "mine");
         return { ...out, files: [...out.files, extraFile] };
       },
@@ -459,6 +460,15 @@ describe("packageApp", () => {
 
     await expect(
       packageWithPackagedHost("linux", licenseFiles, spell("NOTICE")),
+    ).rejects.toMatchObject({ code: "ERR_INCA_PUBLIC_FILE_RESERVED" });
+    expect(await exists(path.join(cwd ?? "", "dist/click-counter"))).toBe(false);
+  });
+
+  it("refuses a package whose build output holds a directory named NOTICE", async () => {
+    const licenseFiles = await makeLicenseFiles(LICENSE_NAMES);
+
+    await expect(
+      packageWithPackagedHost("linux", licenseFiles, "NOTICE/file.txt"),
     ).rejects.toMatchObject({ code: "ERR_INCA_PUBLIC_FILE_RESERVED" });
     expect(await exists(path.join(cwd ?? "", "dist/click-counter"))).toBe(false);
   });

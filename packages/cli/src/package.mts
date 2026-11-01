@@ -114,14 +114,16 @@ function assertNoOutputCollision(output: BuildOutput, dirName: string): void {
 }
 
 /**
- * Refuses a build output whose top-level file has the name of a license file the app receives.
- * Names compare without regard to case.
+ * Refuses a build output whose top-level file or directory has the name of a license file the app
+ * receives. Names compare without regard to case.
  *
- * @throws if a file collides
+ * @throws if an entry collides
  */
 function assertNoReservedFile(output: BuildOutput, licenseFiles: string[]): void {
   const reserved = licenseFiles.map((file) => path.basename(file).toLowerCase());
-  const clash = output.files.find((relPath) => reserved.includes(relPath.toLowerCase()));
+  const clash = output.files
+    .map((relPath) => relPath.split("/")[0] ?? relPath)
+    .find((top) => reserved.includes(top.toLowerCase()));
   if (clash === undefined) return;
   throw new IncaError(
     "ERR_INCA_PUBLIC_FILE_RESERVED",
