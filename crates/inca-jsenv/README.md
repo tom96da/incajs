@@ -15,7 +15,8 @@ rest of the ECMAScript intrinsics. It supplies nothing else: no `console`,
 no timers, no network, no filesystem. Those are the host's to provide, and
 this crate is where they live.
 
-Today that is `console` and the timer queue. `console` writes wherever the
+Today that is `console`, the timer queue, and `TextEncoder` and
+`TextDecoder`, which every `Engine` installs. `console` writes wherever the
 caller points it, because the process embedding it may already be using
 stdout for something else.
 

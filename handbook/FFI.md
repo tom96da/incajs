@@ -31,9 +31,11 @@ All `unsafe` code of the Rust crates lives in the quickjs module of `inca-jsenv`
 The one exception is the `unsafe impl` that rquickjs's `JsLifetime` derive
 expands to, which gives a Rust value on a JS object its lifetime marker.
 `clippy.toml` restricts that derive to the files that allow it:
-`inca-jsenv/src/sourcemap/store.rs` and `inca-bridge/src/event/record.rs`. It
-restricts `rquickjs::Persistent` too, since one kept past its runtime aborts
-the process when the runtime drops.
+`inca-jsenv/src/sourcemap/store.rs`, `inca-jsenv/src/encoding.rs` and
+`inca-bridge/src/event/record.rs`. It restricts `rquickjs::Persistent` too,
+since one kept past its runtime aborts the process when the runtime drops.
+`Engine` installs `TextEncoder` and `TextDecoder` as native classes. Their
+instances own plain Rust data and trace nothing.
 
 ## Retained virtual tree
 

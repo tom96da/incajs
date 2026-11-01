@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-// Provides the globals vite/module-runner needs (TextDecoder/URL); importing it installs them.
+// Provides the `URL` global that vite/module-runner needs; importing it installs it.
 import "./globals.mts";
 import { ModuleRunner } from "vite/module-runner";
 

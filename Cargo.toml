@@ -21,6 +21,7 @@ keywords = ["gpui", "quickjs", "desktop-app", "gui", "webview-free"]
 
 [workspace.dependencies]
 base64 = { version = "0.22", default-features = false, features = ["std"] }
+encoding_rs = "0.8.42"
 env_logger = "0.11"
 gpui = { git = "https://github.com/zed-industries/zed", tag = "v1.24.3" }
 gpui_platform = { git = "https://github.com/zed-industries/zed", tag = "v1.24.3" }

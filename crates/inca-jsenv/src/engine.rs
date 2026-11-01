@@ -221,6 +221,7 @@ impl Engine {
             .context
             .with(|ctx| {
                 create_vault(&ctx)?;
+                crate::encoding::install(&ctx)?;
                 let modules = Object::new(ctx.clone())?;
                 modules.set_prototype(None)?;
                 let vault = vault(&ctx)?;

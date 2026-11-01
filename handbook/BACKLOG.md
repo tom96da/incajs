@@ -410,14 +410,15 @@ A fixed entry is deleted and its ID is never reused.
   over to a new scrolling container that gets the same id. Found by reading;
   not reproduced.
 
-- **B-074 Dev and production differ in `TextDecoder`, `URL` and the `define` globals**
+- **B-074 The development window and a production build differ in `URL` and the `define` globals**
   `Units: cli · Size: S · Impact: Low`
 
-  With `--experimental-hmr` the runtime installs a Latin-1 `TextDecoder`, a
-  minimal `URL` and, on the app's `globalThis`, each `define` value whose key
-  is a plain identifier and whose code is a JSON literal. A production build
-  inlines the `define` values and has none of these globals, so dev and
-  production differ.
+  With `--experimental-hmr` the runtime installs a minimal `URL` and, on the
+  app's `globalThis`, each `define` value whose key is a plain identifier and
+  whose code is a JSON literal. A production build inlines the `define`
+  values and has neither, so the development window and a production build
+  differ. Apply `define` in the module runner's pipeline and implement `URL`
+  natively.
 
 - **B-075 A failed host start in inca dev is handled differently per mode, and the checks overlap**
   `Units: cli · Size: S–M · Impact: Low`

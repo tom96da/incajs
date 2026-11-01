@@ -14,6 +14,9 @@
 //! The public [`class`] module holds the steps that define a native class: its
 //! constructor, methods, getters and global.
 //!
+//! [`Engine`] installs `TextEncoder` and `TextDecoder`. The decoder reads every
+//! encoding of the Encoding Standard.
+//!
 //! [`Limits`] bounds the memory, the stack and the time a script may use.
 //!
 //! The renderer, windows and processes are outside it, so what it installs can
@@ -21,6 +24,7 @@
 
 pub mod class;
 pub mod console;
+mod encoding;
 mod engine;
 
 mod compile;

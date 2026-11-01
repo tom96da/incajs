@@ -27,6 +27,12 @@ pub(crate) fn counters(engine: &Engine) -> [i64; 5] {
     ]
 }
 
+/// The bytes of memory the engine holds after a gc run.
+pub(crate) fn memory_size(engine: &Engine) -> i64 {
+    engine.runtime.run_gc();
+    engine.runtime.memory_usage().memory_used_size
+}
+
 /// Calls `each` once to warm up, then 10 000 times, and returns the counters before and after.
 pub(crate) fn around(engine: &Engine, each: impl Fn(&Ctx<'_>)) -> ([i64; 5], [i64; 5]) {
     engine.with(|ctx| each(&ctx));
