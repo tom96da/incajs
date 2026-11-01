@@ -15,12 +15,10 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 ## Elements are just boxes
 
-Every tag other than `"text"` and `"input"` (`<div>`, `<span>`, `<button>`,
-anything) renders as a generic styled container. Elements carry no default
-styles, so a `<button>` starts as the same plain box as a `<div>` and
-`:style` sets everything. `"text"` renders its `value` attribute followed by
-its descendants' text in child order, and its descendants are not rendered as
-separate elements. `"input"` is a text field, described below.
+Every tag other than `"input"` (`<div>`, `<span>`, `<button>`, anything)
+renders as a generic styled container. Elements carry no default styles, so a
+`<button>` starts as the same plain box as a `<div>` and `:style` sets
+everything. `"input"` is a text field, described below.
 
 ### `button`
 

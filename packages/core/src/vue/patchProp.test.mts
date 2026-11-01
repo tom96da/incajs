@@ -66,7 +66,6 @@ const makeEl = (): IncaElement => ({
   childElementCount: 0,
   previousElementSibling: null,
   nextElementSibling: null,
-  __tag: "div",
   parent: null,
   children: [],
   focus: vi.fn<() => void>(),

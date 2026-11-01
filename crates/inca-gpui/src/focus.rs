@@ -21,6 +21,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use gpui::{App, FocusHandle, Window};
 
 use crate::selector::js_number_text;
+use crate::tree::TEXT_TAG;
 use crate::{
     AttributeValue, EventPayload, EventSink, NodeId, VirtualTree, focusable_by_default,
     hidden_by_attribute, is_disabled_control,
@@ -456,7 +457,7 @@ impl FocusRegistry {
                     )
             });
         let by_default = focusable_by_default(node.tag_name());
-        if node.tag_name() == "text" || hidden || is_disabled_control(node) {
+        if node.tag_name() == TEXT_TAG || hidden || is_disabled_control(node) {
             return None;
         }
         let explicit = match node.attributes().get("tabindex") {

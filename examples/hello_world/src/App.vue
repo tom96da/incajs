@@ -9,7 +9,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
   mount.
 
   The label below is a mustache interpolation, not plain template text:
-  inca's "text" nodes render their value verbatim (no trimming), and
+  the rendered text keeps its content verbatim (no trimming), and
   Vue's whitespace condensing only fully removes whitespace-only text
   between two elements — the interpolation's own trailing edge still picks
   up one condensed space before the following <div>. That's expected,

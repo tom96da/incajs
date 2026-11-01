@@ -19,12 +19,9 @@ use selectors::parser::{
 };
 use selectors::{Element, OpaqueElement};
 
-use crate::tree::{AttributeValue, NodeId, VirtualNode, VirtualTree, is_disabled_control};
-
-/// The tag of a node that stands in for a comment.
-const COMMENT_TAG: &str = "#comment";
-/// The tag of a text element, which renders as text content.
-const TEXT_TAG: &str = "text";
+use crate::tree::{
+    AttributeValue, COMMENT_TAG, NodeId, TEXT_TAG, VirtualNode, VirtualTree, is_disabled_control,
+};
 
 /// The text JavaScript makes of a number. `-0` prints as `0`, and values from `1e21` up or below
 /// `1e-6` use the exponent form.
@@ -423,17 +420,12 @@ fn attribute_text(value: &AttributeValue) -> String {
     }
 }
 
-/// Whether the text content under `node` is not empty.
-fn has_text(tree: &VirtualTree, node: &VirtualNode) -> bool {
-    let own = matches!(
+/// Whether the `"value"` of `node` is not empty.
+fn has_text(node: &VirtualNode) -> bool {
+    matches!(
         node.attributes().get("value"),
         Some(value) if !attribute_text(value).is_empty()
-    );
-    own || node
-        .children()
-        .iter()
-        .filter_map(|&id| tree.get(id))
-        .any(|child| child.tag_name() == TEXT_TAG && has_text(tree, child))
+    )
 }
 
 impl<'t> Node<'t> {
@@ -612,7 +604,7 @@ impl Element for Node<'_> {
                 if is_element(child) {
                     true
                 } else {
-                    child.tag_name() == TEXT_TAG && has_text(self.tree, child)
+                    child.tag_name() == TEXT_TAG && has_text(child)
                 }
             })
         })
@@ -690,7 +682,7 @@ pub fn matches_selector(
     }))
 }
 
-/// The nearest element at or above `node` that matches `selector`. A text element starts at its
+/// The nearest element at or above `node` that matches `selector`. A `#text` node starts at its
 /// nearest element ancestor, and a node tagged `#comment` and an unknown id find nothing.
 ///
 /// # Errors

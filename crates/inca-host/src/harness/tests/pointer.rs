@@ -13,7 +13,7 @@ const CLICKABLE: &str = r"
         n.setStyle(box, 'width', 100);
         n.setStyle(box, 'height', 50);
         n.appendChild(n.rootNodeId(), box);
-        const label = n.createNode('text');
+        const label = n.createNode('#text');
         n.setAttribute(label, 'value', 'hi');
         n.appendChild(box, label);
         globalThis.clicks = 0;
@@ -209,7 +209,7 @@ fn hover_on_a_text_leaf_lands_on_its_container(cx: &mut TestAppContext) {
         &format!(
             r"
             {HOVERABLE}
-            const label = n.createNode('text');
+            const label = n.createNode('#text');
             n.setAttribute(label, 'value', 'hi');
             n.appendChild(box, label);
             "

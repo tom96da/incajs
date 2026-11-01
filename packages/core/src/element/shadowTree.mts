@@ -38,7 +38,7 @@ export function createElementNode(tag: TagName): IncaElement {
  * @returns the new text leaf
  */
 export function createTextNode(text: string): IncaText {
-  const id = createNode("text");
+  const id = createNode("#text");
   setAttribute(id, "value", text);
   const node: Omit<IncaText, "__node_id"> = { kind: "text", parent: null, text };
   return withNodeId(node, id);

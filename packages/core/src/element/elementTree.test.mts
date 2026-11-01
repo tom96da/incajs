@@ -30,16 +30,15 @@ beforeEach(() => {
   } as never;
 });
 
-/** A `div` holding a text leaf, a comment stand-in, a `<text>` element and two elements. */
+/** A `div` holding a text leaf, a comment stand-in and two elements. */
 function mixed() {
   const parent = createElementNode("div");
   const text = createTextNode("t");
   const comment = createCommentNode();
-  const textElement = createElementNode("text");
   const first = createElementNode("span");
   const second = createElementNode("button");
-  for (const child of [text, comment, textElement, first, second]) insert(child, parent);
-  return { parent, text, comment, textElement, first, second };
+  for (const child of [text, comment, first, second]) insert(child, parent);
+  return { parent, text, comment, first, second };
 }
 
 describe("parentElement", () => {
@@ -69,7 +68,7 @@ describe("parentElement", () => {
 });
 
 describe("element siblings", () => {
-  it("nextElementSibling skips a text leaf, a comment stand-in and a text element", () => {
+  it("nextElementSibling skips a text leaf and a comment stand-in", () => {
     const { parent, first, second } = mixed();
     const lead = createElementNode("div");
     insert(lead, parent, parent.children[0]);
@@ -94,7 +93,7 @@ describe("element siblings", () => {
 });
 
 describe("element children", () => {
-  it("skip text leaves, comment stand-ins and text elements", () => {
+  it("skip text leaves and comment stand-ins", () => {
     const { parent, first, second } = mixed();
 
     expect(parent.firstElementChild).toBe(first);

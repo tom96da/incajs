@@ -3,7 +3,7 @@
 
 import type { IncaElement, IncaNode } from "./types.mts";
 
-/** The element members of the tree: a `<text>` element is text content and counts as none. */
+/** The element members of the tree: text leaves and comment stand-ins count as none. */
 export type ElementTreeMembers = Pick<
   IncaElement,
   | "parentElement"
@@ -15,7 +15,7 @@ export type ElementTreeMembers = Pick<
 >;
 
 function isElementNode(node: IncaNode): node is IncaElement {
-  return node.kind === "element" && node.__tag !== "text";
+  return node.kind === "element";
 }
 
 /**

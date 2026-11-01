@@ -65,7 +65,7 @@ export function createIncaElement(
   const scroll = () => (isRemoved(element) ? null : scrollOf(id));
   const fields: Omit<
     IncaElement,
-    "__node_id" | keyof EventHandlers | keyof AttributeMembers | keyof ElementTreeMembers | "__tag"
+    "__node_id" | keyof EventHandlers | keyof AttributeMembers | keyof ElementTreeMembers
   > = {
     get id() {
       return isDestroyed(element) ? "" : String(getAttribute(id, "id") ?? "");
@@ -201,7 +201,6 @@ export function createIncaElement(
   );
   Object.defineProperties(element, Object.getOwnPropertyDescriptors(attributeMembers(id, element)));
   Object.defineProperties(element, Object.getOwnPropertyDescriptors(elementTreeMembers(element)));
-  Object.defineProperty(element, "__tag", { value: tag });
   if (kind === "element") registerElement(element);
   return element;
 }

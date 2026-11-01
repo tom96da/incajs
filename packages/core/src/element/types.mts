@@ -45,11 +45,6 @@ export interface IncaElement extends IncaEventTarget, EventHandlers {
    */
   readonly __node_id: NodeId;
   /**
-   * The host tag. Internal to the renderer.
-   * @internal
-   */
-  readonly __tag: string;
-  /**
    * The `id` attribute, or an empty string when it is unset. Assigning sets
    * the attribute to the value as a string.
    */

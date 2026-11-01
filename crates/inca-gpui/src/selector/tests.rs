@@ -326,13 +326,13 @@ fn a_functional_pseudo_class_matches_through_its_list(
     assert_eq!(p.f.matches(p.node(target), selector), expected);
 }
 
-/// `parent > [comment, text leaf, a, text element, b]`.
+/// `parent > [comment, text node, a, b]`.
 struct Mixed {
     f: Fixture,
     parent: NodeId,
     comment: NodeId,
     a: NodeId,
-    text_element: NodeId,
+    text_node: NodeId,
     b: NodeId,
 }
 
@@ -340,17 +340,16 @@ fn mixed() -> Mixed {
     let mut f = Fixture::new();
     let parent = f.add(f.root, "div", "parent");
     let comment = f.add(parent, "#comment", "comment");
-    let text_leaf = f.add(parent, "text", "leaf");
-    f.attr(text_leaf, "value", "t");
+    let text_node = f.add(parent, "#text", "te");
+    f.attr(text_node, "value", "t");
     let a = f.add(parent, "span", "a");
-    let text_element = f.add(parent, "text", "te");
     let b = f.add(parent, "span", "b");
     Mixed {
         f,
         parent,
         comment,
         a,
-        text_element,
+        text_node,
         b,
     }
 }
@@ -359,7 +358,7 @@ fn mixed() -> Mixed {
 #[case::first_child(":first-child", true, false)]
 #[case::nth_child(":nth-child(2)", false, true)]
 #[case::last_child(":last-child", false, true)]
-fn position_classes_skip_a_comment_a_text_leaf_and_a_text_element(
+fn position_classes_skip_a_comment_and_a_text_node(
     #[case] selector: &str,
     #[case] a_matches: bool,
     #[case] b_matches: bool,
@@ -381,7 +380,7 @@ fn an_adjacent_combinator_skips_the_non_elements() {
 fn empty_counts_a_non_empty_text_leaf() {
     let mut f = Fixture::new();
     let holder = f.add(f.root, "div", "holder");
-    let leaf = f.add(holder, "text", "l");
+    let leaf = f.add(holder, "#text", "l");
     f.attr(leaf, "value", "x");
 
     assert!(!f.matches(holder, ":empty"));
@@ -411,17 +410,6 @@ fn empty_is_true_for_a_childless_element() {
 }
 
 #[test]
-fn empty_counts_a_text_leaf_inside_a_text_element() {
-    let mut f = Fixture::new();
-    let holder = f.add(f.root, "div", "holder");
-    let inner = f.add(holder, "text", "inner");
-    let leaf = f.add(inner, "text", "leaf");
-    f.attr(leaf, "value", "x");
-
-    assert!(!f.matches(holder, ":empty"));
-}
-
-#[test]
 fn root_falls_back_to_the_parentless_node_without_a_declared_root() {
     let mut tree = VirtualTree::new();
     let top = tree.create_node("div").unwrap();
@@ -436,7 +424,7 @@ fn root_falls_back_to_the_parentless_node_without_a_declared_root() {
 fn empty_ignores_a_text_leaf_with_no_value() {
     let mut f = Fixture::new();
     let holder = f.add(f.root, "div", "holder");
-    let leaf = f.add(holder, "text", "l");
+    let leaf = f.add(holder, "#text", "l");
     f.attr(leaf, "value", "");
 
     assert!(f.matches(holder, ":empty"));
@@ -592,37 +580,35 @@ fn disabled_and_enabled_apply_to_buttons_and_inputs_only(
     assert_eq!(f.matches(node, selector), expected);
 }
 
-#[rstest]
-#[case::any("*")]
-#[case::first_child("text:first-child")]
-fn a_text_element_is_no_subject_of_a_selector(#[case] selector: &str) {
+#[test]
+fn a_text_node_is_no_subject_of_a_selector() {
     let m = mixed();
 
-    assert!(!m.f.matches(m.text_element, selector));
+    assert!(!m.f.matches(m.text_node, "*"));
 }
 
 #[test]
-fn a_text_element_is_no_child_for_has() {
+fn a_text_node_is_no_child_for_has() {
     let m = mixed();
 
-    assert!(!m.f.matches(m.parent, "div:has(> text)"));
+    assert!(!m.f.matches(m.parent, "div:has(> :not(span))"));
 }
 
 #[test]
-fn a_text_element_is_no_ancestor_of_a_selector() {
+fn a_text_node_is_no_ancestor_of_a_selector() {
     let mut m = mixed();
-    let inside = m.f.add(m.text_element, "span", "inside");
+    let inside = m.f.add(m.text_node, "span", "inside");
 
-    assert!(!m.f.matches(inside, "text > span"));
+    assert!(!m.f.matches(inside, ":not(div) > span"));
     assert!(m.f.matches(inside, "div > span"));
 }
 
 #[test]
-fn closest_from_a_text_element_starts_at_its_nearest_element_ancestor() {
+fn closest_from_a_text_node_starts_at_its_nearest_element_ancestor() {
     let m = mixed();
 
-    assert_eq!(m.f.closest(m.text_element, "div"), Some(m.parent));
-    assert_eq!(m.f.closest(m.text_element, "text"), None);
+    assert_eq!(m.f.closest(m.text_node, "div"), Some(m.parent));
+    assert_eq!(m.f.closest(m.text_node, ":not(div)"), None);
 }
 
 #[test]
