@@ -110,9 +110,10 @@ Mirrors the Rust split above, using Vitest:
   mocking `globalThis.__inca_native__` and `__inca_callbacks__`. No real
   QuickJS engine runs under `pnpm test`. A barrel (`src/index.mts`)
   re-exports only; its modules carry the tests.
-- **QuickJS run**: `pnpm --filter incajs test:quickjs <file>` bundles one
-  `packages/core` test file with rolldown and runs it in the quickjs-ng build
-  of `quickjs-emscripten`, with vitest's own `expect` and `vi` and a small
+- **QuickJS run**: `pnpm --filter incajs test:quickjs [<file>...]` bundles
+  `packages/core` test files with rolldown and runs each in the quickjs-ng
+  build of `quickjs-emscripten`. Without an argument it runs every test file
+  of the package. It runs with vitest's own `expect` and `vi` and a small
   shim for `describe`, `it` and the hooks. The run is not part of `pnpm test`
   or CI.
 - **No import from core**: the tool in `tests/quickjs/` imports nothing from
@@ -121,7 +122,7 @@ Mirrors the Rust split above, using Vitest:
 - **After a vitest upgrade**, run
   `pnpm --filter incajs test:quickjs src/interfaces.test.mts`. The line
   `the QuickJS context has no global <name>` names a global the context lacks.
-  A stub for vitest goes in `tests/quickjs/run.mts`, and a stub for core code
+  A stub for vitest goes in `tests/quickjs/stubs.js`, and a stub for core code
   goes in the config file.
 - **Integration tests**: a `tests/` directory at the package root, for
   whatever a package's own unit tests can't reach mocked — e.g.

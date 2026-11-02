@@ -1278,17 +1278,18 @@ A fixed entry is deleted and its ID is never reused.
   evaluate them. Fix: evaluate them in the selector adapter once interactive
   visual state exists.
 
-- **B-251 Most of the code that runs in QuickJS is still tested only under Node and Bun**
+- **B-251 Most of the code that runs in QuickJS is tested only under Node and Bun**
   `Units: core,ci · Size: L · Impact: Medium`
 
   The unit tests of `packages/core` run under Node and Bun with the native
   functions mocked, and the host runs the same code in QuickJS. A runner
-  (`pnpm --filter incajs test:quickjs <file>`) runs one test file in the
-  quickjs-ng build that npm publishes, and runs `interfaces.test.mts`, which
-  needs no mock. Behavior that depends on the engine is not tested elsewhere,
-  such as the timing of `FinalizationRegistry` callbacks. Fix, stage 2: give the
-  shim `vi.resetModules`, async test bodies and `it.skip`, then move
-  the tests that wait for a garbage collection. Stage 3: run the rest of the
+  (`pnpm --filter incajs test:quickjs [<file>...]`) runs test files in the
+  quickjs-ng build that npm publishes, every test file of the package when no
+  file is given. `interfaces.test.mts` passes there because it needs no mock.
+  Behavior that depends on the engine is not tested elsewhere, such as the
+  timing of `FinalizationRegistry` callbacks. Fix, stage 2: give the shim
+  `vi.resetModules`, async test bodies and `it.skip`, then move the tests that
+  wait for a garbage collection. Stage 3: run the rest of the
   suite and add a CI step. The direction is to move the whole core suite to
   QuickJS once the shim covers what the tests need; the Node and Bun runs stay
   until then.
