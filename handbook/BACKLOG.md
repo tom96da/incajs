@@ -1288,8 +1288,11 @@ A fixed entry is deleted and its ID is never reused.
   file is given. `interfaces.test.mts` passes there because it needs no mock.
   Behavior that depends on the engine is not tested elsewhere, such as the
   timing of `FinalizationRegistry` callbacks. Fix, stage 2: give the shim
-  `vi.resetModules`, async test bodies and `it.skip`, then move the tests that
-  wait for a garbage collection. Stage 3: run the rest of the
+  `vi.resetModules`, async test bodies, `it.skip`, `setTimeout`, the vitest
+  mocker and `expectTypeOf`, and the externals `node:v8` and `node:vm`. Today
+  `patchProp.test.mts` fails there with "not a function" and `events.test.mts`
+  with "addEventListener of undefined". Then move the tests that wait for a
+  garbage collection. Stage 3: run the rest of the
   suite and add a CI step. The direction is to move the whole core suite to
   QuickJS once the shim covers what the tests need; the Node and Bun runs stay
   until then.
@@ -1304,12 +1307,25 @@ A fixed entry is deleted and its ID is never reused.
   the standard names from a dedicated type setup that replaces `lib.dom` for the
   desktop target.
 
-- **B-253 `document` has no `querySelector()` and `querySelectorAll()`**
-  `Units: core,gpui · Size: S · Impact: Low`
+- **B-253 Design `document.querySelector()` and `querySelectorAll()`**
+  `Units: core,gpui · Size: M · Impact: Low`
 
   An element handle gets both methods in v0.0.27, and `document` has no query
-  members yet. Fix: add them to `document` with the same selector adapter and
-  the same return types as the element methods.
+  members. `document` is a virtual event target, and the tree starts at the
+  root container, a real node with the tag `div`. Decide who owns that relation
+  first: whether the container is a candidate for `document.querySelector("div")`,
+  what `:scope` selects, and how `getRootNode()` reaches `document` without an
+  import cycle between `handle.mts` and `document.mts`. Fix: implement the
+  design with the same selector adapter and the same return types as the
+  element methods.
+
+- **B-254 The event constructors are enumerable globals**
+  `Units: bridge · Size: S · Impact: Low`
+
+  The event constructors are defined with `globals.set`, so
+  `Object.keys(globalThis)` lists them. Browsers define interface objects
+  non-enumerable. Fix: define them with `define_global` like the other native
+  classes.
 
 - **B-255 The packaged app carries no license notice for its bundled JavaScript dependencies**
   `Units: cli · Size: M · Impact: Medium`
@@ -1321,3 +1337,57 @@ A fixed entry is deleted and its ID is never reused.
   legal comments in the production bundle, or write a notice file from the
   dependencies that end up in the bundle, and copy it into the app next to the
   license files of the runtime.
+
+- **B-256 A held `Attr` misses a removal followed by a set between two reads**
+  `Units: core,bridge,gpui · Size: M · Impact: Low`
+
+  An `Attr` from `attributes` asks on each read whether its attribute is still
+  set. When Vue or a script removes the attribute and sets it again before the
+  next read, the held `Attr` stays attached and `attributes` returns the same
+  object. The DOM standard detaches the old `Attr` at the removal and creates
+  a new one at the set. Fix: keep a generation counter per attribute in Rust
+  that changes on every set after a removal, return it with the value, and
+  detach the `Attr` when it differs. Decide it with the Vapor node layer,
+  which may need the same identity.
+
+- **B-257 An `Attr` has no `Node` members**
+  `Units: core · Size: M · Impact: Low`
+
+  The standard `Attr` is a `Node`, so code typed with it expects `nodeType`,
+  `nodeName`, `textContent`, `isConnected`, `ownerDocument` and the other
+  `Node` members. The `Attr` objects of `attributes` carry their own members
+  only, and those reads return `undefined`. Fix: give `Attr` the `Node`
+  members when the Vapor node layer defines the node members of an element.
+
+- **B-258 The QuickJS test runner names a missing global without its cause**
+  `Units: core · Size: S · Impact: Low`
+
+  `test:quickjs` prints `the QuickJS context has no global <name>` for every
+  `ReferenceError` raised while the bundle evaluates. The error comes either
+  from vitest reading a global while it loads, which a stub in the runner
+  fixes, or from core code reading a missing global while the test file's
+  imports evaluate, which a stub in the config file fixes. Fix: mark in the
+  bundle where the test file's own imports start, and name the cause in the
+  line.
+
+- **B-259 `decode()` and `encodeInto()` follow the standard order where Chromium differs**
+  `Units: jsenv · Size: S · Impact: Low`
+
+  `encodeInto("a", view)` on a view over a detached resizable buffer throws
+  `TypeError`, and `decode(view, options)` returns `""` when a `stream` getter
+  of `options` detaches the view's buffer. Firefox and WebKit do the same.
+  Chromium returns `{ read: 0, written: 0 }` for the first and decodes the
+  bytes the view held before the getter ran for the second. The order follows
+  the WebIDL conversion of the arguments, which rejects a resizable buffer and
+  reads `options` before the method takes the bytes. Fix: none while Firefox,
+  WebKit and the standard order agree; change the order if the standard moves
+  to Chromium's result.
+
+- **B-260 The `namespaceURI`, `prefix` and `specified` getters of `Attr` accept a foreign receiver**
+  `Units: core · Size: S · Impact: Low`
+
+  A getter taken from the prototype of an `Attr` and called on `{}` returns
+  `null` for `namespaceURI` and `prefix` and `true` for `specified`. `name`,
+  `value` and `ownerElement` throw `TypeError` for the same call, as do all six
+  getters in Chromium, Firefox and WebKit. Fix: check the receiver in the three
+  getters.
