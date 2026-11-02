@@ -10,6 +10,21 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- `TextEncoder` and `TextDecoder` are available ([cda29e1](https://github.com/tom96da/incajs/commit/cda29e1))
+- `querySelector()` and `querySelectorAll()` on a ref ([5d03fff](https://github.com/tom96da/incajs/commit/5d03fff))
+
+### Changed
+
+- `children` on a ref is a live collection of elements, and `Array.from` gives the array methods ([50d355c](https://github.com/tom96da/incajs/commit/50d355c))
+- `attributes` on a ref is a live `NamedNodeMap` of `Attr` objects ([29d313b](https://github.com/tom96da/incajs/commit/29d313b))
+- the platform packages list every other license of their libraries in `NOTICE` and `license` ([4577ba4](https://github.com/tom96da/incajs/commit/4577ba4), [8b1dccd](https://github.com/tom96da/incajs/commit/8b1dccd))
+
+### Fixed
+
+- `matches()` and `closest()` throw a `SyntaxError` for an invalid selector on a removed element ([b1eef1d](https://github.com/tom96da/incajs/commit/b1eef1d))
+
 ## [0.0.26] - 2026-11-01
 
 ### Added
