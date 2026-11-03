@@ -4,13 +4,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { window } from "./window.mts";
+import type { HostCallback } from "./native.mts";
 
 // Ids come from the host, which numbers them in order.
 let nextCallbackId = 0;
 
 const native = {
   addEventListener: vi.fn<
-    (target: number | string, event: string, capture?: boolean, passive?: boolean) => number
+    (
+      target: number | string,
+      event: string,
+      callback: HostCallback,
+      capture?: boolean,
+      passive?: boolean,
+    ) => number
   >(() => nextCallbackId++),
   removeEventListener: vi.fn<
     (target: number | string, event: string, callbackId: number) => boolean
@@ -22,7 +29,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   nextCallbackId = 0;
   globalThis.__inca_native__ = native as never;
-  delete (globalThis as { __inca_callbacks__?: unknown }).__inca_callbacks__;
 });
 
 describe("window", () => {
@@ -33,7 +39,13 @@ describe("window", () => {
     const callbackId = native.addEventListener.mock.results[0]!.value;
     window.removeEventListener("keydown", listener);
 
-    expect(native.addEventListener).toHaveBeenCalledWith("$window", "keydown", false, false);
+    expect(native.addEventListener).toHaveBeenCalledWith(
+      "$window",
+      "keydown",
+      expect.any(Function),
+      false,
+      false,
+    );
     expect(native.removeEventListener).toHaveBeenCalledExactlyOnceWith(
       "$window",
       "keydown",
@@ -52,9 +64,8 @@ describe("window", () => {
   it("takes a listener that declares the event fields it reads", () => {
     const keys: string[] = [];
     window.addEventListener("keydown", (event: { key: string }) => keys.push(event.key));
-    const callbackId = native.addEventListener.mock.results[0]!.value;
 
-    globalThis.__inca_callbacks__[callbackId]!({ key: "a" });
+    native.addEventListener.mock.calls[0]![2]({ key: "a" });
 
     expect(keys).toEqual(["a"]);
   });
@@ -64,7 +75,7 @@ describe("window", () => {
     window.addEventListener("wheel", vi.fn<() => void>(), { passive: false });
     window.addEventListener("scroll", vi.fn<() => void>());
 
-    expect(native.addEventListener.mock.calls.map((call) => call[3])).toEqual([true, false, false]);
+    expect(native.addEventListener.mock.calls.map((call) => call[4])).toEqual([true, false, false]);
   });
 
   it("runs an onfocus handler as a listener of the window", () => {
@@ -73,12 +84,12 @@ describe("window", () => {
     window.onfocus = function (this: unknown) {
       seen.push(this);
     };
-    const callbackId = native.addEventListener.mock.results[0]!.value;
-    globalThis.__inca_callbacks__[callbackId]!({ currentTarget: window });
+    native.addEventListener.mock.calls[0]![2]({ currentTarget: window });
 
     expect(native.addEventListener).toHaveBeenCalledExactlyOnceWith(
       "$window",
       "focus",
+      expect.any(Function),
       false,
       false,
     );

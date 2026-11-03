@@ -515,7 +515,7 @@ mod tests {
     }
 
     #[rstest]
-    #[case::add("__inca_native__.addEventListener('$nope', 'click', false, false)")]
+    #[case::add("__inca_native__.addEventListener('$nope', 'click', () => {}, false, false)")]
     #[case::remove("__inca_native__.removeEventListener('$nope', 'click', 0)")]
     #[case::dispatch("__inca_native__.dispatchEvent('$nope', new Event('click'))")]
     fn unknown_global_target_tag_throws_a_type_error(#[case] call: &str) {

@@ -20,6 +20,7 @@ import {
   inputValue,
   setInputValue,
 } from "./tree.mts";
+import type { HostCallback } from "./native.mts";
 import type { EventLike } from "./types.mts";
 
 // Ids come from the host, which numbers them in order.
@@ -41,7 +42,13 @@ const native = {
   inputValue: vi.fn<(nodeId: number) => string>(),
   setInputValue: vi.fn<(nodeId: number, value: string) => void>(),
   addEventListener: vi.fn<
-    (nodeId: number, event: string, capture?: boolean, passive?: boolean) => number
+    (
+      nodeId: number,
+      event: string,
+      callback: HostCallback,
+      capture?: boolean,
+      passive?: boolean,
+    ) => number
   >(() => nextCallbackId++),
   removeEventListener: vi.fn<(nodeId: number, event: string, callbackId: number) => boolean>(
     () => true,

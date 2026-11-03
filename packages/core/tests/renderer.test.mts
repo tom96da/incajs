@@ -15,6 +15,7 @@ import { createIncaApp } from "../src/vue/index.mts";
 import { vModelText, withDirectives } from "../src/vue/runtime.mts";
 import type { EventHandlers } from "../src/element/types.mts";
 import type { IncaElement, NodeId } from "../src/index.mts";
+import type { HostCallback } from "../src/native.mts";
 
 /** The handler properties, absent: nothing here reads them. */
 const noHandlers = {} as EventHandlers;
@@ -23,6 +24,9 @@ const noHandlers = {} as EventHandlers;
  * What the fake host knows of each registration beyond its node and event.
  */
 const phases = new Map<number, { capture: boolean; passive: boolean }>();
+
+/** The function the fake host keeps for each registration, as the callback table does. */
+const hostCallbacks = new Map<number, HostCallback>();
 
 /** The text of each input node in the fake host. */
 const inputValues = new Map<NodeId, string>();
@@ -143,11 +147,18 @@ function installFakeNative(): Map<NodeId, FakeNode> {
       requireNode(nodeId);
       inputValues.set(nodeId, value);
     },
-    addEventListener(nodeId: NodeId, event: string, capture = false, passive = false): number {
+    addEventListener(
+      nodeId: NodeId,
+      event: string,
+      callback: HostCallback,
+      capture = false,
+      passive = false,
+    ): number {
       const callbacks = (requireNode(nodeId).listeners[event] ??= []);
       const callbackId = nextCallbackId++;
       callbacks.push(callbackId);
       phases.set(callbackId, { capture, passive });
+      hostCallbacks.set(callbackId, callback);
       return callbackId;
     },
     removeEventListener(nodeId: NodeId, event: string, callbackId: number): boolean {
@@ -156,6 +167,7 @@ function installFakeNative(): Map<NodeId, FakeNode> {
       const index = callbacks.indexOf(callbackId);
       if (index === -1) return false;
       callbacks.splice(index, 1);
+      hostCallbacks.delete(callbackId);
       return true;
     },
     releaseListeners(nodeId: NodeId): number[] {
@@ -168,6 +180,7 @@ function installFakeNative(): Map<NodeId, FakeNode> {
         released.push(...Object.values(node.listeners).flat());
         node.listeners = {};
       }
+      for (const callbackId of released) hostCallbacks.delete(callbackId);
       return released;
     },
     holdNode(): void {},
@@ -201,7 +214,7 @@ function walk(chain: FakeNode[], event: string): { capture: boolean; passive: bo
       const phase = phases.get(callbackId)!;
       if (phase.capture !== capture) continue;
       ran.push(phase);
-      globalThis.__inca_callbacks__[callbackId]!();
+      hostCallbacks.get(callbackId)!();
     }
   };
   for (const node of chain) run(node, true);
@@ -213,7 +226,7 @@ function dispatch(node: FakeNode, event: string, payload?: unknown): void {
   const callbackIds = node.listeners[event] ?? [];
   if (callbackIds.length === 0) throw new Error(`no ${event} listener registered`);
   for (const callbackId of callbackIds) {
-    const callback = globalThis.__inca_callbacks__[callbackId];
+    const callback = hostCallbacks.get(callbackId);
     if (callback === undefined) throw new Error(`no callback registered as ${callbackId}`);
     callback(payload);
   }
@@ -227,7 +240,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
     nodes = installFakeNative();
     inputValues.clear();
     focused = null;
-    delete (globalThis as { __inca_callbacks__?: unknown }).__inca_callbacks__;
+    hostCallbacks.clear();
     const rootId = createNode("root");
     root = {
       ...noHandlers,
@@ -365,7 +378,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
     const containerId = nodes.get(root.__node_id)!.children[0]!;
     const branchId = nodes.get(containerId)!.children[0]!;
     const leafId = nodes.get(branchId)!.children[0]!;
-    expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(1);
+    expect(hostCallbacks.size).toBe(1);
 
     state.shown = false;
     await nextTick();
@@ -375,7 +388,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       nodes.has(leafId),
       "Vue removes only the subtree's root, so the descendant leaves with it",
     ).toBe(true);
-    expect(globalThis.__inca_callbacks__).toEqual({});
+    expect(hostCallbacks.size).toBe(0);
   });
 
   it("registers .capture and .passive handlers with the host's phase and passivity", async () => {
@@ -444,7 +457,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
     await nextTick();
 
     expect(div.listeners["click"]).toHaveLength(0);
-    expect(globalThis.__inca_callbacks__).toEqual({});
+    expect(hostCallbacks.size).toBe(0);
     expect(clicks).toBe(0);
   });
 });
@@ -457,7 +470,7 @@ describe("v-model on an input", () => {
     nodes = installFakeNative();
     inputValues.clear();
     focused = null;
-    delete (globalThis as { __inca_callbacks__?: unknown }).__inca_callbacks__;
+    hostCallbacks.clear();
     mountRoot = createIncaElement(rootNodeId(), "element");
   });
 

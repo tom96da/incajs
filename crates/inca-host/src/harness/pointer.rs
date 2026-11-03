@@ -170,10 +170,9 @@ mod tests {
             n.setAttribute(label, 'value', 'hi');
             n.appendChild(box, label);
             globalThis.clicks = 0;
-            globalThis.__inca_callbacks__[0] = () => {
+            n.addEventListener(box, 'click', () => {
                 globalThis.clicks++;
-            };
-            n.addEventListener(box, 'click');
+            });
         ";
 
     #[gpui::test]
@@ -256,10 +255,9 @@ mod tests {
             n.appendChild(n.rootNodeId(), box);
             globalThis.box = box;
             globalThis.log = [];
-            globalThis.__inca_callbacks__[0] = (e) => {
+            n.addEventListener(box, 'auxclick', (e) => {
                 globalThis.log.push(`${e.detail}:${e.shiftKey}:${e.button}`);
-            };
-            n.addEventListener(box, 'auxclick');
+            });
         ";
 
     #[gpui::test]
@@ -290,14 +288,12 @@ mod tests {
             n.appendChild(frame, box);
             globalThis.enters = 0;
             globalThis.leaves = 0;
-            globalThis.__inca_callbacks__[0] = () => {
+            n.addEventListener(box, 'mouseenter', () => {
                 globalThis.enters++;
-            };
-            globalThis.__inca_callbacks__[1] = () => {
+            });
+            n.addEventListener(box, 'mouseleave', () => {
                 globalThis.leaves++;
-            };
-            n.addEventListener(box, 'mouseenter');
-            n.addEventListener(box, 'mouseleave');
+            });
         ";
 
     fn hover_box(h: &mut Harness) -> NodeId {
@@ -342,10 +338,9 @@ mod tests {
                 n.setStyle(box, 'margin_left', 200);
                 n.appendChild(n.rootNodeId(), box);
                 globalThis.leaves = 0;
-                globalThis.__inca_callbacks__[0] = () => {
+                n.addEventListener(box, 'mouseleave', () => {
                     globalThis.leaves++;
-                };
-                n.addEventListener(box, 'mouseleave');
+                });
                 ",
         );
 

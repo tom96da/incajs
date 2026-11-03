@@ -6,7 +6,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rquickjs::{Class, Ctx, Function, Object};
+use inca_jsenv::callbacks;
+use rquickjs::{Class, Ctx, Value};
 
 use super::{IncaEvent, Walk, bubble_targets, is_cut, note};
 use crate::EventTargetId;
@@ -19,7 +20,6 @@ pub(super) fn deliver<'js>(
     host: &Rc<RefCell<Host>>,
     walk: &Walk<'_>,
     path: &[EventTargetId],
-    callbacks: &Object<'js>,
     event: &Class<'js, IncaEvent<'js>>,
 ) -> bool {
     let record = event.borrow();
@@ -65,11 +65,13 @@ pub(super) fn deliver<'js>(
             {
                 continue;
             }
-            let Ok(callback) = callbacks.get::<_, Function>(listener.callback) else {
-                continue;
-            };
-            state.passive.set(listener.passive);
-            let called = callback.call::<_, ()>((event.clone(),));
+            let called = callbacks::get(ctx, listener.callback).and_then(|stored| {
+                let Some(callback) = stored.and_then(Value::into_function) else {
+                    return Ok(());
+                };
+                state.passive.set(listener.passive);
+                callback.call::<_, ()>((event.clone(),))
+            });
             note(ctx, host, called);
         }
     }
@@ -350,7 +352,7 @@ mod tests {
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [outer, parent, child] = tree_of_three(&host);
-        // Callback ids follow the registration order: 0 to 3, then 4 for the one added mid-walk.
+        // Ids start at 1 in registration order: the listeners that push 0 to 3 hold ids 1 to 4.
         listen_with(
             &dispatcher,
             outer,
@@ -360,8 +362,8 @@ mod tests {
                 r"
                 () => {{
                     out.push(0);
-                   __inca_native__.removeEventListener({parent}, 'click', 1);
-                   __inca_native__.removeEventListener({child}, 'click', 2);
+                   __inca_native__.removeEventListener({parent}, 'click', 2);
+                   __inca_native__.removeEventListener({child}, 'click', 3);
                    __inca_test_listen__({parent}, 'click', () => out.push(4), true);
                 }}
                 "
@@ -388,7 +390,7 @@ mod tests {
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [outer, parent, child] = tree_of_three(&host);
-        // Callback ids follow the registration order: 0 and 1.
+        // Callback ids start at 1 in registration order: 1 and 2.
         listen_with(
             &dispatcher,
             outer,
@@ -398,7 +400,7 @@ mod tests {
                 r"
                 () => {{
                     out.push(0);
-                    __inca_native__.removeEventListener({parent}, 'click', 1);
+                    __inca_native__.removeEventListener({parent}, 'click', 2);
                     __inca_test_listen__({parent}, 'click', again, true);
                 }}
                 "
@@ -421,7 +423,7 @@ mod tests {
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [_, _, child] = tree_of_three(&host);
-        // Callback ids follow the registration order: 0 and 1.
+        // Callback ids start at 1 in registration order: 1 and 2.
         listen_with(
             &dispatcher,
             child,
@@ -431,7 +433,7 @@ mod tests {
                 r"
                 () => {{
                     out.push(0);
-                    __inca_native__.removeEventListener({child}, 'click', 1);
+                    __inca_native__.removeEventListener({child}, 'click', 2);
                     __inca_test_listen__({child}, 'click', again, true, true);
                 }}
                 "

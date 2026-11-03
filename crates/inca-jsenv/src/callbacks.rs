@@ -10,7 +10,7 @@ use crate::vault::vault;
 /// The vault key of the table.
 const TABLE: &str = "callbacks";
 /// The vault key of the id the next [`store`] hands out.
-pub(crate) const NEXT: &str = "nextCallback";
+const NEXT: &str = "nextCallback";
 /// The last id [`store`] returns. A script reads an id as `id | 0`, which keeps every id up to
 /// this one.
 pub const LAST_ID: u32 = 0x7fff_ffff;
@@ -26,6 +26,16 @@ pub(crate) fn install(ctx: &Ctx<'_>) -> JsResult<()> {
     let vault = vault(ctx)?;
     vault.set(TABLE, table)?;
     vault.set(NEXT, 1)
+}
+
+/// Sets the allocator so that the next [`store`] finds no id left.
+///
+/// # Errors
+///
+/// Returns an error if the realm has no vault.
+#[cfg(any(test, feature = "test-support"))]
+pub fn exhaust_ids(ctx: &Ctx<'_>) -> JsResult<()> {
+    vault(ctx)?.set(NEXT, LAST_ID + 1)
 }
 
 /// Stores `value` under the next id and returns it. Ids start at 1 and are never reused in one

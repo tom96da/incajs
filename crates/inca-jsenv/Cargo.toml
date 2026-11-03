@@ -29,6 +29,10 @@ serde.workspace = true
 serde_json.workspace = true
 unicode-width.workspace = true
 
+[features]
+# Exposes the test hooks other crates' tests call.
+test-support = []
+
 [dev-dependencies]
 rstest.workspace = true
 

@@ -5,22 +5,33 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createIncaElement } from "./handle.mts";
 import { markDestroyed } from "./lifecycle.mts";
+import type { HostCallback } from "../native.mts";
 import type { IncaElement } from "./types.mts";
 
-let registrations: { event: string; id: number }[] = [];
+let registrations: { event: string; id: number; callback: HostCallback }[] = [];
+let nextId = 1;
 
 /** Installs a fake host that numbers the listeners it registers, and returns it. */
 function installNative() {
   const native = {
     addEventListener: vi.fn<
-      (nodeId: number, event: string, capture: boolean, passive: boolean) => number
-    >((_nodeId, event) => {
-      const id = registrations.length + 1;
-      registrations.push({ event, id });
+      (
+        nodeId: number,
+        event: string,
+        callback: HostCallback,
+        capture: boolean,
+        passive: boolean,
+      ) => number
+    >((_nodeId, event, callback) => {
+      const id = nextId++;
+      registrations.push({ event, id, callback });
       return id;
     }),
     removeEventListener: vi.fn<(nodeId: number, event: string, callbackId: number) => boolean>(
-      () => true,
+      (_nodeId, _event, callbackId) => {
+        registrations = registrations.filter((registration) => registration.id !== callbackId);
+        return true;
+      },
     ),
     getAttribute: vi.fn<() => null>(() => null),
   };
@@ -34,14 +45,14 @@ let native = installNative();
 function fire(el: IncaElement, event = "click") {
   const payload = { type: event, currentTarget: el, preventDefault: vi.fn<() => void>() };
   for (const registration of registrations) {
-    if (registration.event === event) globalThis.__inca_callbacks__[registration.id]?.(payload);
+    if (registration.event === event) registration.callback(payload);
   }
   return payload;
 }
 
 beforeEach(() => {
-  delete (globalThis as { __inca_callbacks__?: unknown }).__inca_callbacks__;
   registrations = [];
+  nextId = 1;
   native = installNative();
 });
 
@@ -119,7 +130,13 @@ describe("createIncaElement handler properties", () => {
     el.onclick = () => {};
     el.onclick = () => {};
     expect(native.addEventListener).toHaveBeenCalledTimes(1);
-    expect(native.addEventListener).toHaveBeenCalledWith(1, "click", false, false);
+    expect(native.addEventListener).toHaveBeenCalledWith(
+      1,
+      "click",
+      expect.any(Function),
+      false,
+      false,
+    );
   });
 
   it("runs at the place of its first assignment among the listeners", () => {
@@ -158,7 +175,11 @@ describe("createIncaElement handler properties", () => {
     el.onclick = () => {};
     el.onclick = null;
     expect(native.removeEventListener).toHaveBeenCalledTimes(1);
-    expect(native.removeEventListener).toHaveBeenCalledWith(1, "click", registrations[0]!.id);
+    expect(native.removeEventListener).toHaveBeenCalledWith(
+      1,
+      "click",
+      native.addEventListener.mock.results[0]!.value,
+    );
   });
 
   it("cancels the event when the handler returns false", () => {

@@ -203,9 +203,7 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
-    use crate::callbacks::NEXT;
     use crate::timers::{self, Clock, Timers};
-    use crate::vault;
 
     /// An engine with the frame globals on a clock the test moves, and the failures the reporter
     /// received.
@@ -522,8 +520,7 @@ mod tests {
     #[test]
     fn an_exhausted_id_space_throws_a_range_error() {
         let fx = fixture();
-        fx.engine
-            .with(|ctx| vault(&ctx).unwrap().set(NEXT, LAST_ID + 1).unwrap());
+        fx.engine.with(|ctx| callbacks::exhaust_ids(&ctx).unwrap());
 
         assert_eq!(
             fx.thrown("requestAnimationFrame(() => {});"),

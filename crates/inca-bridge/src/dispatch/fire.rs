@@ -286,9 +286,6 @@ mod tests {
         listen(&dispatcher, parent, "focus", "() => {}");
         assert!(!drained(&dispatcher), "bubble listener on an ancestor");
 
-        host.borrow_mut()
-            .listeners
-            .remove(crate::EventTargetId::Node(parent), "focus", 0);
         listen_with(&dispatcher, parent, "focus", (true, false), "() => {}");
         assert!(drained(&dispatcher), "capture listener on an ancestor");
     }
@@ -305,7 +302,7 @@ mod tests {
         assert!(dispatcher.tracks_pointer());
         host.borrow_mut()
             .listeners
-            .remove(crate::EventTargetId::Node(node), "keydown", 0);
+            .remove(crate::EventTargetId::Node(node), "keydown", 1);
         assert!(!dispatcher.tracks_pointer());
 
         host.borrow_mut()

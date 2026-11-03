@@ -72,10 +72,11 @@ export function addEventListener(
   const callbackId = native().addEventListener(
     target,
     event,
+    tracking(run),
     options.capture === true,
     options.passive === true,
   );
-  addCallback(group, listener, callbackId, tracking(run));
+  addCallback(group, listener, callbackId);
 }
 
 /**

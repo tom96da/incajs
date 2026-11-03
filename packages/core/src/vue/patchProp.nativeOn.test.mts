@@ -7,20 +7,33 @@ import * as core from "../rendererCore.mts";
 import { createPatchProp } from "./patchProp.mts";
 import type { IncaElement } from "../rendererCore.mts";
 
-let registrations: { event: string; id: number }[] = [];
+/** What the host calls: it passes the event object first. */
+type Callback = (...args: unknown[]) => void;
+
+let registrations: { event: string; id: number; callback: Callback }[] = [];
+let nextId = 1;
 
 /** Installs a fake host that numbers the listeners it registers, and returns it. */
 function installNative() {
   const native = {
     addEventListener: vi.fn<
-      (nodeId: number, event: string, capture: boolean, passive: boolean) => number
-    >((_nodeId, event) => {
-      const id = registrations.length + 1;
-      registrations.push({ event, id });
+      (
+        nodeId: number,
+        event: string,
+        callback: Callback,
+        capture: boolean,
+        passive: boolean,
+      ) => number
+    >((_nodeId, event, callback) => {
+      const id = nextId++;
+      registrations.push({ event, id, callback });
       return id;
     }),
     removeEventListener: vi.fn<(nodeId: number, event: string, callbackId: number) => boolean>(
-      () => true,
+      (_nodeId, _event, callbackId) => {
+        registrations = registrations.filter((registration) => registration.id !== callbackId);
+        return true;
+      },
     ),
     setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
     removeAttribute: vi.fn<(nodeId: number, key: string) => void>(),
@@ -37,13 +50,13 @@ const patchProp = createPatchProp(core);
 function fire(el: IncaElement, event = "click"): void {
   const payload = { type: event, currentTarget: el, eventId: 1, preventDefault() {} };
   for (const registration of registrations) {
-    if (registration.event === event) globalThis.__inca_callbacks__[registration.id]?.(payload);
+    if (registration.event === event) registration.callback(payload);
   }
 }
 
 beforeEach(() => {
-  delete (globalThis as { __inca_callbacks__?: unknown }).__inca_callbacks__;
   registrations = [];
+  nextId = 1;
   native = installNative();
 });
 

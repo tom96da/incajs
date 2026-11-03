@@ -9,6 +9,7 @@ import { registerElement, unregisterElement } from "./element/lifecycle.mts";
 import { Document } from "./interfaces.mts";
 import "./targets.mts";
 import type { IncaElement } from "./element/types.mts";
+import type { HostCallback } from "./native.mts";
 
 let nextCallbackId = 0;
 let focused: number | null = null;
@@ -16,7 +17,13 @@ let focused: number | null = null;
 const native = {
   focusedNode: vi.fn<() => number | null>(() => focused),
   addEventListener: vi.fn<
-    (target: number | string, event: string, capture?: boolean, passive?: boolean) => number
+    (
+      target: number | string,
+      event: string,
+      callback: HostCallback,
+      capture?: boolean,
+      passive?: boolean,
+    ) => number
   >(() => nextCallbackId++),
   removeEventListener: vi.fn<
     (target: number | string, event: string, callbackId: number) => boolean
@@ -29,7 +36,6 @@ beforeEach(() => {
   nextCallbackId = 0;
   focused = null;
   globalThis.__inca_native__ = native as never;
-  delete (globalThis as { __inca_callbacks__?: unknown }).__inca_callbacks__;
 });
 
 afterEach(() => {
@@ -71,6 +77,7 @@ describe("document", () => {
     expect(native.addEventListener).toHaveBeenCalledExactlyOnceWith(
       "$document",
       "keydown",
+      expect.any(Function),
       false,
       false,
     );
@@ -103,7 +110,7 @@ describe("document", () => {
     document.addEventListener("wheel", vi.fn<() => void>(), { passive: false });
     document.addEventListener("scroll", vi.fn<() => void>());
 
-    expect(native.addEventListener.mock.calls.map((call) => call[3])).toEqual([true, false, false]);
+    expect(native.addEventListener.mock.calls.map((call) => call[4])).toEqual([true, false, false]);
   });
 
   it("carries every HANDLER_EVENTS property", () => {
@@ -118,12 +125,12 @@ describe("document", () => {
     document.onkeydown = function (this: unknown, event: { key: string }) {
       keys.push(this, event.key);
     };
-    const callbackId = native.addEventListener.mock.results[0]!.value;
-    globalThis.__inca_callbacks__[callbackId]!({ key: "a", currentTarget: document });
+    native.addEventListener.mock.calls[0]![2]({ key: "a", currentTarget: document });
 
     expect(native.addEventListener).toHaveBeenCalledExactlyOnceWith(
       "$document",
       "keydown",
+      expect.any(Function),
       false,
       false,
     );

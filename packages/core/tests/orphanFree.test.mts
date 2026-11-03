@@ -13,13 +13,18 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Component } from "@vue/runtime-core";
 
+import { callbackIdFor, groupOf, registeredGroupCount } from "../src/callbacks.mts";
 import { elementOf, isDestroyed } from "../src/element/lifecycle.mts";
 import { createElementNode } from "../src/element/shadowTree.mts";
 import { createIncaApp } from "../src/vue/index.mts";
 import type { IncaElement } from "../src/index.mts";
+import type { HostCallback } from "../src/native.mts";
 
 /** Node's timers, put back after a test loads core over the fake host. */
 const nodeTimers = { setTimeout, setInterval, clearTimeout, clearInterval };
+
+/** The function the fake host keeps for each registration, as the callback table does. */
+const hostCallbacks = new Map<number, HostCallback>();
 
 interface FakeNode {
   tag: string;
@@ -65,6 +70,7 @@ function freeSubtree(id: number, freed: number[], callbacks: number[]): void {
   orphans.delete(id);
   freed.push(id);
   callbacks.push(...node.listeners);
+  for (const callbackId of node.listeners) hostCallbacks.delete(callbackId);
   for (const child of node.children) freeSubtree(child, freed, callbacks);
 }
 
@@ -111,15 +117,17 @@ function installNative(): void {
     removeStyle: (id) => void nodeOf(id),
     inputValue: (id) => (nodeOf(id), ""),
     setInputValue: (id) => void nodeOf(id),
-    addEventListener(id) {
+    addEventListener(id, _event, callback) {
       const callbackId = nextCallbackId++;
       nodeOf(id as number).listeners.push(callbackId);
+      hostCallbacks.set(callbackId, callback);
       return callbackId;
     },
     removeEventListener(id, _event, callbackId) {
       const listeners = nodeOf(id as number).listeners;
       const at = listeners.indexOf(callbackId);
       if (at !== -1) listeners.splice(at, 1);
+      hostCallbacks.delete(callbackId);
       return at !== -1;
     },
     attributeNames: (id) => (nodeOf(id), []),
@@ -136,6 +144,7 @@ function installNative(): void {
         if (!node) continue;
         pending.push(...node.children);
         callbacks.push(...node.listeners);
+        for (const callbackId of node.listeners) hostCallbacks.delete(callbackId);
         node.listeners = [];
       }
       return callbacks;
@@ -182,7 +191,7 @@ async function settle(): Promise<void> {
 }
 
 function click(id: number): void {
-  for (const callbackId of nodeOf(id).listeners) globalThis.__inca_callbacks__[callbackId]!();
+  for (const callbackId of nodeOf(id).listeners) hostCallbacks.get(callbackId)!();
 }
 
 function idsOf(tag: string): number[] {
@@ -200,7 +209,7 @@ function mountApp(App: Component): void {
 
 beforeEach(() => {
   installNative();
-  delete (globalThis as { __inca_callbacks__?: unknown }).__inca_callbacks__;
+  hostCallbacks.clear();
   vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.spyOn(console, "info").mockImplementation(() => {});
 });
@@ -338,6 +347,7 @@ describe("a host that frees orphans, driven by the Inca renderer", () => {
     };
     const App = { render: () => h("div", [h("span", { onClick: () => {} }), h(Bad)]) };
 
+    const groups = registeredGroupCount();
     try {
       mountApp(App);
     } catch {
@@ -353,7 +363,7 @@ describe("a host that frees orphans, driven by the Inca renderer", () => {
     frame();
 
     expect(nodes.has(spanId)).toBe(false);
-    expect(globalThis.__inca_callbacks__[callbackIds[0]!]).toBeUndefined();
+    expect(registeredGroupCount()).toBe(groups);
     expect(isDestroyed(span)).toBe(true);
     expect(nodes.size).toBe(1);
   });
@@ -368,7 +378,7 @@ describe("__inca_released__", () => {
 
     globalThis.__inca_released__([el.__node_id, 9999], [callbackId]);
 
-    expect(globalThis.__inca_callbacks__[callbackId]).toBeUndefined();
+    expect(callbackIdFor(groupOf(el.__node_id, "click", false), listener)).toBeUndefined();
   });
 
   it("marks the handles of the freed ids destroyed", () => {
@@ -380,24 +390,6 @@ describe("__inca_released__", () => {
     globalThis.__inca_released__([el.__node_id, 9999], [callbackId]);
 
     expect(isDestroyed(el)).toBe(true);
-  });
-
-  it("releases the rest when one release throws", () => {
-    const a = createElementNode("div");
-    const b = createElementNode("div");
-    a.addEventListener("click", () => {});
-    b.addEventListener("click", () => {});
-    const first = nodeOf(a.__node_id).listeners[0]!;
-    const second = nodeOf(b.__node_id).listeners[0]!;
-    Object.defineProperty(globalThis.__inca_callbacks__, first, { configurable: false });
-
-    expect(() => globalThis.__inca_released__([a.__node_id, b.__node_id], [first, second])).toThrow(
-      TypeError,
-    );
-
-    expect(globalThis.__inca_callbacks__[second]).toBeUndefined();
-    expect(isDestroyed(b)).toBe(true);
-    expect(isDestroyed(a)).toBe(true);
   });
 
   it("stays in place when a script assigns to it", () => {

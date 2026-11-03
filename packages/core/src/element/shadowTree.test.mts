@@ -440,16 +440,6 @@ describe("remove", () => {
     expect(host.holdNode).not.toHaveBeenCalled();
   });
 
-  it("drops the callbacks the host reports released", () => {
-    const child = element();
-    globalThis.__inca_callbacks__ = { 5: () => {} };
-    vi.mocked(host.releaseListeners).mockReturnValueOnce([5]);
-
-    tree.remove(child);
-
-    expect(globalThis.__inca_callbacks__[5]).toBeUndefined();
-  });
-
   it("makes the removed subtree ignore listener calls", () => {
     const root = tree.createElementNode("div");
     const mid = tree.createElementNode("div");

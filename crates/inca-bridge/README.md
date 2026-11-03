@@ -15,12 +15,12 @@ virtual tree (`inca-gpui`'s `VirtualTree`):
   read the attribute, focus, layout and scroll offset of a node, and scroll a
   node or bring it into view. `Host::reveal_focus` carries out the reveal.
   `holdNode` keeps a parentless node and its subtree alive through the
-  orphan sweep, and `releaseNode` ends the hold. `install` also creates an
-  empty null-prototype `globalThis.__inca_callbacks__`. A script can neither
-  replace nor delete it or `__inca_native__`.
+  orphan sweep, and `releaseNode` ends the hold. `addEventListener`
+  keeps the function it gets in the callback table of the engine. A script
+  can neither replace nor delete `__inca_native__`.
 - `EventDispatcher` carries a native input event the other way: from `gpui`
-  into whichever JS callbacks are registered for it, via
-  `globalThis.__inca_callbacks__`, with one event object passed along the
+  into whichever JS callbacks are registered for it, read from the callback
+  table of the engine, with one event object passed along the
   path of its target. It reads the objects that stand for the nodes of that
   path from `globalThis.__inca_targets__`. When a frame's orphan sweep frees
   nodes, it calls `globalThis.__inca_released__` with their ids and the ids

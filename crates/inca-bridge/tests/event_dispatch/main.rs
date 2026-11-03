@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Integration tests for `inca_bridge::EventDispatcher`'s event dispatch: a real
-//! `VirtualTree`, connected to a real `QuickJS` callback via the
-//! `__inca_callbacks__` convention (see `EventDispatcher`'s doc comment),
-//! rendered through `render_tree_with_events`.
+//! `VirtualTree`, connected to a real `QuickJS` callback via the callback table (see
+//! `EventDispatcher`'s doc comment), rendered through `render_tree_with_events`.
 
 #![allow(clippy::unwrap_used, clippy::float_cmp)]
 

@@ -30,6 +30,8 @@ serde_json.workspace = true
 test-support = ["gpui/test-support", "inca-gpui/test-support"]
 
 [dev-dependencies]
+# Enables the callback test hook of inca-jsenv for this crate's tests.
+inca-jsenv = { path = "../inca-jsenv", features = ["test-support"] }
 rstest.workspace = true
 inca-test-macros = { path = "../inca-test-macros" }
 env_logger.workspace = true

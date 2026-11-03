@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use inca_gpui::{EventPayload, NodeId};
 use inca_jsenv::{Engine, EngineError};
-use rquickjs::{Ctx, Object, Result as JsResult};
+use rquickjs::{Ctx, Result as JsResult};
 
 use super::construct::create;
 use super::{Flags, IncaEvent};
@@ -144,9 +144,6 @@ pub(super) fn script_walk<'a>(
 }
 
 pub(super) fn run(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, walk: &Walk<'_>, id: u64) -> Outcome {
-    let Ok(callbacks) = ctx.globals().get::<_, Object>("__inca_callbacks__") else {
-        return Outcome::default();
-    };
     let path = path_from(&host.borrow(), walk.target);
     let created = targets_of(ctx, &path).and_then(|targets| create(ctx, walk, id, targets));
     let event = match created {
@@ -156,7 +153,7 @@ pub(super) fn run(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, walk: &Walk<'_>, id: 
             return Outcome::default();
         }
     };
-    let canceled = deliver(ctx, host, walk, &path, &callbacks, &event);
+    let canceled = deliver(ctx, host, walk, &path, &event);
     Outcome {
         canceled,
         entered: false,

@@ -5,8 +5,7 @@
 //! JS calls to read the root handle, mutate the retained virtual tree,
 //! register input-event callbacks, dispatch events from script, read and
 //! write the text of an input, and free what it no longer needs. It defines
-//! the timer and frame callback functions of the global object and creates the empty
-//! `globalThis.__inca_callbacks__`, where JS stores each listener under its callback id.
+//! the timer and frame callback functions of the global object.
 
 mod attributes;
 mod capture;
@@ -36,12 +35,11 @@ use scroll::install_scroll;
 use selector::install_selector;
 use tree::install_tree;
 
-/// Installs `globalThis.__inca_native__` into `ctx`, wired to `host`, and an
-/// empty null-prototype `globalThis.__inca_callbacks__`. Both globals are
-/// read-only and non-configurable, so a script can neither replace nor delete
-/// them. The timer functions `setTimeout`, `setInterval`, `clearTimeout` and
-/// `clearInterval` run over the timers of `host`. A timer runs only after
-/// [`crate::EventDispatcher::start_timers`] or
+/// Installs `globalThis.__inca_native__` into `ctx`, wired to `host`. The global is read-only and
+/// non-configurable, so a script can neither replace nor delete it. `addEventListener` keeps each
+/// listener function in the callback table of the engine. The timer functions `setTimeout`,
+/// `setInterval`, `clearTimeout` and `clearInterval` run over the timers of `host`. A timer runs
+/// only after [`crate::EventDispatcher::start_timers`] or
 /// [`crate::EventDispatcher::run_timers_idle`] runs; without one the timer
 /// stays queued. `requestAnimationFrame` and `cancelAnimationFrame` run over the frame callbacks
 /// of `host`, which run in the frames of the window that
@@ -70,10 +68,7 @@ pub fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
     inca_jsenv::frames::install(ctx, &host.borrow().frames)?;
     crate::event::install(ctx)?;
     let globals = ctx.globals();
-    globals.prop("__inca_native__", native)?;
-    let table = Object::new(ctx.clone())?;
-    table.set_prototype(None)?;
-    globals.prop("__inca_callbacks__", table)
+    globals.prop("__inca_native__", native)
 }
 
 /// What every native binding needs while it is registered.
@@ -108,8 +103,6 @@ mod tests {
     #[rstest]
     #[case::native_assigned("__inca_native__", "globalThis.__inca_native__ = null;")]
     #[case::native_deleted("__inca_native__", "delete globalThis.__inca_native__;")]
-    #[case::callbacks_assigned("__inca_callbacks__", "globalThis.__inca_callbacks__ = null;")]
-    #[case::callbacks_deleted("__inca_callbacks__", "delete globalThis.__inca_callbacks__;")]
     fn a_script_cannot_replace_a_bridge_global(#[case] name: &str, #[case] change: &str) {
         let (engine, _host) = engine_with_bindings();
 
@@ -126,30 +119,6 @@ mod tests {
             .unwrap();
 
         assert!(kept, "{name}: {change}");
-    }
-
-    #[test]
-    fn the_callback_table_ignores_object_prototype_accessors() {
-        let (engine, _host) = engine_with_bindings();
-
-        let own: bool = engine
-            .eval(
-                r"
-                Object.defineProperty(Object.prototype, 0, {
-                    get() {
-                        return 'inherited';
-                    },
-                    set(value) {
-                        globalThis.caught = value;
-                    },
-                });
-                globalThis.__inca_callbacks__[0] = 'own';
-                globalThis.caught === undefined && globalThis.__inca_callbacks__[0] === 'own';
-                ",
-            )
-            .unwrap();
-
-        assert!(own);
     }
 
     #[test]

@@ -5,9 +5,9 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use rquickjs::{Ctx, Exception, Result as JsResult, Value};
-
 use inca_gpui::NodeId;
+use inca_jsenv::callbacks;
+use rquickjs::{Ctx, Exception, Result as JsResult, Value};
 
 use super::Natives;
 use super::convert::{Flag, JsCallbackId, JsEventTargetId, JsNodeId, existing_node};
@@ -18,7 +18,7 @@ use crate::EventTargetId;
 /// is passive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Listener {
-    /// The id the JS caller stored its function under.
+    /// The id of the function in the callback table.
     pub callback: u32,
     /// Listens while the event travels down to the target.
     pub capture: bool,
@@ -38,30 +38,11 @@ pub struct Listener {
 #[derive(Debug, Default)]
 pub struct EventListeners {
     pub(super) by_target: HashMap<EventTargetId, HashMap<String, Vec<Listener>>>,
-    pub(super) next_callback: u32,
 }
 
 impl EventListeners {
-    /// Allocates the next callback id, registers it on `(target, event)` with
-    /// the given phase and passivity, and returns it. Ids rise from 0 in call
-    /// order, and each id is issued once, also after [`remove`](Self::remove)
-    /// or [`release`](Self::release). The last id is `u32::MAX - 1`. After it
-    /// the call returns `None` and leaves the registrations unchanged.
-    pub fn add(
-        &mut self,
-        target: EventTargetId,
-        event: impl Into<String>,
-        capture: bool,
-        passive: bool,
-    ) -> Option<u32> {
-        let id = self.next_callback;
-        self.next_callback = id.checked_add(1)?;
-        self.insert(target, event, id, capture, passive);
-        Some(id)
-    }
-
     /// Adds `callback_id` to `(target, event)` with the given phase and
-    /// passivity. An id already there leaves the registrations unchanged.
+    /// passivity.
     fn insert(
         &mut self,
         target: EventTargetId,
@@ -76,13 +57,11 @@ impl EventListeners {
             .or_default()
             .entry(event.into())
             .or_default();
-        if !listeners.iter().any(|l| l.callback == callback_id) {
-            listeners.push(Listener {
-                callback: callback_id,
-                capture,
-                passive,
-            });
-        }
+        listeners.push(Listener {
+            callback: callback_id,
+            capture,
+            passive,
+        });
     }
 
     /// Drops `callback_id` from `(target, event)`, and reports whether it
@@ -143,30 +122,43 @@ pub(super) fn install_events(n: &Natives<'_, '_>) -> JsResult<()> {
 
 fn add_event_listener<'js>(
     host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsEventTargetId, String, Flag, Flag) -> JsResult<u32> {
-    move |ctx, JsEventTargetId(target), event, capture, passive| {
+) -> impl Fn(Ctx<'js>, JsEventTargetId, String, Value<'js>, Flag, Flag) -> JsResult<u32> {
+    move |ctx, JsEventTargetId(target), event, callback, capture, passive| {
         let mut host = host.borrow_mut();
         if let EventTargetId::Node(node_id) = target {
             existing_node(&ctx, &host.tree, node_id)?;
         }
-        host.listeners
-            .add(
-                target,
-                event,
-                capture.0.flatten().unwrap_or(false),
-                passive.0.flatten().unwrap_or(false),
-            )
-            .ok_or_else(|| Exception::throw_range(&ctx, "callback ids are exhausted"))
+        if !callback.is_function() {
+            return Err(Exception::throw_type(
+                &ctx,
+                "addEventListener takes a function. pass a function as the callback",
+            ));
+        }
+        let id = callbacks::store(&ctx, callback)?
+            .ok_or_else(|| Exception::throw_range(&ctx, "callback ids are exhausted"))?;
+        host.listeners.insert(
+            target,
+            event,
+            id,
+            capture.0.flatten().unwrap_or(false),
+            passive.0.flatten().unwrap_or(false),
+        );
+        Ok(id)
     }
 }
 
-fn remove_event_listener(
+fn remove_event_listener<'js>(
     host: Rc<RefCell<Host>>,
-) -> impl Fn(JsEventTargetId, String, JsCallbackId) -> bool {
-    move |JsEventTargetId(target), event, JsCallbackId(callback_id)| {
-        host.borrow_mut()
+) -> impl Fn(Ctx<'js>, JsEventTargetId, String, JsCallbackId) -> JsResult<bool> {
+    move |ctx, JsEventTargetId(target), event, JsCallbackId(callback_id)| {
+        let removed = host
+            .borrow_mut()
             .listeners
-            .remove(target, &event, callback_id)
+            .remove(target, &event, callback_id);
+        if removed {
+            callbacks::release(&ctx, &[callback_id])?;
+        }
+        Ok(removed)
     }
 }
 
@@ -194,6 +186,7 @@ mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
     use crate::test_support::{callback_ids, engine_with_bindings};
+    use crate::tests::callback_stored;
     use rstest::rstest;
 
     #[test]
@@ -220,33 +213,17 @@ mod tests {
     }
 
     #[test]
-    fn a_repeated_registration_keeps_the_first() {
-        let mut listeners = EventListeners::default();
-        listeners.insert(EventTargetId::Node(1), "wheel", 7, true, true);
-        listeners.insert(EventTargetId::Node(1), "wheel", 7, false, false);
-
-        assert_eq!(
-            listeners.listeners_for(EventTargetId::Node(1), "wheel"),
-            &[Listener {
-                callback: 7,
-                capture: true,
-                passive: true
-            }]
-        );
-    }
-
-    #[test]
     fn add_event_listener_takes_optional_capture_and_passive_flags() {
         let (engine, host) = engine_with_bindings();
         engine
             .eval::<()>(
                 r"
                 const n = __inca_native__.createNode('div');
-                __inca_native__.addEventListener(n, 'a');
-                __inca_native__.addEventListener(n, 'a', true);
-                __inca_native__.addEventListener(n, 'a', false, true);
-                __inca_native__.addEventListener(n, 'a', true, true);
-                __inca_native__.removeEventListener(n, 'a', 3);
+                __inca_native__.addEventListener(n, 'a', () => {});
+                __inca_native__.addEventListener(n, 'a', () => {}, true);
+                __inca_native__.addEventListener(n, 'a', () => {}, false, true);
+                __inca_native__.addEventListener(n, 'a', () => {}, true, true);
+                __inca_native__.removeEventListener(n, 'a', 4);
                 ",
             )
             .unwrap();
@@ -259,7 +236,7 @@ mod tests {
             .collect();
         assert_eq!(
             flags,
-            [(0, false, false), (1, true, false), (2, false, true)]
+            [(1, false, false), (2, true, false), (3, false, true)]
         );
     }
 
@@ -270,7 +247,7 @@ mod tests {
             .eval::<()>(
                 r"
                 const n = __inca_native__.createNode('div');
-                __inca_native__.addEventListener(n, 'a', undefined, undefined);
+                __inca_native__.addEventListener(n, 'a', () => {}, undefined, undefined);
                 ",
             )
             .unwrap();
@@ -285,95 +262,38 @@ mod tests {
     }
 
     #[test]
-    fn add_hands_out_ids_from_zero_in_call_order_across_nodes_and_events() {
-        let mut listeners = EventListeners::default();
+    fn add_event_listener_registers_each_id_under_the_target_it_names() {
+        let (engine, host) = engine_with_bindings();
+        engine
+            .eval::<()>(
+                r"
+                const first = __inca_native__.createNode('div');
+                const second = __inca_native__.createNode('div');
+                __inca_native__.addEventListener(first, 'click', () => {});
+                __inca_native__.addEventListener(second, 'click', () => {}, true);
+                __inca_native__.addEventListener(first, 'focus', () => {}, false, true);
+                ",
+            )
+            .unwrap();
+        let host = host.borrow();
 
         assert_eq!(
-            listeners.add(EventTargetId::Node(1), "click", false, false),
-            Some(0)
-        );
-        assert_eq!(
-            listeners.add(EventTargetId::Node(2), "click", true, false),
-            Some(1)
-        );
-        assert_eq!(
-            listeners.add(EventTargetId::Node(1), "focus", false, true),
-            Some(2)
-        );
-        assert_eq!(
-            callback_ids(&listeners, EventTargetId::Node(1), "click"),
-            &[0]
-        );
-        assert_eq!(
-            callback_ids(&listeners, EventTargetId::Node(2), "click"),
+            callback_ids(&host.listeners, EventTargetId::Node(1), "click"),
             &[1]
         );
         assert_eq!(
-            callback_ids(&listeners, EventTargetId::Node(1), "focus"),
+            callback_ids(&host.listeners, EventTargetId::Node(2), "click"),
             &[2]
         );
         assert_eq!(
-            listeners.listeners_for(EventTargetId::Node(1), "focus"),
+            host.listeners
+                .listeners_for(EventTargetId::Node(1), "focus"),
             &[Listener {
-                callback: 2,
+                callback: 3,
                 capture: false,
                 passive: true
             }]
         );
-    }
-
-    #[test]
-    fn add_never_reuses_an_id_after_remove_or_release() {
-        let mut listeners = EventListeners::default();
-        let first = listeners
-            .add(EventTargetId::Node(1), "click", false, false)
-            .unwrap();
-        listeners.remove(EventTargetId::Node(1), "click", first);
-        let second = listeners
-            .add(EventTargetId::Node(1), "click", false, false)
-            .unwrap();
-        listeners.release(1);
-
-        assert_eq!((first, second), (0, 1));
-        assert_eq!(
-            listeners.add(EventTargetId::Node(1), "click", false, false),
-            Some(2)
-        );
-    }
-
-    #[test]
-    fn add_returns_none_once_the_ids_run_out() {
-        let mut listeners = EventListeners {
-            next_callback: u32::MAX - 1,
-            ..EventListeners::default()
-        };
-
-        assert_eq!(
-            listeners.add(EventTargetId::Node(1), "click", false, false),
-            Some(u32::MAX - 1)
-        );
-        assert_eq!(
-            listeners.add(EventTargetId::Node(1), "focus", false, false),
-            None
-        );
-        assert_eq!(
-            listeners.add(EventTargetId::Node(1), "focus", false, false),
-            None
-        );
-    }
-
-    #[test]
-    fn add_registers_nothing_once_the_ids_run_out() {
-        let mut listeners = EventListeners {
-            next_callback: u32::MAX - 1,
-            ..EventListeners::default()
-        };
-
-        let _ = listeners.add(EventTargetId::Node(1), "click", false, false);
-        let _ = listeners.add(EventTargetId::Node(1), "focus", false, false);
-        let _ = listeners.add(EventTargetId::Node(1), "focus", false, false);
-
-        assert!(callback_ids(&listeners, EventTargetId::Node(1), "focus").is_empty());
     }
 
     #[test]
@@ -384,14 +304,14 @@ mod tests {
             .eval(
                 r"
                 const n = __inca_native__.createNode('div');
-                [__inca_native__.addEventListener(n, 'a'),
-                 __inca_native__.addEventListener(n, 'b', true),
-                 __inca_native__.addEventListener(n, 'a')]
+                [__inca_native__.addEventListener(n, 'a', () => {}),
+                 __inca_native__.addEventListener(n, 'b', () => {}, true),
+                 __inca_native__.addEventListener(n, 'a', () => {})]
                 ",
             )
             .unwrap();
 
-        assert_eq!(ids, [0, 1, 2]);
+        assert_eq!(ids, [1, 2, 3]);
     }
 
     #[test]
@@ -402,7 +322,7 @@ mod tests {
             .eval::<()>(
                 r"
                 globalThis.typeError = false;
-                try { __inca_native__.addEventListener(9999, 'click'); }
+                try { __inca_native__.addEventListener(9999, 'click', () => {}); }
                 catch (e) { globalThis.typeError = e instanceof TypeError; }
                 ",
             )
@@ -411,38 +331,77 @@ mod tests {
         assert!(engine.eval::<bool>("typeError").unwrap());
     }
 
-    #[test]
-    fn a_failed_add_event_listener_takes_no_callback_id() {
-        let (engine, _host) = engine_with_bindings();
-
+    /// Makes an `addEventListener` on an unknown node fail, and leaves a node `n`.
+    fn failed_add(engine: &inca_jsenv::Engine) {
         engine
             .eval::<()>(
                 r"
                 globalThis.n = __inca_native__.createNode('div');
-                try { __inca_native__.addEventListener(9999, 'click'); }
+                try { __inca_native__.addEventListener(9999, 'click', () => {}); }
                 catch (e) {}
                 ",
             )
             .unwrap();
+    }
+
+    #[test]
+    fn a_failed_add_event_listener_stores_nothing() {
+        let (engine, _host) = engine_with_bindings();
+        failed_add(&engine);
+
+        assert!(!callback_stored(&engine, 1));
+    }
+
+    #[test]
+    fn a_failed_add_event_listener_takes_no_callback_id() {
+        let (engine, _host) = engine_with_bindings();
+        failed_add(&engine);
 
         assert_eq!(
             engine
-                .eval::<u32>("__inca_native__.addEventListener(n, 'click')")
+                .eval::<u32>("__inca_native__.addEventListener(n, 'click', () => {})")
                 .unwrap(),
-            0
+            1
         );
+    }
+
+    #[test]
+    fn add_event_listener_throws_type_error_for_a_callback_that_is_not_a_function() {
+        let (engine, host) = engine_with_bindings();
+
+        let type_error: bool = engine
+            .eval(
+                r"
+                (() => {
+                    const n = __inca_native__.createNode('div');
+                    try {
+                        __inca_native__.addEventListener(n, 'click', true);
+                        return false;
+                    } catch (e) {
+                        return e instanceof TypeError;
+                    }
+                })()
+                ",
+            )
+            .unwrap();
+
+        assert!(type_error);
+        assert!(host.borrow().listeners.is_empty());
+        assert!(!callback_stored(&engine, 1));
     }
 
     #[test]
     fn add_event_listener_throws_range_error_once_the_ids_run_out() {
         let (engine, host) = engine_with_bindings();
-        host.borrow_mut().listeners.next_callback = u32::MAX;
+        engine.with(|ctx| {
+            callbacks::exhaust_ids(&ctx).unwrap();
+        });
 
         let range_error: bool = engine
             .eval(
                 r"
                 (() => { const n = __inca_native__.createNode('div');
-                try { __inca_native__.addEventListener(n, 'click'); return false; }
+                try { __inca_native__.addEventListener(n, 'click', () => {}); return false; }
                 catch (e) { return e instanceof RangeError; } })()
                 ",
             )
@@ -489,9 +448,9 @@ mod tests {
             .eval(
                 r"
                 const n = __inca_native__.createNode('div');
-                __inca_native__.addEventListener('$document', 'click');
-                __inca_native__.addEventListener('$window', 'click');
-                __inca_native__.addEventListener(n, 'click');
+                __inca_native__.addEventListener('$document', 'click', () => {});
+                __inca_native__.addEventListener('$window', 'click', () => {});
+                __inca_native__.addEventListener(n, 'click', () => {});
                 __inca_native__.destroyNode(n)
                 ",
             )
@@ -500,16 +459,16 @@ mod tests {
 
         assert_eq!(
             node_callbacks,
-            [2],
+            [3],
             "freeing a node frees only its own callbacks"
         );
         assert_eq!(
             callback_ids(&host.listeners, EventTargetId::Document, "click"),
-            [0]
+            [1]
         );
         assert_eq!(
             callback_ids(&host.listeners, EventTargetId::Window, "click"),
-            [1]
+            [2]
         );
     }
 
@@ -521,7 +480,7 @@ mod tests {
             .eval(
                 r"
                 const node = __inca_native__.createNode('div');
-                const id = __inca_native__.addEventListener(node, 'click');
+                const id = __inca_native__.addEventListener(node, 'click', () => {});
                 __inca_native__.removeEventListener(node, 'click', id);
                 ",
             )
@@ -529,6 +488,40 @@ mod tests {
 
         assert!(removed);
         assert!(callback_ids(&host.borrow().listeners, EventTargetId::Node(1), "click").is_empty());
+    }
+
+    #[test]
+    fn remove_event_listener_releases_the_table_entry() {
+        let (engine, _host) = engine_with_bindings();
+
+        engine
+            .eval::<()>(
+                r"
+                const node = __inca_native__.createNode('div');
+                const id = __inca_native__.addEventListener(node, 'click', () => {});
+                __inca_native__.removeEventListener(node, 'click', id);
+                ",
+            )
+            .unwrap();
+
+        assert!(!callback_stored(&engine, 1));
+    }
+
+    #[test]
+    fn removing_a_callback_id_that_is_not_registered_keeps_the_table_entry() {
+        let (engine, _host) = engine_with_bindings();
+
+        engine
+            .eval::<()>(
+                r"
+                const node = __inca_native__.createNode('div');
+                __inca_native__.addEventListener(node, 'click', () => {});
+                __inca_native__.removeEventListener(node, 'focus', 1);
+                ",
+            )
+            .unwrap();
+
+        assert!(callback_stored(&engine, 1));
     }
 
     #[test]
@@ -566,8 +559,8 @@ mod tests {
         let script = format!(
             r"
             const node = __inca_native__.createNode('div');
-            __inca_native__.addEventListener(node, 'click');
-            __inca_native__.addEventListener(node, 'click');
+            __inca_native__.addEventListener(node, 'click', () => {{}});
+            __inca_native__.addEventListener(node, 'click', () => {{}});
             let caught = false;
             try {{
                 __inca_native__.removeEventListener(node, 'click', {bad});
@@ -581,7 +574,7 @@ mod tests {
         assert!(engine.eval::<bool>(&script).unwrap(), "{bad}");
         assert_eq!(
             callback_ids(&host.borrow().listeners, EventTargetId::Node(1), "click"),
-            [0, 1],
+            [1, 2],
             "{bad}"
         );
     }

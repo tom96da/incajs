@@ -7,7 +7,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use inca_gpui::{EventPayload, MousePayload, NodeId};
-use rquickjs::{Class, Ctx, Exception, Object, Result as JsResult, Value};
+use rquickjs::{Class, Ctx, Exception, Result as JsResult, Value};
 
 use super::listeners::{deliver, end_dispatch};
 use super::{IncaEvent, listened, next_event_id, path_from, run, script_walk, targets_of};
@@ -56,15 +56,11 @@ pub(crate) fn dispatch_event<'js>(
     drop(record.held.target.replace(targets.first().cloned()));
     state.trusted.set(false);
     if listened(&host.borrow(), walk.name, walk.flags, target, walk.cut) {
-        let callbacks = ctx
-            .globals()
-            .get::<_, Object>("__inca_callbacks__")
-            .or_else(|_| Object::new(ctx.clone()))?;
         state.event_id.set(Some(next_event_id(host)));
         drop(record.held.path.replace(targets));
         // Last, so a failure above leaves the event free to dispatch again.
         state.dispatching.set(true);
-        deliver(ctx, host, &walk, &path, &callbacks, &event);
+        deliver(ctx, host, &walk, &path, &event);
     } else {
         end_dispatch(&record);
     }
@@ -179,16 +175,16 @@ mod tests {
             &format!(
                 r"
                 (() => {{ const out = [];
-                const first = __inca_native__.addEventListener({node}, 'ping');
-                const second = __inca_native__.addEventListener({node}, 'ping');
-                __inca_callbacks__[first] = () => out.push('first');
-                __inca_callbacks__[second] = () => out.push('second');
+                const n = __inca_native__;
+                const add = (name) => n.addEventListener({node}, 'ping', () => out.push(name));
+                const first = add('first');
+                const second = add('second');
                 __inca_native__.dispatchEvent({node}, new Event('ping'));
                 return [first, second, out]; }})()
                 "
             ),
         );
-        assert_eq!(got, serde_json::json!([0, 1, ["first", "second"]]));
+        assert_eq!(got, serde_json::json!([1, 2, ["first", "second"]]));
     }
 
     #[test]

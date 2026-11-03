@@ -123,8 +123,8 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
-    use crate::callbacks::{LAST_ID, NEXT};
-    use crate::{Clock, Engine, EngineError, ErrorReporter, run_timers, vault};
+    use crate::callbacks;
+    use crate::{Clock, Engine, EngineError, ErrorReporter, run_timers};
 
     /// An engine with the timer globals, over a clock that stands still, and the failures the
     /// reporter received.
@@ -363,8 +363,7 @@ mod tests {
     #[case::set_interval("setInterval")]
     fn an_exhausted_id_space_throws_a_range_error(#[case] name: &str) {
         let fx = fixture();
-        fx.engine
-            .with(|ctx| vault(&ctx).unwrap().set(NEXT, LAST_ID + 1).unwrap());
+        fx.engine.with(|ctx| callbacks::exhaust_ids(&ctx).unwrap());
 
         assert_eq!(
             fx.thrown(&format!("{name}(() => {{}}, 0);")),
