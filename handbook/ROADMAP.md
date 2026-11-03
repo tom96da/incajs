@@ -397,8 +397,8 @@ Items that need a decision before they can join a phase.
 - **Release engineering beyond packaging**: auto-update, code signing and
   notarization. Phase 3.3 produces an application with no update or trust path.
 - **Crash reporting**: a host panic prints in the terminal of `inca dev` and
-  goes to `panic.log` in a packaged app. A native fault under it needs an
-  out-of-process collector, which is separate work.
+  goes to the log file of the run in a packaged app. A native fault under it
+  needs an out-of-process collector, which is separate work.
 - **A JS debugger**: QuickJS ships no inspector protocol, and nothing maps a
   running frame back to a `.vue` source line. Today a bundle's failure is a
   message and a stack, and nothing steps through it.

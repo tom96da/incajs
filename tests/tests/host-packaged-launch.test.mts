@@ -7,7 +7,17 @@
 // on any platform.
 
 import { spawn } from "node:child_process";
-import { cp, link, mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import {
+  cp,
+  link,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  realpath,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -38,9 +48,12 @@ async function placeExecutable(exeDir: string): Promise<string> {
   return exe;
 }
 
-/** Runs `exe` with no argv from `/`, resolving with its exit code and stderr. */
-function launch(exe: string): Promise<{ code: number | null; stdout: string; stderr: string }> {
-  const child = spawn(exe, [], { cwd: "/", stdio: ["ignore", "pipe", "pipe"] });
+/** Runs `exe` with no argv from `/`, resolving with its exit code and output. */
+function launch(
+  exe: string,
+  env?: NodeJS.ProcessEnv,
+): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  const child = spawn(exe, [], { cwd: "/", stdio: ["ignore", "pipe", "pipe"], env });
   let stdout = "";
   let stderr = "";
   child.stdout.setEncoding("utf8").on("data", (chunk: string) => (stdout += chunk));
@@ -53,6 +66,13 @@ function launch(exe: string): Promise<{ code: number | null; stdout: string; std
 
 const THROWING_BUNDLE = 'console.log("marker");\nthrow new Error("boom");\n';
 
+/** The environment that keeps the log of a run inside `home`. */
+const homeEnv = (home: string): NodeJS.ProcessEnv => ({
+  ...process.env,
+  HOME: home,
+  XDG_STATE_HOME: home,
+});
+
 describe("a packaged app launched with no arguments", () => {
   it(
     "runs the bundle beside the executable (flat layout)",
@@ -61,7 +81,7 @@ describe("a packaged app launched with no arguments", () => {
       const bundle = path.join(dir, "app", "bundle.js");
       await writeFile(bundle, THROWING_BUNDLE);
 
-      const { code, stdout, stderr } = await launch(exe);
+      const { code, stdout, stderr } = await launch(exe, homeEnv(dir));
 
       expect(code).toBe(1);
       expect(stdout).toBe("");
@@ -79,11 +99,35 @@ describe("a packaged app launched with no arguments", () => {
       await mkdir(resources, { recursive: true });
       await writeFile(path.join(resources, "bundle.js"), THROWING_BUNDLE);
 
-      const { code, stdout, stderr } = await launch(exe);
+      const { code, stdout, stderr } = await launch(exe, homeEnv(dir));
 
       expect(code).toBe(1);
       expect(stdout).toBe("");
       expect(stderr).toMatch(/^marker\nError: boom\n/);
+    },
+    TIMEOUT_MS,
+  );
+
+  it(
+    "a throwing first bundle leaves a log file with the error",
+    async () => {
+      const exe = await placeExecutable(path.join(dir, "app"));
+      await writeFile(path.join(dir, "app", "bundle.js"), THROWING_BUNDLE);
+      const logDir =
+        process.platform === "darwin"
+          ? path.join(dir, "Library", "Logs", "inca-app")
+          : path.join(dir, "inca-app");
+
+      const { stderr } = await launch(exe, homeEnv(dir));
+
+      expect(stderr).not.toContain("run log");
+      const files = await readdir(logDir);
+      expect(files).toHaveLength(1);
+      expect(files[0]).toMatch(/^\d{8}T\d{6}Z\.log$/);
+      const lines = (await readFile(path.join(logDir, files[0] ?? ""), "utf8")).split("\n");
+      expect(lines[0]).toMatch(/^(@incajs\/host-\S+|inca-host \S+\/\S+) \S+$/);
+      expect(lines[1]).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z startup$/);
+      expect(lines[2]).toBe("Error: boom");
     },
     TIMEOUT_MS,
   );

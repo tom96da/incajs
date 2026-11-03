@@ -42,3 +42,39 @@ default), alongside the plain build output:
 
 `inca package` doesn't sign the app yet. macOS Gatekeeper will warn
 before it opens.
+
+## Run log <Badge type="warning" text="unreleased"/>
+
+A packaged app has no terminal, so it writes its errors to a log file. Each run
+writes one file. The first error or panic of the run creates it, and a run
+without one leaves no file.
+
+The directory depends on the platform:
+
+- macOS: `~/Library/Logs/<identifier>/`
+- Linux: `$XDG_STATE_HOME/<identifier>/`, or `~/.local/state/<identifier>/` when
+  `XDG_STATE_HOME` is unset or not an absolute path
+
+`<identifier>` is the `identifier` of your config. An identifier that is empty,
+starts with `.` or has a character other than an ASCII letter, a digit, `.`,
+`-` or `_` gives `inca-app`. A config with no identifier gives `inca-app` too.
+
+Without a home directory, macOS uses the temporary directory. Linux also uses it
+when there is no home directory and `XDG_STATE_HOME` is unset or not an
+absolute path.
+
+The file is named after the UTC start of the run, for example
+`20261102T163000Z.log`. Each entry has a time, a kind and the message with its
+stack:
+
+- `error`: an uncaught error in a listener, an unhandled promise rejection or a
+  script stopped by the memory or stack limit
+- `startup`: the error that stops the first load. The other errors of that load
+  are `error` entries before it.
+- `panic`: a panic of the host, always the last entry. `RUST_BACKTRACE=1` adds a
+  backtrace.
+- `notice`: the run reached the size limit
+
+Console output is not recorded. The app keeps the 10 newest files. A run writes
+at most 1 MiB of errors, then adds a `notice` and drops later errors. A panic
+is still written.

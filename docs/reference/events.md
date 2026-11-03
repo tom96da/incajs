@@ -194,10 +194,7 @@ event constructor.
 An error a handler throws, or an `async` handler rejects with, follows Vue's
 [error handling](https://vuejs.org/api/composition-api-lifecycle#onerrorcaptured).
 
-The development window reports an error that no hook takes to the terminal
-that ran `inca dev`, and shows it as an application error. A packaged app
-writes it to stderr.
-
-> [!TIP]
-> A packaged app has no readable stderr. Install `app.config.errorHandler` to
-> show these errors yourself.
+The development window reports an error that no hook takes to the terminal that
+ran `inca dev`, and shows it as an application error. A packaged app writes it
+to the log file of the run, see [Run log](../guide/build#run-log).
+Install `app.config.errorHandler` to show these errors in the app.
