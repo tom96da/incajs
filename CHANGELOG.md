@@ -10,6 +10,24 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- `requestAnimationFrame()` and `cancelAnimationFrame()` are available ([b0dd363](https://github.com/tom96da/incajs/commit/b0dd363))
+- `performance.now()` is available, on the same clock as the event `timeStamp` ([1ce1cac](https://github.com/tom96da/incajs/commit/1ce1cac))
+- nodes have `parentNode`, `childNodes`, the sibling links and the identity members ([18e70c8](https://github.com/tom96da/incajs/commit/18e70c8))
+- text nodes have `textContent`, `splitText()` and the character data members ([48356ab](https://github.com/tom96da/incajs/commit/48356ab))
+- a `<style>` element the app renders applies its rules ([e13d65a](https://github.com/tom96da/incajs/commit/e13d65a), [c4f2d98](https://github.com/tom96da/incajs/commit/c4f2d98))
+
+### Changed
+
+- the timer functions exist before the first line of an app runs ([7139c15](https://github.com/tom96da/incajs/commit/7139c15))
+- the event `timeStamp` counts from the start of each load of the app ([1ce1cac](https://github.com/tom96da/incajs/commit/1ce1cac))
+- `performance` has only `now()`, and `timeOrigin` is removed ([1ce1cac](https://github.com/tom96da/incajs/commit/1ce1cac))
+
+### Fixed
+
+- `querySelector()` and `closest()` return `null` when nothing matches ([d00527e](https://github.com/tom96da/incajs/commit/d00527e))
+
 ## [0.0.27] - 2026-11-03
 
 ### Added
