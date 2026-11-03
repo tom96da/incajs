@@ -18,34 +18,28 @@
 //!
 //! Nothing here panics on a failure a user can cause.
 
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::rc::Rc;
-use std::time::Duration;
 
 use gpui::{
-    App, BackgroundExecutor, Bounds, Context, Point, SharedString, Size, TitlebarOptions, Window,
-    WindowBounds, WindowHandle, WindowOptions, div, prelude::*, px, size,
+    App, Bounds, Context, Point, SharedString, TitlebarOptions, Window, WindowBounds, WindowHandle,
+    WindowOptions, div, prelude::*, px, size,
 };
 use gpui_platform::application;
 
-use inca_bridge::install;
-use inca_bridge::{EventDispatcher, Host};
-use inca_gpui::{EventSink, NodeId, NodeLayout, declared_window_size, render_tree_with_events};
-use inca_jsenv::{
-    Clock, Engine, EngineError, ErrorReporter, Limits, PendingModule, console, stderr_reporter,
-};
+use inca_gpui::{EventSink, NodeLayout, render_tree_with_events};
+use inca_jsenv::{EngineError, ErrorReporter, PendingModule, stderr_reporter};
 
 use crate::config::{
-    self, DEFAULT_APP_NAME, effective_config, is_resizable, usable, window_min_size, window_size,
+    self, DEFAULT_APP_NAME, effective_config, is_resizable, window_min_size, window_size,
     window_title,
 };
 
-use crate::console_output::{color_from_env, to_stderr};
-use crate::dev::{ErrorCode, LoadSignal, install_dev, install_load_signal};
+use crate::dev::LoadSignal;
 use crate::dev::{
     SharedWriter, StdoutWriter, fail_startup, install_panic_hook, reporter_for, serve_dev_protocol,
     stdin_lines,
@@ -53,257 +47,12 @@ use crate::dev::{
 use crate::menu;
 use crate::run_log;
 
-/// Reads the window size straight from the app the bundle mounted, so the
-/// window fits its content.
-///
-/// `root` is the empty container the [`Host`] allocates for the bundle to
-/// `mount()` against. The mounted app becomes `root`'s first (and only)
-/// child, never `root` itself, so `width`/`height` are read from that
-/// child's style, not `root`'s.
-///
-/// A dimension the app's root doesn't declare, or declares as a negative or
-/// infinite size, comes back as `None`.
-pub(crate) fn content_window_size(host: &Host, root: NodeId) -> (Option<f32>, Option<f32>) {
-    let Some(content) = host
-        .tree
-        .get(root)
-        .and_then(|node| node.children().first())
-        .and_then(|&content_id| host.tree.get(content_id))
-    else {
-        return (None, None);
-    };
-    let (width, height) = declared_window_size(content);
+mod session;
+mod size;
 
-    // A window dimension in px is always far within f32's
-    // precision range. No meaningful truncation risk here.
-    #[allow(clippy::cast_possible_truncation)]
-    (width.map(|n| n as f32), height.map(|n| n as f32))
-}
-
-/// One mebibyte, in bytes.
-const MIB: usize = 1024 * 1024;
-
-/// The limits of the script engine. `memory` is the heap in bytes (1 GiB), `stack` is the native
-/// stack in bytes (6 MiB), and a zero `time` sets no limit on how long a call runs.
-const ENGINE_LIMITS: Limits = Limits {
-    memory: 1024 * MIB,
-    stack: 6 * MIB,
-    time: Duration::ZERO,
-};
-
-/// Why a request could not be answered with a result.
-#[derive(Debug)]
-pub(crate) enum Failure {
-    /// Something outside JS: an unreadable file, a window that went away.
-    Message(ErrorCode, String),
-    /// A value the app threw, which carries its own frames.
-    Thrown(EngineError),
-}
-
-impl Failure {
-    /// A failure to report as a bundle failure, with the text of `err`.
-    pub(crate) fn bundle(err: impl std::fmt::Display) -> Self {
-        Self::Message(ErrorCode::BundleFailed, err.to_string())
-    }
-}
-
-/// An engine ready for an entry: its host, the engine, and what
-/// `setLoadFailed` reports.
-struct StartedEngine {
-    host: Rc<RefCell<Host>>,
-    engine: Engine,
-    signal: Rc<LoadSignal>,
-}
-
-/// One loaded bundle: the engine running its JS, the tree that JS built, and
-/// the dispatcher wiring events back. A reload replaces all of it at once,
-/// so it travels together and a half-swapped state cannot exist.
-///
-/// Dropping one takes its whole `QuickJS` runtime with it, so no node,
-/// listener or callback survives a reload.
-pub(crate) struct Session {
-    pub(crate) engine: Rc<Engine>,
-    pub(crate) host: Rc<RefCell<Host>>,
-    pub(crate) dispatcher: EventDispatcher,
-}
-
-/// The clock of `executor`, so a test that moves the executor's clock moves the timers.
-pub(crate) fn clock_of(executor: &BackgroundExecutor) -> Clock {
-    let executor = executor.clone();
-    Rc::new(move || executor.now())
-}
-
-impl Session {
-    /// The root node of the host's tree.
-    fn root(&self) -> NodeId {
-        self.host.borrow().root()
-    }
-
-    /// Starts an engine rooted at `entry_path`'s directory and gives it
-    /// everything an entry expects to find: `console`, the native bindings
-    /// and, for the development window (`writer.is_some()`), `__inca_dev__`
-    /// with its `send`, `setLoadFailed` and `compile` methods. All of it is in
-    /// place before any entry code runs, so an entry that logs while evaluating
-    /// finds `console`.
-    ///
-    /// `__inca_dev__` exists only when `writer` is `Some`; see
-    /// [`crate::dev::install_dev`] for what it does. The returned `signal`
-    /// records what `setLoadFailed` reports, and stays at its defaults in
-    /// production.
-    ///
-    /// # Errors
-    ///
-    /// Returns the thrown value if the engine fails to start, or `console`,
-    /// the bindings, or `__inca_dev__` fail to install.
-    fn start_engine(
-        entry_path: &str,
-        writer: Option<&SharedWriter>,
-        clock: Clock,
-    ) -> Result<StartedEngine, EngineError> {
-        let host = Rc::new(RefCell::new(Host::with_clock(clock)));
-        let signal = Rc::new(LoadSignal::default());
-
-        let module_root = Path::new(entry_path).parent().unwrap_or(Path::new("."));
-        let config = config::try_read(Path::new(entry_path)).unwrap_or_default();
-        let engine = Engine::builder()
-            .module_root(module_root)
-            .stack_paths(config::stack_paths(&config, Path::new(entry_path)))
-            .limits(ENGINE_LIMITS)
-            .build()?;
-        engine.with(|ctx| {
-            console::install(&ctx, &to_stderr(), color_from_env())
-                .and_then(|()| install(&ctx, &host))
-                .and_then(|()| match writer {
-                    Some(writer) => install_dev(&ctx, crate::dev::dev_send(writer))
-                        .and_then(|()| install_load_signal(&ctx, Rc::clone(&signal))),
-                    None => Ok(()),
-                })
-                .map_err(|err| EngineError::capture(&ctx, &err))
-        })?;
-        Ok(StartedEngine {
-            host,
-            engine,
-            signal,
-        })
-    }
-
-    /// Wires event dispatch onto an engine whose entry has been started.
-    fn from_parts(host: Rc<RefCell<Host>>, engine: Engine, reporter: ErrorReporter) -> Self {
-        let engine = Rc::new(engine);
-        let dispatcher =
-            EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host)).with_reporter(reporter);
-        Self {
-            engine,
-            host,
-            dispatcher,
-        }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn load(
-        entry_path: &str,
-        source: &str,
-        reporter: ErrorReporter,
-    ) -> Result<Self, EngineError> {
-        Self::load_with(entry_path, source, reporter, inca_jsenv::system_clock())
-    }
-
-    /// Evaluates `source` (the entry's own already-read content) into a
-    /// fresh engine, then wires up event dispatch. An `import` in `source`
-    /// resolves against a sibling file next to `entry_path`.
-    ///
-    /// # Errors
-    ///
-    /// Returns the thrown value if the engine fails to start, the bindings
-    /// or `console` fail to install, or `source` throws while evaluating,
-    /// including an unresolved `import` for a sibling file that isn't there,
-    /// and a top-level `await` that is still pending once the queued jobs
-    /// have run.
-    pub(crate) fn load_with(
-        entry_path: &str,
-        source: &str,
-        reporter: ErrorReporter,
-        clock: Clock,
-    ) -> Result<Self, EngineError> {
-        let StartedEngine { host, engine, .. } = Self::start_engine(entry_path, None, clock)?;
-        let failed = Rc::clone(&reporter);
-        let session = Self::from_parts(host, engine, reporter);
-        session
-            .engine
-            .eval_module(entry_path, source)
-            .inspect_err(|err| session.report_failed_start(&failed, err))?;
-        Ok(session)
-    }
-
-    /// Reports what the app failed on besides its entry: the jobs that threw, the jobs left
-    /// behind, the unhandled rejections and the listener errors. `entry` is the caller's to
-    /// report, so one failure equal to it is left out.
-    pub(crate) fn report_failed_start(&self, reporter: &ErrorReporter, entry: &EngineError) {
-        let mut failures = self.engine.run_jobs();
-        if let Some(at) = failures.iter().position(|failure| failure == entry) {
-            failures.remove(at);
-        }
-        for failure in &failures {
-            reporter(failure);
-        }
-        self.dispatcher.report_pending();
-    }
-
-    #[cfg(test)]
-    pub(crate) fn begin(
-        entry_path: &str,
-        source: &str,
-        reporter: ErrorReporter,
-        writer: Option<&SharedWriter>,
-    ) -> Result<Loading, EngineError> {
-        Self::begin_with(
-            entry_path,
-            source,
-            reporter,
-            writer,
-            inca_jsenv::system_clock(),
-        )
-    }
-
-    /// Starts evaluating `source` as [`Self::load_with`] does, and returns once
-    /// the entry waits on something unsettled, or has completed.
-    /// [`Loading::poll`] drives the rest.
-    ///
-    /// # Errors
-    ///
-    /// Returns the thrown value if the engine fails to start, the bindings
-    /// or `console` fail to install, or `source` fails to link, throws, or
-    /// rejects before it waits.
-    pub(crate) fn begin_with(
-        entry_path: &str,
-        source: &str,
-        reporter: ErrorReporter,
-        writer: Option<&SharedWriter>,
-        clock: Clock,
-    ) -> Result<Loading, EngineError> {
-        let StartedEngine {
-            host,
-            engine,
-            signal,
-        } = Self::start_engine(entry_path, writer, clock)?;
-        let failed = Rc::clone(&reporter);
-        let session = Self::from_parts(host, engine, reporter);
-        let module = session.engine.start_module(entry_path, source)?;
-        let loading = Loading {
-            module,
-            session,
-            seen_failures: Cell::new(0),
-            signal,
-        };
-        match loading.poll() {
-            Some(Err(err)) => {
-                loading.session.report_failed_start(&failed, &err);
-                Err(err)
-            }
-            _ => Ok(loading),
-        }
-    }
-}
+pub(crate) use session::{Failure, Session, clock_of};
+use size::content_window_size;
+pub(crate) use size::maybe_auto_resize_to_content;
 
 /// A [`Session`] whose entry is still evaluating.
 pub(crate) struct Loading {
@@ -371,51 +120,6 @@ impl Render for HostedApp {
         );
         element
     }
-}
-
-/// Resizes each window dimension to fit content the first time that
-/// dimension becomes usable after the window already opened. An app that
-/// mounts after the window opened (an entry still pending when the load
-/// timeout passed) has nothing mounted when [`open`] computes the initial
-/// size. This catches up once the app finishes mounting.
-///
-/// A dimension the config fixes explicitly counts as ready right away. A
-/// dimension still waiting for content keeps the window's current size.
-pub(crate) fn maybe_auto_resize_to_content(app: &HostedApp, window: &mut Window) {
-    let (width_done, height_done) = app.auto_resized.get();
-    if width_done && height_done {
-        return;
-    }
-    let window_config = app.window_config.as_ref();
-    let content = content_window_size(&app.session.host.borrow(), app.session.root());
-    let ready =
-        |done: bool, pick: fn(&config::WindowConfig) -> Option<f32>, content: Option<f32>| {
-            !done
-                && (window_config.is_some_and(|w| usable(pick(w)).is_some())
-                    || usable(content).is_some())
-        };
-    let width_ready = ready(width_done, |w| w.width, content.0);
-    let height_ready = ready(height_done, |w| w.height, content.1);
-    if !width_ready && !height_ready {
-        return;
-    }
-
-    let (width, height) = window_size(window_config, content);
-    let current = window.bounds().size;
-    window.resize(Size {
-        width: if width_ready {
-            px(width)
-        } else {
-            current.width
-        },
-        height: if height_ready {
-            px(height)
-        } else {
-            current.height
-        },
-    });
-    app.auto_resized
-        .set((width_done || width_ready, height_done || height_ready));
 }
 
 /// Evaluates the entry to completion, then opens the window, under the
@@ -695,4 +399,162 @@ pub fn bundle_beside_exe() -> Option<PathBuf> {
 }
 
 #[cfg(test)]
-mod tests;
+mod tests {
+    #![allow(clippy::unwrap_used)]
+
+    use super::*;
+    use gpui::TestAppContext;
+
+    use crate::tests::{ScratchDir, TEST_ENTRY_PATH};
+
+    const DEFERS_ITS_MOUNT: &str = r"
+        globalThis.mounted = false;
+        Promise.resolve().then(() => { globalThis.mounted = true; });
+    ";
+
+    #[test]
+    fn the_report_of_a_missing_entry_names_it() {
+        let dir = ScratchDir::new("print-missing");
+        let entry = dir.join("bundle.js").to_string_lossy().into_owned();
+
+        assert_eq!(
+            config_report(&entry),
+            Err(format!("failed to read {entry}: not a file"))
+        );
+    }
+
+    #[test]
+    fn the_report_reads_the_config_beside_the_entry() {
+        let dir = ScratchDir::new("print-present");
+        let entry = dir.join("bundle.js");
+        fs::write(&entry, "").unwrap();
+        fs::write(dir.join("inca.json"), r#"{"name":"Demo"}"#).unwrap();
+
+        let report: serde_json::Value =
+            serde_json::from_str(&config_report(&entry.to_string_lossy()).unwrap()).unwrap();
+        assert_eq!(report["name"], "Demo");
+    }
+
+    #[test]
+    fn the_report_of_a_config_it_cannot_parse_names_the_field() {
+        let dir = ScratchDir::new("print-malformed");
+        let entry = dir.join("bundle.js");
+        fs::write(&entry, "").unwrap();
+        fs::write(dir.join("inca.json"), r#"{"window":{"width":"wide"}}"#).unwrap();
+
+        let message = config_report(&entry.to_string_lossy()).unwrap_err();
+
+        let config = dir.join("inca.json");
+        assert!(
+            message.starts_with(&format!(
+                r#"failed to read {}: ["window","width"]: "#,
+                config.display()
+            )),
+            "{message}"
+        );
+    }
+
+    #[test]
+    fn config_report_refuses_an_unusable_value_with_its_path() {
+        let dir = ScratchDir::new("print-unusable");
+        let entry = dir.join("bundle.js");
+        fs::write(&entry, "").unwrap();
+        fs::write(dir.join("inca.json"), r#"{"window":{"width":-100}}"#).unwrap();
+
+        assert_eq!(
+            config_report(&entry.to_string_lossy()),
+            Err(format!(
+                concat!(
+                    r#"failed to read {}: ["window","width"]: "#,
+                    "invalid value: -100, expected a finite number above zero"
+                ),
+                dir.join("inca.json").display()
+            ))
+        );
+    }
+
+    #[test]
+    fn bundle_beside_finds_a_flat_sibling_bundle() {
+        let dir = ScratchDir::new("flat");
+        fs::write(dir.join("bundle.js"), "").unwrap();
+
+        assert_eq!(bundle_beside(&dir), Some(dir.join("bundle.js")));
+    }
+
+    #[test]
+    fn bundle_beside_finds_a_macos_app_bundles_resources() {
+        let dir = ScratchDir::new("app-bundle");
+        let macos_dir = dir.join("Contents/MacOS");
+        let resources_dir = dir.join("Contents/Resources");
+        fs::create_dir_all(&macos_dir).unwrap();
+        fs::create_dir_all(&resources_dir).unwrap();
+        fs::write(resources_dir.join("bundle.js"), "").unwrap();
+
+        assert_eq!(
+            bundle_beside(&macos_dir),
+            Some(macos_dir.join("../Resources/bundle.js"))
+        );
+    }
+
+    #[test]
+    fn bundle_beside_is_none_when_nothing_is_there() {
+        let dir = ScratchDir::new("empty");
+
+        assert_eq!(bundle_beside(&dir), None);
+    }
+
+    #[test]
+    fn a_chunk_importing_the_packaged_entry_back_does_not_evaluate_it_twice() {
+        let dir = ScratchDir::new("entry-import-back");
+        let macos_dir = dir.join("Contents/MacOS");
+        let assets_dir = dir.join("Contents/Resources/assets");
+        fs::create_dir_all(&macos_dir).unwrap();
+        fs::create_dir_all(&assets_dir).unwrap();
+        let entry = dir.join("Contents/Resources/bundle.js");
+        fs::write(
+            &entry,
+            r"
+            globalThis.evaluations = (globalThis.evaluations ?? 0) + 1;
+
+            import('./assets/chunk.js');
+            ",
+        )
+        .unwrap();
+        fs::write(assets_dir.join("chunk.js"), "import '../bundle.js';").unwrap();
+
+        let path = bundle_beside(&macos_dir).unwrap();
+        let session = Session::load(
+            &path.to_string_lossy(),
+            &fs::read_to_string(&path).unwrap(),
+            stderr_reporter(),
+        )
+        .unwrap();
+        assert!(session.engine.run_jobs().is_empty());
+
+        let evaluations: i32 = session.engine.eval("globalThis.evaluations").unwrap();
+        assert_eq!(evaluations, 1);
+    }
+
+    #[gpui::test]
+    fn bringing_the_window_up_runs_what_mounting_only_queued(cx: &mut TestAppContext) {
+        cx.update(|cx| start(cx, TEST_ENTRY_PATH, DEFERS_ITS_MOUNT, stderr_reporter()).unwrap());
+        cx.run_until_parked();
+
+        let ran: bool = cx.update(|cx| {
+            cx.windows()
+                .first()
+                .and_then(|window| {
+                    window
+                        .downcast::<HostedApp>()?
+                        .read_with(cx, |app, _| {
+                            app.session.engine.eval::<bool>("globalThis.mounted;").ok()
+                        })
+                        .ok()
+                        .flatten()
+                })
+                .unwrap_or(false)
+        });
+
+        assert!(ran, "an onMounted-style effect must not wait for an event");
+    }
+}
