@@ -9,7 +9,7 @@ use gpui::{Pixels, ScrollHandle, point, px};
 
 use inca_gpui::element::scroll::{Align, rect_of, scroll_chain};
 use inca_gpui::{InputState, NodeId, NodeLayout, VirtualTree, is_scroll_container};
-use inca_jsenv::{Clock, EngineError, Timers, system_clock};
+use inca_jsenv::{Clock, EngineError, Frames, Timers, system_clock};
 
 use crate::focus::FocusRegistry;
 
@@ -59,8 +59,10 @@ pub struct Host {
     pub(super) scroll_retry: Vec<(NodeId, Align, Align)>,
     /// The timers the script started. Plain data: ids, due times and periods.
     pub timers: Rc<Timers>,
-    /// Receives one message each time `timers` starts a timer.
-    pub(crate) timer_wake: async_channel::Receiver<()>,
+    /// The callbacks of `requestAnimationFrame` that wait for a frame.
+    pub frames: Rc<Frames>,
+    /// Receives one message each time `timers` starts a timer or `frames` queues a callback.
+    pub(crate) wake: async_channel::Receiver<()>,
 }
 
 impl std::fmt::Debug for Host {
@@ -92,13 +94,12 @@ impl Host {
             .create_node("div")
             .expect("a new tree has free node ids");
         tree.set_root(root);
-        let (sender, timer_wake) = async_channel::bounded(1);
-        let timers = Timers::new(
-            clock,
-            Rc::new(move || {
-                let _ = sender.try_send(());
-            }),
-        );
+        let (sender, wake) = async_channel::bounded(1);
+        let send: Rc<dyn Fn()> = Rc::new(move || {
+            let _ = sender.try_send(());
+        });
+        let timers = Timers::new(clock, Rc::clone(&send));
+        let frames = Frames::new(send);
         Self {
             tree,
             warn: Rc::new(|line| eprintln!("{line}")),
@@ -118,7 +119,8 @@ impl Host {
             scroll_fresh: Vec::new(),
             scroll_retry: Vec::new(),
             timers,
-            timer_wake,
+            frames,
+            wake,
         }
     }
 }

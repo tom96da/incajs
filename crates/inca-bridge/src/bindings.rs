@@ -5,9 +5,8 @@
 //! JS calls to read the root handle, mutate the retained virtual tree,
 //! register input-event callbacks, dispatch events from script, read and
 //! write the text of an input, and free what it no longer needs. It defines
-//! the timer functions of the global object and creates the empty
-//! `globalThis.__inca_callbacks__`, where JS stores each listener under its
-//! callback id.
+//! the timer and frame callback functions of the global object and creates the empty
+//! `globalThis.__inca_callbacks__`, where JS stores each listener under its callback id.
 
 mod attributes;
 mod capture;
@@ -44,7 +43,9 @@ use tree::install_tree;
 /// `clearInterval` run over the timers of `host`. A timer runs only after
 /// [`crate::EventDispatcher::start_timers`] or
 /// [`crate::EventDispatcher::run_timers_idle`] runs; without one the timer
-/// stays queued.
+/// stays queued. `requestAnimationFrame` and `cancelAnimationFrame` run over the frame callbacks
+/// of `host`, which run in the frames of the window that
+/// [`crate::EventDispatcher::start_timers`] serves.
 ///
 /// # Errors
 ///
@@ -66,6 +67,7 @@ pub fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
     install_selector(&natives)?;
     install_input(&natives)?;
     inca_jsenv::timers::install(ctx, &host.borrow().timers)?;
+    inca_jsenv::frames::install(ctx, &host.borrow().frames)?;
     crate::event::install(ctx)?;
     let globals = ctx.globals();
     globals.prop("__inca_native__", native)?;

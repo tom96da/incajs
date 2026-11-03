@@ -8,8 +8,8 @@
 //! An event only enters the JS engine when it reaches a listener: a capture
 //! listener on its path, or a bubble listener on the nodes the event bubbles
 //! to.
-//! An event that entered the engine and a turn that ran a due timer each
-//! drain the job queue and request a redraw. Rendering runs no JS of its own.
+//! An event that entered the engine, a turn that ran a due timer and a frame that ran a frame
+//! callback each drain the job queue and request a redraw. Rendering runs no JS of its own.
 //!
 //! ## Where the real JS function lives
 //!
@@ -98,6 +98,8 @@ pub(crate) struct State {
     /// The task that sleeps until the next timer is due, or `None` before
     /// [`EventDispatcher::start_timers`] and after [`EventDispatcher::stop_timers`].
     timer_pump: RefCell<Option<gpui::Task<()>>>,
+    /// Whether the window holds a next-frame callback that runs the frame callbacks.
+    frame_requested: Cell<bool>,
 }
 
 /// Records the node the window focuses in `host`.

@@ -15,10 +15,11 @@ rest of the ECMAScript intrinsics. It supplies nothing else: no `console`,
 no timers, no network, no filesystem. Those are the host's to provide, and
 this crate is where they live.
 
-Today that is `console`, the timer queue, and `TextEncoder` and
-`TextDecoder`, which every `Engine` installs. `console` writes wherever the
-caller points it, because the process embedding it may already be using
-stdout for something else.
+Today that is `console`, the timers, the frame callbacks, `performance`,
+`TextEncoder` and `TextDecoder`. Every `Engine` installs `performance`,
+`TextEncoder` and `TextDecoder`. The caller installs `console`, the timer
+functions and the frame functions. `console` writes wherever the caller points it, because the
+process embedding it may already be using stdout for something else.
 
 ```rust
 use std::rc::Rc;

@@ -184,6 +184,7 @@ pub(crate) fn open(
                 app_id: app_config.identifier.clone(),
                 is_resizable: is_resizable(window_config),
                 window_min_size: window_min_size(window_config),
+                inactive_frame_interval: None,
                 ..Default::default()
             },
             |window, cx| {

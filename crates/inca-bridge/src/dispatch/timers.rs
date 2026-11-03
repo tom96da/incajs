@@ -1,32 +1,51 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Runs the timers a script started when they fall due.
+//! Runs the timers a script started when they fall due and its frame callbacks in the next frame.
 
 use std::cell::RefCell;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 use std::time::Duration;
 
 use gpui::{AnyWindowHandle, App, FutureExt as _, Window};
-use inca_jsenv::{Engine, ErrorReporter, run_timers};
+use inca_jsenv::{Engine, ErrorReporter, run_frames, run_timers};
 
-use super::{EventDispatcher, drain_jobs_and_refresh, observe_focus, report_failures};
+use super::{EventDispatcher, State, drain_jobs_and_refresh, observe_focus, report_failures};
 use crate::bindings::Host;
 
 impl EventDispatcher {
     /// Starts the task that runs the timers of this dispatcher's engine in
-    /// `window` when they fall due. Call it once the window exists.
+    /// `window` when they fall due, and asks `window` for a frame while a
+    /// frame callback is pending. Call it once the window exists.
     pub fn start_timers(&self, window: AnyWindowHandle, cx: &mut App) {
+        self.state.frame_requested.set(false);
         let engine = Rc::downgrade(&self.engine);
         let host = Rc::downgrade(&self.host);
+        let state = Rc::downgrade(&self.state);
         let reporter = Rc::clone(&self.reporter);
-        let wake = self.host.borrow().timer_wake.clone();
+        let wake = self.host.borrow().wake.clone();
         let task = cx.spawn(async move |cx| {
             loop {
-                let wait: Option<Duration> = match host.upgrade() {
-                    Some(host) => host.borrow().timers.wait(),
-                    None => break,
+                let (wait, wants_frame) = match (host.upgrade(), state.upgrade()) {
+                    (Some(host), Some(state)) => {
+                        let host = host.borrow();
+                        (
+                            host.timers.wait(),
+                            host.frames.is_pending() && !state.frame_requested.get(),
+                        )
+                    }
+                    _ => break,
                 };
+                if wants_frame {
+                    let live = cx.update(|cx| {
+                        window.update(cx, |_, window, _| {
+                            request_frame(window, &engine, &host, &reporter, &state);
+                        })
+                    });
+                    if live.is_err() {
+                        break;
+                    }
+                }
                 let waited = match wait {
                     Some(wait) => wake
                         .recv()
@@ -59,6 +78,19 @@ impl EventDispatcher {
         *self.state.timer_pump.borrow_mut() = Some(task);
     }
 
+    /// Runs the frame callbacks the script requested, as the next frame of
+    /// `window` does before it draws, and redraws when one ran.
+    pub fn run_frame_callbacks(&self, window: &mut Window, cx: &App) {
+        run_frame_callbacks(
+            &self.engine,
+            &self.host,
+            &self.reporter,
+            &self.state,
+            window,
+            cx,
+        );
+    }
+
     /// Ends the task [`start_timers`](Self::start_timers) started, so no timer
     /// of this dispatcher's engine runs again.
     pub fn stop_timers(&self) {
@@ -78,6 +110,55 @@ impl EventDispatcher {
     pub fn next_timer_wait(&self) -> Option<Duration> {
         self.host.borrow().timers.wait()
     }
+}
+
+/// Queues the next-frame callback that runs the frame callbacks of `host`. The callback holds
+/// weak references, so a dropped session leaves it nothing to run.
+fn request_frame(
+    window: &Window,
+    engine: &Weak<Engine>,
+    host: &Weak<RefCell<Host>>,
+    reporter: &ErrorReporter,
+    state: &Weak<State>,
+) {
+    let Some(strong) = state.upgrade() else {
+        return;
+    };
+    strong.frame_requested.set(true);
+    let (engine, host, reporter, state) = (
+        Weak::clone(engine),
+        Weak::clone(host),
+        Rc::clone(reporter),
+        Weak::clone(state),
+    );
+    window.on_next_frame(move |window, cx| {
+        let (Some(engine), Some(host), Some(state)) =
+            (engine.upgrade(), host.upgrade(), state.upgrade())
+        else {
+            return;
+        };
+        run_frame_callbacks(&engine, &host, &reporter, &state, window, cx);
+    });
+}
+
+/// One frame: the callbacks pending now, then the redraw and the failures they caused. A frame
+/// with no pending callback changes nothing.
+fn run_frame_callbacks(
+    engine: &Engine,
+    host: &RefCell<Host>,
+    reporter: &ErrorReporter,
+    state: &State,
+    window: &mut Window,
+    cx: &App,
+) {
+    state.frame_requested.set(false);
+    observe_focus(host, window, cx);
+    let frames = Rc::clone(&host.borrow().frames);
+    if run_frames(engine, &frames, reporter) == 0 {
+        return;
+    }
+    drain_jobs_and_refresh(engine, reporter, window);
+    report_failures(host, reporter);
 }
 
 /// One turn: the due callbacks, then the redraw and the failures they caused.
@@ -102,8 +183,8 @@ fn fire_timers(
 mod tests {
     #![allow(clippy::unwrap_used)]
     use crate::test_support::{
-        Reported, TestRoot, capture_reporter, engine_for, host_on_executor_clock, mount_active,
-        mount_with_timers,
+        Reported, TestRoot, capture_reporter, engine_for, engine_on_clock, host_on_executor_clock,
+        mount_active, mount_with_timers,
     };
     use crate::{EventDispatcher, Host};
     use gpui::AppContext as _;
@@ -121,7 +202,8 @@ mod tests {
 
     fn scene(cx: &mut TestAppContext) -> Scene {
         let host = host_on_executor_clock(cx);
-        let engine = engine_for(&host);
+        let executor = cx.executor();
+        let engine = engine_on_clock(&host, Rc::new(move || executor.now()));
         let (report, reported) = capture_reporter();
         let window = mount_with_timers(cx, &host, &engine, report);
         engine.eval::<()>("globalThis.log = [];").unwrap();
@@ -276,7 +358,7 @@ mod tests {
         advance(cx, 10);
 
         assert_eq!(log(&scene), "");
-        assert_eq!(scene.host.borrow().timer_wake.receiver_count(), 1);
+        assert_eq!(scene.host.borrow().wake.receiver_count(), 1);
         drop(keep);
     }
 
@@ -455,5 +537,110 @@ mod tests {
         advance(cx, 10);
 
         assert!(reported.borrow().is_empty());
+    }
+
+    /// Delivers the next frame to the window of `scene`: the callbacks GPUI queued. The test
+    /// platform draws a window the callbacks invalidated. Returns how many callbacks ran.
+    fn next_frame(cx: &mut TestAppContext, scene: &Scene) -> usize {
+        cx.run_until_parked();
+        scene
+            .window
+            .update(cx, |_, window, cx| window.simulate_next_frame(cx))
+            .unwrap()
+    }
+
+    #[gpui::test]
+    fn a_frame_is_requested_only_while_a_callback_is_pending(cx: &mut TestAppContext) {
+        let scene = scene(cx);
+        assert_eq!(next_frame(cx, &scene), 0);
+        scene
+            .engine
+            .eval::<()>("requestAnimationFrame(() => log.push('a'));")
+            .unwrap();
+        cx.run_until_parked();
+
+        assert_eq!(next_frame(cx, &scene), 1);
+        scene
+            .engine
+            .eval::<()>("Promise.resolve().then(() => log.push('job'));")
+            .unwrap();
+
+        assert_eq!(next_frame(cx, &scene), 0);
+        assert_eq!(log(&scene), "a");
+    }
+
+    #[gpui::test]
+    fn a_frame_callback_that_requests_another_gets_the_next_frame(cx: &mut TestAppContext) {
+        let scene = scene(cx);
+        scene
+            .engine
+            .eval::<()>(
+                r"
+                requestAnimationFrame(() => {
+                    log.push('a');
+                    requestAnimationFrame(() => log.push('b'));
+                });
+                ",
+            )
+            .unwrap();
+
+        assert_eq!(next_frame(cx, &scene), 1);
+        assert_eq!(log(&scene), "a");
+        assert_eq!(next_frame(cx, &scene), 1);
+
+        assert_eq!(log(&scene), "a,b");
+    }
+
+    #[gpui::test]
+    fn a_frame_callback_write_is_drawn_in_the_frame_that_ran_it(cx: &mut TestAppContext) {
+        let scene = scene(cx);
+        scene
+            .engine
+            .eval::<()>(
+                r"
+                requestAnimationFrame(() => {
+                    const n = __inca_native__;
+                    const box = n.createNode('div');
+                    n.setStyle(box, 'width', 40);
+                    n.setStyle(box, 'height', 20);
+                    n.appendChild(n.rootNodeId(), box);
+                    globalThis.box = box;
+                });
+                ",
+            )
+            .unwrap();
+
+        next_frame(cx, &scene);
+
+        let node = scene.engine.eval::<u32>("box").unwrap();
+        assert!(scene.host.borrow().layout.borrow().contains_key(&node));
+    }
+
+    #[gpui::test]
+    fn a_frame_callback_requested_before_the_window_exists_runs_in_the_first_frame(
+        cx: &mut TestAppContext,
+    ) {
+        let host = host_on_executor_clock(cx);
+        let engine = engine_for(&host);
+        engine
+            .eval::<()>(
+                r"
+                globalThis.log = [];
+                requestAnimationFrame(() => log.push('a'));
+                ",
+            )
+            .unwrap();
+        let (report, reported) = capture_reporter();
+        let window = mount_with_timers(cx, &host, &engine, report);
+        let scene = Scene {
+            window,
+            host,
+            engine,
+            reported,
+        };
+
+        assert_eq!(next_frame(cx, &scene), 1);
+
+        assert_eq!(log(&scene), "a");
     }
 }

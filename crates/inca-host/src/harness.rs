@@ -98,8 +98,10 @@ impl Harness {
     }
 
     /// Runs one pass: the app's pending JS jobs, then queued work until none
-    /// is left, then a window draw, so [`Harness::snapshot`] reads current
-    /// bounds. Jobs scheduled by that draw run on the next call.
+    /// is left, then the frame callbacks the app requested, then a window
+    /// draw, so [`Harness::snapshot`] reads current bounds. Jobs scheduled by
+    /// that draw and frame callbacks requested by a frame callback run on the
+    /// next call.
     ///
     /// # Panics
     ///
@@ -111,6 +113,13 @@ impl Harness {
             })
             .expect("the window is open");
         self.cx.run_until_parked();
+        self.window
+            .update(&mut self.cx, |app, window, cx| {
+                if app.session.host.borrow().frames.is_pending() {
+                    app.session.dispatcher.run_frame_callbacks(window, cx);
+                }
+            })
+            .expect("the window is open");
         self.cx.update(|window, cx| window.draw(cx).clear(cx));
     }
 
@@ -357,5 +366,46 @@ mod tests {
         assert_eq!(eval_f64(&h, "globalThis.ticks"), 0.0);
         h.advance_clock(Duration::from_millis(1));
         assert_eq!(eval_f64(&h, "globalThis.ticks"), 1.0);
+    }
+
+    #[gpui::test]
+    fn settle_runs_a_pending_frame_callback_once(cx: &mut TestAppContext) {
+        let mut h = Harness::load(
+            cx,
+            TEST_ENTRY_PATH,
+            r"
+            globalThis.frames = 0;
+            requestAnimationFrame(() => {
+                globalThis.frames += 1;
+            });
+            ",
+        );
+
+        h.settle();
+
+        assert_eq!(eval_f64(&h, "globalThis.frames"), 1.0);
+    }
+
+    #[gpui::test]
+    fn settle_leaves_a_nested_frame_request_to_the_next_settle(cx: &mut TestAppContext) {
+        let mut h = Harness::load(
+            cx,
+            TEST_ENTRY_PATH,
+            r"
+            globalThis.frames = 0;
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    globalThis.frames += 1;
+                });
+            });
+            ",
+        );
+        assert_eq!(eval_f64(&h, "globalThis.frames"), 0.0);
+
+        h.settle();
+
+        assert_eq!(eval_f64(&h, "globalThis.frames"), 1.0);
+        h.settle();
+        assert_eq!(eval_f64(&h, "globalThis.frames"), 1.0);
     }
 }
