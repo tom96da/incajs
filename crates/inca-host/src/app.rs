@@ -51,7 +51,7 @@ use crate::dev::{
     stdin_lines,
 };
 use crate::menu;
-use crate::panic_log;
+use crate::run_log;
 
 /// Reads the window size straight from the app the bundle mounted, so the
 /// window fits its content.
@@ -529,15 +529,15 @@ pub(crate) fn open(
 /// failed load, the window stays closed.
 ///
 /// A bundle that fails to start and an entry that cannot be read both exit
-/// the process with status 1. In production the failure prints to stderr;
-/// with `dev` set it is reported like a throwing first bundle. On Linux, a
-/// `DISPLAY` or `WAYLAND_DISPLAY` that names a server the host cannot reach
-/// exits the process with status 1 and one line on stderr that names the
-/// variable.
+/// the process with status 1. In production the failure prints to stderr and
+/// is written to the log file of the run; with `dev` set the failure is
+/// reported as a throwing first bundle. On Linux, a `DISPLAY` or
+/// `WAYLAND_DISPLAY` that names a server the host cannot reach exits the
+/// process with status 1 and one line on stderr that names the variable.
 ///
-/// A panic of a packaged app is written to `panic.log` in the log directory
-/// of the app. With `dev` set, a panic goes to the parent process as a
-/// `-32603` error.
+/// An error the running app raises and a panic of a packaged app are written to
+/// the log file of the run in the log directory of the app. With `dev` set, a
+/// panic goes to the parent process as a `-32603` error.
 #[must_use]
 pub fn run_bundle(entry_path: &str, dev: bool) -> ExitCode {
     let writer: Option<SharedWriter> = if dev {
@@ -549,7 +549,10 @@ pub fn run_bundle(entry_path: &str, dev: bool) -> ExitCode {
         let identifier = config::try_read(Path::new(entry_path))
             .ok()
             .and_then(|config| config.identifier);
-        panic_log::install(panic_log::log_path(identifier.as_deref()));
+        run_log::install(
+            run_log::log_dir(identifier.as_deref()),
+            run_log::start_secs(),
+        );
         None
     };
     #[cfg(any(target_os = "linux", target_os = "freebsd"))]
@@ -579,7 +582,16 @@ pub fn run_bundle(entry_path: &str, dev: bool) -> ExitCode {
             close_writer_on_quit(cx, writer);
         }
 
-        let error_reporter = writer.as_ref().map_or_else(stderr_reporter, reporter_for);
+        let error_reporter = writer.as_ref().map_or_else(
+            || {
+                let base = stderr_reporter();
+                Rc::new(move |err: &EngineError| {
+                    run_log::error("error", &err.to_string());
+                    base(err);
+                }) as ErrorReporter
+            },
+            reporter_for,
+        );
         if let Some(writer) = &writer {
             let lines = stdin_lines();
             let started = cx.background_executor().now();

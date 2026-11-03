@@ -32,9 +32,10 @@ A feature the engine cannot run yet fails the build. A `<style>` block is one
 | the host's `--print-config` | `ERR_INCA_CONFIG_INVALID`, and the command exits 1 |
 | `inca-host`, answering a protocol message | a JSON-RPC error (see [PROTOCOL.md](./PROTOCOL.md#failure-handling)) |
 | `inca-host`, otherwise | its stderr |
-| a script that runs past the memory or the stack limit of the engine | an `appError` notification under `--dev`, stderr in a packaged app; a stop during the first load fails the start with exit 1 |
+| a script that runs past the memory or the stack limit of the engine | an `appError` notification under `--dev`, the run log and stderr in a packaged app; a stop during the first load fails the start with exit 1 and a `startup` entry |
 | a panic in `inca-host` under `--dev` | a `-32603` error and the panic on stderr. `inca dev` prints the stderr text and drops the `-32603` line |
-| a panic in `inca-host` of a packaged app | `panic.log` in the log directory of the app, and stderr |
+| a panic in `inca-host` of a packaged app | the run log in the log directory of the app, and stderr |
+| an error the running app raised, in a packaged app | the run log of the app and stderr |
 | an error the running app raised and the host caught | an `appError` notification, see [PROTOCOL.md](./PROTOCOL.md#messages) |
 | a config or entry failure before the first build | `build failed`, then a retry on the next edit |
 | `inca-host` exiting before `ready`, which includes a first bundle that throws or rejects | `ERR_INCA_HOST_EXITED_EARLY`, after `inca dev` prints the cause |

@@ -31,6 +31,7 @@ use crate::app::{
     Failure, HostedApp, Loading, Session, clock_of, maybe_auto_resize_to_content, open,
 };
 use crate::config::is_resizable;
+use crate::run_log;
 pub(crate) use wire::ErrorCode;
 use wire::{Incoming, Method, Outgoing};
 
@@ -600,8 +601,16 @@ pub(crate) fn fail_startup(failure: &Failure, writer: Option<&SharedWriter>) -> 
 
 /// Reports a startup failure wherever anyone is listening. There is no
 /// window to keep, so this is the last thing the process says. `writer` is
-/// `None` in production, where there is nobody on the other end of stdout.
+/// `None` in production, where there is nobody on the other end of stdout; the
+/// failure also goes to the log file of the run.
 pub(crate) fn report_startup_failure(failure: &Failure, writer: Option<&SharedWriter>) {
+    if writer.is_none() {
+        let text = match failure {
+            Failure::Thrown(err) => err.to_string(),
+            Failure::Message(_, message) => message.clone(),
+        };
+        run_log::error("startup", &text);
+    }
     match (failure, writer) {
         (failure, Some(writer)) => send(&**writer, &outgoing(Value::Null, failure)),
         (Failure::Thrown(err), None) => eprintln!("{err}"),

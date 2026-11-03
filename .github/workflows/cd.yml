@@ -197,6 +197,8 @@ jobs:
           xcrun -sdk macosx metal --version
 
       - name: Build inca-host
+        env:
+          INCA_HOST_PACKAGE: "@incajs/host-${{ matrix.pkg }}"
         run: cargo build --release --locked -p inca-host
 
       # A newer image would raise the floor silently; every published binary

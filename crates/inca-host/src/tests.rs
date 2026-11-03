@@ -40,3 +40,20 @@ impl Drop for ScratchDir {
         let _ = fs::remove_dir_all(&self.0);
     }
 }
+
+/// The sorted names of the entries of `dir`.
+pub(crate) fn names_of(dir: &Path) -> Vec<String> {
+    let mut names: Vec<String> = fs::read_dir(dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+        .collect();
+    names.sort();
+    names
+}
+
+/// `count` log names of the year 2000, the oldest first.
+pub(crate) fn old_names(count: usize) -> Vec<String> {
+    (1..=count)
+        .map(|month| format!("2000{month:02}01T000000Z.log"))
+        .collect()
+}

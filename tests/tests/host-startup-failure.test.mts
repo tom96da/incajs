@@ -144,8 +144,13 @@ it("an unreadable entry in development exits 1 after a report with a null id", a
 }, 15_000);
 
 it("an unreadable entry in production prints to stderr and the host exits 1", async () => {
+  const home = await mkdtemp(path.join(tmpdir(), "inca-host-home-"));
   const missing = path.join(tmpdir(), "inca-host-no-such-dir", "bundle.js");
-  const { code, out, stderr } = await runHost([missing]);
+  const { code, out, stderr } = await runHost([missing], {
+    ...process.env,
+    HOME: home,
+    XDG_STATE_HOME: home,
+  }).finally(() => rm(home, { recursive: true, force: true }));
 
   expect(code).toBe(1);
   expect(out).toEqual([]);

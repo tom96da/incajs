@@ -28,14 +28,6 @@ A fixed entry is deleted and its ID is never reused.
 
 ## P1
 
-- **B-060 A packaged app keeps no record of an error it raised**
-  `Units: host · Size: S · Impact: Medium`
-
-  An error a listener throws, an unhandled rejection, a failed first load and
-  a stop by an engine limit go to stderr, which a packaged app does not show.
-  Under `inca dev` they are reported as `appError`. Fix: write them to a
-  second file next to `panic.log`, from the reporter of the production host.
-
 - **B-121 `:style` leaves out some CSS value and key forms**
   `Units: gpui · Size: S · Impact: Low`
 
@@ -90,16 +82,14 @@ A fixed entry is deleted and its ID is never reused.
   from JS is a binding, and settling which of these an app owns is Phase 9
   item 1.
 
-- **B-014 A packaged app's output reaches nobody**
+- **B-014 A packaged app's console output reaches nobody**
   `Units: host,cli · Size: L · Impact: Medium`
 
-  `inca dev` relays the host's
-  stderr, so an app's `console` output and the host's own reports are
-  visible while developing. A double-clicked `.app` writes to a stderr
-  nothing reads. A log file beside the app would also give the crash
-  reporting in [ROADMAP.md](./ROADMAP.md#known-gaps-not-yet-scheduled)
-  somewhere to write. Where it lives per platform, how it rotates, and
-  whether an app can opt out are all undecided.
+  The host writes the errors and panics of a packaged app to a log file for
+  each run. `inca dev` relays the console output of the app, so it is visible
+  while developing. A double-clicked `.app` writes the console output to a
+  stderr nothing reads. Where that output could go per platform and whether an
+  app can opt out are undecided.
 
 - **B-028 A template `ref` lacks most element members**
   `Units: core,bridge · Size: L · Impact: Medium`
@@ -1181,15 +1171,14 @@ A fixed entry is deleted and its ID is never reused.
   right after it starts the entry, and its time limit is off, so it does not
   reach this. Fix: record the stop with the module.
 
-- **B-241 `panic.log` loses earlier panics and can be written through a link**
+- **B-241 The log directory below the temporary directory can be prepared by another user**
   `Units: host · Size: S–M · Impact: Low`
 
-  The next panic replaces `panic.log`. When the host finds no home directory,
-  it writes below the temporary directory, where another user can place a link
-  named `panic.log` before the first panic. Fix: keep each panic in a new file
-  that is created exclusively, in a private directory owned by the user.
-  Another option is to let the person choose the save location in an OS dialog
-  when the app crashes.
+  When the host finds no home directory, it writes below the temporary
+  directory, where another user can prepare the log directory before the first
+  entry. Fix: write in a private directory owned by the user. Another option is
+  to let the person choose the save location in an OS dialog when the app
+  crashes.
 
 - **B-242 The host binary can't unpack itself**
   `Units: host,ci,cli · Size: L · Impact: Low`
@@ -1391,3 +1380,10 @@ A fixed entry is deleted and its ID is never reused.
   `value` and `ownerElement` throw `TypeError` for the same call, as do all six
   getters in Chromium, Firefox and WebKit. Fix: check the receiver in the three
   getters.
+
+- **B-261 An entry of the run log names the cause of an error only in its text**
+  `Units: host,jsenv,bridge · Size: M · Impact: Low`
+
+  An entry of the run log says `error` or `startup`, and the cause of an error
+  (a listener, a rejection, a limit stop) stays in the message text. Fix: give
+  `EngineError` a kind.
