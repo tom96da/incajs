@@ -247,7 +247,10 @@ fn hidden_with(node: &VirtualNode, computed: &HashMap<String, AttributeValue>) -
         node.attributes().get("hidden"),
         Some(AttributeValue::String(value)) if value.eq_ignore_ascii_case("until-found")
     );
-    node.attributes().contains_key("hidden") && !until_found && !computed.contains_key("display")
+    let display_set = computed
+        .get("display")
+        .is_some_and(|value| value.as_str() != Some(""));
+    node.attributes().contains_key("hidden") && !until_found && !display_set
 }
 
 /// Whether the `hidden` attribute hides `id`: it is present in the Hidden
@@ -568,6 +571,27 @@ mod tests {
         tree.set_attribute(parent, "hidden", true).unwrap();
         tree.set_style(parent, "display", "flex").unwrap();
         assert_eq!(wheel(&tree, node), Some((false, true)));
+    }
+
+    #[test]
+    fn the_hidden_attribute_hides_a_node_with_an_empty_display_and_no_sheet() {
+        let mut tree = VirtualTree::new();
+        let node = tree.create_node("div").unwrap();
+        tree.set_style(node, "display", "").unwrap();
+        tree.set_attribute(node, "hidden", true).unwrap();
+
+        assert!(hidden_by_attribute(&tree, node));
+    }
+
+    #[test]
+    fn the_hidden_attribute_hides_a_node_with_an_empty_display_and_no_matching_rule() {
+        let mut f = Fixture::new();
+        f.sheet(".b { width: 1px }");
+        let node = classed(&mut f, "a");
+        f.tree.set_style(node, "display", "").unwrap();
+        f.attr(node, "hidden", true);
+
+        assert!(hidden_by_attribute(&f.tree, node));
     }
 
     #[test]

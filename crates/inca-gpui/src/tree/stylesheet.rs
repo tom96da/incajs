@@ -338,8 +338,9 @@ impl VirtualTree {
 
     /// The style of `id` after the rules of the connected `<style>` elements apply: the matching
     /// declarations by specificity, then sheet order, then rule order, and the node's own style
-    /// last. A declaration of a shorthand replaces the longhands set before it. A node that no
-    /// rule styles, an unknown id and a tree without a `<style>` element give the node's own map.
+    /// last. An empty own value is ignored. A declaration of a shorthand replaces the longhands set
+    /// before it. A node that no rule styles, an unknown id and a tree without a `<style>` element
+    /// give the node's own map.
     #[must_use]
     pub(crate) fn computed_style(&self, id: NodeId) -> Cow<'_, HashMap<String, AttributeValue>> {
         let Some(node) = self.get(id) else {
@@ -371,6 +372,10 @@ impl VirtualTree {
             }
         }
         for (key, value) in shorthands_first(node.style_props()) {
+            // An empty inline value removes the inline declaration.
+            if value.as_str() == Some("") {
+                continue;
+            }
             apply(&mut computed, key, value);
         }
         Cow::Owned(computed)
@@ -440,6 +445,39 @@ mod tests {
         f.tree.set_style(a, "width", 50.0).unwrap();
 
         assert_eq!(value(&f, a, "width"), Some(num(50.0)));
+    }
+
+    #[test]
+    fn an_empty_inline_value_keeps_the_rule_value() {
+        let mut f = Fixture::new();
+        f.sheet(".a { display: flex }");
+        let a = boxed(&mut f, "a");
+        f.tree.set_style(a, "display", "").unwrap();
+
+        assert_eq!(value(&f, a, "display"), Some(text("flex")));
+    }
+
+    #[test]
+    fn an_empty_inline_shorthand_keeps_the_rule_longhands() {
+        let mut f = Fixture::new();
+        f.sheet(".a { padding-top: 8px }");
+        let a = boxed(&mut f, "a");
+        f.tree.set_style(a, "padding", "").unwrap();
+
+        assert_eq!(padding_top(&f, a), Some(8.0));
+    }
+
+    #[test]
+    fn an_empty_inline_shorthand_leaves_the_rule_sides_beside_an_inline_side() {
+        let mut f = Fixture::new();
+        f.sheet(".a { padding: 4px }");
+        let a = boxed(&mut f, "a");
+        f.tree.set_style(a, "padding", "").unwrap();
+        f.tree.set_style(a, "padding_top", 2.0).unwrap();
+        let spec = build_spec(&f.tree, a).unwrap();
+
+        assert_eq!(spec.style.padding.top, Some(2.0));
+        assert_eq!(spec.style.padding.left, Some(4.0));
     }
 
     #[test]
