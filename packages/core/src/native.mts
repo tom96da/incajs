@@ -32,6 +32,7 @@ interface IncaNative {
   addEventListener(
     target: EventTargetId,
     event: string,
+    callback: HostCallback,
     capture?: boolean,
     passive?: boolean,
   ): CallbackId;
@@ -61,8 +62,6 @@ export type HostCallback = (...args: unknown[]) => void;
 declare global {
   // eslint-disable-next-line no-var
   var __inca_native__: IncaNative;
-  // eslint-disable-next-line no-var
-  var __inca_callbacks__: Record<CallbackId, HostCallback>;
   // eslint-disable-next-line no-var
   var __inca_released__: (nodeIds: NodeId[], callbackIds: CallbackId[]) => void;
   // eslint-disable-next-line no-var

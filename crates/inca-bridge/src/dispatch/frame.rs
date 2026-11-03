@@ -6,7 +6,7 @@
 use gpui::{App, Window};
 use inca_gpui::event_sink::with_screen;
 use inca_gpui::{EventPayload, MousePayload, NO_BUTTON};
-use inca_jsenv::EngineError;
+use inca_jsenv::{EngineError, callbacks};
 use rquickjs::Function;
 
 use super::EventDispatcher;
@@ -47,25 +47,28 @@ impl EventDispatcher {
     /// for the next frame, which this requests.
     fn release_orphans(&self, window: &mut Window, cx: &mut App) {
         let swept = self.host.borrow_mut().sweep_orphans();
-        let Some((nodes, callbacks)) = swept else {
+        let Some((nodes, callback_ids)) = swept else {
             return;
         };
         self.host.borrow_mut().focus.observe(window, cx);
         let host = &self.host;
         let entered = self.engine.with(|ctx| {
-            let Ok(hook) = ctx.globals().get::<_, Function>("__inca_released__") else {
-                return false;
-            };
-            let called = event::array_of(&ctx, nodes).and_then(|nodes| {
-                let callbacks = event::array_of(&ctx, callbacks)?;
-                hook.call::<_, ()>((nodes, callbacks))
+            let released = callbacks::release(&ctx, &callback_ids);
+            let hook = ctx.globals().get::<_, Function>("__inca_released__").ok();
+            let called = released.and_then(|()| {
+                let Some(hook) = &hook else {
+                    return Ok(());
+                };
+                let nodes = event::array_of(&ctx, nodes)?;
+                let callback_ids = event::array_of(&ctx, callback_ids)?;
+                hook.call::<_, ()>((nodes, callback_ids))
             });
             if let Err(err) = called {
                 host.borrow_mut()
                     .failures
                     .push(EngineError::capture(&ctx, &err));
             }
-            true
+            hook.is_some()
         });
         if entered {
             self.drain_observed(window);
@@ -157,7 +160,7 @@ impl EventDispatcher {
 mod tests {
     #![allow(clippy::unwrap_used)]
     use crate::test_support::Reported;
-    use crate::tests::{dispatcher_with_engine, eval_json, listen, listen_global};
+    use crate::tests::{callback_stored, dispatcher_with_engine, eval_json, listen, listen_global};
     use crate::{EventDispatcher, Host};
     use gpui::{AppContext as _, Context, TestAppContext, Window};
     use inca_gpui::NodeId;
@@ -491,7 +494,7 @@ mod tests {
             globalThis.top = n.createNode('div');
             globalThis.leaf = n.createNode('div');
             n.appendChild(top, leaf);
-            globalThis.cb = n.addEventListener(leaf, 'click', false, false);
+            globalThis.cb = n.addEventListener(leaf, 'click', () => {}, false, false);
             ");
 
         draw(cx, scene.window);
@@ -499,7 +502,7 @@ mod tests {
 
         assert_eq!(
             scene.json("[globalThis.released, [top, leaf, cb]]"),
-            serde_json::json!([[[[1, 2], [0]]], [1, 2, 0]])
+            serde_json::json!([[[[1, 2], [1]]], [1, 2, 1]])
         );
         assert!(scene.host.borrow().tree.get(1).is_none());
     }
@@ -519,14 +522,14 @@ mod tests {
             });
             const n = __inca_native__;
             globalThis.top = n.createNode('div');
-            globalThis.cb = n.addEventListener(top, 'click', false, false);
+            globalThis.cb = n.addEventListener(top, 'click', () => {}, false, false);
             ");
 
         draw(cx, scene.window);
 
         assert_eq!(
             scene.json("[globalThis.last, [top, cb], globalThis.caught === undefined]"),
-            serde_json::json!([[[1], [0]], [1, 0], true])
+            serde_json::json!([[[1], [1]], [1, 1], true])
         );
     }
 
@@ -602,7 +605,7 @@ mod tests {
         let scene = scene(cx, "");
         scene.js(r"
             globalThis.node = __inca_native__.createNode('div');
-            __inca_native__.addEventListener(node, 'click', false, false);
+            __inca_native__.addEventListener(node, 'click', () => {}, false, false);
             ");
 
         draw(cx, scene.window);
@@ -612,11 +615,24 @@ mod tests {
     }
 
     #[gpui::test]
+    fn a_swept_node_releases_the_table_entries_of_its_listeners(cx: &mut TestAppContext) {
+        let scene = scene(cx, "");
+        scene.js(r"
+            globalThis.node = __inca_native__.createNode('div');
+            __inca_native__.addEventListener(node, 'click', () => {}, false, false);
+            ");
+
+        draw(cx, scene.window);
+
+        assert!(!callback_stored(&scene.dispatcher.engine, 1));
+    }
+
+    #[gpui::test]
     fn without_a_hook_a_frame_reports_nothing(cx: &mut TestAppContext) {
         let scene = scene(cx, "");
         scene.js(r"
             globalThis.node = __inca_native__.createNode('div');
-            __inca_native__.addEventListener(node, 'click', false, false);
+            __inca_native__.addEventListener(node, 'click', () => {}, false, false);
             ");
 
         draw(cx, scene.window);

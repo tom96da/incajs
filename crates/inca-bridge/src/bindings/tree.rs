@@ -7,6 +7,7 @@ use std::rc::Rc;
 use rquickjs::{Ctx, Exception, Result as JsResult};
 
 use inca_gpui::NodeId;
+use inca_jsenv::callbacks;
 
 use super::Natives;
 use super::convert::{JsNodeId, throw_tree_error};
@@ -115,24 +116,29 @@ fn destroy_node<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> 
         let before = host.tree.preceding(node_id);
         move_tab_start(&mut host, node_id, before);
         let freed = host.tree.destroy_node(node_id);
-        Ok(host.free_ids(&freed))
+        let callback_ids = host.free_ids(&freed);
+        callbacks::release(&ctx, &callback_ids)?;
+        Ok(callback_ids)
     }
 }
 
 /// Drops the listeners of `node_id` and of every node below it and returns their callback ids.
 /// The nodes stay in the tree. An unknown id returns no ids.
-fn release_listeners(host: Rc<RefCell<Host>>) -> impl Fn(JsNodeId) -> Vec<u32> {
-    move |JsNodeId(node_id)| {
+fn release_listeners<'js>(
+    host: Rc<RefCell<Host>>,
+) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Vec<u32>> {
+    move |ctx, JsNodeId(node_id)| {
         let mut host = host.borrow_mut();
-        let mut callbacks = Vec::new();
+        let mut callback_ids = Vec::new();
         let mut pending = vec![node_id];
         while let Some(current) = pending.pop() {
             if let Some(node) = host.tree.get(current) {
                 pending.extend(node.children().iter().copied());
-                callbacks.extend(host.listeners.release(current));
+                callback_ids.extend(host.listeners.release(current));
             }
         }
-        callbacks
+        callbacks::release(&ctx, &callback_ids)?;
+        Ok(callback_ids)
     }
 }
 
@@ -191,6 +197,7 @@ pub(super) fn mark_focus_dirty(host: &mut Host, node_id: NodeId) {
 mod tests {
     #![allow(clippy::unwrap_used)]
     use crate::test_support::{LISTEN_JS, callback_ids, engine_with_bindings, error_name};
+    use crate::tests::callback_stored;
     use crate::{EventTargetId, Host};
     use inca_gpui::NodeId;
     use std::cell::RefCell;
@@ -454,8 +461,8 @@ mod tests {
                 const leaf = __inca_native__.createNode('#text');
                 __inca_native__.appendChild(root, branch);
                 __inca_native__.appendChild(branch, leaf);
-                __inca_native__.addEventListener(branch, 'click');
-                __inca_native__.addEventListener(leaf, 'click');
+                __inca_native__.addEventListener(branch, 'click', () => {});
+                __inca_native__.addEventListener(leaf, 'click', () => {});
 
                 __inca_native__.destroyNode(branch);
                 ",
@@ -466,9 +473,26 @@ mod tests {
 
         assert_eq!(
             released,
-            vec![0, 1],
+            vec![1, 2],
             "a descendant's callback is unreachable from JS once its root is gone"
         );
+    }
+
+    #[test]
+    fn destroy_node_releases_the_table_entries_of_its_subtree() {
+        let (engine, _host) = engine_with_bindings();
+
+        engine
+            .eval::<()>(&format!(
+                r"
+                {BRANCH_WITH_LISTENERS}
+                __inca_native__.destroyNode(branch);
+                "
+            ))
+            .unwrap();
+
+        assert!(!callback_stored(&engine, 1));
+        assert!(!callback_stored(&engine, 2));
     }
 
     #[test]
@@ -483,8 +507,8 @@ mod tests {
                 const leaf = __inca_native__.createNode('#text');
                 __inca_native__.appendChild(root, branch);
                 __inca_native__.appendChild(branch, leaf);
-                __inca_native__.addEventListener(branch, 'click');
-                __inca_native__.addEventListener(leaf, 'click');
+                __inca_native__.addEventListener(branch, 'click', () => {});
+                __inca_native__.addEventListener(leaf, 'click', () => {});
 
                 __inca_native__.destroyNode(branch);
                 ",
@@ -633,8 +657,8 @@ mod tests {
         const leaf = __inca_native__.createNode('div');
         __inca_native__.appendChild(root, branch);
         __inca_native__.appendChild(branch, leaf);
-        __inca_native__.addEventListener(branch, 'click');
-        __inca_native__.addEventListener(leaf, 'click');
+        __inca_native__.addEventListener(branch, 'click', () => {});
+        __inca_native__.addEventListener(leaf, 'click', () => {});
         ";
 
     #[test]
@@ -651,7 +675,7 @@ mod tests {
             .unwrap();
         released.sort_unstable();
 
-        assert_eq!(released, [0, 1]);
+        assert_eq!(released, [1, 2]);
     }
 
     /// Releases the listeners of `branch` and returns `[branch, leaf]`.
@@ -666,6 +690,16 @@ mod tests {
                 "
             ))
             .unwrap()
+    }
+
+    #[test]
+    fn release_listeners_releases_the_table_entries_of_a_subtree() {
+        let (engine, _host) = engine_with_bindings();
+
+        release_branch(&engine);
+
+        assert!(!callback_stored(&engine, 1));
+        assert!(!callback_stored(&engine, 2));
     }
 
     #[test]

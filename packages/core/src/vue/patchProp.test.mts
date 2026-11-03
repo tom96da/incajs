@@ -18,6 +18,9 @@ import type {
   ListenerOptions,
 } from "../rendererCore.mts";
 
+/** What the host calls: it passes the event object first. */
+type Callback = (...args: unknown[]) => void;
+
 /** The function a registration call received, callable with any event. */
 const listenerOf = (call: readonly unknown[]): ((...args: unknown[]) => void) =>
   call[2] as (...args: unknown[]) => void;
@@ -1563,7 +1566,9 @@ describe("a listener attached while an event is handled", () => {
 
 describe("with the event tracker of the events layer", () => {
   let nextCallbackId = 0;
-  const addEventListener = vi.fn<(nodeId: number, event: string) => number>(() => nextCallbackId++);
+  const addEventListener = vi.fn<(nodeId: number, event: string, callback: Callback) => number>(
+    () => nextCallbackId++,
+  );
   const real = createPatchProp({
     ...core,
     addEventListener: rendererCore.addEventListener,
@@ -1586,8 +1591,7 @@ describe("with the event tracker of the events layer", () => {
   // Delivers event `eventId` to the newest registration for `nodeId`.
   const send = (nodeId: number, eventId: number): void => {
     const index = addEventListener.mock.calls.findLastIndex(([id]) => id === nodeId);
-    const callbackId = addEventListener.mock.results[index]!.value;
-    globalThis.__inca_callbacks__[callbackId]!({ eventId });
+    addEventListener.mock.calls[index]![2]({ eventId });
   };
 
   it("skips a listener attached by an earlier node's handler until the next event", () => {

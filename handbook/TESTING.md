@@ -63,9 +63,9 @@ All of the following must pass:
 
 ### Test placement
 
-- **Unit tests**: `*.test.mts` next to the module it tests, mocking `globalThis.__inca_native__` and
-  `__inca_callbacks__`. No real QuickJS engine runs under `pnpm test`. A barrel (`src/index.mts`)
-  re-exports only, and its modules carry the tests.
+- **Unit tests**: `*.test.mts` next to the module it tests, mocking `globalThis.__inca_native__`; the mock of
+  `addEventListener` receives the function as its third argument. No real QuickJS engine runs under
+  `pnpm test`. A barrel (`src/index.mts`) re-exports only, and its modules carry the tests.
 - **Integration tests**: a `tests/` directory at the package root, for what a package's unit tests
   can't reach with mocks.
 - **Tests that need both languages**: the root `tests/` package, see

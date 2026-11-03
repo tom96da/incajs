@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { callbackIdFor, groupOf, registeredGroupCount } from "./callbacks.mts";
 import { addEventListener, blur, click, focus, removeEventListener } from "./events.mts";
 import { releaseListeners } from "./tree.mts";
+import type { HostCallback } from "./native.mts";
 import type { EventLike } from "./types.mts";
 
 // Ids come from the host, which numbers them in order.
@@ -27,7 +28,13 @@ const native = {
   inputValue: vi.fn<(nodeId: number) => string>(() => ""),
   setInputValue: vi.fn<(nodeId: number, value: string) => void>(),
   addEventListener: vi.fn<
-    (nodeId: number, event: string, capture?: boolean, passive?: boolean) => number
+    (
+      nodeId: number,
+      event: string,
+      callback: HostCallback,
+      capture?: boolean,
+      passive?: boolean,
+    ) => number
   >(() => nextCallbackId++),
   removeEventListener: vi.fn<(nodeId: number, event: string, callbackId: number) => boolean>(
     () => true,
@@ -61,8 +68,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   nextCallbackId = 0;
   globalThis.__inca_native__ = native;
-  delete (globalThis as { __inca_callbacks__?: unknown }).__inca_callbacks__;
 });
+
+/** The function the host received for the registration at `index`. */
+const received = (index = 0): HostCallback => native.addEventListener.mock.calls.at(index)![2];
 
 describe("addEventListener's callback registry", () => {
   it("records nothing when the native call throws, and registers on the next call", () => {
@@ -76,39 +85,39 @@ describe("addEventListener's callback registry", () => {
 
     addEventListener(1, "click", listener);
     expect(native.addEventListener).toHaveBeenCalledTimes(2);
-    expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(1);
+    expect(callbackIdFor(groupOf(1, "click", false), listener)).toBe(0);
   });
 
-  it("keys __inca_callbacks__ by the id the host returns", () => {
+  it("records the id the host returns", () => {
     native.addEventListener.mockReturnValueOnce(41);
+    const listener = vi.fn<() => void>();
 
-    addEventListener(1, "click", vi.fn<() => void>());
+    addEventListener(1, "click", listener);
 
-    expect(Object.keys(globalThis.__inca_callbacks__)).toEqual(["41"]);
+    expect(callbackIdFor(groupOf(1, "click", false), listener)).toBe(41);
   });
 
-  it("drops the __inca_callbacks__ entry on removal", () => {
+  it("forwards the recorded id on removal", () => {
     native.addEventListener.mockReturnValueOnce(41);
     const listener = vi.fn<() => void>();
 
     addEventListener(1, "click", listener);
     removeEventListener(1, "click", listener);
     expect(native.removeEventListener).toHaveBeenCalledExactlyOnceWith(1, "click", 41);
-    expect(globalThis.__inca_callbacks__).toEqual({});
+    expect(callbackIdFor(groupOf(1, "click", false), listener)).toBeUndefined();
   });
 
-  it("stores the listener at __inca_callbacks__[id] and forwards that id natively", () => {
+  it("passes the listener to the host as the callback", () => {
     const listener = vi.fn<() => void>();
 
     addEventListener(1, "click", listener);
 
     expect(native.addEventListener).toHaveBeenCalledTimes(1);
     const [nodeId, event] = native.addEventListener.mock.calls[0]!;
-    const callbackId = native.addEventListener.mock.results[0]!.value;
     expect(nodeId).toBe(1);
     expect(event).toBe("click");
     const delivered = { type: "click" };
-    globalThis.__inca_callbacks__[callbackId]!(delivered);
+    received()(delivered);
     expect(listener).toHaveBeenCalledExactlyOnceWith(delivered);
   });
 });
@@ -124,7 +133,6 @@ describe("identity of a registration", () => {
     addEventListener(1, "click", vi.fn<() => void>());
 
     expect(native.addEventListener).toHaveBeenCalledTimes(5);
-    expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(5);
   });
 
   it("keeps the registrations of document and window apart", () => {
@@ -137,7 +145,6 @@ describe("identity of a registration", () => {
       "$document",
       "$window",
     ]);
-    expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(2);
   });
 
   it("ignores a second registration of the same function, node, event and capture", () => {
@@ -147,8 +154,13 @@ describe("identity of a registration", () => {
     addEventListener(1, "click", listener, { capture: true, passive: true, once: true });
 
     expect(native.addEventListener).toHaveBeenCalledTimes(1);
-    expect(native.addEventListener).toHaveBeenCalledWith(1, "click", true, false);
-    expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(1);
+    expect(native.addEventListener).toHaveBeenCalledWith(
+      1,
+      "click",
+      expect.any(Function),
+      true,
+      false,
+    );
   });
 
   it("registers the same function again once its registration is gone", () => {
@@ -159,7 +171,6 @@ describe("identity of a registration", () => {
     addEventListener(1, "click", listener);
 
     expect(native.addEventListener).toHaveBeenCalledTimes(2);
-    expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(1);
   });
 });
 
@@ -225,7 +236,7 @@ describe("listener objects", () => {
     };
     addEventListener(1, "click", object);
 
-    globalThis.__inca_callbacks__[native.addEventListener.mock.results[0]!.value]!({
+    received()({
       type: "click",
     });
 
@@ -239,7 +250,7 @@ describe("listener objects", () => {
     });
     const currentTarget = { node: 1 };
 
-    globalThis.__inca_callbacks__[native.addEventListener.mock.results[0]!.value]!({
+    received()({
       type: "click",
       currentTarget,
     });
@@ -252,7 +263,7 @@ describe("listener objects", () => {
     addEventListener(1, "click", function (this: unknown) {
       seen.push(this);
     });
-    const call = globalThis.__inca_callbacks__[native.addEventListener.mock.results[0]!.value]!;
+    const call = received();
 
     call();
     call(null);
@@ -268,7 +279,7 @@ describe("listener objects", () => {
     addEventListener(1, "click", object);
     object.handleEvent = replaced;
 
-    globalThis.__inca_callbacks__[native.addEventListener.mock.results[0]!.value]!({
+    received()({
       type: "click",
     });
 
@@ -298,7 +309,7 @@ describe("listener options", () => {
     addEventListener(100, "c", vi.fn<() => void>(), { passive: true });
     addEventListener(100, "d", vi.fn<() => void>(), { capture: true, passive: true });
 
-    const flags = native.addEventListener.mock.calls.map(([, event, capture, passive]) => [
+    const flags = native.addEventListener.mock.calls.map(([, event, , capture, passive]) => [
       event,
       capture,
       passive,
@@ -318,11 +329,10 @@ describe("listener options", () => {
     addEventListener(1, "click", listener, { once: true });
     const callbackId = native.addEventListener.mock.results[0]!.value;
 
-    globalThis.__inca_callbacks__[callbackId]!({ type: "click" });
+    received()({ type: "click" });
 
     expect(listener).toHaveBeenCalledExactlyOnceWith({ type: "click" });
     expect(native.removeEventListener).toHaveBeenCalledExactlyOnceWith(1, "click", callbackId);
-    expect(globalThis.__inca_callbacks__[callbackId]).toBeUndefined();
   });
 
   it("let a once listener register itself again from inside its run", () => {
@@ -331,24 +341,23 @@ describe("listener options", () => {
     );
     addEventListener(1, "click", listener, { once: true });
 
-    globalThis.__inca_callbacks__[native.addEventListener.mock.results[0]!.value]!();
+    received()();
 
     expect(native.addEventListener).toHaveBeenCalledTimes(2);
-    expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(1);
   });
 
   it("free a once listener of a capture registration through its own capture flag", () => {
     addEventListener(1, "click", vi.fn<() => void>(), { once: true, capture: true });
     const callbackId = native.addEventListener.mock.results[0]!.value;
 
-    globalThis.__inca_callbacks__[callbackId]!();
+    received()();
 
     expect(native.removeEventListener).toHaveBeenCalledExactlyOnceWith(1, "click", callbackId);
   });
 });
 
 describe("removeEventListener", () => {
-  it("drops both halves of the registration of that function", () => {
+  it("forgets the registration of that function only", () => {
     const listener = vi.fn<() => void>();
     const other = vi.fn<() => void>();
     addEventListener(1, "click", listener);
@@ -360,8 +369,8 @@ describe("removeEventListener", () => {
     removeEventListener(1, "click", listener);
 
     expect(native.removeEventListener).toHaveBeenCalledExactlyOnceWith(1, "click", listenerId);
-    expect(globalThis.__inca_callbacks__[listenerId!]).toBeUndefined();
-    expect(globalThis.__inca_callbacks__[otherId!]).toBeDefined();
+    expect(callbackIdFor(groupOf(1, "click", false), listener)).toBeUndefined();
+    expect(callbackIdFor(groupOf(1, "click", false), other)).toBe(otherId);
   });
 
   it("selects the registration by capture", () => {
@@ -373,8 +382,8 @@ describe("removeEventListener", () => {
     removeEventListener(130, "click", listener, { capture: true });
 
     expect(native.removeEventListener).toHaveBeenCalledExactlyOnceWith(130, "click", captureId);
-    expect(globalThis.__inca_callbacks__[plainId!]).toBeDefined();
-    expect(globalThis.__inca_callbacks__[captureId!]).toBeUndefined();
+    expect(callbackIdFor(groupOf(130, "click", false), listener)).toBe(plainId);
+    expect(callbackIdFor(groupOf(130, "click", true), listener)).toBeUndefined();
   });
 
   it("changes nothing when no registration matches", () => {
@@ -388,22 +397,23 @@ describe("removeEventListener", () => {
     removeEventListener(999, "click", listener);
 
     expect(native.removeEventListener).not.toHaveBeenCalled();
-    expect(Object.keys(globalThis.__inca_callbacks__)).toHaveLength(1);
+    expect(callbackIdFor(groupOf(1, "click", false), listener)).toBeDefined();
   });
 });
 
 describe("releaseListeners", () => {
-  it("frees the callback ids the host reports", () => {
-    addEventListener(1, "click", vi.fn<() => void>());
-    addEventListener(2, "click", vi.fn<() => void>());
+  it("forgets the callback ids the host reports", () => {
+    const [releasedListener, keptListener] = [vi.fn<() => void>(), vi.fn<() => void>()];
+    addEventListener(1, "click", releasedListener);
+    addEventListener(2, "click", keptListener);
     const [first, second] = native.addEventListener.mock.results.map((result) => result.value);
     native.releaseListeners.mockReturnValueOnce([first!]);
 
     releaseListeners(1);
 
     expect(native.releaseListeners).toHaveBeenCalledWith(1);
-    expect(globalThis.__inca_callbacks__[first!]).toBeUndefined();
-    expect(globalThis.__inca_callbacks__[second!]).toBeDefined();
+    expect(callbackIdFor(groupOf(1, "click", false), releasedListener)).toBeUndefined();
+    expect(callbackIdFor(groupOf(2, "click", false), keptListener)).toBe(second);
   });
 });
 
@@ -416,8 +426,7 @@ describe("latestEventId", () => {
   });
 
   const fire = (event: unknown): void => {
-    const id = native.addEventListener.mock.results.at(-1)!.value;
-    globalThis.__inca_callbacks__[id]!(event);
+    received(-1)(event);
   };
 
   it("tracks the highest eventId a listener has received, before it runs", () => {

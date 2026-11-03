@@ -17,8 +17,8 @@
 //! per registration: a plain `u32` callback id with its capture and passive
 //! flags, never an `rquickjs::Value`/`Function`/`Persistent<T>`, because a JS
 //! handle kept past the call that produced it outlives the context it
-//! belongs to. `addEventListener` returns the id the host allocated, and the JS
-//! caller stores the function at `globalThis.__inca_callbacks__[callbackId]`.
+//! belongs to. `addEventListener` stores the function in the callback table of
+//! the engine and returns the id it got there.
 //! The walk of an event looks the real function up fresh inside one
 //! `Engine::with` call and drops it before that call returns. It never
 //! crosses into Rust-held state.
@@ -202,8 +202,12 @@ mod tests {
         dispatcher
             .engine
             .eval::<()>(&format!(
-                "__inca_native__.addEventListener({node_id}, 'click');"
+                "__inca_native__.addEventListener({node_id}, 'click', () => {{}});"
             ))
+            .unwrap();
+        dispatcher
+            .engine
+            .with(|ctx| inca_jsenv::callbacks::release(&ctx, &[1]))
             .unwrap();
 
         // The listener has no function stored under its id.

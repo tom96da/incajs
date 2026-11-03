@@ -21,8 +21,7 @@ use crate::{EventDispatcher, EventListeners, EventTargetId, Host};
 /// registers `fn` through `__inca_native__.addEventListener`.
 pub const LISTEN_JS: &str = r"
     globalThis.__inca_test_listen__ = (target, type, fn, capture = false, passive = false) => {
-        const id = __inca_native__.addEventListener(target, type, capture, passive);
-        globalThis.__inca_callbacks__[id] = fn;
+        __inca_native__.addEventListener(target, type, fn, capture, passive);
     };
     ";
 

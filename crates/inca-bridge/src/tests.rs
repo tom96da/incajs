@@ -376,6 +376,11 @@ pub(crate) fn fire_and_read(
     read_out(dispatcher)
 }
 
+/// Whether the callback table of `engine` holds a value under `id`.
+pub(crate) fn callback_stored(engine: &inca_jsenv::Engine, id: u32) -> bool {
+    engine.with(|ctx| inca_jsenv::callbacks::get(&ctx, id).unwrap().is_some())
+}
+
 pub(crate) fn eval_json(dispatcher: &EventDispatcher, js: &str) -> serde_json::Value {
     let json = dispatcher
         .engine

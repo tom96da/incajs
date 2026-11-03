@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { markFreed } from "./element/lifecycle.mts";
-import type { EventTargetId, HostCallback } from "./native.mts";
+import type { EventTargetId } from "./native.mts";
 import type { CallbackId, EventListenerOrObject } from "./types.mts";
 
 /**
@@ -19,23 +19,17 @@ const ownerById = new Map<
   { group: string; listener: EventListenerOrObject<never, never> }
 >();
 
-/** The table the host creates at install; a realm without the host gets a plain one. */
-const callables = (): Record<CallbackId, HostCallback> => (globalThis.__inca_callbacks__ ??= {});
-
 /**
- * Records `callable` under `callbackId` at `globalThis.__inca_callbacks__`.
+ * Records the registration of `listener` under `callbackId`. The host keeps the function it runs.
  * @param group - the node, event and capture flag as one string, from {@link groupOf}
  * @param listener - the listener the caller registered, which identifies the registration
  * @param callbackId - the id the host returned for the registration
- * @param callable - the function the host runs
  */
 export function addCallback(
   group: string,
   listener: EventListenerOrObject<never, never>,
   callbackId: CallbackId,
-  callable: HostCallback,
 ): void {
-  callables()[callbackId] = callable;
   let ids = idsByGroup.get(group);
   if (!ids) idsByGroup.set(group, (ids = new Map()));
   ids.set(listener, callbackId);
@@ -60,7 +54,6 @@ export function callbackIdFor(
  * @param callbackId - the id to drop
  */
 export function releaseCallback(callbackId: CallbackId): void {
-  delete callables()[callbackId];
   const owner = ownerById.get(callbackId);
   if (owner === undefined) return;
   ownerById.delete(callbackId);
@@ -103,23 +96,12 @@ export function registeredGroupCount(): number {
 
 /**
  * The host calls this at the start of a frame, after it freed nodes that had
- * no parent. Each callback is released on its own, so one that throws does not
- * skip the rest. The first error is thrown after the rest is done. Core
- * defines it read-only on each load, so the latest copy of core answers.
+ * no parent. Core defines it read-only on each load, so the latest copy of
+ * core answers.
  */
 const released: typeof globalThis.__inca_released__ = (nodeIds, callbackIds) => {
-  let failure: unknown;
-  let failed = false;
-  for (const callbackId of callbackIds) {
-    try {
-      releaseCallbacks([callbackId]);
-    } catch (error) {
-      if (!failed) failure = error;
-      failed = true;
-    }
-  }
+  releaseCallbacks(callbackIds);
   markFreed(nodeIds);
-  if (failed) throw failure;
 };
 
 Object.defineProperty(globalThis, "__inca_released__", { value: released, configurable: true });

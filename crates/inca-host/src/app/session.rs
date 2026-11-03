@@ -419,7 +419,7 @@ mod tests {
     const MOUNTING_BUNDLE: &str = r"
         const node = __inca_native__.createNode('div');
         __inca_native__.appendChild(__inca_native__.rootNodeId(), node);
-        __inca_native__.addEventListener(node, 'click');
+        __inca_native__.addEventListener(node, 'click', () => {});
     ";
 
     #[test]
@@ -427,7 +427,7 @@ mod tests {
         let first = load(MOUNTING_BUNDLE).unwrap();
         first
             .engine
-            .eval::<()>("__inca_callbacks__[0] = () => {};")
+            .eval::<()>("__inca_native__.addEventListener('$window', 'click', () => {});")
             .unwrap();
         let first_child = first
             .host
@@ -453,24 +453,25 @@ mod tests {
             .iter()
             .map(|l| l.callback)
             .collect();
-        assert_eq!(ids, &[0]);
-        assert_eq!(
+        assert_eq!(ids, &[1]);
+        let stored = |id| {
             second
                 .engine
-                .eval::<i32>("Object.keys(globalThis.__inca_callbacks__).length;")
-                .unwrap(),
-            0,
-            "the fresh engine must not carry the previous callback registry"
+                .with(|ctx| inca_jsenv::callbacks::get(&ctx, id).unwrap().is_some())
+        };
+        assert!(stored(1));
+        assert!(
+            !stored(2),
+            "the fresh engine must not carry the previous callback table"
         );
     }
 
     const THROWING_LISTENER_BUNDLE: &str = r"
         const node = __inca_native__.createNode('div');
         __inca_native__.appendChild(__inca_native__.rootNodeId(), node);
-        __inca_native__.addEventListener(node, 'click');
-        globalThis.__inca_callbacks__[0] = () => {
+        __inca_native__.addEventListener(node, 'click', () => {
             throw new Error('boom');
-        };
+        });
     ";
 
     #[gpui::test]

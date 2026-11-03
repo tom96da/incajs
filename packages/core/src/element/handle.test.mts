@@ -901,7 +901,7 @@ describe("rootElement wheel listeners", () => {
     const addEventListener = vi.fn<(...args: unknown[]) => number>(() => 0);
     globalThis.__inca_native__ = { addEventListener } as never;
     element.addEventListener("wheel", () => {}, options);
-    return addEventListener.mock.calls[0]![3];
+    return addEventListener.mock.calls[0]![4];
   }
 
   function root(id: number): IncaElement {

@@ -153,15 +153,15 @@ be passed, and `undefined` there counts as `null`.
 | `removeStyle` | `(nodeId: number, key: string) => void` | Remove a style prop so it renders as if never set. Removing a key that isn't set does nothing. |
 | `inputValue` | `(nodeId: number) => string` | The text of the input node `nodeId`. Throws a `TypeError` for a node of another tag. |
 | `setInputValue` | `(nodeId: number, value: string) => void` | Replace the text of the input node `nodeId`, without CR and LF. A changed text puts the caret at its end and ends a composition. Throws a `TypeError` for a node of another tag. |
-| `addEventListener` | `(target: number \| "$document" \| "$window", event: string, capture?: boolean, passive?: boolean) => number` | Register a callback for an event and return its id, see [Registering](#registering) and [Tagged targets](#tagged-targets). `capture` and `passive` default to `false`. |
-| `removeEventListener` | `(target: number \| "$document" \| "$window", event: string, callbackId: number) => boolean` | Drop one registration and return whether it was there. An unknown node returns `false`. |
+| `addEventListener` | `(target: number \| "$document" \| "$window", event: string, callback: Function, capture?: boolean, passive?: boolean) => number` | Register `callback` for an event and return its id, see [Registering](#registering) and [Tagged targets](#tagged-targets). A `callback` that is not a function throws a `TypeError`. `capture` and `passive` default to `false`. |
+| `removeEventListener` | `(target: number \| "$document" \| "$window", event: string, callbackId: number) => boolean` | Drop one registration and its table entry, and return whether it was there. An unknown node returns `false`. |
 | `dispatchEvent` | `(target: number \| "$document" \| "$window", event: Event) => boolean` | Walk a script-built event over the path of `target` and return `false` when a listener canceled it, see [Dispatching from script](#dispatching-from-script) and [Tagged targets](#tagged-targets). |
 | `click` | `(nodeId: number) => void` | Walk an untrusted `click` at `nodeId`, see [Dispatching from script](#dispatching-from-script). |
 | `setPointerCapture` | `(nodeId: number, pointerId: number) => void` | Make `nodeId` the pending pointer capture while a button is held, see [Pointer events](#pointer-events). Throws `NotFoundError` for a `pointerId` other than 1 and `InvalidStateError` for a node outside the mounted tree or that names no node. |
 | `releasePointerCapture` | `(nodeId: number, pointerId: number) => void` | Clear the pending capture when `nodeId` holds it. Throws `NotFoundError` for a `pointerId` other than 1. |
 | `hasPointerCapture` | `(nodeId: number, pointerId: number) => boolean` | Whether `nodeId` is the pending capture and still mounted. `false` for a `pointerId` other than 1. |
-| `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its subtree, and return every `callbackId` registered in it. An unknown id returns `[]`. Destroying the root throws. Also drops the hold and the waiting `scrollIntoViewNode` calls of the destroyed nodes. |
-| `releaseListeners` | `(nodeId: number) => number[]` | Drop every listener registered on `nodeId` and on the nodes below it, and return their `callbackId`s. The nodes, their attributes and their children stay. An unknown id returns `[]`. |
+| `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its subtree, release the table entries of every `callbackId` registered in it and return the ids. An unknown id returns `[]`. Destroying the root throws. Also drops the hold and the waiting `scrollIntoViewNode` calls of the destroyed nodes. |
+| `releaseListeners` | `(nodeId: number) => number[]` | Drop every listener registered on `nodeId` and on the nodes below it, release their table entries and return their `callbackId`s. The nodes, their attributes and their children stay. An unknown id returns `[]`. |
 | `matches` | `(nodeId: number, selector: string) => boolean` | Whether the element `nodeId` matches the selector list. Throws a `SyntaxError` for an invalid selector and a `TypeError` for an unknown node. A `#text` node and a `#comment` node match nothing. |
 | `closest` | `(nodeId: number, selector: string) => number \| null` | The id of the nearest element at or above `nodeId` that matches. A `#text` node starts at its nearest element ancestor. Throws like `matches`. |
 | `querySelector` | `(nodeId: number, selector: string) => number \| null` | The id of the first descendant of `nodeId` that matches the selector list, in document order. `nodeId` is never a result. `:scope` and a top-level `&` are `nodeId`, and the whole tree takes part in the match. Text and `#comment` nodes are never results, and a `#text` or `#comment` start finds nothing. Throws a `SyntaxError` for an invalid selector, also for a `#text` or `#comment` start, and a `TypeError` for an unknown node. |
@@ -220,13 +220,16 @@ Payloads and author-facing behaviour are in
 
 #### Registering
 
-- `addEventListener` allocates the id and returns it. Each id is issued once.
-  The ids run from 0 to `u32::MAX - 1`, and the call after the last one
-  throws a `RangeError`. Distinct ids stack on one `(target, event)`, and
-  `capture` and `passive` belong to the registration. An id belongs to one
-  registration, so `removeEventListener` takes the id only. `destroyNode`
-  and `releaseListeners` return the dropped ids because only the caller can
-  free the JS half.
+- `addEventListener` stores the function in the callback table of
+  `inca-jsenv` and returns the table id. The ids come from the one allocator
+  of the context, see [Timers](#timers), and run from 1 to `2^31 - 1`. The call
+  after the last one throws a `RangeError`. Distinct ids stack on one
+  `(target, event)`, and `capture` and `passive` belong to the registration.
+  An id belongs to one registration, so `removeEventListener` takes the id
+  only. `removeEventListener`, `destroyNode`, `releaseListeners` and the
+  frame sweep release the table entries of the ids they drop. `destroyNode`
+  and `releaseListeners` return the dropped ids because the caller still has
+  to free the JS half of its own bookkeeping.
 - `packages/core` keys a registration by target, event, capture and listener, so
   `removeEventListener(type, listener, options)` finds it by identity and
   adding the same listener again changes nothing. A listener object keeps its
@@ -234,11 +237,10 @@ Payloads and author-facing behaviour are in
   event's `currentTarget` as `this`. `once` removes the registration before
   the listener runs. `createEventTarget` builds the listener methods for one
   target, a node or a tag.
-- `install` creates `globalThis.__inca_callbacks__` as an empty
-  null-prototype object on a read-only, non-configurable global. The caller
-  stores the function at `globalThis.__inca_callbacks__[id]` after
-  `addEventListener` returns `id`. A listener runs only after the call
-  returns. A missing or non-function entry is skipped.
+- A walk reads each function from the table by id when it reaches the
+  registration. An id with no table entry is skipped. A failed
+  `addEventListener` (an unknown node, a value that is not a function or
+  exhausted ids) stores nothing and takes no id.
 - A throwing callback goes to `Host::failures`, and sibling callbacks still
   run. Unhandled promise rejections and failed jobs are reported through the
   job drain before listener errors, and only listener errors go to
@@ -693,7 +695,8 @@ reused. A script reaches neither the table nor the allocator.
 `cancelAnimationFrame` on `globalThis` through `inca_jsenv::frames::install`.
 The list (`inca_jsenv::Frames`, owned by `Host::frames`) keeps pairs of a
 handle and a table id in registration order. The callback is in the callback
-table, so a frame callback takes an id from the allocator of the timers.
+table, so a frame callback takes an id from the allocator of the timers and
+listeners.
 
 - `requestAnimationFrame` refuses a non-function with a `TypeError` and
   returns a handle. Handles come from the counter of `Frames`: from 1, step 1

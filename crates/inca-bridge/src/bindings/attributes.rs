@@ -351,7 +351,7 @@ mod tests {
                 rejects(() => __inca_native__.destroyNode({bad})),
                 rejects(() => __inca_native__.holdNode({bad})),
                 rejects(() => __inca_native__.releaseNode({bad})),
-                rejects(() => __inca_native__.addEventListener({bad}, 'click')),
+                rejects(() => __inca_native__.addEventListener({bad}, 'click', () => {{}})),
                 rejects(() => __inca_native__.removeEventListener({bad}, 'click', 1)),
                 rejects(() => __inca_native__.focusNode({bad})),
                 rejects(() => __inca_native__.dispatchEvent({bad}, {{}})),
@@ -549,12 +549,12 @@ mod tests {
                 const root = n.rootNodeId();
                 const kept = n.createNode('div');
                 n.appendChild(root, kept);
-                n.addEventListener(kept, 'click');
+                n.addEventListener(kept, 'click', () => {});
                 const branch = n.createNode('div');
                 const leaf = n.createNode('div');
                 n.appendChild(branch, leaf);
-                n.addEventListener(branch, 'click');
-                n.addEventListener(leaf, 'click');
+                n.addEventListener(branch, 'click', () => {});
+                n.addEventListener(leaf, 'click', () => {});
                 [kept, branch, leaf];
                 ",
             )
@@ -566,7 +566,7 @@ mod tests {
         callbacks.sort_unstable();
 
         assert_eq!(nodes, [branch, leaf]);
-        assert_eq!(callbacks, [1, 2]);
+        assert_eq!(callbacks, [2, 3]);
         let host = host.borrow();
         assert!(
             callback_ids(&host.listeners, crate::EventTargetId::Node(branch), "click").is_empty()
@@ -576,7 +576,7 @@ mod tests {
         );
         assert_eq!(
             callback_ids(&host.listeners, crate::EventTargetId::Node(kept), "click"),
-            [0]
+            [1]
         );
     }
 
