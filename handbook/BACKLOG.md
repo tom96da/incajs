@@ -1387,6 +1387,15 @@ A fixed entry is deleted and its ID is never reused.
   property is removed. Fix: add the missing members on the clock of `inca-jsenv`,
   with `timeOrigin` as epoch milliseconds.
 
+- **B-265 `requestAnimationFrame` callbacks wait while another window covers the app's window on macOS**
+  `Units: host,bridge · Size: M · Impact: Low`
+
+  GPUI stops delivering frames to a window that another window fully covers, so
+  frame callbacks wait until it is uncovered. Chrome and Safari keep a covered
+  window visible and run its callbacks at 60 Hz. Fix: keep the frame source
+  running for a covered window that has pending frame callbacks, or drive the
+  callbacks from a timer while GPUI reports the window occluded.
+
 - **B-266 The config has no `frontend` field**
   `Units: cli,core · Size: L · Impact: Low`
 

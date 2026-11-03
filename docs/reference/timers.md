@@ -1,5 +1,5 @@
 ---
-description: Where the timers differ from the Web standards.
+description: Where the timers and frame callbacks differ from the Web standards.
 ---
 
 <!--
@@ -14,6 +14,8 @@ SPDX-License-Identifier: MIT OR Apache-2.0
   `TypeError`.
 - An interval keeps its schedule. After a late run, the next run is the next
   point of the original schedule, and the runs it missed are skipped.
-- After 2^31 - 1 timers in one run of the app, `setTimeout` and `setInterval`
-  throw a `RangeError`. A reload of the development window starts the count
-  again.
+- After 2^31 - 1 timers and frame callbacks in one run of the app,
+  `setTimeout`, `setInterval` and `requestAnimationFrame` throw a `RangeError`.
+  A reload of the development window starts the count again.
+- On macOS, `requestAnimationFrame` callbacks wait while another window fully
+  covers the app's window, and run when it is uncovered.

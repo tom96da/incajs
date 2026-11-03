@@ -16,6 +16,12 @@ declare global {
   ): number;
   function clearTimeout(id?: number): void;
   function clearInterval(id?: number): void;
+  function requestAnimationFrame(callback: (time: number) => void): number;
+  function cancelAnimationFrame(id: number): void;
+  interface Performance {
+    now(): number;
+  }
+  var performance: Performance;
 }
 
 export {};

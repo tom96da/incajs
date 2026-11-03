@@ -10,13 +10,16 @@
 //! values host code needs in a later call out of reach of scripts.
 //!
 //! [`Timers`] queues the timers a script starts, and [`timers::install`] defines the Web timer
-//! functions over it. [`callbacks`] keeps the functions a script registered under ids.
+//! functions over it. [`Frames`] queues the callbacks of `requestAnimationFrame`, and
+//! [`frames::install`] defines it and `cancelAnimationFrame`. [`callbacks`] keeps the functions a
+//! script registered under ids.
 //!
 //! The public [`class`] module holds the steps that define a native class: its
 //! constructor, methods, getters and global.
 //!
-//! [`Engine`] installs `TextEncoder` and `TextDecoder`. The decoder reads every
-//! encoding of the Encoding Standard.
+//! [`Engine`] installs `performance`, `TextEncoder` and `TextDecoder`. The decoder reads every
+//! encoding of the Encoding Standard. The caller installs `console`, the timers and the frame
+//! callbacks.
 //!
 //! [`Limits`] bounds the memory, the stack and the time a script may use.
 //!
@@ -28,6 +31,7 @@ pub mod class;
 pub mod console;
 mod encoding;
 mod engine;
+pub mod frames;
 
 mod compile;
 mod inspect;
@@ -47,6 +51,7 @@ pub use engine::{
     Engine, EngineBuilder, EngineError, EngineResult, ErrorReporter, PendingModule, report_jobs,
     stderr_reporter,
 };
+pub use frames::{Frames, run_frames};
 pub use limits::Limits;
 pub use quickjs::FunctionAccessor;
 pub use sourcemap::StackPaths;

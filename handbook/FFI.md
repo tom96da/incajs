@@ -687,6 +687,38 @@ reused. A script reaches neither the table nor the allocator.
 - A throw from a handler goes to the error reporter. A listener error the
   callback caused goes to `Host::failures` and is reported after the turn.
 
+### Frame callbacks
+
+`inca_bridge::install` defines `requestAnimationFrame` and
+`cancelAnimationFrame` on `globalThis` through `inca_jsenv::frames::install`.
+The list (`inca_jsenv::Frames`, owned by `Host::frames`) keeps pairs of a
+handle and a table id in registration order. The callback is in the callback
+table, so a frame callback takes an id from the allocator of the timers.
+
+- `requestAnimationFrame` refuses a non-function with a `TypeError` and
+  returns a handle. Handles come from the counter of `Frames`: from 1, step 1
+  per request, the `RangeError` "timer ids are exhausted. restart the app"
+  after `2^31 - 1`. A table that has no free id throws the same error.
+- `cancelAnimationFrame` reads the handle as an unsigned 32-bit integer and
+  throws a `TypeError` without an argument. It releases the table entry only
+  for a handle `Frames` holds, so the id of a timer stays.
+- `inca_jsenv::run_frames` moves the pending list into the batch of the frame
+  and reads `performance.now()` once. Each callback of the batch receives that
+  timestamp. The entry leaves the table before the callback runs, and a
+  callback canceled by an earlier one of the batch does not run. The job
+  queue drains after each callback. A callback requested during the run waits
+  for the next frame.
+- `EventDispatcher::start_timers` asks its window for a frame
+  (`Window::on_next_frame`) while a callback is pending and no frame is
+  queued. The frame runs the callbacks before the draw of that frame, drains
+  the jobs and redraws when one ran, so a write of a callback shows in the
+  same frame. No JS runs in a frame without a pending callback. A session
+  without a window (`run_timers_idle`) runs no frame callbacks. The host sets
+  `WindowOptions::inactive_frame_interval` to `None`, so a window without
+  focus keeps its frame rate.
+- `EventDispatcher::run_frame_callbacks` is the body of that frame callback.
+  `Harness::settle` calls it once before its draw.
+
 ## Application menu
 
 The host sets the menu bar (`crates/inca-host/src/menu.rs`). It holds one
