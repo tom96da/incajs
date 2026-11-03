@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { withAppRoot } from "./config/appRoot.mts";
 import { assertOutDir, resolveBuildConfig, resolveRuntimeConfig } from "./config/loader.mts";
-import { defaultBundler } from "./defaultBundler.mts";
+import { defaultBundler } from "./defaultPlugins.mts";
 import { entryRoot, resolveEntry } from "./entry.mts";
 import type { ResolvedBuildConfig, RuntimeConfig } from "./config/loader.mts";
 import type { Bundler, BuildOutput } from "./types.mts";

@@ -10,7 +10,7 @@ import { copyFile, mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promis
 import path from "node:path";
 import { Writable } from "node:stream";
 
-import { defaultBundler } from "../packages/cli/src/defaultBundler.mts";
+import { defaultBundler } from "../packages/cli/src/defaultPlugins.mts";
 
 const outDir = process.argv[2];
 if (!outDir) {

@@ -7,7 +7,7 @@ import { Writable } from "node:stream";
 
 import { afterAll, beforeAll, expect, it } from "vitest";
 
-import { defaultBundler } from "../src/defaultBundler.mts";
+import { defaultBundler } from "../src/defaultPlugins.mts";
 
 const scratchRoot = path.join(import.meta.dirname, "tmp", "default-bundler");
 
