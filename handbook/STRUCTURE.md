@@ -64,7 +64,7 @@ incajs/
 ├── package.json             # root workspace manifest — lint/format/typecheck/test/build scripts
 ├── pnpm-lock.yaml
 ├── tsconfig.base.json       # shared TS compiler options, extended by each package's tsconfig.json
-├── tsconfig.json            # root type-check scope
+├── tsconfig.json            # solution file: lists the tsconfig of every package, example, docs, scripts and tests
 ├── vitest.config.ts         # runs every package's tests in one Vitest process
 ├── oxlint.config.ts / oxfmt.config.ts  # shared lint/format config for all TS packages
 ├── packages/

@@ -1,5 +1,13 @@
 {
-  "extends": "./tsconfig.base.json",
   "files": [],
-  "include": ["*.ts", "packages/**/*", "tests/**/*.mts"]
+  "references": [
+    { "path": "./tsconfig.root.json" },
+    { "path": "./packages/core" },
+    { "path": "./packages/cli" },
+    { "path": "./examples/click_counter" },
+    { "path": "./examples/hello_world" },
+    { "path": "./docs" },
+    { "path": "./scripts" },
+    { "path": "./tests" }
+  ]
 }
