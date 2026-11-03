@@ -64,8 +64,9 @@ A fixed entry is deleted and its ID is never reused.
   `<style>` blocks in `.vue` SFCs have no effect through the custom
   renderer. A build now fails on one rather than shipping it
   (`ERR_INCA_UNSUPPORTED_STYLE`, raised by the default Vite
-  integration in `defaultPlugins.mts`);
-  rendering them is Phase 7's work.
+  integration in `defaultPlugins.mts`), and an imported stylesheet fails the
+  same way. A `<style>` element that the app renders applies its rules. Fix:
+  turn each SFC `<style>` block into such an element at build time.
 
 - **B-012 The window and the app control each other only at start**
   `Units: bridge,host,core · Size: L · Impact: Medium`

@@ -267,10 +267,10 @@ impl Host {
             };
             let mut chain = Vec::new();
             for id in self.tree.ancestors(node).skip(1) {
-                let Some(ancestor) = self.tree.get(id) else {
+                if self.tree.get(id).is_none() {
                     break;
-                };
-                if is_scroll_container(ancestor)
+                }
+                if is_scroll_container(&self.tree, id)
                     && let Some(l) = layout.get(&id)
                 {
                     chain.push((id, rect_of(l.bounds, l.border)));

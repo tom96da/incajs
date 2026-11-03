@@ -212,17 +212,15 @@ impl FocusRegistry {
         if !tree.is_connected(node_id) {
             return None;
         }
-        let hidden = tree
-            .ancestors(node_id)
-            .filter_map(|id| tree.get(id))
-            .any(|ancestor| {
-                hidden_by_attribute(ancestor)
-                    || ancestor.attributes().contains_key("inert")
+        let hidden = tree.ancestors(node_id).any(|id| {
+            hidden_by_attribute(tree, id) || tree.get(id).is_some_and(|ancestor| {
+                ancestor.attributes().contains_key("inert")
                     || matches!(
-                        ancestor.style_props().get("display"),
+                        tree.computed_style(id).get("display"),
                         Some(AttributeValue::String(value)) if value.eq_ignore_ascii_case("none")
                     )
-            });
+            })
+        });
         let by_default = focusable_by_default(node.tag_name());
         if node.tag_name() == TEXT_TAG || hidden || is_disabled_control(node) {
             return None;
@@ -365,6 +363,29 @@ mod tests {
             }
         }
         assert!(mismatches.is_empty(), "{mismatches:#?}");
+    }
+
+    #[test]
+    fn a_node_under_a_rule_display_none_has_no_tab_index() {
+        let mut f = Fixture::new();
+        f.sheet(".h { display: none }");
+        let parent = f.add(f.root, "div", "parent");
+        f.attr(parent, "class", "h");
+        let child = f.add(parent, "div", "child");
+        f.attr(child, "tabindex", "0");
+
+        assert_eq!(FocusRegistry::tab_index_of(&f.tree, child), None);
+    }
+
+    #[test]
+    fn a_node_with_a_rule_display_none_has_no_tab_index() {
+        let mut f = Fixture::new();
+        f.sheet(".h { display: none }");
+        let node = f.add(f.root, "div", "node");
+        f.attr(node, "class", "h");
+        f.attr(node, "tabindex", "0");
+
+        assert_eq!(FocusRegistry::tab_index_of(&f.tree, node), None);
     }
 
     #[test]

@@ -99,6 +99,7 @@ impl VirtualTree {
         let Some(parent_id) = self.nodes.get(&id).and_then(|node| node.parent) else {
             return;
         };
+        self.generation += 1;
         if let Some(parent) = self.nodes.get_mut(&parent_id) {
             parent.children.retain(|&child| child != id);
         }

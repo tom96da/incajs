@@ -22,12 +22,14 @@
 //! subtree. A node that is created, detached or released is an orphan until
 //! it is inserted, held or destroyed.
 
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 mod lifetime;
 mod links;
 mod props;
+mod stylesheet;
 mod text;
 
 /// The tag of a node that stands in for a comment.
@@ -209,6 +211,10 @@ pub struct VirtualTree {
     root: Option<NodeId>,
     held: HashSet<NodeId>,
     orphans: HashSet<NodeId>,
+    /// Bumped by every change to a node, a link or the root, so a cache built from the tree can
+    /// tell that it is stale.
+    generation: u64,
+    style_cache: RefCell<stylesheet::SheetCache>,
 }
 
 impl VirtualTree {
@@ -220,6 +226,7 @@ impl VirtualTree {
     /// Declares `id` the root that [`is_connected`](Self::is_connected)
     /// measures against.
     pub fn set_root(&mut self, id: NodeId) {
+        self.generation += 1;
         self.root = Some(id);
         self.orphans.remove(&id);
     }
@@ -252,6 +259,7 @@ impl VirtualTree {
     }
 
     fn node_mut(&mut self, id: NodeId) -> Result<&mut VirtualNode, TreeError> {
+        self.generation += 1;
         self.nodes.get_mut(&id).ok_or(TreeError::NodeNotFound(id))
     }
 

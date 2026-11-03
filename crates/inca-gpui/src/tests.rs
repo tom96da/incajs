@@ -48,6 +48,15 @@ impl Fixture {
         self.tree.set_attribute(node, key, value).unwrap();
     }
 
+    /// A `<style>` element under the root that holds `css`, and its text node.
+    pub(crate) fn sheet(&mut self, css: &str) -> (NodeId, NodeId) {
+        let style = self.add(self.root, "style", "sheet");
+        let text_node = self.tree.create_node("#text").unwrap();
+        self.attr(text_node, "value", css);
+        self.tree.append_child(style, text_node).unwrap();
+        (style, text_node)
+    }
+
     pub(crate) fn matches(&self, node: NodeId, selector: &str) -> bool {
         matches_selector(&self.tree, node, selector).unwrap()
     }

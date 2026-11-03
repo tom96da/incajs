@@ -22,15 +22,10 @@ use crate::config::{self, usable, window_size};
 /// A dimension the app's root doesn't declare, or declares as a negative or
 /// infinite size, comes back as `None`.
 pub(super) fn content_window_size(host: &Host, root: NodeId) -> (Option<f32>, Option<f32>) {
-    let Some(content) = host
-        .tree
-        .get(root)
-        .and_then(|node| node.children().first())
-        .and_then(|&content_id| host.tree.get(content_id))
-    else {
+    let Some(&content) = host.tree.get(root).and_then(|node| node.children().first()) else {
         return (None, None);
     };
-    let (width, height) = declared_window_size(content);
+    let (width, height) = declared_window_size(&host.tree, content);
 
     // A window dimension in px is always far within f32's
     // precision range. No meaningful truncation risk here.

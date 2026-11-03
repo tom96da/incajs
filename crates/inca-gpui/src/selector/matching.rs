@@ -10,6 +10,7 @@ use super::{
     QuirksMode, SelectorCaches, SelectorError, SelectorList, TEXT_TAG, VirtualNode, VirtualTree,
     fmt, is_disabled_control, js_number_text, matches_selector_list, parse,
 };
+use selectors::matching::matches_selector as matches_selector_one;
 
 /// An element of the tree: a node that is neither text content nor tagged `#comment`.
 #[derive(Clone)]
@@ -263,6 +264,21 @@ pub(super) fn matches_with(
 ) -> bool {
     let mut caches = SelectorCaches::default();
     matches_selector_list(list, element, &mut matching_context(&mut caches, scope))
+}
+
+pub(super) fn specificity_of_match(
+    list: &SelectorList<Impl>,
+    tree: &VirtualTree,
+    id: NodeId,
+) -> Option<u32> {
+    let element = Node::of(tree, id)?;
+    let mut caches = SelectorCaches::default();
+    let mut context = matching_context(&mut caches, element.opaque());
+    list.slice()
+        .iter()
+        .filter(|selector| matches_selector_one(selector, 0, None, &element, &mut context))
+        .map(selectors::parser::Selector::specificity)
+        .max()
 }
 
 /// Whether the element `node` matches `selector`. A node that is not an element, such as a text

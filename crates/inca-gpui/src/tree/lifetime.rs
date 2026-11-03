@@ -87,6 +87,7 @@ impl VirtualTree {
         if !self.nodes.contains_key(&id) {
             return Vec::new();
         }
+        self.generation += 1;
         self.detach(id);
 
         let mut freed = Vec::new();

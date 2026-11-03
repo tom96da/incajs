@@ -40,7 +40,7 @@ export function vueViteIntegration(runtimeModuleName: string): ViteIntegration {
         code: "ERR_INCA_UNSUPPORTED_STYLE",
         name: "a <style> block",
         matches: (id) => id.includes("vue&type=style"),
-        hint: "the renderer applies no stylesheet. use a :style binding instead",
+        hint: "the build does not convert a stylesheet yet. use a :style binding instead",
       },
     ],
   };
