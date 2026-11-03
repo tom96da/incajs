@@ -29,6 +29,7 @@ const host = {
   removeChild: vi.fn<() => void>(),
   releaseListeners: vi.fn<(nodeId: number) => number[]>(() => []),
   holdNode: vi.fn<(nodeId: number) => void>(),
+  releaseNode: vi.fn<(nodeId: number) => void>(),
   textContent: vi.fn<(nodeId: number) => string>(() => ""),
   wholeText: vi.fn<(nodeId: number) => string>(() => ""),
   substringData: vi.fn<(nodeId: number, offset: number, count: number) => string>(() => ""),

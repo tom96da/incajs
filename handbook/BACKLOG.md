@@ -1262,24 +1262,18 @@ A fixed entry is deleted and its ID is never reused.
   evaluate them. Fix: evaluate them in the selector adapter once interactive
   visual state exists.
 
-- **B-251 Most of the code that runs in QuickJS is tested only under Node and Bun**
-  `Units: core,ci · Size: L · Impact: Medium`
+- **B-251 The QuickJS run of the core tests is not part of CI**
+  `Units: core,ci · Size: M · Impact: Medium`
 
-  The unit tests of `packages/core` run under Node and Bun with the native
-  functions mocked, and the host runs the same code in QuickJS. A runner
-  (`pnpm --filter incajs test:quickjs [<file>...]`) runs test files in the
-  quickjs-ng build that npm publishes, every test file of the package when no
-  file is given. `interfaces.test.mts` passes there because it needs no mock.
-  Behavior that depends on the engine is not tested elsewhere, such as the
-  timing of `FinalizationRegistry` callbacks. Fix, stage 2: give the shim
-  `vi.resetModules`, async test bodies, `it.skip`, `setTimeout`, the vitest
-  mocker and `expectTypeOf`, and the externals `node:v8` and `node:vm`. Today
-  `patchProp.test.mts` fails there with "not a function" and `events.test.mts`
-  with "addEventListener of undefined". Then move the tests that wait for a
-  garbage collection. Stage 3: run the rest of the
-  suite and add a CI step. The direction is to move the whole core suite to
-  QuickJS once the shim covers what the tests need; the Node and Bun runs stay
-  until then.
+  `pnpm --filter incajs test:quickjs` runs every test file of `packages/core`
+  in the quickjs-ng build that npm publishes, and every test passes. No CI step
+  runs it, so a change can break it unseen. The runner is checked under Node
+  only. Fix: add a CI step for the run and run the runner under Bun. The
+  direction is to move the whole core suite to QuickJS; the Node and Bun runs
+  stay until then.
+  The runner never disposes its runtime: disposing it after the weak-reference
+  test of `createApp` makes quickjs-ng abort in `JS_FreeRuntime`. Check this
+  again with the CI step and with each engine update.
 
 - **B-252 The element types carry an `Inca` prefix that the standard types do not**
   `Units: core,cli · Size: L · Impact: Medium`
