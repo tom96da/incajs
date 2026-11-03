@@ -80,11 +80,12 @@
     "lint": "oxlint --type-aware",
     "format": "oxfmt --check .",
     "typecheck": "oxlint -A all --type-aware --type-check",
-    "test:quickjs": "node tests/quickjs/run.mts",
+    "test:quickjs": "node tests/quickjs/run.mts --config quickjs.config.mts",
     "prepack": "clear-package-json package.json -o package.json"
   },
   "devDependencies": {
     "@jitl/quickjs-ng-wasmfile-release-sync": "^0.32.0",
+    "@vitest/mocker": "catalog:",
     "@vue/runtime-core": "catalog:",
     "@vue/runtime-dom": "catalog:",
     "oxfmt": "catalog:",

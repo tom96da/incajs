@@ -44,9 +44,10 @@ const nodes = new Map<number, FakeNode>();
 const held = new Set<number>();
 const orphans = new Set<number>();
 const releaseNode = vi.fn<(id: number) => void>();
-let nextId: number;
 let nextCallbackId: number;
 const ROOT = 1;
+/** Ids stay unique across tests, so a handle finalized late frees no node of a later test. */
+let nextId = ROOT + 1;
 
 function nodeOf(id: number): FakeNode {
   const node = nodes.get(id);
@@ -80,14 +81,13 @@ function installNative(): void {
   held.clear();
   orphans.clear();
   releaseNode.mockClear();
-  nextId = ROOT;
   nextCallbackId = 0;
   const create = (tag: string): number => {
     const id = nextId++;
     nodes.set(id, { tag, parent: null, children: [], listeners: [] });
     return id;
   };
-  create("root");
+  nodes.set(ROOT, { tag: "root", parent: null, children: [], listeners: [] });
   const insertBefore = (parentId: number, childId: number, anchorId: number | null): void => {
     const parent = nodeOf(parentId);
     nodeOf(childId);

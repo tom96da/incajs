@@ -9,6 +9,7 @@ packages:
   - "tests"
 catalog:
   "@types/node": ^26.6.4
+  "@vitest/mocker": ^5.0.3
   "@vue/runtime-core": ^3.5.43
   "@vue/runtime-dom": ^3.5.43
   oxfmt: ^0.72.0

@@ -70,10 +70,12 @@ All of the following must pass:
   can't reach with mocks.
 - **Tests that need both languages**: the root `tests/` package, see
   [Cross-language tests](#cross-language-tests-tests).
-- **QuickJS run**: `pnpm --filter incajs test:quickjs [<file>...]` runs the test files of
+- **QuickJS run**: `pnpm --filter incajs test:quickjs [<file>...]` runs every test file of
   `packages/core` in the quickjs-ng build of `quickjs-emscripten`. The run is not part of
-  `pnpm test` or CI. The tool in `packages/core/tests/quickjs/` imports nothing from the source of
-  `packages/core`. Core-specific plugins and stubs go in a config file passed with `--config`.
+  `pnpm test` or CI.
+  - The tool in `packages/core/tests/quickjs/` imports nothing from the source of `packages/core`.
+  - `quickjs.config.mts` holds the core-specific parts: plugins for the `node:` modules, stubs and
+    the extra modules a test loads with a dynamic `import()`.
 
 ### Required checks
 
