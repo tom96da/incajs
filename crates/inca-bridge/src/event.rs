@@ -19,8 +19,6 @@
 //! of a walk: the nodes, then `document` and `window`.
 
 use std::cell::{Cell, RefCell};
-use std::sync::OnceLock;
-use std::time::Instant;
 
 pub(crate) use inca_gpui::event_sink::Flags;
 use inca_jsenv::class::{define_getter, define_method};
@@ -73,13 +71,19 @@ const INPUT: &str = "input";
 const COMPOSITION: &str = "composition";
 
 impl State {
-    /// The state of an idle event.
-    fn new(name: String, flags: Flags, payload: payload::Payload, trusted: bool) -> Self {
+    /// The state of an idle event created at `time_stamp` milliseconds.
+    fn new(
+        name: String,
+        flags: Flags,
+        payload: payload::Payload,
+        trusted: bool,
+        time_stamp: f64,
+    ) -> Self {
         Self {
             name: RefCell::new(name),
             flags: Cell::new(flags),
             payload,
-            time_stamp: time_stamp(),
+            time_stamp,
             trusted: Cell::new(trusted),
             event_id: Cell::new(None),
             dispatching: Cell::new(false),
@@ -143,13 +147,6 @@ pub(crate) fn install(ctx: &Ctx<'_>) -> JsResult<()> {
     }
     store.set(IS_TRUSTED, members::is_trusted(ctx)?)?;
     vault.set(STORE, store)
-}
-
-/// Milliseconds since the first call. The dispatcher makes the first call
-/// when it starts, so the origin is the host start.
-pub(crate) fn time_stamp() -> f64 {
-    static ORIGIN: OnceLock<Instant> = OnceLock::new();
-    ORIGIN.get_or_init(Instant::now).elapsed().as_secs_f64() * 1000.0
 }
 
 /// `event` as an object of the prototype of `kind`, with the shared
@@ -308,9 +305,60 @@ pub(crate) fn array_of<'js, T: IntoJs<'js>>(
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
-    use crate::tests::{dispatcher_with_engine, eval_json, fire_and_read, listen, tree_of_three};
+    use std::cell::Cell;
+    use std::rc::Rc;
+    use std::time::{Duration, Instant};
+
+    use crate::tests::{
+        RECORDER, dispatcher_on_clock, dispatcher_with_engine, eval_json, fire_and_read, listen,
+        seen_rows, tree_of_three,
+    };
     use gpui::TestAppContext;
     use inca_gpui::EventPayload;
+    use inca_jsenv::Clock;
+
+    /// A clock that `at` moves.
+    fn test_clock() -> (Clock, Rc<Cell<Instant>>) {
+        let at = Rc::new(Cell::new(Instant::now()));
+        let clock: Clock = {
+            let at = Rc::clone(&at);
+            Rc::new(move || at.get())
+        };
+        (clock, at)
+    }
+
+    #[gpui::test]
+    fn the_time_stamp_of_a_host_event_is_the_clock_reading_at_its_creation(
+        cx: &mut TestAppContext,
+    ) {
+        let (clock, at) = test_clock();
+        let (dispatcher, host) = dispatcher_on_clock(clock);
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        dispatcher.engine.eval::<()>(RECORDER).unwrap();
+        listen(&dispatcher, node, "click", "record");
+        at.set(at.get() + Duration::from_millis(40));
+
+        let cx = cx.add_empty_window();
+        cx.update(|window, cx| {
+            dispatcher.fire(node, "click", &EventPayload::None, window, cx);
+        });
+
+        let stamp = seen_rows(&dispatcher)[0][9].as_f64().unwrap();
+        // Float rounding of seconds to milliseconds.
+        assert!((stamp - 40.0).abs() < 1e-9, "{stamp}");
+    }
+
+    #[test]
+    fn the_time_stamp_of_a_new_event_is_the_clock_reading_at_its_creation() {
+        let (clock, at) = test_clock();
+        let (dispatcher, _host) = dispatcher_on_clock(clock);
+        at.set(at.get() + Duration::from_millis(30));
+
+        let got = eval_json(&dispatcher, "new Event('x').timeStamp");
+
+        // Float rounding of seconds to milliseconds.
+        assert!((got.as_f64().unwrap() - 30.0).abs() < 1e-9, "{got}");
+    }
 
     #[test]
     fn init_event_sets_the_type_and_the_flags() {

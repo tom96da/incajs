@@ -284,7 +284,7 @@ export interface IncaEvent {
   readonly defaultPrevented: boolean;
   /** `true` for events the host dispatches and `false` for events a script dispatches. */
   readonly isTrusted: boolean;
-  /** Milliseconds since the host started. */
+  /** Milliseconds since the app was loaded. */
   readonly timeStamp: number;
   /** A number that grows with each event and is the same on every node that event reaches. */
   readonly eventId: number;

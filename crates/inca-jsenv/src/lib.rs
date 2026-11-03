@@ -36,6 +36,7 @@ mod quickjs;
 mod sourcemap;
 #[cfg(test)]
 mod tests;
+mod time;
 mod timers;
 mod vault;
 
@@ -47,5 +48,6 @@ pub use engine::{
 pub use limits::Limits;
 pub use quickjs::FunctionAccessor;
 pub use sourcemap::StackPaths;
+pub use time::now;
 pub use timers::{Clock, Timers, run_timers, system_clock};
 pub use vault::vault;

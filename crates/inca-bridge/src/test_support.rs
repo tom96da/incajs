@@ -12,7 +12,7 @@ use std::rc::Rc;
 
 use gpui::{Context, Render, TestAppContext, Window, WindowHandle, prelude::*};
 use inca_gpui::{NodeId, render_tree_with_events};
-use inca_jsenv::{Engine, EngineError, ErrorReporter};
+use inca_jsenv::{Clock, Engine, EngineError, ErrorReporter, system_clock};
 
 use crate::bindings::install;
 use crate::{EventDispatcher, EventListeners, EventTargetId, Host};
@@ -100,7 +100,16 @@ pub fn error_name(engine: &Engine, call: &str) -> String {
 ///
 /// Panics when the engine or the bindings fail to initialise.
 pub fn engine_for(host: &Rc<RefCell<Host>>) -> Rc<Engine> {
-    let engine = Rc::new(Engine::new().unwrap());
+    engine_on_clock(host, system_clock())
+}
+
+/// [`engine_for`] with an engine whose `performance.now()` reads `clock`.
+///
+/// # Panics
+///
+/// Panics when the engine or the bindings fail to initialise.
+pub(crate) fn engine_on_clock(host: &Rc<RefCell<Host>>, clock: Clock) -> Rc<Engine> {
+    let engine = Rc::new(Engine::builder().clock(clock).build().unwrap());
     engine.with(|ctx| install(&ctx, host)).unwrap();
     engine.eval::<()>(LISTEN_JS).unwrap();
     engine

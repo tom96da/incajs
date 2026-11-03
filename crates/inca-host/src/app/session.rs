@@ -100,7 +100,7 @@ impl Session {
         writer: Option<&SharedWriter>,
         clock: Clock,
     ) -> Result<StartedEngine, EngineError> {
-        let host = Rc::new(RefCell::new(Host::with_clock(clock)));
+        let host = Rc::new(RefCell::new(Host::with_clock(clock.clone())));
         let signal = Rc::new(LoadSignal::default());
 
         let module_root = Path::new(entry_path).parent().unwrap_or(Path::new("."));
@@ -109,6 +109,7 @@ impl Session {
             .module_root(module_root)
             .stack_paths(config::stack_paths(&config, Path::new(entry_path)))
             .limits(ENGINE_LIMITS)
+            .clock(clock)
             .build()?;
         engine.with(|ctx| {
             console::install(&ctx, &to_stderr(), color_from_env())

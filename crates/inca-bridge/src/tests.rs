@@ -13,9 +13,12 @@ use inca_gpui::{
     EventPayload, EventSink, InputRequest, InputState, MousePayload, NodeId, PointerSource,
     WheelPayload,
 };
+use inca_jsenv::Clock;
 use serde_json::Value;
 
-use crate::test_support::{Reported, TestRoot, capture_reporter, engine_for, mount_active};
+use crate::test_support::{
+    Reported, TestRoot, capture_reporter, engine_for, engine_on_clock, mount_active,
+};
 use crate::{EventDispatcher, Host};
 
 /// An `input` holding a value (100 px wide, 6 px per char, from x 0) and a `button`, under a `div`
@@ -222,6 +225,15 @@ pub(crate) fn dispatcher_with_engine() -> (EventDispatcher, Rc<RefCell<Host>>, R
     let dispatcher = EventDispatcher::new(engine, Rc::clone(&host)).with_reporter(report);
 
     (dispatcher, host, reported)
+}
+
+/// [`dispatcher_with_engine`] on an engine whose clock is `clock`.
+pub(crate) fn dispatcher_on_clock(clock: Clock) -> (EventDispatcher, Rc<RefCell<Host>>) {
+    let host = Rc::new(RefCell::new(Host::default()));
+    let engine = engine_on_clock(&host, clock);
+    engine.eval::<()>("globalThis.out = [];").unwrap();
+    let dispatcher = EventDispatcher::new(engine, Rc::clone(&host));
+    (dispatcher, host)
 }
 
 pub(crate) fn at(x: f32, y: f32) -> gpui::Point<gpui::Pixels> {

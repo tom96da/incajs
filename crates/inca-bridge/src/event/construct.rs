@@ -52,7 +52,13 @@ pub(super) fn create<'js>(
     };
     let payload = Payload::from_host(walk.name, walk.payload);
     let kind = Payload::host_kind(walk.payload);
-    let state = State::new(walk.name.to_owned(), walk.flags, payload, walk.trusted);
+    let state = State::new(
+        walk.name.to_owned(),
+        walk.flags,
+        payload,
+        walk.trusted,
+        inca_jsenv::now(ctx)?,
+    );
     state.event_id.set(Some(id));
     state.dispatching.set(true);
     let event = IncaEvent {
@@ -187,7 +193,7 @@ impl<'js> IntoJsFunc<'js, ()> for Construct {
             composed: init.boolean("composed")?,
         };
         let (payload, related, detail) = self.payload(&init)?;
-        let state = State::new(event_type, flags, payload, false);
+        let state = State::new(event_type, flags, payload, false, inca_jsenv::now(ctx)?);
         let event = IncaEvent {
             state,
             held: Held {
