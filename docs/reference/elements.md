@@ -176,8 +176,8 @@ with the differences below. The listener methods are described in
   - `lastChild`
   - `previousSibling`
   - `nextSibling`
-- These members return objects that are no instance of a global class, so
-  `instanceof` with the standard class name fails:
+- The objects these members return are not instances of the standard classes,
+  so `instanceof` against the class name is `false`:
   - `children` (`HTMLCollection`)
   - `attributes` (`NamedNodeMap`)
   - the items of `attributes` (`Attr`)
