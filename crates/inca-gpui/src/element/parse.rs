@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use super::keys::{read_edges, read_prop};
 use super::spec::{EdgesSpec, LengthSpec, OverflowSpec, StyleSpec};
-use crate::tree::{AttributeValue, VirtualNode};
+use crate::tree::{AttributeValue, NodeId, VirtualTree};
 
 /// One or two overflow values, x first; a single value applies to both axes.
 pub(super) fn overflow_pair_from_str(s: &str) -> Option<(OverflowSpec, OverflowSpec)> {
@@ -188,8 +188,8 @@ pub(super) fn style_spec_from_props(props: &HashMap<String, AttributeValue>) -> 
 /// A dimension that is unset, `"auto"`, a percentage or not a finite size
 /// `>= 0` is `None`.
 #[must_use]
-pub fn declared_window_size(node: &VirtualNode) -> (Option<f64>, Option<f64>) {
-    let style = style_spec_from_props(node.style_props());
+pub fn declared_window_size(tree: &VirtualTree, id: NodeId) -> (Option<f64>, Option<f64>) {
+    let style = style_spec_from_props(&tree.computed_style(id));
     let px = |length| match length {
         Some(LengthSpec::Px(n)) => Some(n),
         _ => None,
@@ -456,7 +456,19 @@ mod tests {
         tree.set_style(id, "width", width).unwrap();
         tree.set_style(id, "height", height).unwrap();
 
-        assert_eq!(declared_window_size(tree.get(id).unwrap()), expected);
+        assert_eq!(declared_window_size(&tree, id), expected);
+    }
+
+    #[test]
+    fn a_rule_sizes_the_window() {
+        let mut f = crate::tests::Fixture::new();
+        f.sheet("#content { width: 800px; height: 600px }");
+        let content = f.add(f.root, "div", "content");
+
+        assert_eq!(
+            declared_window_size(&f.tree, content),
+            (Some(800.0), Some(600.0))
+        );
     }
 
     #[test]
@@ -464,7 +476,7 @@ mod tests {
         let mut tree = VirtualTree::new();
         let id = tree.create_node("div").unwrap();
 
-        assert_eq!(declared_window_size(tree.get(id).unwrap()), (None, None));
+        assert_eq!(declared_window_size(&tree, id), (None, None));
     }
 
     #[rstest]

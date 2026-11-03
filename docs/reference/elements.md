@@ -59,6 +59,20 @@ An `input` is a one-line text field.
   `setSelectionRange()`, `select()`, `defaultValue`, `maxLength` and `size`
   are missing.
 
+### `style`
+
+A `style` element applies its rules to every element of the app and is never
+drawn. Render one with `h("style", css)` or `<component is="style">`. A
+`<style>` block in a `.vue` file is not supported yet, see
+[`ERR_INCA_UNSUPPORTED_STYLE`](./errors#err-inca-unsupported-style).
+
+- The declarations take the keys and values of `:style`.
+- `!important` is read as a normal declaration, so an inline value still wins.
+- `@media` and the other at-rules have no effect.
+- The `media`, `type` and `disabled` attributes are ignored.
+- `:hover`, `:active`, `:focus` and the other interactive pseudo-classes never
+  match.
+
 ## Recognized style keys
 
 `:style` takes an object. Only the keys below are read, each with its own
@@ -123,13 +137,9 @@ A number must lie from `0` to `0xffffff`. Other notations, such as color names,
 `hsl()` and `currentcolor`, are not supported. `rgb()` does not take `none`,
 `calc()` or `var()`, and percentage channels need whitespace between them.
 
-## `class`, and `style` as a string, do nothing
+## `style` as a string does nothing
 
-`class="..."` is a valid Vue binding. The compiler accepts it and the
-renderer stores it as a plain attribute, but nothing reads it to draw
-anything.
-
-`style` is different: Vue's compiler routes a static `style="color: red"`
+Vue's compiler routes a static `style="color: red"`
 attribute and a bound `:style="someString"` to the same `style` prop, and
 `patchProp`'s `patchStyle` only accepts that prop as an object. A string
 value is ignored either way. So a plain `style="..."` attribute can
@@ -138,8 +148,8 @@ object, with the keys above, has any visible effect.
 
 ```vue
 <template>
-  <!-- does nothing visually: class, and style as a string -->
-  <div class="card" style="color: red">…</div>
+  <!-- does nothing visually: style as a string -->
+  <div style="color: red">…</div>
   <div :style="'color: red'">…</div>
   <!-- works -->
   <div :style="{ color: '#ff0000' }">…</div>

@@ -85,6 +85,13 @@ impl fmt::Display for SelectorError {
     }
 }
 
+impl SelectorError {
+    /// Why the selector is not valid, as a short phrase.
+    pub(crate) fn reason(&self) -> &'static str {
+        self.reason
+    }
+}
+
 impl std::error::Error for SelectorError {}
 
 /// One string type for every name the selector crate asks for.
@@ -426,6 +433,23 @@ fn parse(selector: &str) -> Result<SelectorList<Impl>, SelectorError> {
             reason: reason(&error),
         }
     })
+}
+
+/// A parsed selector list.
+#[derive(Debug)]
+pub(crate) struct Selectors(SelectorList<Impl>);
+
+impl Selectors {
+    /// Parses `text` as a selector list.
+    pub(crate) fn parse(text: &str) -> Result<Self, SelectorError> {
+        parse(text).map(Self)
+    }
+
+    /// The highest specificity among the selectors that match the element `id`. `None` when no
+    /// selector matches and for a node that is not an element.
+    pub(crate) fn specificity_of_match(&self, tree: &VirtualTree, id: NodeId) -> Option<u32> {
+        matching::specificity_of_match(&self.0, tree, id)
+    }
 }
 
 /// Parses `selector` as a selector list.

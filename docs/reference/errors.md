@@ -165,9 +165,9 @@ it as a bug if your app didn't cause it.
 
 ## `ERR_INCA_UNSUPPORTED_STYLE`
 
-A `.vue` file has a `<style>` block, which isn't supported yet. The
-renderer applies no stylesheet, so the block would have no effect at
-runtime. The build fails with this error.
+A `.vue` file has a `<style>` block, which isn't supported yet. The build
+does not turn the block into a [`style` element](./elements#style), so it
+would have no effect at runtime. The build fails with this error.
 
 Use a `:style` binding instead.
 

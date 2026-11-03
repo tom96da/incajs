@@ -1,6 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::collections::HashMap;
+
 use gpui::Point;
 
 use super::parse::style_spec_from_props;
@@ -231,24 +233,30 @@ pub fn build_spec(tree: &VirtualTree, root: NodeId) -> Option<ElementSpec> {
     build_spec_inner(tree, root, inert)
 }
 
-/// Whether script can scroll `node`: either overflow axis is `hidden`,
+/// Whether script can scroll `id`: either overflow axis is `hidden`,
 /// `scroll` or `auto`.
 #[must_use]
-pub fn is_scroll_container(node: &VirtualNode) -> bool {
-    style_spec_from_props(node.style_props()).is_scroll_container()
+pub fn is_scroll_container(tree: &VirtualTree, id: NodeId) -> bool {
+    style_spec_from_props(&tree.computed_style(id)).is_scroll_container()
 }
 
 /// Whether the `hidden` attribute hides `node`: it is present in the Hidden
-/// state (any value except `until-found`) and the node sets no `display`.
-#[must_use]
-pub fn hidden_by_attribute(node: &VirtualNode) -> bool {
+/// state (any value except `until-found`) and `computed` sets no `display`.
+fn hidden_with(node: &VirtualNode, computed: &HashMap<String, AttributeValue>) -> bool {
     let until_found = matches!(
         node.attributes().get("hidden"),
         Some(AttributeValue::String(value)) if value.eq_ignore_ascii_case("until-found")
     );
-    node.attributes().contains_key("hidden")
-        && !until_found
-        && !node.style_props().contains_key("display")
+    node.attributes().contains_key("hidden") && !until_found && !computed.contains_key("display")
+}
+
+/// Whether the `hidden` attribute hides `id`: it is present in the Hidden
+/// state (any value except `until-found`) and the style of the node sets no
+/// `display`. `false` for an unknown id.
+#[must_use]
+pub fn hidden_by_attribute(tree: &VirtualTree, id: NodeId) -> bool {
+    tree.get(id)
+        .is_some_and(|node| hidden_with(node, &tree.computed_style(id)))
 }
 
 /// The axes along which a wheel step can scroll `id` now. `None` when the node
@@ -258,22 +266,22 @@ pub fn hidden_by_attribute(node: &VirtualNode) -> bool {
 /// `Some((false, false))`.
 #[must_use]
 pub fn wheel_axes(tree: &VirtualTree, id: NodeId) -> Option<Point<bool>> {
-    let node = tree.get(id)?;
+    tree.get(id)?;
     if !tree.is_connected(id) {
         return None;
     }
-    let out = tree
-        .ancestors(id)
-        .filter_map(|id| tree.get(id))
-        .any(|node| {
-            hidden_by_attribute(node)
-                || node.attributes().contains_key("inert")
-                || style_spec_from_props(node.style_props()).display == Some(DisplaySpec::None)
-        });
+    let out = tree.ancestors(id).any(|id| {
+        let Some(node) = tree.get(id) else {
+            return false;
+        };
+        hidden_by_attribute(tree, id)
+            || node.attributes().contains_key("inert")
+            || style_spec_from_props(&tree.computed_style(id)).display == Some(DisplaySpec::None)
+    });
     if out {
         return None;
     }
-    let style = style_spec_from_props(node.style_props());
+    let style = style_spec_from_props(&tree.computed_style(id));
     let scrolls = |axis| axis == Some(OverflowSpec::Scroll);
     Some(Point {
         x: scrolls(style.overflow_x),
@@ -283,6 +291,10 @@ pub fn wheel_axes(tree: &VirtualTree, id: NodeId) -> Option<Point<bool>> {
 
 fn build_spec_inner(tree: &VirtualTree, root: NodeId, inert_above: bool) -> Option<ElementSpec> {
     let node = tree.get(root)?;
+    // A `<style>` element holds rules and takes no part in the layout.
+    if node.tag_name().eq_ignore_ascii_case("style") {
+        return None;
+    }
     let inert = inert_above || node.attributes().contains_key("inert");
 
     let tag = match node.tag_name() {
@@ -303,8 +315,9 @@ fn build_spec_inner(tree: &VirtualTree, root: NodeId, inert_above: bool) -> Opti
         _ => ElementTag::Container,
     };
 
-    let mut style = style_spec_from_props(node.style_props());
-    if hidden_by_attribute(node) {
+    let computed = tree.computed_style(root);
+    let mut style = style_spec_from_props(&computed);
+    if hidden_with(node, &computed) {
         style.display = Some(DisplaySpec::None);
     }
     let children = if matches!(tag, ElementTag::Text(_) | ElementTag::Input { .. }) {
@@ -332,7 +345,15 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
+    use crate::tests::Fixture;
     use crate::tree::VirtualTree;
+
+    /// A node with `name` as its class under the root of `f`.
+    fn classed(f: &mut Fixture, name: &str) -> NodeId {
+        let node = f.add(f.root, "div", name);
+        f.attr(node, "class", name);
+        node
+    }
 
     /// A chain `[grandparent, parent, node]` rooted at the grandparent.
     fn chain() -> (VirtualTree, [NodeId; 3]) {
@@ -547,6 +568,60 @@ mod tests {
         tree.set_attribute(parent, "hidden", true).unwrap();
         tree.set_style(parent, "display", "flex").unwrap();
         assert_eq!(wheel(&tree, node), Some((false, true)));
+    }
+
+    #[test]
+    fn a_style_element_builds_no_element() {
+        let mut f = Fixture::new();
+        let (style, _) = f.sheet(".a { width: 1px }");
+        let other = classed(&mut f, "a");
+
+        let spec = build_spec(&f.tree, f.root).unwrap();
+
+        assert!(build_spec(&f.tree, style).is_none());
+        assert_eq!(
+            spec.children
+                .iter()
+                .map(|child| child.id)
+                .collect::<Vec<_>>(),
+            [other]
+        );
+    }
+
+    #[test]
+    fn a_rule_overflow_makes_a_scroll_container() {
+        let mut f = Fixture::new();
+        f.sheet(".s { overflow: scroll }");
+        let node = classed(&mut f, "s");
+        let plain = classed(&mut f, "plain");
+
+        assert!(is_scroll_container(&f.tree, node));
+        assert!(!is_scroll_container(&f.tree, plain));
+    }
+
+    #[test]
+    fn a_rule_display_none_leaves_the_wheel_no_axes() {
+        let mut f = Fixture::new();
+        f.sheet(".s { overflow: scroll } .h { display: none }");
+        let hidden = classed(&mut f, "h");
+        let node = f.add(hidden, "div", "node");
+        f.attr(node, "class", "s");
+
+        assert_eq!(wheel(&f.tree, node), None);
+    }
+
+    #[test]
+    fn a_rule_display_stops_the_hidden_attribute_from_hiding() {
+        let mut f = Fixture::new();
+        f.sheet(".s { display: flex }");
+        let node = classed(&mut f, "s");
+        f.attr(node, "hidden", true);
+
+        assert!(!hidden_by_attribute(&f.tree, node));
+        assert_eq!(
+            build_spec(&f.tree, node).unwrap().style.display,
+            Some(DisplaySpec::Flex)
+        );
     }
 
     #[test]

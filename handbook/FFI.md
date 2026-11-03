@@ -52,6 +52,10 @@ the custom renderer's output. Each node has:
 | `children` | `Vec<u32>` | Ordered child node handles. |
 
 - A node has at most one parent.
+- The text children of a connected `style` element hold rules. Layout and the
+  scroll and focus checks read a node's `style_props` after the matching rules
+  apply, and the `style_props` win over every rule. The host prints each
+  dropped rule, at-rule and declaration through `warn` as `<style>: <line>`.
 - `appendChild` and `insertBefore` detach the child first, so they also move
   a node.
 - Detaching, moving or destroying a node drops the focus its subtree holds

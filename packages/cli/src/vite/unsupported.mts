@@ -31,7 +31,7 @@ export const UNSUPPORTED: readonly UnsupportedFeature[] = [
     code: "ERR_INCA_UNSUPPORTED_STYLESHEET",
     name: "a stylesheet import",
     matches: (id) => STYLESHEET_RE.test(id),
-    hint: "the renderer applies no stylesheet. use a :style binding instead",
+    hint: "the build does not convert a stylesheet yet. use a :style binding instead",
   },
 ];
 

@@ -20,12 +20,13 @@ const FOCUS_PAYLOAD: EventPayload = EventPayload::Focus {
 };
 
 impl EventDispatcher {
-    /// Runs the work a window owes before it draws a frame: syncs the
-    /// modifier keys, applies a requested focus and fires the resulting
+    /// Runs the work a window owes before it draws a frame: prints the warnings of the
+    /// `<style>` sheets, syncs the modifier keys, applies a requested focus and fires the resulting
     /// `focus`/`blur` events, frees the nodes nothing reaches, reveals the
     /// focused node and fires pending `scroll` events. Call it first in the
     /// window's render.
     pub fn begin_frame(&self, window: &mut Window, cx: &mut App) {
+        self.warn_style_sheets();
         self.sync_modifiers(window, false);
         let transitions = {
             let host = &mut *self.host.borrow_mut();
@@ -38,6 +39,14 @@ impl EventDispatcher {
         self.release_orphans(window, cx);
         self.host.borrow_mut().reveal_focus(window);
         self.fire_scrolls(window, cx);
+    }
+
+    /// Prints each warning of the sheets parsed since the last frame, prefixed with `<style>: `.
+    fn warn_style_sheets(&self) {
+        let host = self.host.borrow();
+        for line in host.tree.take_style_warnings() {
+            (host.warn)(&format!("<style>: {line}"));
+        }
     }
 
     /// Frees the orphans of the tree and tells the script through the global
@@ -244,6 +253,34 @@ mod tests {
         draw(cx, window);
         set_active(cx, window, &dispatcher, false);
         (dispatcher, host, window, node)
+    }
+
+    #[gpui::test]
+    fn a_frame_prints_the_warnings_of_a_style_sheet_once(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let printed = Rc::new(RefCell::new(Vec::new()));
+        let sink = Rc::clone(&printed);
+        host.borrow_mut().warn = Rc::new(move |line| sink.borrow_mut().push(line.to_owned()));
+        {
+            let mut host = host.borrow_mut();
+            let root = host.root();
+            let style = host.tree.create_node("style").unwrap();
+            let text = host.tree.create_node("#text").unwrap();
+            host.tree
+                .set_attribute(text, "value", ".a { bogus: 1 }")
+                .unwrap();
+            host.tree.append_child(style, text).unwrap();
+            host.tree.append_child(root, style).unwrap();
+        }
+        let window = cx.add_window(|_, _| Frame(Rc::new(dispatcher)));
+
+        draw(cx, window);
+        draw(cx, window);
+
+        assert_eq!(
+            *printed.borrow(),
+            ["<style>: ignoring unknown style key `bogus`"]
+        );
     }
 
     #[gpui::test]

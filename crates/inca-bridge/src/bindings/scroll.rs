@@ -22,8 +22,8 @@ pub(super) fn install_scroll(n: &Natives<'_, '_>) -> JsResult<()> {
 fn scroll_of<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Value<'js>> {
     move |ctx, JsNodeId(node_id)| {
         let host = host.borrow();
-        let node = existing_node(&ctx, &host.tree, node_id)?;
-        let rect = is_scroll_container(node).then(|| {
+        existing_node(&ctx, &host.tree, node_id)?;
+        let rect = is_scroll_container(&host.tree, node_id).then(|| {
             let handle = host.scroll_handle(node_id);
             let (offset, max) = (handle.offset(), handle.max_offset());
             // gpui clamps on the next draw; report the same value.
@@ -44,8 +44,8 @@ fn scroll_node<'js>(
 ) -> impl Fn(Ctx<'js>, JsNodeId, Option<f64>, Option<f64>) -> JsResult<()> {
     move |ctx, JsNodeId(node_id), left, top| {
         let host = host.borrow();
-        let node = existing_node(&ctx, &host.tree, node_id)?;
-        if !is_scroll_container(node) {
+        existing_node(&ctx, &host.tree, node_id)?;
+        if !is_scroll_container(&host.tree, node_id) {
             return Ok(());
         }
         let handle = host.scroll_handle(node_id);
