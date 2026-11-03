@@ -27,6 +27,12 @@ use crate::{
     hidden_by_attribute, is_disabled_control,
 };
 
+mod requests;
+mod start;
+mod tab;
+
+use start::Start;
+
 /// What changed since [`FocusRegistry::apply_pending`] was last called.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct FocusTransition {
@@ -98,27 +104,6 @@ enum PendingFocus {
     Blur(NodeId),
 }
 
-/// Where Tab starts while no node is focused.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Start {
-    /// A mouse press on `node`. `focusing` is the node the press focuses, until the registry
-    /// sees that focus.
-    Press {
-        node: NodeId,
-        focusing: Option<NodeId>,
-    },
-    /// The node that took focus last.
-    Focus(NodeId),
-}
-
-impl Start {
-    fn node(self) -> NodeId {
-        match self {
-            Self::Press { node, .. } | Self::Focus(node) => node,
-        }
-    }
-}
-
 /// `NodeId` → its persistent `FocusHandle`, the node focused as of the last
 /// frame this was checked, and every pending request left by a caller that
 /// had no live `Window`/`App`, oldest first. See the module doc for why. Two
@@ -152,172 +137,7 @@ pub struct FocusRegistry {
     start: Option<Start>,
 }
 
-/// Parses a `tabindex` value: optional leading ASCII whitespace, an optional
-/// sign, then digits. Trailing characters are ignored. Returns `None` when the
-/// digits are missing or exceed `i32`.
-fn parse_tab_index(value: &str) -> Option<i32> {
-    let value = value.trim_start_matches([' ', '\t', '\n', '\x0c', '\r']);
-    let (negative, rest) = match value.as_bytes().first()? {
-        b'-' => (true, &value[1..]),
-        b'+' => (false, &value[1..]),
-        _ => (false, value),
-    };
-    let digits = rest
-        .find(|c: char| !c.is_ascii_digit())
-        .unwrap_or(rest.len());
-    if digits == 0 {
-        return None;
-    }
-    let magnitude: i64 = rest[..digits].parse().ok()?;
-    i32::try_from(if negative { -magnitude } else { magnitude }).ok()
-}
-
-/// The target of a Tab press. `stops` lists every focusable node with its
-/// `tabindex` in tree order. Positive values come first in ascending order,
-/// then 0 in tree order, and negative values are outside the order. Past either
-/// end the result is `None`. From a node outside the order the result is the
-/// nearest stop after it (before it when `backward`) in tree order, or forward
-/// with no stop after it the first stop. `current` `None` starts at the first
-/// (or, `backward`, last) stop.
-fn next_stop(stops: &[(NodeId, i32)], current: Option<NodeId>, backward: bool) -> Option<NodeId> {
-    // (sort key, tree position, node)
-    let mut ordered: Vec<(i32, usize, NodeId)> = stops
-        .iter()
-        .enumerate()
-        .filter(|(_, (_, index))| *index >= 0)
-        .map(|(pos, &(id, index))| (if index > 0 { index } else { i32::MAX }, pos, id))
-        .collect();
-    ordered.sort_by_key(|&(key, ..)| key);
-    let at = current.and_then(|id| ordered.iter().position(|&(_, _, node)| node == id));
-    let found = match (current, at) {
-        (Some(_), Some(at)) => {
-            if backward {
-                at.checked_sub(1).and_then(|i| ordered.get(i))
-            } else {
-                ordered.get(at + 1)
-            }
-        }
-        (Some(id), None) => match stops.iter().position(|&(node, _)| node == id) {
-            Some(here) if backward => ordered.iter().filter(|s| s.1 < here).max_by_key(|s| s.1),
-            Some(here) => ordered
-                .iter()
-                .filter(|s| s.1 > here)
-                .min_by_key(|s| s.1)
-                .or_else(|| ordered.first()),
-            None if backward => ordered.last(),
-            None => ordered.first(),
-        },
-        (None, _) if backward => ordered.last(),
-        (None, _) => ordered.first(),
-    };
-    found.map(|&(_, _, id)| id)
-}
-
-/// The target of a Tab press while no node is focused, from a press on `node`, which sits at
-/// `at` among `stops` in tree order. Forward, it is the first stop after `node`, or with none
-/// after it the first stop of the order when `node` is outside the order. Backward, it is the
-/// last stop up to `node` itself.
-fn after_press(stops: &[(NodeId, i32)], node: NodeId, at: usize, backward: bool) -> Option<NodeId> {
-    let own = stops.get(at).filter(|&&(id, _)| id == node);
-    let split = at + usize::from(own.is_some());
-    let in_order = |stop: &&(NodeId, i32)| stop.1 >= 0;
-    if backward {
-        return stops[..split]
-            .iter()
-            .rev()
-            .find(in_order)
-            .map(|&(id, _)| id);
-    }
-    match stops[split..].iter().find(in_order) {
-        Some(&(id, _)) => Some(id),
-        None if own.is_some_and(|&(_, index)| index >= 0) => None,
-        None => next_stop(stops, None, false),
-    }
-}
-
 impl FocusRegistry {
-    /// Moves focus one tab stop forward, or `backward`. With no node focused,
-    /// the move starts from the last press or focus (see
-    /// [`Self::press_start`]). Past the last stop nothing holds focus, and the
-    /// next Tab starts over at the first. A move that finds no stop forgets
-    /// where it started. The transition is reported by the next
-    /// [`Self::apply_pending`]. Returns the node that took focus. The move
-    /// also drops the scroll requests of earlier focus calls.
-    pub fn tab_move(
-        &mut self,
-        tree: &VirtualTree,
-        root: NodeId,
-        window: &mut Window,
-        cx: &mut App,
-        backward: bool,
-    ) -> Option<NodeId> {
-        let focused = self.focused_node(window, cx);
-        let start = if focused.is_none() { self.start } else { None };
-        let mut stops = Vec::new();
-        let mut start_at = None;
-        let mut stack = vec![root];
-        while let Some(id) = stack.pop() {
-            let Some(node) = tree.get(id) else { continue };
-            if start.is_some_and(|start| start.node() == id) {
-                start_at = Some(stops.len());
-            }
-            if self.handles.contains_key(&id)
-                && let Some(index) = Self::tab_index_of(tree, id)
-            {
-                stops.push((id, index));
-            }
-            stack.extend(node.children().iter().rev());
-        }
-        let target = match (start, start_at) {
-            (Some(Start::Press { node, .. }), Some(at)) => after_press(&stops, node, at, backward),
-            (Some(Start::Focus(node)), _) => next_stop(&stops, Some(node), backward),
-            _ => next_stop(&stops, focused, backward),
-        };
-        if target.is_none() {
-            self.start = None;
-        }
-        self.reveal.clear();
-        self.retry.clear();
-        if let Some((id, handle)) = target.and_then(|id| Some((id, self.handles.get(&id)?))) {
-            handle.focus(window, cx);
-            Some(id)
-        } else {
-            window.blur(cx);
-            None
-        }
-    }
-
-    /// Records a mouse press on `node_id` as where Tab starts while no node is
-    /// focused. `focusing` is the node the press focuses, `None` when it
-    /// focuses none or that node already holds focus. A press on `root`
-    /// clears the start.
-    pub fn press_start(&mut self, node_id: NodeId, root: NodeId, focusing: Option<NodeId>) {
-        self.start = (node_id != root).then_some(Start::Press {
-            node: node_id,
-            focusing,
-        });
-    }
-
-    /// Moves where Tab starts off `node_id`'s subtree, which leaves its
-    /// place in the tree, to `before`, the node right before that place
-    /// ([`VirtualTree::preceding`] taken before the change). A start that
-    /// lies outside the subtree stays. `before` being the root, or `None`,
-    /// clears the start.
-    pub fn start_leaves(&mut self, tree: &VirtualTree, node_id: NodeId, before: Option<NodeId>) {
-        let Some(start) = self.start else { return };
-        if tree
-            .ancestors(start.node())
-            .any(|ancestor| ancestor == node_id)
-        {
-            self.start = before
-                .filter(|&before| Some(before) != tree.root())
-                .map(|node| Start::Press {
-                    node,
-                    focusing: None,
-                });
-        }
-    }
-
     /// The handle to `.track_focus(...)` `node_id` with, if it has one.
     /// This is the handle an [`EventSink`] returns from [`EventSink::focus_handle`].
     #[must_use]
@@ -376,98 +196,6 @@ impl FocusRegistry {
         active
     }
 
-    /// Whether `node_id` can hold focus once this frame's tab check has run.
-    /// A node in `tab_dirty` holds it when it has a tab index, and any other
-    /// node holds it when it has a handle.
-    fn focusable_after_frame(&self, tree: &VirtualTree, node_id: NodeId) -> bool {
-        if self.tab_dirty.contains(&node_id) {
-            Self::tab_index_of(tree, node_id).is_some()
-        } else {
-            self.handles.contains_key(&node_id)
-        }
-    }
-
-    /// Takes focus from `node_id` and from every node below it at once. No
-    /// `blur` or `focusout` is reported, and requests to focus those nodes
-    /// are dropped. The window's own focus is released by the next
-    /// [`Self::apply_pending`].
-    pub fn drop_focus_in(&mut self, tree: &VirtualTree, node_id: NodeId) {
-        let inside = |id: NodeId| tree.ancestors(id).any(|ancestor| ancestor == node_id);
-        self.pending.retain(
-            |request| !matches!(request, PendingFocus::Focus { node, .. } if inside(*node)),
-        );
-        self.reveal.retain(|&id| !inside(id));
-        self.retry.retain(|&id| !inside(id));
-        if let Some(held) = self.observed.filter(|&id| inside(id)) {
-            self.observed = None;
-            self.blur_owed = Some(held);
-        }
-        if self.focused.is_some_and(inside) {
-            self.focused = None;
-        }
-    }
-
-    /// Records that `node_id`'s `tabindex` may have changed. The next
-    /// [`Self::apply_pending`] re-reads it.
-    pub fn mark_tab_dirty(&mut self, node_id: NodeId) {
-        self.tab_dirty.insert(node_id);
-    }
-
-    /// Takes the nodes marked by [`Self::mark_tab_dirty`] and its subtree form.
-    #[cfg(feature = "test-support")]
-    pub fn take_tab_dirty(&mut self) -> HashSet<NodeId> {
-        std::mem::take(&mut self.tab_dirty)
-    }
-
-    /// Like [`Self::mark_tab_dirty`] for `node_id` and its descendants that
-    /// have, or could take, a handle.
-    pub fn mark_subtree_dirty(&mut self, tree: &VirtualTree, node_id: NodeId) {
-        let mut stack = vec![node_id];
-        while let Some(id) = stack.pop() {
-            let Some(node) = tree.get(id) else { continue };
-            if self.handles.contains_key(&id)
-                || focusable_by_default(node.tag_name())
-                || node.attributes().contains_key("tabindex")
-            {
-                self.tab_dirty.insert(id);
-            }
-            stack.extend(node.children());
-        }
-    }
-
-    /// The `tabindex` of `node_id`. A node not connected to the tree's root,
-    /// a text node, a node that has an ancestor (or itself) with
-    /// `display: none`, `inert` or a hiding `hidden`, and a `disabled` button
-    /// or input have none. A button or input whose `tabindex` is missing or
-    /// unparsable has 0.
-    fn tab_index_of(tree: &VirtualTree, node_id: NodeId) -> Option<i32> {
-        let node = tree.get(node_id)?;
-        if !tree.is_connected(node_id) {
-            return None;
-        }
-        let hidden = tree
-            .ancestors(node_id)
-            .filter_map(|id| tree.get(id))
-            .any(|ancestor| {
-                hidden_by_attribute(ancestor)
-                    || ancestor.attributes().contains_key("inert")
-                    || matches!(
-                        ancestor.style_props().get("display"),
-                        Some(AttributeValue::String(value)) if value.eq_ignore_ascii_case("none")
-                    )
-            });
-        let by_default = focusable_by_default(node.tag_name());
-        if node.tag_name() == TEXT_TAG || hidden || is_disabled_control(node) {
-            return None;
-        }
-        let explicit = match node.attributes().get("tabindex") {
-            Some(AttributeValue::String(value)) => parse_tab_index(value),
-            Some(AttributeValue::Number(value)) => parse_tab_index(&js_number_text(*value)),
-            Some(AttributeValue::Bool(_)) | None => None,
-        };
-        explicit.or(by_default.then_some(0))
-    }
-
     /// The handle the root container tracks, once [`Self::apply_pending`]
     /// has run. It holds the window's focus while no node is focused.
     #[must_use]
@@ -479,171 +207,6 @@ impl FocusRegistry {
     /// focused node's `blur` or `focus` was reported.
     pub fn set_window_blurred(&mut self, blurred: bool) {
         self.window_blurred = blurred;
-    }
-
-    /// Queues that `node_id` should be focused next frame. With `scroll`,
-    /// the host then scrolls it into view.
-    pub fn request_focus(&mut self, node_id: NodeId, scroll: bool) {
-        self.pending.push_back(PendingFocus::Focus {
-            node: node_id,
-            scroll,
-        });
-    }
-
-    /// Queues that `node_id` should be blurred next frame. Applying it
-    /// blurs only if `node_id` is the focused node at that point.
-    pub fn request_blur(&mut self, node_id: NodeId) {
-        self.pending.push_back(PendingFocus::Blur(node_id));
-    }
-
-    /// Applies every queued request in order and reports each transition
-    /// it produced. Call once per frame, before the element tree that
-    /// needs the resulting `track_focus` wiring is built.
-    ///
-    /// The transitions are returned and not dispatched here, so the caller
-    /// fires them after releasing its borrow of `self`. An [`EventSink`]
-    /// that re-borrows the same `RefCell` while firing would otherwise
-    /// panic with "already mutably borrowed".
-    #[must_use]
-    pub fn apply_pending(
-        &mut self,
-        tree: &VirtualTree,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> Vec<FocusTransition> {
-        let transitions = self.apply_requests(tree, window, cx);
-        let parked = self.parked.get_or_insert_with(|| cx.focus_handle());
-        if window.focused(cx).is_none() {
-            parked.focus(window, cx);
-        }
-        transitions
-    }
-
-    fn apply_requests(
-        &mut self,
-        tree: &VirtualTree,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> Vec<FocusTransition> {
-        let mut transitions = Vec::new();
-        if let Some(owed) = self.blur_owed.take()
-            && self.window_node(window, cx) == Some(owed)
-        {
-            window.blur(cx);
-        }
-        for node_id in std::mem::take(&mut self.tab_dirty) {
-            match Self::tab_index_of(tree, node_id) {
-                Some(_) => {
-                    self.get_or_create(node_id, cx);
-                }
-                None if !tree.is_connected(node_id) => {
-                    // A node that left the tree loses focus without events.
-                    let focused = self
-                        .handles
-                        .get(&node_id)
-                        .is_some_and(|handle| handle.is_focused(window));
-                    if focused {
-                        window.blur(cx);
-                    }
-                    self.forget(node_id);
-                }
-                None => {
-                    if let Some(handle) = self.handles.get(&node_id).cloned() {
-                        // Report a click focus first, then the blur, so JS
-                        // sees both. `forget` would skip the blur.
-                        transitions.extend(self.sync(window, cx));
-                        if handle.is_focused(window) {
-                            window.blur(cx);
-                        }
-                        self.handles.remove(&node_id);
-                        transitions.extend(self.sync(window, cx));
-                    }
-                }
-            }
-        }
-        let pending = std::mem::take(&mut self.pending);
-        if pending.is_empty() {
-            // Nothing queued this frame doesn't mean focus didn't move:
-            // GPUI's own click-to-focus moves it without ever going
-            // through `request_focus`.
-            transitions.extend(self.sync(window, cx));
-            return transitions;
-        }
-        for request in pending {
-            match request {
-                PendingFocus::Focus { node, scroll } => {
-                    // Only a node with a handle takes focus.
-                    if let Some(handle) = self.handles.get(&node) {
-                        handle.focus(window, cx);
-                        // The last focus decides what scrolls.
-                        self.reveal.clear();
-                        self.retry.clear();
-                        if scroll {
-                            self.reveal.push(node);
-                        }
-                    }
-                }
-                PendingFocus::Blur(node_id) => {
-                    let focused = window.focused(cx).and_then(|handle| self.node_for(&handle));
-                    if focused == Some(node_id) {
-                        window.blur(cx);
-                    }
-                }
-            }
-            transitions.extend(self.sync(window, cx));
-        }
-        transitions
-    }
-
-    /// Hands over the focused nodes to scroll into view this frame:
-    /// `(retries, fresh)`. A retry is a node whose box the previous frame
-    /// lacked.
-    pub fn take_reveals(&mut self) -> (Vec<NodeId>, Vec<NodeId>) {
-        (
-            std::mem::take(&mut self.retry),
-            std::mem::take(&mut self.reveal),
-        )
-    }
-
-    /// Keeps `node_id` for one more frame.
-    pub fn retry_reveal(&mut self, node_id: NodeId) {
-        self.retry.push(node_id);
-    }
-
-    /// Reports a transition if which node is focused changed since the
-    /// last call, including a change from GPUI's own click-to-focus, not
-    /// only one made through [`Self::request_focus`]. A node that takes focus
-    /// becomes where Tab starts, except the one the last press focused (see
-    /// [`Self::press_start`]).
-    fn sync(&mut self, window: &mut Window, cx: &mut App) -> Option<FocusTransition> {
-        let focused_now = window.focused(cx).and_then(|handle| self.node_for(&handle));
-        self.observed = focused_now;
-        if focused_now == self.focused {
-            return None;
-        }
-        let blurred = self.focused;
-        self.focused = focused_now;
-        if let Some(node) = focused_now {
-            self.start = match self.start {
-                Some(Start::Press {
-                    node: pressed,
-                    focusing: Some(focusing),
-                }) if focusing == node => Some(Start::Press {
-                    node: pressed,
-                    focusing: None,
-                }),
-                _ => Some(Start::Focus(node)),
-            };
-        }
-        // An inactive window holds the events. Its deactivation already
-        // blurred the old node and its activation focuses the new one.
-        if self.window_blurred || (blurred.is_none() && focused_now.is_none()) {
-            return None;
-        }
-        Some(FocusTransition {
-            blurred,
-            focused: focused_now,
-        })
     }
 
     /// Drops `node_id`'s handle and any queued request to focus it.
@@ -678,4 +241,277 @@ impl FocusRegistry {
 }
 
 #[cfg(test)]
-mod tests;
+mod tests {
+    #![allow(clippy::unwrap_used)]
+
+    use super::*;
+    use crate::tests::*;
+    use gpui::TestAppContext;
+
+    #[gpui::test]
+    fn changing_tabindex_keeps_the_focused_handle(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (mut tree, id) = tree_with("div", Some(AttributeValue::from("0")));
+        let mut registry = FocusRegistry::default();
+        registry.mark_tab_dirty(id);
+        registry.request_focus(id, true);
+        cx.update(|window, cx| {
+            let _ = registry.apply_pending(&tree, window, cx);
+        });
+        let before = registry.handle(id).unwrap();
+
+        tree.set_attribute(id, "tabindex", "-1").unwrap();
+        registry.mark_tab_dirty(id);
+        let transitions = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+
+        let after = registry.handle(id).unwrap();
+        assert_eq!(before, after);
+        assert!(transitions.is_empty());
+        assert!(cx.update(|window, _| after.is_focused(window)));
+    }
+
+    #[gpui::test]
+    fn removing_tabindex_drops_the_focus_handle(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (mut tree, id) = tree_with("div", Some(AttributeValue::from("0")));
+        let mut registry = FocusRegistry::default();
+        registry.mark_tab_dirty(id);
+        registry.request_focus(id, true);
+        cx.update(|window, cx| {
+            let _ = registry.apply_pending(&tree, window, cx);
+        });
+        let held = registry.handle(id).unwrap();
+        assert!(cx.update(|window, _| held.is_focused(window)));
+
+        tree.remove_attribute(id, "tabindex").unwrap();
+        registry.mark_tab_dirty(id);
+        let _ = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+
+        assert!(registry.handle(id).is_none());
+    }
+
+    #[gpui::test]
+    fn focus_on_an_untracked_node_is_ignored(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, id) = tree_with("div", None);
+        let mut registry = FocusRegistry::default();
+        registry.request_focus(id, true);
+        let transitions = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+        assert!(transitions.is_empty());
+        assert!(registry.handle(id).is_none());
+    }
+
+    #[gpui::test]
+    fn forget_clears_a_queued_tab_check(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, id) = tree_with("div", Some(AttributeValue::from("0")));
+        let mut registry = FocusRegistry::default();
+        registry.mark_tab_dirty(id);
+        registry.forget(id);
+        cx.update(|window, cx| {
+            let _ = registry.apply_pending(&tree, window, cx);
+        });
+        assert!(registry.handle(id).is_none());
+    }
+
+    #[gpui::test]
+    fn get_or_create_reuses_the_same_handle_for_one_node(cx: &mut TestAppContext) {
+        let mut registry = FocusRegistry::default();
+        let cx = cx.add_empty_window();
+
+        let (first, second) = cx.update(|_, cx| {
+            let first = registry.get_or_create(1, cx);
+            let second = registry.get_or_create(1, cx);
+            (first, second)
+        });
+
+        assert_eq!(first, second);
+    }
+
+    #[gpui::test]
+    fn forget_lets_a_later_call_mint_a_new_handle(cx: &mut TestAppContext) {
+        let mut registry = FocusRegistry::default();
+        let cx = cx.add_empty_window();
+
+        let before = cx.update(|_, cx| registry.get_or_create(1, cx));
+        registry.forget(1);
+        let after = cx.update(|_, cx| registry.get_or_create(1, cx));
+
+        assert_ne!(before, after);
+        assert!(registry.handle(1).is_some());
+    }
+
+    #[gpui::test]
+    fn focused_node_names_the_node_holding_focus(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, id) = tree_with("div", Some(AttributeValue::from("0")));
+        let mut registry = FocusRegistry::default();
+        registry.mark_tab_dirty(id);
+        cx.update(|window, cx| {
+            let _ = registry.apply_pending(&tree, window, cx);
+            assert_eq!(registry.focused_node(window, cx), None);
+            registry.request_focus(id, true);
+            let _ = registry.apply_pending(&tree, window, cx);
+            assert_eq!(registry.focused_node(window, cx), Some(id));
+        });
+    }
+
+    #[gpui::test]
+    fn observe_takes_the_node_the_window_focuses(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, id) = tree_with("div", Some(AttributeValue::from("0")));
+        let mut registry = FocusRegistry::default();
+        registry.mark_tab_dirty(id);
+        cx.update(|window, cx| {
+            let _ = registry.apply_pending(&tree, window, cx);
+            registry.handle(id).unwrap().focus(window, cx);
+            registry.observe(window, cx);
+        });
+        assert_eq!(registry.active_node(&tree), Some(id));
+    }
+
+    #[gpui::test]
+    fn a_pending_focus_on_a_node_with_a_handle_is_active(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, id) = tree_with("div", Some(AttributeValue::from("0")));
+        let mut registry = FocusRegistry::default();
+        registry.mark_tab_dirty(id);
+        cx.update(|window, cx| {
+            let _ = registry.apply_pending(&tree, window, cx);
+        });
+        registry.request_focus(id, true);
+        assert_eq!(registry.active_node(&tree), Some(id));
+    }
+
+    #[test]
+    fn a_pending_blur_of_the_observed_node_clears_it() {
+        let (tree, id) = tree_with("div", Some(AttributeValue::from("0")));
+        let mut registry = FocusRegistry::default();
+        registry.mark_tab_dirty(id);
+        registry.observed = Some(id);
+        registry.request_blur(id);
+        assert_eq!(registry.active_node(&tree), None);
+    }
+
+    #[test]
+    fn a_pending_blur_of_another_node_keeps_the_observed_one() {
+        let (mut tree, id) = tree_with("div", Some(AttributeValue::from("0")));
+        let other = tree.create_node("div").unwrap();
+        let mut registry = FocusRegistry::default();
+        registry.mark_tab_dirty(id);
+        registry.observed = Some(id);
+        registry.request_blur(other);
+        assert_eq!(registry.active_node(&tree), Some(id));
+    }
+
+    #[test]
+    fn a_pending_focus_on_an_unfocusable_node_changes_nothing() {
+        let (mut tree, id) = tree_with("div", Some(AttributeValue::from("0")));
+        let plain = tree.create_node("div").unwrap();
+        let mut registry = FocusRegistry::default();
+        registry.mark_tab_dirty(id);
+        registry.observed = Some(id);
+        registry.request_focus(plain, true);
+        assert_eq!(registry.active_node(&tree), Some(id));
+    }
+
+    #[test]
+    fn a_tab_dirty_node_is_focusable_only_with_a_tab_index() {
+        let (mut tree, focusable) = tree_with("div", Some(AttributeValue::from("0")));
+        let plain = tree.create_node("div").unwrap();
+        let mut registry = FocusRegistry::default();
+        registry.mark_tab_dirty(focusable);
+        registry.mark_tab_dirty(plain);
+        registry.request_focus(plain, true);
+        assert_eq!(registry.active_node(&tree), None);
+        registry.request_focus(focusable, true);
+        assert_eq!(registry.active_node(&tree), Some(focusable));
+    }
+
+    #[test]
+    fn a_tab_dirty_node_that_loses_its_tab_index_drops_out_of_active() {
+        let (mut tree, id) = tree_with("div", Some(AttributeValue::from("0")));
+        let mut registry = FocusRegistry::default();
+        registry.mark_tab_dirty(id);
+        registry.observed = Some(id);
+        assert_eq!(registry.active_node(&tree), Some(id));
+        tree.remove_attribute(id, "tabindex").unwrap();
+        assert_eq!(registry.active_node(&tree), None);
+    }
+
+    /// Parking the window focus on the root container reports no transition,
+    /// maps to no node and does not flip per frame.
+    #[gpui::test]
+    fn the_parked_focus_fires_no_focus_event(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, _root) = tree_with("div", None);
+        let mut registry = FocusRegistry::default();
+        cx.update(|window, cx| {
+            for _ in 0..2 {
+                let transitions = registry.apply_pending(&tree, window, cx);
+                assert!(transitions.is_empty());
+                assert!(window.focused(cx).is_some());
+                assert_eq!(registry.focused_node(window, cx), None);
+            }
+        });
+    }
+
+    #[gpui::test]
+    fn dropping_focus_is_silent(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, ids) = rooted_tree(2);
+        let gone = ids[0];
+        let mut registry = FocusRegistry::default();
+        focus_all(cx, &mut registry, &tree, &ids, gone);
+        cx.update(|window, cx| registry.observe(window, cx));
+        registry.request_focus(gone, false);
+
+        registry.drop_focus_in(&tree, gone);
+
+        assert_eq!(registry.active_node(&tree), None);
+        let transitions = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+        assert!(transitions.is_empty());
+    }
+
+    #[gpui::test]
+    fn dropping_focus_in_an_unrelated_subtree_keeps_the_focus(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, ids) = rooted_tree(2);
+        let mut registry = FocusRegistry::default();
+        focus_all(cx, &mut registry, &tree, &ids, ids[0]);
+        cx.update(|window, cx| registry.observe(window, cx));
+
+        registry.drop_focus_in(&tree, ids[1]);
+
+        assert_eq!(registry.active_node(&tree), Some(ids[0]));
+        let held = registry.handle(ids[0]).unwrap();
+        let _ = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+        assert!(cx.update(|window, _| held.is_focused(window)));
+    }
+
+    #[gpui::test]
+    fn a_node_focused_elsewhere_after_a_drop_keeps_its_focus(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, ids) = rooted_tree(2);
+        let (gone, other) = (ids[0], ids[1]);
+        let mut registry = FocusRegistry::default();
+        focus_all(cx, &mut registry, &tree, &ids, gone);
+        cx.update(|window, cx| registry.observe(window, cx));
+        registry.drop_focus_in(&tree, gone);
+        // Focus moved outside the registry, as a click does.
+        let held = registry.handle(other).unwrap();
+        cx.update(|window, cx| held.focus(window, cx));
+
+        let _ = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+
+        assert!(cx.update(|window, _| held.is_focused(window)));
+    }
+
+    #[test]
+    fn a_transition_names_its_nodes() {
+        let lost = FocusTransition::window_activation(3, false);
+        assert_eq!((lost.blurred(), lost.focused()), (Some(3), None));
+        let regained = FocusTransition::window_activation(3, true);
+        assert_eq!((regained.blurred(), regained.focused()), (None, Some(3)));
+    }
+}

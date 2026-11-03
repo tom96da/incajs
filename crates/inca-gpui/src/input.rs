@@ -11,6 +11,12 @@ use std::ops::Range;
 use gpui::{Bounds, Pixels, point, px};
 use unicode_segmentation::UnicodeSegmentation;
 
+mod edit;
+mod text;
+
+pub use edit::{Edit, InputPayload};
+pub use text::{pasted, sanitized, typed};
+
 /// The width of the caret bar in pixels.
 pub const CARET_WIDTH: f32 = 1.0;
 
@@ -90,33 +96,6 @@ pub struct InputLayout {
     pub stops: Vec<(usize, f32)>,
 }
 
-/// A change to the value and the state after it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Edit {
-    pub input_type: InputType,
-    /// The bytes of the value that `text` replaces.
-    pub range: Range<usize>,
-    pub text: String,
-    /// The selection after the edit.
-    pub selection: Range<usize>,
-    /// The composition after the edit.
-    pub composition: Option<Range<usize>>,
-    /// The `data` of the `beforeinput` of this edit.
-    pub data: Option<String>,
-}
-
-/// The fields of `beforeinput` and `input`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InputPayload {
-    /// The inserted text, `None` for a deletion and a line break, and on `input` for an
-    /// empty composition text.
-    pub data: Option<String>,
-    /// The kind of edit.
-    pub input_type: InputType,
-    /// A composition is active.
-    pub is_composing: bool,
-}
-
 /// What a frame paints over the text: x positions from the text start.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Highlights {
@@ -137,25 +116,6 @@ pub struct InputState {
     committed: Option<String>,
     /// An edit changed the field since `committed` was set.
     edited: bool,
-}
-
-/// `text` without the chars for which [`char::is_control`] holds.
-#[must_use]
-pub fn typed(text: &str) -> String {
-    text.chars().filter(|c| !c.is_control()).collect()
-}
-
-/// `text` without CR and LF.
-#[must_use]
-pub fn sanitized(text: &str) -> String {
-    text.chars().filter(|c| !matches!(c, '\r' | '\n')).collect()
-}
-
-/// `text` with each CRLF, then each remaining CR and LF, replaced by one
-/// space.
-#[must_use]
-pub fn pasted(text: &str) -> String {
-    text.replace("\r\n", " ").replace(['\r', '\n'], " ")
 }
 
 /// The x of the stop at `offset`, else of the last stop below it, else 0.
@@ -232,42 +192,6 @@ fn bytes_of_units(text: &str, units: usize) -> usize {
         count += c.len_utf16();
     }
     text.len()
-}
-
-/// An edit that removes `range`.
-fn removal(range: Range<usize>, input_type: InputType) -> Edit {
-    Edit {
-        input_type,
-        selection: range.start..range.start,
-        range,
-        text: String::new(),
-        composition: None,
-        data: None,
-    }
-}
-
-impl Edit {
-    /// The fields of the `beforeinput` of this edit when `before` is true, else
-    /// of its `input`.
-    #[must_use]
-    pub fn payload(&self, before: bool) -> InputPayload {
-        let data = if before {
-            self.data.clone()
-        } else {
-            match self.input_type {
-                InputType::InsertText | InputType::InsertFromPaste => Some(self.text.clone()),
-                InputType::InsertCompositionText if !self.text.is_empty() => {
-                    Some(self.text.clone())
-                }
-                _ => None,
-            }
-        };
-        InputPayload {
-            data,
-            input_type: self.input_type,
-            is_composing: self.input_type == InputType::InsertCompositionText,
-        }
-    }
 }
 
 impl InputState {
@@ -482,108 +406,6 @@ impl InputState {
             .unwrap_or_else(|| self.selection.clone())
     }
 
-    /// An edit that puts `text` over `range` and the caret after it, `None`
-    /// when both are empty.
-    fn replacement(range: Range<usize>, text: &str, input_type: InputType) -> Option<Edit> {
-        if text.is_empty() && range.is_empty() {
-            return None;
-        }
-        let end = range.start + text.len();
-        Some(Edit {
-            input_type,
-            range,
-            text: text.to_owned(),
-            selection: end..end,
-            composition: None,
-            data: Some(text.to_owned()),
-        })
-    }
-
-    /// The edit that puts `text` over the composition, else over the
-    /// selection. `None` when both are empty.
-    #[must_use]
-    pub fn insert(&self, text: &str, input_type: InputType) -> Option<Edit> {
-        Self::replacement(self.target(), text, input_type)
-    }
-
-    /// The edit for a platform replacement of `range` (UTF-16 units), else of
-    /// the composition or selection. It is a composition edit while a
-    /// composition is active.
-    #[must_use]
-    pub fn replace(&self, range: Option<Range<usize>>, text: &str) -> Option<Edit> {
-        let range = range.map_or_else(|| self.target(), |range| self.range_from_utf16(&range));
-        let input_type = if self.composition.is_some() {
-            InputType::InsertCompositionText
-        } else {
-            InputType::InsertText
-        };
-        Self::replacement(range, text, input_type)
-    }
-
-    /// The edit that puts `text` over `range` (UTF-16 units), else over the
-    /// composition or selection, and marks it as the composition. `selected`
-    /// (UTF-16 units of `text`) is the selection after the edit, the end of
-    /// `text` without it.
-    #[must_use]
-    pub fn compose(
-        &self,
-        range: Option<Range<usize>>,
-        text: &str,
-        selected: Option<Range<usize>>,
-    ) -> Edit {
-        let range = range.map_or_else(|| self.target(), |range| self.range_from_utf16(&range));
-        let start = range.start;
-        let end = start + text.len();
-        let selection = selected.map_or(end..end, |selected| {
-            start + bytes_of_units(text, selected.start)..start + bytes_of_units(text, selected.end)
-        });
-        Edit {
-            input_type: InputType::InsertCompositionText,
-            range,
-            text: text.to_owned(),
-            selection,
-            composition: (!text.is_empty()).then_some(start..end),
-            data: Some(text.to_owned()),
-        }
-    }
-
-    /// The edit for Backspace or Delete: the selection, else the char before
-    /// the caret, or the grapheme after it going `forward`. At an edge the
-    /// range is empty.
-    #[must_use]
-    pub fn delete(&self, forward: bool) -> Edit {
-        let input_type = if forward {
-            InputType::DeleteContentForward
-        } else {
-            InputType::DeleteContentBackward
-        };
-        let caret = self.caret();
-        let range = if !self.selection.is_empty() {
-            self.selection.clone()
-        } else if forward {
-            caret..self.step(caret, true)
-        } else {
-            self.clamp(caret.saturating_sub(1))..caret
-        };
-        removal(range, input_type)
-    }
-
-    /// The edit that cuts the selection, `None` for an empty one.
-    #[must_use]
-    pub fn cut(&self) -> Option<Edit> {
-        (!self.selection.is_empty())
-            .then(|| removal(self.selection.clone(), InputType::DeleteByCut))
-    }
-
-    /// Writes `edit` into the text, the selection and the composition.
-    pub fn apply(&mut self, edit: &Edit) {
-        self.value.replace_range(edit.range.clone(), &edit.text);
-        self.selection = edit.selection.clone();
-        self.reversed = false;
-        self.composition.clone_from(&edit.composition);
-        self.edited = true;
-    }
-
     /// Whether an edit changed the text since the baseline was set.
     fn changed(&self) -> bool {
         self.edited && self.committed.as_deref().is_some_and(|c| c != self.value)
@@ -627,4 +449,341 @@ impl InputState {
 }
 
 #[cfg(test)]
-mod tests;
+mod tests {
+    #![allow(clippy::float_cmp, clippy::unwrap_used)]
+
+    use super::*;
+    use rstest::rstest;
+
+    /// A state holding `value` with `selection` selected.
+    pub(super) fn at(value: &str, selection: Range<usize>, reversed: bool) -> InputState {
+        InputState {
+            value: value.to_owned(),
+            selection,
+            reversed,
+            ..InputState::default()
+        }
+    }
+
+    /// A state with a caret at `caret` in `value`.
+    pub(super) fn caret_at(value: &str, caret: usize) -> InputState {
+        at(value, caret..caret, false)
+    }
+
+    /// A state that recorded a line starting at window x `x` with `stops`.
+    pub(super) fn laid_out(x: f32, stops: &[(usize, f32)]) -> InputState {
+        let mut state = InputState::default();
+        state.record(InputLayout {
+            x,
+            y: 20.0,
+            height: 16.0,
+            scroll: 0.0,
+            stops: stops.to_vec(),
+        });
+        state
+    }
+
+    /// A focused state holding `value`.
+    pub(super) fn focused(value: &str) -> InputState {
+        let mut state = caret_at(value, value.len());
+        state.begin_focus();
+        state
+    }
+
+    #[rstest]
+    #[case::exact(&[(0, 0.0), (3, 12.0), (6, 24.0)], 3, 12.0)]
+    #[case::between(&[(0, 0.0), (3, 12.0), (6, 24.0)], 4, 12.0)]
+    #[case::empty(&[], 3, 0.0)]
+    fn x_at_reads_the_stop_of_an_offset(
+        #[case] stops: &[(usize, f32)],
+        #[case] offset: usize,
+        #[case] want: f32,
+    ) {
+        assert_eq!(x_at(stops, offset), want);
+    }
+
+    #[rstest]
+    #[case::ascii("ab", &[0, 1, 2])]
+    #[case::wide("é😀", &[0, 2, 6])]
+    #[case::empty("", &[0])]
+    fn stops_of_lists_every_char_boundary(#[case] value: &str, #[case] offsets: &[usize]) {
+        #[allow(clippy::cast_precision_loss)]
+        let x_for = |at: usize| at as f32 * 2.0;
+        let want: Vec<_> = offsets.iter().map(|&at| (at, x_for(at))).collect();
+        assert_eq!(stops_of(value, x_for), want);
+    }
+
+    #[rstest]
+    #[case::inside(0.0, 10.0, 50.0, 30.0, 0.0)]
+    #[case::right(0.0, 40.0, 60.0, 30.0, 11.0)]
+    #[case::left(20.0, 5.0, 60.0, 30.0, 5.0)]
+    #[case::short_line(50.0, 10.0, 10.0, 30.0, 0.0)]
+    #[case::end(0.0, 60.0, 60.0, 30.0, 31.0)]
+    fn scroll_to_caret_keeps_the_caret_in_the_box(
+        #[case] scroll: f32,
+        #[case] caret: f32,
+        #[case] line_width: f32,
+        #[case] width: f32,
+        #[case] want: f32,
+    ) {
+        assert_eq!(scroll_to_caret(scroll, caret, line_width, width), want);
+    }
+
+    #[rstest]
+    #[case::unfocused(0..2, 2, false, None, None)]
+    #[case::unfocused_caret(1..1, 1, false, None, None)]
+    #[case::caret(1..1, 1, true, None, Some(6.0))]
+    #[case::selection(0..2, 2, true, Some((0.0, 12.0)), None)]
+    fn highlights_show_only_while_focused(
+        #[case] selection: Range<usize>,
+        #[case] caret: usize,
+        #[case] focused: bool,
+        #[case] want_selection: Option<(f32, f32)>,
+        #[case] want_caret: Option<f32>,
+    ) {
+        let stops = [(0, 0.0), (1, 6.0), (2, 12.0)];
+        let want = Highlights {
+            selection: want_selection,
+            caret: want_caret,
+        };
+        assert_eq!(highlights(&stops, &selection, caret, focused), want);
+    }
+
+    #[test]
+    fn set_value_strips_line_breaks() {
+        let mut state = InputState::default();
+        state.set_value("a\nb");
+        assert_eq!(state.value(), "ab");
+    }
+
+    #[test]
+    fn set_value_puts_the_caret_at_the_end_of_a_new_value() {
+        let mut state = at("xy", 0..1, true);
+        state.composition = Some(0..1);
+        assert!(state.set_value("abc"));
+        assert_eq!(state.selection(), 3..3);
+        assert!(!state.reversed());
+        assert_eq!(state.composition(), None);
+    }
+
+    #[test]
+    fn set_value_keeps_the_selection_for_the_same_value() {
+        let mut state = at("abc", 0..2, true);
+        assert!(!state.set_value("abc"));
+        assert_eq!(state.selection(), 0..2);
+        assert!(state.reversed());
+    }
+
+    #[rstest]
+    #[case::forward("abcd", 1, 3, 1..3, false)]
+    #[case::backward("abcd", 3, 1, 1..3, true)]
+    #[case::clamped("abcd", 1, 99, 1..4, false)]
+    #[case::inside_a_char("é", 1, 1, 0..0, false)]
+    fn select_orders_the_ends_by_direction(
+        #[case] value: &str,
+        #[case] anchor: usize,
+        #[case] focus: usize,
+        #[case] want: Range<usize>,
+        #[case] reversed: bool,
+    ) {
+        let mut state = caret_at(value, 0);
+        state.select(anchor, focus);
+        assert_eq!(state.selection(), want);
+        assert_eq!(state.reversed(), reversed);
+    }
+
+    #[rstest]
+    #[case::back(2..2, false, Motion::Back, false, false, 1..1, false)]
+    #[case::back_collapses(1..3, false, Motion::Back, false, false, 1..1, false)]
+    #[case::forward_collapses(1..3, false, Motion::Forward, false, false, 3..3, false)]
+    #[case::forward(2..2, false, Motion::Forward, false, false, 3..3, false)]
+    #[case::back_at_start(0..0, false, Motion::Back, false, false, 0..0, false)]
+    #[case::forward_at_end(4..4, false, Motion::Forward, false, false, 4..4, false)]
+    #[case::start(2..2, false, Motion::Start, false, false, 0..0, false)]
+    #[case::end(2..2, false, Motion::End, false, false, 4..4, false)]
+    #[case::extend_back(2..2, false, Motion::Back, true, false, 1..2, true)]
+    #[case::extend_forward_from_a_reversed_selection(
+        1..2, true, Motion::Forward, true, false, 2..2, false
+    )]
+    #[case::extend_start(2..2, false, Motion::Start, true, false, 0..2, true)]
+    #[case::extend_end(2..2, false, Motion::End, true, false, 2..4, false)]
+    #[case::linux_end_after_home(0..2, true, Motion::End, true, false, 2..4, false)]
+    #[case::mac_home_from_caret(2..2, false, Motion::Start, true, true, 0..2, true)]
+    #[case::mac_end_after_home(0..2, true, Motion::End, true, true, 0..4, true)]
+    #[case::mac_end_from_caret(2..2, false, Motion::End, true, true, 2..4, false)]
+    fn a_motion_moves_or_extends_the_caret(
+        #[case] selection: Range<usize>,
+        #[case] reversed: bool,
+        #[case] motion: Motion,
+        #[case] extend: bool,
+        #[case] macos: bool,
+        #[case] want: Range<usize>,
+        #[case] want_reversed: bool,
+    ) {
+        let mut state = at("abcd", selection, reversed);
+        state.motion(motion, extend, macos);
+        assert_eq!(state.selection(), want);
+        assert_eq!(state.reversed(), want_reversed);
+    }
+
+    #[rstest]
+    #[case::combining("e\u{301}x", 3, false, 0)]
+    #[case::emoji_forward("😀a", 0, true, 4)]
+    fn a_step_crosses_one_grapheme(
+        #[case] value: &str,
+        #[case] from: usize,
+        #[case] forward: bool,
+        #[case] want: usize,
+    ) {
+        assert_eq!(caret_at(value, 0).step(from, forward), want);
+    }
+
+    #[rstest]
+    #[case::moves(1..3, 2, false, 2..2)]
+    #[case::extend(1..1, 3, true, 1..3)]
+    fn place_moves_or_extends_from_the_anchor(
+        #[case] selection: Range<usize>,
+        #[case] offset: usize,
+        #[case] extend: bool,
+        #[case] want: Range<usize>,
+    ) {
+        let mut state = at("abcd", selection, false);
+        state.place(offset, extend);
+        assert_eq!(state.selection(), want);
+    }
+
+    #[test]
+    fn select_all_selects_the_whole_value() {
+        let mut state = caret_at("abc", 1);
+        state.select_all();
+        assert_eq!(state.selection(), 0..3);
+    }
+
+    #[rstest]
+    #[case::nearer_right(0.0, 13.0, 2)]
+    #[case::tie(0.0, 3.0, 0)]
+    #[case::left_of_text(0.0, -5.0, 0)]
+    #[case::right_of_text(0.0, 99.0, 3)]
+    #[case::scrolled(-6.0, 0.0, 1)]
+    fn offset_at_finds_the_nearest_stop(
+        #[case] layout_x: f32,
+        #[case] x: f32,
+        #[case] want: usize,
+    ) {
+        let stops = [(0, 0.0), (1, 6.0), (2, 12.0), (3, 18.0)];
+        assert_eq!(laid_out(layout_x, &stops).offset_at(x), want);
+    }
+
+    #[test]
+    fn offset_at_gives_0_without_a_layout() {
+        assert_eq!(InputState::default().offset_at(13.0), 0);
+    }
+
+    #[test]
+    fn to_utf16_counts_the_units_before_a_byte_offset() {
+        assert_eq!(caret_at("a😀b", 0).to_utf16(5), 3);
+    }
+
+    #[rstest]
+    #[case::from(3, 5)]
+    #[case::from_inside_a_pair(2, 5)]
+    #[case::from_past_the_end(9, 6)]
+    fn from_utf16_gives_the_byte_offset_of_a_unit_offset(
+        #[case] units: usize,
+        #[case] want: usize,
+    ) {
+        assert_eq!(caret_at("a😀b", 0).from_utf16(units), want);
+    }
+
+    #[test]
+    fn unmark_keeps_the_text() {
+        let mut state = caret_at("abk", 3);
+        state.composition = Some(2..3);
+        state.unmark();
+        assert_eq!(state.composition(), None);
+        assert_eq!(state.value(), "abk");
+    }
+
+    #[rstest]
+    #[case::recorded(
+        &[(0, 0.0), (1, 6.0), (2, 12.0)],
+        Some(Bounds::from_corners(point(px(16.), px(20.)), point(px(22.), px(36.))))
+    )]
+    #[case::unrecorded(&[], None)]
+    fn bounds_of_reads_the_recorded_layout(
+        #[case] stops: &[(usize, f32)],
+        #[case] want: Option<Bounds<Pixels>>,
+    ) {
+        assert_eq!(laid_out(10.0, stops).bounds_of(&(1..2)), want);
+    }
+
+    #[rstest]
+    #[case(InputType::InsertText, "insertText")]
+    #[case(InputType::InsertFromPaste, "insertFromPaste")]
+    #[case(InputType::InsertCompositionText, "insertCompositionText")]
+    #[case(InputType::InsertLineBreak, "insertLineBreak")]
+    #[case(InputType::DeleteContentBackward, "deleteContentBackward")]
+    #[case(InputType::DeleteContentForward, "deleteContentForward")]
+    #[case(InputType::DeleteByCut, "deleteByCut")]
+    fn input_type_names_follow_input_events(#[case] input_type: InputType, #[case] want: &str) {
+        assert_eq!(input_type.as_str(), want);
+    }
+
+    #[test]
+    fn end_focus_reports_an_edited_changed_value() {
+        let mut state = focused("ab");
+        state.apply(&state.insert("x", InputType::InsertText).unwrap());
+        assert!(state.end_focus());
+    }
+
+    #[test]
+    fn end_focus_reports_nothing_for_a_value_edited_back() {
+        let mut state = focused("ab");
+        state.apply(&state.insert("x", InputType::InsertText).unwrap());
+        state.apply(&state.delete(false));
+        assert!(!state.end_focus());
+    }
+
+    #[test]
+    fn end_focus_reports_nothing_without_an_edit() {
+        assert!(!focused("ab").end_focus());
+    }
+
+    #[test]
+    fn end_focus_of_an_unfocused_state_reports_nothing() {
+        let mut state = caret_at("ab", 2);
+        state.apply(&state.insert("x", InputType::InsertText).unwrap());
+        assert!(!state.end_focus());
+    }
+
+    #[test]
+    fn commit_moves_the_change_baseline() {
+        let mut state = focused("ab");
+        state.apply(&state.insert("x", InputType::InsertText).unwrap());
+        assert!(state.commit());
+        assert!(!state.commit());
+    }
+
+    #[test]
+    fn commit_of_an_unfocused_state_keeps_no_baseline() {
+        let mut state = caret_at("ab", 2);
+        state.apply(&state.insert("x", InputType::InsertText).unwrap());
+        assert!(!state.commit());
+        assert_eq!(state.committed, None);
+    }
+
+    #[test]
+    fn set_value_after_an_edit_leaves_a_change() {
+        let mut state = focused("ab");
+        state.apply(&state.insert("x", InputType::InsertText).unwrap());
+        state.set_value("z");
+        assert!(state.end_focus());
+    }
+
+    #[test]
+    fn set_value_alone_leaves_no_change() {
+        let mut state = focused("ab");
+        state.set_value("z");
+        assert!(!state.end_focus());
+    }
+}

@@ -159,7 +159,7 @@ mod tests {
 
     use super::*;
     use crate::element::spec::build_spec;
-    use crate::element::tests::{num, style_and_warnings, text};
+    use crate::tests::{num, style_and_warnings, text};
     use crate::tree::VirtualTree;
 
     const INVALID: &str = "ignoring invalid color for style key `background`";
