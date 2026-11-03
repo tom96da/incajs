@@ -9,7 +9,6 @@ use std::time::Duration;
 
 use gpui::{AnyWindowHandle, App, FutureExt as _, Window};
 use inca_jsenv::{Engine, ErrorReporter, run_timers};
-use rquickjs::{Ctx, Function, Result as JsResult};
 
 use super::{EventDispatcher, drain_jobs_and_refresh, observe_focus, report_failures};
 use crate::bindings::Host;
@@ -70,7 +69,7 @@ impl EventDispatcher {
     /// yet, and reports their failures.
     pub fn run_timers_idle(&self) {
         let timers = Rc::clone(&self.host.borrow().timers);
-        run_timers(&self.engine, &timers, &self.reporter, &call_timer_hook);
+        run_timers(&self.engine, &timers, &self.reporter);
         self.report_pending();
     }
 
@@ -92,28 +91,19 @@ fn fire_timers(
 ) {
     observe_focus(host, window, cx);
     let timers = Rc::clone(&host.borrow().timers);
-    if run_timers(engine, &timers, reporter, &call_timer_hook) == 0 {
+    if run_timers(engine, &timers, reporter) == 0 {
         return;
     }
     drain_jobs_and_refresh(engine, reporter, window);
     report_failures(host, reporter);
 }
 
-/// Calls the global `__inca_timer__(id)`. A global that is not a function is
-/// skipped.
-fn call_timer_hook(ctx: &Ctx<'_>, id: u32) -> JsResult<()> {
-    let Ok(hook) = ctx.globals().get::<_, Function>("__inca_timer__") else {
-        return Ok(());
-    };
-    hook.call((id,))
-}
-
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
     use crate::test_support::{
-        Reported, TIMERS_JS, TestRoot, capture_reporter, engine_for, host_on_executor_clock,
-        mount_active, mount_with_timers,
+        Reported, TestRoot, capture_reporter, engine_for, host_on_executor_clock, mount_active,
+        mount_with_timers,
     };
     use crate::{EventDispatcher, Host};
     use gpui::AppContext as _;
@@ -131,7 +121,7 @@ mod tests {
 
     fn scene(cx: &mut TestAppContext) -> Scene {
         let host = host_on_executor_clock(cx);
-        let engine = timer_engine(&host);
+        let engine = engine_for(&host);
         let (report, reported) = capture_reporter();
         let window = mount_with_timers(cx, &host, &engine, report);
         engine.eval::<()>("globalThis.log = [];").unwrap();
@@ -150,13 +140,6 @@ mod tests {
 
     fn log(scene: &Scene) -> String {
         scene.engine.eval::<String>("log.join(',')").unwrap()
-    }
-
-    /// [`engine_for`] with [`TIMERS_JS`] evaluated.
-    fn timer_engine(host: &Rc<RefCell<Host>>) -> Rc<inca_jsenv::Engine> {
-        let engine = engine_for(host);
-        engine.eval::<()>(TIMERS_JS).unwrap();
-        engine
     }
 
     #[gpui::test]
@@ -221,7 +204,7 @@ mod tests {
     #[gpui::test]
     fn a_listener_error_raised_by_a_callback_is_reported_after_its_error(cx: &mut TestAppContext) {
         let host = host_on_executor_clock(cx);
-        let engine = timer_engine(&host);
+        let engine = engine_for(&host);
         let (report, reported) = capture_reporter();
         let dispatcher =
             EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host)).with_reporter(report);
@@ -257,7 +240,7 @@ mod tests {
     #[gpui::test]
     fn a_timer_queued_before_start_timers_fires_on_the_first_turn(cx: &mut TestAppContext) {
         let host = host_on_executor_clock(cx);
-        let engine = timer_engine(&host);
+        let engine = engine_for(&host);
         engine
             .eval::<()>(
                 r"
@@ -300,7 +283,7 @@ mod tests {
     #[gpui::test]
     fn a_timer_callback_sees_the_focus_the_window_applied(cx: &mut TestAppContext) {
         let host = host_on_executor_clock(cx);
-        let engine = timer_engine(&host);
+        let engine = engine_for(&host);
         let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
         let node = {
             let mut host = host.borrow_mut();
@@ -382,7 +365,7 @@ mod tests {
     #[gpui::test]
     fn without_start_timers_a_timer_never_runs(cx: &mut TestAppContext) {
         let host = host_on_executor_clock(cx);
-        let engine = timer_engine(&host);
+        let engine = engine_for(&host);
         let root = host.borrow().root();
         let _window = mount_active(cx, &host, &engine, root);
         engine
@@ -403,7 +386,7 @@ mod tests {
     #[gpui::test]
     fn run_timers_idle_runs_due_callbacks_without_a_window(cx: &mut TestAppContext) {
         let host = host_on_executor_clock(cx);
-        let engine = timer_engine(&host);
+        let engine = engine_for(&host);
         let (report, reported) = capture_reporter();
         let dispatcher =
             EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host)).with_reporter(report);
@@ -429,7 +412,7 @@ mod tests {
     #[gpui::test]
     fn a_native_stop_removes_the_entry(cx: &mut TestAppContext) {
         let host = host_on_executor_clock(cx);
-        let engine = timer_engine(&host);
+        let engine = engine_for(&host);
 
         engine
             .eval::<()>("clearTimeout(setTimeout(() => {}, 10));")
@@ -462,14 +445,12 @@ mod tests {
     }
 
     #[gpui::test]
-    fn a_due_timer_without_the_hook_is_skipped(cx: &mut TestAppContext) {
+    fn a_due_timer_whose_handler_returns_reports_nothing(cx: &mut TestAppContext) {
         let host = host_on_executor_clock(cx);
         let engine = engine_for(&host);
         let (report, reported) = capture_reporter();
         let _window = mount_with_timers(cx, &host, &engine, report);
-        engine
-            .eval::<()>("__inca_native__.startTimer(10, false);")
-            .unwrap();
+        engine.eval::<()>("setTimeout(() => {}, 10);").unwrap();
 
         advance(cx, 10);
 

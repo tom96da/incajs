@@ -28,8 +28,9 @@ virtual tree (`inca-gpui`'s `VirtualTree`):
   render layer never has to depend on `QuickJS` itself. A window calls
   `EventDispatcher::begin_frame` first in its render and
   `EventDispatcher::window_activated` when it gains or loses focus.
-- `EventDispatcher::start_timers` runs the due timers through the script hook
-  `globalThis.__inca_timer__`, in a foreground task per window.
+- `install` also defines the timer functions of the global object, over the
+  timers of the `Host`. `EventDispatcher::start_timers` runs the due timers in
+  a foreground task per window.
 - `focus` re-exports `inca-gpui`'s `focus` module: `FocusRegistry` keeps a
   `gpui::FocusHandle` per node and reports the focus and blur transitions
   that `EventDispatcher::begin_frame` dispatches.

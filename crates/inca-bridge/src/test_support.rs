@@ -26,30 +26,6 @@ pub const LISTEN_JS: &str = r"
     };
     ";
 
-/// Defines `setTimeout(handler, delay)`, `clearTimeout(id)` and the hook
-/// `__inca_timer__` over the timer natives, for a script that runs without
-/// the timer globals of an app.
-pub const TIMERS_JS: &str = r"
-    {
-        const handlers = new Map();
-        globalThis.setTimeout = (handler, delay = 0) => {
-            const id = __inca_native__.startTimer(delay, false);
-            handlers.set(id, handler);
-            return id;
-        };
-        globalThis.clearTimeout = (id) => {
-            if (handlers.delete(id)) {
-                __inca_native__.stopTimer(id);
-            }
-        };
-        globalThis.__inca_timer__ = (id) => {
-            const handler = handlers.get(id);
-            handlers.delete(id);
-            handler();
-        };
-    }
-    ";
-
 /// The callback ids of `(target, event)` in registration order.
 #[must_use]
 pub fn callback_ids(listeners: &EventListeners, target: EventTargetId, event: &str) -> Vec<u32> {

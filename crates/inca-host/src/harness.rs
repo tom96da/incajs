@@ -129,7 +129,6 @@ mod tests {
     use super::*;
     use crate::tests::{TEST_ENTRY_PATH, eval_f64, id_where, load_listening, log};
     use gpui::{Pixels, Point, point, px};
-    use inca_bridge::test_support::TIMERS_JS;
     use inca_gpui::EventSink;
 
     #[gpui::test]
@@ -346,16 +345,12 @@ mod tests {
         let mut h = Harness::load(
             cx,
             TEST_ENTRY_PATH,
-            &[
-                TIMERS_JS,
-                r"
-                globalThis.ticks = 0;
-                setTimeout(() => {
-                    globalThis.ticks += 1;
-                }, 100);
-                ",
-            ]
-            .concat(),
+            r"
+            globalThis.ticks = 0;
+            setTimeout(() => {
+                globalThis.ticks += 1;
+            }, 100);
+            ",
         );
 
         h.advance_clock(Duration::from_millis(99));

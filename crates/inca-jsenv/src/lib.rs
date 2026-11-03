@@ -9,7 +9,8 @@
 //! async function whose stack frames name its file. [`vault`] keeps the JS
 //! values host code needs in a later call out of reach of scripts.
 //!
-//! [`Timers`] queues the timers a script starts.
+//! [`Timers`] queues the timers a script starts, and [`timers::install`] defines the Web timer
+//! functions over it. [`callbacks`] keeps the functions a script registered under ids.
 //!
 //! The public [`class`] module holds the steps that define a native class: its
 //! constructor, methods, getters and global.
@@ -22,6 +23,7 @@
 //! The renderer, windows and processes are outside it, so what it installs can
 //! be replaced without reaching the code that draws a UI.
 
+pub mod callbacks;
 pub mod class;
 pub mod console;
 mod encoding;
@@ -37,7 +39,7 @@ mod sourcemap;
 #[cfg(test)]
 mod tests;
 mod time;
-mod timers;
+pub mod timers;
 mod vault;
 
 pub use compile::compile_async_function;

@@ -189,6 +189,7 @@ impl Engine {
             .with(|ctx| {
                 create_vault(&ctx)?;
                 crate::time::install(&ctx, clock)?;
+                crate::callbacks::install(&ctx)?;
                 crate::encoding::install(&ctx)?;
                 let modules = Object::new(ctx.clone())?;
                 modules.set_prototype(None)?;
