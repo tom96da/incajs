@@ -15,10 +15,11 @@ import type { HotPayload } from "vite";
 import type { ModuleRunnerTransport } from "vite/module-runner";
 
 import * as adapterCore from "../../src/adapterCore.mts";
+import { vueViteIntegration } from "../../src/defaultPlugins.mts";
 import { createViteBundler } from "../../src/vite/index.mts";
 import tsdownConfig from "../../tsdown.config.mts";
 import { fsLag } from "../support/fsLag.mts";
-import { scratchApp, TEST_RUNTIME_MODULE, writeIncajs } from "./scratchApp.mts";
+import { scratchApp, TEST_INTEGRATION, TEST_RUNTIME_MODULE, writeIncajs } from "./scratchApp.mts";
 import type { HmrChannel, HmrOptions } from "../../src/types.mts";
 
 const { setUp, tearDown, makeApp } = scratchApp("hmr");
@@ -30,9 +31,7 @@ const builtRuntimePath = path.join(runtimeScratchDir, "vite-runtime.js");
 
 /** Wraps the real `hmr()`, defaulting `runtimePath` to this test's own scratch build. */
 function hmr(options: HmrOptions): Promise<HmrChannel> {
-  return createViteBundler(adapterCore, ["incajs", "vue"], {
-    runtimeModuleName: TEST_RUNTIME_MODULE,
-  }).hmr!({
+  return createViteBundler(adapterCore, ["incajs", "vue"], TEST_INTEGRATION).hmr!({
     runtimePath: builtRuntimePath,
     ...options,
   });
@@ -157,6 +156,34 @@ describe("hmr", () => {
     expect(runtimeId).toBeDefined();
     const exports = modules.getModuleById(runtimeId!)?.exports as { withModifiers: () => unknown };
     expect(String(exports.withModifiers)).toContain("STUB_WITH_MODIFIERS");
+  }, 20000);
+
+  it("creates the plugins again for each session", async () => {
+    const { entry, streams } = await makeApp(`<template><div /></template>\n`);
+    const real = vueViteIntegration(TEST_RUNTIME_MODULE);
+    let created = 0;
+    const counting = {
+      ...real,
+      plugins: () => {
+        created++;
+        return real.plugins();
+      },
+    };
+    const bundler = createViteBundler(adapterCore, ["incajs", "vue"], counting);
+    const options: HmrOptions = {
+      entry,
+      cwd: path.dirname(entry),
+      runtimePath: builtRuntimePath,
+      ...streams,
+      notify: () => {},
+      reload: () => {},
+      onError: () => {},
+    };
+
+    channels.push(await bundler.hmr!(options));
+    channels.push(await bundler.hmr!(options));
+
+    expect(created).toBe(2);
   }, 20000);
 
   it("rejects an import of a peer the app's incajs marks and the app lacks", async () => {

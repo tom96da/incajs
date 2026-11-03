@@ -8,6 +8,7 @@ import { Writable } from "node:stream";
 
 import { build } from "vite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { Plugin } from "vite";
 
 import * as core from "../adapterCore.mts";
 import { resolveViteConfig } from "./config.mts";
@@ -19,11 +20,14 @@ function sink(): Writable {
   return new Writable({ write: (_chunk, _encoding, callback) => callback() });
 }
 
+/** A plugin that tells the config test which integration produced the plugin list. */
+const alphaPlugin: Plugin = { name: "alpha-plugin" };
+
 function optionsFor(mode: ResolveConfigOptions["mode"]): ResolveConfigOptions {
   return {
     core,
     frontend: ["alpha-pkg", "alpha"],
-    frontendOptions: { runtimeModuleName: "runtime" },
+    integration: { plugins: () => [alphaPlugin], unsupported: [] },
     entry: "/unused/src/main.ts",
     outDir: "/unused/dist",
     mode,
@@ -137,10 +141,10 @@ describe("development library build", () => {
 });
 
 describe("resolveViteConfig plugins", () => {
-  it("checks for the Vue peers", () => {
+  it("adds the plugins of the integration to the config", () => {
     const plugins = (resolveViteConfig(optionsFor("production")).plugins ?? []).flat();
     const names = plugins.map((plugin) => (plugin as { name?: string }).name);
 
-    expect(names).toContain("inca:require-peers");
+    expect(names).toContain("alpha-plugin");
   });
 });

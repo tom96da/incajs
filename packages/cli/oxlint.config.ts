@@ -29,7 +29,23 @@ const overrides: OxlintOverride[] = [
     },
   },
   {
-    files: ["src/defaultPlugins.mts", "src/**/*.test.mts"],
+    files: ["src/defaultPlugins.mts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["vite", "vite/**"],
+              message: "Vite types come through the Vite adapter.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/**/*.test.mts"],
     excludeFiles: ["src/vite/**"],
     rules: {
       "no-restricted-imports": [
@@ -56,6 +72,11 @@ const overrides: OxlintOverride[] = [
             {
               group: ["../**", "!../adapterCore.mts"],
               message: "The adapter uses CLI features only through the injected adapter core.",
+            },
+            {
+              group: ["@vitejs/**", "vue", "vue/**", "@vue/**"],
+              message:
+                "The adapter names no frontend. Its plugins come from the injected integration.",
             },
           ],
           paths: [

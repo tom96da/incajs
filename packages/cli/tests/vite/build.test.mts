@@ -9,13 +9,12 @@ import dedent from "ts-dedent";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import * as adapterCore from "../../src/adapterCore.mts";
+import { vueViteIntegration } from "../../src/defaultPlugins.mts";
 import { createViteBundler } from "../../src/vite/index.mts";
-import { scratchApp, TEST_RUNTIME_MODULE, writeIncajs } from "./scratchApp.mts";
+import { scratchApp, TEST_INTEGRATION, TEST_RUNTIME_MODULE, writeIncajs } from "./scratchApp.mts";
 import type { Bundler } from "../../src/types.mts";
 
-const vite = createViteBundler(adapterCore, ["incajs", "vue"], {
-  runtimeModuleName: TEST_RUNTIME_MODULE,
-});
+const vite = createViteBundler(adapterCore, ["incajs", "vue"], TEST_INTEGRATION);
 const build: Bundler["build"] = (options) => vite.build(options);
 
 const { setUp, tearDown, makeApp } = scratchApp("build");
@@ -207,9 +206,7 @@ describe("build", () => {
       `<script setup>\nimport "@vue/runtime-dom";\n</script>\n<template><div /></template>\n`,
     );
     await writeIncajs(path.dirname(entry), domPeer);
-    const react = createViteBundler(adapterCore, ["incajs", "react" as "vue"], {
-      runtimeModuleName: TEST_RUNTIME_MODULE,
-    });
+    const react = createViteBundler(adapterCore, ["incajs", "react" as "vue"], TEST_INTEGRATION);
 
     const result = await react
       .build({ entry, outDir, ...streams })
@@ -223,13 +220,30 @@ describe("build", () => {
       `<script setup>\nimport "@vue/runtime-dom";\n</script>\n<template><div /></template>\n`,
     );
     await writeIncajs(path.dirname(entry), domPeer, "other-pkg");
-    const named = createViteBundler(adapterCore, ["other-pkg", "vue"], {
-      runtimeModuleName: TEST_RUNTIME_MODULE,
-    });
+    const named = createViteBundler(adapterCore, ["other-pkg", "vue"], TEST_INTEGRATION);
 
     await expect(named.build({ entry, outDir, ...streams })).rejects.toThrow(
       "ERR_INCA_PEER_NOT_FOUND",
     );
+  }, 20000);
+
+  it("creates the plugins again for each build", async () => {
+    const { entry, outDir, streams } = await makeApp(`<template><div /></template>\n`);
+    const real = vueViteIntegration(TEST_RUNTIME_MODULE);
+    let created = 0;
+    const counting = {
+      ...real,
+      plugins: () => {
+        created++;
+        return real.plugins();
+      },
+    };
+    const bundler = createViteBundler(adapterCore, ["incajs", "vue"], counting);
+
+    await bundler.build({ entry, outDir, ...streams });
+    await bundler.build({ entry, outDir, ...streams });
+
+    expect(created).toBe(2);
   }, 20000);
 
   it("rejects with a readable error on a syntax error", async () => {

@@ -3,34 +3,25 @@
 
 import path from "node:path";
 
-import vue from "@vitejs/plugin-vue";
-import type { Options as VueOptions } from "@vitejs/plugin-vue";
 import type { InlineConfig } from "vite";
 
 import { captureOutput } from "./captureOutput.mts";
 import { emitConfig } from "./emitConfig.mts";
+import { integrationPlugins } from "./integration.mts";
 import { streamLogger } from "./logger.mts";
-import { requirePeers } from "./requirePeers.mts";
-import { rejectUnsupported } from "./unsupported.mts";
 import type { AdapterCore, FrontendId } from "../adapterCore.mts";
 import type { CapturedOutput } from "./captureOutput.mts";
+import type { ViteIntegration } from "./integration.mts";
 
 export const BUNDLE_FILE_NAME = "bundle.js";
-
-/** The options of the `vue` plugin's template compiler. */
-type VueTemplateCompilerOptions = NonNullable<
-  NonNullable<VueOptions["template"]>["compilerOptions"]
->;
-
-export type FrontendOptions = VueTemplateCompilerOptions;
 
 export interface ResolveConfigOptions {
   core: AdapterCore;
   /** The frontend to bundle. Its package lists the peers the app must install. */
   frontend: FrontendId;
-  /** The frontend's own settings. */
-  frontendOptions: FrontendOptions;
-  /** The app's own entry point. It may import `.vue` files. */
+  /** The frontend's Vite plugins and refused features. */
+  integration: ViteIntegration;
+  /** The app's own entry point. It may import the files of the frontend. */
   entry: string;
   /** See the `root` option in `../types.mts`. Defaults to the entry's directory. */
   root?: string;
@@ -40,7 +31,7 @@ export interface ResolveConfigOptions {
   publicDir?: string;
   /** Where the build's output is written. */
   outDir: string;
-  /** `"development"` keeps `@vue/runtime-core`'s own warnings; `"production"` strips them. */
+  /** `"development"` keeps the runtime's own warnings; `"production"` strips them. */
   mode: "development" | "production";
   /** Writes the map in a production build too. Development always writes it. */
   sourcemap?: boolean;
@@ -59,18 +50,17 @@ export interface ResolveConfigOptions {
 }
 
 /**
- * Builds the Vite config shared by `watch` and `build`, compiling `.vue`
- * files via `@vitejs/plugin-vue`. Compiled templates import their helpers
- * from `options.runtimeModuleName`.
+ * Builds the Vite config shared by `watch` and `build`, adding the plugins of the
+ * frontend's integration.
  *
- * An import the entry doesn't inline (a dynamic `import()`, or a `.vue`
- * file's own `<style>` block) lands as its own chunk or asset alongside
+ * An import the entry doesn't inline (a dynamic `import()`, or a
+ * stylesheet) lands as its own chunk or asset alongside
  * the entry, named by `chunkFileNames`/`assetFileNames` below.
  */
 export function resolveViteConfig({
   core,
   frontend,
-  frontendOptions,
+  integration,
   entry,
   root = path.dirname(entry),
   envDir,
@@ -103,14 +93,7 @@ export function resolveViteConfig({
       "process.env.NODE_ENV": JSON.stringify(mode),
     },
     plugins: [
-      vue({
-        template: {
-          // Hoisted static content is stringified into createStaticVNode, which needs insertStaticContent.
-          compilerOptions: { ...frontendOptions, hoistStatic: false },
-        },
-      }),
-      requirePeers(core, frontend),
-      rejectUnsupported(core),
+      ...integrationPlugins(core, frontend, integration),
       emitConfig(runtimeConfig),
       captureOutput(core, onOutput),
     ],

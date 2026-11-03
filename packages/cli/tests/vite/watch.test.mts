@@ -8,12 +8,10 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import * as adapterCore from "../../src/adapterCore.mts";
 import { createViteBundler } from "../../src/vite/index.mts";
-import { scratchApp, TEST_RUNTIME_MODULE } from "./scratchApp.mts";
+import { scratchApp, TEST_INTEGRATION } from "./scratchApp.mts";
 import type { BuildOutput, Bundler, Watcher } from "../../src/types.mts";
 
-const vite = createViteBundler(adapterCore, ["incajs", "vue"], {
-  runtimeModuleName: TEST_RUNTIME_MODULE,
-});
+const vite = createViteBundler(adapterCore, ["incajs", "vue"], TEST_INTEGRATION);
 const watch: Bundler["watch"] = (options) => vite.watch(options);
 
 const { setUp, tearDown, makeApp } = scratchApp("watch");
