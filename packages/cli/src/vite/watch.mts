@@ -6,8 +6,8 @@ import type { RolldownWatcher } from "rolldown";
 
 import { toBuildOutput } from "./captureOutput.mts";
 import { resolveViteConfig } from "./config.mts";
-import type { AdapterCore, BundlerOptions, Watcher } from "../adapterCore.mts";
-import type { FrontendId, FrontendOptions } from "./config.mts";
+import type { AdapterCore, BundlerOptions, FrontendId, Watcher } from "../adapterCore.mts";
+import type { FrontendOptions } from "./config.mts";
 
 /**
  * Builds `entry` into a build under `outDir` and rebuilds it on every

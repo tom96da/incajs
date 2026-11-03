@@ -1,14 +1,20 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
 import { entryRoot, resolveEntry, selectEntry } from "./entry.mts";
+import type { Frontend } from "./types.mts";
+
+const ALPHA: Frontend = {
+  id: ["alpha-pkg", "alpha"],
+  appFile: "App.alpha",
+  entryCode: (appImport) => `load(${appImport});`,
+};
 
 let cwd: string | undefined;
 
@@ -24,20 +30,26 @@ async function makeApp(): Promise<string> {
 }
 
 describe("resolveEntry", () => {
-  it("wraps src/App.vue in a synthesized entry when there's no main.mts", async () => {
+  it("writes the entry text of the frontend for its app file", async () => {
     const app = await makeApp();
-    const appVuePath = path.join(app, "src/App.vue");
-    await writeFile(appVuePath, "<template><div/></template>\n");
+    const appPath = path.join(app, "src/App.alpha");
+    await writeFile(appPath, "alpha\n");
 
-    const entry = await resolveEntry(app);
+    const entry = await resolveEntry(app, ALPHA);
 
     expect(entry).toBe(path.join(app, "node_modules/.inca/entry.mts"));
-    const content = await readFile(entry, "utf8");
-    expect(content).toContain('import { createIncaApp } from "incajs/vue";');
-    expect(content).toContain(
-      `import App from ${JSON.stringify(appVuePath.split(path.sep).join("/"))};`,
+    expect(await readFile(entry, "utf8")).toBe(
+      `load(${JSON.stringify(appPath.split(path.sep).join("/"))});`,
     );
-    expect(content).toContain("createIncaApp(App).mount();");
+  });
+
+  it("ignores an App.vue the frontend does not name", async () => {
+    const app = await makeApp();
+    await writeFile(path.join(app, "src/App.vue"), "<template><div/></template>\n");
+
+    await expect(resolveEntry(app, ALPHA)).rejects.toMatchObject({
+      code: "ERR_INCA_ENTRY_NOT_FOUND",
+    });
   });
 
   it("prefers a committed src/main.mts over src/App.vue when both exist", async () => {
@@ -46,7 +58,7 @@ describe("resolveEntry", () => {
     await writeFile(mainPath, "// a hand-written entry\n");
     await writeFile(path.join(app, "src/App.vue"), "<template><div/></template>\n");
 
-    await expect(resolveEntry(app)).resolves.toBe(mainPath);
+    await expect(resolveEntry(app, ALPHA)).resolves.toBe(mainPath);
   });
 
   it.each(["main.ts", "main.js"])("uses a committed src/%s", async (file) => {
@@ -55,35 +67,37 @@ describe("resolveEntry", () => {
     await writeFile(mainPath, "// a hand-written entry\n");
     await writeFile(path.join(app, "src/App.vue"), "<template><div/></template>\n");
 
-    await expect(resolveEntry(app)).resolves.toBe(mainPath);
+    await expect(resolveEntry(app, ALPHA)).resolves.toBe(mainPath);
   });
 
   it("prefers main.mts over main.ts over main.js", async () => {
     const app = await makeApp();
     await writeFile(path.join(app, "src/main.js"), "");
     await writeFile(path.join(app, "src/main.ts"), "");
-    await expect(resolveEntry(app)).resolves.toBe(path.join(app, "src/main.ts"));
+    await expect(resolveEntry(app, ALPHA)).resolves.toBe(path.join(app, "src/main.ts"));
 
     await writeFile(path.join(app, "src/main.mts"), "");
-    await expect(resolveEntry(app)).resolves.toBe(path.join(app, "src/main.mts"));
+    await expect(resolveEntry(app, ALPHA)).resolves.toBe(path.join(app, "src/main.mts"));
   });
 
-  it("throws asking for main.ts or App.vue when no entry exists", async () => {
+  it("names the app file of the frontend in the missing-entry error", async () => {
     const app = await makeApp();
 
-    await expect(resolveEntry(app)).rejects.toThrow(
-      `no app entry found. check that ${path.join(app, "src/main.ts")} or ${path.join(app, "src/App.vue")} exists`,
+    await expect(resolveEntry(app, ALPHA)).rejects.toThrow(
+      `no app entry found. check that ${path.join(app, "src/main.ts")} or ${path.join(app, "src/App.alpha")} exists`,
     );
   });
 });
 
 describe("selectEntry", () => {
-  it("gives the synthesized entry for src/App.vue without writing it", async () => {
+  it("gives the synthesized entry path for the app file of the frontend", async () => {
     const app = await makeApp();
-    await writeFile(path.join(app, "src/App.vue"), "<template><div/></template>\n");
+    await writeFile(path.join(app, "src/App.alpha"), "alpha\n");
 
-    expect(selectEntry(app)).toBe(path.join(app, "node_modules/.inca/entry.mts"));
-    expect(existsSync(path.join(app, "node_modules/.inca/entry.mts"))).toBe(false);
+    expect(selectEntry(app, ALPHA)).toBe(path.join(app, "node_modules/.inca/entry.mts"));
+    await expect(access(path.join(app, "node_modules/.inca/entry.mts"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
   });
 });
 

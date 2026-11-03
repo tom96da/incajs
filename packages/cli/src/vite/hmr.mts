@@ -23,8 +23,14 @@ import { CONFIG_FILE_NAME } from "./emitConfig.mts";
 import { streamLogger } from "./logger.mts";
 import { requirePeers } from "./requirePeers.mts";
 import { rejectUnsupported } from "./unsupported.mts";
-import type { AdapterCore, BuildFailure, HmrChannel, HmrOptions } from "../adapterCore.mts";
-import type { FrontendId, FrontendOptions } from "./config.mts";
+import type {
+  AdapterCore,
+  BuildFailure,
+  FrontendId,
+  HmrChannel,
+  HmrOptions,
+} from "../adapterCore.mts";
+import type { FrontendOptions } from "./config.mts";
 
 /**
  * A failed update's detail: the same fields a Rollup/Vite plugin

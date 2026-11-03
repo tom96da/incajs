@@ -12,7 +12,7 @@ import {
   resolveRuntimeConfig,
   runtimeConfigOf,
 } from "./config/loader.mts";
-import { defaultBundler } from "./defaultPlugins.mts";
+import { defaultBundler, defaultFrontend } from "./defaultPlugins.mts";
 import { HostClient } from "./dev-client/index.mts";
 import { acquireDevLock } from "./devLock.mts";
 import { entryRoot, resolveEntry, selectEntry } from "./entry.mts";
@@ -24,7 +24,7 @@ import { checkConfig } from "./printConfig.mts";
 import { retryOnEdit } from "./retryOnEdit.mts";
 import { watchForEdit } from "./watchForEdit.mts";
 import type { ResolvedAppConfig } from "./config/loader.mts";
-import type { Bundler, BuildOutput, HmrChannel } from "./types.mts";
+import type { Bundler, BuildOutput, Frontend, HmrChannel } from "./types.mts";
 import type { EditWatch } from "./watchForEdit.mts";
 
 export interface DevOptions {
@@ -32,13 +32,15 @@ export interface DevOptions {
   cwd?: string;
   /**
    * The app's entry point. Defaults to the first of `src/main.mts`, `src/main.ts` and
-   * `src/main.js` that exists, otherwise `src/App.vue` wrapped in a synthesized entry. An entry
-   * selected this way is selected again while the app runs, and the host reloads when the
-   * selection changes.
+   * `src/main.js` that exists, otherwise the app file of the frontend wrapped in a synthesized
+   * entry. An entry selected this way is selected again while the app runs, and the host reloads
+   * when the selection changes.
    */
   entry?: string;
   /** Overrides the bundler. See {@link defaultBundler} for what's wired in by default. */
   bundler?: Bundler;
+  /** Overrides the frontend. Defaults to {@link defaultFrontend}. */
+  frontend?: Frontend;
   /**
    * Delivers module-granular updates instead of a full reload on every
    * change, over `bundler.hmr`. See `--experimental-hmr`.
@@ -183,8 +185,8 @@ interface Session {
  * entry.
  *
  * When the entry is selected automatically, `dev` selects it again after every change to a main
- * file or `src/App.vue` and reloads the development window if the selection changed. A missing
- * entry prints `build failed` and keeps the running host until one exists.
+ * file or the app file of the frontend and reloads the development window if the selection
+ * changed. A missing entry prints `build failed` and keeps the running host until one exists.
  *
  * @throws if another `inca dev` is already running for this app.
  * @throws if the host binary can't be resolved or isn't a file.
@@ -215,6 +217,7 @@ export async function dev(options: DevOptions): Promise<void> {
     const bin = options.hostBin ?? (await resolveHostBin(cwd, stderr));
     await assertHostBin(bin);
     const bundler: Bundler = options.bundler ?? defaultBundler;
+    const frontend: Frontend = options.frontend ?? defaultFrontend;
 
     const hmr = options.experimentalHmr ? bundler.hmr?.bind(bundler) : undefined;
     if (options.experimentalHmr && !hmr) {
@@ -229,10 +232,11 @@ export async function dev(options: DevOptions): Promise<void> {
       signal: options.signal,
       stdout,
       stderr,
+      appFile: frontend.appFile,
       async attempt() {
         const config = await resolveBuildConfig(cwd);
         const automaticEntry = options.entry === undefined && config.entry === undefined;
-        const entry = options.entry ?? config.entry ?? (await resolveEntry(cwd));
+        const entry = options.entry ?? config.entry ?? (await resolveEntry(cwd, frontend));
         const metadata = await resolveMetadata(cwd, stdout);
         const runtimeConfig = metadata
           ? runtimeConfigOf(metadata, { dev: true })
@@ -453,12 +457,12 @@ export async function dev(options: DevOptions): Promise<void> {
      */
     async function reselect(): Promise<void> {
       if (stopping) return;
-      const selected = selectEntry(cwd);
+      const selected = selectEntry(cwd, frontend);
       if (selected !== undefined && selected === session?.entry) return;
       try {
         // Closing the session stops repeat build errors. The host stays.
         if (selected === undefined) await closeSession();
-        const next = await resolveEntry(cwd);
+        const next = await resolveEntry(cwd, frontend);
         missing = false;
         await closeSession();
         if (stopping) return;
@@ -475,7 +479,7 @@ export async function dev(options: DevOptions): Promise<void> {
       // `stopped` comes first so that it wins over an edit that lands with it.
       while (await Promise.race([stopped.then(() => false), watch.edited.then(() => true)])) {
         watch.close();
-        watch = entryWatch = watchForEdit(cwd);
+        watch = entryWatch = watchForEdit(cwd, { appFile: frontend.appFile });
         queue = queue.then(reselect);
         await queue;
       }
@@ -484,9 +488,9 @@ export async function dev(options: DevOptions): Promise<void> {
     let initial: string | undefined = entry;
     if (automaticEntry) {
       // Armed before the recheck, so a change made after it is not lost.
-      entryWatch = watchForEdit(cwd);
+      entryWatch = watchForEdit(cwd, { appFile: frontend.appFile });
       try {
-        initial = await resolveEntry(cwd);
+        initial = await resolveEntry(cwd, frontend);
       } catch (error) {
         initial = undefined;
         missing = true;

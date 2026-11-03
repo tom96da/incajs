@@ -21,12 +21,18 @@ import {
 import { fsLag } from "./support/fsLag.mts";
 import { watches } from "./support/watches.mts";
 import type { DevOptions } from "../src/dev.mts";
-import type { BuildOutput } from "../src/types.mts";
+import type { BuildOutput, Frontend } from "../src/types.mts";
 
 vi.mock("../src/watchForEdit.mts", async (importOriginal) => {
   const { recordWatches } = await import("./support/watches.mts");
   return recordWatches(await importOriginal());
 });
+
+const ALPHA: Frontend = {
+  id: ["alpha-pkg", "alpha"],
+  appFile: "App.alpha",
+  entryCode: (appImport) => `load(${appImport});`,
+};
 
 describe("dev entry selection", () => {
   const scratch = scratchConfigApp("dev-entry");
@@ -190,6 +196,29 @@ describe("dev entry selection", () => {
     await run.running;
   });
 
+  it("keeps the synthesized entry when the app file of the frontend is edited", async () => {
+    const cwd = await makeSourceApp("App.alpha");
+    const run = await startReady(cwd, { frontend: ALPHA });
+    const synthesized = path.join(cwd, "node_modules/.inca/entry.mts");
+    const written = (await stat(synthesized)).mtimeMs;
+
+    // Two edits: the second signal arrives only after the first selection has finished.
+    const first = waitForSignal();
+    await writeFile(path.join(cwd, "src/App.alpha"), "edit 0\n");
+    await first;
+    await fsLag();
+    const second = waitForSignal();
+    await writeFile(path.join(cwd, "src/App.alpha"), "edit 1\n");
+    await second;
+    await fsLag();
+
+    expect((await stat(synthesized)).mtimeMs).toBe(written);
+    expect(run.bundler.watches).toHaveLength(1);
+
+    run.abort();
+    await run.running;
+  });
+
   it("keeps an explicit entry when main files change", async () => {
     const cwd = await makeSourceApp("App.vue");
     const explicit = path.join(cwd, "src/App.vue");
@@ -266,6 +295,53 @@ describe("dev entry selection", () => {
     );
     run.bundler.emitBuild(BUILD_B);
     await hostEvents(run, ["start /unused/a.js", "reload"]);
+
+    run.abort();
+    await run.running;
+  });
+
+  it("starts with the entry written for the app file of the frontend", async () => {
+    const cwd = await makeSourceApp("App.alpha");
+    const run = await startReady(cwd, { frontend: ALPHA });
+
+    expect(run.bundler.watches[0]!.options.entry).toBe(
+      path.join(cwd, "node_modules/.inca/entry.mts"),
+    );
+
+    run.abort();
+    await run.running;
+  });
+
+  it("selects the entry again when the app file of the frontend returns", async () => {
+    const cwd = await makeSourceApp("App.alpha");
+    const run = await startReady(cwd, { frontend: ALPHA });
+
+    await rm(path.join(cwd, "src/App.alpha"));
+    await waitFor(() => expect(run.stderr.text()).toContain("no app entry found"));
+    await fsLag();
+
+    await writeFile(path.join(cwd, "src/App.alpha"), "");
+    await waitFor(() => expect(run.bundler.watches).toHaveLength(2));
+    expect(run.bundler.watches[1]!.options.entry).toBe(
+      path.join(cwd, "node_modules/.inca/entry.mts"),
+    );
+
+    run.abort();
+    await run.running;
+  });
+
+  it("waits for the app file of the frontend before the first build", async () => {
+    const cwd = await makeSourceApp();
+    const run = await startDev(cwd, { frontend: ALPHA });
+    await waitFor(() => expect(run.stderr.text()).toContain("build failed"));
+    await fsLag();
+
+    await writeFile(path.join(cwd, "src/App.alpha"), "");
+    await run.bundler.watching;
+
+    expect(run.bundler.watches[0]!.options.entry).toBe(
+      path.join(cwd, "node_modules/.inca/entry.mts"),
+    );
 
     run.abort();
     await run.running;

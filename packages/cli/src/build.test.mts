@@ -1,14 +1,20 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { build } from "./build.mts";
-import type { Bundler, BuildOptions, BuildOutput } from "./types.mts";
+import type { Bundler, BuildOptions, BuildOutput, Frontend } from "./types.mts";
+
+const ALPHA: Frontend = {
+  id: ["alpha-pkg", "alpha"],
+  appFile: "App.alpha",
+  entryCode: (appImport) => `load(${appImport});`,
+};
 
 type RecordingBundler = Bundler & { seen: BuildOptions | undefined };
 
@@ -92,6 +98,24 @@ describe("build", () => {
     });
 
     expect(bundler.seen?.root).toBe("/app/src");
+  });
+
+  it("resolves the entry from the app file of the frontend", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "inca-build-"));
+    onTestFinished(() => rm(cwd, { recursive: true, force: true }));
+    await mkdir(path.join(cwd, "src"));
+    await writeFile(path.join(cwd, "src/App.alpha"), "alpha\n");
+    const bundler = makeFakeBundler(writeNothing);
+
+    await build({
+      cwd,
+      frontend: ALPHA,
+      bundler,
+      config: { outDir: path.join(cwd, "dist"), entry: undefined, sourcemap: false },
+    });
+
+    expect(bundler.seen?.entry).toBe(path.join(cwd, "node_modules/.inca/entry.mts"));
+    expect(bundler.seen?.root).toBe(path.join(cwd, "src"));
   });
 
   it("refuses a supplied config whose outDir holds the app, without building", async () => {

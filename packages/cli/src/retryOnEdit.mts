@@ -18,6 +18,8 @@ export interface RetryOnEditOptions<T> {
   stdout: NodeJS.WritableStream;
   /** Receives each failure. */
   stderr: NodeJS.WritableStream;
+  /** The file name in `src/` that the frontend treats as a whole app. An edit to it counts. */
+  appFile: string;
   /** How long edits must stay quiet before the next attempt. Defaults to 100. */
   debounceMs?: number;
   /**
@@ -57,12 +59,12 @@ function waitForEdit(edited: Promise<void>, signal: AbortSignal): Promise<boolea
  * a refused `add` is printed first.
  */
 export async function retryOnEdit<T>(options: RetryOnEditOptions<T>): Promise<T | undefined> {
-  const { cwd, signal, stdout, stderr, debounceMs } = options;
+  const { cwd, signal, stdout, stderr, appFile, debounceMs } = options;
   // A silent retry is bound to one in a row. The wait resets it.
   let silentRetry = false;
   for (;;) {
     // Armed before the attempt, so a save made during it counts.
-    const watch = watchForEdit(cwd, { debounceMs });
+    const watch = watchForEdit(cwd, { appFile, debounceMs });
     try {
       return await options.attempt(watch);
     } catch (error) {

@@ -44,7 +44,7 @@ async function makeApp(): Promise<string> {
 /** Arms a watch that the test closes on its way out. */
 async function arm(cwd: string): Promise<EditWatch> {
   await fsLag();
-  const watcher = watchForEdit(cwd, { debounceMs: DEBOUNCE });
+  const watcher = watchForEdit(cwd, { appFile: "App.alpha", debounceMs: DEBOUNCE });
   open.push(watcher);
   await fsLag();
   return watcher;
@@ -97,17 +97,23 @@ describe("watchForEdit", () => {
     expect(await settled(watcher.edited, SETTLE_MS)).toBe(true);
   });
 
-  it.each(["main.mts", "main.ts", "main.js", "App.vue"])(
-    "resolves once src/%s exists",
-    async (file) => {
-      const app = await makeApp();
-      const watcher = await arm(app);
+  it.each(["main.mts", "main.ts", "main.js"])("resolves once src/%s exists", async (file) => {
+    const app = await makeApp();
+    const watcher = await arm(app);
 
-      await writeFile(path.join(app, "src", file), "");
+    await writeFile(path.join(app, "src", file), "");
 
-      expect(await settled(watcher.edited, SETTLE_MS)).toBe(true);
-    },
-  );
+    expect(await settled(watcher.edited, SETTLE_MS)).toBe(true);
+  });
+
+  it("resolves once the app file of the frontend exists", async () => {
+    const app = await makeApp();
+    const watcher = await arm(app);
+
+    await writeFile(path.join(app, "src", "App.alpha"), "");
+
+    expect(await settled(watcher.edited, SETTLE_MS)).toBe(true);
+  });
 
   it.each(["main.mts"])(
     "resolves once src/%s is created along with a src/ that was absent",
@@ -131,6 +137,7 @@ describe("watchForEdit", () => {
     await writeFile(path.join(app, "README.md"), "");
     await writeFile(path.join(app, "src", "util.mts"), "");
     await writeFile(path.join(app, "src", "Other.vue"), "");
+    await writeFile(path.join(app, "src", "App.vue"), "");
     await writeFile(path.join(app, "node_modules/.inca", "entry.mts"), "");
     await writeFile(path.join(app, "node_modules", "package.json"), "{}");
 
@@ -300,7 +307,7 @@ describe("watchForEdit", () => {
           throw new Error("EMFILE: too many open files");
         });
 
-      expect(() => watchForEdit(app)).toThrow("EMFILE");
+      expect(() => watchForEdit(app, { appFile: "App.alpha" })).toThrow("EMFILE");
       expect(first.close).toHaveBeenCalledTimes(1);
     });
 

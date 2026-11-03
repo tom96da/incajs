@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { watch } from "node:fs";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Writable } from "node:stream";
@@ -67,6 +67,7 @@ function start<T>(attempt: RetryOnEditOptions<T>["attempt"]) {
     signal: controller.signal,
     stdout: stdout.stream,
     stderr: stderr.stream,
+    appFile: "App.alpha",
     debounceMs: DEBOUNCE,
     attempt: run,
   });
@@ -118,6 +119,21 @@ describe("retryOnEdit", () => {
     await expect(running).resolves.toBe("done");
     expect(run).toHaveBeenCalledTimes(2);
     expect(count(stdout.text(), "[inca] retrying")).toBe(1);
+  });
+
+  it("retries after an edit to the app file of the frontend", async () => {
+    await mkdir(path.join(app, "src"));
+    let calls = 0;
+    const { running, run, stdout } = start(() => {
+      calls++;
+      return calls === 1 ? Promise.reject(new Error("first")) : Promise.resolve("done");
+    });
+    await vi.waitFor(() => expect(stdout.text()).toContain("waiting for a change to retry"));
+
+    await writeFile(path.join(app, "src/App.alpha"), "");
+
+    await expect(running).resolves.toBe("done");
+    expect(run).toHaveBeenCalledTimes(2);
   });
 
   it("prints each failure once per edit", async () => {
