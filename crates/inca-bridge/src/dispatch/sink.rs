@@ -408,26 +408,6 @@ mod tests {
         }
     }
 
-    #[gpui::test]
-    fn time_stamp_counts_milliseconds_from_the_host_start_and_grows(cx: &mut TestAppContext) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
-        dispatcher.engine.eval::<()>(RECORDER).unwrap();
-        listen(&dispatcher, node, "click", "record");
-        let cx = cx.add_empty_window();
-        for _ in 0..3 {
-            cx.update(|window, cx| {
-                dispatcher.fire(node, "click", &EventPayload::None, window, cx);
-            });
-        }
-        let stamps: Vec<f64> = seen_rows(&dispatcher)
-            .iter()
-            .map(|r| r[9].as_f64().unwrap())
-            .collect();
-        assert!(stamps[0] > 0.0, "{stamps:?}");
-        assert!(stamps.windows(2).all(|w| w[1] >= w[0]), "{stamps:?}");
-    }
-
     #[gpui_cases]
     #[gpui::test]
     #[case::phase_constants(

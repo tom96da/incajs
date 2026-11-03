@@ -1389,6 +1389,16 @@ A fixed entry is deleted and its ID is never reused.
   (a listener, a rejection, a limit stop) stays in the message text. Fix: give
   `EngineError` a kind.
 
+- **B-263 `performance` has only `now()`**
+  `Units: jsenv · Size: M · Impact: Low`
+
+  The object `performance` has the one member `now()`. `timeOrigin`, `toJSON()`,
+  `mark()`, `measure()` and the entry members are missing. quickjs-ng defines
+  `performance.timeOrigin` as a reading of a monotonic clock, which no app can
+  turn into a date. The host's `performance` replaces that object, so the
+  property is removed. Fix: add the missing members on the clock of `inca-jsenv`,
+  with `timeOrigin` as epoch milliseconds.
+
 - **B-266 The config has no `frontend` field**
   `Units: cli,core · Size: L · Impact: Low`
 

@@ -32,7 +32,6 @@ use inca_gpui::NodeId;
 use inca_jsenv::{Engine, ErrorReporter, report_jobs, stderr_reporter};
 
 use crate::bindings::Host;
-use crate::event;
 
 mod fire;
 mod frame;
@@ -118,7 +117,6 @@ pub(crate) fn report_failures(host: &RefCell<Host>, reporter: &ErrorReporter) {
 impl EventDispatcher {
     /// Reports failures through [`stderr_reporter`].
     pub fn new(engine: Rc<Engine>, host: Rc<RefCell<Host>>) -> Self {
-        event::time_stamp();
         Self {
             engine,
             host,

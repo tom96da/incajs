@@ -17,6 +17,7 @@ use rquickjs::{Coerced, Context, Ctx, FromJs, Function, Object, Runtime, Value};
 use crate::limits::{Limits, Watchdog, interrupted, null_under_memory_limit, record_limits};
 use crate::loader::{DiskLoader, DiskResolver};
 use crate::sourcemap::{StackPaths, remap_stack};
+use crate::timers::{Clock, system_clock};
 use crate::vault::{create_vault, vault};
 
 mod jobs;
@@ -175,7 +176,7 @@ impl Engine {
         EngineBuilder::default()
     }
 
-    fn from_runtime(runtime: Runtime, limits: Limits) -> EngineResult<Self> {
+    fn from_runtime(runtime: Runtime, limits: Limits, clock: &Clock) -> EngineResult<Self> {
         let context = Context::full(&runtime).map_err(|err| EngineError::plain(&err))?;
         let engine = Self {
             runtime,
@@ -187,6 +188,7 @@ impl Engine {
             .context
             .with(|ctx| {
                 create_vault(&ctx)?;
+                crate::time::install(&ctx, clock)?;
                 crate::encoding::install(&ctx)?;
                 let modules = Object::new(ctx.clone())?;
                 modules.set_prototype(None)?;
@@ -298,6 +300,7 @@ pub struct EngineBuilder {
     module_roots: Vec<PathBuf>,
     paths: StackPaths,
     limits: Limits,
+    clock: Option<Clock>,
 }
 
 impl EngineBuilder {
@@ -327,6 +330,14 @@ impl EngineBuilder {
         self
     }
 
+    /// Sets the clock `performance.now()` reads, counted from the build.
+    /// Defaults to [`system_clock`].
+    #[must_use]
+    pub fn clock(mut self, clock: Clock) -> Self {
+        self.clock = Some(clock);
+        self
+    }
+
     /// Builds the configured [`Engine`].
     ///
     /// # Errors
@@ -338,7 +349,11 @@ impl EngineBuilder {
         if !self.module_roots.is_empty() {
             runtime.set_loader(DiskResolver::new(self.module_roots), DiskLoader);
         }
-        let engine = Engine::from_runtime(runtime, self.limits)?;
+        let engine = Engine::from_runtime(
+            runtime,
+            self.limits,
+            &self.clock.unwrap_or_else(system_clock),
+        )?;
         engine
             .with(|ctx| crate::sourcemap::set_paths(&ctx, self.paths))
             .map_err(|err| EngineError::plain(&err))?;
