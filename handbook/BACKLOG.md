@@ -1387,3 +1387,12 @@ A fixed entry is deleted and its ID is never reused.
   An entry of the run log says `error` or `startup`, and the cause of an error
   (a listener, a rejection, a limit stop) stays in the message text. Fix: give
   `EngineError` a kind.
+
+- **B-262 The CLI generates an app entry that names the Vue renderer**
+  `Units: cli · Size: S · Impact: Low`
+
+  When an app has no entry file, `inca dev` and `inca build` write
+  `node_modules/.inca/entry.mts` with `import { createIncaApp } from "incajs/vue"`.
+  The CLI therefore knows the renderer's entry point outside
+  `defaultBundler.mts`, and a different renderer cannot replace it. Fix: take the
+  entry code from the default bundler, which already names the renderer module.
