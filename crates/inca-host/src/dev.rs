@@ -8,34 +8,27 @@
 //! otherwise, as `__inca_dev__.receive(method, paramsJson)`; see
 //! [`wire`] for the wire format this speaks.
 //!
-//! The first entry starts as a [`Loading`] and the window opens once its
-//! top-level `await` settles. An entry still pending after [`LOAD_TIMEOUT`]
+//! The first entry starts as a [`crate::app::Loading`] and the window opens once its
+//! top-level `await` settles. An entry still pending after [`serve::LOAD_TIMEOUT`]
 //! opens the window at the size the config gives, else the mounted content's
 //! size, else the default size, unless the app reported a failed load.
 
 use std::cell::RefCell;
-use std::fs;
 use std::io::{self, BufRead, Write};
-use std::ops::ControlFlow;
 use std::rc::Rc;
 use std::sync::mpsc;
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use gpui::{App, FutureExt, WindowHandle};
-use serde_json::Value;
+use inca_jsenv::{EngineError, ErrorReporter};
 
-use inca_jsenv::{Clock, Engine, EngineError, ErrorReporter, report_jobs};
-
-use crate::app::{
-    Failure, HostedApp, Loading, Session, clock_of, maybe_auto_resize_to_content, open,
-};
-use crate::config::is_resizable;
-use crate::run_log;
 pub(crate) use wire::ErrorCode;
-use wire::{Incoming, Method, Outgoing};
+use wire::Outgoing;
 
 mod globals;
+mod reload;
+mod serve;
+mod startup;
 mod wire;
 
 pub(crate) use globals::{DevSend, LoadSignal, call_dev_receive, install_dev, install_load_signal};
@@ -231,392 +224,185 @@ pub(crate) fn dev_send(writer: &SharedWriter) -> crate::dev::DevSend {
     Rc::new(move |method: &str, params| send(&*writer, &Outgoing::notification(method, params)))
 }
 
-/// Answers the request `id` came from. A notification carries no id and
-/// takes no reply.
-fn respond(id: Option<&Value>, outcome: &Result<(), Failure>, writer: &SharedWriter) {
-    let Some(id) = id else { return };
-    send(
-        &**writer,
-        &match outcome {
-            Ok(()) => Outgoing::result(id.clone()),
-            Err(failure) => outgoing(id.clone(), failure),
-        },
-    );
-}
-
-/// The error message that reports `failure` for the request `id`.
-fn outgoing(id: Value, failure: &Failure) -> Outgoing {
-    match failure {
-        Failure::Message(code, message) => Outgoing::error(id, *code, message.clone()),
-        Failure::Thrown(err) => Outgoing::thrown(id, ErrorCode::BundleFailed, err),
-    }
-}
-
-/// How long the first load may stay pending with no window before the window
-/// opens at the size the config gives, else the mounted content's size, else
-/// the default size.
-pub(crate) const LOAD_TIMEOUT: Duration = Duration::from_secs(2);
-
-/// Puts `session` on screen in place of the window's current one.
-fn swap_in(
-    window: &WindowHandle<HostedApp>,
-    cx: &mut App,
-    session: Session,
-) -> Result<(), Failure> {
-    window
-        .update(cx, |app, window, cx| {
-            app.session.dispatcher.stop_timers();
-            app.session = session;
-            app.session
-                .dispatcher
-                .start_timers(window.window_handle(), cx);
-            // A fixed-size window gets a fresh auto-resize chance, as if it just launched
-            // with the reloaded content. A resizable window may carry a manual resize the
-            // user made since it last auto-resized, which reloading the bundle must not discard.
-            if !is_resizable(app.window_config.as_ref()) {
-                app.auto_resized.set((false, false));
-            }
-            app.session.dispatcher.drain_jobs_and_refresh(window, cx);
-            maybe_auto_resize_to_content(app, window);
-        })
-        .map_err(Failure::bundle)
-}
-
-/// `params` as the JSON text `__inca_dev__.receive` takes.
-fn params_json(params: Option<Value>) -> String {
-    serde_json::to_string(&params.unwrap_or(Value::Null)).unwrap_or_else(|_| "null".to_owned())
-}
-
-/// Relays an unrecognized notification (no `id`) into the window's app via
-/// [`crate::dev::call_dev_receive`], then drains the job queue and
-/// refreshes the window as a swap does. A callback may have queued
-/// reactivity work or thrown.
-fn relay_to_js(
-    window: &WindowHandle<HostedApp>,
-    cx: &mut App,
-    method: &str,
-    params: Option<Value>,
-    reporter: &ErrorReporter,
-) {
-    let params_json = params_json(params);
-
-    let _ = window.update(cx, |app, window, cx| {
-        app.session.dispatcher.observe_focus(window, cx);
-        deliver(&app.session.engine, method, &params_json, reporter);
-        app.session.dispatcher.drain_jobs_and_refresh(window, cx);
-        maybe_auto_resize_to_content(app, window);
-    });
-}
-
-/// Calls `__inca_dev__.receive` on `engine` and reports what it throws.
-fn deliver(engine: &Engine, method: &str, params_json: &str, reporter: &ErrorReporter) {
-    if let Some(err) = call_dev_receive(engine, method, params_json) {
-        reporter(&err);
-    }
-}
-
-/// An entry that is still evaluating, with the `reload` ids waiting on it.
-struct Pending {
-    loading: Loading,
-    ids: Vec<Value>,
-}
-
-/// What the serve loop knows: whether a window exists, the load in flight
-/// and when the first load's wait ends.
-struct Serve {
-    window: Option<WindowHandle<HostedApp>>,
-    pending: Option<Pending>,
-    deadline: Instant,
-    was_held: bool,
-    entry_path: String,
-    writer: SharedWriter,
-    reporter: ErrorReporter,
-    clock: Clock,
-}
-
-impl Serve {
-    /// Whether the first load waits for the app: no window yet and the app
-    /// reported a failed load.
-    fn held(&self) -> bool {
-        self.window.is_none()
-            && self
-                .pending
-                .as_ref()
-                .is_some_and(|pending| pending.loading.start_failed())
-    }
-
-    /// Restarts the deadline when the app clears a failed-load report, even
-    /// when the report and the clearing happened between two polls.
-    fn track_hold(&mut self, cx: &App) {
-        let held = self.held();
-        let reported = self
-            .pending
-            .as_ref()
-            .is_some_and(|pending| pending.loading.reported_failure());
-        if (self.was_held || reported) && !held {
-            self.deadline = cx.background_executor().now() + LOAD_TIMEOUT;
-        }
-        self.was_held = held;
-    }
-
-    /// How long to wait for a line: until the load deadline while no window is
-    /// open, and until the next timer of the load in flight. `None` waits for
-    /// the next line.
-    fn wait(&self, cx: &gpui::AsyncApp) -> Option<Duration> {
-        let load = (self.window.is_none() && !self.held()).then(|| {
-            self.deadline
-                .saturating_duration_since(cx.background_executor().now())
-        });
-        let timer = self
-            .pending
-            .as_ref()
-            .and_then(|pending| pending.loading.session().dispatcher.next_timer_wait());
-        match (load, timer) {
-            (Some(load), Some(timer)) => Some(load.min(timer)),
-            (load, timer) => load.or(timer),
-        }
-    }
-
-    /// Polls the pending load and acts on its outcome.
-    fn advance(&mut self, cx: &mut App) {
-        let Some(pending) = &self.pending else { return };
-        pending.loading.session().dispatcher.run_timers_idle();
-        let Some(result) = pending.loading.poll() else {
-            let session = pending.loading.session();
-            report_jobs(&session.engine, &self.reporter);
-            session.dispatcher.report_pending();
-            self.track_hold(cx);
-            return;
-        };
-        match &result {
-            Err(err) => pending
-                .loading
-                .session()
-                .report_failed_start(&self.reporter, err),
-            Ok(()) => pending.loading.session().dispatcher.report_pending(),
-        }
-        let Some(Pending { loading, ids }) = self.pending.take() else {
-            return;
-        };
-        let outcome = match (result, self.window) {
-            (Ok(()), None) => {
-                self.open_window(cx, loading.into_session());
-                return self.answer(&ids, &Ok(()));
-            }
-            (Ok(()), Some(window)) => swap_in(&window, cx, loading.into_session()),
-            (Err(err), None) => fail_startup(&Failure::Thrown(err), Some(&self.writer)),
-            (Err(err), Some(_)) => Err(Failure::Thrown(err)),
-        };
-        self.answer(&ids, &outcome);
-    }
-
-    /// Opens the window on `session` and announces it.
-    fn open_window(&mut self, cx: &mut App, session: Session) {
-        match open(cx, session, &self.entry_path) {
-            Ok(window) => {
-                self.window = Some(window);
-                send(&*self.writer, &Outgoing::ready());
-            }
-            Err(failure) => fail_startup(&failure, Some(&self.writer)),
-        }
-    }
-
-    fn answer(&self, ids: &[Value], outcome: &Result<(), Failure>) {
-        for id in ids {
-            respond(Some(id), outcome, &self.writer);
-        }
-    }
-
-    /// The wait for the first load ended: one more poll, then the window
-    /// opens on whatever the app has mounted.
-    fn time_out(&mut self, cx: &mut App) {
-        self.advance(cx);
-        // A report or a clear made in the final poll moves the deadline on.
-        if self.window.is_some() || self.held() || cx.background_executor().now() < self.deadline {
-            return;
-        }
-        if let Some(Pending { loading, ids }) = self.pending.take() {
-            self.open_window(cx, loading.into_session());
-            self.answer(&ids, &Ok(()));
-        }
-    }
-
-    /// Re-reads the entry and starts it as the pending load. A load that
-    /// cannot start is answered at once and leaves the state as it was.
-    fn reload(&mut self, cx: &mut App, id: Option<Value>) {
-        let begun = fs::read_to_string(&self.entry_path)
-            .map_err(|err| {
-                Failure::Message(
-                    ErrorCode::BundleFailed,
-                    format!("failed to read {}: {err}", self.entry_path),
-                )
-            })
-            .and_then(|source| {
-                Session::begin_with(
-                    &self.entry_path,
-                    &source,
-                    Rc::clone(&self.reporter),
-                    Some(&self.writer),
-                    self.clock.clone(),
-                )
-                .map_err(Failure::Thrown)
-            });
-        let loading = match begun {
-            Ok(loading) => loading,
-            Err(failure) => return respond(id.as_ref(), &Err(failure), &self.writer),
-        };
-        let mut ids = self
-            .pending
-            .take()
-            .map(|pending| pending.ids)
-            .unwrap_or_default();
-        ids.extend(id);
-        self.pending = Some(Pending { loading, ids });
-        self.track_hold(cx);
-        self.advance(cx);
-    }
-
-    /// Relays a notification to the load in flight, or to the window's app
-    /// when none is.
-    fn relay(&mut self, cx: &mut App, method: &str, params: Option<Value>) {
-        if let Some(pending) = &self.pending {
-            let params_json = params_json(params);
-            let engine = &pending.loading.session().engine;
-            deliver(engine, method, &params_json, &self.reporter);
-            self.advance(cx);
-        } else if let Some(window) = &self.window {
-            relay_to_js(window, cx, method, params, &self.reporter);
-        }
-    }
-
-    /// Handles one stdin line.
-    fn on_line(&mut self, cx: &mut App, line: &str) -> ControlFlow<()> {
-        match wire::decode(line) {
-            Ok(Incoming::Call {
-                id,
-                method: Method::Reload,
-            }) => self.reload(cx, id),
-            Ok(Incoming::Call {
-                id,
-                method: Method::Shutdown,
-            }) => {
-                respond(id.as_ref(), &Ok(()), &self.writer);
-                return ControlFlow::Break(());
-            }
-            Ok(Incoming::Unrecognized {
-                id: Some(id),
-                method,
-                ..
-            }) => respond(
-                Some(&id),
-                &Err(Failure::Message(
-                    ErrorCode::MethodNotFound,
-                    format!("unknown method: {method}"),
-                )),
-                &self.writer,
-            ),
-            Ok(Incoming::Unrecognized {
-                id: None,
-                method,
-                params,
-            }) => self.relay(cx, &method, params),
-            Ok(Incoming::Empty) => {}
-            Err((code, message)) => {
-                send(&*self.writer, &Outgoing::error(Value::Null, code, message));
-            }
-        }
-        ControlFlow::Continue(())
-    }
-}
-
-/// Starts serving the protocol messages arriving on `lines` while `first`
-/// evaluates, and returns once the first poll has run. The loop task answers
-/// until `shutdown`, or until the channel closes, then quits the app.
-///
-/// The window opens when `first` settles, or [`LOAD_TIMEOUT`] after `started`
-/// (the instant just before `first` began evaluating) when it is still
-/// pending, unless the app reported a failed load. A `first` that fails with
-/// no window open ends the process.
-pub(crate) fn serve_dev_protocol(
-    cx: &mut App,
-    lines: async_channel::Receiver<String>,
-    first: Loading,
-    started: Instant,
-    entry_path: String,
-    writer: SharedWriter,
-) {
-    let mut serve = Serve {
-        window: None,
-        pending: Some(Pending {
-            loading: first,
-            ids: Vec::new(),
-        }),
-        deadline: started + LOAD_TIMEOUT,
-        was_held: false,
-        entry_path,
-        reporter: reporter_for(&writer),
-        writer,
-        clock: clock_of(cx.background_executor()),
-    };
-    serve.track_hold(cx);
-    serve.advance(cx);
-
-    cx.spawn(async move |cx: &mut gpui::AsyncApp| {
-        loop {
-            let received = match serve.wait(cx) {
-                Some(wait) => lines
-                    .recv()
-                    .with_timeout(wait, cx.background_executor())
-                    .await
-                    .ok(),
-                None => Some(lines.recv().await),
-            };
-            let flow = match received {
-                Some(Ok(line)) => cx.update(|cx| serve.on_line(cx, &line)),
-                Some(Err(_)) => ControlFlow::Break(()),
-                None => {
-                    cx.update(|cx| serve.time_out(cx));
-                    ControlFlow::Continue(())
-                }
-            };
-            if flow.is_break() {
-                break;
-            }
-        }
-        cx.update(|cx| cx.quit());
-    })
-    .detach();
-}
-
-/// Reports a startup failure, closes the writer and ends the process with
-/// status 1. No window ever opened, so the event loop has nothing to quit
-/// from. `writer` is `None` in production.
-pub(crate) fn fail_startup(failure: &Failure, writer: Option<&SharedWriter>) -> ! {
-    report_startup_failure(failure, writer);
-    if let Some(writer) = writer {
-        writer.close();
-    }
-    std::process::exit(1)
-}
-
-/// Reports a startup failure wherever anyone is listening. There is no
-/// window to keep, so this is the last thing the process says. `writer` is
-/// `None` in production, where there is nobody on the other end of stdout; the
-/// failure also goes to the log file of the run.
-pub(crate) fn report_startup_failure(failure: &Failure, writer: Option<&SharedWriter>) {
-    if writer.is_none() {
-        let text = match failure {
-            Failure::Thrown(err) => err.to_string(),
-            Failure::Message(_, message) => message.clone(),
-        };
-        run_log::error("startup", &text);
-    }
-    match (failure, writer) {
-        (failure, Some(writer)) => send(&**writer, &outgoing(Value::Null, failure)),
-        (Failure::Thrown(err), None) => eprintln!("{err}"),
-        (Failure::Message(_, message), None) => eprintln!("{message}"),
-    }
-}
+pub(crate) use serve::serve_dev_protocol;
+pub(crate) use startup::fail_startup;
 
 #[cfg(test)]
-mod tests;
+mod tests {
+    #![allow(clippy::unwrap_used)]
+
+    use super::*;
+    use std::sync::{Arc, Mutex};
+    use std::time::Instant;
+
+    use serde_json::Value;
+
+    #[test]
+    fn panic_line_keeps_the_internal_error_protocol_shape() {
+        let message = "boom\nsecond line";
+        let line = panic_line(message);
+        assert_eq!(line.lines().count(), 1);
+        let parsed: Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(parsed["jsonrpc"], "2.0");
+        assert_eq!(parsed["id"], Value::Null);
+        assert_eq!(parsed["error"]["code"], -32603);
+        assert_eq!(parsed["error"]["message"], message);
+    }
+
+    /// A sink that records what had been flushed when a flush completes.
+    #[derive(Clone, Default)]
+    struct SlowSink {
+        pending: Arc<Mutex<String>>,
+        flushed: Arc<Mutex<String>>,
+    }
+
+    impl Write for SlowSink {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            self.pending
+                .lock()
+                .unwrap()
+                .push_str(&String::from_utf8_lossy(buf));
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            thread::sleep(Duration::from_millis(50));
+            let pending = self.pending.lock().unwrap().clone();
+            *self.flushed.lock().unwrap() = pending;
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn the_writer_acknowledges_a_panic_line_after_its_flush() {
+        let (sender, receiver) = async_channel::unbounded();
+        let sink = SlowSink::default();
+        let writer_sink = sink.clone();
+        let handle = thread::spawn(move || write_lines(&receiver, || writer_sink.clone()));
+        let mut stderr = Vec::new();
+
+        report_panic(&sender, None, "boom", &mut stderr, Duration::from_secs(5));
+
+        assert!(sink.flushed.lock().unwrap().contains("boom"));
+        assert!(stderr.is_empty());
+        drop(sender);
+        handle.join().unwrap();
+    }
+
+    #[test]
+    fn a_closed_panic_report_channel_is_reported_on_stderr() {
+        let (sender, receiver) = async_channel::unbounded::<Queued>();
+        drop(receiver);
+        let mut stderr = Vec::new();
+
+        report_panic(&sender, None, "test", &mut stderr, Duration::from_secs(5));
+
+        assert_eq!(
+            String::from_utf8(stderr).unwrap(),
+            "panic report not sent. the writer channel is closed\n"
+        );
+    }
+
+    #[test]
+    fn an_unacknowledged_panic_report_is_reported_on_stderr_after_the_wait() {
+        let (sender, receiver) = async_channel::unbounded::<Queued>();
+        let mut stderr = Vec::new();
+
+        report_panic(
+            &sender,
+            None,
+            "test",
+            &mut stderr,
+            Duration::from_millis(20),
+        );
+
+        assert_eq!(
+            String::from_utf8(stderr).unwrap(),
+            "panic report not confirmed. the writer did not flush in time\n"
+        );
+        drop(receiver);
+    }
+
+    #[test]
+    fn a_panic_report_follows_lines_already_queued() {
+        let (sender, receiver) = async_channel::unbounded();
+        sender.send_blocking(("earlier".to_owned(), None)).unwrap();
+        let mut stderr = Vec::new();
+
+        report_panic(
+            &sender,
+            None,
+            "panic",
+            &mut stderr,
+            Duration::from_millis(1),
+        );
+
+        assert_eq!(receiver.recv_blocking().unwrap().0, "earlier");
+        let (report, ack) = receiver.recv_blocking().unwrap();
+        assert!(report.contains("panic"));
+        assert!(ack.is_some());
+    }
+
+    #[test]
+    fn a_panic_on_the_writer_thread_is_reported_without_queueing() {
+        let (sender, receiver) = async_channel::unbounded::<Queued>();
+        let mut stderr = Vec::new();
+        let start = Instant::now();
+
+        report_panic(
+            &sender,
+            Some(thread::current().id()),
+            "boom",
+            &mut stderr,
+            Duration::from_secs(5),
+        );
+
+        assert!(start.elapsed() < Duration::from_secs(2));
+        assert_eq!(
+            String::from_utf8(stderr).unwrap(),
+            "panic report not sent. the panic is on the writer thread\n"
+        );
+        assert!(receiver.try_recv().is_err());
+    }
+
+    #[test]
+    fn a_regular_protocol_line_carries_no_acknowledgement() {
+        let (sender, receiver) = async_channel::unbounded();
+        let writer = StdoutWriter(sender, RefCell::new(None), None);
+
+        writer.write_line("line".to_owned());
+
+        let (line, ack) = receiver.recv_blocking().unwrap();
+        assert_eq!(line, "line");
+        assert!(ack.is_none());
+    }
+
+    struct FailingFlush;
+
+    impl Write for FailingFlush {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Err(io::Error::other("broken pipe"))
+        }
+    }
+
+    #[test]
+    fn a_failed_flush_ends_the_writer_and_drops_the_confirmation() {
+        let (sender, receiver) = async_channel::unbounded();
+        let handle = thread::spawn(move || write_lines(&receiver, || FailingFlush));
+        let mut stderr = Vec::new();
+        let start = Instant::now();
+
+        report_panic(&sender, None, "boom", &mut stderr, Duration::from_secs(5));
+
+        assert!(start.elapsed() < Duration::from_secs(2));
+        assert_eq!(
+            String::from_utf8(stderr).unwrap(),
+            "panic report not confirmed. the writer did not flush in time\n"
+        );
+        handle.join().unwrap();
+    }
+}
