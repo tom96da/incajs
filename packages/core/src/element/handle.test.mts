@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { document } from "../document.mts";
 import { createIncaElement, rootElement } from "./handle.mts";
-import { elementOf, markDestroyed, markRemoved } from "./lifecycle.mts";
+import { elementOf, markDestroyed, markRemoved, nodeOf } from "./lifecycle.mts";
 import { createTextNode, remove } from "./shadowTree.mts";
 import type { ScrollOptions } from "./scroll.mts";
 import type { IncaElement, IncaInputElement } from "./types.mts";
@@ -242,6 +242,19 @@ describe("createIncaElement selectors", () => {
     host.querySelectorAll.mockReturnValue([2, 3]);
 
     expect(found.length).toBe(1);
+  });
+
+  it("querySelectorAll returns a list that a loop visits in full when the host answers fewer", () => {
+    const host = installSelectors();
+    const { outer } = chain();
+    host.querySelectorAll.mockReturnValueOnce([2, 3]);
+    const found = outer.querySelectorAll("div");
+    host.querySelectorAll.mockReturnValue([]);
+    const visited: unknown[] = [];
+
+    for (const el of found) visited.push(el);
+
+    expect(visited.length).toBe(2);
   });
 
   it("querySelectorAll returns a new list on every call", () => {
@@ -608,11 +621,18 @@ describe("createIncaElement registration", () => {
     expect(elementOf(7)).toBe(el);
   });
 
-  it("leaves a comment stand-in unregistered", () => {
+  it("leaves a comment stand-in out of elementOf", () => {
     installHost();
     createIncaElement(8, "comment");
 
     expect(elementOf(8)).toBeUndefined();
+  });
+
+  it("registers a comment stand-in as a node", () => {
+    installHost();
+    const comment = createIncaElement(8, "comment");
+
+    expect(nodeOf(8)).toBe(comment);
   });
 });
 

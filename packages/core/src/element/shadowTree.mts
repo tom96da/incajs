@@ -16,11 +16,13 @@ import {
   isDestroyed,
   isHeld,
   markRemoved,
+  registerNode,
   releaseWhenCollected,
   withNodeId,
 } from "./lifecycle.mts";
+import { nodeTreeMembers } from "./nodeTree.mts";
 import type { TagName } from "../types.mts";
-import type { IncaElement, IncaNode, IncaText } from "./types.mts";
+import type { IncaElement, IncaNode, IncaText, NodeMembers } from "./types.mts";
 
 /**
  * Allocates a new element node for `tag`.
@@ -40,8 +42,15 @@ export function createElementNode(tag: TagName): IncaElement {
 export function createTextNode(text: string): IncaText {
   const id = createNode("#text");
   setAttribute(id, "value", text);
-  const node: Omit<IncaText, "__node_id"> = { kind: "text", parent: null, text };
-  return withNodeId(node, id);
+  const node: Omit<IncaText, "__node_id" | keyof NodeMembers> = {
+    kind: "text",
+    parent: null,
+    text,
+  };
+  const handle = withNodeId(node as IncaText, id);
+  Object.defineProperties(handle, Object.getOwnPropertyDescriptors(nodeTreeMembers(handle)));
+  registerNode(handle);
+  return handle;
 }
 
 // inca has no comment concept. A hidden, childless container stands in for one.

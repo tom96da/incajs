@@ -172,6 +172,25 @@ function installNative(): void {
     setPointerCapture() {},
     releasePointerCapture() {},
     hasPointerCapture: () => false,
+    linkedNode(id, link) {
+      const node = nodeOf(id);
+      const siblings = node.parent === null ? [] : nodeOf(node.parent).children;
+      const at = siblings.indexOf(id);
+      const found = {
+        parent: node.parent,
+        first: node.children[0],
+        last: node.children.at(-1),
+        previous: siblings[at - 1],
+        next: siblings[at + 1],
+      }[link];
+      return found ?? null;
+    },
+    childNodeIds: (id) => [...nodeOf(id).children],
+    isConnected(id) {
+      let at: number | null = id;
+      while (at !== null && at !== ROOT) at = nodeOf(at).parent;
+      return at === ROOT;
+    },
   };
 }
 

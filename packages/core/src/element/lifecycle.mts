@@ -34,35 +34,35 @@ export function isNode(value: unknown): value is IncaNode {
 }
 
 /**
- * Weak references to the element handles, keyed by native node id. A handle
+ * Weak references to the node handles, keyed by native node id. A handle
  * that nothing references can be collected, and its record stays until
  * `collected` drops it. A record leaves at once when the host frees the node.
  */
-const elements = new Map<NodeId, WeakRef<IncaElement>>();
+const records = new Map<NodeId, WeakRef<IncaNode>>();
 
 /**
  * Drops the record of a collected handle. A newer handle registered under the
  * same id keeps its record.
  */
 const collected = new FinalizationRegistry<NodeId>((id) => {
-  if (!elements.get(id)?.deref()) elements.delete(id);
+  if (!records.get(id)?.deref()) records.delete(id);
 });
 
 /**
- * Records `element` under its id.
- * @param element - the handle to record
+ * Records `node` under its id.
+ * @param node - the handle to record
  */
-export function registerElement(element: IncaElement): void {
-  elements.set(element.__node_id, new WeakRef(element));
-  collected.register(element, element.__node_id);
+export function registerNode(node: IncaNode): void {
+  records.set(node.__node_id, new WeakRef(node));
+  collected.register(node, node.__node_id);
 }
 
 /**
  * Drops the record of a native node.
  * @param id - the native node's id
  */
-export function unregisterElement(id: NodeId): void {
-  elements.delete(id);
+export function unregisterNode(id: NodeId): void {
+  records.delete(id);
 }
 
 /**
@@ -71,16 +71,26 @@ export function unregisterElement(id: NodeId): void {
  * @returns the number of records
  */
 export function recordedCount(): number {
-  return elements.size;
+  return records.size;
 }
 
 /**
- * Looks up the live handle of a native node.
+ * Looks up the live handle of a native node of any kind.
  * @param id - the native node's id
  * @returns the handle, or `undefined` when none is live
  */
+export function nodeOf(id: NodeId): IncaNode | undefined {
+  return records.get(id)?.deref();
+}
+
+/**
+ * Looks up the live handle of a native element.
+ * @param id - the native node's id
+ * @returns the handle, or `undefined` when none is live or the node is not an element
+ */
 export function elementOf(id: NodeId): IncaElement | undefined {
-  return elements.get(id)?.deref();
+  const node = nodeOf(id);
+  return node?.kind === "element" ? node : undefined;
 }
 
 const removed = new WeakSet<IncaNode>();
@@ -118,13 +128,13 @@ export function isDestroyed(node: IncaNode): boolean {
 
 /**
  * Records that the host freed `node` and every descendant of it, and drops
- * their element handles from the registry.
+ * their handles from the registry.
  * @param node - the root of the freed subtree
  */
 export function markDestroyed(node: IncaNode): void {
   destroyed.add(node);
+  unregisterNode(node.__node_id);
   if (node.kind === "text") return;
-  unregisterElement(node.__node_id);
   for (const child of node.__children) markDestroyed(child);
 }
 
@@ -136,8 +146,8 @@ export function markDestroyed(node: IncaNode): void {
  */
 export function markFreed(nodeIds: readonly NodeId[]): void {
   for (const id of nodeIds) {
-    const element = elementOf(id);
-    if (element) markDestroyed(element);
+    const node = nodeOf(id);
+    if (node) markDestroyed(node);
   }
 }
 

@@ -143,6 +143,9 @@ be passed, and `undefined` there counts as `null`.
 | `appendChild` | `(parentId: number, childId: number) => void` | Attach a child at the end of `parentId`'s children. Same as `insertBefore` with no anchor. |
 | `insertBefore` | `(parentId: number, childId: number, anchorId: number \| null) => void` | Attach a child before `anchorId`, or at the end if `null`. |
 | `removeChild` | `(parentId: number, childId: number) => void` | Detach a child node. Freed at the next frame unless re-inserted or held, see Tree rules. |
+| `linkedNode` | `(nodeId: number, link: "parent" \| "first" \| "last" \| "previous" \| "next") => number \| null` | The id of the parent, first child, last child, previous sibling or next sibling of `nodeId`, or `null` when there is none. Throws a `TypeError` for an unknown node or another `link`. |
+| `childNodeIds` | `(nodeId: number) => number[]` | The ids of the children of `nodeId` in order. Throws a `TypeError` for an unknown node. |
+| `isConnected` | `(nodeId: number) => boolean` | Whether `nodeId` is the root container or hangs under it. Throws a `TypeError` for an unknown node. |
 | `holdNode` | `(nodeId: number) => void` | Keep `nodeId` and its subtree alive while it has no parent. |
 | `releaseNode` | `(nodeId: number) => void` | End the hold. |
 | `setAttribute` | `(nodeId: number, key: string, value: string \| number \| boolean) => void` | Set a non-style attribute prop. Names are folded to ASCII lower case. |

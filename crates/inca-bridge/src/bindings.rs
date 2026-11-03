@@ -14,6 +14,7 @@ mod focus;
 mod host;
 mod input;
 mod listeners;
+mod node;
 mod scroll;
 mod selector;
 mod tree;
@@ -31,6 +32,7 @@ use capture::install_capture;
 use focus::install_focus;
 use input::install_input;
 use listeners::install_events;
+use node::install_node;
 use scroll::install_scroll;
 use selector::install_selector;
 use tree::install_tree;
@@ -58,6 +60,7 @@ pub fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
         host,
     };
     install_tree(&natives)?;
+    install_node(&natives)?;
     install_events(&natives)?;
     install_focus(&natives)?;
     install_capture(&natives)?;

@@ -49,33 +49,36 @@ export interface HTMLCollectionOf<T extends IncaElement> {
   [Symbol.iterator](): IterableIterator<T>;
 }
 
-/** A read-only list of elements that a query returned. It keeps the elements it found. */
-export interface NodeListOf<T extends IncaElement> {
+/**
+ * A read-only list of nodes. The list of `childNodes` follows later changes. The list of
+ * `querySelectorAll()` holds the elements found when it was made.
+ */
+export interface NodeListOf<T extends IncaNode> {
   readonly [index: number]: T;
-  /** The number of elements in the list. */
+  /** The number of nodes in the list. */
   readonly length: number;
   /**
-   * The element at `index`, or `null` beyond the list. The index converts to an unsigned 32-bit
+   * The node at `index`, or `null` beyond the list. The index converts to an unsigned 32-bit
    * integer.
    * @param index - The position in the list.
-   * @returns The element at `index`, or `null`.
+   * @returns The node at `index`, or `null`.
    */
   item(index: number): T | null;
   /**
-   * Calls `callback` with the element, its index and the list for each element in order.
+   * Calls `callback` with the node, its index and the list for each node in order.
    * @throws TypeError when `callback` is not a function
-   * @param callback - The function to call for each element.
+   * @param callback - The function to call for each node.
    * @param thisArg - The value of `this` inside `callback`.
    */
   forEach(
     callback: (value: T, index: number, list: NodeListOf<T>) => void,
     thisArg?: unknown,
   ): void;
-  /** The pairs of index and element in order. */
+  /** The pairs of index and node in order. */
   entries(): IterableIterator<[number, T]>;
   /** The indices in order. */
   keys(): IterableIterator<number>;
-  /** The elements in order. */
+  /** The nodes in order. */
   values(): IterableIterator<T>;
   [Symbol.iterator](): IterableIterator<T>;
 }
@@ -124,6 +127,47 @@ export interface NamedNodeMap {
   [Symbol.iterator](): IterableIterator<Attr>;
 }
 
+/** The members every node has: what it is, its data and its place in the tree. */
+export interface NodeMembers {
+  /** `1` for an element, `3` for a text node and `8` for a comment stand-in. */
+  readonly nodeType: 1 | 3 | 8;
+  /**
+   * The {@link IncaElement.tagName} of an element, `"#text"` for a text node and `"#comment"` for a
+   * comment stand-in.
+   */
+  readonly nodeName: string;
+  /**
+   * The data of a text node or a comment stand-in, and `null` for an element. Assigning `null` or
+   * `undefined` stores `""` and any other value stores its string. Assigning to an element or to a
+   * freed node does nothing.
+   */
+  nodeValue: string | null;
+  /** Whether the node hangs under the mount container, which counts as connected. */
+  readonly isConnected: boolean;
+  /** The `document` export. */
+  readonly ownerDocument: IncaDocument;
+  /**
+   * The parent, `document` for the mount container and `null` for a detached node. A freed node
+   * reads `null`.
+   */
+  readonly parentNode: IncaElement | IncaDocument | null;
+  /** The first child, or `null`. */
+  readonly firstChild: IncaNode | null;
+  /** The last child, or `null`. */
+  readonly lastChild: IncaNode | null;
+  /** The sibling right before this node, or `null`. */
+  readonly previousSibling: IncaNode | null;
+  /** The sibling right after this node, or `null`. */
+  readonly nextSibling: IncaNode | null;
+  /**
+   * The children in order, as a live list. Every read returns the same object, which follows later
+   * changes. A freed node has an empty list.
+   */
+  readonly childNodes: NodeListOf<IncaNode>;
+  /** Whether the node has a child. */
+  hasChildNodes(): boolean;
+}
+
 /**
  * A container node: either a real element or the hidden stand-in that
  * `createCommentNode` makes. It is the only node type that can act as a
@@ -134,7 +178,7 @@ export interface NamedNodeMap {
  * call, an assignment to a handler property does nothing, and `dispatchEvent()` runs no listener
  * on it.
  */
-export interface IncaElement extends IncaEventTarget, EventHandlers {
+export interface IncaElement extends IncaEventTarget, EventHandlers, NodeMembers {
   /**
    * The node id the host knows this node by. Internal to the renderer.
    * @internal
@@ -359,7 +403,7 @@ export interface IncaInputElement extends IncaElement {
 }
 
 /** A text leaf node. */
-export interface IncaText {
+export interface IncaText extends NodeMembers {
   /**
    * The node id the host knows this node by. Internal to the renderer.
    * @internal

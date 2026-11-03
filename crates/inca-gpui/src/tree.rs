@@ -257,6 +257,36 @@ impl VirtualTree {
         std::iter::successors(Some(id), |&id| self.get(id).and_then(VirtualNode::parent))
     }
 
+    /// The first child of `id`. `None` for a childless or unknown node.
+    #[must_use]
+    pub fn first_child(&self, id: NodeId) -> Option<NodeId> {
+        self.get(id)?.children().first().copied()
+    }
+
+    /// The last child of `id`. `None` for a childless or unknown node.
+    #[must_use]
+    pub fn last_child(&self, id: NodeId) -> Option<NodeId> {
+        self.get(id)?.children().last().copied()
+    }
+
+    /// The child of `id`'s parent right before `id`. `None` for the first child, a parentless
+    /// node and an unknown node.
+    #[must_use]
+    pub fn previous_sibling(&self, id: NodeId) -> Option<NodeId> {
+        let siblings = self.get(self.get(id)?.parent()?)?.children();
+        let index = siblings.iter().position(|&child| child == id)?;
+        siblings.get(index.checked_sub(1)?).copied()
+    }
+
+    /// The child of `id`'s parent right after `id`. `None` for the last child, a parentless
+    /// node and an unknown node.
+    #[must_use]
+    pub fn next_sibling(&self, id: NodeId) -> Option<NodeId> {
+        let siblings = self.get(self.get(id)?.parent()?)?.children();
+        let index = siblings.iter().position(|&child| child == id)?;
+        siblings.get(index + 1).copied()
+    }
+
     /// The node right before `id`'s subtree in tree order: the last node of
     /// its previous sibling's subtree, or its parent when it is the first
     /// child. `None` for a node without a parent.
@@ -391,6 +421,76 @@ mod tests {
             tree.set_attribute(node, *attribute, true).unwrap();
         }
         assert_eq!(is_disabled_control(tree.get(node).unwrap()), want, "{tag}");
+    }
+
+    /// `parent` holds `a`, `b`, `c`. `lone_parent` holds `lone`. `loose` has no parent. The last
+    /// entry is an id no node has.
+    fn linked_tree() -> (VirtualTree, [NodeId; 8]) {
+        let mut tree = VirtualTree::new();
+        let [parent, a, b, c, lone_parent, lone, loose] =
+            [(); 7].map(|()| tree.create_node("div").unwrap());
+        for child in [a, b, c] {
+            tree.append_child(parent, child).unwrap();
+        }
+        tree.append_child(lone_parent, lone).unwrap();
+        (tree, [parent, a, b, c, lone_parent, lone, loose, 999])
+    }
+
+    const PARENT: usize = 0;
+    const A: usize = 1;
+    const B: usize = 2;
+    const C: usize = 3;
+    const LONE_PARENT: usize = 4;
+    const LONE: usize = 5;
+    const LOOSE: usize = 6;
+    const UNKNOWN: usize = 7;
+
+    #[rstest]
+    #[case::first(A, Some(B))]
+    #[case::middle(B, Some(C))]
+    #[case::last(C, None)]
+    #[case::only(LONE, None)]
+    #[case::detached(LOOSE, None)]
+    #[case::unknown(UNKNOWN, None)]
+    fn next_sibling_is_the_child_after(#[case] node: usize, #[case] want: Option<usize>) {
+        let (tree, ids) = linked_tree();
+
+        assert_eq!(tree.next_sibling(ids[node]), want.map(|at| ids[at]));
+    }
+
+    #[rstest]
+    #[case::first(A, None)]
+    #[case::middle(B, Some(A))]
+    #[case::last(C, Some(B))]
+    #[case::only(LONE, None)]
+    #[case::detached(LOOSE, None)]
+    #[case::unknown(UNKNOWN, None)]
+    fn previous_sibling_is_the_child_before(#[case] node: usize, #[case] want: Option<usize>) {
+        let (tree, ids) = linked_tree();
+
+        assert_eq!(tree.previous_sibling(ids[node]), want.map(|at| ids[at]));
+    }
+
+    #[rstest]
+    #[case::several(PARENT, Some(A))]
+    #[case::only(LONE_PARENT, Some(LONE))]
+    #[case::childless(LOOSE, None)]
+    #[case::unknown(UNKNOWN, None)]
+    fn first_child_is_the_first_of_the_children(#[case] node: usize, #[case] want: Option<usize>) {
+        let (tree, ids) = linked_tree();
+
+        assert_eq!(tree.first_child(ids[node]), want.map(|at| ids[at]));
+    }
+
+    #[rstest]
+    #[case::several(PARENT, Some(C))]
+    #[case::only(LONE_PARENT, Some(LONE))]
+    #[case::childless(LOOSE, None)]
+    #[case::unknown(UNKNOWN, None)]
+    fn last_child_is_the_last_of_the_children(#[case] node: usize, #[case] want: Option<usize>) {
+        let (tree, ids) = linked_tree();
+
+        assert_eq!(tree.last_child(ids[node]), want.map(|at| ids[at]));
     }
 
     #[test]

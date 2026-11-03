@@ -3,6 +3,7 @@
 
 import { releaseCallbacks } from "./callbacks.mts";
 import { native } from "./native.mts";
+import type { NodeLink } from "./native.mts";
 import type { AttributeValue, NodeId, ScrollAlignment, StyleProps, TagName } from "./types.mts";
 
 /**
@@ -121,6 +122,38 @@ export function getAttribute(nodeId: NodeId, key: string): AttributeValue | null
  */
 export function attributeNames(nodeId: NodeId): string[] {
   return native().attributeNames(nodeId);
+}
+
+/**
+ * Reads one link of a node in the host tree.
+ * @param nodeId - the node to start from
+ * @param link - which node to reach
+ * @returns the id of the parent, first child, last child, previous sibling or next sibling, or
+ *   `null` when there is none
+ * @throws {TypeError} when `nodeId` names no node
+ */
+export function linkedNode(nodeId: NodeId, link: NodeLink): NodeId | null {
+  return native().linkedNode(nodeId, link);
+}
+
+/**
+ * Lists the children of a node in the host tree.
+ * @param nodeId - the parent
+ * @returns the ids of the children in order
+ * @throws {TypeError} when `nodeId` names no node
+ */
+export function childNodeIds(nodeId: NodeId): NodeId[] {
+  return native().childNodeIds(nodeId);
+}
+
+/**
+ * Whether the host tree connects a node to the mount container.
+ * @param nodeId - the node to test
+ * @returns `true` for the mount container and the nodes below it
+ * @throws {TypeError} when `nodeId` names no node
+ */
+export function isConnected(nodeId: NodeId): boolean {
+  return native().isConnected(nodeId);
 }
 
 /**

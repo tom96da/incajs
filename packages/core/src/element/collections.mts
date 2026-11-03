@@ -1,7 +1,14 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import type { Attr, HTMLCollectionOf, IncaElement, NamedNodeMap, NodeListOf } from "./types.mts";
+import type {
+  Attr,
+  HTMLCollectionOf,
+  IncaElement,
+  IncaNode,
+  NamedNodeMap,
+  NodeListOf,
+} from "./types.mts";
 
 const ARRAY_INDEX = /^(?:0|[1-9]\d*)$/;
 
@@ -203,16 +210,16 @@ export function namedNodeMapOf(
 }
 
 /**
- * Builds a read-only `NodeList` over a fixed list of elements.
- * @param items - the elements in order; the list keeps its own copy
+ * Builds a live, read-only `NodeList` over the nodes `source` returns. Every read asks `source`
+ * again.
+ * @param source - lists the current nodes in order
  * @returns the list
  */
-export function nodeListOf<T extends IncaElement>(items: readonly T[]): NodeListOf<T> {
-  const fixed = [...items];
+export function nodeListOf<T extends IncaNode>(source: () => readonly T[]): NodeListOf<T> {
   return indexedCollection({
     tag: "NodeList",
     arrayMembers: true,
-    source: () => fixed,
+    source,
     find: () => null,
     named: () => null,
     names: () => [],

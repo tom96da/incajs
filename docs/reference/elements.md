@@ -170,15 +170,12 @@ with the differences below. The listener methods are described in
   the next frame draws it.
 - Only `pointerId` 1 is accepted by `setPointerCapture()`,
   `releasePointerCapture()` and `hasPointerCapture()`.
-- `parent` is the parent element. These tree members are missing:
-  - `childNodes`
-  - `firstChild`
-  - `lastChild`
-  - `previousSibling`
-  - `nextSibling`
+- `parent` is the parent element.
+- The `parentNode` of the mount container is `document`.
 - The objects these members return are not instances of the standard classes,
   so `instanceof` against the class name is `false`:
   - `children` (`HTMLCollection`)
+  - `childNodes` (`NodeList`)
   - `attributes` (`NamedNodeMap`)
   - the items of `attributes` (`Attr`)
   - `querySelectorAll()` (`NodeList`)

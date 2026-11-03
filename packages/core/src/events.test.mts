@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { callbackIdFor, groupOf, registeredGroupCount } from "./callbacks.mts";
 import { addEventListener, blur, click, focus, removeEventListener } from "./events.mts";
 import { releaseListeners } from "./tree.mts";
-import type { HostCallback } from "./native.mts";
+import type { HostCallback, NodeLink } from "./native.mts";
 import type { EventLike } from "./types.mts";
 
 // Ids come from the host, which numbers them in order.
@@ -62,6 +62,9 @@ const native = {
   setPointerCapture: vi.fn<(nodeId: number, pointerId: number) => void>(),
   releasePointerCapture: vi.fn<(nodeId: number, pointerId: number) => void>(),
   hasPointerCapture: vi.fn<(nodeId: number, pointerId: number) => boolean>(),
+  linkedNode: vi.fn<(nodeId: number, link: NodeLink) => number | null>(() => null),
+  childNodeIds: vi.fn<(nodeId: number) => number[]>(() => []),
+  isConnected: vi.fn<(nodeId: number) => boolean>(() => true),
 };
 
 beforeEach(() => {

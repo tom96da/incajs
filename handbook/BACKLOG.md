@@ -97,14 +97,20 @@ A fixed entry is deleted and its ID is never reused.
 
   The element handle lacks:
   - `classList`, `className`, `dataset`, `style`;
-  - the tree members (`firstChild`, `lastChild`, `previousSibling`,
-    `nextSibling`, `childNodes`, the members of text nodes).
+  - the members of text nodes;
+  - the modern mutation methods (`append`, `prepend`, `before`, `after`,
+    `remove`, `replaceWith`, `replaceChildren`);
+  - the classic mutation methods (`appendChild`, `insertBefore`,
+    `removeChild`, `replaceChild`, `cloneNode`);
+  - `compareDocumentPosition()`, `isSameNode()` and `isEqualNode()`;
+  - the HTML parsing members (`innerHTML`, `outerHTML`,
+    `insertAdjacentHTML`, `content` of a `<template>`).
 
   The members it has differ from a browser in the box reads (B-160), the
   `offsetParent` chain (B-161), the scroll members (B-172, B-174, B-216 and
   B-217) and `scroll-margin` (B-176).
 
-  Fix: build the tree members on the JS shadow tree.
+  Fix: build the members on the host tree, in stages.
 
 - **B-036 Reverting a script edit under `--experimental-hmr` sometimes applies nothing**
   `Units: cli · Size: M · Impact: Medium · Status: needs repro`

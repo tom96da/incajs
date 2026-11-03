@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { document } from "./document.mts";
 import { HANDLER_EVENTS } from "./element/eventHandlers.mts";
-import { registerElement, unregisterElement } from "./element/lifecycle.mts";
+import { registerNode, unregisterNode } from "./element/lifecycle.mts";
 import { Document } from "./interfaces.mts";
 import "./targets.mts";
 import type { IncaElement } from "./element/types.mts";
@@ -39,7 +39,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  unregisterElement(5);
+  unregisterNode(5);
 });
 
 describe("document", () => {
@@ -52,8 +52,8 @@ describe("document", () => {
   });
 
   it("reads the focused element as activeElement", () => {
-    const handle = { __node_id: 5 } as unknown as IncaElement;
-    registerElement(handle);
+    const handle = { __node_id: 5, kind: "element" } as unknown as IncaElement;
+    registerNode(handle);
     const states = [];
 
     states.push(document.activeElement);

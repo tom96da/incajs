@@ -7,8 +7,11 @@ import {
   appendChild,
   checkSelector,
   focusedNode,
+  childNodeIds,
   getAttribute,
+  isConnected,
   layoutOf,
+  linkedNode,
   scrollIntoViewNode,
   scrollNode,
   scrollOf,
@@ -20,7 +23,7 @@ import {
   inputValue,
   setInputValue,
 } from "./tree.mts";
-import type { HostCallback } from "./native.mts";
+import type { HostCallback, NodeLink } from "./native.mts";
 import type { EventLike } from "./types.mts";
 
 // Ids come from the host, which numbers them in order.
@@ -76,6 +79,9 @@ const native = {
   setPointerCapture: vi.fn<(nodeId: number, pointerId: number) => void>(),
   releasePointerCapture: vi.fn<(nodeId: number, pointerId: number) => void>(),
   hasPointerCapture: vi.fn<(nodeId: number, pointerId: number) => boolean>(),
+  linkedNode: vi.fn<(nodeId: number, link: NodeLink) => number | null>(() => null),
+  childNodeIds: vi.fn<(nodeId: number) => number[]>(() => []),
+  isConnected: vi.fn<(nodeId: number) => boolean>(() => true),
 };
 
 beforeEach(() => {
@@ -93,6 +99,24 @@ describe("wrapper functions forward to __inca_native__", () => {
   it("removeChild", () => {
     removeChild(1, 2);
     expect(native.removeChild).toHaveBeenCalledWith(1, 2);
+  });
+
+  it("linkedNode", () => {
+    native.linkedNode.mockReturnValueOnce(7);
+    expect(linkedNode(1, "next")).toBe(7);
+    expect(native.linkedNode).toHaveBeenCalledWith(1, "next");
+  });
+
+  it("childNodeIds", () => {
+    native.childNodeIds.mockReturnValueOnce([2, 3]);
+    expect(childNodeIds(1)).toEqual([2, 3]);
+    expect(native.childNodeIds).toHaveBeenCalledWith(1);
+  });
+
+  it("isConnected", () => {
+    native.isConnected.mockReturnValueOnce(false);
+    expect(isConnected(1)).toBe(false);
+    expect(native.isConnected).toHaveBeenCalledWith(1);
   });
 
   it("getAttribute", () => {
