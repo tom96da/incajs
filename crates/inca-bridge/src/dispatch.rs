@@ -28,27 +28,20 @@ use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use gpui::{App, Window};
-use inca_gpui::event_sink::{flags_of, hover_path_difference, with_screen};
-use inca_gpui::{
-    EventPayload, MousePayload, NO_BUTTON, NodeId, PointerSource, buttons_mask, is_disabled_control,
-};
-use inca_jsenv::{Engine, EngineError, ErrorReporter, report_jobs, stderr_reporter};
-use rquickjs::Function;
+use inca_gpui::NodeId;
+use inca_jsenv::{Engine, ErrorReporter, report_jobs, stderr_reporter};
 
-use crate::EventTargetId;
 use crate::bindings::Host;
-use crate::event::{self, Walk};
-use crate::focus::FocusTransition;
+use crate::event;
 
+mod fire;
+mod frame;
+mod hover;
 mod input;
+mod keys;
 mod pointer;
 mod sink;
 mod timers;
-
-/// The payload of the window's `focus` and `blur`.
-const FOCUS_PAYLOAD: EventPayload = EventPayload::Focus {
-    related_target: None,
-};
 
 pub(crate) use inca_gpui::event_sink::spec_of;
 
@@ -57,15 +50,15 @@ pub(crate) use inca_gpui::event_sink::spec_of;
 /// `(event target, event name)`.
 #[derive(Clone)]
 pub struct EventDispatcher {
-    engine: Rc<Engine>,
-    host: Rc<RefCell<Host>>,
+    pub(crate) engine: Rc<Engine>,
+    pub(crate) host: Rc<RefCell<Host>>,
     reporter: ErrorReporter,
-    state: Rc<State>,
+    pub(crate) state: Rc<State>,
 }
 
 /// The mutable state every clone of an [`EventDispatcher`] shares.
 #[derive(Default)]
-struct State {
+pub(crate) struct State {
     /// Whether the `pointerdown` of the press now held was canceled. It suppresses `mousedown`,
     /// `mousemove` and `mouseup` until the `pointerup`.
     pointerdown_canceled: Cell<bool>,
@@ -84,7 +77,7 @@ struct State {
     /// [`EventDispatcher::sync_modifiers`] first reads them.
     held_modifiers: Cell<Option<gpui::Modifiers>>,
     /// The containers `gpui` reports as hovered.
-    hovered: RefCell<BTreeSet<NodeId>>,
+    pub(crate) hovered: RefCell<BTreeSet<NodeId>>,
     /// The deepest hovered container the hover events last reported and its
     /// ancestors, nearest first.
     hover_prev: RefCell<Vec<NodeId>>,
@@ -150,45 +143,6 @@ impl EventDispatcher {
         !host.listeners.is_empty() || host.focus.has_handles()
     }
 
-    /// Returns `payload` with its `buttons` bitmask set to [`Host::held_buttons`] unless the
-    /// event carries the buttons of its own press or release.
-    fn with_held_buttons(&self, event: &str, mut payload: EventPayload) -> EventPayload {
-        let held = self.host.borrow().held_buttons;
-        if let Some(mouse) = payload.mouse_mut().filter(|_| !spec_of(event).own_buttons) {
-            mouse.buttons = held;
-        }
-        payload
-    }
-
-    /// Updates [`Host::held_buttons`] for a raw `"mousedown"` or `"mouseup"` of `button` and
-    /// returns the new value. `button` is `MousePayload`'s own field, a public part of
-    /// `inca-gpui`'s API, so an out-of-range value (only 0..=4 are ever produced by this crate)
-    /// is handled: [`buttons_mask`] maps it to 0.
-    fn update_held_buttons(&self, event: &str, button: u8) -> u8 {
-        let bit = buttons_mask(button);
-        let mut host = self.host.borrow_mut();
-        match event {
-            "mousedown" => host.held_buttons |= bit,
-            "mouseup" => host.held_buttons &= !bit,
-            _ => {}
-        }
-        host.held_buttons
-    }
-
-    /// Returns `payload` with `movementX`/`movementY` set to the delta of the
-    /// raw pointer move being dispatched, for `mousemove`. Every other event
-    /// keeps 0.
-    fn with_movement(&self, mut payload: EventPayload, event: &str) -> EventPayload {
-        if spec_of(event).movement
-            && let EventPayload::Mouse(mouse) = &mut payload
-        {
-            let (movement_x, movement_y) = self.state.current_movement.get().unwrap_or((0.0, 0.0));
-            mouse.movement_x = movement_x;
-            mouse.movement_y = movement_y;
-        }
-        payload
-    }
-
     /// Takes the window's current modifier keys as the baseline for the next
     /// change. With `force` unset, an existing baseline stays.
     pub fn sync_modifiers(&self, window: &Window, force: bool) {
@@ -197,471 +151,10 @@ impl EventDispatcher {
         }
     }
 
-    /// Dispatches `event` along the path of `target`, with `target` as its
-    /// target, and reports what the listeners threw. Returns whether a
-    /// listener prevented the default action and whether the walk entered the
-    /// engine. `cut` lists the nodes whose listeners stay silent.
-    fn walk(
-        &self,
-        target: EventTargetId,
-        event: &str,
-        payload: &EventPayload,
-        cut: &[NodeId],
-    ) -> (bool, bool) {
-        let outcome = event::walk(
-            &self.engine,
-            &self.host,
-            &Walk {
-                name: event,
-                flags: flags_of(event, payload),
-                target,
-                cut,
-                payload,
-                trusted: true,
-            },
-        );
-        // Reported after the walk: a reporter is free to do anything, and
-        // re-entering the engine from inside `Engine::with` panics.
-        self.report_pending();
-        (outcome.canceled, outcome.entered)
-    }
-
     /// Reports listener errors, in the order they happened. Call it outside any
     /// [`Engine::with`].
     pub fn report_pending(&self) {
         report_failures(&self.host, &self.reporter);
-    }
-
-    /// The nodes that receive no pointer `mousedown`, `mouseup`, `click` or
-    /// `dblclick`: a disabled button or input on the path from the mouse target
-    /// or the pressed target of the event, and the ancestors of that control.
-    /// Listeners below the control run. A keyboard click always runs.
-    fn cut_by_disabled_control(
-        &self,
-        event: &str,
-        payload: &EventPayload,
-        cx: &App,
-    ) -> Vec<NodeId> {
-        let keyboard = matches!(
-            payload,
-            EventPayload::Mouse(MousePayload {
-                pointer: Some(PointerSource::Keyboard),
-                ..
-            })
-        );
-        if keyboard || !matches!(event, "mousedown" | "mouseup" | "click" | "dblclick") {
-            return Vec::new();
-        }
-        let host = self.host.borrow();
-        let disabled = |id: &NodeId| host.tree.get(*id).is_some_and(is_disabled_control);
-        let button = match payload {
-            EventPayload::Mouse(mouse) => Some(mouse.button),
-            _ => None,
-        };
-        let pressed = button.and_then(|button| inca_gpui::pressed_target(cx, button));
-        let mut cut = Vec::new();
-        for start in [inca_gpui::mouse_target(cx), pressed].into_iter().flatten() {
-            let path = self.path_from(start);
-            if let Some(button) = path.iter().position(disabled) {
-                cut.extend_from_slice(&path[button..]);
-            }
-        }
-        cut
-    }
-
-    /// The default action of a `mousedown` that reached `target`: the nearest
-    /// node on its path that can take focus takes it, else the window blurs.
-    /// A prevented `mousedown` leaves the focus alone. Every press records
-    /// `target` as where Tab starts while no node is focused.
-    fn focus_on_press(&self, target: NodeId, prevented: bool, window: &mut Window, cx: &mut App) {
-        let path = self.path_from(target);
-        let handle = {
-            let mut host = self.host.borrow_mut();
-            let focusing = if prevented {
-                None
-            } else {
-                path.iter()
-                    .copied()
-                    .find(|&id| host.focus.handle(id).is_some())
-            };
-            let focused = host.focus.focused_node(window, cx);
-            let root = host.root();
-            host.focus
-                .press_start(target, root, focusing.filter(|&node| Some(node) != focused));
-            focusing.and_then(|node| host.focus.handle(node))
-        };
-        if prevented {
-            return;
-        }
-        match handle {
-            Some(handle) => handle.focus(window, cx),
-            None => window.blur(cx),
-        }
-    }
-
-    /// `payload` as a listener sees it: a `related_target` that left the tree
-    /// reads `None`, and the buttons, movement, screen and offset fields are
-    /// set. `target` is the node the event fires at.
-    fn prepare(
-        &self,
-        event: &str,
-        target: NodeId,
-        payload: &EventPayload,
-        window: &Window,
-    ) -> EventPayload {
-        let payload = self.live_related(payload.clone());
-        let payload = self.with_held_buttons(event, payload);
-        let payload = self.with_movement(payload, event);
-        let payload = with_screen(payload, window);
-        self.with_offset(target, payload)
-    }
-
-    /// `payload` with `offsetX`/`offsetY` measured from the padding edge of
-    /// `target` in the last drawn frame, or equal to the client position when
-    /// `target` has no recorded box.
-    fn with_offset(&self, target: NodeId, mut payload: EventPayload) -> EventPayload {
-        let host = self.host.borrow();
-        let layout = host.layout.borrow().get(&target).copied();
-        if let Some(mouse) = payload.mouse_mut() {
-            let (left, top) = layout.map_or((0.0, 0.0), |l| {
-                let border = f32::from(l.border);
-                (
-                    f32::from(l.bounds.origin.x) + border,
-                    f32::from(l.bounds.origin.y) + border,
-                )
-            });
-            mouse.offset_x = mouse.client_x - left;
-            mouse.offset_y = mouse.client_y - top;
-        }
-        payload
-    }
-
-    /// `payload` with a `related_target` that left the tree set to `None`.
-    fn live_related(&self, mut payload: EventPayload) -> EventPayload {
-        let gone = |id: &NodeId| self.host.borrow().tree.get(*id).is_none();
-        match &mut payload {
-            EventPayload::Focus { related_target } => {
-                if related_target.as_ref().is_some_and(gone) {
-                    *related_target = None;
-                }
-            }
-            other => {
-                if let Some(mouse) = other.mouse_mut()
-                    && mouse.related_target.as_ref().is_some_and(gone)
-                {
-                    mouse.related_target = None;
-                }
-            }
-        }
-        payload
-    }
-
-    /// `found` when that node is still in the tree, else `node_id`.
-    fn resolve(&self, found: Option<NodeId>, node_id: NodeId) -> NodeId {
-        let host = self.host.borrow();
-        found
-            .filter(|id| host.tree.get(*id).is_some())
-            .unwrap_or(node_id)
-    }
-
-    /// `target` and its ancestors up to the host root, nearest first.
-    fn path_from(&self, target: NodeId) -> Vec<NodeId> {
-        self.host.borrow().tree.ancestors(target).collect()
-    }
-
-    /// The nearest node that is `a`, `b` or an ancestor of both.
-    fn common_ancestor(&self, a: NodeId, b: NodeId) -> Option<NodeId> {
-        let above_b = self.path_from(b);
-        self.path_from(a).into_iter().find(|i| above_b.contains(i))
-    }
-
-    /// Fires `event` at `start` with `start` as the `target`. The capture
-    /// listeners from `window` down to `start` run first, then the bubble
-    /// listeners of `start` and, while the event bubbles, of each ancestor,
-    /// until one calls `stopPropagation()`. Every listener receives the same
-    /// event object, whose `eventId` is larger than the one of the event
-    /// fired before. Returns whether a listener prevented the default
-    /// action. `preventDefault()` calls from a passive listener are ignored.
-    /// A pointer `click` or `dblclick` skips a disabled button or input and its
-    /// ancestors, as `mousedown` and `mouseup` do. A `start` that left the
-    /// tree fires nothing. When a listener ran, the job queue drains after
-    /// the walk and the window refreshes. A call made while the window draws
-    /// has no refresh to make, and the caller requests the next frame.
-    ///
-    /// While the listeners run, `eventPhase` is 1 on the ancestors of `target`
-    /// during the capture pass, 2 where `currentTarget` is `target` and 3 on
-    /// the ancestors during the bubble pass, and `composedPath()` lists the path,
-    /// from `target` up through its element ancestors, document and window, as the
-    /// objects that `__inca_targets__` gives, or as node ids and the tags
-    /// `"$document"` and `"$window"` when no such global exists. Afterwards
-    /// `currentTarget` is `null`, `eventPhase` is 0 and `composedPath()` is
-    /// empty. A listener that throws is reported, and the remaining listeners
-    /// run. A throw of `__inca_targets__` is reported and no listener runs.
-    pub fn fire(
-        &self,
-        start: NodeId,
-        event: &str,
-        payload: &EventPayload,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> bool {
-        if self.host.borrow().tree.get(start).is_none() {
-            return false;
-        }
-        self.fire_inner(start, event, payload, window, cx)
-    }
-
-    fn fire_inner(
-        &self,
-        start: NodeId,
-        event: &str,
-        payload: &EventPayload,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> bool {
-        self.host.borrow_mut().focus.observe(window, cx);
-        let payload = &self.prepare(event, start, payload, window);
-        let cut = self.cut_by_disabled_control(event, payload, cx);
-        let (canceled, entered) = self.walk(EventTargetId::Node(start), event, payload, &cut);
-        if entered {
-            self.drain_observed(window);
-        }
-        canceled
-    }
-
-    fn key_target(&self, window: &mut Window, cx: &mut App) -> NodeId {
-        let (root, focused) = {
-            let host = self.host.borrow();
-            (host.root(), host.focus.focused_node(window, cx))
-        };
-        self.resolve(focused, root)
-    }
-
-    /// Runs the work a window owes before it draws a frame: syncs the
-    /// modifier keys, applies a requested focus and fires the resulting
-    /// `focus`/`blur` events, frees the nodes nothing reaches, reveals the
-    /// focused node and fires pending `scroll` events. Call it first in the
-    /// window's render.
-    pub fn begin_frame(&self, window: &mut Window, cx: &mut App) {
-        self.sync_modifiers(window, false);
-        let transitions = {
-            let host = &mut *self.host.borrow_mut();
-            host.focus.apply_pending(&host.tree, window, cx)
-        };
-        for transition in &transitions {
-            self.input_focus_moved(transition, window, cx);
-            transition.dispatch(self, window, cx);
-        }
-        self.release_orphans(window, cx);
-        self.host.borrow_mut().reveal_focus(window);
-        self.fire_scrolls(window, cx);
-    }
-
-    /// Frees the orphans of the tree and tells the script through the global
-    /// `__inca_released__(nodeIds, callbackIds)`. The global is looked up per
-    /// call and skipped when it is not a function. A thrown error is
-    /// reported and the frame goes on. Nodes the hook leaves orphaned wait
-    /// for the next frame, which this requests.
-    fn release_orphans(&self, window: &mut Window, cx: &mut App) {
-        let swept = self.host.borrow_mut().sweep_orphans();
-        let Some((nodes, callbacks)) = swept else {
-            return;
-        };
-        self.host.borrow_mut().focus.observe(window, cx);
-        let host = &self.host;
-        let entered = self.engine.with(|ctx| {
-            let Ok(hook) = ctx.globals().get::<_, Function>("__inca_released__") else {
-                return false;
-            };
-            let called = event::array_of(&ctx, nodes).and_then(|nodes| {
-                let callbacks = event::array_of(&ctx, callbacks)?;
-                hook.call::<_, ()>((nodes, callbacks))
-            });
-            if let Err(err) = called {
-                host.borrow_mut()
-                    .failures
-                    .push(EngineError::capture(&ctx, &err));
-            }
-            true
-        });
-        if entered {
-            self.drain_observed(window);
-        }
-        // The requests end when a frame leaves no orphan.
-        if self.host.borrow().tree.has_orphans() {
-            window.request_animation_frame();
-        }
-    }
-
-    /// Handles the window gaining (`active` true) or losing focus. The
-    /// modifier keys are re-read, a lost window clears the held presses, and
-    /// the focused node receives `focus` or `blur` while keeping its focus,
-    /// and an edited focused `input` fires `change` before its `blur`.
-    /// `window` receives `focus` before the node and `blur` after it.
-    pub fn window_activated(&self, active: bool, window: &mut Window, cx: &mut App) {
-        self.sync_modifiers(window, true);
-        if !active {
-            inca_gpui::clear_presses(cx);
-            self.reset_pointer(window, cx);
-        }
-        self.host.borrow_mut().focus.set_window_blurred(!active);
-        let focused = self.host.borrow().focus.focused_node(window, cx);
-        if active {
-            self.fire_at_global(EventTargetId::Window, "focus", &FOCUS_PAYLOAD, window, cx);
-        }
-        if let Some(node) = focused {
-            if !active {
-                self.input_window_blur(node, window, cx);
-            }
-            FocusTransition::window_activation(node, active).dispatch(self, window, cx);
-        }
-        if !active {
-            self.fire_at_global(EventTargetId::Window, "blur", &FOCUS_PAYLOAD, window, cx);
-        }
-    }
-
-    /// Ends the pointer capture with `lostpointercapture`, then forgets the held buttons and a
-    /// canceled `pointerdown`. The release of a button the window never sees would leave them set.
-    fn reset_pointer(&self, window: &mut Window, cx: &mut App) {
-        self.host.borrow_mut().capture_pending = None;
-        let payload =
-            EventPayload::Mouse(MousePayload::at(gpui::Point::default(), window.modifiers()));
-        self.process_capture(&payload, NO_BUTTON, window, cx);
-        self.state.pointerdown_canceled.set(false);
-        self.state.input_drag.set(None);
-        let mut host = self.host.borrow_mut();
-        host.held_buttons = 0;
-        host.capture_pending = None;
-        host.capture_active = None;
-    }
-
-    /// Fires `event` at `document` or `window` alone, with no node on its path.
-    fn fire_at_global(
-        &self,
-        target: EventTargetId,
-        event: &str,
-        payload: &EventPayload,
-        window: &mut Window,
-        cx: &mut App,
-    ) {
-        self.host.borrow_mut().focus.observe(window, cx);
-        let payload = self.with_held_buttons(event, payload.clone());
-        let payload = with_screen(payload, window);
-        let (_, entered) = self.walk(target, event, &payload, &[]);
-        if entered {
-            self.drain_observed(window);
-        }
-    }
-
-    /// Fires `scroll` at each container whose offset changed since the last
-    /// call and that a `scroll` listener reaches. A script write and a wheel
-    /// scroll each fire once. Only the containers a listener reaches run JS.
-    pub fn fire_scrolls(&self, window: &mut Window, cx: &mut App) {
-        let moved = self.host.borrow_mut().scrolled_nodes();
-        let any = !moved.is_empty();
-        for node in moved {
-            self.fire(node, "scroll", &EventPayload::None, window, cx);
-        }
-        // A refresh requested while drawing has no effect, so a listener's own
-        // writes need the next frame.
-        if any {
-            window.request_animation_frame();
-        }
-    }
-
-    /// The deepest container `gpui` reports as hovered. Containers that left
-    /// the tree drop out of the set.
-    fn deepest_hovered(&self) -> Option<NodeId> {
-        let mut set = self.state.hovered.borrow_mut();
-        set.retain(|id| self.host.borrow().tree.get(*id).is_some());
-        set.iter()
-            .copied()
-            .max_by_key(|id| (self.path_from(*id).len(), *id))
-    }
-
-    /// Queues the hover report for the end of the update, once. It reports the
-    /// hovered set unless the update already reported its deepest container.
-    fn schedule_hover_report(&self, window: &mut Window, cx: &mut App) {
-        if self.state.hover_scheduled.replace(true) {
-            return;
-        }
-        let this = self.clone();
-        window.defer(cx, move |window, cx| {
-            this.state.hover_scheduled.set(false);
-            if !this.state.hover_settled.replace(false) {
-                this.report_hover(this.deepest_hovered(), window, cx);
-            }
-        });
-    }
-
-    /// [`Self::report_hover_with`] for a move, which is about no button.
-    fn report_hover(&self, next: Option<NodeId>, window: &mut Window, cx: &mut App) {
-        self.report_hover_with(next, NO_BUTTON, window, cx);
-    }
-
-    /// Fires the hover events for the pointer moving from the deepest
-    /// container reported last time to the one under it now, or to the capturing
-    /// node while a capture is active. The pointer events come first, then the
-    /// mouse ones. Each group is `out` at the old container, `leave` at each
-    /// container left (innermost first), `over` at the new one and `enter` at
-    /// each container entered (outermost first). The pointer events are about
-    /// `button`.
-    fn report_hover_with(
-        &self,
-        physical: Option<NodeId>,
-        button: u8,
-        window: &mut Window,
-        cx: &mut App,
-    ) {
-        let mouse = MousePayload::at(window.mouse_position(), window.modifiers());
-        self.process_capture(&EventPayload::Mouse(mouse), button, window, cx);
-        let next = self.hover_target(physical);
-        let next_path = next.map(|id| self.path_from(id)).unwrap_or_default();
-        // A removed container is replaced by its nearest live ancestor.
-        let old_path = self.state.hover_prev.replace(next_path.clone());
-        // A container is live while it still hangs below the old path's top.
-        let top = old_path.last().copied();
-        let live = |id: &NodeId| self.path_from(*id).last().copied() == top;
-        let removed = old_path.first().is_some_and(|id| !live(id));
-        let old_path: Vec<_> = old_path.into_iter().skip_while(|id| !live(id)).collect();
-        let prev = old_path.first().copied();
-        if prev == next {
-            return;
-        }
-        let (leave, enter) = hover_path_difference(&old_path, &next_path);
-        let with = |related_target| {
-            EventPayload::Mouse(MousePayload {
-                related_target,
-                ..mouse
-            })
-        };
-        let pointer = |related| pointer::pointer_payload(&with(related), button);
-        // A removed container receives no `out`.
-        let old = prev.filter(|_| !removed);
-        if let Some(old) = old {
-            self.fire(old, "pointerout", &pointer(next), window, cx);
-        }
-        for &id in &leave {
-            self.fire(id, "pointerleave", &pointer(next), window, cx);
-        }
-        if let Some(new) = next {
-            self.fire(new, "pointerover", &pointer(prev), window, cx);
-        }
-        for &id in &enter {
-            self.fire(id, "pointerenter", &pointer(prev), window, cx);
-        }
-        if let Some(old) = old {
-            self.fire(old, "mouseout", &with(next), window, cx);
-        }
-        for id in leave {
-            self.fire(id, "mouseleave", &with(next), window, cx);
-        }
-        if let Some(new) = next {
-            self.fire(new, "mouseover", &with(prev), window, cx);
-        }
-        for id in enter {
-            self.fire(id, "mouseenter", &with(prev), window, cx);
-        }
     }
 
     /// Records the node the window focuses, so `focusedNode()` in JS that runs
@@ -696,4 +189,189 @@ pub fn drain_jobs_and_refresh(engine: &Engine, reporter: &ErrorReporter, window:
 }
 
 #[cfg(test)]
-mod tests;
+mod tests {
+    #![allow(clippy::unwrap_used)]
+    use crate::tests::{dispatcher_with_engine, listen};
+    use gpui::TestAppContext;
+    use inca_gpui::EventPayload;
+
+    #[gpui::test]
+    fn a_stale_callback_id_is_skipped_rather_than_reported(cx: &mut TestAppContext) {
+        let (dispatcher, host, reported) = dispatcher_with_engine();
+        let node_id = host.borrow_mut().tree.create_node("div").unwrap();
+        dispatcher
+            .engine
+            .eval::<()>(&format!(
+                "__inca_native__.addEventListener({node_id}, 'click');"
+            ))
+            .unwrap();
+
+        // The listener has no function stored under its id.
+        let cx = cx.add_empty_window();
+        cx.update(|window, cx| {
+            dispatcher.fire(node_id, "click", &EventPayload::None, window, cx);
+        });
+
+        assert!(
+            reported.borrow().is_empty(),
+            "a registration outliving its function is not a fault to report"
+        );
+    }
+
+    #[gpui::test]
+    fn drain_jobs_and_refresh_runs_what_a_microtask_only_scheduled(cx: &mut TestAppContext) {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        dispatcher
+            .engine
+            .eval::<()>(
+                "globalThis.ran = false; Promise.resolve().then(() => globalThis.ran = true);",
+            )
+            .unwrap();
+        assert!(
+            !dispatcher.engine.eval::<bool>("globalThis.ran;").unwrap(),
+            "the microtask must still be pending before the drain"
+        );
+
+        let cx = cx.add_empty_window();
+        cx.update(|window, cx| dispatcher.drain_jobs_and_refresh(window, cx));
+
+        assert!(dispatcher.engine.eval::<bool>("globalThis.ran;").unwrap());
+    }
+
+    #[gpui::test]
+    fn a_pending_job_waits_when_no_listener_ran(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node_id = host.borrow_mut().tree.create_node("div").unwrap();
+        dispatcher
+            .engine
+            .eval::<()>(
+                "globalThis.ran = false; Promise.resolve().then(() => globalThis.ran = true);",
+            )
+            .unwrap();
+
+        let cx = cx.add_empty_window();
+        cx.update(|window, cx| {
+            dispatcher.fire(node_id, "click", &EventPayload::None, window, cx);
+        });
+
+        assert!(
+            !dispatcher.engine.eval::<bool>("globalThis.ran;").unwrap(),
+            "an event nobody hears neither enters the engine nor drains it"
+        );
+    }
+
+    #[gpui::test]
+    fn a_throwing_callback_is_reported(cx: &mut TestAppContext) {
+        let (dispatcher, host, reported) = dispatcher_with_engine();
+        let node_id = host.borrow_mut().tree.create_node("div").unwrap();
+        listen(
+            &dispatcher,
+            node_id,
+            "click",
+            "() => { throw new Error('boom'); }",
+        );
+
+        let cx = cx.add_empty_window();
+        cx.update(|window, cx| {
+            dispatcher.fire(node_id, "click", &EventPayload::None, window, cx);
+        });
+
+        let reported = reported.borrow();
+        assert_eq!(reported.len(), 1);
+        assert_eq!(reported[0].message(), "Error: boom");
+        assert!(reported[0].stack().is_some());
+    }
+
+    #[gpui::test]
+    fn one_throwing_callback_does_not_stop_the_others(cx: &mut TestAppContext) {
+        let (dispatcher, host, reported) = dispatcher_with_engine();
+        let node_id = host.borrow_mut().tree.create_node("div").unwrap();
+        dispatcher
+            .engine
+            .eval::<()>("globalThis.ran = false;")
+            .unwrap();
+        listen(
+            &dispatcher,
+            node_id,
+            "click",
+            "() => { throw new Error('boom'); }",
+        );
+        listen(
+            &dispatcher,
+            node_id,
+            "click",
+            "() => { globalThis.ran = true; }",
+        );
+
+        let cx = cx.add_empty_window();
+        cx.update(|window, cx| {
+            dispatcher.fire(node_id, "click", &EventPayload::None, window, cx);
+        });
+
+        assert_eq!(reported.borrow().len(), 1);
+        assert!(dispatcher.engine.eval::<bool>("globalThis.ran;").unwrap());
+    }
+
+    #[gpui::test]
+    fn listener_errors_of_a_dispatch_in_a_job_are_reported_when_the_jobs_drain(
+        cx: &mut TestAppContext,
+    ) {
+        let (dispatcher, host, reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        listen(
+            &dispatcher,
+            node,
+            "ping",
+            "() => { throw new Error('boom'); }",
+        );
+        dispatcher
+            .engine
+            .eval::<()>(&format!(
+                r"
+                Promise.resolve().then(() =>
+                    __inca_native__.dispatchEvent({node}, new Event('ping'))
+                );
+                "
+            ))
+            .unwrap();
+        let cx = cx.add_empty_window();
+
+        cx.update(|window, cx| dispatcher.drain_jobs_and_refresh(window, cx));
+
+        assert_eq!(reported.borrow().len(), 1);
+        assert_eq!(reported.borrow()[0].message(), "Error: boom");
+    }
+
+    #[gpui::test]
+    fn drain_jobs_and_refresh_shows_js_the_focus_the_window_applied(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let root = host.borrow().root();
+        host.borrow_mut().tree.append_child(root, node).unwrap();
+        host.borrow_mut()
+            .tree
+            .set_attribute(node, "tabindex", inca_gpui::AttributeValue::from("0"))
+            .unwrap();
+        let cx = cx.add_empty_window();
+        cx.update(|window, cx| {
+            let mut host = host.borrow_mut();
+            let host = &mut *host;
+            host.focus.mark_tab_dirty(node);
+            let _ = host.focus.apply_pending(&host.tree, window, cx);
+            host.focus.handle(node).unwrap().focus(window, cx);
+        });
+        dispatcher
+            .engine
+            .eval::<()>(
+                "var seen; Promise.resolve().then(() => { seen = __inca_native__.focusedNode(); });",
+            )
+            .unwrap();
+
+        cx.update(|window, cx| dispatcher.drain_jobs_and_refresh(window, cx));
+
+        assert_eq!(
+            dispatcher.engine.eval::<u64>("seen").unwrap(),
+            u64::from(node)
+        );
+    }
+}

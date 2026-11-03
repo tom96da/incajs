@@ -4,14 +4,22 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use inca_gpui::{EventPayload, MousePayload, NodeId};
+use inca_gpui::{EventPayload, NodeId};
 use inca_jsenv::{Engine, EngineError};
-use rquickjs::{Class, Ctx, Exception, Function, Object, Result as JsResult, Value};
+use rquickjs::{Ctx, Object, Result as JsResult};
 
 use super::construct::create;
-use super::{Flags, IncaEvent, targets_of};
+use super::{Flags, IncaEvent};
 use crate::EventTargetId;
-use crate::bindings::{Host, Listener};
+use crate::bindings::Host;
+use listeners::deliver;
+
+mod listeners;
+mod script;
+mod targets;
+
+pub(crate) use script::{click, dispatch_event};
+pub(super) use targets::targets_of;
 
 /// What one walk needs to know.
 pub(crate) struct Walk<'a> {
@@ -94,7 +102,7 @@ pub(crate) fn listened(
         })
 }
 
-fn next_event_id(host: &Rc<RefCell<Host>>) -> u64 {
+pub(super) fn next_event_id(host: &Rc<RefCell<Host>>) -> u64 {
     let mut host = host.borrow_mut();
     host.last_event_id += 1;
     host.last_event_id
@@ -119,7 +127,7 @@ pub(crate) fn walk(engine: &Engine, host: &Rc<RefCell<Host>>, walk: &Walk<'_>) -
 
 /// A walk of an event a script starts: no node is cut and the event is
 /// untrusted.
-fn script_walk<'a>(
+pub(super) fn script_walk<'a>(
     name: &'a str,
     flags: Flags,
     target: EventTargetId,
@@ -135,7 +143,7 @@ fn script_walk<'a>(
     }
 }
 
-fn run(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, walk: &Walk<'_>, id: u64) -> Outcome {
+pub(super) fn run(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, walk: &Walk<'_>, id: u64) -> Outcome {
     let Ok(callbacks) = ctx.globals().get::<_, Object>("__inca_callbacks__") else {
         return Outcome::default();
     };
@@ -155,90 +163,6 @@ fn run(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, walk: &Walk<'_>, id: u64) -> Out
     }
 }
 
-/// Calls the listeners along `path` with `event`, then leaves the event
-/// idle. Returns whether it ended canceled.
-fn deliver<'js>(
-    ctx: &Ctx<'js>,
-    host: &Rc<RefCell<Host>>,
-    walk: &Walk<'_>,
-    path: &[EventTargetId],
-    callbacks: &Object<'js>,
-    event: &Class<'js, IncaEvent<'js>>,
-) -> bool {
-    let record = event.borrow();
-    let state = &record.state;
-    let down = (0..path.len()).rev().map(|index| (true, index));
-    let up = (0..bubble_targets(walk.flags, path).len()).map(|index| (false, index));
-    for (capture, index) in down.chain(up) {
-        if state.stop.get() {
-            break;
-        }
-        let target = path[index];
-        if is_cut(target, walk.cut) {
-            continue;
-        }
-        let listeners: Vec<Listener> = host
-            .borrow()
-            .listeners
-            .listeners_for(target, walk.name)
-            .iter()
-            .filter(|l| l.capture == capture)
-            .copied()
-            .collect();
-        if listeners.is_empty() {
-            continue;
-        }
-        let phase = match (index == 0, capture) {
-            (true, _) => 2,
-            (false, true) => 1,
-            (false, false) => 3,
-        };
-        state.current.set(Some(index));
-        state.phase.set(phase);
-        for listener in listeners {
-            if state.immediate.get() {
-                break;
-            }
-            // The full value is compared. Flags change only through remove, then add.
-            if !host
-                .borrow()
-                .listeners
-                .listeners_for(target, walk.name)
-                .contains(&listener)
-            {
-                continue;
-            }
-            let Ok(callback) = callbacks.get::<_, Function>(listener.callback) else {
-                continue;
-            };
-            state.passive.set(listener.passive);
-            let called = callback.call::<_, ()>((event.clone(),));
-            note(ctx, host, called);
-        }
-    }
-    let canceled = state.canceled.get();
-    end_dispatch(&record);
-    canceled
-}
-
-/// Leaves `event` as a dispatch leaves it: no walk state, no stop flags,
-/// no path.
-fn end_dispatch(event: &IncaEvent<'_>) {
-    let state = &event.state;
-    for flag in [
-        &state.dispatching,
-        &state.passive,
-        &state.stop,
-        &state.immediate,
-    ] {
-        flag.set(false);
-    }
-    state.current.set(None);
-    state.phase.set(0);
-    // A kept event keeps only target, relatedTarget and detail alive.
-    drop(event.held.path.take());
-}
-
 /// Files a thrown error of `result` in `Host::failures`, where the dispatcher
 /// reports listener errors in the order they happened.
 fn note(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, result: JsResult<()>) {
@@ -249,84 +173,332 @@ fn note(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, result: JsResult<()>) {
     }
 }
 
-/// Dispatches a script-built `event` at `target` and returns `false` when a
-/// listener canceled it. Listener errors go to `Host::failures`.
-///
-/// # Errors
-///
-/// Throws a `TypeError` when `event` is not an event object of this host, and
-/// an `InvalidStateError` while `event` is being dispatched.
-/// Throws what `__inca_targets__` throws.
-pub(crate) fn dispatch_event<'js>(
-    ctx: &Ctx<'js>,
-    host: &Rc<RefCell<Host>>,
-    target: EventTargetId,
-    event: &Value<'js>,
-) -> JsResult<bool> {
-    let event = Class::<IncaEvent>::from_value(event).map_err(|_| {
-        Exception::throw_type(
-            ctx,
-            concat!(
-                "dispatchEvent needs an event object, ",
-                "so pass one made with new Event(type)"
-            ),
-        )
-    })?;
-    let record = event.borrow();
-    let state = &record.state;
-    if state.dispatching.get() {
-        return Err(Exception::throw_dom(
-            ctx,
-            "InvalidStateError",
-            concat!(
-                "the event is already being dispatched, ",
-                "so dispatch it again after its listeners return"
-            ),
-        ));
-    }
-    let path = path_from(&host.borrow(), target);
-    let name = state.name.borrow().clone();
-    let walk = script_walk(&name, state.flags.get(), target, &EventPayload::None);
-    let targets = targets_of(ctx, &path)?;
-    drop(record.held.target.replace(targets.first().cloned()));
-    state.trusted.set(false);
-    if listened(&host.borrow(), walk.name, walk.flags, target, walk.cut) {
-        let callbacks = ctx
-            .globals()
-            .get::<_, Object>("__inca_callbacks__")
-            .or_else(|_| Object::new(ctx.clone()))?;
-        state.event_id.set(Some(next_event_id(host)));
-        drop(record.held.path.replace(targets));
-        // Last, so a failure above leaves the event free to dispatch again.
-        state.dispatching.set(true);
-        deliver(ctx, host, &walk, &path, &callbacks, &event);
-    } else {
-        end_dispatch(&record);
-    }
-    Ok(!state.canceled.get())
-}
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+    use super::*;
+    use crate::event::Flags;
+    use crate::tests::{
+        dispatcher_with_engine, eval_json, fire_and_read, listen, listen_global, listen_with,
+        node_under_root, read_out, tagged, tree_of_three,
+    };
+    use crate::{EventTargetId, event};
+    use gpui::TestAppContext;
+    use inca_gpui::EventPayload;
+    use rstest::rstest;
 
-/// Runs an untrusted `click` at `target`. A disabled button or input, a node that left the tree
-/// and a node whose own click is still running ignore the call.
-pub(crate) fn click(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, target: NodeId) {
-    {
-        let mut host = host.borrow_mut();
-        let Some(node) = host.tree.get(target) else {
-            return;
-        };
-        if inca_gpui::is_disabled_control(node) || !host.clicking.insert(target) {
-            return;
+    #[gpui::test]
+    fn one_event_object_reaches_every_node(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [outer, parent, child] = tree_of_three(&host);
+        for node in [child, parent, outer] {
+            listen(
+                &dispatcher,
+                node,
+                "click",
+                r"
+                (e) => { globalThis.first ??= e; e.seen = (e.seen ?? 0) + 1;
+                out.push([e === first, e.seen]); }
+                ",
+            );
         }
+
+        let out = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
+
+        assert_eq!(out, serde_json::json!([[true, 1], [true, 2], [true, 3]]));
     }
-    let payload = EventPayload::Mouse(MousePayload::keyboard_click(gpui::Modifiers::none()));
-    let walk = script_walk(
-        "click",
-        crate::dispatch::spec_of("click").flags,
-        EventTargetId::Node(target),
-        &payload,
-    );
-    if listened(&host.borrow(), walk.name, walk.flags, walk.target, walk.cut) {
-        run(ctx, host, &walk, next_event_id(host));
+
+    #[gpui::test]
+    fn after_dispatch_current_target_is_null_phase_0_and_stop_flags_clear(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, _, child] = tree_of_three(&host);
+        listen(
+            &dispatcher,
+            child,
+            "click",
+            r"
+            (e) => {
+                globalThis.kept = e; e.stopPropagation(); e.preventDefault();
+                out.push([e.currentTarget, e.eventPhase, e.cancelBubble]);
+            }
+            ",
+        );
+        let during = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
+        assert_eq!(during, serde_json::json!([[child, 2, true]]));
+
+        let after = dispatcher
+            .engine
+            .eval::<String>(
+                r"
+                JSON.stringify([kept.currentTarget, kept.eventPhase, kept.cancelBubble,
+                kept.defaultPrevented, kept.composedPath().length])
+                ",
+            )
+            .unwrap();
+        assert_eq!(after, "[null,0,false,true,0]");
     }
-    host.borrow_mut().clicking.remove(&target);
+
+    #[gpui::test]
+    fn the_path_is_fixed_when_dispatch_starts(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [outer, parent, child] = tree_of_three(&host);
+        for node in [child, parent, outer] {
+            listen(
+                &dispatcher,
+                node,
+                "click",
+                &format!(
+                    r"
+                    (e) => {{
+                        out.push([e.currentTarget, e.composedPath()]);
+                        if (e.currentTarget === {child}) __inca_native__.removeChild({parent}, {child});
+                    }}
+                    "
+                ),
+            );
+        }
+
+        let out = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
+
+        let path = serde_json::json!([child, parent, outer]);
+        assert_eq!(
+            out,
+            serde_json::json!([[child, path], [parent, path], [outer, path]])
+        );
+    }
+
+    #[gpui::test]
+    fn each_dispatch_takes_the_next_event_id_and_an_unheard_one_takes_none(
+        cx: &mut TestAppContext,
+    ) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, parent, child] = tree_of_three(&host);
+        let record = "(e) => out.push([e.type, e.eventId])";
+        listen(&dispatcher, parent, "click", record);
+        listen(&dispatcher, parent, "focusin", record);
+        let cx = cx.add_empty_window();
+
+        cx.update(|window, cx| {
+            let none = EventPayload::None;
+            dispatcher.fire(child, "click", &none, window, cx);
+            dispatcher.fire(child, "keydown", &none, window, cx);
+            dispatcher.fire(child, "click", &none, window, cx);
+            dispatcher.fire(child, "focusin", &none, window, cx);
+        });
+
+        let out = dispatcher
+            .engine
+            .eval::<String>("JSON.stringify(out)")
+            .unwrap();
+        assert_eq!(out, r#"[["click",1],["click",2],["focusin",3]]"#);
+    }
+
+    #[gpui::test]
+    fn capture_listeners_run_root_down_before_the_bubble_listeners_run_target_up(
+        cx: &mut TestAppContext,
+    ) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [outer, parent, child] = tree_of_three(&host);
+        // Bubble listeners register first, so the walk order differs from the registration order.
+        for (name, node, capture) in [
+            ("child", child, false),
+            ("parent", parent, false),
+            ("outer", outer, false),
+            ("child-capture", child, true),
+            ("parent-capture", parent, true),
+            ("outer-capture", outer, true),
+        ] {
+            listen_with(&dispatcher, node, "click", (capture, false), &tagged(name));
+        }
+
+        let out = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
+
+        assert_eq!(
+            out,
+            serde_json::json!([
+                ["outer-capture", outer, 1],
+                ["parent-capture", parent, 1],
+                ["child-capture", child, 2],
+                ["child", child, 2],
+                ["parent", parent, 3],
+                ["outer", outer, 3],
+            ])
+        );
+    }
+
+    #[gpui::test]
+    fn capture_listeners_of_one_node_run_apart_from_its_bubble_listeners(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, _, child] = tree_of_three(&host);
+        for (name, capture) in [("b0", false), ("c1", true), ("b2", false), ("c3", true)] {
+            listen_with(&dispatcher, child, "click", (capture, false), &tagged(name));
+        }
+
+        let out = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
+
+        let names: Vec<_> = out
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r[0].as_str().unwrap())
+            .collect();
+        assert_eq!(names, ["c1", "c3", "b0", "b2"]);
+    }
+
+    #[gpui::test]
+    fn an_event_that_does_not_bubble_still_captures_through_its_ancestors(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [outer, parent, child] = tree_of_three(&host);
+        for (name, node, capture) in [
+            ("outer", outer, true),
+            ("outer-bubble", outer, false),
+            ("parent", parent, true),
+            ("parent-bubble", parent, false),
+            ("child", child, true),
+            ("child-bubble", child, false),
+        ] {
+            listen_with(&dispatcher, node, "focus", (capture, false), &tagged(name));
+        }
+
+        let out = fire_and_read(cx, &dispatcher, child, "focus", &EventPayload::None);
+
+        assert_eq!(
+            out,
+            serde_json::json!([
+                ["outer", outer, 1],
+                ["parent", parent, 1],
+                ["child", child, 2],
+                ["child-bubble", child, 2],
+            ])
+        );
+    }
+
+    #[gpui::test]
+    fn the_cut_nodes_are_skipped_in_both_passes(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [outer, parent, child] = tree_of_three(&host);
+        for (name, node, capture) in [
+            ("outer-capture", outer, true),
+            ("parent-capture", parent, true),
+            ("child-capture", child, true),
+            ("child", child, false),
+            ("parent", parent, false),
+            ("outer", outer, false),
+        ] {
+            listen_with(&dispatcher, node, "click", (capture, false), &tagged(name));
+        }
+        let cx = cx.add_empty_window();
+
+        cx.update(|_, _| {
+            event::walk(
+                &dispatcher.engine,
+                &dispatcher.host,
+                &Walk {
+                    name: "click",
+                    flags: Flags::ALL,
+                    target: EventTargetId::Node(child),
+                    cut: &[parent, outer],
+                    payload: &EventPayload::None,
+                    trusted: true,
+                },
+            );
+        });
+
+        let out = dispatcher
+            .engine
+            .eval::<String>("JSON.stringify(out)")
+            .unwrap();
+        assert_eq!(
+            out,
+            serde_json::json!([["child-capture", child, 2], ["child", child, 2]]).to_string()
+        );
+    }
+
+    #[gpui::test]
+    fn a_cut_silences_document_and_window(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let outer = node_under_root(&host);
+        let child = host.borrow_mut().tree.create_node("div").unwrap();
+        host.borrow_mut().tree.append_child(outer, child).unwrap();
+        listen(&dispatcher, child, "click", "() => out.push('child')");
+        for (tag, capture) in [
+            ("$document", true),
+            ("$document", false),
+            ("$window", false),
+        ] {
+            listen_global(
+                &dispatcher,
+                tag,
+                "click",
+                capture,
+                "() => out.push('global')",
+            );
+        }
+        let cx = cx.add_empty_window();
+
+        cx.update(|_, _| {
+            event::walk(
+                &dispatcher.engine,
+                &dispatcher.host,
+                &Walk {
+                    name: "click",
+                    flags: Flags::ALL,
+                    target: EventTargetId::Node(child),
+                    cut: &[outer],
+                    payload: &EventPayload::None,
+                    trusted: true,
+                },
+            );
+        });
+
+        assert_eq!(read_out(&dispatcher), serde_json::json!(["child"]));
+    }
+
+    #[rstest]
+    #[case::stop_propagation("e.stopPropagation();")]
+    #[case::stop_immediate_propagation("e.stopImmediatePropagation();")]
+    #[case::cancel_bubble("e.cancelBubble = true;")]
+    fn a_stop_requested_before_dispatch_runs_no_listener(#[case] stop: &str) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        listen(&dispatcher, node, "ping", "() => out.push('ran')");
+
+        let got = eval_json(
+            &dispatcher,
+            &format!(
+                r"
+                (() => {{
+                    const e = new Event('ping');
+                    {stop}
+                    const returned = __inca_native__.dispatchEvent({node}, e);
+                    return [returned, out];
+                }})()
+                "
+            ),
+        );
+
+        assert_eq!(got, serde_json::json!([true, []]));
+    }
+
+    #[test]
+    fn a_dispatch_no_listener_hears_clears_the_stop_flags() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+
+        let got = eval_json(
+            &dispatcher,
+            &format!(
+                r"
+                (() => {{
+                    const e = new Event('ping');
+                    e.stopPropagation();
+                    __inca_native__.dispatchEvent({node}, e);
+                    return e.cancelBubble;
+                }})()
+                "
+            ),
+        );
+
+        assert_eq!(got, serde_json::json!(false));
+    }
 }

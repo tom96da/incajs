@@ -38,9 +38,8 @@ mod record;
 mod walk;
 
 use record::{Held, IncaEvent, State};
+use walk::targets_of;
 pub(crate) use walk::{Walk, click, dispatch_event, listened, walk};
-
-use crate::EventTargetId;
 
 /// The vault key of the event store: the prototype of each kind of event
 /// under the kind, and the `isTrusted` getter.
@@ -289,22 +288,6 @@ fn other_kind(ctx: &Ctx<'_>, member: &str) -> rquickjs::Error {
     )
 }
 
-/// What stands for each of `targets`: the entries of the array that the
-/// global `__inca_targets__` returns for them, or the targets themselves when
-/// the global is not a function.
-///
-/// # Errors
-///
-/// Throws what the global throws, and a `TypeError` when it returns no array.
-fn targets_of<'js>(ctx: &Ctx<'js>, targets: &[EventTargetId]) -> JsResult<Vec<Value<'js>>> {
-    let given = array_of(ctx, targets.iter().copied())?;
-    let Ok(hook) = ctx.globals().get::<_, Function>("__inca_targets__") else {
-        return (0..targets.len()).map(|index| given.get(index)).collect();
-    };
-    let found: Array = hook.call((given,))?;
-    (0..targets.len()).map(|index| found.get(index)).collect()
-}
-
 /// A new array of `items`. Each entry is defined, so no index setter on
 /// `Array.prototype` or `Object.prototype` runs.
 pub(crate) fn array_of<'js, T: IntoJs<'js>>(
@@ -320,4 +303,240 @@ pub(crate) fn array_of<'js, T: IntoJs<'js>>(
         )?;
     }
     Ok(array)
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+    use crate::tests::{dispatcher_with_engine, eval_json, fire_and_read, listen, tree_of_three};
+    use gpui::TestAppContext;
+    use inca_gpui::EventPayload;
+
+    #[test]
+    fn init_event_sets_the_type_and_the_flags() {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+
+        let got = eval_json(
+            &dispatcher,
+            r"
+            (() => {
+                const e = new Event('a');
+                e.initEvent(5, 1, 0);
+                return [e.type, e.bubbles, e.cancelable];
+            })()
+            ",
+        );
+
+        assert_eq!(got, serde_json::json!(["5", true, false]));
+    }
+
+    #[test]
+    fn init_event_defaults_the_flags_to_false() {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+
+        let got = eval_json(
+            &dispatcher,
+            r"
+            (() => {
+                const e = new Event('a', { bubbles: true, cancelable: true });
+                e.initEvent('b');
+                return [e.type, e.bubbles, e.cancelable];
+            })()
+            ",
+        );
+
+        assert_eq!(got, serde_json::json!(["b", false, false]));
+    }
+
+    #[test]
+    fn init_event_without_a_type_throws_a_type_error() {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+
+        let got = eval_json(
+            &dispatcher,
+            r"
+            (() => {
+                try {
+                    new Event('a').initEvent();
+                    return 'ran';
+                } catch (err) {
+                    return err instanceof TypeError;
+                }
+            })()
+            ",
+        );
+
+        assert_eq!(got, serde_json::json!(true));
+    }
+
+    #[test]
+    fn init_event_during_its_dispatch_changes_nothing() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        listen(
+            &dispatcher,
+            node,
+            "x",
+            r"
+            (e) => {
+                e.initEvent('y', true, true);
+                out.push([e.type, e.bubbles, e.cancelable]);
+            }
+            ",
+        );
+
+        let got = eval_json(
+            &dispatcher,
+            &format!("(__inca_native__.dispatchEvent({node}, new Event('x')), out)"),
+        );
+
+        assert_eq!(got, serde_json::json!([["x", false, false]]));
+    }
+
+    #[test]
+    fn init_event_sets_the_type_and_bubbling_for_the_next_dispatch() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [outer, _, child] = tree_of_three(&host);
+        listen(&dispatcher, child, "b", "() => out.push('child')");
+        listen(&dispatcher, outer, "b", "() => out.push('outer')");
+
+        let got = eval_json(
+            &dispatcher,
+            &format!(
+                r"
+                (() => {{
+                    const e = new Event('a');
+                    e.initEvent('b', true);
+                    __inca_native__.dispatchEvent({child}, e);
+                    return out;
+                }})()
+                "
+            ),
+        );
+
+        assert_eq!(got, serde_json::json!(["child", "outer"]));
+    }
+
+    #[test]
+    fn init_event_clears_the_canceled_flag() {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+
+        let got = eval_json(
+            &dispatcher,
+            r"
+            (() => {
+                const e = new Event('a', { cancelable: true });
+                e.preventDefault();
+                e.initEvent('a', false, true);
+                return e.defaultPrevented;
+            })()
+            ",
+        );
+
+        assert_eq!(got, serde_json::json!(false));
+    }
+
+    #[test]
+    fn init_event_clears_the_stop_flag() {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+
+        let got = eval_json(
+            &dispatcher,
+            r"
+            (() => {
+                const e = new Event('a');
+                e.stopPropagation();
+                e.initEvent('a');
+                return e.cancelBubble;
+            })()
+            ",
+        );
+
+        assert_eq!(got, serde_json::json!(false));
+    }
+
+    #[test]
+    fn init_event_clears_the_immediate_stop_flag() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        listen(&dispatcher, node, "a", "() => out.push('ran')");
+
+        let got = eval_json(
+            &dispatcher,
+            &format!(
+                r"
+                (() => {{
+                    const e = new Event('a');
+                    e.stopImmediatePropagation();
+                    e.initEvent('a');
+                    __inca_native__.dispatchEvent({node}, e);
+                    return out;
+                }})()
+                "
+            ),
+        );
+
+        assert_eq!(got, serde_json::json!(["ran"]));
+    }
+
+    #[gpui::test]
+    fn init_event_makes_a_kept_host_event_untrusted(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        listen(&dispatcher, node, "click", "(e) => (globalThis.kept = e)");
+        fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
+
+        let got = eval_json(
+            &dispatcher,
+            r"
+            (() => {
+                const before = kept.isTrusted;
+                kept.initEvent('zz');
+                return [before, kept.isTrusted];
+            })()
+            ",
+        );
+
+        assert_eq!(got, serde_json::json!([true, false]));
+    }
+
+    #[test]
+    fn init_event_keeps_composed() {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+
+        let got = eval_json(
+            &dispatcher,
+            r"
+            (() => {
+                const e = new Event('a', { composed: true });
+                e.initEvent('b');
+                return e.composed;
+            })()
+            ",
+        );
+
+        assert_eq!(got, serde_json::json!(true));
+    }
+
+    #[test]
+    fn init_event_keeps_the_target() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+
+        let got = eval_json(
+            &dispatcher,
+            &format!(
+                r"
+                (() => {{
+                    const e = new Event('a');
+                    __inca_native__.dispatchEvent({node}, e);
+                    e.initEvent('b');
+                    return e.target;
+                }})()
+                "
+            ),
+        );
+
+        assert_eq!(got, serde_json::json!(node));
+    }
 }
