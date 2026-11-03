@@ -39,6 +39,10 @@ fn probe(cx: &mut TestAppContext) -> Value {
 #[case::query_selector_invalid_selector("querySelectorSyntaxError", json!("SyntaxError"))]
 #[case::children_skip_text_nodes("childrenLength", json!(0))]
 #[case::named_item_value("namedItemValue", json!("card"))]
+#[case::first_child_node_value("firstChildNodeValue", json!("two"))]
+#[case::child_nodes_length("childNodesLength", json!(2))]
+#[case::next_sibling_node_name("nextSiblingNodeName", json!("LI"))]
+#[case::text_content_joins_nested_text("textContent", json!("onetwo"))]
 fn the_element_members_answer_on_the_real_host(
     cx: &mut TestAppContext,
     #[case] key: &str,

@@ -48,6 +48,10 @@ function probe() {
     querySelectorSyntaxError: badQuery,
     childrenLength: second.value.children.length,
     namedItemValue: list.value.attributes.getNamedItem("class").value,
+    firstChildNodeValue: second.value.firstChild.nodeValue,
+    childNodesLength: list.value.childNodes.length,
+    nextSiblingNodeName: list.value.firstChild.nextSibling.nodeName,
+    textContent: list.value.textContent,
   });
 }
 </script>
