@@ -246,8 +246,8 @@ mod tests {
     #![allow(clippy::float_cmp, clippy::unwrap_used)]
 
     use super::*;
-    use crate::element::tests::*;
     use crate::event_sink::EventSink;
+    use crate::tests::*;
     use crate::tree::{NodeId, VirtualTree};
     use gpui::{Bounds, Pixels, Point, TestAppContext, VisualTestContext, point, px};
     use inca_test_macros::gpui_cases;

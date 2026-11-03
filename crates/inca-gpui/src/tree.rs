@@ -25,7 +25,9 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
-use crate::element::style_key;
+mod lifetime;
+mod links;
+mod props;
 
 /// The tag of a node that stands in for a comment.
 pub(crate) const COMMENT_TAG: &str = "#comment";
@@ -224,76 +226,6 @@ impl VirtualTree {
         self.root
     }
 
-    /// Keeps `id` and its subtree out of [`sweep`](Self::sweep) while it has
-    /// no parent. Holding a held, attached or root node changes nothing
-    /// visible. [`destroy_node`](Self::destroy_node) ends the hold.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`TreeError::NodeNotFound`] if `id` names no node.
-    pub fn hold(&mut self, id: NodeId) -> Result<(), TreeError> {
-        if !self.nodes.contains_key(&id) {
-            return Err(TreeError::NodeNotFound(id));
-        }
-        self.held.insert(id);
-        self.orphans.remove(&id);
-        Ok(())
-    }
-
-    /// Ends the hold of `id`. A parentless node that is not the root becomes
-    /// an orphan. An unknown or unheld `id` changes nothing.
-    pub fn release(&mut self, id: NodeId) {
-        if self.held.remove(&id) {
-            self.orphan_if_free(id);
-        }
-    }
-
-    /// Whether a [`sweep`](Self::sweep) would free a node.
-    #[must_use]
-    pub fn has_orphans(&self) -> bool {
-        !self.orphans.is_empty()
-    }
-
-    /// Frees every orphan with its subtree, as
-    /// [`destroy_node`](Self::destroy_node) does, and returns every freed id.
-    pub fn sweep(&mut self) -> Vec<NodeId> {
-        let mut orphans: Vec<NodeId> = self.orphans.drain().collect();
-        orphans.sort_unstable();
-        orphans
-            .into_iter()
-            .flat_map(|id| self.destroy_node(id))
-            .collect()
-    }
-
-    /// Marks `id` an orphan when it is a parentless node, not the root and
-    /// not held.
-    fn orphan_if_free(&mut self, id: NodeId) {
-        let free = self.nodes.get(&id).is_some_and(|n| n.parent.is_none())
-            && self.root != Some(id)
-            && !self.held.contains(&id);
-        if free {
-            self.orphans.insert(id);
-        }
-    }
-
-    /// Whether `id` is the root or its parent chain reaches it. Always true
-    /// while no root is declared. With a root, a destroyed or unknown id is
-    /// not connected.
-    #[must_use]
-    pub fn is_connected(&self, id: NodeId) -> bool {
-        let Some(root) = self.root else {
-            return true;
-        };
-        let mut current = Some(id);
-        while let Some(id) = current {
-            if id == root {
-                return self.nodes.contains_key(&id);
-            }
-            current = self.nodes.get(&id).and_then(|node| node.parent);
-        }
-        false
-    }
-
     /// Allocates a new node and returns its id. Ids are assigned
     /// sequentially starting at 0 and are never reused, even after the node
     /// they named is destroyed, so a stale id never names another node.
@@ -342,216 +274,156 @@ impl VirtualTree {
         }
         Some(last)
     }
-
-    /// Appends `child_id` to `parent_id`'s children. Thin wrapper over
-    /// [`insert_before`](Self::insert_before) with no anchor.
-    ///
-    /// # Errors
-    ///
-    /// Same as [`insert_before`](Self::insert_before), with no anchor to
-    /// fail on.
-    pub fn append_child(&mut self, parent_id: NodeId, child_id: NodeId) -> Result<(), TreeError> {
-        self.insert_before(parent_id, child_id, None)
-    }
-
-    /// Inserts `child_id` into `parent_id`'s children, before `anchor_id` if
-    /// given, or at the end if `None`. `child_id` is detached from whatever
-    /// it was attached to first, so this both attaches and moves. A node
-    /// never has two parents.
-    ///
-    /// If `anchor_id` is `child_id` itself and the child is already in
-    /// `parent_id`, nothing changes.
-    ///
-    /// If `anchor_id` names a real node that isn't (or is no longer) among
-    /// `parent_id`'s children, this falls back to appending at the end, same
-    /// as an absent `remove_child` target. Only a truly
-    /// unknown/never-allocated `anchor_id` is an error.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`TreeError::NodeNotFound`] if `parent_id` or `child_id`
-    /// names no node, or if `anchor_id` is `Some` and names no node.
-    /// Returns [`TreeError::WouldCycle`] if `child_id` is `parent_id` or one
-    /// of its ancestors.
-    pub fn insert_before(
-        &mut self,
-        parent_id: NodeId,
-        child_id: NodeId,
-        anchor_id: Option<NodeId>,
-    ) -> Result<(), TreeError> {
-        if !self.nodes.contains_key(&child_id) {
-            return Err(TreeError::NodeNotFound(child_id));
-        }
-        if let Some(anchor_id) = anchor_id
-            && !self.nodes.contains_key(&anchor_id)
-        {
-            return Err(TreeError::NodeNotFound(anchor_id));
-        }
-        if !self.nodes.contains_key(&parent_id) {
-            return Err(TreeError::NodeNotFound(parent_id));
-        }
-        if self.is_self_or_ancestor(child_id, parent_id) {
-            return Err(TreeError::WouldCycle(child_id));
-        }
-
-        // A child that is its own anchor stays where it is.
-        if anchor_id == Some(child_id)
-            && self
-                .nodes
-                .get(&child_id)
-                .is_some_and(|c| c.parent == Some(parent_id))
-        {
-            return Ok(());
-        }
-
-        self.detach(child_id);
-
-        let parent = self.node_mut(parent_id)?;
-        let index = anchor_id
-            .and_then(|anchor_id| parent.children.iter().position(|&id| id == anchor_id))
-            .unwrap_or(parent.children.len());
-        parent.children.insert(index, child_id);
-        if let Some(child) = self.nodes.get_mut(&child_id) {
-            child.parent = Some(parent_id);
-        }
-        self.orphans.remove(&child_id);
-        Ok(())
-    }
-
-    /// Whether `candidate` is `of` itself or sits above it.
-    fn is_self_or_ancestor(&self, candidate: NodeId, of: NodeId) -> bool {
-        let mut current = Some(of);
-        while let Some(id) = current {
-            if id == candidate {
-                return true;
-            }
-            current = self.nodes.get(&id).and_then(|node| node.parent);
-        }
-        false
-    }
-
-    /// Unlinks `id` from its parent, if it has one. Leaves the node itself
-    /// alone, children and all.
-    fn detach(&mut self, id: NodeId) {
-        let Some(parent_id) = self.nodes.get(&id).and_then(|node| node.parent) else {
-            return;
-        };
-        if let Some(parent) = self.nodes.get_mut(&parent_id) {
-            parent.children.retain(|&child| child != id);
-        }
-        if let Some(node) = self.nodes.get_mut(&id) {
-            node.parent = None;
-        }
-    }
-
-    /// Frees `id` and its whole subtree, detaching it from its parent first,
-    /// and returns every freed id, `id` among them.
-    ///
-    /// The subtree goes too because a caller removing a node holds that
-    /// node's id and nothing below it. Also ends the hold of every freed id.
-    /// An unknown `id` frees nothing and returns an empty `Vec`: destroying
-    /// twice is a no-op, not an error.
-    pub fn destroy_node(&mut self, id: NodeId) -> Vec<NodeId> {
-        if !self.nodes.contains_key(&id) {
-            return Vec::new();
-        }
-        self.detach(id);
-
-        let mut freed = Vec::new();
-        let mut pending = vec![id];
-        while let Some(current) = pending.pop() {
-            if let Some(node) = self.nodes.remove(&current) {
-                pending.extend(node.children.iter().copied());
-                self.held.remove(&current);
-                self.orphans.remove(&current);
-                freed.push(current);
-            }
-        }
-        freed
-    }
-
-    /// Unlinks `child_id` from `parent_id`'s children, if present. `child_id`
-    /// not being (or no longer being) a child of `parent_id` is a no-op, not
-    /// an error. Only an unknown `parent_id` is. The child node keeps its own
-    /// children and, unless held, is an orphan until it is inserted again.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`TreeError::NodeNotFound`] if `parent_id` names no node.
-    pub fn remove_child(&mut self, parent_id: NodeId, child_id: NodeId) -> Result<(), TreeError> {
-        let parent = self.node_mut(parent_id)?;
-        let before = parent.children.len();
-        parent.children.retain(|&id| id != child_id);
-        if parent.children.len() == before {
-            return Ok(());
-        }
-        if let Some(child) = self.nodes.get_mut(&child_id) {
-            child.parent = None;
-        }
-        self.orphan_if_free(child_id);
-        Ok(())
-    }
-
-    /// Sets (inserting or overwriting) one attribute prop.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`TreeError::NodeNotFound`] if `node_id` names no node.
-    pub fn set_attribute(
-        &mut self,
-        node_id: NodeId,
-        key: impl Into<String>,
-        value: impl Into<AttributeValue>,
-    ) -> Result<(), TreeError> {
-        let node = self.node_mut(node_id)?;
-        node.attributes.insert(key.into(), value.into());
-        Ok(())
-    }
-
-    /// Removes one attribute prop. Removing a key that isn't set is a no-op.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`TreeError::NodeNotFound`] if `node_id` names no node.
-    pub fn remove_attribute(&mut self, node_id: NodeId, key: &str) -> Result<(), TreeError> {
-        let node = self.node_mut(node_id)?;
-        node.attributes.remove(key);
-        Ok(())
-    }
-
-    /// Sets (inserting or overwriting) one style prop. `key` may be
-    /// `camelCase`, `kebab-case` or `snake_case`, a host name or its CSS name,
-    /// and all spellings of one prop share one slot.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`TreeError::NodeNotFound`] if `node_id` names no node.
-    pub fn set_style(
-        &mut self,
-        node_id: NodeId,
-        key: impl Into<String>,
-        value: impl Into<AttributeValue>,
-    ) -> Result<(), TreeError> {
-        let node = self.node_mut(node_id)?;
-        let key: String = key.into();
-        let stored = style_key(&key).into_owned();
-        node.style_props.insert(stored, value.into());
-        Ok(())
-    }
-
-    /// Removes one style prop, so the property renders as if never set.
-    /// `key` may be `camelCase`, `kebab-case` or `snake_case`, a host name or
-    /// its CSS name. Removing a key that isn't set is a no-op.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`TreeError::NodeNotFound`] if `node_id` names no node.
-    pub fn remove_style(&mut self, node_id: NodeId, key: &str) -> Result<(), TreeError> {
-        let node = self.node_mut(node_id)?;
-        node.style_props.remove(&*style_key(key));
-        Ok(())
-    }
 }
 
 #[cfg(test)]
-mod tests;
+mod tests {
+    #![allow(clippy::unwrap_used)]
+
+    use super::*;
+    use rstest::rstest;
+
+    #[test]
+    fn create_node_fails_once_the_id_space_is_used_up() {
+        let mut tree = VirtualTree::new();
+        tree.next_id = NodeId::MAX - 1;
+
+        let last = tree.create_node("div").unwrap();
+        assert_eq!(last, NodeId::MAX - 1);
+        assert_eq!(tree.create_node("div"), Err(TreeError::IdsExhausted));
+        assert_eq!(tree.create_node("div"), Err(TreeError::IdsExhausted));
+        assert_eq!(tree.nodes.len(), 1);
+        assert!(tree.get(last).is_some());
+    }
+
+    #[test]
+    fn ids_exhausted_has_a_message() {
+        assert_eq!(
+            TreeError::IdsExhausted.to_string(),
+            "node id space exhausted"
+        );
+    }
+
+    #[test]
+    fn a_fresh_node_has_no_parent() {
+        let mut tree = VirtualTree::new();
+        let node = tree.create_node("div").unwrap();
+
+        assert_eq!(tree.get(node).unwrap().parent(), None);
+    }
+
+    #[test]
+    fn destroyed_ids_are_not_handed_out_again() {
+        let mut tree = VirtualTree::new();
+        let first = tree.create_node("div").unwrap();
+        tree.destroy_node(first);
+
+        assert_ne!(
+            tree.create_node("div").unwrap(),
+            first,
+            "a stale id never names another node"
+        );
+    }
+
+    #[test]
+    fn operations_on_unknown_ids_error_instead_of_panicking() {
+        let mut tree = VirtualTree::new();
+        let node = tree.create_node("div").unwrap();
+
+        assert_eq!(
+            tree.append_child(node, 999).unwrap_err(),
+            TreeError::NodeNotFound(999)
+        );
+        assert_eq!(
+            tree.append_child(999, node).unwrap_err(),
+            TreeError::NodeNotFound(999)
+        );
+        assert_eq!(
+            tree.remove_child(999, node).unwrap_err(),
+            TreeError::NodeNotFound(999)
+        );
+        assert_eq!(
+            tree.set_attribute(999, "k", "v").unwrap_err(),
+            TreeError::NodeNotFound(999)
+        );
+        assert_eq!(
+            tree.set_style(999, "k", "v").unwrap_err(),
+            TreeError::NodeNotFound(999)
+        );
+        assert_eq!(
+            tree.remove_style(999, "k").unwrap_err(),
+            TreeError::NodeNotFound(999)
+        );
+    }
+
+    #[test]
+    fn ancestors_lists_the_node_then_its_parents_up_to_the_root() {
+        let mut tree = VirtualTree::new();
+        let root = tree.create_node("div").unwrap();
+        let mid = tree.create_node("div").unwrap();
+        let leaf = tree.create_node("div").unwrap();
+        tree.append_child(root, mid).unwrap();
+        tree.append_child(mid, leaf).unwrap();
+
+        assert_eq!(tree.ancestors(leaf).collect::<Vec<_>>(), [leaf, mid, root]);
+        assert_eq!(tree.ancestors(root).collect::<Vec<_>>(), [root]);
+    }
+
+    #[test]
+    fn ancestors_of_an_unknown_id_yields_only_that_id() {
+        let tree = VirtualTree::new();
+        assert_eq!(tree.ancestors(7).collect::<Vec<_>>(), [7]);
+    }
+
+    #[rstest]
+    #[case::button("button", &["disabled"], true)]
+    #[case::input("input", &["disabled"], true)]
+    #[case::div("div", &["disabled"], false)]
+    #[case::enabled_button("button", &[], false)]
+    fn is_disabled_control_needs_a_control_tag_and_the_disabled_attribute(
+        #[case] tag: &str,
+        #[case] attributes: &[&str],
+        #[case] want: bool,
+    ) {
+        let mut tree = VirtualTree::new();
+        let node = tree.create_node(tag).unwrap();
+        for attribute in attributes {
+            tree.set_attribute(node, *attribute, true).unwrap();
+        }
+        assert_eq!(is_disabled_control(tree.get(node).unwrap()), want, "{tag}");
+    }
+
+    #[test]
+    fn preceding_is_none_without_a_parent() {
+        let mut tree = VirtualTree::new();
+        let id = tree.create_node("div").unwrap();
+
+        assert_eq!(tree.preceding(id), None);
+    }
+
+    #[test]
+    fn preceding_of_a_first_child_is_its_parent() {
+        let mut tree = VirtualTree::new();
+        let parent = tree.create_node("div").unwrap();
+        let child = tree.create_node("div").unwrap();
+        tree.append_child(parent, child).unwrap();
+
+        assert_eq!(tree.preceding(child), Some(parent));
+    }
+
+    #[test]
+    fn preceding_is_the_last_node_before_the_subtree() {
+        let mut tree = VirtualTree::new();
+        let parent = tree.create_node("div").unwrap();
+        let first = tree.create_node("div").unwrap();
+        let inner = tree.create_node("div").unwrap();
+        let deepest = tree.create_node("div").unwrap();
+        let second = tree.create_node("div").unwrap();
+        tree.append_child(parent, first).unwrap();
+        tree.append_child(first, inner).unwrap();
+        tree.append_child(inner, deepest).unwrap();
+        tree.append_child(parent, second).unwrap();
+
+        assert_eq!(tree.preceding(second), Some(deepest));
+    }
+}

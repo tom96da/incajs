@@ -11,6 +11,10 @@ use super::scroll::{RootStep, WheelChain, next_offset};
 use crate::event_sink::{EventPayload, EventSink, button_index};
 use crate::tree::NodeId;
 
+mod tracker;
+
+pub(super) use tracker::pointer_tracker;
+
 // The first container to report in the bubble phase wins; a release clears its button's press.
 #[derive(Default)]
 struct MouseTarget {
@@ -201,149 +205,6 @@ where
     })
 }
 
-/// `event` with the click count of its button's recorded press, if any.
-fn with_press_count(event: &MouseUpEvent, cx: &App) -> MouseUpEvent {
-    let slot = slot(event.button);
-    let mut event = event.clone();
-    if let Some((_, count)) = cx.try_global::<MouseTarget>().and_then(|t| t.pressed[slot]) {
-        event.click_count = count;
-    }
-    event
-}
-
-/// The deepest container that reported for the mouse event being handled,
-/// else `root`.
-fn target_or(cx: &App, root: NodeId) -> NodeId {
-    mouse_target(cx).unwrap_or(root)
-}
-
-/// Reports the release of `event`, under `root` when no container is: its
-/// `mouseup`, then the clicks it completes. Forgets that button's press.
-fn report_release(
-    sink: &impl EventSink,
-    root: NodeId,
-    event: &MouseUpEvent,
-    window: &mut Window,
-    cx: &mut App,
-) {
-    let slot = slot(event.button);
-    let target = cx.default_global::<MouseTarget>();
-    let released = target.current.unwrap_or(root);
-    let pressed = target.pressed[slot].map(|(id, _)| id);
-    let completes = completes_click(event.button, event.modifiers, control_click(cx).macos);
-    let pressed = pressed.filter(|_| completes);
-    let event = with_press_count(event, cx);
-    sink.pointer_input("mouseup", released, &(&event).into(), window, cx);
-    sink.pointer_released(&event, pressed, released, window, cx);
-    cx.default_global::<MouseTarget>().pressed[slot] = None;
-}
-
-// Zero-size first child of the root. Its capture handlers run before any
-// container's, and its bubble handlers run after every container's below the
-// root, so each input is reported once, with its target settled.
-pub(super) fn pointer_tracker<E: EventSink + Clone + 'static>(
-    root: NodeId,
-    dispatch: E,
-) -> impl IntoElement {
-    canvas(
-        |_, _, _| (),
-        move |_, (), window, _| {
-            let moved = dispatch.clone();
-            window.on_mouse_event(
-                move |event: &MouseMoveEvent, phase, window, cx| match phase {
-                    DispatchPhase::Capture => {
-                        cx.default_global::<MouseTarget>().current = None;
-                        cx.default_global::<ControlClick>().held = event.modifiers.control;
-                        moved.pointer_moved(event.position, cx);
-                    }
-                    DispatchPhase::Bubble => {
-                        let target = target_or(cx, root);
-                        moved.pointer_input("mousemove", target, &event.into(), window, cx);
-                    }
-                },
-            );
-            let pressed = dispatch.clone();
-            window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
-                let event = &restored_down(event, cx);
-                match phase {
-                    DispatchPhase::Capture => {
-                        let slot = slot(event.button);
-                        let target = cx.default_global::<MouseTarget>();
-                        target.current = None;
-                        target.pressed[slot] = None;
-                        // gpui would focus before the listeners run; the sink focuses after.
-                        window.prevent_default();
-                    }
-                    DispatchPhase::Bubble => {
-                        let target = target_or(cx, root);
-                        pressed.pointer_input("mousedown", target, &event.into(), window, cx);
-                        if opens_context_menu(
-                            event.button,
-                            event.modifiers,
-                            control_click(cx).macos,
-                        ) {
-                            let payload = EventPayload::context_menu(event);
-                            pressed.fire(target, "contextmenu", &payload, window, cx);
-                        }
-                    }
-                }
-            });
-            let released = dispatch.clone();
-            window.on_mouse_event(move |event: &MouseUpEvent, phase, window, cx| match phase {
-                DispatchPhase::Capture => cx.default_global::<MouseTarget>().current = None,
-                DispatchPhase::Bubble => {
-                    let event = restored_up(event, cx);
-                    report_release(&released, root, &event, window, cx);
-                }
-            });
-            let scrolled = dispatch.clone();
-            window.on_mouse_event(
-                move |event: &ScrollWheelEvent, phase, window, cx| match phase {
-                    DispatchPhase::Capture => {
-                        cx.default_global::<MouseTarget>().current = None;
-                        cx.default_global::<WheelChain>().0.clear();
-                    }
-                    DispatchPhase::Bubble => {
-                        let mut chain = std::mem::take(&mut cx.default_global::<WheelChain>().0);
-                        let delta = event.delta.pixel_delta(window.line_height());
-                        let could_move = |(id, handle): &(NodeId, ScrollHandle)| {
-                            scrolled
-                                .wheel_axes(*id)
-                                .and_then(|axes| next_offset(axes, handle, delta))
-                        };
-                        let below_could_move = chain.iter().any(|link| could_move(link).is_some());
-                        let target = target_or(cx, root);
-                        scrolled.pointer_input("wheel", target, &event.into(), window, cx);
-                        let mut step_taken = window.default_prevented();
-                        if !step_taken
-                            && let Some(((_, handle), next)) = chain
-                                .iter()
-                                .find_map(|link| could_move(link).map(|next| (link, next)))
-                        {
-                            handle.set_offset(next);
-                            window.refresh();
-                            step_taken = true;
-                        }
-                        // The root's own listener takes the step when it is under the pointer.
-                        cx.default_global::<RootStep>().0 =
-                            (!step_taken && !below_could_move).then_some(delta);
-                        chain.clear();
-                        cx.default_global::<WheelChain>().0 = chain;
-                    }
-                },
-            );
-            let dispatch = dispatch.clone();
-            window.on_mouse_event(move |_: &MouseExitEvent, phase, _, _| {
-                if phase == DispatchPhase::Capture {
-                    dispatch.pointer_left();
-                }
-            });
-        },
-    )
-    .absolute()
-    .size_0()
-}
-
 // The root's capture handlers run before any other key listener of the
 // window, so the sink sees every key once, whatever is focused.
 pub(super) fn root_keys<Elem, E>(element: Elem, dispatch: E) -> Elem
@@ -362,4 +223,236 @@ where
 }
 
 #[cfg(test)]
-mod tests;
+mod tests {
+    #![allow(clippy::unwrap_used)]
+
+    use super::*;
+    use crate::tests::*;
+    use gpui::{MouseButton, Pixels, Point, TestAppContext, point, px};
+    use inca_test_macros::gpui_cases;
+    use rstest::rstest;
+
+    pub(super) fn at((x, y): (f32, f32)) -> Point<Pixels> {
+        point(px(x), px(y))
+    }
+
+    pub(super) fn report(event: &str, target: NodeId) -> (String, NodeId) {
+        (event.to_owned(), target)
+    }
+
+    pub(super) const LEAF: (f32, f32) = (10., 10.);
+
+    /// Sets the platform and focuses the root, as the host does, so the window's modifier events
+    /// reach the root.
+    fn control_click_of(scene: &mut Scene, macos: bool) {
+        let handle = scene.cx.update(|_, cx| {
+            cx.set_global(ControlClick { held: false, macos });
+            cx.focus_handle()
+        });
+        *scene.focus.borrow_mut() = Some((0, handle.clone()));
+        scene.cx.update(|window, cx| {
+            window.refresh();
+            window.focus(&handle, cx);
+        });
+    }
+
+    /// `(button, control)` of the last payload reported for `event`.
+    fn last_payload(scene: &Scene, event: &str) -> (u8, bool) {
+        let payloads = scene.payloads.borrow();
+        match payloads.iter().rfind(|p| p.0 == event).map(|p| &p.1) {
+            Some(EventPayload::Mouse(mouse)) => (mouse.button, mouse.modifiers.control),
+            other => panic!("no mouse payload for {event}: {other:?}"),
+        }
+    }
+
+    /// The press the last `release` report names.
+    fn released_press(scene: &Scene) -> Option<NodeId> {
+        let calls = scene.calls.borrow();
+        calls.iter().rfind(|c| c.0 == "release").unwrap().3
+    }
+
+    const CONTROL: Modifiers = Modifiers {
+        control: true,
+        alt: false,
+        shift: false,
+        platform: false,
+        function: false,
+    };
+
+    #[rstest]
+    #[case::macos_rewritten(
+        true,
+        true,
+        MouseButton::Right,
+        Modifiers::none(),
+        MouseButton::Left,
+        true
+    )]
+    #[case::macos_real_right(
+        true,
+        false,
+        MouseButton::Right,
+        Modifiers::none(),
+        MouseButton::Right,
+        false
+    )]
+    #[case::macos_control_right(true, true, MouseButton::Right, CONTROL, MouseButton::Right, true)]
+    #[case::linux(
+        false,
+        true,
+        MouseButton::Right,
+        Modifiers::none(),
+        MouseButton::Right,
+        false
+    )]
+    #[case::left(
+        true,
+        true,
+        MouseButton::Left,
+        Modifiers::none(),
+        MouseButton::Left,
+        false
+    )]
+    fn restore_control_click_turns_a_rewritten_press_left(
+        #[case] macos: bool,
+        #[case] held: bool,
+        #[case] button: MouseButton,
+        #[case] modifiers: Modifiers,
+        #[case] want_button: MouseButton,
+        #[case] want_control: bool,
+    ) {
+        let restored = restore_control_click(button, modifiers, ControlClick { held, macos });
+        assert_eq!(
+            restored,
+            (
+                want_button,
+                Modifiers {
+                    control: want_control,
+                    ..modifiers
+                }
+            )
+        );
+    }
+
+    #[rstest]
+    #[case::right(MouseButton::Right, Modifiers::none(), false, true)]
+    #[case::mac_control_left(MouseButton::Left, CONTROL, true, true)]
+    #[case::linux_control_left(MouseButton::Left, CONTROL, false, false)]
+    #[case::mac_plain_left(MouseButton::Left, Modifiers::none(), true, false)]
+    fn opens_context_menu_follows_the_button_and_platform(
+        #[case] button: MouseButton,
+        #[case] modifiers: Modifiers,
+        #[case] macos: bool,
+        #[case] want: bool,
+    ) {
+        assert_eq!(opens_context_menu(button, modifiers, macos), want);
+    }
+
+    #[rstest]
+    #[case::macos_control_left(MouseButton::Left, CONTROL, true, false)]
+    #[case::macos_plain_left(MouseButton::Left, Modifiers::none(), true, true)]
+    #[case::linux_control_left(MouseButton::Left, CONTROL, false, true)]
+    #[case::macos_control_right(MouseButton::Right, CONTROL, true, true)]
+    fn completes_click_follows_the_platform(
+        #[case] button: MouseButton,
+        #[case] modifiers: Modifiers,
+        #[case] macos: bool,
+        #[case] want: bool,
+    ) {
+        assert_eq!(completes_click(button, modifiers, macos), want);
+    }
+
+    #[gpui_cases]
+    #[gpui::test]
+    #[case::macos(true, (0, true), 0)]
+    #[case::linux(false, (2, false), 2)]
+    fn a_rewritten_control_click_reports_a_left_press_with_control(
+        cx: &mut TestAppContext,
+        macos: bool,
+        down: (u8, bool),
+        contextmenu: u8,
+    ) {
+        let mut scene = probe_tree(cx, true);
+        control_click_of(&mut scene, macos);
+        scene.cx.simulate_modifiers_change(CONTROL);
+        scene
+            .cx
+            .simulate_mouse_down(at(LEAF), MouseButton::Right, Modifiers::none());
+        assert_eq!(last_payload(&scene, "mousedown"), down);
+        assert_eq!(last_payload(&scene, "contextmenu").0, contextmenu);
+    }
+
+    #[gpui::test]
+    fn a_pointer_move_with_control_counts_as_held(cx: &mut TestAppContext) {
+        let mut scene = probe_tree(cx, true);
+        control_click_of(&mut scene, true);
+        scene.cx.simulate_mouse_move(at(LEAF), None, CONTROL);
+        scene
+            .cx
+            .simulate_mouse_down(at(LEAF), MouseButton::Right, Modifiers::none());
+        assert_eq!(last_payload(&scene, "mousedown"), (0, true));
+    }
+
+    #[gpui::test]
+    fn a_control_release_clears_the_held_control(cx: &mut TestAppContext) {
+        let mut scene = probe_tree(cx, true);
+        control_click_of(&mut scene, true);
+        scene.cx.simulate_modifiers_change(CONTROL);
+        scene.cx.simulate_modifiers_change(Modifiers::none());
+        scene
+            .cx
+            .simulate_mouse_down(at(LEAF), MouseButton::Right, Modifiers::none());
+        assert_eq!(last_payload(&scene, "mousedown"), (2, false));
+    }
+
+    #[gpui::test]
+    fn a_rewritten_release_is_a_left_release(cx: &mut TestAppContext) {
+        let mut scene = probe_tree(cx, true);
+        control_click_of(&mut scene, true);
+        scene.cx.simulate_modifiers_change(CONTROL);
+        scene
+            .cx
+            .simulate_mouse_down(at(LEAF), MouseButton::Right, Modifiers::none());
+        scene
+            .cx
+            .simulate_mouse_up(at(LEAF), MouseButton::Right, Modifiers::none());
+        assert_eq!(last_payload(&scene, "mouseup"), (0, true));
+        assert_eq!(released_press(&scene), None);
+    }
+
+    #[gpui::test]
+    fn a_release_after_control_completes_the_click(cx: &mut TestAppContext) {
+        let mut scene = probe_tree(cx, true);
+        control_click_of(&mut scene, true);
+        scene.cx.simulate_modifiers_change(CONTROL);
+        scene
+            .cx
+            .simulate_mouse_down(at(LEAF), MouseButton::Right, Modifiers::none());
+        scene.cx.simulate_modifiers_change(Modifiers::none());
+        scene
+            .cx
+            .simulate_mouse_up(at(LEAF), MouseButton::Left, Modifiers::none());
+        assert_eq!(released_press(&scene), Some(2));
+    }
+
+    #[gpui_cases]
+    #[gpui::test]
+    #[case::macos(true, None)]
+    #[case::linux(false, Some(2))]
+    fn a_release_with_control_held_completes_no_click_on_macos(
+        cx: &mut TestAppContext,
+        macos: bool,
+        pressed: Option<NodeId>,
+    ) {
+        let mut scene = probe_tree(cx, true);
+        control_click_of(&mut scene, macos);
+        scene.cx.simulate_modifiers_change(CONTROL);
+        scene
+            .cx
+            .simulate_mouse_down(at(LEAF), MouseButton::Left, CONTROL);
+        scene
+            .cx
+            .simulate_mouse_up(at(LEAF), MouseButton::Left, CONTROL);
+        assert_eq!(released_press(&scene), pressed);
+    }
+}

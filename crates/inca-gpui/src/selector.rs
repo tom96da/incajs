@@ -24,6 +24,12 @@ use crate::tree::{
     AttributeValue, COMMENT_TAG, NodeId, TEXT_TAG, VirtualNode, VirtualTree, is_disabled_control,
 };
 
+mod matching;
+mod query;
+
+pub use matching::{closest_selector, matches_selector};
+pub use query::{query_selector, query_selector_all};
+
 /// The text JavaScript makes of a number. `-0` prints as `0`, and values from `1e21` up or below
 /// `1e-6` use the exponent form.
 #[must_use]
@@ -394,235 +400,6 @@ impl<'i> Parser<'i> for SelectorParser {
     }
 }
 
-/// An element of the tree: a node that is neither text content nor tagged `#comment`.
-#[derive(Clone)]
-struct Node<'t> {
-    tree: &'t VirtualTree,
-    node: &'t VirtualNode,
-}
-
-impl fmt::Debug for Node<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.node.id())
-    }
-}
-
-fn is_element(node: &VirtualNode) -> bool {
-    !matches!(node.tag_name(), COMMENT_TAG | TEXT_TAG)
-}
-
-/// The text of an attribute value: a string as is, a number through `js_number_text`, a bool as
-/// `true` or `false`.
-fn attribute_text(value: &AttributeValue) -> String {
-    match value {
-        AttributeValue::String(text) => text.clone(),
-        AttributeValue::Number(number) => js_number_text(*number),
-        AttributeValue::Bool(flag) => flag.to_string(),
-    }
-}
-
-/// Whether the `"value"` of `node` is not empty.
-fn has_text(node: &VirtualNode) -> bool {
-    matches!(
-        node.attributes().get("value"),
-        Some(value) if !attribute_text(value).is_empty()
-    )
-}
-
-impl<'t> Node<'t> {
-    fn of(tree: &'t VirtualTree, id: NodeId) -> Option<Self> {
-        tree.get(id)
-            .filter(|node| is_element(node))
-            .map(|node| Node { tree, node })
-    }
-
-    /// The nearest element above `node`.
-    fn nearest_above(tree: &'t VirtualTree, node: &VirtualNode) -> Option<Self> {
-        let mut parent = node.parent();
-        while let Some(id) = parent {
-            if let Some(element) = Node::of(tree, id) {
-                return Some(element);
-            }
-            parent = tree.get(id)?.parent();
-        }
-        None
-    }
-
-    /// An `input` that has neither `readonly` nor `disabled`.
-    fn is_editable(&self) -> bool {
-        self.node.tag_name() == "input"
-            && !self.node.attributes().contains_key("readonly")
-            && !self.node.attributes().contains_key("disabled")
-    }
-
-    fn attribute(&self, name: &str) -> Option<String> {
-        self.node.attributes().get(name).map(attribute_text)
-    }
-
-    /// The element `step` places from this one among its parent's children, skipping nodes that
-    /// are not elements.
-    fn sibling(&self, step: isize) -> Option<Self> {
-        let siblings = self.tree.get(self.node.parent()?)?.children();
-        let at = siblings.iter().position(|&id| id == self.node.id())?;
-        let mut index = at.checked_add_signed(step);
-        while let Some(&id) = index.and_then(|i| siblings.get(i)) {
-            if let Some(found) = Node::of(self.tree, id) {
-                return Some(found);
-            }
-            index = index.and_then(|i| i.checked_add_signed(step));
-        }
-        None
-    }
-}
-
-impl Element for Node<'_> {
-    type Impl = Impl;
-
-    fn opaque(&self) -> OpaqueElement {
-        OpaqueElement::new(self.node)
-    }
-
-    fn parent_element(&self) -> Option<Self> {
-        Node::nearest_above(self.tree, self.node)
-    }
-
-    fn parent_node_is_shadow_root(&self) -> bool {
-        false
-    }
-
-    fn containing_shadow_host(&self) -> Option<Self> {
-        None
-    }
-
-    fn is_pseudo_element(&self) -> bool {
-        false
-    }
-
-    fn prev_sibling_element(&self) -> Option<Self> {
-        self.sibling(-1)
-    }
-
-    fn next_sibling_element(&self) -> Option<Self> {
-        self.sibling(1)
-    }
-
-    fn first_element_child(&self) -> Option<Self> {
-        self.node
-            .children()
-            .iter()
-            .find_map(|&id| Node::of(self.tree, id))
-    }
-
-    fn is_html_element_in_html_document(&self) -> bool {
-        true
-    }
-
-    fn has_local_name(&self, name: &Atom) -> bool {
-        self.node.tag_name().eq_ignore_ascii_case(&name.0)
-    }
-
-    fn has_namespace(&self, _namespace: &Atom) -> bool {
-        true
-    }
-
-    fn is_same_type(&self, other: &Self) -> bool {
-        self.node.tag_name() == other.node.tag_name()
-    }
-
-    fn attr_matches(
-        &self,
-        _namespace: &NamespaceConstraint<&Atom>,
-        local_name: &Atom,
-        operation: &AttrSelectorOperation<&Atom>,
-    ) -> bool {
-        self.attribute(&local_name.0)
-            .is_some_and(|value| operation.eval_str(&value))
-    }
-
-    fn match_non_ts_pseudo_class(
-        &self,
-        class: &PseudoClass,
-        _context: &mut MatchingContext<Impl>,
-    ) -> bool {
-        let tag = self.node.tag_name();
-        let control = matches!(tag, "button" | "input");
-        match class {
-            PseudoClass::Never(_) => false,
-            PseudoClass::Defined | PseudoClass::DirLtr => true,
-            PseudoClass::Disabled => is_disabled_control(self.node),
-            PseudoClass::Enabled => control && !is_disabled_control(self.node),
-            PseudoClass::ReadWrite => self.is_editable(),
-            PseudoClass::ReadOnly => !self.is_editable(),
-        }
-    }
-
-    fn match_pseudo_element(
-        &self,
-        _pseudo: &PseudoElement,
-        _context: &mut MatchingContext<Impl>,
-    ) -> bool {
-        false
-    }
-
-    fn apply_selector_flags(&self, _flags: ElementSelectorFlags) {}
-
-    fn is_link(&self) -> bool {
-        false
-    }
-
-    fn is_html_slot_element(&self) -> bool {
-        false
-    }
-
-    fn has_id(&self, id: &Atom, case_sensitivity: CaseSensitivity) -> bool {
-        self.attribute("id")
-            .is_some_and(|value| case_sensitivity.eq(value.as_bytes(), id.0.as_bytes()))
-    }
-
-    fn has_class(&self, name: &Atom, case_sensitivity: CaseSensitivity) -> bool {
-        self.attribute("class").is_some_and(|value| {
-            value
-                .split_ascii_whitespace()
-                .any(|class| case_sensitivity.eq(class.as_bytes(), name.0.as_bytes()))
-        })
-    }
-
-    fn has_custom_state(&self, _name: &Atom) -> bool {
-        false
-    }
-
-    fn imported_part(&self, _name: &Atom) -> Option<Atom> {
-        None
-    }
-
-    fn is_part(&self, _name: &Atom) -> bool {
-        false
-    }
-
-    fn is_empty(&self) -> bool {
-        !self.node.children().iter().any(|&id| {
-            self.tree.get(id).is_some_and(|child| {
-                if is_element(child) {
-                    true
-                } else {
-                    child.tag_name() == TEXT_TAG && has_text(child)
-                }
-            })
-        })
-    }
-
-    fn is_root(&self) -> bool {
-        match self.tree.root() {
-            Some(root) => root == self.node.id(),
-            None => self.node.parent().is_none(),
-        }
-    }
-
-    fn add_element_unique_hashes(&self, _filter: &mut BloomFilter) -> bool {
-        false
-    }
-}
-
 fn reason(error: &SelectorParseError) -> &'static str {
     match &error.kind {
         ParseErrorKind::Custom(ParseKind::Argument) => {
@@ -651,45 +428,6 @@ fn parse(selector: &str) -> Result<SelectorList<Impl>, SelectorError> {
     })
 }
 
-fn matching_context(
-    caches: &mut SelectorCaches,
-    scope: OpaqueElement,
-) -> MatchingContext<'_, Impl> {
-    let mut context = MatchingContext::new(
-        MatchingMode::Normal,
-        None,
-        caches,
-        QuirksMode::NoQuirks,
-        NeedsSelectorFlags::No,
-        MatchingForInvalidation::No,
-    );
-    context.scope_element = Some(scope);
-    context
-}
-
-fn matches_with(list: &SelectorList<Impl>, element: &Node<'_>, scope: OpaqueElement) -> bool {
-    let mut caches = SelectorCaches::default();
-    matches_selector_list(list, element, &mut matching_context(&mut caches, scope))
-}
-
-/// Whether the element `node` matches `selector`. A node that is not an element, such as a text
-/// leaf or a node tagged `#comment`, and an unknown id match nothing.
-///
-/// # Errors
-///
-/// Returns a [`SelectorError`] when `selector` is not a valid selector list.
-pub fn matches_selector(
-    tree: &VirtualTree,
-    node: NodeId,
-    selector: &str,
-) -> Result<bool, SelectorError> {
-    let list = parse(selector)?;
-    Ok(Node::of(tree, node).is_some_and(|element| {
-        let scope = element.opaque();
-        matches_with(&list, &element, scope)
-    }))
-}
-
 /// Parses `selector` as a selector list.
 ///
 /// # Errors
@@ -699,94 +437,323 @@ pub fn check_selector(selector: &str) -> Result<(), SelectorError> {
     parse(selector).map(drop)
 }
 
-/// The nearest element at or above `node` that matches `selector`. A `#text` node starts at its
-/// nearest element ancestor, and a node tagged `#comment` and an unknown id find nothing.
-///
-/// # Errors
-///
-/// Returns a [`SelectorError`] when `selector` is not a valid selector list.
-pub fn closest_selector(
-    tree: &VirtualTree,
-    node: NodeId,
-    selector: &str,
-) -> Result<Option<NodeId>, SelectorError> {
-    let list = parse(selector)?;
-    let Some(start) = tree.get(node) else {
-        return Ok(None);
-    };
-    if start.tag_name() == COMMENT_TAG {
-        return Ok(None);
-    }
-    let scope = OpaqueElement::new(start);
-    let mut current = Node::of(tree, node).or_else(|| Node::nearest_above(tree, start));
-    while let Some(element) = current {
-        if matches_with(&list, &element, scope) {
-            return Ok(Some(element.node.id()));
-        }
-        current = element.parent_element();
-    }
-    Ok(None)
-}
-
-/// The descendants of `start` that match `selector`, in document order. The walk stops at the
-/// first match when `first_only` is set.
-fn search(
-    tree: &VirtualTree,
-    start: NodeId,
-    selector: &str,
-    first_only: bool,
-) -> Result<Vec<NodeId>, SelectorError> {
-    let list = parse(selector)?;
-    let mut found = Vec::new();
-    let Some(root) = Node::of(tree, start) else {
-        return Ok(found);
-    };
-    let mut caches = SelectorCaches::default();
-    let mut context = matching_context(&mut caches, root.opaque());
-    let mut pending: Vec<NodeId> = root.node.children().iter().rev().copied().collect();
-    while let Some(id) = pending.pop() {
-        let Some(element) = Node::of(tree, id) else {
-            continue;
-        };
-        if matches_selector_list(&list, &element, &mut context) {
-            found.push(id);
-            if first_only {
-                break;
-            }
-        }
-        pending.extend(element.node.children().iter().rev().copied());
-    }
-    Ok(found)
-}
-
-/// The first descendant of `node` that matches `selector` in document order. `:scope` and a
-/// top-level `&` are `node`. A node that is not an element, such as a text leaf or a node tagged
-/// `#comment`, and an unknown id find nothing.
-///
-/// # Errors
-///
-/// Returns a [`SelectorError`] when `selector` is not a valid selector list.
-pub fn query_selector(
-    tree: &VirtualTree,
-    node: NodeId,
-    selector: &str,
-) -> Result<Option<NodeId>, SelectorError> {
-    Ok(search(tree, node, selector, true)?.first().copied())
-}
-
-/// Every descendant of `node` that matches `selector`, each once, in document order. The other
-/// rules are those of [`query_selector`].
-///
-/// # Errors
-///
-/// Returns a [`SelectorError`] when `selector` is not a valid selector list.
-pub fn query_selector_all(
-    tree: &VirtualTree,
-    node: NodeId,
-    selector: &str,
-) -> Result<Vec<NodeId>, SelectorError> {
-    search(tree, node, selector, false)
-}
-
 #[cfg(test)]
-mod tests;
+mod tests {
+    #![allow(clippy::unwrap_used)]
+
+    use super::*;
+    use crate::tests::*;
+    use rstest::rstest;
+
+    #[rstest]
+    #[case::only_unknown_names(":is(:foo)", false)]
+    #[case::an_unknown_name_beside_a_match(":is(:foo, p)", true)]
+    fn an_is_list_drops_an_unknown_name(#[case] selector: &str, #[case] expected: bool) {
+        let p = page();
+
+        assert_eq!(p.f.matches(p.p1, selector), expected);
+    }
+
+    #[rstest]
+    #[case::host(":host")]
+    #[case::host_function(":host(a)")]
+    #[case::host_context(":host-context(x)")]
+    #[case::host_context_compound(":host-context(.a#b)")]
+    #[case::host_context_padded(":host-context( x )")]
+    #[case::host_context_universal(":host-context(*)")]
+    #[case::host_context_attribute(":host-context([x])")]
+    #[case::host_context_pseudo_class(":host-context(a:hover)")]
+    #[case::host_context_negation(":host-context(:not(x))")]
+    #[case::lang(":lang(en)")]
+    #[case::lang_list(":lang(en, fr)")]
+    #[case::lang_strings(":lang(\"fr\", \"de\")")]
+    #[case::lang_mixed(":lang(en, \"fr\")")]
+    #[case::dir_rtl(":dir(rtl)")]
+    #[case::upper_case_pseudo_class(":HOVER")]
+    #[case::upper_case_pseudo_element("::BEFORE")]
+    #[case::upper_case_functional_pseudo_element("::HIGHLIGHT(x)")]
+    #[case::state(":state(x)")]
+    #[case::webkit_autofill(":-webkit-autofill")]
+    #[case::webkit_any_link(":-webkit-any-link")]
+    #[case::webkit_full_screen(":-webkit-full-screen")]
+    #[case::picture_in_picture(":picture-in-picture")]
+    #[case::file_selector_button("::file-selector-button")]
+    #[case::spelling_error("::spelling-error")]
+    #[case::grammar_error("::grammar-error")]
+    #[case::target_text("::target-text")]
+    #[case::cue("::cue")]
+    #[case::view_transition("::view-transition")]
+    #[case::hover(":hover")]
+    #[case::focus(":focus")]
+    #[case::checked(":checked")]
+    #[case::open(":open")]
+    #[case::before("::before")]
+    #[case::slotted("::slotted(x)")]
+    #[case::part("::part(x)")]
+    #[case::highlight("::highlight(x)")]
+    #[case::webkit("::-webkit-scrollbar")]
+    fn an_accepted_name_the_host_cannot_evaluate_never_matches(#[case] selector: &str) {
+        let p = page();
+
+        assert!(!p.f.matches(p.p1, selector));
+    }
+
+    #[rstest]
+    #[case::lower_case(":dir(ltr)")]
+    #[case::upper_case(":DIR(LTR)")]
+    fn dir_ltr_matches_every_element(#[case] selector: &str) {
+        let p = page();
+
+        assert!(p.f.matches(p.p1, selector));
+    }
+
+    #[rstest]
+    #[case::two_members(":-webkit-any(p, span)", true)]
+    #[case::no_member(":-webkit-any(span)", false)]
+    fn webkit_any_matches_through_its_list(#[case] selector: &str, #[case] expected: bool) {
+        let p = page();
+
+        assert_eq!(p.f.matches(p.p1, selector), expected);
+    }
+
+    #[rstest]
+    #[case::unclosed_attribute("[data-k")]
+    #[case::unclosed_function(":is(p")]
+    fn the_end_of_the_input_closes_an_open_block(#[case] selector: &str) {
+        let mut p = page();
+        p.f.attr(p.p1, "data-k", "");
+
+        assert!(p.f.matches(p.p1, selector));
+    }
+
+    #[test]
+    fn any_namespace_matches_by_the_type_name() {
+        let p = page();
+
+        assert!(p.f.matches(p.f.root, "*|div"));
+    }
+
+    #[rstest]
+    #[case::negative_zero(-0.0, "0")]
+    #[case::infinity(f64::INFINITY, "Infinity")]
+    #[case::negative_infinity(f64::NEG_INFINITY, "-Infinity")]
+    #[case::nan(f64::NAN, "NaN")]
+    #[case::large(1e21, "1e+21")]
+    #[case::small(1e-7, "1e-7")]
+    #[case::integer(42.0, "42")]
+    #[case::negative_fraction(-1.5, "-1.5")]
+    #[case::below_the_exponent_form(1e20, "100000000000000000000")]
+    #[case::decimal_zeros(0.000_001, "0.000001")]
+    #[case::exponent_with_digits(1.5e-7, "1.5e-7")]
+    #[case::fraction(0.5, "0.5")]
+    fn js_number_text_prints_a_number_as_javascript_does(
+        #[case] value: f64,
+        #[case] expected: &str,
+    ) {
+        assert_eq!(js_number_text(value), expected);
+    }
+
+    fn check_matches(selector: &str) -> Result<(), SelectorError> {
+        let p = page();
+        matches_selector(&p.f.tree, p.p1, selector).map(drop)
+    }
+
+    fn check_query(selector: &str) -> Result<(), SelectorError> {
+        let p = page();
+        query_selector(&p.f.tree, p.main, selector).map(drop)
+    }
+
+    fn check_query_all(selector: &str) -> Result<(), SelectorError> {
+        let p = page();
+        query_selector_all(&p.f.tree, p.main, selector).map(drop)
+    }
+
+    fn check_query_on_a_comment(selector: &str) -> Result<(), SelectorError> {
+        let m = mixed();
+        query_selector(&m.f.tree, m.comment, selector).map(drop)
+    }
+
+    fn check_query_all_on_a_comment(selector: &str) -> Result<(), SelectorError> {
+        let m = mixed();
+        query_selector_all(&m.f.tree, m.comment, selector).map(drop)
+    }
+
+    #[test]
+    fn check_selector_accepts_a_valid_selector_list() {
+        assert_eq!(check_selector("div > p, span"), Ok(()));
+    }
+
+    #[rstest]
+    #[case::empty("", "it has an empty part")]
+    #[case::trailing_combinator("div >", "it has a combinator without an operand")]
+    #[case::leading_combinator("> div", "it has an empty part")]
+    #[case::doubled_combinator("div > > p", "it has a combinator without an operand")]
+    #[case::empty_value("[a=]", "it does not follow the selector grammar")]
+    #[case::digit_value("[a=1]", "it does not follow the selector grammar")]
+    #[case::empty_list_item("a,,b", "it has an empty part")]
+    #[case::namespace("ns|a", "it does not follow the selector grammar")]
+    #[case::unknown_pseudo_class(":foo", "it names an unknown pseudo-class or pseudo-element")]
+    #[case::unknown_pseudo_class_in_not(
+        ":not(:foo)",
+        "it names an unknown pseudo-class or pseudo-element"
+    )]
+    #[case::unknown_pseudo_element("::foo", "it names an unknown pseudo-class or pseudo-element")]
+    #[case::target_within(":target-within", "it names an unknown pseudo-class or pseudo-element")]
+    #[case::playing(":playing", "it names an unknown pseudo-class or pseudo-element")]
+    #[case::paused(":paused", "it names an unknown pseudo-class or pseudo-element")]
+    #[case::unknown_function(":foo(x)", "it names an unknown pseudo-class or pseudo-element")]
+    #[case::unknown_function_pseudo_element(
+        "::foo(x)",
+        "it names an unknown pseudo-class or pseudo-element"
+    )]
+    #[case::lang_without_range(
+        ":lang()",
+        "its pseudo-class or pseudo-element argument is not valid"
+    )]
+    #[case::lang_with_number(
+        ":lang(1)",
+        "its pseudo-class or pseudo-element argument is not valid"
+    )]
+    #[case::lang_with_two_idents(
+        ":lang(en fr)",
+        "its pseudo-class or pseudo-element argument is not valid"
+    )]
+    #[case::state_without_name(
+        ":state()",
+        "its pseudo-class or pseudo-element argument is not valid"
+    )]
+    #[case::state_with_number(
+        ":state(1)",
+        "its pseudo-class or pseudo-element argument is not valid"
+    )]
+    #[case::state_with_two_idents(
+        ":state(x y)",
+        "its pseudo-class or pseudo-element argument is not valid"
+    )]
+    #[case::dir_without_name(":dir()", "its pseudo-class or pseudo-element argument is not valid")]
+    #[case::dir_with_number(":dir(1)", "its pseudo-class or pseudo-element argument is not valid")]
+    #[case::dir_with_two_names(
+        ":dir(ltr rtl)",
+        "its pseudo-class or pseudo-element argument is not valid"
+    )]
+    #[case::highlight_without_name(
+        "::highlight()",
+        "its pseudo-class or pseudo-element argument is not valid"
+    )]
+    #[case::highlight_with_number(
+        "::highlight(1)",
+        "its pseudo-class or pseudo-element argument is not valid"
+    )]
+    #[case::host_context_without_selector(
+        ":host-context()",
+        "its pseudo-class or pseudo-element argument is not valid"
+    )]
+    #[case::host_context_with_a_combinator(
+        ":host-context(a b)",
+        "its pseudo-class or pseudo-element argument is not valid"
+    )]
+    #[case::host_context_with_a_child_combinator(
+        ":host-context(a>b)",
+        "its pseudo-class or pseudo-element argument is not valid"
+    )]
+    #[case::host_context_with_an_adjacent_combinator(
+        ":host-context(a+b)",
+        "its pseudo-class or pseudo-element argument is not valid"
+    )]
+    #[case::host_context_with_a_sibling_combinator(
+        ":host-context(a~b)",
+        "its pseudo-class or pseudo-element argument is not valid"
+    )]
+    #[case::host_context_with_a_list(
+        ":host-context(a, b)",
+        "its pseudo-class or pseudo-element argument is not valid"
+    )]
+    #[case::host_context_ending_in_a_dot(
+        ":host-context(a.)",
+        "its pseudo-class or pseudo-element argument is not valid"
+    )]
+    #[case::host_context_ending_in_a_colon(
+        ":host-context(a:)",
+        "its pseudo-class or pseudo-element argument is not valid"
+    )]
+    #[case::host_context_with_two_dots(
+        ":host-context(..a)",
+        "its pseudo-class or pseudo-element argument is not valid"
+    )]
+    #[case::host_context_with_a_colon_after_a_dot(
+        ":host-context(.:x)",
+        "its pseudo-class or pseudo-element argument is not valid"
+    )]
+    #[case::host_context_with_a_dot_after_a_colon(
+        ":host-context(:.a)",
+        "its pseudo-class or pseudo-element argument is not valid"
+    )]
+    #[case::host_context_after_a_type(
+        ":host-context(a*)",
+        "its pseudo-class or pseudo-element argument is not valid"
+    )]
+    #[case::host_context_before_a_type(
+        ":host-context(*a)",
+        "its pseudo-class or pseudo-element argument is not valid"
+    )]
+    #[case::host_context_with_a_function(
+        ":host-context(a(x))",
+        "its pseudo-class or pseudo-element argument is not valid"
+    )]
+    #[case::host_context_attribute_before_a_type(
+        ":host-context([x]a)",
+        "its pseudo-class or pseudo-element argument is not valid"
+    )]
+    #[case::host_context_class_before_universal(
+        ":host-context(.a*)",
+        "its pseudo-class or pseudo-element argument is not valid"
+    )]
+    #[case::host_context_with_a_pseudo_element(
+        ":host-context(a::before)",
+        "its pseudo-class or pseudo-element argument is not valid"
+    )]
+    #[case::host_context_with_a_number(
+        ":host-context(1)",
+        "its pseudo-class or pseudo-element argument is not valid"
+    )]
+    #[case::host_context_with_a_delimiter(
+        ":host-context(!)",
+        "its pseudo-class or pseudo-element argument is not valid"
+    )]
+    #[case::host_context_with_a_string(
+        ":host-context(\"x\")",
+        "its pseudo-class or pseudo-element argument is not valid"
+    )]
+    #[case::class_after_a_pseudo_element(
+        "::before:hover",
+        "it does not follow the selector grammar"
+    )]
+    #[case::form_state_after_a_pseudo_element(
+        "::before:checked",
+        "it does not follow the selector grammar"
+    )]
+    #[case::structural_after_a_pseudo_element(
+        "::before:first-child",
+        "it does not follow the selector grammar"
+    )]
+    fn an_invalid_selector_returns_the_parse_error(
+        #[case] selector: &str,
+        #[case] reason: &str,
+        #[values(
+            check_matches,
+            check_selector,
+            check_query,
+            check_query_all,
+            check_query_on_a_comment,
+            check_query_all_on_a_comment
+        )]
+        run: fn(&str) -> Result<(), SelectorError>,
+    ) {
+        let error = run(selector).unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            format!("the selector is not valid. {reason}")
+        );
+    }
+}
