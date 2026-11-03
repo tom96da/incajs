@@ -14,6 +14,7 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 - `TextEncoder` and `TextDecoder` are available ([cda29e1](https://github.com/tom96da/incajs/commit/cda29e1))
 - `querySelector()` and `querySelectorAll()` on a ref ([5d03fff](https://github.com/tom96da/incajs/commit/5d03fff))
+- a packaged app writes its errors and panics to a log file for each run, and keeps the last 10 files ([0aaabf9](https://github.com/tom96da/incajs/commit/0aaabf9))
 
 ### Changed
 
