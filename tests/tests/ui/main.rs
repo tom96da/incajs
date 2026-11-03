@@ -25,5 +25,6 @@ mod propagation;
 mod reactivity;
 mod removed;
 mod scroll;
+mod style_element;
 mod tabindex;
 mod timing;
