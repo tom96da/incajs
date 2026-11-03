@@ -5,6 +5,9 @@
 // pending, to check when the window opens and `ready` is sent. Linux runs the
 // host headless (the vitest setup removes the display variables). macOS opens
 // a real window.
+//
+// The cases run together and wait out the 2 seconds in real time. Other tests that depend on
+// that wait use gpui's fake clock in `inca-host`.
 
 import { spawn } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";

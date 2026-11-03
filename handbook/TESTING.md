@@ -12,37 +12,16 @@ change is done, for Rust and TypeScript.
 
 ### Test placement
 
-- **Unit tests**: an inline `#[cfg(test)] mod tests { .. }` at the end of the
-  module they test. When the module and its tests together exceed 800 lines,
-  the tests move to `<module>/tests.rs` (e.g.
-  `crates/inca-gpui/src/tree/tests.rs`) and the module declares them with
-  `#[cfg(test)] mod tests;`. A `tests.rs` that fits in 800 lines together with
-  its module goes back inline. A module with many tests keeps shared helpers
-  in `tests.rs` and the tests in `<module>/tests/<topic>.rs`. `tests.rs`
-  declares its topic modules before its helpers. A file stays at or below 800
-  lines.
-- **Overlapping tests**: the branch is pinned once, where the code lives.
-  When a unit test and an integration test pin the same branch, the unit
-  test stays. An integration test pins one contract, such as what JS observes
-  or how layers connect. A unit test that asserts only a private field gives
-  way to the integration test of the same behaviour.
-- **Shared helpers**: a helper used by tests of several modules of one crate
-  lives once in that crate's `src/tests.rs`, declared in `lib.rs` with
-  `#[cfg(test)] mod tests;`. `test_support` is the name of the `inca-bridge`
-  feature and module, so it names nothing else.
-- **Integration tests**: `tests/*.rs` in each crate, one file per
-  cross-module concern (e.g. `crates/inca-gpui/tests/layout_parity.rs`).
-  Cargo compiles each against the crate's public API only.
-- **gpui behavior pins**: `crates/inca-gpui/tests/gpui_behavior.rs` checks the
-  facts the event dispatch assumes about gpui (listener order, hit testing,
-  focus on press, the wheel step on a hidden container, key propagation) on gpui's test platform. A
-  gpui upgrade that changes one fails there first.
-- **Opening a window**: see [MANUAL_GUI_CHECK.md](./MANUAL_GUI_CHECK.md).
-- **Tests that need both languages**: the root `tests/` package, see
-  [Root tests](#root-tests-tests).
-- **Console tests**: console behaviour is unit-tested beside the code in
-  `crates/inca-jsenv/src`. Timers are checked by the shape of the output.
-  Color is checked by exact SGR sequences and by stripping them.
+- **Unit tests**: an inline `#[cfg(test)] mod tests { .. }` at the end of the module they test. A
+  file stays at or below 800 lines. Past that, split the module by concern. Each new module keeps
+  its code and its tests in one file.
+- **Shared helpers**: a helper used by tests of several modules of one crate lives once in that
+  crate's `src/tests.rs`.
+- **Integration tests**: `tests/*.rs` in each crate, one file per cross-module concern. Cargo
+  compiles each against the crate's public API only.
+- **Overlapping tests**: the branch is pinned once, where the code lives. When a unit test and an
+  integration test pin the same branch, the unit test stays. An integration test pins one contract,
+  such as what JS observes or how layers connect.
 
 ### Test names
 
@@ -59,18 +38,16 @@ Independent cases of one behaviour are one test per case.
   `#[gpui::test]`, with `#[case::<id>(..)]`. `cx: &mut TestAppContext` stays
   the first parameter and the last parameters take the case values.
   `rstest` cannot supply `cx`.
-- Both name a test `<fn>::case_<N>_<id>`. `cargo test -p <crate> -- --list`
-  prints the names.
+- Both name a test `<fn>::case_<N>_<id>`.
 - A loop whose iterations share state, or whose body only registers
   listeners for one dispatch, stays a loop.
 
 ### Lint allows
 
-A test module that needs `clippy::unwrap_used` (or `float_cmp` and the like)
-carries the allow itself, as an inner `#![allow(..)]` at the top of its inline
-block, its `tests.rs`, its topic file or its integration test file. A
-production file has no `#[allow]` on a `mod tests;` line, and a child module
-does not rely on the allow of its parent.
+A test module that needs `clippy::unwrap_used` (or `float_cmp` and the like) carries the allow
+itself, as an inner `#![allow(..)]` at the top of its inline block, the shared `tests.rs` or its
+integration test file. A production file has no `#[allow]` on a `mod tests;` line, and a child
+module does not rely on the allow of its parent.
 
 ### Required checks
 
@@ -82,56 +59,26 @@ All of the following must pass:
 - `cargo clippy --workspace --all-targets --exclude inca-tests -- -D warnings`
 - `cargo test --workspace --exclude inca-tests`
 
-### Toolchain pinning and MSRV
-
-`rust-toolchain.toml` pins the toolchain, and rustup applies it to every
-`cargo` call in the workspace, locally and on CI. `Cargo.toml`'s
-`rust-version` is held equal to the pin. Bump both together. The resolver
-(`resolver = "3"`) is MSRV-aware, so it does not pick a dependency that needs
-a newer `rustc`.
-
-### macOS coverage
-
-The `rust-macos` and `rust-macos-intel` jobs run the same Rust steps as the
-Linux jobs, with `inca-tests` excluded. `test-macos` runs the Node unit suites.
-`rust-node-macos` runs the same steps as `rust-node-ubuntu`, including
-`cargo test -p inca-tests` and the `@incajs/e2e-tests` suite. The `plutil`
-tests in `packages/cli/src/macosApp.test.mts` run only on macOS and are
-skipped elsewhere.
-
 ## TypeScript (`packages/*`)
 
 ### Test placement
 
-Mirrors the Rust split above, using Vitest:
-
-- **Unit tests**: `*.test.mts` co-located next to the module it tests
-  (e.g. `packages/core/src/tree.test.mts` next to `src/tree.mts`),
-  mocking `globalThis.__inca_native__` and `__inca_callbacks__`. No real
-  QuickJS engine runs under `pnpm test`. A barrel (`src/index.mts`)
-  re-exports only; its modules carry the tests.
-- **QuickJS run**: `pnpm --filter incajs test:quickjs [<file>...]` bundles
-  `packages/core` test files with rolldown and runs each in the quickjs-ng
-  build of `quickjs-emscripten`. Without an argument it runs every test file
-  of the package. It runs with vitest's own `expect` and `vi` and a small
-  shim for `describe`, `it` and the hooks. The run is not part of `pnpm test`
-  or CI.
-- **No import from core**: the tool in `tests/quickjs/` imports nothing from
-  `packages/core` source. Core-specific plugins and stubs go in a config file
-  passed with `--config`.
-- **After a vitest upgrade**, run
-  `pnpm --filter incajs test:quickjs src/interfaces.test.mts`. The line
-  `the QuickJS context has no global <name>` names a global the context lacks.
-  A stub for vitest goes in `tests/quickjs/stubs.js`, and a stub for core code
-  goes in the config file.
-- **Integration tests**: a `tests/` directory at the package root, for
-  whatever a package's own unit tests can't reach mocked — e.g.
-  `packages/core/tests/renderer.test.mts`, driving `createIncaApp`
-  end-to-end against `incajs/vue` and a real (unmocked) `incajs` core.
+- **Unit tests**: `*.test.mts` next to the module it tests, mocking `globalThis.__inca_native__` and
+  `__inca_callbacks__`. No real QuickJS engine runs under `pnpm test`. A barrel (`src/index.mts`)
+  re-exports only, and its modules carry the tests.
+- **Integration tests**: a `tests/` directory at the package root, for what a package's unit tests
+  can't reach with mocks.
+- **Tests that need both languages**: the root `tests/` package, see
+  [Cross-language tests](#cross-language-tests-tests).
+- **QuickJS run**: `pnpm --filter incajs test:quickjs [<file>...]` runs the test files of
+  `packages/core` in the quickjs-ng build of `quickjs-emscripten`. The run is not part of
+  `pnpm test` or CI. The tool in `packages/core/tests/quickjs/` imports nothing from the source of
+  `packages/core`. Core-specific plugins and stubs go in a config file passed with `--config`.
 
 ### Required checks
 
-**A change isn't done until root `pnpm test` passes with no warnings.** CI
+**A change isn't done until root `pnpm test` passes with no warnings.** A run of one package
+(`pnpm --filter <pkg> test`) can miss a failure in the tests of another package that uses it. CI
 also runs `pnpm -r build`, which builds every workspace member that defines
 a build script: the two packages, the examples and the docs site.
 
@@ -148,105 +95,64 @@ Run `format` from the root. `oxfmt.config.ts` holds the import-sorting rules,
 and only the root script (`oxfmt --check --disable-nested-config .`) applies
 them. A package's own `format` can pass on imports the root one rejects.
 
-### Build-tooling gotchas
+### Workspace imports and build output
 
-- Each package's `tsdown.config.mts` bundles the declarations from the entry
-  files, so test files stay out of `dist` and no `dist/*.test.d.ts` is
-  published.
-- Type-checking resolves workspace imports from source through the `"source"`
-  export condition and `customConditions` in `tsconfig.base.json`. Vitest
-  does not read `customConditions`. A package that tests against another
-  workspace package sets the condition on `resolve.conditions` and
-  `ssr.resolve.conditions` in its own `vitest.config.mts`.
-- A package's `tsconfig.json` `include` lists every directory whose files are
-  checked, plus a `*.mts` glob for its root-level config files. A file outside
-  `include` is still linted, but without `tsconfig.base.json`'s `strict` and
-  `customConditions`.
-- Vitest replaces an array option such as `exclude` with its default instead
-  of merging. Spread `configDefaults` from `vitest/config` to extend it, as
-  the root `vitest.config.ts` does.
-- A test fixture spawned as a process (`packages/cli`'s
-  `tests/dev-client/fixtures/*.mts`) needs its executable bit set.
+- A package that tests against another workspace package sets the `"source"`
+  condition on `resolve.conditions` and `ssr.resolve.conditions` in its own
+  `vitest.config.mts`. Vitest does not read `customConditions` from
+  `tsconfig.base.json`.
 - A test that needs its own package's build output produces it itself on
-  every run. `hmr.test.mts` calls tsdown's `build()` in `beforeAll` with the
-  package's `tsdown.config.mts`. It overrides only `entry`, `outDir` and
-  `dts`, and writes to a scratch directory.
+  every run, into a scratch directory.
 
-## Root tests (`tests/`)
+## Cross-language tests (`tests/`)
 
-The root `tests/` package holds the tests that need both languages. It sits
-outside every crate and package, so neither side depends on the other. A test
-that spawns the real `inca-host` binary lives here, never in a crate or a
-package.
+The root `tests/` package holds the tests that need both languages. It sits outside every crate and
+package, so neither side depends on the other. A test that spawns the real `inca-host` binary lives
+here, never in a crate or a package.
 
-### Rust tests (`inca-tests`)
+### Test placement
 
-- Rust files in `tests/tests/`: `config_contract.rs` starts Node.
-  `js_core_integration.rs` reads `packages/core/dist`.
-- `tests/tests/ui/` mounts the `.vue` files in `tests/tests/ui-fixtures/` in
-  the `Harness`. `build-ui-fixtures.mjs` bundles them all once per run and
-  needs `packages/core/dist`. Only top-level `.vue` files become fixtures;
-  helper components live in `ui-fixtures/parts/`.
-- The **`test-support` feature** gates `inca-host`'s `Harness` and `snapshot`
-  and enables gpui's test platform. The root `tests/` dev-dependency turns it
-  on. Its unit tests are in `crates/inca-host/src/harness/tests/` and
-  `snapshot.rs`.
-- The **`test-support` feature** of `inca-bridge` exposes `test_support`, the
-  engine helpers shared by its unit and integration tests. The crate's own
-  dev-dependency turns it on.
+- **Rust tests (`inca-tests`)**: `tests/tests/*.rs`. The UI tests in `tests/tests/ui/` mount the
+  `.vue` files in `tests/tests/ui-fixtures/` in the `Harness`. Only top-level `.vue` files become
+  fixtures, and helper components live in `ui-fixtures/parts/`.
+- **Node e2e tests (`@incajs/e2e-tests`)**: `tests/tests/*.test.mts`. They spawn the real
+  `inca-host` binary, and `pnpm test` does not run them.
 
-### Node e2e tests (`@incajs/e2e-tests`)
+### Test support
 
-The Node files in `tests/tests/` belong to `@incajs/e2e-tests`, which
-`pnpm test` does not run: `hmr-quickjs-state`, `hmr-timers`,
-`host-startup-failure`, `host-startup-wait`, `host-shutdown`,
-`host-packaged-launch`, `host-print-config`, `host-source-map`, `host-timers`,
-`hmr-callback-ids`, `host-stack-limit` and `inca-config`.
-They spawn the real `inca-host` binary, and `hmr-quickjs-state`, `hmr-timers`
-and `hmr-callback-ids` also start a real Vite dev server.
-
-- `tests/support/headless.mts` is a vitest setup file. It removes `DISPLAY`
-  and `WAYLAND_DISPLAY`, so on Linux every spawned host runs on gpui's
-  headless platform and the tests need no X server. A new test needs no code
-  for this.
+- `tests/support/headless.mts` is a vitest setup file. It removes `DISPLAY` and `WAYLAND_DISPLAY`,
+  so on Linux every spawned host runs on gpui's headless platform and the tests need no X server. A
+  new test needs no code for this.
 - `tests/support/hostBin.mts` exports `resolveTestHostBin()`, which returns
-  `target/debug/inca-host`, else `target/release/inca-host`. The tests that
-  spawn the host import it.
-- `host-shutdown` speaks the dev protocol on raw stdio. On macOS it opens a
-  real window and needs a window-server session.
-- `host-startup-wait` starts the host on entries whose top-level `await`
-  stays pending and checks when `ready` arrives. Its tests run together and
-  wait out the 2 seconds in real time. Other tests that depend on that wait
-  use gpui's fake clock in `inca-host`.
-- `host-print-config` runs `--print-config` and compares the printed JSON and
-  the exit code.
-- `host-timers` runs an interval and a timeout of the built `incajs` on the
-  real clock.
-- `host-stack-limit` runs a script that recurses until the stack limit throws
-  and checks that the host exits with 1 and no signal.
-- `hmr-timers` edits a script under experimental HMR and checks that a timer
-  the old module started keeps ticking.
-- `host-packaged-launch` starts the host with no argv, from an unrelated
-  working directory, with the bundle beside the executable. Its bundles open
-  no window, so it needs no display.
+  `target/debug/inca-host`, else `target/release/inca-host`. The tests that spawn the host import
+  it.
+- The `test-support` feature of `inca-host` gates its `Harness` and `snapshot` and enables gpui's
+  test platform. The `test-support` feature of `inca-bridge` exposes the engine helpers its tests
+  share. A dev-dependency turns each on.
 
 ### Required checks
 
 All of the following must pass:
 
 - `pnpm -F incajs -F @incajs/cli build`, then
-  `cargo clippy -p inca-tests --all-targets -- -D warnings` and
-  `cargo test -p inca-tests`
-- `cargo build -p inca-host`, then `pnpm -F @incajs/e2e-tests test`. CI runs
-  the e2e step under `xvfb-run -a`.
+  `cargo clippy -p inca-tests --all-targets -- -D warnings` and `cargo test -p inca-tests`
+- `cargo build -p inca-host`, then `pnpm -F @incajs/e2e-tests test`. CI runs the e2e step under
+  `xvfb-run -a`.
 
 On CI, only `rust-node-ubuntu` lints and type-checks `tests/`.
 
-## Running tests
+## CI
 
-- Whole workspace, from the root: `pnpm test`, `pnpm typecheck` (covers
-  `examples/*` too) and `pnpm -r build`.
-- One package: `pnpm --filter <pkg> test`, `typecheck` or `build`. A single
-  package can miss what another package's tests catch.
-- Coverage: `pnpm test:coverage`.
-- Rust and the root tests: see the Required checks of each section.
+[`ci.yml`](../.github/workflows/ci.yml) runs the checks of this document on every pull request and
+on pushes to the integration and release branches. A job runs only when the files of its area
+changed. One status check stands for all jobs.
+
+- **Lint, format and type check**: on one Node.js version.
+- **Node.js and Bun**: the TypeScript unit tests on Node.js 22, 24 and 26 on Linux, on Node.js 26 on
+  macOS, and on Bun on Linux.
+- **Rust**: on Linux (x64 and arm64) and on macOS (arm64 and x64). Linux jobs run in the oldest
+  supported Ubuntu.
+- **Rust and JavaScript together**: the cross-language tests on Linux and macOS with Node.js 26, and
+  on Linux with Bun.
+
+A test that only macOS can run skips itself elsewhere.

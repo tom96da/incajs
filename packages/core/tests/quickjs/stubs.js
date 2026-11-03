@@ -1,7 +1,14 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-// The globals that vitest reads while it loads, evaluated in the QuickJS context.
+/**
+ * The globals that vitest reads while it loads, evaluated in the QuickJS context.
+ *
+ * After a vitest upgrade, run `pnpm -F incajs test:quickjs src/interfaces.test.mts`.
+ * The line `the QuickJS context has no global <name>` names a global to stub here.
+ * A stub for core code goes in the config file passed with `--config`.
+ */
+
 globalThis.process = {
   env: {},
   argv: [],

@@ -3,9 +3,10 @@
 # Copyright (c) 2026 tom96da
 # SPDX-License-Identifier: MIT OR Apache-2.0
 
-# Pinned so the ubuntu and macos CI legs don't compile with the different
-# rustc versions their runner images happen to ship. Cargo.toml's
-# rust-version is held equal to this channel -- bump both together.
+# Pins the rustc version, so the Linux and macOS CI jobs compile with the same one.
+# `rust-version` in Cargo.toml equals this channel. Bump both together.
+# The resolver (`resolver = "3"`) reads `rust-version` and skips a dependency that needs a newer
+# rustc.
 [toolchain]
 channel = "1.98.0"
 components = ["clippy", "rustfmt"]
