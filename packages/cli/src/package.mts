@@ -13,7 +13,7 @@ import { log } from "./log.mts";
 import { writeMacosApp } from "./macosApp.mts";
 import { checkConfig } from "./printConfig.mts";
 import type { ResolvedAppConfig } from "./config/loader.mts";
-import type { Bundler, BuildOutput } from "./types.mts";
+import type { Bundler, BuildOutput, Frontend } from "./types.mts";
 
 /** A platform `inca package` can emit a distributable application for. */
 export type PackageTarget = "macos" | "linux";
@@ -25,11 +25,13 @@ export interface PackageAppOptions {
   /**
    * The app's entry point. Defaults to resolving it the same way `inca
    * dev`/`build` do: a committed `src/main.mts`, `src/main.ts` or `src/main.js`,
-   * or `src/App.vue` wrapped in a synthesized one.
+   * or the app file of the frontend wrapped in a synthesized one.
    */
   entry?: string;
   /** Overrides the bundler. See {@link build}'s default. */
   bundler?: Bundler;
+  /** Overrides the frontend. See {@link build}'s default. */
+  frontend?: Frontend;
   /**
    * Overrides which host binary gets embedded in the packaged
    * app, in place of automatic resolution (`INCA_HOST_BIN`, then the binary
@@ -215,6 +217,7 @@ export async function packageApp(options: PackageAppOptions = {}): Promise<Packa
     sourcemap: options.sourcemap,
     runtimeConfig: runtimeConfigOf(metadata),
     bundler: options.bundler,
+    frontend: options.frontend,
     stdout,
     stderr: options.stderr,
   });

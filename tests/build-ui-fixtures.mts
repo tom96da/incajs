@@ -10,7 +10,7 @@ import { copyFile, mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promis
 import path from "node:path";
 import { Writable } from "node:stream";
 
-import { defaultBundler } from "../packages/cli/src/defaultPlugins.mts";
+import { defaultBundler, defaultFrontend } from "../packages/cli/src/defaultPlugins.mts";
 
 const outDir = process.argv[2];
 if (!outDir) {
@@ -41,10 +41,7 @@ for (const name of names) {
   const entry = path.join(entriesDir, `${name}.mts`);
   const buildDir = path.join(outDir, `${name}.build`);
   const app = JSON.stringify(path.join(fixturesDir, `${name}.vue`));
-  await writeFile(
-    entry,
-    `import { createIncaApp } from "incajs/vue";\nimport App from ${app};\ncreateIncaApp(App).mount();\n`,
-  );
+  await writeFile(entry, defaultFrontend.entryCode(app));
   try {
     const output = await bundler.build({
       entry,

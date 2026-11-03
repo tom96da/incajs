@@ -12,13 +12,10 @@ import { emitConfig } from "./emitConfig.mts";
 import { streamLogger } from "./logger.mts";
 import { requirePeers } from "./requirePeers.mts";
 import { rejectUnsupported } from "./unsupported.mts";
-import type { AdapterCore } from "../adapterCore.mts";
+import type { AdapterCore, FrontendId } from "../adapterCore.mts";
 import type { CapturedOutput } from "./captureOutput.mts";
 
 export const BUNDLE_FILE_NAME = "bundle.js";
-
-/** A frontend: the package that lists its peers, and its name there. */
-export type FrontendId = readonly [pkg: string, frontend: string];
 
 /** The options of the `vue` plugin's template compiler. */
 type VueTemplateCompilerOptions = NonNullable<

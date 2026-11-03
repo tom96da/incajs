@@ -8,8 +8,7 @@ import { pathToFileURL } from "node:url";
 
 import type { Plugin } from "vite";
 
-import type { AdapterCore } from "../adapterCore.mts";
-import type { FrontendId } from "./config.mts";
+import type { AdapterCore, FrontendId } from "../adapterCore.mts";
 
 /** Vite stands in for an optional peer it can't find with an id of its own. */
 const OPTIONAL_PEER_PREFIX = "__vite-optional-peer-dep:";

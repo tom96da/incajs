@@ -22,7 +22,13 @@ import { IncaError } from "./error.mts";
 import { hostLicenseFiles, resolveHostBin } from "./host/index.mts";
 import { packageApp } from "./package.mts";
 import type { PackageTarget } from "./package.mts";
-import type { Bundler, BuildOptions, BuildOutput, Watcher } from "./types.mts";
+import type { Bundler, BuildOptions, BuildOutput, Frontend, Watcher } from "./types.mts";
+
+const ALPHA: Frontend = {
+  id: ["alpha-pkg", "alpha"],
+  appFile: "App.alpha",
+  entryCode: (appImport) => `load(${appImport});`,
+};
 
 const mockedResolveHostBin = vi.mocked(resolveHostBin);
 const mockedLicenseFiles = vi.mocked(hostLicenseFiles);
@@ -127,6 +133,31 @@ describe("packageApp", () => {
     });
 
     expect(seen?.runtimeConfig).not.toHaveProperty("dev");
+  });
+
+  it("hands the frontend to the build", async () => {
+    const app = await makeApp({ name: "click_counter" });
+    await mkdir(path.join(app, "src"));
+    await writeFile(path.join(app, "src/App.alpha"), "alpha\n");
+    const hostBin = await makeHostBin(app);
+    const bundler = fakeBundler();
+    let seen: BuildOptions | undefined;
+    const build = bundler.build.bind(bundler);
+    bundler.build = (options) => {
+      seen = options;
+      return build(options);
+    };
+
+    await packageApp({
+      cwd: app,
+      frontend: ALPHA,
+      bundler,
+      hostBin,
+      target: "linux",
+      stdout: makeSink().stream,
+    });
+
+    expect(seen?.entry).toBe(path.join(app, "node_modules/.inca/entry.mts"));
   });
 
   it("refuses a config the host cannot read before laying out the app", async () => {

@@ -20,13 +20,18 @@ export interface EditWatch {
 /** The files in the app's root directory that configure it. */
 const CONFIG_FILE = /^(?:inca\.config\.[a-z0-9]+|package\.json)$/;
 
-/** The entry files `resolveEntry` looks for in `src/`, by name. */
-const ENTRY_FILES: readonly string[] = [...MAIN_FILES, "App.vue"];
+/** Options for {@link watchForEdit}. */
+export interface WatchForEditOptions {
+  /** The file name in `src/` that the frontend treats as a whole app. An edit to it counts. */
+  appFile: string;
+  /** How long changes must stay quiet before `edited` resolves. Defaults to 100. */
+  debounceMs?: number;
+}
 
 /**
  * Watches the files that decide how an app starts: `inca.config.*` and `package.json` in `cwd`,
- * `src/main.mts`, `src/main.ts`, `src/main.js` and `src/App.vue`, and every file passed to
- * {@link EditWatch.add}. Creating, deleting, changing or renaming one of them counts as an edit.
+ * `src/main.mts`, `src/main.ts`, `src/main.js` and the app file of the frontend, and every file
+ * passed to {@link EditWatch.add}. Creating, deleting, changing or renaming one of them counts as an edit.
  * Edits to other files are ignored.
  *
  * The watchers are live when this returns, so a save made while the caller
@@ -34,12 +39,14 @@ const ENTRY_FILES: readonly string[] = [...MAIN_FILES, "App.vue"];
  * `edited` keeps it resolved.
  *
  * @param cwd - the app's root directory
- * @param options.debounceMs - how long changes must stay quiet before `edited` resolves. Defaults to 100.
+ * @param options - the app file of the frontend and the debounce
  * @returns the watch. Call `close()` when done with it.
  * @throws if the operating system refuses a watcher, for example when it is out of file handles
  */
-export function watchForEdit(cwd: string, options: { debounceMs?: number } = {}): EditWatch {
+export function watchForEdit(cwd: string, options: WatchForEditOptions): EditWatch {
   const debounceMs = options.debounceMs ?? 100;
+  // The entry files `resolveEntry` looks for in `src/`, by name.
+  const entryFiles = [...MAIN_FILES, options.appFile];
   const watchers = new Set<FSWatcher>();
   let timer: NodeJS.Timeout | undefined;
   let closed = false;
@@ -86,7 +93,7 @@ export function watchForEdit(cwd: string, options: { debounceMs?: number } = {})
   try {
     // `src` counts so that a deleted and recreated `src/` re-arms the caller.
     watchDir(cwd, (name) => name === "src" || CONFIG_FILE.test(name));
-    watchDir(path.join(cwd, "src"), (name) => ENTRY_FILES.includes(name));
+    watchDir(path.join(cwd, "src"), (name) => entryFiles.includes(name));
   } catch (error) {
     close();
     throw error;

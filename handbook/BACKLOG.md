@@ -1388,11 +1388,14 @@ A fixed entry is deleted and its ID is never reused.
   (a listener, a rejection, a limit stop) stays in the message text. Fix: give
   `EngineError` a kind.
 
-- **B-262 The CLI generates an app entry that names the Vue renderer**
-  `Units: cli · Size: S · Impact: Low`
+- **B-266 The config has no `frontend` field**
+  `Units: cli,core · Size: L · Impact: Low`
 
-  When an app has no entry file, `inca dev` and `inca build` write
-  `node_modules/.inca/entry.mts` with `import { createIncaApp } from "incajs/vue"`.
-  The CLI therefore knows the renderer's entry point outside
-  `defaultBundler.mts`, and a different renderer cannot replace it. Fix: take the
-  entry code from the default bundler, which already names the renderer module.
+  The CLI wires the Vue frontend in `packages/cli/src/defaultPlugins.mts`, and
+  `inca.config.ts` cannot select or replace it. `incajs/vue` exports no `vue()`,
+  so an app cannot write `frontend: vue()`. Fix: let the config take a frontend
+  object whose members are the `Frontend` of the CLI and the plugin list for a
+  named bundler. Needs: the Vite slot of that contract; `inca config` printing
+  a field that holds a function; a decision for `package.json` `"inca"` and the
+  JSON configs, which cannot hold one; moving `@vitejs/plugin-vue` from the
+  dependencies of `@incajs/cli` to an optional peer of `incajs`.

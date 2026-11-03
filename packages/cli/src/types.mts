@@ -1,6 +1,23 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+/** A frontend's package and its key in that package's `incajs.frontends`. */
+export type FrontendId = readonly [pkg: string, frontend: string];
+
+/** What the CLI needs to know of a frontend. */
+export interface Frontend {
+  /** The package that lists the frontend's peers, and its key there. */
+  id: FrontendId;
+  /** The file name in `src/` that is a whole app, such as `App.vue`. */
+  appFile: string;
+  /**
+   * The source of the synthesized entry for the app file.
+   * @param appImport - the JSON-quoted import specifier of the app file, with `/` separators
+   * @returns the file text, without a trailing newline
+   */
+  entryCode(appImport: string): string;
+}
+
 /** A running build watch. {@link Bundler.watch} resolves to this value. */
 export interface Watcher {
   /** Stops watching and releases the underlying build process. */
@@ -9,7 +26,7 @@ export interface Watcher {
 
 /** Options for {@link Bundler.build}. */
 export interface BuildOptions {
-  /** The app's own entry point. It may import `.vue` files. */
+  /** The app's own entry point. It may import the files of the frontend. */
   entry: string;
   /** The app's root directory for Vite. `envDir` and `publicDir` default to locations under it. Defaults to the entry's directory. */
   root?: string;
@@ -76,7 +93,7 @@ export interface BuildOutput {
 
 /** Options for {@link Bundler.hmr}. */
 export interface HmrOptions {
-  /** The app's own entry point. It may import `.vue` files. */
+  /** The app's own entry point. It may import the files of the frontend. */
   entry: string;
   /** The directory the app's module urls are relative to. Defaults to the entry's directory. */
   root?: string;

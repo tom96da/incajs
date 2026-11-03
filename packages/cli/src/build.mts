@@ -5,21 +5,24 @@ import path from "node:path";
 
 import { withAppRoot } from "./config/appRoot.mts";
 import { assertOutDir, resolveBuildConfig, resolveRuntimeConfig } from "./config/loader.mts";
-import { defaultBundler } from "./defaultPlugins.mts";
+import { defaultBundler, defaultFrontend } from "./defaultPlugins.mts";
 import { entryRoot, resolveEntry } from "./entry.mts";
 import type { ResolvedBuildConfig, RuntimeConfig } from "./config/loader.mts";
-import type { Bundler, BuildOutput } from "./types.mts";
+import type { Bundler, BuildOutput, Frontend } from "./types.mts";
 
 export interface BuildAppOptions {
   /** The app's root directory. Defaults to `process.cwd()`. */
   cwd?: string;
   /**
    * The app's entry point. Defaults to resolving it automatically: a
-   * committed `src/main.mts`, `src/main.ts` or `src/main.js`, or `src/App.vue` wrapped in a synthesized one.
+   * committed `src/main.mts`, `src/main.ts` or `src/main.js`, or the app file of the frontend
+   * wrapped in a synthesized one.
    */
   entry?: string;
   /** Overrides the bundler. See {@link defaultBundler} for what's wired in by default. */
   bundler?: Bundler;
+  /** Overrides the frontend. Defaults to {@link defaultFrontend}. */
+  frontend?: Frontend;
   /** An already-resolved config. It lets `packageApp` avoid loading it twice. */
   config?: ResolvedBuildConfig;
   /** Writes `bundle.js.map` beside the bundle. Overrides the config's `sourcemap` when set. */
@@ -41,8 +44,9 @@ export async function build(options: BuildAppOptions = {}): Promise<BuildOutput>
   const config = options.config ?? (await resolveBuildConfig(cwd));
   const outDir = path.resolve(cwd, config.outDir);
   const bundler: Bundler = options.bundler ?? defaultBundler;
+  const frontend: Frontend = options.frontend ?? defaultFrontend;
 
-  const entry = options.entry ?? config.entry ?? (await resolveEntry(cwd));
+  const entry = options.entry ?? config.entry ?? (await resolveEntry(cwd, frontend));
   assertOutDir(cwd, outDir, entry);
   const runtimeConfig = options.runtimeConfig ?? (await resolveRuntimeConfig(cwd));
 
