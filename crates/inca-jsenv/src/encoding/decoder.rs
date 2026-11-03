@@ -294,7 +294,7 @@ mod tests {
     use crate::Engine;
     use crate::encoding::NOT_AN_OBJECT;
     use crate::encoding::tests::{run, thrown};
-    use crate::engine::tests::around;
+    use crate::tests::around;
 
     /// A codec for `label` with the default flags.
     fn codec(label: &str) -> Codec {

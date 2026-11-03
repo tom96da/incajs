@@ -1,0 +1,684 @@
+// Copyright (c) 2026 tom96da
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+//! `Map`, `Set` and typed-array values.
+
+use std::cell::RefCell;
+use std::fmt::Write;
+use std::rc::Rc;
+
+use rquickjs::function::{Rest, This};
+use rquickjs::{Function, Object, Value};
+
+use super::array::{separate, write_more};
+use super::object::{constructor_name, slot, write_slot};
+use super::{MAX_ENTRIES, Mode, put, settled, write_value};
+use crate::paint::Style;
+
+/// `Name(n) { ... }`, a map's entries as `key => value`.
+pub(super) fn write_collection<'js>(
+    out: &mut String,
+    value: &Value<'js>,
+    each: &Function<'js>,
+    name: &str,
+    depth: usize,
+    mode: Mode,
+) {
+    if depth >= mode.max_depth {
+        put(out, mode, Style::Cyan, &format!("[{name}]"));
+        return;
+    }
+    let items = items(value, each);
+    if items.is_empty() {
+        let _ = write!(out, "{name}(0) {{}}");
+        return;
+    }
+
+    let _ = write!(out, "{name}({}) {{ ", items.len());
+    for (index, (item, key)) in items.iter().take(MAX_ENTRIES).enumerate() {
+        if index > 0 {
+            out.push_str(", ");
+        }
+        if name == "Map" {
+            write_value(out, key, depth + 1, mode);
+            out.push_str(" => ");
+        }
+        write_value(out, item, depth + 1, mode);
+    }
+    if items.len() > MAX_ENTRIES {
+        // Entries precede it, so it starts with a separator.
+        let mut written = true;
+        #[allow(clippy::cast_precision_loss)]
+        write_more(out, &mut written, (items.len() - MAX_ENTRIES) as f64, mode);
+    }
+    out.push_str(" }");
+}
+
+/// `Name(n) [ ... ]`, the elements of a typed array of the kind `name`. `length_of` is the
+/// pinned `length` getter.
+pub(super) fn write_typed_array<'js>(
+    out: &mut String,
+    object: &Object<'js>,
+    name: &str,
+    length_of: &Function<'js>,
+    depth: usize,
+    mode: Mode,
+) {
+    let own = constructor_name(object);
+    if depth >= mode.max_depth {
+        let text = match own.as_deref() {
+            None => format!("[{name}: null prototype]"),
+            Some(own) if own != name => format!("[{own} [{name}]]"),
+            Some(_) => format!("[{name}]"),
+        };
+        put(out, mode, Style::Cyan, &text);
+        return;
+    }
+    let length = settled(
+        object.ctx(),
+        length_of.call::<_, f64>((This(object.clone()),)),
+    )
+    .unwrap_or(0.0);
+    let _ = match own.as_deref() {
+        None => write!(out, "[{name}({length}): null prototype] "),
+        Some(own) if own != name => write!(out, "{own}({length}) [{name}] "),
+        Some(_) => write!(out, "{name}({length}) "),
+    };
+    if length < 1.0 {
+        out.push_str("[]");
+        return;
+    }
+    out.push_str("[ ");
+    let mut written = false;
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let count = length as usize;
+    for index in 0..count.min(MAX_ENTRIES) {
+        separate(out, &mut written);
+        write_slot(out, slot(object, &index.to_string()), depth, mode);
+    }
+    if count > MAX_ENTRIES {
+        #[allow(clippy::cast_precision_loss)]
+        write_more(out, &mut written, (count - MAX_ENTRIES) as f64, mode);
+    }
+    out.push_str(" ]");
+}
+
+/// The `(value, key)` pairs `each` (a `forEach`) visits, as far as it got
+/// before any exception, which is cleared.
+fn items<'js>(value: &Value<'js>, each: &Function<'js>) -> Vec<(Value<'js>, Value<'js>)> {
+    let ctx = value.ctx();
+    let found = Rc::new(RefCell::new(Vec::new()));
+    let sink = Rc::clone(&found);
+    let visit = settled(
+        ctx,
+        Function::new(ctx.clone(), move |args: Rest<Value<'js>>| {
+            let mut args = args.0.into_iter();
+            if let (Some(item), Some(key)) = (args.next(), args.next()) {
+                sink.borrow_mut().push((item, key));
+            }
+        }),
+    );
+    if let Some(visit) = visit {
+        settled(ctx, each.call::<_, ()>((This(value.clone()), visit)));
+    }
+    found.take()
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+
+    use rstest::rstest;
+
+    use super::*;
+    use crate::inspect::{line, pin, quoted};
+    use crate::tests::{
+        colored, counted, cyan, escaped, green, rendered, strip, with_realm, yellow,
+    };
+
+    /// Pins the intrinsics, runs `setup`, then renders `expression`.
+    fn after(setup: &str, expression: &str, color: bool) -> String {
+        with_realm(|ctx| {
+            pin(&ctx).unwrap();
+            ctx.eval::<(), _>(setup).unwrap();
+            let value: Value<'_> = ctx.eval(expression).unwrap();
+            let out = line(&[value], color);
+            assert!(!ctx.has_exception(), "a read left an exception pending");
+            out
+        })
+    }
+
+    fn magenta(text: &str) -> String {
+        format!("\x1b[35m{text}\x1b[39m")
+    }
+
+    fn red(text: &str) -> String {
+        format!("\x1b[31m{text}\x1b[39m")
+    }
+
+    #[test]
+    fn a_date_prints_its_iso_string() {
+        assert_eq!(rendered("new Date(0)"), "1970-01-01T00:00:00.000Z");
+        assert_eq!(rendered("new Date(-1)"), "1969-12-31T23:59:59.999Z");
+        assert_eq!(
+            rendered("new Date(Date.UTC(2024, 1, 29, 13, 5, 9, 7))"),
+            "2024-02-29T13:05:09.007Z"
+        );
+    }
+
+    #[test]
+    fn an_invalid_date_says_so() {
+        assert_eq!(rendered("new Date(NaN)"), "Invalid Date");
+        assert_eq!(rendered("new Date('nope')"), "Invalid Date");
+        assert_eq!(rendered("new Date(8.64e15 + 1)"), "Invalid Date");
+    }
+
+    #[test]
+    fn a_date_prints_nothing_but_its_time() {
+        assert_eq!(
+            rendered("Object.assign(new Date(0), { x: 1 })"),
+            "1970-01-01T00:00:00.000Z",
+            "Node adds the own properties after the time"
+        );
+    }
+
+    #[test]
+    fn a_regexp_prints_its_source_and_flags() {
+        assert_eq!(rendered("/a\\/b/gi"), "/a\\/b/gi");
+        assert_eq!(rendered("/x/"), "/x/");
+        assert_eq!(rendered("new RegExp('')"), "/(?:)/");
+        assert_eq!(rendered("new RegExp('\\n', 'dgimsuy')"), "/\\n/dgimsuy");
+        assert_eq!(
+            rendered("const r = /x/g; r.lastIndex = 3; r"),
+            "/x/g",
+            "lastIndex is not part of the text"
+        );
+        assert_eq!(
+            rendered("Object.assign(/x/, { k: 1 })"),
+            "/x/",
+            "Node adds the own properties after the pattern"
+        );
+    }
+
+    #[test]
+    fn a_map_prints_its_size_and_entries() {
+        assert_eq!(
+            rendered("new Map([['a', 1], ['b', { c: 2 }]])"),
+            "Map(2) { 'a' => 1, 'b' => { c: 2 } }"
+        );
+        assert_eq!(
+            rendered("new Map([[{ a: 1 }, [1]]])"),
+            "Map(1) { { a: 1 } => [ 1 ] }"
+        );
+        assert_eq!(rendered("new Map([[1, 2], [1, 3]])"), "Map(1) { 1 => 3 }");
+        assert_eq!(rendered("new Map()"), "Map(0) {}");
+    }
+
+    #[test]
+    fn a_set_prints_its_size_and_members() {
+        assert_eq!(rendered("new Set([1, 2])"), "Set(2) { 1, 2 }");
+        assert_eq!(rendered("new Set(['x', ['y']])"), "Set(2) { 'x', [ 'y' ] }");
+        assert_eq!(rendered("new Set([1, 1])"), "Set(1) { 1 }");
+        assert_eq!(rendered("new Set()"), "Set(0) {}");
+    }
+
+    #[test]
+    fn collections_follow_the_insertion_order_and_hold_any_value() {
+        assert_eq!(
+            rendered("new Map([[null, undefined], [NaN, 1n], [Symbol('s'), true]])"),
+            "Map(3) { null => undefined, NaN => 1n, Symbol(s) => true }"
+        );
+        assert_eq!(
+            rendered("new Set([new Date(0), /x/g, new Map(), new Set()])"),
+            "Set(4) { 1970-01-01T00:00:00.000Z, /x/g, Map(0) {}, Set(0) {} }"
+        );
+    }
+
+    #[test]
+    fn the_four_types_nest_in_arrays_and_objects() {
+        assert_eq!(
+            rendered("[new Date(0), /x/g, new Map([[1, 2]]), new Set([1])]"),
+            "[ 1970-01-01T00:00:00.000Z, /x/g, Map(1) { 1 => 2 }, Set(1) { 1 } ]"
+        );
+        assert_eq!(
+            rendered("({ d: new Date(0), r: /x/, m: new Map(), s: new Set([1]) })"),
+            "{ d: 1970-01-01T00:00:00.000Z, r: /x/, m: Map(0) {}, s: Set(1) { 1 } }"
+        );
+    }
+
+    #[test]
+    fn a_collection_stops_at_the_depth_limit() {
+        assert_eq!(
+            rendered("({ a: { b: { c: new Map([[1, 2]]) } } })"),
+            "{ a: { b: { c: [Map] } } }"
+        );
+        assert_eq!(rendered("[[[new Set([1])]]]"), "[ [ [ [Set] ] ] ]");
+        assert_eq!(
+            rendered("({ a: { b: new Map([[1, { c: 1 }]]) } })"),
+            "{ a: { b: Map(1) { 1 => [Object] } } }"
+        );
+        assert_eq!(
+            rendered("new Map([[1, new Map([[2, new Map([[3, new Map([[4, 5]])]])]])]])"),
+            "Map(1) { 1 => Map(1) { 2 => Map(1) { 3 => [Map] } } }"
+        );
+    }
+
+    #[test]
+    fn a_date_and_a_regexp_have_no_depth_limit() {
+        assert_eq!(
+            rendered("({ a: { b: { c: new Date(0), d: /x/ } } })"),
+            "{ a: { b: { c: 1970-01-01T00:00:00.000Z, d: /x/ } } }"
+        );
+    }
+
+    #[test]
+    fn a_collection_that_holds_itself_ends_at_the_depth_limit() {
+        assert_eq!(
+            rendered("const m = new Map(); m.set('self', m); m"),
+            "Map(1) { 'self' => Map(1) { 'self' => Map(1) { 'self' => [Map] } } }",
+            "Node marks the cycle instead"
+        );
+        assert_eq!(
+            rendered("const s = new Set(); s.add(s); s"),
+            "Set(1) { Set(1) { Set(1) { [Set] } } }"
+        );
+    }
+
+    /// `Set(total) { 0, 1, ..., shown - 1 tail }`.
+    fn set_text(total: usize, shown: usize, tail: &str) -> String {
+        let items: Vec<String> = (0..shown).map(|i| i.to_string()).collect();
+        format!("Set({total}) {{ {}{tail} }}", items.join(", "))
+    }
+
+    /// `Map(total) { 0 => 0, ..., shown - 1 => shown - 1 tail }`.
+    fn map_text(total: usize, shown: usize, tail: &str) -> String {
+        let items: Vec<String> = (0..shown).map(|i| format!("{i} => {i}")).collect();
+        format!("Map({total}) {{ {}{tail} }}", items.join(", "))
+    }
+
+    #[rstest]
+    #[case::below_cap(99)]
+    #[case::at_cap(100)]
+    fn a_collection_prints_up_to_100_entries(#[case] total: usize) {
+        assert_eq!(
+            rendered(&format!(
+                "new Set(Array.from({{ length: {total} }}, (_, i) => i))"
+            )),
+            set_text(total, total, "")
+        );
+        assert_eq!(
+            rendered(&format!(
+                "new Map(Array.from({{ length: {total} }}, (_, i) => [i, i]))"
+            )),
+            map_text(total, total, "")
+        );
+    }
+
+    #[rstest]
+    #[case::one_more(101, ", ... 1 more item")]
+    #[case::two_more(102, ", ... 2 more items")]
+    #[case::many_more(100_000, ", ... 99900 more items")]
+    fn a_collection_past_100_entries_counts_the_rest(#[case] total: usize, #[case] tail: &str) {
+        assert_eq!(
+            rendered(&format!(
+                "new Set(Array.from({{ length: {total} }}, (_, i) => i))"
+            )),
+            set_text(total, 100, tail),
+            "{total}"
+        );
+        assert_eq!(
+            rendered(&format!(
+                "new Map(Array.from({{ length: {total} }}, (_, i) => [i, i]))"
+            )),
+            map_text(total, 100, tail),
+            "{total}"
+        );
+    }
+
+    #[test]
+    fn a_nested_collection_is_capped_on_its_own() {
+        let inner = set_text(101, 100, ", ... 1 more item");
+        assert_eq!(
+            rendered("[new Set(Array.from({ length: 101 }, (_, i) => i)), 7]"),
+            format!("[ {inner}, 7 ]")
+        );
+        assert_eq!(
+            rendered("new Map([['k', new Set(Array.from({ length: 101 }, (_, i) => i))]])"),
+            format!("Map(1) {{ 'k' => {inner} }}")
+        );
+    }
+
+    #[test]
+    fn the_collection_count_is_uncolored() {
+        assert!(
+            colored("new Set(Array.from({ length: 101 }, (_, i) => i))")
+                .ends_with(", ... 1 more item }")
+        );
+    }
+
+    #[rstest]
+    #[case::to_iso_string("Date.prototype.toISOString = () => 'hijacked';")]
+    #[case::get_time("Date.prototype.getTime = () => { throw new Error('no'); };")]
+    #[case::value_of("Date.prototype.valueOf = () => { throw new Error('no'); };")]
+    #[case::to_primitive(
+        "Object.defineProperty(Date.prototype, Symbol.toPrimitive, { value() { throw 1; } });"
+    )]
+    #[case::global_replaced("globalThis.Date = function () {};")]
+    #[case::global_getter("Object.defineProperty(globalThis, 'Date', { get() { throw 1; } });")]
+    #[case::pins_assigned("try { globalThis.__inca_intrinsics__ = []; } catch {}")]
+    #[case::pins_deleted("try { delete globalThis.__inca_intrinsics__; } catch {}")]
+    #[case::pin_entry_replaced(
+        "try { globalThis.__inca_intrinsics__[0] = () => 'hijacked'; } catch {}"
+    )]
+    fn replacing_the_date_machinery_does_not_change_a_date(#[case] tamper: &str) {
+        let setup = format!("globalThis.d = new Date(0); globalThis.bad = new Date(NaN); {tamper}");
+        assert_eq!(
+            after(&setup, "[d, bad]", false),
+            "[ 1970-01-01T00:00:00.000Z, Invalid Date ]",
+            "{tamper}"
+        );
+    }
+
+    #[test]
+    fn a_date_ignores_its_own_overrides() {
+        let date = r"
+            const d = new Date(0);
+            d.toISOString = () => 'own'; d.valueOf = () => { throw 1; };
+            d.getTime = () => { throw 2; }; Object.defineProperty(d, Symbol.toPrimitive, { value() { throw 3; } }); d
+            ";
+        assert_eq!(rendered(date), "1970-01-01T00:00:00.000Z");
+    }
+
+    #[test]
+    fn replacing_the_collection_and_regexp_machinery_changes_nothing() {
+        let setup = r"
+            globalThis.m = new Map([[1, 2]]); globalThis.s = new Set([1]);
+            globalThis.r = /x/g; Map.prototype.forEach = () => { throw 1; };
+            Map.prototype.entries = () => { throw 2; };
+            Map.prototype[Symbol.iterator] = () => { throw 3; };
+            Set.prototype.forEach = () => { throw 4; };
+            Set.prototype.values = () => { throw 5; };
+            Set.prototype[Symbol.iterator] = () => { throw 6; };
+            Object.defineProperty(Map.prototype, 'size', { get() { throw 7; } });
+            Object.defineProperty(Set.prototype, 'size', { get() { throw 8; } });
+            Object.defineProperty(RegExp.prototype, 'source', { get() { throw 9; } });
+            RegExp.prototype.toString = () => 'hijacked';
+            globalThis.Map = globalThis.Set = globalThis.RegExp = undefined;
+            ";
+        assert_eq!(after(setup, "m", false), "Map(1) { 1 => 2 }");
+        assert_eq!(after(setup, "s", false), "Set(1) { 1 }");
+        assert_eq!(after(setup, "r", false), "/x/g");
+    }
+
+    #[test]
+    fn a_collections_own_overrides_are_ignored() {
+        assert_eq!(
+            rendered(
+                r"
+                const m = new Map([[1, 2]]); m.forEach = () => { throw 1; };
+                m.entries = () => { throw 2; }; m[Symbol.iterator] = () => { throw 3; };
+                Object.defineProperty(m, 'size', { value: 99 }); m
+                "
+            ),
+            "Map(1) { 1 => 2 }"
+        );
+        assert_eq!(
+            rendered(
+                r"
+                const s = new Set([1]); s.forEach = () => { throw 1; };
+                s.values = () => { throw 2; }; s[Symbol.iterator] = () => { throw 3; }; s
+                "
+            ),
+            "Set(1) { 1 }"
+        );
+    }
+
+    #[test]
+    fn a_subclass_prints_as_its_builtin() {
+        assert_eq!(
+            rendered("new (class A extends Map {})([[1, 2]])"),
+            "Map(1) { 1 => 2 }",
+            "Node prefixes the subclass name"
+        );
+        assert_eq!(
+            rendered("new (class B extends Set {})([1])"),
+            "Set(1) { 1 }"
+        );
+        assert_eq!(
+            rendered("new (class C extends Date {})(0)"),
+            "1970-01-01T00:00:00.000Z"
+        );
+        assert_eq!(
+            rendered("new (class D extends RegExp {})('x', 'g')"),
+            "/x/g"
+        );
+    }
+
+    #[test]
+    fn a_null_prototype_collection_still_prints() {
+        assert_eq!(
+            rendered("const m = new Map([[1, 2]]); Object.setPrototypeOf(m, null); m"),
+            "Map(1) { 1 => 2 }"
+        );
+        assert_eq!(
+            rendered("const d = new Date(0); Object.setPrototypeOf(d, null); d"),
+            "1970-01-01T00:00:00.000Z"
+        );
+    }
+
+    #[test]
+    fn the_types_are_colored_whole_with_their_contents_inside() {
+        assert_eq!(colored("new Date(0)"), magenta("1970-01-01T00:00:00.000Z"));
+        assert_eq!(colored("new Date(NaN)"), magenta("Invalid Date"));
+        assert_eq!(colored("/a/gi"), red("/a/gi"));
+        assert_eq!(
+            colored("new Map([['a', 1], ['b', { c: 2 }]])"),
+            format!(
+                "Map(2) {{ {} => {}, {} => {{ c: {} }} }}",
+                green("'a'"),
+                yellow("1"),
+                green("'b'"),
+                yellow("2")
+            )
+        );
+        assert_eq!(
+            colored("new Set([1, 'x'])"),
+            format!("Set(2) {{ {}, {} }}", yellow("1"), green("'x'"))
+        );
+        assert_eq!(colored("new Map()"), "Map(0) {}");
+        assert_eq!(colored("new Set()"), "Set(0) {}");
+    }
+
+    #[test]
+    fn collection_placeholders_are_cyan() {
+        assert_eq!(
+            colored("({ a: { b: { c: new Map([[1, 2]]) } } })"),
+            format!("{{ a: {{ b: {{ c: {} }} }} }}", cyan("[Map]"))
+        );
+        assert_eq!(
+            colored("[[[new Set([1])]]]"),
+            format!("[ [ [ {} ] ] ]", cyan("[Set]"))
+        );
+    }
+
+    #[test]
+    fn the_types_nest_colored_inside_a_collection() {
+        assert_eq!(
+            colored("new Map([[new Date(0), /x/]])"),
+            format!(
+                "Map(1) {{ {} => {} }}",
+                magenta("1970-01-01T00:00:00.000Z"),
+                red("/x/")
+            )
+        );
+    }
+
+    #[test]
+    fn the_types_print_the_same_text_with_color_on_or_off() {
+        let source = "[new Date(0), new Date(NaN), /a\\/b/gi, new Map([['k', new Set([1, 'v'])]]), new Set()]";
+
+        assert_eq!(rendered(source), strip(&colored(source)));
+        assert!(!rendered(source).contains('\x1b'));
+        assert_eq!(after("", source, true), colored(source));
+    }
+
+    #[test]
+    fn collection_text_holding_a_line_break_is_closed_on_each_line() {
+        assert_eq!(
+            colored("new Set(['a\\nb'])"),
+            "Set(1) { \x1b[32m'a\x1b[39m\n\x1b[32mb'\x1b[39m }"
+        );
+        assert_eq!(
+            colored("new Map([['k\\nz', 1]])"),
+            "Map(1) { \x1b[32m'k\x1b[39m\n\x1b[32mz'\x1b[39m => \x1b[33m1\x1b[39m }"
+        );
+    }
+
+    #[test]
+    fn escaped_collections_stay_on_one_line() {
+        assert_eq!(
+            escaped("new Map([['a\\nb', 'c\\td']])", false),
+            "Map(1) { 'a\\nb' => 'c\\td' }"
+        );
+        assert_eq!(
+            escaped("new Set(['x\\ny'])", true),
+            "Set(1) { \x1b[32m'x\\ny'\x1b[39m }"
+        );
+        assert_eq!(escaped("new RegExp('\\n')", false), "/\\n/");
+        assert_eq!(escaped("new Date(0)", false), "1970-01-01T00:00:00.000Z");
+    }
+
+    #[test]
+    fn quoted_prints_the_four_types_like_line() {
+        with_realm(|ctx| {
+            pin(&ctx).unwrap();
+            let date: Value<'_> = ctx.eval("new Date(0)").unwrap();
+            let map: Value<'_> = ctx.eval("new Map([['a', 1]])").unwrap();
+
+            assert_eq!(quoted(&date, false), "1970-01-01T00:00:00.000Z");
+            assert_eq!(quoted(&map, false), "Map(1) { 'a' => 1 }");
+            assert_eq!(quoted(&map, true), colored("new Map([['a', 1]])"));
+        });
+    }
+
+    #[rstest]
+    #[case::global("global")]
+    #[case::ignore_case("ignoreCase")]
+    #[case::multiline("multiline")]
+    #[case::dot_all("dotAll")]
+    #[case::unicode("unicode")]
+    #[case::unicode_sets("unicodeSets")]
+    #[case::sticky("sticky")]
+    #[case::has_indices("hasIndices")]
+    #[case::source("source")]
+    fn a_regexp_is_read_without_running_any_of_its_accessors(#[case] key: &str) {
+        let setup = format!(
+            r"
+            globalThis.calls = 0; globalThis.r = /a/gy;
+            Object.defineProperty(r, '{key}', {{ get() {{ calls++; throw 1; }} }});
+            "
+        );
+        with_realm(|ctx| {
+            pin(&ctx).unwrap();
+            ctx.eval::<(), _>(setup.as_str()).unwrap();
+            let value: Value<'_> = ctx.eval("r").unwrap();
+
+            assert_eq!(line(&[value], false), "/a/gy", "{key}");
+            assert_eq!(ctx.eval::<i32, _>("calls").unwrap(), 0, "{key}");
+        });
+    }
+
+    #[test]
+    fn a_regexp_lists_its_flags_in_the_standard_order() {
+        assert_eq!(rendered("new RegExp('x', 'ysmigdu')"), "/x/dgimsuy");
+        assert_eq!(rendered("new RegExp('x', 'yvsmigd')"), "/x/dgimsvy");
+    }
+
+    #[test]
+    fn a_collection_is_not_mistaken_for_a_plain_object() {
+        assert_eq!(rendered("Object.create(Map.prototype)"), "Map {}");
+        assert_eq!(rendered("Object.create(Date.prototype)"), "Date {}");
+        assert_eq!(rendered("Object.create(Set.prototype)"), "Set {}");
+        assert_eq!(rendered("Object.create(RegExp.prototype)"), "RegExp {}");
+    }
+
+    #[rstest]
+    #[case::elements("new Uint8Array(3)", "Uint8Array(3) [ 0, 0, 0 ]")]
+    #[case::empty("new Uint8Array(0)", "Uint8Array(0) []")]
+    #[case::detached(
+        r"
+        (() => {
+            const buffer = new ArrayBuffer(4);
+            const array = new Uint8Array(buffer);
+            buffer.transfer();
+            return array;
+        })()
+        ",
+        "Uint8Array(0) []"
+    )]
+    #[case::subclass(
+        r"
+        (() => {
+            class U extends Uint8Array {}
+            return new U(2);
+        })()
+        ",
+        "U(2) [Uint8Array] [ 0, 0 ]"
+    )]
+    #[case::null_prototype(
+        "Object.setPrototypeOf(new Uint8Array(1), null)",
+        "[Uint8Array(1): null prototype] [ 0 ]"
+    )]
+    #[case::past_the_depth(
+        "({ a: { b: { c: new Uint8Array(1) } } })",
+        "{ a: { b: { c: [Uint8Array] } } }"
+    )]
+    #[case::subclass_past_the_depth(
+        r"
+        (() => {
+            class U extends Uint8Array {}
+            return [[[new U(1)]]];
+        })()
+        ",
+        "[ [ [ [U [Uint8Array]] ] ] ]"
+    )]
+    #[case::null_prototype_past_the_depth(
+        "[[[Object.setPrototypeOf(new Uint8Array(1), null)]]]",
+        "[ [ [ [Uint8Array: null prototype] ] ] ]"
+    )]
+    #[case::prototype_only("Object.create(Uint8Array.prototype)", "Uint8Array {}")]
+    fn a_typed_array_prints_its_elements(#[case] expression: &str, #[case] want: &str) {
+        assert_eq!(rendered(expression), want);
+    }
+
+    #[test]
+    fn a_typed_array_past_a_hundred_entries_counts_the_rest() {
+        let text = rendered("new Uint8Array(101)");
+
+        let zeros = vec!["0"; 100].join(", ");
+        assert_eq!(
+            text,
+            format!("Uint8Array(101) [ {zeros}, ... 1 more item ]")
+        );
+    }
+
+    #[test]
+    fn a_typed_array_reads_no_getter_a_script_replaced() {
+        let (text, calls) = counted(
+            r"
+            const typed = Object.getPrototypeOf(Uint8Array.prototype);
+            for (const key of ['length', Symbol.toStringTag]) {
+                Object.defineProperty(typed, key, {
+                    get() {
+                        calls++;
+                        return 9;
+                    },
+                });
+            }
+            new Uint8Array(2);
+            ",
+        );
+
+        assert_eq!((text.as_str(), calls), ("Uint8Array(2) [ 0, 0 ]", 0));
+    }
+}

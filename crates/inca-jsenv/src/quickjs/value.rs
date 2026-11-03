@@ -270,8 +270,8 @@ mod tests {
 
     use super::*;
     use crate::Engine;
-    use crate::engine::tests::{around, counters};
     use crate::tests::with_realm;
+    use crate::tests::{around, counters};
 
     /// Runs `body` with `source` evaluated first, in a fresh realm.
     fn with<R>(source: &str, body: impl FnOnce(&Ctx<'_>) -> R) -> R {

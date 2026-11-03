@@ -9,20 +9,12 @@
 //! value. Values held inside a `Map`, a `Set` or a typed array are printed
 //! like any other value.
 
-use std::cell::RefCell;
-use std::fmt::Write;
-use std::rc::Rc;
-
 use rquickjs::{
-    Array, Ctx, Function, Object, Result as JsResult, Value,
-    function::{Rest, This},
-    object::Property,
+    Array, Ctx, Function, Object, Result as JsResult, Value, function::This, object::Property,
 };
 
-use super::{
-    MAX_ENTRIES, Mode, constructor_name, put, separate, settled, slot, write_more, write_slot,
-    write_value,
-};
+use super::collections::{write_collection, write_typed_array};
+use super::{Mode, put, settled};
 use crate::paint::Style;
 use crate::quickjs::ValueExt;
 
@@ -149,113 +141,4 @@ fn regexp_text<'js>(value: &Value<'js>, pins: &Pins<'js>) -> Option<String> {
         }
     }
     Some(format!("/{source}/{flags}"))
-}
-
-/// `Name(n) { ... }`, a map's entries as `key => value`.
-fn write_collection<'js>(
-    out: &mut String,
-    value: &Value<'js>,
-    each: &Function<'js>,
-    name: &str,
-    depth: usize,
-    mode: Mode,
-) {
-    if depth >= mode.max_depth {
-        put(out, mode, Style::Cyan, &format!("[{name}]"));
-        return;
-    }
-    let items = items(value, each);
-    if items.is_empty() {
-        let _ = write!(out, "{name}(0) {{}}");
-        return;
-    }
-
-    let _ = write!(out, "{name}({}) {{ ", items.len());
-    for (index, (item, key)) in items.iter().take(MAX_ENTRIES).enumerate() {
-        if index > 0 {
-            out.push_str(", ");
-        }
-        if name == "Map" {
-            write_value(out, key, depth + 1, mode);
-            out.push_str(" => ");
-        }
-        write_value(out, item, depth + 1, mode);
-    }
-    if items.len() > MAX_ENTRIES {
-        // Entries precede it, so it starts with a separator.
-        let mut written = true;
-        #[allow(clippy::cast_precision_loss)]
-        write_more(out, &mut written, (items.len() - MAX_ENTRIES) as f64, mode);
-    }
-    out.push_str(" }");
-}
-
-/// `Name(n) [ ... ]`, the elements of a typed array of the kind `name`. `length_of` is the
-/// pinned `length` getter.
-fn write_typed_array<'js>(
-    out: &mut String,
-    object: &Object<'js>,
-    name: &str,
-    length_of: &Function<'js>,
-    depth: usize,
-    mode: Mode,
-) {
-    let own = constructor_name(object);
-    if depth >= mode.max_depth {
-        let text = match own.as_deref() {
-            None => format!("[{name}: null prototype]"),
-            Some(own) if own != name => format!("[{own} [{name}]]"),
-            Some(_) => format!("[{name}]"),
-        };
-        put(out, mode, Style::Cyan, &text);
-        return;
-    }
-    let length = settled(
-        object.ctx(),
-        length_of.call::<_, f64>((This(object.clone()),)),
-    )
-    .unwrap_or(0.0);
-    let _ = match own.as_deref() {
-        None => write!(out, "[{name}({length}): null prototype] "),
-        Some(own) if own != name => write!(out, "{own}({length}) [{name}] "),
-        Some(_) => write!(out, "{name}({length}) "),
-    };
-    if length < 1.0 {
-        out.push_str("[]");
-        return;
-    }
-    out.push_str("[ ");
-    let mut written = false;
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let count = length as usize;
-    for index in 0..count.min(MAX_ENTRIES) {
-        separate(out, &mut written);
-        write_slot(out, slot(object, &index.to_string()), depth, mode);
-    }
-    if count > MAX_ENTRIES {
-        #[allow(clippy::cast_precision_loss)]
-        write_more(out, &mut written, (count - MAX_ENTRIES) as f64, mode);
-    }
-    out.push_str(" ]");
-}
-
-/// The `(value, key)` pairs `each` (a `forEach`) visits, as far as it got
-/// before any exception, which is cleared.
-fn items<'js>(value: &Value<'js>, each: &Function<'js>) -> Vec<(Value<'js>, Value<'js>)> {
-    let ctx = value.ctx();
-    let found = Rc::new(RefCell::new(Vec::new()));
-    let sink = Rc::clone(&found);
-    let visit = settled(
-        ctx,
-        Function::new(ctx.clone(), move |args: Rest<Value<'js>>| {
-            let mut args = args.0.into_iter();
-            if let (Some(item), Some(key)) = (args.next(), args.next()) {
-                sink.borrow_mut().push((item, key));
-            }
-        }),
-    );
-    if let Some(visit) = visit {
-        settled(ctx, each.call::<_, ()>((This(value.clone()), visit)));
-    }
-    found.take()
 }
