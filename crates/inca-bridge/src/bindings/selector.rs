@@ -4,14 +4,14 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rquickjs::{Ctx, Exception, Result as JsResult};
+use rquickjs::{Ctx, Exception, Result as JsResult, Value};
 
 use inca_gpui::{
     NodeId, check_selector, closest_selector, matches_selector, query_selector, query_selector_all,
 };
 
 use super::Natives;
-use super::convert::{JsNodeId, existing_node};
+use super::convert::{JsNodeId, existing_node, or_null};
 use super::host::Host;
 
 /// `matches`, `closest`, `checkSelector`, `querySelector` and `querySelectorAll`: selector
@@ -42,23 +42,25 @@ fn matches<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId, String) 
 
 fn closest<'js>(
     host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Option<NodeId>> {
+) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Value<'js>> {
     move |ctx, JsNodeId(node_id), selector| {
         let host = host.borrow();
         existing_node(&ctx, &host.tree, node_id)?;
-        closest_selector(&host.tree, node_id, &selector)
-            .map_err(|err| Exception::throw_dom(&ctx, "SyntaxError", &err.to_string()))
+        let found = closest_selector(&host.tree, node_id, &selector)
+            .map_err(|err| Exception::throw_dom(&ctx, "SyntaxError", &err.to_string()))?;
+        or_null(&ctx, found)
     }
 }
 
 fn query<'js>(
     host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Option<NodeId>> {
+) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Value<'js>> {
     move |ctx, JsNodeId(node_id), selector| {
         let host = host.borrow();
         existing_node(&ctx, &host.tree, node_id)?;
-        query_selector(&host.tree, node_id, &selector)
-            .map_err(|err| Exception::throw_dom(&ctx, "SyntaxError", &err.to_string()))
+        let found = query_selector(&host.tree, node_id, &selector)
+            .map_err(|err| Exception::throw_dom(&ctx, "SyntaxError", &err.to_string()))?;
+        or_null(&ctx, found)
     }
 }
 
@@ -152,6 +154,24 @@ mod tests {
         let inner: u32 = engine.eval("inner").unwrap();
 
         assert_eq!(got, found.then_some(inner));
+    }
+
+    #[rstest]
+    #[case::closest("closest(inner, 'p')")]
+    #[case::query_selector("querySelector(outer, 'p')")]
+    fn a_query_without_a_match_returns_null(#[case] call: &str) {
+        let (engine, _host) = engine_with_bindings();
+
+        let got: bool = engine
+            .eval(&format!(
+                r"
+                {TREE}
+                n.{call} === null;
+                "
+            ))
+            .unwrap();
+
+        assert!(got);
     }
 
     #[rstest]
