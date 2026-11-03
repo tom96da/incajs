@@ -45,11 +45,11 @@ export function createNodeOps(core: IncaCore): NodeOps {
 
     /**
      * Creates the hidden container that stands in for a Vue comment node
-     * (e.g. a `v-if`/`v-for` placeholder). The comment's text is discarded.
-     * @param _text - the comment's text
+     * (e.g. a `v-if`/`v-for` placeholder).
+     * @param text - the comment's text
      * @returns the new hidden element
      */
-    createComment: (_text: string): IncaElement => skipReactive(core.createCommentNode()),
+    createComment: (text: string): IncaElement => skipReactive(core.createCommentNode(text)),
 
     setText: (node: IncaText, text: string): void => core.setText(node, text),
 

@@ -65,6 +65,11 @@ const native = {
   linkedNode: vi.fn<(nodeId: number, link: NodeLink) => number | null>(() => null),
   childNodeIds: vi.fn<(nodeId: number) => number[]>(() => []),
   isConnected: vi.fn<(nodeId: number) => boolean>(() => true),
+  textContent: vi.fn<(nodeId: number) => string>(() => ""),
+  wholeText: vi.fn<(nodeId: number) => string>(() => ""),
+  substringData: vi.fn<(nodeId: number, offset: number, count: number) => string>(() => ""),
+  replaceData: vi.fn<(nodeId: number, offset: number, count: number, data: string) => void>(),
+  splitText: vi.fn<(nodeId: number, offset: number) => number>(() => 0),
 };
 
 beforeEach(() => {

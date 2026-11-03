@@ -146,6 +146,11 @@ be passed, and `undefined` there counts as `null`.
 | `linkedNode` | `(nodeId: number, link: "parent" \| "first" \| "last" \| "previous" \| "next") => number \| null` | The id of the parent, first child, last child, previous sibling or next sibling of `nodeId`, or `null` when there is none. Throws a `TypeError` for an unknown node or another `link`. |
 | `childNodeIds` | `(nodeId: number) => number[]` | The ids of the children of `nodeId` in order. Throws a `TypeError` for an unknown node. |
 | `isConnected` | `(nodeId: number) => boolean` | Whether `nodeId` is the root container or hangs under it. Throws a `TypeError` for an unknown node. |
+| `textContent` | `(nodeId: number) => string` | The data of a `#text` or `#comment` node. For any other node, the data of every descendant `#text` node in tree order. Throws a `TypeError` for an unknown node. |
+| `wholeText` | `(nodeId: number) => string` | The data of `nodeId` and of the `#text` siblings that touch it, in order. Throws a `TypeError` for an unknown node. |
+| `substringData` | `(nodeId: number, offset: number, count: number) => string` | The `count` UTF-16 code units of the data (the `"value"` attribute) from `offset`, as many as the data holds. Both arguments convert to unsigned 32-bit integers. A half of a surrogate pair that stands alone reads U+FFFD. Throws an `IndexSizeError` `DOMException` when `offset` is beyond the data and a `TypeError` for an unknown node. |
+| `replaceData` | `(nodeId: number, offset: number, count: number, data: string) => void` | Replace `count` UTF-16 code units of the data from `offset` with `data`. Arguments and errors as `substringData`. |
+| `splitText` | `(nodeId: number, offset: number) => number` | Cut the data at `offset`: `nodeId` keeps the head and a new `#text` node holds the tail. The new node follows `nodeId` when `nodeId` has a parent, and has none otherwise, so it is freed at the next frame unless held. Returns its id. Arguments and errors as `substringData`. |
 | `holdNode` | `(nodeId: number) => void` | Keep `nodeId` and its subtree alive while it has no parent. |
 | `releaseNode` | `(nodeId: number) => void` | End the hold. |
 | `setAttribute` | `(nodeId: number, key: string, value: string \| number \| boolean) => void` | Set a non-style attribute prop. Names are folded to ASCII lower case. |

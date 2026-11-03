@@ -157,6 +157,68 @@ export function isConnected(nodeId: NodeId): boolean {
 }
 
 /**
+ * Reads the text of a node in the host tree: the data of a text or comment node, and the data of
+ * the text descendants in tree order for an element.
+ * @param nodeId - the node to read
+ * @returns the text
+ * @throws {TypeError} when `nodeId` names no node
+ */
+export function textContent(nodeId: NodeId): string {
+  return native().textContent(nodeId);
+}
+
+/**
+ * Reads the data of a text node and of the text siblings that touch it.
+ * @param nodeId - the text node
+ * @returns the joined data in order
+ * @throws {TypeError} when `nodeId` names no node
+ */
+export function wholeText(nodeId: NodeId): string {
+  return native().wholeText(nodeId);
+}
+
+/**
+ * Reads a range of the data of a node. Offset and count convert to unsigned 32-bit integers and
+ * count UTF-16 code units.
+ * @param nodeId - the text or comment node
+ * @param offset - where the range starts
+ * @param count - the length of the range, cut at the end of the data
+ * @returns the text of the range
+ * @throws {DOMException} named `IndexSizeError` when `offset` is beyond the data
+ * @throws {TypeError} when `nodeId` names no node
+ */
+export function substringData(nodeId: NodeId, offset: number, count: number): string {
+  return native().substringData(nodeId, offset, count);
+}
+
+/**
+ * Replaces a range of the data of a node. Offset and count convert like in {@link substringData}.
+ * @param nodeId - the text or comment node
+ * @param offset - where the range starts
+ * @param count - the length of the range, cut at the end of the data
+ * @param data - the text that takes the place of the range
+ * @throws {DOMException} named `IndexSizeError` when `offset` is beyond the data
+ * @throws {TypeError} when `nodeId` names no node
+ */
+export function replaceData(nodeId: NodeId, offset: number, count: number, data: string): void {
+  native().replaceData(nodeId, offset, count, data);
+}
+
+/**
+ * Cuts the data of a text node. The new node holds the tail and follows `nodeId` when `nodeId` has
+ * a parent. It has no parent otherwise, and the host frees it at the start of the next frame
+ * unless it is inserted or held with {@link holdNode} by then.
+ * @param nodeId - the text node
+ * @param offset - where to cut, converted like in {@link substringData}
+ * @returns the id of the new node
+ * @throws {DOMException} named `IndexSizeError` when `offset` is beyond the data
+ * @throws {TypeError} when `nodeId` names no node
+ */
+export function splitText(nodeId: NodeId, offset: number): NodeId {
+  return native().splitText(nodeId, offset);
+}
+
+/**
  * Whether the element `nodeId` matches the selector list `selector`.
  * @param nodeId - the node to test
  * @param selector - the selector list
