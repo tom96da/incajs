@@ -8,6 +8,7 @@
 //! needs. It also creates the empty `globalThis.__inca_callbacks__`, where
 //! JS stores each listener under its callback id.
 
+mod attributes;
 mod capture;
 pub(crate) mod convert;
 mod focus;

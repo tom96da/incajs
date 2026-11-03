@@ -3,7 +3,6 @@
 
 use std::cell::RefCell;
 
-use gpui::Modifiers;
 use inca_gpui::{EventPayload, NodeId};
 use inca_jsenv::class;
 use rquickjs::convert::Coerced;
@@ -11,9 +10,7 @@ use rquickjs::function::{IntoJsFunc, Opt, ParamRequirement, Params, This};
 use rquickjs::{Class, Ctx, Exception, Function, Object, Result as JsResult, Value};
 
 use super::members::PHASES;
-use super::payload::{
-    DELTA_MODES, Input, KEY_LOCATIONS, Keyboard, Mouse, Payload, Pointer, Ui, Wheel,
-};
+use super::payload::{DELTA_MODES, KEY_LOCATIONS, Payload, Ui};
 use super::walk::Walk;
 use super::{
     COMPOSITION, CUSTOM, EVENT, FOCUS, Flags, Held, INPUT, IncaEvent, KEYBOARD, MOUSE, POINTER,
@@ -22,6 +19,9 @@ use super::{
 };
 use crate::EventTargetId;
 use crate::bindings::convert::or_null;
+use init::{Init, input, keyboard, mouse, pointer, wheel};
+
+mod init;
 
 /// Each class of event: the kind it builds, its name, and the kind whose constructor its
 /// constructor inherits from.
@@ -246,244 +246,463 @@ impl Construct {
     }
 }
 
-/// The modifier members of `init`: `altKey`, `ctrlKey`, `metaKey`, `shiftKey`.
-fn modifiers(init: &Init<'_, '_>) -> JsResult<Modifiers> {
-    let alt = init.boolean("altKey")?;
-    let control = init.boolean("ctrlKey")?;
-    let platform = init.boolean("metaKey")?;
-    let shift = init.boolean("shiftKey")?;
-    Ok(Modifiers {
-        control,
-        alt,
-        shift,
-        platform,
-        function: false,
-    })
-}
-
-/// The mouse fields of `init` and its `relatedTarget`. `ui` holds the `detail` read before.
-fn mouse<'js>(init: &Init<'_, 'js>, ui: Ui) -> JsResult<(Mouse, Option<Value<'js>>)> {
-    let modifiers = modifiers(init)?;
-    let button = init.short("button")?;
-    let buttons = init.unsigned_short("buttons")?;
-    let client_x = init.double("clientX", 0.0)?.floor();
-    let client_y = init.double("clientY", 0.0)?.floor();
-    let movement_x = f64::from(init.long("movementX")?);
-    let movement_y = f64::from(init.long("movementY")?);
-    let related = init.target("relatedTarget")?;
-    let screen_x = init.double("screenX", 0.0)?.floor();
-    let screen_y = init.double("screenY", 0.0)?.floor();
-    // `which` is an unsigned long, so a button below -1 wraps.
-    #[allow(clippy::cast_sign_loss)]
-    let which = (i32::from(button) + 1) as u32;
-    let mouse = Mouse {
-        ui: Ui { which, ..ui },
-        screen_x,
-        screen_y,
-        client_x,
-        client_y,
-        offset_x: client_x,
-        offset_y: client_y,
-        movement_x,
-        movement_y,
-        // A script-built event takes -1 as 0.
-        button: if button == -1 { 0 } else { button },
-        buttons,
-        modifiers,
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+    use crate::tests::{
+        dispatcher_with_engine, eval_json, fire_and_read, key_payload, listen, mouse_at,
+        pointer_click, wheel_at,
     };
-    Ok((mouse, related))
-}
+    use gpui::TestAppContext;
+    use inca_gpui::EventPayload;
+    use inca_test_macros::gpui_cases;
+    use rstest::rstest;
 
-/// The pointer fields of `init`.
-fn pointer(init: &Init<'_, '_>) -> JsResult<Pointer> {
-    let height = init.double("height", 1.0)?;
-    let is_primary = init.boolean("isPrimary")?;
-    let id = init.long("pointerId")?;
-    let kind = init.string("pointerType")?;
-    let pressure = init.float("pressure", 0.0)?;
-    let width = init.double("width", 1.0)?;
-    Ok(Pointer {
-        id,
-        width,
-        height,
-        pressure,
-        kind,
-        is_primary,
-    })
-}
-
-/// The wheel fields of `init`.
-fn wheel(init: &Init<'_, '_>) -> JsResult<Wheel> {
-    let mode = init.unsigned_long("deltaMode")?;
-    let x = init.double("deltaX", 0.0)?;
-    let y = init.double("deltaY", 0.0)?;
-    let z = init.double("deltaZ", 0.0)?;
-    Ok(Wheel { x, y, z, mode })
-}
-
-/// The payload of a `KeyboardEvent` built from `init`. `which` is `keyCode`.
-fn keyboard(init: &Init<'_, '_>, ui: Ui) -> JsResult<Payload> {
-    let modifiers = modifiers(init)?;
-    let char_code = init.unsigned_long("charCode")?;
-    let code = init.string("code")?;
-    let is_composing = init.boolean("isComposing")?;
-    let key = init.string("key")?;
-    let key_code = init.unsigned_long("keyCode")?;
-    let location = init.unsigned_long("location")?;
-    let repeat = init.boolean("repeat")?;
-    Ok(Payload::Keyboard(
-        Ui {
-            which: key_code,
-            ..ui
-        },
-        Keyboard {
-            key,
-            code,
-            location,
-            repeat,
-            is_composing,
-            modifiers,
-            key_code,
-            char_code,
-        },
-    ))
-}
-
-/// The payload of an `InputEvent` built from `init`. The `dataTransfer` and `targetRanges` members
-/// are not read.
-fn input(init: &Init<'_, '_>, ui: Ui) -> JsResult<Payload> {
-    let data = match init.member("data")? {
-        Some(value) if !value.is_null() => Some(value.get::<Coerced<String>>()?.0),
-        _ => None,
-    };
-    let input_type = init.string("inputType")?;
-    let is_composing = init.boolean("isComposing")?;
-    Ok(Payload::Input(
-        ui,
-        Input {
-            data,
-            kind: input_type,
-            is_composing,
-        },
-    ))
-}
-
-/// The init dictionary an event constructor reads its members from.
-struct Init<'a, 'js> {
-    ctx: &'a Ctx<'js>,
-    /// The class being built, for the messages.
-    name: &'static str,
-    object: Option<Object<'js>>,
-}
-
-impl<'js> Init<'_, 'js> {
-    /// Member `key`, `None` when the init is absent or the member is `undefined`.
-    fn member(&self, key: &str) -> JsResult<Option<Value<'js>>> {
-        let Some(object) = &self.object else {
-            return Ok(None);
-        };
-        let value: Value = object.get(key)?;
-        Ok((!value.is_undefined()).then_some(value))
+    #[test]
+    fn a_new_event_starts_idle_and_untrusted_with_every_flag_false() {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        let got = eval_json(
+            &dispatcher,
+            r"
+            (() => { const e = new Event('ping');
+            return [e.type, e.bubbles, e.cancelable, e.composed, e.isTrusted, e.target,
+                e.currentTarget, e.srcElement, e.eventPhase, e.defaultPrevented,
+                e.returnValue, e.cancelBubble, e.composedPath().length,
+                typeof e.timeStamp, e.constructor === Event, e instanceof Event]; })()
+            ",
+        );
+        assert_eq!(
+            got,
+            serde_json::json!([
+                "ping", false, false, false, false, null, null, null, 0, false, true, false, 0,
+                "number", true, true
+            ])
+        );
     }
 
-    fn boolean(&self, key: &str) -> JsResult<bool> {
-        match self.member(key)? {
-            Some(value) => Ok(value.get::<Coerced<bool>>()?.0),
-            None => Ok(false),
+    #[test]
+    fn the_init_object_sets_the_flags_by_truthiness() {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        let got = eval_json(
+            &dispatcher,
+            r"
+            [new Event('a', { bubbles: 1, cancelable: 'x', composed: {} }),
+            new Event('b', { bubbles: 0, cancelable: '' }),
+            new Event('c', null), new Event('d', undefined), new Event(5),
+            new Event(undefined)].map((e) => [e.type, e.bubbles, e.cancelable, e.composed])
+            ",
+        );
+        assert_eq!(
+            got,
+            serde_json::json!([
+                ["a", true, true, true],
+                ["b", false, false, false],
+                ["c", false, false, false],
+                ["d", false, false, false],
+                ["5", false, false, false],
+                ["undefined", false, false, false]
+            ])
+        );
+    }
+
+    #[test]
+    fn the_constructors_refuse_a_plain_call_a_missing_type_and_a_primitive_init() {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        let got = eval_json(
+            &dispatcher,
+            r"
+            ['Event', 'CustomEvent'].flatMap((name) => { const C = globalThis[name];
+            return [() => C('x'), () => C.call(function () {}, 'x'), () => new C(),
+                () => new C('x', 5), () => new C(Symbol())].map((f) => {
+                try { f(); return 'ran'; } catch (err) { return err instanceof TypeError; } }); })
+            ",
+        );
+        assert_eq!(
+            got,
+            serde_json::Value::Array(vec![serde_json::json!(true); 10])
+        );
+    }
+
+    #[test]
+    fn a_custom_event_carries_its_detail() {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        let got = eval_json(
+            &dispatcher,
+            r"
+            (() => {
+                const d = { n: 1 };
+                const a = new CustomEvent('a', { detail: d, bubbles: true });
+                const b = new CustomEvent('b');
+                const c = new CustomEvent('c', { detail: undefined });
+                return [a.detail === d, a.bubbles, b.detail, c.detail];
+            })()
+            ",
+        );
+        assert_eq!(got, serde_json::json!([true, true, null, null]));
+    }
+
+    #[test]
+    fn a_custom_event_inherits_from_event() {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        let got = eval_json(
+            &dispatcher,
+            r"
+            (() => {
+                const a = new CustomEvent('a');
+                return [
+                    a instanceof CustomEvent,
+                    a instanceof Event,
+                    Object.getPrototypeOf(CustomEvent) === Event,
+                    a.preventDefault === new Event('x').preventDefault,
+                    CustomEvent.name,
+                    Event.name,
+                    Event.AT_TARGET,
+                    CustomEvent.BUBBLING_PHASE,
+                ];
+            })()
+            ",
+        );
+        assert_eq!(
+            got,
+            serde_json::json!([true, true, true, true, "CustomEvent", "Event", 2, 3])
+        );
+    }
+
+    #[test]
+    fn a_subclass_of_event_keeps_its_own_prototype() {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        let got = eval_json(
+            &dispatcher,
+            r"
+            (() => { class Mine extends Event { hi() { return this.type; } }
+            const e = new Mine('m');
+            e.preventDefault();
+            return [e.hi(), e instanceof Mine, e instanceof Event, e.defaultPrevented]; })()
+            ",
+        );
+        assert_eq!(got, serde_json::json!(["m", true, true, false]));
+    }
+
+    #[gpui::test]
+    fn host_events_of_one_kind_are_trusted_instances_of_event_sharing_a_prototype(
+        cx: &mut TestAppContext,
+    ) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        listen(
+            &dispatcher,
+            node,
+            "click",
+            r"
+            (e) => { (globalThis.events ??= []).push(e);
+            out.push([e instanceof Event, e.constructor === Event, e.isTrusted]); }
+            ",
+        );
+        fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
+        let out = fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
+        assert_eq!(
+            out,
+            serde_json::json!([[true, true, true], [true, true, true]])
+        );
+        let shared = dispatcher
+            .engine
+            .eval::<bool>(
+                r"
+                const [a, b] = events;
+                a !== b && Object.getPrototypeOf(a) === Object.getPrototypeOf(b)
+                   && a.preventDefault === b.preventDefault
+                   && Object.getPrototypeOf(a) !== Object.prototype
+                ",
+            )
+            .unwrap();
+        assert!(shared);
+    }
+
+    #[rstest]
+    #[case::src_element("srcElement")]
+    #[case::default_prevented("defaultPrevented")]
+    #[case::return_value("returnValue")]
+    #[case::cancel_bubble("cancelBubble")]
+    fn an_event_accessor_descriptor_reads_enumerable_configurable(#[case] key: &str) {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+
+        let got = eval_json(
+            &dispatcher,
+            &r"
+            (() => {
+                const d = Object.getOwnPropertyDescriptor(Event.prototype, 'KEY');
+                return [d.writable, d.enumerable, d.configurable].join();
+            })()
+            "
+            .replace("KEY", key),
+        );
+
+        assert_eq!(got, serde_json::json!(",true,true"));
+    }
+
+    #[rstest]
+    #[case::on_the_prototype("Event.prototype")]
+    #[case::on_the_constructor("Event")]
+    fn a_phase_constant_descriptor_reads_enumerable_only(#[case] owner: &str) {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+
+        let got = eval_json(
+            &dispatcher,
+            &r"
+            (() => {
+                const d = Object.getOwnPropertyDescriptor(OWNER, 'AT_TARGET');
+                return [d.writable, d.enumerable, d.configurable].join();
+            })()
+            "
+            .replace("OWNER", owner),
+        );
+
+        assert_eq!(got, serde_json::json!("false,true,false"));
+    }
+
+    #[rstest]
+    #[case::event("Event")]
+    #[case::custom_event("CustomEvent")]
+    fn an_event_constructor_length_reads_one(#[case] constructor: &str) {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+
+        let got = eval_json(
+            &dispatcher,
+            &format!("Object.getOwnPropertyDescriptor({constructor}, 'length').value"),
+        );
+
+        assert_eq!(got, serde_json::json!(1));
+    }
+
+    #[rstest]
+    #[case::event("new Event('x')", "[object Event]")]
+    #[case::custom_event("new CustomEvent('x')", "[object CustomEvent]")]
+    fn an_event_string_tag_names_its_class(#[case] value: &str, #[case] want: &str) {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+
+        let got = eval_json(
+            &dispatcher,
+            &"Object.prototype.toString.call(VALUE)".replace("VALUE", value),
+        );
+
+        assert_eq!(got, serde_json::json!(want));
+    }
+
+    #[rstest]
+    #[case::event("Event.prototype", "Event")]
+    #[case::custom_event("CustomEvent.prototype", "CustomEvent")]
+    fn a_string_tag_descriptor_reads_configurable_only(#[case] owner: &str, #[case] tag: &str) {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+
+        let got = eval_json(
+            &dispatcher,
+            &r"
+            (() => {
+                const d = Object.getOwnPropertyDescriptor(OWNER, Symbol.toStringTag);
+                return [d.value, d.writable, d.enumerable, d.configurable].join();
+            })()
+            "
+            .replace("OWNER", owner),
+        );
+
+        assert_eq!(got, serde_json::json!(format!("{tag},false,false,true")));
+    }
+
+    #[rstest]
+    #[case::ui_event("UIEvent", "Event")]
+    #[case::focus_event("FocusEvent", "UIEvent")]
+    #[case::mouse_event("MouseEvent", "UIEvent")]
+    #[case::pointer_event("PointerEvent", "MouseEvent")]
+    #[case::wheel_event("WheelEvent", "MouseEvent")]
+    #[case::keyboard_event("KeyboardEvent", "UIEvent")]
+    #[case::input_event("InputEvent", "UIEvent")]
+    #[case::composition_event("CompositionEvent", "UIEvent")]
+    fn an_event_constructor_inherits_from_its_parent(#[case] name: &str, #[case] parent: &str) {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+
+        let got = eval_json(
+            &dispatcher,
+            &format!(
+                concat!(
+                    "[Object.getPrototypeOf({name}) === {parent}, ",
+                    "Object.getPrototypeOf({name}.prototype) === {parent}.prototype]"
+                ),
+                name = name,
+                parent = parent,
+            ),
+        );
+
+        assert_eq!(got, serde_json::json!([true, true]));
+    }
+
+    fn input_payload() -> EventPayload {
+        EventPayload::Input(inca_gpui::InputPayload {
+            data: None,
+            input_type: inca_gpui::InputType::InsertText,
+            is_composing: false,
+        })
+    }
+
+    fn composition_payload() -> EventPayload {
+        EventPayload::Composition {
+            data: String::new(),
         }
     }
 
-    /// A `long` member: the value converted with `ToInt32`.
-    fn long(&self, key: &str) -> JsResult<i32> {
-        match self.member(key)? {
-            Some(value) => Ok(value.get::<Coerced<i32>>()?.0),
-            None => Ok(0),
-        }
+    #[gpui_cases]
+    #[gpui::test]
+    #[case::mouse("mousedown", mouse_at(1.0, 1.0), "MouseEvent")]
+    #[case::pointer("click", pointer_click(), "PointerEvent")]
+    #[case::wheel("wheel", wheel_at(1.0, 1.0), "WheelEvent")]
+    #[case::keyboard("keydown", key_payload(gpui::Modifiers::none()), "KeyboardEvent")]
+    #[case::focus("focus", EventPayload::Focus { related_target: None }, "FocusEvent")]
+    #[case::input("input", input_payload(), "InputEvent")]
+    #[case::composition("compositionend", composition_payload(), "CompositionEvent")]
+    fn a_host_event_reports_its_class_as_constructor(
+        cx: &mut TestAppContext,
+        event: &str,
+        payload: EventPayload,
+        class: &str,
+    ) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        listen(
+            &dispatcher,
+            node,
+            event,
+            &format!("(e) => out.push(e.constructor === {class})"),
+        );
+
+        let out = fire_and_read(cx, &dispatcher, node, event, &payload);
+
+        assert_eq!(out, serde_json::json!([true]));
     }
 
-    /// An `unsigned long` member: the 32 bits of [`Self::long`].
-    #[allow(clippy::cast_sign_loss)]
-    fn unsigned_long(&self, key: &str) -> JsResult<u32> {
-        Ok(self.long(key)? as u32)
+    #[rstest]
+    #[case::wheel_constructor("WheelEvent.DOM_DELTA_PAGE", 2)]
+    #[case::wheel_prototype("WheelEvent.prototype.DOM_DELTA_LINE", 1)]
+    #[case::keyboard_constructor("KeyboardEvent.DOM_KEY_LOCATION_NUMPAD", 3)]
+    #[case::keyboard_prototype("KeyboardEvent.prototype.DOM_KEY_LOCATION_RIGHT", 2)]
+    fn an_event_constant_reads_its_value(#[case] constant: &str, #[case] want: i32) {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+
+        assert_eq!(eval_json(&dispatcher, constant), serde_json::json!(want));
     }
 
-    /// A `short` member: the low 16 bits of [`Self::long`].
-    #[allow(clippy::cast_possible_truncation)]
-    fn short(&self, key: &str) -> JsResult<i16> {
-        Ok(self.long(key)? as i16)
+    #[rstest]
+    #[case::focus("FocusEvent", "focus")]
+    #[case::mouse("MouseEvent", "click")]
+    fn a_built_event_keeps_its_related_target(#[case] class: &str, #[case] event_type: &str) {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+
+        let got = eval_json(
+            &dispatcher,
+            &format!(
+                r"
+                (() => {{
+                    const other = {{}};
+                    return new {class}('{event_type}', {{ relatedTarget: other }}).relatedTarget === other;
+                }})()
+                "
+            ),
+        );
+
+        assert_eq!(got, serde_json::json!(true));
     }
 
-    /// An `unsigned short` member: the low 16 bits of [`Self::long`].
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    fn unsigned_short(&self, key: &str) -> JsResult<u16> {
-        Ok(self.long(key)? as u16)
+    #[test]
+    fn init_custom_event_sets_the_detail() {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+
+        let got = eval_json(
+            &dispatcher,
+            r"
+            (() => {
+                const d = { n: 1 };
+                const e = new CustomEvent('a', { detail: 2 });
+                e.initCustomEvent('b', true, false, d);
+                return [e.type, e.bubbles, e.cancelable, e.detail === d];
+            })()
+            ",
+        );
+
+        assert_eq!(got, serde_json::json!(["b", true, false, true]));
     }
 
-    /// A `double` member, `default` when absent.
-    ///
-    /// # Errors
-    ///
-    /// Throws a `TypeError` for a value that is not a finite number.
-    fn double(&self, key: &str, default: f64) -> JsResult<f64> {
-        let Some(value) = self.member(key)? else {
-            return Ok(default);
-        };
-        let number = value.get::<Coerced<f64>>()?.0;
-        if number.is_finite() {
-            Ok(number)
-        } else {
-            Err(self.not_finite(key))
-        }
+    #[test]
+    fn init_custom_event_reads_an_undefined_detail_as_null() {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+
+        let got = eval_json(
+            &dispatcher,
+            r"
+            (() => {
+                const e = new CustomEvent('a', { detail: 2 });
+                e.initCustomEvent('b', false, false, undefined);
+                return e.detail;
+            })()
+            ",
+        );
+
+        assert_eq!(got, serde_json::json!(null));
     }
 
-    /// A `float` member, `default` when absent.
-    ///
-    /// # Errors
-    ///
-    /// Throws a `TypeError` for a value that is not a finite number as an `f32`.
-    fn float(&self, key: &str, default: f32) -> JsResult<f32> {
-        #[allow(clippy::cast_possible_truncation)]
-        let number = self.double(key, f64::from(default))? as f32;
-        if number.is_finite() {
-            Ok(number)
-        } else {
-            Err(self.not_finite(key))
-        }
+    #[test]
+    fn init_custom_event_throws_on_an_event_without_detail() {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+
+        let got = eval_json(
+            &dispatcher,
+            r"
+            (() => {
+                try {
+                    CustomEvent.prototype.initCustomEvent.call(new Event('a'), 'b');
+                    return 'ran';
+                } catch (err) {
+                    return err instanceof TypeError;
+                }
+            })()
+            ",
+        );
+
+        assert_eq!(got, serde_json::json!(true));
     }
 
-    /// A `DOMString` member, `""` when absent.
-    fn string(&self, key: &str) -> JsResult<String> {
-        match self.member(key)? {
-            Some(value) => Ok(value.get::<Coerced<String>>()?.0),
-            None => Ok(String::new()),
-        }
+    #[test]
+    fn init_custom_event_during_its_dispatch_keeps_the_detail() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        listen(
+            &dispatcher,
+            node,
+            "x",
+            r"
+            (e) => {
+                e.initCustomEvent('y', true, true, 9);
+                out.push(e.detail);
+            }
+            ",
+        );
+
+        let got = eval_json(
+            &dispatcher,
+            &format!(
+                "(__inca_native__.dispatchEvent({node}, new CustomEvent('x', {{ detail: 1 }})), out)"
+            ),
+        );
+
+        assert_eq!(got, serde_json::json!([1]));
     }
 
-    /// An `EventTarget?` member: an object, or `None` for `null`.
-    ///
-    /// # Errors
-    ///
-    /// Throws a `TypeError` for any other value.
-    fn target(&self, key: &str) -> JsResult<Option<Value<'js>>> {
-        match self.member(key)? {
-            Some(value) if value.is_object() => Ok(Some(value)),
-            Some(value) if !value.is_null() => Err(self.error(&format!(
-                "the {key} member is not an object, so pass an element, document, window or null"
-            ))),
-            _ => Ok(None),
-        }
-    }
+    #[rstest]
+    #[case::init_event("Event.prototype.initEvent")]
+    #[case::init_custom_event("CustomEvent.prototype.initCustomEvent")]
+    fn an_init_method_length_reads_one(#[case] method: &str) {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
 
-    fn not_finite(&self, key: &str) -> rquickjs::Error {
-        self.error(&format!(
-            "the {key} member is not a finite number, so pass a finite number or leave it out"
-        ))
-    }
-
-    fn error(&self, message: &str) -> rquickjs::Error {
-        Exception::throw_type(
-            self.ctx,
-            &format!("cannot construct {}: {message}", self.name),
-        )
+        assert_eq!(
+            eval_json(&dispatcher, &format!("{method}.length")),
+            serde_json::json!(1)
+        );
     }
 }
