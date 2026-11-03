@@ -10,6 +10,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.0.27] - 2026-11-03
+
 ### Added
 
 - `TextEncoder` and `TextDecoder` are available ([cda29e1](https://github.com/tom96da/incajs/commit/cda29e1))
@@ -533,7 +535,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - prebuilt `inca-host` binaries for linux-x64, linux-arm64, and darwin-arm64, resolved automatically per platform
 - click event dispatch from the native tree back into JS
 
-[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.26...HEAD
+[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.27...HEAD
+[0.0.27]: https://github.com/tom96da/incajs/releases/tag/v0.0.27
 [0.0.26]: https://github.com/tom96da/incajs/releases/tag/v0.0.26
 [0.0.25]: https://github.com/tom96da/incajs/releases/tag/v0.0.25
 [0.0.24]: https://github.com/tom96da/incajs/releases/tag/v0.0.24
