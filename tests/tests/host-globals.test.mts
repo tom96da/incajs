@@ -3,7 +3,7 @@
 
 // Runs one app under the real `inca-host` binary twice, as `inca dev
 // --experimental-hmr` serves it and as a production build, and compares what
-// the app prints about its encoding globals.
+// the app prints about its timer, frame and encoding globals.
 
 import { spawn } from "node:child_process";
 import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -24,11 +24,21 @@ const WAIT_TIMEOUT_MS = 30_000;
 /** How long the host is given to reload before this test gives up on it. */
 const RELOAD_TIMEOUT_MS = 10_000;
 /** What the app prints, decoded from the bytes of a hiragana letter. */
-const EXPECTED = "[e2e] function function あ";
+const EXPECTED = "[e2e] function function function function function function function あ";
 
 const ENTRY = dedent`
   console.log(
     "[e2e] " +
+      typeof setTimeout +
+      " " +
+      typeof setInterval +
+      " " +
+      typeof clearTimeout +
+      " " +
+      typeof requestAnimationFrame +
+      " " +
+      typeof cancelAnimationFrame +
+      " " +
       typeof TextEncoder +
       " " +
       typeof TextDecoder +
@@ -86,7 +96,7 @@ afterAll(async () => {
 });
 
 it(
-  "prints the same encoding globals in development and in production",
+  "prints the same globals in development and in production",
   async () => {
     const outDir = path.join(appDir, "dist");
     await defaultBundler.build({
