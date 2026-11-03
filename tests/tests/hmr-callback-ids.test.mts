@@ -14,7 +14,7 @@ import { Writable } from "node:stream";
 
 import { afterAll, beforeAll, expect, it, onTestFailed, vi } from "vitest";
 
-import { defaultBundler } from "../../packages/cli/src/defaultBundler.mts";
+import { defaultBundler } from "../../packages/cli/src/defaultPlugins.mts";
 import { HostClient } from "../../packages/cli/src/dev-client/client.mts";
 import { resolveTestHostBin } from "../support/hostBin.mts";
 import { reloadHost, settleReloads } from "../support/reloads.mts";

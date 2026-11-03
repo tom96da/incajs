@@ -9,7 +9,7 @@ import rootConfig from "../../oxlint.config.ts";
 const overrides: OxlintOverride[] = [
   {
     files: ["src/**/*.mts"],
-    excludeFiles: ["src/vite/**", "src/defaultBundler.mts", "src/**/*.test.mts"],
+    excludeFiles: ["src/vite/**", "src/defaultPlugins.mts", "src/**/*.test.mts"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -29,7 +29,7 @@ const overrides: OxlintOverride[] = [
     },
   },
   {
-    files: ["src/defaultBundler.mts", "src/**/*.test.mts"],
+    files: ["src/defaultPlugins.mts", "src/**/*.test.mts"],
     excludeFiles: ["src/vite/**"],
     rules: {
       "no-restricted-imports": [

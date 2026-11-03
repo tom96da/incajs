@@ -583,7 +583,7 @@ A fixed entry is deleted and its ID is never reused.
 - **B-104 A user cannot select a bundler adapter**
   `Units: cli · Size: M · Impact: Low`
 
-  `defaultBundler` (`packages/cli/src/defaultBundler.mts`) wires in the Vite
+  `defaultBundler` (`packages/cli/src/defaultPlugins.mts`) wires in the Vite
   adapter, and the CLI picks it itself. How a user selects another adapter
   is not decided. One planned shape is an `@incajs/cli/rspack` entry.
 

@@ -12,7 +12,7 @@ import {
   resolveRuntimeConfig,
   runtimeConfigOf,
 } from "./config/loader.mts";
-import { defaultBundler } from "./defaultBundler.mts";
+import { defaultBundler } from "./defaultPlugins.mts";
 import { HostClient } from "./dev-client/index.mts";
 import { acquireDevLock } from "./devLock.mts";
 import { entryRoot, resolveEntry, selectEntry } from "./entry.mts";

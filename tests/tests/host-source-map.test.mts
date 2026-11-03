@@ -12,7 +12,7 @@ import { Writable } from "node:stream";
 
 import { afterAll, expect, it } from "vitest";
 
-import { defaultBundler } from "../../packages/cli/src/defaultBundler.mts";
+import { defaultBundler } from "../../packages/cli/src/defaultPlugins.mts";
 import { resolveTestHostBin } from "../support/hostBin.mts";
 import type { BuildOutput, Watcher } from "../../packages/cli/src/types.mts";
 
