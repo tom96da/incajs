@@ -1120,18 +1120,6 @@ A fixed entry is deleted and its ID is never reused.
   string opens a path that runs text as code, and the host has no policy to
   limit it, so the choice waits for a decision on Trusted Types and `eval`.
 
-- **B-233 A global that `incajs` defines is missing until `incajs` loads**
-  `Units: core,cli,docs · Size: S–M · Impact: Low`
-
-  Core defines the timer functions when the `incajs` or `incajs/vue` module
-  loads. A module that runs earlier and calls one of them at its top level
-  fails with `ReferenceError`. The entry that `inca` generates imports
-  `incajs/vue` before `App`, so a `.vue` file is safe there. A hand-written
-  entry that imports `App` first is not. Fix: the injection of B-226 adds the
-  import for the identifiers that core defines. A bare `import "incajs"`
-  does not do it: the bundler drops `incajs` when the app uses no export of
-  it.
-
 - **B-236 Nested components hit the stack limit at a smaller depth than in browsers**
   `Units: jsenv,host · Size: L · Impact: Low`
 

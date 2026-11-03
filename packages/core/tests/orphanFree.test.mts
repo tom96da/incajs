@@ -163,8 +163,6 @@ function installNative(): void {
     setPointerCapture() {},
     releasePointerCapture() {},
     hasPointerCapture: () => false,
-    startTimer: () => undefined,
-    stopTimer() {},
   };
 }
 

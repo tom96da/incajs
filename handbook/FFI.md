@@ -174,17 +174,14 @@ be passed, and `undefined` there counts as `null`.
 | `scrollOf` | `(nodeId: number) => [left, top, maxLeft, maxTop] \| null` | Read the scroll offset (positive) and its maximum as of the last drawn frame, with the offset clamped to that maximum. `null` for a node whose `overflow` is `visible` or `clip` on both axes. |
 | `scrollIntoViewNode` | `(nodeId: number, block: string, inline: string) => void` | Scroll every scroll container above `nodeId` until the node shows, innermost first. `block` is the vertical and `inline` the horizontal alignment: `"start"`, `"center"`, `"end"` or `"nearest"`. `"nearest"` keeps a node that shows in place. A node shorter than the box aligns the edge that lies outside it, and a longer node aligns its end when its start lies before the box, and its start when its end lies after the box. Uses the boxes of the last drawn frame. A node with no recorded box is retried once on the next frame. |
 | `scrollNode` | `(nodeId: number, left: number \| null, top: number \| null) => void` | Set the scroll offset of the axes given, a `null` axis keeps its value. Values below 0 become 0, and the host clamps the upper end at the next frame. A node whose `overflow` is `visible` or `clip` on both axes ignores the call. |
-| `startTimer` | `(delay: number, repeat: boolean) => number \| undefined` | Queue a timer due `delay` ms from now and return its id, see [Timers](#timers). Ids start at 1, are shared by every timer and are never reused. `undefined` after the last id, `2^31 - 1`. |
-| `stopTimer` | `(id: number) => void` | Drop timer `id`. An id that is not queued does nothing. |
 
 Shared throw rules, all as a `TypeError` except where noted:
 
-- A malformed `nodeId`, `callbackId`, timer `id` or `delay` throws, and so
+- A malformed `nodeId` or `callbackId` throws, and so
   does a `target` string other than the two tags in
   [Tagged targets](#tagged-targets).
 - A `capture`, `passive` or `preventScroll` that is not a boolean,
   `undefined` or `null` throws.
-- A `repeat` that is not a boolean throws.
 - `addEventListener` throws a `RangeError` after the last id.
 - `setAttribute` and `setStyle` throw for a `value` that is not a string, number or boolean.
 - `dispatchEvent` throws for an argument that is not an event of the host.
@@ -655,39 +652,39 @@ with the node ids.
 
 ### Timers
 
-The timers come with `incajs`. `packages/core/src/timers.mts` defines them
-on load when `__inca_native__` has `startTimer`. The handlers and their
-arguments stay in JS, under the id `startTimer` returns. Rust allocates the
-ids and keeps them with the due times and periods in `inca_jsenv::Timers`,
-which `Host::timers` owns.
+`inca_bridge::install` defines `setTimeout`, `setInterval`, `clearTimeout` and
+`clearInterval` on `globalThis` through `inca_jsenv::timers::install`, so the
+first line of the bundle sees them. The queue (`inca_jsenv::Timers`, owned by
+`Host::timers`) keeps ids, due times and periods. The handler and its
+arguments are an array in the callback table of `inca-jsenv`
+(`inca_jsenv::callbacks`): a null-prototype object in the vault with one id
+allocator for every registration of a context. Ids start at 1 and are never
+reused. A script reaches neither the table nor the allocator.
 
-`__inca_timer__(id: number) => void` is a global that core defines read-only
-on each load. Rust looks it up by name for each due timer and keeps nothing.
-A global that is not a function is skipped.
-
-- Core coerces `delay` with `delay | 0` and `max(.., 0)`, refuses a
-  non-function handler with a `TypeError`, and throws the `RangeError` "timer
-  ids are exhausted. restart the app" when `startTimer` returns `undefined`.
-  The clear functions read the id as `id | 0` and call `stopTimer` only for an
-  id core holds.
-- The hook drops a one-shot entry, then calls the handler with `globalThis`
-  as `this` and the stored arguments. It calls `stopTimer` for an id it does
-  not hold. A second load of core ends the timers of the first load.
+- `setTimeout` and `setInterval` refuse a non-function handler with a
+  `TypeError`, read `delay` as a 32-bit integer raised to 0 and throw the
+  `RangeError` "timer ids are exhausted. restart the app" after the id
+  `2^31 - 1`. The timer id is the table id.
+- The clear functions are one function. They read the id as a 32-bit integer
+  and release the table entry and the queue entry only for an id the queue
+  holds, so the id of another kind of registration stays.
+- A due timer calls its handler with `globalThis` as `this` and the stored
+  arguments. A one-shot entry leaves the table before the handler runs.
 - A timer started in a callback has the callback's nesting level plus 1. A
   timer of level above 6 whose delay is under 4 ms waits 4 ms. The level
   holds while the job queue drains after the callback. Rust keeps it: the
-  turn records the level before it calls the hook, and
-  `startTimer` reads it.
-- A turn (`inca_jsenv::run_timers`) reads the clock once and calls the hook
-  for each timer due at that reading in `(due, creation)` order. A repeating
-  timer is queued again, at the first point of its schedule (the first due
-  time plus whole periods) after that reading, before the hook runs. A timer
-  started during the turn waits for the next turn.
+  turn records the level before it calls the handler, and the timer function
+  reads it.
+- A turn (`inca_jsenv::run_timers`) reads the clock once and runs each timer
+  due at that reading in `(due, creation)` order. A repeating timer is queued
+  again, at the first point of its schedule (the first due time plus whole
+  periods) after that reading, before the handler runs. A timer started
+  during the turn waits for the next turn.
 - `EventDispatcher::start_timers` runs one foreground task per window. It
   waits on the wake channel and one executor timer, runs a turn when the
   earliest timer is due, and redraws only when a timer ran. `stop_timers`
   ends it. A reload stops the old task before it starts the new one.
-- A throw from the hook goes to the error reporter. A listener error the
+- A throw from a handler goes to the error reporter. A listener error the
   callback caused goes to `Host::failures` and is reported after the turn.
 
 ## Application menu

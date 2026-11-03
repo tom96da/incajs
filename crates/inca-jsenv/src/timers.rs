@@ -3,15 +3,17 @@
 
 //! The timer queue behind the Web timer functions.
 //!
-//! Rust keeps ids, due times and periods. What each id runs stays with the
-//! caller, so no JS value outlives the engine.
+//! Rust keeps ids, due times and periods. What each id runs lives in the
+//! [callback table](crate::callbacks), so no JS value outlives the engine.
+
+mod globals;
+
+pub use globals::install;
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
-
-use rquickjs::{Ctx, Result as JsResult};
 
 use crate::engine::{Engine, EngineError, ErrorReporter};
 
@@ -19,9 +21,6 @@ use crate::engine::{Engine, EngineError, ErrorReporter};
 const NESTING_LIMIT: u32 = 6;
 /// The delay of a timer started in a callback of level [`NESTING_LIMIT`] or deeper.
 const NESTED_DELAY: Duration = Duration::from_millis(4);
-/// The last id [`Timers::start`] returns. A script reads a timer id as
-/// `id | 0`, which keeps every id up to this one.
-const LAST_ID: u32 = 0x7fff_ffff;
 
 /// Reads the current time. A host passes its executor's clock, so a test that
 /// moves that clock moves the timers.
@@ -57,8 +56,6 @@ struct State {
     by_id: HashMap<u32, Entry>,
     queue: BTreeMap<(Instant, u64), u32>,
     next_seq: u64,
-    /// The id the last [`Timers::start`] returned, 0 before the first.
-    last_id: u32,
     running_level: u32,
 }
 
@@ -112,26 +109,23 @@ impl Timers {
         })
     }
 
-    /// Queues a timer due `delay` milliseconds from now and returns its id.
-    /// Ids start at 1, are shared by every timer and are never reused. `None`
-    /// once the id `2^31 - 1` has been returned. A timer started while
+    /// Queues timer `id`, due `delay` milliseconds from now. The id comes from
+    /// the [callback table](crate::callbacks). A timer started while
     /// [`run_timers`] runs a timer of level six or deeper waits at least 4 ms.
-    pub fn start(&self, delay: u32, repeat: bool) -> Option<u32> {
+    pub fn start(&self, id: u32, delay: u32, repeat: bool) {
         let now = (self.clock)();
-        let id = {
+        {
             let mut state = self.state.borrow_mut();
-            let id = state.last_id + 1;
-            if id > LAST_ID {
-                return None;
-            }
-            state.last_id = id;
             let level = state.running_level + 1;
             let period = nested(level, Duration::from_millis(u64::from(delay)));
             state.insert(id, now + period, period, repeat, level);
-            id
-        };
+        }
         (self.wake)();
-        Some(id)
+    }
+
+    /// Whether timer `id` is queued.
+    pub(crate) fn contains(&self, id: u32) -> bool {
+        self.state.borrow().by_id.contains_key(&id)
     }
 
     /// Removes timer `id`. An id that is not queued does nothing.
@@ -155,9 +149,9 @@ impl Timers {
 
     /// Takes timer `id` out of the queue for a turn that reads `now`.
     /// A repeating timer goes back on its schedule, at the first point after
-    /// `now`, before its callback runs. Returns the level the callback runs at,
-    /// or `None` when the timer left the queue.
-    fn take(&self, id: u32, now: Instant) -> Option<u32> {
+    /// `now`, before its callback runs. Returns the level the callback runs at
+    /// and whether the timer repeats, or `None` when the timer left the queue.
+    fn take(&self, id: u32, now: Instant) -> Option<(u32, bool)> {
         let mut state = self.state.borrow_mut();
         let entry = *state.by_id.get(&id)?;
         state.queue.remove(&entry.key);
@@ -169,23 +163,19 @@ impl Timers {
         } else {
             state.by_id.remove(&id);
         }
-        Some(entry.level)
+        Some((entry.level, entry.repeat))
     }
 }
 
 /// Runs the timers due at one reading of the clock, in due order, and returns
-/// how many ran. `fire` runs one timer, given its id. The job queue drains
-/// after each timer, at its nesting level. An error `fire` returns, and each
-/// failed job, goes to `reporter`. A timer started during the turn waits for
-/// the next turn.
+/// how many ran. A timer calls its handler with `this` set to `globalThis`
+/// and the arguments the timer function received. A one-shot timer leaves the
+/// callback table before its handler runs. The job queue drains after each
+/// timer, at its nesting level. A throw of the handler, and each failed job,
+/// goes to `reporter`. A timer started during the turn waits for the next turn.
 ///
 /// Call it outside any [`Engine::with`].
-pub fn run_timers(
-    engine: &Engine,
-    timers: &Timers,
-    reporter: &ErrorReporter,
-    fire: &dyn Fn(&Ctx<'_>, u32) -> JsResult<()>,
-) -> usize {
+pub fn run_timers(engine: &Engine, timers: &Timers, reporter: &ErrorReporter) -> usize {
     let now = (timers.clock)();
     let due: Vec<u32> = timers
         .state
@@ -196,13 +186,14 @@ pub fn run_timers(
         .collect();
     let mut ran = 0;
     for id in due {
-        let Some(level) = timers.take(id, now) else {
+        let Some((level, repeat)) = timers.take(id, now) else {
             continue;
         };
         ran += 1;
         timers.state.borrow_mut().running_level = level;
-        let fired =
-            engine.with(|ctx| fire(&ctx, id).map_err(|err| EngineError::capture(&ctx, &err)));
+        let fired = engine.with(|ctx| {
+            globals::fire(&ctx, id, repeat).map_err(|err| EngineError::capture(&ctx, &err))
+        });
         let mut failures: Vec<EngineError> = fired.err().into_iter().collect();
         failures.extend(engine.run_jobs());
         timers.state.borrow_mut().running_level = 0;
@@ -219,38 +210,9 @@ mod tests {
 
     use std::cell::{Cell, RefCell};
 
-    use rquickjs::Function;
-
     use super::*;
 
-    /// The script side of the fixture, over the natives `start` and `stop`:
-    /// `after(handler, delay)` and `every(handler, delay)` queue a handler and
-    /// return its id, `cancel(id)` drops it, and `fire(id)` runs it.
-    const SCRIPT: &str = r"
-        globalThis.log = [];
-        const handlers = new Map();
-        const queue = (repeat) => (handler, delay) => {
-            const id = start(delay, repeat);
-            handlers.set(id, handler);
-            return id;
-        };
-        globalThis.after = queue(false);
-        globalThis.every = queue(true);
-        globalThis.cancel = (id) => {
-            handlers.delete(id);
-            stop(id);
-        };
-        globalThis.fire = (id) => {
-            handlers.get(id)();
-        };
-        ";
-
-    /// Runs timer `id` through the script's `fire`.
-    fn fire(ctx: &Ctx<'_>, id: u32) -> JsResult<()> {
-        ctx.globals().get::<_, Function>("fire")?.call((id,))
-    }
-
-    /// An engine with the fixture script, a clock the test moves, and the reports.
+    /// An engine with the timer globals, a clock the test moves, and the reports.
     struct Fixture {
         engine: Engine,
         timers: Rc<Timers>,
@@ -272,17 +234,7 @@ mod tests {
             Rc::new(move || wakes.set(wakes.get() + 1))
         });
         let engine = Engine::new().unwrap();
-        engine.with(|ctx| {
-            let starter = Rc::clone(&timers);
-            let start = Function::new(ctx.clone(), move |delay: u32, repeat: bool| {
-                starter.start(delay, repeat).unwrap()
-            })
-            .unwrap();
-            let stopper = Rc::clone(&timers);
-            let stop = Function::new(ctx.clone(), move |id: u32| stopper.stop(id)).unwrap();
-            ctx.globals().set("start", start).unwrap();
-            ctx.globals().set("stop", stop).unwrap();
-        });
+        engine.with(|ctx| install(&ctx, &timers)).unwrap();
         let reported = Rc::new(RefCell::new(Vec::new()));
         let report: ErrorReporter = {
             let reported = Rc::clone(&reported);
@@ -296,7 +248,7 @@ mod tests {
             reported,
             reporter: report,
         };
-        fx.eval(SCRIPT);
+        fx.eval("globalThis.log = [];");
         fx
     }
 
@@ -314,7 +266,7 @@ mod tests {
         }
 
         fn run(&self) -> usize {
-            run_timers(&self.engine, &self.timers, &self.reporter, &fire)
+            run_timers(&self.engine, &self.timers, &self.reporter)
         }
 
         fn log(&self) -> String {
@@ -329,7 +281,7 @@ mod tests {
     #[test]
     fn a_timeout_runs_once_at_its_due_time() {
         let fx = fixture();
-        fx.eval("after(() => log.push('a'), 100);");
+        fx.eval("setTimeout(() => log.push('a'), 100);");
 
         fx.advance(99);
         assert_eq!(fx.run(), 0);
@@ -345,7 +297,7 @@ mod tests {
     #[test]
     fn an_interval_runs_once_per_period() {
         let fx = fixture();
-        fx.eval("every(() => log.push('a'), 10);");
+        fx.eval("setInterval(() => log.push('a'), 10);");
         for _ in 0..3 {
             fx.advance(10);
             assert_eq!(fx.run(), 1);
@@ -356,7 +308,7 @@ mod tests {
     #[test]
     fn a_late_interval_returns_to_its_schedule() {
         let fx = fixture();
-        fx.eval("every(() => log.push('a'), 50);");
+        fx.eval("setInterval(() => log.push('a'), 50);");
 
         fx.advance(175);
         assert_eq!(fx.run(), 1);
@@ -369,9 +321,9 @@ mod tests {
         let fx = fixture();
         fx.eval(
             r"
-            const id = every(() => {
+            const id = setInterval(() => {
                 log.push('a');
-                cancel(id);
+                clearTimeout(id);
             }, 10);
             ",
         );
@@ -389,7 +341,7 @@ mod tests {
         let fx = fixture();
         fx.eval(
             r"
-            after(() => {
+            setTimeout(() => {
                 throw new Error('boom');
             }, 0);
             ",
@@ -403,10 +355,10 @@ mod tests {
         let fx = fixture();
         fx.eval(
             r"
-            after(() => {
+            setTimeout(() => {
                 throw new Error('boom');
             }, 0);
-            after(() => log.push('b'), 0);
+            setTimeout(() => log.push('b'), 0);
             ",
         );
         assert_eq!(fx.run(), 2);
@@ -418,7 +370,7 @@ mod tests {
         let fx = fixture();
         fx.eval(
             r"
-            every(() => {
+            setInterval(() => {
                 throw new Error('x');
             }, 10);
             ",
@@ -436,7 +388,7 @@ mod tests {
         fx.eval(
             r"
             for (const n of ['a', 'b', 'c']) {
-                after(() => log.push(n), 10);
+                setTimeout(() => log.push(n), 10);
             }
             ",
         );
@@ -450,8 +402,8 @@ mod tests {
         let fx = fixture();
         fx.eval(
             r"
-            after(() => log.push('a'), 10);
-            after(() => log.push('b'), 5);
+            setTimeout(() => log.push('a'), 10);
+            setTimeout(() => log.push('b'), 5);
             ",
         );
         fx.advance(10);
@@ -464,9 +416,9 @@ mod tests {
         let fx = fixture();
         fx.eval(
             r"
-            after(() => {
+            setTimeout(() => {
                 log.push('a');
-                after(() => log.push('b'), 0);
+                setTimeout(() => log.push('b'), 0);
             }, 0);
             ",
         );
@@ -482,11 +434,11 @@ mod tests {
         fx.eval(
             r"
             let b;
-            after(() => {
-                cancel(b);
+            setTimeout(() => {
+                clearTimeout(b);
                 log.push('a');
             }, 5);
-            b = after(() => log.push('b'), 5);
+            b = setTimeout(() => log.push('b'), 5);
             ",
         );
         fx.advance(5);
@@ -499,11 +451,11 @@ mod tests {
         let fx = fixture();
         fx.eval(
             r"
-            after(() => {
+            setTimeout(() => {
                 log.push('a');
                 Promise.resolve().then(() => log.push('job'));
             }, 0);
-            after(() => log.push('b'), 0);
+            setTimeout(() => log.push('b'), 0);
             ",
         );
         assert_eq!(fx.run(), 2);
@@ -535,10 +487,10 @@ mod tests {
                 n += 1;
                 log.push(n);
                 if (n < 8) {
-                    after(link, 0);
+                    setTimeout(link, 0);
                 }
             };
-            after(link, 0);
+            setTimeout(link, 0);
             ",
         );
         assert_seventh_link_waits_four_ms(&fx);
@@ -550,7 +502,7 @@ mod tests {
         fx.eval(
             r"
             let n = 0;
-            const sleep = () => new Promise((resolve) => after(resolve, 0));
+            const sleep = () => new Promise((resolve) => setTimeout(resolve, 0));
             (async () => {
                 for (let i = 0; i < 8; i++) {
                     await sleep();
@@ -573,16 +525,16 @@ mod tests {
                 n += 1;
                 log.push(n);
                 if (n < 8) {
-                    after(link, 0);
+                    setTimeout(link, 0);
                 }
             };
-            after(link, 0);
+            setTimeout(link, 0);
             ",
         );
         for _ in 0..6 {
             assert_eq!(fx.run(), 1);
         }
-        fx.eval("after(() => log.push('top'), 0);");
+        fx.eval("setTimeout(() => log.push('top'), 0);");
         assert_eq!(fx.run(), 1);
         assert_eq!(fx.log(), "1,2,3,4,5,6,top");
     }
@@ -590,7 +542,7 @@ mod tests {
     #[test]
     fn a_zero_period_interval_waits_four_milliseconds_after_six_runs() {
         let fx = fixture();
-        fx.eval("every(() => log.push('x'), 0);");
+        fx.eval("setInterval(() => log.push('x'), 0);");
         for _ in 0..6 {
             assert_eq!(fx.run(), 1);
         }
@@ -606,8 +558,9 @@ mod tests {
     fn next_due_is_the_earliest_queued_due_time() {
         let fx = fixture();
         assert_eq!(fx.timers.next_due(), None);
-        let late = fx.timers.start(30, false).unwrap();
-        let early = fx.timers.start(10, false).unwrap();
+        let (late, early) = (1, 2);
+        fx.timers.start(late, 30, false);
+        fx.timers.start(early, 10, false);
         assert_eq!(fx.timers.next_due(), Some(fx.due_in(10)));
         fx.timers.stop(early);
         assert_eq!(fx.timers.next_due(), Some(fx.due_in(30)));
@@ -619,7 +572,7 @@ mod tests {
     fn wait_is_the_time_left_by_the_queues_own_clock() {
         let fx = fixture();
         assert_eq!(fx.timers.wait(), None);
-        fx.timers.start(10, false);
+        fx.timers.start(1, 10, false);
         assert_eq!(fx.timers.wait(), Some(Duration::from_millis(10)));
         fx.advance(4);
         assert_eq!(fx.timers.wait(), Some(Duration::from_millis(6)));
@@ -628,42 +581,18 @@ mod tests {
     }
 
     #[test]
-    fn start_numbers_the_timers_from_one_without_reuse() {
-        let fx = fixture();
-        let first = fx.timers.start(10, false);
-        let second = fx.timers.start(10, true);
-        fx.timers.stop(1);
-        let third = fx.timers.start(10, false);
-
-        assert_eq!([first, second, third], [Some(1), Some(2), Some(3)]);
-    }
-
-    #[test]
-    fn start_after_the_last_id_returns_none() {
-        let fx = fixture();
-        fx.timers.state.borrow_mut().last_id = LAST_ID - 1;
-
-        assert_eq!(fx.timers.start(10, false), Some(LAST_ID));
-        assert_eq!(fx.timers.start(10, false), None);
-        assert_eq!(fx.wakes.get(), 1);
-    }
-
-    #[test]
     fn wake_runs_on_every_start() {
         let fx = fixture();
-        fx.eval(
-            r"
-            after(() => {}, 1);
-            every(() => {}, 1);
-            ",
-        );
+        fx.timers.start(1, 1, false);
+        fx.timers.start(2, 1, true);
         assert_eq!(fx.wakes.get(), 2);
     }
 
     #[test]
     fn wake_does_not_run_on_stop() {
         let fx = fixture();
-        fx.eval("cancel(after(() => {}, 1));");
+        fx.timers.start(1, 1, false);
+        fx.timers.stop(1);
         assert_eq!(fx.wakes.get(), 1);
     }
 }

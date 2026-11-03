@@ -256,7 +256,6 @@ mod tests {
 
     use super::*;
     use gpui::TestAppContext;
-    use inca_bridge::test_support::TIMERS_JS;
     use serde_json::json;
 
     use crate::tests::{
@@ -421,25 +420,17 @@ mod tests {
     #[gpui::test]
     fn a_reload_starts_the_pump_of_the_new_session(cx: &mut TestAppContext) {
         let dir = ScratchDir::new("timer-reload");
-        let old = [
-            TIMERS_JS,
-            "setTimeout(() => __inca_dev__.send('old_fired', '{}'), 100);",
-        ]
-        .concat();
-        let entry = write_entry(&dir, &old);
+        let old = "setTimeout(() => __inca_dev__.send('old_fired', '{}'), 100);";
+        let entry = write_entry(&dir, old);
         let (capturing, _) = capture();
-        let (window, sender) = serve_idle_on_executor_clock(cx, &old, &entry, &capturing);
+        let (window, sender) = serve_idle_on_executor_clock(cx, old, &entry, &capturing);
         let keep = window
             .update(cx, |app, _, _| app.session.dispatcher.clone())
             .unwrap();
 
         std::fs::write(
             &entry,
-            [
-                TIMERS_JS,
-                "setTimeout(() => __inca_dev__.send('new_fired', '{}'), 100);",
-            ]
-            .concat(),
+            "setTimeout(() => __inca_dev__.send('new_fired', '{}'), 100);",
         )
         .unwrap();
         request(&sender, 1, "reload");
@@ -460,11 +451,7 @@ mod tests {
         let (capturing, _) = capture();
         let (_window, sender) = serve_idle_on_executor_clock(cx, "", &entry, &capturing);
 
-        std::fs::write(
-            &entry,
-            [TIMERS_JS, "await new Promise((r) => setTimeout(r, 500));"].concat(),
-        )
-        .unwrap();
+        std::fs::write(&entry, "await new Promise((r) => setTimeout(r, 500));").unwrap();
         request(&sender, 5, "reload");
         cx.run_until_parked();
         assert!(
@@ -492,7 +479,7 @@ mod tests {
         let (capturing, writer) = capture();
         let _sender = serve_on_executor_clock(
             cx,
-            &[TIMERS_JS, "await new Promise((r) => setTimeout(r, 500));"].concat(),
+            "await new Promise((r) => setTimeout(r, 500));",
             TEST_ENTRY_PATH,
             &writer,
         );
