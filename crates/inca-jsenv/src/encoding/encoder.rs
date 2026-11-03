@@ -187,7 +187,7 @@ mod tests {
     use super::*;
     use crate::Engine;
     use crate::encoding::tests::{run, thrown};
-    use crate::engine::tests::memory_size;
+    use crate::tests::memory_size;
 
     #[rstest]
     #[case::empty("encode()", "")]

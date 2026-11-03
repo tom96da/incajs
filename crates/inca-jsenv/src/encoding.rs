@@ -171,7 +171,7 @@ mod tests {
 
     use super::*;
     use crate::Engine;
-    use crate::engine::tests::around;
+    use crate::tests::around;
 
     /// The string that the script `source` evaluates to, in a new engine.
     pub(super) fn run(source: &str) -> String {

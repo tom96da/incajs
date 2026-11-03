@@ -9,16 +9,20 @@
 
 use std::fmt::Write;
 
-use rquickjs::promise::PromiseState;
-use rquickjs::{Coerced, Ctx, Object, Promise, Result as JsResult, Type, Value, object::Filter};
+use rquickjs::{Coerced, Ctx, Result as JsResult, Type, Value};
 
 use crate::paint::{Style, paint};
-use crate::quickjs::{ObjectExt, ValueExt};
+use crate::quickjs::ValueExt;
 use crate::sourcemap::remap_stack;
 
+mod array;
 mod builtins;
+mod collections;
+mod object;
 
+use array::write_array;
 pub(crate) use builtins::pin;
+use object::write_object;
 
 /// Nesting depth after which `[Array]` or `[Object]` is printed. It also bounds a cycle.
 const MAX_DEPTH: usize = 3;
@@ -268,347 +272,419 @@ fn write_function(out: &mut String, value: &Value<'_>, mode: Mode) {
     put(out, mode, Style::Cyan, &text);
 }
 
-fn write_array(out: &mut String, value: &Value<'_>, depth: usize, mode: Mode) {
-    let Some(array) = value.as_array() else {
-        put(out, mode, Style::Cyan, "[Array]");
-        return;
-    };
-    if depth >= mode.max_depth {
-        put(out, mode, Style::Cyan, "[Array]");
-        return;
-    }
-    let object = array.as_object();
-    let ctx = object.ctx();
-    // A length above `i32::MAX` is a float, so `Array::len` cannot read it.
-    let length = settled(ctx, object.get::<_, f64>("length")).unwrap_or(0.0);
-    if length < 1.0 && !mode.hidden {
-        out.push_str("[]");
-        return;
-    }
-
-    out.push_str("[ ");
-    let mut written = false;
-    let mut entries = 0;
-    let mut next = 0.0;
-    // Only the present indices are visited, in ascending order, so a hole run
-    // of any size costs one step.
-    for key in object.own_keys::<String>(Filter::new().string()) {
-        let Some(index) = settled(ctx, key).as_deref().and_then(array_index) else {
-            continue;
-        };
-        if index >= length {
-            continue;
-        }
-        if index > next {
-            write_holes(out, &mut written, index - next, mode);
-            entries += 1;
-            next = index;
-            if entries == MAX_ENTRIES {
-                break;
-            }
-        }
-        separate(out, &mut written);
-        write_slot(out, slot(object, &index.to_string()), depth, mode);
-        entries += 1;
-        next = index + 1.0;
-        if entries == MAX_ENTRIES {
-            break;
-        }
-    }
-    let rest = length - next;
-    if rest > 0.0 {
-        if entries == MAX_ENTRIES {
-            write_more(out, &mut written, rest, mode);
-        } else {
-            write_holes(out, &mut written, rest, mode);
-        }
-    }
-    if mode.hidden {
-        separate(out, &mut written);
-        out.push_str("[length]: ");
-        put(out, mode, Style::Yellow, &length.to_string());
-    }
-    out.push_str(" ]");
-}
-
-/// The index an array key names, or `None` for any other key.
-fn array_index(key: &str) -> Option<f64> {
-    let index: u32 = key.parse().ok()?;
-    (index != u32::MAX && index.to_string() == key).then_some(f64::from(index))
-}
-
-/// Starts the next entry of an array.
-fn separate(out: &mut String, written: &mut bool) {
-    if *written {
-        out.push_str(", ");
-    }
-    *written = true;
-}
-
-fn write_holes(out: &mut String, written: &mut bool, count: f64, mode: Mode) {
-    separate(out, written);
-    put(
-        out,
-        mode,
-        Style::Grey,
-        &format!("<{}>", items(count, "empty")),
-    );
-}
-
-/// `... N more items`, closing an array cut at [`MAX_ENTRIES`].
-fn write_more(out: &mut String, written: &mut bool, count: f64, mode: Mode) {
-    separate(out, written);
-    plain(out, mode, &format!("... {}", items(count, "more")));
-}
-
-/// `N <kind> item` or `N <kind> items`.
-#[allow(clippy::float_cmp)] // JS lengths arrive as f64 and the counts are whole numbers
-fn items(count: f64, kind: &str) -> String {
-    let plural = if count == 1.0 { "" } else { "s" };
-    format!("{count} {kind} item{plural}")
-}
-
 /// `text` in single quotes.
 pub(crate) fn quote(text: &str) -> String {
     format!("'{}'", text.replace('\'', "\\'"))
 }
 
-/// A key that is an identifier prints as it is; any other is quoted.
-fn write_key(out: &mut String, key: &str, bracketed: bool, mode: Mode) {
-    if bracketed {
-        out.push('[');
-    }
-    let mut chars = key.chars();
-    let bare = chars
-        .next()
-        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
-        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
-    if bare {
-        plain(out, mode, key);
-    } else {
-        put(out, mode, Style::Green, &quote(key));
-    }
-    out.push_str(if bracketed { "]: " } else { ": " });
-}
-
-/// What an own property holds.
-enum Slot<'js> {
-    Value(Value<'js>),
-    /// `[Getter]`, `[Setter]` or `[Getter/Setter]`.
-    Accessor(&'static str),
-    /// No such property, or a read that threw (the exception is cleared).
-    Missing,
-}
-
-/// Reads an own property's descriptor, so an accessor is named and never
-/// called.
-fn slot<'js>(object: &Object<'js>, key: &str) -> Slot<'js> {
-    let Some(Some(desc)) = settled(object.ctx(), object.get_own_property_descriptor(key)) else {
-        return Slot::Missing;
-    };
-    match (
-        desc.is_accessor(),
-        desc.getter.is_undefined(),
-        desc.setter.is_undefined(),
-    ) {
-        (true, false, false) => Slot::Accessor("[Getter/Setter]"),
-        (true, false, true) => Slot::Accessor("[Getter]"),
-        (true, true, false) => Slot::Accessor("[Setter]"),
-        // A data property, or an accessor with neither function, whose value
-        // is `undefined`.
-        _ => Slot::Value(desc.value),
-    }
-}
-
-/// Appends what an own property holds. `undefined` stands for a missing one.
-fn write_slot(out: &mut String, slot: Slot<'_>, depth: usize, mode: Mode) {
-    match slot {
-        Slot::Value(item) => write_value(out, &item, depth + 1, mode),
-        Slot::Accessor(text) => put(out, mode, Style::Cyan, text),
-        Slot::Missing => put(out, mode, Style::Grey, "undefined"),
-    }
-}
-
-fn write_object(out: &mut String, value: &Value<'_>, depth: usize, mode: Mode) {
-    let Some(object) = value.as_object() else {
-        put(out, mode, Style::Cyan, "[Object]");
-        return;
-    };
-    if builtins::write(out, object, depth, mode) {
-        return;
-    }
-    let promise = value.as_promise();
-    // The label of a prototype-less object is a tag in brackets.
-    let (label, tag) = match (constructor_name(object), promise.is_some()) {
-        (None, true) => ("Promise: null prototype".to_owned(), true),
-        (None, false) if is_module_namespace(object) => ("Module: null prototype".to_owned(), true),
-        (None, false) => ("Object: null prototype".to_owned(), true),
-        (Some(name), true) if name != "Promise" => (format!("{name} [Promise]"), false),
-        (Some(name), _) => (name, false),
-    };
-    if depth >= mode.max_depth {
-        put(out, mode, Style::Cyan, &format!("[{label}]"));
-        return;
-    }
-    let prefix = match (tag, label.as_str()) {
-        (true, _) => format!("[{label}] "),
-        (false, "Object") => String::new(),
-        _ => format!("{label} "),
-    };
-
-    let mut entries = 0;
-    let mut body = String::new();
-    if let Some(promise) = promise {
-        write_promise_state(&mut body, promise, depth, mode);
-        entries += 1;
-    }
-    let keys = if mode.hidden {
-        object.own_keys::<String>(Filter::new().string())
-    } else {
-        object.keys::<String>()
-    };
-    for key in keys {
-        let Ok(key) = key else {
-            drop(object.ctx().catch());
-            continue;
-        };
-        let shown = mode.hidden
-            && settled(object.ctx(), object.get_own_property_descriptor(&key[..]))
-                .flatten()
-                .is_some_and(|desc| !desc.is_enumerable());
-        if entries > 0 {
-            body.push_str(", ");
-        }
-        write_key(&mut body, &key, shown, mode);
-        write_slot(&mut body, slot(object, &key), depth, mode);
-        entries += 1;
-    }
-
-    if entries == 0 {
-        let _ = write!(out, "{prefix}{{}}");
-    } else {
-        let _ = write!(out, "{prefix}{{ {body} }}");
-    }
-}
-
-/// Appends the state of `promise`: `<pending>`, its value, or `<rejected>` and its reason.
-fn write_promise_state(out: &mut String, promise: &Promise<'_>, depth: usize, mode: Mode) {
-    match promise.state() {
-        PromiseState::Pending => put(out, mode, Style::Cyan, "<pending>"),
-        PromiseState::Resolved => {
-            for value in promise.result::<Value>().into_iter().flatten() {
-                write_value(out, &value, depth + 1, mode);
-            }
-        }
-        PromiseState::Rejected => {
-            put(out, mode, Style::Cyan, "<rejected>");
-            out.push(' ');
-            // `result` throws the reason, so `catch` takes it back.
-            drop(promise.result::<Value>());
-            write_value(out, &promise.ctx().catch(), depth + 1, mode);
-        }
-    }
-}
-
-/// The name of the first constructor on the prototype chain that the object
-/// is an instance of. `None` for an object with no prototype. When no
-/// constructor qualifies, `Object <name of the prototype>`. Only own data
-/// properties are read. A constructor that is a `Proxy` reads as its target,
-/// and a `Proxy` on the chain reads as `Object`, so no getter or trap runs.
-fn constructor_name(object: &Object<'_>) -> Option<String> {
-    let first = prototype_of(object)?;
-    let mut current = first.clone();
-    loop {
-        if current.as_value().is_proxy() {
-            return Some("Object".to_owned());
-        }
-        let own = settled(
-            object.ctx(),
-            current.get_own_property_descriptor("constructor"),
-        )
-        .flatten();
-        if let Some(constructor) = own
-            .and_then(|desc| unproxied(&desc.value))
-            .and_then(Value::into_object)
-            && constructor.is_function()
-            && let Some(name) = own_string(&constructor, "name").filter(|name| !name.is_empty())
-            && is_instance(object, &constructor)
-        {
-            return Some(name);
-        }
-        match prototype_of(&current) {
-            Some(next) => current = next,
-            None => break,
-        }
-    }
-    let inner = constructor_name(&first).unwrap_or_else(|| detached(&first));
-    Some(format!("Object <{inner}>"))
-}
-
-/// A prototype-less object as a prototype label: `[Object: null prototype]`,
-/// then `{}` when it has no enumerable keys.
-fn detached(object: &Object<'_>) -> String {
-    if object.keys::<String>().next().is_none() {
-        "[Object: null prototype] {}".to_owned()
-    } else {
-        "[Object: null prototype]".to_owned()
-    }
-}
-
-/// The string held by an own data property, or `None`.
-fn own_string(object: &Object<'_>, key: &str) -> Option<String> {
-    let desc = settled(object.ctx(), object.get_own_property_descriptor(key)).flatten()?;
-    desc.value.as_string()?.to_string().ok()
-}
-
-/// Whether the object is a module namespace, which has no prototype and the
-/// tag `Module`.
-fn is_module_namespace(object: &Object<'_>) -> bool {
-    let ctx = object.ctx();
-    let Ok(symbol) = ctx.globals().get::<_, Object<'_>>("Symbol") else {
-        drop(ctx.catch());
-        return false;
-    };
-    let Some(Some(tag)) = settled(ctx, symbol.get_own_property_descriptor("toStringTag")) else {
-        return false;
-    };
-    object.get_prototype().is_none()
-        && settled(ctx, object.get_own_property_descriptor(tag.value))
-            .flatten()
-            .and_then(|desc| desc.value.as_string()?.to_string().ok())
-            .is_some_and(|tag| tag == "Module")
-}
-
-/// The prototype, clearing the exception a `Proxy` prototype's trap threw.
-fn prototype_of<'js>(object: &Object<'js>) -> Option<Object<'js>> {
-    let prototype = object.get_prototype();
-    if object.ctx().has_exception() {
-        drop(object.ctx().catch());
-    }
-    prototype
-}
-
-/// Whether the data property `constructor.prototype` is on the object's chain.
-fn is_instance<'js>(object: &Object<'js>, constructor: &Object<'js>) -> bool {
-    let ctx = object.ctx();
-    let Some(target) = settled(ctx, constructor.get_own_property_descriptor("prototype"))
-        .flatten()
-        .and_then(|desc| desc.value.into_object())
-    else {
-        return false;
-    };
-    let mut current = prototype_of(object);
-    while let Some(next) = current {
-        if next == target {
-            return true;
-        }
-        if next.as_value().is_proxy() {
-            return false;
-        }
-        current = prototype_of(&next);
-    }
-    false
-}
-
 #[cfg(test)]
-mod tests;
+mod tests {
+    #![allow(clippy::unwrap_used)]
+
+    use rquickjs::{Context, Runtime};
+    use rstest::rstest;
+
+    use super::*;
+    use crate::tests::{colored, counted, cyan, escaped, green, rendered, with_realm, yellow};
+
+    #[test]
+    fn accessor_text_is_cyan() {
+        assert_eq!(
+            colored("({ get a() { return 1; }, set b(v) {}, get c() { return 1; }, set c(v) {} })"),
+            format!(
+                "{{ a: {}, b: {}, c: {} }}",
+                cyan("[Getter]"),
+                cyan("[Setter]"),
+                cyan("[Getter/Setter]")
+            )
+        );
+    }
+
+    #[test]
+    fn quoted_quotes_a_string_and_leaves_the_rest_alone() {
+        with_realm(|ctx| {
+            let text: Value<'_> = ctx.eval("'it\\'s'").unwrap();
+            let object: Value<'_> = ctx.eval("({ a: 'b' })").unwrap();
+            let number: Value<'_> = ctx.eval("7").unwrap();
+
+            assert_eq!(quoted(&text, false), "'it\\'s'");
+            assert_eq!(quoted(&object, false), "{ a: 'b' }");
+            assert_eq!(quoted(&number, false), "7");
+        });
+    }
+
+    #[test]
+    fn several_arguments_are_space_separated() {
+        let out = with_realm(|ctx| {
+            let values: Vec<Value<'_>> = ctx.eval("['a', 1, { k: true }]").unwrap();
+            line(&values, false)
+        });
+
+        assert_eq!(out, "a 1 { k: true }");
+    }
+
+    #[test]
+    fn numbers_bigints_and_booleans_are_yellow() {
+        assert_eq!(colored("42"), yellow("42"));
+        assert_eq!(colored("1.5"), yellow("1.5"));
+        assert_eq!(colored("NaN"), yellow("NaN"));
+        assert_eq!(colored("1 / 0"), yellow("Infinity"));
+        assert_eq!(colored("-1 / 0"), yellow("-Infinity"));
+        assert_eq!(colored("10n"), yellow("10n"));
+        assert_eq!(colored("true"), yellow("true"));
+        assert_eq!(colored("false"), yellow("false"));
+    }
+
+    #[rstest]
+    #[case::null("null", "\x1b[1mnull\x1b[22m")]
+    #[case::undefined("undefined", "\x1b[90mundefined\x1b[39m")]
+    fn a_nullish_value_takes_its_own_style(#[case] source: &str, #[case] want: &str) {
+        assert_eq!(colored(source), want);
+    }
+
+    #[test]
+    fn a_symbol_is_green() {
+        assert_eq!(colored("Symbol('tag')"), green("Symbol(tag)"));
+    }
+
+    #[test]
+    fn a_top_level_string_stays_uncolored() {
+        assert_eq!(colored("'plain'"), "plain");
+        assert_eq!(colored("''"), "");
+    }
+
+    #[test]
+    fn a_nested_string_is_green_with_its_quotes() {
+        assert_eq!(
+            colored("['a', 1]"),
+            format!("[ {}, {} ]", green("'a'"), yellow("1"))
+        );
+        assert_eq!(colored("['it\\'s']"), format!("[ {} ]", green("'it\\'s'")));
+    }
+
+    #[test]
+    fn an_identifier_key_is_uncolored_and_a_quoted_key_is_green() {
+        assert_eq!(
+            colored("({ k: 'v', n: 1 })"),
+            format!("{{ k: {}, n: {} }}", green("'v'"), yellow("1"))
+        );
+        let source = "({ '1': 2, 'a b': 1, _ok9: 3 })";
+
+        assert_eq!(
+            colored(source),
+            format!(
+                "{{ {}: {}, {}: {}, _ok9: {} }}",
+                green("'1'"),
+                yellow("2"),
+                green("'a b'"),
+                yellow("1"),
+                yellow("3")
+            )
+        );
+        assert_eq!(rendered(source), "{ '1': 2, 'a b': 1, _ok9: 3 }");
+    }
+
+    #[test]
+    fn functions_are_cyan() {
+        assert_eq!(
+            colored("function named() {}; named"),
+            cyan("[Function: named]")
+        );
+        assert_eq!(colored("(() => {})"), cyan("[Function (anonymous)]"));
+    }
+
+    #[test]
+    fn depth_placeholders_are_cyan() {
+        assert_eq!(
+            colored("({ a: { b: { c: { d: 1 } } } })"),
+            format!("{{ a: {{ b: {{ c: {} }} }} }}", cyan("[Object]"))
+        );
+        assert_eq!(
+            colored("[[[[1]]]]"),
+            format!("[ [ [ {} ] ] ]", cyan("[Array]"))
+        );
+    }
+
+    #[test]
+    fn empty_containers_are_uncolored() {
+        assert_eq!(colored("[]"), "[]");
+        assert_eq!(colored("({})"), "{}");
+    }
+
+    #[test]
+    fn an_error_keeps_its_first_line_and_dims_every_frame() {
+        let out = colored("new Error('boom')");
+        let mut lines = out.lines();
+
+        assert_eq!(lines.next(), Some("Error: boom"));
+        let frames: Vec<&str> = lines.collect();
+        assert!(!frames.is_empty());
+        for frame in frames {
+            assert!(frame.starts_with("\x1b[90m"), "{frame:?}");
+            assert!(frame.ends_with("\x1b[39m"), "{frame:?}");
+            assert!(frame.contains("at "), "{frame:?}");
+        }
+    }
+
+    #[test]
+    fn an_error_without_a_stack_has_nothing_to_dim() {
+        assert_eq!(
+            colored("const e = new TypeError('bad'); e.stack = ''; e"),
+            "TypeError: bad"
+        );
+    }
+
+    #[test]
+    fn arguments_are_colored_one_by_one_and_joined_plainly() {
+        let out = with_realm(|ctx| {
+            let values: Vec<Value<'_>> = ctx.eval("['a', 1, null]").unwrap();
+            line(&values, true)
+        });
+
+        assert_eq!(out, format!("a {} \x1b[1mnull\x1b[22m", yellow("1")));
+    }
+
+    #[test]
+    fn quoted_colors_a_string_green_and_a_number_yellow() {
+        with_realm(|ctx| {
+            let text: Value<'_> = ctx.eval("'s'").unwrap();
+            let number: Value<'_> = ctx.eval("7").unwrap();
+
+            assert_eq!(quoted(&text, true), green("'s'"));
+            assert_eq!(quoted(&number, true), yellow("7"));
+        });
+    }
+
+    #[test]
+    fn color_never_crosses_a_line_break() {
+        assert_eq!(
+            colored("['a\\nb']"),
+            "[ \x1b[32m'a\x1b[39m\n\x1b[32mb'\x1b[39m ]"
+        );
+        assert_eq!(
+            colored("Symbol('a\\nb')"),
+            "\x1b[32mSymbol(a\x1b[39m\n\x1b[32mb)\x1b[39m"
+        );
+        assert_eq!(
+            colored("({ 'k': 'a\\n\\nb' })"),
+            "{ k: \x1b[32m'a\x1b[39m\n\n\x1b[32mb'\x1b[39m }"
+        );
+    }
+
+    #[test]
+    fn a_multi_line_error_message_stays_plain() {
+        let out = colored("new Error('x\\ny')");
+        let lines: Vec<&str> = out.lines().collect();
+
+        assert_eq!(lines[..2], ["Error: x", "y"]);
+        assert!(lines[2].starts_with("\x1b[90m"), "{lines:?}");
+    }
+
+    #[test]
+    fn escaped_text_has_no_control_character_left() {
+        assert_eq!(
+            escaped("['a\\nb\\tc\\x01\\x1b[1m']", false),
+            "[ 'a\\nb\\tc\\x01\\x1b[1m' ]"
+        );
+        assert_eq!(escaped("Symbol('a\\nb')", false), "Symbol(a\\nb)");
+        assert_eq!(escaped("({ 'k\\n': 1 })", false), "{ 'k\\n': 1 }");
+        assert_eq!(escaped("'top\\n'", false), "'top\\n'");
+    }
+
+    #[test]
+    fn an_escaped_error_is_one_line() {
+        let out = escaped("new Error('x\\ny')", false);
+
+        assert!(!out.contains('\n'), "{out}");
+        assert!(out.starts_with("Error: x\\ny\\n    at "), "{out}");
+    }
+
+    #[test]
+    fn escaping_happens_before_painting() {
+        assert_eq!(
+            escaped("['\\x1b[31m']", true),
+            "[ \x1b[32m'\\x1b[31m'\x1b[39m ]"
+        );
+        assert_eq!(escaped("['a\\nb']", true), "[ \x1b[32m'a\\nb'\x1b[39m ]");
+    }
+
+    /// A `Proxy` around `target` whose handler counts every trap lookup in
+    /// `calls`.
+    fn spied(target: &str) -> String {
+        format!(
+            "new Proxy({target}, new Proxy({{}}, {{ get() {{ calls++; return undefined; }} }}))"
+        )
+    }
+
+    #[rstest]
+    #[case::map("new Map([[1, 2]])", "Map(1) { 1 => 2 }")]
+    #[case::set("new Set([1])", "Set(1) { 1 }")]
+    #[case::date("new Date(0)", "1970-01-01T00:00:00.000Z")]
+    #[case::regexp("/a/g", "/a/g")]
+    #[case::array("[1, 'a']", "[ 1, 'a' ]")]
+    #[case::empty_array("[]", "[]")]
+    #[case::object("({ a: 1 })", "{ a: 1 }")]
+    #[case::empty_object("({})", "{}")]
+    #[case::function("function named() {}", "[Function: named]")]
+    #[case::accessors(
+        "({ get a() { calls++; }, set b(v) {} })",
+        "{ a: [Getter], b: [Setter] }"
+    )]
+    fn a_proxy_prints_as_its_target(#[case] target: &str, #[case] shown: &str) {
+        assert_eq!(counted(&spied(target)), (shown.to_owned(), 0), "{target}");
+    }
+
+    #[test]
+    fn a_proxy_chain_prints_as_its_last_target() {
+        assert_eq!(
+            counted(&spied(&spied(&spied("new Map([[1, 2]])")))),
+            ("Map(1) { 1 => 2 }".to_owned(), 0)
+        );
+    }
+
+    #[rstest]
+    #[case::map("const r = Proxy.revocable(new Map(), {}); r.revoke(); r.proxy")]
+    #[case::object("const r = Proxy.revocable({}, {}); r.revoke(); r.proxy")]
+    #[case::function("const r = Proxy.revocable(function () {}, {}); r.revoke(); r.proxy")]
+    #[case::wrapped(
+        "const r = Proxy.revocable({}, {}); const p = new Proxy(r.proxy, {}); r.revoke(); p"
+    )]
+    fn a_revoked_proxy_says_so(#[case] source: &str) {
+        assert_eq!(rendered(source), "<Revoked Proxy>", "{source}");
+    }
+
+    #[test]
+    fn a_proxy_nests_in_every_container() {
+        assert_eq!(
+            counted(&format!(
+                "({{ o: {0}, a: [{1}], m: new Map([[{0}, {2}]]), s: new Set([{1}]) }})",
+                spied("({ x: 1 })"),
+                spied("[2]"),
+                spied("new Date(0)"),
+            )),
+            (
+                concat!(
+                    "{ o: { x: 1 }, a: [ [ 2 ] ], m: Map(1) { { x: 1 } => 1970-01-01T00:00:00.000Z }, ",
+                    "s: Set(1) { [ 2 ] } }"
+                )
+                .to_owned(),
+                0
+            )
+        );
+        assert_eq!(
+            rendered("({ o: new Proxy({ x: 1 }, {}), a: [new Proxy([2], {})] })"),
+            "{ o: { x: 1 }, a: [ [ 2 ] ] }"
+        );
+        assert_eq!(
+            rendered("new Map([[new Proxy({ k: 1 }, {}), new Proxy(new Set([1]), {})]])"),
+            "Map(1) { { k: 1 } => Set(1) { 1 } }"
+        );
+        assert_eq!(
+            rendered("new Set([new Proxy(new Map(), {})])"),
+            "Set(1) { Map(0) {} }"
+        );
+        assert_eq!(
+            rendered(
+                "({ r: (() => { const r = Proxy.revocable({}, {}); r.revoke(); return r.proxy; })() })"
+            ),
+            "{ r: <Revoked Proxy> }"
+        );
+    }
+
+    #[test]
+    fn a_proxy_counts_toward_the_depth_limit_as_its_target_does() {
+        assert_eq!(
+            rendered("({ a: { b: { c: new Proxy({ d: 1 }, {}) } } })"),
+            "{ a: { b: { c: [Object] } } }"
+        );
+        assert_eq!(rendered("[[[new Proxy([1], {})]]]"), "[ [ [ [Array] ] ] ]");
+        assert_eq!(
+            rendered("({ a: { b: { c: new Proxy(new Map(), {}) } } })"),
+            "{ a: { b: { c: [Map] } } }"
+        );
+        assert_eq!(
+            rendered("({ a: { b: { c: new Proxy(function f() {}, {}) } } })"),
+            "{ a: { b: { c: [Function: f] } } }"
+        );
+    }
+
+    #[test]
+    fn a_proxy_prints_the_same_in_color() {
+        assert_eq!(
+            colored("new Proxy(new Map([['a', 1]]), {})"),
+            colored("new Map([['a', 1]])")
+        );
+        assert_eq!(
+            colored("new Proxy({ k: 'v' }, {})"),
+            format!("{{ k: {} }}", green("'v'"))
+        );
+        assert_eq!(
+            colored("const r = Proxy.revocable({}, {}); r.revoke(); r.proxy"),
+            cyan("<Revoked Proxy>")
+        );
+        assert_eq!(
+            colored("new Proxy(function f() {}, {})"),
+            cyan("[Function: f]")
+        );
+    }
+
+    #[test]
+    fn an_object_inheriting_from_a_proxy_runs_no_trap() {
+        assert_eq!(
+            counted(&format!("Object.create({})", spied("({ a: 1 })"))),
+            ("{}".to_owned(), 0)
+        );
+    }
+
+    #[test]
+    fn a_second_pinning_keeps_the_first_intrinsics() {
+        with_realm(|ctx| {
+            pin(&ctx).unwrap();
+            ctx.eval::<(), _>("Date.prototype.toISOString = () => 'late';")
+                .unwrap();
+            pin(&ctx).unwrap();
+            let value: Value<'_> = ctx.eval("new Date(0)").unwrap();
+
+            assert_eq!(line(&[value], false), "1970-01-01T00:00:00.000Z");
+        });
+    }
+
+    #[test]
+    fn pinning_reports_a_realm_without_the_intrinsics() {
+        let runtime = Runtime::new().unwrap();
+        let context = Context::custom::<rquickjs::context::intrinsic::Eval>(&runtime).unwrap();
+        context.with(|ctx| {
+            assert!(pin(&ctx).is_err());
+            let thrown = format!("{:?}", ctx.catch());
+            assert!(thrown.contains("Date is not defined"), "{thrown}");
+            assert!(!ctx.has_exception());
+        });
+    }
+
+    #[test]
+    fn an_unpinned_realm_prints_the_four_types_as_objects() {
+        with_realm(|ctx| {
+            let values: Vec<Value<'_>> = ctx
+                .eval("[new Date(0), /x/g, new Map([[1, 2]]), new Set([1])]")
+                .unwrap();
+
+            assert_eq!(line(&values, false), "Date {} RegExp {} Map {} Set {}");
+            assert!(!ctx.has_exception());
+        });
+    }
+
+    #[test]
+    fn values_made_before_pin_print_after_it() {
+        with_realm(|ctx| {
+            let values: Vec<Value<'_>> = ctx
+                .eval("[new Date(0), /x/g, new Map([[1, 2]]), new Set([1])]")
+                .unwrap();
+
+            pin(&ctx).unwrap();
+            assert_eq!(
+                line(&values, false),
+                "1970-01-01T00:00:00.000Z /x/g Map(1) { 1 => 2 } Set(1) { 1 }"
+            );
+        });
+    }
+}

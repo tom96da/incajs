@@ -4,6 +4,8 @@
 //! The `globalThis.console` object: [`install`] defines it, and [`Output`]
 //! receives what it prints.
 
+mod assert;
+mod counters;
 mod format;
 mod state;
 mod table;
@@ -12,7 +14,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use rquickjs::{
-    Coerced, Ctx, Function, Object, Result as JsResult, Value,
+    Ctx, Function, Object, Result as JsResult, Value,
     function::{IntoJsFunc, Opt, Rest},
 };
 use unicode_width::UnicodeWidthStr;
@@ -20,13 +22,12 @@ use unicode_width::UnicodeWidthStr;
 use crate::inspect;
 use crate::paint::{Style, paint};
 use crate::sourcemap::remap_stack;
+use assert::assert;
+use counters::{count, count_reset, time, time_end, time_log};
 use state::State;
 
 /// Starts every line, once per open group.
 const GROUP_INDENT: &str = "│ ";
-
-/// The label `count`, `time` and their relatives use when given none.
-const DEFAULT_LABEL: &str = "default";
 
 /// The kind of line `console` produced, passed to [`Output`] with the line.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -154,39 +155,6 @@ impl Console {
     }
 }
 
-/// A `label` argument: `"default"` when absent, `undefined` or unstringifiable.
-fn label_of(label: &Opt<Value<'_>>) -> String {
-    match &label.0 {
-        Some(value) if !value.is_undefined() => {
-            inspect::settled(value.ctx(), value.get::<Coerced<String>>())
-                .map_or_else(|| DEFAULT_LABEL.to_owned(), |text| text.0)
-        }
-        _ => DEFAULT_LABEL.to_owned(),
-    }
-}
-
-/// The `console.assert` line: "Assertion failed", joined to a string first
-/// datum with `: `.
-fn assertion_message<'js>(ctx: &Ctx<'js>, mut data: Vec<Value<'js>>, color: bool) -> String {
-    const MESSAGE: &str = "Assertion failed";
-    let first = data
-        .first()
-        .and_then(Value::as_string)
-        .and_then(|text| text.to_string().ok());
-    let lead = match first {
-        Some(first) => {
-            data.remove(0);
-            format!("{MESSAGE}: {first}")
-        }
-        None => MESSAGE.to_owned(),
-    };
-    match rquickjs::String::from_str(ctx.clone(), &lead) {
-        Ok(lead) => data.insert(0, lead.into_value()),
-        Err(_) => return MESSAGE.to_owned(),
-    }
-    format::substitute(ctx, &data, color)
-}
-
 /// The frames of the stack that called `console.trace`. `QuickJS` lists no
 /// frame for a native function, so skipping this evaluation's own leaves the
 /// caller on top.
@@ -307,59 +275,6 @@ fn trace(c: Rc<Console>) -> impl Fn(Ctx<'_>, Rest<Value<'_>>) {
     }
 }
 
-/// `console.assert`: an error line when the condition is falsy.
-fn assert<'js>(c: Rc<Console>) -> impl Fn(Ctx<'js>, Opt<Value<'js>>, Rest<Value<'js>>) {
-    move |ctx, condition, data| {
-        let holds = condition
-            .0
-            .and_then(|value| value.get::<Coerced<bool>>().ok())
-            .is_some_and(|flag| flag.0);
-        if holds {
-            return;
-        }
-        c.write(Level::Error, &assertion_message(&ctx, data.0, c.color));
-    }
-}
-
-/// `console.count`: increments the label's counter and prints it.
-fn count(c: Rc<Console>) -> impl Fn(Opt<Value<'_>>) {
-    move |label| {
-        let label = label_of(&label);
-        let count = c.state.borrow_mut().count(&label);
-        c.write(Level::Log, &format!("{label}: {count}"));
-    }
-}
-
-/// `console.countReset`: zeroes the label's counter, warning when it has none.
-fn count_reset(c: Rc<Console>) -> impl Fn(Opt<Value<'_>>) {
-    move |label| {
-        let label = label_of(&label);
-        if !c.state.borrow_mut().reset_count(&label) {
-            c.warn(&format!("Count for '{label}' does not exist"));
-        }
-    }
-}
-
-/// `console.time`: starts the label's timer, warning when it is running.
-fn time(c: Rc<Console>) -> impl Fn(Opt<Value<'_>>) {
-    move |label| {
-        let label = label_of(&label);
-        if !c.state.borrow_mut().start_timer(&label) {
-            c.warn(&format!("Timer '{label}' already exists"));
-        }
-    }
-}
-
-/// `console.timeLog`: prints the label's elapsed time and the extra data.
-fn time_log(c: Rc<Console>) -> impl Fn(Opt<Value<'_>>, Rest<Value<'_>>) {
-    move |label, data| c.time_log(&label_of(&label), &data.0, false)
-}
-
-/// `console.timeEnd`: prints the label's elapsed time and stops the timer.
-fn time_end(c: Rc<Console>) -> impl Fn(Opt<Value<'_>>) {
-    move |label| c.time_log(&label_of(&label), &[], true)
-}
-
 /// `console.group`: prints the label behind an open marker and indents what follows.
 fn group(c: Rc<Console>) -> impl Fn(Ctx<'_>, Rest<Value<'_>>) {
     move |ctx, label| c.group(&ctx, "▼", &label.0)
@@ -409,4 +324,394 @@ fn table(c: Rc<Console>) -> impl Fn(Opt<Value<'_>>, Opt<Value<'_>>) {
 }
 
 #[cfg(test)]
-mod tests;
+mod tests {
+    #![allow(clippy::unwrap_used)]
+
+    use rquickjs::{Context, Runtime};
+
+    use super::*;
+    use crate::tests::{lines_written_by, texts, without_elapsed, written_by};
+
+    #[test]
+    fn every_method_writes_at_its_own_level() {
+        let written = lines_written_by(
+            r"
+            console.trace('a'); console.debug('a'); console.log('a');
+            console.info('a'); console.warn('a'); console.error('a');
+            ",
+        );
+
+        let levels: Vec<Level> = written.iter().map(|(level, _)| *level).collect();
+        assert_eq!(
+            levels,
+            vec![
+                Level::Trace,
+                Level::Debug,
+                Level::Log,
+                Level::Info,
+                Level::Warn,
+                Level::Error
+            ]
+        );
+    }
+
+    #[test]
+    fn logging_nothing_writes_an_empty_line() {
+        let written = lines_written_by("console.log();");
+
+        assert_eq!(written.len(), 1);
+        assert_eq!(written[0].1, "");
+    }
+
+    #[test]
+    fn symbols_mark_error_warn_and_info_only() {
+        assert_eq!(
+            texts(
+                r"
+                console.error('e'); console.warn('w'); console.info('i');
+                console.log('l'); console.debug('d'); console.dirxml('x');
+                "
+            ),
+            ["✖ e", "⚠ w", "ℹ i", "l", "d", "x"]
+        );
+    }
+
+    #[test]
+    fn a_multi_line_body_lines_up_under_the_first_lines_text() {
+        assert_eq!(
+            texts("console.error('a\\nb'); console.group('g'); console.warn('c\\nd');"),
+            ["✖ a\n  b", "▼ g", "│ ⚠ c\n│   d"]
+        );
+    }
+
+    #[test]
+    fn dirxml_writes_at_log_level() {
+        assert_eq!(lines_written_by("console.dirxml(1);")[0].0, Level::Log);
+    }
+
+    #[test]
+    fn count_runs_per_label_and_defaults_to_default() {
+        assert_eq!(
+            texts(
+                "console.count(); console.count('a'); console.count(); console.count('a'); console.count(undefined);"
+            ),
+            ["default: 1", "a: 1", "default: 2", "a: 2", "default: 3"]
+        );
+    }
+
+    #[test]
+    fn count_reset_restarts_the_count() {
+        assert_eq!(
+            texts(
+                "console.count('a'); console.count('a'); console.countReset('a'); console.count('a');"
+            ),
+            ["a: 1", "a: 2", "a: 1"]
+        );
+        assert_eq!(
+            texts("console.count(); console.countReset(); console.count();"),
+            ["default: 1", "default: 1"]
+        );
+    }
+
+    #[test]
+    fn count_reset_warns_about_an_unknown_label() {
+        let written = lines_written_by("console.countReset('nope'); console.countReset();");
+
+        assert_eq!(
+            written,
+            [
+                (Level::Warn, "⚠ Count for 'nope' does not exist".to_owned()),
+                (
+                    Level::Warn,
+                    "⚠ Count for 'default' does not exist".to_owned()
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn time_log_prints_the_label_and_a_millisecond_figure() {
+        let lines = texts("console.time('t'); console.timeLog('t'); console.timeLog('t');");
+
+        assert_eq!(lines.len(), 2);
+        assert_eq!(without_elapsed(&lines[0]), "t: Nms");
+        assert_eq!(without_elapsed(&lines[1]), "t: Nms");
+    }
+
+    #[test]
+    fn time_log_appends_extra_data() {
+        let lines = texts("console.time(); console.timeLog('default', 'x', { a: 1 });");
+
+        assert_eq!(without_elapsed(&lines[0]), "default: Nms x { a: 1 }");
+    }
+
+    #[test]
+    fn time_end_prints_then_forgets_the_timer() {
+        let written = lines_written_by(
+            "console.time('t'); console.timeEnd('t'); console.timeEnd('t'); console.timeLog('t');",
+        );
+
+        assert_eq!(without_elapsed(&written[0].1), "t: Nms");
+        assert_eq!(written[0].0, Level::Log);
+        assert_eq!(
+            written[1..],
+            [
+                (Level::Warn, "⚠ Timer 't' does not exist".to_owned()),
+                (Level::Warn, "⚠ Timer 't' does not exist".to_owned()),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_duplicate_time_warns_and_keeps_the_first_timer() {
+        let written =
+            lines_written_by("console.time('t'); console.time('t'); console.timeEnd('t');");
+
+        assert_eq!(
+            written[0],
+            (Level::Warn, "⚠ Timer 't' already exists".to_owned())
+        );
+        assert_eq!(written.len(), 2);
+    }
+
+    #[test]
+    fn an_unknown_time_label_warns_for_both_log_and_end() {
+        assert_eq!(
+            texts("console.timeLog('x'); console.timeEnd();"),
+            [
+                "⚠ Timer 'x' does not exist",
+                "⚠ Timer 'default' does not exist"
+            ]
+        );
+    }
+
+    #[test]
+    fn groups_indent_what_follows_and_nest() {
+        assert_eq!(
+            texts(
+                r"
+                console.group('a'); console.log('1'); console.group('b'); console.log('2');
+                console.groupEnd(); console.log('3'); console.groupEnd(); console.log('4');
+                "
+            ),
+            ["▼ a", "│ 1", "│ ▼ b", "│ │ 2", "│ 3", "4"]
+        );
+    }
+
+    #[test]
+    fn a_collapsed_group_has_its_own_marker_and_still_indents() {
+        assert_eq!(
+            texts("console.groupCollapsed('c'); console.log('x');"),
+            ["▶ c", "│ x"]
+        );
+    }
+
+    #[test]
+    fn a_group_label_is_formatted_like_log_arguments() {
+        assert_eq!(texts("console.group('a', 1, true);"), ["▼ a 1 true"]);
+    }
+
+    #[test]
+    fn a_group_without_a_label_is_named_after_itself() {
+        assert_eq!(
+            texts("console.group(); console.groupCollapsed();"),
+            ["▼ console.group", "│ ▶ console.group"]
+        );
+    }
+
+    #[test]
+    fn group_end_with_no_open_group_does_nothing() {
+        assert_eq!(
+            texts(
+                "console.groupEnd(); console.groupEnd(); console.log('x'); console.group('g'); console.groupEnd(); console.groupEnd(); console.log('y');"
+            ),
+            ["x", "▼ g", "y"]
+        );
+    }
+
+    #[test]
+    fn warnings_and_symbols_sit_behind_the_guides() {
+        assert_eq!(
+            texts("console.group('g'); console.countReset('q');"),
+            ["▼ g", "│ ⚠ Count for 'q' does not exist"]
+        );
+    }
+
+    #[test]
+    fn clear_closes_every_group() {
+        assert_eq!(
+            texts("console.group('a'); console.group('b'); console.clear(); console.log('x');"),
+            ["▼ a", "│ ▼ b", "x"]
+        );
+    }
+
+    #[test]
+    fn clear_keeps_counters_and_timers() {
+        let lines = texts(
+            "console.count(); console.time(); console.clear(); console.count(); console.timeEnd();",
+        );
+
+        assert_eq!(lines[0], "default: 1");
+        assert_eq!(lines[1], "default: 2");
+        assert_eq!(without_elapsed(&lines[2]), "default: Nms");
+    }
+
+    #[test]
+    fn trace_prints_the_message_then_the_callers_frames() {
+        let written = lines_written_by(
+            "function inner() { console.trace('hi', 1); }\nfunction outer() { inner(); }\nouter();",
+        );
+
+        assert_eq!(written.len(), 1);
+        assert_eq!(written[0].0, Level::Trace);
+        let lines: Vec<&str> = written[0].1.lines().collect();
+        assert_eq!(lines[0], "Trace: hi 1");
+        assert!(lines[1].contains("at inner "), "{lines:?}");
+        assert!(lines[2].contains("at outer "), "{lines:?}");
+        assert!(
+            !lines.iter().any(|l| l.contains("console.trace")),
+            "{lines:?}"
+        );
+    }
+
+    #[test]
+    fn trace_frames_read_at_their_source() {
+        let body = crate::sourcemap::mapped_body("console.trace('hi');");
+        let written = written_by(false, |ctx| {
+            let f = crate::compile_async_function(ctx, &[], &body, "virtual.js").unwrap();
+            ctx.globals().set("f", f).unwrap();
+            ctx.eval::<(), _>("f();").unwrap();
+        });
+
+        let text = &written[0].1;
+        assert!(text.contains("src/app.ts:12:5"), "{text}");
+        assert!(!text.contains("virtual.js:"), "{text}");
+    }
+
+    #[test]
+    fn trace_without_data_is_just_the_word() {
+        let text = &texts("console.trace();")[0];
+
+        assert_eq!(text.lines().next(), Some("Trace"));
+    }
+
+    #[test]
+    fn trace_stack_lines_follow_the_group_guides() {
+        let text = &texts("console.group('g'); console.trace('x');")[1];
+
+        assert!(text.lines().all(|l| l.starts_with("│ ")), "{text}");
+    }
+
+    #[test]
+    fn empty_lines_carry_no_trailing_whitespace() {
+        assert_eq!(
+            texts(
+                r"
+                console.group(''); console.log(''); console.log('a\n\nb');
+                console.error(''); console.error('a\n\nb'); console.log();
+                "
+            ),
+            ["▼", "│", "│ a\n│\n│ b", "│ ✖", "│ ✖ a\n│\n│   b", "│"]
+        );
+        assert_eq!(texts("console.log('');"), [""]);
+    }
+
+    #[test]
+    fn install_fails_in_a_realm_without_the_intrinsics_and_leaves_nothing_pending() {
+        let runtime = Runtime::new().unwrap();
+        let context = Context::custom::<rquickjs::context::intrinsic::Eval>(&runtime).unwrap();
+        context.with(|ctx| {
+            let output: Output = Rc::new(|_, _| {});
+
+            assert!(install(&ctx, &output, false).is_err());
+            let thrown = format!("{:?}", ctx.catch());
+            assert!(thrown.contains("Date is not defined"), "{thrown}");
+            assert!(!ctx.has_exception());
+        });
+    }
+
+    #[test]
+    fn a_context_keeps_printing_after_another_context_is_dropped() {
+        let written = Rc::new(RefCell::new(Vec::new()));
+        let output: Output = {
+            let sink = Rc::clone(&written);
+            Rc::new(move |_, message| sink.borrow_mut().push(message.to_owned()))
+        };
+        let runtime = Runtime::new().unwrap();
+        let first = Context::full(&runtime).unwrap();
+        let second = Context::full(&runtime).unwrap();
+        first.with(|ctx| install(&ctx, &output, false).unwrap());
+        second.with(|ctx| install(&ctx, &output, false).unwrap());
+        drop(first);
+        runtime.run_gc();
+
+        second.with(|ctx| {
+            ctx.eval::<(), _>("console.log(new Date(0), new Map([[1, 2]]), /x/g, new Set([3]));")
+                .unwrap();
+            assert!(!ctx.has_exception());
+        });
+        assert_eq!(
+            written.take(),
+            ["1970-01-01T00:00:00.000Z Map(1) { 1 => 2 } /x/g Set(1) { 3 }"]
+        );
+    }
+
+    #[test]
+    fn a_group_label_substitutes_specifiers() {
+        assert_eq!(
+            texts(
+                "console.group('%s (%d)', 'job', 3, 'extra'); console.groupCollapsed('%c%s', 'css', 'c'); console.group('%s');"
+            ),
+            ["▼ job (3) extra", "│ ▶ c", "│ │ ▼ %s"]
+        );
+    }
+
+    #[test]
+    fn trace_substitutes_specifiers_in_its_label() {
+        let text = &texts("console.trace('%s:%d', 'f', 2, 'x');")[0];
+
+        assert_eq!(text.lines().next(), Some("Trace: f:2 x"));
+    }
+
+    #[test]
+    fn every_formatting_method_substitutes_specifiers() {
+        let written = lines_written_by(
+            r"
+            console.log('%s=%d', 'a', 1); console.debug('%s', 'x', 'y');
+            console.info('%o', 'i'); console.warn('%f', '1.5');
+            console.error('%s', Symbol('e')); console.dirxml('%i', '7.9');
+            ",
+        );
+
+        assert_eq!(
+            written,
+            [
+                (Level::Log, "a=1".to_owned()),
+                (Level::Debug, "x y".to_owned()),
+                (Level::Info, "ℹ 'i'".to_owned()),
+                (Level::Warn, "⚠ 1.5".to_owned()),
+                (Level::Error, "✖ Symbol(e)".to_owned()),
+                (Level::Log, "7".to_owned()),
+            ]
+        );
+    }
+
+    #[test]
+    fn dir_table_and_the_counters_do_not_format() {
+        assert_eq!(
+            texts(
+                r"
+                console.dir('%s', 'x'); console.table('%s'); console.count('%s');
+                console.countReset('%d'); console.timeEnd('%i');
+                "
+            ),
+            [
+                "'%s'",
+                "%s",
+                "%s: 1",
+                "⚠ Count for '%d' does not exist",
+                "⚠ Timer '%i' does not exist",
+            ]
+        );
+    }
+}
