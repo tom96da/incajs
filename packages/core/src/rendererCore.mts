@@ -34,13 +34,16 @@ export {
   setStyle,
   removeStyle,
 } from "./tree.mts";
-export { createIncaElement, rootElement } from "./element/handle.mts";
+export {
+  createCommentNode,
+  createElementNode,
+  createIncaElement,
+  rootElement,
+} from "./element/handle.mts";
 export { isRemoved } from "./element/lifecycle.mts";
 /** @internal */
 export { releaseWhenCollected } from "./element/lifecycle.mts";
 export {
-  createCommentNode,
-  createElementNode,
   createTextNode,
   insert,
   nextSibling,

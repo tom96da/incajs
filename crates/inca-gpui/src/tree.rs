@@ -28,6 +28,7 @@ use std::fmt;
 mod lifetime;
 mod links;
 mod props;
+mod text;
 
 /// The tag of a node that stands in for a comment.
 pub(crate) const COMMENT_TAG: &str = "#comment";
@@ -177,6 +178,8 @@ pub enum TreeError {
     WouldCycle(NodeId),
     /// Every id has been handed out.
     IdsExhausted,
+    /// A text offset beyond the length of the data.
+    IndexSize,
 }
 
 impl fmt::Display for TreeError {
@@ -190,6 +193,7 @@ impl fmt::Display for TreeError {
                 )
             }
             TreeError::IdsExhausted => write!(f, "node id space exhausted"),
+            TreeError::IndexSize => write!(f, "the offset is beyond the length of the data"),
         }
     }
 }

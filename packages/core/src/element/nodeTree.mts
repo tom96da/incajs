@@ -20,6 +20,28 @@ import type { IncaElement, IncaNode, NodeMembers } from "./types.mts";
 const NODE_TYPES = { element: 1, text: 3, comment: 8 } as const;
 
 /**
+ * Reads the data of a text node or comment stand-in. A freed node keeps the last data of a text
+ * node and reads `""` for a comment.
+ * @param node - the text node or comment stand-in
+ * @returns the data
+ */
+export function readData(node: IncaNode): string {
+  if (isDestroyed(node)) return node.kind === "text" ? node.text : "";
+  return String(getAttribute(node.__node_id, "value") ?? "");
+}
+
+/**
+ * Stores the data of a text node or comment stand-in. An element and a freed node ignore it.
+ * @param node - the text node or comment stand-in
+ * @param data - the new data
+ */
+export function writeData(node: IncaNode, data: string): void {
+  if (node.kind === "element" || isDestroyed(node)) return;
+  setAttribute(node.__node_id, "value", data);
+  if (node.kind === "text") node.text = data;
+}
+
+/**
  * Builds the node members of `node`. Each read asks the host tree again.
  * @param node - the handle the members belong to
  * @returns the members, as getters
@@ -42,15 +64,10 @@ export function nodeTreeMembers(node: IncaNode): NodeMembers {
       return node.kind === "element" ? node.tagName : `#${node.kind}`;
     },
     get nodeValue() {
-      if (node.kind === "element") return null;
-      if (isDestroyed(node)) return node.kind === "text" ? node.text : "";
-      return String(getAttribute(id, "value") ?? "");
+      return node.kind === "element" ? null : readData(node);
     },
     set nodeValue(value: string | null) {
-      if (node.kind === "element" || isDestroyed(node)) return;
-      const data = String(value ?? "");
-      setAttribute(id, "value", data);
-      if (node.kind === "text") node.text = data;
+      writeData(node, String(value ?? ""));
     },
     get isConnected() {
       return !isDestroyed(node) && isConnected(id);

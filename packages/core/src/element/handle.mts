@@ -14,6 +14,7 @@ import { createEventTarget } from "../eventTarget.mts";
 import {
   checkSelector,
   closestNode,
+  createNode,
   getAttribute,
   inputValue,
   matchesNode,
@@ -24,6 +25,8 @@ import {
   scrollOf,
   setAttribute,
   setInputValue,
+  setStyle,
+  textContent,
 } from "../tree.mts";
 import { attributeMembers, attributeText, requireArguments } from "./attributes.mts";
 import { nodeListOf } from "./collections.mts";
@@ -40,11 +43,19 @@ import {
 } from "./lifecycle.mts";
 import { nodeTreeMembers } from "./nodeTree.mts";
 import { scrollIntoViewArgs, scrollPosition } from "./scroll.mts";
+import { setElementText } from "./shadowTree.mts";
+import { characterDataMembers, nullableText } from "./text.mts";
 import type { NodeId, TagName } from "../types.mts";
 import type { AttributeMembers } from "./attributes.mts";
 import type { ElementTreeMembers } from "./elementTree.mts";
 import type { ScrollArgs, ScrollIntoViewOptions } from "./scroll.mts";
-import type { EventHandlers, IncaElement, IncaNode, NodeMembers } from "./types.mts";
+import type {
+  EventHandlers,
+  IncaElement,
+  IncaNode,
+  NodeMembers,
+  TextContentMember,
+} from "./types.mts";
 
 /**
  * Checks the argument count of a selector method and converts the selector to text.
@@ -86,6 +97,7 @@ export function createIncaElement(
     | keyof AttributeMembers
     | keyof ElementTreeMembers
     | keyof NodeMembers
+    | keyof TextContentMember
   > = {
     get id() {
       return isDestroyed(element) ? "" : String(getAttribute(id, "id") ?? "");
@@ -247,8 +259,55 @@ export function createIncaElement(
   Object.defineProperties(element, Object.getOwnPropertyDescriptors(attributeMembers(id, element)));
   Object.defineProperties(element, Object.getOwnPropertyDescriptors(elementTreeMembers(element)));
   Object.defineProperties(element, Object.getOwnPropertyDescriptors(nodeTreeMembers(element)));
+  Object.defineProperties(
+    element,
+    Object.getOwnPropertyDescriptors(
+      kind === "comment" ? characterDataMembers(element) : elementTextContent(element),
+    ),
+  );
   registerNode(element);
   return element;
+}
+
+/**
+ * Builds the `textContent` of an element.
+ * @param element - the handle the member belongs to
+ * @returns the member
+ */
+function elementTextContent(element: IncaElement): TextContentMember {
+  return {
+    get textContent() {
+      return isDestroyed(element) ? "" : textContent(element.__node_id);
+    },
+    set textContent(value: string) {
+      if (isDestroyed(element)) return;
+      setElementText(element, nullableText(value));
+    },
+  };
+}
+
+/**
+ * Allocates a new element node for `tag`.
+ * @param tag - the node's element kind
+ * @returns the new, parentless, childless element
+ */
+export function createElementNode(tag: TagName): IncaElement {
+  const id = createNode(tag);
+  return createIncaElement(id, "element", tag);
+}
+
+// inca has no comment concept. A hidden, childless container stands in for one.
+/**
+ * Creates the hidden container that stands in for a comment node, such as a
+ * placeholder for conditional content.
+ * @param text - the data of the comment
+ * @returns the new hidden element
+ */
+export function createCommentNode(text = ""): IncaElement {
+  const id = createNode("#comment");
+  setStyle(id, "display", "none");
+  setAttribute(id, "value", text);
+  return createIncaElement(id, "comment");
 }
 
 /**

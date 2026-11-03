@@ -217,15 +217,6 @@ pub struct ElementSpec {
     pub children: Vec<ElementSpec>,
 }
 
-/// A node's `"value"` attribute: a non-string or missing value is empty.
-fn text_content(node: &VirtualNode) -> String {
-    node.attributes()
-        .get("value")
-        .and_then(AttributeValue::as_str)
-        .unwrap_or_default()
-        .to_owned()
-}
-
 /// Builds an [`ElementSpec`] for `root` and its whole subtree. `None` if `root`
 /// doesn't resolve, matching [`VirtualTree::get`]'s convention. The render path
 /// is fed by JS-supplied data, so it skips a child id that doesn't resolve.
@@ -295,7 +286,7 @@ fn build_spec_inner(tree: &VirtualTree, root: NodeId, inert_above: bool) -> Opti
     let inert = inert_above || node.attributes().contains_key("inert");
 
     let tag = match node.tag_name() {
-        TEXT_TAG => ElementTag::Text(text_content(node)),
+        TEXT_TAG => ElementTag::Text(node.data().to_owned()),
         "input" => {
             let attributes = node.attributes();
             ElementTag::Input {

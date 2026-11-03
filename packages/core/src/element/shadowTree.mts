@@ -9,30 +9,10 @@ import {
   releaseListeners,
   removeChild,
   setAttribute,
-  setStyle,
 } from "../tree.mts";
-import { createIncaElement } from "./handle.mts";
-import {
-  isDestroyed,
-  isHeld,
-  markRemoved,
-  registerNode,
-  releaseWhenCollected,
-  withNodeId,
-} from "./lifecycle.mts";
-import { nodeTreeMembers } from "./nodeTree.mts";
-import type { TagName } from "../types.mts";
-import type { IncaElement, IncaNode, IncaText, NodeMembers } from "./types.mts";
-
-/**
- * Allocates a new element node for `tag`.
- * @param tag - the node's element kind
- * @returns the new, parentless, childless element
- */
-export function createElementNode(tag: TagName): IncaElement {
-  const id = createNode(tag);
-  return createIncaElement(id, "element", tag);
-}
+import { isDestroyed, isHeld, markRemoved, releaseWhenCollected } from "./lifecycle.mts";
+import { createIncaText } from "./text.mts";
+import type { IncaElement, IncaNode, IncaText } from "./types.mts";
 
 /**
  * Creates a text leaf.
@@ -42,27 +22,7 @@ export function createElementNode(tag: TagName): IncaElement {
 export function createTextNode(text: string): IncaText {
   const id = createNode("#text");
   setAttribute(id, "value", text);
-  const node: Omit<IncaText, "__node_id" | keyof NodeMembers> = {
-    kind: "text",
-    parent: null,
-    text,
-  };
-  const handle = withNodeId(node as IncaText, id);
-  Object.defineProperties(handle, Object.getOwnPropertyDescriptors(nodeTreeMembers(handle)));
-  registerNode(handle);
-  return handle;
-}
-
-// inca has no comment concept. A hidden, childless container stands in for one.
-/**
- * Creates the hidden container that stands in for a comment node, such as a
- * placeholder for conditional content.
- * @returns the new hidden element
- */
-export function createCommentNode(): IncaElement {
-  const id = createNode("#comment");
-  setStyle(id, "display", "none");
-  return createIncaElement(id, "comment");
+  return createIncaText(id, text);
 }
 
 /**

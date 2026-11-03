@@ -10,6 +10,11 @@ import {
   childNodeIds,
   getAttribute,
   isConnected,
+  replaceData,
+  splitText,
+  substringData,
+  textContent,
+  wholeText,
   layoutOf,
   linkedNode,
   scrollIntoViewNode,
@@ -82,6 +87,11 @@ const native = {
   linkedNode: vi.fn<(nodeId: number, link: NodeLink) => number | null>(() => null),
   childNodeIds: vi.fn<(nodeId: number) => number[]>(() => []),
   isConnected: vi.fn<(nodeId: number) => boolean>(() => true),
+  textContent: vi.fn<(nodeId: number) => string>(() => ""),
+  wholeText: vi.fn<(nodeId: number) => string>(() => ""),
+  substringData: vi.fn<(nodeId: number, offset: number, count: number) => string>(() => ""),
+  replaceData: vi.fn<(nodeId: number, offset: number, count: number, data: string) => void>(),
+  splitText: vi.fn<(nodeId: number, offset: number) => number>(() => 0),
 };
 
 beforeEach(() => {
@@ -111,6 +121,27 @@ describe("wrapper functions forward to __inca_native__", () => {
     native.childNodeIds.mockReturnValueOnce([2, 3]);
     expect(childNodeIds(1)).toEqual([2, 3]);
     expect(native.childNodeIds).toHaveBeenCalledWith(1);
+  });
+
+  it.each([
+    ["textContent", () => textContent(1), "text", [1]],
+    ["wholeText", () => wholeText(1), "whole", [1]],
+    ["substringData", () => substringData(1, 2, 3), "part", [1, 2, 3]],
+  ] as const)("%s", (name, call, result, args) => {
+    native[name].mockReturnValueOnce(result);
+    expect(call()).toBe(result);
+    expect(native[name]).toHaveBeenCalledWith(...args);
+  });
+
+  it("replaceData", () => {
+    replaceData(1, 2, 3, "d");
+    expect(native.replaceData).toHaveBeenCalledWith(1, 2, 3, "d");
+  });
+
+  it("splitText", () => {
+    native.splitText.mockReturnValueOnce(7);
+    expect(splitText(1, 2)).toBe(7);
+    expect(native.splitText).toHaveBeenCalledWith(1, 2);
   });
 
   it("isConnected", () => {

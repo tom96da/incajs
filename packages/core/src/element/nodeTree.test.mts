@@ -4,9 +4,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { document } from "../document.mts";
-import { createIncaElement, rootElement } from "./handle.mts";
+import { createCommentNode, createElementNode, createIncaElement, rootElement } from "./handle.mts";
 import { markDestroyed } from "./lifecycle.mts";
-import { createCommentNode, createElementNode, createTextNode } from "./shadowTree.mts";
+import { createTextNode } from "./shadowTree.mts";
 import type { NodeLink } from "../native.mts";
 
 /** The node each node reaches by each link. */
@@ -113,6 +113,12 @@ describe("nodeValue", () => {
     text.nodeValue = value as string | null;
 
     expect(text.text).toBe(stored);
+  });
+
+  it("sends the text of a new comment stand-in to the host", () => {
+    const comment = createCommentNode("x");
+
+    expect(host.setAttribute).toHaveBeenCalledWith(comment.__node_id, "value", "x");
   });
 
   it("sends an assignment to a comment stand-in to the host", () => {

@@ -26,6 +26,14 @@ beforeEach(() => {
   globalThis.__inca_native__ = native as never;
 });
 
+describe("createNodeOps comment", () => {
+  it("keeps the text of a comment", () => {
+    const comment = nodeOps.createComment("note");
+
+    expect(native.setAttribute).toHaveBeenCalledWith(comment.__node_id, "value", "note");
+  });
+});
+
 describe("createNodeOps text", () => {
   it("writes the text of a text node through setText", () => {
     const text = nodeOps.createText("a");

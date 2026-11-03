@@ -10,6 +10,7 @@ import { document } from "../document.mts";
 import { createEventTarget } from "../eventTarget.mts";
 import { htmlCollectionOf, namedNodeMapOf, nodeListOf } from "./collections.mts";
 import { rectOf } from "./geometry.mts";
+import { createCommentNode, createElementNode } from "./handle.mts";
 import { elementOf, markDestroyed, releaseWhenCollected, unregisterNode } from "./lifecycle.mts";
 import * as tree from "./shadowTree.mts";
 import type { EventLike, IncaEventTarget } from "../types.mts";
@@ -64,6 +65,11 @@ const host = {
   isConnected: vi.fn<(nodeId: number) => boolean>(() => false),
   linkedNode: vi.fn<(nodeId: number, link: string) => number | null>(() => null),
   childNodeIds: vi.fn<(nodeId: number) => number[]>(() => []),
+  textContent: vi.fn<(nodeId: number) => string>(() => ""),
+  wholeText: vi.fn<(nodeId: number) => string>(() => ""),
+  substringData: vi.fn<(nodeId: number, offset: number, count: number) => string>(() => ""),
+  replaceData: vi.fn<(nodeId: number, offset: number, count: number, data: string) => void>(),
+  splitText: vi.fn<(nodeId: number, offset: number) => number>(() => 0),
 };
 
 const noLayout = {
@@ -124,6 +130,7 @@ function element(): IncaElement {
     nodeType: 1,
     nodeName: "DIV",
     nodeValue: null,
+    textContent: "",
     isConnected: false,
     ownerDocument: document,
     parentNode: null,
@@ -156,7 +163,7 @@ function element(): IncaElement {
 
 describe("createElement", () => {
   it("allocates a native node for the tag and returns a parentless, childless element", () => {
-    const el = tree.createElementNode("div");
+    const el = createElementNode("div");
     expect(host.createNode).toHaveBeenCalledWith("div");
     expect(el).toEqual({
       id: "",
@@ -174,6 +181,7 @@ describe("createElement", () => {
       nodeType: 1,
       nodeName: "DIV",
       nodeValue: null,
+      textContent: "",
       isConnected: false,
       ownerDocument: document,
       parentNode: null,
@@ -240,7 +248,7 @@ describe("createText", () => {
 
 describe("createComment", () => {
   it("creates a hidden container in place of a comment", () => {
-    const node = tree.createCommentNode();
+    const node = createCommentNode();
     expect(host.createNode).toHaveBeenCalledWith("#comment");
     expect(host.setStyle).toHaveBeenCalledWith(1, "display", "none");
     expect(node.kind).toBe("comment");
@@ -250,8 +258,8 @@ describe("createComment", () => {
 
 describe("event target methods", () => {
   it("come from createEventTarget, resolving the element's own node id", () => {
-    const el = tree.createElementNode("div");
-    const comment = tree.createCommentNode();
+    const el = createElementNode("div");
+    const comment = createCommentNode();
 
     const resolvers = vi
       .mocked(createEventTarget)
@@ -402,7 +410,7 @@ describe("remove", () => {
   });
 
   it("holds the removed element until its handle is collected", () => {
-    const child = tree.createElementNode("div");
+    const child = createElementNode("div");
     vi.mocked(host.holdNode).mockClear();
 
     tree.remove(child);
@@ -411,8 +419,8 @@ describe("remove", () => {
   });
 
   it("holds only the root of a removed subtree", () => {
-    const root = tree.createElementNode("div");
-    const leaf = tree.createElementNode("div");
+    const root = createElementNode("div");
+    const leaf = createElementNode("div");
     tree.insert(leaf, root);
     vi.mocked(host.holdNode).mockClear();
 
@@ -422,7 +430,7 @@ describe("remove", () => {
   });
 
   it("does not hold a removed element a held path already holds", () => {
-    const child = tree.createElementNode("div");
+    const child = createElementNode("div");
     releaseWhenCollected(child);
     vi.mocked(host.holdNode).mockClear();
 
@@ -433,7 +441,7 @@ describe("remove", () => {
 
   it.each([
     ["a text leaf", () => tree.createTextNode("t")],
-    ["a comment stand-in", () => tree.createCommentNode()],
+    ["a comment stand-in", () => createCommentNode()],
   ])("holds no %s", (_name, create) => {
     const node = create();
     vi.mocked(host.holdNode).mockClear();
@@ -444,8 +452,8 @@ describe("remove", () => {
   });
 
   it("unlinks a child of a freed parent without a host call", () => {
-    const parent = tree.createElementNode("div");
-    const child = tree.createElementNode("div");
+    const parent = createElementNode("div");
+    const child = createElementNode("div");
     tree.insert(child, parent);
     markDestroyed(parent);
     vi.mocked(host.removeChild).mockClear();
@@ -459,7 +467,7 @@ describe("remove", () => {
   });
 
   it("holds no element the host freed", () => {
-    const child = tree.createElementNode("div");
+    const child = createElementNode("div");
     markDestroyed(child);
     vi.mocked(host.holdNode).mockClear();
 
@@ -469,9 +477,9 @@ describe("remove", () => {
   });
 
   it("makes the removed subtree ignore listener calls", () => {
-    const root = tree.createElementNode("div");
-    const mid = tree.createElementNode("div");
-    const leaf = tree.createElementNode("button");
+    const root = createElementNode("div");
+    const mid = createElementNode("div");
+    const leaf = createElementNode("button");
     tree.insert(tree.createTextNode("t"), mid);
     tree.insert(leaf, mid);
     tree.insert(mid, root);
@@ -487,8 +495,8 @@ describe("remove", () => {
   });
 
   it("keeps the attributes of a descendant readable", () => {
-    const root = tree.createElementNode("div");
-    const leaf = tree.createElementNode("button");
+    const root = createElementNode("div");
+    const leaf = createElementNode("button");
     tree.insert(leaf, root);
     vi.mocked(host.getAttribute).mockReturnValue("7");
 
@@ -498,8 +506,8 @@ describe("remove", () => {
   });
 
   it("keeps the children setElementText replaces readable", () => {
-    const root = tree.createElementNode("div");
-    const child = tree.createElementNode("div");
+    const root = createElementNode("div");
+    const child = createElementNode("div");
     tree.insert(child, root);
     vi.mocked(host.getAttribute).mockReturnValue("c");
 
@@ -533,7 +541,7 @@ describe("a removed element once its handle is collected", () => {
     // Handles of earlier tests may be collected here, so this node gets an id none of them had.
     nextId = 9000;
     const id = (() => {
-      const child = tree.createElementNode("div");
+      const child = createElementNode("div");
       tree.remove(child);
       return child.__node_id;
     })();
@@ -549,9 +557,9 @@ describe("a removed element once its handle is collected", () => {
 
 describe("element registry", () => {
   it("keeps the record of the removed subtree", () => {
-    const root = tree.createElementNode("div");
-    const mid = tree.createElementNode("div");
-    const leaf = tree.createElementNode("button");
+    const root = createElementNode("div");
+    const mid = createElementNode("div");
+    const leaf = createElementNode("button");
     tree.insert(leaf, mid);
     tree.insert(mid, root);
 
@@ -561,9 +569,9 @@ describe("element registry", () => {
   });
 
   it("keeps the record of the children setElementText replaces", () => {
-    const root = tree.createElementNode("div");
-    const child = tree.createElementNode("div");
-    const grandchild = tree.createElementNode("div");
+    const root = createElementNode("div");
+    const child = createElementNode("div");
+    const grandchild = createElementNode("div");
     tree.insert(grandchild, child);
     tree.insert(child, root);
 

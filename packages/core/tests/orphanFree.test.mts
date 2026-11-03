@@ -14,8 +14,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Component } from "@vue/runtime-core";
 
 import { callbackIdFor, groupOf, registeredGroupCount } from "../src/callbacks.mts";
+import { createElementNode } from "../src/element/handle.mts";
 import { elementOf, isDestroyed } from "../src/element/lifecycle.mts";
-import { createElementNode } from "../src/element/shadowTree.mts";
+import { createTextNode } from "../src/element/shadowTree.mts";
 import { createIncaApp } from "../src/vue/index.mts";
 import type { IncaElement } from "../src/index.mts";
 import type { HostCallback } from "../src/native.mts";
@@ -190,6 +191,16 @@ function installNative(): void {
       let at: number | null = id;
       while (at !== null && at !== ROOT) at = nodeOf(at).parent;
       return at === ROOT;
+    },
+    textContent: () => "",
+    wholeText: () => "",
+    substringData: () => "",
+    replaceData() {},
+    splitText(id) {
+      nodeOf(id);
+      const tail = create("#text");
+      orphans.add(tail);
+      return tail;
     },
   };
 }
@@ -385,6 +396,16 @@ describe("a host that frees orphans, driven by the Inca renderer", () => {
     expect(registeredGroupCount()).toBe(groups);
     expect(isDestroyed(span)).toBe(true);
     expect(nodes.size).toBe(1);
+  });
+});
+
+describe("splitText on a text node with no parent", () => {
+  it("keeps the new node through the next frame", () => {
+    const tail = createTextNode("ab").splitText(1);
+
+    frame();
+
+    expect(isDestroyed(tail)).toBe(false);
   });
 });
 

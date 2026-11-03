@@ -172,6 +172,11 @@ with the differences below. The listener methods are described in
   `releasePointerCapture()` and `hasPointerCapture()`.
 - `parent` is the parent element.
 - The `parentNode` of the mount container is `document`.
+- The methods below store U+FFFD for each half of a surrogate pair they split:
+  - `splitText()`
+  - `substringData()`, `insertData()`, `deleteData()`, `replaceData()`
+- A text node or comment removed from the tree stops working after the next
+  frame. A `data` assignment is ignored and `splitText()` throws.
 - The objects these members return are not instances of the standard classes,
   so `instanceof` against the class name is `false`:
   - `children` (`HTMLCollection`)

@@ -26,6 +26,11 @@ interface IncaNative {
   linkedNode(nodeId: NodeId, link: NodeLink): NodeId | null;
   childNodeIds(nodeId: NodeId): NodeId[];
   isConnected(nodeId: NodeId): boolean;
+  textContent(nodeId: NodeId): string;
+  wholeText(nodeId: NodeId): string;
+  substringData(nodeId: NodeId, offset: number, count: number): string;
+  replaceData(nodeId: NodeId, offset: number, count: number, data: string): void;
+  splitText(nodeId: NodeId, offset: number): NodeId;
   matches(nodeId: NodeId, selector: string): boolean;
   closest(nodeId: NodeId, selector: string): NodeId | null;
   checkSelector(selector: string): void;

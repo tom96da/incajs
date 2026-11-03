@@ -69,6 +69,7 @@ const makeEl = (): IncaElement => ({
   nodeType: 1,
   nodeName: "DIV",
   nodeValue: null,
+  textContent: "",
   isConnected: false,
   ownerDocument: {} as IncaElement["ownerDocument"],
   parentNode: null,

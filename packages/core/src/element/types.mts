@@ -168,6 +168,75 @@ export interface NodeMembers {
   hasChildNodes(): boolean;
 }
 
+/** The `textContent` of a node. */
+export interface TextContentMember {
+  /**
+   * The data of a text node or a comment stand-in, and the data of the text nodes below an
+   * element in tree order, comment stand-ins left out. Assigning `null` or `undefined` stores `""`
+   * and any other value stores its string. Assigning to an element replaces its children with one
+   * text node, or with none for `""`. A freed node reads `""` or its last data and ignores the
+   * assignment.
+   */
+  textContent: string;
+}
+
+/** The members of a text node and a comment stand-in that read and edit their data. */
+export interface CharacterDataMembers extends TextContentMember {
+  /** The data. Assigning `null` stores `""` and any other value stores its string. */
+  data: string;
+  /** The number of UTF-16 code units of the data. */
+  readonly length: number;
+  /**
+   * The part of the data from `offset`. Both arguments convert to unsigned 32-bit integers and
+   * count UTF-16 code units. `count` stops at the end of the data.
+   * @param offset - Where the part starts.
+   * @param count - The length of the part.
+   * @throws {DOMException} named `IndexSizeError` when `offset` is beyond the data.
+   */
+  substringData(offset: number, count: number): string;
+  /**
+   * Adds `data` at the end of the data.
+   * @param data - The text to add.
+   */
+  appendData(data: string): void;
+  /**
+   * Adds `data` at `offset`.
+   * @param offset - Where to add.
+   * @param data - The text to add.
+   * @throws {DOMException} named `IndexSizeError` when `offset` is beyond the data.
+   */
+  insertData(offset: number, data: string): void;
+  /**
+   * Removes `count` units from `offset`.
+   * @param offset - Where the removal starts.
+   * @param count - The number of units, stopping at the end of the data.
+   * @throws {DOMException} named `IndexSizeError` when `offset` is beyond the data.
+   */
+  deleteData(offset: number, count: number): void;
+  /**
+   * Replaces `count` units from `offset` with `data`.
+   * @param offset - Where the replaced part starts.
+   * @param count - The number of units, stopping at the end of the data.
+   * @param data - The new text.
+   * @throws {DOMException} named `IndexSizeError` when `offset` is beyond the data.
+   */
+  replaceData(offset: number, count: number, data: string): void;
+}
+
+/** The members only a text node has. */
+export interface TextMembers {
+  /** The data of this node and of the text nodes that touch it, in order. */
+  readonly wholeText: string;
+  /**
+   * Cuts the data at `offset`. This node keeps the head and the new node holds the tail. The new
+   * node follows this one when this one has a parent, and has no parent otherwise.
+   * @param offset - Where to cut, converted like the offset of `substringData()`.
+   * @returns The new node.
+   * @throws {DOMException} named `IndexSizeError` when `offset` is beyond the data.
+   */
+  splitText(offset: number): IncaText;
+}
+
 /**
  * A container node: either a real element or the hidden stand-in that
  * `createCommentNode` makes. It is the only node type that can act as a
@@ -178,7 +247,8 @@ export interface NodeMembers {
  * call, an assignment to a handler property does nothing, and `dispatchEvent()` runs no listener
  * on it.
  */
-export interface IncaElement extends IncaEventTarget, EventHandlers, NodeMembers {
+export interface IncaElement
+  extends IncaEventTarget, EventHandlers, NodeMembers, TextContentMember {
   /**
    * The node id the host knows this node by. Internal to the renderer.
    * @internal
@@ -403,7 +473,7 @@ export interface IncaInputElement extends IncaElement {
 }
 
 /** A text leaf node. */
-export interface IncaText extends NodeMembers {
+export interface IncaText extends NodeMembers, CharacterDataMembers, TextMembers {
   /**
    * The node id the host knows this node by. Internal to the renderer.
    * @internal

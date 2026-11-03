@@ -140,6 +140,11 @@ function installFakeNative(): Map<NodeId, FakeNode> {
       while (at !== null && at !== rootId) at = requireNode(at).parent;
       return at === rootId;
     },
+    textContent: () => "",
+    wholeText: () => "",
+    substringData: () => "",
+    replaceData() {},
+    splitText: () => 0,
     matches: () => false,
     closest: () => null,
     checkSelector: () => {},
@@ -281,6 +286,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       nodeType: 1,
       nodeName: "DIV",
       nodeValue: null,
+      textContent: "",
       isConnected: false,
       ownerDocument: document,
       parentNode: null,
