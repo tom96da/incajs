@@ -35,15 +35,16 @@ import {
   isDestroyed,
   isNode,
   isRemoved,
-  registerElement,
+  registerNode,
   withNodeId,
 } from "./lifecycle.mts";
+import { nodeTreeMembers } from "./nodeTree.mts";
 import { scrollIntoViewArgs, scrollPosition } from "./scroll.mts";
 import type { NodeId, TagName } from "../types.mts";
 import type { AttributeMembers } from "./attributes.mts";
 import type { ElementTreeMembers } from "./elementTree.mts";
 import type { ScrollArgs, ScrollIntoViewOptions } from "./scroll.mts";
-import type { EventHandlers, IncaElement, IncaNode } from "./types.mts";
+import type { EventHandlers, IncaElement, IncaNode, NodeMembers } from "./types.mts";
 
 /**
  * Checks the argument count of a selector method and converts the selector to text.
@@ -60,8 +61,8 @@ function selectorText(args: readonly unknown[], method: string): string {
  * Builds the {@link IncaElement} handle for a native node: parentless,
  * childless, with `id`, `focus()`, `blur()`, `click()`, the pointer capture
  * methods, `contains()`, the listener methods of an event target, `tabIndex`,
- * the `value` of an `input`, `getRootNode()`, the layout members and the event handler properties,
- * all driven through the host.
+ * the `value` of an `input`, `getRootNode()`, the layout members, the node members and the event
+ * handler properties, all driven through the host.
  * @param id - the native node's id
  * @param kind - whether the node is an element or a comment stand-in
  * @param tag - the node's element kind, `div` when omitted; a `button` or `input` defaults to tab
@@ -80,7 +81,11 @@ export function createIncaElement(
   const scroll = () => (isRemoved(element) ? null : scrollOf(id));
   const fields: Omit<
     IncaElement,
-    "__node_id" | keyof EventHandlers | keyof AttributeMembers | keyof ElementTreeMembers
+    | "__node_id"
+    | keyof EventHandlers
+    | keyof AttributeMembers
+    | keyof ElementTreeMembers
+    | keyof NodeMembers
   > = {
     get id() {
       return isDestroyed(element) ? "" : String(getAttribute(id, "id") ?? "");
@@ -213,9 +218,10 @@ export function createIncaElement(
       const text = selectorText(args, "querySelectorAll");
       if (isDestroyed(element)) {
         checkSelector(text);
-        return nodeListOf([]);
+        return nodeListOf(() => []);
       }
-      return nodeListOf(queryNodes(id, text).map((found) => elementOf(found)!));
+      const found = queryNodes(id, text).map((node) => elementOf(node)!);
+      return nodeListOf(() => found);
     },
     getRootNode: () => {
       let top = element;
@@ -240,7 +246,8 @@ export function createIncaElement(
   );
   Object.defineProperties(element, Object.getOwnPropertyDescriptors(attributeMembers(id, element)));
   Object.defineProperties(element, Object.getOwnPropertyDescriptors(elementTreeMembers(element)));
-  if (kind === "element") registerElement(element);
+  Object.defineProperties(element, Object.getOwnPropertyDescriptors(nodeTreeMembers(element)));
+  registerNode(element);
   return element;
 }
 

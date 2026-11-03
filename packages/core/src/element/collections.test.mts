@@ -515,7 +515,7 @@ describe("a NodeList", () => {
   type List = ReturnType<typeof nodeListOf>;
 
   function list(...items: IncaElement[]) {
-    const l = nodeListOf(items);
+    const l = nodeListOf(() => items);
     return { l, loose: l as unknown as Loose };
   }
 
@@ -527,13 +527,13 @@ describe("a NodeList", () => {
     expect(Object.prototype.toString.call(list().l)).toBe("[object NodeList]");
   });
 
-  it("keeps its length after the source array changes", () => {
+  it("follows a change of its source", () => {
     const items = [fake()];
-    const l = nodeListOf(items);
+    const l = nodeListOf(() => items);
 
     items.push(fake());
 
-    expect(l.length).toBe(1);
+    expect(l.length).toBe(2);
   });
 
   it.each([
@@ -543,7 +543,7 @@ describe("a NodeList", () => {
     [-1, null],
   ])("item(%s) reads the entry or null", (index, at) => {
     const items = [fake(), fake()];
-    const l = nodeListOf(items);
+    const l = nodeListOf(() => items);
 
     expect(l.item(index)).toBe(at === null ? null : items[at]);
   });
@@ -585,19 +585,6 @@ describe("a NodeList", () => {
     const { loose } = list(fake());
 
     expect(loose[Symbol.iterator]).toBe(loose["values"]);
-  });
-
-  it("visits every element of a loop that removes elements from its source", () => {
-    const items = [fake(), fake(), fake()];
-    const l = nodeListOf(items);
-    const visited: unknown[] = [];
-
-    for (const el of l) {
-      visited.push(el);
-      items.length = 0;
-    }
-
-    expect([visited.length, l.length]).toEqual([3, 3]);
   });
 
   it.each(["forEach", "entries", "keys", "values"])("takes %s from Array.prototype", (name) => {
@@ -658,6 +645,6 @@ describe("a NodeList", () => {
       () => null,
     );
 
-    expect([name in c, name in map, name in nodeListOf([])]).toEqual([false, false, true]);
+    expect([name in c, name in map, name in nodeListOf(() => [])]).toEqual([false, false, true]);
   });
 });

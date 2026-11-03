@@ -5,6 +5,7 @@ import { h, nextTick, reactive, ref } from "@vue/runtime-core";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Ref } from "@vue/runtime-core";
 
+import { document } from "../src/document.mts";
 import { htmlCollectionOf, namedNodeMapOf, nodeListOf } from "../src/element/collections.mts";
 import { rectOf } from "../src/element/geometry.mts";
 import { createIncaElement } from "../src/element/handle.mts";
@@ -124,6 +125,20 @@ function installFakeNative(): Map<NodeId, FakeNode> {
     scrollIntoViewNode(_nodeId: NodeId, _block: string, _inline: string): void {},
     removeAttribute(nodeId: NodeId, key: string): void {
       delete requireNode(nodeId).attributes[key];
+    },
+    linkedNode(nodeId: NodeId, link: "parent" | "first" | "last" | "previous" | "next") {
+      const node = requireNode(nodeId);
+      if (link === "parent") return node.parent;
+      if (link === "first") return node.children[0] ?? null;
+      if (link === "last") return node.children.at(-1) ?? null;
+      const siblings = node.parent === null ? [] : requireNode(node.parent).children;
+      return siblings[siblings.indexOf(nodeId) + (link === "next" ? 1 : -1)] ?? null;
+    },
+    childNodeIds: (nodeId: NodeId) => [...requireNode(nodeId).children],
+    isConnected(nodeId: NodeId): boolean {
+      let at: NodeId | null = nodeId;
+      while (at !== null && at !== rootId) at = requireNode(at).parent;
+      return at === rootId;
     },
     matches: () => false,
     closest: () => null,
@@ -261,8 +276,20 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       matches: () => false,
       closest: () => null,
       querySelector: () => null,
-      querySelectorAll: () => nodeListOf([]),
+      querySelectorAll: () => nodeListOf(() => []),
       parentElement: null,
+      nodeType: 1,
+      nodeName: "DIV",
+      nodeValue: null,
+      isConnected: false,
+      ownerDocument: document,
+      parentNode: null,
+      firstChild: null,
+      lastChild: null,
+      previousSibling: null,
+      nextSibling: null,
+      childNodes: nodeListOf(() => []),
+      hasChildNodes: () => false,
       firstElementChild: null,
       lastElementChild: null,
       childElementCount: 0,

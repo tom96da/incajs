@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { document } from "./document.mts";
 import "./targets.mts";
-import { elementOf, registerElement, unregisterElement } from "./element/lifecycle.mts";
+import { elementOf, registerNode, unregisterNode } from "./element/lifecycle.mts";
 import { window } from "./window.mts";
 import type { IncaElement } from "./element/types.mts";
 
@@ -26,8 +26,8 @@ describe("globals", () => {
 
 describe("__inca_targets__", () => {
   afterEach(() => {
-    unregisterElement(5);
-    unregisterElement(ROOT);
+    unregisterNode(5);
+    unregisterNode(ROOT);
   });
 
   it("resolves the document and window tags to their objects", () => {
@@ -38,8 +38,8 @@ describe("__inca_targets__", () => {
   });
 
   it("resolves registered element nodes to their handles", () => {
-    const handle = { __node_id: 5 } as unknown as IncaElement;
-    registerElement(handle);
+    const handle = { __node_id: 5, kind: "element" } as unknown as IncaElement;
+    registerNode(handle);
 
     const [found] = globalThis.__inca_targets__([5]);
 

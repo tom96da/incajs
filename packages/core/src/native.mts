@@ -3,6 +3,9 @@
 
 import type { AttributeValue, CallbackId, EventLike, NodeId, ScrollAlignment } from "./types.mts";
 
+/** How {@link IncaNative.linkedNode} names the node to reach from a node. */
+export type NodeLink = "parent" | "first" | "last" | "previous" | "next";
+
 /** What a listener or a dispatch names: a node id, or the tag of `document` or `window`. */
 export type EventTargetId = NodeId | "$document" | "$window";
 
@@ -20,6 +23,9 @@ interface IncaNative {
   getAttribute(nodeId: NodeId, key: string): AttributeValue | null;
   removeAttribute(nodeId: NodeId, key: string): void;
   attributeNames(nodeId: NodeId): string[];
+  linkedNode(nodeId: NodeId, link: NodeLink): NodeId | null;
+  childNodeIds(nodeId: NodeId): NodeId[];
+  isConnected(nodeId: NodeId): boolean;
   matches(nodeId: NodeId, selector: string): boolean;
   closest(nodeId: NodeId, selector: string): NodeId | null;
   checkSelector(selector: string): void;

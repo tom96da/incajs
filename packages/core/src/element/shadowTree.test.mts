@@ -6,10 +6,11 @@ import { runInNewContext } from "node:vm";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { document } from "../document.mts";
 import { createEventTarget } from "../eventTarget.mts";
 import { htmlCollectionOf, namedNodeMapOf, nodeListOf } from "./collections.mts";
 import { rectOf } from "./geometry.mts";
-import { elementOf, markDestroyed, releaseWhenCollected, unregisterElement } from "./lifecycle.mts";
+import { elementOf, markDestroyed, releaseWhenCollected, unregisterNode } from "./lifecycle.mts";
 import * as tree from "./shadowTree.mts";
 import type { EventLike, IncaEventTarget } from "../types.mts";
 import type { EventHandlers, IncaElement, IncaText } from "./types.mts";
@@ -60,6 +61,9 @@ const host = {
   scrollIntoViewNode: vi.fn<(nodeId: number, block: string, inline: string) => void>(),
   click: vi.fn<(nodeId: number) => void>(),
   dispatchEvent: vi.fn<(nodeId: number, event: EventLike) => boolean>(() => true),
+  isConnected: vi.fn<(nodeId: number) => boolean>(() => false),
+  linkedNode: vi.fn<(nodeId: number, link: string) => number | null>(() => null),
+  childNodeIds: vi.fn<(nodeId: number) => number[]>(() => []),
 };
 
 const noLayout = {
@@ -97,7 +101,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(host.getAttribute).mockImplementation(() => null);
   globalThis.__inca_native__ = host as never;
-  for (let id = 1; id < nextId; id++) unregisterElement(id);
+  for (let id = 1; id < nextId; id++) unregisterNode(id);
   nextId = 1;
   vi.mocked(host.createNode).mockImplementation(() => nextId++);
 });
@@ -115,8 +119,20 @@ function element(): IncaElement {
     matches: () => false,
     closest: () => null,
     querySelector: () => null,
-    querySelectorAll: () => nodeListOf([]),
+    querySelectorAll: () => nodeListOf(() => []),
     parentElement: null,
+    nodeType: 1,
+    nodeName: "DIV",
+    nodeValue: null,
+    isConnected: false,
+    ownerDocument: document,
+    parentNode: null,
+    firstChild: null,
+    lastChild: null,
+    previousSibling: null,
+    nextSibling: null,
+    childNodes: nodeListOf(() => []),
+    hasChildNodes: () => false,
     firstElementChild: null,
     lastElementChild: null,
     childElementCount: 0,
@@ -155,6 +171,18 @@ describe("createElement", () => {
       parent: null,
       __children: [],
       children: expect.any(Object),
+      nodeType: 1,
+      nodeName: "DIV",
+      nodeValue: null,
+      isConnected: false,
+      ownerDocument: document,
+      parentNode: null,
+      firstChild: null,
+      lastChild: null,
+      previousSibling: null,
+      nextSibling: null,
+      childNodes: expect.any(Object),
+      hasChildNodes: expect.any(Function),
       focus: expect.any(Function),
       blur: expect.any(Function),
       click: expect.any(Function),
@@ -204,7 +232,7 @@ describe("createText", () => {
     const node = tree.createTextNode("hello");
     expect(host.createNode).toHaveBeenCalledWith("#text");
     expect(host.setAttribute).toHaveBeenCalledWith(1, "value", "hello");
-    expect(node).toEqual({ kind: "text", parent: null, text: "hello" });
+    expect(node).toMatchObject({ kind: "text", parent: null, text: "hello" });
     expect(node.__node_id).toBe(1);
     expect("id" in node).toBe(false);
   });
