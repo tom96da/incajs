@@ -10,6 +10,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.0.28] - 2026-11-03
+
 ### Added
 
 - `requestAnimationFrame()` and `cancelAnimationFrame()` are available ([b0dd363](https://github.com/tom96da/incajs/commit/b0dd363))
@@ -553,7 +555,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - prebuilt `inca-host` binaries for linux-x64, linux-arm64, and darwin-arm64, resolved automatically per platform
 - click event dispatch from the native tree back into JS
 
-[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.27...HEAD
+[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.28...HEAD
+[0.0.28]: https://github.com/tom96da/incajs/releases/tag/v0.0.28
 [0.0.27]: https://github.com/tom96da/incajs/releases/tag/v0.0.27
 [0.0.26]: https://github.com/tom96da/incajs/releases/tag/v0.0.26
 [0.0.25]: https://github.com/tom96da/incajs/releases/tag/v0.0.25
