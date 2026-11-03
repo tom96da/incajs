@@ -22,17 +22,11 @@ export interface UnsupportedFeature {
 const STYLESHEET_RE = /\.(?:css|pcss|postcss|sass|scss|less|styl|stylus)(?:\?|$)/;
 
 /**
- * Every feature a build refuses. Add an entry when the engine is found to
+ * Every feature a build refuses, whatever the frontend. Add an entry when the engine is found to
  * ignore something standard, so an app hits a build error instead of a
  * silent no-op at runtime; drop it again once the engine handles it.
  */
 export const UNSUPPORTED: readonly UnsupportedFeature[] = [
-  {
-    code: "ERR_INCA_UNSUPPORTED_STYLE",
-    name: "a <style> block",
-    matches: (id) => id.includes("vue&type=style"),
-    hint: "the renderer applies no stylesheet. use a :style binding instead",
-  },
   {
     code: "ERR_INCA_UNSUPPORTED_STYLESHEET",
     name: "a stylesheet import",
@@ -44,16 +38,19 @@ export const UNSUPPORTED: readonly UnsupportedFeature[] = [
 /**
  * Fails the build on the first module that uses an unsupported feature,
  * naming the file that used it.
+ *
+ * @param core - the CLI logic the adapter uses
+ * @param extra - features the frontend refuses, checked before {@link UNSUPPORTED}
  */
 export function rejectUnsupported(
   core: AdapterCore,
-  features: readonly UnsupportedFeature[] = UNSUPPORTED,
+  extra: readonly UnsupportedFeature[] = [],
 ): Plugin {
   return {
     name: "inca:reject-unsupported",
     enforce: "pre",
     transform(_code, id) {
-      const feature = features.find((candidate) => candidate.matches(id));
+      const feature = [...extra, ...UNSUPPORTED].find((candidate) => candidate.matches(id));
       if (!feature) return null;
       const file = path.relative(process.cwd(), id.split("?")[0] ?? id);
       // The code is repeated in the message: the bundler re-wraps the

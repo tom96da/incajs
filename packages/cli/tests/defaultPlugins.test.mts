@@ -15,7 +15,12 @@ const scratchRoot = path.join(import.meta.dirname, "tmp", "default-bundler");
 beforeAll(() => mkdir(scratchRoot, { recursive: true }));
 afterAll(() => rm(scratchRoot, { recursive: true, force: true }));
 
-it("builds templates against incajs/vue/runtime", async () => {
+/**
+ * Builds an app whose template is `template` through `defaultBundler`, with `incajs/vue/runtime`
+ * stubbed as the Vue core plus `runtimeExtra`.
+ * @returns the text of the bundle
+ */
+async function bundleOf(template: string, runtimeExtra: string): Promise<string> {
   const appDir = await mkdtemp(path.join(scratchRoot, "app-"));
   const stub = path.join(appDir, "node_modules/incajs");
   await mkdir(stub, { recursive: true });
@@ -29,12 +34,9 @@ it("builds templates against incajs/vue/runtime", async () => {
   );
   await writeFile(
     path.join(stub, "runtime.mjs"),
-    `export * from "@vue/runtime-core";\nexport const withModifiers = (fn) => { "DEFAULT_RUNTIME_MARKER"; return fn; };\n`,
+    `export * from "@vue/runtime-core";\n${runtimeExtra}`,
   );
-  await writeFile(
-    path.join(appDir, "App.vue"),
-    `<template><div @click.stop="1">x</div></template>\n`,
-  );
+  await writeFile(path.join(appDir, "App.vue"), `<template>${template}</template>\n`);
   const entry = path.join(appDir, "entry.mts");
   await writeFile(entry, `import App from "./App.vue";\nexport default App;\n`);
   const sink = new Writable({ write: (_chunk, _encoding, callback) => callback() });
@@ -47,7 +49,25 @@ it("builds templates against incajs/vue/runtime", async () => {
     quiet: true,
   });
 
-  expect(await readFile(output.entryFile, "utf8")).toContain("DEFAULT_RUNTIME_MARKER");
+  return readFile(output.entryFile, "utf8");
+}
+
+it("builds templates against incajs/vue/runtime", async () => {
+  const bundle = await bundleOf(
+    `<div @click.stop="1">x</div>`,
+    `export const withModifiers = (fn) => { "DEFAULT_RUNTIME_MARKER"; return fn; };\n`,
+  );
+
+  expect(bundle).toContain("DEFAULT_RUNTIME_MARKER");
+}, 20000);
+
+it("compiles many static elements without createStaticVNode", async () => {
+  const bundle = await bundleOf(
+    "<i>x</i>".repeat(25),
+    `export const createStaticVNode = (...args) => { "STATIC_MARKER"; return args; };\n`,
+  );
+
+  expect(bundle).not.toContain("STATIC_MARKER");
 }, 20000);
 
 it("checks the peers that incajs lists for vue", async () => {

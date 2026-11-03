@@ -63,7 +63,8 @@ A fixed entry is deleted and its ID is never reused.
   Scoped/global
   `<style>` blocks in `.vue` SFCs have no effect through the custom
   renderer. A build now fails on one rather than shipping it
-  (`ERR_INCA_UNSUPPORTED_STYLE`, raised by `vite/unsupported.mts`);
+  (`ERR_INCA_UNSUPPORTED_STYLE`, raised by the default Vite
+  integration in `defaultPlugins.mts`);
   rendering them is Phase 7's work.
 
 - **B-012 The window and the app control each other only at start**
@@ -911,8 +912,8 @@ A fixed entry is deleted and its ID is never reused.
   `define`. The CLI runs Vite with `configFile: false`, and `IncaConfig` has
   no field for either, so an app cannot turn the Options API off or set its
   own compile-time flags. B-104 covers choosing a bundler adapter. Fix: an
-  `inca.config.ts` field that the Vite adapter passes to `vue()` and
-  `define`.
+  `inca.config.ts` field that the default Vite integration passes to
+  `vue()` and `define`.
 
 - **B-207 An event handler attribute runs nothing**
   `Units: core · Size: L · Impact: Low`

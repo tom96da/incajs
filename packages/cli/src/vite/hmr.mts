@@ -6,7 +6,6 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import vue from "@vitejs/plugin-vue";
 import dedent from "ts-dedent";
 import { DevEnvironment, buildErrorMessage, createServer } from "vite";
 import type { RollupError } from "rolldown";
@@ -20,9 +19,8 @@ import type {
 } from "vite";
 
 import { CONFIG_FILE_NAME } from "./emitConfig.mts";
+import { integrationPlugins } from "./integration.mts";
 import { streamLogger } from "./logger.mts";
-import { requirePeers } from "./requirePeers.mts";
-import { rejectUnsupported } from "./unsupported.mts";
 import type {
   AdapterCore,
   BuildFailure,
@@ -30,7 +28,7 @@ import type {
   HmrChannel,
   HmrOptions,
 } from "../adapterCore.mts";
-import type { FrontendOptions } from "./config.mts";
+import type { ViteIntegration } from "./integration.mts";
 
 /**
  * A failed update's detail: the same fields a Rollup/Vite plugin
@@ -253,10 +251,9 @@ function shimViteClient(): Plugin {
 }
 
 /**
- * Forwards each changed file to `@vitejs/plugin-vue`'s own HMR support,
- * which only ever sends `file-changed` over the server-wide WebSocket
- * client, one this custom environment doesn't have. Also records when
- * this happened, for `createIncaHotChannel`'s own `onUpdate` timing.
+ * Forwards each changed file as the `file-changed` event that the HMR support of a frontend
+ * plugin expects over the server-wide WebSocket client, which this custom environment doesn't
+ * have. Also records when this happened, for `createIncaHotChannel`'s own `onUpdate` timing.
  */
 function fileChangedPlugin(changed: { current: { file: string; at: number } | undefined }): Plugin {
   return {
@@ -280,7 +277,7 @@ function fileChangedPlugin(changed: { current: { file: string; at: number } | un
 export async function hmr(
   core: AdapterCore,
   frontend: FrontendId,
-  frontendOptions: FrontendOptions,
+  integration: ViteIntegration,
   {
     entry,
     root = path.dirname(entry),
@@ -343,14 +340,7 @@ export async function hmr(
       },
     },
     plugins: [
-      vue({
-        template: {
-          // Hoisted static content is stringified into createStaticVNode, which needs insertStaticContent.
-          compilerOptions: { ...frontendOptions, hoistStatic: false },
-        },
-      }),
-      requirePeers(core, frontend),
-      rejectUnsupported(core),
+      ...integrationPlugins(core, frontend, integration),
       shimViteClient(),
       fileChangedPlugin(changed),
     ],

@@ -7,7 +7,7 @@ import type { RolldownWatcher } from "rolldown";
 import { toBuildOutput } from "./captureOutput.mts";
 import { resolveViteConfig } from "./config.mts";
 import type { AdapterCore, BundlerOptions, FrontendId, Watcher } from "../adapterCore.mts";
-import type { FrontendOptions } from "./config.mts";
+import type { ViteIntegration } from "./integration.mts";
 
 /**
  * Builds `entry` into a build under `outDir` and rebuilds it on every
@@ -17,7 +17,7 @@ import type { FrontendOptions } from "./config.mts";
 export async function watch(
   core: AdapterCore,
   frontend: FrontendId,
-  frontendOptions: FrontendOptions,
+  integration: ViteIntegration,
   {
     onBuild,
     onError,
@@ -33,7 +33,7 @@ export async function watch(
     resolveViteConfig({
       core,
       frontend,
-      frontendOptions: frontendOptions,
+      integration,
       ...buildOptions,
       watch: true,
       stdout,

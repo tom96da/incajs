@@ -5,6 +5,8 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Writable } from "node:stream";
 
+import { vueViteIntegration } from "../../src/defaultPlugins.mts";
+
 export interface ScratchApp {
   entry: string;
   outDir: string;
@@ -56,6 +58,9 @@ const RUNTIME_PACKAGE = "scratch-runtime";
 
 /** The module name the scratch apps' templates import their helpers from. */
 export const TEST_RUNTIME_MODULE = `${RUNTIME_PACKAGE}/core`;
+
+/** The Vue integration with compiled templates reading their helpers from the stub module. */
+export const TEST_INTEGRATION = vueViteIntegration(TEST_RUNTIME_MODULE);
 
 // Stands in for the modifier helpers; the marker shows up in a bundle that imported them.
 const runtimeModule = `export * from "@vue/runtime-core";
