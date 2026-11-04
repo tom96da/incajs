@@ -406,15 +406,13 @@ jobs:
       - name: Build the JS packages
         run: pnpm -F incajs -F @incajs/cli build
 
-      - name: Lint
-        parallel:
+      - parallel:
           - name: Oxlint
             run: pnpm exec oxlint --type-aware tests
           - name: Clippy
             run: cargo clippy -p inca-tests --all-targets -- -D warnings
 
-      - name: Format
-        parallel:
+      - parallel:
           - name: Oxfmt
             run: pnpm exec oxfmt --check --disable-nested-config tests
           - name: cargo fmt
