@@ -123,16 +123,14 @@ jobs:
       - name: Install deps
         run: pnpm ci
 
-      # Runs from the root, so examples/ is covered too (it defines no
-      # `pretest`). rust-node-ubuntu checks tests/.
       - name: Lint
-        run: pnpm exec oxlint --type-aware --ignore-pattern 'tests/**'
+        run: pnpm exec oxlint --type-aware packages
 
       - name: Check formatting
-        run: pnpm exec oxfmt --check --disable-nested-config . '!tests/**'
+        run: pnpm exec oxfmt --check --disable-nested-config packages
 
       - name: Typecheck
-        run: pnpm exec oxlint -A all --type-aware --type-check --ignore-pattern 'tests/**'
+        run: pnpm exec tsc -b --noEmit packages/*
 
   # One job per version instead of a strategy.matrix, so a skip keeps its name.
   test-node-22:
@@ -408,17 +406,22 @@ jobs:
       - name: Build the JS packages
         run: pnpm -F incajs -F @incajs/cli build
 
-      - name: Check formatting
-        run: cargo fmt -p inca-tests -- --check
+      - name: Lint
+        parallel:
+          - name: Oxlint
+            run: pnpm exec oxlint --type-aware tests
+          - name: Clippy
+            run: cargo clippy -p inca-tests --all-targets -- -D warnings
 
-      - name: Lint and typecheck tests/
-        run: pnpm exec oxlint --type-aware --type-check tests
+      - name: Format
+        parallel:
+          - name: Oxfmt
+            run: pnpm exec oxfmt --check --disable-nested-config tests
+          - name: cargo fmt
+            run: cargo fmt -p inca-tests -- --check
 
-      - name: Check formatting of tests/
-        run: pnpm exec oxfmt --check --disable-nested-config tests
-
-      - name: Clippy
-        run: cargo clippy -p inca-tests --all-targets -- -D warnings
+      - name: Typecheck
+        run: pnpm exec tsc -b --noEmit tests
 
       - name: Test
         run: cargo test -p inca-tests
