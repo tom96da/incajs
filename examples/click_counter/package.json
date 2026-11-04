@@ -16,7 +16,7 @@
     "package": "inca package",
     "lint": "oxlint --type-aware",
     "format": "oxfmt --check .",
-    "typecheck": "oxlint -A all --type-aware --type-check"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "incajs": "workspace:*",

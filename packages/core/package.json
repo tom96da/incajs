@@ -79,7 +79,7 @@
     "test": "vitest run",
     "lint": "oxlint --type-aware",
     "format": "oxfmt --check .",
-    "typecheck": "oxlint -A all --type-aware --type-check",
+    "typecheck": "tsc -b --noEmit",
     "test:quickjs": "node tests/quickjs/run.mts --config quickjs.config.mts",
     "prepack": "clear-package-json package.json -o package.json"
   },

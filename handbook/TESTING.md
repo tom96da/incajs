@@ -88,7 +88,7 @@ Every package under `packages/*` defines the same scripts:
 
 - `lint`: `oxlint --type-aware`
 - `format`: `oxfmt --check .`
-- `typecheck`: `oxlint -A all --type-aware --type-check`
+- `typecheck`: `tsc -b --noEmit`
 - `test`: `vitest run`
 
 CI runs `lint`, `format` and `typecheck` as separate steps.

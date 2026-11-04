@@ -67,7 +67,7 @@
     "test": "vitest run",
     "lint": "oxlint --type-aware",
     "format": "oxfmt --check .",
-    "typecheck": "oxlint -A all --type-aware --type-check",
+    "typecheck": "tsc -b --noEmit",
     "prepack": "clear-package-json package.json -o package.json"
   },
   "dependencies": {
