@@ -16,7 +16,7 @@ import type { Component } from "@vue/runtime-core";
 import { callbackIdFor, groupOf, registeredGroupCount } from "../src/callbacks.mts";
 import { createElementNode } from "../src/element/handle.mts";
 import { elementOf, isDestroyed } from "../src/element/lifecycle.mts";
-import { createTextNode } from "../src/element/shadowTree.mts";
+import { createTextNode } from "../src/element/text.mts";
 import { createIncaApp } from "../src/vue/index.mts";
 import type { IncaElement } from "../src/index.mts";
 import type { HostCallback } from "../src/native.mts";

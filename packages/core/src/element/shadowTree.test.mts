@@ -13,8 +13,9 @@ import { rectOf } from "./geometry.mts";
 import { createCommentNode, createElementNode } from "./handle.mts";
 import { elementOf, markDestroyed, releaseWhenCollected, unregisterNode } from "./lifecycle.mts";
 import * as tree from "./shadowTree.mts";
+import { createTextNode } from "./text.mts";
 import type { EventLike, IncaEventTarget } from "../types.mts";
-import type { EventHandlers, IncaElement, IncaText } from "./types.mts";
+import type { EventHandlers, IncaElement } from "./types.mts";
 
 let nextId = 1;
 
@@ -235,17 +236,6 @@ describe("createElement", () => {
   });
 });
 
-describe("createText", () => {
-  it("creates a text node and forwards the initial value", () => {
-    const node = tree.createTextNode("hello");
-    expect(host.createNode).toHaveBeenCalledWith("#text");
-    expect(host.setAttribute).toHaveBeenCalledWith(1, "value", "hello");
-    expect(node).toMatchObject({ kind: "text", parent: null, text: "hello" });
-    expect(node.__node_id).toBe(1);
-    expect("id" in node).toBe(false);
-  });
-});
-
 describe("createComment", () => {
   it("creates a hidden container in place of a comment", () => {
     const node = createCommentNode();
@@ -274,43 +264,6 @@ describe("event target methods", () => {
     expect(remove).toHaveBeenCalledExactlyOnceWith("click", listener, true);
     expect(el.dispatchEvent(event)).toBe(false);
     expect(dispatch).toHaveBeenCalledExactlyOnceWith(event);
-  });
-});
-
-describe("setText", () => {
-  it("forwards the new value and updates the node", () => {
-    const node = tree.createTextNode("old") as IncaText;
-    tree.setText(node, "new");
-    expect(host.setAttribute).toHaveBeenCalledWith(1, "value", "new");
-    expect(node.text).toBe("new");
-  });
-});
-
-describe("setElementText", () => {
-  it("replaces existing children with one text child", () => {
-    const el = element();
-    const oldChild = element();
-    el.__children.push(oldChild);
-    oldChild.parent = el;
-
-    tree.setElementText(el, "hello");
-
-    expect(host.removeChild).toHaveBeenCalledWith(el.__node_id, oldChild.__node_id);
-    expect(host.releaseListeners).toHaveBeenCalledWith(oldChild.__node_id);
-    expect(oldChild.parent).toBeNull();
-    expect(el.__children).toHaveLength(1);
-    expect(el.__children[0]).toMatchObject({ kind: "text", text: "hello" });
-  });
-
-  it("leaves no children behind for an empty string", () => {
-    const el = element();
-    const oldChild = element();
-    el.__children.push(oldChild);
-    oldChild.parent = el;
-
-    tree.setElementText(el, "");
-
-    expect(el.__children).toHaveLength(0);
   });
 });
 
@@ -440,7 +393,7 @@ describe("remove", () => {
   });
 
   it.each([
-    ["a text leaf", () => tree.createTextNode("t")],
+    ["a text leaf", () => createTextNode("t")],
     ["a comment stand-in", () => createCommentNode()],
   ])("holds a removed %s until its handle is collected", (_name, create) => {
     const node = create();
@@ -480,7 +433,7 @@ describe("remove", () => {
     const root = createElementNode("div");
     const mid = createElementNode("div");
     const leaf = createElementNode("button");
-    tree.insert(tree.createTextNode("t"), mid);
+    tree.insert(createTextNode("t"), mid);
     tree.insert(leaf, mid);
     tree.insert(mid, root);
 
@@ -503,17 +456,6 @@ describe("remove", () => {
     tree.remove(root);
 
     expect([root.id, leaf.id, leaf.tabIndex]).toEqual(["7", "7", 7]);
-  });
-
-  it("keeps the children setElementText replaces readable", () => {
-    const root = createElementNode("div");
-    const child = createElementNode("div");
-    tree.insert(child, root);
-    vi.mocked(host.getAttribute).mockReturnValue("c");
-
-    tree.setElementText(root, "");
-
-    expect(child.id).toBe("c");
   });
 });
 
@@ -566,18 +508,6 @@ describe("element registry", () => {
     tree.remove(root);
 
     expect([root, mid, leaf].map((el) => elementOf(el.__node_id))).toEqual([root, mid, leaf]);
-  });
-
-  it("keeps the record of the children setElementText replaces", () => {
-    const root = createElementNode("div");
-    const child = createElementNode("div");
-    const grandchild = createElementNode("div");
-    tree.insert(grandchild, child);
-    tree.insert(child, root);
-
-    tree.setElementText(root, "hello");
-
-    expect([child, grandchild].map((el) => elementOf(el.__node_id))).toEqual([child, grandchild]);
   });
 });
 

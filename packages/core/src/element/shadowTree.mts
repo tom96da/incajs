@@ -1,55 +1,9 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import {
-  appendChild,
-  createNode,
-  holdNode,
-  insertBefore,
-  releaseListeners,
-  removeChild,
-  setAttribute,
-} from "../tree.mts";
+import { holdNode, insertBefore, releaseListeners, removeChild } from "../tree.mts";
 import { isDestroyed, isHeld, markRemoved, releaseWhenCollected } from "./lifecycle.mts";
-import { createIncaText } from "./text.mts";
-import type { IncaElement, IncaNode, IncaText } from "./types.mts";
-
-/**
- * Creates a text leaf.
- * @param text - the initial text content
- * @returns the new text leaf
- */
-export function createTextNode(text: string): IncaText {
-  const id = createNode("#text");
-  setAttribute(id, "value", text);
-  return createIncaText(id, text);
-}
-
-/**
- * Updates a text leaf's content in place.
- * @param node - the text leaf to update
- * @param text - the new text content
- */
-export function setText(node: IncaText, text: string): void {
-  setAttribute(node.__node_id, "value", text);
-  node.text = text;
-}
-
-/**
- * Replaces all of `el`'s children with at most a single text child holding
- * `text`. An empty string leaves `el` childless.
- * @param el - the container whose children are replaced
- * @param text - the new text content
- */
-export function setElementText(el: IncaElement, text: string): void {
-  for (const child of el.__children.slice()) remove(child);
-  if (!text) return;
-
-  const textNode = createTextNode(text);
-  appendChild(el.__node_id, textNode.__node_id);
-  textNode.parent = el;
-  el.__children.push(textNode);
-}
+import type { IncaElement, IncaNode } from "./types.mts";
 
 // Drops `child` from its parent in this module's shadow of the native tree.
 function unlink(child: IncaNode): void {

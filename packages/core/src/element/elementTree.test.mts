@@ -4,7 +4,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createCommentNode, createElementNode, rootElement } from "./handle.mts";
-import { createTextNode, insert, remove } from "./shadowTree.mts";
+import { insert, remove } from "./shadowTree.mts";
+import { createTextNode } from "./text.mts";
 
 let nextId = 1;
 

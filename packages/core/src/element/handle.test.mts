@@ -6,7 +6,8 @@ import { describe, expect, it, vi } from "vitest";
 import { document } from "../document.mts";
 import { createIncaElement, rootElement } from "./handle.mts";
 import { elementOf, markDestroyed, markRemoved, nodeOf } from "./lifecycle.mts";
-import { createTextNode, remove } from "./shadowTree.mts";
+import { remove } from "./shadowTree.mts";
+import { createTextNode } from "./text.mts";
 import type { ScrollOptions } from "./scroll.mts";
 import type { IncaElement, IncaInputElement } from "./types.mts";
 

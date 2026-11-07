@@ -4,8 +4,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createCommentNode, createElementNode } from "./handle.mts";
-import { markDestroyed } from "./lifecycle.mts";
-import { createTextNode, insert } from "./shadowTree.mts";
+import { elementOf, markDestroyed } from "./lifecycle.mts";
+import { insert } from "./shadowTree.mts";
+import { createTextNode, setElementText, setText } from "./text.mts";
 import type { IncaText } from "./types.mts";
 
 /** The data of each text node or comment stand-in. */
@@ -278,5 +279,77 @@ describe("textContent of an element", () => {
     el.textContent = "new";
 
     expect(el.__children).toHaveLength(1);
+  });
+});
+
+describe("createText", () => {
+  it("creates a text node and forwards the initial value", () => {
+    const node = createTextNode("hello");
+    expect(host.createNode).toHaveBeenCalledWith("#text");
+    expect(host.setAttribute).toHaveBeenCalledWith(node.__node_id, "value", "hello");
+    expect(node).toMatchObject({ kind: "text", parent: null, text: "hello" });
+    expect("id" in node).toBe(false);
+  });
+});
+
+describe("setText", () => {
+  it("forwards the new value and updates the node", () => {
+    const node = createTextNode("old") as IncaText;
+    setText(node, "new");
+    expect(host.setAttribute).toHaveBeenCalledWith(node.__node_id, "value", "new");
+    expect(node.text).toBe("new");
+  });
+});
+
+describe("setElementText", () => {
+  it("replaces existing children with one text child", () => {
+    const el = createElementNode("div");
+    const oldChild = createElementNode("div");
+    insert(oldChild, el);
+
+    setElementText(el, "hello");
+
+    expect(host.removeChild).toHaveBeenCalledWith(el.__node_id, oldChild.__node_id);
+    expect(host.releaseListeners).toHaveBeenCalledWith(oldChild.__node_id);
+    expect(oldChild.parent).toBeNull();
+    expect(el.__children).toHaveLength(1);
+    expect(el.__children[0]).toMatchObject({ kind: "text", text: "hello" });
+  });
+
+  it("leaves no children behind for an empty string", () => {
+    const el = createElementNode("div");
+    const oldChild = createElementNode("div");
+    insert(oldChild, el);
+
+    setElementText(el, "");
+
+    expect(el.__children).toHaveLength(0);
+  });
+});
+
+describe("remove", () => {
+  it("keeps the children setElementText replaces readable", () => {
+    const root = createElementNode("div");
+    const child = createElementNode("div");
+    insert(child, root);
+    data[child.__node_id] = "c";
+
+    setElementText(root, "");
+
+    expect(child.id).toBe("c");
+  });
+});
+
+describe("element registry", () => {
+  it("keeps the record of the children setElementText replaces", () => {
+    const root = createElementNode("div");
+    const child = createElementNode("div");
+    const grandchild = createElementNode("div");
+    insert(grandchild, child);
+    insert(child, root);
+
+    setElementText(root, "hello");
+
+    expect([child, grandchild].map((el) => elementOf(el.__node_id))).toEqual([child, grandchild]);
   });
 });
