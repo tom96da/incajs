@@ -42,7 +42,7 @@ let focused: NodeId | null = null;
 
 interface FakeNode {
   tag: string;
-  attributes: Record<string, unknown>;
+  attributes: Map<string, unknown>;
   style: Record<string, unknown>;
   parent: NodeId | null;
   children: NodeId[];
@@ -70,7 +70,14 @@ function installFakeNative(): Map<NodeId, FakeNode> {
 
   function allocate(tag: string): NodeId {
     const id = nextId++;
-    nodes.set(id, { tag, attributes: {}, style: {}, parent: null, children: [], listeners: {} });
+    nodes.set(id, {
+      tag,
+      attributes: new Map(),
+      style: {},
+      parent: null,
+      children: [],
+      listeners: {},
+    });
     return id;
   }
 
@@ -139,10 +146,10 @@ function installFakeNative(): Map<NodeId, FakeNode> {
       detach(childId);
     },
     setAttribute(nodeId: NodeId, key: string, value: unknown): void {
-      requireNode(nodeId).attributes[key] = value;
+      requireNode(nodeId).attributes.set(key, value);
     },
     getAttribute(nodeId: NodeId, key: string): string | number | boolean | null {
-      return (requireNode(nodeId).attributes[key] ?? null) as string | number | boolean | null;
+      return (requireNode(nodeId).attributes.get(key) ?? null) as string | number | boolean | null;
     },
     layoutOf(
       _nodeId: NodeId,
@@ -155,7 +162,7 @@ function installFakeNative(): Map<NodeId, FakeNode> {
     scrollNode(_nodeId: NodeId, _left: number | null, _top: number | null): void {},
     scrollIntoViewNode(_nodeId: NodeId, _block: string, _inline: string): void {},
     removeAttribute(nodeId: NodeId, key: string): void {
-      delete requireNode(nodeId).attributes[key];
+      requireNode(nodeId).attributes.delete(key);
     },
     linkedNode(nodeId: NodeId, link: "parent" | "first" | "last" | "previous" | "next") {
       const node = requireNode(nodeId);
@@ -182,7 +189,7 @@ function installFakeNative(): Map<NodeId, FakeNode> {
     querySelector: () => null,
     querySelectorAll: () => [],
     attributeNames(nodeId: NodeId): string[] {
-      return Object.keys(requireNode(nodeId).attributes);
+      return [...requireNode(nodeId).attributes.keys()];
     },
     setStyle(nodeId: NodeId, key: string, value: unknown): void {
       requireNode(nodeId).style[key] = value;
@@ -390,15 +397,15 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
     expect(rootNode.children).toHaveLength(1);
     const div = nodes.get(rootNode.children[0]!)!;
     expect(div.style).toEqual({ background: "#000" });
-    expect(div.attributes["class"]).toBe("box");
+    expect(div.attributes.get("class")).toBe("box");
     expect(div.children).toHaveLength(1);
     const text = nodes.get(div.children[0]!)!;
-    expect(text.attributes["value"]).toBe("count: 0");
+    expect(text.attributes.get("value")).toBe("count: 0");
 
     dispatch(div, "click");
     await nextTick();
 
-    expect(nodes.get(div.children[0]!)!.attributes["value"]).toBe("count: 1");
+    expect(nodes.get(div.children[0]!)!.attributes.get("value")).toBe("count: 1");
   });
 
   it("reorders a keyed list via moves, keeping each item's node identity", async () => {
