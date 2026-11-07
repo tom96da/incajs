@@ -7,12 +7,14 @@ import { createCommentNode, createElementNode, createIncaFragment } from "./hand
 import { isHeld, isRemoved, markDestroyed } from "./lifecycle.mts";
 import { remove } from "./shadowTree.mts";
 import { createTextNode } from "./text.mts";
-import type { IncaFragment, IncaNode } from "./types.mts";
+import type { IncaFragment, IncaNode, IncaTemplateElement } from "./types.mts";
 
 /** The children of each node in the fake host. */
 let kids = new Map<number, number[]>();
 let parents = new Map<number, number>();
 let tags = new Map<number, string>();
+/** The content fragment of each template in the fake host. */
+let contents = new Map<number, number>();
 let nextId = 1;
 
 const notFound = () => new DOMException("not a child", "NotFoundError");
@@ -43,14 +45,27 @@ const host = {
     const id = nextId++;
     kids.set(id, []);
     tags.set(id, tag);
+    if (tag === "template") {
+      const content = nextId++;
+      kids.set(content, []);
+      tags.set(content, "#fragment");
+      contents.set(id, content);
+    }
     return id;
   }),
+  templateContent: vi.fn<(nodeId: number) => number | null>((id) => contents.get(id) ?? null),
   setAttribute: vi.fn<() => void>(),
   setStyle: vi.fn<() => void>(),
   cloneNode: vi.fn<(nodeId: number, deep: boolean) => [number, string][]>((id, deep) => {
     const copy = (original: number): [number, string][] => {
       const tag = tags.get(original)!;
-      const pairs: [number, string][] = [[host.createNode(tag), tag]];
+      const made = host.createNode(tag);
+      const pairs: [number, string][] = [[made, tag]];
+      const content = contents.get(original);
+      if (content !== undefined) {
+        pairs.push([contents.get(made)!, "#fragment"]);
+        if (deep) for (const child of childrenOf(content)) pairs.push(...copy(child));
+      }
       if (deep) for (const child of childrenOf(original)) pairs.push(...copy(child));
       return pairs;
     };
@@ -88,6 +103,7 @@ beforeEach(() => {
   kids = new Map();
   parents = new Map();
   tags = new Map();
+  contents = new Map();
   nextId = 1;
   globalThis.__inca_native__ = host as never;
 });
@@ -634,5 +650,53 @@ describe("cloneNode", () => {
     group.appendChild(div());
 
     expect(kinds(group.cloneNode(true).__children)).toEqual(["element"]);
+  });
+});
+
+describe("a template", () => {
+  const template = () => createElementNode("template") as IncaTemplateElement;
+
+  it("takes an appended node as its own child and not as content", () => {
+    const owner = template();
+    const child = div();
+
+    owner.appendChild(child);
+
+    expect([owner.__children, owner.content.__children]).toEqual([[child], []]);
+  });
+
+  it("holds the copy of a cloned template once", () => {
+    const owner = template();
+
+    const copy = owner.cloneNode(false);
+
+    const holds = host.holdNode.mock.calls.filter(([id]) => id === copy.__node_id);
+    expect(holds).toHaveLength(1);
+  });
+
+  it("gives a shallow clone an empty content with the id the host returned", () => {
+    const owner = template();
+    owner.content.appendChild(div());
+
+    const copy = owner.cloneNode(false) as IncaTemplateElement;
+
+    expect([copy.content.__node_id, copy.content.__children]).toEqual([copy.__node_id + 1, []]);
+  });
+
+  it("copies the content nodes and children of a deep clone from their own entries", () => {
+    const owner = template();
+    const inside = div();
+    const own = div();
+    owner.content.appendChild(inside);
+    owner.appendChild(own);
+
+    const copy = owner.cloneNode(true) as IncaTemplateElement;
+
+    const pairs = host.cloneNode.mock.results[0]!.value as [number, string][];
+    expect([
+      copy.content.__children[0]!.__node_id,
+      copy.__children[0]!.__node_id,
+      copy.content.__children[0] === inside,
+    ]).toEqual([pairs[2]![0], pairs[3]![0], false]);
   });
 });

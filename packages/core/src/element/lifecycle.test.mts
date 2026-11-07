@@ -3,7 +3,9 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { IncaElement, IncaNode } from "./types.mts";
+import { createElementNode } from "./handle.mts";
+import { isDestroyed, isRemoved, markDestroyed, markRemoved } from "./lifecycle.mts";
+import type { IncaElement, IncaNode, IncaTemplateElement } from "./types.mts";
 
 describe("element registry", () => {
   /** What `FinalizationRegistry.register` received, by target: one entry per registry. */
@@ -114,5 +116,78 @@ describe("element registry", () => {
     markDestroyed(text);
 
     expect(nodeOf(42)).toBeUndefined();
+  });
+});
+
+describe("the release of a template", () => {
+  const registered = new Map<object, { callback: (id: number) => void; held: number }[]>();
+  const host = {
+    createNode: vi.fn<(tag: string) => number>(() => 4),
+    templateContent: vi.fn<(nodeId: number) => number | null>(() => 5),
+    holdNode: vi.fn<(nodeId: number) => void>(),
+    releaseNode: vi.fn<(nodeId: number) => void>(),
+  };
+
+  beforeEach(() => {
+    registered.clear();
+    vi.clearAllMocks();
+    vi.stubGlobal(
+      "FinalizationRegistry",
+      class {
+        constructor(private readonly callback: (id: number) => void) {}
+        register(target: object, held: number): void {
+          registered.set(target, [
+            ...(registered.get(target) ?? []),
+            { callback: this.callback, held },
+          ]);
+        }
+      },
+    );
+    globalThis.__inca_native__ = host as never;
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("releases the node of a collected template handle once, with its id", async () => {
+    vi.resetModules();
+    const { createElementNode } = await import("./handle.mts");
+    const owner = createElementNode("template");
+
+    for (const { callback, held } of registered.get(owner)!) callback(held);
+
+    expect(host.releaseNode.mock.calls).toEqual([[owner.__node_id]]);
+  });
+});
+
+describe("a template", () => {
+  const host = {
+    createNode: vi.fn<(tag: string) => number>(() => 4),
+    templateContent: vi.fn<(nodeId: number) => number | null>(() => 5),
+    holdNode: vi.fn<(nodeId: number) => void>(),
+    releaseNode: vi.fn<(nodeId: number) => void>(),
+  };
+
+  const template = () => {
+    globalThis.__inca_native__ = host as never;
+    const owner = createElementNode("template") as IncaTemplateElement;
+    return { owner, content: owner.content };
+  };
+
+  it("marks its content handle destroyed when the host frees it", () => {
+    const { owner, content } = template();
+
+    markDestroyed(owner);
+
+    expect(isDestroyed(content)).toBe(true);
+  });
+
+  it("marks its content handle removed when it leaves the tree", () => {
+    const { owner, content } = template();
+
+    markRemoved(owner);
+
+    expect(isRemoved(content)).toBe(true);
   });
 });

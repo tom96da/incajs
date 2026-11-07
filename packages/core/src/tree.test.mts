@@ -73,6 +73,7 @@ const native = {
     () => true,
   ),
   releaseListeners: vi.fn<(nodeId: number) => number[]>(() => []),
+  templateContent: vi.fn<(nodeId: number) => number | null>(() => null),
   attributeNames: vi.fn<(nodeId: number) => string[]>(() => []),
   matches: vi.fn<(nodeId: number, selector: string) => boolean>(() => false),
   closest: vi.fn<(nodeId: number, selector: string) => number | null>(() => null),

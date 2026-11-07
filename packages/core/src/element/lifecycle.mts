@@ -3,7 +3,7 @@
 
 import { native } from "../native.mts";
 import type { NodeId } from "../types.mts";
-import type { IncaElement, IncaNode } from "./types.mts";
+import type { IncaElement, IncaFragment, IncaNode } from "./types.mts";
 
 /** Every handle that `withNodeId` gave a node id. */
 const nodes = new WeakSet<object>();
@@ -93,6 +93,34 @@ export function elementOf(id: NodeId): IncaElement | undefined {
   return node?.kind === "element" ? node : undefined;
 }
 
+/** The content handle of each template handle. */
+const contents = new WeakMap<IncaElement, IncaFragment>();
+
+/**
+ * The template handle of each content handle. The entry keeps the template reachable while its
+ * content is, so the host holds both nodes as long as either handle is.
+ */
+const owners = new WeakMap<IncaFragment, IncaElement>();
+
+/**
+ * Reads the content handle of a template that already has one.
+ * @param node - any node handle
+ * @returns the stored content, or `undefined`
+ */
+export function existingContent(node: IncaNode): IncaFragment | undefined {
+  return node.kind === "element" ? contents.get(node) : undefined;
+}
+
+/**
+ * Links a template handle and its content handle both ways.
+ * @param template - the template handle
+ * @param content - its content handle
+ */
+export function storeContent(template: IncaElement, content: IncaFragment): void {
+  contents.set(template, content);
+  owners.set(content, template);
+}
+
 const removed = new WeakSet<IncaNode>();
 
 /**
@@ -113,6 +141,8 @@ export function markRemoved(node: IncaNode): void {
   removed.add(node);
   if (node.kind === "text") return;
   for (const child of node.__children) markRemoved(child);
+  const content = existingContent(node);
+  if (content) markRemoved(content);
 }
 
 const destroyed = new WeakSet<IncaNode>();
@@ -132,10 +162,15 @@ export function isDestroyed(node: IncaNode): boolean {
  * @param node - the root of the freed subtree
  */
 export function markDestroyed(node: IncaNode): void {
+  if (destroyed.has(node)) return;
   destroyed.add(node);
   unregisterNode(node.__node_id);
   if (node.kind === "text") return;
   for (const child of node.__children) markDestroyed(child);
+  const content = existingContent(node);
+  if (content) markDestroyed(content);
+  const owner = node.kind === "fragment" ? owners.get(node) : undefined;
+  if (owner) markDestroyed(owner);
 }
 
 /**
