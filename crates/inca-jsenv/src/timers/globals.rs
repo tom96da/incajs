@@ -12,6 +12,7 @@ use rquickjs::{
 
 use super::Timers;
 use crate::callbacks;
+use crate::class::define_function;
 
 /// Defines `setTimeout`, `setInterval`, `clearTimeout` and `clearInterval` on the global object
 /// of `ctx`, over `timers`. The handler and its arguments stay in the
@@ -21,7 +22,6 @@ use crate::callbacks;
 ///
 /// Returns an error if a global cannot be defined.
 pub fn install<'js>(ctx: &Ctx<'js>, timers: &Rc<Timers>) -> JsResult<()> {
-    let globals = ctx.globals();
     for (name, repeat) in [("setTimeout", false), ("setInterval", true)] {
         let timers = Rc::clone(timers);
         let start = Function::new(
@@ -32,17 +32,15 @@ pub fn install<'js>(ctx: &Ctx<'js>, timers: &Rc<Timers>) -> JsResult<()> {
                   args: Rest<Value<'js>>| {
                 start(&ctx, &timers, name, handler, delay.0, args.0, repeat)
             },
-        )?
-        .with_name(name)?;
-        globals.set(name, start)?;
+        )?;
+        define_function(ctx, name, start)?;
     }
     for name in ["clearTimeout", "clearInterval"] {
         let timers = Rc::clone(timers);
         let clear = Function::new(ctx.clone(), move |ctx: Ctx<'js>, id: Opt<Coerced<i32>>| {
             clear(&ctx, &timers, id.0.map_or(0, |id| id.0))
-        })?
-        .with_name(name)?;
-        globals.set(name, clear)?;
+        })?;
+        define_function(ctx, name, clear)?;
     }
     Ok(())
 }
@@ -197,6 +195,25 @@ mod tests {
         let kind: String = fx.engine.eval(&format!("typeof {name}")).unwrap();
 
         assert_eq!(kind, "function");
+    }
+
+    #[rstest]
+    #[case::starting_loop("setTimeout")]
+    #[case::clearing_loop("clearTimeout")]
+    fn the_globals_are_writable_enumerable_and_configurable(#[case] name: &str) {
+        let fx = fixture();
+
+        let attributes: String = fx
+            .engine
+            .eval(&format!(
+                r"
+                const d = Object.getOwnPropertyDescriptor(globalThis, '{name}');
+                [d.writable, d.enumerable, d.configurable].join();
+                "
+            ))
+            .unwrap();
+
+        assert_eq!(attributes, "true,true,true");
     }
 
     #[rstest]
