@@ -27,7 +27,7 @@ export default defineConfig({
       groups: [
         {
           name: "hooks",
-          test: /packages\/core\/src\/(callbacks|targets|interfaces|timers|element\/fragment)\.mts$/,
+          test: /packages\/core\/src\/(callbacks|targets|interfaces|element\/fragment)\.mts$/,
         },
       ],
     },
