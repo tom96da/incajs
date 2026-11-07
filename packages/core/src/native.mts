@@ -21,6 +21,7 @@ interface IncaNative {
   removeChild(parentId: NodeId, childId: NodeId): void;
   replaceChild(parentId: NodeId, nodeId: NodeId, childId: NodeId): number;
   cloneNode(nodeId: NodeId, deep: boolean): [NodeId, string][];
+  templateContent(nodeId: NodeId): NodeId | null;
   rootOf(nodeId: NodeId): NodeId;
   compareNodePosition(nodeId: NodeId, otherId: NodeId): number;
   isEqualNode(nodeId: NodeId, otherId: NodeId): boolean;

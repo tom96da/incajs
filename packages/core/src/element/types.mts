@@ -530,6 +530,12 @@ export interface IncaInputElement extends IncaElement {
   value: string;
 }
 
+/** The handle of a `<template>`. */
+export interface IncaTemplateElement extends IncaElement {
+  /** The fragment that holds the markup of the template. It is never drawn or connected. */
+  readonly content: IncaFragment;
+}
+
 /** A text leaf node. */
 export interface IncaText extends NodeMembers, CharacterDataMembers, TextMembers {
   /**

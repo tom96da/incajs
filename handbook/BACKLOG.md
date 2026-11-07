@@ -1553,3 +1553,20 @@ A fixed entry is deleted and its ID is never reused.
   relative path leave the root, and the key becomes the absolute path. The
   bundle then carries a path of the machine. Fix: resolve the root to its real
   path before the keys are made.
+
+- **B-287 There is no `HTMLTemplateElement` global**
+  `Units: core · Size: S · Impact: Low`
+
+  A `template` element has `content`, but the global `HTMLTemplateElement` does not
+  exist, so `instanceof HTMLTemplateElement` throws a `ReferenceError`. Fix: define the
+  global with the `content` member when the `document` redesign adds the other node
+  classes.
+
+- **B-288 The `ownerDocument` of a template's `content` and its nodes is `document`**
+  `Units: core · Size: L · Impact: Low`
+
+  In a browser, `content.ownerDocument` is a separate inert document that its
+  nodes share, and a node moved out of the content has `document` as its
+  `ownerDocument`. The host has one document, so the content and its nodes read
+  `document` at all times. Fix: add a second document object for them with the
+  `document` redesign.

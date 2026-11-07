@@ -241,6 +241,7 @@ function installFakeNative(): Map<NodeId, FakeNode> {
       for (const callbackId of released) hostCallbacks.delete(callbackId);
       return released;
     },
+    templateContent: () => null,
     holdNode(): void {},
     releaseNode(): void {},
     focusNode(): void {},

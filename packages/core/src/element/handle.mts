@@ -32,11 +32,19 @@ import { nodeListOf } from "./collections.mts";
 import { elementTreeMembers } from "./elementTree.mts";
 import { withEventHandlers } from "./eventHandlers.mts";
 import { layoutBox, offsetOf, offsetParentOf, rectOf, tabIndexOf } from "./geometry.mts";
-import { elementOf, isDestroyed, isRemoved, registerNode, withNodeId } from "./lifecycle.mts";
+import {
+  elementOf,
+  existingContent,
+  isDestroyed,
+  isRemoved,
+  registerNode,
+  withNodeId,
+} from "./lifecycle.mts";
 import { nodeMutationMembers } from "./nodeMutation.mts";
 import { nodeRelationMembers } from "./nodeRelations.mts";
 import { nodeTreeMembers } from "./nodeTree.mts";
 import { scrollIntoViewArgs, scrollPosition } from "./scroll.mts";
+import { attachContent, isTemplateTag } from "./templateContent.mts";
 import { characterDataMembers, createIncaText, nullableText, setElementText } from "./text.mts";
 import type { NodeId, TagName } from "../types.mts";
 import type { AttributeMembers } from "./attributes.mts";
@@ -224,6 +232,13 @@ export function createIncaElement(
       return nodeListOf(() => found);
     },
   };
+  if (isTemplateTag(tag)) {
+    Object.defineProperty(fields, "content", {
+      get: () => existingContent(element),
+      enumerable: true,
+      configurable: true,
+    });
+  }
   if (tag === "input") {
     Object.defineProperty(fields, "value", {
       get: () => (isDestroyed(element) ? "" : inputValue(id)),
@@ -254,6 +269,7 @@ export function createIncaElement(
     ),
   );
   registerNode(element);
+  if (isTemplateTag(tag)) attachContent(element, createIncaFragment);
   return element;
 }
 

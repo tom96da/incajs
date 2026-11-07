@@ -12,8 +12,9 @@ import {
   replaceChild,
 } from "../tree.mts";
 import { requireArguments } from "./attributes.mts";
-import { isDestroyed, isNode } from "./lifecycle.mts";
+import { existingContent, isDestroyed, isNode } from "./lifecycle.mts";
 import { keep, link, unlink } from "./shadowTree.mts";
+import { isTemplateTag } from "./templateContent.mts";
 import type { NodeId, TagName } from "../types.mts";
 import type {
   IncaElement,
@@ -94,6 +95,14 @@ export function cloneNode<T extends IncaNode>(node: T, deep: boolean, builders: 
       original.kind === "fragment"
         ? builders.fragment!(id)
         : builders.element!(id, original.kind, original.kind === "element" ? tag : undefined);
+    if (original.kind === "element" && isTemplateTag(original.tagName)) {
+      next++;
+      const content = existingContent(copy as IncaElement)!;
+      if (deep) {
+        for (const child of existingContent(original)!.__children)
+          link(content, [build(child)], content.__children.length);
+      }
+    }
     if (!deep) return copy;
     for (const child of original.__children)
       link(copy as IncaParent, [build(child)], copy.__children.length);
