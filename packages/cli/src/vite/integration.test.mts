@@ -20,19 +20,26 @@ const integration: ViteIntegration = {
       hint: "use a beta file",
     },
   ],
+  styleModule: "alpha-style",
 };
 
 describe("integrationPlugins", () => {
   it("puts the plugins of the integration first", () => {
-    const names = integrationPlugins(core, FRONTEND, integration).map(
+    const names = integrationPlugins(core, FRONTEND, integration, "/app").map(
       (plugin) => (plugin as Plugin).name,
     );
 
-    expect(names).toEqual(["alpha-plugin", "inca:require-peers", "inca:reject-unsupported"]);
+    expect(names).toEqual([
+      "alpha-plugin",
+      "inca:style-collect",
+      "inca:style-apply",
+      "inca:require-peers",
+      "inca:reject-unsupported",
+    ]);
   });
 
   it("passes the unsupported entries of the integration to the check", () => {
-    const check = integrationPlugins(core, FRONTEND, integration)[2] as Plugin;
+    const check = integrationPlugins(core, FRONTEND, integration, "/app")[4] as Plugin;
     const transform = check.transform as (code: string, id: string) => unknown;
 
     expect(() => transform("", "/app/x.alpha")).toThrow("ERR_INCA_TEST_ALPHA");

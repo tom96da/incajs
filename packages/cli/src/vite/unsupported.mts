@@ -19,28 +19,19 @@ export interface UnsupportedFeature {
   hint: string;
 }
 
-const STYLESHEET_RE = /\.(?:css|pcss|postcss|sass|scss|less|styl|stylus)(?:\?|$)/;
-
 /**
- * Every feature a build refuses, whatever the frontend. Add an entry when the engine is found to
- * ignore something standard, so an app hits a build error instead of a
- * silent no-op at runtime; drop it again once the engine handles it.
+ * The features every build refuses, whatever the frontend. Add an entry when the engine is found
+ * to ignore something standard, so an app hits a build error instead of a silent no-op at
+ * runtime; drop it again once the engine handles it.
  */
-export const UNSUPPORTED: readonly UnsupportedFeature[] = [
-  {
-    code: "ERR_INCA_UNSUPPORTED_STYLESHEET",
-    name: "a stylesheet import",
-    matches: (id) => STYLESHEET_RE.test(id),
-    hint: "the build does not convert a stylesheet yet. use a :style binding instead",
-  },
-];
+export const UNSUPPORTED: readonly UnsupportedFeature[] = [];
 
 /**
  * Fails the build on the first module that uses an unsupported feature,
  * naming the file that used it.
  *
  * @param core - the CLI logic the adapter uses
- * @param extra - features the frontend refuses, checked before {@link UNSUPPORTED}
+ * @param extra - features the frontend refuses, checked together with {@link UNSUPPORTED}
  */
 export function rejectUnsupported(
   core: AdapterCore,

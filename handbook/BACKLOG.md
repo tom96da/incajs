@@ -57,17 +57,6 @@ A fixed entry is deleted and its ID is never reused.
 
 ## P2
 
-- **B-007 `.vue` `<style>` blocks don't reach the screen**
-  `Units: cli,core,gpui · Size: L · Impact: Medium`
-
-  Scoped/global
-  `<style>` blocks in `.vue` SFCs have no effect through the custom
-  renderer. A build now fails on one rather than shipping it
-  (`ERR_INCA_UNSUPPORTED_STYLE`, raised by the default Vite
-  integration in `defaultPlugins.mts`), and an imported stylesheet fails the
-  same way. A `<style>` element that the app renders applies its rules. Fix:
-  turn each SFC `<style>` block into such an element at build time.
-
 - **B-012 The window and the app control each other only at start**
   `Units: bridge,host,core · Size: L · Impact: Medium`
 
@@ -1409,6 +1398,34 @@ A fixed entry is deleted and its ID is never reused.
   a field that holds a function; a decision for `package.json` `"inca"` and the
   JSON configs, which cannot hold one; moving `@vitejs/plugin-vue` from the
   dependencies of `@incajs/cli` to an optional peer of `incajs`.
+
+- **B-268 The `<style>` elements of an app's stylesheets are children of the root container**
+  `Units: core,cli,gpui · Size: M · Impact: Low`
+
+  The build turns a `<style>` block of a `.vue` file and a `.css` import into a
+  `style` element appended to the root container. There the element appears in
+  `childNodes`, `firstChild` and `children` of the container and counts for
+  `:first-child`. A browser puts it in `document.head`. Fix: add
+  `document.head` and attach the elements there. Needs: a host node for the
+  head beside the container, which also changes the `body` equivalent of B-199
+  and B-200.
+
+- **B-269 A style warning names no source file**
+  `Units: bridge,cli · Size: M · Impact: Low`
+
+  The line that the host prints for a rule or a declaration it drops names the
+  rule or the declaration only. The host cannot map a sheet to a source file,
+  because the `style` element carries no source name. Fix: the build writes a
+  source name on the element, and the warning prefix reads it.
+
+- **B-270 CSS `v-bind()` in `<style>` is unsupported**
+  `Units: core,cli · Size: M · Impact: Low`
+
+  A build of a `.vue` file whose `<style>` block uses `v-bind()` fails: the
+  compiled block imports `useCssVars` from `incajs/vue/runtime`, which does not
+  export it, and the declaration would read a custom property that the host
+  drops. Fix: export `useCssVars` from `incajs/vue/runtime` and give the host
+  custom properties and `var()` values.
 
 - **B-271 A `DocumentFragment` lacks the query and listener members**
   `Units: core · Size: S · Impact: Low`

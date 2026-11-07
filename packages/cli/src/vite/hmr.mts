@@ -229,14 +229,15 @@ function createIncaHotChannel(
 /**
  * Stubs out `/@vite/client` (the browser HMR client import analysis
  * injects wherever `import.meta.hot` appears). The module runner's own
- * `hot` getter creates the real context instead.
+ * `hot` getter creates the real context instead. The module also re-exports the style helpers
+ * that the development output of a stylesheet imports from it.
  *
  * Vite's built-in `resolve.alias` entry for `/@vite/client` runs before any
  * plugin's own `resolveId`, rewriting it to an `/@fs/…/dist/client/client.mjs`
  * absolute id first. So this has to match the resolved path, not the raw
  * specifier, or the real client (which opens a WebSocket) loads instead.
  */
-function shimViteClient(): Plugin {
+function shimViteClient(styleModule: string): Plugin {
   const shimId = "\0inca:vite-client-shim";
   return {
     name: "inca:shim-vite-client",
@@ -245,7 +246,12 @@ function shimViteClient(): Plugin {
       return id === "/@vite/client" || id.endsWith("/dist/client/client.mjs") ? shimId : null;
     },
     load(id) {
-      return id === shimId ? "export function createHotContext() { return undefined; }" : null;
+      return id === shimId
+        ? dedent`
+            export function createHotContext() { return undefined; }
+            export { updateStyle, removeStyle } from ${JSON.stringify(styleModule)};
+          `
+        : null;
     },
   };
 }
@@ -340,8 +346,8 @@ export async function hmr(
       },
     },
     plugins: [
-      ...integrationPlugins(core, frontend, integration),
-      shimViteClient(),
+      ...integrationPlugins(core, frontend, integration, root),
+      shimViteClient(integration.styleModule),
       fileChangedPlugin(changed),
     ],
   });

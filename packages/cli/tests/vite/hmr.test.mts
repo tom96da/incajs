@@ -8,6 +8,7 @@ import { Writable } from "node:stream";
 import { setTimeout } from "node:timers/promises";
 import { stripVTControlCharacters } from "node:util";
 
+import dedent from "ts-dedent";
 import { build } from "tsdown";
 import { ESModulesEvaluator, ModuleRunner } from "vite/module-runner";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -156,6 +157,77 @@ describe("hmr", () => {
     expect(runtimeId).toBeDefined();
     const exports = modules.getModuleById(runtimeId!)?.exports as { withModifiers: () => unknown };
     expect(String(exports.withModifiers)).toContain("STUB_WITH_MODIFIERS");
+  }, 20000);
+
+  it("applies a stylesheet through the client shim", async () => {
+    const { entry, streams } = await makeApp(
+      `<script setup>\nimport "./a.css";\n</script>\n<template><div /></template>\n`,
+    );
+    const appDir = path.dirname(entry);
+    await writeFile(path.join(appDir, "a.css"), ".a { width: 1px; }\n");
+    await writeFile(
+      path.join(appDir, "node_modules/incajs/style.mjs"),
+      dedent`
+        export function updateStyle(key, css) {
+          globalThis.__hmrStyleCalls.push([key, css]);
+        }
+        export function removeStyle(key) {
+          globalThis.__hmrStyleCalls.push([key]);
+        }
+      `,
+    );
+    const calls: [string, string?][] = [];
+    Object.assign(globalThis, { __hmrStyleCalls: calls });
+    const channel = await hmr({
+      entry,
+      cwd: appDir,
+      ...streams,
+      notify: (payload) => client.notify(payload as HotPayload),
+      reload: () => {},
+      onError: () => {},
+    });
+    channels.push(channel);
+    const client = connectRunner(channel.dispatch);
+
+    await client.runner.import(entry);
+
+    expect(calls).toEqual([[expect.stringMatching(/\/a\.css$/), ".a { width: 1px; }\n"]]);
+  }, 20000);
+
+  it("removes the stylesheet of an import the edited module dropped", async () => {
+    const { entry, vuePath, streams } = await makeApp(
+      `<script setup>\nimport "./a.css";\n</script>\n<template><div /></template>\n`,
+    );
+    const appDir = path.dirname(entry);
+    await writeFile(path.join(appDir, "a.css"), ".a { width: 1px; }\n");
+    await writeFile(
+      path.join(appDir, "node_modules/incajs/style.mjs"),
+      dedent`
+        export function updateStyle() {}
+        export function removeStyle(key) {
+          globalThis.__hmrStyleCalls.push([key]);
+        }
+      `,
+    );
+    const calls: [string, string?][] = [];
+    Object.assign(globalThis, { __hmrStyleCalls: calls });
+    const channel = await hmr({
+      entry,
+      cwd: appDir,
+      ...streams,
+      notify: (payload) => client.notify(payload as HotPayload),
+      reload: () => {},
+      onError: () => {},
+    });
+    channels.push(channel);
+    const client = connectRunner(channel.dispatch);
+    await client.runner.import(entry);
+
+    await writeFile(vuePath, `<template><div /></template>\n`);
+
+    await vi.waitFor(() => expect(calls).toEqual([[expect.stringMatching(/\/a\.css$/)]]), {
+      timeout: 15000,
+    });
   }, 20000);
 
   it("creates the plugins again for each session", async () => {

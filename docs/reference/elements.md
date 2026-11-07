@@ -62,13 +62,19 @@ An `input` is a one-line text field.
 ### `style`
 
 A `style` element applies its rules to every element of the app and is never
-drawn. Render one with `h("style", css)` or `<component is="style">`. A
-`<style>` block in a `.vue` file is not supported yet, see
-[`ERR_INCA_UNSUPPORTED_STYLE`](./errors#err-inca-unsupported-style).
+drawn. The elements of a `<style>` block and of an imported stylesheet are
+children of the mount container. You can also render one with `h("style", css)`
+or `<component is="style">`.
 
-- The declarations take the keys and values of `:style`.
+- The declarations take the keys and values of `:style`. The host drops any
+  other declaration, see [Why does a rule of my stylesheet have no
+  effect?](../guide/troubleshooting#why-does-a-rule-of-my-stylesheet-have-no-effect).
 - `!important` is read as a normal declaration, so an inline value still wins.
-- `@media` and the other at-rules have no effect.
+- `@media` and the other at-rules, including an `@import` that the build did not
+  resolve, have no effect.
+- Native CSS nesting, custom properties, `var()` and `url()` values have no
+  effect.
+- `v-bind()` in a `<style>` block fails the build.
 - The `media`, `type` and `disabled` attributes are ignored.
 - The host draws no focus indicator and no look for `:hover` or `:active`.
 - `:hover` and `:active` change only while the app has an event listener, a

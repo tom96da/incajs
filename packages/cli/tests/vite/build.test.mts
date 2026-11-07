@@ -142,24 +142,6 @@ describe("build", () => {
     expect(output.files).toContain("x.txt");
   }, 20000);
 
-  it("rejects a <style> block, naming the file that used it", async () => {
-    const { entry, outDir, streams } = await makeApp(
-      dedent`
-        <script setup>
-        const msg = "hello";
-        </script>
-        <template><div>{{ msg }}</div></template>
-        <style scoped>
-        div { color: red; }
-        </style>
-      `,
-    );
-
-    await expect(build({ entry, outDir, ...streams })).rejects.toThrow(
-      /App\.vue uses a <style> block/,
-    );
-  }, 20000);
-
   it("rejects a missing @vue/runtime-dom with the install command", async () => {
     const { entry, outDir, streams } = await makeApp(
       dedent`
@@ -190,6 +172,7 @@ describe("build", () => {
         ...manifest,
         type: "module",
         main: "index.js",
+        exports: { ...manifest.exports, ".": "./index.js" },
         peerDependencies: { "@vue/runtime-dom": "*" },
         peerDependenciesMeta: { "@vue/runtime-dom": { optional: true } },
       }),

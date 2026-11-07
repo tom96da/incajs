@@ -4,6 +4,7 @@
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import dedent from "ts-dedent";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import * as adapterCore from "../../src/adapterCore.mts";
@@ -195,6 +196,51 @@ describe("watch", () => {
     expect(JSON.parse(await readFile(path.join(outDir, "inca.json"), "utf8"))).toEqual({
       name: "Demo",
     });
+  }, 20000);
+
+  it("rebuilds a changed stylesheet and keeps the call of an unchanged one", async () => {
+    const { entry, outDir, streams } = await makeApp(
+      dedent`
+        <script setup>
+        import "./a.css";
+        import "./b.css";
+        </script>
+        <template><div /></template>
+      `,
+    );
+    const appDir = path.dirname(entry);
+    await writeFile(path.join(appDir, "a.css"), ".a { width: 1px; }\n");
+    await writeFile(path.join(appDir, "b.css"), ".b { width: 2px; }\n");
+
+    let resolveBuild!: (output: BuildOutput) => void;
+    let nextBuild = new Promise<BuildOutput>((resolve) => {
+      resolveBuild = resolve;
+    });
+    const watcher = await watch({
+      entry,
+      outDir,
+      mode: "development",
+      ...streams,
+      onBuild: (output) => resolveBuild(output),
+      onError: (error) => {
+        throw new Error(error.message);
+      },
+    });
+    watchers.push(watcher);
+
+    await nextBuild;
+    nextBuild = new Promise((resolve) => {
+      resolveBuild = resolve;
+    });
+
+    await writeFile(path.join(appDir, "a.css"), ".a { width: 3px; }\n");
+    const output = await nextBuild;
+
+    const bundle = await readFile(output.entryFile, "utf8");
+    expect(bundle.match(/^updateStyle\(/gm)).toHaveLength(2);
+    expect(bundle).toContain(".a { width: 3px; }");
+    expect(bundle).toContain(".b { width: 2px; }");
+    expect(bundle).not.toContain(".a { width: 1px; }");
   }, 20000);
 
   it("reports a syntax error without throwing", async () => {

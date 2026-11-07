@@ -21,9 +21,8 @@ and where each is reported.
 For example, a `width` nobody set falls through to the app's root element
 and then to 800 × 600.
 
-A feature the engine cannot run yet fails the build. A `<style>` block is one
-(the lists are `packages/cli/src/vite/unsupported.mts` and the Vite integration in
-`packages/cli/src/defaultPlugins.mts`).
+An integration can refuse input the engine cannot run yet. The build then
+fails and names the file.
 
 ## Where a failure is reported
 

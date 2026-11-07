@@ -32,16 +32,6 @@ describe("rejectUnsupported", () => {
     );
   });
 
-  it("rejects a stylesheet import with no extra entries", () => {
-    expect(() => transformOf([], "/app/x.scss")).toThrow("ERR_INCA_UNSUPPORTED_STYLESHEET");
-  });
-
-  it("prefers an extra entry over the stylesheet entry", () => {
-    expect(() => transformOf([ALPHA], "/app/A.vue?type=style&lang.css")).toThrow(
-      "ERR_INCA_TEST_ALPHA",
-    );
-  });
-
   it("lets every other id through", () => {
     expect(transformOf([ALPHA], "/app/main.ts")).toBeNull();
   });
