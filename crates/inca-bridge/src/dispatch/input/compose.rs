@@ -28,8 +28,9 @@ impl EventDispatcher {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
-    use crate::tests::input::{cancel_beforeinput, eval_input, mark, replace, row};
-    use crate::tests::{InputScene, input_scene, listen, log, record, types};
+    use crate::dispatch::input::scene::{InputScene, input_scene, log, record, types};
+    use crate::dispatch::input::scene::{cancel_beforeinput, eval_input, mark, replace, row};
+    use crate::tests::listen;
     use gpui::TestAppContext;
     use inca_gpui::{EventSink as _, InputRequest};
     use inca_test_macros::gpui_cases;
