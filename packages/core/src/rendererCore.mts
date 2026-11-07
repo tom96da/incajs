@@ -3,6 +3,7 @@
 
 import "./timers.mts";
 import "./targets.mts";
+import "./element/fragment.mts";
 
 export { createEventTarget } from "./eventTarget.mts";
 export { window } from "./window.mts";

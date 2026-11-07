@@ -24,7 +24,10 @@ export default defineConfig({
     chunkFileNames: "chunks/[name]-[hash].js",
     codeSplitting: {
       groups: [
-        { name: "hooks", test: /packages\/core\/src\/(callbacks|targets|interfaces|timers)\.mts$/ },
+        {
+          name: "hooks",
+          test: /packages\/core\/src\/(callbacks|targets|interfaces|timers|element\/fragment)\.mts$/,
+        },
       ],
     },
   },

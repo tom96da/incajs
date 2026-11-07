@@ -27,7 +27,7 @@ export function withNodeId<T extends object>(
 /**
  * Whether `value` is a node handle.
  * @param value - the value to check
- * @returns `true` for an element, a comment stand-in or a text handle
+ * @returns `true` for an element, a comment stand-in, a text handle or a fragment
  */
 export function isNode(value: unknown): value is IncaNode {
   return typeof value === "object" && value !== null && nodes.has(value);

@@ -16,9 +16,10 @@ export type EventTargetId = NodeId | "$document" | "$window";
 interface IncaNative {
   rootNodeId(): NodeId;
   createNode(tag: string): NodeId;
-  appendChild(parentId: NodeId, childId: NodeId): void;
-  insertBefore(parentId: NodeId, childId: NodeId, anchorId: NodeId | null): void;
+  appendChild(parentId: NodeId, nodeId: NodeId): number;
+  insertBefore(parentId: NodeId, nodeId: NodeId, refId: NodeId | null): number;
   removeChild(parentId: NodeId, childId: NodeId): void;
+  replaceChild(parentId: NodeId, nodeId: NodeId, childId: NodeId): number;
   setAttribute(nodeId: NodeId, key: string, value: AttributeValue): void;
   getAttribute(nodeId: NodeId, key: string): AttributeValue | null;
   removeAttribute(nodeId: NodeId, key: string): void;

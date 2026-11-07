@@ -50,7 +50,7 @@ export function elementTreeMembers(element: IncaElement): ElementTreeMembers {
       return (children ??= htmlCollectionOf(() => elementChildren(element)));
     },
     get parentElement() {
-      return element.parent;
+      return element.parent?.kind === "element" ? element.parent : null;
     },
     get firstElementChild() {
       return elementChildren(element)[0] ?? null;

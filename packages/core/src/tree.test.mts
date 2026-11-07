@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   appendChild,
+  insertBefore,
+  replaceChild,
   checkSelector,
   focusedNode,
   childNodeIds,
@@ -37,9 +39,10 @@ let nextCallbackId = 0;
 const native = {
   rootNodeId: vi.fn<() => number>(() => 42),
   createNode: vi.fn<(tag: string) => number>((_tag: string) => 1),
-  appendChild: vi.fn<(parentId: number, childId: number) => void>(),
-  insertBefore: vi.fn<(parentId: number, childId: number, anchorId: number | null) => void>(),
+  appendChild: vi.fn<(parentId: number, childId: number) => number>(() => 0),
+  insertBefore: vi.fn<(parentId: number, childId: number, refId: number | null) => number>(() => 0),
   removeChild: vi.fn<(parentId: number, childId: number) => void>(),
+  replaceChild: vi.fn<(parentId: number, nodeId: number, childId: number) => number>(() => 0),
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   getAttribute: vi.fn<(nodeId: number, key: string) => string | number | boolean | null>(
     () => null,
@@ -102,8 +105,21 @@ beforeEach(() => {
 
 describe("wrapper functions forward to __inca_native__", () => {
   it("appendChild", () => {
-    appendChild(1, 2);
+    native.appendChild.mockReturnValueOnce(4);
+    expect(appendChild(1, 2)).toBe(4);
     expect(native.appendChild).toHaveBeenCalledWith(1, 2);
+  });
+
+  it("insertBefore", () => {
+    native.insertBefore.mockReturnValueOnce(5);
+    expect(insertBefore(1, 2, 3)).toBe(5);
+    expect(native.insertBefore).toHaveBeenCalledWith(1, 2, 3);
+  });
+
+  it("replaceChild", () => {
+    native.replaceChild.mockReturnValueOnce(6);
+    expect(replaceChild(1, 2, 3)).toBe(6);
+    expect(native.replaceChild).toHaveBeenCalledWith(1, 2, 3);
   });
 
   it("removeChild", () => {

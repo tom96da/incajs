@@ -15,9 +15,10 @@ import {
 import { nodeListOf } from "./collections.mts";
 import { isDestroyed, nodeOf } from "./lifecycle.mts";
 import type { NodeLink } from "../native.mts";
-import type { IncaElement, IncaNode, NodeMembers } from "./types.mts";
+import type { NodeMutationMembers } from "./nodeMutation.mts";
+import type { IncaElement, IncaFragment, IncaNode, NodeMembers } from "./types.mts";
 
-const NODE_TYPES = { element: 1, text: 3, comment: 8 } as const;
+const NODE_TYPES = { element: 1, text: 3, comment: 8, fragment: 11 } as const;
 
 /**
  * Reads the data of a text node or comment stand-in. A freed node keeps the last data of a text
@@ -36,7 +37,7 @@ export function readData(node: IncaNode): string {
  * @param data - the new data
  */
 export function writeData(node: IncaNode, data: string): void {
-  if (node.kind === "element" || isDestroyed(node)) return;
+  if (node.kind === "element" || node.kind === "fragment" || isDestroyed(node)) return;
   setAttribute(node.__node_id, "value", data);
   if (node.kind === "text") node.text = data;
 }
@@ -46,7 +47,7 @@ export function writeData(node: IncaNode, data: string): void {
  * @param node - the handle the members belong to
  * @returns the members, as getters
  */
-export function nodeTreeMembers(node: IncaNode): NodeMembers {
+export function nodeTreeMembers(node: IncaNode): Omit<NodeMembers, keyof NodeMutationMembers> {
   const id = node.__node_id;
   const reach = (link: NodeLink): IncaNode | null => {
     if (isDestroyed(node)) return null;
@@ -61,10 +62,11 @@ export function nodeTreeMembers(node: IncaNode): NodeMembers {
       return NODE_TYPES[node.kind];
     },
     get nodeName() {
-      return node.kind === "element" ? node.tagName : `#${node.kind}`;
+      if (node.kind === "element") return node.tagName;
+      return node.kind === "fragment" ? "#document-fragment" : `#${node.kind}`;
     },
     get nodeValue() {
-      return node.kind === "element" ? null : readData(node);
+      return node.kind === "element" || node.kind === "fragment" ? null : readData(node);
     },
     set nodeValue(value: string | null) {
       writeData(node, String(value ?? ""));
@@ -77,7 +79,7 @@ export function nodeTreeMembers(node: IncaNode): NodeMembers {
     },
     get parentNode() {
       const parent = reach("parent");
-      if (parent !== null) return parent as IncaElement;
+      if (parent !== null) return parent as IncaElement | IncaFragment;
       return id === rootNodeId() ? document : null;
     },
     get firstChild() {

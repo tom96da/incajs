@@ -20,9 +20,9 @@ function activeElement(): IncaElement | null {
  * passes through it, and it is the next target after the mount container.
  *
  * It has the listener methods `addEventListener`, `removeEventListener` and
- * `dispatchEvent`, the event handler properties such as `onkeydown`, and
- * `activeElement`. A `wheel` listener is passive unless its options say
- * `passive: false`. It is an instance of the global `Document`.
+ * `dispatchEvent`, the event handler properties such as `onkeydown`,
+ * `activeElement` and `createDocumentFragment()`. A `wheel` listener is passive unless its
+ * options say `passive: false`. It is an instance of the global `Document`.
  */
 export const document: IncaDocument = /* @__PURE__ */ Object.defineProperties(
   Object.setPrototypeOf(

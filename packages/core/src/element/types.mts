@@ -129,17 +129,20 @@ export interface NamedNodeMap {
 
 /** The members every node has: what it is, its data and its place in the tree. */
 export interface NodeMembers {
-  /** `1` for an element, `3` for a text node and `8` for a comment stand-in. */
-  readonly nodeType: 1 | 3 | 8;
   /**
-   * The {@link IncaElement.tagName} of an element, `"#text"` for a text node and `"#comment"` for a
-   * comment stand-in.
+   * `1` for an element, `3` for a text node, `8` for a comment stand-in and `11` for a
+   * fragment.
+   */
+  readonly nodeType: 1 | 3 | 8 | 11;
+  /**
+   * The {@link IncaElement.tagName} of an element, `"#text"` for a text node, `"#comment"` for a
+   * comment stand-in and `"#document-fragment"` for a fragment.
    */
   readonly nodeName: string;
   /**
-   * The data of a text node or a comment stand-in, and `null` for an element. Assigning `null` or
-   * `undefined` stores `""` and any other value stores its string. Assigning to an element or to a
-   * freed node does nothing.
+   * The data of a text node or a comment stand-in, and `null` for an element or a
+   * fragment. Assigning `null` or `undefined` stores `""` and any other value stores its string.
+   * Assigning to an element, a fragment or a freed node does nothing.
    */
   nodeValue: string | null;
   /** Whether the node hangs under the mount container, which counts as connected. */
@@ -147,10 +150,10 @@ export interface NodeMembers {
   /** The `document` export. */
   readonly ownerDocument: IncaDocument;
   /**
-   * The parent, `document` for the mount container and `null` for a detached node. A freed node
-   * reads `null`.
+   * The parent, `document` for the mount container and `null` for a detached node. A node inside
+   * a fragment reads the fragment. A freed node reads `null`.
    */
-  readonly parentNode: IncaElement | IncaDocument | null;
+  readonly parentNode: IncaElement | IncaFragment | IncaDocument | null;
   /** The first child, or `null`. */
   readonly firstChild: IncaNode | null;
   /** The last child, or `null`. */
@@ -166,6 +169,34 @@ export interface NodeMembers {
   readonly childNodes: NodeListOf<IncaNode>;
   /** Whether the node has a child. */
   hasChildNodes(): boolean;
+  /**
+   * Appends `node` as the last child. A fragment gives up its children in order and stays empty.
+   * A node that has a parent moves. Throws `HierarchyRequestError` when this node is a text node or
+   * a comment, or when `node` is this node or one of its ancestors.
+   * @returns `node`
+   */
+  appendChild<T extends IncaNode>(node: T): T;
+  /**
+   * Inserts `node` before `child`, or last when `child` is `null` or `undefined`. A fragment gives
+   * up its children in order and stays empty. Throws `HierarchyRequestError` as
+   * {@link NodeMembers.appendChild} does, and `NotFoundError` when `child` is not a child of this
+   * node.
+   * @returns `node`
+   */
+  insertBefore<T extends IncaNode>(node: T, child: IncaNode | null | undefined): T;
+  /**
+   * Removes `child`, which keeps its listeners and can be inserted again. Throws `NotFoundError`
+   * when `child` is not a child of this node.
+   * @returns `child`
+   */
+  removeChild<T extends IncaNode>(child: T): T;
+  /**
+   * Puts `node` in the place of `child`, which keeps its listeners and can be inserted again.
+   * Throws as {@link NodeMembers.insertBefore} does, with `child` as the node that has to be a
+   * child of this node.
+   * @returns `child`
+   */
+  replaceChild<T extends IncaNode>(node: IncaNode, child: T): T;
 }
 
 /** The `textContent` of a node. */
@@ -269,8 +300,8 @@ export interface IncaElement
    * `"DIV"`.
    */
   readonly tagName: string;
-  /** The current parent, or `null` if this node isn't attached to the tree. */
-  parent: IncaElement | null;
+  /** The current parent element or fragment, or `null` if this node isn't attached to the tree. */
+  parent: IncaParent | null;
   /**
    * The children of this node in render order, text leaves included.
    * @internal
@@ -281,7 +312,10 @@ export interface IncaElement
    * follows later changes. A removed element lists the element children it kept.
    */
   readonly children: HTMLCollectionOf<IncaElement>;
-  /** The parent element, or `null` for a detached node and for the mount container. */
+  /**
+   * The parent element, or `null` for a detached node, a node inside a fragment and the mount
+   * container.
+   */
   readonly parentElement: IncaElement | null;
   /** The first child that is an element, or `null`. */
   readonly firstElementChild: IncaElement | null;
@@ -460,7 +494,7 @@ export interface IncaElement
    * The `document` export while the node hangs under the mount container,
    * else the topmost node of its subtree, the node itself without a parent.
    */
-  getRootNode(): IncaElement | IncaDocument;
+  getRootNode(): IncaElement | IncaFragment | IncaDocument;
 }
 
 /** The handle of an `<input>`. */
@@ -481,13 +515,37 @@ export interface IncaText extends NodeMembers, CharacterDataMembers, TextMembers
   readonly __node_id: NodeId;
   /** Discriminates this node within the {@link IncaNode} union. */
   readonly kind: "text";
-  /** The current parent, or `null` if this node isn't attached to the tree. */
-  parent: IncaElement | null;
+  /** The current parent element or fragment, or `null` if this node isn't attached to the tree. */
+  parent: IncaParent | null;
   /**
    * The text content, mirroring the value pushed to the native node.
    */
   text: string;
 }
 
-/** Any node the shadow tree holds: an element, comment, or text leaf. */
-export type IncaNode = IncaElement | IncaText;
+/**
+ * The node `document.createDocumentFragment()` returns: a parentless container whose children move
+ * into the node it is inserted into.
+ */
+export interface IncaFragment extends NodeMembers, TextContentMember {
+  /**
+   * The node id the host knows this node by. Internal to the renderer.
+   * @internal
+   */
+  readonly __node_id: NodeId;
+  /** Discriminates this node within the {@link IncaNode} union. */
+  readonly kind: "fragment";
+  /** A fragment has no parent. */
+  parent: null;
+  /**
+   * The children of this node in order, text leaves included.
+   * @internal
+   */
+  __children: IncaNode[];
+}
+
+/** A node that can have children. */
+export type IncaParent = IncaElement | IncaFragment;
+
+/** Any node the shadow tree holds: an element, comment, text leaf or fragment. */
+export type IncaNode = IncaElement | IncaText | IncaFragment;

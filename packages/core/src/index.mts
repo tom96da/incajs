@@ -3,6 +3,7 @@
 
 // The renderer's value exports live in `rendererCore.mts`.
 
+import "./element/fragment.mts";
 import "./timers.mts";
 
 export { document } from "./document.mts";
@@ -13,8 +14,10 @@ export type {
   Attr,
   HTMLCollectionOf,
   IncaElement,
+  IncaFragment,
   IncaInputElement,
   IncaNode,
+  IncaParent,
   NamedNodeMap,
   NodeListOf,
 } from "./element/types.mts";

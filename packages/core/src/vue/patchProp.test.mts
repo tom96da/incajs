@@ -49,8 +49,15 @@ const BUBBLE = { capture: false, passive: false };
 /** The handler properties, absent: nothing here reads them. */
 const noHandlers = {} as EventHandlers;
 
+/** The mutation members, absent: nothing here calls them. */
+const noMutation = {} as Pick<
+  IncaElement,
+  "appendChild" | "insertBefore" | "removeChild" | "replaceChild"
+>;
+
 const makeEl = (): IncaElement => ({
   ...noHandlers,
+  ...noMutation,
   getAttribute: () => null,
   setAttribute: () => {},
   hasAttribute: () => false,

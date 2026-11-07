@@ -41,6 +41,7 @@ import {
   registerNode,
   withNodeId,
 } from "./lifecycle.mts";
+import { nodeMutationMembers } from "./nodeMutation.mts";
 import { nodeTreeMembers } from "./nodeTree.mts";
 import { scrollIntoViewArgs, scrollPosition } from "./scroll.mts";
 import { characterDataMembers, nullableText, setElementText } from "./text.mts";
@@ -52,6 +53,7 @@ import type {
   EventHandlers,
   IncaElement,
   IncaNode,
+  IncaParent,
   NodeMembers,
   TextContentMember,
 } from "./types.mts";
@@ -211,10 +213,7 @@ export function createIncaElement(
         return null;
       }
       const found = closestNode(id, text);
-      if (found === null) return null;
-      let at: IncaElement | null = element;
-      while (at !== null && at.__node_id !== found) at = at.parent;
-      return at;
+      return found === null ? null : elementOf(found)!;
     },
     querySelector: (...args: [selectors: string]) => {
       const text = selectorText(args, "querySelector");
@@ -235,7 +234,7 @@ export function createIncaElement(
       return nodeListOf(() => found);
     },
     getRootNode: () => {
-      let top = element;
+      let top: IncaParent = element;
       while (top.parent !== null) top = top.parent;
       return top.__node_id === rootNodeId() ? document : top;
     },
@@ -258,6 +257,7 @@ export function createIncaElement(
   Object.defineProperties(element, Object.getOwnPropertyDescriptors(attributeMembers(id, element)));
   Object.defineProperties(element, Object.getOwnPropertyDescriptors(elementTreeMembers(element)));
   Object.defineProperties(element, Object.getOwnPropertyDescriptors(nodeTreeMembers(element)));
+  Object.defineProperties(element, Object.getOwnPropertyDescriptors(nodeMutationMembers(element)));
   Object.defineProperties(
     element,
     Object.getOwnPropertyDescriptors(

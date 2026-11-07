@@ -16,13 +16,14 @@ import {
 } from "../tree.mts";
 import { attributeText, requireArguments } from "./attributes.mts";
 import { isDestroyed, registerNode, releaseWhenCollected, withNodeId } from "./lifecycle.mts";
+import { nodeMutationMembers } from "./nodeMutation.mts";
 import { nodeTreeMembers, readData, writeData } from "./nodeTree.mts";
 import { remove } from "./shadowTree.mts";
 import type { NodeId } from "../types.mts";
 import type {
   CharacterDataMembers,
-  IncaElement,
   IncaNode,
+  IncaParent,
   IncaText,
   NodeMembers,
   TextMembers,
@@ -118,33 +119,6 @@ function textMembers(node: IncaText): TextMembers {
 }
 
 /**
- * Builds the handle of a text node.
- * @param id - the native node's id
- * @param text - the data the node holds
- * @returns the new, parentless handle
- */
-export function createIncaText(id: NodeId, text: string): IncaText {
-  const node: Omit<
-    IncaText,
-    "__node_id" | keyof NodeMembers | keyof CharacterDataMembers | keyof TextMembers
-  > = {
-    kind: "text",
-    parent: null,
-    text,
-  };
-  const handle = withNodeId(node as IncaText, id);
-  for (const members of [
-    nodeTreeMembers(handle),
-    characterDataMembers(handle),
-    textMembers(handle),
-  ]) {
-    Object.defineProperties(handle, Object.getOwnPropertyDescriptors(members));
-  }
-  registerNode(handle);
-  return handle;
-}
-
-/**
  * Creates a text leaf.
  * @param text - the initial text content
  * @returns the new text leaf
@@ -168,10 +142,10 @@ export function setText(node: IncaText, text: string): void {
 /**
  * Replaces all of `el`'s children with at most a single text child holding
  * `text`. An empty string leaves `el` childless.
- * @param el - the container whose children are replaced
+ * @param el - the element or fragment whose children are replaced
  * @param text - the new text content
  */
-export function setElementText(el: IncaElement, text: string): void {
+export function setElementText(el: IncaParent, text: string): void {
   for (const child of el.__children.slice()) remove(child);
   if (!text) return;
 
@@ -179,4 +153,32 @@ export function setElementText(el: IncaElement, text: string): void {
   appendChild(el.__node_id, textNode.__node_id);
   textNode.parent = el;
   el.__children.push(textNode);
+}
+
+/**
+ * Builds the handle of a text node.
+ * @param id - the native node's id
+ * @param text - the data the node holds
+ * @returns the new, parentless handle
+ */
+export function createIncaText(id: NodeId, text: string): IncaText {
+  const node: Omit<
+    IncaText,
+    "__node_id" | keyof NodeMembers | keyof CharacterDataMembers | keyof TextMembers
+  > = {
+    kind: "text",
+    parent: null,
+    text,
+  };
+  const handle = withNodeId(node as IncaText, id);
+  for (const members of [
+    nodeTreeMembers(handle),
+    nodeMutationMembers(handle),
+    characterDataMembers(handle),
+    textMembers(handle),
+  ]) {
+    Object.defineProperties(handle, Object.getOwnPropertyDescriptors(members));
+  }
+  registerNode(handle);
+  return handle;
 }

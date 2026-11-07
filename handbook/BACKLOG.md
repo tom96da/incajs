@@ -100,8 +100,7 @@ A fixed entry is deleted and its ID is never reused.
   - `classList`, `className`, `dataset`, `style`;
   - the modern mutation methods (`append`, `prepend`, `before`, `after`,
     `remove`, `replaceWith`, `replaceChildren`);
-  - the classic mutation methods (`appendChild`, `insertBefore`,
-    `removeChild`, `replaceChild`, `cloneNode`);
+  - the classic mutation method `cloneNode`;
   - `compareDocumentPosition()`, `isSameNode()` and `isEqualNode()`;
   - the HTML parsing members (`innerHTML`, `outerHTML`,
     `insertAdjacentHTML`, `content` of a `<template>`).
@@ -1418,3 +1417,13 @@ A fixed entry is deleted and its ID is never reused.
   a field that holds a function; a decision for `package.json` `"inca"` and the
   JSON configs, which cannot hold one; moving `@vitejs/plugin-vue` from the
   dependencies of `@incajs/cli` to an optional peer of `incajs`.
+
+- **B-271 A `DocumentFragment` lacks the query and listener members**
+  `Units: core · Size: S · Impact: Low`
+
+  The fragment that `document.createDocumentFragment()` returns has the node
+  members, the mutation members, `textContent`, `hasChildNodes()` and
+  `childNodes`. It lacks `querySelector()`, `querySelectorAll()`, `children`,
+  `getElementById()` and the listener methods. There is no global
+  `DocumentFragment`. Fix: add `querySelector()`, `querySelectorAll()`, `children`,
+  `getElementById()` and the listener methods.

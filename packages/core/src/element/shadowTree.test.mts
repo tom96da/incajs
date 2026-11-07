@@ -9,12 +9,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { document } from "../document.mts";
 import { createEventTarget } from "../eventTarget.mts";
 import { htmlCollectionOf, namedNodeMapOf, nodeListOf } from "./collections.mts";
+import { createIncaFragment } from "./fragment.mts";
 import { rectOf } from "./geometry.mts";
 import { createCommentNode, createElementNode } from "./handle.mts";
 import { elementOf, markDestroyed, releaseWhenCollected, unregisterNode } from "./lifecycle.mts";
 import * as tree from "./shadowTree.mts";
 import { createTextNode } from "./text.mts";
 import type { EventLike, IncaEventTarget } from "../types.mts";
+import type { NodeMutationMembers } from "./nodeMutation.mts";
 import type { EventHandlers, IncaElement } from "./types.mts";
 
 let nextId = 1;
@@ -38,9 +40,10 @@ vi.mock("../eventTarget.mts", () => ({
 const host = {
   rootNodeId: vi.fn<() => number>(),
   createNode: vi.fn<(tag: string) => number>(),
-  appendChild: vi.fn<(parentId: number, childId: number) => void>(),
-  insertBefore: vi.fn<(parentId: number, childId: number, anchorId: number | null) => void>(),
+  appendChild: vi.fn<(parentId: number, childId: number) => number>(() => 0),
+  insertBefore: vi.fn<(parentId: number, childId: number, refId: number | null) => number>(() => 0),
   removeChild: vi.fn<(parentId: number, childId: number) => void>(),
+  replaceChild: vi.fn<(parentId: number, nodeId: number, childId: number) => number>(() => 0),
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   getAttribute: vi.fn<(nodeId: number, key: string) => string | number | boolean | null>(
     () => null,
@@ -116,9 +119,13 @@ beforeEach(() => {
 /** The handler properties, absent: nothing here reads them. */
 const noHandlers = {} as EventHandlers;
 
+/** The mutation members, absent: nothing here calls them. */
+const noMutation = {} as NodeMutationMembers;
+
 function element(): IncaElement {
   return {
     ...noHandlers,
+    ...noMutation,
     __node_id: nextId++,
     id: "",
     kind: "element",
@@ -192,6 +199,10 @@ describe("createElement", () => {
       nextSibling: null,
       childNodes: expect.any(Object),
       hasChildNodes: expect.any(Function),
+      appendChild: expect.any(Function),
+      insertBefore: expect.any(Function),
+      removeChild: expect.any(Function),
+      replaceChild: expect.any(Function),
       focus: expect.any(Function),
       blur: expect.any(Function),
       click: expect.any(Function),
@@ -522,6 +533,15 @@ describe("parentNode / nextSibling", () => {
     expect(tree.parentNode(first)).toBe(parent);
     expect(tree.nextSibling(first)).toBe(second);
     expect(tree.nextSibling(second)).toBeNull();
+  });
+
+  it("parentNode returns null for a node inside a fragment", () => {
+    const group = createIncaFragment(host.createNode("#fragment"));
+    const child = element();
+    group.__children.push(child);
+    child.parent = group;
+
+    expect(tree.parentNode(child)).toBeNull();
   });
 
   it("return null for a node with no parent", () => {

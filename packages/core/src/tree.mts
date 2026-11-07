@@ -29,37 +29,60 @@ export function createNode(tag: TagName): NodeId {
 }
 
 /**
- * Attaches `childId` as the last child of `parentId`. A thin wrapper over
+ * Attaches `nodeId` as the last child of `parentId`. A thin wrapper over
  * {@link insertBefore} with no anchor.
  * @param parentId - the container to attach to
- * @param childId - the node being attached
+ * @param nodeId - the node being attached, or a fragment whose children are attached
+ * @returns the position of the first attached node among the children of `parentId`
+ * @throws {DOMException} `HierarchyRequestError` as {@link insertBefore} does
  */
-export function appendChild(parentId: NodeId, childId: NodeId): void {
-  native().appendChild(parentId, childId);
+export function appendChild(parentId: NodeId, nodeId: NodeId): number {
+  return native().appendChild(parentId, nodeId);
 }
 
 /**
- * Attaches `childId` as a child of `parentId`, positioned before `anchorId`
- * (or at the end, if `anchorId` is `null`). If `anchorId` names a real node
- * that just isn't currently a child of `parentId`, this falls back to
- * appending at the end. Only a wholly unknown `anchorId` raises.
+ * Attaches `nodeId` as a child of `parentId`, positioned before `refId`
+ * (or at the end, if `refId` is `null`). A fragment attaches its children in order.
  * @param parentId - the container to attach to
- * @param childId - the node being attached
- * @param anchorId - the sibling to insert before, or `null` to append at the end
+ * @param nodeId - the node being attached, or a fragment whose children are attached
+ * @param refId - the sibling to insert before, or `null` to append at the end
+ * @returns the position of the first attached node among the children of `parentId`
+ * @throws {DOMException} `HierarchyRequestError` when `parentId` is a text node or a comment,
+ *   `nodeId` is `parentId` or an ancestor of it, or `nodeId` is the root container;
+ *   `NotFoundError` when `refId` is not a child of `parentId`
+ * @throws {TypeError} when an id names no node
  */
-export function insertBefore(parentId: NodeId, childId: NodeId, anchorId: NodeId | null): void {
-  native().insertBefore(parentId, childId, anchorId);
+export function insertBefore(parentId: NodeId, nodeId: NodeId, refId: NodeId | null): number {
+  return native().insertBefore(parentId, nodeId, refId);
 }
 
 /**
- * Detaches `childId` from `parentId`. The detached node keeps its own children
+ * Detaches `childId` from `parentId`. The detached node keeps its own children and its listeners,
  * and is freed at the start of the next frame unless it is inserted or held
- * with {@link holdNode} by then.
+ * with {@link holdNode} by then. An unknown `childId` does nothing.
  * @param parentId - the current container
  * @param childId - the node being detached
+ * @throws {DOMException} `NotFoundError` when `childId` is a node that is not a child of `parentId`
+ * @throws {TypeError} when `parentId` names no node
  */
 export function removeChild(parentId: NodeId, childId: NodeId): void {
   native().removeChild(parentId, childId);
+}
+
+/**
+ * Puts `nodeId` where `childId` is a child of `parentId`. `childId` leaves the tree with its
+ * subtree, keeps its listeners and is freed at the start of the next frame unless it is held with
+ * {@link holdNode}. A fragment puts its children there in order.
+ * @param parentId - the container that holds `childId`
+ * @param nodeId - the node being attached, or a fragment whose children are attached
+ * @param childId - the child being replaced
+ * @returns the position of the first attached node among the children of `parentId`
+ * @throws {DOMException} `HierarchyRequestError` and `NotFoundError` as {@link insertBefore} does,
+ *   with `childId` as the node that has to be a child
+ * @throws {TypeError} when an id names no node
+ */
+export function replaceChild(parentId: NodeId, nodeId: NodeId, childId: NodeId): number {
+  return native().replaceChild(parentId, nodeId, childId);
 }
 
 /**
