@@ -1538,3 +1538,15 @@ A fixed entry is deleted and its ID is never reused.
 
   The host has no `Blob`, so a script that calls `URL.createObjectURL` throws a
   `TypeError`. Fix: add `Blob`, then both functions.
+
+- **B-284 An edit saved right after a failed first load can be lost under HMR**
+  `Units: cli · Size: S · Impact: Low`
+
+  When the first load of the app fails, the retry starts as soon as the first
+  changed file is reported. A second file saved within a few milliseconds is
+  not yet invalidated in the module graph, so the retry reads its old text, and
+  the update that follows is dropped because the module is still loading. The
+  app keeps the old text until the next edit. Vite in a browser ended with the
+  new text in all 84 measured runs. Fix: wait until the reported files settle
+  before the retry and redesign the retry test that saves two files back to
+  back, so it no longer depends on the order the watcher reports them.
