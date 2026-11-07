@@ -10,6 +10,21 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- nodes have `appendChild()`, `insertBefore()`, `removeChild()` and `replaceChild()` ([c9fec6f](https://github.com/tom96da/incajs/commit/c9fec6f), [35c8af1](https://github.com/tom96da/incajs/commit/35c8af1))
+- `document.createDocumentFragment()` is available ([c9fec6f](https://github.com/tom96da/incajs/commit/c9fec6f))
+- nodes have `cloneNode()` ([b09c413](https://github.com/tom96da/incajs/commit/b09c413), [1b15c99](https://github.com/tom96da/incajs/commit/1b15c99))
+- nodes have `contains()`, `compareDocumentPosition()`, `isSameNode()` and `isEqualNode()` ([b09c413](https://github.com/tom96da/incajs/commit/b09c413), [1b15c99](https://github.com/tom96da/incajs/commit/1b15c99))
+- a `<style>` block, a `scoped` style and a CSS import apply in the app ([6e960a0](https://github.com/tom96da/incajs/commit/6e960a0))
+- an edit of a style block keeps the state of the components under experimental HMR ([6e960a0](https://github.com/tom96da/incajs/commit/6e960a0))
+- `:hover`, `:active`, `:focus` and `:focus-within` apply to the rules of a style element ([001bf7b](https://github.com/tom96da/incajs/commit/001bf7b), [d985bd8](https://github.com/tom96da/incajs/commit/d985bd8))
+- `URL` and `URLSearchParams` are available ([c3405ab](https://github.com/tom96da/incajs/commit/c3405ab))
+
+### Fixed
+
+- a text node or comment that was removed stays usable after the next frame ([4eb41ff](https://github.com/tom96da/incajs/commit/4eb41ff))
+
 ## [0.0.28] - 2026-11-03
 
 ### Added
