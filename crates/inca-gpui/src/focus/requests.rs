@@ -179,9 +179,9 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
-    use crate::AttributeValue;
     use crate::tests::*;
     use gpui::TestAppContext;
+    use inca_node::AttributeValue;
 
     #[gpui::test]
     fn removing_tabindex_blurs_the_focused_node(cx: &mut TestAppContext) {

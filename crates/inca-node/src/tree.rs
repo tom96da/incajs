@@ -26,20 +26,20 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
+mod computed;
 mod insertion;
 mod lifetime;
 mod links;
 mod props;
 mod relations;
 mod state;
-mod stylesheet;
 mod text;
 
 /// The tag of a node that stands in for a comment.
 pub(crate) const COMMENT_TAG: &str = "#comment";
 
 /// The tag of a text content node.
-pub(crate) const TEXT_TAG: &str = "#text";
+pub const TEXT_TAG: &str = "#text";
 
 /// The tag of a fragment: a node that holds children, has no parent and is never connected.
 pub(crate) const FRAGMENT_TAG: &str = "#fragment";
@@ -117,7 +117,7 @@ impl From<bool> for AttributeValue {
 /// The text JavaScript makes of a number. `-0` prints as `0`, and values from `1e21` up or below
 /// `1e-6` use the exponent form.
 #[must_use]
-pub(crate) fn js_number_text(value: f64) -> String {
+pub fn js_number_text(value: f64) -> String {
     if value.is_nan() {
         return "NaN".to_owned();
     }
@@ -290,7 +290,7 @@ pub struct VirtualTree {
     /// Bumped by every change to a node, a link or the root, so a cache built from the tree can
     /// tell that it is stale.
     generation: u64,
-    style_cache: RefCell<stylesheet::SheetCache>,
+    style_cache: RefCell<computed::SheetCache>,
     interaction: state::InteractionState,
 }
 

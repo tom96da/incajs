@@ -1,13 +1,31 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Reads a [`VirtualTree`] node into a plain description of its element and style.
+//!
+//! [`build_spec`] turns a node and its subtree into an [`ElementSpec`] that carries a
+//! [`StyleSpec`] per node. The spec is plain data, so it is unit-testable on its own.
+//!
+//! Unrecognized `style_props` keys, malformed values and unrecognized `attributes` keys are
+//! ignored. Reading runs on the render path, where nothing can raise a catchable exception.
+//! [`style_warning`] lets the caller that stores a style report an unknown key, an invalid color
+//! or a value of an unsupported shape once, when it is set.
+
 use std::collections::HashMap;
 
-use super::parse::style_spec_from_props;
-use crate::input::sanitized;
+mod color;
+mod keys;
+mod parse;
+
+pub(crate) use keys::style_key;
+pub use keys::{STYLE_KEYS, StyleKey, ValueKind, style_warning};
+pub use parse::declared_window_size;
+
+use self::parse::style_spec_from_props;
+use crate::input_text::sanitized;
 use crate::tree::{AttributeValue, NodeId, TEXT_TAG, VirtualNode, VirtualTree};
 
-/// What kind of element a [`VirtualNode`](crate::tree::VirtualNode) maps to.
+/// What kind of element a [`VirtualNode`] maps to.
 ///
 /// Three kinds exist, chosen by the `"#text"` and `"input"` tag names.
 ///
@@ -22,14 +40,13 @@ pub enum ElementTag {
     Text(String),
     /// An `"input"` tag: one line of text the host holds per node, drawn
     /// over the box. `placeholder` is its `placeholder` attribute without CR
-    /// and LF ([`crate::input::sanitized`]; missing or non-string → empty).
+    /// and LF ([`crate::input_text::sanitized`]; missing or non-string → empty).
     /// `editable` is false with a `readonly` or `disabled` attribute. Its
     /// children are not rendered.
     Input { placeholder: String, editable: bool },
 }
 
-/// A length in pixels, or `"auto"`. `gpui`-independent mirror of the subset
-/// of [`gpui::Length`] this layer supports.
+/// A length in pixels, or `"auto"`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LengthSpec {
     Px(f64),
@@ -86,7 +103,7 @@ macro_rules! keywords {
 }
 
 keywords! {
-    /// `gpui`-independent mirror of [`gpui::Display`]'s supported variants.
+    /// The values of `display`.
     pub enum DisplaySpec {
         Flex = "flex",
         Block = "block",
@@ -96,7 +113,7 @@ keywords! {
 }
 
 keywords! {
-    /// `gpui`-independent mirror of [`gpui::FlexDirection`].
+    /// The values of `flex-direction`.
     pub enum FlexDirectionSpec {
         Row = "row",
         Column = "column",
@@ -106,9 +123,7 @@ keywords! {
 }
 
 keywords! {
-    /// `gpui`-independent mirror of the common subset of `gpui`'s `AlignItems`
-    /// and `JustifyContent` (`= AlignContent`) enums: the variants both share
-    /// and that this layer supports.
+    /// The values of `align-items` and `justify-content`.
     pub enum AlignSpec {
         Start = "start" | "flex-start",
         End = "end" | "flex-end",
@@ -118,7 +133,7 @@ keywords! {
 }
 
 keywords! {
-    /// `gpui`-independent mirror of [`gpui::Overflow`]'s supported variants.
+    /// The values of `overflow`.
     /// `"auto"` names [`OverflowSpec::Scroll`].
     pub enum OverflowSpec {
         Visible = "visible",
@@ -149,9 +164,9 @@ impl<T> Default for EdgesSpec<T> {
     }
 }
 
-/// A plain-data, `gpui`-independent style description, built from a
-/// [`VirtualNode`](crate::tree::VirtualNode)'s `style_props`.
-/// [`STYLE_KEYS`](crate::STYLE_KEYS) lists the keys it is read from.
+/// A plain-data style description, built from a
+/// [`VirtualNode`]'s `style_props`.
+/// [`STYLE_KEYS`] lists the keys it is read from.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct StyleSpec {
     pub display: Option<DisplaySpec>,
@@ -198,14 +213,14 @@ pub struct StyleSpec {
 
 impl StyleSpec {
     /// Whether either axis is `hidden` or scrolls, which makes the node a scroll container.
-    pub(super) fn is_scroll_container(&self) -> bool {
+    #[must_use]
+    pub fn is_scroll_container(&self) -> bool {
         let scrollable = |axis| matches!(axis, Some(OverflowSpec::Hidden | OverflowSpec::Scroll));
         scrollable(self.overflow_x) || scrollable(self.overflow_y)
     }
 }
 
-/// A `gpui`-independent, recursive description of one
-/// [`VirtualNode`](crate::tree::VirtualNode) and its subtree.
+/// A recursive description of one [`VirtualNode`] and its subtree.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ElementSpec {
     pub id: NodeId,

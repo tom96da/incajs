@@ -8,21 +8,21 @@ use cssparser::{
     QualifiedRuleParser, RuleBodyItemParser, RuleBodyParser, StyleSheetParser,
 };
 
-use crate::element::{style_key, style_warning};
 use crate::selector::Selectors;
+use crate::spec::{style_key, style_warning};
 use crate::tree::AttributeValue;
 
 /// One qualified rule: its selectors and its declarations in source order.
 #[derive(Debug)]
-pub(super) struct Rule {
-    pub(super) selectors: Selectors,
-    pub(super) declarations: Vec<(String, AttributeValue)>,
+pub(crate) struct Rule {
+    pub(crate) selectors: Selectors,
+    pub(crate) declarations: Vec<(String, AttributeValue)>,
 }
 
 /// The rules of one `<style>` element.
 #[derive(Debug, Default)]
-pub(super) struct StyleSheet {
-    pub(super) rules: Vec<Rule>,
+pub(crate) struct StyleSheet {
+    pub(crate) rules: Vec<Rule>,
 }
 
 /// The declarations of one rule block and the warnings its invalid declarations raise.
@@ -171,7 +171,7 @@ fn at_rule_name(source: &str) -> &str {
 
 impl StyleSheet {
     /// The rules of `text` and one line for each rule, at-rule or declaration it drops.
-    pub(super) fn parse(text: &str) -> (Self, Vec<String>) {
+    pub(crate) fn parse(text: &str) -> (Self, Vec<String>) {
         let mut input = Parser::new(text);
         let mut rules = Vec::new();
         let mut warnings = Vec::new();

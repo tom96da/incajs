@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use super::keys::{read_edges, read_prop};
-use super::spec::{EdgesSpec, LengthSpec, OverflowSpec, StyleSpec};
+use super::{EdgesSpec, LengthSpec, OverflowSpec, StyleSpec};
 use crate::tree::{AttributeValue, NodeId, VirtualTree};
 
 /// One or two overflow values, x first; a single value applies to both axes.
@@ -202,10 +202,8 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
-    use crate::element::style::apply_style;
     use crate::tests::*;
     use crate::{AlignSpec, FlexDirectionSpec, VirtualTree, build_spec};
-    use gpui::{Length, StyleRefinement, px};
     use rstest::rstest;
 
     #[test]
@@ -407,14 +405,6 @@ mod tests {
     }
 
     #[test]
-    fn clip_overflow_reaches_the_gpui_refinement_as_clip() {
-        let mut refinement = StyleRefinement::default();
-        apply_style(&mut refinement, &style_of(&[("overflow", text("clip"))]));
-        assert_eq!(refinement.overflow.x, Some(gpui::Overflow::Clip));
-        assert_eq!(refinement.overflow.y, Some(gpui::Overflow::Clip));
-    }
-
-    #[test]
     fn malformed_enum_value_is_ignored_not_a_panic() {
         let mut tree = VirtualTree::new();
         let id = tree.create_node("div").unwrap();
@@ -423,20 +413,6 @@ mod tests {
 
         let spec = build_spec(&tree, id).unwrap();
         assert_eq!(spec.style.display, None);
-    }
-
-    #[test]
-    fn applying_a_style_keeps_the_values_the_spec_leaves_unset() {
-        let mut style = StyleRefinement::default();
-        apply_style(
-            &mut style,
-            &style_of(&[("display", "flex".into()), ("width", num(120.0))]),
-        );
-        apply_style(&mut style, &style_of(&[("height", num(40.0))]));
-
-        assert_eq!(style.display, Some(gpui::Display::Flex));
-        assert_eq!(style.size.width, Some(Length::from(px(120.0))));
-        assert_eq!(style.size.height, Some(Length::from(px(40.0))));
     }
 
     #[rstest]

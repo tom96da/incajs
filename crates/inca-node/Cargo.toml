@@ -1,0 +1,32 @@
+#:schema https://json.schemastore.org/cargo.json
+
+# Copyright (c) 2026 tom96da
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "inca-node"
+description = "The retained virtual tree, selectors and style spec inca renders."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords.workspace = true
+publish = false
+
+[lib]
+name = "inca_node"
+
+[dependencies]
+cssparser.workspace = true
+precomputed-hash.workspace = true
+selectors.workspace = true
+
+[dev-dependencies]
+rstest.workspace = true
+
+[lints]
+workspace = true

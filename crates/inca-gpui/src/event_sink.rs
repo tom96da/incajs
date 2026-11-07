@@ -8,7 +8,7 @@ use gpui::{
 
 use crate::element::NodeLayout;
 use crate::input::{InputLayout, InputPayload, InputRequest, InputState, InputType};
-use crate::tree::NodeId;
+use inca_node::tree::NodeId;
 
 mod key;
 mod sink;

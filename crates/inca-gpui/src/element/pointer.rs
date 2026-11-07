@@ -7,9 +7,9 @@ use gpui::{
     MouseMoveEvent, MouseUpEvent, ScrollHandle, ScrollWheelEvent, Window, canvas,
 };
 
-use super::scroll::{RootStep, WheelChain, next_offset};
+use super::wheel::{RootStep, WheelChain, next_offset};
 use crate::event_sink::{EventPayload, EventSink, button_index};
-use crate::tree::NodeId;
+use inca_node::tree::NodeId;
 
 mod tracker;
 

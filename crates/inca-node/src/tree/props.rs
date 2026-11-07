@@ -4,7 +4,7 @@
 //! The attributes and style props of a node.
 
 use super::{AttributeValue, NodeId, TreeError, VirtualTree};
-use crate::element::style_key;
+use crate::spec::style_key;
 
 impl VirtualTree {
     /// Sets (inserting or overwriting) one attribute prop.
@@ -73,7 +73,7 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
-    use crate::element::style_key;
+    use crate::spec::style_key;
     use rstest::rstest;
     use std::borrow::Cow;
 

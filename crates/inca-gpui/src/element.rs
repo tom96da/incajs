@@ -1,42 +1,26 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Converts a retained [`VirtualTree`](crate::tree::VirtualTree) into real `gpui` elements.
-//!
-//! Split into two layers:
-//! - a pure spec layer ([`ElementSpec`]/[`StyleSpec`]/[`build_spec`]) that
-//!   has no `gpui` dependency and is exhaustively unit-testable on its own;
-//! - a thin gpui layer ([`build_element`]/[`render_tree`]) that turns that
-//!   spec into a real [`AnyElement`](gpui::AnyElement).
-//!
-//! Unrecognized `style_props` keys, malformed values and unrecognized
-//! `attributes` keys are ignored. This runs on the render path, where nothing
-//! can raise a catchable exception. [`style_warning`] lets the caller that
-//! stores a style report an unknown key, an invalid color or a value of a
-//! shape the host does not support once, when it is set.
+//! Converts a retained [`VirtualTree`](inca_node::tree::VirtualTree) into real `gpui` elements
+//! ([`build_element`]/[`render_tree`]), reading each node through
+//! [`build_spec`](inca_node::build_spec).
 
 mod build;
 mod children;
-mod color;
 mod input;
-mod keys;
-mod parse;
 mod pointer;
-pub mod scroll;
-mod spec;
 mod style;
+mod wheel;
 
 pub use build::{
     NodeLayout, build_element, build_element_with_events, debug_selector, render_tree,
     render_tree_with_events,
 };
 pub use input::TextInputHandler;
-pub(crate) use keys::style_key;
-pub use keys::{STYLE_KEYS, StyleKey, ValueKind, style_warning};
-pub use parse::declared_window_size;
 pub use pointer::{clear_presses, mouse_target, opens_context_menu, pressed_target};
-pub use spec::{
-    AlignSpec, ColorSpec, DisplaySpec, EdgesSpec, ElementSpec, ElementTag, FlexDirectionSpec,
-    LengthSpec, OverflowSpec, StyleSpec, WheelAxes, build_spec, hidden_by_attribute,
-    is_scroll_container, wheel_axes,
-};
+
+/// The scroll geometry and `rect_of`, which reads a laid-out box.
+pub mod scroll {
+    pub use super::children::rect_of;
+    pub use inca_node::scroll::{Align, Rect, scroll_chain, scroll_delta};
+}

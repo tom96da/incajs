@@ -41,10 +41,10 @@ pub trait EventSink {
     fn scroll_handle(&self, node_id: NodeId) -> Option<gpui::ScrollHandle>;
 
     /// The axes along which a wheel step can scroll `node_id` now, read from
-    /// the live tree (see [`crate::wheel_axes`]). `None` when the node is unknown,
+    /// the live tree (see [`inca_node::wheel_axes`]). `None` when the node is unknown,
     /// detached, hidden or inert. A shown container without `scroll` overflow
     /// gives `false` on both axes.
-    fn wheel_axes(&self, node_id: NodeId) -> Option<crate::WheelAxes>;
+    fn wheel_axes(&self, node_id: NodeId) -> Option<inca_node::WheelAxes>;
 
     /// Forgets every recorded layout. Called before each frame's tree is
     /// built, so only nodes laid out in the new frame have a record.
@@ -167,7 +167,7 @@ macro_rules! noop_sink_methods {
     ($($name:ident),* $(,)?) => { $(noop_sink_methods!(@one $name);)* };
     (@one clear_layout) => { fn clear_layout(&self) {} };
     (@one record_layout) => {
-        fn record_layout(&self, _: $crate::tree::NodeId, _: $crate::element::NodeLayout) {}
+        fn record_layout(&self, _: inca_node::NodeId, _: $crate::element::NodeLayout) {}
     };
     (@one pointer_moved) => {
         fn pointer_moved(&self, _: gpui::Point<gpui::Pixels>, _: &mut gpui::App) {}
@@ -179,7 +179,7 @@ macro_rules! noop_sink_methods {
     (@one hover_changed) => {
         fn hover_changed(
             &self,
-            _: $crate::tree::NodeId,
+            _: inca_node::NodeId,
             _: bool,
             _: &mut gpui::Window,
             _: &mut gpui::App,
@@ -187,13 +187,13 @@ macro_rules! noop_sink_methods {
         }
     };
     (@one pointer_over) => {
-        fn pointer_over(&self, _: $crate::tree::NodeId, _: &mut gpui::Window, _: &mut gpui::App) {}
+        fn pointer_over(&self, _: inca_node::NodeId, _: &mut gpui::Window, _: &mut gpui::App) {}
     };
     (@one pointer_input) => {
         fn pointer_input(
             &self,
             _: &str,
-            _: $crate::tree::NodeId,
+            _: inca_node::NodeId,
             _: &$crate::event_sink::EventPayload,
             _: &mut gpui::Window,
             _: &mut gpui::App,
@@ -204,8 +204,8 @@ macro_rules! noop_sink_methods {
         fn pointer_released(
             &self,
             _: &gpui::MouseUpEvent,
-            _: Option<$crate::tree::NodeId>,
-            _: $crate::tree::NodeId,
+            _: Option<inca_node::NodeId>,
+            _: inca_node::NodeId,
             _: &mut gpui::Window,
             _: &mut gpui::App,
         ) {
@@ -223,17 +223,17 @@ macro_rules! noop_sink_methods {
         }
     };
     (@one input) => {
-        fn input(&self, _: $crate::tree::NodeId) -> Option<$crate::input::InputState> {
+        fn input(&self, _: inca_node::NodeId) -> Option<$crate::input::InputState> {
             None
         }
     };
     (@one record_input) => {
-        fn record_input(&self, _: $crate::tree::NodeId, _: $crate::input::InputLayout) {}
+        fn record_input(&self, _: inca_node::NodeId, _: $crate::input::InputLayout) {}
     };
     (@one input_request) => {
         fn input_request(
             &self,
-            _: $crate::tree::NodeId,
+            _: inca_node::NodeId,
             _: $crate::input::InputRequest,
             _: &mut gpui::Window,
             _: &mut gpui::App,

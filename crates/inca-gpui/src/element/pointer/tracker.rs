@@ -160,12 +160,12 @@ mod tests {
     use super::*;
     use crate::element::pointer::tests::{LEAF, at, report};
     use crate::tests::*;
-    use crate::tree::VirtualTree;
     use crate::{clear_presses, pressed_target};
     use gpui::prelude::*;
     use gpui::{
         MouseButton, ScrollDelta, ScrollWheelEvent, TestAppContext, VisualTestContext, point, px,
     };
+    use inca_node::tree::VirtualTree;
     use std::rc::Rc;
 
     /// Runs one of each mouse event at `pos`.

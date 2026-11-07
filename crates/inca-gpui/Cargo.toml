@@ -5,7 +5,7 @@
 
 [package]
 name = "inca-gpui"
-description = "The retained virtual tree and gpui element/event layer inca renders through. It depends on gpui only."
+description = "The gpui element, focus and event layer inca renders through."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -29,10 +29,8 @@ path = "examples/gpui/hello_world.rs"
 test-support = []
 
 [dependencies]
-cssparser.workspace = true
 gpui.workspace = true
-precomputed-hash.workspace = true
-selectors.workspace = true
+inca-node = { path = "../inca-node" }
 unicode-segmentation.workspace = true
 
 [dev-dependencies]

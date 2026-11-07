@@ -2762,14 +2762,12 @@ dependencies = [
 name = "inca-gpui"
 version = "0.0.29"
 dependencies = [
- "cssparser",
  "env_logger",
  "gpui",
  "gpui_platform",
+ "inca-node",
  "inca-test-macros",
- "precomputed-hash",
  "rstest",
- "selectors",
  "unicode-segmentation",
 ]
 
@@ -2805,6 +2803,16 @@ dependencies = [
  "serde_json",
  "unicode-width",
  "url",
+]
+
+[[package]]
+name = "inca-node"
+version = "0.0.29"
+dependencies = [
+ "cssparser",
+ "precomputed-hash",
+ "rstest",
+ "selectors",
 ]
 
 [[package]]

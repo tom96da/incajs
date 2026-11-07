@@ -12,10 +12,9 @@ use gpui::{Bounds, Pixels, point, px};
 use unicode_segmentation::UnicodeSegmentation;
 
 mod edit;
-mod text;
 
 pub use edit::{Edit, InputPayload};
-pub use text::{pasted, sanitized, typed};
+pub use inca_node::input_text::{pasted, sanitized, typed};
 
 /// The width of the caret bar in pixels.
 pub const CARET_WIDTH: f32 = 1.0;
