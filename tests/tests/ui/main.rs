@@ -21,6 +21,7 @@ mod layout;
 mod lists;
 mod members;
 mod modifiers;
+mod node_mutation;
 mod propagation;
 mod reactivity;
 mod removed;
