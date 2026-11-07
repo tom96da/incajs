@@ -5,7 +5,8 @@
 
 use gpui::{App, Window};
 use inca_gpui::event_sink::hover_path_difference;
-use inca_gpui::{EventPayload, MousePayload, NO_BUTTON, NodeId};
+use inca_gpui::{EventPayload, MousePayload, NO_BUTTON};
+use inca_node::NodeId;
 
 use super::{EventDispatcher, pointer};
 
@@ -119,7 +120,8 @@ mod tests {
     };
     use crate::{EventDispatcher, Host};
     use gpui::{TestAppContext, point, px};
-    use inca_gpui::{EventPayload, EventSink as _, MousePayload, NodeId};
+    use inca_gpui::{EventPayload, EventSink as _, MousePayload};
+    use inca_node::NodeId;
     use std::cell::RefCell;
     use std::rc::Rc;
 

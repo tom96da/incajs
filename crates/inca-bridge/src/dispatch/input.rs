@@ -5,11 +5,11 @@
 //! input, the editing keys and the mouse selection.
 
 use gpui::{App, ClipboardItem, Keystroke, MouseButton, Window};
-use inca_gpui::input::pasted;
 use inca_gpui::{
-    EventPayload, InputPayload, InputState, InputType, Motion, MousePayload, NodeId,
-    is_disabled_control, opens_context_menu,
+    EventPayload, InputPayload, InputState, InputType, Motion, MousePayload, opens_context_menu,
 };
+use inca_node::input_text::pasted;
+use inca_node::{NodeId, is_disabled_control};
 
 use crate::focus::FocusTransition;
 

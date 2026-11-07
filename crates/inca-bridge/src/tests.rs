@@ -9,8 +9,9 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use gpui::{AppContext as _, Context, TestAppContext, Window, point, px};
-use inca_gpui::{EventPayload, EventSink, MousePayload, NodeId, PointerSource, WheelPayload};
+use inca_gpui::{EventPayload, EventSink, MousePayload, PointerSource, WheelPayload};
 use inca_jsenv::Clock;
+use inca_node::NodeId;
 
 use crate::test_support::{Reported, capture_reporter, engine_for, engine_on_clock};
 use crate::{EventDispatcher, Host};
@@ -190,7 +191,7 @@ pub(crate) fn eval_json(dispatcher: &EventDispatcher, js: &str) -> serde_json::V
 
 /// Whether `node` matches the state class `class`.
 pub(crate) fn state(host: &Host, node: NodeId, class: &str) -> bool {
-    inca_gpui::matches_selector(&host.tree, node, class).unwrap()
+    inca_node::matches_selector(&host.tree, node, class).unwrap()
 }
 
 /// Appends a `<style>` element that holds `css` under the root.
@@ -207,7 +208,8 @@ pub(crate) mod keys {
     use std::rc::Rc;
 
     use gpui::{App, AppContext as _, Keystroke, TestAppContext, Window, WindowHandle, WindowId};
-    use inca_gpui::{EventPayload, EventSink, KeyPayload, NodeId};
+    use inca_gpui::{EventPayload, EventSink, KeyPayload};
+    use inca_node::NodeId;
 
     use super::mouse_at;
     use crate::test_support::{TestRoot, engine_for, focusable_tree, mount_active};
@@ -535,7 +537,7 @@ pub(crate) fn focusable_node(dispatcher: &EventDispatcher, host: &Rc<RefCell<Hos
     let root = host.root();
     host.tree.append_child(root, node).unwrap();
     host.tree
-        .set_attribute(node, "tabindex", inca_gpui::AttributeValue::from("0"))
+        .set_attribute(node, "tabindex", inca_node::AttributeValue::from("0"))
         .unwrap();
     host.focus.mark_tab_dirty(node);
     drop(host);

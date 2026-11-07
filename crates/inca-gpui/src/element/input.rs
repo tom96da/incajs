@@ -382,11 +382,12 @@ mod tests {
     use super::*;
     use crate::element::input::text_runs;
     use crate::tests::*;
-    use crate::{VirtualTree, render_tree, render_tree_with_events};
+    use crate::{render_tree, render_tree_with_events};
     use gpui::InputHandler as _;
     use gpui::{
         Context, Keystroke, Render, TestAppContext, TextStyle, VisualTestContext, point, size,
     };
+    use inca_node::VirtualTree;
     use inca_test_macros::gpui_cases;
     use rstest::rstest;
     use std::ops::Range;

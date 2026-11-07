@@ -7,7 +7,7 @@ use crate::dispatch::EventDispatcher;
 use gpui::App;
 use gpui::Window;
 use inca_gpui::EventPayload;
-use inca_gpui::NodeId;
+use inca_node::NodeId;
 impl EventDispatcher {
     /// Fires the composition event `event` at `node` with `data`.
     pub(super) fn fire_composition(

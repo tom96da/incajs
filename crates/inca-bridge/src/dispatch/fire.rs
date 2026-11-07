@@ -5,7 +5,8 @@
 
 use gpui::{App, Window};
 use inca_gpui::event_sink::{flags_of, with_screen};
-use inca_gpui::{EventPayload, MousePayload, NodeId, PointerSource, is_disabled_control};
+use inca_gpui::{EventPayload, MousePayload, PointerSource};
+use inca_node::{NodeId, is_disabled_control};
 
 use super::EventDispatcher;
 use crate::EventTargetId;

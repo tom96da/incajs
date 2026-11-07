@@ -8,7 +8,7 @@ use std::rc::Rc;
 
 use rquickjs::{Ctx, Exception, Result as JsResult};
 
-use inca_gpui::NodeId;
+use inca_node::NodeId;
 
 use super::Natives;
 use super::convert::{JsNodeId, existing_node};

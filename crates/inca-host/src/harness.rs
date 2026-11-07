@@ -11,8 +11,8 @@ use std::time::Duration;
 
 use gpui::{KeyUpEvent, Keystroke, TestAppContext, VisualTestContext, WindowHandle};
 use inca_bridge::Host;
-use inca_gpui::NodeId;
 use inca_jsenv::stderr_reporter;
+use inca_node::NodeId;
 
 use crate::app::{HostedApp, start};
 use crate::snapshot::{Node, snapshot};

@@ -15,8 +15,9 @@ use gpui::{
     VisualTestContext, Window, point, prelude::*, px,
 };
 use inca_bridge::{EventDispatcher, Host};
-use inca_gpui::{EventSink, NodeId, NodeLayout, render_tree_with_events};
+use inca_gpui::{EventSink, NodeLayout, render_tree_with_events};
 use inca_jsenv::{Engine, EngineError};
+use inca_node::NodeId;
 
 use inca_bridge::test_support;
 

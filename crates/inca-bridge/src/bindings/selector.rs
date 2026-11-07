@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use rquickjs::{Ctx, Exception, Result as JsResult, Value};
 
-use inca_gpui::{
+use inca_node::{
     NodeId, check_selector, closest_selector, matches_selector, query_selector, query_selector_all,
 };
 

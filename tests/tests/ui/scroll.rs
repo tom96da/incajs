@@ -7,8 +7,8 @@
 
 use super::common::{by_id, click, load, near, text_of, y};
 use gpui::TestAppContext;
-use inca_gpui::NodeId;
 use inca_host::harness::Harness;
+use inca_node::NodeId;
 
 fn node(h: &mut Harness, id: &str) -> NodeId {
     by_id(&h.snapshot(), id).id

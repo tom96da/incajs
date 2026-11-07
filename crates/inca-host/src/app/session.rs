@@ -12,8 +12,8 @@ use gpui::BackgroundExecutor;
 
 use inca_bridge::install;
 use inca_bridge::{EventDispatcher, Host};
-use inca_gpui::NodeId;
 use inca_jsenv::{Clock, Engine, EngineError, ErrorReporter, Limits, console};
+use inca_node::NodeId;
 
 use crate::app::Loading;
 use crate::config;

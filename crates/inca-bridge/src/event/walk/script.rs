@@ -6,7 +6,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use inca_gpui::{EventPayload, MousePayload, NodeId};
+use inca_gpui::{EventPayload, MousePayload};
+use inca_node::NodeId;
 use rquickjs::{Class, Ctx, Exception, Result as JsResult, Value};
 
 use super::listeners::{deliver, end_dispatch};
@@ -75,7 +76,7 @@ pub(crate) fn click(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, target: NodeId) {
         let Some(node) = host.tree.get(target) else {
             return;
         };
-        if inca_gpui::is_disabled_control(node) || !host.clicking.insert(target) {
+        if inca_node::is_disabled_control(node) || !host.clicking.insert(target) {
             return;
         }
     }
@@ -101,7 +102,8 @@ mod tests {
         node_under_root, read_out, tree_of_three,
     };
     use gpui::TestAppContext;
-    use inca_gpui::{EventPayload, NodeId};
+    use inca_gpui::EventPayload;
+    use inca_node::NodeId;
 
     #[test]
     fn dispatch_event_walks_capture_target_bubble_and_returns_true_when_not_canceled() {

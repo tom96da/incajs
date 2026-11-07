@@ -7,7 +7,8 @@ use gpui::{
     Modifiers, MouseButton, MouseDownEvent, MouseUpEvent, Pixels, Point, ScrollDelta,
     ScrollWheelEvent, point, px,
 };
-use inca_gpui::{NodeId, debug_selector};
+use inca_gpui::debug_selector;
+use inca_node::NodeId;
 
 use super::Harness;
 use crate::snapshot::{Bounds, Node};

@@ -20,7 +20,7 @@ use serde_json::{Value, json};
 
 use inca_jsenv::{EngineError, stderr_reporter};
 
-use inca_gpui::NodeId;
+use inca_node::NodeId;
 
 use crate::app::{HostedApp, Loading, Session};
 use crate::dev::{SharedWriter, Writer, reporter_for, serve_dev_protocol};

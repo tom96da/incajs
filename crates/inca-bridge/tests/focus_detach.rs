@@ -8,7 +8,7 @@
 
 use gpui::{TestAppContext, prelude::*};
 use inca_bridge::test_support;
-use inca_gpui::NodeId;
+use inca_node::NodeId;
 use inca_test_macros::gpui_cases;
 
 struct Ids {

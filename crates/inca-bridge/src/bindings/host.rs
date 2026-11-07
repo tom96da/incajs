@@ -7,9 +7,10 @@ use std::rc::Rc;
 
 use gpui::{Pixels, ScrollHandle, point, px};
 
-use inca_gpui::element::scroll::{Align, rect_of, scroll_chain};
-use inca_gpui::{InputState, NodeId, NodeLayout, VirtualTree, is_scroll_container};
+use inca_gpui::{InputState, NodeLayout, rect_of};
 use inca_jsenv::{Clock, EngineError, Frames, Timers, system_clock};
+use inca_node::scroll::{Align, scroll_chain};
+use inca_node::{NodeId, VirtualTree, is_scroll_container};
 
 use crate::focus::FocusRegistry;
 
@@ -392,7 +393,7 @@ impl Host {
             {
                 l.bounds.origin.x -= px(dx);
                 l.bounds.origin.y -= px(dy);
-                if self.tree.get(id).and_then(inca_gpui::VirtualNode::parent) == Some(container) {
+                if self.tree.get(id).and_then(inca_node::VirtualNode::parent) == Some(container) {
                     l.scroll.x += px(dx);
                     l.scroll.y += px(dy);
                 }

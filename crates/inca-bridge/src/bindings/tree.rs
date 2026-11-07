@@ -6,8 +6,8 @@ use std::rc::Rc;
 
 use rquickjs::{Ctx, Exception, Result as JsResult};
 
-use inca_gpui::NodeId;
 use inca_jsenv::callbacks;
+use inca_node::NodeId;
 
 use super::Natives;
 use super::convert::{JsNodeId, throw_tree_error};
@@ -101,7 +101,7 @@ mod tests {
     use crate::test_support::{LISTEN_JS, callback_ids, engine_with_bindings};
     use crate::tests::callback_stored;
     use crate::{EventTargetId, Host};
-    use inca_gpui::NodeId;
+    use inca_node::NodeId;
     use std::cell::RefCell;
     use std::rc::Rc;
 
@@ -322,7 +322,7 @@ mod tests {
 
         let host = host.borrow();
         for _ in 0..3 {
-            inca_gpui::build_spec(&host.tree, 1).unwrap();
+            inca_node::build_spec(&host.tree, 1).unwrap();
         }
         assert_eq!(warnings.borrow().len(), 1);
     }

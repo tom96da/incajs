@@ -4,8 +4,8 @@
 //! The default actions of key presses and the `keypress` event.
 
 use gpui::{App, Window};
-use inca_gpui::element::scroll::Align;
 use inca_gpui::{EventPayload, MousePayload};
+use inca_node::scroll::Align;
 
 use super::EventDispatcher;
 use crate::EventTargetId;
@@ -166,7 +166,8 @@ mod tests {
     use crate::tests::keys::{Scene, scene};
     use crate::tests::listen;
     use gpui::{KeyUpEvent, Keystroke, PlatformInput, TestAppContext};
-    use inca_gpui::{InputRequest, NodeId};
+    use inca_gpui::InputRequest;
+    use inca_node::NodeId;
     use inca_test_macros::gpui_cases;
     use rstest::rstest;
 

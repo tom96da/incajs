@@ -21,7 +21,8 @@ use gpui::{
     div, point, px, size,
 };
 
-use inca_gpui::{NodeId, VirtualTree, render_tree};
+use inca_gpui::render_tree;
+use inca_node::{NodeId, VirtualTree};
 
 /// Selectors matching [`build_tree`]'s node creation order, used to tag the
 /// hand-written reference tree the same way `render_tree` tags its own

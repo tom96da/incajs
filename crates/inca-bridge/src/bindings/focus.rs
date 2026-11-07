@@ -67,7 +67,8 @@ mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
     use crate::test_support::engine_with_bindings;
-    use inca_gpui::{AttributeValue, NodeLayout};
+    use inca_gpui::NodeLayout;
+    use inca_node::AttributeValue;
 
     #[test]
     fn only_focus_attributes_and_display_mark_a_node_for_a_focus_check() {

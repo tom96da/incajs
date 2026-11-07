@@ -373,7 +373,7 @@ mod tests {
             let root = host.root();
             host.tree.append_child(root, node).unwrap();
             host.tree
-                .set_attribute(node, "tabindex", inca_gpui::AttributeValue::from("0"))
+                .set_attribute(node, "tabindex", inca_node::AttributeValue::from("0"))
                 .unwrap();
             node
         };

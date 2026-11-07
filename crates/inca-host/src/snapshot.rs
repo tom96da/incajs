@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use inca_gpui::{AttributeValue, ElementSpec, ElementTag, NodeId, VirtualTree, build_spec};
+use inca_node::{AttributeValue, ElementSpec, ElementTag, NodeId, VirtualTree, build_spec};
 use serde::Serialize;
 use serde_json::Value;
 

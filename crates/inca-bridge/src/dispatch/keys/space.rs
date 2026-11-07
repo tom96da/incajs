@@ -4,7 +4,8 @@
 //! The clicks that Space, Enter and a mouse release make on a button.
 
 use gpui::{App, MouseButton, MouseUpEvent, Window};
-use inca_gpui::{EventPayload, NodeId};
+use inca_gpui::EventPayload;
+use inca_node::NodeId;
 
 use crate::dispatch::EventDispatcher;
 
@@ -13,7 +14,7 @@ impl EventDispatcher {
         let host = self.host.borrow();
         host.focus.focused_node(window, cx).filter(|id| {
             host.tree.get(*id).is_some_and(|node| {
-                node.tag_name() == "button" && !inca_gpui::is_disabled_control(node)
+                node.tag_name() == "button" && !inca_node::is_disabled_control(node)
             })
         })
     }
@@ -69,7 +70,8 @@ mod tests {
     use crate::tests::keys::{Scene, scene};
     use crate::tests::{at, mouse_at};
     use gpui::{TestAppContext, WindowId};
-    use inca_gpui::{EventPayload, EventSink, NodeId};
+    use inca_gpui::{EventPayload, EventSink};
+    use inca_node::NodeId;
     use inca_test_macros::gpui_cases;
 
     impl Scene {

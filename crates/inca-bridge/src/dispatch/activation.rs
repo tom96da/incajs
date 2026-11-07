@@ -79,7 +79,7 @@ mod tests {
     };
     use crate::{EventDispatcher, Host};
     use gpui::{AppContext as _, TestAppContext};
-    use inca_gpui::NodeId;
+    use inca_node::NodeId;
     use std::cell::RefCell;
     use std::rc::Rc;
 

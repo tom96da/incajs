@@ -8,7 +8,7 @@ use std::rc::Rc;
 
 use rquickjs::{Ctx, Exception, IntoJs, Result as JsResult, Value};
 
-use inca_gpui::{AttributeValue, NodeId, VirtualNode, style_warning};
+use inca_node::{AttributeValue, NodeId, VirtualNode, style_warning};
 
 use super::convert::{JsNodeId, existing_node, or_null, throw_tree_error};
 use super::host::Host;
@@ -150,7 +150,7 @@ fn attribute_value_to_js<'js>(
 mod tests {
     #![allow(clippy::unwrap_used)]
     use crate::test_support::{callback_ids, engine_with_bindings};
-    use inca_gpui::NodeId;
+    use inca_node::NodeId;
     use rstest::rstest;
 
     #[test]
