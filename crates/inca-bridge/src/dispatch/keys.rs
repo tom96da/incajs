@@ -162,8 +162,9 @@ fn types_character(keystroke: &gpui::Keystroke, macos: bool) -> bool {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
+    use crate::dispatch::input::scene::{InputScene, input_scene, record, types};
     use crate::tests::keys::{Scene, scene};
-    use crate::tests::{InputScene, input_scene, listen, record, types};
+    use crate::tests::listen;
     use gpui::{KeyUpEvent, Keystroke, PlatformInput, TestAppContext};
     use inca_gpui::{InputRequest, NodeId};
     use inca_test_macros::gpui_cases;

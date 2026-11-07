@@ -126,10 +126,11 @@ impl EventDispatcher {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
-    use crate::tests::input::{
+    use crate::dispatch::input::scene::{InputScene, input_scene, log, record, types};
+    use crate::dispatch::input::scene::{
         cancel_beforeinput, keydown, line_break_rows, mark, replace, row, set_attributes,
     };
-    use crate::tests::{InputScene, input_scene, listen, log, record, types};
+    use crate::tests::listen;
     use gpui::{ClipboardItem, TestAppContext};
     use inca_test_macros::gpui_cases;
 

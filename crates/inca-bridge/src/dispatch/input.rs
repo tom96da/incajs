@@ -17,6 +17,8 @@ use super::EventDispatcher;
 
 mod compose;
 mod edit;
+#[cfg(test)]
+pub(crate) mod scene;
 
 impl EventDispatcher {
     /// Whether `node` is an `input`.
@@ -271,14 +273,12 @@ impl EventDispatcher {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
-    use crate::test_support::engine_with_bindings;
-    use crate::tests::input::{
+    use crate::dispatch::input::scene::{InputScene, input_scene, log, mouse_of, record, types};
+    use crate::dispatch::input::scene::{
         cancel_beforeinput, eval_input, line_break_rows, replace, set_attributes,
     };
-    use crate::tests::{
-        InputScene, at, dispatcher_with_engine, eval_json, input_scene, listen, listen_global, log,
-        mouse_of, read_out, record, types,
-    };
+    use crate::test_support::engine_with_bindings;
+    use crate::tests::{at, dispatcher_with_engine, eval_json, listen, listen_global, read_out};
     use gpui::{MouseButton, TestAppContext, VisualTestContext};
     use inca_gpui::{EventSink as _, InputLayout, InputRequest};
     use inca_test_macros::gpui_cases;

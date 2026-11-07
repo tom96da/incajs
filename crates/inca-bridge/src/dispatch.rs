@@ -33,6 +33,7 @@ use inca_jsenv::{Engine, ErrorReporter, report_jobs, stderr_reporter};
 
 use crate::bindings::Host;
 
+mod activation;
 mod fire;
 mod frame;
 mod hover;
