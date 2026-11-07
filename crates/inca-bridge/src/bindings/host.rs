@@ -208,6 +208,13 @@ impl Host {
         self.tree.root().expect("the host declares a root")
     }
 
+    /// Writes the focus that style rules read from the focus registry. Returns whether the value
+    /// changed.
+    pub(crate) fn sync_focus_style(&mut self) -> bool {
+        let node = self.focus.visual_focus(&self.tree);
+        self.tree.set_focus(node)
+    }
+
     /// The deepest container whose last drawn box holds the point, else the root.
     pub(crate) fn container_at(&self, x: f32, y: f32) -> NodeId {
         let point = point(px(x), px(y));

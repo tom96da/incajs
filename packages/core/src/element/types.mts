@@ -435,8 +435,8 @@ export interface IncaElement
    */
   readonly attributes: NamedNodeMap;
   /**
-   * Whether this element matches the selector list. `:hover`, `:focus` and the other interactive
-   * and form-state pseudo-classes never match.
+   * Whether this element matches the selector list. `:focus-visible` and the other interactive and
+   * form-state pseudo-classes never match.
    * @throws DOMException named `SyntaxError` for an invalid selector, also after this element is
    * removed
    * @param selectors - A selector list.

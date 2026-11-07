@@ -16,7 +16,7 @@ fn search(
     selector: &str,
     first_only: bool,
 ) -> Result<Vec<NodeId>, SelectorError> {
-    let list = parse(selector)?;
+    let (list, _) = parse(selector)?;
     let mut found = Vec::new();
     let Some(root) = Node::of(tree, start) else {
         return Ok(found);

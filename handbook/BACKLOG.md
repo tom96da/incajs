@@ -660,18 +660,12 @@ A fixed entry is deleted and its ID is never reused.
   bar shows no icon. Linux needs an icon format such as PNG or SVG and a
   `.desktop` file that matches the window's `identifier`.
 
-- **B-129 A focused node looks like an unfocused one**
+- **B-129 The host draws no default look for interactive states**
   `Units: gpui,core · Size: L · Impact: Low`
 
-  A focused node has no visual sign. The fix adds a
-  `:focus` state to the host's style model: a style variant that applies while
-  the node holds focus, set from the same focus transitions that dispatch
-  `focus` and `blur`.
-
-- **B-131 `:focus` is unsupported**
-  `Units: gpui,core · Size: S · Impact: Low`
-
-  Fix: add `:focus` with the interactive visual state.
+  The host adds no look for `:focus`. An app styles it in a `<style>` rule.
+  Fix: a preset stylesheet (focus ring, hover and press looks) that an app
+  switches on and off. Design undecided.
 
 - **B-141 `hidden="until-found"` renders and focuses as an unhidden node**
   `Units: gpui,bridge · Size: M · Impact: Low`
@@ -1251,13 +1245,13 @@ A fixed entry is deleted and its ID is never reused.
   reads the `dir` attribute (`:dir(ltr)` matches every element today), and
   `dir="auto"` needs text direction. `:state()` waits for custom elements.
 
-- **B-250 Form-state and interactive pseudo-classes never match**
+- **B-250 Form-state and focus-visible pseudo-classes never match**
   `Units: gpui,bridge · Size: M · Impact: Low`
 
-  `closest()`, `matches()`, `querySelector()` and `querySelectorAll()` accept
-  `:hover`, `:focus` and `:checked` and match nothing, where browsers
-  evaluate them. Fix: evaluate them in the selector adapter once interactive
-  visual state exists.
+  `:checked` and the other form-state names and `:focus-visible` match nothing
+  in `closest()`, `matches()`, `querySelector()`, `querySelectorAll()` and in
+  rules. Fix: evaluate them in the selector adapter. `:focus-visible` needs
+  the input modality of the last focus change.
 
 - **B-251 The QuickJS run of the core tests is not part of CI**
   `Units: core,ci · Size: M · Impact: Medium`

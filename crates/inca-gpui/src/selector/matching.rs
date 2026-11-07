@@ -8,7 +8,7 @@ use super::{
     Element, ElementSelectorFlags, FRAGMENT_TAG, Impl, MatchingContext, MatchingForInvalidation,
     MatchingMode, NamespaceConstraint, NeedsSelectorFlags, NodeId, OpaqueElement, PseudoClass,
     PseudoElement, QuirksMode, SelectorCaches, SelectorError, SelectorList, TEXT_TAG, VirtualNode,
-    VirtualTree, fmt, is_disabled_control, js_number_text, matches_selector_list, parse,
+    VirtualTree, fmt, is_disabled_control, matches_selector_list, parse,
 };
 use selectors::matching::matches_selector as matches_selector_one;
 
@@ -29,21 +29,11 @@ fn is_element(node: &VirtualNode) -> bool {
     !matches!(node.tag_name(), COMMENT_TAG | FRAGMENT_TAG | TEXT_TAG)
 }
 
-/// The text of an attribute value: a string as is, a number through `js_number_text`, a bool as
-/// `true` or `false`.
-pub(crate) fn attribute_text(value: &AttributeValue) -> String {
-    match value {
-        AttributeValue::String(text) => text.clone(),
-        AttributeValue::Number(number) => js_number_text(*number),
-        AttributeValue::Bool(flag) => flag.to_string(),
-    }
-}
-
 /// Whether the `"value"` of `node` is not empty.
 fn has_text(node: &VirtualNode) -> bool {
     matches!(
         node.attributes().get("value"),
-        Some(value) if !attribute_text(value).is_empty()
+        Some(value) if !value.text().is_empty()
     )
 }
 
@@ -74,7 +64,7 @@ impl<'t> Node<'t> {
     }
 
     fn attribute(&self, name: &str) -> Option<String> {
-        self.node.attributes().get(name).map(attribute_text)
+        self.node.attributes().get(name).map(AttributeValue::text)
     }
 
     /// The element `step` places from this one among its parent's children, skipping nodes that
@@ -167,6 +157,8 @@ impl Element for Node<'_> {
         match class {
             PseudoClass::Never(_) => false,
             PseudoClass::Defined | PseudoClass::DirLtr => true,
+            PseudoClass::Focus => self.tree.is_focused(self.node.id()),
+            PseudoClass::FocusWithin => self.tree.is_focus_within(self.node.id()),
             PseudoClass::Disabled => is_disabled_control(self.node),
             PseudoClass::Enabled => control && !is_disabled_control(self.node),
             PseudoClass::ReadWrite => self.is_editable(),
@@ -292,7 +284,7 @@ pub fn matches_selector(
     node: NodeId,
     selector: &str,
 ) -> Result<bool, SelectorError> {
-    let list = parse(selector)?;
+    let (list, _) = parse(selector)?;
     Ok(Node::of(tree, node).is_some_and(|element| {
         let scope = element.opaque();
         matches_with(&list, &element, scope)
@@ -310,7 +302,7 @@ pub fn closest_selector(
     node: NodeId,
     selector: &str,
 ) -> Result<Option<NodeId>, SelectorError> {
-    let list = parse(selector)?;
+    let (list, _) = parse(selector)?;
     let Some(start) = tree.get(node) else {
         return Ok(None);
     };
