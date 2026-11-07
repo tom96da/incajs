@@ -68,8 +68,9 @@ function unpack(
   target: TargetKey,
   roots: readonly CacheRoot[],
   stderr: NodeJS.WritableStream = new PassThrough(),
+  signal?: AbortSignal,
 ): Promise<string> {
-  return unpackHost(host, target, roots, stderr);
+  return unpackHost(host, target, roots, stderr, signal);
 }
 
 /** The error `fn` rejects with. */
@@ -146,6 +147,14 @@ describe("unpackHost", () => {
     expect(String(stderr.read())).toBe(
       `${styleText(["bold", "cyan"], "[inca]", { stream: stderr })} unpacked the host binary into ${path.dirname(file)}\n`,
     );
+  });
+
+  it("writes no line when the signal is aborted", async () => {
+    const stderr = new PassThrough();
+
+    await unpack(pkg(), KEY, [{ dir: temp() }], stderr, AbortSignal.abort());
+
+    expect(stderr.read()).toBeNull();
   });
 
   it("writes nothing when a usable entry exists", async () => {

@@ -439,6 +439,22 @@ describe("dev entry selection", () => {
     expect(run.bundler.watches).toHaveLength(1);
   });
 
+  it("writes no entry when shutdown starts as the session closes on a missing entry", async () => {
+    const cwd = await makeSourceApp("main.js");
+    const run = await startReady(cwd);
+    let release!: () => void;
+    run.bundler.holdClose = new Promise((resolve) => (release = resolve));
+
+    await rm(path.join(cwd, "src/main.js"));
+    await waitFor(() => expect(run.bundler.closeCalls).toBe(1));
+    await writeFile(path.join(cwd, "src/App.vue"), APP_VUE);
+    run.abort();
+    release();
+    await run.running;
+
+    await expect(stat(path.join(cwd, "node_modules/.inca/entry.mts"))).rejects.toThrow("ENOENT");
+  });
+
   it("ignores the callbacks of a replaced watcher", async () => {
     const cwd = await makeSourceApp("main.js");
     const run = await startReady(cwd);
@@ -525,17 +541,67 @@ describe("dev entry selection", () => {
     expect(run.bundler.closed).toBe(true);
   });
 
-  it("closes the entry monitor when the signal is already aborted", async () => {
+  it("opens no watcher when the signal aborts while the entry is resolved", async () => {
     const cwd = await makeSourceApp("App.vue");
     const controller = new AbortController();
-    controller.abort();
-    const run = await startDev(cwd, { signal: controller.signal });
+    let resolutions = 0;
+    const frontend: Frontend = {
+      ...ALPHA,
+      appFile: "App.vue",
+      entryCode: (appImport) => {
+        // The first resolution belongs to the config step, the second to the automatic entry.
+        if (++resolutions === 2) controller.abort();
+        return `load(${appImport});`;
+      },
+    };
+    const run = await startDev(cwd, { frontend, signal: controller.signal });
 
     await run.running;
 
-    expect(run.bundler.watches).toHaveLength(1);
-    expect(run.bundler.closed).toBe(true);
-    expect(watches.allClosed()).toBe(true);
+    expect(run.bundler.watches).toHaveLength(0);
+    expect(await run.hostLog.lines()).toEqual([]);
+  });
+
+  it("prints no build failure when the entry fails to resolve after the signal aborts", async () => {
+    const cwd = await makeSourceApp("App.vue");
+    const controller = new AbortController();
+    let resolutions = 0;
+    const frontend: Frontend = {
+      ...ALPHA,
+      appFile: "App.vue",
+      entryCode: (appImport) => {
+        // The first resolution belongs to the config step, the second to the automatic entry.
+        if (++resolutions === 2) {
+          controller.abort();
+          throw new Error("entry failed");
+        }
+        return `load(${appImport});`;
+      },
+    };
+    const run = await startDev(cwd, { frontend, signal: controller.signal });
+
+    await run.running;
+
+    expect(run.stderr.text()).not.toContain("build failed");
+  });
+
+  it("prints no build failure for an entry that fails to resolve after the abort", async () => {
+    const cwd = await makeSourceApp("App.vue", "main.js");
+    const controller = new AbortController();
+    const frontend: Frontend = {
+      ...ALPHA,
+      appFile: "App.vue",
+      entryCode: () => {
+        controller.abort();
+        throw new Error("entry failed");
+      },
+    };
+    const run = await startReady(cwd, { frontend, signal: controller.signal });
+
+    await rm(path.join(cwd, "src/main.js"));
+    await run.running;
+
+    expect(run.stderr.text()).not.toContain("build failed");
   });
 
   it("rejects when the entry monitor cannot be armed again", async () => {

@@ -5,6 +5,7 @@
 // A stand-in whose `ready` notification lands late, so a build that
 // finishes before it can be tested without a real slow-starting host.
 // With `MOCK_HOST_READY_GATE` set to a file path, `ready` lands once that file exists.
+// With `MOCK_HOST_RELOAD_SILENT` set, a `reload` is received and never answered.
 
 import "./answerPrintConfig.mts";
 import { existsSync } from "node:fs";
@@ -33,6 +34,7 @@ readline.createInterface({ input: process.stdin }).on("line", (line) => {
   if (method === "reload") {
     reloadCount += 1;
     process.stderr.write(`reload #${reloadCount}\n`);
+    if (process.env.MOCK_HOST_RELOAD_SILENT) return;
   }
   process.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", id, result: null })}\n`);
   if (method === "shutdown") process.exit(0);

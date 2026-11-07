@@ -429,11 +429,22 @@ describe("dev with --experimental-hmr", () => {
   }
 
   /** Starts `dev()` with the HMR channel and waits until its first host is ready. */
-  async function startAuto(cwd: string, hostBin = logMockHost) {
+  async function startAuto(
+    cwd: string,
+    hostBin = logMockHost,
+    onOpen?: (channels: number, abort: () => void) => void,
+  ) {
     const bundler = makeFakeHmrBundler("/unused/entry.js");
+    const controller = new AbortController();
+    if (onOpen) {
+      const open = bundler.hmr!.bind(bundler);
+      bundler.hmr = (options) => {
+        onOpen(bundler.channels.length, () => controller.abort());
+        return open(options);
+      };
+    }
     const stdout = makeSink();
     const stderr = makeSink();
-    const controller = new AbortController();
     const hostLog = await useHostLog(cwd);
     onTestFinished(() => controller.abort());
     const running = dev({
@@ -574,5 +585,80 @@ describe("dev with --experimental-hmr", () => {
 
     run.abort();
     await run.running;
+  });
+
+  it("starts no reload when shutdown starts while the new channel opens", async () => {
+    const cwd = await makeAppVue();
+    const run = await startAuto(cwd, logMockHost, (channels, abort) => {
+      if (channels === 1) abort();
+    });
+
+    await writeFile(path.join(cwd, "src/main.mts"), "");
+    await run.running;
+
+    expect(await run.hostLog.lines()).toEqual(["start /unused/entry.js", "stop /unused/entry.js"]);
+  });
+
+  it("does not wait for a reload the host has not answered when shutdown starts", async () => {
+    const cwd = await makeAppVue();
+    vi.stubEnv("MOCK_HOST_RELOAD_GATE", "1");
+    onTestFinished(() => void vi.unstubAllEnvs());
+    const run = await startAuto(cwd);
+
+    run.bundler.emitFullReload();
+    await waitFor(async () => expect(await run.hostLog.lines()).toContain("reload"));
+    run.abort();
+    await run.running;
+
+    // The gate is never released, so the host never answers.
+    expect(await run.hostLog.lines()).toEqual([
+      "start /unused/entry.js",
+      "reload",
+      "stop /unused/entry.js",
+    ]);
+  });
+
+  it("prints no reload failure when shutdown starts during an unanswered reload", async () => {
+    const cwd = await makeAppVue();
+    vi.stubEnv("MOCK_HOST_RELOAD_GATE", "1");
+    onTestFinished(() => void vi.unstubAllEnvs());
+    const run = await startAuto(cwd);
+
+    run.bundler.emitFullReload();
+    await waitFor(async () => expect(await run.hostLog.lines()).toContain("reload"));
+    run.abort();
+    await run.running;
+
+    expect(run.stderr.text()).not.toContain("reload failed");
+  });
+
+  it("prints no reload failure when shutdown starts in the ready notification reload", async () => {
+    const cwd = await makeAppVue();
+    vi.stubEnv("MOCK_HOST_READY_GATE", path.join(cwd, "ready.release"));
+    vi.stubEnv("MOCK_HOST_RELOAD_SILENT", "1");
+    onTestFinished(() => void vi.unstubAllEnvs());
+    const bundler = makeFakeHmrBundler("/unused/entry.js");
+    const stderr = makeSink();
+    const controller = new AbortController();
+    onTestFinished(() => controller.abort());
+    const running = dev({
+      cwd,
+      bundler,
+      hostBin: slowReadyMockHost,
+      experimentalHmr: true,
+      stdout: makeSink().stream,
+      stderr: stderr.stream,
+      signal: controller.signal,
+    });
+    await waitFor(() => expect(bundler.channels).toHaveLength(1));
+    await writeFile(path.join(cwd, "src/main.mts"), "");
+    await waitFor(() => expect(bundler.channels).toHaveLength(2));
+    await writeFile(path.join(cwd, "ready.release"), "");
+    await waitFor(() => expect(stderr.text()).toContain("reload #1"));
+
+    controller.abort();
+    await running;
+
+    expect(stderr.text()).not.toContain("reload failed");
   });
 });
