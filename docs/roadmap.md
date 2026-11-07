@@ -48,7 +48,7 @@ A semantics layer, platform accessibility APIs, and keyboard reachability. Waits
 Timers are done, and the host limits memory and stack. Fetch/WebSocket and
 filesystem access are not built yet.
 
-[Timers](/reference/timers)
+[Timers and frame callbacks](/reference/built-ins#settimeout-and-setinterval)
 ::::
 
 :::: not-started Phase 7: Majority style & Tailwind coverage

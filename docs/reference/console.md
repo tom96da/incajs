@@ -120,6 +120,7 @@ type as in Node. These environment variables override the terminal check:
 - An event prints as its class with only `isTrusted`, such as
   `PointerEvent { isTrusted: [Getter] }` for a click. Its other fields are
   getters on its prototype.
+- A `URL` and a `URLSearchParams` print as `{}`.
 - Symbol-keyed properties and extra properties on arrays, typed arrays and
   errors are dropped. A `WeakMap` prints as a plain object. A circular
   reference prints `[Object]` at the depth limit, with no marker.
