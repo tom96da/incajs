@@ -54,6 +54,9 @@ impl EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) {
+        let path = physical.map(|id| self.path_from(id)).unwrap_or_default();
+        let changed = self.host.borrow_mut().tree.set_hover_path(&path);
+        self.restyle(changed, true, window);
         let mouse = MousePayload::at(window.mouse_position(), window.modifiers());
         self.process_capture(&EventPayload::Mouse(mouse), button, window, cx);
         let next = self.hover_target(physical);
@@ -109,6 +112,7 @@ impl EventDispatcher {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
+    use crate::tests::state;
     use crate::tests::{
         RECORDER, at, dispatcher_with_engine, fire_and_read, listen, listen_global,
         node_under_root, read_out, seen, seen_rows, tree_of_three, wheel_at,
@@ -528,5 +532,117 @@ mod tests {
         let out = fire_and_read(cx, &dispatcher, child, "wheel", &wheel_at(60.0, 40.0));
 
         assert_eq!(out, serde_json::json!([[50, 20]]));
+    }
+
+    /// [`hover_tree`] with `a` attached under the host root.
+    fn connected_hover_tree() -> (EventDispatcher, [NodeId; 4]) {
+        let (dispatcher, ids) = hover_tree();
+        {
+            let mut host = dispatcher.host.borrow_mut();
+            let root = host.root();
+            host.tree.append_child(root, ids[0]).unwrap();
+        }
+        (dispatcher, ids)
+    }
+
+    fn hovered(dispatcher: &EventDispatcher, ids: [NodeId; 4]) -> [bool; 4] {
+        let host = dispatcher.host.borrow();
+        ids.map(|id| state(&host, id, ":hover"))
+    }
+
+    #[gpui::test]
+    fn a_hover_report_marks_the_node_and_its_ancestors(cx: &mut TestAppContext) {
+        let (dispatcher, ids) = connected_hover_tree();
+        hover(cx, &dispatcher, Some(ids[2]));
+
+        assert_eq!(hovered(&dispatcher, ids)[..3], [true, true, true]);
+    }
+
+    #[gpui::test]
+    fn a_hover_report_leaves_a_sibling_unmarked(cx: &mut TestAppContext) {
+        let (dispatcher, ids) = connected_hover_tree();
+        hover(cx, &dispatcher, Some(ids[2]));
+
+        assert!(!hovered(&dispatcher, ids)[3]);
+    }
+
+    #[gpui::test]
+    fn a_hover_report_of_none_clears_the_hover_state(cx: &mut TestAppContext) {
+        let (dispatcher, ids) = connected_hover_tree();
+        hover(cx, &dispatcher, Some(ids[2]));
+        hover(cx, &dispatcher, None);
+
+        assert_eq!(hovered(&dispatcher, ids), [false; 4]);
+    }
+
+    #[gpui::test]
+    fn a_hover_report_that_fires_nothing_still_rewrites_the_path(cx: &mut TestAppContext) {
+        let (dispatcher, [a, b, c, d]) = connected_hover_tree();
+        hover(cx, &dispatcher, Some(c));
+        dispatcher
+            .host
+            .borrow_mut()
+            .tree
+            .remove_child(b, c)
+            .unwrap();
+        hover(cx, &dispatcher, Some(b));
+        dispatcher
+            .host
+            .borrow_mut()
+            .tree
+            .insert_before(b, c, None)
+            .unwrap();
+
+        assert_eq!(
+            hovered(&dispatcher, [a, b, c, d]),
+            [true, true, false, false]
+        );
+    }
+
+    #[gpui::test]
+    fn the_mouseover_listener_reads_the_hover_state_as_true(cx: &mut TestAppContext) {
+        let (dispatcher, [_, _, c, _]) = connected_hover_tree();
+        listen(
+            &dispatcher,
+            c,
+            "mouseover",
+            &format!("() => seen.push(String(__inca_native__.matches({c}, ':hover')))"),
+        );
+
+        let got = hover(cx, &dispatcher, Some(c));
+
+        assert!(got.contains(&"true".to_owned()));
+    }
+
+    #[gpui::test]
+    fn a_hovered_node_moved_inside_its_parent_keeps_the_hover_state(cx: &mut TestAppContext) {
+        let (dispatcher, [a, b, c, d]) = connected_hover_tree();
+        hover(cx, &dispatcher, Some(c));
+        {
+            let tree = &mut dispatcher.host.borrow_mut().tree;
+            tree.remove_child(b, c).unwrap();
+            tree.insert_before(b, c, Some(d)).unwrap();
+        }
+
+        assert_eq!(
+            hovered(&dispatcher, [a, b, c, d]),
+            [true, true, true, false]
+        );
+    }
+
+    #[gpui::test]
+    fn a_hovered_node_moved_under_another_parent_keeps_the_hover_state(cx: &mut TestAppContext) {
+        let (dispatcher, [a, b, c, d]) = connected_hover_tree();
+        hover(cx, &dispatcher, Some(c));
+        {
+            let tree = &mut dispatcher.host.borrow_mut().tree;
+            tree.remove_child(b, c).unwrap();
+            tree.append_child(d, c).unwrap();
+        }
+
+        assert_eq!(
+            hovered(&dispatcher, [a, b, c, d]),
+            [true, true, true, false]
+        );
     }
 }

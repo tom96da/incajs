@@ -3,15 +3,50 @@
 
 //! The interaction state that the rules of a `<style>` element read.
 
+use std::collections::HashSet;
+
 use super::{NodeId, VirtualTree};
 
 /// The state a script or the user puts on nodes. The tree reads it and never prunes it.
 #[derive(Debug, Default)]
 pub(super) struct InteractionState {
     focus: Option<NodeId>,
+    /// The ids on the path from the deepest hovered container to the root.
+    hover: HashSet<NodeId>,
+    /// The ids on the pressed path.
+    active: HashSet<NodeId>,
+}
+
+/// Replaces `set` with `path`. Returns whether the set changed.
+fn replace(set: &mut HashSet<NodeId>, path: &[NodeId]) -> bool {
+    let next: HashSet<NodeId> = path.iter().copied().collect();
+    let changed = *set != next;
+    *set = next;
+    changed
 }
 
 impl VirtualTree {
+    /// Sets the hover path: the ids of the deepest hovered container and its ancestors. An empty
+    /// path clears. Returns whether the set changed.
+    pub fn set_hover_path(&mut self, path: &[NodeId]) -> bool {
+        replace(&mut self.interaction.hover, path)
+    }
+
+    /// Sets the pressed path, like [`Self::set_hover_path`].
+    pub fn set_active_path(&mut self, path: &[NodeId]) -> bool {
+        replace(&mut self.interaction.active, path)
+    }
+
+    /// Whether `id` is on the hover path and is connected.
+    pub(crate) fn is_hovered(&self, id: NodeId) -> bool {
+        self.interaction.hover.contains(&id) && self.is_connected(id)
+    }
+
+    /// Whether `id` is on the pressed path and is connected.
+    pub(crate) fn is_active(&self, id: NodeId) -> bool {
+        self.interaction.active.contains(&id) && self.is_connected(id)
+    }
+
     /// Sets the focused node, or none. Returns whether the value changed.
     pub fn set_focus(&mut self, node: Option<NodeId>) -> bool {
         let changed = self.interaction.focus != node;
@@ -35,6 +70,12 @@ impl VirtualTree {
     #[must_use]
     pub fn uses_focus_state(&self) -> bool {
         self.sheet_flags().focus
+    }
+
+    /// Whether a connected `<style>` rule names `:hover` or `:active`.
+    #[must_use]
+    pub fn uses_pointer_state(&self) -> bool {
+        self.sheet_flags().pointer
     }
 }
 
@@ -67,6 +108,15 @@ mod tests {
             input,
             other,
         }
+    }
+
+    /// Puts the input and its ancestors on the path of `class` (`:hover` or `:active`).
+    fn put_on_path(s: &mut Scene, class: &str) {
+        let path: Vec<_> = s.f.tree.ancestors(s.input).collect();
+        match class {
+            ":hover" => s.f.tree.set_hover_path(&path),
+            _ => s.f.tree.set_active_path(&path),
+        };
     }
 
     fn width(f: &Fixture, node: NodeId) -> Option<crate::AttributeValue> {
@@ -259,6 +309,161 @@ mod tests {
         s.f.tree.set_focus(Some(s.input));
         let during = width(&s.f, s.input);
         s.f.tree.set_focus(None);
+
+        assert_eq!(before, None);
+        assert_eq!(during, Some(text("1px")));
+        assert_eq!(width(&s.f, s.input), None);
+    }
+
+    #[rstest]
+    #[case::hover(":hover")]
+    #[case::active(":active")]
+    fn a_pointer_state_matches_the_node_and_its_ancestors(#[case] class: &str) {
+        let mut s = scene();
+        put_on_path(&mut s, class);
+
+        assert!(s.f.matches(s.input, class));
+        assert!(s.f.matches(s.card, class));
+        assert!(s.f.matches(s.f.root, class));
+    }
+
+    #[rstest]
+    #[case::hover(":hover")]
+    #[case::active(":active")]
+    fn a_pointer_state_does_not_match_a_sibling_branch(#[case] class: &str) {
+        let mut s = scene();
+        put_on_path(&mut s, class);
+
+        assert!(!s.f.matches(s.other, class));
+    }
+
+    #[rstest]
+    #[case::hover_set_active_read(":hover", ":active")]
+    #[case::active_set_hover_read(":active", ":hover")]
+    fn a_pointer_state_does_not_answer_for_the_other_one(#[case] set: &str, #[case] read: &str) {
+        let mut s = scene();
+        put_on_path(&mut s, set);
+
+        assert!(!s.f.matches(s.input, read));
+    }
+
+    #[test]
+    fn a_negated_hover_matches_an_unhovered_node() {
+        let s = scene();
+
+        assert!(s.f.matches(s.input, ":not(:hover)"));
+    }
+
+    #[test]
+    fn a_negated_hover_does_not_match_a_hovered_node() {
+        let mut s = scene();
+        put_on_path(&mut s, ":hover");
+
+        assert!(!s.f.matches(s.input, ":not(:hover)"));
+    }
+
+    #[test]
+    fn a_hover_name_is_read_case_insensitively() {
+        let mut s = scene();
+        put_on_path(&mut s, ":hover");
+
+        assert!(s.f.matches(s.input, ":HOVER"));
+    }
+
+    #[rstest]
+    #[case::a_first_path(&[], &[1, 2], true)]
+    #[case::the_same_path(&[1, 2], &[1, 2], false)]
+    #[case::the_same_ids_reordered(&[1, 2], &[2, 1], false)]
+    #[case::another_path(&[1, 2], &[1, 3], true)]
+    #[case::cleared(&[1, 2], &[], true)]
+    #[case::empty_again(&[], &[], false)]
+    fn the_path_setters_report_whether_the_set_changed(
+        #[case] before: &[NodeId],
+        #[case] after: &[NodeId],
+        #[case] expected: bool,
+        #[values(VirtualTree::set_hover_path, VirtualTree::set_active_path)] set: fn(
+            &mut VirtualTree,
+            &[NodeId],
+        )
+            -> bool,
+    ) {
+        let mut tree = VirtualTree::new();
+        set(&mut tree, before);
+
+        assert_eq!(set(&mut tree, after), expected);
+    }
+
+    #[rstest]
+    #[case::hover(":hover")]
+    #[case::active(":active")]
+    fn a_detached_pointer_node_stops_matching_while_its_ancestors_keep_matching(
+        #[case] class: &str,
+    ) {
+        let mut s = scene();
+        put_on_path(&mut s, class);
+        s.f.tree.remove_child(s.card, s.input).unwrap();
+
+        assert!(!s.f.matches(s.input, class));
+        assert!(s.f.matches(s.card, class));
+    }
+
+    #[rstest]
+    #[case::hover(":hover")]
+    #[case::active(":active")]
+    fn a_detached_pointer_node_matches_again_once_attached(#[case] class: &str) {
+        let mut s = scene();
+        put_on_path(&mut s, class);
+        s.f.tree.remove_child(s.card, s.input).unwrap();
+        let detached = s.f.matches(s.input, class);
+        s.f.tree.insert_before(s.card, s.input, None).unwrap();
+
+        assert!(!detached);
+        assert!(s.f.matches(s.input, class));
+    }
+
+    #[rstest]
+    #[case::hover(":hover")]
+    #[case::active(":active")]
+    #[case::negated(":not(:hover)")]
+    #[case::inside_is(":is(.a:hover)")]
+    #[case::nested_in_has("div:has(:active)")]
+    fn uses_pointer_state_is_true_when_a_rule_names_the_state(#[case] selector: &str) {
+        let mut s = scene();
+        s.f.sheet(&format!("{selector} {{ width: 1px }}"));
+
+        assert!(s.f.tree.uses_pointer_state());
+    }
+
+    #[rstest]
+    #[case::no_rule("")]
+    #[case::a_focus_rule(":focus { width: 1px }")]
+    #[case::host_context(":host-context(a:hover) { width: 1px }")]
+    fn uses_pointer_state_is_false_when_no_rule_names_the_state(#[case] css: &str) {
+        let mut s = scene();
+        s.f.sheet(css);
+
+        assert!(!s.f.tree.uses_pointer_state());
+    }
+
+    #[rstest]
+    #[case::two_rules(":focus { width: 1px } :hover { width: 2px }")]
+    #[case::one_selector(":focus:hover { width: 1px }")]
+    fn sheet_flags_keep_both_kinds(#[case] css: &str) {
+        let mut s = scene();
+        s.f.sheet(css);
+
+        assert!(s.f.tree.uses_focus_state());
+        assert!(s.f.tree.uses_pointer_state());
+    }
+
+    #[test]
+    fn a_hover_rule_applies_only_while_the_node_is_hovered() {
+        let mut s = scene();
+        s.f.sheet("input:hover { width: 1px }");
+        let before = width(&s.f, s.input);
+        put_on_path(&mut s, ":hover");
+        let during = width(&s.f, s.input);
+        s.f.tree.set_hover_path(&[]);
 
         assert_eq!(before, None);
         assert_eq!(during, Some(text("1px")));

@@ -37,12 +37,15 @@ pub use query::{query_selector, query_selector_all};
 pub(crate) struct StateFlags {
     /// `:focus` or `:focus-within`.
     pub(crate) focus: bool,
+    /// `:hover` or `:active`.
+    pub(crate) pointer: bool,
 }
 
 impl StateFlags {
     pub(crate) fn merge(self, other: Self) -> Self {
         Self {
             focus: self.focus || other.focus,
+            pointer: self.pointer || other.pointer,
         }
     }
 }
@@ -53,9 +56,13 @@ struct Tracker(Cell<StateFlags>);
 
 impl Tracker {
     fn note(&self, class: &PseudoClass) {
-        if matches!(class, PseudoClass::Focus | PseudoClass::FocusWithin) {
-            self.0.set(StateFlags { focus: true });
+        let mut flags = self.0.get();
+        match class {
+            PseudoClass::Focus | PseudoClass::FocusWithin => flags.focus = true,
+            PseudoClass::Hover | PseudoClass::Active => flags.pointer = true,
+            _ => {}
         }
+        self.0.set(flags);
     }
 
     fn flags(&self) -> StateFlags {
@@ -124,8 +131,6 @@ impl PrecomputedHash for Atom {
 
 /// The names a selector accepts without a way to evaluate them.
 const NEVER_MATCHING_PSEUDO_CLASSES: &[&str] = &[
-    "hover",
-    "active",
     "focus-visible",
     "target",
     "visited",
@@ -176,6 +181,8 @@ enum PseudoClass {
     /// A name the host accepts and cannot evaluate.
     Never(String),
     Defined,
+    Hover,
+    Active,
     Focus,
     FocusWithin,
     /// `:dir(ltr)`: every element has the directionality `ltr`.
@@ -191,6 +198,8 @@ impl ToCss for PseudoClass {
         let name = match self {
             PseudoClass::Never(name) => name,
             PseudoClass::Defined => "defined",
+            PseudoClass::Hover => "hover",
+            PseudoClass::Active => "active",
             PseudoClass::Focus => "focus",
             PseudoClass::FocusWithin => "focus-within",
             PseudoClass::DirLtr => "dir(ltr)",
@@ -352,6 +361,8 @@ impl<'i> Parser<'i> for SelectorParser {
         let name = name.to_ascii_lowercase();
         let class = match name.as_str() {
             "defined" => PseudoClass::Defined,
+            "hover" => PseudoClass::Hover,
+            "active" => PseudoClass::Active,
             "focus" => PseudoClass::Focus,
             "focus-within" => PseudoClass::FocusWithin,
             "read-only" => PseudoClass::ReadOnly,
@@ -505,7 +516,6 @@ mod tests {
     #[case::lang_strings(":lang(\"fr\", \"de\")")]
     #[case::lang_mixed(":lang(en, \"fr\")")]
     #[case::dir_rtl(":dir(rtl)")]
-    #[case::upper_case_pseudo_class(":HOVER")]
     #[case::upper_case_pseudo_element("::BEFORE")]
     #[case::upper_case_functional_pseudo_element("::HIGHLIGHT(x)")]
     #[case::state(":state(x)")]
@@ -519,7 +529,6 @@ mod tests {
     #[case::target_text("::target-text")]
     #[case::cue("::cue")]
     #[case::view_transition("::view-transition")]
-    #[case::hover(":hover")]
     #[case::focus_visible(":focus-visible")]
     #[case::checked(":checked")]
     #[case::open(":open")]

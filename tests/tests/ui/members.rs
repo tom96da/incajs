@@ -31,7 +31,7 @@ fn probe(cx: &mut TestAppContext) -> Value {
 #[case::disabled_attribute_matches("matchesDisabled", json!(true))]
 #[case::closest("closest", json!(true))]
 #[case::matches("matches", json!(true))]
-#[case::hover_never_matches("hover", json!(false))]
+#[case::hover_does_not_match_without_the_pointer("hover", json!(false))]
 #[case::invalid_selector("syntaxError", json!("SyntaxError"))]
 #[case::query_selector_returns_the_ref("querySelector", json!(true))]
 #[case::query_selector_all_keeps_document_order("querySelectorAllIds", json!(["first", "second"]))]

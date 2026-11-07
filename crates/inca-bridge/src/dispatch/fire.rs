@@ -455,4 +455,19 @@ mod tests {
 
         assert_eq!(out, serde_json::json!([true, true, true]));
     }
+
+    #[inca_test_macros::gpui_cases]
+    #[gpui::test]
+    #[case::hover_rule(".a:hover { width: 1px }", true)]
+    #[case::focus_rule(".a:focus { width: 1px }", false)]
+    fn tracks_pointer_when_a_rule_names_hover_or_active(
+        _cx: &mut TestAppContext,
+        #[case] css: &str,
+        #[case] expected: bool,
+    ) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        crate::tests::add_sheet(&host, css);
+
+        assert_eq!(dispatcher.tracks_pointer(), expected);
+    }
 }

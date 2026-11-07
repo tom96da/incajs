@@ -663,9 +663,9 @@ A fixed entry is deleted and its ID is never reused.
 - **B-129 The host draws no default look for interactive states**
   `Units: gpui,core · Size: L · Impact: Low`
 
-  The host adds no look for `:focus`. An app styles it in a `<style>` rule.
-  Fix: a preset stylesheet (focus ring, hover and press looks) that an app
-  switches on and off. Design undecided.
+  The host adds no look for `:hover`, `:active` and `:focus`. An app styles
+  them in a `<style>` rule. Fix: a preset stylesheet (focus ring, hover and
+  press looks) that an app switches on and off. Design undecided.
 
 - **B-141 `hidden="until-found"` renders and focuses as an unhidden node**
   `Units: gpui,bridge · Size: M · Impact: Low`
@@ -1419,3 +1419,16 @@ A fixed entry is deleted and its ID is never reused.
   `querySelectorAll()`, `children`, `getElementById()` and the listener
   methods. There is no global `DocumentFragment`. Fix: add `querySelector()`, `querySelectorAll()`,
   `children`, `getElementById()` and the listener methods.
+
+- **B-282 A node moved or detached keeps `:hover` and `:active` until the next hover change**
+  `Units: gpui,bridge · Size: S · Impact: Low`
+
+  A keyed move of an element under a still pointer keeps `:hover` and
+  `:active`, because gpui reports a hover change only when the element's own
+  test differs, and `:active` also returns after a detach and re-attach.
+  Chromium, WebKit and Firefox clear both until the next pointer move. A node
+  moved under another parent stays `:hover` while its new parent is not, and
+  the former ancestors of a detached hovered node keep `:hover` until the next
+  pointer move, where browsers clear them at once. Fix: request a hover re-test
+  after a move of a node in the hover or press path and clear a press path that
+  no longer reaches the root through its recorded parents.

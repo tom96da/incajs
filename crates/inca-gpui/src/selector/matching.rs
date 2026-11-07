@@ -157,6 +157,8 @@ impl Element for Node<'_> {
         match class {
             PseudoClass::Never(_) => false,
             PseudoClass::Defined | PseudoClass::DirLtr => true,
+            PseudoClass::Hover => self.tree.is_hovered(self.node.id()),
+            PseudoClass::Active => self.tree.is_active(self.node.id()),
             PseudoClass::Focus => self.tree.is_focused(self.node.id()),
             PseudoClass::FocusWithin => self.tree.is_focus_within(self.node.id()),
             PseudoClass::Disabled => is_disabled_control(self.node),
@@ -454,13 +456,6 @@ mod tests {
         let p = page();
 
         assert_eq!(p.f.matches(p.node(target), selector), expected);
-    }
-
-    #[test]
-    fn a_negated_interactive_state_matches() {
-        let p = page();
-
-        assert!(p.f.matches(p.p1, ":not(:hover)"));
     }
 
     #[rstest]

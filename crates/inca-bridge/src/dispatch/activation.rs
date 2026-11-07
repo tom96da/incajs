@@ -34,7 +34,7 @@ impl EventDispatcher {
             host.focus.observe(window, cx);
             host.sync_focus_style()
         };
-        self.restyle(changed, window);
+        self.restyle(changed, false, window);
         let focused = self.host.borrow().focus.focused_node(window, cx);
         if active {
             self.fire_at_global(EventTargetId::Window, "focus", &FOCUS_PAYLOAD, window, cx);
@@ -50,8 +50,9 @@ impl EventDispatcher {
         }
     }
 
-    /// Ends the pointer capture with `lostpointercapture`, then forgets the held buttons and a
-    /// canceled `pointerdown`. The release of a button the window never sees would leave them set.
+    /// Ends the pointer capture with `lostpointercapture`, then forgets the held buttons, the
+    /// press state and a canceled `pointerdown`. The release of a button the window never sees
+    /// would leave them set.
     fn reset_pointer(&self, window: &mut Window, cx: &mut App) {
         self.host.borrow_mut().capture_pending = None;
         let payload =
@@ -59,10 +60,13 @@ impl EventDispatcher {
         self.process_capture(&payload, NO_BUTTON, window, cx);
         self.state.pointerdown_canceled.set(false);
         self.state.input_drag.set(None);
-        let mut host = self.host.borrow_mut();
-        host.held_buttons = 0;
-        host.capture_pending = None;
-        host.capture_active = None;
+        {
+            let mut host = self.host.borrow_mut();
+            host.held_buttons = 0;
+            host.capture_pending = None;
+            host.capture_active = None;
+        }
+        self.clear_press(window);
     }
 }
 
@@ -71,7 +75,7 @@ mod tests {
     #![allow(clippy::unwrap_used)]
     use crate::tests::{
         Frame, dispatcher_with_engine, draw, focus_scene, focusable_node, is_focused, listen,
-        listen_global, seen_text, set_active,
+        listen_global, seen_text, set_active, state,
     };
     use crate::{EventDispatcher, Host};
     use gpui::{AppContext as _, TestAppContext};
@@ -359,5 +363,15 @@ mod tests {
             .unwrap();
 
         assert_eq!(focused, (true, false));
+    }
+
+    #[gpui::test]
+    fn deactivating_the_window_clears_the_press_state(cx: &mut TestAppContext) {
+        let (dispatcher, host, window, node) = focus_scene(cx);
+        let path: Vec<_> = host.borrow().tree.ancestors(node).collect();
+        host.borrow_mut().tree.set_active_path(&path);
+        set_active(cx, window, &dispatcher, false);
+
+        assert!(!state(&host.borrow(), node, ":active"));
     }
 }

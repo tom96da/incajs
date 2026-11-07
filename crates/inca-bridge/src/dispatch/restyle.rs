@@ -8,10 +8,16 @@ use gpui::Window;
 use super::EventDispatcher;
 
 impl EventDispatcher {
-    /// Redraws the window when `changed` and a connected rule names the focus state. Returns
-    /// whether it requested the redraw.
-    pub(crate) fn restyle(&self, changed: bool, window: &mut Window) -> bool {
-        let redraw = changed && self.host.borrow().tree.uses_focus_state();
+    /// Redraws the window when `changed` and a connected rule names the pointer state (`pointer`)
+    /// or the focus state. Returns whether it requested the redraw.
+    pub(crate) fn restyle(&self, changed: bool, pointer: bool, window: &mut Window) -> bool {
+        let tree = &self.host.borrow().tree;
+        let redraw = changed
+            && if pointer {
+                tree.uses_pointer_state()
+            } else {
+                tree.uses_focus_state()
+            };
         if redraw {
             window.refresh();
         }
@@ -29,16 +35,20 @@ mod tests {
     use crate::tests::{add_sheet, dispatcher_with_engine};
 
     const FOCUS_RULE: &str = "input:focus { width: 60px }";
+    const HOVER_RULE: &str = "div:hover { width: 60px }";
 
     #[gpui_cases]
     #[gpui::test]
-    #[case::changed_with_a_focus_rule(true, FOCUS_RULE, true)]
-    #[case::changed_without_a_rule(true, "", false)]
-    #[case::unchanged_with_a_focus_rule(false, FOCUS_RULE, false)]
-    #[case::changed_with_only_a_hover_rule(true, "div:hover { width: 60px }", false)]
+    #[case::focus_changed_with_a_focus_rule(true, false, FOCUS_RULE, true)]
+    #[case::focus_changed_without_a_rule(true, false, "", false)]
+    #[case::focus_unchanged_with_a_focus_rule(false, false, FOCUS_RULE, false)]
+    #[case::focus_changed_with_only_a_hover_rule(true, false, HOVER_RULE, false)]
+    #[case::pointer_changed_with_a_hover_rule(true, true, HOVER_RULE, true)]
+    #[case::pointer_changed_with_only_a_focus_rule(true, true, FOCUS_RULE, false)]
     fn restyle_redraws_only_for_a_changed_value_a_rule_reads(
         cx: &mut TestAppContext,
         #[case] changed: bool,
+        #[case] pointer: bool,
         #[case] css: &str,
         #[case] expected: bool,
     ) {
@@ -46,7 +56,7 @@ mod tests {
         add_sheet(&host, css);
         let cx = cx.add_empty_window();
 
-        let redrawn = cx.update(|window, _| dispatcher.restyle(changed, window));
+        let redrawn = cx.update(|window, _| dispatcher.restyle(changed, pointer, window));
 
         assert_eq!(redrawn, expected);
     }
