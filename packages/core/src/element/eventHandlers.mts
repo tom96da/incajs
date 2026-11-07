@@ -4,8 +4,17 @@
 import type { IncaEventMap, IncaEventTarget } from "../types.mts";
 import type { EventHandlers } from "./types.mts";
 
+/** Every event name but the ones that have no handler property. */
+type HandlerEvent = Exclude<
+  keyof IncaEventMap,
+  "focusin" | "focusout" | "compositionstart" | "compositionupdate" | "compositionend"
+>;
+
 /** The events whose handler property every element has. */
-export const HANDLER_EVENTS = [
+export const HANDLER_EVENTS = (<const U extends readonly HandlerEvent[]>(
+  // A name left out of the list makes the call fail with a wrong argument count.
+  ...events: [Exclude<HandlerEvent, U[number]>] extends [never] ? U : [missing: HandlerEvent]
+) => events as unknown as U)(
   "auxclick",
   "beforeinput",
   "blur",
@@ -36,7 +45,7 @@ export const HANDLER_EVENTS = [
   "pointerup",
   "scroll",
   "wheel",
-] as const satisfies readonly (keyof IncaEventMap)[];
+);
 
 /**
  * Defines the event handler properties on `handle`. A value assigned while a property holds `null`

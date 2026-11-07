@@ -3,12 +3,10 @@
 
 import { describe, expectTypeOf, it } from "vitest";
 
-import type { HANDLER_EVENTS } from "./element/eventHandlers.mts";
 import type { EventHandler, IncaElement, IncaInputElement } from "./element/types.mts";
 import type {
   IncaCompositionEvent,
   IncaEvent,
-  IncaEventMap,
   IncaEventTarget,
   IncaFocusEvent,
   IncaInputEvent,
@@ -186,15 +184,6 @@ describe("the event types", () => {
     expectTypeOf<IncaMouseEvent>().toExtend<IncaUIEvent>();
     expectTypeOf<IncaPointerEvent>().toExtend<IncaMouseEvent>();
     expectTypeOf<IncaWheelEvent>().toExtend<IncaMouseEvent>();
-  });
-
-  it("list a handler for every event but focusin, focusout and the composition events", () => {
-    expectTypeOf<(typeof HANDLER_EVENTS)[number]>().toEqualTypeOf<
-      Exclude<
-        keyof IncaEventMap,
-        "focusin" | "focusout" | "compositionstart" | "compositionupdate" | "compositionend"
-      >
-    >();
   });
 });
 
