@@ -32,9 +32,7 @@
     "LICENSE-APACHE"
   ],
   "type": "module",
-  "sideEffects": [
-    "src/vite/runtime/globals.mts"
-  ],
+  "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

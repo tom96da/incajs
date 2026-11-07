@@ -131,6 +131,27 @@ pub fn define_getter<'js>(proto: &Object<'js>, key: &str, get: Function<'js>) ->
     )
 }
 
+/// Defines `get` and `set` as the enumerable, configurable accessor `key` of `proto`. The
+/// functions are named `get <key>` and `set <key>`.
+///
+/// # Errors
+///
+/// Returns an error if the property cannot be defined.
+pub fn define_accessor<'js>(
+    proto: &Object<'js>,
+    key: &str,
+    get: Function<'js>,
+    set: Function<'js>,
+) -> JsResult<()> {
+    proto.prop(
+        key,
+        FunctionAccessor::new_get(get.with_name(format!("get {key}"))?)
+            .set(set.with_name(format!("set {key}"))?)
+            .enumerable()
+            .configurable(),
+    )
+}
+
 /// Defines `value` as the writable, configurable, non-enumerable global `name`.
 ///
 /// # Errors
@@ -158,6 +179,13 @@ mod tests {
         let widget = define_class(ctx, &proto, "Widget", 2, || ()).unwrap();
         define_method(&proto, "run", Function::new(ctx.clone(), || ()).unwrap()).unwrap();
         define_getter(&proto, "size", Function::new(ctx.clone(), || 3).unwrap()).unwrap();
+        define_accessor(
+            &proto,
+            "level",
+            Function::new(ctx.clone(), || 1).unwrap(),
+            Function::new(ctx.clone(), || ()).unwrap(),
+        )
+        .unwrap();
         define_global(ctx, "Widget", widget).unwrap();
         ctx.globals().set("proto", proto).unwrap();
     }
@@ -254,6 +282,31 @@ mod tests {
                     "Object.getOwnPropertyDescriptor(proto, 'size').get.name"
                 ),
                 "get size"
+            );
+        });
+    }
+
+    #[test]
+    fn define_accessor_makes_an_enumerable_accessor_with_a_setter() {
+        with_realm(|ctx| {
+            assert_eq!(attributes(&ctx, "[proto, 'level']"), "-ecgs");
+        });
+    }
+
+    #[rstest]
+    #[case::getter("get", "get level")]
+    #[case::setter("set", "set level")]
+    fn define_accessor_names_the_functions_get_key_and_set_key(
+        #[case] side: &str,
+        #[case] expected: &str,
+    ) {
+        with_realm(|ctx| {
+            assert_eq!(
+                text(
+                    &ctx,
+                    &format!("Object.getOwnPropertyDescriptor(proto, 'level').{side}.name")
+                ),
+                expected
             );
         });
     }

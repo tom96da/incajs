@@ -17,9 +17,9 @@
 //! The public [`class`] module holds the steps that define a native class: its
 //! constructor, methods, getters and global.
 //!
-//! [`Engine`] installs `performance`, `TextEncoder` and `TextDecoder`. The decoder reads every
-//! encoding of the Encoding Standard. The caller installs `console`, the timers and the frame
-//! callbacks.
+//! [`Engine`] installs `performance`, `TextEncoder`, `TextDecoder`, `URL` and `URLSearchParams`.
+//! The decoder reads every encoding of the Encoding Standard. The caller installs `console`, the
+//! timers and the frame callbacks.
 //!
 //! [`Limits`] bounds the memory, the stack and the time a script may use.
 //!
@@ -44,6 +44,7 @@ mod sourcemap;
 mod tests;
 mod time;
 pub mod timers;
+mod url;
 mod vault;
 
 pub use compile::compile_async_function;

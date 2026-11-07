@@ -1,8 +1,6 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-// Provides the `URL` global that vite/module-runner needs; importing it installs it.
-import "./globals.mts";
 import { ModuleRunner } from "vite/module-runner";
 
 import { createIncaDevTransport } from "./createIncaDevTransport.mts";

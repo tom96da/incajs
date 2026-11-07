@@ -154,7 +154,7 @@ fn encode_into(wtf8: &[u8], dest: &mut [u8]) -> (usize, usize) {
 }
 
 /// The UTF-8 bytes of `wtf8`, with each unpaired surrogate replaced by U+FFFD.
-fn encode(wtf8: &[u8]) -> Vec<u8> {
+pub(crate) fn encode(wtf8: &[u8]) -> Vec<u8> {
     let mut out = vec![0; wtf8.len()];
     let (_, written) = encode_into(wtf8, &mut out);
     out.truncate(written);

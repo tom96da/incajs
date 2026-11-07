@@ -392,15 +392,14 @@ A fixed entry is deleted and its ID is never reused.
   over to a new scrolling container that gets the same id. Found by reading;
   not reproduced.
 
-- **B-074 The development window and a production build differ in `URL` and the `define` globals**
+- **B-074 The development window and a production build differ in the `define` globals**
   `Units: cli · Size: S · Impact: Low`
 
-  With `--experimental-hmr` the runtime installs a minimal `URL` and, on the
-  app's `globalThis`, each `define` value whose key is a plain identifier and
-  whose code is a JSON literal. A production build inlines the `define`
-  values and has neither, so the development window and a production build
-  differ. Apply `define` in the module runner's pipeline and implement `URL`
-  natively.
+  With `--experimental-hmr` the runtime installs, on the app's `globalThis`,
+  each `define` value whose key is a plain identifier and whose code is a JSON
+  literal. A production build inlines the `define` values and has no such
+  globals, so the development window and a production build differ. Apply
+  `define` in the module runner's pipeline.
 
 - **B-075 A failed host start in inca dev is handled differently per mode, and the checks overlap**
   `Units: cli · Size: S–M · Impact: Low`
@@ -1437,6 +1436,90 @@ A fixed entry is deleted and its ID is never reused.
   methods. There is no global `DocumentFragment`. Fix: add `querySelector()`, `querySelectorAll()`,
   `children`, `getElementById()` and the listener methods.
 
+- **B-272 `^` and `|` stay raw in the path of a URL**
+  `Units: jsenv · Size: S · Impact: Low`
+
+  `new URL("http://a/p^q|r").pathname` keeps `^` and `|` raw. Chromium
+  percent-encodes both as `%5E` and `%7C`. The parser of the `url` crate
+  decides this. Fix: an upstream fix in the crate that encodes both, or an own
+  path encode set.
+
+- **B-273 A `pathname` of `//x` on a URL with a path and no host drops the `/.` prefix**
+  `Units: jsenv · Size: S · Impact: Low`
+
+  Setting `pathname = "//x"` on `foo:/p` gives `foo://x`, which reads `x` as a
+  host. Chromium gives `foo:/.//x`. Fix: an upstream fix in the `url`
+  crate, or a check in the setter of the wrapper that adds the `/.` prefix.
+
+- **B-274 `file:` URLs parse differently from Chromium**
+  `Units: jsenv · Size: S · Impact: Low`
+
+  The `url` crate keeps `C|` in `file:///C|/x`, accepts `file://C:/x`, drops
+  the host `localhost`, keeps the drive letter for `file:///c:/../x` and for
+  `/x` against `file:///C:/a/b`, and drops `localhost` for the `hostname`
+  setter. Chromium percent-encodes the `|`, rejects `file://C:/x`, keeps
+  `localhost` and drops the drive letter in the relative cases. Fix: an
+  upstream fix in the crate, or an own `file:` parser.
+
+- **B-275 A space in a host and the label `xn--a` are refused**
+  `Units: jsenv · Size: S · Impact: Low`
+
+  `new URL("http://a b/")`, `hostname = "b c"` and
+  `new URL("http://xn--a.com/")` fail. Chromium accepts the space and writes
+  `%20`, and accepts `xn--a.com`. Fix: an upstream fix in the `url` crate, or an own host parser.
+
+- **B-276 `protocol` set on a URL with an opaque path is refused**
+  `Units: jsenv · Size: S · Impact: Low`
+
+  `protocol = "http"` on `mailto:x?q#f` changes nothing. Chromium gives
+  `http://x/?q#f`. Fix: an upstream fix in the `url` crate, or handle the
+  case in the setter of the wrapper.
+
+- **B-277 The origin of a `filesystem:` URL is `"null"`**
+  `Units: jsenv · Size: S · Impact: Low`
+
+  `new URL("filesystem:http://a/t/x").origin` is `"null"`. Chromium gives
+  `http://a`. Fix: read the inner URL of the `filesystem:` scheme in the
+  `origin` getter of the wrapper.
+
+- **B-278 A trailing space of an opaque path goes when the query or fragment is removed**
+  `Units: jsenv · Size: S · Impact: Low`
+
+  With `data:a ?x`, `searchParams.delete("x")`, `search = ""` and, on
+  `data:a #x`, `hash = ""` give `data:a`. Chromium keeps the space and gives
+  `data:a `. The `url` crate strips it when it clears the query or the
+  fragment. Fix: an upstream fix in the crate, or an own serializer for opaque
+  paths.
+
+- **B-279 A URL of 4 GiB or more aborts the host**
+  `Units: jsenv · Size: S · Impact: Low`
+
+  The `url` crate converts the length of the serialization with `unwrap` in
+  `set_query` and `set_fragment`, so a URL over 4 GiB panics, and a panic
+  aborts the host. The heap limit does not bound Rust copies, so a script may
+  reach it. Fix: refuse a string over a fixed length in `usv`, or an upstream
+  fix in the crate.
+
+- **B-280 `console.log` prints an empty object for a `URL`**
+  `Units: jsenv · Size: S · Impact: Low`
+
+  `inspect` has no case for a native class, so
+  `console.log(new URL("http://a"))` prints `{}`. Chromium prints `URL` with
+  `origin`, `protocol`, `username`, `password` and `host`, and
+  `URLSearchParams` as `size=N`. Fix: add a case to `inspect` for native class
+  instances that prints these members.
+
+- **B-281 A `Proxy` record runs all its `getOwnPropertyDescriptor` traps before its `get` traps**
+  `Units: jsenv · Size: S · Impact: Low`
+
+  `new URLSearchParams(proxy)` calls `ownKeys`, then the descriptor trap of
+  every key, then the `get` trap of every key. The record conversion of Web IDL
+  calls the descriptor trap and the `get` trap of one key before the next key.
+  rquickjs reads keys with a filter and gives no public way to read the
+  enumerability of a symbol key. Fix: read the own property descriptor of each
+  key in `record`, which needs a wrapper in the `quickjs` module that turns an
+  atom into its key value.
+
 - **B-282 A node moved or detached keeps `:hover` and `:active` until the next hover change**
   `Units: gpui,bridge · Size: S · Impact: Low`
 
@@ -1449,3 +1532,9 @@ A fixed entry is deleted and its ID is never reused.
   pointer move, where browsers clear them at once. Fix: request a hover re-test
   after a move of a node in the hover or press path and clear a press path that
   no longer reaches the root through its recorded parents.
+
+- **B-283 `URL.createObjectURL` and `URL.revokeObjectURL` don't exist**
+  `Units: jsenv · Size: S · Impact: Low`
+
+  The host has no `Blob`, so a script that calls `URL.createObjectURL` throws a
+  `TypeError`. Fix: add `Blob`, then both functions.

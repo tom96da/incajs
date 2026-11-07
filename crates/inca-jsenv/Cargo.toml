@@ -28,6 +28,7 @@ rquickjs.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 unicode-width.workspace = true
+url.workspace = true
 
 [features]
 # Exposes the test hooks other crates' tests call.

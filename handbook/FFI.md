@@ -22,20 +22,23 @@ read-only global function returns it only while Rust calls it through a native
 gate, so no script reaches it, and Rust holds only the keys. The data of a
 native class instance is the exception. An event object is an instance of a
 native class. The JS values its fields hold, such as `target` and `detail`,
-belong to that instance. The garbage collector traces them, and they go when
-the event goes. They sit in one struct whose trace names every field. A value
-left untraced makes the engine's drop abort the process.
+belong to that instance. So does the `searchParams` object of a `URL` object.
+The garbage collector traces them, and they go when the event goes or, for
+`searchParams`, with its `URL` object. They sit in one struct whose trace names
+every field. A value left untraced makes the engine's drop abort the process.
 
 All `unsafe` code of the Rust crates lives in the quickjs module of `inca-jsenv`
 (`quickjs.rs` and `quickjs/`).
 The one exception is the `unsafe impl` that rquickjs's `JsLifetime` derive
 expands to, which gives a Rust value on a JS object its lifetime marker.
 `clippy.toml` restricts that derive to the files that allow it:
-`inca-jsenv/src/sourcemap/store.rs`, `inca-jsenv/src/encoding.rs` and
-`inca-bridge/src/event/record.rs`. It restricts `rquickjs::Persistent` too,
-since one kept past its runtime aborts the process when the runtime drops.
-`Engine` installs `TextEncoder` and `TextDecoder` as native classes. Their
-instances own plain Rust data and trace nothing.
+`inca-jsenv/src/sourcemap/store.rs`, `inca-jsenv/src/encoding.rs`,
+`inca-jsenv/src/url.rs` and `inca-bridge/src/event/record.rs`. It restricts
+`rquickjs::Persistent` too, since one kept past its runtime aborts the process
+when the runtime drops.
+`Engine` installs `TextEncoder`, `TextDecoder`, `URL` and `URLSearchParams` as
+native classes. The instances of all of them but `URL` own plain Rust data and
+trace nothing. A `URL` instance traces its `searchParams` object.
 
 ## Retained virtual tree
 
