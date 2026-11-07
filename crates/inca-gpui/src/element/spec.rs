@@ -3,8 +3,6 @@
 
 use std::collections::HashMap;
 
-use gpui::Point;
-
 use super::parse::style_spec_from_props;
 use crate::input::sanitized;
 use crate::tree::{AttributeValue, NodeId, TEXT_TAG, VirtualNode, VirtualTree};
@@ -262,13 +260,22 @@ pub fn hidden_by_attribute(tree: &VirtualTree, id: NodeId) -> bool {
         .is_some_and(|node| hidden_with(node, &tree.computed_style(id)))
 }
 
+/// The axes a wheel step can scroll.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WheelAxes {
+    /// Whether the horizontal axis scrolls.
+    pub x: bool,
+    /// Whether the vertical axis scrolls.
+    pub y: bool,
+}
+
 /// The axes along which a wheel step can scroll `id` now. `None` when the node
 /// is unknown or not connected, or it or an ancestor has `display: none`, a hiding
 /// `hidden` attribute or `inert`. Otherwise an axis is `true` when its
 /// overflow is `scroll` or `auto`; a container with any other overflow gives
-/// `Some((false, false))`.
+/// `Some(WheelAxes { x: false, y: false })`.
 #[must_use]
-pub fn wheel_axes(tree: &VirtualTree, id: NodeId) -> Option<Point<bool>> {
+pub fn wheel_axes(tree: &VirtualTree, id: NodeId) -> Option<WheelAxes> {
     tree.get(id)?;
     if !tree.is_connected(id) {
         return None;
@@ -286,7 +293,7 @@ pub fn wheel_axes(tree: &VirtualTree, id: NodeId) -> Option<Point<bool>> {
     }
     let style = style_spec_from_props(&tree.computed_style(id));
     let scrolls = |axis| axis == Some(OverflowSpec::Scroll);
-    Some(Point {
+    Some(WheelAxes {
         x: scrolls(style.overflow_x),
         y: scrolls(style.overflow_y),
     })

@@ -365,27 +365,40 @@ mod tests {
         assert!(mismatches.is_empty(), "{mismatches:#?}");
     }
 
+    /// A `<style>` element under the root with a rule that hides `.h`.
+    fn hide_class_h(tree: &mut VirtualTree) {
+        let style = tree.create_node("style").unwrap();
+        tree.append_child(ROOT, style).unwrap();
+        let css = tree.create_node("#text").unwrap();
+        tree.set_attribute(css, "value", ".h { display: none }")
+            .unwrap();
+        tree.append_child(style, css).unwrap();
+    }
+
     #[test]
     fn a_node_under_a_rule_display_none_has_no_tab_index() {
-        let mut f = Fixture::new();
-        f.sheet(".h { display: none }");
-        let parent = f.add(f.root, "div", "parent");
-        f.attr(parent, "class", "h");
-        let child = f.add(parent, "div", "child");
-        f.attr(child, "tabindex", "0");
+        let (mut tree, _) = rooted_tree(0);
+        hide_class_h(&mut tree);
+        let parent = tree.create_node("div").unwrap();
+        tree.append_child(ROOT, parent).unwrap();
+        tree.set_attribute(parent, "class", "h").unwrap();
+        let child = tree.create_node("div").unwrap();
+        tree.append_child(parent, child).unwrap();
+        tree.set_attribute(child, "tabindex", "0").unwrap();
 
-        assert_eq!(FocusRegistry::tab_index_of(&f.tree, child), None);
+        assert_eq!(FocusRegistry::tab_index_of(&tree, child), None);
     }
 
     #[test]
     fn a_node_with_a_rule_display_none_has_no_tab_index() {
-        let mut f = Fixture::new();
-        f.sheet(".h { display: none }");
-        let node = f.add(f.root, "div", "node");
-        f.attr(node, "class", "h");
-        f.attr(node, "tabindex", "0");
+        let (mut tree, _) = rooted_tree(0);
+        hide_class_h(&mut tree);
+        let node = tree.create_node("div").unwrap();
+        tree.append_child(ROOT, node).unwrap();
+        tree.set_attribute(node, "class", "h").unwrap();
+        tree.set_attribute(node, "tabindex", "0").unwrap();
 
-        assert_eq!(FocusRegistry::tab_index_of(&f.tree, node), None);
+        assert_eq!(FocusRegistry::tab_index_of(&tree, node), None);
     }
 
     #[test]

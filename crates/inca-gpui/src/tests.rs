@@ -280,7 +280,7 @@ impl EventSink for Probe {
         Some(self.handles.borrow_mut().entry(id).or_default().clone())
     }
 
-    fn wheel_axes(&self, id: NodeId) -> Option<gpui::Point<bool>> {
+    fn wheel_axes(&self, id: NodeId) -> Option<crate::WheelAxes> {
         wheel_axes(&self.tree.borrow(), id)
     }
 

@@ -11,8 +11,8 @@ pub mod tree;
 pub use element::{
     AlignSpec, ColorSpec, DisplaySpec, EdgesSpec, ElementSpec, ElementTag, FlexDirectionSpec,
     LengthSpec, NodeLayout, OverflowSpec, STYLE_KEYS, StyleKey, StyleSpec, TextInputHandler,
-    ValueKind, build_element, build_element_with_events, build_spec, clear_presses, debug_selector,
-    declared_window_size, hidden_by_attribute, is_scroll_container, mouse_target,
+    ValueKind, WheelAxes, build_element, build_element_with_events, build_spec, clear_presses,
+    debug_selector, declared_window_size, hidden_by_attribute, is_scroll_container, mouse_target,
     opens_context_menu, pressed_target, render_tree, render_tree_with_events, style_warning,
     wheel_axes,
 };
