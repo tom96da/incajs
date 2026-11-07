@@ -15,9 +15,10 @@ let nextCallbackId = 0;
 const native = {
   rootNodeId: vi.fn<() => number>(() => 0),
   createNode: vi.fn<(tag: string) => number>((_tag: string) => 1),
-  appendChild: vi.fn<(parentId: number, childId: number) => void>(),
-  insertBefore: vi.fn<(parentId: number, childId: number, anchorId: number | null) => void>(),
+  appendChild: vi.fn<(parentId: number, childId: number) => number>(() => 0),
+  insertBefore: vi.fn<(parentId: number, childId: number, refId: number | null) => number>(() => 0),
   removeChild: vi.fn<(parentId: number, childId: number) => void>(),
+  replaceChild: vi.fn<(parentId: number, nodeId: number, childId: number) => number>(() => 0),
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   getAttribute: vi.fn<(nodeId: number, key: string) => string | number | boolean | null>(
     () => null,

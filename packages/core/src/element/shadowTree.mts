@@ -3,16 +3,44 @@
 
 import { holdNode, insertBefore, releaseListeners, removeChild } from "../tree.mts";
 import { isDestroyed, isHeld, markRemoved, releaseWhenCollected } from "./lifecycle.mts";
-import type { IncaElement, IncaNode } from "./types.mts";
+import type { IncaElement, IncaNode, IncaParent } from "./types.mts";
 
-// Drops `child` from its parent in this module's shadow of the native tree.
-function unlink(child: IncaNode): void {
+/**
+ * Holds `child` until its handle is collected, so the host does not free it at the next frame.
+ * @param child - the removed node
+ * @internal
+ */
+export function keep(child: IncaNode): void {
+  if (isDestroyed(child) || isHeld(child)) return;
+  holdNode(child.__node_id);
+  releaseWhenCollected(child);
+}
+
+/**
+ * Drops `child` from its parent in the shadow of the host tree.
+ * @param child - the node to detach
+ * @internal
+ */
+export function unlink(child: IncaNode): void {
   const parent = child.parent;
   if (!parent) return;
 
   const index = parent.__children.indexOf(child);
   if (index !== -1) parent.__children.splice(index, 1);
   child.parent = null;
+}
+
+/**
+ * Puts the moved nodes into `parent.__children` at `position`, which the host counted after it
+ * detached them.
+ * @param parent - the node that received the nodes
+ * @param moved - the nodes in order
+ * @param position - the place of the first node
+ * @internal
+ */
+export function link(parent: IncaParent, moved: readonly IncaNode[], position: number): void {
+  parent.__children.splice(position, 0, ...moved);
+  for (const node of moved) node.parent = parent;
 }
 
 function detach(child: IncaNode): void {
@@ -66,23 +94,12 @@ export function remove(child: IncaNode): void {
 }
 
 /**
- * Holds `child` until its handle is collected, so the host does not free it at the next frame.
- *
- * @param child - the removed node
- */
-function keep(child: IncaNode): void {
-  if (isDestroyed(child) || isHeld(child)) return;
-  holdNode(child.__node_id);
-  releaseWhenCollected(child);
-}
-
-/**
  * Looks up the current parent.
  * @param node - the node to query
- * @returns the current parent, or `null` if it isn't attached
+ * @returns the current parent, or `null` if it isn't attached or sits in a fragment
  */
 export function parentNode(node: IncaNode): IncaElement | null {
-  return node.parent;
+  return node.parent?.kind === "element" ? node.parent : null;
 }
 
 /**

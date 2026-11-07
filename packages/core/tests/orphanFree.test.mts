@@ -88,15 +88,19 @@ function installNative(): void {
     return id;
   };
   nodes.set(ROOT, { tag: "root", parent: null, children: [], listeners: [] });
-  const insertBefore = (parentId: number, childId: number, anchorId: number | null): void => {
+  const insertBefore = (parentId: number, childId: number, refId: number | null): number => {
     const parent = nodeOf(parentId);
     nodeOf(childId);
+    if (refId !== null && !parent.children.includes(refId)) {
+      throw new DOMException("not a child", "NotFoundError");
+    }
     detach(childId);
     orphans.delete(childId);
-    const at = anchorId === null ? -1 : parent.children.indexOf(anchorId);
+    const at = refId === null ? -1 : parent.children.indexOf(refId);
     if (at === -1) parent.children.push(childId);
     else parent.children.splice(at, 0, childId);
     nodeOf(childId).parent = parentId;
+    return parent.children.indexOf(childId);
   };
   globalThis.__inca_native__ = {
     rootNodeId: () => ROOT,
@@ -107,9 +111,16 @@ function installNative(): void {
     },
     appendChild: (parentId, childId) => insertBefore(parentId, childId, null),
     insertBefore,
+    replaceChild: () => {
+      throw new Error("not used here");
+    },
     removeChild(parentId, childId) {
       nodeOf(parentId);
-      if (nodes.get(childId)?.parent === parentId) detach(childId);
+      if (!nodes.has(childId)) return;
+      if (nodes.get(childId)?.parent !== parentId) {
+        throw new DOMException("not a child", "NotFoundError");
+      }
+      detach(childId);
     },
     setAttribute: (id) => void nodeOf(id),
     getAttribute: (id) => (nodeOf(id), null),

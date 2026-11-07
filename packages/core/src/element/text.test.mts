@@ -332,7 +332,7 @@ describe("remove", () => {
     const root = createElementNode("div");
     const child = createElementNode("div");
     insert(child, root);
-    data[child.__node_id] = "c";
+    vi.mocked(host.getAttribute).mockReturnValueOnce("c");
 
     setElementText(root, "");
 

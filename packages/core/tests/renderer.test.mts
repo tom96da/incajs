@@ -14,12 +14,16 @@ import { createEventTarget } from "../src/eventTarget.mts";
 import { createNode, rootNodeId } from "../src/tree.mts";
 import { createIncaApp } from "../src/vue/index.mts";
 import { vModelText, withDirectives } from "../src/vue/runtime.mts";
+import type { NodeMutationMembers } from "../src/element/nodeMutation.mts";
 import type { EventHandlers } from "../src/element/types.mts";
 import type { IncaElement, NodeId } from "../src/index.mts";
 import type { HostCallback } from "../src/native.mts";
 
 /** The handler properties, absent: nothing here reads them. */
 const noHandlers = {} as EventHandlers;
+
+/** The mutation members, absent: nothing here calls them. */
+const noMutation = {} as NodeMutationMembers;
 
 /**
  * What the fake host knows of each registration beyond its node and event.
@@ -88,24 +92,36 @@ function installFakeNative(): Map<NodeId, FakeNode> {
       return rootId;
     },
     createNode: allocate,
-    appendChild(parentId: NodeId, childId: NodeId): void {
-      globalThis.__inca_native__.insertBefore(parentId, childId, null);
+    appendChild(parentId: NodeId, childId: NodeId): number {
+      return globalThis.__inca_native__.insertBefore(parentId, childId, null);
     },
-    insertBefore(parentId: NodeId, childId: NodeId, anchorId: NodeId | null): void {
+    insertBefore(parentId: NodeId, childId: NodeId, refId: NodeId | null): number {
       const parent = requireNode(parentId);
       const child = requireNode(childId);
+      const anchorIndex = refId === null ? -1 : parent.children.indexOf(refId);
+      if (refId !== null && anchorIndex === -1) {
+        throw new DOMException("not a child", "NotFoundError");
+      }
       detach(childId);
-      const anchorIndex = anchorId === null ? -1 : parent.children.indexOf(anchorId);
-      if (anchorIndex === -1) {
+      const at = refId === null ? -1 : parent.children.indexOf(refId);
+      if (at === -1) {
         parent.children.push(childId);
       } else {
-        parent.children.splice(anchorIndex, 0, childId);
+        parent.children.splice(at, 0, childId);
       }
       child.parent = parentId;
+      return parent.children.indexOf(childId);
+    },
+    replaceChild(): number {
+      throw new Error("not used here");
     },
     removeChild(parentId: NodeId, childId: NodeId): void {
       requireNode(parentId);
-      if (nodes.get(childId)?.parent === parentId) detach(childId);
+      if (!nodes.has(childId)) return;
+      if (nodes.get(childId)?.parent !== parentId) {
+        throw new DOMException("not a child", "NotFoundError");
+      }
+      detach(childId);
     },
     setAttribute(nodeId: NodeId, key: string, value: unknown): void {
       requireNode(nodeId).attributes[key] = value;
@@ -264,6 +280,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
     const rootId = createNode("root");
     root = {
       ...noHandlers,
+      ...noMutation,
       getAttribute: () => null,
       setAttribute: () => {},
       hasAttribute: () => false,

@@ -26,7 +26,7 @@ export function layoutBox(el: IncaElement): LayoutBox | null {
  */
 export function offsetParentOf(el: IncaElement): IncaElement | null {
   const parent = el.parent;
-  if (!layoutBox(el) || !parent || !layoutBox(parent)) return null;
+  if (!layoutBox(el) || parent?.kind !== "element" || !layoutBox(parent)) return null;
   return parent;
 }
 

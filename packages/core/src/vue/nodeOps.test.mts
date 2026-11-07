@@ -12,8 +12,8 @@ let nextId = 1;
 /** The host bindings the element handles call. */
 const native = {
   createNode: vi.fn<(tag: string) => number>(() => nextId++),
-  appendChild: vi.fn<(parentId: number, childId: number) => void>(),
-  insertBefore: vi.fn<(parentId: number, childId: number, anchorId: number | null) => void>(),
+  appendChild: vi.fn<(parentId: number, childId: number) => number>(() => 0),
+  insertBefore: vi.fn<(parentId: number, childId: number, refId: number | null) => number>(() => 0),
   removeChild: vi.fn<(parentId: number, childId: number) => void>(),
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   setStyle: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),

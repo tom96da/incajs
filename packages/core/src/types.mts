@@ -3,7 +3,7 @@
 
 // The package's public type surface.
 
-import type { EventHandlers, IncaElement } from "./element/types.mts";
+import type { EventHandlers, IncaElement, IncaFragment } from "./element/types.mts";
 
 /**
  * Stable handle to a node in the native retained tree, returned by `createNode`
@@ -219,6 +219,11 @@ export interface IncaDocument extends IncaEventTarget, EventHandlers<IncaDocumen
    * takes effect for this property at once.
    */
   readonly activeElement: IncaElement | null;
+  /**
+   * Creates an empty fragment. Inserting it moves its children into the node it is inserted into.
+   * @returns the new fragment
+   */
+  createDocumentFragment(): IncaFragment;
 }
 
 /**
