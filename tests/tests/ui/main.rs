@@ -29,3 +29,4 @@ mod scroll;
 mod style_element;
 mod tabindex;
 mod timing;
+mod visual_state;
