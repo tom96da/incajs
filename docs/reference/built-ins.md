@@ -25,7 +25,7 @@ Both follow the
   - `decode()` returns an empty string when a `stream` getter of the options
     detaches the buffer of the view.
 
-## `URL` and `URLSearchParams` <Badge type="warning" text="unreleased"/>
+## `URL` and `URLSearchParams`
 
 Both follow the
 [URL Standard](https://url.spec.whatwg.org/).

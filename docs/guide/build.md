@@ -43,7 +43,7 @@ default), alongside the plain build output:
 `inca package` doesn't sign the app yet. macOS Gatekeeper will warn
 before it opens.
 
-## Run log <Badge type="warning" text="unreleased"/>
+## Run log
 
 A packaged app has no terminal, so it writes its errors to a log file. Each run
 writes one file. The first error or panic of the run creates it, and a run

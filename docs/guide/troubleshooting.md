@@ -29,12 +29,12 @@ app fails to start rather than falling back to a software renderer. See
 [Linux runtime requirements](./#linux-runtime-requirements) for the
 libraries and driver package it needs, and how to check for them.
 
-## Where does a packaged app write its errors? <Badge type="warning" text="unreleased"/>
+## Where does a packaged app write its errors?
 
 A packaged app writes its errors and crash reports to a log file, one file for
 each run. [Run log](./build#run-log) says where the file is and what it holds.
 
-## Why does my script throw an out-of-memory or a stack error? <Badge type="warning" text="unreleased"/>
+## Why does my script throw an out-of-memory or a stack error?
 
 The host limits a script to 1 GiB of heap and 6 MiB of stack. An allocation
 past the heap limit throws `InternalError: out of memory`, and recursion past
@@ -42,7 +42,7 @@ the stack limit throws `RangeError: Maximum call stack size exceeded`. The
 engine can throw `null` where it cannot allocate an error object, and the host
 reports that as `null. the engine also throws null when it runs out of memory`.
 
-## Why does a rule of my stylesheet have no effect? <Badge type="warning" text="unreleased"/>
+## Why does a rule of my stylesheet have no effect?
 
 The host reads a subset of CSS. It drops what it cannot read and prints a line
 that starts with `<style>:` in the terminal of `inca dev`, naming the rule or

@@ -10,6 +10,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.0.29] - 2026-11-08
+
 ### Added
 
 - nodes have `appendChild()`, `insertBefore()`, `removeChild()` and `replaceChild()` ([c9fec6f](https://github.com/tom96da/incajs/commit/c9fec6f), [35c8af1](https://github.com/tom96da/incajs/commit/35c8af1))
@@ -570,7 +572,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - prebuilt `inca-host` binaries for linux-x64, linux-arm64, and darwin-arm64, resolved automatically per platform
 - click event dispatch from the native tree back into JS
 
-[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.28...HEAD
+[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.29...HEAD
+[0.0.29]: https://github.com/tom96da/incajs/releases/tag/v0.0.29
 [0.0.28]: https://github.com/tom96da/incajs/releases/tag/v0.0.28
 [0.0.27]: https://github.com/tom96da/incajs/releases/tag/v0.0.27
 [0.0.26]: https://github.com/tom96da/incajs/releases/tag/v0.0.26
