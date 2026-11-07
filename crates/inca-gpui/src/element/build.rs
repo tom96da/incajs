@@ -10,7 +10,7 @@ use super::pointer::{
     mark_mouse_target, pointer_tracker, root_keys, wire_focus, wire_hover, wire_modifier_keys,
 };
 use super::scroll::{scroll_anchor, wire_scroll};
-use super::spec::{ElementSpec, ElementTag, build_spec};
+use super::spec::{ElementSpec, ElementTag, WheelAxes, build_spec};
 use super::style::{apply_style, clip_scroll_axes};
 use crate::event_sink::{EventPayload, EventSink, noop_sink_methods};
 use crate::tree::{NodeId, VirtualTree};
@@ -174,7 +174,7 @@ impl EventSink for NoSink {
         None
     }
 
-    fn wheel_axes(&self, _node_id: NodeId) -> Option<Point<bool>> {
+    fn wheel_axes(&self, _node_id: NodeId) -> Option<WheelAxes> {
         None
     }
 

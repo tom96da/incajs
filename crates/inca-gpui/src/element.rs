@@ -37,6 +37,6 @@ pub use parse::declared_window_size;
 pub use pointer::{clear_presses, mouse_target, opens_context_menu, pressed_target};
 pub use spec::{
     AlignSpec, ColorSpec, DisplaySpec, EdgesSpec, ElementSpec, ElementTag, FlexDirectionSpec,
-    LengthSpec, OverflowSpec, StyleSpec, build_spec, hidden_by_attribute, is_scroll_container,
-    wheel_axes,
+    LengthSpec, OverflowSpec, StyleSpec, WheelAxes, build_spec, hidden_by_attribute,
+    is_scroll_container, wheel_axes,
 };

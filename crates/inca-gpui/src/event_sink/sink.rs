@@ -44,7 +44,7 @@ pub trait EventSink {
     /// the live tree (see [`crate::wheel_axes`]). `None` when the node is unknown,
     /// detached, hidden or inert. A shown container without `scroll` overflow
     /// gives `false` on both axes.
-    fn wheel_axes(&self, node_id: NodeId) -> Option<gpui::Point<bool>>;
+    fn wheel_axes(&self, node_id: NodeId) -> Option<crate::WheelAxes>;
 
     /// Forgets every recorded layout. Called before each frame's tree is
     /// built, so only nodes laid out in the new frame have a record.

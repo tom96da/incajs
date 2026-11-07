@@ -4,7 +4,7 @@
 use gpui::prelude::*;
 use gpui::{Bounds, Global, Pixels, Point, ScrollHandle, Window, div, point, px};
 
-use super::spec::{ElementSpec, StyleSpec};
+use super::spec::{ElementSpec, StyleSpec, WheelAxes};
 use crate::NodeId;
 use crate::event_sink::EventSink;
 
@@ -25,7 +25,7 @@ impl Global for RootStep {}
 
 /// The scroll change a wheel `delta` makes along the scrolling `axes`. A
 /// delta on both axes moves along y when the magnitudes tie.
-pub(super) fn axis_step(axes: Point<bool>, delta: Point<Pixels>) -> Point<Pixels> {
+pub(super) fn axis_step(axes: WheelAxes, delta: Point<Pixels>) -> Point<Pixels> {
     let along = |own: bool, main: Pixels, cross: Pixels, cross_scrolls: bool| {
         if !own {
             Pixels::ZERO
@@ -52,7 +52,7 @@ pub(super) fn axis_step(axes: Point<bool>, delta: Point<Pixels>) -> Point<Pixels
 /// The offset a wheel `delta` moves `handle` to, clamped to the content of the
 /// last layout. `None` when the clamped offset stays where it is.
 pub(super) fn next_offset(
-    axes: Point<bool>,
+    axes: WheelAxes,
     handle: &ScrollHandle,
     delta: Point<Pixels>,
 ) -> Option<Point<Pixels>> {

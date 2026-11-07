@@ -67,7 +67,7 @@ impl EventSink for EventDispatcher {
         Some(self.host.borrow().scroll_handle(node_id))
     }
 
-    fn wheel_axes(&self, node_id: NodeId) -> Option<gpui::Point<bool>> {
+    fn wheel_axes(&self, node_id: NodeId) -> Option<inca_gpui::WheelAxes> {
         inca_gpui::wheel_axes(&self.host.borrow().tree, node_id)
     }
 
