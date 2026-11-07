@@ -13,15 +13,12 @@ use super::Natives;
 use super::convert::{JsNodeId, throw_tree_error};
 use super::host::Host;
 
-/// The retained tree itself: allocating, attaching, and describing nodes, plus `destroyNode`,
+/// The retained tree itself: allocating and describing nodes, plus `destroyNode`,
 /// `releaseListeners`, `holdNode` and `releaseNode`. Freeing a subtree is a tree operation first,
 /// even though it also releases the listener/focus state that named its nodes.
 pub(super) fn install_tree(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("rootNodeId", root_node_id)?;
     n.set("createNode", create_node)?;
-    n.set("appendChild", append_child)?;
-    n.set("insertBefore", insert_before)?;
-    n.set("removeChild", remove_child)?;
     n.set("setAttribute", super::attributes::set_attribute)?;
     n.set("getAttribute", super::attributes::get_attribute)?;
     n.set("removeAttribute", super::attributes::remove_attribute)?;
@@ -47,74 +44,17 @@ fn create_node<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, String) -> JsR
     }
 }
 
-fn append_child<'js>(
-    host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, JsNodeId) -> JsResult<()> {
-    move |ctx, JsNodeId(parent_id), JsNodeId(child_id)| {
-        insert_child(&ctx, &mut host.borrow_mut(), parent_id, child_id, None)
-    }
-}
-
-fn insert_before<'js>(
-    host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, JsNodeId, Option<JsNodeId>) -> JsResult<()> {
-    move |ctx, JsNodeId(parent_id), JsNodeId(child_id), anchor_id| {
-        let anchor_id = anchor_id.map(|JsNodeId(id)| id);
-        insert_child(&ctx, &mut host.borrow_mut(), parent_id, child_id, anchor_id)
-    }
-}
-
-/// Inserts `child_id` under `parent_id` before `anchor_id`, or last without one, and queues
-/// its focus re-check. A moved attached node drops the focus it held.
-fn insert_child(
-    ctx: &Ctx<'_>,
-    host: &mut Host,
-    parent_id: NodeId,
-    child_id: NodeId,
-    anchor_id: Option<NodeId>,
-) -> JsResult<()> {
-    refuse_root(ctx, host, child_id, "moved")?;
-    let attached = is_attached(host, child_id);
-    let before = host.tree.preceding(child_id);
-    host.tree
-        .insert_before(parent_id, child_id, anchor_id)
-        .map_err(|err| throw_tree_error(ctx, err))?;
-    if attached {
-        drop_focus(host, child_id);
-        move_tab_start(host, child_id, before);
-    }
-    mark_focus_dirty(host, child_id);
-    Ok(())
-}
-
-fn remove_child<'js>(
-    host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, JsNodeId) -> JsResult<()> {
-    move |ctx, JsNodeId(parent_id), JsNodeId(child_id)| {
-        let mut host = host.borrow_mut();
-        let child_of_parent = host
-            .tree
-            .get(child_id)
-            .is_some_and(|node| node.parent() == Some(parent_id));
-        let before = host.tree.preceding(child_id);
-        host.tree
-            .remove_child(parent_id, child_id)
-            .map_err(|err| throw_tree_error(&ctx, err))?;
-        if child_of_parent {
-            drop_focus(&mut host, child_id);
-            move_tab_start(&mut host, child_id, before);
-            mark_focus_dirty(&mut host, child_id);
-        }
-        Ok(())
-    }
-}
-
 fn destroy_node<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Vec<u32>> {
     move |ctx, JsNodeId(node_id)| {
         let mut host = host.borrow_mut();
-        refuse_root(&ctx, &host, node_id, "destroyed")?;
+        if node_id == host.root() {
+            return Err(Exception::throw_type(
+                &ctx,
+                "the root node belongs to the host and cannot be destroyed",
+            ));
+        }
         let before = host.tree.preceding(node_id);
-        move_tab_start(&mut host, node_id, before);
+        host.move_tab_start(node_id, before);
         let freed = host.tree.destroy_node(node_id);
         let callback_ids = host.free_ids(&freed);
         callbacks::release(&ctx, &callback_ids)?;
@@ -155,48 +95,10 @@ fn release_node(host: Rc<RefCell<Host>>) -> impl Fn(JsNodeId) {
     move |JsNodeId(node_id)| host.borrow_mut().tree.release(node_id)
 }
 
-/// Refuses `id` when it is the root node, which belongs to the host. `verb`
-/// completes the message, as in "cannot be {verb}".
-///
-/// # Errors
-///
-/// Throws a `TypeError` when `id` is the root.
-fn refuse_root(ctx: &Ctx<'_>, host: &Host, id: NodeId, verb: &str) -> JsResult<()> {
-    if id == host.root() {
-        return Err(Exception::throw_type(
-            ctx,
-            &format!("the root node belongs to the host and cannot be {verb}"),
-        ));
-    }
-    Ok(())
-}
-
-fn is_attached(host: &Host, node_id: NodeId) -> bool {
-    host.tree
-        .get(node_id)
-        .is_some_and(|node| node.parent().is_some())
-}
-
-/// Called when `removeChild` detaches a node or an insert moves an attached
-/// one. A node that was never attached holds no focus to drop.
-fn drop_focus(host: &mut Host, node_id: NodeId) {
-    host.focus.drop_focus_in(&host.tree, node_id);
-}
-
-/// Moves where Tab starts off `node_id`'s subtree to `before`, the node right before its place.
-fn move_tab_start(host: &mut Host, node_id: NodeId, before: Option<NodeId>) {
-    host.focus.start_leaves(&host.tree, node_id, before);
-}
-
-/// Queues a focus re-check of the node and its subtree.
-pub(super) fn mark_focus_dirty(host: &mut Host, node_id: NodeId) {
-    host.focus.mark_subtree_dirty(&host.tree, node_id);
-}
-
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
-    use crate::test_support::{LISTEN_JS, callback_ids, engine_with_bindings, error_name};
+    use crate::test_support::{LISTEN_JS, callback_ids, engine_with_bindings};
     use crate::tests::callback_stored;
     use crate::{EventTargetId, Host};
     use inca_gpui::NodeId;
@@ -597,57 +499,6 @@ mod tests {
         assert!(caught, "the root belongs to the host, not to the app");
         let host = host.borrow();
         assert!(host.tree.get(host.root()).is_some());
-    }
-
-    #[test]
-    fn moving_the_root_throws_a_catchable_exception() {
-        let (engine, host) = engine_with_bindings();
-
-        let caught: u32 = engine
-            .eval(
-                r"
-                const root = __inca_native__.rootNodeId();
-                const n = __inca_native__.createNode('div');
-                let caught = 0;
-                try {
-                    __inca_native__.appendChild(n, root);
-                } catch (e) {
-                    if (e instanceof TypeError) caught += 1;
-                }
-                try {
-                    __inca_native__.insertBefore(n, root, null);
-                } catch (e) {
-                    if (e instanceof TypeError) caught += 1;
-                }
-                __inca_native__.destroyNode(n);
-                caught;
-                ",
-            )
-            .unwrap();
-
-        assert_eq!(caught, 2, "the root belongs to the host, not to the app");
-        let host = host.borrow();
-        let root = host.tree.get(host.root()).unwrap();
-        assert_eq!(root.parent(), None);
-    }
-
-    #[test]
-    fn a_cycle_throws_hierarchy_request_error() {
-        let (engine, _host) = engine_with_bindings();
-        engine
-            .eval::<()>(
-                r"
-                globalThis.a = __inca_native__.createNode('div');
-                globalThis.c = __inca_native__.createNode('div');
-                __inca_native__.appendChild(a, c);
-                ",
-            )
-            .unwrap();
-
-        assert_eq!(
-            error_name(&engine, "__inca_native__.appendChild(c, a)"),
-            "HierarchyRequestError"
-        );
     }
 
     /// Builds `root > branch > leaf` with a click listener on each of the two lower nodes.

@@ -429,12 +429,10 @@ mod tests {
         assert_eq!(build_spec(&tree, id).unwrap().tag, want);
     }
 
-    #[rstest]
-    #[case::text("#text")]
-    #[case::input("input")]
-    fn a_text_or_input_spec_has_no_children(#[case] tag: &str) {
+    #[test]
+    fn an_input_spec_has_no_children() {
         let mut tree = VirtualTree::new();
-        let id = tree.create_node(tag).unwrap();
+        let id = tree.create_node("input").unwrap();
         let child = tree.create_node("div").unwrap();
         tree.append_child(id, child).unwrap();
         assert!(build_spec(&tree, id).unwrap().children.is_empty());

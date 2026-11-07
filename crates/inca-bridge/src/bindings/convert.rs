@@ -126,9 +126,10 @@ pub(super) fn existing_node<'a>(
 
 pub(super) fn throw_tree_error(ctx: &Ctx<'_>, err: TreeError) -> rquickjs::Error {
     match err {
-        TreeError::WouldCycle(_) => {
+        TreeError::WouldCycle(_) | TreeError::LeafParent(_) | TreeError::RootMoved(_) => {
             Exception::throw_dom(ctx, "HierarchyRequestError", &err.to_string())
         }
+        TreeError::NotAChild { .. } => Exception::throw_dom(ctx, "NotFoundError", &err.to_string()),
         TreeError::IndexSize => Exception::throw_dom(ctx, "IndexSizeError", &err.to_string()),
         _ => Exception::throw_type(ctx, &err.to_string()),
     }

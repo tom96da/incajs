@@ -51,17 +51,19 @@ the custom renderer's output. Each node has:
 | `parent` | `Option<u32>` | The node this one is attached to, if any. |
 | `children` | `Vec<u32>` | Ordered child node handles. |
 
-- A node has at most one parent.
+- A node has at most one parent. A `#fragment` has none.
 - The text children of a connected `style` element hold rules. Layout and the
   scroll and focus checks read a node's `style_props` after the matching rules
   apply, and the `style_props` win over every rule. The host prints each
   dropped rule, at-rule and declaration through `warn` as `<style>: <line>`.
-- `appendChild` and `insertBefore` detach the child first, so they also move
-  a node.
-- Detaching, moving or destroying a node drops the focus its subtree holds
-  at the call, with no `blur` or `focusout`.
-- Making a node its own ancestor throws. A `childId` naming the root, which
-  belongs to the host, throws too.
+- `appendChild`, `insertBefore` and `replaceChild` detach the node first, so
+  they also move a node. A `#fragment` moves its children in order and stays
+  empty. Each call returns the position of the first inserted node among the
+  children of `parentId`.
+- Detaching, moving, replacing or destroying a node drops the focus its subtree
+  holds at the call, with no `blur` or `focusout`. Detaching, moving or
+  replacing a node sets the scroll offsets of its subtree to 0.
+- `removeChild` and `replaceChild` keep the listeners of the node they detach.
 - A `nodeId` that is not a finite whole number in the `u32` range throws a
   `TypeError`.
 - `destroyNode` frees a node and its subtree at once. At the start of each
@@ -73,7 +75,7 @@ the custom renderer's output. Each node has:
 
 ### Tag vocabulary
 
-Implemented in `crates/inca-gpui/src/element/`. There are five kinds:
+Implemented in `crates/inca-gpui/src/element/`. There are six kinds:
 
 | `tag_name` | Maps to |
 | --- | --- |
@@ -81,6 +83,7 @@ Implemented in `crates/inca-gpui/src/element/`. There are five kinds:
 | `"button"` | A styled container. The host reads its `tabindex` with a default of 0. [Elements](../docs/reference/elements.md#button) covers its key clicks. |
 | `"input"` | One line of editable text in a styled container. The host keeps its text; `inputValue` and `setInputValue` read and write it. Its children are not rendered. [Elements](../docs/reference/elements.md#input) covers the rest. |
 | `"#comment"` | A generic styled container that marks a comment stand-in. Selector matching treats it as no element. |
+| `"#fragment"` | A node that holds children and never has a parent. It is never connected, so layout, paint and focus skip it. Selector matching treats it as no element. |
 | anything else | A generic styled container (a GPUI `div()`). |
 
 ### Style prop vocabulary
@@ -144,9 +147,10 @@ be passed, and `undefined` there counts as `null`.
 | --- | --- | --- |
 | `rootNodeId` | `() => number` | Return the id of the host-allocated root container, the node a mounting app attaches itself under. |
 | `createNode` | `(tag: string) => number` | Allocate a `VirtualNode`, return its id. Throws once every id has been used. Freed at the next frame unless inserted or held, see Tree rules. |
-| `appendChild` | `(parentId: number, childId: number) => void` | Attach a child at the end of `parentId`'s children. Same as `insertBefore` with no anchor. |
-| `insertBefore` | `(parentId: number, childId: number, anchorId: number \| null) => void` | Attach a child before `anchorId`, or at the end if `null`. |
-| `removeChild` | `(parentId: number, childId: number) => void` | Detach a child node. Freed at the next frame unless re-inserted or held, see Tree rules. |
+| `appendChild` | `(parentId: number, nodeId: number) => number` | Attach a node at the end of `parentId`'s children. Same as `insertBefore` with no reference. Returns the position of the first inserted node. |
+| `insertBefore` | `(parentId: number, nodeId: number, refId: number \| null) => number` | Attach a node before `refId`, or at the end if `null` or `undefined`. Returns the position of the first inserted node. |
+| `removeChild` | `(parentId: number, childId: number) => void` | Detach a child node. Throws `NotFoundError` for a known node that is not a child. Freed at the next frame unless re-inserted or held, see Tree rules. |
+| `replaceChild` | `(parentId: number, nodeId: number, childId: number) => number` | Put a node where `childId` was and detach `childId`. Returns the position of the first inserted node. |
 | `linkedNode` | `(nodeId: number, link: "parent" \| "first" \| "last" \| "previous" \| "next") => number \| null` | The id of the parent, first child, last child, previous sibling or next sibling of `nodeId`, or `null` when there is none. Throws a `TypeError` for an unknown node or another `link`. |
 | `childNodeIds` | `(nodeId: number) => number[]` | The ids of the children of `nodeId` in order. Throws a `TypeError` for an unknown node. |
 | `isConnected` | `(nodeId: number) => boolean` | Whether `nodeId` is the root container or hangs under it. Throws a `TypeError` for an unknown node. |
@@ -197,29 +201,30 @@ Shared throw rules, all as a `TypeError` except where noted:
 - `addEventListener` throws a `RangeError` after the last id.
 - `setAttribute` and `setStyle` throw for a `value` that is not a string, number or boolean.
 - `dispatchEvent` throws for an argument that is not an event of the host.
-- A `nodeId`, `parentId`, `childId` or `anchorId` that names no node
+- A `nodeId`, `parentId`, `childId` or `refId` that names no node
   throws, except in the calls that let go of something: `releaseNode`,
   `destroyNode`, `releaseListeners`, `removeEventListener`, `blurNode` and
   the `childId` of `removeChild` ignore it. The host can free a node before
   the caller lets go of it.
 - `scrollIntoViewNode` throws for a `block` or `inline` outside the four
   alignment names.
-- `removeChild` ignores a `childId` that is not a child of `parentId`.
 
 `dispatchEvent` also throws a `DOMException` named `InvalidStateError` for an
 event that is being dispatched.
 
-`insertBefore` and `appendChild` also throw a `DOMException` named
-`HierarchyRequestError` when the attachment would make a node its own ancestor.
+`appendChild`, `insertBefore` and `replaceChild` validate in this order, and
+the first failing check throws. A failure changes nothing.
 
-`insertBefore` and `appendChild`:
+1. A `parentId`, `nodeId` or reference that names no node throws a `TypeError`.
+2. A `#text` or `#comment` parent throws a `HierarchyRequestError`.
+3. A `nodeId` that is `parentId` or one of its ancestors throws a
+   `HierarchyRequestError`.
+4. A reference (`refId`, or `childId` of `replaceChild`) that is not a child of
+   `parentId` throws a `NotFoundError`.
+5. A `nodeId` naming the root, which belongs to the host, throws a
+   `HierarchyRequestError`.
 
-- If `anchorId` equals `childId` and the child is already under `parentId`,
-  nothing changes.
-- If `anchorId` is a real node that is not a child of `parentId`, the child
-  is appended at the end.
-- An `anchorId` that names no node throws.
-- A `childId` naming the root throws.
+A `refId` equal to `nodeId` stands for the next sibling of `nodeId`.
 
 The host converts the `VirtualNode` tree into GPUI elements on each frame.
 

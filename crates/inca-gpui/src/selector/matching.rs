@@ -5,14 +5,14 @@
 
 use super::{
     Atom, AttrSelectorOperation, AttributeValue, BloomFilter, COMMENT_TAG, CaseSensitivity,
-    Element, ElementSelectorFlags, Impl, MatchingContext, MatchingForInvalidation, MatchingMode,
-    NamespaceConstraint, NeedsSelectorFlags, NodeId, OpaqueElement, PseudoClass, PseudoElement,
-    QuirksMode, SelectorCaches, SelectorError, SelectorList, TEXT_TAG, VirtualNode, VirtualTree,
-    fmt, is_disabled_control, js_number_text, matches_selector_list, parse,
+    Element, ElementSelectorFlags, FRAGMENT_TAG, Impl, MatchingContext, MatchingForInvalidation,
+    MatchingMode, NamespaceConstraint, NeedsSelectorFlags, NodeId, OpaqueElement, PseudoClass,
+    PseudoElement, QuirksMode, SelectorCaches, SelectorError, SelectorList, TEXT_TAG, VirtualNode,
+    VirtualTree, fmt, is_disabled_control, js_number_text, matches_selector_list, parse,
 };
 use selectors::matching::matches_selector as matches_selector_one;
 
-/// An element of the tree: a node that is neither text content nor tagged `#comment`.
+/// An element of the tree: a node that is neither text content, a comment nor a fragment.
 #[derive(Clone)]
 pub(super) struct Node<'t> {
     tree: &'t VirtualTree,
@@ -26,7 +26,7 @@ impl fmt::Debug for Node<'_> {
 }
 
 fn is_element(node: &VirtualNode) -> bool {
-    !matches!(node.tag_name(), COMMENT_TAG | TEXT_TAG)
+    !matches!(node.tag_name(), COMMENT_TAG | FRAGMENT_TAG | TEXT_TAG)
 }
 
 /// The text of an attribute value: a string as is, a number through `js_number_text`, a bool as
@@ -729,20 +729,22 @@ mod tests {
     }
 
     #[test]
-    fn a_text_node_is_no_ancestor_of_a_selector() {
-        let mut m = mixed();
-        let inside = m.f.add(m.text_node, "span", "inside");
-
-        assert!(!m.f.matches(inside, ":not(div) > span"));
-        assert!(m.f.matches(inside, "div > span"));
-    }
-
-    #[test]
     fn closest_from_a_text_node_starts_at_its_nearest_element_ancestor() {
         let m = mixed();
 
         assert_eq!(m.f.closest(m.text_node, "div"), Some(m.parent));
         assert_eq!(m.f.closest(m.text_node, ":not(div)"), None);
+    }
+
+    #[test]
+    fn closest_from_a_child_in_a_fragment_finds_no_fragment() {
+        let mut f = crate::tests::Fixture::new();
+        let fragment = f.tree.create_node(FRAGMENT_TAG).unwrap();
+        f.attr(fragment, "id", "box");
+        let inside = f.tree.create_node("span").unwrap();
+        f.tree.append_child(fragment, inside).unwrap();
+
+        assert_eq!(f.closest(inside, "#box"), None);
     }
 
     #[test]

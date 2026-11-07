@@ -130,6 +130,72 @@ pub(super) fn clamped_offset(offset: Pixels, max: Pixels) -> Pixels {
     offset.clamp(-max, px(0.))
 }
 
+/// A node that leaves its place, as it was before the tree call.
+pub(super) struct Leaving {
+    id: NodeId,
+    attached: bool,
+    /// The node right before its subtree in tree order.
+    before: Option<NodeId>,
+}
+
+impl Host {
+    /// Records where each of `ids` sits before a tree call moves or removes it.
+    pub(super) fn leaving(&self, ids: &[NodeId]) -> Vec<Leaving> {
+        ids.iter()
+            .map(|&id| Leaving {
+                id,
+                attached: self
+                    .tree
+                    .get(id)
+                    .is_some_and(|node| node.parent().is_some()),
+                before: self.tree.preceding(id),
+            })
+            .collect()
+    }
+
+    /// Runs the host steps after the tree changed. A node that had a parent drops the focus it
+    /// held and moves the Tab start. Every node queues a focus re-check and resets the scroll
+    /// offsets of its subtree.
+    pub(super) fn settle(&mut self, leaving: &[Leaving]) {
+        for node in leaving {
+            if node.attached {
+                self.focus.drop_focus_in(&self.tree, node.id);
+                self.move_tab_start(node.id, node.before);
+            }
+            self.mark_focus_dirty(node.id);
+            self.reset_scroll(node.id);
+        }
+    }
+
+    /// Moves where Tab starts off `node_id`'s subtree to `before`, the node right before its
+    /// place.
+    pub(super) fn move_tab_start(&mut self, node_id: NodeId, before: Option<NodeId>) {
+        self.focus.start_leaves(&self.tree, node_id, before);
+    }
+
+    /// Queues a focus re-check of the node and its subtree.
+    pub(super) fn mark_focus_dirty(&mut self, node_id: NodeId) {
+        self.focus.mark_subtree_dirty(&self.tree, node_id);
+    }
+
+    /// Sets the scroll offset of `node_id` and of every node below it to zero.
+    fn reset_scroll(&self, node_id: NodeId) {
+        let handles = self.scroll_handles.borrow();
+        if handles.is_empty() {
+            return;
+        }
+        let mut pending = vec![node_id];
+        while let Some(id) = pending.pop() {
+            if let Some(handle) = handles.get(&id) {
+                handle.set_offset(gpui::Point::default());
+            }
+            if let Some(node) = self.tree.get(id) {
+                pending.extend(node.children().iter().copied());
+            }
+        }
+    }
+}
+
 impl Host {
     /// The node a mounting app attaches under. Allocated with the tree, so
     /// `rootNodeId` always resolves.

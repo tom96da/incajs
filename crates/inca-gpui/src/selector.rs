@@ -21,7 +21,8 @@ use selectors::parser::{
 use selectors::{Element, OpaqueElement};
 
 use crate::tree::{
-    AttributeValue, COMMENT_TAG, NodeId, TEXT_TAG, VirtualNode, VirtualTree, is_disabled_control,
+    AttributeValue, COMMENT_TAG, FRAGMENT_TAG, NodeId, TEXT_TAG, VirtualNode, VirtualTree,
+    is_disabled_control,
 };
 
 mod matching;
