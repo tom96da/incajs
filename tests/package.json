@@ -21,6 +21,7 @@
   },
   "devDependencies": {
     "ts-dedent": "2.3.0",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
     "vite": "catalog:",
     "vitest": "catalog:"
   },
