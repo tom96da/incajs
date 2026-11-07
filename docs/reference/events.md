@@ -64,8 +64,8 @@ and `returnValue`. The three flags depend on the event:
 - `timeStamp` counts milliseconds since the app was loaded, on the clock of
   `performance.now()`.
 - The `view` of a UI event is `null`.
-- Removing the focused node, or moving it within the tree, leaves `blur` and
-  `focusout` unfired.
+- Assigning `innerHTML` or `outerHTML` fires `blur` and `focusout` when the focused node leaves the
+  tree. Every other removal or move of the focused node leaves them unfired.
 
 ## Mouse
 

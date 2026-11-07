@@ -152,7 +152,8 @@ attribute and a bound `:style="someString"` to the same `style` prop, and
 `patchProp`'s `patchStyle` only accepts that prop as an object. A string
 value is ignored either way. So a plain `style="..."` attribute can
 *never* work, since it's always a string; only `:style` bound to an
-object, with the keys above, has any visible effect.
+object, with the keys above, has any visible effect. A `style` attribute inside assigned markup
+applies, see [Parsed HTML](#parsed-html).
 
 ```vue
 <template>
@@ -225,6 +226,16 @@ with the differences below. The listener methods are described in
   - `setNamedItem()` and `removeNamedItem()`
   - `getNamedItemNS()`, `setNamedItemNS()` and `removeNamedItemNS()`
 - An `Attr` has no `Node` members.
+
+### Parsed HTML
+
+- A `style` attribute in parsed markup applies the declarations that
+  [`:style`](#recognized-style-keys) knows and warns about the others. The attribute itself is not
+  kept: `getAttribute("style")` returns `null`, and reading the markup writes the applied
+  declarations.
+- An `on*` attribute stays a plain attribute and registers no listener.
+- Attribute names with capitals, such as `viewBox`, come back in lower case from
+  `getAttributeNames()` and `outerHTML`. `svg` and `math` parse as plain elements.
 
 ## Vue features that don't work yet
 
