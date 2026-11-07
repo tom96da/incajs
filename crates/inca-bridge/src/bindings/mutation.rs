@@ -434,4 +434,21 @@ mod tests {
 
         assert_eq!(host.borrow().scroll_handle(ids[0]).offset(), zero());
     }
+
+    #[test]
+    fn clone_node_lists_the_content_fragment_after_a_template() {
+        let (engine, _host) = engine_with_bindings();
+
+        let tags: Vec<String> = engine
+            .eval(
+                r"
+                const n = __inca_native__;
+                const template = n.createNode('template');
+                n.cloneNode(template, false).map((pair) => pair[1]);
+                ",
+            )
+            .unwrap();
+
+        assert_eq!(tags, ["template", "#fragment"]);
+    }
 }

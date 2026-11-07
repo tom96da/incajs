@@ -228,6 +228,23 @@ mod tests {
     }
 
     #[gpui::test]
+    fn the_hook_receives_the_content_ids_of_a_swept_template(cx: &mut TestAppContext) {
+        let scene = scene(cx, RELEASED);
+        scene.js(r"
+            const n = __inca_native__;
+            globalThis.template = n.createNode('template');
+            globalThis.content = n.templateContent(template);
+            ");
+
+        draw(cx, scene.window);
+
+        assert_eq!(
+            scene.json("[globalThis.released.map(([n]) => n), [template, content]]"),
+            serde_json::json!([[[1, 2]], [1, 2]])
+        );
+    }
+
+    #[gpui::test]
     fn the_released_hook_receives_its_ids_past_an_inherited_index_setter(cx: &mut TestAppContext) {
         let scene = scene(
             cx,
