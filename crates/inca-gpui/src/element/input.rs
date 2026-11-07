@@ -18,7 +18,7 @@ use crate::input::{
     CARET_WIDTH, Highlights, InputLayout, InputRequest, InputState, highlights, scroll_to_caret,
     stops_of, x_at,
 };
-use crate::tree::NodeId;
+use inca_node::tree::NodeId;
 
 /// The selection fill.
 const SELECTION: u32 = 0x3390_ff66;

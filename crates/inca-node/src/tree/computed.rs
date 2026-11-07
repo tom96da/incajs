@@ -1,7 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The rules of the `<style>` elements and the cascade that merges them with a node's own style.
+//! The computed style of a node: the rules of the `<style>` elements merged with the node's own
+//! style, the order of shorthand and longhand keys, the cache and the warnings.
 
 use std::borrow::Cow;
 use std::cmp::Reverse;
@@ -10,10 +11,7 @@ use std::rc::Rc;
 
 use super::{AttributeValue, NodeId, TEXT_TAG, VirtualNode, VirtualTree};
 use crate::selector::StateFlags;
-
-mod parse;
-
-use parse::{Rule, StyleSheet};
+use crate::stylesheet::{Rule, StyleSheet};
 
 /// The longhands that a shorthand key overrides when it is applied after them.
 const SHORTHANDS: &[(&str, &[&str])] = &[
@@ -168,7 +166,7 @@ impl VirtualTree {
     /// before it. A node that no rule styles, an unknown id and a tree without a `<style>` element
     /// give the node's own map.
     #[must_use]
-    pub(crate) fn computed_style(&self, id: NodeId) -> Cow<'_, HashMap<String, AttributeValue>> {
+    pub fn computed_style(&self, id: NodeId) -> Cow<'_, HashMap<String, AttributeValue>> {
         let Some(node) = self.get(id) else {
             return Cow::Owned(HashMap::new());
         };

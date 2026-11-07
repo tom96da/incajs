@@ -3,24 +3,24 @@
 
 //! The style keys the host reads, their aliases and the warnings for a bad value.
 
+use super::color::as_color;
+use super::parse::EdgeKeys;
+use super::parse::Overflows;
+use super::parse::StyleFault;
+use super::parse::edges_from;
+use super::parse::margin_length_from;
+use super::parse::non_negative;
+use super::parse::non_negative_px;
+use super::parse::opacity;
+use super::parse::overflow_pair_from_str;
+use super::parse::size_spec_from;
+use super::parse::store;
 use crate::AlignSpec;
 use crate::AttributeValue;
 use crate::DisplaySpec;
 use crate::FlexDirectionSpec;
 use crate::OverflowSpec;
 use crate::StyleSpec;
-use crate::element::color::as_color;
-use crate::element::parse::EdgeKeys;
-use crate::element::parse::Overflows;
-use crate::element::parse::StyleFault;
-use crate::element::parse::edges_from;
-use crate::element::parse::margin_length_from;
-use crate::element::parse::non_negative;
-use crate::element::parse::non_negative_px;
-use crate::element::parse::opacity;
-use crate::element::parse::overflow_pair_from_str;
-use crate::element::parse::size_spec_from;
-use crate::element::parse::store;
 use std::borrow::Cow;
 use std::collections::HashMap;
 
@@ -283,11 +283,8 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
-    use crate::element::style::apply_style;
-    use crate::element::{STYLE_KEYS, ValueKind, style_key};
     use crate::tests::*;
     use crate::{ColorSpec, EdgesSpec, LengthSpec, VirtualTree, build_spec};
-    use gpui::{Length, StyleRefinement, px};
     use rstest::rstest;
 
     /// Values `kind` accepts, chosen so that a reader of another kind with the
@@ -421,40 +418,6 @@ mod tests {
                 Some(LengthSpec::Px(8.0)),
             ]
         );
-    }
-
-    #[test]
-    fn box_keys_reach_the_gpui_refinement() {
-        let style = style_of(&[
-            ("padding_right", num(1.0)),
-            ("padding_bottom", num(2.0)),
-            ("padding_left", num(3.0)),
-            ("margin_top", num(-2.0)),
-            ("margin_right", text("auto")),
-            ("margin_bottom", num(4.0)),
-            ("margin_left", num(-5.0)),
-            ("flex_grow", num(2.0)),
-            ("flex_shrink", num(0.5)),
-            ("opacity", num(0.5)),
-            ("min_width", num(10.0)),
-            ("max_height", num(20.0)),
-        ]);
-        let mut refinement = StyleRefinement::default();
-        apply_style(&mut refinement, &style);
-        assert_eq!(refinement.padding.top, None);
-        assert_eq!(refinement.padding.right, Some(px(1.).into()));
-        assert_eq!(refinement.padding.bottom, Some(px(2.).into()));
-        assert_eq!(refinement.padding.left, Some(px(3.).into()));
-        assert_eq!(refinement.margin.top, Some(px(-2.).into()));
-        assert_eq!(refinement.margin.right, Some(Length::Auto));
-        assert_eq!(refinement.margin.bottom, Some(px(4.).into()));
-        assert_eq!(refinement.margin.left, Some(px(-5.).into()));
-        assert_eq!(refinement.flex_grow, Some(2.0));
-        assert_eq!(refinement.flex_shrink, Some(0.5));
-        assert_eq!(refinement.opacity, Some(0.5));
-        assert_eq!(refinement.min_size.width, Some(px(10.).into()));
-        assert_eq!(refinement.max_size.height, Some(px(20.).into()));
-        assert_eq!(refinement.min_size.height, None);
     }
 
     #[test]
@@ -654,25 +617,5 @@ mod tests {
                 }
             }
         }
-    }
-
-    #[test]
-    fn color_keys_reach_the_gpui_refinement() {
-        let mut style = StyleRefinement::default();
-        apply_style(
-            &mut style,
-            &style_of(&[
-                ("background", text("#33669980")),
-                ("border_color", num(f64::from(0x0033_6699))),
-                ("text_color", text("rgb(51 102 153 / 50%)")),
-            ]),
-        );
-
-        assert_eq!(
-            style.background,
-            Some(gpui::Fill::from(gpui::Hsla::from(gpui::rgba(0x3366_9980))))
-        );
-        assert_eq!(style.border_color, Some(gpui::rgba(0x3366_99ff).into()));
-        assert_eq!(style.text.color, Some(gpui::rgba(0x3366_9980).into()));
     }
 }

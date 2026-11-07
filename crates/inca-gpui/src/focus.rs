@@ -20,12 +20,12 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use gpui::{App, FocusHandle, Window};
 
-use crate::tree::TEXT_TAG;
-use crate::tree::js_number_text;
 use crate::{
     AttributeValue, EventPayload, EventSink, NodeId, VirtualTree, focusable_by_default,
     hidden_by_attribute, is_disabled_control,
 };
+use inca_node::tree::TEXT_TAG;
+use inca_node::tree::js_number_text;
 
 mod requests;
 mod start;

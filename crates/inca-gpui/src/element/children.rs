@@ -7,10 +7,11 @@ use gpui::prelude::*;
 use gpui::{Bounds, Pixels, ScrollHandle, point, px};
 
 use super::build::NodeLayout;
-use super::scroll::snapped_extra;
-use super::spec::{DisplaySpec, ElementSpec, ElementTag};
+use super::wheel::snapped_extra;
 use crate::event_sink::EventSink;
-use crate::tree::NodeId;
+use inca_node::scroll::Rect;
+use inca_node::spec::{DisplaySpec, ElementSpec, ElementTag};
+use inca_node::tree::NodeId;
 
 /// The children of `spec` that become `gpui` elements, in order. An empty
 /// text child renders nothing.
@@ -77,14 +78,34 @@ where
     })
 }
 
+/// The box `bounds` shrunk by `inset` on every side, in window coordinates. A
+/// negative size reads as 0.
+#[must_use]
+pub fn rect_of(bounds: Bounds<Pixels>, inset: Pixels) -> Rect {
+    Rect {
+        x: f32::from(bounds.origin.x + inset),
+        y: f32::from(bounds.origin.y + inset),
+        width: f32::from(bounds.size.width - inset * 2.0).max(0.0),
+        height: f32::from(bounds.size.height - inset * 2.0).max(0.0),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
-    use crate::VirtualTree;
     use crate::tests::*;
-    use gpui::{TestAppContext, point};
+    use gpui::{Bounds, TestAppContext, point};
+    use inca_node::VirtualTree;
+
+    #[test]
+    fn a_border_wider_than_half_the_box_leaves_a_zero_size_view() {
+        let bounds = Bounds::new(point(px(10.0), px(10.0)), gpui::size(px(10.0), px(6.0)));
+        let view = rect_of(bounds, px(8.0));
+        assert_eq!((view.width, view.height), (0.0, 0.0));
+        assert_eq!((view.x, view.y), (18.0, 18.0));
+    }
 
     #[gpui::test]
     fn nested_boxes_record_window_bounds_and_border(cx: &mut TestAppContext) {

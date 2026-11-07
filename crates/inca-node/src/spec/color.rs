@@ -1,8 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use super::ColorSpec;
 use super::parse::decimal;
-use super::spec::ColorSpec;
 use crate::tree::AttributeValue;
 
 /// A number from `0` to `0xffffff` (opaque), or a string holding `#rgb`,
@@ -158,7 +158,7 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
-    use crate::element::spec::build_spec;
+    use crate::spec::build_spec;
     use crate::tests::{num, style_and_warnings, text};
     use crate::tree::VirtualTree;
 
