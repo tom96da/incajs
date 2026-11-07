@@ -203,7 +203,7 @@ impl FocusRegistry {
     }
 
     /// The `tabindex` of `node_id`. A node not connected to the tree's root,
-    /// a text node, a node that has an ancestor (or itself) with
+    /// a text node, a node that has an ancestor (or itself) that is a template or has
     /// `display: none`, `inert` or a hiding `hidden`, and a `disabled` button
     /// or input have none. A button or input whose `tabindex` is missing or
     /// unparsable has 0.
@@ -214,7 +214,8 @@ impl FocusRegistry {
         }
         let hidden = tree.ancestors(node_id).any(|id| {
             hidden_by_attribute(tree, id) || tree.get(id).is_some_and(|ancestor| {
-                ancestor.attributes().contains_key("inert")
+                ancestor.is_template()
+                    || ancestor.attributes().contains_key("inert")
                     || matches!(
                         tree.computed_style(id).get("display"),
                         Some(AttributeValue::String(value)) if value.eq_ignore_ascii_case("none")
@@ -315,6 +316,16 @@ mod tests {
         let (tree, id) = tree_with("div", None);
         assert_eq!(FocusRegistry::tab_index_of(&tree, id), None);
         assert_eq!(FocusRegistry::tab_index_of(&tree, 999), None);
+    }
+
+    #[test]
+    fn a_button_under_a_template_has_no_tab_index() {
+        let (mut tree, button) = rooted_button(false);
+        let template = tree.create_node("template").unwrap();
+        tree.append_child(ROOT, template).unwrap();
+        tree.append_child(template, button).unwrap();
+
+        assert_eq!(FocusRegistry::tab_index_of(&tree, button), None);
     }
 
     #[test]
