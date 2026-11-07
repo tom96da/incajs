@@ -29,5 +29,6 @@ mod scroll;
 mod style_element;
 mod style_sfc;
 mod tabindex;
+mod template;
 mod timing;
 mod visual_state;
