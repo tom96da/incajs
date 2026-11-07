@@ -3,14 +3,14 @@
 
 use gpui::Modifiers;
 use inca_gpui::{EventPayload, MousePayload, NO_BUTTON, PointerSource, buttons_mask};
-use inca_jsenv::class::define_method;
+use inca_jsenv::class::{define_method, define_this_getter, define_this_method};
 use rquickjs::convert::Coerced;
 use rquickjs::function::This;
 use rquickjs::{Array, Ctx, Function, IntoJs, Object, Result as JsResult, Value};
 
 use super::key_code::{key_code, keypress_code};
 use super::{
-    COMPOSITION, EVENT, FOCUS, INPUT, KEYBOARD, MOUSE, POINTER, WHEEL, child_of, constants, field,
+    COMPOSITION, EVENT, FOCUS, INPUT, KEYBOARD, MOUSE, POINTER, WHEEL, child_of, constants,
     other_kind, with_event,
 };
 use crate::bindings::convert::or_null;
@@ -486,18 +486,14 @@ pub(super) fn keyboard_prototype<'js>(ctx: &Ctx<'js>, ui: &Object<'js>) -> JsRes
 pub(super) fn input_prototype<'js>(ctx: &Ctx<'js>, ui: &Object<'js>) -> JsResult<Object<'js>> {
     let proto = child_of(ctx, ui)?;
     define_fields(ctx, &proto, input_of, INPUT_FIELDS)?;
-    let ranges = Function::new(
-        ctx.clone(),
-        |ctx: Ctx<'js>, This(this): This<Value<'js>>| {
-            with_event(&ctx, &this, |event| {
-                input_of(&event.state.payload)
-                    .map(|_| ())
-                    .ok_or_else(|| other_kind(&ctx, "getTargetRanges"))
-            })?;
-            Array::new(ctx)
-        },
-    )?;
-    define_method(&proto, "getTargetRanges", ranges)?;
+    define_this_method(ctx, &proto, "getTargetRanges", |ctx, this| {
+        with_event(ctx, &this, |event| {
+            input_of(&event.state.payload)
+                .map(|_| ())
+                .ok_or_else(|| other_kind(ctx, "getTargetRanges"))
+        })?;
+        Array::new(ctx.clone())
+    })?;
     Ok(proto)
 }
 
@@ -527,9 +523,11 @@ fn define_fields<'js, P: 'static>(
     fields: &'static [(&'static str, Read<P>)],
 ) -> JsResult<()> {
     for &(key, read) in fields {
-        field(ctx, proto, key, move |ctx, event| {
-            let payload = of(&event.state.payload).ok_or_else(|| other_kind(ctx, key))?;
-            read(payload).into_js(ctx)
+        define_this_getter(ctx, proto, key, move |ctx, this| {
+            with_event(ctx, &this, |event| {
+                let payload = of(&event.state.payload).ok_or_else(|| other_kind(ctx, key))?;
+                read(payload).into_js(ctx)
+            })
         })?;
     }
     Ok(())
@@ -542,11 +540,13 @@ fn related_target<'js>(
     proto: &Object<'js>,
     has: fn(&Payload) -> bool,
 ) -> JsResult<()> {
-    field(ctx, proto, "relatedTarget", move |ctx, event| {
-        if !has(&event.state.payload) {
-            return Err(other_kind(ctx, "relatedTarget"));
-        }
-        or_null(ctx, event.held.related.clone())
+    define_this_getter(ctx, proto, "relatedTarget", move |ctx, this| {
+        with_event(ctx, &this, |event| {
+            if !has(&event.state.payload) {
+                return Err(other_kind(ctx, "relatedTarget"));
+            }
+            or_null(ctx, event.held.related.clone())
+        })
     })
 }
 

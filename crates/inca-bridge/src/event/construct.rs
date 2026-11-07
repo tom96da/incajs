@@ -14,8 +14,8 @@ use super::payload::{DELTA_MODES, KEY_LOCATIONS, Payload, Ui};
 use super::walk::Walk;
 use super::{
     COMPOSITION, CUSTOM, EVENT, FOCUS, Flags, Held, INPUT, IncaEvent, KEYBOARD, MOUSE, POINTER,
-    State, UI, WHEEL, child_of, constants, field, given, initialize, new_event, other_kind,
-    targets_of, with_event,
+    State, UI, WHEEL, child_of, constants, given, initialize, new_event, other_kind, targets_of,
+    with_event,
 };
 use crate::EventTargetId;
 use crate::bindings::convert::or_null;
@@ -90,13 +90,15 @@ fn related_of(payload: &EventPayload) -> Option<NodeId> {
 /// `event`.
 pub(super) fn custom_prototype<'js>(ctx: &Ctx<'js>, event: &Object<'js>) -> JsResult<Object<'js>> {
     let proto = child_of(ctx, event)?;
-    field(ctx, &proto, "detail", |ctx, event| {
-        event
-            .held
-            .detail
-            .borrow()
-            .clone()
-            .ok_or_else(|| other_kind(ctx, "detail"))
+    class::define_this_getter(ctx, &proto, "detail", |ctx, this| {
+        with_event(ctx, &this, |event| {
+            event
+                .held
+                .detail
+                .borrow()
+                .clone()
+                .ok_or_else(|| other_kind(ctx, "detail"))
+        })
     })?;
     let init = Function::new(
         ctx.clone(),
