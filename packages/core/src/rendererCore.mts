@@ -43,15 +43,8 @@ export {
 export { isRemoved } from "./element/lifecycle.mts";
 /** @internal */
 export { releaseWhenCollected } from "./element/lifecycle.mts";
-export {
-  createTextNode,
-  insert,
-  nextSibling,
-  parentNode,
-  remove,
-  setElementText,
-  setText,
-} from "./element/shadowTree.mts";
+export { insert, nextSibling, parentNode, remove } from "./element/shadowTree.mts";
+export { createTextNode, setElementText, setText } from "./element/text.mts";
 export type * from "./types.mts";
 export type * from "./element/types.mts";
 

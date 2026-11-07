@@ -43,8 +43,7 @@ import {
 } from "./lifecycle.mts";
 import { nodeTreeMembers } from "./nodeTree.mts";
 import { scrollIntoViewArgs, scrollPosition } from "./scroll.mts";
-import { setElementText } from "./shadowTree.mts";
-import { characterDataMembers, nullableText } from "./text.mts";
+import { characterDataMembers, nullableText, setElementText } from "./text.mts";
 import type { NodeId, TagName } from "../types.mts";
 import type { AttributeMembers } from "./attributes.mts";
 import type { ElementTreeMembers } from "./elementTree.mts";

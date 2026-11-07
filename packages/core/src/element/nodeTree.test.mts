@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { document } from "../document.mts";
 import { createCommentNode, createElementNode, createIncaElement, rootElement } from "./handle.mts";
 import { markDestroyed } from "./lifecycle.mts";
-import { createTextNode } from "./shadowTree.mts";
+import { createTextNode } from "./text.mts";
 import type { NodeLink } from "../native.mts";
 
 /** The node each node reaches by each link. */
