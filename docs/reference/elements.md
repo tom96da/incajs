@@ -221,8 +221,7 @@ with the differences below. The listener methods are described in
   every element. `:lang()` and `:state()` never match. `:dir(ltr)` matches every
   element and any other `:dir()` value never matches. `:disabled` and
   `:enabled` apply to `button` and `input` only.
-- `attributes` and `getAttributeNames()` list the names in alphabetical
-  order. These members of `attributes` are missing:
+- These members of `attributes` are missing:
   - `setNamedItem()` and `removeNamedItem()`
   - `getNamedItemNS()`, `setNamedItemNS()` and `removeNamedItemNS()`
 - An `Attr` has no `Node` members.

@@ -30,7 +30,7 @@ impl VirtualTree {
     /// Returns [`TreeError::NodeNotFound`] if `node_id` names no node.
     pub fn remove_attribute(&mut self, node_id: NodeId, key: &str) -> Result<(), TreeError> {
         let node = self.node_mut(node_id)?;
-        node.attributes.remove(key);
+        node.attributes.shift_remove(key);
         Ok(())
     }
 
@@ -89,6 +89,38 @@ mod tests {
             tree.get(node).unwrap().attributes().get("value"),
             Some(&AttributeValue::String("second".into()))
         );
+    }
+
+    fn attribute_keys(tree: &VirtualTree, node: NodeId) -> Vec<&str> {
+        tree.get(node)
+            .unwrap()
+            .attributes()
+            .keys()
+            .map(String::as_str)
+            .collect()
+    }
+
+    #[test]
+    fn setting_an_existing_attribute_keeps_its_position() {
+        let mut tree = VirtualTree::new();
+        let node = tree.create_node("div").unwrap();
+        for key in ["a", "b", "c", "a"] {
+            tree.set_attribute(node, key, key).unwrap();
+        }
+
+        assert_eq!(attribute_keys(&tree, node), ["a", "b", "c"]);
+    }
+
+    #[test]
+    fn removing_an_attribute_keeps_the_others_in_order() {
+        let mut tree = VirtualTree::new();
+        let node = tree.create_node("div").unwrap();
+        for key in ["a", "b", "c"] {
+            tree.set_attribute(node, key, key).unwrap();
+        }
+        tree.remove_attribute(node, "a").unwrap();
+
+        assert_eq!(attribute_keys(&tree, node), ["b", "c"]);
     }
 
     #[test]

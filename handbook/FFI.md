@@ -180,7 +180,7 @@ be passed, and `undefined` there counts as `null`.
 | `setAttribute` | `(nodeId: number, key: string, value: string \| number \| boolean) => void` | Set a non-style attribute prop. Names are folded to ASCII lower case. |
 | `getAttribute` | `(nodeId: number, key: string) => string \| number \| boolean \| null` | Read a non-style attribute prop as stored, or `null` when the key is unset. Names are folded to ASCII lower case. |
 | `removeAttribute` | `(nodeId: number, key: string) => void` | Remove a non-style attribute prop. Removing a key that isn't set does nothing. Names are folded to ASCII lower case. |
-| `attributeNames` | `(nodeId: number) => string[]` | The keys of the non-style attributes of `nodeId`, sorted. The host keeps no insertion order. |
+| `attributeNames` | `(nodeId: number) => string[]` | The keys of the non-style attributes of `nodeId`, in the order they were set. |
 | `setStyle` | `(nodeId: number, key: string, value: string \| number \| boolean) => void` | Set a style prop. |
 | `removeStyle` | `(nodeId: number, key: string) => void` | Remove a style prop so it renders as if never set. Removing a key that isn't set does nothing. |
 | `inputValue` | `(nodeId: number) => string` | The text of the input node `nodeId`. Throws a `TypeError` for a node of another tag. |

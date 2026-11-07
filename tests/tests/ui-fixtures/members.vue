@@ -58,7 +58,7 @@ function probe() {
 
 <template>
   <div :style="{ width: 300, height: 400 }">
-    <ul ref="list" class="card" data-kind="people">
+    <ul ref="list" data-kind="people" class="card">
       <li id="first" :style="{ width: 50, height: 10 }">one</li>
       <li ref="second" id="second" :style="{ width: 50, height: 10 }">two</li>
     </ul>

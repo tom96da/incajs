@@ -2810,6 +2810,7 @@ name = "inca-node"
 version = "0.0.29"
 dependencies = [
  "cssparser",
+ "indexmap",
  "precomputed-hash",
  "rstest",
  "selectors",

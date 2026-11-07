@@ -434,6 +434,20 @@ mod tests {
     }
 
     #[test]
+    fn a_clone_keeps_the_attribute_order() {
+        let mut tree = VirtualTree::new();
+        let original = node(&mut tree, "div");
+        for key in ["c", "a", "b"] {
+            tree.set_attribute(original, key, key).unwrap();
+        }
+
+        let made = tree.clone_subtree(original, false).unwrap();
+
+        let keys: Vec<_> = tree.get(made[0].1).unwrap().attributes().keys().collect();
+        assert_eq!(keys, ["c", "a", "b"]);
+    }
+
+    #[test]
     fn a_clone_copies_the_attribute_and_style_maps_as_they_are() {
         let mut tree = VirtualTree::new();
         let original = sample(&mut tree, "div");

@@ -182,7 +182,7 @@ function installFakeNative(): Map<NodeId, FakeNode> {
     querySelector: () => null,
     querySelectorAll: () => [],
     attributeNames(nodeId: NodeId): string[] {
-      return Object.keys(requireNode(nodeId).attributes).sort();
+      return Object.keys(requireNode(nodeId).attributes);
     },
     setStyle(nodeId: NodeId, key: string, value: unknown): void {
       requireNode(nodeId).style[key] = value;

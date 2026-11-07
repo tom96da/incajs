@@ -105,7 +105,7 @@ export interface Attr {
   readonly ownerElement: IncaElement | null;
 }
 
-/** A live, read-only list of the attributes of an element in alphabetical order of the name. */
+/** A live, read-only list of the attributes of an element in the order they were set. */
 export interface NamedNodeMap {
   readonly [index: number]: Attr;
   /** The number of attributes. */
@@ -427,7 +427,7 @@ export interface IncaElement
    * @param name - The attribute name.
    */
   removeAttribute(name: string): void;
-  /** The names of the set attributes in alphabetical order. */
+  /** The names of the set attributes in the order they were set. */
   getAttributeNames(): string[];
   /**
    * The set attributes as a live map. Every read returns the same object, which follows later

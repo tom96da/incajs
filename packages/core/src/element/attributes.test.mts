@@ -26,7 +26,7 @@ function setup(initial: Record<string, Stored> = {}) {
     removeAttribute: vi.fn<(nodeId: number, key: string) => void>((_id, key) => {
       store.delete(fold(key));
     }),
-    attributeNames: vi.fn<(nodeId: number) => string[]>(() => [...store.keys()].toSorted()),
+    attributeNames: vi.fn<(nodeId: number) => string[]>(() => [...store.keys()]),
   };
   globalThis.__inca_native__ = host as never;
   const el: IncaElement = createIncaElement(1, "element", "div");
@@ -136,7 +136,7 @@ describe("removeAttribute", () => {
 
 describe("getAttributeNames", () => {
   it("lists the names of the host in its order", () => {
-    expect(setup({ id: "x", a: 1 }).el.getAttributeNames()).toEqual(["a", "id"]);
+    expect(setup({ id: "x", a: 1 }).el.getAttributeNames()).toEqual(["id", "a"]);
   });
 });
 
@@ -145,9 +145,9 @@ describe("attributes", () => {
     const { el } = setup({ id: "x", b: 1, a: 2 });
 
     expect([el.attributes[0]?.name, el.attributes[1]?.name, el.attributes[2]?.name]).toEqual([
-      "a",
-      "b",
       "id",
+      "b",
+      "a",
     ]);
   });
 
@@ -175,10 +175,10 @@ describe("attributes", () => {
     for (const attr of el.attributes) seen.push([attr.name, attr.value]);
 
     expect(seen).toEqual([
-      ["a", "1"],
       ["b", "2"],
+      ["a", "1"],
     ]);
-    expect(el.attributes[Symbol.iterator]().next().value).toBe(el.attributes.getNamedItem("a"));
+    expect(el.attributes[Symbol.iterator]().next().value).toBe(el.attributes.getNamedItem("b"));
   });
 
   it("visits every second attribute when a loop removes the visited one", () => {
