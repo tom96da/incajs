@@ -1550,3 +1550,13 @@ A fixed entry is deleted and its ID is never reused.
   new text in all 84 measured runs. Fix: wait until the reported files settle
   before the retry and redesign the retry test that saves two files back to
   back, so it no longer depends on the order the watcher reports them.
+
+- **B-285 A freed reference throws `NotFoundError` before the node checks run**
+  `Units: core · Size: S · Impact: Low`
+
+  `insertBefore` and `replaceChild` check a freed reference or old child
+  first. When the node cannot be inserted under the parent, as with a text
+  node as the parent, browsers throw `HierarchyRequestError` before
+  `NotFoundError`. A reference that is still alive follows the browser order.
+  Fix: let the host treat an unknown reference as not a child, at the step
+  where the host checks the reference.
