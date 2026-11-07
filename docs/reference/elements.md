@@ -70,8 +70,10 @@ drawn. Render one with `h("style", css)` or `<component is="style">`. A
 - `!important` is read as a normal declaration, so an inline value still wins.
 - `@media` and the other at-rules have no effect.
 - The `media`, `type` and `disabled` attributes are ignored.
-- The host draws no focus indicator. `:hover`, `:active` and the other
-  interactive pseudo-classes never match.
+- The host draws no focus indicator and no look for `:hover` or `:active`.
+- `:hover` and `:active` change only while the app has an event listener, a
+  focusable element or a rule that names them.
+- `:focus-visible` and the other interactive pseudo-classes never match.
 
 ## Recognized style keys
 

@@ -137,12 +137,12 @@ impl EventDispatcher {
         self
     }
 
-    /// Whether the containers report the pointer: a listener is registered
-    /// or a node can take focus. The render path asks once per frame.
+    /// Whether the containers report the pointer: a listener is registered, a node can take
+    /// focus or a style rule names `:hover` or `:active`. The render path asks once per frame.
     #[must_use]
     pub fn tracks_pointer(&self) -> bool {
         let host = self.host.borrow();
-        !host.listeners.is_empty() || host.focus.has_handles()
+        !host.listeners.is_empty() || host.focus.has_handles() || host.tree.uses_pointer_state()
     }
 
     /// Takes the window's current modifier keys as the baseline for the next

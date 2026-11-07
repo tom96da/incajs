@@ -87,6 +87,7 @@ impl EventDispatcher {
 mod tests {
     #![allow(clippy::unwrap_used)]
     use crate::tests::pointer::{Scene, scene};
+    use crate::tests::state;
     use crate::tests::{at, listen_global};
     use gpui::TestAppContext;
     use inca_gpui::{EventPayload, EventSink, MousePayload, PointerSource};
@@ -412,5 +413,32 @@ mod tests {
         let sink = s.dispatcher.clone();
         s.cx.update(|window, cx| sink.window_activated(false, window, cx));
         assert_eq!(s.take(), [format!("lostpointercapture@{a}")]);
+    }
+
+    #[gpui::test]
+    fn the_hover_state_follows_the_node_under_the_pointer_while_a_capture_is_active(
+        cx: &mut TestAppContext,
+    ) {
+        let mut s = captured(cx, "b");
+        let a = s.a;
+        s.moved(a, (2.0, 2.0));
+        s.moved(a, (3.0, 3.0));
+        let host = s.host.borrow();
+
+        assert!(state(&host, s.a, ":hover"));
+        assert!(!state(&host, s.b, ":hover"));
+    }
+
+    #[gpui::test]
+    fn mouseenter_follows_the_capturing_node_while_the_pointer_is_over_another(
+        cx: &mut TestAppContext,
+    ) {
+        let mut s = captured(cx, "b");
+        let (a, b) = (s.a, s.b);
+        s.moved(a, (2.0, 2.0));
+        let got = s.take();
+
+        assert!(got.contains(&format!("mouseenter@{b}")));
+        assert!(!got.contains(&format!("mouseenter@{a}")));
     }
 }

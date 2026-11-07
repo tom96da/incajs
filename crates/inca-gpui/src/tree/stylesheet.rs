@@ -411,15 +411,6 @@ mod tests {
     }
 
     #[test]
-    fn a_state_pseudo_class_matches_nothing_yet() {
-        let mut f = Fixture::new();
-        f.sheet(".a:hover { width: 1px }");
-        let a = f.boxed("a");
-
-        assert_eq!(f.computed(a, "width"), None);
-    }
-
-    #[test]
     fn a_sheet_warns_once_while_its_text_stays() {
         let mut f = Fixture::new();
         f.sheet(".a { bogus: 1 }");

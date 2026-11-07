@@ -408,11 +408,11 @@ with the node ids.
   `contextmenu` is the deepest container under the pointer, or the root when
   there is none. While a pointer capture is active, the pointer events and
   `mousedown`, `mouseup`, `mousemove` go to the capturing node.
-- While any listener is registered or any node can take focus, every non-inert
-  container reports the pointer (`EventSink::tracks_pointer`) through a marker
-  listener and one `on_hover` (`EventSink::hover_changed`), which keeps the
-  hovered set. An inert node and its subtree stay outside hit testing and
-  hover.
+- While any listener is registered, any node can take focus or a style rule
+  names `:hover` or `:active`, every non-inert container reports the pointer
+  (`EventSink::tracks_pointer`) through a marker listener and one `on_hover`
+  (`EventSink::hover_changed`), which keeps the hovered set. An inert node and
+  its subtree stay outside hit testing and hover.
 - The host builds a container with a scroll handle as `hidden`, so `gpui`
   never steps it, and applies one step itself after the `wheel` listeners ran.
   The step goes to the first container under the pointer that is live
@@ -470,7 +470,8 @@ with the node ids.
   `pointerout`, `pointerleave`, `pointerover` and `pointerenter` fire first, in
   the same order, and the mouse ones follow. While a capture is active the report
   takes the capturing node as the deepest container, and a gpui hover change
-  only updates the hovered set.
+  only updates the hovered set. Each report also writes the path of the
+  container under the pointer into the tree, and `:hover` rules read it.
 - `EventSink::pointer_input` turns each raw mouse input into pointer events
   (`dispatch/pointer.rs`). The held-button mask in `Host::held_buttons` changes
   once per raw `mousedown` or `mouseup`. The first button down fires

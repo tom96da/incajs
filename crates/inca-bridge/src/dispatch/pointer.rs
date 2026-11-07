@@ -31,6 +31,9 @@ impl EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) {
+        if matches!(payload, EventPayload::Mouse(mouse) if mouse.buttons == 0) {
+            self.clear_press(window);
+        }
         self.begin_pointer(payload, NO_BUTTON, window, cx);
         let target = self.captured_or(target);
         let pointer = pointer_payload(payload, NO_BUTTON);
@@ -58,6 +61,11 @@ impl EventDispatcher {
         self.begin_pointer(payload, button, window, cx);
         let target = self.captured_or(target);
         self.state.press_target.set(Some(target));
+        if button <= 1 {
+            let path = self.path_from(target);
+            let changed = self.host.borrow_mut().tree.set_active_path(&path);
+            self.restyle(changed, true, window);
+        }
         let pointer = pointer_payload(payload, button);
         if first {
             let canceled = self.fire_inner(target, "pointerdown", &pointer, window, cx);
@@ -87,6 +95,9 @@ impl EventDispatcher {
         cx: &mut App,
     ) {
         let last = self.update_held_buttons("mouseup", button) == 0;
+        if last {
+            self.clear_press(window);
+        }
         self.begin_pointer(payload, button, window, cx);
         let target = self.captured_or(target);
         let pointer = pointer_payload(payload, button);
@@ -107,6 +118,12 @@ impl EventDispatcher {
                 self.state.captured_release.set(Some((target, button)));
             }
         }
+    }
+
+    /// Clears the pressed path and redraws when a rule reads it.
+    pub(super) fn clear_press(&self, window: &mut Window) {
+        let changed = self.host.borrow_mut().tree.set_active_path(&[]);
+        self.restyle(changed, true, window);
     }
 
     /// Returns `payload` with its `buttons` bitmask set to
@@ -153,10 +170,11 @@ impl EventDispatcher {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
-    use crate::tests::pointer::scene;
+    use crate::tests::pointer::{Scene, scene};
+    use crate::tests::state;
     use crate::tests::{at, dispatcher_with_engine, mouse_at, wheel_at};
     use gpui::TestAppContext;
-    use inca_gpui::{EventPayload, EventSink as _};
+    use inca_gpui::{EventPayload, EventSink as _, MousePayload, NodeId};
     use inca_test_macros::gpui_cases;
 
     #[gpui::test]
@@ -537,5 +555,151 @@ mod tests {
 
         let payload = dispatcher.with_movement(EventPayload::None, "click");
         assert_eq!(payload, EventPayload::None);
+    }
+
+    fn pressed(s: &Scene, node: NodeId) -> bool {
+        state(&s.host.borrow(), node, ":active")
+    }
+
+    fn read_active(node: NodeId) -> String {
+        format!("() => out.push(String(__inca_native__.matches({node}, ':active')))")
+    }
+
+    #[gpui_cases]
+    #[gpui::test]
+    #[case::left(0)]
+    #[case::middle(1)]
+    fn a_press_marks_the_node_before_pointerdown_fires(
+        cx: &mut TestAppContext,
+        #[case] button: u8,
+    ) {
+        let mut s = scene(cx);
+        s.listen(s.a, "pointerdown", &read_active(s.a));
+        s.down(s.a, button);
+
+        assert!(s.take().contains(&"true".to_owned()));
+    }
+
+    #[gpui::test]
+    fn the_last_release_clears_the_press_before_pointerup_fires(cx: &mut TestAppContext) {
+        let mut s = scene(cx);
+        s.listen(s.a, "pointerup", &read_active(s.a));
+        s.down(s.a, 0);
+        s.up(s.a, s.a, 0);
+
+        assert!(s.take().contains(&"false".to_owned()));
+    }
+
+    #[gpui::test]
+    fn a_right_press_marks_nothing(cx: &mut TestAppContext) {
+        let mut s = scene(cx);
+        s.down(s.a, 2);
+
+        assert!(!pressed(&s, s.a));
+    }
+
+    #[gpui_cases]
+    #[gpui::test]
+    #[case::the_button(false)]
+    #[case::a_child_of_the_button(true)]
+    fn a_press_on_a_disabled_button_marks_it_and_its_ancestors(
+        cx: &mut TestAppContext,
+        #[case] on_child: bool,
+    ) {
+        let mut s = scene(cx);
+        let (button, child) = {
+            let tree = &mut s.host.borrow_mut().tree;
+            let button = tree.create_node("button").unwrap();
+            let child = tree.create_node("span").unwrap();
+            tree.set_attribute(button, "disabled", true).unwrap();
+            tree.append_child(button, child).unwrap();
+            tree.append_child(tree.root().unwrap(), button).unwrap();
+            (button, child)
+        };
+        s.down(if on_child { child } else { button }, 0);
+
+        assert!(pressed(&s, button));
+        assert!(pressed(&s, s.host.borrow().root()));
+    }
+
+    #[gpui::test]
+    fn a_second_left_press_replaces_the_pressed_path(cx: &mut TestAppContext) {
+        let mut s = scene(cx);
+        s.down(s.a, 0);
+        s.down(s.b, 0);
+
+        assert!(!pressed(&s, s.a));
+        assert!(pressed(&s, s.b));
+    }
+
+    #[gpui::test]
+    fn a_move_with_no_button_clears_a_press_whose_release_was_lost(cx: &mut TestAppContext) {
+        let mut s = scene(cx);
+        s.down(s.a, 0);
+        s.moved(s.a, (3.0, 3.0));
+
+        assert!(!pressed(&s, s.a));
+    }
+
+    /// Presses `a` and moves the pointer to `b` with the button still held.
+    fn drag_out(s: &mut Scene) {
+        s.hover(s.a);
+        s.down(s.a, 0);
+        let sink = s.dispatcher.clone();
+        let b = s.b;
+        let held = EventPayload::Mouse(MousePayload {
+            buttons: 1,
+            ..MousePayload::at(at(5.0, 5.0), gpui::Modifiers::none())
+        });
+        s.cx.update(|window, cx| {
+            sink.pointer_over(b, window, cx);
+            sink.pointer_input("mousemove", b, &held, window, cx);
+        });
+    }
+
+    #[gpui::test]
+    fn a_move_out_of_the_pressed_node_moves_the_hover(cx: &mut TestAppContext) {
+        let mut s = scene(cx);
+        drag_out(&mut s);
+        let host = s.host.borrow();
+
+        assert!(state(&host, s.b, ":hover"));
+        assert!(!state(&host, s.a, ":hover"));
+    }
+
+    #[gpui::test]
+    fn a_move_out_of_the_pressed_node_keeps_the_press(cx: &mut TestAppContext) {
+        let mut s = scene(cx);
+        drag_out(&mut s);
+
+        assert!(pressed(&s, s.a));
+        assert!(!pressed(&s, s.b));
+    }
+
+    #[gpui::test]
+    fn releasing_one_of_two_held_buttons_keeps_the_press_until_the_last(cx: &mut TestAppContext) {
+        let mut s = scene(cx);
+        s.down(s.a, 0);
+        s.down(s.a, 2);
+        s.up(s.a, s.a, 2);
+        let after_first = pressed(&s, s.a);
+        s.up(s.a, s.a, 0);
+
+        assert!(after_first);
+        assert!(!pressed(&s, s.a));
+    }
+
+    #[gpui::test]
+    fn a_pressed_node_moved_inside_its_parent_keeps_the_press_state(cx: &mut TestAppContext) {
+        let mut s = scene(cx);
+        s.down(s.a, 0);
+        {
+            let tree = &mut s.host.borrow_mut().tree;
+            let root = tree.root().unwrap();
+            tree.remove_child(root, s.a).unwrap();
+            tree.insert_before(root, s.a, Some(s.b)).unwrap();
+        }
+
+        assert!(pressed(&s, s.a));
     }
 }
