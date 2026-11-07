@@ -54,6 +54,26 @@ impl VirtualTree {
         Ok(())
     }
 
+    /// Applies the declarations of the text of a `style` attribute as style props, in order, and
+    /// returns one line for each declaration that is dropped. The text is not stored as an
+    /// attribute.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TreeError::NodeNotFound`] if `node_id` names no node and the text holds a valid
+    /// declaration.
+    pub(crate) fn set_style_attribute(
+        &mut self,
+        node_id: NodeId,
+        text: &str,
+    ) -> Result<Vec<String>, TreeError> {
+        let (declarations, warnings) = crate::stylesheet::declarations(text);
+        for (key, value) in declarations {
+            self.set_style(node_id, key, value)?;
+        }
+        Ok(warnings)
+    }
+
     /// Removes one style prop, so the property renders as if never set.
     /// `key` may be `camelCase`, `kebab-case` or `snake_case`, a host name or
     /// its CSS name. Removing a key that isn't set is a no-op.

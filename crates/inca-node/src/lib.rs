@@ -1,6 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+mod html;
 pub mod input_text;
 pub mod scroll;
 pub mod selector;
@@ -8,6 +9,7 @@ pub mod spec;
 mod stylesheet;
 pub mod tree;
 
+pub use html::{ParsedHtml, ParsedNode};
 pub use input_text::{pasted, sanitized, typed};
 pub use scroll::{Align, Rect, scroll_chain, scroll_delta};
 pub use selector::{

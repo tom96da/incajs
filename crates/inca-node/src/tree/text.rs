@@ -32,6 +32,19 @@ impl VirtualTree {
             .ok_or(TreeError::NodeNotFound(id))
     }
 
+    /// Appends `text` to the data of the text node `id`.
+    pub(crate) fn append_text(&mut self, id: NodeId, text: &str) -> Result<(), TreeError> {
+        let node = self.node_mut(id)?;
+        match node.attributes.get_mut("value") {
+            Some(AttributeValue::String(data)) => data.push_str(text),
+            _ => {
+                node.attributes
+                    .insert("value".to_owned(), AttributeValue::String(text.to_owned()));
+            }
+        }
+        Ok(())
+    }
+
     /// The text a node contributes to `textContent`: the data of a text or comment node, and the
     /// data of every descendant text node in tree order for any other node.
     ///
@@ -154,6 +167,34 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
+
+    #[test]
+    fn append_text_adds_to_the_data() {
+        let mut tree = VirtualTree::new();
+        let id = leaf(&mut tree, TEXT_TAG, "ab");
+
+        tree.append_text(id, "cd").unwrap();
+
+        assert_eq!(tree.get(id).unwrap().data(), "abcd");
+    }
+
+    #[test]
+    fn append_text_starts_the_data_of_a_node_without_any() {
+        let mut tree = VirtualTree::new();
+        let id = tree.create_node(TEXT_TAG).unwrap();
+
+        tree.append_text(id, "cd").unwrap();
+
+        assert_eq!(tree.get(id).unwrap().data(), "cd");
+    }
+
+    #[test]
+    fn append_text_to_an_unknown_node_errors() {
+        assert_eq!(
+            VirtualTree::new().append_text(4, "x"),
+            Err(TreeError::NodeNotFound(4))
+        );
+    }
 
     fn leaf(tree: &mut VirtualTree, tag: &str, data: &str) -> NodeId {
         let id = tree.create_node(tag).unwrap();

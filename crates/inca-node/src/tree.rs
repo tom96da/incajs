@@ -354,6 +354,12 @@ impl VirtualTree {
         self.allocate(tag_name)
     }
 
+    /// Makes the next id `next`, so a test reaches the end of the id space.
+    #[cfg(test)]
+    pub(crate) fn set_next_id(&mut self, next: NodeId) {
+        self.next_id = next;
+    }
+
     fn allocate(&mut self, tag_name: String) -> Result<NodeId, TreeError> {
         let id = self.next_id;
         self.next_id = id.checked_add(1).ok_or(TreeError::IdsExhausted)?;

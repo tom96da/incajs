@@ -22,6 +22,7 @@ name = "inca_node"
 
 [dependencies]
 cssparser.workspace = true
+html5ever.workspace = true
 indexmap.workspace = true
 precomputed-hash.workspace = true
 selectors.workspace = true
