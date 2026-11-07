@@ -9,9 +9,26 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 # Built-ins
 
-The host defines these globals before your app runs. Each section lists where
-a global differs from the Web standards. [Console](./console) has its
-own page.
+The host defines these globals before your app runs. This page lists where a
+global differs from the Web standards and how to load their types.
+[Console](./console) has its own page.
+
+## Types
+
+Add the types of these globals to your `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "types": ["incajs/globals"]
+  }
+}
+```
+
+Don't load the DOM and Node.js types. They declare names the host does not define, such as
+the window object and the fetch function. With `@types/node` loaded as well, keep
+`skipLibCheck` on. A file that uses Node APIs, such as an `inca.config.ts` that reads
+`process.env`, belongs in a second tsconfig with `"types": ["node"]`.
 
 ## `TextEncoder` and `TextDecoder`
 
@@ -63,7 +80,6 @@ These results for `file:` URLs differ from the ones of browsers:
 These follow the
 [HTML Standard](https://html.spec.whatwg.org/multipage/timers-and-user-prompts.html#timers).
 
-- Their types come with `incajs`.
 - A handler must be a function. A string or any other value throws a
   `TypeError`.
 - An interval keeps its schedule. After a late run, the next run is the next
@@ -74,7 +90,6 @@ These follow the
 This follows the
 [HTML Standard](https://html.spec.whatwg.org/multipage/imagebitmap-and-animations.html#animation-frames).
 
-- Its type comes with `incajs`.
 - A callback must be a function. A string or any other value throws a
   `TypeError`.
 - On macOS, callbacks wait while another window fully covers the app's window,
