@@ -13,8 +13,8 @@ use std::rc::Rc;
 
 use gpui::{TestAppContext, prelude::*};
 use inca_bridge::Host;
-use inca_gpui::NodeId;
 use inca_jsenv::Engine;
+use inca_node::NodeId;
 use inca_test_macros::gpui_cases;
 
 use inca_bridge::test_support;

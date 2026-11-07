@@ -14,8 +14,9 @@ use std::rc::Rc;
 use gpui::{TestAppContext, point, px};
 use inca_bridge::test_support::engine_for;
 use inca_bridge::{EventDispatcher, Host};
-use inca_gpui::{EventPayload, MousePayload, NodeId};
+use inca_gpui::{EventPayload, MousePayload};
 use inca_jsenv::Engine;
+use inca_node::NodeId;
 
 /// Set in the child process that runs a test's body.
 const CHILD: &str = "INCA_EVENT_GC_CHILD";

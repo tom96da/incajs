@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use inca_gpui::NodeId;
+use inca_node::NodeId;
 use rquickjs::{Ctx, IntoJs, Result as JsResult, Value};
 
 /// The JS tag of [`EventTargetId::Document`].

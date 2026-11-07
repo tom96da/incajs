@@ -4,9 +4,8 @@
 use std::rc::Rc;
 
 use gpui::{App, MouseUpEvent, ScrollHandle, Window};
-use inca_gpui::{
-    EventPayload, EventSink, InputLayout, InputRequest, InputState, KeyPayload, NodeId,
-};
+use inca_gpui::{EventPayload, EventSink, InputLayout, InputRequest, InputState, KeyPayload};
+use inca_node::NodeId;
 
 use super::EventDispatcher;
 use crate::EventTargetId;
@@ -67,8 +66,8 @@ impl EventSink for EventDispatcher {
         Some(self.host.borrow().scroll_handle(node_id))
     }
 
-    fn wheel_axes(&self, node_id: NodeId) -> Option<inca_gpui::WheelAxes> {
-        inca_gpui::wheel_axes(&self.host.borrow().tree, node_id)
+    fn wheel_axes(&self, node_id: NodeId) -> Option<inca_node::WheelAxes> {
+        inca_node::wheel_axes(&self.host.borrow().tree, node_id)
     }
 
     /// The first call of an update computes the delta and defers clearing it,
@@ -241,7 +240,8 @@ mod tests {
     };
     use gpui::TestAppContext;
     use inca_gpui::event_sink::EVENTS;
-    use inca_gpui::{EventPayload, MousePayload, NodeId, PointerSource, WheelPayload};
+    use inca_gpui::{EventPayload, MousePayload, PointerSource, WheelPayload};
+    use inca_node::NodeId;
     use inca_test_macros::gpui_cases;
 
     /// `inca-gpui` only ever produces a `button` index in `0..=4`, but

@@ -4,8 +4,8 @@
 use rquickjs::function::Opt;
 use rquickjs::{Ctx, Exception, FromJs, IntoJs, Result as JsResult, Value};
 
-use inca_gpui::element::scroll::Align;
-use inca_gpui::{NodeId, TreeError, VirtualNode, VirtualTree};
+use inca_node::scroll::Align;
+use inca_node::{NodeId, TreeError, VirtualNode, VirtualTree};
 
 use crate::EventTargetId;
 use crate::event_target::{DOCUMENT_TAG, WINDOW_TAG};

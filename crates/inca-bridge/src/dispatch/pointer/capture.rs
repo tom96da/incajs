@@ -4,7 +4,8 @@
 //! The capture of the pointer by a node.
 
 use gpui::{App, Window};
-use inca_gpui::{EventPayload, NodeId};
+use inca_gpui::EventPayload;
+use inca_node::NodeId;
 
 use super::super::EventDispatcher;
 use super::pointer_payload;

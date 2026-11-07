@@ -28,8 +28,8 @@ use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use gpui::{App, Window};
-use inca_gpui::NodeId;
 use inca_jsenv::{Engine, ErrorReporter, report_jobs, stderr_reporter};
+use inca_node::NodeId;
 
 use crate::bindings::Host;
 
@@ -356,7 +356,7 @@ mod tests {
         host.borrow_mut().tree.append_child(root, node).unwrap();
         host.borrow_mut()
             .tree
-            .set_attribute(node, "tabindex", inca_gpui::AttributeValue::from("0"))
+            .set_attribute(node, "tabindex", inca_node::AttributeValue::from("0"))
             .unwrap();
         let cx = cx.add_empty_window();
         cx.update(|window, cx| {

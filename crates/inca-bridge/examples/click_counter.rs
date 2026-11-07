@@ -17,8 +17,9 @@ use gpui_platform::application;
 
 use inca_bridge::install;
 use inca_bridge::{EventDispatcher, Host};
-use inca_gpui::{NodeId, VirtualTree, render_tree_with_events};
+use inca_gpui::render_tree_with_events;
 use inca_jsenv::Engine;
+use inca_node::{NodeId, VirtualTree};
 
 struct ClickCounter {
     host: Rc<RefCell<Host>>,

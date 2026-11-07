@@ -4,8 +4,9 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use inca_gpui::{EventPayload, NodeId};
+use inca_gpui::EventPayload;
 use inca_jsenv::{Engine, EngineError};
+use inca_node::NodeId;
 use rquickjs::{Ctx, Result as JsResult};
 
 use super::construct::create;

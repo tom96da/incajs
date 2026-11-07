@@ -3,9 +3,10 @@
 
 use std::cell::RefCell;
 
-use inca_gpui::{EventPayload, NodeId};
+use inca_gpui::EventPayload;
 use inca_jsenv::class;
 use inca_jsenv::class::{define_method, define_this_getter};
+use inca_node::NodeId;
 use rquickjs::convert::Coerced;
 use rquickjs::function::{IntoJsFunc, Opt, ParamRequirement, Params, This};
 use rquickjs::{Class, Ctx, Exception, Function, Object, Result as JsResult, Value};

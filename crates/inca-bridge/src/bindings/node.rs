@@ -9,7 +9,7 @@ use std::rc::Rc;
 use rquickjs::convert::Coerced;
 use rquickjs::{Ctx, Exception, Result as JsResult, Value};
 
-use inca_gpui::NodeId;
+use inca_node::NodeId;
 
 use super::Natives;
 use super::convert::{JsNodeId, existing_node, or_null, throw_tree_error};

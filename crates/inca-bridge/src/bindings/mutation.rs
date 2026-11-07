@@ -10,7 +10,7 @@ use rquickjs::convert::Coerced;
 use rquickjs::convert::List;
 use rquickjs::{Ctx, Result as JsResult};
 
-use inca_gpui::NodeId;
+use inca_node::NodeId;
 
 use super::Natives;
 use super::convert::{JsNodeId, throw_tree_error};

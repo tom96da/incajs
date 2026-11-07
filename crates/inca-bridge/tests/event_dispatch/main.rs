@@ -16,8 +16,9 @@ use gpui::{
     px,
 };
 use inca_bridge::{EventDispatcher, Host};
-use inca_gpui::{NodeId, render_tree_with_events};
+use inca_gpui::render_tree_with_events;
 use inca_jsenv::{Engine, EngineError};
+use inca_node::NodeId;
 
 use inca_bridge::test_support;
 

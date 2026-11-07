@@ -5,7 +5,8 @@
 
 use gpui::{App, Window};
 use inca_gpui::event_sink::spec_of;
-use inca_gpui::{EventPayload, NO_BUTTON, NodeId, PointerSource, buttons_mask};
+use inca_gpui::{EventPayload, NO_BUTTON, PointerSource, buttons_mask};
+use inca_node::NodeId;
 
 use super::EventDispatcher;
 
@@ -174,7 +175,8 @@ mod tests {
     use crate::tests::state;
     use crate::tests::{at, dispatcher_with_engine, mouse_at, wheel_at};
     use gpui::TestAppContext;
-    use inca_gpui::{EventPayload, EventSink as _, MousePayload, NodeId};
+    use inca_gpui::{EventPayload, EventSink as _, MousePayload};
+    use inca_node::NodeId;
     use inca_test_macros::gpui_cases;
 
     #[gpui::test]

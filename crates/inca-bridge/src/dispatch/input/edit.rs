@@ -12,9 +12,9 @@ use inca_gpui::InputPayload;
 use inca_gpui::InputRequest;
 use inca_gpui::InputState;
 use inca_gpui::InputType;
-use inca_gpui::NodeId;
-use inca_gpui::input::sanitized;
-use inca_gpui::input::typed;
+use inca_node::NodeId;
+use inca_node::input_text::sanitized;
+use inca_node::input_text::typed;
 impl EventDispatcher {
     /// Fires `beforeinput`, writes `edit` into the text state of `node` unless a listener
     /// canceled it or changed the value or the node, and fires `input`.

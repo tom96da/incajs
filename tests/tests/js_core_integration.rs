@@ -22,8 +22,8 @@ use std::rc::Rc;
 
 use inca_bridge::Host;
 use inca_bridge::install;
-use inca_gpui::AttributeValue;
 use inca_jsenv::Engine;
+use inca_node::AttributeValue;
 use rquickjs::{Function, Module};
 
 const BUNDLE_PATH: &str = concat!(

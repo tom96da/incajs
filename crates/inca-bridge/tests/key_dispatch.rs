@@ -15,8 +15,8 @@ use gpui::{
     PlatformInput, TestAppContext, VisualTestContext, prelude::*,
 };
 use inca_bridge::{EventListeners, Host};
-use inca_gpui::NodeId;
 use inca_jsenv::Engine;
+use inca_node::NodeId;
 use inca_test_macros::gpui_cases;
 
 use inca_bridge::test_support;

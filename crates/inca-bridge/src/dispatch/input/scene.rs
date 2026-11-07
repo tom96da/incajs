@@ -10,7 +10,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use gpui::{App, AppContext as _, Keystroke, TestAppContext, WindowHandle};
-use inca_gpui::{EventPayload, EventSink, InputRequest, InputState, MousePayload, NodeId};
+use inca_gpui::{EventPayload, EventSink, InputRequest, InputState, MousePayload};
+use inca_node::NodeId;
 use serde_json::{Value, json};
 
 use crate::test_support::{TestRoot, engine_for, mount_active};

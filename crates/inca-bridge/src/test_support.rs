@@ -11,8 +11,9 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use gpui::{Context, Render, TestAppContext, Window, WindowHandle, prelude::*};
-use inca_gpui::{NodeId, render_tree_with_events};
+use inca_gpui::render_tree_with_events;
 use inca_jsenv::{Clock, Engine, EngineError, ErrorReporter, system_clock};
+use inca_node::NodeId;
 
 use crate::bindings::install;
 use crate::{EventDispatcher, EventListeners, EventTargetId, Host};

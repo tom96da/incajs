@@ -5,8 +5,8 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use inca_gpui::NodeId;
 use inca_jsenv::callbacks;
+use inca_node::NodeId;
 use rquickjs::{Ctx, Exception, Result as JsResult, Value};
 
 use super::Natives;
