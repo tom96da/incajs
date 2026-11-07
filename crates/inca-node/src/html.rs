@@ -7,13 +7,17 @@
 //! and builds the nodes directly in the tree. The result is a fragment that has no parent and is
 //! not held, so the caller moves its children and destroys it in the same task.
 //!
+//! [`VirtualTree::serialize_html`] writes a subtree back as markup.
+//!
 //! Element names and attribute keys are stored in lower case, without a namespace. A `style`
 //! attribute applies as inline style props and no `style` attribute is stored.
 
 mod depth;
+mod serialize;
 mod sink;
 
 use crate::tree::{COMMENT_TAG, FRAGMENT_TAG, NodeId, TEXT_TAG, TreeError, VirtualTree};
+pub use serialize::HtmlScope;
 use sink::{HtmlSink, node_of, parse_fragment};
 
 /// One node of a parsed fragment.

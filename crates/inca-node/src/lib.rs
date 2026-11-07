@@ -9,7 +9,7 @@ pub mod spec;
 mod stylesheet;
 pub mod tree;
 
-pub use html::{ParsedHtml, ParsedNode};
+pub use html::{HtmlScope, ParsedHtml, ParsedNode};
 pub use input_text::{pasted, sanitized, typed};
 pub use scroll::{Align, Rect, scroll_chain, scroll_delta};
 pub use selector::{

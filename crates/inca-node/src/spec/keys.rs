@@ -21,6 +21,7 @@ use crate::DisplaySpec;
 use crate::FlexDirectionSpec;
 use crate::OverflowSpec;
 use crate::StyleSpec;
+use crate::tree::js_number_text;
 use std::borrow::Cow;
 use std::collections::HashMap;
 
@@ -251,6 +252,42 @@ pub(crate) fn style_key(key: &str) -> Cow<'_, str> {
     match alias_target(&snake) {
         Some(key) => Cow::Borrowed(key),
         None => snake,
+    }
+}
+
+/// The CSS name of the host key `key`: its first CSS alias, or the key itself, in `kebab-case`.
+pub(crate) fn css_name(key: &str) -> String {
+    let name = STYLE_KEYS
+        .iter()
+        .find(|entry| entry.key == key)
+        .and_then(|entry| entry.aliases.first().copied())
+        .unwrap_or(key);
+    name.replace('_', "-")
+}
+
+/// The CSS text of the style prop `key` set to `value`. `None` when the prop does not apply: a
+/// bool, an empty string and a value that [`style_warning`] flags. A number is written with the
+/// unit its kind takes.
+pub(crate) fn css_declaration(key: &str, value: &AttributeValue) -> Option<String> {
+    if style_warning(key, value).is_some() {
+        return None;
+    }
+    match value {
+        AttributeValue::String(text) if !text.is_empty() => Some(text.clone()),
+        AttributeValue::Number(number) => {
+            let kind = STYLE_KEYS.iter().find(|entry| entry.key == key)?.kind;
+            match kind {
+                ValueKind::NonNegativePx | ValueKind::NonNegativePxOrAuto | ValueKind::PxOrAuto => {
+                    Some(format!("{}px", js_number_text(*number)))
+                }
+                ValueKind::NonNegativeNumber | ValueKind::Opacity => Some(js_number_text(*number)),
+                // `style_warning` keeps a color number inside `0..=0xffffff`.
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                ValueKind::Color => Some(format!("#{:06x}", *number as u32)),
+                ValueKind::Keyword(_) | ValueKind::KeywordPair(_) => None,
+            }
+        }
+        _ => None,
     }
 }
 
@@ -592,6 +629,42 @@ mod tests {
         let (_, warnings) = style_and_warnings(&[("not_a_real_prop", text(""))]);
 
         assert_eq!(warnings, ["ignoring unknown style key `not_a_real_prop`"]);
+    }
+
+    #[test]
+    fn a_css_name_reads_back_as_its_key() {
+        for entry in STYLE_KEYS {
+            assert_eq!(style_key(&css_name(entry.key)), entry.key, "{}", entry.key);
+        }
+    }
+
+    #[rstest]
+    #[case::alias_for_color("text_color", "color")]
+    #[case::alias_for_radius("corner_radius", "border-radius")]
+    #[case::first_alias("background", "background-color")]
+    #[case::kebab_case("flex_direction", "flex-direction")]
+    fn css_name_writes_the_css_spelling(#[case] key: &str, #[case] expected: &str) {
+        assert_eq!(css_name(key), expected);
+    }
+
+    #[rstest]
+    #[case::px("width", num(5.0), Some("5px"))]
+    #[case::negative_px("margin", num(-2.5), Some("-2.5px"))]
+    #[case::decimal("flex_grow", num(2.0), Some("2"))]
+    #[case::opacity("opacity", num(0.5), Some("0.5"))]
+    #[case::color("text_color", num(f64::from(0x00ab_cdef_u32)), Some("#abcdef"))]
+    #[case::color_with_zeros("background", num(255.0), Some("#0000ff"))]
+    #[case::string("width", text("10px"), Some("10px"))]
+    #[case::bool("width", AttributeValue::Bool(true), None)]
+    #[case::empty_string("width", text(""), None)]
+    #[case::flagged_string("width", text("bogus"), None)]
+    #[case::flagged_number("display", num(1.0), None)]
+    fn css_declaration_writes_the_value_by_its_kind(
+        #[case] key: &str,
+        #[case] value: AttributeValue,
+        #[case] expected: Option<&str>,
+    ) {
+        assert_eq!(css_declaration(key, &value).as_deref(), expected);
     }
 
     #[test]
