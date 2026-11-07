@@ -15,12 +15,16 @@ use super::Natives;
 use super::convert::{JsNodeId, existing_node, or_null, throw_tree_error};
 use super::host::Host;
 
-/// `linkedNode`, `childNodeIds`, `isConnected` and the text natives `textContent`, `wholeText`,
+/// `linkedNode`, `childNodeIds`, `isConnected`, the relation natives `rootOf`,
+/// `compareNodePosition` and `isEqualNode`, and the text natives `textContent`, `wholeText`,
 /// `substringData`, `replaceData` and `splitText`.
 pub(super) fn install_node(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("linkedNode", linked_node)?;
     n.set("childNodeIds", child_node_ids)?;
     n.set("isConnected", is_connected)?;
+    n.set("rootOf", root_of)?;
+    n.set("compareNodePosition", compare_node_position)?;
+    n.set("isEqualNode", is_equal_node)?;
     n.set("textContent", text_content)?;
     n.set("wholeText", whole_text)?;
     n.set("substringData", substring_data)?;
@@ -75,6 +79,37 @@ fn is_connected<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> 
         let host = host.borrow();
         existing_node(&ctx, &host.tree, node_id)?;
         Ok(host.tree.is_connected(node_id))
+    }
+}
+
+fn root_of<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<NodeId> {
+    move |ctx, JsNodeId(node_id)| {
+        host.borrow()
+            .tree
+            .root_of(node_id)
+            .map_err(|err| throw_tree_error(&ctx, err))
+    }
+}
+
+fn compare_node_position<'js>(
+    host: Rc<RefCell<Host>>,
+) -> impl Fn(Ctx<'js>, JsNodeId, JsNodeId) -> JsResult<u32> {
+    move |ctx, JsNodeId(node_id), JsNodeId(other_id)| {
+        host.borrow()
+            .tree
+            .compare_position(node_id, other_id)
+            .map_err(|err| throw_tree_error(&ctx, err))
+    }
+}
+
+fn is_equal_node<'js>(
+    host: Rc<RefCell<Host>>,
+) -> impl Fn(Ctx<'js>, JsNodeId, JsNodeId) -> JsResult<bool> {
+    move |ctx, JsNodeId(node_id), JsNodeId(other_id)| {
+        host.borrow()
+            .tree
+            .is_equal(node_id, other_id)
+            .map_err(|err| throw_tree_error(&ctx, err))
     }
 }
 
@@ -166,6 +201,11 @@ mod tests {
     #[case::substring_data("substringData(999, 0, 0)")]
     #[case::replace_data("replaceData(999, 0, 0, '')")]
     #[case::split_text("splitText(999, 0)")]
+    #[case::root_of("rootOf(999)")]
+    #[case::compare_unknown_node("compareNodePosition(999, __inca_native__.rootNodeId())")]
+    #[case::compare_unknown_other("compareNodePosition(__inca_native__.rootNodeId(), 999)")]
+    #[case::equal_unknown_node("isEqualNode(999, __inca_native__.rootNodeId())")]
+    #[case::equal_unknown_other("isEqualNode(__inca_native__.rootNodeId(), 999)")]
     fn an_unknown_node_id_throws_type_error(#[case] call: &str) {
         let (engine, _host) = engine_with_bindings();
 
@@ -202,6 +242,30 @@ mod tests {
             .unwrap();
 
         assert!(same);
+    }
+
+    #[rstest]
+    #[case::compare_position("n.compareNodePosition(top, leaf)", 20)]
+    #[case::root_of("Number(n.rootOf(leaf) === top)", 1)]
+    #[case::is_equal_to_a_childless_twin("Number(n.isEqualNode(top, twin))", 0)]
+    #[case::is_equal_with_another_tag("Number(n.isEqualNode(leaf, twin))", 0)]
+    fn a_relation_native_reports_the_tree_shape(#[case] call: &str, #[case] want: u32) {
+        let (engine, _host) = engine_with_bindings();
+
+        let read: u32 = engine
+            .eval(&format!(
+                r"
+                const n = __inca_native__;
+                const top = n.createNode('div');
+                const leaf = n.createNode('span');
+                const twin = n.createNode('div');
+                n.appendChild(top, leaf);
+                {call};
+                "
+            ))
+            .unwrap();
+
+        assert_eq!(read, want);
     }
 
     #[test]

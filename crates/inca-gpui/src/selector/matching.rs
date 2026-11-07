@@ -31,7 +31,7 @@ fn is_element(node: &VirtualNode) -> bool {
 
 /// The text of an attribute value: a string as is, a number through `js_number_text`, a bool as
 /// `true` or `false`.
-fn attribute_text(value: &AttributeValue) -> String {
+pub(crate) fn attribute_text(value: &AttributeValue) -> String {
     match value {
         AttributeValue::String(text) => text.clone(),
         AttributeValue::Number(number) => js_number_text(*number),

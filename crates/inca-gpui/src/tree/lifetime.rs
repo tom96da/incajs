@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Holding, releasing, sweeping and destroying nodes.
+//! Cloning, holding, releasing, sweeping and destroying nodes.
 
 use super::{NodeId, TreeError, VirtualTree};
 
@@ -102,6 +102,47 @@ impl VirtualTree {
         }
         freed
     }
+
+    /// Copies `id` with its tag, attributes and style props, and with its descendants when `deep`.
+    /// Returns the original, the copy and the tag of each copy in pre-order, the copy of `id`
+    /// first. Only that copy has no parent.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TreeError::NodeNotFound`] if `id` names no node and [`TreeError::IdsExhausted`]
+    /// when no id is left. Copies made before the failure stay as orphans.
+    pub fn clone_subtree(
+        &mut self,
+        id: NodeId,
+        deep: bool,
+    ) -> Result<Vec<(NodeId, NodeId, String)>, TreeError> {
+        self.get(id).ok_or(TreeError::NodeNotFound(id))?;
+        let mut made = Vec::new();
+        let mut pending: Vec<(NodeId, Option<NodeId>)> = vec![(id, None)];
+        while let Some((original, parent)) = pending.pop() {
+            let node = self
+                .get(original)
+                .ok_or(TreeError::NodeNotFound(original))?;
+            let (tag, attributes, style_props, children) = (
+                node.tag_name.clone(),
+                node.attributes.clone(),
+                node.style_props.clone(),
+                node.children.clone(),
+            );
+            let copy = self.create_node(tag.clone())?;
+            let target = self.node_mut(copy)?;
+            target.attributes = attributes;
+            target.style_props = style_props;
+            made.push((original, copy, tag));
+            if let Some(parent) = parent {
+                self.append_child(parent, copy)?;
+            }
+            if deep {
+                pending.extend(children.into_iter().rev().map(|child| (child, Some(copy))));
+            }
+        }
+        Ok(made)
+    }
 }
 
 #[cfg(test)]
@@ -109,6 +150,9 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
+    use crate::tests::{children, family, node, sample};
+    use crate::tree::{AttributeValue, FRAGMENT_TAG};
+    use rstest::rstest;
 
     #[test]
     fn destroy_frees_the_whole_subtree() {
@@ -348,5 +392,116 @@ mod tests {
 
         tree.release(child);
         assert!(!tree.has_orphans());
+    }
+
+    #[test]
+    fn a_shallow_clone_has_no_children() {
+        let mut tree = VirtualTree::new();
+        let (parent, _) = family(&mut tree, 3);
+
+        let made = tree.clone_subtree(parent, false).unwrap();
+
+        assert_eq!(made.len(), 1);
+        assert!(children(&tree, made[0].1).is_empty());
+    }
+
+    #[test]
+    fn a_deep_clone_lists_the_copies_in_pre_order() {
+        let mut tree = VirtualTree::new();
+        let root = sample(&mut tree, "div");
+
+        let made = tree.clone_subtree(root, true).unwrap();
+
+        let tags: Vec<&str> = made.iter().map(|(_, _, tag)| tag.as_str()).collect();
+        assert_eq!(tags, ["div", "span", "#text", "#text"]);
+        let ids: Vec<NodeId> = made.iter().map(|(_, copy, _)| *copy).collect();
+        assert_eq!(children(&tree, ids[0]), [ids[1], ids[3]]);
+        assert_eq!(children(&tree, ids[1]), [ids[2]]);
+        assert_eq!(tree.is_equal(root, ids[0]), Ok(true));
+    }
+
+    #[rstest]
+    #[case::fragment(FRAGMENT_TAG)]
+    #[case::comment("#comment")]
+    fn a_clone_keeps_the_kind_of_the_node(#[case] tag: &str) {
+        let mut tree = VirtualTree::new();
+        let original = node(&mut tree, tag);
+
+        let made = tree.clone_subtree(original, true).unwrap();
+
+        assert_eq!(made[0].2, tag);
+        assert_eq!(tree.get(made[0].1).unwrap().tag_name(), tag);
+    }
+
+    #[test]
+    fn a_clone_copies_the_attribute_and_style_maps_as_they_are() {
+        let mut tree = VirtualTree::new();
+        let original = sample(&mut tree, "div");
+
+        let made = tree.clone_subtree(original, false).unwrap();
+
+        let (from, to) = (tree.get(original).unwrap(), tree.get(made[0].1).unwrap());
+        assert_eq!(to.attributes(), from.attributes());
+        assert_eq!(to.style_props(), from.style_props());
+        assert_eq!(
+            to.attributes().get("tabindex"),
+            Some(&AttributeValue::Number(1.0))
+        );
+    }
+
+    #[test]
+    fn a_clone_is_a_parentless_orphan() {
+        let mut tree = VirtualTree::new();
+        let (parent, _) = family(&mut tree, 2);
+
+        let made = tree.clone_subtree(parent, true).unwrap();
+
+        let copy = made[0].1;
+        assert_eq!(tree.get(copy).unwrap().parent(), None);
+        assert!(tree.orphans.contains(&copy));
+        assert!(!tree.orphans.contains(&made[1].1));
+    }
+
+    #[test]
+    fn a_clone_leaves_the_original_alone() {
+        let mut tree = VirtualTree::new();
+        let (parent, kids) = family(&mut tree, 2);
+
+        tree.clone_subtree(parent, true).unwrap();
+
+        assert_eq!(children(&tree, parent), kids);
+    }
+
+    #[test]
+    fn a_clone_that_runs_out_of_ids_fails() {
+        let mut tree = VirtualTree::new();
+        let (parent, _) = family(&mut tree, 2);
+        tree.next_id = NodeId::MAX - 2;
+
+        assert_eq!(
+            tree.clone_subtree(parent, true),
+            Err(TreeError::IdsExhausted)
+        );
+    }
+
+    #[test]
+    fn the_copies_made_before_the_ids_ran_out_stay_as_orphans() {
+        let mut tree = VirtualTree::new();
+        let (parent, _) = family(&mut tree, 2);
+        tree.next_id = NodeId::MAX - 2;
+
+        let _ = tree.clone_subtree(parent, true);
+
+        let copy = NodeId::MAX - 2;
+        assert!(tree.orphans.contains(&copy));
+        assert_eq!(children(&tree, copy), [NodeId::MAX - 1]);
+    }
+
+    #[test]
+    fn a_clone_of_an_unknown_id_fails() {
+        assert_eq!(
+            VirtualTree::new().clone_subtree(4, true),
+            Err(TreeError::NodeNotFound(4))
+        );
     }
 }
