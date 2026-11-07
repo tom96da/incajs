@@ -12,6 +12,7 @@ mod capture;
 pub(crate) mod convert;
 mod focus;
 mod host;
+mod html;
 mod input;
 mod listeners;
 mod mutation;
@@ -31,6 +32,7 @@ use rquickjs::{Ctx, Function, Object, Result as JsResult};
 
 use capture::install_capture;
 use focus::install_focus;
+use html::install_html;
 use input::install_input;
 use listeners::install_events;
 use mutation::install_mutation;
@@ -63,6 +65,7 @@ pub fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
     };
     install_tree(&natives)?;
     install_mutation(&natives)?;
+    install_html(&natives)?;
     install_node(&natives)?;
     install_events(&natives)?;
     install_focus(&natives)?;

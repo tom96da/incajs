@@ -19,7 +19,7 @@ mod listeners;
 mod script;
 mod targets;
 
-pub(crate) use script::{click, dispatch_event};
+pub(crate) use script::{click, dispatch_event, lose_focus};
 pub(super) use targets::targets_of;
 
 /// What one walk needs to know.

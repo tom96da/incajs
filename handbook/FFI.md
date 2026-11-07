@@ -73,9 +73,12 @@ the custom renderer's output. Each node has:
   empty. Each call returns the position of the first inserted node among the
   children of `parentId`.
 - Detaching, moving, replacing or destroying a node drops the focus its subtree
-  holds at the call, with no `blur` or `focusout`. Detaching, moving or
-  replacing a node sets the scroll offsets of its subtree to 0.
+  holds at the call. Detaching, moving or replacing a node sets the scroll offsets of its subtree
+  to 0.
 - `removeChild` and `replaceChild` keep the listeners of the node they detach.
+- `setInnerHtml` and `setOuterHtml` fire `blur` and then `focusout` at the focused node, before
+  the tree changes, when it sits in the subtrees they remove. The other calls that drop focus
+  fire nothing.
 - A `nodeId` that is not a finite whole number in the `u32` range throws a
   `TypeError`.
 - `destroyNode` frees a node and its subtree at once. It frees nothing for the content of a
@@ -172,6 +175,11 @@ be passed, and `undefined` there counts as `null`.
 | `childNodeIds` | `(nodeId: number) => number[]` | The ids of the children of `nodeId` in order. Throws a `TypeError` for an unknown node. |
 | `isConnected` | `(nodeId: number) => boolean` | Whether `nodeId` is the root container or hangs under it. Throws a `TypeError` for an unknown node. |
 | `cloneNode` | `(nodeId: number, deep: boolean) => [number, string][]` | Copy a node with its tag, attributes and style props, and its descendants when `deep` is truthy. A falsy `deep` clones only the node. Returns the id and tag of each copy in pre-order, the copy of `nodeId` first. The copy of a template is followed by the copy of its content (`"#fragment"`), the content descendants when `deep` is truthy, and then the other children. The copies have no listeners, focus or scroll offset, and the root copy has no parent. An `input` copy has the typed text of its original. Throws a `TypeError` for an unknown node. |
+| `innerHtml` | `(nodeId: number) => string` | The markup of the children of `nodeId`. A template reads its content. Throws a `TypeError` for an unknown node. |
+| `outerHtml` | `(nodeId: number) => string` | The markup of `nodeId` with its children. Throws a `TypeError` for an unknown node. |
+| `setInnerHtml` | `(nodeId: number, html: string) => Parsed` | Parse `html` in the context of `nodeId` and replace all its children, or the children of its content for a template. The old children stay in the host as orphans with their listeners. Returns the parsed nodes at position 0. Throws a `TypeError` for an unknown node. |
+| `setOuterHtml` | `(nodeId: number, html: string) => Parsed \| null` | Parse `html` in the context of the parent of `nodeId` and replace the node with the result. `null` and no change for a node without a parent. Throws `NoModificationAllowedError` for the root container and a `TypeError` for an unknown node. |
+| `insertAdjacentHtml` | `(nodeId: number, position: string, html: string) => Parsed` | Parse `html` and insert the nodes at `position` (`beforebegin`, `afterbegin`, `beforeend` or `afterend`, matched ignoring ASCII case) of `nodeId`. The context is the container the nodes enter, and `body` for an `html` element. Throws `SyntaxError` for another position, `NoModificationAllowedError` for `beforebegin` or `afterend` on a node without a parent, and a `TypeError` for an unknown node. |
 | `compareNodePosition` | `(nodeId: number, otherId: number) => number` | The position of `otherId` relative to `nodeId` as a bit mask: `1` disconnected, `2` preceding, `4` following, `8` contains, `16` contained by, `32` implementation specific. Equal ids give `0`. Nodes of different trees give `1 \| 32` plus `2` or `4`. Throws a `TypeError` for an unknown node. |
 | `rootOf` | `(nodeId: number) => number` | The top of the parent chain of `nodeId`. A connected node gives the root container. Throws a `TypeError` for an unknown node. |
 | `isEqualNode` | `(nodeId: number, otherId: number) => boolean` | Whether the two subtrees have the same tags, attributes, style props and children. The typed text of an `input` is not compared. Throws a `TypeError` for an unknown node. |
@@ -250,6 +258,16 @@ the first failing check throws. A failure changes nothing.
 A `refId` equal to `nodeId` stands for the next sibling of `nodeId`.
 
 The host converts the `VirtualNode` tree into GPUI elements on each frame.
+
+### Parsed
+
+`setInnerHtml`, `setOuterHtml` and `insertAdjacentHtml` return `[position, entries]`. `position` is
+the index among the children of the container where the first inserted node sits, or would sit for
+an empty result. Each entry is `[id, tag, parentId, data]` in pre-order, the content fragments of
+templates included. An entry whose `parentId` is no id of the list is a root. `data` is the text of
+a `#text` or `#comment` node and `null` for any other node. A `style` attribute applies as style
+props and its warnings print through `warn`. An `input` takes the typed text of its `value`
+attribute.
 
 ### Event dispatch
 
