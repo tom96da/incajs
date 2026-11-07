@@ -8,6 +8,7 @@ export default defineConfig({
     index: "src/index.mts",
     vue: "src/vue/index.mts",
     "vue-runtime": "src/vue/runtime.mts",
+    style: "src/style.mts",
     // Not in package.json's `exports`. For inca-tests only.
     rendererCore: "src/rendererCore.mts",
   },
