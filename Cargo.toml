@@ -34,6 +34,8 @@ serde_json = "1"
 serde_path_to_error = "0.1.20"
 unicode-segmentation = "1.13"
 unicode-width = "0.2"
+# `url::quirks` is hidden API: the URL tests of `inca-jsenv` guard a version bump.
+url = "2.5"
 cssparser = "0.38"
 precomputed-hash = "0.1"
 selectors = "0.41"

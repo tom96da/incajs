@@ -24,6 +24,7 @@ mod encoder;
 
 use decoder::{Codec, Decoder};
 use encoder::Encoder;
+pub(crate) use encoder::encode;
 
 /// The vault key of the prototypes and the getters.
 const STORE: &str = "encoding";
