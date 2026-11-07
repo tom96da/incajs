@@ -1560,3 +1560,12 @@ A fixed entry is deleted and its ID is never reused.
   `NotFoundError`. A reference that is still alive follows the browser order.
   Fix: let the host treat an unknown reference as not a child, at the step
   where the host checks the reference.
+
+- **B-286 A project root reached through a symlink gives absolute stylesheet keys**
+  `Units: cli · Size: S · Impact: Low`
+
+  The key of a stylesheet is its path below the project root. Vite hands out
+  the real path of a module, so a root that goes through a symlink makes the
+  relative path leave the root, and the key becomes the absolute path. The
+  bundle then carries a path of the machine. Fix: resolve the root to its real
+  path before the keys are made.
