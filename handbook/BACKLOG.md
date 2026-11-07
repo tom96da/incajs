@@ -1268,14 +1268,6 @@ A fixed entry is deleted and its ID is never reused.
   design with the same selector adapter and the same return types as the
   element methods.
 
-- **B-254 The event constructors are enumerable globals**
-  `Units: bridge · Size: S · Impact: Low`
-
-  The event constructors are defined with `globals.set`, so
-  `Object.keys(globalThis)` lists them. Browsers define interface objects
-  non-enumerable. Fix: define them with `define_global` like the other native
-  classes.
-
 - **B-255 The packaged app carries no license notice for its bundled JavaScript dependencies**
   `Units: cli · Size: M · Impact: Medium`
 

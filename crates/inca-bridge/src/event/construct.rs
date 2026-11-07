@@ -5,6 +5,7 @@ use std::cell::RefCell;
 
 use inca_gpui::{EventPayload, NodeId};
 use inca_jsenv::class;
+use inca_jsenv::class::{define_method, define_this_getter};
 use rquickjs::convert::Coerced;
 use rquickjs::function::{IntoJsFunc, Opt, ParamRequirement, Params, This};
 use rquickjs::{Class, Ctx, Exception, Function, Object, Result as JsResult, Value};
@@ -90,7 +91,7 @@ fn related_of(payload: &EventPayload) -> Option<NodeId> {
 /// `event`.
 pub(super) fn custom_prototype<'js>(ctx: &Ctx<'js>, event: &Object<'js>) -> JsResult<Object<'js>> {
     let proto = child_of(ctx, event)?;
-    class::define_this_getter(ctx, &proto, "detail", |ctx, this| {
+    define_this_getter(ctx, &proto, "detail", |ctx, this| {
         with_event(ctx, &this, |event| {
             event
                 .held
@@ -120,21 +121,20 @@ pub(super) fn custom_prototype<'js>(ctx: &Ctx<'js>, event: &Object<'js>) -> JsRe
             })
         },
     )?;
-    class::define_method(&proto, "initCustomEvent", init)?;
+    define_method(&proto, "initCustomEvent", init)?;
     Ok(proto)
 }
 
 /// Installs a global constructor for each of [`CLASSES`], linked with the prototype of the same
 /// index in `prototypes`, and the constants of `Event`, `WheelEvent` and `KeyboardEvent`.
 pub(super) fn constructors<'js>(ctx: &Ctx<'js>, prototypes: &[Object<'js>; 10]) -> JsResult<()> {
-    let globals = ctx.globals();
     let mut made: Vec<(&str, Function<'js>)> = Vec::new();
     for (&(kind, name, parent), proto) in CLASSES.iter().zip(prototypes) {
         let function = class::define_class(ctx, proto, name, 1, Construct { name, kind })?;
         if let Some((_, parent)) = made.iter().find(|(made, _)| Some(*made) == parent) {
             function.set_prototype(Some(parent))?;
         }
-        globals.set(name, function.clone())?;
+        class::define_global(ctx, name, function.clone())?;
         made.push((kind, function));
     }
     for (kind, function) in &made {
@@ -446,6 +446,23 @@ mod tests {
         );
 
         assert_eq!(got, serde_json::json!(",true,true"));
+    }
+
+    #[test]
+    fn an_event_constructor_global_reads_writable_configurable_not_enumerable() {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+
+        let got = eval_json(
+            &dispatcher,
+            r"
+            (() => {
+                const d = Object.getOwnPropertyDescriptor(globalThis, 'Event');
+                return [d.writable, d.enumerable, d.configurable].join();
+            })()
+            ",
+        );
+
+        assert_eq!(got, serde_json::json!("true,false,true"));
     }
 
     #[rstest]
