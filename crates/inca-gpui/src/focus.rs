@@ -20,8 +20,8 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use gpui::{App, FocusHandle, Window};
 
-use crate::selector::js_number_text;
 use crate::tree::TEXT_TAG;
+use crate::tree::js_number_text;
 use crate::{
     AttributeValue, EventPayload, EventSink, NodeId, VirtualTree, focusable_by_default,
     hidden_by_attribute, is_disabled_control,
@@ -196,6 +196,13 @@ impl FocusRegistry {
         active
     }
 
+    /// The node that style rules treat as focused: [`Self::active_node`], or none while the
+    /// window is inactive.
+    #[must_use]
+    pub fn visual_focus(&self, tree: &VirtualTree) -> Option<NodeId> {
+        self.active_node(tree).filter(|_| !self.window_blurred)
+    }
+
     /// The handle the root container tracks, once [`Self::apply_pending`]
     /// has run. It holds the window's focus while no node is focused.
     #[must_use]
@@ -312,6 +319,27 @@ mod tests {
             let _ = registry.apply_pending(&tree, window, cx);
         });
         assert!(registry.handle(id).is_none());
+    }
+
+    #[test]
+    fn visual_focus_counts_a_queued_request() {
+        let (tree, id) = tree_with("div", Some(AttributeValue::from("0")));
+        let mut registry = FocusRegistry::default();
+        registry.mark_tab_dirty(id);
+        registry.request_focus(id, true);
+
+        assert_eq!(registry.visual_focus(&tree), Some(id));
+    }
+
+    #[test]
+    fn visual_focus_is_none_while_the_window_is_inactive() {
+        let (tree, id) = tree_with("div", Some(AttributeValue::from("0")));
+        let mut registry = FocusRegistry::default();
+        registry.mark_tab_dirty(id);
+        registry.request_focus(id, true);
+        registry.set_window_blurred(true);
+
+        assert_eq!(registry.visual_focus(&tree), None);
     }
 
     #[gpui::test]

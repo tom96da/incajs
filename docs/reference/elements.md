@@ -70,8 +70,8 @@ drawn. Render one with `h("style", css)` or `<component is="style">`. A
 - `!important` is read as a normal declaration, so an inline value still wins.
 - `@media` and the other at-rules have no effect.
 - The `media`, `type` and `disabled` attributes are ignored.
-- `:hover`, `:active`, `:focus` and the other interactive pseudo-classes never
-  match.
+- The host draws no focus indicator. `:hover`, `:active` and the other
+  interactive pseudo-classes never match.
 
 ## Recognized style keys
 
@@ -208,9 +208,9 @@ with the differences below. The listener methods are described in
   - `querySelector()`
   - `querySelectorAll()`
 
-  They accept `:hover`, `:focus` and the other interactive and form-state
-  pseudo-classes and never match them, so `:not(:hover)` matches every
-  element. `:lang()` and `:state()` never match. `:dir(ltr)` matches every
+  They accept `:focus-visible` and the other interactive and form-state
+  pseudo-classes and never match them, so `:not(:focus-visible)` matches
+  every element. `:lang()` and `:state()` never match. `:dir(ltr)` matches every
   element and any other `:dir()` value never matches. `:disabled` and
   `:enabled` apply to `button` and `input` only.
 - `attributes` and `getAttributeNames()` list the names in alphabetical

@@ -31,6 +31,7 @@ mod lifetime;
 mod links;
 mod props;
 mod relations;
+mod state;
 mod stylesheet;
 mod text;
 
@@ -69,6 +70,16 @@ impl AttributeValue {
         }
     }
 
+    /// The text of the value: a string as is, a number through [`js_number_text`], a bool as `true`
+    /// or `false`.
+    pub(crate) fn text(&self) -> String {
+        match self {
+            Self::String(text) => text.clone(),
+            Self::Number(number) => js_number_text(*number),
+            Self::Bool(flag) => flag.to_string(),
+        }
+    }
+
     /// The number of a `Number` value, `None` for any other kind.
     #[must_use]
     pub fn as_number(&self) -> Option<f64> {
@@ -101,6 +112,49 @@ impl From<bool> for AttributeValue {
     fn from(value: bool) -> Self {
         AttributeValue::Bool(value)
     }
+}
+
+/// The text JavaScript makes of a number. `-0` prints as `0`, and values from `1e21` up or below
+/// `1e-6` use the exponent form.
+#[must_use]
+pub(crate) fn js_number_text(value: f64) -> String {
+    if value.is_nan() {
+        return "NaN".to_owned();
+    }
+    if value.is_infinite() {
+        return if value < 0.0 { "-Infinity" } else { "Infinity" }.to_owned();
+    }
+    let sign = if value < 0.0 { "-" } else { "" };
+    // `{:e}` prints the shortest digits that read back, as `d.ddde<exp>`.
+    let scientific = format!("{:e}", value.abs());
+    let (mantissa, exponent) = scientific
+        .split_once('e')
+        .unwrap_or((scientific.as_str(), "0"));
+    let digits: String = mantissa.chars().filter(|c| *c != '.').collect();
+    let exponent: i32 = exponent.parse().unwrap_or(0);
+    // The value is 0.<digits> * 10^point.
+    let point = exponent + 1;
+    let count = i32::try_from(digits.len()).unwrap_or(i32::MAX);
+    let body = if count <= point && point <= 21 {
+        let zeros = usize::try_from(point - count).unwrap_or(0);
+        format!("{digits}{}", "0".repeat(zeros))
+    } else if 0 < point && point <= 21 {
+        let at = usize::try_from(point).unwrap_or(0);
+        format!("{}.{}", &digits[..at], &digits[at..])
+    } else if -6 < point && point <= 0 {
+        let zeros = usize::try_from(-point).unwrap_or(0);
+        format!("0.{}{digits}", "0".repeat(zeros))
+    } else {
+        let power = point - 1;
+        let exponent_sign = if power < 0 { "-" } else { "+" };
+        let fraction = if digits.len() > 1 {
+            format!(".{}", &digits[1..])
+        } else {
+            String::new()
+        };
+        format!("{}{fraction}e{exponent_sign}{}", &digits[..1], power.abs())
+    };
+    format!("{sign}{body}")
 }
 
 /// Whether a node of `tag` takes focus without a `tabindex`: a `button` or an
@@ -237,6 +291,7 @@ pub struct VirtualTree {
     /// tell that it is stale.
     generation: u64,
     style_cache: RefCell<stylesheet::SheetCache>,
+    interaction: state::InteractionState,
 }
 
 impl VirtualTree {
@@ -455,6 +510,26 @@ mod tests {
             tree.set_attribute(node, *attribute, true).unwrap();
         }
         assert_eq!(is_disabled_control(tree.get(node).unwrap()), want, "{tag}");
+    }
+
+    #[rstest]
+    #[case::negative_zero(-0.0, "0")]
+    #[case::infinity(f64::INFINITY, "Infinity")]
+    #[case::negative_infinity(f64::NEG_INFINITY, "-Infinity")]
+    #[case::nan(f64::NAN, "NaN")]
+    #[case::large(1e21, "1e+21")]
+    #[case::small(1e-7, "1e-7")]
+    #[case::integer(42.0, "42")]
+    #[case::negative_fraction(-1.5, "-1.5")]
+    #[case::below_the_exponent_form(1e20, "100000000000000000000")]
+    #[case::decimal_zeros(0.000_001, "0.000001")]
+    #[case::exponent_with_digits(1.5e-7, "1.5e-7")]
+    #[case::fraction(0.5, "0.5")]
+    fn js_number_text_prints_a_number_as_javascript_does(
+        #[case] value: f64,
+        #[case] expected: &str,
+    ) {
+        assert_eq!(js_number_text(value), expected);
     }
 
     /// `parent` holds `a`, `b`, `c`. `lone_parent` holds `lone`. `loose` has no parent. The last

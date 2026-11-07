@@ -57,6 +57,17 @@ impl Fixture {
         (style, text_node)
     }
 
+    /// A `div` under the root with `name` as its id and its class.
+    pub(crate) fn boxed(&mut self, name: &str) -> NodeId {
+        let node = self.add(self.root, "div", name);
+        self.attr(node, "class", name);
+        node
+    }
+
+    pub(crate) fn computed(&self, node: NodeId, key: &str) -> Option<AttributeValue> {
+        self.tree.computed_style(node).get(key).cloned()
+    }
+
     pub(crate) fn matches(&self, node: NodeId, selector: &str) -> bool {
         matches_selector(&self.tree, node, selector).unwrap()
     }

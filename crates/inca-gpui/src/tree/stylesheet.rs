@@ -8,14 +8,12 @@ use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use cssparser::{
-    AtRuleParser, CowRcStr, DeclarationParser, ParseError, ParseErrorKind, Parser, ParserState,
-    QualifiedRuleParser, RuleBodyItemParser, RuleBodyParser, StyleSheetParser,
-};
-
 use super::{AttributeValue, NodeId, TEXT_TAG, VirtualNode, VirtualTree};
-use crate::element::{style_key, style_warning};
-use crate::selector::Selectors;
+use crate::selector::StateFlags;
+
+mod parse;
+
+use parse::{Rule, StyleSheet};
 
 /// The longhands that a shorthand key overrides when it is applied after them.
 const SHORTHANDS: &[(&str, &[&str])] = &[
@@ -75,192 +73,6 @@ fn shorthands_first<'a>(
     entries
 }
 
-/// One qualified rule: its selectors and its declarations in source order.
-#[derive(Debug)]
-struct Rule {
-    selectors: Selectors,
-    declarations: Vec<(String, AttributeValue)>,
-}
-
-/// The rules of one `<style>` element.
-#[derive(Debug, Default)]
-struct StyleSheet {
-    rules: Vec<Rule>,
-}
-
-/// The declarations of one rule block and the warnings its invalid declarations raise.
-#[derive(Default)]
-struct Body {
-    declarations: Vec<(String, AttributeValue)>,
-    warnings: Vec<String>,
-}
-
-/// `text` without its `/* */` comments.
-fn without_comments(text: &str) -> String {
-    let mut out = String::new();
-    let mut rest = text;
-    while let Some(open) = rest.find("/*") {
-        out.push_str(&rest[..open]);
-        let after = &rest[open + 2..];
-        rest = after.find("*/").map_or("", |close| &after[close + 2..]);
-    }
-    out.push_str(rest);
-    out
-}
-
-/// The value without a trailing `!important`.
-fn without_important(value: &str) -> &str {
-    match value.rsplit_once('!') {
-        Some((head, flag)) if flag.trim_ascii().eq_ignore_ascii_case("important") => {
-            head.trim_ascii_end()
-        }
-        _ => value,
-    }
-}
-
-impl<'i> DeclarationParser<'i> for Body {
-    type Declaration = ();
-    type Error = &'static str;
-
-    fn parse_value(
-        &mut self,
-        name: CowRcStr<'i>,
-        input: &mut Parser<'i>,
-        _start: &ParserState,
-    ) -> Result<(), ParseError<&'static str>> {
-        let start = input.position();
-        while input.next_including_whitespace_and_comments().is_ok() {}
-        let source = without_comments(input.slice_from(start));
-        let text = without_important(source.trim_ascii());
-        if text.is_empty() {
-            return Ok(());
-        }
-        let name = name.to_ascii_lowercase();
-        let value = AttributeValue::String(text.to_owned());
-        match style_warning(&name, &value) {
-            Some(warning) => self.warnings.push(warning),
-            None => self
-                .declarations
-                .push((style_key(&name).into_owned(), value)),
-        }
-        Ok(())
-    }
-}
-
-impl AtRuleParser<'_> for Body {
-    type Prelude = ();
-    type AtRule = ();
-    type Error = &'static str;
-}
-
-impl QualifiedRuleParser<'_> for Body {
-    type Prelude = ();
-    type QualifiedRule = ();
-    type Error = &'static str;
-}
-
-impl RuleBodyItemParser<'_, (), &'static str> for Body {
-    fn parse_declarations(&self) -> bool {
-        true
-    }
-
-    fn parse_qualified(&self) -> bool {
-        false
-    }
-}
-
-/// Reads the qualified rules of a sheet. An at-rule keeps the trait's default and is rejected.
-struct Rules;
-
-impl<'i> QualifiedRuleParser<'i> for Rules {
-    type Prelude = Selectors;
-    type QualifiedRule = (Rule, Vec<String>);
-    type Error = &'static str;
-
-    fn parse_prelude(
-        &mut self,
-        input: &mut Parser<'i>,
-    ) -> Result<Selectors, ParseError<&'static str>> {
-        let start = input.position();
-        while input.next_including_whitespace_and_comments().is_ok() {}
-        let text = input.slice_from(start);
-        Selectors::parse(text).map_err(|error| ParseError::custom(error.reason()))
-    }
-
-    fn parse_block(
-        &mut self,
-        selectors: Selectors,
-        _start: &ParserState,
-        input: &mut Parser<'i>,
-    ) -> Result<(Rule, Vec<String>), ParseError<&'static str>> {
-        let mut body = Body::default();
-        let mut invalid = Vec::new();
-        for item in RuleBodyParser::new(input, &mut body) {
-            if let Err((_, source, _)) = item {
-                invalid.push(format!(
-                    "ignoring the declaration `{}`",
-                    source.trim_end_matches(|c: char| c == ';' || c.is_ascii_whitespace())
-                ));
-            }
-        }
-        let Body {
-            declarations,
-            mut warnings,
-        } = body;
-        warnings.extend(invalid);
-        Ok((
-            Rule {
-                selectors,
-                declarations,
-            },
-            warnings,
-        ))
-    }
-}
-
-impl AtRuleParser<'_> for Rules {
-    type Prelude = ();
-    type AtRule = (Rule, Vec<String>);
-    type Error = &'static str;
-}
-
-/// The name of the at-rule that `source` starts with, `@` included.
-fn at_rule_name(source: &str) -> &str {
-    let end = source[1..]
-        .find(|c: char| !(c.is_ascii_alphanumeric() || c == '-' || c == '_'))
-        .map_or(source.len(), |end| end + 1);
-    &source[..end]
-}
-
-impl StyleSheet {
-    /// The rules of `text` and one line for each rule, at-rule or declaration it drops.
-    fn parse(text: &str) -> (Self, Vec<String>) {
-        let mut input = Parser::new(text);
-        let mut rules = Vec::new();
-        let mut warnings = Vec::new();
-        for item in StyleSheetParser::new(&mut input, &mut Rules) {
-            match item {
-                Ok((rule, dropped)) => {
-                    rules.push(rule);
-                    warnings.extend(dropped);
-                }
-                Err((_, source, _)) if source.starts_with('@') => {
-                    warnings.push(format!("ignoring the at-rule `{}`", at_rule_name(source)));
-                }
-                Err((error, source, _)) => {
-                    let prelude = source.split('{').next().unwrap_or(source).trim_ascii();
-                    let reason = match error.kind {
-                        ParseErrorKind::Custom(reason) => reason,
-                        ParseErrorKind::Basic(_) => "it has no block",
-                    };
-                    warnings.push(format!("ignoring the rule `{prelude}`: {reason}"));
-                }
-            }
-        }
-        (Self { rules }, warnings)
-    }
-}
-
 /// The sheets of the connected `<style>` elements, kept until the tree changes.
 #[derive(Debug, Default)]
 pub(super) struct SheetCache {
@@ -268,6 +80,8 @@ pub(super) struct SheetCache {
     generation: Option<u64>,
     /// The sheets in tree order.
     sheets: Vec<Rc<StyleSheet>>,
+    /// The state flags of the rules of every sheet.
+    flags: StateFlags,
     /// The text each `<style>` element had when its sheet was parsed.
     parsed: HashMap<NodeId, (String, Rc<StyleSheet>)>,
     /// The warning lines of the parses nobody has taken yet.
@@ -325,8 +139,20 @@ impl VirtualTree {
             sheets.push(Rc::clone(&entry.1));
             parsed.insert(id, entry);
         }
+        cache.flags = sheets
+            .iter()
+            .flat_map(|sheet| &sheet.rules)
+            .fold(StateFlags::default(), |all, rule| {
+                all.merge(rule.selectors.flags())
+            });
         cache.sheets = sheets;
         cache.parsed = parsed;
+    }
+
+    /// The state flags of the connected sheets.
+    pub(super) fn sheet_flags(&self) -> StateFlags {
+        self.refresh_sheets();
+        self.style_cache.borrow().flags
     }
 
     /// The warning lines of the sheet parses since the last call. A sheet with unchanged text
@@ -392,17 +218,6 @@ mod tests {
     use crate::build_spec;
     use crate::tests::{Fixture, num, text};
 
-    /// A `div` under the root with `name` as its id and its class.
-    fn boxed(f: &mut Fixture, name: &str) -> NodeId {
-        let node = f.add(f.root, "div", name);
-        f.attr(node, "class", name);
-        node
-    }
-
-    fn value(f: &Fixture, node: NodeId, key: &str) -> Option<AttributeValue> {
-        f.tree.computed_style(node).get(key).cloned()
-    }
-
     fn padding_top(f: &Fixture, node: NodeId) -> Option<f64> {
         build_spec(&f.tree, node).unwrap().style.padding.top
     }
@@ -411,20 +226,20 @@ mod tests {
     fn a_rule_applies_its_declarations_to_a_matching_node() {
         let mut f = Fixture::new();
         f.sheet(".a { width: 40px }");
-        let a = boxed(&mut f, "a");
-        let b = boxed(&mut f, "b");
+        let a = f.boxed("a");
+        let b = f.boxed("b");
 
-        assert_eq!(value(&f, a, "width"), Some(text("40px")));
-        assert_eq!(value(&f, b, "width"), None);
+        assert_eq!(f.computed(a, "width"), Some(text("40px")));
+        assert_eq!(f.computed(b, "width"), None);
     }
 
     #[test]
     fn a_higher_specificity_beats_a_later_rule() {
         let mut f = Fixture::new();
         f.sheet("#a { width: 1px } .a { width: 2px }");
-        let a = boxed(&mut f, "a");
+        let a = f.boxed("a");
 
-        assert_eq!(value(&f, a, "width"), Some(text("1px")));
+        assert_eq!(f.computed(a, "width"), Some(text("1px")));
     }
 
     #[test]
@@ -432,36 +247,36 @@ mod tests {
         let mut f = Fixture::new();
         f.sheet(".a { width: 1px }");
         f.sheet(".a { width: 2px }");
-        let a = boxed(&mut f, "a");
+        let a = f.boxed("a");
 
-        assert_eq!(value(&f, a, "width"), Some(text("2px")));
+        assert_eq!(f.computed(a, "width"), Some(text("2px")));
     }
 
     #[test]
     fn the_inline_style_beats_every_rule() {
         let mut f = Fixture::new();
         f.sheet("#a.a { width: 1px }");
-        let a = boxed(&mut f, "a");
+        let a = f.boxed("a");
         f.tree.set_style(a, "width", 50.0).unwrap();
 
-        assert_eq!(value(&f, a, "width"), Some(num(50.0)));
+        assert_eq!(f.computed(a, "width"), Some(num(50.0)));
     }
 
     #[test]
     fn an_empty_inline_value_keeps_the_rule_value() {
         let mut f = Fixture::new();
         f.sheet(".a { display: flex }");
-        let a = boxed(&mut f, "a");
+        let a = f.boxed("a");
         f.tree.set_style(a, "display", "").unwrap();
 
-        assert_eq!(value(&f, a, "display"), Some(text("flex")));
+        assert_eq!(f.computed(a, "display"), Some(text("flex")));
     }
 
     #[test]
     fn an_empty_inline_shorthand_keeps_the_rule_longhands() {
         let mut f = Fixture::new();
         f.sheet(".a { padding-top: 8px }");
-        let a = boxed(&mut f, "a");
+        let a = f.boxed("a");
         f.tree.set_style(a, "padding", "").unwrap();
 
         assert_eq!(padding_top(&f, a), Some(8.0));
@@ -471,7 +286,7 @@ mod tests {
     fn an_empty_inline_shorthand_leaves_the_rule_sides_beside_an_inline_side() {
         let mut f = Fixture::new();
         f.sheet(".a { padding: 4px }");
-        let a = boxed(&mut f, "a");
+        let a = f.boxed("a");
         f.tree.set_style(a, "padding", "").unwrap();
         f.tree.set_style(a, "padding_top", 2.0).unwrap();
         let spec = build_spec(&f.tree, a).unwrap();
@@ -484,7 +299,7 @@ mod tests {
     fn a_rule_shorthand_replaces_an_earlier_rule_longhand() {
         let mut f = Fixture::new();
         f.sheet(".a { padding-top: 8px } .a { padding: 4px }");
-        let a = boxed(&mut f, "a");
+        let a = f.boxed("a");
 
         assert_eq!(padding_top(&f, a), Some(4.0));
     }
@@ -493,7 +308,7 @@ mod tests {
     fn an_inline_shorthand_replaces_a_rule_longhand() {
         let mut f = Fixture::new();
         f.sheet(".a { padding-top: 8px }");
-        let a = boxed(&mut f, "a");
+        let a = f.boxed("a");
         f.tree.set_style(a, "padding", 4.0).unwrap();
 
         assert_eq!(padding_top(&f, a), Some(4.0));
@@ -503,7 +318,7 @@ mod tests {
     fn an_inline_axis_replaces_a_rule_side() {
         let mut f = Fixture::new();
         f.sheet(".a { padding-left: 8px }");
-        let a = boxed(&mut f, "a");
+        let a = f.boxed("a");
         f.tree.set_style(a, "padding_x", 4.0).unwrap();
 
         assert_eq!(
@@ -522,16 +337,16 @@ mod tests {
     fn a_later_shorthand_removes_its_longhand(#[case] declarations: &str, #[case] longhand: &str) {
         let mut f = Fixture::new();
         f.sheet(&format!(".a {{ {declarations} }}"));
-        let a = boxed(&mut f, "a");
+        let a = f.boxed("a");
 
-        assert_eq!(value(&f, a, longhand), None);
+        assert_eq!(f.computed(a, longhand), None);
     }
 
     #[test]
     fn a_longhand_after_its_shorthand_wins_on_its_side() {
         let mut f = Fixture::new();
         f.sheet(".a { padding: 4px; padding-top: 8px }");
-        let a = boxed(&mut f, "a");
+        let a = f.boxed("a");
         let spec = build_spec(&f.tree, a).unwrap();
 
         assert_eq!(spec.style.padding.top, Some(8.0));
@@ -571,169 +386,44 @@ mod tests {
     }
 
     #[test]
-    fn an_invalid_declaration_keeps_the_earlier_value_of_its_key() {
-        let mut f = Fixture::new();
-        f.sheet(".a { width: 10px; width: bogus }");
-        let a = boxed(&mut f, "a");
-
-        assert_eq!(value(&f, a, "width"), Some(text("10px")));
-    }
-
-    #[test]
-    fn an_invalid_declaration_warns() {
-        let mut f = Fixture::new();
-        f.sheet(".a { width: bogus }");
-
-        assert_eq!(
-            f.tree.take_style_warnings(),
-            ["ignoring unsupported value for style key `width`"]
-        );
-    }
-
-    #[test]
-    fn a_declaration_without_a_colon_warns() {
-        let mut f = Fixture::new();
-        f.sheet(".a { width 10px; height: 2px }");
-
-        assert_eq!(
-            f.tree.take_style_warnings(),
-            ["ignoring the declaration `width 10px`"]
-        );
-    }
-
-    #[test]
-    fn a_declaration_after_one_without_a_colon_still_applies() {
-        let mut f = Fixture::new();
-        f.sheet(".a { width 10px; height: 2px }");
-        let a = boxed(&mut f, "a");
-
-        assert_eq!(value(&f, a, "height"), Some(text("2px")));
-    }
-
-    #[test]
-    fn a_declaration_name_ignores_case() {
-        let mut f = Fixture::new();
-        f.sheet(".a { WIDTH: 1px }");
-        let a = boxed(&mut f, "a");
-
-        assert_eq!(value(&f, a, "width"), Some(text("1px")));
-    }
-
-    #[test]
-    fn an_empty_value_is_dropped_silently() {
-        let mut f = Fixture::new();
-        f.sheet(".a { width: ; height: 2px }");
-        let a = boxed(&mut f, "a");
-
-        assert!(f.tree.take_style_warnings().is_empty());
-        assert_eq!(value(&f, a, "width"), None);
-    }
-
-    #[rstest]
-    #[case::around_the_value(".a { width: /* c */ 10px /* d */ }")]
-    #[case::unterminated(".a { width: 10px /* c }")]
-    #[case::before_important(".a { width: 10px /* c */ !important }")]
-    fn a_comment_inside_a_value_is_skipped(#[case] css: &str) {
-        let mut f = Fixture::new();
-        f.sheet(css);
-        let a = boxed(&mut f, "a");
-
-        assert_eq!(value(&f, a, "width"), Some(text("10px")));
-    }
-
-    #[test]
-    fn a_comment_before_a_selector_is_skipped() {
-        let mut f = Fixture::new();
-        f.sheet("/* c */ .a { width: 1px }");
-        let a = boxed(&mut f, "a");
-
-        assert_eq!(value(&f, a, "width"), Some(text("1px")));
-    }
-
-    #[rstest]
-    #[case::unknown_pseudo_class(
-        "a:foo { width: 1px } .a { width: 2px }",
-        "ignoring the rule `a:foo`: it names an unknown pseudo-class or pseudo-element"
-    )]
-    #[case::missing_block(".a { width: 2px } .c", "ignoring the rule `.c`: it has no block")]
-    fn an_invalid_rule_warns(#[case] css: &str, #[case] warning: &str) {
-        let mut f = Fixture::new();
-        f.sheet(css);
-
-        assert_eq!(f.tree.take_style_warnings(), [warning]);
-    }
-
-    #[test]
-    fn a_rule_after_an_invalid_rule_still_applies() {
-        let mut f = Fixture::new();
-        f.sheet("a:foo { width: 1px } .a { width: 2px }");
-        let a = boxed(&mut f, "a");
-
-        assert_eq!(value(&f, a, "width"), Some(text("2px")));
-    }
-
-    #[test]
-    fn an_at_rule_is_skipped_with_its_block() {
-        let mut f = Fixture::new();
-        f.sheet("@media (min-width: 1px) { .a { width: 1px } } .a { height: 2px }");
-        let a = boxed(&mut f, "a");
-
-        assert_eq!(
-            f.tree.take_style_warnings(),
-            ["ignoring the at-rule `@media`"]
-        );
-        assert_eq!(value(&f, a, "width"), None);
-        assert_eq!(value(&f, a, "height"), Some(text("2px")));
-    }
-
-    #[test]
-    fn important_applies_at_normal_importance() {
-        let mut f = Fixture::new();
-        f.sheet("#a { width: 5px !important } .a { width: 9px }");
-        let a = boxed(&mut f, "a");
-
-        assert_eq!(value(&f, a, "width"), Some(text("5px")));
-    }
-
-    #[test]
     fn a_style_element_applies_once_it_is_connected() {
         let mut f = Fixture::new();
         let (style, _) = f.sheet(".a { width: 1px }");
-        let a = boxed(&mut f, "a");
+        let a = f.boxed("a");
         f.tree.remove_child(f.root, style).unwrap();
-        let detached = value(&f, a, "width");
+        let detached = f.computed(a, "width");
         f.tree.append_child(f.root, style).unwrap();
 
         assert_eq!(detached, None);
-        assert_eq!(value(&f, a, "width"), Some(text("1px")));
+        assert_eq!(f.computed(a, "width"), Some(text("1px")));
     }
 
     #[test]
     fn editing_the_sheet_text_changes_the_next_read() {
         let mut f = Fixture::new();
         let (_, text_node) = f.sheet(".a { width: 1px }");
-        let a = boxed(&mut f, "a");
-        let before = value(&f, a, "width");
+        let a = f.boxed("a");
+        let before = f.computed(a, "width");
         f.attr(text_node, "value", ".a { width: 2px }");
 
         assert_eq!(before, Some(text("1px")));
-        assert_eq!(value(&f, a, "width"), Some(text("2px")));
+        assert_eq!(f.computed(a, "width"), Some(text("2px")));
     }
 
     #[test]
     fn a_state_pseudo_class_matches_nothing_yet() {
         let mut f = Fixture::new();
         f.sheet(".a:hover { width: 1px }");
-        let a = boxed(&mut f, "a");
+        let a = f.boxed("a");
 
-        assert_eq!(value(&f, a, "width"), None);
+        assert_eq!(f.computed(a, "width"), None);
     }
 
     #[test]
     fn a_sheet_warns_once_while_its_text_stays() {
         let mut f = Fixture::new();
         f.sheet(".a { bogus: 1 }");
-        let a = boxed(&mut f, "a");
+        let a = f.boxed("a");
         let first = f.tree.take_style_warnings();
         f.tree.set_style(a, "width", 1.0).unwrap();
 
@@ -744,7 +434,7 @@ mod tests {
     #[test]
     fn a_node_without_a_sheet_in_the_tree_borrows_its_inline_map() {
         let mut f = Fixture::new();
-        let a = boxed(&mut f, "a");
+        let a = f.boxed("a");
         f.tree.set_style(a, "width", 1.0).unwrap();
 
         assert!(matches!(f.tree.computed_style(a), Cow::Borrowed(map) if map.len() == 1));
@@ -754,7 +444,7 @@ mod tests {
     fn a_node_no_rule_styles_borrows_its_inline_map() {
         let mut f = Fixture::new();
         f.sheet(".a { width: 1px }");
-        let b = boxed(&mut f, "b");
+        let b = f.boxed("b");
 
         assert!(matches!(f.tree.computed_style(b), Cow::Borrowed(_)));
     }
@@ -766,9 +456,9 @@ mod tests {
         let text_node = f.tree.create_node(TEXT_TAG).unwrap();
         f.attr(text_node, "value", ".a { width: 1px }");
         f.tree.append_child(style, text_node).unwrap();
-        let a = boxed(&mut f, "a");
+        let a = f.boxed("a");
 
-        assert_eq!(value(&f, a, "width"), Some(text("1px")));
+        assert_eq!(f.computed(a, "width"), Some(text("1px")));
     }
 
     #[test]
@@ -778,10 +468,10 @@ mod tests {
         let comment = f.tree.create_node("#comment").unwrap();
         f.attr(comment, "value", ".a { width: 9px }");
         f.tree.append_child(style, comment).unwrap();
-        let a = boxed(&mut f, "a");
+        let a = f.boxed("a");
 
-        assert_eq!(value(&f, a, "width"), None);
-        assert_eq!(value(&f, a, "height"), Some(text("2px")));
+        assert_eq!(f.computed(a, "width"), None);
+        assert_eq!(f.computed(a, "height"), Some(text("2px")));
     }
 
     #[test]
@@ -793,9 +483,9 @@ mod tests {
         f.attr(text_node, "value", ".a { width: 1px }");
         f.tree.append_child(inner, text_node).unwrap();
         f.tree.append_child(outer, inner).unwrap();
-        let a = boxed(&mut f, "a");
+        let a = f.boxed("a");
 
-        assert_eq!(value(&f, a, "width"), None);
+        assert_eq!(f.computed(a, "width"), None);
     }
 
     #[test]
@@ -804,8 +494,8 @@ mod tests {
         let (first, _) = f.sheet(".a { width: 1px }");
         let (second, _) = f.sheet(".a { width: 2px }");
         f.tree.insert_before(f.root, second, Some(first)).unwrap();
-        let a = boxed(&mut f, "a");
+        let a = f.boxed("a");
 
-        assert_eq!(value(&f, a, "width"), Some(text("1px")));
+        assert_eq!(f.computed(a, "width"), Some(text("1px")));
     }
 }

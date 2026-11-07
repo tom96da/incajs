@@ -33,7 +33,8 @@ fn check<'js>(_host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, String) -> JsResult
 
 fn matches<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<bool> {
     move |ctx, JsNodeId(node_id), selector| {
-        let host = host.borrow();
+        let mut host = host.borrow_mut();
+        host.sync_focus_style();
         existing_node(&ctx, &host.tree, node_id)?;
         matches_selector(&host.tree, node_id, &selector)
             .map_err(|err| Exception::throw_dom(&ctx, "SyntaxError", &err.to_string()))
@@ -44,7 +45,8 @@ fn closest<'js>(
     host: Rc<RefCell<Host>>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Value<'js>> {
     move |ctx, JsNodeId(node_id), selector| {
-        let host = host.borrow();
+        let mut host = host.borrow_mut();
+        host.sync_focus_style();
         existing_node(&ctx, &host.tree, node_id)?;
         let found = closest_selector(&host.tree, node_id, &selector)
             .map_err(|err| Exception::throw_dom(&ctx, "SyntaxError", &err.to_string()))?;
@@ -56,7 +58,8 @@ fn query<'js>(
     host: Rc<RefCell<Host>>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Value<'js>> {
     move |ctx, JsNodeId(node_id), selector| {
-        let host = host.borrow();
+        let mut host = host.borrow_mut();
+        host.sync_focus_style();
         existing_node(&ctx, &host.tree, node_id)?;
         let found = query_selector(&host.tree, node_id, &selector)
             .map_err(|err| Exception::throw_dom(&ctx, "SyntaxError", &err.to_string()))?;
@@ -68,7 +71,8 @@ fn query_all<'js>(
     host: Rc<RefCell<Host>>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Vec<NodeId>> {
     move |ctx, JsNodeId(node_id), selector| {
-        let host = host.borrow();
+        let mut host = host.borrow_mut();
+        host.sync_focus_style();
         existing_node(&ctx, &host.tree, node_id)?;
         query_selector_all(&host.tree, node_id, &selector)
             .map_err(|err| Exception::throw_dom(&ctx, "SyntaxError", &err.to_string()))
@@ -255,5 +259,88 @@ mod tests {
             .unwrap();
 
         assert!(got);
+    }
+
+    const FIELD: &str = r"
+        const n = __inca_native__;
+        const card = n.createNode('div');
+        const field = n.createNode('div');
+        n.setAttribute(field, 'tabindex', 0);
+        n.appendChild(card, field);
+        n.appendChild(n.rootNodeId(), card);
+        ";
+
+    #[rstest]
+    #[case::matches_after_focus("n.focusNode(field); n.matches(field, ':focus')", true)]
+    #[case::matches_after_blur(
+        "n.focusNode(field); n.blurNode(field); n.matches(field, ':focus')",
+        false
+    )]
+    #[case::closest_after_focus("n.focusNode(field); n.closest(field, ':focus') === field", true)]
+    #[case::closest_after_blur(
+        "n.focusNode(field); n.blurNode(field); n.closest(field, ':focus') === null",
+        true
+    )]
+    #[case::query_selector_after_focus(
+        "n.focusNode(field); n.querySelector(card, ':focus') === field",
+        true
+    )]
+    #[case::query_selector_all_after_focus(
+        "n.focusNode(field); n.querySelectorAll(card, ':focus').length === 1",
+        true
+    )]
+    fn a_focus_request_shows_in_the_next_read_of_focus(
+        #[case] script: &str,
+        #[case] expected: bool,
+    ) {
+        let (engine, _host) = engine_with_bindings();
+
+        let got: bool = engine
+            .eval(&format!(
+                r"
+                {FIELD}
+                {script};
+                "
+            ))
+            .unwrap();
+
+        assert_eq!(got, expected);
+    }
+
+    #[test]
+    fn focus_within_matches_an_ancestor_of_the_focused_node() {
+        let (engine, _host) = engine_with_bindings();
+
+        let got: bool = engine
+            .eval(&format!(
+                r"
+                {FIELD}
+                n.focusNode(field);
+                n.matches(card, ':focus-within') && !n.matches(card, ':focus');
+                "
+            ))
+            .unwrap();
+
+        assert!(got);
+    }
+
+    #[test]
+    fn a_removed_focused_node_is_not_focused_when_attached_again() {
+        let (engine, _host) = engine_with_bindings();
+
+        let got: Vec<bool> = engine
+            .eval(&format!(
+                r"
+                {FIELD}
+                n.focusNode(field);
+                n.removeChild(card, field);
+                const removed = n.matches(field, ':focus');
+                n.appendChild(card, field);
+                [removed, n.matches(field, ':focus')];
+                "
+            ))
+            .unwrap();
+
+        assert_eq!(got, [false, false]);
     }
 }

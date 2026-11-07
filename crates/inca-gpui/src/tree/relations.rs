@@ -4,7 +4,6 @@
 //! Cloning nodes and comparing them: the top of a tree, tree positions and equality.
 
 use super::{NodeId, TreeError, VirtualNode, VirtualTree};
-use crate::selector::attribute_text;
 
 /// A node that is not in the tree.
 fn missing(id: NodeId) -> TreeError {
@@ -17,7 +16,7 @@ fn same_attributes(a: &VirtualNode, b: &VirtualNode) -> bool {
         && a.attributes.iter().all(|(key, value)| {
             b.attributes
                 .get(key)
-                .is_some_and(|other| attribute_text(value) == attribute_text(other))
+                .is_some_and(|other| value.text() == other.text())
         })
 }
 

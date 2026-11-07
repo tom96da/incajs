@@ -4,6 +4,7 @@
 //! CSS selector matching over the retained tree, for `matches()`, `closest()` and the two query
 //! methods.
 
+use std::cell::Cell;
 use std::fmt;
 
 use cssparser::{CowRcStr, ParseError, ParseErrorKind, Parser as CssParser, ToCss, Token};
@@ -28,51 +29,47 @@ use crate::tree::{
 mod matching;
 mod query;
 
-pub(crate) use matching::attribute_text;
 pub use matching::{closest_selector, matches_selector};
 pub use query::{query_selector, query_selector_all};
 
-/// The text JavaScript makes of a number. `-0` prints as `0`, and values from `1e21` up or below
-/// `1e-6` use the exponent form.
-#[must_use]
-pub(crate) fn js_number_text(value: f64) -> String {
-    if value.is_nan() {
-        return "NaN".to_owned();
+/// The interaction state classes a selector list names, nested positions included.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct StateFlags {
+    /// `:focus` or `:focus-within`.
+    pub(crate) focus: bool,
+}
+
+impl StateFlags {
+    pub(crate) fn merge(self, other: Self) -> Self {
+        Self {
+            focus: self.focus || other.focus,
+        }
     }
-    if value.is_infinite() {
-        return if value < 0.0 { "-Infinity" } else { "Infinity" }.to_owned();
+}
+
+/// Collects the flags of the classes a parser returns.
+#[derive(Default)]
+struct Tracker(Cell<StateFlags>);
+
+impl Tracker {
+    fn note(&self, class: &PseudoClass) {
+        if matches!(class, PseudoClass::Focus | PseudoClass::FocusWithin) {
+            self.0.set(StateFlags { focus: true });
+        }
     }
-    let sign = if value < 0.0 { "-" } else { "" };
-    // `{:e}` prints the shortest digits that read back, as `d.ddde<exp>`.
-    let scientific = format!("{:e}", value.abs());
-    let (mantissa, exponent) = scientific
-        .split_once('e')
-        .unwrap_or((scientific.as_str(), "0"));
-    let digits: String = mantissa.chars().filter(|c| *c != '.').collect();
-    let exponent: i32 = exponent.parse().unwrap_or(0);
-    // The value is 0.<digits> * 10^point.
-    let point = exponent + 1;
-    let count = i32::try_from(digits.len()).unwrap_or(i32::MAX);
-    let body = if count <= point && point <= 21 {
-        let zeros = usize::try_from(point - count).unwrap_or(0);
-        format!("{digits}{}", "0".repeat(zeros))
-    } else if 0 < point && point <= 21 {
-        let at = usize::try_from(point).unwrap_or(0);
-        format!("{}.{}", &digits[..at], &digits[at..])
-    } else if -6 < point && point <= 0 {
-        let zeros = usize::try_from(-point).unwrap_or(0);
-        format!("0.{}{digits}", "0".repeat(zeros))
-    } else {
-        let power = point - 1;
-        let exponent_sign = if power < 0 { "-" } else { "+" };
-        let fraction = if digits.len() > 1 {
-            format!(".{}", &digits[1..])
-        } else {
-            String::new()
-        };
-        format!("{}{fraction}e{exponent_sign}{}", &digits[..1], power.abs())
-    };
-    format!("{sign}{body}")
+
+    fn flags(&self) -> StateFlags {
+        self.0.get()
+    }
+
+    /// Runs `parse` and drops the flags it noted. The argument of a class that is stored as a
+    /// never-matching name names no state.
+    fn scoped<T>(&self, parse: impl FnOnce() -> T) -> T {
+        let saved = self.0.get();
+        let result = parse();
+        self.0.set(saved);
+        result
+    }
 }
 
 /// A selector that failed to parse, with a short reason.
@@ -129,9 +126,7 @@ impl PrecomputedHash for Atom {
 const NEVER_MATCHING_PSEUDO_CLASSES: &[&str] = &[
     "hover",
     "active",
-    "focus",
     "focus-visible",
-    "focus-within",
     "target",
     "visited",
     "link",
@@ -181,6 +176,8 @@ enum PseudoClass {
     /// A name the host accepts and cannot evaluate.
     Never(String),
     Defined,
+    Focus,
+    FocusWithin,
     /// `:dir(ltr)`: every element has the directionality `ltr`.
     DirLtr,
     ReadOnly,
@@ -194,6 +191,8 @@ impl ToCss for PseudoClass {
         let name = match self {
             PseudoClass::Never(name) => name,
             PseudoClass::Defined => "defined",
+            PseudoClass::Focus => "focus",
+            PseudoClass::FocusWithin => "focus-within",
             PseudoClass::DirLtr => "dir(ltr)",
             PseudoClass::ReadOnly => "read-only",
             PseudoClass::ReadWrite => "read-write",
@@ -243,7 +242,8 @@ impl SelectorImpl for Impl {
     type PseudoElement = PseudoElement;
 }
 
-struct SelectorParser;
+#[derive(Default)]
+struct SelectorParser(Tracker);
 
 /// Why a selector failed: the selector crate's own error, or an argument the host rejects.
 #[derive(Clone, Debug, PartialEq)]
@@ -350,15 +350,19 @@ impl<'i> Parser<'i> for SelectorParser {
         name: CowRcStr<'i>,
     ) -> Result<PseudoClass, SelectorParseError> {
         let name = name.to_ascii_lowercase();
-        Ok(match name.as_str() {
+        let class = match name.as_str() {
             "defined" => PseudoClass::Defined,
+            "focus" => PseudoClass::Focus,
+            "focus-within" => PseudoClass::FocusWithin,
             "read-only" => PseudoClass::ReadOnly,
             "read-write" => PseudoClass::ReadWrite,
             "disabled" => PseudoClass::Disabled,
             "enabled" => PseudoClass::Enabled,
             _ if NEVER_MATCHING_PSEUDO_CLASSES.contains(&name.as_str()) => PseudoClass::Never(name),
             _ => return Err(unsupported()),
-        })
+        };
+        self.0.note(&class);
+        Ok(class)
     }
 
     fn parse_non_ts_functional_pseudo_class(
@@ -370,7 +374,7 @@ impl<'i> Parser<'i> for SelectorParser {
         let name = name.to_ascii_lowercase();
         match name.as_str() {
             "lang" => check_lang_arguments(parser)?,
-            "host-context" => check_compound_argument(self, parser)?,
+            "host-context" => self.0.scoped(|| check_compound_argument(self, parser))?,
             "state" => single_ident(parser)?,
             "dir" => {
                 if parser.try_parse(|p| p.expect_ident_matching("ltr")).is_ok() {
@@ -428,23 +432,29 @@ fn reason(error: &SelectorParseError) -> &'static str {
 
 const MALFORMED: &str = "it does not follow the selector grammar";
 
-fn parse(selector: &str) -> Result<SelectorList<Impl>, SelectorError> {
+fn parse(selector: &str) -> Result<(SelectorList<Impl>, StateFlags), SelectorError> {
+    let parser = SelectorParser::default();
     let mut input = CssParser::new(selector);
-    SelectorList::parse(&SelectorParser, &mut input, ParseRelative::No).map_err(|error| {
-        SelectorError {
+    SelectorList::parse(&parser, &mut input, ParseRelative::No)
+        .map(|list| (list, parser.0.flags()))
+        .map_err(|error| SelectorError {
             reason: reason(&error),
-        }
-    })
+        })
 }
 
 /// A parsed selector list.
 #[derive(Debug)]
-pub(crate) struct Selectors(SelectorList<Impl>);
+pub(crate) struct Selectors(SelectorList<Impl>, StateFlags);
 
 impl Selectors {
     /// Parses `text` as a selector list.
     pub(crate) fn parse(text: &str) -> Result<Self, SelectorError> {
-        parse(text).map(Self)
+        parse(text).map(|(list, flags)| Self(list, flags))
+    }
+
+    /// The interaction state classes the list names.
+    pub(crate) fn flags(&self) -> StateFlags {
+        self.1
     }
 
     /// The highest specificity among the selectors that match the element `id`. `None` when no
@@ -510,7 +520,7 @@ mod tests {
     #[case::cue("::cue")]
     #[case::view_transition("::view-transition")]
     #[case::hover(":hover")]
-    #[case::focus(":focus")]
+    #[case::focus_visible(":focus-visible")]
     #[case::checked(":checked")]
     #[case::open(":open")]
     #[case::before("::before")]
@@ -557,26 +567,6 @@ mod tests {
         let p = page();
 
         assert!(p.f.matches(p.f.root, "*|div"));
-    }
-
-    #[rstest]
-    #[case::negative_zero(-0.0, "0")]
-    #[case::infinity(f64::INFINITY, "Infinity")]
-    #[case::negative_infinity(f64::NEG_INFINITY, "-Infinity")]
-    #[case::nan(f64::NAN, "NaN")]
-    #[case::large(1e21, "1e+21")]
-    #[case::small(1e-7, "1e-7")]
-    #[case::integer(42.0, "42")]
-    #[case::negative_fraction(-1.5, "-1.5")]
-    #[case::below_the_exponent_form(1e20, "100000000000000000000")]
-    #[case::decimal_zeros(0.000_001, "0.000001")]
-    #[case::exponent_with_digits(1.5e-7, "1.5e-7")]
-    #[case::fraction(0.5, "0.5")]
-    fn js_number_text_prints_a_number_as_javascript_does(
-        #[case] value: f64,
-        #[case] expected: &str,
-    ) {
-        assert_eq!(js_number_text(value), expected);
     }
 
     fn check_matches(selector: &str) -> Result<(), SelectorError> {

@@ -8,7 +8,9 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use gpui::{App, AppContext as _, Keystroke, TestAppContext, WindowHandle, point, px};
+use gpui::{
+    App, AppContext as _, Context, Keystroke, TestAppContext, Window, WindowHandle, point, px,
+};
 use inca_gpui::{
     EventPayload, EventSink, InputRequest, InputState, MousePayload, NodeId, PointerSource,
     WheelPayload,
@@ -389,6 +391,20 @@ pub(crate) fn eval_json(dispatcher: &EventDispatcher, js: &str) -> serde_json::V
     serde_json::from_str(&json).unwrap()
 }
 
+/// Whether `node` matches the state class `class`.
+pub(crate) fn state(host: &Host, node: NodeId, class: &str) -> bool {
+    inca_gpui::matches_selector(&host.tree, node, class).unwrap()
+}
+
+/// Appends a `<style>` element that holds `css` under the root.
+pub(crate) fn add_sheet(host: &RefCell<Host>, css: &str) {
+    let host = &mut *host.borrow_mut();
+    let [style, text] = ["style", "#text"].map(|tag| host.tree.create_node(tag).unwrap());
+    host.tree.set_attribute(text, "value", css).unwrap();
+    host.tree.append_child(style, text).unwrap();
+    host.tree.append_child(host.root(), style).unwrap();
+}
+
 pub(crate) mod keys {
     use std::cell::RefCell;
     use std::rc::Rc;
@@ -709,6 +725,81 @@ pub(crate) mod pointer {
 /// A listener that pushes `[name, currentTarget, eventPhase]`.
 pub(crate) fn tagged(name: &str) -> String {
     format!("(e) => out.push(['{name}', e.currentTarget, e.eventPhase])")
+}
+
+const SEEN: &str = r"
+    globalThis.seen = [];
+    globalThis.mark = (e) => { globalThis.seen.push(e.type + ':' + e.target); };
+    ";
+
+pub(crate) fn focusable_node(dispatcher: &EventDispatcher, host: &Rc<RefCell<Host>>) -> NodeId {
+    let mut host = host.borrow_mut();
+    let node = host.tree.create_node("div").unwrap();
+    let root = host.root();
+    host.tree.append_child(root, node).unwrap();
+    host.tree
+        .set_attribute(node, "tabindex", inca_gpui::AttributeValue::from("0"))
+        .unwrap();
+    host.focus.mark_tab_dirty(node);
+    drop(host);
+    dispatcher.engine.eval::<()>(SEEN).unwrap();
+    for event in ["focus", "blur"] {
+        listen(dispatcher, node, event, "mark");
+    }
+    node
+}
+
+/// A view whose render runs `begin_frame`, as a window's render does.
+pub(crate) struct Frame(pub(crate) Rc<EventDispatcher>);
+
+impl gpui::Render for Frame {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl gpui::IntoElement {
+        self.0.begin_frame(window, cx);
+        gpui::div()
+    }
+}
+
+pub(crate) fn draw(cx: &mut TestAppContext, window: gpui::WindowHandle<Frame>) {
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+}
+
+pub(crate) fn seen_text(dispatcher: &EventDispatcher) -> String {
+    dispatcher
+        .engine
+        .eval::<String>("JSON.stringify(globalThis.seen)")
+        .unwrap()
+}
+
+pub(crate) fn set_active(
+    cx: &mut TestAppContext,
+    window: gpui::WindowHandle<Frame>,
+    dispatcher: &EventDispatcher,
+    active: bool,
+) {
+    cx.update_window(window.into(), |_, window, cx| {
+        dispatcher.window_activated(active, window, cx);
+    })
+    .unwrap();
+}
+
+pub(crate) fn is_focused(host: &Host, node: NodeId) -> bool {
+    state(host, node, ":focus")
+}
+
+pub(crate) fn focus_scene(
+    cx: &mut TestAppContext,
+) -> (
+    Rc<crate::EventDispatcher>,
+    Rc<std::cell::RefCell<crate::Host>>,
+    gpui::WindowHandle<Frame>,
+    u32,
+) {
+    let (dispatcher, host, _reported) = dispatcher_with_engine();
+    let node = focusable_node(&dispatcher, &host);
+    let dispatcher = Rc::new(dispatcher);
+    let window = cx.add_window(|_, _| Frame(Rc::clone(&dispatcher)));
+    (dispatcher, host, window, node)
 }
 
 pub(crate) mod input {
