@@ -9,14 +9,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { document } from "../document.mts";
 import { createEventTarget } from "../eventTarget.mts";
 import { htmlCollectionOf, namedNodeMapOf, nodeListOf } from "./collections.mts";
-import { createIncaFragment } from "./fragment.mts";
 import { rectOf } from "./geometry.mts";
-import { createCommentNode, createElementNode } from "./handle.mts";
+import { createCommentNode, createElementNode, createIncaFragment } from "./handle.mts";
 import { elementOf, markDestroyed, releaseWhenCollected, unregisterNode } from "./lifecycle.mts";
 import * as tree from "./shadowTree.mts";
 import { createTextNode } from "./text.mts";
 import type { EventLike, IncaEventTarget } from "../types.mts";
 import type { NodeMutationMembers } from "./nodeMutation.mts";
+import type { NodeRelationMembers } from "./nodeRelations.mts";
 import type { EventHandlers, IncaElement } from "./types.mts";
 
 let nextId = 1;
@@ -120,7 +120,7 @@ beforeEach(() => {
 const noHandlers = {} as EventHandlers;
 
 /** The mutation members, absent: nothing here calls them. */
-const noMutation = {} as NodeMutationMembers;
+const noMutation = {} as Pick<IncaElement, keyof NodeMutationMembers | keyof NodeRelationMembers>;
 
 function element(): IncaElement {
   return {
@@ -203,6 +203,10 @@ describe("createElement", () => {
       insertBefore: expect.any(Function),
       removeChild: expect.any(Function),
       replaceChild: expect.any(Function),
+      cloneNode: expect.any(Function),
+      compareDocumentPosition: expect.any(Function),
+      isSameNode: expect.any(Function),
+      isEqualNode: expect.any(Function),
       focus: expect.any(Function),
       blur: expect.any(Function),
       click: expect.any(Function),

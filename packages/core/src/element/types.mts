@@ -197,6 +197,42 @@ export interface NodeMembers {
    * @returns `child`
    */
   replaceChild<T extends IncaNode>(node: IncaNode, child: T): T;
+  /**
+   * Copies the node: its tag, attributes and style, and with `deep` its descendants. The copy has
+   * no parent, no listeners and no scroll offset, and the text of an `input` carries over.
+   * @param deep - whether the descendants are copied too
+   * @returns the copy
+   */
+  cloneNode(deep?: boolean): this;
+  /**
+   * Whether `other` is this node or one of its descendants in the tree as rendered. `null` and
+   * `undefined` give `false`, and any other value that is not a node throws a `TypeError`. After
+   * the node is removed, it still answers for the subtree it keeps. A freed node contains only
+   * itself.
+   */
+  contains(other: IncaNode | null): boolean;
+  /**
+   * The `document` export while the node hangs under the mount container, else the topmost node
+   * of its subtree, the node itself without a parent.
+   */
+  getRootNode(): IncaNode | IncaDocument;
+  /**
+   * The position of `other` relative to this node as a bit mask: `1` disconnected, `2` preceding,
+   * `4` following, `8` contains, `16` contained by and `32` implementation specific. Nodes of
+   * different trees give `1 | 32` plus `2` or `4`, with opposite directions for the two orders of
+   * the pair. A freed node is a tree of its own: it gives `1 | 32` plus `2` or `4` by the order of
+   * the two ids, and `0` for itself.
+   * @throws {TypeError} when `other` is not a node
+   */
+  compareDocumentPosition(other: IncaNode): number;
+  /** Whether `other` is this node. `null` and `undefined` give `false`. */
+  isSameNode(other: IncaNode | null): boolean;
+  /**
+   * Whether `other` has the same tag, attributes, style and children, compared in depth. The typed
+   * text of an `input` is not compared. `null` and `undefined` give `false`. A freed node equals
+   * only itself.
+   */
+  isEqualNode(other: IncaNode | null): boolean;
 }
 
 /** The `textContent` of a node. */
@@ -359,13 +395,6 @@ export interface IncaElement
    */
   hasPointerCapture(pointerId: number): boolean;
   /**
-   * Whether `other` is this node or one of its descendants in the tree as
-   * rendered. `null` and `undefined` give `false`, and any other value that is
-   * not a node throws a `TypeError`. After the node is removed, it still answers
-   * for the subtree it keeps.
-   */
-  contains(other: IncaNode | null): boolean;
-  /**
    * Assigning sets the `tabindex` attribute to the value's integer part,
    * wrapped to 32 bits. Reading returns the `tabindex` attribute as an
    * integer, or `-1` (`0` for a `button` or an `input`) when it is unset or invalid.
@@ -490,11 +519,6 @@ export interface IncaElement
    * does nothing.
    */
   scrollIntoView(arg?: boolean | ScrollIntoViewOptions): void;
-  /**
-   * The `document` export while the node hangs under the mount container,
-   * else the topmost node of its subtree, the node itself without a parent.
-   */
-  getRootNode(): IncaElement | IncaFragment | IncaDocument;
 }
 
 /** The handle of an `<input>`. */

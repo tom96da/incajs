@@ -100,8 +100,6 @@ A fixed entry is deleted and its ID is never reused.
   - `classList`, `className`, `dataset`, `style`;
   - the modern mutation methods (`append`, `prepend`, `before`, `after`,
     `remove`, `replaceWith`, `replaceChildren`);
-  - the classic mutation method `cloneNode`;
-  - `compareDocumentPosition()`, `isSameNode()` and `isEqualNode()`;
   - the HTML parsing members (`innerHTML`, `outerHTML`,
     `insertAdjacentHTML`, `content` of a `<template>`).
 
@@ -1422,8 +1420,8 @@ A fixed entry is deleted and its ID is never reused.
   `Units: core · Size: S · Impact: Low`
 
   The fragment that `document.createDocumentFragment()` returns has the node
-  members, the mutation members, `textContent`, `hasChildNodes()` and
-  `childNodes`. It lacks `querySelector()`, `querySelectorAll()`, `children`,
-  `getElementById()` and the listener methods. There is no global
-  `DocumentFragment`. Fix: add `querySelector()`, `querySelectorAll()`, `children`,
-  `getElementById()` and the listener methods.
+  members, the mutation members, the relation members, `textContent`,
+  `hasChildNodes()` and `childNodes`. It lacks `querySelector()`,
+  `querySelectorAll()`, `children`, `getElementById()` and the listener
+  methods. There is no global `DocumentFragment`. Fix: add `querySelector()`, `querySelectorAll()`,
+  `children`, `getElementById()` and the listener methods.

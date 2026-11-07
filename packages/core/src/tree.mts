@@ -86,6 +86,51 @@ export function replaceChild(parentId: NodeId, nodeId: NodeId, childId: NodeId):
 }
 
 /**
+ * Copies `nodeId` in the host tree. The copy has no parent and is freed at the start of the next
+ * frame unless it is held with {@link holdNode}. It keeps the tag, attributes and style of the
+ * original and the typed text of an `input`, and no listeners.
+ * @param nodeId - the node to copy
+ * @param deep - whether the descendants are copied too
+ * @returns the id and tag of each copy in pre-order, the copy of `nodeId` first
+ * @throws {TypeError} when `nodeId` names no node
+ */
+export function cloneNode(nodeId: NodeId, deep: boolean): [NodeId, TagName][] {
+  return native().cloneNode(nodeId, deep);
+}
+
+/**
+ * Finds the top of the tree `nodeId` belongs to.
+ * @param nodeId - the node to start from
+ * @returns the id of the topmost ancestor, `nodeId` itself without a parent
+ * @throws {TypeError} when `nodeId` names no node
+ */
+export function rootOf(nodeId: NodeId): NodeId {
+  return native().rootOf(nodeId);
+}
+
+/**
+ * Compares the tree positions of two nodes.
+ * @param nodeId - the node the mask describes the other from
+ * @param otherId - the node to locate
+ * @returns the bit mask of `compareDocumentPosition`
+ * @throws {TypeError} when an id names no node
+ */
+export function compareNodePosition(nodeId: NodeId, otherId: NodeId): number {
+  return native().compareNodePosition(nodeId, otherId);
+}
+
+/**
+ * Compares two nodes and their subtrees by tag, attributes, style and children.
+ * @param nodeId - the first node
+ * @param otherId - the second node
+ * @returns whether the two are equal
+ * @throws {TypeError} when an id names no node
+ */
+export function isEqualNode(nodeId: NodeId, otherId: NodeId): boolean {
+  return native().isEqualNode(nodeId, otherId);
+}
+
+/**
  * Drops every event listener registered on `nodeId` and on the nodes below it. The nodes stay in
  * the tree. An unknown id does nothing.
  * @param nodeId - the root of the subtree

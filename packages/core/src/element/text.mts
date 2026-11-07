@@ -17,6 +17,7 @@ import {
 import { attributeText, requireArguments } from "./attributes.mts";
 import { isDestroyed, registerNode, releaseWhenCollected, withNodeId } from "./lifecycle.mts";
 import { nodeMutationMembers } from "./nodeMutation.mts";
+import { nodeRelationMembers } from "./nodeRelations.mts";
 import { nodeTreeMembers, readData, writeData } from "./nodeTree.mts";
 import { remove } from "./shadowTree.mts";
 import type { NodeId } from "../types.mts";
@@ -173,7 +174,8 @@ export function createIncaText(id: NodeId, text: string): IncaText {
   const handle = withNodeId(node as IncaText, id);
   for (const members of [
     nodeTreeMembers(handle),
-    nodeMutationMembers(handle),
+    nodeMutationMembers(handle, { text: createIncaText }),
+    nodeRelationMembers(handle),
     characterDataMembers(handle),
     textMembers(handle),
   ]) {

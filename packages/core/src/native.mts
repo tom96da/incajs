@@ -20,6 +20,10 @@ interface IncaNative {
   insertBefore(parentId: NodeId, nodeId: NodeId, refId: NodeId | null): number;
   removeChild(parentId: NodeId, childId: NodeId): void;
   replaceChild(parentId: NodeId, nodeId: NodeId, childId: NodeId): number;
+  cloneNode(nodeId: NodeId, deep: boolean): [NodeId, string][];
+  rootOf(nodeId: NodeId): NodeId;
+  compareNodePosition(nodeId: NodeId, otherId: NodeId): number;
+  isEqualNode(nodeId: NodeId, otherId: NodeId): boolean;
   setAttribute(nodeId: NodeId, key: string, value: AttributeValue): void;
   getAttribute(nodeId: NodeId, key: string): AttributeValue | null;
   removeAttribute(nodeId: NodeId, key: string): void;

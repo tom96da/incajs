@@ -7,6 +7,10 @@ import {
   appendChild,
   insertBefore,
   replaceChild,
+  cloneNode,
+  rootOf,
+  compareNodePosition,
+  isEqualNode,
   checkSelector,
   focusedNode,
   childNodeIds,
@@ -43,6 +47,10 @@ const native = {
   insertBefore: vi.fn<(parentId: number, childId: number, refId: number | null) => number>(() => 0),
   removeChild: vi.fn<(parentId: number, childId: number) => void>(),
   replaceChild: vi.fn<(parentId: number, nodeId: number, childId: number) => number>(() => 0),
+  cloneNode: vi.fn<(nodeId: number, deep: boolean) => [number, string][]>(() => []),
+  rootOf: vi.fn<(nodeId: number) => number>((nodeId) => nodeId),
+  compareNodePosition: vi.fn<(nodeId: number, otherId: number) => number>(() => 0),
+  isEqualNode: vi.fn<(nodeId: number, otherId: number) => boolean>(() => false),
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   getAttribute: vi.fn<(nodeId: number, key: string) => string | number | boolean | null>(
     () => null,
@@ -120,6 +128,30 @@ describe("wrapper functions forward to __inca_native__", () => {
     native.replaceChild.mockReturnValueOnce(6);
     expect(replaceChild(1, 2, 3)).toBe(6);
     expect(native.replaceChild).toHaveBeenCalledWith(1, 2, 3);
+  });
+
+  it("cloneNode", () => {
+    native.cloneNode.mockReturnValueOnce([[7, "div"]]);
+    expect(cloneNode(1, true)).toEqual([[7, "div"]]);
+    expect(native.cloneNode).toHaveBeenCalledWith(1, true);
+  });
+
+  it("rootOf", () => {
+    native.rootOf.mockReturnValueOnce(9);
+    expect(rootOf(1)).toBe(9);
+    expect(native.rootOf).toHaveBeenCalledWith(1);
+  });
+
+  it("compareNodePosition", () => {
+    native.compareNodePosition.mockReturnValueOnce(20);
+    expect(compareNodePosition(1, 2)).toBe(20);
+    expect(native.compareNodePosition).toHaveBeenCalledWith(1, 2);
+  });
+
+  it("isEqualNode", () => {
+    native.isEqualNode.mockReturnValueOnce(true);
+    expect(isEqualNode(1, 2)).toBe(true);
+    expect(native.isEqualNode).toHaveBeenCalledWith(1, 2);
   });
 
   it("removeChild", () => {

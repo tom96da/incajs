@@ -3,8 +3,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createIncaFragment } from "./fragment.mts";
-import { createElementNode } from "./handle.mts";
+import { createCommentNode, createElementNode, createIncaFragment } from "./handle.mts";
 import { isHeld, isRemoved, markDestroyed } from "./lifecycle.mts";
 import { remove } from "./shadowTree.mts";
 import { createTextNode } from "./text.mts";
@@ -47,6 +46,16 @@ const host = {
     return id;
   }),
   setAttribute: vi.fn<() => void>(),
+  setStyle: vi.fn<() => void>(),
+  cloneNode: vi.fn<(nodeId: number, deep: boolean) => [number, string][]>((id, deep) => {
+    const copy = (original: number): [number, string][] => {
+      const tag = tags.get(original)!;
+      const pairs: [number, string][] = [[host.createNode(tag), tag]];
+      if (deep) for (const child of childrenOf(original)) pairs.push(...copy(child));
+      return pairs;
+    };
+    return copy(id);
+  }),
   appendChild: vi.fn<(parentId: number, childId: number) => number>((parent, id) =>
     place(parent, movedBy(id), null),
   ),
@@ -507,5 +516,123 @@ describe("arguments", () => {
     expect(group.__children).toEqual([inside]);
     expect(inside.parent).toBe(group);
     expect(second.__children).toEqual(others);
+  });
+});
+
+describe("cloneNode", () => {
+  /** An element holding a text node and an element that holds a comment. */
+  const tree = () => {
+    const { parent, children } = family(1);
+    const text = createTextNode("x");
+    const comment = createCommentNode("c");
+    parent.appendChild(text);
+    children[0]!.appendChild(comment);
+    return { parent, inner: children[0]!, text, comment };
+  };
+  const kinds = (nodes: readonly IncaNode[]) => nodes.map((node) => node.kind);
+
+  it.each([
+    ["undefined", undefined, false],
+    ["true", true, true],
+    ["a truthy value", 1, true],
+  ])("asks the host for %s as the deep flag", (_name, deep, asked) => {
+    const { parent } = family(0);
+
+    parent.cloneNode(deep as boolean | undefined);
+
+    expect(host.cloneNode).toHaveBeenCalledWith(parent.__node_id, asked);
+  });
+
+  it("builds an element with the tag the host returns", () => {
+    const copy = createElementNode("span").cloneNode();
+
+    expect(copy).toMatchObject({ kind: "element", tagName: "SPAN" });
+  });
+
+  it("builds a comment as a comment", () => {
+    const copy = createCommentNode("c").cloneNode();
+
+    expect(copy.kind).toBe("comment");
+  });
+
+  it("gives a comment the default tag name", () => {
+    const copy = createCommentNode("c").cloneNode() as unknown as { tagName: string };
+
+    expect(copy.tagName).toBe("DIV");
+  });
+
+  it("builds a text node with the data of the original", () => {
+    const copy = createTextNode("x").cloneNode();
+
+    expect(copy).toMatchObject({ kind: "text", text: "x" });
+  });
+
+  it("builds a fragment", () => {
+    const copy = fragment().cloneNode();
+
+    expect(copy.kind).toBe("fragment");
+  });
+
+  it("gives the copy new ids and no parent", () => {
+    const { parent } = family(0);
+    const copy = parent.cloneNode();
+
+    expect([copy.__node_id === parent.__node_id, copy.parent]).toEqual([false, null]);
+  });
+
+  it("holds the copy", () => {
+    expect(isHeld(div().cloneNode())).toBe(true);
+  });
+
+  it("copies no child in a shallow clone", () => {
+    const { parent } = tree();
+
+    expect(parent.cloneNode(false).__children).toEqual([]);
+  });
+
+  it("copies the descendants in a deep clone", () => {
+    const { parent } = tree();
+    const outer = div();
+    outer.appendChild(parent);
+    host.appendChild.mockClear();
+
+    const copy = parent.cloneNode(true);
+
+    expect(host.appendChild).not.toHaveBeenCalled();
+    expect(idsOf(outer)).toEqual([parent.__node_id]);
+    expect(kinds(copy.__children)).toEqual(["element", "text"]);
+    expect(kinds((copy.__children[0] as typeof parent).__children)).toEqual(["comment"]);
+  });
+
+  it("gives each handle of a deep clone the id the host returned in pre-order", () => {
+    const { parent } = tree();
+
+    const copy = parent.cloneNode(true);
+    const [inner, text] = copy.__children as [typeof parent, IncaNode];
+
+    expect([inner.__node_id, inner.__children[0]!.__node_id, text.__node_id]).toEqual([
+      copy.__node_id + 1,
+      copy.__node_id + 2,
+      copy.__node_id + 3,
+    ]);
+  });
+
+  it("sets the parent of each copied child", () => {
+    const { parent } = tree();
+
+    const copy = parent.cloneNode(true);
+    const inner = copy.__children[0] as typeof parent;
+
+    expect([copy.__children.map((child) => child.parent), inner.__children[0]!.parent]).toEqual([
+      [copy, copy],
+      inner,
+    ]);
+  });
+
+  it("copies the children of a fragment", () => {
+    const group = fragment();
+    group.appendChild(div());
+
+    expect(kinds(group.cloneNode(true).__children)).toEqual(["element"]);
   });
 });

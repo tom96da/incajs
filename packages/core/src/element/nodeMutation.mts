@@ -4,17 +4,41 @@
 // The classic mutation members of every handle. The host validates and performs each change, and
 // the members patch the shadow tree with the position it returns.
 
-import { appendChild, insertBefore, removeChild, replaceChild } from "../tree.mts";
+import {
+  appendChild,
+  cloneNode as cloneHostNode,
+  insertBefore,
+  removeChild,
+  replaceChild,
+} from "../tree.mts";
 import { requireArguments } from "./attributes.mts";
 import { isDestroyed, isNode } from "./lifecycle.mts";
 import { keep, link, unlink } from "./shadowTree.mts";
-import type { IncaNode, IncaParent, NodeMembers } from "./types.mts";
+import type { NodeId, TagName } from "../types.mts";
+import type {
+  IncaElement,
+  IncaFragment,
+  IncaNode,
+  IncaParent,
+  IncaText,
+  NodeMembers,
+} from "./types.mts";
 
 /** The members {@link nodeMutationMembers} builds. */
 export type NodeMutationMembers = Pick<
   NodeMembers,
-  "appendChild" | "insertBefore" | "removeChild" | "replaceChild"
+  "appendChild" | "insertBefore" | "removeChild" | "replaceChild" | "cloneNode"
 >;
+
+/**
+ * The functions that build a handle for a native node. A handle passes the builders of the kinds
+ * its clone can hold: a text node has no children, so it passes `text` alone.
+ */
+export interface HandleBuilders {
+  element?: (id: NodeId, kind: IncaElement["kind"], tag?: TagName) => IncaElement;
+  text: (id: NodeId, data: string) => IncaText;
+  fragment?: (id: NodeId) => IncaFragment;
+}
 
 /**
  * Builds the error for a child the host freed.
@@ -33,8 +57,9 @@ function notFound(): Error {
  * @param position - the argument's place in the call, counted from 1
  * @returns the node
  * @throws {TypeError} when `value` is not a node
+ * @internal
  */
-function nodeArgument(value: unknown, position: number): IncaNode {
+export function nodeArgument(value: unknown, position: number): IncaNode {
   if (!isNode(value)) {
     throw new TypeError(
       `parameter ${position} is not a node. pass an element, a text node, a comment or a fragment`,
@@ -53,11 +78,39 @@ function movedBy(node: IncaNode): IncaNode[] {
 }
 
 /**
+ * Copies a node into handles. The host copies the nodes and the handles follow its pre-order.
+ * @param node - the node to copy
+ * @param deep - whether the descendants are copied too
+ * @param builders - the functions that build the handles
+ * @returns the held, parentless copy
+ */
+export function cloneNode<T extends IncaNode>(node: T, deep: boolean, builders: HandleBuilders): T {
+  const copies = cloneHostNode(node.__node_id, deep);
+  let next = 0;
+  const build = (original: IncaNode): IncaNode => {
+    const [id, tag] = copies[next++]!;
+    if (original.kind === "text") return builders.text(id, original.text);
+    const copy =
+      original.kind === "fragment"
+        ? builders.fragment!(id)
+        : builders.element!(id, original.kind, original.kind === "element" ? tag : undefined);
+    if (!deep) return copy;
+    for (const child of original.__children)
+      link(copy as IncaParent, [build(child)], copy.__children.length);
+    return copy;
+  };
+  const copy = build(node);
+  keep(copy);
+  return copy as T;
+}
+
+/**
  * Builds the mutation members of `node`.
  * @param node - the handle the members belong to
+ * @param builders - the functions that build the handles of a clone
  * @returns the members
  */
-export function nodeMutationMembers(node: IncaNode): NodeMutationMembers {
+export function nodeMutationMembers(node: IncaNode, builders: HandleBuilders): NodeMutationMembers {
   const id = node.__node_id;
   // A text node as the parent throws in the host call, so the shadow patch sees an element or a
   // fragment.
@@ -105,5 +158,6 @@ export function nodeMutationMembers(node: IncaNode): NodeMutationMembers {
       link(parent, moved, position);
       return old;
     },
+    cloneNode: (deep?: boolean) => cloneNode(node, Boolean(deep), builders),
   } as NodeMutationMembers;
 }
