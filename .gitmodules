@@ -66,3 +66,7 @@
 	path = specs/whatwg/encoding
 	url = https://github.com/whatwg/encoding.git
 	shallow = true
+[submodule "specs/whatwg/url"]
+	path = specs/whatwg/url
+	url = https://github.com/whatwg/url.git
+	shallow = true

@@ -141,3 +141,4 @@ Policy: the standard decides. Where it is silent, two of the three engines
 | `specs/whatwg/dom` | [whatwg/dom](https://github.com/whatwg/dom) | `b76da7a` (2026-10-05) | Event dispatch, propagation, `preventDefault`. The text is `dom.bs`. |
 | `specs/whatwg/encoding` | [whatwg/encoding](https://github.com/whatwg/encoding) | `be17ac5` (2026-10-19) | `TextEncoder`, `TextDecoder` and the encoding labels. The text is `encoding.bs`. |
 | `specs/whatwg/html` | [whatwg/html](https://github.com/whatwg/html) | `ba3400b` (2026-10-06) | Focus, `tabindex`, Tab order, the focus fixup rules. The text is `source`. |
+| `specs/whatwg/url` | [whatwg/url](https://github.com/whatwg/url) | `845bafc` (2026-10-19) | Parsing and serializing URLs, `URL`, `URLSearchParams`. The text is `url.bs`. |
