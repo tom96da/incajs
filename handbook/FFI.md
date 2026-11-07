@@ -87,7 +87,10 @@ the custom renderer's output. Each node has:
 
 ### Tag vocabulary
 
-Implemented in `crates/inca-gpui/src/element/`. There are six kinds:
+`inca-node` classifies the tags in `ElementTag` (`spec.rs`) and lists the
+tags that take focus by default in `focusable_by_default` (`tree.rs`).
+`inca-gpui` builds the elements in `crates/inca-gpui/src/element/`. There are
+six kinds:
 
 | `tag_name` | Maps to |
 | --- | --- |
@@ -100,16 +103,17 @@ Implemented in `crates/inca-gpui/src/element/`. There are six kinds:
 
 ### Style prop vocabulary
 
-Implemented in `element/parse.rs` and `element/style.rs`.
-`inca_gpui::STYLE_KEYS` lists every key, its CSS names and the value it takes.
-An unrecognized key, an invalid color and a value of a shape the host does not
-support each print one warning line on stderr, once for each node and warning
-line, and the value reads as unset. An empty string `''` on a known key
-prints no warning. The table lists every key the host reads. `set_style` and
-`remove_style` map the camelCase and kebab-case spellings of a key to its
-snake_case form, and a CSS name to its host key, as `inca_gpui::STYLE_KEYS`
-lists. All spellings of one prop share one slot. A key with an uppercase initial, a mixed-case kebab key and a key
-that starts with `-` are unknown.
+`inca-node` reads the keys in `spec/`, and `inca_node::STYLE_KEYS` lists every
+key, its CSS names and the value it takes. `inca-gpui` maps the spec onto
+`gpui` in `element/style.rs`. An unrecognized key, an invalid color and a value of a
+shape the host does not support each print one warning line on stderr, once
+for each node and warning line, and the value reads as unset. An empty string
+`''` on a known key prints no warning. The table lists every key the host
+reads. `set_style` and `remove_style` map the camelCase and kebab-case
+spellings of a key to its snake_case form, and a CSS name to its host key, as
+`inca_node::STYLE_KEYS` lists. All spellings of one prop share one slot. A key
+with an uppercase initial, a mixed-case kebab key and a key that starts with
+`-` are unknown.
 
 A px value is a number or a string: a decimal with optional sign and exponent,
 then `px` in any case (`"10px"`), or a string that reads as zero (`"0"`).

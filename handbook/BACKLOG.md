@@ -43,7 +43,7 @@ A fixed entry is deleted and its ID is never reused.
   `StyleProps` (`packages/core/src/types.mts`) copies the host's vocabulary
   by hand. Vue's `CSSProperties` type lists only CSS properties, so an
   editor that checks `:style` flags the host's own keys.
-  `inca_gpui::STYLE_KEYS` lists the keys, their CSS names, value kinds and
+  `inca_node::STYLE_KEYS` lists the keys, their CSS names, value kinds and
   keyword names, but no description, and the padding and margin keys carry
   no precedence. A generator that writes JSON and TypeScript types from it,
   with descriptions added to the declaration, gives tools one source. It
@@ -429,7 +429,7 @@ A fixed entry is deleted and its ID is never reused.
 
   A vertical wheel scrolls a container that scrolls only on x, and only the
   dominant axis of a diagonal delta moves. The rules are `axis_step` in
-  `crates/inca-gpui/src/element/scroll.rs`. The DOM latches a continuing
+  `crates/inca-gpui/src/element/wheel.rs`. The DOM latches a continuing
   gesture to the container it started on. Here a gesture moves to the parent
   as soon as the inner container reaches its limit.
 
@@ -524,11 +524,12 @@ A fixed entry is deleted and its ID is never reused.
   hosts are added.
 
 - **B-096 `missing_docs` is not enforced**
-  `Units: gpui,bridge,ci · Size: M · Impact: Low`
+  `Units: node,gpui,bridge,jsenv,ci · Size: M · Impact: Low`
 
-  `inca-bridge` lacks docs on 4 public items and `inca-gpui` on 59, as
+  `inca-node` lacks docs on 41 public items, `inca-gpui` on 38, `inca-bridge`
+  on 6 and `inca-jsenv` on 2, as
   `RUSTDOCFLAGS="-W missing-docs" cargo doc -p <crate> --no-deps` counts
-  them. `inca-jsenv` and `inca-host` have none. Setting
+  them. `inca-host` has none. Setting
   `missing_docs = "warn"` under `[workspace.lints.rust]` applies to every
   crate that inherits the table. It fails CI, which runs clippy with
   `-D warnings`, until the gaps are filled. A crate cannot opt out of one
