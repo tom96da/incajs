@@ -442,13 +442,13 @@ describe("remove", () => {
   it.each([
     ["a text leaf", () => tree.createTextNode("t")],
     ["a comment stand-in", () => createCommentNode()],
-  ])("holds no %s", (_name, create) => {
+  ])("holds a removed %s until its handle is collected", (_name, create) => {
     const node = create();
     vi.mocked(host.holdNode).mockClear();
 
     tree.remove(node);
 
-    expect(host.holdNode).not.toHaveBeenCalled();
+    expect(host.holdNode).toHaveBeenCalledWith(node.__node_id);
   });
 
   it("unlinks a child of a freed parent without a host call", () => {
