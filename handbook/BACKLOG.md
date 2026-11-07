@@ -1418,13 +1418,3 @@ A fixed entry is deleted and its ID is never reused.
   a field that holds a function; a decision for `package.json` `"inca"` and the
   JSON configs, which cannot hold one; moving `@vitejs/plugin-vue` from the
   dependencies of `@incajs/cli` to an optional peer of `incajs`.
-
-- **B-267 A text node or comment removed from the tree stops working after the next frame**
-  `Units: core · Size: S · Impact: Medium`
-
-  The host keeps only removed elements, so a removed text node or comment is
-  freed with the next frame. With `const t = ref.firstChild; ref.textContent = "x";`,
-  a later `t.data = "y"` is ignored and `t.splitText(1)` throws "the text node
-  was freed". A browser keeps a detached text node usable. Fix: hold removed
-  text nodes and comments like removed elements, in `remove()` of
-  `shadowTree.mts`.

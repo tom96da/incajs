@@ -108,11 +108,18 @@ export function remove(child: IncaNode): void {
   else detach(child);
   releaseListeners(child.__node_id);
   markRemoved(child);
-  // The host frees an unheld parentless node at the next frame, and the handle stays readable.
-  if (child.kind === "element" && !isDestroyed(child) && !isHeld(child)) {
-    holdNode(child.__node_id);
-    releaseWhenCollected(child);
-  }
+  keep(child);
+}
+
+/**
+ * Holds `child` until its handle is collected, so the host does not free it at the next frame.
+ *
+ * @param child - the removed node
+ */
+function keep(child: IncaNode): void {
+  if (isDestroyed(child) || isHeld(child)) return;
+  holdNode(child.__node_id);
+  releaseWhenCollected(child);
 }
 
 /**
