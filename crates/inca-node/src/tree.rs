@@ -270,6 +270,9 @@ pub enum TreeError {
     NotAChild { parent: NodeId, child: NodeId },
     /// The root node given as the node to insert.
     RootMoved(NodeId),
+    /// A call that writes into the parent of a node, given the root container or a node that has no
+    /// parent.
+    NoParent(NodeId),
 }
 
 impl fmt::Display for TreeError {
@@ -295,6 +298,7 @@ impl fmt::Display for TreeError {
             TreeError::RootMoved(_) => {
                 write!(f, "the root node belongs to the host and cannot be moved")
             }
+            TreeError::NoParent(id) => write!(f, "node {id} has no parent to write into"),
         }
     }
 }
