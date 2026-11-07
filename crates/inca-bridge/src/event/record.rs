@@ -4,48 +4,69 @@
 //! The native record of an event: the structs, their lifetime marker and
 //! their trace.
 
-// A derive on a struct with a lifetime generates items that an `allow` on the
-// struct does not cover.
-#![allow(clippy::disallowed_macros, clippy::disallowed_types)]
-
 use std::cell::{Cell, RefCell};
 
+#[allow(clippy::disallowed_types)]
+use rquickjs::JsLifetime;
 use rquickjs::class::{JsClass, Readable, Trace, Tracer};
 use rquickjs::function::Constructor;
-use rquickjs::{Ctx, JsLifetime, Object, Result as JsResult, Value};
+use rquickjs::{Ctx, Object, Result as JsResult};
 
 use super::Flags;
 use super::payload::Payload;
 
-/// An event: the object every listener of one walk receives, and the state
-/// its getters and methods read.
-#[derive(JsLifetime)]
-pub(super) struct IncaEvent<'js> {
-    pub(super) state: State,
-    pub(super) held: Held<'js>,
+// A derive on a struct with a lifetime generates items that an `allow` on the struct does not
+// cover, so the struct sits in a module of its own.
+#[allow(clippy::disallowed_macros, clippy::disallowed_types)]
+mod incaevent {
+    use rquickjs::JsLifetime;
+
+    use super::{Held, State};
+
+    /// An event: the object every listener of one walk receives, and the state
+    /// its getters and methods read.
+    #[derive(JsLifetime)]
+    pub(in crate::event) struct IncaEvent<'js> {
+        pub(in crate::event) state: State,
+        pub(in crate::event) held: Held<'js>,
+    }
 }
 
-/// Every JS value an event holds. Each one is traced, so it lives as long as
-/// the event, and a cycle through it is collected. An untraced value aborts
-/// the process when the runtime drops.
-#[derive(JsLifetime)]
-pub(super) struct Held<'js> {
-    /// What stands for the node the event was last dispatched at, `None`
-    /// before the first dispatch.
-    pub(super) target: RefCell<Option<Value<'js>>>,
-    /// What stands for each node of the path while a walk runs, target
-    /// first. Empty outside a walk.
-    pub(super) path: RefCell<Vec<Value<'js>>>,
-    /// What stands for the other node of a mouse or focus event.
-    pub(super) related: Option<Value<'js>>,
-    /// The `detail` of a `CustomEvent`, `None` for any other event.
-    pub(super) detail: RefCell<Option<Value<'js>>>,
+pub(super) use incaevent::IncaEvent;
+
+// A derive on a struct with a lifetime generates items that an `allow` on the struct does not
+// cover, so the struct sits in a module of its own.
+#[allow(clippy::disallowed_macros, clippy::disallowed_types)]
+mod held {
+    use std::cell::RefCell;
+
+    use rquickjs::{JsLifetime, Value};
+
+    /// Every JS value an event holds. Each one is traced, so it lives as long as
+    /// the event, and a cycle through it is collected. An untraced value aborts
+    /// the process when the runtime drops.
+    #[derive(JsLifetime)]
+    pub(in crate::event) struct Held<'js> {
+        /// What stands for the node the event was last dispatched at, `None`
+        /// before the first dispatch.
+        pub(in crate::event) target: RefCell<Option<Value<'js>>>,
+        /// What stands for each node of the path while a walk runs, target
+        /// first. Empty outside a walk.
+        pub(in crate::event) path: RefCell<Vec<Value<'js>>>,
+        /// What stands for the other node of a mouse or focus event.
+        pub(in crate::event) related: Option<Value<'js>>,
+        /// The `detail` of a `CustomEvent`, `None` for any other event.
+        pub(in crate::event) detail: RefCell<Option<Value<'js>>>,
+    }
 }
+
+pub(super) use held::Held;
 
 /// The fields of an [`IncaEvent`] that hold no JS value. It has no lifetime
 /// parameter, so a JS value cannot be added here. A walk sets the cells
 /// between listener calls. `initEvent` sets the type and the flags of an idle
 /// event.
+#[allow(clippy::disallowed_macros)]
 #[derive(JsLifetime)]
 pub(super) struct State {
     pub(super) name: RefCell<String>,
@@ -126,6 +147,7 @@ mod tests {
     use inca_gpui::{EventPayload, MousePayload};
     use inca_test_macros::gpui_cases;
     use rquickjs::Class;
+    use rquickjs::Value;
     use rstest::rstest;
 
     #[test]
