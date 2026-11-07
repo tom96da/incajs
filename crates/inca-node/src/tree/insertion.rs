@@ -57,14 +57,18 @@ impl VirtualTree {
         }
     }
 
-    /// Whether `candidate` is `of` itself or sits above it.
+    /// Whether `candidate` is `of` itself or sits above it. The parentless content of a template
+    /// continues at its template.
     fn is_self_or_ancestor(&self, candidate: NodeId, of: NodeId) -> bool {
         let mut current = Some(of);
         while let Some(id) = current {
             if id == candidate {
                 return true;
             }
-            current = self.nodes.get(&id).and_then(|node| node.parent);
+            current = self
+                .nodes
+                .get(&id)
+                .and_then(|node| node.parent.or(node.owner));
         }
         false
     }
@@ -243,5 +247,40 @@ mod tests {
         f.tree.append_child(f.root, extra).unwrap();
 
         assert_eq!(children(&f.tree, f.root), [extra]);
+    }
+
+    #[rstest]
+    #[case::template(|template: NodeId, _: NodeId, _: NodeId| template)]
+    #[case::ancestor_of_the_template(|_: NodeId, ancestor: NodeId, _: NodeId| ancestor)]
+    fn a_node_above_the_content_cannot_go_into_the_content(
+        #[case] pick: fn(NodeId, NodeId, NodeId) -> NodeId,
+    ) {
+        let mut tree = VirtualTree::new();
+        let ancestor = node(&mut tree, "div");
+        let template = node(&mut tree, "template");
+        let inside = node(&mut tree, "span");
+        tree.append_child(ancestor, template).unwrap();
+        let content = tree.template_content(template).unwrap();
+        tree.append_child(content, inside).unwrap();
+        let moved = pick(template, ancestor, inside);
+
+        assert_eq!(
+            tree.append_child(content, moved).unwrap_err(),
+            TreeError::WouldCycle(moved)
+        );
+    }
+
+    #[test]
+    fn a_template_cannot_go_into_a_node_of_its_content() {
+        let mut tree = VirtualTree::new();
+        let template = node(&mut tree, "template");
+        let inside = node(&mut tree, "span");
+        let content = tree.template_content(template).unwrap();
+        tree.append_child(content, inside).unwrap();
+
+        assert_eq!(
+            tree.append_child(inside, template).unwrap_err(),
+            TreeError::WouldCycle(template)
+        );
     }
 }

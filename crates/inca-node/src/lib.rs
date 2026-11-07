@@ -21,7 +21,7 @@ pub use spec::{
 };
 pub use tree::{
     AttributeValue, NodeId, TreeError, VirtualNode, VirtualTree, focusable_by_default,
-    is_disabled_control,
+    is_disabled_control, is_template_tag,
 };
 
 #[cfg(test)]

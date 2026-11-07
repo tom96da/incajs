@@ -35,9 +35,12 @@ A node has a tag name, attributes kept in insertion order, style props and child
 one parent: attaching it to a new parent detaches it from the old one. The tag `"#text"` makes a
 text node.
 
-A parentless node that is neither the root nor held is an orphan. `VirtualTree::sweep` frees every
-orphan with its subtree, and a held node stays out of the sweep. A node can also be destroyed on its
-own, and a subtree can be cloned.
+A parentless node that is neither the root, held nor the content of a template is an orphan.
+`VirtualTree::sweep` frees every orphan with its subtree, and a held node stays out of the sweep. A
+node can also be destroyed on its own, and a subtree can be cloned.
+
+A `template` element owns a content fragment. The fragment has no parent, and it goes with the
+template.
 
 The tree answers the node relations and the text operations of the DOM: the ancestors and
 siblings of a node, the position of one node against another, and the reading and editing of

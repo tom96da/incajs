@@ -10,6 +10,8 @@
 //! attachment that would make a node its own ancestor is refused, so a walk
 //! down the tree always terminates. A fragment never has a parent.
 //!
+//! A template owns a fragment as its content. The content has no parent and is never connected.
+//!
 //! A root can be declared with [`VirtualTree::set_root`].
 //! [`VirtualTree::is_connected`] then reads the parent chain up to it.
 //!
@@ -35,6 +37,7 @@ mod links;
 mod props;
 mod relations;
 mod state;
+mod template;
 mod text;
 
 /// The tag of a node that stands in for a comment.
@@ -166,6 +169,12 @@ pub fn focusable_by_default(tag: &str) -> bool {
     matches!(tag, "button" | "input")
 }
 
+/// Whether a node of `tag` is a template, whatever the case of the tag.
+#[must_use]
+pub fn is_template_tag(tag: &str) -> bool {
+    tag.eq_ignore_ascii_case("template")
+}
+
 /// Whether `node` is a `button` or an `input` carrying the `disabled`
 /// attribute.
 #[must_use]
@@ -184,6 +193,10 @@ pub struct VirtualNode {
     attributes: IndexMap<String, AttributeValue>,
     parent: Option<NodeId>,
     children: Vec<NodeId>,
+    /// The fragment a template owns.
+    content: Option<NodeId>,
+    /// The template that owns this fragment.
+    owner: Option<NodeId>,
 }
 
 impl VirtualNode {
@@ -195,7 +208,15 @@ impl VirtualNode {
             attributes: IndexMap::new(),
             parent: None,
             children: Vec::new(),
+            content: None,
+            owner: None,
         }
+    }
+
+    /// Whether the tag of the node is `template`.
+    #[must_use]
+    pub fn is_template(&self) -> bool {
+        is_template_tag(&self.tag_name)
     }
 
     #[must_use]
@@ -323,11 +344,20 @@ impl VirtualTree {
     /// # Errors
     ///
     /// Returns [`TreeError::IdsExhausted`] once `u32::MAX` nodes have been
-    /// created over the tree's lifetime.
+    /// created over the tree's lifetime. A template takes two ids, its own and its content's,
+    /// and fails without creating either when fewer are left.
     pub fn create_node(&mut self, tag_name: impl Into<String>) -> Result<NodeId, TreeError> {
+        let tag_name = tag_name.into();
+        if is_template_tag(&tag_name) {
+            return self.create_template(tag_name);
+        }
+        self.allocate(tag_name)
+    }
+
+    fn allocate(&mut self, tag_name: String) -> Result<NodeId, TreeError> {
         let id = self.next_id;
         self.next_id = id.checked_add(1).ok_or(TreeError::IdsExhausted)?;
-        self.nodes.insert(id, VirtualNode::new(id, tag_name.into()));
+        self.nodes.insert(id, VirtualNode::new(id, tag_name));
         self.orphans.insert(id);
         Ok(id)
     }

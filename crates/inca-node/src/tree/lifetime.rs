@@ -47,10 +47,13 @@ impl VirtualTree {
             .collect()
     }
 
-    /// Marks `id` an orphan when it is a parentless node, not the root and
-    /// not held.
+    /// Marks `id` an orphan when it is a parentless node, not the root, not held and not the
+    /// content of a template.
     pub(super) fn orphan_if_free(&mut self, id: NodeId) {
-        let free = self.nodes.get(&id).is_some_and(|n| n.parent.is_none())
+        let free = self
+            .nodes
+            .get(&id)
+            .is_some_and(|n| n.parent.is_none() && n.owner.is_none())
             && self.root != Some(id)
             && !self.held.contains(&id);
         if free {
@@ -81,10 +84,10 @@ impl VirtualTree {
     ///
     /// The subtree goes too because a caller removing a node holds that
     /// node's id and nothing below it. Also ends the hold of every freed id.
-    /// An unknown `id` frees nothing and returns an empty `Vec`: destroying
-    /// twice is a no-op, not an error.
+    /// A template frees its content with it. An unknown `id` and the content of a template free
+    /// nothing and return an empty `Vec`: destroying twice is a no-op, not an error.
     pub fn destroy_node(&mut self, id: NodeId) -> Vec<NodeId> {
-        if !self.nodes.contains_key(&id) {
+        if self.nodes.get(&id).is_none_or(|node| node.owner.is_some()) {
             return Vec::new();
         }
         self.generation += 1;
@@ -95,6 +98,7 @@ impl VirtualTree {
         while let Some(current) = pending.pop() {
             if let Some(node) = self.nodes.remove(&current) {
                 pending.extend(node.children.iter().copied());
+                pending.extend(node.content);
                 self.held.remove(&current);
                 self.orphans.remove(&current);
                 freed.push(current);
@@ -105,7 +109,9 @@ impl VirtualTree {
 
     /// Copies `id` with its tag, attributes and style props, and with its descendants when `deep`.
     /// Returns the original, the copy and the tag of each copy in pre-order, the copy of `id`
-    /// first. Only that copy has no parent.
+    /// first. Only that copy has no parent. The copy of a template comes with a fresh content
+    /// that follows it in the list, with the content descendants when `deep`, before the other
+    /// children.
     ///
     /// # Errors
     ///
@@ -118,31 +124,58 @@ impl VirtualTree {
     ) -> Result<Vec<(NodeId, NodeId, String)>, TreeError> {
         self.get(id).ok_or(TreeError::NodeNotFound(id))?;
         let mut made = Vec::new();
-        let mut pending: Vec<(NodeId, Option<NodeId>)> = vec![(id, None)];
-        while let Some((original, parent)) = pending.pop() {
+        let mut pending = vec![Step::Node(id, None)];
+        while let Some(step) = pending.pop() {
+            let (original, copy) = match step {
+                Step::Content(original, copy) => (original, copy),
+                Step::Node(original, parent) => {
+                    let node = self
+                        .get(original)
+                        .ok_or(TreeError::NodeNotFound(original))?;
+                    let (tag, attributes, style_props) = (
+                        node.tag_name.clone(),
+                        node.attributes.clone(),
+                        node.style_props.clone(),
+                    );
+                    let copy = self.create_node(tag)?;
+                    let target = self.node_mut(copy)?;
+                    target.attributes = attributes;
+                    target.style_props = style_props;
+                    if let Some(parent) = parent {
+                        self.append_child(parent, copy)?;
+                    }
+                    (original, copy)
+                }
+            };
             let node = self
                 .get(original)
                 .ok_or(TreeError::NodeNotFound(original))?;
-            let (tag, attributes, style_props, children) = (
-                node.tag_name.clone(),
-                node.attributes.clone(),
-                node.style_props.clone(),
-                node.children.clone(),
-            );
-            let copy = self.create_node(tag.clone())?;
-            let target = self.node_mut(copy)?;
-            target.attributes = attributes;
-            target.style_props = style_props;
-            made.push((original, copy, tag));
-            if let Some(parent) = parent {
-                self.append_child(parent, copy)?;
-            }
+            made.push((original, copy, node.tag_name.clone()));
+            let (children, content) = (node.children.clone(), node.content);
             if deep {
-                pending.extend(children.into_iter().rev().map(|child| (child, Some(copy))));
+                pending.extend(
+                    children
+                        .into_iter()
+                        .rev()
+                        .map(|child| Step::Node(child, Some(copy))),
+                );
+            }
+            if let Some(content) = content {
+                let fresh = self
+                    .template_content(copy)
+                    .ok_or(TreeError::NodeNotFound(copy))?;
+                pending.push(Step::Content(content, fresh));
             }
         }
         Ok(made)
     }
+}
+
+/// A node `clone_subtree` still has to copy: an ordinary node with the copy of its parent, or a
+/// template content with the content its template copy made.
+enum Step {
+    Node(NodeId, Option<NodeId>),
+    Content(NodeId, NodeId),
 }
 
 #[cfg(test)]
@@ -517,5 +550,99 @@ mod tests {
             VirtualTree::new().clone_subtree(4, true),
             Err(TreeError::NodeNotFound(4))
         );
+    }
+
+    #[test]
+    fn releasing_the_content_leaves_it_unswept() {
+        let mut tree = VirtualTree::new();
+        let template = node(&mut tree, "template");
+        let content = tree.template_content(template).unwrap();
+        tree.hold(content).unwrap();
+
+        tree.release(content);
+
+        assert!(!tree.orphans.contains(&content));
+    }
+
+    #[test]
+    fn sweeping_a_template_frees_its_content_and_the_nodes_in_it() {
+        let mut tree = VirtualTree::new();
+        let template = node(&mut tree, "template");
+        let content = tree.template_content(template).unwrap();
+        let inner = node(&mut tree, "span");
+        tree.append_child(content, inner).unwrap();
+
+        let mut freed = tree.sweep();
+        freed.sort_unstable();
+
+        assert_eq!(freed, [template, content, inner]);
+        assert!(tree.get(content).is_none());
+    }
+
+    #[test]
+    fn destroying_the_content_frees_nothing() {
+        let mut tree = VirtualTree::new();
+        let template = node(&mut tree, "template");
+        let content = tree.template_content(template).unwrap();
+
+        assert!(tree.destroy_node(content).is_empty());
+        assert!(tree.get(content).is_some());
+    }
+
+    #[test]
+    fn a_shallow_clone_of_a_template_has_a_fresh_empty_content() {
+        let mut tree = VirtualTree::new();
+        let template = node(&mut tree, "template");
+        let content = tree.template_content(template).unwrap();
+        let inner = node(&mut tree, "span");
+        tree.append_child(content, inner).unwrap();
+
+        let made = tree.clone_subtree(template, false).unwrap();
+
+        let tags: Vec<&str> = made.iter().map(|(_, _, tag)| tag.as_str()).collect();
+        assert_eq!(tags, ["template", FRAGMENT_TAG]);
+        let copy = made[0].1;
+        assert_eq!(tree.template_content(copy), Some(made[1].1));
+        assert_ne!(made[1].1, content);
+        assert!(children(&tree, made[1].1).is_empty());
+    }
+
+    #[test]
+    fn a_deep_clone_of_a_template_lists_its_content_before_its_children() {
+        let mut tree = VirtualTree::new();
+        let template = node(&mut tree, "template");
+        let content = tree.template_content(template).unwrap();
+        let (inner, own) = (node(&mut tree, "span"), node(&mut tree, "b"));
+        tree.append_child(content, inner).unwrap();
+        tree.append_child(template, own).unwrap();
+
+        let made = tree.clone_subtree(template, true).unwrap();
+
+        let tags: Vec<&str> = made.iter().map(|(_, _, tag)| tag.as_str()).collect();
+        assert_eq!(tags, ["template", FRAGMENT_TAG, "span", "b"]);
+        let copies: Vec<NodeId> = made.iter().map(|(_, copy, _)| *copy).collect();
+        assert_eq!(children(&tree, copies[1]), [copies[2]]);
+        assert_eq!(children(&tree, copies[0]), [copies[3]]);
+    }
+
+    #[test]
+    fn a_deep_clone_copies_the_content_of_a_template_in_a_content() {
+        let mut tree = VirtualTree::new();
+        let outer = node(&mut tree, "template");
+        let outer_content = tree.template_content(outer).unwrap();
+        let nested = node(&mut tree, "template");
+        let nested_content = tree.template_content(nested).unwrap();
+        let inner = node(&mut tree, "span");
+        tree.append_child(outer_content, nested).unwrap();
+        tree.append_child(nested_content, inner).unwrap();
+
+        let made = tree.clone_subtree(outer, true).unwrap();
+
+        let tags: Vec<&str> = made.iter().map(|(_, _, tag)| tag.as_str()).collect();
+        assert_eq!(
+            tags,
+            ["template", FRAGMENT_TAG, "template", FRAGMENT_TAG, "span"]
+        );
+        assert_eq!(children(&tree, made[3].1), [made[4].1]);
     }
 }
