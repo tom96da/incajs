@@ -11,7 +11,7 @@ use inca_node::NodeId;
 use rquickjs::{Class, Ctx, Exception, Result as JsResult, Value};
 
 use super::listeners::{deliver, end_dispatch};
-use super::{IncaEvent, listened, next_event_id, path_from, run, script_walk, targets_of};
+use super::{IncaEvent, Walk, listened, next_event_id, path_from, run, script_walk, targets_of};
 use crate::EventTargetId;
 use crate::bindings::Host;
 
@@ -91,6 +91,27 @@ pub(crate) fn click(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, target: NodeId) {
         run(ctx, host, &walk, next_event_id(host));
     }
     host.borrow_mut().clicking.remove(&target);
+}
+
+/// Fires `blur` and then `focusout` at `target`, the focused node that is about to leave the
+/// tree. Both events carry no `relatedTarget`.
+pub(crate) fn lose_focus(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, target: NodeId) {
+    let payload = EventPayload::Focus {
+        related_target: None,
+    };
+    for name in ["blur", "focusout"] {
+        let walk = Walk {
+            name,
+            flags: crate::dispatch::spec_of(name).flags,
+            target: EventTargetId::Node(target),
+            cut: &[],
+            payload: &payload,
+            trusted: true,
+        };
+        if listened(&host.borrow(), walk.name, walk.flags, walk.target, walk.cut) {
+            run(ctx, host, &walk, next_event_id(host));
+        }
+    }
 }
 
 #[cfg(test)]
@@ -665,6 +686,70 @@ mod tests {
                 ["parent", parent, 3]
             ])
         );
+    }
+
+    #[test]
+    fn lose_focus_fires_trusted_blur_then_focusout_at_the_target() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, _, child] = tree_of_three(&host);
+        for event in ["blur", "focusout"] {
+            listen(
+                &dispatcher,
+                child,
+                event,
+                "(e) => out.push([e.type, e.isTrusted, e.target])",
+            );
+        }
+
+        dispatcher
+            .engine
+            .with(|ctx| super::lose_focus(&ctx, &host, child));
+
+        assert_eq!(
+            read_out(&dispatcher),
+            serde_json::json!([["blur", true, child], ["focusout", true, child]])
+        );
+    }
+
+    #[test]
+    fn lose_focus_gives_both_events_no_related_target() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, _, child] = tree_of_three(&host);
+        for event in ["blur", "focusout"] {
+            listen(
+                &dispatcher,
+                child,
+                event,
+                "(e) => out.push(e.relatedTarget)",
+            );
+        }
+
+        dispatcher
+            .engine
+            .with(|ctx| super::lose_focus(&ctx, &host, child));
+
+        assert_eq!(read_out(&dispatcher), serde_json::json!([null, null]));
+    }
+
+    #[test]
+    fn lose_focus_reaches_the_document_with_focusout_only() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = node_under_root(&host);
+        for event in ["blur", "focusout"] {
+            listen_global(
+                &dispatcher,
+                "$document",
+                event,
+                false,
+                "(e) => out.push(e.type)",
+            );
+        }
+
+        dispatcher
+            .engine
+            .with(|ctx| super::lose_focus(&ctx, &host, node));
+
+        assert_eq!(read_out(&dispatcher), serde_json::json!(["focusout"]));
     }
 
     #[test]

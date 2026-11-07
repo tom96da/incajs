@@ -77,17 +77,23 @@ pub(super) fn set_style<'js>(
         if is_display {
             host.mark_focus_dirty(node_id);
         }
-        if let Some(warning) = warning
-            && host
-                .style_warned
-                .entry(node_id)
-                .or_default()
-                .insert(warning.clone())
-        {
-            let tag = host.tree.get(node_id).map_or("", VirtualNode::tag_name);
-            (host.warn)(&format!("node {node_id} ({tag}): {warning}"));
+        if let Some(warning) = warning {
+            print_style_warning(&mut host, node_id, &warning);
         }
         Ok(())
+    }
+}
+
+/// Prints the `warning` of a style of `node_id` through `Host::warn`, once for each node and line.
+pub(super) fn print_style_warning(host: &mut Host, node_id: NodeId, warning: &str) {
+    if host
+        .style_warned
+        .entry(node_id)
+        .or_default()
+        .insert(warning.to_owned())
+    {
+        let tag = host.tree.get(node_id).map_or("", VirtualNode::tag_name);
+        (host.warn)(&format!("node {node_id} ({tag}): {warning}"));
     }
 }
 

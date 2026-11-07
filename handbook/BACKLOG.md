@@ -1607,3 +1607,12 @@ A fixed entry is deleted and its ID is never reused.
   nesting cap, the parser puts the new element inside the furthest block, and Chromium puts it
   beside the parent of the block. The deepest level is the same. Fix: follow the placement of
   Chromium for these repairs in the depth bookkeeping of the parser.
+
+- **B-293 Only the HTML members fire `blur` and `focusout` when they remove the focus**
+  `Units: bridge · Size: M · Impact: Low`
+
+  Chromium fires `blur` and `focusout` at the focused element when its removal takes it out of the
+  document. `innerHTML` and `outerHTML` fire them. `removeChild()`, `replaceChild()`, the
+  `textContent` setter and the moves of `appendChild()` drop the focus silently. Fix: one shared
+  step before the tree change that every mutation native calls, then drop the line about
+  `removeChild()` and `replaceChild()` from `elements.md`.
