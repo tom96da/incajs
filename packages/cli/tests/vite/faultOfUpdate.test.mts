@@ -7,7 +7,6 @@ import { describe, expect, it } from "vitest";
 
 import * as adapterCore from "../../src/adapterCore.mts";
 import { faultOfUpdate } from "../../src/vite/hmr.mts";
-import { UNSUPPORTED } from "../../src/vite/unsupported.mts";
 
 /** The fault with color removed from its stack. */
 function plain(error: Parameters<typeof faultOfUpdate>[1]) {
@@ -90,11 +89,11 @@ describe("faultOfUpdate", () => {
   });
 
   it("reports the failure unsupported.mts raises the way a rebuild does", () => {
-    const feature = UNSUPPORTED[0]!;
-    const message = `${feature.code}: App.vue uses ${feature.name}, unsupported for now: ${feature.hint}`;
+    const code = "ERR_INCA_TEST_ALPHA";
+    const message = `${code}: App.vue uses an alpha block, unsupported for now: use a beta block`;
     const fault = plain({ message, stack: "at x" });
 
-    expect(fault.code).toBe(feature.code);
+    expect(fault.code).toBe(code);
     expect(fault.message).toBe(adapterCore.bundlerFault(message).message);
     expect(fault.message).not.toContain("ERR_INCA");
     expect(fault.stack).toBe("at x");

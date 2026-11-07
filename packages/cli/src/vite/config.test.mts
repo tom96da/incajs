@@ -27,7 +27,7 @@ function optionsFor(mode: ResolveConfigOptions["mode"]): ResolveConfigOptions {
   return {
     core,
     frontend: ["alpha-pkg", "alpha"],
-    integration: { plugins: () => [alphaPlugin], unsupported: [] },
+    integration: { plugins: () => [alphaPlugin], unsupported: [], styleModule: "alpha-style" },
     entry: "/unused/src/main.ts",
     outDir: "/unused/dist",
     mode,

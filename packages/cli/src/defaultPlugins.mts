@@ -21,7 +21,7 @@ export const defaultFrontend: Frontend = {
 };
 
 /**
- * The Vue plugin of Vite and the features of Vue that a build refuses.
+ * The Vue plugin of Vite and the module that applies the stylesheets of a build.
  * @param runtimeModuleName - the module that compiled templates import their helpers from
  * @returns the integration the Vite adapter takes
  */
@@ -35,14 +35,8 @@ export function vueViteIntegration(runtimeModuleName: string): ViteIntegration {
         },
       }),
     ],
-    unsupported: [
-      {
-        code: "ERR_INCA_UNSUPPORTED_STYLE",
-        name: "a <style> block",
-        matches: (id) => id.includes("vue&type=style"),
-        hint: "the build does not convert a stylesheet yet. use a :style binding instead",
-      },
-    ],
+    unsupported: [],
+    styleModule: "incajs/style",
   };
 }
 

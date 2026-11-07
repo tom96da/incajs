@@ -5,6 +5,8 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Writable } from "node:stream";
 
+import dedent from "ts-dedent";
+
 import { vueViteIntegration } from "../../src/defaultPlugins.mts";
 
 export interface ScratchApp {
@@ -45,12 +47,22 @@ export async function writeIncajs(
     path.join(dir, "package.json"),
     JSON.stringify({
       name: pkg,
+      exports: { "./style": "./style.mjs" },
       incajs: {
         frontends: Object.fromEntries(
           Object.entries(frontends).map(([name, peers]) => [name, { peers }]),
         ),
       },
     }),
+  );
+  await writeFile(
+    path.join(dir, "style.mjs"),
+    dedent`
+      export function updateStyle(key, css) {
+        console.debug(key, css);
+      }
+      export function removeStyle() {}
+    `,
   );
 }
 

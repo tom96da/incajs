@@ -19,7 +19,7 @@ export interface ResolveConfigOptions {
   core: AdapterCore;
   /** The frontend to bundle. Its package lists the peers the app must install. */
   frontend: FrontendId;
-  /** The frontend's Vite plugins and refused features. */
+  /** The frontend's Vite plugins, style module and refused features. */
   integration: ViteIntegration;
   /** The app's own entry point. It may import the files of the frontend. */
   entry: string;
@@ -53,9 +53,8 @@ export interface ResolveConfigOptions {
  * Builds the Vite config shared by `watch` and `build`, adding the plugins of the
  * frontend's integration.
  *
- * An import the entry doesn't inline (a dynamic `import()`, or a
- * stylesheet) lands as its own chunk or asset alongside
- * the entry, named by `chunkFileNames`/`assetFileNames` below.
+ * An import the entry doesn't inline (a dynamic `import()`) lands as its own chunk alongside
+ * the entry, named by `chunkFileNames` below.
  */
 export function resolveViteConfig({
   core,
@@ -93,13 +92,16 @@ export function resolveViteConfig({
       "process.env.NODE_ENV": JSON.stringify(mode),
     },
     plugins: [
-      ...integrationPlugins(core, frontend, integration),
+      ...integrationPlugins(core, frontend, integration, root),
       emitConfig(runtimeConfig),
       captureOutput(core, onOutput),
     ],
     build: {
+      // Library mode takes a JS entry. App mode would need an HTML entry.
       lib: {
         entry,
+        // Library mode names a css file even for empty css and throws when the package has no name.
+        cssFileName: "inca-style",
         formats: ["es"],
         fileName: () => BUNDLE_FILE_NAME,
       },

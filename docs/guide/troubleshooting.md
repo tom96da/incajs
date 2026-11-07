@@ -42,6 +42,13 @@ the stack limit throws `RangeError: Maximum call stack size exceeded`. The
 engine can throw `null` where it cannot allocate an error object, and the host
 reports that as `null. the engine also throws null when it runs out of memory`.
 
+## Why does a rule of my stylesheet have no effect? <Badge type="warning" text="unreleased"/>
+
+The host reads a subset of CSS. It drops what it cannot read and prints a line
+that starts with `<style>:` in the terminal of `inca dev`, naming the rule or
+the declaration. See [`style`](../reference/elements#style) for what has no
+effect.
+
 ## Why doesn't my content scroll when it is taller than the window?
 
 Content taller than the window is cut off at the window edge. Put the content

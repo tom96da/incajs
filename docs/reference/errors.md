@@ -163,35 +163,6 @@ code. The message gives the exit code or the signal.
 The host's own output, printed before the exit, says what went wrong. Report
 it as a bug if your app didn't cause it.
 
-## `ERR_INCA_UNSUPPORTED_STYLE`
-
-A `.vue` file has a `<style>` block, which isn't supported yet. The build
-does not turn the block into a [`style` element](./elements#style), so it
-would have no effect at runtime. The build fails with this error.
-
-Use a `:style` binding instead.
-
-Not supported yet:
-
-```vue
-<style>
-.box { color: red; }
-</style>
-```
-
-Use instead:
-
-```vue
-<template>
-  <div :style="{ color: '#ff0000' }">…</div>
-</template>
-```
-
-## `ERR_INCA_UNSUPPORTED_STYLESHEET`
-
-Something imports a `.css` (or `.scss`, `.less`, …) file. Same reason as
-above. See `ERR_INCA_UNSUPPORTED_STYLE`.
-
 ## `ERR_INCA_PEER_NOT_FOUND`
 
 The app needs a package that `incajs` lists as a peer of its frontend,
