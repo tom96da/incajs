@@ -117,6 +117,27 @@ fn removing_the_focused_node_or_an_ancestor_drops_focus_at_the_call(
     assert_dropped(&out);
 }
 
+#[gpui_cases]
+#[gpui::test]
+#[case::the_focused_node(false)]
+#[case::an_ancestor(true)]
+fn replacing_the_focused_node_or_an_ancestor_drops_focus_at_the_call(
+    cx: &mut TestAppContext,
+    #[case] nested: bool,
+) {
+    let out = focus_then_run(cx, nested, |ids| {
+        format!(
+            r"
+            const n = __inca_native__;
+            n.replaceChild({}, n.createNode('div'), {});
+            ",
+            ids.parent, ids.top
+        )
+    });
+
+    assert_dropped(&out);
+}
+
 #[gpui::test]
 fn removing_an_unrelated_node_keeps_focus(cx: &mut TestAppContext) {
     let out = focus_then_run(cx, false, |ids| {
@@ -177,7 +198,17 @@ fn moving_an_unrelated_node_keeps_focus(cx: &mut TestAppContext, #[case] anchore
 
 #[gpui::test]
 fn removing_from_a_parent_that_is_not_the_parent_keeps_focus(cx: &mut TestAppContext) {
-    let out = focus_then_run(cx, false, |ids| native("removeChild", &[ids.root, ids.top]));
+    let out = focus_then_run(cx, false, |ids| {
+        format!(
+            r"
+            try {{
+                {};
+            }} catch (e) {{
+            }}
+            ",
+            native("removeChild", &[ids.root, ids.top])
+        )
+    });
 
     assert_eq!(out.at_call, Some(out.leaf));
     assert_eq!(out.after_frame, Some(out.leaf));

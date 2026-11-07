@@ -1,96 +1,84 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Attaching, moving and detaching nodes.
+//! Attaching, moving, replacing and detaching nodes.
 
 use super::{NodeId, TreeError, VirtualTree};
 
 impl VirtualTree {
-    /// Appends `child_id` to `parent_id`'s children. Thin wrapper over
-    /// [`insert_before`](Self::insert_before) with no anchor.
+    /// Appends `node_id` to `parent_id`'s children. Thin wrapper over
+    /// [`insert_before`](Self::insert_before) with no reference child.
     ///
     /// # Errors
     ///
-    /// Same as [`insert_before`](Self::insert_before), with no anchor to
-    /// fail on.
-    pub fn append_child(&mut self, parent_id: NodeId, child_id: NodeId) -> Result<(), TreeError> {
-        self.insert_before(parent_id, child_id, None)
+    /// Same as [`insert_before`](Self::insert_before), with no reference child to fail on.
+    pub fn append_child(&mut self, parent_id: NodeId, node_id: NodeId) -> Result<usize, TreeError> {
+        self.insert_before(parent_id, node_id, None)
     }
 
-    /// Inserts `child_id` into `parent_id`'s children, before `anchor_id` if
-    /// given, or at the end if `None`. `child_id` is detached from whatever
-    /// it was attached to first, so this both attaches and moves. A node
-    /// never has two parents.
+    /// Inserts `node_id` into `parent_id`'s children, before `reference_id` if given, or at the
+    /// end if `None`, and returns the position of the first inserted child among the children of
+    /// `parent_id`. `node_id` is detached from its old parent first, so this both attaches and
+    /// moves. A fragment moves its children in order and stays empty and parentless. An empty
+    /// fragment changes nothing and returns the position it would take.
     ///
-    /// If `anchor_id` is `child_id` itself and the child is already in
-    /// `parent_id`, nothing changes.
-    ///
-    /// If `anchor_id` names a real node that isn't (or is no longer) among
-    /// `parent_id`'s children, this falls back to appending at the end, same
-    /// as an absent `remove_child` target. Only a truly
-    /// unknown/never-allocated `anchor_id` is an error.
+    /// A reference child equal to `node_id` stands for the next sibling of `node_id`.
     ///
     /// # Errors
     ///
-    /// Returns [`TreeError::NodeNotFound`] if `parent_id` or `child_id`
-    /// names no node, or if `anchor_id` is `Some` and names no node.
-    /// Returns [`TreeError::WouldCycle`] if `child_id` is `parent_id` or one
-    /// of its ancestors.
+    /// All checks run before the first change. The first one that fails returns:
+    ///
+    /// - [`TreeError::NodeNotFound`] if `parent_id`, `node_id` or `reference_id` names no node,
+    ///   checked in that order.
+    /// - [`TreeError::LeafParent`] if `parent_id` is a text node or a comment.
+    /// - [`TreeError::WouldCycle`] if `node_id` is `parent_id` or one of its ancestors.
+    /// - [`TreeError::NotAChild`] if `reference_id` is not a child of `parent_id`.
+    /// - [`TreeError::RootMoved`] if `node_id` is the root.
     pub fn insert_before(
         &mut self,
         parent_id: NodeId,
-        child_id: NodeId,
-        anchor_id: Option<NodeId>,
-    ) -> Result<(), TreeError> {
-        if !self.nodes.contains_key(&child_id) {
-            return Err(TreeError::NodeNotFound(child_id));
-        }
-        if let Some(anchor_id) = anchor_id
-            && !self.nodes.contains_key(&anchor_id)
-        {
-            return Err(TreeError::NodeNotFound(anchor_id));
-        }
-        if !self.nodes.contains_key(&parent_id) {
-            return Err(TreeError::NodeNotFound(parent_id));
-        }
-        if self.is_self_or_ancestor(child_id, parent_id) {
-            return Err(TreeError::WouldCycle(child_id));
-        }
-
-        // A child that is its own anchor stays where it is.
-        if anchor_id == Some(child_id)
-            && self
-                .nodes
-                .get(&child_id)
-                .is_some_and(|c| c.parent == Some(parent_id))
-        {
-            return Ok(());
-        }
-
-        self.detach(child_id);
-
-        let parent = self.node_mut(parent_id)?;
-        let index = anchor_id
-            .and_then(|anchor_id| parent.children.iter().position(|&id| id == anchor_id))
-            .unwrap_or(parent.children.len());
-        parent.children.insert(index, child_id);
-        if let Some(child) = self.nodes.get_mut(&child_id) {
-            child.parent = Some(parent_id);
-        }
-        self.orphans.remove(&child_id);
-        Ok(())
+        node_id: NodeId,
+        reference_id: Option<NodeId>,
+    ) -> Result<usize, TreeError> {
+        self.check_insertion(parent_id, node_id, reference_id)?;
+        let reference = match reference_id {
+            Some(reference) if reference == node_id => self.next_sibling(node_id),
+            other => other,
+        };
+        Ok(self.place(parent_id, self.nodes_to_move(node_id), reference))
     }
 
-    /// Whether `candidate` is `of` itself or sits above it.
-    fn is_self_or_ancestor(&self, candidate: NodeId, of: NodeId) -> bool {
-        let mut current = Some(of);
-        while let Some(id) = current {
-            if id == candidate {
-                return true;
-            }
-            current = self.nodes.get(&id).and_then(|node| node.parent);
+    /// Detaches `nodes` and inserts them in order before `reference`, or last without one.
+    /// Returns the position of the first of them among the children of `parent_id`.
+    pub(super) fn place(
+        &mut self,
+        parent_id: NodeId,
+        nodes: Vec<NodeId>,
+        reference: Option<NodeId>,
+    ) -> usize {
+        for &id in &nodes {
+            self.detach(id);
         }
-        false
+        let Some(parent) = self.nodes.get(&parent_id) else {
+            return 0;
+        };
+        let index = reference
+            .and_then(|reference| parent.children.iter().position(|&id| id == reference))
+            .unwrap_or(parent.children.len());
+        if nodes.is_empty() {
+            return index;
+        }
+        self.generation += 1;
+        if let Some(parent) = self.nodes.get_mut(&parent_id) {
+            parent.children.splice(index..index, nodes.iter().copied());
+        }
+        for id in nodes {
+            if let Some(node) = self.nodes.get_mut(&id) {
+                node.parent = Some(parent_id);
+            }
+            self.orphans.remove(&id);
+        }
+        index
     }
 
     /// Unlinks `id` from its parent, if it has one. Leaves the node itself
@@ -108,26 +96,56 @@ impl VirtualTree {
         }
     }
 
-    /// Unlinks `child_id` from `parent_id`'s children, if present. `child_id`
-    /// not being (or no longer being) a child of `parent_id` is a no-op, not
-    /// an error. Only an unknown `parent_id` is. The child node keeps its own
-    /// children and, unless held, is an orphan until it is inserted again.
+    /// Unlinks `child_id` from `parent_id`'s children. The child node keeps its own children and,
+    /// unless held, is an orphan until it is inserted again. An unknown `child_id` changes
+    /// nothing.
     ///
     /// # Errors
     ///
-    /// Returns [`TreeError::NodeNotFound`] if `parent_id` names no node.
+    /// Returns [`TreeError::NodeNotFound`] if `parent_id` names no node, and
+    /// [`TreeError::NotAChild`] if `child_id` names a node that is not a child of `parent_id`.
     pub fn remove_child(&mut self, parent_id: NodeId, child_id: NodeId) -> Result<(), TreeError> {
-        let parent = self.node_mut(parent_id)?;
-        let before = parent.children.len();
-        parent.children.retain(|&id| id != child_id);
-        if parent.children.len() == before {
-            return Ok(());
+        let parent = self
+            .nodes
+            .get(&parent_id)
+            .ok_or(TreeError::NodeNotFound(parent_id))?;
+        if !parent.children.contains(&child_id) {
+            if !self.nodes.contains_key(&child_id) {
+                return Ok(());
+            }
+            return Err(TreeError::NotAChild {
+                parent: parent_id,
+                child: child_id,
+            });
         }
-        if let Some(child) = self.nodes.get_mut(&child_id) {
-            child.parent = None;
-        }
+        self.detach(child_id);
         self.orphan_if_free(child_id);
         Ok(())
+    }
+
+    /// Replaces `child_id` among the children of `parent_id` with `node_id` and returns the
+    /// position of the first inserted child. `child_id` leaves the tree with its subtree and is an
+    /// orphan unless held. `node_id` may be a descendant of `child_id`. A fragment moves its
+    /// children.
+    ///
+    /// # Errors
+    ///
+    /// The checks and their order are those of [`insert_before`](Self::insert_before), with
+    /// `child_id` as the node that has to be a child of `parent_id`.
+    pub fn replace_child(
+        &mut self,
+        parent_id: NodeId,
+        node_id: NodeId,
+        child_id: NodeId,
+    ) -> Result<usize, TreeError> {
+        self.check_insertion(parent_id, node_id, Some(child_id))?;
+        let mut reference = self.next_sibling(child_id);
+        if reference == Some(node_id) {
+            reference = self.next_sibling(node_id);
+        }
+        self.detach(child_id);
+        self.orphan_if_free(child_id);
+        Ok(self.place(parent_id, self.nodes_to_move(node_id), reference))
     }
 }
 
@@ -135,204 +153,418 @@ impl VirtualTree {
 mod tests {
     #![allow(clippy::unwrap_used)]
 
+    use rstest::rstest;
+
     use super::*;
+    use crate::tests::{Fixture, children, family, node, not_a_child, text};
+    use crate::tree::{FRAGMENT_TAG, TEXT_TAG};
 
     #[test]
     fn append_child_keeps_the_call_order() {
         let mut tree = VirtualTree::new();
-        let parent = tree.create_node("div").unwrap();
-        let a = tree.create_node("span").unwrap();
-        let b = tree.create_node("span").unwrap();
-        let c = tree.create_node("span").unwrap();
+        let (parent, kids) = family(&mut tree, 3);
 
-        tree.append_child(parent, a).unwrap();
-        tree.append_child(parent, b).unwrap();
-        tree.append_child(parent, c).unwrap();
+        assert_eq!(children(&tree, parent), kids);
+    }
 
-        assert_eq!(tree.get(parent).unwrap().children(), &[a, b, c]);
+    #[rstest]
+    #[case::start(0, 0)]
+    #[case::middle(2, 2)]
+    #[case::end_by_none(3, 3)]
+    fn insert_before_returns_the_position(#[case] before: usize, #[case] expected: usize) {
+        let mut tree = VirtualTree::new();
+        let (parent, kids) = family(&mut tree, 3);
+        let extra = node(&mut tree, "span");
+        let reference = kids.get(before).copied();
+
+        let position = tree.insert_before(parent, extra, reference).unwrap();
+
+        assert_eq!(position, expected);
+        assert_eq!(children(&tree, parent)[expected], extra);
     }
 
     #[test]
-    fn insert_before_places_a_node_at_the_start_middle_and_end() {
+    fn insert_before_counts_the_position_without_the_moved_sibling() {
         let mut tree = VirtualTree::new();
-        let parent = tree.create_node("div").unwrap();
-        let a = tree.create_node("span").unwrap();
-        let b = tree.create_node("span").unwrap();
-        let c = tree.create_node("span").unwrap();
+        let (parent, kids) = family(&mut tree, 4);
 
-        tree.insert_before(parent, b, None).unwrap(); // end: [b]
-        tree.insert_before(parent, a, Some(b)).unwrap(); // start: [a, b]
-        tree.insert_before(parent, c, None).unwrap(); // end: [a, b, c]
+        let position = tree.insert_before(parent, kids[0], Some(kids[3])).unwrap();
 
-        assert_eq!(tree.get(parent).unwrap().children(), &[a, b, c]);
-
-        let d = tree.create_node("span").unwrap();
-        tree.insert_before(parent, d, Some(b)).unwrap(); // middle: [a, d, b, c]
-        assert_eq!(tree.get(parent).unwrap().children(), &[a, d, b, c]);
-    }
-
-    #[test]
-    fn insert_before_itself_is_a_no_op() {
-        let mut tree = VirtualTree::new();
-        let parent = tree.create_node("div").unwrap();
-        let a = tree.create_node("span").unwrap();
-        let b = tree.create_node("span").unwrap();
-        tree.insert_before(parent, a, None).unwrap();
-        tree.insert_before(parent, b, None).unwrap();
-
-        tree.insert_before(parent, a, Some(a)).unwrap();
-
-        assert_eq!(tree.get(parent).unwrap().children(), &[a, b]);
-    }
-
-    #[test]
-    fn insert_before_unknown_anchor_falls_back_to_append() {
-        let mut tree = VirtualTree::new();
-        let parent = tree.create_node("div").unwrap();
-        let a = tree.create_node("span").unwrap();
-        let stray_anchor = tree.create_node("span").unwrap(); // real node, never attached here
-
-        tree.insert_before(parent, a, Some(stray_anchor)).unwrap();
-
-        assert_eq!(tree.get(parent).unwrap().children(), &[a]);
-    }
-
-    #[test]
-    fn insert_before_unknown_ids_error() {
-        let mut tree = VirtualTree::new();
-        let parent = tree.create_node("div").unwrap();
-        let child = tree.create_node("span").unwrap();
-
+        assert_eq!(position, 2);
         assert_eq!(
-            tree.insert_before(999, child, None).unwrap_err(),
-            TreeError::NodeNotFound(999)
-        );
-        assert_eq!(
-            tree.insert_before(parent, 999, None).unwrap_err(),
-            TreeError::NodeNotFound(999)
-        );
-        assert_eq!(
-            tree.insert_before(parent, child, Some(999)).unwrap_err(),
-            TreeError::NodeNotFound(999)
+            children(&tree, parent),
+            [kids[1], kids[2], kids[0], kids[3]]
         );
     }
 
     #[test]
     fn a_node_has_one_parent_at_a_time() {
         let mut tree = VirtualTree::new();
-        let first = tree.create_node("div").unwrap();
-        let second = tree.create_node("div").unwrap();
-        let child = tree.create_node("span").unwrap();
+        let (first, kids) = family(&mut tree, 1);
+        let second = node(&mut tree, "div");
 
-        tree.append_child(first, child).unwrap();
-        tree.append_child(second, child).unwrap();
+        tree.append_child(second, kids[0]).unwrap();
 
-        assert!(
-            tree.get(first).unwrap().children().is_empty(),
-            "attaching elsewhere must detach from the previous parent"
-        );
-        assert_eq!(tree.get(second).unwrap().children(), &[child]);
-        assert_eq!(tree.get(child).unwrap().parent(), Some(second));
-    }
-
-    #[test]
-    fn attaching_a_node_under_itself_is_refused() {
-        let mut tree = VirtualTree::new();
-        let node = tree.create_node("div").unwrap();
-
-        assert_eq!(
-            tree.append_child(node, node).unwrap_err(),
-            TreeError::WouldCycle(node)
-        );
-    }
-
-    #[test]
-    fn attaching_an_ancestor_under_its_descendant_is_refused() {
-        let mut tree = VirtualTree::new();
-        let grandparent = tree.create_node("div").unwrap();
-        let parent = tree.create_node("div").unwrap();
-        let child = tree.create_node("div").unwrap();
-        tree.append_child(grandparent, parent).unwrap();
-        tree.append_child(parent, child).unwrap();
-
-        assert_eq!(
-            tree.append_child(child, grandparent).unwrap_err(),
-            TreeError::WouldCycle(grandparent),
-            "a cycle here would leave the render walk with no end"
-        );
-        assert_eq!(tree.get(grandparent).unwrap().children(), &[parent]);
+        assert!(children(&tree, first).is_empty());
+        assert_eq!(children(&tree, second), kids);
+        assert_eq!(tree.get(kids[0]).unwrap().parent(), Some(second));
     }
 
     #[test]
     fn moving_a_child_within_one_parent_reorders_it() {
         let mut tree = VirtualTree::new();
-        let parent = tree.create_node("div").unwrap();
-        let a = tree.create_node("span").unwrap();
-        let b = tree.create_node("span").unwrap();
-        tree.append_child(parent, a).unwrap();
-        tree.append_child(parent, b).unwrap();
+        let (parent, kids) = family(&mut tree, 2);
 
-        tree.insert_before(parent, b, Some(a)).unwrap();
+        tree.insert_before(parent, kids[1], Some(kids[0])).unwrap();
+
+        assert_eq!(children(&tree, parent), [kids[1], kids[0]]);
+    }
+
+    #[rstest]
+    #[case::node_last(1)]
+    #[case::node_first(0)]
+    fn insert_before_itself_leaves_the_tree_unchanged(#[case] index: usize) {
+        let mut tree = VirtualTree::new();
+        let (parent, kids) = family(&mut tree, 2);
+
+        let position = tree
+            .insert_before(parent, kids[index], Some(kids[index]))
+            .unwrap();
+
+        assert_eq!(position, index);
+        assert_eq!(children(&tree, parent), kids);
+    }
+
+    #[test]
+    fn inserting_a_fragment_moves_its_children_in_order() {
+        let mut tree = VirtualTree::new();
+        let (parent, kids) = family(&mut tree, 1);
+        let fragment = node(&mut tree, FRAGMENT_TAG);
+        let (a, b) = (node(&mut tree, "i"), node(&mut tree, "b"));
+        tree.append_child(fragment, a).unwrap();
+        tree.append_child(fragment, b).unwrap();
+
+        let position = tree.insert_before(parent, fragment, Some(kids[0])).unwrap();
+
+        assert_eq!(position, 0);
+        assert_eq!(children(&tree, parent), [a, b, kids[0]]);
+        assert!(children(&tree, fragment).is_empty());
+        assert_eq!(tree.get(a).unwrap().parent(), Some(parent));
+        assert_eq!(tree.get(fragment).unwrap().parent(), None);
+    }
+
+    #[test]
+    fn a_fragment_never_gets_a_parent() {
+        let mut tree = VirtualTree::new();
+        let (parent, _) = family(&mut tree, 1);
+        let fragment = node(&mut tree, FRAGMENT_TAG);
+
+        tree.append_child(parent, fragment).unwrap();
+
+        assert_eq!(tree.get(fragment).unwrap().parent(), None);
+        assert_eq!(children(&tree, parent).len(), 1);
+    }
+
+    #[test]
+    fn a_refused_fragment_insert_keeps_the_fragment_children() {
+        let mut tree = VirtualTree::new();
+        let fragment = node(&mut tree, FRAGMENT_TAG);
+        let inner = node(&mut tree, "div");
+        tree.append_child(fragment, inner).unwrap();
 
         assert_eq!(
-            tree.get(parent).unwrap().children(),
-            &[b, a],
-            "a move must not leave the node listed twice"
+            tree.append_child(inner, fragment).unwrap_err(),
+            TreeError::WouldCycle(fragment)
         );
+        assert_eq!(children(&tree, fragment), [inner]);
+        assert_eq!(tree.get(inner).unwrap().parent(), Some(fragment));
+    }
+
+    #[test]
+    fn inserting_an_empty_fragment_changes_nothing() {
+        let mut tree = VirtualTree::new();
+        let (parent, kids) = family(&mut tree, 2);
+        let fragment = node(&mut tree, FRAGMENT_TAG);
+        let generation = tree.generation;
+
+        let position = tree.insert_before(parent, fragment, Some(kids[1])).unwrap();
+
+        assert_eq!(position, 1);
+        assert_eq!(children(&tree, parent), kids);
+        assert_eq!(tree.generation, generation);
+    }
+
+    #[test]
+    fn a_moved_node_is_no_orphan() {
+        let mut tree = VirtualTree::new();
+        let (parent, _) = family(&mut tree, 0);
+        let fragment = node(&mut tree, FRAGMENT_TAG);
+        let (loose, inner) = (node(&mut tree, "i"), node(&mut tree, "b"));
+        tree.append_child(fragment, inner).unwrap();
+
+        tree.append_child(parent, loose).unwrap();
+        tree.append_child(parent, fragment).unwrap();
+
+        assert!(!tree.orphans.contains(&loose));
+        assert!(!tree.orphans.contains(&inner));
     }
 
     #[test]
     fn remove_child_clears_the_parent_link() {
         let mut tree = VirtualTree::new();
-        let parent = tree.create_node("div").unwrap();
-        let child = tree.create_node("span").unwrap();
-        tree.append_child(parent, child).unwrap();
+        let (parent, kids) = family(&mut tree, 1);
 
-        tree.remove_child(parent, child).unwrap();
+        tree.remove_child(parent, kids[0]).unwrap();
 
-        assert_eq!(tree.get(child).unwrap().parent(), None);
+        assert_eq!(tree.get(kids[0]).unwrap().parent(), None);
+        assert!(children(&tree, parent).is_empty());
     }
 
     #[test]
-    fn remove_child_leaves_a_link_to_a_different_parent_alone() {
+    fn remove_child_keeps_the_node_alive_as_an_orphan() {
         let mut tree = VirtualTree::new();
-        let real_parent = tree.create_node("div").unwrap();
-        let stranger = tree.create_node("div").unwrap();
-        let child = tree.create_node("span").unwrap();
-        tree.append_child(real_parent, child).unwrap();
+        let (parent, kids) = family(&mut tree, 1);
 
-        tree.remove_child(stranger, child).unwrap();
+        tree.remove_child(parent, kids[0]).unwrap();
 
-        assert_eq!(tree.get(child).unwrap().parent(), Some(real_parent));
+        assert!(tree.get(kids[0]).is_some());
+        assert!(tree.orphans.contains(&kids[0]));
+    }
+
+    #[rstest]
+    #[case::child_of_another_parent(true)]
+    #[case::parentless_node(false)]
+    fn remove_child_throws_for_a_known_node_that_is_not_a_child(#[case] has_parent: bool) {
+        let mut tree = VirtualTree::new();
+        let (parent, _) = family(&mut tree, 1);
+        let (other, others) = family(&mut tree, 1);
+        let target = if has_parent {
+            others[0]
+        } else {
+            node(&mut tree, "span")
+        };
+
+        assert_eq!(
+            tree.remove_child(parent, target).unwrap_err(),
+            not_a_child(parent, target)
+        );
+        assert_eq!(children(&tree, other), others);
+    }
+
+    #[rstest]
+    #[case::not_a_child(true)]
+    #[case::unknown_parent(false)]
+    fn a_refused_remove_child_leaves_the_generation_alone(#[case] known_parent: bool) {
+        let mut tree = VirtualTree::new();
+        let (parent, _) = family(&mut tree, 1);
+        let loose = node(&mut tree, "span");
+        let generation = tree.generation;
+
+        let (parent, child) = if known_parent {
+            (parent, loose)
+        } else {
+            (9999, 0)
+        };
+        assert!(tree.remove_child(parent, child).is_err());
+
+        assert_eq!(tree.generation, generation);
     }
 
     #[test]
-    fn detach_keeps_node_alive() {
+    fn remove_child_ignores_an_unknown_child() {
         let mut tree = VirtualTree::new();
-        let parent = tree.create_node("div").unwrap();
-        let child = tree.create_node("span").unwrap();
-        tree.append_child(parent, child).unwrap();
+        let (parent, kids) = family(&mut tree, 1);
 
-        tree.remove_child(parent, child).unwrap();
+        assert!(tree.remove_child(parent, 9999).is_ok());
+        assert_eq!(children(&tree, parent), kids);
+    }
 
-        assert!(tree.get(parent).unwrap().children().is_empty());
-        assert!(
-            tree.get(child).is_some(),
-            "detaching a child must not deallocate it"
+    #[test]
+    fn remove_child_throws_for_an_unknown_parent() {
+        let mut tree = VirtualTree::new();
+
+        assert_eq!(
+            tree.remove_child(9999, 0).unwrap_err(),
+            TreeError::NodeNotFound(9999)
         );
     }
 
     #[test]
-    fn remove_of_absent_child_is_a_no_op() {
+    fn a_fragment_with_a_style_applies_its_rule_once_moved_into_the_tree() {
+        let mut f = Fixture::new();
+        let a = f.add(f.root, "div", "a");
+        f.attr(a, "class", "a");
+        let fragment = node(&mut f.tree, FRAGMENT_TAG);
+        let style = node(&mut f.tree, "style");
+        let css = node(&mut f.tree, TEXT_TAG);
+        f.attr(css, "value", ".a { width: 1px }");
+        f.tree.append_child(style, css).unwrap();
+        f.tree.append_child(fragment, style).unwrap();
+        let inside = f.tree.computed_style(a).get("width").cloned();
+
+        f.tree.append_child(f.root, fragment).unwrap();
+
+        assert_eq!(inside, None);
+        assert_eq!(f.tree.computed_style(a).get("width"), Some(&text("1px")));
+    }
+
+    #[test]
+    fn a_loose_style_applies_its_rule_once_appended_under_the_root() {
+        let mut f = Fixture::new();
+        let a = f.add(f.root, "div", "a");
+        f.attr(a, "class", "a");
+        let style = node(&mut f.tree, "style");
+        let css = node(&mut f.tree, TEXT_TAG);
+        f.attr(css, "value", ".a { width: 1px }");
+        f.tree.append_child(style, css).unwrap();
+        let loose = f.tree.computed_style(a).get("width").cloned();
+
+        f.tree.append_child(f.root, style).unwrap();
+
+        assert_eq!(loose, None);
+        assert_eq!(f.tree.computed_style(a).get("width"), Some(&text("1px")));
+    }
+
+    #[rstest]
+    #[case::style(false)]
+    #[case::its_text(true)]
+    fn removing_a_connected_style_stops_its_rules(#[case] remove_text: bool) {
+        let mut f = Fixture::new();
+        let (style, css) = f.sheet(".a { width: 1px }");
+        let a = f.add(f.root, "div", "a");
+        f.attr(a, "class", "a");
+        let applied = f.tree.computed_style(a).get("width").cloned();
+
+        if remove_text {
+            f.tree.remove_child(style, css).unwrap();
+        } else {
+            f.tree.remove_child(f.root, style).unwrap();
+        }
+
+        assert_eq!(applied, Some(text("1px")));
+        assert_eq!(f.tree.computed_style(a).get("width"), None);
+    }
+
+    #[test]
+    fn a_replaced_child_is_an_orphan() {
         let mut tree = VirtualTree::new();
-        let parent = tree.create_node("div").unwrap();
-        let never_appended = tree.create_node("span").unwrap();
+        let (parent, kids) = family(&mut tree, 1);
+        let extra = node(&mut tree, "i");
 
-        // Absent child that exists elsewhere in the tree.
-        assert!(tree.remove_child(parent, never_appended).is_ok());
-        assert!(tree.get(parent).unwrap().children().is_empty());
+        tree.replace_child(parent, extra, kids[0]).unwrap();
 
-        // Absent child id that was never allocated at all.
-        assert!(tree.remove_child(parent, 9999).is_ok());
+        assert!(tree.orphans.contains(&kids[0]));
+    }
+
+    #[test]
+    fn replace_child_puts_the_node_at_the_position_of_the_child() {
+        let mut tree = VirtualTree::new();
+        let (parent, kids) = family(&mut tree, 3);
+        let extra = node(&mut tree, "i");
+
+        let position = tree.replace_child(parent, extra, kids[1]).unwrap();
+
+        assert_eq!(position, 1);
+        assert_eq!(children(&tree, parent), [kids[0], extra, kids[2]]);
+        assert_eq!(tree.get(kids[1]).unwrap().parent(), None);
+    }
+
+    #[test]
+    fn replace_child_with_the_child_itself_leaves_the_tree_unchanged() {
+        let mut tree = VirtualTree::new();
+        let (parent, kids) = family(&mut tree, 3);
+
+        let position = tree.replace_child(parent, kids[1], kids[1]).unwrap();
+
+        assert_eq!(position, 1);
+        assert_eq!(children(&tree, parent), kids);
+        assert!(!tree.orphans.contains(&kids[1]));
+    }
+
+    #[test]
+    fn replace_child_puts_the_next_sibling_where_the_child_was() {
+        let mut tree = VirtualTree::new();
+        let (parent, kids) = family(&mut tree, 3);
+
+        let position = tree.replace_child(parent, kids[2], kids[1]).unwrap();
+
+        assert_eq!(position, 1);
+        assert_eq!(children(&tree, parent), [kids[0], kids[2]]);
+    }
+
+    #[test]
+    fn replace_child_counts_the_position_without_an_earlier_node() {
+        let mut tree = VirtualTree::new();
+        let (parent, kids) = family(&mut tree, 3);
+
+        let position = tree.replace_child(parent, kids[0], kids[2]).unwrap();
+
+        assert_eq!(position, 1);
+        assert_eq!(children(&tree, parent), [kids[1], kids[0]]);
+    }
+
+    #[test]
+    fn replace_child_with_a_fragment_moves_its_children() {
+        let mut tree = VirtualTree::new();
+        let (parent, kids) = family(&mut tree, 2);
+        let fragment = node(&mut tree, FRAGMENT_TAG);
+        let (a, b) = (node(&mut tree, "i"), node(&mut tree, "b"));
+        tree.append_child(fragment, a).unwrap();
+        tree.append_child(fragment, b).unwrap();
+
+        let position = tree.replace_child(parent, fragment, kids[0]).unwrap();
+
+        assert_eq!(position, 0);
+        assert_eq!(children(&tree, parent), [a, b, kids[1]]);
+        assert!(children(&tree, fragment).is_empty());
+    }
+
+    #[test]
+    fn replace_child_puts_a_descendant_where_the_child_was() {
+        let mut tree = VirtualTree::new();
+        let (parent, kids) = family(&mut tree, 2);
+        let inner = node(&mut tree, "i");
+        tree.append_child(kids[0], inner).unwrap();
+
+        let position = tree.replace_child(parent, inner, kids[0]).unwrap();
+
+        assert_eq!(position, 0);
+        assert_eq!(children(&tree, parent), [inner, kids[1]]);
+        assert!(children(&tree, kids[0]).is_empty());
+        assert!(tree.orphans.contains(&kids[0]));
+    }
+
+    #[rstest]
+    #[case::child_of_another_parent("other")]
+    #[case::parentless_node("loose")]
+    #[case::fragment("fragment")]
+    fn replace_child_throws_for_a_child_that_is_not_a_child(#[case] kind: &str) {
+        let mut tree = VirtualTree::new();
+        let (parent, kids) = family(&mut tree, 1);
+        let (_, others) = family(&mut tree, 1);
+        let target = match kind {
+            "other" => others[0],
+            "loose" => node(&mut tree, "span"),
+            _ => node(&mut tree, FRAGMENT_TAG),
+        };
+        let extra = node(&mut tree, "i");
+
+        assert_eq!(
+            tree.replace_child(parent, extra, target).unwrap_err(),
+            not_a_child(parent, target)
+        );
+        assert_eq!(children(&tree, parent), kids);
+    }
+
+    #[test]
+    fn replace_child_throws_for_a_leaf_parent() {
+        let mut tree = VirtualTree::new();
+        let leaf = node(&mut tree, TEXT_TAG);
+        let (extra, other) = (node(&mut tree, "i"), node(&mut tree, "b"));
+
+        assert_eq!(
+            tree.replace_child(leaf, extra, other).unwrap_err(),
+            TreeError::LeafParent(leaf)
+        );
     }
 }

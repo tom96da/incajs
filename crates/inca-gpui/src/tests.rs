@@ -491,3 +491,29 @@ pub(crate) fn overflow_of(props: &[(&str, &str)]) -> (Option<OverflowSpec>, Opti
     let style = build_spec(&tree, id).unwrap().style;
     (style.overflow_x, style.overflow_y)
 }
+
+/// A tree node of `tag`.
+pub(crate) fn node(tree: &mut VirtualTree, tag: &str) -> NodeId {
+    tree.create_node(tag).unwrap()
+}
+
+/// A `div` parent with `count` `span` children.
+pub(crate) fn family(tree: &mut VirtualTree, count: usize) -> (NodeId, Vec<NodeId>) {
+    let parent = node(tree, "div");
+    let kids = (0..count)
+        .map(|_| {
+            let kid = node(tree, "span");
+            tree.append_child(parent, kid).unwrap();
+            kid
+        })
+        .collect();
+    (parent, kids)
+}
+
+pub(crate) fn children(tree: &VirtualTree, id: NodeId) -> Vec<NodeId> {
+    tree.get(id).unwrap().children().to_vec()
+}
+
+pub(crate) fn not_a_child(parent: NodeId, child: NodeId) -> crate::tree::TreeError {
+    crate::tree::TreeError::NotAChild { parent, child }
+}

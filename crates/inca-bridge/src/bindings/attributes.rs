@@ -12,7 +12,6 @@ use inca_gpui::{AttributeValue, NodeId, VirtualNode, style_warning};
 
 use super::convert::{JsNodeId, existing_node, or_null, throw_tree_error};
 use super::host::Host;
-use super::tree::mark_focus_dirty;
 
 pub(super) fn set_attribute<'js>(
     host: Rc<RefCell<Host>>,
@@ -78,7 +77,7 @@ pub(super) fn set_style<'js>(
             .set_style(node_id, key, value)
             .map_err(|err| throw_tree_error(&ctx, err))?;
         if is_display {
-            mark_focus_dirty(&mut host, node_id);
+            host.mark_focus_dirty(node_id);
         }
         if let Some(warning) = warning
             && host
@@ -103,7 +102,7 @@ pub(super) fn remove_style<'js>(
             .remove_style(node_id, &key)
             .map_err(|err| throw_tree_error(&ctx, err))?;
         if key == "display" {
-            mark_focus_dirty(&mut host, node_id);
+            host.mark_focus_dirty(node_id);
         }
         Ok(())
     }
@@ -113,7 +112,7 @@ pub(super) fn remove_style<'js>(
 fn mark_focus_dirty_for(host: &mut Host, node_id: NodeId, key: &str) {
     match key {
         "tabindex" | "disabled" => host.focus.mark_tab_dirty(node_id),
-        "hidden" | "inert" => mark_focus_dirty(host, node_id),
+        "hidden" | "inert" => host.mark_focus_dirty(node_id),
         _ => {}
     }
 }

@@ -8,7 +8,7 @@
 //! Two invariants the render path relies on: a node has at most one parent
 //! (attaching it somewhere new detaches it from where it was), and an
 //! attachment that would make a node its own ancestor is refused, so a walk
-//! down the tree always terminates.
+//! down the tree always terminates. A fragment never has a parent.
 //!
 //! A root can be declared with [`VirtualTree::set_root`].
 //! [`VirtualTree::is_connected`] then reads the parent chain up to it.
@@ -26,6 +26,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
+mod insertion;
 mod lifetime;
 mod links;
 mod props;
@@ -37,6 +38,9 @@ pub(crate) const COMMENT_TAG: &str = "#comment";
 
 /// The tag of a text content node.
 pub(crate) const TEXT_TAG: &str = "#text";
+
+/// The tag of a fragment: a node that holds children, has no parent and is never connected.
+pub(crate) const FRAGMENT_TAG: &str = "#fragment";
 
 /// Stable handle returned to JS, used in every subsequent host-bridge call.
 pub type NodeId = u32;
@@ -182,6 +186,12 @@ pub enum TreeError {
     IdsExhausted,
     /// A text offset beyond the length of the data.
     IndexSize,
+    /// A text node or a comment given as the parent of a child.
+    LeafParent(NodeId),
+    /// A reference or removed child that is not a child of the parent.
+    NotAChild { parent: NodeId, child: NodeId },
+    /// The root node given as the node to insert.
+    RootMoved(NodeId),
 }
 
 impl fmt::Display for TreeError {
@@ -196,6 +206,17 @@ impl fmt::Display for TreeError {
             }
             TreeError::IdsExhausted => write!(f, "node id space exhausted"),
             TreeError::IndexSize => write!(f, "the offset is beyond the length of the data"),
+            TreeError::LeafParent(id) => write!(
+                f,
+                "node {id} cannot have children. only elements and fragments can"
+            ),
+            TreeError::NotAChild { parent, child } => write!(
+                f,
+                "node {child} is not a child of node {parent}. pass a child of the node you call it on"
+            ),
+            TreeError::RootMoved(_) => {
+                write!(f, "the root node belongs to the host and cannot be moved")
+            }
         }
     }
 }
