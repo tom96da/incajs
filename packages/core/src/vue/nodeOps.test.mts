@@ -44,6 +44,16 @@ describe("createNodeOps text", () => {
   });
 });
 
+describe("createNodeOps scope id", () => {
+  it("sets the scope id as an empty attribute", () => {
+    const el = nodeOps.createElement("div");
+
+    nodeOps.setScopeId!(el, "data-v-1a2b");
+
+    expect(native.setAttribute).toHaveBeenCalledWith(el.__node_id, "data-v-1a2b", "");
+  });
+});
+
 describe("createNodeOps reactivity", () => {
   it("keeps the same element inside reactive() and ref()", () => {
     const el = nodeOps.createElement("div");

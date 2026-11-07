@@ -72,6 +72,14 @@ export function createNodeOps(core: IncaCore): NodeOps {
       core.insert(child, parent, anchor),
 
     /**
+     * Marks `el` with the empty attribute `id`. A scoped style rule selects the
+     * elements of its component through it.
+     * @param el - the element of a component with scoped styles
+     * @param id - the attribute name Vue generated for the component
+     */
+    setScopeId: (el: IncaElement, id: string): void => core.setAttribute(el.__node_id, id, ""),
+
+    /**
      * Removes `child` with its subtree. Vue unmounts a subtree by calling this
      * on its root alone.
      * @param child - the node being removed
