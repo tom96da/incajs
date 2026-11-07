@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { callbackIdFor, groupOf, registeredGroupCount } from "./callbacks.mts";
 import { addEventListener, blur, click, focus, removeEventListener } from "./events.mts";
 import { releaseListeners } from "./tree.mts";
-import type { HostCallback, NodeLink } from "./native.mts";
+import type { HostCallback, NodeLink, Parsed } from "./native.mts";
 import type { EventLike } from "./types.mts";
 
 // Ids come from the host, which numbers them in order.
@@ -46,6 +46,14 @@ const native = {
   ),
   releaseListeners: vi.fn<(nodeId: number) => number[]>(() => []),
   templateContent: vi.fn<(nodeId: number) => number | null>(() => null),
+  innerHtml: vi.fn<(nodeId: number) => string>(() => ""),
+  outerHtml: vi.fn<(nodeId: number) => string>(() => ""),
+  setInnerHtml: vi.fn<(nodeId: number, html: string) => Parsed>(() => [0, []]),
+  setOuterHtml: vi.fn<(nodeId: number, html: string) => Parsed | null>(() => null),
+  insertAdjacentHtml: vi.fn<(nodeId: number, position: string, html: string) => Parsed>(() => [
+    0,
+    [],
+  ]),
   attributeNames: vi.fn<(nodeId: number) => string[]>(() => []),
   matches: vi.fn<(nodeId: number, selector: string) => boolean>(() => false),
   closest: vi.fn<(nodeId: number, selector: string) => number | null>(() => null),

@@ -32,6 +32,7 @@ import { nodeListOf } from "./collections.mts";
 import { elementTreeMembers } from "./elementTree.mts";
 import { withEventHandlers } from "./eventHandlers.mts";
 import { layoutBox, offsetOf, offsetParentOf, rectOf, tabIndexOf } from "./geometry.mts";
+import { htmlMembers } from "./html.mts";
 import {
   elementOf,
   existingContent,
@@ -53,6 +54,7 @@ import type { HandleBuilders } from "./nodeMutation.mts";
 import type { ScrollArgs, ScrollIntoViewOptions } from "./scroll.mts";
 import type {
   EventHandlers,
+  HtmlMembers,
   IncaElement,
   IncaFragment,
   NodeMembers,
@@ -105,6 +107,7 @@ export function createIncaElement(
     | keyof EventHandlers
     | keyof AttributeMembers
     | keyof ElementTreeMembers
+    | keyof HtmlMembers
     | keyof NodeMembers
     | keyof TextContentMember
   > = {
@@ -268,6 +271,12 @@ export function createIncaElement(
       kind === "comment" ? characterDataMembers(element) : elementTextContent(element),
     ),
   );
+  if (kind !== "comment") {
+    Object.defineProperties(
+      element,
+      Object.getOwnPropertyDescriptors(htmlMembers(element, builders)),
+    );
+  }
   registerNode(element);
   if (isTemplateTag(tag)) attachContent(element, createIncaFragment);
   return element;

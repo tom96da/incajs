@@ -261,14 +261,14 @@ describe("textContent of an element", () => {
     expect(el.__children).toEqual([]);
   });
 
-  it("releases the listeners of a removed child", () => {
+  it("keeps the listeners of a removed child", () => {
     const el = createElementNode("div");
     const child = createElementNode("span");
     insert(child, el);
 
     el.textContent = "new";
 
-    expect(host.releaseListeners).toHaveBeenCalledWith(child.__node_id);
+    expect(host.releaseListeners).not.toHaveBeenCalled();
   });
 
   it("ignores an assignment to a freed element", () => {
@@ -310,7 +310,6 @@ describe("setElementText", () => {
     setElementText(el, "hello");
 
     expect(host.removeChild).toHaveBeenCalledWith(el.__node_id, oldChild.__node_id);
-    expect(host.releaseListeners).toHaveBeenCalledWith(oldChild.__node_id);
     expect(oldChild.parent).toBeNull();
     expect(el.__children).toHaveLength(1);
     expect(el.__children[0]).toMatchObject({ kind: "text", text: "hello" });

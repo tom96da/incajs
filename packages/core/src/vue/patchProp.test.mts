@@ -65,6 +65,9 @@ const noMutation = {} as Pick<
 const makeEl = (): IncaElement => ({
   ...noHandlers,
   ...noMutation,
+  innerHTML: "",
+  outerHTML: "",
+  insertAdjacentHTML: () => {},
   getAttribute: () => null,
   setAttribute: () => {},
   hasAttribute: () => false,

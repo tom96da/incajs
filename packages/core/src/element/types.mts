@@ -304,6 +304,28 @@ export interface TextMembers {
   splitText(offset: number): IncaText;
 }
 
+/** The members that read and write the markup of an element. */
+export interface HtmlMembers {
+  /**
+   * The markup of the children. Assigning replaces all children with the nodes the string parses
+   * to in the context of the element, and `null` assigns `""`. A template reads and replaces its
+   * content.
+   */
+  innerHTML: string;
+  /**
+   * The markup of the element and its children. Assigning replaces the element with the nodes the
+   * string parses to in the context of its parent, and `null` assigns `""`. An element without a
+   * parent keeps its place. The mount container throws a `NoModificationAllowedError`.
+   */
+  outerHTML: string;
+  /**
+   * Parses `text` and inserts the nodes at `position`: `beforebegin`, `afterbegin`, `beforeend` or
+   * `afterend`, in any ASCII case. Another position throws a `SyntaxError`. `beforebegin` and
+   * `afterend` on an element without a parent throw a `NoModificationAllowedError`.
+   */
+  insertAdjacentHTML(position: string, text: string): void;
+}
+
 /**
  * A container node: either a real element or the hidden stand-in that
  * `createCommentNode` makes. It is the only node type that can act as a
@@ -315,7 +337,7 @@ export interface TextMembers {
  * on it.
  */
 export interface IncaElement
-  extends IncaEventTarget, EventHandlers, NodeMembers, TextContentMember {
+  extends IncaEventTarget, EventHandlers, NodeMembers, TextContentMember, HtmlMembers {
   /**
    * The node id the host knows this node by. Internal to the renderer.
    * @internal

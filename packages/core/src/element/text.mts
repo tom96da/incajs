@@ -8,6 +8,7 @@ import {
   createNode,
   getAttribute,
   holdNode,
+  removeChild,
   replaceData,
   setAttribute,
   splitText,
@@ -19,7 +20,7 @@ import { isDestroyed, registerNode, releaseWhenCollected, withNodeId } from "./l
 import { nodeMutationMembers } from "./nodeMutation.mts";
 import { nodeRelationMembers } from "./nodeRelations.mts";
 import { nodeTreeMembers, readData, writeData } from "./nodeTree.mts";
-import { remove } from "./shadowTree.mts";
+import { keep, unlink } from "./shadowTree.mts";
 import type { NodeId } from "../types.mts";
 import type {
   CharacterDataMembers,
@@ -142,12 +143,16 @@ export function setText(node: IncaText, text: string): void {
 
 /**
  * Replaces all of `el`'s children with at most a single text child holding
- * `text`. An empty string leaves `el` childless.
+ * `text`. The old children keep their listeners. An empty string leaves `el` childless.
  * @param el - the element or fragment whose children are replaced
  * @param text - the new text content
  */
 export function setElementText(el: IncaParent, text: string): void {
-  for (const child of el.__children.slice()) remove(child);
+  for (const child of el.__children.slice()) {
+    removeChild(el.__node_id, child.__node_id);
+    unlink(child);
+    keep(child);
+  }
   if (!text) return;
 
   const textNode = createTextNode(text);
