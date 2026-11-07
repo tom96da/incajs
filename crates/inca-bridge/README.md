@@ -6,7 +6,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 # inca-bridge
 
 Binds a `QuickJS` realm (`inca-jsenv`'s `Engine`) to `inca`'s retained
-virtual tree (`inca-gpui`'s `VirtualTree`):
+virtual tree (`inca-node`'s `VirtualTree`):
 
 - `install` installs `globalThis.__inca_native__`: the small set of native
   functions JS calls to read the root handle, mutate the retained virtual
