@@ -6,12 +6,13 @@
 use std::cell::RefCell;
 
 use encoding_rs::{DecoderResult, Encoding, UTF_8, UTF_16BE, UTF_16LE};
-use rquickjs::class::{JsClass, Readable, Trace, Tracer};
-use rquickjs::function::{Constructor, Opt, This};
-use rquickjs::{Class, Ctx, Exception, Function, JsLifetime, Object, Result as JsResult, Value};
+#[allow(clippy::disallowed_types)]
+use rquickjs::JsLifetime;
+use rquickjs::function::{Opt, This};
+use rquickjs::{Class, Ctx, Exception, Function, Object, Result as JsResult, Value};
 
 use super::{Construct, STORE, flag_of, is_detached, is_resizable, options_of, read};
-use crate::class::{define_class, define_getter, define_global, define_method};
+use crate::class::{define_class, define_getter, define_global, define_method, plain_class};
 use crate::quickjs::{
     copy_range, is_array_buffer, is_data_view, typed_array_kind, typed_array_range,
 };
@@ -23,29 +24,13 @@ const NOT_VALID: &str =
 const NOT_A_DECODER: &str = "the receiver is not a TextDecoder. call the method on an instance";
 
 /// A `TextDecoder` instance.
+#[allow(clippy::disallowed_macros)]
 #[derive(JsLifetime)]
 pub(super) struct Decoder {
     pub(super) codec: RefCell<Codec>,
 }
 
-impl<'js> Trace<'js> for Decoder {
-    fn trace<'a>(&self, _tracer: Tracer<'a, 'js>) {}
-}
-
-impl<'js> JsClass<'js> for Decoder {
-    const NAME: &'static str = "TextDecoder";
-
-    type Mutable = Readable;
-
-    // An instance takes the prototype from the vault when it is made.
-    fn prototype(_ctx: &Ctx<'js>) -> JsResult<Option<Object<'js>>> {
-        Ok(None)
-    }
-
-    fn constructor(_ctx: &Ctx<'js>) -> JsResult<Option<Constructor<'js>>> {
-        Ok(None)
-    }
-}
+plain_class!(Decoder, "TextDecoder");
 
 pub(super) fn define_decoder<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<()> {
     let class = define_class(ctx, proto, "TextDecoder", 0, Construct { decoder: true })?;
@@ -293,8 +278,7 @@ mod tests {
     use super::*;
     use crate::Engine;
     use crate::encoding::NOT_AN_OBJECT;
-    use crate::encoding::tests::{run, thrown};
-    use crate::tests::around;
+    use crate::tests::{around, run, thrown};
 
     /// A codec for `label` with the default flags.
     fn codec(label: &str) -> Codec {

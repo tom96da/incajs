@@ -14,6 +14,40 @@ use rquickjs::{Ctx, Function, Object, Result as JsResult, Value};
 
 use crate::FunctionAccessor;
 
+/// The `TypeError` message of a class constructor called without `new`.
+pub(crate) const NEEDS_NEW: &str = "the class constructor needs new. call it with new";
+
+/// Emits the empty `Trace` and the `JsClass` of a class whose instances hold plain Rust data and
+/// take their prototype from the vault.
+macro_rules! plain_class {
+    ($type:ident, $name:literal) => {
+        impl<'js> ::rquickjs::class::Trace<'js> for $type {
+            fn trace<'a>(&self, _tracer: ::rquickjs::class::Tracer<'a, 'js>) {}
+        }
+
+        impl<'js> ::rquickjs::class::JsClass<'js> for $type {
+            const NAME: &'static str = $name;
+
+            type Mutable = ::rquickjs::class::Readable;
+
+            // An instance takes the prototype from the vault when it is made.
+            fn prototype(
+                _ctx: &::rquickjs::Ctx<'js>,
+            ) -> ::rquickjs::Result<Option<::rquickjs::Object<'js>>> {
+                Ok(None)
+            }
+
+            fn constructor(
+                _ctx: &::rquickjs::Ctx<'js>,
+            ) -> ::rquickjs::Result<Option<::rquickjs::function::Constructor<'js>>> {
+                Ok(None)
+            }
+        }
+    };
+}
+
+pub(crate) use plain_class;
+
 /// The constructor `name` with `length` parameters and the body `body`. `name.prototype` is
 /// read-only, `proto.constructor` is writable and configurable, and `proto` gets the configurable
 /// string tag `name`.
