@@ -4,18 +4,18 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rquickjs::{Ctx, Exception, Result as JsResult};
+use rquickjs::{Ctx, Exception, Result as JsResult, Value};
 
 use inca_jsenv::callbacks;
 use inca_node::NodeId;
 
 use super::Natives;
-use super::convert::{JsNodeId, throw_tree_error};
+use super::convert::{JsNodeId, existing_node, or_null, throw_tree_error};
 use super::host::Host;
 
-/// The retained tree itself: allocating and describing nodes, plus `destroyNode`,
-/// `releaseListeners`, `holdNode` and `releaseNode`. Freeing a subtree is a tree operation first,
-/// even though it also releases the listener/focus state that named its nodes.
+/// The retained tree itself: allocating and describing nodes, plus `templateContent`,
+/// `destroyNode`, `releaseListeners`, `holdNode` and `releaseNode`. Freeing a subtree is a tree
+/// operation first, even though it also releases the listener/focus state that named its nodes.
 pub(super) fn install_tree(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("rootNodeId", root_node_id)?;
     n.set("createNode", create_node)?;
@@ -25,6 +25,7 @@ pub(super) fn install_tree(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("attributeNames", super::attributes::attribute_names)?;
     n.set("setStyle", super::attributes::set_style)?;
     n.set("removeStyle", super::attributes::remove_style)?;
+    n.set("templateContent", template_content)?;
     n.set("destroyNode", destroy_node)?;
     n.set("releaseListeners", release_listeners)?;
     n.set("holdNode", hold_node)?;
@@ -41,6 +42,17 @@ fn create_node<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, String) -> JsR
         host.tree
             .create_node(tag_name)
             .map_err(|err| throw_tree_error(&ctx, err))
+    }
+}
+
+/// The id of the content fragment of the template `node_id`, `null` for a node that is no template.
+fn template_content<'js>(
+    host: Rc<RefCell<Host>>,
+) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Value<'js>> {
+    move |ctx, JsNodeId(node_id)| {
+        let host = host.borrow();
+        existing_node(&ctx, &host.tree, node_id)?;
+        or_null(&ctx, host.tree.template_content(node_id))
     }
 }
 
@@ -62,8 +74,9 @@ fn destroy_node<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> 
     }
 }
 
-/// Drops the listeners of `node_id` and of every node below it and returns their callback ids.
-/// The nodes stay in the tree. An unknown id returns no ids.
+/// Drops the listeners of `node_id` and of every node below it, the content of a template
+/// included, and returns their callback ids. The nodes stay in the tree. An unknown id returns no
+/// ids.
 fn release_listeners<'js>(
     host: Rc<RefCell<Host>>,
 ) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Vec<u32>> {
@@ -74,6 +87,7 @@ fn release_listeners<'js>(
         while let Some(current) = pending.pop() {
             if let Some(node) = host.tree.get(current) {
                 pending.extend(node.children().iter().copied());
+                pending.extend(host.tree.template_content(current));
                 callback_ids.extend(host.listeners.release(current));
             }
         }
@@ -606,5 +620,77 @@ mod tests {
             .unwrap();
 
         assert!(!ran);
+    }
+
+    #[test]
+    fn template_content_is_the_same_fragment_on_each_read() {
+        let (engine, _host) = engine_with_bindings();
+
+        let same: bool = engine
+            .eval(
+                r"
+                const n = __inca_native__;
+                const template = n.createNode('template');
+                const content = n.templateContent(template);
+                content !== template && content === n.templateContent(template);
+                ",
+            )
+            .unwrap();
+
+        assert!(same);
+    }
+
+    #[test]
+    fn template_content_of_a_div_is_null() {
+        let (engine, _host) = engine_with_bindings();
+
+        let is_null: bool = engine
+            .eval("__inca_native__.templateContent(__inca_native__.createNode('div')) === null;")
+            .unwrap();
+
+        assert!(is_null);
+    }
+
+    #[test]
+    fn template_content_of_an_unknown_node_throws_type_error() {
+        let (engine, _host) = engine_with_bindings();
+
+        let caught: bool = engine
+            .eval(
+                r"
+                let caught = false;
+                try {
+                    __inca_native__.templateContent(999);
+                } catch (e) {
+                    caught = e instanceof TypeError;
+                }
+                caught;
+                ",
+            )
+            .unwrap();
+
+        assert!(caught);
+    }
+
+    #[test]
+    fn release_listeners_drops_a_listener_on_a_content_node() {
+        let (engine, host) = engine_with_bindings();
+
+        let ids: Vec<NodeId> = engine
+            .eval(
+                r"
+                const n = __inca_native__;
+                const template = n.createNode('template');
+                const inner = n.createNode('div');
+                n.appendChild(n.templateContent(template), inner);
+                n.addEventListener(inner, 'click', () => {});
+                n.releaseListeners(template);
+                [inner];
+                ",
+            )
+            .unwrap();
+
+        let host = host.borrow();
+        assert!(callback_ids(&host.listeners, EventTargetId::Node(ids[0]), "click").is_empty());
     }
 }

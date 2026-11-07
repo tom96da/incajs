@@ -78,19 +78,19 @@ the custom renderer's output. Each node has:
 - `removeChild` and `replaceChild` keep the listeners of the node they detach.
 - A `nodeId` that is not a finite whole number in the `u32` range throws a
   `TypeError`.
-- `destroyNode` frees a node and its subtree at once. At the start of each
-  frame the host also frees every node that has no parent and is neither
-  the root nor held with `holdNode`, with its subtree.
-- `releaseListeners` drops the listeners of a node and its subtree and leaves
-  the nodes in the tree. A detached node stays readable until the host frees
-  it.
+- `destroyNode` frees a node and its subtree at once. It frees nothing for the content of a
+  template. At the start of each frame the host also frees every node that has no parent and is
+  neither the root, held with `holdNode` nor the content of a template, with its subtree. The
+  content of a template goes with the template.
+- `releaseListeners` drops the listeners of a node, its subtree and the content of a template and
+  leaves the nodes in the tree. A detached node stays readable until the host frees it.
 
 ### Tag vocabulary
 
 `inca-node` classifies the tags in `ElementTag` (`spec.rs`) and lists the
 tags that take focus by default in `focusable_by_default` (`tree.rs`).
 `inca-gpui` builds the elements in `crates/inca-gpui/src/element/`. There are
-six kinds:
+seven kinds:
 
 | `tag_name` | Maps to |
 | --- | --- |
@@ -98,7 +98,8 @@ six kinds:
 | `"button"` | A styled container. The host reads its `tabindex` with a default of 0. [Elements](../docs/reference/elements.md#button) covers its key clicks. |
 | `"input"` | One line of editable text in a styled container. The host keeps its text; `inputValue` and `setInputValue` read and write it. Its children are not rendered. [Elements](../docs/reference/elements.md#input) covers the rest. |
 | `"#comment"` | A generic styled container that marks a comment stand-in. Selector matching treats it as no element. |
-| `"#fragment"` | A node that holds children and never has a parent. It is never connected, so layout, paint and focus skip it. Selector matching treats it as no element. |
+| `"#fragment"` | A node that holds children and never has a parent. It is never connected, so layout, paint and focus skip it. Selector matching treats it as no element. The content of a template is a fragment that the template owns. |
+| `"template"` | A node that is never laid out or painted, with its children. It owns a `#fragment` as its content, created with it. `templateContent` returns its id. The content has no parent and never counts as connected. The tag is matched ignoring ASCII case. |
 | anything else | A generic styled container (a GPUI `div()`). |
 
 ### Style prop vocabulary
@@ -170,7 +171,7 @@ be passed, and `undefined` there counts as `null`.
 | `linkedNode` | `(nodeId: number, link: "parent" \| "first" \| "last" \| "previous" \| "next") => number \| null` | The id of the parent, first child, last child, previous sibling or next sibling of `nodeId`, or `null` when there is none. Throws a `TypeError` for an unknown node or another `link`. |
 | `childNodeIds` | `(nodeId: number) => number[]` | The ids of the children of `nodeId` in order. Throws a `TypeError` for an unknown node. |
 | `isConnected` | `(nodeId: number) => boolean` | Whether `nodeId` is the root container or hangs under it. Throws a `TypeError` for an unknown node. |
-| `cloneNode` | `(nodeId: number, deep: boolean) => [number, string][]` | Copy a node with its tag, attributes and style props, and its descendants when `deep` is truthy. A falsy `deep` clones only the node. Returns the id and tag of each copy in pre-order, the copy of `nodeId` first. The copies have no listeners, focus or scroll offset, and the root copy has no parent. An `input` copy has the typed text of its original. Throws a `TypeError` for an unknown node. |
+| `cloneNode` | `(nodeId: number, deep: boolean) => [number, string][]` | Copy a node with its tag, attributes and style props, and its descendants when `deep` is truthy. A falsy `deep` clones only the node. Returns the id and tag of each copy in pre-order, the copy of `nodeId` first. The copy of a template is followed by the copy of its content (`"#fragment"`), the content descendants when `deep` is truthy, and then the other children. The copies have no listeners, focus or scroll offset, and the root copy has no parent. An `input` copy has the typed text of its original. Throws a `TypeError` for an unknown node. |
 | `compareNodePosition` | `(nodeId: number, otherId: number) => number` | The position of `otherId` relative to `nodeId` as a bit mask: `1` disconnected, `2` preceding, `4` following, `8` contains, `16` contained by, `32` implementation specific. Equal ids give `0`. Nodes of different trees give `1 \| 32` plus `2` or `4`. Throws a `TypeError` for an unknown node. |
 | `rootOf` | `(nodeId: number) => number` | The top of the parent chain of `nodeId`. A connected node gives the root container. Throws a `TypeError` for an unknown node. |
 | `isEqualNode` | `(nodeId: number, otherId: number) => boolean` | Whether the two subtrees have the same tags, attributes, style props and children. The typed text of an `input` is not compared. Throws a `TypeError` for an unknown node. |
@@ -196,7 +197,8 @@ be passed, and `undefined` there counts as `null`.
 | `setPointerCapture` | `(nodeId: number, pointerId: number) => void` | Make `nodeId` the pending pointer capture while a button is held, see [Pointer events](#pointer-events). Throws `NotFoundError` for a `pointerId` other than 1 and `InvalidStateError` for a node outside the mounted tree or that names no node. |
 | `releasePointerCapture` | `(nodeId: number, pointerId: number) => void` | Clear the pending capture when `nodeId` holds it. Throws `NotFoundError` for a `pointerId` other than 1. |
 | `hasPointerCapture` | `(nodeId: number, pointerId: number) => boolean` | Whether `nodeId` is the pending capture and still mounted. `false` for a `pointerId` other than 1. |
-| `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its subtree, release the table entries of every `callbackId` registered in it and return the ids. An unknown id returns `[]`. Destroying the root throws. Also drops the hold and the waiting `scrollIntoViewNode` calls of the destroyed nodes. |
+| `templateContent` | `(nodeId: number) => number \| null` | The id of the content fragment of the template `nodeId`, the same id on every call. `null` for a node that is no template. Throws a `TypeError` for an unknown node. |
+| `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its subtree, and the content of a template, release the table entries of every `callbackId` registered in it and return the ids. An unknown id returns `[]`. Destroying the root throws. Also drops the hold and the waiting `scrollIntoViewNode` calls of the destroyed nodes. |
 | `releaseListeners` | `(nodeId: number) => number[]` | Drop every listener registered on `nodeId` and on the nodes below it, release their table entries and return their `callbackId`s. The nodes, their attributes and their children stay. An unknown id returns `[]`. |
 | `matches` | `(nodeId: number, selector: string) => boolean` | Whether the element `nodeId` matches the selector list. Throws a `SyntaxError` for an invalid selector and a `TypeError` for an unknown node. A `#text` node and a `#comment` node match nothing. |
 | `closest` | `(nodeId: number, selector: string) => number \| null` | The id of the nearest element at or above `nodeId` that matches. A `#text` node starts at its nearest element ancestor. Throws like `matches`. |
@@ -238,7 +240,8 @@ the first failing check throws. A failure changes nothing.
 1. A `parentId`, `nodeId` or reference that names no node throws a `TypeError`.
 2. A `#text` or `#comment` parent throws a `HierarchyRequestError`.
 3. A `nodeId` that is `parentId` or one of its ancestors throws a
-   `HierarchyRequestError`.
+   `HierarchyRequestError`. The template that owns a content is an ancestor of
+   the content and of every node in it.
 4. A reference (`refId`, or `childId` of `replaceChild`) that is not a child of
    `parentId` throws a `NotFoundError`.
 5. A `nodeId` naming the root, which belongs to the host, throws a
@@ -294,8 +297,8 @@ global is skipped.
 
 - Rust calls it at most once per frame, after the focus pass, and only when
   the sweep of that frame freed a node.
-- `nodeIds` holds every freed node, subtrees included, and `callbackIds`
-  every registration on them. Each id arrives once. Ids freed by
+- `nodeIds` holds every freed node, subtrees and the content of a freed template included, and
+  `callbackIds` every registration on them. Each id arrives once. Ids freed by
   `destroyNode` or dropped by `releaseListeners` never pass through it.
 - A throw is reported to `Host::failures` and the frame goes on.
 
