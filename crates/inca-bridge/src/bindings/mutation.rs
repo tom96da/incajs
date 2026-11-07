@@ -6,6 +6,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use rquickjs::convert::Coerced;
+use rquickjs::convert::List;
 use rquickjs::{Ctx, Result as JsResult};
 
 use inca_gpui::NodeId;
@@ -14,14 +16,15 @@ use super::Natives;
 use super::convert::{JsNodeId, throw_tree_error};
 use super::host::Host;
 
-/// The classic mutation members: `appendChild`, `insertBefore`, `removeChild` and
-/// `replaceChild`. Each moved or removed node drops the focus it held, moves the Tab start,
+/// The classic mutation members: `appendChild`, `insertBefore`, `removeChild`, `replaceChild`
+/// and `cloneNode`. Each moved or removed node drops the focus it held, moves the Tab start,
 /// queues a focus re-check and resets the scroll offsets of its subtree.
 pub(super) fn install_mutation(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("appendChild", append_child)?;
     n.set("insertBefore", insert_before)?;
     n.set("removeChild", remove_child)?;
-    n.set("replaceChild", replace_child)
+    n.set("replaceChild", replace_child)?;
+    n.set("cloneNode", clone_node)
 }
 
 fn append_child<'js>(
@@ -74,6 +77,35 @@ fn remove_child<'js>(
             .map_err(|err| throw_tree_error(&ctx, err))?;
         host.settle(&left);
         Ok(())
+    }
+}
+
+/// The id and tag of each copy, as the two-element arrays JS reads.
+type Copies = Vec<List<(NodeId, String)>>;
+
+/// Copies `node_id` and, when `deep`, its descendants. Returns the id and tag of each copy in
+/// pre-order. An `input` copy gets the typed text of its original.
+fn clone_node<'js>(
+    host: Rc<RefCell<Host>>,
+) -> impl Fn(Ctx<'js>, JsNodeId, Coerced<bool>) -> JsResult<Copies> {
+    move |ctx, JsNodeId(node_id), Coerced(deep)| {
+        let mut host = host.borrow_mut();
+        let made = host
+            .tree
+            .clone_subtree(node_id, deep)
+            .map_err(|err| throw_tree_error(&ctx, err))?;
+        let mut inputs = host.inputs.borrow_mut();
+        for (original, copy, tag) in &made {
+            let typed = inputs.get(original).map(|input| input.value().to_owned());
+            if let (true, Some(typed)) = (tag == "input", typed) {
+                inputs.entry(*copy).or_default().set_value(&typed);
+            }
+        }
+        drop(inputs);
+        Ok(made
+            .into_iter()
+            .map(|(_, copy, tag)| List((copy, tag)))
+            .collect())
     }
 }
 
@@ -257,6 +289,90 @@ mod tests {
             .unwrap();
 
         assert_eq!(fired, 1);
+    }
+
+    #[test]
+    fn clone_node_returns_the_tag_of_each_copy_in_pre_order() {
+        let (engine, _host) = engine_with_family();
+
+        let tags: Vec<String> = engine
+            .eval("n.cloneNode(p, true).map((pair) => pair[1])")
+            .unwrap();
+
+        assert_eq!(tags, ["div", "span", "span"]);
+    }
+
+    #[test]
+    fn clone_node_returns_ids_that_name_new_nodes() {
+        let (engine, _host) = engine_with_family();
+
+        let fresh: bool = engine
+            .eval(
+                r"
+                const ids = n.cloneNode(p, true).map((pair) => pair[0]);
+                ids.every((id) => ![p, a, b].includes(id));
+                ",
+            )
+            .unwrap();
+
+        assert!(fresh);
+    }
+
+    #[test]
+    fn a_shallow_clone_node_returns_one_copy() {
+        let (engine, _host) = engine_with_family();
+
+        let count: u32 = engine.eval("n.cloneNode(p, false).length").unwrap();
+
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn a_cloned_input_has_the_typed_text_of_its_original() {
+        let (engine, _host) = engine_with_family();
+
+        let texts: Vec<String> = engine
+            .eval(
+                r"
+                const field = n.createNode('input');
+                n.setInputValue(field, 'typed');
+                const copy = n.cloneNode(field, false)[0][0];
+                [n.inputValue(copy), n.inputValue(field)];
+                ",
+            )
+            .unwrap();
+
+        assert_eq!(texts, ["typed", "typed"]);
+    }
+
+    #[test]
+    fn a_deep_cloned_input_keeps_its_own_typed_text() {
+        let (engine, _host) = engine_with_family();
+
+        let texts: Vec<String> = engine
+            .eval(
+                r"
+                const box = n.createNode('div');
+                const one = n.createNode('input');
+                const two = n.createNode('input');
+                n.appendChild(box, one);
+                n.appendChild(box, two);
+                n.setInputValue(one, 'first');
+                n.setInputValue(two, 'second');
+                const made = n.cloneNode(box, true);
+                [n.inputValue(made[1][0]), n.inputValue(made[2][0])];
+                ",
+            )
+            .unwrap();
+
+        assert_eq!(texts, ["first", "second"]);
+    }
+
+    #[test]
+    fn clone_node_of_an_unknown_id_throws_type_error() {
+        let (engine, _host) = engine_with_family();
+
+        assert_eq!(error_name(&engine, "n.cloneNode(999, true)"), "TypeError");
     }
 
     fn zero() -> Point<gpui::Pixels> {

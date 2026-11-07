@@ -30,6 +30,7 @@ mod insertion;
 mod lifetime;
 mod links;
 mod props;
+mod relations;
 mod stylesheet;
 mod text;
 

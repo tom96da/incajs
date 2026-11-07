@@ -10,7 +10,7 @@ use crate::event_sink::{EventPayload, EventSink, noop_sink_methods};
 use crate::focus::FocusRegistry;
 use crate::input::{InputLayout, InputRequest, InputState};
 use crate::selector::{closest_selector, matches_selector};
-use crate::tree::AttributeValue;
+use crate::tree::{AttributeValue, TEXT_TAG};
 use crate::tree::{NodeId, VirtualTree};
 use gpui::Pixels;
 use gpui::point;
@@ -516,4 +516,21 @@ pub(crate) fn children(tree: &VirtualTree, id: NodeId) -> Vec<NodeId> {
 
 pub(crate) fn not_a_child(parent: NodeId, child: NodeId) -> crate::tree::TreeError {
     crate::tree::TreeError::NotAChild { parent, child }
+}
+
+/// `tag[class=a, tabindex=1, width=4] > (span > #text "hi", #text "t")`.
+pub(crate) fn sample(tree: &mut VirtualTree, tag: &str) -> NodeId {
+    let root = node(tree, tag);
+    tree.set_attribute(root, "class", "a").unwrap();
+    tree.set_attribute(root, "tabindex", 1.0).unwrap();
+    tree.set_style(root, "width", 4.0).unwrap();
+    let span = node(tree, "span");
+    let inner = node(tree, TEXT_TAG);
+    tree.set_attribute(inner, "value", "hi").unwrap();
+    let tail = node(tree, TEXT_TAG);
+    tree.set_attribute(tail, "value", "t").unwrap();
+    tree.append_child(root, span).unwrap();
+    tree.append_child(span, inner).unwrap();
+    tree.append_child(root, tail).unwrap();
+    root
 }

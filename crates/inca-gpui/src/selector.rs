@@ -28,6 +28,7 @@ use crate::tree::{
 mod matching;
 mod query;
 
+pub(crate) use matching::attribute_text;
 pub use matching::{closest_selector, matches_selector};
 pub use query::{query_selector, query_selector_all};
 
