@@ -21,12 +21,11 @@
 use std::cell::{Cell, RefCell};
 
 pub(crate) use inca_gpui::event_sink::Flags;
-use inca_jsenv::class::{define_getter, define_method};
 use inca_jsenv::{FunctionAccessor, vault};
 use rquickjs::convert::Coerced;
-use rquickjs::function::{Opt, This};
+use rquickjs::function::Opt;
 use rquickjs::object::Property;
-use rquickjs::{Array, Class, Ctx, Exception, Function, IntoJs, Object, Result as JsResult, Value};
+use rquickjs::{Array, Class, Ctx, Exception, IntoJs, Object, Result as JsResult, Value};
 
 mod construct;
 mod key_code;
@@ -186,52 +185,6 @@ fn with_event<'js, T>(
         )
     })?;
     run(&event.borrow())
-}
-
-/// The getter `get <key>`, which runs `read` on the event `this` names.
-fn getter<'js>(
-    ctx: &Ctx<'js>,
-    key: &str,
-    read: impl Fn(&Ctx<'js>, &IncaEvent<'js>) -> JsResult<Value<'js>> + 'js,
-) -> JsResult<Function<'js>> {
-    Function::new(
-        ctx.clone(),
-        move |ctx: Ctx<'js>, This(this): This<Value<'js>>| {
-            with_event(&ctx, &this, |event| read(&ctx, event))
-        },
-    )?
-    .with_name(format!("get {key}"))
-}
-
-/// Defines on `proto` the enumerable, configurable getter `key`, which runs
-/// `read` on the event `this` names.
-fn field<'js>(
-    ctx: &Ctx<'js>,
-    proto: &Object<'js>,
-    key: &str,
-    read: impl Fn(&Ctx<'js>, &IncaEvent<'js>) -> JsResult<Value<'js>> + 'js,
-) -> JsResult<()> {
-    define_getter(proto, key, getter(ctx, key, read)?)
-}
-
-/// Defines on `proto` the method `name`, which runs `act` on the event `this`
-/// names.
-fn action<'js>(
-    ctx: &Ctx<'js>,
-    proto: &Object<'js>,
-    name: &str,
-    act: fn(&IncaEvent<'_>),
-) -> JsResult<()> {
-    let function = Function::new(
-        ctx.clone(),
-        move |ctx: Ctx<'js>, This(this): This<Value<'js>>| {
-            with_event(&ctx, &this, |event| {
-                act(event);
-                Ok(())
-            })
-        },
-    )?;
-    define_method(proto, name, function)
 }
 
 /// A new object that inherits from `parent`.
