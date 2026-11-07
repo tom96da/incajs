@@ -1,16 +1,22 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The definition steps that every native class shares: its constructor, the
-//! methods and getters of its prototype and its global.
+//! The definition steps for the names a Web standard defines: a class with its constructor,
+//! methods and getters, a free function and a namespace object.
 //!
-//! Methods and accessors are enumerable. The global is writable, configurable
-//! and not enumerable.
+//! Each entry gives the attributes of its kind. Methods and accessors are enumerable.
+//! [`define_function`] makes a writable, enumerable, configurable global. [`define_global`] (a
+//! class) and [`define_namespace`] make a writable, configurable, non-enumerable one. A global
+//! that is an accessor goes through [`define_accessor`] on the global object.
+//!
+//! The `this` entries ([`define_this_getter`], [`define_this_accessor`], [`define_this_method`],
+//! [`getter_function`]) build the function from a closure that gets the `this` value. The
+//! property keeps the attributes and function names listed above for its kind.
 
 use rquickjs::atom::PredefinedAtom;
-use rquickjs::function::{IntoJsFunc, Params};
+use rquickjs::function::{IntoJsFunc, Params, This};
 use rquickjs::object::Property;
-use rquickjs::{Ctx, Function, Object, Result as JsResult, Value};
+use rquickjs::{Ctx, FromJs, Function, IntoJs, Object, Result as JsResult, Value};
 
 use crate::FunctionAccessor;
 
@@ -97,17 +103,18 @@ pub fn new_target_prototype<'js>(
     Ok(proto.unwrap_or(default))
 }
 
-/// Defines `function` as the writable, enumerable, configurable method `name` of `proto`.
+/// Defines `function` as the writable, enumerable, configurable method `name` of `target`. The
+/// owner may be a prototype, a constructor or a namespace object.
 ///
 /// # Errors
 ///
 /// Returns an error if the property cannot be defined.
 pub fn define_method<'js>(
-    proto: &Object<'js>,
+    target: &Object<'js>,
     name: &str,
     function: Function<'js>,
 ) -> JsResult<()> {
-    proto.prop(
+    target.prop(
         name,
         Property::from(function.with_name(name)?)
             .writable()
@@ -116,14 +123,14 @@ pub fn define_method<'js>(
     )
 }
 
-/// Defines `get` as the enumerable, configurable getter `key` of `proto`, without a setter. The
+/// Defines `get` as the enumerable, configurable getter `key` of `target`, without a setter. The
 /// function is named `get <key>`.
 ///
 /// # Errors
 ///
 /// Returns an error if the property cannot be defined.
-pub fn define_getter<'js>(proto: &Object<'js>, key: &str, get: Function<'js>) -> JsResult<()> {
-    proto.prop(
+pub fn define_getter<'js>(target: &Object<'js>, key: &str, get: Function<'js>) -> JsResult<()> {
+    target.prop(
         key,
         FunctionAccessor::new_get(get.with_name(format!("get {key}"))?)
             .enumerable()
@@ -131,25 +138,98 @@ pub fn define_getter<'js>(proto: &Object<'js>, key: &str, get: Function<'js>) ->
     )
 }
 
-/// Defines `get` and `set` as the enumerable, configurable accessor `key` of `proto`. The
+/// Defines `get` and `set` as the enumerable, configurable accessor `key` of `target`. The
 /// functions are named `get <key>` and `set <key>`.
 ///
 /// # Errors
 ///
 /// Returns an error if the property cannot be defined.
 pub fn define_accessor<'js>(
-    proto: &Object<'js>,
+    target: &Object<'js>,
     key: &str,
     get: Function<'js>,
     set: Function<'js>,
 ) -> JsResult<()> {
-    proto.prop(
+    target.prop(
         key,
         FunctionAccessor::new_get(get.with_name(format!("get {key}"))?)
             .set(set.with_name(format!("set {key}"))?)
             .enumerable()
             .configurable(),
     )
+}
+
+/// The function named `get <key>` that returns what `read` makes of the context and the `this`
+/// value of the call.
+///
+/// # Errors
+///
+/// Returns an error if the function cannot be built.
+pub fn getter_function<'js, R: IntoJs<'js> + 'js>(
+    ctx: &Ctx<'js>,
+    key: &str,
+    read: impl Fn(&Ctx<'js>, Value<'js>) -> JsResult<R> + 'js,
+) -> JsResult<Function<'js>> {
+    Function::new(
+        ctx.clone(),
+        move |ctx: Ctx<'js>, This(this): This<Value<'js>>| read(&ctx, this),
+    )?
+    .with_name(format!("get {key}"))
+}
+
+/// Defines the enumerable, configurable getter `key` of `target`, named `get <key>`. `read` gets
+/// the context and the `this` value of the call.
+///
+/// # Errors
+///
+/// Returns an error if the function cannot be built or the property cannot be defined.
+pub fn define_this_getter<'js, R: IntoJs<'js> + 'js>(
+    ctx: &Ctx<'js>,
+    target: &Object<'js>,
+    key: &str,
+    read: impl Fn(&Ctx<'js>, Value<'js>) -> JsResult<R> + 'js,
+) -> JsResult<()> {
+    define_getter(target, key, getter_function(ctx, key, read)?)
+}
+
+/// Defines the enumerable, configurable accessor `key` of `target`, with the functions `get <key>`
+/// and `set <key>`. `read` gets the context and the `this` value of the call. `write` gets the
+/// context, the `this` value and the argument converted to `A`.
+///
+/// # Errors
+///
+/// Returns an error if a function cannot be built or the property cannot be defined.
+pub fn define_this_accessor<'js, R: IntoJs<'js> + 'js, A: FromJs<'js> + 'js>(
+    ctx: &Ctx<'js>,
+    target: &Object<'js>,
+    key: &str,
+    read: impl Fn(&Ctx<'js>, Value<'js>) -> JsResult<R> + 'js,
+    write: impl Fn(&Ctx<'js>, Value<'js>, A) -> JsResult<()> + 'js,
+) -> JsResult<()> {
+    let set = Function::new(
+        ctx.clone(),
+        move |ctx: Ctx<'js>, This(this): This<Value<'js>>, value: A| write(&ctx, this, value),
+    )?;
+    define_accessor(target, key, getter_function(ctx, key, read)?, set)
+}
+
+/// Defines the writable, enumerable, configurable method `name` of `target`. `run` gets the
+/// context and the `this` value of the call.
+///
+/// # Errors
+///
+/// Returns an error if the function cannot be built or the property cannot be defined.
+pub fn define_this_method<'js, R: IntoJs<'js> + 'js>(
+    ctx: &Ctx<'js>,
+    target: &Object<'js>,
+    name: &str,
+    run: impl Fn(&Ctx<'js>, Value<'js>) -> JsResult<R> + 'js,
+) -> JsResult<()> {
+    let function = Function::new(
+        ctx.clone(),
+        move |ctx: Ctx<'js>, This(this): This<Value<'js>>| run(&ctx, this),
+    )?;
+    define_method(target, name, function)
 }
 
 /// Defines `value` as the writable, configurable, non-enumerable global `name`.
@@ -160,6 +240,32 @@ pub fn define_accessor<'js>(
 pub fn define_global<'js>(ctx: &Ctx<'js>, name: &str, value: Function<'js>) -> JsResult<()> {
     ctx.globals()
         .prop(name, Property::from(value).writable().configurable())
+}
+
+/// Defines `function`, named `name`, as the writable, enumerable, configurable global `name`.
+///
+/// # Errors
+///
+/// Returns an error if the global cannot be defined.
+pub fn define_function<'js>(ctx: &Ctx<'js>, name: &str, function: Function<'js>) -> JsResult<()> {
+    ctx.globals().prop(
+        name,
+        Property::from(function.with_name(name)?)
+            .writable()
+            .enumerable()
+            .configurable(),
+    )
+}
+
+/// Defines `object` as the writable, configurable, non-enumerable global `name`. Define the
+/// members of `object` first.
+///
+/// # Errors
+///
+/// Returns an error if the global cannot be defined.
+pub fn define_namespace<'js>(ctx: &Ctx<'js>, name: &str, object: Object<'js>) -> JsResult<()> {
+    ctx.globals()
+        .prop(name, Property::from(object).writable().configurable())
 }
 
 #[cfg(test)]
@@ -186,7 +292,12 @@ mod tests {
             Function::new(ctx.clone(), || ()).unwrap(),
         )
         .unwrap();
+        define_this_getter(ctx, &proto, "kind", |_, _| Ok(4)).unwrap();
+        define_this_accessor(ctx, &proto, "mode", |_, _| Ok(5), |_, _, _: Value| Ok(())).unwrap();
+        define_this_method(ctx, &proto, "go", |_, _| Ok(())).unwrap();
         define_global(ctx, "Widget", widget).unwrap();
+        define_function(ctx, "work", Function::new(ctx.clone(), || ()).unwrap()).unwrap();
+        define_namespace(ctx, "space", Object::new(ctx.clone()).unwrap()).unwrap();
         ctx.globals().set("proto", proto).unwrap();
     }
 
@@ -315,6 +426,118 @@ mod tests {
     fn define_global_makes_the_property_not_enumerable() {
         with_realm(|ctx| {
             assert_eq!(attributes(&ctx, "[globalThis, 'Widget']"), "w-c--");
+        });
+    }
+
+    #[test]
+    fn define_function_makes_a_writable_enumerable_configurable_global() {
+        with_realm(|ctx| {
+            assert_eq!(attributes(&ctx, "[globalThis, 'work']"), "wec--");
+        });
+    }
+
+    #[test]
+    fn define_function_names_the_function_after_the_global() {
+        with_realm(|ctx| {
+            assert_eq!(text(&ctx, "work.name"), "work");
+        });
+    }
+
+    #[test]
+    fn define_namespace_makes_a_writable_configurable_non_enumerable_global() {
+        with_realm(|ctx| {
+            assert_eq!(attributes(&ctx, "[globalThis, 'space']"), "w-c--");
+        });
+    }
+
+    #[test]
+    fn define_this_getter_passes_the_this_value() {
+        with_realm(|ctx| {
+            define(&ctx);
+            define_this_getter(
+                &ctx,
+                &ctx.globals().get("proto").unwrap(),
+                "me",
+                |_, this| Ok(this),
+            )
+            .unwrap();
+
+            let got = ctx
+                .eval::<bool, _>("const o = Object.create(proto); o.me === o")
+                .unwrap();
+
+            assert!(got);
+        });
+    }
+
+    #[test]
+    fn define_this_accessor_passes_the_converted_argument_to_write() {
+        with_realm(|ctx| {
+            define(&ctx);
+            define_this_accessor(
+                &ctx,
+                &ctx.globals().get("proto").unwrap(),
+                "slot",
+                |_, _| Ok(()),
+                |ctx, _, value: i32| ctx.globals().set("got", value),
+            )
+            .unwrap();
+
+            let got = ctx
+                .eval::<i32, _>("Object.create(proto).slot = 40; got")
+                .unwrap();
+
+            assert_eq!(got, 40);
+        });
+    }
+
+    #[test]
+    fn define_this_accessor_passes_the_this_value_to_write() {
+        with_realm(|ctx| {
+            define(&ctx);
+            define_this_accessor(
+                &ctx,
+                &ctx.globals().get("proto").unwrap(),
+                "slot",
+                |_, _| Ok(()),
+                |ctx, this, _: Value| ctx.globals().set("got", this),
+            )
+            .unwrap();
+
+            let got = ctx
+                .eval::<bool, _>("const o = Object.create(proto); o.slot = 1; got === o")
+                .unwrap();
+
+            assert!(got);
+        });
+    }
+
+    #[test]
+    fn define_this_method_passes_the_this_value() {
+        with_realm(|ctx| {
+            define(&ctx);
+            define_this_method(
+                &ctx,
+                &ctx.globals().get("proto").unwrap(),
+                "me",
+                |_, this| Ok(this),
+            )
+            .unwrap();
+
+            let got = ctx
+                .eval::<bool, _>("const o = Object.create(proto); o.me() === o")
+                .unwrap();
+
+            assert!(got);
+        });
+    }
+
+    #[test]
+    fn getter_function_names_the_function_get_key() {
+        with_realm(|ctx| {
+            let function = getter_function(&ctx, "size", |_, _| Ok(1)).unwrap();
+
+            assert_eq!(function.get::<_, String>("name").unwrap(), "get size");
         });
     }
 

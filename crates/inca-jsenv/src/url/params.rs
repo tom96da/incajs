@@ -279,6 +279,7 @@ pub(super) fn define_params<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResul
         )?;
     }
     let entries: Function = proto.get("entries")?;
+    // `define_method` takes a string key and makes the property enumerable.
     proto.prop(
         PredefinedAtom::SymbolIterator,
         Property::from(entries).writable().configurable(),

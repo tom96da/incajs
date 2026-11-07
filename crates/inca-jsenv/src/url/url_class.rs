@@ -6,7 +6,6 @@
 use std::rc::Rc;
 
 use rquickjs::function::{IntoJsFunc, Opt, ParamRequirement, Params, Rest, This};
-use rquickjs::object::Property;
 use rquickjs::{Class, Ctx, Exception, Function, Object, Result as JsResult, Value};
 use url::{Url, quirks};
 
@@ -186,13 +185,7 @@ pub(super) fn define_url<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<(
         },
     )?;
     for (name, function) in [("canParse", can_parse), ("parse", parse_url)] {
-        class.prop(
-            name,
-            Property::from(function.with_name(name)?.with_length(1)?)
-                .writable()
-                .enumerable()
-                .configurable(),
-        )?;
+        define_method(&class, name, function.with_length(1)?)?;
     }
     for (name, read, write) in COMPONENTS {
         let set = setter(ctx, move |state, value| {

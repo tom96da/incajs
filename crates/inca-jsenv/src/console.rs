@@ -19,6 +19,7 @@ use rquickjs::{
 };
 use unicode_width::UnicodeWidthStr;
 
+use crate::class::{define_method, define_namespace};
 use crate::inspect;
 use crate::paint::{Style, paint};
 use crate::sourcemap::remap_stack;
@@ -196,8 +197,7 @@ pub fn install(ctx: &Ctx<'_>, output: &Output, color: bool) -> JsResult<()> {
     };
     install_methods(&methods)?;
 
-    ctx.globals().set("console", console)?;
-    Ok(())
+    define_namespace(ctx, "console", console)
 }
 
 /// Registers methods on the console object, handing each one its own clone of the shared state.
@@ -213,7 +213,8 @@ impl<'js> Methods<'_, 'js> {
     where
         F: IntoJsFunc<'js, P> + 'js,
     {
-        self.console.set(
+        define_method(
+            self.console,
             name,
             Function::new(self.ctx.clone(), make(Rc::clone(self.shared)))?,
         )
@@ -331,6 +332,23 @@ mod tests {
 
     use super::*;
     use crate::tests::{lines_written_by, texts, without_elapsed, written_by};
+
+    #[test]
+    fn console_is_writable_configurable_and_not_enumerable() {
+        let text = &texts(
+            r"
+            const d = Object.getOwnPropertyDescriptor(globalThis, 'console');
+            console.log([d.writable, d.enumerable, d.configurable].join());
+            ",
+        )[0];
+
+        assert_eq!(text, "true,false,true");
+    }
+
+    #[test]
+    fn a_method_is_named_after_itself() {
+        assert_eq!(texts("console.log(console.log.name);")[0], "log");
+    }
 
     #[test]
     fn every_method_writes_at_its_own_level() {

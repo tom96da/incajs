@@ -14,8 +14,15 @@
 //! [`frames::install`] defines it and `cancelAnimationFrame`. [`callbacks`] keeps the functions a
 //! script registered under ids.
 //!
-//! The public [`class`] module holds the steps that define a native class: its
-//! constructor, methods, getters and global.
+//! The public [`class`] module holds the steps that define a Web global: a native class with its
+//! constructor, methods, getters and global, a free function and a namespace object. A function,
+//! class or namespace that a Web standard defines goes through it. An internal object, such as the
+//! vault, may use `set` and `prop`.
+//!
+//! Each `install` function takes `ctx` first, then the shared state by reference (`&Rc<Timers>`,
+//! `&Clock`, `&Output`), then plain options by value. It is `pub` when another crate calls it and
+//! `pub(crate)` otherwise. It names the lifetime as `Ctx<'js>` when a closure that captures state
+//! needs the name and as `Ctx<'_>` otherwise. Its doc has an `# Errors` section.
 //!
 //! [`Engine`] installs `performance`, `TextEncoder`, `TextDecoder`, `URL` and `URLSearchParams`.
 //! The decoder reads every encoding of the Encoding Standard. The caller installs `console`, the

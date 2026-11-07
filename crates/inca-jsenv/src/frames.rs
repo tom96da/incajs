@@ -14,6 +14,7 @@ use rquickjs::function::Opt;
 use rquickjs::{Coerced, Ctx, Exception, Function, Result as JsResult, Value};
 
 use crate::callbacks::{self, LAST_ID};
+use crate::class::define_function;
 use crate::engine::{Engine, EngineError, ErrorReporter};
 use crate::time::now;
 
@@ -98,25 +99,22 @@ impl Frames {
 ///
 /// Returns an error if a global cannot be defined.
 pub fn install<'js>(ctx: &Ctx<'js>, frames: &Rc<Frames>) -> JsResult<()> {
-    let globals = ctx.globals();
     let request = {
         let frames = Rc::clone(frames);
         Function::new(
             ctx.clone(),
             move |ctx: Ctx<'js>, callback: Opt<Value<'js>>| request(&ctx, &frames, callback.0),
         )?
-        .with_name("requestAnimationFrame")?
     };
-    globals.set("requestAnimationFrame", request)?;
+    define_function(ctx, "requestAnimationFrame", request)?;
     let cancel = {
         let frames = Rc::clone(frames);
         Function::new(
             ctx.clone(),
             move |ctx: Ctx<'js>, handle: Opt<Coerced<i32>>| cancel(&ctx, &frames, handle.0),
         )?
-        .with_name("cancelAnimationFrame")?
     };
-    globals.set("cancelAnimationFrame", cancel)
+    define_function(ctx, "cancelAnimationFrame", cancel)
 }
 
 /// Queues `callback` and returns the handle of the request.
@@ -281,6 +279,25 @@ mod tests {
                 ))
                 .unwrap()
         }
+    }
+
+    #[rstest]
+    #[case::request("requestAnimationFrame")]
+    #[case::cancel("cancelAnimationFrame")]
+    fn the_frame_globals_are_writable_enumerable_and_configurable(#[case] name: &str) {
+        let fx = fixture();
+
+        let attributes: String = fx
+            .engine
+            .eval(&format!(
+                r"
+                const d = Object.getOwnPropertyDescriptor(globalThis, '{name}');
+                [d.writable, d.enumerable, d.configurable].join();
+                "
+            ))
+            .unwrap();
+
+        assert_eq!(attributes, "true,true,true");
     }
 
     #[test]
