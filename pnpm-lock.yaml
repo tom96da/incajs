@@ -412,6 +412,9 @@ importers:
       ts-dedent:
         specifier: 2.3.0
         version: 2.3.0
+      typescript:
+        specifier: npm:@typescript/typescript6@^6.0.2
+        version: '@typescript/typescript6@6.0.2'
       vite:
         specifier: 'catalog:'
         version: 8.3.4(@types/node@26.6.4)
