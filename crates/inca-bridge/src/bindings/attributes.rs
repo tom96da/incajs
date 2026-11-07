@@ -59,9 +59,7 @@ pub(super) fn attribute_names<'js>(
     move |ctx, JsNodeId(node_id)| {
         let host = host.borrow();
         let node = existing_node(&ctx, &host.tree, node_id)?;
-        let mut names: Vec<String> = node.attributes().keys().cloned().collect();
-        names.sort_unstable();
-        Ok(names)
+        Ok(node.attributes().keys().cloned().collect())
     }
 }
 
@@ -245,7 +243,7 @@ mod tests {
     }
 
     #[test]
-    fn attribute_names_returns_the_sorted_keys() {
+    fn attribute_names_returns_the_keys_in_insertion_order() {
         let (engine, _host) = engine_with_bindings();
 
         let names: Vec<String> = engine
@@ -261,7 +259,7 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(names, ["a", "id", "title"]);
+        assert_eq!(names, ["id", "title", "a"]);
     }
 
     #[test]

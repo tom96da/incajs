@@ -1206,15 +1206,6 @@ A fixed entry is deleted and its ID is never reused.
   detached element with a listener is collected once JS drops it, and
   `remove()` stops releasing listeners.
 
-- **B-247 `attributes` lists the names alphabetically**
-  `Units: gpui,bridge,core · Size: S · Impact: Low`
-
-  `attributes` and `getAttributeNames()` list the attributes in alphabetical
-  order, and a browser lists them in insertion order. The host keeps its
-  attributes in a `HashMap`. Fix: an ordered attribute store in `VirtualNode`
-  (`IndexMap`, already in `Cargo.lock`) and an `attributeNames` binding that
-  returns its order.
-
 - **B-248 The platform packages ship no notice for their MIT and Apache-2.0 dependencies**
   `Units: cli,host · Size: M · Impact: Low`
 

@@ -182,8 +182,8 @@ export function getAttribute(nodeId: NodeId, key: string): AttributeValue | null
 }
 
 /**
- * Returns the names of the attributes stored on `nodeId`, sorted, in the lower case the host
- * keeps them in.
+ * Returns the names of the attributes stored on `nodeId` in the order they were set, in the lower
+ * case the host keeps them in.
  * @param nodeId - the node to read
  * @returns the attribute names
  * @throws {TypeError} when `nodeId` names no node

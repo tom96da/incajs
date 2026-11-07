@@ -20,7 +20,7 @@ fn probe(cx: &mut TestAppContext) -> Value {
 #[gpui_cases]
 #[gpui::test]
 #[case::tag_name("tagName", json!("UL"))]
-#[case::attribute_names("attributeNames", json!(["class", "data-kind"]))]
+#[case::attribute_names("attributeNames", json!(["data-kind", "class"]))]
 #[case::attribute("attribute", json!("people"))]
 #[case::first_element_child("firstElementChild", json!(true))]
 #[case::child_element_count("childElementCount", json!(2))]

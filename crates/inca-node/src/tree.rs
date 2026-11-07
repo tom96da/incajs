@@ -26,6 +26,8 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
+use indexmap::IndexMap;
+
 mod computed;
 mod insertion;
 mod lifetime;
@@ -179,7 +181,7 @@ pub struct VirtualNode {
     id: NodeId,
     tag_name: String,
     style_props: HashMap<String, AttributeValue>,
-    attributes: HashMap<String, AttributeValue>,
+    attributes: IndexMap<String, AttributeValue>,
     parent: Option<NodeId>,
     children: Vec<NodeId>,
 }
@@ -190,7 +192,7 @@ impl VirtualNode {
             id,
             tag_name,
             style_props: HashMap::new(),
-            attributes: HashMap::new(),
+            attributes: IndexMap::new(),
             parent: None,
             children: Vec::new(),
         }
@@ -212,7 +214,7 @@ impl VirtualNode {
     }
 
     #[must_use]
-    pub fn attributes(&self) -> &HashMap<String, AttributeValue> {
+    pub fn attributes(&self) -> &IndexMap<String, AttributeValue> {
         &self.attributes
     }
 
