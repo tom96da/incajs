@@ -3,11 +3,8 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-import { document } from "../document.mts";
 import { createIncaElement, rootElement } from "./handle.mts";
 import { elementOf, markDestroyed, markRemoved, nodeOf } from "./lifecycle.mts";
-import { remove } from "./shadowTree.mts";
-import { createTextNode } from "./text.mts";
 import type { ScrollOptions } from "./scroll.mts";
 import type { IncaElement, IncaInputElement } from "./types.mts";
 
@@ -859,63 +856,6 @@ describe("createIncaElement id", () => {
   });
 });
 
-describe("createIncaElement contains", () => {
-  const kept: IncaElement[] = [];
-  const tree = (): IncaElement[] => {
-    installHost();
-    const [root, child, grandchild] = [41, 42, 43].map((id) =>
-      createIncaElement(id, "element", "div"),
-    );
-    child!.parent = root!;
-    root!.__children.push(child!);
-    grandchild!.parent = child!;
-    child!.__children.push(grandchild!);
-    return [root!, child!, grandchild!];
-  };
-
-  it("is true for the element itself", () => {
-    const [root] = tree();
-    expect(root!.contains(root!)).toBe(true);
-  });
-
-  it("is true for a descendant element and a descendant text node", () => {
-    const [root, child, grandchild] = tree();
-    const text = createTextNode("x");
-    text.parent = child!;
-    expect([root!.contains(grandchild!), root!.contains(text)]).toEqual([true, true]);
-  });
-
-  it("is false for an ancestor and an unrelated element", () => {
-    const [root, child] = tree();
-    const [other] = tree();
-    expect([child!.contains(root!), root!.contains(other!)]).toEqual([false, false]);
-  });
-
-  it("follows a removal: the old parent loses the subtree, which keeps its own", () => {
-    const [root, child, grandchild] = tree();
-    remove(child!);
-    // A collected removed handle releases its hold through whichever host is installed then.
-    kept.push(child!);
-    expect([root!.contains(child!), child!.contains(grandchild!)]).toEqual([false, true]);
-  });
-
-  it("is false for null and undefined", () => {
-    const [root] = tree();
-    expect([root!.contains(null), root!.contains(undefined as unknown as null)]).toEqual([
-      false,
-      false,
-    ]);
-  });
-
-  it.each([
-    ["a number", 5],
-    ["a plain object with a parent", { parent: null }],
-  ])("throws a TypeError for %s", (_name, value) => {
-    const [root] = tree();
-    expect(() => root!.contains(value as unknown as null)).toThrow(TypeError);
-  });
-});
-
 describe("rootElement wheel listeners", () => {
   /** The `passive` argument that `element` registers a `wheel` listener with. */
   function registeredPassive(element: IncaElement, options?: { passive: boolean }) {
@@ -940,30 +880,5 @@ describe("rootElement wheel listeners", () => {
 
   it("are not passive on an inner element", () => {
     expect(registeredPassive(createIncaElement(72, "element", "div"))).toBe(false);
-  });
-});
-
-describe("createIncaElement getRootNode", () => {
-  function nested(topId: number) {
-    globalThis.__inca_native__ = { rootNodeId: () => 80 } as never;
-    const top = createIncaElement(topId, "element", "div");
-    const element = createIncaElement(83, "element", "div");
-    element.parent = top;
-    return { top, element };
-  }
-
-  it("gives document under the mount container", () => {
-    expect(nested(80).element.getRootNode()).toBe(document);
-  });
-
-  it("gives the top element of a detached subtree", () => {
-    const { top, element } = nested(81);
-    expect(element.getRootNode()).toBe(top);
-  });
-
-  it("gives the node itself when alone", () => {
-    globalThis.__inca_native__ = { rootNodeId: () => 80 } as never;
-    const element = createIncaElement(83, "element", "div");
-    expect(element.getRootNode()).toBe(element);
   });
 });

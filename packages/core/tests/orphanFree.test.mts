@@ -114,6 +114,18 @@ function installNative(): void {
     replaceChild: () => {
       throw new Error("not used here");
     },
+    cloneNode: () => {
+      throw new Error("not used here");
+    },
+    rootOf: () => {
+      throw new Error("not used here");
+    },
+    compareNodePosition: () => {
+      throw new Error("not used here");
+    },
+    isEqualNode: () => {
+      throw new Error("not used here");
+    },
     removeChild(parentId, childId) {
       nodeOf(parentId);
       if (!nodes.has(childId)) return;

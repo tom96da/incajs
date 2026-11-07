@@ -52,7 +52,14 @@ const noHandlers = {} as EventHandlers;
 /** The mutation members, absent: nothing here calls them. */
 const noMutation = {} as Pick<
   IncaElement,
-  "appendChild" | "insertBefore" | "removeChild" | "replaceChild"
+  | "appendChild"
+  | "insertBefore"
+  | "removeChild"
+  | "replaceChild"
+  | "cloneNode"
+  | "compareDocumentPosition"
+  | "isSameNode"
+  | "isEqualNode"
 >;
 
 const makeEl = (): IncaElement => ({

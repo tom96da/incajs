@@ -1,7 +1,6 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { document } from "../document.mts";
 import {
   blur,
   click,
@@ -33,27 +32,21 @@ import { nodeListOf } from "./collections.mts";
 import { elementTreeMembers } from "./elementTree.mts";
 import { withEventHandlers } from "./eventHandlers.mts";
 import { layoutBox, offsetOf, offsetParentOf, rectOf, tabIndexOf } from "./geometry.mts";
-import {
-  elementOf,
-  isDestroyed,
-  isNode,
-  isRemoved,
-  registerNode,
-  withNodeId,
-} from "./lifecycle.mts";
+import { elementOf, isDestroyed, isRemoved, registerNode, withNodeId } from "./lifecycle.mts";
 import { nodeMutationMembers } from "./nodeMutation.mts";
+import { nodeRelationMembers } from "./nodeRelations.mts";
 import { nodeTreeMembers } from "./nodeTree.mts";
 import { scrollIntoViewArgs, scrollPosition } from "./scroll.mts";
-import { characterDataMembers, nullableText, setElementText } from "./text.mts";
+import { characterDataMembers, createIncaText, nullableText, setElementText } from "./text.mts";
 import type { NodeId, TagName } from "../types.mts";
 import type { AttributeMembers } from "./attributes.mts";
 import type { ElementTreeMembers } from "./elementTree.mts";
+import type { HandleBuilders } from "./nodeMutation.mts";
 import type { ScrollArgs, ScrollIntoViewOptions } from "./scroll.mts";
 import type {
   EventHandlers,
   IncaElement,
-  IncaNode,
-  IncaParent,
+  IncaFragment,
   NodeMembers,
   TextContentMember,
 } from "./types.mts";
@@ -69,11 +62,18 @@ function selectorText(args: readonly unknown[], method: string): string {
   return attributeText(args[0]);
 }
 
+/** The builders a clone uses for each kind of handle. */
+const builders: HandleBuilders = {
+  element: createIncaElement,
+  text: createIncaText,
+  fragment: createIncaFragment,
+};
+
 /**
  * Builds the {@link IncaElement} handle for a native node: parentless,
  * childless, with `id`, `focus()`, `blur()`, `click()`, the pointer capture
- * methods, `contains()`, the listener methods of an event target, `tabIndex`,
- * the `value` of an `input`, `getRootNode()`, the layout members, the node members and the event
+ * methods, the listener methods of an event target, `tabIndex`,
+ * the `value` of an `input`, the layout members, the node members and the event
  * handler properties, all driven through the host.
  * @param id - the native node's id
  * @param kind - whether the node is an element or a comment stand-in
@@ -120,16 +120,6 @@ export function createIncaElement(
     setPointerCapture: (pointerId: number) => setPointerCapture(id, pointerId),
     releasePointerCapture: (pointerId: number) => releasePointerCapture(id, pointerId),
     hasPointerCapture: (pointerId: number) => hasPointerCapture(id, pointerId),
-    contains: (other: unknown) => {
-      if (other === null || other === undefined) return false;
-      if (!isNode(other)) {
-        throw new TypeError("the value is not a node. pass an element, a text node or null");
-      }
-      for (let node: IncaNode | null = other; node !== null; node = node.parent) {
-        if (node === element) return true;
-      }
-      return false;
-    },
     addEventListener: (...args: Parameters<typeof target.addEventListener>) => {
       if (!isRemoved(element)) target.addEventListener(...args);
     },
@@ -233,11 +223,6 @@ export function createIncaElement(
       const found = queryNodes(id, text).map((node) => elementOf(node)!);
       return nodeListOf(() => found);
     },
-    getRootNode: () => {
-      let top: IncaParent = element;
-      while (top.parent !== null) top = top.parent;
-      return top.__node_id === rootNodeId() ? document : top;
-    },
   };
   if (tag === "input") {
     Object.defineProperty(fields, "value", {
@@ -257,7 +242,11 @@ export function createIncaElement(
   Object.defineProperties(element, Object.getOwnPropertyDescriptors(attributeMembers(id, element)));
   Object.defineProperties(element, Object.getOwnPropertyDescriptors(elementTreeMembers(element)));
   Object.defineProperties(element, Object.getOwnPropertyDescriptors(nodeTreeMembers(element)));
-  Object.defineProperties(element, Object.getOwnPropertyDescriptors(nodeMutationMembers(element)));
+  Object.defineProperties(
+    element,
+    Object.getOwnPropertyDescriptors(nodeMutationMembers(element, builders)),
+  );
+  Object.defineProperties(element, Object.getOwnPropertyDescriptors(nodeRelationMembers(element)));
   Object.defineProperties(
     element,
     Object.getOwnPropertyDescriptors(
@@ -318,4 +307,36 @@ export function createCommentNode(text = ""): IncaElement {
 export function rootElement(): IncaElement {
   const id = rootNodeId();
   return elementOf(id) ?? createIncaElement(id, "element", undefined, ["wheel"]);
+}
+
+/**
+ * Builds the handle of a fragment.
+ * @param id - the native node's id
+ * @returns the new, empty handle
+ */
+export function createIncaFragment(id: NodeId): IncaFragment {
+  const fields: Omit<IncaFragment, "__node_id" | keyof NodeMembers | keyof TextContentMember> = {
+    kind: "fragment",
+    parent: null,
+    __children: [],
+  };
+  const fragment = withNodeId(fields as IncaFragment, id);
+  const textMember: TextContentMember = {
+    get textContent() {
+      return isDestroyed(fragment) ? "" : textContent(id);
+    },
+    set textContent(value: string) {
+      if (!isDestroyed(fragment)) setElementText(fragment, nullableText(value));
+    },
+  };
+  for (const members of [
+    nodeTreeMembers(fragment),
+    nodeMutationMembers(fragment, builders),
+    nodeRelationMembers(fragment),
+    textMember,
+  ]) {
+    Object.defineProperties(fragment, Object.getOwnPropertyDescriptors(members));
+  }
+  registerNode(fragment);
+  return fragment;
 }

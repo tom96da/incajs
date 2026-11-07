@@ -15,6 +15,7 @@ import { createNode, rootNodeId } from "../src/tree.mts";
 import { createIncaApp } from "../src/vue/index.mts";
 import { vModelText, withDirectives } from "../src/vue/runtime.mts";
 import type { NodeMutationMembers } from "../src/element/nodeMutation.mts";
+import type { NodeRelationMembers } from "../src/element/nodeRelations.mts";
 import type { EventHandlers } from "../src/element/types.mts";
 import type { IncaElement, NodeId } from "../src/index.mts";
 import type { HostCallback } from "../src/native.mts";
@@ -23,7 +24,7 @@ import type { HostCallback } from "../src/native.mts";
 const noHandlers = {} as EventHandlers;
 
 /** The mutation members, absent: nothing here calls them. */
-const noMutation = {} as NodeMutationMembers;
+const noMutation = {} as Pick<IncaElement, keyof NodeMutationMembers | keyof NodeRelationMembers>;
 
 /**
  * What the fake host knows of each registration beyond its node and event.
@@ -113,6 +114,20 @@ function installFakeNative(): Map<NodeId, FakeNode> {
       return parent.children.indexOf(childId);
     },
     replaceChild(): number {
+      throw new Error("not used here");
+    },
+    cloneNode(): [NodeId, string][] {
+      throw new Error("not used here");
+    },
+    rootOf(id: NodeId): NodeId {
+      let top = id;
+      while (requireNode(top).parent !== null) top = requireNode(top).parent!;
+      return top;
+    },
+    compareNodePosition(): number {
+      throw new Error("not used here");
+    },
+    isEqualNode(): boolean {
       throw new Error("not used here");
     },
     removeChild(parentId: NodeId, childId: NodeId): void {

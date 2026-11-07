@@ -16,6 +16,7 @@ import { nodeListOf } from "./collections.mts";
 import { isDestroyed, nodeOf } from "./lifecycle.mts";
 import type { NodeLink } from "../native.mts";
 import type { NodeMutationMembers } from "./nodeMutation.mts";
+import type { NodeRelationMembers } from "./nodeRelations.mts";
 import type { IncaElement, IncaFragment, IncaNode, NodeMembers } from "./types.mts";
 
 const NODE_TYPES = { element: 1, text: 3, comment: 8, fragment: 11 } as const;
@@ -47,7 +48,9 @@ export function writeData(node: IncaNode, data: string): void {
  * @param node - the handle the members belong to
  * @returns the members, as getters
  */
-export function nodeTreeMembers(node: IncaNode): Omit<NodeMembers, keyof NodeMutationMembers> {
+export function nodeTreeMembers(
+  node: IncaNode,
+): Omit<NodeMembers, keyof NodeMutationMembers | keyof NodeRelationMembers> {
   const id = node.__node_id;
   const reach = (link: NodeLink): IncaNode | null => {
     if (isDestroyed(node)) return null;

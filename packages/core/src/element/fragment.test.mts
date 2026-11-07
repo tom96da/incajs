@@ -140,10 +140,4 @@ describe("a node inside a fragment", () => {
   it("reads null as parentElement", () => {
     expect(inside().child.parentElement).toBeNull();
   });
-
-  it("reads the fragment from getRootNode", () => {
-    const { fragment, child } = inside();
-
-    expect(child.getRootNode()).toBe(fragment);
-  });
 });

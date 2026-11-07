@@ -19,6 +19,10 @@ const native = {
   insertBefore: vi.fn<(parentId: number, childId: number, refId: number | null) => number>(() => 0),
   removeChild: vi.fn<(parentId: number, childId: number) => void>(),
   replaceChild: vi.fn<(parentId: number, nodeId: number, childId: number) => number>(() => 0),
+  cloneNode: vi.fn<(nodeId: number, deep: boolean) => [number, string][]>(() => []),
+  rootOf: vi.fn<(nodeId: number) => number>((nodeId) => nodeId),
+  compareNodePosition: vi.fn<(nodeId: number, otherId: number) => number>(() => 0),
+  isEqualNode: vi.fn<(nodeId: number, otherId: number) => boolean>(() => false),
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   getAttribute: vi.fn<(nodeId: number, key: string) => string | number | boolean | null>(
     () => null,
