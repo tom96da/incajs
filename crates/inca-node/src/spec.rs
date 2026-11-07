@@ -285,8 +285,8 @@ pub struct WheelAxes {
 }
 
 /// The axes along which a wheel step can scroll `id` now. `None` when the node
-/// is unknown or not connected, or it or an ancestor has `display: none`, a hiding
-/// `hidden` attribute or `inert`. Otherwise an axis is `true` when its
+/// is unknown or not connected, or it or an ancestor is a template or has `display: none`, a
+/// hiding `hidden` attribute or `inert`. Otherwise an axis is `true` when its
 /// overflow is `scroll` or `auto`; a container with any other overflow gives
 /// `Some(WheelAxes { x: false, y: false })`.
 #[must_use]
@@ -299,7 +299,8 @@ pub fn wheel_axes(tree: &VirtualTree, id: NodeId) -> Option<WheelAxes> {
         let Some(node) = tree.get(id) else {
             return false;
         };
-        hidden_by_attribute(tree, id)
+        node.is_template()
+            || hidden_by_attribute(tree, id)
             || node.attributes().contains_key("inert")
             || style_spec_from_props(&tree.computed_style(id)).display == Some(DisplaySpec::None)
     });
@@ -316,8 +317,9 @@ pub fn wheel_axes(tree: &VirtualTree, id: NodeId) -> Option<WheelAxes> {
 
 fn build_spec_inner(tree: &VirtualTree, root: NodeId, inert_above: bool) -> Option<ElementSpec> {
     let node = tree.get(root)?;
-    // A `<style>` element holds rules and takes no part in the layout.
-    if node.tag_name().eq_ignore_ascii_case("style") {
+    // A `<style>` element holds rules and a template holds markup. Neither takes part in the
+    // layout.
+    if node.tag_name().eq_ignore_ascii_case("style") || node.is_template() {
         return None;
     }
     let inert = inert_above || node.attributes().contains_key("inert");
@@ -719,5 +721,34 @@ mod tests {
         let spec = build_spec(&tree, parent).unwrap();
         let child_ids: Vec<NodeId> = spec.children.iter().map(|c| c.id).collect();
         assert_eq!(child_ids, &[a, b]);
+    }
+
+    #[test]
+    fn a_template_without_children_has_no_spec() {
+        let mut tree = VirtualTree::new();
+        let template = tree.create_node("TEMPLATE").unwrap();
+
+        assert!(build_spec(&tree, template).is_none());
+    }
+
+    #[test]
+    fn a_template_with_a_child_has_no_spec() {
+        let mut tree = VirtualTree::new();
+        let template = tree.create_node("TEMPLATE").unwrap();
+        let child = tree.create_node("div").unwrap();
+        tree.append_child(template, child).unwrap();
+
+        assert!(build_spec(&tree, template).is_none());
+    }
+
+    #[test]
+    fn wheel_axes_is_none_under_a_template() {
+        let (mut tree, [_, parent, node]) = chain();
+        tree.set_style(node, "overflow", "scroll").unwrap();
+        let template = tree.create_node("template").unwrap();
+        tree.append_child(parent, template).unwrap();
+        tree.append_child(template, node).unwrap();
+
+        assert_eq!(wheel(&tree, node), None);
     }
 }
