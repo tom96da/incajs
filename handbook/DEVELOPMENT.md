@@ -28,17 +28,23 @@ History is in [PLAN.md](./PLAN.md) and [CHANGELOG.md](../CHANGELOG.md).
   published by `cd.yml`. Errors name the source file, and `sourcemap` writes
   a source map.
 - **HMR**: opt-in through `--experimental-hmr` or `INCA_EXPERIMENTAL_HMR`.
-  A template edit keeps component state and a script edit resets it.
+  A template edit and a style edit keep component state, and a script edit
+  resets it.
 - **Input**: pointer, focus, keyboard and scrolling (`overflow`, wheel), and
   events fired from a script. Template refs read their box and scroll.
 - **Text input**: a single-line `<input>` with selection, the clipboard,
   IME composition, the input events and `v-model`.
 - **Timers**: the Web timer functions, run by the executor of the window.
+- **Nodes**: tree links, the mutation members, fragments, cloning and the
+  relations between nodes.
+- **Styles**: `<style>` elements, `<style>` blocks, scoped styles and CSS
+  imports apply, and `:hover`, `:active`, `:focus` and `:focus-within` match.
+- **Built-ins**: `TextEncoder`, `TextDecoder`, `URL`, `URLSearchParams` and
+  `performance.now()`.
 
 ### Not started
 
 - `textarea`, word-wise editing, undo and redo, and the selection API.
-- Interactive visual state.
 - `position` and `z-index`.
 - React and other frontends. Vue 3 has to be stable first.
 
