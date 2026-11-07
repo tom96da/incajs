@@ -106,6 +106,32 @@ impl RuleBodyItemParser<'_, (), &'static str> for Body {
     }
 }
 
+/// Reads the declarations of a block from `input`: the valid ones in source order and one line
+/// for each one that is dropped.
+fn read_body(input: &mut Parser<'_>) -> (Vec<(String, AttributeValue)>, Vec<String>) {
+    let mut body = Body::default();
+    let mut invalid = Vec::new();
+    for item in RuleBodyParser::new(input, &mut body) {
+        if let Err((_, source, _)) = item {
+            invalid.push(format!(
+                "ignoring the declaration `{}`",
+                source.trim_end_matches(|c: char| c == ';' || c.is_ascii_whitespace())
+            ));
+        }
+    }
+    let Body {
+        declarations,
+        mut warnings,
+    } = body;
+    warnings.extend(invalid);
+    (declarations, warnings)
+}
+
+/// The declarations of the text of a `style` attribute and one line for each one it drops.
+pub(crate) fn declarations(text: &str) -> (Vec<(String, AttributeValue)>, Vec<String>) {
+    read_body(&mut Parser::new(text))
+}
+
 /// Reads the qualified rules of a sheet. An at-rule keeps the trait's default and is rejected.
 struct Rules;
 
@@ -130,21 +156,7 @@ impl<'i> QualifiedRuleParser<'i> for Rules {
         _start: &ParserState,
         input: &mut Parser<'i>,
     ) -> Result<(Rule, Vec<String>), ParseError<&'static str>> {
-        let mut body = Body::default();
-        let mut invalid = Vec::new();
-        for item in RuleBodyParser::new(input, &mut body) {
-            if let Err((_, source, _)) = item {
-                invalid.push(format!(
-                    "ignoring the declaration `{}`",
-                    source.trim_end_matches(|c: char| c == ';' || c.is_ascii_whitespace())
-                ));
-            }
-        }
-        let Body {
-            declarations,
-            mut warnings,
-        } = body;
-        warnings.extend(invalid);
+        let (declarations, warnings) = read_body(input);
         Ok((
             Rule {
                 selectors,

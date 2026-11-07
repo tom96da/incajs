@@ -1570,3 +1570,40 @@ A fixed entry is deleted and its ID is never reused.
   `ownerDocument`. The host has one document, so the content and its nodes read
   `document` at all times. Fix: add a second document object for them with the
   `document` redesign.
+
+- **B-289 Parsed `svg` and `math` content has no namespace**
+  `Units: host · Size: M · Impact: Low`
+
+  Parsed `svg` and `math` content has no namespace, so attribute names with capitals (`viewBox`)
+  are stored and written in lower case, and an `svg` context parses as HTML. Fix: add a namespace
+  field to the node and `createElementNS`, and keep the case of attribute names of elements in a
+  foreign namespace.
+
+  Inside `svg`, a `template` element gets a content fragment and is hidden, because the tree matches
+  the tag only. Its parsed children go to its own children and serialization writes the empty
+  content, so the children are lost.
+
+- **B-290 Parsing markup with many misnested formatting end tags is slow**
+  `Units: node · Size: M · Impact: Low`
+
+  The cost is quadratic in the number of such tags: the open-element stack of html5ever keeps
+  growing while the tree depth grows with it, and each token scans it. In a release build, 16,000
+  nodes of repeated misnested formatting markup take 2.5 s with html5ever alone and 2.8 s with the
+  host sink. Fix: limit the open-element stack in the parser, or accept it as a markup size limit.
+
+- **B-291 A tree several thousand levels deep overflows the stack of the renderer**
+  `Units: node,gpui,host · Size: L · Impact: Medium`
+
+  Converting the tree into an element spec, dropping and cloning that spec, building the elements
+  and writing the snapshot each recurse once per level. A tree thousands of levels deep, built with
+  `appendChild()` or by markup with many repairs of formatting elements (about 1 MB of markup
+  reaches 100,000 levels, and Chromium nests the same markup as deep), overflows the stack of the
+  main thread. Fix: walk and drop the spec iteratively in each of these places.
+
+- **B-292 A start-tag repair past the nesting cap places the new `a` or `nobr` differently**
+  `Units: node · Size: M · Impact: Low`
+
+  When `<a>` or a nested `<nobr>` repairs formatting elements and the furthest block lies past the
+  nesting cap, the parser puts the new element inside the furthest block, and Chromium puts it
+  beside the parent of the block. The deepest level is the same. Fix: follow the placement of
+  Chromium for these repairs in the depth bookkeeping of the parser.

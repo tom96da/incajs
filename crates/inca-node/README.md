@@ -42,6 +42,8 @@ node can also be destroyed on its own, and a subtree can be cloned.
 A `template` element owns a content fragment. The fragment has no parent, and it goes with the
 template.
 
+Markup parses into the tree as the children of a context node.
+
 The tree answers the node relations and the text operations of the DOM: the ancestors and
 siblings of a node, the position of one node against another, and the reading and editing of
 text data. It also records the pointer and focus state that `:hover`, `:active`, `:focus` and

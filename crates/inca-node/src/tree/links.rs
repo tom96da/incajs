@@ -3,6 +3,8 @@
 
 //! Attaching, moving, replacing and detaching nodes.
 
+use std::collections::HashSet;
+
 use super::{NodeId, TreeError, VirtualTree};
 
 impl VirtualTree {
@@ -56,9 +58,7 @@ impl VirtualTree {
         nodes: Vec<NodeId>,
         reference: Option<NodeId>,
     ) -> usize {
-        for &id in &nodes {
-            self.detach(id);
-        }
+        self.detach_all(&nodes);
         let Some(parent) = self.nodes.get(&parent_id) else {
             return 0;
         };
@@ -79,6 +79,38 @@ impl VirtualTree {
             self.orphans.remove(&id);
         }
         index
+    }
+
+    /// Moves every child of `from` to the end of `to`, in order, in one pass over the children.
+    ///
+    /// # Errors
+    ///
+    /// The checks of [`insert_before`](Self::insert_before) for inserting `from` into `to`.
+    // The sources are nodes the current parse created, so none is the tree root.
+    pub(crate) fn move_children(&mut self, from: NodeId, to: NodeId) -> Result<(), TreeError> {
+        self.check_insertion(to, from, None)?;
+        let nodes = self.nodes.get(&from).map(|node| node.children.clone());
+        self.place(to, nodes.unwrap_or_default(), None);
+        Ok(())
+    }
+
+    /// Unlinks every node of `ids` from its parent with one pass over the children.
+    fn detach_all(&mut self, ids: &[NodeId]) {
+        // Every caller passes one node or the children of one node: one shared parent.
+        let first = ids.first().and_then(|id| self.nodes.get(id));
+        let Some(parent_id) = first.and_then(|node| node.parent) else {
+            return;
+        };
+        let moving: HashSet<NodeId> = ids.iter().copied().collect();
+        self.generation += 1;
+        if let Some(parent) = self.nodes.get_mut(&parent_id) {
+            parent.children.retain(|child| !moving.contains(child));
+        }
+        for id in ids {
+            if let Some(node) = self.nodes.get_mut(id) {
+                node.parent = None;
+            }
+        }
     }
 
     /// Unlinks `id` from its parent, if it has one. Leaves the node itself
@@ -292,6 +324,55 @@ mod tests {
         assert_eq!(position, 1);
         assert_eq!(children(&tree, parent), kids);
         assert_eq!(tree.generation, generation);
+    }
+
+    #[test]
+    fn move_children_keeps_their_order() {
+        let mut tree = VirtualTree::new();
+        let (from, kids) = family(&mut tree, 3);
+        let to = node(&mut tree, "section");
+
+        tree.move_children(from, to).unwrap();
+
+        assert_eq!(children(&tree, to), kids);
+    }
+
+    #[test]
+    fn move_children_empties_the_source() {
+        let mut tree = VirtualTree::new();
+        let (from, kids) = family(&mut tree, 3);
+        let to = node(&mut tree, "section");
+
+        tree.move_children(from, to).unwrap();
+
+        assert_eq!(children(&tree, from), []);
+        assert_eq!(tree.get(kids[2]).unwrap().parent(), Some(to));
+    }
+
+    #[test]
+    fn move_children_advances_the_generation_by_the_same_step_for_any_count() {
+        let step = |count: usize| {
+            let mut tree = VirtualTree::new();
+            let (from, _) = family(&mut tree, count);
+            let to = node(&mut tree, "section");
+            let generation = tree.generation;
+            tree.move_children(from, to).unwrap();
+            tree.generation - generation
+        };
+
+        assert_eq!(step(5), step(1));
+    }
+
+    #[test]
+    fn move_children_refuses_a_target_inside_the_source() {
+        let mut tree = VirtualTree::new();
+        let (from, kids) = family(&mut tree, 1);
+
+        assert_eq!(
+            tree.move_children(from, kids[0]).unwrap_err(),
+            TreeError::WouldCycle(from)
+        );
+        assert_eq!(children(&tree, from), kids);
     }
 
     #[test]
