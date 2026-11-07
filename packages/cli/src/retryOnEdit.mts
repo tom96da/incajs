@@ -55,8 +55,8 @@ function waitForEdit(edited: Promise<void>, signal: AbortSignal): Promise<boolea
  *
  * @param options - the attempt and where to report
  * @returns the value of the first attempt that succeeds, or `undefined` when `signal` aborts first
- * @throws if the operating system refuses a watcher. The failure that led to
- * a refused `add` is printed first.
+ * @throws if the operating system refuses a watcher before the signal aborts. The failure that
+ * led to a refused `add` is printed first.
  */
 export async function retryOnEdit<T>(options: RetryOnEditOptions<T>): Promise<T | undefined> {
   const { cwd, signal, stdout, stderr, appFile, debounceMs } = options;
@@ -73,6 +73,7 @@ export async function retryOnEdit<T>(options: RetryOnEditOptions<T>): Promise<T 
         try {
           watch.add(file);
         } catch (addError) {
+          if (signal.aborted) return undefined;
           // The watcher failure ends the call, so the failure behind it is printed first.
           printFault(stderr, "build failed", toFault(error), STAMPED);
           throw addError;
@@ -84,8 +85,8 @@ export async function retryOnEdit<T>(options: RetryOnEditOptions<T>): Promise<T 
       }
       silentRetry = false;
 
-      printFault(stderr, "build failed", toFault(error), STAMPED);
       if (signal.aborted) return undefined;
+      printFault(stderr, "build failed", toFault(error), STAMPED);
       log(stdout, "waiting for a change to retry", STAMPED);
       if (!(await waitForEdit(watch.edited, signal))) return undefined;
       log(stdout, "retrying", STAMPED);

@@ -174,6 +174,7 @@ async function isDirectory(dir: string): Promise<boolean> {
  * @param target - the key of the target, from `hostTarget`
  * @param roots - the roots to try in order, from {@link cacheRoots}
  * @param stderr - receives the line that names the directory a new entry was unpacked into
+ * @param signal - once aborted, the unpack line is not written
  * @returns the path of the unpacked binary
  * @throws `ERR_INCA_HOST_PACKAGE_CORRUPT` when the package's binary can't be unpacked or doesn't
  * match its checksum, and `ERR_INCA_HOST_UNPACK_FAILED` when no root can take the file
@@ -183,6 +184,7 @@ export async function unpackHost(
   target: TargetKey,
   roots: readonly CacheRoot[],
   stderr: NodeJS.WritableStream,
+  signal?: AbortSignal,
 ): Promise<string> {
   const entry = `${target}@${pkg.version}`;
   for (const root of roots) {
@@ -200,7 +202,7 @@ export async function unpackHost(
     } catch {
       continue;
     }
-    log(stderr, `unpacked the host binary into ${path.dirname(file)}`);
+    if (!signal?.aborted) log(stderr, `unpacked the host binary into ${path.dirname(file)}`);
     await prune(root.dir, target, entry);
     return file;
   }

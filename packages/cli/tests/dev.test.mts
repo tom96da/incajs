@@ -8,12 +8,37 @@ import { afterAll, beforeAll, describe, expect, it, onTestFinished, vi } from "v
 
 vi.mock("../src/host/index.mts", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/host/index.mts")>();
-  return { ...actual, resolveHostBin: vi.fn<typeof actual.resolveHostBin>(actual.resolveHostBin) };
+  return {
+    ...actual,
+    resolveHostBin: vi.fn<typeof actual.resolveHostBin>(actual.resolveHostBin),
+    assertHostBin: vi.fn<typeof actual.assertHostBin>(actual.assertHostBin),
+  };
 });
 
+vi.mock("../src/config/loader.mts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/config/loader.mts")>();
+  return {
+    ...actual,
+    resolveBuildConfig: vi.fn<typeof actual.resolveBuildConfig>(actual.resolveBuildConfig),
+    resolveAppConfig: vi.fn<typeof actual.resolveAppConfig>(actual.resolveAppConfig),
+    resolveRuntimeConfig: vi.fn<typeof actual.resolveRuntimeConfig>(actual.resolveRuntimeConfig),
+  };
+});
+
+vi.mock("../src/entry.mts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/entry.mts")>();
+  return { ...actual, resolveEntry: vi.fn<typeof actual.resolveEntry>(actual.resolveEntry) };
+});
+
+import {
+  resolveAppConfig,
+  resolveBuildConfig,
+  resolveRuntimeConfig,
+} from "../src/config/loader.mts";
 import { dev } from "../src/dev.mts";
+import { resolveEntry } from "../src/entry.mts";
 import { IncaError } from "../src/error.mts";
-import { resolveHostBin } from "../src/host/index.mts";
+import { assertHostBin, resolveHostBin } from "../src/host/index.mts";
 import { scratchConfigApp } from "./scratchConfigApp.mts";
 import {
   waitFor,
@@ -38,6 +63,11 @@ const exists = (file: string) =>
   );
 
 const mockedResolveHostBin = vi.mocked(resolveHostBin);
+const mockedAssertHostBin = vi.mocked(assertHostBin);
+const mockedResolveBuildConfig = vi.mocked(resolveBuildConfig);
+const mockedResolveEntry = vi.mocked(resolveEntry);
+const mockedResolveAppConfig = vi.mocked(resolveAppConfig);
+const mockedResolveRuntimeConfig = vi.mocked(resolveRuntimeConfig);
 
 describe("dev", () => {
   const scratch = scratchConfigApp("dev");
@@ -58,7 +88,203 @@ describe("dev", () => {
       signal: new AbortController().signal,
     }).catch(() => undefined);
 
-    expect(mockedResolveHostBin).toHaveBeenCalledWith(cwd, stderr.stream);
+    expect(mockedResolveHostBin).toHaveBeenCalledWith(cwd, stderr.stream, expect.any(AbortSignal));
+  });
+
+  /** Runs `dev()` for a fresh app with the signal `controller` holds. */
+  async function runWith(controller: AbortController): Promise<void> {
+    await dev({
+      cwd: await scratch.makeApp({}),
+      entry: "unused",
+      bundler: makeFakeBundler(),
+      hostBin: mockHost,
+      stdout: makeSink().stream,
+      stderr: makeSink().stream,
+      signal: controller.signal,
+    });
+  }
+
+  it("resolves no host when the signal is already aborted", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    mockedResolveHostBin.mockClear();
+
+    await dev({
+      cwd: await scratch.makeApp({}),
+      entry: "unused",
+      bundler: makeFakeBundler(),
+      stdout: makeSink().stream,
+      stderr: makeSink().stream,
+      signal: controller.signal,
+    });
+
+    expect(mockedResolveHostBin).not.toHaveBeenCalled();
+  });
+
+  it("checks no host binary when the signal aborts while the host is resolved", async () => {
+    const controller = new AbortController();
+    mockedAssertHostBin.mockClear();
+    mockedResolveHostBin.mockImplementationOnce(() => {
+      controller.abort();
+      return Promise.resolve(mockHost);
+    });
+
+    await dev({
+      cwd: await scratch.makeApp({}),
+      entry: "unused",
+      bundler: makeFakeBundler(),
+      stdout: makeSink().stream,
+      stderr: makeSink().stream,
+      signal: controller.signal,
+    });
+
+    expect(mockedAssertHostBin).not.toHaveBeenCalled();
+  });
+
+  it("loads no config when the signal aborts while the host binary is checked", async () => {
+    const controller = new AbortController();
+    mockedResolveBuildConfig.mockClear();
+    mockedAssertHostBin.mockImplementationOnce(() => {
+      controller.abort();
+      return Promise.resolve();
+    });
+
+    await runWith(controller);
+
+    expect(mockedResolveBuildConfig).not.toHaveBeenCalled();
+  });
+
+  it("resolves when the watcher is refused after the signal aborts", async () => {
+    const controller = new AbortController();
+    const bundler = makeFakeBundler();
+    bundler.refuseNextWatch = true;
+    const watch = bundler.watch.bind(bundler);
+    bundler.watch = (options) => {
+      controller.abort();
+      return watch(options);
+    };
+
+    const running = dev({
+      cwd: await scratch.makeApp({}),
+      entry: "unused",
+      bundler,
+      hostBin: mockHost,
+      stdout: makeSink().stream,
+      stderr: makeSink().stream,
+      signal: controller.signal,
+    });
+
+    await expect(running).resolves.toBeUndefined();
+  });
+
+  /** An app whose entry `dev()` selects itself. */
+  async function makeAutoApp(): Promise<string> {
+    const cwd = await scratch.makeApp({});
+    await mkdir(path.join(cwd, "src"), { recursive: true });
+    await writeFile(path.join(cwd, "src/App.vue"), "<template><div/></template>\n");
+    return cwd;
+  }
+
+  /** Runs `dev()` on an app whose entry it selects itself. */
+  async function runAuto(controller: AbortController): Promise<void> {
+    await dev({
+      cwd: await makeAutoApp(),
+      bundler: makeFakeBundler(),
+      hostBin: mockHost,
+      stdout: makeSink().stream,
+      stderr: makeSink().stream,
+      signal: controller.signal,
+    });
+  }
+
+  it("selects no entry when the signal aborts while the build config loads", async () => {
+    const controller = new AbortController();
+    mockedResolveEntry.mockClear();
+    const load = mockedResolveBuildConfig.getMockImplementation()!;
+    mockedResolveBuildConfig.mockImplementationOnce((dir) => {
+      controller.abort();
+      return load(dir);
+    });
+
+    await runAuto(controller);
+
+    expect(mockedResolveEntry).not.toHaveBeenCalled();
+  });
+
+  it("reads no app config when the signal aborts while the entry is selected", async () => {
+    const controller = new AbortController();
+    mockedResolveAppConfig.mockClear();
+    const select = mockedResolveEntry.getMockImplementation()!;
+    mockedResolveEntry.mockImplementationOnce((dir, frontend) => {
+      controller.abort();
+      return select(dir, frontend);
+    });
+
+    await runAuto(controller);
+
+    expect(mockedResolveAppConfig).not.toHaveBeenCalled();
+  });
+
+  it("prints no unnamed notice when the signal aborts while the app config loads", async () => {
+    const controller = new AbortController();
+    const stdout = makeSink();
+    const load = mockedResolveAppConfig.getMockImplementation()!;
+    mockedResolveAppConfig.mockImplementationOnce((dir) => {
+      controller.abort();
+      return load(dir);
+    });
+
+    await dev({
+      cwd: await scratch.makeApp({}),
+      entry: "unused",
+      bundler: makeFakeBundler(),
+      hostBin: mockHost,
+      stdout: stdout.stream,
+      stderr: makeSink().stream,
+      signal: controller.signal,
+    });
+
+    expect(stdout.text()).not.toContain("running unnamed");
+  });
+
+  it("reads no runtime config when the signal aborts while the app config loads", async () => {
+    const controller = new AbortController();
+    mockedResolveRuntimeConfig.mockClear();
+    const load = mockedResolveAppConfig.getMockImplementation()!;
+    mockedResolveAppConfig.mockImplementationOnce((dir) => {
+      controller.abort();
+      return load(dir);
+    });
+
+    await runAuto(controller);
+
+    expect(mockedResolveRuntimeConfig).not.toHaveBeenCalled();
+  });
+
+  it("prints no start failure when the signal aborts while the host starts", async () => {
+    const controller = new AbortController();
+    const stderr = makeSink();
+    const bundler = makeFakeBundler();
+    // The first call is the check of `dev()`, the second the start of the host.
+    mockedAssertHostBin.mockResolvedValueOnce().mockImplementationOnce(() => {
+      controller.abort();
+      return Promise.reject(new Error("start refused"));
+    });
+
+    const running = dev({
+      cwd: await scratch.makeApp({}),
+      entry: "unused",
+      bundler,
+      hostBin: mockHost,
+      stdout: makeSink().stream,
+      stderr: stderr.stream,
+      signal: controller.signal,
+    });
+    await bundler.watching;
+    bundler.emitBuild();
+    await running;
+
+    expect(stderr.text()).not.toContain("failed to start the host");
   });
 
   it("starts the host and prints ready once the first build lands", async () => {
@@ -113,6 +339,40 @@ describe("dev", () => {
     );
     expect(stdout.text()).not.toContain("ready");
     expect(bundler.closed).toBe(true);
+  });
+
+  it("rejects with a setting failure that surfaces after the signal aborts", async () => {
+    vi.stubEnv(
+      "MOCK_HOST_CONFIG_FAULT",
+      'failed to read {file}: ["window","width"]: ' +
+        "invalid value: -100, expected a finite number above zero\n",
+    );
+    onTestFinished(() => void vi.unstubAllEnvs());
+    const controller = new AbortController();
+    const bundler = makeFakeBundler();
+    let release = (): void => {};
+    bundler.holdClose = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    const running = dev({
+      cwd: await scratch.makeApp({}),
+      entry: "unused",
+      bundler,
+      hostBin: mockHost,
+      stdout: makeSink().stream,
+      stderr: makeSink().stream,
+      signal: controller.signal,
+    });
+    await bundler.watching;
+    bundler.emitBuild();
+    await waitFor(() => expect(bundler.closeCalls).toBe(1));
+    controller.abort();
+    release();
+
+    await expect(running).rejects.toThrow(
+      expect.objectContaining({ code: "ERR_INCA_CONFIG_INVALID" }),
+    );
   });
 
   it("passes src as the root of the entry synthesized for App.vue to the bundler", async () => {

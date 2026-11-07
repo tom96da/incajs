@@ -111,6 +111,15 @@ describe("resolveHostBin", () => {
     expect(String(stderr.read())).toContain(`unpacked the host binary into ${path.dirname(bin)}`);
   });
 
+  it("writes no unpack line when the signal is aborted", async () => {
+    installPackage();
+    const stderr = new PassThrough();
+
+    await resolveHostBin(undefined, stderr, AbortSignal.abort());
+
+    expect(stderr.read()).toBeNull();
+  });
+
   it("falls back to the user cache when INCA_CACHE_DIR can't be used", async () => {
     installPackage();
     vi.stubEnv("INCA_CACHE_DIR", regularFile());

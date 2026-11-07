@@ -30,6 +30,7 @@ function homeDirectory(): string | undefined {
  * cache, then `node_modules/.inca/host` of the app.
  * @param cwd - the app's root directory
  * @param stderr - receives the line that names the directory a new unpack wrote into
+ * @param signal - once aborted, the unpack line is not written
  * @returns the path of the host binary to start
  * @throws `ERR_INCA_HOST_BIN_UNRESOLVED` if no override is set and no package carries a binary
  * for this platform, `ERR_INCA_HOST_PACKAGE_CORRUPT` if the package's binary is unusable and
@@ -38,6 +39,7 @@ function homeDirectory(): string | undefined {
 export async function resolveHostBin(
   cwd: string = process.cwd(),
   stderr: NodeJS.WritableStream = process.stderr,
+  signal?: AbortSignal,
 ): Promise<string> {
   const fromEnv = process.env[HOST_BIN_ENV_VAR];
   if (fromEnv) return fromEnv;
@@ -45,7 +47,7 @@ export async function resolveHostBin(
   const host = await inspectHostPackage();
   if (host.state === "installed") {
     const roots = cacheRoots(process.env, process.platform, homeDirectory(), cwd);
-    return unpackHost(host.pkg, host.target.key, roots, stderr);
+    return unpackHost(host.pkg, host.target.key, roots, stderr, signal);
   }
   if (host.state === "corrupt") throw host.error;
 

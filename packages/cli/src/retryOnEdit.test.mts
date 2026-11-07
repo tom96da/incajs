@@ -275,10 +275,48 @@ describe("retryOnEdit", () => {
     expect(stderr.text()).toContain("build failed (ERR_INCA_ICON_NOT_FOUND): no icon");
   });
 
-  it("returns after printing the failure when aborted with the named file present", async () => {
+  it("resolves undefined when a watcher error follows the abort", async () => {
+    const real = vi.mocked(watch).getMockImplementation() as typeof watch;
+    vi.mocked(watch)
+      .mockImplementationOnce(real)
+      .mockImplementationOnce(real)
+      .mockImplementationOnce(() => {
+        throw new Error("EMFILE: too many open files");
+      });
+    const { running } = start(() => {
+      controller.abort();
+      return Promise.reject(
+        new IncaError("ERR_INCA_ICON_NOT_FOUND", "no icon", path.join(app, "x.icns")),
+      );
+    });
+
+    expect(await running).toBeUndefined();
+  });
+
+  it("prints nothing when a watcher error follows the abort", async () => {
+    const real = vi.mocked(watch).getMockImplementation() as typeof watch;
+    vi.mocked(watch)
+      .mockImplementationOnce(real)
+      .mockImplementationOnce(real)
+      .mockImplementationOnce(() => {
+        throw new Error("EMFILE: too many open files");
+      });
+    const { running, stderr } = start(() => {
+      controller.abort();
+      return Promise.reject(
+        new IncaError("ERR_INCA_ICON_NOT_FOUND", "no icon", path.join(app, "x.icns")),
+      );
+    });
+
+    await running;
+
+    expect(stderr.text()).toBe("");
+  });
+
+  it("does not retry when aborted with the named file present", async () => {
     const icon = path.join(app, "app.icns");
     await writeFile(icon, "");
-    const { running, run, stdout, stderr } = start(() => {
+    const { running, run } = start(() => {
       controller.abort();
       return Promise.reject(new IncaError("ERR_INCA_ICON_NOT_FOUND", "no icon", icon));
     });
@@ -286,8 +324,6 @@ describe("retryOnEdit", () => {
     await expect(running).resolves.toBeUndefined();
 
     expect(run).toHaveBeenCalledTimes(1);
-    expect(stderr.text()).toContain("build failed (ERR_INCA_ICON_NOT_FOUND): no icon");
-    expect(stdout.text()).toBe("");
   });
 
   it("resolves undefined when the signal aborts during the wait", async () => {
@@ -309,7 +345,7 @@ describe("retryOnEdit", () => {
   });
 
   it("resolves undefined at once when the signal is already aborted at a failure", async () => {
-    const { running, run, stdout, stderr } = start(() => {
+    const { running, run, stdout } = start(() => {
       controller.abort();
       return Promise.reject(new Error("broken"));
     });
@@ -317,8 +353,18 @@ describe("retryOnEdit", () => {
     await expect(running).resolves.toBeUndefined();
 
     expect(run).toHaveBeenCalledTimes(1);
-    expect(stderr.text()).toContain("build failed: broken");
     expect(stdout.text()).toBe("");
+  });
+
+  it("prints no failure when the signal is already aborted at a failure", async () => {
+    const { running, stderr } = start(() => {
+      controller.abort();
+      return Promise.reject(new Error("broken"));
+    });
+
+    await running;
+
+    expect(stderr.text()).toBe("");
   });
 
   it("prints a value that is not an Error", async () => {

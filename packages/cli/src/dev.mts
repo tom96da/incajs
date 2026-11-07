@@ -59,11 +59,7 @@ export interface DevOptions {
   signal: AbortSignal;
 }
 
-/**
- * How long `reload` waits for the host before giving up. A wedged app never
- * answers, and an aborted `dev()` waits for the in-flight rebuild's reload
- * before it can stop the host.
- */
+/** How long `reload` waits for the host before giving up. A wedged app never answers. */
 const RELOAD_TIMEOUT_MS = 10_000;
 
 /** The failures that leave the app unnamed instead of stopping `inca dev`. */
@@ -74,19 +70,20 @@ const UNNAMED: readonly string[] = [
 
 /**
  * The app's full config, or `undefined` when it names itself nowhere,
- * which is reported on `stdout`.
+ * which is reported on `stdout` unless `signal` has aborted.
  *
  * @throws if the config can't be read for any other reason
  */
 async function resolveMetadata(
   cwd: string,
   stdout: NodeJS.WritableStream,
+  signal: AbortSignal,
 ): Promise<ResolvedAppConfig | undefined> {
   try {
     return await resolveAppConfig(cwd);
   } catch (error) {
     if (!(error instanceof IncaError) || !UNNAMED.includes(error.code)) throw error;
-    log(stdout, `running unnamed. ${error.message}`, STAMPED);
+    if (!signal.aborted) log(stdout, `running unnamed. ${error.message}`, STAMPED);
     return undefined;
   }
 }
@@ -99,13 +96,15 @@ async function resolveMetadata(
  * launched from.
  *
  * `undefined` on every other platform, and whenever the bundle can't be
- * assembled. It is reported on `stdout`, and the host is launched unbundled.
+ * assembled. It is reported on `stdout` unless `signal` has aborted, and the host is launched
+ * unbundled.
  */
 async function bundleExecutable(
   cwd: string,
   metadata: ResolvedAppConfig | undefined,
   hostBin: string,
   stdout: NodeJS.WritableStream,
+  signal: AbortSignal,
 ): Promise<string | undefined> {
   if (process.platform !== "darwin" || !metadata) return undefined;
 
@@ -118,7 +117,7 @@ async function bundleExecutable(
     });
     return app.executablePath;
   } catch (error) {
-    log(stdout, `running unbundled. ${toFault(error).message}`, STAMPED);
+    if (!signal.aborted) log(stdout, `running unbundled. ${toFault(error).message}`, STAMPED);
     return undefined;
   }
 }
@@ -211,11 +210,16 @@ export async function dev(options: DevOptions): Promise<void> {
   else options.signal.addEventListener("abort", () => stop(), { once: true });
   let entryWatch: EditWatch | undefined;
   let monitoring: Promise<{ error: unknown } | undefined> | undefined;
+  // Set once the startup steps are done. A step that rejects after a cancel ends quietly.
+  let running = false;
   try {
+    if (stopping) return;
     const stdout = options.stdout ?? process.stdout;
     const stderr = options.stderr ?? process.stderr;
-    const bin = options.hostBin ?? (await resolveHostBin(cwd, stderr));
+    const bin = options.hostBin ?? (await resolveHostBin(cwd, stderr, options.signal));
+    if (stopping) return;
     await assertHostBin(bin);
+    if (stopping) return;
     const bundler: Bundler = options.bundler ?? defaultBundler;
     const frontend: Frontend = options.frontend ?? defaultFrontend;
 
@@ -235,19 +239,24 @@ export async function dev(options: DevOptions): Promise<void> {
       appFile: frontend.appFile,
       async attempt() {
         const config = await resolveBuildConfig(cwd);
+        if (stopping) return undefined;
         const automaticEntry = options.entry === undefined && config.entry === undefined;
         const entry = options.entry ?? config.entry ?? (await resolveEntry(cwd, frontend));
-        const metadata = await resolveMetadata(cwd, stdout);
+        if (stopping) return undefined;
+        const metadata = await resolveMetadata(cwd, stdout, options.signal);
+        if (stopping) return undefined;
         const runtimeConfig = metadata
           ? runtimeConfigOf(metadata, { dev: true })
           : await resolveRuntimeConfig(cwd, { dev: true });
+        if (stopping) return undefined;
         return { entry, automaticEntry, metadata, runtimeConfig };
       },
     });
     if (!resolved) return;
     const { entry, automaticEntry, metadata, runtimeConfig } = resolved;
     const devDir = devDirOf(cwd);
-    const hostBin = (await bundleExecutable(cwd, metadata, bin, stdout)) ?? bin;
+    const hostBin = (await bundleExecutable(cwd, metadata, bin, stdout, options.signal)) ?? bin;
+    if (stopping) return;
 
     let client: HostClient | undefined;
     // The config the host refused, thrown once the session has closed.
@@ -265,10 +274,14 @@ export async function dev(options: DevOptions): Promise<void> {
     // The open HMR channel's dispatch, which the host's `vite` integration calls.
     let dispatchVite: ((params: unknown) => void) | undefined;
 
+    /** Reloads the host. A reload still waiting for the host when shutdown starts is dropped. */
     async function reloadHost(): Promise<boolean> {
+      if (stopping) return false;
       try {
-        await client?.call("reload", undefined, RELOAD_TIMEOUT_MS);
-        return true;
+        return await Promise.race([
+          Promise.resolve(client?.call("reload", undefined, RELOAD_TIMEOUT_MS)).then(() => true),
+          stopped.then(() => false),
+        ]);
       } catch (error) {
         printFault(stderr, "reload failed", toFault(error), STAMPED);
         return false;
@@ -326,7 +339,7 @@ export async function dev(options: DevOptions): Promise<void> {
       try {
         await next.start();
       } catch (error) {
-        printFault(stderr, "failed to start the host", toFault(error), STAMPED);
+        if (!stopping) printFault(stderr, "failed to start the host", toFault(error), STAMPED);
         return;
       }
       client = next;
@@ -462,13 +475,14 @@ export async function dev(options: DevOptions): Promise<void> {
       try {
         // Closing the session stops repeat build errors. The host stays.
         if (selected === undefined) await closeSession();
+        if (stopping) return;
         const next = await resolveEntry(cwd, frontend);
         missing = false;
         await closeSession();
         if (stopping) return;
         session = await openSession(next);
       } catch (error) {
-        if (!missing) printFault(stderr, "build failed", toFault(error), STAMPED);
+        if (!missing && !stopping) printFault(stderr, "build failed", toFault(error), STAMPED);
         missing = selected === undefined;
       }
     }
@@ -494,10 +508,10 @@ export async function dev(options: DevOptions): Promise<void> {
       } catch (error) {
         initial = undefined;
         missing = true;
-        printFault(stderr, "build failed", toFault(error), STAMPED);
+        if (!stopping) printFault(stderr, "build failed", toFault(error), STAMPED);
       }
     }
-    if (initial !== undefined) session = await openSession(initial);
+    if (initial !== undefined && !stopping) session = await openSession(initial);
     if (entryWatch) {
       monitoring = monitorEntry(entryWatch).then(
         () => undefined,
@@ -508,6 +522,7 @@ export async function dev(options: DevOptions): Promise<void> {
       );
     }
 
+    running = true;
     await stopped;
 
     const monitorFailure = await monitoring;
@@ -532,6 +547,8 @@ export async function dev(options: DevOptions): Promise<void> {
         `the host exited with ${signal ? `signal ${signal}` : `code ${code}`}`,
       );
     }
+  } catch (error) {
+    if (running || !options.signal.aborted) throw error;
   } finally {
     // Ends the entry monitor and waits for it, so it arms no watch after this.
     stop();
