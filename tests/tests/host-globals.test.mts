@@ -3,7 +3,7 @@
 
 // Runs one app under the real `inca-host` binary twice, as `inca dev
 // --experimental-hmr` serves it and as a production build, and compares what
-// the app prints about its timer, frame and encoding globals.
+// the app prints about its timer, frame, encoding and URL globals.
 
 import { spawn } from "node:child_process";
 import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -23,8 +23,9 @@ import type { HmrChannel } from "../../packages/cli/src/types.mts";
 const WAIT_TIMEOUT_MS = 30_000;
 /** How long the host is given to reload before this test gives up on it. */
 const RELOAD_TIMEOUT_MS = 10_000;
-/** What the app prints, decoded from the bytes of a hiragana letter. */
-const EXPECTED = "[e2e] function function function function function function function あ";
+/** What the app prints: a hiragana letter decoded from bytes, a resolved URL and a query string. */
+const EXPECTED =
+  "[e2e] function function function function function function function あ http://example.com/a%20b?x=1#h a=1+2";
 
 const ENTRY = dedent`
   console.log(
@@ -43,7 +44,11 @@ const ENTRY = dedent`
       " " +
       typeof TextDecoder +
       " " +
-      new TextDecoder().decode(new Uint8Array([0xe3, 0x81, 0x82])),
+      new TextDecoder().decode(new Uint8Array([0xe3, 0x81, 0x82])) +
+      " " +
+      new URL("../a b?x=1#h", "http://example.com/d/e").href +
+      " " +
+      new URLSearchParams({ a: "1 2" }).toString(),
   );
 `;
 
