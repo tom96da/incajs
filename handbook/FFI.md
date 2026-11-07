@@ -31,14 +31,23 @@ All `unsafe` code of the Rust crates lives in the quickjs module of `inca-jsenv`
 (`quickjs.rs` and `quickjs/`).
 The one exception is the `unsafe impl` that rquickjs's `JsLifetime` derive
 expands to, which gives a Rust value on a JS object its lifetime marker.
-`clippy.toml` restricts that derive to the files that allow it:
-`inca-jsenv/src/sourcemap/store.rs`, `inca-jsenv/src/encoding.rs`,
-`inca-jsenv/src/url.rs` and `inca-bridge/src/event/record.rs`. It restricts
-`rquickjs::Persistent` too, since one kept past its runtime aborts the process
-when the runtime drops.
-`Engine` installs `TextEncoder`, `TextDecoder`, `URL` and `URLSearchParams` as
-native classes. The instances of all of them but `URL` own plain Rust data and
-trace nothing. A `URL` instance traces its `searchParams` object.
+`clippy.toml` restricts that derive and `rquickjs::Persistent`, since one kept
+past its runtime aborts the process when the runtime drops. The restriction is
+lifted per type: at the item, or in a module of its own for a type with a
+lifetime parameter. Don't lift it for a whole file with `#![allow]`. These
+types derive it:
+
+| Type | File | What it is | JS values it holds |
+| --- | --- | --- | --- |
+| `IncaEvent` | `inca-bridge/src/event/record.rs` | An event object | Through `Held`, traced |
+| `Held` | `inca-bridge/src/event/record.rs` | The JS values of an event | `target`, `path`, `related` and `detail`, traced |
+| `State` | `inca-bridge/src/event/record.rs` | The plain fields of an event | None |
+| `UrlInstance` | `inca-jsenv/src/url.rs` | A `URL` object | Its `searchParams` object, traced |
+| `ParamsInstance` | `inca-jsenv/src/url.rs` | A `URLSearchParams` object | None |
+| `ParamsIterator` | `inca-jsenv/src/url/iterator.rs` | A `URLSearchParams` iterator | None |
+| `Encoder` | `inca-jsenv/src/encoding/encoder.rs` | A `TextEncoder` object | None |
+| `Decoder` | `inca-jsenv/src/encoding/decoder.rs` | A `TextDecoder` object | None |
+| `SourceMaps` | `inca-jsenv/src/sourcemap/store.rs` | The source maps of a runtime | None |
 
 ## Retained virtual tree
 
