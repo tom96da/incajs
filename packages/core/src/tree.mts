@@ -3,7 +3,7 @@
 
 import { releaseCallbacks } from "./callbacks.mts";
 import { native } from "./native.mts";
-import type { NodeLink } from "./native.mts";
+import type { NodeLink, Parsed } from "./native.mts";
 import type { AttributeValue, NodeId, ScrollAlignment, StyleProps, TagName } from "./types.mts";
 
 /**
@@ -96,6 +96,65 @@ export function replaceChild(parentId: NodeId, nodeId: NodeId, childId: NodeId):
  */
 export function cloneNode(nodeId: NodeId, deep: boolean): [NodeId, TagName][] {
   return native().cloneNode(nodeId, deep);
+}
+
+/**
+ * Reads the markup of the children of a node. A template reads its content.
+ * @param nodeId - the node to read
+ * @returns the markup
+ * @throws {TypeError} when `nodeId` names no node
+ */
+export function innerHtml(nodeId: NodeId): string {
+  return native().innerHtml(nodeId);
+}
+
+/**
+ * Reads the markup of a node and its children.
+ * @param nodeId - the node to read
+ * @returns the markup
+ * @throws {TypeError} when `nodeId` names no node
+ */
+export function outerHtml(nodeId: NodeId): string {
+  return native().outerHtml(nodeId);
+}
+
+/**
+ * Parses `html` in the context of a node and replaces its children, or the children of its content
+ * for a template. The old children keep their listeners and are freed at the start of the next
+ * frame unless held.
+ * @param nodeId - the node whose children are replaced
+ * @param html - the markup
+ * @returns the parsed nodes, put at position 0
+ * @throws {TypeError} when `nodeId` names no node
+ */
+export function setInnerHtml(nodeId: NodeId, html: string): Parsed {
+  return native().setInnerHtml(nodeId, html);
+}
+
+/**
+ * Parses `html` in the context of the parent of a node and replaces the node with the result.
+ * @param nodeId - the node to replace
+ * @param html - the markup
+ * @returns the parsed nodes and their position, or `null` and no change for a node without a parent
+ * @throws {DOMException} `NoModificationAllowedError` for the root container
+ * @throws {TypeError} when `nodeId` names no node
+ */
+export function setOuterHtml(nodeId: NodeId, html: string): Parsed | null {
+  return native().setOuterHtml(nodeId, html);
+}
+
+/**
+ * Parses `html` and inserts the nodes next to or inside a node.
+ * @param nodeId - the node the position is relative to
+ * @param position - `beforebegin`, `afterbegin`, `beforeend` or `afterend`, in any ASCII case
+ * @param html - the markup
+ * @returns the parsed nodes and their position among the children of their new parent
+ * @throws {DOMException} `SyntaxError` for another position; `NoModificationAllowedError` for
+ *   `beforebegin` or `afterend` on a node without a parent
+ * @throws {TypeError} when `nodeId` names no node
+ */
+export function insertAdjacentHtml(nodeId: NodeId, position: string, html: string): Parsed {
+  return native().insertAdjacentHtml(nodeId, position, html);
 }
 
 /**

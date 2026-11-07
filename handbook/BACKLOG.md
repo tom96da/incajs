@@ -88,9 +88,7 @@ A fixed entry is deleted and its ID is never reused.
   The element handle lacks:
   - `classList`, `className`, `dataset`, `style`;
   - the modern mutation methods (`append`, `prepend`, `before`, `after`,
-    `remove`, `replaceWith`, `replaceChildren`);
-  - the HTML parsing members (`innerHTML`, `outerHTML`,
-    `insertAdjacentHTML`, `content` of a `<template>`).
+    `remove`, `replaceWith`, `replaceChildren`).
 
   The members it has differ from a browser in the box reads (B-160), the
   `offsetParent` chain (B-161), the scroll members (B-172, B-174, B-216 and
@@ -1616,3 +1614,10 @@ A fixed entry is deleted and its ID is never reused.
   `textContent` setter and the moves of `appendChild()` drop the focus silently. Fix: one shared
   step before the tree change that every mutation native calls, then drop the line about
   `removeChild()` and `replaceChild()` from `elements.md`.
+
+- **B-294 `v-html` sets an attribute named `innerHTML`**
+  `Units: core · Size: S · Impact: Medium`
+
+  `patchProp` sends the `innerHTML` prop of `v-html` to `setAttribute("innerHTML")`, so the markup
+  becomes a plain attribute and no child is created, although elements now have `innerHTML`. Fix:
+  set the `innerHTML` prop as a property in `patchProp`, as the `value` prop is.

@@ -6,6 +6,15 @@ import type { AttributeValue, CallbackId, EventLike, NodeId, ScrollAlignment } f
 /** How {@link IncaNative.linkedNode} names the node to reach from a node. */
 export type NodeLink = "parent" | "first" | "last" | "previous" | "next";
 
+/** One node of a parsed fragment: id, tag, parent id and the text of a text node or a comment. */
+export type ParsedEntry = [id: NodeId, tag: string, parentId: NodeId, data: string | null];
+
+/**
+ * What a parse writes into the tree: the position of the first inserted node among the children of
+ * its container, and the nodes in pre-order. An entry whose parent is no entry is a root.
+ */
+export type Parsed = [position: number, entries: ParsedEntry[]];
+
 /** What a listener or a dispatch names: a node id, or the tag of `document` or `window`. */
 export type EventTargetId = NodeId | "$document" | "$window";
 
@@ -22,6 +31,11 @@ interface IncaNative {
   replaceChild(parentId: NodeId, nodeId: NodeId, childId: NodeId): number;
   cloneNode(nodeId: NodeId, deep: boolean): [NodeId, string][];
   templateContent(nodeId: NodeId): NodeId | null;
+  innerHtml(nodeId: NodeId): string;
+  outerHtml(nodeId: NodeId): string;
+  setInnerHtml(nodeId: NodeId, html: string): Parsed;
+  setOuterHtml(nodeId: NodeId, html: string): Parsed | null;
+  insertAdjacentHtml(nodeId: NodeId, position: string, html: string): Parsed;
   rootOf(nodeId: NodeId): NodeId;
   compareNodePosition(nodeId: NodeId, otherId: NodeId): number;
   isEqualNode(nodeId: NodeId, otherId: NodeId): boolean;

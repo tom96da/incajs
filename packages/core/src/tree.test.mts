@@ -8,6 +8,11 @@ import {
   insertBefore,
   replaceChild,
   cloneNode,
+  innerHtml,
+  outerHtml,
+  setInnerHtml,
+  setOuterHtml,
+  insertAdjacentHtml,
   rootOf,
   compareNodePosition,
   isEqualNode,
@@ -34,7 +39,7 @@ import {
   inputValue,
   setInputValue,
 } from "./tree.mts";
-import type { HostCallback, NodeLink } from "./native.mts";
+import type { HostCallback, NodeLink, Parsed } from "./native.mts";
 import type { EventLike } from "./types.mts";
 
 // Ids come from the host, which numbers them in order.
@@ -74,6 +79,14 @@ const native = {
   ),
   releaseListeners: vi.fn<(nodeId: number) => number[]>(() => []),
   templateContent: vi.fn<(nodeId: number) => number | null>(() => null),
+  innerHtml: vi.fn<(nodeId: number) => string>(() => ""),
+  outerHtml: vi.fn<(nodeId: number) => string>(() => ""),
+  setInnerHtml: vi.fn<(nodeId: number, html: string) => Parsed>(() => [0, []]),
+  setOuterHtml: vi.fn<(nodeId: number, html: string) => Parsed | null>(() => null),
+  insertAdjacentHtml: vi.fn<(nodeId: number, position: string, html: string) => Parsed>(() => [
+    0,
+    [],
+  ]),
   attributeNames: vi.fn<(nodeId: number) => string[]>(() => []),
   matches: vi.fn<(nodeId: number, selector: string) => boolean>(() => false),
   closest: vi.fn<(nodeId: number, selector: string) => number | null>(() => null),
@@ -135,6 +148,33 @@ describe("wrapper functions forward to __inca_native__", () => {
     native.cloneNode.mockReturnValueOnce([[7, "div"]]);
     expect(cloneNode(1, true)).toEqual([[7, "div"]]);
     expect(native.cloneNode).toHaveBeenCalledWith(1, true);
+  });
+
+  it.each([
+    ["innerHtml", () => innerHtml(1), "<b></b>"],
+    ["outerHtml", () => outerHtml(1), "<p><b></b></p>"],
+  ] as const)("%s", (name, call, result) => {
+    native[name].mockReturnValueOnce(result);
+    expect(call()).toBe(result);
+    expect(native[name]).toHaveBeenCalledWith(1);
+  });
+
+  it("setInnerHtml", () => {
+    native.setInnerHtml.mockReturnValueOnce([0, [[2, "b", 9, null]]]);
+    expect(setInnerHtml(1, "<b>")).toEqual([0, [[2, "b", 9, null]]]);
+    expect(native.setInnerHtml).toHaveBeenCalledWith(1, "<b>");
+  });
+
+  it("setOuterHtml", () => {
+    native.setOuterHtml.mockReturnValueOnce(null);
+    expect(setOuterHtml(1, "<b>")).toBeNull();
+    expect(native.setOuterHtml).toHaveBeenCalledWith(1, "<b>");
+  });
+
+  it("insertAdjacentHtml", () => {
+    native.insertAdjacentHtml.mockReturnValueOnce([3, []]);
+    expect(insertAdjacentHtml(1, "afterend", "<b>")).toEqual([3, []]);
+    expect(native.insertAdjacentHtml).toHaveBeenCalledWith(1, "afterend", "<b>");
   });
 
   it("rootOf", () => {

@@ -159,6 +159,11 @@ function installNative(): void {
     closest: (id) => (nodeOf(id), null),
     checkSelector: () => {},
     templateContent: () => null,
+    innerHtml: () => "",
+    outerHtml: () => "",
+    setInnerHtml: () => [0, []],
+    setOuterHtml: () => null,
+    insertAdjacentHtml: () => [0, []],
     querySelector: (id) => (nodeOf(id), null),
     querySelectorAll: (id) => (nodeOf(id), []),
     releaseListeners(id) {

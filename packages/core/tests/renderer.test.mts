@@ -242,6 +242,11 @@ function installFakeNative(): Map<NodeId, FakeNode> {
       return released;
     },
     templateContent: () => null,
+    innerHtml: () => "",
+    outerHtml: () => "",
+    setInnerHtml: () => [0, []],
+    setOuterHtml: () => null,
+    insertAdjacentHtml: () => [0, []],
     holdNode(): void {},
     releaseNode(): void {},
     focusNode(): void {},
@@ -304,6 +309,9 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
     root = {
       ...noHandlers,
       ...noMutation,
+      innerHTML: "",
+      outerHTML: "",
+      insertAdjacentHTML: () => {},
       getAttribute: () => null,
       setAttribute: () => {},
       hasAttribute: () => false,
