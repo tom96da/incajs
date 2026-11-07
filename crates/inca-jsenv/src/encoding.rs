@@ -9,16 +9,13 @@
 //! The `encoder` module writes UTF-8 from the WTF-8 form of a string and the `decoder` module
 //! decodes bytes. This module installs both classes and converts the shared arguments.
 
-// `clippy.toml` restricts the `JsLifetime` derive to the files that allow it.
-#![allow(clippy::disallowed_macros, clippy::disallowed_types)]
-
 use std::cell::RefCell;
 
 use rquickjs::convert::Coerced;
 use rquickjs::function::{IntoJsFunc, ParamRequirement, Params, This};
 use rquickjs::{Class, Ctx, Exception, FromJs, Function, Object, Result as JsResult, Value};
 
-use crate::class::new_target_prototype;
+use crate::class::{NEEDS_NEW, new_target_prototype};
 use crate::quickjs::{is_array_buffer, string_wtf8};
 use crate::vault::vault;
 
@@ -50,7 +47,6 @@ const GETTERS_JS: &str = r"
     })()
     ";
 
-const NEEDS_NEW: &str = "the class constructor needs new. call it with new";
 const NOT_AN_OBJECT: &str = "the options are not an object. pass an object or leave them out";
 
 /// Defines the globals `TextEncoder` and `TextDecoder` and keeps their prototypes and the buffer
@@ -171,26 +167,7 @@ mod tests {
 
     use super::*;
     use crate::Engine;
-    use crate::tests::around;
-
-    /// The string that the script `source` evaluates to, in a new engine.
-    pub(super) fn run(source: &str) -> String {
-        Engine::new().unwrap().eval(source).unwrap()
-    }
-
-    /// What the statements `body` throw, as `Name: message`, or `no throw`.
-    pub(super) fn thrown(body: &str) -> String {
-        run(&format!(
-            r"
-            try {{
-                {body};
-                'no throw';
-            }} catch (e) {{
-                `${{e.name}}: ${{e.message}}`;
-            }}
-            "
-        ))
-    }
+    use crate::tests::{around, run, thrown};
 
     #[rstest]
     #[case::encoder("TextEncoder")]

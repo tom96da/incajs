@@ -23,6 +23,25 @@ use crate::inspect::{line, pin, quoted_escaped};
 use crate::paint::Style;
 use crate::sourcemap::{register, remap_stack};
 
+/// The string that the script `source` evaluates to, in a new engine.
+pub(crate) fn run(source: &str) -> String {
+    Engine::new().unwrap().eval(source).unwrap()
+}
+
+/// What the statements `body` throw, as `Name: message`, or `no throw`.
+pub(crate) fn thrown(body: &str) -> String {
+    run(&format!(
+        r"
+        try {{
+            {body};
+            'no throw';
+        }} catch (e) {{
+            `${{e.name}}: ${{e.message}}`;
+        }}
+        "
+    ))
+}
+
 /// Runs `body` in a fresh runtime with a full context.
 pub(crate) fn with_realm<R>(body: impl FnOnce(Ctx<'_>) -> R) -> R {
     let runtime = Runtime::new().unwrap();

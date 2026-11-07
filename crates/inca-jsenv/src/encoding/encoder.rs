@@ -3,15 +3,14 @@
 
 //! The `TextEncoder` class and the UTF-8 encoding of a WTF-8 string.
 
-use rquickjs::class::{JsClass, Readable, Trace, Tracer};
-use rquickjs::function::{Constructor, Opt, This};
+#[allow(clippy::disallowed_types)]
+use rquickjs::JsLifetime;
+use rquickjs::function::{Opt, This};
 use rquickjs::object::Property;
-use rquickjs::{
-    Class, Ctx, Exception, Function, JsLifetime, Object, Result as JsResult, TypedArray, Value,
-};
+use rquickjs::{Class, Ctx, Exception, Function, Object, Result as JsResult, TypedArray, Value};
 
 use super::{Construct, STORE, is_detached, is_resizable, read};
-use crate::class::{define_class, define_getter, define_global, define_method};
+use crate::class::{define_class, define_getter, define_global, define_method, plain_class};
 use crate::quickjs::{
     UINT8, is_immutable_array_buffer, string_wtf8, typed_array_kind, typed_array_range,
     write_uint8_array,
@@ -22,27 +21,11 @@ const NOT_A_UINT8_ARRAY: &str = "the destination is not a Uint8Array. pass a Uin
 const NOT_AN_ENCODER: &str = "the receiver is not a TextEncoder. call the method on an instance";
 
 /// A `TextEncoder` instance. It has no state.
+#[allow(clippy::disallowed_macros)]
 #[derive(JsLifetime)]
 pub(super) struct Encoder;
 
-impl<'js> Trace<'js> for Encoder {
-    fn trace<'a>(&self, _tracer: Tracer<'a, 'js>) {}
-}
-
-impl<'js> JsClass<'js> for Encoder {
-    const NAME: &'static str = "TextEncoder";
-
-    type Mutable = Readable;
-
-    // An instance takes the prototype from the vault when it is made.
-    fn prototype(_ctx: &Ctx<'js>) -> JsResult<Option<Object<'js>>> {
-        Ok(None)
-    }
-
-    fn constructor(_ctx: &Ctx<'js>) -> JsResult<Option<Constructor<'js>>> {
-        Ok(None)
-    }
-}
+plain_class!(Encoder, "TextEncoder");
 
 pub(super) fn define_encoder<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<()> {
     let class = define_class(ctx, proto, "TextEncoder", 0, Construct { decoder: false })?;
@@ -186,8 +169,7 @@ mod tests {
 
     use super::*;
     use crate::Engine;
-    use crate::encoding::tests::{run, thrown};
-    use crate::tests::memory_size;
+    use crate::tests::{memory_size, run, thrown};
 
     #[rstest]
     #[case::empty("encode()", "")]
