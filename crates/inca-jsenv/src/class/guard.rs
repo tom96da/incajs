@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! The checks a native function makes when a script calls it: that a class constructor got `new`,
-//! that a method got an instance of its class and which prototype a new instance takes.
+//! that a method got an instance of its class, that enough arguments came and which prototype a
+//! new instance takes.
 
 use rquickjs::class::JsClass;
 use rquickjs::function::Params;
@@ -10,6 +11,11 @@ use rquickjs::{Class, Ctx, Exception, Object, Result as JsResult, Value};
 
 /// The `TypeError` message of a class constructor called without `new`.
 pub(crate) const NEEDS_NEW: &str = "the class constructor needs new. call it with new";
+
+/// The body of the constructors that always throw.
+pub(crate) fn illegal_constructor<'js>() -> impl Fn(Ctx<'js>) -> JsResult<Value<'js>> {
+    |ctx| Err(Exception::throw_type(&ctx, "illegal constructor"))
+}
 
 /// The class instance `this` is, or a `TypeError` that names the class.
 pub(crate) fn receiver<'js, T: JsClass<'js>>(
@@ -23,6 +29,25 @@ pub(crate) fn receiver<'js, T: JsClass<'js>>(
         );
         Exception::throw_type(ctx, &message)
     })
+}
+
+/// A `TypeError` unless `args` holds `count` arguments.
+pub(crate) fn require(
+    ctx: &Ctx<'_>,
+    method: &str,
+    args: &[Value<'_>],
+    count: usize,
+) -> JsResult<()> {
+    if args.len() < count {
+        let message = format!("too few arguments for {method}. pass at least {count}");
+        return Err(Exception::throw_type(ctx, &message));
+    }
+    Ok(())
+}
+
+/// The argument at `index`, `None` when it is absent or `undefined`.
+pub(crate) fn given<'a, 'js>(args: &'a [Value<'js>], index: usize) -> Option<&'a Value<'js>> {
+    args.get(index).filter(|value| !value.is_undefined())
 }
 
 /// The prototype for an instance a constructor builds: the `prototype` of the constructor that

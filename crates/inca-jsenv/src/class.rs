@@ -6,7 +6,8 @@
 //!
 //! The `define` module holds the definition steps: a class with its constructor, methods and
 //! getters, a free function and a namespace object. The `guard` module holds the call-time checks:
-//! `new` on a constructor, the receiver of a method and the prototype of a new instance. This module re-exports both.
+//! `new` on a constructor, the receiver of a method, the argument count and the prototype of a new
+//! instance. This module re-exports both.
 
 mod define;
 mod guard;
@@ -18,4 +19,4 @@ pub use define::{
     getter_function,
 };
 pub use guard::new_target_prototype;
-pub(crate) use guard::{NEEDS_NEW, receiver};
+pub(crate) use guard::{NEEDS_NEW, given, illegal_constructor, receiver, require};

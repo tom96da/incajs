@@ -1319,16 +1319,6 @@ A fixed entry is deleted and its ID is never reused.
   (a listener, a rejection, a limit stop) stays in the message text. Fix: give
   `EngineError` a kind.
 
-- **B-263 `performance` has only `now()`**
-  `Units: jsenv · Size: M · Impact: Low`
-
-  The object `performance` has the one member `now()`. `timeOrigin`, `toJSON()`,
-  `mark()`, `measure()` and the entry members are missing. quickjs-ng defines
-  `performance.timeOrigin` as a reading of a monotonic clock, which no app can
-  turn into a date. The host's `performance` replaces that object, so the
-  property is removed. Fix: add the missing members on the clock of `inca-jsenv`,
-  with `timeOrigin` as epoch milliseconds.
-
 - **B-264 Text data stores U+FFFD for each half of a split surrogate pair**
   `Units: gpui · Size: M · Impact: Low`
 
@@ -1602,3 +1592,22 @@ A fixed entry is deleted and its ID is never reused.
   `patchProp` sends the `innerHTML` prop of `v-html` to `setAttribute("innerHTML")`, so the markup
   becomes a plain attribute and no child is created, although elements now have `innerHTML`. Fix:
   set the `innerHTML` prop as a property in `patchProp`, as the `value` prop is.
+
+- **B-295 `structuredClone` is missing**
+  `Units: jsenv · Size: L · Impact: Medium`
+
+  The global `structuredClone()` does not exist, so libraries that copy a value with it fail, and
+  `detail` of `performance.mark()` and `performance.measure()` is stored as the passed object. Fix:
+  implement it in Rust over the QuickJS value serializer, then copy `detail` through it and drop
+  the line about `detail` from the `performance` section of `built-ins.md`.
+
+- **B-296 `performance` lacks the observer, the navigation parts and the event target**
+  `Units: jsenv · Size: M · Impact: Low`
+
+  `PerformanceObserver`, `timing`, `navigation`, `memory`, `eventCounts`, `interactionCount`, the
+  resource-timing methods, `navigationId` on entries, the built-in `navigation` and
+  `visibility-state` entries and the `EventTarget` base are missing, and `measure()` has no real
+  value for the load-event names. Fix: add `PerformanceObserver` over the timeline. Give
+  `Performance` an `EventTarget` base once the event target lives below `inca-jsenv` or the bridge
+  passes a hook. The navigation parts wait for a navigation model that a window does not have.
+  The `detail` copy belongs to B-295.

@@ -18,10 +18,10 @@ use std::rc::Rc;
 #[allow(clippy::disallowed_types)]
 use rquickjs::JsLifetime;
 use rquickjs::function::IntoJsFunc;
-use rquickjs::{Ctx, Exception, Function, Object, Result as JsResult, Value};
+use rquickjs::{Ctx, Function, Object, Result as JsResult, Value};
 use url::{Url, form_urlencoded, quirks};
 
-use crate::class::{define_method, plain_class, receiver};
+use crate::class::{define_method, given, plain_class, receiver, require};
 use crate::encoding::encode;
 use crate::quickjs::string_wtf8;
 use crate::vault::vault;
@@ -183,15 +183,6 @@ fn usv(value: &Value<'_>) -> JsResult<String> {
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
-/// A `TypeError` unless `args` holds `count` arguments.
-fn require(ctx: &Ctx<'_>, method: &str, args: &[Value<'_>], count: usize) -> JsResult<()> {
-    if args.len() < count {
-        let message = format!("too few arguments for {method}. pass at least {count}");
-        return Err(Exception::throw_type(ctx, &message));
-    }
-    Ok(())
-}
-
 /// Defines `body` as the method `name` of `proto` with `length` parameters.
 fn method<'js, P>(
     ctx: &Ctx<'js>,
@@ -205,11 +196,6 @@ fn method<'js, P>(
         name,
         Function::new(ctx.clone(), body)?.with_length(length)?,
     )
-}
-
-/// The argument at `index`, `None` when it is absent or `undefined`.
-fn given<'a, 'js>(args: &'a [Value<'js>], index: usize) -> Option<&'a Value<'js>> {
-    args.get(index).filter(|value| !value.is_undefined())
 }
 
 /// The state of the `URLSearchParams` that `this` is.
