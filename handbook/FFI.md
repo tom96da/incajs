@@ -45,6 +45,7 @@ types derive it:
 | `UrlInstance` | `inca-jsenv/src/url.rs` | A `URL` object | Its `searchParams` object, traced |
 | `ParamsInstance` | `inca-jsenv/src/url.rs` | A `URLSearchParams` object | None |
 | `ParamsIterator` | `inca-jsenv/src/url/iterator.rs` | A `URLSearchParams` iterator | None |
+| `PerformanceInstance` | `inca-jsenv/src/time.rs` | The `performance` object | None |
 | `Encoder` | `inca-jsenv/src/encoding/encoder.rs` | A `TextEncoder` object | None |
 | `Decoder` | `inca-jsenv/src/encoding/decoder.rs` | A `TextDecoder` object | None |
 | `SourceMaps` | `inca-jsenv/src/sourcemap/store.rs` | The source maps of a runtime | None |

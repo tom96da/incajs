@@ -1,12 +1,20 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The clock of a context, read by `performance.now()` and by the host.
+//! The clock of a context, read by `performance.now()` and by the host, and the `Performance`
+//! class.
 
+use std::time::{SystemTime, UNIX_EPOCH};
+
+#[allow(clippy::disallowed_types)]
+use rquickjs::JsLifetime;
 use rquickjs::object::Property;
-use rquickjs::{Ctx, Function, Object, Result as JsResult, Value};
+use rquickjs::{Class, Ctx, Exception, Function, Object, Result as JsResult, Value};
 
-use crate::class::{define_accessor, define_method};
+use crate::class::{
+    define_accessor, define_class, define_global, define_this_getter, define_this_method,
+    plain_class, receiver,
+};
 use crate::timers::Clock;
 use crate::vault::vault;
 
@@ -16,22 +24,60 @@ const NOW: &str = "now";
 /// The vault key of the `performance` object.
 const PERFORMANCE: &str = "performance";
 
-/// Starts the clock of `ctx`'s realm at the reading of `clock` now, keeps its
-/// reader in the vault and defines the accessor `performance` with that reader as `now`. An
-/// assignment to `performance` replaces the accessor with a data property.
+/// The `Performance` instance. `time_origin` is the epoch milliseconds of the moment
+/// `performance.now()` is 0.
+#[allow(clippy::disallowed_macros)]
+#[derive(JsLifetime)]
+struct PerformanceInstance {
+    time_origin: f64,
+}
+
+plain_class!(PerformanceInstance, "Performance");
+
+/// Starts the clock of `ctx`'s realm at the reading of `clock` now and keeps its reader in the
+/// vault. Defines the global class `Performance` and the accessor `performance`, whose value is
+/// the one instance. An assignment to `performance` replaces the accessor with a data property.
 ///
 /// # Errors
 ///
-/// Returns an error if the realm has no vault or the global cannot be defined.
+/// Returns an error if the realm has no vault or a global cannot be defined.
 pub(crate) fn install<'js>(ctx: &Ctx<'js>, clock: &Clock) -> JsResult<()> {
     let origin = clock();
+    let time_origin = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs_f64()
+        * 1000.0;
     let clock = Clock::clone(clock);
     let now = Function::new(ctx.clone(), move || {
         clock().saturating_duration_since(origin).as_secs_f64() * 1000.0
     })?;
-    vault(ctx)?.set(NOW, now.clone())?;
-    let performance = Object::new(ctx.clone())?;
-    define_method(&performance, NOW, now)?;
+    vault(ctx)?.set(NOW, now)?;
+    let proto = Object::new(ctx.clone())?;
+    let class = define_class(ctx, &proto, "Performance", 0, |ctx: Ctx<'js>| {
+        Err::<Value<'js>, _>(Exception::throw_type(&ctx, "illegal constructor"))
+    })?;
+    define_this_method(ctx, &proto, NOW, |ctx, this| {
+        receiver::<PerformanceInstance>(ctx, &this)?;
+        self::now(ctx)
+    })?;
+    define_this_getter(ctx, &proto, "timeOrigin", |ctx, this| {
+        Ok(receiver::<PerformanceInstance>(ctx, &this)?
+            .borrow()
+            .time_origin)
+    })?;
+    define_this_method(ctx, &proto, "toJSON", |ctx, this| {
+        let json = Object::new(ctx.clone())?;
+        json.set(
+            "timeOrigin",
+            receiver::<PerformanceInstance>(ctx, &this)?
+                .borrow()
+                .time_origin,
+        )?;
+        Ok(json)
+    })?;
+    define_global(ctx, "Performance", class)?;
+    let performance = Class::instance_proto(PerformanceInstance { time_origin }, proto)?;
     vault(ctx)?.set(PERFORMANCE, performance)?;
     let get = Function::new(ctx.clone(), |ctx: Ctx<'js>| {
         vault(&ctx)?.get::<_, Object>(PERFORMANCE)
@@ -61,30 +107,12 @@ pub fn now(ctx: &Ctx<'_>) -> JsResult<f64> {
 mod tests {
     #![allow(clippy::unwrap_used)]
 
-    use std::cell::Cell;
-    use std::rc::Rc;
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
 
     use rstest::rstest;
 
     use super::*;
-    use crate::Engine;
-    use crate::tests::with_realm;
-
-    /// An engine on a clock that `at` moves.
-    fn engine_on_test_clock() -> (Engine, Rc<Cell<Instant>>) {
-        let at = Rc::new(Cell::new(Instant::now()));
-        let clock: Clock = {
-            let at = Rc::clone(&at);
-            Rc::new(move || at.get())
-        };
-        let engine = Engine::builder().clock(clock).build().unwrap();
-        (engine, at)
-    }
-
-    fn advance(at: &Cell<Instant>, by: Duration) {
-        at.set(at.get() + by);
-    }
+    use crate::tests::{advance, engine_on_test_clock, run, thrown, with_realm};
 
     /// The clock counts seconds as `f64`, so whole milliseconds differ by float rounding.
     fn assert_near(got: f64, want: f64) {
@@ -173,5 +201,121 @@ mod tests {
     #[test]
     fn now_fails_in_a_context_no_engine_made() {
         with_realm(|ctx| assert!(now(&ctx).is_err()));
+    }
+
+    #[test]
+    fn time_origin_is_epoch_milliseconds() {
+        let (engine, _) = engine_on_test_clock();
+
+        let got: bool = engine
+            .eval(
+                r"
+                const origin = performance.timeOrigin;
+                origin > 1e12 && Math.abs(Date.now() - (origin + performance.now())) < 1000;
+                ",
+            )
+            .unwrap();
+
+        assert!(got);
+    }
+
+    #[test]
+    fn time_origin_stays_equal_while_the_wall_clock_moves() {
+        let (engine, _) = engine_on_test_clock();
+
+        let got: bool = engine
+            .eval(
+                r"
+                const first = performance.timeOrigin;
+                const until = Date.now() + 5;
+                while (Date.now() < until);
+                performance.timeOrigin === first;
+                ",
+            )
+            .unwrap();
+
+        assert!(got);
+    }
+
+    #[test]
+    fn time_origin_is_a_getter_of_the_prototype() {
+        let (engine, _) = engine_on_test_clock();
+
+        let got: bool = engine
+            .eval(
+                r"
+                const d = Object.getOwnPropertyDescriptor(Performance.prototype, 'timeOrigin');
+                typeof d.get === 'function' && d.set === undefined;
+                ",
+            )
+            .unwrap();
+
+        assert!(got);
+    }
+
+    #[test]
+    fn to_json_holds_the_time_origin() {
+        let (engine, _) = engine_on_test_clock();
+
+        let got: bool = engine
+            .eval("performance.toJSON().timeOrigin === performance.timeOrigin")
+            .unwrap();
+
+        assert!(got);
+    }
+
+    #[test]
+    fn json_stringify_gives_the_time_origin() {
+        let (engine, _) = engine_on_test_clock();
+
+        let got: bool = engine
+            .eval(
+                r#"
+                JSON.stringify(performance) === `{"timeOrigin":${performance.timeOrigin}}`;
+                "#,
+            )
+            .unwrap();
+
+        assert!(got);
+    }
+
+    #[rstest]
+    #[case::names("Object.getOwnPropertyNames(performance)")]
+    #[case::keys("Object.keys(performance)")]
+    fn performance_has_no_own_property(#[case] list: &str) {
+        let (engine, _) = engine_on_test_clock();
+
+        assert_eq!(
+            engine
+                .eval::<String>(&format!("JSON.stringify({list})"))
+                .unwrap(),
+            "[]"
+        );
+    }
+
+    #[test]
+    fn performance_constructor_throws() {
+        assert_eq!(
+            thrown("new Performance()"),
+            "TypeError: illegal constructor"
+        );
+    }
+
+    #[test]
+    fn performance_constructor_has_length_0() {
+        assert_eq!(run("String(Performance.length)"), "0");
+    }
+
+    #[rstest]
+    #[case::now("Performance.prototype.now.call({})")]
+    #[case::time_origin(
+        "Object.getOwnPropertyDescriptor(Performance.prototype, 'timeOrigin').get.call({})"
+    )]
+    #[case::to_json("Performance.prototype.toJSON.call({})")]
+    fn performance_member_on_a_foreign_receiver_throws(#[case] call: &str) {
+        assert_eq!(
+            thrown(call),
+            "TypeError: the receiver is not a Performance. call the method on an instance"
+        );
     }
 }
