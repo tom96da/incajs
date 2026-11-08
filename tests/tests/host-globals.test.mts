@@ -256,13 +256,17 @@ it("compiles a script that uses the declared globals with no other types", async
       new URL("x");
     `,
   );
-  const program = ts.createProgram([useEntry], {
+  const options: ts.CompilerOptions = {
     lib: ["lib.es2025.d.ts"],
     types: ["incajs/globals"],
     module: ts.ModuleKind.Preserve,
     noEmit: true,
     strict: true,
-  });
+  };
+  // A `types` name resolves from the current directory, which differs between runners.
+  const host = ts.createCompilerHost(options);
+  host.getCurrentDirectory = () => appDir;
+  const program = ts.createProgram([useEntry], options, host);
   expect(
     ts
       .getPreEmitDiagnostics(program)
