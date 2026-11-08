@@ -9,12 +9,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[allow(clippy::disallowed_types)]
 use rquickjs::JsLifetime;
 use rquickjs::object::Property;
-use rquickjs::{Class, Ctx, Exception, Function, Object, Result as JsResult, Value};
+use rquickjs::{Class, Ctx, Function, Object, Result as JsResult, Value};
 
 use crate::class::{
     define_accessor, define_class, define_global, define_this_getter, define_this_method,
-    plain_class, receiver,
+    illegal_constructor, plain_class, receiver,
 };
+use crate::timeline;
 use crate::timers::Clock;
 use crate::vault::vault;
 
@@ -28,7 +29,7 @@ const PERFORMANCE: &str = "performance";
 /// `performance.now()` is 0.
 #[allow(clippy::disallowed_macros)]
 #[derive(JsLifetime)]
-struct PerformanceInstance {
+pub(crate) struct PerformanceInstance {
     time_origin: f64,
 }
 
@@ -54,9 +55,7 @@ pub(crate) fn install<'js>(ctx: &Ctx<'js>, clock: &Clock) -> JsResult<()> {
     })?;
     vault(ctx)?.set(NOW, now)?;
     let proto = Object::new(ctx.clone())?;
-    let class = define_class(ctx, &proto, "Performance", 0, |ctx: Ctx<'js>| {
-        Err::<Value<'js>, _>(Exception::throw_type(&ctx, "illegal constructor"))
-    })?;
+    let class = define_class(ctx, &proto, "Performance", 0, illegal_constructor())?;
     define_this_method(ctx, &proto, NOW, |ctx, this| {
         receiver::<PerformanceInstance>(ctx, &this)?;
         self::now(ctx)
@@ -76,6 +75,7 @@ pub(crate) fn install<'js>(ctx: &Ctx<'js>, clock: &Clock) -> JsResult<()> {
         )?;
         Ok(json)
     })?;
+    timeline::install(ctx, &proto)?;
     define_global(ctx, "Performance", class)?;
     let performance = Class::instance_proto(PerformanceInstance { time_origin }, proto)?;
     vault(ctx)?.set(PERFORMANCE, performance)?;
@@ -112,7 +112,7 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
-    use crate::tests::{advance, engine_on_test_clock, run, thrown, with_realm};
+    use crate::tests::{advance, engine_on_test_clock, thrown, with_realm};
 
     /// The clock counts seconds as `f64`, so whole milliseconds differ by float rounding.
     fn assert_near(got: f64, want: f64) {
@@ -279,31 +279,16 @@ mod tests {
         assert!(got);
     }
 
-    #[rstest]
-    #[case::names("Object.getOwnPropertyNames(performance)")]
-    #[case::keys("Object.keys(performance)")]
-    fn performance_has_no_own_property(#[case] list: &str) {
+    #[test]
+    fn performance_has_no_own_property() {
         let (engine, _) = engine_on_test_clock();
 
         assert_eq!(
             engine
-                .eval::<String>(&format!("JSON.stringify({list})"))
+                .eval::<String>("JSON.stringify(Object.getOwnPropertyNames(performance))")
                 .unwrap(),
             "[]"
         );
-    }
-
-    #[test]
-    fn performance_constructor_throws() {
-        assert_eq!(
-            thrown("new Performance()"),
-            "TypeError: illegal constructor"
-        );
-    }
-
-    #[test]
-    fn performance_constructor_has_length_0() {
-        assert_eq!(run("String(Performance.length)"), "0");
     }
 
     #[rstest]

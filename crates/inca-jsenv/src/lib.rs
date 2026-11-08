@@ -24,9 +24,10 @@
 //! `pub(crate)` otherwise. It names the lifetime as `Ctx<'js>` when a closure that captures state
 //! needs the name and as `Ctx<'_>` otherwise. Its doc has an `# Errors` section.
 //!
-//! [`Engine`] installs `Performance`, `performance`, `TextEncoder`, `TextDecoder`, `URL` and
-//! `URLSearchParams`. The decoder reads every encoding of the Encoding Standard. The caller
-//! installs `console`, the timers and the frame callbacks.
+//! [`Engine`] installs `Performance`, `PerformanceEntry`, `PerformanceMark`, `PerformanceMeasure`,
+//! `performance`, `TextEncoder`, `TextDecoder`, `URL` and `URLSearchParams`. The decoder reads
+//! every encoding of the Encoding Standard. The caller installs `console`, the timers and the
+//! frame callbacks.
 //!
 //! [`Limits`] bounds the memory, the stack and the time a script may use.
 //!
@@ -50,6 +51,7 @@ mod sourcemap;
 #[cfg(test)]
 mod tests;
 mod time;
+mod timeline;
 pub mod timers;
 mod url;
 mod vault;

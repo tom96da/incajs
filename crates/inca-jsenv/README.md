@@ -16,10 +16,10 @@ no timers, no network, no filesystem. Those are the host's to provide, and
 this crate is where they live.
 
 Today that is `console`, the timers, the frame callbacks, `performance`,
-`TextEncoder`, `TextDecoder`, `URL` and `URLSearchParams`. Every `Engine`
-installs `Performance`, `performance`, `TextEncoder`, `TextDecoder`, `URL` and
-`URLSearchParams`. The caller installs `console`, the timer functions and the
-frame functions. `console` writes wherever the caller points it, because the
+`TextEncoder`, `TextDecoder`, `URL` and `URLSearchParams`. Every `Engine` installs `Performance`,
+`PerformanceEntry`, `PerformanceMark`, `PerformanceMeasure`, `performance`, `TextEncoder`,
+`TextDecoder`, `URL` and `URLSearchParams`. The caller installs `console`, the timer functions and
+the frame functions. `console` writes wherever the caller points it, because the
 process embedding it may already be using stdout for something else.
 
 ```rust

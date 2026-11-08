@@ -60,6 +60,32 @@ pub(crate) fn advance(at: &Cell<Instant>, by: Duration) {
     at.set(at.get() + by);
 }
 
+/// The string `source` evaluates to, on a test clock that stays at 0.
+pub(crate) fn run_at(source: &str) -> String {
+    engine_on_test_clock().0.eval(source).unwrap()
+}
+
+/// The string `source` evaluates to, on a test clock moved forward by `millis`.
+pub(crate) fn run_after(millis: u64, source: &str) -> String {
+    let (engine, at) = engine_on_test_clock();
+    advance(&at, Duration::from_millis(millis));
+    engine.eval(source).unwrap()
+}
+
+/// What the statements `body` throw on a test clock, as `Name: message`, or `no throw`.
+pub(crate) fn thrown_at(body: &str) -> String {
+    run_at(&format!(
+        r"
+        try {{
+            {body};
+            'no throw';
+        }} catch (e) {{
+            `${{e.name}}: ${{e.message}}`;
+        }}
+        "
+    ))
+}
+
 /// Runs `body` in a fresh runtime with a full context.
 pub(crate) fn with_realm<R>(body: impl FnOnce(Ctx<'_>) -> R) -> R {
     let runtime = Runtime::new().unwrap();

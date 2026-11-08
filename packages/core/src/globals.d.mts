@@ -21,10 +21,54 @@ declare global {
   function requestAnimationFrame(callback: FrameRequestCallback): number;
   function cancelAnimationFrame(handle: number): void;
 
+  interface PerformanceEntry {
+    readonly name: string;
+    readonly entryType: string;
+    readonly startTime: number;
+    readonly duration: number;
+    toJSON(): any;
+  }
+  var PerformanceEntry: { prototype: PerformanceEntry; new (): PerformanceEntry };
+  type PerformanceEntryList = PerformanceEntry[];
+
+  interface PerformanceMarkOptions {
+    detail?: any;
+    startTime?: number;
+  }
+  interface PerformanceMark extends PerformanceEntry {
+    readonly detail: any;
+  }
+  var PerformanceMark: {
+    prototype: PerformanceMark;
+    new (markName: string, markOptions?: PerformanceMarkOptions): PerformanceMark;
+  };
+
+  interface PerformanceMeasureOptions {
+    detail?: any;
+    start?: string | number;
+    duration?: number;
+    end?: string | number;
+  }
+  interface PerformanceMeasure extends PerformanceEntry {
+    readonly detail: any;
+  }
+  var PerformanceMeasure: { prototype: PerformanceMeasure; new (): PerformanceMeasure };
+
   interface Performance {
     readonly timeOrigin: number;
     now(): number;
     toJSON(): any;
+    mark(markName: string, markOptions?: PerformanceMarkOptions): PerformanceMark;
+    measure(
+      measureName: string,
+      startOrMeasureOptions?: string | PerformanceMeasureOptions,
+      endMark?: string,
+    ): PerformanceMeasure;
+    getEntries(): PerformanceEntryList;
+    getEntriesByName(name: string, type?: string): PerformanceEntryList;
+    getEntriesByType(type: string): PerformanceEntryList;
+    clearMarks(markName?: string): void;
+    clearMeasures(measureName?: string): void;
   }
   var Performance: { prototype: Performance; new (): Performance };
   var performance: Performance;
