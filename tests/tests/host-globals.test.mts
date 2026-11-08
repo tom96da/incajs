@@ -136,7 +136,7 @@ it(
 );
 
 /** The declaration file of the global types. */
-const GLOBALS_DTS = path.resolve(import.meta.dirname, "../../packages/core/src/globals.d.mts");
+const GLOBALS_DTS = path.resolve(import.meta.dirname, "../../packages/core/dist/globals.d.mts");
 /** What a function or class carries besides its members. */
 const FUNCTION_OWN = new Set(["length", "name", "prototype"]);
 
