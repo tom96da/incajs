@@ -24,6 +24,15 @@ impl Fixture {
         Fixture { tree, root }
     }
 
+    /// A fixture whose root hangs under a new `#document`. Returns it with the document.
+    pub(crate) fn with_document() -> (Self, NodeId) {
+        let mut f = Self::new();
+        let document = f.tree.create_node("#document").unwrap();
+        f.tree.set_document(document);
+        f.tree.append_child(document, f.root).unwrap();
+        (f, document)
+    }
+
     pub(crate) fn add(&mut self, parent: NodeId, tag: &str, name: &str) -> NodeId {
         let node = self.tree.create_node(tag).unwrap();
         self.tree.append_child(parent, node).unwrap();

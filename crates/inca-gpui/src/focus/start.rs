@@ -4,6 +4,7 @@
 //! Where Tab starts while no node is focused.
 
 use super::{FocusRegistry, NodeId, VirtualTree};
+use inca_node::tree::VirtualNode;
 
 /// Where Tab starts while no node is focused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,6 +27,13 @@ impl Start {
     }
 }
 
+/// Whether `node_id` is the document or a child of it. A tree without a document has none.
+fn is_document_side(tree: &VirtualTree, node_id: NodeId) -> bool {
+    tree.document().is_some_and(|document| {
+        node_id == document || tree.get(node_id).and_then(VirtualNode::parent) == Some(document)
+    })
+}
+
 impl FocusRegistry {
     /// Records a mouse press on `node_id` as where Tab starts while no node is
     /// focused. `focusing` is the node the press focuses, `None` when it
@@ -41,8 +49,8 @@ impl FocusRegistry {
     /// Moves where Tab starts off `node_id`'s subtree, which leaves its
     /// place in the tree, to `before`, the node right before that place
     /// ([`VirtualTree::preceding`] taken before the change). A start that
-    /// lies outside the subtree stays. `before` being the root, or `None`,
-    /// clears the start.
+    /// lies outside the subtree stays. `before` being the root, the document or one of its
+    /// children, or `None`, clears the start.
     pub fn start_leaves(&mut self, tree: &VirtualTree, node_id: NodeId, before: Option<NodeId>) {
         let Some(start) = self.start else { return };
         if tree
@@ -50,7 +58,7 @@ impl FocusRegistry {
             .any(|ancestor| ancestor == node_id)
         {
             self.start = before
-                .filter(|&before| Some(before) != tree.root())
+                .filter(|&before| Some(before) != tree.root() && !is_document_side(tree, before))
                 .map(|node| Start::Press {
                     node,
                     focusing: None,
@@ -310,5 +318,62 @@ mod tests {
         registry.press_start(ids[1], ROOT, None);
 
         assert_eq!(tab(cx, &mut registry, &tree, false), Some(ids[0]));
+    }
+
+    #[rstest::rstest]
+    #[case::before_is_document(false)]
+    #[case::before_is_comment_sibling(true)]
+    fn a_start_in_the_root_clears_when_the_root_leaves_the_document(#[case] comment: bool) {
+        let (mut tree, ids) = rooted_tree(1);
+        let document = tree.document().unwrap();
+        if comment {
+            let comment = tree.create_node("#comment").unwrap();
+            tree.insert_before(document, comment, Some(ROOT)).unwrap();
+        }
+        let mut registry = FocusRegistry::default();
+        registry.press_start(ids[0], ROOT, None);
+        let before = tree.preceding(ROOT);
+        tree.remove_child(document, ROOT).unwrap();
+
+        registry.start_leaves(&tree, ROOT, before);
+
+        assert_eq!(registry.start, None);
+    }
+
+    #[test]
+    fn a_start_clears_when_it_leaves_as_the_first_child_of_a_root_without_a_document() {
+        let mut tree = VirtualTree::new();
+        let root = tree.create_node("div").unwrap();
+        let child = tree.create_node("div").unwrap();
+        tree.set_root(root);
+        tree.append_child(root, child).unwrap();
+        let mut registry = FocusRegistry::default();
+        registry.press_start(child, root, None);
+
+        registry.start_leaves(&tree, child, tree.preceding(child));
+
+        assert_eq!(registry.start, None);
+    }
+
+    #[test]
+    fn a_parentless_before_other_than_the_root_keeps_the_start_without_a_document() {
+        let mut tree = VirtualTree::new();
+        let root = tree.create_node("div").unwrap();
+        let child = tree.create_node("div").unwrap();
+        let loose = tree.create_node("div").unwrap();
+        tree.set_root(root);
+        tree.append_child(root, child).unwrap();
+        let mut registry = FocusRegistry::default();
+        registry.press_start(child, root, None);
+
+        registry.start_leaves(&tree, child, Some(loose));
+
+        assert_eq!(
+            registry.start,
+            Some(Start::Press {
+                node: loose,
+                focusing: None
+            })
+        );
     }
 }

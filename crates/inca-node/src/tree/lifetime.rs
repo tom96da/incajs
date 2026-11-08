@@ -22,8 +22,8 @@ impl VirtualTree {
         Ok(())
     }
 
-    /// Ends the hold of `id`. A parentless node that is not the root becomes
-    /// an orphan. An unknown or unheld `id` changes nothing.
+    /// Ends the hold of `id`. A parentless node that is neither the root nor
+    /// the document becomes an orphan. An unknown or unheld `id` changes nothing.
     pub fn release(&mut self, id: NodeId) {
         if self.held.remove(&id) {
             self.orphan_if_free(id);
@@ -47,26 +47,27 @@ impl VirtualTree {
             .collect()
     }
 
-    /// Marks `id` an orphan when it is a parentless node, not the root, not held and not the
-    /// content of a template.
+    /// Marks `id` an orphan when it is a parentless node, neither the root nor the document, not
+    /// held and not the content of a template.
     pub(super) fn orphan_if_free(&mut self, id: NodeId) {
         let free = self
             .nodes
             .get(&id)
             .is_some_and(|n| n.parent.is_none() && n.owner.is_none())
             && self.root != Some(id)
+            && self.document != Some(id)
             && !self.held.contains(&id);
         if free {
             self.orphans.insert(id);
         }
     }
 
-    /// Whether `id` is the root or its parent chain reaches it. Always true
-    /// while no root is declared. With a root, a destroyed or unknown id is
-    /// not connected.
+    /// Whether `id` is the document or its parent chain reaches it. Without a document the
+    /// measure is the root. Always true while neither is declared. With one, a destroyed or
+    /// unknown id is not connected.
     #[must_use]
     pub fn is_connected(&self, id: NodeId) -> bool {
-        let Some(root) = self.root else {
+        let Some(root) = self.document.or(self.root) else {
             return true;
         };
         let mut current = Some(id);
@@ -183,7 +184,7 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
-    use crate::tests::{children, family, node, sample};
+    use crate::tests::{Fixture, children, family, node, sample};
     use crate::tree::{AttributeValue, FRAGMENT_TAG};
     use rstest::rstest;
 
@@ -644,5 +645,52 @@ mod tests {
             ["template", FRAGMENT_TAG, "template", FRAGMENT_TAG, "span"]
         );
         assert_eq!(children(&tree, made[3].1), [made[4].1]);
+    }
+
+    #[test]
+    fn a_chain_under_the_document_is_connected() {
+        let (mut f, _) = Fixture::with_document();
+        let mid = f.add(f.root, "div", "mid");
+        let leaf = f.add(mid, "div", "leaf");
+
+        assert!(f.tree.is_connected(leaf));
+    }
+
+    #[test]
+    fn the_document_is_connected() {
+        let (f, document) = Fixture::with_document();
+
+        assert!(f.tree.is_connected(document));
+    }
+
+    #[test]
+    fn the_root_removed_from_the_document_takes_its_subtree_out_of_connection() {
+        let (mut f, document) = Fixture::with_document();
+        let child = f.add(f.root, "div", "child");
+
+        f.tree.remove_child(document, f.root).unwrap();
+
+        assert!(!f.tree.is_connected(child));
+    }
+
+    #[test]
+    fn the_root_appended_to_the_document_again_connects_its_subtree() {
+        let (mut f, document) = Fixture::with_document();
+        let child = f.add(f.root, "div", "child");
+        f.tree.remove_child(document, f.root).unwrap();
+
+        f.tree.append_child(document, f.root).unwrap();
+
+        assert!(f.tree.is_connected(child));
+    }
+
+    #[test]
+    fn the_detached_root_survives_a_sweep() {
+        let (mut f, document) = Fixture::with_document();
+        f.tree.remove_child(document, f.root).unwrap();
+
+        f.tree.sweep();
+
+        assert!(f.tree.get(f.root).is_some());
     }
 }

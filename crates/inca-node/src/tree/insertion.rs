@@ -3,17 +3,27 @@
 
 //! The rules for putting a node under a parent.
 
-use super::{COMMENT_TAG, FRAGMENT_TAG, NodeId, TEXT_TAG, TreeError, VirtualTree};
+use super::{
+    COMMENT_TAG, DOCUMENT_TAG, FRAGMENT_TAG, NodeId, TEXT_TAG, TreeError, VirtualNode, VirtualTree,
+};
 
 impl VirtualTree {
-    /// The checks of an insertion in DOM order: the ids exist, the parent is no leaf, the node is
-    /// no ancestor of the parent, the reference is a child of the parent and the node is not the
-    /// root. It changes nothing.
+    /// The checks of an insertion in DOM order:
+    ///
+    /// - the ids exist;
+    /// - the parent is no leaf;
+    /// - the node is no ancestor of the parent;
+    /// - the reference is a child of the parent;
+    /// - the node is not the document, and not the root while no document is declared;
+    /// - a document parent keeps to one element and no text.
+    ///
+    /// `replaced` is the child the insertion removes. It changes nothing.
     pub(super) fn check_insertion(
         &self,
         parent_id: NodeId,
         node_id: NodeId,
         reference_id: Option<NodeId>,
+        replaced: Option<NodeId>,
     ) -> Result<(), TreeError> {
         let parent = self
             .nodes
@@ -41,8 +51,44 @@ impl VirtualTree {
                 child: reference_id,
             });
         }
-        if self.root == Some(node_id) {
+        if self.document == Some(node_id) {
+            return Err(TreeError::DocumentInserted(node_id));
+        }
+        if self.document.is_none() && self.root == Some(node_id) {
             return Err(TreeError::RootMoved(node_id));
+        }
+        if parent.tag_name() == DOCUMENT_TAG {
+            self.check_document_child(parent, node_id, replaced)?;
+        }
+        Ok(())
+    }
+
+    /// The rules of a document parent: no text, at most one element in all.
+    fn check_document_child(
+        &self,
+        parent: &VirtualNode,
+        node_id: NodeId,
+        replaced: Option<NodeId>,
+    ) -> Result<(), TreeError> {
+        let (mut texts, mut elements) = (0, 0);
+        for id in self.nodes_to_move(node_id) {
+            match self.nodes.get(&id).map(VirtualNode::tag_name) {
+                Some(TEXT_TAG) => texts += 1,
+                Some(COMMENT_TAG) | None => {}
+                Some(_) => elements += 1,
+            }
+        }
+        let held = parent
+            .children
+            .iter()
+            .filter(|&&id| Some(id) != replaced)
+            .any(|id| {
+                self.nodes
+                    .get(id)
+                    .is_some_and(|n| n.tag_name() != COMMENT_TAG)
+            });
+        if texts > 0 || elements > 1 || (elements == 1 && held) {
+            return Err(TreeError::DocumentChild(node_id));
         }
         Ok(())
     }
@@ -282,5 +328,107 @@ mod tests {
             tree.append_child(inside, template).unwrap_err(),
             TreeError::WouldCycle(template)
         );
+    }
+
+    #[test]
+    fn the_document_cannot_be_inserted() {
+        let (mut f, document) = Fixture::with_document();
+        let parent = node(&mut f.tree, "div");
+
+        assert_eq!(
+            f.tree.append_child(parent, document).unwrap_err(),
+            TreeError::DocumentInserted(document)
+        );
+    }
+
+    type Operand = fn(&mut VirtualTree) -> NodeId;
+
+    fn fragment_of(tree: &mut VirtualTree, tags: &[&str]) -> NodeId {
+        let fragment = node(tree, FRAGMENT_TAG);
+        for tag in tags {
+            let child = node(tree, tag);
+            tree.append_child(fragment, child).unwrap();
+        }
+        fragment
+    }
+
+    #[rstest]
+    #[case::second_element(|tree: &mut VirtualTree| node(tree, "div"))]
+    #[case::text(|tree: &mut VirtualTree| node(tree, TEXT_TAG))]
+    #[case::fragment_of_two_elements(|tree: &mut VirtualTree| fragment_of(tree, &["div", "span"]))]
+    #[case::fragment_with_text(|tree: &mut VirtualTree| fragment_of(tree, &[COMMENT_TAG, TEXT_TAG]))]
+    fn the_document_refuses(#[case] make: Operand) {
+        let (mut f, document) = Fixture::with_document();
+        let operand = make(&mut f.tree);
+
+        assert_eq!(
+            f.tree.append_child(document, operand).unwrap_err(),
+            TreeError::DocumentChild(operand)
+        );
+        assert_eq!(children(&f.tree, document), [f.root]);
+    }
+
+    #[rstest]
+    #[case::comment_before_root(|tree: &mut VirtualTree| node(tree, COMMENT_TAG), true)]
+    #[case::fragment_of_comments(|tree: &mut VirtualTree| fragment_of(tree, &[COMMENT_TAG, COMMENT_TAG]), false)]
+    #[case::empty_fragment(|tree: &mut VirtualTree| fragment_of(tree, &[]), false)]
+    fn the_document_takes(#[case] make: Operand, #[case] before_root: bool) {
+        let (mut f, document) = Fixture::with_document();
+        let operand = make(&mut f.tree);
+        let reference = before_root.then_some(f.root);
+
+        f.tree.insert_before(document, operand, reference).unwrap();
+
+        assert_eq!(f.tree.document_element(), Some(f.root));
+    }
+
+    #[test]
+    fn the_document_takes_an_element_after_its_element_left() {
+        let (mut f, document) = Fixture::with_document();
+        let comment = node(&mut f.tree, COMMENT_TAG);
+        f.tree.append_child(document, comment).unwrap();
+        f.tree.remove_child(document, f.root).unwrap();
+        let next = node(&mut f.tree, "div");
+
+        f.tree.append_child(document, next).unwrap();
+
+        assert_eq!(f.tree.document_element(), Some(next));
+    }
+
+    #[rstest]
+    #[case::element(|tree: &mut VirtualTree| node(tree, "div"))]
+    #[case::comment(|tree: &mut VirtualTree| node(tree, COMMENT_TAG))]
+    fn the_root_can_be_replaced_in_the_document(#[case] make: Operand) {
+        let (mut f, document) = Fixture::with_document();
+        let operand = make(&mut f.tree);
+
+        f.tree.replace_child(document, operand, f.root).unwrap();
+
+        assert_eq!(children(&f.tree, document), [operand]);
+    }
+
+    #[test]
+    fn a_comment_cannot_be_replaced_by_an_element_beside_the_root() {
+        let (mut f, document) = Fixture::with_document();
+        let comment = node(&mut f.tree, COMMENT_TAG);
+        f.tree.append_child(document, comment).unwrap();
+        let element = node(&mut f.tree, "div");
+
+        assert_eq!(
+            f.tree
+                .replace_child(document, element, comment)
+                .unwrap_err(),
+            TreeError::DocumentChild(element)
+        );
+    }
+
+    #[test]
+    fn the_root_moves_under_a_detached_element_while_a_document_is_declared() {
+        let (mut f, _) = Fixture::with_document();
+        let parent = node(&mut f.tree, "div");
+
+        f.tree.append_child(parent, f.root).unwrap();
+
+        assert_eq!(f.tree.get(f.root).unwrap().parent(), Some(parent));
     }
 }

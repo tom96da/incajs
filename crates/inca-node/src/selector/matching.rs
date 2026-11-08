@@ -5,10 +5,11 @@
 
 use super::{
     Atom, AttrSelectorOperation, AttributeValue, BloomFilter, COMMENT_TAG, CaseSensitivity,
-    Element, ElementSelectorFlags, FRAGMENT_TAG, Impl, MatchingContext, MatchingForInvalidation,
-    MatchingMode, NamespaceConstraint, NeedsSelectorFlags, NodeId, OpaqueElement, PseudoClass,
-    PseudoElement, QuirksMode, SelectorCaches, SelectorError, SelectorList, TEXT_TAG, VirtualNode,
-    VirtualTree, fmt, is_disabled_control, matches_selector_list, parse,
+    DOCUMENT_TAG, Element, ElementSelectorFlags, FRAGMENT_TAG, Impl, MatchingContext,
+    MatchingForInvalidation, MatchingMode, NamespaceConstraint, NeedsSelectorFlags, NodeId,
+    OpaqueElement, PseudoClass, PseudoElement, QuirksMode, SelectorCaches, SelectorError,
+    SelectorList, TEXT_TAG, VirtualNode, VirtualTree, fmt, is_disabled_control,
+    matches_selector_list, parse,
 };
 use selectors::matching::matches_selector as matches_selector_one;
 
@@ -26,7 +27,10 @@ impl fmt::Debug for Node<'_> {
 }
 
 fn is_element(node: &VirtualNode) -> bool {
-    !matches!(node.tag_name(), COMMENT_TAG | FRAGMENT_TAG | TEXT_TAG)
+    !matches!(
+        node.tag_name(),
+        COMMENT_TAG | DOCUMENT_TAG | FRAGMENT_TAG | TEXT_TAG
+    )
 }
 
 /// Whether the `"value"` of `node` is not empty.
@@ -224,8 +228,8 @@ impl Element for Node<'_> {
     }
 
     fn is_root(&self) -> bool {
-        match self.tree.root() {
-            Some(root) => root == self.node.id(),
+        match self.tree.document() {
+            Some(document) => self.node.parent() == Some(document),
             None => self.node.parent().is_none(),
         }
     }
@@ -237,7 +241,7 @@ impl Element for Node<'_> {
 
 pub(super) fn matching_context(
     caches: &mut SelectorCaches,
-    scope: OpaqueElement,
+    scope: Option<OpaqueElement>,
 ) -> MatchingContext<'_, Impl> {
     let mut context = MatchingContext::new(
         MatchingMode::Normal,
@@ -247,7 +251,7 @@ pub(super) fn matching_context(
         NeedsSelectorFlags::No,
         MatchingForInvalidation::No,
     );
-    context.scope_element = Some(scope);
+    context.scope_element = scope;
     context
 }
 
@@ -257,7 +261,11 @@ pub(super) fn matches_with(
     scope: OpaqueElement,
 ) -> bool {
     let mut caches = SelectorCaches::default();
-    matches_selector_list(list, element, &mut matching_context(&mut caches, scope))
+    matches_selector_list(
+        list,
+        element,
+        &mut matching_context(&mut caches, Some(scope)),
+    )
 }
 
 pub(super) fn specificity_of_match(
@@ -267,7 +275,7 @@ pub(super) fn specificity_of_match(
 ) -> Option<u32> {
     let element = Node::of(tree, id)?;
     let mut caches = SelectorCaches::default();
-    let mut context = matching_context(&mut caches, element.opaque());
+    let mut context = matching_context(&mut caches, Some(element.opaque()));
     list.slice()
         .iter()
         .filter(|selector| matches_selector_one(selector, 0, None, &element, &mut context))
@@ -740,5 +748,31 @@ mod tests {
 
         assert!(!matches_selector(&p.f.tree, 9999, "*").unwrap());
         assert_eq!(closest_selector(&p.f.tree, 9999, "*").unwrap(), None);
+    }
+
+    #[test]
+    fn root_is_the_element_child_of_the_document() {
+        let (mut f, _) = Fixture::with_document();
+        let child = f.add(f.root, "div", "child");
+
+        assert!(f.matches(f.root, ":root"));
+        assert!(!f.matches(child, ":root"));
+    }
+
+    #[test]
+    fn root_follows_the_replaced_document_element() {
+        let (mut f, document) = Fixture::with_document();
+        let div = f.tree.create_node("div").unwrap();
+        f.tree.replace_child(document, div, f.root).unwrap();
+
+        assert!(f.matches(div, ":root"));
+        assert!(!f.matches(f.root, ":root"));
+    }
+
+    #[test]
+    fn the_universal_selector_never_matches_the_document() {
+        let (f, document) = Fixture::with_document();
+
+        assert!(!f.matches(document, "*"));
     }
 }

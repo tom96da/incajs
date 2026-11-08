@@ -202,7 +202,7 @@ impl FocusRegistry {
         }
     }
 
-    /// The `tabindex` of `node_id`. A node not connected to the tree's root,
+    /// The `tabindex` of `node_id`. A node not connected to the tree's document,
     /// a text node, a node that has an ancestor (or itself) that is a template or has
     /// `display: none`, `inert` or a hiding `hidden`, and a `disabled` button
     /// or input have none. A button or input whose `tabindex` is missing or
