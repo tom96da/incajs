@@ -28,7 +28,6 @@
   },
   "files": [
     "dist",
-    "src/globals.d.mts",
     "LICENSE-MIT",
     "LICENSE-APACHE"
   ],
@@ -64,7 +63,8 @@
       "import": "./dist/style.js"
     },
     "./globals": {
-      "types": "./src/globals.d.mts"
+      "source": "./src/globals.d.mts",
+      "types": "./dist/globals.d.mts"
     }
   },
   "publishConfig": {
@@ -86,7 +86,7 @@
         "import": "./dist/style.js"
       },
       "./globals": {
-        "types": "./src/globals.d.mts"
+        "types": "./dist/globals.d.mts"
       }
     },
     "access": "public"

@@ -18,6 +18,7 @@ export default defineConfig({
   deps: { neverBundle: ["@vue/runtime-core", "@vue/runtime-dom"] },
   dts: { generator: "tsgo", tsgo: { moduleUrl: import.meta.resolve("@typescript/native") } },
   clean: true,
+  copy: [{ from: "src/globals.d.mts", to: "dist" }],
   publint: true,
   attw: { level: "error" },
   minify: true,
