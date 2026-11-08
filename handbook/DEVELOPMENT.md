@@ -18,34 +18,32 @@ for the full pitch.
 
 History is in [PLAN.md](./PLAN.md) and [CHANGELOG.md](../CHANGELOG.md).
 
-### Done
+### Recently done
 
-- **Host**: the Rust FFI bridge (`inca-gpui`, `inca-bridge`, `inca-jsenv`),
-  with a `console`.
-- **Packages**: the pnpm workspace, `packages/core`, `incajs/vue` and the
-  `.vue` examples.
-- **CLI**: the `inca` commands, with per-platform `@incajs/host-*` packages
-  published by `cd.yml`. Errors name the source file, and `sourcemap` writes
-  a source map.
-- **HMR**: opt-in through `--experimental-hmr` or `INCA_EXPERIMENTAL_HMR`.
-  A template edit and a style edit keep component state, and a script edit
-  resets it.
-- **Input**: pointer, focus, keyboard and scrolling (`overflow`, wheel), and
-  events fired from a script. Template refs read their box and scroll.
-- **Text input**: a single-line `<input>` with selection, the clipboard,
-  IME composition, the input events and `v-model`.
-- **Timers**: the Web timer functions, run by the executor of the window.
 - **Nodes**: tree links, the mutation members, fragments, cloning and the
-  relations between nodes.
+  relations between nodes. Template elements hold their content, and HTML
+  strings parse into the tree through `innerHTML` and `insertAdjacentHTML`,
+  and serialize back out through `outerHTML`.
 - **Styles**: `<style>` elements, `<style>` blocks, scoped styles and CSS
-  imports apply, and `:hover`, `:active`, `:focus` and `:focus-within` match.
-- **Built-ins**: `TextEncoder`, `TextDecoder`, `URL`, `URLSearchParams` and
-  `performance.now()`.
+  imports apply, and `:hover`, `:active` and `:focus` match. A style edit
+  keeps component state under HMR.
+- **Built-ins**: the timers, `requestAnimationFrame()`, `URL` and
+  `performance.now()`. `incajs/globals` declares the types of every built-in
+  global.
+
+### In progress
+
+- **A base for Vue Vapor mode**: `document` as a node of the tree, the
+  `Node`, `Element` and `Text` interfaces, and the attribute, class and
+  style members that Vapor reads.
+- **Built-ins as the web expects them**: definitions written one way, so that
+  libraries find the globals they probe.
 
 ### Not started
 
 - `textarea`, word-wise editing, undo and redo, and the selection API.
 - `position` and `z-index`.
+- The `html` and `body` elements, namespaces and a global `window`.
 - React and other frontends. Vue 3 has to be stable first.
 
 ### Foundation
