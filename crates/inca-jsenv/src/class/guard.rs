@@ -1,14 +1,29 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The checks a native function makes when a script calls it: that a class constructor got `new`
-//! and which prototype a new instance takes.
+//! The checks a native function makes when a script calls it: that a class constructor got `new`,
+//! that a method got an instance of its class and which prototype a new instance takes.
 
+use rquickjs::class::JsClass;
 use rquickjs::function::Params;
-use rquickjs::{Object, Result as JsResult, Value};
+use rquickjs::{Class, Ctx, Exception, Object, Result as JsResult, Value};
 
 /// The `TypeError` message of a class constructor called without `new`.
 pub(crate) const NEEDS_NEW: &str = "the class constructor needs new. call it with new";
+
+/// The class instance `this` is, or a `TypeError` that names the class.
+pub(crate) fn receiver<'js, T: JsClass<'js>>(
+    ctx: &Ctx<'js>,
+    this: &Value<'js>,
+) -> JsResult<Class<'js, T>> {
+    Class::<T>::from_value(this).map_err(|_| {
+        let message = format!(
+            "the receiver is not a {}. call the method on an instance",
+            T::NAME
+        );
+        Exception::throw_type(ctx, &message)
+    })
+}
 
 /// The prototype for an instance a constructor builds: the `prototype` of the constructor that
 /// `new` named, so a subclass keeps its own, and `default` when that is no object.

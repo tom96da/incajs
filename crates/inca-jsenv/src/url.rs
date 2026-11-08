@@ -17,12 +17,11 @@ use std::rc::Rc;
 
 #[allow(clippy::disallowed_types)]
 use rquickjs::JsLifetime;
-use rquickjs::class::JsClass;
 use rquickjs::function::IntoJsFunc;
-use rquickjs::{Class, Ctx, Exception, Function, Object, Result as JsResult, Value};
+use rquickjs::{Ctx, Exception, Function, Object, Result as JsResult, Value};
 use url::{Url, form_urlencoded, quirks};
 
-use crate::class::{define_method, plain_class};
+use crate::class::{define_method, plain_class, receiver};
 use crate::encoding::encode;
 use crate::quickjs::string_wtf8;
 use crate::vault::vault;
@@ -211,17 +210,6 @@ fn method<'js, P>(
 /// The argument at `index`, `None` when it is absent or `undefined`.
 fn given<'a, 'js>(args: &'a [Value<'js>], index: usize) -> Option<&'a Value<'js>> {
     args.get(index).filter(|value| !value.is_undefined())
-}
-
-/// The class instance `this` is, or a `TypeError`.
-fn receiver<'js, T: JsClass<'js>>(ctx: &Ctx<'js>, this: &Value<'js>) -> JsResult<Class<'js, T>> {
-    Class::<T>::from_value(this).map_err(|_| {
-        let message = format!(
-            "the receiver is not a {}. call the method on an instance",
-            T::NAME
-        );
-        Exception::throw_type(ctx, &message)
-    })
 }
 
 /// The state of the `URLSearchParams` that `this` is.

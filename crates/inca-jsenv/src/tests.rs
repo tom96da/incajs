@@ -6,11 +6,12 @@
 #![allow(clippy::unwrap_used)]
 
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     env, fs,
     ops::Deref,
     path::{Path, PathBuf},
     rc::Rc,
+    time::{Duration, Instant},
 };
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
@@ -22,6 +23,7 @@ use crate::console::{Level, Output, install};
 use crate::inspect::{line, pin, quoted_escaped};
 use crate::paint::Style;
 use crate::sourcemap::{register, remap_stack};
+use crate::timers::Clock;
 
 /// The string that the script `source` evaluates to, in a new engine.
 pub(crate) fn run(source: &str) -> String {
@@ -40,6 +42,22 @@ pub(crate) fn thrown(body: &str) -> String {
         }}
         "
     ))
+}
+
+/// An engine on a clock that `at` moves.
+pub(crate) fn engine_on_test_clock() -> (Engine, Rc<Cell<Instant>>) {
+    let at = Rc::new(Cell::new(Instant::now()));
+    let clock: Clock = {
+        let at = Rc::clone(&at);
+        Rc::new(move || at.get())
+    };
+    let engine = Engine::builder().clock(clock).build().unwrap();
+    (engine, at)
+}
+
+/// Moves the test clock `at` forward by `by`.
+pub(crate) fn advance(at: &Cell<Instant>, by: Duration) {
+    at.set(at.get() + by);
 }
 
 /// Runs `body` in a fresh runtime with a full context.

@@ -223,17 +223,28 @@ it(
     await writeFile(
       shapeEntry,
       dedent`
-        const own = (value, skip) =>
-          Object.getOwnPropertyNames(value).filter((n) => !skip.includes(n)).sort();
+        const chain = (value) => {
+          const list = [];
+          for (let o = value; o && o !== Object.prototype; o = Object.getPrototypeOf(o)) {
+            list.push(o);
+          }
+          return list;
+        };
+        const own = (values, skip) =>
+          [...new Set(values.flatMap((o) => Object.getOwnPropertyNames(o)))]
+            .filter((n) => !skip.includes(n))
+            .sort();
         const shapes = {};
         for (const name of ${JSON.stringify(Object.keys(declared))}) {
           const value = globalThis[name];
           const isFunction = typeof value === "function";
           shapes[name] = {
             type: typeof value,
-            members: own(value, isFunction ? ["length", "name", "prototype"] : []),
+            members: isFunction
+              ? own([value], ["length", "name", "prototype"])
+              : own(chain(value), ["constructor"]),
             prototypeMembers:
-              isFunction && value.prototype ? own(value.prototype, ["constructor"]) : null,
+              isFunction && value.prototype ? own(chain(value.prototype), ["constructor"]) : null,
           };
         }
         console.log("[e2e] " + JSON.stringify(shapes));

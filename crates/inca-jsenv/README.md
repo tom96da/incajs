@@ -17,7 +17,7 @@ this crate is where they live.
 
 Today that is `console`, the timers, the frame callbacks, `performance`,
 `TextEncoder`, `TextDecoder`, `URL` and `URLSearchParams`. Every `Engine`
-installs `performance`, `TextEncoder`, `TextDecoder`, `URL` and
+installs `Performance`, `performance`, `TextEncoder`, `TextDecoder`, `URL` and
 `URLSearchParams`. The caller installs `console`, the timer functions and the
 frame functions. `console` writes wherever the caller points it, because the
 process embedding it may already be using stdout for something else.

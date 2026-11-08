@@ -22,8 +22,11 @@ declare global {
   function cancelAnimationFrame(handle: number): void;
 
   interface Performance {
+    readonly timeOrigin: number;
     now(): number;
+    toJSON(): any;
   }
+  var Performance: { prototype: Performance; new (): Performance };
   var performance: Performance;
 
   interface Console {
