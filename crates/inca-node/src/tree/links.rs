@@ -35,14 +35,17 @@ impl VirtualTree {
     /// - [`TreeError::LeafParent`] if `parent_id` is a text node or a comment.
     /// - [`TreeError::WouldCycle`] if `node_id` is `parent_id` or one of its ancestors.
     /// - [`TreeError::NotAChild`] if `reference_id` is not a child of `parent_id`.
-    /// - [`TreeError::RootMoved`] if `node_id` is the root.
+    /// - [`TreeError::DocumentInserted`] if `node_id` is the document.
+    /// - [`TreeError::RootMoved`] if `node_id` is the root while no document is declared.
+    /// - [`TreeError::DocumentChild`] if `parent_id` is the document and the insertion would give
+    ///   it text or a second element.
     pub fn insert_before(
         &mut self,
         parent_id: NodeId,
         node_id: NodeId,
         reference_id: Option<NodeId>,
     ) -> Result<usize, TreeError> {
-        self.check_insertion(parent_id, node_id, reference_id)?;
+        self.check_insertion(parent_id, node_id, reference_id, None)?;
         let reference = match reference_id {
             Some(reference) if reference == node_id => self.next_sibling(node_id),
             other => other,
@@ -86,9 +89,9 @@ impl VirtualTree {
     /// # Errors
     ///
     /// The checks of [`insert_before`](Self::insert_before) for inserting `from` into `to`.
-    // The sources are nodes the current parse created, so none is the tree root.
+    // The sources are nodes the current parse created, so none is the root or the document.
     pub(crate) fn move_children(&mut self, from: NodeId, to: NodeId) -> Result<(), TreeError> {
-        self.check_insertion(to, from, None)?;
+        self.check_insertion(to, from, None, None)?;
         let nodes = self.nodes.get(&from).map(|node| node.children.clone());
         self.place(to, nodes.unwrap_or_default(), None);
         Ok(())
@@ -170,7 +173,7 @@ impl VirtualTree {
         node_id: NodeId,
         child_id: NodeId,
     ) -> Result<usize, TreeError> {
-        self.check_insertion(parent_id, node_id, Some(child_id))?;
+        self.check_insertion(parent_id, node_id, Some(child_id), Some(child_id))?;
         let mut reference = self.next_sibling(child_id);
         if reference == Some(node_id) {
             reference = self.next_sibling(node_id);

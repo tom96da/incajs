@@ -87,10 +87,10 @@ pub(super) struct SheetCache {
 }
 
 impl VirtualTree {
-    /// The connected `<style>` elements in tree order. None while the tree has no root.
+    /// The connected `<style>` elements in tree order. None while the tree has no document or root.
     fn style_elements(&self) -> Vec<NodeId> {
         let mut found = Vec::new();
-        let mut pending: Vec<NodeId> = self.root.into_iter().collect();
+        let mut pending: Vec<NodeId> = self.document.or(self.root).into_iter().collect();
         while let Some(id) = pending.pop() {
             let Some(node) = self.get(id) else { continue };
             if node.tag_name().eq_ignore_ascii_case("style") {
@@ -486,5 +486,17 @@ mod tests {
         let a = f.boxed("a");
 
         assert_eq!(f.computed(a, "width"), Some(text("1px")));
+    }
+
+    #[test]
+    fn a_style_applies_while_the_root_hangs_under_the_document() {
+        let (mut f, document) = Fixture::with_document();
+        f.sheet(".a { width: 1px }");
+        let a = f.boxed("a");
+        let hung = f.computed(a, "width");
+        f.tree.remove_child(document, f.root).unwrap();
+
+        assert_eq!(hung, Some(text("1px")));
+        assert_eq!(f.computed(a, "width"), None);
     }
 }

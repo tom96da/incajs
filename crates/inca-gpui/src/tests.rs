@@ -22,15 +22,18 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-/// The root of a tree `rooted_tree` builds: the first node created.
+/// The root of a tree `rooted_tree` builds: the first node created. The document is node 1.
 pub(crate) const ROOT: NodeId = 0;
 
-/// A rooted tree with `count` nodes attached under the root, each
+/// A tree whose document holds the root, with `count` nodes attached under the root, each
 /// `tabindex="0"`.
 pub(crate) fn rooted_tree(count: usize) -> (VirtualTree, Vec<NodeId>) {
     let mut tree = VirtualTree::new();
     let root = tree.create_node("div").unwrap();
+    let document = tree.create_node("#document").unwrap();
     tree.set_root(root);
+    tree.set_document(document);
+    tree.append_child(document, root).unwrap();
     let ids = (0..count)
         .map(|_| {
             let id = tree.create_node("div").unwrap();

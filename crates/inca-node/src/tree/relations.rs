@@ -21,7 +21,8 @@ fn same_attributes(a: &VirtualNode, b: &VirtualNode) -> bool {
 }
 
 impl VirtualTree {
-    /// The top of the parent chain of `id`. A connected node gives the root.
+    /// The top of the parent chain of `id`. A connected node gives the document, or the root
+    /// while no document is declared.
     ///
     /// # Errors
     ///

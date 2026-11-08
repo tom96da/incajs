@@ -5,11 +5,12 @@
 
 use super::matching::{Node, matching_context};
 use super::{
-    Element, NodeId, SelectorCaches, SelectorError, VirtualTree, matches_selector_list, parse,
+    DOCUMENT_TAG, Element, NodeId, SelectorCaches, SelectorError, VirtualTree,
+    matches_selector_list, parse,
 };
 
-/// The descendants of `start` that match `selector`, in document order. The walk stops at the
-/// first match when `first_only` is set.
+/// The descendants of `start`, an element or the document, that match `selector`, in document
+/// order. The walk stops at the first match when `first_only` is set.
 fn search(
     tree: &VirtualTree,
     start: NodeId,
@@ -18,12 +19,16 @@ fn search(
 ) -> Result<Vec<NodeId>, SelectorError> {
     let (list, _) = parse(selector)?;
     let mut found = Vec::new();
-    let Some(root) = Node::of(tree, start) else {
+    let Some(start) = tree
+        .get(start)
+        .filter(|node| Node::of(tree, node.id()).is_some() || node.tag_name() == DOCUMENT_TAG)
+    else {
         return Ok(found);
     };
+    let scope = Node::of(tree, start.id()).map(|element| element.opaque());
     let mut caches = SelectorCaches::default();
-    let mut context = matching_context(&mut caches, root.opaque());
-    let mut pending: Vec<NodeId> = root.node.children().iter().rev().copied().collect();
+    let mut context = matching_context(&mut caches, scope);
+    let mut pending: Vec<NodeId> = start.children().iter().rev().copied().collect();
     while let Some(id) = pending.pop() {
         let Some(element) = Node::of(tree, id) else {
             continue;
@@ -208,5 +213,27 @@ mod tests {
         }
 
         assert_eq!(query_selector_all(&tree, top, "*").unwrap().len(), 99_999);
+    }
+
+    #[rstest]
+    #[case::type_selector("div", &["root"])]
+    #[case::scope(":scope", &["root"])]
+    #[case::scope_children(":scope > *", &["first", "second"])]
+    fn a_query_from_the_document_scopes_to_its_element(
+        #[case] selector: &str,
+        #[case] expected: &[&str],
+    ) {
+        let (mut f, document) = Fixture::with_document();
+        let first = f.add(f.root, "p", "first");
+        let second = f.add(f.root, "p", "second");
+        let named = [("root", f.root), ("first", first), ("second", second)];
+
+        assert_eq!(
+            query_selector_all(&f.tree, document, selector).unwrap(),
+            expected
+                .iter()
+                .map(|name| named.iter().find(|(n, _)| n == name).unwrap().1)
+                .collect::<Vec<_>>()
+        );
     }
 }

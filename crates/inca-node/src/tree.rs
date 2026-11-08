@@ -12,14 +12,16 @@
 //!
 //! A template owns a fragment as its content. The content has no parent and is never connected.
 //!
-//! A root can be declared with [`VirtualTree::set_root`].
-//! [`VirtualTree::is_connected`] then reads the parent chain up to it.
+//! A document can be declared with [`VirtualTree::set_document`]. It is the top of the tree and
+//! [`VirtualTree::is_connected`] reads the parent chain up to it. A root declared with
+//! [`VirtualTree::set_root`] is the node the host owns: the sweep never frees it. Without a
+//! document, `is_connected` measures against the root.
 //!
 //! [`VirtualTree::remove_child`] detaches a node and keeps it with its
 //! children.
 //! [`VirtualTree::destroy_node`] frees a subtree on request.
 //!
-//! An orphan is a node with no parent that is neither the root nor held with
+//! An orphan is a node with no parent that is neither the root, the document nor held with
 //! [`VirtualTree::hold`]. [`VirtualTree::sweep`] frees every orphan with its
 //! subtree. A node that is created, detached or released is an orphan until
 //! it is inserted, held or destroyed.
@@ -45,6 +47,10 @@ pub(crate) const COMMENT_TAG: &str = "#comment";
 
 /// The tag of a text content node.
 pub const TEXT_TAG: &str = "#text";
+
+/// The tag of the document: the top of the tree, which holds at most one element and any number of
+/// comments.
+pub(crate) const DOCUMENT_TAG: &str = "#document";
 
 /// The tag of a fragment: a node that holds children, has no parent and is never connected.
 pub(crate) const FRAGMENT_TAG: &str = "#fragment";
@@ -268,8 +274,12 @@ pub enum TreeError {
     LeafParent(NodeId),
     /// A reference or removed child that is not a child of the parent.
     NotAChild { parent: NodeId, child: NodeId },
-    /// The root node given as the node to insert.
+    /// The root node given as the node to insert while no document is declared.
     RootMoved(NodeId),
+    /// The document given as the node to insert.
+    DocumentInserted(NodeId),
+    /// A node the document cannot hold: text, a second element, or a fragment with either.
+    DocumentChild(NodeId),
     /// A call that writes into the parent of a node, given the root container or a node that has no
     /// parent.
     NoParent(NodeId),
@@ -298,6 +308,14 @@ impl fmt::Display for TreeError {
             TreeError::RootMoved(_) => {
                 write!(f, "the root node belongs to the host and cannot be moved")
             }
+            TreeError::DocumentInserted(_) => write!(
+                f,
+                "the document cannot be inserted. it is the top of the tree"
+            ),
+            TreeError::DocumentChild(_) => write!(
+                f,
+                "the document holds one element and no text. remove its element first or insert a single element"
+            ),
             TreeError::NoParent(id) => write!(f, "node {id} has no parent to write into"),
         }
     }
@@ -312,10 +330,11 @@ pub struct VirtualTree {
     nodes: HashMap<NodeId, VirtualNode>,
     next_id: NodeId,
     root: Option<NodeId>,
+    document: Option<NodeId>,
     held: HashSet<NodeId>,
     orphans: HashSet<NodeId>,
-    /// Bumped by every change to a node, a link or the root, so a cache built from the tree can
-    /// tell that it is stale.
+    /// Bumped by every change to a node, a link, the root or the document, so a cache built from
+    /// the tree can tell that it is stale.
     generation: u64,
     style_cache: RefCell<computed::SheetCache>,
     interaction: state::InteractionState,
@@ -327,8 +346,7 @@ impl VirtualTree {
         Self::default()
     }
 
-    /// Declares `id` the root that [`is_connected`](Self::is_connected)
-    /// measures against.
+    /// Declares `id` the node the host owns: the sweep never frees it.
     pub fn set_root(&mut self, id: NodeId) {
         self.generation += 1;
         self.root = Some(id);
@@ -339,6 +357,33 @@ impl VirtualTree {
     #[must_use]
     pub fn root(&self) -> Option<NodeId> {
         self.root
+    }
+
+    /// Declares `id` the document that [`is_connected`](Self::is_connected) measures against.
+    pub fn set_document(&mut self, id: NodeId) {
+        self.generation += 1;
+        self.document = Some(id);
+        self.orphans.remove(&id);
+    }
+
+    /// The document declared with [`set_document`](Self::set_document), if any.
+    #[must_use]
+    pub fn document(&self) -> Option<NodeId> {
+        self.document
+    }
+
+    /// The first element child of the document, skipping comments. `None` while no document is
+    /// declared or it has no element child.
+    #[must_use]
+    pub fn document_element(&self) -> Option<NodeId> {
+        self.get(self.document?)?
+            .children()
+            .iter()
+            .copied()
+            .find(|&id| {
+                self.get(id)
+                    .is_some_and(|node| node.tag_name() != COMMENT_TAG)
+            })
     }
 
     /// Allocates a new node and returns its id. Ids are assigned
@@ -442,6 +487,7 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
+    use crate::tests::{Fixture, node};
     use rstest::rstest;
 
     #[test]
@@ -676,5 +722,38 @@ mod tests {
         tree.append_child(parent, second).unwrap();
 
         assert_eq!(tree.preceding(second), Some(deepest));
+    }
+
+    #[test]
+    fn a_declared_document_is_no_orphan() {
+        let mut tree = VirtualTree::new();
+        let document = tree.create_node(DOCUMENT_TAG).unwrap();
+        tree.set_document(document);
+
+        tree.sweep();
+
+        assert!(tree.get(document).is_some());
+    }
+
+    #[test]
+    fn the_document_element_skips_a_leading_comment() {
+        let (mut f, document) = Fixture::with_document();
+        let comment = node(&mut f.tree, COMMENT_TAG);
+        f.tree
+            .insert_before(document, comment, Some(f.root))
+            .unwrap();
+
+        assert_eq!(f.tree.document_element(), Some(f.root));
+    }
+
+    #[test]
+    fn there_is_no_document_element_among_only_comments() {
+        let mut tree = VirtualTree::new();
+        let document = tree.create_node(DOCUMENT_TAG).unwrap();
+        let comment = tree.create_node(COMMENT_TAG).unwrap();
+        tree.append_child(document, comment).unwrap();
+        tree.set_document(document);
+
+        assert_eq!(tree.document_element(), None);
     }
 }
