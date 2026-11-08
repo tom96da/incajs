@@ -4,7 +4,7 @@
 /**
  * The globals that vitest reads while it loads, evaluated in the QuickJS context.
  *
- * After a vitest upgrade, run `pnpm -F incajs test:quickjs src/interfaces.test.mts`.
+ * After a vitest upgrade, run `pnpm -F incajs test:quickjs src/document.test.mts`.
  * The line `the QuickJS context has no global <name>` names a global to stub here.
  * A stub for core code goes in the config file passed with `--config`.
  */

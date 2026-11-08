@@ -76,6 +76,7 @@ pub fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
     inca_jsenv::timers::install(ctx, &host.borrow().timers)?;
     inca_jsenv::frames::install(ctx, &host.borrow().frames)?;
     crate::event::install(ctx)?;
+    crate::interfaces::install(ctx)?;
     let globals = ctx.globals();
     globals.prop("__inca_native__", native)
 }

@@ -10,6 +10,7 @@ mod bindings;
 mod dispatch;
 mod event;
 mod event_target;
+mod interfaces;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
 #[cfg(test)]
