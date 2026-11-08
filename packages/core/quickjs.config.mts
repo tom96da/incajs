@@ -31,6 +31,9 @@ const plugin: Plugin = {
 export default {
   plugins: [plugin],
   // a module of vitest creates a TextDecoder
-  stubs: ["globalThis.TextDecoder = class { decode() { return ''; } };"],
+  stubs: [
+    "globalThis.TextDecoder = class { decode() { return ''; } };",
+    "globalThis.Document = class Document {};",
+  ],
   modules: ["@vue/runtime-core/dist/runtime-core.cjs.prod.js"],
 };

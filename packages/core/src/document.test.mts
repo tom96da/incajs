@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { document } from "./document.mts";
 import { HANDLER_EVENTS } from "./element/eventHandlers.mts";
 import { registerNode, unregisterNode } from "./element/lifecycle.mts";
-import { Document } from "./interfaces.mts";
 import "./targets.mts";
 import type { IncaElement } from "./element/types.mts";
 import type { HostCallback } from "./native.mts";

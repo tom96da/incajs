@@ -1611,3 +1611,18 @@ A fixed entry is deleted and its ID is never reused.
   `Performance` an `EventTarget` base once the event target lives below `inca-jsenv` or the bridge
   passes a hook. The navigation parts wait for a navigation model that a window does not have.
   The `detail` copy belongs to B-295.
+
+- **B-297 Nodes have no `Node`, `Element` or `Text` interface objects**
+  `Units: bridge,core · Size: L · Impact: Medium`
+
+  `instanceof Node`, `Element` and `Text` throw, and Vue Vapor reads them. The prototype of
+  `document` is `Document.prototype`, so it reads `[object Document]`. In browsers it is
+  `HTMLDocument.prototype` and reads `[object HTMLDocument]`. Fix: host class definitions for the
+  chain (`EventTarget`, `Node`, `Document`, `HTMLDocument`, `Element`, `Text`), handles that take
+  their prototypes from the host, then `Comment`, `CharacterData` and `DocumentFragment`.
+
+- **B-298 `new Document()` throws**
+  `Units: node,bridge · Size: M · Impact: Low`
+
+  In browsers `new Document()` builds an empty document with no element. The host has one
+  document. Fix: let the tree hold inert documents that are never connected, then construct one.

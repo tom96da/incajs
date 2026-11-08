@@ -4,7 +4,6 @@
 import { withEventHandlers } from "./element/eventHandlers.mts";
 import { elementOf } from "./element/lifecycle.mts";
 import { createEventTarget } from "./eventTarget.mts";
-import { Document } from "./interfaces.mts";
 import { focusedNode } from "./tree.mts";
 import type { IncaElement } from "./element/types.mts";
 import type { IncaDocument } from "./types.mts";
