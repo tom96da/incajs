@@ -3,6 +3,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { nativeStub } from "../tests/setup.mts";
 import type { IncaNode } from "./element/types.mts";
 
 interface FakeNode {
@@ -57,7 +58,7 @@ function descendants(id: number): number[] {
 }
 
 function installNatives(): void {
-  globalThis.__inca_native__ = {
+  globalThis.__inca_native__ = nativeStub({
     rootNodeId: () => ROOT,
     createNode: (tag: string) => {
       guard("createNode");
@@ -102,7 +103,7 @@ function installNatives(): void {
     releaseListeners: () => [],
     holdNode: () => {},
     releaseNode: () => {},
-  } as never;
+  } as never);
 }
 
 /** The style elements below the root, as `[key, text]` pairs in tree order. */

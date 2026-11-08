@@ -116,7 +116,7 @@ pub(crate) fn listen_with(
         .unwrap();
 }
 
-/// Registers `f` on the global target `tag`, `"$document"` or `"$window"`, in the capture phase
+/// Registers `f` on the global target `tag`, `"$window"`, in the capture phase
 /// when `capture` is set.
 pub(crate) fn listen_global(
     dispatcher: &EventDispatcher,

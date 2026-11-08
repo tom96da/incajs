@@ -3,6 +3,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 
+import { nativeStub } from "../../tests/setup.mts";
 import { createIncaElement } from "./handle.mts";
 import { markDestroyed } from "./lifecycle.mts";
 import { scrollIntoViewArgs, scrollPosition } from "./scroll.mts";
@@ -14,7 +15,7 @@ function installHost(scroll: readonly [number, number, number, number] | null = 
     getAttribute: vi.fn<() => null>(() => null),
     layoutOf: vi.fn<() => null>(() => null),
   };
-  globalThis.__inca_native__ = host as never;
+  globalThis.__inca_native__ = nativeStub(host as never);
   return host;
 }
 

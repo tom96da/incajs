@@ -3,15 +3,27 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { nativeStub } from "../tests/setup.mts";
 import { document } from "./document.mts";
 import { HANDLER_EVENTS } from "./element/eventHandlers.mts";
-import { registerNode, unregisterNode } from "./element/lifecycle.mts";
+import { createElementNode, rootElement } from "./element/handle.mts";
+import { isHeld, markDestroyed, registerNode, unregisterNode } from "./element/lifecycle.mts";
 import "./targets.mts";
 import type { IncaElement } from "./element/types.mts";
-import type { HostCallback } from "./native.mts";
+import type { HostCallback, NodeLink } from "./native.mts";
+
+/** The id `nativeStub` gives the document. */
+const DOCUMENT = 1;
 
 let nextCallbackId = 0;
+let nextId = 100;
 let focused: number | null = null;
+/** The data of each text node or comment stand-in. */
+let data: Record<number, unknown> = {};
+/** The parent each node reaches through `linkedNode`. */
+let parents = new Map<number, number>();
+let found: number | null = null;
+let foundAll: number[] = [];
 
 const native = {
   focusedNode: vi.fn<() => number | null>(() => focused),
@@ -28,13 +40,44 @@ const native = {
     (target: number | string, event: string, callbackId: number) => boolean
   >(() => true),
   dispatchEvent: vi.fn<(target: number | string, event: unknown) => boolean>(() => true),
+  rootNodeId: vi.fn<() => number>(() => 0),
+  createNode: vi.fn<(tag: string) => number>(() => nextId++),
+  createElement: vi.fn<(localName: string) => [number, string]>((localName) => [
+    nextId++,
+    localName.toLowerCase(),
+  ]),
+  setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(
+    (nodeId, _key, value) => {
+      data[nodeId] = value;
+    },
+  ),
+  getAttribute: vi.fn<(nodeId: number, key: string) => unknown>((nodeId) => data[nodeId] ?? null),
+  setStyle: vi.fn<() => void>(),
+  appendChild: vi.fn<(parentId: number, childId: number) => number>(() => 0),
+  removeChild: vi.fn<(parentId: number, childId: number) => void>(),
+  releaseListeners: vi.fn<(nodeId: number) => number[]>(() => []),
+  holdNode: vi.fn<(nodeId: number) => void>(),
+  releaseNode: vi.fn<(nodeId: number) => void>(),
+  textContent: vi.fn<(nodeId: number) => string>(() => "joined"),
+  isConnected: vi.fn<(nodeId: number) => boolean>(() => false),
+  layoutOf: vi.fn<() => null>(() => null),
+  linkedNode: vi.fn<(nodeId: number, link: NodeLink) => number | null>((nodeId, link) =>
+    link === "parent" ? (parents.get(nodeId) ?? null) : null,
+  ),
+  querySelector: vi.fn<(nodeId: number, selector: string) => number | null>(() => found),
+  querySelectorAll: vi.fn<(nodeId: number, selector: string) => number[]>(() => foundAll),
 };
 
 beforeEach(() => {
   vi.clearAllMocks();
   nextCallbackId = 0;
+  nextId = 100;
   focused = null;
-  globalThis.__inca_native__ = native as never;
+  data = {};
+  parents = new Map();
+  found = null;
+  foundAll = [];
+  globalThis.__inca_native__ = nativeStub(native as never);
 });
 
 afterEach(() => {
@@ -44,10 +87,6 @@ afterEach(() => {
 describe("document", () => {
   it("is an instance of Document", () => {
     expect(document).toBeInstanceOf(Document);
-  });
-
-  it("has the Document string tag", () => {
-    expect(Object.prototype.toString.call(document)).toBe("[object Document]");
   });
 
   it("reads the focused element as activeElement", () => {
@@ -70,11 +109,11 @@ describe("document", () => {
     expect(document.activeElement).toBeNull();
   });
 
-  it("registers a listener on the document target", () => {
+  it("registers a listener on the document node", () => {
     document.addEventListener("keydown", vi.fn<() => void>());
 
     expect(native.addEventListener).toHaveBeenCalledExactlyOnceWith(
-      "$document",
+      DOCUMENT,
       "keydown",
       expect.any(Function),
       false,
@@ -82,7 +121,7 @@ describe("document", () => {
     );
   });
 
-  it("removes a listener from the document target", () => {
+  it("removes a listener from the document node", () => {
     const listener = vi.fn<() => void>();
     document.addEventListener("keydown", listener);
     const callbackId = native.addEventListener.mock.results[0]!.value;
@@ -90,18 +129,18 @@ describe("document", () => {
     document.removeEventListener("keydown", listener);
 
     expect(native.removeEventListener).toHaveBeenCalledExactlyOnceWith(
-      "$document",
+      DOCUMENT,
       "keydown",
       callbackId,
     );
   });
 
-  it("dispatches at the document target", () => {
+  it("dispatches at the document node", () => {
     const event = { type: "ping" };
 
     document.dispatchEvent(event);
 
-    expect(native.dispatchEvent).toHaveBeenCalledExactlyOnceWith("$document", event);
+    expect(native.dispatchEvent).toHaveBeenCalledExactlyOnceWith(DOCUMENT, event);
   });
 
   it("makes wheel listeners passive unless the options say otherwise", () => {
@@ -127,12 +166,277 @@ describe("document", () => {
     native.addEventListener.mock.calls[0]![2]({ key: "a", currentTarget: document });
 
     expect(native.addEventListener).toHaveBeenCalledExactlyOnceWith(
-      "$document",
+      DOCUMENT,
       "keydown",
       expect.any(Function),
       false,
       false,
     );
     expect(keys).toEqual([document, "a"]);
+  });
+});
+
+describe("node members", () => {
+  it("reads 9 as nodeType", () => {
+    expect(document.nodeType).toBe(9);
+  });
+
+  it('reads "#document" as nodeName', () => {
+    expect(document.nodeName).toBe("#document");
+  });
+
+  it("reads null as ownerDocument", () => {
+    expect(document.ownerDocument).toBeNull();
+  });
+
+  it("reads null as textContent", () => {
+    expect(document.textContent).toBeNull();
+  });
+
+  it("ignores an assignment to textContent", () => {
+    document.textContent = "x";
+
+    expect(native.setAttribute).not.toHaveBeenCalled();
+    expect(native.createNode).not.toHaveBeenCalled();
+  });
+
+  it("reads null as nodeValue", () => {
+    expect(document.nodeValue).toBeNull();
+  });
+
+  it("ignores an assignment to nodeValue", () => {
+    document.nodeValue = "x";
+
+    expect(native.setAttribute).not.toHaveBeenCalled();
+  });
+
+  it("has no cloneNode", () => {
+    expect("cloneNode" in document).toBe(false);
+  });
+
+  it("links the mount container back after it was removed", () => {
+    const root = rootElement();
+
+    document.removeChild(root);
+    document.appendChild(root);
+
+    expect(native.removeChild).toHaveBeenCalledExactlyOnceWith(DOCUMENT, 0);
+    expect(native.appendChild).toHaveBeenCalledExactlyOnceWith(DOCUMENT, 0);
+    expect(root.parent).toBe(document);
+    expect(document.__children).toEqual([root]);
+  });
+});
+
+describe("createElement", () => {
+  it("passes the name as given to the host", () => {
+    document.createElement("DIV");
+
+    expect(native.createElement).toHaveBeenCalledExactlyOnceWith("DIV");
+  });
+
+  it("reads the id and the tag the host answers", () => {
+    native.createElement.mockImplementationOnce(() => [77, "span"]);
+
+    const el = document.createElement("DIV");
+
+    expect([el.__node_id, el.tagName, el.nodeName]).toEqual([77, "SPAN", "SPAN"]);
+  });
+
+  it("converts the name once", () => {
+    let conversions = 0;
+    const name = {
+      toString: () => {
+        conversions++;
+        return "div";
+      },
+    };
+
+    document.createElement(name as never);
+
+    expect(conversions).toBe(1);
+  });
+
+  it("passes the error of an invalid name through", () => {
+    const error = new DOMException("the element name is not valid", "InvalidCharacterError");
+    native.createElement.mockImplementationOnce(() => {
+      throw error;
+    });
+
+    expect(() => document.createElement("1a")).toThrow(error);
+  });
+});
+
+describe("created nodes", () => {
+  it.each([
+    ["element", () => document.createElement("div")],
+    ["text node", () => document.createTextNode("t")],
+    ["comment", () => document.createComment("c")],
+    ["fragment", () => document.createDocumentFragment()],
+  ] as const)("holds the %s until its handle is collected", (_name, create) => {
+    const node = create();
+
+    expect(native.holdNode).toHaveBeenCalledWith(node.__node_id);
+    expect(isHeld(node)).toBe(true);
+  });
+
+  it.each([
+    ["createElement", () => document.createElement(...([] as unknown as [string]))],
+    ["createTextNode", () => document.createTextNode(...([] as unknown as [string]))],
+    ["createComment", () => document.createComment(...([] as unknown as [string]))],
+  ] as const)("%s without an argument throws a TypeError", (_name, call) => {
+    expect(call).toThrow(TypeError);
+  });
+
+  it.each([
+    [
+      "createTextNode(undefined) reads the data undefined",
+      () => document.createTextNode(undefined as never),
+      "undefined",
+    ],
+    [
+      "createComment(null) reads the data null",
+      () => document.createComment(null as never),
+      "null",
+    ],
+  ] as const)("%s as text", (_name, create, expected) => {
+    expect(create().nodeValue).toBe(expected);
+  });
+
+  it("creates a parentless text node", () => {
+    expect(document.createTextNode("t")).toMatchObject({ kind: "text", text: "t", parent: null });
+  });
+
+  it("creates a parentless comment", () => {
+    expect(document.createComment("c")).toMatchObject({ kind: "comment", parent: null });
+  });
+});
+
+describe("createDocumentFragment", () => {
+  it("allocates a native fragment node", () => {
+    document.createDocumentFragment();
+
+    expect(native.createNode).toHaveBeenCalledWith("#fragment");
+  });
+
+  it("returns an empty, parentless fragment", () => {
+    const fragment = document.createDocumentFragment();
+
+    expect(fragment).toMatchObject({ kind: "fragment", parent: null, __children: [] });
+  });
+
+  it.each([
+    ["nodeType", 11],
+    ["nodeName", "#document-fragment"],
+    ["nodeValue", null],
+    ["isConnected", false],
+    ["ownerDocument", document],
+  ] as const)("reads %s of a fragment", (member, value) => {
+    expect(document.createDocumentFragment()[member]).toBe(value);
+  });
+
+  it("ignores an assignment to nodeValue", () => {
+    const fragment = document.createDocumentFragment();
+
+    fragment.nodeValue = "x";
+
+    expect(fragment.nodeValue).toBeNull();
+    expect(native.setAttribute).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "addEventListener",
+    "removeEventListener",
+    "dispatchEvent",
+    "querySelector",
+    "querySelectorAll",
+    "children",
+    "getElementById",
+  ])("has no %s", (member) => {
+    expect(member in document.createDocumentFragment()).toBe(false);
+  });
+
+  it("reads textContent from the host", () => {
+    expect(document.createDocumentFragment().textContent).toBe("joined");
+  });
+
+  it("reads an empty textContent once the host freed it", () => {
+    const fragment = document.createDocumentFragment();
+    markDestroyed(fragment);
+
+    expect(fragment.textContent).toBe("");
+  });
+
+  it("replaces its children with one text node when textContent is assigned", () => {
+    const fragment = document.createDocumentFragment();
+    fragment.appendChild(createElementNode("div"));
+
+    fragment.textContent = "x";
+
+    expect(fragment.__children.map((child) => child.kind)).toEqual(["text"]);
+  });
+
+  it("ignores a textContent assignment once the host freed it", () => {
+    const fragment = document.createDocumentFragment();
+    markDestroyed(fragment);
+
+    fragment.textContent = "x";
+
+    expect(native.setAttribute).not.toHaveBeenCalled();
+  });
+});
+
+describe("a node inside a fragment", () => {
+  const inside = () => {
+    const fragment = document.createDocumentFragment();
+    const child = createElementNode("div");
+    fragment.appendChild(child);
+    parents.set(child.__node_id, fragment.__node_id);
+    return { fragment, child };
+  };
+
+  it("reads the fragment as parentNode", () => {
+    const { fragment, child } = inside();
+
+    expect(child.parentNode).toBe(fragment);
+  });
+
+  it("has no offsetParent", () => {
+    expect(inside().child.offsetParent).toBeNull();
+  });
+
+  it("reads null as parentElement", () => {
+    expect(inside().child.parentElement).toBeNull();
+  });
+});
+
+describe("queries", () => {
+  it("finds the element the host names with querySelector", () => {
+    const el = createElementNode("div");
+    found = el.__node_id;
+
+    expect(document.querySelector("div")).toBe(el);
+    expect(native.querySelector).toHaveBeenCalledExactlyOnceWith(DOCUMENT, "div");
+  });
+
+  it("gives null when the host finds nothing", () => {
+    expect(document.querySelector("div")).toBeNull();
+  });
+
+  it("lists the elements the host names with querySelectorAll", () => {
+    const [first, second] = [createElementNode("div"), createElementNode("div")];
+    foundAll = [first.__node_id, second.__node_id];
+
+    expect([...document.querySelectorAll("div")]).toEqual([first, second]);
+    expect(native.querySelectorAll).toHaveBeenCalledExactlyOnceWith(DOCUMENT, "div");
+  });
+
+  it("finds the mount container when it matches", () => {
+    found = 0;
+
+    expect(document.querySelector("div")).toBe(rootElement());
+  });
+
+  it.each(["querySelector", "querySelectorAll"] as const)("%s needs an argument", (method) => {
+    expect(() => document[method](...([] as unknown as [string]))).toThrow(TypeError);
   });
 });

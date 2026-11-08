@@ -3,6 +3,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { nativeStub } from "../../tests/setup.mts";
 import { createIncaElement } from "./handle.mts";
 import { markDestroyed } from "./lifecycle.mts";
 import type { HostCallback } from "../native.mts";
@@ -35,7 +36,7 @@ function installNative() {
     ),
     getAttribute: vi.fn<() => null>(() => null),
   };
-  globalThis.__inca_native__ = native as never;
+  globalThis.__inca_native__ = nativeStub(native as never);
   return native;
 }
 

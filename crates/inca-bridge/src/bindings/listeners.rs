@@ -230,7 +230,7 @@ mod tests {
         let host = host.borrow();
         let flags: Vec<_> = host
             .listeners
-            .listeners_for(EventTargetId::Node(1), "a")
+            .listeners_for(EventTargetId::Node(2), "a")
             .iter()
             .map(|l| (l.callback, l.capture, l.passive))
             .collect();
@@ -254,7 +254,7 @@ mod tests {
         let host = host.borrow();
         let flags: Vec<_> = host
             .listeners
-            .listeners_for(EventTargetId::Node(1), "a")
+            .listeners_for(EventTargetId::Node(2), "a")
             .iter()
             .map(|l| (l.capture, l.passive))
             .collect();
@@ -278,16 +278,16 @@ mod tests {
         let host = host.borrow();
 
         assert_eq!(
-            callback_ids(&host.listeners, EventTargetId::Node(1), "click"),
+            callback_ids(&host.listeners, EventTargetId::Node(2), "click"),
             &[1]
         );
         assert_eq!(
-            callback_ids(&host.listeners, EventTargetId::Node(2), "click"),
+            callback_ids(&host.listeners, EventTargetId::Node(3), "click"),
             &[2]
         );
         assert_eq!(
             host.listeners
-                .listeners_for(EventTargetId::Node(1), "focus"),
+                .listeners_for(EventTargetId::Node(2), "focus"),
             &[Listener {
                 callback: 3,
                 capture: false,
@@ -442,13 +442,12 @@ mod tests {
     }
 
     #[test]
-    fn destroying_a_node_leaves_the_global_target_registrations() {
+    fn destroying_a_node_leaves_the_window_registration() {
         let (engine, host) = engine_with_bindings();
         let node_callbacks: Vec<u32> = engine
             .eval(
                 r"
                 const n = __inca_native__.createNode('div');
-                __inca_native__.addEventListener('$document', 'click', () => {});
                 __inca_native__.addEventListener('$window', 'click', () => {});
                 __inca_native__.addEventListener(n, 'click', () => {});
                 __inca_native__.destroyNode(n)
@@ -459,16 +458,12 @@ mod tests {
 
         assert_eq!(
             node_callbacks,
-            [3],
+            [2],
             "freeing a node frees only its own callbacks"
         );
         assert_eq!(
-            callback_ids(&host.listeners, EventTargetId::Document, "click"),
-            [1]
-        );
-        assert_eq!(
             callback_ids(&host.listeners, EventTargetId::Window, "click"),
-            [2]
+            [1]
         );
     }
 
@@ -487,7 +482,7 @@ mod tests {
             .unwrap();
 
         assert!(removed);
-        assert!(callback_ids(&host.borrow().listeners, EventTargetId::Node(1), "click").is_empty());
+        assert!(callback_ids(&host.borrow().listeners, EventTargetId::Node(2), "click").is_empty());
     }
 
     #[test]
@@ -573,7 +568,7 @@ mod tests {
 
         assert!(engine.eval::<bool>(&script).unwrap(), "{bad}");
         assert_eq!(
-            callback_ids(&host.borrow().listeners, EventTargetId::Node(1), "click"),
+            callback_ids(&host.borrow().listeners, EventTargetId::Node(2), "click"),
             [1, 2],
             "{bad}"
         );

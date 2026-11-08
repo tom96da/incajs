@@ -274,15 +274,14 @@ pub enum TreeError {
     LeafParent(NodeId),
     /// A reference or removed child that is not a child of the parent.
     NotAChild { parent: NodeId, child: NodeId },
-    /// The root node given as the node to insert while no document is declared.
-    RootMoved(NodeId),
     /// The document given as the node to insert.
     DocumentInserted(NodeId),
     /// A node the document cannot hold: text, a second element, or a fragment with either.
     DocumentChild(NodeId),
-    /// A call that writes into the parent of a node, given the root container or a node that has no
-    /// parent.
+    /// A call that writes into the parent of a node, given a node that has no parent.
     NoParent(NodeId),
+    /// A call that writes into the parent of a node whose parent is the document.
+    DocumentParent(NodeId),
 }
 
 impl fmt::Display for TreeError {
@@ -305,9 +304,6 @@ impl fmt::Display for TreeError {
                 f,
                 "node {child} is not a child of node {parent}. pass a child of the node you call it on"
             ),
-            TreeError::RootMoved(_) => {
-                write!(f, "the root node belongs to the host and cannot be moved")
-            }
             TreeError::DocumentInserted(_) => write!(
                 f,
                 "the document cannot be inserted. it is the top of the tree"
@@ -317,6 +313,10 @@ impl fmt::Display for TreeError {
                 "the document holds one element and no text. remove its element first or insert a single element"
             ),
             TreeError::NoParent(id) => write!(f, "node {id} has no parent to write into"),
+            TreeError::DocumentParent(id) => write!(
+                f,
+                "node {id} is the element of the document. replace it through the document"
+            ),
         }
     }
 }

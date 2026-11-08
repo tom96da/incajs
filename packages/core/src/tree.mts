@@ -17,6 +17,26 @@ export function rootNodeId(): NodeId {
 }
 
 /**
+ * Returns the id of the document node, the parent of the root container. The host allocates it
+ * with the tree and it names the same node for the engine's lifetime.
+ * @returns the document node's id
+ */
+export function documentNodeId(): NodeId {
+  return native().documentNodeId();
+}
+
+/**
+ * Allocates a new element in the native tree, as {@link createNode} does for a tag, after the
+ * host checks that `localName` is a valid element name and lowers its ASCII upper case.
+ * @param localName - the element name
+ * @returns the new node's id and its tag
+ * @throws {DOMException} `InvalidCharacterError` when `localName` is not a valid element name
+ */
+export function createElement(localName: string): [NodeId, TagName] {
+  return native().createElement(localName);
+}
+
+/**
  * Allocates a new node of kind `tag` in the native tree. The node starts out
  * detached. Attach it with {@link appendChild}/{@link insertBefore}. The host
  * frees the node at the start of the next frame unless it is inserted or held
@@ -48,7 +68,8 @@ export function appendChild(parentId: NodeId, nodeId: NodeId): number {
  * @param refId - the sibling to insert before, or `null` to append at the end
  * @returns the position of the first attached node among the children of `parentId`
  * @throws {DOMException} `HierarchyRequestError` when `parentId` is a text node or a comment,
- *   `nodeId` is `parentId` or an ancestor of it, or `nodeId` is the root container;
+ *   `nodeId` is `parentId` or an ancestor of it, `nodeId` is the document, or `parentId` is the
+ *   document and the insertion gives it text or a second element;
  *   `NotFoundError` when `refId` is not a child of `parentId`
  * @throws {TypeError} when an id names no node
  */
@@ -136,7 +157,7 @@ export function setInnerHtml(nodeId: NodeId, html: string): Parsed {
  * @param nodeId - the node to replace
  * @param html - the markup
  * @returns the parsed nodes and their position, or `null` and no change for a node without a parent
- * @throws {DOMException} `NoModificationAllowedError` for the root container
+ * @throws {DOMException} `NoModificationAllowedError` for a node whose parent is the document
  * @throws {TypeError} when `nodeId` names no node
  */
 export function setOuterHtml(nodeId: NodeId, html: string): Parsed | null {
@@ -150,7 +171,7 @@ export function setOuterHtml(nodeId: NodeId, html: string): Parsed | null {
  * @param html - the markup
  * @returns the parsed nodes and their position among the children of their new parent
  * @throws {DOMException} `SyntaxError` for another position; `NoModificationAllowedError` for
- *   `beforebegin` or `afterend` on a node without a parent
+ *   `beforebegin` or `afterend` on a node without a parent or a node whose parent is the document
  * @throws {TypeError} when `nodeId` names no node
  */
 export function insertAdjacentHtml(nodeId: NodeId, position: string, html: string): Parsed {
@@ -160,7 +181,8 @@ export function insertAdjacentHtml(nodeId: NodeId, position: string, html: strin
 /**
  * Finds the top of the tree `nodeId` belongs to.
  * @param nodeId - the node to start from
- * @returns the id of the topmost ancestor, `nodeId` itself without a parent
+ * @returns the id of the topmost ancestor, which is the document for a connected node, and
+ *   `nodeId` itself without a parent
  * @throws {TypeError} when `nodeId` names no node
  */
 export function rootOf(nodeId: NodeId): NodeId {
@@ -274,9 +296,9 @@ export function childNodeIds(nodeId: NodeId): NodeId[] {
 }
 
 /**
- * Whether the host tree connects a node to the mount container.
+ * Whether the parent chain of a node reaches the document.
  * @param nodeId - the node to test
- * @returns `true` for the mount container and the nodes below it
+ * @returns `true` for the document and the nodes below it
  * @throws {TypeError} when `nodeId` names no node
  */
 export function isConnected(nodeId: NodeId): boolean {

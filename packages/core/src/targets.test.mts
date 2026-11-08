@@ -3,16 +3,20 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { document } from "./document.mts";
+import { nativeStub } from "../tests/setup.mts";
 import "./targets.mts";
+import { document } from "./document.mts";
+import { adoptTextNode } from "./element/handle.mts";
 import { elementOf, registerNode, unregisterNode } from "./element/lifecycle.mts";
 import { window } from "./window.mts";
 import type { IncaElement } from "./element/types.mts";
 
+/** The id `nativeStub` gives the document. */
+const DOCUMENT = 1;
 const ROOT = 77;
 
 beforeEach(() => {
-  globalThis.__inca_native__ = { rootNodeId: vi.fn<() => number>(() => ROOT) } as never;
+  globalThis.__inca_native__ = nativeStub({ rootNodeId: vi.fn<() => number>(() => ROOT) } as never);
 });
 
 describe("globals", () => {
@@ -28,13 +32,27 @@ describe("__inca_targets__", () => {
   afterEach(() => {
     unregisterNode(5);
     unregisterNode(ROOT);
+    unregisterNode(8);
   });
 
-  it("resolves the document and window tags to their objects", () => {
-    const [doc, win] = globalThis.__inca_targets__(["$document", "$window"]);
+  it("resolves the id of the document node to the document", () => {
+    const [doc] = globalThis.__inca_targets__([DOCUMENT]);
 
     expect(doc).toBe(document);
+  });
+
+  it("resolves the window tag to window", () => {
+    const [win] = globalThis.__inca_targets__(["$window"]);
+
     expect(win).toBe(window);
+  });
+
+  it("returns null for a text node", () => {
+    const text = adoptTextNode(8, "t");
+
+    const [found] = globalThis.__inca_targets__([text.__node_id]);
+
+    expect(found).toBeNull();
   });
 
   it("resolves registered element nodes to their handles", () => {

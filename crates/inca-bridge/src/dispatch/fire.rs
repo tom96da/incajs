@@ -75,9 +75,9 @@ impl EventDispatcher {
     /// While the listeners run, `eventPhase` is 1 on the ancestors of `target`
     /// during the capture pass, 2 where `currentTarget` is `target` and 3 on
     /// the ancestors during the bubble pass, and `composedPath()` lists the path,
-    /// from `target` up through its element ancestors, document and window, as the
-    /// objects that `__inca_targets__` gives, or as node ids and the tags
-    /// `"$document"` and `"$window"` when no such global exists. Afterwards
+    /// from `target` up through its ancestors to the document, then window, as the
+    /// objects that `__inca_targets__` gives, or as node ids and the tag
+    /// `"$window"` when no such global exists. Afterwards
     /// `currentTarget` is `null`, `eventPhase` is 0 and `composedPath()` is
     /// empty. A listener that throws is reported, and the remaining listeners
     /// run. A throw of `__inca_targets__` is reported and no listener runs.
@@ -161,7 +161,7 @@ impl EventDispatcher {
             .unwrap_or(node_id)
     }
 
-    /// `target` and its ancestors up to the host root, nearest first.
+    /// `target` and its ancestors up to the document, nearest first.
     pub(super) fn path_from(&self, target: NodeId) -> Vec<NodeId> {
         self.host.borrow().tree.ancestors(target).collect()
     }
@@ -231,9 +231,9 @@ impl EventDispatcher {
                     .find(|&id| host.focus.handle(id).is_some())
             };
             let focused = host.focus.focused_node(window, cx);
-            let root = host.root();
+            let top = host.top();
             host.focus
-                .press_start(target, root, focusing.filter(|&node| Some(node) != focused));
+                .press_start(target, top, focusing.filter(|&node| Some(node) != focused));
             focusing.and_then(|node| host.focus.handle(node))
         };
         if prevented {
@@ -246,11 +246,11 @@ impl EventDispatcher {
     }
 
     pub(super) fn key_target(&self, window: &mut Window, cx: &mut App) -> NodeId {
-        let (root, focused) = {
+        let (top, focused) = {
             let host = self.host.borrow();
-            (host.root(), host.focus.focused_node(window, cx))
+            (host.top(), host.focus.focused_node(window, cx))
         };
-        self.resolve(focused, root)
+        self.resolve(focused, top)
     }
 }
 

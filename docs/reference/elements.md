@@ -190,7 +190,6 @@ with the differences below. The listener methods are described in
 - Only `pointerId` 1 is accepted by `setPointerCapture()`,
   `releasePointerCapture()` and `hasPointerCapture()`.
 - `parent` is the parent element, or the fragment that holds the node.
-- The `parentNode` of the mount container is `document`.
 - A node that a template removes (for example with `v-if`) drops its listeners
   for good. Appending it again does not restore them. `removeChild()` and
   `replaceChild()` keep the listeners of the node they remove.
@@ -201,6 +200,7 @@ with the differences below. The listener methods are described in
   - the listener methods
 
   The global `DocumentFragment` does not exist.
+- `document` has no `cloneNode()`.
 - The methods below store U+FFFD for each half of a surrogate pair they split:
   - `splitText()`
   - `substringData()`, `insertData()`, `deleteData()`, `replaceData()`

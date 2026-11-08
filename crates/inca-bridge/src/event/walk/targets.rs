@@ -361,47 +361,63 @@ mod tests {
     fn native_event_path_runs_through_the_root_then_document_then_window(cx: &mut TestAppContext) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = node_under_root(&host);
-        let root = host.borrow().root();
+        let (root, document) = {
+            let host = host.borrow();
+            (host.root(), host.document())
+        };
         dispatcher.engine.eval::<()>(HOOK).unwrap();
         listen(&dispatcher, node, "click", &note_walk("node"));
         listen(&dispatcher, root, "click", &note_walk("root"));
-        listen_global(
-            &dispatcher,
-            "$document",
-            "click",
-            false,
-            &note_walk("document"),
-        );
+        listen(&dispatcher, document, "click", &note_walk("document"));
         listen_global(&dispatcher, "$window", "click", false, &note_walk("window"));
 
         let out = fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
 
-        let path = serde_json::json!([node, root, "$document", "$window"]);
+        let path = serde_json::json!([node, root, document, "$window"]);
         assert_eq!(
             out,
             serde_json::json!([
                 ["node", node, node, 2, path],
                 ["root", node, root, 3, path],
-                ["document", node, "$document", 3, path],
+                ["document", node, document, 3, path],
                 ["window", node, "$window", 3, path],
             ])
         );
     }
 
     #[gpui::test]
-    fn global_targets_capture_window_first_and_bubble_window_last(cx: &mut TestAppContext) {
+    fn the_window_captures_first_and_bubbles_last(cx: &mut TestAppContext) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = node_under_root(&host);
+        let document = host.borrow().document();
         dispatcher.engine.eval::<()>(HOOK).unwrap();
-        for (tag, capture) in [
-            ("$window", true),
-            ("$document", true),
-            ("$document", false),
-            ("$window", false),
-        ] {
-            let label = format!("{tag} {}", if capture { "capture" } else { "bubble" });
-            listen_global(&dispatcher, tag, "click", capture, &note_walk(&label));
-        }
+        listen_global(
+            &dispatcher,
+            "$window",
+            "click",
+            true,
+            &note_walk("$window capture"),
+        );
+        listen_with(
+            &dispatcher,
+            document,
+            "click",
+            (true, false),
+            &note_walk("document capture"),
+        );
+        listen(
+            &dispatcher,
+            document,
+            "click",
+            &note_walk("document bubble"),
+        );
+        listen_global(
+            &dispatcher,
+            "$window",
+            "click",
+            false,
+            &note_walk("$window bubble"),
+        );
         listen_with(
             &dispatcher,
             node,
@@ -419,7 +435,7 @@ mod tests {
             .iter()
             .map(|row| (row[0].as_str().unwrap(), row[2].clone(), row[3].clone()))
             .collect();
-        let (doc, win) = ("$document", "$window");
+        let win = "$window";
         assert_eq!(
             order,
             [
@@ -429,8 +445,8 @@ mod tests {
                     serde_json::json!(1)
                 ),
                 (
-                    "$document capture",
-                    serde_json::json!(doc),
+                    "document capture",
+                    serde_json::json!(document),
                     serde_json::json!(1)
                 ),
                 (
@@ -440,8 +456,8 @@ mod tests {
                 ),
                 ("node bubble", serde_json::json!(node), serde_json::json!(2)),
                 (
-                    "$document bubble",
-                    serde_json::json!(doc),
+                    "document bubble",
+                    serde_json::json!(document),
                     serde_json::json!(3)
                 ),
                 (
@@ -456,16 +472,13 @@ mod tests {
     #[gpui::test]
     fn a_key_event_with_nothing_focused_starts_at_the_host_root(cx: &mut TestAppContext) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let root = host.borrow().root();
+        let (root, document) = {
+            let host = host.borrow();
+            (host.root(), host.document())
+        };
         dispatcher.engine.eval::<()>(HOOK).unwrap();
         listen(&dispatcher, root, "keydown", &note_walk("root"));
-        listen_global(
-            &dispatcher,
-            "$document",
-            "keydown",
-            false,
-            &note_walk("document"),
-        );
+        listen(&dispatcher, document, "keydown", &note_walk("document"));
         listen_global(
             &dispatcher,
             "$window",
@@ -481,32 +494,27 @@ mod tests {
             sink.key_input(&key, false, &EventPayload::None, window, cx);
         });
 
-        let path = serde_json::json!([root, "$document", "$window"]);
+        let path = serde_json::json!([root, document, "$window"]);
         assert_eq!(
             read_out(&dispatcher),
             serde_json::json!([
                 ["root", root, root, 2, path],
-                ["document", root, "$document", 3, path],
+                ["document", root, document, 3, path],
                 ["window", root, "$window", 3, path],
             ])
         );
     }
 
     #[gpui::test]
-    fn an_event_at_a_node_outside_the_root_never_reaches_document_or_window(
+    fn an_event_at_a_node_outside_the_document_never_reaches_document_or_window(
         cx: &mut TestAppContext,
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let document = host.borrow().document();
         dispatcher.engine.eval::<()>(HOOK).unwrap();
         listen(&dispatcher, node, "click", &note_walk("node"));
-        listen_global(
-            &dispatcher,
-            "$document",
-            "click",
-            false,
-            &note_walk("document"),
-        );
+        listen(&dispatcher, document, "click", &note_walk("document"));
         listen_global(&dispatcher, "$window", "click", true, &note_walk("window"));
 
         let out = fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
@@ -515,6 +523,9 @@ mod tests {
     }
 
     #[rstest]
+    #[case::document_tag(
+        "__inca_native__.addEventListener('$document', 'click', () => {}, false, false)"
+    )]
     #[case::add("__inca_native__.addEventListener('$nope', 'click', () => {}, false, false)")]
     #[case::remove("__inca_native__.removeEventListener('$nope', 'click', 0)")]
     #[case::dispatch("__inca_native__.dispatchEvent('$nope', new Event('click'))")]

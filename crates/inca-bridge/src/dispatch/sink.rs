@@ -56,7 +56,7 @@ impl EventSink for EventDispatcher {
     fn focus_handle(&self, node_id: NodeId) -> Option<gpui::FocusHandle> {
         let host = self.host.borrow();
         host.focus.handle(node_id).or_else(|| {
-            (node_id == host.root())
+            (Some(node_id) == host.tree.document_element())
                 .then(|| host.focus.parked_handle())
                 .flatten()
         })
@@ -662,5 +662,37 @@ mod tests {
 
         let want = format!("{event}:true:true:{fields}");
         assert_eq!(seen(&dispatcher), serde_json::json!([want]));
+    }
+
+    /// Builds the parked handle the way a frame does.
+    fn park(cx: &mut TestAppContext, dispatcher: &crate::EventDispatcher) {
+        let cx = cx.add_empty_window();
+        cx.update(|window, cx| {
+            let host = &mut *dispatcher.host.borrow_mut();
+            let _ = host.focus.apply_pending(&host.tree, window, cx);
+        });
+    }
+
+    #[gpui::test]
+    fn the_element_of_the_document_answers_with_the_parked_handle(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        park(cx, &dispatcher);
+        let root = host.borrow().root();
+
+        assert!(inca_gpui::EventSink::focus_handle(&dispatcher, root).is_some());
+    }
+
+    #[gpui::test]
+    fn the_root_outside_the_document_answers_with_no_handle(cx: &mut TestAppContext) {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        park(cx, &dispatcher);
+        let root = {
+            let host = &mut *host.borrow_mut();
+            let (document, root) = (host.document(), host.root());
+            host.tree.remove_child(document, root).unwrap();
+            root
+        };
+
+        assert!(inca_gpui::EventSink::focus_handle(&dispatcher, root).is_none());
     }
 }

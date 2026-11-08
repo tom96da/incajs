@@ -3,23 +3,16 @@
 
 // The node members of every handle: identity, data and links read from the host tree.
 
-import { document } from "../document.mts";
-import {
-  childNodeIds,
-  getAttribute,
-  isConnected,
-  linkedNode,
-  rootNodeId,
-  setAttribute,
-} from "../tree.mts";
+import { childNodeIds, getAttribute, isConnected, linkedNode, setAttribute } from "../tree.mts";
 import { nodeListOf } from "./collections.mts";
-import { isDestroyed, nodeOf } from "./lifecycle.mts";
+import { isDestroyed } from "./lifecycle.mts";
 import type { NodeLink } from "../native.mts";
-import type { NodeMutationMembers } from "./nodeMutation.mts";
+import type { IncaDocument } from "../types.mts";
+import type { HandleBuilders, NodeMutationMembers } from "./nodeMutation.mts";
 import type { NodeRelationMembers } from "./nodeRelations.mts";
 import type { IncaElement, IncaFragment, IncaNode, NodeMembers } from "./types.mts";
 
-const NODE_TYPES = { element: 1, text: 3, comment: 8, fragment: 11 } as const;
+const NODE_TYPES = { element: 1, text: 3, comment: 8, document: 9, fragment: 11 } as const;
 
 /**
  * Reads the data of a text node or comment stand-in. A freed node keeps the last data of a text
@@ -33,12 +26,14 @@ export function readData(node: IncaNode): string {
 }
 
 /**
- * Stores the data of a text node or comment stand-in. An element and a freed node ignore it.
+ * Stores the data of a text node or comment stand-in. An element, the document and a freed node
+ * ignore it.
  * @param node - the text node or comment stand-in
  * @param data - the new data
  */
 export function writeData(node: IncaNode, data: string): void {
-  if (node.kind === "element" || node.kind === "fragment" || isDestroyed(node)) return;
+  if (node.kind === "element" || node.kind === "fragment" || node.kind === "document") return;
+  if (isDestroyed(node)) return;
   setAttribute(node.__node_id, "value", data);
   if (node.kind === "text") node.text = data;
 }
@@ -46,20 +41,22 @@ export function writeData(node: IncaNode, data: string): void {
 /**
  * Builds the node members of `node`. Each read asks the host tree again.
  * @param node - the handle the members belong to
+ * @param builders - the lookups of the document handle and of a handle by node id
  * @returns the members, as getters
  */
 export function nodeTreeMembers(
   node: IncaNode,
+  builders: HandleBuilders,
 ): Omit<NodeMembers, keyof NodeMutationMembers | keyof NodeRelationMembers> {
   const id = node.__node_id;
   const reach = (link: NodeLink): IncaNode | null => {
     if (isDestroyed(node)) return null;
     const found = linkedNode(id, link);
-    return found === null ? null : (nodeOf(found) ?? null);
+    return found === null ? null : (builders.node(found) ?? null);
   };
   let childNodes: NodeMembers["childNodes"] | undefined;
   const liveChildren = (): IncaNode[] =>
-    isDestroyed(node) ? [] : childNodeIds(id).flatMap((child) => nodeOf(child) ?? []);
+    isDestroyed(node) ? [] : childNodeIds(id).flatMap((child) => builders.node(child) ?? []);
   return {
     get nodeType() {
       return NODE_TYPES[node.kind];
@@ -69,7 +66,9 @@ export function nodeTreeMembers(
       return node.kind === "fragment" ? "#document-fragment" : `#${node.kind}`;
     },
     get nodeValue() {
-      return node.kind === "element" || node.kind === "fragment" ? null : readData(node);
+      return node.kind === "element" || node.kind === "fragment" || node.kind === "document"
+        ? null
+        : readData(node);
     },
     set nodeValue(value: string | null) {
       writeData(node, String(value ?? ""));
@@ -78,12 +77,10 @@ export function nodeTreeMembers(
       return !isDestroyed(node) && isConnected(id);
     },
     get ownerDocument() {
-      return document;
+      return node.kind === "document" ? null : builders.document();
     },
     get parentNode() {
-      const parent = reach("parent");
-      if (parent !== null) return parent as IncaElement | IncaFragment;
-      return id === rootNodeId() ? document : null;
+      return reach("parent") as IncaElement | IncaFragment | IncaDocument | null;
     },
     get firstChild() {
       return reach("first");

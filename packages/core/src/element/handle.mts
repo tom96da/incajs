@@ -11,14 +11,19 @@ import {
 } from "../events.mts";
 import { createEventTarget } from "../eventTarget.mts";
 import {
+  appendChild,
   checkSelector,
   closestNode,
+  createElement as createHostElement,
   createNode,
+  documentNodeId,
+  focusedNode,
   getAttribute,
   inputValue,
   matchesNode,
   queryNode,
   queryNodes,
+  removeChild,
   rootNodeId,
   scrollIntoViewNode,
   scrollOf,
@@ -38,6 +43,7 @@ import {
   existingContent,
   isDestroyed,
   isRemoved,
+  nodeOf,
   registerNode,
   withNodeId,
 } from "./lifecycle.mts";
@@ -45,9 +51,10 @@ import { nodeMutationMembers } from "./nodeMutation.mts";
 import { nodeRelationMembers } from "./nodeRelations.mts";
 import { nodeTreeMembers } from "./nodeTree.mts";
 import { scrollIntoViewArgs, scrollPosition } from "./scroll.mts";
+import { keep, unlink } from "./shadowTree.mts";
 import { attachContent, isTemplateTag } from "./templateContent.mts";
-import { characterDataMembers, createIncaText, nullableText, setElementText } from "./text.mts";
-import type { NodeId, TagName } from "../types.mts";
+import { characterDataMembers, createIncaText, nullableText } from "./text.mts";
+import type { IncaDocument, NodeId, TagName } from "../types.mts";
 import type { AttributeMembers } from "./attributes.mts";
 import type { ElementTreeMembers } from "./elementTree.mts";
 import type { HandleBuilders } from "./nodeMutation.mts";
@@ -57,6 +64,9 @@ import type {
   HtmlMembers,
   IncaElement,
   IncaFragment,
+  IncaNode,
+  IncaParent,
+  IncaText,
   NodeMembers,
   TextContentMember,
 } from "./types.mts";
@@ -72,11 +82,54 @@ function selectorText(args: readonly unknown[], method: string): string {
   return attributeText(args[0]);
 }
 
-/** The builders a clone uses for each kind of handle. */
+/** The members `querySelector()` and `querySelectorAll()` of an element and of the document. */
+type QueryMembers = Pick<IncaElement, "querySelector" | "querySelectorAll">;
+
+/**
+ * Finds the element handle of an element node.
+ * @param id - the native node's id
+ * @returns the handle
+ */
+function elementHandle(id: NodeId): IncaElement {
+  return handleOf(id) as IncaElement;
+}
+
+/**
+ * Builds the query members of a node that holds elements below it.
+ * @param node - the element or the document the members belong to
+ * @returns the members
+ */
+function queryMembers(node: IncaElement | IncaDocument): QueryMembers {
+  const id = node.__node_id;
+  return {
+    querySelector: (...args: [selectors: string]) => {
+      const text = selectorText(args, "querySelector");
+      if (isDestroyed(node)) {
+        checkSelector(text);
+        return null;
+      }
+      const found = queryNode(id, text);
+      return found === null ? null : elementHandle(found);
+    },
+    querySelectorAll: (...args: [selectors: string]) => {
+      const text = selectorText(args, "querySelectorAll");
+      if (isDestroyed(node)) {
+        checkSelector(text);
+        return nodeListOf(() => []);
+      }
+      const found = queryNodes(id, text).map(elementHandle);
+      return nodeListOf(() => found);
+    },
+  };
+}
+
+/** The builders a clone uses for each kind of handle, and the lookups every handle uses. */
 const builders: HandleBuilders = {
   element: createIncaElement,
-  text: createIncaText,
+  text: (id, data) => createIncaText(id, data, builders),
   fragment: createIncaFragment,
+  document: documentHandle,
+  node: handleOf,
 };
 
 /**
@@ -110,6 +163,7 @@ export function createIncaElement(
     | keyof HtmlMembers
     | keyof NodeMembers
     | keyof TextContentMember
+    | keyof QueryMembers
   > = {
     get id() {
       return isDestroyed(element) ? "" : String(getAttribute(id, "id") ?? "");
@@ -214,25 +268,7 @@ export function createIncaElement(
         return null;
       }
       const found = closestNode(id, text);
-      return found === null ? null : elementOf(found)!;
-    },
-    querySelector: (...args: [selectors: string]) => {
-      const text = selectorText(args, "querySelector");
-      if (isDestroyed(element)) {
-        checkSelector(text);
-        return null;
-      }
-      const found = queryNode(id, text);
-      return found === null ? null : elementOf(found)!;
-    },
-    querySelectorAll: (...args: [selectors: string]) => {
-      const text = selectorText(args, "querySelectorAll");
-      if (isDestroyed(element)) {
-        checkSelector(text);
-        return nodeListOf(() => []);
-      }
-      const found = queryNodes(id, text).map((node) => elementOf(node)!);
-      return nodeListOf(() => found);
+      return found === null ? null : elementHandle(found);
     },
   };
   if (isTemplateTag(tag)) {
@@ -259,12 +295,19 @@ export function createIncaElement(
   );
   Object.defineProperties(element, Object.getOwnPropertyDescriptors(attributeMembers(id, element)));
   Object.defineProperties(element, Object.getOwnPropertyDescriptors(elementTreeMembers(element)));
-  Object.defineProperties(element, Object.getOwnPropertyDescriptors(nodeTreeMembers(element)));
+  Object.defineProperties(
+    element,
+    Object.getOwnPropertyDescriptors(nodeTreeMembers(element, builders)),
+  );
   Object.defineProperties(
     element,
     Object.getOwnPropertyDescriptors(nodeMutationMembers(element, builders)),
   );
-  Object.defineProperties(element, Object.getOwnPropertyDescriptors(nodeRelationMembers(element)));
+  Object.defineProperties(
+    element,
+    Object.getOwnPropertyDescriptors(nodeRelationMembers(element, builders)),
+  );
+  Object.defineProperties(element, Object.getOwnPropertyDescriptors(queryMembers(element)));
   Object.defineProperties(
     element,
     Object.getOwnPropertyDescriptors(
@@ -324,6 +367,47 @@ export function createCommentNode(text = ""): IncaElement {
 }
 
 /**
+ * Creates a text leaf.
+ * @param text - the initial text content
+ * @returns the new text leaf
+ */
+export function createTextNode(text: string): IncaText {
+  const id = createNode("#text");
+  setAttribute(id, "value", text);
+  return createIncaText(id, text, builders);
+}
+
+/**
+ * Builds the handle of an existing text node.
+ * @param id - the native node's id
+ * @param data - the data the node holds
+ * @returns the new, parentless handle
+ */
+export function adoptTextNode(id: NodeId, data: string): IncaText {
+  return createIncaText(id, data, builders);
+}
+
+/**
+ * Replaces all of `el`'s children with at most a single text child holding
+ * `text`. The old children keep their listeners. An empty string leaves `el` childless.
+ * @param el - the element or fragment whose children are replaced
+ * @param text - the new text content
+ */
+export function setElementText(el: IncaParent, text: string): void {
+  for (const child of el.__children.slice()) {
+    removeChild(el.__node_id, child.__node_id);
+    unlink(child);
+    keep(child);
+  }
+  if (!text) return;
+
+  const textNode = createTextNode(text);
+  appendChild(el.__node_id, textNode.__node_id);
+  textNode.parent = el;
+  el.__children.push(textNode);
+}
+
+/**
  * Returns the handle of the host's mount container, which stands between the app's elements and
  * `document` in an event path. A live handle is reused, so a mount and an event see one object.
  * A `wheel` listener on it is passive unless its options say `passive: false`.
@@ -355,13 +439,101 @@ export function createIncaFragment(id: NodeId): IncaFragment {
     },
   };
   for (const members of [
-    nodeTreeMembers(fragment),
+    nodeTreeMembers(fragment, builders),
     nodeMutationMembers(fragment, builders),
-    nodeRelationMembers(fragment),
+    nodeRelationMembers(fragment, builders),
     textMember,
   ]) {
     Object.defineProperties(fragment, Object.getOwnPropertyDescriptors(members));
   }
   registerNode(fragment);
   return fragment;
+}
+
+/** The handle of the document, built on first use and kept for the life of the realm. */
+let theDocument: IncaDocument | undefined;
+
+/**
+ * Returns the handle of the document.
+ * @returns the handle, which names the same object on every call
+ */
+export function documentHandle(): IncaDocument {
+  return (theDocument ??= createIncaDocument(documentNodeId()));
+}
+
+/**
+ * Looks up the handle of a node by id, the document handle included.
+ * @param id - the native node's id
+ * @returns the live handle, or `undefined` when none is live
+ */
+export function handleOf(id: NodeId): IncaNode | undefined {
+  const live = nodeOf(id);
+  if (live) return live;
+  if (id === rootNodeId()) return rootElement();
+  return id === documentNodeId() ? documentHandle() : undefined;
+}
+
+/**
+ * Holds a node the script created until its handle is collected.
+ * @param handle - the new, parentless handle
+ * @returns `handle`
+ */
+function held<T extends IncaNode>(handle: T): T {
+  keep(handle);
+  return handle;
+}
+
+/**
+ * Builds the handle of the document node: the listener methods and handler properties of an event
+ * target, the node members without `cloneNode()`, the creation methods and the query methods.
+ * @param id - the native node's id
+ * @returns the new handle
+ */
+function createIncaDocument(id: NodeId): IncaDocument {
+  const target = createEventTarget(id, ["wheel"]);
+  const fields: Omit<
+    IncaDocument,
+    "__node_id" | keyof EventHandlers<IncaDocument> | keyof NodeMembers | keyof QueryMembers
+  > = {
+    ...target,
+    kind: "document",
+    parent: null,
+    __children: [],
+    get textContent() {
+      return null;
+    },
+    set textContent(_value: string | null) {},
+    get activeElement() {
+      const focused = focusedNode();
+      return focused === null ? null : (elementOf(focused) ?? null);
+    },
+    createDocumentFragment: () => held(createIncaFragment(createNode("#fragment"))),
+    createElement: (...args: [localName: string]) => {
+      requireArguments(args, 1, "createElement");
+      const [elementId, tag] = createHostElement(attributeText(args[0]));
+      return held(createIncaElement(elementId, "element", tag));
+    },
+    createTextNode: (...args: [data: string]) => {
+      requireArguments(args, 1, "createTextNode");
+      return held(createTextNode(attributeText(args[0])));
+    },
+    createComment: (...args: [data: string]) => {
+      requireArguments(args, 1, "createComment");
+      return held(createCommentNode(attributeText(args[0])));
+    },
+  };
+  const handle = withEventHandlers(withNodeId(fields as IncaDocument, id), () => false);
+  // The host has one document, so the document has no `cloneNode()`.
+  const { cloneNode: _cloneNode, ...mutation } = nodeMutationMembers(handle, builders);
+  for (const members of [
+    nodeTreeMembers(handle, builders),
+    mutation,
+    nodeRelationMembers(handle, builders),
+    queryMembers(handle),
+  ]) {
+    Object.defineProperties(handle, Object.getOwnPropertyDescriptors(members));
+  }
+  Object.setPrototypeOf(handle, Document.prototype);
+  registerNode(handle);
+  return handle;
 }

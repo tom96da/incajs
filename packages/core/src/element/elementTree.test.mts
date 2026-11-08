@@ -3,15 +3,15 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createCommentNode, createElementNode, rootElement } from "./handle.mts";
+import { nativeStub } from "../../tests/setup.mts";
+import { createCommentNode, createElementNode, createTextNode, rootElement } from "./handle.mts";
 import { insert, remove } from "./shadowTree.mts";
-import { createTextNode } from "./text.mts";
 
 let nextId = 1;
 
 beforeEach(() => {
   nextId = 1;
-  globalThis.__inca_native__ = {
+  globalThis.__inca_native__ = nativeStub({
     rootNodeId: () => 0,
     createNode: vi.fn<() => number>(() => nextId++),
     setAttribute: vi.fn<() => void>(),
@@ -22,7 +22,7 @@ beforeEach(() => {
     holdNode: vi.fn<() => void>(),
     releaseNode: vi.fn<() => void>(),
     attributeNames: vi.fn<() => string[]>(() => []),
-  } as never;
+  } as never);
 });
 
 /** A `div` holding a text leaf, a comment stand-in and two elements. */

@@ -3,10 +3,12 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createCommentNode, createElementNode } from "./handle.mts";
+import { nativeStub } from "../../tests/setup.mts";
+import { document } from "../document.mts";
+import { createCommentNode, createElementNode, createTextNode, setElementText } from "./handle.mts";
 import { elementOf, markDestroyed } from "./lifecycle.mts";
 import { insert } from "./shadowTree.mts";
-import { createTextNode, setElementText, setText } from "./text.mts";
+import { setText } from "./text.mts";
 import type { IncaText } from "./types.mts";
 
 /** The data of each text node or comment stand-in. */
@@ -42,7 +44,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   data = {};
   nextId = 100;
-  globalThis.__inca_native__ = host as never;
+  globalThis.__inca_native__ = nativeStub(host as never);
 });
 
 describe("data", () => {
@@ -200,6 +202,10 @@ describe("splitText", () => {
 
   it("leaves the tail with no parent for a node with no parent", () => {
     expect(createTextNode("abcd").splitText(2).parent).toBeNull();
+  });
+
+  it("gives the tail the document as ownerDocument", () => {
+    expect(createTextNode("abcd").splitText(2).ownerDocument).toBe(document);
   });
 
   it("throws a TypeError for a freed node", () => {

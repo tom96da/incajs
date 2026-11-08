@@ -3,6 +3,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { nativeStub } from "../tests/setup.mts";
 import {
   appendChild,
   insertBefore,
@@ -122,7 +123,7 @@ const native = {
 beforeEach(() => {
   vi.clearAllMocks();
   nextCallbackId = 0;
-  globalThis.__inca_native__ = native;
+  globalThis.__inca_native__ = nativeStub(native);
 });
 
 describe("wrapper functions forward to __inca_native__", () => {

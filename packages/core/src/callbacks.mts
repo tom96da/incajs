@@ -75,7 +75,7 @@ export function releaseCallbacks(callbackIds: readonly CallbackId[]): void {
 /**
  * The capture flag is part of the identity: the same target, event and
  * function can listen in both phases side by side.
- * @param target - the event target (node id, "$document" or "$window")
+ * @param target - the event target (node id or "$window")
  * @param event - the event name
  * @param capture - the capture flag of the registration
  * @returns the target, event and capture flag as one string

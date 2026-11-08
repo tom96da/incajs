@@ -6,7 +6,7 @@ import type { EventTargetId } from "./native.mts";
 import type { EventListenerOrObject, IncaEventTarget, ListenerOptions } from "./types.mts";
 
 /**
- * Builds the listener methods of an event target: a node, document or window.
+ * Builds the listener methods of an event target: a node or window.
  * @param target - the target id, or a function that resolves it each time a method runs
  * @param passiveByDefault - event names whose listeners are passive unless
  * their options say `passive: false`

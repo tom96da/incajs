@@ -3,6 +3,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { nativeStub } from "../tests/setup.mts";
 import { createEventTarget } from "./eventTarget.mts";
 import type { HostCallback } from "./native.mts";
 import type { EventLike } from "./types.mts";
@@ -29,7 +30,7 @@ const native = {
 beforeEach(() => {
   vi.clearAllMocks();
   nextCallbackId = 0;
-  globalThis.__inca_native__ = native as never;
+  globalThis.__inca_native__ = nativeStub(native as never);
 });
 
 // Flags of every host registration as [event, capture, passive].

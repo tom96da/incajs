@@ -158,7 +158,7 @@ fn add_div(host: &mut Host, parent: Option<NodeId>, height: f64, scrolls: bool) 
     node
 }
 
-/// Node 0 scrolls (100px over 300px of content, node 1).
+/// Node 0 scrolls (100px over 300px of content, node 2).
 fn one_container() -> Host {
     let mut host = Host::default();
     let container = add_div(&mut host, None, 100.0, true);
@@ -166,8 +166,8 @@ fn one_container() -> Host {
     host
 }
 
-/// Node 0 scrolls 200px over node 1, which scrolls 200px over node 2, and
-/// node 3 fills the rest of node 0.
+/// Node 0 scrolls 200px over node 2, which scrolls 200px over node 3, and
+/// node 4 fills the rest of node 0.
 fn nested_containers() -> Host {
     let mut host = Host::default();
     let outer = add_div(&mut host, None, 100.0, true);

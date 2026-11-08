@@ -594,7 +594,8 @@ mod tests {
             format!("(e) => out.push(['{label}', e.target, e.currentTarget, e.eventPhase])")
         };
         listen(dispatcher, node, "ping", &record("node"));
-        listen_global(dispatcher, "$document", "ping", false, &record("document"));
+        let document = dispatcher.host.borrow().document();
+        listen(dispatcher, document, "ping", &record("document"));
         listen_global(dispatcher, "$window", "ping", false, &record("window"));
         dispatcher
             .engine
@@ -610,13 +611,15 @@ mod tests {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = node_under_root(&host);
 
+        let document = host.borrow().document();
+
         let out = ping_from(&dispatcher, node, &node.to_string());
 
         assert_eq!(
             out,
             serde_json::json!([
                 ["node", node, node, 2],
-                ["document", node, "$document", 3],
+                ["document", node, document, 3],
                 ["window", node, "$window", 3],
             ])
         );
@@ -627,13 +630,15 @@ mod tests {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = node_under_root(&host);
 
-        let out = ping_from(&dispatcher, node, "'$document'");
+        let document = host.borrow().document();
+
+        let out = ping_from(&dispatcher, node, &document.to_string());
 
         assert_eq!(
             out,
             serde_json::json!([
-                ["document", "$document", "$document", 2],
-                ["window", "$document", "$window", 3],
+                ["document", document, document, 2],
+                ["window", document, "$window", 3],
             ])
         );
     }
@@ -735,14 +740,9 @@ mod tests {
     fn lose_focus_reaches_the_document_with_focusout_only() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = node_under_root(&host);
+        let document = host.borrow().document();
         for event in ["blur", "focusout"] {
-            listen_global(
-                &dispatcher,
-                "$document",
-                event,
-                false,
-                "(e) => out.push(e.type)",
-            );
+            listen(&dispatcher, document, event, "(e) => out.push(e.type)");
         }
 
         dispatcher

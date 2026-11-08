@@ -110,7 +110,7 @@ fn set_inner_html<'js>(
 }
 
 /// Replaces `node_id` with the nodes `markup` parses to in the context of its parent. A node
-/// without a parent changes nothing and gives `null`. The root container throws.
+/// without a parent changes nothing and gives `null`. A node whose parent is the document throws.
 fn set_outer_html<'js>(
     host: Rc<RefCell<Host>>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Value<'js>> {
@@ -118,11 +118,11 @@ fn set_outer_html<'js>(
         let parsed = {
             let mut host = host.borrow_mut();
             let Some(parent) = existing_node(&ctx, &host.tree, node_id)?.parent() else {
-                if host.tree.root() == Some(node_id) {
-                    return Err(throw_tree_error(&ctx, TreeError::NoParent(node_id)));
-                }
                 return Ok(Value::new_null(ctx.clone()));
             };
+            if host.tree.document() == Some(parent) {
+                return Err(throw_tree_error(&ctx, TreeError::DocumentParent(node_id)));
+            }
             host.tree
                 .parse_html(Some(parent), &markup)
                 .map_err(|err| throw_tree_error(&ctx, err))?
@@ -163,6 +163,11 @@ fn insert_adjacent_html<'js>(
                 .ok_or_else(|| throw_tree_error(&ctx, TreeError::NoParent(node_id)))?,
             Position::AfterBegin | Position::BeforeEnd => node_id,
         };
+        if matches!(position, Position::BeforeBegin | Position::AfterEnd)
+            && host.tree.document() == Some(container)
+        {
+            return Err(throw_tree_error(&ctx, TreeError::DocumentParent(node_id)));
+        }
         let context = match host
             .tree
             .get(container)
@@ -448,14 +453,51 @@ mod tests {
         assert_eq!(got, r#"[null,"<p></p>"]"#);
     }
 
+    /// The error name of `call` and how many ids the next `createNode` skips after it.
+    fn name_and_skipped_ids(engine: &Engine, call: &str) -> String {
+        eval(
+            engine,
+            &format!(
+                r"
+                const before = n.createNode('p');
+                let name = 'none';
+                try {{
+                    {call};
+                }} catch (e) {{
+                    name = e.name;
+                }}
+                return [name, n.createNode('p') - before - 1];
+                "
+            ),
+        )
+    }
+
     #[test]
-    fn set_outer_html_on_the_root_container_throws_no_modification_allowed() {
+    fn set_outer_html_on_the_element_of_the_document_throws_before_parsing() {
         let (engine, _host) = engine();
 
         assert_eq!(
-            error_name(&engine, "n.setOuterHtml(n.rootNodeId(), '<i></i>')"),
-            "NoModificationAllowedError"
+            name_and_skipped_ids(&engine, "n.setOuterHtml(n.rootNodeId(), '<i></i>')"),
+            r#"["NoModificationAllowedError",0]"#
         );
+    }
+
+    #[test]
+    fn set_outer_html_on_the_detached_root_returns_null_and_changes_nothing() {
+        let (engine, _host) = engine();
+
+        let got = eval(
+            &engine,
+            r"
+            n.removeChild(n.documentNodeId(), n.rootNodeId());
+            return [
+                n.setOuterHtml(n.rootNodeId(), '<i></i>'),
+                n.childNodeIds(n.rootNodeId()).length
+            ];
+            ",
+        );
+
+        assert_eq!(got, "[null,1]");
     }
 
     #[test]
@@ -571,6 +613,21 @@ mod tests {
                 &format!("n.insertAdjacentHtml(n.createNode('p'), '{position}', 'x')")
             ),
             "NoModificationAllowedError"
+        );
+    }
+
+    #[rstest]
+    #[case::after_end("afterend")]
+    #[case::before_begin("beforebegin")]
+    fn a_sibling_position_on_the_attached_root_throws_before_parsing(#[case] position: &str) {
+        let (engine, _host) = engine();
+
+        assert_eq!(
+            name_and_skipped_ids(
+                &engine,
+                &format!("n.insertAdjacentHtml(n.rootNodeId(), '{position}', 'x')")
+            ),
+            r#"["NoModificationAllowedError",0]"#
         );
     }
 

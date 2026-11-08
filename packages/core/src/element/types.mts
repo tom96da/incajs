@@ -130,28 +130,28 @@ export interface NamedNodeMap {
 /** The members every node has: what it is, its data and its place in the tree. */
 export interface NodeMembers {
   /**
-   * `1` for an element, `3` for a text node, `8` for a comment stand-in and `11` for a
-   * fragment.
+   * `1` for an element, `3` for a text node, `8` for a comment stand-in, `9` for the document and
+   * `11` for a fragment.
    */
-  readonly nodeType: 1 | 3 | 8 | 11;
+  readonly nodeType: 1 | 3 | 8 | 9 | 11;
   /**
    * The {@link IncaElement.tagName} of an element, `"#text"` for a text node, `"#comment"` for a
-   * comment stand-in and `"#document-fragment"` for a fragment.
+   * comment stand-in, `"#document"` for the document and `"#document-fragment"` for a fragment.
    */
   readonly nodeName: string;
   /**
-   * The data of a text node or a comment stand-in, and `null` for an element or a
+   * The data of a text node or a comment stand-in, and `null` for an element, the document or a
    * fragment. Assigning `null` or `undefined` stores `""` and any other value stores its string.
-   * Assigning to an element, a fragment or a freed node does nothing.
+   * Assigning to an element, the document, a fragment or a freed node does nothing.
    */
   nodeValue: string | null;
-  /** Whether the node hangs under the mount container, which counts as connected. */
+  /** Whether the node hangs under `document`. */
   readonly isConnected: boolean;
-  /** The `document` export. */
-  readonly ownerDocument: IncaDocument;
+  /** `document`, and `null` for `document` itself. */
+  readonly ownerDocument: IncaDocument | null;
   /**
-   * The parent, `document` for the mount container and `null` for a detached node. A node inside
-   * a fragment reads the fragment. A freed node reads `null`.
+   * The parent, or `null` for a detached node. A node inside a fragment reads the fragment. A
+   * freed node reads `null`.
    */
   readonly parentNode: IncaElement | IncaFragment | IncaDocument | null;
   /** The first child, or `null`. */
@@ -212,10 +212,10 @@ export interface NodeMembers {
    */
   contains(other: IncaNode | null): boolean;
   /**
-   * The `document` export while the node hangs under the mount container, else the topmost node
-   * of its subtree, the node itself without a parent.
+   * The topmost node above this one: `document` for a connected node, else the top of its
+   * subtree, the node itself without a parent.
    */
-  getRootNode(): IncaNode | IncaDocument;
+  getRootNode(): IncaNode;
   /**
    * The position of `other` relative to this node as a bit mask: `1` disconnected, `2` preceding,
    * `4` following, `8` contains, `16` contained by and `32` implementation specific. Nodes of
@@ -315,13 +315,15 @@ export interface HtmlMembers {
   /**
    * The markup of the element and its children. Assigning replaces the element with the nodes the
    * string parses to in the context of its parent, and `null` assigns `""`. An element without a
-   * parent keeps its place. The mount container throws a `NoModificationAllowedError`.
+   * parent keeps its place. An element whose parent is `document` throws a
+   * `NoModificationAllowedError`.
    */
   outerHTML: string;
   /**
    * Parses `text` and inserts the nodes at `position`: `beforebegin`, `afterbegin`, `beforeend` or
    * `afterend`, in any ASCII case. Another position throws a `SyntaxError`. `beforebegin` and
-   * `afterend` on an element without a parent throw a `NoModificationAllowedError`.
+   * `afterend` on an element without a parent or whose parent is `document` throw a
+   * `NoModificationAllowedError`.
    */
   insertAdjacentHTML(position: string, text: string): void;
 }
@@ -597,7 +599,7 @@ export interface IncaFragment extends NodeMembers, TextContentMember {
 }
 
 /** A node that can have children. */
-export type IncaParent = IncaElement | IncaFragment;
+export type IncaParent = IncaElement | IncaFragment | IncaDocument;
 
-/** Any node the shadow tree holds: an element, comment, text leaf or fragment. */
-export type IncaNode = IncaElement | IncaText | IncaFragment;
+/** Any node the shadow tree holds: an element, comment, text leaf, fragment or the document. */
+export type IncaNode = IncaElement | IncaText | IncaFragment | IncaDocument;

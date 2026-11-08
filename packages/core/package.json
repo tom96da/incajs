@@ -35,7 +35,6 @@
   "sideEffects": [
     "src/callbacks.mts",
     "src/targets.mts",
-    "src/element/fragment.mts",
     "dist/chunks/hooks-*.js"
   ],
   "main": "./dist/index.js",

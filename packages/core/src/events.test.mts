@@ -3,6 +3,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { nativeStub } from "../tests/setup.mts";
 import { callbackIdFor, groupOf, registeredGroupCount } from "./callbacks.mts";
 import { addEventListener, blur, click, focus, removeEventListener } from "./events.mts";
 import { releaseListeners } from "./tree.mts";
@@ -89,7 +90,7 @@ const native = {
 beforeEach(() => {
   vi.clearAllMocks();
   nextCallbackId = 0;
-  globalThis.__inca_native__ = native;
+  globalThis.__inca_native__ = nativeStub(native);
 });
 
 /** The function the host received for the registration at `index`. */
@@ -157,16 +158,13 @@ describe("identity of a registration", () => {
     expect(native.addEventListener).toHaveBeenCalledTimes(5);
   });
 
-  it("keeps the registrations of document and window apart", () => {
+  it("keeps the registrations of a node and window apart", () => {
     const listener = vi.fn<() => void>();
 
-    addEventListener("$document", "click", listener);
+    addEventListener(1, "click", listener);
     addEventListener("$window", "click", listener);
 
-    expect(native.addEventListener.mock.calls.map((call) => call[0])).toEqual([
-      "$document",
-      "$window",
-    ]);
+    expect(native.addEventListener.mock.calls.map((call) => call[0])).toEqual([1, "$window"]);
   });
 
   it("ignores a second registration of the same function, node, event and capture", () => {

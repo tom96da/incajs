@@ -3,7 +3,15 @@
 
 // The package's public type surface.
 
-import type { EventHandlers, IncaElement, IncaFragment } from "./element/types.mts";
+import type {
+  EventHandlers,
+  IncaElement,
+  IncaFragment,
+  IncaNode,
+  IncaText,
+  NodeListOf,
+  NodeMembers,
+} from "./element/types.mts";
 
 /**
  * Stable handle to a node in the native retained tree, returned by `createNode`
@@ -211,9 +219,27 @@ export interface IncaEventTarget {
 }
 
 /**
- * The event target between the elements and `window`.
+ * The top node of the tree, the parent of the mount container. It holds at most one element and
+ * any number of comments, and no text.
  */
-export interface IncaDocument extends IncaEventTarget, EventHandlers<IncaDocument> {
+export interface IncaDocument
+  extends IncaEventTarget, EventHandlers<IncaDocument>, Omit<NodeMembers, "cloneNode"> {
+  /**
+   * The node id the host knows this node by. Internal to the renderer.
+   * @internal
+   */
+  readonly __node_id: NodeId;
+  /** Discriminates this node within the {@link IncaNode} union. */
+  readonly kind: "document";
+  /** The document has no parent. */
+  parent: null;
+  /**
+   * The children of this node in order.
+   * @internal
+   */
+  __children: IncaNode[];
+  /** Always `null`. An assignment does nothing. */
+  textContent: string | null;
   /**
    * The element that has focus, or `null` when no element has focus. A `focus()` or `blur()` call
    * takes effect for this property at once.
@@ -224,6 +250,44 @@ export interface IncaDocument extends IncaEventTarget, EventHandlers<IncaDocumen
    * @returns the new fragment
    */
   createDocumentFragment(): IncaFragment;
+  /**
+   * Creates an element. The name converts to a string, and its ASCII upper case becomes lower
+   * case. The second argument of the web API is ignored.
+   * @param localName - The element name, such as `"div"`.
+   * @returns The new element, which has no parent.
+   * @throws TypeError when called without an argument
+   * @throws DOMException named `InvalidCharacterError` when `localName` is not a valid element name
+   */
+  createElement(localName: string): IncaElement;
+  /**
+   * Creates a text node.
+   * @param data - The text. It converts to a string.
+   * @returns The new text node, which has no parent.
+   * @throws TypeError when called without an argument
+   */
+  createTextNode(data: string): IncaText;
+  /**
+   * Creates a comment.
+   * @param data - The text. It converts to a string.
+   * @returns The new comment, which has no parent.
+   * @throws TypeError when called without an argument
+   */
+  createComment(data: string): IncaElement;
+  /**
+   * The first element below the document that matches the selector list, or `null`.
+   * @throws DOMException named `SyntaxError` for an invalid selector
+   * @param selectors - A selector list.
+   * @returns The first matching element in document order, or `null`.
+   */
+  querySelector(selectors: string): IncaElement | null;
+  /**
+   * The elements below the document that match the selector list, in document order, as a list
+   * that later changes do not reach. Every call returns a new list.
+   * @throws DOMException named `SyntaxError` for an invalid selector
+   * @param selectors - A selector list.
+   * @returns The matching elements.
+   */
+  querySelectorAll(selectors: string): NodeListOf<IncaElement>;
 }
 
 /**
@@ -254,8 +318,9 @@ export interface IncaEvent {
    * The element the event is about. It is the deepest element under the pointer for pointer
    * events (the capturing element while the pointer is captured), the nearest common ancestor of
    * the press and the release for `click`, `dblclick` and `auxclick`, and the focused element for
-   * key events. With no such element it is the mount container's element. A script dispatch at
-   * `document` or `window` gives that object.
+   * key events. With no such element it is the mount container's element, or `document` while
+   * the mount container is out of the document. A script dispatch at `document` or `window`
+   * gives that object.
    */
   // At run time it is null only for a node with no live handle: one made by createNode directly,
   // or a collected handle. An event from a Vue element always has a handle.

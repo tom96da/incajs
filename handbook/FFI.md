@@ -85,8 +85,9 @@ the custom renderer's output. Each node has:
   `TypeError`.
 - `destroyNode` frees a node and its subtree at once. It frees nothing for the content of a
   template. At the start of each frame the host also frees every node that has no parent and is
-  neither the root, held with `holdNode` nor the content of a template, with its subtree. The
-  content of a template goes with the template.
+  neither the root, the document, held with `holdNode` nor the content of a template, with its
+  subtree. The content of a template goes with the template. The root and the document stay,
+  detached, with everything below them.
 - `releaseListeners` drops the listeners of a node, its subtree and the content of a template and
   leaves the nodes in the tree. A detached node stays readable until the host frees it.
 
@@ -95,13 +96,14 @@ the custom renderer's output. Each node has:
 `inca-node` classifies the tags in `ElementTag` (`spec.rs`) and lists the
 tags that take focus by default in `focusable_by_default` (`tree.rs`).
 `inca-gpui` builds the elements in `crates/inca-gpui/src/element/`. There are
-seven kinds:
+eight kinds:
 
 | `tag_name` | Maps to |
 | --- | --- |
 | `"#text"` | The tag core gives to text content. Content is its `"value"` string attribute (missing/non-string → empty, never a panic). Its children are not rendered. |
 | `"button"` | A styled container. The host reads its `tabindex` with a default of 0. [Elements](../docs/reference/elements.md#button) covers its key clicks. |
 | `"input"` | One line of editable text in a styled container. The host keeps its text; `inputValue` and `setInputValue` read and write it. Its children are not rendered. [Elements](../docs/reference/elements.md#input) covers the rest. |
+| `"#document"` | The top of the tree, the parent of the root container. It has no parent and holds at most one element and any number of comments. It is never laid out, painted or matched. |
 | `"#comment"` | A generic styled container that marks a comment stand-in. Selector matching treats it as no element. |
 | `"#fragment"` | A node that holds children and never has a parent. It is never connected, so layout, paint and focus skip it. Selector matching treats it as no element. The content of a template is a fragment that the template owns. |
 | `"template"` | A node that is never laid out or painted, with its children. It owns a `#fragment` as its content, created with it. `templateContent` returns its id. The content has no parent and never counts as connected. The tag is matched ignoring ASCII case. |
@@ -168,22 +170,24 @@ be passed, and `undefined` there counts as `null`.
 | Function | Signature | Purpose |
 | --- | --- | --- |
 | `rootNodeId` | `() => number` | Return the id of the host-allocated root container, the node a mounting app attaches itself under. |
+| `documentNodeId` | `() => number` | The id of the document node. |
 | `createNode` | `(tag: string) => number` | Allocate a `VirtualNode`, return its id. Throws once every id has been used. Freed at the next frame unless inserted or held, see Tree rules. |
+| `createElement` | `(localName: string) => [number, string]` | Allocate a `VirtualNode` for the element `localName` names, with its ASCII upper case lowered, and return its id and tag. Freed at the next frame unless inserted or held, see Tree rules. Throws `InvalidCharacterError` for a name that is no valid element local name. |
 | `appendChild` | `(parentId: number, nodeId: number) => number` | Attach a node at the end of `parentId`'s children. Same as `insertBefore` with no reference. Returns the position of the first inserted node. |
 | `insertBefore` | `(parentId: number, nodeId: number, refId: number \| null) => number` | Attach a node before `refId`, or at the end if `null` or `undefined`. Returns the position of the first inserted node. |
 | `removeChild` | `(parentId: number, childId: number) => void` | Detach a child node. Throws `NotFoundError` for a known node that is not a child. Freed at the next frame unless re-inserted or held, see Tree rules. |
 | `replaceChild` | `(parentId: number, nodeId: number, childId: number) => number` | Put a node where `childId` was and detach `childId`. Returns the position of the first inserted node. |
 | `linkedNode` | `(nodeId: number, link: "parent" \| "first" \| "last" \| "previous" \| "next") => number \| null` | The id of the parent, first child, last child, previous sibling or next sibling of `nodeId`, or `null` when there is none. Throws a `TypeError` for an unknown node or another `link`. |
 | `childNodeIds` | `(nodeId: number) => number[]` | The ids of the children of `nodeId` in order. Throws a `TypeError` for an unknown node. |
-| `isConnected` | `(nodeId: number) => boolean` | Whether `nodeId` is the root container or hangs under it. Throws a `TypeError` for an unknown node. |
+| `isConnected` | `(nodeId: number) => boolean` | Whether the parent chain of `nodeId` reaches the document. The document is connected. Throws a `TypeError` for an unknown node. |
 | `cloneNode` | `(nodeId: number, deep: boolean) => [number, string][]` | Copy a node with its tag, attributes and style props, and its descendants when `deep` is truthy. A falsy `deep` clones only the node. Returns the id and tag of each copy in pre-order, the copy of `nodeId` first. The copy of a template is followed by the copy of its content (`"#fragment"`), the content descendants when `deep` is truthy, and then the other children. The copies have no listeners, focus or scroll offset, and the root copy has no parent. An `input` copy has the typed text of its original. Throws a `TypeError` for an unknown node. |
 | `innerHtml` | `(nodeId: number) => string` | The markup of the children of `nodeId`. A template reads its content. Throws a `TypeError` for an unknown node. |
 | `outerHtml` | `(nodeId: number) => string` | The markup of `nodeId` with its children. Throws a `TypeError` for an unknown node. |
 | `setInnerHtml` | `(nodeId: number, html: string) => Parsed` | Parse `html` in the context of `nodeId` and replace all its children, or the children of its content for a template. The old children stay in the host as orphans with their listeners. Returns the parsed nodes at position 0. Throws a `TypeError` for an unknown node. |
-| `setOuterHtml` | `(nodeId: number, html: string) => Parsed \| null` | Parse `html` in the context of the parent of `nodeId` and replace the node with the result. `null` and no change for a node without a parent. Throws `NoModificationAllowedError` for the root container and a `TypeError` for an unknown node. |
-| `insertAdjacentHtml` | `(nodeId: number, position: string, html: string) => Parsed` | Parse `html` and insert the nodes at `position` (`beforebegin`, `afterbegin`, `beforeend` or `afterend`, matched ignoring ASCII case) of `nodeId`. The context is the container the nodes enter, and `body` for an `html` element. Throws `SyntaxError` for another position, `NoModificationAllowedError` for `beforebegin` or `afterend` on a node without a parent, and a `TypeError` for an unknown node. |
+| `setOuterHtml` | `(nodeId: number, html: string) => Parsed \| null` | Parse `html` in the context of the parent of `nodeId` and replace the node with the result. `null` and no change for a node without a parent. Throws `NoModificationAllowedError` for a node whose parent is the document and a `TypeError` for an unknown node. |
+| `insertAdjacentHtml` | `(nodeId: number, position: string, html: string) => Parsed` | Parse `html` and insert the nodes at `position` (`beforebegin`, `afterbegin`, `beforeend` or `afterend`, matched ignoring ASCII case) of `nodeId`. The context is the container the nodes enter, and `body` for an `html` element. Throws `SyntaxError` for another position, `NoModificationAllowedError` for `beforebegin` or `afterend` on a node without a parent or a node whose parent is the document, and a `TypeError` for an unknown node. |
 | `compareNodePosition` | `(nodeId: number, otherId: number) => number` | The position of `otherId` relative to `nodeId` as a bit mask: `1` disconnected, `2` preceding, `4` following, `8` contains, `16` contained by, `32` implementation specific. Equal ids give `0`. Nodes of different trees give `1 \| 32` plus `2` or `4`. Throws a `TypeError` for an unknown node. |
-| `rootOf` | `(nodeId: number) => number` | The top of the parent chain of `nodeId`. A connected node gives the root container. Throws a `TypeError` for an unknown node. |
+| `rootOf` | `(nodeId: number) => number` | The top of the parent chain of `nodeId`. A connected node gives the document. Throws a `TypeError` for an unknown node. |
 | `isEqualNode` | `(nodeId: number, otherId: number) => boolean` | Whether the two subtrees have the same tags, attributes, style props and children. The typed text of an `input` is not compared. Throws a `TypeError` for an unknown node. |
 | `textContent` | `(nodeId: number) => string` | The data of a `#text` or `#comment` node. For any other node, the data of every descendant `#text` node in tree order. Throws a `TypeError` for an unknown node. |
 | `wholeText` | `(nodeId: number) => string` | The data of `nodeId` and of the `#text` siblings that touch it, in order. Throws a `TypeError` for an unknown node. |
@@ -200,19 +204,19 @@ be passed, and `undefined` there counts as `null`.
 | `removeStyle` | `(nodeId: number, key: string) => void` | Remove a style prop so it renders as if never set. Removing a key that isn't set does nothing. |
 | `inputValue` | `(nodeId: number) => string` | The text of the input node `nodeId`. Throws a `TypeError` for a node of another tag. |
 | `setInputValue` | `(nodeId: number, value: string) => void` | Replace the text of the input node `nodeId`, without CR and LF. A changed text puts the caret at its end and ends a composition. Throws a `TypeError` for a node of another tag. |
-| `addEventListener` | `(target: number \| "$document" \| "$window", event: string, callback: Function, capture?: boolean, passive?: boolean) => number` | Register `callback` for an event and return its id, see [Registering](#registering) and [Tagged targets](#tagged-targets). A `callback` that is not a function throws a `TypeError`. `capture` and `passive` default to `false`. |
-| `removeEventListener` | `(target: number \| "$document" \| "$window", event: string, callbackId: number) => boolean` | Drop one registration and its table entry, and return whether it was there. An unknown node returns `false`. |
-| `dispatchEvent` | `(target: number \| "$document" \| "$window", event: Event) => boolean` | Walk a script-built event over the path of `target` and return `false` when a listener canceled it, see [Dispatching from script](#dispatching-from-script) and [Tagged targets](#tagged-targets). |
+| `addEventListener` | `(target: number \| "$window", event: string, callback: Function, capture?: boolean, passive?: boolean) => number` | Register `callback` for an event and return its id, see [Registering](#registering) and [Tagged targets](#tagged-targets). A `callback` that is not a function throws a `TypeError`. `capture` and `passive` default to `false`. |
+| `removeEventListener` | `(target: number \| "$window", event: string, callbackId: number) => boolean` | Drop one registration and its table entry, and return whether it was there. An unknown node returns `false`. |
+| `dispatchEvent` | `(target: number \| "$window", event: Event) => boolean` | Walk a script-built event over the path of `target` and return `false` when a listener canceled it, see [Dispatching from script](#dispatching-from-script) and [Tagged targets](#tagged-targets). |
 | `click` | `(nodeId: number) => void` | Walk an untrusted `click` at `nodeId`, see [Dispatching from script](#dispatching-from-script). |
 | `setPointerCapture` | `(nodeId: number, pointerId: number) => void` | Make `nodeId` the pending pointer capture while a button is held, see [Pointer events](#pointer-events). Throws `NotFoundError` for a `pointerId` other than 1 and `InvalidStateError` for a node outside the mounted tree or that names no node. |
 | `releasePointerCapture` | `(nodeId: number, pointerId: number) => void` | Clear the pending capture when `nodeId` holds it. Throws `NotFoundError` for a `pointerId` other than 1. |
 | `hasPointerCapture` | `(nodeId: number, pointerId: number) => boolean` | Whether `nodeId` is the pending capture and still mounted. `false` for a `pointerId` other than 1. |
 | `templateContent` | `(nodeId: number) => number \| null` | The id of the content fragment of the template `nodeId`, the same id on every call. `null` for a node that is no template. Throws a `TypeError` for an unknown node. |
-| `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its subtree, and the content of a template, release the table entries of every `callbackId` registered in it and return the ids. An unknown id returns `[]`. Destroying the root throws. Also drops the hold and the waiting `scrollIntoViewNode` calls of the destroyed nodes. |
+| `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its subtree, and the content of a template, release the table entries of every `callbackId` registered in it and return the ids. An unknown id returns `[]`. Destroying the document, the root or a node above the root throws. Also drops the hold and the waiting `scrollIntoViewNode` calls of the destroyed nodes. |
 | `releaseListeners` | `(nodeId: number) => number[]` | Drop every listener registered on `nodeId` and on the nodes below it, release their table entries and return their `callbackId`s. The nodes, their attributes and their children stay. An unknown id returns `[]`. |
 | `matches` | `(nodeId: number, selector: string) => boolean` | Whether the element `nodeId` matches the selector list. Throws a `SyntaxError` for an invalid selector and a `TypeError` for an unknown node. A `#text` node and a `#comment` node match nothing. |
 | `closest` | `(nodeId: number, selector: string) => number \| null` | The id of the nearest element at or above `nodeId` that matches. A `#text` node starts at its nearest element ancestor. Throws like `matches`. |
-| `querySelector` | `(nodeId: number, selector: string) => number \| null` | The id of the first descendant of `nodeId` that matches the selector list, in document order. `nodeId` is never a result. `:scope` and a top-level `&` are `nodeId`, and the whole tree takes part in the match. Text and `#comment` nodes are never results, and a `#text` or `#comment` start finds nothing. Throws a `SyntaxError` for an invalid selector, also for a `#text` or `#comment` start, and a `TypeError` for an unknown node. |
+| `querySelector` | `(nodeId: number, selector: string) => number \| null` | The id of the first descendant of `nodeId` that matches the selector list, in document order. `nodeId` is never a result. `:scope` and a top-level `&` are `nodeId`, and the whole tree takes part in the match. The document has no scope element, so `:scope` selects the element of the document. Text and `#comment` nodes are never results, and a `#text` or `#comment` start finds nothing. Throws a `SyntaxError` for an invalid selector, also for a `#text` or `#comment` start, and a `TypeError` for an unknown node. |
 | `querySelectorAll` | `(nodeId: number, selector: string) => number[]` | The ids of every descendant of `nodeId` that matches, each once, in document order. Follows the rules of `querySelector`. |
 | `checkSelector` | `(selector: string) => void` | Throws a `SyntaxError` for an invalid selector list and returns for a valid one. It takes no node. |
 | `focusNode` | `(nodeId: number, preventScroll?: boolean) => void` | Request focus for `nodeId`, next frame. Only a connected node with a `tabindex` that is not hidden takes it, and a `button` or `input` defaults to `0`. Unless `preventScroll` is `true`, the scroll containers above the node then scroll it into view: a node that shows stays put, a node outside a container's box centres, and a node that shows partly moves the least vertically and stays put horizontally. A node with no box yet is retried next frame. |
@@ -226,7 +230,7 @@ be passed, and `undefined` there counts as `null`.
 Shared throw rules, all as a `TypeError` except where noted:
 
 - A malformed `nodeId` or `callbackId` throws, and so
-  does a `target` string other than the two tags in
+  does a `target` string other than the tag in
   [Tagged targets](#tagged-targets).
 - A `capture`, `passive` or `preventScroll` that is not a boolean,
   `undefined` or `null` throws.
@@ -254,8 +258,10 @@ the first failing check throws. A failure changes nothing.
    the content and of every node in it.
 4. A reference (`refId`, or `childId` of `replaceChild`) that is not a child of
    `parentId` throws a `NotFoundError`.
-5. A `nodeId` naming the root, which belongs to the host, throws a
-   `HierarchyRequestError`.
+5. A `nodeId` naming the document throws a `HierarchyRequestError`.
+6. A document parent takes comments and at most one element, and throws a
+   `HierarchyRequestError` for a text node, a fragment with text and a second
+   element.
 
 A `refId` equal to `nodeId` stands for the next sibling of `nodeId`.
 
@@ -324,7 +330,7 @@ global is skipped.
 
 #### Event targets
 
-`__inca_targets__(ids: (number | "$document" | "$window")[]) => unknown[]` is a
+`__inca_targets__(ids: (number | "$window")[]) => unknown[]` is a
 global that core defines read-only on each load, like `__inca_released__`, so
 the latest copy of core answers. Rust looks it up by name on each walk and
 keeps nothing.
@@ -339,25 +345,25 @@ keeps nothing.
 - A throw, or a result that is not an array, goes to `Host::failures` and the
   walk runs no listener. `dispatchEvent` throws it.
 - Core gives the element handle of a node that has one, the `document` export
-  for the `"$document"` tag, the `window` export for the `"$window"` tag, the
+  for the document node, the `window` export for the `"$window"` tag, the
   element of the host root, which it creates on first use and `mount()`
   reuses, and `null` for any other node.
 
 #### Tagged targets
 
-The strings `"$document"` and `"$window"` name the `document` and
-`window` exports in place of a node id in `addEventListener`, `removeEventListener`,
-`dispatchEvent` and `__inca_targets__`. Rust holds them as `EventTargetId`
+The string `"$window"` names the `window` export in place of a node id in
+`addEventListener`, `removeEventListener`,
+`dispatchEvent` and `__inca_targets__`. Rust holds it as `EventTargetId`
 with the node ids.
 
 - Any other string throws a `TypeError`.
-- A registration on a tag takes `capture` and `passive` like one on a node,
-  and `document` and `window` keep separate registrations of one event name.
-- A path runs from the target node through its ancestors, the host root
-  included, to `"$document"`, then `"$window"`. A node outside the root
-  reaches neither global. A script dispatch at `"$document"` reaches
-  `"$window"`, and one at `"$window"` stays there.
-- A cut node silences both tags for that walk.
+- A registration on the tag takes `capture` and `passive` like one on a node,
+  and `window` keeps its registrations apart from the nodes'.
+- A path runs from the target node through its ancestors to the document,
+  then `"$window"`. A node outside the document reaches no `"$window"`. A
+  script dispatch at the document reaches `"$window"`, and one at `"$window"`
+  stays there.
+- A cut node silences `"$window"` for that walk.
 - Tags never reach `destroyNode`, the sweep or `__inca_released__`. The
   registrations live in the host and end with it, and the callbacks of the
   tags end with the JS realm.
@@ -444,8 +450,8 @@ with the node ids.
 #### Pointer events
 
 - The target of `mousedown`, `mouseup`, `mousemove`, `wheel` and
-  `contextmenu` is the deepest container under the pointer, or the root when
-  there is none. While a pointer capture is active, the pointer events and
+  `contextmenu` is the deepest container under the pointer, or the document
+  element when there is none. While a pointer capture is active, the pointer events and
   `mousedown`, `mouseup`, `mousemove` go to the capturing node.
 - While any listener is registered, any node can take focus or a style rule
   names `:hover` or `:active`, every non-inert container reports the pointer
@@ -477,7 +483,7 @@ with the node ids.
   deactivation clears every record (`inca_gpui::clear_presses`).
 - `click` fires at the nearest common ancestor of the press container of that
   button and the release container, so a press must be recorded. A release
-  over no container uses the root. The payload is `EventPayload::click`: the
+  over no container uses the document element. The payload is `EventPayload::click`: the
   release position and modifiers, `button` the released button, `buttons` 0,
   `detail` the click count of the press, pointer source mouse. On macOS a left
   release with Control held completes no `click`.
@@ -503,9 +509,11 @@ with the node ids.
   first), `mouseover` at the new one, `mouseenter` on each container entered
   (outermost first). The `mouseover`/`mouseout` walk starts at the deepest
   container. `relatedTarget` is the new container for `mouseout` and
-  `mouseleave` and the old one for `mouseover` and `mouseenter`. A removed old
+  `mouseleave` and the old one for `mouseover` and `mouseenter`. The document is the
+  outermost container of every path, so the reports reach it. A removed old
   container is skipped and its nearest remaining ancestor counts as the old
-  one. Position and modifiers are read at the report. The pointer events
+  one. A removed root fires no event, and only connected containers count as
+  hovered. Position and modifiers are read at the report. The pointer events
   `pointerout`, `pointerleave`, `pointerover` and `pointerenter` fire first, in
   the same order, and the mouse ones follow. While a capture is active the report
   takes the capturing node as the deepest container, and a gpui hover change
@@ -557,7 +565,7 @@ with the node ids.
 #### Keyboard and focus
 
 - The target of `keydown`, `keypress` and `keyup` is the focused node, or the
-  root when nothing is focused. The window focus then rests on
+  element of the document when nothing is focused, else the document. The window focus then rests on
   `FocusRegistry::parked_handle`, which maps to no node.
 - The root wires capture-phase `keydown` and `keyup` listeners whether or not
   a script listens. They call `EventSink::key_input`, which walks the event
@@ -596,7 +604,8 @@ with the node ids.
   the key's default action, except for Space.
 - The root wires `on_modifiers_changed` into `EventSink::modifiers_changed`.
   A modifier change bubbles `keydown` or `keyup` named `Shift`, `Control`,
-  `Alt` or `Meta`, in that order, from the focused node or the root. It is
+  `Alt` or `Meta`, in that order, from the focused node, else the document element, else the
+  document. It is
   diffed against `held_modifiers`, which `sync_modifiers` seeds from the
   window on the first frame and on every activation.
 - `focusNode`/`blurNode` queue and apply in order on the next frame. A focus

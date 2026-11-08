@@ -1,7 +1,14 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import type { AttributeValue, CallbackId, EventLike, NodeId, ScrollAlignment } from "./types.mts";
+import type {
+  AttributeValue,
+  CallbackId,
+  EventLike,
+  NodeId,
+  ScrollAlignment,
+  TagName,
+} from "./types.mts";
 
 /** How {@link IncaNative.linkedNode} names the node to reach from a node. */
 export type NodeLink = "parent" | "first" | "last" | "previous" | "next";
@@ -15,8 +22,8 @@ export type ParsedEntry = [id: NodeId, tag: string, parentId: NodeId, data: stri
  */
 export type Parsed = [position: number, entries: ParsedEntry[]];
 
-/** What a listener or a dispatch names: a node id, or the tag of `document` or `window`. */
-export type EventTargetId = NodeId | "$document" | "$window";
+/** What a listener or a dispatch names: a node id, or the tag of `window`. */
+export type EventTargetId = NodeId | "$window";
 
 /**
  * The host-injected object every wrapper in this package forwards to. Not part of the public
@@ -24,7 +31,9 @@ export type EventTargetId = NodeId | "$document" | "$window";
  */
 interface IncaNative {
   rootNodeId(): NodeId;
+  documentNodeId(): NodeId;
   createNode(tag: string): NodeId;
+  createElement(localName: string): [NodeId, TagName];
   appendChild(parentId: NodeId, nodeId: NodeId): number;
   insertBefore(parentId: NodeId, nodeId: NodeId, refId: NodeId | null): number;
   removeChild(parentId: NodeId, childId: NodeId): void;

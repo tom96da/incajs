@@ -107,17 +107,23 @@ impl Render for HostedApp {
         let session = &self.session;
         session.dispatcher.begin_frame(window, cx);
         let host = session.host.borrow();
-        let element = render_tree_with_events(&host.tree, host.root(), &session.dispatcher)
+        let top = host.tree.document_element();
+        let element = top
+            .and_then(|id| render_tree_with_events(&host.tree, id, &session.dispatcher))
             .unwrap_or_else(|| div().into_any_element());
-        // The root fills the window; the walk records only its children.
-        session.dispatcher.record_layout(
-            host.root(),
-            NodeLayout {
-                bounds: Bounds::new(Point::default(), window.viewport_size()),
-                border: px(0.0),
-                scroll: Point::default(),
-            },
-        );
+        // The element of the document fills the window; the walk records only its children.
+        if let Some(id) = top {
+            session.dispatcher.record_layout(
+                id,
+                NodeLayout {
+                    bounds: Bounds::new(Point::default(), window.viewport_size()),
+                    border: px(0.0),
+                    scroll: Point::default(),
+                },
+            );
+        } else {
+            session.dispatcher.clear_layout();
+        }
         element
     }
 }
@@ -557,5 +563,46 @@ mod tests {
         });
 
         assert!(ran, "an onMounted-style effect must not wait for an event");
+    }
+
+    #[gpui::test]
+    fn the_root_has_a_box_only_while_the_document_holds_it(cx: &mut TestAppContext) {
+        cx.update(|cx| start(cx, TEST_ENTRY_PATH, "", stderr_reporter()).unwrap());
+        cx.run_until_parked();
+        let window = cx.update(|cx| cx.windows()[0].downcast::<HostedApp>().unwrap());
+        let drawn_box = |cx: &mut TestAppContext, script: &str| -> bool {
+            cx.update(|cx| {
+                window
+                    .read_with(cx, |app, _| app.session.engine.eval::<()>(script).unwrap())
+                    .unwrap();
+                cx.update_window(window.into(), |_, window, cx| {
+                    window.refresh();
+                    window.draw(cx).clear(cx);
+                })
+                .unwrap();
+                window
+                    .read_with(cx, |app, _| {
+                        app.session
+                            .engine
+                            .eval::<bool>(
+                                "__inca_native__.layoutOf(__inca_native__.rootNodeId()) !== null",
+                            )
+                            .unwrap()
+                    })
+                    .unwrap()
+            })
+        };
+        assert!(drawn_box(cx, ""));
+
+        let removed = drawn_box(
+            cx,
+            "__inca_native__.removeChild(__inca_native__.documentNodeId(), __inca_native__.rootNodeId());",
+        );
+        let appended = drawn_box(
+            cx,
+            "__inca_native__.appendChild(__inca_native__.documentNodeId(), __inca_native__.rootNodeId());",
+        );
+
+        assert_eq!((removed, appended), (false, true));
     }
 }
