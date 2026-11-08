@@ -10,6 +10,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.0.30] - 2026-11-08
+
 ### Added
 
 - `<template>` elements have a `content` fragment ([4eade56](https://github.com/tom96da/incajs/commit/4eade56), [c30722f](https://github.com/tom96da/incajs/commit/c30722f), [fba57a4](https://github.com/tom96da/incajs/commit/fba57a4), [62c8a21](https://github.com/tom96da/incajs/commit/62c8a21))
@@ -590,7 +592,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - prebuilt `inca-host` binaries for linux-x64, linux-arm64, and darwin-arm64, resolved automatically per platform
 - click event dispatch from the native tree back into JS
 
-[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.29...HEAD
+[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.30...HEAD
+[0.0.30]: https://github.com/tom96da/incajs/releases/tag/v0.0.30
 [0.0.29]: https://github.com/tom96da/incajs/releases/tag/v0.0.29
 [0.0.28]: https://github.com/tom96da/incajs/releases/tag/v0.0.28
 [0.0.27]: https://github.com/tom96da/incajs/releases/tag/v0.0.27
