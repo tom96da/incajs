@@ -10,6 +10,24 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- `<template>` elements have a `content` fragment ([4eade56](https://github.com/tom96da/incajs/commit/4eade56), [c30722f](https://github.com/tom96da/incajs/commit/c30722f), [fba57a4](https://github.com/tom96da/incajs/commit/fba57a4), [62c8a21](https://github.com/tom96da/incajs/commit/62c8a21))
+- elements have `innerHTML`, `outerHTML` and `insertAdjacentHTML()` ([7c8158c](https://github.com/tom96da/incajs/commit/7c8158c), [49232ba](https://github.com/tom96da/incajs/commit/49232ba), [7f33c02](https://github.com/tom96da/incajs/commit/7f33c02), [abecf4d](https://github.com/tom96da/incajs/commit/abecf4d), [3e70046](https://github.com/tom96da/incajs/commit/3e70046))
+- `incajs/globals` declares the types of every built-in global ([971b85f](https://github.com/tom96da/incajs/commit/971b85f))
+
+### Changed
+
+- the types of the timers and `requestAnimationFrame()` come from `incajs/globals` ([971b85f](https://github.com/tom96da/incajs/commit/971b85f))
+- setting `textContent` keeps the listeners of the nodes it replaces ([3e70046](https://github.com/tom96da/incajs/commit/3e70046))
+
+### Fixed
+
+- `attributes` and `getAttributeNames()` list names in insertion order ([a389dc7](https://github.com/tom96da/incajs/commit/a389dc7))
+- `console` and the event constructors stay out of `Object.keys(globalThis)` ([f7fda53](https://github.com/tom96da/incajs/commit/f7fda53), [c00d4c1](https://github.com/tom96da/incajs/commit/c00d4c1))
+- `performance` is an accessor that an assignment replaces ([f7fda53](https://github.com/tom96da/incajs/commit/f7fda53))
+- `inca dev` stops at once when cancelled and prints no failure ([2f5febe](https://github.com/tom96da/incajs/commit/2f5febe))
+
 ## [0.0.29] - 2026-11-08
 
 ### Added
