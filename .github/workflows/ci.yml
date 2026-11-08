@@ -507,7 +507,7 @@ jobs:
         run: cargo build -p inca-host
 
       - name: Test (real inca-host + real Vite dev server)
-        run: bun --bun vitest run --root ./tests
+        run: bun --bun run -F @incajs/e2e-tests test
 
   # One status check whose name survives changes to the jobs above.
   passed:
