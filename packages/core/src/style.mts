@@ -3,9 +3,14 @@
 
 // The style elements of the stylesheets that built code applies.
 
-import { createElementNode, createIncaElement, rootElement } from "./element/handle.mts";
+import {
+  adoptTextNode,
+  createElementNode,
+  createIncaElement,
+  createTextNode,
+  rootElement,
+} from "./element/handle.mts";
 import { insert, link, remove, unlink } from "./element/shadowTree.mts";
-import { createIncaText, createTextNode } from "./element/text.mts";
 import {
   childNodeIds,
   getAttribute,
@@ -27,7 +32,7 @@ let scanned = false;
 function adopt(id: NodeId): IncaElement {
   const el = createIncaElement(id, "element", "style");
   for (const child of childNodeIds(id)) {
-    const text = createIncaText(child, String(getAttribute(child, "value") ?? ""));
+    const text = adoptTextNode(child, String(getAttribute(child, "value") ?? ""));
     link(el, [text], el.__children.length);
   }
   const root = rootElement();

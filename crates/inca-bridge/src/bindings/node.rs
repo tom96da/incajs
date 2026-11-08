@@ -321,7 +321,7 @@ mod tests {
     }
 
     #[test]
-    fn is_connected_follows_the_path_to_the_root() {
+    fn is_connected_follows_the_path_to_the_document() {
         let (engine, _host) = engine_with_bindings();
 
         let reads: Vec<bool> = engine

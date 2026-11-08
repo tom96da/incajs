@@ -3,6 +3,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { nativeStub } from "../../tests/setup.mts";
 import { document } from "../document.mts";
 import { createElementNode } from "./handle.mts";
 import { isDestroyed, markDestroyed } from "./lifecycle.mts";
@@ -34,7 +35,7 @@ beforeEach(() => {
   host.templateContent.mockImplementation((id) => (templates.has(id) ? id + 1 : null));
   nextId = 1;
   templates = new Set();
-  globalThis.__inca_native__ = host as never;
+  globalThis.__inca_native__ = nativeStub(host as never);
 });
 
 const template = () => createElementNode("template") as IncaTemplateElement;

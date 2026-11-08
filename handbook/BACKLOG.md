@@ -1235,18 +1235,6 @@ A fixed entry is deleted and its ID is never reused.
   the standard names from a dedicated type setup that replaces `lib.dom` for the
   desktop target.
 
-- **B-253 Design `document.querySelector()` and `querySelectorAll()`**
-  `Units: core,gpui · Size: M · Impact: Low`
-
-  An element handle gets both methods in v0.0.27, and `document` has no query
-  members. `document` is a virtual event target, and the tree starts at the
-  root container, a real node with the tag `div`. Decide who owns that relation
-  first: whether the container is a candidate for `document.querySelector("div")`,
-  what `:scope` selects, and how `getRootNode()` reaches `document` without an
-  import cycle between `handle.mts` and `document.mts`. Fix: implement the
-  design with the same selector adapter and the same return types as the
-  element methods.
-
 - **B-255 The packaged app carries no license notice for its bundled JavaScript dependencies**
   `Units: cli · Size: M · Impact: Medium`
 
@@ -1626,3 +1614,32 @@ A fixed entry is deleted and its ID is never reused.
 
   In browsers `new Document()` builds an empty document with no element. The host has one
   document. Fix: let the tree hold inert documents that are never connected, then construct one.
+
+- **B-299 `document` has no `html`, `head` or `body` element**
+  `Units: node,bridge,core · Size: L · Impact: Medium`
+
+  The mount container is the element of the document, so `document.body`, `document.head` and
+  `document.documentElement` are missing, and Vue's `Transition` reads `document.body.offsetHeight`.
+  Fix: give the document an `html` element with `head` and `body`, and mount into `body`. `:root`
+  then matches `html`.
+
+- **B-300 `document` has no `cloneNode()`**
+  `Units: core · Size: S · Impact: Low`
+
+  In browsers `document.cloneNode(true)` returns a new `#document` with copies of its children.
+  Fix: clone into an inert document once B-298 lets the tree hold one.
+
+- **B-301 `createElement()` ignores its second argument**
+  `Units: core · Size: S · Impact: Low`
+
+  In browsers `document.createElement(name, options)` reads `options.is` to build a customized
+  built-in element. The host ignores the argument.
+
+- **B-302 `document` starts with no shadow children**
+  `Units: core · Size: M · Impact: Low`
+
+  The host holds the root under the document, but `document.__children` is empty and the handle of
+  the root has no parent until the root leaves and returns. `document.insertBefore(node, root)`
+  then finds no next sibling for `node` through the nodeOps path of Vue. Linking the root into the
+  document keeps it alive as long as the realm, which the GC test for unmount rules out. Fix: make
+  the children of the document a view over the host, or drop the shadow tree.

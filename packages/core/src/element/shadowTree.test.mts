@@ -6,14 +6,19 @@ import { runInNewContext } from "node:vm";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { nativeStub } from "../../tests/setup.mts";
 import { document } from "../document.mts";
 import { createEventTarget } from "../eventTarget.mts";
 import { htmlCollectionOf, namedNodeMapOf, nodeListOf } from "./collections.mts";
 import { rectOf } from "./geometry.mts";
-import { createCommentNode, createElementNode, createIncaFragment } from "./handle.mts";
+import {
+  createCommentNode,
+  createElementNode,
+  createIncaFragment,
+  createTextNode,
+} from "./handle.mts";
 import { elementOf, markDestroyed, releaseWhenCollected, unregisterNode } from "./lifecycle.mts";
 import * as tree from "./shadowTree.mts";
-import { createTextNode } from "./text.mts";
 import type { EventLike, IncaEventTarget } from "../types.mts";
 import type { NodeMutationMembers } from "./nodeMutation.mts";
 import type { NodeRelationMembers } from "./nodeRelations.mts";
@@ -112,7 +117,7 @@ const noLayout = {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(host.getAttribute).mockImplementation(() => null);
-  globalThis.__inca_native__ = host as never;
+  globalThis.__inca_native__ = nativeStub(host as never);
   for (let id = 1; id < nextId; id++) unregisterNode(id);
   nextId = 1;
   vi.mocked(host.createNode).mockImplementation(() => nextId++);

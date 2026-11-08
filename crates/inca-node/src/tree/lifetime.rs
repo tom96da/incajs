@@ -85,7 +85,8 @@ impl VirtualTree {
     ///
     /// The subtree goes too because a caller removing a node holds that
     /// node's id and nothing below it. Also ends the hold of every freed id.
-    /// A template frees its content with it. An unknown `id` and the content of a template free
+    /// A template frees its content with it. The root and the document stay, detached, with
+    /// everything below them. An unknown `id` and the content of a template free
     /// nothing and return an empty `Vec`: destroying twice is a no-op, not an error.
     pub fn destroy_node(&mut self, id: NodeId) -> Vec<NodeId> {
         if self.nodes.get(&id).is_none_or(|node| node.owner.is_some()) {
@@ -97,7 +98,9 @@ impl VirtualTree {
         let mut freed = Vec::new();
         let mut pending = vec![id];
         while let Some(current) = pending.pop() {
-            if let Some(node) = self.nodes.remove(&current) {
+            if self.root == Some(current) || self.document == Some(current) {
+                self.detach(current);
+            } else if let Some(node) = self.nodes.remove(&current) {
                 pending.extend(node.children.iter().copied());
                 pending.extend(node.content);
                 self.held.remove(&current);
@@ -208,6 +211,21 @@ mod tests {
         assert!(tree.get(branch).is_none());
         assert!(tree.get(leaf).is_none());
         assert!(tree.get(root).unwrap().children().is_empty());
+    }
+
+    #[test]
+    fn a_root_under_an_orphan_survives_the_sweep() {
+        let mut tree = VirtualTree::new();
+        let root = tree.create_node("div").unwrap();
+        let loose = tree.create_node("div").unwrap();
+        let child = tree.create_node("span").unwrap();
+        tree.set_root(root);
+        tree.append_child(root, child).unwrap();
+        tree.append_child(loose, root).unwrap();
+
+        assert_eq!(tree.sweep(), [loose]);
+        assert!(tree.get(root).unwrap().parent().is_none());
+        assert!(tree.get(child).is_some());
     }
 
     #[test]
@@ -682,6 +700,16 @@ mod tests {
         f.tree.append_child(document, f.root).unwrap();
 
         assert!(f.tree.is_connected(child));
+    }
+
+    #[test]
+    fn destroying_the_document_frees_nothing_and_keeps_it() {
+        let (mut f, document) = Fixture::with_document();
+
+        let freed = f.tree.destroy_node(document);
+
+        assert!(freed.is_empty());
+        assert!(f.tree.get(document).is_some());
     }
 
     #[test]

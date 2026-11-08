@@ -15,7 +15,7 @@ import { requireArguments } from "./attributes.mts";
 import { existingContent, isDestroyed, isNode } from "./lifecycle.mts";
 import { keep, link, unlink } from "./shadowTree.mts";
 import { isTemplateTag } from "./templateContent.mts";
-import type { NodeId, TagName } from "../types.mts";
+import type { IncaDocument, NodeId, TagName } from "../types.mts";
 import type {
   IncaElement,
   IncaFragment,
@@ -32,13 +32,18 @@ export type NodeMutationMembers = Pick<
 >;
 
 /**
- * The functions that build a handle for a native node. A handle passes the builders of the kinds
- * its clone can hold: a text node has no children, so it passes `text` alone.
+ * The functions that build and find the handles of native nodes. Every handle passes `text`,
+ * `document` and `node`. An element or a fragment also passes `element` and `fragment`, the
+ * builders of the kinds its clone can hold.
  */
 export interface HandleBuilders {
   element?: (id: NodeId, kind: IncaElement["kind"], tag?: TagName) => IncaElement;
   text: (id: NodeId, data: string) => IncaText;
   fragment?: (id: NodeId) => IncaFragment;
+  /** The handle of the document. */
+  document: () => IncaDocument;
+  /** The handle of a node by id: the live handle, or the document handle for the document id. */
+  node: (id: NodeId) => IncaNode | undefined;
 }
 
 /**
@@ -88,7 +93,9 @@ function movedBy(node: IncaNode): IncaNode[] {
 export function cloneNode<T extends IncaNode>(node: T, deep: boolean, builders: HandleBuilders): T {
   const copies = cloneHostNode(node.__node_id, deep);
   let next = 0;
-  const build = (original: IncaNode): IncaNode => {
+  // The document has no clone and no parent, so no copy walk reaches it.
+  type Copyable = Exclude<IncaNode, IncaDocument>;
+  const build = (original: Copyable): IncaNode => {
     const [id, tag] = copies[next++]!;
     if (original.kind === "text") return builders.text(id, original.text);
     const copy =
@@ -100,15 +107,15 @@ export function cloneNode<T extends IncaNode>(node: T, deep: boolean, builders: 
       const content = existingContent(copy as IncaElement)!;
       if (deep) {
         for (const child of existingContent(original)!.__children)
-          link(content, [build(child)], content.__children.length);
+          link(content, [build(child as Copyable)], content.__children.length);
       }
     }
     if (!deep) return copy;
     for (const child of original.__children)
-      link(copy as IncaParent, [build(child)], copy.__children.length);
+      link(copy as IncaParent, [build(child as Copyable)], copy.__children.length);
     return copy;
   };
-  const copy = build(node);
+  const copy = build(node as Copyable);
   keep(copy);
   return copy as T;
 }

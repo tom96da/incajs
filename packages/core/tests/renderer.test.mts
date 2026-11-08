@@ -14,6 +14,7 @@ import { createEventTarget } from "../src/eventTarget.mts";
 import { createNode, rootNodeId } from "../src/tree.mts";
 import { createIncaApp } from "../src/vue/index.mts";
 import { vModelText, withDirectives } from "../src/vue/runtime.mts";
+import { nativeStub } from "./setup.mts";
 import type { NodeMutationMembers } from "../src/element/nodeMutation.mts";
 import type { NodeRelationMembers } from "../src/element/nodeRelations.mts";
 import type { EventHandlers } from "../src/element/types.mts";
@@ -92,12 +93,19 @@ function installFakeNative(): Map<NodeId, FakeNode> {
     node.parent = null;
   }
 
-  // The host allocates its root along with the tree, before any JS runs.
+  // The host allocates its root and the document above it along with the tree, before any JS
+  // runs.
   const rootId = allocate("div");
+  const documentId = allocate("#document");
+  requireNode(rootId).parent = documentId;
+  requireNode(documentId).children.push(rootId);
 
-  globalThis.__inca_native__ = {
+  globalThis.__inca_native__ = nativeStub({
     rootNodeId(): NodeId {
       return rootId;
+    },
+    documentNodeId(): NodeId {
+      return documentId;
     },
     createNode: allocate,
     appendChild(parentId: NodeId, childId: NodeId): number {
@@ -175,8 +183,8 @@ function installFakeNative(): Map<NodeId, FakeNode> {
     childNodeIds: (nodeId: NodeId) => [...requireNode(nodeId).children],
     isConnected(nodeId: NodeId): boolean {
       let at: NodeId | null = nodeId;
-      while (at !== null && at !== rootId) at = requireNode(at).parent;
-      return at === rootId;
+      while (at !== null && at !== documentId) at = requireNode(at).parent;
+      return at === documentId;
     },
     textContent: () => "",
     wholeText: () => "",
@@ -261,7 +269,7 @@ function installFakeNative(): Map<NodeId, FakeNode> {
     setPointerCapture(): void {},
     releasePointerCapture(): void {},
     hasPointerCapture: () => false,
-  };
+  });
 
   return nodes;
 }

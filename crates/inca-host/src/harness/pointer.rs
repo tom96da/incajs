@@ -242,8 +242,7 @@ mod tests {
     #[should_panic(expected = "the root node exists")]
     fn snapshot_panics_without_a_root_node(cx: &mut TestAppContext) {
         let mut h = Harness::load(cx, TEST_ENTRY_PATH, "");
-        let root = h.host.borrow().root();
-        h.host.borrow_mut().tree.destroy_node(root);
+        h.host.borrow_mut().tree.set_root(9999);
         h.snapshot();
     }
 

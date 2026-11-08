@@ -34,6 +34,7 @@ export default {
   stubs: [
     "globalThis.TextDecoder = class { decode() { return ''; } };",
     "globalThis.Document = class Document {};",
+    "globalThis.__inca_native__ = { documentNodeId: () => 1 };",
   ],
   modules: ["@vue/runtime-core/dist/runtime-core.cjs.prod.js"],
 };

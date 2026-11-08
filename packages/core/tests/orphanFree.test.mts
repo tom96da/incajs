@@ -14,10 +14,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Component } from "@vue/runtime-core";
 
 import { callbackIdFor, groupOf, registeredGroupCount } from "../src/callbacks.mts";
-import { createElementNode } from "../src/element/handle.mts";
+import { createElementNode, createTextNode } from "../src/element/handle.mts";
 import { elementOf, isDestroyed } from "../src/element/lifecycle.mts";
-import { createTextNode } from "../src/element/text.mts";
 import { createIncaApp } from "../src/vue/index.mts";
+import { nativeStub } from "./setup.mts";
 import type { IncaElement } from "../src/index.mts";
 import type { HostCallback } from "../src/native.mts";
 
@@ -102,7 +102,7 @@ function installNative(): void {
     nodeOf(childId).parent = parentId;
     return parent.children.indexOf(childId);
   };
-  globalThis.__inca_native__ = {
+  globalThis.__inca_native__ = nativeStub({
     rootNodeId: () => ROOT,
     createNode(tag) {
       const id = create(tag);
@@ -231,7 +231,7 @@ function installNative(): void {
       orphans.add(tail);
       return tail;
     },
-  };
+  });
 }
 
 /** Frees the orphans like the host does at the start of a frame. */

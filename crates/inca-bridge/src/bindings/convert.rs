@@ -8,7 +8,7 @@ use inca_node::scroll::Align;
 use inca_node::{NodeId, TreeError, VirtualNode, VirtualTree};
 
 use crate::EventTargetId;
-use crate::event_target::{DOCUMENT_TAG, WINDOW_TAG};
+use crate::event_target::WINDOW_TAG;
 
 /// An optional boolean argument: omitted, `undefined` and `null` give the
 /// default.
@@ -75,7 +75,7 @@ impl<'js> FromJs<'js> for JsAlign {
 }
 
 /// An event target argument: a node id as [`JsNodeId`] takes it, or the tag
-/// `"$document"` or `"$window"`. Any other string throws a `TypeError`.
+/// `"$window"`. Any other string throws a `TypeError`.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct JsEventTargetId(pub(super) EventTargetId);
 
@@ -85,17 +85,15 @@ impl<'js> FromJs<'js> for JsEventTargetId {
             return JsNodeId::from_js(ctx, value).map(|JsNodeId(id)| Self(EventTargetId::Node(id)));
         };
         match tag.to_string()?.as_str() {
-            DOCUMENT_TAG => Ok(Self(EventTargetId::Document)),
             WINDOW_TAG => Ok(Self(EventTargetId::Window)),
             other => Err(Exception::throw_type(
                 ctx,
                 &format!(
                     concat!(
                         "unknown event target tag: {other}. ",
-                        "pass a node id, \"{document}\" or \"{window}\""
+                        "pass a node id or \"{window}\""
                     ),
                     other = other,
-                    document = DOCUMENT_TAG,
                     window = WINDOW_TAG,
                 ),
             )),
@@ -126,11 +124,14 @@ pub(super) fn existing_node<'a>(
 
 pub(super) fn throw_tree_error(ctx: &Ctx<'_>, err: TreeError) -> rquickjs::Error {
     match err {
-        TreeError::WouldCycle(_) | TreeError::LeafParent(_) | TreeError::RootMoved(_) => {
+        TreeError::WouldCycle(_)
+        | TreeError::LeafParent(_)
+        | TreeError::DocumentInserted(_)
+        | TreeError::DocumentChild(_) => {
             Exception::throw_dom(ctx, "HierarchyRequestError", &err.to_string())
         }
         TreeError::NotAChild { .. } => Exception::throw_dom(ctx, "NotFoundError", &err.to_string()),
-        TreeError::NoParent(_) => {
+        TreeError::NoParent(_) | TreeError::DocumentParent(_) => {
             Exception::throw_dom(ctx, "NoModificationAllowedError", &err.to_string())
         }
         TreeError::IndexSize => Exception::throw_dom(ctx, "IndexSizeError", &err.to_string()),

@@ -14,7 +14,7 @@ impl VirtualTree {
     /// - the parent is no leaf;
     /// - the node is no ancestor of the parent;
     /// - the reference is a child of the parent;
-    /// - the node is not the document, and not the root while no document is declared;
+    /// - the node is not the document;
     /// - a document parent keeps to one element and no text.
     ///
     /// `replaced` is the child the insertion removes. It changes nothing.
@@ -53,9 +53,6 @@ impl VirtualTree {
         }
         if self.document == Some(node_id) {
             return Err(TreeError::DocumentInserted(node_id));
-        }
-        if self.document.is_none() && self.root == Some(node_id) {
-            return Err(TreeError::RootMoved(node_id));
         }
         if parent.tag_name() == DOCUMENT_TAG {
             self.check_document_child(parent, node_id, replaced)?;
@@ -260,18 +257,6 @@ mod tests {
             TreeError::WouldCycle(grandparent)
         );
         assert_eq!(children(&tree, grandparent), kids);
-    }
-
-    #[test]
-    fn the_root_moved_under_a_detached_parent_is_refused() {
-        let mut f = Fixture::new();
-        let parent = node(&mut f.tree, "div");
-
-        assert_eq!(
-            f.tree.append_child(parent, f.root).unwrap_err(),
-            TreeError::RootMoved(f.root)
-        );
-        assert_eq!(f.tree.get(f.root).unwrap().parent(), None);
     }
 
     #[test]

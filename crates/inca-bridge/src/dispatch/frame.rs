@@ -222,9 +222,9 @@ mod tests {
 
         assert_eq!(
             scene.json("[globalThis.released, [top, leaf, cb]]"),
-            serde_json::json!([[[[1, 2], [1]]], [1, 2, 1]])
+            serde_json::json!([[[[2, 3], [1]]], [2, 3, 1]])
         );
-        assert!(scene.host.borrow().tree.get(1).is_none());
+        assert!(scene.host.borrow().tree.get(2).is_none());
     }
 
     #[gpui::test]
@@ -240,7 +240,7 @@ mod tests {
 
         assert_eq!(
             scene.json("[globalThis.released.map(([n]) => n), [template, content]]"),
-            serde_json::json!([[[1, 2]], [1, 2]])
+            serde_json::json!([[[2, 3]], [2, 3]])
         );
     }
 
@@ -266,7 +266,7 @@ mod tests {
 
         assert_eq!(
             scene.json("[globalThis.last, [top, cb], globalThis.caught === undefined]"),
-            serde_json::json!([[[1], [1]], [1, 1], true])
+            serde_json::json!([[[2], [1]], [2, 1], true])
         );
     }
 
@@ -325,14 +325,14 @@ mod tests {
         scene.js("__inca_native__.createNode('div');");
 
         draw(cx, scene.window);
-        assert_eq!(scene.json("globalThis.released"), serde_json::json!([[1]]));
+        assert_eq!(scene.json("globalThis.released"), serde_json::json!([[2]]));
         assert!(scene.requested_frames(cx) > 0);
         assert!(scene.reported.borrow().is_empty());
 
         draw(cx, scene.window);
         assert_eq!(
             scene.json("globalThis.released"),
-            serde_json::json!([[1], [2]])
+            serde_json::json!([[2], [3]])
         );
         assert_eq!(scene.requested_frames(cx), 0);
     }
@@ -347,7 +347,7 @@ mod tests {
 
         draw(cx, scene.window);
 
-        assert!(scene.host.borrow().tree.get(1).is_none());
+        assert!(scene.host.borrow().tree.get(2).is_none());
         assert!(scene.host.borrow().listeners.is_empty());
     }
 

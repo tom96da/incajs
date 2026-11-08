@@ -4,11 +4,8 @@
 // The text handle, and the character data members of text nodes and comment stand-ins.
 
 import {
-  appendChild,
-  createNode,
   getAttribute,
   holdNode,
-  removeChild,
   replaceData,
   setAttribute,
   splitText,
@@ -20,12 +17,11 @@ import { isDestroyed, registerNode, releaseWhenCollected, withNodeId } from "./l
 import { nodeMutationMembers } from "./nodeMutation.mts";
 import { nodeRelationMembers } from "./nodeRelations.mts";
 import { nodeTreeMembers, readData, writeData } from "./nodeTree.mts";
-import { keep, unlink } from "./shadowTree.mts";
 import type { NodeId } from "../types.mts";
+import type { HandleBuilders } from "./nodeMutation.mts";
 import type {
   CharacterDataMembers,
   IncaNode,
-  IncaParent,
   IncaText,
   NodeMembers,
   TextMembers,
@@ -93,9 +89,10 @@ export function characterDataMembers(node: IncaNode): CharacterDataMembers {
 /**
  * Builds the members only a text node has.
  * @param node - the text handle the members belong to
+ * @param builders - the functions that build and find handles
  * @returns the members
  */
-function textMembers(node: IncaText): TextMembers {
+function textMembers(node: IncaText, builders: HandleBuilders): TextMembers {
   const id = node.__node_id;
   return {
     get wholeText() {
@@ -105,7 +102,7 @@ function textMembers(node: IncaText): TextMembers {
       requireArguments(args, 1, "splitText");
       if (isDestroyed(node)) throw new TypeError("the text node was freed. create a new one");
       const tailId = splitText(id, args[0]);
-      const tail = createIncaText(tailId, String(getAttribute(tailId, "value") ?? ""));
+      const tail = createIncaText(tailId, String(getAttribute(tailId, "value") ?? ""), builders);
       node.text = readData(node);
       const parent = node.parent;
       if (parent === null) {
@@ -121,17 +118,6 @@ function textMembers(node: IncaText): TextMembers {
 }
 
 /**
- * Creates a text leaf.
- * @param text - the initial text content
- * @returns the new text leaf
- */
-export function createTextNode(text: string): IncaText {
-  const id = createNode("#text");
-  setAttribute(id, "value", text);
-  return createIncaText(id, text);
-}
-
-/**
  * Updates a text leaf's content in place.
  * @param node - the text leaf to update
  * @param text - the new text content
@@ -142,32 +128,13 @@ export function setText(node: IncaText, text: string): void {
 }
 
 /**
- * Replaces all of `el`'s children with at most a single text child holding
- * `text`. The old children keep their listeners. An empty string leaves `el` childless.
- * @param el - the element or fragment whose children are replaced
- * @param text - the new text content
- */
-export function setElementText(el: IncaParent, text: string): void {
-  for (const child of el.__children.slice()) {
-    removeChild(el.__node_id, child.__node_id);
-    unlink(child);
-    keep(child);
-  }
-  if (!text) return;
-
-  const textNode = createTextNode(text);
-  appendChild(el.__node_id, textNode.__node_id);
-  textNode.parent = el;
-  el.__children.push(textNode);
-}
-
-/**
  * Builds the handle of a text node.
  * @param id - the native node's id
  * @param text - the data the node holds
+ * @param builders - the functions that build and find handles
  * @returns the new, parentless handle
  */
-export function createIncaText(id: NodeId, text: string): IncaText {
+export function createIncaText(id: NodeId, text: string, builders: HandleBuilders): IncaText {
   const node: Omit<
     IncaText,
     "__node_id" | keyof NodeMembers | keyof CharacterDataMembers | keyof TextMembers
@@ -178,11 +145,11 @@ export function createIncaText(id: NodeId, text: string): IncaText {
   };
   const handle = withNodeId(node as IncaText, id);
   for (const members of [
-    nodeTreeMembers(handle),
-    nodeMutationMembers(handle, { text: createIncaText }),
-    nodeRelationMembers(handle),
+    nodeTreeMembers(handle, builders),
+    nodeMutationMembers(handle, builders),
+    nodeRelationMembers(handle, builders),
     characterDataMembers(handle),
-    textMembers(handle),
+    textMembers(handle, builders),
   ]) {
     Object.defineProperties(handle, Object.getOwnPropertyDescriptors(members));
   }

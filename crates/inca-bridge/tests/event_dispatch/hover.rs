@@ -21,6 +21,8 @@ fn hover_dispatches_enter_then_leave(cx: &mut TestAppContext) {
         let node = host.tree.create_node("div").unwrap();
         host.tree.set_style(node, "width", 100.0).unwrap();
         host.tree.set_style(node, "height", 100.0).unwrap();
+        let root = host.root();
+        host.tree.append_child(root, node).unwrap();
         node
     };
     let engine = test_support::engine_for(&host);
@@ -347,6 +349,8 @@ fn a_node_replacing_the_hovered_one_gets_enter_events_under_a_resting_pointer(
         host.tree.set_style(old, "width", 100.0).unwrap();
         host.tree.set_style(old, "height", 100.0).unwrap();
         host.tree.append_child(parent, old).unwrap();
+        let root = host.root();
+        host.tree.append_child(root, parent).unwrap();
         (parent, old)
     };
     let engine = test_support::engine_for(&host);

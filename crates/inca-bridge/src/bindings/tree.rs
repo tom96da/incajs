@@ -18,7 +18,9 @@ use super::host::Host;
 /// operation first, even though it also releases the listener/focus state that named its nodes.
 pub(super) fn install_tree(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("rootNodeId", root_node_id)?;
+    n.set("documentNodeId", document_node_id)?;
     n.set("createNode", create_node)?;
+    n.set("createElement", super::create_element::create_element)?;
     n.set("setAttribute", super::attributes::set_attribute)?;
     n.set("getAttribute", super::attributes::get_attribute)?;
     n.set("removeAttribute", super::attributes::remove_attribute)?;
@@ -34,6 +36,10 @@ pub(super) fn install_tree(n: &Natives<'_, '_>) -> JsResult<()> {
 
 fn root_node_id(host: Rc<RefCell<Host>>) -> impl Fn() -> NodeId {
     move || host.borrow().root()
+}
+
+fn document_node_id(host: Rc<RefCell<Host>>) -> impl Fn() -> NodeId {
+    move || host.borrow().document()
 }
 
 fn create_node<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, String) -> JsResult<NodeId> {
@@ -59,10 +65,16 @@ fn template_content<'js>(
 fn destroy_node<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Vec<u32>> {
     move |ctx, JsNodeId(node_id)| {
         let mut host = host.borrow_mut();
-        if node_id == host.root() {
+        if host.tree.ancestors(host.root()).any(|id| id == node_id) {
             return Err(Exception::throw_type(
                 &ctx,
-                "the root node belongs to the host and cannot be destroyed",
+                "the root node belongs to the host. neither it nor a node above it can be destroyed",
+            ));
+        }
+        if node_id == host.document() {
+            return Err(Exception::throw_type(
+                &ctx,
+                "the document belongs to the host. it cannot be destroyed",
             ));
         }
         let before = host.tree.preceding(node_id);
@@ -112,7 +124,7 @@ fn release_node(host: Rc<RefCell<Host>>) -> impl Fn(JsNodeId) {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
-    use crate::test_support::{LISTEN_JS, callback_ids, engine_with_bindings};
+    use crate::test_support::{LISTEN_JS, callback_ids, engine_with_bindings, error_name};
     use crate::tests::callback_stored;
     use crate::{EventTargetId, Host};
     use inca_node::NodeId;
@@ -163,7 +175,7 @@ mod tests {
 
         assert_eq!(
             *warnings.borrow(),
-            ["node 1 (div): ignoring unknown style key `flexDirections`"]
+            ["node 2 (div): ignoring unknown style key `flexDirections`"]
         );
     }
 
@@ -181,7 +193,7 @@ mod tests {
 
         assert_eq!(
             *warnings.borrow(),
-            ["node 1 (div): ignoring invalid color for style key `background`"]
+            ["node 2 (div): ignoring invalid color for style key `background`"]
         );
     }
 
@@ -214,8 +226,8 @@ mod tests {
         assert_eq!(
             *warnings.borrow(),
             [
-                "node 1 (div): ignoring unknown style key `bogus`",
                 "node 2 (div): ignoring unknown style key `bogus`",
+                "node 3 (div): ignoring unknown style key `bogus`",
             ]
         );
     }
@@ -235,8 +247,8 @@ mod tests {
         assert_eq!(
             *warnings.borrow(),
             [
-                "node 1 (div): ignoring unknown style key `bogus-key`",
-                "node 1 (div): ignoring unknown style key `bogusKey`",
+                "node 2 (div): ignoring unknown style key `bogus-key`",
+                "node 2 (div): ignoring unknown style key `bogusKey`",
             ]
         );
     }
@@ -256,8 +268,8 @@ mod tests {
         assert_eq!(
             *warnings.borrow(),
             [
-                "node 1 (div): ignoring unknown style key `bogus`",
-                "node 1 (div): ignoring unsupported value for style key `width`",
+                "node 2 (div): ignoring unknown style key `bogus`",
+                "node 2 (div): ignoring unsupported value for style key `width`",
             ]
         );
     }
@@ -304,7 +316,7 @@ mod tests {
 
         assert_eq!(
             *warnings.borrow(),
-            ["node 1 (#text): ignoring unknown style key `bogus`"]
+            ["node 2 (#text): ignoring unknown style key `bogus`"]
         );
     }
 
@@ -493,6 +505,31 @@ mod tests {
     }
 
     #[test]
+    fn destroying_a_node_above_the_root_throws_and_keeps_the_root() {
+        let (engine, host) = engine_with_bindings();
+
+        let caught: bool = engine
+            .eval(
+                r"
+                const loose = __inca_native__.createNode('div');
+                __inca_native__.appendChild(loose, __inca_native__.rootNodeId());
+                let caught = false;
+                try {
+                    __inca_native__.destroyNode(loose);
+                } catch (e) {
+                    caught = true;
+                }
+                caught;
+                ",
+            )
+            .unwrap();
+
+        assert!(caught);
+        let host = host.borrow();
+        assert!(host.tree.get(host.root()).is_some());
+    }
+
+    #[test]
     fn destroying_the_root_throws_a_catchable_exception() {
         let (engine, host) = engine_with_bindings();
 
@@ -513,6 +550,43 @@ mod tests {
         assert!(caught, "the root belongs to the host, not to the app");
         let host = host.borrow();
         assert!(host.tree.get(host.root()).is_some());
+    }
+
+    #[test]
+    fn destroying_the_document_throws_a_type_error() {
+        let (engine, host) = engine_with_bindings();
+        engine
+            .eval::<()>(
+                r"
+                __inca_native__.removeChild(
+                    __inca_native__.documentNodeId(),
+                    __inca_native__.rootNodeId()
+                );
+                ",
+            )
+            .unwrap();
+
+        let name = error_name(
+            &engine,
+            "__inca_native__.destroyNode(__inca_native__.documentNodeId())",
+        );
+
+        assert_eq!(name, "TypeError");
+        let host = host.borrow();
+        assert!(host.tree.get(host.document()).is_some());
+    }
+
+    #[test]
+    fn the_document_node_is_the_parent_of_the_root_node() {
+        let (engine, host) = engine_with_bindings();
+
+        let ids: Vec<u32> = engine
+            .eval("[__inca_native__.documentNodeId(), __inca_native__.rootNodeId()]")
+            .unwrap();
+
+        let host = host.borrow();
+        assert_eq!(ids, [host.document(), host.root()]);
+        assert_eq!(host.tree.get(ids[1]).unwrap().parent(), Some(ids[0]));
     }
 
     /// Builds `root > branch > leaf` with a click listener on each of the two lower nodes.

@@ -3,10 +3,15 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createCommentNode, createElementNode, createIncaFragment } from "./handle.mts";
+import { nativeStub } from "../../tests/setup.mts";
+import {
+  createCommentNode,
+  createElementNode,
+  createIncaFragment,
+  createTextNode,
+} from "./handle.mts";
 import { isHeld, isRemoved, markDestroyed } from "./lifecycle.mts";
 import { remove } from "./shadowTree.mts";
-import { createTextNode } from "./text.mts";
 import type { IncaFragment, IncaNode, IncaTemplateElement } from "./types.mts";
 
 /** The children of each node in the fake host. */
@@ -105,7 +110,7 @@ beforeEach(() => {
   tags = new Map();
   contents = new Map();
   nextId = 1;
-  globalThis.__inca_native__ = host as never;
+  globalThis.__inca_native__ = nativeStub(host as never);
 });
 
 const div = () => createElementNode("div");

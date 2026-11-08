@@ -30,7 +30,7 @@ methods of the DOM `Event` interface (see Base fields).
 - A removed element drops its listeners. `addEventListener()` and an
   assignment to a handler property do nothing on it.
 - An attribute that holds code, such as `onclick="count++"`, runs nothing.
-- `document` and `window` have no `body`, `documentElement` or query methods.
+- `document` has no `body`, `head` or `documentElement`. `window` has no query methods.
 - `window` and `document` are imports. `globalThis.window` and
   `globalThis.document` stay undefined.
 
@@ -97,6 +97,8 @@ from [Pointer Events](https://www.w3.org/TR/2026/WD-pointerevents4-20261005/#whe
 - A mouse event outside every element has the mount container as `target`.
   Moving the pointer between an element and an empty area gives the mount
   container as `relatedTarget`.
+- While the mount container is removed from `document`, a key event with nothing
+  focused has `document` as `target`.
 
 ## Pointer
 

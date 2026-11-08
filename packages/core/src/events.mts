@@ -27,14 +27,14 @@ function tracking(listener: HostCallback): HostCallback {
 }
 
 /**
- * Registers `listener` for `event` on the target (node, document or window).
+ * Registers `listener` for `event` on the target (node or window).
  * Registering the same listener for the same target, event and `capture`
  * again changes nothing, and the first registration keeps its other options.
  * A `null` listener is ignored.
  *
  * Any event name is accepted, and it fires when the host dispatches that name.
  * `IncaEventMap` gives the event type of each name the host dispatches.
- * @param target - the event target (node id, "$document" or "$window")
+ * @param target - the event target (node id or "$window")
  * @param event - the event name (e.g. `"click"`)
  * @param listener - a function, called with the event's `currentTarget` as
  * `this`, or an object whose `handleEvent` method is called with the object
@@ -82,7 +82,7 @@ export function addEventListener(
 /**
  * Drops the registration {@link addEventListener} made for `listener` on
  * the target with the same `event` and `capture`. A no-op if there is none.
- * @param target - the event target (node, document or window)
+ * @param target - the event target (node or window)
  * @param event - the event name
  * @param listener - the listener that was registered
  * @param options - `capture` of the registration to drop
@@ -105,7 +105,7 @@ export function removeEventListener(
  * Dispatches `event` at a target along its path. Dispatching at an element
  * reaches its ancestors, `document` and `window`. Dispatching at `document`
  * reaches `window`, and dispatching at `window` reaches only `window`.
- * @param target - the target to dispatch at (node id, "$document" or "$window")
+ * @param target - the target to dispatch at (node id or "$window")
  * @param event - the event to dispatch
  * @returns `false` when a listener canceled a cancelable event, else `true`
  * @throws TypeError when `target` is malformed or is an unknown target tag

@@ -10,6 +10,7 @@
 mod attributes;
 mod capture;
 pub(crate) mod convert;
+mod create_element;
 mod focus;
 mod host;
 mod html;

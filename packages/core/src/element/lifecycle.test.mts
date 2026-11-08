@@ -3,6 +3,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { nativeStub } from "../../tests/setup.mts";
 import { createElementNode } from "./handle.mts";
 import { isDestroyed, isRemoved, markDestroyed, markRemoved } from "./lifecycle.mts";
 import type { IncaElement, IncaNode, IncaTemplateElement } from "./types.mts";
@@ -143,7 +144,7 @@ describe("the release of a template", () => {
         }
       },
     );
-    globalThis.__inca_native__ = host as never;
+    globalThis.__inca_native__ = nativeStub(host as never);
   });
 
   afterEach(() => {
@@ -170,7 +171,7 @@ describe("a template", () => {
   };
 
   const template = () => {
-    globalThis.__inca_native__ = host as never;
+    globalThis.__inca_native__ = nativeStub(host as never);
     const owner = createElementNode("template") as IncaTemplateElement;
     return { owner, content: owner.content };
   };

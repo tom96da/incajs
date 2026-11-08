@@ -90,9 +90,13 @@ impl EventDispatcher {
             ("tab", false) if plain => {
                 let moved = {
                     let host = &mut *self.host.borrow_mut();
-                    let moved =
-                        host.focus
-                            .tab_move(&host.tree, host.root(), window, cx, modifiers.shift);
+                    let moved = host.focus.tab_move(
+                        &host.tree,
+                        host.document(),
+                        window,
+                        cx,
+                        modifiers.shift,
+                    );
                     if let Some(node) = moved {
                         host.reveal(node, Align::Reveal, Align::CenterOutside);
                     }

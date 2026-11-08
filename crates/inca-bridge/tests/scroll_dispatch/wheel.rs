@@ -7,7 +7,7 @@ use inca_test_macros::gpui_cases;
 #[gpui::test]
 fn stop_propagation_skips_ancestors_but_not_the_scroll(cx: &mut TestAppContext) {
     let host = one_container();
-    let js = [on_wheel(0, CONTAINER), on_wheel(1, CHILD_STOP)].concat();
+    let js = [on_wheel(0, CONTAINER), on_wheel(2, CHILD_STOP)].concat();
     let mut scene = Scene::new(cx, host, &js);
     scene.wheel(-50.);
     assert_eq!(scene.ran(), r#"["child"]"#);
@@ -25,7 +25,7 @@ fn stop_propagation_skips_ancestors_but_not_the_scroll(cx: &mut TestAppContext) 
 #[gpui::test]
 fn prevent_default_from_a_child_cancels_the_scroll(cx: &mut TestAppContext) {
     let host = one_container();
-    let js = on_wheel(1, CHILD_PREVENT);
+    let js = on_wheel(2, CHILD_PREVENT);
     let mut scene = Scene::new(cx, host, &js);
     scene.wheel(-50.);
     assert_eq!(scene.ran(), r#"["child"]"#);
@@ -35,7 +35,7 @@ fn prevent_default_from_a_child_cancels_the_scroll(cx: &mut TestAppContext) {
 #[gpui::test]
 fn a_passive_listener_cannot_cancel_the_scroll(cx: &mut TestAppContext) {
     let host = one_container();
-    let js = listen(1, "wheel", CHILD_PREVENT, false, true);
+    let js = listen(2, "wheel", CHILD_PREVENT, false, true);
     let mut scene = Scene::new(cx, host, &js);
     scene.wheel(-50.);
     assert_eq!(scene.ran(), r#"["child"]"#);
@@ -49,7 +49,7 @@ fn prevent_default_from_a_capture_listener_of_the_container_cancels_the_scroll(
     let host = one_container();
     let js = [
         listen(0, "wheel", CONTAINER_PREVENT, true, false),
-        on_wheel(1, SECOND),
+        on_wheel(2, SECOND),
     ]
     .concat();
     let mut scene = Scene::new(cx, host, &js);
@@ -62,7 +62,7 @@ fn prevent_default_from_a_capture_listener_of_the_container_cancels_the_scroll(
 fn a_script_offset_past_the_end_still_lets_the_ancestor_scroll(cx: &mut TestAppContext) {
     let mut scene = Scene::new(cx, nested_containers(), "");
     // No draw between the script offset and the wheel, so the offset is unclamped.
-    scene.js("__inca_native__.scrollNode(1, null, 999)");
+    scene.js("__inca_native__.scrollNode(2, null, 999)");
     scene.cx.simulate_event(ScrollWheelEvent {
         position: point(px(10.), px(10.)),
         delta: ScrollDelta::Pixels(point(px(0.), px(-50.))),
@@ -75,11 +75,11 @@ fn a_script_offset_past_the_end_still_lets_the_ancestor_scroll(cx: &mut TestAppC
 #[gpui::test]
 fn prevent_default_from_the_inner_container_cancels_both_scrolls(cx: &mut TestAppContext) {
     let host = nested_containers();
-    let js = on_wheel(1, CHILD_PREVENT);
+    let js = on_wheel(2, CHILD_PREVENT);
     let mut scene = Scene::new(cx, host, &js);
     scene.wheel(-50.);
     scene.wheel(-250.);
-    assert_eq!(scene.offset(1).y, px(0.));
+    assert_eq!(scene.offset(2).y, px(0.));
     assert_eq!(scene.offset(0).y, px(0.));
 }
 
@@ -98,8 +98,8 @@ fn stop_immediate_propagation_from_a_child_still_scrolls(cx: &mut TestAppContext
     let host = one_container();
     let js = [
         on_wheel(0, CONTAINER),
-        on_wheel(1, IMMEDIATE),
-        on_wheel(1, SECOND),
+        on_wheel(2, IMMEDIATE),
+        on_wheel(2, SECOND),
     ]
     .concat();
     let mut scene = Scene::new(cx, host, &js);
@@ -111,7 +111,7 @@ fn stop_immediate_propagation_from_a_child_still_scrolls(cx: &mut TestAppContext
 #[gpui::test]
 fn a_stopped_wheel_does_not_silence_the_next_one(cx: &mut TestAppContext) {
     let host = one_container();
-    let js = [on_wheel(0, CONTAINER), on_wheel(1, CHILD_STOP_FLAG)].concat();
+    let js = [on_wheel(0, CONTAINER), on_wheel(2, CHILD_STOP_FLAG)].concat();
     let mut scene = Scene::new(cx, host, &js);
     scene.js("globalThis.stop = true;");
     scene.wheel(-10.);
@@ -151,7 +151,7 @@ fn a_wheel_after_a_prevented_one_scrolls_again(cx: &mut TestAppContext) {
 #[gpui::test]
 fn a_throw_after_stop_propagation_still_stops_ancestors_and_scrolls(cx: &mut TestAppContext) {
     let host = one_container();
-    let js = [on_wheel(0, CONTAINER), on_wheel(1, CHILD_THROW)].concat();
+    let js = [on_wheel(0, CONTAINER), on_wheel(2, CHILD_THROW)].concat();
     let mut scene = Scene::new(cx, host, &js);
     scene.js("globalThis.stop = true;");
     scene.wheel(-50.);
@@ -193,8 +193,8 @@ const CHILD_THROW: &str = r"(e) => {
     if (globalThis.stop) { e.stopPropagation(); throw new Error('boom'); }
 }";
 
-/// Node 0 holds node 1, which scrolls 200px over node 2, which scrolls 200px over node 3. Node
-/// 4 fills the rest of node 1.
+/// Node 0 holds node 2, which scrolls 200px over node 3, which scrolls 200px over node 4. Node
+/// 5 fills the rest of node 2.
 fn scrollers_below_a_plain_root() -> Host {
     let mut host = Host::default();
     let root = add_div(&mut host, None, 100.0, false);
@@ -207,8 +207,8 @@ fn scrollers_below_a_plain_root() -> Host {
 
 #[gpui_cases]
 #[gpui::test]
-#[case::outer_container(1, 20, -20.0, 0.0)]
-#[case::inner_container(2, 20, 0.0, -20.0)]
+#[case::outer_container(2, 20, -20.0, 0.0)]
+#[case::inner_container(3, 20, 0.0, -20.0)]
 fn a_prevented_listeners_scroll_write_to_a_container_stays(
     cx: &mut TestAppContext,
     written: NodeId,
@@ -231,8 +231,8 @@ fn a_prevented_listeners_scroll_write_to_a_container_stays(
 
     scene.wheel(-30.);
 
-    assert_eq!(scene.offset(1).y, px(outer));
-    assert_eq!(scene.offset(2).y, px(inner));
+    assert_eq!(scene.offset(2).y, px(outer));
+    assert_eq!(scene.offset(3).y, px(inner));
 }
 
 #[gpui::test]
@@ -243,7 +243,7 @@ fn the_wheel_step_adds_to_an_unprevented_listeners_write_to_the_inner_container(
         0,
         r"
         () => {
-            __inca_native__.scrollNode(2, null, 20);
+            __inca_native__.scrollNode(3, null, 20);
         }
         ",
     );
@@ -251,10 +251,10 @@ fn the_wheel_step_adds_to_an_unprevented_listeners_write_to_the_inner_container(
 
     scene.wheel(-30.);
 
-    assert_eq!(scene.offset(2).y, px(-50.));
+    assert_eq!(scene.offset(3).y, px(-50.));
 }
 
-/// Node 0 scrolls 100px over node 1 and node 2, which are 300px and 100px tall.
+/// Node 0 scrolls 100px over node 2 and node 3, which are 300px and 100px tall.
 fn scrolling_root() -> Host {
     let mut host = Host::default();
     let root = add_div(&mut host, None, 100.0, true);
@@ -300,8 +300,8 @@ fn the_wheel_step_adds_to_an_unprevented_listeners_write_to_the_root_container(
     assert_eq!(scene.offset(0).y, px(-50.));
 }
 
-/// Node 0 scrolls 100px over node 1, which scrolls 100px over node 2, 300px tall, and over
-/// node 3, 200px tall.
+/// Node 0 scrolls 100px over node 2, which scrolls 100px over node 3, 300px tall, and over
+/// node 4, 200px tall.
 fn scrolling_root_over_a_scroller() -> Host {
     let mut host = Host::default();
     let root = add_div(&mut host, None, 100.0, true);
@@ -326,7 +326,7 @@ fn an_unprevented_root_write_stays_when_an_inner_container_takes_the_step(cx: &m
     scene.wheel(-30.);
 
     assert_eq!(scene.offset(0).y, px(-20.));
-    assert_eq!(scene.offset(1).y, px(-30.));
+    assert_eq!(scene.offset(2).y, px(-30.));
 }
 
 #[gpui::test]
@@ -358,13 +358,13 @@ fn a_capture_listeners_write_to_the_inner_container_keeps_the_write(
     expected: f32,
 ) {
     let js = listen(
-        2,
+        3,
         "wheel",
         &format!(
             r"
             (e) => {{
                 {prevent}
-                __inca_native__.scrollNode(2, null, 20);
+                __inca_native__.scrollNode(3, null, 20);
             }}
             "
         ),
@@ -375,11 +375,11 @@ fn a_capture_listeners_write_to_the_inner_container_keeps_the_write(
 
     scene.wheel(-30.);
 
-    assert_eq!(scene.offset(2).y, px(expected));
-    assert_eq!(scene.offset(1).y, px(0.));
+    assert_eq!(scene.offset(3).y, px(expected));
+    assert_eq!(scene.offset(2).y, px(0.));
 }
 
-/// Scrolls node 2 to its end, then node 1 to its end.
+/// Scrolls node 3 to its end, then node 2 to its end.
 fn scroll_to_the_ends(scene: &mut Scene) {
     scene.wheel(-200.);
     scene.wheel(-200.);
@@ -387,7 +387,7 @@ fn scroll_to_the_ends(scene: &mut Scene) {
 
 #[gpui_cases]
 #[gpui::test]
-#[case::on_inner(2)]
+#[case::on_inner(3)]
 #[case::on_root(0)]
 fn a_listeners_write_to_the_inner_end_sends_the_step_to_the_outer(
     cx: &mut TestAppContext,
@@ -397,7 +397,7 @@ fn a_listeners_write_to_the_inner_end_sends_the_step_to_the_outer(
         on,
         r"
         () => {
-            __inca_native__.scrollNode(2, null, 200);
+            __inca_native__.scrollNode(3, null, 200);
         }
         ",
     );
@@ -405,8 +405,8 @@ fn a_listeners_write_to_the_inner_end_sends_the_step_to_the_outer(
 
     scene.wheel(-30.);
 
-    assert_eq!(scene.offset(2).y, px(-200.));
-    assert_eq!(scene.offset(1).y, px(-30.));
+    assert_eq!(scene.offset(3).y, px(-200.));
+    assert_eq!(scene.offset(2).y, px(-30.));
 }
 
 #[gpui_cases]
@@ -424,7 +424,7 @@ fn an_inner_container_a_listener_moves_off_its_end_takes_the_step(
             r"
             () => {{
                 if (globalThis.write) {{
-                    __inca_native__.scrollNode(2, null, {top});
+                    __inca_native__.scrollNode(3, null, {top});
                 }}
             }}
             "
@@ -436,18 +436,18 @@ fn an_inner_container_a_listener_moves_off_its_end_takes_the_step(
 
     scene.wheel(-30.);
 
-    assert_eq!(scene.offset(2).y, px(inner));
-    assert_eq!(scene.offset(1).y, px(0.));
+    assert_eq!(scene.offset(3).y, px(inner));
+    assert_eq!(scene.offset(2).y, px(0.));
 }
 
 #[gpui_cases]
 #[gpui::test]
-#[case::removed("__inca_native__.removeChild(1, 2);")]
-#[case::display_none("__inca_native__.setStyle(2, 'display', 'none');")]
-#[case::hidden_attribute("__inca_native__.setAttribute(2, 'hidden', true);")]
-#[case::inert("__inca_native__.setAttribute(2, 'inert', true);")]
+#[case::removed("__inca_native__.removeChild(2, 3);")]
+#[case::display_none("__inca_native__.setStyle(3, 'display', 'none');")]
+#[case::hidden_attribute("__inca_native__.setAttribute(3, 'hidden', true);")]
+#[case::inert("__inca_native__.setAttribute(3, 'inert', true);")]
 #[case::overflow_hidden(
-    "__inca_native__.setStyle(2, 'overflow_x', 'hidden'); __inca_native__.setStyle(2, 'overflow_y', 'hidden');"
+    "__inca_native__.setStyle(3, 'overflow_x', 'hidden'); __inca_native__.setStyle(3, 'overflow_y', 'hidden');"
 )]
 fn a_listener_that_drops_the_inner_container_sends_the_step_to_the_outer(
     cx: &mut TestAppContext,
@@ -467,8 +467,8 @@ fn a_listener_that_drops_the_inner_container_sends_the_step_to_the_outer(
 
     scene.wheel(-30.);
 
-    assert_eq!(scene.offset(2).y, px(0.));
-    assert_eq!(scene.offset(1).y, px(-30.));
+    assert_eq!(scene.offset(3).y, px(0.));
+    assert_eq!(scene.offset(2).y, px(-30.));
 }
 
 #[gpui::test]
@@ -478,7 +478,7 @@ fn an_outer_container_a_listener_moves_off_its_end_takes_the_step(cx: &mut TestA
         r"
         () => {
             if (globalThis.write) {
-                __inca_native__.scrollNode(1, null, 0);
+                __inca_native__.scrollNode(2, null, 0);
             }
         }
         ",
@@ -489,8 +489,8 @@ fn an_outer_container_a_listener_moves_off_its_end_takes_the_step(cx: &mut TestA
 
     scene.wheel(-30.);
 
-    assert_eq!(scene.offset(2).y, px(-200.));
-    assert_eq!(scene.offset(1).y, px(-30.));
+    assert_eq!(scene.offset(3).y, px(-200.));
+    assert_eq!(scene.offset(2).y, px(-30.));
 }
 
 #[gpui::test]
@@ -499,7 +499,7 @@ fn the_root_skips_a_step_an_inner_container_could_take_before_listeners(cx: &mut
         0,
         r"
         () => {
-            __inca_native__.scrollNode(1, null, 200);
+            __inca_native__.scrollNode(2, null, 200);
         }
         ",
     );
@@ -510,9 +510,9 @@ fn the_root_skips_a_step_an_inner_container_could_take_before_listeners(cx: &mut
     assert_eq!(scene.offset(0).y, px(0.));
 }
 
-/// Node 0 scrolls 100px over node 1, which scrolls 100px over node 2, which
-/// scrolls 100px over node 3, 300px tall. Node 4 fills the rest of node 1 and
-/// node 5 the rest of node 0.
+/// Node 0 scrolls 100px over node 2, which scrolls 100px over node 3, which
+/// scrolls 100px over node 4, 300px tall. Node 5 fills the rest of node 2 and
+/// node 6 the rest of node 0.
 fn two_scrollers_in_a_scrolling_root() -> Host {
     let mut host = Host::default();
     let root = add_div(&mut host, None, 100.0, true);
@@ -531,7 +531,7 @@ fn the_root_skips_a_step_that_one_of_two_inner_containers_could_take(cx: &mut Te
         r"
         () => {
             if (globalThis.write) {
-                __inca_native__.scrollNode(1, null, 200);
+                __inca_native__.scrollNode(2, null, 200);
             }
         }
         ",
@@ -552,7 +552,7 @@ fn an_inner_container_a_listener_moves_off_its_end_beats_the_root(cx: &mut TestA
         r"
         () => {
             if (globalThis.write) {
-                __inca_native__.scrollNode(1, null, 0);
+                __inca_native__.scrollNode(2, null, 0);
             }
         }
         ",
@@ -563,6 +563,6 @@ fn an_inner_container_a_listener_moves_off_its_end_beats_the_root(cx: &mut TestA
 
     scene.wheel(-30.);
 
-    assert_eq!(scene.offset(1).y, px(-30.));
+    assert_eq!(scene.offset(2).y, px(-30.));
     assert_eq!(scene.offset(0).y, px(0.));
 }

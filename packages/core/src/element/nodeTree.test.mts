@@ -3,12 +3,20 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { nativeStub } from "../../tests/setup.mts";
 import { document } from "../document.mts";
-import { createCommentNode, createElementNode, createIncaElement, rootElement } from "./handle.mts";
+import {
+  createCommentNode,
+  createElementNode,
+  createIncaElement,
+  createTextNode,
+  rootElement,
+} from "./handle.mts";
 import { markDestroyed } from "./lifecycle.mts";
-import { createTextNode } from "./text.mts";
 import type { NodeLink } from "../native.mts";
 
+/** The id `nativeStub` gives the document. */
+const DOCUMENT = 1;
 /** The node each node reaches by each link. */
 let links: Record<number, Partial<Record<NodeLink, number>>> = {};
 /** The children of each node. */
@@ -38,7 +46,7 @@ beforeEach(() => {
   children = {};
   data = {};
   nextId = 100;
-  globalThis.__inca_native__ = host as never;
+  globalThis.__inca_native__ = nativeStub(host as never);
 });
 
 describe("nodeType", () => {
@@ -153,13 +161,20 @@ describe("ownerDocument", () => {
   ] as const)("is the document of a detached %s", (_, make) => {
     expect(make().ownerDocument).toBe(document);
   });
+
+  it("is the document of a freed element", () => {
+    const el = createElementNode("div");
+    markDestroyed(el);
+
+    expect(el.ownerDocument).toBe(document);
+  });
 });
 
 describe("parentNode", () => {
   it("is the handle of the parent", () => {
-    const parent = createIncaElement(1, "element", "div");
-    const child = createIncaElement(2, "element", "div");
-    links[2] = { parent: 1 };
+    const parent = createIncaElement(11, "element", "div");
+    const child = createIncaElement(12, "element", "div");
+    links[12] = { parent: 11 };
 
     expect(child.parentNode).toBe(parent);
   });
@@ -169,7 +184,19 @@ describe("parentNode", () => {
   });
 
   it("is the document for the mount container", () => {
-    expect(rootElement().parentNode).toBe(document);
+    const root = rootElement();
+    links[root.__node_id] = { parent: DOCUMENT };
+
+    expect(root.parentNode).toBe(document);
+  });
+
+  it("is the document when no handle of it was built yet", async () => {
+    vi.resetModules();
+    const fresh = await import("./handle.mts");
+    const child = fresh.createIncaElement(12, "element", "div");
+    links[12] = { parent: DOCUMENT };
+
+    expect(child.parentNode).toBe(fresh.documentHandle());
   });
 });
 

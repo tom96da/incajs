@@ -176,7 +176,7 @@ mod tests {
     #[rstest]
     #[case::append_under_text("n.appendChild(t, loose)", "HierarchyRequestError")]
     #[case::cycle("n.appendChild(a, p)", "HierarchyRequestError")]
-    #[case::root("n.appendChild(loose2, n.rootNodeId())", "HierarchyRequestError")]
+    #[case::root("n.appendChild(loose2, n.documentNodeId())", "HierarchyRequestError")]
     #[case::stray_reference("n.insertBefore(p, loose, x)", "NotFoundError")]
     #[case::remove_a_non_child("n.removeChild(p, x)", "NotFoundError")]
     #[case::append_unknown_parent("n.appendChild(999, a)", "TypeError")]

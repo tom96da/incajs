@@ -182,12 +182,12 @@ fn the_pointer_tracker_leaves_the_layout_unchanged(cx: &mut TestAppContext) {
     let panes = build_panes(&["mouseenter"], &[]);
     let mut cx = mount_panes(cx, &panes);
 
-    let root = cx.debug_bounds("node-1").unwrap();
+    let root = cx.debug_bounds("node-2").unwrap();
     assert_eq!(root.origin, point(px(0.0), px(0.0)));
     assert_eq!(root.size, gpui::size(px(300.0), px(100.0)));
-    let a = cx.debug_bounds("node-2").unwrap();
-    let b = cx.debug_bounds("node-3").unwrap();
+    let a = cx.debug_bounds("node-3").unwrap();
+    let b = cx.debug_bounds("node-4").unwrap();
     assert_eq!(a.origin, root.origin);
     assert_eq!(b.origin, point(px(100.0), px(0.0)));
-    assert_eq!((panes.root, panes.a, panes.b), (1, 2, 3));
+    assert_eq!((panes.root, panes.a, panes.b), (2, 3, 4));
 }

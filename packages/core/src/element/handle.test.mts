@@ -3,7 +3,8 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-import { createIncaElement, rootElement } from "./handle.mts";
+import { nativeStub } from "../../tests/setup.mts";
+import { createIncaElement, handleOf, rootElement } from "./handle.mts";
 import { elementOf, markDestroyed, markRemoved, nodeOf } from "./lifecycle.mts";
 import type { ScrollOptions } from "./scroll.mts";
 import type { IncaElement, IncaInputElement } from "./types.mts";
@@ -42,7 +43,7 @@ function installHost(
     removeEventListener: vi.fn<() => boolean>(() => true),
     dispatchEvent: vi.fn<(nodeId: number, event: unknown) => boolean>(() => true),
   };
-  globalThis.__inca_native__ = host as never;
+  globalThis.__inca_native__ = nativeStub(host as never);
   return host;
 }
 
@@ -56,7 +57,7 @@ describe("createIncaElement selectors", () => {
       querySelector: vi.fn<(nodeId: number, selector: string) => number | null>(() => null),
       querySelectorAll: vi.fn<(nodeId: number, selector: string) => number[]>(() => []),
     };
-    globalThis.__inca_native__ = host as never;
+    globalThis.__inca_native__ = nativeStub(host as never);
     return host;
   }
 
@@ -113,6 +114,14 @@ describe("createIncaElement selectors", () => {
     const { leaf } = chain();
 
     expect(leaf.closest("div")).toBe(leaf);
+  });
+
+  it("closest resolves the mount container before any handle of it exists", () => {
+    const host = installSelectors(91);
+    globalThis.__inca_native__ = nativeStub({ ...host, rootNodeId: () => 91 } as never);
+    const { leaf } = chain();
+
+    expect(leaf.closest("div")).toBe(rootElement());
   });
 
   it("closest is null when nothing matches", () => {
@@ -312,9 +321,15 @@ describe("createIncaElement tagName", () => {
   });
 
   it("reads DIV for the mount container", () => {
-    globalThis.__inca_native__ = { rootNodeId: () => 90 } as never;
+    globalThis.__inca_native__ = nativeStub({ rootNodeId: () => 90 } as never);
 
     expect(rootElement().tagName).toBe("DIV");
+  });
+
+  it("finds the mount container by its id before any handle of it exists", () => {
+    globalThis.__inca_native__ = nativeStub({ rootNodeId: () => 91 } as never);
+
+    expect(handleOf(91)).toBe(rootElement());
   });
 
   it("reads the tag of a removed element", () => {
@@ -362,7 +377,7 @@ describe("createIncaElement value", () => {
       inputValue: vi.fn<(nodeId: number) => string>(() => text),
       setInputValue: vi.fn<(nodeId: number, value: string) => void>(),
     };
-    globalThis.__inca_native__ = host as never;
+    globalThis.__inca_native__ = nativeStub(host as never);
     return host;
   }
 
@@ -428,7 +443,7 @@ describe("createIncaElement after the node is removed", () => {
       inputValue: vi.fn<(nodeId: number) => string>(() => "abc"),
       setInputValue: vi.fn<(nodeId: number, value: string) => void>(),
     };
-    globalThis.__inca_native__ = host as never;
+    globalThis.__inca_native__ = nativeStub(host as never);
     const el = createIncaElement(1, "element", "input");
     markRemoved(el);
 
@@ -448,7 +463,7 @@ describe("createIncaElement after the node is removed", () => {
 
   it("writes the text of an input through the host", () => {
     const host = { setInputValue: vi.fn<(nodeId: number, value: string) => void>() };
-    globalThis.__inca_native__ = host as never;
+    globalThis.__inca_native__ = nativeStub(host as never);
     const el = createIncaElement(1, "element", "input");
     markRemoved(el);
 
@@ -860,13 +875,13 @@ describe("rootElement wheel listeners", () => {
   /** The `passive` argument that `element` registers a `wheel` listener with. */
   function registeredPassive(element: IncaElement, options?: { passive: boolean }) {
     const addEventListener = vi.fn<(...args: unknown[]) => number>(() => 0);
-    globalThis.__inca_native__ = { addEventListener } as never;
+    globalThis.__inca_native__ = nativeStub({ addEventListener } as never);
     element.addEventListener("wheel", () => {}, options);
     return addEventListener.mock.calls[0]![4];
   }
 
   function root(id: number): IncaElement {
-    globalThis.__inca_native__ = { rootNodeId: () => id } as never;
+    globalThis.__inca_native__ = nativeStub({ rootNodeId: () => id } as never);
     return rootElement();
   }
 

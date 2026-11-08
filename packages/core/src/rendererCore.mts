@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import "./targets.mts";
-import "./element/fragment.mts";
 
 export { createEventTarget } from "./eventTarget.mts";
 export { window } from "./window.mts";
@@ -38,13 +37,15 @@ export {
   createCommentNode,
   createElementNode,
   createIncaElement,
+  createTextNode,
   rootElement,
+  setElementText,
 } from "./element/handle.mts";
 export { isRemoved } from "./element/lifecycle.mts";
 /** @internal */
 export { releaseWhenCollected } from "./element/lifecycle.mts";
 export { insert, nextSibling, parentNode, remove } from "./element/shadowTree.mts";
-export { createTextNode, setElementText, setText } from "./element/text.mts";
+export { setText } from "./element/text.mts";
 export type * from "./types.mts";
 export type * from "./element/types.mts";
 

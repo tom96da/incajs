@@ -3,6 +3,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 
+import { nativeStub } from "../../tests/setup.mts";
 import { createIncaElement } from "./handle.mts";
 import { markDestroyed, markRemoved } from "./lifecycle.mts";
 import type { IncaElement } from "./types.mts";
@@ -28,7 +29,7 @@ function setup(initial: Record<string, Stored> = {}) {
     }),
     attributeNames: vi.fn<(nodeId: number) => string[]>(() => [...store.keys()]),
   };
-  globalThis.__inca_native__ = host as never;
+  globalThis.__inca_native__ = nativeStub(host as never);
   const el: IncaElement = createIncaElement(1, "element", "div");
   return { host, el, store };
 }

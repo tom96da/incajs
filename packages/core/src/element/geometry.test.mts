@@ -3,16 +3,17 @@
 
 import { describe, expect, it, vi } from "vitest";
 
+import { nativeStub } from "../../tests/setup.mts";
 import { offsetOf, rectOf, tabIndexOf } from "./geometry.mts";
 import { createIncaElement } from "./handle.mts";
 
 type Box = readonly [number, number, number, number, number, number, number];
 
 function installHost(boxes: Record<number, Box>, scrollOf = vi.fn<() => null>(() => null)): void {
-  globalThis.__inca_native__ = {
+  globalThis.__inca_native__ = nativeStub({
     layoutOf: vi.fn<(nodeId: number) => Box | null>((nodeId) => boxes[nodeId] ?? null),
     scrollOf,
-  } as never;
+  } as never);
 }
 
 describe("offsetOf", () => {

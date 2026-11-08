@@ -3,6 +3,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { nativeStub } from "../../tests/setup.mts";
 import { createElementNode } from "./handle.mts";
 import { markDestroyed } from "./lifecycle.mts";
 import { insert } from "./shadowTree.mts";
@@ -38,7 +39,7 @@ const host = {
 beforeEach(() => {
   vi.clearAllMocks();
   templates = new Set();
-  globalThis.__inca_native__ = host as never;
+  globalThis.__inca_native__ = nativeStub(host as never);
 });
 
 let nextId = 500;

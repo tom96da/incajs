@@ -27,7 +27,7 @@ pub(crate) struct Walk<'a> {
     pub(crate) name: &'a str,
     pub(crate) flags: Flags,
     pub(crate) target: EventTargetId,
-    /// The nodes whose listeners do not run. A cut silences document and window too.
+    /// The nodes whose listeners do not run. A cut silences window too.
     pub(crate) cut: &'a [NodeId],
     pub(crate) payload: &'a EventPayload,
     /// The value of `isTrusted` on the event the walk creates.
@@ -44,22 +44,19 @@ pub(crate) struct Outcome {
 }
 
 /// The targets an event fired at `target` travels through, nearest first: the
-/// nodes from `target` up to the host root, then document, then window. A node
-/// that is not under the root never reaches document or window.
+/// nodes from `target` up to the document, then window. A node outside the
+/// document never reaches window.
 pub(crate) fn path_from(host: &Host, target: EventTargetId) -> Vec<EventTargetId> {
     let mut path = Vec::new();
-    let mut connected = true;
     if let EventTargetId::Node(node) = target {
         let ancestors: Vec<_> = host.tree.ancestors(node).collect();
-        connected = ancestors.last().copied() == host.tree.root();
+        let connected = ancestors.last().copied() == host.tree.document();
         path.extend(ancestors.into_iter().map(EventTargetId::Node));
-    }
-    if connected {
-        if target != EventTargetId::Window {
-            path.push(EventTargetId::Document);
+        if !connected {
+            return path;
         }
-        path.push(EventTargetId::Window);
     }
+    path.push(EventTargetId::Window);
     path
 }
 
@@ -72,12 +69,11 @@ fn bubble_targets(flags: Flags, path: &[EventTargetId]) -> &[EventTargetId] {
     }
 }
 
-/// Whether `target` stays silent: a cut node, or document and window while any
-/// node is cut.
+/// Whether `target` stays silent: a cut node, or window while any node is cut.
 fn is_cut(target: EventTargetId, cut: &[NodeId]) -> bool {
     match target {
         EventTargetId::Node(node) => cut.contains(&node),
-        EventTargetId::Document | EventTargetId::Window => !cut.is_empty(),
+        EventTargetId::Window => !cut.is_empty(),
     }
 }
 
@@ -413,25 +409,28 @@ mod tests {
     }
 
     #[gpui::test]
-    fn a_cut_silences_document_and_window(cx: &mut TestAppContext) {
+    fn a_cut_silences_the_document_and_window(cx: &mut TestAppContext) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let outer = node_under_root(&host);
         let child = host.borrow_mut().tree.create_node("div").unwrap();
         host.borrow_mut().tree.append_child(outer, child).unwrap();
+        let document = host.borrow().document();
         listen(&dispatcher, child, "click", "() => out.push('child')");
-        for (tag, capture) in [
-            ("$document", true),
-            ("$document", false),
-            ("$window", false),
-        ] {
-            listen_global(
-                &dispatcher,
-                tag,
-                "click",
-                capture,
-                "() => out.push('global')",
-            );
-        }
+        listen_with(
+            &dispatcher,
+            document,
+            "click",
+            (true, false),
+            "() => out.push('global')",
+        );
+        listen(&dispatcher, document, "click", "() => out.push('global')");
+        listen_global(
+            &dispatcher,
+            "$window",
+            "click",
+            false,
+            "() => out.push('global')",
+        );
         let cx = cx.add_empty_window();
 
         cx.update(|_, _| {
@@ -442,7 +441,7 @@ mod tests {
                     name: "click",
                     flags: Flags::ALL,
                     target: EventTargetId::Node(child),
-                    cut: &[outer],
+                    cut: &[outer, document],
                     payload: &EventPayload::None,
                     trusted: true,
                 },

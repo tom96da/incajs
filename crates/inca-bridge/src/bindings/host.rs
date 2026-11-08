@@ -94,7 +94,13 @@ impl Host {
         let root = tree
             .create_node("div")
             .expect("a new tree has free node ids");
+        let document = tree
+            .create_node("#document")
+            .expect("a new tree has free node ids");
+        tree.append_child(document, root)
+            .expect("a new document takes its first element");
         tree.set_root(root);
+        tree.set_document(document);
         let (sender, wake) = async_channel::bounded(1);
         let send: Rc<dyn Fn()> = Rc::new(move || {
             let _ = sender.try_send(());
@@ -209,6 +215,24 @@ impl Host {
         self.tree.root().expect("the host declares a root")
     }
 
+    /// The document, the parent of the node a mounting app attaches under.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the tree has no document. [`Host::default`] always declares one.
+    #[must_use]
+    pub fn document(&self) -> NodeId {
+        self.tree.document().expect("the host declares a document")
+    }
+
+    /// The node events fall back to: the document element, else the document.
+    #[must_use]
+    pub fn top(&self) -> NodeId {
+        self.tree
+            .document_element()
+            .unwrap_or_else(|| self.document())
+    }
+
     /// Writes the focus that style rules read from the focus registry. Returns whether the value
     /// changed.
     pub(crate) fn sync_focus_style(&mut self) -> bool {
@@ -216,7 +240,7 @@ impl Host {
         self.tree.set_focus(node)
     }
 
-    /// The deepest container whose last drawn box holds the point, else the root.
+    /// The deepest container whose last drawn box holds the point, else the top node.
     pub(crate) fn container_at(&self, x: f32, y: f32) -> NodeId {
         let point = point(px(x), px(y));
         self.layout
@@ -225,7 +249,7 @@ impl Host {
             .filter(|(_, layout)| layout.bounds.contains(&point))
             .map(|(&id, _)| id)
             .max_by_key(|&id| (self.tree.ancestors(id).count(), id))
-            .unwrap_or_else(|| self.root())
+            .unwrap_or_else(|| self.top())
     }
 
     /// Drops the per-node state of freed nodes and returns the callback ids
@@ -399,5 +423,28 @@ impl Host {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+
+    use super::Host;
+
+    #[test]
+    fn container_at_without_a_box_gives_the_root_while_it_is_in_the_document() {
+        let host = Host::default();
+
+        assert_eq!(host.container_at(1.0, 1.0), host.root());
+    }
+
+    #[test]
+    fn container_at_without_a_box_gives_the_document_after_the_root_left() {
+        let mut host = Host::default();
+        let (document, root) = (host.document(), host.root());
+        host.tree.remove_child(document, root).unwrap();
+
+        assert_eq!(host.container_at(1.0, 1.0), document);
     }
 }

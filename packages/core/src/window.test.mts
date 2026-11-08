@@ -3,6 +3,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { nativeStub } from "../tests/setup.mts";
 import { window } from "./window.mts";
 import type { HostCallback } from "./native.mts";
 
@@ -28,7 +29,7 @@ const native = {
 beforeEach(() => {
   vi.clearAllMocks();
   nextCallbackId = 0;
-  globalThis.__inca_native__ = native as never;
+  globalThis.__inca_native__ = nativeStub(native as never);
 });
 
 describe("window", () => {

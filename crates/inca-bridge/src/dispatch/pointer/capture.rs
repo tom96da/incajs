@@ -32,7 +32,7 @@ impl EventDispatcher {
                 if host.tree.is_connected(node) {
                     EventTargetId::Node(node)
                 } else {
-                    EventTargetId::Document
+                    EventTargetId::Node(host.document())
                 }
             });
             let got = pending.map(EventTargetId::Node);
@@ -87,9 +87,9 @@ impl EventDispatcher {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
+    use crate::tests::at;
     use crate::tests::pointer::{Scene, scene};
     use crate::tests::state;
-    use crate::tests::{at, listen_global};
     use gpui::TestAppContext;
     use inca_gpui::{EventPayload, EventSink, MousePayload, PointerSource};
     use inca_test_macros::gpui_cases;
@@ -385,11 +385,10 @@ mod tests {
         let mut s = captured(cx, "a");
         let (a, b) = (s.a, s.b);
         s.moved(a, (2.0, 2.0));
-        listen_global(
-            &s.dispatcher,
-            "$document",
+        let document = s.host.borrow().document();
+        s.listen(
+            document,
             "lostpointercapture",
-            false,
             "(e) => out.push(`${e.type}@${e.target}`)",
         );
         s.take();
@@ -398,7 +397,7 @@ mod tests {
         let got = s.take();
         assert_eq!(
             only(&got, &["lost"]),
-            [&"lostpointercapture@$document".to_owned()]
+            [&format!("lostpointercapture@{document}")]
         );
         assert!(!got.iter().any(|e| e.ends_with(&format!("@{a}"))));
     }

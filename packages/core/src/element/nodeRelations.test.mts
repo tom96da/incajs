@@ -3,19 +3,19 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { nativeStub } from "../../tests/setup.mts";
 import { document } from "../document.mts";
-import { createIncaElement, createIncaFragment } from "./handle.mts";
+import { adoptTextNode, createIncaElement, createIncaFragment } from "./handle.mts";
 import { markDestroyed } from "./lifecycle.mts";
-import { createIncaText } from "./text.mts";
 
-const ROOT = 1;
+/** The id `nativeStub` gives the document. */
+const DOCUMENT = 1;
 /** The mask `compareNodePosition` answers, set per test. */
 let mask = 0;
 /** The top `rootOf` answers, set per test. */
-let top = ROOT;
+let top = DOCUMENT;
 
 const host = {
-  rootNodeId: vi.fn<() => number>(() => ROOT),
   rootOf: vi.fn<(nodeId: number) => number>(() => top),
   compareNodePosition: vi.fn<(nodeId: number, otherId: number) => number>(() => mask),
   isEqualNode: vi.fn<(nodeId: number, otherId: number) => boolean>(() => true),
@@ -24,8 +24,8 @@ const host = {
 beforeEach(() => {
   vi.clearAllMocks();
   mask = 0;
-  top = ROOT;
-  globalThis.__inca_native__ = host as never;
+  top = DOCUMENT;
+  globalThis.__inca_native__ = nativeStub(host as never);
 });
 
 const div = (id: number) => createIncaElement(id, "element", "div");
@@ -99,8 +99,11 @@ describe("contains", () => {
 });
 
 describe("getRootNode", () => {
-  it("gives document when the top is the mount container", () => {
-    expect(div(10).getRootNode()).toBe(document);
+  it.each([
+    ["a connected node", () => div(10)],
+    ["the document", () => document],
+  ])("gives document for %s", (_name, make) => {
+    expect(make().getRootNode()).toBe(document);
   });
 
   it("gives the top node of a detached subtree", () => {
@@ -114,7 +117,7 @@ describe("getRootNode", () => {
     const group = createIncaFragment(21);
     top = 21;
 
-    expect(createIncaText(10, "x").getRootNode()).toBe(group);
+    expect(adoptTextNode(10, "x").getRootNode()).toBe(group);
   });
 
   it("gives a freed node itself without asking the host", () => {
