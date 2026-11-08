@@ -72,8 +72,27 @@ These results for `file:` URLs differ from the ones of browsers:
 
 ## `performance`
 
-- `now()` is the only member. It counts milliseconds from the start of the
-  app, and a reload of the development window starts it again.
+- `now()` counts milliseconds from the start of the app, and a reload of the
+  development window starts it again.
+  `timeOrigin` and the entries of `mark()` and `measure()` start again with it.
+- The timeline starts empty. It holds the entries of `mark()` and `measure()`,
+  and no other entry type.
+- The `detail` of a mark or a measure is the object you passed. A function is
+  accepted.
+- `toJSON()` returns `timeOrigin` only, and entries have no `navigationId`.
+- `performance` is not an `EventTarget`, so it has no `addEventListener()`.
+- `measure()` with a navigation timing name, such as `fetchStart`, as `start`
+  or `end` throws `InvalidAccessError`. `navigationStart` is 0.
+- These do not exist:
+  - `PerformanceObserver`
+  - `timing`
+  - `navigation`
+  - `memory`
+  - `eventCounts`
+  - `interactionCount`
+  - `clearResourceTimings()`
+  - `setResourceTimingBufferSize()`
+  - `onresourcetimingbufferfull`
 
 ## `setTimeout()` and `setInterval()`
 
