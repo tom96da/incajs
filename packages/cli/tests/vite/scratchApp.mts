@@ -47,7 +47,7 @@ export async function writeIncajs(
     path.join(dir, "package.json"),
     JSON.stringify({
       name: pkg,
-      exports: { "./style": "./style.mjs" },
+      exports: { ".": "./index.mjs", "./style": "./style.mjs" },
       incajs: {
         frontends: Object.fromEntries(
           Object.entries(frontends).map(([name, peers]) => [name, { peers }]),
@@ -55,6 +55,7 @@ export async function writeIncajs(
       },
     }),
   );
+  await writeFile(path.join(dir, "index.mjs"), "export const document = {};\n");
   await writeFile(
     path.join(dir, "style.mjs"),
     dedent`

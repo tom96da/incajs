@@ -8,6 +8,7 @@ import { injectNames } from "./inject.mts";
 const plugin = injectNames({ document: ["alpha-pkg", "document"] });
 type Transform = (code: string, id: string) => Promise<{ code: string } | null>;
 const transform = plugin.transform as Transform;
+type Config = () => { resolve: { dedupe: string[] } };
 
 describe("injectNames", () => {
   it("adds the import to a module that names the injected name", async () => {
@@ -38,6 +39,10 @@ describe("injectNames", () => {
       expect(result!.code).toContain('import { document } from "alpha-pkg"');
     },
   );
+
+  it("resolves the injected modules to one copy", () => {
+    expect((plugin.config as Config)().resolve.dedupe).toEqual(["alpha-pkg"]);
+  });
 
   it("runs after the Vue and TypeScript transforms", () => {
     expect(plugin.enforce).toBe("post");
