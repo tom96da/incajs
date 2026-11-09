@@ -10,6 +10,11 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- `performance` has `timeOrigin` and `toJSON()` ([6a3cf09](https://github.com/tom96da/incajs/commit/6a3cf09))
+- `performance` has `mark()`, `measure()` and the entry methods ([605f715](https://github.com/tom96da/incajs/commit/605f715))
+
 ## [0.0.30] - 2026-11-08
 
 ### Added
