@@ -26,9 +26,12 @@ import type { HmrChannel } from "../../packages/cli/src/types.mts";
 const WAIT_TIMEOUT_MS = 30_000;
 /** How long the host is given to reload before this test gives up on it. */
 const RELOAD_TIMEOUT_MS = 10_000;
-/** What the app prints: a hiragana letter decoded from bytes, a resolved URL and a query string. */
+/**
+ * What the app prints: a hiragana letter decoded from bytes, a resolved URL, a query string and
+ * the types of the injected `document` and of `globalThis.document`.
+ */
 const EXPECTED =
-  "[e2e] function function function function function function function あ http://example.com/a%20b?x=1#h a=1+2";
+  "[e2e] function function function function function function function あ http://example.com/a%20b?x=1#h a=1+2 object undefined";
 
 const ENTRY = dedent`
   console.log(
@@ -51,7 +54,11 @@ const ENTRY = dedent`
       " " +
       new URL("../a b?x=1#h", "http://example.com/d/e").href +
       " " +
-      new URLSearchParams({ a: "1 2" }).toString(),
+      new URLSearchParams({ a: "1 2" }).toString() +
+      " " +
+      typeof document +
+      " " +
+      typeof globalThis.document,
   );
 `;
 
@@ -137,6 +144,9 @@ it(
 
 /** The declaration file of the global types. */
 const GLOBALS_DTS = path.resolve(import.meta.dirname, "../../packages/core/dist/globals.d.mts");
+/** The globals the host does not define: the build binds them to an import. */
+// The host leaves `document` undefined, so the shape comparison has nothing to read.
+const BOUND_BY_IMPORT = new Set(["document"]);
 /** What a function or class carries besides its members. */
 const FUNCTION_OWN = new Set(["length", "name", "prototype"]);
 
@@ -172,6 +182,7 @@ function declaredShapes(): Record<string, Shape> {
     if (ts.isVariableStatement(node)) {
       for (const declaration of node.declarationList.declarations) {
         const name = (declaration.name as ts.Identifier).text;
+        if (BOUND_BY_IMPORT.has(name)) continue;
         const type = checker.getTypeAtLocation(declaration);
         const prototype = type.getProperty("prototype");
         shapes[name] = prototype
@@ -265,6 +276,7 @@ it("compiles a script that uses the declared globals with no other types", async
       requestAnimationFrame(() => {});
       performance.now();
       new URL("x");
+      document.createElement("div");
     `,
   );
   const options: ts.CompilerOptions = {

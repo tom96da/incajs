@@ -43,6 +43,9 @@ function hmr(options: HmrOptions): Promise<HmrChannel> {
 const runtimeEntry = (tsdownConfig.entry as Record<string, string>)["vite-runtime"]!;
 
 beforeAll(async () => {
+  // The injected `document` import loads the real core, which needs the host's calls.
+  vi.stubGlobal("__inca_native__", { documentNodeId: () => 1 });
+  vi.stubGlobal("Document", class Document {});
   await setUp();
   await build({
     ...tsdownConfig,

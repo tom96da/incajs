@@ -36,6 +36,7 @@ export function vueViteIntegration(runtimeModuleName: string): ViteIntegration {
       }),
     ],
     unsupported: [],
+    inject: { document: ["incajs", "document"] },
     styleModule: "incajs/style",
   };
 }

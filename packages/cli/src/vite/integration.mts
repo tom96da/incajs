@@ -3,10 +3,12 @@
 
 import type { PluginOption } from "vite";
 
+import { injectNames } from "./inject.mts";
 import { requirePeers } from "./requirePeers.mts";
 import { styleToElements } from "./style.mts";
 import { rejectUnsupported } from "./unsupported.mts";
 import type { AdapterCore, FrontendId } from "../adapterCore.mts";
+import type { Inject } from "./inject.mts";
 import type { UnsupportedFeature } from "./unsupported.mts";
 
 /** What the Vite adapter needs of a frontend. */
@@ -15,6 +17,8 @@ export interface ViteIntegration {
   plugins(): PluginOption[];
   /** The module ids the build refuses. */
   unsupported: readonly UnsupportedFeature[];
+  /** The free names every module binds to an import. */
+  inject: Inject;
   /**
    * The module that exports `updateStyle(id, css)` and `removeStyle(id)`. A stylesheet module
    * calls them.
@@ -24,8 +28,8 @@ export interface ViteIntegration {
 
 /**
  * The plugins that a frontend adds to a Vite config: its own, the ones that turn stylesheets into
- * calls of the style module, the peer check and the refusal of unsupported features. Calls
- * `integration.plugins()` once.
+ * calls of the style module, the peer check, the refusal of unsupported features and the import of
+ * the injected names. Calls `integration.plugins()` once.
  * @param core - the CLI logic the adapter uses
  * @param frontend - the frontend to bundle
  * @param integration - the frontend's Vite plugins, style module and refused features
@@ -43,5 +47,6 @@ export function integrationPlugins(
     ...styleToElements(integration.styleModule, root),
     requirePeers(core, frontend),
     rejectUnsupported(core, integration.unsupported),
+    injectNames(integration.inject),
   ];
 }

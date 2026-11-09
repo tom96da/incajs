@@ -21,8 +21,7 @@ methods of the DOM `Event` interface (see Base fields).
 
 ## Event targets
 
-`document` and `window` from `incajs` (`import { document, window } from
-"incajs"`) and a template `ref` have `addEventListener()`,
+`document`, `window` and a template `ref` have `addEventListener()`,
 `removeEventListener()` and `dispatchEvent()`.
 
 - The mount container (the container `mount()` targets, see [Elements](./elements.md)) stands in for `html` and `body` in `composedPath()`.
@@ -31,7 +30,7 @@ methods of the DOM `Event` interface (see Base fields).
   assignment to a handler property do nothing on it.
 - An attribute that holds code, such as `onclick="count++"`, runs nothing.
 - `document` has no `body`, `head` or `documentElement`. `window` has no query methods.
-- `window` and `document` are imports. `globalThis.window` and
+- `document` needs no import. `window` is an import. `globalThis.window` and
   `globalThis.document` stay undefined.
 
 ## Event modifiers

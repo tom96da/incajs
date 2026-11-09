@@ -20,6 +20,7 @@ const integration: ViteIntegration = {
       hint: "use a beta file",
     },
   ],
+  inject: {},
   styleModule: "alpha-style",
 };
 
@@ -35,6 +36,7 @@ describe("integrationPlugins", () => {
       "inca:style-apply",
       "inca:require-peers",
       "inca:reject-unsupported",
+      "inca:inject",
     ]);
   });
 
