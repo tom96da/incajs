@@ -14,6 +14,15 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 - `performance` has `timeOrigin` and `toJSON()` ([6a3cf09](https://github.com/tom96da/incajs/commit/6a3cf09))
 - `performance` has `mark()`, `measure()` and the entry methods ([605f715](https://github.com/tom96da/incajs/commit/605f715))
+- `document` has the node members, `querySelector()` and `querySelectorAll()` ([6e1e440](https://github.com/tom96da/incajs/commit/6e1e440))
+- `document` is the parent of the mount container and receives its events ([6e1e440](https://github.com/tom96da/incajs/commit/6e1e440))
+- `document.createElement()` throws `InvalidCharacterError` for an invalid name ([6e1e440](https://github.com/tom96da/incajs/commit/6e1e440))
+- `incajs/globals` declares `Document`, `ShadowRoot` and `DOMException` ([8d0ffc7](https://github.com/tom96da/incajs/commit/8d0ffc7))
+
+### Changed
+
+- `document` needs no import ([8d0ffc7](https://github.com/tom96da/incajs/commit/8d0ffc7))
+- the window draws nothing while the mount container is out of `document` ([6e1e440](https://github.com/tom96da/incajs/commit/6e1e440))
 
 ## [0.0.30] - 2026-11-08
 
