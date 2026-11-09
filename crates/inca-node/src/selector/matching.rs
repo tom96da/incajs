@@ -228,9 +228,10 @@ impl Element for Node<'_> {
     }
 
     fn is_root(&self) -> bool {
-        match self.tree.document() {
-            Some(document) => self.node.parent() == Some(document),
-            None => self.node.parent().is_none(),
+        match (self.tree.document(), self.tree.root()) {
+            (Some(document), _) => self.node.parent() == Some(document),
+            (None, Some(root)) => self.node.id() == root,
+            (None, None) => self.node.parent().is_none(),
         }
     }
 
@@ -547,6 +548,15 @@ mod tests {
 
         assert!(matches_selector(&tree, top, ":root").unwrap());
         assert!(!matches_selector(&tree, child, ":root").unwrap());
+    }
+
+    #[test]
+    fn root_is_the_declared_root_without_a_document() {
+        let mut f = Fixture::new();
+        let loose = f.tree.create_node("div").unwrap();
+
+        assert!(f.matches(f.root, ":root"));
+        assert!(!f.matches(loose, ":root"));
     }
 
     #[test]
