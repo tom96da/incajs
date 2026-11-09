@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { Writable } from "node:stream";
 import { setTimeout } from "node:timers/promises";
@@ -43,9 +44,6 @@ function hmr(options: HmrOptions): Promise<HmrChannel> {
 const runtimeEntry = (tsdownConfig.entry as Record<string, string>)["vite-runtime"]!;
 
 beforeAll(async () => {
-  // The injected `document` import loads the real core, which needs the host's calls.
-  vi.stubGlobal("__inca_native__", { documentNodeId: () => 1 });
-  vi.stubGlobal("Document", class Document {});
   await setUp();
   await build({
     ...tsdownConfig,
@@ -160,6 +158,31 @@ describe("hmr", () => {
     expect(runtimeId).toBeDefined();
     const exports = modules.getModuleById(runtimeId!)?.exports as { withModifiers: () => unknown };
     expect(String(exports.withModifiers)).toContain("STUB_WITH_MODIFIERS");
+  }, 20000);
+
+  it("binds document in a dependency that sits outside the app", async () => {
+    const outside = await realpath(await mkdtemp(path.join(tmpdir(), "inca-dependency-")));
+    const dependency = path.join(outside, "dependency.mjs");
+    await writeFile(dependency, "globalThis.title = document.title;\n");
+    const { entry, streams } = await makeApp(
+      `<script setup>\nimport ${JSON.stringify(dependency)};\n</script>\n<template><div /></template>\n`,
+    );
+    const channel = await hmr({
+      entry,
+      cwd: path.dirname(entry),
+      ...streams,
+      notify: (payload) => client.notify(payload as HotPayload),
+      reload: () => {},
+      onError: () => {},
+    });
+    channels.push(channel);
+
+    const client = connectRunner(channel.dispatch);
+    await client.runner.import(entry);
+    await rm(outside, { recursive: true, force: true });
+
+    const ids = [...client.runner.evaluatedModules.idToModuleMap.keys()];
+    expect(ids.some((id) => id.endsWith("/node_modules/incajs/index.mjs"))).toBe(true);
   }, 20000);
 
   it("applies a stylesheet through the client shim", async () => {

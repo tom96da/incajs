@@ -19,10 +19,10 @@ afterAll(() => rm(scratchRoot, { recursive: true, force: true }));
 
 /**
  * Builds an app whose template is `template` through `defaultBundler`, with `incajs/vue/runtime`
- * stubbed as the Vue core plus `runtimeExtra`.
+ * stubbed as the Vue core plus `runtimeExtra`. The entry starts with `imports`.
  * @returns the text of the bundle
  */
-async function bundleOf(template: string, runtimeExtra: string): Promise<string> {
+async function bundleOf(template: string, runtimeExtra: string, imports = ""): Promise<string> {
   const appDir = await mkdtemp(path.join(scratchRoot, "app-"));
   const stub = path.join(appDir, "node_modules/incajs");
   await mkdir(stub, { recursive: true });
@@ -31,8 +31,12 @@ async function bundleOf(template: string, runtimeExtra: string): Promise<string>
     JSON.stringify({
       name: "incajs",
       type: "module",
-      exports: { "./vue/runtime": "./runtime.mjs" },
+      exports: { ".": "./index.mjs", "./vue/runtime": "./runtime.mjs" },
     }),
+  );
+  await writeFile(
+    path.join(stub, "index.mjs"),
+    `export const document = { title: "DOCUMENT_STUB_MARKER" };\n`,
   );
   await writeFile(
     path.join(stub, "runtime.mjs"),
@@ -40,7 +44,7 @@ async function bundleOf(template: string, runtimeExtra: string): Promise<string>
   );
   await writeFile(path.join(appDir, "App.vue"), `<template>${template}</template>\n`);
   const entry = path.join(appDir, "entry.mts");
-  await writeFile(entry, `import App from "./App.vue";\nexport default App;\n`);
+  await writeFile(entry, `${imports}import App from "./App.vue";\nexport default App;\n`);
   const sink = new Writable({ write: (_chunk, _encoding, callback) => callback() });
 
   const output = await defaultBundler.build({
@@ -53,6 +57,17 @@ async function bundleOf(template: string, runtimeExtra: string): Promise<string>
 
   return readFile(output.entryFile, "utf8");
 }
+
+it("binds document in a dependency that sits outside the app", async () => {
+  const outside = await realpath(await mkdtemp(path.join(tmpdir(), "inca-dependency-")));
+  const dependency = path.join(outside, "dependency.mjs");
+  await writeFile(dependency, "globalThis.title = document.title;\n");
+
+  const bundle = await bundleOf("<i>x</i>", "", `import ${JSON.stringify(dependency)};\n`);
+  await rm(outside, { recursive: true, force: true });
+
+  expect(bundle).toContain("DOCUMENT_STUB_MARKER");
+}, 20000);
 
 it("builds templates against incajs/vue/runtime", async () => {
   const bundle = await bundleOf(

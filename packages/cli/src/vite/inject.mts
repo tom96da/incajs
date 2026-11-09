@@ -11,14 +11,17 @@ const EXTENSIONS = new Set(["js", "mjs", "cjs", "jsx", "ts", "mts", "cts", "tsx"
 
 /**
  * Adds an import for each free name of `inject` that a module uses. Runs in the build and in the
- * development server, after the Vue and TypeScript transforms.
+ * development server, after the Vue and TypeScript transforms. The injected modules resolve from
+ * the app root.
  *
  * @param inject - the names to bind and the modules they come from
  */
 export function injectNames(inject: Inject): Plugin {
+  const modules = Object.values(inject).map((to) => (typeof to === "string" ? to : to[0]));
   return {
     name: "inca:inject",
     enforce: "post",
+    config: () => ({ resolve: { dedupe: modules } }),
     async transform(code, id) {
       const extension = id.split("?")[0]!.split(".").pop()!;
       if (!EXTENSIONS.has(extension)) return null;
