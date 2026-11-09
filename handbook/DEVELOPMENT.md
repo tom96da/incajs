@@ -33,17 +33,17 @@ History is in [PLAN.md](./PLAN.md) and [CHANGELOG.md](../CHANGELOG.md).
 
 ### In progress
 
-- **A base for Vue Vapor mode**: `document` as a node of the tree, the
-  `Node`, `Element` and `Text` interfaces, and the attribute, class and
-  style members that Vapor reads.
+- **A base for Vue Vapor mode**: the class, style and dataset members of an
+  element, and element namespaces.
 - **Built-ins as the web expects them**: definitions written one way, so that
-  libraries find the globals they probe.
+  libraries find the globals they probe, and a `URL` that prints its fields in
+  the console.
 
 ### Not started
 
 - `textarea`, word-wise editing, undo and redo, and the selection API.
 - `position` and `z-index`.
-- The `html` and `body` elements, namespaces and a global `window`.
+- The `html` and `body` elements and a global `window`.
 - React and other frontends. Vue 3 has to be stable first.
 
 ### Foundation
