@@ -1046,16 +1046,6 @@ A fixed entry is deleted and its ID is never reused.
   the evaluator hold each module's compiled function for as long as the module
   stays cached, then drop the entry with the function.
 
-- **B-226 `window` and `document` need an import**
-  `Units: cli,core,docs · Size: M · Impact: Low`
-
-  `window` and `document` are exports of `incajs`, and `globalThis.window` and
-  `globalThis.document` are undefined. Defining them breaks `vue`'s runtime
-  DOM, which calls `document.createElement` at load when `document` exists.
-  Fix: a Vite plugin injects `import { document, window } from "incajs"` into
-  the app's own source, not into `node_modules`, and generates their types
-  into `.inca/`.
-
 - **B-228 The text input lacks commands and members of a browser text field**
   `Units: gpui,bridge,core,docs · Size: L · Impact: Low`
 
@@ -1643,3 +1633,11 @@ A fixed entry is deleted and its ID is never reused.
   then finds no next sibling for `node` through the nodeOps path of Vue. Linking the root into the
   document keeps it alive as long as the realm, which the GC test for unmount rules out. Fix: make
   the children of the document a view over the host, or drop the shadow tree.
+
+- **B-303 The default stack names Vue and Vite in several places**
+  `Units: cli · Size: M · Impact: Low`
+
+  `vueViteIntegration` takes the runtime module name as an argument but fixes `styleModule` and
+  `inject` to `incajs` inside, so `defaultPlugins.mts` names the package in two ways. `build.mts`
+  and `dev.mts` import `defaultFrontend` and `defaultBundler` from it, so both commands depend on
+  the module that names Vue and Vite, and `defaultBundler` is built from `defaultFrontend.id`.

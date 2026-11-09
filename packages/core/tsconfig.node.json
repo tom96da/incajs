@@ -1,5 +1,5 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": { "types": ["node"] },
-  "include": ["src/**/*.test.mts", "src/host.d.mts", "tests/**/*", "*.mts"]
+  "include": ["src/**/*.test.mts", "src/globals.d.mts", "tests/**/*", "*.mts"]
 }
