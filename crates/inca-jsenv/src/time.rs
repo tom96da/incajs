@@ -42,13 +42,18 @@ plain_class!(PerformanceInstance, "Performance");
 /// # Errors
 ///
 /// Returns an error if the realm has no vault or a global cannot be defined.
-pub(crate) fn install<'js>(ctx: &Ctx<'js>, clock: &Clock) -> JsResult<()> {
-    let origin = clock();
+pub(crate) fn install(ctx: &Ctx<'_>, clock: &Clock) -> JsResult<()> {
     let time_origin = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs_f64()
         * 1000.0;
+    install_at(ctx, clock, time_origin)
+}
+
+/// [`install`] with the epoch milliseconds of the origin given.
+fn install_at<'js>(ctx: &Ctx<'js>, clock: &Clock, time_origin: f64) -> JsResult<()> {
+    let origin = clock();
     let clock = Clock::clone(clock);
     let now = Function::new(ctx.clone(), move || {
         clock().saturating_duration_since(origin).as_secs_f64() * 1000.0
@@ -107,7 +112,8 @@ pub fn now(ctx: &Ctx<'_>) -> JsResult<f64> {
 mod tests {
     #![allow(clippy::unwrap_used)]
 
-    use std::time::Duration;
+    use std::rc::Rc;
+    use std::time::{Duration, Instant};
 
     use rstest::rstest;
 
@@ -220,21 +226,17 @@ mod tests {
     }
 
     #[test]
-    fn time_origin_stays_equal_while_the_wall_clock_moves() {
-        let (engine, _) = engine_on_test_clock();
+    fn time_origin_is_the_given_epoch_milliseconds() {
+        with_realm(|ctx| {
+            crate::vault::create_vault(&ctx).unwrap();
+            let clock: Clock = Rc::new(Instant::now);
+            install_at(&ctx, &clock, 1_700_000_000_123.5).unwrap();
 
-        let got: bool = engine
-            .eval(
-                r"
-                const first = performance.timeOrigin;
-                const until = Date.now() + 5;
-                while (Date.now() < until);
-                performance.timeOrigin === first;
-                ",
-            )
-            .unwrap();
-
-        assert!(got);
+            assert!(
+                ctx.eval::<bool, _>("performance.timeOrigin === 1700000000123.5")
+                    .unwrap()
+            );
+        });
     }
 
     #[test]
