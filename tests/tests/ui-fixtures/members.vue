@@ -44,6 +44,8 @@ function probe() {
     syntaxError: bad,
     querySelector: list.value.querySelector("li + li") === second.value,
     querySelectorAllIds: Array.from(list.value.querySelectorAll("li"), (item) => item.id),
+    documentQuerySelector: document.querySelector("li + li") === second.value,
+    documentQuerySelectorAllIds: Array.from(document.querySelectorAll("li"), (item) => item.id),
     querySelectorSelf: list.value.querySelector(".card"),
     querySelectorSyntaxError: badQuery,
     childrenLength: second.value.children.length,

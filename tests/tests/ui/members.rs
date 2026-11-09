@@ -35,6 +35,8 @@ fn probe(cx: &mut TestAppContext) -> Value {
 #[case::invalid_selector("syntaxError", json!("SyntaxError"))]
 #[case::query_selector_returns_the_ref("querySelector", json!(true))]
 #[case::query_selector_all_keeps_document_order("querySelectorAllIds", json!(["first", "second"]))]
+#[case::document_query_selector("documentQuerySelector", json!(true))]
+#[case::document_query_selector_all_keeps_document_order("documentQuerySelectorAllIds", json!(["first", "second"]))]
 #[case::query_selector_skips_the_start_node("querySelectorSelf", json!(null))]
 #[case::query_selector_invalid_selector("querySelectorSyntaxError", json!("SyntaxError"))]
 #[case::children_skip_text_nodes("childrenLength", json!(0))]
