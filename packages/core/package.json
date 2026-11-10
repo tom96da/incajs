@@ -95,19 +95,16 @@
     "lint": "oxlint --type-aware",
     "format": "oxfmt --check .",
     "typecheck": "tsc -b --noEmit",
-    "test:quickjs": "node tests/quickjs/run.mts --config quickjs.config.mts",
+    "test:quickjs": "vitest run -c vitest.quickjs.config.mts",
     "prepack": "clear-package-json package.json -o package.json"
   },
   "devDependencies": {
-    "@jitl/quickjs-ng-wasmfile-release-sync": "^0.32.0",
-    "@vitest/mocker": "catalog:",
     "@vue/runtime-core": "catalog:",
     "@vue/runtime-dom": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
-    "quickjs-emscripten": "^0.32.0",
     "rolldown": "catalog:",
-    "ts-dedent": "2.3.0"
+    "vitest-pool-quickjs": "^0.1.0"
   },
   "peerDependencies": {
     "@vue/runtime-core": "catalog:",
