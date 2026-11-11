@@ -101,7 +101,8 @@ impl VirtualTree {
             .collect())
     }
 
-    /// Appends the tokens that are not in the set and writes the attribute, creating it.
+    /// Appends the tokens that are not in the set and writes the attribute, creating it. Nothing is
+    /// written when the attribute is absent and the set is empty.
     ///
     /// # Errors
     ///
@@ -114,6 +115,9 @@ impl VirtualTree {
             if !set.iter().any(|t| t == token) {
                 set.push((*token).to_owned());
             }
+        }
+        if set.is_empty() && !self.has_class_attribute(id) {
+            return Ok(());
         }
         Ok(self.rewrite(id, &set)?)
     }
@@ -387,8 +391,17 @@ mod tests {
     }
 
     #[test]
-    fn add_without_tokens_creates_the_attribute_empty() {
+    fn add_without_tokens_leaves_an_absent_attribute_absent() {
         let (mut tree, id) = with_class(None);
+
+        tree.add_classes(id, &[]).unwrap();
+
+        assert_eq!(class_attribute(&tree, id), None);
+    }
+
+    #[test]
+    fn add_without_tokens_empties_a_whitespace_only_attribute() {
+        let (mut tree, id) = with_class(Some("  "));
 
         tree.add_classes(id, &[]).unwrap();
 
