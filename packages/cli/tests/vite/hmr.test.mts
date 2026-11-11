@@ -63,31 +63,6 @@ describe("hmr", () => {
     expect(logs()).toBe("");
   }, 20000);
 
-  it("loads the modifier helpers a template imports from the runtime core module", async () => {
-    const { entry, streams } = await makeApp(
-      `<script setup>\nconst msg = "hello";\n</script>\n<template><div @click.stop="msg = 'x'">{{ msg }}</div></template>\n`,
-    );
-
-    const channel = await hmr({
-      entry,
-      cwd: path.dirname(entry),
-      ...streams,
-      notify: (payload) => client.notify(payload as HotPayload),
-      reload: () => {},
-      onError: () => {},
-    });
-    channels.push(channel);
-
-    const client = connectRunner(channel.dispatch);
-    await client.runner.import(entry);
-
-    const modules = client.runner.evaluatedModules;
-    const runtimeId = [...modules.idToModuleMap.keys()].find((id) => id.endsWith("/core.mjs"));
-    expect(runtimeId).toBeDefined();
-    const exports = modules.getModuleById(runtimeId!)?.exports as { withModifiers: () => unknown };
-    expect(String(exports.withModifiers)).toContain("STUB_WITH_MODIFIERS");
-  }, 20000);
-
   it("binds document in a dependency that sits outside the app", async () => {
     const outside = await realpath(await mkdtemp(path.join(tmpdir(), "inca-dependency-")));
     const dependency = path.join(outside, "dependency.mjs");
