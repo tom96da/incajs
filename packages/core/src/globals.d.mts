@@ -41,6 +41,9 @@ declare global {
   /** The interface object of token lists. It cannot be called or constructed. */
   var DOMTokenList: { readonly prototype: DOMTokenList };
 
+  /** The interface object of the `style` of an element, which a script cannot construct. */
+  var CSSStyleDeclaration: { readonly prototype: import("incajs").CSSStyleDeclaration };
+
   function setTimeout<A extends unknown[]>(
     handler: (...args: A) => void,
     delay?: number,

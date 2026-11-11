@@ -320,6 +320,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       innerHTML: "",
       outerHTML: "",
       insertAdjacentHTML: () => {},
+      style: {} as IncaElement["style"],
       getAttribute: () => null,
       setAttribute: () => {},
       hasAttribute: () => false,

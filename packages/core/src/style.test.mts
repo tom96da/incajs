@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { nativeStub } from "../tests/setup.mts";
-import type { IncaNode } from "./element/types.mts";
+import type { CSSStyleDeclaration, IncaNode } from "./element/types.mts";
 
 interface FakeNode {
   tag: string;
@@ -59,6 +59,7 @@ function descendants(id: number): number[] {
 
 function installNatives(): void {
   globalThis.__inca_native__ = nativeStub({
+    styleOf: () => ({}) as CSSStyleDeclaration,
     rootNodeId: () => ROOT,
     createNode: (tag: string) => {
       guard("createNode");

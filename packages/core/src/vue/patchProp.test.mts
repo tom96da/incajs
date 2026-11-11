@@ -68,6 +68,7 @@ const makeEl = (): IncaElement => ({
   innerHTML: "",
   outerHTML: "",
   insertAdjacentHTML: () => {},
+  style: {} as IncaElement["style"],
   getAttribute: () => null,
   setAttribute: () => {},
   hasAttribute: () => false,

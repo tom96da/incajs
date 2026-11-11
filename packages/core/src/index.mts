@@ -9,6 +9,7 @@ export type { RectLike, RectValues } from "./element/geometry.mts";
 export type { ScrollIntoViewOptions, ScrollOptions } from "./element/scroll.mts";
 export type {
   Attr,
+  CSSStyleDeclaration,
   HTMLCollectionOf,
   IncaElement,
   IncaFragment,

@@ -43,6 +43,7 @@ vi.mock("../eventTarget.mts", () => ({
 }));
 
 const host = {
+  styleOf: vi.fn<(nodeId: number) => object>(() => ({})),
   rootNodeId: vi.fn<() => number>(),
   createNode: vi.fn<(tag: string) => number>(),
   appendChild: vi.fn<(parentId: number, childId: number) => number>(() => 0),
@@ -137,6 +138,7 @@ function element(): IncaElement {
     innerHTML: "",
     outerHTML: "",
     insertAdjacentHTML: () => {},
+    style: {} as IncaElement["style"],
     __node_id: nextId++,
     id: "",
     className: "",
@@ -246,6 +248,7 @@ describe("createElement", () => {
       removeAttribute: expect.any(Function),
       getAttributeNames: expect.any(Function),
       attributes: expect.anything(),
+      style: expect.anything(),
       getBoundingClientRect: expect.any(Function),
       offsetWidth: 0,
       offsetHeight: 0,

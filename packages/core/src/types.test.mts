@@ -3,7 +3,12 @@
 
 import { describe, expectTypeOf, it } from "vitest";
 
-import type { EventHandler, IncaElement, IncaInputElement } from "./element/types.mts";
+import type {
+  CSSStyleDeclaration,
+  EventHandler,
+  IncaElement,
+  IncaInputElement,
+} from "./element/types.mts";
 import type {
   IncaCompositionEvent,
   IncaEvent,
@@ -241,5 +246,20 @@ describe("the style types", () => {
 
   it("reject a percentage on opacity", () => {
     expectTypeOf<{ opacity: "50%" }>().not.toExtend<StyleProps>();
+  });
+});
+
+describe("the style member", () => {
+  it("reads a CSSStyleDeclaration on an element", () => {
+    expectTypeOf<IncaElement["style"]>().toEqualTypeOf<CSSStyleDeclaration>();
+  });
+
+  it("types a host-only style property as a string", () => {
+    expectTypeOf<CSSStyleDeclaration["textColor"]>().toEqualTypeOf<string>();
+  });
+
+  it("types a style property as a string in both spellings", () => {
+    expectTypeOf<CSSStyleDeclaration["backgroundColor"]>().toEqualTypeOf<string>();
+    expectTypeOf<CSSStyleDeclaration["background-color"]>().toEqualTypeOf<string>();
   });
 });

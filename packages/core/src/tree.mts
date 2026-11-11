@@ -3,6 +3,7 @@
 
 import { releaseCallbacks } from "./callbacks.mts";
 import { native } from "./native.mts";
+import type { CSSStyleDeclaration } from "./element/types.mts";
 import type { NodeLink, Parsed } from "./native.mts";
 import type { AttributeValue, NodeId, ScrollAlignment, StyleProps, TagName } from "./types.mts";
 
@@ -241,11 +242,12 @@ export function releaseNode(nodeId: NodeId): void {
 }
 
 /**
- * Sets a non-style attribute/prop on `nodeId`. See {@link setStyle} for
- * layout/paint properties, which live in a separate map.
+ * Sets an attribute/prop on `nodeId`. The key `style` applies the text as the inline style
+ * declarations. See {@link setStyle} for layout/paint properties.
  * @param nodeId - the node to update
  * @param key - the attribute name
  * @param value - the attribute value
+ * @throws {DOMException} named `InvalidCharacterError` when `key` is not a valid attribute name
  */
 export function setAttribute(nodeId: NodeId, key: string, value: AttributeValue): void {
   native().setAttribute(nodeId, key, value);
@@ -492,7 +494,7 @@ export function scrollIntoViewNode(
 }
 
 /**
- * Removes a non-style attribute/prop from `nodeId`. Removing an attribute
+ * Removes an attribute/prop from `nodeId`. Removing an attribute
  * that isn't set does nothing.
  * @param nodeId - the node to update
  * @param key - the attribute name
@@ -534,6 +536,16 @@ export function setStyle(nodeId: NodeId, key: string, value: AttributeValue): vo
  */
 export function removeStyle(nodeId: NodeId, key: string): void {
   native().removeStyle(nodeId, key);
+}
+
+/**
+ * Returns the style declaration block of `nodeId`. Each call returns a new object over the node's
+ * inline style. The block of a freed node reads empty and ignores writes.
+ * @param nodeId - the node whose inline style the block reads and writes
+ * @returns the block
+ */
+export function styleOf(nodeId: NodeId): CSSStyleDeclaration {
+  return native().styleOf(nodeId);
 }
 
 /**

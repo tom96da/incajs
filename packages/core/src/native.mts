@@ -1,6 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import type { CSSStyleDeclaration } from "./element/types.mts";
 import type {
   AttributeValue,
   CallbackId,
@@ -68,6 +69,7 @@ interface IncaNative {
   querySelectorAll(nodeId: NodeId, selector: string): NodeId[];
   setStyle(nodeId: NodeId, key: string, value: AttributeValue): void;
   removeStyle(nodeId: NodeId, key: string): void;
+  styleOf(nodeId: NodeId): CSSStyleDeclaration;
   inputValue(nodeId: NodeId): string;
   setInputValue(nodeId: NodeId, value: string): void;
   addEventListener(
