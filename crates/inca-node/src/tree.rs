@@ -191,6 +191,10 @@ pub fn is_disabled_control(node: &VirtualNode) -> bool {
     focusable_by_default(node.tag_name()) && node.attributes().contains_key("disabled")
 }
 
+/// The inline style props of a node, in the order they were set. Setting a key that exists keeps
+/// its position, and a removed key that is set again goes last.
+pub type StyleMap = IndexMap<String, AttributeValue>;
+
 /// A single retained node. Always accessed through a [`VirtualTree`]. There
 /// is no way to construct one standalone, since its [`id`](VirtualNode::id)
 /// is only meaningful within the tree that allocated it.
@@ -198,7 +202,7 @@ pub fn is_disabled_control(node: &VirtualNode) -> bool {
 pub struct VirtualNode {
     id: NodeId,
     tag_name: String,
-    style_props: HashMap<String, AttributeValue>,
+    style_props: StyleMap,
     attributes: IndexMap<String, AttributeValue>,
     parent: Option<NodeId>,
     children: Vec<NodeId>,
@@ -213,7 +217,7 @@ impl VirtualNode {
         Self {
             id,
             tag_name,
-            style_props: HashMap::new(),
+            style_props: StyleMap::new(),
             attributes: IndexMap::new(),
             parent: None,
             children: Vec::new(),
@@ -239,7 +243,7 @@ impl VirtualNode {
     }
 
     #[must_use]
-    pub fn style_props(&self) -> &HashMap<String, AttributeValue> {
+    pub fn style_props(&self) -> &StyleMap {
         &self.style_props
     }
 

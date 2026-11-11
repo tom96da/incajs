@@ -21,9 +21,8 @@ use crate::DisplaySpec;
 use crate::FlexDirectionSpec;
 use crate::OverflowSpec;
 use crate::StyleSpec;
-use crate::tree::js_number_text;
+use crate::tree::{StyleMap, js_number_text};
 use std::borrow::Cow;
-use std::collections::HashMap;
 
 /// The value a style key takes. A value the kind does not accept is dropped
 /// with a warning.
@@ -164,7 +163,7 @@ macro_rules! style_props {
         }
 
         /// Resolves every box-edge family of `props` into `style`.
-        pub(super) fn read_edges(props: &HashMap<String, AttributeValue>, style: &mut StyleSpec) {
+        pub(super) fn read_edges(props: &StyleMap, style: &mut StyleSpec) {
             $(
                 style.$edge_field =
                     edges_from(props, &$edges, |value| style_props!(@read $edge_kind, value));

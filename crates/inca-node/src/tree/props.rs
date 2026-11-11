@@ -83,7 +83,7 @@ impl VirtualTree {
     /// Returns [`TreeError::NodeNotFound`] if `node_id` names no node.
     pub fn remove_style(&mut self, node_id: NodeId, key: &str) -> Result<(), TreeError> {
         let node = self.node_mut(node_id)?;
-        node.style_props.remove(&*style_key(key));
+        node.style_props.shift_remove(&*style_key(key));
         Ok(())
     }
 }
@@ -212,6 +212,46 @@ mod tests {
         let styles = tree.get(node).unwrap().style_props();
         assert!(styles.get("gap").is_none());
         assert!(styles.get("width").is_some());
+    }
+
+    #[test]
+    fn a_style_key_set_again_keeps_its_position() {
+        let mut tree = VirtualTree::new();
+        let id = tree.create_node("div").unwrap();
+        tree.set_style(id, "width", "1px").unwrap();
+        tree.set_style(id, "height", "2px").unwrap();
+
+        tree.set_style(id, "width", "3px").unwrap();
+
+        let keys: Vec<&str> = tree
+            .get(id)
+            .unwrap()
+            .style_props()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        assert_eq!(keys, ["width", "height"]);
+    }
+
+    #[test]
+    fn a_removed_style_key_set_again_goes_last() {
+        let mut tree = VirtualTree::new();
+        let id = tree.create_node("div").unwrap();
+        tree.set_style(id, "width", "1px").unwrap();
+        tree.set_style(id, "height", "2px").unwrap();
+        tree.set_style(id, "gap", "3px").unwrap();
+
+        tree.remove_style(id, "width").unwrap();
+        tree.set_style(id, "width", "4px").unwrap();
+
+        let keys: Vec<&str> = tree
+            .get(id)
+            .unwrap()
+            .style_props()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        assert_eq!(keys, ["height", "gap", "width"]);
     }
 
     #[test]

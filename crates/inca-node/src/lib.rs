@@ -22,7 +22,7 @@ pub use spec::{
     declared_window_size, hidden_by_attribute, is_scroll_container, style_warning, wheel_axes,
 };
 pub use tree::{
-    AttributeValue, ClassListError, NodeId, TreeError, VirtualNode, VirtualTree,
+    AttributeValue, ClassListError, NodeId, StyleMap, TreeError, VirtualNode, VirtualTree,
     focusable_by_default, is_disabled_control, is_template_tag,
 };
 
