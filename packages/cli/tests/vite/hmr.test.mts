@@ -10,89 +10,18 @@ import { setTimeout } from "node:timers/promises";
 import { stripVTControlCharacters } from "node:util";
 
 import dedent from "ts-dedent";
-import { build } from "tsdown";
-import { ESModulesEvaluator, ModuleRunner } from "vite/module-runner";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { HotPayload } from "vite";
-import type { ModuleRunnerTransport } from "vite/module-runner";
 
 import * as adapterCore from "../../src/adapterCore.mts";
 import { vueViteIntegration } from "../../src/defaultPlugins.mts";
 import { createViteBundler } from "../../src/vite/index.mts";
-import tsdownConfig from "../../tsdown.config.mts";
 import { fsLag } from "../support/fsLag.mts";
-import { scratchApp, TEST_INTEGRATION, TEST_RUNTIME_MODULE, writeIncajs } from "./scratchApp.mts";
-import type { HmrChannel, HmrOptions } from "../../src/types.mts";
+import { connectRunner, discard, useHmr } from "./hmrApp.mts";
+import { TEST_RUNTIME_MODULE, writeIncajs } from "./scratchApp.mts";
+import type { HmrOptions } from "../../src/types.mts";
 
-const { setUp, tearDown, makeApp } = scratchApp("hmr");
-
-// Builds vite-runtime.js into its own scratch dir, from the package's real
-// tsdown.config.mts, leaving the package's dist/ untouched.
-const runtimeScratchDir = path.join(import.meta.dirname, "tmp/vite-runtime-build");
-const builtRuntimePath = path.join(runtimeScratchDir, "vite-runtime.js");
-
-/** Wraps the real `hmr()`, defaulting `runtimePath` to this test's own scratch build. */
-function hmr(options: HmrOptions): Promise<HmrChannel> {
-  return createViteBundler(adapterCore, ["incajs", "vue"], TEST_INTEGRATION).hmr!({
-    runtimePath: builtRuntimePath,
-    ...options,
-  });
-}
-
-// The real tsdown.config.mts's own "vite-runtime" entry, reused here rather
-// than re-typed so this can never silently drift from the real build.
-const runtimeEntry = (tsdownConfig.entry as Record<string, string>)["vite-runtime"]!;
-
-beforeAll(async () => {
-  await setUp();
-  await build({
-    ...tsdownConfig,
-    config: false,
-    cwd: path.resolve(import.meta.dirname, "../.."),
-    entry: { "vite-runtime": runtimeEntry },
-    outDir: runtimeScratchDir,
-    // A .js runtime entry needs no declarations, and they would re-typecheck the package.
-    dts: false,
-    logLevel: "silent",
-  });
-}, 120000);
-afterAll(async () => {
-  await tearDown();
-  await rm(runtimeScratchDir, { recursive: true, force: true });
-});
-
-/** A stream that drops what it is given. */
-function discard(): Writable {
-  return new Writable({ write: (_chunk, _encoding, callback) => callback() });
-}
-
-let channels: HmrChannel[] = [];
-afterEach(async () => {
-  await Promise.all(channels.map((channel) => channel.close()));
-  channels = [];
-});
-
-/**
- * Wires a real `vite/module-runner` `ModuleRunner` to an `HmrChannel`, the
- * same round trip `packages/cli/src/vite/runtime` drives from
- * inside a running app. `notify` plays the server's half, `dispatch` the
- * client's.
- */
-function connectRunner(dispatch: HmrChannel["dispatch"]): {
-  runner: ModuleRunner;
-  notify: (payload: HotPayload) => void;
-} {
-  let onMessage: ((data: HotPayload) => void) | undefined;
-  const transport: ModuleRunnerTransport = {
-    connect(handlers) {
-      onMessage = handlers.onMessage;
-    },
-    send: (data) => dispatch(data),
-  };
-  const runner = new ModuleRunner({ transport, hmr: { logger: false } }, new ESModulesEvaluator());
-  return { runner, notify: (payload) => onMessage?.(payload) };
-}
-
+const { hmr, makeApp, channels, builtRuntimePath } = useHmr("hmr");
 describe("hmr", () => {
   it("sends a Vue HMR update (not a reload) for a template-only edit, quiet", async () => {
     const { entry, vuePath, streams, logs } = await makeApp(

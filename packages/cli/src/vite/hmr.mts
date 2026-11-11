@@ -1,8 +1,9 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -256,23 +257,100 @@ function shimViteClient(styleModule: string): Plugin {
   };
 }
 
+/** The content hash of `file`, or `undefined` when it can't be read as a file. */
+async function contentHashOf(file: string): Promise<string | undefined> {
+  try {
+    return createHash("sha1")
+      .update(await readFile(file))
+      .digest("hex");
+  } catch {
+    return undefined;
+  }
+}
+
+/** The files whose every event passes: a changed dependency retries a failed start. */
+const dependencyFiles = new Set([
+  "package.json",
+  "pnpm-lock.yaml",
+  "package-lock.json",
+  "yarn.lock",
+  "bun.lock",
+  "bun.lockb",
+]);
+
 /**
- * Forwards each changed file as the `file-changed` event that the HMR support of a frontend
- * plugin expects over the server-wide WebSocket client, which this custom environment doesn't
- * have. Also records when this happened, for `createIncaHotChannel`'s own `onUpdate` timing.
+ * Drops the update event of a file whose content equals what the server last loaded or handled,
+ * and of a file for which no plugin chose a module to update. The watcher also reports a rewrite
+ * of identical content, a touch and, on macOS, writes that finished before it started. The
+ * events of the dependency files pass unchanged.
+ *
+ * Forwards every other changed file as the `file-changed` event that the HMR support of a
+ * frontend plugin expects over the server-wide WebSocket client, which this custom environment
+ * doesn't have. Also records when this happened, for `createIncaHotChannel`'s own `onUpdate`
+ * timing.
+ *
+ * Two plugins share the state. The first runs before every other `hotUpdate`, so the baseline
+ * moves even when a plugin's update throws, and each event keeps its own verdict while events
+ * of one file overlap. The second runs last, so that emptying the modules cancels the update the
+ * other plugins prepared.
  */
-function fileChangedPlugin(changed: { current: { file: string; at: number } | undefined }): Plugin {
-  return {
-    name: "inca:file-changed",
-    hotUpdate(options) {
-      changed.current = { file: options.file, at: Date.now() };
-      this.environment.hot.send({
-        type: "custom",
-        event: "file-changed",
-        data: { file: options.file },
-      } satisfies CustomPayload);
+function fileChangedPlugins(changed: {
+  current: { file: string; at: number } | undefined;
+}): Plugin[] {
+  // One hash per file the server has loaded or seen change.
+  const hashes = new Map<string, string>();
+  // What each event did to its file's hash. The event's options object is the key.
+  const verdicts = new WeakMap<object, "same" | "changed" | "unseen">();
+  // One pass per event: a second environment would find the verdict consumed and pass it.
+  const client = (environment: { name: string }) => environment.name === "client";
+  return [
+    {
+      name: "inca:file-baseline",
+      enforce: "pre",
+      applyToEnvironment: client,
+      load: {
+        order: "pre",
+        async handler(id) {
+          const file = id.split("?")[0]!;
+          if (!path.isAbsolute(file) || file.includes("/node_modules/") || hashes.has(file)) {
+            return null;
+          }
+          const hash = await contentHashOf(file);
+          if (hash && !hashes.has(file)) hashes.set(file, hash);
+          return null;
+        },
+      },
+      async hotUpdate(options) {
+        const hash = options.type === "delete" ? undefined : await contentHashOf(options.file);
+        const previous = hashes.get(options.file);
+        if (hash) hashes.set(options.file, hash);
+        else hashes.delete(options.file);
+        if (!hash || dependencyFiles.has(path.basename(options.file))) return;
+        // A replayed write can arrive as a creation before the watcher knows the file.
+        if (hash === previous) verdicts.set(options, "same");
+        else if (options.type === "update") verdicts.set(options, previous ? "changed" : "unseen");
+      },
     },
-  };
+    {
+      name: "inca:file-changed",
+      enforce: "post",
+      applyToEnvironment: client,
+      hotUpdate: {
+        order: "post",
+        handler(options) {
+          const verdict = verdicts.get(options);
+          if (verdict === "same" || (verdict === "unseen" && !options.modules.length)) return [];
+
+          changed.current = { file: options.file, at: Date.now() };
+          this.environment.hot.send({
+            type: "custom",
+            event: "file-changed",
+            data: { file: options.file },
+          } satisfies CustomPayload);
+        },
+      },
+    },
+  ];
 }
 
 /**
@@ -348,7 +426,7 @@ export async function hmr(
     plugins: [
       ...integrationPlugins(core, frontend, integration, root),
       shimViteClient(integration.styleModule),
-      fileChangedPlugin(changed),
+      ...fileChangedPlugins(changed),
     ],
   });
 

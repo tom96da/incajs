@@ -23,8 +23,10 @@ An unknown command prints the command list and exits with code 1.
 ## `inca dev`
 
 Watches your app and opens a live-reloading development window, reloading
-on every change. It exits with code 0 when you close the window and
-non-zero if the host crashes.
+on every change. Saving a file without changing it does not reload
+the app. If the app failed to start, save a change to try again. It
+exits with code 0 when you close the window and non-zero if the host
+crashes.
 
 When the config or the entry cannot be used before the first build, it
 prints the error and retries when you save the config or the entry. It
