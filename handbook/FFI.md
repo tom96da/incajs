@@ -191,8 +191,10 @@ be passed, and `undefined` there counts as `null`.
 | --- | --- | --- |
 | `rootNodeId` | `() => number` | Return the id of the host-allocated root container, the node a mounting app attaches itself under. |
 | `documentNodeId` | `() => number` | The id of the document node. |
-| `createNode` | `(tag: string) => number` | Allocate a `VirtualNode`, return its id. Throws once every id has been used. Freed at the next frame unless inserted or held, see Tree rules. |
-| `createElement` | `(localName: string) => [number, string]` | Allocate a `VirtualNode` for the element `localName` names, with its ASCII upper case lowered, and return its id and tag. Freed at the next frame unless inserted or held, see Tree rules. Throws `InvalidCharacterError` for a name that is no valid element local name. |
+| `createNode` | `(tag: string) => number` | Allocate a `VirtualNode`, return its id. A tag that starts with `#` makes a node of that kind and any other tag makes an element of the HTML namespace. Throws once every id has been used. Freed at the next frame unless inserted or held, see Tree rules. |
+| `createElement` | `(localName: string) => [number, string]` | Allocate an element of the HTML namespace for `localName`, lowered in ASCII, and return its id and tag. Freed at the next frame unless inserted or held, see Tree rules. Throws `InvalidCharacterError` for a name that is no valid element local name. |
+| `createElementNS` | `(namespace: string \| null, qualifiedName: string) => [number, string, string \| null, string \| null, string]` | Allocate an element of `namespace` for `qualifiedName` and return its id, local name, namespace, prefix and tag name. An empty or `null` namespace gives no namespace. The name keeps its case. Freed at the next frame unless inserted or held, see Tree rules. Throws `InvalidCharacterError` for a bad name and `NamespaceError` for a prefix the namespace does not allow. |
+| `attributeKey` | `(nodeId: number, name: string) => string` | The key an attribute called `name` has on `nodeId`: ASCII lower case for an HTML element and `name` as given for any other element. Throws a `TypeError` for an unknown node. |
 | `appendChild` | `(parentId: number, nodeId: number) => number` | Attach a node at the end of `parentId`'s children. Same as `insertBefore` with no reference. Returns the position of the first inserted node. |
 | `insertBefore` | `(parentId: number, nodeId: number, refId: number \| null) => number` | Attach a node before `refId`, or at the end if `null` or `undefined`. Returns the position of the first inserted node. |
 | `removeChild` | `(parentId: number, childId: number) => void` | Detach a child node. Throws `NotFoundError` for a known node that is not a child. Freed at the next frame unless re-inserted or held, see Tree rules. |
@@ -200,7 +202,7 @@ be passed, and `undefined` there counts as `null`.
 | `linkedNode` | `(nodeId: number, link: "parent" \| "first" \| "last" \| "previous" \| "next") => number \| null` | The id of the parent, first child, last child, previous sibling or next sibling of `nodeId`, or `null` when there is none. Throws a `TypeError` for an unknown node or another `link`. |
 | `childNodeIds` | `(nodeId: number) => number[]` | The ids of the children of `nodeId` in order. Throws a `TypeError` for an unknown node. |
 | `isConnected` | `(nodeId: number) => boolean` | Whether the parent chain of `nodeId` reaches the document. The document is connected. Throws a `TypeError` for an unknown node. |
-| `cloneNode` | `(nodeId: number, deep: boolean) => [number, string][]` | Copy a node with its tag, attributes and style props, and its descendants when `deep` is truthy. A falsy `deep` clones only the node. Returns the id and tag of each copy in pre-order, the copy of `nodeId` first. The copy of a template is followed by the copy of its content (`"#fragment"`), the content descendants when `deep` is truthy, and then the other children. The copies have no listeners, focus or scroll offset, and the root copy has no parent. An `input` copy has the typed text of its original. Throws a `TypeError` for an unknown node. |
+| `cloneNode` | `(nodeId: number, deep: boolean) => (number \| string \| null)[][]` | Copy a node with its name, attributes and style props, and its descendants when `deep` is truthy. A falsy `deep` clones only the node. Returns one entry per copy in pre-order, the copy of `nodeId` first. An element copy is `[id, localName, namespace \| null, prefix \| null, tagName]`. A `#text`, `#comment` or `#fragment` copy is `[id, tag]`. The copy of a template is followed by the copy of its content (`"#fragment"`), the content descendants when `deep` is truthy, and then the other children. The copies have no listeners, focus or scroll offset, and the root copy has no parent. An HTML `input` copy has the typed text of its original. Throws a `TypeError` for an unknown node. |
 | `innerHtml` | `(nodeId: number) => string` | The markup of the children of `nodeId`. A template reads its content. Throws a `TypeError` for an unknown node. |
 | `outerHtml` | `(nodeId: number) => string` | The markup of `nodeId` with its children. Throws a `TypeError` for an unknown node. |
 | `setInnerHtml` | `(nodeId: number, html: string) => Parsed` | Parse `html` in the context of `nodeId` and replace all its children, or the children of its content for a template. The old children stay in the host as orphans with their listeners. Returns the parsed nodes at position 0. Throws a `TypeError` for an unknown node. |
@@ -208,7 +210,7 @@ be passed, and `undefined` there counts as `null`.
 | `insertAdjacentHtml` | `(nodeId: number, position: string, html: string) => Parsed` | Parse `html` and insert the nodes at `position` (`beforebegin`, `afterbegin`, `beforeend` or `afterend`, matched ignoring ASCII case) of `nodeId`. The context is the container the nodes enter, and `body` for an `html` element. Throws `SyntaxError` for another position, `NoModificationAllowedError` for `beforebegin` or `afterend` on a node without a parent or a node whose parent is the document, and a `TypeError` for an unknown node. |
 | `compareNodePosition` | `(nodeId: number, otherId: number) => number` | The position of `otherId` relative to `nodeId` as a bit mask: `1` disconnected, `2` preceding, `4` following, `8` contains, `16` contained by, `32` implementation specific. Equal ids give `0`. Nodes of different trees give `1 \| 32` plus `2` or `4`. Throws a `TypeError` for an unknown node. |
 | `rootOf` | `(nodeId: number) => number` | The top of the parent chain of `nodeId`. A connected node gives the document. Throws a `TypeError` for an unknown node. |
-| `isEqualNode` | `(nodeId: number, otherId: number) => boolean` | Whether the two subtrees have the same tags, attributes, style props and children. The typed text of an `input` is not compared. Throws a `TypeError` for an unknown node. |
+| `isEqualNode` | `(nodeId: number, otherId: number) => boolean` | Whether the two subtrees have the same namespace, prefix, local name, attributes, style props and children. The typed text of an `input` is not compared. Throws a `TypeError` for an unknown node. |
 | `textContent` | `(nodeId: number) => string` | The data of a `#text` or `#comment` node. For any other node, the data of every descendant `#text` node in tree order. Throws a `TypeError` for an unknown node. |
 | `wholeText` | `(nodeId: number) => string` | The data of `nodeId` and of the `#text` siblings that touch it, in order. Throws a `TypeError` for an unknown node. |
 | `substringData` | `(nodeId: number, offset: number, count: number) => string` | The `count` UTF-16 code units of the data (the `"value"` attribute) from `offset`, as many as the data holds. Both arguments convert to unsigned 32-bit integers. A half of a surrogate pair that stands alone reads U+FFFD. Throws an `IndexSizeError` `DOMException` when `offset` is beyond the data and a `TypeError` for an unknown node. |
@@ -303,11 +305,12 @@ The host converts the `VirtualNode` tree into GPUI elements on each frame.
 
 `setInnerHtml`, `setOuterHtml` and `insertAdjacentHtml` return `[position, entries]`. `position` is
 the index among the children of the container where the first inserted node sits, or would sit for
-an empty result. Each entry is `[id, tag, parentId, data]` in pre-order, the content fragments of
-templates included. An entry whose `parentId` is no id of the list is a root. `data` is the text of
-a `#text` or `#comment` node and `null` for any other node. A `style` attribute applies as style
-props and its warnings print through `warn`. An `input` takes the typed text of its `value`
-attribute.
+an empty result. Each entry is `[id, tag, namespace, parentId, data]` in pre-order, the content
+fragments of templates included. `namespace` is the namespace of the node and `null` for a `#text`,
+`#comment` or `#fragment` node. A parsed element has no prefix. An entry whose `parentId` is no id
+of the list is a root. `data` is the text of a `#text` or `#comment` node and `null` for any other
+node. A `style` attribute applies as style props and its warnings print through `warn`. An `input`
+takes the typed text of its `value` attribute.
 
 ### Token lists
 
