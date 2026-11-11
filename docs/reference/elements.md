@@ -193,6 +193,18 @@ with the differences below. The listener methods are described in
 - A node that a template removes (for example with `v-if`) drops its listeners
   for good. Appending it again does not restore them. `removeChild()` and
   `replaceChild()` keep the listeners of the node they remove.
+- `classList` has no index properties. `classList[0]` is `undefined`, and no index shows up when
+  you list the keys of the object or serialize it to JSON. Read a token with `item()` or iterate
+  over the list.
+- These iteration functions of `classList` are the host's own functions. They differ from the
+  `Array.prototype` functions. Their iterators have a different prototype from the one of
+  `[].values()`. The tag of such an iterator reads `Array Iterator`.
+  - `values()`
+  - `keys()`
+  - `entries()`
+  - `forEach()`
+  - `[Symbol.iterator]`
+- The `className` of an SVG element is a string, and assigning to it writes the `class` attribute.
 - `document.createDocumentFragment()` returns a fragment without these members:
   - `querySelector()` and `querySelectorAll()`
   - `children`
@@ -251,8 +263,7 @@ have, and using them fails the build:
   fails at the template-compiler stage.
 - **No `fetch`**: `fetch` isn't provided as a global by the JS runtime
   Incarnative.js embeds.
-- **`ref` lacks other element members**: `classList`, `className`, `dataset`
-  and `style` are missing.
+- **`ref` lacks other element members**: `dataset` and `style` are missing.
 
 Event modifiers such as `.stop`, `.once` and `@keydown.enter` are documented
 in [Events: Event modifiers](./events#event-modifiers).
