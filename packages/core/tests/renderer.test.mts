@@ -332,6 +332,8 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       ),
       __node_id: rootId,
       id: "",
+      className: "",
+      classList: {} as DOMTokenList,
       kind: "element",
       tagName: "DIV",
       matches: () => false,

@@ -33,6 +33,7 @@ import {
   textContent,
 } from "../tree.mts";
 import { attributeMembers, attributeText, requireArguments } from "./attributes.mts";
+import { classMembers } from "./classList.mts";
 import { nodeListOf } from "./collections.mts";
 import { elementTreeMembers } from "./elementTree.mts";
 import { withEventHandlers } from "./eventHandlers.mts";
@@ -56,6 +57,7 @@ import { attachContent, isTemplateTag } from "./templateContent.mts";
 import { characterDataMembers, createIncaText, nullableText } from "./text.mts";
 import type { IncaDocument, NodeId, TagName } from "../types.mts";
 import type { AttributeMembers } from "./attributes.mts";
+import type { ClassMembers } from "./classList.mts";
 import type { ElementTreeMembers } from "./elementTree.mts";
 import type { HandleBuilders } from "./nodeMutation.mts";
 import type { ScrollArgs, ScrollIntoViewOptions } from "./scroll.mts";
@@ -159,6 +161,7 @@ export function createIncaElement(
     | "__node_id"
     | keyof EventHandlers
     | keyof AttributeMembers
+    | keyof ClassMembers
     | keyof ElementTreeMembers
     | keyof HtmlMembers
     | keyof NodeMembers
@@ -315,6 +318,7 @@ export function createIncaElement(
     ),
   );
   if (kind !== "comment") {
+    Object.defineProperties(element, Object.getOwnPropertyDescriptors(classMembers(id, element)));
     Object.defineProperties(
       element,
       Object.getOwnPropertyDescriptors(htmlMembers(element, builders)),

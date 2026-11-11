@@ -263,6 +263,15 @@ export function getAttribute(nodeId: NodeId, key: string): AttributeValue | null
 }
 
 /**
+ * Returns the token list of the `class` attribute of `nodeId`. A list of a freed node reads empty.
+ * @param nodeId - the node
+ * @returns the live list
+ */
+export function classList(nodeId: NodeId): DOMTokenList {
+  return native().classList(nodeId);
+}
+
+/**
  * Returns the names of the attributes stored on `nodeId` in the order they were set, in the lower
  * case the host keeps them in.
  * @param nodeId - the node to read
