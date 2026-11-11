@@ -288,7 +288,7 @@ impl TreeSink for HtmlSink<'_> {
             for attribute in &attrs {
                 let key = attribute_key(&attribute.name);
                 if key == "style" {
-                    let lines = tree.set_style_attribute(id, &attribute.value)?;
+                    let lines = tree.set_style_text(id, &attribute.value)?;
                     warnings.extend(lines.into_iter().map(|line| (id, line)));
                 } else {
                     tree.set_attribute(id, key, &*attribute.value)?;

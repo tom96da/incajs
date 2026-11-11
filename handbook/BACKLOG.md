@@ -1644,6 +1644,23 @@ A fixed entry is deleted and its ID is never reused.
   it is an `SVGAnimatedString`, and an assignment throws a `TypeError` in strict mode. Fix: return
   an `SVGAnimatedString`-like object once `className` uses namespaces.
 
+- **B-310 `getAttribute("style")` returns the serialized declarations**
+  `Units: node,bridge · Size: M · Impact: Low`
+
+  In browsers `getAttribute("style")` returns the text that was set until the next declaration
+  write, and an attribute selector sees that text. The host stores the declarations in serialized
+  form at once, so `setAttribute("style", "width:1px")` reads back `width: 1px;`. A browser creates
+  the attribute at the first read of `style`, the host creates it at the first declaration write,
+  so `a`, `style.width`, `b` lists `a, style, b` where a browser lists `a, b, style`. Fix: keep the
+  text as set beside the props and derive the serialized form on the first declaration write.
+
+- **B-311 `isEqualNode` compares the derived style text**
+  `Units: node · Size: S · Impact: Low`
+
+  `isEqualNode` compares the serialized declarations, so `width:1px` and `width: 1px;` are equal
+  and `#f00` equals `rgb(255, 0, 0)`. A browser compares the text as written and answers `false`.
+  Fix: compare the text as set once B-310 keeps it.
+
 - **B-317 `window` is not a global**
   `Units: host · Size: S · Impact: Low`
 

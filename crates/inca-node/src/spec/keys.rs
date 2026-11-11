@@ -318,6 +318,11 @@ fn keyword_text(names: &[&str], word: &str) -> Option<String> {
         .map(|name| name.replace('_', "-"))
 }
 
+/// The message for a style key that no prop is named by.
+pub(crate) fn unknown_key_warning(key: &str) -> String {
+    format!("ignoring unknown style key `{key}`")
+}
+
 /// The message for the style prop `key` set to `value` when the key is
 /// unknown, a color is invalid, or the value has a shape the host does not
 /// support. `key` may be `camelCase`, `kebab-case` or `snake_case`, a host name
@@ -336,7 +341,7 @@ pub fn style_warning(key: &str, value: &AttributeValue) -> Option<String> {
         return None;
     }
     Some(match fault {
-        StyleFault::UnknownKey => format!("ignoring unknown style key `{key}`"),
+        StyleFault::UnknownKey => unknown_key_warning(key),
         StyleFault::InvalidColor => format!("ignoring invalid color for style key `{key}`"),
         StyleFault::UnsupportedValue => format!("ignoring unsupported value for style key `{key}`"),
     })

@@ -202,8 +202,8 @@ pub type StyleMap = IndexMap<String, AttributeValue>;
 pub struct VirtualNode {
     id: NodeId,
     tag_name: String,
-    style_props: StyleMap,
-    attributes: IndexMap<String, AttributeValue>,
+    pub(crate) style_props: StyleMap,
+    pub(crate) attributes: IndexMap<String, AttributeValue>,
     parent: Option<NodeId>,
     children: Vec<NodeId>,
     /// The fragment a template owns.
@@ -429,7 +429,7 @@ impl VirtualTree {
         self.nodes.get(&id)
     }
 
-    fn node_mut(&mut self, id: NodeId) -> Result<&mut VirtualNode, TreeError> {
+    pub(crate) fn node_mut(&mut self, id: NodeId) -> Result<&mut VirtualNode, TreeError> {
         self.generation += 1;
         self.nodes.get_mut(&id).ok_or(TreeError::NodeNotFound(id))
     }

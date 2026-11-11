@@ -4,10 +4,12 @@
 //! The attributes and style props of a node.
 
 use super::{AttributeValue, NodeId, TreeError, VirtualTree};
-use crate::spec::style_key;
+use crate::inline_style::sync_style_entry;
+use crate::spec::{css_declaration, style_key};
 
 impl VirtualTree {
-    /// Sets (inserting or overwriting) one attribute prop.
+    /// Sets (inserting or overwriting) one attribute prop. The key `style` applies the declarations
+    /// of the text as style props and stores the derived text; the warning lines are dropped.
     ///
     /// # Errors
     ///
@@ -18,25 +20,36 @@ impl VirtualTree {
         key: impl Into<String>,
         value: impl Into<AttributeValue>,
     ) -> Result<(), TreeError> {
+        let key: String = key.into();
+        let value = value.into();
+        if key == "style" {
+            self.set_style_text(node_id, &value.text())?;
+            return Ok(());
+        }
         let node = self.node_mut(node_id)?;
-        node.attributes.insert(key.into(), value.into());
+        node.attributes.insert(key, value);
         Ok(())
     }
 
-    /// Removes one attribute prop. Removing a key that isn't set is a no-op.
+    /// Removes one attribute prop. Removing a key that isn't set is a no-op. Removing `style`
+    /// clears the style props.
     ///
     /// # Errors
     ///
     /// Returns [`TreeError::NodeNotFound`] if `node_id` names no node.
     pub fn remove_attribute(&mut self, node_id: NodeId, key: &str) -> Result<(), TreeError> {
         let node = self.node_mut(node_id)?;
+        if key == "style" {
+            node.style_props.clear();
+        }
         node.attributes.shift_remove(key);
         Ok(())
     }
 
     /// Sets (inserting or overwriting) one style prop. `key` may be
     /// `camelCase`, `kebab-case` or `snake_case`, a host name or its CSS name,
-    /// and all spellings of one prop share one slot.
+    /// and all spellings of one prop share one slot. The `style` attribute is
+    /// derived again, and created when the value has a declaration text.
     ///
     /// # Errors
     ///
@@ -50,33 +63,17 @@ impl VirtualTree {
         let node = self.node_mut(node_id)?;
         let key: String = key.into();
         let stored = style_key(&key).into_owned();
-        node.style_props.insert(stored, value.into());
+        let value = value.into();
+        let declared = css_declaration(&stored, &value).is_some();
+        node.style_props.insert(stored, value);
+        sync_style_entry(node, declared);
         Ok(())
-    }
-
-    /// Applies the declarations of the text of a `style` attribute as style props, in order, and
-    /// returns one line for each declaration that is dropped. The text is not stored as an
-    /// attribute.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`TreeError::NodeNotFound`] if `node_id` names no node and the text holds a valid
-    /// declaration.
-    pub(crate) fn set_style_attribute(
-        &mut self,
-        node_id: NodeId,
-        text: &str,
-    ) -> Result<Vec<String>, TreeError> {
-        let (declarations, warnings) = crate::stylesheet::declarations(text);
-        for (key, value) in declarations {
-            self.set_style(node_id, key, value)?;
-        }
-        Ok(warnings)
     }
 
     /// Removes one style prop, so the property renders as if never set.
     /// `key` may be `camelCase`, `kebab-case` or `snake_case`, a host name or
-    /// its CSS name. Removing a key that isn't set is a no-op.
+    /// its CSS name. Removing a key that isn't set is a no-op. An existing
+    /// `style` attribute is derived again.
     ///
     /// # Errors
     ///
@@ -84,6 +81,7 @@ impl VirtualTree {
     pub fn remove_style(&mut self, node_id: NodeId, key: &str) -> Result<(), TreeError> {
         let node = self.node_mut(node_id)?;
         node.style_props.shift_remove(&*style_key(key));
+        sync_style_entry(node, false);
         Ok(())
     }
 }
@@ -93,7 +91,9 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
+    use crate::css_text;
     use crate::spec::style_key;
+    use crate::tests::text;
     use rstest::rstest;
     use std::borrow::Cow;
 
@@ -252,6 +252,154 @@ mod tests {
             .map(String::as_str)
             .collect();
         assert_eq!(keys, ["height", "gap", "width"]);
+    }
+
+    fn style_entry(tree: &VirtualTree, node: NodeId) -> Option<String> {
+        tree.get(node)
+            .unwrap()
+            .attributes()
+            .get("style")
+            .map(AttributeValue::text)
+    }
+
+    #[test]
+    fn removing_the_last_declaration_leaves_the_entry_empty() {
+        let mut tree = VirtualTree::new();
+        let node = tree.create_node("div").unwrap();
+        tree.set_style(node, "width", "1px").unwrap();
+
+        tree.remove_style(node, "width").unwrap();
+
+        assert_eq!(style_entry(&tree, node), Some(String::new()));
+    }
+
+    #[rstest]
+    #[case::set_style(|t: &mut VirtualTree, n: NodeId| t.set_style(n, "gap", "3px").unwrap())]
+    #[case::remove_style(|t: &mut VirtualTree, n: NodeId| t.remove_style(n, "width").unwrap())]
+    #[case::set_style_property(|t: &mut VirtualTree, n: NodeId| {
+        t.set_style_property(n, "gap", "3px").unwrap();
+    })]
+    #[case::remove_style_property(|t: &mut VirtualTree, n: NodeId| {
+        t.remove_style_property(n, "width").unwrap();
+    })]
+    #[case::set_style_text(|t: &mut VirtualTree, n: NodeId| {
+        t.set_style_text(n, "gap: 3px").unwrap();
+    })]
+    fn a_style_write_derives_the_entry_again(#[case] write: fn(&mut VirtualTree, NodeId)) {
+        let mut tree = VirtualTree::new();
+        let node = tree.create_node("div").unwrap();
+        tree.set_style(node, "width", "1px").unwrap();
+        assert_eq!(style_entry(&tree, node).as_deref(), Some("width: 1px;"));
+
+        write(&mut tree, node);
+
+        let derived = css_text(tree.get(node).unwrap());
+        assert_eq!(style_entry(&tree, node), Some(derived));
+    }
+
+    #[test]
+    fn a_declaration_write_creates_the_entry_last() {
+        let mut tree = VirtualTree::new();
+        let node = tree.create_node("div").unwrap();
+        tree.set_attribute(node, "a", "1").unwrap();
+        tree.set_style(node, "width", "1px").unwrap();
+        tree.set_attribute(node, "b", "1").unwrap();
+
+        assert_eq!(attribute_keys(&tree, node), ["a", "style", "b"]);
+    }
+
+    #[rstest]
+    #[case::empty_string(text(""))]
+    #[case::bool(AttributeValue::Bool(true))]
+    fn set_style_of_a_value_without_text_creates_no_entry(#[case] value: AttributeValue) {
+        let mut tree = VirtualTree::new();
+        let node = tree.create_node("div").unwrap();
+
+        tree.set_style(node, "width", value).unwrap();
+
+        assert_eq!(style_entry(&tree, node), None);
+    }
+
+    #[test]
+    fn set_style_of_an_unknown_key_creates_no_entry() {
+        let mut tree = VirtualTree::new();
+        let node = tree.create_node("div").unwrap();
+
+        tree.set_style(node, "not_a_key", "1px").unwrap();
+
+        assert_eq!(style_entry(&tree, node), None);
+    }
+
+    #[test]
+    fn remove_style_creates_no_entry() {
+        let mut tree = VirtualTree::new();
+        let node = tree.create_node("div").unwrap();
+
+        tree.remove_style(node, "width").unwrap();
+
+        assert_eq!(style_entry(&tree, node), None);
+    }
+
+    #[rstest]
+    #[case::comment("#comment")]
+    #[case::text("#text")]
+    fn a_comment_and_a_text_node_get_no_entry(#[case] tag: &str) {
+        let mut tree = VirtualTree::new();
+        let node = tree.create_node(tag).unwrap();
+
+        tree.set_style(node, "width", "1px").unwrap();
+        tree.set_attribute(node, "style", "width: 2px").unwrap();
+
+        assert_eq!(style_entry(&tree, node), None);
+    }
+
+    #[test]
+    fn set_attribute_style_stores_the_derived_text() {
+        let mut tree = VirtualTree::new();
+        let node = tree.create_node("div").unwrap();
+
+        tree.set_attribute(node, "style", "WIDTH:1px;bogus:1")
+            .unwrap();
+
+        assert_eq!(style_entry(&tree, node).as_deref(), Some("width: 1px;"));
+    }
+
+    #[test]
+    fn set_attribute_style_applies_the_declarations_as_props() {
+        let mut tree = VirtualTree::new();
+        let node = tree.create_node("div").unwrap();
+
+        tree.set_attribute(node, "style", "width:1px").unwrap();
+
+        assert_eq!(
+            tree.get(node).unwrap().style_props().get("width"),
+            Some(&text("1px"))
+        );
+    }
+
+    #[test]
+    fn set_attribute_style_stores_the_entry_at_the_position_of_the_write() {
+        let mut tree = VirtualTree::new();
+        let node = tree.create_node("div").unwrap();
+        tree.set_attribute(node, "a", "1").unwrap();
+        tree.set_attribute(node, "style", "width:1px").unwrap();
+        tree.set_attribute(node, "b", "1").unwrap();
+        tree.set_attribute(node, "style", "width:2px").unwrap();
+
+        assert_eq!(attribute_keys(&tree, node), ["a", "style", "b"]);
+    }
+
+    #[test]
+    fn remove_attribute_style_clears_the_props_and_the_entry() {
+        let mut tree = VirtualTree::new();
+        let node = tree.create_node("div").unwrap();
+        tree.set_attribute(node, "style", "width:1px").unwrap();
+
+        tree.remove_attribute(node, "style").unwrap();
+
+        let got = tree.get(node).unwrap();
+        assert!(got.style_props().is_empty());
+        assert!(got.attributes().is_empty());
     }
 
     #[test]

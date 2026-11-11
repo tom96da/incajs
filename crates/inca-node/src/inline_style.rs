@@ -3,8 +3,12 @@
 
 //! The inline style of a node as a block of declarations.
 
-use crate::spec::{STYLE_KEYS, css_declaration, css_name, style_key};
-use crate::tree::VirtualNode;
+use crate::spec::{
+    STYLE_KEYS, css_declaration, css_name, style_key, style_warning, unknown_key_warning,
+};
+use crate::tree::{
+    AttributeValue, COMMENT_TAG, NodeId, TEXT_TAG, TreeError, VirtualNode, VirtualTree,
+};
 
 /// The style props of `node` that have a canonical text, in prop order, with that text. A stored
 /// unknown key and a value without a text are no declaration.
@@ -62,6 +66,100 @@ pub fn style_item(node: &VirtualNode, index: usize) -> Option<String> {
 #[must_use]
 pub fn style_length(node: &VirtualNode) -> usize {
     style_declarations(node).count()
+}
+
+/// Stores `css_text` as the `style` attribute of `node`: an existing entry keeps its place, and a
+/// missing one is created last when `create` is set. A text node and a comment never get one.
+pub(crate) fn sync_style_entry(node: &mut VirtualNode, create: bool) {
+    if matches!(node.tag_name(), TEXT_TAG | COMMENT_TAG) {
+        return;
+    }
+    if create || node.attributes.contains_key("style") {
+        let text = css_text(node);
+        node.attributes.insert("style".into(), text.into());
+    }
+}
+
+impl VirtualTree {
+    /// Replaces the style props with the declarations of `text` and stores the declarations as the
+    /// `style` attribute, in serialized form. A repeated property takes the later value and the
+    /// later position. `!important` is read and dropped. Returns one line for each declaration
+    /// that is dropped.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TreeError::NodeNotFound`] if `node_id` names no node.
+    pub fn set_style_text(
+        &mut self,
+        node_id: NodeId,
+        text: &str,
+    ) -> Result<Vec<String>, TreeError> {
+        let node = self.node_mut(node_id)?;
+        let (declarations, warnings) = crate::stylesheet::declarations(text);
+        node.style_props.clear();
+        for (key, value) in declarations {
+            let key = style_key(&key).into_owned();
+            node.style_props.shift_remove(&key);
+            node.style_props.insert(key, value);
+        }
+        sync_style_entry(node, true);
+        Ok(warnings)
+    }
+
+    /// Sets the CSS property `name` to `text`. An empty text removes the property. Returns the
+    /// warning line when `name` is unknown or the value is invalid, and then changes nothing.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TreeError::NodeNotFound`] if `node_id` names no node.
+    pub fn set_style_property(
+        &mut self,
+        node_id: NodeId,
+        name: &str,
+        text: &str,
+    ) -> Result<Vec<String>, TreeError> {
+        let node = self.node_mut(node_id)?;
+        let text = text.trim_ascii();
+        let key = property_key(name);
+        if text.is_empty() {
+            if let Some(key) = key {
+                node.style_props.shift_remove(key);
+                sync_style_entry(node, false);
+            }
+            return Ok(Vec::new());
+        }
+        let Some(key) = key else {
+            return Ok(vec![unknown_key_warning(name)]);
+        };
+        let value = AttributeValue::String(text.to_owned());
+        if let Some(line) = style_warning(&name.to_ascii_lowercase(), &value) {
+            return Ok(vec![line]);
+        }
+        let declared = css_declaration(key, &value).is_some();
+        node.style_props.insert(key.to_owned(), value);
+        sync_style_entry(node, declared);
+        Ok(Vec::new())
+    }
+
+    /// Removes the CSS property `name` and returns its former canonical text, empty when it had
+    /// none.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TreeError::NodeNotFound`] if `node_id` names no node.
+    pub fn remove_style_property(
+        &mut self,
+        node_id: NodeId,
+        name: &str,
+    ) -> Result<String, TreeError> {
+        let node = self.node_mut(node_id)?;
+        let former = style_property_value(node, name);
+        if let Some(key) = property_key(name) {
+            node.style_props.shift_remove(key);
+            sync_style_entry(node, false);
+        }
+        Ok(former)
+    }
 }
 
 #[cfg(test)]
@@ -158,5 +256,167 @@ mod tests {
         let (tree, id) = block(&[("corner_radius", num(2.0)), ("text_color", text("#f00"))]);
 
         assert_eq!(style_property_value(tree.get(id).unwrap(), name), expected);
+    }
+
+    fn entry(tree: &VirtualTree, id: crate::NodeId) -> Option<String> {
+        tree.get(id)
+            .unwrap()
+            .attributes()
+            .get("style")
+            .map(AttributeValue::text)
+    }
+
+    #[test]
+    fn set_style_text_replaces_the_old_props() {
+        let (mut tree, id) = block(&[("height", text("9px"))]);
+
+        tree.set_style_text(id, "width: 1px").unwrap();
+
+        assert_eq!(css_text(tree.get(id).unwrap()), "width: 1px;");
+    }
+
+    #[test]
+    fn set_style_text_returns_a_line_for_each_dropped_declaration() {
+        let (mut tree, id) = block(&[]);
+
+        let lines = tree.set_style_text(id, "bogus: 1; width: 2px").unwrap();
+
+        assert_eq!(lines, ["ignoring unknown style key `bogus`"]);
+    }
+
+    #[test]
+    fn set_style_text_reads_important_as_normal() {
+        let (mut tree, id) = block(&[]);
+
+        let lines = tree.set_style_text(id, "width: 3px !important").unwrap();
+
+        assert!(lines.is_empty());
+        assert_eq!(css_text(tree.get(id).unwrap()), "width: 3px;");
+    }
+
+    #[test]
+    fn a_repeated_property_takes_the_later_value_and_position() {
+        let (mut tree, id) = block(&[]);
+
+        tree.set_style_text(id, "width:1px;height:2px;width:3px")
+            .unwrap();
+
+        assert_eq!(css_text(tree.get(id).unwrap()), "height: 2px; width: 3px;");
+    }
+
+    #[test]
+    fn set_style_text_of_the_empty_text_creates_the_empty_entry() {
+        let (mut tree, id) = block(&[]);
+
+        tree.set_style_text(id, "").unwrap();
+
+        assert_eq!(entry(&tree, id), Some(String::new()));
+    }
+
+    #[test]
+    fn set_style_property_stores_a_valid_value() {
+        let (mut tree, id) = block(&[]);
+
+        let lines = tree.set_style_property(id, "WIDTH", " 4px ").unwrap();
+
+        assert!(lines.is_empty());
+        assert_eq!(entry(&tree, id).as_deref(), Some("width: 4px;"));
+    }
+
+    #[test]
+    fn set_style_property_of_an_existing_key_keeps_its_position() {
+        let (mut tree, id) = block(&[("width", text("1px")), ("height", text("2px"))]);
+
+        tree.set_style_property(id, "width", "3px").unwrap();
+
+        assert_eq!(css_text(tree.get(id).unwrap()), "width: 3px; height: 2px;");
+    }
+
+    #[test]
+    fn set_style_property_of_an_invalid_value_warns_and_keeps_the_block() {
+        let (mut tree, id) = block(&[("width", text("1px"))]);
+
+        let lines = tree.set_style_property(id, "width", "bogus").unwrap();
+
+        assert_eq!(lines, ["ignoring unsupported value for style key `width`"]);
+        assert_eq!(css_text(tree.get(id).unwrap()), "width: 1px;");
+    }
+
+    #[rstest]
+    #[case::unknown("foo")]
+    #[case::underscore("flex_direction")]
+    fn set_style_property_of_an_unknown_name_warns_and_keeps_the_block(#[case] name: &str) {
+        let (mut tree, id) = block(&[("width", text("1px"))]);
+
+        let lines = tree.set_style_property(id, name, "row").unwrap();
+
+        assert_eq!(lines, [format!("ignoring unknown style key `{name}`")]);
+        assert_eq!(css_text(tree.get(id).unwrap()), "width: 1px;");
+    }
+
+    #[test]
+    fn set_style_property_of_the_empty_text_removes_the_property() {
+        let (mut tree, id) = block(&[("width", text("1px")), ("height", text("2px"))]);
+
+        tree.set_style_property(id, "width", "").unwrap();
+
+        assert_eq!(css_text(tree.get(id).unwrap()), "height: 2px;");
+    }
+
+    #[test]
+    fn set_style_property_of_whitespace_removes_the_property() {
+        let (mut tree, id) = block(&[("width", text("1px"))]);
+
+        tree.set_style_property(id, "width", "  ").unwrap();
+
+        assert_eq!(css_text(tree.get(id).unwrap()), "");
+    }
+
+    #[test]
+    fn set_style_property_of_an_unknown_name_and_the_empty_text_is_silent() {
+        let (mut tree, id) = block(&[("width", text("1px"))]);
+
+        let lines = tree.set_style_property(id, "foo", "").unwrap();
+
+        assert!(lines.is_empty());
+        assert_eq!(css_text(tree.get(id).unwrap()), "width: 1px;");
+    }
+
+    #[test]
+    fn set_style_property_of_the_empty_text_creates_no_entry() {
+        let (mut tree, id) = block(&[]);
+
+        tree.set_style_property(id, "width", "").unwrap();
+
+        assert_eq!(entry(&tree, id), None);
+    }
+
+    #[test]
+    fn set_style_property_of_an_invalid_value_creates_no_entry() {
+        let (mut tree, id) = block(&[]);
+
+        tree.set_style_property(id, "width", "bogus").unwrap();
+
+        assert_eq!(entry(&tree, id), None);
+    }
+
+    #[test]
+    fn remove_style_property_returns_the_former_canonical_text() {
+        let (mut tree, id) = block(&[("text_color", text("#f00")), ("width", num(2.0))]);
+
+        let former = tree.remove_style_property(id, "color").unwrap();
+
+        assert_eq!(former, "rgb(255, 0, 0)");
+        assert_eq!(css_text(tree.get(id).unwrap()), "width: 2px;");
+    }
+
+    #[test]
+    fn remove_style_property_of_an_absent_property_returns_empty_and_creates_no_entry() {
+        let (mut tree, id) = block(&[]);
+
+        let former = tree.remove_style_property(id, "width").unwrap();
+
+        assert_eq!(former, "");
+        assert_eq!(entry(&tree, id), None);
     }
 }

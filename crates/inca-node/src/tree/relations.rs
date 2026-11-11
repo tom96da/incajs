@@ -73,7 +73,7 @@ impl VirtualTree {
     }
 
     /// Whether the subtrees of `a` and `b` are equal: the same tags, attributes (compared by text
-    /// form), style props and children, pairwise in order.
+    /// form, the derived `style` text included) and children, pairwise in order.
     ///
     /// # Errors
     ///
@@ -84,7 +84,6 @@ impl VirtualTree {
             let nx = self.get(x).ok_or(missing(x))?;
             let ny = self.get(y).ok_or(missing(y))?;
             if nx.tag_name != ny.tag_name
-                || nx.style_props != ny.style_props
                 || !same_attributes(nx, ny)
                 || nx.children.len() != ny.children.len()
             {
@@ -269,5 +268,37 @@ mod tests {
         }
 
         assert_eq!(tree.is_equal(first, second), Ok(true));
+    }
+
+    #[test]
+    fn is_equal_compares_the_derived_style_text() {
+        let mut tree = VirtualTree::new();
+        let (first, second) = (node(&mut tree, "div"), node(&mut tree, "div"));
+        tree.set_style(first, "text_color", "#f00").unwrap();
+        tree.set_style(second, "text_color", "rgb(255, 0, 0)")
+            .unwrap();
+
+        assert_eq!(tree.is_equal(first, second), Ok(true));
+    }
+
+    #[test]
+    fn is_equal_tells_another_declaration_order_apart() {
+        let mut tree = VirtualTree::new();
+        let (first, second) = (node(&mut tree, "div"), node(&mut tree, "div"));
+        tree.set_style_text(first, "width: 1px; height: 2px")
+            .unwrap();
+        tree.set_style_text(second, "height: 2px; width: 1px")
+            .unwrap();
+
+        assert_eq!(tree.is_equal(first, second), Ok(false));
+    }
+
+    #[test]
+    fn is_equal_tells_an_empty_style_attribute_from_none() {
+        let mut tree = VirtualTree::new();
+        let (first, second) = (node(&mut tree, "div"), node(&mut tree, "div"));
+        tree.set_style_text(first, "").unwrap();
+
+        assert_eq!(tree.is_equal(first, second), Ok(false));
     }
 }
