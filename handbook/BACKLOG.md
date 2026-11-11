@@ -1671,6 +1671,20 @@ A fixed entry is deleted and its ID is never reused.
   and `#f00` equals `rgb(255, 0, 0)`. A browser compares the text as written and answers `false`.
   Fix: compare the text as set once B-310 keeps it.
 
+- **B-313 `createElementNS()` with the HTML namespace and `STYLE` or `TEMPLATE` behaves as the HTML element**
+  `Units: node,bridge · Size: S · Impact: Low`
+
+  In browsers `createElementNS(HTML_NS, "STYLE")` makes an element that is no `style` element.
+  The host compares `style` and `template` without ASCII case in the HTML namespace, so the
+  element holds rules or content. Fix: compare the two names exactly.
+
+- **B-316 `createElementNS()` drops the name text after the second colon**
+  `Units: bridge · Size: S · Impact: Low`
+
+  `createElementNS(ns, "a:b:c")` reads local name `b` and `tagName` `a:b` in Chromium, and the host
+  does the same. WebKit keeps `b:c` as the local name. Fix: keep the text from the second colon in
+  the local name if browsers agree on it.
+
 - **B-317 `window` is not a global**
   `Units: host · Size: S · Impact: Low`
 
