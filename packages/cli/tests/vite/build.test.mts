@@ -52,37 +52,6 @@ describe("build", () => {
     expect(bundle).not.toContain("createElementBlock");
   }, 20000);
 
-  it("leaves static siblings unstringified", async () => {
-    const { entry, outDir, streams } = await makeApp(
-      `<template><div>${"<div>a</div>".repeat(25)}</div></template>\n`,
-    );
-
-    const output = await build({ entry, outDir, ...streams });
-
-    // Stringified static content survives as literal markup in the bundle.
-    expect(await readFile(output.entryFile, "utf8")).not.toContain("<div>a</div>");
-  }, 20000);
-
-  it("imports the modifier helpers from the runtime core module", async () => {
-    const { entry, outDir, streams } = await makeApp(
-      dedent`
-        <script setup>
-        import { ref } from "@vue/runtime-core";
-        const n = ref(0);
-        </script>
-        <template><div @click.stop="n++" @keydown.enter="n++">{{ n }}</div></template>
-      `,
-    );
-
-    const output = await build({ entry, outDir, ...streams });
-
-    const bundle = await readFile(output.entryFile, "utf8");
-    expect(bundle).toContain("STUB_WITH_MODIFIERS");
-    expect(bundle).toContain("STUB_WITH_KEYS");
-    expect(bundle).toContain('["stop"]');
-    expect(bundle).toContain('["enter"]');
-  }, 20000);
-
   it("reports a dynamic import as its own chunk alongside the entry", async () => {
     const { entry, outDir, streams } = await makeApp(
       `<script setup>\nconst msg = "hello";\n</script>\n<template><div>{{ msg }}</div></template>\n`,

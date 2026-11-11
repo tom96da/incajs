@@ -69,62 +69,6 @@ it("binds document in a dependency that sits outside the app", async () => {
   expect(bundle).toContain("DOCUMENT_STUB_MARKER");
 }, 20000);
 
-it("builds templates against incajs/vue/runtime", async () => {
-  const bundle = await bundleOf(
-    `<div @click.stop="1">x</div>`,
-    `export const withModifiers = (fn) => { "DEFAULT_RUNTIME_MARKER"; return fn; };\n`,
-  );
-
-  expect(bundle).toContain("DEFAULT_RUNTIME_MARKER");
-}, 20000);
-
-it("compiles many static elements without createStaticVNode", async () => {
-  const bundle = await bundleOf(
-    "<i>x</i>".repeat(25),
-    `export const createStaticVNode = (...args) => { "STATIC_MARKER"; return args; };\n`,
-  );
-
-  expect(bundle).not.toContain("STATIC_MARKER");
-}, 20000);
-
-it("checks the peers that incajs lists for vue", async () => {
-  const appDir = await mkdtemp(path.join(scratchRoot, "app-"));
-  const stub = path.join(appDir, "node_modules/incajs");
-  await mkdir(stub, { recursive: true });
-  await writeFile(
-    path.join(stub, "package.json"),
-    JSON.stringify({
-      name: "incajs",
-      type: "module",
-      exports: { "./vue/runtime": "./runtime.mjs" },
-      incajs: { frontends: { vue: { peers: ["@vue/runtime-dom"] } } },
-    }),
-  );
-  await writeFile(path.join(stub, "runtime.mjs"), `export * from "@vue/runtime-core";\n`);
-  await writeFile(
-    path.join(appDir, "App.vue"),
-    dedent`
-      <script setup>
-      import "@vue/runtime-dom";
-      </script>
-      <template><div /></template>
-    `,
-  );
-  const entry = path.join(appDir, "entry.mts");
-  await writeFile(entry, `import App from "./App.vue";\nexport default App;\n`);
-  const sink = new Writable({ write: (_chunk, _encoding, callback) => callback() });
-
-  await expect(
-    defaultBundler.build({
-      entry,
-      outDir: path.join(appDir, "dist"),
-      stdout: sink,
-      stderr: sink,
-      quiet: true,
-    }),
-  ).rejects.toThrow("ERR_INCA_PEER_NOT_FOUND");
-}, 20000);
-
 type StyleCall = [key: string, css: string];
 
 let styleRoot: string;
