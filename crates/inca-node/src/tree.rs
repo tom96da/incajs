@@ -30,13 +30,16 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
+use html5ever::{Namespace, ns};
 use indexmap::IndexMap;
 
 mod class_list;
 mod computed;
+mod element;
 mod insertion;
 mod lifetime;
 mod links;
+mod name;
 mod props;
 mod relations;
 mod state;
@@ -204,6 +207,10 @@ pub type StyleMap = IndexMap<String, AttributeValue>;
 pub struct VirtualNode {
     id: NodeId,
     tag_name: String,
+    /// The namespace of an element. `None` for a node that is no element and for an element made
+    /// without one.
+    namespace: Option<Namespace>,
+    prefix: Option<String>,
     pub(crate) style_props: StyleMap,
     pub(crate) attributes: IndexMap<String, AttributeValue>,
     parent: Option<NodeId>,
@@ -215,10 +222,17 @@ pub struct VirtualNode {
 }
 
 impl VirtualNode {
-    fn new(id: NodeId, tag_name: String) -> Self {
+    fn new(
+        id: NodeId,
+        tag_name: String,
+        namespace: Option<Namespace>,
+        prefix: Option<String>,
+    ) -> Self {
         Self {
             id,
             tag_name,
+            namespace,
+            prefix,
             style_props: StyleMap::new(),
             attributes: IndexMap::new(),
             parent: None,
@@ -226,12 +240,6 @@ impl VirtualNode {
             content: None,
             owner: None,
         }
-    }
-
-    /// Whether the tag of the node is `template`.
-    #[must_use]
-    pub fn is_template(&self) -> bool {
-        is_template_tag(&self.tag_name)
     }
 
     #[must_use]
@@ -406,10 +414,8 @@ impl VirtualTree {
     /// and fails without creating either when fewer are left.
     pub fn create_node(&mut self, tag_name: impl Into<String>) -> Result<NodeId, TreeError> {
         let tag_name = tag_name.into();
-        if is_template_tag(&tag_name) {
-            return self.create_template(tag_name);
-        }
-        self.allocate(tag_name)
+        let namespace = VirtualNode::is_element_tag(&tag_name).then_some(ns!(html));
+        self.create_element(namespace, None, tag_name)
     }
 
     /// Makes the next id `next`, so a test reaches the end of the id space.
@@ -418,10 +424,16 @@ impl VirtualTree {
         self.next_id = next;
     }
 
-    fn allocate(&mut self, tag_name: String) -> Result<NodeId, TreeError> {
+    fn allocate(
+        &mut self,
+        tag_name: String,
+        namespace: Option<Namespace>,
+        prefix: Option<String>,
+    ) -> Result<NodeId, TreeError> {
         let id = self.next_id;
         self.next_id = id.checked_add(1).ok_or(TreeError::IdsExhausted)?;
-        self.nodes.insert(id, VirtualNode::new(id, tag_name));
+        self.nodes
+            .insert(id, VirtualNode::new(id, tag_name, namespace, prefix));
         self.orphans.insert(id);
         Ok(id)
     }

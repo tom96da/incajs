@@ -72,8 +72,9 @@ impl VirtualTree {
         })
     }
 
-    /// Whether the subtrees of `a` and `b` are equal: the same tags, attributes (compared by text
-    /// form, the derived `style` text included) and children, pairwise in order.
+    /// Whether the subtrees of `a` and `b` are equal: the same tags, namespaces, prefixes,
+    /// attributes (compared by text form, the derived `style` text included) and children,
+    /// pairwise in order.
     ///
     /// # Errors
     ///
@@ -84,6 +85,8 @@ impl VirtualTree {
             let nx = self.get(x).ok_or(missing(x))?;
             let ny = self.get(y).ok_or(missing(y))?;
             if nx.tag_name != ny.tag_name
+                || nx.namespace != ny.namespace
+                || nx.prefix != ny.prefix
                 || !same_attributes(nx, ny)
                 || nx.children.len() != ny.children.len()
             {
@@ -102,7 +105,7 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
-    use crate::tests::{family, node, sample};
+    use crate::tests::{HTML, SVG, family, node, sample};
     use crate::tree::FRAGMENT_TAG;
 
     /// `r > (a > (a1 > x, a2), b > b1)`, returned as `[r, a, a1, a2, b, b1, x]`.
@@ -246,6 +249,22 @@ mod tests {
         change(&mut tree, second);
 
         assert_eq!(tree.is_equal(first, second), Ok(expected));
+    }
+
+    #[rstest]
+    #[case::html_by_name(Some(HTML), None, true)]
+    #[case::namespace(Some(SVG), None, false)]
+    #[case::prefix(Some(HTML), Some("x"), false)]
+    fn is_equal_compares_the_namespace_and_the_prefix(
+        #[case] namespace: Option<&str>,
+        #[case] prefix: Option<&str>,
+        #[case] expected: bool,
+    ) {
+        let mut tree = VirtualTree::new();
+        let plain = node(&mut tree, "a");
+        let other = tree.create_element_ns(namespace, prefix, "a").unwrap();
+
+        assert_eq!(tree.is_equal(plain, other), Ok(expected));
     }
 
     #[test]

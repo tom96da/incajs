@@ -3,15 +3,21 @@
 
 //! The content of a template: a fragment the template owns.
 
+use html5ever::ns;
+
 use super::{FRAGMENT_TAG, NodeId, TreeError, VirtualTree};
 
 impl VirtualTree {
     /// Creates a template and its empty content, and returns the id of the template. The content
     /// is no orphan: it lives and dies with the template.
-    pub(super) fn create_template(&mut self, tag_name: String) -> Result<NodeId, TreeError> {
+    pub(super) fn create_template(
+        &mut self,
+        tag_name: String,
+        prefix: Option<String>,
+    ) -> Result<NodeId, TreeError> {
         self.next_id.checked_add(2).ok_or(TreeError::IdsExhausted)?;
-        let template = self.allocate(tag_name)?;
-        let content = self.allocate(FRAGMENT_TAG.to_owned())?;
+        let template = self.allocate(tag_name, Some(ns!(html)), prefix)?;
+        let content = self.allocate(FRAGMENT_TAG.to_owned(), None, None)?;
         self.orphans.remove(&content);
         if let Some(node) = self.nodes.get_mut(&template) {
             node.content = Some(content);
@@ -38,7 +44,7 @@ mod tests {
 
     use super::*;
     use crate::selector::query_selector;
-    use crate::tests::{Fixture, children, node, text};
+    use crate::tests::{Fixture, HTML, SVG, children, node, text};
 
     #[rstest]
     #[case::lowercase("template")]
@@ -64,6 +70,24 @@ mod tests {
         let element = node(&mut tree, tag);
 
         assert_eq!(tree.template_content(element), None);
+    }
+
+    #[test]
+    fn an_svg_template_has_no_content() {
+        let mut tree = VirtualTree::new();
+        let element = tree.create_element_ns(Some(SVG), None, "template").unwrap();
+
+        assert_eq!(tree.template_content(element), None);
+    }
+
+    #[test]
+    fn an_html_template_made_with_a_namespace_has_content() {
+        let mut tree = VirtualTree::new();
+        let element = tree
+            .create_element_ns(Some(HTML), None, "template")
+            .unwrap();
+
+        assert!(tree.template_content(element).is_some());
     }
 
     #[test]
