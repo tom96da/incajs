@@ -584,6 +584,24 @@ mod tests {
     }
 
     #[test]
+    fn for_each_visits_the_tokens_it_started_with_when_the_callback_adds_one() {
+        let body = r"
+            const seen = [];
+            let added = false;
+            list.forEach((token) => {
+                if (!added) {
+                    added = true;
+                    list.add('c');
+                }
+                seen.push(token);
+            });
+            return [seen, list.value];
+            ";
+
+        assert_eq!(list_run(Some("a b"), body), json!([["a", "b"], "a b c"]));
+    }
+
+    #[test]
     fn for_each_reads_the_list_live_when_the_callback_removes_a_token() {
         let body = r"
             const seen = [];
