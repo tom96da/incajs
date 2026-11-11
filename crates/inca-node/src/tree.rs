@@ -44,6 +44,7 @@ mod template;
 mod text;
 
 pub use class_list::ClassListError;
+pub use props::valid_attribute_name;
 
 /// The tag of a node that stands in for a comment.
 pub(crate) const COMMENT_TAG: &str = "#comment";

@@ -86,6 +86,16 @@ impl VirtualTree {
     }
 }
 
+/// Whether `name` is a valid attribute name. A name is invalid when it is empty or holds NUL, ASCII
+/// whitespace, `/`, `=` or `>`.
+#[must_use]
+pub fn valid_attribute_name(name: &str) -> bool {
+    !name.is_empty()
+        && !name
+            .chars()
+            .any(|c| c == '\0' || c.is_ascii_whitespace() || matches!(c, '/' | '=' | '>'))
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
@@ -479,5 +489,24 @@ mod tests {
         #[case] want: &str,
     ) {
         assert_eq!(style_key(key), want, "{key}");
+    }
+
+    #[rstest]
+    #[case::empty("", false)]
+    #[case::nul("a\0b", false)]
+    #[case::space("a b", false)]
+    #[case::tab("a\tb", false)]
+    #[case::newline("a\nb", false)]
+    #[case::form_feed("a\x0cb", false)]
+    #[case::carriage_return("a\rb", false)]
+    #[case::slash("a/b", false)]
+    #[case::equals("a=b", false)]
+    #[case::greater_than("a>b", false)]
+    #[case::vertical_tab("a\x0bb", true)]
+    #[case::non_ascii_space("a\u{a0}b", true)]
+    #[case::colon("a:b", true)]
+    #[case::data("data-x", true)]
+    fn valid_attribute_name_follows_the_name_rule(#[case] name: &str, #[case] valid: bool) {
+        assert_eq!(valid_attribute_name(name), valid, "{name:?}");
     }
 }
