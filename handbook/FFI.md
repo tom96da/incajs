@@ -52,6 +52,7 @@ types derive it:
 | `SourceMaps` | `inca-jsenv/src/sourcemap/store.rs` | The source maps of a runtime | None |
 | `TokenList` | `inca-bridge/src/bindings/token_list.rs` | A `classList` object | None |
 | `TokenListIterator` | `inca-bridge/src/bindings/token_list.rs` | A `classList` iterator | None |
+| `IncaStyle` | `inca-bridge/src/bindings/inline_style.rs` | A `CSSStyleDeclaration` object | None |
 
 ## Retained virtual tree
 
@@ -62,8 +63,8 @@ the custom renderer's output. Each node has:
 | --- | --- | --- |
 | `id` | `u32` | Stable handle returned to JS, used in all subsequent calls. |
 | `tag_name` | `String` | Element kind, used to pick a GPUI element builder. |
-| `style_props` | map | Layout/paint style properties. |
-| `attributes` | map | Non-style attributes/props. |
+| `style_props` | ordered map | Layout/paint style properties, in the order they were set. |
+| `attributes` | map | Attributes and props. `style` holds the text derived from the style props. |
 | `parent` | `Option<u32>` | The node this one is attached to, if any. |
 | `children` | `Vec<u32>` | Ordered child node handles. |
 
@@ -130,6 +131,23 @@ then `px` in any case (`"10px"`), or a string that reads as zero (`"0"`).
 Surrounding whitespace is ignored. A decimal value is a number or a string
 holding one decimal (`"0.5"`). Neither takes `%`. Each key keeps its range;
 `opacity` clamps, any other value outside its range warns.
+
+The text that a style declaration reads back, through `getPropertyValue()`,
+`cssText`, the `style` attribute and `outerHTML`, is computed from the stored
+value:
+
+- A px value or an `auto` value reads as its number in px, with `auto` in lower
+  case.
+- A number reads as its JS number text.
+- An `opacity` reads as the number as written, without clamping.
+- A keyword reads as its entry in the keyword list that matches it, ignoring
+  ASCII case.
+- A keyword pair reads as both keywords, or as one keyword when they are equal.
+- A color reads as `transparent` for that keyword, otherwise as `rgb()`, and as
+  `rgba()` when the alpha is below 255. The alpha is the shortest decimal that
+  rounds back to the same byte.
+- A value the reader rejects, and a boolean value, have no text and no
+  declaration.
 
 | Key | Value | Maps to |
 | --- | --- | --- |
@@ -198,13 +216,19 @@ be passed, and `undefined` there counts as `null`.
 | `splitText` | `(nodeId: number, offset: number) => number` | Cut the data at `offset`: `nodeId` keeps the head and a new `#text` node holds the tail. The new node follows `nodeId` when `nodeId` has a parent, and has none otherwise, so it is freed at the next frame unless held. Returns its id. Arguments and errors as `substringData`. |
 | `holdNode` | `(nodeId: number) => void` | Keep `nodeId` and its subtree alive while it has no parent. |
 | `releaseNode` | `(nodeId: number) => void` | End the hold. |
-| `setAttribute` | `(nodeId: number, key: string, value: string \| number \| boolean) => void` | Set a non-style attribute prop. Names are folded to ASCII lower case. |
-| `getAttribute` | `(nodeId: number, key: string) => string \| number \| boolean \| null` | Read a non-style attribute prop as stored, or `null` when the key is unset. Names are folded to ASCII lower case. |
-| `removeAttribute` | `(nodeId: number, key: string) => void` | Remove a non-style attribute prop. Removing a key that isn't set does nothing. Names are folded to ASCII lower case. |
-| `attributeNames` | `(nodeId: number) => string[]` | The keys of the non-style attributes of `nodeId`, in the order they were set. |
+| `setAttribute` | `(nodeId: number, key: string, value: string \| number \| boolean) => void` | Set an attribute prop. The `style` key applies the text as declarations, and the stored `style` text derives from the style props. Names are folded to ASCII lower case. Throws `InvalidCharacterError` for a name that is empty or holds NUL, ASCII whitespace, `/`, `=` or `>`. |
+| `getAttribute` | `(nodeId: number, key: string) => string \| number \| boolean \| null` | Read an attribute prop as stored, or `null` when the key is unset. The `style` text derives from the style props. Names are folded to ASCII lower case. |
+| `removeAttribute` | `(nodeId: number, key: string) => void` | Remove an attribute prop. Removing `style` clears the style props. Removing a key that isn't set does nothing. Names are folded to ASCII lower case. |
+| `attributeNames` | `(nodeId: number) => string[]` | The keys of the attributes of `nodeId`, in the order they were set. |
 | `classList` | `(nodeId: number) => DOMTokenList` | The `DOMTokenList` over the `class` attribute of `nodeId`. A list that reads empty for a freed node, an exception to the throw rule below. |
-| `setStyle` | `(nodeId: number, key: string, value: string \| number \| boolean) => void` | Set a style prop. |
-| `removeStyle` | `(nodeId: number, key: string) => void` | Remove a style prop so it renders as if never set. Removing a key that isn't set does nothing. |
+| `setStyle` | `(nodeId: number, key: string, value: string \| number \| boolean) => void` | Set a style prop. The `style` attribute is derived again. |
+| `removeStyle` | `(nodeId: number, key: string) => void` | Remove a style prop so it renders as if never set. Removing a key that isn't set does nothing. The `style` attribute is derived again. |
+| `styleOf` | `(nodeId: number) => CSSStyleDeclaration` | Create a `CSSStyleDeclaration` object over the style props of `nodeId`. The element keeps one object for its lifetime. A freed node gives an empty block. |
+| `datasetGet` | `(nodeId: number, key: string) => string \| undefined` | The `data-*` attribute of `key` as text, or `undefined` when the attribute is absent or the key has no attribute name. Never throws for a key. |
+| `datasetSet` | `(nodeId: number, key: string, value: string) => void` | Set the `data-*` attribute of `key`. Throws `SyntaxError` for a dash before a lower case letter in `key` and `InvalidCharacterError` for an attribute name that is not valid. A freed node ignores the write after these checks. |
+| `datasetDelete` | `(nodeId: number, key: string) => boolean` | Remove the `data-*` attribute of `key`. Returns `true`, also when nothing was removed. |
+| `datasetKeys` | `(nodeId: number) => string[]` | The keys of the `data-*` attributes of `nodeId` in attribute order. An attribute with an upper case letter in its name has no key and is left out. Empty for a freed node. |
+| `datasetTarget` | `() => object` | A new plain object whose prototype is `DOMStringMap.prototype`, the target of the `dataset` proxy. |
 | `inputValue` | `(nodeId: number) => string` | The text of the input node `nodeId`. Throws a `TypeError` for a node of another tag. |
 | `setInputValue` | `(nodeId: number, value: string) => void` | Replace the text of the input node `nodeId`, without CR and LF. A changed text puts the caret at its end and ends a composition. Throws a `TypeError` for a node of another tag. |
 | `addEventListener` | `(target: number \| "$window", event: string, callback: Function, capture?: boolean, passive?: boolean) => number` | Register `callback` for an event and return its id, see [Registering](#registering) and [Tagged targets](#tagged-targets). A `callback` that is not a function throws a `TypeError`. `capture` and `passive` default to `false`. |
@@ -239,13 +263,17 @@ Shared throw rules, all as a `TypeError` except where noted:
   `undefined` or `null` throws.
 - `addEventListener` throws a `RangeError` after the last id.
 - `setAttribute` and `setStyle` throw for a `value` that is not a string, number or boolean.
+- `setAttribute` and `datasetSet` throw `InvalidCharacterError` for an attribute name that is not
+  valid. `datasetSet` throws `SyntaxError` for a dash before a lower case letter in its key.
 - `dispatchEvent` throws for an argument that is not an event of the host.
 - A `nodeId`, `parentId`, `childId` or `refId` that names no node
   throws, except in the calls that let go of something: `releaseNode`,
   `destroyNode`, `releaseListeners`, `removeEventListener`, `blurNode` and
   the `childId` of `removeChild` ignore it. The host can free a node before
   the caller lets go of it.
-- `classList` does not throw for a freed `nodeId`. It returns a list that reads empty.
+- `classList`, `styleOf`, `datasetGet`, `datasetSet`, `datasetDelete` and `datasetKeys` do not throw
+  for a freed `nodeId`. `classList` and `styleOf` return an object that reads empty, `datasetSet`
+  still throws for a key that makes an invalid name, and the other calls read nothing.
 - `scrollIntoViewNode` throws for a `block` or `inline` outside the four
   alignment names.
 

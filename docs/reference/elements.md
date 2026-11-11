@@ -239,12 +239,32 @@ with the differences below. The listener methods are described in
   - `getNamedItemNS()`, `setNamedItemNS()` and `removeNamedItemNS()`
 - An `Attr` has no `Node` members.
 
+### `style` and `dataset`
+
+- `style` reads and writes the keys of [Recognized style keys](#recognized-style-keys) and these
+  host-only keys:
+  - `textColor`
+  - `textSize`
+  - `cornerRadius`
+- A name that `setProperty()` does not know, and a value the host cannot read such as a number
+  without a unit, print a warning and change nothing.
+- `!important` is dropped. `getPropertyPriority()` returns an empty string.
+- A shorthand key is stored as written. Reading a longhand does not take the shorthand's value, and
+  a longhand wins over its shorthand whatever the order.
+- `style` has no indexed access and is not iterable. These members read the declarations:
+  - `item()`
+  - `length`
+- `getAttribute("style")` returns the declarations the host applied, in
+  serialized form, also before any write. Declarations the host dropped are not
+  in it. An attribute selector and `isEqualNode()` read that text. The attribute
+  is created by the first declaration written, so `a`, `style.width`, `b` lists
+  `a, style, b`.
+
 ### Parsed HTML
 
 - A `style` attribute in parsed markup applies the declarations that
-  [`:style`](#recognized-style-keys) knows and warns about the others. The attribute itself is not
-  kept: `getAttribute("style")` returns `null`, and reading the markup writes the applied
-  declarations.
+  [`:style`](#recognized-style-keys) knows and warns about the others. The
+  attribute reads back the applied declarations.
 - An `on*` attribute stays a plain attribute and registers no listener.
 - Attribute names with capitals, such as `viewBox`, come back in lower case from
   `getAttributeNames()` and `outerHTML`. `svg` and `math` parse as plain elements.
@@ -263,7 +283,6 @@ have, and using them fails the build:
   fails at the template-compiler stage.
 - **No `fetch`**: `fetch` isn't provided as a global by the JS runtime
   Incarnative.js embeds.
-- **`ref` lacks other element members**: `dataset` and `style` are missing.
 
 Event modifiers such as `.stop`, `.once` and `@keydown.enter` are documented
 in [Events: Event modifiers](./events#event-modifiers).
