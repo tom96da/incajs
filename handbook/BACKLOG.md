@@ -1629,6 +1629,14 @@ A fixed entry is deleted and its ID is never reused.
   `styleModule` holds `"incajs/style"`. `build.mts` and `dev.mts` import `defaultFrontend` and
   `defaultBundler` from it, so both commands depend on the module that names Vue and Vite.
 
+- **B-304 `DOMTokenList` has no indexed access**
+  `Units: bridge · Size: M · Impact: Low`
+
+  `classList[0]` reads `undefined`, and `Object.keys` and `JSON.stringify` show no indexes. In
+  browsers the list exposes its tokens as indexed properties. `item(i)` and iteration read the
+  tokens. Fix: make the class exotic for index access, after a spike proves that prototype lookup,
+  expando properties and `defineProperty` still work on an exotic class.
+
 - **B-317 `window` is not a global**
   `Units: host · Size: S · Impact: Low`
 

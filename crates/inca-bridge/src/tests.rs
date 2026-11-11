@@ -600,3 +600,35 @@ pub(crate) fn focus_scene(
     let window = cx.add_window(|_, _| Frame(Rc::clone(&dispatcher)));
     (dispatcher, host, window, node)
 }
+
+/// Runs `body` as a function body next to the natives `n`, a new div `id` and its list `list`.
+/// `class` is the class attribute of the div, absent for `None`. A `freed` div is destroyed after
+/// the list is read from it. Returns what `body` returns, as JSON.
+pub(crate) fn list_exec(class: Option<&str>, freed: bool, body: &str) -> serde_json::Value {
+    let (engine, _host) = crate::test_support::engine_with_bindings();
+    let class = serde_json::to_string(&class).unwrap();
+    let destroy = if freed { "n.destroyNode(id);" } else { "" };
+    let json: String = engine
+        .eval(&format!(
+            r"
+            JSON.stringify((() => {{
+                const n = __inca_native__;
+                const id = n.createNode('div');
+                const class_ = {class};
+                if (class_ !== null) {{
+                    n.setAttribute(id, 'class', class_);
+                }}
+                const list = n.classList(id);
+                {destroy}
+                {body}
+            }})())
+            "
+        ))
+        .unwrap();
+    serde_json::from_str(&json).unwrap()
+}
+
+/// [`list_exec`] on a div that is not freed.
+pub(crate) fn list_run(class: Option<&str>, body: &str) -> serde_json::Value {
+    list_exec(class, false, body)
+}
