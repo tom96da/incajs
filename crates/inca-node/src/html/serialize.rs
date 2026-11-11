@@ -2,12 +2,15 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Writing a subtree of the tree as HTML.
+//!
+//! An element is written with its qualified name and its namespace, so the rules for void and
+//! raw-text elements apply to the elements of the HTML namespace only.
 
 use std::io;
 
 use html5ever::serialize::SerializeOpts;
 use html5ever::serialize::{Serialize, Serializer, TraversalScope, serialize};
-use html5ever::{LocalName, QualName, ns};
+use html5ever::{LocalName, Namespace, QualName, ns};
 
 use crate::tree::{
     COMMENT_TAG, FRAGMENT_TAG, NodeId, TEXT_TAG, TreeError, VirtualNode, VirtualTree,
@@ -23,7 +26,7 @@ pub enum HtmlScope {
 }
 
 /// The elements that have no content: they write no end tag and no children.
-const VOID_TAGS: [&str; 18] = [
+const VOID_NAMES: [&str; 18] = [
     "area", "base", "basefont", "bgsound", "br", "col", "embed", "frame", "hr", "img", "input",
     "keygen", "link", "meta", "param", "source", "track", "wbr",
 ];
@@ -39,8 +42,16 @@ enum Step {
     Exit(NodeId),
 }
 
-fn html_name(tag: &str) -> QualName {
-    QualName::new(None, ns!(html), LocalName::from(tag))
+/// The name the serializer gets for `node`: its qualified name as the local name, and its
+/// namespace.
+fn element_name(node: &VirtualNode) -> QualName {
+    let namespace = node.namespace_uri().map_or(ns!(), Namespace::from);
+    QualName::new(None, namespace, LocalName::from(&*node.qualified_name()))
+}
+
+/// Whether the node is a void element of the HTML namespace without a prefix.
+fn is_void(node: &VirtualNode) -> bool {
+    node.prefix().is_none() && VOID_NAMES.iter().any(|name| node.is_html(name))
 }
 
 /// The attributes of `node` in insertion order, each written as its text.
@@ -87,7 +98,7 @@ impl Serialize for Subtree<'_> {
             match step {
                 Step::Exit(id) => {
                     if let Some(node) = self.tree.get(id) {
-                        serializer.end_elem(html_name(node.tag_name()))?;
+                        serializer.end_elem(element_name(node))?;
                     }
                 }
                 Step::Enter(id) => {
@@ -100,14 +111,14 @@ impl Serialize for Subtree<'_> {
                         FRAGMENT_TAG => {
                             steps.extend(self.children(id).into_iter().rev().map(Step::Enter));
                         }
-                        tag => {
+                        _ => {
                             let attributes = attribute_list(node);
                             serializer.start_elem(
-                                html_name(tag),
+                                element_name(node),
                                 attributes.iter().map(|(name, text)| (name, text.as_str())),
                             )?;
                             steps.push(Step::Exit(id));
-                            if !VOID_TAGS.contains(&tag) {
+                            if !is_void(node) {
                                 steps.extend(self.children(id).into_iter().rev().map(Step::Enter));
                             }
                         }
@@ -137,7 +148,10 @@ impl VirtualTree {
         let leaf = matches!(tag, TEXT_TAG | COMMENT_TAG);
         let traversal_scope = match scope {
             HtmlScope::Inner if leaf => return Ok(String::new()),
-            HtmlScope::Inner => TraversalScope::ChildrenOnly(Some(html_name(tag))),
+            HtmlScope::Inner if node.in_html_namespace() => {
+                TraversalScope::ChildrenOnly(Some(element_name(node)))
+            }
+            HtmlScope::Inner => TraversalScope::ChildrenOnly(None),
             HtmlScope::Outer => TraversalScope::IncludeNode,
         };
         let mut out = Vec::new();
@@ -158,7 +172,7 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
-    use crate::tests::node;
+    use crate::tests::{HTML, SVG, node};
     use crate::tree::AttributeValue;
 
     fn text_node(tree: &mut VirtualTree, data: &str) -> NodeId {
@@ -419,6 +433,132 @@ mod tests {
             outer(&tree, div),
             "<div style=\"width: 5px; color: rgb(255, 0, 0); border-radius: 2px;\"></div>"
         );
+    }
+
+    /// An element of `namespace` holding `data` as a text node.
+    fn holding_ns(
+        tree: &mut VirtualTree,
+        namespace: &str,
+        prefix: Option<&str>,
+        local: &str,
+        data: &str,
+    ) -> NodeId {
+        let parent = tree
+            .create_element_ns(Some(namespace), prefix, local)
+            .unwrap();
+        let child = text_node(tree, data);
+        tree.append_child(parent, child).unwrap();
+        parent
+    }
+
+    #[rstest]
+    #[case::svg_prefix(SVG, "s", "g", "<s:g>x</s:g>")]
+    #[case::html_prefix(HTML, "x", "Y", "<x:Y>x</x:Y>")]
+    fn a_prefixed_element_is_written_with_its_qualified_name(
+        #[case] namespace: &str,
+        #[case] prefix: &str,
+        #[case] local: &str,
+        #[case] expected: &str,
+    ) {
+        let mut tree = VirtualTree::new();
+        let element = holding_ns(&mut tree, namespace, Some(prefix), local, "x");
+
+        assert_eq!(outer(&tree, element), expected);
+    }
+
+    #[test]
+    fn an_attribute_of_a_prefixed_element_is_written() {
+        let mut tree = VirtualTree::new();
+        let element = tree.create_element_ns(Some(HTML), Some("x"), "Y").unwrap();
+        tree.set_attribute(element, "k", "v").unwrap();
+
+        assert_eq!(outer(&tree, element), "<x:Y k=\"v\"></x:Y>");
+    }
+
+    #[test]
+    fn the_text_of_a_prefixed_html_style_is_escaped() {
+        let mut tree = VirtualTree::new();
+        let element = holding_ns(&mut tree, HTML, Some("x"), "style", "a&b");
+
+        assert_eq!(outer(&tree, element), "<x:style>a&amp;b</x:style>");
+    }
+
+    #[test]
+    fn a_prefixed_void_element_is_written_with_its_children_and_an_end_tag() {
+        let mut tree = VirtualTree::new();
+        let p = node(&mut tree, "p");
+        let br = tree.create_element_ns(Some(HTML), Some("x"), "br").unwrap();
+        let inside = text_node(&mut tree, "in");
+        tree.append_child(p, br).unwrap();
+        tree.append_child(br, inside).unwrap();
+
+        assert_eq!(outer(&tree, p), "<p><x:br>in</x:br></p>");
+    }
+
+    #[test]
+    fn text_after_a_prefixed_void_element_in_a_style_is_still_escaped() {
+        let mut tree = VirtualTree::new();
+        let div = node(&mut tree, "div");
+        let style = node(&mut tree, "style");
+        let br = tree.create_element_ns(Some(HTML), Some("x"), "br").unwrap();
+        let after = text_node(&mut tree, "a&b");
+        tree.append_child(div, style).unwrap();
+        tree.append_child(style, br).unwrap();
+        tree.append_child(div, after).unwrap();
+
+        assert_eq!(
+            outer(&tree, div),
+            "<div><style><x:br></x:br></style>a&amp;b</div>"
+        );
+    }
+
+    #[test]
+    fn an_svg_style_escapes_its_text() {
+        let mut tree = VirtualTree::new();
+        let element = holding_ns(&mut tree, SVG, None, "style", "a&b");
+
+        assert_eq!(outer(&tree, element), "<style>a&amp;b</style>");
+    }
+
+    #[test]
+    fn an_svg_link_writes_its_children_and_an_end_tag() {
+        let mut tree = VirtualTree::new();
+        let element = holding_ns(&mut tree, SVG, None, "link", "x");
+
+        assert_eq!(outer(&tree, element), "<link>x</link>");
+    }
+
+    #[rstest]
+    #[case::style("style", "a&b<c", "a&amp;b&lt;c", "a&b<c")]
+    #[case::script("script", "a&b<c", "a&amp;b&lt;c", "a&b<c")]
+    fn the_inner_markup_of_a_raw_text_element_is_escaped_in_svg_only(
+        #[case] local: &str,
+        #[case] data: &str,
+        #[case] svg: &str,
+        #[case] html: &str,
+    ) {
+        let mut tree = VirtualTree::new();
+        let in_svg = holding_ns(&mut tree, SVG, None, local, data);
+        let in_html = holding_ns(&mut tree, HTML, None, local, data);
+
+        assert_eq!(inner(&tree, in_svg), svg);
+        assert_eq!(inner(&tree, in_html), html);
+    }
+
+    #[test]
+    fn xlink_attributes_and_nested_svg_content_round_trip() {
+        let markup = concat!(
+            "<svg viewBox=\"0 0 1 1\" xlink:href=\"u\">",
+            "<foreignObject><div></div></foreignObject></svg>"
+        );
+        let mut tree = VirtualTree::new();
+        let first = tree.parse_html(None, markup).unwrap();
+
+        let written = tree
+            .serialize_html(first.fragment, HtmlScope::Inner)
+            .unwrap();
+
+        assert_eq!(written, markup);
     }
 
     #[test]

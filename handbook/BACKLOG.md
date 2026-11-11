@@ -1504,18 +1504,6 @@ A fixed entry is deleted and its ID is never reused.
   `document` at all times. Fix: add a second document object for them with the
   `document` redesign.
 
-- **B-289 Parsed `svg` and `math` content has no namespace**
-  `Units: host · Size: M · Impact: Low`
-
-  Parsed `svg` and `math` content has no namespace, so attribute names with capitals (`viewBox`)
-  are stored and written in lower case, and an `svg` context parses as HTML. Fix: add a namespace
-  field to the node and `createElementNS`, and keep the case of attribute names of elements in a
-  foreign namespace.
-
-  Inside `svg`, a `template` element gets a content fragment and is hidden, because the tree matches
-  the tag only. Its parsed children go to its own children and serialization writes the empty
-  content, so the children are lost.
-
 - **B-290 Parsing markup with many misnested formatting end tags is slow**
   `Units: node · Size: M · Impact: Low`
 
@@ -1689,3 +1677,13 @@ A fixed entry is deleted and its ID is never reused.
   Vue's development build reads `window.ShadowRoot` unguarded in `mount()` (`normalizeContainer`),
   and `window` is not a global, so `inca dev` with Vapor mode throws at mount. Fix: guard the
   `window` read in the host, or provide a `window` global.
+
+- **B-318 A prefixed HTML element with a void name writes an end tag**
+  `Units: node · Size: S · Impact: Low`
+
+  For an element made with `createElementNS()` in the HTML namespace, with a prefix and a void
+  local name (`x:br`, `x:img`, `x:input`) and a child, Chromium and WebKit write `<p><x:br></p>`
+  with neither child nor end tag, and Firefox writes `<p><br></p>`. In the SVG namespace Chromium
+  and WebKit write `<x:br>in</x:br>` and Firefox writes `<br>in</br>`, which drops the prefix. The
+  host writes the child and the end tag in the HTML namespace too (`<p><x:br>in</x:br></p>`).
+

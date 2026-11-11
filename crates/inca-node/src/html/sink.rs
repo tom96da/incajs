@@ -23,6 +23,45 @@ use html5ever::{Attribute, LocalName, Namespace, QualName, TokenizerResult, loca
 use crate::tree::{COMMENT_TAG, FRAGMENT_TAG, NodeId, TEXT_TAG};
 use crate::tree::{TreeError, VirtualNode, VirtualTree};
 
+/// The element a fragment parse takes as its context.
+pub(super) struct Context {
+    namespace: Option<Namespace>,
+    local_name: String,
+    /// Whether the `encoding` attribute names HTML. The tree builder reads it for a `MathML`
+    /// `annotation-xml` only.
+    integration_point: bool,
+}
+
+impl Context {
+    /// The `body` element of the HTML namespace.
+    pub(super) fn body() -> Self {
+        Self {
+            namespace: Some(ns!(html)),
+            local_name: "body".to_owned(),
+            integration_point: false,
+        }
+    }
+
+    /// The context that `node` stands for. The local name of an HTML element is in lower case.
+    pub(super) fn of(node: &VirtualNode) -> Self {
+        let local_name = if node.in_html_namespace() {
+            node.tag_name().to_ascii_lowercase()
+        } else {
+            node.tag_name().to_owned()
+        };
+        let holds_html = node.attributes().get("encoding").is_some_and(|value| {
+            let text = value.text();
+            text.eq_ignore_ascii_case("text/html")
+                || text.eq_ignore_ascii_case("application/xhtml+xml")
+        });
+        Self {
+            namespace: node.namespace_uri().map(Namespace::from),
+            local_name,
+            integration_point: holds_html,
+        }
+    }
+}
+
 pub(super) type Handle = u64;
 
 /// The first handle that stands in for a node.
@@ -74,6 +113,8 @@ pub(super) struct HtmlSink<'a> {
     pub(super) last_section: RefCell<HashMap<Handle, Handle>>,
     /// The elements the tree builder has closed.
     pub(super) closed: RefCell<HashSet<Handle>>,
+    /// The `MathML` `annotation-xml` elements that hold HTML.
+    integration_points: RefCell<HashSet<Handle>>,
 }
 
 /// The id a handle names, `None` for a stand-in.
@@ -98,6 +139,7 @@ impl<'a> HtmlSink<'a> {
             attached: RefCell::default(),
             last_section: RefCell::default(),
             closed: RefCell::default(),
+            integration_points: RefCell::default(),
         })
     }
 
@@ -105,10 +147,13 @@ impl<'a> HtmlSink<'a> {
         node_of(self.document).unwrap_or_default()
     }
 
-    /// Creates an element of the HTML namespace that the tree builder takes as the context.
-    pub(super) fn create_context(&self, tag: &str) -> Handle {
-        let name = QualName::new(None, ns!(html), LocalName::from(tag));
-        self.create_element(name, Vec::new(), ElementFlags::default())
+    /// Creates the element that the tree builder takes as the context.
+    pub(super) fn create_context(&self, context: &Context) -> Handle {
+        let namespace = context.namespace.clone().unwrap_or(ns!());
+        let name = QualName::new(None, namespace, LocalName::from(&*context.local_name));
+        let mut flags = ElementFlags::default();
+        flags.mathml_annotation_xml_integration_point = context.integration_point;
+        self.create_element(name, Vec::new(), flags)
     }
 
     fn stand_in(&self) -> Handle {
@@ -231,12 +276,11 @@ pub(super) fn parse_fragment(sink: HtmlSink<'_>, context: Handle, markup: &str) 
     tokenizer.sink.0.sink.finish()
 }
 
-/// The key of an attribute: its name with the prefix, in ASCII lower case.
-fn attribute_key(name: &QualName) -> String {
-    let local = name.local.to_ascii_lowercase().to_string();
+/// The name of an attribute with its prefix.
+fn prefixed_name(name: &QualName) -> String {
     match &name.prefix {
-        Some(prefix) => format!("{}:{local}", prefix.to_ascii_lowercase()),
-        None => local,
+        Some(prefix) => format!("{prefix}:{}", name.local),
+        None => name.local.to_string(),
     }
 }
 
@@ -276,17 +320,14 @@ impl TreeSink for HtmlSink<'_> {
         }
     }
 
-    fn create_element(
-        &self,
-        name: QualName,
-        attrs: Vec<Attribute>,
-        _flags: ElementFlags,
-    ) -> Handle {
+    fn create_element(&self, name: QualName, attrs: Vec<Attribute>, flags: ElementFlags) -> Handle {
         let created = self.change(|tree| {
-            let id = tree.create_node(&*name.local)?;
+            let id = tree.create_element_ns(Some(&*name.ns), None, &*name.local)?;
             let mut warnings = Vec::new();
             for attribute in &attrs {
-                let key = attribute_key(&attribute.name);
+                let given = prefixed_name(&attribute.name);
+                let node = tree.get(id).ok_or(TreeError::NodeNotFound(id))?;
+                let key = node.attribute_key(&given).into_owned();
                 if key == "style" {
                     let lines = tree.set_style_text(id, &attribute.value)?;
                     warnings.extend(lines.into_iter().map(|line| (id, line)));
@@ -304,6 +345,9 @@ impl TreeSink for HtmlSink<'_> {
             }
             None => self.stand_in(),
         };
+        if flags.mathml_annotation_xml_integration_point {
+            self.integration_points.borrow_mut().insert(handle);
+        }
         self.names.borrow_mut().insert(handle, name);
         handle
     }
@@ -395,6 +439,10 @@ impl TreeSink for HtmlSink<'_> {
         self.change(|tree| tree.move_children(from, to));
     }
 
+    fn is_mathml_annotation_xml_integration_point(&self, handle: &Handle) -> bool {
+        self.integration_points.borrow().contains(handle)
+    }
+
     fn allow_declarative_shadow_roots(&self, _intended_parent: &Handle) -> bool {
         false
     }
@@ -411,6 +459,7 @@ mod tests {
 
     use super::*;
     use crate::html::{children_shape, shape};
+    use crate::tests::{HTML, MATHML, SVG};
 
     fn parse(markup: &str) -> (VirtualTree, crate::ParsedHtml) {
         let mut tree = VirtualTree::new();
@@ -441,9 +490,9 @@ mod tests {
     #[rstest]
     #[case::lower_case_key("<div id=a DATA-X=B>", vec![pair("id", "a"), pair("data-x", "B")])]
     #[case::valueless("<input disabled>", vec![pair("disabled", "")])]
-    #[case::camel_case_foreign_key("<svg viewBox='0 0 1 1'>", vec![pair("viewbox", "0 0 1 1")])]
+    #[case::camel_case_foreign_key("<svg viewBox='0 0 1 1'>", vec![pair("viewBox", "0 0 1 1")])]
     #[case::prefixed_key("<svg xlink:href=u>", vec![pair("xlink:href", "u")])]
-    fn an_element_keeps_its_attributes_as_lower_case_strings(
+    fn an_element_keeps_its_attributes_as_strings(
         #[case] markup: &str,
         #[case] expected: Vec<(String, String)>,
     ) {
@@ -586,6 +635,96 @@ mod tests {
     #[test]
     fn a_foreign_element_keeps_the_case_of_its_tag() {
         assert_eq!(shape_of("<svg><foreignObject></svg>"), "svg(foreignObject)");
+    }
+
+    fn names_of(html: &crate::ParsedHtml) -> Vec<(&str, Option<&str>)> {
+        html.nodes
+            .iter()
+            .map(|node| (node.tag.as_str(), node.namespace.as_deref()))
+            .collect()
+    }
+
+    #[test]
+    fn parsed_nodes_carry_the_namespace_of_their_element() {
+        let (_tree, html) = parse("<svg><foreignObject></foreignObject></svg>a<!--c--><p>");
+
+        assert_eq!(
+            names_of(&html),
+            vec![
+                ("svg", Some(SVG)),
+                ("foreignObject", Some(SVG)),
+                ("#text", None),
+                ("#comment", None),
+                ("p", Some(HTML)),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_math_element_is_in_the_mathml_namespace() {
+        let (_tree, html) = parse("<math><mi>");
+
+        assert_eq!(
+            names_of(&html),
+            vec![("math", Some(MATHML)), ("mi", Some(MATHML))]
+        );
+    }
+
+    #[test]
+    fn a_template_in_svg_has_no_content() {
+        let (tree, html) = parse("<svg><template>");
+
+        assert_eq!(tree.template_content(html.nodes[1].id), None);
+    }
+
+    #[rstest]
+    #[case::text_html("text/html", "math(annotation-xml(div))")]
+    #[case::xhtml("application/xhtml+xml", "math(annotation-xml(div))")]
+    #[case::upper_case("TEXT/HTML", "math(annotation-xml(div))")]
+    #[case::mixed_case("Text/Html", "math(annotation-xml(div))")]
+    #[case::other("other", "math(annotation-xml) div")]
+    fn an_annotation_xml_that_holds_html_keeps_a_div_as_its_child(
+        #[case] encoding: &str,
+        #[case] expected: &str,
+    ) {
+        let markup = format!("<math><annotation-xml encoding=\"{encoding}\"><div>");
+
+        assert_eq!(shape_of(&markup), expected);
+    }
+
+    #[rstest]
+    #[case::text_html("text/html", HTML)]
+    #[case::xhtml("application/xhtml+xml", HTML)]
+    #[case::upper_case("TEXT/HTML", HTML)]
+    #[case::other_encoding("other", MATHML)]
+    fn an_annotation_xml_context_that_holds_html_takes_html_children(
+        #[case] encoding: &str,
+        #[case] expected: &str,
+    ) {
+        let mut tree = VirtualTree::new();
+        let node = tree
+            .create_element_ns(Some(MATHML), None, "annotation-xml")
+            .unwrap();
+        tree.set_attribute(node, "encoding", encoding).unwrap();
+
+        let html = tree.parse_html(Some(node), "<mi>").unwrap();
+
+        assert_eq!(names_of(&html), vec![("mi", Some(expected))]);
+    }
+
+    #[test]
+    fn an_svg_context_parses_its_markup_as_svg() {
+        let mut tree = VirtualTree::new();
+        let node = tree.create_element_ns(Some(SVG), None, "svg").unwrap();
+
+        let html = tree
+            .parse_html(Some(node), "<title>x</title><div>")
+            .unwrap();
+
+        assert_eq!(
+            names_of(&html),
+            vec![("title", Some(SVG)), ("#text", None), ("div", Some(HTML))]
+        );
     }
 
     #[test]
