@@ -1637,7 +1637,6 @@ A fixed entry is deleted and its ID is never reused.
 - **B-303 The default stack names Vue and Vite in several places**
   `Units: cli · Size: M · Impact: Low`
 
-  `vueViteIntegration` takes the runtime module name as an argument but fixes `styleModule` and
-  `inject` to `incajs` inside, so `defaultPlugins.mts` names the package in two ways. `build.mts`
-  and `dev.mts` import `defaultFrontend` and `defaultBundler` from it, so both commands depend on
-  the module that names Vue and Vite, and `defaultBundler` is built from `defaultFrontend.id`.
+  `defaultPlugins.mts` names `incajs` in two ways: `inject` holds `["incajs", "document"]` and
+  `styleModule` holds `"incajs/style"`. `build.mts` and `dev.mts` import `defaultFrontend` and
+  `defaultBundler` from it, so both commands depend on the module that names Vue and Vite.

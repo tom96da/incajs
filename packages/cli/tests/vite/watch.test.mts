@@ -12,7 +12,7 @@ import { createViteBundler } from "../../src/vite/index.mts";
 import { scratchApp, TEST_INTEGRATION } from "./scratchApp.mts";
 import type { BuildOutput, Bundler, Watcher } from "../../src/types.mts";
 
-const vite = createViteBundler(adapterCore, ["incajs", "vue"], TEST_INTEGRATION);
+const vite = createViteBundler(adapterCore, TEST_INTEGRATION);
 const watch: Bundler["watch"] = (options) => vite.watch(options);
 
 const { setUp, tearDown, makeApp } = scratchApp("watch");

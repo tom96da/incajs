@@ -5,7 +5,7 @@ import { build as buildOnce } from "vite";
 
 import { toBuildOutput } from "./captureOutput.mts";
 import { resolveViteConfig } from "./config.mts";
-import type { AdapterCore, BuildOptions, BuildOutput, FrontendId } from "../adapterCore.mts";
+import type { AdapterCore, BuildOptions, BuildOutput } from "../adapterCore.mts";
 import type { ViteIntegration } from "./integration.mts";
 
 /**
@@ -14,7 +14,6 @@ import type { ViteIntegration } from "./integration.mts";
  */
 export async function build(
   core: AdapterCore,
-  frontend: FrontendId,
   integration: ViteIntegration,
   {
     entry,
@@ -33,7 +32,6 @@ export async function build(
   await buildOnce(
     resolveViteConfig({
       core,
-      frontend,
       integration,
       entry,
       root,
