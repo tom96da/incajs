@@ -50,6 +50,8 @@ types derive it:
 | `Encoder` | `inca-jsenv/src/encoding/encoder.rs` | A `TextEncoder` object | None |
 | `Decoder` | `inca-jsenv/src/encoding/decoder.rs` | A `TextDecoder` object | None |
 | `SourceMaps` | `inca-jsenv/src/sourcemap/store.rs` | The source maps of a runtime | None |
+| `TokenList` | `inca-bridge/src/bindings/token_list.rs` | A `classList` object | None |
+| `TokenListIterator` | `inca-bridge/src/bindings/token_list.rs` | A `classList` iterator | None |
 
 ## Retained virtual tree
 
@@ -200,6 +202,7 @@ be passed, and `undefined` there counts as `null`.
 | `getAttribute` | `(nodeId: number, key: string) => string \| number \| boolean \| null` | Read a non-style attribute prop as stored, or `null` when the key is unset. Names are folded to ASCII lower case. |
 | `removeAttribute` | `(nodeId: number, key: string) => void` | Remove a non-style attribute prop. Removing a key that isn't set does nothing. Names are folded to ASCII lower case. |
 | `attributeNames` | `(nodeId: number) => string[]` | The keys of the non-style attributes of `nodeId`, in the order they were set. |
+| `classList` | `(nodeId: number) => DOMTokenList` | The `DOMTokenList` over the `class` attribute of `nodeId`. A list that reads empty for a freed node, an exception to the throw rule below. |
 | `setStyle` | `(nodeId: number, key: string, value: string \| number \| boolean) => void` | Set a style prop. |
 | `removeStyle` | `(nodeId: number, key: string) => void` | Remove a style prop so it renders as if never set. Removing a key that isn't set does nothing. |
 | `inputValue` | `(nodeId: number) => string` | The text of the input node `nodeId`. Throws a `TypeError` for a node of another tag. |
@@ -242,6 +245,7 @@ Shared throw rules, all as a `TypeError` except where noted:
   `destroyNode`, `releaseListeners`, `removeEventListener`, `blurNode` and
   the `childId` of `removeChild` ignore it. The host can free a node before
   the caller lets go of it.
+- `classList` does not throw for a freed `nodeId`. It returns a list that reads empty.
 - `scrollIntoViewNode` throws for a `block` or `inline` outside the four
   alignment names.
 
@@ -276,6 +280,16 @@ templates included. An entry whose `parentId` is no id of the list is a root. `d
 a `#text` or `#comment` node and `null` for any other node. A `style` attribute applies as style
 props and its warnings print through `warn`. An `input` takes the typed text of its `value`
 attribute.
+
+### Token lists
+
+`classList` returns a native class instance, `TokenList`, that holds the node id and no JS value.
+Its prototype lives in the `interfaces` store of the realm vault under `DOMTokenList`, and the
+global `DOMTokenList` constructor throws a `TypeError` when called. The write methods throw a
+`DOMException` named `SyntaxError` for an empty token and `InvalidCharacterError` for a token with
+ASCII whitespace. The host checks every token of a call before it changes the `class` attribute.
+The iterators of `keys`, `values` and `entries` are native class instances too, and their prototype
+is stored under `DOMTokenList Iterator`.
 
 ### Event dispatch
 

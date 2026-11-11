@@ -86,7 +86,7 @@ A fixed entry is deleted and its ID is never reused.
   `Units: core,bridge · Size: L · Impact: Medium`
 
   The element handle lacks:
-  - `classList`, `className`, `dataset`, `style`;
+  - `dataset`, `style`;
   - the modern mutation methods (`append`, `prepend`, `before`, `after`,
     `remove`, `replaceWith`, `replaceChildren`).
 
