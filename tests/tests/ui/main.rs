@@ -28,6 +28,7 @@ mod reactivity;
 mod removed;
 mod scroll;
 mod style_element;
+mod style_member;
 mod style_sfc;
 mod tabindex;
 mod template;
