@@ -10,6 +10,7 @@ export type { ScrollIntoViewOptions, ScrollOptions } from "./element/scroll.mts"
 export type {
   Attr,
   CSSStyleDeclaration,
+  DOMStringMap,
   HTMLCollectionOf,
   IncaElement,
   IncaFragment,

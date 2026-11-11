@@ -75,6 +75,7 @@ const makeEl = (): IncaElement => ({
   removeAttribute: () => {},
   getAttributeNames: () => [],
   attributes: {} as IncaElement["attributes"],
+  dataset: {},
   __node_id: 1,
   id: "",
   className: "",

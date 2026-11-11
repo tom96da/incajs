@@ -9,6 +9,9 @@ declare global {
   /** The interface object of `document`. */
   var Document: { readonly prototype: object };
 
+  /** The interface object of `element.dataset`, which scripts cannot construct. */
+  var DOMStringMap: { readonly prototype: object };
+
   /** The interface object of shadow roots, which the host never creates. */
   var ShadowRoot: { readonly prototype: object };
 
