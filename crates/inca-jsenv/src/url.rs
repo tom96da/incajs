@@ -18,7 +18,7 @@ use std::rc::Rc;
 #[allow(clippy::disallowed_types)]
 use rquickjs::JsLifetime;
 use rquickjs::function::IntoJsFunc;
-use rquickjs::{Ctx, Function, Object, Result as JsResult, Value};
+use rquickjs::{Class, Ctx, Function, Object, Result as JsResult, Value};
 use url::{Url, form_urlencoded, quirks};
 
 use crate::class::{define_method, given, plain_class, receiver, require};
@@ -175,6 +175,36 @@ pub(crate) fn install(ctx: &Ctx<'_>) -> JsResult<()> {
     url_class::define_url(ctx, &url_proto)?;
     params::define_params(ctx, &params_proto)?;
     iterator::define_iterator(ctx, &iterator_proto)
+}
+
+/// What `console` prints of a `URL` or a `URLSearchParams`, read without running script code.
+pub(crate) enum Printed<'js> {
+    /// The string members of a `URL` in print order with the `searchParams` object.
+    Url {
+        members: Vec<(&'static str, String)>,
+        params: Value<'js>,
+    },
+    /// The pairs of a `URLSearchParams` in list order.
+    Params(Vec<(String, String)>),
+}
+
+/// The state of `value` when it is a `URL` or a `URLSearchParams`, `None` for any other value.
+pub(crate) fn printed<'js>(value: &Value<'js>) -> Option<Printed<'js>> {
+    if let Ok(class) = Class::<UrlInstance>::from_value(value) {
+        let class = class.borrow();
+        let state = class.state.borrow();
+        let url = state.url.as_ref()?;
+        return Some(Printed::Url {
+            members: url_class::MEMBERS
+                .iter()
+                .map(|&(name, read)| (name, read(url)))
+                .collect(),
+            params: class.params.clone().into_value(),
+        });
+    }
+    let class = Class::<ParamsInstance>::from_value(value).ok()?;
+    let pairs = class.borrow().0.borrow().list.clone();
+    Some(Printed::Params(pairs))
 }
 
 /// `value` converted with `ToString`, with each unpaired surrogate replaced by U+FFFD.
