@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 mod html;
+mod inline_style;
 pub mod input_text;
 pub mod scroll;
 pub mod selector;
@@ -10,6 +11,7 @@ mod stylesheet;
 pub mod tree;
 
 pub use html::{HtmlScope, ParsedHtml, ParsedNode};
+pub use inline_style::{css_text, style_item, style_length, style_property_value};
 pub use input_text::{pasted, sanitized, typed};
 pub use scroll::{Align, Rect, scroll_chain, scroll_delta};
 pub use selector::{

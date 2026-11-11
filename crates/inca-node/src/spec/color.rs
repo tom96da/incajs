@@ -20,6 +20,25 @@ pub(super) fn as_color(value: &AttributeValue) -> Option<ColorSpec> {
     }
 }
 
+/// The CSS text of `color`: `rgb(r, g, b)`, and `rgba(r, g, b, a)` when the alpha is below 255.
+pub(super) fn rgb_text(color: ColorSpec) -> String {
+    let [_, r, g, b] = color.rgb.to_be_bytes();
+    if color.alpha == 255 {
+        return format!("rgb({r}, {g}, {b})");
+    }
+    format!("rgba({r}, {g}, {b}, {})", alpha_text(color.alpha))
+}
+
+/// The alpha as a fraction with two decimals when they read back as `alpha`, else with three.
+fn alpha_text(alpha: u8) -> String {
+    let fraction = f64::from(alpha) / 255.0;
+    let two = (fraction * 100.0).round() / 100.0;
+    if to_byte(two * 255.0) == alpha {
+        return two.to_string();
+    }
+    ((fraction * 1000.0).round() / 1000.0).to_string()
+}
+
 fn parse_color(s: &str) -> Option<ColorSpec> {
     if let Some(hex) = s.strip_prefix('#') {
         return parse_hex(hex);
@@ -161,6 +180,18 @@ mod tests {
     use crate::spec::build_spec;
     use crate::tests::{num, style_and_warnings, text};
     use crate::tree::VirtualTree;
+
+    #[rstest]
+    #[case::opaque(ColorSpec::opaque(0xff8000), "rgb(255, 128, 0)")]
+    #[case::alpha_with_two_decimals(
+        ColorSpec { rgb: 0xff0000, alpha: 0x80 },
+        "rgba(255, 0, 0, 0.5)"
+    )]
+    #[case::alpha_with_three_decimals(ColorSpec { rgb: 0, alpha: 1 }, "rgba(0, 0, 0, 0.004)")]
+    #[case::alpha_zero(ColorSpec { rgb: 0xffffff, alpha: 0 }, "rgba(255, 255, 255, 0)")]
+    fn rgb_text_writes_the_color(#[case] color: ColorSpec, #[case] expected: &str) {
+        assert_eq!(rgb_text(color), expected);
+    }
 
     const INVALID: &str = "ignoring invalid color for style key `background`";
 
