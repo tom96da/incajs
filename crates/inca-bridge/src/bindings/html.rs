@@ -168,12 +168,8 @@ fn insert_adjacent_html<'js>(
         {
             return Err(throw_tree_error(&ctx, TreeError::DocumentParent(node_id)));
         }
-        let context = match host
-            .tree
-            .get(container)
-            .map(inca_node::VirtualNode::tag_name)
-        {
-            Some(tag) if tag.eq_ignore_ascii_case("html") => None,
+        let context = match host.tree.get(container) {
+            Some(node) if node.is_html("html") => None,
             _ => Some(container),
         };
         let parsed = host
@@ -238,10 +234,11 @@ fn finish(host: &mut Host, parsed: &ParsedHtml) {
     for (node_id, line) in &parsed.warnings {
         print_style_warning(host, *node_id, line);
     }
-    for node in parsed.nodes.iter().filter(|node| node.tag == "input") {
+    for node in &parsed.nodes {
         let typed = host
             .tree
             .get(node.id)
+            .filter(|input| input.is_html("input"))
             .and_then(|input| input.attributes().get("value"))
             .and_then(AttributeValue::as_str)
             .map(str::to_owned);
@@ -275,6 +272,9 @@ fn parsed_js<'js>(ctx: &Ctx<'js>, position: usize, parsed: &ParsedHtml) -> JsRes
 }
 
 #[cfg(test)]
+mod namespace;
+
+#[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
 
@@ -301,14 +301,14 @@ mod tests {
         const html = (id) => n.innerHtml(id);
         ";
 
-    fn engine() -> (Engine, Rc<RefCell<Host>>) {
+    pub(super) fn engine() -> (Engine, Rc<RefCell<Host>>) {
         let (engine, host) = engine_with_bindings();
         engine.eval::<()>(LISTEN_JS).unwrap();
         engine.eval::<()>(SETUP).unwrap();
         (engine, host)
     }
 
-    fn eval(engine: &Engine, js: &str) -> String {
+    pub(super) fn eval(engine: &Engine, js: &str) -> String {
         engine
             .eval(&format!("JSON.stringify((() => {{ {js} }})())"))
             .unwrap()
@@ -743,21 +743,6 @@ mod tests {
         );
 
         assert_eq!(got, "[[],true]");
-    }
-
-    #[test]
-    fn a_parsed_input_reads_its_value_attribute_as_typed_text() {
-        let (engine, _host) = engine();
-
-        let got = eval(
-            &engine,
-            r"
-            const parsed = n.setInnerHtml(host, '<input value=a>');
-            return n.inputValue(parsed[1][0][0]);
-            ",
-        );
-
-        assert_eq!(got, r#""a""#);
     }
 
     #[test]

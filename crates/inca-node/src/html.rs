@@ -9,8 +9,10 @@
 //!
 //! [`VirtualTree::serialize_html`] writes a subtree back as markup.
 //!
-//! Element names and attribute keys are stored in lower case, without a namespace. A `style`
-//! attribute applies as inline style props and no `style` attribute is stored.
+//! An element keeps the namespace the parser reports. The names and attribute keys of the HTML
+//! namespace are in lower case, and those of `svg` and `math` content keep the case the parser
+//! delivers, such as `viewBox`. A `style` attribute applies as inline style props and no `style`
+//! attribute is stored.
 
 mod depth;
 mod serialize;
@@ -18,13 +20,15 @@ mod sink;
 
 use crate::tree::{COMMENT_TAG, FRAGMENT_TAG, NodeId, TEXT_TAG, TreeError, VirtualTree};
 pub use serialize::HtmlScope;
-use sink::{HtmlSink, node_of, parse_fragment};
+use sink::{Context, HtmlSink, node_of, parse_fragment};
 
 /// One node of a parsed fragment.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParsedNode {
     pub id: NodeId,
     pub tag: String,
+    /// The namespace of an element, `None` for a text node, a comment and a fragment.
+    pub namespace: Option<String>,
     /// The node that holds this one. A top-level node has the result fragment, and the content
     /// fragment of a template has the template.
     pub parent: Option<NodeId>,
@@ -47,8 +51,8 @@ pub struct ParsedHtml {
 impl VirtualTree {
     /// Parses `markup` as the children of `context` and returns the nodes in a new fragment.
     ///
-    /// The tag of `context` selects the tokenizer state and the insertion mode. A fragment and
-    /// `None` stand for `body`. The context node is not changed.
+    /// The namespace and tag of `context` select the tokenizer state and the insertion mode. A
+    /// fragment and `None` stand for `body`. The context node is not changed.
     ///
     /// An element or comment appended to an open element at a depth of 512 levels lands beside
     /// that element, and text stays in its element. Formatting elements that the parser reopens
@@ -65,20 +69,20 @@ impl VirtualTree {
         context: Option<NodeId>,
         markup: &str,
     ) -> Result<ParsedHtml, TreeError> {
-        let tag = match context {
-            None => "body".to_owned(),
+        let context = match context {
+            None => Context::body(),
             Some(id) => {
                 let node = self.get(id).ok_or(TreeError::NodeNotFound(id))?;
                 match node.tag_name() {
                     TEXT_TAG | COMMENT_TAG => return Err(TreeError::LeafParent(id)),
-                    FRAGMENT_TAG => "body".to_owned(),
-                    tag => tag.to_ascii_lowercase(),
+                    FRAGMENT_TAG => Context::body(),
+                    _ => Context::of(node),
                 }
             }
         };
         let sink = HtmlSink::new(self)?;
         let document = sink.document_id();
-        let context_handle = sink.create_context(&tag);
+        let context_handle = sink.create_context(&context);
         let context_id = node_of(context_handle);
         let end = parse_fragment(sink, context_handle, markup);
         let outcome = match end.failure {
@@ -136,6 +140,7 @@ impl VirtualTree {
             entries.push(ParsedNode {
                 id,
                 tag: node.tag_name().to_owned(),
+                namespace: node.namespace_uri().map(str::to_owned),
                 parent: Some(parent),
                 data: is_leaf.then(|| node.data().to_owned()),
             });
