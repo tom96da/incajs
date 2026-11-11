@@ -331,6 +331,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
         () => null,
         () => null,
       ),
+      dataset: {},
       __node_id: rootId,
       id: "",
       className: "",

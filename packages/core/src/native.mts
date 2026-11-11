@@ -54,6 +54,11 @@ interface IncaNative {
   removeAttribute(nodeId: NodeId, key: string): void;
   attributeNames(nodeId: NodeId): string[];
   classList(nodeId: NodeId): DOMTokenList;
+  datasetGet(nodeId: NodeId, key: string): string | undefined;
+  datasetSet(nodeId: NodeId, key: string, value: string): void;
+  datasetDelete(nodeId: NodeId, key: string): boolean;
+  datasetKeys(nodeId: NodeId): string[];
+  datasetTarget(): object;
   linkedNode(nodeId: NodeId, link: NodeLink): NodeId | null;
   childNodeIds(nodeId: NodeId): NodeId[];
   isConnected(nodeId: NodeId): boolean;

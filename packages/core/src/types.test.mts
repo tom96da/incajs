@@ -263,3 +263,9 @@ describe("the style member", () => {
     expectTypeOf<CSSStyleDeclaration["background-color"]>().toEqualTypeOf<string>();
   });
 });
+
+describe("the dataset type", () => {
+  it("reads a key as a string or undefined", () => {
+    expectTypeOf<IncaElement["dataset"]["x"]>().toEqualTypeOf<string | undefined>();
+  });
+});

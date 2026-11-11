@@ -105,6 +105,14 @@ export interface Attr {
   readonly ownerElement: IncaElement | null;
 }
 
+/**
+ * The `data-*` attributes of an element as properties. The key `fooBar` names the attribute
+ * `data-foo-bar`. Reads give text and writes convert the value to text.
+ */
+export interface DOMStringMap {
+  [name: string]: string | undefined;
+}
+
 /** A live, read-only list of the attributes of an element in the order they were set. */
 export interface NamedNodeMap {
   readonly [index: number]: Attr;
@@ -597,6 +605,14 @@ export interface IncaElement
    */
   get style(): CSSStyleDeclaration;
   set style(cssText: string | null);
+  /**
+   * The `data-*` attributes as a live object. Every read returns the same object. A write converts
+   * the value to text.
+   * @throws DOMException named `SyntaxError` for a write to a key with a dash before a lower case
+   * letter, and named `InvalidCharacterError` for a key that makes an invalid attribute name
+   * @throws TypeError for a write of a `Symbol` value
+   */
+  readonly dataset: DOMStringMap;
   /**
    * Whether this element matches the selector list. `:focus-visible` and the other interactive and
    * form-state pseudo-classes never match.

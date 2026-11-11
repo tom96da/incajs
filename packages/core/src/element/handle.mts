@@ -35,6 +35,7 @@ import {
 import { attributeMembers, attributeText, requireArguments } from "./attributes.mts";
 import { classMembers } from "./classList.mts";
 import { nodeListOf } from "./collections.mts";
+import { datasetMembers } from "./dataset.mts";
 import { elementTreeMembers } from "./elementTree.mts";
 import { withEventHandlers } from "./eventHandlers.mts";
 import { layoutBox, offsetOf, offsetParentOf, rectOf, tabIndexOf } from "./geometry.mts";
@@ -59,6 +60,7 @@ import { characterDataMembers, createIncaText, nullableText } from "./text.mts";
 import type { IncaDocument, NodeId, TagName } from "../types.mts";
 import type { AttributeMembers } from "./attributes.mts";
 import type { ClassMembers } from "./classList.mts";
+import type { DatasetMembers } from "./dataset.mts";
 import type { ElementTreeMembers } from "./elementTree.mts";
 import type { StyleMembers } from "./inlineStyle.mts";
 import type { HandleBuilders } from "./nodeMutation.mts";
@@ -140,8 +142,8 @@ const builders: HandleBuilders = {
  * Builds the {@link IncaElement} handle for a native node: parentless,
  * childless, with `id`, `focus()`, `blur()`, `click()`, the pointer capture
  * methods, the listener methods of an event target, `tabIndex`,
- * the `value` of an `input`, the `style`, the layout members, the node members and the event
- * handler properties, all driven through the host.
+ * the `value` of an `input`, the `style`, the `dataset`, the `classList`, the layout members,
+ * the node members and the event handler properties, all driven through the host.
  * @param id - the native node's id
  * @param kind - whether the node is an element or a comment stand-in
  * @param tag - the node's element kind, `div` when omitted; a `button` or `input` defaults to tab
@@ -164,6 +166,7 @@ export function createIncaElement(
     | keyof EventHandlers
     | keyof AttributeMembers
     | keyof ClassMembers
+    | keyof DatasetMembers
     | keyof ElementTreeMembers
     | keyof HtmlMembers
     | keyof NodeMembers
@@ -327,6 +330,7 @@ export function createIncaElement(
       Object.getOwnPropertyDescriptors(htmlMembers(element, builders)),
     );
     Object.defineProperties(element, Object.getOwnPropertyDescriptors(styleMembers(id)));
+    Object.defineProperties(element, Object.getOwnPropertyDescriptors(datasetMembers(id)));
   }
   registerNode(element);
   if (isTemplateTag(tag)) attachContent(element, createIncaFragment);

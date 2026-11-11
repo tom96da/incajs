@@ -81,17 +81,16 @@ describe("setAttribute", () => {
     expect(host.setAttribute).not.toHaveBeenCalled();
   });
 
-  it.each([[""], ["a b"], ["a/b"], ["a=b"], ["a>b"], ["a\0b"]])(
-    "throws InvalidCharacterError for the name %j",
-    (name) => {
-      const { host, el } = setup();
+  it("propagates the error the native throws for an invalid name", () => {
+    const { host, el } = setup();
+    host.setAttribute.mockImplementation(() => {
+      throw new DOMException("refused", "InvalidCharacterError");
+    });
 
-      expect(() => el.setAttribute(name, "v")).toThrow(
-        expect.objectContaining({ name: "InvalidCharacterError" }),
-      );
-      expect(host.setAttribute).not.toHaveBeenCalled();
-    },
-  );
+    expect(() => el.setAttribute("a b", "v")).toThrow(
+      expect.objectContaining({ name: "InvalidCharacterError" }),
+    );
+  });
 
   it.each([["a:b"], ["é"], ["data-x"], ["1a"], ["×"]])("accepts the name %j", (name) => {
     const { host, el } = setup();

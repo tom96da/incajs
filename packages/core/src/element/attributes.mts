@@ -23,21 +23,6 @@ export type AttributeMembers = Pick<
   | "attributes"
 >;
 
-/** The characters an attribute name cannot hold. */
-const INVALID_NAME_CHARACTERS = new Set(["\0", "\t", "\n", "\f", "\r", " ", "/", "=", ">"]);
-
-/**
- * Whether `name` is a valid attribute local name: not empty, with no ASCII whitespace, NUL, `/`,
- * `=` or `>`.
- * @param name - the name to check
- * @returns `true` for a valid name
- */
-function validName(name: string): boolean {
-  if (name.length === 0) return false;
-  for (const character of name) if (INVALID_NAME_CHARACTERS.has(character)) return false;
-  return true;
-}
-
 /**
  * Converts a value to text. A `Symbol` throws a `TypeError`.
  * @param value - the value to convert
@@ -199,12 +184,6 @@ export function attributeMembers(id: NodeId, element: IncaElement): AttributeMem
       requireArguments(args, 2, "setAttribute");
       const name = attributeText(args[0]);
       const value = attributeText(args[1]);
-      if (!validName(name)) {
-        throw new DOMException(
-          "the attribute name is not valid. it is empty or holds whitespace, '/', '=' or '>'",
-          "InvalidCharacterError",
-        );
-      }
       if (!isDestroyed(element)) writeAttribute(id, name, value);
     },
     hasAttribute: (...args: [name: string]) => {

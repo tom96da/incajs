@@ -285,6 +285,56 @@ export function attributeNames(nodeId: NodeId): string[] {
 }
 
 /**
+ * Reads the `data-*` attribute that the `dataset` key `key` names.
+ * @param nodeId - the node to read
+ * @param key - the camelCase dataset key
+ * @returns the value as text, or `undefined` when the attribute is absent or the key names none
+ */
+export function datasetGet(nodeId: NodeId, key: string): string | undefined {
+  return native().datasetGet(nodeId, key);
+}
+
+/**
+ * Writes the `data-*` attribute that the `dataset` key `key` names. A freed node ignores the
+ * write.
+ * @param nodeId - the node to update
+ * @param key - the camelCase dataset key
+ * @param value - the attribute text
+ * @throws {DOMException} named `SyntaxError` for a key with a dash before a lower case letter, and
+ * named `InvalidCharacterError` for a key that makes an invalid attribute name
+ */
+export function datasetSet(nodeId: NodeId, key: string, value: string): void {
+  native().datasetSet(nodeId, key, value);
+}
+
+/**
+ * Removes the `data-*` attribute that the `dataset` key `key` names.
+ * @param nodeId - the node to update
+ * @param key - the camelCase dataset key
+ * @returns `true` in every case, also for an absent attribute
+ */
+export function datasetDelete(nodeId: NodeId, key: string): boolean {
+  return native().datasetDelete(nodeId, key);
+}
+
+/**
+ * Lists the `dataset` keys of `nodeId` in attribute order.
+ * @param nodeId - the node to read
+ * @returns the keys, empty for a freed node
+ */
+export function datasetKeys(nodeId: NodeId): string[] {
+  return native().datasetKeys(nodeId);
+}
+
+/**
+ * Creates the target object of a `dataset` proxy. Its prototype is the `DOMStringMap` prototype.
+ * @returns the target
+ */
+export function datasetTarget(): object {
+  return native().datasetTarget();
+}
+
+/**
  * Reads one link of a node in the host tree.
  * @param nodeId - the node to start from
  * @param link - which node to reach

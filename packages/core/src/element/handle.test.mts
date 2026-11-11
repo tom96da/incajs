@@ -649,6 +649,25 @@ describe("createIncaElement registration", () => {
   });
 });
 
+describe("createIncaElement dataset", () => {
+  it("gives an element a dataset", () => {
+    installHost();
+
+    expect("dataset" in createIncaElement(8, "element", "div")).toBe(true);
+  });
+});
+
+describe("createIncaElement destroyed attributes", () => {
+  it("ignores setAttribute with an invalid name on a destroyed element", () => {
+    const host = installHost();
+    const el = createIncaElement(8, "element", "div");
+    markDestroyed(el);
+
+    expect(() => el.setAttribute("a b", "v")).not.toThrow();
+    expect(host.setAttribute).not.toHaveBeenCalled();
+  });
+});
+
 describe("createIncaElement focus and scrollIntoView", () => {
   it.each([
     ["no options", undefined, false],
