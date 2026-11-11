@@ -12,11 +12,12 @@
 mod define;
 mod guard;
 
-pub(crate) use define::plain_class;
+pub use crate::plain_class;
 pub use define::{
     define_accessor, define_class, define_function, define_getter, define_global, define_method,
     define_namespace, define_this_accessor, define_this_getter, define_this_method,
-    getter_function,
+    getter_function, iterator_prototype,
 };
 pub use guard::new_target_prototype;
-pub(crate) use guard::{NEEDS_NEW, given, illegal_constructor, receiver, require};
+pub(crate) use guard::{NEEDS_NEW, given, illegal_constructor};
+pub use guard::{receiver, require};
