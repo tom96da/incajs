@@ -30,7 +30,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
-use html5ever::{Namespace, ns};
+use html5ever::Namespace;
 use indexmap::IndexMap;
 
 mod class_list;
@@ -176,24 +176,11 @@ pub fn js_number_text(value: f64) -> String {
     format!("{sign}{body}")
 }
 
-/// Whether a node of `tag` takes focus without a `tabindex`: a `button` or an
-/// `input`.
-#[must_use]
-pub fn focusable_by_default(tag: &str) -> bool {
-    matches!(tag, "button" | "input")
-}
-
-/// Whether a node of `tag` is a template, whatever the case of the tag.
-#[must_use]
-pub fn is_template_tag(tag: &str) -> bool {
-    tag.eq_ignore_ascii_case("template")
-}
-
-/// Whether `node` is a `button` or an `input` carrying the `disabled`
+/// Whether `node` is an HTML `button` or `input` carrying the `disabled`
 /// attribute.
 #[must_use]
 pub fn is_disabled_control(node: &VirtualNode) -> bool {
-    focusable_by_default(node.tag_name()) && node.attributes().contains_key("disabled")
+    node.is_focusable_by_default() && node.attributes().contains_key("disabled")
 }
 
 /// The inline style props of a node, in the order they were set. Setting a key that exists keeps
@@ -403,41 +390,6 @@ impl VirtualTree {
             })
     }
 
-    /// Allocates a new node and returns its id. Ids are assigned
-    /// sequentially starting at 0 and are never reused, even after the node
-    /// they named is destroyed, so a stale id never names another node.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`TreeError::IdsExhausted`] once `u32::MAX` nodes have been
-    /// created over the tree's lifetime. A template takes two ids, its own and its content's,
-    /// and fails without creating either when fewer are left.
-    pub fn create_node(&mut self, tag_name: impl Into<String>) -> Result<NodeId, TreeError> {
-        let tag_name = tag_name.into();
-        let namespace = VirtualNode::is_element_tag(&tag_name).then_some(ns!(html));
-        self.create_element(namespace, None, tag_name)
-    }
-
-    /// Makes the next id `next`, so a test reaches the end of the id space.
-    #[cfg(test)]
-    pub(crate) fn set_next_id(&mut self, next: NodeId) {
-        self.next_id = next;
-    }
-
-    fn allocate(
-        &mut self,
-        tag_name: String,
-        namespace: Option<Namespace>,
-        prefix: Option<String>,
-    ) -> Result<NodeId, TreeError> {
-        let id = self.next_id;
-        self.next_id = id.checked_add(1).ok_or(TreeError::IdsExhausted)?;
-        self.nodes
-            .insert(id, VirtualNode::new(id, tag_name, namespace, prefix));
-        self.orphans.insert(id);
-        Ok(id)
-    }
-
     #[must_use]
     pub fn get(&self, id: NodeId) -> Option<&VirtualNode> {
         self.nodes.get(&id)
@@ -512,44 +464,10 @@ mod tests {
     use rstest::rstest;
 
     #[test]
-    fn create_node_fails_once_the_id_space_is_used_up() {
-        let mut tree = VirtualTree::new();
-        tree.next_id = NodeId::MAX - 1;
-
-        let last = tree.create_node("div").unwrap();
-        assert_eq!(last, NodeId::MAX - 1);
-        assert_eq!(tree.create_node("div"), Err(TreeError::IdsExhausted));
-        assert_eq!(tree.create_node("div"), Err(TreeError::IdsExhausted));
-        assert_eq!(tree.nodes.len(), 1);
-        assert!(tree.get(last).is_some());
-    }
-
-    #[test]
     fn ids_exhausted_has_a_message() {
         assert_eq!(
             TreeError::IdsExhausted.to_string(),
             "node id space exhausted"
-        );
-    }
-
-    #[test]
-    fn a_fresh_node_has_no_parent() {
-        let mut tree = VirtualTree::new();
-        let node = tree.create_node("div").unwrap();
-
-        assert_eq!(tree.get(node).unwrap().parent(), None);
-    }
-
-    #[test]
-    fn destroyed_ids_are_not_handed_out_again() {
-        let mut tree = VirtualTree::new();
-        let first = tree.create_node("div").unwrap();
-        tree.destroy_node(first);
-
-        assert_ne!(
-            tree.create_node("div").unwrap(),
-            first,
-            "a stale id never names another node"
         );
     }
 

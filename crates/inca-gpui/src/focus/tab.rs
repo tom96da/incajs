@@ -5,7 +5,7 @@
 
 use super::{
     App, AttributeValue, FocusRegistry, NodeId, PendingFocus, Start, TEXT_TAG, VirtualTree, Window,
-    focusable_by_default, hidden_by_attribute, is_disabled_control, js_number_text,
+    hidden_by_attribute, is_disabled_control, js_number_text,
 };
 
 /// Parses a `tabindex` value: optional leading ASCII whitespace, an optional
@@ -193,7 +193,7 @@ impl FocusRegistry {
         while let Some(id) = stack.pop() {
             let Some(node) = tree.get(id) else { continue };
             if self.handles.contains_key(&id)
-                || focusable_by_default(node.tag_name())
+                || node.is_focusable_by_default()
                 || node.attributes().contains_key("tabindex")
             {
                 self.tab_dirty.insert(id);
@@ -204,8 +204,8 @@ impl FocusRegistry {
 
     /// The `tabindex` of `node_id`. A node not connected to the tree's document,
     /// a text node, a node that has an ancestor (or itself) that is a template or has
-    /// `display: none`, `inert` or a hiding `hidden`, and a `disabled` button
-    /// or input have none. A button or input whose `tabindex` is missing or
+    /// `display: none`, `inert` or a hiding `hidden`, and a `disabled` HTML button
+    /// or input have none. An HTML button or input whose `tabindex` is missing or
     /// unparsable has 0.
     pub(super) fn tab_index_of(tree: &VirtualTree, node_id: NodeId) -> Option<i32> {
         let node = tree.get(node_id)?;
@@ -222,7 +222,7 @@ impl FocusRegistry {
                     )
             })
         });
-        let by_default = focusable_by_default(node.tag_name());
+        let by_default = node.is_focusable_by_default();
         if node.tag_name() == TEXT_TAG || hidden || is_disabled_control(node) {
             return None;
         }
@@ -422,6 +422,27 @@ mod tests {
         tree.remove_style(id, "display").unwrap();
         tree.set_attribute(id, "hidden", "until-found").unwrap();
         assert_eq!(FocusRegistry::tab_index_of(&tree, id), Some(0));
+    }
+
+    const SVG: &str = "http://www.w3.org/2000/svg";
+
+    #[rstest]
+    #[case::button("button")]
+    #[case::input("input")]
+    fn an_svg_control_has_no_default_tab_index(#[case] tag: &str) {
+        let (mut tree, _) = rooted_tree(0);
+        let id = tree.create_element_ns(Some(SVG), None, tag).unwrap();
+        tree.append_child(ROOT, id).unwrap();
+        assert_eq!(FocusRegistry::tab_index_of(&tree, id), None, "{tag}");
+    }
+
+    #[test]
+    fn an_svg_template_ancestor_leaves_the_tab_index_of_its_subtree() {
+        let (mut tree, button) = rooted_button(false);
+        let template = tree.create_element_ns(Some(SVG), None, "template").unwrap();
+        tree.append_child(ROOT, template).unwrap();
+        tree.append_child(template, button).unwrap();
+        assert_eq!(FocusRegistry::tab_index_of(&tree, button), Some(0));
     }
 
     #[gpui::test]

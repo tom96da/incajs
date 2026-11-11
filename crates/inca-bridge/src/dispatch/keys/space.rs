@@ -13,9 +13,9 @@ impl EventDispatcher {
     pub(super) fn focused_enabled_button(&self, window: &Window, cx: &App) -> Option<NodeId> {
         let host = self.host.borrow();
         host.focus.focused_node(window, cx).filter(|id| {
-            host.tree.get(*id).is_some_and(|node| {
-                node.tag_name() == "button" && !inca_node::is_disabled_control(node)
-            })
+            host.tree
+                .get(*id)
+                .is_some_and(|node| node.is_html("button") && !inca_node::is_disabled_control(node))
         })
     }
 
@@ -67,6 +67,7 @@ impl EventDispatcher {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
+    use crate::test_support::SVG;
     use crate::tests::keys::{Scene, scene};
     use crate::tests::{at, mouse_at};
     use gpui::{TestAppContext, WindowId};
@@ -201,6 +202,37 @@ mod tests {
         s.focus(cx, s.field);
         s.key(cx, key, false, false);
         s.key(cx, key, true, false);
+        assert_eq!(s.clicks(), "[]");
+    }
+
+    #[gpui::test]
+    fn space_on_a_focused_svg_button_clicks_nothing(cx: &mut TestAppContext) {
+        let s = scene(cx);
+        let button = s
+            .host
+            .borrow_mut()
+            .tree
+            .create_element_ns(Some(SVG), None, "button")
+            .unwrap();
+        {
+            let mut host = s.host.borrow_mut();
+            host.tree.set_attribute(button, "tabindex", "0").unwrap();
+            host.tree.append_child(s.parent, button).unwrap();
+            host.focus.mark_tab_dirty(button);
+        }
+        s.engine
+            .eval::<()>(&format!(
+                r"
+                __inca_test_listen__({button}, 'click', () => {{
+                    out.push('click');
+                }});
+                "
+            ))
+            .unwrap();
+        s.focus(cx, button);
+        assert_eq!(s.focused(cx), Some(button));
+        s.key(cx, "space", false, false);
+        s.key(cx, "space", true, false);
         assert_eq!(s.clicks(), "[]");
     }
 

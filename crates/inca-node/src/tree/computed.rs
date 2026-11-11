@@ -93,7 +93,7 @@ impl VirtualTree {
         let mut pending: Vec<NodeId> = self.document.or(self.root).into_iter().collect();
         while let Some(id) = pending.pop() {
             let Some(node) = self.get(id) else { continue };
-            if node.tag_name().eq_ignore_ascii_case("style") {
+            if node.is_style() {
                 found.push(id);
                 // The children of a `<style>` element are its text.
                 continue;
@@ -214,7 +214,7 @@ mod tests {
 
     use super::*;
     use crate::build_spec;
-    use crate::tests::{Fixture, num, text};
+    use crate::tests::{Fixture, SVG, num, text};
 
     fn padding_top(f: &Fixture, node: NodeId) -> Option<f64> {
         build_spec(&f.tree, node).unwrap().style.padding.top
@@ -381,6 +381,19 @@ mod tests {
                 "width"
             ]
         );
+    }
+
+    #[test]
+    fn an_svg_style_element_applies_its_rules() {
+        let mut f = Fixture::new();
+        let style = f.tree.create_element_ns(Some(SVG), None, "style").unwrap();
+        let css = f.tree.create_node("#text").unwrap();
+        f.attr(css, "value", ".a { width: 40px }");
+        f.tree.append_child(style, css).unwrap();
+        f.tree.append_child(f.root, style).unwrap();
+        let a = f.boxed("a");
+
+        assert_eq!(f.computed(a, "width"), Some(text("40px")));
     }
 
     #[test]
