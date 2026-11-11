@@ -120,12 +120,13 @@ type as in Node. These environment variables override the terminal check:
 - An event prints as its class with only `isTrusted`, such as
   `PointerEvent { isTrusted: [Getter] }` for a click. Its other fields are
   getters on its prototype.
-- A `URL` and a `URLSearchParams` print as `{}`.
 - Symbol-keyed properties and extra properties on arrays, typed arrays and
   errors are dropped. A `WeakMap` prints as a plain object. A circular
   reference prints `[Object]` at the depth limit, with no marker.
 - `%o` prints no hidden fields of a typed array, such as `[buffer]`.
-- A `Date`, `RegExp`, `Map` or `Set` prints like Node, but properties
-  added to it and the name of a subclass are left out.
+- A `Date`, `RegExp`, `Map`, `Set`, `URL` or `URLSearchParams` leaves out the
+  properties added to it and the name of a subclass.
+- A `URL` and a `URLSearchParams` past the depth limit print as `[URL]` and
+  `[URLSearchParams]`, and a `URLSearchParams` prints at most 100 pairs.
 - A string inside an array or object is always single-quoted.
 - Timers always print milliseconds.

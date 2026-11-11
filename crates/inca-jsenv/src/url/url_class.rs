@@ -92,44 +92,55 @@ macro_rules! ignoring {
     };
 }
 
-/// The components that read and write the URL alone: name, getter and setter.
+/// A read of the string a component of the URL holds.
+macro_rules! component {
+    ($get:ident) => {
+        |url| quirks::$get(url).to_owned()
+    };
+}
+
+fn read_href(url: &Url) -> String {
+    quirks::href(url).to_owned()
+}
+
+fn read_search(url: &Url) -> String {
+    quirks::search(url).to_owned()
+}
+
+/// The `origin` of a `file:` URL reads `file://`.
+fn read_origin(url: &Url) -> String {
+    if url.scheme() == "file" {
+        "file://".to_owned()
+    } else {
+        quirks::origin(url)
+    }
+}
+
+/// The string members of a `URL` in print order: name and read.
+pub(super) const MEMBERS: [(&str, Read); 11] = [
+    ("href", read_href),
+    ("origin", read_origin),
+    ("protocol", component!(protocol)),
+    ("username", component!(username)),
+    ("password", component!(password)),
+    ("host", component!(host)),
+    ("hostname", component!(hostname)),
+    ("port", component!(port)),
+    ("pathname", component!(pathname)),
+    ("search", read_search),
+    ("hash", component!(hash)),
+];
+
+/// The components that write the URL alone: name, read and setter.
 const COMPONENTS: [(&str, Read, Write); 8] = [
-    (
-        "protocol",
-        |url| quirks::protocol(url).to_owned(),
-        ignoring!(set_protocol),
-    ),
-    (
-        "username",
-        |url| quirks::username(url).to_owned(),
-        ignoring!(set_username),
-    ),
-    (
-        "password",
-        |url| quirks::password(url).to_owned(),
-        ignoring!(set_password),
-    ),
-    (
-        "host",
-        |url| quirks::host(url).to_owned(),
-        ignoring!(set_host),
-    ),
-    (
-        "hostname",
-        |url| quirks::hostname(url).to_owned(),
-        ignoring!(set_hostname),
-    ),
-    (
-        "port",
-        |url| quirks::port(url).to_owned(),
-        ignoring!(set_port),
-    ),
-    (
-        "pathname",
-        |url| quirks::pathname(url).to_owned(),
-        quirks::set_pathname,
-    ),
-    ("hash", |url| quirks::hash(url).to_owned(), quirks::set_hash),
+    ("protocol", component!(protocol), ignoring!(set_protocol)),
+    ("username", component!(username), ignoring!(set_username)),
+    ("password", component!(password), ignoring!(set_password)),
+    ("host", component!(host), ignoring!(set_host)),
+    ("hostname", component!(hostname), ignoring!(set_hostname)),
+    ("port", component!(port), ignoring!(set_port)),
+    ("pathname", component!(pathname), quirks::set_pathname),
+    ("hash", component!(hash), quirks::set_hash),
 ];
 
 /// A getter that returns what `read` makes of the URL.
@@ -199,29 +210,19 @@ pub(super) fn define_url<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<(
     define_accessor(
         proto,
         "href",
-        getter(ctx, |url| quirks::href(url).to_owned())?,
+        getter(ctx, read_href)?,
         setter(ctx, State::set_href)?,
     )?;
     define_accessor(
         proto,
         "search",
-        getter(ctx, |url| quirks::search(url).to_owned())?,
+        getter(ctx, read_search)?,
         setter(ctx, |state, value| {
             state.set_search(value);
             Ok(())
         })?,
     )?;
-    define_getter(
-        proto,
-        "origin",
-        getter(ctx, |url| {
-            if url.scheme() == "file" {
-                "file://".to_owned()
-            } else {
-                quirks::origin(url)
-            }
-        })?,
-    )?;
+    define_getter(proto, "origin", getter(ctx, read_origin)?)?;
     define_getter(
         proto,
         "searchParams",
@@ -235,11 +236,7 @@ pub(super) fn define_url<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<(
         )?,
     )?;
     for name in ["toString", "toJSON"] {
-        define_method(
-            proto,
-            name,
-            getter(ctx, |url| quirks::href(url).to_owned())?,
-        )?;
+        define_method(proto, name, getter(ctx, read_href)?)?;
     }
     define_global(ctx, "URL", class)
 }

@@ -1428,15 +1428,6 @@ A fixed entry is deleted and its ID is never reused.
   reach it. Fix: refuse a string over a fixed length in `usv`, or an upstream
   fix in the crate.
 
-- **B-280 `console.log` prints an empty object for a `URL`**
-  `Units: jsenv · Size: S · Impact: Low`
-
-  `inspect` has no case for a native class, so
-  `console.log(new URL("http://a"))` prints `{}`. Chromium prints `URL` with
-  `origin`, `protocol`, `username`, `password` and `host`, and
-  `URLSearchParams` as `size=N`. Fix: add a case to `inspect` for native class
-  instances that prints these members.
-
 - **B-281 A `Proxy` record runs all its `getOwnPropertyDescriptor` traps before its `get` traps**
   `Units: jsenv · Size: S · Impact: Low`
 

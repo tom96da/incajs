@@ -52,6 +52,7 @@ Both follow the
 - `new URLSearchParams(record)` reads a `Proxy` record in this order: every
   `getOwnPropertyDescriptor` trap, then every `get` trap.
 - A URL of 4 GiB or more aborts the host.
+- The `origin` of a `file:` URL is `file://`.
 
 These results of parsing and setting differ from the ones of browsers:
 

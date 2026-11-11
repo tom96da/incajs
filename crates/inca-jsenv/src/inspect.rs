@@ -19,6 +19,7 @@ mod array;
 mod builtins;
 mod collections;
 mod object;
+mod url;
 
 use array::write_array;
 pub(crate) use builtins::pin;
