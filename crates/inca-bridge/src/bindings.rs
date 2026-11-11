@@ -11,6 +11,7 @@ mod attributes;
 mod capture;
 pub(crate) mod convert;
 mod create_element;
+mod dataset;
 mod focus;
 mod host;
 mod html;
@@ -34,6 +35,7 @@ use rquickjs::function::IntoJsFunc;
 use rquickjs::{Ctx, Function, Object, Result as JsResult};
 
 use capture::install_capture;
+use dataset::install_dataset;
 use focus::install_focus;
 use html::install_html;
 use inline_style::install_style;
@@ -74,6 +76,7 @@ pub fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
     install_node(&natives)?;
     install_token_list(&natives)?;
     install_style(&natives)?;
+    install_dataset(&natives)?;
     install_events(&natives)?;
     install_focus(&natives)?;
     install_capture(&natives)?;

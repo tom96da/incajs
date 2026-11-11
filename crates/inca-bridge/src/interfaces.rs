@@ -1,11 +1,11 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The interface objects `Document` and `ShadowRoot`, and the store that keeps the prototypes of
-//! the interfaces and of their iterators.
+//! The interface objects `Document`, `ShadowRoot` and `DOMStringMap`, and the store that keeps the
+//! prototypes of the interfaces and of their iterators.
 //!
-//! Both exist before the app runs. Neither can be constructed: the host has one document and no
-//! shadow roots.
+//! All exist before the app runs. None can be constructed: the host has one document, no shadow
+//! roots, and a `DOMStringMap` only as the `dataset` of an element.
 
 use inca_jsenv::class::{define_class, define_global};
 use inca_jsenv::vault;
@@ -67,7 +67,7 @@ pub(crate) fn define_unconstructable<'js>(
     store_prototype(ctx, name, proto)
 }
 
-/// Defines the globals `Document` and `ShadowRoot`.
+/// Defines the globals `Document`, `ShadowRoot` and `DOMStringMap`.
 ///
 /// # Errors
 ///
@@ -84,6 +84,12 @@ pub(crate) fn install(ctx: &Ctx<'_>) -> JsResult<()> {
         &Object::new(ctx.clone())?,
         "ShadowRoot",
         "a shadow root cannot be constructed. the host has no shadow roots",
+    )?;
+    define_unconstructable(
+        ctx,
+        &Object::new(ctx.clone())?,
+        "DOMStringMap",
+        "a DOMStringMap cannot be constructed. read it from dataset",
     )
 }
 
@@ -101,6 +107,7 @@ mod tests {
     const TOKEN_LIST: &str = "a token list cannot be constructed. read it from classList";
     const STYLE: &str =
         "a style declaration cannot be constructed. read it from the style of an element";
+    const DOMSTRING_MAP: &str = "a DOMStringMap cannot be constructed. read it from dataset";
 
     #[rstest]
     #[case::document_new("new Document()", DOCUMENT)]
@@ -111,6 +118,8 @@ mod tests {
     #[case::token_list_call("DOMTokenList()", TOKEN_LIST)]
     #[case::style_new("new CSSStyleDeclaration()", STYLE)]
     #[case::style_call("CSSStyleDeclaration()", STYLE)]
+    #[case::dom_string_map_new("new DOMStringMap()", DOMSTRING_MAP)]
+    #[case::dom_string_map_call("DOMStringMap()", DOMSTRING_MAP)]
     fn constructing_an_interface_throws_a_type_error(#[case] call: &str, #[case] message: &str) {
         let (dispatcher, _host, _reported) = dispatcher_with_engine();
         let got = eval_json(
@@ -136,6 +145,7 @@ mod tests {
     #[case::shadow_root("ShadowRoot")]
     #[case::token_list("DOMTokenList")]
     #[case::style("CSSStyleDeclaration")]
+    #[case::dom_string_map("DOMStringMap")]
     fn an_interface_has_length_zero(#[case] name: &str) {
         let (dispatcher, _host, _reported) = dispatcher_with_engine();
         assert_eq!(
@@ -149,6 +159,7 @@ mod tests {
     #[case::shadow_root("ShadowRoot")]
     #[case::token_list("DOMTokenList")]
     #[case::style("CSSStyleDeclaration")]
+    #[case::dom_string_map("DOMStringMap")]
     fn the_store_keeps_the_prototype_of_every_interface(#[case] name: &str) {
         let (engine, _host) = engine_with_bindings();
 

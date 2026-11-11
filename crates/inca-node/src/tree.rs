@@ -87,7 +87,8 @@ impl AttributeValue {
 
     /// The text of the value: a string as is, a number through [`js_number_text`], a bool as `true`
     /// or `false`.
-    pub(crate) fn text(&self) -> String {
+    #[must_use]
+    pub fn text(&self) -> String {
         match self {
             Self::String(text) => text.clone(),
             Self::Number(number) => js_number_text(*number),

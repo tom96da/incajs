@@ -8,7 +8,7 @@ use std::rc::Rc;
 
 use rquickjs::{Ctx, Exception, IntoJs, Result as JsResult, Value};
 
-use inca_node::{AttributeValue, NodeId, VirtualNode, style_warning};
+use inca_node::{AttributeValue, NodeId, VirtualNode, style_warning, valid_attribute_name};
 
 use super::convert::{JsNodeId, existing_node, or_null, throw_tree_error};
 use super::host::Host;
@@ -18,6 +18,13 @@ pub(super) fn set_attribute<'js>(
 ) -> impl Fn(Ctx<'js>, JsNodeId, String, Value<'js>) -> JsResult<()> {
     move |ctx, JsNodeId(node_id), key, raw| {
         let value = attribute_value_from_js(&ctx, &raw)?;
+        if !valid_attribute_name(&key) {
+            return Err(Exception::throw_dom(
+                &ctx,
+                "InvalidCharacterError",
+                "the attribute name is not valid. pass a name such as data-id",
+            ));
+        }
         let mut host = host.borrow_mut();
         let key = key.to_ascii_lowercase();
         if key == "style" {
@@ -165,7 +172,7 @@ fn attribute_value_to_js<'js>(
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
-    use crate::test_support::{callback_ids, engine_with_bindings};
+    use crate::test_support::{callback_ids, engine_with_bindings, error_name};
     use inca_node::NodeId;
     use rstest::rstest;
 
@@ -256,6 +263,50 @@ mod tests {
             .unwrap();
 
         assert!(gone);
+    }
+
+    #[rstest]
+    #[case::empty("")]
+    #[case::space("a b")]
+    #[case::slash("a/b")]
+    #[case::equals("a=b")]
+    #[case::gt("a>b")]
+    #[case::nul(r"a\0b")]
+    #[case::tab(r"a\tb")]
+    #[case::newline(r"a\nb")]
+    fn set_attribute_throws_invalid_character_for_an_invalid_name(#[case] name: &str) {
+        let (engine, _host) = engine_with_bindings();
+
+        assert_eq!(
+            error_name(
+                &engine,
+                &format!(
+                    "__inca_native__.setAttribute(__inca_native__.createNode('div'), '{name}', 'x')"
+                ),
+            ),
+            "InvalidCharacterError"
+        );
+    }
+
+    #[test]
+    fn set_attribute_with_an_invalid_name_writes_nothing() {
+        let (engine, _host) = engine_with_bindings();
+
+        let got: bool = engine
+            .eval(
+                r"
+                const n = __inca_native__;
+                const node = n.createNode('div');
+                try {
+                    n.setAttribute(node, 'a b', 'x');
+                } catch (e) {
+                }
+                n.attributeNames(node).length === 0;
+                ",
+            )
+            .unwrap();
+
+        assert!(got);
     }
 
     #[test]
