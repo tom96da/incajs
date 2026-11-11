@@ -3,7 +3,7 @@
 
 //! The style keys the host reads, their aliases and the warnings for a bad value.
 
-use super::color::as_color;
+use super::color::{as_color, rgb_text};
 use super::parse::EdgeKeys;
 use super::parse::Overflows;
 use super::parse::StyleFault;
@@ -11,6 +11,7 @@ use super::parse::edges_from;
 use super::parse::margin_length_from;
 use super::parse::non_negative;
 use super::parse::non_negative_px;
+use super::parse::number;
 use super::parse::opacity;
 use super::parse::overflow_pair_from_str;
 use super::parse::size_spec_from;
@@ -19,6 +20,7 @@ use crate::AlignSpec;
 use crate::AttributeValue;
 use crate::DisplaySpec;
 use crate::FlexDirectionSpec;
+use crate::LengthSpec;
 use crate::OverflowSpec;
 use crate::StyleSpec;
 use crate::tree::{StyleMap, js_number_text};
@@ -264,30 +266,56 @@ pub(crate) fn css_name(key: &str) -> String {
     name.replace('_', "-")
 }
 
-/// The CSS text of the style prop `key` set to `value`. `None` when the prop does not apply: a
-/// bool, an empty string and a value that [`style_warning`] flags. A number is written with the
-/// unit its kind takes.
+/// The canonical CSS text of the style prop `key` set to `value`, computed from the value the
+/// spec reads. `None` when the prop has no such value: a bool, an empty string, an unknown key
+/// and a value the reader of the kind rejects.
 pub(crate) fn css_declaration(key: &str, value: &AttributeValue) -> Option<String> {
-    if style_warning(key, value).is_some() {
-        return None;
-    }
-    match value {
-        AttributeValue::String(text) if !text.is_empty() => Some(text.clone()),
-        AttributeValue::Number(number) => {
-            let kind = STYLE_KEYS.iter().find(|entry| entry.key == key)?.kind;
-            match kind {
-                ValueKind::NonNegativePx | ValueKind::NonNegativePxOrAuto | ValueKind::PxOrAuto => {
-                    Some(format!("{}px", js_number_text(*number)))
-                }
-                ValueKind::NonNegativeNumber | ValueKind::Opacity => Some(js_number_text(*number)),
-                // `style_warning` keeps a color number inside `0..=0xffffff`.
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                ValueKind::Color => Some(format!("#{:06x}", *number as u32)),
-                ValueKind::Keyword(_) | ValueKind::KeywordPair(_) => None,
-            }
+    let kind = STYLE_KEYS.iter().find(|entry| entry.key == key)?.kind;
+    match kind {
+        ValueKind::NonNegativePx => non_negative_px(value).map(px_text),
+        ValueKind::PxOrAuto => margin_length_from(value).map(length_text),
+        ValueKind::NonNegativePxOrAuto => size_spec_from(value).map(length_text),
+        ValueKind::NonNegativeNumber => non_negative(value).map(js_number_text),
+        ValueKind::Opacity => number(value).filter(|n| n.is_finite()).map(js_number_text),
+        ValueKind::Keyword(names) => value.as_str().and_then(|name| keyword_text(names, name)),
+        ValueKind::KeywordPair(names) => {
+            let text = value.as_str()?;
+            overflow_pair_from_str(text)?;
+            let mut words = text
+                .split_ascii_whitespace()
+                .map(|word| keyword_text(names, word));
+            let x = words.next()??;
+            let y = words.next().unwrap_or_else(|| Some(x.clone()))?;
+            Some(if x == y { x } else { format!("{x} {y}") })
         }
-        _ => None,
+        ValueKind::Color => match value {
+            AttributeValue::String(text)
+                if text.trim_ascii().eq_ignore_ascii_case("transparent") =>
+            {
+                Some("transparent".to_owned())
+            }
+            _ => as_color(value).map(rgb_text),
+        },
     }
+}
+
+fn px_text(n: f64) -> String {
+    format!("{}px", js_number_text(n))
+}
+
+fn length_text(length: LengthSpec) -> String {
+    match length {
+        LengthSpec::Px(n) => px_text(n),
+        LengthSpec::Auto => "auto".to_owned(),
+    }
+}
+
+/// The entry of `names` that `word` matches without ASCII case, written with `-`.
+fn keyword_text(names: &[&str], word: &str) -> Option<String> {
+    names
+        .iter()
+        .find(|name| name.eq_ignore_ascii_case(word))
+        .map(|name| name.replace('_', "-"))
 }
 
 /// The message for the style prop `key` set to `value` when the key is
@@ -649,15 +677,45 @@ mod tests {
     #[rstest]
     #[case::px("width", num(5.0), Some("5px"))]
     #[case::negative_px("margin", num(-2.5), Some("-2.5px"))]
+    #[case::px_text("width", text("10PX"), Some("10px"))]
+    #[case::unitless_zero("width", text("0"), Some("0px"))]
+    #[case::negative_zero("width", text("-0px"), Some("0px"))]
+    #[case::auto("width", text("AUTO"), Some("auto"))]
+    #[case::margin_auto("margin_left", text("auto"), Some("auto"))]
     #[case::decimal("flex_grow", num(2.0), Some("2"))]
     #[case::opacity("opacity", num(0.5), Some("0.5"))]
-    #[case::color("text_color", num(f64::from(0x00ab_cdef_u32)), Some("#abcdef"))]
-    #[case::color_with_zeros("background", num(255.0), Some("#0000ff"))]
-    #[case::string("width", text("10px"), Some("10px"))]
+    #[case::opacity_beyond_one("opacity", num(2.0), Some("2"))]
+    #[case::opacity_negative("opacity", text("-1"), Some("-1"))]
+    #[case::opacity_not_finite("opacity", text("1e999"), None)]
+    #[case::keyword_case("display", text("FLEX"), Some("flex"))]
+    #[case::keyword_underscore("flex_direction", text("ROW_REVERSE"), Some("row-reverse"))]
+    #[case::keyword_hyphen("flex_direction", text("row-reverse"), Some("row-reverse"))]
+    #[case::keyword_alias("overflow_x", text("auto"), Some("auto"))]
+    #[case::pair_equal("overflow", text("hidden  Hidden"), Some("hidden"))]
+    #[case::pair_single("overflow", text("scroll"), Some("scroll"))]
+    #[case::pair_unequal("overflow", text("HIDDEN scroll"), Some("hidden scroll"))]
+    #[case::color_hex("text_color", text("#FFF"), Some("rgb(255, 255, 255)"))]
+    #[case::color_hex_alpha("text_color", text("#ff000080"), Some("rgba(255, 0, 0, 0.5)"))]
+    #[case::color_function("background", text("rgb(1 2 3)"), Some("rgb(1, 2, 3)"))]
+    #[case::color_function_alpha(
+        "background",
+        text("rgb(0 0 0 / 50%)"),
+        Some("rgba(0, 0, 0, 0.5)")
+    )]
+    #[case::color_number(
+        "text_color",
+        num(f64::from(0x00ab_cdef_u32)),
+        Some("rgb(171, 205, 239)")
+    )]
+    #[case::color_transparent("border_color", text("TRANSPARENT"), Some("transparent"))]
+    #[case::color_transparent_padded("border_color", text(" transparent "), Some("transparent"))]
+    #[case::color_transparent_hex("border_color", text("#0000"), Some("rgba(0, 0, 0, 0)"))]
     #[case::bool("width", AttributeValue::Bool(true), None)]
     #[case::empty_string("width", text(""), None)]
     #[case::flagged_string("width", text("bogus"), None)]
+    #[case::not_finite("width", text("1e999px"), None)]
     #[case::flagged_number("display", num(1.0), None)]
+    #[case::unknown_key("not_a_key", num(1.0), None)]
     fn css_declaration_writes_the_value_by_its_kind(
         #[case] key: &str,
         #[case] value: AttributeValue,

@@ -9,7 +9,7 @@ use html5ever::serialize::SerializeOpts;
 use html5ever::serialize::{Serialize, Serializer, TraversalScope, serialize};
 use html5ever::{LocalName, QualName, ns};
 
-use crate::spec::{css_declaration, css_name};
+use crate::css_text;
 use crate::tree::{
     COMMENT_TAG, FRAGMENT_TAG, NodeId, TEXT_TAG, TreeError, VirtualNode, VirtualTree,
 };
@@ -44,25 +44,10 @@ fn html_name(tag: &str) -> QualName {
     QualName::new(None, ns!(html), LocalName::from(tag))
 }
 
-/// The inline style props of `node` as a `style` attribute value, `None` when none applies.
-fn style_text(node: &VirtualNode) -> Option<String> {
-    let mut declarations: Vec<(String, String)> = node
-        .style_props()
-        .iter()
-        .filter_map(|(key, value)| Some((css_name(key), css_declaration(key, value)?)))
-        .collect();
-    declarations.sort_unstable();
-    let text: Vec<String> = declarations
-        .iter()
-        .map(|(name, value)| format!("{name}: {value};"))
-        .collect();
-    (!text.is_empty()).then(|| text.join(" "))
-}
-
 /// The attributes of `node` in insertion order. The `style` attribute holds the declarations of
-/// the style props when there are any, and the plain attribute otherwise.
+/// the style props in prop order when there are any, and the plain attribute otherwise.
 fn attribute_list(node: &VirtualNode) -> Vec<(QualName, String)> {
-    let declared = style_text(node);
+    let declared = Some(css_text(node)).filter(|text| !text.is_empty());
     let mut list = Vec::new();
     let mut styled = false;
     for (key, value) in node.attributes() {
@@ -468,7 +453,7 @@ mod tests {
     }
 
     #[test]
-    fn declarations_are_sorted_by_css_name() {
+    fn declarations_are_written_in_the_order_they_were_set() {
         let mut tree = VirtualTree::new();
         let div = node(&mut tree, "div");
         tree.set_style(div, "width", 5.0).unwrap();
@@ -477,7 +462,7 @@ mod tests {
 
         assert_eq!(
             outer(&tree, div),
-            "<div style=\"border-radius: 2px; color: #f00; width: 5px;\"></div>"
+            "<div style=\"width: 5px; color: rgb(255, 0, 0); border-radius: 2px;\"></div>"
         );
     }
 
@@ -501,7 +486,7 @@ mod tests {
     fn a_parsed_tree_and_its_template_content_round_trip() {
         let markup = "<table><tr><td class=a>x &amp; y</td></tr></table>\
             <template><b>t</b></template>\
-            <my-el style=\"width: 5px; color: #f00\">&nbsp;<!--c--></my-el>";
+            <my-el style=\"width: 5px; color: rgb(255, 0, 0)\">&nbsp;<!--c--></my-el>";
         let mut tree = VirtualTree::new();
         let first = tree.parse_html(None, markup).unwrap();
         let written = tree
