@@ -56,7 +56,11 @@ export async function writeIncajs(
       },
     }),
   );
-  await writeFile(path.join(dir, "index.mjs"), "export const document = {};\n");
+  // `vue` calls document.createElement when it loads.
+  await writeFile(
+    path.join(dir, "index.mjs"),
+    "export const document = { createElement: () => ({}) };\n",
+  );
   await writeFile(
     path.join(dir, "style.mjs"),
     dedent`
@@ -68,19 +72,14 @@ export async function writeIncajs(
   );
 }
 
-const RUNTIME_PACKAGE = "scratch-runtime";
-
-/** The module name the scratch apps' templates import their helpers from. */
-export const TEST_RUNTIME_MODULE = `${RUNTIME_PACKAGE}/core`;
-
-/** The Vue integration with compiled templates reading their helpers from the stub module. */
+/** A Vue integration for the scratch apps, which resolve `incajs` to a stub. */
 export const TEST_INTEGRATION: ViteIntegration = {
   frontend: ["incajs", "vue"],
   plugins: () => [
     vue({
       template: {
         // Hoisted static content becomes createStaticVNode, which needs insertStaticContent.
-        compilerOptions: { runtimeModuleName: TEST_RUNTIME_MODULE, hoistStatic: false },
+        compilerOptions: { hoistStatic: false },
       },
     }),
   ],
@@ -89,34 +88,9 @@ export const TEST_INTEGRATION: ViteIntegration = {
   styleModule: "incajs/style",
 };
 
-// Stands in for the modifier helpers; the marker shows up in a bundle that imported them.
-const runtimeModule = `export * from "@vue/runtime-core";
-export const withModifiers = (fn) => { "STUB_WITH_MODIFIERS"; return fn; };
-export const withKeys = (fn) => { "STUB_WITH_KEYS"; return fn; };
-`;
-
-/**
- * Makes `TEST_RUNTIME_MODULE`, the module compiled templates import,
- * resolve under `scratchRoot` to a stub.
- */
-async function writeRuntimeModule(scratchRoot: string): Promise<void> {
-  const dir = path.join(scratchRoot, "node_modules", RUNTIME_PACKAGE);
-  await mkdir(dir, { recursive: true });
-  await writeFile(
-    path.join(dir, "package.json"),
-    JSON.stringify({
-      name: RUNTIME_PACKAGE,
-      type: "module",
-      exports: { [TEST_RUNTIME_MODULE.replace(RUNTIME_PACKAGE, ".")]: "./core.mjs" },
-    }),
-  );
-  await writeFile(path.join(dir, "core.mjs"), runtimeModule);
-}
-
 /**
  * A scratch-app scaffold scoped to its own directory under `tests/tmp/`
- * (gitignored) rather than a real OS tmpdir: this mirrors how Vite
- * resolves a real app's `@vue/runtime-core` import, by walking up to this
+ * (gitignored). A bare `vue` import in a template resolves by walking up to this
  * package's own `node_modules`. Each caller gets its own `name` so
  * concurrently running test files never race on the same directory.
  */
@@ -130,7 +104,6 @@ export function scratchApp(name: string): {
   return {
     setUp: async () => {
       await mkdir(scratchRoot, { recursive: true });
-      await writeRuntimeModule(scratchRoot);
     },
     tearDown: () => rm(scratchRoot, { recursive: true, force: true }),
     async makeApp(vueSource: string): Promise<ScratchApp> {

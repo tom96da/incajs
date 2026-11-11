@@ -29,7 +29,7 @@ export const defaultBundler: Bundler = createViteBundler(adapterCore, {
     vue({
       template: {
         // Hoisted static content becomes createStaticVNode, which needs insertStaticContent.
-        compilerOptions: { runtimeModuleName: "incajs/vue/runtime", hoistStatic: false },
+        compilerOptions: { hoistStatic: false },
       },
     }),
   ],

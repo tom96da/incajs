@@ -165,14 +165,11 @@ A fixed entry is deleted and its ID is never reused.
   `outline-color`, per-side border colors, `box-shadow` and
   `text-decoration-color` come with the properties they belong to.
 
-- **B-126 No test resolves `incajs/vue/runtime` through the published
-  `exports`**
+- **B-126 No test resolves `incajs/vue` and `incajs/style` through the published `exports`**
   `Units: cli,core · Size: S · Impact: Low`
 
-  Compiled templates import `incajs/vue/runtime`, which re-exports from
-  `@vue/runtime-dom`, an optional peer of `incajs` like `@vue/runtime-core`. No test installs the packed
-  `incajs` into a scratch app and resolves `incajs/vue/runtime` through the
-  published `exports`. The UI tests cover the workspace link.
+  No test installs the packed `incajs` into a scratch app and resolves `incajs/vue` and
+  `incajs/style` through the published `exports`. The UI tests cover the workspace link.
 
 ## P3
 
@@ -1348,14 +1345,14 @@ A fixed entry is deleted and its ID is never reused.
   because the `style` element carries no source name. Fix: the build writes a
   source name on the element, and the warning prefix reads it.
 
-- **B-270 CSS `v-bind()` in `<style>` is unsupported**
+- **B-270 CSS `v-bind()` in `<style>` has no effect in the host**
   `Units: core,cli · Size: M · Impact: Low`
 
-  A build of a `.vue` file whose `<style>` block uses `v-bind()` fails: the
-  compiled block imports `useCssVars` from `incajs/vue/runtime`, which does not
-  export it, and the declaration would read a custom property that the host
-  drops. Fix: export `useCssVars` from `incajs/vue/runtime` and give the host
-  custom properties and `var()` values.
+  A build of a `.vue` file whose `<style>` block uses `v-bind()` succeeds, because the compiled
+  block imports `useCssVars` from `vue`. At mount `useCssVars` throws: an element has no `style`
+  object with `setProperty`, and `MutationObserver` is not defined. The declaration also reads a
+  custom property that the host drops. Fix: give the host `MutationObserver`, custom properties
+  and `var()` values.
 
 - **B-271 A `DocumentFragment` lacks the query and listener members**
   `Units: core · Size: S · Impact: Low`
@@ -1640,3 +1637,10 @@ A fixed entry is deleted and its ID is never reused.
   `defaultPlugins.mts` names `incajs` in two ways: `inject` holds `["incajs", "document"]` and
   `styleModule` holds `"incajs/style"`. `build.mts` and `dev.mts` import `defaultFrontend` and
   `defaultBundler` from it, so both commands depend on the module that names Vue and Vite.
+
+- **B-317 `window` is not a global**
+  `Units: host · Size: S · Impact: Low`
+
+  Vue's development build reads `window.ShadowRoot` unguarded in `mount()` (`normalizeContainer`),
+  and `window` is not a global, so `inca dev` with Vapor mode throws at mount. Fix: guard the
+  `window` read in the host, or provide a `window` global.
