@@ -20,6 +20,7 @@ mod mutation;
 mod node;
 mod scroll;
 mod selector;
+mod token_list;
 mod tree;
 
 pub use host::Host;
@@ -40,6 +41,7 @@ use mutation::install_mutation;
 use node::install_node;
 use scroll::install_scroll;
 use selector::install_selector;
+use token_list::install_token_list;
 use tree::install_tree;
 
 /// Installs `globalThis.__inca_native__` into `ctx`, wired to `host`. The global is read-only and
@@ -68,6 +70,7 @@ pub fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
     install_mutation(&natives)?;
     install_html(&natives)?;
     install_node(&natives)?;
+    install_token_list(&natives)?;
     install_events(&natives)?;
     install_focus(&natives)?;
     install_capture(&natives)?;

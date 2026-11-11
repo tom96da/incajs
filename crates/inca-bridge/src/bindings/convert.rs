@@ -1,6 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use rquickjs::convert::Coerced;
 use rquickjs::function::Opt;
 use rquickjs::{Ctx, Exception, FromJs, IntoJs, Result as JsResult, Value};
 
@@ -29,6 +30,11 @@ fn whole_u32(ctx: &Ctx<'_>, value: &Value<'_>, noun: &str) -> JsResult<u32> {
         ctx,
         &format!("{noun} must be a whole number in the range of an unsigned 32-bit integer"),
     ))
+}
+
+/// An offset, a count or an index: the argument converts to an unsigned 32-bit integer.
+pub(super) fn unsigned(Coerced(value): Coerced<i32>) -> u32 {
+    value.cast_unsigned()
 }
 
 /// A node id argument. Accepts a finite whole number in `u32` range;

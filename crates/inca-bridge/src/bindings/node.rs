@@ -12,7 +12,7 @@ use rquickjs::{Ctx, Exception, Result as JsResult, Value};
 use inca_node::NodeId;
 
 use super::Natives;
-use super::convert::{JsNodeId, existing_node, or_null, throw_tree_error};
+use super::convert::{JsNodeId, existing_node, or_null, throw_tree_error, unsigned};
 use super::host::Host;
 
 /// `linkedNode`, `childNodeIds`, `isConnected`, the relation natives `rootOf`,
@@ -129,11 +129,6 @@ fn whole_text<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> Js
             .whole_text(node_id)
             .map_err(|err| throw_tree_error(&ctx, err))
     }
-}
-
-/// An offset or a count: the argument converts to an unsigned 32-bit integer.
-fn unsigned(Coerced(value): Coerced<i32>) -> u32 {
-    value.cast_unsigned()
 }
 
 fn substring_data<'js>(
