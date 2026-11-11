@@ -289,7 +289,9 @@ global `DOMTokenList` constructor throws a `TypeError` when called. The write me
 `DOMException` named `SyntaxError` for an empty token and `InvalidCharacterError` for a token with
 ASCII whitespace. The host checks every token of a call before it changes the `class` attribute.
 The iterators of `keys`, `values` and `entries` are native class instances too, and their prototype
-is stored under `DOMTokenList Iterator`.
+is stored under `DOMTokenList Iterator`. `forEach` reads the token count once, then reads each token
+from the current list and skips a position the list no longer has, so a token that the callback adds
+is not visited. The iterators read the live list at every step.
 
 ### Event dispatch
 

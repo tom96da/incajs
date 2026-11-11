@@ -237,16 +237,18 @@ fn define_for_each<'js>(
             .get(1)
             .cloned()
             .unwrap_or_else(|| Value::new_undefined(ctx.clone()));
-        let mut index = 0;
-        // The borrow ends before the callback runs, so the callback may change the list.
-        while let Some(token) = tokens_of(&h, node).into_iter().nth(index) {
+        let count = tokens_of(&h, node).len();
+        for index in 0..count {
+            // The borrow ends before the callback runs, so the callback may change the list.
+            let Some(token) = tokens_of(&h, node).into_iter().nth(index) else {
+                continue;
+            };
             callback.call::<_, Value>((
                 This(this_arg.clone()),
                 token,
                 position(index),
                 this.clone(),
             ))?;
-            index += 1;
         }
         Ok(())
     })?;
@@ -568,7 +570,7 @@ mod tests {
     }
 
     #[test]
-    fn for_each_visits_a_token_added_by_the_callback() {
+    fn for_each_does_not_visit_a_token_added_by_the_callback() {
         let body = r"
             const seen = [];
             list.forEach((token) => {
@@ -578,7 +580,21 @@ mod tests {
             return seen;
             ";
 
-        assert_eq!(list_run(Some("a"), body), json!(["a", "b"]));
+        assert_eq!(list_run(Some("a"), body), json!(["a"]));
+    }
+
+    #[test]
+    fn for_each_reads_the_list_live_when_the_callback_removes_a_token() {
+        let body = r"
+            const seen = [];
+            list.forEach((token) => {
+                list.remove(token);
+                seen.push(token);
+            });
+            return seen;
+            ";
+
+        assert_eq!(list_run(Some("a b c"), body), json!(["a", "c"]));
     }
 
     #[test]
