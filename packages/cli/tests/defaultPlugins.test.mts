@@ -18,11 +18,11 @@ beforeAll(() => mkdir(scratchRoot, { recursive: true }));
 afterAll(() => rm(scratchRoot, { recursive: true, force: true }));
 
 /**
- * Builds an app whose template is `template` through `defaultBundler`, with `incajs/vue/runtime`
- * stubbed as the Vue core plus `runtimeExtra`. The entry starts with `imports`.
+ * Builds an app whose template is `template` through `defaultBundler`. The entry starts with
+ * `imports`.
  * @returns the text of the bundle
  */
-async function bundleOf(template: string, runtimeExtra: string, imports = ""): Promise<string> {
+async function bundleOf(template: string, imports = ""): Promise<string> {
   const appDir = await mkdtemp(path.join(scratchRoot, "app-"));
   const stub = path.join(appDir, "node_modules/incajs");
   await mkdir(stub, { recursive: true });
@@ -31,16 +31,12 @@ async function bundleOf(template: string, runtimeExtra: string, imports = ""): P
     JSON.stringify({
       name: "incajs",
       type: "module",
-      exports: { ".": "./index.mjs", "./vue/runtime": "./runtime.mjs" },
+      exports: { ".": "./index.mjs" },
     }),
   );
   await writeFile(
     path.join(stub, "index.mjs"),
     `export const document = { title: "DOCUMENT_STUB_MARKER" };\n`,
-  );
-  await writeFile(
-    path.join(stub, "runtime.mjs"),
-    `export * from "@vue/runtime-core";\n${runtimeExtra}`,
   );
   await writeFile(path.join(appDir, "App.vue"), `<template>${template}</template>\n`);
   const entry = path.join(appDir, "entry.mts");
@@ -63,7 +59,7 @@ it("binds document in a dependency that sits outside the app", async () => {
   const dependency = path.join(outside, "dependency.mjs");
   await writeFile(dependency, "globalThis.title = document.title;\n");
 
-  const bundle = await bundleOf("<i>x</i>", "", `import ${JSON.stringify(dependency)};\n`);
+  const bundle = await bundleOf("<i>x</i>", `import ${JSON.stringify(dependency)};\n`);
   await rm(outside, { recursive: true, force: true });
 
   expect(bundle).toContain("DOCUMENT_STUB_MARKER");
@@ -95,11 +91,18 @@ async function stylesOf(
     JSON.stringify({
       name: "incajs",
       type: "module",
-      exports: { "./vue/runtime": "./runtime.mjs", "./style": "./style.mjs" },
+      exports: { "./style": "./style.mjs" },
     }),
   );
+  const vueStub = path.join(appDir, "node_modules/vue");
+  await mkdir(vueStub, { recursive: true });
+  // Bun reads this package.json through exports, and plugin-vue reads its version.
   await writeFile(
-    path.join(stub, "runtime.mjs"),
+    path.join(vueStub, "package.json"),
+    JSON.stringify({ name: "vue", version: "3.5.0", type: "module", exports: "./index.mjs" }),
+  );
+  await writeFile(
+    path.join(vueStub, "index.mjs"),
     "export const openBlock = () => {};\nexport const createElementBlock = () => {};\n",
   );
   await writeFile(
