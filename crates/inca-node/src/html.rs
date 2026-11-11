@@ -350,7 +350,7 @@ pub(super) mod tests {
     }
 
     #[test]
-    fn a_style_attribute_stores_no_attribute() {
+    fn a_style_attribute_is_stored_at_its_source_position() {
         let (tree, html) = props("<div style='width: 1px' id='a'>");
 
         let keys: Vec<&String> = tree
@@ -359,7 +359,18 @@ pub(super) mod tests {
             .attributes()
             .keys()
             .collect();
-        assert_eq!(keys, ["id"]);
+        assert_eq!(keys, ["style", "id"]);
+    }
+
+    #[test]
+    fn a_style_attribute_is_stored_as_the_derived_text() {
+        let (tree, html) = props("<div style='WIDTH:1px; bogus: 1; height:2PX'>");
+
+        let attributes = tree.get(html.nodes[0].id).unwrap().attributes();
+        assert_eq!(
+            attributes.get("style"),
+            Some(&AttributeValue::String("width: 1px; height: 2px;".into()))
+        );
     }
 
     #[test]

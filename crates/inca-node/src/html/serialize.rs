@@ -9,7 +9,6 @@ use html5ever::serialize::SerializeOpts;
 use html5ever::serialize::{Serialize, Serializer, TraversalScope, serialize};
 use html5ever::{LocalName, QualName, ns};
 
-use crate::css_text;
 use crate::tree::{
     COMMENT_TAG, FRAGMENT_TAG, NodeId, TEXT_TAG, TreeError, VirtualNode, VirtualTree,
 };
@@ -44,28 +43,17 @@ fn html_name(tag: &str) -> QualName {
     QualName::new(None, ns!(html), LocalName::from(tag))
 }
 
-/// The attributes of `node` in insertion order. The `style` attribute holds the declarations of
-/// the style props in prop order when there are any, and the plain attribute otherwise.
+/// The attributes of `node` in insertion order, each written as its text.
 fn attribute_list(node: &VirtualNode) -> Vec<(QualName, String)> {
-    let declared = Some(css_text(node)).filter(|text| !text.is_empty());
-    let mut list = Vec::new();
-    let mut styled = false;
-    for (key, value) in node.attributes() {
-        let text = if key == "style" {
-            styled = true;
-            declared.clone().unwrap_or_else(|| value.text())
-        } else {
-            value.text()
-        };
-        list.push((
-            QualName::new(None, ns!(), LocalName::from(key.as_str())),
-            text,
-        ));
-    }
-    if let (false, Some(text)) = (styled, declared) {
-        list.push((QualName::new(None, ns!(), LocalName::from("style")), text));
-    }
-    list
+    node.attributes()
+        .iter()
+        .map(|(key, value)| {
+            (
+                QualName::new(None, ns!(), LocalName::from(key.as_str())),
+                value.text(),
+            )
+        })
+        .collect()
 }
 
 impl Subtree<'_> {
@@ -137,8 +125,8 @@ impl VirtualTree {
     /// markup is empty. A fragment has no markup of its own. A template writes its content as its
     /// children. Void elements write no end tag and no children.
     ///
-    /// The `style` attribute holds the inline style props as `name: value;` declarations sorted
-    /// by CSS name. When no prop applies, the attribute that script set is written as it is.
+    /// The attributes are written in their order. The `style` attribute holds the inline style
+    /// declarations as `name: value;` in the order they were set.
     ///
     /// # Errors
     ///
@@ -387,32 +375,12 @@ mod tests {
     }
 
     #[test]
-    fn style_props_win_over_the_plain_attribute() {
+    fn a_style_entry_without_declarations_writes_an_empty_attribute() {
         let mut tree = VirtualTree::new();
         let div = node(&mut tree, "div");
-        tree.set_attribute(div, "style", "color: red").unwrap();
-        tree.set_style(div, "width", "5px").unwrap();
+        tree.set_attribute(div, "style", "").unwrap();
 
-        assert_eq!(outer(&tree, div), "<div style=\"width: 5px;\"></div>");
-    }
-
-    #[test]
-    fn the_plain_style_attribute_is_written_as_it_is() {
-        let mut tree = VirtualTree::new();
-        let div = node(&mut tree, "div");
-        tree.set_attribute(div, "style", "color:red").unwrap();
-
-        assert_eq!(outer(&tree, div), "<div style=\"color:red\"></div>");
-    }
-
-    #[test]
-    fn the_plain_style_attribute_stays_when_no_prop_applies() {
-        let mut tree = VirtualTree::new();
-        let div = node(&mut tree, "div");
-        tree.set_attribute(div, "style", "color:red").unwrap();
-        tree.set_style(div, "width", true).unwrap();
-
-        assert_eq!(outer(&tree, div), "<div style=\"color:red\"></div>");
+        assert_eq!(outer(&tree, div), "<div style=\"\"></div>");
     }
 
     #[test]
@@ -425,7 +393,7 @@ mod tests {
     }
 
     #[test]
-    fn the_style_attribute_takes_the_position_of_the_plain_one() {
+    fn the_style_attribute_keeps_the_position_of_the_entry() {
         let mut tree = VirtualTree::new();
         let div = node(&mut tree, "div");
         for key in ["a", "style", "b"] {
@@ -436,19 +404,6 @@ mod tests {
         assert_eq!(
             outer(&tree, div),
             "<div a=\"1\" style=\"width: 5px;\" b=\"1\"></div>"
-        );
-    }
-
-    #[test]
-    fn the_style_attribute_of_props_goes_last_without_a_plain_one() {
-        let mut tree = VirtualTree::new();
-        let div = node(&mut tree, "div");
-        tree.set_attribute(div, "a", "1").unwrap();
-        tree.set_style(div, "width", "5px").unwrap();
-
-        assert_eq!(
-            outer(&tree, div),
-            "<div a=\"1\" style=\"width: 5px;\"></div>"
         );
     }
 
@@ -486,7 +441,7 @@ mod tests {
     fn a_parsed_tree_and_its_template_content_round_trip() {
         let markup = "<table><tr><td class=a>x &amp; y</td></tr></table>\
             <template><b>t</b></template>\
-            <my-el style=\"width: 5px; color: rgb(255, 0, 0)\">&nbsp;<!--c--></my-el>";
+            <my-el style=\"width: 5px; color: #f00\">&nbsp;<!--c--></my-el>";
         let mut tree = VirtualTree::new();
         let first = tree.parse_html(None, markup).unwrap();
         let written = tree

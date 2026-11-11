@@ -16,7 +16,7 @@ mod keys;
 mod parse;
 
 pub use keys::{STYLE_KEYS, StyleKey, ValueKind, style_warning};
-pub(crate) use keys::{css_declaration, css_name, style_key};
+pub(crate) use keys::{css_declaration, css_name, style_key, unknown_key_warning};
 pub use parse::declared_window_size;
 
 use self::parse::style_spec_from_props;

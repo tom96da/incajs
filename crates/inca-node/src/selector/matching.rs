@@ -636,6 +636,17 @@ mod tests {
         assert_eq!(p.f.matches(p.p1, selector), expected);
     }
 
+    #[rstest]
+    #[case::presence("[style]")]
+    #[case::substring("[style*=width]")]
+    #[case::derived_text("[style=\"width: 1px;\"]")]
+    fn the_style_attribute_matches_as_derived_text(#[case] selector: &str) {
+        let mut p = page();
+        p.f.attr(p.p1, "style", "WIDTH:1px");
+
+        assert!(p.f.matches(p.p1, selector));
+    }
+
     /// `parent > [a, comment, b]` with a `c` under `b`.
     fn has_fixture() -> (Fixture, NodeId, NodeId) {
         let mut f = Fixture::new();
