@@ -26,8 +26,8 @@ const alphaPlugin: Plugin = { name: "alpha-plugin" };
 function optionsFor(mode: ResolveConfigOptions["mode"]): ResolveConfigOptions {
   return {
     core,
-    frontend: ["alpha-pkg", "alpha"],
     integration: {
+      frontend: ["alpha-pkg", "alpha"],
       plugins: () => [alphaPlugin],
       unsupported: [],
       inject: {},

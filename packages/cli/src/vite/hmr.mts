@@ -22,13 +22,7 @@ import type {
 import { CONFIG_FILE_NAME } from "./emitConfig.mts";
 import { integrationPlugins } from "./integration.mts";
 import { streamLogger } from "./logger.mts";
-import type {
-  AdapterCore,
-  BuildFailure,
-  FrontendId,
-  HmrChannel,
-  HmrOptions,
-} from "../adapterCore.mts";
+import type { AdapterCore, BuildFailure, HmrChannel, HmrOptions } from "../adapterCore.mts";
 import type { ViteIntegration } from "./integration.mts";
 
 /**
@@ -360,7 +354,6 @@ function fileChangedPlugins(changed: {
  */
 export async function hmr(
   core: AdapterCore,
-  frontend: FrontendId,
   integration: ViteIntegration,
   {
     entry,
@@ -424,7 +417,7 @@ export async function hmr(
       },
     },
     plugins: [
-      ...integrationPlugins(core, frontend, integration, root),
+      ...integrationPlugins(core, integration, root),
       shimViteClient(integration.styleModule),
       ...fileChangedPlugins(changed),
     ],

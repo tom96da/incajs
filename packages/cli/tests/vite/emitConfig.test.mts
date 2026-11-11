@@ -11,7 +11,7 @@ import { createViteBundler } from "../../src/vite/index.mts";
 import { scratchApp, TEST_INTEGRATION } from "./scratchApp.mts";
 import type { Bundler } from "../../src/types.mts";
 
-const vite = createViteBundler(adapterCore, ["incajs", "vue"], TEST_INTEGRATION);
+const vite = createViteBundler(adapterCore, TEST_INTEGRATION);
 const build: Bundler["build"] = (options) => vite.build(options);
 
 const { setUp, tearDown, makeApp } = scratchApp("emit-config");

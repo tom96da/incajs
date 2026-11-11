@@ -9,7 +9,7 @@ import { captureOutput } from "./captureOutput.mts";
 import { emitConfig } from "./emitConfig.mts";
 import { integrationPlugins } from "./integration.mts";
 import { streamLogger } from "./logger.mts";
-import type { AdapterCore, FrontendId } from "../adapterCore.mts";
+import type { AdapterCore } from "../adapterCore.mts";
 import type { CapturedOutput } from "./captureOutput.mts";
 import type { ViteIntegration } from "./integration.mts";
 
@@ -17,9 +17,7 @@ export const BUNDLE_FILE_NAME = "bundle.js";
 
 export interface ResolveConfigOptions {
   core: AdapterCore;
-  /** The frontend to bundle. Its package lists the peers the app must install. */
-  frontend: FrontendId;
-  /** The frontend's Vite plugins, style module and refused features. */
+  /** The frontend to bundle with its Vite plugins, style module and refused features. */
   integration: ViteIntegration;
   /** The app's own entry point. It may import the files of the frontend. */
   entry: string;
@@ -58,7 +56,6 @@ export interface ResolveConfigOptions {
  */
 export function resolveViteConfig({
   core,
-  frontend,
   integration,
   entry,
   root = path.dirname(entry),
@@ -92,7 +89,7 @@ export function resolveViteConfig({
       "process.env.NODE_ENV": JSON.stringify(mode),
     },
     plugins: [
-      ...integrationPlugins(core, frontend, integration, root),
+      ...integrationPlugins(core, integration, root),
       emitConfig(runtimeConfig),
       captureOutput(core, onOutput),
     ],

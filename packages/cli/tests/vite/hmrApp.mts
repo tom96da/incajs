@@ -65,7 +65,7 @@ export function useHmr(name: string) {
 
   /** Wraps the real `hmr()`, defaulting `runtimePath` to this test's own scratch build. */
   function hmr(options: HmrOptions, integration = TEST_INTEGRATION): Promise<HmrChannel> {
-    return createViteBundler(adapterCore, ["incajs", "vue"], integration).hmr!({
+    return createViteBundler(adapterCore, integration).hmr!({
       runtimePath: builtRuntimePath,
       ...options,
     });

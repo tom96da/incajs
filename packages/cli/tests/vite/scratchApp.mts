@@ -5,9 +5,10 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Writable } from "node:stream";
 
+import vue from "@vitejs/plugin-vue";
 import dedent from "ts-dedent";
 
-import { vueViteIntegration } from "../../src/defaultPlugins.mts";
+import type { ViteIntegration } from "../../src/vite/index.mts";
 
 export interface ScratchApp {
   entry: string;
@@ -73,7 +74,20 @@ const RUNTIME_PACKAGE = "scratch-runtime";
 export const TEST_RUNTIME_MODULE = `${RUNTIME_PACKAGE}/core`;
 
 /** The Vue integration with compiled templates reading their helpers from the stub module. */
-export const TEST_INTEGRATION = vueViteIntegration(TEST_RUNTIME_MODULE);
+export const TEST_INTEGRATION: ViteIntegration = {
+  frontend: ["incajs", "vue"],
+  plugins: () => [
+    vue({
+      template: {
+        // Hoisted static content becomes createStaticVNode, which needs insertStaticContent.
+        compilerOptions: { runtimeModuleName: TEST_RUNTIME_MODULE, hoistStatic: false },
+      },
+    }),
+  ],
+  unsupported: [],
+  inject: { document: ["incajs", "document"] },
+  styleModule: "incajs/style",
+};
 
 // Stands in for the modifier helpers; the marker shows up in a bundle that imported them.
 const runtimeModule = `export * from "@vue/runtime-core";

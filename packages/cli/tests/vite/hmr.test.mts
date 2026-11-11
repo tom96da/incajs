@@ -14,11 +14,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { HotPayload } from "vite";
 
 import * as adapterCore from "../../src/adapterCore.mts";
-import { vueViteIntegration } from "../../src/defaultPlugins.mts";
 import { createViteBundler } from "../../src/vite/index.mts";
 import { fsLag } from "../support/fsLag.mts";
 import { connectRunner, discard, useHmr } from "./hmrApp.mts";
-import { TEST_RUNTIME_MODULE, writeIncajs } from "./scratchApp.mts";
+import { TEST_INTEGRATION, writeIncajs } from "./scratchApp.mts";
 import type { HmrOptions } from "../../src/types.mts";
 
 const { hmr, makeApp, channels, builtRuntimePath } = useHmr("hmr");
@@ -187,16 +186,12 @@ describe("hmr", () => {
 
   it("creates the plugins again for each session", async () => {
     const { entry, streams } = await makeApp(`<template><div /></template>\n`);
-    const real = vueViteIntegration(TEST_RUNTIME_MODULE);
     let created = 0;
-    const counting = {
-      ...real,
-      plugins: () => {
-        created++;
-        return real.plugins();
-      },
+    const counting = () => {
+      created++;
+      return TEST_INTEGRATION.plugins();
     };
-    const bundler = createViteBundler(adapterCore, ["incajs", "vue"], counting);
+    const bundler = createViteBundler(adapterCore, { ...TEST_INTEGRATION, plugins: counting });
     const options: HmrOptions = {
       entry,
       cwd: path.dirname(entry),

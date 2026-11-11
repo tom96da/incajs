@@ -7,10 +7,9 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { HotPayload, Plugin } from "vite";
 
-import { vueViteIntegration } from "../../src/defaultPlugins.mts";
 import { fsLag } from "../support/fsLag.mts";
 import { connectRunner, useHmr } from "./hmrApp.mts";
-import { TEST_INTEGRATION, TEST_RUNTIME_MODULE } from "./scratchApp.mts";
+import { TEST_INTEGRATION } from "./scratchApp.mts";
 
 const { hmr, makeApp, channels } = useHmr("hmr-file-events");
 
@@ -111,7 +110,7 @@ describe("hmr file events", () => {
   it("updates for an edit outside the module graph when a plugin chose modules", async () => {
     let typeFile = "";
     const vuePathOf = (file: string) => path.join(path.dirname(file), "App.vue");
-    const real = vueViteIntegration(TEST_RUNTIME_MODULE);
+    const real = TEST_INTEGRATION;
     // Like plugin-vue for a type file that `defineProps<Props>()` imports.
     const integration: typeof real = {
       ...real,
@@ -155,7 +154,7 @@ describe("hmr file events", () => {
     let open = () => {};
     const gate = new Promise<void>((resolve) => (open = resolve));
     let gated = false;
-    const real = vueViteIntegration(TEST_RUNTIME_MODULE);
+    const real = TEST_INTEGRATION;
     const integration: typeof real = {
       ...real,
       plugins: () => [
@@ -187,7 +186,7 @@ describe("hmr file events", () => {
     let lateFile = "";
     let imported = () => {};
     const loaded = new Promise<void>((resolve) => (imported = resolve));
-    const real = vueViteIntegration(TEST_RUNTIME_MODULE);
+    const real = TEST_INTEGRATION;
     const integration: typeof real = {
       ...real,
       plugins: () => [

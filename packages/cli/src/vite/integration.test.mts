@@ -8,9 +8,8 @@ import * as core from "../adapterCore.mts";
 import { integrationPlugins } from "./integration.mts";
 import type { ViteIntegration } from "./integration.mts";
 
-const FRONTEND = ["alpha-pkg", "alpha"] as const;
-
 const integration: ViteIntegration = {
+  frontend: ["alpha-pkg", "alpha"],
   plugins: () => [{ name: "alpha-plugin" }],
   unsupported: [
     {
@@ -26,7 +25,7 @@ const integration: ViteIntegration = {
 
 describe("integrationPlugins", () => {
   it("puts the plugins of the integration first", () => {
-    const names = integrationPlugins(core, FRONTEND, integration, "/app").map(
+    const names = integrationPlugins(core, integration, "/app").map(
       (plugin) => (plugin as Plugin).name,
     );
 
@@ -41,7 +40,7 @@ describe("integrationPlugins", () => {
   });
 
   it("passes the unsupported entries of the integration to the check", () => {
-    const check = integrationPlugins(core, FRONTEND, integration, "/app")[4] as Plugin;
+    const check = integrationPlugins(core, integration, "/app")[4] as Plugin;
     const transform = check.transform as (code: string, id: string) => unknown;
 
     expect(() => transform("", "/app/x.alpha")).toThrow("ERR_INCA_TEST_ALPHA");
