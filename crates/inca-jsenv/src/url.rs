@@ -184,12 +184,16 @@ pub(crate) enum Printed<'js> {
         members: Vec<(&'static str, String)>,
         params: Value<'js>,
     },
-    /// The pairs of a `URLSearchParams` in list order.
-    Params(Vec<(String, String)>),
+    /// The first pairs of a `URLSearchParams` in list order and the number of all its pairs.
+    Params {
+        pairs: Vec<(String, String)>,
+        len: usize,
+    },
 }
 
-/// The state of `value` when it is a `URL` or a `URLSearchParams`, `None` for any other value.
-pub(crate) fn printed<'js>(value: &Value<'js>) -> Option<Printed<'js>> {
+/// The state of `value` when it is a `URL` or a `URLSearchParams`, `None` for any other value. A
+/// `URLSearchParams` yields at most `limit` pairs.
+pub(crate) fn printed<'js>(value: &Value<'js>, limit: usize) -> Option<Printed<'js>> {
     if let Ok(class) = Class::<UrlInstance>::from_value(value) {
         let class = class.borrow();
         let state = class.state.borrow();
@@ -203,8 +207,13 @@ pub(crate) fn printed<'js>(value: &Value<'js>) -> Option<Printed<'js>> {
         });
     }
     let class = Class::<ParamsInstance>::from_value(value).ok()?;
-    let pairs = class.borrow().0.borrow().list.clone();
-    Some(Printed::Params(pairs))
+    let class = class.borrow();
+    let state = class.0.borrow();
+    let pairs = state.list.iter().take(limit).cloned().collect();
+    Some(Printed::Params {
+        pairs,
+        len: state.list.len(),
+    })
 }
 
 /// `value` converted with `ToString`, with each unpaired surrogate replaced by U+FFFD.

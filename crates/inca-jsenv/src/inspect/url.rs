@@ -20,14 +20,15 @@ pub(super) fn write(
     depth: usize,
     mode: Mode,
 ) -> bool {
-    let Some(printed) = printed(value) else {
+    let at_limit = depth >= mode.max_depth;
+    let Some(printed) = printed(value, if at_limit { 0 } else { MAX_ENTRIES }) else {
         return false;
     };
     let name = match printed {
         Printed::Url { .. } => "URL",
-        Printed::Params(_) => "URLSearchParams",
+        Printed::Params { .. } => "URLSearchParams",
     };
-    if depth >= mode.max_depth {
+    if at_limit {
         put(out, mode, Style::Cyan, &format!("[{name}]"));
         return true;
     }
@@ -48,10 +49,10 @@ pub(super) fn write(
             }
             out.push_str(" }");
         }
-        Printed::Params(pairs) if pairs.is_empty() => out.push_str("URLSearchParams {}"),
-        Printed::Params(pairs) => {
+        Printed::Params { len: 0, .. } => out.push_str("URLSearchParams {}"),
+        Printed::Params { pairs, len } => {
             out.push_str("URLSearchParams { ");
-            for (index, (key, text)) in pairs.iter().take(MAX_ENTRIES).enumerate() {
+            for (index, (key, text)) in pairs.iter().enumerate() {
                 if index > 0 {
                     out.push_str(", ");
                 }
@@ -59,10 +60,10 @@ pub(super) fn write(
                 out.push_str(" => ");
                 put(out, mode, Style::Green, &quote(text));
             }
-            if pairs.len() > MAX_ENTRIES {
+            if len > MAX_ENTRIES {
                 let mut written = true;
                 #[allow(clippy::cast_precision_loss)]
-                write_more(out, &mut written, (pairs.len() - MAX_ENTRIES) as f64, mode);
+                write_more(out, &mut written, (len - MAX_ENTRIES) as f64, mode);
             }
             out.push_str(" }");
         }
