@@ -76,6 +76,8 @@ const makeEl = (): IncaElement => ({
   attributes: {} as IncaElement["attributes"],
   __node_id: 1,
   id: "",
+  className: "",
+  classList: {} as DOMTokenList,
   kind: "element",
   tagName: "DIV",
   matches: () => false,

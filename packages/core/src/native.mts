@@ -52,6 +52,7 @@ interface IncaNative {
   getAttribute(nodeId: NodeId, key: string): AttributeValue | null;
   removeAttribute(nodeId: NodeId, key: string): void;
   attributeNames(nodeId: NodeId): string[];
+  classList(nodeId: NodeId): DOMTokenList;
   linkedNode(nodeId: NodeId, link: NodeLink): NodeId | null;
   childNodeIds(nodeId: NodeId): NodeId[];
   isConnected(nodeId: NodeId): boolean;

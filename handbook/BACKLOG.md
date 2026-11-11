@@ -1637,6 +1637,13 @@ A fixed entry is deleted and its ID is never reused.
   tokens. Fix: make the class exotic for index access, after a spike proves that prototype lookup,
   expando properties and `defineProperty` still work on an exotic class.
 
+- **B-305 `className` of an SVG element is a string**
+  `Units: core · Size: S · Impact: Low`
+
+  `className` of an `svg` element reads and writes the `class` attribute as a string. In browsers
+  it is an `SVGAnimatedString`, and an assignment throws a `TypeError` in strict mode. Fix: return
+  an `SVGAnimatedString`-like object once `className` uses namespaces.
+
 - **B-317 `window` is not a global**
   `Units: host · Size: S · Impact: Low`
 

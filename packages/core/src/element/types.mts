@@ -351,6 +351,17 @@ export interface IncaElement
    */
   id: string;
   /**
+   * The `class` attribute, or an empty string when it is unset. Assigning sets the attribute to the
+   * value as a string.
+   */
+  className: string;
+  /**
+   * The live token list of the `class` attribute. Every read returns the same list. Assigning a
+   * string sets the `value` of the list.
+   */
+  get classList(): DOMTokenList;
+  set classList(value: string);
+  /**
    * `"comment"` for the hidden stand-in `createCommentNode` makes;
    * `"element"` for every other container.
    */

@@ -50,6 +50,7 @@ const host = {
   removeChild: vi.fn<(parentId: number, childId: number) => void>(),
   replaceChild: vi.fn<(parentId: number, nodeId: number, childId: number) => number>(() => 0),
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
+  classList: vi.fn<(nodeId: number) => object>(() => ({})),
   getAttribute: vi.fn<(nodeId: number, key: string) => string | number | boolean | null>(
     () => null,
   ),
@@ -138,6 +139,8 @@ function element(): IncaElement {
     insertAdjacentHTML: () => {},
     __node_id: nextId++,
     id: "",
+    className: "",
+    classList: {} as DOMTokenList,
     kind: "element",
     tagName: "DIV",
     matches: () => false,
@@ -185,6 +188,8 @@ describe("createElement", () => {
     expect(host.createNode).toHaveBeenCalledWith("div");
     expect(el).toEqual({
       id: "",
+      className: "",
+      classList: {},
       kind: "element",
       tagName: "DIV",
       parentElement: null,
