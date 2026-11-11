@@ -217,11 +217,19 @@ with the differences below. The listener methods are described in
   pseudo-classes and never match them, so `:not(:focus-visible)` matches
   every element. `:lang()` and `:state()` never match. `:dir(ltr)` matches every
   element and any other `:dir()` value never matches. `:disabled` and
-  `:enabled` apply to `button` and `input` only.
+  `:enabled` apply to HTML `button` and `input` only.
 - These members of `attributes` are missing:
   - `setNamedItem()` and `removeNamedItem()`
   - `getNamedItemNS()`, `setNamedItemNS()` and `removeNamedItemNS()`
 - An `Attr` has no `Node` members.
+- Attributes have no namespace. `xlink:href` is an attribute named `xlink:href`.
+  `Attr.namespaceURI` and `Attr.prefix` read `null`, and the `NS` attribute methods
+  are missing.
+- An element named `STYLE` or `TEMPLATE` made with `createElementNS()` and the HTML
+  namespace behaves as `style` or `template`.
+- An `<svg>` that a Vue template creates is an element of the HTML namespace:
+  `namespaceURI` reads the HTML namespace, `tagName` reads `SVG` and attribute names
+  such as `viewBox` are lower case.
 
 ### `style` and `dataset`
 
@@ -250,8 +258,6 @@ with the differences below. The listener methods are described in
   [`:style`](#recognized-style-keys) knows and warns about the others. The
   attribute reads back the applied declarations.
 - An `on*` attribute stays a plain attribute and registers no listener.
-- Attribute names with capitals, such as `viewBox`, come back in lower case from
-  `getAttributeNames()` and `outerHTML`. `svg` and `math` parse as plain elements.
 
 ## Vue features that don't work yet
 
