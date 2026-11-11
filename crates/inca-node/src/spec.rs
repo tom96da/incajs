@@ -317,14 +317,14 @@ fn build_spec_inner(tree: &VirtualTree, root: NodeId, inert_above: bool) -> Opti
     let node = tree.get(root)?;
     // A `<style>` element holds rules and a template holds markup. Neither takes part in the
     // layout.
-    if node.tag_name().eq_ignore_ascii_case("style") || node.is_template() {
+    if node.is_style() || node.is_template() {
         return None;
     }
     let inert = inert_above || node.attributes().contains_key("inert");
 
     let tag = match node.tag_name() {
         TEXT_TAG => ElementTag::Text(node.data().to_owned()),
-        "input" => {
+        _ if node.is_html("input") => {
             let attributes = node.attributes();
             ElementTag::Input {
                 placeholder: attributes
@@ -370,7 +370,7 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
-    use crate::tests::Fixture;
+    use crate::tests::{Fixture, HTML, SVG};
     use crate::tree::VirtualTree;
 
     /// A node with `name` as its class under the root of `f`.
@@ -737,6 +737,49 @@ mod tests {
         tree.append_child(template, child).unwrap();
 
         assert!(build_spec(&tree, template).is_none());
+    }
+
+    #[test]
+    fn an_svg_template_is_laid_out() {
+        let mut tree = VirtualTree::new();
+        let template = tree.create_element_ns(Some(SVG), None, "template").unwrap();
+
+        assert!(build_spec(&tree, template).is_some());
+    }
+
+    #[test]
+    fn an_svg_input_is_a_container() {
+        let mut tree = VirtualTree::new();
+        let input = tree.create_element_ns(Some(SVG), None, "input").unwrap();
+        let child = tree.create_node("div").unwrap();
+        tree.append_child(input, child).unwrap();
+
+        let spec = build_spec(&tree, input).unwrap();
+        assert!(matches!(spec.tag, ElementTag::Container));
+        assert_eq!(spec.children.len(), 1);
+    }
+
+    #[rstest]
+    #[case::html(HTML)]
+    #[case::svg(SVG)]
+    fn a_style_element_has_no_spec(#[case] namespace: &str) {
+        let mut tree = VirtualTree::new();
+        let style = tree
+            .create_element_ns(Some(namespace), None, "style")
+            .unwrap();
+
+        assert!(build_spec(&tree, style).is_none());
+    }
+
+    #[test]
+    fn wheel_axes_is_not_none_under_an_svg_template() {
+        let (mut tree, [_, parent, node]) = chain();
+        tree.set_style(node, "overflow", "scroll").unwrap();
+        let template = tree.create_element_ns(Some(SVG), None, "template").unwrap();
+        tree.append_child(parent, template).unwrap();
+        tree.append_child(template, node).unwrap();
+
+        assert_eq!(wheel(&tree, node), Some((true, true)));
     }
 
     #[test]

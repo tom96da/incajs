@@ -21,12 +21,12 @@ mod edit;
 pub(crate) mod scene;
 
 impl EventDispatcher {
-    /// Whether `node` is an `input`.
+    /// Whether `node` is an HTML `input`.
     pub(super) fn is_input(&self, node: NodeId) -> bool {
         let host = self.host.borrow();
         host.tree
             .get(node)
-            .is_some_and(|node| node.tag_name() == "input")
+            .is_some_and(|node| node.is_html("input"))
     }
 
     /// Reads `node` once: whether it is an `input`, has `readonly`, and is a disabled control.
@@ -35,7 +35,7 @@ impl EventDispatcher {
         host.tree.get(node).map(|node| {
             let attributes = node.attributes();
             (
-                node.tag_name() == "input",
+                node.is_html("input"),
                 attributes.contains_key("readonly"),
                 is_disabled_control(node),
             )
@@ -48,7 +48,7 @@ impl EventDispatcher {
         readonly && !self.composing(node)
     }
 
-    /// Whether `node` is an `input` that takes edits: neither `readonly` nor disabled.
+    /// Whether `node` is an HTML `input` that takes edits: neither `readonly` nor disabled.
     fn editable(&self, node: NodeId) -> bool {
         matches!(self.input_flags(node), Some((true, false, false)))
     }
@@ -277,7 +277,7 @@ mod tests {
     use crate::dispatch::input::scene::{
         cancel_beforeinput, eval_input, line_break_rows, replace, set_attributes,
     };
-    use crate::test_support::engine_with_bindings;
+    use crate::test_support::{SVG, engine_with_bindings};
     use crate::tests::{at, dispatcher_with_engine, eval_json, listen, listen_global, read_out};
     use gpui::{MouseButton, TestAppContext, VisualTestContext};
     use inca_gpui::{EventSink as _, InputLayout, InputRequest};
@@ -518,6 +518,35 @@ mod tests {
         s.draw(cx);
         let mut visual = VisualTestContext::from_window(s.window.into(), cx);
         visual.simulate_mouse_down(at(13.0, 5.0), MouseButton::Left, gpui::Modifiers::none());
+        assert_eq!(read_out(&s.dispatcher), serde_json::json!([]));
+    }
+
+    #[gpui::test]
+    fn an_svg_input_takes_no_edit_request(cx: &mut TestAppContext) {
+        let s = input_scene(cx, "");
+        let svg_input = s
+            .host
+            .borrow_mut()
+            .tree
+            .create_element_ns(Some(SVG), None, "input")
+            .unwrap();
+        s.host
+            .borrow_mut()
+            .tree
+            .append_child(s.parent, svg_input)
+            .unwrap();
+        s.host
+            .borrow_mut()
+            .inputs
+            .get_mut()
+            .entry(svg_input)
+            .or_default();
+        listen(&s.dispatcher, svg_input, "input", "() => out.push('input')");
+        s.in_window(cx, |scene, window, cx| {
+            scene
+                .dispatcher
+                .input_request(svg_input, replace("x"), window, cx);
+        });
         assert_eq!(read_out(&s.dispatcher), serde_json::json!([]));
     }
 

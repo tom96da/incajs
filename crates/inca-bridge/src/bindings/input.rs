@@ -23,7 +23,7 @@ pub(super) fn install_input(n: &Natives<'_, '_>) -> JsResult<()> {
 /// `verb` names what the caller does with the value.
 fn input_node(ctx: &Ctx<'_>, host: &Host, id: NodeId, verb: &str) -> JsResult<()> {
     let node = existing_node(ctx, &host.tree, id)?;
-    if node.tag_name() == "input" {
+    if node.is_html("input") {
         return Ok(());
     }
     let message = format!("node {id} is not an input. only an input element has a value to {verb}");
@@ -62,7 +62,7 @@ mod tests {
 
     use rstest::rstest;
 
-    use crate::test_support::engine_with_bindings;
+    use crate::test_support::{SVG, engine_with_bindings};
 
     #[test]
     fn input_value_reads_what_set_input_value_wrote() {
@@ -92,6 +92,35 @@ mod tests {
             .eval(&format!(
                 r"
                 const node = __inca_native__.createNode('div');
+                let caught = false;
+                try {{
+                    {call};
+                }} catch (e) {{
+                    caught = e instanceof TypeError;
+                }}
+                caught;
+                "
+            ))
+            .unwrap();
+
+        assert!(caught, "{call}");
+    }
+
+    #[rstest]
+    #[case::read("__inca_native__.inputValue(node)")]
+    #[case::write("__inca_native__.setInputValue(node, 'x')")]
+    fn an_input_native_on_an_svg_input_throws(#[case] call: &str) {
+        let (engine, host) = engine_with_bindings();
+        let node = host
+            .borrow_mut()
+            .tree
+            .create_element_ns(Some(SVG), None, "input")
+            .unwrap();
+
+        let caught: bool = engine
+            .eval(&format!(
+                r"
+                const node = {node};
                 let caught = false;
                 try {{
                     {call};

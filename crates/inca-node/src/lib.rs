@@ -27,7 +27,7 @@ pub use spec::{
 };
 pub use tree::{
     AttributeValue, ClassListError, NodeId, StyleMap, TreeError, VirtualNode, VirtualTree,
-    focusable_by_default, is_disabled_control, is_template_tag, valid_attribute_name,
+    is_disabled_control, valid_attribute_name,
 };
 
 #[cfg(test)]

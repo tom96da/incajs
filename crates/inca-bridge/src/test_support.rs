@@ -18,6 +18,15 @@ use inca_node::NodeId;
 use crate::bindings::install;
 use crate::{EventDispatcher, EventListeners, EventTargetId, Host};
 
+/// The HTML namespace.
+pub const HTML: &str = "http://www.w3.org/1999/xhtml";
+
+/// The SVG namespace.
+pub const SVG: &str = "http://www.w3.org/2000/svg";
+
+/// The `MathML` namespace.
+pub const MATHML: &str = "http://www.w3.org/1998/Math/MathML";
+
 /// Defines `__inca_test_listen__(target, type, fn, capture, passive)`, which
 /// registers `fn` through `__inca_native__.addEventListener`.
 pub const LISTEN_JS: &str = r"
