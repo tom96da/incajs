@@ -1349,10 +1349,9 @@ A fixed entry is deleted and its ID is never reused.
   `Units: core,cli · Size: M · Impact: Low`
 
   A build of a `.vue` file whose `<style>` block uses `v-bind()` succeeds, because the compiled
-  block imports `useCssVars` from `vue`. At mount `useCssVars` throws: an element has no `style`
-  object with `setProperty`, and `MutationObserver` is not defined. The declaration also reads a
-  custom property that the host drops. Fix: give the host `MutationObserver`, custom properties
-  and `var()` values.
+  block imports `useCssVars` from `vue`. At mount `useCssVars` throws, because `MutationObserver`
+  is not defined. The declaration also reads a custom property that the host drops. Fix: give the
+  host `MutationObserver`, custom properties and `var()` values.
 
 - **B-271 A `DocumentFragment` lacks the query and listener members**
   `Units: core · Size: S · Impact: Low`

@@ -304,6 +304,128 @@ export interface TextMembers {
   splitText(offset: number): IncaText;
 }
 
+/**
+ * The inline style of an element. Every style key and every CSS alias is a property in camelCase
+ * and in kebab-case, and the host-only style keys are properties too. Reading a property gives the
+ * declaration in its serialized form, or an empty string when the block has none.
+ * Assigning a property sets the declaration, and an empty string removes it. A value the host
+ * cannot read prints a warning and leaves the block as it was. The block of a freed element reads
+ * empty and ignores writes. It is not constructible, has no indexed access and is not iterable.
+ */
+export interface CSSStyleDeclaration {
+  /** The number of declarations. */
+  readonly length: number;
+  /**
+   * The declarations as `name: value;` text in the order they were set. Assigning replaces all
+   * declarations with the ones the text holds, and `null` assigns `""`.
+   */
+  cssText: string;
+  /**
+   * The serialized value of the declaration `property`, or an empty string when it is unset.
+   * @param property - The CSS name, such as `background-color`.
+   * @returns The value.
+   */
+  getPropertyValue(property: string): string;
+  /**
+   * Sets the declaration `property` to `value`, and removes it when `value` is `null` or `""`.
+   * A `priority` other than `""` and `"important"` leaves the block as it was.
+   * @param property - The CSS name.
+   * @param value - The value, converted to text.
+   * @param priority - The priority, which the host does not keep.
+   */
+  setProperty(property: string, value: string | null, priority?: string | null): void;
+  /**
+   * Removes the declaration `property`.
+   * @param property - The CSS name.
+   * @returns The value the declaration had, or an empty string when it was unset.
+   */
+  removeProperty(property: string): string;
+  /**
+   * The priority of the declaration `property`.
+   * @param property - The CSS name.
+   * @returns Always an empty string.
+   */
+  getPropertyPriority(property: string): string;
+  /**
+   * The CSS name of the declaration at `index`, in the order they were set.
+   * @param index - The position, converted to an unsigned 32-bit integer.
+   * @returns The name, or an empty string beyond the list.
+   */
+  item(index: number): string;
+  display: string;
+  "flex-direction": string;
+  flexDirection: string;
+  "justify-content": string;
+  justifyContent: string;
+  "align-items": string;
+  alignItems: string;
+  gap: string;
+  width: string;
+  height: string;
+  "border-width": string;
+  borderWidth: string;
+  background: string;
+  "background-color": string;
+  backgroundColor: string;
+  "border-color": string;
+  borderColor: string;
+  "corner-radius": string;
+  cornerRadius: string;
+  "border-radius": string;
+  borderRadius: string;
+  "text-color": string;
+  textColor: string;
+  color: string;
+  "text-size": string;
+  textSize: string;
+  "font-size": string;
+  fontSize: string;
+  overflow: string;
+  "overflow-x": string;
+  overflowX: string;
+  "overflow-y": string;
+  overflowY: string;
+  "flex-grow": string;
+  flexGrow: string;
+  "flex-shrink": string;
+  flexShrink: string;
+  opacity: string;
+  "min-width": string;
+  minWidth: string;
+  "min-height": string;
+  minHeight: string;
+  "max-width": string;
+  maxWidth: string;
+  "max-height": string;
+  maxHeight: string;
+  padding: string;
+  "padding-x": string;
+  paddingX: string;
+  "padding-y": string;
+  paddingY: string;
+  "padding-top": string;
+  paddingTop: string;
+  "padding-right": string;
+  paddingRight: string;
+  "padding-bottom": string;
+  paddingBottom: string;
+  "padding-left": string;
+  paddingLeft: string;
+  margin: string;
+  "margin-x": string;
+  marginX: string;
+  "margin-y": string;
+  marginY: string;
+  "margin-top": string;
+  marginTop: string;
+  "margin-right": string;
+  marginRight: string;
+  "margin-bottom": string;
+  marginBottom: string;
+  "margin-left": string;
+  marginLeft: string;
+}
+
 /** The members that read and write the markup of an element. */
 export interface HtmlMembers {
   /**
@@ -469,6 +591,12 @@ export interface IncaElement
    * changes. A key that equals the name of a set attribute reads its `Attr`.
    */
   readonly attributes: NamedNodeMap;
+  /**
+   * The inline style as a live block. Every read returns the same object. Assigning a string
+   * writes its `cssText`, and `null` assigns `""`.
+   */
+  get style(): CSSStyleDeclaration;
+  set style(cssText: string | null);
   /**
    * Whether this element matches the selector list. `:focus-visible` and the other interactive and
    * form-state pseudo-classes never match.

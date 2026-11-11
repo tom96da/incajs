@@ -39,6 +39,7 @@ import { elementTreeMembers } from "./elementTree.mts";
 import { withEventHandlers } from "./eventHandlers.mts";
 import { layoutBox, offsetOf, offsetParentOf, rectOf, tabIndexOf } from "./geometry.mts";
 import { htmlMembers } from "./html.mts";
+import { styleMembers } from "./inlineStyle.mts";
 import {
   elementOf,
   existingContent,
@@ -59,6 +60,7 @@ import type { IncaDocument, NodeId, TagName } from "../types.mts";
 import type { AttributeMembers } from "./attributes.mts";
 import type { ClassMembers } from "./classList.mts";
 import type { ElementTreeMembers } from "./elementTree.mts";
+import type { StyleMembers } from "./inlineStyle.mts";
 import type { HandleBuilders } from "./nodeMutation.mts";
 import type { ScrollArgs, ScrollIntoViewOptions } from "./scroll.mts";
 import type {
@@ -138,7 +140,7 @@ const builders: HandleBuilders = {
  * Builds the {@link IncaElement} handle for a native node: parentless,
  * childless, with `id`, `focus()`, `blur()`, `click()`, the pointer capture
  * methods, the listener methods of an event target, `tabIndex`,
- * the `value` of an `input`, the layout members, the node members and the event
+ * the `value` of an `input`, the `style`, the layout members, the node members and the event
  * handler properties, all driven through the host.
  * @param id - the native node's id
  * @param kind - whether the node is an element or a comment stand-in
@@ -167,6 +169,7 @@ export function createIncaElement(
     | keyof NodeMembers
     | keyof TextContentMember
     | keyof QueryMembers
+    | keyof StyleMembers
   > = {
     get id() {
       return isDestroyed(element) ? "" : String(getAttribute(id, "id") ?? "");
@@ -323,6 +326,7 @@ export function createIncaElement(
       element,
       Object.getOwnPropertyDescriptors(htmlMembers(element, builders)),
     );
+    Object.defineProperties(element, Object.getOwnPropertyDescriptors(styleMembers(id)));
   }
   registerNode(element);
   if (isTemplateTag(tag)) attachContent(element, createIncaFragment);
