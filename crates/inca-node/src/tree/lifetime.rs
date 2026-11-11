@@ -112,8 +112,8 @@ impl VirtualTree {
     }
 
     /// Copies `id` with its name, namespace, prefix, attributes and style props, and with its
-    /// descendants when `deep`. Returns the original, the copy and the tag of each copy in
-    /// pre-order, the copy of `id` first. Only that copy has no parent. The copy of a template
+    /// descendants when `deep`. Returns the original and the copy of each node in pre-order, the
+    /// copy of `id` first. Only that copy has no parent. The copy of a template
     /// comes with a fresh content that follows it in the list, with the content descendants when
     /// `deep`, before the other children.
     ///
@@ -125,7 +125,7 @@ impl VirtualTree {
         &mut self,
         id: NodeId,
         deep: bool,
-    ) -> Result<Vec<(NodeId, NodeId, String)>, TreeError> {
+    ) -> Result<Vec<(NodeId, NodeId)>, TreeError> {
         self.get(id).ok_or(TreeError::NodeNotFound(id))?;
         let mut made = Vec::new();
         let mut pending = vec![Step::Node(id, None)];
@@ -153,10 +153,10 @@ impl VirtualTree {
                     (original, copy)
                 }
             };
+            made.push((original, copy));
             let node = self
                 .get(original)
                 .ok_or(TreeError::NodeNotFound(original))?;
-            made.push((original, copy, node.tag_name.clone()));
             let (children, content) = (node.children.clone(), node.content);
             if deep {
                 pending.extend(
@@ -466,9 +466,12 @@ mod tests {
 
         let made = tree.clone_subtree(root, true).unwrap();
 
-        let tags: Vec<&str> = made.iter().map(|(_, _, tag)| tag.as_str()).collect();
+        let ids: Vec<NodeId> = made.iter().map(|&(_, copy)| copy).collect();
+        let tags: Vec<&str> = ids
+            .iter()
+            .map(|&id| tree.get(id).unwrap().tag_name())
+            .collect();
         assert_eq!(tags, ["div", "span", "#text", "#text"]);
-        let ids: Vec<NodeId> = made.iter().map(|(_, copy, _)| *copy).collect();
         assert_eq!(children(&tree, ids[0]), [ids[1], ids[3]]);
         assert_eq!(children(&tree, ids[1]), [ids[2]]);
         assert_eq!(tree.is_equal(root, ids[0]), Ok(true));
@@ -483,7 +486,6 @@ mod tests {
 
         let made = tree.clone_subtree(original, true).unwrap();
 
-        assert_eq!(made[0].2, tag);
         assert_eq!(tree.get(made[0].1).unwrap().tag_name(), tag);
     }
 
@@ -676,7 +678,10 @@ mod tests {
 
         let made = tree.clone_subtree(template, false).unwrap();
 
-        let tags: Vec<&str> = made.iter().map(|(_, _, tag)| tag.as_str()).collect();
+        let tags: Vec<&str> = made
+            .iter()
+            .map(|&(_, copy)| tree.get(copy).unwrap().tag_name())
+            .collect();
         assert_eq!(tags, ["template", FRAGMENT_TAG]);
         let copy = made[0].1;
         assert_eq!(tree.template_content(copy), Some(made[1].1));
@@ -695,9 +700,12 @@ mod tests {
 
         let made = tree.clone_subtree(template, true).unwrap();
 
-        let tags: Vec<&str> = made.iter().map(|(_, _, tag)| tag.as_str()).collect();
+        let tags: Vec<&str> = made
+            .iter()
+            .map(|&(_, copy)| tree.get(copy).unwrap().tag_name())
+            .collect();
         assert_eq!(tags, ["template", FRAGMENT_TAG, "span", "b"]);
-        let copies: Vec<NodeId> = made.iter().map(|(_, copy, _)| *copy).collect();
+        let copies: Vec<NodeId> = made.iter().map(|&(_, copy)| copy).collect();
         assert_eq!(children(&tree, copies[1]), [copies[2]]);
         assert_eq!(children(&tree, copies[0]), [copies[3]]);
     }
@@ -715,7 +723,10 @@ mod tests {
 
         let made = tree.clone_subtree(outer, true).unwrap();
 
-        let tags: Vec<&str> = made.iter().map(|(_, _, tag)| tag.as_str()).collect();
+        let tags: Vec<&str> = made
+            .iter()
+            .map(|&(_, copy)| tree.get(copy).unwrap().tag_name())
+            .collect();
         assert_eq!(
             tags,
             ["template", FRAGMENT_TAG, "template", FRAGMENT_TAG, "span"]

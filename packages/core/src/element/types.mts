@@ -85,7 +85,7 @@ export interface NodeListOf<T extends IncaNode> {
 
 /** An attribute of an element. It has no `Node` members. */
 export interface Attr {
-  /** The attribute name in lower case. */
+  /** The attribute name as the element keys it: lower case on an HTML element. */
   readonly name: string;
   /** The same as `name`. */
   readonly localName: string;
@@ -523,10 +523,16 @@ export interface IncaElement
    */
   readonly kind: "element" | "comment";
   /**
-   * The tag of the element in ASCII upper case, such as `"BUTTON"`. The mount container reads
-   * `"DIV"`.
+   * The qualified name of the element. An element of the HTML namespace reads in ASCII upper case,
+   * such as `"BUTTON"`, and the mount container reads `"DIV"`.
    */
   readonly tagName: string;
+  /** The name of the element without its prefix. */
+  readonly localName: string;
+  /** The namespace of the element, or `null` for none. */
+  readonly namespaceURI: string | null;
+  /** The prefix of the element name, or `null` for none. */
+  readonly prefix: string | null;
   /** The current parent element or fragment, or `null` if this node isn't attached to the tree. */
   parent: IncaParent | null;
   /**

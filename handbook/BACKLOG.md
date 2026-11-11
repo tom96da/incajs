@@ -1671,12 +1671,34 @@ A fixed entry is deleted and its ID is never reused.
   and `#f00` equals `rgb(255, 0, 0)`. A browser compares the text as written and answers `false`.
   Fix: compare the text as set once B-310 keeps it.
 
+- **B-312 Attributes have no namespace**
+  `Units: node,bridge,core · Size: M · Impact: Low`
+
+  `setAttributeNS()`, `getAttributeNS()` and the other `NS` attribute methods are missing, and
+  `Attr.namespaceURI` and `Attr.prefix` read `null`. `xlink:href` is one attribute with that name.
+  Browsers report the namespace `xlink` and the local name `href` for it. Fix: store a namespace
+  and a prefix on each attribute and add the `NS` methods.
+
 - **B-313 `createElementNS()` with the HTML namespace and `STYLE` or `TEMPLATE` behaves as the HTML element**
   `Units: node,bridge · Size: S · Impact: Low`
 
   In browsers `createElementNS(HTML_NS, "STYLE")` makes an element that is no `style` element.
   The host compares `style` and `template` without ASCII case in the HTML namespace, so the
   element holds rules or content. Fix: compare the two names exactly.
+
+- **B-314 `lookupNamespaceURI()`, `isDefaultNamespace()` and `lookupPrefix()` are missing**
+  `Units: core · Size: S · Impact: Low`
+
+  Nodes have `namespaceURI` and `prefix`, but not the three lookup methods of the DOM standard.
+  Fix: add them to the node handles, walking the ancestors for `xmlns` attributes.
+
+- **B-315 A Vue-rendered `<svg>` is an element of the HTML namespace**
+  `Units: core · Size: S · Impact: Medium`
+
+  The renderer ignores the `namespace` argument of Vue's `createElement`, so an `<svg>` made by a
+  template reads `namespaceURI` HTML, `tagName` `SVG` and folds attribute names such as `viewBox`
+  to lower case. Fix: pass the argument through once Vue's own `createApp` runs on the node layer
+  (v0.0.34).
 
 - **B-316 `createElementNS()` drops the name text after the second colon**
   `Units: bridge · Size: S · Impact: Low`
@@ -1701,3 +1723,13 @@ A fixed entry is deleted and its ID is never reused.
   and WebKit write `<x:br>in</x:br>` and Firefox writes `<br>in</br>`, which drops the prefix. The
   host writes the child and the end tag in the HTML namespace too (`<p><x:br>in</x:br></p>`).
 
+- **B-319 Creating an element and parsing HTML cost 5 to 10 percent more**
+  `Units: core · Size: M · Impact: Low`
+
+  A release host creates an element with `document.createElement()` in about 64 µs, against 59 µs
+  before, a renderer element node in about 66 µs, against 61 µs, and parses `innerHTML` in about
+  146 µs per element, against 134 µs. A deep `cloneNode()` shows no difference. Each handle now
+  defines the members of `classList`, `className`, `style`, `dataset` and the name members. The
+  share of each member is not measured. Fix: define the member functions once on a shared
+  prototype and keep the state of an element in one record, then measure again with a build of the
+  parent commit of each member.

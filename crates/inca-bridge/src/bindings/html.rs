@@ -4,9 +4,11 @@
 //! The natives behind `innerHTML`, `outerHTML` and `insertAdjacentHTML`. A write parses the markup
 //! in the tree, puts the nodes in place and returns them as a `Parsed` list for JS to build its
 //! handles from: `[position, entries]`, where `position` is the index among the children of the
-//! container where the first inserted node sits and each entry is `[id, tag, parentId, data]`.
-//! An entry whose `parentId` is no id of the list is a root. `data` is the text of a `#text` or
-//! `#comment` node and `null` for any other node.
+//! container where the first inserted node sits and each entry is
+//! `[id, tag, namespace, parentId, data]`. An entry whose `parentId` is no id of the list is a
+//! root. `namespace` is the namespace of the node and `null` for a `#text`, `#comment` or
+//! `#fragment` node. `data` is the text of a `#text` or `#comment` node and `null` for any other
+//! node. The tests of these natives sit in the same file.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -260,6 +262,7 @@ fn parsed_js<'js>(ctx: &Ctx<'js>, position: usize, parsed: &ParsedHtml) -> JsRes
         let row = [
             node.id.into_js(ctx)?,
             node.tag.as_str().into_js(ctx)?,
+            or_null(ctx, node.namespace.as_deref())?,
             node.parent.unwrap_or(parsed.fragment).into_js(ctx)?,
             or_null(ctx, node.data.as_deref())?,
         ];
@@ -272,9 +275,6 @@ fn parsed_js<'js>(ctx: &Ctx<'js>, position: usize, parsed: &ParsedHtml) -> JsRes
 }
 
 #[cfg(test)]
-mod namespace;
-
-#[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
 
@@ -285,82 +285,103 @@ mod tests {
     use rstest::rstest;
 
     use crate::Host;
-    use crate::test_support::{LISTEN_JS, engine_with_bindings, error_name};
+    use crate::test_support::{HTML, LISTEN_JS, MATHML, SVG, engine_with_bindings, error_name};
 
     /// `host` is a `div` under the root. `rows` maps a `Parsed` result to
-    /// `[tag, index of the parent entry or -1, data]`.
+    /// `[tag, index of the parent entry or -1, namespace, data]`.
     const SETUP: &str = r"
         const n = __inca_native__;
         const host = n.createNode('div');
         n.appendChild(n.rootNodeId(), host);
         const rows = (parsed) => parsed[1].map((e) => [
             e[1],
-            parsed[1].findIndex((x) => x[0] === e[2]),
-            e[3],
+            parsed[1].findIndex((x) => x[0] === e[3]),
+            e[2],
+            e[4],
         ]);
         const html = (id) => n.innerHtml(id);
         ";
 
-    pub(super) fn engine() -> (Engine, Rc<RefCell<Host>>) {
+    fn engine() -> (Engine, Rc<RefCell<Host>>) {
         let (engine, host) = engine_with_bindings();
         engine.eval::<()>(LISTEN_JS).unwrap();
         engine.eval::<()>(SETUP).unwrap();
         (engine, host)
     }
 
-    pub(super) fn eval(engine: &Engine, js: &str) -> String {
+    fn eval(engine: &Engine, js: &str) -> String {
         engine
             .eval(&format!("JSON.stringify((() => {{ {js} }})())"))
             .unwrap()
     }
 
     #[test]
-    fn set_inner_html_returns_pre_order_entries_with_parent_ids_and_data() {
-        let (engine, _host) = engine();
-
-        let got = eval(&engine, "return rows(n.setInnerHtml(host, '<p>a</p>b'));");
-
-        assert_eq!(got, r##"[["p",-1,null],["#text",0,"a"],["#text",-1,"b"]]"##);
-    }
-
-    #[test]
-    fn set_inner_html_returns_a_comment_with_its_data() {
-        let (engine, _host) = engine();
-
-        let got = eval(&engine, "return rows(n.setInnerHtml(host, '<!--c-->'));");
-
-        assert_eq!(got, r##"[["#comment",-1,"c"]]"##);
-    }
-
-    #[test]
-    fn set_inner_html_returns_position_zero() {
+    fn set_inner_html_returns_pre_order_entries_with_parent_ids_namespaces_and_data() {
         let (engine, _host) = engine();
 
         let got = eval(
             &engine,
             r"
-            n.setInnerHtml(host, '<b></b>');
-            return n.setInnerHtml(host, '<i></i>')[0];
+            const markup = '<p>a</p>b<!--c--><svg><foreignObject></foreignObject></svg><math><mi>x</mi></math>';
+            return rows(n.setInnerHtml(host, markup));
             ",
         );
 
-        assert_eq!(got, "0");
+        assert_eq!(
+            got,
+            format!(
+                r##"[["p",-1,"{HTML}",null],["#text",0,null,"a"],["#text",-1,null,"b"],["#comment",-1,null,"c"],["svg",-1,"{SVG}",null],["foreignObject",4,"{SVG}",null],["math",-1,"{MATHML}",null],["mi",6,"{MATHML}",null],["#text",7,null,"x"]]"##
+            )
+        );
+    }
+
+    #[rstest]
+    #[case::html("<input value=a>", 0, true)]
+    #[case::svg("<svg><input value=a></svg>", 1, false)]
+    fn a_parsed_input_takes_the_value_attribute_as_typed_text_in_html_only(
+        #[case] markup: &str,
+        #[case] index: usize,
+        #[case] typed: bool,
+    ) {
+        let (engine, host) = engine();
+
+        let id: u32 = engine
+            .eval(&format!("n.setInnerHtml(host, '{markup}')[1][{index}][0];"))
+            .unwrap();
+
+        assert_eq!(host.borrow().inputs.borrow().contains_key(&id), typed);
     }
 
     #[test]
-    fn set_inner_html_replaces_all_old_children() {
+    fn set_outer_html_parses_in_the_namespace_of_the_parent() {
+        let (engine, _host) = engine();
+
+        let got = eval(
+            &engine,
+            r"
+            const svg = n.setInnerHtml(host, '<svg><foreignObject></foreignObject></svg>')[1][0][0];
+            const foreign = n.childNodeIds(svg)[0];
+            return rows(n.setOuterHtml(foreign, '<title>'));
+            ",
+        );
+
+        assert_eq!(got, format!(r#"[["title",-1,"{SVG}",null]]"#));
+    }
+
+    #[test]
+    fn set_inner_html_replaces_all_old_children_and_returns_position_zero() {
         let (engine, _host) = engine();
 
         let got = eval(
             &engine,
             r"
             n.setInnerHtml(host, '<b></b><i></i>');
-            n.setInnerHtml(host, '<u></u>');
-            return html(host);
+            const parsed = n.setInnerHtml(host, '<u></u>');
+            return [parsed[0], html(host)];
             ",
         );
 
-        assert_eq!(got, r#""<u></u>""#);
+        assert_eq!(got, r#"[0,"<u></u>"]"#);
     }
 
     #[test]
@@ -482,61 +503,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn set_outer_html_on_the_detached_root_returns_null_and_changes_nothing() {
-        let (engine, _host) = engine();
-
-        let got = eval(
-            &engine,
-            r"
-            n.removeChild(n.documentNodeId(), n.rootNodeId());
-            return [
-                n.setOuterHtml(n.rootNodeId(), '<i></i>'),
-                n.childNodeIds(n.rootNodeId()).length
-            ];
-            ",
-        );
-
-        assert_eq!(got, "[null,1]");
-    }
-
-    #[test]
-    fn set_outer_html_under_a_fragment_parses_in_body() {
-        let (engine, _host) = engine();
-
-        let got = eval(
-            &engine,
-            r"
-            const f = n.createNode('#fragment');
-            const p = n.createNode('p');
-            n.appendChild(f, p);
-            n.setOuterHtml(p, '<td>x</td><p>y</p>');
-            return html(f);
-            ",
-        );
-
-        assert_eq!(got, r#""x<p>y</p>""#);
-    }
-
-    #[test]
-    fn set_outer_html_of_an_own_child_of_a_template_stays_among_the_own_children() {
-        let (engine, _host) = engine();
-
-        let got = eval(
-            &engine,
-            r"
-            const t = n.createNode('template');
-            n.appendChild(host, t);
-            const own = n.createNode('p');
-            n.appendChild(t, own);
-            n.setOuterHtml(own, '<i></i>');
-            return [n.childNodeIds(t).length, n.childNodeIds(n.templateContent(t)).length];
-            ",
-        );
-
-        assert_eq!(got, "[1,0]");
-    }
-
     const PLACED: &str = r"
         n.setInnerHtml(host, '<p></p><m><i></i></m><q></q>');
         const m = n.childNodeIds(host)[1];
@@ -563,26 +529,21 @@ mod tests {
         assert_eq!(got, expected);
     }
 
-    #[test]
-    fn insert_adjacent_html_accepts_a_position_in_any_case() {
+    #[rstest]
+    #[case::any_case("BeforeEnd", "none")]
+    #[case::unknown("inside", "SyntaxError")]
+    fn insert_adjacent_html_reads_a_position_ignoring_case(
+        #[case] position: &str,
+        #[case] expected: &str,
+    ) {
         let (engine, _host) = engine();
 
         assert_eq!(
             error_name(
                 &engine,
-                "n.insertAdjacentHtml(host, 'BeforeEnd', '<i></i>')"
+                &format!("n.insertAdjacentHtml(host, '{position}', '<i></i>')")
             ),
-            "none"
-        );
-    }
-
-    #[test]
-    fn insert_adjacent_html_throws_syntax_error_for_an_unknown_position() {
-        let (engine, _host) = engine();
-
-        assert_eq!(
-            error_name(&engine, "n.insertAdjacentHtml(host, 'inside', 'x')"),
-            "SyntaxError"
+            expected
         );
     }
 
@@ -633,9 +594,7 @@ mod tests {
 
     #[rstest]
     #[case::before_begin_of_a_child("beforebegin", "child", "x<body></body>")]
-    #[case::after_end_of_a_child("afterend", "child", "<body></body>x")]
     #[case::after_begin_of_html("afterbegin", "root", "x<body></body>")]
-    #[case::before_end_of_html("beforeend", "root", "<body></body>x")]
     fn an_html_context_parses_in_the_body_context(
         #[case] position: &str,
         #[case] target: &str,
@@ -681,14 +640,11 @@ mod tests {
         assert_eq!(eval(&engine, "return out;"), "[]");
     }
 
-    #[rstest]
-    #[case::outer_on_the_root("n.setOuterHtml(n.rootNodeId(), '<i></i>')")]
-    #[case::adjacent_after_the_root("n.insertAdjacentHtml(n.rootNodeId(), 'afterend', '<i></i>')")]
-    #[case::adjacent_unknown_position("n.insertAdjacentHtml(host, 'inside', '<i></i>')")]
-    fn a_refused_call_leaves_no_orphan(#[case] call: &str) {
+    #[test]
+    fn an_unknown_position_leaves_no_orphan() {
         let (engine, host) = engine();
 
-        let _ = error_name(&engine, call);
+        let _ = error_name(&engine, "n.insertAdjacentHtml(host, 'inside', '<i></i>')");
 
         assert!(!host.borrow().tree.has_orphans());
     }

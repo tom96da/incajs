@@ -8,14 +8,15 @@ import {
   appendChild,
   cloneNode as cloneHostNode,
   insertBefore,
+  nameOf,
   removeChild,
   replaceChild,
 } from "../tree.mts";
 import { requireArguments } from "./attributes.mts";
 import { existingContent, isDestroyed, isNode } from "./lifecycle.mts";
 import { keep, link, unlink } from "./shadowTree.mts";
-import { isTemplateTag } from "./templateContent.mts";
-import type { IncaDocument, NodeId, TagName } from "../types.mts";
+import type { ElementName } from "../native.mts";
+import type { IncaDocument, NodeId } from "../types.mts";
 import type {
   IncaElement,
   IncaFragment,
@@ -37,7 +38,7 @@ export type NodeMutationMembers = Pick<
  * builders of the kinds its clone can hold.
  */
 export interface HandleBuilders {
-  element?: (id: NodeId, kind: IncaElement["kind"], tag?: TagName) => IncaElement;
+  element?: (id: NodeId, kind: IncaElement["kind"], name?: ElementName) => IncaElement;
   text: (id: NodeId, data: string) => IncaText;
   fragment?: (id: NodeId) => IncaFragment;
   /** The handle of the document. */
@@ -96,13 +97,18 @@ export function cloneNode<T extends IncaNode>(node: T, deep: boolean, builders: 
   // The document has no clone and no parent, so no copy walk reaches it.
   type Copyable = Exclude<IncaNode, IncaDocument>;
   const build = (original: Copyable): IncaNode => {
-    const [id, tag] = copies[next++]!;
+    const entry = copies[next++]!;
+    const id = entry[0];
     if (original.kind === "text") return builders.text(id, original.text);
     const copy =
       original.kind === "fragment"
         ? builders.fragment!(id)
-        : builders.element!(id, original.kind, original.kind === "element" ? tag : undefined);
-    if (original.kind === "element" && isTemplateTag(original.tagName)) {
+        : builders.element!(
+            id,
+            original.kind,
+            original.kind === "element" ? nameOf(entry) : undefined,
+          );
+    if (original.kind === "element" && existingContent(original) !== undefined) {
       next++;
       const content = existingContent(copy as IncaElement)!;
       if (deep) {

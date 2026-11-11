@@ -4,7 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { nativeStub } from "../../tests/setup.mts";
-import { createElementNode } from "./handle.mts";
+import { createElementNode, createIncaElement } from "./handle.mts";
 import { isDestroyed, isRemoved, markDestroyed, markRemoved } from "./lifecycle.mts";
 import type { IncaElement, IncaNode, IncaTemplateElement } from "./types.mts";
 
@@ -190,5 +190,21 @@ describe("a template", () => {
     markRemoved(owner);
 
     expect(isRemoved(content)).toBe(true);
+  });
+});
+
+describe("the name members of a freed element", () => {
+  it("keep their values", () => {
+    globalThis.__inca_native__ = nativeStub();
+    const el = createIncaElement(1, "element", ["Y", "urn:x", "x", "X:Y"]);
+
+    markDestroyed(el);
+
+    expect([el.tagName, el.localName, el.namespaceURI, el.prefix]).toEqual([
+      "X:Y",
+      "Y",
+      "urn:x",
+      "x",
+    ]);
   });
 });

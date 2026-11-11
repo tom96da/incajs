@@ -2,9 +2,16 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { releaseCallbacks } from "./callbacks.mts";
-import { native } from "./native.mts";
+import { HTML_NAMESPACE, native } from "./native.mts";
 import type { CSSStyleDeclaration, DOMTokenList } from "./element/types.mts";
-import type { NodeLink, Parsed } from "./native.mts";
+import type {
+  ElementEntry,
+  ElementName,
+  NodeEntry,
+  NodeLink,
+  Parsed,
+  ParsedEntry,
+} from "./native.mts";
 import type { AttributeValue, NodeId, ScrollAlignment, StyleProps, TagName } from "./types.mts";
 
 /**
@@ -35,6 +42,38 @@ export function documentNodeId(): NodeId {
  */
 export function createElement(localName: string): [NodeId, TagName] {
   return native().createElement(localName);
+}
+
+/**
+ * Allocates a new element in the native tree with a namespace, as {@link createElement} does for
+ * the HTML namespace. The host validates and splits `qualifiedName`; JS converts the arguments.
+ * @param namespace - the namespace, or `null` for none
+ * @param qualifiedName - the element name, with an optional prefix
+ * @returns the new node's id, local name, namespace, prefix and tag name
+ * @throws {DOMException} `InvalidCharacterError` when a part of the name is not valid, and
+ *   `NamespaceError` when the prefix and the namespace do not fit
+ */
+export function createElementNS(namespace: string | null, qualifiedName: string): ElementEntry {
+  return native().createElementNS(namespace, qualifiedName);
+}
+
+/**
+ * Reads the name a creating native returned.
+ * @param entry - an entry of `createElement`, `createElementNS` or `cloneNode`
+ * @returns the tag string for a two-part entry, and the last four parts for a five-part entry
+ */
+export function nameOf(entry: NodeEntry | ElementEntry): ElementName {
+  return entry.length === 2 ? entry[1] : [entry[1], entry[2], entry[3], entry[4]];
+}
+
+/**
+ * Reads the name of an element row of a parse result. A parsed element has no prefix, and a name
+ * outside the HTML namespace keeps its case.
+ * @param row - an element row
+ * @returns the tag string for an HTML row, and the name tuple for any other namespace
+ */
+export function nameOfRow(row: ParsedEntry): ElementName {
+  return row[2] === HTML_NAMESPACE ? row[1] : [row[1], row[2], null, row[1]];
 }
 
 /**
@@ -113,10 +152,11 @@ export function replaceChild(parentId: NodeId, nodeId: NodeId, childId: NodeId):
  * original and the typed text of an `input`, and no listeners.
  * @param nodeId - the node to copy
  * @param deep - whether the descendants are copied too
- * @returns the id and tag of each copy in pre-order, the copy of `nodeId` first
+ * @returns one entry per copy in pre-order, the copy of `nodeId` first: the id and the four name
+ *   parts of an element, the id and the marker of any other node
  * @throws {TypeError} when `nodeId` names no node
  */
-export function cloneNode(nodeId: NodeId, deep: boolean): [NodeId, TagName][] {
+export function cloneNode(nodeId: NodeId, deep: boolean): (NodeEntry | ElementEntry)[] {
   return native().cloneNode(nodeId, deep);
 }
 
@@ -251,6 +291,18 @@ export function releaseNode(nodeId: NodeId): void {
  */
 export function setAttribute(nodeId: NodeId, key: string, value: AttributeValue): void {
   native().setAttribute(nodeId, key, value);
+}
+
+/**
+ * Returns the key that the attribute `name` has on `nodeId`: the name in lower case for an HTML
+ * element, and unchanged for any other element.
+ * @param nodeId - the node to read
+ * @param name - the attribute name
+ * @returns the key
+ * @throws {TypeError} when `nodeId` names no node
+ */
+export function attributeKey(nodeId: NodeId, name: string): string {
+  return native().attributeKey(nodeId, name);
 }
 
 /**

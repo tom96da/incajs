@@ -4,9 +4,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { nativeStub } from "../tests/setup.mts";
+import { HTML_NAMESPACE } from "./native.mts";
 import {
   appendChild,
+  attributeKey,
+  createElementNS,
   insertBefore,
+  nameOf,
+  nameOfRow,
   replaceChild,
   cloneNode,
   innerHtml,
@@ -40,7 +45,7 @@ import {
   inputValue,
   setInputValue,
 } from "./tree.mts";
-import type { HostCallback, NodeLink, Parsed } from "./native.mts";
+import type { ElementEntry, HostCallback, NodeLink, Parsed } from "./native.mts";
 import type { EventLike } from "./types.mts";
 
 // Ids come from the host, which numbers them in order.
@@ -49,6 +54,14 @@ let nextCallbackId = 0;
 const native = {
   rootNodeId: vi.fn<() => number>(() => 42),
   createNode: vi.fn<(tag: string) => number>((_tag: string) => 1),
+  createElementNS: vi.fn<(namespace: string | null, qualifiedName: string) => ElementEntry>(() => [
+    1,
+    "a",
+    null,
+    null,
+    "a",
+  ]),
+  attributeKey: vi.fn<(nodeId: number, name: string) => string>((_nodeId, name) => name),
   appendChild: vi.fn<(parentId: number, childId: number) => number>(() => 0),
   insertBefore: vi.fn<(parentId: number, childId: number, refId: number | null) => number>(() => 0),
   removeChild: vi.fn<(parentId: number, childId: number) => void>(),
@@ -145,6 +158,18 @@ describe("wrapper functions forward to __inca_native__", () => {
     expect(native.replaceChild).toHaveBeenCalledWith(1, 2, 3);
   });
 
+  it("createElementNS", () => {
+    native.createElementNS.mockReturnValueOnce([5, "Y", "urn:x", "x", "X:Y"]);
+    expect(createElementNS("urn:x", "x:Y")).toEqual([5, "Y", "urn:x", "x", "X:Y"]);
+    expect(native.createElementNS).toHaveBeenCalledWith("urn:x", "x:Y");
+  });
+
+  it("attributeKey", () => {
+    native.attributeKey.mockReturnValueOnce("viewbox");
+    expect(attributeKey(1, "viewBox")).toBe("viewbox");
+    expect(native.attributeKey).toHaveBeenCalledWith(1, "viewBox");
+  });
+
   it("cloneNode", () => {
     native.cloneNode.mockReturnValueOnce([[7, "div"]]);
     expect(cloneNode(1, true)).toEqual([[7, "div"]]);
@@ -161,8 +186,8 @@ describe("wrapper functions forward to __inca_native__", () => {
   });
 
   it("setInnerHtml", () => {
-    native.setInnerHtml.mockReturnValueOnce([0, [[2, "b", 9, null]]]);
-    expect(setInnerHtml(1, "<b>")).toEqual([0, [[2, "b", 9, null]]]);
+    native.setInnerHtml.mockReturnValueOnce([0, [[2, "b", HTML_NAMESPACE, 9, null]]]);
+    expect(setInnerHtml(1, "<b>")).toEqual([0, [[2, "b", HTML_NAMESPACE, 9, null]]]);
     expect(native.setInnerHtml).toHaveBeenCalledWith(1, "<b>");
   });
 
@@ -311,5 +336,30 @@ describe("wrapper functions forward to __inca_native__", () => {
   it("focusedNode", () => {
     native.focusedNode.mockReturnValueOnce(7);
     expect(focusedNode()).toBe(7);
+  });
+});
+
+describe("nameOf", () => {
+  it("gives the tag of a two-part entry", () => {
+    expect(nameOf([7, "div"])).toBe("div");
+  });
+
+  it("gives the four name parts of a five-part entry", () => {
+    expect(nameOf([7, "Y", "urn:x", "x", "X:Y"])).toEqual(["Y", "urn:x", "x", "X:Y"]);
+  });
+});
+
+describe("nameOfRow", () => {
+  it("gives the tag of an HTML row", () => {
+    expect(nameOfRow([7, "div", HTML_NAMESPACE, 0, null])).toBe("div");
+  });
+
+  it("gives the tuple of a foreign row without upper case or prefix", () => {
+    expect(nameOfRow([7, "foreignObject", "urn:x", 0, null])).toEqual([
+      "foreignObject",
+      "urn:x",
+      null,
+      "foreignObject",
+    ]);
   });
 });

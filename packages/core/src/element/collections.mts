@@ -190,21 +190,20 @@ export function htmlCollectionOf<T extends IncaElement>(
  * Builds a live, read-only `NamedNodeMap` over the attributes `source` returns. Every read asks
  * `source` again.
  * @param source - lists the current attributes in order
- * @param find - answers `getNamedItem()` for a name
- * @param named - answers a named property: the attribute whose name is `key`, or `null`
+ * @param find - answers `getNamedItem()` and a named property: the attribute called `name`, or
+ *   `null`
  * @returns the map
  */
 export function namedNodeMapOf(
   source: () => readonly Attr[],
   find: (name: string) => Attr | null,
-  named: (key: string) => Attr | null,
 ): NamedNodeMap {
   return indexedCollection({
     tag: "NamedNodeMap",
     method: "getNamedItem",
     source,
     find,
-    named,
+    named: find,
     names: (items) => items.map((attr) => attr.name),
   }) as NamedNodeMap;
 }

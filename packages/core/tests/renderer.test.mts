@@ -329,7 +329,6 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       attributes: namedNodeMapOf(
         () => [],
         () => null,
-        () => null,
       ),
       dataset: {},
       __node_id: rootId,
@@ -338,6 +337,9 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       classList: {} as DOMTokenList,
       kind: "element",
       tagName: "DIV",
+      localName: "div",
+      namespaceURI: "http://www.w3.org/1999/xhtml",
+      prefix: null,
       matches: () => false,
       closest: () => null,
       querySelector: () => null,

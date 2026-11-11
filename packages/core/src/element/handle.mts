@@ -10,17 +10,20 @@ import {
   setPointerCapture,
 } from "../events.mts";
 import { createEventTarget } from "../eventTarget.mts";
+import { HTML_NAMESPACE } from "../native.mts";
 import {
   appendChild,
   checkSelector,
   closestNode,
   createElement as createHostElement,
+  createElementNS as createHostElementNS,
   createNode,
   documentNodeId,
   focusedNode,
   getAttribute,
   inputValue,
   matchesNode,
+  nameOf,
   queryNode,
   queryNodes,
   removeChild,
@@ -55,8 +58,9 @@ import { nodeRelationMembers } from "./nodeRelations.mts";
 import { nodeTreeMembers } from "./nodeTree.mts";
 import { scrollIntoViewArgs, scrollPosition } from "./scroll.mts";
 import { keep, unlink } from "./shadowTree.mts";
-import { attachContent, isTemplateTag } from "./templateContent.mts";
+import { attachContent } from "./templateContent.mts";
 import { characterDataMembers, createIncaText, nullableText } from "./text.mts";
+import type { ElementName } from "../native.mts";
 import type { IncaDocument, NodeId, TagName } from "../types.mts";
 import type { AttributeMembers } from "./attributes.mts";
 import type { ClassMembers } from "./classList.mts";
@@ -146,8 +150,9 @@ const builders: HandleBuilders = {
  * the node members and the event handler properties, all driven through the host.
  * @param id - the native node's id
  * @param kind - whether the node is an element or a comment stand-in
- * @param tag - the node's element kind, `div` when omitted; a `button` or `input` defaults to tab
- *   index `0`, and an `input` has `value`
+ * @param name - the element name, an HTML `div` when omitted. An HTML `button` or `input`
+ *   defaults to tab index `0`, an HTML `input` has `value` and an HTML `template` has `content`.
+ *   The handle keeps the name, so the name members read after the host frees the node.
  * @param passiveByDefault - event names whose listeners are passive unless their options say
  *   `passive: false`
  * @returns the new handle
@@ -155,14 +160,23 @@ const builders: HandleBuilders = {
 export function createIncaElement(
   id: NodeId,
   kind: IncaElement["kind"],
-  tag: TagName = "div",
+  name: ElementName = "div",
   passiveByDefault: readonly string[] = [],
 ): IncaElement {
+  const [localName, namespaceURI, prefix, tagName] =
+    typeof name === "string"
+      ? [name, HTML_NAMESPACE, null, name.replace(/[a-z]/g, (letter) => letter.toUpperCase())]
+      : name;
+  const html = namespaceURI === HTML_NAMESPACE;
   const target = createEventTarget(() => id, passiveByDefault);
   const scroll = () => (isRemoved(element) ? null : scrollOf(id));
   const fields: Omit<
     IncaElement,
     | "__node_id"
+    | "tagName"
+    | "localName"
+    | "namespaceURI"
+    | "prefix"
     | keyof EventHandlers
     | keyof AttributeMembers
     | keyof ClassMembers
@@ -181,7 +195,6 @@ export function createIncaElement(
       if (!isDestroyed(element)) setAttribute(id, "id", String(value));
     },
     kind,
-    tagName: tag.replace(/[a-z]/g, (letter) => letter.toUpperCase()),
     parent: null,
     __children: [],
     focus: (options?: { preventScroll?: boolean }) => {
@@ -202,7 +215,10 @@ export function createIncaElement(
     },
     dispatchEvent: (event) => isDestroyed(element) || target.dispatchEvent(event),
     get tabIndex() {
-      return tabIndexOf(isDestroyed(element) ? null : getAttribute(id, "tabindex"), tag);
+      return tabIndexOf(
+        isDestroyed(element) ? null : getAttribute(id, "tabindex"),
+        html ? localName : "",
+      );
     },
     set tabIndex(value: number) {
       if (!isDestroyed(element)) setAttribute(id, "tabindex", value | 0);
@@ -280,14 +296,18 @@ export function createIncaElement(
       return found === null ? null : elementHandle(found);
     },
   };
-  if (isTemplateTag(tag)) {
+  for (const [member, value] of Object.entries({ tagName, localName, namespaceURI, prefix })) {
+    Object.defineProperty(fields, member, { value, enumerable: true });
+  }
+  const template = html && localName.toLowerCase() === "template";
+  if (template) {
     Object.defineProperty(fields, "content", {
       get: () => existingContent(element),
       enumerable: true,
       configurable: true,
     });
   }
-  if (tag === "input") {
+  if (html && localName === "input") {
     Object.defineProperty(fields, "value", {
       get: () => (isDestroyed(element) ? "" : inputValue(id)),
       set: (value: unknown) => {
@@ -333,7 +353,7 @@ export function createIncaElement(
     Object.defineProperties(element, Object.getOwnPropertyDescriptors(datasetMembers(id)));
   }
   registerNode(element);
-  if (isTemplateTag(tag)) attachContent(element, createIncaFragment);
+  if (template) attachContent(element, createIncaFragment);
   return element;
 }
 
@@ -427,7 +447,7 @@ export function setElementText(el: IncaParent, text: string): void {
  */
 export function rootElement(): IncaElement {
   const id = rootNodeId();
-  return elementOf(id) ?? createIncaElement(id, "element", undefined, ["wheel"]);
+  return elementOf(id) ?? createIncaElement(id, "element", "div", ["wheel"]);
 }
 
 /**
@@ -522,8 +542,14 @@ function createIncaDocument(id: NodeId): IncaDocument {
     createDocumentFragment: () => held(createIncaFragment(createNode("#fragment"))),
     createElement: (...args: [localName: string]) => {
       requireArguments(args, 1, "createElement");
-      const [elementId, tag] = createHostElement(attributeText(args[0]));
-      return held(createIncaElement(elementId, "element", tag));
+      const entry = createHostElement(attributeText(args[0]));
+      return held(createIncaElement(entry[0], "element", nameOf(entry)));
+    },
+    createElementNS: (...args: [namespace: string | null, qualifiedName: string]) => {
+      requireArguments(args, 2, "createElementNS");
+      const namespace = args[0] === null || args[0] === undefined ? null : attributeText(args[0]);
+      const entry = createHostElementNS(namespace || null, attributeText(args[1]));
+      return held(createIncaElement(entry[0], "element", nameOf(entry)));
     },
     createTextNode: (...args: [data: string]) => {
       requireArguments(args, 1, "createTextNode");

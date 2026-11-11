@@ -4,8 +4,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { nativeStub } from "../../tests/setup.mts";
+import { HTML_NAMESPACE } from "../native.mts";
 import { createIncaElement, handleOf, rootElement } from "./handle.mts";
 import { elementOf, markDestroyed, markRemoved, nodeOf } from "./lifecycle.mts";
+import type { ElementName } from "../native.mts";
 import type { ScrollOptions } from "./scroll.mts";
 import type { IncaElement, IncaInputElement } from "./types.mts";
 
@@ -346,6 +348,75 @@ describe("createIncaElement tagName", () => {
     markDestroyed(el);
 
     expect(el.tagName).toBe("INPUT");
+  });
+});
+
+describe("createIncaElement name", () => {
+  const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
+  const svg = (localName: string): ElementName => [localName, SVG_NAMESPACE, null, localName];
+  const membersOf = (el: IncaElement) => [el.tagName, el.localName, el.namespaceURI, el.prefix];
+
+  it("reads the members of a name tuple", () => {
+    installHost();
+
+    const el = createIncaElement(1, "element", ["Y", "urn:x", "x", "X:Y"]);
+
+    expect(membersOf(el)).toEqual(["X:Y", "Y", "urn:x", "x"]);
+  });
+
+  it("reads a tag string as an HTML name", () => {
+    installHost();
+
+    const el = createIncaElement(1, "element", "button");
+
+    expect(membersOf(el)).toEqual(["BUTTON", "button", HTML_NAMESPACE, null]);
+  });
+
+  it("gives a tag string and the equal tuple the same members", () => {
+    installHost();
+
+    const tuple = createIncaElement(1, "element", ["svg", HTML_NAMESPACE, null, "SVG"]);
+
+    expect(membersOf(tuple)).toEqual(membersOf(createIncaElement(2, "element", "svg")));
+  });
+
+  it("makes an HTML div without a name", () => {
+    installHost();
+
+    expect(membersOf(createIncaElement(1, "element"))).toEqual([
+      "DIV",
+      "div",
+      HTML_NAMESPACE,
+      null,
+    ]);
+  });
+
+  it.each(["tagName", "localName", "namespaceURI", "prefix"] as const)(
+    "throws in strict code on an assignment to %s",
+    (member) => {
+      installHost();
+      const el = createIncaElement(1, "element", "div");
+
+      expect(() => ((el as unknown as Record<string, unknown>)[member] = "x")).toThrow(TypeError);
+    },
+  );
+
+  it("gives an SVG input no value", () => {
+    installHost();
+
+    expect("value" in createIncaElement(1, "element", svg("input"))).toBe(false);
+  });
+
+  it("gives an SVG template no content", () => {
+    installHost();
+
+    expect("content" in createIncaElement(1, "element", svg("template"))).toBe(false);
+  });
+
+  it("reads -1 as the default tab index of an SVG button", () => {
+    installHost();
+
+    expect(createIncaElement(1, "element", svg("button")).tabIndex).toBe(-1);
   });
 });
 

@@ -7,13 +7,13 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use rquickjs::convert::Coerced;
-use rquickjs::convert::List;
-use rquickjs::{Ctx, Result as JsResult};
+use rquickjs::{Array, Ctx, Exception, Result as JsResult};
 
 use inca_node::NodeId;
 
 use super::Natives;
 use super::convert::{JsNodeId, throw_tree_error};
+use super::create_element::element_entry;
 use super::host::Host;
 
 /// The classic mutation members: `appendChild`, `insertBefore`, `removeChild`, `replaceChild`
@@ -80,14 +80,13 @@ fn remove_child<'js>(
     }
 }
 
-/// The id and tag of each copy, as the two-element arrays JS reads.
-type Copies = Vec<List<(NodeId, String)>>;
-
-/// Copies `node_id` and, when `deep`, its descendants. Returns the id and tag of each copy in
-/// pre-order. An `input` copy gets the typed text of its original.
+/// Copies `node_id` and, when `deep`, its descendants. Returns one entry per copy in pre-order:
+/// `[id, localName, namespace, prefix, tagName]` for an element and `[id, tag]` for a `#text`,
+/// a `#comment` and a `#fragment`, which includes the content of a template. An HTML `input` copy
+/// gets the typed text of its original.
 fn clone_node<'js>(
     host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, Coerced<bool>) -> JsResult<Copies> {
+) -> impl Fn(Ctx<'js>, JsNodeId, Coerced<bool>) -> JsResult<Vec<Array<'js>>> {
     move |ctx, JsNodeId(node_id), Coerced(deep)| {
         let mut host = host.borrow_mut();
         let made = host
@@ -95,17 +94,25 @@ fn clone_node<'js>(
             .clone_subtree(node_id, deep)
             .map_err(|err| throw_tree_error(&ctx, err))?;
         let mut inputs = host.inputs.borrow_mut();
-        for (original, copy, tag) in &made {
-            let typed = inputs.get(original).map(|input| input.value().to_owned());
-            if let (true, Some(typed)) = (tag == "input", typed) {
-                inputs.entry(*copy).or_default().set_value(&typed);
+        let mut entries = Vec::with_capacity(made.len());
+        for (original, copy) in made {
+            let Some(node) = host.tree.get(copy) else {
+                return Err(Exception::throw_type(&ctx, "the copy is missing"));
+            };
+            let typed = inputs.get(&original).map(|input| input.value().to_owned());
+            if let (true, Some(typed)) = (node.is_html("input"), typed) {
+                inputs.entry(copy).or_default().set_value(&typed);
+            }
+            if node.is_element() {
+                entries.push(element_entry(&ctx, copy, node)?);
+            } else {
+                let entry = Array::new(ctx.clone())?;
+                entry.set(0, copy)?;
+                entry.set(1, node.tag_name())?;
+                entries.push(entry);
             }
         }
-        drop(inputs);
-        Ok(made
-            .into_iter()
-            .map(|(_, copy, tag)| List((copy, tag)))
-            .collect())
+        Ok(entries)
     }
 }
 
@@ -139,7 +146,7 @@ mod tests {
     use rstest::rstest;
 
     use crate::Host;
-    use crate::test_support::{LISTEN_JS, engine_with_bindings, error_name};
+    use crate::test_support::{HTML, LISTEN_JS, SVG, engine_with_bindings, error_name};
 
     /// Builds `p > (a, b)`, `q > x`, `g > (g1, g2)` and the parentless `loose`, `loose2`, `t`
     /// (text), `c` (comment) and `f` (empty fragment).
@@ -303,6 +310,45 @@ mod tests {
     }
 
     #[test]
+    fn clone_node_returns_the_name_parts_of_an_element_copy() {
+        let (engine, _host) = engine_with_family();
+
+        let got: String = engine
+            .eval(&format!(
+                r"
+                const el = n.createElementNS('{SVG}', 's:foreignObject')[0];
+                JSON.stringify(n.cloneNode(el, false).map((e) => e.slice(1)));
+                "
+            ))
+            .unwrap();
+
+        assert_eq!(
+            got,
+            format!(r#"[["foreignObject","{SVG}","s","s:foreignObject"]]"#)
+        );
+    }
+
+    #[test]
+    fn clone_node_returns_a_pair_for_text_and_comment_copies() {
+        let (engine, _host) = engine_with_family();
+
+        let got: String = engine
+            .eval(
+                r"
+                n.appendChild(a, t);
+                n.appendChild(a, c);
+                JSON.stringify(n.cloneNode(a, true).map((e) => e.slice(1)));
+                ",
+            )
+            .unwrap();
+
+        assert_eq!(
+            got,
+            format!(r##"[["span","{HTML}",null,"SPAN"],["#text"],["#comment"]]"##)
+        );
+    }
+
+    #[test]
     fn clone_node_returns_ids_that_name_new_nodes() {
         let (engine, _host) = engine_with_family();
 
@@ -436,6 +482,22 @@ mod tests {
     }
 
     #[test]
+    fn the_content_fragment_of_a_cloned_template_is_a_pair() {
+        let (engine, _host) = engine_with_bindings();
+
+        let length: u32 = engine
+            .eval(
+                r"
+                const n = __inca_native__;
+                n.cloneNode(n.createNode('template'), false)[1].length;
+                ",
+            )
+            .unwrap();
+
+        assert_eq!(length, 2);
+    }
+
+    #[test]
     fn clone_node_lists_the_content_fragment_after_a_template() {
         let (engine, _host) = engine_with_bindings();
 
@@ -444,7 +506,7 @@ mod tests {
                 r"
                 const n = __inca_native__;
                 const template = n.createNode('template');
-                n.cloneNode(template, false).map((pair) => pair[1]);
+                n.cloneNode(template, false).map((entry) => entry[1]);
                 ",
             )
             .unwrap();
