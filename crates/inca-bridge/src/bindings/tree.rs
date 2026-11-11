@@ -21,6 +21,8 @@ pub(super) fn install_tree(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("documentNodeId", document_node_id)?;
     n.set("createNode", create_node)?;
     n.set("createElement", super::create_element::create_element)?;
+    n.set("createElementNS", super::create_element::create_element_ns)?;
+    n.set("attributeKey", super::create_element::attribute_key)?;
     n.set("setAttribute", super::attributes::set_attribute)?;
     n.set("getAttribute", super::attributes::get_attribute)?;
     n.set("removeAttribute", super::attributes::remove_attribute)?;

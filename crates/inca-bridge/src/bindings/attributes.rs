@@ -26,7 +26,7 @@ pub(super) fn set_attribute<'js>(
             ));
         }
         let mut host = host.borrow_mut();
-        let key = key.to_ascii_lowercase();
+        let key = folded_key(&ctx, &host, node_id, &key)?;
         if key == "style" {
             let warnings = host
                 .tree
@@ -49,8 +49,8 @@ pub(super) fn get_attribute<'js>(
     host: Rc<RefCell<Host>>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Value<'js>> {
     move |ctx, JsNodeId(node_id), key| {
-        let key = key.to_ascii_lowercase();
         let host = host.borrow();
+        let key = folded_key(&ctx, &host, node_id, &key)?;
         let node = existing_node(&ctx, &host.tree, node_id)?;
         attribute_value_to_js(&ctx, node.attributes().get(&key))
     }
@@ -61,13 +61,25 @@ pub(super) fn remove_attribute<'js>(
 ) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<()> {
     move |ctx, JsNodeId(node_id), key| {
         let mut host = host.borrow_mut();
-        let key = key.to_ascii_lowercase();
+        let key = folded_key(&ctx, &host, node_id, &key)?;
         host.tree
             .remove_attribute(node_id, &key)
             .map_err(|err| throw_tree_error(&ctx, err))?;
         mark_focus_dirty_for(&mut host, node_id, &key);
         Ok(())
     }
+}
+
+/// The key `name` has on the node `node_id`.
+pub(super) fn folded_key(
+    ctx: &Ctx<'_>,
+    host: &Host,
+    node_id: NodeId,
+    name: &str,
+) -> JsResult<String> {
+    Ok(existing_node(ctx, &host.tree, node_id)?
+        .attribute_key(name)
+        .into_owned())
 }
 
 pub(super) fn attribute_names<'js>(
@@ -172,7 +184,7 @@ fn attribute_value_to_js<'js>(
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
-    use crate::test_support::{callback_ids, engine_with_bindings, error_name};
+    use crate::test_support::{SVG, callback_ids, engine_with_bindings, error_name};
     use inca_node::NodeId;
     use rstest::rstest;
 
@@ -307,6 +319,62 @@ mod tests {
             .unwrap();
 
         assert!(got);
+    }
+
+    #[test]
+    fn an_attribute_name_keeps_its_case_outside_the_html_namespace() {
+        let (engine, _host) = engine_with_bindings();
+
+        let same: bool = engine
+            .eval(&format!(
+                r"
+                const n = __inca_native__;
+                const node = n.createElementNS('{SVG}', 'svg')[0];
+                n.setAttribute(node, 'viewBox', '0 0 1 1');
+                n.getAttribute(node, 'viewBox') === '0 0 1 1' && n.getAttribute(node, 'viewbox') === null;
+                "
+            ))
+            .unwrap();
+
+        assert!(same);
+    }
+
+    #[test]
+    fn remove_attribute_leaves_the_key_of_another_case_outside_the_html_namespace() {
+        let (engine, _host) = engine_with_bindings();
+
+        let kept: bool = engine
+            .eval(&format!(
+                r"
+                const n = __inca_native__;
+                const node = n.createElementNS('{SVG}', 'svg')[0];
+                n.setAttribute(node, 'viewBox', '0 0 1 1');
+                n.removeAttribute(node, 'viewbox');
+                n.getAttribute(node, 'viewBox') === '0 0 1 1';
+                "
+            ))
+            .unwrap();
+
+        assert!(kept);
+    }
+
+    #[test]
+    fn remove_attribute_deletes_the_key_it_is_given_outside_the_html_namespace() {
+        let (engine, _host) = engine_with_bindings();
+
+        let gone: bool = engine
+            .eval(&format!(
+                r"
+                const n = __inca_native__;
+                const node = n.createElementNS('{SVG}', 'svg')[0];
+                n.setAttribute(node, 'viewBox', '0 0 1 1');
+                n.removeAttribute(node, 'viewBox');
+                n.getAttribute(node, 'viewBox') === null;
+                "
+            ))
+            .unwrap();
+
+        assert!(gone);
     }
 
     #[test]
