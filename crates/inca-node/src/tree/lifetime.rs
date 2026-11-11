@@ -111,11 +111,11 @@ impl VirtualTree {
         freed
     }
 
-    /// Copies `id` with its tag, attributes and style props, and with its descendants when `deep`.
-    /// Returns the original, the copy and the tag of each copy in pre-order, the copy of `id`
-    /// first. Only that copy has no parent. The copy of a template comes with a fresh content
-    /// that follows it in the list, with the content descendants when `deep`, before the other
-    /// children.
+    /// Copies `id` with its name, namespace, prefix, attributes and style props, and with its
+    /// descendants when `deep`. Returns the original, the copy and the tag of each copy in
+    /// pre-order, the copy of `id` first. Only that copy has no parent. The copy of a template
+    /// comes with a fresh content that follows it in the list, with the content descendants when
+    /// `deep`, before the other children.
     ///
     /// # Errors
     ///
@@ -136,12 +136,14 @@ impl VirtualTree {
                     let node = self
                         .get(original)
                         .ok_or(TreeError::NodeNotFound(original))?;
-                    let (tag, attributes, style_props) = (
+                    let (tag, namespace, prefix) = (
                         node.tag_name.clone(),
-                        node.attributes.clone(),
-                        node.style_props.clone(),
+                        node.namespace.clone(),
+                        node.prefix.clone(),
                     );
-                    let copy = self.create_node(tag)?;
+                    let (attributes, style_props) =
+                        (node.attributes.clone(), node.style_props.clone());
+                    let copy = self.create_element(namespace, prefix, tag)?;
                     let target = self.node_mut(copy)?;
                     target.attributes = attributes;
                     target.style_props = style_props;
@@ -187,7 +189,7 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
-    use crate::tests::{Fixture, children, family, node, sample};
+    use crate::tests::{Fixture, SVG, children, family, node, sample};
     use crate::tree::{AttributeValue, FRAGMENT_TAG};
     use rstest::rstest;
 
@@ -483,6 +485,45 @@ mod tests {
 
         assert_eq!(made[0].2, tag);
         assert_eq!(tree.get(made[0].1).unwrap().tag_name(), tag);
+    }
+
+    #[test]
+    fn a_shallow_clone_keeps_the_namespace_and_the_prefix() {
+        let mut tree = VirtualTree::new();
+        let svg = tree.create_element_ns(Some(SVG), Some("s"), "svg").unwrap();
+
+        let made = tree.clone_subtree(svg, false).unwrap();
+
+        let copy = tree.get(made[0].1).unwrap();
+        assert_eq!(copy.namespace_uri(), Some(SVG));
+        assert_eq!(copy.prefix(), Some("s"));
+    }
+
+    #[test]
+    fn a_deep_clone_keeps_the_namespace_and_the_prefix_of_a_descendant() {
+        let mut tree = VirtualTree::new();
+        let svg = tree.create_element_ns(Some(SVG), None, "svg").unwrap();
+        let inner = tree
+            .create_element_ns(Some(SVG), Some("s"), "foreignObject")
+            .unwrap();
+        tree.append_child(svg, inner).unwrap();
+
+        let made = tree.clone_subtree(svg, true).unwrap();
+
+        let copy = tree.get(made[1].1).unwrap();
+        assert_eq!(copy.namespace_uri(), Some(SVG));
+        assert_eq!(copy.prefix(), Some("s"));
+    }
+
+    #[test]
+    fn a_clone_of_an_svg_template_has_no_content() {
+        let mut tree = VirtualTree::new();
+        let template = tree.create_element_ns(Some(SVG), None, "template").unwrap();
+
+        let made = tree.clone_subtree(template, true).unwrap();
+
+        assert_eq!(made.len(), 1);
+        assert_eq!(tree.template_content(made[0].1), None);
     }
 
     #[test]

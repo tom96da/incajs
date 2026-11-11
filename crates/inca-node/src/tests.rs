@@ -189,6 +189,15 @@ pub(crate) fn overflow_of(props: &[(&str, &str)]) -> (Option<OverflowSpec>, Opti
     (style.overflow_x, style.overflow_y)
 }
 
+/// The HTML namespace.
+pub(crate) const HTML: &str = "http://www.w3.org/1999/xhtml";
+
+/// The SVG namespace.
+pub(crate) const SVG: &str = "http://www.w3.org/2000/svg";
+
+/// The `MathML` namespace.
+pub(crate) const MATHML: &str = "http://www.w3.org/1998/Math/MathML";
+
 /// A tree node of `tag`.
 pub(crate) fn node(tree: &mut VirtualTree, tag: &str) -> NodeId {
     tree.create_node(tag).unwrap()
