@@ -32,6 +32,7 @@ use std::fmt;
 
 use indexmap::IndexMap;
 
+mod class_list;
 mod computed;
 mod insertion;
 mod lifetime;
@@ -41,6 +42,8 @@ mod relations;
 mod state;
 mod template;
 mod text;
+
+pub use class_list::ClassListError;
 
 /// The tag of a node that stands in for a comment.
 pub(crate) const COMMENT_TAG: &str = "#comment";
