@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import {
+  attributeKey,
   attributeNames,
   getAttribute as readAttribute,
   removeAttribute as dropAttribute,
@@ -44,11 +45,6 @@ export function requireArguments(args: readonly unknown[], count: number, method
   if (args.length < count) {
     throw new TypeError(`${method}() needs ${count} argument${count === 1 ? "" : "s"}`);
   }
-}
-
-/** Folds the letters A to Z of an attribute name to lower case. Every other character stays. */
-function foldName(name: string): string {
-  return name.replace(/[A-Z]/g, (letter) => letter.toLowerCase());
 }
 
 /**
@@ -160,11 +156,13 @@ export function attributeMembers(id: NodeId, element: IncaElement): AttributeMem
     }
     return attr;
   };
-  /** The attribute `name`, which is already in the host's lower case. */
+  /** The attribute `name`, looked up under the key the host gives it. */
   const find = (name: string): Attr | null => {
-    const value = isDestroyed(element) ? null : read(name);
-    if (value !== null) return attrOf(name, value);
-    const gone = held.get(name);
+    if (isDestroyed(element)) return null;
+    const key = attributeKey(id, name);
+    const value = read(key);
+    if (value !== null) return attrOf(key, value);
+    const gone = held.get(key);
     if (gone) AttributeNode.detach(gone);
     return null;
   };
@@ -197,11 +195,7 @@ export function attributeMembers(id: NodeId, element: IncaElement): AttributeMem
     },
     getAttributeNames: () => names(),
     get attributes() {
-      map ??= namedNodeMapOf(
-        list,
-        (name) => find(foldName(name)),
-        (key) => (key === foldName(key) ? find(key) : null),
-      );
+      map ??= namedNodeMapOf(list, find);
       return map;
     },
   };

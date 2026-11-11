@@ -14,8 +14,41 @@ import type {
 /** How {@link IncaNative.linkedNode} names the node to reach from a node. */
 export type NodeLink = "parent" | "first" | "last" | "previous" | "next";
 
-/** One node of a parsed fragment: id, tag, parent id and the text of a text node or a comment. */
-export type ParsedEntry = [id: NodeId, tag: string, parentId: NodeId, data: string | null];
+/** The namespace of the elements `createElement()` makes. */
+export const HTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
+
+/**
+ * The name of an element. A string is the tag of an HTML element: it is the local name, and its
+ * ASCII upper case is the `tagName`. A tuple holds the four name parts of
+ * `createElementNS`.
+ */
+export type ElementName =
+  | string
+  | [localName: string, namespaceURI: string | null, prefix: string | null, tagName: string];
+
+/** What a native returns for a node without a name: id and the marker or tag. */
+export type NodeEntry = [id: NodeId, tag: string];
+
+/** What a native returns for an element it makes: id and the four name parts. */
+export type ElementEntry = [
+  id: NodeId,
+  localName: string,
+  namespaceURI: string | null,
+  prefix: string | null,
+  tagName: string,
+];
+
+/**
+ * One node of a parsed fragment: id, tag, namespace (`null` for a text node, a comment and a
+ * fragment), parent id and the text of a text node or a comment.
+ */
+export type ParsedEntry = [
+  id: NodeId,
+  tag: string,
+  namespaceURI: string | null,
+  parentId: NodeId,
+  data: string | null,
+];
 
 /**
  * What a parse writes into the tree: the position of the first inserted node among the children of
@@ -35,11 +68,13 @@ interface IncaNative {
   documentNodeId(): NodeId;
   createNode(tag: string): NodeId;
   createElement(localName: string): [NodeId, TagName];
+  createElementNS(namespace: string | null, qualifiedName: string): ElementEntry;
+  attributeKey(nodeId: NodeId, name: string): string;
   appendChild(parentId: NodeId, nodeId: NodeId): number;
   insertBefore(parentId: NodeId, nodeId: NodeId, refId: NodeId | null): number;
   removeChild(parentId: NodeId, childId: NodeId): void;
   replaceChild(parentId: NodeId, nodeId: NodeId, childId: NodeId): number;
-  cloneNode(nodeId: NodeId, deep: boolean): [NodeId, string][];
+  cloneNode(nodeId: NodeId, deep: boolean): (NodeEntry | ElementEntry)[];
   templateContent(nodeId: NodeId): NodeId | null;
   innerHtml(nodeId: NodeId): string;
   outerHtml(nodeId: NodeId): string;

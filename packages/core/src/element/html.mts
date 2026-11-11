@@ -4,7 +4,14 @@
 // The markup members of an element. The host parses and serializes, and the members build the
 // handles of the parsed nodes and patch the shadow tree.
 
-import { insertAdjacentHtml, innerHtml, outerHtml, setInnerHtml, setOuterHtml } from "../tree.mts";
+import {
+  insertAdjacentHtml,
+  innerHtml,
+  nameOfRow,
+  outerHtml,
+  setInnerHtml,
+  setOuterHtml,
+} from "../tree.mts";
 import { attributeText, requireArguments } from "./attributes.mts";
 import { existingContent, isDestroyed } from "./lifecycle.mts";
 import { keep, link, unlink } from "./shadowTree.mts";
@@ -34,7 +41,8 @@ function markupText(value: unknown): string {
 function adopt(parsed: Parsed, builders: HandleBuilders): IncaNode[] {
   const handles = new Map<NodeId, IncaNode>();
   const roots: IncaNode[] = [];
-  for (const [id, tag, parentId, data] of parsed[1]) {
+  for (const row of parsed[1]) {
+    const [id, tag, , parentId, data] = row;
     const parent = handles.get(parentId) as IncaParent | undefined;
     if (tag === "#fragment") {
       handles.set(id, existingContent(parent as IncaElement)!);
@@ -45,7 +53,7 @@ function adopt(parsed: Parsed, builders: HandleBuilders): IncaNode[] {
         ? builders.text(id, data ?? "")
         : tag === "#comment"
           ? builders.element!(id, "comment")
-          : builders.element!(id, "element", tag);
+          : builders.element!(id, "element", nameOfRow(row));
     handles.set(id, handle);
     if (parent) link(parent, [handle], parent.__children.length);
     else roots.push(handle);

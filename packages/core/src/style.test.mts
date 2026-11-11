@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { nativeStub } from "../tests/setup.mts";
-import type { CSSStyleDeclaration, IncaNode } from "./element/types.mts";
+import type { CSSStyleDeclaration, IncaElement, IncaNode } from "./element/types.mts";
 
 interface FakeNode {
   tag: string;
@@ -228,6 +228,15 @@ describe("the shadow tree of the root container", () => {
     const copy = rootElement().cloneNode(true);
 
     expect(shape(copy)).toEqual(["DIV", ["STYLE", "text"], ["STYLE", "text"]]);
+  });
+
+  it("reads STYLE as the tag name of a found style element", async () => {
+    leftStyle("a.css", "old");
+    const { updateStyle } = await load();
+    const { rootElement } = await import("./element/handle.mts");
+    updateStyle("b.css", "b");
+
+    expect((rootElement().__children[0] as IncaElement).tagName).toBe("STYLE");
   });
 
   it("puts an insertion after a found style element at its place", async () => {

@@ -260,6 +260,19 @@ export interface IncaDocument
    */
   createElement(localName: string): IncaElement;
   /**
+   * Creates an element with a namespace. The namespace converts to a string, and `null`,
+   * `undefined` and `""` mean no namespace. The name converts to a string and splits at its first
+   * colon into a prefix and a local name. The element keeps the case of the name.
+   * @param namespace - The namespace, such as `"http://www.w3.org/2000/svg"`.
+   * @param qualifiedName - The element name, such as `"svg"` or `"x:item"`.
+   * @returns The new element, which has no parent.
+   * @throws TypeError when called with fewer than two arguments
+   * @throws DOMException named `InvalidCharacterError` when the prefix or the local name is not a
+   *   valid element name
+   * @throws DOMException named `NamespaceError` when the prefix and the namespace do not fit
+   */
+  createElementNS(namespace: string | null, qualifiedName: string): IncaElement;
+  /**
    * Creates a text node.
    * @param data - The text. It converts to a string.
    * @returns The new text node, which has no parent.

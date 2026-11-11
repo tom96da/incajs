@@ -6,7 +6,11 @@ import { describe, expect, it, vi } from "vitest";
 import { nativeStub } from "../../tests/setup.mts";
 import { createIncaElement } from "./handle.mts";
 import { markDestroyed, markRemoved } from "./lifecycle.mts";
+import type { ElementName } from "../native.mts";
 import type { IncaElement } from "./types.mts";
+
+const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
+const SVG: ElementName = ["svg", SVG_NAMESPACE, null, "svg"];
 
 type Stored = string | number | boolean;
 type Loose = Record<PropertyKey, unknown>;
@@ -14,23 +18,28 @@ type Loose = Record<PropertyKey, unknown>;
 /** Folds A to Z only. */
 const fold = (key: string): string => key.replace(/[A-Z]/g, (letter) => letter.toLowerCase());
 
-/** Installs a fake host that keeps attributes in a map, and returns it with a handle. */
-function setup(initial: Record<string, Stored> = {}) {
+/**
+ * Installs a fake host that keeps attributes in a map, and returns it with a handle. An HTML
+ * element folds the keys and any other element keeps them.
+ */
+function setup(initial: Record<string, Stored> = {}, name: ElementName = "div") {
   const store = new Map<string, Stored>(Object.entries(initial));
+  const keyOf = (key: string): string => (typeof name === "string" ? fold(key) : key);
   const host = {
+    attributeKey: vi.fn<(nodeId: number, name: string) => string>((_id, key) => keyOf(key)),
     getAttribute: vi.fn<(nodeId: number, key: string) => Stored | null>(
-      (_id, key) => store.get(fold(key)) ?? null,
+      (_id, key) => store.get(keyOf(key)) ?? null,
     ),
     setAttribute: vi.fn<(nodeId: number, key: string, value: Stored) => void>((_id, key, value) => {
-      store.set(fold(key), value);
+      store.set(keyOf(key), value);
     }),
     removeAttribute: vi.fn<(nodeId: number, key: string) => void>((_id, key) => {
-      store.delete(fold(key));
+      store.delete(keyOf(key));
     }),
     attributeNames: vi.fn<(nodeId: number) => string[]>(() => [...store.keys()]),
   };
   globalThis.__inca_native__ = nativeStub(host as never);
-  const el: IncaElement = createIncaElement(1, "element", "div");
+  const el: IncaElement = createIncaElement(1, "element", name);
   return { host, el, store };
 }
 
@@ -227,8 +236,22 @@ describe("attributes", () => {
     ]);
   });
 
-  it("reads undefined for a name with an upper case letter", () => {
-    expect((setup({ "data-x": "1" }).el.attributes as unknown as Loose)["DATA-X"]).toBeUndefined();
+  it("reads the attribute of an HTML element through a name with an upper case letter", () => {
+    const { el } = setup({ viewbox: "0 0 1 1" });
+
+    expect((el.attributes as unknown as Loose)["viewBox"]).toBe(
+      el.attributes.getNamedItem("viewbox"),
+    );
+  });
+
+  it("reads the attribute of an SVG element through its own case only", () => {
+    const { el } = setup({ viewBox: "0 0 1 1" }, SVG);
+    const map = el.attributes as unknown as Loose;
+
+    expect([map["viewBox"], map["viewbox"]]).toEqual([
+      el.attributes.getNamedItem("viewBox"),
+      undefined,
+    ]);
   });
 
   it("reads undefined for an unset name", () => {
@@ -290,12 +313,22 @@ describe("getNamedItem", () => {
     ]);
   });
 
-  it("asks the host with the folded name", () => {
+  it("asks the host for the key of the name", () => {
     const { el, host } = setup({ id: "x" });
 
     el.attributes.getNamedItem("ID");
 
+    expect(host.attributeKey).toHaveBeenCalledWith(1, "ID");
     expect(host.getAttribute).toHaveBeenCalledWith(1, "id");
+  });
+
+  it("keeps the case of a name on an SVG element", () => {
+    const { el } = setup({ viewBox: "0 0 1 1" }, SVG);
+
+    expect([
+      el.attributes.getNamedItem("viewBox")?.name,
+      el.attributes.getNamedItem("viewbox"),
+    ]).toEqual(["viewBox", null]);
   });
 
   it("returns null for an unset attribute", () => {
@@ -461,6 +494,7 @@ describe("a freed node", () => {
 
     expect(el.attributes.getNamedItem("a")).toBeNull();
     expect(host.getAttribute).not.toHaveBeenCalled();
+    expect(host.attributeKey).not.toHaveBeenCalled();
   });
 
   it("throws TypeError from getNamedItem without an argument", () => {
@@ -476,6 +510,7 @@ describe("a freed node", () => {
 
     expect((el.attributes as unknown as Loose)["a"]).toBeUndefined();
     expect(host.getAttribute).not.toHaveBeenCalled();
+    expect(host.attributeKey).not.toHaveBeenCalled();
   });
 
   it("detaches a held Attr", () => {

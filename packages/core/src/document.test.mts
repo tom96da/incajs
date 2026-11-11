@@ -9,8 +9,11 @@ import { HANDLER_EVENTS } from "./element/eventHandlers.mts";
 import { createElementNode, rootElement } from "./element/handle.mts";
 import { isHeld, markDestroyed, registerNode, unregisterNode } from "./element/lifecycle.mts";
 import "./targets.mts";
+import { HTML_NAMESPACE } from "./native.mts";
 import type { IncaElement } from "./element/types.mts";
-import type { HostCallback, NodeLink } from "./native.mts";
+import type { ElementEntry, HostCallback, NodeLink } from "./native.mts";
+
+const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
 
 /** The id `nativeStub` gives the document. */
 const DOCUMENT = 1;
@@ -46,6 +49,9 @@ const native = {
     nextId++,
     localName.toLowerCase(),
   ]),
+  createElementNS: vi.fn<(namespace: string | null, qualifiedName: string) => ElementEntry>(
+    (namespace, qualifiedName) => [nextId++, qualifiedName, namespace, null, qualifiedName],
+  ),
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(
     (nodeId, _key, value) => {
       data[nodeId] = value;
@@ -263,6 +269,86 @@ describe("createElement", () => {
     });
 
     expect(() => document.createElement("1a")).toThrow(error);
+  });
+});
+
+describe("the name members of createElement", () => {
+  it.each([
+    ["svg", ["SVG", "svg"]],
+    ["DIV", ["DIV", "div"]],
+  ] as const)("reads %s as tagName and localName", (name, expected) => {
+    const el = document.createElement(name);
+
+    expect([el.tagName, el.localName, el.namespaceURI, el.prefix]).toEqual([
+      ...expected,
+      HTML_NAMESPACE,
+      null,
+    ]);
+  });
+});
+
+describe("createElementNS", () => {
+  it("reads the four members and nodeName the host answers", () => {
+    native.createElementNS.mockImplementationOnce(() => [77, "item", SVG_NAMESPACE, "x", "x:item"]);
+
+    const el = document.createElementNS(SVG_NAMESPACE, "x:item");
+
+    expect([
+      el.__node_id,
+      el.tagName,
+      el.nodeName,
+      el.localName,
+      el.namespaceURI,
+      el.prefix,
+    ]).toEqual([77, "x:item", "x:item", "item", SVG_NAMESPACE, "x"]);
+  });
+
+  it.each([
+    ["null", null, null],
+    ["undefined", undefined, null],
+    ["an empty string", "", null],
+    ["a number", 1, "1"],
+    ["a string", SVG_NAMESPACE, SVG_NAMESPACE],
+  ] as const)("passes %s as the namespace %j to the host", (_name, namespace, passed) => {
+    document.createElementNS(namespace as never, "a");
+
+    expect(native.createElementNS).toHaveBeenCalledExactlyOnceWith(passed, "a");
+  });
+
+  it("converts the name to a string", () => {
+    document.createElementNS(null, undefined as never);
+
+    expect(native.createElementNS).toHaveBeenCalledExactlyOnceWith(null, "undefined");
+  });
+
+  it("ignores a third argument", () => {
+    (document.createElementNS as (...args: unknown[]) => unknown)(null, "a", "extra");
+
+    expect(native.createElementNS).toHaveBeenCalledExactlyOnceWith(null, "a");
+  });
+
+  it.each([
+    ["no argument", []],
+    ["one argument", [SVG_NAMESPACE]],
+  ] as const)("throws a TypeError for %s", (_name, args) => {
+    expect(() => (document.createElementNS as (...a: unknown[]) => unknown)(...args)).toThrow(
+      TypeError,
+    );
+  });
+
+  it("passes the error of an invalid name through", () => {
+    const error = new DOMException("the element name is not valid", "InvalidCharacterError");
+    native.createElementNS.mockImplementationOnce(() => {
+      throw error;
+    });
+
+    expect(() => document.createElementNS(null, "1a")).toThrow(error);
+  });
+
+  it("holds the element until its handle is collected", () => {
+    const el = document.createElementNS(SVG_NAMESPACE, "svg");
+
+    expect(isHeld(el)).toBe(true);
   });
 });
 

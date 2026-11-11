@@ -7,12 +7,14 @@ import { nativeStub } from "../../tests/setup.mts";
 import {
   createCommentNode,
   createElementNode,
+  createIncaElement,
   createIncaFragment,
   createTextNode,
 } from "./handle.mts";
 import { isHeld, isRemoved, markDestroyed } from "./lifecycle.mts";
 import { remove } from "./shadowTree.mts";
-import type { IncaFragment, IncaNode, IncaTemplateElement } from "./types.mts";
+import type { ElementEntry, NodeEntry } from "../native.mts";
+import type { IncaElement, IncaFragment, IncaNode, IncaTemplateElement } from "./types.mts";
 
 /** The children of each node in the fake host. */
 let kids = new Map<number, number[]>();
@@ -61,7 +63,7 @@ const host = {
   templateContent: vi.fn<(nodeId: number) => number | null>((id) => contents.get(id) ?? null),
   setAttribute: vi.fn<() => void>(),
   setStyle: vi.fn<() => void>(),
-  cloneNode: vi.fn<(nodeId: number, deep: boolean) => [number, string][]>((id, deep) => {
+  cloneNode: vi.fn<(nodeId: number, deep: boolean) => (NodeEntry | ElementEntry)[]>((id, deep) => {
     const copy = (original: number): [number, string][] => {
       const tag = tags.get(original)!;
       const made = host.createNode(tag);
@@ -570,6 +572,22 @@ describe("cloneNode", () => {
     expect(copy).toMatchObject({ kind: "element", tagName: "SPAN" });
   });
 
+  it("builds an element with the name parts of a five-part entry", () => {
+    const original = createElementNode("div");
+    host.cloneNode.mockImplementationOnce(() => [
+      [host.createNode("div"), "Y", "urn:x", "x", "X:Y"],
+    ]);
+
+    const copy = original.cloneNode() as IncaElement;
+
+    expect([copy.tagName, copy.localName, copy.namespaceURI, copy.prefix]).toEqual([
+      "X:Y",
+      "Y",
+      "urn:x",
+      "x",
+    ]);
+  });
+
   it("builds a comment as a comment", () => {
     const copy = createCommentNode("c").cloneNode();
 
@@ -668,6 +686,26 @@ describe("a template", () => {
     owner.appendChild(child);
 
     expect([owner.__children, owner.content.__children]).toEqual([[child], []]);
+  });
+
+  it("makes no content for the copy of an SVG template and keeps the ids in step", () => {
+    const svgNamespace = "http://www.w3.org/2000/svg";
+    const owner = createIncaElement(host.createNode("div"), "element", [
+      "template",
+      svgNamespace,
+      null,
+      "template",
+    ]);
+    owner.appendChild(div());
+    const [copyId, childId] = [host.createNode("div"), host.createNode("div")];
+    host.cloneNode.mockImplementationOnce(() => [
+      [copyId, "template", svgNamespace, null, "template"],
+      [childId, "div"],
+    ]);
+
+    const copy = owner.cloneNode(true);
+
+    expect(["content" in copy, copy.__children[0]!.__node_id]).toEqual([false, childId]);
   });
 
   it("holds the copy of a cloned template once", () => {

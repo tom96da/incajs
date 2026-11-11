@@ -642,7 +642,6 @@ describe("a NodeList", () => {
     const map = namedNodeMapOf(
       () => [],
       () => null,
-      () => null,
     );
 
     expect([name in c, name in map, name in nodeListOf(() => [])]).toEqual([false, false, true]);

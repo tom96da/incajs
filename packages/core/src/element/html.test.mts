@@ -4,6 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { nativeStub } from "../../tests/setup.mts";
+import { HTML_NAMESPACE } from "../native.mts";
 import { createElementNode } from "./handle.mts";
 import { markDestroyed } from "./lifecycle.mts";
 import { insert } from "./shadowTree.mts";
@@ -49,12 +50,13 @@ const withChild = (): [IncaElement, IncaElement] => {
   insert(child, parent);
   return [parent, child];
 };
-const entry = (tag: string, parentId = 0, data: string | null = null): ParsedEntry => [
-  nextId++,
-  tag,
-  parentId,
-  data,
-];
+const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
+const entry = (
+  tag: string,
+  parentId = 0,
+  data: string | null = null,
+  namespace: string | null = tag.startsWith("#") ? null : HTML_NAMESPACE,
+): ParsedEntry => [nextId++, tag, namespace, parentId, data];
 
 describe("conversion of an assigned markup", () => {
   it.each([
@@ -223,9 +225,9 @@ describe("adopt", () => {
 
   it("reaches the content of a parsed template", () => {
     const el = createElementNode("div");
-    const template: ParsedEntry = [600, "template", 0, null];
-    const content: ParsedEntry = [601, "#fragment", 600, null];
-    const child: ParsedEntry = [602, "p", 601, null];
+    const template: ParsedEntry = [600, "template", HTML_NAMESPACE, 0, null];
+    const content: ParsedEntry = [601, "#fragment", null, 600, null];
+    const child: ParsedEntry = [602, "p", HTML_NAMESPACE, 601, null];
     templates.add(600);
     host.setInnerHtml.mockReturnValueOnce([0, [template, content, child]]);
 
@@ -233,6 +235,45 @@ describe("adopt", () => {
 
     const made = el.__children[0] as IncaTemplateElement;
     expect([made.__children.length, made.content.__children[0]?.__node_id]).toEqual([0, 602]);
+  });
+
+  it("names a parsed HTML element from its row", () => {
+    const el = createElementNode("div");
+    host.setInnerHtml.mockReturnValueOnce([0, [entry("b")]]);
+
+    el.innerHTML = "<b></b>";
+
+    const made = el.__children[0] as IncaElement;
+    expect([made.tagName, made.localName, made.namespaceURI, made.prefix]).toEqual([
+      "B",
+      "b",
+      HTML_NAMESPACE,
+      null,
+    ]);
+  });
+
+  it("names a parsed foreign element from its row", () => {
+    const el = createElementNode("div");
+    host.setInnerHtml.mockReturnValueOnce([0, [entry("foreignObject", 0, null, SVG_NAMESPACE)]]);
+
+    el.innerHTML = "<svg><foreignObject></foreignObject></svg>";
+
+    const made = el.__children[0] as IncaElement;
+    expect([made.tagName, made.localName, made.namespaceURI, made.prefix]).toEqual([
+      "foreignObject",
+      "foreignObject",
+      SVG_NAMESPACE,
+      null,
+    ]);
+  });
+
+  it("makes a parsed foreign input without value", () => {
+    const el = createElementNode("div");
+    host.setInnerHtml.mockReturnValueOnce([0, [entry("input", 0, null, SVG_NAMESPACE)]]);
+
+    el.innerHTML = "<svg><input></svg>";
+
+    expect("value" in el.__children[0]!).toBe(false);
   });
 
   it("makes a comment stand-in without the markup members", () => {
