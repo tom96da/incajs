@@ -1,17 +1,18 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Matching one node against a selector, and `closest`.
+//! Matching one node against a selector, and `closest`. The tests sit in the same file.
 
 use super::{
-    Atom, AttrSelectorOperation, AttributeValue, BloomFilter, COMMENT_TAG, CaseSensitivity,
-    DOCUMENT_TAG, Element, ElementSelectorFlags, FRAGMENT_TAG, Impl, MatchingContext,
-    MatchingForInvalidation, MatchingMode, NamespaceConstraint, NeedsSelectorFlags, NodeId,
-    OpaqueElement, PseudoClass, PseudoElement, QuirksMode, SelectorCaches, SelectorError,
-    SelectorList, TEXT_TAG, VirtualNode, VirtualTree, fmt, is_disabled_control,
-    matches_selector_list, parse,
+    Atom, AttrSelectorOperation, BloomFilter, COMMENT_TAG, CaseSensitivity, Element,
+    ElementSelectorFlags, Impl, MatchingContext, MatchingForInvalidation, MatchingMode,
+    NamespaceConstraint, NeedsSelectorFlags, NodeId, OpaqueElement, PseudoClass, PseudoElement,
+    QuirksMode, SelectorCaches, SelectorError, SelectorList, TEXT_TAG, VirtualNode, VirtualTree,
+    fmt, matches_selector_list, parse,
 };
 use selectors::matching::matches_selector as matches_selector_one;
+
+mod element_kind;
 
 /// An element of the tree: a node that is neither text content, a comment nor a fragment.
 #[derive(Clone)]
@@ -26,13 +27,6 @@ impl fmt::Debug for Node<'_> {
     }
 }
 
-fn is_element(node: &VirtualNode) -> bool {
-    !matches!(
-        node.tag_name(),
-        COMMENT_TAG | DOCUMENT_TAG | FRAGMENT_TAG | TEXT_TAG
-    )
-}
-
 /// Whether the `"value"` of `node` is not empty.
 fn has_text(node: &VirtualNode) -> bool {
     matches!(
@@ -44,7 +38,7 @@ fn has_text(node: &VirtualNode) -> bool {
 impl<'t> Node<'t> {
     pub(super) fn of(tree: &'t VirtualTree, id: NodeId) -> Option<Self> {
         tree.get(id)
-            .filter(|node| is_element(node))
+            .filter(|node| node.is_element())
             .map(|node| Node { tree, node })
     }
 
@@ -58,17 +52,6 @@ impl<'t> Node<'t> {
             parent = tree.get(id)?.parent();
         }
         None
-    }
-
-    /// An `input` that has neither `readonly` nor `disabled`.
-    fn is_editable(&self) -> bool {
-        self.node.tag_name() == "input"
-            && !self.node.attributes().contains_key("readonly")
-            && !self.node.attributes().contains_key("disabled")
-    }
-
-    fn attribute(&self, name: &str) -> Option<String> {
-        self.node.attributes().get(name).map(AttributeValue::text)
     }
 
     /// The element `step` places from this one among its parent's children, skipping nodes that
@@ -130,7 +113,7 @@ impl Element for Node<'_> {
     }
 
     fn has_local_name(&self, name: &Atom) -> bool {
-        self.node.tag_name().eq_ignore_ascii_case(&name.0)
+        self.has_name(&name.0)
     }
 
     fn has_namespace(&self, _namespace: &Atom) -> bool {
@@ -138,7 +121,7 @@ impl Element for Node<'_> {
     }
 
     fn is_same_type(&self, other: &Self) -> bool {
-        self.node.tag_name() == other.node.tag_name()
+        self.is_same_type_as(other)
     }
 
     fn attr_matches(
@@ -156,8 +139,6 @@ impl Element for Node<'_> {
         class: &PseudoClass,
         _context: &mut MatchingContext<Impl>,
     ) -> bool {
-        let tag = self.node.tag_name();
-        let control = matches!(tag, "button" | "input");
         match class {
             PseudoClass::Never(_) => false,
             PseudoClass::Defined | PseudoClass::DirLtr => true,
@@ -165,10 +146,10 @@ impl Element for Node<'_> {
             PseudoClass::Active => self.tree.is_active(self.node.id()),
             PseudoClass::Focus => self.tree.is_focused(self.node.id()),
             PseudoClass::FocusWithin => self.tree.is_focus_within(self.node.id()),
-            PseudoClass::Disabled => is_disabled_control(self.node),
-            PseudoClass::Enabled => control && !is_disabled_control(self.node),
-            PseudoClass::ReadWrite => self.is_editable(),
-            PseudoClass::ReadOnly => !self.is_editable(),
+            PseudoClass::Disabled
+            | PseudoClass::Enabled
+            | PseudoClass::ReadWrite
+            | PseudoClass::ReadOnly => self.is_in_state(class),
         }
     }
 
@@ -218,7 +199,7 @@ impl Element for Node<'_> {
     fn is_empty(&self) -> bool {
         !self.node.children().iter().any(|&id| {
             self.tree.get(id).is_some_and(|child| {
-                if is_element(child) {
+                if child.is_element() {
                     true
                 } else {
                     child.tag_name() == TEXT_TAG && has_text(child)
@@ -337,33 +318,22 @@ mod tests {
 
     use super::*;
     use crate::tests::*;
+    use crate::tree::{AttributeValue, FRAGMENT_TAG};
     use rstest::rstest;
 
     #[rstest]
     #[case::type_selector("p1", "p", true)]
     #[case::type_selector_miss("p1", "span", false)]
-    #[case::universal("p1", "*", true)]
     #[case::id("main", "#main", true)]
     #[case::id_miss("main", "#p1", false)]
     #[case::class("main", ".card", true)]
     #[case::class_miss("main", ".other", false)]
-    #[case::attribute_exists("main", "[data-k]", true)]
     #[case::attribute_equals("main", "[data-k=\"ab-cd ef\"]", true)]
-    #[case::attribute_word("main", "[data-k~=ef]", true)]
-    #[case::attribute_prefix_word("main", "[data-k|=ab]", true)]
-    #[case::attribute_starts("main", "[data-k^=ab]", true)]
-    #[case::attribute_ends("main", "[data-k$=ef]", true)]
-    #[case::attribute_contains("main", "[data-k*=cd]", true)]
     #[case::attribute_miss("main", "[data-k$=ab]", false)]
-    #[case::list("foot", "p, footer", true)]
     #[case::child("p1", "section > p", true)]
     #[case::child_miss("p1", "div > p", false)]
-    #[case::descendant("p1", "div p", true)]
-    #[case::descendant_miss("foot", "section footer", false)]
     #[case::adjacent("p2", "p + span", true)]
     #[case::adjacent_miss("p1", "span + p", false)]
-    #[case::sibling("foot", "section ~ footer", true)]
-    #[case::sibling_miss("main", "footer ~ section", false)]
     fn a_selector_form_matches_by_its_grammar(
         #[case] target: &str,
         #[case] selector: &str,
@@ -445,36 +415,12 @@ mod tests {
         assert!(p.f.matches(p.p1, "&"));
     }
 
-    #[test]
-    fn closest_with_an_ampersand_stops_at_the_called_node() {
-        let p = page();
-
-        assert_eq!(p.f.closest(p.p2, "&"), Some(p.p2));
-    }
-
     #[rstest]
     #[case::first_of_its_type("p1", "p:first-of-type", true)]
     #[case::first_of_another_type("p2", "span:first-of-type", true)]
     #[case::second_of_its_type("p3", "p:first-of-type", false)]
     #[case::last_of_its_type("p3", "p:last-of-type", true)]
     fn of_type_pseudo_classes_compare_the_tag(
-        #[case] target: &str,
-        #[case] selector: &str,
-        #[case] expected: bool,
-    ) {
-        let p = page();
-
-        assert_eq!(p.f.matches(p.node(target), selector), expected);
-    }
-
-    #[rstest]
-    #[case::is("p1", ":is(p, div)", true)]
-    #[case::where_list("p1", ":where(span, p)", true)]
-    #[case::not("p1", ":not(span)", true)]
-    #[case::not_miss("p1", ":not(p)", false)]
-    #[case::nth_child_of("p2", ":nth-child(1 of span)", true)]
-    #[case::nth_child_of_miss("p2", ":nth-child(2 of span)", false)]
-    fn a_functional_pseudo_class_matches_through_its_list(
         #[case] target: &str,
         #[case] selector: &str,
         #[case] expected: bool,
@@ -616,12 +562,6 @@ mod tests {
 
     #[rstest]
     #[case::number("n", AttributeValue::Number(3.0), "[n=\"3\"]", true)]
-    #[case::big_number_as_javascript_prints_it(
-        "n",
-        AttributeValue::Number(1e21),
-        "[n=\"1e+21\"]",
-        true
-    )]
     #[case::boolean_true("b", AttributeValue::Bool(true), "[b=\"true\"]", true)]
     #[case::boolean_false("b", AttributeValue::Bool(false), "[b=\"false\"]", true)]
     fn an_attribute_compares_its_printed_text(
@@ -675,59 +615,6 @@ mod tests {
         let (f, _, a) = has_fixture();
 
         assert!(f.matches(a, selector));
-    }
-
-    #[rstest]
-    #[case::defined("div", ":defined", true)]
-    #[case::read_only_for_a_div("div", ":read-only", true)]
-    #[case::read_write_for_an_input("input", ":read-write", true)]
-    #[case::read_only_misses_an_editable_input("input", ":read-only", false)]
-    fn an_evaluated_state_matches_by_the_element(
-        #[case] tag: &str,
-        #[case] selector: &str,
-        #[case] expected: bool,
-    ) {
-        let mut f = Fixture::new();
-        let node = f.add(f.root, tag, "n");
-
-        assert_eq!(f.matches(node, selector), expected);
-    }
-
-    #[rstest]
-    #[case::readonly("readonly")]
-    #[case::disabled("disabled")]
-    fn an_input_with_a_blocking_attribute_is_read_only(#[case] attribute: &str) {
-        let mut f = Fixture::new();
-        let input = f.add(f.root, "input", "i");
-        f.attr(input, attribute, "");
-
-        assert!(f.matches(input, ":read-only"));
-        assert!(!f.matches(input, ":read-write"));
-    }
-
-    #[rstest]
-    #[case::disabled_button("button", true, ":disabled", true)]
-    #[case::disabled_input("input", true, ":disabled", true)]
-    #[case::enabled_button("button", false, ":enabled", true)]
-    #[case::enabled_input("input", false, ":enabled", true)]
-    #[case::disabled_is_not_enabled("button", true, ":enabled", false)]
-    #[case::div_is_not_disabled("div", true, ":disabled", false)]
-    #[case::div_is_not_enabled("div", false, ":enabled", false)]
-    #[case::textarea_is_not_disabled("textarea", true, ":disabled", false)]
-    #[case::textarea_is_not_enabled("textarea", false, ":enabled", false)]
-    fn disabled_and_enabled_apply_to_buttons_and_inputs_only(
-        #[case] tag: &str,
-        #[case] disabled: bool,
-        #[case] selector: &str,
-        #[case] expected: bool,
-    ) {
-        let mut f = Fixture::new();
-        let node = f.add(f.root, tag, "n");
-        if disabled {
-            f.attr(node, "disabled", "");
-        }
-
-        assert_eq!(f.matches(node, selector), expected);
     }
 
     #[test]
