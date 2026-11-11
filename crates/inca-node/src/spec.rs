@@ -11,8 +11,6 @@
 //! [`style_warning`] lets the caller that stores a style report an unknown key, an invalid color
 //! or a value of an unsupported shape once, when it is set.
 
-use std::collections::HashMap;
-
 mod color;
 mod keys;
 mod parse;
@@ -23,7 +21,7 @@ pub use parse::declared_window_size;
 
 use self::parse::style_spec_from_props;
 use crate::input_text::sanitized;
-use crate::tree::{AttributeValue, NodeId, TEXT_TAG, VirtualNode, VirtualTree};
+use crate::tree::{AttributeValue, NodeId, StyleMap, TEXT_TAG, VirtualNode, VirtualTree};
 
 /// What kind of element a [`VirtualNode`] maps to.
 ///
@@ -255,7 +253,7 @@ pub fn is_scroll_container(tree: &VirtualTree, id: NodeId) -> bool {
 
 /// Whether the `hidden` attribute hides `node`: it is present in the Hidden
 /// state (any value except `until-found`) and `computed` sets no `display`.
-fn hidden_with(node: &VirtualNode, computed: &HashMap<String, AttributeValue>) -> bool {
+fn hidden_with(node: &VirtualNode, computed: &StyleMap) -> bool {
     let until_found = matches!(
         node.attributes().get("hidden"),
         Some(AttributeValue::String(value)) if value.eq_ignore_ascii_case("until-found")

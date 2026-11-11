@@ -1,11 +1,9 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::HashMap;
-
 use super::keys::{read_edges, read_prop};
 use super::{EdgesSpec, LengthSpec, OverflowSpec, StyleSpec};
-use crate::tree::{AttributeValue, NodeId, VirtualTree};
+use crate::tree::{AttributeValue, NodeId, StyleMap, VirtualTree};
 
 /// One or two overflow values, x first; a single value applies to both axes.
 pub(super) fn overflow_pair_from_str(s: &str) -> Option<(OverflowSpec, OverflowSpec)> {
@@ -123,7 +121,7 @@ pub(super) struct EdgeKeys {
 /// shorthand. A value `parse` rejects counts as unset and falls through to
 /// the next key.
 pub(super) fn edges_from<T>(
-    props: &HashMap<String, AttributeValue>,
+    props: &StyleMap,
     keys: &EdgeKeys,
     parse: fn(&AttributeValue) -> Option<T>,
 ) -> EdgesSpec<T> {
@@ -169,13 +167,13 @@ pub(super) fn store<T>(
 
 /// Builds a [`StyleSpec`] from a node's raw `style_props`, ignoring any key
 /// or value this layer doesn't (yet) recognize.
-pub(super) fn style_spec_from_props(props: &HashMap<String, AttributeValue>) -> StyleSpec {
+pub(super) fn style_spec_from_props(props: &StyleMap) -> StyleSpec {
     let mut style = StyleSpec::default();
     let mut overflow = Overflows::default();
     for (key, value) in props {
         read_prop(&mut style, &mut overflow, key, value);
     }
-    // `props` iterates in arbitrary order, so precedence is resolved here.
+    // Precedence does not depend on the order of `props`, so it is resolved here.
     (style.overflow_x, style.overflow_y) = computed_axes(
         overflow.x.or(overflow.all.map(|(x, _)| x)),
         overflow.y.or(overflow.all.map(|(_, y)| y)),

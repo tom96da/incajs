@@ -9,7 +9,7 @@ use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use super::{AttributeValue, NodeId, TEXT_TAG, VirtualNode, VirtualTree};
+use super::{AttributeValue, NodeId, StyleMap, TEXT_TAG, VirtualNode, VirtualTree};
 use crate::selector::StateFlags;
 use crate::stylesheet::{Rule, StyleSheet};
 
@@ -53,10 +53,10 @@ fn covers(key: &str) -> usize {
 }
 
 /// Sets `key`, after removing the keys it overrides.
-fn apply(map: &mut HashMap<String, AttributeValue>, key: &str, value: &AttributeValue) {
+fn apply(map: &mut StyleMap, key: &str, value: &AttributeValue) {
     if let Some((_, longhands)) = SHORTHANDS.iter().find(|(shorthand, _)| *shorthand == key) {
         for longhand in *longhands {
-            map.remove(*longhand);
+            map.shift_remove(*longhand);
         }
     }
     map.insert(key.to_owned(), value.clone());
@@ -166,9 +166,9 @@ impl VirtualTree {
     /// before it. A node that no rule styles, an unknown id and a tree without a `<style>` element
     /// give the node's own map.
     #[must_use]
-    pub fn computed_style(&self, id: NodeId) -> Cow<'_, HashMap<String, AttributeValue>> {
+    pub fn computed_style(&self, id: NodeId) -> Cow<'_, StyleMap> {
         let Some(node) = self.get(id) else {
-            return Cow::Owned(HashMap::new());
+            return Cow::Owned(StyleMap::new());
         };
         self.refresh_sheets();
         let sheets = self.style_cache.borrow().sheets.clone();
@@ -189,7 +189,7 @@ impl VirtualTree {
         if matched.is_empty() {
             return Cow::Borrowed(node.style_props());
         }
-        let mut computed = HashMap::new();
+        let mut computed = StyleMap::new();
         for (_, _, _, rule) in matched {
             for (key, value) in &rule.declarations {
                 apply(&mut computed, key, value);
