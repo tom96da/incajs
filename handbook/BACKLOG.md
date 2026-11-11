@@ -1644,6 +1644,30 @@ A fixed entry is deleted and its ID is never reused.
   it is an `SVGAnimatedString`, and an assignment throws a `TypeError` in strict mode. Fix: return
   an `SVGAnimatedString`-like object once `className` uses namespaces.
 
+- **B-307 Shorthand style keys: longhand reads and order**
+  `Units: node · Size: M · Impact: Low`
+
+  A shorthand (`padding`, `margin`, `overflow`) is stored as written. `style.paddingTop` after
+  `style.padding = "4px"` reads `""`, and a longhand wins over its shorthand whatever the order
+  they were set in. A browser expands the shorthand into its longhands, in the order of the
+  shorthand. Fix: expand a shorthand when it is stored and keep the longhands in the props.
+
+- **B-308 `!important`, `getPropertyPriority` and custom properties**
+  `Units: node,bridge · Size: M · Impact: Low`
+
+  The host reads `!important` and drops it. `getPropertyPriority` returns `""` for every
+  property, and `setProperty` with the priority `important` stores the value without importance.
+  A custom property (`--x`) is an unknown name: `setProperty("--x", "1")` prints a warning and
+  stores nothing. Fix: store the priority beside each declaration and add custom properties to
+  the props together with `var()`.
+
+- **B-309 `style` has no index access and is not iterable**
+  `Units: bridge · Size: M · Impact: Low`
+
+  `style[0]` reads `undefined`, and `Object.keys(style)` and `[...style]` show no declarations. In
+  browsers the declaration block exposes its property names as indexed properties. `item(i)` and
+  `length` read them. The fix is the one of B-304.
+
 - **B-310 `getAttribute("style")` returns the serialized declarations**
   `Units: node,bridge · Size: M · Impact: Low`
 

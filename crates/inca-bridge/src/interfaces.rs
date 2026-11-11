@@ -99,6 +99,8 @@ mod tests {
     const DOCUMENT: &str = "a document cannot be constructed. the host has one document";
     const SHADOW_ROOT: &str = "a shadow root cannot be constructed. the host has no shadow roots";
     const TOKEN_LIST: &str = "a token list cannot be constructed. read it from classList";
+    const STYLE: &str =
+        "a style declaration cannot be constructed. read it from the style of an element";
 
     #[rstest]
     #[case::document_new("new Document()", DOCUMENT)]
@@ -107,6 +109,8 @@ mod tests {
     #[case::shadow_root_call("ShadowRoot()", SHADOW_ROOT)]
     #[case::token_list_new("new DOMTokenList()", TOKEN_LIST)]
     #[case::token_list_call("DOMTokenList()", TOKEN_LIST)]
+    #[case::style_new("new CSSStyleDeclaration()", STYLE)]
+    #[case::style_call("CSSStyleDeclaration()", STYLE)]
     fn constructing_an_interface_throws_a_type_error(#[case] call: &str, #[case] message: &str) {
         let (dispatcher, _host, _reported) = dispatcher_with_engine();
         let got = eval_json(
@@ -131,6 +135,7 @@ mod tests {
     #[case::document("Document")]
     #[case::shadow_root("ShadowRoot")]
     #[case::token_list("DOMTokenList")]
+    #[case::style("CSSStyleDeclaration")]
     fn an_interface_has_length_zero(#[case] name: &str) {
         let (dispatcher, _host, _reported) = dispatcher_with_engine();
         assert_eq!(
@@ -143,6 +148,7 @@ mod tests {
     #[case::document("Document")]
     #[case::shadow_root("ShadowRoot")]
     #[case::token_list("DOMTokenList")]
+    #[case::style("CSSStyleDeclaration")]
     fn the_store_keeps_the_prototype_of_every_interface(#[case] name: &str) {
         let (engine, _host) = engine_with_bindings();
 

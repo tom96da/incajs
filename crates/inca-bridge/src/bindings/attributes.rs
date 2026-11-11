@@ -16,13 +16,23 @@ use super::host::Host;
 pub(super) fn set_attribute<'js>(
     host: Rc<RefCell<Host>>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String, Value<'js>) -> JsResult<()> {
-    move |ctx, JsNodeId(node_id), key, value| {
-        let value = attribute_value_from_js(&ctx, &value)?;
+    move |ctx, JsNodeId(node_id), key, raw| {
+        let value = attribute_value_from_js(&ctx, &raw)?;
         let mut host = host.borrow_mut();
         let key = key.to_ascii_lowercase();
-        host.tree
-            .set_attribute(node_id, key.clone(), value)
-            .map_err(|err| throw_tree_error(&ctx, err))?;
+        if key == "style" {
+            let warnings = host
+                .tree
+                .set_style_text(node_id, &value.text())
+                .map_err(|err| throw_tree_error(&ctx, err))?;
+            for line in &warnings {
+                print_style_warning(&mut host, node_id, line);
+            }
+        } else {
+            host.tree
+                .set_attribute(node_id, key.clone(), value)
+                .map_err(|err| throw_tree_error(&ctx, err))?;
+        }
         mark_focus_dirty_for(&mut host, node_id, &key);
         Ok(())
     }
@@ -116,7 +126,7 @@ pub(super) fn remove_style<'js>(
 fn mark_focus_dirty_for(host: &mut Host, node_id: NodeId, key: &str) {
     match key {
         "tabindex" | "disabled" => host.focus.mark_tab_dirty(node_id),
-        "hidden" | "inert" => host.mark_focus_dirty(node_id),
+        "hidden" | "inert" | "style" => host.mark_focus_dirty(node_id),
         _ => {}
     }
 }

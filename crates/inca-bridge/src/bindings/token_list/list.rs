@@ -66,7 +66,7 @@ fn class_list<'js>(
 
 /// Defines `body` as the method `name` of `proto` with `length` parameters. `body` gets the
 /// context, the `this` value and the arguments.
-pub(super) fn method<'js, R: IntoJs<'js> + 'js>(
+pub(in crate::bindings) fn method<'js, R: IntoJs<'js> + 'js>(
     ctx: &Ctx<'js>,
     proto: &Object<'js>,
     name: &str,
