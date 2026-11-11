@@ -21,7 +21,7 @@ use rquickjs::function::IntoJsFunc;
 use rquickjs::{Class, Ctx, Function, Object, Result as JsResult, Value};
 use url::{Url, form_urlencoded, quirks};
 
-use crate::class::{define_method, given, plain_class, receiver, require};
+use crate::class::{define_method, given, iterator_prototype, plain_class, receiver, require};
 use crate::encoding::encode;
 use crate::quickjs::string_wtf8;
 use crate::vault::vault;
@@ -33,15 +33,6 @@ mod url_class;
 
 /// The vault key of the prototypes.
 const STORE: &str = "url";
-
-/// Evaluates to the prototype of the iterators, derived from the iterator prototype that
-/// `Array.prototype[Symbol.iterator]` results inherit from.
-const ITERATOR_JS: &str = r"
-    (() => {
-        const iterators = Object.getPrototypeOf(Object.getPrototypeOf([][Symbol.iterator]()));
-        return { __proto__: null, iterator: Object.create(iterators) };
-    })()
-    ";
 
 /// The URL of a `URL` and the pairs of its query. A `URLSearchParams` of its own has no URL.
 struct State {
@@ -165,12 +156,14 @@ plain_class!(ParamsInstance, "URLSearchParams");
 ///
 /// Returns an error if the realm lacks an intrinsic or has no vault.
 pub(crate) fn install(ctx: &Ctx<'_>) -> JsResult<()> {
-    let store: Object = ctx.eval(ITERATOR_JS)?;
+    let store = Object::new(ctx.clone())?;
+    store.set_prototype(None)?;
+    let iterator_proto = iterator_prototype(ctx)?;
+    store.set("iterator", iterator_proto.clone())?;
     let url_proto = Object::new(ctx.clone())?;
     let params_proto = Object::new(ctx.clone())?;
     store.set("url", url_proto.clone())?;
     store.set("params", params_proto.clone())?;
-    let iterator_proto: Object = store.get("iterator")?;
     vault(ctx)?.set(STORE, store)?;
     url_class::define_url(ctx, &url_proto)?;
     params::define_params(ctx, &params_proto)?;

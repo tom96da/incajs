@@ -18,7 +18,11 @@ pub(crate) fn illegal_constructor<'js>() -> impl Fn(Ctx<'js>) -> JsResult<Value<
 }
 
 /// The class instance `this` is, or a `TypeError` that names the class.
-pub(crate) fn receiver<'js, T: JsClass<'js>>(
+///
+/// # Errors
+///
+/// Returns a `TypeError` if `this` is not an instance of `T`.
+pub fn receiver<'js, T: JsClass<'js>>(
     ctx: &Ctx<'js>,
     this: &Value<'js>,
 ) -> JsResult<Class<'js, T>> {
@@ -32,12 +36,11 @@ pub(crate) fn receiver<'js, T: JsClass<'js>>(
 }
 
 /// A `TypeError` unless `args` holds `count` arguments.
-pub(crate) fn require(
-    ctx: &Ctx<'_>,
-    method: &str,
-    args: &[Value<'_>],
-    count: usize,
-) -> JsResult<()> {
+///
+/// # Errors
+///
+/// Returns a `TypeError` if `args` holds fewer than `count` arguments.
+pub fn require(ctx: &Ctx<'_>, method: &str, args: &[Value<'_>], count: usize) -> JsResult<()> {
     if args.len() < count {
         let message = format!("too few arguments for {method}. pass at least {count}");
         return Err(Exception::throw_type(ctx, &message));

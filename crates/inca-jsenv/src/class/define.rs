@@ -22,6 +22,7 @@ use crate::FunctionAccessor;
 
 /// Emits the empty `Trace` and the `JsClass` of a class whose instances hold plain Rust data and
 /// take their prototype from the vault.
+#[macro_export]
 macro_rules! plain_class {
     ($type:ident, $name:literal) => {
         impl<'js> ::rquickjs::class::Trace<'js> for $type {
@@ -49,7 +50,22 @@ macro_rules! plain_class {
     };
 }
 
-pub(crate) use plain_class;
+/// The prototype of an iterator class, derived from the iterator prototype that the results of
+/// `Array.prototype[Symbol.iterator]` inherit from.
+///
+/// # Errors
+///
+/// Returns an error if the realm lacks the intrinsic.
+pub fn iterator_prototype<'js>(ctx: &Ctx<'js>) -> JsResult<Object<'js>> {
+    ctx.eval(ITERATOR_JS)
+}
+
+const ITERATOR_JS: &str = r"
+    (() => {
+        const iterators = Object.getPrototypeOf(Object.getPrototypeOf([][Symbol.iterator]()));
+        return Object.create(iterators);
+    })()
+    ";
 
 /// The constructor `name` with `length` parameters and the body `body`. `name.prototype` is
 /// read-only, `proto.constructor` is writable and configurable, and `proto` gets the configurable
