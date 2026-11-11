@@ -598,6 +598,19 @@ mod tests {
     }
 
     #[test]
+    fn for_each_on_the_list_of_a_freed_node_never_calls_the_callback() {
+        let body = r"
+            let calls = 0;
+            list.forEach(() => {
+                calls += 1;
+            });
+            return calls;
+            ";
+
+        assert_eq!(freed(Some("a b"), body), json!(0));
+    }
+
+    #[test]
     fn the_default_iterator_is_values() {
         assert_eq!(
             list_run(None, "return list[Symbol.iterator] === list.values;"),
