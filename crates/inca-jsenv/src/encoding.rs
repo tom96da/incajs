@@ -4,7 +4,7 @@
 //! The `TextEncoder` and `TextDecoder` classes.
 //!
 //! Each instance owns plain Rust data: a `Codec` for a decoder and nothing for an encoder. The
-//! prototypes and the getters that classify a buffer sit in the vault, so a script that
+//! prototypes and the getters that classify a buffer are kept in the vault, so a script that
 //! replaces a property of `ArrayBuffer`, `DataView` or an instance changes nothing here.
 //! The `encoder` module writes UTF-8 from the WTF-8 form of a string and the `decoder` module
 //! decodes bytes. This module installs both classes and converts the shared arguments.
@@ -17,7 +17,7 @@ use rquickjs::{Class, Ctx, Exception, FromJs, Function, Object, Result as JsResu
 
 use crate::class::{NEEDS_NEW, new_target_prototype};
 use crate::quickjs::{is_array_buffer, string_wtf8};
-use crate::vault::vault;
+use crate::vault::{required_prototype, store_prototype, vault};
 
 mod decoder;
 mod encoder;
@@ -26,8 +26,12 @@ use decoder::{Codec, Decoder};
 use encoder::Encoder;
 pub(crate) use encoder::encode;
 
-/// The vault key of the prototypes and the getters.
+/// The vault key of the getters that classify a buffer.
 const STORE: &str = "encoding";
+
+/// The names of the prototypes in the prototype store.
+const ENCODER: &str = "TextEncoder";
+const DECODER: &str = "TextDecoder";
 
 /// Evaluates to the getters that classify a buffer, read from the intrinsics before any script
 /// runs.
@@ -60,9 +64,9 @@ pub(crate) fn install(ctx: &Ctx<'_>) -> JsResult<()> {
     let store: Object = ctx.eval(GETTERS_JS)?;
     let encoder_proto = Object::new(ctx.clone())?;
     let decoder_proto = Object::new(ctx.clone())?;
-    store.set("encoder", encoder_proto.clone())?;
-    store.set("decoder", decoder_proto.clone())?;
     vault(ctx)?.set(STORE, store)?;
+    store_prototype(ctx, ENCODER, &encoder_proto)?;
+    store_prototype(ctx, DECODER, &decoder_proto)?;
     encoder::define_encoder(ctx, &encoder_proto)?;
     decoder::define_decoder(ctx, &decoder_proto)
 }
@@ -82,9 +86,8 @@ impl<'js> IntoJsFunc<'js, ()> for Construct {
         if !params.is_constructor() {
             return Err(Exception::throw_type(ctx, NEEDS_NEW));
         }
-        let store: Object = vault(ctx)?.get(STORE)?;
         if !self.decoder {
-            let proto = new_target_prototype(&params, store.get("encoder")?)?;
+            let proto = new_target_prototype(&params, required_prototype(ctx, ENCODER)?)?;
             return Ok(Class::instance_proto(Encoder, proto)?.into_value());
         }
         let label = match params.arg(0) {
@@ -109,7 +112,7 @@ impl<'js> IntoJsFunc<'js, ()> for Construct {
                     ),
                 )
             })?;
-        let proto = new_target_prototype(&params, store.get("decoder")?)?;
+        let proto = new_target_prototype(&params, required_prototype(ctx, DECODER)?)?;
         let decoder = Decoder {
             codec: RefCell::new(codec),
         };

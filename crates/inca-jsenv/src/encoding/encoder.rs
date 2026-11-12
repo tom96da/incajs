@@ -10,7 +10,9 @@ use rquickjs::object::Property;
 use rquickjs::{Class, Ctx, Exception, Function, Object, Result as JsResult, TypedArray, Value};
 
 use super::{Construct, STORE, is_detached, is_resizable, read};
-use crate::class::{define_class, define_getter, define_global, define_method, plain_class};
+use crate::class::{
+    define_class, define_getter, define_global, define_method, define_sized_method, plain_class,
+};
 use crate::quickjs::{
     UINT8, is_immutable_array_buffer, string_wtf8, typed_array_kind, typed_array_range,
     write_uint8_array,
@@ -52,20 +54,18 @@ pub(super) fn define_encoder<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResu
             },
         )?,
     )?;
-    define_method(
+    define_sized_method(
+        ctx,
         proto,
         "encodeInto",
-        Function::new(
-            ctx.clone(),
-            |ctx: Ctx<'js>,
-             This(this): This<Value<'js>>,
-             source: Opt<Value<'js>>,
-             destination: Opt<Value<'js>>| {
-                encoder_of(&ctx, &this)?;
-                encode_into_destination(&ctx, source.0, destination.0)
-            },
-        )?
-        .with_length(2)?,
+        2,
+        |ctx: Ctx<'js>,
+         This(this): This<Value<'js>>,
+         source: Opt<Value<'js>>,
+         destination: Opt<Value<'js>>| {
+            encoder_of(&ctx, &this)?;
+            encode_into_destination(&ctx, source.0, destination.0)
+        },
     )?;
     define_global(ctx, "TextEncoder", class)
 }

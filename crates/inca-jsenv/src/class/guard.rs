@@ -6,8 +6,9 @@
 //! new instance takes.
 
 use rquickjs::class::JsClass;
+use rquickjs::convert::Coerced;
 use rquickjs::function::Params;
-use rquickjs::{Class, Ctx, Exception, Object, Result as JsResult, Value};
+use rquickjs::{Class, Ctx, Exception, FromJs, Object, Result as JsResult, Value};
 
 /// The `TypeError` message of a class constructor called without `new`.
 pub(crate) const NEEDS_NEW: &str = "the class constructor needs new. call it with new";
@@ -33,6 +34,15 @@ pub fn receiver<'js, T: JsClass<'js>>(
         );
         Exception::throw_type(ctx, &message)
     })
+}
+
+/// `value` converted with `ToString`.
+///
+/// # Errors
+///
+/// Returns the error `ToString` throws, as for a `Symbol`.
+pub fn text<'js>(ctx: &Ctx<'js>, value: &Value<'js>) -> JsResult<String> {
+    Ok(Coerced::<String>::from_js(ctx, value.clone())?.0)
 }
 
 /// A `TypeError` unless `args` holds `count` arguments.

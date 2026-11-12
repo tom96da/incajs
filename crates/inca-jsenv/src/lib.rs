@@ -67,4 +67,4 @@ pub use quickjs::FunctionAccessor;
 pub use sourcemap::StackPaths;
 pub use time::now;
 pub use timers::{Clock, Timers, run_timers, system_clock};
-pub use vault::vault;
+pub use vault::{required_prototype, store_prototype, stored_prototype, vault};

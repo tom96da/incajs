@@ -12,8 +12,8 @@ use rquickjs::function::This;
 use rquickjs::object::Property;
 use rquickjs::{Ctx, Error, IntoJs, Object, Result as JsResult, Value};
 
-use super::{Shared, method, receiver};
-use crate::class::plain_class;
+use super::{Shared, receiver};
+use crate::class::{define_sized_method, plain_class};
 
 #[derive(Clone, Copy)]
 pub(super) enum Kind {
@@ -38,7 +38,7 @@ pub(super) fn define_iterator<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsRes
         PredefinedAtom::SymbolToStringTag,
         Property::from("URLSearchParams Iterator").configurable(),
     )?;
-    method(
+    define_sized_method(
         ctx,
         proto,
         "next",
@@ -65,7 +65,8 @@ pub(super) fn define_iterator<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsRes
             result.set("done", done)?;
             Ok::<_, Error>(result)
         },
-    )
+    )?;
+    Ok(())
 }
 
 #[cfg(test)]

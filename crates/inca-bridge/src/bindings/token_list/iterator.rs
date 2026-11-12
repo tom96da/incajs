@@ -15,12 +15,14 @@ use rquickjs::atom::PredefinedAtom;
 use rquickjs::object::Property;
 use rquickjs::{Array, Class, Ctx, IntoJs, Object, Result as JsResult, Value};
 
-use inca_jsenv::class::{iterator_prototype, plain_class, receiver};
+use inca_jsenv::class::{define_this_method, iterator_prototype, plain_class, receiver};
+use inca_jsenv::store_prototype;
 use inca_node::NodeId;
 
-use super::list::{method, position, tokens_of};
+use super::list::tokens_of;
+use crate::bindings::convert::saturated;
 use crate::bindings::host::Host;
-use crate::interfaces::{interface_prototype, store_prototype};
+use inca_jsenv::required_prototype;
 
 /// The name of the iterator prototype in the prototype store.
 const ITERATOR: &str = "DOMTokenList Iterator";
@@ -58,7 +60,7 @@ pub(super) fn new_iterator<'js>(ctx: &Ctx<'js>, node: NodeId, kind: Kind) -> JsR
         kind,
         index: Cell::new(0),
     };
-    Ok(Class::instance_proto(iterator, interface_prototype(ctx, ITERATOR)?)?.into_value())
+    Ok(Class::instance_proto(iterator, required_prototype(ctx, ITERATOR)?)?.into_value())
 }
 
 fn define_next<'js>(
@@ -71,7 +73,7 @@ fn define_next<'js>(
         Property::from("Array Iterator").configurable(),
     )?;
     let h = host.clone();
-    method(ctx, iterator, "next", 0, move |ctx, this, _| {
+    define_this_method(ctx, iterator, "next", 0, move |ctx, this, _| {
         let class = receiver::<TokenListIterator>(ctx, &this)?;
         let it = class.borrow();
         let index = it.index.get();
@@ -86,11 +88,11 @@ fn define_next<'js>(
         };
         it.index.set(index + 1);
         let value = match it.kind {
-            Kind::Keys => position(index).into_js(ctx)?,
+            Kind::Keys => saturated(index).into_js(ctx)?,
             Kind::Values => token.into_js(ctx)?,
             Kind::Entries => {
                 let pair = Array::new(ctx.clone())?;
-                pair.set(0, position(index))?;
+                pair.set(0, saturated(index))?;
                 pair.set(1, token)?;
                 pair.into_value()
             }

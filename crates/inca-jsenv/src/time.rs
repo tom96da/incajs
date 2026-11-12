@@ -61,7 +61,7 @@ fn install_at<'js>(ctx: &Ctx<'js>, clock: &Clock, time_origin: f64) -> JsResult<
     vault(ctx)?.set(NOW, now)?;
     let proto = Object::new(ctx.clone())?;
     let class = define_class(ctx, &proto, "Performance", 0, illegal_constructor())?;
-    define_this_method(ctx, &proto, NOW, |ctx, this| {
+    define_this_method(ctx, &proto, NOW, 0, |ctx, this, _| {
         receiver::<PerformanceInstance>(ctx, &this)?;
         self::now(ctx)
     })?;
@@ -70,7 +70,7 @@ fn install_at<'js>(ctx: &Ctx<'js>, clock: &Clock, time_origin: f64) -> JsResult<
             .borrow()
             .time_origin)
     })?;
-    define_this_method(ctx, &proto, "toJSON", |ctx, this| {
+    define_this_method(ctx, &proto, "toJSON", 0, |ctx, this, _| {
         let json = Object::new(ctx.clone())?;
         json.set(
             "timeOrigin",

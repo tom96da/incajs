@@ -6,4 +6,4 @@
 mod iterator;
 mod list;
 
-pub(in crate::bindings) use list::{install_token_list, method};
+pub(in crate::bindings) use list::install_token_list;

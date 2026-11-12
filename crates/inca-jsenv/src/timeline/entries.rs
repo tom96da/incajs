@@ -14,20 +14,20 @@ use std::cmp::Ordering;
 
 #[allow(clippy::disallowed_types)]
 use rquickjs::JsLifetime;
-use rquickjs::convert::Coerced;
-use rquickjs::function::{Constructor, Rest, This};
+use rquickjs::function::{Constructor, This};
 use rquickjs::object::Property;
-use rquickjs::{Array, Class, Ctx, FromJs, Function, IntoJs, Object, Result as JsResult, Value};
+use rquickjs::{Array, Class, Ctx, Function, IntoJs, Object, Result as JsResult, Value};
 
 use crate::class::{
-    define_class, define_global, define_method, define_this_getter, define_this_method, given,
-    illegal_constructor, plain_class, receiver, require,
+    define_class, define_global, define_this_getter, define_this_method, given,
+    illegal_constructor, plain_class, receiver, require, text,
 };
 use crate::time::PerformanceInstance;
-use crate::vault::vault;
+use crate::vault::{required_prototype, store_prototype, vault};
 
-/// The vault key of the object that holds the prototypes of the mark and the measure.
-const CLASSES: &str = "performance-classes";
+/// The names of the prototypes of the mark and the measure in the prototype store.
+const MARK: &str = "PerformanceMark";
+const MEASURE: &str = "PerformanceMeasure";
 
 /// The vault key of the array of entries in creation order.
 const TIMELINE: &str = "timeline";
@@ -45,6 +45,13 @@ pub(super) enum Kind {
 }
 
 impl Kind {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Mark => MARK,
+            Self::Measure => MEASURE,
+        }
+    }
+
     fn entry_type(self) -> &'static str {
         match self {
             Self::Mark => "mark",
@@ -68,15 +75,9 @@ pub(super) struct EntryInstance(pub(super) EntryData);
 
 plain_class!(EntryInstance, "PerformanceEntry");
 
-/// `value` converted with `ToString`.
-pub(super) fn text<'js>(ctx: &Ctx<'js>, value: &Value<'js>) -> JsResult<String> {
-    Ok(Coerced::<String>::from_js(ctx, value.clone())?.0)
-}
-
 /// The prototype of the entries of `kind`.
 pub(super) fn prototype<'js>(ctx: &Ctx<'js>, kind: Kind) -> JsResult<Object<'js>> {
-    let classes: Object = vault(ctx)?.get(CLASSES)?;
-    classes.get(kind.entry_type())
+    required_prototype(ctx, kind.name())
 }
 
 /// A new entry with the prototype `proto`, whose detail is `detail`.
@@ -189,15 +190,11 @@ fn method<'js, R: IntoJs<'js> + 'js>(
     length: usize,
     run: impl Fn(&Ctx<'js>, &[Value<'js>]) -> JsResult<R> + 'js,
 ) -> JsResult<()> {
-    let function = Function::new(
-        ctx.clone(),
-        move |ctx: Ctx<'js>, This(this): This<Value<'js>>, Rest(args): Rest<Value<'js>>| {
-            receiver::<PerformanceInstance>(&ctx, &this)?;
-            run(&ctx, &args)
-        },
-    )?
-    .with_length(length)?;
-    define_method(proto, name, function)
+    define_this_method(ctx, proto, name, length, move |ctx, this, args| {
+        receiver::<PerformanceInstance>(ctx, &this)?;
+        run(ctx, args)
+    })?;
+    Ok(())
 }
 
 /// Defines the getter `key` of `proto`, which reads the entry that `this` is.
@@ -241,7 +238,7 @@ pub(crate) fn install<'js>(ctx: &Ctx<'js>, performance_proto: &Object<'js>) -> J
     })?;
     entry_getter(ctx, &entry_proto, "startTime", |data| data.start_time)?;
     entry_getter(ctx, &entry_proto, "duration", |data| data.duration)?;
-    define_this_method(ctx, &entry_proto, "toJSON", |ctx, this| {
+    define_this_method(ctx, &entry_proto, "toJSON", 0, |ctx, this, _| {
         let entry = receiver::<EntryInstance>(ctx, &this)?;
         let data = &entry.borrow().0;
         let json = Object::new(ctx.clone())?;
@@ -279,11 +276,8 @@ pub(crate) fn install<'js>(ctx: &Ctx<'js>, performance_proto: &Object<'js>) -> J
             detail(ctx, receiver::<EntryInstance>(ctx, &this)?)
         })?;
     }
-    let classes = Object::new(ctx.clone())?;
-    classes.set_prototype(None)?;
-    classes.set(Kind::Mark.entry_type(), mark_proto)?;
-    classes.set(Kind::Measure.entry_type(), measure_proto)?;
-    vault.set(CLASSES, classes)?;
+    store_prototype(ctx, MARK, &mark_proto)?;
+    store_prototype(ctx, MEASURE, &measure_proto)?;
     define_global(ctx, "PerformanceEntry", entry_class)?;
     define_global(ctx, "PerformanceMark", mark_class)?;
     define_global(ctx, "PerformanceMeasure", measure_class)?;

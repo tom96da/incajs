@@ -15,7 +15,10 @@ use rquickjs::JsLifetime;
 use rquickjs::convert::Coerced;
 use rquickjs::{Class, Ctx, FromJs, Object, Result as JsResult, Value};
 
-use inca_jsenv::class::{define_this_accessor, define_this_getter, plain_class, receiver, require};
+use inca_jsenv::class::{
+    define_this_accessor, define_this_getter, define_this_method, plain_class, receiver, require,
+    text,
+};
 use inca_node::{
     NodeId, STYLE_KEYS, TreeError, VirtualNode, css_text, style_item, style_length,
     style_property_value,
@@ -23,10 +26,10 @@ use inca_node::{
 
 use super::Natives;
 use super::attributes::print_style_warning;
-use super::convert::{JsNodeId, unsigned};
+use super::convert::{JsNodeId, saturated, unsigned};
 use super::host::Host;
-use super::token_list::method;
-use crate::interfaces::{define_unconstructable, interface_prototype};
+use crate::interfaces::define_unconstructable;
+use inca_jsenv::required_prototype;
 
 /// A `CSSStyleDeclaration` instance. It holds the node id and no JS value.
 #[allow(clippy::disallowed_macros)]
@@ -57,7 +60,7 @@ fn style_of<'js>(
     _host: Rc<RefCell<Host>>,
 ) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Class<'js, IncaStyle>> {
     move |ctx, JsNodeId(node)| {
-        let proto = interface_prototype(&ctx, "CSSStyleDeclaration")?;
+        let proto = required_prototype(&ctx, "CSSStyleDeclaration")?;
         Class::instance_proto(IncaStyle { node }, proto)
     }
 }
@@ -93,10 +96,6 @@ fn is_display(name: &str) -> bool {
     name.eq_ignore_ascii_case("display")
 }
 
-fn text<'js>(ctx: &Ctx<'js>, value: &Value<'js>) -> JsResult<String> {
-    Ok(Coerced::<String>::from_js(ctx, value.clone())?.0)
-}
-
 /// The text of a written value: `null` is empty and a `Symbol` throws a `TypeError`.
 fn value_text<'js>(ctx: &Ctx<'js>, value: &Value<'js>) -> JsResult<String> {
     if value.is_null() {
@@ -113,7 +112,7 @@ fn define_members<'js>(
     let h = host.clone();
     define_this_getter(ctx, proto, "length", move |ctx, this| {
         let length = read(&h, node_of(ctx, &this)?, style_length);
-        Ok(u32::try_from(length).unwrap_or(u32::MAX))
+        Ok(saturated(length))
     })?;
     let (get, set) = (host.clone(), host.clone());
     define_this_accessor(
@@ -130,14 +129,14 @@ fn define_members<'js>(
         },
     )?;
     let h = host.clone();
-    method(ctx, proto, "getPropertyValue", 1, move |ctx, this, args| {
+    define_this_method(ctx, proto, "getPropertyValue", 1, move |ctx, this, args| {
         let node = node_of(ctx, &this)?;
         require(ctx, "getPropertyValue", args, 1)?;
         let name = text(ctx, &args[0])?;
         Ok(read(&h, node, |node| style_property_value(node, &name)))
     })?;
     let h = host.clone();
-    method(ctx, proto, "setProperty", 2, move |ctx, this, args| {
+    define_this_method(ctx, proto, "setProperty", 2, move |ctx, this, args| {
         let node = node_of(ctx, &this)?;
         require(ctx, "setProperty", args, 2)?;
         let name = text(ctx, &args[0])?;
@@ -157,7 +156,7 @@ fn define_members<'js>(
         Ok(())
     })?;
     let h = host.clone();
-    method(ctx, proto, "removeProperty", 1, move |ctx, this, args| {
+    define_this_method(ctx, proto, "removeProperty", 1, move |ctx, this, args| {
         let node = node_of(ctx, &this)?;
         require(ctx, "removeProperty", args, 1)?;
         let name = text(ctx, &args[0])?;
@@ -167,14 +166,14 @@ fn define_members<'js>(
         }
         Ok(former.unwrap_or_default())
     })?;
-    method(ctx, proto, "getPropertyPriority", 1, |ctx, this, args| {
+    define_this_method(ctx, proto, "getPropertyPriority", 1, |ctx, this, args| {
         node_of(ctx, &this)?;
         require(ctx, "getPropertyPriority", args, 1)?;
         text(ctx, &args[0])?;
         Ok(String::new())
     })?;
     let h = host.clone();
-    method(ctx, proto, "item", 1, move |ctx, this, args| {
+    define_this_method(ctx, proto, "item", 1, move |ctx, this, args| {
         let node = node_of(ctx, &this)?;
         require(ctx, "item", args, 1)?;
         let index = unsigned(Coerced::<i32>::from_js(ctx, args[0].clone())?);

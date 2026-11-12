@@ -11,7 +11,7 @@
 
 use std::cell::Cell;
 
-use rquickjs::{Ctx, Error, Function, Object, Result as JsResult};
+use rquickjs::{Ctx, Error, Exception, Function, Object, Result as JsResult};
 
 use crate::quickjs::ObjectExt;
 
@@ -62,6 +62,53 @@ pub fn vault<'js>(ctx: &Ctx<'js>) -> JsResult<Object<'js>> {
     let opened = open.call(());
     OPENING.set(false);
     opened
+}
+
+/// The vault key of the prototype store: one prototype under each name.
+const PROTOTYPES: &str = "prototypes";
+
+/// Keeps `proto` in the prototype store of `ctx`'s realm under `name`. The first call creates the
+/// store, a null-prototype object in the vault.
+///
+/// # Errors
+///
+/// Returns an error if the realm has no vault.
+pub fn store_prototype<'js>(ctx: &Ctx<'js>, name: &str, proto: &Object<'js>) -> JsResult<()> {
+    let vault = vault(ctx)?;
+    if let Some(store) = vault.get::<_, Option<Object>>(PROTOTYPES)? {
+        return store.set(name, proto.clone());
+    }
+    let store = Object::new(ctx.clone())?;
+    store.set_prototype(None)?;
+    vault.set(PROTOTYPES, store.clone())?;
+    store.set(name, proto.clone())
+}
+
+/// The prototype kept under `name` in the prototype store, `None` if there is none.
+///
+/// # Errors
+///
+/// Returns an error if the realm has no vault.
+pub fn stored_prototype<'js>(ctx: &Ctx<'js>, name: &str) -> JsResult<Option<Object<'js>>> {
+    let Some(store) = vault(ctx)?.get::<_, Option<Object>>(PROTOTYPES)? else {
+        return Ok(None);
+    };
+    store.get(name)
+}
+
+/// The prototype kept under `name` in the prototype store.
+///
+/// # Errors
+///
+/// Returns a `TypeError` if no prototype is stored under `name`, and an error if the realm has no
+/// vault.
+pub fn required_prototype<'js>(ctx: &Ctx<'js>, name: &str) -> JsResult<Object<'js>> {
+    stored_prototype(ctx, name)?.ok_or_else(|| {
+        Exception::throw_type(
+            ctx,
+            &format!("no prototype is stored for {name}. define the class first"),
+        )
+    })
 }
 
 #[cfg(test)]
@@ -132,6 +179,46 @@ mod tests {
             vault(&ctx).unwrap().set("kept", 7).unwrap();
 
             assert_eq!(vault(&ctx).unwrap().get::<_, i32>("kept").unwrap(), 7);
+        });
+    }
+
+    #[test]
+    fn a_prototype_is_none_before_any_is_stored() {
+        with_realm(|ctx| {
+            create_vault(&ctx).unwrap();
+
+            assert!(stored_prototype(&ctx, "Widget").unwrap().is_none());
+        });
+    }
+
+    #[test]
+    fn a_stored_prototype_is_returned() {
+        with_realm(|ctx| {
+            create_vault(&ctx).unwrap();
+            let proto = Object::new(ctx.clone()).unwrap();
+            proto.set("kept", 7).unwrap();
+            store_prototype(&ctx, "Widget", &proto).unwrap();
+
+            let got = stored_prototype(&ctx, "Widget").unwrap().unwrap();
+
+            assert_eq!(got.get::<_, i32>("kept").unwrap(), 7);
+        });
+    }
+
+    #[test]
+    fn a_missing_prototype_throws_a_type_error() {
+        with_realm(|ctx| {
+            create_vault(&ctx).unwrap();
+
+            assert!(required_prototype(&ctx, "Widget").is_err());
+            let error = ctx.catch();
+            let error = error.as_object().unwrap();
+
+            assert_eq!(error.get::<_, String>("name").unwrap(), "TypeError");
+            assert_eq!(
+                error.get::<_, String>("message").unwrap(),
+                "no prototype is stored for Widget. define the class first"
+            );
         });
     }
 

@@ -17,7 +17,7 @@ use inca_node::{AttributeValue, VirtualNode, data_attribute, valid_attribute_nam
 use super::Natives;
 use super::convert::{JsNodeId, throw_tree_error};
 use super::host::Host;
-use crate::interfaces::interface_prototype;
+use inca_jsenv::required_prototype;
 
 /// `datasetGet`, `datasetSet`, `datasetDelete`, `datasetKeys` and `datasetTarget`: the natives
 /// behind the `dataset` proxy of an element.
@@ -124,7 +124,7 @@ fn dataset_keys<'js>(
 fn dataset_target<'js>(_host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>) -> JsResult<Object<'js>> {
     move |ctx| {
         let target = Object::new(ctx.clone())?;
-        target.set_prototype(Some(&interface_prototype(&ctx, "DOMStringMap")?))?;
+        target.set_prototype(Some(&required_prototype(&ctx, "DOMStringMap")?))?;
         Ok(target)
     }
 }

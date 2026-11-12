@@ -10,9 +10,12 @@ use rquickjs::{Class, Ctx, Error, Exception, Function, IntoJs, Object, Result as
 
 use super::iterator::{Kind, ParamsIterator};
 use super::params_init::init_list;
-use super::{ParamsInstance, STORE, State, given, method, require, shared, usv};
-use crate::class::{NEEDS_NEW, define_class, define_getter, define_global, new_target_prototype};
-use crate::vault::vault;
+use super::{ITERATOR, ParamsInstance, State, given, require, shared, usv};
+use crate::class::{
+    NEEDS_NEW, define_class, define_getter, define_global, define_sized_method,
+    new_target_prototype,
+};
+use crate::vault::required_prototype;
 
 const NOT_A_FUNCTION: &str = "the callback is not a function. pass a function";
 
@@ -31,8 +34,7 @@ impl<'js> IntoJsFunc<'js, ()> for Construct {
         }
         let init = params.arg(0).filter(|value| !value.is_undefined());
         let list = init_list(ctx, init.as_ref())?;
-        let store: Object = vault(ctx)?.get(STORE)?;
-        let proto = new_target_prototype(&params, store.get("params")?)?;
+        let proto = new_target_prototype(&params, required_prototype(ctx, "URLSearchParams")?)?;
         let instance = ParamsInstance(State::new(None, list));
         Ok(Class::instance_proto(instance, proto)?.into_value())
     }
@@ -65,18 +67,17 @@ fn name_of(ctx: &Ctx<'_>, method: &str, args: &[Value<'_>]) -> JsResult<String> 
 /// A new iterator of `kind` over the pairs of `this`.
 fn iterator<'js>(ctx: &Ctx<'js>, this: &Value<'js>, kind: Kind) -> JsResult<Value<'js>> {
     let state = shared(ctx, this)?;
-    let store: Object = vault(ctx)?.get(STORE)?;
     let iterator = ParamsIterator {
         state,
         kind,
         index: std::cell::Cell::new(0),
     };
-    Ok(Class::instance_proto(iterator, store.get("iterator")?)?.into_value())
+    Ok(Class::instance_proto(iterator, required_prototype(ctx, ITERATOR)?)?.into_value())
 }
 
 /// Defines `append`, `delete`, `set` and `sort`, which change the list.
 fn define_changing_members<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<()> {
-    method(
+    define_sized_method(
         ctx,
         proto,
         "append",
@@ -90,7 +91,7 @@ fn define_changing_members<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult
             Ok::<_, Error>(())
         },
     )?;
-    method(
+    define_sized_method(
         ctx,
         proto,
         "delete",
@@ -106,7 +107,7 @@ fn define_changing_members<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult
             Ok::<_, Error>(())
         },
     )?;
-    method(
+    define_sized_method(
         ctx,
         proto,
         "set",
@@ -134,7 +135,7 @@ fn define_changing_members<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult
             Ok::<_, Error>(())
         },
     )?;
-    method(
+    define_sized_method(
         ctx,
         proto,
         "sort",
@@ -154,7 +155,7 @@ fn define_changing_members<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult
 
 /// Defines `get`, `getAll`, `has` and `toString`, which read the list.
 fn define_reading_members<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<()> {
-    method(
+    define_sized_method(
         ctx,
         proto,
         "get",
@@ -174,7 +175,7 @@ fn define_reading_members<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<
             }
         },
     )?;
-    method(
+    define_sized_method(
         ctx,
         proto,
         "getAll",
@@ -192,7 +193,7 @@ fn define_reading_members<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<
             found.into_js(&ctx)
         },
     )?;
-    method(
+    define_sized_method(
         ctx,
         proto,
         "has",
@@ -208,7 +209,7 @@ fn define_reading_members<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<
             Ok::<_, Error>(found)
         },
     )?;
-    method(
+    define_sized_method(
         ctx,
         proto,
         "toString",
@@ -226,7 +227,7 @@ pub(super) fn define_params<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResul
     let class = define_class(ctx, proto, "URLSearchParams", 0, Construct)?;
     define_changing_members(ctx, proto)?;
     define_reading_members(ctx, proto)?;
-    method(
+    define_sized_method(
         ctx,
         proto,
         "forEach",
@@ -270,7 +271,7 @@ pub(super) fn define_params<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResul
         ("keys", Kind::Keys),
         ("values", Kind::Values),
     ] {
-        method(
+        define_sized_method(
             ctx,
             proto,
             name,
