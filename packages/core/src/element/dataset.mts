@@ -37,6 +37,7 @@ export function datasetMembers(id: NodeId): DatasetMembers {
         defineProperty(target, key, descriptor) {
           if (typeof key !== "string") return Reflect.defineProperty(target, key, descriptor);
           if (!("value" in descriptor)) return false;
+          if (descriptor.configurable === false) return false;
           datasetSet(id, key, attributeText(descriptor.value));
           return true;
         },
