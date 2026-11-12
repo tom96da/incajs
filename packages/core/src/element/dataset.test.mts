@@ -229,6 +229,23 @@ describe("dataset", () => {
     expect(host.datasetSet).not.toHaveBeenCalled();
   });
 
+  it("throws a TypeError for defineProperty with configurable false and writes nothing", () => {
+    const { host, dataset } = setup();
+
+    expect(() => Object.defineProperty(dataset, "x", { value: "v", configurable: false })).toThrow(
+      TypeError,
+    );
+    expect(host.datasetSet).not.toHaveBeenCalled();
+  });
+
+  it("writes data-x through defineProperty with configurable true", () => {
+    const { host, dataset } = setup();
+
+    Object.defineProperty(dataset, "x", { value: "v", configurable: true });
+
+    expect(host.datasetSet).toHaveBeenCalledExactlyOnceWith(1, "x", "v");
+  });
+
   it("defines a Symbol key on the target", () => {
     const { host, dataset } = setup();
     const key = Symbol("k");
