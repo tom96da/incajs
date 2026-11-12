@@ -167,6 +167,7 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
+    use crate::build_spec;
     use crate::tests::{num, text};
     use crate::tree::{AttributeValue, VirtualTree};
     use rstest::rstest;
@@ -352,6 +353,69 @@ mod tests {
 
         assert_eq!(lines, [format!("ignoring unknown style key `{name}`")]);
         assert_eq!(css_text(tree.get(id).unwrap()), "width: 1px;");
+    }
+
+    #[rstest]
+    #[case::overflowing("1e999")]
+    #[case::negative_overflowing("-1e999")]
+    #[case::infinity("Infinity")]
+    #[case::nan("NaN")]
+    fn set_style_property_of_a_non_finite_opacity_keeps_the_former_value(#[case] written: &str) {
+        let (mut tree, id) = block(&[("opacity", num(0.5))]);
+
+        let lines = tree.set_style_property(id, "opacity", written).unwrap();
+
+        assert_eq!(
+            lines,
+            ["ignoring unsupported value for style key `opacity`"]
+        );
+        assert_eq!(css_text(tree.get(id).unwrap()), "opacity: 0.5;");
+        assert_eq!(entry(&tree, id).as_deref(), Some("opacity: 0.5;"));
+    }
+
+    #[rstest]
+    #[case::overflowing("opacity: 1e999")]
+    #[case::negative_overflowing("opacity: -1e999")]
+    fn set_style_text_drops_a_non_finite_opacity(#[case] written: &str) {
+        let (mut tree, id) = block(&[]);
+
+        let lines = tree.set_style_text(id, written).unwrap();
+
+        assert_eq!(
+            lines,
+            ["ignoring unsupported value for style key `opacity`"]
+        );
+        assert_eq!(css_text(tree.get(id).unwrap()), "");
+        assert_eq!(style_length(tree.get(id).unwrap()), 0);
+        assert_eq!(entry(&tree, id).as_deref(), Some(""));
+    }
+
+    #[rstest]
+    #[case::infinity(f64::INFINITY)]
+    #[case::negative_infinity(f64::NEG_INFINITY)]
+    fn set_style_of_a_non_finite_opacity_has_no_declaration_and_renders_unset(#[case] value: f64) {
+        let (tree, id) = block(&[("opacity", num(value))]);
+
+        assert_eq!(css_text(tree.get(id).unwrap()), "");
+        assert_eq!(style_length(tree.get(id).unwrap()), 0);
+        assert_eq!(build_spec(&tree, id).unwrap().style.opacity, None);
+    }
+
+    #[rstest]
+    #[case::beyond_one(2.0, "opacity: 2;", 1.0)]
+    #[case::negative(-1.0, "opacity: -1;", 0.0)]
+    fn a_finite_opacity_outside_the_range_is_kept_and_rendered_clamped(
+        #[case] value: f64,
+        #[case] css: &str,
+        #[case] rendered: f64,
+    ) {
+        let (mut tree, id) = block(&[("opacity", num(value))]);
+        assert_eq!(css_text(tree.get(id).unwrap()), css);
+        assert_eq!(build_spec(&tree, id).unwrap().style.opacity, Some(rendered));
+
+        tree.set_style_text(id, css).unwrap();
+        assert_eq!(css_text(tree.get(id).unwrap()), css);
+        assert_eq!(build_spec(&tree, id).unwrap().style.opacity, Some(rendered));
     }
 
     #[test]
