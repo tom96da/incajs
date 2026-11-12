@@ -8,17 +8,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-<!-- coderabbit-ai-generated:v1 -->
-
-<!-- coderabbit-ai-generated-section:v1:6865c47d84ff69c8952a636a3d2999bb66afc1fe9599e35b3b8de5b88399dc09 -->
-
 ## [Unreleased]
-
-### Fixed
-
-- Inline opacity declarations serialize the clamped value used for rendering.
-
-<!-- /coderabbit-ai-generated:v1 -->
 
 ## [0.0.31] - 2026-11-09
 
