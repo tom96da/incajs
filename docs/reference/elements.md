@@ -83,18 +83,22 @@ or `<component is="style">`.
 
 ## Recognized style keys
 
-`:style` takes an object. Only the keys below are read, each with its own
-accepted value shapes. A value of the wrong shape sets the property to its
-default, even when the key held a valid value before. An unrecognized key,
-such as a misspelled one, has no effect.
+`:style` takes an object or a string. Only the keys below are read.
+
+An object gives each key its own accepted value shapes. A value of the wrong
+shape sets the property to its default, even when the key held a valid value
+before. An unrecognized key has no effect. Removing a key, or setting it to
+`null` or `undefined`, restores that property to its default.
 
 The host prints a warning line on stderr the first time an element sets an
 unrecognized key or a value of a shape the host does not support. An empty
 string `''` on a known key prints no warning.
 
-Removing a key from the object, or setting it to `null` or `undefined`,
-restores that property to its default. Setting `style` to a string or `null`
-clears every key set before.
+A string is a list of CSS declarations, such as `"gap: 8px; color: #f00"`. Its
+property names are the keys of the table in kebab-case, such as
+`flex-direction`, and its values are the values of the table. The host drops
+any other declaration. A string replaces every property set before. `null` or
+`undefined` clears every property set before.
 
 A px size is a number or a string such as `"10px"`. A string that reads as
 zero, such as `"0"` or `"0.0"`, also works. Other units are not supported.
@@ -144,26 +148,6 @@ literal, e.g. `0xff0000`, or a string of the CSS
 A number must lie from `0` to `0xffffff`. Other notations, such as color names,
 `hsl()` and `currentcolor`, are not supported. `rgb()` does not take `none`,
 `calc()` or `var()`, and percentage channels need whitespace between them.
-
-## `style` as a string does nothing
-
-Vue's compiler routes a static `style="color: red"`
-attribute and a bound `:style="someString"` to the same `style` prop, and
-`patchProp`'s `patchStyle` only accepts that prop as an object. A string
-value is ignored either way. So a plain `style="..."` attribute can
-*never* work, since it's always a string; only `:style` bound to an
-object, with the keys above, has any visible effect. A `style` attribute inside assigned markup
-applies, see [Parsed HTML](#parsed-html).
-
-```vue
-<template>
-  <!-- does nothing visually: style as a string -->
-  <div style="color: red">…</div>
-  <div :style="'color: red'">…</div>
-  <!-- works -->
-  <div :style="{ color: '#ff0000' }">…</div>
-</template>
-```
 
 ## Template refs
 
