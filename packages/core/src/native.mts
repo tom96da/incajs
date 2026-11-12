@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import type { CSSStyleDeclaration } from "./element/types.mts";
+import type { CSSStyleDeclaration, DOMTokenList } from "./element/types.mts";
 import type {
   AttributeValue,
   CallbackId,

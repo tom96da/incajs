@@ -17,7 +17,7 @@ import { vModelText, withDirectives } from "../src/vue/runtime.mts";
 import { nativeStub } from "./setup.mts";
 import type { NodeMutationMembers } from "../src/element/nodeMutation.mts";
 import type { NodeRelationMembers } from "../src/element/nodeRelations.mts";
-import type { EventHandlers } from "../src/element/types.mts";
+import type { DOMTokenList, EventHandlers } from "../src/element/types.mts";
 import type { IncaElement, NodeId } from "../src/index.mts";
 import type { HostCallback } from "../src/native.mts";
 

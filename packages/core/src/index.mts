@@ -11,6 +11,7 @@ export type {
   Attr,
   CSSStyleDeclaration,
   DOMStringMap,
+  DOMTokenList,
   HTMLCollectionOf,
   IncaElement,
   IncaFragment,

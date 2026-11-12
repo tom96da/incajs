@@ -3,7 +3,7 @@
 
 import { releaseCallbacks } from "./callbacks.mts";
 import { native } from "./native.mts";
-import type { CSSStyleDeclaration } from "./element/types.mts";
+import type { CSSStyleDeclaration, DOMTokenList } from "./element/types.mts";
 import type { NodeLink, Parsed } from "./native.mts";
 import type { AttributeValue, NodeId, ScrollAlignment, StyleProps, TagName } from "./types.mts";
 

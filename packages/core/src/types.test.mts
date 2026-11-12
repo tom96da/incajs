@@ -5,6 +5,8 @@ import { describe, expectTypeOf, it } from "vitest";
 
 import type {
   CSSStyleDeclaration,
+  DOMStringMap,
+  DOMTokenList,
   EventHandler,
   IncaElement,
   IncaInputElement,
@@ -267,5 +269,21 @@ describe("the style member", () => {
 describe("the dataset type", () => {
   it("reads a key as a string or undefined", () => {
     expectTypeOf<IncaElement["dataset"]["x"]>().toEqualTypeOf<string | undefined>();
+  });
+});
+
+describe("the host interface globals", () => {
+  it("type the prototype of CSSStyleDeclaration as the exported interface", () => {
+    expectTypeOf<
+      typeof globalThis.CSSStyleDeclaration.prototype
+    >().toEqualTypeOf<CSSStyleDeclaration>();
+  });
+
+  it("type the prototype of DOMStringMap as the exported interface", () => {
+    expectTypeOf<typeof globalThis.DOMStringMap.prototype>().toEqualTypeOf<DOMStringMap>();
+  });
+
+  it("type the prototype of DOMTokenList as the exported interface", () => {
+    expectTypeOf<typeof globalThis.DOMTokenList.prototype>().toEqualTypeOf<DOMTokenList>();
   });
 });

@@ -22,7 +22,7 @@ import * as tree from "./shadowTree.mts";
 import type { EventLike, IncaEventTarget } from "../types.mts";
 import type { NodeMutationMembers } from "./nodeMutation.mts";
 import type { NodeRelationMembers } from "./nodeRelations.mts";
-import type { EventHandlers, IncaElement } from "./types.mts";
+import type { DOMTokenList, EventHandlers, IncaElement } from "./types.mts";
 
 let nextId = 1;
 
