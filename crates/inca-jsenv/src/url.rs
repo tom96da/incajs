@@ -17,22 +17,21 @@ use std::rc::Rc;
 
 #[allow(clippy::disallowed_types)]
 use rquickjs::JsLifetime;
-use rquickjs::function::IntoJsFunc;
-use rquickjs::{Class, Ctx, Function, Object, Result as JsResult, Value};
+use rquickjs::{Class, Ctx, Object, Result as JsResult, Value};
 use url::{Url, form_urlencoded, quirks};
 
-use crate::class::{define_method, given, iterator_prototype, plain_class, receiver, require};
+use crate::class::{given, iterator_prototype, plain_class, receiver, require};
 use crate::encoding::encode;
 use crate::quickjs::string_wtf8;
-use crate::vault::vault;
+use crate::vault::store_prototype;
 
 mod iterator;
 mod params;
 mod params_init;
 mod url_class;
 
-/// The vault key of the prototypes.
-const STORE: &str = "url";
+/// The name of the iterator prototype in the prototype store.
+const ITERATOR: &str = "URLSearchParams Iterator";
 
 /// The URL of a `URL` and the pairs of its query. A `URLSearchParams` of its own has no URL.
 struct State {
@@ -156,15 +155,12 @@ plain_class!(ParamsInstance, "URLSearchParams");
 ///
 /// Returns an error if the realm lacks an intrinsic or has no vault.
 pub(crate) fn install(ctx: &Ctx<'_>) -> JsResult<()> {
-    let store = Object::new(ctx.clone())?;
-    store.set_prototype(None)?;
     let iterator_proto = iterator_prototype(ctx)?;
-    store.set("iterator", iterator_proto.clone())?;
     let url_proto = Object::new(ctx.clone())?;
     let params_proto = Object::new(ctx.clone())?;
-    store.set("url", url_proto.clone())?;
-    store.set("params", params_proto.clone())?;
-    vault(ctx)?.set(STORE, store)?;
+    store_prototype(ctx, ITERATOR, &iterator_proto)?;
+    store_prototype(ctx, "URL", &url_proto)?;
+    store_prototype(ctx, "URLSearchParams", &params_proto)?;
     url_class::define_url(ctx, &url_proto)?;
     params::define_params(ctx, &params_proto)?;
     iterator::define_iterator(ctx, &iterator_proto)
@@ -213,21 +209,6 @@ pub(crate) fn printed<'js>(value: &Value<'js>, limit: usize) -> Option<Printed<'
 fn usv(value: &Value<'_>) -> JsResult<String> {
     let bytes = encode(&string_wtf8(value)?);
     Ok(String::from_utf8_lossy(&bytes).into_owned())
-}
-
-/// Defines `body` as the method `name` of `proto` with `length` parameters.
-fn method<'js, P>(
-    ctx: &Ctx<'js>,
-    proto: &Object<'js>,
-    name: &str,
-    length: usize,
-    body: impl IntoJsFunc<'js, P> + 'js,
-) -> JsResult<()> {
-    define_method(
-        proto,
-        name,
-        Function::new(ctx.clone(), body)?.with_length(length)?,
-    )
 }
 
 /// The state of the `URLSearchParams` that `this` is.

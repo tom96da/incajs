@@ -1,56 +1,31 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The interface objects `Document`, `ShadowRoot` and `DOMStringMap`, and the store that keeps the
-//! prototypes of the interfaces and of their iterators.
+//! The interface objects `Document`, `ShadowRoot` and `DOMStringMap`, and the helpers that keep the
+//! prototypes of the interfaces and of their iterators in the prototype store of the vault.
 //!
 //! All exist before the app runs. None can be constructed: the host has one document, no shadow
 //! roots, and a `DOMStringMap` only as the `dataset` of an element.
 
 use inca_jsenv::class::{define_class, define_global};
-use inca_jsenv::vault;
+use inca_jsenv::store_prototype;
 use rquickjs::{Ctx, Exception, Object, Result as JsResult};
 
-/// The vault key of the prototype store: one prototype under each name.
-const STORE: &str = "interfaces";
-
-/// The prototype store of `ctx`'s realm. The first call creates it.
-fn store<'js>(ctx: &Ctx<'js>) -> JsResult<Object<'js>> {
-    let vault = vault(ctx)?;
-    if vault.contains_key(STORE)? {
-        return vault.get(STORE);
-    }
-    let store = Object::new(ctx.clone())?;
-    store.set_prototype(None)?;
-    vault.set(STORE, store.clone())?;
-    Ok(store)
-}
-
-/// Keeps `proto` in the prototype store under `name`.
-pub(crate) fn store_prototype<'js>(
-    ctx: &Ctx<'js>,
-    name: &str,
-    proto: &Object<'js>,
-) -> JsResult<()> {
-    store(ctx)?.set(name, proto.clone())
-}
-
-/// The prototype kept under `name`, which an instance of a native class takes.
-///
-/// # Errors
-///
-/// Returns a `TypeError` if no prototype is stored under `name`.
-pub(crate) fn interface_prototype<'js>(ctx: &Ctx<'js>, name: &str) -> JsResult<Object<'js>> {
-    store(ctx)?.get::<_, Option<Object>>(name)?.ok_or_else(|| {
-        Exception::throw_type(
-            ctx,
-            &format!("no prototype is stored for {name}. define the interface first"),
-        )
-    })
-}
-
 /// Defines the global `name`, a class over `proto` whose every call throws a `TypeError` with
-/// `message`, and keeps `proto` in the prototype store under `name`.
+/// `message`.
+fn define_interface<'js>(
+    ctx: &Ctx<'js>,
+    proto: &Object<'js>,
+    name: &str,
+    message: &'static str,
+) -> JsResult<()> {
+    let body = move |ctx: Ctx<'_>| -> JsResult<()> { Err(Exception::throw_type(&ctx, message)) };
+    let class = define_class(ctx, proto, name, 0, body)?;
+    define_global(ctx, name, class)
+}
+
+/// Defines the global `name` like [`define_interface`] and keeps `proto` in the prototype store
+/// under `name`.
 ///
 /// # Errors
 ///
@@ -61,9 +36,7 @@ pub(crate) fn define_unconstructable<'js>(
     name: &str,
     message: &'static str,
 ) -> JsResult<()> {
-    let body = move |ctx: Ctx<'_>| -> JsResult<()> { Err(Exception::throw_type(&ctx, message)) };
-    let class = define_class(ctx, proto, name, 0, body)?;
-    define_global(ctx, name, class)?;
+    define_interface(ctx, proto, name, message)?;
     store_prototype(ctx, name, proto)
 }
 
@@ -73,13 +46,13 @@ pub(crate) fn define_unconstructable<'js>(
 ///
 /// Returns an error if defining a global on `ctx` fails.
 pub(crate) fn install(ctx: &Ctx<'_>) -> JsResult<()> {
-    define_unconstructable(
+    define_interface(
         ctx,
         &Object::new(ctx.clone())?,
         "Document",
         "a document cannot be constructed. the host has one document",
     )?;
-    define_unconstructable(
+    define_interface(
         ctx,
         &Object::new(ctx.clone())?,
         "ShadowRoot",
@@ -96,9 +69,9 @@ pub(crate) fn install(ctx: &Ctx<'_>) -> JsResult<()> {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
-    use super::interface_prototype;
     use crate::test_support::engine_with_bindings;
     use crate::tests::{dispatcher_with_engine, eval_json};
+    use inca_jsenv::required_prototype;
     use rquickjs::Function;
     use rstest::rstest;
 
@@ -155,8 +128,6 @@ mod tests {
     }
 
     #[rstest]
-    #[case::document("Document")]
-    #[case::shadow_root("ShadowRoot")]
     #[case::token_list("DOMTokenList")]
     #[case::style("CSSStyleDeclaration")]
     #[case::dom_string_map("DOMStringMap")]
@@ -164,32 +135,11 @@ mod tests {
         let (engine, _host) = engine_with_bindings();
 
         let got = engine.with(|ctx| {
-            let proto = interface_prototype(&ctx, name).unwrap();
+            let proto = required_prototype(&ctx, name).unwrap();
             let class: Function = proto.get("constructor").unwrap();
             class.get::<_, String>("name").unwrap()
         });
 
         assert_eq!(got, name);
-    }
-
-    #[test]
-    fn an_unknown_interface_has_no_prototype() {
-        let (engine, _host) = engine_with_bindings();
-
-        let thrown = engine.with(|ctx| {
-            assert!(interface_prototype(&ctx, "Nothing").is_err());
-            let error = ctx.catch();
-            let name: String = error.as_object().unwrap().get("name").unwrap();
-            let message: String = error.as_object().unwrap().get("message").unwrap();
-            (name, message)
-        });
-
-        assert_eq!(
-            thrown,
-            (
-                "TypeError".to_owned(),
-                "no prototype is stored for Nothing. define the interface first".to_owned()
-            )
-        );
     }
 }

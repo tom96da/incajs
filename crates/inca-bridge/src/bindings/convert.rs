@@ -37,6 +37,11 @@ pub(super) fn unsigned(Coerced(value): Coerced<i32>) -> u32 {
     value.cast_unsigned()
 }
 
+/// A length or an index as the `u32` JS reads, saturating at `u32::MAX`.
+pub(super) fn saturated(count: usize) -> u32 {
+    u32::try_from(count).unwrap_or(u32::MAX)
+}
+
 /// A node id argument. Accepts a finite whole number in `u32` range;
 /// anything else (`NaN`, `1.5`, `-1`, `Infinity`, `2**32`, a non-number)
 /// throws a `TypeError`.

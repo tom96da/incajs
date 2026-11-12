@@ -10,11 +10,11 @@
 //! that is an accessor goes through [`define_accessor`] on the global object.
 //!
 //! The `this` entries ([`define_this_getter`], [`define_this_accessor`], [`define_this_method`],
-//! [`getter_function`]) build the function from a closure that gets the `this` value. The
-//! property keeps the attributes and function names listed above for its kind.
+//! [`getter_function`]) take a closure that gets the `this` value. The closure becomes the
+//! function. The property gets the attributes and the function names of its kind.
 
 use rquickjs::atom::PredefinedAtom;
-use rquickjs::function::{IntoJsFunc, This};
+use rquickjs::function::{IntoJsFunc, Rest, This};
 use rquickjs::object::Property;
 use rquickjs::{Ctx, FromJs, Function, IntoJs, Object, Result as JsResult, Value};
 
@@ -207,8 +207,9 @@ pub fn define_this_accessor<'js, R: IntoJs<'js> + 'js, A: FromJs<'js> + 'js>(
     define_accessor(target, key, getter_function(ctx, key, read)?, set)
 }
 
-/// Defines the writable, enumerable, configurable method `name` of `target`. `run` gets the
-/// context and the `this` value of the call.
+/// Defines the writable, enumerable, configurable method `name` of `target` with `length`
+/// parameters. `run` gets the context, the `this` value and the arguments of the call. Returns the
+/// method.
 ///
 /// # Errors
 ///
@@ -217,13 +218,36 @@ pub fn define_this_method<'js, R: IntoJs<'js> + 'js>(
     ctx: &Ctx<'js>,
     target: &Object<'js>,
     name: &str,
-    run: impl Fn(&Ctx<'js>, Value<'js>) -> JsResult<R> + 'js,
-) -> JsResult<()> {
-    let function = Function::new(
-        ctx.clone(),
-        move |ctx: Ctx<'js>, This(this): This<Value<'js>>| run(&ctx, this),
-    )?;
-    define_method(target, name, function)
+    length: usize,
+    run: impl Fn(&Ctx<'js>, Value<'js>, &[Value<'js>]) -> JsResult<R> + 'js,
+) -> JsResult<Function<'js>> {
+    define_sized_method(
+        ctx,
+        target,
+        name,
+        length,
+        move |ctx: Ctx<'js>, This(this): This<Value<'js>>, Rest(args): Rest<Value<'js>>| {
+            run(&ctx, this, &args)
+        },
+    )
+}
+
+/// Defines the method `name` of `target` like [`define_method`], from any function body, with
+/// `length` parameters. Returns the method.
+///
+/// # Errors
+///
+/// Returns an error if the function cannot be built or the property cannot be defined.
+pub fn define_sized_method<'js, P>(
+    ctx: &Ctx<'js>,
+    target: &Object<'js>,
+    name: &str,
+    length: usize,
+    body: impl IntoJsFunc<'js, P> + 'js,
+) -> JsResult<Function<'js>> {
+    let function = Function::new(ctx.clone(), body)?.with_length(length)?;
+    define_method(target, name, function.clone())?;
+    Ok(function)
 }
 
 /// Defines `value` as the writable, configurable, non-enumerable global `name`.
@@ -287,7 +311,7 @@ mod tests {
         .unwrap();
         define_this_getter(ctx, &proto, "kind", |_, _| Ok(4)).unwrap();
         define_this_accessor(ctx, &proto, "mode", |_, _| Ok(5), |_, _, _: Value| Ok(())).unwrap();
-        define_this_method(ctx, &proto, "go", |_, _| Ok(())).unwrap();
+        define_this_method(ctx, &proto, "go", 0, |_, _, _| Ok(())).unwrap();
         define_global(ctx, "Widget", widget).unwrap();
         define_function(ctx, "work", Function::new(ctx.clone(), || ()).unwrap()).unwrap();
         define_namespace(ctx, "space", Object::new(ctx.clone()).unwrap()).unwrap();
@@ -513,7 +537,8 @@ mod tests {
                 &ctx,
                 &ctx.globals().get("proto").unwrap(),
                 "me",
-                |_, this| Ok(this),
+                0,
+                |_, this, _| Ok(this),
             )
             .unwrap();
 

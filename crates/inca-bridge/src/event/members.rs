@@ -38,20 +38,20 @@ pub(super) fn is_trusted<'js>(ctx: &Ctx<'js>) -> JsResult<Function<'js>> {
 }
 
 fn define_methods<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<()> {
-    define_this_method(ctx, proto, "stopPropagation", |ctx, this| {
+    define_this_method(ctx, proto, "stopPropagation", 0, |ctx, this, _| {
         with_event(ctx, &this, |event| {
             event.state.stop.set(true);
             Ok(())
         })
     })?;
-    define_this_method(ctx, proto, "stopImmediatePropagation", |ctx, this| {
+    define_this_method(ctx, proto, "stopImmediatePropagation", 0, |ctx, this, _| {
         with_event(ctx, &this, |event| {
             event.state.stop.set(true);
             event.state.immediate.set(true);
             Ok(())
         })
     })?;
-    define_this_method(ctx, proto, "preventDefault", |ctx, this| {
+    define_this_method(ctx, proto, "preventDefault", 0, |ctx, this, _| {
         with_event(ctx, &this, |event| {
             if event.cancels() {
                 event.state.canceled.set(true);
@@ -73,7 +73,7 @@ fn define_methods<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<()> {
         },
     )?;
     define_method(proto, "initEvent", init_event)?;
-    define_this_method(ctx, proto, "composedPath", |ctx, this| {
+    define_this_method(ctx, proto, "composedPath", 0, |ctx, this, _| {
         with_event(ctx, &this, |event| {
             let path = if event.state.dispatching.get() {
                 event.held.path.borrow().clone()
@@ -82,7 +82,8 @@ fn define_methods<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<()> {
             };
             array_of(ctx, path)
         })
-    })
+    })?;
+    Ok(())
 }
 
 fn define_fields<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<()> {

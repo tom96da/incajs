@@ -486,7 +486,7 @@ pub(super) fn keyboard_prototype<'js>(ctx: &Ctx<'js>, ui: &Object<'js>) -> JsRes
 pub(super) fn input_prototype<'js>(ctx: &Ctx<'js>, ui: &Object<'js>) -> JsResult<Object<'js>> {
     let proto = child_of(ctx, ui)?;
     define_fields(ctx, &proto, input_of, INPUT_FIELDS)?;
-    define_this_method(ctx, &proto, "getTargetRanges", |ctx, this| {
+    define_this_method(ctx, &proto, "getTargetRanges", 0, |ctx, this, _| {
         with_event(ctx, &this, |event| {
             input_of(&event.state.payload)
                 .map(|_| ())

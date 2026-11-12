@@ -13,22 +13,22 @@ use std::rc::Rc;
 use rquickjs::JsLifetime;
 use rquickjs::atom::PredefinedAtom;
 use rquickjs::convert::Coerced;
-use rquickjs::function::{Rest, This};
+use rquickjs::function::This;
 use rquickjs::object::Property;
-use rquickjs::{
-    Class, Ctx, Exception, FromJs, Function, IntoJs, Object, Result as JsResult, Value,
-};
+use rquickjs::{Class, Ctx, Exception, FromJs, Function, Object, Result as JsResult, Value};
 
 use inca_jsenv::class::{
-    define_method, define_this_accessor, define_this_getter, plain_class, receiver, require,
+    define_this_accessor, define_this_getter, define_this_method, plain_class, receiver, require,
+    text,
 };
 use inca_node::{AttributeValue, ClassListError, NodeId};
 
 use super::iterator::{Kind, install_iterator, new_iterator};
 use crate::bindings::Natives;
-use crate::bindings::convert::{JsNodeId, or_null, unsigned};
+use crate::bindings::convert::{JsNodeId, or_null, saturated, unsigned};
 use crate::bindings::host::Host;
-use crate::interfaces::{define_unconstructable, interface_prototype};
+use crate::interfaces::define_unconstructable;
+use inca_jsenv::required_prototype;
 
 /// A `DOMTokenList` instance. It holds the node id and no JS value.
 #[allow(clippy::disallowed_macros)]
@@ -59,29 +59,9 @@ fn class_list<'js>(
     _host: Rc<RefCell<Host>>,
 ) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Class<'js, TokenList>> {
     move |ctx, JsNodeId(node)| {
-        let proto = interface_prototype(&ctx, "DOMTokenList")?;
+        let proto = required_prototype(&ctx, "DOMTokenList")?;
         Class::instance_proto(TokenList { node }, proto)
     }
-}
-
-/// Defines `body` as the method `name` of `proto` with `length` parameters. `body` gets the
-/// context, the `this` value and the arguments.
-pub(in crate::bindings) fn method<'js, R: IntoJs<'js> + 'js>(
-    ctx: &Ctx<'js>,
-    proto: &Object<'js>,
-    name: &str,
-    length: usize,
-    body: impl Fn(&Ctx<'js>, Value<'js>, &[Value<'js>]) -> JsResult<R> + 'js,
-) -> JsResult<Function<'js>> {
-    let function = Function::new(
-        ctx.clone(),
-        move |ctx: Ctx<'js>, This(this): This<Value<'js>>, Rest(args): Rest<Value<'js>>| {
-            body(&ctx, this, &args)
-        },
-    )?
-    .with_length(length)?;
-    define_method(proto, name, function.clone())?;
-    Ok(function)
 }
 
 fn node_of<'js>(ctx: &Ctx<'js>, this: &Value<'js>) -> JsResult<NodeId> {
@@ -98,16 +78,8 @@ fn value_of(host: &RefCell<Host>, node: NodeId) -> String {
     host.borrow().tree.class_value(node).unwrap_or_default()
 }
 
-fn text<'js>(ctx: &Ctx<'js>, value: &Value<'js>) -> JsResult<String> {
-    Ok(Coerced::<String>::from_js(ctx, value.clone())?.0)
-}
-
 fn texts<'js>(ctx: &Ctx<'js>, args: &[Value<'js>]) -> JsResult<Vec<String>> {
     args.iter().map(|value| text(ctx, value)).collect()
-}
-
-pub(super) fn position(index: usize) -> u32 {
-    u32::try_from(index).unwrap_or(u32::MAX)
 }
 
 /// The value of a write: a freed node gives the default and a bad token throws a `DOMException`.
@@ -135,7 +107,7 @@ fn define_members<'js>(
 ) -> JsResult<()> {
     let h = host.clone();
     define_this_getter(ctx, proto, "length", move |ctx, this| {
-        Ok(position(tokens_of(&h, node_of(ctx, &this)?).len()))
+        Ok(saturated(tokens_of(&h, node_of(ctx, &this)?).len()))
     })?;
     let (read, write) = (host.clone(), host.clone());
     define_this_accessor(
@@ -154,11 +126,11 @@ fn define_members<'js>(
         },
     )?;
     let h = host.clone();
-    method(ctx, proto, "toString", 0, move |ctx, this, _| {
+    define_this_method(ctx, proto, "toString", 0, move |ctx, this, _| {
         Ok(value_of(&h, node_of(ctx, &this)?))
     })?;
     let h = host.clone();
-    method(ctx, proto, "item", 1, move |ctx, this, args| {
+    define_this_method(ctx, proto, "item", 1, move |ctx, this, args| {
         let node = node_of(ctx, &this)?;
         require(ctx, "item", args, 1)?;
         let index = unsigned(Coerced::<i32>::from_js(ctx, args[0].clone())?);
@@ -166,14 +138,14 @@ fn define_members<'js>(
         or_null(ctx, token)
     })?;
     let h = host.clone();
-    method(ctx, proto, "contains", 1, move |ctx, this, args| {
+    define_this_method(ctx, proto, "contains", 1, move |ctx, this, args| {
         let node = node_of(ctx, &this)?;
         require(ctx, "contains", args, 1)?;
         let token = text(ctx, &args[0])?;
         Ok(tokens_of(&h, node).contains(&token))
     })?;
     let h = host.clone();
-    method(ctx, proto, "add", 0, move |ctx, this, args| {
+    define_this_method(ctx, proto, "add", 0, move |ctx, this, args| {
         let node = node_of(ctx, &this)?;
         let tokens = texts(ctx, args)?;
         let tokens: Vec<&str> = tokens.iter().map(String::as_str).collect();
@@ -181,7 +153,7 @@ fn define_members<'js>(
         written(ctx, result)
     })?;
     let h = host.clone();
-    method(ctx, proto, "remove", 0, move |ctx, this, args| {
+    define_this_method(ctx, proto, "remove", 0, move |ctx, this, args| {
         let node = node_of(ctx, &this)?;
         let tokens = texts(ctx, args)?;
         let tokens: Vec<&str> = tokens.iter().map(String::as_str).collect();
@@ -189,7 +161,7 @@ fn define_members<'js>(
         written(ctx, result)
     })?;
     let h = host.clone();
-    method(ctx, proto, "toggle", 1, move |ctx, this, args| {
+    define_this_method(ctx, proto, "toggle", 1, move |ctx, this, args| {
         let node = node_of(ctx, &this)?;
         require(ctx, "toggle", args, 1)?;
         let token = text(ctx, &args[0])?;
@@ -203,14 +175,14 @@ fn define_members<'js>(
         written(ctx, result)
     })?;
     let h = host.clone();
-    method(ctx, proto, "replace", 2, move |ctx, this, args| {
+    define_this_method(ctx, proto, "replace", 2, move |ctx, this, args| {
         let node = node_of(ctx, &this)?;
         require(ctx, "replace", args, 2)?;
         let (token, new_token) = (text(ctx, &args[0])?, text(ctx, &args[1])?);
         let result = h.borrow_mut().tree.replace_class(node, &token, &new_token);
         written(ctx, result)
     })?;
-    method(ctx, proto, "supports", 1, |ctx, this, _| {
+    define_this_method(ctx, proto, "supports", 1, |ctx, this, _| {
         node_of(ctx, &this)?;
         Err::<(), _>(Exception::throw_type(
             ctx,
@@ -227,7 +199,7 @@ fn define_for_each<'js>(
     host: &Rc<RefCell<Host>>,
 ) -> JsResult<()> {
     let h = host.clone();
-    method(ctx, proto, "forEach", 1, move |ctx, this, args| {
+    define_this_method(ctx, proto, "forEach", 1, move |ctx, this, args| {
         let node = node_of(ctx, &this)?;
         require(ctx, "forEach", args, 1)?;
         let callback = args[0].as_function().ok_or_else(|| {
@@ -246,7 +218,7 @@ fn define_for_each<'js>(
             callback.call::<_, Value>((
                 This(this_arg.clone()),
                 token,
-                position(index),
+                saturated(index),
                 this.clone(),
             ))?;
         }
@@ -272,7 +244,7 @@ fn define_iterator_method<'js>(
     name: &str,
     kind: Kind,
 ) -> JsResult<Function<'js>> {
-    method(ctx, proto, name, 0, move |ctx, this, _| {
+    define_this_method(ctx, proto, name, 0, move |ctx, this, _| {
         new_iterator(ctx, node_of(ctx, &this)?, kind)
     })
 }

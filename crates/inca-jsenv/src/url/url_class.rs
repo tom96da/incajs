@@ -9,12 +9,12 @@ use rquickjs::function::{IntoJsFunc, Opt, ParamRequirement, Params, Rest, This};
 use rquickjs::{Class, Ctx, Exception, Function, Object, Result as JsResult, Value};
 use url::{Url, quirks};
 
-use super::{ParamsInstance, STORE, State, UrlInstance, given, receiver, require, url_state, usv};
+use super::{ParamsInstance, State, UrlInstance, given, receiver, require, url_state, usv};
 use crate::class::{
     NEEDS_NEW, define_accessor, define_class, define_getter, define_global, define_method,
-    new_target_prototype,
+    define_sized_method, new_target_prototype,
 };
-use crate::vault::vault;
+use crate::vault::required_prototype;
 
 const INVALID_URL: &str =
     "the URL is not valid. pass an absolute URL, or a relative one with a base";
@@ -52,8 +52,10 @@ fn instance<'js>(
 ) -> JsResult<Class<'js, UrlInstance<'js>>> {
     let state = State::new(Some(url), Vec::new());
     state.borrow_mut().rebuild();
-    let store: Object = vault(ctx)?.get(STORE)?;
-    let params = Class::instance_proto(ParamsInstance(Rc::clone(&state)), store.get("params")?)?;
+    let params = Class::instance_proto(
+        ParamsInstance(Rc::clone(&state)),
+        required_prototype(ctx, "URLSearchParams")?,
+    )?;
     Class::instance_proto(UrlInstance { state, params }, proto)
 }
 
@@ -74,8 +76,7 @@ impl<'js> IntoJsFunc<'js, ()> for Construct {
         let (url, base) = parse_arguments(ctx, "URL", &args)?;
         let url =
             parse(&url, base.as_deref()).map_err(|message| Exception::throw_type(ctx, message))?;
-        let store: Object = vault(ctx)?.get(STORE)?;
-        let proto = new_target_prototype(&params, store.get("url")?)?;
+        let proto = new_target_prototype(&params, required_prototype(ctx, "URL")?)?;
         Ok(instance(ctx, url, proto)?.into_value())
     }
 }
@@ -177,27 +178,31 @@ fn setter<'js>(
 
 pub(super) fn define_url<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<()> {
     let class = define_class(ctx, proto, "URL", 1, Construct)?;
-    let can_parse = Function::new(
-        ctx.clone(),
+    define_sized_method(
+        ctx,
+        &class,
+        "canParse",
+        1,
         |ctx: Ctx<'js>, Rest(args): Rest<Value<'js>>| {
             let (url, base) = parse_arguments(&ctx, "URL.canParse", &args)?;
             Ok::<_, rquickjs::Error>(parse(&url, base.as_deref()).is_ok())
         },
     )?;
-    let parse_url = Function::new(
-        ctx.clone(),
+    define_sized_method(
+        ctx,
+        &class,
+        "parse",
+        1,
         |ctx: Ctx<'js>, Rest(args): Rest<Value<'js>>| {
             let (url, base) = parse_arguments(&ctx, "URL.parse", &args)?;
             let Ok(url) = parse(&url, base.as_deref()) else {
                 return Ok(Value::new_null(ctx));
             };
-            let store: Object = vault(&ctx)?.get(STORE)?;
-            Ok::<_, rquickjs::Error>(instance(&ctx, url, store.get("url")?)?.into_value())
+            Ok::<_, rquickjs::Error>(
+                instance(&ctx, url, required_prototype(&ctx, "URL")?)?.into_value(),
+            )
         },
     )?;
-    for (name, function) in [("canParse", can_parse), ("parse", parse_url)] {
-        define_method(&class, name, function.with_length(1)?)?;
-    }
     for (name, read, write) in COMPONENTS {
         let set = setter(ctx, move |state, value| {
             if let Some(url) = &mut state.url {

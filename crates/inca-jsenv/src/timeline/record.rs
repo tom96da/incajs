@@ -7,8 +7,8 @@ use rquickjs::convert::Coerced;
 use rquickjs::function::{IntoJsFunc, ParamRequirement, Params};
 use rquickjs::{Ctx, Exception, FromJs, Object, Result as JsResult, Value};
 
-use super::entries::{EntryData, Kind, append, entry, prototype, text, timeline_entries};
-use crate::class::{NEEDS_NEW, given, new_target_prototype, require};
+use super::entries::{EntryData, Kind, append, entry, prototype, timeline_entries};
+use crate::class::{NEEDS_NEW, given, new_target_prototype, require, text};
 use crate::time::now;
 
 /// The time origin, which `measure()` takes as 0.
