@@ -98,10 +98,10 @@ pub(super) fn size_spec_from(value: &AttributeValue) -> Option<LengthSpec> {
     }
 }
 
-/// A decimal value clamped to `0..=1`; `NaN` is unset.
+/// A finite decimal value clamped to `0..=1`; `NaN` and infinities are unset.
 pub(super) fn opacity(value: &AttributeValue) -> Option<f64> {
     number(value)
-        .filter(|n| !n.is_nan())
+        .filter(|n| n.is_finite())
         .map(|n| n.clamp(0.0, 1.0))
 }
 
@@ -312,15 +312,17 @@ mod tests {
             (opacity(num(0.0)), opacity(num(1.0))),
             (Some(0.0), Some(1.0))
         );
-        assert_eq!(opacity(num(f64::INFINITY)), Some(1.0));
-        assert_eq!(opacity(num(f64::NEG_INFINITY)), Some(0.0));
     }
 
-    #[test]
-    fn opacity_of_nan_or_a_non_numeric_string_is_unset() {
-        let opacity = |value| style_of(&[("opacity", value)]).opacity;
-        assert_eq!(opacity(num(f64::NAN)), None);
-        assert_eq!(opacity(text("half")), None);
+    #[rstest]
+    #[case::nan(num(f64::NAN))]
+    #[case::infinity(num(f64::INFINITY))]
+    #[case::negative_infinity(num(f64::NEG_INFINITY))]
+    #[case::overflowing_text(text("1e999"))]
+    #[case::negative_overflowing_text(text("-1e999"))]
+    #[case::non_numeric_string(text("half"))]
+    fn opacity_that_is_not_a_finite_number_is_unset(#[case] value: AttributeValue) {
+        assert_eq!(style_of(&[("opacity", value)]).opacity, None);
     }
 
     #[test]
