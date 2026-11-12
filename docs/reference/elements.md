@@ -124,7 +124,7 @@ zero, such as `"0"` or `"0.0"`, also works. Other units are not supported.
 | `padding` / `paddingX` / `paddingY` / `paddingTop` / `paddingRight` / `paddingBottom` / `paddingLeft` | px size (`>= 0`) | a negative, `NaN` or infinite value is ignored |
 | `margin` / `marginX` / `marginY` / `marginTop` / `marginRight` / `marginBottom` / `marginLeft` | px size (negative allowed) \| `"auto"` | |
 | `flexGrow` / `flexShrink` | number or decimal string (`>= 0`) | |
-| `opacity` | number or decimal string (`0` to `1`) | clamped; applies to descendants too |
+| `opacity` | number or decimal string (`0` to `1`) | clamped; `NaN`, infinity and text that overflows to infinity are ignored; applies to descendants too |
 | `minWidth` / `minHeight` / `maxWidth` / `maxHeight` | px size (`>= 0`) \| `"auto"` | `"auto"` is the default limit: none for the `max` keys, the content size for a flex item's `min` keys |
 
 Content taller than the window is cut off at the window edge; see
