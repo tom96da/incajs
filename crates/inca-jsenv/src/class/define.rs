@@ -9,9 +9,9 @@
 //! class) and [`define_namespace`] make a writable, configurable, non-enumerable one. A global
 //! that is an accessor goes through [`define_accessor`] on the global object.
 //!
-//! The `this` entries ([`define_this_getter`], [`define_this_accessor`], [`define_this_method`],
-//! [`getter_function`]) take a closure that gets the `this` value. The closure becomes the
-//! function. The property gets the attributes and the function names of its kind.
+//! The `this` entries ([`define_this_getter`], [`define_this_accessor`], [`define_this_method`])
+//! take a closure that gets the `this` value. The closure becomes the function. The property gets
+//! the attributes and the function names of its kind.
 
 use rquickjs::atom::PredefinedAtom;
 use rquickjs::function::{IntoJsFunc, Rest, This};
@@ -153,24 +153,6 @@ pub fn define_accessor<'js>(
     )
 }
 
-/// The function named `get <key>` that returns what `read` makes of the context and the `this`
-/// value of the call.
-///
-/// # Errors
-///
-/// Returns an error if the function cannot be built.
-pub fn getter_function<'js, R: IntoJs<'js> + 'js>(
-    ctx: &Ctx<'js>,
-    key: &str,
-    read: impl Fn(&Ctx<'js>, Value<'js>) -> JsResult<R> + 'js,
-) -> JsResult<Function<'js>> {
-    Function::new(
-        ctx.clone(),
-        move |ctx: Ctx<'js>, This(this): This<Value<'js>>| read(&ctx, this),
-    )?
-    .with_name(format!("get {key}"))
-}
-
 /// Defines the enumerable, configurable getter `key` of `target`, named `get <key>`. `read` gets
 /// the context and the `this` value of the call.
 ///
@@ -183,7 +165,11 @@ pub fn define_this_getter<'js, R: IntoJs<'js> + 'js>(
     key: &str,
     read: impl Fn(&Ctx<'js>, Value<'js>) -> JsResult<R> + 'js,
 ) -> JsResult<()> {
-    define_getter(target, key, getter_function(ctx, key, read)?)
+    let get = Function::new(
+        ctx.clone(),
+        move |ctx: Ctx<'js>, This(this): This<Value<'js>>| read(&ctx, this),
+    )?;
+    define_getter(target, key, get)
 }
 
 /// Defines the enumerable, configurable accessor `key` of `target`, with the functions `get <key>`
@@ -200,11 +186,15 @@ pub fn define_this_accessor<'js, R: IntoJs<'js> + 'js, A: FromJs<'js> + 'js>(
     read: impl Fn(&Ctx<'js>, Value<'js>) -> JsResult<R> + 'js,
     write: impl Fn(&Ctx<'js>, Value<'js>, A) -> JsResult<()> + 'js,
 ) -> JsResult<()> {
+    let get = Function::new(
+        ctx.clone(),
+        move |ctx: Ctx<'js>, This(this): This<Value<'js>>| read(&ctx, this),
+    )?;
     let set = Function::new(
         ctx.clone(),
         move |ctx: Ctx<'js>, This(this): This<Value<'js>>, value: A| write(&ctx, this, value),
     )?;
-    define_accessor(target, key, getter_function(ctx, key, read)?, set)
+    define_accessor(target, key, get, set)
 }
 
 /// Defines the writable, enumerable, configurable method `name` of `target` with `length`
@@ -547,15 +537,6 @@ mod tests {
                 .unwrap();
 
             assert!(got);
-        });
-    }
-
-    #[test]
-    fn getter_function_names_the_function_get_key() {
-        with_realm(|ctx| {
-            let function = getter_function(&ctx, "size", |_, _| Ok(1)).unwrap();
-
-            assert_eq!(function.get::<_, String>("name").unwrap(), "get size");
         });
     }
 

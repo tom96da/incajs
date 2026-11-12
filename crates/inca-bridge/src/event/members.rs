@@ -3,7 +3,7 @@
 
 use inca_jsenv::FunctionAccessor;
 use inca_jsenv::class::{
-    define_method, define_this_accessor, define_this_getter, define_this_method, getter_function,
+    define_method, define_this_accessor, define_this_getter, define_this_method,
 };
 use rquickjs::convert::Coerced;
 use rquickjs::function::{Opt, This};
@@ -28,6 +28,21 @@ pub(super) fn event_prototype<'js>(ctx: &Ctx<'js>) -> JsResult<Object<'js>> {
     define_methods(ctx, &proto)?;
     define_fields(ctx, &proto)?;
     Ok(proto)
+}
+
+/// The function named `get <key>` that returns what `read` makes of the `this` value. `isTrusted`
+/// is one function shared by every event and `eventId` is a non-enumerable accessor, so neither
+/// fits the `define_*` helpers.
+fn getter_function<'js, R: IntoJs<'js> + 'js>(
+    ctx: &Ctx<'js>,
+    key: &str,
+    read: impl Fn(&Ctx<'js>, Value<'js>) -> JsResult<R> + 'js,
+) -> JsResult<Function<'js>> {
+    Function::new(
+        ctx.clone(),
+        move |ctx: Ctx<'js>, This(this): This<Value<'js>>| read(&ctx, this),
+    )?
+    .with_name(format!("get {key}"))
 }
 
 /// The getter every event owns as `isTrusted`.
