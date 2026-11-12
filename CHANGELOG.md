@@ -10,6 +10,23 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- elements have `className` and `classList` ([b9e7bb7d](https://github.com/tom96da/incajs/commit/b9e7bb7d))
+- elements have `style` ([389b4561](https://github.com/tom96da/incajs/commit/389b4561))
+- elements have `dataset` ([05d96e98](https://github.com/tom96da/incajs/commit/05d96e98))
+- a string bound to `:style` applies as the whole inline style ([b77f91e0](https://github.com/tom96da/incajs/commit/b77f91e0))
+
+### Changed
+
+- the style attribute of an element lists the declarations in the order they were set ([315a810b](https://github.com/tom96da/incajs/commit/315a810b))
+- `setAttribute()` throws for an invalid attribute name in the renderer too ([6cd3adaf](https://github.com/tom96da/incajs/commit/6cd3adaf))
+- an opacity that is not a finite number is ignored ([19fc126e](https://github.com/tom96da/incajs/commit/19fc126e))
+
+### Fixed
+
+- `console` prints the fields of a URL and the pairs of its search parameters ([91bbf219](https://github.com/tom96da/incajs/commit/91bbf219))
+
 ## [0.0.31] - 2026-11-09
 
 ### Added
