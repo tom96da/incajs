@@ -362,6 +362,10 @@ importers:
         version: link:../../npm/linux-x64
 
   packages/core:
+    dependencies:
+      vue:
+        specifier: 'catalog:'
+        version: 3.5.43(@typescript/typescript6@6.0.2)
     devDependencies:
       '@vue/runtime-core':
         specifier: 'catalog:'

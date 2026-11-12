@@ -108,13 +108,17 @@
   },
   "peerDependencies": {
     "@vue/runtime-core": "catalog:",
-    "@vue/runtime-dom": "catalog:"
+    "@vue/runtime-dom": "catalog:",
+    "vue": "catalog:"
   },
   "peerDependenciesMeta": {
     "@vue/runtime-core": {
       "optional": true
     },
     "@vue/runtime-dom": {
+      "optional": true
+    },
+    "vue": {
       "optional": true
     }
   },
@@ -126,7 +130,8 @@
       "vue": {
         "peers": [
           "@vue/runtime-core",
-          "@vue/runtime-dom"
+          "@vue/runtime-dom",
+          "vue"
         ]
       }
     }
