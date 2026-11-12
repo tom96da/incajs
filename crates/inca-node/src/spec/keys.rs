@@ -11,6 +11,7 @@ use super::parse::edges_from;
 use super::parse::margin_length_from;
 use super::parse::non_negative;
 use super::parse::non_negative_px;
+use super::parse::number;
 use super::parse::opacity;
 use super::parse::overflow_pair_from_str;
 use super::parse::size_spec_from;
@@ -275,7 +276,7 @@ pub(crate) fn css_declaration(key: &str, value: &AttributeValue) -> Option<Strin
         ValueKind::PxOrAuto => margin_length_from(value).map(length_text),
         ValueKind::NonNegativePxOrAuto => size_spec_from(value).map(length_text),
         ValueKind::NonNegativeNumber => non_negative(value).map(js_number_text),
-        ValueKind::Opacity => opacity(value).map(js_number_text),
+        ValueKind::Opacity => number(value).filter(|n| n.is_finite()).map(js_number_text),
         ValueKind::Keyword(names) => value.as_str().and_then(|name| keyword_text(names, name)),
         ValueKind::KeywordPair(names) => {
             let text = value.as_str()?;
@@ -688,8 +689,8 @@ mod tests {
     #[case::margin_auto("margin_left", text("auto"), Some("auto"))]
     #[case::decimal("flex_grow", num(2.0), Some("2"))]
     #[case::opacity("opacity", num(0.5), Some("0.5"))]
-    #[case::opacity_beyond_one("opacity", num(2.0), Some("1"))]
-    #[case::opacity_negative("opacity", text("-1"), Some("0"))]
+    #[case::opacity_beyond_one("opacity", num(2.0), Some("2"))]
+    #[case::opacity_negative("opacity", text("-1"), Some("-1"))]
     #[case::opacity_overflowing_text("opacity", text("1e999"), None)]
     #[case::opacity_negative_overflowing_text("opacity", text("-1e999"), None)]
     #[case::opacity_infinity("opacity", num(f64::INFINITY), None)]
