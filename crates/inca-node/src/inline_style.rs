@@ -402,20 +402,30 @@ mod tests {
     }
 
     #[rstest]
-    #[case::beyond_one(2.0, "opacity: 2;", 1.0)]
-    #[case::negative(-1.0, "opacity: -1;", 0.0)]
-    fn a_finite_opacity_outside_the_range_is_kept_and_rendered_clamped(
+    #[case::beyond_one(2.0, "opacity: 1;", 1.0)]
+    #[case::negative(-1.0, "opacity: 0;", 0.0)]
+    fn a_finite_opacity_outside_the_range_is_serialized_and_rendered_clamped(
         #[case] value: f64,
         #[case] css: &str,
         #[case] rendered: f64,
     ) {
         let (mut tree, id) = block(&[("opacity", num(value))]);
-        assert_eq!(css_text(tree.get(id).unwrap()), css);
-        assert_eq!(build_spec(&tree, id).unwrap().style.opacity, Some(rendered));
+        let check = |tree: &VirtualTree| {
+            let node = tree.get(id).unwrap();
+            assert_eq!(css_text(node), css);
+            assert_eq!(style_length(node), 1);
+            assert_eq!(entry(tree, id).as_deref(), Some(css));
+            assert_eq!(build_spec(tree, id).unwrap().style.opacity, Some(rendered));
+        };
+        check(&tree);
 
-        tree.set_style_text(id, css).unwrap();
-        assert_eq!(css_text(tree.get(id).unwrap()), css);
-        assert_eq!(build_spec(&tree, id).unwrap().style.opacity, Some(rendered));
+        tree.set_style_property(id, "opacity", &value.to_string())
+            .unwrap();
+        check(&tree);
+
+        tree.set_style_text(id, &format!("opacity: {value}"))
+            .unwrap();
+        check(&tree);
     }
 
     #[test]
