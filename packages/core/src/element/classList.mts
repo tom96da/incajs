@@ -5,7 +5,7 @@ import { classList as listOf, getAttribute, setAttribute } from "../tree.mts";
 import { attributeText } from "./attributes.mts";
 import { isDestroyed } from "./lifecycle.mts";
 import type { NodeId } from "../types.mts";
-import type { IncaElement } from "./types.mts";
+import type { DOMTokenList, IncaElement } from "./types.mts";
 
 /** The members {@link classMembers} builds. */
 export type ClassMembers = Pick<IncaElement, "className" | "classList">;

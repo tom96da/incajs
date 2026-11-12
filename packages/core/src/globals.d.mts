@@ -10,39 +10,13 @@ declare global {
   var Document: { readonly prototype: object };
 
   /** The interface object of `element.dataset`, which scripts cannot construct. */
-  var DOMStringMap: { readonly prototype: object };
+  var DOMStringMap: { readonly prototype: import("incajs").DOMStringMap };
 
   /** The interface object of shadow roots, which the host never creates. */
   var ShadowRoot: { readonly prototype: object };
 
-  /** The live set of the tokens of an attribute. It is read from `classList`. */
-  interface DOMTokenList {
-    /** The number of tokens. */
-    readonly length: number;
-    /** The attribute text. Assigning sets the attribute. */
-    value: string;
-    toString(): string;
-    /** Returns the token at `index`, or `null`. */
-    item(index: number): string | null;
-    contains(token: string): boolean;
-    add(...tokens: string[]): void;
-    remove(...tokens: string[]): void;
-    toggle(token: string, force?: boolean): boolean;
-    replace(token: string, newToken: string): boolean;
-    /** Throws a `TypeError`, because `class` defines no supported tokens. */
-    supports(token: string): boolean;
-    forEach(
-      callback: (token: string, index: number, list: DOMTokenList) => void,
-      thisArg?: unknown,
-    ): void;
-    keys(): IteratorObject<number, undefined, unknown>;
-    values(): IteratorObject<string, undefined, unknown>;
-    entries(): IteratorObject<[number, string], undefined, unknown>;
-    [Symbol.iterator](): IteratorObject<string, undefined, unknown>;
-  }
-
   /** The interface object of token lists. It cannot be called or constructed. */
-  var DOMTokenList: { readonly prototype: DOMTokenList };
+  var DOMTokenList: { readonly prototype: import("incajs").DOMTokenList };
 
   /** The interface object of the `style` of an element, which a script cannot construct. */
   var CSSStyleDeclaration: { readonly prototype: import("incajs").CSSStyleDeclaration };

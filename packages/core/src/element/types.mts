@@ -113,6 +113,32 @@ export interface DOMStringMap {
   [name: string]: string | undefined;
 }
 
+/** The live set of the tokens of the `class` attribute. It is read from `classList`. */
+export interface DOMTokenList {
+  /** The number of tokens. */
+  readonly length: number;
+  /** The attribute text. Assigning sets the attribute. */
+  value: string;
+  toString(): string;
+  /** Returns the token at `index`, or `null`. */
+  item(index: number): string | null;
+  contains(token: string): boolean;
+  add(...tokens: string[]): void;
+  remove(...tokens: string[]): void;
+  toggle(token: string, force?: boolean): boolean;
+  replace(token: string, newToken: string): boolean;
+  /** Throws a `TypeError`, because `class` defines no supported tokens. */
+  supports(token: string): boolean;
+  forEach(
+    callback: (token: string, index: number, list: DOMTokenList) => void,
+    thisArg?: unknown,
+  ): void;
+  keys(): IteratorObject<number, undefined, unknown>;
+  values(): IteratorObject<string, undefined, unknown>;
+  entries(): IteratorObject<[number, string], undefined, unknown>;
+  [Symbol.iterator](): IteratorObject<string, undefined, unknown>;
+}
+
 /** A live, read-only list of the attributes of an element in the order they were set. */
 export interface NamedNodeMap {
   readonly [index: number]: Attr;
