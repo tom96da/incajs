@@ -61,13 +61,23 @@ const isSendable = (value: unknown): value is string | number =>
 // the diff runs against this snapshot instead of the previous value.
 const sentStyles = new WeakMap<IncaElement, Map<string, string | number>>();
 
+// The elements whose inline style was last set from a string.
+const styleTexts = new WeakSet<IncaElement>();
+
 function patchStyle(core: IncaCore, el: IncaElement, nextValue: unknown): void {
+  let sent = sentStyles.get(el);
+  if (!sent) sentStyles.set(el, (sent = new Map()));
+  if (typeof nextValue === "string") {
+    core.setAttribute(el.__node_id, "style", nextValue);
+    sent.clear();
+    styleTexts.add(el);
+    return;
+  }
+  if (styleTexts.delete(el)) core.setAttribute(el.__node_id, "style", "");
   const next =
     typeof nextValue === "object" && nextValue !== null
       ? (nextValue as Record<string, unknown>)
       : {};
-  let sent = sentStyles.get(el);
-  if (!sent) sentStyles.set(el, (sent = new Map()));
 
   let removed = false;
   for (const key of sent.keys()) {
@@ -303,16 +313,15 @@ const BOOLEAN_ATTRIBUTES = new Set([
  *
  * ### `style`
  *
- * An object (per `:style="{...}"`) is diffed against the entries already
- * sent for this element.
+ * A string is the whole inline style. The host parses its declarations and replaces every
+ * declaration set before. An object is diffed against the entries already sent for this element.
  * - `core.setStyle` runs for each entry that is new or changed.
- * - `core.removeStyle` runs for each sent entry that is now absent, `null`,
- *   or not a string/number. After a removal, `core.setStyle` runs again for
- *   every remaining string/number entry.
- * - A string or `null` `style` removes every entry.
- * - A key takes kebab-case (`flex-direction`) or camelCase (`flexDirection`).
- *   If an object names one property more than once, the value set most
- *   recently applies.
+ * - `core.removeStyle` runs for each sent entry that is now absent, `null`, or not a string or
+ *   number. After a removal, `core.setStyle` runs again for every remaining string or number entry.
+ * - An object that follows a string starts from an empty style.
+ * - `null` and `undefined` remove every declaration.
+ * - A key takes kebab-case (`flex-direction`) or camelCase (`flexDirection`). If an object names
+ *   one property more than once, the value set most recently applies.
  *
  * ### `onXxx`
  *

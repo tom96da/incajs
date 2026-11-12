@@ -227,15 +227,6 @@ describe("style", () => {
     expect(core.setStyle).toHaveBeenCalledTimes(2);
   });
 
-  it("removes every sent key when the style becomes a string", () => {
-    const other = { ...el, __node_id: 2 };
-    patchProp(other, "style", null, { gap: 8 }, undefined, null);
-    patchProp(other, "style", { gap: 8 }, "color: red", undefined, null);
-
-    expect(core.setStyle).toHaveBeenCalledExactlyOnceWith(2, "gap", 8);
-    expect(core.removeStyle).toHaveBeenCalledExactlyOnceWith(2, "gap");
-  });
-
   it("applies an in-place change when prev and next are the same object", () => {
     const other = { ...el, __node_id: 3 };
     const style: Record<string, unknown> = { gap: 8, width: 1 };
