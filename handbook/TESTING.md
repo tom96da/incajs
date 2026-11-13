@@ -63,26 +63,22 @@ All of the following must pass:
 
 ### Test placement
 
-- **Unit tests**: `*.test.mts` next to the module it tests, mocking `globalThis.__inca_native__`; the mock of
-  `addEventListener` receives the function as its third argument. No real QuickJS engine runs under
-  `pnpm test`. A barrel (`src/index.mts`) re-exports only, and its modules carry the tests.
+- **Unit tests**: `*.test.mts` next to the module it tests, mocking `globalThis.__inca_native__`. No
+  real QuickJS engine runs under `pnpm test`. A barrel (`src/index.mts`) re-exports only, and its
+  modules carry the tests.
 - **Integration tests**: a `tests/` directory at the package root, for what a package's unit tests
   can't reach with mocks.
 - **Tests that need both languages**: the root `tests/` package, see
   [Cross-language tests](#cross-language-tests-tests).
-- **QuickJS run**: `pnpm --filter incajs test:quickjs [<file>...]` runs every test file of
-  `packages/core` in the quickjs-ng build of `quickjs-emscripten`. The run is not part of
-  `pnpm test` or CI.
-  - The tool in `packages/core/tests/quickjs/` imports nothing from the source of `packages/core`.
-  - `quickjs.config.mts` holds the core-specific parts: plugins for the `node:` modules, stubs and
-    the extra modules a test loads with a dynamic `import()`.
+- **QuickJS run**: `pnpm -F incajs test:quickjs [<file>...]` runs the test files of `packages/core`,
+  `src/**/*.test.mts` and `tests/*.test.mts`, in QuickJS through `vitest-pool-quickjs`, configured
+  in `vitest.quickjs.config.mts`. The run is not part of `pnpm test`.
 
 ### Required checks
 
 **A change isn't done until root `pnpm test` passes with no warnings.** A run of one package
 (`pnpm --filter <pkg> test`) can miss a failure in the tests of another package that uses it. CI
-also runs `pnpm -r build`, which builds every workspace member that defines
-a build script: the two packages, the examples and the docs site.
+also builds every workspace member except the docs site.
 
 Every package under `packages/*` defines the same scripts:
 
@@ -97,12 +93,8 @@ Run `format` from the root. `oxfmt.config.ts` holds the import-sorting rules,
 and only the root script (`oxfmt --check --disable-nested-config .`) applies
 them. A package's own `format` can pass on imports the root one rejects.
 
-### Workspace imports and build output
+### Build output
 
-- A package that tests against another workspace package sets the `"source"`
-  condition on `resolve.conditions` and `ssr.resolve.conditions` in its own
-  `vitest.config.mts`. Vitest does not read `customConditions` from
-  `tsconfig.base.json`.
 - A test that needs its own package's build output produces it itself on
   every run, into a scratch directory.
 
@@ -138,10 +130,9 @@ All of the following must pass:
 
 - `pnpm -F incajs -F @incajs/cli build`, then
   `cargo clippy -p inca-tests --all-targets -- -D warnings` and `cargo test -p inca-tests`
-- `cargo build -p inca-host`, then `pnpm -F @incajs/e2e-tests test`. CI runs the e2e step under
-  `xvfb-run -a`.
+- `cargo build -p inca-host`, then `pnpm -F @incajs/e2e-tests test`
 
-On CI, only `rust-node-ubuntu` lints and type-checks `tests/`.
+On CI, the Rust & Node jobs lint, format-check and type-check `tests/`.
 
 ## CI
 
