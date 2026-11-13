@@ -257,7 +257,7 @@ jobs:
         run: pnpm ci
 
       - name: Build
-        run: pnpm -r build
+        run: pnpm -r -F './packages/*' build
 
       - name: Copy the license files into the packages
         run: make licenses
