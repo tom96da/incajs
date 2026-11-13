@@ -329,6 +329,23 @@ mod tests {
     }
 
     #[test]
+    fn clone_node_gives_null_for_a_copy_without_a_namespace_and_prefix() {
+        let (engine, _host) = engine_with_family();
+
+        let strict: bool = engine
+            .eval(
+                r"
+                const el = n.createElementNS(null, 'a')[0];
+                const copy = n.cloneNode(el, false)[0];
+                copy[2] === null && copy[3] === null;
+                ",
+            )
+            .unwrap();
+
+        assert!(strict);
+    }
+
+    #[test]
     fn clone_node_returns_a_pair_for_text_and_comment_copies() {
         let (engine, _host) = engine_with_family();
 
