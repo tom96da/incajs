@@ -1700,14 +1700,13 @@ A fixed entry is deleted and its ID is never reused.
   and `window` is not a global, so `inca dev` with Vapor mode throws at mount. Fix: guard the
   `window` read in the host, or provide a `window` global.
 
-- **B-318 A prefixed HTML element with a void name writes an end tag**
+- **B-318 A prefixed HTML element with a void name writes its child and an end tag**
   `Units: node · Size: S · Impact: Low`
 
-  For an element made with `createElementNS()` in the HTML namespace, with a prefix and a void
-  local name (`x:br`, `x:img`, `x:input`) and a child, Chromium and WebKit write `<p><x:br></p>`
-  with neither child nor end tag, and Firefox writes `<p><br></p>`. In the SVG namespace Chromium
-  and WebKit write `<x:br>in</x:br>` and Firefox writes `<br>in</br>`, which drops the prefix. The
-  host writes the child and the end tag in the HTML namespace too (`<p><x:br>in</x:br></p>`).
+  For an element made with `createElementNS()` in the HTML namespace, with a prefix, a void local
+  name (`x:br`, `x:img`, `x:input`) and a child, Chromium and WebKit write `<p><x:br></p>` with
+  neither child nor end tag, and Firefox writes `<p><br></p>`. The host writes the child and the
+  end tag (`<p><x:br>in</x:br></p>`).
 
 - **B-319 Creating an element and parsing HTML cost 5 to 10 percent more**
   `Units: core · Size: M · Impact: Low`
@@ -1719,3 +1718,15 @@ A fixed entry is deleted and its ID is never reused.
   share of each member is not measured. Fix: define the member functions once on a shared
   prototype and keep the state of an element in one record, then measure again with a build of the
   parent commit of each member.
+
+- **B-320 An invalid inline style value hides the value of a rule**
+  `Units: node · Size: M · Impact: Low`
+
+  `set_style`, the path of an object bound to `:style`, stores a value that the reader of its key
+  rejects: a negative width, `NaN`, a non-finite opacity or text such as `half`. The computed
+  style puts the inline layer over the rules, so the rejected value wins and then reads as unset,
+  and the value of a matching rule is lost. Browsers ignore an invalid declaration, so the rule
+  applies. `setProperty()` and `setAttribute("style", ...)` reject before storing and keep the
+  earlier value. Fix: skip an inline value that the reader of its key rejects when the computed
+  style is built, or reject it in `set_style`.
+
