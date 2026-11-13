@@ -15,6 +15,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+// `UrlInstance` and `ParamsInstance` derive `JsLifetime`. Only `UrlInstance` holds a JS value, its
+// `searchParams` object, and its trace names it.
 #[allow(clippy::disallowed_types)]
 use rquickjs::JsLifetime;
 use rquickjs::{Class, Ctx, Object, Result as JsResult, Value};
@@ -142,6 +144,7 @@ mod instance {
 use instance::UrlInstance;
 
 /// A `URLSearchParams` instance.
+// `ParamsInstance` holds the list of pairs and no JS value, so the derive is sound.
 #[allow(clippy::disallowed_macros)]
 #[derive(JsLifetime)]
 struct ParamsInstance(Shared);

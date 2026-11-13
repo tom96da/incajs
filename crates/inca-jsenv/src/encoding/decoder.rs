@@ -6,6 +6,7 @@
 use std::cell::RefCell;
 
 use encoding_rs::{DecoderResult, Encoding, UTF_8, UTF_16BE, UTF_16LE};
+// `Decoder` derives `JsLifetime`, and the class holds a codec and no JS value.
 #[allow(clippy::disallowed_types)]
 use rquickjs::JsLifetime;
 use rquickjs::function::{Opt, This};
@@ -24,6 +25,7 @@ const NOT_VALID: &str =
 const NOT_A_DECODER: &str = "the receiver is not a TextDecoder. call the method on an instance";
 
 /// A `TextDecoder` instance.
+// `Decoder` holds a codec and no JS value, so the derive is sound.
 #[allow(clippy::disallowed_macros)]
 #[derive(JsLifetime)]
 pub(super) struct Decoder {

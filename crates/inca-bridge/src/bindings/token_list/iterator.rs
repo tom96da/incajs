@@ -9,6 +9,8 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+// `TokenListIterator` derives `JsLifetime`, and the class holds a node id and a position and no JS
+// value.
 #[allow(clippy::disallowed_types)]
 use rquickjs::JsLifetime;
 use rquickjs::atom::PredefinedAtom;
@@ -36,6 +38,7 @@ pub(super) enum Kind {
 }
 
 /// A `DOMTokenList` iterator. It holds the node id and the position, and no JS value.
+// `TokenListIterator` holds a node id and a position and no JS value, so the derive is sound.
 #[allow(clippy::disallowed_macros)]
 #[derive(JsLifetime)]
 struct TokenListIterator {

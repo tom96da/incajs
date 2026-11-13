@@ -9,6 +9,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+// `TokenList` derives `JsLifetime`, and the class holds a node id and no JS value.
 #[allow(clippy::disallowed_types)]
 use rquickjs::JsLifetime;
 use rquickjs::atom::PredefinedAtom;
@@ -31,6 +32,7 @@ use crate::interfaces::define_unconstructable;
 use inca_jsenv::required_prototype;
 
 /// A `DOMTokenList` instance. It holds the node id and no JS value.
+// `TokenList` holds a node id and no JS value, so the derive is sound.
 #[allow(clippy::disallowed_macros)]
 #[derive(JsLifetime)]
 struct TokenList {

@@ -6,6 +6,8 @@
 
 use std::cell::{Cell, RefCell};
 
+// `IncaEvent`, `Held` and `State` derive `JsLifetime`. `IncaEvent` holds JS values through `Held`,
+// whose trace names them. `State` holds none.
 #[allow(clippy::disallowed_types)]
 use rquickjs::JsLifetime;
 use rquickjs::class::{JsClass, Readable, Trace, Tracer};
@@ -66,6 +68,7 @@ pub(super) use held::Held;
 /// parameter, so a JS value cannot be added here. A walk sets the cells
 /// between listener calls. `initEvent` sets the type and the flags of an idle
 /// event.
+// `State` holds plain fields and no JS value, so the derive is sound.
 #[allow(clippy::disallowed_macros)]
 #[derive(JsLifetime)]
 pub(super) struct State {

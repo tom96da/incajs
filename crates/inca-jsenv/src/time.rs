@@ -6,6 +6,7 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
+// `PerformanceInstance` derives `JsLifetime`, and the class holds a number and no JS value.
 #[allow(clippy::disallowed_types)]
 use rquickjs::JsLifetime;
 use rquickjs::object::Property;
@@ -27,6 +28,7 @@ const PERFORMANCE: &str = "performance";
 
 /// The `Performance` instance. `time_origin` is the epoch milliseconds of the moment
 /// `performance.now()` is 0.
+// `PerformanceInstance` holds a number and no JS value, so the derive is sound.
 #[allow(clippy::disallowed_macros)]
 #[derive(JsLifetime)]
 pub(crate) struct PerformanceInstance {

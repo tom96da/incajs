@@ -729,6 +729,7 @@ mod tests {
         assert_eq!(before, after);
     }
 
+    // The test keeps `Persistent` values alive on purpose and frees them before the runtime.
     #[allow(clippy::disallowed_types)]
     #[test]
     fn a_value_that_is_kept_alive_moves_a_counter() {

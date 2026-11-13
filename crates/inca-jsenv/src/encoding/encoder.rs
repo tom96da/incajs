@@ -3,6 +3,7 @@
 
 //! The `TextEncoder` class and the UTF-8 encoding of a WTF-8 string.
 
+// `Encoder` derives `JsLifetime`, and the class has no state and no JS value.
 #[allow(clippy::disallowed_types)]
 use rquickjs::JsLifetime;
 use rquickjs::function::{Opt, This};
@@ -23,6 +24,7 @@ const NOT_A_UINT8_ARRAY: &str = "the destination is not a Uint8Array. pass a Uin
 const NOT_AN_ENCODER: &str = "the receiver is not a TextEncoder. call the method on an instance";
 
 /// A `TextEncoder` instance. It has no state.
+// `Encoder` has no state, so the derive is sound.
 #[allow(clippy::disallowed_macros)]
 #[derive(JsLifetime)]
 pub(super) struct Encoder;

@@ -12,6 +12,7 @@
 
 use std::cmp::Ordering;
 
+// `EntryInstance` derives `JsLifetime`, and the class holds plain entry data and no JS value.
 #[allow(clippy::disallowed_types)]
 use rquickjs::JsLifetime;
 use rquickjs::function::{Constructor, This};
@@ -69,6 +70,7 @@ pub(super) struct EntryData {
 }
 
 /// A `PerformanceMark` or a `PerformanceMeasure`. The prototype tells which.
+// `EntryInstance` holds the entry name and times and no JS value, so the derive is sound.
 #[allow(clippy::disallowed_macros)]
 #[derive(JsLifetime)]
 pub(super) struct EntryInstance(pub(super) EntryData);

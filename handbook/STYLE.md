@@ -39,6 +39,7 @@ value kept past its runtime aborts the process when the runtime drops.
 - **Scope**: lift the restriction per item, with an `allow` at the use. A type with a lifetime
   parameter sits in a module of its own, and the `allow` goes on that module. Don't lift it for a
   whole file with `#![allow]`.
+- **Reason**: each lifting carries a one-line comment with the reason.
 
 ## Prose
 

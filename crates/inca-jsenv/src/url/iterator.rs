@@ -5,6 +5,7 @@
 
 use std::cell::Cell;
 
+// `ParamsIterator` derives `JsLifetime`, and the class holds no JS value.
 #[allow(clippy::disallowed_types)]
 use rquickjs::JsLifetime;
 use rquickjs::atom::PredefinedAtom;
@@ -23,6 +24,7 @@ pub(super) enum Kind {
 }
 
 /// A `URLSearchParams Iterator` instance. It holds no JS value.
+// `ParamsIterator` holds no JS value, so the derive is sound.
 #[allow(clippy::disallowed_macros)]
 #[derive(JsLifetime)]
 pub(super) struct ParamsIterator {

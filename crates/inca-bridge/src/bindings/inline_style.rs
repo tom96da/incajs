@@ -10,6 +10,7 @@ use std::cell::RefCell;
 use std::iter::once;
 use std::rc::Rc;
 
+// `IncaStyle` derives `JsLifetime`, and the class holds a node id and no JS value.
 #[allow(clippy::disallowed_types)]
 use rquickjs::JsLifetime;
 use rquickjs::convert::Coerced;
@@ -32,6 +33,7 @@ use crate::interfaces::define_unconstructable;
 use inca_jsenv::required_prototype;
 
 /// A `CSSStyleDeclaration` instance. It holds the node id and no JS value.
+// `IncaStyle` holds a node id and no JS value, so the derive is sound.
 #[allow(clippy::disallowed_macros)]
 #[derive(JsLifetime)]
 pub(super) struct IncaStyle {
