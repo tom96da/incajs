@@ -10,6 +10,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.0.32] - 2026-11-14
+
 ### Added
 
 - elements have `className` and `classList` ([b9e7bb7d](https://github.com/tom96da/incajs/commit/b9e7bb7d))
@@ -630,7 +632,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - prebuilt `inca-host` binaries for linux-x64, linux-arm64, and darwin-arm64, resolved automatically per platform
 - click event dispatch from the native tree back into JS
 
-[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.31...HEAD
+[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.32...HEAD
+[0.0.32]: https://github.com/tom96da/incajs/releases/tag/v0.0.32
 [0.0.31]: https://github.com/tom96da/incajs/releases/tag/v0.0.31
 [0.0.30]: https://github.com/tom96da/incajs/releases/tag/v0.0.30
 [0.0.29]: https://github.com/tom96da/incajs/releases/tag/v0.0.29
