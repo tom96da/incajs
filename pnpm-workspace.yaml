@@ -8,15 +8,15 @@ packages:
   - "docs"
   - "tests"
 catalog:
-  "@types/node": ^26.6.4
-  "@vitest/mocker": ^5.0.3
+  "@types/node": ^26.6.6
+  "@vitest/mocker": ^5.1.0
   "@vue/runtime-core": ^3.5.43
   "@vue/runtime-dom": ^3.5.43
-  oxfmt: ^0.72.0
-  oxlint: ^1.87.0
+  oxfmt: ^0.78.0
+  oxlint: ^1.93.0
   rolldown: ~1.2.15
   vite: ~8.3.4
-  vitest: ^5.0.3
+  vitest: ^5.1.0
   vue: ^3.5.43
 overrides:
   "@arethetypeswrong/core>typescript": 6.0.3

@@ -104,7 +104,7 @@
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "rolldown": "catalog:",
-    "vitest-pool-quickjs": "^0.1.0"
+    "vitest-pool-quickjs": "^0.2.2"
   },
   "peerDependencies": {
     "@vue/runtime-core": "catalog:",
