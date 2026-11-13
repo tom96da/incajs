@@ -20,6 +20,10 @@ History is in [PLAN.md](./PLAN.md) and [CHANGELOG.md](../CHANGELOG.md).
 
 ### Recently done
 
+- **Element members**: `className`, `classList`, `style` and `dataset`. A string bound to `:style`
+  applies as the whole inline style.
+- **Namespaces**: `document.createElementNS()` creates elements with a namespace, and an element
+  reports its namespace and prefix. `innerHTML` keeps svg and math content in its namespace.
 - **Nodes**: tree links, the mutation members, fragments, cloning and the
   relations between nodes. Template elements hold their content, and HTML
   strings parse into the tree through `innerHTML` and `insertAdjacentHTML`,
@@ -29,15 +33,11 @@ History is in [PLAN.md](./PLAN.md) and [CHANGELOG.md](../CHANGELOG.md).
   keeps component state under HMR.
 - **Built-ins**: the timers, `requestAnimationFrame()`, `URL` and
   `performance.now()`. `incajs/globals` declares the types of every built-in
-  global.
+  global, and `console` prints the fields of a `URL`.
 
 ### In progress
 
-- **A base for Vue Vapor mode**: the class, style and dataset members of an
-  element, and element namespaces.
-- **Built-ins as the web expects them**: definitions written one way, so that
-  libraries find the globals they probe, and a `URL` that prints its fields in
-  the console.
+None at the moment.
 
 ### Not started
 
@@ -51,6 +51,7 @@ History is in [PLAN.md](./PLAN.md) and [CHANGELOG.md](../CHANGELOG.md).
 - **Release**: `v0.0.31`.
 - **Node.js**: 22.18 or newer.
 - **Toolchain**: zed `v1.24.3` for `gpui`, rquickjs `0.14.0`.
+- **QuickJS test run**: `vitest-pool-quickjs` `^0.2.2`.
 - **Linux binaries**: built in an `ubuntu:22.04` container by both workflows,
   for a glibc 2.35 floor.
 - **macOS**: host packages for arm64 and x64 (Intel).
@@ -70,12 +71,12 @@ During development, the `inca` CLI runs as a Node parent process. It bundles
 with Vite, launches the host as a child and sends rebuilds and HMR updates
 over the child's stdio.
 
-- [ARCHITECTURE.md](./ARCHITECTURE.md) describes the layers, the system
-  diagram and how HMR reaches the embedded runtime.
-- [FFI.md](./FFI.md) lists the functions, tags and style props JS can call on
-  the host.
+- [ARCHITECTURE.md](./ARCHITECTURE.md) introduces the concepts: the layers, how they connect and
+  the development window.
+- [FFI.md](./FFI.md) holds the contract of the JS↔Rust boundary: the functions, tags and style
+  props JS can call on the host, and the rules both sides keep.
 - [PROTOCOL.md](./PROTOCOL.md) defines the messages between the host and the
-  Node process that spawns it.
+  Node process that spawns it, and how HMR updates reach the host.
 - [FAILURES.md](./FAILURES.md) records what the CLI refuses and what it falls
   back from.
 
