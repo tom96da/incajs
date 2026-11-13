@@ -19,14 +19,26 @@ Each place that carries text has one role.
 
 ## Enforcement
 
-A convention that a tool can check is enforced by one of two tools.
+A convention that a tool can check is enforced by one of three tools.
 
 - **`oxlint`** checks the code against rules, configured in
   [`oxlint.config.ts`](../oxlint.config.ts).
 - **`oxfmt`** formats the code, configured in
   [`oxfmt.config.ts`](../oxfmt.config.ts).
+- **`clippy`** checks the Rust code against lints, configured in
+  [`clippy.toml`](../clippy.toml).
 
 A convention without a rule is a review criterion.
+
+## Restricted Rust types
+
+`clippy.toml` restricts each item (a type, a macro or a derive) whose use can let a value outlive
+the JS runtime that owns what it refers to, for example `rquickjs::Persistent` and `JsLifetime`. A
+value kept past its runtime aborts the process when the runtime drops.
+
+- **Scope**: lift the restriction per item, with an `allow` at the use. A type with a lifetime
+  parameter sits in a module of its own, and the `allow` goes on that module. Don't lift it for a
+  whole file with `#![allow]`.
 
 ## Prose
 
