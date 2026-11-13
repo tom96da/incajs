@@ -42,13 +42,8 @@ impl Context {
         }
     }
 
-    /// The context that `node` stands for. The local name of an HTML element is in lower case.
+    /// The context that `node` stands for, with the local name it was created with.
     pub(super) fn of(node: &VirtualNode) -> Self {
-        let local_name = if node.in_html_namespace() {
-            node.tag_name().to_ascii_lowercase()
-        } else {
-            node.tag_name().to_owned()
-        };
         let holds_html = node.attributes().get("encoding").is_some_and(|value| {
             let text = value.text();
             text.eq_ignore_ascii_case("text/html")
@@ -56,7 +51,7 @@ impl Context {
         });
         Self {
             namespace: node.namespace_uri().map(Namespace::from),
-            local_name,
+            local_name: node.tag_name().to_owned(),
             integration_point: holds_html,
         }
     }
@@ -725,6 +720,21 @@ mod tests {
             names_of(&html),
             vec![("title", Some(SVG)), ("#text", None), ("div", Some(HTML))]
         );
+    }
+
+    #[rstest]
+    #[case::lower_case("title", vec![("#text", None)])]
+    #[case::upper_case("TITLE", vec![("b", Some(HTML)), ("#text", None)])]
+    fn an_html_context_parses_with_the_name_it_was_created_with(
+        #[case] name: &str,
+        #[case] expected: Vec<(&str, Option<&str>)>,
+    ) {
+        let mut tree = VirtualTree::new();
+        let node = tree.create_element_ns(Some(HTML), None, name).unwrap();
+
+        let html = tree.parse_html(Some(node), "<b>x").unwrap();
+
+        assert_eq!(names_of(&html), expected);
     }
 
     #[test]

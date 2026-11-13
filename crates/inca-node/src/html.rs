@@ -219,8 +219,8 @@ pub(super) mod tests {
     }
 
     #[test]
-    fn the_context_tag_ignores_case() {
-        assert_eq!(result_shape(Some("TR"), "<td>a</td>"), "td(\"a\")");
+    fn the_context_tag_keeps_its_case() {
+        assert_eq!(result_shape(Some("TR"), "<td>a</td>"), "\"a\"");
     }
 
     #[rstest]
