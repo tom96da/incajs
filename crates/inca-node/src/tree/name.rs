@@ -24,17 +24,16 @@ impl VirtualNode {
         Self::is_element_tag(&self.tag_name)
     }
 
-    /// Whether the node is an HTML `template` element, whatever the case of its name.
+    /// Whether the node is an HTML `template` element.
     #[must_use]
     pub fn is_template(&self) -> bool {
-        self.is_html_ci("template")
+        self.is_html("template")
     }
 
-    /// Whether the node is a `style` element: an HTML one whatever the case of its name, or an SVG
-    /// one named `style` exactly.
+    /// Whether the node is a `style` element of the HTML or the SVG namespace.
     #[must_use]
     pub fn is_style(&self) -> bool {
-        self.is_html_ci("style") || (self.namespace == Some(ns!(svg)) && self.tag_name == "style")
+        self.is_html("style") || (self.namespace == Some(ns!(svg)) && self.tag_name == "style")
     }
 
     /// Whether the node is an HTML `button` or `input`, which takes focus without a `tabindex`.
@@ -65,13 +64,6 @@ impl VirtualNode {
     #[must_use]
     pub fn is_html(&self, local_name: &str) -> bool {
         self.in_html_namespace() && self.tag_name == local_name
-    }
-
-    /// Whether the node is an element of the HTML namespace named `local_name`, whatever the case
-    /// of either.
-    #[must_use]
-    pub fn is_html_ci(&self, local_name: &str) -> bool {
-        self.in_html_namespace() && self.tag_name.eq_ignore_ascii_case(local_name)
     }
 
     /// The name with its prefix: `prefix:local`, or the local name alone.
@@ -183,30 +175,14 @@ mod tests {
     }
 
     #[rstest]
-    #[case::html_other_case(Some(HTML), "DIV", "div", true)]
-    #[case::html_other_name(Some(HTML), "div", "span", false)]
-    #[case::svg(Some(SVG), "div", "div", false)]
-    fn is_html_ci_needs_the_html_namespace_and_ignores_the_case(
-        #[case] namespace: Option<&str>,
-        #[case] local_name: &str,
-        #[case] asked: &str,
-        #[case] expected: bool,
-    ) {
-        let mut tree = VirtualTree::new();
-        let id = tree.create_element_ns(namespace, None, local_name).unwrap();
-
-        assert_eq!(tree.get(id).unwrap().is_html_ci(asked), expected);
-    }
-
-    #[rstest]
     #[case::html(Some(HTML), "style", true)]
-    #[case::html_other_case(Some(HTML), "STYLE", true)]
+    #[case::html_other_case(Some(HTML), "STYLE", false)]
     #[case::svg(Some(SVG), "style", true)]
     #[case::svg_other_case(Some(SVG), "STYLE", false)]
     #[case::other_namespace(Some("urn:x"), "style", false)]
     #[case::no_namespace(None, "style", false)]
     #[case::html_other_name(Some(HTML), "div", false)]
-    fn is_style_ignores_the_case_in_the_html_namespace_only(
+    fn is_style_needs_the_exact_name_in_the_html_or_svg_namespace(
         #[case] namespace: Option<&str>,
         #[case] local_name: &str,
         #[case] expected: bool,

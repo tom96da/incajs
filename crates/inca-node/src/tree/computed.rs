@@ -452,7 +452,7 @@ mod tests {
     }
 
     #[test]
-    fn a_style_tag_in_capitals_holds_rules() {
+    fn a_style_tag_in_capitals_holds_no_rules() {
         let mut f = Fixture::new();
         let style = f.add(f.root, "STYLE", "sheet");
         let text_node = f.tree.create_node(TEXT_TAG).unwrap();
@@ -460,7 +460,7 @@ mod tests {
         f.tree.append_child(style, text_node).unwrap();
         let a = f.boxed("a");
 
-        assert_eq!(f.computed(a, "width"), Some(text("1px")));
+        assert_eq!(f.computed(a, "width"), None);
     }
 
     #[test]

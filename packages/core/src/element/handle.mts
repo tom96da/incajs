@@ -299,7 +299,7 @@ export function createIncaElement(
   for (const [member, value] of Object.entries({ tagName, localName, namespaceURI, prefix })) {
     Object.defineProperty(fields, member, { value, enumerable: true });
   }
-  const template = html && localName.toLowerCase() === "template";
+  const template = html && localName === "template";
   if (template) {
     Object.defineProperty(fields, "content", {
       get: () => existingContent(element),

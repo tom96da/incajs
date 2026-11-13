@@ -46,12 +46,10 @@ mod tests {
     use crate::selector::query_selector;
     use crate::tests::{Fixture, HTML, SVG, children, node, text};
 
-    #[rstest]
-    #[case::lowercase("template")]
-    #[case::uppercase("TEMPLATE")]
-    fn a_template_has_an_empty_parentless_content_it_owns(#[case] tag: &str) {
+    #[test]
+    fn a_template_has_an_empty_parentless_content_it_owns() {
         let mut tree = VirtualTree::new();
-        let template = node(&mut tree, tag);
+        let template = node(&mut tree, "template");
 
         let content = tree.template_content(template).unwrap();
 
@@ -65,6 +63,7 @@ mod tests {
     #[rstest]
     #[case::div("div")]
     #[case::style("style")]
+    #[case::uppercase("TEMPLATE")]
     fn another_element_has_no_content(#[case] tag: &str) {
         let mut tree = VirtualTree::new();
         let element = node(&mut tree, tag);

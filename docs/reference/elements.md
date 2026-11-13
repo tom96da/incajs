@@ -225,8 +225,6 @@ with the differences below. The listener methods are described in
 - Attributes have no namespace. `xlink:href` is an attribute named `xlink:href`.
   `Attr.namespaceURI` and `Attr.prefix` read `null`, and the `NS` attribute methods
   are missing.
-- An element named `STYLE` or `TEMPLATE` made with `createElementNS()` and the HTML
-  namespace behaves as `style` or `template`.
 - An `<svg>` that a Vue template creates is an element of the HTML namespace:
   `namespaceURI` reads the HTML namespace, `tagName` reads `SVG` and attribute names
   such as `viewBox` are lower case.

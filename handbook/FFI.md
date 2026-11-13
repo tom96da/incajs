@@ -109,7 +109,7 @@ eight kinds:
 | `"#document"` | The top of the tree, the parent of the root container. It has no parent and holds at most one element and any number of comments. It is never laid out, painted or matched. |
 | `"#comment"` | A generic styled container that marks a comment stand-in. Selector matching treats it as no element. |
 | `"#fragment"` | A node that holds children and never has a parent. It is never connected, so layout, paint and focus skip it. Selector matching treats it as no element. The content of a template is a fragment that the template owns. |
-| `"template"` | A node that is never laid out or painted, with its children. It owns a `#fragment` as its content, created with it. `templateContent` returns its id. The content has no parent and never counts as connected. The tag is matched ignoring ASCII case. |
+| `"template"` | A node that is never laid out or painted, with its children. It owns a `#fragment` as its content, created with it. `templateContent` returns its id. The content has no parent and never counts as connected. |
 | anything else | A generic styled container (a GPUI `div()`). |
 
 ### Style prop vocabulary
