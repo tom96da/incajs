@@ -27,10 +27,10 @@ incajs/
 ├── handbook/
 │   ├── STRUCTURE.md         # this file
 │   ├── DEVELOPMENT.md       # project status, architecture links, guiding principles
-│   ├── ARCHITECTURE.md      # tech stack, system diagram, development window, HMR delivery design
+│   ├── ARCHITECTURE.md      # the concepts: tech stack, system diagram, development window
 │   ├── ROADMAP.md           # planned phased implementation (Vue 3 first, React later)
-│   ├── FFI.md               # JS↔Rust host bridge function surface
-│   ├── PROTOCOL.md          # dev protocol between the host binary and the Node process spawning it
+│   ├── FFI.md               # contract of the JS↔Rust host bridge
+│   ├── PROTOCOL.md          # dev protocol between the host binary and the Node process spawning it, and HMR delivery
 │   ├── PLAN.md              # checkbox-tracked, per-phase task breakdown of ROADMAP.md
 │   ├── BACKLOG.md           # unscheduled desktop-app gaps and QoL fixes, outside ROADMAP.md's phased plan
 │   ├── GIT.md               # commit message format and the commit-review policy

@@ -24,6 +24,8 @@ impl EventDispatcher {
         let state = Rc::downgrade(&self.state);
         let reporter = Rc::clone(&self.reporter);
         let wake = self.host.borrow().wake.clone();
+        // A foreground task on the main thread. It sleeps on the wake channel and one executor
+        // timer until the earliest timer is due.
         let task = cx.spawn(async move |cx| {
             loop {
                 let (wait, wants_frame) = match (host.upgrade(), state.upgrade()) {

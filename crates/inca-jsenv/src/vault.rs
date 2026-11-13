@@ -26,6 +26,7 @@ const OPEN_JS: &str = r"
     }
     ";
 
+// A call into an engine and the native calls inside it run on one thread, so the flag tracks it.
 thread_local! {
     /// Whether [`vault`] is calling the vault global on this thread.
     static OPENING: Cell<bool> = const { Cell::new(false) };

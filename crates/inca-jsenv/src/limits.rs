@@ -19,6 +19,7 @@ const TIME_LIMIT: &str = "timeLimit";
 /// The vault key that is `true` while the engine has a memory limit.
 const MEMORY_LIMITED: &str = "memoryLimited";
 
+// A call into an engine and the native calls inside it run on one thread, so the flag tracks it.
 thread_local! {
     /// Whether the interrupt handler stopped the latest call on this thread. The handler has no
     /// [`Ctx`], so the vault cannot carry it.

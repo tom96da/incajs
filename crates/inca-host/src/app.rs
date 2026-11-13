@@ -17,6 +17,9 @@
 //! every diagnostic, and the app's own `console`, go to stderr.
 //!
 //! Nothing here panics on a failure a user can cause.
+//!
+//! The JS runtime, the bridge and GPUI's `App` run on the main thread. GPUI
+//! builds the `App` there and holds it in an `Rc`.
 
 use std::cell::Cell;
 use std::env;

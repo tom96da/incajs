@@ -6,9 +6,9 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 # Dev protocol (host ↔ dev-client)
 
 The messages `inca-host` and the Node process that spawns it exchange during
-development. `@incajs/cli`'s `dev-client` is the Node end: it launches the
-host binary and speaks every message below. [FFI.md](./FFI.md) covers the
-other boundary, JS calling into Rust inside the host process.
+development, HMR delivery included. `@incajs/cli`'s `dev-client` is the Node end: it launches the
+host binary and speaks every message below. [FFI.md](./FFI.md) covers the other boundary, JS
+calling into Rust inside the host process.
 
 ## Transport
 
@@ -147,6 +147,21 @@ keeps the generated positions. The `stack` property a script reads from an
 `Error` itself holds the generated positions and names the file `filename` for
 its first compile and `filename?t=N` for a later one, where `N` is unique to
 each compile.
+
+## HMR delivery
+
+HMR runs on Vite's Runtime API (`vite/module-runner`).
+
+- The `ModuleRunner` runs inside QuickJS. Vite hands the evaluator `__vite_ssr_exports__` and
+  `__vite_ssr_import__` as same-realm objects, so the runner runs beside the evaluator. Only
+  `fetchModule` results and HMR payloads cross the boundary, as JSON.
+- A custom `ModuleRunnerTransport` carries those messages between the Node process and the host
+  over the stdio channel `dev-client` owns, as the `vite` notifications of
+  [Extending it](#extending-it).
+- The CLI's own evaluator runs the transformed module source inside QuickJS. It subclasses Vite's
+  `ESModulesEvaluator`. Its module step builds each module with `__inca_dev__.compile`, so a frame
+  the host reports names the module. The host maps the frame to the original source through the
+  inline source map that Vite appends ([Source maps](#source-maps)).
 
 ## Failure handling
 

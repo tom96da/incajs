@@ -150,9 +150,8 @@ Runtime API (`vite/module-runner`). Updated modules are evaluated inside
 QuickJS and trigger a GPUI redraw. Component state survives where
 Vue's own HMR can: a template-only edit keeps it, and a script edit still
 remounts the component. The runner itself runs inside QuickJS. See
-[ARCHITECTURE.md](./ARCHITECTURE.md#hmr-delivery) for why, and for why this
-is preferred over a hand-rolled HMR protocol. A future `rspack` would
-hold its own Node/QuickJS halves the same way.
+[PROTOCOL.md](./PROTOCOL.md#hmr-delivery) for how it is delivered. A future
+`rspack` would hold its own Node/QuickJS halves the same way.
 
 Ships **experimental and opt-in**: without the flag, `inca dev` keeps this
 phase's full reload unchanged. See [PLAN.md](./PLAN.md#phase-34-hmr)
@@ -318,7 +317,7 @@ does around its content lives in this phase.
    one-session-per-process shape does not express that today.
 2. **Native menus**: an application menu bar and context menus, with their
    keyboard shortcuts. The host already owns a `Quit` item and its shortcut,
-   and an app cannot remove them (see [FFI.md](./FFI.md#application-menu)).
+   and an app cannot remove them.
    What an app adds beside it, and where those items come from, is this
    item's work. The candidates are `inca.config.ts`, a JS binding and an SFC.
 3. **Dialogs**: file open/save and message boxes, drawn by the platform.

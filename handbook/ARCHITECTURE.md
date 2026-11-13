@@ -5,8 +5,9 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 # Architecture
 
-The layers of Incarnative.js and how they connect. [FFI.md](./FFI.md) covers
-the JS↔Rust binding surface and [PROTOCOL.md](./PROTOCOL.md) the dev protocol.
+The concepts of Incarnative.js: its layers, how they connect and the development window.
+[FFI.md](./FFI.md) holds the contract of the JS↔Rust boundary and [PROTOCOL.md](./PROTOCOL.md) the
+dev protocol, HMR delivery included.
 
 ## Tech stack
 
@@ -16,17 +17,11 @@ the JS↔Rust binding surface and [PROTOCOL.md](./PROTOCOL.md) the dev protocol.
 | **JS engine** | QuickJS via [`rquickjs`](https://github.com/DelSkayn/rquickjs) | Embedded, lightweight JS runtime executing UI logic and reactivity. |
 | **Core JS package** | `incajs` | Typed wrapper around the host bridge (`__inca_native__`), shared by every frontend adapter. |
 | **Frontend framework** | `incajs/vue`, a subpath of the `incajs` package | Custom renderer mapping Vue's virtual component trees to `incajs` calls. |
-| **Bundler & dev tooling** | Vite, in library/build mode | Compiles `.vue` through `@vitejs/plugin-vue`. HMR is delivered through Vite's Runtime API (see [HMR delivery](#hmr-delivery)). |
-| **Dev CLI** | `@incajs/cli` (Node) | Parent process during development. Owns the commands and wires its bundler adapter to its dev-protocol client. |
-| **Bundler adapter** | `@incajs/cli`'s `vite` (Node) | Runs Vite in library/watch mode and announces each rebuild. The only part of the CLI that imports `vite`. It gets the CLI logic it needs from the injected `adapterCore`. |
-| **Host client** | `@incajs/cli`'s `dev-client` (Node) | Launches and supervises the Rust host as a child and carries messages over its stdio. Depends on no bundler. |
+| **Bundler & dev tooling** | Vite, in library/build mode | Compiles `.vue` through `@vitejs/plugin-vue`. |
+| **Dev CLI** | `@incajs/cli` (Node) | Runs the `inca` commands and is the parent process during development. |
+| **Bundler adapter** | `@incajs/cli`'s `vite` (Node) | Runs Vite and announces each rebuild. |
+| **Host client** | `@incajs/cli`'s `dev-client` (Node) | Launches the host as a child and carries messages over its stdio. |
 | **Host bridge** | In-process Rust functions bound into the QuickJS context via `rquickjs` | Carries mutation operations (`createNode`, `setAttribute`, `appendChild`, ...) from JS to the Rust host. No C ABI or IPC is involved, since everything runs in one process. |
-
-`Bundler` is the contract an adapter implements. `adapterCore` holds the CLI
-logic the CLI injects into an adapter, `IncaError` and `bundlerFault`, and
-re-exports the contract's types.
-
-Vite supplies the Vue SFC compiler through `@vitejs/plugin-vue`.
 
 ## System architecture
 
@@ -61,22 +56,6 @@ Vite supplies the Vue SFC compiler through `@vitejs/plugin-vue`.
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-## Threads
-
-The JS runtime, the bridge and `gpui`'s `App` run on the main thread. `gpui`
-builds the `App` there and holds it in an `Rc`. Code on the event path may keep
-state in a `thread_local!` because every native call and every event handler
-runs on that thread. The timer pump is a foreground task on the main thread.
-It sleeps on the wake channel and one executor timer until the earliest timer
-is due.
-
-## Node lifetime
-
-At the start of each frame the host runs, in order, the focus requests and
-their transitions, the sweep of nodes with no parent that are neither the root, the document nor
-held, the `__inca_released__` call and the focus reveal.
-[FFI.md](./FFI.md#released-nodes) defines the rule and the hook.
-
 ## Development window
 
 The development window draws the application you wrote. `inca dev` opens it
@@ -87,22 +66,8 @@ with the prebuilt host.
 - **Output**: what the application prints reaches the terminal that ran
   `inca dev`.
 
-## HMR delivery
-
-HMR uses Vite's Runtime API (`vite/module-runner`) instead of Vite's browser
-client.
-
-- The `ModuleRunner` runs inside QuickJS. Vite hands the evaluator
-  `__vite_ssr_exports__` and `__vite_ssr_import__` as same-realm objects, so
-  the runner runs beside the evaluator. Only `fetchModule` results and HMR
-  payloads cross the boundary, as JSON.
-- A custom `ModuleRunnerTransport` carries those messages between the Node
-  process and the host over the stdio channel `dev-client` owns.
-- The CLI's own evaluator runs the transformed module source inside QuickJS.
-  It subclasses Vite's `ESModulesEvaluator`. Its module step builds each module
-  with `__inca_dev__.compile` ([PROTOCOL.md](./PROTOCOL.md#extending-it)), so a
-  frame the host reports names the module. The host maps the frame to the
-  original source through the inline source map that Vite appends.
-
-This reuses Vite's module graph invalidation and its accept and dispose
-boundaries, without a hand-rolled HMR protocol.
+With `inca dev --experimental-hmr`, an edit of a `.vue` file updates the running window in place.
+A template-only edit and an edit of a style block keep the state of the components. A script edit
+remounts the component. HMR runs on Vite's Runtime API and reuses Vite's module graph invalidation
+and its accept and dispose boundaries. [PROTOCOL.md](./PROTOCOL.md#hmr-delivery) describes how the
+updates reach the host.
