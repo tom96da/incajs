@@ -16,16 +16,21 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - elements have `style` ([389b4561](https://github.com/tom96da/incajs/commit/389b4561))
 - elements have `dataset` ([05d96e98](https://github.com/tom96da/incajs/commit/05d96e98))
 - a string bound to `:style` applies as the whole inline style ([b77f91e0](https://github.com/tom96da/incajs/commit/b77f91e0))
+- `document.createElementNS()` creates elements with a namespace, and elements report it ([3732085f](https://github.com/tom96da/incajs/commit/3732085f))
 
 ### Changed
 
 - the style attribute of an element lists the declarations in the order they were set ([315a810b](https://github.com/tom96da/incajs/commit/315a810b))
 - `setAttribute()` throws for an invalid attribute name in the renderer too ([6cd3adaf](https://github.com/tom96da/incajs/commit/6cd3adaf))
 - an opacity that is not a finite number is ignored ([19fc126e](https://github.com/tom96da/incajs/commit/19fc126e))
+- `tagName` is read-only ([3732085f](https://github.com/tom96da/incajs/commit/3732085f))
 
 ### Fixed
 
 - `console` prints the fields of a URL and the pairs of its search parameters ([91bbf219](https://github.com/tom96da/incajs/commit/91bbf219))
+- `innerHTML` keeps the namespace of svg and math content and names such as `viewBox` ([1dceaae1](https://github.com/tom96da/incajs/commit/1dceaae1))
+- an SVG element is not taken for an HTML element of the same name ([296fb525](https://github.com/tom96da/incajs/commit/296fb525))
+- an HTML element finds an attribute in `attributes` under a name with capitals ([3732085f](https://github.com/tom96da/incajs/commit/3732085f))
 
 ## [0.0.31] - 2026-11-09
 
