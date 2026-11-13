@@ -11,7 +11,7 @@ use rquickjs::{Array, Ctx, Exception, Result as JsResult};
 use inca_node::{NodeId, VirtualNode};
 
 use super::attributes::folded_key;
-use super::convert::{JsNodeId, throw_tree_error};
+use super::convert::{JsNodeId, or_null, throw_tree_error};
 use super::host::Host;
 
 /// The namespace the `xml` prefix is bound to.
@@ -84,8 +84,8 @@ pub(super) fn element_entry<'js>(
     let entry = Array::new(ctx.clone())?;
     entry.set(0, id)?;
     entry.set(1, node.tag_name())?;
-    entry.set(2, node.namespace_uri())?;
-    entry.set(3, node.prefix())?;
+    entry.set(2, or_null(ctx, node.namespace_uri())?)?;
+    entry.set(3, or_null(ctx, node.prefix())?)?;
     entry.set(4, node.dom_tag_name().into_owned())?;
     Ok(entry)
 }
@@ -260,6 +260,22 @@ mod tests {
             .unwrap();
 
         assert_eq!(entry, format!(r#"["a","{XML_NS}","xml"]"#));
+    }
+
+    #[test]
+    fn create_element_ns_gives_null_for_a_missing_namespace_and_prefix() {
+        let (engine, _host) = engine_with_bindings();
+
+        let strict: bool = engine
+            .eval(
+                r"
+                const entry = __inca_native__.createElementNS(null, 'a');
+                entry[2] === null && entry[3] === null;
+                ",
+            )
+            .unwrap();
+
+        assert!(strict);
     }
 
     #[rstest]

@@ -335,6 +335,17 @@ mod tests {
         );
     }
 
+    #[test]
+    fn a_parsed_text_node_has_a_null_namespace() {
+        let (engine, _host) = engine();
+
+        let strict: bool = engine
+            .eval("n.setInnerHtml(host, 'a')[1][0][2] === null;")
+            .unwrap();
+
+        assert!(strict);
+    }
+
     #[rstest]
     #[case::html("<input value=a>", 0, true)]
     #[case::svg("<svg><input value=a></svg>", 1, false)]
