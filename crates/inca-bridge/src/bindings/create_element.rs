@@ -111,8 +111,8 @@ impl NameError {
     }
 }
 
-/// Splits `qualified_name` at its first colon into the prefix and the local name, which ends at
-/// a second colon, and checks both against `namespace`.
+/// Splits `qualified_name` at its first colon into the prefix and the local name, which holds the
+/// rest of the text, and checks both against `namespace`.
 fn validate_and_extract<'a>(
     namespace: Option<&str>,
     qualified_name: &'a str,
@@ -121,11 +121,7 @@ fn validate_and_extract<'a>(
         Some((prefix, rest)) => (Some(prefix), rest),
         None => (None, qualified_name),
     };
-    let local_name = if prefix.is_some() {
-        rest.split(':').next().unwrap_or_default()
-    } else {
-        rest
-    };
+    let local_name = rest;
     if !is_element_local_name(local_name) || prefix.is_some_and(|p| !is_prefix(p)) {
         return Err(NameError::InvalidCharacter);
     }
@@ -295,11 +291,12 @@ mod tests {
     }
 
     #[rstest]
-    #[case::second_colon_ends_the_name("a:b:c", "b")]
-    #[case::third_colon_is_dropped("a:b:c:d", "b")]
-    #[case::trailing_colon("a:b:", "b")]
+    #[case::second_colon_stays_in_the_name("a:b:c", "b:c")]
+    #[case::third_colon_stays_in_the_name("a:b:c:d", "b:c:d")]
+    #[case::trailing_colon("a:b:", "b:")]
+    #[case::double_colon("a::b", ":b")]
     #[case::angle_in_local("a:b<", "b<")]
-    fn create_element_ns_ends_the_local_name_at_a_second_colon(
+    fn create_element_ns_keeps_the_text_after_the_first_colon_as_the_local_name(
         #[case] name: &str,
         #[case] local: &str,
     ) {
@@ -315,7 +312,7 @@ mod tests {
     }
 
     #[rstest]
-    #[case::double_colon("a::b")]
+    #[case::forbidden_after_a_second_colon("a:b:c/")]
     #[case::digit_local("a:1")]
     #[case::empty_prefix(":a")]
     #[case::empty_local("a:")]

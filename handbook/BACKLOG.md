@@ -1700,13 +1700,6 @@ A fixed entry is deleted and its ID is never reused.
   to lower case. Fix: pass the argument through once Vue's own `createApp` runs on the node layer
   (v0.0.34).
 
-- **B-316 `createElementNS()` drops the name text after the second colon**
-  `Units: bridge · Size: S · Impact: Low`
-
-  `createElementNS(ns, "a:b:c")` reads local name `b` and `tagName` `a:b` in Chromium, and the host
-  does the same. WebKit keeps `b:c` as the local name. Fix: keep the text from the second colon in
-  the local name if browsers agree on it.
-
 - **B-317 `window` is not a global**
   `Units: host · Size: S · Impact: Low`
 
