@@ -68,7 +68,7 @@ impl VirtualTree {
         prefix: Option<String>,
         tag_name: String,
     ) -> Result<NodeId, TreeError> {
-        if namespace == Some(ns!(html)) && tag_name.eq_ignore_ascii_case("template") {
+        if namespace == Some(ns!(html)) && tag_name == "template" {
             return self.create_template(tag_name, prefix);
         }
         self.allocate(tag_name, namespace, prefix)
@@ -82,6 +82,22 @@ mod tests {
     use super::*;
     use crate::tests::{HTML, SVG, node};
     use rstest::rstest;
+
+    #[rstest]
+    #[case::style("STYLE")]
+    #[case::template("TEMPLATE")]
+    fn an_html_style_or_template_in_capitals_is_an_ordinary_element(#[case] name: &str) {
+        let mut tree = VirtualTree::new();
+        let id = tree.create_element_ns(Some(HTML), None, name).unwrap();
+
+        let element = tree.get(id).unwrap();
+        assert!(!element.is_style());
+        assert!(!element.is_template());
+        assert_eq!(tree.template_content(id), None);
+        let parsed = tree.parse_html(Some(id), "<b>x</b>").unwrap();
+        let tags: Vec<&str> = parsed.nodes.iter().map(|node| node.tag.as_str()).collect();
+        assert_eq!(tags, ["b", "#text"]);
+    }
 
     #[test]
     fn create_node_fails_once_the_id_space_is_used_up() {

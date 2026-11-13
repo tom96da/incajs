@@ -724,7 +724,7 @@ mod tests {
     #[test]
     fn a_template_without_children_has_no_spec() {
         let mut tree = VirtualTree::new();
-        let template = tree.create_node("TEMPLATE").unwrap();
+        let template = tree.create_node("template").unwrap();
 
         assert!(build_spec(&tree, template).is_none());
     }
@@ -732,7 +732,7 @@ mod tests {
     #[test]
     fn a_template_with_a_child_has_no_spec() {
         let mut tree = VirtualTree::new();
-        let template = tree.create_node("TEMPLATE").unwrap();
+        let template = tree.create_node("template").unwrap();
         let child = tree.create_node("div").unwrap();
         tree.append_child(template, child).unwrap();
 

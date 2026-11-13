@@ -1679,13 +1679,6 @@ A fixed entry is deleted and its ID is never reused.
   Browsers report the namespace `xlink` and the local name `href` for it. Fix: store a namespace
   and a prefix on each attribute and add the `NS` methods.
 
-- **B-313 `createElementNS()` with the HTML namespace and `STYLE` or `TEMPLATE` behaves as the HTML element**
-  `Units: node,bridge · Size: S · Impact: Low`
-
-  In browsers `createElementNS(HTML_NS, "STYLE")` makes an element that is no `style` element.
-  The host compares `style` and `template` without ASCII case in the HTML namespace, so the
-  element holds rules or content. Fix: compare the two names exactly.
-
 - **B-314 `lookupNamespaceURI()`, `isDefaultNamespace()` and `lookupPrefix()` are missing**
   `Units: core · Size: S · Impact: Low`
 
