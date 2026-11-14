@@ -1,7 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The classic mutation natives and the host steps that follow a node leaving its place.
+//! The mutation natives, `removeNode` included, and the host steps that follow a node leaving
+//! its place.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -9,20 +10,23 @@ use std::rc::Rc;
 use rquickjs::convert::Coerced;
 use rquickjs::{Array, Ctx, Exception, Result as JsResult};
 
+use inca_jsenv::callbacks;
 use inca_node::NodeId;
+use inca_node::tree::TEXT_TAG;
 
 use super::Natives;
 use super::convert::{JsNodeId, throw_tree_error};
 use super::create_element::element_entry;
 use super::host::Host;
 
-/// The classic mutation members: `appendChild`, `insertBefore`, `removeChild`, `replaceChild`
-/// and `cloneNode`. Each moved or removed node drops the focus it held, moves the Tab start,
-/// queues a focus re-check and resets the scroll offsets of its subtree.
+/// The mutation members: `appendChild`, `insertBefore`, `removeChild`, `removeNode`,
+/// `replaceChild` and `cloneNode`. Each moved or removed node drops the focus it held, moves the
+/// Tab start, queues a focus re-check and resets the scroll offsets of its subtree.
 pub(super) fn install_mutation(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("appendChild", append_child)?;
     n.set("insertBefore", insert_before)?;
     n.set("removeChild", remove_child)?;
+    n.set("removeNode", remove_node)?;
     n.set("replaceChild", replace_child)?;
     n.set("cloneNode", clone_node)
 }
@@ -80,10 +84,49 @@ fn remove_child<'js>(
     }
 }
 
+/// Takes `node_id` out of its parent when it has one, holds it, drops the listeners of its
+/// subtree and returns `[callbackIds, nodeIds]`: the callback ids of those listeners and the ids
+/// of the subtree in pre-order. An unknown id returns two empty lists.
+fn remove_node<'js>(
+    host: Rc<RefCell<Host>>,
+) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Array<'js>> {
+    move |ctx, JsNodeId(node_id)| {
+        let mut host = host.borrow_mut();
+        let Some(parent_id) = host.tree.get(node_id).map(inca_node::VirtualNode::parent) else {
+            return pair(&ctx, &[], &[]);
+        };
+        if let Some(parent_id) = parent_id {
+            let left = host.leaving(&[node_id]);
+            host.tree
+                .remove_child(parent_id, node_id)
+                .map_err(|err| throw_tree_error(&ctx, err))?;
+            host.settle(&left);
+        }
+        host.tree
+            .hold(node_id)
+            .map_err(|err| throw_tree_error(&ctx, err))?;
+        let node_ids = host.tree.subtree(node_id);
+        let callback_ids: Vec<u32> = node_ids
+            .iter()
+            .flat_map(|&id| host.listeners.release(id))
+            .collect();
+        callbacks::release(&ctx, &callback_ids)?;
+        pair(&ctx, &callback_ids, &node_ids)
+    }
+}
+
+/// The array `[first, second]` of two id lists.
+fn pair<'js>(ctx: &Ctx<'js>, first: &[u32], second: &[u32]) -> JsResult<Array<'js>> {
+    let array = Array::new(ctx.clone())?;
+    array.set(0, first.to_vec())?;
+    array.set(1, second.to_vec())?;
+    Ok(array)
+}
+
 /// Copies `node_id` and, when `deep`, its descendants. Returns one entry per copy in pre-order:
-/// `[id, localName, namespace, prefix, tagName]` for an element and `[id, tag]` for a `#text`,
-/// a `#comment` and a `#fragment`, which includes the content of a template. An HTML `input` copy
-/// gets the typed text of its original.
+/// `[id, localName, namespace, prefix, tagName]` for an element and `[id, tag, data]` for any
+/// other node, with `data` the text of a `#text` copy and `null` otherwise. The copies include the
+/// content of a template. An HTML `input` copy gets the typed text of its original.
 fn clone_node<'js>(
     host: Rc<RefCell<Host>>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, Coerced<bool>) -> JsResult<Vec<Array<'js>>> {
@@ -109,6 +152,11 @@ fn clone_node<'js>(
                 let entry = Array::new(ctx.clone())?;
                 entry.set(0, copy)?;
                 entry.set(1, node.tag_name())?;
+                let data = (node.tag_name() == TEXT_TAG)
+                    .then(|| host.tree.text_content(copy))
+                    .transpose()
+                    .map_err(|err| throw_tree_error(&ctx, err))?;
+                entry.set(2, data)?;
                 entries.push(entry);
             }
         }
@@ -145,8 +193,11 @@ mod tests {
     use inca_jsenv::Engine;
     use rstest::rstest;
 
+    use crate::EventTargetId;
     use crate::Host;
-    use crate::test_support::{HTML, LISTEN_JS, SVG, engine_with_bindings, error_name};
+    use crate::test_support::{
+        HTML, LISTEN_JS, SVG, callback_ids, engine_with_bindings, error_name,
+    };
 
     /// Builds `p > (a, b)`, `q > x`, `g > (g1, g2)` and the parentless `loose`, `loose2`, `t`
     /// (text), `c` (comment) and `f` (empty fragment).
@@ -346,7 +397,7 @@ mod tests {
     }
 
     #[test]
-    fn clone_node_returns_a_pair_for_text_and_comment_copies() {
+    fn clone_node_lists_a_deep_copy_in_pre_order_with_the_entry_of_each_kind() {
         let (engine, _host) = engine_with_family();
 
         let got: String = engine
@@ -361,8 +412,31 @@ mod tests {
 
         assert_eq!(
             got,
-            format!(r##"[["span","{HTML}",null,"SPAN"],["#text"],["#comment"]]"##)
+            format!(r##"[["span","{HTML}",null,"SPAN"],["#text",""],["#comment",null]]"##)
         );
+    }
+
+    #[rstest]
+    #[case::text("t", r##"["#text","abc"]"##)]
+    #[case::comment("c", r##"["#comment",null]"##)]
+    #[case::fragment("g", r##"["#fragment",null]"##)]
+    #[case::document("n.documentNodeId()", r##"["#document",null]"##)]
+    fn clone_node_gives_the_data_of_a_text_copy_and_null_for_the_other_kinds(
+        #[case] node: &str,
+        #[case] want: &str,
+    ) {
+        let (engine, _host) = engine_with_family();
+
+        let entry: String = engine
+            .eval(&format!(
+                r"
+                n.setAttribute(t, 'value', 'abc');
+                JSON.stringify(n.cloneNode({node}, false)[0].slice(1));
+                "
+            ))
+            .unwrap();
+
+        assert_eq!(entry, want);
     }
 
     #[test]
@@ -455,6 +529,7 @@ mod tests {
     #[case::removed("n.removeChild(p, a)")]
     #[case::moved("n.appendChild(q, a)")]
     #[case::replaced("n.replaceChild(p, loose, a)")]
+    #[case::taken_out("n.removeNode(a)")]
     fn a_scrolled_node_and_its_scrolled_descendant_read_zero(#[case] call: &str) {
         let (engine, host) = engine_with_family();
         engine
@@ -498,8 +573,176 @@ mod tests {
         assert_eq!(host.borrow().scroll_handle(ids[0]).offset(), zero());
     }
 
+    /// `top > (kid > deep, sibling)`, each node a global, with a `click` listener on `top`, `kid`
+    /// and `deep`. `listeners` holds the three callback ids.
+    const REMOVABLE: &str = r"
+        globalThis.top = n.createNode('div');
+        globalThis.kid = n.createNode('div');
+        globalThis.deep = n.createNode('div');
+        globalThis.sibling = n.createNode('div');
+        n.appendChild(top, kid);
+        n.appendChild(kid, deep);
+        n.appendChild(top, sibling);
+        globalThis.listeners = [
+            n.addEventListener(top, 'click', () => {}),
+            n.addEventListener(kid, 'click', () => {}),
+            n.addEventListener(deep, 'click', () => {}),
+        ];
+        ";
+
     #[test]
-    fn the_content_fragment_of_a_cloned_template_is_a_pair() {
+    fn remove_node_leaves_no_parent() {
+        let (engine, _host) = engine_with_family();
+
+        let parent: Option<u32> = engine
+            .eval(&format!(
+                r"
+                {REMOVABLE}
+                n.appendChild(p, top);
+                n.removeNode(top);
+                n.linkedNode(top, 'parent');
+                "
+            ))
+            .unwrap();
+
+        assert_eq!(parent, None);
+    }
+
+    #[test]
+    fn remove_node_holds_the_node_against_the_sweep() {
+        let (engine, host) = engine_with_family();
+        let top: u32 = engine
+            .eval(&format!(
+                r"
+                {REMOVABLE}
+                n.appendChild(p, top);
+                n.removeNode(top);
+                top;
+                "
+            ))
+            .unwrap();
+
+        host.borrow_mut().tree.sweep();
+
+        assert!(host.borrow().tree.get(top).is_some());
+    }
+
+    #[test]
+    fn remove_node_drops_the_listeners_of_the_subtree() {
+        let (engine, host) = engine_with_family();
+        let ids: Vec<u32> = engine
+            .eval(&format!(
+                r"
+                {REMOVABLE}
+                n.appendChild(p, top);
+                n.removeNode(top);
+                [top, kid, deep];
+                "
+            ))
+            .unwrap();
+
+        let host = host.borrow();
+        for id in ids {
+            assert!(callback_ids(&host.listeners, EventTargetId::Node(id), "click").is_empty());
+        }
+    }
+
+    #[test]
+    fn remove_node_returns_the_callback_ids_of_the_subtree() {
+        let (engine, _host) = engine_with_family();
+
+        let mut lists: Vec<Vec<u32>> = engine
+            .eval(&format!(
+                r"
+                {REMOVABLE}
+                n.appendChild(p, top);
+                [n.removeNode(top)[0], listeners];
+                "
+            ))
+            .unwrap();
+
+        let mut expected = lists.pop().unwrap();
+        let mut returned = lists.pop().unwrap();
+        expected.sort_unstable();
+        returned.sort_unstable();
+        assert_eq!(returned, expected);
+    }
+
+    #[test]
+    fn remove_node_returns_the_ids_of_the_subtree_in_pre_order() {
+        let (engine, _host) = engine_with_family();
+
+        let lists: Vec<Vec<u32>> = engine
+            .eval(&format!(
+                r"
+                {REMOVABLE}
+                n.appendChild(p, top);
+                [n.removeNode(top)[1], [top, kid, deep, sibling]];
+                "
+            ))
+            .unwrap();
+
+        assert_eq!(lists[0], lists[1]);
+    }
+
+    #[test]
+    fn remove_node_includes_the_content_of_a_template() {
+        let (engine, _host) = engine_with_family();
+
+        let got: Vec<Vec<u32>> = engine
+            .eval(
+                r"
+                const template = n.createNode('template');
+                const content = n.templateContent(template);
+                const inner = n.createNode('div');
+                n.appendChild(content, inner);
+                const id = n.addEventListener(inner, 'click', () => {});
+                const [callbackIds, nodeIds] = n.removeNode(template);
+                [callbackIds, [id], nodeIds, [template, content, inner]];
+                ",
+            )
+            .unwrap();
+
+        assert_eq!(got[0], got[1]);
+        assert_eq!(got[2], got[3]);
+    }
+
+    #[test]
+    fn remove_node_of_an_unknown_id_returns_two_empty_lists() {
+        let (engine, _host) = engine_with_family();
+
+        let got: String = engine.eval("JSON.stringify(n.removeNode(999))").unwrap();
+
+        assert_eq!(got, "[[],[]]");
+    }
+
+    #[test]
+    fn remove_node_drops_the_focus_requests_of_the_subtree() {
+        let (engine, host) = engine_with_family();
+        let kid: u32 = engine
+            .eval(
+                r"
+                n.appendChild(n.rootNodeId(), p);
+                n.setAttribute(a, 'tabindex', 0);
+                n.focusNode(a);
+                a;
+                ",
+            )
+            .unwrap();
+        assert_eq!(
+            host.borrow().focus.active_node(&host.borrow().tree),
+            Some(kid)
+        );
+
+        engine
+            .eval::<()>("n.removeNode(p); n.appendChild(n.rootNodeId(), p);")
+            .unwrap();
+
+        assert_eq!(host.borrow().focus.active_node(&host.borrow().tree), None);
+    }
+
+    #[test]
+    fn the_content_fragment_of_a_cloned_template_has_three_parts() {
         let (engine, _host) = engine_with_bindings();
 
         let length: u32 = engine
@@ -511,7 +754,7 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(length, 2);
+        assert_eq!(length, 3);
     }
 
     #[test]
