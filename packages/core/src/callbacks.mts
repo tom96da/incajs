@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { markFreed } from "./element/lifecycle.mts";
+import { createIdTable } from "./idTable.mts";
 import type { EventTargetId } from "./ffi/index.mts";
 import type { CallbackId, EventListenerOrObject } from "./types.mts";
 
@@ -14,10 +15,7 @@ const idsByGroup = new Map<string, Map<EventListenerOrObject<never, never>, Call
  * Finds the group and listener of a registration from its id, when the host
  * reports the id released.
  */
-const ownerById = new Map<
-  CallbackId,
-  { group: string; listener: EventListenerOrObject<never, never> }
->();
+const ownerById = createIdTable<{ group: string; listener: EventListenerOrObject<never, never> }>();
 
 /**
  * Records the registration of `listener` under `callbackId`. The host keeps the function it runs.
