@@ -19,6 +19,7 @@ import {
   focusedNode,
   getAttribute,
   inputValue,
+  linkedNode,
   nameOf,
   removeChild,
   rootNodeId,
@@ -85,6 +86,7 @@ const builders: HandleBuilders = {
   text: (id, data) => createIncaText(id, data, builders),
   fragment: createIncaFragment,
   document: documentHandle,
+  documentCopy: (id) => createIncaDocument(id, true),
   node: handleOf,
 };
 
@@ -375,7 +377,7 @@ let theDocument: IncaDocument | undefined;
  * @returns the handle, which names the same object on every call
  */
 export function documentHandle(): IncaDocument {
-  return (theDocument ??= createIncaDocument(documentNodeId()));
+  return (theDocument ??= createIncaDocument(documentNodeId(), false));
 }
 
 /**
@@ -402,12 +404,14 @@ function held<T extends IncaNode>(handle: T): T {
 }
 
 /**
- * Builds the handle of the document node: the listener methods and handler properties of an event
- * target, the node members without `cloneNode()`, the creation methods and the query methods.
+ * Builds the handle of a document node: the listener methods and handler properties of an event
+ * target, the node members, the creation methods and the query methods.
  * @param id - the native node's id
+ * @param copy - whether the node is a copy of the document, which the focus of the host never
+ *   reaches
  * @returns the new handle
  */
-function createIncaDocument(id: NodeId): IncaDocument {
+function createIncaDocument(id: NodeId, copy: boolean): IncaDocument {
   const target = createEventTarget(id, ["wheel"]);
   const fields: Omit<
     IncaDocument,
@@ -420,8 +424,11 @@ function createIncaDocument(id: NodeId): IncaDocument {
     },
     set textContent(_value: string | null) {},
     get activeElement() {
-      const focused = focusedNode();
-      return focused === null ? null : (elementOf(focused) ?? null);
+      const focused = copy ? null : focusedNode();
+      if (focused !== null) return elementOf(focused) ?? null;
+      const first = linkedNode(id, "first", true);
+      const element = first === null ? undefined : builders.node(first);
+      return element?.kind === "element" ? element : null;
     },
     createDocumentFragment: () => held(createIncaFragment(createNode("#fragment"))),
     createElement: (...args: [localName: string]) => {
@@ -445,11 +452,9 @@ function createIncaDocument(id: NodeId): IncaDocument {
     },
   };
   const handle = withEventHandlers(withNodeId(fields as IncaDocument, id), () => false);
-  // The host has one document, so the document has no `cloneNode()`.
-  const { cloneNode: _cloneNode, ...mutation } = nodeMutationMembers(handle, builders);
   for (const members of [
     nodeTreeMembers(handle, builders),
-    mutation,
+    nodeMutationMembers(handle, builders),
     nodeRelationMembers(handle, builders),
     queryMembers(handle, builders),
   ]) {

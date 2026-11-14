@@ -204,7 +204,8 @@ with the differences below. The listener methods are described in
   - the listener methods
 
   The global `DocumentFragment` does not exist.
-- `document` has no `cloneNode()`.
+- The nodes of a copy of `document`, and the nodes its creation methods make, read `document` as
+  their `ownerDocument`.
 - The methods below store U+FFFD for each half of a surrogate pair they split:
   - `splitText()`
   - `substringData()`, `insertData()`, `deleteData()`, `replaceData()`

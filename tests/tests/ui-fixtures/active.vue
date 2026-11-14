@@ -34,12 +34,12 @@ function focusB() {
 
 function blurA() {
   a.value.blur();
-  record(document.activeElement === null);
+  record(document.activeElement === document.firstChild);
 }
 
 function focusN() {
   n.value.focus();
-  record(document.activeElement === null);
+  record(document.activeElement === document.firstChild);
 }
 
 function onFocusB() {
@@ -55,7 +55,7 @@ function kill() {
 }
 
 function probeDoomed() {
-  result2.value = String(document.activeElement === null);
+  result2.value = String(document.activeElement === document.firstChild);
 }
 
 function probeDoomedFocused() {

@@ -26,7 +26,7 @@ fn focusing_another_node_moves_it(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn blur_gives_null(cx: &mut TestAppContext) {
+fn blur_gives_the_mount_container(cx: &mut TestAppContext) {
     let mut h = load(cx, "active");
     click(&mut h, "focus-a");
 
@@ -36,7 +36,7 @@ fn blur_gives_null(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn focusing_a_node_with_no_tabindex_reads_null(cx: &mut TestAppContext) {
+fn focusing_a_node_with_no_tabindex_reads_the_mount_container(cx: &mut TestAppContext) {
     let mut h = load(cx, "active");
 
     click(&mut h, "focus-n");
@@ -64,7 +64,7 @@ fn tab_focus_is_visible_in_the_focus_handler(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn removing_the_focused_node_makes_the_active_element_null(cx: &mut TestAppContext) {
+fn removing_the_focused_node_makes_the_active_element_the_mount_container(cx: &mut TestAppContext) {
     let mut h = load(cx, "active");
     click(&mut h, "doomed");
     click(&mut h, "probe-doomed-focused");
