@@ -209,8 +209,16 @@ impl Element for Node<'_> {
     }
 
     fn is_root(&self) -> bool {
+        let under_document = self
+            .node
+            .parent()
+            .and_then(|parent| self.tree.get(parent))
+            .is_some_and(VirtualNode::is_document);
+        if under_document {
+            return true;
+        }
         match (self.tree.document(), self.tree.root()) {
-            (Some(document), _) => self.node.parent() == Some(document),
+            (Some(_), _) => false,
             (None, Some(root)) => self.node.id() == root,
             (None, None) => self.node.parent().is_none(),
         }
@@ -664,6 +672,18 @@ mod tests {
         let child = f.add(f.root, "div", "child");
 
         assert!(f.matches(f.root, ":root"));
+        assert!(!f.matches(child, ":root"));
+    }
+
+    #[test]
+    fn root_is_the_element_child_of_a_copied_document() {
+        let (mut f, document) = Fixture::with_document();
+        let child = f.add(f.root, "div", "child");
+        let copies = f.tree.clone_subtree(document, true).unwrap();
+        let (copied_root, copied_child) = (copies[1].1, copies[2].1);
+
+        assert!(f.matches(copied_root, ":root"));
+        assert!(!f.matches(copied_child, ":root"));
         assert!(!f.matches(child, ":root"));
     }
 

@@ -263,7 +263,7 @@ the first failing check throws. A failure changes nothing.
    the content and of every node in it.
 4. A reference (`refId`, or `childId` of `replaceChild`) that is not a child of
    `parentId` throws a `NotFoundError`.
-5. A `nodeId` naming the document throws a `HierarchyRequestError`.
+5. A `nodeId` naming a document throws a `HierarchyRequestError`.
 6. A document parent takes comments and at most one element, and throws a
    `HierarchyRequestError` for a text node, a fragment with text and a second
    element.

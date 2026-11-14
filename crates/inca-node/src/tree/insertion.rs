@@ -14,7 +14,7 @@ impl VirtualTree {
     /// - the parent is no leaf;
     /// - the node is no ancestor of the parent;
     /// - the reference is a child of the parent;
-    /// - the node is not the document;
+    /// - the node is no document;
     /// - a document parent keeps to one element and no text.
     ///
     /// `replaced` is the child the insertion removes. It changes nothing.
@@ -51,7 +51,11 @@ impl VirtualTree {
                 child: reference_id,
             });
         }
-        if self.document == Some(node_id) {
+        if self
+            .nodes
+            .get(&node_id)
+            .is_some_and(VirtualNode::is_document)
+        {
             return Err(TreeError::DocumentInserted(node_id));
         }
         if parent.tag_name() == DOCUMENT_TAG {
@@ -323,6 +327,18 @@ mod tests {
         assert_eq!(
             f.tree.append_child(parent, document).unwrap_err(),
             TreeError::DocumentInserted(document)
+        );
+    }
+
+    #[test]
+    fn a_copied_document_cannot_be_inserted() {
+        let (mut f, document) = Fixture::with_document();
+        let copy = f.tree.clone_subtree(document, false).unwrap()[0].1;
+        let parent = node(&mut f.tree, "div");
+
+        assert_eq!(
+            f.tree.append_child(parent, copy).unwrap_err(),
+            TreeError::DocumentInserted(copy)
         );
     }
 

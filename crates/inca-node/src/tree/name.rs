@@ -8,7 +8,7 @@ use std::borrow::Cow;
 
 use html5ever::ns;
 
-use super::VirtualNode;
+use super::{DOCUMENT_TAG, VirtualNode};
 
 impl VirtualNode {
     /// Whether a node with the tag `tag` is an element. The other kinds have tags that start
@@ -22,6 +22,12 @@ impl VirtualNode {
     #[must_use]
     pub fn is_element(&self) -> bool {
         Self::is_element_tag(&self.tag_name)
+    }
+
+    /// Whether the node is a document: the declared one or a copy of it.
+    #[must_use]
+    pub fn is_document(&self) -> bool {
+        self.tag_name == DOCUMENT_TAG
     }
 
     /// Whether the node is an HTML `template` element.
@@ -154,6 +160,17 @@ mod tests {
         let id = node(&mut tree, tag);
 
         assert_eq!(tree.get(id).unwrap().is_element(), expected);
+    }
+
+    #[rstest]
+    #[case::document("#document", true)]
+    #[case::fragment("#fragment", false)]
+    #[case::element("div", false)]
+    fn is_document_is_true_for_a_document_tag_only(#[case] tag: &str, #[case] expected: bool) {
+        let mut tree = VirtualTree::new();
+        let id = node(&mut tree, tag);
+
+        assert_eq!(tree.get(id).unwrap().is_document(), expected);
     }
 
     #[rstest]

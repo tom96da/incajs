@@ -35,8 +35,8 @@ impl VirtualTree {
     /// - [`TreeError::LeafParent`] if `parent_id` is a text node or a comment.
     /// - [`TreeError::WouldCycle`] if `node_id` is `parent_id` or one of its ancestors.
     /// - [`TreeError::NotAChild`] if `reference_id` is not a child of `parent_id`.
-    /// - [`TreeError::DocumentInserted`] if `node_id` is the document.
-    /// - [`TreeError::DocumentChild`] if `parent_id` is the document and the insertion would give
+    /// - [`TreeError::DocumentInserted`] if `node_id` is a document.
+    /// - [`TreeError::DocumentChild`] if `parent_id` is a document and the insertion would give
     ///   it text or a second element.
     pub fn insert_before(
         &mut self,
