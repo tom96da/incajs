@@ -8,8 +8,8 @@ use super::number::font_size_px;
 use super::number::margin_length_from;
 use super::number::non_negative;
 use super::number::non_negative_px;
-use super::number::number;
 use super::number::opacity;
+use super::number::opacity_value;
 use super::number::size_spec_from;
 use super::parse::EdgeKeys;
 use super::parse::Overflows;
@@ -41,7 +41,7 @@ pub enum ValueKind {
     FontSizePx,
     /// A decimal value `>= 0`. A text beyond the largest flex factor applies at it.
     NonNegativeNumber,
-    /// A decimal value, clamped to `0..=1`.
+    /// A decimal value or a percentage, clamped to `0..=1` when used.
     Opacity,
     /// A number from `0` to `0xffffff`, or a string: `#rgb`, `#rgba`, `#rrggbb`,
     /// `#rrggbbaa`, `transparent`, `rgb()` or `rgba()`.
@@ -281,7 +281,7 @@ pub(crate) fn css_declaration(key: &str, value: &AttributeValue) -> Option<Strin
         ValueKind::PxOrAuto => margin_length_from(value).map(length_text),
         ValueKind::NonNegativePxOrAuto => size_spec_from(value).map(length_text),
         ValueKind::NonNegativeNumber => non_negative(value).map(js_number_text),
-        ValueKind::Opacity => number(value).filter(|n| n.is_finite()).map(js_number_text),
+        ValueKind::Opacity => opacity_value(value).map(js_number_text),
         ValueKind::Keyword(names) => value.as_str().and_then(|name| keyword_text(names, name)),
         ValueKind::KeywordPair(names) => {
             let text = value.as_str()?;
@@ -704,6 +704,12 @@ mod tests {
         Some("-3.4028234663852886e+38")
     )]
     #[case::opacity_number_above_f32_max("opacity", num(1e300), Some("1e+300"))]
+    #[case::opacity_percent("opacity", text("50%"), Some("0.5"))]
+    #[case::opacity_exponent_percent("opacity", text("5e1%"), Some("0.5"))]
+    #[case::opacity_percent_beyond_one("opacity", text("150%"), Some("1.5"))]
+    #[case::opacity_negative_percent("opacity", text("-50%"), Some("-0.5"))]
+    #[case::opacity_small_percent("opacity", text("0.7%"), Some("0.007"))]
+    #[case::opacity_rounded_percent("opacity", text("12.3%"), Some("0.123"))]
     #[case::opacity_infinity("opacity", num(f64::INFINITY), None)]
     #[case::opacity_negative_infinity("opacity", num(f64::NEG_INFINITY), None)]
     #[case::keyword_case("display", text("FLEX"), Some("flex"))]

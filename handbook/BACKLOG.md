@@ -32,8 +32,7 @@ A fixed entry is deleted and its ID is never reused.
   `Units: node · Size: S · Impact: Low`
 
   `:style` takes `px` as the only unit, so `"1em"`, `"10pt"` and `"50%"` for
-  a size warn. `opacity` takes a decimal string but not `"50%"`. A key that
-  starts with `-` is unknown, so vendor prefixes (`-webkit-flex`) and custom
+  a size warn. A key that starts with `-` is unknown, so vendor prefixes (`-webkit-flex`) and custom
   properties (`--gap`) warn, and CSS accepts both. Percentages for sizes and shorthands are B-085.
 
 - **B-123 The style vocabulary is not emitted as JSON and TypeScript types**

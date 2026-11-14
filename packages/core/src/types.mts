@@ -109,11 +109,11 @@ export interface StyleProps {
    */
   flexShrink?: number | `${number}`;
   /**
-   * Opacity from `0` to `1`, applied to this node and its descendants; values outside are clamped.
-   * The host warns on a trailing `.`, a `.` before the exponent, hexadecimal, binary and octal, which
-   * the type admits.
+   * Opacity from `0` to `1`, or a percentage from `0%` to `100%`, applied to this node and its
+   * descendants; values outside are clamped. The host warns on a trailing `.`, a `.` before the
+   * exponent, hexadecimal, binary and octal, which the type admits.
    */
-  opacity?: number | `${number}`;
+  opacity?: number | `${number}` | `${number}%`;
   /** Minimum width in px (`>= 0`), or `"auto"` for the default minimum. */
   minWidth?: Px | "auto";
   /** Minimum height in px (`>= 0`), or `"auto"` for the default minimum. */

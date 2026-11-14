@@ -345,6 +345,15 @@ mod tests {
     }
 
     #[test]
+    fn a_rule_takes_a_percentage_opacity() {
+        let mut f = Fixture::new();
+        f.sheet(".a { opacity: 50% }");
+        let a = f.boxed("a");
+
+        assert_eq!(build_spec(&f.tree, a).unwrap().style.opacity, Some(0.5));
+    }
+
+    #[test]
     fn important_applies_at_normal_importance() {
         let mut f = Fixture::new();
         f.sheet("#a { width: 5px !important } .a { width: 9px }");

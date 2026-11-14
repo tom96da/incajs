@@ -114,11 +114,24 @@ pub(super) fn size_spec_from(value: &AttributeValue) -> Option<LengthSpec> {
     }
 }
 
-/// A decimal value clamped to `0..=1`; a JS `NaN` or infinity is unset.
+/// The opacity as specified: a finite JS number, a decimal text, or a decimal text with `%`, which
+/// is the fraction rounded to 15 significant digits. Surrounding ASCII whitespace is ignored.
+pub(super) fn opacity_value(value: &AttributeValue) -> Option<f64> {
+    match value {
+        AttributeValue::Number(n) => Some(*n).filter(|n| n.is_finite()),
+        AttributeValue::String(s) => match s.trim_ascii().strip_suffix('%') {
+            Some(percent) => {
+                decimal(percent).and_then(|n| format!("{:.14e}", n / 100.0).parse().ok())
+            }
+            None => decimal(s.trim_ascii()),
+        },
+        AttributeValue::Bool(_) => None,
+    }
+}
+
+/// An opacity clamped to `0..=1`; a JS `NaN` or infinity is unset.
 pub(super) fn opacity(value: &AttributeValue) -> Option<f64> {
-    number(value)
-        .filter(|n| n.is_finite())
-        .map(|n| n.clamp(0.0, 1.0))
+    opacity_value(value).map(|n| n.clamp(0.0, 1.0))
 }
 
 #[cfg(test)]
@@ -180,6 +193,35 @@ mod tests {
     #[case::non_numeric_string(text("half"))]
     fn opacity_that_is_not_a_finite_number_is_unset(#[case] value: AttributeValue) {
         assert_eq!(style_of(&[("opacity", value)]).opacity, None);
+    }
+
+    #[rstest]
+    #[case::percent(text("50%"), 0.5)]
+    #[case::exponent_percent(text("5e1%"), 0.5)]
+    #[case::surrounding_space(text(" 50% "), 0.5)]
+    #[case::fraction_percent(text("50.5%"), 0.505)]
+    #[case::rounded_small_percent(text("0.7%"), 0.007)]
+    #[case::rounded_percent(text("12.3%"), 0.123)]
+    #[case::beyond_one_percent(text("150%"), 1.0)]
+    #[case::negative_percent(text("-50%"), 0.0)]
+    #[case::overflowing_percent(text("1e999%"), 1.0)]
+    #[case::js_number_is_no_percentage(num(50.0), 1.0)]
+    fn opacity_takes_a_percentage_as_its_fraction(
+        #[case] value: AttributeValue,
+        #[case] want: f64,
+    ) {
+        assert_eq!(style_of(&[("opacity", value)]).opacity, Some(want));
+    }
+
+    #[test]
+    fn a_flex_factor_takes_no_percentage() {
+        let (style, warnings) = style_and_warnings(&[("flex_grow", text("50%"))]);
+
+        assert_eq!(style.flex_grow, None);
+        assert_eq!(
+            warnings,
+            ["ignoring unsupported value for style key `flex_grow`"]
+        );
     }
 
     #[rstest]
@@ -392,7 +434,11 @@ mod tests {
     #[case::infinity("Infinity")]
     #[case::trailing_dot("5.")]
     #[case::dot_before_exponent("1.e2")]
-    #[case::percent("50%")]
+    #[case::space_before_percent("50 %")]
+    #[case::double_percent("50%%")]
+    #[case::bare_percent("%")]
+    #[case::trailing_dot_before_percent("50.%")]
+    #[case::text_after_percent("50%x")]
     fn a_numeric_string_in_a_wrong_form_warns(#[case] written: &str) {
         let (style, warnings) = style_and_warnings(&[("opacity", text(written))]);
 

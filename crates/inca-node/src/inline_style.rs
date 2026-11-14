@@ -388,38 +388,40 @@ mod tests {
         assert_eq!(entry(&tree, id).as_deref(), Some(""));
     }
 
-    #[rstest]
-    #[case::overflowing("1e999", "opacity: 3.4028234663852886e+38;", 1.0)]
-    #[case::negative_overflowing("-1e999", "opacity: -3.4028234663852886e+38;", 0.0)]
-    fn set_style_property_of_an_overflowing_opacity_stores_it_and_renders_it_clamped(
-        #[case] written: &str,
-        #[case] css: &str,
-        #[case] rendered: f64,
-    ) {
+    #[test]
+    fn set_style_property_of_a_percentage_opacity_stores_its_fraction() {
         let (mut tree, id) = block(&[]);
 
-        let lines = tree.set_style_property(id, "opacity", written).unwrap();
+        let lines = tree.set_style_property(id, "opacity", "50%").unwrap();
 
         assert!(lines.is_empty(), "{lines:?}");
-        assert_eq!(css_text(tree.get(id).unwrap()), css);
-        assert_eq!(build_spec(&tree, id).unwrap().style.opacity, Some(rendered));
+        assert_eq!(css_text(tree.get(id).unwrap()), "opacity: 0.5;");
+        assert_eq!(build_spec(&tree, id).unwrap().style.opacity, Some(0.5));
     }
 
-    #[rstest]
-    #[case::overflowing("opacity: 1e999", "opacity: 3.4028234663852886e+38;", 1.0)]
-    #[case::negative_overflowing("opacity: -1e999", "opacity: -3.4028234663852886e+38;", 0.0)]
-    fn set_style_text_of_an_overflowing_opacity_stores_it_and_renders_it_clamped(
-        #[case] written: &str,
-        #[case] css: &str,
-        #[case] rendered: f64,
-    ) {
+    #[test]
+    fn set_style_text_of_a_percentage_opacity_stores_one_declaration() {
         let (mut tree, id) = block(&[]);
 
-        let lines = tree.set_style_text(id, written).unwrap();
+        let lines = tree.set_style_text(id, "opacity: 50%").unwrap();
 
         assert!(lines.is_empty(), "{lines:?}");
-        assert_eq!(css_text(tree.get(id).unwrap()), css);
-        assert_eq!(build_spec(&tree, id).unwrap().style.opacity, Some(rendered));
+        assert_eq!(style_length(tree.get(id).unwrap()), 1);
+        assert_eq!(build_spec(&tree, id).unwrap().style.opacity, Some(0.5));
+    }
+
+    #[test]
+    fn set_style_text_of_an_overflowing_opacity_stores_the_largest_value() {
+        let (mut tree, id) = block(&[]);
+
+        let lines = tree.set_style_text(id, "opacity: 1e999").unwrap();
+
+        assert!(lines.is_empty(), "{lines:?}");
+        assert_eq!(
+            css_text(tree.get(id).unwrap()),
+            "opacity: 3.4028234663852886e+38;"
+        );
+        assert_eq!(build_spec(&tree, id).unwrap().style.opacity, Some(1.0));
     }
 
     #[rstest]
@@ -434,14 +436,18 @@ mod tests {
     }
 
     #[rstest]
-    #[case::beyond_one(2.0, "opacity: 2;", 1.0)]
-    #[case::negative(-1.0, "opacity: -1;", 0.0)]
+    #[case::beyond_one(num(2.0), "opacity: 2;", 1.0)]
+    #[case::negative(num(-1.0), "opacity: -1;", 0.0)]
+    #[case::percent_beyond_one(text("150%"), "opacity: 1.5;", 1.0)]
+    #[case::negative_percent(text("-50%"), "opacity: -0.5;", 0.0)]
+    #[case::overflowing(text("1e999"), "opacity: 3.4028234663852886e+38;", 1.0)]
+    #[case::negative_overflowing(text("-1e999"), "opacity: -3.4028234663852886e+38;", 0.0)]
     fn a_finite_opacity_outside_the_range_is_kept_and_rendered_clamped(
-        #[case] value: f64,
+        #[case] value: AttributeValue,
         #[case] css: &str,
         #[case] rendered: f64,
     ) {
-        let (mut tree, id) = block(&[("opacity", num(value))]);
+        let (mut tree, id) = block(&[("opacity", value)]);
         assert_eq!(css_text(tree.get(id).unwrap()), css);
         assert_eq!(build_spec(&tree, id).unwrap().style.opacity, Some(rendered));
 

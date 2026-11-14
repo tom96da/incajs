@@ -241,13 +241,19 @@ describe("the style types", () => {
   });
 
   it("accept a decimal string on opacity, flexGrow and flexShrink", () => {
-    expectTypeOf<StyleProps["opacity"]>().toEqualTypeOf<number | `${number}` | undefined>();
+    expectTypeOf<StyleProps["opacity"]>().toEqualTypeOf<
+      number | `${number}` | `${number}%` | undefined
+    >();
     expectTypeOf<StyleProps["flexGrow"]>().toEqualTypeOf<number | `${number}` | undefined>();
     expectTypeOf<StyleProps["flexShrink"]>().toEqualTypeOf<number | `${number}` | undefined>();
   });
 
-  it("reject a percentage on opacity", () => {
-    expectTypeOf<{ opacity: "50%" }>().not.toExtend<StyleProps>();
+  it("accept a percentage on opacity", () => {
+    expectTypeOf<{ opacity: "50%" }>().toExtend<StyleProps>();
+  });
+
+  it("reject a percentage on flexGrow", () => {
+    expectTypeOf<{ flexGrow: "50%" }>().not.toExtend<StyleProps>();
   });
 });
 

@@ -102,8 +102,8 @@ any other declaration. A string replaces every property set before. `null` or
 
 A px size is a number or a string such as `"10px"`. A string that reads as
 zero, such as `"0"` or `"0.0"`, also works. Other units are not supported.
-`opacity`, `flexGrow` and `flexShrink` also take a decimal string such as
-`"0.5"`, without `%`. A key that starts with `-` is unknown.
+`opacity`, `flexGrow` and `flexShrink` also take a decimal string such as `"0.5"`. `opacity` also
+takes a percentage such as `"50%"`. A key that starts with `-` is unknown.
 
 | Key | Value | Notes |
 | --- | --- | --- |
@@ -124,7 +124,7 @@ zero, such as `"0"` or `"0.0"`, also works. Other units are not supported.
 | `padding` / `paddingX` / `paddingY` / `paddingTop` / `paddingRight` / `paddingBottom` / `paddingLeft` | px size (`>= 0`) | a negative, `NaN` or infinite number is ignored |
 | `margin` / `marginX` / `marginY` / `marginTop` / `marginRight` / `marginBottom` / `marginLeft` | px size (negative allowed) \| `"auto"` | |
 | `flexGrow` / `flexShrink` | number or decimal string (`>= 0`) | |
-| `opacity` | number or decimal string (`0` to `1`) | clamped; `NaN` and infinity are ignored; applies to descendants too |
+| `opacity` | number, decimal string or percentage (`0` to `1`, `0%` to `100%`) | clamped; `NaN` and infinity are ignored; applies to descendants too |
 | `minWidth` / `minHeight` / `maxWidth` / `maxHeight` | px size (`>= 0`) \| `"auto"` | `"auto"` is the default limit: none for the `max` keys, the content size for a flex item's `min` keys |
 
 A length above `33554428px` and a flex factor above `1e18` apply at that value and read back as it,

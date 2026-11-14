@@ -225,6 +225,13 @@ mod tests {
     }
 
     #[test]
+    fn a_percentage_opacity_reaches_the_gpui_refinement() {
+        let refinement = refine(&[("opacity", text("50%"))]);
+
+        assert_eq!(refinement.opacity, Some(0.5));
+    }
+
+    #[test]
     fn color_keys_reach_the_gpui_refinement() {
         let mut style = StyleRefinement::default();
         apply_style(
