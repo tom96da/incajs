@@ -81,7 +81,7 @@ fn is_connected<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> 
     move |ctx, JsNodeId(node_id)| {
         let host = host.borrow();
         existing_node(&ctx, &host.tree, node_id)?;
-        Ok(host.tree.is_connected(node_id))
+        Ok(host.tree.in_document(node_id))
     }
 }
 
@@ -433,6 +433,22 @@ mod tests {
             .unwrap();
 
         assert_eq!(reads, [false, true, true]);
+    }
+
+    #[test]
+    fn is_connected_of_the_element_of_a_copied_document_is_true() {
+        let (engine, _host) = engine_with_bindings();
+
+        let connected: bool = engine
+            .eval(
+                r"
+                const n = __inca_native__;
+                n.isConnected(n.cloneNode(n.documentNodeId(), true)[1][0]);
+                ",
+            )
+            .unwrap();
+
+        assert!(connected);
     }
 
     #[rstest]

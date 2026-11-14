@@ -15,7 +15,9 @@ use std::rc::Rc;
 
 use rquickjs::{Array, Ctx, Exception, IntoJs, Result as JsResult, Value};
 
-use inca_node::{AttributeValue, HtmlScope, NodeId, ParsedHtml, TreeError, VirtualTree};
+use inca_node::{
+    AttributeValue, HtmlScope, NodeId, ParsedHtml, TreeError, VirtualNode, VirtualTree,
+};
 
 use super::Natives;
 use super::attributes::print_style_warning;
@@ -112,7 +114,7 @@ fn set_inner_html<'js>(
 }
 
 /// Replaces `node_id` with the nodes `markup` parses to in the context of its parent. A node
-/// without a parent changes nothing and gives `null`. A node whose parent is the document throws.
+/// without a parent changes nothing and gives `null`. A node whose parent is a document throws.
 fn set_outer_html<'js>(
     host: Rc<RefCell<Host>>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Value<'js>> {
@@ -122,7 +124,7 @@ fn set_outer_html<'js>(
             let Some(parent) = existing_node(&ctx, &host.tree, node_id)?.parent() else {
                 return Ok(Value::new_null(ctx.clone()));
             };
-            if host.tree.document() == Some(parent) {
+            if host.tree.get(parent).is_some_and(VirtualNode::is_document) {
                 return Err(throw_tree_error(&ctx, TreeError::DocumentParent(node_id)));
             }
             host.tree
@@ -166,7 +168,10 @@ fn insert_adjacent_html<'js>(
             Position::AfterBegin | Position::BeforeEnd => node_id,
         };
         if matches!(position, Position::BeforeBegin | Position::AfterEnd)
-            && host.tree.document() == Some(container)
+            && host
+                .tree
+                .get(container)
+                .is_some_and(VirtualNode::is_document)
         {
             return Err(throw_tree_error(&ctx, TreeError::DocumentParent(node_id)));
         }
@@ -511,6 +516,21 @@ mod tests {
         assert_eq!(
             name_and_skipped_ids(&engine, "n.setOuterHtml(n.rootNodeId(), '<i></i>')"),
             r#"["NoModificationAllowedError",0]"#
+        );
+    }
+
+    #[rstest]
+    #[case::set_outer_html("n.setOuterHtml(copy, '<i></i>')")]
+    #[case::insert_adjacent_html_after_end("n.insertAdjacentHtml(copy, 'afterend', '<i></i>')")]
+    fn markup_beside_the_element_of_a_copied_document_throws(#[case] call: &str) {
+        let (engine, _host) = engine();
+
+        assert_eq!(
+            error_name(
+                &engine,
+                &format!("const copy = n.cloneNode(n.documentNodeId(), true)[1][0]; {call}")
+            ),
+            "NoModificationAllowedError"
         );
     }
 
