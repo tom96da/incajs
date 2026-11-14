@@ -18,8 +18,8 @@ import { createElementNode, createTextNode } from "../src/element/handle.mts";
 import { elementOf, isDestroyed } from "../src/element/lifecycle.mts";
 import { createIncaApp } from "../src/vue/index.mts";
 import { nativeStub } from "./setup.mts";
+import type { HostCallback } from "../src/ffi/index.mts";
 import type { IncaElement } from "../src/index.mts";
-import type { HostCallback } from "../src/native.mts";
 
 /** Node's timers, put back after a test loads core over the fake host. */
 const nodeTimers = { setTimeout, setInterval, clearTimeout, clearInterval };

@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { nativeStub } from "../tests/setup.mts";
 import { createEventTarget } from "./eventTarget.mts";
-import type { HostCallback } from "./native.mts";
+import type { HostCallback } from "./ffi/index.mts";
 import type { EventLike } from "./types.mts";
 
 // Ids come from the host, which numbers them in order.

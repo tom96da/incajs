@@ -4,7 +4,7 @@
 // The relation members of every handle. The host compares the nodes of a live tree.
 // A freed node is in a tree of its own, so its answers come from the handle.
 
-import { compareNodePosition, isEqualNode, rootOf } from "../tree.mts";
+import { compareNodePosition, isEqualNode, rootOf } from "../ffi/index.mts";
 import { requireArguments } from "./attributes.mts";
 import { isDestroyed } from "./lifecycle.mts";
 import { nodeArgument } from "./nodeMutation.mts";

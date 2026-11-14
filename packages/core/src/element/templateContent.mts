@@ -3,7 +3,7 @@
 
 // The `content` of a template: one fragment handle for each template handle.
 
-import { native } from "../native.mts";
+import { holdNode, templateContent } from "../ffi/index.mts";
 import { releaseWhenCollected, storeContent } from "./lifecycle.mts";
 import type { NodeId } from "../types.mts";
 import type { IncaElement, IncaFragment } from "./types.mts";
@@ -17,7 +17,7 @@ import type { IncaElement, IncaFragment } from "./types.mts";
  * @internal
  */
 export function attachContent(template: IncaElement, build: (id: NodeId) => IncaFragment): void {
-  storeContent(template, build(native().templateContent(template.__node_id)!));
-  native().holdNode(template.__node_id);
+  storeContent(template, build(templateContent(template.__node_id)!));
+  holdNode(template.__node_id);
   releaseWhenCollected(template);
 }

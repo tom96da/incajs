@@ -4,11 +4,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { nativeStub } from "../../tests/setup.mts";
-import { HTML_NAMESPACE } from "../native.mts";
+import { HTML_NAMESPACE } from "../ffi/index.mts";
 import { createElementNode } from "./handle.mts";
 import { markDestroyed } from "./lifecycle.mts";
 import { insert } from "./shadowTree.mts";
-import type { Parsed, ParsedEntry } from "../native.mts";
+import type { Parsed, ParsedEntry } from "../ffi/index.mts";
 import type { IncaElement, IncaTemplateElement, IncaText } from "./types.mts";
 
 let templates = new Set<number>();

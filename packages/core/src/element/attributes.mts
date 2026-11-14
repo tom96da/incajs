@@ -7,7 +7,7 @@ import {
   getAttribute as readAttribute,
   removeAttribute as dropAttribute,
   setAttribute as writeAttribute,
-} from "../tree.mts";
+} from "../ffi/index.mts";
 import { namedNodeMapOf } from "./collections.mts";
 import { isDestroyed } from "./lifecycle.mts";
 import type { NodeId } from "../types.mts";

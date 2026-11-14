@@ -1,7 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { holdNode, insertBefore, releaseListeners, removeChild } from "../tree.mts";
+import { releaseCallbacks } from "../callbacks.mts";
+import { holdNode, insertBefore, releaseListeners, removeChild } from "../ffi/index.mts";
 import { isDestroyed, isHeld, markRemoved, releaseWhenCollected } from "./lifecycle.mts";
 import type { IncaElement, IncaNode, IncaParent } from "./types.mts";
 
@@ -88,7 +89,7 @@ export function remove(child: IncaNode): void {
   // A parent the host freed takes its children with it, and `removeChild` rejects its id.
   if (child.parent && isDestroyed(child.parent)) unlink(child);
   else detach(child);
-  releaseListeners(child.__node_id);
+  releaseCallbacks(releaseListeners(child.__node_id));
   markRemoved(child);
   keep(child);
 }

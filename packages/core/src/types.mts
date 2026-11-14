@@ -12,30 +12,12 @@ import type {
   NodeListOf,
   NodeMembers,
 } from "./element/types.mts";
+import type { AttributeValue, CallbackId, NodeId, ScrollAlignment } from "./ffi/index.mts";
 
-/**
- * Stable handle to a node in the native retained tree, returned by `createNode`
- * and used in every later call that touches that node.
- */
-export type NodeId = number;
-
-/**
- * Id assigned to one registered event listener. Managed internally by
- * `addEventListener`/`removeEventListener`/`releaseListeners`.
- */
-export type CallbackId = number;
-
-/**
- * A value `setAttribute`/`setStyle` can take. Any other value raises a catchable
- * exception.
- */
-export type AttributeValue = string | number | boolean;
+export type { AttributeValue, CallbackId, NodeId, ScrollAlignment };
 
 /** Element kind passed to `createNode`. */
 export type TagName = string;
-
-/** Where `scrollIntoView` aligns a node on one axis. */
-export type ScrollAlignment = "start" | "center" | "end" | "nearest";
 
 /** One overflow value; `"auto"` is an alias of `"scroll"`. */
 export type Overflow = "visible" | "hidden" | "clip" | "scroll" | "auto";

@@ -7,6 +7,7 @@ import { runInNewContext } from "node:vm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { nativeStub } from "../../tests/setup.mts";
+import { addCallback, callbackIdFor, groupOf } from "../callbacks.mts";
 import { document } from "../document.mts";
 import { createEventTarget } from "../eventTarget.mts";
 import { htmlCollectionOf, namedNodeMapOf, nodeListOf } from "./collections.mts";
@@ -406,6 +407,21 @@ describe("remove", () => {
 
     expect(host.releaseListeners).toHaveBeenCalledWith(child.__node_id);
     expect(host.removeChild).not.toHaveBeenCalled();
+  });
+
+  it("forgets the callback ids the host reports", () => {
+    const [releasedListener, keptListener] = [vi.fn<() => void>(), vi.fn<() => void>()];
+    const child = element();
+    addCallback(groupOf(child.__node_id, "click", false), releasedListener, 501);
+    addCallback(groupOf(2, "click", false), keptListener, 502);
+    vi.mocked(host.releaseListeners).mockReturnValueOnce([501]);
+
+    tree.remove(child);
+
+    expect(
+      callbackIdFor(groupOf(child.__node_id, "click", false), releasedListener),
+    ).toBeUndefined();
+    expect(callbackIdFor(groupOf(2, "click", false), keptListener)).toBe(502);
   });
 
   it("holds the removed element until its handle is collected", () => {

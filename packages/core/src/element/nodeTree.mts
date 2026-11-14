@@ -3,10 +3,16 @@
 
 // The node members of every handle: identity, data and links read from the host tree.
 
-import { childNodeIds, getAttribute, isConnected, linkedNode, setAttribute } from "../tree.mts";
+import {
+  childNodeIds,
+  getAttribute,
+  isConnected,
+  linkedNode,
+  setAttribute,
+} from "../ffi/index.mts";
 import { nodeListOf } from "./collections.mts";
 import { isDestroyed } from "./lifecycle.mts";
-import type { NodeLink } from "../native.mts";
+import type { NodeLink } from "../ffi/index.mts";
 import type { IncaDocument } from "../types.mts";
 import type { HandleBuilders, NodeMutationMembers } from "./nodeMutation.mts";
 import type { NodeRelationMembers } from "./nodeRelations.mts";

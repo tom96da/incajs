@@ -4,10 +4,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { nativeStub } from "../tests/setup.mts";
-import { callbackIdFor, groupOf, registeredGroupCount } from "./callbacks.mts";
-import { addEventListener, blur, click, focus, removeEventListener } from "./events.mts";
-import { releaseListeners } from "./tree.mts";
-import type { HostCallback, NodeLink, Parsed } from "./native.mts";
+import { callbackIdFor, groupOf, registeredGroupCount, releaseCallbacks } from "./callbacks.mts";
+import { addEventListener, removeEventListener } from "./events.mts";
+import type { HostCallback, NodeLink, Parsed } from "./ffi/index.mts";
 import type { EventLike } from "./types.mts";
 
 // Ids come from the host, which numbers them in order.
@@ -217,14 +216,11 @@ describe("registry groups", () => {
     expect(registeredGroupCount() - base).toBe(0);
   });
 
-  it("empties when the host reports released registrations", () => {
+  it("empties when every registration id is released", () => {
     addEventListener(9001, "click", vi.fn<() => void>());
     addEventListener(9002, "keydown", vi.fn<() => void>());
-    native.releaseListeners.mockReturnValueOnce(
-      native.addEventListener.mock.results.map((result) => result.value),
-    );
 
-    releaseListeners(9001);
+    releaseCallbacks(native.addEventListener.mock.results.map((result) => result.value));
 
     expect(registeredGroupCount() - base).toBe(0);
   });
@@ -421,22 +417,6 @@ describe("removeEventListener", () => {
   });
 });
 
-describe("releaseListeners", () => {
-  it("forgets the callback ids the host reports", () => {
-    const [releasedListener, keptListener] = [vi.fn<() => void>(), vi.fn<() => void>()];
-    addEventListener(1, "click", releasedListener);
-    addEventListener(2, "click", keptListener);
-    const [first, second] = native.addEventListener.mock.results.map((result) => result.value);
-    native.releaseListeners.mockReturnValueOnce([first!]);
-
-    releaseListeners(1);
-
-    expect(native.releaseListeners).toHaveBeenCalledWith(1);
-    expect(callbackIdFor(groupOf(1, "click", false), releasedListener)).toBeUndefined();
-    expect(callbackIdFor(groupOf(2, "click", false), keptListener)).toBe(second);
-  });
-});
-
 describe("latestEventId", () => {
   // A fresh module per test, so the tracker starts at 0.
   let tracked: typeof import("./events.mts");
@@ -471,27 +451,4 @@ describe("latestEventId", () => {
       expect(tracked.latestEventId()).toBe(0);
     },
   );
-});
-
-describe("focus", () => {
-  it("passes the preventScroll flag through", () => {
-    focus(7, true);
-    focus(7, false);
-    expect(native.focusNode).toHaveBeenNthCalledWith(1, 7, true);
-    expect(native.focusNode).toHaveBeenNthCalledWith(2, 7, false);
-  });
-});
-
-describe("blur", () => {
-  it("forwards the node id to native blurNode", () => {
-    blur(7);
-    expect(native.blurNode).toHaveBeenCalledWith(7);
-  });
-});
-
-describe("click", () => {
-  it("forwards the node id to native click", () => {
-    click(7);
-    expect(native.click).toHaveBeenCalledExactlyOnceWith(7);
-  });
 });

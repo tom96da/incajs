@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { scrollNode, scrollOf } from "../tree.mts";
+import { scrollNode, scrollOf } from "../ffi/index.mts";
 import { isRemoved } from "./lifecycle.mts";
 import type { ScrollAlignment } from "../types.mts";
 import type { IncaElement } from "./types.mts";

@@ -11,7 +11,7 @@ import {
   splitText,
   substringData,
   wholeText,
-} from "../tree.mts";
+} from "../ffi/index.mts";
 import { attributeText, requireArguments } from "./attributes.mts";
 import { isDestroyed, registerNode, releaseWhenCollected, withNodeId } from "./lifecycle.mts";
 import { nodeMutationMembers } from "./nodeMutation.mts";

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { native } from "../native.mts";
+import { releaseNode } from "../ffi/index.mts";
 import type { NodeId } from "../types.mts";
 import type { IncaElement, IncaFragment, IncaNode } from "./types.mts";
 
@@ -190,7 +190,7 @@ export function markFreed(nodeIds: readonly NodeId[]): void {
  * Releases the hold of a node whose handle was collected. A node destroyed
  * already is unknown to the host and the call does nothing.
  */
-const released = new FinalizationRegistry<NodeId>((id) => native().releaseNode(id));
+const released = new FinalizationRegistry<NodeId>((id) => releaseNode(id));
 
 const held = new WeakSet<IncaNode>();
 

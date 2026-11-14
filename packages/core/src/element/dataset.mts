@@ -1,7 +1,13 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { datasetDelete, datasetGet, datasetKeys, datasetSet, datasetTarget } from "../tree.mts";
+import {
+  datasetDelete,
+  datasetGet,
+  datasetKeys,
+  datasetSet,
+  datasetTarget,
+} from "../ffi/index.mts";
 import { attributeText } from "./attributes.mts";
 import type { NodeId } from "../types.mts";
 import type { DOMStringMap, IncaElement } from "./types.mts";
