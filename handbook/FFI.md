@@ -73,8 +73,6 @@ The host keeps a retained tree of nodes. JS names each node by a `u32` id.
   neither the root, the document, held with `holdNode` nor the content of a template, with its
   subtree. The content of a template goes with the template. The root and the document stay,
   detached, with everything below them.
-- `releaseListeners` drops the listeners of a node, its subtree and the content of a template and
-  leaves the nodes in the tree. A detached node stays readable until the host frees it.
 
 ### Tag vocabulary
 
@@ -213,8 +211,7 @@ be passed, and `undefined` there counts as `null`.
 | `hasPointerCapture` | `(nodeId: number, pointerId: number) => boolean` | Whether `nodeId` is the pending capture and still mounted. `false` for a `pointerId` other than 1. |
 | `templateContent` | `(nodeId: number) => number \| null` | The id of the content fragment of the template `nodeId`, the same id on every call. `null` for a node that is no template. Throws a `TypeError` for an unknown node. |
 | `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its subtree, and the content of a template, release the table entries of every `callbackId` registered in it and return the ids. An unknown id returns `[]`. Destroying the document, the root or a node above the root throws. Also drops the hold and the waiting `scrollIntoViewNode` calls of the destroyed nodes. |
-| `releaseListeners` | `(nodeId: number) => number[]` | Drop every listener registered on `nodeId` and on the nodes below it, release their table entries and return their `callbackId`s. The nodes, their attributes and their children stay. An unknown id returns `[]`. |
-| `removeNode` | `(nodeId: number) => [number[], number[]]` | Detach `nodeId` from its parent (see `removeChild`), hold it (see `holdNode`), drop every listener registered on it and on the nodes below it, release their table entries and return their `callbackId`s and the ids of `nodeId` and every node below it in pre-order. The content of a template and its nodes follow the template, before its children. An unknown id returns `[[], []]`. |
+| `removeNode` | `(nodeId: number) => [number[], number[]]` | Detach `nodeId` from its parent (see `removeChild`), hold it (see `holdNode`), drop every listener registered on it and on the nodes below it, release their table entries and return their `callbackId`s and the ids of `nodeId` and every node below it in pre-order. The content of a template and its nodes follow the template, before its children. The nodes stay readable until the host frees them. An unknown id returns `[[], []]`. |
 | `matches` | `(nodeId: number, selector: string) => boolean` | Whether the element `nodeId` matches the selector list. Throws a `SyntaxError` for an invalid selector and a `TypeError` for an unknown node. A `#text` node and a `#comment` node match nothing. |
 | `closest` | `(nodeId: number, selector: string) => number \| null` | The id of the nearest element at or above `nodeId` that matches. A `#text` node starts at its nearest element ancestor. Throws like `matches`. |
 | `querySelector` | `(nodeId: number, selector: string) => number \| null` | The id of the first descendant of `nodeId` that matches the selector list, in document order. `nodeId` is never a result. `:scope` and a top-level `&` are `nodeId`, and the whole tree takes part in the match. The document has no scope element, so `:scope` selects the element of the document. Text and `#comment` nodes are never results, and a `#text` or `#comment` start finds nothing. Throws a `SyntaxError` for an invalid selector, also for a `#text` or `#comment` start, and a `TypeError` for an unknown node. |
@@ -239,10 +236,8 @@ Shared throw rules, all as a `TypeError` except where noted:
 - `setAttribute` and `setStyle` throw for a `value` that is not a string, number or boolean.
 - `dispatchEvent` throws for an argument that is not an event of the host.
 - A `nodeId`, `parentId`, `childId` or `refId` that names no node
-  throws, except in the calls that let go of something: `releaseNode`,
-  `destroyNode`, `releaseListeners`, `removeNode`, `removeEventListener`,
-  `blurNode` and the `childId` of `removeChild` ignore it. The host can free
-  a node before the caller lets go of it.
+  throws, except in the calls that let go of something, such as `releaseNode`. They ignore it,
+  because the host can free a node before the caller lets go of it.
 - `classList`, `styleOf`, `datasetGet`, `datasetSet`, `datasetDelete` and `datasetKeys` do not throw
   for a freed `nodeId`. `classList` and `styleOf` return an object that reads empty, `datasetSet`
   still throws for a key that makes an invalid name and writes nothing, and the other calls read
@@ -305,10 +300,9 @@ Payloads and author-facing behaviour are in
   `2^31 - 1`. The call after the last one throws a `RangeError`. Distinct ids stack on one
   `(target, event)`, and `capture` and `passive` belong to the registration.
   An id belongs to one registration, so `removeEventListener` takes the id
-  only. `removeEventListener`, `destroyNode`, `releaseListeners`, `removeNode`
-  and the frame sweep release the table entries of the ids they drop.
-  `destroyNode`, `releaseListeners` and `removeNode` return the dropped ids
-  because the caller still has to free the JS half of its own bookkeeping.
+  only. A native that drops ids releases their table entries. A native that drops the ids of a
+  subtree also returns them, because the caller still has to free the JS half of its own
+  bookkeeping.
 - A walk reads each function from the table by id when it reaches the
   registration. An id with no table entry is skipped. A failed
   `addEventListener` (an unknown node, a value that is not a function or
@@ -331,8 +325,8 @@ call, the focus reveal and the `scroll` events.
 - The host calls `__inca_released__` at most once per frame, and only when the sweep of that frame
   freed a node.
 - `nodeIds` holds every freed node, subtrees and the content of a freed template included, and
-  `callbackIds` every registration on them. Each id arrives once. Ids freed by
-  `destroyNode`, dropped by `releaseListeners` or released by `removeNode` never pass through it.
+  `callbackIds` every registration on them. Each id arrives once. Ids that a native
+  returned as dropped never pass through it.
 - A throw is reported and the frame goes on.
 
 #### Event targets

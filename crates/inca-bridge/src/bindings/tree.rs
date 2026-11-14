@@ -14,8 +14,8 @@ use super::convert::{JsNodeId, existing_node, or_null, throw_tree_error};
 use super::host::Host;
 
 /// The retained tree itself: allocating and describing nodes, plus `templateContent`,
-/// `destroyNode`, `releaseListeners`, `holdNode` and `releaseNode`. Freeing a subtree is a tree
-/// operation first, even though it also releases the listener/focus state that named its nodes.
+/// `destroyNode`, `holdNode` and `releaseNode`. Freeing a subtree is a tree operation first, even
+/// though it also releases the listener/focus state that named its nodes.
 pub(super) fn install_tree(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("rootNodeId", root_node_id)?;
     n.set("documentNodeId", document_node_id)?;
@@ -31,7 +31,6 @@ pub(super) fn install_tree(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("removeStyle", super::attributes::remove_style)?;
     n.set("templateContent", template_content)?;
     n.set("destroyNode", destroy_node)?;
-    n.set("releaseListeners", release_listeners)?;
     n.set("holdNode", hold_node)?;
     n.set("releaseNode", release_node)
 }
@@ -88,25 +87,6 @@ fn destroy_node<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> 
     }
 }
 
-/// Drops the listeners of `node_id` and of every node below it, the content of a template
-/// included, and returns their callback ids. The nodes stay in the tree. An unknown id returns no
-/// ids.
-fn release_listeners<'js>(
-    host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Vec<u32>> {
-    move |ctx, JsNodeId(node_id)| {
-        let mut host = host.borrow_mut();
-        let callback_ids: Vec<u32> = host
-            .tree
-            .subtree(node_id)
-            .into_iter()
-            .flat_map(|id| host.listeners.release(id))
-            .collect();
-        callbacks::release(&ctx, &callback_ids)?;
-        Ok(callback_ids)
-    }
-}
-
 fn hold_node<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<()> {
     move |ctx, JsNodeId(node_id)| {
         host.borrow_mut()
@@ -123,9 +103,9 @@ fn release_node(host: Rc<RefCell<Host>>) -> impl Fn(JsNodeId) {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
-    use crate::test_support::{LISTEN_JS, callback_ids, engine_with_bindings, error_name};
+    use crate::Host;
+    use crate::test_support::{callback_ids, engine_with_bindings, error_name};
     use crate::tests::callback_stored;
-    use crate::{EventTargetId, Host};
     use inca_node::NodeId;
     use std::cell::RefCell;
     use std::rc::Rc;
@@ -405,6 +385,17 @@ mod tests {
         );
     }
 
+    /// Builds `root > branch > leaf` with a click listener on each of the two lower nodes.
+    const BRANCH_WITH_LISTENERS: &str = r"
+        const root = __inca_native__.rootNodeId();
+        const branch = __inca_native__.createNode('div');
+        const leaf = __inca_native__.createNode('div');
+        __inca_native__.appendChild(root, branch);
+        __inca_native__.appendChild(branch, leaf);
+        __inca_native__.addEventListener(branch, 'click', () => {});
+        __inca_native__.addEventListener(leaf, 'click', () => {});
+        ";
+
     #[test]
     fn destroy_node_releases_the_table_entries_of_its_subtree() {
         let (engine, _host) = engine_with_bindings();
@@ -588,113 +579,6 @@ mod tests {
         assert_eq!(host.tree.get(ids[1]).unwrap().parent(), Some(ids[0]));
     }
 
-    /// Builds `root > branch > leaf` with a click listener on each of the two lower nodes.
-    const BRANCH_WITH_LISTENERS: &str = r"
-        const root = __inca_native__.rootNodeId();
-        const branch = __inca_native__.createNode('div');
-        const leaf = __inca_native__.createNode('div');
-        __inca_native__.appendChild(root, branch);
-        __inca_native__.appendChild(branch, leaf);
-        __inca_native__.addEventListener(branch, 'click', () => {});
-        __inca_native__.addEventListener(leaf, 'click', () => {});
-        ";
-
-    #[test]
-    fn release_listeners_returns_the_callbacks_of_the_node_and_a_descendant() {
-        let (engine, _host) = engine_with_bindings();
-
-        let mut released: Vec<u32> = engine
-            .eval(&format!(
-                r"
-                {BRANCH_WITH_LISTENERS}
-                __inca_native__.releaseListeners(branch);
-                "
-            ))
-            .unwrap();
-        released.sort_unstable();
-
-        assert_eq!(released, [1, 2]);
-    }
-
-    /// Releases the listeners of `branch` and returns `[branch, leaf]`.
-    fn release_branch(engine: &inca_jsenv::Engine) -> Vec<NodeId> {
-        engine
-            .eval(&format!(
-                r"
-                {BRANCH_WITH_LISTENERS}
-                __inca_native__.setAttribute(leaf, 'id', 'x');
-                __inca_native__.releaseListeners(branch);
-                [branch, leaf];
-                "
-            ))
-            .unwrap()
-    }
-
-    #[test]
-    fn release_listeners_releases_the_table_entries_of_a_subtree() {
-        let (engine, _host) = engine_with_bindings();
-
-        release_branch(&engine);
-
-        assert!(!callback_stored(&engine, 1));
-        assert!(!callback_stored(&engine, 2));
-    }
-
-    #[test]
-    fn release_listeners_drops_the_registrations() {
-        let (engine, host) = engine_with_bindings();
-        let ids = release_branch(&engine);
-
-        let host = host.borrow();
-        assert!(callback_ids(&host.listeners, EventTargetId::Node(ids[0]), "click").is_empty());
-        assert!(callback_ids(&host.listeners, EventTargetId::Node(ids[1]), "click").is_empty());
-    }
-
-    #[test]
-    fn release_listeners_keeps_the_nodes_and_their_attributes() {
-        let (engine, host) = engine_with_bindings();
-        let ids = release_branch(&engine);
-
-        let host = host.borrow();
-        let leaf_node = host.tree.get(ids[1]).unwrap();
-        assert_eq!(leaf_node.parent(), Some(ids[0]));
-        assert!(leaf_node.attributes().contains_key("id"));
-    }
-
-    #[test]
-    fn release_listeners_of_an_unknown_id_returns_nothing() {
-        let (engine, _host) = engine_with_bindings();
-
-        let released: Vec<u32> = engine
-            .eval("__inca_native__.releaseListeners(999);")
-            .unwrap();
-
-        assert!(released.is_empty());
-    }
-
-    #[test]
-    fn a_dispatched_event_reaches_no_listener_after_release_listeners() {
-        let (engine, _host) = engine_with_bindings();
-        engine.eval::<()>(LISTEN_JS).unwrap();
-
-        let ran: bool = engine
-            .eval(
-                r"
-                const node = __inca_native__.createNode('div');
-                let ran = false;
-                __inca_test_listen__(node, 'ping', () => {
-                    ran = true;
-                });
-                __inca_native__.releaseListeners(node);
-                __inca_native__.dispatchEvent(node, new Event('ping'));
-                ran;
-                ",
-            )
-            .unwrap();
-
-        assert!(!ran);
-    }
-
     #[test]
     fn template_content_is_the_same_fragment_on_each_read() {
         let (engine, _host) = engine_with_bindings();
@@ -743,27 +627,5 @@ mod tests {
             .unwrap();
 
         assert!(caught);
-    }
-
-    #[test]
-    fn release_listeners_drops_a_listener_on_a_content_node() {
-        let (engine, host) = engine_with_bindings();
-
-        let ids: Vec<NodeId> = engine
-            .eval(
-                r"
-                const n = __inca_native__;
-                const template = n.createNode('template');
-                const inner = n.createNode('div');
-                n.appendChild(n.templateContent(template), inner);
-                n.addEventListener(inner, 'click', () => {});
-                n.releaseListeners(template);
-                [inner];
-                ",
-            )
-            .unwrap();
-
-        let host = host.borrow();
-        assert!(callback_ids(&host.listeners, EventTargetId::Node(ids[0]), "click").is_empty());
     }
 }

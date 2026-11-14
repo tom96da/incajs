@@ -198,6 +198,7 @@ mod tests {
     use crate::test_support::{
         HTML, LISTEN_JS, SVG, callback_ids, engine_with_bindings, error_name,
     };
+    use crate::tests::callback_stored;
 
     /// Builds `p > (a, b)`, `q > x`, `g > (g1, g2)` and the parentless `loose`, `loose2`, `t`
     /// (text), `c` (comment) and `f` (empty fragment).
@@ -659,6 +660,24 @@ mod tests {
         for id in ids {
             assert!(callback_ids(&host.listeners, EventTargetId::Node(id), "click").is_empty());
         }
+    }
+
+    #[test]
+    fn remove_node_releases_the_table_entries_of_the_subtree() {
+        let (engine, _host) = engine_with_family();
+
+        let ids: Vec<u32> = engine
+            .eval(&format!(
+                r"
+                {REMOVABLE}
+                n.appendChild(p, top);
+                n.removeNode(top);
+                listeners;
+                "
+            ))
+            .unwrap();
+
+        assert!(ids.iter().all(|&id| !callback_stored(&engine, id)));
     }
 
     #[test]
