@@ -29,9 +29,14 @@ methods of the DOM `Event` interface (see Base fields).
 - A removed element drops its listeners. `addEventListener()` and an
   assignment to a handler property do nothing on it.
 - An attribute that holds code, such as `onclick="count++"`, runs nothing.
-- `document` has no `body`, `head` or `documentElement`. `window` has no query methods.
-- `document` needs no import. `window` is an import. `globalThis.window` and
-  `globalThis.document` stay undefined.
+- `document` has no `body`, `head` or `documentElement`. `window` has the event members only, with
+  no `location`, `navigator` or `performance`, and the host fires no `resize` or `load` event at it.
+- `document` and `window` need no import. `globalThis.window` and `globalThis.document` stay
+  undefined, and `window.window`, `self` and `window.globalThis` are absent.
+  A dependency that tests `typeof window` finds a window.
+- A root that a hand-built renderer mounts cannot reload on a `<script>` edit, because
+  `window.location` is absent.
+- A window close and a quit run no `beforeunload`, `pagehide` or `unload` listener.
 
 ## Event modifiers
 

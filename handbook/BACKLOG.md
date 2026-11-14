@@ -1577,8 +1577,9 @@ A fixed entry is deleted and its ID is never reused.
   `Units: cli · Size: M · Impact: Low`
 
   `defaultPlugins.mts` names `incajs` in two ways: `inject` holds `["incajs", "document"]` and
-  `styleModule` holds `"incajs/style"`. `build.mts` and `dev.mts` import `defaultFrontend` and
-  `defaultBundler` from it, so both commands depend on the module that names Vue and Vite.
+  `["incajs", "window"]`, and `styleModule` holds `"incajs/style"`. `build.mts` and `dev.mts` import
+  `defaultFrontend` and `defaultBundler` from it, so both commands depend on the module that names
+  Vue and Vite.
 
 - **B-304 `DOMTokenList` has no indexed access**
   `Units: bridge · Size: M · Impact: Low`
@@ -1658,12 +1659,14 @@ A fixed entry is deleted and its ID is never reused.
   to lower case. Fix: pass the argument through once Vue's own `createApp` runs on the node layer
   (v0.0.34).
 
-- **B-317 `window` is not a global**
-  `Units: host · Size: S · Impact: Low`
+- **B-317 A root rendered with `render()` reloads through `window.location`**
+  `Units: cli,core · Size: S · Impact: Low`
 
-  Vue's development build reads `window.ShadowRoot` unguarded in `mount()` (`normalizeContainer`),
-  and `window` is not a global, so `inca dev` with Vapor mode throws at mount. Fix: guard the
-  `window` read in the host, or provide a `window` global.
+  A root made by a hand-built `createRenderer(...).render()` has no `reload` method, so a `<script>`
+  edit makes Vue's HMR call `window.location.reload()`. `window` has no `location`: the call throws
+  `cannot read property 'reload' of undefined`, Vue catches it and prints `Full reload required`,
+  and the edited script does not run again. `createIncaApp` roots are not affected. Fix: give
+  `window` a `location` with a `reload()` that reloads the app, or guard the call.
 
 - **B-318 A prefixed HTML element with a void name writes its child and an end tag**
   `Units: node · Size: S · Impact: Low`
@@ -1762,6 +1765,47 @@ A fixed entry is deleted and its ID is never reused.
   async function without settling it. Fix: settle the module's promise with the stop's error when a
   job ends on an uncatchable error, in the vendored source or in a wrapper that rejects the
   module's promise after a tripped job.
+
+- **B-328 The injected names reach every package**
+  `Units: cli · Size: M · Impact: Low`
+
+  The build binds `document` and `window` in every module, dependencies included. A dependency that
+  tests `typeof window` takes its browser branch and finds a window with the event members only. The
+  injection adds no build time (170 ms before and after). Fix: an exclude list or an
+  allow list per package and per name, applied in the inject plugin by the module's package. Needs:
+  B-266, which decides where the list is configured.
+
+- **B-329 `window` and `document` are not global properties**
+  `Units: cli,core · Size: M · Impact: Low`
+
+  A browser answers `window === globalThis`. Here `window` is an object the build binds in each
+  module that names it: `typeof window` is `"object"` while `globalThis.window` is `undefined`, and
+  `window.window`, `self` and `window.globalThis` are absent. `document` behaves the same way:
+  `typeof document` is `"object"` and `globalThis.document` is `undefined`. The types of `document`
+  (a `var`) accept `globalThis.document`, and the types of `window` (a `const`) reject
+  `globalThis.window`; the `document` type disagrees with the runtime. Code that never passes the
+  build sees neither name. Fix: define `window` as a global once every entry point passes the build,
+  or give the injected object the self-references. Needs: B-328 (scope of the names).
+
+- **B-330 `window` lacks the members of the browser scope**
+  `Units: core · Size: M · Impact: Low`
+
+  `window` has the event members only. The host fires no `resize` or `load` event at it (`focus` and
+  `blur` reach it by capture only). `navigator`, `performance`, `innerWidth`, `innerHeight`,
+  `getComputedStyle()` and `ShadowRoot` are absent, so Vue and dependencies that read them take
+  their fallback or throw a `TypeError` (`Transition` reads `window.getComputedStyle`; this entry
+  owns the window part and B-299 owns the `document.body` part). `location` is B-317. Fix: add each
+  member as its own entry when a host feature backs it.
+
+- **B-337 A window close or a quit runs no `beforeunload`, `pagehide` or `unload` listener**
+  `Units: host,bridge · Size: M · Impact: Low`
+
+  Browsers run these listeners on a page close. A real close fires none of the events `close`,
+  `unload`, `pagehide` and `beforeunload`: four listeners never fired in 120 runs. A quit dispatches
+  nothing by code reading, and Cmd+Q is unmeasured. So an app has no hook for work at the end. Fix:
+  dispatch `pagehide` and `unload` on `window` (already the event target) before the windows clear.
+  `beforeunload` is left out: a cancellable close needs gpui's `on_window_should_close`, which the
+  host does not use.
 
 - **B-339 Reading `children` of a large list costs more than before**
   `Units: bridge,core · Size: M · Impact: Low`

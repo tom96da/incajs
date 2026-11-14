@@ -36,7 +36,8 @@ async function bundleOf(template: string, imports = ""): Promise<string> {
   );
   await writeFile(
     path.join(stub, "index.mjs"),
-    `export const document = { title: "DOCUMENT_STUB_MARKER" };\n`,
+    `export const document = { title: "DOCUMENT_STUB_MARKER" };\n` +
+      `export const window = { title: "WINDOW_STUB_MARKER" };\n`,
   );
   await writeFile(path.join(appDir, "App.vue"), `<template>${template}</template>\n`);
   const entry = path.join(appDir, "entry.mts");
@@ -54,16 +55,23 @@ async function bundleOf(template: string, imports = ""): Promise<string> {
   return readFile(output.entryFile, "utf8");
 }
 
-it("binds document in a dependency that sits outside the app", async () => {
-  const outside = await realpath(await mkdtemp(path.join(tmpdir(), "inca-dependency-")));
-  const dependency = path.join(outside, "dependency.mjs");
-  await writeFile(dependency, "globalThis.title = document.title;\n");
+it.each([
+  ["document", "DOCUMENT_STUB_MARKER"],
+  ["window", "WINDOW_STUB_MARKER"],
+])(
+  "binds %s in a dependency that sits outside the app",
+  async (name, marker) => {
+    const outside = await realpath(await mkdtemp(path.join(tmpdir(), "inca-dependency-")));
+    const dependency = path.join(outside, "dependency.mjs");
+    await writeFile(dependency, `globalThis.title = ${name}.title;\n`);
 
-  const bundle = await bundleOf("<i>x</i>", `import ${JSON.stringify(dependency)};\n`);
-  await rm(outside, { recursive: true, force: true });
+    const bundle = await bundleOf("<i>x</i>", `import ${JSON.stringify(dependency)};\n`);
+    await rm(outside, { recursive: true, force: true });
 
-  expect(bundle).toContain("DOCUMENT_STUB_MARKER");
-}, 20000);
+    expect(bundle).toContain(marker);
+  },
+  20000,
+);
 
 type StyleCall = [key: string, css: string];
 

@@ -6,6 +6,9 @@ declare global {
   /** The document of the app. The build adds its import to every module that names it. */
   var document: import("incajs").IncaDocument;
 
+  /** The window of the app. The build adds its import to every module that names it. */
+  const window: import("incajs").IncaWindow;
+
   /** The interface object of `document`. */
   var Document: { readonly prototype: object };
 
