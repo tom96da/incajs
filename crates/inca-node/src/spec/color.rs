@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::ColorSpec;
-use super::parse::decimal;
+use super::number::decimal;
 use crate::tree::AttributeValue;
 
 /// A number from `0` to `0xffffff` (opaque), or a string holding `#rgb`,

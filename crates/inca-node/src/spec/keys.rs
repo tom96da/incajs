@@ -4,17 +4,17 @@
 //! The style keys the host reads, their aliases and the warnings for a bad value.
 
 use super::color::{as_color, rgb_text};
+use super::number::margin_length_from;
+use super::number::non_negative;
+use super::number::non_negative_px;
+use super::number::number;
+use super::number::opacity;
+use super::number::size_spec_from;
 use super::parse::EdgeKeys;
 use super::parse::Overflows;
 use super::parse::StyleFault;
 use super::parse::edges_from;
-use super::parse::margin_length_from;
-use super::parse::non_negative;
-use super::parse::non_negative_px;
-use super::parse::number;
-use super::parse::opacity;
 use super::parse::overflow_pair_from_str;
-use super::parse::size_spec_from;
 use super::parse::store;
 use crate::AlignSpec;
 use crate::AttributeValue;
