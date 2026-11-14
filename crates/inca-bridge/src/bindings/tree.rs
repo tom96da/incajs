@@ -96,15 +96,12 @@ fn release_listeners<'js>(
 ) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Vec<u32>> {
     move |ctx, JsNodeId(node_id)| {
         let mut host = host.borrow_mut();
-        let mut callback_ids = Vec::new();
-        let mut pending = vec![node_id];
-        while let Some(current) = pending.pop() {
-            if let Some(node) = host.tree.get(current) {
-                pending.extend(node.children().iter().copied());
-                pending.extend(host.tree.template_content(current));
-                callback_ids.extend(host.listeners.release(current));
-            }
-        }
+        let callback_ids: Vec<u32> = host
+            .tree
+            .subtree(node_id)
+            .into_iter()
+            .flat_map(|id| host.listeners.release(id))
+            .collect();
         callbacks::release(&ctx, &callback_ids)?;
         Ok(callback_ids)
     }

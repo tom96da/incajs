@@ -170,10 +170,10 @@ be passed, and `undefined` there counts as `null`.
 | `insertBefore` | `(parentId: number, nodeId: number, refId: number \| null) => number` | Attach a node before `refId`, or at the end if `null` or `undefined`. Returns the position of the first inserted node. |
 | `removeChild` | `(parentId: number, childId: number) => void` | Detach a child node. Throws `NotFoundError` for a known node that is not a child. Freed at the next frame unless re-inserted or held, see [Retained virtual tree](#retained-virtual-tree). |
 | `replaceChild` | `(parentId: number, nodeId: number, childId: number) => number` | Put a node where `childId` was and detach `childId`. Returns the position of the first inserted node. |
-| `linkedNode` | `(nodeId: number, link: "parent" \| "first" \| "last" \| "previous" \| "next") => number \| null` | The id of the parent, first child, last child, previous sibling or next sibling of `nodeId`, or `null` when there is none. Throws a `TypeError` for an unknown node or another `link`. |
-| `childNodeIds` | `(nodeId: number) => number[]` | The ids of the children of `nodeId` in order. Throws a `TypeError` for an unknown node. |
+| `linkedNode` | `(nodeId: number, link: "parent" \| "first" \| "last" \| "previous" \| "next", elementOnly?: boolean) => number \| null` | The id of the parent, first child, last child, previous sibling or next sibling of `nodeId`, or `null` when there is none. With `elementOnly` true, the nearest element in that direction: the parent when it is an element, the first or last element child, the nearest element sibling. Throws a `TypeError` for an unknown node or another `link`. |
+| `childNodeIds` | `(nodeId: number, elementOnly?: boolean) => number[]` | The ids of the children of `nodeId` in order. With `elementOnly` true, only the element children. Throws a `TypeError` for an unknown node. |
 | `isConnected` | `(nodeId: number) => boolean` | Whether the parent chain of `nodeId` reaches the document. The document is connected. Throws a `TypeError` for an unknown node. |
-| `cloneNode` | `(nodeId: number, deep: boolean) => (number \| string \| null)[][]` | Copy a node with its name, attributes and style props, and its descendants when `deep` is truthy. A falsy `deep` clones only the node. Returns one entry per copy in pre-order, the copy of `nodeId` first. An element copy is `[id, localName, namespace \| null, prefix \| null, tagName]`. A `#text`, `#comment` or `#fragment` copy is `[id, tag]`. The copy of a template is followed by the copy of its content (`"#fragment"`), the content descendants when `deep` is truthy, and then the other children. The copies have no listeners, focus or scroll offset, and the root copy has no parent. An HTML `input` copy has the typed text of its original. Throws a `TypeError` for an unknown node. |
+| `cloneNode` | `(nodeId: number, deep: boolean) => (number \| string \| null)[][]` | Copy a node with its name, attributes and style props, and its descendants when `deep` is truthy. A falsy `deep` clones only the node. Returns one entry per copy in pre-order, the copy of `nodeId` first. An element copy is `[id, localName, namespace \| null, prefix \| null, tagName]`. A `#text`, `#comment`, `#fragment` or `#document` copy is `[id, tag, data]`, with `data` the text of a `#text` copy and `null` otherwise. The copy of a template is followed by the copy of its content (`"#fragment"`), the content descendants when `deep` is truthy, and then the other children. The copies have no listeners, focus or scroll offset, and the root copy has no parent. An HTML `input` copy has the typed text of its original. Throws a `TypeError` for an unknown node. |
 | `innerHtml` | `(nodeId: number) => string` | The markup of the children of `nodeId`. A template reads its content. Throws a `TypeError` for an unknown node. |
 | `outerHtml` | `(nodeId: number) => string` | The markup of `nodeId` with its children. Throws a `TypeError` for an unknown node. |
 | `setInnerHtml` | `(nodeId: number, html: string) => Parsed` | Parse `html` in the context of `nodeId` and replace all its children, or the children of its content for a template. The old children stay in the host as orphans with their listeners. Returns the parsed nodes at position 0. Throws a `TypeError` for an unknown node. |
@@ -214,6 +214,7 @@ be passed, and `undefined` there counts as `null`.
 | `templateContent` | `(nodeId: number) => number \| null` | The id of the content fragment of the template `nodeId`, the same id on every call. `null` for a node that is no template. Throws a `TypeError` for an unknown node. |
 | `destroyNode` | `(nodeId: number) => number[]` | Free `nodeId` and its subtree, and the content of a template, release the table entries of every `callbackId` registered in it and return the ids. An unknown id returns `[]`. Destroying the document, the root or a node above the root throws. Also drops the hold and the waiting `scrollIntoViewNode` calls of the destroyed nodes. |
 | `releaseListeners` | `(nodeId: number) => number[]` | Drop every listener registered on `nodeId` and on the nodes below it, release their table entries and return their `callbackId`s. The nodes, their attributes and their children stay. An unknown id returns `[]`. |
+| `removeNode` | `(nodeId: number) => [number[], number[]]` | Detach `nodeId` from its parent (see `removeChild`), hold it (see `holdNode`), drop every listener registered on it and on the nodes below it, release their table entries and return their `callbackId`s and the ids of `nodeId` and every node below it in pre-order. The content of a template and its nodes follow the template, before its children. An unknown id returns `[[], []]`. |
 | `matches` | `(nodeId: number, selector: string) => boolean` | Whether the element `nodeId` matches the selector list. Throws a `SyntaxError` for an invalid selector and a `TypeError` for an unknown node. A `#text` node and a `#comment` node match nothing. |
 | `closest` | `(nodeId: number, selector: string) => number \| null` | The id of the nearest element at or above `nodeId` that matches. A `#text` node starts at its nearest element ancestor. Throws like `matches`. |
 | `querySelector` | `(nodeId: number, selector: string) => number \| null` | The id of the first descendant of `nodeId` that matches the selector list, in document order. `nodeId` is never a result. `:scope` and a top-level `&` are `nodeId`, and the whole tree takes part in the match. The document has no scope element, so `:scope` selects the element of the document. Text and `#comment` nodes are never results, and a `#text` or `#comment` start finds nothing. Throws a `SyntaxError` for an invalid selector, also for a `#text` or `#comment` start, and a `TypeError` for an unknown node. |
@@ -232,16 +233,16 @@ Shared throw rules, all as a `TypeError` except where noted:
 - A malformed `nodeId` or `callbackId` throws, and so
   does a `target` string other than the tag in
   [Tagged targets](#tagged-targets).
-- A `capture`, `passive` or `preventScroll` that is not a boolean,
+- A `capture`, `passive`, `preventScroll` or `elementOnly` that is not a boolean,
   `undefined` or `null` throws.
 - `addEventListener` throws a `RangeError` after the last id.
 - `setAttribute` and `setStyle` throw for a `value` that is not a string, number or boolean.
 - `dispatchEvent` throws for an argument that is not an event of the host.
 - A `nodeId`, `parentId`, `childId` or `refId` that names no node
   throws, except in the calls that let go of something: `releaseNode`,
-  `destroyNode`, `releaseListeners`, `removeEventListener`, `blurNode` and
-  the `childId` of `removeChild` ignore it. The host can free a node before
-  the caller lets go of it.
+  `destroyNode`, `releaseListeners`, `removeNode`, `removeEventListener`,
+  `blurNode` and the `childId` of `removeChild` ignore it. The host can free
+  a node before the caller lets go of it.
 - `classList`, `styleOf`, `datasetGet`, `datasetSet`, `datasetDelete` and `datasetKeys` do not throw
   for a freed `nodeId`. `classList` and `styleOf` return an object that reads empty, `datasetSet`
   still throws for a key that makes an invalid name and writes nothing, and the other calls read
@@ -304,10 +305,10 @@ Payloads and author-facing behaviour are in
   `2^31 - 1`. The call after the last one throws a `RangeError`. Distinct ids stack on one
   `(target, event)`, and `capture` and `passive` belong to the registration.
   An id belongs to one registration, so `removeEventListener` takes the id
-  only. `removeEventListener`, `destroyNode`, `releaseListeners` and the
-  frame sweep release the table entries of the ids they drop. `destroyNode`
-  and `releaseListeners` return the dropped ids because the caller still has
-  to free the JS half of its own bookkeeping.
+  only. `removeEventListener`, `destroyNode`, `releaseListeners`, `removeNode`
+  and the frame sweep release the table entries of the ids they drop.
+  `destroyNode`, `releaseListeners` and `removeNode` return the dropped ids
+  because the caller still has to free the JS half of its own bookkeeping.
 - A walk reads each function from the table by id when it reaches the
   registration. An id with no table entry is skipped. A failed
   `addEventListener` (an unknown node, a value that is not a function or
@@ -331,7 +332,7 @@ call, the focus reveal and the `scroll` events.
   freed a node.
 - `nodeIds` holds every freed node, subtrees and the content of a freed template included, and
   `callbackIds` every registration on them. Each id arrives once. Ids freed by
-  `destroyNode` or dropped by `releaseListeners` never pass through it.
+  `destroyNode`, dropped by `releaseListeners` or released by `removeNode` never pass through it.
 - A throw is reported and the frame goes on.
 
 #### Event targets

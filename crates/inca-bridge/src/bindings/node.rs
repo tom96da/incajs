@@ -9,10 +9,10 @@ use std::rc::Rc;
 use rquickjs::convert::Coerced;
 use rquickjs::{Ctx, Exception, Result as JsResult, Value};
 
-use inca_node::NodeId;
+use inca_node::{Link, NodeId};
 
 use super::Natives;
-use super::convert::{JsNodeId, existing_node, or_null, throw_tree_error, unsigned};
+use super::convert::{Flag, JsNodeId, existing_node, or_null, throw_tree_error, unsigned};
 use super::host::Host;
 
 /// `linkedNode`, `childNodeIds`, `isConnected`, the relation natives `rootOf`,
@@ -33,19 +33,19 @@ pub(super) fn install_node(n: &Natives<'_, '_>) -> JsResult<()> {
 }
 
 /// The node `link` names from the node `id`, or `null`. `link` is `"parent"`, `"first"`,
-/// `"last"`, `"previous"` or `"next"`.
+/// `"last"`, `"previous"` or `"next"`. With `elementOnly`, the nearest element in that direction.
 fn linked_node<'js>(
     host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Value<'js>> {
-    move |ctx, JsNodeId(node_id), link| {
+) -> impl Fn(Ctx<'js>, JsNodeId, String, Flag) -> JsResult<Value<'js>> {
+    move |ctx, JsNodeId(node_id), link, element_only| {
         let host = host.borrow();
-        let node = existing_node(&ctx, &host.tree, node_id)?;
-        let found = match link.as_str() {
-            "parent" => node.parent(),
-            "first" => host.tree.first_child(node_id),
-            "last" => host.tree.last_child(node_id),
-            "previous" => host.tree.previous_sibling(node_id),
-            "next" => host.tree.next_sibling(node_id),
+        existing_node(&ctx, &host.tree, node_id)?;
+        let link = match link.as_str() {
+            "parent" => Link::Parent,
+            "first" => Link::First,
+            "last" => Link::Last,
+            "previous" => Link::Previous,
+            "next" => Link::Next,
             other => {
                 return Err(Exception::throw_type(
                     &ctx,
@@ -59,18 +59,21 @@ fn linked_node<'js>(
                 ));
             }
         };
-        or_null(&ctx, found)
+        let element_only = element_only.0.flatten() == Some(true);
+        or_null(&ctx, host.tree.linked(node_id, link, element_only))
     }
 }
 
+/// The ids of the children of the node `id` in order, only the elements with `elementOnly`.
 fn child_node_ids<'js>(
     host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Vec<NodeId>> {
-    move |ctx, JsNodeId(node_id)| {
+) -> impl Fn(Ctx<'js>, JsNodeId, Flag) -> JsResult<Vec<NodeId>> {
+    move |ctx, JsNodeId(node_id), element_only| {
         let host = host.borrow();
-        Ok(existing_node(&ctx, &host.tree, node_id)?
-            .children()
-            .to_vec())
+        existing_node(&ctx, &host.tree, node_id)?;
+        Ok(host
+            .tree
+            .child_ids(node_id, element_only.0.flatten() == Some(true)))
     }
 }
 
@@ -189,7 +192,9 @@ mod tests {
 
     #[rstest]
     #[case::linked_node("linkedNode(999, 'parent')")]
+    #[case::linked_node_of_elements("linkedNode(999, 'next', true)")]
     #[case::child_node_ids("childNodeIds(999)")]
+    #[case::child_node_ids_of_elements("childNodeIds(999, true)")]
     #[case::is_connected("isConnected(999)")]
     #[case::text_content("textContent(999)")]
     #[case::whole_text("wholeText(999)")]
@@ -208,6 +213,100 @@ mod tests {
             error_name(&engine, &format!("__inca_native__.{call}")),
             "TypeError"
         );
+    }
+
+    /// `parent > (a, #text, #comment, b)`, each node a global.
+    const MIXED: &str = r"
+        const n = __inca_native__;
+        const parent = n.createNode('div');
+        const a = n.createNode('span');
+        const text = n.createNode('#text');
+        const comment = n.createNode('#comment');
+        const b = n.createNode('span');
+        n.appendChild(parent, a);
+        n.appendChild(parent, text);
+        n.appendChild(parent, comment);
+        n.appendChild(parent, b);
+        ";
+
+    #[test]
+    fn linked_node_with_the_element_flag_skips_a_text_and_a_comment() {
+        let (engine, _host) = engine_with_bindings();
+
+        let found: bool = engine
+            .eval(&format!(
+                r"
+                {MIXED}
+                n.linkedNode(a, 'next', true) === b;
+                "
+            ))
+            .unwrap();
+
+        assert!(found);
+    }
+
+    #[rstest]
+    #[case::omitted("")]
+    #[case::undefined(", undefined")]
+    #[case::null(", null")]
+    #[case::false_value(", false")]
+    fn linked_node_without_the_element_flag_reads_any_node(#[case] flag: &str) {
+        let (engine, _host) = engine_with_bindings();
+
+        let found: bool = engine
+            .eval(&format!(
+                r"
+                {MIXED}
+                n.linkedNode(a, 'next'{flag}) === text;
+                "
+            ))
+            .unwrap();
+
+        assert!(found);
+    }
+
+    #[rstest]
+    #[case::linked_node("linkedNode(a, 'next', 1)")]
+    #[case::child_node_ids("childNodeIds(parent, 'yes')")]
+    fn an_element_flag_that_is_no_boolean_throws_type_error(#[case] call: &str) {
+        let (engine, _host) = engine_with_bindings();
+
+        let name = error_name(&engine, &format!("{MIXED} n.{call}"));
+
+        assert_eq!(name, "TypeError");
+    }
+
+    #[test]
+    fn child_node_ids_with_the_element_flag_lists_the_elements() {
+        let (engine, _host) = engine_with_bindings();
+
+        let listed: bool = engine
+            .eval(&format!(
+                r"
+                {MIXED}
+                const ids = n.childNodeIds(parent, true);
+                ids.length === 2 && ids[0] === a && ids[1] === b;
+                "
+            ))
+            .unwrap();
+
+        assert!(listed);
+    }
+
+    #[test]
+    fn child_node_ids_without_the_element_flag_lists_every_child() {
+        let (engine, _host) = engine_with_bindings();
+
+        let count: u32 = engine
+            .eval(&format!(
+                r"
+                {MIXED}
+                n.childNodeIds(parent).length;
+                "
+            ))
+            .unwrap();
+
+        assert_eq!(count, 4);
     }
 
     #[rstest]
