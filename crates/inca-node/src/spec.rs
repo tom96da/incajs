@@ -13,6 +13,7 @@
 
 mod color;
 mod keys;
+mod number;
 mod parse;
 
 pub use keys::{STYLE_KEYS, StyleKey, ValueKind, style_warning};
