@@ -974,7 +974,7 @@ A fixed entry is deleted and its ID is never reused.
   only when one is set and checks neither the icon nor `outDir`; `inca build`
   checks `outDir` through `resolveBuildConfig` and `assertOutDir`. `inca dev`
   runs `resolveBuildConfig`, then `resolveAppConfig`, and on a missing
-  `package.json` or name prints `running unnamed. …` to stdout and falls back
+  `package.json` or name prints `running unnamed. …` to stderr and falls back
   to `resolveRuntimeConfig`. Any other failure there, such as a missing icon,
   stops `inca dev` where `inca build` succeeds. Each resolver loads the config
   file again, up to three loads per `inca dev` attempt.
@@ -1140,16 +1140,6 @@ A fixed entry is deleted and its ID is never reused.
   could skip the cache at the cost of unpacking on every start. On macOS the
   unpacked binary needs its own signature and lives outside the `.app`, so it
   needs a way to find the bundle.
-
-- **B-243 The CLI has no rule for which stream a line goes to**
-  `Units: cli · Size: S · Impact: Low`
-
-  `build`, `package` and `dev` write their progress and result lines to
-  stdout, while a warning and the shutdown line go to stderr. The line that
-  names the directory of a first unpack goes to stderr, because `inca config`
-  prints JSON on stdout. Nothing records which kind of line uses which stream.
-  Fix: decide one rule, apply it to every `log` and `warn` call and write it in
-  `handbook/STYLE.md`.
 
 - **B-246 A removed element drops its listeners**
   `Units: core,bridge · Size: M · Impact: Low`

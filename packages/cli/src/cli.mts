@@ -107,7 +107,7 @@ const devCommand = defineCommand({
     const controller = new AbortController();
     const onSignal = (): void => {
       if (controller.signal.aborted) return;
-      log(process.stderr, "shutting down", { timestamp: true });
+      log(process.stdout, "shutting down", { timestamp: true });
       controller.abort();
     };
     // A wrapper script runner (e.g. `pnpm run`) commonly delivers SIGTERM to

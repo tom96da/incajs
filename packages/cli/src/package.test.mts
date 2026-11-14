@@ -130,6 +130,7 @@ describe("packageApp", () => {
       hostBin,
       target: "linux",
       stdout: makeSink().stream,
+      stderr: makeSink().stream,
     });
 
     expect(seen?.runtimeConfig).not.toHaveProperty("dev");
@@ -155,6 +156,7 @@ describe("packageApp", () => {
       hostBin,
       target: "linux",
       stdout: makeSink().stream,
+      stderr: makeSink().stream,
     });
 
     expect(seen?.entry).toBe(path.join(app, "node_modules/.inca/entry.mts"));
@@ -174,6 +176,7 @@ describe("packageApp", () => {
         hostBin,
         target: "linux",
         stdout: makeSink().stream,
+        stderr: makeSink().stream,
       }),
     ).rejects.toThrow(expect.objectContaining({ code: "ERR_INCA_CONFIG_INVALID" }));
     expect(existsSync(path.join(app, "dist/click_counter"))).toBe(false);
@@ -190,6 +193,7 @@ describe("packageApp", () => {
       hostBin,
       target: "macos",
       stdout: makeSink().stream,
+      stderr: makeSink().stream,
     });
 
     expect(appPath).toBe(path.join(app, "dist/click_counter.app"));
@@ -226,6 +230,7 @@ describe("packageApp", () => {
       hostBin,
       target: "linux",
       stdout: makeSink().stream,
+      stderr: makeSink().stream,
     });
 
     expect(appPath).toBe(path.join(app, "dist/click-counter"));
@@ -245,6 +250,7 @@ describe("packageApp", () => {
       sourcemap: true,
       target: "linux",
       stdout: makeSink().stream,
+      stderr: makeSink().stream,
     });
 
     expect(await readFile(path.join(appPath, "bundle.js.map"), "utf8")).toBe("{}");
@@ -261,7 +267,8 @@ describe("packageApp", () => {
       bundler: fakeBundler(),
       hostBin,
       target: "linux",
-      stdout: sink.stream,
+      stdout: makeSink().stream,
+      stderr: sink.stream,
     });
 
     expect(sink.text()).toContain("org.inca.click-counter");
@@ -282,7 +289,8 @@ describe("packageApp", () => {
       bundler: fakeBundler(),
       hostBin,
       target: "linux",
-      stdout: sink.stream,
+      stdout: makeSink().stream,
+      stderr: sink.stream,
     });
 
     expect(sink.text()).toBe("");
@@ -303,7 +311,8 @@ describe("packageApp", () => {
       bundler: fakeBundler(),
       hostBin,
       target: "linux",
-      stdout: sink.stream,
+      stdout: makeSink().stream,
+      stderr: sink.stream,
     });
 
     expect(sink.text()).toContain('the "inca" key in package.json is deprecated');
@@ -324,6 +333,7 @@ describe("packageApp", () => {
       hostBin,
       target: "linux",
       stdout: makeSink().stream,
+      stderr: makeSink().stream,
     });
 
     expect(appPath).toBe(path.join(app, "dist/click-counter"));
@@ -341,6 +351,7 @@ describe("packageApp", () => {
         hostBin: path.join(app, "nonexistent-host"),
         target: "linux",
         stdout: makeSink().stream,
+        stderr: makeSink().stream,
       }),
     ).rejects.toThrow(/no host binary/);
   });
@@ -370,6 +381,7 @@ describe("packageApp", () => {
       hostBin,
       target: "linux",
       stdout: makeSink().stream,
+      stderr: makeSink().stream,
     });
   }
 
@@ -433,6 +445,7 @@ describe("packageApp", () => {
       bundler,
       target,
       stdout,
+      stderr: makeSink().stream,
     });
   }
 
@@ -478,6 +491,7 @@ describe("packageApp", () => {
       hostBin,
       target: "linux",
       stdout: makeSink().stream,
+      stderr: makeSink().stream,
     });
 
     expect(mockedLicenseFiles).toHaveBeenCalledWith(hostBin);

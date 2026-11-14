@@ -98,6 +98,7 @@ describe("dev on macOS", () => {
     const cwd = await scratch.makeApp({});
     const bundler = makeFakeBundler();
     const stdout = makeSink();
+    const stderr = makeSink();
     const controller = new AbortController();
 
     const running = dev({
@@ -106,7 +107,7 @@ describe("dev on macOS", () => {
       bundler,
       hostBin: mockHost,
       stdout: stdout.stream,
-      stderr: makeSink().stream,
+      stderr: stderr.stream,
       signal: controller.signal,
     });
 
@@ -117,7 +118,7 @@ describe("dev on macOS", () => {
     controller.abort();
     await running;
 
-    expect(stdout.text()).toContain("running unnamed");
+    expect(stderr.text()).toContain("running unnamed");
     const scratchFiles = await readdir(path.join(cwd, "node_modules/.inca"));
     expect(scratchFiles.filter((name) => name.endsWith(".app"))).toEqual([]);
   });
@@ -150,7 +151,7 @@ describe("dev on macOS", () => {
     pretendMacos();
     const cwd = await scratch.makeApp({ name: "failing" });
     const controller = new AbortController();
-    const stdout = makeSink();
+    const stderr = makeSink();
     vi.mocked(writeMacosApp).mockImplementationOnce(() => {
       controller.abort();
       return Promise.reject(new Error("no space"));
@@ -161,12 +162,12 @@ describe("dev on macOS", () => {
       entry: "unused",
       bundler: makeFakeBundler(),
       hostBin: mockHost,
-      stdout: stdout.stream,
-      stderr: makeSink().stream,
+      stdout: makeSink().stream,
+      stderr: stderr.stream,
       signal: controller.signal,
     });
 
-    expect(stdout.text()).not.toContain("running unbundled");
+    expect(stderr.text()).not.toContain("running unbundled");
   });
 
   it("selects no entry when the signal aborts while the bundle is assembled", async () => {

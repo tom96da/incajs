@@ -227,7 +227,7 @@ describe("dev", () => {
 
   it("prints no unnamed notice when the signal aborts while the app config loads", async () => {
     const controller = new AbortController();
-    const stdout = makeSink();
+    const stderr = makeSink();
     const load = mockedResolveAppConfig.getMockImplementation()!;
     mockedResolveAppConfig.mockImplementationOnce((dir) => {
       controller.abort();
@@ -239,12 +239,12 @@ describe("dev", () => {
       entry: "unused",
       bundler: makeFakeBundler(),
       hostBin: mockHost,
-      stdout: stdout.stream,
-      stderr: makeSink().stream,
+      stdout: makeSink().stream,
+      stderr: stderr.stream,
       signal: controller.signal,
     });
 
-    expect(stdout.text()).not.toContain("running unnamed");
+    expect(stderr.text()).not.toContain("running unnamed");
   });
 
   it("reads no runtime config when the signal aborts while the app config loads", async () => {
