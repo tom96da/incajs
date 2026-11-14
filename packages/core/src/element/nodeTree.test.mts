@@ -13,7 +13,7 @@ import {
   rootElement,
 } from "./handle.mts";
 import { markDestroyed } from "./lifecycle.mts";
-import type { NodeLink } from "../native.mts";
+import type { NodeLink } from "../ffi/index.mts";
 
 /** The id `nativeStub` gives the document. */
 const DOCUMENT = 1;

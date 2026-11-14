@@ -11,11 +11,11 @@ import {
   nameOf,
   removeChild,
   replaceChild,
-} from "../tree.mts";
+} from "../ffi/index.mts";
 import { requireArguments } from "./attributes.mts";
 import { existingContent, isDestroyed, isNode } from "./lifecycle.mts";
 import { keep, link, unlink } from "./shadowTree.mts";
-import type { ElementName } from "../native.mts";
+import type { ElementName } from "../ffi/index.mts";
 import type { IncaDocument, NodeId } from "../types.mts";
 import type {
   IncaElement,

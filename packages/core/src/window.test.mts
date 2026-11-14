@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { nativeStub } from "../tests/setup.mts";
 import { window } from "./window.mts";
-import type { HostCallback } from "./native.mts";
+import type { HostCallback } from "./ffi/index.mts";
 
 // Ids come from the host, which numbers them in order.
 let nextCallbackId = 0;

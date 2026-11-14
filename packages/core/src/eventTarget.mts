@@ -1,8 +1,9 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { addEventListener, dispatchEvent, removeEventListener } from "./events.mts";
-import type { EventTargetId } from "./native.mts";
+import { addEventListener, removeEventListener } from "./events.mts";
+import { dispatchEvent } from "./ffi/index.mts";
+import type { EventTargetId } from "./ffi/index.mts";
 import type { EventListenerOrObject, IncaEventTarget, ListenerOptions } from "./types.mts";
 
 /**

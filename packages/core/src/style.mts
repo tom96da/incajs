@@ -19,7 +19,7 @@ import {
   removeChild,
   rootNodeId,
   setAttribute,
-} from "./tree.mts";
+} from "./ffi/index.mts";
 import type { IncaElement } from "./element/types.mts";
 import type { NodeId } from "./types.mts";
 

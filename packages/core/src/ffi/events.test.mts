@@ -1,0 +1,82 @@
+// Copyright (c) 2026 tom96da
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { nativeStub } from "../../tests/setup.mts";
+import { addListener, blur, click, focus, focusedNode, removeListener } from "./events.mts";
+import type { HostCallback } from "./native.mts";
+
+const native = {
+  addEventListener: vi.fn<
+    (
+      nodeId: number,
+      event: string,
+      callback: HostCallback,
+      capture?: boolean,
+      passive?: boolean,
+    ) => number
+  >(() => 41),
+  removeEventListener: vi.fn<(nodeId: number, event: string, callbackId: number) => boolean>(
+    () => true,
+  ),
+  focusNode: vi.fn<(nodeId: number, preventScroll?: boolean) => void>(),
+  blurNode: vi.fn<(nodeId: number) => void>(),
+  focusedNode: vi.fn<() => number | null>(() => null),
+  click: vi.fn<(nodeId: number) => void>(),
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  globalThis.__inca_native__ = nativeStub(native);
+});
+
+describe("wrapper functions forward to __inca_native__", () => {
+  it("addListener passes the options on and gives the callback id", () => {
+    const callback = vi.fn<HostCallback>();
+
+    expect(addListener(1, "click", callback, true, false)).toBe(41);
+    expect(native.addEventListener).toHaveBeenCalledExactlyOnceWith(
+      1,
+      "click",
+      callback,
+      true,
+      false,
+    );
+  });
+
+  it("removeListener passes the callback id on and gives the host's answer", () => {
+    native.removeEventListener.mockReturnValueOnce(false);
+
+    expect(removeListener(1, "click", 41)).toBe(false);
+    expect(native.removeEventListener).toHaveBeenCalledExactlyOnceWith(1, "click", 41);
+  });
+
+  it("focusedNode gives the id the host reports", () => {
+    native.focusedNode.mockReturnValueOnce(7);
+    expect(focusedNode()).toBe(7);
+  });
+});
+
+describe("focus", () => {
+  it("passes the preventScroll flag through", () => {
+    focus(7, true);
+    focus(7, false);
+    expect(native.focusNode).toHaveBeenNthCalledWith(1, 7, true);
+    expect(native.focusNode).toHaveBeenNthCalledWith(2, 7, false);
+  });
+});
+
+describe("blur", () => {
+  it("forwards the node id to native blurNode", () => {
+    blur(7);
+    expect(native.blurNode).toHaveBeenCalledWith(7);
+  });
+});
+
+describe("click", () => {
+  it("forwards the node id to native click", () => {
+    click(7);
+    expect(native.click).toHaveBeenCalledExactlyOnceWith(7);
+  });
+});

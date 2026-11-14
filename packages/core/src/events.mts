@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { addCallback, callbackIdFor, groupOf, releaseCallback } from "./callbacks.mts";
-import { native } from "./native.mts";
-import type { EventTargetId, HostCallback } from "./native.mts";
-import type { EventLike, EventListenerOrObject, ListenerOptions, NodeId } from "./types.mts";
+import { addListener, removeListener } from "./ffi/index.mts";
+import type { EventTargetId, HostCallback } from "./ffi/index.mts";
+import type { EventListenerOrObject, ListenerOptions } from "./types.mts";
 
 let latestId = 0;
 
@@ -69,7 +69,7 @@ export function addEventListener(
         return call(...args);
       }
     : call;
-  const callbackId = native().addEventListener(
+  const callbackId = addListener(
     target,
     event,
     tracking(run),
@@ -97,94 +97,6 @@ export function removeEventListener(
   const callbackId = callbackIdFor(groupOf(target, event, options.capture), listener);
   if (callbackId === undefined) return;
 
-  native().removeEventListener(target, event, callbackId);
+  removeListener(target, event, callbackId);
   releaseCallback(callbackId);
-}
-
-/**
- * Dispatches `event` at a target along its path. Dispatching at an element
- * reaches its ancestors, `document` and `window`. Dispatching at `document`
- * reaches `window`, and dispatching at `window` reaches only `window`.
- * @param target - the target to dispatch at (node id or "$window")
- * @param event - the event to dispatch
- * @returns `false` when a listener canceled a cancelable event, else `true`
- * @throws TypeError when `target` is malformed or is an unknown target tag
- * @throws TypeError when `target` is a node id that names no node
- * @throws TypeError when `event` is not an event built with an event constructor
- * @throws DOMException named `InvalidStateError` when `event` is being dispatched
- */
-export function dispatchEvent(target: EventTargetId, event: EventLike): boolean {
-  return native().dispatchEvent(target, event);
-}
-
-/**
- * Fires an untrusted `click` at `nodeId`. A disabled `button` or `input` and a node whose
- * own click is still running ignore the call.
- * @param nodeId - the node to click
- * @throws TypeError when `nodeId` is malformed
- * @throws TypeError when `nodeId` names no node
- */
-export function click(nodeId: NodeId): void {
-  native().click(nodeId);
-}
-
-/**
- * Requests that `nodeId` become focused. Takes effect on the next frame,
- * dispatching `"blur"`/`"focus"` for whatever actually changed. The node
- * needs a `tabindex` attribute to take focus, and a listener for either event
- * is optional. The scroll containers around the node scroll it into view.
- * @param nodeId - the node to focus
- * @param preventScroll - `true` to leave the scroll containers in place; omitted or `false` scrolls the node into view
- * @throws TypeError when `nodeId` is malformed
- * @throws TypeError when `nodeId` names no node
- */
-export function focus(nodeId: NodeId, preventScroll?: boolean): void {
-  native().focusNode(nodeId, preventScroll);
-}
-
-/**
- * Requests that `nodeId` become unfocused, the way `element.blur()` does.
- * Takes effect on the next frame; a no-op if `nodeId` isn't the focused node
- * when it runs.
- * @param nodeId - the node to unfocus
- */
-export function blur(nodeId: NodeId): void {
-  native().blurNode(nodeId);
-}
-
-/**
- * Captures the mouse pointer for `nodeId` while a button is held. The pointer events and the
- * mouse events that follow go to the node until the last button is released, and
- * `gotpointercapture` fires before the next pointer event. With no button held the call does
- * nothing.
- * @param nodeId - the node to capture the pointer for
- * @param pointerId - the pointer to capture; only `1`, the mouse, exists
- * @throws DOMException named `NotFoundError` when `pointerId` is not `1`
- * @throws DOMException named `InvalidStateError` when `nodeId` names no node or a node outside
- * the mounted tree
- */
-export function setPointerCapture(nodeId: NodeId, pointerId: number): void {
-  native().setPointerCapture(nodeId, pointerId);
-}
-
-/**
- * Releases the pointer capture `nodeId` requested. `lostpointercapture` fires before the next
- * pointer event. The call does nothing for a node that has no capture.
- * @param nodeId - the node that holds the capture
- * @param pointerId - the pointer to release; only `1`, the mouse, exists
- * @throws DOMException named `NotFoundError` when `pointerId` is not `1`
- */
-export function releasePointerCapture(nodeId: NodeId, pointerId: number): void {
-  native().releasePointerCapture(nodeId, pointerId);
-}
-
-/**
- * Whether `nodeId` requested the pointer capture and has not released it.
- * @param nodeId - the node to ask about
- * @param pointerId - the pointer to ask about
- * @returns `false` for a pointer other than `1`, for a node outside the mounted tree and for a
- * node that holds no capture
- */
-export function hasPointerCapture(nodeId: NodeId, pointerId: number): boolean {
-  return native().hasPointerCapture(nodeId, pointerId);
 }

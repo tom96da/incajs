@@ -5,16 +5,12 @@ import "./targets.mts";
 
 export { createEventTarget } from "./eventTarget.mts";
 export { window } from "./window.mts";
+export { addEventListener, removeEventListener, latestEventId } from "./events.mts";
 export {
-  addEventListener,
-  removeEventListener,
-  latestEventId,
   focus,
   blur,
   dispatchEvent,
   click,
-} from "./events.mts";
-export {
   focusedNode,
   appendChild,
   createNode,
@@ -32,7 +28,7 @@ export {
   removeAttribute,
   setStyle,
   removeStyle,
-} from "./tree.mts";
+} from "./ffi/index.mts";
 export {
   createCommentNode,
   createElementNode,

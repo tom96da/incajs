@@ -3,57 +3,42 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { nativeStub } from "../tests/setup.mts";
+import { nativeStub } from "../../tests/setup.mts";
 import { HTML_NAMESPACE } from "./native.mts";
 import {
   appendChild,
-  attributeKey,
+  checkSelector,
+  childNodeIds,
+  cloneNode,
+  compareNodePosition,
   createElementNS,
+  innerHtml,
+  insertAdjacentHtml,
   insertBefore,
+  isConnected,
+  isEqualNode,
+  linkedNode,
   nameOf,
   nameOfRow,
-  replaceChild,
-  cloneNode,
-  innerHtml,
   outerHtml,
-  setInnerHtml,
-  setOuterHtml,
-  insertAdjacentHtml,
-  rootOf,
-  compareNodePosition,
-  isEqualNode,
-  checkSelector,
-  focusedNode,
-  childNodeIds,
-  getAttribute,
-  isConnected,
-  replaceData,
-  splitText,
-  substringData,
-  textContent,
-  wholeText,
-  layoutOf,
-  linkedNode,
-  scrollIntoViewNode,
-  scrollNode,
-  scrollOf,
-  removeAttribute,
-  removeChild,
-  removeStyle,
   queryNode,
   queryNodes,
-  inputValue,
-  setInputValue,
-} from "./tree.mts";
-import type { ElementEntry, HostCallback, NodeLink, Parsed } from "./native.mts";
-import type { EventLike } from "./types.mts";
-
-// Ids come from the host, which numbers them in order.
-let nextCallbackId = 0;
+  releaseListeners,
+  removeChild,
+  replaceChild,
+  replaceData,
+  rootOf,
+  setInnerHtml,
+  setOuterHtml,
+  splitText,
+  substringData,
+  templateContent,
+  textContent,
+  wholeText,
+} from "./nodes.mts";
+import type { ElementEntry, NodeLink, Parsed } from "./native.mts";
 
 const native = {
-  rootNodeId: vi.fn<() => number>(() => 42),
-  createNode: vi.fn<(tag: string) => number>((_tag: string) => 1),
   createElementNS: vi.fn<(namespace: string | null, qualifiedName: string) => ElementEntry>(() => [
     1,
     "a",
@@ -61,7 +46,6 @@ const native = {
     null,
     "a",
   ]),
-  attributeKey: vi.fn<(nodeId: number, name: string) => string>((_nodeId, name) => name),
   appendChild: vi.fn<(parentId: number, childId: number) => number>(() => 0),
   insertBefore: vi.fn<(parentId: number, childId: number, refId: number | null) => number>(() => 0),
   removeChild: vi.fn<(parentId: number, childId: number) => void>(),
@@ -70,27 +54,6 @@ const native = {
   rootOf: vi.fn<(nodeId: number) => number>((nodeId) => nodeId),
   compareNodePosition: vi.fn<(nodeId: number, otherId: number) => number>(() => 0),
   isEqualNode: vi.fn<(nodeId: number, otherId: number) => boolean>(() => false),
-  setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
-  getAttribute: vi.fn<(nodeId: number, key: string) => string | number | boolean | null>(
-    () => null,
-  ),
-  removeAttribute: vi.fn<(nodeId: number, key: string) => void>(),
-  setStyle: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
-  removeStyle: vi.fn<(nodeId: number, key: string) => void>(),
-  inputValue: vi.fn<(nodeId: number) => string>(),
-  setInputValue: vi.fn<(nodeId: number, value: string) => void>(),
-  addEventListener: vi.fn<
-    (
-      nodeId: number,
-      event: string,
-      callback: HostCallback,
-      capture?: boolean,
-      passive?: boolean,
-    ) => number
-  >(() => nextCallbackId++),
-  removeEventListener: vi.fn<(nodeId: number, event: string, callbackId: number) => boolean>(
-    () => true,
-  ),
   releaseListeners: vi.fn<(nodeId: number) => number[]>(() => []),
   templateContent: vi.fn<(nodeId: number) => number | null>(() => null),
   innerHtml: vi.fn<(nodeId: number) => string>(() => ""),
@@ -101,28 +64,9 @@ const native = {
     0,
     [],
   ]),
-  attributeNames: vi.fn<(nodeId: number) => string[]>(() => []),
-  matches: vi.fn<(nodeId: number, selector: string) => boolean>(() => false),
-  closest: vi.fn<(nodeId: number, selector: string) => number | null>(() => null),
   checkSelector: vi.fn<(selector: string) => void>(),
   querySelector: vi.fn<(nodeId: number, selector: string) => number | null>(() => null),
   querySelectorAll: vi.fn<(nodeId: number, selector: string) => number[]>(() => []),
-  holdNode: vi.fn<(nodeId: number) => void>(),
-  releaseNode: vi.fn<(nodeId: number) => void>(),
-  focusNode: vi.fn<(nodeId: number) => void>(),
-  blurNode: vi.fn<(nodeId: number) => void>(),
-  focusedNode: vi.fn<() => number | null>(() => null),
-  layoutOf: vi.fn<
-    (nodeId: number) => readonly [number, number, number, number, number, number, number] | null
-  >(() => null),
-  scrollOf: vi.fn<(nodeId: number) => readonly [number, number, number, number] | null>(() => null),
-  scrollNode: vi.fn<(nodeId: number, left: number | null, top: number | null) => void>(),
-  scrollIntoViewNode: vi.fn<(nodeId: number, block: string, inline: string) => void>(),
-  dispatchEvent: vi.fn<(nodeId: number, event: EventLike) => boolean>(() => true),
-  click: vi.fn<(nodeId: number) => void>(),
-  setPointerCapture: vi.fn<(nodeId: number, pointerId: number) => void>(),
-  releasePointerCapture: vi.fn<(nodeId: number, pointerId: number) => void>(),
-  hasPointerCapture: vi.fn<(nodeId: number, pointerId: number) => boolean>(),
   linkedNode: vi.fn<(nodeId: number, link: NodeLink) => number | null>(() => null),
   childNodeIds: vi.fn<(nodeId: number) => number[]>(() => []),
   isConnected: vi.fn<(nodeId: number) => boolean>(() => true),
@@ -135,7 +79,6 @@ const native = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  nextCallbackId = 0;
   globalThis.__inca_native__ = nativeStub(native);
 });
 
@@ -162,12 +105,6 @@ describe("wrapper functions forward to __inca_native__", () => {
     native.createElementNS.mockReturnValueOnce([5, "Y", "urn:x", "x", "X:Y"]);
     expect(createElementNS("urn:x", "x:Y")).toEqual([5, "Y", "urn:x", "x", "X:Y"]);
     expect(native.createElementNS).toHaveBeenCalledWith("urn:x", "x:Y");
-  });
-
-  it("attributeKey", () => {
-    native.attributeKey.mockReturnValueOnce("viewbox");
-    expect(attributeKey(1, "viewBox")).toBe("viewbox");
-    expect(native.attributeKey).toHaveBeenCalledWith(1, "viewBox");
   });
 
   it("cloneNode", () => {
@@ -265,12 +202,6 @@ describe("wrapper functions forward to __inca_native__", () => {
     expect(native.isConnected).toHaveBeenCalledWith(1);
   });
 
-  it("getAttribute", () => {
-    native.getAttribute.mockReturnValueOnce("hello");
-    expect(getAttribute(1, "label")).toBe("hello");
-    expect(native.getAttribute).toHaveBeenCalledWith(1, "label");
-  });
-
   it("the checkSelector wrapper forwards the selector", () => {
     checkSelector("div > p");
     expect(native.checkSelector).toHaveBeenCalledWith("div > p");
@@ -290,52 +221,16 @@ describe("wrapper functions forward to __inca_native__", () => {
     expect(native.querySelectorAll).toHaveBeenCalledWith(2, "span");
   });
 
-  it("layoutOf", () => {
-    native.layoutOf.mockReturnValueOnce([1, 2, 3, 4, 0, 5, 6]);
-    expect(layoutOf(1)).toEqual([1, 2, 3, 4, 0, 5, 6]);
-    expect(native.layoutOf).toHaveBeenCalledWith(1);
+  it("templateContent gives the fragment id the host reports", () => {
+    native.templateContent.mockReturnValueOnce(8);
+    expect(templateContent(1)).toBe(8);
+    expect(native.templateContent).toHaveBeenCalledWith(1);
   });
 
-  it("scrollOf", () => {
-    native.scrollOf.mockReturnValueOnce([1, 2, 3, 4]);
-    expect(scrollOf(1)).toEqual([1, 2, 3, 4]);
-    expect(native.scrollOf).toHaveBeenCalledWith(1);
-  });
-
-  it("scrollNode", () => {
-    scrollNode(1, 5, null);
-    expect(native.scrollNode).toHaveBeenCalledWith(1, 5, null);
-  });
-
-  it("scrollIntoViewNode", () => {
-    scrollIntoViewNode(1, "center", "end");
-    expect(native.scrollIntoViewNode).toHaveBeenCalledWith(1, "center", "end");
-  });
-
-  it("removeAttribute", () => {
-    removeAttribute(1, "label");
-    expect(native.removeAttribute).toHaveBeenCalledWith(1, "label");
-  });
-
-  it("removeStyle", () => {
-    removeStyle(1, "display");
-    expect(native.removeStyle).toHaveBeenCalledWith(1, "display");
-  });
-
-  it("inputValue", () => {
-    native.inputValue.mockReturnValueOnce("abc");
-    expect(inputValue(1)).toBe("abc");
-    expect(native.inputValue).toHaveBeenCalledWith(1);
-  });
-
-  it("setInputValue", () => {
-    setInputValue(1, "abc");
-    expect(native.setInputValue).toHaveBeenCalledWith(1, "abc");
-  });
-
-  it("focusedNode", () => {
-    native.focusedNode.mockReturnValueOnce(7);
-    expect(focusedNode()).toBe(7);
+  it("releaseListeners gives the callback ids the host reports", () => {
+    native.releaseListeners.mockReturnValueOnce([4, 5]);
+    expect(releaseListeners(1)).toEqual([4, 5]);
+    expect(native.releaseListeners).toHaveBeenCalledWith(1);
   });
 });
 

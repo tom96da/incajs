@@ -13,7 +13,7 @@ import {
 } from "./handle.mts";
 import { isHeld, isRemoved, markDestroyed } from "./lifecycle.mts";
 import { remove } from "./shadowTree.mts";
-import type { ElementEntry, NodeEntry } from "../native.mts";
+import type { ElementEntry, NodeEntry } from "../ffi/index.mts";
 import type { IncaElement, IncaFragment, IncaNode, IncaTemplateElement } from "./types.mts";
 
 /** The children of each node in the fake host. */

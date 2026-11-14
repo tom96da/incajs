@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { markFreed } from "./element/lifecycle.mts";
-import type { EventTargetId } from "./native.mts";
+import type { EventTargetId } from "./ffi/index.mts";
 import type { CallbackId, EventListenerOrObject } from "./types.mts";
 
 /**

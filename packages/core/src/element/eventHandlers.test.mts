@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { nativeStub } from "../../tests/setup.mts";
 import { createIncaElement } from "./handle.mts";
 import { markDestroyed } from "./lifecycle.mts";
-import type { HostCallback } from "../native.mts";
+import type { HostCallback } from "../ffi/index.mts";
 import type { IncaElement } from "./types.mts";
 
 let registrations: { event: string; id: number; callback: HostCallback }[] = [];

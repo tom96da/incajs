@@ -9,17 +9,16 @@ import { document } from "../src/document.mts";
 import { htmlCollectionOf, namedNodeMapOf, nodeListOf } from "../src/element/collections.mts";
 import { rectOf } from "../src/element/geometry.mts";
 import { createIncaElement } from "../src/element/handle.mts";
-import { blur, click, focus } from "../src/events.mts";
 import { createEventTarget } from "../src/eventTarget.mts";
-import { createNode, rootNodeId } from "../src/tree.mts";
+import { blur, click, focus, createNode, rootNodeId } from "../src/ffi/index.mts";
 import { createIncaApp } from "../src/vue/index.mts";
 import { vModelText, withDirectives } from "../src/vue/runtime.mts";
 import { nativeStub } from "./setup.mts";
 import type { NodeMutationMembers } from "../src/element/nodeMutation.mts";
 import type { NodeRelationMembers } from "../src/element/nodeRelations.mts";
 import type { DOMTokenList, EventHandlers } from "../src/element/types.mts";
+import type { HostCallback } from "../src/ffi/index.mts";
 import type { IncaElement, NodeId } from "../src/index.mts";
-import type { HostCallback } from "../src/native.mts";
 
 /** The handler properties, absent: nothing here reads them. */
 const noHandlers = {} as EventHandlers;

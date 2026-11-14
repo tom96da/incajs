@@ -1,15 +1,29 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import type { CSSStyleDeclaration, DOMTokenList } from "./element/types.mts";
-import type {
-  AttributeValue,
-  CallbackId,
-  EventLike,
-  NodeId,
-  ScrollAlignment,
-  TagName,
-} from "./types.mts";
+import type { CSSStyleDeclaration, DOMTokenList } from "../element/types.mts";
+import type { EventLike, TagName } from "../types.mts";
+
+/**
+ * Stable handle to a node in the native retained tree, returned by `createNode`
+ * and used in every later call that touches that node.
+ */
+export type NodeId = number;
+
+/**
+ * Id assigned to one registered event listener. Managed internally by
+ * `addEventListener`/`removeEventListener`/`releaseListeners`.
+ */
+export type CallbackId = number;
+
+/**
+ * A value `setAttribute`/`setStyle` can take. Any other value raises a catchable
+ * exception.
+ */
+export type AttributeValue = string | number | boolean;
+
+/** Where `scrollIntoView` aligns a node on one axis. */
+export type ScrollAlignment = "start" | "center" | "end" | "nearest";
 
 /** How {@link IncaNative.linkedNode} names the node to reach from a node. */
 export type NodeLink = "parent" | "first" | "last" | "previous" | "next";

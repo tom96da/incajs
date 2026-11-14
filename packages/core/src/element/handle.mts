@@ -1,6 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import { createEventTarget } from "../eventTarget.mts";
 import {
   blur,
   click,
@@ -8,10 +9,7 @@ import {
   hasPointerCapture,
   releasePointerCapture,
   setPointerCapture,
-} from "../events.mts";
-import { createEventTarget } from "../eventTarget.mts";
-import { HTML_NAMESPACE } from "../native.mts";
-import {
+  HTML_NAMESPACE,
   appendChild,
   checkSelector,
   closestNode,
@@ -34,7 +32,7 @@ import {
   setInputValue,
   setStyle,
   textContent,
-} from "../tree.mts";
+} from "../ffi/index.mts";
 import { attributeMembers, attributeText, requireArguments } from "./attributes.mts";
 import { classMembers } from "./classList.mts";
 import { nodeListOf } from "./collections.mts";
@@ -60,7 +58,7 @@ import { scrollIntoViewArgs, scrollPosition } from "./scroll.mts";
 import { keep, unlink } from "./shadowTree.mts";
 import { attachContent } from "./templateContent.mts";
 import { characterDataMembers, createIncaText, nullableText } from "./text.mts";
-import type { ElementName } from "../native.mts";
+import type { ElementName } from "../ffi/index.mts";
 import type { IncaDocument, NodeId, TagName } from "../types.mts";
 import type { AttributeMembers } from "./attributes.mts";
 import type { ClassMembers } from "./classList.mts";

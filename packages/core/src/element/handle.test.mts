@@ -4,10 +4,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { nativeStub } from "../../tests/setup.mts";
-import { HTML_NAMESPACE } from "../native.mts";
+import { HTML_NAMESPACE } from "../ffi/index.mts";
 import { createIncaElement, handleOf, rootElement } from "./handle.mts";
 import { elementOf, markDestroyed, markRemoved, nodeOf } from "./lifecycle.mts";
-import type { ElementName } from "../native.mts";
+import type { ElementName } from "../ffi/index.mts";
 import type { ScrollOptions } from "./scroll.mts";
 import type { IncaElement, IncaInputElement } from "./types.mts";
 

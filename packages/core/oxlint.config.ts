@@ -22,6 +22,30 @@ const overrides: OxlintOverride[] = [
               group: ["**/rendererCore.mts"],
               message: "Core features do not use the injected core. Import the defining module.",
             },
+            {
+              group: ["**/ffi/*", "!**/ffi/index.mts"],
+              message:
+                "Import the host calls from the ffi barrel. Only the ffi directory calls native().",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/ffi/**/*.mts"],
+    excludeFiles: ["src/ffi/**/*.test.mts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["../**", "@vue/*"],
+              allowTypeImports: true,
+              message:
+                "The wrapper of the natives imports only types from the rest of the package.",
+            },
           ],
         },
       ],

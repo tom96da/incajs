@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { nativeStub } from "../../tests/setup.mts";
 import { createIncaElement } from "./handle.mts";
 import { markDestroyed, markRemoved } from "./lifecycle.mts";
-import type { ElementName } from "../native.mts";
+import type { ElementName } from "../ffi/index.mts";
 import type { IncaElement } from "./types.mts";
 
 const SVG_NAMESPACE = "http://www.w3.org/2000/svg";

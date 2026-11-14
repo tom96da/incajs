@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { styleOf } from "../tree.mts";
+import { styleOf } from "../ffi/index.mts";
 import { attributeText } from "./attributes.mts";
 import type { NodeId } from "../types.mts";
 import type { CSSStyleDeclaration, IncaElement } from "./types.mts";

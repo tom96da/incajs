@@ -9,9 +9,9 @@ import { HANDLER_EVENTS } from "./element/eventHandlers.mts";
 import { createElementNode, rootElement } from "./element/handle.mts";
 import { isHeld, markDestroyed, registerNode, unregisterNode } from "./element/lifecycle.mts";
 import "./targets.mts";
-import { HTML_NAMESPACE } from "./native.mts";
+import { HTML_NAMESPACE } from "./ffi/index.mts";
 import type { IncaElement } from "./element/types.mts";
-import type { ElementEntry, HostCallback, NodeLink } from "./native.mts";
+import type { ElementEntry, HostCallback, NodeLink } from "./ffi/index.mts";
 
 const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
 

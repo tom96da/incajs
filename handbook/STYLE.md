@@ -100,6 +100,8 @@ Code reaches another layer through what that layer injects.
 
 - **Core features** (the element handles, the shadow tree and the host calls)
   import no framework and not the injected core.
+- **Host calls**: only the host-call wrapper calls the natives. The rest of core uses the functions
+  of that wrapper.
 - **Frontend renderers** reach the core features only through the injected
   core. Only the composition root imports it as a value. The other files
   import its types and take it as a parameter.
