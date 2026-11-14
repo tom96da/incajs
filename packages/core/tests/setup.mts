@@ -1,6 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import { vi } from "vitest";
+
 // The globals the host defines before an app runs.
 
 // A test file imports this module for `nativeStub`, so the QuickJS run evaluates it a second time
@@ -26,3 +28,21 @@ export function nativeStub(extra: Partial<Native> = {}): Native {
 }
 
 globalThis.__inca_native__ ??= nativeStub();
+
+/** `[x, y, width, height, border, scrollX, scrollY]` of a drawn node. */
+type Box = readonly [number, number, number, number, number, number, number];
+
+/** Installs a fake host whose reads give `boxes` and `scroll`, and returns it. */
+export function installMembersHost(
+  boxes: Record<number, Box> = {},
+  scroll: readonly [number, number, number, number] | null = null,
+) {
+  const host = {
+    getAttribute: vi.fn<() => null>(() => null),
+    layoutOf: vi.fn<(nodeId: number) => Box | null>((nodeId) => boxes[nodeId] ?? null),
+    scrollOf: vi.fn<() => readonly [number, number, number, number] | null>(() => scroll),
+    scrollNode: vi.fn<(nodeId: number, left: number | null, top: number | null) => void>(),
+  };
+  globalThis.__inca_native__ = nativeStub(host as never);
+  return host;
+}

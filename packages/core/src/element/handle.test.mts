@@ -4,11 +4,17 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { nativeStub } from "../../tests/setup.mts";
+import { document } from "../document.mts";
 import { HTML_NAMESPACE } from "../ffi/index.mts";
-import { createIncaElement, handleOf, rootElement } from "./handle.mts";
+import {
+  createCommentNode,
+  createElementNode,
+  createIncaElement,
+  handleOf,
+  rootElement,
+} from "./handle.mts";
 import { elementOf, markDestroyed, markRemoved, nodeOf } from "./lifecycle.mts";
 import type { ElementName } from "../ffi/index.mts";
-import type { ScrollOptions } from "./scroll.mts";
 import type { IncaElement, IncaInputElement } from "./types.mts";
 
 /** Installs a fake host whose reads give `stored`, `boxes` and `scroll`, and returns it. */
@@ -49,261 +55,178 @@ function installHost(
   return host;
 }
 
-describe("createIncaElement selectors", () => {
-  /** A fake host whose `matches` and `closest` answer `found`; the queries find nothing. */
-  function installSelectors(found: number | null = null, matched = false) {
-    const host = {
-      matches: vi.fn<(nodeId: number, selector: string) => boolean>(() => matched),
-      closest: vi.fn<(nodeId: number, selector: string) => number | null>(() => found),
-      checkSelector: vi.fn<(selector: string) => void>(),
-      querySelector: vi.fn<(nodeId: number, selector: string) => number | null>(() => null),
-      querySelectorAll: vi.fn<(nodeId: number, selector: string) => number[]>(() => []),
-    };
-    globalThis.__inca_native__ = nativeStub(host as never);
-    return host;
-  }
+/** Installs a fake host that answers every read the members of a new handle make. */
+function installCreationHost() {
+  const host = {
+    createNode: vi.fn<(tag: string) => number>(() => 1),
+    setStyle: vi.fn<() => void>(),
+    setAttribute: vi.fn<() => void>(),
+    getAttribute: vi.fn<() => null>(() => null),
+    classList: vi.fn<() => object>(() => ({})),
+    styleOf: vi.fn<() => object>(() => ({})),
+    attributeNames: vi.fn<() => string[]>(() => []),
+    attributeKey: vi.fn<(nodeId: number, name: string) => string>((_id, name) => name),
+    datasetTarget: vi.fn<() => object>(() => ({})),
+    datasetKeys: vi.fn<() => string[]>(() => []),
+    isConnected: vi.fn<() => boolean>(() => false),
+    linkedNode: vi.fn<() => null>(() => null),
+    childNodeIds: vi.fn<() => number[]>(() => []),
+    textContent: vi.fn<() => string>(() => ""),
+    innerHtml: vi.fn<() => string>(() => ""),
+    outerHtml: vi.fn<() => string>(() => ""),
+    layoutOf: vi.fn<() => null>(() => null),
+    scrollOf: vi.fn<() => null>(() => null),
+    addEventListener: vi.fn<(nodeId: number) => number>(() => 0),
+    removeEventListener: vi.fn<(nodeId: number) => boolean>(() => true),
+    dispatchEvent: vi.fn<(nodeId: number, event: unknown) => boolean>(() => true),
+  };
+  globalThis.__inca_native__ = nativeStub(host as never);
+  return host;
+}
 
-  /** `outer > inner > leaf` with ids 1, 2 and 3. */
-  function chain() {
-    const [outer, inner, leaf] = [1, 2, 3].map((id) => createIncaElement(id, "element", "div"));
-    inner!.parent = outer!;
-    outer!.__children.push(inner!);
-    leaf!.parent = inner!;
-    inner!.__children.push(leaf!);
-    return { outer: outer!, inner: inner!, leaf: leaf! };
-  }
+describe("createElement", () => {
+  it("allocates a native node for the tag and returns a parentless, childless element", () => {
+    const host = installCreationHost();
+    const el = createElementNode("div");
+    expect(host.createNode).toHaveBeenCalledWith("div");
+    expect(el).toEqual({
+      id: "",
+      className: "",
+      classList: {},
+      kind: "element",
+      tagName: "DIV",
+      localName: "div",
+      namespaceURI: "http://www.w3.org/1999/xhtml",
+      prefix: null,
+      parentElement: null,
+      firstElementChild: null,
+      lastElementChild: null,
+      childElementCount: 0,
+      previousElementSibling: null,
+      nextElementSibling: null,
+      parent: null,
+      __children: [],
+      children: expect.any(Object),
+      nodeType: 1,
+      nodeName: "DIV",
+      nodeValue: null,
+      textContent: "",
+      innerHTML: "",
+      outerHTML: "",
+      insertAdjacentHTML: expect.any(Function),
+      isConnected: false,
+      ownerDocument: document,
+      parentNode: null,
+      firstChild: null,
+      lastChild: null,
+      previousSibling: null,
+      nextSibling: null,
+      childNodes: expect.any(Object),
+      hasChildNodes: expect.any(Function),
+      appendChild: expect.any(Function),
+      insertBefore: expect.any(Function),
+      removeChild: expect.any(Function),
+      replaceChild: expect.any(Function),
+      cloneNode: expect.any(Function),
+      compareDocumentPosition: expect.any(Function),
+      isSameNode: expect.any(Function),
+      isEqualNode: expect.any(Function),
+      focus: expect.any(Function),
+      blur: expect.any(Function),
+      click: expect.any(Function),
+      setPointerCapture: expect.any(Function),
+      releasePointerCapture: expect.any(Function),
+      hasPointerCapture: expect.any(Function),
+      contains: expect.any(Function),
+      addEventListener: expect.any(Function),
+      removeEventListener: expect.any(Function),
+      dispatchEvent: expect.any(Function),
+      tabIndex: -1,
+      querySelector: expect.any(Function),
+      querySelectorAll: expect.any(Function),
+      matches: expect.any(Function),
+      closest: expect.any(Function),
+      getAttribute: expect.any(Function),
+      setAttribute: expect.any(Function),
+      hasAttribute: expect.any(Function),
+      removeAttribute: expect.any(Function),
+      getAttributeNames: expect.any(Function),
+      attributes: expect.anything(),
+      style: expect.anything(),
+      dataset: expect.anything(),
+      getBoundingClientRect: expect.any(Function),
+      offsetWidth: 0,
+      offsetHeight: 0,
+      offsetLeft: 0,
+      offsetTop: 0,
+      offsetParent: null,
+      clientWidth: 0,
+      clientHeight: 0,
+      clientLeft: 0,
+      clientTop: 0,
+      scrollLeft: 0,
+      scrollTop: 0,
+      scrollWidth: 0,
+      scrollHeight: 0,
+      scrollTo: expect.any(Function),
+      scrollBy: expect.any(Function),
+      scrollIntoView: expect.any(Function),
+      getRootNode: expect.any(Function),
+    });
+    expect(el.__node_id).toBe(1);
+  });
+});
 
-  it("calls matches with the node id and the selector", () => {
-    const host = installSelectors(null, true);
-    const { leaf } = chain();
+describe("createComment", () => {
+  it("creates a hidden container in place of a comment", () => {
+    const host = installCreationHost();
+    const node = createCommentNode();
+    expect(host.createNode).toHaveBeenCalledWith("#comment");
+    expect(host.setStyle).toHaveBeenCalledWith(1, "display", "none");
+    expect(node.kind).toBe("comment");
+    expect(node.tagName).toBe("DIV");
+  });
+});
 
-    expect(leaf.matches(".a")).toBe(true);
-    expect(host.matches).toHaveBeenCalledWith(3, ".a");
+describe("event target methods", () => {
+  it("add a listener under the element's own node id", () => {
+    const host = installCreationHost();
+    const el = createElementNode("div");
+
+    el.addEventListener("click", vi.fn<() => void>());
+
+    expect(host.addEventListener.mock.calls[0]![0]).toBe(el.__node_id);
   });
 
-  it.each(["matches", "closest", "querySelector", "querySelectorAll"] as const)(
-    "%s converts a number to text",
-    (method) => {
-      const host = installSelectors();
-      const { leaf } = chain();
+  it("remove a listener under the element's own node id", () => {
+    const host = installCreationHost();
+    const el = createElementNode("div");
+    const listener = vi.fn<() => void>();
+    el.addEventListener("click", listener);
 
-      leaf[method](1 as unknown as string);
+    el.removeEventListener("click", listener);
 
-      expect(host[method]).toHaveBeenCalledWith(3, "1");
-    },
-  );
-
-  it.each(["matches", "closest", "querySelector", "querySelectorAll"] as const)(
-    "%s throws a TypeError for a Symbol",
-    (method) => {
-      installSelectors();
-      const { leaf } = chain();
-
-      expect(() => leaf[method](Symbol("s") as unknown as string)).toThrow(TypeError);
-    },
-  );
-
-  it("calls closest with the node id and resolves the id to the ancestor handle", () => {
-    const host = installSelectors(1);
-    const { outer, leaf } = chain();
-
-    expect(leaf.closest("div")).toBe(outer);
-    expect(host.closest).toHaveBeenCalledWith(3, "div");
+    expect(host.removeEventListener.mock.calls[0]![0]).toBe(el.__node_id);
   });
 
-  it("closest resolves to the element itself when the host names it", () => {
-    installSelectors(3);
-    const { leaf } = chain();
+  it("dispatch an event at the element's own node id", () => {
+    const host = installCreationHost();
+    const el = createElementNode("div");
 
-    expect(leaf.closest("div")).toBe(leaf);
+    el.dispatchEvent({ type: "ping" });
+
+    expect(host.dispatchEvent.mock.calls[0]![0]).toBe(el.__node_id);
   });
 
-  it("closest resolves the mount container before any handle of it exists", () => {
-    const host = installSelectors(91);
-    globalThis.__inca_native__ = nativeStub({ ...host, rootNodeId: () => 91 } as never);
-    const { leaf } = chain();
+  it("register listeners under the comment stand-in's node id", () => {
+    const host = installCreationHost();
+    host.createNode.mockReturnValueOnce(5);
+    const comment = createCommentNode();
 
-    expect(leaf.closest("div")).toBe(rootElement());
+    comment.addEventListener("click", vi.fn<() => void>());
+
+    expect(host.addEventListener.mock.calls[0]![0]).toBe(5);
   });
-
-  it("closest is null when nothing matches", () => {
-    installSelectors(null);
-
-    expect(chain().leaf.closest("p")).toBeNull();
-  });
-
-  it.each([
-    ["matches", false],
-    ["closest", null],
-    ["querySelector", null],
-  ] as const)("%s answers %s for a freed handle without a host call", (method, expected) => {
-    const host = installSelectors(1, true);
-    const { leaf } = chain();
-    markDestroyed(leaf);
-
-    expect(leaf[method]("div")).toBe(expected);
-    expect(host[method]).not.toHaveBeenCalled();
-  });
-
-  it("querySelectorAll answers an empty list for a freed handle without a host call", () => {
-    const host = installSelectors();
-    const { leaf } = chain();
-    markDestroyed(leaf);
-
-    expect([leaf.querySelectorAll("div").length, host.querySelectorAll.mock.calls]).toEqual([
-      0,
-      [],
-    ]);
-  });
-
-  it.each(["matches", "closest", "querySelector", "querySelectorAll"] as const)(
-    "%s throws SyntaxError on a freed element",
-    (method) => {
-      const host = installSelectors();
-      host.checkSelector.mockImplementation(() => {
-        throw new DOMException("the selector is not valid", "SyntaxError");
-      });
-      const { leaf } = chain();
-      markDestroyed(leaf);
-
-      expect(() => leaf[method]("div >")).toThrow(expect.objectContaining({ name: "SyntaxError" }));
-    },
-  );
-
-  it.each(["matches", "closest", "querySelector", "querySelectorAll"] as const)(
-    "%s throws TypeError for a missing argument on a freed element",
-    (method) => {
-      const host = installSelectors();
-      const { leaf } = chain();
-      markDestroyed(leaf);
-
-      expect(() => (leaf[method] as () => unknown)()).toThrow(TypeError);
-      expect(host.checkSelector).not.toHaveBeenCalled();
-    },
-  );
-
-  it.each(["matches", "closest", "querySelector", "querySelectorAll"] as const)(
-    "%s throws TypeError for a Symbol on a freed element",
-    (method) => {
-      const host = installSelectors();
-      const { leaf } = chain();
-      markDestroyed(leaf);
-
-      expect(() => leaf[method](Symbol("s") as unknown as string)).toThrow(TypeError);
-      expect(host.checkSelector).not.toHaveBeenCalled();
-    },
-  );
-
-  it.each(["matches", "closest", "querySelector", "querySelectorAll"] as const)(
-    "%s sends the converted selector text to checkSelector",
-    (method) => {
-      const host = installSelectors();
-      const { leaf } = chain();
-      markDestroyed(leaf);
-
-      leaf[method](1 as unknown as string);
-
-      expect(host.checkSelector).toHaveBeenCalledWith("1");
-    },
-  );
-
-  it("querySelector returns the handle of the id", () => {
-    const host = installSelectors();
-    const { outer, inner } = chain();
-    host.querySelector.mockReturnValueOnce(2);
-
-    expect(outer.querySelector("div")).toBe(inner);
-  });
-
-  it("querySelector calls the host with the node id and the selector", () => {
-    const host = installSelectors();
-    const { outer } = chain();
-
-    outer.querySelector("div");
-
-    expect(host.querySelector).toHaveBeenCalledWith(1, "div");
-  });
-
-  it("querySelector returns null without a match", () => {
-    installSelectors();
-
-    expect(chain().leaf.querySelector("div")).toBeNull();
-  });
-
-  it("querySelectorAll returns the handles in native order", () => {
-    const host = installSelectors();
-    const { outer, inner, leaf } = chain();
-    host.querySelectorAll.mockReturnValueOnce([3, 2]);
-
-    const found = outer.querySelectorAll("div");
-
-    expect(found[0]).toBe(leaf);
-    expect(found[1]).toBe(inner);
-    expect(host.querySelectorAll).toHaveBeenCalledWith(1, "div");
-  });
-
-  it("querySelectorAll returns a list that later answers do not reach", () => {
-    const host = installSelectors();
-    const { outer } = chain();
-    host.querySelectorAll.mockReturnValueOnce([2]);
-
-    const found = outer.querySelectorAll("div");
-    host.querySelectorAll.mockReturnValue([2, 3]);
-
-    expect(found.length).toBe(1);
-  });
-
-  it("querySelectorAll returns a list that a loop visits in full when the host answers fewer", () => {
-    const host = installSelectors();
-    const { outer } = chain();
-    host.querySelectorAll.mockReturnValueOnce([2, 3]);
-    const found = outer.querySelectorAll("div");
-    host.querySelectorAll.mockReturnValue([]);
-    const visited: unknown[] = [];
-
-    for (const el of found) visited.push(el);
-
-    expect(visited.length).toBe(2);
-  });
-
-  it("querySelectorAll returns a new list on every call", () => {
-    installSelectors();
-    const { outer } = chain();
-
-    expect(outer.querySelectorAll("div")).not.toBe(outer.querySelectorAll("div"));
-  });
-
-  it.each(["querySelector", "querySelectorAll"] as const)(
-    "%s still asks the host for a removed handle",
-    (method) => {
-      const host = installSelectors();
-      const { leaf } = chain();
-      markRemoved(leaf);
-
-      leaf[method]("div");
-
-      expect(host[method]).toHaveBeenCalledTimes(1);
-    },
-  );
-
-  it("still asks the host for a removed handle", () => {
-    const host = installSelectors(null, true);
-    const { leaf } = chain();
-    markRemoved(leaf);
-
-    expect(leaf.matches("div")).toBe(true);
-    expect(host.matches).toHaveBeenCalledTimes(1);
-  });
-
-  it.each(["matches", "closest", "querySelector", "querySelectorAll"] as const)(
-    "%s throws a TypeError for no argument",
-    (method) => {
-      installSelectors();
-      const { leaf } = chain();
-
-      expect(() => (leaf[method] as () => unknown)()).toThrow(TypeError);
-    },
-  );
 });
 
 describe("createIncaElement tagName", () => {
@@ -602,101 +525,6 @@ describe("createIncaElement after the node is removed", () => {
   });
 });
 
-describe("createIncaElement layout", () => {
-  it("reads the rect from the last drawn box", () => {
-    installHost(null, { 1: [10, 20, 30, 40, 2, 0, 0] });
-    const el = createIncaElement(1, "element", "div");
-    const rect = el.getBoundingClientRect();
-    expect([
-      rect.x,
-      rect.y,
-      rect.width,
-      rect.height,
-      rect.left,
-      rect.top,
-      rect.right,
-      rect.bottom,
-    ]).toEqual([10, 20, 30, 40, 10, 20, 40, 60]);
-  });
-
-  it("gives zero members and a null offsetParent when there is no record", () => {
-    installHost();
-    const el = createIncaElement(1, "element", "div");
-    expect([el.offsetWidth, el.offsetHeight, el.offsetLeft, el.offsetTop]).toEqual([0, 0, 0, 0]);
-    expect([el.clientWidth, el.clientHeight, el.clientLeft, el.clientTop]).toEqual([0, 0, 0, 0]);
-    expect(el.offsetParent).toBeNull();
-  });
-
-  it("rounds the offset and client members", () => {
-    installHost(null, { 1: [10.4, 20.6, 30.5, 40.2, 1.6, 0, 0] });
-    const el = createIncaElement(1, "element", "div");
-    expect([el.offsetWidth, el.offsetHeight]).toEqual([31, 40]);
-    expect([el.offsetLeft, el.offsetTop]).toEqual([10, 21]);
-    expect([el.clientLeft, el.clientTop]).toEqual([2, 2]);
-    expect([el.clientWidth, el.clientHeight]).toEqual([27, 37]);
-  });
-
-  it("reads a position slightly above the parent as 0", () => {
-    installHost(null, {
-      1: [100, 50, 200, 100, 0, 0, 0],
-      2: [99.7, 49.7, 20, 20, 0, 0, 0],
-    });
-    const parent = createIncaElement(1, "element", "div");
-    const child = createIncaElement(2, "element", "div");
-    child.parent = parent;
-
-    expect([child.offsetLeft, child.offsetTop]).toEqual([0, 0]);
-  });
-
-  it("clamps the client size at zero", () => {
-    installHost(null, { 1: [0, 0, 2, 2, 5, 0, 0] });
-    const el = createIncaElement(1, "element", "div");
-    expect([el.clientWidth, el.clientHeight]).toEqual([0, 0]);
-  });
-
-  it("measures offsets from the offsetParent", () => {
-    installHost(null, {
-      1: [100, 50, 200, 100, 0, 0, 0],
-      2: [110.4, 60.6, 20, 20, 0, 0, 0],
-    });
-    const parent = createIncaElement(1, "element", "div");
-    const child = createIncaElement(2, "element", "div");
-    child.parent = parent;
-
-    expect(child.offsetParent).toBe(parent);
-    expect([child.offsetLeft, child.offsetTop]).toEqual([10, 11]);
-  });
-
-  it("gives a null offsetParent when the parent has no record", () => {
-    installHost(null, { 2: [110, 60, 20, 20, 0, 0, 0] });
-    const child = createIncaElement(2, "element", "div");
-    child.parent = createIncaElement(1, "element", "div");
-
-    expect(child.offsetParent).toBeNull();
-    expect([child.offsetLeft, child.offsetTop]).toEqual([110, 60]);
-  });
-
-  it("gives a null offsetParent to the root wrapper", () => {
-    installHost(null, { 1: [5.4, 6, 10, 10, 0, 0, 0] });
-    const el = createIncaElement(1, "element", "div");
-    expect(el.offsetParent).toBeNull();
-    expect([el.offsetLeft, el.offsetTop]).toEqual([5, 6]);
-  });
-
-  it("reads zeros for a freed element", () => {
-    installHost(null, { 1: [10, 20, 30, 40, 2, 0, 0] });
-    const el = createIncaElement(1, "element", "div");
-    markDestroyed(el);
-    expect([
-      el.getBoundingClientRect().width,
-      el.offsetWidth,
-      el.clientWidth,
-      el.offsetLeft,
-    ]).toEqual([0, 0, 0, 0]);
-    expect(el.offsetParent).toBeNull();
-  });
-});
-
 describe("createIncaElement registration", () => {
   it("registers an element handle", () => {
     installHost();
@@ -768,72 +596,6 @@ describe("createIncaElement focus and scrollIntoView", () => {
     el.scrollIntoView(false);
     expect(host.focusNode).not.toHaveBeenCalled();
     expect(host.scrollIntoViewNode).not.toHaveBeenCalled();
-  });
-});
-
-describe("createIncaElement scroll members", () => {
-  it("read zeros with no record", () => {
-    installHost();
-    const el = createIncaElement(7, "element", "div");
-    expect([el.scrollLeft, el.scrollTop, el.scrollWidth, el.scrollHeight]).toEqual([0, 0, 0, 0]);
-  });
-
-  it("report scrollWidth and scrollHeight as client size plus the maximum offset", () => {
-    installHost(null, { 7: [0, 0, 20, 10, 0, 0, 0] }, [0, 0, 30, 60]);
-    const el = createIncaElement(7, "element", "div");
-    expect([el.scrollWidth, el.scrollHeight]).toEqual([50, 70]);
-  });
-
-  it("read zeros once removed", () => {
-    installHost(null, {}, [5, 6, 7, 8]);
-    const el = createIncaElement(7, "element", "div");
-    markDestroyed(el);
-    expect([el.scrollTop, el.scrollWidth]).toEqual([0, 0]);
-  });
-});
-
-describe("createIncaElement scroll setters and methods", () => {
-  it("writes scrollLeft on the horizontal axis only", () => {
-    const host = installHost();
-    const el = createIncaElement(7, "element", "div");
-    el.scrollLeft = 30;
-    expect(host.scrollNode).toHaveBeenLastCalledWith(7, 30, null);
-  });
-
-  it("writes scrollTop on the vertical axis only", () => {
-    const host = installHost();
-    const el = createIncaElement(7, "element", "div");
-    el.scrollTop = 40;
-    expect(host.scrollNode).toHaveBeenLastCalledWith(7, null, 40);
-  });
-
-  it("coerces a numeric string assigned to scrollTop", () => {
-    const host = installHost();
-    const el = createIncaElement(7, "element", "div");
-    el.scrollTop = "40" as unknown as number;
-    expect(host.scrollNode).toHaveBeenLastCalledWith(7, null, 40);
-  });
-
-  it("reads scrollLeft and scrollTop from the record", () => {
-    installHost(null, {}, [10, 20, 100, 200]);
-    const el = createIncaElement(7, "element", "div");
-    expect([el.scrollLeft, el.scrollTop]).toEqual([10, 20]);
-  });
-
-  it("wires scrollTo and scrollBy to the number form", () => {
-    const host = installHost(null, {}, [5, 6, 100, 200]);
-    const el = createIncaElement(7, "element", "div");
-    el.scrollTo(10, 20);
-    expect(host.scrollNode).toHaveBeenLastCalledWith(7, 10, 20);
-    el.scrollBy(1, 2);
-    expect(host.scrollNode).toHaveBeenLastCalledWith(7, 6, 8);
-  });
-
-  it("passes null for both axes on scrollTo(null)", () => {
-    const host = installHost();
-    const el = createIncaElement(7, "element", "div");
-    el.scrollTo(null as unknown as ScrollOptions);
-    expect(host.scrollNode).toHaveBeenLastCalledWith(7, null, null);
   });
 });
 

@@ -3,10 +3,11 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-import { nativeStub } from "../../tests/setup.mts";
+import { installMembersHost, nativeStub } from "../../tests/setup.mts";
 import { createIncaElement } from "./handle.mts";
 import { markDestroyed } from "./lifecycle.mts";
 import { scrollIntoViewArgs, scrollPosition } from "./scroll.mts";
+import type { ScrollOptions } from "./scroll.mts";
 
 function installHost(scroll: readonly [number, number, number, number] | null = null) {
   const host = {
@@ -106,5 +107,71 @@ describe("scrollIntoViewArgs", () => {
       block: "end",
       inline: "nearest",
     });
+  });
+});
+
+describe("createIncaElement scroll members", () => {
+  it("read zeros with no record", () => {
+    installMembersHost();
+    const el = createIncaElement(7, "element", "div");
+    expect([el.scrollLeft, el.scrollTop, el.scrollWidth, el.scrollHeight]).toEqual([0, 0, 0, 0]);
+  });
+
+  it("report scrollWidth and scrollHeight as client size plus the maximum offset", () => {
+    installMembersHost({ 7: [0, 0, 20, 10, 0, 0, 0] }, [0, 0, 30, 60]);
+    const el = createIncaElement(7, "element", "div");
+    expect([el.scrollWidth, el.scrollHeight]).toEqual([50, 70]);
+  });
+
+  it("read zeros once removed", () => {
+    installMembersHost({}, [5, 6, 7, 8]);
+    const el = createIncaElement(7, "element", "div");
+    markDestroyed(el);
+    expect([el.scrollTop, el.scrollWidth]).toEqual([0, 0]);
+  });
+});
+
+describe("createIncaElement scroll setters and methods", () => {
+  it("writes scrollLeft on the horizontal axis only", () => {
+    const host = installMembersHost();
+    const el = createIncaElement(7, "element", "div");
+    el.scrollLeft = 30;
+    expect(host.scrollNode).toHaveBeenLastCalledWith(7, 30, null);
+  });
+
+  it("writes scrollTop on the vertical axis only", () => {
+    const host = installMembersHost();
+    const el = createIncaElement(7, "element", "div");
+    el.scrollTop = 40;
+    expect(host.scrollNode).toHaveBeenLastCalledWith(7, null, 40);
+  });
+
+  it("coerces a numeric string assigned to scrollTop", () => {
+    const host = installMembersHost();
+    const el = createIncaElement(7, "element", "div");
+    el.scrollTop = "40" as unknown as number;
+    expect(host.scrollNode).toHaveBeenLastCalledWith(7, null, 40);
+  });
+
+  it("reads scrollLeft and scrollTop from the record", () => {
+    installMembersHost({}, [10, 20, 100, 200]);
+    const el = createIncaElement(7, "element", "div");
+    expect([el.scrollLeft, el.scrollTop]).toEqual([10, 20]);
+  });
+
+  it("wires scrollTo and scrollBy to the number form", () => {
+    const host = installMembersHost({}, [5, 6, 100, 200]);
+    const el = createIncaElement(7, "element", "div");
+    el.scrollTo(10, 20);
+    expect(host.scrollNode).toHaveBeenLastCalledWith(7, 10, 20);
+    el.scrollBy(1, 2);
+    expect(host.scrollNode).toHaveBeenLastCalledWith(7, 6, 8);
+  });
+
+  it("passes null for both axes on scrollTo(null)", () => {
+    const host = installMembersHost();
+    const el = createIncaElement(7, "element", "div");
+    el.scrollTo(null as unknown as ScrollOptions);
+    expect(host.scrollNode).toHaveBeenLastCalledWith(7, null, null);
   });
 });

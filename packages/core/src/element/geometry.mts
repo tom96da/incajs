@@ -5,6 +5,21 @@ import { layoutOf } from "../ffi/index.mts";
 import { isRemoved } from "./lifecycle.mts";
 import type { IncaElement } from "./types.mts";
 
+/** The members {@link layoutMembers} builds. */
+export type LayoutMembers = Pick<
+  IncaElement,
+  | "getBoundingClientRect"
+  | "offsetWidth"
+  | "offsetHeight"
+  | "offsetLeft"
+  | "offsetTop"
+  | "offsetParent"
+  | "clientWidth"
+  | "clientHeight"
+  | "clientLeft"
+  | "clientTop"
+>;
+
 /** `[x, y, width, height, border, scrollX, scrollY]` of a node's last drawn frame. */
 export type LayoutBox = readonly [number, number, number, number, number, number, number];
 
@@ -108,4 +123,44 @@ export function tabIndexOf(value: string | number | boolean | null, kind: string
 
   const n = Number(match[1]) || 0;
   return n >= -2147483648 && n <= 2147483647 ? n : fallback;
+}
+
+/**
+ * Builds the layout members of an element, read from the box of the last drawn frame.
+ * @param element - the handle the members belong to
+ * @returns the members
+ */
+export function layoutMembers(element: IncaElement): LayoutMembers {
+  return {
+    getBoundingClientRect: () => rectOf(layoutBox(element)),
+    get offsetWidth() {
+      return Math.round(layoutBox(element)?.[2] ?? 0);
+    },
+    get offsetHeight() {
+      return Math.round(layoutBox(element)?.[3] ?? 0);
+    },
+    get offsetLeft() {
+      return offsetOf(element).left;
+    },
+    get offsetTop() {
+      return offsetOf(element).top;
+    },
+    get offsetParent() {
+      return offsetParentOf(element);
+    },
+    get clientWidth() {
+      const box = layoutBox(element);
+      return box ? Math.max(0, Math.round(box[2] - 2 * box[4])) : 0;
+    },
+    get clientHeight() {
+      const box = layoutBox(element);
+      return box ? Math.max(0, Math.round(box[3] - 2 * box[4])) : 0;
+    },
+    get clientLeft() {
+      return Math.round(layoutBox(element)?.[4] ?? 0);
+    },
+    get clientTop() {
+      return Math.round(layoutBox(element)?.[4] ?? 0);
+    },
+  };
 }

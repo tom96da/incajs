@@ -12,12 +12,12 @@ import {
   setInnerHtml,
   setOuterHtml,
 } from "../ffi/index.mts";
-import { attributeText, requireArguments } from "./attributes.mts";
+import { attributeText, requireArguments } from "./arguments.mts";
 import { existingContent, isDestroyed } from "./lifecycle.mts";
 import { keep, link, unlink } from "./shadowTree.mts";
 import type { Parsed } from "../ffi/index.mts";
 import type { NodeId } from "../types.mts";
-import type { HandleBuilders } from "./nodeMutation.mts";
+import type { HandleBuilders } from "./lifecycle.mts";
 import type { HtmlMembers, IncaElement, IncaNode, IncaParent } from "./types.mts";
 
 /**

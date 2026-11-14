@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { scrollNode, scrollOf } from "../ffi/index.mts";
+import { scrollIntoViewNode, scrollNode, scrollOf } from "../ffi/index.mts";
 import { isRemoved } from "./lifecycle.mts";
 import type { ScrollAlignment } from "../types.mts";
 import type { IncaElement } from "./types.mts";
@@ -71,4 +71,53 @@ export function scrollIntoViewArgs(arg?: boolean | ScrollIntoViewOptions): {
     };
   }
   return { block: arg === false ? "end" : "start", inline: "nearest" };
+}
+
+/** The members {@link scrollMembers} builds. */
+export type ScrollMembers = Pick<
+  IncaElement,
+  | "scrollLeft"
+  | "scrollTop"
+  | "scrollWidth"
+  | "scrollHeight"
+  | "scrollTo"
+  | "scrollBy"
+  | "scrollIntoView"
+>;
+
+/**
+ * Builds the scroll members of an element. A removed element reads zeros and ignores the calls.
+ * @param element - the handle the members belong to
+ * @returns the members
+ */
+export function scrollMembers(element: IncaElement): ScrollMembers {
+  const id = element.__node_id;
+  const scroll = () => (isRemoved(element) ? null : scrollOf(id));
+  return {
+    get scrollLeft() {
+      return scroll()?.[0] ?? 0;
+    },
+    set scrollLeft(value: number) {
+      scrollPosition(element, [value], false);
+    },
+    get scrollTop() {
+      return scroll()?.[1] ?? 0;
+    },
+    set scrollTop(value: number) {
+      scrollPosition(element, [undefined, value], false);
+    },
+    get scrollWidth() {
+      return element.clientWidth + Math.round(scroll()?.[2] ?? 0);
+    },
+    get scrollHeight() {
+      return element.clientHeight + Math.round(scroll()?.[3] ?? 0);
+    },
+    scrollTo: (...args: ScrollArgs) => scrollPosition(element, args, false),
+    scrollBy: (...args: ScrollArgs) => scrollPosition(element, args, true),
+    scrollIntoView: (arg?: boolean | ScrollIntoViewOptions) => {
+      if (isRemoved(element)) return;
+      const { block, inline } = scrollIntoViewArgs(arg);
+      scrollIntoViewNode(id, block, inline);
+    },
+  };
 }

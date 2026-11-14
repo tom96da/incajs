@@ -14,9 +14,25 @@ import { nodeListOf } from "./collections.mts";
 import { isDestroyed } from "./lifecycle.mts";
 import type { NodeLink } from "../ffi/index.mts";
 import type { IncaDocument } from "../types.mts";
-import type { HandleBuilders, NodeMutationMembers } from "./nodeMutation.mts";
-import type { NodeRelationMembers } from "./nodeRelations.mts";
+import type { HandleBuilders } from "./lifecycle.mts";
 import type { IncaElement, IncaFragment, IncaNode, NodeMembers } from "./types.mts";
+
+/** The members {@link nodeTreeMembers} builds. */
+export type NodeTreeMembers = Pick<
+  NodeMembers,
+  | "nodeType"
+  | "nodeName"
+  | "nodeValue"
+  | "isConnected"
+  | "ownerDocument"
+  | "parentNode"
+  | "firstChild"
+  | "lastChild"
+  | "previousSibling"
+  | "nextSibling"
+  | "childNodes"
+  | "hasChildNodes"
+>;
 
 const NODE_TYPES = { element: 1, text: 3, comment: 8, document: 9, fragment: 11 } as const;
 
@@ -50,10 +66,7 @@ export function writeData(node: IncaNode, data: string): void {
  * @param builders - the lookups of the document handle and of a handle by node id
  * @returns the members, as getters
  */
-export function nodeTreeMembers(
-  node: IncaNode,
-  builders: HandleBuilders,
-): Omit<NodeMembers, keyof NodeMutationMembers | keyof NodeRelationMembers> {
+export function nodeTreeMembers(node: IncaNode, builders: HandleBuilders): NodeTreeMembers {
   const id = node.__node_id;
   const reach = (link: NodeLink): IncaNode | null => {
     if (isDestroyed(node)) return null;

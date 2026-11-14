@@ -12,13 +12,13 @@ import {
   substringData,
   wholeText,
 } from "../ffi/index.mts";
-import { attributeText, requireArguments } from "./attributes.mts";
+import { attributeText, nullableText, requireArguments } from "./arguments.mts";
 import { isDestroyed, registerNode, releaseWhenCollected, withNodeId } from "./lifecycle.mts";
 import { nodeMutationMembers } from "./nodeMutation.mts";
 import { nodeRelationMembers } from "./nodeRelations.mts";
 import { nodeTreeMembers, readData, writeData } from "./nodeTree.mts";
 import type { NodeId } from "../types.mts";
-import type { HandleBuilders } from "./nodeMutation.mts";
+import type { HandleBuilders } from "./lifecycle.mts";
 import type {
   CharacterDataMembers,
   IncaNode,
@@ -26,11 +26,6 @@ import type {
   NodeMembers,
   TextMembers,
 } from "./types.mts";
-
-/** Converts an assignment to a nullable text member: `null` and `undefined` store `""`. */
-export function nullableText(value: unknown): string {
-  return value === null || value === undefined ? "" : attributeText(value);
-}
 
 /**
  * Builds the character data members of a text node or a comment stand-in.

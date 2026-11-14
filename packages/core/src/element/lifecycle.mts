@@ -2,8 +2,24 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { releaseNode } from "../ffi/index.mts";
-import type { NodeId } from "../types.mts";
-import type { IncaElement, IncaFragment, IncaNode } from "./types.mts";
+import type { ElementName } from "../ffi/index.mts";
+import type { IncaDocument, NodeId } from "../types.mts";
+import type { IncaElement, IncaFragment, IncaNode, IncaText } from "./types.mts";
+
+/**
+ * The functions that build and find the handles of native nodes. Every handle passes `text`,
+ * `document` and `node`. An element or a fragment also passes `element` and `fragment`, the
+ * builders of the kinds its clone can hold.
+ */
+export interface HandleBuilders {
+  element?: (id: NodeId, kind: IncaElement["kind"], name?: ElementName) => IncaElement;
+  text: (id: NodeId, data: string) => IncaText;
+  fragment?: (id: NodeId) => IncaFragment;
+  /** The handle of the document. */
+  document: () => IncaDocument;
+  /** The handle of a node by id: the live handle, or the document handle for the document id. */
+  node: (id: NodeId) => IncaNode | undefined;
+}
 
 /** Every handle that `withNodeId` gave a node id. */
 const nodes = new WeakSet<object>();

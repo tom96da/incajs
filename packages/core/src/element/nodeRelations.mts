@@ -5,10 +5,9 @@
 // A freed node is in a tree of its own, so its answers come from the handle.
 
 import { compareNodePosition, isEqualNode, rootOf } from "../ffi/index.mts";
-import { requireArguments } from "./attributes.mts";
+import { nodeArgument, requireArguments } from "./arguments.mts";
 import { isDestroyed } from "./lifecycle.mts";
-import { nodeArgument } from "./nodeMutation.mts";
-import type { HandleBuilders } from "./nodeMutation.mts";
+import type { HandleBuilders } from "./lifecycle.mts";
 import type { IncaNode, NodeMembers } from "./types.mts";
 
 /** The members {@link nodeRelationMembers} builds. */

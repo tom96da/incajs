@@ -8,7 +8,7 @@ import {
   datasetSet,
   datasetTarget,
 } from "../ffi/index.mts";
-import { attributeText } from "./attributes.mts";
+import { attributeText } from "./arguments.mts";
 import type { NodeId } from "../types.mts";
 import type { DOMStringMap, IncaElement } from "./types.mts";
 
