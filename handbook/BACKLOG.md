@@ -1120,16 +1120,6 @@ A fixed entry is deleted and its ID is never reused.
   no `keypress`. Fix: report a dead key as `Dead` from the platform layer, or
   skip `keypress` for a key that starts a composition.
 
-- **B-240 A module the time limit stops loses the limit in its error**
-  `Units: jsenv · Size: S–M · Impact: Low`
-
-  A module that the time limit stops in `start_module` reads as
-  `InternalError: interrupted`, without the limit, when another call into the
-  engine runs before `poll_module` reads it. The engine remembers a stop for
-  one call, and each call forgets the stop of the call before. The host polls
-  right after it starts the entry, and its time limit is off, so it does not
-  reach this. Fix: record the stop with the module.
-
 - **B-241 The log directory below the temporary directory can be prepared by another user**
   `Units: host · Size: S–M · Impact: Low`
 
@@ -1767,6 +1757,22 @@ A fixed entry is deleted and its ID is never reused.
   `replaceChild` and the markup setters, as `removeNode` does, and follow `leftHeld`: weak entries
   for the descendants and a keeper list on the handle of the top.
 
+- **B-326 `run_jobs` reports a stopped module without the limit**
+  `Units: jsenv · Size: S · Impact: Low`
+
+  The report reads `InternalError: interrupted` where `poll_module` reads the text with the limit.
+  Fix: record the stop on the module's promise at the stop (the vault entry of the module carries
+  a flag) so `take_rejections` names the limit whatever call runs first. Then the `run_jobs` test
+  expects the named text.
+
+- **B-327 A module a job stops stays pending**
+  `Units: jsenv · Size: M · Impact: Low`
+
+  `poll_module` returns `None` for ever and `eval_module` reports `WouldBlock`. The engine ends the
+  async function without settling it. Fix: settle the module's promise with the stop's error when a
+  job ends on an uncatchable error, in the vendored source or in a wrapper that rejects the
+  module's promise after a tripped job.
+
 - **B-339 Reading `children` of a large list costs more than before**
   `Units: bridge,core · Size: M · Impact: Low`
 
@@ -1777,3 +1783,4 @@ A fixed entry is deleted and its ID is never reused.
   snapshot per collection read, invalidated by a tree generation the host counts, or add a host
   call that returns the element child at an index. Measure again with a built app that mounts a
   list of 1000 items and reads `children`, `parentNode` and `nextSibling` on the release host.
+

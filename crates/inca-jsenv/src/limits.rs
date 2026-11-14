@@ -419,12 +419,51 @@ mod tests {
             .unwrap();
 
         assert!(engine.poll_module(&module).is_none());
+        assert!(engine.poll_module(&module).is_none());
 
         let failures = engine.run_jobs();
-        // The stop of the poll comes first, and the drain stops again on the jobs that are left.
-        assert_eq!(failures.len(), 2);
+        // Each stopped poll and the drain stop on the jobs that are left.
+        assert_eq!(failures.len(), 3);
         assert_eq!(failures[0].message(), stopped());
         assert_eq!(failures[1].message(), stopped());
+        assert_eq!(failures[2].message(), stopped());
+    }
+
+    #[test]
+    fn a_module_the_limit_stopped_keeps_the_limit_after_another_call() {
+        let engine = engine_with(timed(LIMIT_MS));
+        let module = engine.start_module("spins.mjs", SPINS).unwrap();
+
+        engine.eval::<()>("1").unwrap();
+        let result = engine.poll_module(&module).unwrap();
+
+        assert_eq!(result.unwrap_err().message(), stopped());
+    }
+
+    #[test]
+    fn polling_a_stopped_module_again_returns_the_same_error() {
+        let engine = engine_with(timed(LIMIT_MS));
+        let module = engine.start_module("spins.mjs", SPINS).unwrap();
+
+        let first = engine.poll_module(&module).unwrap();
+        engine.eval::<()>("1").unwrap();
+        let second = engine.poll_module(&module).unwrap();
+        engine.eval::<()>("1").unwrap();
+        let third = engine.poll_module(&module).unwrap();
+
+        assert_eq!(first, second);
+        assert_eq!(second, third);
+    }
+
+    #[test]
+    fn run_jobs_reports_a_stopped_module_without_the_limit() {
+        let engine = engine_with(timed(LIMIT_MS));
+        let _module = engine.start_module("spins.mjs", SPINS).unwrap();
+
+        let failures = engine.run_jobs();
+
+        assert_eq!(failures.len(), 1);
+        assert_eq!(failures[0].message(), "InternalError: interrupted");
     }
 
     #[test]

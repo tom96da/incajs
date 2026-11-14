@@ -5,6 +5,7 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use rquickjs::function::Rest;
@@ -106,16 +107,23 @@ impl Engine {
         self.watchdog.arm();
         let name = canonical_name(name);
         let id = NEXT_MODULE.fetch_add(1, Ordering::Relaxed);
-        self.context.with(|ctx| {
+        let module = self.context.with(|ctx| {
             crate::sourcemap::register(&ctx, &name, source);
             Module::declare(ctx.clone(), name, source)
                 .and_then(rquickjs::Module::eval)
                 .and_then(|(_module, promise)| {
                     vault(&ctx)?.get::<_, Object>(MODULES)?.set(id, promise)
                 })
-                .map(|()| PendingModule { id })
+                .map(|()| PendingModule {
+                    id,
+                    result: OnceLock::new(),
+                })
                 .map_err(|err| EngineError::capture(&ctx, &err))
-        })
+        })?;
+        if let Some(result) = self.settled(&module) {
+            let _ = module.result.set(result);
+        }
+        Ok(module)
     }
 
     /// Runs promise jobs until `module` settles or the job queue is empty.
@@ -123,7 +131,8 @@ impl Engine {
     /// Returns `None` while the module is pending. Settle it by evaluating
     /// code that resolves what it awaits, then poll again. Returns
     /// `Some(Ok(()))` once the module has completed, and `Some(Err(_))` once
-    /// it has thrown. Every later poll returns the same result.
+    /// it has thrown. Every later poll returns the same result. A module that
+    /// the time limit stopped at its start keeps the limit in its error.
     ///
     /// The next [`run_jobs`](Self::run_jobs) returns the failure of a job
     /// that throws during a poll, whether the module is pending or settled,
@@ -140,13 +149,16 @@ impl Engine {
     /// Returns `Some(Err(_))` for an exception the module threw while
     /// evaluating, or for a module that another engine started.
     pub fn poll_module(&self, module: &PendingModule) -> Option<EngineResult<()>> {
-        // A module that start_module stopped reads its error before the arm forgets the stop.
-        if let Some(result) = self.settled(module) {
-            return Some(result);
+        let holds = self.holds(module);
+        if holds && let Some(result) = module.result.get() {
+            return Some(result.clone());
         }
         self.watchdog.arm();
         loop {
             if let Some(result) = self.settled(module) {
+                if holds {
+                    let _ = module.result.set(result.clone());
+                }
                 return Some(result);
             }
             let mut failures = Vec::new();
@@ -156,6 +168,16 @@ impl Engine {
                 return None;
             }
         }
+    }
+
+    /// Whether this engine's module table has a promise under the module's id.
+    fn holds(&self, module: &PendingModule) -> bool {
+        self.context.with(|ctx| {
+            vault(&ctx)
+                .and_then(|vault| vault.get::<_, Object>(MODULES))
+                .and_then(|modules| modules.get::<_, Promise>(module.id))
+                .is_ok()
+        })
     }
 
     /// The module's result, or `None` while its promise is pending.
@@ -199,6 +221,9 @@ pub struct PendingModule {
     /// The key of the module's promise in the engine's module table. Another
     /// engine holds no promise under it.
     id: u32,
+    /// The module's result once it settled, kept so a later poll reads it after the stop flag is
+    /// gone.
+    result: OnceLock<EngineResult<()>>,
 }
 
 /// Runs `engine`'s pending promise jobs and sends each failure to `reporter`:
@@ -220,6 +245,13 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
+
+    /// A module that waits until `globalThis.release()` runs.
+    const PUBLISHES_ITS_RESOLVER: &str = r"
+        await new Promise((resolve) => {
+            globalThis.release = resolve;
+        });
+        ";
 
     #[test]
     fn an_unhandled_rejection_is_returned_once() {
@@ -438,6 +470,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(engine.poll_module(&module), Some(Ok(())));
+        engine.eval::<()>("1").unwrap();
         assert_eq!(engine.poll_module(&module), Some(Ok(())));
     }
 
@@ -457,12 +490,34 @@ mod tests {
         assert_eq!(first, second);
     }
 
+    #[rstest]
+    #[case::throws("throw new Error('x');", Err("Error: x"))]
+    #[case::completes("globalThis.done = 1;", Ok(()))]
+    fn a_module_settled_at_its_start_returns_the_same_result_again(
+        #[case] source: &str,
+        #[case] expected: Result<(), &str>,
+    ) {
+        let engine = Engine::new().unwrap();
+        let module = engine.start_module("sync.mjs", source).unwrap();
+
+        let first = engine.poll_module(&module).unwrap();
+        engine.eval::<()>("1").unwrap();
+        let second = engine.poll_module(&module).unwrap();
+
+        assert_eq!(
+            first.as_ref().copied().map_err(EngineError::message),
+            expected
+        );
+        assert_eq!(first, second);
+    }
+
     #[test]
     fn a_module_from_another_engine_is_an_error() {
         let other = Engine::new().unwrap();
         let module = other
-            .start_module("foreign.mjs", "await new Promise(() => {});")
+            .start_module("foreign.mjs", "await Promise.resolve();")
             .unwrap();
+        assert_eq!(other.poll_module(&module), Some(Ok(())));
         let engine = Engine::new().unwrap();
         let _own = engine
             .start_module("own.mjs", "await new Promise(() => {});")
@@ -471,6 +526,20 @@ mod tests {
         let err = engine.poll_module(&module).unwrap().unwrap_err();
         assert!(!err.message().is_empty());
         assert_eq!(err.stack(), None);
+    }
+
+    #[test]
+    fn a_poll_on_another_engine_does_not_replace_the_result() {
+        let engine = Engine::new().unwrap();
+        let module = engine
+            .start_module("publishes.mjs", PUBLISHES_ITS_RESOLVER)
+            .unwrap();
+        let other = Engine::new().unwrap();
+
+        assert!(other.poll_module(&module).unwrap().is_err());
+        engine.eval::<()>("globalThis.release()").unwrap();
+
+        assert_eq!(engine.poll_module(&module), Some(Ok(())));
     }
 
     #[test]
