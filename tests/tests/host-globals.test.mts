@@ -28,10 +28,11 @@ const WAIT_TIMEOUT_MS = 30_000;
 const RELOAD_TIMEOUT_MS = 10_000;
 /**
  * What the app prints: a hiragana letter decoded from bytes, a resolved URL, a query string and
- * the types of the injected `document` and of `globalThis.document`.
+ * the types of the injected `document` and of `globalThis.document`, then the same two for
+ * `window`.
  */
 const EXPECTED =
-  "[e2e] function function function function function function function あ http://example.com/a%20b?x=1#h a=1+2 object undefined";
+  "[e2e] function function function function function function function あ http://example.com/a%20b?x=1#h a=1+2 object undefined object undefined";
 
 const ENTRY = dedent`
   console.log(
@@ -58,7 +59,11 @@ const ENTRY = dedent`
       " " +
       typeof document +
       " " +
-      typeof globalThis.document,
+      typeof globalThis.document +
+      " " +
+      typeof window +
+      " " +
+      typeof globalThis.window,
   );
 `;
 
@@ -145,8 +150,8 @@ it(
 /** The declaration file of the global types. */
 const GLOBALS_DTS = path.resolve(import.meta.dirname, "../../packages/core/dist/globals.d.mts");
 /** The globals the host does not define: the build binds them to an import. */
-// The host leaves `document` undefined, so the shape comparison has nothing to read.
-const BOUND_BY_IMPORT = new Set(["document"]);
+// The host leaves `document` and `window` undefined, so the shape comparison has nothing to read.
+const BOUND_BY_IMPORT = new Set(["document", "window"]);
 /** What a function or class carries besides its members. */
 const FUNCTION_OWN = new Set(["length", "name", "prototype"]);
 
@@ -277,6 +282,7 @@ it("compiles a script that uses the declared globals with no other types", async
       performance.now();
       new URL("x");
       document.createElement("div");
+      window.addEventListener("keydown", () => {});
     `,
   );
   const options: ts.CompilerOptions = {

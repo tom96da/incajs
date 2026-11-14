@@ -34,6 +34,6 @@ export const defaultBundler: Bundler = createViteBundler(adapterCore, {
     }),
   ],
   unsupported: [],
-  inject: { document: ["incajs", "document"] },
+  inject: { document: ["incajs", "document"], window: ["incajs", "window"] },
   styleModule: "incajs/style",
 });
