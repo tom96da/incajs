@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { classList as listOf, getAttribute, setAttribute } from "../ffi/index.mts";
-import { attributeText } from "./attributes.mts";
+import { attributeText } from "./arguments.mts";
 import { isDestroyed } from "./lifecycle.mts";
 import type { NodeId } from "../types.mts";
 import type { DOMTokenList, IncaElement } from "./types.mts";

@@ -11,8 +11,6 @@ import {
   setPointerCapture,
   HTML_NAMESPACE,
   appendChild,
-  checkSelector,
-  closestNode,
   createElement as createHostElement,
   createElementNS as createHostElementNS,
   createNode,
@@ -20,26 +18,21 @@ import {
   focusedNode,
   getAttribute,
   inputValue,
-  matchesNode,
   nameOf,
-  queryNode,
-  queryNodes,
   removeChild,
   rootNodeId,
-  scrollIntoViewNode,
-  scrollOf,
   setAttribute,
   setInputValue,
   setStyle,
   textContent,
 } from "../ffi/index.mts";
-import { attributeMembers, attributeText, requireArguments } from "./attributes.mts";
+import { attributeText, nullableText, requireArguments } from "./arguments.mts";
+import { attributeMembers } from "./attributes.mts";
 import { classMembers } from "./classList.mts";
-import { nodeListOf } from "./collections.mts";
 import { datasetMembers } from "./dataset.mts";
 import { elementTreeMembers } from "./elementTree.mts";
 import { withEventHandlers } from "./eventHandlers.mts";
-import { layoutBox, offsetOf, offsetParentOf, rectOf, tabIndexOf } from "./geometry.mts";
+import { layoutMembers, tabIndexOf } from "./geometry.mts";
 import { htmlMembers } from "./html.mts";
 import { styleMembers } from "./inlineStyle.mts";
 import {
@@ -54,19 +47,22 @@ import {
 import { nodeMutationMembers } from "./nodeMutation.mts";
 import { nodeRelationMembers } from "./nodeRelations.mts";
 import { nodeTreeMembers } from "./nodeTree.mts";
-import { scrollIntoViewArgs, scrollPosition } from "./scroll.mts";
+import { scrollMembers } from "./scroll.mts";
+import { queryMembers, selectorMembers } from "./selectors.mts";
 import { keep, unlink } from "./shadowTree.mts";
 import { attachContent } from "./templateContent.mts";
-import { characterDataMembers, createIncaText, nullableText } from "./text.mts";
+import { characterDataMembers, createIncaText } from "./text.mts";
 import type { ElementName } from "../ffi/index.mts";
 import type { IncaDocument, NodeId, TagName } from "../types.mts";
 import type { AttributeMembers } from "./attributes.mts";
 import type { ClassMembers } from "./classList.mts";
 import type { DatasetMembers } from "./dataset.mts";
 import type { ElementTreeMembers } from "./elementTree.mts";
+import type { LayoutMembers } from "./geometry.mts";
 import type { StyleMembers } from "./inlineStyle.mts";
-import type { HandleBuilders } from "./nodeMutation.mts";
-import type { ScrollArgs, ScrollIntoViewOptions } from "./scroll.mts";
+import type { HandleBuilders } from "./lifecycle.mts";
+import type { ScrollMembers } from "./scroll.mts";
+import type { QueryMembers, SelectorMembers } from "./selectors.mts";
 import type {
   EventHandlers,
   HtmlMembers,
@@ -78,58 +74,6 @@ import type {
   NodeMembers,
   TextContentMember,
 } from "./types.mts";
-
-/**
- * Checks the argument count of a selector method and converts the selector to text.
- * @param args - the arguments the call received
- * @param method - the method name for the message
- * @returns the selector text
- */
-function selectorText(args: readonly unknown[], method: string): string {
-  requireArguments(args, 1, method);
-  return attributeText(args[0]);
-}
-
-/** The members `querySelector()` and `querySelectorAll()` of an element and of the document. */
-type QueryMembers = Pick<IncaElement, "querySelector" | "querySelectorAll">;
-
-/**
- * Finds the element handle of an element node.
- * @param id - the native node's id
- * @returns the handle
- */
-function elementHandle(id: NodeId): IncaElement {
-  return handleOf(id) as IncaElement;
-}
-
-/**
- * Builds the query members of a node that holds elements below it.
- * @param node - the element or the document the members belong to
- * @returns the members
- */
-function queryMembers(node: IncaElement | IncaDocument): QueryMembers {
-  const id = node.__node_id;
-  return {
-    querySelector: (...args: [selectors: string]) => {
-      const text = selectorText(args, "querySelector");
-      if (isDestroyed(node)) {
-        checkSelector(text);
-        return null;
-      }
-      const found = queryNode(id, text);
-      return found === null ? null : elementHandle(found);
-    },
-    querySelectorAll: (...args: [selectors: string]) => {
-      const text = selectorText(args, "querySelectorAll");
-      if (isDestroyed(node)) {
-        checkSelector(text);
-        return nodeListOf(() => []);
-      }
-      const found = queryNodes(id, text).map(elementHandle);
-      return nodeListOf(() => found);
-    },
-  };
-}
 
 /** The builders a clone uses for each kind of handle, and the lookups every handle uses. */
 const builders: HandleBuilders = {
@@ -167,7 +111,6 @@ export function createIncaElement(
       : name;
   const html = namespaceURI === HTML_NAMESPACE;
   const target = createEventTarget(() => id, passiveByDefault);
-  const scroll = () => (isRemoved(element) ? null : scrollOf(id));
   const fields: Omit<
     IncaElement,
     | "__node_id"
@@ -183,7 +126,10 @@ export function createIncaElement(
     | keyof HtmlMembers
     | keyof NodeMembers
     | keyof TextContentMember
+    | keyof LayoutMembers
     | keyof QueryMembers
+    | keyof ScrollMembers
+    | keyof SelectorMembers
     | keyof StyleMembers
   > = {
     get id() {
@@ -220,78 +166,6 @@ export function createIncaElement(
     },
     set tabIndex(value: number) {
       if (!isDestroyed(element)) setAttribute(id, "tabindex", value | 0);
-    },
-    getBoundingClientRect: () => rectOf(layoutBox(element)),
-    get offsetWidth() {
-      return Math.round(layoutBox(element)?.[2] ?? 0);
-    },
-    get offsetHeight() {
-      return Math.round(layoutBox(element)?.[3] ?? 0);
-    },
-    get offsetLeft() {
-      return offsetOf(element).left;
-    },
-    get offsetTop() {
-      return offsetOf(element).top;
-    },
-    get offsetParent() {
-      return offsetParentOf(element);
-    },
-    get clientWidth() {
-      const box = layoutBox(element);
-      return box ? Math.max(0, Math.round(box[2] - 2 * box[4])) : 0;
-    },
-    get clientHeight() {
-      const box = layoutBox(element);
-      return box ? Math.max(0, Math.round(box[3] - 2 * box[4])) : 0;
-    },
-    get clientLeft() {
-      return Math.round(layoutBox(element)?.[4] ?? 0);
-    },
-    get clientTop() {
-      return Math.round(layoutBox(element)?.[4] ?? 0);
-    },
-    get scrollLeft() {
-      return scroll()?.[0] ?? 0;
-    },
-    set scrollLeft(value: number) {
-      scrollPosition(element, [value], false);
-    },
-    get scrollTop() {
-      return scroll()?.[1] ?? 0;
-    },
-    set scrollTop(value: number) {
-      scrollPosition(element, [undefined, value], false);
-    },
-    get scrollWidth() {
-      return element.clientWidth + Math.round(scroll()?.[2] ?? 0);
-    },
-    get scrollHeight() {
-      return element.clientHeight + Math.round(scroll()?.[3] ?? 0);
-    },
-    scrollTo: (...args: ScrollArgs) => scrollPosition(element, args, false),
-    scrollBy: (...args: ScrollArgs) => scrollPosition(element, args, true),
-    scrollIntoView: (arg?: boolean | ScrollIntoViewOptions) => {
-      if (isRemoved(element)) return;
-      const { block, inline } = scrollIntoViewArgs(arg);
-      scrollIntoViewNode(id, block, inline);
-    },
-    matches: (...args: [selectors: string]) => {
-      const text = selectorText(args, "matches");
-      if (isDestroyed(element)) {
-        checkSelector(text);
-        return false;
-      }
-      return matchesNode(id, text);
-    },
-    closest: (...args: [selectors: string]) => {
-      const text = selectorText(args, "closest");
-      if (isDestroyed(element)) {
-        checkSelector(text);
-        return null;
-      }
-      const found = closestNode(id, text);
-      return found === null ? null : elementHandle(found);
     },
   };
   for (const [member, value] of Object.entries({ tagName, localName, namespaceURI, prefix })) {
@@ -334,7 +208,14 @@ export function createIncaElement(
     element,
     Object.getOwnPropertyDescriptors(nodeRelationMembers(element, builders)),
   );
-  Object.defineProperties(element, Object.getOwnPropertyDescriptors(queryMembers(element)));
+  for (const members of [
+    layoutMembers(element),
+    scrollMembers(element),
+    selectorMembers(element, builders),
+    queryMembers(element, builders),
+  ]) {
+    Object.defineProperties(element, Object.getOwnPropertyDescriptors(members));
+  }
   Object.defineProperties(
     element,
     Object.getOwnPropertyDescriptors(
@@ -565,7 +446,7 @@ function createIncaDocument(id: NodeId): IncaDocument {
     nodeTreeMembers(handle, builders),
     mutation,
     nodeRelationMembers(handle, builders),
-    queryMembers(handle),
+    queryMembers(handle, builders),
   ]) {
     Object.defineProperties(handle, Object.getOwnPropertyDescriptors(members));
   }

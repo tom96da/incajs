@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { styleOf } from "../ffi/index.mts";
-import { attributeText } from "./attributes.mts";
+import { attributeText } from "./arguments.mts";
 import type { NodeId } from "../types.mts";
 import type { CSSStyleDeclaration, IncaElement } from "./types.mts";
 

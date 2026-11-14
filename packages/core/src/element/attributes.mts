@@ -8,6 +8,7 @@ import {
   removeAttribute as dropAttribute,
   setAttribute as writeAttribute,
 } from "../ffi/index.mts";
+import { requireArguments, attributeText } from "./arguments.mts";
 import { namedNodeMapOf } from "./collections.mts";
 import { isDestroyed } from "./lifecycle.mts";
 import type { NodeId } from "../types.mts";
@@ -23,29 +24,6 @@ export type AttributeMembers = Pick<
   | "getAttributeNames"
   | "attributes"
 >;
-
-/**
- * Converts a value to text. A `Symbol` throws a `TypeError`.
- * @param value - the value to convert
- * @returns the text of `value`
- */
-export function attributeText(value: unknown): string {
-  if (typeof value === "symbol") throw new TypeError("a symbol cannot become text");
-  // oxlint-disable-next-line typescript/no-base-to-string
-  return String(value);
-}
-
-/**
- * Throws a `TypeError` when a call passes fewer than `count` arguments.
- * @param args - the arguments the call received
- * @param count - the number the method needs
- * @param method - the method name for the message
- */
-export function requireArguments(args: readonly unknown[], count: number, method: string): void {
-  if (args.length < count) {
-    throw new TypeError(`${method}() needs ${count} argument${count === 1 ? "" : "s"}`);
-  }
-}
 
 /**
  * An attribute that reads its value from the element on each access. It detaches when the element

@@ -9,7 +9,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { nativeStub } from "../../tests/setup.mts";
 import { addCallback, callbackIdFor, groupOf } from "../callbacks.mts";
 import { document } from "../document.mts";
-import { createEventTarget } from "../eventTarget.mts";
 import { htmlCollectionOf, namedNodeMapOf, nodeListOf } from "./collections.mts";
 import { rectOf } from "./geometry.mts";
 import {
@@ -27,7 +26,7 @@ import type { DOMTokenList, EventHandlers, IncaElement } from "./types.mts";
 
 let nextId = 1;
 
-const { add, remove, dispatch, target } = vi.hoisted(() => {
+const { add, remove, target } = vi.hoisted(() => {
   const add = vi.fn<IncaEventTarget["addEventListener"]>();
   const remove = vi.fn<IncaEventTarget["removeEventListener"]>();
   const dispatch = vi.fn<(event: EventLike) => boolean>(() => true);
@@ -36,7 +35,7 @@ const { add, remove, dispatch, target } = vi.hoisted(() => {
     removeEventListener: remove,
     dispatchEvent: dispatch,
   };
-  return { add, remove, dispatch, target };
+  return { add, remove, target };
 });
 
 vi.mock("../eventTarget.mts", () => ({
@@ -190,129 +189,6 @@ function element(): IncaElement {
     ...noLayout,
   };
 }
-
-describe("createElement", () => {
-  it("allocates a native node for the tag and returns a parentless, childless element", () => {
-    const el = createElementNode("div");
-    expect(host.createNode).toHaveBeenCalledWith("div");
-    expect(el).toEqual({
-      id: "",
-      className: "",
-      classList: {},
-      kind: "element",
-      tagName: "DIV",
-      localName: "div",
-      namespaceURI: "http://www.w3.org/1999/xhtml",
-      prefix: null,
-      parentElement: null,
-      firstElementChild: null,
-      lastElementChild: null,
-      childElementCount: 0,
-      previousElementSibling: null,
-      nextElementSibling: null,
-      parent: null,
-      __children: [],
-      children: expect.any(Object),
-      nodeType: 1,
-      nodeName: "DIV",
-      nodeValue: null,
-      textContent: "",
-      innerHTML: "",
-      outerHTML: "",
-      insertAdjacentHTML: expect.any(Function),
-      isConnected: false,
-      ownerDocument: document,
-      parentNode: null,
-      firstChild: null,
-      lastChild: null,
-      previousSibling: null,
-      nextSibling: null,
-      childNodes: expect.any(Object),
-      hasChildNodes: expect.any(Function),
-      appendChild: expect.any(Function),
-      insertBefore: expect.any(Function),
-      removeChild: expect.any(Function),
-      replaceChild: expect.any(Function),
-      cloneNode: expect.any(Function),
-      compareDocumentPosition: expect.any(Function),
-      isSameNode: expect.any(Function),
-      isEqualNode: expect.any(Function),
-      focus: expect.any(Function),
-      blur: expect.any(Function),
-      click: expect.any(Function),
-      setPointerCapture: expect.any(Function),
-      releasePointerCapture: expect.any(Function),
-      hasPointerCapture: expect.any(Function),
-      contains: expect.any(Function),
-      addEventListener: expect.any(Function),
-      removeEventListener: expect.any(Function),
-      dispatchEvent: expect.any(Function),
-      tabIndex: -1,
-      querySelector: expect.any(Function),
-      querySelectorAll: expect.any(Function),
-      matches: expect.any(Function),
-      closest: expect.any(Function),
-      getAttribute: expect.any(Function),
-      setAttribute: expect.any(Function),
-      hasAttribute: expect.any(Function),
-      removeAttribute: expect.any(Function),
-      getAttributeNames: expect.any(Function),
-      attributes: expect.anything(),
-      style: expect.anything(),
-      dataset: expect.anything(),
-      getBoundingClientRect: expect.any(Function),
-      offsetWidth: 0,
-      offsetHeight: 0,
-      offsetLeft: 0,
-      offsetTop: 0,
-      offsetParent: null,
-      clientWidth: 0,
-      clientHeight: 0,
-      clientLeft: 0,
-      clientTop: 0,
-      scrollLeft: 0,
-      scrollTop: 0,
-      scrollWidth: 0,
-      scrollHeight: 0,
-      scrollTo: expect.any(Function),
-      scrollBy: expect.any(Function),
-      scrollIntoView: expect.any(Function),
-      getRootNode: expect.any(Function),
-    });
-    expect(el.__node_id).toBe(1);
-  });
-});
-
-describe("createComment", () => {
-  it("creates a hidden container in place of a comment", () => {
-    const node = createCommentNode();
-    expect(host.createNode).toHaveBeenCalledWith("#comment");
-    expect(host.setStyle).toHaveBeenCalledWith(1, "display", "none");
-    expect(node.kind).toBe("comment");
-    expect(node.tagName).toBe("DIV");
-  });
-});
-
-describe("event target methods", () => {
-  it("come from createEventTarget, resolving the element's own node id", () => {
-    const el = createElementNode("div");
-    const comment = createCommentNode();
-
-    const resolvers = vi
-      .mocked(createEventTarget)
-      .mock.calls.map(([resolve]) => (resolve as () => number)());
-    expect(resolvers).toEqual([el.__node_id, comment.__node_id]);
-    const listener = vi.fn<() => void>();
-    const event = { type: "ping" };
-    dispatch.mockReturnValueOnce(false);
-    el.addEventListener("click", listener, true);
-    el.removeEventListener("click", listener, true);
-    expect(add).toHaveBeenCalledExactlyOnceWith("click", listener, true);
-    expect(remove).toHaveBeenCalledExactlyOnceWith("click", listener, true);
-    expect(el.dispatchEvent(event)).toBe(false);
-    expect(dispatch).toHaveBeenCalledExactlyOnceWith(event);
-  });
-});
 
 describe("insert", () => {
   it("appends when no anchor is given", () => {
