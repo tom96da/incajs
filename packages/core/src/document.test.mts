@@ -11,7 +11,8 @@ import { isHeld, markFreed, registerNode } from "./element/lifecycle.mts";
 import "./targets.mts";
 import { HTML_NAMESPACE } from "./ffi/index.mts";
 import type { IncaElement } from "./element/types.mts";
-import type { ElementEntry, HostCallback, NodeLink } from "./ffi/index.mts";
+import type { ElementEntry, HostCallback, NodeEntry, NodeLink } from "./ffi/index.mts";
+import type { IncaDocument } from "./types.mts";
 
 const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
 
@@ -27,6 +28,12 @@ let data: Record<number, unknown> = {};
 let parents = new Map<number, number>();
 let found: number | null = null;
 let foundAll: number[] = [];
+/** The first element child the host reports for each node. */
+let firstElements = new Map<number, number>();
+/** The first child of any kind the host reports for each node. */
+let firstChildren = new Map<number, number>();
+/** The children the host lists for each node. */
+let childrenOf = new Map<number, number[]>();
 
 const native = {
   focusedNode: vi.fn<() => number | null>(() => focused),
@@ -66,12 +73,16 @@ const native = {
   textContent: vi.fn<(nodeId: number) => string>(() => "joined"),
   isConnected: vi.fn<(nodeId: number) => boolean>(() => false),
   layoutOf: vi.fn<() => null>(() => null),
+  cloneNode: vi.fn<(nodeId: number, deep: boolean) => (NodeEntry | ElementEntry)[]>(),
   /** Every parent the test sets is a fragment or the document, so none is an element. */
   linkedNode: vi.fn<(nodeId: number, link: NodeLink, elementOnly?: boolean) => number | null>(
-    (nodeId, link, elementOnly) =>
-      link === "parent" && !elementOnly ? (parents.get(nodeId) ?? null) : null,
+    (nodeId, link, elementOnly) => {
+      if (link === "first")
+        return (elementOnly ? firstElements : firstChildren).get(nodeId) ?? null;
+      return link === "parent" && !elementOnly ? (parents.get(nodeId) ?? null) : null;
+    },
   ),
-  childNodeIds: vi.fn<(nodeId: number) => number[]>(() => []),
+  childNodeIds: vi.fn<(nodeId: number) => number[]>((nodeId) => childrenOf.get(nodeId) ?? []),
   attributeNames: vi.fn<(nodeId: number) => string[]>(() => []),
   querySelector: vi.fn<(nodeId: number, selector: string) => number | null>(() => found),
   querySelectorAll: vi.fn<(nodeId: number, selector: string) => number[]>(() => foundAll),
@@ -86,6 +97,9 @@ beforeEach(() => {
   parents = new Map();
   found = null;
   foundAll = [];
+  firstElements = new Map();
+  firstChildren = new Map();
+  childrenOf = new Map();
   globalThis.__inca_native__ = nativeStub(native as never);
 });
 
@@ -93,27 +107,34 @@ afterEach(() => {
   markFreed([5]);
 });
 
+const elementOfId5 = { __node_id: 5, kind: "element" } as unknown as IncaElement;
+
 describe("document", () => {
   it("is an instance of Document", () => {
     expect(document).toBeInstanceOf(Document);
   });
 
-  it("reads the focused element as activeElement", () => {
-    const handle = { __node_id: 5, kind: "element" } as unknown as IncaElement;
-    registerNode(handle);
-    const states = [];
+  it.each([
+    ["the focused element", 5, () => elementOfId5],
+    ["the mount container when nothing has focus", null, () => rootElement()],
+  ])("reads %s as activeElement", (_name, focus, expected) => {
+    registerNode(elementOfId5);
+    firstElements.set(DOCUMENT, 0);
+    focused = focus;
 
-    states.push(document.activeElement);
-    focused = 5;
-    states.push(document.activeElement);
-    focused = null;
-    states.push(document.activeElement);
+    expect(document.activeElement).toBe(expected());
+  });
 
-    expect(states).toEqual([null, handle, null]);
+  it("reads the mount container as activeElement when a comment comes before it", () => {
+    firstChildren.set(DOCUMENT, 77);
+    firstElements.set(DOCUMENT, 0);
+
+    expect(document.activeElement).toBe(rootElement());
   });
 
   it("reads null as activeElement for a focused id with no registered element", () => {
     focused = 999;
+    firstElements.set(DOCUMENT, 0);
 
     expect(document.activeElement).toBeNull();
   });
@@ -217,10 +238,6 @@ describe("node members", () => {
     document.nodeValue = "x";
 
     expect(native.setAttribute).not.toHaveBeenCalled();
-  });
-
-  it("has no cloneNode", () => {
-    expect("cloneNode" in document).toBe(false);
   });
 
   it("takes the mount container out of the host and puts it back", () => {
@@ -530,5 +547,86 @@ describe("queries", () => {
 
   it.each(["querySelector", "querySelectorAll"] as const)("%s needs an argument", (method) => {
     expect(() => document[method](...([] as unknown as [string]))).toThrow(TypeError);
+  });
+});
+
+describe("a copy of the document", () => {
+  const COPY = 200;
+  const CHILD = 201;
+  const copyEntries = (deep: boolean): (NodeEntry | ElementEntry)[] => [
+    [COPY, "#document", null],
+    ...(deep ? [[CHILD, "div", HTML_NAMESPACE, null, "DIV"] as ElementEntry] : []),
+  ];
+
+  beforeEach(() => {
+    native.cloneNode.mockImplementation((_nodeId, deep) => copyEntries(deep));
+  });
+
+  it("reads 9 as nodeType and #document as nodeName", () => {
+    const copy = document.cloneNode(true);
+
+    expect([copy.nodeType, copy.nodeName]).toEqual([9, "#document"]);
+  });
+
+  it("has the prototype of document and is a new object", () => {
+    const copy = document.cloneNode(true);
+
+    expect([
+      Object.getPrototypeOf(copy) === Object.getPrototypeOf(document),
+      copy === document,
+    ]).toEqual([true, false]);
+  });
+
+  it("holds the copies of the children of the document", () => {
+    childrenOf.set(COPY, [CHILD]);
+
+    const copy = document.cloneNode(true);
+
+    expect(Array.from(copy.childNodes)).toEqual([expect.objectContaining({ __node_id: CHILD })]);
+  });
+
+  it("asks the host for no descendants without an argument", () => {
+    const copy = document.cloneNode();
+
+    expect([native.cloneNode.mock.lastCall, copy.hasChildNodes()]).toEqual([
+      [DOCUMENT, false],
+      false,
+    ]);
+  });
+
+  it("holds the copy until its handle is collected", () => {
+    expect(isHeld(document.cloneNode(true))).toBe(true);
+  });
+
+  it.each([
+    ["after cloneNode(true)", true, [CHILD], (copy: IncaDocument) => copy.childNodes[0]],
+    ["after cloneNode()", false, [], () => null],
+  ])(
+    "reads the element child of the copy as activeElement %s",
+    (_name, deep, children, expected) => {
+      childrenOf.set(COPY, children);
+      for (const child of children) firstElements.set(COPY, child);
+      const copy = document.cloneNode(deep);
+
+      expect(copy.activeElement).toBe(expected(copy));
+    },
+  );
+
+  it("reads the element child of the copy as activeElement while the host document has focus", () => {
+    registerNode(elementOfId5);
+    focused = 5;
+    firstElements.set(COPY, CHILD);
+    childrenOf.set(COPY, [CHILD]);
+    const copy = document.cloneNode(true);
+
+    expect(copy.activeElement).toBe(copy.childNodes[0]);
+  });
+
+  it("reads document as the ownerDocument of a node of the copy", () => {
+    childrenOf.set(COPY, [CHILD]);
+
+    const copy = document.cloneNode(true);
+
+    expect(copy.childNodes[0]!.ownerDocument).toBe(document);
   });
 });

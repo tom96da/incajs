@@ -203,8 +203,7 @@ export interface IncaEventTarget {
  * The top node of the tree, the parent of the mount container. It holds at most one element and
  * any number of comments, and no text.
  */
-export interface IncaDocument
-  extends IncaEventTarget, EventHandlers<IncaDocument>, Omit<NodeMembers, "cloneNode"> {
+export interface IncaDocument extends IncaEventTarget, EventHandlers<IncaDocument>, NodeMembers {
   /**
    * The node id the host knows this node by. Internal to the renderer.
    * @internal
@@ -215,8 +214,8 @@ export interface IncaDocument
   /** Always `null`. An assignment does nothing. */
   textContent: string | null;
   /**
-   * The element that has focus, or `null` when no element has focus. A `focus()` or `blur()` call
-   * takes effect for this property at once.
+   * The element that has focus, or else the element of the document, or `null` when it has none.
+   * A `focus()` or `blur()` call takes effect for this property at once.
    */
   readonly activeElement: IncaElement | null;
   /**

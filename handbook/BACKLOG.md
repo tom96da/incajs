@@ -1587,12 +1587,6 @@ A fixed entry is deleted and its ID is never reused.
   Fix: give the document an `html` element with `head` and `body`, and mount into `body`. `:root`
   then matches `html`.
 
-- **B-300 `document` has no `cloneNode()`**
-  `Units: core · Size: S · Impact: Low`
-
-  In browsers `document.cloneNode(true)` returns a new `#document` with copies of its children.
-  Fix: clone into an inert document once B-298 lets the tree hold one.
-
 - **B-301 `createElement()` ignores its second argument**
   `Units: core · Size: S · Impact: Low`
 
@@ -1733,6 +1727,14 @@ A fixed entry is deleted and its ID is never reused.
   detached subtree while a node in it has a live handle, and let core hold the top of such a
   subtree until the kept handle is collected. Vue does not meet it: it holds every node it creates
   and the mount container.
+
+- **B-322 The nodes of a copied document report `document` as their owner**
+  `Units: core,node,bridge · Size: M · Impact: Low`
+
+  `ownerDocument` of a node inside `document.cloneNode(true)`, and of a node made by the copy's
+  `createElement()`, reads `document`. In browsers it reads the copy. Fix: record the node document
+  of each node in the host, set it in the copy and in the creation methods of a copy, and read it in
+  `ownerDocument`. B-298 builds on it.
 
 - **B-323 The handle of the mount container can be collected while the container sits in `document`**
   `Units: core · Size: S · Impact: Low`

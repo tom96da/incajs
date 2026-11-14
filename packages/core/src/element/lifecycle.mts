@@ -18,6 +18,8 @@ export interface HandleBuilders {
   fragment?: (id: NodeId) => IncaFragment;
   /** The handle of the document. */
   document: () => IncaDocument;
+  /** The handle of a copy of the document, which has the node id of the copy. */
+  documentCopy: (id: NodeId) => IncaDocument;
   /**
    * The handle of a node by id: the live handle, or the document handle for the document id. It
    * rebuilds the handle of the root container when that handle was collected.

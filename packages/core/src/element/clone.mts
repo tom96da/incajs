@@ -28,6 +28,8 @@ function buildCopy(
       return builders.text(entry[0], entry[2] ?? "");
     case "#comment":
       return builders.element!(entry[0], "comment");
+    case "#document":
+      return builders.documentCopy(entry[0]);
     default:
       return index === 0 ? builders.fragment!(entry[0]) : undefined;
   }
