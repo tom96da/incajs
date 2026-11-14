@@ -11,9 +11,13 @@ import path from "node:path";
 import { createInterface } from "node:readline";
 
 import { dedent } from "ts-dedent";
-import { expect, it } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
 
 import { resolveTestHostBin } from "../support/hostBin.mts";
+
+beforeEach(() => {
+  vi.stubEnv("INCA_BUNDLE_PATH", "");
+});
 
 it("a throwing first bundle is reported on stdout and the host exits 1", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "inca-host-startup-"));

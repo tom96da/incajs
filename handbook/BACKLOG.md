@@ -1135,8 +1135,10 @@ A fixed entry is deleted and its ID is never reused.
   compressed binary, unpacks it into a cache directory on the first start,
   checks it and replaces itself with it. On Linux, an anonymous in-memory file
   could skip the cache at the cost of unpacking on every start. On macOS the
-  unpacked binary needs its own signature and lives outside the `.app`, so it
-  needs a way to find the bundle.
+  unpacked binary needs its own signature and lives outside the `.app`. The host
+  reads the bundle location from `INCA_BUNDLE_PATH`, so the launcher can sit
+  away from the bundle. A launcher that finds no bundle must say so itself,
+  since the host would report a search beside the unpacked binary.
 
 - **B-246 A removed element drops its listeners**
   `Units: core,bridge · Size: M · Impact: Low`
@@ -1827,6 +1829,15 @@ A fixed entry is deleted and its ID is never reused.
   dispatch `pagehide` and `unload` on `window` (already the event target) before the windows clear.
   `beforeunload` is left out: a cancellable close needs gpui's `on_window_should_close`, which the
   host does not use.
+
+- **B-338 A packaged app runs any bundle that an argument or the environment names**
+  `Units: host,cli · Size: M · Impact: Low`
+
+  The host takes a bundle path as an argument, so a packaged app runs any
+  bundle that is named on its command line. `INCA_BUNDLE_PATH` is a second
+  way when nothing sits beside the executable. Fix: the later `inca-app`
+  binary, which ships to users, runs only its own bundle and accepts neither.
+  `inca package` then copies `inca-app`.
 
 - **B-339 Reading `children` of a large list costs more than before**
   `Units: bridge,core · Size: M · Impact: Low`

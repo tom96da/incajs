@@ -23,6 +23,7 @@
 
 use std::cell::Cell;
 use std::env;
+use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -403,10 +404,62 @@ fn bundle_beside(exe_dir: &Path) -> Option<PathBuf> {
 ///
 /// Looks next to the executable, then in `../Resources` (a macOS app
 /// bundle). Returns `None` when neither holds a file.
-#[must_use]
-pub fn bundle_beside_exe() -> Option<PathBuf> {
+fn bundle_beside_exe() -> Option<PathBuf> {
     let exe = env::current_exe().ok()?;
     bundle_beside(exe.parent()?)
+}
+
+/// Why no bundle could be found.
+#[derive(Debug, PartialEq, Eq)]
+pub enum BundleError {
+    /// Nothing sits beside the executable and `INCA_BUNDLE_PATH` is unset or empty.
+    NotFound,
+    /// `INCA_BUNDLE_PATH` is set and unusable. Holds the line to print on stderr.
+    Refused(String),
+}
+
+/// The bundle found beside the executable (`beside`), else the one `variable` (the value of
+/// `INCA_BUNDLE_PATH`) names.
+/// The variable is read only when nothing sits beside the executable.
+fn bundle_from(beside: Option<PathBuf>, variable: Option<&OsStr>) -> Result<PathBuf, BundleError> {
+    if let Some(path) = beside {
+        return Ok(path);
+    }
+    let Some(value) = variable.filter(|value| !value.is_empty()) else {
+        return Err(BundleError::NotFound);
+    };
+    let shown = value.to_string_lossy();
+    let Some(text) = value.to_str() else {
+        return Err(BundleError::Refused(format!(
+            "INCA_BUNDLE_PATH names no file: {shown}"
+        )));
+    };
+    let path = Path::new(text);
+    if !path.is_absolute() {
+        return Err(BundleError::Refused(format!(
+            "INCA_BUNDLE_PATH must be an absolute path: {shown}"
+        )));
+    }
+    if !path.is_file() {
+        return Err(BundleError::Refused(format!(
+            "INCA_BUNDLE_PATH names no file: {shown}"
+        )));
+    }
+    Ok(path.to_path_buf())
+}
+
+/// Finds the `bundle.js` to run when argv names none: the one beside the executable, else the
+/// one `INCA_BUNDLE_PATH` names.
+///
+/// # Errors
+///
+/// Returns [`BundleError::NotFound`] when neither exists and
+/// [`BundleError::Refused`] when the variable is set and unusable.
+pub fn launcher_bundle() -> Result<PathBuf, BundleError> {
+    bundle_from(
+        bundle_beside_exe(),
+        env::var_os("INCA_BUNDLE_PATH").as_deref(),
+    )
 }
 
 #[cfg(test)]
@@ -415,6 +468,7 @@ mod tests {
 
     use super::*;
     use gpui::TestAppContext;
+    use rstest::rstest;
 
     use crate::tests::{ScratchDir, TEST_ENTRY_PATH};
 
@@ -512,6 +566,92 @@ mod tests {
         let dir = ScratchDir::new("empty");
 
         assert_eq!(bundle_beside(&dir), None);
+    }
+
+    #[test]
+    fn a_bundle_beside_wins_over_the_variable() {
+        let dir = ScratchDir::new("var-beside");
+        let other = dir.join("other.js");
+        fs::write(&other, "").unwrap();
+
+        assert_eq!(
+            bundle_from(
+                Some(PathBuf::from("/beside/bundle.js")),
+                Some(other.as_os_str())
+            ),
+            Ok(PathBuf::from("/beside/bundle.js"))
+        );
+    }
+
+    #[test]
+    fn an_unusable_variable_is_not_read_when_a_bundle_is_beside() {
+        assert_eq!(
+            bundle_from(
+                Some(PathBuf::from("/beside/bundle.js")),
+                Some(OsStr::new("relative.js"))
+            ),
+            Ok(PathBuf::from("/beside/bundle.js"))
+        );
+    }
+
+    #[test]
+    fn a_usable_variable_names_the_bundle_when_nothing_is_beside() {
+        let dir = ScratchDir::new("var-usable");
+        let bundle = dir.join("bundle.js");
+        fs::write(&bundle, "").unwrap();
+
+        assert_eq!(bundle_from(None, Some(bundle.as_os_str())), Ok(bundle));
+    }
+
+    #[rstest]
+    #[case::unset(None)]
+    #[case::empty(Some(OsStr::new("")))]
+    fn an_unset_or_empty_variable_reports_the_search_failure(#[case] variable: Option<&OsStr>) {
+        assert_eq!(bundle_from(None, variable), Err(BundleError::NotFound));
+    }
+
+    #[test]
+    fn a_relative_variable_is_refused() {
+        assert_eq!(
+            bundle_from(None, Some(OsStr::new("bundle.js"))),
+            Err(BundleError::Refused(
+                "INCA_BUNDLE_PATH must be an absolute path: bundle.js".to_string()
+            ))
+        );
+    }
+
+    fn missing(dir: &Path) -> PathBuf {
+        dir.join("none.js")
+    }
+
+    fn directory(dir: &Path) -> PathBuf {
+        dir.to_path_buf()
+    }
+
+    #[cfg(unix)]
+    fn non_utf8(dir: &Path) -> PathBuf {
+        use std::os::unix::ffi::OsStrExt;
+
+        let bundle = dir.join(OsStr::from_bytes(b"bundle\xff.js"));
+        fs::write(&bundle, "").unwrap();
+        bundle
+    }
+
+    #[rstest]
+    #[case::missing(missing)]
+    #[case::directory(directory)]
+    #[cfg_attr(unix, case::non_utf8(non_utf8))]
+    fn a_variable_that_names_no_file_is_refused(#[case] make: fn(&Path) -> PathBuf) {
+        let dir = ScratchDir::new("var-no-file");
+        let value = make(&dir);
+
+        assert_eq!(
+            bundle_from(None, Some(value.as_os_str())),
+            Err(BundleError::Refused(format!(
+                "INCA_BUNDLE_PATH names no file: {}",
+                value.display()
+            )))
+        );
     }
 
     #[test]
