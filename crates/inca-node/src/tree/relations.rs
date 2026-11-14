@@ -1,9 +1,25 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Cloning nodes and comparing them: the top of a tree, tree positions and equality.
+//! Relations between nodes: the links to the neighbours, the nodes of a subtree, the top of a
+//! tree, tree positions and equality.
 
 use super::{NodeId, TreeError, VirtualNode, VirtualTree};
+
+/// A neighbour of a node that [`VirtualTree::linked`] reads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Link {
+    /// The parent.
+    Parent,
+    /// The first child.
+    First,
+    /// The last child.
+    Last,
+    /// The sibling right before.
+    Previous,
+    /// The sibling right after.
+    Next,
+}
 
 /// A node that is not in the tree.
 fn missing(id: NodeId) -> TreeError {
@@ -21,6 +37,71 @@ fn same_attributes(a: &VirtualNode, b: &VirtualNode) -> bool {
 }
 
 impl VirtualTree {
+    /// The node `link` names from `id`. With `elements_only` the nearest element in that direction:
+    /// the parent when it is an element, the first or last element child, the nearest element
+    /// sibling. `None` when there is none and for an unknown id.
+    #[must_use]
+    pub fn linked(&self, id: NodeId, link: Link, elements_only: bool) -> Option<NodeId> {
+        if !elements_only {
+            return match link {
+                Link::Parent => self.get(id)?.parent(),
+                Link::First => self.first_child(id),
+                Link::Last => self.last_child(id),
+                Link::Previous => self.previous_sibling(id),
+                Link::Next => self.next_sibling(id),
+            };
+        }
+        let node = self.get(id)?;
+        let is_element = |other: &NodeId| self.get(*other).is_some_and(VirtualNode::is_element);
+        let beside = |before: bool| {
+            let siblings = self.get(node.parent()?)?.children();
+            let index = siblings.iter().position(|&child| child == id)?;
+            if before {
+                siblings[..index].iter().rev().copied().find(is_element)
+            } else {
+                siblings[index + 1..].iter().copied().find(is_element)
+            }
+        };
+        match link {
+            Link::Parent => node.parent().filter(is_element),
+            Link::First => node.children().iter().copied().find(is_element),
+            Link::Last => node.children().iter().rev().copied().find(is_element),
+            Link::Previous => beside(true),
+            Link::Next => beside(false),
+        }
+    }
+
+    /// The children of `id` in order, only the elements with `elements_only`. Empty for an
+    /// unknown id.
+    #[must_use]
+    pub fn child_ids(&self, id: NodeId, elements_only: bool) -> Vec<NodeId> {
+        let Some(node) = self.get(id) else {
+            return Vec::new();
+        };
+        node.children()
+            .iter()
+            .copied()
+            .filter(|&child| !elements_only || self.get(child).is_some_and(VirtualNode::is_element))
+            .collect()
+    }
+
+    /// `id` and every node below it in pre-order. The content of a template and its nodes follow
+    /// the template, before its children. Empty for an unknown id.
+    #[must_use]
+    pub fn subtree(&self, id: NodeId) -> Vec<NodeId> {
+        let mut ids = Vec::new();
+        let mut pending = vec![id];
+        while let Some(current) = pending.pop() {
+            let Some(node) = self.get(current) else {
+                continue;
+            };
+            ids.push(current);
+            pending.extend(node.children().iter().rev());
+            pending.extend(node.content);
+        }
+        ids
+    }
+
     /// The top of the parent chain of `id`. A connected node gives the document, or the root
     /// while no document is declared.
     ///
@@ -105,8 +186,8 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
-    use crate::tests::{HTML, SVG, family, node, sample};
-    use crate::tree::FRAGMENT_TAG;
+    use crate::tests::{Fixture, HTML, SVG, family, node, sample};
+    use crate::tree::{COMMENT_TAG, FRAGMENT_TAG, TEXT_TAG};
 
     /// `r > (a > (a1 > x, a2), b > b1)`, returned as `[r, a, a1, a2, b, b1, x]`.
     fn shape() -> (VirtualTree, [NodeId; 7]) {
@@ -117,6 +198,194 @@ mod tests {
             tree.append_child(parent, child).unwrap();
         }
         (tree, ids)
+    }
+
+    /// `root > parent > [#text, #comment, a, #text, #comment, b, #comment, #text]` under a
+    /// `#document`, a `#fragment` holding a `div`, a node with no parent and an id no node has.
+    fn links() -> (VirtualTree, [NodeId; 14]) {
+        let (f, document) = Fixture::with_document();
+        let (mut tree, root) = (f.tree, f.root);
+        let [
+            parent,
+            text_1,
+            comment_1,
+            a,
+            text_2,
+            comment_2,
+            b,
+            comment_3,
+            text_3,
+        ] = [
+            "div",
+            TEXT_TAG,
+            COMMENT_TAG,
+            "div",
+            TEXT_TAG,
+            COMMENT_TAG,
+            "div",
+            COMMENT_TAG,
+            TEXT_TAG,
+        ]
+        .map(|tag| node(&mut tree, tag));
+        tree.append_child(root, parent).unwrap();
+        for child in [
+            text_1, comment_1, a, text_2, comment_2, b, comment_3, text_3,
+        ] {
+            tree.append_child(parent, child).unwrap();
+        }
+        let fragment = node(&mut tree, FRAGMENT_TAG);
+        let in_fragment = node(&mut tree, "div");
+        tree.append_child(fragment, in_fragment).unwrap();
+        let loose = node(&mut tree, "div");
+        let ids = [
+            parent,
+            text_1,
+            comment_1,
+            a,
+            text_2,
+            comment_2,
+            b,
+            comment_3,
+            text_3,
+            root,
+            document,
+            fragment,
+            in_fragment,
+            loose,
+        ];
+        (tree, ids)
+    }
+
+    const PARENT: usize = 0;
+    const TEXT_1: usize = 1;
+    const COMMENT_1: usize = 2;
+    const A: usize = 3;
+    const TEXT_2: usize = 4;
+    const B: usize = 6;
+    const TEXT_3: usize = 8;
+    const ROOT: usize = 9;
+    const IN_FRAGMENT: usize = 12;
+    const LOOSE: usize = 13;
+    const UNKNOWN_ID: NodeId = 999;
+
+    #[rstest]
+    #[case::parent(A, Link::Parent, Some(PARENT))]
+    #[case::first(PARENT, Link::First, Some(TEXT_1))]
+    #[case::last(PARENT, Link::Last, Some(TEXT_3))]
+    #[case::previous(A, Link::Previous, Some(COMMENT_1))]
+    #[case::next(A, Link::Next, Some(TEXT_2))]
+    #[case::parentless(LOOSE, Link::Parent, None)]
+    fn linked_reads_the_node_the_link_names(
+        #[case] node: usize,
+        #[case] link: Link,
+        #[case] want: Option<usize>,
+    ) {
+        let (tree, ids) = links();
+
+        assert_eq!(tree.linked(ids[node], link, false), want.map(|at| ids[at]));
+    }
+
+    #[rstest]
+    #[case::parent(Link::Parent, false)]
+    #[case::of_elements(Link::Next, true)]
+    fn linked_of_an_unknown_id_is_none(#[case] link: Link, #[case] elements_only: bool) {
+        let (tree, _) = links();
+
+        assert_eq!(tree.linked(UNKNOWN_ID, link, elements_only), None);
+    }
+
+    #[rstest]
+    #[case::skips_a_text_and_a_comment(A, Some(B))]
+    #[case::trailing_non_elements(B, None)]
+    fn linked_next_of_elements_skips_other_nodes(#[case] node: usize, #[case] want: Option<usize>) {
+        let (tree, ids) = links();
+
+        assert_eq!(
+            tree.linked(ids[node], Link::Next, true),
+            want.map(|at| ids[at])
+        );
+    }
+
+    #[rstest]
+    #[case::skips_a_text_and_a_comment(B, Some(A))]
+    #[case::leading_non_elements(A, None)]
+    fn linked_previous_of_elements_skips_other_nodes(
+        #[case] node: usize,
+        #[case] want: Option<usize>,
+    ) {
+        let (tree, ids) = links();
+
+        assert_eq!(
+            tree.linked(ids[node], Link::Previous, true),
+            want.map(|at| ids[at])
+        );
+    }
+
+    #[rstest]
+    #[case::first(Link::First, Some(A))]
+    #[case::last(Link::Last, Some(B))]
+    fn linked_end_of_elements_skips_leading_and_trailing_non_elements(
+        #[case] link: Link,
+        #[case] want: Option<usize>,
+    ) {
+        let (tree, ids) = links();
+
+        assert_eq!(tree.linked(ids[PARENT], link, true), want.map(|at| ids[at]));
+    }
+
+    #[rstest]
+    #[case::element_parent(A, Some(PARENT))]
+    #[case::document_parent(ROOT, None)]
+    #[case::fragment_parent(IN_FRAGMENT, None)]
+    #[case::no_parent(LOOSE, None)]
+    fn linked_parent_of_elements_is_an_element(#[case] node: usize, #[case] want: Option<usize>) {
+        let (tree, ids) = links();
+
+        assert_eq!(
+            tree.linked(ids[node], Link::Parent, true),
+            want.map(|at| ids[at])
+        );
+    }
+
+    #[rstest]
+    #[case::all(false, &[1, 2, 3, 4, 5, 6, 7, 8])]
+    #[case::elements(true, &[3, 6])]
+    fn child_ids_lists_the_children_in_order(#[case] elements_only: bool, #[case] want: &[usize]) {
+        let (tree, ids) = links();
+
+        let want: Vec<NodeId> = want.iter().map(|&at| ids[at]).collect();
+        assert_eq!(tree.child_ids(ids[PARENT], elements_only), want);
+    }
+
+    #[test]
+    fn subtree_lists_a_template_content_before_its_children_in_pre_order() {
+        let mut tree = VirtualTree::new();
+        let template = node(&mut tree, "template");
+        let content = tree.template_content(template).unwrap();
+        let [in_content, first, nested, second] = [(); 4].map(|()| node(&mut tree, "div"));
+        tree.append_child(content, in_content).unwrap();
+        tree.append_child(template, first).unwrap();
+        tree.append_child(first, nested).unwrap();
+        tree.append_child(template, second).unwrap();
+
+        assert_eq!(
+            tree.subtree(template),
+            [template, content, in_content, first, nested, second]
+        );
+    }
+
+    #[test]
+    fn subtree_of_an_unknown_id_is_empty() {
+        let (tree, _) = links();
+
+        assert_eq!(tree.subtree(UNKNOWN_ID), Vec::<NodeId>::new());
+    }
+
+    #[test]
+    fn child_ids_of_an_unknown_id_is_empty() {
+        let (tree, _) = links();
+
+        assert_eq!(tree.child_ids(UNKNOWN_ID, false), Vec::<NodeId>::new());
     }
 
     #[rstest]
