@@ -474,6 +474,37 @@ mod tests {
     }
 
     #[gpui::test]
+    fn two_flex_grow_siblings_beyond_the_limit_share_the_space_equally(cx: &mut TestAppContext) {
+        let grow = [("flex_grow", s("1e999"))];
+        let bounds = layout(cx, &row(), &[&grow, &grow]);
+        assert_eq!(bounds[1].size.width, px(100.));
+        assert_eq!(bounds[2].size.width, px(100.));
+    }
+
+    #[gpui::test]
+    fn two_flex_shrink_siblings_beyond_the_limit_shrink_equally(cx: &mut TestAppContext) {
+        let shrink = [("width", n(150.)), ("flex_shrink", s("1e999"))];
+        let bounds = layout(cx, &row(), &[&shrink, &shrink]);
+        assert_eq!(bounds[1].size.width, px(100.));
+        assert_eq!(bounds[2].size.width, px(100.));
+    }
+
+    #[gpui::test]
+    fn a_width_and_padding_beyond_the_length_limit_stay_finite(cx: &mut TestAppContext) {
+        let huge = s("1e999px");
+        let bounds = layout(
+            cx,
+            &[("display", s("flex"))],
+            &[&[
+                ("width", huge.clone()),
+                ("padding_left", huge.clone()),
+                ("padding_right", huge),
+            ]],
+        );
+        assert_eq!(bounds[1].size.width, px(67_108_856.));
+    }
+
+    #[gpui::test]
     fn an_x_only_container_scrolls_along_x_without_a_dispatcher(cx: &mut TestAppContext) {
         let shift = content_shift(
             cx,

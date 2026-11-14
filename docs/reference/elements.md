@@ -119,13 +119,19 @@ zero, such as `"0"` or `"0.0"`, also works. Other units are not supported.
 | `borderColor` | color (below) | |
 | `borderRadius` | px size (`>= 0`) | applied to all four corners |
 | `color` | color (below) | cascades to descendant text leaves |
-| `fontSize` | px size (`>= 0`) | cascades to descendant text leaves |
+| `fontSize` | px size (`>= 0`) | cascades to descendant text leaves; a size above `2048px` applies as `2048px` |
 | `overflow` / `overflowX` / `overflowY` | `"visible"` \| `"hidden"` \| `"clip"` \| `"scroll"` \| `"auto"`; `overflow` also takes two of them, x then y | `"hidden"` clips and script can scroll it; `"scroll"` (and its alias `"auto"`) also scrolls with the wheel; `overflowX`/`overflowY` win over `overflow` |
-| `padding` / `paddingX` / `paddingY` / `paddingTop` / `paddingRight` / `paddingBottom` / `paddingLeft` | px size (`>= 0`) | a negative, `NaN` or infinite value is ignored |
+| `padding` / `paddingX` / `paddingY` / `paddingTop` / `paddingRight` / `paddingBottom` / `paddingLeft` | px size (`>= 0`) | a negative, `NaN` or infinite number is ignored |
 | `margin` / `marginX` / `marginY` / `marginTop` / `marginRight` / `marginBottom` / `marginLeft` | px size (negative allowed) \| `"auto"` | |
 | `flexGrow` / `flexShrink` | number or decimal string (`>= 0`) | |
-| `opacity` | number or decimal string (`0` to `1`) | clamped; `NaN`, infinity and text that overflows to infinity are ignored; applies to descendants too |
+| `opacity` | number or decimal string (`0` to `1`) | clamped; `NaN` and infinity are ignored; applies to descendants too |
 | `minWidth` / `minHeight` / `maxWidth` / `maxHeight` | px size (`>= 0`) \| `"auto"` | `"auto"` is the default limit: none for the `max` keys, the content size for a flex item's `min` keys |
+
+A length above `33554428px` and a flex factor above `1e18` apply at that value and read back as it,
+as a text (`1e999px`, `99999999px`, `1e19`) or as a number: `33554428px` for a length,
+`-33554428px` for a margin, `1000000000000000000` for `flexGrow` and `flexShrink`. An `opacity`
+text beyond the largest number reads back `3.4028234663852886e+38`, and a JS number above it reads
+back as written.
 
 Content taller than the window is cut off at the window edge; see
 [Why doesn't my content scroll](../guide/troubleshooting#why-doesn-t-my-content-scroll-when-it-is-taller-than-the-window).

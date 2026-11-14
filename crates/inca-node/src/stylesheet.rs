@@ -212,8 +212,11 @@ impl StyleSheet {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
+
     use rstest::rstest;
 
+    use crate::build_spec;
     use crate::tests::{Fixture, text};
 
     #[test]
@@ -330,6 +333,15 @@ mod tests {
         );
         assert_eq!(f.computed(a, "width"), None);
         assert_eq!(f.computed(a, "height"), Some(text("2px")));
+    }
+
+    #[test]
+    fn a_rule_takes_an_overflowing_opacity_number() {
+        let mut f = Fixture::new();
+        f.sheet(".a { opacity: 1e999 }");
+        let a = f.boxed("a");
+
+        assert_eq!(build_spec(&f.tree, a).unwrap().style.opacity, Some(1.0));
     }
 
     #[test]

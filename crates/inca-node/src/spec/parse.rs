@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::keys::{read_edges, read_prop};
+use super::number::MAX_LENGTH_PX;
 use super::{EdgesSpec, LengthSpec, OverflowSpec, StyleSpec};
 use crate::tree::{AttributeValue, NodeId, StyleMap, VirtualTree};
 
@@ -106,13 +107,13 @@ pub(super) fn style_spec_from_props(props: &StyleMap) -> StyleSpec {
 }
 
 /// The window size an element's style declares, in px: `(width, height)`.
-/// A dimension that is unset, `"auto"`, a percentage or not a finite size
-/// `>= 0` is `None`.
+/// A dimension that is unset, `"auto"`, a percentage, not a size `>= 0` or `33554428` and above is
+/// `None`.
 #[must_use]
 pub fn declared_window_size(tree: &VirtualTree, id: NodeId) -> (Option<f64>, Option<f64>) {
     let style = style_spec_from_props(&tree.computed_style(id));
     let px = |length| match length {
-        Some(LengthSpec::Px(n)) => Some(n),
+        Some(LengthSpec::Px(n)) if n < MAX_LENGTH_PX => Some(n),
         _ => None,
     };
     (px(style.width), px(style.height))
@@ -278,6 +279,13 @@ mod tests {
     #[case::percent("50%".into(), "50%".into(), (None, None))]
     #[case::negative(AttributeValue::Number(-1.0), "-1px".into(), (None, None))]
     #[case::infinite("1e999px".into(), AttributeValue::Number(f64::INFINITY), (None, None))]
+    #[case::beyond_the_limit("99999999px".into(), "10px".into(), (None, Some(10.0)))]
+    #[case::at_the_limit("33554428px".into(), "10px".into(), (None, Some(10.0)))]
+    #[case::below_the_limit(
+        "33554427px".into(),
+        "10000px".into(),
+        (Some(33_554_427.0), Some(10000.0))
+    )]
     fn window_size_reads_width_and_height_through_the_declaration(
         #[case] width: AttributeValue,
         #[case] height: AttributeValue,

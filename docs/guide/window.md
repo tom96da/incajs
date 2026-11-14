@@ -35,7 +35,8 @@ declares, so a fixed-size app gets a window that fits it:
 
 Each dimension falls through on its own: a config that sets only `width`
 still takes its height from the root element. With neither source giving
-one, the window opens at 800 × 600.
+one, the window opens at 800 × 600. A root of `33554428px` or more in a dimension gives the
+default size.
 
 `window.minWidth` and `window.minHeight` set the smallest the window can
 be. A window opens at least that size, and a dimension you leave out is
