@@ -58,10 +58,10 @@ export function createElementNS(namespace: string | null, qualifiedName: string)
 /**
  * Reads the name a creating native returned.
  * @param entry - an entry of `createElement`, `createElementNS` or `cloneNode`
- * @returns the tag string for a two-part entry, and the last four parts for a five-part entry
+ * @returns the last four parts for a five-part entry, and the tag string for any other entry
  */
-export function nameOf(entry: NodeEntry | ElementEntry): ElementName {
-  return entry.length === 2 ? entry[1] : [entry[1], entry[2], entry[3], entry[4]];
+export function nameOf(entry: [id: NodeId, tag: string] | NodeEntry | ElementEntry): ElementName {
+  return entry.length === 5 ? [entry[1], entry[2], entry[3], entry[4]] : entry[1];
 }
 
 /**
@@ -151,7 +151,8 @@ export function replaceChild(parentId: NodeId, nodeId: NodeId, childId: NodeId):
  * @param nodeId - the node to copy
  * @param deep - whether the descendants are copied too
  * @returns one entry per copy in pre-order, the copy of `nodeId` first: the id and the four name
- *   parts of an element, the id and the marker of any other node
+ *   parts of an element, the id, the marker and the text of any other node (`null` unless it is a
+ *   `#text` copy)
  * @throws {TypeError} when `nodeId` names no node
  */
 export function cloneNode(nodeId: NodeId, deep: boolean): (NodeEntry | ElementEntry)[] {
@@ -251,13 +252,14 @@ export function isEqualNode(nodeId: NodeId, otherId: NodeId): boolean {
 }
 
 /**
- * Drops every event listener registered on `nodeId` and on the nodes below it. The nodes stay in
- * the tree. An unknown id does nothing.
+ * Takes `nodeId` out of its parent, holds it, and drops every event listener registered on it and
+ * on the nodes below it. The nodes stay in the host. An unknown id does nothing.
  * @param nodeId - the root of the subtree
- * @returns the callback ids of the dropped listeners
+ * @returns the callback ids of the dropped listeners and the ids of `nodeId` and every node below
+ *   it in pre-order, the content of a template and its nodes before the template's children
  */
-export function releaseListeners(nodeId: NodeId): CallbackId[] {
-  return native().releaseListeners(nodeId);
+export function removeNode(nodeId: NodeId): [callbackIds: CallbackId[], nodeIds: NodeId[]] {
+  return native().removeNode(nodeId);
 }
 
 /**
@@ -294,22 +296,25 @@ export function templateContent(nodeId: NodeId): NodeId | null {
  * Reads one link of a node in the host tree.
  * @param nodeId - the node to start from
  * @param link - which node to reach
+ * @param elementOnly - `true` to reach the nearest element in that direction: the parent when it
+ *   is an element, the first or last element child, the nearest element sibling
  * @returns the id of the parent, first child, last child, previous sibling or next sibling, or
  *   `null` when there is none
  * @throws {TypeError} when `nodeId` names no node
  */
-export function linkedNode(nodeId: NodeId, link: NodeLink): NodeId | null {
-  return native().linkedNode(nodeId, link);
+export function linkedNode(nodeId: NodeId, link: NodeLink, elementOnly?: boolean): NodeId | null {
+  return native().linkedNode(nodeId, link, elementOnly);
 }
 
 /**
  * Lists the children of a node in the host tree.
  * @param nodeId - the parent
+ * @param elementOnly - `true` to list the element children only
  * @returns the ids of the children in order
  * @throws {TypeError} when `nodeId` names no node
  */
-export function childNodeIds(nodeId: NodeId): NodeId[] {
-  return native().childNodeIds(nodeId);
+export function childNodeIds(nodeId: NodeId, elementOnly?: boolean): NodeId[] {
+  return native().childNodeIds(nodeId, elementOnly);
 }
 
 /**

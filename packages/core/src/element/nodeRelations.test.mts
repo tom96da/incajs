@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { nativeStub } from "../../tests/setup.mts";
 import { document } from "../document.mts";
 import { adoptTextNode, createIncaElement, createIncaFragment } from "./handle.mts";
-import { markDestroyed } from "./lifecycle.mts";
+import { markFreed } from "./lifecycle.mts";
 
 /** The id `nativeStub` gives the document. */
 const DOCUMENT = 1;
@@ -16,6 +16,7 @@ let mask = 0;
 let top = DOCUMENT;
 
 const host = {
+  rootNodeId: vi.fn<() => number>(() => 0),
   rootOf: vi.fn<(nodeId: number) => number>(() => top),
   compareNodePosition: vi.fn<(nodeId: number, otherId: number) => number>(() => mask),
   isEqualNode: vi.fn<(nodeId: number, otherId: number) => boolean>(() => true),
@@ -70,14 +71,14 @@ describe("contains", () => {
   it("is false for a freed node", () => {
     const node = div(10);
     mask = 16;
-    markDestroyed(node);
+    markFreed([node.__node_id]);
 
     expect(node.contains(div(11))).toBe(false);
   });
 
   it("is true for a freed node and itself", () => {
     const node = div(10);
-    markDestroyed(node);
+    markFreed([node.__node_id]);
 
     expect(node.contains(node)).toBe(true);
   });
@@ -85,7 +86,7 @@ describe("contains", () => {
   it("is false for a freed other node", () => {
     const other = div(11);
     mask = 16;
-    markDestroyed(other);
+    markFreed([other.__node_id]);
 
     expect(div(10).contains(other)).toBe(false);
   });
@@ -120,9 +121,16 @@ describe("getRootNode", () => {
     expect(adoptTextNode(10, "x").getRootNode()).toBe(group);
   });
 
+  it("gives the node itself when the top of its tree has no handle", () => {
+    const node = div(10);
+    top = 99;
+
+    expect(node.getRootNode()).toBe(node);
+  });
+
   it("gives a freed node itself without asking the host", () => {
     const node = div(10);
-    markDestroyed(node);
+    markFreed([node.__node_id]);
 
     expect(node.getRootNode()).toBe(node);
     expect(host.rootOf).not.toHaveBeenCalled();
@@ -144,7 +152,7 @@ describe("compareDocumentPosition", () => {
 
   it("gives disconnected and preceding for a freed node and a lower other id", () => {
     const node = div(10);
-    markDestroyed(node);
+    markFreed([node.__node_id]);
 
     expect(node.compareDocumentPosition(div(9))).toBe(1 | 32 | 2);
     expect(host.compareNodePosition).not.toHaveBeenCalled();
@@ -152,7 +160,7 @@ describe("compareDocumentPosition", () => {
 
   it("gives disconnected and following for a freed other node with a higher id", () => {
     const other = div(11);
-    markDestroyed(other);
+    markFreed([other.__node_id]);
 
     expect(div(10).compareDocumentPosition(other)).toBe(1 | 32 | 4);
     expect(host.compareNodePosition).not.toHaveBeenCalled();
@@ -160,7 +168,7 @@ describe("compareDocumentPosition", () => {
 
   it("gives 0 for the same freed node", () => {
     const node = div(10);
-    markDestroyed(node);
+    markFreed([node.__node_id]);
 
     expect(node.compareDocumentPosition(node)).toBe(0);
     expect(host.compareNodePosition).not.toHaveBeenCalled();
@@ -223,7 +231,7 @@ describe("isEqualNode", () => {
 
   it("is false for a freed node without asking the host", () => {
     const node = div(10);
-    markDestroyed(node);
+    markFreed([node.__node_id]);
 
     expect(node.isEqualNode(div(11))).toBe(false);
     expect(host.isEqualNode).not.toHaveBeenCalled();
@@ -231,7 +239,7 @@ describe("isEqualNode", () => {
 
   it("is false for a freed other node without asking the host", () => {
     const other = div(11);
-    markDestroyed(other);
+    markFreed([other.__node_id]);
 
     expect(div(10).isEqualNode(other)).toBe(false);
     expect(host.isEqualNode).not.toHaveBeenCalled();
@@ -239,7 +247,7 @@ describe("isEqualNode", () => {
 
   it("is true for a freed node compared to itself without asking the host", () => {
     const node = div(10);
-    markDestroyed(node);
+    markFreed([node.__node_id]);
 
     expect(node.isEqualNode(node)).toBe(true);
     expect(host.isEqualNode).not.toHaveBeenCalled();

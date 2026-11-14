@@ -32,10 +32,10 @@ function selectorText(args: readonly unknown[], method: string): string {
  * Finds the element handle of an element node.
  * @param id - the native node's id
  * @param builders - the lookup of a handle by node id
- * @returns the handle
+ * @returns the handle, or `undefined` when the node has none
  */
-function elementHandle(id: NodeId, builders: HandleBuilders): IncaElement {
-  return builders.node(id) as IncaElement;
+function elementHandle(id: NodeId, builders: HandleBuilders): IncaElement | undefined {
+  return builders.node(id) as IncaElement | undefined;
 }
 
 /**
@@ -57,7 +57,7 @@ export function queryMembers(
         return null;
       }
       const found = queryNode(id, text);
-      return found === null ? null : elementHandle(found, builders);
+      return found === null ? null : (elementHandle(found, builders) ?? null);
     },
     querySelectorAll: (...args: [selectors: string]) => {
       const text = selectorText(args, "querySelectorAll");
@@ -65,7 +65,7 @@ export function queryMembers(
         checkSelector(text);
         return nodeListOf(() => []);
       }
-      const found = queryNodes(id, text).map((nodeId) => elementHandle(nodeId, builders));
+      const found = queryNodes(id, text).flatMap((nodeId) => elementHandle(nodeId, builders) ?? []);
       return nodeListOf(() => found);
     },
   };
@@ -95,7 +95,7 @@ export function selectorMembers(element: IncaElement, builders: HandleBuilders):
         return null;
       }
       const found = closestNode(id, text);
-      return found === null ? null : elementHandle(found, builders);
+      return found === null ? null : (elementHandle(found, builders) ?? null);
     },
   };
 }

@@ -18,7 +18,7 @@ const kept = ref(true);
 const guard = (e) => {
   const path = e.composedPath();
   const chain = [];
-  for (let n = e.target; n !== null; n = n.parent) chain.push(n);
+  for (let n = e.target; n !== null; n = n.parentElement) chain.push(n);
   const held =
     path.length === chain.length + 2 &&
     chain.every((n, i) => n === path[i]) &&

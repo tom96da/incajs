@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { nativeStub } from "../../tests/setup.mts";
 import { createIncaElement } from "./handle.mts";
-import { markDestroyed } from "./lifecycle.mts";
+import { markFreed } from "./lifecycle.mts";
 import type { IncaElement } from "./types.mts";
 
 type Stored = string | number | boolean;
@@ -67,7 +67,7 @@ describe("className", () => {
 
   it("throws a TypeError when a symbol is written to a freed element", () => {
     const { el } = setup();
-    markDestroyed(el);
+    markFreed([el.__node_id]);
 
     expect(() => {
       el.className = Symbol("c") as unknown as string;
@@ -76,14 +76,14 @@ describe("className", () => {
 
   it("reads an empty string on a freed element", () => {
     const { el } = setup({ class: "a" });
-    markDestroyed(el);
+    markFreed([el.__node_id]);
 
     expect(el.className).toBe("");
   });
 
   it("ignores a write on a freed element", () => {
     const { el, host } = setup();
-    markDestroyed(el);
+    markFreed([el.__node_id]);
 
     el.className = "a";
 
@@ -137,7 +137,7 @@ describe("classList", () => {
 
   it("asks the native once on the first read of a freed handle", () => {
     const { el, host } = setup();
-    markDestroyed(el);
+    markFreed([el.__node_id]);
 
     void el.classList;
 

@@ -19,7 +19,7 @@ const native = {
   insertBefore: vi.fn<(parentId: number, childId: number, refId: number | null) => number>(() => 0),
   removeChild: vi.fn<(parentId: number, childId: number) => void>(),
   replaceChild: vi.fn<(parentId: number, nodeId: number, childId: number) => number>(() => 0),
-  cloneNode: vi.fn<(nodeId: number, deep: boolean) => [number, string][]>(() => []),
+  cloneNode: vi.fn<(nodeId: number, deep: boolean) => [number, string, null][]>(() => []),
   rootOf: vi.fn<(nodeId: number) => number>((nodeId) => nodeId),
   compareNodePosition: vi.fn<(nodeId: number, otherId: number) => number>(() => 0),
   isEqualNode: vi.fn<(nodeId: number, otherId: number) => boolean>(() => false),
@@ -44,7 +44,7 @@ const native = {
   removeEventListener: vi.fn<(nodeId: number, event: string, callbackId: number) => boolean>(
     () => true,
   ),
-  releaseListeners: vi.fn<(nodeId: number) => number[]>(() => []),
+  removeNode: vi.fn<(nodeId: number) => [number[], number[]]>(() => [[], []]),
   templateContent: vi.fn<(nodeId: number) => number | null>(() => null),
   innerHtml: vi.fn<(nodeId: number) => string>(() => ""),
   outerHtml: vi.fn<(nodeId: number) => string>(() => ""),

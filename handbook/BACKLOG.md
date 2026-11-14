@@ -1599,15 +1599,6 @@ A fixed entry is deleted and its ID is never reused.
   In browsers `document.createElement(name, options)` reads `options.is` to build a customized
   built-in element. The host ignores the argument.
 
-- **B-302 `document` starts with no shadow children**
-  `Units: core · Size: M · Impact: Low`
-
-  The host holds the root under the document, but `document.__children` is empty and the handle of
-  the root has no parent until the root leaves and returns. `document.insertBefore(node, root)`
-  then finds no next sibling for `node` through the nodeOps path of Vue. Linking the root into the
-  document keeps it alive as long as the realm, which the GC test for unmount rules out. Fix: make
-  the children of the document a view over the host, or drop the shadow tree.
-
 - **B-303 The default stack names Vue and Vite in several places**
   `Units: cli · Size: M · Impact: Low`
 
@@ -1730,3 +1721,55 @@ A fixed entry is deleted and its ID is never reused.
   earlier value. Fix: skip an inline value that the reader of its key rejects when the computed
   style is built, or reject it in `set_style`.
 
+- **B-321 A handle inside a detached subtree does not keep the subtree alive**
+  `Units: core,node · Size: M · Impact: Low`
+
+  When the script keeps a node of a detached subtree (a removed one, one built under a parent that
+  was never inserted, a fragment or a copy made by `cloneNode()`) and the handle of the subtree's
+  top is collected, the host frees the whole subtree at the next frame and the kept node reads as
+  freed: `parentNode` is
+  `null` and its members read nothing. In browsers the node keeps its subtree. The other direction
+  holds: the handle of a removed node keeps the handles below it alive. Fix: let the host keep a
+  detached subtree while a node in it has a live handle, and let core hold the top of such a
+  subtree until the kept handle is collected. Vue does not meet it: it holds every node it creates
+  and the mount container.
+
+- **B-323 The handle of the mount container can be collected while the container sits in `document`**
+  `Units: core · Size: S · Impact: Low`
+
+  When the script holds no reference to the mount container, its handle is collected, and the next
+  read builds a new object: a property the script set on the old one is gone. In browsers the
+  document keeps the element and its object. Fix: give the container a strong table entry while it
+  has a parent, as every other attached node, and let the unmount test pin that the app and its
+  nodes are collected while the container stays.
+
+- **B-324 One run can create at most 2^32 - 3 nodes**
+  `Units: node,bridge,core · Size: M · Impact: Low`
+
+  Node ids are never reused, so once `2^32 - 3` nodes have been created over the run, every call
+  that creates a node throws a `TypeError`. A removed node still counts. An app that creates 1000
+  nodes a second reaches it in about 50 days. Browsers have no such limit. Fix: reuse a freed id
+  once no handle, callback or table entry can name it, or widen the id to 53 bits on both sides.
+
+- **B-325 A node removed through a member keeps the handles of its subtree until a frame**
+  `Units: bridge,core · Size: M · Impact: Low`
+
+  `removeChild`, `replaceChild`, `innerHTML` and `outerHTML` release the handle of the removed
+  top node only. The handles of its descendants are strong table entries until the host reports
+  them freed, which happens at a frame. An app that removes large subtrees through these members in one task without
+  yielding to a frame keeps every descendant handle alive, and a run that does so long enough runs
+  out of memory. The nodes Vue removes are not affected: the renderer removes through a call that
+  returns the subtree. Fix: let the host return the ids of the subtree from `removeChild`,
+  `replaceChild` and the markup setters, as `removeNode` does, and follow `leftHeld`: weak entries
+  for the descendants and a keeper list on the handle of the top.
+
+- **B-339 Reading `children` of a large list costs more than before**
+  `Units: bridge,core · Size: M · Impact: Low`
+
+  Every `length` or index read of `children` asks the host for the element children and builds the
+  handle of each, so a loop over a list grows with the square of its length. Reading the length and
+  every item of a list of 1000 items takes about 2.3 times as long as the JS tree it replaced (330
+  ms against 129 ms). Replacing every item of a list of 1000 takes 18% to 22% longer. Fix: keep a
+  snapshot per collection read, invalidated by a tree generation the host counts, or add a host
+  call that returns the element child at an index. Measure again with a built app that mounts a
+  list of 1000 items and reads `children`, `parentNode` and `nextSibling` on the release host.

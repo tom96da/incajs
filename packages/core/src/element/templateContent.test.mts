@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { nativeStub } from "../../tests/setup.mts";
 import { document } from "../document.mts";
 import { createElementNode } from "./handle.mts";
-import { isDestroyed, markDestroyed } from "./lifecycle.mts";
+import { markFreed } from "./lifecycle.mts";
 import type { IncaTemplateElement } from "./types.mts";
 
 let nextId = 1;
@@ -76,21 +76,13 @@ describe("the link between a template and its content", () => {
     expect(host.holdNode).toHaveBeenCalledWith(owner.__node_id);
   });
 
-  it("marks the template destroyed when only the content is marked", () => {
-    const owner = template();
-
-    markDestroyed(owner.content);
-
-    expect(isDestroyed(owner)).toBe(true);
-  });
-
   it("reads the same content object after the host freed the template", () => {
     const owner = template();
     const content = owner.content;
     host.templateContent.mockImplementation(() => {
       throw new TypeError("freed");
     });
-    markDestroyed(owner);
+    markFreed([owner.__node_id]);
 
     expect(owner.content).toBe(content);
   });

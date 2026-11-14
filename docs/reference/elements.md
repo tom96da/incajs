@@ -173,7 +173,15 @@ with the differences below. The listener methods are described in
   the next frame draws it.
 - Only `pointerId` 1 is accepted by `setPointerCapture()`,
   `releasePointerCapture()` and `hasPointerCapture()`.
-- `parent` is the parent element, or the fragment that holds the node.
+- A node of a removed subtree, of one never inserted, of a fragment or of a copy made by
+  `cloneNode()` is freed with that subtree once the script holds no reference to the top of the
+  subtree. Its links then read `null`. Inserting it, or using it as a parent, throws a `TypeError`,
+  and using it as the anchor throws a `NotFoundError`.
+- The mount container can be collected while it sits in `document` and the script holds no
+  reference to it. A later read returns a new object, without the properties the script set on the
+  old one.
+- One run of the app can create 2^32 - 3 nodes in total. A template counts as two, and a removed
+  node still counts. After that, every call that creates a node throws a `TypeError`.
 - A node that a template removes (for example with `v-if`) drops its listeners
   for good. Appending it again does not restore them. `removeChild()` and
   `replaceChild()` keep the listeners of the node they remove.

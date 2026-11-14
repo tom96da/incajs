@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { installMembersHost, nativeStub } from "../../tests/setup.mts";
 import { createIncaElement } from "./handle.mts";
-import { markDestroyed } from "./lifecycle.mts";
+import { markFreed } from "./lifecycle.mts";
 import { scrollIntoViewArgs, scrollPosition } from "./scroll.mts";
 import type { ScrollOptions } from "./scroll.mts";
 
@@ -66,7 +66,7 @@ describe("scrollPosition", () => {
   it("ignores a call on a removed element", () => {
     const host = installHost([1, 2, 3, 4]);
     const el = createIncaElement(7, "element", "div");
-    markDestroyed(el);
+    markFreed([el.__node_id]);
     scrollPosition(el, [1, 1], true);
     expect(host.scrollNode).not.toHaveBeenCalled();
   });
@@ -126,7 +126,7 @@ describe("createIncaElement scroll members", () => {
   it("read zeros once removed", () => {
     installMembersHost({}, [5, 6, 7, 8]);
     const el = createIncaElement(7, "element", "div");
-    markDestroyed(el);
+    markFreed([el.__node_id]);
     expect([el.scrollTop, el.scrollWidth]).toEqual([0, 0]);
   });
 });

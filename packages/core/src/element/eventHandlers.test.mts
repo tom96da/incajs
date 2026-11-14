@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { nativeStub } from "../../tests/setup.mts";
 import { createIncaElement } from "./handle.mts";
-import { markDestroyed } from "./lifecycle.mts";
+import { markFreed } from "./lifecycle.mts";
 import type { HostCallback } from "../ffi/index.mts";
 import type { IncaElement } from "./types.mts";
 
@@ -219,7 +219,7 @@ describe("createIncaElement handler properties", () => {
 
   it("ignores an assignment after the node is removed", () => {
     const el = element();
-    markDestroyed(el);
+    markFreed([el.__node_id]);
     el.onclick = () => {};
     expect(el.onclick).toBeNull();
     expect(native.addEventListener).not.toHaveBeenCalled();

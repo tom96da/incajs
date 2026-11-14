@@ -33,12 +33,19 @@ globalThis.__inca_native__ ??= nativeStub();
 /** `[x, y, width, height, border, scrollX, scrollY]` of a drawn node. */
 type Box = readonly [number, number, number, number, number, number, number];
 
-/** Installs a fake host whose reads give `boxes` and `scroll`, and returns it. */
+/**
+ * Installs a fake host whose reads give `boxes`, `scroll` and the parents in `parents`, and returns
+ * it.
+ */
 export function installMembersHost(
   boxes: Record<number, Box> = {},
   scroll: readonly [number, number, number, number] | null = null,
+  parents: Record<number, number> = {},
 ) {
   const host = {
+    linkedNode: vi.fn<(nodeId: number, link: string) => number | null>((nodeId, link) =>
+      link === "parent" ? (parents[nodeId] ?? null) : null,
+    ),
     getAttribute: vi.fn<() => null>(() => null),
     layoutOf: vi.fn<(nodeId: number) => Box | null>((nodeId) => boxes[nodeId] ?? null),
     scrollOf: vi.fn<() => readonly [number, number, number, number] | null>(() => scroll),

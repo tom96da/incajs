@@ -17,229 +17,18 @@ import { callbackIdFor, groupOf, registeredGroupCount } from "../src/callbacks.m
 import { createElementNode, createTextNode } from "../src/element/handle.mts";
 import { elementOf, isDestroyed } from "../src/element/lifecycle.mts";
 import { createIncaApp } from "../src/vue/index.mts";
-import { nativeStub } from "./setup.mts";
-import type { HostCallback } from "../src/ffi/index.mts";
+import { installFakeHost } from "./fakeHost.mts";
 import type { IncaElement } from "../src/index.mts";
+import type { FakeHost } from "./fakeHost.mts";
 
 /** Node's timers, put back after a test loads core over the fake host. */
 const nodeTimers = { setTimeout, setInterval, clearTimeout, clearInterval };
 
-/** The function the fake host keeps for each registration, as the callback table does. */
-const hostCallbacks = new Map<number, HostCallback>();
+/** The orphan model of the host and a frame that frees its orphans: `tests/fakeHost.mts`. */
+let host: FakeHost;
 
-interface FakeNode {
-  tag: string;
-  parent: number | null;
-  children: number[];
-  listeners: number[];
-}
-
-/**
- * A fake host with the orphan model of the real one: a created node is an
- * orphan until it is inserted or held, `removeChild` makes an orphan unless
- * the node is held, and `frame()` frees every orphan with its subtree and
- * reports the freed ids to `__inca_released__`.
- */
-const nodes = new Map<number, FakeNode>();
-const held = new Set<number>();
-const orphans = new Set<number>();
-const releaseNode = vi.fn<(id: number) => void>();
-let nextCallbackId: number;
-const ROOT = 1;
-/** Ids stay unique across tests, so a handle finalized late frees no node of a later test. */
-let nextId = ROOT + 1;
-
-function nodeOf(id: number): FakeNode {
-  const node = nodes.get(id);
-  if (!node) throw new TypeError(`unknown node id: ${id}`);
-  return node;
-}
-
-function detach(id: number): void {
-  const node = nodeOf(id);
-  if (node.parent === null) return;
-  const siblings = nodeOf(node.parent).children;
-  siblings.splice(siblings.indexOf(id), 1);
-  node.parent = null;
-  if (!held.has(id)) orphans.add(id);
-}
-
-function freeSubtree(id: number, freed: number[], callbacks: number[]): void {
-  const node = nodes.get(id);
-  if (!node) return;
-  nodes.delete(id);
-  held.delete(id);
-  orphans.delete(id);
-  freed.push(id);
-  callbacks.push(...node.listeners);
-  for (const callbackId of node.listeners) hostCallbacks.delete(callbackId);
-  for (const child of node.children) freeSubtree(child, freed, callbacks);
-}
-
-function installNative(): void {
-  nodes.clear();
-  held.clear();
-  orphans.clear();
-  releaseNode.mockClear();
-  nextCallbackId = 0;
-  const create = (tag: string): number => {
-    const id = nextId++;
-    nodes.set(id, { tag, parent: null, children: [], listeners: [] });
-    return id;
-  };
-  nodes.set(ROOT, { tag: "root", parent: null, children: [], listeners: [] });
-  const insertBefore = (parentId: number, childId: number, refId: number | null): number => {
-    const parent = nodeOf(parentId);
-    nodeOf(childId);
-    if (refId !== null && !parent.children.includes(refId)) {
-      throw new DOMException("not a child", "NotFoundError");
-    }
-    detach(childId);
-    orphans.delete(childId);
-    const at = refId === null ? -1 : parent.children.indexOf(refId);
-    if (at === -1) parent.children.push(childId);
-    else parent.children.splice(at, 0, childId);
-    nodeOf(childId).parent = parentId;
-    return parent.children.indexOf(childId);
-  };
-  globalThis.__inca_native__ = nativeStub({
-    rootNodeId: () => ROOT,
-    createNode(tag) {
-      const id = create(tag);
-      orphans.add(id);
-      return id;
-    },
-    appendChild: (parentId, childId) => insertBefore(parentId, childId, null),
-    insertBefore,
-    replaceChild: () => {
-      throw new Error("not used here");
-    },
-    cloneNode: () => {
-      throw new Error("not used here");
-    },
-    rootOf: () => {
-      throw new Error("not used here");
-    },
-    compareNodePosition: () => {
-      throw new Error("not used here");
-    },
-    isEqualNode: () => {
-      throw new Error("not used here");
-    },
-    removeChild(parentId, childId) {
-      nodeOf(parentId);
-      if (!nodes.has(childId)) return;
-      if (nodes.get(childId)?.parent !== parentId) {
-        throw new DOMException("not a child", "NotFoundError");
-      }
-      detach(childId);
-    },
-    setAttribute: (id) => void nodeOf(id),
-    getAttribute: (id) => (nodeOf(id), null),
-    removeAttribute: (id) => void nodeOf(id),
-    setStyle: (id) => void nodeOf(id),
-    removeStyle: (id) => void nodeOf(id),
-    inputValue: (id) => (nodeOf(id), ""),
-    setInputValue: (id) => void nodeOf(id),
-    addEventListener(id, _event, callback) {
-      const callbackId = nextCallbackId++;
-      nodeOf(id as number).listeners.push(callbackId);
-      hostCallbacks.set(callbackId, callback);
-      return callbackId;
-    },
-    removeEventListener(id, _event, callbackId) {
-      const listeners = nodeOf(id as number).listeners;
-      const at = listeners.indexOf(callbackId);
-      if (at !== -1) listeners.splice(at, 1);
-      hostCallbacks.delete(callbackId);
-      return at !== -1;
-    },
-    attributeNames: (id) => (nodeOf(id), []),
-    matches: (id) => (nodeOf(id), false),
-    closest: (id) => (nodeOf(id), null),
-    checkSelector: () => {},
-    templateContent: () => null,
-    innerHtml: () => "",
-    outerHtml: () => "",
-    setInnerHtml: () => [0, []],
-    setOuterHtml: () => null,
-    insertAdjacentHtml: () => [0, []],
-    querySelector: (id) => (nodeOf(id), null),
-    querySelectorAll: (id) => (nodeOf(id), []),
-    releaseListeners(id) {
-      const callbacks: number[] = [];
-      const pending = [id];
-      while (pending.length > 0) {
-        const node = nodes.get(pending.pop()!);
-        if (!node) continue;
-        pending.push(...node.children);
-        callbacks.push(...node.listeners);
-        for (const callbackId of node.listeners) hostCallbacks.delete(callbackId);
-        node.listeners = [];
-      }
-      return callbacks;
-    },
-    holdNode(id) {
-      nodeOf(id);
-      held.add(id);
-      orphans.delete(id);
-    },
-    releaseNode(id) {
-      releaseNode(id);
-      held.delete(id);
-      const node = nodes.get(id);
-      if (node && node.parent === null && id !== ROOT) orphans.add(id);
-    },
-    focusNode() {},
-    blurNode() {},
-    focusedNode: () => null,
-    layoutOf: () => null,
-    scrollOf: () => null,
-    scrollNode() {},
-    scrollIntoViewNode() {},
-    dispatchEvent: () => true,
-    click() {},
-    setPointerCapture() {},
-    releasePointerCapture() {},
-    hasPointerCapture: () => false,
-    linkedNode(id, link) {
-      const node = nodeOf(id);
-      const siblings = node.parent === null ? [] : nodeOf(node.parent).children;
-      const at = siblings.indexOf(id);
-      const found = {
-        parent: node.parent,
-        first: node.children[0],
-        last: node.children.at(-1),
-        previous: siblings[at - 1],
-        next: siblings[at + 1],
-      }[link];
-      return found ?? null;
-    },
-    childNodeIds: (id) => [...nodeOf(id).children],
-    isConnected(id) {
-      let at: number | null = id;
-      while (at !== null && at !== ROOT) at = nodeOf(at).parent;
-      return at === ROOT;
-    },
-    textContent: () => "",
-    wholeText: () => "",
-    substringData: () => "",
-    replaceData() {},
-    splitText(id) {
-      nodeOf(id);
-      const tail = create("#text");
-      orphans.add(tail);
-      return tail;
-    },
-  });
-}
-
-/** Frees the orphans like the host does at the start of a frame. */
 function frame(): void {
-  const freed: number[] = [];
-  const callbacks: number[] = [];
-  for (const id of Array.from(orphans)) freeSubtree(id, freed, callbacks);
-  if (freed.length > 0) globalThis.__inca_released__(freed, callbacks);
+  host.frame();
 }
 
 async function settle(): Promise<void> {
@@ -250,12 +39,10 @@ async function settle(): Promise<void> {
 }
 
 function click(id: number): void {
-  for (const callbackId of nodeOf(id).listeners) hostCallbacks.get(callbackId)!();
+  for (const callbackId of host.nodes.get(id)!.listeners) host.callbacks.get(callbackId)!();
 }
 
-function idsOf(tag: string): number[] {
-  return [...nodes].filter(([, node]) => node.tag === tag).map(([id]) => id);
-}
+const idsOf = (tag: string): number[] => host.idsOf(tag);
 
 const mountedApps: { unmount(): void }[] = [];
 
@@ -267,8 +54,7 @@ function mountApp(App: Component): void {
 }
 
 beforeEach(() => {
-  installNative();
-  hostCallbacks.clear();
+  host = installFakeHost();
   vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.spyOn(console, "info").mockImplementation(() => {});
 });
@@ -309,17 +95,17 @@ describe("a host that frees orphans, driven by the Inca renderer", () => {
     expect(idsOf("button")).toEqual([buttonId]);
     click(buttonId);
     await settle();
-    expect(nodes.get(buttonId)!.listeners).toHaveLength(1);
+    expect(host.nodes.get(buttonId)!.listeners).toHaveLength(1);
     expect(elementOf(buttonId)).toBeDefined();
     expect(isDestroyed(elementOf(buttonId)!)).toBe(false);
 
-    const before = nodes.size;
+    const before = host.nodes.size;
     for (let i = 0; i < 20; i++) {
       which.value = i % 2 === 0 ? B : A;
       await settle();
     }
-    expect(nodes.size).toBe(before);
-    expect([...held].some((id) => nodes.get(id)!.parent === null)).toBe(true);
+    expect(host.nodes.size).toBe(before);
+    expect([...host.held].some((id) => host.nodes.get(id)!.parent === null)).toBe(true);
   });
 
   it("keeps a removed element in the host across frames while its handle lives", async () => {
@@ -338,7 +124,7 @@ describe("a host that frees orphans, driven by the Inca renderer", () => {
     await settle();
     await settle();
 
-    expect(nodes.get(id)?.parent).toBeNull();
+    expect(host.nodes.get(id)?.parent).toBeNull();
     expect(isDestroyed(kept!)).toBe(false);
   });
 
@@ -356,7 +142,9 @@ describe("a host that frees orphans, driven by the Inca renderer", () => {
     target.value = box.value;
     await settle();
 
-    const tags = nodeOf(box.value!.__node_id).children.map((id) => nodes.get(id)!.tag);
+    const tags = host.nodes
+      .get(box.value!.__node_id)!
+      .children.map((id) => host.nodes.get(id)!.tag);
     expect(tags).toEqual(["#text"]);
   });
 
@@ -390,11 +178,9 @@ describe("a host that frees orphans, driven by the Inca renderer", () => {
     await settle();
 
     expect(idsOf("em")).toHaveLength(1);
-    expect(idsOf("p").every((id) => nodes.get(id)!.parent === null)).toBe(true);
+    expect(idsOf("p").every((id) => host.nodes.get(id)!.parent === null)).toBe(true);
     const strong = idsOf("strong")[0]!;
-    let at: number | null = strong;
-    while (at !== null && at !== ROOT) at = nodes.get(at)!.parent;
-    expect(at).toBe(ROOT);
+    expect(host.natives.rootOf!(strong)).toBe(host.DOCUMENT);
   });
 
   it("frees the nodes a throwing child setup leaves, with their callbacks and handles", async () => {
@@ -415,16 +201,16 @@ describe("a host that frees orphans, driven by the Inca renderer", () => {
     await nextTick();
     const spanId = idsOf("span")[0]!;
     const span = elementOf(spanId)!;
-    const callbackIds = [...nodeOf(spanId).listeners];
+    const callbackIds = [...host.nodes.get(spanId)!.listeners];
     expect(callbackIds).toHaveLength(1);
-    expect(orphans.size).toBeGreaterThan(0);
+    expect(host.orphans().length).toBeGreaterThan(0);
 
     frame();
 
-    expect(nodes.has(spanId)).toBe(false);
+    expect(host.nodes.has(spanId)).toBe(false);
     expect(registeredGroupCount()).toBe(groups);
     expect(isDestroyed(span)).toBe(true);
-    expect(nodes.size).toBe(1);
+    expect(host.nodes.size).toBe(2);
   });
 });
 
@@ -443,7 +229,7 @@ describe("__inca_released__", () => {
     const el = createElementNode("div");
     const listener = () => {};
     el.addEventListener("click", listener);
-    const callbackId = nodeOf(el.__node_id).listeners[0]!;
+    const callbackId = host.nodes.get(el.__node_id)!.listeners[0]!;
 
     globalThis.__inca_released__([el.__node_id, 9999], [callbackId]);
 
@@ -454,7 +240,7 @@ describe("__inca_released__", () => {
     const el = createElementNode("div");
     const listener = () => {};
     el.addEventListener("click", listener);
-    const callbackId = nodeOf(el.__node_id).listeners[0]!;
+    const callbackId = host.nodes.get(el.__node_id)!.listeners[0]!;
 
     globalThis.__inca_released__([el.__node_id, 9999], [callbackId]);
 
@@ -511,7 +297,7 @@ describe("the hold registry", () => {
     expect(typeof handle.__node_id).toBe("number");
     expect(registering.length).toBeGreaterThan(0);
     for (const registry of registering) registry.cleanup(handle.__node_id);
-    expect(releaseNode).toHaveBeenCalledWith(handle.__node_id);
-    expect(held.has(handle.__node_id)).toBe(false);
+    expect(host.spies.releaseNode).toHaveBeenCalledWith(handle.__node_id);
+    expect(host.held.has(handle.__node_id)).toBe(false);
   });
 });

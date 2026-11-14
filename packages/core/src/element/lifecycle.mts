@@ -1,7 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { releaseNode } from "../ffi/index.mts";
+import { holdNode, releaseNode } from "../ffi/index.mts";
+import { createIdTable } from "../idTable.mts";
 import type { ElementName } from "../ffi/index.mts";
 import type { IncaDocument, NodeId } from "../types.mts";
 import type { IncaElement, IncaFragment, IncaNode, IncaText } from "./types.mts";
@@ -17,7 +18,10 @@ export interface HandleBuilders {
   fragment?: (id: NodeId) => IncaFragment;
   /** The handle of the document. */
   document: () => IncaDocument;
-  /** The handle of a node by id: the live handle, or the document handle for the document id. */
+  /**
+   * The handle of a node by id: the live handle, or the document handle for the document id. It
+   * rebuilds the handle of the root container when that handle was collected.
+   */
   node: (id: NodeId) => IncaNode | undefined;
 }
 
@@ -50,44 +54,109 @@ export function isNode(value: unknown): value is IncaNode {
 }
 
 /**
- * Weak references to the node handles, keyed by native node id. A handle
- * that nothing references can be collected, and its record stays until
- * `collected` drops it. A record leaves at once when the host frees the node.
+ * The handle of each node that entered a parent and was not removed since. The entry keeps the
+ * handle alive.
  */
-const records = new Map<NodeId, WeakRef<IncaNode>>();
+const strong = createIdTable<IncaNode>();
 
 /**
- * Drops the record of a collected handle. A newer handle registered under the
- * same id keeps its record.
+ * A weak reference to the handle of every other node: a node with no parent, a node below a
+ * removed node, and the root container.
  */
-const collected = new FinalizationRegistry<NodeId>((id) => {
-  if (!records.get(id)?.deref()) records.delete(id);
-});
+const weak = createIdTable<WeakRef<IncaNode>>();
+
+/** The id of the root container, which stays weak while it sits under the document. */
+let rootId: NodeId | undefined;
 
 /**
- * Records `node` under its id.
+ * Records `node` under its id, weakly. A handle already recorded under the id is replaced.
  * @param node - the handle to record
  */
 export function registerNode(node: IncaNode): void {
-  records.set(node.__node_id, new WeakRef(node));
-  collected.register(node, node.__node_id);
+  strong.delete(node.__node_id);
+  weak.set(node.__node_id, new WeakRef(node));
 }
 
 /**
- * Drops the record of a native node.
- * @param id - the native node's id
+ * Records the handle of the root container. The container keeps its weak entry when it enters
+ * the tree, so the handle of an unmounted app is collectable.
+ * @param node - the root container's handle
  */
-export function unregisterNode(id: NodeId): void {
-  records.delete(id);
+export function registerRoot(node: IncaElement): void {
+  rootId = node.__node_id;
+  registerNode(node);
 }
 
 /**
- * Counts the recorded nodes, including those whose handle is already collected
- * and waits for the registry to drop it.
- * @returns the number of records
+ * Makes the handle of `node` strong, so it lives while the node has a parent. The handles below a
+ * removed node keep their weak entries when the node enters a parent again: the node's handle
+ * keeps them alive. The root container stays weak.
+ * @param node - the handle of a node the host put under a parent
  */
-export function recordedCount(): number {
-  return records.size;
+export function entered(node: IncaNode): void {
+  const id = node.__node_id;
+  if (id === rootId) return;
+  strong.set(id, node);
+  weak.delete(id);
+}
+
+/**
+ * Makes the handle of a node that has no parent weak, and holds the node until the handle is
+ * collected. The entries below the node do not change.
+ * @param node - the handle of a node the host took out of its parent
+ */
+export function left(node: IncaNode): void {
+  unparent(node);
+  hold(node);
+}
+
+/**
+ * The handles `leftHeld` recorded below each removed node at its last removal, which live as long as
+ * the handle of that node. A handle moved out of the subtree later stays in the list until the top
+ * is collected. The host frees a removed subtree at a frame after the handle of its top is
+ * collected.
+ */
+const kept = new WeakMap<IncaNode, IncaNode[]>();
+
+/**
+ * Makes the handle of a node that has no parent weak, for a node the host holds already. Every
+ * live handle below it becomes weak too and lives as long as `node`'s handle, whether the entry
+ * was strong or weak before. The release of the node registers on the collection of the handle.
+ * @param node - the handle of a node that `removeNode` took out of its parent
+ * @param nodeIds - the ids of `node` and every node below it
+ */
+export function leftHeld(node: IncaNode, nodeIds: readonly NodeId[]): void {
+  unparent(node);
+  const below: IncaNode[] = [];
+  for (const id of nodeIds) {
+    const handle = nodeOf(id);
+    if (handle === undefined || handle === node) continue;
+    unparent(handle);
+    below.push(handle);
+  }
+  kept.set(node, below);
+  if (!isHeld(node)) releaseWhenCollected(node);
+}
+
+/**
+ * Moves the entry of `node` to the weak table.
+ * @param node - the handle of a node that has no parent, or sits below a removed node
+ */
+function unparent(node: IncaNode): void {
+  const id = node.__node_id;
+  weak.set(id, new WeakRef(node));
+  strong.delete(id);
+}
+
+/**
+ * Holds `node` until its handle is collected, so the host does not free it at the next frame. A
+ * node held already changes nothing.
+ * @param node - the handle of a node that has no parent
+ */
+export function hold(node: IncaNode): void {
+  if (isHeld(node)) return;
+  holdNode(node.__node_id);
+  releaseWhenCollected(node);
 }
 
 /**
@@ -96,7 +165,7 @@ export function recordedCount(): number {
  * @returns the handle, or `undefined` when none is live
  */
 export function nodeOf(id: NodeId): IncaNode | undefined {
-  return records.get(id)?.deref();
+  return strong.get(id) ?? weak.get(id)?.deref();
 }
 
 /**
@@ -143,62 +212,43 @@ const removed = new WeakSet<IncaNode>();
  * Whether `node` left the tree for good, removed or freed. A removed node stays in the host and
  * its members read real values. Its listeners are gone.
  * @param node - the handle to check
- * @returns `true` after {@link markRemoved} or {@link markDestroyed} reached `node`
+ * @returns `true` after {@link markRemoved} reached `node`, or when the host freed it
  */
 export function isRemoved(node: IncaNode): boolean {
-  return removed.has(node) || destroyed.has(node);
+  return removed.has(node) || isDestroyed(node);
 }
 
 /**
- * Records that `node` and every descendant of it were removed from the tree.
- * @param node - the root of the removed subtree
+ * Records that the nodes of a removed subtree left the tree. An id with no live handle is
+ * skipped.
+ * @param nodeIds - the ids of the removed node and every node below it
  */
-export function markRemoved(node: IncaNode): void {
-  removed.add(node);
-  if (node.kind === "text") return;
-  for (const child of node.__children) markRemoved(child);
-  const content = existingContent(node);
-  if (content) markRemoved(content);
+export function markRemoved(nodeIds: readonly NodeId[]): void {
+  for (const id of nodeIds) {
+    const node = nodeOf(id);
+    if (node) removed.add(node);
+  }
 }
-
-const destroyed = new WeakSet<IncaNode>();
 
 /**
  * Whether the host freed `node` with its subtree.
  * @param node - the handle to check
- * @returns `true` after {@link markDestroyed} reached `node`
+ * @returns `true` when no table holds `node` under its id
  */
 export function isDestroyed(node: IncaNode): boolean {
-  return destroyed.has(node);
+  return nodeOf(node.__node_id) !== node;
 }
 
 /**
- * Records that the host freed `node` and every descendant of it, and drops
- * their handles from the registry.
- * @param node - the root of the freed subtree
- */
-export function markDestroyed(node: IncaNode): void {
-  if (destroyed.has(node)) return;
-  destroyed.add(node);
-  unregisterNode(node.__node_id);
-  if (node.kind === "text") return;
-  for (const child of node.__children) markDestroyed(child);
-  const content = existingContent(node);
-  if (content) markDestroyed(content);
-  const owner = node.kind === "fragment" ? owners.get(node) : undefined;
-  if (owner) markDestroyed(owner);
-}
-
-/**
- * Marks the handle of each freed node destroyed. An id with no live handle is
- * skipped.
+ * Drops the table entries of the nodes the host freed. The ids already list every node of a freed
+ * subtree.
  * @param nodeIds - ids of nodes the host freed, subtrees included
  * @internal
  */
 export function markFreed(nodeIds: readonly NodeId[]): void {
   for (const id of nodeIds) {
-    const node = nodeOf(id);
-    if (node) markDestroyed(node);
+    strong.delete(id);
+    weak.delete(id);
   }
 }
 

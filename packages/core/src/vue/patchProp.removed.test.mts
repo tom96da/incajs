@@ -13,12 +13,11 @@ describe("patchProp on a removed element", () => {
     const released = new Set<number>();
     globalThis.__inca_native__ = {
       createNode: vi.fn<() => number>(() => 2),
-      removeChild: vi.fn<() => void>(),
       holdNode: vi.fn<() => void>(),
       releaseNode: vi.fn<() => void>(),
-      releaseListeners: vi.fn<(id: number) => number[]>((id) => {
+      removeNode: vi.fn<(id: number) => [number[], number[]]>((id) => {
         released.add(id);
-        return [];
+        return [[], [id]];
       }),
       addEventListener: vi.fn<(id: number) => number>((id) => {
         if (released.has(id)) throw new TypeError(`node ${id} is not live`);

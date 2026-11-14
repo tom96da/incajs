@@ -2,15 +2,14 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 // The classic mutation members of every handle. The host validates and performs each change, and
-// the members patch the shadow tree with the position it returns.
+// the members keep the node table in step with it.
 
 import { appendChild, insertBefore, removeChild, replaceChild } from "../ffi/index.mts";
 import { nodeArgument, requireArguments } from "./arguments.mts";
 import { cloneNode } from "./clone.mts";
-import { isDestroyed } from "./lifecycle.mts";
-import { keep, link, unlink } from "./shadowTree.mts";
+import { entered, isDestroyed, left } from "./lifecycle.mts";
 import type { HandleBuilders } from "./lifecycle.mts";
-import type { IncaNode, IncaParent, NodeMembers } from "./types.mts";
+import type { IncaNode, NodeMembers } from "./types.mts";
 
 /** The members {@link nodeMutationMembers} builds. */
 export type NodeMutationMembers = Pick<
@@ -22,20 +21,11 @@ export type NodeMutationMembers = Pick<
  * Builds the error for a child the host freed.
  * @returns a `NotFoundError`
  */
-function notFound(): Error {
+export function notFound(): Error {
   return new DOMException(
     "the node was freed. pass a child of the node you call it on",
     "NotFoundError",
   );
-}
-
-/**
- * Lists the nodes an insertion moves: the node, or the children of a fragment.
- * @param node - the inserted node
- * @returns the moved nodes in order
- */
-function movedBy(node: IncaNode): IncaNode[] {
-  return node.kind === "fragment" ? node.__children.slice() : [node];
 }
 
 /**
@@ -46,20 +36,16 @@ function movedBy(node: IncaNode): IncaNode[] {
  */
 export function nodeMutationMembers(node: IncaNode, builders: HandleBuilders): NodeMutationMembers {
   const id = node.__node_id;
-  // A text node as the parent throws in the host call, so the shadow patch sees an element or a
-  // fragment.
-  const parent = node as IncaParent;
-  const insert = (child: IncaNode, call: () => number): void => {
-    const moved = movedBy(child);
-    const position = call();
-    for (const mover of moved) unlink(mover);
-    link(parent, moved, position);
+  /** Makes the handle of an inserted node strong. The children of a fragment are strong already. */
+  const enter = (child: IncaNode): void => {
+    if (child.kind !== "fragment") entered(child);
   };
   return {
     appendChild: (...args: [node: IncaNode]) => {
       requireArguments(args, 1, "appendChild");
       const child = nodeArgument(args[0], 1);
-      insert(child, () => appendChild(id, child.__node_id));
+      appendChild(id, child.__node_id);
+      enter(child);
       return child;
     },
     insertBefore: (...args: [node: IncaNode, child: IncaNode | null | undefined]) => {
@@ -67,7 +53,8 @@ export function nodeMutationMembers(node: IncaNode, builders: HandleBuilders): N
       const child = nodeArgument(args[0], 1);
       const reference = args[1] === null || args[1] === undefined ? null : nodeArgument(args[1], 2);
       if (reference && isDestroyed(reference)) throw notFound();
-      insert(child, () => insertBefore(id, child.__node_id, reference?.__node_id ?? null));
+      insertBefore(id, child.__node_id, reference?.__node_id ?? null);
+      enter(child);
       return child;
     },
     removeChild: (...args: [child: IncaNode]) => {
@@ -75,8 +62,7 @@ export function nodeMutationMembers(node: IncaNode, builders: HandleBuilders): N
       const child = nodeArgument(args[0], 1);
       if (isDestroyed(child)) throw notFound();
       removeChild(id, child.__node_id);
-      unlink(child);
-      keep(child);
+      left(child);
       return child;
     },
     replaceChild: (...args: [node: IncaNode, child: IncaNode]) => {
@@ -84,12 +70,9 @@ export function nodeMutationMembers(node: IncaNode, builders: HandleBuilders): N
       const child = nodeArgument(args[0], 1);
       const old = nodeArgument(args[1], 2);
       if (isDestroyed(old)) throw notFound();
-      const moved = movedBy(child);
-      const position = replaceChild(id, child.__node_id, old.__node_id);
-      for (const mover of moved) unlink(mover);
-      unlink(old);
-      if (old !== child) keep(old);
-      link(parent, moved, position);
+      replaceChild(id, child.__node_id, old.__node_id);
+      enter(child);
+      if (old !== child) left(old);
       return old;
     },
     cloneNode: (deep?: boolean) => cloneNode(node, Boolean(deep), builders),

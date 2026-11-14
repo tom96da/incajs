@@ -5,12 +5,13 @@ import { describe, expect, it, vi } from "vitest";
 
 import { nativeStub } from "../../tests/setup.mts";
 import { createIncaElement, rootElement } from "./handle.mts";
-import { markDestroyed, markRemoved } from "./lifecycle.mts";
+import { markFreed, markRemoved } from "./lifecycle.mts";
 
 describe("createIncaElement selectors", () => {
   /** A fake host whose `matches` and `closest` answer `found`; the queries find nothing. */
   function installSelectors(found: number | null = null, matched = false) {
     const host = {
+      rootNodeId: vi.fn<() => number>(() => 0),
       matches: vi.fn<(nodeId: number, selector: string) => boolean>(() => matched),
       closest: vi.fn<(nodeId: number, selector: string) => number | null>(() => found),
       checkSelector: vi.fn<(selector: string) => void>(),
@@ -21,13 +22,9 @@ describe("createIncaElement selectors", () => {
     return host;
   }
 
-  /** `outer > inner > leaf` with ids 1, 2 and 3. */
+  /** Three elements with ids 1, 2 and 3. */
   function chain() {
     const [outer, inner, leaf] = [1, 2, 3].map((id) => createIncaElement(id, "element", "div"));
-    inner!.parent = outer!;
-    outer!.__children.push(inner!);
-    leaf!.parent = inner!;
-    inner!.__children.push(leaf!);
     return { outer: outer!, inner: inner!, leaf: leaf! };
   }
 
@@ -84,6 +81,12 @@ describe("createIncaElement selectors", () => {
     expect(leaf.closest("div")).toBe(rootElement());
   });
 
+  it("closest is null when the matched ancestor has no handle", () => {
+    installSelectors(77);
+
+    expect(chain().leaf.closest("div")).toBeNull();
+  });
+
   it("closest is null when nothing matches", () => {
     installSelectors(null);
 
@@ -97,7 +100,7 @@ describe("createIncaElement selectors", () => {
   ] as const)("%s answers %s for a freed handle without a host call", (method, expected) => {
     const host = installSelectors(1, true);
     const { leaf } = chain();
-    markDestroyed(leaf);
+    markFreed([leaf.__node_id]);
 
     expect(leaf[method]("div")).toBe(expected);
     expect(host[method]).not.toHaveBeenCalled();
@@ -106,7 +109,7 @@ describe("createIncaElement selectors", () => {
   it("querySelectorAll answers an empty list for a freed handle without a host call", () => {
     const host = installSelectors();
     const { leaf } = chain();
-    markDestroyed(leaf);
+    markFreed([leaf.__node_id]);
 
     expect([leaf.querySelectorAll("div").length, host.querySelectorAll.mock.calls]).toEqual([
       0,
@@ -122,7 +125,7 @@ describe("createIncaElement selectors", () => {
         throw new DOMException("the selector is not valid", "SyntaxError");
       });
       const { leaf } = chain();
-      markDestroyed(leaf);
+      markFreed([leaf.__node_id]);
 
       expect(() => leaf[method]("div >")).toThrow(expect.objectContaining({ name: "SyntaxError" }));
     },
@@ -133,7 +136,7 @@ describe("createIncaElement selectors", () => {
     (method) => {
       const host = installSelectors();
       const { leaf } = chain();
-      markDestroyed(leaf);
+      markFreed([leaf.__node_id]);
 
       expect(() => (leaf[method] as () => unknown)()).toThrow(TypeError);
       expect(host.checkSelector).not.toHaveBeenCalled();
@@ -145,7 +148,7 @@ describe("createIncaElement selectors", () => {
     (method) => {
       const host = installSelectors();
       const { leaf } = chain();
-      markDestroyed(leaf);
+      markFreed([leaf.__node_id]);
 
       expect(() => leaf[method](Symbol("s") as unknown as string)).toThrow(TypeError);
       expect(host.checkSelector).not.toHaveBeenCalled();
@@ -157,7 +160,7 @@ describe("createIncaElement selectors", () => {
     (method) => {
       const host = installSelectors();
       const { leaf } = chain();
-      markDestroyed(leaf);
+      markFreed([leaf.__node_id]);
 
       leaf[method](1 as unknown as string);
 
@@ -180,6 +183,22 @@ describe("createIncaElement selectors", () => {
     outer.querySelector("div");
 
     expect(host.querySelector).toHaveBeenCalledWith(1, "div");
+  });
+
+  it("querySelector returns null for a match with no handle", () => {
+    const host = installSelectors();
+    const { outer } = chain();
+    host.querySelector.mockReturnValueOnce(77);
+
+    expect(outer.querySelector("div")).toBeNull();
+  });
+
+  it("querySelectorAll skips a match with no handle", () => {
+    const host = installSelectors();
+    const { outer, inner } = chain();
+    host.querySelectorAll.mockReturnValueOnce([77, 2]);
+
+    expect(Array.from(outer.querySelectorAll("div"))).toEqual([inner]);
   });
 
   it("querySelector returns null without a match", () => {
@@ -236,7 +255,7 @@ describe("createIncaElement selectors", () => {
     (method) => {
       const host = installSelectors();
       const { leaf } = chain();
-      markRemoved(leaf);
+      markRemoved([leaf.__node_id]);
 
       leaf[method]("div");
 
@@ -247,7 +266,7 @@ describe("createIncaElement selectors", () => {
   it("still asks the host for a removed handle", () => {
     const host = installSelectors(null, true);
     const { leaf } = chain();
-    markRemoved(leaf);
+    markRemoved([leaf.__node_id]);
 
     expect(leaf.matches("div")).toBe(true);
     expect(host.matches).toHaveBeenCalledTimes(1);

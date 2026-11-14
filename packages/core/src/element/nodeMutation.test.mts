@@ -3,118 +3,30 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { nativeStub } from "../../tests/setup.mts";
+import { installFakeHost } from "../../tests/fakeHost.mts";
+import { collectGarbage, collectSentinel } from "../../tests/gc.mts";
+import { HTML_NAMESPACE } from "../ffi/index.mts";
 import { createElementNode, createIncaElement, createIncaFragment } from "./handle.mts";
-import { isHeld, isRemoved, markDestroyed } from "./lifecycle.mts";
-import { remove } from "./shadowTree.mts";
-import type { ElementEntry, NodeEntry } from "../ffi/index.mts";
+import { isHeld, isRemoved, markFreed, nodeOf } from "./lifecycle.mts";
+import { remove } from "./treeOps.mts";
+import type { FakeHost } from "../../tests/fakeHost.mts";
 import type { IncaFragment, IncaNode, IncaTemplateElement } from "./types.mts";
 
-/** The children of each node in the fake host. */
-let kids = new Map<number, number[]>();
-let parents = new Map<number, number>();
-let tags = new Map<number, string>();
-/** The content fragment of each template in the fake host. */
-let contents = new Map<number, number>();
-let nextId = 1;
-
-const notFound = () => new DOMException("not a child", "NotFoundError");
-const childrenOf = (id: number): number[] => kids.get(id)!;
-const nextOf = (id: number): number | null => {
-  const siblings = childrenOf(parents.get(id)!);
-  return siblings[siblings.indexOf(id) + 1] ?? null;
-};
-const detach = (id: number): void => {
-  const parent = parents.get(id);
-  if (parent === undefined) return;
-  childrenOf(parent).splice(childrenOf(parent).indexOf(id), 1);
-  parents.delete(id);
-};
-const movedBy = (id: number): number[] =>
-  tags.get(id) === "#fragment" ? [...childrenOf(id)] : [id];
-/** Puts the nodes before `reference` the way the host does and returns the position. */
-const place = (parent: number, nodes: number[], reference: number | null): number => {
-  for (const id of nodes) detach(id);
-  const at = reference === null ? childrenOf(parent).length : childrenOf(parent).indexOf(reference);
-  childrenOf(parent).splice(at, 0, ...nodes);
-  for (const id of nodes) parents.set(id, parent);
-  return at;
-};
-
-const host = {
-  createNode: vi.fn<(tag: string) => number>((tag) => {
-    const id = nextId++;
-    kids.set(id, []);
-    tags.set(id, tag);
-    if (tag === "template") {
-      const content = nextId++;
-      kids.set(content, []);
-      tags.set(content, "#fragment");
-      contents.set(id, content);
-    }
-    return id;
-  }),
-  templateContent: vi.fn<(nodeId: number) => number | null>((id) => contents.get(id) ?? null),
-  setAttribute: vi.fn<() => void>(),
-  setStyle: vi.fn<() => void>(),
-  cloneNode: vi.fn<(nodeId: number, deep: boolean) => (NodeEntry | ElementEntry)[]>((id, deep) => {
-    const copy = (original: number): [number, string][] => {
-      const tag = tags.get(original)!;
-      const made = host.createNode(tag);
-      const pairs: [number, string][] = [[made, tag]];
-      const content = contents.get(original);
-      if (content !== undefined) {
-        pairs.push([contents.get(made)!, "#fragment"]);
-        if (deep) for (const child of childrenOf(content)) pairs.push(...copy(child));
-      }
-      if (deep) for (const child of childrenOf(original)) pairs.push(...copy(child));
-      return pairs;
-    };
-    return copy(id);
-  }),
-  appendChild: vi.fn<(parentId: number, childId: number) => number>((parent, id) =>
-    place(parent, movedBy(id), null),
-  ),
-  insertBefore: vi.fn<(parentId: number, childId: number, refId: number | null) => number>(
-    (parent, id, reference) => {
-      if (reference !== null && !childrenOf(parent).includes(reference)) throw notFound();
-      return place(parent, movedBy(id), reference === id ? nextOf(id) : reference);
-    },
-  ),
-  removeChild: vi.fn<(parentId: number, childId: number) => void>((parent, id) => {
-    if (parents.get(id) !== parent) throw notFound();
-    detach(id);
-  }),
-  replaceChild: vi.fn<(parentId: number, nodeId: number, childId: number) => number>(
-    (parent, id, child) => {
-      if (parents.get(child) !== parent) throw notFound();
-      let reference = nextOf(child);
-      if (reference === id) reference = nextOf(id);
-      detach(child);
-      return place(parent, movedBy(id), reference);
-    },
-  ),
-  holdNode: vi.fn<(nodeId: number) => void>(),
-  releaseNode: vi.fn<(nodeId: number) => void>(),
-  releaseListeners: vi.fn<(nodeId: number) => number[]>(() => []),
-};
+let host: FakeHost;
 
 beforeEach(() => {
   vi.clearAllMocks();
-  kids = new Map();
-  parents = new Map();
-  tags = new Map();
-  contents = new Map();
-  nextId = 1;
-  globalThis.__inca_native__ = nativeStub(host as never);
+  host = installFakeHost();
 });
 
 const div = () => createElementNode("div");
-const fragment = (): IncaFragment => createIncaFragment(host.createNode("#fragment"));
-/** The ids the shadow lists of `node` hold, after checking that the host lists the same. */
-const idsOf = (node: Exclude<IncaNode, { kind: "text" }>): number[] => {
-  const ids = node.__children.map((child) => child.__node_id);
-  expect(childrenOf(node.__node_id)).toEqual(ids);
+const fragment = (): IncaFragment => createIncaFragment(host.create("#fragment"));
+/** The children of `node` as the host lists them. */
+const kids = (node: IncaNode): IncaNode[] => Array.from(node.childNodes);
+/** The ids of the children of `node`, after checking that the host lists the same. */
+const idsOf = (node: IncaNode): number[] => {
+  const ids = kids(node).map((child) => child.__node_id);
+  expect(host.nodes.get(node.__node_id)!.children).toEqual(ids);
   return ids;
 };
 /** A parent holding `count` fresh elements. */
@@ -139,7 +51,7 @@ describe("appendChild", () => {
 
     parent.appendChild(child);
 
-    expect(parent.__children).toEqual([...children, child]);
+    expect(kids(parent)).toEqual([...children, child]);
   });
 
   it("sets the parent of the node", () => {
@@ -148,7 +60,7 @@ describe("appendChild", () => {
 
     parent.appendChild(child);
 
-    expect(child.parent).toBe(parent);
+    expect(child.parentNode).toBe(parent);
   });
 
   it("moves a node from another parent", () => {
@@ -157,7 +69,7 @@ describe("appendChild", () => {
 
     to.appendChild(children[0]!);
 
-    expect(children[0]!.parent).toBe(to);
+    expect(children[0]!.parentNode).toBe(to);
   });
 
   it("leaves the old parent without the moved node", () => {
@@ -174,7 +86,7 @@ describe("appendChild", () => {
 
     parent.appendChild(children[0]!);
 
-    expect(parent.__children).toEqual([children[1], children[2], children[0]]);
+    expect(kids(parent)).toEqual([children[1], children[2], children[0]]);
     expect(idsOf(parent)).toHaveLength(3);
   });
 
@@ -188,10 +100,10 @@ describe("appendChild", () => {
 
     parent.appendChild(group);
 
-    expect(parent.__children).toEqual([...children, first, second]);
-    expect(group.__children).toEqual([]);
-    expect(first.parent).toBe(parent);
-    expect(second.parent).toBe(parent);
+    expect(kids(parent)).toEqual([...children, first, second]);
+    expect(kids(group)).toEqual([]);
+    expect(first.parentNode).toBe(parent);
+    expect(second.parentNode).toBe(parent);
   });
 });
 
@@ -202,8 +114,8 @@ describe("insertBefore", () => {
 
     parent.insertBefore(child, children[1]!);
 
-    expect(parent.__children).toEqual([children[0], child, children[1]]);
-    expect(child.parent).toBe(parent);
+    expect(kids(parent)).toEqual([children[0], child, children[1]]);
+    expect(child.parentNode).toBe(parent);
   });
 
   it.each([null, undefined])("appends for the reference %s", (reference) => {
@@ -212,7 +124,7 @@ describe("insertBefore", () => {
 
     parent.insertBefore(child, reference);
 
-    expect(parent.__children).toEqual([...children, child]);
+    expect(kids(parent)).toEqual([...children, child]);
   });
 
   it("sends null to the host for a missing reference", () => {
@@ -221,7 +133,11 @@ describe("insertBefore", () => {
 
     parent.insertBefore(child, undefined);
 
-    expect(host.insertBefore).toHaveBeenLastCalledWith(parent.__node_id, child.__node_id, null);
+    expect(host.spies.insertBefore).toHaveBeenLastCalledWith(
+      parent.__node_id,
+      child.__node_id,
+      null,
+    );
   });
 
   it("counts the position after the node left its place", () => {
@@ -229,7 +145,7 @@ describe("insertBefore", () => {
 
     parent.insertBefore(children[0]!, children[2]!);
 
-    expect(parent.__children).toEqual([children[1], children[0], children[2]]);
+    expect(kids(parent)).toEqual([children[1], children[0], children[2]]);
     expect(idsOf(parent)).toHaveLength(3);
   });
 
@@ -238,7 +154,7 @@ describe("insertBefore", () => {
 
     parent.insertBefore(children[1]!, children[1]!);
 
-    expect(parent.__children).toEqual(children);
+    expect(kids(parent)).toEqual(children);
   });
 
   it("moves the children of a fragment before the reference", () => {
@@ -251,8 +167,8 @@ describe("insertBefore", () => {
 
     parent.insertBefore(group, children[1]!);
 
-    expect(parent.__children).toEqual([children[0], first, second, children[1]]);
-    expect(group.__children).toEqual([]);
+    expect(kids(parent)).toEqual([children[0], first, second, children[1]]);
+    expect(kids(group)).toEqual([]);
     expect(idsOf(parent)).toHaveLength(4);
   });
 
@@ -271,7 +187,7 @@ describe("replaceChild", () => {
 
     const old = parent.replaceChild(child, children[1]!);
 
-    expect(parent.__children).toEqual([children[0], child, children[2]]);
+    expect(kids(parent)).toEqual([children[0], child, children[2]]);
     expect(old).toBe(children[1]);
     expect(idsOf(parent)).toHaveLength(3);
   });
@@ -281,7 +197,7 @@ describe("replaceChild", () => {
 
     parent.replaceChild(div(), children[0]!);
 
-    expect(children[0]!.parent).toBeNull();
+    expect(children[0]!.parentNode).toBeNull();
   });
 
   it("holds the replaced child", () => {
@@ -289,7 +205,7 @@ describe("replaceChild", () => {
 
     parent.replaceChild(div(), children[0]!);
 
-    expect(host.holdNode).toHaveBeenCalledWith(children[0]!.__node_id);
+    expect(host.spies.holdNode).toHaveBeenCalledWith(children[0]!.__node_id);
     expect(isHeld(children[0]!)).toBe(true);
   });
 
@@ -298,7 +214,7 @@ describe("replaceChild", () => {
 
     parent.replaceChild(div(), children[0]!);
 
-    expect(host.releaseListeners).not.toHaveBeenCalled();
+    expect(host.spies.removeNode).not.toHaveBeenCalled();
     expect(isRemoved(children[0]!)).toBe(false);
   });
 
@@ -307,10 +223,10 @@ describe("replaceChild", () => {
 
     parent.replaceChild(children[1]!, children[1]!);
 
-    expect(parent.__children).toEqual(children);
-    expect(children[1]!.parent).toBe(parent);
+    expect(kids(parent)).toEqual(children);
+    expect(children[1]!.parentNode).toBe(parent);
     expect(idsOf(parent)).toHaveLength(3);
-    expect(host.holdNode).not.toHaveBeenCalled();
+    expect(host.spies.holdNode).not.toHaveBeenCalled();
   });
 
   it("takes a descendant of the child out of it", () => {
@@ -320,8 +236,8 @@ describe("replaceChild", () => {
 
     parent.replaceChild(inner, children[0]!);
 
-    expect(parent.__children).toEqual([inner, children[1]]);
-    expect(children[0]!.__children).toEqual([]);
+    expect(kids(parent)).toEqual([inner, children[1]]);
+    expect(kids(children[0]!)).toEqual([]);
     expect(idsOf(parent)).toHaveLength(2);
   });
 
@@ -330,7 +246,7 @@ describe("replaceChild", () => {
 
     parent.replaceChild(children[0]!, children[1]!);
 
-    expect(parent.__children).toEqual([children[0], children[2]]);
+    expect(kids(parent)).toEqual([children[0], children[2]]);
     expect(idsOf(parent)).toHaveLength(2);
   });
 
@@ -339,7 +255,7 @@ describe("replaceChild", () => {
 
     parent.replaceChild(children[2]!, children[1]!);
 
-    expect(parent.__children).toEqual([children[0], children[2]]);
+    expect(kids(parent)).toEqual([children[0], children[2]]);
     expect(idsOf(parent)).toHaveLength(2);
   });
 
@@ -353,8 +269,8 @@ describe("replaceChild", () => {
 
     parent.replaceChild(group, children[0]!);
 
-    expect(parent.__children).toEqual([first, second, children[1]]);
-    expect(group.__children).toEqual([]);
+    expect(kids(parent)).toEqual([first, second, children[1]]);
+    expect(kids(group)).toEqual([]);
     expect(idsOf(parent)).toHaveLength(3);
   });
 });
@@ -371,8 +287,8 @@ describe("removeChild", () => {
 
     parent.removeChild(children[0]!);
 
-    expect(parent.__children).toEqual([children[1]]);
-    expect(children[0]!.parent).toBeNull();
+    expect(kids(parent)).toEqual([children[1]]);
+    expect(children[0]!.parentNode).toBeNull();
   });
 
   it("holds the child", () => {
@@ -380,7 +296,7 @@ describe("removeChild", () => {
 
     parent.removeChild(children[0]!);
 
-    expect(host.holdNode).toHaveBeenCalledWith(children[0]!.__node_id);
+    expect(host.spies.holdNode).toHaveBeenCalledWith(children[0]!.__node_id);
     expect(isHeld(children[0]!)).toBe(true);
   });
 
@@ -389,7 +305,7 @@ describe("removeChild", () => {
 
     parent.removeChild(children[0]!);
 
-    expect(host.releaseListeners).not.toHaveBeenCalled();
+    expect(host.spies.removeNode).not.toHaveBeenCalled();
     expect(isRemoved(children[0]!)).toBe(false);
   });
 
@@ -399,7 +315,7 @@ describe("removeChild", () => {
 
     parent.appendChild(children[0]!);
 
-    expect(parent.__children).toEqual(children);
+    expect(kids(parent)).toEqual(children);
     expect(idsOf(parent)).toHaveLength(1);
   });
 
@@ -410,8 +326,8 @@ describe("removeChild", () => {
 
     remove(child);
 
-    expect(group.__children).toEqual([]);
-    expect(host.removeChild).toHaveBeenCalledWith(group.__node_id, child.__node_id);
+    expect(kids(group)).toEqual([]);
+    expect(host.spies.removeNode).toHaveBeenCalledWith(child.__node_id);
   });
 });
 
@@ -450,7 +366,7 @@ describe("arguments", () => {
 
   it("throws NotFoundError from removeChild for a freed child", () => {
     const { parent, children } = family(1);
-    markDestroyed(children[0]!);
+    markFreed([children[0]!.__node_id]);
 
     expect(() => parent.removeChild(children[0]!)).toThrow(
       expect.objectContaining({ name: "NotFoundError" }),
@@ -459,7 +375,7 @@ describe("arguments", () => {
 
   it("throws NotFoundError from insertBefore for a freed reference", () => {
     const { parent, children } = family(1);
-    markDestroyed(children[0]!);
+    markFreed([children[0]!.__node_id]);
 
     expect(() => parent.insertBefore(div(), children[0]!)).toThrow(
       expect.objectContaining({ name: "NotFoundError" }),
@@ -468,7 +384,7 @@ describe("arguments", () => {
 
   it("throws NotFoundError from replaceChild for a freed child", () => {
     const { parent, children } = family(1);
-    markDestroyed(children[0]!);
+    markFreed([children[0]!.__node_id]);
 
     expect(() => parent.replaceChild(div(), children[0]!)).toThrow(
       expect.objectContaining({ name: "NotFoundError" }),
@@ -492,9 +408,9 @@ describe("arguments", () => {
       expect.objectContaining({ name: "NotFoundError" }),
     );
 
-    expect(first.__children).toEqual(children);
-    expect(children[0]!.parent).toBe(first);
-    expect(second.__children).toHaveLength(1);
+    expect(kids(first)).toEqual(children);
+    expect(children[0]!.parentNode).toBe(first);
+    expect(kids(second)).toHaveLength(1);
   });
 
   it("changes no list when replaceChild gets a child of another parent", () => {
@@ -508,10 +424,10 @@ describe("arguments", () => {
       expect.objectContaining({ name: "NotFoundError" }),
     );
 
-    expect(first.__children).toEqual(children);
-    expect(children[0]!.parent).toBe(first);
-    expect(group.__children).toEqual([inside]);
-    expect(second.__children).toEqual(others);
+    expect(kids(first)).toEqual(children);
+    expect(children[0]!.parentNode).toBe(first);
+    expect(kids(group)).toEqual([inside]);
+    expect(kids(second)).toEqual(others);
   });
 
   it.each([
@@ -528,11 +444,11 @@ describe("arguments", () => {
       expect.objectContaining({ name: "NotFoundError" }),
     );
 
-    expect(first.__children).toEqual(children);
-    expect(children[0]!.parent).toBe(first);
-    expect(group.__children).toEqual([inside]);
-    expect(inside.parent).toBe(group);
-    expect(second.__children).toEqual(others);
+    expect(kids(first)).toEqual(children);
+    expect(children[0]!.parentNode).toBe(first);
+    expect(kids(group)).toEqual([inside]);
+    expect(inside.parentNode).toBe(group);
+    expect(kids(second)).toEqual(others);
   });
 });
 
@@ -545,27 +461,28 @@ describe("a template", () => {
 
     owner.appendChild(child);
 
-    expect([owner.__children, owner.content.__children]).toEqual([[child], []]);
+    expect([kids(owner), kids(owner.content)]).toEqual([[child], []]);
   });
 
   it("makes no content for the copy of an SVG template and keeps the ids in step", () => {
     const svgNamespace = "http://www.w3.org/2000/svg";
-    const owner = createIncaElement(host.createNode("div"), "element", [
+    const owner = createIncaElement(host.create("div"), "element", [
       "template",
       svgNamespace,
       null,
       "template",
     ]);
     owner.appendChild(div());
-    const [copyId, childId] = [host.createNode("div"), host.createNode("div")];
-    host.cloneNode.mockImplementationOnce(() => [
+    const [copyId, childId] = [host.create("div"), host.create("div")];
+    host.natives.appendChild!(copyId, childId);
+    host.spies.cloneNode.mockImplementationOnce(() => [
       [copyId, "template", svgNamespace, null, "template"],
-      [childId, "div"],
+      [childId, "div", HTML_NAMESPACE, null, "DIV"],
     ]);
 
     const copy = owner.cloneNode(true);
 
-    expect(["content" in copy, copy.__children[0]!.__node_id]).toEqual([false, childId]);
+    expect(["content" in copy, kids(copy)[0]!.__node_id]).toEqual([false, childId]);
   });
 
   it("holds the copy of a cloned template once", () => {
@@ -573,7 +490,7 @@ describe("a template", () => {
 
     const copy = owner.cloneNode(false);
 
-    const holds = host.holdNode.mock.calls.filter(([id]) => id === copy.__node_id);
+    const holds = host.spies.holdNode.mock.calls.filter(([id]) => id === copy.__node_id);
     expect(holds).toHaveLength(1);
   });
 
@@ -583,7 +500,7 @@ describe("a template", () => {
 
     const copy = owner.cloneNode(false) as IncaTemplateElement;
 
-    expect([copy.content.__node_id, copy.content.__children]).toEqual([copy.__node_id + 1, []]);
+    expect([copy.content.__node_id, kids(copy.content)]).toEqual([copy.__node_id + 1, []]);
   });
 
   it("copies the content nodes and children of a deep clone from their own entries", () => {
@@ -595,11 +512,103 @@ describe("a template", () => {
 
     const copy = owner.cloneNode(true) as IncaTemplateElement;
 
-    const pairs = host.cloneNode.mock.results[0]!.value as [number, string][];
+    const pairs = host.spies.cloneNode.mock.results[0]!.value as unknown[][];
     expect([
-      copy.content.__children[0]!.__node_id,
-      copy.__children[0]!.__node_id,
-      copy.content.__children[0] === inside,
+      kids(copy.content)[0]!.__node_id,
+      kids(copy)[0]!.__node_id,
+      kids(copy.content)[0] === inside,
     ]).toEqual([pairs[2]![0], pairs[3]![0], false]);
+  });
+});
+
+describe("the handles after a mutation member", () => {
+  it.each([
+    ["appendChild", (parent: IncaNode, child: IncaNode) => parent.appendChild(child)],
+    ["insertBefore", (parent: IncaNode, child: IncaNode) => parent.insertBefore(child, null)],
+  ] as const)(
+    "%s keeps the handle of the inserted node after a collection",
+    async (_member, call) => {
+      const parent = div();
+      const id = (() => {
+        const child = div();
+        call(parent, child);
+        return child.__node_id;
+      })();
+
+      await collectSentinel();
+
+      expect(nodeOf(id)).toBeDefined();
+    },
+  );
+
+  it("keeps the handles of the former children of an inserted fragment", async () => {
+    const parent = div();
+    const id = (() => {
+      const group = fragment();
+      const child = div();
+      group.appendChild(child);
+      parent.appendChild(group);
+      return child.__node_id;
+    })();
+
+    await collectSentinel();
+
+    expect(nodeOf(id)).toBeDefined();
+  });
+
+  it("keeps the handle of a node moved to another parent", async () => {
+    const [from, to] = [div(), div()];
+    const id = (() => {
+      const child = div();
+      from.appendChild(child);
+      to.appendChild(child);
+      return child.__node_id;
+    })();
+
+    await collectSentinel();
+
+    expect(nodeOf(id)).toBeDefined();
+  });
+
+  it("lets the handle of a removed child be collected", async () => {
+    const parent = div();
+    const child = (() => {
+      const made = div();
+      parent.appendChild(made);
+      parent.removeChild(made);
+      return new WeakRef(made);
+    })();
+
+    await collectGarbage(() => child.deref() === undefined);
+
+    expect(child.deref()).toBeUndefined();
+  });
+
+  it("lets the replaced child be collected", async () => {
+    const parent = div();
+    const old = (() => {
+      const [first, second] = [div(), div()];
+      parent.appendChild(second);
+      parent.replaceChild(first, second);
+      return new WeakRef(second);
+    })();
+
+    await collectGarbage(() => old.deref() === undefined);
+
+    expect(old.deref()).toBeUndefined();
+  });
+
+  it("keeps the handle of the new node after a collection", async () => {
+    const parent = div();
+    const added = (() => {
+      const [first, second] = [div(), div()];
+      parent.appendChild(second);
+      parent.replaceChild(first, second);
+      return first.__node_id;
+    })();
+
+    await collectSentinel();
+
+    expect(nodeOf(added)).toBeDefined();
   });
 });

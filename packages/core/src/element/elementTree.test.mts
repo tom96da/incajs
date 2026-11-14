@@ -1,28 +1,19 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
-import { nativeStub } from "../../tests/setup.mts";
+import { installFakeHost } from "../../tests/fakeHost.mts";
 import { createCommentNode, createElementNode, createTextNode, rootElement } from "./handle.mts";
-import { insert, remove } from "./shadowTree.mts";
+import { markFreed } from "./lifecycle.mts";
+import { insert, remove } from "./treeOps.mts";
+import type { FakeHost } from "../../tests/fakeHost.mts";
+import type { IncaElement } from "./types.mts";
 
-let nextId = 1;
+let host: FakeHost;
 
 beforeEach(() => {
-  nextId = 1;
-  globalThis.__inca_native__ = nativeStub({
-    rootNodeId: () => 0,
-    createNode: vi.fn<() => number>(() => nextId++),
-    setAttribute: vi.fn<() => void>(),
-    setStyle: vi.fn<() => void>(),
-    insertBefore: vi.fn<() => void>(),
-    removeChild: vi.fn<() => void>(),
-    releaseListeners: vi.fn<() => number[]>(() => []),
-    holdNode: vi.fn<() => void>(),
-    releaseNode: vi.fn<() => void>(),
-    attributeNames: vi.fn<() => string[]>(() => []),
-  } as never);
+  host = installFakeHost();
 });
 
 /** A `div` holding a text leaf, a comment stand-in and two elements. */
@@ -66,7 +57,7 @@ describe("element siblings", () => {
   it("nextElementSibling skips a text leaf and a comment stand-in", () => {
     const { parent, first, second } = mixed();
     const lead = createElementNode("div");
-    insert(lead, parent, parent.__children[0]);
+    insert(lead, parent, parent.firstChild);
 
     expect(lead.nextElementSibling).toBe(first);
     expect(first.nextElementSibling).toBe(second);
@@ -178,5 +169,58 @@ describe("the tree members", () => {
 
     expect([parent.firstElementChild, parent.childElementCount]).toEqual([second, 1]);
     expect(first.parentElement).toBeNull();
+  });
+});
+
+describe("the element flag", () => {
+  it.each([
+    ["previousElementSibling", "previous"],
+    ["nextElementSibling", "next"],
+  ] as const)("%s asks the host for the nearest element", (member, link) => {
+    const { first } = mixed();
+
+    void first[member];
+
+    expect(host.spies.linkedNode).toHaveBeenCalledWith(first.__node_id, link, true);
+  });
+});
+
+describe("a freed element", () => {
+  it("reads no element link", () => {
+    const { first } = mixed();
+    markFreed([first.__node_id]);
+
+    expect([
+      first.parentElement,
+      first.previousElementSibling,
+      first.nextElementSibling,
+      first.firstElementChild,
+      first.lastElementChild,
+    ]).toEqual([null, null, null, null, null]);
+  });
+
+  it("lists no child", () => {
+    const { parent } = mixed();
+    markFreed([parent.__node_id]);
+
+    expect([parent.children.length, parent.childElementCount]).toEqual([0, 0]);
+  });
+});
+
+describe("a child with no handle", () => {
+  /** A `div` whose host child came from a raw native call, beside a child with a handle. */
+  function withRawChild(): IncaElement {
+    const parent = createElementNode("div");
+    host.natives.appendChild!(parent.__node_id, host.create("span"));
+    insert(createElementNode("button"), parent);
+    return parent;
+  }
+
+  it.each([
+    ["children", (parent: IncaElement) => parent.children.length],
+    ["childNodes", (parent: IncaElement) => parent.childNodes.length],
+    ["childElementCount", (parent: IncaElement) => parent.childElementCount],
+  ] as const)("is skipped by %s", (_member, count) => {
+    expect(count(withRawChild())).toBe(1);
   });
 });

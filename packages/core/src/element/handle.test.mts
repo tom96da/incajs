@@ -3,6 +3,8 @@
 
 import { describe, expect, it, vi } from "vitest";
 
+import { installFakeHost } from "../../tests/fakeHost.mts";
+import { collectGarbage } from "../../tests/gc.mts";
 import { nativeStub } from "../../tests/setup.mts";
 import { document } from "../document.mts";
 import { HTML_NAMESPACE } from "../ffi/index.mts";
@@ -13,7 +15,7 @@ import {
   handleOf,
   rootElement,
 } from "./handle.mts";
-import { elementOf, markDestroyed, markRemoved, nodeOf } from "./lifecycle.mts";
+import { elementOf, markFreed, markRemoved, nodeOf } from "./lifecycle.mts";
 import type { ElementName } from "../ffi/index.mts";
 import type { IncaElement, IncaInputElement } from "./types.mts";
 
@@ -44,7 +46,6 @@ function installHost(
     scrollIntoViewNode: vi.fn<(nodeId: number, block: string, inline: string) => void>(),
     createNode: vi.fn<() => number>(() => 60),
     removeChild: vi.fn<(parentId: number, childId: number) => void>(),
-    releaseListeners: vi.fn<() => number[]>(() => []),
     holdNode: vi.fn<(nodeId: number) => void>(),
     releaseNode: vi.fn<(nodeId: number) => void>(),
     addEventListener: vi.fn<() => number>(() => 0),
@@ -85,7 +86,7 @@ function installCreationHost() {
 }
 
 describe("createElement", () => {
-  it("allocates a native node for the tag and returns a parentless, childless element", () => {
+  it("allocates a native node for the tag and returns a childless element", () => {
     const host = installCreationHost();
     const el = createElementNode("div");
     expect(host.createNode).toHaveBeenCalledWith("div");
@@ -104,8 +105,6 @@ describe("createElement", () => {
       childElementCount: 0,
       previousElementSibling: null,
       nextElementSibling: null,
-      parent: null,
-      __children: [],
       children: expect.any(Object),
       nodeType: 1,
       nodeName: "DIV",
@@ -260,7 +259,7 @@ describe("createIncaElement tagName", () => {
   it("reads the tag of a removed element", () => {
     installHost();
     const el = createIncaElement(1, "element", "input");
-    markRemoved(el);
+    markRemoved([el.__node_id]);
 
     expect(el.tagName).toBe("INPUT");
   });
@@ -268,7 +267,7 @@ describe("createIncaElement tagName", () => {
   it("reads the tag of a freed element", () => {
     installHost();
     const el = createIncaElement(1, "element", "input");
-    markDestroyed(el);
+    markFreed([el.__node_id]);
 
     expect(el.tagName).toBe("INPUT");
   });
@@ -393,7 +392,7 @@ describe("createIncaElement value", () => {
   it("reads an empty text after the node is removed", () => {
     const host = installInput("abc");
     const el = createIncaElement(1, "element", "input");
-    markDestroyed(el);
+    markFreed([el.__node_id]);
     expect((el as IncaInputElement).value).toBe("");
     expect(host.inputValue).not.toHaveBeenCalled();
   });
@@ -401,7 +400,7 @@ describe("createIncaElement value", () => {
   it("ignores an assignment after the node is removed", () => {
     const host = installInput();
     const el = createIncaElement(1, "element", "input");
-    markDestroyed(el);
+    markFreed([el.__node_id]);
     (el as IncaInputElement).value = "a";
     expect(host.setInputValue).not.toHaveBeenCalled();
   });
@@ -417,7 +416,7 @@ describe("createIncaElement after the node is removed", () => {
   function removed(stored: string | number | boolean | null = null, tag: "div" | "input" = "div") {
     const host = installHost(stored);
     const el = createIncaElement(1, "element", tag);
-    markRemoved(el);
+    markRemoved([el.__node_id]);
     return { host, el };
   }
 
@@ -439,7 +438,7 @@ describe("createIncaElement after the node is removed", () => {
     };
     globalThis.__inca_native__ = nativeStub(host as never);
     const el = createIncaElement(1, "element", "input");
-    markRemoved(el);
+    markRemoved([el.__node_id]);
 
     expect((el as IncaInputElement).value).toBe("abc");
   });
@@ -459,7 +458,7 @@ describe("createIncaElement after the node is removed", () => {
     const host = { setInputValue: vi.fn<(nodeId: number, value: string) => void>() };
     globalThis.__inca_native__ = nativeStub(host as never);
     const el = createIncaElement(1, "element", "input");
-    markRemoved(el);
+    markRemoved([el.__node_id]);
 
     (el as IncaInputElement).value = "t";
 
@@ -499,7 +498,7 @@ describe("createIncaElement after the node is removed", () => {
   it("reads zero box members without asking the host", () => {
     const host = installHost(null, { 1: [10, 20, 30, 40, 2, 0, 0] });
     const el = createIncaElement(1, "element", "div");
-    markRemoved(el);
+    markRemoved([el.__node_id]);
 
     expect([el.offsetWidth, el.clientHeight, el.offsetLeft]).toEqual([0, 0, 0]);
     expect(host.layoutOf).not.toHaveBeenCalled();
@@ -508,7 +507,7 @@ describe("createIncaElement after the node is removed", () => {
   it("reads zero scroll members without asking the host", () => {
     const host = installHost(null, {}, [5, 6, 7, 8]);
     const el = createIncaElement(1, "element", "div");
-    markRemoved(el);
+    markRemoved([el.__node_id]);
 
     expect([el.scrollTop, el.scrollWidth]).toEqual([0, 0]);
     expect(host.scrollOf).not.toHaveBeenCalled();
@@ -517,7 +516,7 @@ describe("createIncaElement after the node is removed", () => {
   it("ignores scrollTo", () => {
     const host = installHost(null, {}, [5, 6, 7, 8]);
     const el = createIncaElement(1, "element", "div");
-    markRemoved(el);
+    markRemoved([el.__node_id]);
 
     el.scrollTo(1, 2);
 
@@ -560,7 +559,7 @@ describe("createIncaElement destroyed attributes", () => {
   it("ignores setAttribute with an invalid name on a destroyed element", () => {
     const host = installHost();
     const el = createIncaElement(8, "element", "div");
-    markDestroyed(el);
+    markFreed([el.__node_id]);
 
     expect(() => el.setAttribute("a b", "v")).not.toThrow();
     expect(host.setAttribute).not.toHaveBeenCalled();
@@ -590,7 +589,7 @@ describe("createIncaElement focus and scrollIntoView", () => {
   it("ignores focus and scrollIntoView once freed", () => {
     const host = installHost();
     const el = createIncaElement(3, "element", "div");
-    markDestroyed(el);
+    markFreed([el.__node_id]);
 
     el.focus({ preventScroll: true });
     el.scrollIntoView(false);
@@ -603,7 +602,7 @@ describe("createIncaElement blur and click", () => {
   it("forwards blur of a freed element to the host", () => {
     const host = installHost();
     const el = createIncaElement(4, "element", "button");
-    markDestroyed(el);
+    markFreed([el.__node_id]);
 
     el.blur();
     expect(host.blurNode).toHaveBeenCalledWith(4);
@@ -612,7 +611,7 @@ describe("createIncaElement blur and click", () => {
   it("ignores click once freed", () => {
     const host = installHost();
     const el = createIncaElement(4, "element", "button");
-    markDestroyed(el);
+    markFreed([el.__node_id]);
 
     el.click();
     expect(host.click).not.toHaveBeenCalled();
@@ -642,7 +641,7 @@ describe("createIncaElement pointer capture", () => {
     function freed() {
       const host = installHost();
       const el = createIncaElement(4, "element", "div");
-      markDestroyed(el);
+      markFreed([el.__node_id]);
       return { host, el };
     }
 
@@ -699,7 +698,7 @@ describe("createIncaElement id", () => {
   it("reads an empty string after the node is freed", () => {
     const host = installHost("a");
     const el = createIncaElement(1, "element", "div");
-    markDestroyed(el);
+    markFreed([el.__node_id]);
     expect(el.id).toBe("");
     expect(host.getAttribute).not.toHaveBeenCalled();
   });
@@ -707,7 +706,7 @@ describe("createIncaElement id", () => {
   it("ignores an id write after the node is freed", () => {
     const host = installHost();
     const el = createIncaElement(1, "element", "div");
-    markDestroyed(el);
+    markFreed([el.__node_id]);
     el.id = "b";
     expect(host.setAttribute).not.toHaveBeenCalled();
   });
@@ -747,5 +746,22 @@ describe("rootElement wheel listeners", () => {
 
   it("are not passive on an inner element", () => {
     expect(registeredPassive(createIncaElement(72, "element", "div"))).toBe(false);
+  });
+});
+
+describe("the handle of the mount container after a collection", () => {
+  it("is read as the parent of a top-level element", async () => {
+    const host = installFakeHost();
+    const top = createElementNode("div");
+    const root = (() => {
+      const container = rootElement();
+      container.appendChild(top);
+      return new WeakRef(container);
+    })();
+
+    await collectGarbage(() => root.deref() === undefined);
+    expect(root.deref()).toBeUndefined();
+
+    expect(top.parentNode?.__node_id).toBe(host.ROOT);
   });
 });

@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { nativeStub } from "../../tests/setup.mts";
 import { createIncaElement } from "./handle.mts";
-import { markDestroyed, markRemoved } from "./lifecycle.mts";
+import { markFreed, markRemoved } from "./lifecycle.mts";
 import type { ElementName } from "../ffi/index.mts";
 import type { IncaElement } from "./types.mts";
 
@@ -468,21 +468,21 @@ describe("an Attr", () => {
 describe("a freed node", () => {
   it("reads no attribute", () => {
     const { el } = setup({ a: "1" });
-    markDestroyed(el);
+    markFreed([el.__node_id]);
 
     expect([el.getAttribute("a"), el.hasAttribute("a")]).toEqual([null, false]);
   });
 
   it("lists no attribute", () => {
     const { el } = setup({ a: "1" });
-    markDestroyed(el);
+    markFreed([el.__node_id]);
 
     expect([el.attributes.length, el.getAttributeNames()]).toEqual([0, []]);
   });
 
   it("gives an empty attributes map without a host call", () => {
     const { el, host } = setup({ a: "1" });
-    markDestroyed(el);
+    markFreed([el.__node_id]);
 
     expect(el.attributes.length).toBe(0);
     expect(host.attributeNames).not.toHaveBeenCalled();
@@ -490,7 +490,7 @@ describe("a freed node", () => {
 
   it("answers null from getNamedItem without a host call", () => {
     const { el, host } = setup({ a: "1" });
-    markDestroyed(el);
+    markFreed([el.__node_id]);
 
     expect(el.attributes.getNamedItem("a")).toBeNull();
     expect(host.getAttribute).not.toHaveBeenCalled();
@@ -499,14 +499,14 @@ describe("a freed node", () => {
 
   it("throws TypeError from getNamedItem without an argument", () => {
     const { el } = setup({ a: "1" });
-    markDestroyed(el);
+    markFreed([el.__node_id]);
 
     expect(() => (el.attributes.getNamedItem as unknown as () => void)()).toThrow(TypeError);
   });
 
   it("reads undefined for a name without a host call", () => {
     const { el, host } = setup({ a: "1" });
-    markDestroyed(el);
+    markFreed([el.__node_id]);
 
     expect((el.attributes as unknown as Loose)["a"]).toBeUndefined();
     expect(host.getAttribute).not.toHaveBeenCalled();
@@ -516,7 +516,7 @@ describe("a freed node", () => {
   it("detaches a held Attr", () => {
     const { el } = setup({ a: "1" });
     const attr = el.attributes.getNamedItem("a")!;
-    markDestroyed(el);
+    markFreed([el.__node_id]);
 
     expect(attr.ownerElement).toBeNull();
   });
@@ -524,7 +524,7 @@ describe("a freed node", () => {
   it("ignores an assignment to value of a held Attr", () => {
     const { el, host } = setup({ a: "1" });
     const attr = el.attributes.getNamedItem("a")!;
-    markDestroyed(el);
+    markFreed([el.__node_id]);
 
     attr.value = "2";
 
@@ -533,7 +533,7 @@ describe("a freed node", () => {
 
   it("ignores setAttribute", () => {
     const { host, el } = setup();
-    markDestroyed(el);
+    markFreed([el.__node_id]);
 
     el.setAttribute("b", "2");
 
@@ -542,7 +542,7 @@ describe("a freed node", () => {
 
   it("ignores removeAttribute", () => {
     const { host, el } = setup({ a: "1" });
-    markDestroyed(el);
+    markFreed([el.__node_id]);
 
     el.removeAttribute("a");
 
@@ -554,7 +554,7 @@ describe("a removed node", () => {
   /** A removed node over a host that holds `a`. */
   function removed() {
     const { el } = setup({ a: "1" });
-    markRemoved(el);
+    markRemoved([el.__node_id]);
     return el;
   }
 

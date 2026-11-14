@@ -98,8 +98,8 @@ string with `\` at the end of a line.
 
 Code reaches another layer through what that layer injects.
 
-- **Core features** (the element handles, the shadow tree and the host calls)
-  import no framework and not the injected core.
+- **Core features** (the element handles and the host calls) import no framework and not the
+  injected core.
 - **Host calls**: only the host-call wrapper calls the natives. The rest of core uses the functions
   of that wrapper.
 - **Frontend renderers** reach the core features only through the injected
