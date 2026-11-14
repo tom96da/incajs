@@ -691,6 +691,7 @@ mod tests {
     #[case::opacity("opacity", num(0.5), Some("0.5"))]
     #[case::opacity_beyond_one("opacity", num(2.0), Some("2"))]
     #[case::opacity_negative("opacity", text("-1"), Some("-1"))]
+    #[case::opacity_dot_before_exponent("opacity", text("1.e2"), None)]
     #[case::opacity_overflowing_text("opacity", text("1e999"), None)]
     #[case::opacity_negative_overflowing_text("opacity", text("-1e999"), None)]
     #[case::opacity_infinity("opacity", num(f64::INFINITY), None)]

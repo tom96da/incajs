@@ -115,22 +115,11 @@ fn to_byte(n: f64) -> u8 {
     n.round() as u8
 }
 
-/// A CSS number: `decimal`, and every `.` is followed by an ASCII digit.
-fn css_number(s: &str) -> Option<f64> {
-    if s.as_bytes()
-        .windows(2)
-        .any(|pair| pair[0] == b'.' && !pair[1].is_ascii_digit())
-    {
-        return None;
-    }
-    decimal(s)
-}
-
 /// A number, or a number followed by `%`.
 fn component(token: &str) -> Option<Component> {
     match token.strip_suffix('%') {
-        Some(n) => css_number(n).map(Component::Percent),
-        None => css_number(token).map(Component::Number),
+        Some(n) => decimal(n).map(Component::Percent),
+        None => decimal(token).map(Component::Number),
     }
 }
 
@@ -472,7 +461,7 @@ mod tests {
     #[case::bare_percent("rgb(%,0,0)")]
     #[case::none("rgb(none 0 0)")]
     #[case::calc("rgb(calc(1 + 1) 2 3)")]
-    fn a_channel_that_is_not_a_css_number_is_ignored(#[case] written: &str) {
+    fn a_channel_that_is_not_a_decimal_is_ignored(#[case] written: &str) {
         assert_eq!(read(written), (None, vec![INVALID.to_owned()]), "{written}");
     }
 
