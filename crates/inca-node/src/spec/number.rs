@@ -6,8 +6,21 @@
 use super::LengthSpec;
 use crate::tree::AttributeValue;
 
-/// A decimal number in the CSS number syntax: it ends in an ASCII digit and every `.` is
-/// followed by one. `5.`, `1.e2`, `inf`, `infinity` and `nan` are not decimals.
+/// The largest magnitude of a decimal: the largest `f32`.
+const MAX_NUMBER: f64 = f32::MAX as f64;
+
+/// The largest flex factor: the factors of the siblings sum to a finite `f32`.
+const MAX_FLEX_FACTOR: f64 = 1e18;
+
+/// The largest length in px that the layout holds.
+pub(super) const MAX_LENGTH_PX: f64 = 33_554_428.0;
+
+/// The largest font size in px; `zeno` 0.3.3 sizes a glyph buffer in 32-bit arithmetic.
+const MAX_FONT_SIZE_PX: f64 = 2048.0;
+
+/// A decimal number in the CSS number syntax, clamped to `-MAX_NUMBER..=MAX_NUMBER`: it ends in an
+/// ASCII digit and every `.` is followed by one. `5.`, `1.e2`, `inf`, `infinity` and `nan` are not
+/// decimals.
 pub(super) fn decimal(s: &str) -> Option<f64> {
     if !s.as_bytes().last()?.is_ascii_digit() {
         return None;
@@ -18,12 +31,13 @@ pub(super) fn decimal(s: &str) -> Option<f64> {
     {
         return None;
     }
-    s.parse().ok()
+    s.parse()
+        .ok()
+        .map(|n: f64| n.clamp(-MAX_NUMBER, MAX_NUMBER))
 }
 
 /// A number, or a string holding one decimal with optional surrounding
-/// ASCII whitespace. The result can be negative or infinite; each key filters
-/// its range.
+/// ASCII whitespace. The result can be negative; each key filters its range.
 pub(super) fn number(value: &AttributeValue) -> Option<f64> {
     match value {
         AttributeValue::Number(n) => Some(*n),
@@ -34,30 +48,48 @@ pub(super) fn number(value: &AttributeValue) -> Option<f64> {
 
 /// A px value: a number, or a string holding one decimal followed by `px`
 /// (any case), with optional surrounding ASCII whitespace. A string without a
-/// unit counts when it reads as zero (`"0"`). The result can be negative or
-/// infinite (`"1e999px"`); each caller filters its range.
+/// unit counts when it reads as zero (`"0"`). The result can be negative, and a value beyond
+/// `MAX_LENGTH_PX` is limited to it. A JS `NaN` or infinity is passed on; each caller filters its
+/// range.
 pub(super) fn style_px(value: &AttributeValue) -> Option<f64> {
     match value {
-        AttributeValue::Number(n) => Some(*n),
+        AttributeValue::Number(n) => Some(limit_px(*n)),
         AttributeValue::String(s) => {
             let s = s.trim_ascii();
             match s.len().checked_sub(2).and_then(|at| s.get(at..)) {
                 Some(unit) if unit.eq_ignore_ascii_case("px") => decimal(&s[..s.len() - 2]),
                 _ => decimal(s).filter(|n| *n == 0.0),
             }
+            .map(limit_px)
         }
         AttributeValue::Bool(_) => None,
     }
 }
 
-/// A finite number `>= 0`; negatives, `NaN` and infinities are unset.
-pub(super) fn non_negative(value: &AttributeValue) -> Option<f64> {
-    number(value).filter(|n| n.is_finite() && *n >= 0.0)
+/// `n` limited to `-MAX_LENGTH_PX..=MAX_LENGTH_PX`; `NaN` and infinities stay as they are.
+fn limit_px(n: f64) -> f64 {
+    if n.is_finite() {
+        n.clamp(-MAX_LENGTH_PX, MAX_LENGTH_PX)
+    } else {
+        n
+    }
 }
 
-/// A finite px value `>= 0`; negatives, `NaN` and infinities are unset.
+/// A number `>= 0`, limited to `MAX_FLEX_FACTOR`; negatives, `NaN` and infinities are unset.
+pub(super) fn non_negative(value: &AttributeValue) -> Option<f64> {
+    number(value)
+        .filter(|n| n.is_finite() && *n >= 0.0)
+        .map(|n| n.min(MAX_FLEX_FACTOR))
+}
+
+/// A px value `>= 0`; negatives, `NaN` and infinities are unset.
 pub(super) fn non_negative_px(value: &AttributeValue) -> Option<f64> {
     style_px(value).filter(|n| n.is_finite() && *n >= 0.0)
+}
+
+/// A px value `>= 0`, limited to `MAX_FONT_SIZE_PX`; negatives, `NaN` and infinities are unset.
+pub(super) fn font_size_px(value: &AttributeValue) -> Option<f64> {
+    non_negative_px(value).map(|n| n.min(MAX_FONT_SIZE_PX))
 }
 
 /// `"auto"` or a px value.
@@ -68,12 +100,12 @@ pub(super) fn length_spec_from(value: &AttributeValue) -> Option<LengthSpec> {
     }
 }
 
-/// A finite px value or `"auto"`; `NaN` and infinities are unset.
+/// A px value or `"auto"`; `NaN` and infinities are unset.
 pub(super) fn margin_length_from(value: &AttributeValue) -> Option<LengthSpec> {
     length_spec_from(value).filter(|l| !matches!(l, LengthSpec::Px(n) if !n.is_finite()))
 }
 
-/// `"auto"` or a finite px value `>= 0`; negatives, `NaN` and infinities are
+/// `"auto"` or a px value `>= 0`; negatives, `NaN` and infinities are
 /// unset.
 pub(super) fn size_spec_from(value: &AttributeValue) -> Option<LengthSpec> {
     match value {
@@ -82,7 +114,7 @@ pub(super) fn size_spec_from(value: &AttributeValue) -> Option<LengthSpec> {
     }
 }
 
-/// A finite decimal value clamped to `0..=1`; `NaN` and infinities are unset.
+/// A decimal value clamped to `0..=1`; a JS `NaN` or infinity is unset.
 pub(super) fn opacity(value: &AttributeValue) -> Option<f64> {
     number(value)
         .filter(|n| n.is_finite())
@@ -145,11 +177,86 @@ mod tests {
     #[case::nan(num(f64::NAN))]
     #[case::infinity(num(f64::INFINITY))]
     #[case::negative_infinity(num(f64::NEG_INFINITY))]
-    #[case::overflowing_text(text("1e999"))]
-    #[case::negative_overflowing_text(text("-1e999"))]
     #[case::non_numeric_string(text("half"))]
     fn opacity_that_is_not_a_finite_number_is_unset(#[case] value: AttributeValue) {
         assert_eq!(style_of(&[("opacity", value)]).opacity, None);
+    }
+
+    #[rstest]
+    #[case::overflowing_text(text("1e999"), 1.0)]
+    #[case::negative_overflowing_text(text("-1e999"), 0.0)]
+    #[case::text_above_f32_max(text("1e300"), 1.0)]
+    #[case::number_above_f32_max(num(1e300), 1.0)]
+    fn opacity_clamps_a_value_beyond_the_largest_number(
+        #[case] value: AttributeValue,
+        #[case] want: f64,
+    ) {
+        assert_eq!(style_of(&[("opacity", value)]).opacity, Some(want));
+    }
+
+    #[rstest]
+    #[case::finite_text_above_f32_max("1e300", MAX_NUMBER)]
+    #[case::overflowing_text("1e999", MAX_NUMBER)]
+    #[case::negative_overflowing_text("-1e999", -MAX_NUMBER)]
+    fn a_decimal_beyond_the_largest_number_is_limited(#[case] written: &str, #[case] want: f64) {
+        assert_eq!(decimal(written), Some(want));
+    }
+
+    #[rstest]
+    #[case::overflowing_text(text("1e999px"))]
+    #[case::finite_text(text("99999999px"))]
+    #[case::js_number(num(1e30))]
+    fn a_width_beyond_the_length_limit_applies_at_the_limit(#[case] value: AttributeValue) {
+        let (style, warnings) = style_and_warnings(&[("width", value)]);
+
+        assert_eq!(style.width, Some(LengthSpec::Px(MAX_LENGTH_PX)));
+        assert!(warnings.is_empty(), "{warnings:?}");
+    }
+
+    #[test]
+    fn a_margin_below_the_negative_length_limit_applies_at_the_limit() {
+        let style = style_of(&[("margin_top", text("-1e999px"))]);
+
+        assert_eq!(style.margin.top, Some(LengthSpec::Px(-MAX_LENGTH_PX)));
+    }
+
+    #[rstest]
+    #[case::infinity(f64::INFINITY)]
+    #[case::negative_infinity(f64::NEG_INFINITY)]
+    #[case::nan(f64::NAN)]
+    fn a_non_finite_js_number_leaves_a_length_unset(#[case] n: f64) {
+        let style = style_of(&[("width", num(n)), ("margin_top", num(n))]);
+
+        assert_eq!(style, StyleSpec::default());
+    }
+
+    #[rstest]
+    #[case::overflowing_text(text("1e999"))]
+    #[case::finite_text(text("1e300"))]
+    #[case::js_number(num(1e300))]
+    fn a_flex_factor_beyond_the_limit_applies_at_the_limit(#[case] value: AttributeValue) {
+        let style = style_of(&[("flex_grow", value)]);
+
+        assert_eq!(style.flex_grow, Some(MAX_FLEX_FACTOR));
+    }
+
+    #[rstest]
+    #[case::text(text("99999px"))]
+    #[case::overflowing_text(text("1e999px"))]
+    #[case::above_the_limit(text("4096px"))]
+    #[case::at_the_limit(text("2048px"))]
+    #[case::js_number(num(1e30))]
+    fn a_font_size_is_limited_to_the_largest_size(#[case] value: AttributeValue) {
+        let style = style_of(&[("text_size", value)]);
+
+        assert_eq!(style.text_size, Some(MAX_FONT_SIZE_PX));
+    }
+
+    #[test]
+    fn a_corner_radius_keeps_the_length_limit() {
+        let style = style_of(&[("corner_radius", text("1e999px"))]);
+
+        assert_eq!(style.corner_radius, Some(MAX_LENGTH_PX));
     }
 
     #[test]
@@ -180,6 +287,8 @@ mod tests {
     #[case::unitless_zero("0", 0.0)]
     #[case::unitless_decimal_zero("0.0", 0.0)]
     #[case::unitless_signed_zero("+0", 0.0)]
+    #[case::underflowing_px("1e-999px", 0.0)]
+    #[case::underflowing_unitless("1e-999", 0.0)]
     fn a_px_string_equals_the_number(#[case] written: &str, #[case] want: f64) {
         let (style, warnings) = style_and_warnings(&[("width", text(written))]);
 
@@ -200,6 +309,7 @@ mod tests {
     #[case::infinity("infpx")]
     #[case::em("10em")]
     #[case::percent("50%")]
+    #[case::negative_overflowing("-1e999px")]
     fn a_px_string_in_a_wrong_form_warns(#[case] written: &str) {
         let (style, warnings) = style_and_warnings(&[("width", text(written))]);
 
@@ -215,8 +325,6 @@ mod tests {
     #[case::gap_negative("gap", "-1px", false)]
     #[case::width_negative("width", "-1px", false)]
     #[case::margin_negative("margin_top", "-1px", true)]
-    #[case::width_infinite("width", "1e999px", false)]
-    #[case::margin_infinite("margin_top", "1e999px", false)]
     fn a_px_string_follows_the_key_range(
         #[case] key: &str,
         #[case] written: &str,
@@ -297,10 +405,11 @@ mod tests {
     }
 
     #[rstest]
-    #[case::flex_grow("flex_grow")]
-    #[case::flex_shrink("flex_shrink")]
-    fn a_negative_numeric_string_warns_on_a_flex_factor(#[case] key: &str) {
-        let (style, warnings) = style_and_warnings(&[(key, text("-1"))]);
+    #[case::flex_grow("flex_grow", "-1")]
+    #[case::flex_shrink("flex_shrink", "-1")]
+    #[case::negative_overflowing("flex_grow", "-1e999")]
+    fn a_negative_numeric_string_warns_on_a_flex_factor(#[case] key: &str, #[case] written: &str) {
+        let (style, warnings) = style_and_warnings(&[(key, text(written))]);
 
         assert_eq!(style, StyleSpec::default(), "{key}");
         assert_eq!(

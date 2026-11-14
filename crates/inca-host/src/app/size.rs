@@ -19,8 +19,8 @@ use crate::config::{self, usable, window_size};
 /// child, never `root` itself, so `width`/`height` are read from that
 /// child's style, not `root`'s.
 ///
-/// A dimension the app's root doesn't declare, or declares as a negative or
-/// infinite size, comes back as `None`.
+/// A dimension the app's root doesn't declare, or declares as a negative size or one too large for
+/// a window, comes back as `None`.
 pub(super) fn content_window_size(host: &Host, root: NodeId) -> (Option<f32>, Option<f32>) {
     let Some(&content) = host.tree.get(root).and_then(|node| node.children().first()) else {
         return (None, None);
@@ -454,8 +454,8 @@ mod tests {
     #[rstest]
     #[case::negative_number(AttributeValue::Number(-5.0))]
     #[case::negative_px(AttributeValue::String("-5px".into()))]
-    #[case::infinite_px(AttributeValue::String("1e999px".into()))]
-    fn content_window_size_drops_a_negative_or_infinite_dimension(#[case] value: AttributeValue) {
+    #[case::too_large_px(AttributeValue::String("1e999px".into()))]
+    fn content_window_size_drops_a_negative_or_too_large_dimension(#[case] value: AttributeValue) {
         let mut host = Host::default();
         let root = host.root();
         let content = host.tree.create_node("div").unwrap();

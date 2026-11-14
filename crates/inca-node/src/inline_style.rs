@@ -356,8 +356,6 @@ mod tests {
     }
 
     #[rstest]
-    #[case::overflowing("1e999")]
-    #[case::negative_overflowing("-1e999")]
     #[case::infinity("Infinity")]
     #[case::nan("NaN")]
     fn set_style_property_of_a_non_finite_opacity_keeps_the_former_value(#[case] written: &str) {
@@ -374,8 +372,8 @@ mod tests {
     }
 
     #[rstest]
-    #[case::overflowing("opacity: 1e999")]
-    #[case::negative_overflowing("opacity: -1e999")]
+    #[case::infinity("opacity: Infinity")]
+    #[case::nan("opacity: NaN")]
     fn set_style_text_drops_a_non_finite_opacity(#[case] written: &str) {
         let (mut tree, id) = block(&[]);
 
@@ -388,6 +386,40 @@ mod tests {
         assert_eq!(css_text(tree.get(id).unwrap()), "");
         assert_eq!(style_length(tree.get(id).unwrap()), 0);
         assert_eq!(entry(&tree, id).as_deref(), Some(""));
+    }
+
+    #[rstest]
+    #[case::overflowing("1e999", "opacity: 3.4028234663852886e+38;", 1.0)]
+    #[case::negative_overflowing("-1e999", "opacity: -3.4028234663852886e+38;", 0.0)]
+    fn set_style_property_of_an_overflowing_opacity_stores_it_and_renders_it_clamped(
+        #[case] written: &str,
+        #[case] css: &str,
+        #[case] rendered: f64,
+    ) {
+        let (mut tree, id) = block(&[]);
+
+        let lines = tree.set_style_property(id, "opacity", written).unwrap();
+
+        assert!(lines.is_empty(), "{lines:?}");
+        assert_eq!(css_text(tree.get(id).unwrap()), css);
+        assert_eq!(build_spec(&tree, id).unwrap().style.opacity, Some(rendered));
+    }
+
+    #[rstest]
+    #[case::overflowing("opacity: 1e999", "opacity: 3.4028234663852886e+38;", 1.0)]
+    #[case::negative_overflowing("opacity: -1e999", "opacity: -3.4028234663852886e+38;", 0.0)]
+    fn set_style_text_of_an_overflowing_opacity_stores_it_and_renders_it_clamped(
+        #[case] written: &str,
+        #[case] css: &str,
+        #[case] rendered: f64,
+    ) {
+        let (mut tree, id) = block(&[]);
+
+        let lines = tree.set_style_text(id, written).unwrap();
+
+        assert!(lines.is_empty(), "{lines:?}");
+        assert_eq!(css_text(tree.get(id).unwrap()), css);
+        assert_eq!(build_spec(&tree, id).unwrap().style.opacity, Some(rendered));
     }
 
     #[rstest]

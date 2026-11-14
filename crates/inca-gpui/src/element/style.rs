@@ -161,6 +161,7 @@ pub(super) fn apply_style(style: &mut StyleRefinement, spec: &StyleSpec) {
 mod tests {
     use super::*;
     use crate::tests::*;
+    use inca_node::AttributeValue;
 
     #[test]
     fn box_keys_reach_the_gpui_refinement() {
@@ -194,6 +195,33 @@ mod tests {
         assert_eq!(refinement.min_size.width, Some(px(10.).into()));
         assert_eq!(refinement.max_size.height, Some(px(20.).into()));
         assert_eq!(refinement.min_size.height, None);
+    }
+
+    fn refine(props: &[(&str, AttributeValue)]) -> StyleRefinement {
+        let mut refinement = StyleRefinement::default();
+        apply_style(&mut refinement, &style_of(props));
+        refinement
+    }
+
+    #[test]
+    fn the_length_limit_reaches_the_gpui_refinement_exactly() {
+        let refinement = refine(&[("width", text("1e999px"))]);
+
+        assert_eq!(refinement.size.width, Some(px(33_554_428.).into()));
+    }
+
+    #[test]
+    fn the_font_limit_reaches_the_gpui_refinement() {
+        let refinement = refine(&[("text_size", text("1e999px"))]);
+
+        assert_eq!(refinement.text.font_size, Some(px(2048.).into()));
+    }
+
+    #[test]
+    fn the_flex_limit_reaches_the_gpui_refinement_finite() {
+        let refinement = refine(&[("flex_grow", text("1e300"))]);
+
+        assert_eq!(refinement.flex_grow, Some(1e18_f32));
     }
 
     #[test]

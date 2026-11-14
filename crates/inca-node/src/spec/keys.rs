@@ -4,6 +4,7 @@
 //! The style keys the host reads, their aliases and the warnings for a bad value.
 
 use super::color::{as_color, rgb_text};
+use super::number::font_size_px;
 use super::number::margin_length_from;
 use super::number::non_negative;
 use super::number::non_negative_px;
@@ -30,13 +31,15 @@ use std::borrow::Cow;
 /// with a warning.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ValueKind {
-    /// A finite px value `>= 0`.
+    /// A px value `>= 0`. A text beyond the largest length applies at it.
     NonNegativePx,
-    /// A finite px value `>= 0`, or `"auto"`.
+    /// A px value `>= 0`, or `"auto"`. A text beyond the largest length applies at it.
     NonNegativePxOrAuto,
-    /// A finite px value, or `"auto"`.
+    /// A px value, or `"auto"`. A text beyond the largest length applies at it.
     PxOrAuto,
-    /// A finite decimal value `>= 0`.
+    /// A px value `>= 0`, limited to the largest font size.
+    FontSizePx,
+    /// A decimal value `>= 0`. A text beyond the largest flex factor applies at it.
     NonNegativeNumber,
     /// A decimal value, clamped to `0..=1`.
     Opacity,
@@ -67,6 +70,7 @@ macro_rules! style_props {
     (@kind KeywordPair($ty:ident)) => { ValueKind::KeywordPair($ty::NAMES) };
     (@kind $kind:ident) => { ValueKind::$kind };
     (@read NonNegativePx, $value:ident) => { non_negative_px($value) };
+    (@read FontSizePx, $value:ident) => { font_size_px($value) };
     (@read NonNegativePxOrAuto, $value:ident) => { size_spec_from($value) };
     (@read PxOrAuto, $value:ident) => { margin_length_from($value) };
     (@read NonNegativeNumber, $value:ident) => { non_negative($value) };
@@ -196,7 +200,7 @@ style_props! {
         "border_color" []: Color => style.border_color;
         "corner_radius" ["border_radius"]: NonNegativePx => style.corner_radius;
         "text_color" ["color"]: Color => style.text_color;
-        "text_size" ["font_size"]: NonNegativePx => style.text_size;
+        "text_size" ["font_size"]: FontSizePx => style.text_size;
         "overflow" []: KeywordPair(OverflowSpec) => overflow.all;
         "overflow_x" []: Keyword(OverflowSpec) => overflow.x;
         "overflow_y" []: Keyword(OverflowSpec) => overflow.y;
@@ -273,6 +277,7 @@ pub(crate) fn css_declaration(key: &str, value: &AttributeValue) -> Option<Strin
     let kind = STYLE_KEYS.iter().find(|entry| entry.key == key)?.kind;
     match kind {
         ValueKind::NonNegativePx => non_negative_px(value).map(px_text),
+        ValueKind::FontSizePx => font_size_px(value).map(px_text),
         ValueKind::PxOrAuto => margin_length_from(value).map(length_text),
         ValueKind::NonNegativePxOrAuto => size_spec_from(value).map(length_text),
         ValueKind::NonNegativeNumber => non_negative(value).map(js_number_text),
@@ -360,7 +365,7 @@ mod tests {
     /// same result type rejects at least one of them.
     fn sample_values(kind: ValueKind) -> Vec<AttributeValue> {
         match kind {
-            ValueKind::NonNegativePx => vec![num(1.0)],
+            ValueKind::NonNegativePx | ValueKind::FontSizePx => vec![num(1.0)],
             ValueKind::NonNegativePxOrAuto => vec![text("auto")],
             ValueKind::PxOrAuto | ValueKind::Opacity => vec![num(-1.0)],
             ValueKind::NonNegativeNumber => vec![num(2.0)],
@@ -692,8 +697,13 @@ mod tests {
     #[case::opacity_beyond_one("opacity", num(2.0), Some("2"))]
     #[case::opacity_negative("opacity", text("-1"), Some("-1"))]
     #[case::opacity_dot_before_exponent("opacity", text("1.e2"), None)]
-    #[case::opacity_overflowing_text("opacity", text("1e999"), None)]
-    #[case::opacity_negative_overflowing_text("opacity", text("-1e999"), None)]
+    #[case::opacity_overflowing_text("opacity", text("1e999"), Some("3.4028234663852886e+38"))]
+    #[case::opacity_negative_overflowing_text(
+        "opacity",
+        text("-1e999"),
+        Some("-3.4028234663852886e+38")
+    )]
+    #[case::opacity_number_above_f32_max("opacity", num(1e300), Some("1e+300"))]
     #[case::opacity_infinity("opacity", num(f64::INFINITY), None)]
     #[case::opacity_negative_infinity("opacity", num(f64::NEG_INFINITY), None)]
     #[case::keyword_case("display", text("FLEX"), Some("flex"))]
@@ -722,7 +732,13 @@ mod tests {
     #[case::bool("width", AttributeValue::Bool(true), None)]
     #[case::empty_string("width", text(""), None)]
     #[case::flagged_string("width", text("bogus"), None)]
-    #[case::not_finite("width", text("1e999px"), None)]
+    #[case::overflowing_length("width", text("1e999px"), Some("33554428px"))]
+    #[case::length_above_the_limit("width", text("99999999px"), Some("33554428px"))]
+    #[case::negative_overflowing_margin("margin_top", text("-1e999px"), Some("-33554428px"))]
+    #[case::overflowing_corner_radius("corner_radius", text("1e999px"), Some("33554428px"))]
+    #[case::overflowing_flex_factor("flex_grow", text("1e999"), Some("1000000000000000000"))]
+    #[case::overflowing_font_size("text_size", text("1e999px"), Some("2048px"))]
+    #[case::font_size_above_the_limit("text_size", text("4096px"), Some("2048px"))]
     #[case::flagged_number("display", num(1.0), None)]
     #[case::unknown_key("not_a_key", num(1.0), None)]
     fn css_declaration_writes_the_value_by_its_kind(

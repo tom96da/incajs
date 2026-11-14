@@ -29,13 +29,12 @@ A fixed entry is deleted and its ID is never reused.
 ## P1
 
 - **B-121 `:style` leaves out some CSS value and key forms**
-  `Units: gpui · Size: S · Impact: Low`
+  `Units: node · Size: S · Impact: Low`
 
   `:style` takes `px` as the only unit, so `"1em"`, `"10pt"` and `"50%"` for
-  a size warn. `opacity` takes a decimal string but not `"50%"`. `"1e999px"`
-  warns, and CSS accepts it. A key that starts with `-` is unknown, so vendor
-  prefixes (`-webkit-flex`) and custom properties (`--gap`) warn, and CSS
-  accepts both. Percentages for sizes and shorthands are B-085.
+  a size warn. `opacity` takes a decimal string but not `"50%"`. A key that
+  starts with `-` is unknown, so vendor prefixes (`-webkit-flex`) and custom
+  properties (`--gap`) warn, and CSS accepts both. Percentages for sizes and shorthands are B-085.
 
 - **B-123 The style vocabulary is not emitted as JSON and TypeScript types**
   `Units: gpui,core,cli · Size: L · Impact: Medium`
@@ -169,16 +168,6 @@ A fixed entry is deleted and its ID is never reused.
 
   No test installs the packed `incajs` into a scratch app and resolves `incajs/vue` and
   `incajs/style` through the published `exports`. The UI tests cover the workspace link.
-
-- **B-332 A font size of 100000px ends the host**
-  `Units: node · Size: S · Impact: Medium`
-
-  A text with `text_size` of 8000px and more grows the memory of the host with the square of the
-  size (8000px 319 MB, 20000px 1.4 GB). From 50000px an allocation fails and from 100000px the
-  rasterizer panics (`zeno` `mask.rs:307`), which ends the host. Reading the source shows the cause:
-  `zeno` 0.3.3 sizes the glyph buffer as `width * height * bytes` in 32-bit arithmetic
-  (`mask.rs:34-40`), which wraps for a large glyph, and the write at `mask.rs:307` then indexes past
-  the buffer. Fix: limit the font size in the reader of `text_size`.
 
 ## P3
 
@@ -444,14 +433,13 @@ A fixed entry is deleted and its ID is never reused.
   scaled by `gpui`'s line height, which differs from the browser's.
 
 - **B-085 Some box style values are not accepted**
-  `Units: gpui · Size: M · Impact: Low`
+  `Units: node · Size: M · Impact: Low`
 
   `width`, `height`, `min_*` and `max_*` take px numbers or px strings (or
   `"auto"`) only, and `padding` and `margin` take px numbers or px strings
   (`margin` also `"auto"`), so percentages are ignored, and `flex_basis` is not
   a key. `padding` and `margin` read one value per key, so the CSS shorthand
-  `"1 2 3 4"` is ignored. The length keys `width`, `height`, `min_*` and
-  `max_*` accept `NaN` and infinity.
+  `"1 2 3 4"` is ignored.
 
 - **B-086 Some `console` methods only approximate the standard**
   `Units: jsenv · Size: M · Impact: Low`
@@ -1806,6 +1794,30 @@ A fixed entry is deleted and its ID is never reused.
   their fallback or throw a `TypeError` (`Transition` reads `window.getComputedStyle`; this entry
   owns the window part and B-299 owns the `document.body` part). `location` is B-317. Fix: add each
   member as its own entry when a host feature backs it.
+
+- **B-333 `text_size` stops at 2048px**
+  `Units: node · Size: S · Impact: Low`
+
+  A font size above `2048px` applies as `2048px`; Chromium allows `10000px`. The limit keeps the
+  glyph buffer of `zeno` small. Fix: on the Mac, at scale factor 2, measure the peak memory of
+  `4096px`, `8000px` and `10000px` and raise the limit to the largest size that stays small, up to
+  `10000`. The tests, the docs line and the contract in `FFI.md` take the new value.
+
+- **B-334 An overflowing length or flex factor reads back as the host's limit**
+  `Units: node,gpui · Size: M · Impact: Low`
+
+  `width: 1e999px` and `width: 99999999px` read `33554428px`, `margin-left: -1e999px` reads
+  `-33554428px`, and `flex-grow: 1e999` and `flex-grow: 1e19` read `1000000000000000000`. Chromium
+  reads the specified value (`3.40282e+38px` for `1e999px`, `3.40282e+38` for `1e999`) and clamps
+  only the layout. Fix: store the value unclamped (the largest number for an overflowing text) and
+  move the limits to the conversion in `inca-gpui` and to the window rule. The fix removes the
+  finite case (`99999999px`, `1e19`) too.
+
+- **B-335 An overflowing opacity reads back with more digits than Chromium**
+  `Units: node · Size: S · Impact: Low`
+
+  `opacity: 1e999` reads `3.4028234663852886e+38`; a JS number above that reads as written.
+  Chromium reads `3.40282e+38`. Fix: clamp a stored opacity to the largest number.
 
 - **B-337 A window close or a quit runs no `beforeunload`, `pagehide` or `unload` listener**
   `Units: host,bridge · Size: M · Impact: Low`
