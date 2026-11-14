@@ -170,6 +170,16 @@ A fixed entry is deleted and its ID is never reused.
   No test installs the packed `incajs` into a scratch app and resolves `incajs/vue` and
   `incajs/style` through the published `exports`. The UI tests cover the workspace link.
 
+- **B-332 A font size of 100000px ends the host**
+  `Units: node · Size: S · Impact: Medium`
+
+  A text with `text_size` of 8000px and more grows the memory of the host with the square of the
+  size (8000px 319 MB, 20000px 1.4 GB). From 50000px an allocation fails and from 100000px the
+  rasterizer panics (`zeno` `mask.rs:307`), which ends the host. Reading the source shows the cause:
+  `zeno` 0.3.3 sizes the glyph buffer as `width * height * bytes` in 32-bit arithmetic
+  (`mask.rs:34-40`), which wraps for a large glyph, and the write at `mask.rs:307` then indexes past
+  the buffer. Fix: limit the font size in the reader of `text_size`.
+
 ## P3
 
 - **B-001 Vue template type-checking**
