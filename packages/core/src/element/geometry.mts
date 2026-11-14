@@ -1,8 +1,9 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { layoutOf } from "../ffi/index.mts";
+import { layoutOf, linkedNode } from "../ffi/index.mts";
 import { isRemoved } from "./lifecycle.mts";
+import type { HandleBuilders } from "./lifecycle.mts";
 import type { IncaElement } from "./types.mts";
 
 /** The members {@link layoutMembers} builds. */
@@ -34,15 +35,17 @@ export function layoutBox(el: IncaElement): LayoutBox | null {
 }
 
 /**
- * The parent a node's offsets are measured from. It is the parent when both
+ * The parent a node's offsets are measured from. It is the parent element when both
  * the node and the parent have a recorded box.
  * @param el - the node to query
+ * @param builders - the lookup of a handle by node id
  * @returns the parent, or `null`
  */
-export function offsetParentOf(el: IncaElement): IncaElement | null {
-  const parent = el.parent;
-  if (!layoutBox(el) || parent?.kind !== "element" || !layoutBox(parent)) return null;
-  return parent;
+export function offsetParentOf(el: IncaElement, builders: HandleBuilders): IncaElement | null {
+  if (!layoutBox(el)) return null;
+  const id = linkedNode(el.__node_id, "parent", true);
+  const parent = id === null ? undefined : (builders.node(id) as IncaElement | undefined);
+  return parent && layoutBox(parent) ? parent : null;
 }
 
 /**
@@ -50,13 +53,14 @@ export function offsetParentOf(el: IncaElement): IncaElement | null {
  * whole pixels. A node with no offset parent is measured from the window
  * origin.
  * @param el - the node to measure
+ * @param builders - the lookup of a handle by node id
  * @returns `left` and `top`; both `0` when the node has no recorded box
  */
-export function offsetOf(el: IncaElement): { left: number; top: number } {
+export function offsetOf(el: IncaElement, builders: HandleBuilders): { left: number; top: number } {
   const box = layoutBox(el);
   if (!box) return { left: 0, top: 0 };
 
-  const parent = offsetParentOf(el);
+  const parent = offsetParentOf(el, builders);
   const origin = parent ? layoutBox(parent) : null;
   // The box moved with the scroll its parent applied when it was recorded.
   return {
@@ -128,9 +132,10 @@ export function tabIndexOf(value: string | number | boolean | null, kind: string
 /**
  * Builds the layout members of an element, read from the box of the last drawn frame.
  * @param element - the handle the members belong to
+ * @param builders - the lookup of a handle by node id
  * @returns the members
  */
-export function layoutMembers(element: IncaElement): LayoutMembers {
+export function layoutMembers(element: IncaElement, builders: HandleBuilders): LayoutMembers {
   return {
     getBoundingClientRect: () => rectOf(layoutBox(element)),
     get offsetWidth() {
@@ -140,13 +145,13 @@ export function layoutMembers(element: IncaElement): LayoutMembers {
       return Math.round(layoutBox(element)?.[3] ?? 0);
     },
     get offsetLeft() {
-      return offsetOf(element).left;
+      return offsetOf(element, builders).left;
     },
     get offsetTop() {
-      return offsetOf(element).top;
+      return offsetOf(element, builders).top;
     },
     get offsetParent() {
-      return offsetParentOf(element);
+      return offsetParentOf(element, builders);
     },
     get clientWidth() {
       const box = layoutBox(element);

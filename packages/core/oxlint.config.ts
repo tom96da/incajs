@@ -52,7 +52,7 @@ const overrides: OxlintOverride[] = [
     },
   },
   {
-    files: ["src/vue/createApp.mts", "src/vue/**/*.test.mts"],
+    files: ["src/vue/createApp.mts"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -61,6 +61,23 @@ const overrides: OxlintOverride[] = [
             {
               group: ["../**", "!../rendererCore.mts", "incajs", "incajs/**"],
               message: "The renderer uses core features only through the injected core.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/vue/**/*.test.mts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["../**", "!../rendererCore.mts", "!../../tests/*.mts", "incajs", "incajs/**"],
+              message:
+                "The renderer uses core features only through the injected core. Test support lives in tests/.",
             },
           ],
         },

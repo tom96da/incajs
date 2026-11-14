@@ -7,7 +7,7 @@ import { nativeStub } from "../tests/setup.mts";
 import { document } from "./document.mts";
 import { HANDLER_EVENTS } from "./element/eventHandlers.mts";
 import { createElementNode, rootElement } from "./element/handle.mts";
-import { isHeld, markDestroyed, registerNode, unregisterNode } from "./element/lifecycle.mts";
+import { isHeld, markFreed, registerNode } from "./element/lifecycle.mts";
 import "./targets.mts";
 import { HTML_NAMESPACE } from "./ffi/index.mts";
 import type { IncaElement } from "./element/types.mts";
@@ -61,15 +61,18 @@ const native = {
   setStyle: vi.fn<() => void>(),
   appendChild: vi.fn<(parentId: number, childId: number) => number>(() => 0),
   removeChild: vi.fn<(parentId: number, childId: number) => void>(),
-  releaseListeners: vi.fn<(nodeId: number) => number[]>(() => []),
   holdNode: vi.fn<(nodeId: number) => void>(),
   releaseNode: vi.fn<(nodeId: number) => void>(),
   textContent: vi.fn<(nodeId: number) => string>(() => "joined"),
   isConnected: vi.fn<(nodeId: number) => boolean>(() => false),
   layoutOf: vi.fn<() => null>(() => null),
-  linkedNode: vi.fn<(nodeId: number, link: NodeLink) => number | null>((nodeId, link) =>
-    link === "parent" ? (parents.get(nodeId) ?? null) : null,
+  /** Every parent the test sets is a fragment or the document, so none is an element. */
+  linkedNode: vi.fn<(nodeId: number, link: NodeLink, elementOnly?: boolean) => number | null>(
+    (nodeId, link, elementOnly) =>
+      link === "parent" && !elementOnly ? (parents.get(nodeId) ?? null) : null,
   ),
+  childNodeIds: vi.fn<(nodeId: number) => number[]>(() => []),
+  attributeNames: vi.fn<(nodeId: number) => string[]>(() => []),
   querySelector: vi.fn<(nodeId: number, selector: string) => number | null>(() => found),
   querySelectorAll: vi.fn<(nodeId: number, selector: string) => number[]>(() => foundAll),
 };
@@ -87,7 +90,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  unregisterNode(5);
+  markFreed([5]);
 });
 
 describe("document", () => {
@@ -220,7 +223,7 @@ describe("node members", () => {
     expect("cloneNode" in document).toBe(false);
   });
 
-  it("links the mount container back after it was removed", () => {
+  it("takes the mount container out of the host and puts it back", () => {
     const root = rootElement();
 
     document.removeChild(root);
@@ -228,8 +231,6 @@ describe("node members", () => {
 
     expect(native.removeChild).toHaveBeenCalledExactlyOnceWith(DOCUMENT, 0);
     expect(native.appendChild).toHaveBeenCalledExactlyOnceWith(DOCUMENT, 0);
-    expect(root.parent).toBe(document);
-    expect(document.__children).toEqual([root]);
   });
 });
 
@@ -389,11 +390,15 @@ describe("created nodes", () => {
   });
 
   it("creates a parentless text node", () => {
-    expect(document.createTextNode("t")).toMatchObject({ kind: "text", text: "t", parent: null });
+    expect(document.createTextNode("t")).toMatchObject({
+      kind: "text",
+      text: "t",
+      parentNode: null,
+    });
   });
 
   it("creates a parentless comment", () => {
-    expect(document.createComment("c")).toMatchObject({ kind: "comment", parent: null });
+    expect(document.createComment("c")).toMatchObject({ kind: "comment", parentNode: null });
   });
 });
 
@@ -407,7 +412,7 @@ describe("createDocumentFragment", () => {
   it("returns an empty, parentless fragment", () => {
     const fragment = document.createDocumentFragment();
 
-    expect(fragment).toMatchObject({ kind: "fragment", parent: null, __children: [] });
+    expect(fragment).toMatchObject({ kind: "fragment", parentNode: null, firstChild: null });
   });
 
   it.each([
@@ -447,7 +452,7 @@ describe("createDocumentFragment", () => {
 
   it("reads an empty textContent once the host freed it", () => {
     const fragment = document.createDocumentFragment();
-    markDestroyed(fragment);
+    markFreed([fragment.__node_id]);
 
     expect(fragment.textContent).toBe("");
   });
@@ -458,12 +463,13 @@ describe("createDocumentFragment", () => {
 
     fragment.textContent = "x";
 
-    expect(fragment.__children.map((child) => child.kind)).toEqual(["text"]);
+    expect(native.createNode).toHaveBeenLastCalledWith("#text");
+    expect(native.appendChild).toHaveBeenLastCalledWith(fragment.__node_id, nextId - 1);
   });
 
   it("ignores a textContent assignment once the host freed it", () => {
     const fragment = document.createDocumentFragment();
-    markDestroyed(fragment);
+    markFreed([fragment.__node_id]);
 
     fragment.textContent = "x";
 

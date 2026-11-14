@@ -1,8 +1,12 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import { childNodeIds, linkedNode } from "../ffi/index.mts";
 import { htmlCollectionOf } from "./collections.mts";
-import type { IncaElement, IncaNode } from "./types.mts";
+import { isDestroyed } from "./lifecycle.mts";
+import type { NodeLink } from "../ffi/index.mts";
+import type { HandleBuilders } from "./lifecycle.mts";
+import type { IncaElement } from "./types.mts";
 
 /** The element members of the tree: text leaves and comment stand-ins count as none. */
 export type ElementTreeMembers = Pick<
@@ -16,56 +20,49 @@ export type ElementTreeMembers = Pick<
   | "nextElementSibling"
 >;
 
-function isElementNode(node: IncaNode): node is IncaElement {
-  return node.kind === "element";
-}
-
 /**
- * Lists the entries of `element.__children` that are elements.
- * @param element - the parent
- * @returns the element children in order
- */
-function elementChildren(element: IncaElement): IncaElement[] {
-  return element.__children.filter(isElementNode);
-}
-
-function siblingElement(element: IncaElement, step: 1 | -1): IncaElement | null {
-  const siblings = element.parent?.__children ?? [];
-  for (let at = siblings.indexOf(element) + step; at >= 0 && at < siblings.length; at += step) {
-    const sibling = siblings[at]!;
-    if (isElementNode(sibling)) return sibling;
-  }
-  return null;
-}
-
-/**
- * Builds the element tree members of `element`. Each read looks at the shadow tree again.
+ * Builds the element tree members of `element`. Each read asks the host tree again. A freed
+ * element has no links, and a node with no handle is skipped.
  * @param element - the handle the members belong to
+ * @param builders - the lookup of a handle by node id
  * @returns the members, as getters
  */
-export function elementTreeMembers(element: IncaElement): ElementTreeMembers {
+export function elementTreeMembers(
+  element: IncaElement,
+  builders: HandleBuilders,
+): ElementTreeMembers {
+  const id = element.__node_id;
+  const handleOf = (nodeId: number): IncaElement | undefined =>
+    builders.node(nodeId) as IncaElement | undefined;
+  const reach = (link: NodeLink): IncaElement | null => {
+    if (isDestroyed(element)) return null;
+    const found = linkedNode(id, link, true);
+    return found === null ? null : (handleOf(found) ?? null);
+  };
+  const liveChildren = (): IncaElement[] =>
+    isDestroyed(element) ? [] : childNodeIds(id, true).flatMap((child) => handleOf(child) ?? []);
   let children: IncaElement["children"] | undefined;
   return {
     get children() {
-      return (children ??= htmlCollectionOf(() => elementChildren(element)));
+      return (children ??= htmlCollectionOf(liveChildren));
     },
     get parentElement() {
-      return element.parent?.kind === "element" ? element.parent : null;
+      return reach("parent");
     },
     get firstElementChild() {
-      return elementChildren(element)[0] ?? null;
+      return reach("first");
     },
     get lastElementChild() {
-      return elementChildren(element).at(-1) ?? null;
+      return reach("last");
     },
     get childElementCount() {
-      return elementChildren(element).length;
+      return liveChildren().length;
     },
     get previousElementSibling() {
-      return siblingElement(element, -1);
+      return reach("previous");
     },
     get nextElementSibling() {
-      return siblingElement(element, 1);
+      return reach("next");
     },
   };
 }

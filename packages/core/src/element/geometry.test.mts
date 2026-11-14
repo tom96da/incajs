@@ -3,15 +3,26 @@
 
 import { describe, expect, it, vi } from "vitest";
 
+import { installFakeHost } from "../../tests/fakeHost.mts";
+import { collectGarbage } from "../../tests/gc.mts";
 import { installMembersHost, nativeStub } from "../../tests/setup.mts";
 import { offsetOf, rectOf, tabIndexOf } from "./geometry.mts";
-import { createIncaElement } from "./handle.mts";
-import { markDestroyed } from "./lifecycle.mts";
+import { createElementNode, createIncaElement, rootElement } from "./handle.mts";
+import { markFreed, nodeOf } from "./lifecycle.mts";
+import type { HandleBuilders } from "./lifecycle.mts";
+
+const builders = { node: nodeOf } as HandleBuilders;
 
 type Box = readonly [number, number, number, number, number, number, number];
 
-function installHost(boxes: Record<number, Box>, scrollOf = vi.fn<() => null>(() => null)): void {
+function installHost(
+  boxes: Record<number, Box>,
+  scrollOf = vi.fn<() => null>(() => null),
+  parents: Record<number, number> = {},
+): void {
   globalThis.__inca_native__ = nativeStub({
+    linkedNode: (nodeId: number, link: string) =>
+      link === "parent" ? (parents[nodeId] ?? null) : null,
     layoutOf: vi.fn<(nodeId: number) => Box | null>((nodeId) => boxes[nodeId] ?? null),
     scrollOf,
   } as never);
@@ -19,12 +30,13 @@ function installHost(boxes: Record<number, Box>, scrollOf = vi.fn<() => null>(()
 
 describe("offsetOf", () => {
   it("measures from the parent's padding edge inside its border", () => {
-    installHost({ 1: [100, 50, 200, 100, 4, 0, 0], 2: [110, 60, 20, 20, 0, 0, 0] });
-    const parent = createIncaElement(1, "element", "div");
+    installHost({ 1: [100, 50, 200, 100, 4, 0, 0], 2: [110, 60, 20, 20, 0, 0, 0] }, undefined, {
+      2: 1,
+    });
+    createIncaElement(1, "element", "div");
     const child = createIncaElement(2, "element", "div");
-    child.parent = parent;
 
-    expect(offsetOf(child)).toEqual({ left: 6, top: 6 });
+    expect(offsetOf(child, builders)).toEqual({ left: 6, top: 6 });
   });
 
   it("adds the scroll recorded with the box and ignores a later write", () => {
@@ -32,12 +44,12 @@ describe("offsetOf", () => {
     installHost(
       { 1: [100, 50, 200, 100, 4, 0, 0], 2: [95, 20, 20, 20, 0, 15, 40] },
       scrollOf as never,
+      { 2: 1 },
     );
-    const parent = createIncaElement(1, "element", "div");
+    createIncaElement(1, "element", "div");
     const child = createIncaElement(2, "element", "div");
-    child.parent = parent;
 
-    expect(offsetOf(child)).toEqual({ left: 6, top: 6 });
+    expect(offsetOf(child, builders)).toEqual({ left: 6, top: 6 });
     expect(scrollOf).not.toHaveBeenCalled();
   });
 });
@@ -153,13 +165,16 @@ describe("createIncaElement layout", () => {
   });
 
   it("reads a position slightly above the parent as 0", () => {
-    installMembersHost({
-      1: [100, 50, 200, 100, 0, 0, 0],
-      2: [99.7, 49.7, 20, 20, 0, 0, 0],
-    });
-    const parent = createIncaElement(1, "element", "div");
+    installMembersHost(
+      {
+        1: [100, 50, 200, 100, 0, 0, 0],
+        2: [99.7, 49.7, 20, 20, 0, 0, 0],
+      },
+      null,
+      { 2: 1 },
+    );
+    createIncaElement(1, "element", "div");
     const child = createIncaElement(2, "element", "div");
-    child.parent = parent;
 
     expect([child.offsetLeft, child.offsetTop]).toEqual([0, 0]);
   });
@@ -171,22 +186,25 @@ describe("createIncaElement layout", () => {
   });
 
   it("measures offsets from the offsetParent", () => {
-    installMembersHost({
-      1: [100, 50, 200, 100, 0, 0, 0],
-      2: [110.4, 60.6, 20, 20, 0, 0, 0],
-    });
+    installMembersHost(
+      {
+        1: [100, 50, 200, 100, 0, 0, 0],
+        2: [110.4, 60.6, 20, 20, 0, 0, 0],
+      },
+      null,
+      { 2: 1 },
+    );
     const parent = createIncaElement(1, "element", "div");
     const child = createIncaElement(2, "element", "div");
-    child.parent = parent;
 
     expect(child.offsetParent).toBe(parent);
     expect([child.offsetLeft, child.offsetTop]).toEqual([10, 11]);
   });
 
   it("gives a null offsetParent when the parent has no record", () => {
-    installMembersHost({ 2: [110, 60, 20, 20, 0, 0, 0] });
+    installMembersHost({ 2: [110, 60, 20, 20, 0, 0, 0] }, null, { 2: 1 });
     const child = createIncaElement(2, "element", "div");
-    child.parent = createIncaElement(1, "element", "div");
+    createIncaElement(1, "element", "div");
 
     expect(child.offsetParent).toBeNull();
     expect([child.offsetLeft, child.offsetTop]).toEqual([110, 60]);
@@ -202,7 +220,7 @@ describe("createIncaElement layout", () => {
   it("reads zeros for a freed element", () => {
     installMembersHost({ 1: [10, 20, 30, 40, 2, 0, 0] });
     const el = createIncaElement(1, "element", "div");
-    markDestroyed(el);
+    markFreed([el.__node_id]);
     expect([
       el.getBoundingClientRect().width,
       el.offsetWidth,
@@ -210,5 +228,25 @@ describe("createIncaElement layout", () => {
       el.offsetLeft,
     ]).toEqual([0, 0, 0, 0]);
     expect(el.offsetParent).toBeNull();
+  });
+});
+
+describe("offsetParent of a top-level element", () => {
+  it("is the mount container after the handle of the container was collected", async () => {
+    const boxes: Record<number, Box> = {};
+    const host = installFakeHost({ layoutOf: (nodeId: number) => boxes[nodeId] ?? null });
+    const top = createElementNode("div");
+    const root = (() => {
+      const container = rootElement();
+      container.appendChild(top);
+      return new WeakRef(container);
+    })();
+    boxes[host.ROOT] = [0, 0, 200, 100, 0, 0, 0];
+    boxes[top.__node_id] = [10, 10, 20, 20, 0, 0, 0];
+
+    await collectGarbage(() => root.deref() === undefined);
+    expect(root.deref()).toBeUndefined();
+
+    expect(top.offsetParent?.__node_id).toBe(host.ROOT);
   });
 });

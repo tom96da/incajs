@@ -43,7 +43,7 @@ export function nodeRelationMembers(node: IncaNode, builders: HandleBuilders): N
       return (compareNodePosition(id, found.__node_id) & CONTAINED_BY) !== 0;
     },
     getRootNode: () => {
-      return isDestroyed(node) ? node : builders.node(rootOf(id))!;
+      return isDestroyed(node) ? node : (builders.node(rootOf(id)) ?? node);
     },
     compareDocumentPosition: (...args: [other: IncaNode]) => {
       requireArguments(args, 1, "compareDocumentPosition");

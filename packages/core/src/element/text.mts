@@ -5,7 +5,7 @@
 
 import {
   getAttribute,
-  holdNode,
+  linkedNode,
   replaceData,
   setAttribute,
   splitText,
@@ -13,7 +13,7 @@ import {
   wholeText,
 } from "../ffi/index.mts";
 import { attributeText, nullableText, requireArguments } from "./arguments.mts";
-import { isDestroyed, registerNode, releaseWhenCollected, withNodeId } from "./lifecycle.mts";
+import { entered, hold, isDestroyed, registerNode, withNodeId } from "./lifecycle.mts";
 import { nodeMutationMembers } from "./nodeMutation.mts";
 import { nodeRelationMembers } from "./nodeRelations.mts";
 import { nodeTreeMembers, readData, writeData } from "./nodeTree.mts";
@@ -99,14 +99,8 @@ function textMembers(node: IncaText, builders: HandleBuilders): TextMembers {
       const tailId = splitText(id, args[0]);
       const tail = createIncaText(tailId, String(getAttribute(tailId, "value") ?? ""), builders);
       node.text = readData(node);
-      const parent = node.parent;
-      if (parent === null) {
-        holdNode(tail.__node_id);
-        releaseWhenCollected(tail);
-      } else {
-        parent.__children.splice(parent.__children.indexOf(node) + 1, 0, tail);
-        tail.parent = parent;
-      }
+      if (linkedNode(tailId, "parent") === null) hold(tail);
+      else entered(tail);
       return tail;
     },
   };
@@ -135,7 +129,6 @@ export function createIncaText(id: NodeId, text: string, builders: HandleBuilder
     "__node_id" | keyof NodeMembers | keyof CharacterDataMembers | keyof TextMembers
   > = {
     kind: "text",
-    parent: null,
     text,
   };
   const handle = withNodeId(node as IncaText, id);

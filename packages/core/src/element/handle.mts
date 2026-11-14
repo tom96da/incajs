@@ -11,6 +11,7 @@ import {
   setPointerCapture,
   HTML_NAMESPACE,
   appendChild,
+  childNodeIds,
   createElement as createHostElement,
   createElementNS as createHostElementNS,
   createNode,
@@ -37,11 +38,15 @@ import { htmlMembers } from "./html.mts";
 import { styleMembers } from "./inlineStyle.mts";
 import {
   elementOf,
+  entered,
   existingContent,
+  hold,
   isDestroyed,
   isRemoved,
+  left,
   nodeOf,
   registerNode,
+  registerRoot,
   withNodeId,
 } from "./lifecycle.mts";
 import { nodeMutationMembers } from "./nodeMutation.mts";
@@ -49,7 +54,6 @@ import { nodeRelationMembers } from "./nodeRelations.mts";
 import { nodeTreeMembers } from "./nodeTree.mts";
 import { scrollMembers } from "./scroll.mts";
 import { queryMembers, selectorMembers } from "./selectors.mts";
-import { keep, unlink } from "./shadowTree.mts";
 import { attachContent } from "./templateContent.mts";
 import { characterDataMembers, createIncaText } from "./text.mts";
 import type { ElementName } from "../ffi/index.mts";
@@ -139,8 +143,6 @@ export function createIncaElement(
       if (!isDestroyed(element)) setAttribute(id, "id", String(value));
     },
     kind,
-    parent: null,
-    __children: [],
     focus: (options?: { preventScroll?: boolean }) => {
       if (!isRemoved(element)) focus(id, Boolean(options?.preventScroll));
     },
@@ -195,7 +197,10 @@ export function createIncaElement(
     isRemoved(element),
   );
   Object.defineProperties(element, Object.getOwnPropertyDescriptors(attributeMembers(id, element)));
-  Object.defineProperties(element, Object.getOwnPropertyDescriptors(elementTreeMembers(element)));
+  Object.defineProperties(
+    element,
+    Object.getOwnPropertyDescriptors(elementTreeMembers(element, builders)),
+  );
   Object.defineProperties(
     element,
     Object.getOwnPropertyDescriptors(nodeTreeMembers(element, builders)),
@@ -209,7 +214,7 @@ export function createIncaElement(
     Object.getOwnPropertyDescriptors(nodeRelationMembers(element, builders)),
   );
   for (const members of [
-    layoutMembers(element),
+    layoutMembers(element, builders),
     scrollMembers(element),
     selectorMembers(element, builders),
     queryMembers(element, builders),
@@ -305,17 +310,16 @@ export function adoptTextNode(id: NodeId, data: string): IncaText {
  * @param text - the new text content
  */
 export function setElementText(el: IncaParent, text: string): void {
-  for (const child of el.__children.slice()) {
-    removeChild(el.__node_id, child.__node_id);
-    unlink(child);
-    keep(child);
+  for (const childId of childNodeIds(el.__node_id)) {
+    removeChild(el.__node_id, childId);
+    const child = nodeOf(childId);
+    if (child) left(child);
   }
   if (!text) return;
 
   const textNode = createTextNode(text);
   appendChild(el.__node_id, textNode.__node_id);
-  textNode.parent = el;
-  el.__children.push(textNode);
+  entered(textNode);
 }
 
 /**
@@ -326,7 +330,11 @@ export function setElementText(el: IncaParent, text: string): void {
  */
 export function rootElement(): IncaElement {
   const id = rootNodeId();
-  return elementOf(id) ?? createIncaElement(id, "element", "div", ["wheel"]);
+  const live = elementOf(id);
+  if (live) return live;
+  const root = createIncaElement(id, "element", "div", ["wheel"]);
+  registerRoot(root);
+  return root;
 }
 
 /**
@@ -337,8 +345,6 @@ export function rootElement(): IncaElement {
 export function createIncaFragment(id: NodeId): IncaFragment {
   const fields: Omit<IncaFragment, "__node_id" | keyof NodeMembers | keyof TextContentMember> = {
     kind: "fragment",
-    parent: null,
-    __children: [],
   };
   const fragment = withNodeId(fields as IncaFragment, id);
   const textMember: TextContentMember = {
@@ -373,7 +379,8 @@ export function documentHandle(): IncaDocument {
 }
 
 /**
- * Looks up the handle of a node by id, the document handle included.
+ * Looks up the handle of a node by id, the document handle included. A collected handle of the
+ * root container is rebuilt.
  * @param id - the native node's id
  * @returns the live handle, or `undefined` when none is live
  */
@@ -390,7 +397,7 @@ export function handleOf(id: NodeId): IncaNode | undefined {
  * @returns `handle`
  */
 function held<T extends IncaNode>(handle: T): T {
-  keep(handle);
+  hold(handle);
   return handle;
 }
 
@@ -408,8 +415,6 @@ function createIncaDocument(id: NodeId): IncaDocument {
   > = {
     ...target,
     kind: "document",
-    parent: null,
-    __children: [],
     get textContent() {
       return null;
     },

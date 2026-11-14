@@ -1,14 +1,37 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-// The copy of a node: the host copies the nodes and the handles follow its pre-order.
+// The copy of a node: the host copies the nodes and builds one handle for each entry it returns.
 
 import { cloneNode as cloneHostNode, nameOf } from "../ffi/index.mts";
-import { existingContent } from "./lifecycle.mts";
-import { keep, link } from "./shadowTree.mts";
-import type { IncaDocument } from "../types.mts";
+import { entered, hold } from "./lifecycle.mts";
+import type { ElementEntry, NodeEntry } from "../ffi/index.mts";
 import type { HandleBuilders } from "./lifecycle.mts";
-import type { IncaElement, IncaNode, IncaParent } from "./types.mts";
+import type { IncaNode } from "./types.mts";
+
+/**
+ * Builds the handle of one copied node.
+ * @param entry - what the host returned for the copy
+ * @param index - the place of the entry in the result
+ * @param builders - the functions that build the handles
+ * @returns the handle, or `undefined` for the content fragment of a template, which the handle of
+ *   the template already holds
+ */
+function buildCopy(
+  entry: NodeEntry | ElementEntry,
+  index: number,
+  builders: HandleBuilders,
+): IncaNode | undefined {
+  if (entry.length === 5) return builders.element!(entry[0], "element", nameOf(entry));
+  switch (entry[1]) {
+    case "#text":
+      return builders.text(entry[0], entry[2] ?? "");
+    case "#comment":
+      return builders.element!(entry[0], "comment");
+    default:
+      return index === 0 ? builders.fragment!(entry[0]) : undefined;
+  }
+}
 
 /**
  * Copies a node into handles. The host copies the nodes and the handles follow its pre-order.
@@ -18,36 +41,13 @@ import type { IncaElement, IncaNode, IncaParent } from "./types.mts";
  * @returns the held, parentless copy
  */
 export function cloneNode<T extends IncaNode>(node: T, deep: boolean, builders: HandleBuilders): T {
-  const copies = cloneHostNode(node.__node_id, deep);
-  let next = 0;
-  // The document has no clone and no parent, so no copy walk reaches it.
-  type Copyable = Exclude<IncaNode, IncaDocument>;
-  const build = (original: Copyable): IncaNode => {
-    const entry = copies[next++]!;
-    const id = entry[0];
-    if (original.kind === "text") return builders.text(id, original.text);
-    const copy =
-      original.kind === "fragment"
-        ? builders.fragment!(id)
-        : builders.element!(
-            id,
-            original.kind,
-            original.kind === "element" ? nameOf(entry) : undefined,
-          );
-    if (original.kind === "element" && existingContent(original) !== undefined) {
-      next++;
-      const content = existingContent(copy as IncaElement)!;
-      if (deep) {
-        for (const child of existingContent(original)!.__children)
-          link(content, [build(child as Copyable)], content.__children.length);
-      }
-    }
-    if (!deep) return copy;
-    for (const child of original.__children)
-      link(copy as IncaParent, [build(child as Copyable)], copy.__children.length);
-    return copy;
-  };
-  const copy = build(node as Copyable);
-  keep(copy);
+  const entries = cloneHostNode(node.__node_id, deep);
+  const copy = buildCopy(entries[0]!, 0, builders)!;
+  for (const [index, entry] of entries.entries()) {
+    if (index === 0) continue;
+    const handle = buildCopy(entry, index, builders);
+    if (handle) entered(handle);
+  }
+  hold(copy);
   return copy as T;
 }

@@ -12,12 +12,9 @@ export {
   dispatchEvent,
   click,
   focusedNode,
-  appendChild,
   createNode,
   holdNode,
   releaseNode,
-  insertBefore,
-  removeChild,
   rootNodeId,
   setAttribute,
   getAttribute,
@@ -40,13 +37,13 @@ export {
 export { isRemoved } from "./element/lifecycle.mts";
 /** @internal */
 export { releaseWhenCollected } from "./element/lifecycle.mts";
-export { insert, nextSibling, parentNode, remove } from "./element/shadowTree.mts";
+export { insert, nextSibling, parentNode, remove } from "./element/treeOps.mts";
 export { setText } from "./element/text.mts";
 export type * from "./types.mts";
 export type * from "./element/types.mts";
 
 /**
  * What a custom renderer (`incajs/vue`) drives the host through: the tree and
- * event calls, the element handles and the shadow tree.
+ * event calls, the element handles and the tree operations.
  */
 export type IncaCore = typeof import("./rendererCore.mts");

@@ -3,54 +3,50 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { installFakeHost } from "../../tests/fakeHost.mts";
+import { collectGarbage, collectSentinel } from "../../tests/gc.mts";
 import { nativeStub } from "../../tests/setup.mts";
 import { document } from "../document.mts";
 import { createCommentNode, createElementNode, createTextNode, setElementText } from "./handle.mts";
-import { elementOf, markDestroyed } from "./lifecycle.mts";
-import { insert } from "./shadowTree.mts";
+import { elementOf, markFreed, nodeOf } from "./lifecycle.mts";
 import { setText } from "./text.mts";
-import type { IncaText } from "./types.mts";
+import { insert } from "./treeOps.mts";
+import type { FakeHost } from "../../tests/fakeHost.mts";
+import type { IncaNode, IncaText } from "./types.mts";
 
-/** The data of each text node or comment stand-in. */
-let data: Record<number, string> = {};
-let nextId = 100;
+let fake: FakeHost;
+
+/** The data of a text node or comment stand-in in the host. */
+const dataOf = (node: IncaNode): string | null => fake.nodes.get(node.__node_id)!.data;
+
+/** The children of `node` as the host lists them. */
+const kids = (node: IncaNode): IncaNode[] => Array.from(node.childNodes);
 
 const host = {
-  rootNodeId: vi.fn<() => number>(() => 0),
-  createNode: vi.fn<(tag: string) => number>(() => nextId++),
-  setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(
-    (nodeId, _key, value) => {
-      data[nodeId] = String(value);
-    },
-  ),
-  getAttribute: vi.fn<(nodeId: number, key: string) => string | null>(
-    (nodeId) => data[nodeId] ?? null,
-  ),
-  setStyle: vi.fn<() => void>(),
-  appendChild: vi.fn<() => void>(),
-  insertBefore: vi.fn<() => void>(),
-  removeChild: vi.fn<() => void>(),
-  releaseListeners: vi.fn<(nodeId: number) => number[]>(() => []),
-  holdNode: vi.fn<(nodeId: number) => void>(),
-  releaseNode: vi.fn<(nodeId: number) => void>(),
+  createNode: vi.fn<(tag: string) => number>(),
+  setAttribute: vi.fn<(nodeId: number, key: string, value: string | number | boolean) => void>(),
+  getAttribute: vi.fn<(nodeId: number, key: string) => string | null>(),
   textContent: vi.fn<(nodeId: number) => string>(() => ""),
   wholeText: vi.fn<(nodeId: number) => string>(() => ""),
   substringData: vi.fn<(nodeId: number, offset: number, count: number) => string>(() => ""),
   replaceData: vi.fn<(nodeId: number, offset: number, count: number, data: string) => void>(),
-  splitText: vi.fn<(nodeId: number, offset: number) => number>(() => 900),
+  splitText: vi.fn<(nodeId: number, offset: number) => number>(),
 };
 
 beforeEach(() => {
   vi.clearAllMocks();
-  data = {};
-  nextId = 100;
-  globalThis.__inca_native__ = nativeStub(host as never);
+  fake = installFakeHost();
+  host.createNode.mockImplementation(fake.natives.createNode!);
+  host.setAttribute.mockImplementation(fake.natives.setAttribute!);
+  host.getAttribute.mockImplementation(fake.natives.getAttribute! as never);
+  host.splitText.mockImplementation(fake.natives.splitText!);
+  globalThis.__inca_native__ = nativeStub({ ...fake.natives, ...host } as never);
 });
 
 describe("data", () => {
   it("reads the data from the host", () => {
     const text = createTextNode("first");
-    data[text.__node_id] = "second";
+    fake.nodes.get(text.__node_id)!.data = "second";
 
     expect(text.data).toBe("second");
   });
@@ -64,7 +60,7 @@ describe("data", () => {
 
     text.data = value as string;
 
-    expect(data[text.__node_id]).toBe(stored);
+    expect(dataOf(text)).toBe(stored);
   });
 });
 
@@ -82,7 +78,7 @@ describe("textContent of a text node", () => {
 
     text.textContent = value as string;
 
-    expect(data[text.__node_id]).toBe(stored);
+    expect(dataOf(text)).toBe(stored);
   });
 });
 
@@ -109,7 +105,7 @@ describe("substringData", () => {
 
   it("reads the range of the last data of a freed node", () => {
     const text = createTextNode("abcd");
-    markDestroyed(text);
+    markFreed([text.__node_id]);
 
     expect(text.substringData(1, 2)).toBe("bc");
   });
@@ -132,7 +128,7 @@ describe("the editing methods", () => {
   it("mirror the data the host holds in the text field", () => {
     const text = createTextNode("abc");
     host.replaceData.mockImplementationOnce((id) => {
-      data[id] = "aXc";
+      fake.nodes.get(id)!.data = "aXc";
     });
 
     text.replaceData(1, 1, "X");
@@ -142,7 +138,7 @@ describe("the editing methods", () => {
 
   it("send nothing to the host for a freed node", () => {
     const text = createTextNode("abc");
-    markDestroyed(text);
+    markFreed([text.__node_id]);
 
     text.appendData("X");
 
@@ -166,20 +162,23 @@ describe("the editing methods", () => {
 describe("splitText", () => {
   it("returns the node the host made, holding the tail", () => {
     const text = createTextNode("abcd");
-    host.splitText.mockReturnValueOnce(900);
-    data[900] = "cd";
+    host.splitText.mockImplementationOnce((id, offset) => {
+      const tailId = fake.natives.splitText!(id, offset);
+      fake.nodes.get(tailId)!.data = "cd";
+      return tailId;
+    });
 
     const tail = text.splitText(2);
 
-    expect(tail.__node_id).toBe(900);
+    expect(tail.__node_id).toBe(host.splitText.mock.results[0]!.value);
     expect(tail.text).toBe("cd");
   });
 
   it("keeps the head in the text field", () => {
     const text = createTextNode("abcd");
-    host.splitText.mockImplementationOnce((id) => {
-      data[id] = "ab";
-      return 900;
+    host.splitText.mockImplementationOnce((id, offset) => {
+      fake.nodes.get(id)!.data = "ab";
+      return fake.natives.splitText!(id, offset);
     });
 
     text.splitText(2);
@@ -196,12 +195,12 @@ describe("splitText", () => {
 
     const tail = text.splitText(2);
 
-    expect(parent.__children).toEqual([text, tail, last]);
-    expect(tail.parent).toBe(parent);
+    expect(kids(parent)).toEqual([text, tail, last]);
+    expect(tail.parentNode).toBe(parent);
   });
 
   it("leaves the tail with no parent for a node with no parent", () => {
-    expect(createTextNode("abcd").splitText(2).parent).toBeNull();
+    expect(createTextNode("abcd").splitText(2).parentNode).toBeNull();
   });
 
   it("gives the tail the document as ownerDocument", () => {
@@ -210,7 +209,7 @@ describe("splitText", () => {
 
   it("throws a TypeError for a freed node", () => {
     const text = createTextNode("abcd");
-    markDestroyed(text);
+    markFreed([text.__node_id]);
 
     expect(() => text.splitText(1)).toThrow(TypeError);
   });
@@ -227,7 +226,7 @@ describe("wholeText", () => {
 
   it("reads the last data of a freed node", () => {
     const text = createTextNode("a");
-    markDestroyed(text);
+    markFreed([text.__node_id]);
 
     expect(text.wholeText).toBe("a");
   });
@@ -244,7 +243,7 @@ describe("textContent of an element", () => {
 
   it("reads an empty text for a freed element", () => {
     const el = createElementNode("div");
-    markDestroyed(el);
+    markFreed([el.__node_id]);
 
     expect(el.textContent).toBe("");
   });
@@ -255,7 +254,7 @@ describe("textContent of an element", () => {
 
     el.textContent = "new";
 
-    expect(el.__children.map((child) => (child as IncaText).text)).toEqual(["new"]);
+    expect(kids(el).map((child) => (child as IncaText).text)).toEqual(["new"]);
   });
 
   it.each([null, undefined, ""] as const)("removes the children for %j", (value) => {
@@ -264,7 +263,7 @@ describe("textContent of an element", () => {
 
     el.textContent = value as string;
 
-    expect(el.__children).toEqual([]);
+    expect(kids(el)).toEqual([]);
   });
 
   it("keeps the listeners of a removed child", () => {
@@ -274,17 +273,17 @@ describe("textContent of an element", () => {
 
     el.textContent = "new";
 
-    expect(host.releaseListeners).not.toHaveBeenCalled();
+    expect(fake.spies.removeNode).not.toHaveBeenCalled();
   });
 
   it("ignores an assignment to a freed element", () => {
     const el = createElementNode("div");
     insert(createTextNode("old"), el);
-    markDestroyed(el);
+    markFreed([el.__node_id]);
 
     el.textContent = "new";
 
-    expect(el.__children).toHaveLength(1);
+    expect(fake.nodes.get(el.__node_id)!.children).toHaveLength(1);
   });
 });
 
@@ -293,7 +292,7 @@ describe("createText", () => {
     const node = createTextNode("hello");
     expect(host.createNode).toHaveBeenCalledWith("#text");
     expect(host.setAttribute).toHaveBeenCalledWith(node.__node_id, "value", "hello");
-    expect(node).toMatchObject({ kind: "text", parent: null, text: "hello" });
+    expect(node).toMatchObject({ kind: "text", text: "hello" });
     expect("id" in node).toBe(false);
   });
 });
@@ -315,10 +314,10 @@ describe("setElementText", () => {
 
     setElementText(el, "hello");
 
-    expect(host.removeChild).toHaveBeenCalledWith(el.__node_id, oldChild.__node_id);
-    expect(oldChild.parent).toBeNull();
-    expect(el.__children).toHaveLength(1);
-    expect(el.__children[0]).toMatchObject({ kind: "text", text: "hello" });
+    expect(fake.spies.removeChild).toHaveBeenCalledWith(el.__node_id, oldChild.__node_id);
+    expect(oldChild.parentNode).toBeNull();
+    expect(kids(el)).toHaveLength(1);
+    expect(kids(el)[0]).toMatchObject({ kind: "text", text: "hello" });
   });
 
   it("leaves no children behind for an empty string", () => {
@@ -328,7 +327,7 @@ describe("setElementText", () => {
 
     setElementText(el, "");
 
-    expect(el.__children).toHaveLength(0);
+    expect(kids(el)).toHaveLength(0);
   });
 });
 
@@ -356,5 +355,64 @@ describe("element registry", () => {
     setElementText(root, "hello");
 
     expect([child, grandchild].map((el) => elementOf(el.__node_id))).toEqual([child, grandchild]);
+  });
+});
+
+describe("the tail of splitText", () => {
+  it("reads the parent of the tail with one link read", () => {
+    const parent = createElementNode("div");
+    const text = createTextNode("abcd");
+    insert(text, parent);
+    fake.spies.linkedNode.mockClear();
+
+    text.splitText(2);
+
+    expect(fake.spies.linkedNode.mock.calls).toEqual([
+      [host.splitText.mock.results[0]!.value, "parent", undefined],
+    ]);
+  });
+
+  it("keeps the handle of a tail that has a parent after a collection", async () => {
+    const parent = createElementNode("div");
+    const id = (() => {
+      const text = createTextNode("abcd");
+      insert(text, parent);
+      return text.splitText(2).__node_id;
+    })();
+
+    await collectSentinel();
+
+    expect(nodeOf(id)).toBeDefined();
+  });
+
+  it("holds a tail that has no parent", () => {
+    const tail = createTextNode("abcd").splitText(2);
+
+    expect(fake.spies.holdNode).toHaveBeenCalledWith(tail.__node_id);
+  });
+});
+
+describe("the handles after the textContent setter", () => {
+  it("lets the old children be collected", async () => {
+    const el = createElementNode("div");
+    const old = (() => {
+      const child = createElementNode("span");
+      insert(child, el);
+      return new WeakRef(child);
+    })();
+
+    el.textContent = "new";
+    await collectGarbage(() => old.deref() === undefined);
+
+    expect(old.deref()).toBeUndefined();
+  });
+
+  it("keeps the handle of the new text node after a collection", async () => {
+    const el = createElementNode("div");
+
+    el.textContent = "new";
+    await collectSentinel();
+
+    expect(nodeOf(fake.nodes.get(el.__node_id)!.children[0]!)).toBeDefined();
   });
 });

@@ -5,118 +5,71 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { nativeStub } from "../../tests/setup.mts";
 import { createElementNode, createIncaElement } from "./handle.mts";
-import { isDestroyed, isRemoved, markDestroyed, markRemoved } from "./lifecycle.mts";
-import type { IncaElement, IncaNode, IncaTemplateElement } from "./types.mts";
+import {
+  entered,
+  isDestroyed,
+  isRemoved,
+  markFreed,
+  markRemoved,
+  nodeOf,
+  registerNode,
+  elementOf,
+} from "./lifecycle.mts";
+import type { IncaNode, IncaTemplateElement } from "./types.mts";
 
-describe("element registry", () => {
-  /** What `FinalizationRegistry.register` received, by target: one entry per registry. */
-  const registered = new Map<object, { callback: (id: number) => void; held: number }[]>();
-  /** Targets the test declares collected. */
-  const gone = new WeakSet<object>();
+/** A stand-in handle with the given node id and kind. */
+function standIn(id: number, kind: "element" | "text" = "element"): IncaNode {
+  return Object.defineProperties(
+    {},
+    { __node_id: { value: id }, kind: { value: kind } },
+  ) as IncaNode;
+}
 
-  /** Declares `target` collected: its WeakRef reads empty and its registry callbacks run. */
-  function collect(target: object): void {
-    gone.add(target);
-    for (const { callback, held } of registered.get(target)!) callback(held);
-  }
-
-  /** A stand-in handle with the given node id. */
-  function handleOf(id: number): IncaElement {
-    return Object.defineProperties(
-      {},
-      {
-        __node_id: { value: id },
-        kind: { value: "element" },
-      },
-    ) as IncaElement;
-  }
-
-  async function load() {
-    vi.resetModules();
-    return import("./lifecycle.mts");
-  }
-
-  beforeEach(() => {
-    registered.clear();
-    vi.stubGlobal(
-      "FinalizationRegistry",
-      class {
-        constructor(private readonly callback: (id: number) => void) {}
-        register(target: object, held: number): void {
-          const list = registered.get(target) ?? [];
-          list.push({ callback: this.callback, held });
-          registered.set(target, list);
-        }
-      },
-    );
-    vi.stubGlobal(
-      "WeakRef",
-      class {
-        constructor(private readonly target: object) {}
-        deref(): object | undefined {
-          return gone.has(this.target) ? undefined : this.target;
-        }
-      },
-    );
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it("drops the record of a collected handle", async () => {
-    const { recordedCount, registerNode } = await load();
-    const before = recordedCount();
-    const el = handleOf(31);
-    registerNode(el);
-    expect(recordedCount()).toBe(before + 1);
-
-    collect(el);
-
-    expect(recordedCount()).toBe(before);
-  });
-
-  it("keeps the record of a newer handle when an older one with its id is collected", async () => {
-    const { elementOf, registerNode } = await load();
-    const first = handleOf(33);
-    const el = handleOf(33);
+describe("the node table", () => {
+  it("replaces the handle of an id when a newer handle registers under it", () => {
+    const first = standIn(33);
+    const el = standIn(33);
     registerNode(first);
     registerNode(el);
-
-    collect(first);
 
     expect(elementOf(33)).toBe(el);
   });
 
-  /** A stand-in text handle with the given node id. */
-  function textOf(id: number): IncaNode {
-    return Object.defineProperties(
-      {},
-      {
-        __node_id: { value: id },
-        kind: { value: "text" },
-      },
-    ) as IncaNode;
-  }
+  it("replaces an attached handle when a newer handle registers under its id", () => {
+    const first = standIn(34);
+    const el = standIn(34);
+    registerNode(first);
+    entered(first);
+    registerNode(el);
 
-  it("marks the handle of a freed text node destroyed", async () => {
-    const { isDestroyed, markFreed, registerNode } = await load();
-    const text = textOf(41);
-    registerNode(text);
-
-    markFreed([41]);
-
-    expect(isDestroyed(text)).toBe(true);
+    expect(elementOf(34)).toBe(el);
   });
 
-  it("drops the record of a destroyed text node", async () => {
-    const { markDestroyed, nodeOf, registerNode } = await load();
-    const text = textOf(42);
+  it.each([
+    ["attached", (handle: IncaNode) => entered(handle)],
+    ["parentless", () => {}],
+  ] as const)(
+    "reads a freed %s handle as destroyed and gives no handle for its id",
+    (_state, prepare) => {
+      const text = standIn(41, "text");
+      registerNode(text);
+      prepare(text);
+
+      markFreed([41]);
+
+      expect([isDestroyed(text), nodeOf(41)]).toEqual([true, undefined]);
+    },
+  );
+
+  it.each([
+    ["attached", (handle: IncaNode) => entered(handle)],
+    ["parentless", () => {}],
+  ] as const)("reads a live %s handle as not destroyed", (_state, prepare) => {
+    const text = standIn(43, "text");
     registerNode(text);
+    prepare(text);
 
-    markDestroyed(text);
-
-    expect(nodeOf(42)).toBeUndefined();
+    expect(isDestroyed(text)).toBe(false);
   });
 });
 
@@ -162,6 +115,31 @@ describe("the release of a template", () => {
   });
 });
 
+describe("the release of a removed node", () => {
+  it("registers a node that a held path covers once", async () => {
+    const registered = new Map<object, number>();
+    vi.stubGlobal(
+      "FinalizationRegistry",
+      class {
+        register(target: object): void {
+          registered.set(target, (registered.get(target) ?? 0) + 1);
+        }
+      },
+    );
+    vi.resetModules();
+    globalThis.__inca_native__ = nativeStub({ releaseNode: () => {} } as never);
+    const { createIncaElement } = await import("./handle.mts");
+    const { leftHeld, releaseWhenCollected } = await import("./lifecycle.mts");
+    const el = createIncaElement(50, "element", "div");
+    releaseWhenCollected(el);
+
+    leftHeld(el, [el.__node_id]);
+
+    expect(registered.get(el)).toBe(1);
+    vi.unstubAllGlobals();
+  });
+});
+
 describe("a template", () => {
   const host = {
     createNode: vi.fn<(tag: string) => number>(() => 4),
@@ -179,7 +157,7 @@ describe("a template", () => {
   it("marks its content handle destroyed when the host frees it", () => {
     const { owner, content } = template();
 
-    markDestroyed(owner);
+    markFreed([owner.__node_id, content.__node_id]);
 
     expect(isDestroyed(content)).toBe(true);
   });
@@ -187,7 +165,7 @@ describe("a template", () => {
   it("marks its content handle removed when it leaves the tree", () => {
     const { owner, content } = template();
 
-    markRemoved(owner);
+    markRemoved([owner.__node_id, content.__node_id]);
 
     expect(isRemoved(content)).toBe(true);
   });
@@ -195,10 +173,10 @@ describe("a template", () => {
 
 describe("the name members of a freed element", () => {
   it("keep their values", () => {
-    globalThis.__inca_native__ = nativeStub();
+    globalThis.__inca_native__ = nativeStub({ releaseNode: () => {} } as never);
     const el = createIncaElement(1, "element", ["Y", "urn:x", "x", "X:Y"]);
 
-    markDestroyed(el);
+    markFreed([el.__node_id]);
 
     expect([el.tagName, el.localName, el.namespaceURI, el.prefix]).toEqual([
       "X:Y",

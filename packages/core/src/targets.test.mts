@@ -7,7 +7,7 @@ import { nativeStub } from "../tests/setup.mts";
 import "./targets.mts";
 import { document } from "./document.mts";
 import { adoptTextNode } from "./element/handle.mts";
-import { elementOf, registerNode, unregisterNode } from "./element/lifecycle.mts";
+import { elementOf, registerNode, markFreed } from "./element/lifecycle.mts";
 import { window } from "./window.mts";
 import type { IncaElement } from "./element/types.mts";
 
@@ -30,9 +30,9 @@ describe("globals", () => {
 
 describe("__inca_targets__", () => {
   afterEach(() => {
-    unregisterNode(5);
-    unregisterNode(ROOT);
-    unregisterNode(8);
+    markFreed([5]);
+    markFreed([ROOT]);
+    markFreed([8]);
   });
 
   it("resolves the id of the document node to the document", () => {

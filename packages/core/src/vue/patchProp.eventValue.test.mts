@@ -13,6 +13,7 @@ const core: IncaCore = {
   addEventListener: vi.fn<IncaCore["addEventListener"]>(),
   removeEventListener: vi.fn<IncaCore["removeEventListener"]>(),
   latestEventId: vi.fn<() => number>(() => 0),
+  isRemoved: () => false,
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   removeAttribute: vi.fn<(nodeId: number, key: string) => void>(),
 };

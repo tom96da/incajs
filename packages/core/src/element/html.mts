@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 // The markup members of an element. The host parses and serializes, and the members build the
-// handles of the parsed nodes and patch the shadow tree.
+// handles of the parsed nodes and keep the node table in step.
 
 import {
+  childNodeIds,
   insertAdjacentHtml,
   innerHtml,
   nameOfRow,
@@ -13,12 +14,10 @@ import {
   setOuterHtml,
 } from "../ffi/index.mts";
 import { attributeText, requireArguments } from "./arguments.mts";
-import { existingContent, isDestroyed } from "./lifecycle.mts";
-import { keep, link, unlink } from "./shadowTree.mts";
+import { entered, existingContent, isDestroyed, left, nodeOf } from "./lifecycle.mts";
 import type { Parsed } from "../ffi/index.mts";
-import type { NodeId } from "../types.mts";
 import type { HandleBuilders } from "./lifecycle.mts";
-import type { HtmlMembers, IncaElement, IncaNode, IncaParent } from "./types.mts";
+import type { HtmlMembers, IncaElement } from "./types.mts";
 
 /**
  * Converts an assignment to `innerHTML` or `outerHTML`: `null` gives `""` and any other value its
@@ -31,34 +30,24 @@ function markupText(value: unknown): string {
 }
 
 /**
- * Builds the handles of a parse result and links the nested ones. The entries come in pre-order, so
- * a parent has its handle before its children. The content fragment of a template takes the handle
- * the template already holds.
+ * Builds the handles of a parse result and makes them strong, as the host put each one under a
+ * parent. The entries come in pre-order, so a parent has its handle before its children. The
+ * content fragment of a template takes the handle the template already holds.
  * @param parsed - what the host parsed
  * @param builders - the functions that build the handles of each kind
- * @returns the handles whose parent is no entry of the result, in order
  */
-function adopt(parsed: Parsed, builders: HandleBuilders): IncaNode[] {
-  const handles = new Map<NodeId, IncaNode>();
-  const roots: IncaNode[] = [];
+function adopt(parsed: Parsed, builders: HandleBuilders): void {
   for (const row of parsed[1]) {
-    const [id, tag, , parentId, data] = row;
-    const parent = handles.get(parentId) as IncaParent | undefined;
-    if (tag === "#fragment") {
-      handles.set(id, existingContent(parent as IncaElement)!);
-      continue;
-    }
+    const [id, tag] = row;
+    if (tag === "#fragment") continue;
     const handle =
       tag === "#text"
-        ? builders.text(id, data ?? "")
+        ? builders.text(id, row[4] ?? "")
         : tag === "#comment"
           ? builders.element!(id, "comment")
           : builders.element!(id, "element", nameOfRow(row));
-    handles.set(id, handle);
-    if (parent) link(parent, [handle], parent.__children.length);
-    else roots.push(handle);
+    entered(handle);
   }
-  return roots;
 }
 
 /**
@@ -69,8 +58,6 @@ function adopt(parsed: Parsed, builders: HandleBuilders): IncaNode[] {
  */
 export function htmlMembers(element: IncaElement, builders: HandleBuilders): HtmlMembers {
   const id = element.__node_id;
-  const place = (parsed: Parsed, container: IncaParent): void =>
-    link(container, adopt(parsed, builders), parsed[0]);
   return {
     get innerHTML() {
       return isDestroyed(element) ? "" : innerHtml(id);
@@ -79,12 +66,13 @@ export function htmlMembers(element: IncaElement, builders: HandleBuilders): Htm
       const text = markupText(value);
       if (isDestroyed(element)) return;
       const container = existingContent(element) ?? element;
+      const old = childNodeIds(container.__node_id);
       const parsed = setInnerHtml(id, text);
-      for (const child of container.__children.slice()) {
-        unlink(child);
-        keep(child);
+      for (const child of old) {
+        const handle = nodeOf(child);
+        if (handle) left(handle);
       }
-      place(parsed, container);
+      adopt(parsed, builders);
     },
     get outerHTML() {
       return isDestroyed(element) ? "" : outerHtml(id);
@@ -93,20 +81,16 @@ export function htmlMembers(element: IncaElement, builders: HandleBuilders): Htm
       const text = markupText(value);
       if (isDestroyed(element)) return;
       const parsed = setOuterHtml(id, text);
-      const parent = element.parent!;
       if (parsed === null) return;
-      unlink(element);
-      keep(element);
-      place(parsed, parent);
+      left(element);
+      adopt(parsed, builders);
     },
     insertAdjacentHTML: (...args: [position: string, text: string]) => {
       requireArguments(args, 2, "insertAdjacentHTML");
       const position = attributeText(args[0]);
       const text = attributeText(args[1]);
       if (isDestroyed(element)) return;
-      const parsed = insertAdjacentHtml(id, position, text);
-      const beside = /^(beforebegin|afterend)$/i.test(position);
-      place(parsed, beside ? element.parent! : element);
+      adopt(insertAdjacentHtml(id, position, text), builders);
     },
   };
 }

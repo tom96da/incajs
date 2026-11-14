@@ -12,7 +12,7 @@ export type NodeId = number;
 
 /**
  * Id assigned to one registered event listener. Managed internally by
- * `addEventListener`/`removeEventListener`/`releaseListeners`.
+ * `addEventListener`/`removeEventListener`/`removeNode`.
  */
 export type CallbackId = number;
 
@@ -40,8 +40,11 @@ export type ElementName =
   | string
   | [localName: string, namespaceURI: string | null, prefix: string | null, tagName: string];
 
-/** What a native returns for a node without a name: id and the marker or tag. */
-export type NodeEntry = [id: NodeId, tag: string];
+/**
+ * What a native returns for a copy of a node without a name: id, the marker or tag, and the text
+ * of a `#text` copy (`null` for any other node).
+ */
+export type NodeEntry = [id: NodeId, tag: string, data: string | null];
 
 /** What a native returns for an element it makes: id and the four name parts. */
 export type ElementEntry = [
@@ -108,8 +111,8 @@ interface IncaNative {
   datasetDelete(nodeId: NodeId, key: string): boolean;
   datasetKeys(nodeId: NodeId): string[];
   datasetTarget(): object;
-  linkedNode(nodeId: NodeId, link: NodeLink): NodeId | null;
-  childNodeIds(nodeId: NodeId): NodeId[];
+  linkedNode(nodeId: NodeId, link: NodeLink, elementOnly?: boolean): NodeId | null;
+  childNodeIds(nodeId: NodeId, elementOnly?: boolean): NodeId[];
   isConnected(nodeId: NodeId): boolean;
   textContent(nodeId: NodeId): string;
   wholeText(nodeId: NodeId): string;
@@ -134,7 +137,7 @@ interface IncaNative {
     passive?: boolean,
   ): CallbackId;
   removeEventListener(target: EventTargetId, event: string, callbackId: CallbackId): boolean;
-  releaseListeners(nodeId: NodeId): CallbackId[];
+  removeNode(nodeId: NodeId): [callbackIds: CallbackId[], nodeIds: NodeId[]];
   holdNode(nodeId: NodeId): void;
   releaseNode(nodeId: NodeId): void;
   focusNode(nodeId: NodeId, preventScroll?: boolean): void;

@@ -4,7 +4,9 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { nativeStub } from "../../tests/setup.mts";
+import { HTML_NAMESPACE } from "../ffi/index.mts";
 import { createIncaElement } from "./handle.mts";
+import type { ElementEntry } from "../ffi/index.mts";
 import type { CSSStyleDeclaration } from "./types.mts";
 
 /** The first block `styleOf` gives. */
@@ -18,7 +20,9 @@ function setup() {
       .mockReturnValueOnce(block),
     setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
     removeAttribute: vi.fn<(nodeId: number, key: string) => void>(),
-    cloneNode: vi.fn<(nodeId: number, deep: boolean) => [number, string][]>(() => [[2, "div"]]),
+    cloneNode: vi.fn<(nodeId: number, deep: boolean) => ElementEntry[]>(() => [
+      [2, "div", HTML_NAMESPACE, null, "DIV"],
+    ]),
     holdNode: vi.fn<(nodeId: number) => void>(),
   };
   globalThis.__inca_native__ = nativeStub(host as never);

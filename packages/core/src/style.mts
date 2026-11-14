@@ -10,16 +10,9 @@ import {
   createTextNode,
   rootElement,
 } from "./element/handle.mts";
-import { insert, link, remove, unlink } from "./element/shadowTree.mts";
-import {
-  childNodeIds,
-  getAttribute,
-  linkedNode,
-  queryNodes,
-  removeChild,
-  rootNodeId,
-  setAttribute,
-} from "./ffi/index.mts";
+import { entered, nodeOf } from "./element/lifecycle.mts";
+import { insert, remove } from "./element/treeOps.mts";
+import { childNodeIds, getAttribute, queryNodes, rootNodeId, setAttribute } from "./ffi/index.mts";
 import type { IncaElement } from "./element/types.mts";
 import type { NodeId } from "./types.mts";
 
@@ -28,19 +21,13 @@ const KEY_ATTRIBUTE = "data-inca-style";
 const elements = new Map<string, IncaElement>();
 let scanned = false;
 
-/** Gives a style element an earlier evaluation left a handle, and links it into the shadow tree. */
+/** Gives a style element an earlier evaluation left a handle, and makes it strong with its text. */
 function adopt(id: NodeId): IncaElement {
   const el = createIncaElement(id, "element", "style");
   for (const child of childNodeIds(id)) {
-    const text = adoptTextNode(child, String(getAttribute(child, "value") ?? ""));
-    link(el, [text], el.__children.length);
+    entered(adoptTextNode(child, String(getAttribute(child, "value") ?? "")));
   }
-  const root = rootElement();
-  if (linkedNode(id, "parent") === root.__node_id) {
-    const host = childNodeIds(root.__node_id);
-    const before = root.__children.filter((c) => host.indexOf(c.__node_id) < host.indexOf(id));
-    link(root, [el], before.length);
-  }
+  entered(el);
   return el;
 }
 
@@ -55,9 +42,12 @@ function scan(): void {
 
 /** Replaces the children of `el` with one text node holding `css`. */
 function writeText(el: IncaElement, css: string): void {
-  const old = el.__children.slice();
+  const old = childNodeIds(el.__node_id);
   if (css) insert(createTextNode(css), el);
-  for (const child of old) remove(child);
+  for (const child of old) {
+    const text = nodeOf(child);
+    if (text) remove(text);
+  }
 }
 
 /**
@@ -92,8 +82,6 @@ export function removeStyle(key: string): void {
   const el = elements.get(key);
   if (el === undefined) return;
 
-  const parent = linkedNode(el.__node_id, "parent");
-  if (parent !== null) removeChild(parent, el.__node_id);
-  unlink(el);
+  remove(el);
   elements.delete(key);
 }

@@ -54,7 +54,7 @@ interface FakeNode {
 // actual `nodeOps`/`patchProp` end to end, without a real Rust process.
 //
 // It matches the real host where the difference is observable: one parent per
-// node, several callbacks per (node, event), and `releaseListeners` dropping a whole
+// node, several callbacks per (node, event), and `removeNode` dropping a whole
 // subtree. It does not refuse a cycle the way the host does. `nodeOps` never
 // builds one.
 function installFakeNative(): Map<NodeId, FakeNode> {
@@ -130,7 +130,7 @@ function installFakeNative(): Map<NodeId, FakeNode> {
     replaceChild(): number {
       throw new Error("not used here");
     },
-    cloneNode(): [NodeId, string][] {
+    cloneNode(): [NodeId, string, null][] {
       throw new Error("not used here");
     },
     rootOf(id: NodeId): NodeId {
@@ -235,18 +235,21 @@ function installFakeNative(): Map<NodeId, FakeNode> {
       hostCallbacks.delete(callbackId);
       return true;
     },
-    releaseListeners(nodeId: NodeId): number[] {
+    removeNode(nodeId: NodeId): [number[], number[]] {
+      if (!nodes.has(nodeId)) return [[], []];
+      detach(nodeId);
       const released: number[] = [];
-      const pending = [nodeId];
-      while (pending.length > 0) {
-        const node = nodes.get(pending.pop()!);
-        if (!node) continue;
-        pending.push(...node.children);
+      const ids: NodeId[] = [];
+      const visit = (id: NodeId): void => {
+        const node = requireNode(id);
+        ids.push(id);
         released.push(...Object.values(node.listeners).flat());
         node.listeners = {};
-      }
+        for (const child of node.children) visit(child);
+      };
+      visit(nodeId);
       for (const callbackId of released) hostCallbacks.delete(callbackId);
-      return released;
+      return [released, ids];
     },
     templateContent: () => null,
     innerHtml: () => "",
@@ -362,8 +365,6 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       childElementCount: 0,
       previousElementSibling: null,
       nextElementSibling: null,
-      parent: null,
-      __children: [],
       children: htmlCollectionOf(() => []),
       focus: () => focus(rootId),
       blur: () => blur(rootId),

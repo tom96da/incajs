@@ -7,7 +7,6 @@ import type {
   EventHandlers,
   IncaElement,
   IncaFragment,
-  IncaNode,
   IncaText,
   NodeListOf,
   NodeMembers,
@@ -211,15 +210,8 @@ export interface IncaDocument
    * @internal
    */
   readonly __node_id: NodeId;
-  /** Discriminates this node within the {@link IncaNode} union. */
+  /** Discriminates this node within the `IncaNode` union. */
   readonly kind: "document";
-  /** The document has no parent. */
-  parent: null;
-  /**
-   * The children of this node in order.
-   * @internal
-   */
-  __children: IncaNode[];
   /** Always `null`. An assignment does nothing. */
   textContent: string | null;
   /**

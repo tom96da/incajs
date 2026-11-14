@@ -12,7 +12,7 @@ import {
   createTextNode,
   rootElement,
 } from "./handle.mts";
-import { markDestroyed } from "./lifecycle.mts";
+import { markFreed } from "./lifecycle.mts";
 import type { NodeLink } from "../ffi/index.mts";
 
 /** The id `nativeStub` gives the document. */
@@ -164,7 +164,7 @@ describe("ownerDocument", () => {
 
   it("is the document of a freed element", () => {
     const el = createElementNode("div");
-    markDestroyed(el);
+    markFreed([el.__node_id]);
 
     expect(el.ownerDocument).toBe(document);
   });
@@ -305,7 +305,7 @@ describe("a freed node", () => {
     links[id] = { parent: parent.__node_id, first: 1, last: 1, previous: 1, next: 1 };
     children[id] = [parent.__node_id];
     const list = child.childNodes;
-    markDestroyed(child);
+    markFreed([child.__node_id]);
     vi.clearAllMocks();
     return { child, list };
   }
@@ -345,21 +345,21 @@ describe("a freed node", () => {
 
   it("keeps the last data of a text node", () => {
     const text = createTextNode("kept");
-    markDestroyed(text);
+    markFreed([text.__node_id]);
 
     expect(text.nodeValue).toBe("kept");
   });
 
   it("has an empty nodeValue as a comment stand-in", () => {
     const comment = createCommentNode();
-    markDestroyed(comment);
+    markFreed([comment.__node_id]);
 
     expect(comment.nodeValue).toBe("");
   });
 
   it("ignores an assignment to nodeValue", () => {
     const text = createTextNode("kept");
-    markDestroyed(text);
+    markFreed([text.__node_id]);
     host.setAttribute.mockClear();
 
     text.nodeValue = "changed";

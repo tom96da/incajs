@@ -36,6 +36,7 @@ const core: IncaCore = {
   addEventListener: vi.fn<IncaCore["addEventListener"]>(),
   removeEventListener: vi.fn<IncaCore["removeEventListener"]>(),
   latestEventId: vi.fn<() => number>(() => 0),
+  isRemoved: () => false,
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   removeAttribute: vi.fn<(nodeId: number, key: string) => void>(),
   setStyle: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
@@ -108,8 +109,6 @@ const makeEl = (): IncaElement => ({
   childElementCount: 0,
   previousElementSibling: null,
   nextElementSibling: null,
-  parent: null,
-  __children: [],
   children: {} as IncaElement["children"],
   focus: vi.fn<() => void>(),
   blur: vi.fn<() => void>(),
@@ -1169,7 +1168,11 @@ describe("errors thrown by an event handler", () => {
       hook?: () => boolean | void,
     ): () => void {
       let id = 1;
-      vi.stubGlobal("__inca_native__", { createNode: () => ++id, insertBefore: () => {} });
+      vi.stubGlobal("__inca_native__", {
+        createNode: () => ++id,
+        insertBefore: () => {},
+        linkedNode: () => null,
+      });
       const renderer = createRenderer({ ...createNodeOps(core), patchProp });
       const Child = { render: () => h("view", { onClick }) };
       const Parent = {
@@ -1299,7 +1302,11 @@ describe("everything else", () => {
 
   it("removes an attribute that is absent from the new vnode props", async () => {
     let id = 1;
-    vi.stubGlobal("__inca_native__", { createNode: () => ++id, insertBefore: () => {} });
+    vi.stubGlobal("__inca_native__", {
+      createNode: () => ++id,
+      insertBefore: () => {},
+      linkedNode: () => null,
+    });
     const renderer = createRenderer({ ...createNodeOps(core), patchProp });
     const shown = ref(true);
     renderer
@@ -1565,7 +1572,11 @@ describe("a listener attached while an event is handled", () => {
 
   it("is skipped by the ancestor dispatch of the event that caused the re-render", async () => {
     let id = 1;
-    vi.stubGlobal("__inca_native__", { createNode: () => ++id, insertBefore: () => {} });
+    vi.stubGlobal("__inca_native__", {
+      createNode: () => ++id,
+      insertBefore: () => {},
+      linkedNode: () => null,
+    });
     const renderer = createRenderer({ ...createNodeOps(core), patchProp });
     const armed = ref(false);
     const onAncestor = spy();

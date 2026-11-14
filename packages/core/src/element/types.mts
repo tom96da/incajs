@@ -487,7 +487,7 @@ export interface HtmlMembers {
 /**
  * A container node: either a real element or the hidden stand-in that
  * `createCommentNode` makes. It is the only node type that can act as a
- * parent. `parent` reads the node's current position in the tree.
+ * parent.
  *
  * A removed node keeps its attributes and its position in its own subtree, and its members read
  * them. Its listeners are dropped. `addEventListener()` and `removeEventListener()` ignore the
@@ -533,13 +533,6 @@ export interface IncaElement
   readonly namespaceURI: string | null;
   /** The prefix of the element name, or `null` for none. */
   readonly prefix: string | null;
-  /** The current parent element or fragment, or `null` if this node isn't attached to the tree. */
-  parent: IncaParent | null;
-  /**
-   * The children of this node in render order, text leaves included.
-   * @internal
-   */
-  __children: IncaNode[];
   /**
    * The child elements in order, as a live collection. Every read returns the same object, which
    * follows later changes. A removed element lists the element children it kept.
@@ -756,8 +749,6 @@ export interface IncaText extends NodeMembers, CharacterDataMembers, TextMembers
   readonly __node_id: NodeId;
   /** Discriminates this node within the {@link IncaNode} union. */
   readonly kind: "text";
-  /** The current parent element or fragment, or `null` if this node isn't attached to the tree. */
-  parent: IncaParent | null;
   /**
    * The text content, mirroring the value pushed to the native node.
    */
@@ -776,17 +767,10 @@ export interface IncaFragment extends NodeMembers, TextContentMember {
   readonly __node_id: NodeId;
   /** Discriminates this node within the {@link IncaNode} union. */
   readonly kind: "fragment";
-  /** A fragment has no parent. */
-  parent: null;
-  /**
-   * The children of this node in order, text leaves included.
-   * @internal
-   */
-  __children: IncaNode[];
 }
 
 /** A node that can have children. */
 export type IncaParent = IncaElement | IncaFragment | IncaDocument;
 
-/** Any node the shadow tree holds: an element, comment, text leaf, fragment or the document. */
+/** Any node handle: an element, comment, text leaf, fragment or the document. */
 export type IncaNode = IncaElement | IncaText | IncaFragment | IncaDocument;

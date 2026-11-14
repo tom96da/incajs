@@ -23,8 +23,8 @@ import {
   outerHtml,
   queryNode,
   queryNodes,
-  releaseListeners,
   removeChild,
+  removeNode,
   replaceChild,
   replaceData,
   rootOf,
@@ -36,7 +36,7 @@ import {
   textContent,
   wholeText,
 } from "./nodes.mts";
-import type { ElementEntry, NodeLink, Parsed } from "./native.mts";
+import type { ElementEntry, NodeEntry, NodeLink, Parsed } from "./native.mts";
 
 const native = {
   createElementNS: vi.fn<(namespace: string | null, qualifiedName: string) => ElementEntry>(() => [
@@ -50,11 +50,11 @@ const native = {
   insertBefore: vi.fn<(parentId: number, childId: number, refId: number | null) => number>(() => 0),
   removeChild: vi.fn<(parentId: number, childId: number) => void>(),
   replaceChild: vi.fn<(parentId: number, nodeId: number, childId: number) => number>(() => 0),
-  cloneNode: vi.fn<(nodeId: number, deep: boolean) => [number, string][]>(() => []),
+  cloneNode: vi.fn<(nodeId: number, deep: boolean) => NodeEntry[]>(() => []),
   rootOf: vi.fn<(nodeId: number) => number>((nodeId) => nodeId),
   compareNodePosition: vi.fn<(nodeId: number, otherId: number) => number>(() => 0),
   isEqualNode: vi.fn<(nodeId: number, otherId: number) => boolean>(() => false),
-  releaseListeners: vi.fn<(nodeId: number) => number[]>(() => []),
+  removeNode: vi.fn<(nodeId: number) => [number[], number[]]>(() => [[], []]),
   templateContent: vi.fn<(nodeId: number) => number | null>(() => null),
   innerHtml: vi.fn<(nodeId: number) => string>(() => ""),
   outerHtml: vi.fn<(nodeId: number) => string>(() => ""),
@@ -67,8 +67,10 @@ const native = {
   checkSelector: vi.fn<(selector: string) => void>(),
   querySelector: vi.fn<(nodeId: number, selector: string) => number | null>(() => null),
   querySelectorAll: vi.fn<(nodeId: number, selector: string) => number[]>(() => []),
-  linkedNode: vi.fn<(nodeId: number, link: NodeLink) => number | null>(() => null),
-  childNodeIds: vi.fn<(nodeId: number) => number[]>(() => []),
+  linkedNode: vi.fn<(nodeId: number, link: NodeLink, elementOnly?: boolean) => number | null>(
+    () => null,
+  ),
+  childNodeIds: vi.fn<(nodeId: number, elementOnly?: boolean) => number[]>(() => []),
   isConnected: vi.fn<(nodeId: number) => boolean>(() => true),
   textContent: vi.fn<(nodeId: number) => string>(() => ""),
   wholeText: vi.fn<(nodeId: number) => string>(() => ""),
@@ -108,8 +110,8 @@ describe("wrapper functions forward to __inca_native__", () => {
   });
 
   it("cloneNode", () => {
-    native.cloneNode.mockReturnValueOnce([[7, "div"]]);
-    expect(cloneNode(1, true)).toEqual([[7, "div"]]);
+    native.cloneNode.mockReturnValueOnce([[7, "#text", "x"]]);
+    expect(cloneNode(1, true)).toEqual([[7, "#text", "x"]]);
     expect(native.cloneNode).toHaveBeenCalledWith(1, true);
   });
 
@@ -166,13 +168,23 @@ describe("wrapper functions forward to __inca_native__", () => {
   it("linkedNode", () => {
     native.linkedNode.mockReturnValueOnce(7);
     expect(linkedNode(1, "next")).toBe(7);
-    expect(native.linkedNode).toHaveBeenCalledWith(1, "next");
+    expect(native.linkedNode).toHaveBeenCalledWith(1, "next", undefined);
+  });
+
+  it("linkedNode passes the element flag", () => {
+    linkedNode(1, "next", true);
+    expect(native.linkedNode).toHaveBeenCalledWith(1, "next", true);
   });
 
   it("childNodeIds", () => {
     native.childNodeIds.mockReturnValueOnce([2, 3]);
     expect(childNodeIds(1)).toEqual([2, 3]);
-    expect(native.childNodeIds).toHaveBeenCalledWith(1);
+    expect(native.childNodeIds).toHaveBeenCalledWith(1, undefined);
+  });
+
+  it("childNodeIds passes the element flag", () => {
+    childNodeIds(1, true);
+    expect(native.childNodeIds).toHaveBeenCalledWith(1, true);
   });
 
   it.each([
@@ -227,10 +239,16 @@ describe("wrapper functions forward to __inca_native__", () => {
     expect(native.templateContent).toHaveBeenCalledWith(1);
   });
 
-  it("releaseListeners gives the callback ids the host reports", () => {
-    native.releaseListeners.mockReturnValueOnce([4, 5]);
-    expect(releaseListeners(1)).toEqual([4, 5]);
-    expect(native.releaseListeners).toHaveBeenCalledWith(1);
+  it("removeNode gives the callback ids and the node ids the host reports", () => {
+    native.removeNode.mockReturnValueOnce([
+      [4, 5],
+      [1, 2],
+    ]);
+    expect(removeNode(1)).toEqual([
+      [4, 5],
+      [1, 2],
+    ]);
+    expect(native.removeNode).toHaveBeenCalledWith(1);
   });
 });
 
