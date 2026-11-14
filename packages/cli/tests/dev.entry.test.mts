@@ -497,15 +497,16 @@ describe("dev entry selection", () => {
   it("reports a missing entry at start and starts once one exists", async () => {
     const cwd = await makeSourceApp("main.mts");
     // The unnamed app is reported during the first attempt, after its entry was found.
-    const stdout = new Writable({
+    const stderr = makeSink();
+    const warned = new Writable({
       write(chunk: Buffer, _encoding, callback) {
         if (chunk.toString().includes("running unnamed")) rmSync(path.join(cwd, "src/main.mts"));
-        callback();
+        stderr.stream.write(chunk, callback);
       },
     });
-    const run = await startDev(cwd, { stdout });
+    const run = await startDev(cwd, { stderr: warned });
 
-    await waitFor(() => expect(run.stderr.text()).toContain("no app entry found"));
+    await waitFor(() => expect(stderr.text()).toContain("no app entry found"));
     expect(run.bundler.watches).toHaveLength(0);
 
     await writeFile(path.join(cwd, "src/App.vue"), APP_VUE);

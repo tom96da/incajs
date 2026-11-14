@@ -18,7 +18,7 @@ import { acquireDevLock } from "./devLock.mts";
 import { entryRoot, resolveEntry, selectEntry } from "./entry.mts";
 import { IncaError } from "./error.mts";
 import { assertHostBin, resolveHostBin } from "./host/index.mts";
-import { STAMPED, log, printFault, toFault } from "./log.mts";
+import { STAMPED, log, printFault, toFault, warn } from "./log.mts";
 import { writeMacosApp } from "./macosApp.mts";
 import { checkConfig } from "./printConfig.mts";
 import { retryOnEdit } from "./retryOnEdit.mts";
@@ -70,20 +70,20 @@ const UNNAMED: readonly string[] = [
 
 /**
  * The app's full config, or `undefined` when it names itself nowhere,
- * which is reported on `stdout` unless `signal` has aborted.
+ * which is reported on `stderr` unless `signal` has aborted.
  *
  * @throws if the config can't be read for any other reason
  */
 async function resolveMetadata(
   cwd: string,
-  stdout: NodeJS.WritableStream,
+  stderr: NodeJS.WritableStream,
   signal: AbortSignal,
 ): Promise<ResolvedAppConfig | undefined> {
   try {
     return await resolveAppConfig(cwd);
   } catch (error) {
     if (!(error instanceof IncaError) || !UNNAMED.includes(error.code)) throw error;
-    if (!signal.aborted) log(stdout, `running unnamed. ${error.message}`, STAMPED);
+    if (!signal.aborted) warn(stderr, `running unnamed. ${error.message}`, STAMPED);
     return undefined;
   }
 }
@@ -96,14 +96,14 @@ async function resolveMetadata(
  * launched from.
  *
  * `undefined` on every other platform, and whenever the bundle can't be
- * assembled. It is reported on `stdout` unless `signal` has aborted, and the host is launched
+ * assembled. It is reported on `stderr` unless `signal` has aborted, and the host is launched
  * unbundled.
  */
 async function bundleExecutable(
   cwd: string,
   metadata: ResolvedAppConfig | undefined,
   hostBin: string,
-  stdout: NodeJS.WritableStream,
+  stderr: NodeJS.WritableStream,
   signal: AbortSignal,
 ): Promise<string | undefined> {
   if (process.platform !== "darwin" || !metadata) return undefined;
@@ -117,7 +117,7 @@ async function bundleExecutable(
     });
     return app.executablePath;
   } catch (error) {
-    if (!signal.aborted) log(stdout, `running unbundled. ${toFault(error).message}`, STAMPED);
+    if (!signal.aborted) warn(stderr, `running unbundled. ${toFault(error).message}`, STAMPED);
     return undefined;
   }
 }
@@ -243,7 +243,7 @@ export async function dev(options: DevOptions): Promise<void> {
         const automaticEntry = options.entry === undefined && config.entry === undefined;
         const entry = options.entry ?? config.entry ?? (await resolveEntry(cwd, frontend));
         if (stopping) return undefined;
-        const metadata = await resolveMetadata(cwd, stdout, options.signal);
+        const metadata = await resolveMetadata(cwd, stderr, options.signal);
         if (stopping) return undefined;
         const runtimeConfig = metadata
           ? runtimeConfigOf(metadata, { dev: true })
@@ -255,7 +255,7 @@ export async function dev(options: DevOptions): Promise<void> {
     if (!resolved) return;
     const { entry, automaticEntry, metadata, runtimeConfig } = resolved;
     const devDir = devDirOf(cwd);
-    const hostBin = (await bundleExecutable(cwd, metadata, bin, stdout, options.signal)) ?? bin;
+    const hostBin = (await bundleExecutable(cwd, metadata, bin, stderr, options.signal)) ?? bin;
     if (stopping) return;
 
     let client: HostClient | undefined;

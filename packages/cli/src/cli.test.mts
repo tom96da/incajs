@@ -252,7 +252,7 @@ describe("run", () => {
       process.emit(signal);
 
       expect(options?.signal.aborted).toBe(true);
-      expect(written(stderr)).toContain("[inca] shutting down");
+      expect(written(stdout)).toContain("[inca] shutting down");
     },
   );
 
@@ -288,7 +288,7 @@ describe("run", () => {
     process.emit("SIGINT");
     process.emit("SIGTERM");
 
-    expect(written(stderr).match(/\[inca\] shutting down/g)).toHaveLength(1);
+    expect(written(stdout).match(/\[inca\] shutting down/g)).toHaveLength(1);
   });
 
   it("sets a non-zero exit code and prints a readable error when dev fails", async () => {

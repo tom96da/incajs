@@ -9,7 +9,7 @@ import { slugify } from "./config/defaults.mts";
 import { resolveAppConfig, runtimeConfigOf } from "./config/loader.mts";
 import { IncaError } from "./error.mts";
 import { assertHostBin, hostLicenseFiles, resolveHostBin } from "./host/index.mts";
-import { log } from "./log.mts";
+import { warn } from "./log.mts";
 import { writeMacosApp } from "./macosApp.mts";
 import { checkConfig } from "./printConfig.mts";
 import type { ResolvedAppConfig } from "./config/loader.mts";
@@ -48,7 +48,9 @@ export interface PackageAppOptions {
   target?: PackageTarget;
   /** Where progress notes and the bundler's own output go. Defaults to `process.stdout`. */
   stdout?: NodeJS.WritableStream;
-  /** Where the bundler's warnings and errors go. Defaults to `process.stderr`. */
+  /**
+   * Where the bundler's and `packageApp`'s warnings and errors go. Defaults to `process.stderr`.
+   */
   stderr?: NodeJS.WritableStream;
 }
 
@@ -194,18 +196,19 @@ async function packageLinux({
 export async function packageApp(options: PackageAppOptions = {}): Promise<PackageResult> {
   const cwd = options.cwd ?? process.cwd();
   const stdout = options.stdout ?? process.stdout;
+  const stderr = options.stderr ?? process.stderr;
   const target = options.target ?? targetForPlatform();
 
   const metadata = await resolveAppConfig(cwd);
   if (metadata.usedPackageJsonKey) {
-    log(
-      stdout,
+    warn(
+      stderr,
       `the "inca" key in package.json is deprecated. move these settings to inca.config.ts`,
     );
   }
   if (metadata.identifierIsDefault) {
-    log(
-      stdout,
+    warn(
+      stderr,
       `no "identifier" set in inca.config.ts. using generated identifier ${metadata.identifier}`,
     );
   }

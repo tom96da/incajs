@@ -67,6 +67,12 @@ user.
   documentation of a dependency. Don't point at `handbook/`, backlog ids,
   planning terms such as phases, or files of another package.
 
+## CLI output
+
+- **Streams**: information goes to stdout, a warning and a failure to stderr, and `config` and
+  `info`, which print data on stdout, write their information to stderr. The unpack line of the host
+  binary and the host's own output go to stderr in every command.
+
 ## Internal items
 
 The parameters, return values, fields and methods of an item that users never
