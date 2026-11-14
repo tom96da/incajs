@@ -113,6 +113,18 @@ impl VirtualTree {
         self.ancestors(id).last().ok_or(missing(id))
     }
 
+    /// Whether `id` is connected, or the top of its parent chain is a document node: the
+    /// declared document or a copy of it. `is_connected` stays the measure of focus and hover.
+    #[must_use]
+    pub fn in_document(&self, id: NodeId) -> bool {
+        self.is_connected(id)
+            || self
+                .root_of(id)
+                .ok()
+                .and_then(|top| self.get(top))
+                .is_some_and(VirtualNode::is_document)
+    }
+
     /// The position of `other` relative to `this` as a bit mask: `1` disconnected, `2` preceding,
     /// `4` following, `8` contains, `16` contained by and `32` implementation specific. Equal ids
     /// give `0`. Nodes of different trees give `1 | 32` plus `2` when the top of `other` has the
@@ -474,6 +486,19 @@ mod tests {
             VirtualTree::new().root_of(3),
             Err(TreeError::NodeNotFound(3))
         );
+    }
+
+    #[rstest]
+    #[case::copied_document(0, true)]
+    #[case::element_of_a_copied_document(1, true)]
+    #[case::parentless_element(2, false)]
+    fn in_document_is_true_under_a_copied_document(#[case] at: usize, #[case] expected: bool) {
+        let (mut f, document) = Fixture::with_document();
+        let copies = f.tree.clone_subtree(document, true).unwrap();
+        let loose = node(&mut f.tree, "div");
+        let ids = [copies[0].1, copies[1].1, loose];
+
+        assert_eq!(f.tree.in_document(ids[at]), expected);
     }
 
     #[rstest]

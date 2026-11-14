@@ -279,7 +279,7 @@ pub enum TreeError {
     LeafParent(NodeId),
     /// A reference or removed child that is not a child of the parent.
     NotAChild { parent: NodeId, child: NodeId },
-    /// The document given as the node to insert.
+    /// A document given as the node to insert.
     DocumentInserted(NodeId),
     /// A node the document cannot hold: text, a second element, or a fragment with either.
     DocumentChild(NodeId),
