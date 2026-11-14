@@ -77,7 +77,7 @@ attempt, including a report and its retraction made within one poll.
 
 | `method` | Response | Meaning |
 | --- | --- | --- |
-| `reload` | `null` once the new bundle's evaluation ends | Re-read the bundle at the path given on argv and evaluate it afresh. The config read at startup stands. The window keeps the old bundle meanwhile. A later `reload` replaces a pending one, and every queued id gets the later outcome. Relayed notifications go to the loading bundle while it is pending, and to the window's bundle after it settles. |
+| `reload` | `null` once the new bundle's evaluation ends | Re-read the bundle at the entry path the host started with and evaluate it afresh. The config read at startup stands. The window keeps the old bundle meanwhile. A later `reload` replaces a pending one, and every queued id gets the later outcome. Relayed notifications go to the loading bundle while it is pending, and to the window's bundle after it settles. |
 | `shutdown` | `null` | Exit 0. The client kills the child if it has not exited after the response. |
 
 ### From the host

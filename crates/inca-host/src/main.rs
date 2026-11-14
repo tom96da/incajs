@@ -8,12 +8,17 @@ use std::process::ExitCode;
 
 const USAGE: &str = "usage: inca-host [--dev | --print-config] [<path-to-bundle.js>]";
 
-/// The `bundle.js` beside the executable, or the failure to report.
-fn bundle_beside_exe_or_failure() -> Result<String, ExitCode> {
-    inca_host::bundle_beside_exe()
+/// The `bundle.js` the launcher provides, or the failure to report.
+fn bundle_or_failure() -> Result<String, ExitCode> {
+    inca_host::launcher_bundle()
         .map(|path| path.to_string_lossy().into_owned())
-        .ok_or_else(|| {
-            eprintln!("{USAGE}\nno bundle.js found beside the executable");
+        .map_err(|error| {
+            match error {
+                inca_host::BundleError::NotFound => {
+                    eprintln!("{USAGE}\nno bundle.js found beside the executable");
+                }
+                inca_host::BundleError::Refused(message) => eprintln!("{message}"),
+            }
             ExitCode::FAILURE
         })
 }
@@ -23,15 +28,15 @@ fn main() -> ExitCode {
 
     let args: Vec<String> = env::args().skip(1).collect();
     let (dev, entry_path) = match args.as_slice() {
-        [] => match bundle_beside_exe_or_failure() {
+        [] => match bundle_or_failure() {
             Ok(path) => (false, path),
             Err(code) => return code,
         },
-        [flag] if flag == "--dev" => match bundle_beside_exe_or_failure() {
+        [flag] if flag == "--dev" => match bundle_or_failure() {
             Ok(path) => (true, path),
             Err(code) => return code,
         },
-        [flag] if flag == "--print-config" => match bundle_beside_exe_or_failure() {
+        [flag] if flag == "--print-config" => match bundle_or_failure() {
             Ok(path) => return inca_host::print_config(&path),
             Err(code) => return code,
         },

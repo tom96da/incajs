@@ -21,7 +21,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resolveTestHostBin } from "../support/hostBin.mts";
 
@@ -32,6 +32,7 @@ const hostBin = resolveTestHostBin();
 let dir: string;
 
 beforeEach(async () => {
+  vi.stubEnv("INCA_BUNDLE_PATH", "");
   // The host reports the executable's resolved path, so compare against that.
   dir = await realpath(await mkdtemp(path.join(tmpdir(), "inca-host-packaged-")));
 });
@@ -52,8 +53,9 @@ async function placeExecutable(exeDir: string): Promise<string> {
 function launch(
   exe: string,
   env?: NodeJS.ProcessEnv,
+  args: string[] = [],
 ): Promise<{ code: number | null; stdout: string; stderr: string }> {
-  const child = spawn(exe, [], { cwd: "/", stdio: ["ignore", "pipe", "pipe"], env });
+  const child = spawn(exe, args, { cwd: "/", stdio: ["ignore", "pipe", "pipe"], env });
   let stdout = "";
   let stderr = "";
   child.stdout.setEncoding("utf8").on("data", (chunk: string) => (stdout += chunk));
@@ -73,7 +75,7 @@ const homeEnv = (home: string): NodeJS.ProcessEnv => ({
   XDG_STATE_HOME: home,
 });
 
-describe("a packaged app launched with no arguments", () => {
+describe("a packaged app launch", () => {
   it(
     "runs the bundle beside the executable (flat layout)",
     async () => {
@@ -142,6 +144,74 @@ describe("a packaged app launched with no arguments", () => {
       expect(code).toBe(1);
       expect(stdout).toBe("");
       expect(stderr).toContain("no bundle.js found beside the executable");
+    },
+    TIMEOUT_MS,
+  );
+
+  it(
+    "ignores INCA_BUNDLE_PATH when a bundle is beside the executable",
+    async () => {
+      const exe = await placeExecutable(path.join(dir, "app"));
+      await writeFile(
+        path.join(dir, "app", "bundle.js"),
+        'console.log("beside");\nthrow new Error("boom");\n',
+      );
+      const other = path.join(dir, "other.js");
+      await writeFile(other, 'console.log("variable");\nthrow new Error("boom");\n');
+      vi.stubEnv("INCA_BUNDLE_PATH", other);
+
+      const { stderr } = await launch(exe, homeEnv(dir));
+
+      expect(stderr).toMatch(/^beside\n/);
+    },
+    TIMEOUT_MS,
+  );
+
+  it(
+    "runs the bundle INCA_BUNDLE_PATH names when none is beside the executable",
+    async () => {
+      const exe = await placeExecutable(path.join(dir, "app"));
+      const other = path.join(dir, "other.js");
+      await writeFile(other, THROWING_BUNDLE);
+      vi.stubEnv("INCA_BUNDLE_PATH", other);
+
+      const { code, stderr } = await launch(exe, homeEnv(dir));
+
+      expect(code).toBe(1);
+      expect(stderr).toMatch(/^marker\nError: boom\n/);
+    },
+    TIMEOUT_MS,
+  );
+
+  it(
+    "an explicit path argument wins over INCA_BUNDLE_PATH",
+    async () => {
+      const exe = await placeExecutable(path.join(dir, "app"));
+      const explicit = path.join(dir, "explicit.js");
+      await writeFile(explicit, 'console.log("explicit");\nthrow new Error("boom");\n');
+      const other = path.join(dir, "other.js");
+      await writeFile(other, 'console.log("variable");\nthrow new Error("boom");\n');
+      vi.stubEnv("INCA_BUNDLE_PATH", other);
+
+      const { stderr } = await launch(exe, homeEnv(dir), [explicit]);
+
+      expect(stderr).toMatch(/^explicit\n/);
+    },
+    TIMEOUT_MS,
+  );
+
+  it(
+    "exits 1 naming INCA_BUNDLE_PATH when it names a missing file",
+    async () => {
+      const exe = await placeExecutable(path.join(dir, "app"));
+      const missing = path.join(dir, "missing.js");
+      vi.stubEnv("INCA_BUNDLE_PATH", missing);
+
+      const { code, stdout, stderr } = await launch(exe, homeEnv(dir));
+
+      expect(code).toBe(1);
+      expect(stdout).toBe("");
+      expect(stderr).toBe(`INCA_BUNDLE_PATH names no file: ${missing}\n`);
     },
     TIMEOUT_MS,
   );

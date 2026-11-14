@@ -9,7 +9,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { afterEach, beforeEach, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { resolveTestHostBin } from "../support/hostBin.mts";
 
@@ -18,6 +18,7 @@ const hostBin = resolveTestHostBin();
 let dir: string;
 
 beforeEach(async () => {
+  vi.stubEnv("INCA_BUNDLE_PATH", "");
   dir = await mkdtemp(path.join(tmpdir(), "inca-host-print-config-"));
 });
 
@@ -101,4 +102,15 @@ it("exits 1 with the usage when --print-config comes with --dev", async () => {
   expect(result.status).toBe(1);
   expect(result.stdout).toBe("");
   expect(result.stderr).toContain("usage: inca-host [--dev | --print-config]");
+});
+
+it("prints the config of the bundle INCA_BUNDLE_PATH names when none is beside the executable", async () => {
+  await writeFile(path.join(dir, "bundle.js"), "");
+  await writeFile(path.join(dir, "inca.json"), JSON.stringify({ name: "FromVariable" }));
+  vi.stubEnv("INCA_BUNDLE_PATH", path.join(dir, "bundle.js"));
+
+  const result = run(["--print-config"]);
+
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout)).toMatchObject({ name: "FromVariable" });
 });

@@ -20,4 +20,4 @@ pub mod harness;
 #[cfg(any(test, feature = "test-support"))]
 pub mod snapshot;
 
-pub use app::{bundle_beside_exe, print_config, run_bundle};
+pub use app::{BundleError, launcher_bundle, print_config, run_bundle};
