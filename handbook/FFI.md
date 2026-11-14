@@ -101,9 +101,9 @@ that starts with `-` are unknown.
 A px value is a number or a string: a decimal with optional sign and exponent,
 then `px` in any case (`"10px"`), or a string that reads as zero (`"0"`).
 Surrounding whitespace is ignored. A decimal value is a number or a string
-holding one decimal (`"0.5"`). Neither takes `%`. A text above the largest value (`1e999`,
-`99999999px`) applies at the largest value. Each key keeps its range; `opacity` clamps, any other
-value outside its range warns.
+holding one decimal (`"0.5"`). Only `opacity` takes a `%` string (`"50%"`). A text above the
+largest value (`1e999px`) applies at the largest value. Each key keeps its range;
+`opacity` clamps, any other value outside its range warns.
 
 The text that a style declaration reads back, through `getPropertyValue()`,
 `cssText`, the `style` attribute and `outerHTML`, is computed from the stored
@@ -112,8 +112,9 @@ value:
 - A px value or an `auto` value reads as its number in px, with `auto` in lower
   case.
 - A number reads as its JS number text.
-- An `opacity` reads as the number as written, without clamping. A text that overflows reads as the
-  largest number (`1e999` reads `3.4028234663852886e+38`).
+- An `opacity` reads as the number as written and a percentage reads as its fraction (`50%` reads
+  `0.5`), without clamping. A text that overflows reads as the largest number (`1e999` reads
+  `3.4028234663852886e+38`).
 - A keyword reads as its entry in the keyword list that matches it, ignoring
   ASCII case.
 - A keyword pair reads as both keywords, or as one keyword when they are equal.
@@ -139,7 +140,7 @@ value:
 | `padding` (+ `_x`/`_y`/`_top`/`_right`/`_bottom`/`_left`) | px value (`>= 0`) | `padding` sets the four sides, `_x` the left and right, `_y` the top and bottom. A side beats an axis and an axis beats `padding`. A value of the wrong type falls through to the next key. |
 | `margin` (+ the same suffixes) | px value (negatives allowed) or `"auto"` | The sides and precedence of `padding`. |
 | `flex_grow` / `flex_shrink` | decimal value `>= 0` | |
-| `opacity` | decimal value, clamped to `0..=1` (`NaN` ignored) | |
+| `opacity` | decimal value or percentage, clamped to `0..=1` (`NaN` ignored) | |
 | `min_width` / `min_height` / `max_width` / `max_height` | px value (`>= 0`) or `"auto"` | |
 
 A color string ignores surrounding ASCII whitespace. `rgb()` and `rgba()` take
