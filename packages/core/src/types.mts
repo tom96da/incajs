@@ -24,7 +24,8 @@ export type Overflow = "visible" | "hidden" | "clip" | "scroll" | "auto";
 /**
  * A size in px: a number, `"0"` or a string such as `"10px"`. A string that reads as zero
  * (`"0.0"`, `"-0"`) is also valid, and the unit is case-insensitive. The host warns on a space
- * before `px`, a trailing `.` and hexadecimal, binary and octal, which the type admits.
+ * before `px`, a trailing `.`, a `.` before the exponent, hexadecimal, binary and octal, which the
+ * type admits.
  */
 export type Px = number | "0" | `${number}px`;
 
@@ -97,17 +98,20 @@ export interface StyleProps {
   marginLeft?: Px | "auto";
   /**
    * Share (`>= 0`) of the free space in the parent's main axis this node takes.
-   * The host warns on a trailing `.`, hexadecimal, binary and octal, which the type admits.
+   * The host warns on a trailing `.`, a `.` before the exponent, hexadecimal, binary and octal,
+   * which the type admits.
    */
   flexGrow?: number | `${number}`;
   /**
    * Share (`>= 0`) of the overflow in the parent's main axis this node gives up.
-   * The host warns on a trailing `.`, hexadecimal, binary and octal, which the type admits.
+   * The host warns on a trailing `.`, a `.` before the exponent, hexadecimal, binary and octal,
+   * which the type admits.
    */
   flexShrink?: number | `${number}`;
   /**
    * Opacity from `0` to `1`, applied to this node and its descendants; values outside are clamped.
-   * The host warns on a trailing `.`, hexadecimal, binary and octal, which the type admits.
+   * The host warns on a trailing `.`, a `.` before the exponent, hexadecimal, binary and octal, which
+   * the type admits.
    */
   opacity?: number | `${number}`;
   /** Minimum width in px (`>= 0`), or `"auto"` for the default minimum. */

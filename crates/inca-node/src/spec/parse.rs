@@ -28,10 +28,16 @@ pub(super) fn computed_axes(
     (computed(x, y), computed(y, x))
 }
 
-/// A decimal number: the syntax of `f64` ending in an ASCII digit. `5.`,
-/// `inf`, `infinity` and `nan` are not decimals.
+/// A decimal number in the CSS number syntax: it ends in an ASCII digit and every `.` is
+/// followed by one. `5.`, `1.e2`, `inf`, `infinity` and `nan` are not decimals.
 pub(super) fn decimal(s: &str) -> Option<f64> {
     if !s.as_bytes().last()?.is_ascii_digit() {
+        return None;
+    }
+    if s.as_bytes()
+        .windows(2)
+        .any(|pair| pair[0] == b'.' && !pair[1].is_ascii_digit())
+    {
         return None;
     }
     s.parse().ok()
@@ -462,6 +468,10 @@ mod tests {
     #[case::plus_sign("+10px", 10.0)]
     #[case::leading_dot(".5px", 0.5)]
     #[case::exponent("1e1px", 10.0)]
+    #[case::upper_case_exponent("1E2px", 100.0)]
+    #[case::signed_exponent("1e+2px", 100.0)]
+    #[case::negative_exponent("1e-1px", 0.1)]
+    #[case::leading_dot_exponent(".5e1px", 5.0)]
     #[case::negative_zero("-0px", 0.0)]
     #[case::unitless_zero("0", 0.0)]
     #[case::unitless_decimal_zero("0.0", 0.0)]
@@ -479,6 +489,10 @@ mod tests {
     #[case::space_inside_number("1 0px")]
     #[case::unit_only("px")]
     #[case::trailing_dot("5.px")]
+    #[case::dot_before_exponent("1.e2px")]
+    #[case::exponent_without_digits("1epx")]
+    #[case::exponent_sign_without_digits("1e+px")]
+    #[case::fraction_in_exponent("1e2.5px")]
     #[case::infinity("infpx")]
     #[case::em("10em")]
     #[case::percent("50%")]
@@ -577,6 +591,7 @@ mod tests {
     #[case::hex("0x1")]
     #[case::infinity("Infinity")]
     #[case::trailing_dot("5.")]
+    #[case::dot_before_exponent("1.e2")]
     #[case::percent("50%")]
     fn a_numeric_string_in_a_wrong_form_warns(#[case] written: &str) {
         let (style, warnings) = style_and_warnings(&[("opacity", text(written))]);
