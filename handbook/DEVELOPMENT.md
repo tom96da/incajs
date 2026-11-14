@@ -37,7 +37,8 @@ History is in [PLAN.md](./PLAN.md) and [CHANGELOG.md](../CHANGELOG.md).
 
 ### In progress
 
-None at the moment.
+- **JS and Rust boundary**: the calls that read and change the node tree are collected in one place and
+  measured before and after the change.
 
 ### Not started
 
