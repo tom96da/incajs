@@ -225,6 +225,16 @@ describe("registry groups", () => {
     expect(registeredGroupCount() - base).toBe(0);
   });
 
+  it("ignores a registration id that no listener holds", () => {
+    const listener = vi.fn<() => void>();
+    addEventListener(9001, "click", listener);
+
+    releaseCallbacks([2_000_000_000]);
+
+    expect(registeredGroupCount() - base).toBe(1);
+    removeEventListener(9001, "click", listener);
+  });
+
   it("keeps a group while another listener of it remains", () => {
     const kept = vi.fn<() => void>();
     addEventListener(9001, "click", kept);
