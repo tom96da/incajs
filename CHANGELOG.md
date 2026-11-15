@@ -12,12 +12,19 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Added
 
+- `window` needs no import in a module ([7bd158cd](https://github.com/tom96da/incajs/commit/7bd158cd))
+- `opacity` takes a percentage such as `50%` ([010c1b60](https://github.com/tom96da/incajs/commit/010c1b60))
 - `document.cloneNode()` returns a copy of the document ([d5970d07](https://github.com/tom96da/incajs/commit/d5970d07))
 
 ### Changed
 
+- the CLI writes warnings to stderr and information to stdout ([ce166a6f](https://github.com/tom96da/incajs/commit/ce166a6f))
+- a size above the largest value, such as `1e999px`, applies at the largest value ([7e323be3](https://github.com/tom96da/incajs/commit/7e323be3))
+- a number with a dot before the exponent, such as `1.e2px`, is ignored ([c5ad5433](https://github.com/tom96da/incajs/commit/c5ad5433))
+- `incajs/globals` declares `document` as a constant ([7fd0ef97](https://github.com/tom96da/incajs/commit/7fd0ef97))
 - node handles have no `parent` member, and `parentNode` reads the parent ([c8001eb1](https://github.com/tom96da/incajs/commit/c8001eb1))
 - `document.activeElement` reads the mount container when nothing has focus ([d5970d07](https://github.com/tom96da/incajs/commit/d5970d07))
+- reversing and clearing a list of 1000 items takes less than half the time ([c8001eb1](https://github.com/tom96da/incajs/commit/c8001eb1))
 
 ### Fixed
 
