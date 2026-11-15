@@ -628,7 +628,8 @@ mod tests {
         dir.to_path_buf()
     }
 
-    #[cfg(unix)]
+    // macOS refuses a file name with invalid UTF-8, so the file only exists on Linux.
+    #[cfg(target_os = "linux")]
     fn non_utf8(dir: &Path) -> PathBuf {
         use std::os::unix::ffi::OsStrExt;
 
@@ -640,7 +641,7 @@ mod tests {
     #[rstest]
     #[case::missing(missing)]
     #[case::directory(directory)]
-    #[cfg_attr(unix, case::non_utf8(non_utf8))]
+    #[cfg_attr(target_os = "linux", case::non_utf8(non_utf8))]
     fn a_variable_that_names_no_file_is_refused(#[case] make: fn(&Path) -> PathBuf) {
         let dir = ScratchDir::new("var-no-file");
         let value = make(&dir);
