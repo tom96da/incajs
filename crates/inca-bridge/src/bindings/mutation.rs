@@ -15,7 +15,7 @@ use inca_node::NodeId;
 use inca_node::tree::TEXT_TAG;
 
 use super::Natives;
-use super::convert::{JsNodeId, throw_tree_error};
+use super::convert::{JsNodeId, or_null, throw_tree_error};
 use super::create_element::element_entry;
 use super::host::Host;
 
@@ -156,7 +156,7 @@ fn clone_node<'js>(
                     .then(|| host.tree.text_content(copy))
                     .transpose()
                     .map_err(|err| throw_tree_error(&ctx, err))?;
-                entry.set(2, data)?;
+                entry.set(2, or_null(&ctx, data)?)?;
                 entries.push(entry);
             }
         }
@@ -437,6 +437,20 @@ mod tests {
             .unwrap();
 
         assert_eq!(entry, want);
+    }
+
+    #[rstest]
+    #[case::comment("c")]
+    #[case::fragment("g")]
+    #[case::document("n.documentNodeId()")]
+    fn clone_node_sets_the_data_of_a_non_text_copy_to_null(#[case] node: &str) {
+        let (engine, _host) = engine_with_family();
+
+        let is_null: bool = engine
+            .eval(&format!("n.cloneNode({node}, false)[0][2] === null"))
+            .unwrap();
+
+        assert!(is_null);
     }
 
     #[test]
