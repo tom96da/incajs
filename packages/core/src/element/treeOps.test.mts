@@ -439,6 +439,27 @@ describe("the handles of the table", () => {
     expect(leaf.deref()).toBeDefined();
   });
 
+  it("keeps the descendants of a reinserted branch while its root is attached", async () => {
+    const root = div();
+    const parent = div();
+    const leaf = weakly(() => {
+      const child = div();
+      const grandchild = div();
+      tree.insert(child, root);
+      tree.insert(grandchild, child);
+      (grandchild as unknown as { mark: string }).mark = "kept";
+      return grandchild;
+    });
+    tree.remove(root);
+    tree.insert(root, parent);
+
+    await collectSentinel();
+
+    expect(leaf.deref()).toBeDefined();
+    const grandchild = root.firstChild?.firstChild as unknown as { mark?: string } | null;
+    expect(grandchild?.mark).toBe("kept");
+  });
+
   it("keeps the handle of a descendant of a node removed out of a removed subtree", async () => {
     const mid = div();
     const [top, leaf] = (() => {
