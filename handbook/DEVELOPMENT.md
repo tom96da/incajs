@@ -20,25 +20,24 @@ History is in [PLAN.md](./PLAN.md) and [CHANGELOG.md](../CHANGELOG.md).
 
 ### Recently done
 
+- **Node tree**: the host tree is the only tree. Every link and every read of the tree comes from the
+  host, and the calls into the host sit in one directory. `document.cloneNode()` copies the
+  document.
+- **Document and window**: `window` needs no import, as `document` needs none, and both are
+  defined the same way.
+- **Style values**: `opacity` takes a percentage. A number above the largest value applies at the
+  largest value.
+- **CLI output**: warnings go to stderr and information to stdout.
+- **Host bundle**: the host takes the location of `bundle.js` from its launcher when none sits beside
+  it.
 - **Element members**: `className`, `classList`, `style` and `dataset`. A string bound to `:style`
   applies as the whole inline style.
 - **Namespaces**: `document.createElementNS()` creates elements with a namespace, and an element
   reports its namespace and prefix. `innerHTML` keeps svg and math content in its namespace.
-- **Nodes**: tree links, the mutation members, fragments, cloning and the
-  relations between nodes. Template elements hold their content, and HTML
-  strings parse into the tree through `innerHTML` and `insertAdjacentHTML`,
-  and serialize back out through `outerHTML`.
-- **Styles**: `<style>` elements, `<style>` blocks, scoped styles and CSS
-  imports apply, and `:hover`, `:active` and `:focus` match. A style edit
-  keeps component state under HMR.
-- **Built-ins**: the timers, `requestAnimationFrame()`, `URL` and
-  `performance.now()`. `incajs/globals` declares the types of every built-in
-  global, and `console` prints the fields of a `URL`.
 
 ### In progress
 
-- **JS and Rust boundary**: the calls that read and change the node tree are collected in one place and
-  measured before and after the change.
+None at the moment.
 
 ### Not started
 
