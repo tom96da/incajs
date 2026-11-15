@@ -4,7 +4,7 @@
 // The host defines these globals before the app runs. This file carries their types.
 declare global {
   /** The document of the app. The build adds its import to every module that names it. */
-  var document: import("incajs").IncaDocument;
+  const document: import("incajs").IncaDocument;
 
   /** The window of the app. The build adds its import to every module that names it. */
   const window: import("incajs").IncaWindow;

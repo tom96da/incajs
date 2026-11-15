@@ -58,7 +58,7 @@ import { queryMembers, selectorMembers } from "./selectors.mts";
 import { attachContent } from "./templateContent.mts";
 import { characterDataMembers, createIncaText } from "./text.mts";
 import type { ElementName } from "../ffi/index.mts";
-import type { IncaDocument, NodeId, TagName } from "../types.mts";
+import type { IncaDocument, IncaWindow, NodeId, TagName } from "../types.mts";
 import type { AttributeMembers } from "./attributes.mts";
 import type { ClassMembers } from "./classList.mts";
 import type { DatasetMembers } from "./dataset.mts";
@@ -378,6 +378,21 @@ let theDocument: IncaDocument | undefined;
  */
 export function documentHandle(): IncaDocument {
   return (theDocument ??= createIncaDocument(documentNodeId(), false));
+}
+
+/** The handle of the window, built on first use and kept for the life of the realm. */
+let theWindow: IncaWindow | undefined;
+
+/**
+ * Returns the handle of the window.
+ * @returns the handle, which names the same object on every call
+ */
+export function windowHandle(): IncaWindow {
+  return (theWindow ??= Object.defineProperty(
+    withEventHandlers(createEventTarget("$window", ["wheel"]), () => false),
+    Symbol.toStringTag,
+    { value: "Window" },
+  ) as IncaWindow);
 }
 
 /**

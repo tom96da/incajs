@@ -4,6 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { nativeStub } from "../tests/setup.mts";
+import { windowHandle } from "./element/handle.mts";
 import { window } from "./window.mts";
 import type { HostCallback } from "./ffi/index.mts";
 
@@ -33,6 +34,10 @@ beforeEach(() => {
 });
 
 describe("window", () => {
+  it("is the handle that windowHandle returns on every call", () => {
+    expect(windowHandle()).toBe(window);
+  });
+
   it("listens on the window target", () => {
     const listener = vi.fn<() => void>();
 
