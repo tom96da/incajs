@@ -1850,3 +1850,12 @@ A fixed entry is deleted and its ID is never reused.
   call that returns the element child at an index. Measure again with a built app that mounts a
   list of 1000 items and reads `children`, `parentNode` and `nextSibling` on the release host.
 
+- **B-340 The window target is a string that the script side repeats**
+  `Units: bridge,core · Size: S · Impact: Low`
+
+  The host names the window as an event target with the tag `"$window"`, which is no node. `document`
+  has a host call, `documentNodeId()`, and the script side reads the id from it. The window has no
+  such call, so the tag is written out in the window handle, in the lookup of a target by id and in
+  the type of an event target. Fix: add a host call that returns the target of the window, as
+  `documentNodeId()` does for the document, and let the wrapper of the host calls hand it to
+  both places.
