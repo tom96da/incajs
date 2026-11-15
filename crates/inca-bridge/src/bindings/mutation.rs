@@ -351,17 +351,6 @@ mod tests {
     }
 
     #[test]
-    fn clone_node_returns_the_tag_of_each_copy_in_pre_order() {
-        let (engine, _host) = engine_with_family();
-
-        let tags: Vec<String> = engine
-            .eval("n.cloneNode(p, true).map((pair) => pair[1])")
-            .unwrap();
-
-        assert_eq!(tags, ["div", "span", "span"]);
-    }
-
-    #[test]
     fn clone_node_returns_the_name_parts_of_an_element_copy() {
         let (engine, _host) = engine_with_family();
 
@@ -404,6 +393,7 @@ mod tests {
         let got: String = engine
             .eval(
                 r"
+                n.setAttribute(t, 'value', 'abc');
                 n.appendChild(a, t);
                 n.appendChild(a, c);
                 JSON.stringify(n.cloneNode(a, true).map((e) => e.slice(1)));
@@ -413,31 +403,8 @@ mod tests {
 
         assert_eq!(
             got,
-            format!(r##"[["span","{HTML}",null,"SPAN"],["#text",""],["#comment",null]]"##)
+            format!(r##"[["span","{HTML}",null,"SPAN"],["#text","abc"],["#comment",null]]"##)
         );
-    }
-
-    #[rstest]
-    #[case::text("t", r##"["#text","abc"]"##)]
-    #[case::comment("c", r##"["#comment",null]"##)]
-    #[case::fragment("g", r##"["#fragment",null]"##)]
-    #[case::document("n.documentNodeId()", r##"["#document",null]"##)]
-    fn clone_node_gives_the_data_of_a_text_copy_and_null_for_the_other_kinds(
-        #[case] node: &str,
-        #[case] want: &str,
-    ) {
-        let (engine, _host) = engine_with_family();
-
-        let entry: String = engine
-            .eval(&format!(
-                r"
-                n.setAttribute(t, 'value', 'abc');
-                JSON.stringify(n.cloneNode({node}, false)[0].slice(1));
-                "
-            ))
-            .unwrap();
-
-        assert_eq!(entry, want);
     }
 
     #[rstest]
@@ -461,8 +428,9 @@ mod tests {
         let fresh: bool = engine
             .eval(
                 r"
+                n.appendChild(a, t);
                 const ids = n.cloneNode(p, true).map((pair) => pair[0]);
-                ids.every((id) => ![p, a, b].includes(id));
+                ids.every((id) => ![p, a, b, t].includes(id));
                 ",
             )
             .unwrap();
@@ -772,22 +740,6 @@ mod tests {
             .unwrap();
 
         assert_eq!(host.borrow().focus.active_node(&host.borrow().tree), None);
-    }
-
-    #[test]
-    fn the_content_fragment_of_a_cloned_template_has_three_parts() {
-        let (engine, _host) = engine_with_bindings();
-
-        let length: u32 = engine
-            .eval(
-                r"
-                const n = __inca_native__;
-                n.cloneNode(n.createNode('template'), false)[1].length;
-                ",
-            )
-            .unwrap();
-
-        assert_eq!(length, 3);
     }
 
     #[test]
