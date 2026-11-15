@@ -37,7 +37,10 @@ History is in [PLAN.md](./PLAN.md) and [CHANGELOG.md](../CHANGELOG.md).
 
 ### In progress
 
-None at the moment.
+- **Modern mutation**: the members that insert, replace and remove nodes in one call.
+- **Built-ins**: `crypto`, `structuredClone` and `AbortController`.
+- **Scrollbars**: a thumb that follows the platform setting, with dragging.
+- **Test channel**: a development build that a test can click, snapshot and wait on from outside.
 
 ### Not started
 
