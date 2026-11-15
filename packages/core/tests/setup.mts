@@ -19,12 +19,13 @@ if (!("Document" in globalThis)) {
 type Native = typeof globalThis.__inca_native__;
 
 /**
- * A stand-in for `__inca_native__` with the calls core makes while it builds `document`.
+ * A stand-in for `__inca_native__` with the calls core makes while it builds `document`, and the
+ * release that the collection of a handle makes at any time.
  * @param extra - the calls and values a test adds or replaces
  * @returns the stand-in, in which `documentNodeId()` gives 1
  */
 export function nativeStub(extra: Partial<Native> = {}): Native {
-  return { documentNodeId: () => 1, ...extra } as Native;
+  return { documentNodeId: () => 1, releaseNode: () => undefined, ...extra } as Native;
 }
 
 globalThis.__inca_native__ ??= nativeStub();
