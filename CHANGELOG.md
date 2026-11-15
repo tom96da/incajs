@@ -10,6 +10,19 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- `document.cloneNode()` returns a copy of the document ([d5970d07](https://github.com/tom96da/incajs/commit/d5970d07))
+
+### Changed
+
+- node handles have no `parent` member, and `parentNode` reads the parent ([c8001eb1](https://github.com/tom96da/incajs/commit/c8001eb1))
+- `document.activeElement` reads the mount container when nothing has focus ([d5970d07](https://github.com/tom96da/incajs/commit/d5970d07))
+
+### Fixed
+
+- Vue finds the nodes a script inserted into `document` beside the mount container ([c8001eb1](https://github.com/tom96da/incajs/commit/c8001eb1))
+
 ## [0.0.32] - 2026-11-14
 
 ### Added
