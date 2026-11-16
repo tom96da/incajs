@@ -205,13 +205,16 @@ with the differences below. The listener methods are described in
   - `forEach()`
   - `[Symbol.iterator]`
 - The `className` of an SVG element is a string, and assigning to it writes the `class` attribute.
+- These constructors throw a `TypeError`. Create nodes with the methods of `document`.
+  - `new EventTarget()`
+  - `new Text()`
+  - `new Comment()`
+  - `new DocumentFragment()`
 - `document.createDocumentFragment()` returns a fragment without these members:
   - `querySelector()` and `querySelectorAll()`
   - `children`
   - `getElementById()`
   - the listener methods
-
-  The global `DocumentFragment` does not exist.
 - The nodes of a copy of `document`, and the nodes its creation methods make, read `document` as
   their `ownerDocument`.
 - The methods below store U+FFFD for each half of a surrogate pair they split:

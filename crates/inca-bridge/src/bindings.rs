@@ -86,6 +86,9 @@ pub fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
     install_scroll(&natives)?;
     install_selector(&natives)?;
     install_input(&natives)?;
+    natives.set("interfacePrototypes", |_host| {
+        crate::interfaces::interface_prototypes()
+    })?;
     inca_jsenv::timers::install(ctx, &host.borrow().timers)?;
     inca_jsenv::frames::install(ctx, &host.borrow().frames)?;
     crate::event::install(ctx)?;
