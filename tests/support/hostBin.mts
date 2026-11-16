@@ -6,6 +6,7 @@ import path from "node:path";
 
 /**
  * Locates the host binary the e2e tests start.
+ * The click tests need the debug binary built with the automation feature.
  * @returns `target/debug/inca-host`, else `target/release/inca-host`
  * @throws if neither binary exists. The tests never build one.
  */
@@ -16,6 +17,6 @@ export function resolveTestHostBin(): string {
   if (existsSync(debug)) return debug;
   if (existsSync(release)) return release;
   throw new Error(
-    `no inca-host binary found at ${debug} or ${release}. run \`cargo build -p inca-host\` first`,
+    `no inca-host binary found at ${debug} or ${release}. run \`cargo build -p inca-host --features automation\` first`,
   );
 }
