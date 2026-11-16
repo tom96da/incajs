@@ -13,6 +13,7 @@ import { handlerMembers } from "./eventHandlers.mts";
 import { layoutMembers, offsetMembers } from "./geometry.mts";
 import { htmlMembers } from "./html.mts";
 import { styleMembers } from "./inlineStyle.mts";
+import { childNodeMutationMembers, parentNodeMutationMembers } from "./insertionMembers.mts";
 import { clickMembers, focusMembers, pointerCaptureMembers } from "./interaction.mts";
 import {
   DOCUMENT_RULE,
@@ -57,6 +58,20 @@ function defineKind(proto: object, kind: string): void {
 }
 
 /**
+ * Defines the members that insert nodes and lists them in the `Symbol.unscopables` of `proto`.
+ * @param proto - the prototype
+ * @param sets - the member objects, built for this prototype
+ */
+function defineInsertionMembers(proto: object, ...sets: object[]): void {
+  const names = Object.create(null) as Record<string, true>;
+  for (const set of sets) {
+    defineMembers(proto, set);
+    for (const name of Object.keys(set)) names[name] = true;
+  }
+  Object.defineProperty(proto, Symbol.unscopables, { value: names, configurable: true });
+}
+
+/**
  * Defines the members of the node interfaces on the host prototypes. Each mixin member is built
  * again for each interface that includes it, so each interface has its own functions.
  * @param builders - the functions that build and find handles
@@ -85,6 +100,7 @@ export function installInterfaces(builders: HandleBuilders): void {
 
   defineMembers(all.CharacterData, characterDataMembers());
   defineMembers(all.CharacterData, nonDocumentTypeChildNodeMembers(builders));
+  defineInsertionMembers(all.CharacterData, childNodeMutationMembers(builders));
 
   defineMembers(all.Text, textMembers());
   defineKind(all.Text, "text");
@@ -101,6 +117,11 @@ export function installInterfaces(builders: HandleBuilders): void {
   defineMembers(all.Element, pointerCaptureMembers());
   defineMembers(all.Element, nonDocumentTypeChildNodeMembers(builders));
   parentNode(all.Element);
+  defineInsertionMembers(
+    all.Element,
+    parentNodeMutationMembers(builders),
+    childNodeMutationMembers(builders),
+  );
   defineKind(all.Element, "element");
 
   defineMembers(all.HTMLElement, clickMembers());
@@ -109,10 +130,12 @@ export function installInterfaces(builders: HandleBuilders): void {
   shared(all.ForeignElement);
 
   parentNode(all.DocumentFragment);
+  defineInsertionMembers(all.DocumentFragment, parentNodeMutationMembers(builders));
   defineKind(all.DocumentFragment, "fragment");
 
   defineMembers(all.Document, documentMembers(builders));
   parentNode(all.Document);
+  defineInsertionMembers(all.Document, parentNodeMutationMembers(builders));
   defineMembers(
     all.Document,
     handlerMembers((self) => receiverOf(self, DOCUMENT_RULE)),

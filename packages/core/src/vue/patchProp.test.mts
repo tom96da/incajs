@@ -62,6 +62,13 @@ const noMutation = {} as Pick<
   | "compareDocumentPosition"
   | "isSameNode"
   | "isEqualNode"
+  | "append"
+  | "prepend"
+  | "replaceChildren"
+  | "before"
+  | "after"
+  | "replaceWith"
+  | "remove"
 >;
 
 const makeEl = (): IncaElement => ({

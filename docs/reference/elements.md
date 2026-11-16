@@ -182,16 +182,19 @@ with the differences below.
   `releasePointerCapture()` and `hasPointerCapture()`.
 - A node of a removed subtree, of one never inserted, of a fragment or of a copy made by
   `cloneNode()` is freed with that subtree once the script holds no reference to the top of the
-  subtree. Its links then read `null`. Inserting it, or using it as a parent, throws a `TypeError`,
-  and using it as the anchor throws a `NotFoundError`.
+  subtree. Its links then read `null`. `before()`, `after()`, `replaceWith()` and `remove()` on it
+  do nothing. Inserting it, or using it as a parent, throws a `TypeError`, and using it as the
+  anchor throws a `NotFoundError`.
+- `append()`, `prepend()`, `before()`, `after()`, `replaceWith()` and `replaceChildren()` change
+  nothing when they throw, also when they get several nodes.
 - The mount container can be collected while it sits in `document` and the script holds no
   reference to it. A later read returns a new object, without the properties the script set on the
   old one.
 - One run of the app can create 2^32 - 3 nodes in total. A template counts as two, and a removed
   node still counts. After that, every call that creates a node throws a `TypeError`.
 - A node that a template removes (for example with `v-if`) drops its listeners
-  for good. Appending it again does not restore them. `removeChild()` and
-  `replaceChild()` keep the listeners of the node they remove.
+  for good. Appending it again does not restore them. `removeChild()`, `replaceChild()`,
+  `remove()`, `replaceWith()` and `replaceChildren()` keep the listeners of the nodes they remove.
 - `classList` has no index properties. `classList[0]` is `undefined`, and no index shows up when
   you list the keys of the object or serialize it to JSON. Read a token with `item()` or iterate
   over the list.
@@ -227,6 +230,8 @@ with the differences below.
 - The methods below store U+FFFD for each half of a surrogate pair they split:
   - `splitText()`
   - `substringData()`, `insertData()`, `deleteData()`, `replaceData()`
+- A string with a lone surrogate that a member writes into the document, as text data or as an
+  attribute value, throws a `TypeError`.
 - The objects these members return are not instances of the standard classes,
   so `instanceof` against the class name is `false`:
   - `children` (`HTMLCollection`)

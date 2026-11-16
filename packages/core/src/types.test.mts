@@ -8,9 +8,11 @@ import type {
   DOMStringMap,
   DOMTokenList,
   EventHandler,
+  IncaComment,
   IncaElement,
   IncaHTMLElement,
   IncaInputElement,
+  IncaText,
 } from "./element/types.mts";
 import type {
   IncaCompositionEvent,
@@ -292,5 +294,21 @@ describe("the host interface globals", () => {
 
   it("type the prototype of DOMTokenList as the exported interface", () => {
     expectTypeOf<typeof globalThis.DOMTokenList.prototype>().toEqualTypeOf<DOMTokenList>();
+  });
+});
+
+describe("the modern mutation members", () => {
+  it("take nodes and strings and return void", () => {
+    expectTypeOf<IncaElement["append"]>().toBeCallableWith("s", {} as IncaText, {} as IncaElement);
+    expectTypeOf<IncaElement["append"]>().returns.toBeVoid();
+  });
+
+  it("give a text node no append", () => {
+    expectTypeOf<IncaText>().not.toHaveProperty("append");
+  });
+
+  it("give a comment remove and no append", () => {
+    expectTypeOf<IncaComment>().toHaveProperty("remove");
+    expectTypeOf<IncaComment>().not.toHaveProperty("append");
   });
 });

@@ -28,6 +28,15 @@ export type ScrollAlignment = "start" | "center" | "end" | "nearest";
 /** How {@link IncaNative.linkedNode} names the node to reach from a node. */
 export type NodeLink = "parent" | "first" | "last" | "previous" | "next";
 
+/** Where `insertNodes` puts its nodes: into the node or next to it. */
+export type InsertionPlace =
+  | "append"
+  | "prepend"
+  | "before"
+  | "after"
+  | "replaceWith"
+  | "replaceChildren";
+
 /** The namespace of the elements `createElement()` makes. */
 export const HTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
 
@@ -134,6 +143,11 @@ interface IncaNative {
   insertBefore(parentId: NodeId, nodeId: NodeId, refId: NodeId | null): number;
   removeChild(parentId: NodeId, childId: NodeId): void;
   replaceChild(parentId: NodeId, nodeId: NodeId, childId: NodeId): number;
+  insertNodes(
+    nodeId: NodeId,
+    place: InsertionPlace,
+    nodes: (NodeId | string)[],
+  ): [textIds: NodeId[], removedIds: NodeId[]] | null;
   cloneNode(nodeId: NodeId, deep: boolean): (NodeEntry | ElementEntry)[];
   templateContent(nodeId: NodeId): NodeId | null;
   innerHtml(nodeId: NodeId): string;

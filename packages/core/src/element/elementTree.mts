@@ -12,11 +12,18 @@ import {
 } from "./lifecycle.mts";
 import type { NodeLink } from "../ffi/index.mts";
 import type { HandleBuilders } from "./lifecycle.mts";
-import type { NonDocumentTypeChildNodeMembers, ParentNodeMembers } from "./nodeTypes.mts";
+import type {
+  NonDocumentTypeChildNodeMembers,
+  ParentNodeMembers,
+  ParentNodeMutationMembers,
+} from "./nodeTypes.mts";
 import type { IncaElement, IncaNode } from "./types.mts";
 
 /** The ParentNode members the tree gives, the queries excepted. Comments count as no element. */
-export type ElementTreeMembers = Omit<ParentNodeMembers, "querySelector" | "querySelectorAll">;
+export type ElementTreeMembers = Omit<
+  ParentNodeMembers,
+  keyof ParentNodeMutationMembers | "querySelector" | "querySelectorAll"
+>;
 
 /**
  * Finds the element handle of a node id.

@@ -6,6 +6,7 @@ import type { HANDLER_EVENTS } from "./eventHandlers.mts";
 import type { RectLike } from "./geometry.mts";
 import type {
   CharacterDataMembers,
+  ChildNodeMembers,
   NodeMembers,
   NonDocumentTypeChildNodeMembers,
   ParentNodeMembers,
@@ -328,6 +329,7 @@ export interface IncaElement
     IncaEventTarget,
     NodeMembers,
     ParentNodeMembers,
+    ChildNodeMembers,
     NonDocumentTypeChildNodeMembers,
     TextContentMember,
     HtmlMembers {
@@ -546,6 +548,7 @@ export interface IncaComment
     NodeMembers,
     TextContentMember,
     CharacterDataMembers,
+    ChildNodeMembers,
     NonDocumentTypeChildNodeMembers {
   /**
    * The node id the host knows this node by. Internal to the renderer.
@@ -563,6 +566,7 @@ export interface IncaText
     NodeMembers,
     TextContentMember,
     CharacterDataMembers,
+    ChildNodeMembers,
     NonDocumentTypeChildNodeMembers,
     TextMembers {
   /**

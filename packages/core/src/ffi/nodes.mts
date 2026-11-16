@@ -6,6 +6,7 @@ import type { CallbackId, NodeId, TagName } from "../types.mts";
 import type {
   ElementEntry,
   ElementName,
+  InsertionPlace,
   InterfacePrototypes,
   NodeEntry,
   NodeLink,
@@ -161,6 +162,31 @@ export function removeChild(parentId: NodeId, childId: NodeId): void {
  */
 export function replaceChild(parentId: NodeId, nodeId: NodeId, childId: NodeId): number {
   return native().replaceChild(parentId, nodeId, childId);
+}
+
+/**
+ * Inserts `nodes` at `place` of `nodeId`: `"append"` and `"prepend"` into the node, `"before"`,
+ * `"after"` and `"replaceWith"` next to it, and `"replaceChildren"` as its only children. A number
+ * names a node, and a string makes a new text node with the string as its data. A node that has a
+ * parent moves, and a fragment puts its children there in order. The nodes that leave the tree
+ * keep their listeners and are freed at the start of the next frame unless they are inserted or
+ * held with {@link holdNode}.
+ * @param nodeId - the node that names the place
+ * @param place - where the nodes go
+ * @param nodes - the node ids and the strings, in order
+ * @returns the ids of the new text nodes in order and the ids of the nodes the call removed
+ *   from the tree, and `null` when `place` is next to a node that has no parent
+ * @throws {DOMException} `HierarchyRequestError` when the insertion would give a text node or a
+ *   comment a child, put a node inside itself, or give the document text or a second element;
+ *   `NotFoundError` when the node after `"after"` left its parent in the same call
+ * @throws {TypeError} when an id names no node, a string holds a lone surrogate or the ids run out
+ */
+export function insertNodes(
+  nodeId: NodeId,
+  place: InsertionPlace,
+  nodes: (NodeId | string)[],
+): [textIds: NodeId[], removedIds: NodeId[]] | null {
+  return native().insertNodes(nodeId, place, nodes);
 }
 
 /**

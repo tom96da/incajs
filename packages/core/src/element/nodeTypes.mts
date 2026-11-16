@@ -201,8 +201,60 @@ export interface TextMembers {
   splitText(offset: number): IncaText;
 }
 
+/** The members of the nodes that hold children that insert and replace nodes. */
+export interface ParentNodeMutationMembers {
+  /**
+   * Inserts `nodes` after the last child. A string becomes a new text node. A fragment gives up
+   * its children in order, and a node that has a parent moves. With several nodes, a node given
+   * twice takes the place of its last occurrence. When the call throws, no node has moved.
+   * @param nodes - the nodes and strings to insert
+   * @throws {DOMException} named `HierarchyRequestError` when a node is this node or one of its
+   * ancestors, or the insertion gives the document text or a second element
+   * @throws {TypeError} for a `Symbol`, a string with a lone surrogate or a freed node
+   */
+  append(...nodes: (IncaNode | string)[]): void;
+  /**
+   * Inserts `nodes` before the first child that the call does not move. Takes and throws as
+   * {@link ParentNodeMutationMembers.append} does.
+   * @param nodes - the nodes and strings to insert
+   */
+  prepend(...nodes: (IncaNode | string)[]): void;
+  /**
+   * Makes `nodes` the only children. Every other child leaves, keeps its listeners and can be
+   * inserted again. Takes and throws as {@link ParentNodeMutationMembers.append} does. A document
+   * that holds an element throws when it gets an element.
+   * @param nodes - the nodes and strings to insert
+   */
+  replaceChildren(...nodes: (IncaNode | string)[]): void;
+}
+
+/** The members of the nodes that have a parent and leave it or change places in it. */
+export interface ChildNodeMembers {
+  /**
+   * Inserts `nodes` before this node. A node that has no parent does nothing. Takes and throws as
+   * {@link ParentNodeMutationMembers.append} does.
+   * @param nodes - the nodes and strings to insert
+   */
+  before(...nodes: (IncaNode | string)[]): void;
+  /**
+   * Inserts `nodes` after this node. A node that has no parent does nothing. Takes and throws as
+   * {@link ParentNodeMutationMembers.append} does.
+   * @param nodes - the nodes and strings to insert
+   */
+  after(...nodes: (IncaNode | string)[]): void;
+  /**
+   * Puts `nodes` in the place of this node, which leaves its parent unless it is one of them. A
+   * node that has no parent does nothing. Takes and throws as
+   * {@link ParentNodeMutationMembers.append} does.
+   * @param nodes - the nodes and strings to insert
+   */
+  replaceWith(...nodes: (IncaNode | string)[]): void;
+  /** Takes this node out of its parent. It keeps its listeners and can be inserted again. */
+  remove(): void;
+}
+
 /** The members of the nodes that hold children: the child elements and the queries. */
-export interface ParentNodeMembers {
+export interface ParentNodeMembers extends ParentNodeMutationMembers {
   /**
    * The child elements in order, as a live collection. Every read returns the same object, which
    * follows later changes. A removed element lists the element children it kept.
