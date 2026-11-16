@@ -5,12 +5,12 @@
 
 use super::matching::{Node, matching_context};
 use super::{
-    DOCUMENT_TAG, Element, NodeId, SelectorCaches, SelectorError, VirtualTree,
+    DOCUMENT_TAG, Element, FRAGMENT_TAG, NodeId, SelectorCaches, SelectorError, VirtualTree,
     matches_selector_list, parse,
 };
 
-/// The descendants of `start`, an element or the document, that match `selector`, in document
-/// order. The walk stops at the first match when `first_only` is set.
+/// The descendants of `start`, an element, a fragment or the document, that match `selector`, in
+/// document order. The walk stops at the first match when `first_only` is set.
 fn search(
     tree: &VirtualTree,
     start: NodeId,
@@ -19,10 +19,10 @@ fn search(
 ) -> Result<Vec<NodeId>, SelectorError> {
     let (list, _) = parse(selector)?;
     let mut found = Vec::new();
-    let Some(start) = tree
-        .get(start)
-        .filter(|node| Node::of(tree, node.id()).is_some() || node.tag_name() == DOCUMENT_TAG)
-    else {
+    let Some(start) = tree.get(start).filter(|node| {
+        Node::of(tree, node.id()).is_some()
+            || matches!(node.tag_name(), DOCUMENT_TAG | FRAGMENT_TAG)
+    }) else {
         return Ok(found);
     };
     let scope = Node::of(tree, start.id()).map(|element| element.opaque());
@@ -45,7 +45,9 @@ fn search(
 }
 
 /// The first descendant of `node` that matches `selector` in document order. `:scope` and a
-/// top-level `&` are `node`. A node that is not an element, such as a text leaf or a node tagged
+/// top-level `&` are `node` when it is an element. From the document they select its element, and
+/// from a fragment they select no element, so a selector that starts with `:scope` finds nothing
+/// there. A node that is no element, fragment or document, such as a text leaf or a node tagged
 /// `#comment`, and an unknown id find nothing.
 ///
 /// # Errors
@@ -190,6 +192,39 @@ mod tests {
                 .is_empty()
         );
         assert_eq!(query_selector(&m.f.tree, start, "*").unwrap(), None);
+    }
+
+    /// A fragment holding `div#outer > p#inner`.
+    fn fragment_with_div() -> (Fixture, NodeId, [NodeId; 2]) {
+        let mut f = Fixture::new();
+        let fragment = f.tree.create_node(FRAGMENT_TAG).unwrap();
+        let outer = f.add(fragment, "div", "outer");
+        let inner = f.add(outer, "p", "inner");
+        (f, fragment, [outer, inner])
+    }
+
+    #[test]
+    fn a_fragment_start_finds_its_matching_child() {
+        let (f, fragment, [outer, _]) = fragment_with_div();
+
+        assert_eq!(
+            query_selector_all(&f.tree, fragment, "div").unwrap(),
+            [outer]
+        );
+    }
+
+    #[test]
+    fn a_fragment_start_finds_a_nested_descendant() {
+        let (f, fragment, [_, inner]) = fragment_with_div();
+
+        assert_eq!(query_selector_all(&f.tree, fragment, "p").unwrap(), [inner]);
+    }
+
+    #[test]
+    fn a_fragment_start_stops_at_the_first_match_when_first_only_is_set() {
+        let (f, fragment, [outer, _]) = fragment_with_div();
+
+        assert_eq!(search(&f.tree, fragment, "div, p", true).unwrap(), [outer]);
     }
 
     #[test]

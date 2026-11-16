@@ -1925,3 +1925,12 @@ A fixed entry is deleted and its ID is never reused.
   `performance.measure('m', { start: 5, duration: -1 })` gives startTime 5 and duration -1, and
   `{ end: 5, duration: -1 }` gives startTime 6 and duration -1. Chromium 153 does the same. WebKit
   26.6 throws a `TypeError`. Fix: throw a `TypeError` for a negative duration.
+
+- **B-354 `:scope` on a fragment matches no element**
+  `Units: node · Size: M · Impact: Low`
+
+  The scoping root of `querySelector()` and `querySelectorAll()` may be a `DocumentFragment`, so
+  `fragment.querySelectorAll(":scope > .a")` matches the top-level `.a` children. The host returns
+  nothing for a selector that starts with `:scope` from a fragment, because the matching context
+  has no scope for it and the parent of a top-level child is no element. Fix: give the matching
+  context a virtual scope for a fragment.

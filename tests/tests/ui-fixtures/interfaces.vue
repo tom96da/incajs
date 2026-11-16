@@ -12,6 +12,10 @@ const paragraph = ref(null);
 const shown = ref(false);
 
 function probe() {
+  const fragment = document.createDocumentFragment();
+  fragment.appendChild(document.createElement("div")).appendChild(document.createElement("p"));
+  const fragmentQueryOne = fragment.querySelector("p")?.nodeName ?? null;
+  const fragmentQueryAll = fragment.querySelectorAll("div, p").length;
   const comment = box.value.lastChild;
   box.value.innerHTML = "<svg></svg>";
   const svg = box.value.firstChild;
@@ -26,6 +30,7 @@ function probe() {
     svgIsHtmlElement: svg instanceof HTMLElement,
     fragmentIsDocumentFragment: document.createDocumentFragment() instanceof DocumentFragment,
     windowIsEventTarget: window instanceof EventTarget,
+    fragmentFindsDescendants: [fragmentQueryOne, fragmentQueryAll],
     textParentIsTheRef: paragraph.value.firstChild.parentElement === paragraph.value,
   });
 }
