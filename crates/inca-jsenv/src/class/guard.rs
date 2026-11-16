@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! The checks a native function makes when a script calls it: that a class constructor got `new`,
-//! that a method got an instance of its class, that enough arguments came and which prototype a
-//! new instance takes.
+//! that a method got an instance of its class, that enough arguments came, which prototype a new
+//! instance takes and that an options argument is an object.
 
 use rquickjs::class::JsClass;
 use rquickjs::convert::Coerced;
@@ -12,6 +12,10 @@ use rquickjs::{Class, Ctx, Exception, FromJs, Object, Result as JsResult, Value}
 
 /// The `TypeError` message of a class constructor called without `new`.
 pub(crate) const NEEDS_NEW: &str = "the class constructor needs new. call it with new";
+
+/// The `TypeError` message of an options argument that is no object.
+pub(crate) const NOT_AN_OBJECT: &str =
+    "the options are not an object. pass an object or leave them out";
 
 /// The body of the constructors that always throw.
 pub(crate) fn illegal_constructor<'js>() -> impl Fn(Ctx<'js>) -> JsResult<Value<'js>> {
@@ -34,6 +38,24 @@ pub fn receiver<'js, T: JsClass<'js>>(
         );
         Exception::throw_type(ctx, &message)
     })
+}
+
+/// The object of a dictionary argument: `None` for an absent, `undefined` or `null` value.
+///
+/// # Errors
+///
+/// Returns a `TypeError` if the value is any other value that is no object.
+pub(crate) fn options_of<'js>(
+    ctx: &Ctx<'js>,
+    value: Option<Value<'js>>,
+) -> JsResult<Option<Object<'js>>> {
+    match value {
+        Some(value) if !value.is_undefined() && !value.is_null() => value
+            .into_object()
+            .map(Some)
+            .ok_or_else(|| Exception::throw_type(ctx, NOT_AN_OBJECT)),
+        _ => Ok(None),
+    }
 }
 
 /// `value` converted with `ToString`.

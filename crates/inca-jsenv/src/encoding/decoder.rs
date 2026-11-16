@@ -12,9 +12,11 @@ use rquickjs::JsLifetime;
 use rquickjs::function::{Opt, This};
 use rquickjs::{Class, Ctx, Exception, Function, Object, Result as JsResult, Value};
 
-use super::{Construct, flag_of, options_of};
+use super::{Construct, flag_of};
 use crate::buffer_source::{bytes_of, source_of, store};
-use crate::class::{define_class, define_getter, define_global, define_method, plain_class};
+use crate::class::{
+    define_class, define_getter, define_global, define_method, options_of, plain_class,
+};
 
 const NOT_VALID: &str =
     "the data is not valid for the encoding. decode with fatal false to replace it";
@@ -209,7 +211,7 @@ mod tests {
 
     use super::*;
     use crate::Engine;
-    use crate::encoding::NOT_AN_OBJECT;
+    use crate::class::NOT_AN_OBJECT;
     use crate::tests::{around, run, thrown};
 
     /// A codec for `label` with the default flags.

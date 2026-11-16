@@ -6,9 +6,9 @@
 //!
 //! The `define` module holds the definition steps: a class with its constructor, methods and
 //! getters, a free function and a namespace object. The `guard` module holds the call-time checks:
-//! `new` on a constructor, the receiver of a method, the argument count and the prototype of a new
-//! instance. The `iterate` module holds the `Symbol.iterator` method of an object and the loop over
-//! the values it yields. This module re-exports all three.
+//! `new` on a constructor, the receiver of a method, the argument count, the prototype of a new
+//! instance and the options argument. The `iterate` module holds the `Symbol.iterator` method of
+//! an object and the loop over the values it yields. This module re-exports all three.
 
 mod define;
 mod guard;
@@ -20,7 +20,9 @@ pub use define::{
     define_namespace, define_sized_method, define_this_accessor, define_this_getter,
     define_this_method, iterator_prototype,
 };
+#[cfg(test)]
+pub(crate) use guard::NOT_AN_OBJECT;
 pub use guard::new_target_prototype;
-pub(crate) use guard::{NEEDS_NEW, given, illegal_constructor};
+pub(crate) use guard::{NEEDS_NEW, given, illegal_constructor, options_of};
 pub use guard::{receiver, require, text};
 pub use iterate::{Method, iterate, method_of};

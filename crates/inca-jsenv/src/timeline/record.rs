@@ -8,7 +8,7 @@ use rquickjs::function::{IntoJsFunc, ParamRequirement, Params};
 use rquickjs::{Ctx, Exception, FromJs, Object, Result as JsResult, Value};
 
 use super::entries::{EntryData, Kind, append, entry, prototype, timeline_entries};
-use crate::class::{NEEDS_NEW, given, new_target_prototype, require, text};
+use crate::class::{NEEDS_NEW, given, new_target_prototype, options_of, require, text};
 use crate::time::now;
 
 /// The time origin, which `measure()` takes as 0.
@@ -67,11 +67,7 @@ fn make_mark<'js>(ctx: &Ctx<'js>, args: &[Value<'js>]) -> JsResult<(EntryData, V
     let name = text(ctx, &args[0])?;
     let mut detail = None;
     let mut start_time = None;
-    if let Some(options) = given(args, 1).filter(|options| !options.is_null()) {
-        let options = options.as_object().ok_or_else(|| {
-            let message = "the options are not an object. pass an object or leave them out";
-            Exception::throw_type(ctx, message)
-        })?;
+    if let Some(options) = options_of(ctx, args.get(1).cloned())? {
         detail = defined(options.get("detail")?);
         let value: Value = options.get("startTime")?;
         if !value.is_undefined() {
@@ -275,7 +271,7 @@ mod tests {
 
     use rstest::rstest;
 
-    use crate::class::NEEDS_NEW;
+    use crate::class::{NEEDS_NEW, NOT_AN_OBJECT};
     use crate::tests::{run_after, run_at, thrown_at};
 
     const TIME: &str =
@@ -338,7 +334,7 @@ mod tests {
     #[case::infinite("performance.mark('a', { startTime: Infinity })", TIME)]
     #[case::options_number(
         "performance.mark('a', 5)",
-        "TypeError: the options are not an object. pass an object or leave them out"
+        &format!("TypeError: {NOT_AN_OBJECT}")
     )]
     fn mark_rejects_an_invalid_call(#[case] call: &str, #[case] message: &str) {
         assert_eq!(thrown_marked(call), message);
@@ -652,7 +648,7 @@ mod tests {
     #[case::negative("performance.mark('fetchStart', { startTime: -1 })", TIME)]
     #[case::options_number(
         "performance.mark('fetchStart', 5)",
-        "TypeError: the options are not an object. pass an object or leave them out"
+        &format!("TypeError: {NOT_AN_OBJECT}")
     )]
     fn mark_checks_the_options_before_the_name(#[case] call: &str, #[case] message: &str) {
         assert_eq!(thrown_marked(call), message);
