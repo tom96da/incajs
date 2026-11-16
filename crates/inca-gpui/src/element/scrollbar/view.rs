@@ -32,6 +32,8 @@ pub(super) struct ScrollbarState {
     overflowed: bool,
     /// Whether a press on a bar is waiting for its release.
     pub(super) pressed_on_bar: bool,
+    /// The mode of the last frame.
+    mode: Scrollbars,
     /// Whether the pointer lay over a bar at the last check.
     pub(super) over_bar: bool,
     /// The axis whose thumb lies under the pointer.
@@ -55,6 +57,7 @@ impl ScrollbarState {
             shown: true,
             overflowed,
             pressed_on_bar: false,
+            mode,
             over_bar: false,
             hover: None,
             drag: None,
@@ -151,9 +154,13 @@ pub(in crate::element) fn scrollbar<E: EventSink + Clone + 'static>(
             });
             let wheel = cx.default_global::<WheelScrolled>().0.remove(&id);
             state.update(cx, |state, cx| {
-                if mode == Scrollbars::Overlay && (wheel || (overflow && !state.overflowed)) {
+                let switched = mode != state.mode;
+                if mode == Scrollbars::Overlay
+                    && (wheel || (overflow && !state.overflowed) || switched)
+                {
                     state.show(cx);
                 }
+                state.mode = mode;
                 state.overflowed = overflow;
             });
             let drag_ended = state.update(cx, |state, cx| {
@@ -424,6 +431,17 @@ mod tests {
     }
 
     #[gpui::test]
+    fn a_container_switched_from_classic_to_overlay_hides_its_thumb_after_the_delay(
+        cx: &mut TestAppContext,
+    ) {
+        let (mut scene, states) = scene(cx, Scrollbars::Classic, &Y_ONLY);
+        scene.probe.mode_now.set(Some(Scrollbars::Overlay));
+        scene.frame();
+        wait(&mut scene, HIDE_DELAY);
+        assert!(!thumb_shown(&mut scene, &states));
+    }
+
+    #[gpui::test]
     fn a_classic_auto_thumb_shows_at_the_first_draw(cx: &mut TestAppContext) {
         let (mut scene, states) = scene(cx, Scrollbars::Classic, &Y_AUTO);
         let plan = plan(&mut scene, &states, Scrollbars::Classic, Size::default());
@@ -451,6 +469,7 @@ mod tests {
             shown: false,
             overflowed: false,
             pressed_on_bar: false,
+            mode: Scrollbars::Overlay,
             over_bar: false,
             hover: None,
             drag: None,
