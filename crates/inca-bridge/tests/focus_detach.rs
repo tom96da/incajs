@@ -1,8 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! A focused node that `removeChild` detaches or an insert moves loses focus
-//! at the call, with no `blur` or `focusout`, and never regains it.
+//! A focused node that a removal detaches or an insert moves loses focus at the call, with no
+//! `blur` or `focusout`, and never regains it.
 
 #![allow(clippy::unwrap_used)]
 
@@ -189,6 +189,42 @@ fn moving_an_unrelated_node_keeps_focus(cx: &mut TestAppContext, #[case] anchore
         } else {
             native("appendChild", &[ids.parent, ids.sibling])
         }
+    });
+
+    assert_eq!(out.at_call, Some(out.leaf));
+    assert_eq!(out.after_frame, Some(out.leaf));
+    assert_eq!(out.seen, "[]");
+}
+
+#[gpui_cases]
+#[gpui::test]
+#[case::append("insertNodes(P, 'append', [T])")]
+#[case::replace_children("insertNodes(P, 'replaceChildren', [])")]
+#[case::replace_with_no_node("insertNodes(T, 'replaceWith', [])")]
+fn inserting_nodes_over_the_focused_node_drops_focus_at_the_call(
+    cx: &mut TestAppContext,
+    #[case] call: &str,
+) {
+    let out = focus_then_run(cx, false, |ids| {
+        let call = call
+            .replace('P', &ids.parent.to_string())
+            .replace('T', &ids.top.to_string());
+        format!("__inca_native__.{call}")
+    });
+
+    assert_dropped(&out);
+}
+
+#[gpui_cases]
+#[gpui::test]
+#[case::append("insertNodes(P, 'append', [S])")]
+#[case::replace_with_no_node("insertNodes(S, 'replaceWith', [])")]
+fn inserting_nodes_over_an_unrelated_node_keeps_focus(cx: &mut TestAppContext, #[case] call: &str) {
+    let out = focus_then_run(cx, false, |ids| {
+        let call = call
+            .replace('P', &ids.parent.to_string())
+            .replace('S', &ids.sibling.to_string());
+        format!("__inca_native__.{call}")
     });
 
     assert_eq!(out.at_call, Some(out.leaf));
