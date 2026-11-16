@@ -73,6 +73,7 @@ export function nativeStub(extra: Partial<Native> = {}): Native {
     documentNodeId: () => 1,
     releaseNode: () => undefined,
     registerUncloneable: () => undefined,
+    windowTargetId: () => "window-target",
     interfacePrototypes: () => Object.assign(Object.create(null), interfaceChain()),
     ...extra,
   } as Native;

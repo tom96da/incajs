@@ -72,6 +72,7 @@ export {
   releasePointerCapture,
   removeListener,
   setPointerCapture,
+  windowTargetId,
 } from "./events.mts";
 export { HTML_NAMESPACE } from "./native.mts";
 export type {
@@ -90,4 +91,5 @@ export type {
   Parsed,
   ParsedEntry,
   ScrollAlignment,
+  WindowTargetId,
 } from "./native.mts";

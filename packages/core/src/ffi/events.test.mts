@@ -4,8 +4,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { nativeStub } from "../../tests/setup.mts";
-import { addListener, blur, click, focus, focusedNode, removeListener } from "./events.mts";
-import type { HostCallback } from "./native.mts";
+import {
+  addListener,
+  blur,
+  click,
+  focus,
+  focusedNode,
+  removeListener,
+  windowTargetId,
+} from "./events.mts";
+import type { HostCallback, WindowTargetId } from "./native.mts";
 
 const native = {
   addEventListener: vi.fn<
@@ -24,6 +32,7 @@ const native = {
   blurNode: vi.fn<(nodeId: number) => void>(),
   focusedNode: vi.fn<() => number | null>(() => null),
   click: vi.fn<(nodeId: number) => void>(),
+  windowTargetId: vi.fn<() => WindowTargetId>(() => "window-target" as WindowTargetId),
 };
 
 beforeEach(() => {
@@ -50,6 +59,13 @@ describe("wrapper functions forward to __inca_native__", () => {
 
     expect(removeListener(1, "click", 41)).toBe(false);
     expect(native.removeEventListener).toHaveBeenCalledExactlyOnceWith(1, "click", 41);
+  });
+
+  it("windowTargetId asks the host once over two calls", () => {
+    windowTargetId();
+    windowTargetId();
+
+    expect(native.windowTargetId).toHaveBeenCalledTimes(1);
   });
 
   it("focusedNode gives the id the host reports", () => {

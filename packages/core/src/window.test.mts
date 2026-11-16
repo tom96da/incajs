@@ -46,14 +46,14 @@ describe("window", () => {
     window.removeEventListener("keydown", listener);
 
     expect(native.addEventListener).toHaveBeenCalledWith(
-      "$window",
+      "window-target",
       "keydown",
       expect.any(Function),
       false,
       false,
     );
     expect(native.removeEventListener).toHaveBeenCalledExactlyOnceWith(
-      "$window",
+      "window-target",
       "keydown",
       callbackId,
     );
@@ -64,7 +64,7 @@ describe("window", () => {
 
     window.dispatchEvent(event);
 
-    expect(native.dispatchEvent).toHaveBeenCalledExactlyOnceWith("$window", event);
+    expect(native.dispatchEvent).toHaveBeenCalledExactlyOnceWith("window-target", event);
   });
 
   it("takes a listener that declares the event fields it reads", () => {
@@ -93,7 +93,7 @@ describe("window", () => {
     native.addEventListener.mock.calls[0]![2]({ currentTarget: window });
 
     expect(native.addEventListener).toHaveBeenCalledExactlyOnceWith(
-      "$window",
+      "window-target",
       "focus",
       expect.any(Function),
       false,

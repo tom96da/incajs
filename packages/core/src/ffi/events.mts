@@ -3,11 +3,11 @@
 
 import { native } from "./native.mts";
 import type { CallbackId, EventLike, NodeId } from "../types.mts";
-import type { EventTargetId, HostCallback } from "./native.mts";
+import type { EventTargetId, HostCallback, WindowTargetId } from "./native.mts";
 
 /**
  * Registers `callback` for `event` on a target.
- * @param target - the event target (node id or "$window")
+ * @param target - the event target (a node id or the window target)
  * @param event - the event name
  * @param callback - what the host calls with the event object
  * @param capture - whether the listener runs while the event travels down to the target
@@ -46,7 +46,7 @@ export function removeListener(
  * Dispatches `event` at a target along its path. Dispatching at an element
  * reaches its ancestors, `document` and `window`. Dispatching at `document`
  * reaches `window`, and dispatching at `window` reaches only `window`.
- * @param target - the target to dispatch at (node id or "$window")
+ * @param target - the target to dispatch at (a node id or the window target)
  * @param event - the event to dispatch
  * @returns `false` when a listener canceled a cancelable event, else `true`
  * @throws TypeError when `target` is malformed or is an unknown target tag
@@ -56,6 +56,17 @@ export function removeListener(
  */
 export function dispatchEvent(target: EventTargetId, event: EventLike): boolean {
   return native().dispatchEvent(target, event);
+}
+
+let windowTarget: WindowTargetId | undefined;
+
+/**
+ * The target that names the window in {@link addListener}, {@link removeListener} and
+ * {@link dispatchEvent}. The host is asked once.
+ * @returns the window target
+ */
+export function windowTargetId(): WindowTargetId {
+  return (windowTarget ??= native().windowTargetId());
 }
 
 /**
