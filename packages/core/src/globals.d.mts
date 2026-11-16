@@ -9,14 +9,63 @@ declare global {
   /** The window of the app. The build adds its import to every module that names it. */
   const window: import("incajs").IncaWindow;
 
+  /** The constants of `Node`, a number for each node type and document position. */
+  interface NodeConstants {
+    readonly ELEMENT_NODE: 1;
+    readonly ATTRIBUTE_NODE: 2;
+    readonly TEXT_NODE: 3;
+    readonly CDATA_SECTION_NODE: 4;
+    readonly ENTITY_REFERENCE_NODE: 5;
+    readonly ENTITY_NODE: 6;
+    readonly PROCESSING_INSTRUCTION_NODE: 7;
+    readonly COMMENT_NODE: 8;
+    readonly DOCUMENT_NODE: 9;
+    readonly DOCUMENT_TYPE_NODE: 10;
+    readonly DOCUMENT_FRAGMENT_NODE: 11;
+    readonly NOTATION_NODE: 12;
+    readonly DOCUMENT_POSITION_DISCONNECTED: 1;
+    readonly DOCUMENT_POSITION_PRECEDING: 2;
+    readonly DOCUMENT_POSITION_FOLLOWING: 4;
+    readonly DOCUMENT_POSITION_CONTAINS: 8;
+    readonly DOCUMENT_POSITION_CONTAINED_BY: 16;
+    readonly DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC: 32;
+  }
+
+  /** The interface object of event targets, which a script cannot construct. */
+  var EventTarget: { readonly prototype: object };
+
+  /** The interface object of nodes, which a script cannot construct. */
+  var Node: NodeConstants & { readonly prototype: NodeConstants };
+
+  /** The interface object of text and comments, which a script cannot construct. */
+  var CharacterData: { readonly prototype: NodeConstants };
+
+  /** The interface object of text nodes, which a script cannot construct. */
+  var Text: { readonly prototype: NodeConstants };
+
+  /** The interface object of comments, which a script cannot construct. */
+  var Comment: { readonly prototype: NodeConstants };
+
+  /** The interface object of elements, which a script cannot construct. */
+  var Element: { readonly prototype: NodeConstants };
+
+  /** The interface object of HTML elements, which a script cannot construct. */
+  var HTMLElement: { readonly prototype: NodeConstants };
+
+  /** The interface object of fragments, which a script cannot construct. */
+  var DocumentFragment: { readonly prototype: NodeConstants };
+
   /** The interface object of `document`. */
-  var Document: { readonly prototype: object };
+  var Document: { readonly prototype: NodeConstants };
+
+  /** The interface object of the HTML document, which a script cannot construct. */
+  var HTMLDocument: { readonly prototype: NodeConstants };
 
   /** The interface object of `element.dataset`, which scripts cannot construct. */
   var DOMStringMap: { readonly prototype: import("incajs").DOMStringMap };
 
   /** The interface object of shadow roots, which the host never creates. */
-  var ShadowRoot: { readonly prototype: object };
+  var ShadowRoot: { readonly prototype: NodeConstants };
 
   /** The interface object of token lists. It cannot be called or constructed. */
   var DOMTokenList: { readonly prototype: import("incajs").DOMTokenList };

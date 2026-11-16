@@ -1353,7 +1353,7 @@ A fixed entry is deleted and its ID is never reused.
   members, the mutation members, the relation members, `textContent`,
   `hasChildNodes()` and `childNodes`. It lacks `querySelector()`,
   `querySelectorAll()`, `children`, `getElementById()` and the listener
-  methods. There is no global `DocumentFragment`. Fix: add `querySelector()`, `querySelectorAll()`,
+  methods. Fix: add `querySelector()`, `querySelectorAll()`,
   `children`, `getElementById()` and the listener methods.
 
 - **B-272 `^` and `|` stay raw in the path of a URL**
@@ -1549,14 +1549,16 @@ A fixed entry is deleted and its ID is never reused.
   `Performance` an `EventTarget` base once the event target lives below `inca-jsenv` or the bridge
   passes a hook. The navigation parts wait for a navigation model that a window does not have.
 
-- **B-297 Nodes have no `Node`, `Element` or `Text` interface objects**
+- **B-297 Nodes are not instances of `Node`, `Element` and `Text`**
   `Units: bridge,core · Size: L · Impact: Medium`
 
-  `instanceof Node`, `Element` and `Text` throw, and Vue Vapor reads them. The prototype of
-  `document` is `Document.prototype`, so it reads `[object Document]`. In browsers it is
-  `HTMLDocument.prototype` and reads `[object HTMLDocument]`. Fix: host class definitions for the
-  chain (`EventTarget`, `Node`, `Document`, `HTMLDocument`, `Element`, `Text`), handles that take
-  their prototypes from the host, then `Comment`, `CharacterData` and `DocumentFragment`.
+  The globals `EventTarget`, `Node`, `CharacterData`, `Text`, `Comment`, `Element`, `HTMLElement`,
+  `DocumentFragment` and `HTMLDocument` exist, and no handle takes their prototypes. So
+  `instanceof Node` is `false` for every node except `document`. The prototype of `document` is
+  `Document.prototype`, which inherits `Node.prototype` and has its 18 constants, and `document`
+  reads `[object Document]`. In browsers it is `HTMLDocument.prototype` and reads
+  `[object HTMLDocument]`. Fix: handles that take their prototypes from the host, then the
+  interfaces of the tags, of SVG and MathML, and constructors.
 
 - **B-298 `new Document()` throws**
   `Units: node,bridge · Size: M · Impact: Low`
