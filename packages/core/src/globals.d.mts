@@ -214,6 +214,11 @@ declare global {
     new (init?: string | string[][] | Record<string, string> | URLSearchParams): URLSearchParams;
     prototype: URLSearchParams;
   };
+
+  interface StructuredSerializeOptions {
+    transfer?: ArrayBuffer[];
+  }
+  function structuredClone<T = any>(value: T, options?: StructuredSerializeOptions): T;
 }
 
 // The JavaScript engine provides these globals.

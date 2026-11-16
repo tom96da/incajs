@@ -11,7 +11,7 @@ use rquickjs::function::This;
 use rquickjs::{Ctx, Exception, FromJs, Function, Object, Result as JsResult, Value};
 
 use crate::quickjs::{
-    copy_range, is_array_buffer, is_data_view, typed_array_kind, typed_array_range,
+    class_id, copy_range, is_array_buffer, is_data_view, typed_array_kind, typed_array_range,
 };
 use crate::vault::vault;
 
@@ -44,7 +44,14 @@ const GETTERS_JS: &str = r"
 /// Returns an error if the realm lacks an intrinsic or has no vault.
 pub(crate) fn install(ctx: &Ctx<'_>) -> JsResult<()> {
     let store: Object = ctx.eval(GETTERS_JS)?;
+    let shared: Value = ctx.eval("new SharedArrayBuffer(0)")?;
+    store.set("sharedClass", class_id(&shared))?;
     vault(ctx)?.set(STORE, store)
+}
+
+/// The class id of a `SharedArrayBuffer`, measured when the store was made.
+pub(crate) fn shared_class(store: &Object<'_>) -> JsResult<u32> {
+    store.get("sharedClass")
 }
 
 /// The getters that classify a buffer, from the vault of `ctx`'s realm.
@@ -118,7 +125,7 @@ pub(crate) fn source_of<'js>(
     } else if is_data_view(&input) {
         let buffer = read(store, "viewBuffer", &input)?;
         Source::Data(input, buffer)
-    } else if is_array_buffer(&input) || is_shared_array_buffer(ctx, store, &input) {
+    } else if is_array_buffer(&input) || class_id(&input) == shared_class(store)? {
         Source::Whole(input)
     } else {
         return Err(wrong());
@@ -140,16 +147,6 @@ pub(crate) fn source_of<'js>(
         ));
     }
     Ok(source)
-}
-
-/// Whether `value` is a `SharedArrayBuffer`: the getter `growable` fails only on another class,
-/// and that failure is cleared.
-fn is_shared_array_buffer<'js>(ctx: &Ctx<'js>, store: &Object<'js>, value: &Value<'js>) -> bool {
-    let probe = read::<bool>(store, "growable", value).is_ok();
-    if !probe {
-        drop(ctx.catch());
-    }
-    probe
 }
 
 /// A copy of the bytes `source` covers.

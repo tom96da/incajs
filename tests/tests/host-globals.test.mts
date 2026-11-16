@@ -281,6 +281,7 @@ it("compiles a script that uses the declared globals with no other types", async
       requestAnimationFrame(() => {});
       performance.now();
       new URL("x");
+      const copy: number[] = structuredClone([1], { transfer: [] });
       document.createElement("div");
       window.addEventListener("keydown", () => {});
     `,
