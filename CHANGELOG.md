@@ -17,16 +17,29 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - `structuredClone()` is available and moves the `ArrayBuffer` objects of `transfer` ([65ea6c62](https://github.com/tom96da/incajs/commit/65ea6c62))
 - scroll containers draw a scrollbar, and its width is left out of the client size ([27fc09ec](https://github.com/tom96da/incajs/commit/27fc09ec))
 - the thumb of a scrollbar can be dragged ([982ec9b6](https://github.com/tom96da/incajs/commit/982ec9b6))
+- `Node`, `Element`, `Text` and the other node interfaces are available, so `instanceof` works ([99f44ce6](https://github.com/tom96da/incajs/commit/99f44ce6))
+- text nodes, fragments and `document` have the tree and listener members they lacked ([dd7175af](https://github.com/tom96da/incajs/commit/dd7175af))
+- `structuredClone()` throws a `DataCloneError` for a node, `document` and `window` ([dd7175af](https://github.com/tom96da/incajs/commit/dd7175af))
+- nodes have the modern mutation members such as `append()`, `before()` and `replaceWith()` ([f7a128d2](https://github.com/tom96da/incajs/commit/f7a128d2))
 
 ### Changed
 
 - `TextDecoder.decode()` names a resizable buffer as the cause when it refuses one ([9343be0c](https://github.com/tom96da/incajs/commit/9343be0c))
+- `document` reads as `[object HTMLDocument]` ([99f44ce6](https://github.com/tom96da/incajs/commit/99f44ce6))
+- a comment has only the members of `Node` and `CharacterData` ([99f44ce6](https://github.com/tom96da/incajs/commit/99f44ce6))
+- `reactive()` and `ref()` keep a node as it is, so its properties are not tracked ([99f44ce6](https://github.com/tom96da/incajs/commit/99f44ce6))
+- `click()` and the `offset` members exist on HTML elements only ([dd7175af](https://github.com/tom96da/incajs/commit/dd7175af))
+- `style`, `dataset` and `focus()` need an HTML, SVG or MathML element, so a text node, a comment and a fragment lose them ([dd7175af](https://github.com/tom96da/incajs/commit/dd7175af))
+- the types of `createElementNS()`, `querySelector()` and `children` have no HTML members ([dd7175af](https://github.com/tom96da/incajs/commit/dd7175af))
+- `Object.keys()`, a spread and `JSON.stringify()` skip the members of a node, and `console.log()` prints the interface ([dd7175af](https://github.com/tom96da/incajs/commit/dd7175af))
+- a method of a node called on another object throws a `TypeError` ([dd7175af](https://github.com/tom96da/incajs/commit/dd7175af))
 
 ### Fixed
 
 - the `detail` of a mark or a measure is a copy of the object you passed ([9d97fd77](https://github.com/tom96da/incajs/commit/9d97fd77))
 - Tab focuses the node that `replaceChild()` moves into the place of the pressed node ([cb62077c](https://github.com/tom96da/incajs/commit/cb62077c))
 - a config file that fails to load shows an appropriate error message ([d11364d6](https://github.com/tom96da/incajs/commit/d11364d6))
+- `textContent` keeps the children when the new text cannot be created ([294fefd6](https://github.com/tom96da/incajs/commit/294fefd6))
 
 ## [0.0.33] - 2026-11-15
 
