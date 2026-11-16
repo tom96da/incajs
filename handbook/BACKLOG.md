@@ -1859,3 +1859,12 @@ A fixed entry is deleted and its ID is never reused.
   the type of an event target. Fix: add a host call that returns the target of the window, as
   `documentNodeId()` does for the document, and let the wrapper of the host calls hand it to
   both places.
+
+- **B-351 The quota error of `getRandomValues()` is a `DOMException`, where Chromium throws a `QuotaExceededError` class**
+  `Units: jsenv · Size: S · Impact: Low`
+
+  `crypto.getRandomValues()` throws a `DOMException` named `QuotaExceededError` for an array above
+  65536 bytes. Chromium 153 has a global `QuotaExceededError` class that extends `DOMException` and
+  throws an instance of it, with `quota` and `requested` unset. WebKit 26.6 throws a plain
+  `DOMException`, as the host does. `err instanceof QuotaExceededError` is a `ReferenceError` in the
+  host. Fix: add the global class when an API needs it.

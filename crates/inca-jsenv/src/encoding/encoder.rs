@@ -17,7 +17,7 @@ use crate::class::{
 };
 use crate::quickjs::{
     UINT8, is_immutable_array_buffer, string_wtf8, typed_array_kind, typed_array_range,
-    write_uint8_array,
+    write_typed_array,
 };
 
 const NOT_A_UINT8_ARRAY: &str = "the destination is not a Uint8Array. pass a Uint8Array";
@@ -113,7 +113,7 @@ fn encode_into_destination<'js>(
     let mut bytes = vec![0; room.min(source.len())];
     let (read, written) = encode_into(&source, &mut bytes);
     if written > 0 {
-        write_uint8_array(&destination, &bytes[..written])?;
+        write_typed_array(&destination, &bytes[..written])?;
     }
     result_object(ctx, read, written)
 }

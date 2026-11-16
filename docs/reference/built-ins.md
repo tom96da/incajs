@@ -95,6 +95,12 @@ These results for `file:` URLs differ from the ones of browsers:
   - `setResourceTimingBufferSize()`
   - `onresourcetimingbufferfull`
 
+## `crypto` <Badge type="warning" text="unreleased"/>
+
+This follows the [Web Cryptography API](https://www.w3.org/TR/WebCryptoAPI/).
+
+- `crypto.subtle` and `CryptoKey` are missing.
+
 ## `setTimeout()` and `setInterval()`
 
 These follow the

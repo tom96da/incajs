@@ -193,6 +193,7 @@ impl Engine {
                 crate::buffer_source::install(&ctx)?;
                 crate::encoding::install(&ctx)?;
                 crate::url::install(&ctx)?;
+                crate::crypto::install(&ctx)?;
                 let modules = Object::new(ctx.clone())?;
                 modules.set_prototype(None)?;
                 let vault = vault(&ctx)?;

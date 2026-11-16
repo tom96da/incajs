@@ -25,9 +25,9 @@
 //! needs the name and as `Ctx<'_>` otherwise. Its doc has an `# Errors` section.
 //!
 //! [`Engine`] installs `Performance`, `PerformanceEntry`, `PerformanceMark`, `PerformanceMeasure`,
-//! `performance`, `TextEncoder`, `TextDecoder`, `URL` and `URLSearchParams`. The decoder reads
-//! every encoding of the Encoding Standard. The caller installs `console`, the timers and the
-//! frame callbacks.
+//! `performance`, `Crypto`, `crypto`, `TextEncoder`, `TextDecoder`, `URL` and `URLSearchParams`.
+//! The decoder reads every encoding of the Encoding Standard. The caller installs `console`, the
+//! timers and the frame callbacks.
 //!
 //! [`Limits`] bounds the memory, the stack and the time a script may use.
 //!
@@ -43,6 +43,7 @@ pub mod frames;
 
 mod buffer_source;
 mod compile;
+mod crypto;
 mod inspect;
 mod limits;
 mod loader;
