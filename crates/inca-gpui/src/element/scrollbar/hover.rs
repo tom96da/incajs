@@ -11,7 +11,7 @@ use crate::event_sink::EventSink;
 use inca_node::NodeId;
 
 /// The container whose bar lies under the pointer for the input being handled. A move clears it
-/// at its capture, and the bars set it again.
+/// at its capture, and the bars set it again at a move and at paint.
 #[derive(Default)]
 pub(in crate::element) struct OverBar(pub(in crate::element) Option<NodeId>);
 
@@ -27,7 +27,8 @@ impl OverBar {
 
 /// Records whether `pointer` (`None` when it left the window) lies over a bar of the container,
 /// and reports the hover that the bar's box hides from the container's own box. Returns whether
-/// the pointer lies over a bar.
+/// the pointer lies over a bar. A bar that another box covers at the pointer does not count. The
+/// hit test of a frame is final after its prepaint, so call this from paint.
 pub(super) fn sync_over_bar<E: EventSink>(
     ctx: &Ctx<E>,
     pointer: Option<Point<gpui::Pixels>>,
@@ -37,7 +38,8 @@ pub(super) fn sync_over_bar<E: EventSink>(
     let Some(sink) = &ctx.sink else {
         return false;
     };
-    let over = pointer.is_some_and(|p| ctx.rects.iter().any(|rect| rect.contains(&p)));
+    let over = pointer.is_some_and(|p| ctx.rects.iter().any(|rect| rect.contains(&p)))
+        && ctx.over_bar(window);
     let was = ctx
         .state
         .update(cx, |state, _| std::mem::replace(&mut state.over_bar, over));
@@ -65,7 +67,7 @@ mod tests {
     use crate::Scrollbars;
     use crate::element::scrollbar::HIDE_DELAY;
     use crate::element::scrollbar::view::ScrollbarState;
-    use crate::tests::{BarScene, capture_entities, nested_bar_tree};
+    use crate::tests::{BarScene, boxed, capture_entities, nested_bar_tree};
 
     const BOTH: [(&str, &str); 1] = [("overflow", "scroll")];
     const Y_SCROLL: [(&str, &str); 2] = [("overflow_x", "hidden"), ("overflow_y", "scroll")];
@@ -154,6 +156,32 @@ mod tests {
         hover(&mut scene, OUTSIDE);
         scene.probe.hovers.borrow_mut().clear();
         hover(&mut scene, TRACK);
+        assert_eq!(reports(&scene), [true]);
+    }
+
+    #[gpui::test]
+    fn a_bar_under_the_bar_of_a_later_sibling_reports_no_hover(cx: &mut TestAppContext) {
+        let mut tree = nested_bar_tree(&BOTH);
+        let cover = boxed(&mut tree, Some(0), 100., 100.);
+        tree.set_style(cover, "margin_top", -150.0).unwrap();
+        tree.set_style(cover, "overflow", "scroll").unwrap();
+        boxed(&mut tree, Some(cover), 300., 300.);
+        let mut scene = BarScene::new(cx, Scrollbars::Classic, tree);
+        scene.probe.hovers.borrow_mut().clear();
+        hover(&mut scene, TRACK);
+        assert_eq!(reports(&scene), [false]);
+    }
+
+    #[gpui::test]
+    fn a_bar_that_appears_under_a_stationary_pointer_starts_the_hover(cx: &mut TestAppContext) {
+        let mut scene = BarScene::new(cx, Scrollbars::Classic, nested_bar_tree(&[]));
+        hover(&mut scene, TRACK);
+        scene.probe.hovers.borrow_mut().clear();
+        {
+            let mut tree = scene.probe.tree.borrow_mut();
+            tree.set_style(1, "overflow", "scroll").unwrap();
+        }
+        scene.frame();
         assert_eq!(reports(&scene), [true]);
     }
 }
